@@ -310,12 +310,12 @@ final class ContactSettleTests: XCTestCase {
 
     /// The stance table: the pressing / holding kinds own the phase-0 walk-up; the side-by-side kinds say so (the touch distance is predicted for the posture they end in).
     func testStanceTableOwnsTheWalkUp() {
-        for k in [SocialKind.boop, .bump, .sneak, .chestBump, .highFive, .bellyBounce, .nuzzle, .hum, .cheekSquish, .swayHug, .whisperGiggle, .cuddleLean, .backToBack] {
+        for k in [SocialKind.boop, .bump, .sneak, .chestBump, .highFive, .bellyBounce, .nuzzle, .cheekSquish, .swayHug, .whisperGiggle, .cuddleLean, .backToBack] {
             let st = ContactStance.entry(k)
             XCTAssertEqual(st?.steps.first?.retargets, true, "\(k): phase 0 walks up through the stance")
         }
         for k in [SocialKind.nuzzle, .sitTogether, .cheekSquish, .bellyBounce, .cuddleLean, .whisperGiggle, .swayHug, .backToBack, .boop, .highFive] { XCTAssertEqual(ContactStance.entry(k)?.facing, .camera, "\(k) ends side by side") }          // (boop / highFive since 2026-11-05, user rule 2: the stub arm only reaches past a partner who stands BESIDE it - HandReach, BlobSocial+Hands.swift)
-        for k in [SocialKind.bump, .chestBump, .hum] { XCTAssertEqual(ContactStance.entry(k)?.facing, .each, "\(k) ends face to face") }
+        for k in [SocialKind.bump, .chestBump] { XCTAssertEqual(ContactStance.entry(k)?.facing, .each, "\(k) ends face to face") }
         XCTAssertTrue(ContactStance.entry(.squabble)?.steps.first?.retargets ?? false, "squabble owns its walk-up since drive round 2 (arrival -7.4 cm -> -1.0 cm)"); XCTAssertFalse(ContactStance.entry(.tag)?.steps.first?.retargets ?? true)
     }
 

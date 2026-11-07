@@ -16,7 +16,6 @@ sitTogether_pip_pearl	pip,pearl	sitTogether	perp,top,low	-	90
 sneak_pip_lavender	pip,lavender	sneak	perp,top,low	-	90
 chestBump_bob_pip	bob,pip	chestBump	perp,top,low	-	90
 highFive_pearl_teddy	pearl,teddy	highFive	perp,top,low	-	90
-hum_moss_lavender	moss,lavender	hum	perp,top,low	-	90
 cheekSquish_teddy_bob	teddy,bob	cheekSquish	perp,top,low	-	90
 tag_lavender_pip	lavender,pip	tag	perp,top,low	-	90
 bellyBounce_pip_pearl	pip,pearl	bellyBounce	perp,top,low	-	90
@@ -37,7 +36,6 @@ chase_bob_teddy	bob,teddy	chase	perp,top,low	-	120
 flop_teddy_pearl	teddy,pearl	flop	perp,top,low	-	120
 sitTogether_bob_teddy	bob,teddy	sitTogether	perp,top,low	-	90
 spinHug_bob_teddy	bob,teddy	spinHug	perp,top,low	-	90
-hum_bob_teddy	bob,teddy	hum	perp,top,low	-	90
 nuzzle_bob_teddy	bob,teddy	nuzzle	perp,top,low	-	90
 sneak_bob_teddy	bob,teddy	sneak	perp,top,low	-	90
 highFive_bob_teddy	bob,teddy	highFive	perp,top,low	-	90

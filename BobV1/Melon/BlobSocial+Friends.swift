@@ -4,7 +4,6 @@
 //  (the walk, the in-place hop, the spin, the wave arm, the pose overlays and jelly kicks of the other socials), so the arms stay stubby and the feet attached:
 //    chestBump    face to face, a small crouch, both hop and the bellies meet at the top (a big jelly squish, a bounce back), twice, a happy hop
 //    highFive     the JELLY BUMP: side by side angled ~30 deg inward, both lean in and bump cheeks / upper sides: squish, boop, double jiggle, happy look; no arm raise (2026-11-02)
-//    hum          face to face, heads lean in, eyes close, a soft chirp each and a heart: a happy purr together
 //    cheekSquish  side by side, leaning together, two gentle presses (squash + a soft squish each) and a giggle
 //    twirl        face to face, each spins once (the second a beat after the first), twice, then a small bow and a heart
 //    hopAlong     side by side: one hops, the other copies half a second later, three times (follow the leader, on the spot)
@@ -18,14 +17,14 @@ import simd
 extension SocialKind {
     /// The "we like each other" kinds (the Park gives friendship a bonus while one is on).
     var isFriendly: Bool {
-        switch self { case .chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround, .swayHug, .danceOff, .whisperGiggle, .shyWave, .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .spinHug: return true; default: return false }
+        switch self { case .chestBump, .highFive, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround, .swayHug, .danceOff, .whisperGiggle, .shyWave, .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .spinHug: return true; default: return false }
     }
 }
 
 enum FriendTuning {
     /// Base weights in the social pick (the older kinds: boop 3, follow 2 ...).
     // 2026-11-06 user: standing hand-holding too often; restore when the hands emotes get their own looks (r4-hands)
-    static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.hum, 1.8), (.cheekSquish, 0.9), (.twirl, 2.0), (.hopAlong, 2.0),
+    static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.cheekSquish, 0.9), (.twirl, 2.0), (.hopAlong, 2.0),
                                                       (.littleRace, 1.3), (.tag, 1.3), (.leapfrog, 1.2), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2),
                                                       (.swayHug, 1.5), (.danceOff, 1.3), (.whisperGiggle, 0.65), (.shyWave, 1.2)]
     /// Closeness multiplier by friendship level (stranger, pal, friend, best friend); housemates are 1.
@@ -36,10 +35,18 @@ enum FriendTuning {
     static let taste: [JellyFeature: Set<SocialKind>] = [
         .none: [.highFive, .chestBump, .littleRace, .peekaboo],
         .spines: [.chestBump, .highFive, .hopAlong, .tag, .leapfrog, .littleRace],
-        .daisy: [.hum, .cheekSquish, .cuddleLean, .backToBack],
-        .wings: [.twirl, .hum, .hopAlong, .mirrorDance, .ringAround, .peekaboo],
+        .daisy: [.cheekSquish, .cuddleLean, .backToBack],
+        .wings: [.twirl, .hopAlong, .mirrorDance, .ringAround, .peekaboo],
     ]
     static let tasteMul: Float = 1.5
+    /// 2026-11-06 (variety): the kinds that stay reachable at night (back to back, sway hug, twirl, hop along, peekaboo): their fast-move night cut is 30 % instead of 80 % and they get a boost.
+    static let nightCalm: Set<SocialKind> = [.backToBack, .swayHug, .twirl, .hopAlong, .peekaboo]
+    static let nightBoost: Float = 0.8
+    /// The standing hand-on-partner kinds: together they take at most this share of a pick (the user saw the hand-on-arm pose "too often", 2026-11-06).
+    static let handKinds: Set<SocialKind> = [.boop, .cheekSquish, .whisperGiggle, .highFive]
+    static let handShareMax: Float = 0.05
+    /// A pair does not repeat a kind within its last `pairMemory` sessions.
+    static let pairMemory = 3
 }
 
 extension BlobBrain {
@@ -64,10 +71,23 @@ extension BlobBrain {
             if k == .highFive, (socialBook.fiveCool[o.steerID] ?? 0) > 0 || (o.socialBook.fiveCool[steerID] ?? 0) > 0 { continue }          // (a pair high-fives at most once a minute)
             var x = base * c
             if k == .highFive { x *= EmoteTuning.fiveWeight / 2.2 * (o.socialWandering ? EmoteTuning.fiveCrossingBoost : 1) }          // (modest; likelier when they cross paths: he is out on a wander leg)
-            let tender = k == .hum || k == .cheekSquish || k == .cuddleLean || k == .backToBack
-            if tender { x *= (grumpy ? 0.3 : 1) * (1 + 0.6 * night) } else { x *= grumpy ? 0.15 : 1; if k.isFast { x *= 1 - 0.8 * night } }
+            let tender = k == .cheekSquish || k == .cuddleLean || k == .backToBack
+            if tender { x *= (grumpy ? 0.3 : 1) * (1 + 0.6 * night) } else { x *= grumpy ? 0.15 : 1; if k.isFast { x *= 1 - (FriendTuning.nightCalm.contains(k) ? 0.3 : 0.8) * night } }
+            if FriendTuning.nightCalm.contains(k) { x *= 1 + FriendTuning.nightBoost * night }          // (2026-11-06 variety: at night the gentle lively ones are the ones that run, not only the hand kinds)
             if taste.contains(k) { x *= FriendTuning.tasteMul }
             w.append((k, x))
+        }
+    }
+
+    /// 2026-11-06 (variety): drop the kinds this pair did in its last few sessions, and cap the hand-on-partner kinds' combined share of the table.
+    func socialVarietyShape(_ w: inout [(SocialKind, Float)], partner o: BlobBrain) {
+        let recent = Set((socialBook.pairRecent[o.steerID] ?? []) + (o.socialBook.pairRecent[steerID] ?? []))
+        let kept = w.filter { !recent.contains($0.0) }
+        if kept.count >= 6 { w = kept }
+        let hand = w.filter { FriendTuning.handKinds.contains($0.0) }.reduce(0) { $0 + $1.1 }, rest = w.reduce(0) { $0 + $1.1 } - hand
+        if hand > 0, hand > FriendTuning.handShareMax / (1 - FriendTuning.handShareMax) * rest {
+            let f = FriendTuning.handShareMax / (1 - FriendTuning.handShareMax) * rest / hand
+            for i in w.indices where FriendTuning.handKinds.contains(w[i].0) { w[i].1 *= f }
         }
     }
 
@@ -91,14 +111,14 @@ extension BlobBrain {
             s.goal = spot
             o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
-        case .chestBump, .hum, .twirl:
+        case .chestBump, .twirl:
             guard d > 0.5, d < 5.5 else { return false }
-            let gapK: Float = kind == .twirl ? 1.1 : (kind == .hum ? 0.82 : 0.78)
+            let gapK: Float = kind == .twirl ? 1.1 : 0.78
             let away = (me - you) / max(d, 1e-3)
             let want = you + away * standGap(o, along: away, peerGap * gapK)
             let spot = closeFixed(want)
             guard simd_distance(spot, want) < 0.12, spotFree(spot, besides: [self, o]) else { return false }
-            let s = newSession(kind, with: o, duration: kind == .hum ? vDur(4.6) : 0)
+            let s = newSession(kind, with: o, duration: 0)
             s.goal = spot
             o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(me)
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
@@ -113,7 +133,6 @@ extension BlobBrain {
         switch s.kind {
         case .chestBump: driveChestBump(s, o, isA, sim)
         case .highFive: driveHighFive(s, o, isA, sim)
-        case .hum: driveHum(s, o, isA)
         case .cheekSquish: driveCheekSquish(s, o, isA)
         case .twirl: driveTwirl(s, o, isA, sim)
         case .hopAlong: driveHopAlong(s, o, isA, sim)
@@ -248,30 +267,7 @@ extension BlobBrain {
         }
     }
 
-    // MARK: happy hum
 
-    private func driveHum(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool) {
-        if openFaceToFace(s, o, isA, settle: 0.45) { return }
-        faceEach(o)
-        let ft = s.phaseT
-        let lean = smooth01(ft / 0.8) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
-        socialBook.wantPitch = 0.10 * lean
-        socialBook.wantRoll = (isA ? 1 : -1) * 0.05 * lean
-        socialBook.wantEyes = 1 - 0.9 * lean                                                  // eyes closed
-        socialBook.wantSquash = 1 - 0.022 * lean * (0.6 + 0.4 * sinf(2 * .pi * ft * 1.3))    // the hum, felt as a faint shiver
-        // a soft ripple about every 1.1 s, one chirp each (a first, b after), and a heart
-        if lean > 0.6, ft.truncatingRemainder(dividingBy: 1.1) < 0.03 { jellyKick = max(jellyKick, impactKick(0.7)) }
-        if isA {
-            if !s.impacted, ft > 0.7 {
-                s.impacted = true
-                AudioHub.shared.chirp(jelly: steerID, .happy)
-                onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
-            }
-            if s.passes == 0, ft > 1.6 { s.passes = 1; AudioHub.shared.chirp(jelly: o.steerID, .babble) }
-            if s.passes == 1, ft > 3.0 { s.passes = 2; AudioHub.shared.chirp(jelly: steerID, .babble) }
-            if ft > s.duration { s.finish(.done) }
-        }
-    }
 
     // MARK: cheek squish
 

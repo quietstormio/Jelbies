@@ -436,6 +436,7 @@ final class SocialTests: XCTestCase {
             XCTAssertNil(ContactStance.table.keys.first { $0.rawValue.lowercased().contains("noseboop") || $0.rawValue.lowercased().contains("kiss") })
         }
         XCTAssertNil(SocialKind(rawValue: "noseBoop"))
+        XCTAssertNil(SocialKind(rawValue: "hum"), "hum (face to face, heads touching, still) read as a kiss: removed 2026-11-06")
         let weighted = FriendTuning.base.map { $0.0 } + FriendTuning.taste.values.flatMap { Array($0) }
         XCTAssertFalse(weighted.contains { $0.rawValue.lowercased().contains("noseboop") || $0.rawValue.lowercased().contains("kiss") })
     }
