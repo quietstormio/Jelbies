@@ -106,7 +106,7 @@ nonisolated enum ParkTextSafety {
         "tits", "blowjob", "handjob", "orgasm", "erotic", "horny", "cumshot", "dildo", "masturbat", "pedo", "incest", "molest", "sexy", "sex",
         "kill", "murder", "suicide", "stab", "bomb", "terror", "slaughter", "genocide", "torture", "gunshot",
         "cocaine", "heroin", "meth", "marijuana", "cannabis", "vodka", "whiskey", "tequila", "alcohol", "drunk", "booze", "weed", "stoner",
-        "kiss", "boyfriend", "girlfriend", "sweetheart", "romance", "lover",
+        "kiss", "boyfriend", "girlfriend", "sweetheart", "romance",   // "lover" is whole-word only (it hides in "Clover")
         "selfharm", "killmyself", "kms", "kys", "hateyou", "idiot", "stupid",
     ]
 }
