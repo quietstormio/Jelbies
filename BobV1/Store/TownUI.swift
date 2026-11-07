@@ -1,7 +1,7 @@
 //
 //  TownUI.swift
 //  Places to go: the "Go out" pill, the Town ("Where to?": a little map, the destinations; the player goes alone, the Jellies stay home), the Track panel (Waddle / Focus, prizes,
-//  Go race; Train comes next), the Bag sheet (boosts on now, snacks / wear / care with a pink action each, the room-space meter) and the HUD buttons
+//  Go race; Train comes next), the Bag sheet (snacks / wear / care with a pink action each, the room-space meter) and the HUD buttons
 //  (Drops pill, Bag, Go out, the boost badge).
 //
 
@@ -458,7 +458,6 @@ struct BagSheet: View {
                         Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
-                if tab != .wear { boosts }
                 LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 140, showNote: false, pick: { who = $0 })
                 ScrollViewReader { proxy in ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) {
                     ForEach(tabs) { t in
@@ -527,25 +526,6 @@ struct BagSheet: View {
                 .accessibilityIdentifier("bag-room-\(d.id.rawValue)")
             }
         }
-    }
-
-    private var boosts: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Boosts on now").font(SK.font(12, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
-            let rows = care.perkRows.filter { !$0.perks.isEmpty }
-            if rows.isEmpty {
-                Text("None. A snack can give one.").font(SK.font(13, .bold)).foregroundStyle(SK.muted)
-            }
-            ForEach(rows, id: \.id) { r in
-                HStack(alignment: .top, spacing: 8) {
-                    Text(r.name).font(SK.font(14, .black)).foregroundStyle(SK.ink).lineLimit(1).fixedSize().frame(minWidth: 42, alignment: .leading)
-                    FlowChips(items: r.perks.map { ($0.kind, $0.left) })
-                }
-            }
-        }
-        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(SK.card))
-        .accessibilityIdentifier("bag-boosts")
     }
 
     private func row(_ item: StoreItem) -> some View {
@@ -639,14 +619,6 @@ struct BagSheet: View {
         }
         .padding(14).background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(SK.card))
         .accessibilityElement(children: .combine).accessibilityIdentifier("bag-room-meter")
-    }
-}
-
-/// Chips that wrap onto more lines.
-struct FlowChips: View {
-    let items: [(PerkKind, TimeInterval)]
-    var body: some View {
-        FlowLayout(spacing: 6) { ForEach(items, id: \.0.rawValue) { PerkChip(kind: $0.0, left: $0.1) } }
     }
 }
 

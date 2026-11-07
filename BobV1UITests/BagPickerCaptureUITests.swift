@@ -17,7 +17,7 @@ final class BagPickerCaptureUITests: XCTestCase {
         XCTAssertTrue(app.buttons["bag-close"].waitForExistence(timeout: 300))
         sleep(4)
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'who-'")).count, 2)
-        XCTAssertEqual(app.otherElements["bag-boosts"].exists, tab != "wear")
+        XCTAssertEqual(app.otherElements["bag-boosts"].exists, false)
         XCTAssertTrue(app.otherElements["lobby-picker-empty"].exists || app.staticTexts["Empty slot"].exists)
         try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: "\(out)/\(name).png"))
         app.terminate()
