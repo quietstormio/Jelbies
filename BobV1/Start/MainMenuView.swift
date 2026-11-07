@@ -58,7 +58,6 @@ struct MainMenuView: View {
     let flow: StartFlow
     private let hasSave = StartFlow.hasSave()
     @State private var confirmNew = false
-    @State private var visible = true
     @State private var loading = false          // Continue / New Game tapped: the spinner replaces the buttons until the screen is swapped
     private var theme = ThemeStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -86,7 +85,6 @@ struct MainMenuView: View {
         .animation(.easeInOut(duration: 0.2), value: confirmNew)
         .animation(.easeInOut(duration: 0.5), value: theme.selection)
         .onAppear {
-            visible = true
             LaunchTiming.mark("menu shown")
             #if targetEnvironment(simulator)
             if hasSave, UserDefaults.standard.object(forKey: "AutoContinue") != nil {          // timing aid: taps Continue after N seconds
@@ -95,7 +93,6 @@ struct MainMenuView: View {
             }
             #endif
         }
-        .onDisappear { visible = false }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
     }
 
@@ -108,12 +105,14 @@ struct MainMenuView: View {
     }
 
     private func title(width: CGFloat) -> some View {
-        // The swing frame is 620x307 with the logo ~96% of its width.
-        SpinLogo(still: still, active: visible)
-            .frame(width: width / 0.96)
-            .aspectRatio(620.0 / 307.0, contentMode: .fit)
-            .shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * width / 364)
-            .accessibilityElement().accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
+        // The still official logo, centred in the same 620x307 frame the old swing video used, so the layout above and below it does not move.
+        ZStack {
+            Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: width)
+                .shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * width / 364)
+        }
+        .frame(width: width / 0.96)
+        .aspectRatio(620.0 / 307.0, contentMode: .fit)
+        .accessibilityElement().accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
     }
 
     private func buttons(k: CGFloat) -> some View {
@@ -152,70 +151,6 @@ struct MainMenuView: View {
         }
     }
 }
-
-/// Swing + jumps loop: 210 frames, 30 fps, 7 s seamless (menuswing_000...209). Decoded frames are ~760 KB each,
-/// so only a small sliding window is kept in memory and decoded ahead on a background queue.
-@MainActor private final class SwingFrames {
-    static let shared = SwingFrames()
-    static let count = 210
-    static let fps: Double = 30
-    private let ahead = 20, behind = 3
-    private var cache: [Int: UIImage] = [:]
-    private var pending = Set<Int>()
-
-    nonisolated private static func decode(_ i: Int) -> UIImage? {
-        let n = String(format: "menuswing_%03d", i)
-        guard let u = Bundle.main.url(forResource: n, withExtension: "png") ?? Bundle.main.url(forResource: n, withExtension: "png", subdirectory: "MenuSwing"),
-              let img = UIImage(contentsOfFile: u.path) else { return nil }
-        return img.preparingForDisplay() ?? img
-    }
-
-    /// Returns frame i if decoded (else the nearest earlier decoded one) and prefetches the window ahead.
-    func frame(_ i: Int) -> UIImage? {
-        let want = (-behind...ahead).map { (i + $0 + Self.count) % Self.count }
-        let keep = Set(want)
-        for k in cache.keys where !keep.contains(k) { cache[k] = nil }
-        for k in want where cache[k] == nil && !pending.contains(k) {
-            pending.insert(k)
-            Task.detached(priority: .userInitiated) {
-                let img = SwingFrames.decode(k)
-                await MainActor.run { [self] in
-                    pending.remove(k)
-                    if let img { cache[k] = img }
-                }
-            }
-        }
-        if let f = cache[i] { return f }
-        for d in 1..<behind + 1 { if let f = cache[(i - d + Self.count) % Self.count] { return f } }
-        return nil
-    }
-}
-
-struct SpinLogo: View {
-    let still: Bool
-    let active: Bool
-    @State private var start = Date()
-
-    var body: some View {
-        Group {
-            if still || !active {
-                Image(uiImage: SwingFrames.shared.frame(0) ?? UIImage()).resizable().scaledToFit().themedLogo()
-                    .overlay { if SwingFrames.shared.frame(0) == nil { Image("JelbiesLogo").resizable().scaledToFit().themedLogo() } }
-            } else {
-                TimelineView(.animation(minimumInterval: 1.0 / SwingFrames.fps)) { tl in
-                    let i = Int(tl.date.timeIntervalSince(start) * SwingFrames.fps) % SwingFrames.count
-                    if let img = SwingFrames.shared.frame(i) {
-                        Image(uiImage: img).resizable().scaledToFit().themedLogo()
-                    } else {
-                        Image("JelbiesLogo").resizable().scaledToFit().themedLogo()
-                    }
-                }
-            }
-        }
-        .onChange(of: active) { _, _ in start = Date() }
-    }
-}
-
 
 /// Title buttons: Continue = white pill with a solid lip; New Game = blue pill with a white rim. Press drops by the lip.
 /// Colours come from the theme palette (Sky Blue New Game fill is #3672B3: white text 4.98:1; the mockup's #3E7DC0 is 4.28:1).
