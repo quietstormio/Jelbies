@@ -137,7 +137,8 @@ enum SleepTuning {
     static let shiftEvery: ClosedRange<Float> = 9...22, twitchEvery: ClosedRange<Float> = 9...30, halfEvery: ClosedRange<Float> = 70...200
     // (2026-11-04: the turn used to wander up to +-0.5 rad at 0.12 rad/s and read as a slow clockwise spin; now small, slow, alternating and always back to centre)
     // (2026-11-06 "rolling over like a kid in bed": maxRoll 0.30 -> `maxRoll` below, shifts about 2.2x as often, and 60 % of them are roll-overs; see `rollRateMax`)
-    static let maxRoll: Float = 0.75, maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
+    nonisolated(unsafe) static var maxRoll: Float = 0.75          // (a var only so the no-slide test can compare against the old 0.30)
+    static let maxYaw: Float = 0.14, rollRate: Float = 0.05, yawRate: Float = 0.03
     /// A toss / turn eases (smoothstep, so it starts and ends at rest) over this long; nothing a sleeper does is faster. (2026-11-05: they "twitch": the old toss
     /// popped back to flat the frame its constant-rate chase arrived, and there were 0.45 s arm / foot twitches. Both gone.)
     static let tossTime: ClosedRange<Float> = 1.8...3.0
@@ -668,21 +669,18 @@ extension BlobBrain {
         return goal.sign == .minus ? -min(-goal, cap) : min(goal, cap)
     }
 
+    /// A slight change of where he lies. NEVER toward (or at all beside) another sleeper (user 2026-11-06 "they slide towards each other, like to hold hands"):
+    /// a sleeper with a neighbour within `rollNearDist` (a snuggle row, a hand-hold pair, a cuddle) does not move once he lies; a hold only exists where the walk
+    /// chose a hold spot before the flop, and a pair that lay down apart simply lies there. (The old partner pull "close up to the footprint gap" is gone.)
     private func sleepPlanDrift(_ f: inout SleepFidget, _ sc: Float) {
         let T = SleepTuning.self
         let mates = sleepMates
-        var to = position
-        if sleep.bed < 0, sleep.mode != .hold, let o = sleep.partner, o.isNapping {
-            let d = o.position - position, len = simd_length(d)
-            let want = Self.lieReach(d, yaw: sleep.lieYaw) + 0.04
-            if len > want + 0.05 { to = position + d / len * min(0.3 * sc, len - want) }
-        }
-        if to == position {
-            let cap = sleep.bed >= 0 ? T.driftMaxBed : T.driftMax
-            let a = rand(0, 2 * .pi), m = rand(0.05, cap) * sc
-            to = position + SIMD2(cosf(a), sinf(a)) * m
-            if simd_distance(to, f.home) > cap { return }
-        }
+        if mates.contains(where: { simd_distance($0.position, position) < T.rollNearDist }) { return }
+        let cap = sleep.bed >= 0 ? T.driftMaxBed : T.driftMax
+        let a = rand(0, 2 * .pi), m = rand(0.05, cap) * sc
+        let to = position + SIMD2(cosf(a), sinf(a)) * m
+        if simd_distance(to, f.home) > cap { return }
+        for o in mates where simd_distance(o.position, to) < simd_distance(o.position, position) { return }          // never closer to anybody
         if sleep.bed < 0 {
             guard sleepSpotOK(to, mates: mates.filter { $0 === sleep.partner }, relaxed: true, hold: sleep.mode == .hold) else { return }
             guard sleepFloorOK(to, relaxed: true) else { return }
