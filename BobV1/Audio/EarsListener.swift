@@ -55,8 +55,6 @@ nonisolated final class EarsPipeline: NSObject, @unchecked Sendable, SNResultsOb
     let queue = DispatchQueue(label: "io.mgsllc.BobV1.ears", qos: .userInitiated)
     let sampleRate: Double
     let dsp: EarsDSP
-    /// The bubble wand's blow detector: fed from the same tap (one engine, fanned out), read on main (BubbleWand).
-    let blow: BlowDetector
     private(set) var detector: EarsDetector
     private(set) var clock = EarsClock()
     private(set) var analyzer: SNAudioStreamAnalyzer?
@@ -76,7 +74,6 @@ nonisolated final class EarsPipeline: NSObject, @unchecked Sendable, SNResultsOb
     init(format: AVAudioFormat, classify: Bool) {
         sampleRate = format.sampleRate
         dsp = EarsDSP(sampleRate: format.sampleRate)
-        blow = BlowDetector(sampleRate: format.sampleRate)
         detector = EarsDetector(usesClassifier: false)
         super.init()
         if classify {
@@ -110,11 +107,11 @@ nonisolated final class EarsPipeline: NSObject, @unchecked Sendable, SNResultsOb
         let streamStart = dsp.time
         if hostTime != 0 { clock.note(bufferHost: AVAudioTime.seconds(forHostTime: hostTime), streamStart: streamStart) }
         // mono: channel 0 (the phone mic is mono; a stereo accessory's left channel is plenty)
-        if buffer.stride == 1 { let u = UnsafeBufferPointer(start: ch[0], count: n); dsp.feed(u); blow.feed(u) }
+        if buffer.stride == 1 { let u = UnsafeBufferPointer(start: ch[0], count: n); dsp.feed(u) }
         else {
             if samples.count < n { samples = [Float](repeating: 0, count: n) }
             for i in 0..<n { samples[i] = ch[0][i * buffer.stride] }
-            samples.withUnsafeBufferPointer { let u = UnsafeBufferPointer(start: $0.baseAddress, count: n); dsp.feed(u); blow.feed(u) }
+            samples.withUnsafeBufferPointer { let u = UnsafeBufferPointer(start: $0.baseAddress, count: n); dsp.feed(u) }
         }
         if let analyzer { analyzer.analyze(buffer, atAudioFramePosition: framePos) }
         framePos += AVAudioFramePosition(n)
@@ -146,7 +143,7 @@ nonisolated final class EarsPipeline: NSObject, @unchecked Sendable, SNResultsOb
 
     /// The app played a sound effect at host time `media`.
     func noteAppSound(at media: Double) { queue.async { [self] in detector.noteAppSound(at: clock.stream(media)) } }
-    func setAppMusic(_ l: Float) { lock.lock(); appMusic = l; lock.unlock(); blow.appLoud = l >= BlowDetector.appLoudLevel }
+    func setAppMusic(_ l: Float) { lock.lock(); appMusic = l; lock.unlock() }
     private func readAppMusic() -> Float { lock.lock(); defer { lock.unlock() }; return appMusic }
     private func publishLevel(_ rms: Float) {
         let db = 20 * log10(max(rms, 1e-6))
@@ -250,7 +247,6 @@ final class Ears {
             reactor.reset(jellies)
             state = .off; hearing = nil; level = 0
             note("off")
-            if wandListening { start() }          // the bubble wand still wants the mic
             return
         }
         if inert { defaults.set(true, forKey: Self.key); if state == .off { state = .listening }; return }
@@ -273,36 +269,7 @@ final class Ears {
         if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
     }
 
-    // MARK: the bubble wand's microphone (Toys/BubbleWand.swift)
-
-    /// The wand is out and wants to hear blowing: the SAME engine/tap as Ears (started if the Ears switch is off; then its sound events are dropped).
-    /// The mic permission is asked the same way as for Ears; a refusal sets `wandMicDenied` and the wand falls back to tap-and-hold.
-    @ObservationIgnored private(set) var wandListening = false
-    private(set) var wandMicDenied = false
-    var wantsEngine: Bool { isOn || wandListening }
-    /// 0...1 blow strength from the mic right now (0 when not blowing or no engine).
-    var blowStrength: Float { pipeline?.blow.strength ?? 0 }
-    var micReadyForBlow: Bool { pipeline != nil && state == .listening }
-
-    func setWandListening(_ on: Bool) {
-        guard on != wandListening else { return }
-        wandListening = on
-        if !on {
-            if !isOn, !inert { stopEngine(); if sessionUp { sessionUp = false; sessionHook(false) }; state = .off; hearing = nil; level = 0 }
-            return
-        }
-        wandMicDenied = false
-        guard !inert else { return }
-        if isOn, engine != nil || starting { return }
-        if permissionDenied() { wandMicDenied = true; return }
-        if permissionGranted() { start(); return }
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let ok = await self.requestPermission()
-            guard self.wandListening else { return }
-            if ok { self.start() } else { self.wandMicDenied = true }
-        }
-    }
+    var wantsEngine: Bool { isOn }
 
     // MARK: foreground / voice
 
@@ -431,7 +398,7 @@ final class Ears {
         var events = injected; injected.removeAll(keepingCapacity: true)
         if let p = pipeline {
             let d = p.drain()
-            if isOn { events += d.events }          // (only the wand is listening: the sound reactions stay quiet)
+            if isOn { events += d.events }
             hudClock += 1
             if isOn, hudClock % 6 == 0 {
                 if hearing != d.hearing { hearing = d.hearing }

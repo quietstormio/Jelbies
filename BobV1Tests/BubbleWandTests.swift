@@ -126,10 +126,34 @@ final class BubbleWandTests: XCTestCase {
         XCTAssertEqual(wand.field.bubbles.count, 1)
     }
 
+    func testBubbleModeOpensNoMicrophone() {
+        let before = Ears.shared.state
+        let rs = rigs([SIMD2(-1.5, 0)])
+        wand.activate(care: nil)
+        wand.holding = true
+        step(rs, seconds: 1.0)
+        XCTAssertGreaterThan(wand.field.spawned, 3, "holding still makes bubbles")
+        XCTAssertFalse(Ears.shared.wantsEngine, "the wand never asks Ears for the input engine (no mic tap, no orange dot)")
+        XCTAssertEqual(Ears.shared.state, before, "Ears is untouched by the wand")
+        wand.deactivate()
+        XCTAssertEqual(Ears.shared.state, before)
+    }
+
+    func testBubbleModeShowsNoBall() {
+        let c = GameCare(jellyCount: 3, persistent: false, defaults: UserDefaults(suiteName: "Bubbles.noball.\(UUID())")!)
+        c.play.begin(ball: .beachball, title: "Beach ball", jellies: [], snapCamera: true)
+        XCTAssertTrue(c.play.ballGame, "the beach ball game draws its ball")
+        c.endPlay()
+        c.play.beginToy(title: wand.title); wand.begin(care: c)          // (what beginPlay(wand:) does once canPlay allows it)
+        XCTAssertTrue(c.play.active)
+        XCTAssertEqual(c.play.ballKind, .beachball, "the last thrown ball is still remembered ...")
+        XCTAssertFalse(c.play.ballGame, "... but the bubble wand's toy phase draws no ball (refreshTossBall guards on ballGame)")
+        c.endPlay()
+    }
+
     func testTapAndHoldBlowsWithoutAMic() {
         let rs = rigs([SIMD2(-1.5, 0)])
         wand.activate(care: nil)
-        XCTAssertTrue(wand.micUnavailable, "no engine under XCTest: the wand says hold to blow")
         step(rs, seconds: 0.5)
         XCTAssertEqual(wand.field.spawned, 0, "no blowing, no bubbles")
         wand.holding = true

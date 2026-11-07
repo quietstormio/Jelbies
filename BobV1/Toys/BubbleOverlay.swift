@@ -186,7 +186,7 @@ struct BubbleWandControls: View {
     var body: some View {
         VStack {
             Spacer()
-            Text(wand.micUnavailable ? "Hold the wand to blow bubbles" : "Blow on the microphone, or hold the wand")
+            Text("Hold the wand to blow bubbles")
                 .font(.system(size: 14, weight: .bold, design: .rounded)).foregroundStyle(Color(red: 0.25, green: 0.33, blue: 0.5))
                 .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white.opacity(0.92)))
                 .accessibilityHidden(true)

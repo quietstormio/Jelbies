@@ -1,12 +1,11 @@
 //
 //  BubbleWand.swift
-//  The bubble wand, a play-mode toy (registered through PlayToyRegistry; bought once in the shop). The wand sits at the bottom of the screen. BLOW into
-//  the microphone (Audio/BlowDetector.swift, fed from Ears' single input tap) or TAP AND HOLD the wand (the always-available fallback, also for VoiceOver
-//  and when the mic is refused): bubbles stream out, rise, drift into the room and pop on their own after a few seconds.
+//  The bubble wand, a play-mode toy (registered through PlayToyRegistry; bought once in the shop). The wand sits at the bottom of the screen. TAP AND HOLD the wand (also the VoiceOver
+//  action; no microphone, user 2026-11-06): bubbles stream out, rise, drift into the room and pop on their own after a few seconds.
 //  The Jelbies play: some WATCH a bubble (turn and look), some CHASE one (walk under it, hop, pop it with the head: a soft pop, a sparkle, a giggle),
 //  at most two chase at once so it never looks like a drill; now and then two want the same bubble and one gets there first. A drifting bubble that
 //  touches a body pops too. Three pops in a row (within 8 s) give hearts. Bubbles draw in Toys/BubbleOverlay.swift (a CALayer overlay, no blur/material).
-//  Pure parts: BubbleField (the sim), BlowDetector (the sound). All time is the wand's own clock (steps of the fixed tick), so tests are deterministic.
+//  Pure part: BubbleField (the sim). All time is the wand's own clock (steps of the fixed tick), so tests are deterministic.
 //
 
 import Foundation
@@ -58,8 +57,6 @@ final class BubbleWand: PlayToy {
     var holding = false
     /// 0...1 how hard the player is blowing right now (mic, hold or demo): the wand's meter.
     private(set) var strength: Float = 0
-    /// True when the microphone path is unavailable (refused, or no engine): the wand then says "hold to blow".
-    var micUnavailable: Bool { ears.wandMicDenied || !ears.micReadyForBlow }
     /// The view size the overlay draws in (points); the mouth and the pixel scale follow it.
     @ObservationIgnored var viewSize = CGSize(width: 440, height: 956) { didSet { if viewSize != oldValue { mouthCache = nil } } }
 
@@ -67,7 +64,6 @@ final class BubbleWand: PlayToy {
     struct PopFX: Equatable { var pos: SIMD3<Float>; var born: Float; var size: Float }
     @ObservationIgnored private(set) var fx: [PopFX] = []
     @ObservationIgnored private(set) var clock: Float = 0
-    @ObservationIgnored var ears: Ears = .shared
     /// Simulated blow for captures / tests: strength by time since `start` (nil = off).
     @ObservationIgnored var demo: ((Float) -> Float)?
     @ObservationIgnored private var demoStart: Float = 0
@@ -109,17 +105,13 @@ final class BubbleWand: PlayToy {
 
     /// The picker's call: Play mode on with the wand (GameCare.beginPlay(wand:) -> `begin`).
     func activate(care: GameCare) { care.beginPlay(wand: self) }
-    /// Play mode is up (or a test): the wand comes out and listens.
-    func begin(care: GameCare) { activate(care: care, listen: !noMic) }
-    @ObservationIgnored private var noMic = false
-    func activate(care: GameCare?) { activate(care: care, listen: true) }
-    /// `listen: false` = no microphone (the capture demo, so no permission prompt covers the screen).
-    func activate(care: GameCare?, listen: Bool) {
+    /// Play mode is up (or a test): the wand comes out.
+    func begin(care: GameCare) { activate(care: Optional(care)) }          // (the optional overload: the plain one is the picker's entry and would re-enter beginPlay)
+    func activate(care: GameCare?) {
         self.care = care
         guard !active else { return }
         active = true
         reset()
-        if listen { ears.setWandListening(true) }
     }
     func deactivate() {
         if let c = care, c.play.active { c.endPlay() }          // (Done / the picker's put-away: Play mode goes too; endPlay calls back, then `active` is already false)
@@ -127,13 +119,11 @@ final class BubbleWand: PlayToy {
         active = false
         holding = false
         reset()
-        ears.setWandListening(false)
         states.removeAll()
     }
     /// Test seam: back to a fresh, put-away wand (counters too).
     func resetForTests() {
         BubbleTuning.contactPopChance = 0.35
-        noMic = false
         deactivate(); active = false; clock = 0; demo = nil; burstUntil = -1; states.removeAll(); field = BubbleField()
         popsByJelly = [:]; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
     }
@@ -146,8 +136,7 @@ final class BubbleWand: PlayToy {
 
     /// `-BubbleDemo 1`: the wand comes out by itself and a simulated blow plays (pulses of 2.5 s every 4 s). `2` blows without pause.
     func startDemo(mode: Int, care: GameCare?) {
-        noMic = true          // (the capture demo never asks for the microphone)
-        if let care, care.canPlay { care.beginPlay(wand: self) } else { activate(care: care, listen: false) }
+        if let care, care.canPlay { care.beginPlay(wand: self) } else { activate(care: care) }
         demoStart = clock
         demo = mode == 2 ? { _ in 0.7 } : { t in t.truncatingRemainder(dividingBy: 4) < 2.5 ? 0.45 + 0.4 * sinf(t * 2.1).magnitude : 0 }
     }
@@ -182,7 +171,6 @@ final class BubbleWand: PlayToy {
         if let d = demo { s = d(clock - demoStart) }
         if clock < burstUntil { s = max(s, BubbleTuning.holdStrength) }
         if holding { holdT += dt; s = max(s, min(BubbleTuning.holdStrength + 0.3 * holdT, 0.9)) } else { holdT = 0 }
-        if !ears.wandMicDenied, ears.micReadyForBlow { s = max(s, ears.blowStrength) }
         strength = s
         // 2. bubbles out
         if s > 0.05 {

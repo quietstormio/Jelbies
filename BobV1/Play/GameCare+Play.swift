@@ -117,10 +117,10 @@ extension GameCare {
 
     // MARK: drawing
 
-    /// The ball and its shadow, drawn with the room's animating decor. True = this frame's active decor mesh was set here.
+    /// The ball and its shadow (never in the bubble wand's toy phase: no ball there, whatever ball was thrown last), drawn with the room's animating decor. True = this frame's active decor mesh was set here.
     func refreshTossBall(_ room: RoomRenderer, active: Set<Int>, time: Float) -> Bool {
         let p = play
-        guard p.active, p.camBlend > 0.02 || p.phase != .inHand else {
+        guard p.ballGame, p.camBlend > 0.02 || p.phase != .inHand else {
             if playShown { playShown = false; room.setDecorActive(RoomMesh()); decorDrawn.activeShown = false }
             return false
         }
