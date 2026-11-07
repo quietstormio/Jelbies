@@ -47,4 +47,6 @@ nonisolated enum SpaExitEmotes {
         return picks.shuffled(using: &g)
     }
     nonisolated(unsafe) static var lastSet: [IdleKind] = []
+    /// Test seam: fixed emotes for the next exit (by picked order).
+    nonisolated(unsafe) static var forced: [IdleKind]?
 }
