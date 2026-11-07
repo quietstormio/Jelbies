@@ -45,8 +45,8 @@ nonisolated struct NowPlaying: Equatable, Sendable {
         if !SessionPolicy.gameMusicAllowed(musicOn: musicOn, otherAudioPlaying: otherAudioPlaying) {
             return NowPlaying(state: .yourMusic, line: "Your music is playing", note: "Game music rests until it stops", canSkip: false)
         }
-        if scene.isPlaylist {          // the café plays its own playlist: "Café · title", Skip works
-            return NowPlaying(state: .playing, line: "\(sceneLabel(scene)) · \(sceneTrack.flatMap { CafeMusic.title($0) } ?? "Playlist")", note: nil, canSkip: true)
+        if scene.isPlaylist {          // the café and the park play their own playlists: "Café · title", "Park · title", Skip works
+            return NowPlaying(state: .playing, line: "\(sceneLabel(scene)) · \(sceneTrack.flatMap { (scene == .park ? ParkMusic.title($0) : CafeMusic.title($0)) } ?? "Playlist")", note: nil, canSkip: true)
         }
         if scene != .none {
             return NowPlaying(state: .screen, line: "\(sceneLabel(scene)) music", note: "Plays on its own here", canSkip: false)
