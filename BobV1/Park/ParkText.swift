@@ -23,6 +23,8 @@ enum ParkText {
     private static let instructions = """
     You write tiny bits of text for cute jelly pet creatures in a kids' game. Keep everything gentle, kind and silly. \
     One short sentence at most. No emoji, no quotes, no hashtags, no real people, no brands.
+    This is a friendly, cozy park for young children. No romance, no violence, no scary things, no insults, no grown-up topics, \
+    no drinks or medicines, no names of real people or companies. Use only simple, warm, silly words a small child would love.
     """
 
     /// A name, a personality line and a greeting for a new visitor. nil when the model is unavailable or the answer is unusable.
@@ -34,10 +36,13 @@ enum ParkText {
                 let s = LanguageModelSession(instructions: instructions)
                 let r = try await s.respond(to: "A \(colour) jelly creature with a \(style) nature\(signature.isEmpty ? "" : " and \(signature)") visits the park.",
                                             generating: ParkVisitorOut.self, options: GenerationOptions(temperature: 0.8))
-                guard let name = ParkPool.clean(r.content.name, limit: 12), !name.contains(" "),
-                      let blurb = ParkPool.clean(r.content.personality, limit: 56),
+                guard let name = ParkPool.clean(r.content.name, limit: 12, isName: true), !name.contains(" "),
+                      let blurb = ParkPool.clean(r.content.personality, limit: 60),
                       let greeting = ParkPool.clean(r.content.greeting, limit: 48) else { return nil }
                 return ParkWrittenText(name: name, blurb: blurb, greeting: greeting)
+            } catch let e as LanguageModelSession.GenerationError {
+                // guardrailViolation, refusal and every other generation error: the hand-written words stand
+                switch e { case .guardrailViolation, .refusal: return nil; default: return nil }
             } catch { return nil }
         }
         #endif
@@ -54,6 +59,8 @@ enum ParkText {
                 let r = try await s.respond(to: "\(name), a \(style) jelly creature, has just become the player's \(level.title.lowercased()). Write what \(name) says, in 8 words or fewer.",
                                             generating: ParkLineOut.self, options: GenerationOptions(temperature: 0.8))
                 return ParkPool.clean(r.content.line, limit: 48)
+            } catch let e as LanguageModelSession.GenerationError {
+                switch e { case .guardrailViolation, .refusal: return nil; default: return nil }
             } catch { return nil }
         }
         #endif
