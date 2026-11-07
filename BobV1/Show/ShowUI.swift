@@ -382,7 +382,7 @@ struct StudioScreen: View {
                 LobbyHowSheet(rows: [
                     (.hanger, "Dress for the theme", "Pick the rank, then tap Dress up. Things in today\u{2019}s style count most. Gold edge = a match."),
                     (.drop, "Feed and shine", "Theme foods fill the jars. A Clean before the show adds Glow."),
-                    (.feet, "Practice dance", "Dance skill is 30% of the Dance round."),
+                    (.feet, "Practice dance", "Tap the feet on the beat of the studio music."),
                     (.trophy, "Enter the Jelly Show", "Look, Dance and Trick, each scored out of 100."),
                 ], close: { setHow(false) })
                 .zIndex(1)
@@ -595,7 +595,7 @@ struct DancePicker: View {
                 Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("dance-close")
             }
-            Text("Tap the feet on the beat of the studio music. Dance skill is 30% of the Dance round.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+            Text("Tap the feet on the beat of the studio music.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
             ForEach(DanceID.allCases, id: \.rawValue) { d in
                 let open = st?.danceOpen(d) ?? (d == .sway), skill = st?.proficiency(d) ?? 0
                 Button { if open { start(d) } else { AudioHub.shared.play(.notEnough) } } label: {

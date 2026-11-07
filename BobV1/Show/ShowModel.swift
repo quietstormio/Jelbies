@@ -29,8 +29,8 @@ nonisolated enum ShowRank: String, CaseIterable, Codable, Sendable {
     /// Which slots those are, in order (the first `slots` of these).
     var slotOrder: [WearSlot] { Array(ShowRank.allSlotOrder.prefix(slots)) }
     static let allSlotOrder: [WearSlot] = [.head, .feet, .neck, .face, .body, .hands]
-    /// Prompts in the Dance round (16 / 20 / 24 / 28).
-    var promptCount: Int { switch self { case .puddle: return 16; case .pond: return 20; case .lagoon: return 24; case .ocean: return 28 } }
+    /// Prompts in the Dance round: one short song at every rank (20 beats at 0.5 s on the 120 BPM grid = about 10 s). Ranks differ in timing, not length.
+    var promptCount: Int { ShowScoring.dancePrompts }
     /// Puddle and Pond judge one notch kinder (Perfect within 80 ms instead of 60).
     var kindTiming: Bool { self == .puddle || self == .pond }
     var timing: ShowTiming { kindTiming ? .kind : .standard }
@@ -225,8 +225,10 @@ nonisolated enum ShowScoring {
     }
 
     // MARK: Dance
-    /// Dance = 100 x (0.7 accuracy + 0.3 dance skill).
-    static func dance(accuracy: Float, skill: Float) -> Float { 100 * (0.7 * clamp01(accuracy) + 0.3 * clamp01(skill)) }
+    /// Prompts in every Dance round (about 10 s at 120 BPM).
+    static let dancePrompts = 20
+    /// Dance = 100 x accuracy (Perfect 1, Good 0.6, Slip 0).
+    static func dance(accuracy: Float) -> Float { 100 * clamp01(accuracy) }
     /// Perfect 1, Good 0.6, Slip 0.
     static func gradeValue(_ g: DrillGrade) -> Float { switch g { case .perfect: return 1; case .good: return 0.6; case .miss: return 0 } }
     /// The Cheer meter: +1/8 per Perfect, +1/16 per Good, -1/16 per Slip, clamped 0...1.

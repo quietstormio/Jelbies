@@ -92,7 +92,7 @@ extension GameCare {
         let items = rank.slotOrder.compactMap { showOutfitTags(jelly: id)[$0] }
         var s = ShowScores()
         s.look = ShowScoring.look(outfit: ShowScoring.outfitMatch(items: items, slots: rank.slots, theme: theme), main: p.stat(theme.main), friend: p.stat(theme.friend), glow: p.glow, dirt: p.dirt)
-        s.dance = ShowScoring.dance(accuracy: 0.7, skill: p.danceSkill)
+        s.dance = ShowScoring.dance(accuracy: 0.7)
         let known = ShowTrickInfo.stageTricks.filter { p.tricks[$0] != nil }
         var trick: Float = 0
         for k in 0..<ShowScoring.turns {

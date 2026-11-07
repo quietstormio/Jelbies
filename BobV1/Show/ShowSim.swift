@@ -133,14 +133,14 @@ nonisolated struct ShowSim: Sendable {
         guard round == .dance, dance != nil, danceScore == nil else { return [] }
         dance!.tick(songTime: t)
         let ev = dance!.takeEvents()
-        if dance!.finished { danceScore = ShowScoring.dance(accuracy: dance!.accuracy, skill: player.danceSkill) }
+        if dance!.finished { danceScore = ShowScoring.dance(accuracy: dance!.accuracy) }
         return ev
     }
     var danceDone: Bool { danceScore != nil }
     /// On to the Trick round (after the dance has finished; a dance that never ran scores freestyle 0 accuracy).
     mutating func finishDance() {
         guard round == .dance else { return }
-        if danceScore == nil { danceScore = ShowScoring.dance(accuracy: dance?.accuracy ?? 0, skill: player.danceSkill) }
+        if danceScore == nil { danceScore = ShowScoring.dance(accuracy: dance?.accuracy ?? 0) }
         round = .trick
     }
 
@@ -231,8 +231,7 @@ nonisolated struct ShowSim: Sendable {
             if parts.glow < 12 { return "Look was \(name)'s weakest at \(p.lookPts). A Clean before the show makes him glow, and Glow is 20 of the 100." }
             return "Look was \(name)'s weakest at \(p.lookPts). \(theme.main.title) food fills his \(theme.main.title) jar, which counts 70% of the stats part."
         case .dance:
-            return player.danceSkill < 0.5 ? "Dance was \(name)'s lowest at \(p.dancePts). Practice a dance in the Studio: dance skill is 30% of the round."
-                : "Dance was \(name)'s lowest at \(p.dancePts). Tap right on the beat: Perfects are worth most."
+            return "Dance was \(name)'s lowest at \(p.dancePts). Tap right on the beat: Perfects are worth most."
         default:
             return knownTricks.count < 3 ? "Trick was \(name)'s lowest at \(p.trickPts). Teach him more tricks (the Shop has pages): a fresh trick scores 18, a repeat 12."
                 : "Trick was \(name)'s lowest at \(p.trickPts). Practice his tricks by voice so they land more often, and tap when the ring hugs him."

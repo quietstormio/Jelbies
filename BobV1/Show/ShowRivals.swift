@@ -121,7 +121,7 @@ nonisolated enum ShowRivalSource {
     static func scores(for r: ShowRival, theme: ShowTheme, rng g: inout RaceRNG) -> ShowScores {
         var sc = ShowScores()
         sc.look = ShowScoring.look(outfit: r.stats.outfit, main: r.stats.main, friend: r.stats.friend, glow: r.stats.glow, dirt: 0)
-        sc.dance = ShowScoring.dance(accuracy: r.stats.accuracy, skill: r.stats.skill)
+        sc.dance = ShowScoring.dance(accuracy: r.stats.accuracy)
         var trick = 0
         for k in 0..<ShowScoring.turns {
             let success = g.next() < r.stats.reliability

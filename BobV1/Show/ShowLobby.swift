@@ -33,7 +33,7 @@ extension GameCare {
         let tip: String
         switch lowest {
         case 0: tip = match < 1 ? "Look is lowest. Wear \(theme.main.title) things." : (p.glow < 0.5 ? "Look is lowest. A Clean adds Glow." : "Look is lowest. \(theme.main.title) food helps.")
-        case 1: tip = p.dance == nil ? "Dance is lowest. Learn a dance in the Studio." : "Dance is lowest. Practice in the Studio."
+        case 1: tip = "Dance is lowest. Tap right on the beat."
         default: tip = ShowTrickInfo.stageTricks.contains { p.tricks[$0] != nil } ? "Trick is lowest. Practice your tricks." : "Trick is lowest. Teach a trick."
         }
         return (total, rank.rivalEstimate, tip)
