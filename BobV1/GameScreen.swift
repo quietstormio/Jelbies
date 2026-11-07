@@ -537,8 +537,10 @@ struct GameScreen: View {
         // capture aid: -RaceStart 1 sends Jelly 0 (or -RaceJelly n) to the track as soon as the room is up; -RaceSeed n, -RaceAuto <taps/s> (the player's buttons tapped for him)
         if d.integer(forKey: "RaceStart") != 0 {
             let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0
-            for _ in 0..<100 where !care.canRace(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
+            NSLog("[melon] capture aid: -RaceStart waiting for the room")
+            for _ in 0..<1200 where !care.canRace(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }          // (up to 2 min: a cold launch on a busy simulator needs 30 s before the first frame)
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
+            if let why = care.raceBlocker(jelly: who) { NSLog("[melon] capture aid: -RaceStart blocked: %@", why) }
             care.startRace(jelly: who)
         }
         // capture aid: -TrainStart 1 sends Jelly 0 (or -RaceJelly n) to practise Rhythm Steps; -TrainAuto 1 plays the drill for him

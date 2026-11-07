@@ -103,6 +103,7 @@ final class RaceFlow {
     /// -RaceAuto <taps per second>: the player's two buttons are tapped for him, alternately, at that rate.
     @ObservationIgnored var autoRate: Float?
     @ObservationIgnored var autoT: Float = 0
+    @ObservationIgnored var jumpAidT: Float = 0          // (-RaceJumpEvery capture aid)
     @ObservationIgnored private var autoFoot = 0
     /// -RaceAuto also sends him home by himself this long after the card appears.
     @ObservationIgnored var autoReturnAfter: Float?
@@ -231,6 +232,9 @@ final class RaceFlow {
             autoT += dt
             while autoT >= 1 / max(r, 0.1) { autoT -= 1 / max(r, 0.1); _ = tap(foot: autoFoot); autoFoot = 1 - autoFoot }
         }
+        // capture aid: -RaceJumpEvery <seconds of race time> presses the Jump button on its own (a hurdle jump in the first seconds of the run, not after the long walk to the first bar)
+        let every = UserDefaults.standard.double(forKey: "RaceJumpEvery")
+        if every > 0, buttonsLive, kind == .race, sim!.phase == .running { jumpAidT += dt; if jumpAidT >= Float(every) { jumpAidT = 0; _ = jump() } }
         sim!.tick(dt: dt, bodyFree: bodyFree, bodyReady: bodyReady, bodyBetween: bodyBetween)
         let ev = sim!.takeEvents()
         for e in ev { handle(e) }
