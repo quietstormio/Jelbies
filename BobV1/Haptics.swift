@@ -338,6 +338,7 @@ final class HapticDriver {
     private(set) var warm = false
     // the room's cues (Haptics+Emotes.swift): the same engine and lifecycle owner as the touch haptics
     var roomLast: Double = -.infinity
+    var hopLast: Double = -.infinity
     var roomShutdown: Task<Void, Never>?
     var roomEngineHeld = false
     var roomRequests = 0, roomDropped = 0, roomEngineStarts = 0

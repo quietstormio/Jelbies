@@ -33,7 +33,7 @@ enum GroupCue: String, CaseIterable, Sendable {
     case highFiveBump = "highFive.bump", congaForm = "congaLine.form", congaScatter = "congaLine.scatter", ringForm = "ringDance.form", ringScatter = "ringDance.scatter"
 }
 /// Sounds that carry a haptic (the landing, the squish, the boop ...). The footstep carries none; the emote clips have their own key-frame cues.
-enum SFXCue: String, CaseIterable, Sendable { case setdown, squish, boop, wobble, zoomies }          // (no `jump`: a hop's push-off is the move's own start cue; ~0.4 hops a second would keep the phone buzzing)
+enum SFXCue: String, CaseIterable, Sendable { case setdown, squish, boop, wobble, zoomies, hopLand }          // (no `jump`: a hop's push-off is the move's own start cue; ~0.4 hops a second would keep the phone buzzing)
 
 enum HapticCue: Hashable, Sendable {
     case idle(IdleKind), social(SocialKind), emote(EmoteCue), group(GroupCue), sfx(SFXCue), beat(String)          // beat: a batch-2 move's key frame, EmoteTreats.haptics["move.beat"]
@@ -73,6 +73,7 @@ enum HapticCue: Hashable, Sendable {
         case .boop: return CueSpec(i: 0.26, s: 0.28, n: 1)
         case .wobble: return CueSpec(i: 0.16, s: 0.08, n: 4, gap: 0.075, decay: 0.75)
         case .zoomies: return CueSpec(i: 0.22, s: 0.10, n: 3, gap: 0.11, decay: 0.85)
+        case .hopLand: return CueSpec(i: 0.30, s: 0.08)          // a very light single soft tap (energy 0.3 ... 1.3 scales it to ~0.09 ... 0.4)
         }
     }
 
@@ -224,6 +225,11 @@ extension HapticDriver {
     /// A race / volleyball / bath gives its own haptics: the stage sets this.
     nonisolated(unsafe) static var roomBusy: (() -> Bool)?
     static let roomMinGap: Double = 0.5
+    /// Hop landings (BlobBrain+HopSound.swift): their own 0.25 s gap across all Jelbies that does NOT take the room-cue slot (a landing must never displace a chirp / squish cue);
+    /// a cue that fired in the last 0.2 s wins. Same engine, same guards (warm = a touch / focus / wash owns it, Settings off, race / volley / bath), plus: no menu or sheet over the room.
+    nonisolated(unsafe) static var hopOverlayUp = false
+    static let hopMinGap: Double = 0.25
+    nonisolated(unsafe) static var hopTap: ((Float) -> Void)?
     static let roomIdleShutdown: Double = 30
 
     /// Play a cue. True = accepted. Cheap when refused (one flag / one defaults read).
@@ -241,6 +247,21 @@ extension HapticDriver {
             if p.delay == 0 { for k in sinks { k.transient(intensity: p.i, sharpness: p.s) } }
             else { Self.after(p.delay) { [weak self] in guard let self, self.roomEngineHeld || self.warm else { return }; for k in self.sinks { k.transient(intensity: p.i, sharpness: p.s) } } }
         }
+        return true
+    }
+
+    /// One soft tap for a hop landing. True = fired.
+    @discardableResult
+    func hopLandTap(energy: Float) -> Bool {
+        guard !warm, !Self.hopOverlayUp, HapticSettings.enabled, !(Self.roomBusy?() ?? false) else { return false }
+        let now = Self.clock()
+        guard now - hopLast >= Self.hopMinGap, now - roomLast >= 0.2 else { return false }
+        hopLast = now
+        let p = HapticCue.sfx(.hopLand).pulses(energy: energy, jitter: Self.jitter())[0]
+        Self.hopTap?(p.i)
+        guard !sinks.isEmpty else { return true }
+        holdRoomEngine()
+        for k in sinks { k.transient(intensity: p.i, sharpness: p.s) }
         return true
     }
 

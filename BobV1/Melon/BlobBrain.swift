@@ -214,6 +214,8 @@ final class BlobBrain {
     var tossFire: ((BlobBrain) -> Void)?
     var waitBounceT: Float = 0
     var held: Bool { idleBlocked || reserved }
+    /// The generic hop / landing sound + haptic detector's state (BlobBrain+HopSound.swift).
+    var hopAir = HopAirState()
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
     var social: SocialSession?
     var socialBook = SocialBook()
@@ -602,7 +604,7 @@ final class BlobBrain {
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
-        defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
+        defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); hopSoundTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
         centreDwellTick(dt)
