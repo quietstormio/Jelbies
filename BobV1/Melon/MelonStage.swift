@@ -1413,7 +1413,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         renderer.showVisible = false
         room.showVisible = false
         // (the Studio's action shot keeps his arms at rest, as in the room: a posed arm deformed the skin the neck cord and the tutu are bound to, and they rode up it. `pose` only turns the camera.)
-        if hp != nil { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
+        // (a lobby avatar with a brain skins AFTER its throwaway feature tick below, with that tick's own ear / pom scales, not the live ones)
+        let skinLater = hp != nil && a.brain != nil
+        if skinLater {}
+        else if hp != nil { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
         else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
@@ -1429,7 +1432,11 @@ final class MelonController: NSObject, MTKViewDelegate {
             let feature: JellyFeature = hp?.borrowed == true ? .none : (a.profile?.feature ?? JellyRoster.feature(slot: id))
             var worn: [String] = []
             for sl in WearSlot.allCases where sl != .feet { if let l = w.shown(id, sl), !l.art.isEmpty { worn.append(l.art) } }
-            fs.tick(id: id, brain: b, sim: a.sim, feature: feature, worn: worn, hideAll: false, dt: 1.0 / 60)
+            let drive = TeddyDrive.portrait(fs: fs, id: id, brain: b, sim: a.sim, feature: feature, worn: worn)
+            let liveSkin = (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway)
+            drive.apply(to: a.skinner)
+            a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
+            (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway) = liveSkin
             if let fl = fs.slot(id) { w.setArtOverride(id, fl.fit.hatVariant) }
             fs.syncCarry(id, sim: a.sim)
             featureMesh = fs.frame { renderer.skinPointer(body: $0) }
