@@ -163,6 +163,29 @@ final class NecklaceTiltTests: XCTestCase {
         if let d = ProcessInfo.processInfo.environment["NECK_OUT"] { try? s.write(toFile: d, atomically: true, encoding: .utf8) }
     }
 
+    /// Bandana + necklace arm air per pose (env NECK_IDS, default Bob, Pip, Lavender, Teddy, Panda): the least air (m) between any vertex of the piece and an arm's drawn surface. Prints BANDANAAIR.
+    /// Rest is asserted (>= 5 mm); the swinging arm crossing the loop in motion is the documented limit (see testNecklaceTiltAndHug), so those numbers are reported.
+    func testBandanaArmAir() throws {
+        let ids = ProcessInfo.processInfo.environment["NECK_IDS"]?.split(separator: ",").compactMap({ Int($0) }) ?? [0, 1, 3, 4, 6]
+        var s = "", failures: [String] = []
+        s += "tilt side \(WearLevel.tiltSideY) at \(WearLevel.tiltSideAt) back \(WearLevel.tiltBackY) from \(WearLevel.tiltFrom); sideY bandanas \(WearLevel.sideY(.bandanaCoral)) J \(WearLevel.sideY(.diamondJ)) pearls \(WearLevel.sideY(.pearls))\n"
+        for look in [WearLook.bandanaCoral, .bandanaMint, .bandanaSun, .pearls, .diamondJ] {
+            guard let p = WearMeshes.prepare(look, body: WearBody.shared) else { XCTFail("no art"); continue }
+            XCTAssertTrue(p.tilted, "\(look)")
+            var least: [String: (Float, String)] = [:], topY: Float = -9
+            for id in ids { for (n, r) in measure(look, id: id) {
+                topY = max(topY, r.topY)
+                if r.armClear < (least[n]?.0 ?? 9) { least[n] = (r.armClear, Self.names[id] + " " + r.whereArm) }
+                if n == "rest", look.rawValue.hasPrefix("bandana"), r.armClear < 0.005 { failures.append("\(look.rawValue) \(Self.names[id]) rest: only \(r.armClear) of air over an arm at \(r.whereArm)") }
+                if look.rawValue.hasPrefix("bandana"), r.topY > 0.72 { failures.append("\(look.rawValue) \(Self.names[id]) \(n): reaches y \(r.topY)") }
+            } }
+            s += "BANDANAAIR \(look.rawValue): " + ["rest", "walk", "run", "hop", "jacks"].map { n in String(format: "%@ %.3f (%@)", n, least[n]?.0 ?? 9, least[n]?.1 ?? "") }.joined(separator: " | ") + String(format: " | topY %.3f\n", topY)
+        }
+        print("BANDANAAIR\n" + s)
+        if let d = ProcessInfo.processInfo.environment["NECK_OUT"] { try? s.write(toFile: d, atomically: true, encoding: .utf8) }
+        XCTAssertTrue(failures.isEmpty, failures.joined(separator: "\n"))
+    }
+
     // MARK: the assertions
 
     /// Front centre at its authored height, back higher by the tilt, the loop above the arm tops at the sides at rest, hugging the skin (characters Bob, Pip, Lavender, Teddy, Panda through

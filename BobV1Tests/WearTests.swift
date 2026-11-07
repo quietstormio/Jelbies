@@ -168,7 +168,8 @@ final class WearTests: XCTestCase {
             XCTAssertLessThanOrEqual(p.rest.count, vMax, "\(l)")
             XCTAssertLessThanOrEqual(p.triangles, tMax, "\(l)")
             XCTAssertGreaterThan(p.triangles, 50, "\(l)")
-            XCTAssertEqual(p.rest.count, l.row.vertices, "\(l) matches the generated table")
+            let dropped = (WearMeshes.art(l)?.parts ?? []).filter { WearRules.drops(l, part: $0.name) }.reduce(0) { $0 + $1.positions.count }          // (the bow tie's band is not drawn)
+            XCTAssertEqual(p.rest.count + dropped, l.row.vertices, "\(l) matches the generated table")
             XCTAssertFalse(p.rest.contains { $0.x.isNaN })
         }
         for n in 0..<10 { XCTAssertNotNil(WearMeshes.art("digit_\(n)")) }
