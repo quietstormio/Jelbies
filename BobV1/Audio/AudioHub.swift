@@ -147,6 +147,7 @@ final class AudioHub {
         if muted { return "muted" }
         if !started { return "!started" }
         if !active { return "!active" }
+        if effectsHeld { return "welcome-back cover" }
         let level = settings.sfxLevel * duck.gain
         if level <= 0.01 { return String(format: "level=%.3f sfxLevel=%.2f duck=%.2f", level, settings.sfxLevel, duck.gain) }
         return nil
@@ -205,6 +206,10 @@ final class AudioHub {
             }
         }
     }
+    /// Welcome-back cover: effects stay silent until it begins to fade (`holdEffects`). `resumeReady`: the session is active again, no reactivation retry is pending and the music fade-in has started.
+    @ObservationIgnored private var effectsHeld = false
+    func holdEffects(_ on: Bool) { effectsHeld = on }
+    var resumeReady: Bool { !started || muted || (active && sessionRetry == nil && resumeFade > 0.05) }
     @ObservationIgnored private var sessionRetry: Task<Void, Never>?
     @ObservationIgnored private var settleTask: Task<Void, Never>?
 
@@ -335,7 +340,15 @@ final class AudioHub {
     // MARK: ears (Audio/EarsListener.swift)
 
     /// Ears set its `.playAndRecord` + mixWithOthers session: the hub keeps off the category until `earsSessionEnded`.
-    func earsSessionBegan() { earsSession = true }
+    func earsSessionBegan() {
+        earsSession = true
+        // the hub's own .ambient (cold launch: hub.start can land after Ears' detached activation) must never be the last word while the input engine runs:
+        // re-assert the full-level mic plan (.playAndRecord, .default mode, defaultToSpeaker + mixWithOthers + A2DP) - idempotent
+        let plan = SessionPolicy.plan(musicOn: true, otherAudioPlaying: false, micActive: true)
+        let s = AVAudioSession.sharedInstance()
+        try? s.setCategory(plan.category, mode: .default, options: plan.options)
+        try? s.setActive(true)
+    }
     func earsSessionEnded() { earsSession = false; if started, !micSession { setUpSession() } }
     /// The Jellies dance to music from outside: the app's own music fades down (and the mic stops hearing it).
     func earsDancing(_ on: Bool) { danceTarget = on ? AudioMix.danceDuck : 1 }

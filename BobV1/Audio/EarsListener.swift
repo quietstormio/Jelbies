@@ -277,7 +277,7 @@ final class Ears {
         guard on != foreground else { return }
         foreground = on
         guard !inert, wantsEngine, state != .denied else { return }
-        if on { start() } else { stopEngine(); reactor.reset(jellies); state = .paused(.background); hearing = nil; level = 0; note("background") }
+        if on { start() } else { stopEngine(); if sessionUp { sessionUp = false; sessionHook(false) }; reactor.reset(jellies); state = .paused(.background); hearing = nil; level = 0; note("background") }
     }
 
     /// The voice mic is up: Ears lets go of the input until `voiceResume`.
