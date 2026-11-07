@@ -78,7 +78,7 @@ nonisolated enum WearRules {
         switch l {
         case .pearls, .chainGold, .diamondJ: up = 0.20
         case .scarfCosy, .scarfSky, .scarfPlum, .whistleCoach, .bandanaCoral, .bandanaMint, .bandanaSun: up = 0.19
-        case .scarfSilk, .bowtiePink, .bowtieSky: up = 0.22
+        case .scarfSilk: up = 0.22
         case .lei: up = 0.23
         default: return nil
         }
@@ -111,6 +111,12 @@ nonisolated enum WearRules {
         }
     }
 
+    /// Before captures / tests only: true draws the old bow tie with the thin band round the body.
+    nonisolated(unsafe) static var bowKeepsBand = ProcessInfo.processInfo.environment["WEAR_BOWTIE_BAND"] == "on"
+    static func isBowtie(_ l: WearLook) -> Bool { l == .bowtiePink || l == .bowtieSky }
+    /// Parts of the art that are not drawn at all: the bow tie's band.
+    static func drops(_ l: WearLook, part: String) -> Bool { isBowtie(l) && !bowKeepsBand && part == "band" }
+
     static func rule(_ l: WearLook, part: String) -> PartRule {
         let surface = PartRule(w0: 1, w1: 1)
         let rigid = PartRule()
@@ -126,7 +132,9 @@ nonisolated enum WearRules {
             if part.hasPrefix("tail") { return PartRule(w0: 1, w1: 0.3, h0: 0, h1: 1) }
             return part == "knot" ? rigid : surface
         case .diamondJ: return part == "jbody" || part == "jbar" || part == "bail" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
-        case .bowtiePink, .bowtieSky: return part == "band" ? surface : rigid
+        case .bowtiePink, .bowtieSky:
+            // 2026-11-06: a bow tie is ONLY the bow, sitting on the chest: every remaining part rides the skin (no band round the body). `bowKeepsBand` (before captures only) restores the old band + rigid bow.
+            return bowKeepsBand ? (part == "band" ? surface : rigid) : surface
         case .chainGold: return part == "coin" || part == "coinring" || part == "star" || part == "bail" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
         case .capeHero: return part == "panel" ? PartRule(w0: 1, w1: 0.35, h0: 0, h1: 1) : surface
         case .monocleGold: return part == "chain" || part.hasPrefix("link") ? PartRule(w0: 1, w1: 0.4, h0: 0, h1: 1) : rigid

@@ -112,7 +112,7 @@ nonisolated enum WearMeshes {
         let anchor = l.row.anchorRest
         let isArm = WearRules.isArm(l)
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
-        for (pi, part) in a.parts.enumerated() {
+        for (pi, part) in a.parts.filter({ !WearRules.drops(l, part: $0.name) }).enumerated() {
             let rule = WearRules.rule(l, part: part.name)
             let material = WearRules.material(l, part: part.name)
             let base = UInt32(p.rest.count)
