@@ -47,7 +47,7 @@ struct AppleExtrasPanel: View {
             Text("Siri & Shortcuts").jFont(12, .bold).foregroundStyle(ink.opacity(0.6))
             SiriTipView(intent: CheckOnJelbiesIntent(), isVisible: $tipVisible)
                 .siriTipViewStyle(.automatic)
-            Text("Feed, water, goodnight, race and train work too.")
+            Text("Feed, water, goodnight and race work too.")
                 .jFont(12, .medium).foregroundStyle(ink.opacity(0.65))
             HStack { Spacer(); ShortcutsLink().shortcutsLinkStyle(.automatic).fixedSize() }
         }
