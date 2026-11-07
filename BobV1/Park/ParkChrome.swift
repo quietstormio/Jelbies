@@ -35,8 +35,8 @@ struct ParkChrome: View {
                             .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
                             .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
                             .accessibilityElement(children: .ignore).accessibilityLabel("Park").accessibilityIdentifier("park-chip")
-                            Spacer()
                             musicButton
+                            Spacer()
                             DropsPill(wallet: care.bath.wallet)
                         }
                         friends
@@ -46,11 +46,11 @@ struct ParkChrome: View {
                 }
                 if soundOpen, park.inScene {
                     VStack {
-                        HStack { Spacer(); SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } } }
+                        HStack { SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } }; Spacer() }
                         Spacer()
                     }
-                    .padding(.top, 60).padding(.trailing, 12)
-                    .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
+                    .padding(.top, 60).padding(.leading, 12)
+                    .transition(.scale(scale: 0.9, anchor: .topLeading).combined(with: .opacity))
                 }
                 if park.phase == .playing {
                     if let vid = park.card, let v = book.visitor(vid) {
