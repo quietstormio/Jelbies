@@ -1,7 +1,7 @@
 //
 //  ShowFlowTests.swift
 //  The Jelly Show's trip, headless: the fade and the swaps, the rounds in order (Look, the countdown that waits for the music, the dance on the
-//  grid, three trick turns with the ring, the Glow Burst), the one-time settlement (Drops, record, trophies), the cues, the Studio's dance drill,
+//  grid, three trick turns off the menu, the Glow Burst), the one-time settlement (Drops, record, trophies), the cues, the Studio's dance drill,
 //  the care glue (locks, inputs read from the Jelbie, rivals borrowed as bodies), and the stage camera keeping every body in the frame both ways.
 //
 
@@ -17,7 +17,7 @@ final class ShowFlowTests: XCTestCase {
         var p = ShowPlayerInput(name: "Bob")
         for t in WearTag.allCases { p.condition[t] = 0.5 }
         p.glow = 0.8; p.dirt = 0; p.dance = .sway; p.danceSkill = 0.5
-        p.tricks = [.sit: 0.9, .jacks: 0.9, .flip: 0.9]
+        p.tricks = [.sit: 0.9, .jacks: 0.9, .flip: 0.9]; p.care = 1
         return p
     }
     private func flow() -> (ShowFlow, [ShowCue]) {
@@ -60,12 +60,11 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertTrue(cues.contains(.go)); XCTAssertEqual(cues.filter { $0 == .countdown }.count, 3)
         run(f, seconds: 4) { f.round == .trick }
         XCTAssertEqual(dances.last?.1, false, "the dance stops")
-        // three turns: pick, ring, perform; the Burst is on offer after a good dance with a shiny Jelbie
+        // three turns: pick, perform; the Burst is on offer after a good dance with a shiny Jelbie
         run(f, seconds: 30) { f.sim?.round == .results && f.trickStage == .pick }
         XCTAssertEqual(f.sim!.turns.count, 3); XCTAssertEqual(performs.count, 3)
         XCTAssertEqual(Set(f.sim!.turns.map(\.trick)).count, 3, "the auto player shows three different tricks")
         XCTAssertTrue(f.sim!.burstUsed, "Cheer and Glow were high: the Burst fired"); XCTAssertTrue(cues.contains(.burst))
-        for t in f.sim!.turns { XCTAssertGreaterThan(t.timing, 0.8, "the auto player taps near the ring's best") }
         // settled once: Drops, the record, the awards
         XCTAssertTrue(f.hasResults); XCTAssertNotNil(celebrated)
         XCTAssertEqual(f.earned, ShowRank.puddle.drops(place: f.sim!.playerPlace!)); XCTAssertEqual(wallet.count, f.earned)
@@ -82,36 +81,52 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertNil(f.sim); XCTAssertEqual(f.musicScene, .none)
     }
 
-    func testRingTimingAndMissedRing() {
+    /// Picking a trick performs it at once (no ring); a pick while he is performing is ignored; the dance with no taps scores 0.
+    func testPickingATrickPerformsItAtOnce() {
         let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        var performs: [(VoiceTrick, Bool)] = []; f.onPerform = { performs.append(($0, $1)) }
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .pond, dayKey: 20261022, bodies: 1, seed: 1)
         XCTAssertFalse(f.active, "the Pond is locked until a 1st at the Puddle")
         f.progress.record(rank: .puddle, place: 1, theme: .beachGames, character: 0, burst: false, perfectDance: false, hatTrick: false)
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .pond, dayKey: 20261022, bodies: 1, seed: 1)
         XCTAssertTrue(f.active)
         run(f, seconds: 2) { f.phase == .stage }
-        f.finishLook()
+        XCTAssertEqual(f.round, .look)
+        run(f, seconds: ShowFlow.lookSeconds + 0.5) { f.round == .dance }
+        XCTAssertEqual(f.round, .dance, "the Look walk-on moves on by itself")
         run(f, seconds: 5) { f.beat == .dancing }
         // (no taps: every prompt slips, no failing)
         run(f, seconds: 25) { f.beat == .danced }
-        XCTAssertEqual(f.sim!.dance!.misses, ShowRank.pond.promptCount); XCTAssertEqual(f.sim!.danceScore!, 100 * 0.3 * 0.5, accuracy: 1e-3)
+        XCTAssertEqual(f.sim!.dance!.misses, ShowRank.pond.promptCount); XCTAssertEqual(f.sim!.danceScore!, 0, accuracy: 1e-3, "all slips: 0 (the score is 100% accuracy)")
         f.finishDance()
         XCTAssertFalse(f.sim!.burstReady, "no cheer: no Burst")
         f.pick(.sit)
-        XCTAssertEqual(f.trickStage, .ring)
-        run(f, seconds: Float(ShowScoring.ringSeconds))
-        f.tapRing()
-        XCTAssertEqual(f.trickStage, .performing)
-        XCTAssertGreaterThan(f.lastTurn!.timing, 0.9, "a tap as the ring hugs him is near-perfect")
+        XCTAssertEqual(f.trickStage, .performing); XCTAssertEqual(performs.count, 1)
+        XCTAssertEqual(f.sim!.turns.count, 1)
+        f.pick(.jacks)                    // not yet: he is still performing
+        XCTAssertEqual(f.sim!.turns.count, 1)
         run(f, seconds: ShowFlow.performSeconds + 0.1)
         XCTAssertEqual(f.trickStage, .pick)
         f.pick(.jacks)
-        run(f, seconds: Float(ShowScoring.ringSeconds + ShowFlow.ringGrace) + 0.2)
-        XCTAssertEqual(f.trickStage, .performing, "a ring nobody tapped is judged (timing 0), still a turn")
-        XCTAssertEqual(f.lastTurn!.timing, 0)
-        XCTAssertEqual(f.sim!.turns.count, 2)
-        f.pick(.sit)                      // not yet: he is still performing
-        XCTAssertEqual(f.sim!.turns.count, 2); XCTAssertNil(f.sim!.ringTrick)
+        XCTAssertEqual(f.sim!.turns.count, 2); XCTAssertEqual(f.lastTurn?.trick, .jacks)
+    }
+
+    /// The Look round is a judged walk-on: there is no wardrobe on the stage, it moves on after about 3 s, or at once on Next.
+    func testLookWalkOnAdvancesByItselfOrOnNext() {
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 20261022, bodies: 1, seed: 1)
+        run(f, seconds: 2) { f.phase == .stage }
+        f.setOutfit([.head: [f.theme.main]])
+        let look = f.sim!.lookScore
+        run(f, seconds: 2)
+        XCTAssertEqual(f.round, .look, "still judging after 2 s")
+        run(f, seconds: 1.5) { f.round == .dance }
+        XCTAssertEqual(f.round, .dance); XCTAssertEqual(f.sim!.lookScore, look, "the outfit he walked on in is the one scored")
+        let g = ShowFlow(); g.songClock = { _ in nil }; g.audioReady = { _ in true }; g.cue = { _ in }
+        g.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 20261022, bodies: 1, seed: 1)
+        run(g, seconds: 2) { g.phase == .stage }
+        g.finishLook()
+        XCTAssertEqual(g.round, .dance, "Next moves on at once")
     }
 
     func testPracticeDrillTeachesTheDance() {
@@ -135,15 +150,16 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertFalse(f.active)
     }
 
-    /// A brand-new Jelbie (no tricks learned) can enter: every turn is a cute flop that still scores, and the show reaches its results.
-    func testNoTricksLearnedStillFinishesTheShow() {
+    /// A brand-new Jelbie (no tricks learned) can enter: the default tricks are on his menu, and the show reaches its results.
+    func testNoTricksLearnedStillHasTheDefaultsAndFinishesTheShow() {
         let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }; f.auto = true
         var p = ShowPlayerInput(name: "Bob"); p.tricks = [:]
         f.begin(playerID: 0, name: "Bob", character: 0, input: p, rank: .puddle, dayKey: 20261023, bodies: 1, seed: 2)
+        XCTAssertEqual(Set(f.sim!.knownTricks), Set(ShowTrickInfo.defaults))
         run(f, seconds: 90) { f.hasResults }
         XCTAssertTrue(f.hasResults)
         XCTAssertEqual(f.sim!.turns.count, 3)
-        for t in f.sim!.turns { XCTAssertFalse(t.success); XCTAssertGreaterThanOrEqual(t.points, 8) }
+        for t in f.sim!.turns { XCTAssertTrue(ShowTrickInfo.defaults.contains(t.trick)); XCTAssertGreaterThanOrEqual(t.points, ShowTuning.flopPoints) }
         XCTAssertNotNil(f.sim!.playerPlace)
     }
 
@@ -179,6 +195,7 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertEqual(i.glow, 0.6, accuracy: 1e-5); XCTAssertEqual(i.dirt, 0.2, accuracy: 1e-5)
         XCTAssertEqual(i.dance, .bop); XCTAssertEqual(i.danceSkill, 0.6, accuracy: 1e-5)
         XCTAssertEqual(i.tricks, [.sit: 0.8, .hop: 0.7])
+        XCTAssertGreaterThan(i.care, 0); XCTAssertLessThanOrEqual(i.care, 1)
         care.store.grant("wear-flower_crown"); care.store.wear(.flowerCrown, on: 0)
         XCTAssertEqual(care.showOutfitTags(jelly: 0)[.head], WearLook.flowerCrown.tags)
         let est = care.showEstimate(jelly: 0, rank: .puddle, theme: .starlightGala)

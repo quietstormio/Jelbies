@@ -157,19 +157,15 @@ final class PlayAssistTests: XCTestCase {
 
     // MARK: show
 
-    func testShowWindowsAndRingFollowRelaxedTiming() {
-        XCTAssertEqual(ShowScoring.ringSeconds, 1.2, accuracy: 1e-9)
+    func testShowWindowsFollowRelaxedTiming() {
         A11ySettings.shared.relaxedTiming = true
         ShowAssist.refresh()
         XCTAssertEqual(ShowAssist.windowScale, 2.5)
-        XCTAssertEqual(ShowScoring.ringSeconds, 2.4, accuracy: 1e-9, "the ring closes at half speed")
-        XCTAssertGreaterThan(ShowScoring.timing(error: 0.3), 0.5, "a tap 300 ms off still scores well")
         let g = ShowBeat.stage
         let d = ShowDanceSim(count: 4, grid: g, timing: .standard, seed: 1, songTime: 0)
         XCTAssertEqual(d.timing.good, TrainingTuning.goodWindow * 2.5, accuracy: 1e-9)
         ShowAssist.reset()
         XCTAssertEqual(ShowDanceSim(count: 4, grid: g, timing: .standard, seed: 1, songTime: 0).timing.good, TrainingTuning.goodWindow, accuracy: 1e-9)
-        XCTAssertEqual(ShowScoring.ringSeconds, 1.2, accuracy: 1e-9)
     }
 
     // MARK: bath

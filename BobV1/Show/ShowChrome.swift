@@ -2,7 +2,7 @@
 //  ShowChrome.swift
 //  The Jelly Show's screen furniture over the 3D stage (the mockups ShowLook / ShowDance / ShowTrick / ShowResults.dc.html): the round header
 //  with its three pips, the Look round's judged walk-on and score card, the Dance round's Cheer meter, prompt lane, flash and foot buttons,
-//  the Trick round's turn chips, spotlight ring, meters, Glow Burst and trick cards, the results' podium, stacked bars, Drops, cup, stickers and
+//  the Trick round's turn chips, meters, Glow Burst and trick menu, the results' podium, stacked bars, Drops, cup, stickers and
 //  tip, the Studio drill's card, and the white fade. Portrait stacks under the Jelbie; a phone on its side puts the cards beside him.
 //
 
@@ -370,7 +370,6 @@ struct TrickRound: View {
     @Environment(\.verticalSizeClass) private var vsc
     private var compact: Bool { vsc == .compact }
     private var show: ShowFlow { care.show }
-    private let rigid = UIImpactFeedbackGenerator(style: .rigid)
 
     var body: some View {
         let _ = show.revision
@@ -378,23 +377,21 @@ struct TrickRound: View {
             let size = g.size
             let body = StageProject.body(ShowStage.playerSpot, frame: .trick, size: size)
             ZStack(alignment: .top) {
-                ring(body: body)
                 if show.burstFlash > 0 { Confetti(serial: show.burstFlash, at: body.centre).allowsHitTesting(false) }
                 VStack(spacing: 8) {
                     RoundHeader(care: care, round: 3, title: "Trick", quits: false)
                     if compact {
                         HStack(alignment: .top, spacing: 12) {
                             VStack(alignment: .leading) { StagePill(text: hint); Spacer(minLength: 0) }
-                            VStack(spacing: 8) { turns; meters; burst; cards }.frame(width: min(size.width * 0.52, 520))
+                            VStack(spacing: 8) { turns; meters; burst; menu }.frame(width: min(size.width * 0.52, 520))
                         }
                     } else {
                         turns
                         HStack { Spacer(); StagePill(text: hint); Spacer() }
                         Spacer(minLength: 0)
-                        Text(show.trickStage == .ring ? "Tap anywhere when the gold ring hugs \(show.playerName)" : "Better timing, more points (up to +6)").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.mist)
                         meters
                         burst
-                        cards
+                        menu
                     }
                 }
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
@@ -406,33 +403,10 @@ struct TrickRound: View {
         guard let s = show.sim else { return "" }
         switch show.trickStage {
         case .pick: return s.tricksDone ? "All three done!" : "Turn \(s.turnIndex + 1) of 3 \u{00B7} pick a trick"
-        case .ring: return "Turn \(s.turnIndex + 1) of 3 \u{00B7} tap when the gold ring hugs \(show.playerName)"
         case .performing:
             guard let t = show.lastTurn else { return "" }
             return t.success ? "\(t.trick.title)! +\(t.points)\(t.burst ? " and Glow Burst +10" : "")" : "A cute flop. +\(t.points)"
         }
-    }
-
-    /// The spotlight ring round the Jelbie: a dashed outer circle and the gold ring closing on him; the whole stage is the tap.
-    private func ring(body: (centre: CGPoint, radius: CGFloat)) -> some View {
-        let outer = body.radius * 2.6, inner = body.radius * 1.15
-        return ZStack {
-            Circle().strokeBorder(ShowUI.light.opacity(0.6), style: StrokeStyle(lineWidth: 2.5, dash: [4, 7])).frame(width: outer * 2, height: outer * 2).position(body.centre)
-            TimelineView(.animation(minimumInterval: 1.0 / 60, paused: show.trickStage != .ring)) { _ in
-                let p = show.trickStage == .ring ? min(max(CGFloat(show.ringProgress), 0), 1.3) : 0
-                let r = outer + (inner - outer) * min(p, 1)
-                Circle().strokeBorder(p > 1 ? ShowUI.goldDeep.opacity(0.5) : ShowUI.gold, lineWidth: 5).frame(width: r * 2, height: r * 2).position(body.centre)
-                    .opacity(show.trickStage == .ring ? 0.95 : 0)
-            }
-            if show.trickStage == .ring {
-                Color.white.opacity(0.001).contentShape(Rectangle())
-                    .onTapGesture { rigid.impactOccurred(intensity: 0.8); show.tapRing() }
-                    .accessibilityLabel("Tap when the ring hugs \(show.playerName)").accessibilityHint("You will hear Now at the right moment")
-                    .accessibilityIdentifier("trick-ring").accessibilityAddTraits(.isButton)
-                    .accessibilityAction { rigid.impactOccurred(intensity: 0.8); show.tapRing() }
-            }
-        }
-        .ignoresSafeArea()
     }
 
     private var turns: some View {
@@ -501,43 +475,58 @@ struct TrickRound: View {
         }
     }
 
-    private var cards: some View {
+    /// The trick menu, like a restaurant: one row per trick this Jelbie knows (icon, name, stars, points, theme tag). Tap a row and he performs it.
+    private var menu: some View {
         let s = show.sim
         let known = s?.knownTricks ?? []
+        let live = show.trickStage == .pick && !(s?.tricksDone ?? true)
         return VStack(alignment: .leading, spacing: 6) {
-            if !compact { HStack(alignment: .firstTextBaseline) { Text("Pick your trick").font(SK.font(16, .black)).foregroundStyle(SK.cream); Spacer(); Text("Max 30 points per turn").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.lilacPale) } }
-            if known.isEmpty {
-                ShowCard { Text("No tricks learned yet. Teach one by voice (the trick book), then come back. Each turn still scores a cute flop: 8 points.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true) }
-                if show.trickStage == .pick, let s, !s.tricksDone { ShowCTA(title: "Flop cutely", id: "trick-flop", height: 48) { show.pick(.sit) } }
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) { ForEach(known, id: \.rawValue) { t in card(t) } }.padding(.horizontal, 2).padding(.vertical, 4)
-                }
+            HStack(alignment: .firstTextBaseline) {
+                Text("Trick menu").font(SK.font(16, .black)).foregroundStyle(SK.cream)
+                Spacer()
+                Text("More stars, more points").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.lilacPale)
             }
+            ScrollView(.vertical, showsIndicators: known.count > 4) {
+                VStack(spacing: 6) { ForEach(known, id: \.rawValue) { t in row(t, live: live) } }.padding(.vertical, 2)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: Self.menuHeight(rows: known.count, compact: compact))
         }
         .accessibilityIdentifier("trick-cards")
     }
-    private func card(_ t: VoiceTrick) -> some View {
+    /// Four rows show at once (a phone on its side fewer); more scroll.
+    static func menuHeight(rows: Int, compact: Bool) -> CGFloat {
+        let row: CGFloat = compact ? 46 : 56, gap: CGFloat = 6
+        let shown = CGFloat(min(max(rows, 1), compact ? 3 : 4))
+        return shown * row + (shown - 1) * gap + 4
+    }
+    private func row(_ t: VoiceTrick, live: Bool) -> some View {
         let s = show.sim!
-        let used = s.usedTricks.contains(t), r = s.reliability(t), bonus = show.theme.trickBonus(ShowTrickInfo.tags(t))
+        let used = s.usedTricks.contains(t), pts = s.points(t), stars = ShowTrickInfo.difficulty(t)
         let tag = ShowTrickInfo.tags(t).first { $0 == show.theme.main } ?? ShowTrickInfo.tags(t).first { $0 == show.theme.friend }
-        let live = show.trickStage == .pick && !s.tricksDone
         return Button { if live { AudioHub.shared.uiTap(); show.pick(t) } } label: {
-            VStack(spacing: 4) {
-                if !compact { Image(systemName: ShowTrickInfo.symbol(t)).font(.system(size: 26, weight: .heavy)).foregroundStyle(SK.ink) }
-                Text(t.title).font(SK.font(16, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                if let tag { Text("\(tag.title) +\(bonus)").font(SK.font(11, .black)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(ShowUI.tag(tag))) }
-                else { Text("No match").font(SK.font(11, .black)).foregroundStyle(SK.muted).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(Color(hex: 0xECE8EE))) }
-                GeometryReader { g in ZStack(alignment: .leading) { Capsule().fill(ShowUI.bar); Capsule().fill(r >= 0.7 ? SK.mint : SK.honeyDeep).frame(width: max(4, g.size.width * CGFloat(r))) } }.frame(height: 8)
-                Text("Chance \(Int((r * 100).rounded()))%").font(SK.font(13, .black)).foregroundStyle(SK.ink)
-                if !compact { Text(used ? "Used: base 12" : "Fresh: base 18").font(SK.font(10.5, .heavy)).foregroundStyle(SK.muted) }
+            HStack(spacing: 10) {
+                Image(systemName: ShowTrickInfo.symbol(t)).font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 30)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(t.title).font(SK.font(16, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    HStack(spacing: 2) {
+                        ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 10, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
+                        if used { Text("shown already").font(SK.font(10.5, .heavy)).foregroundStyle(SK.muted).padding(.leading, 4) }
+                    }
+                }
+                Spacer(minLength: 4)
+                if let tag { Text(tag.title).font(SK.font(11, .black)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(ShowUI.tag(tag))) }
+                Text("+\(pts)").font(SK.font(20, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(minWidth: 44, alignment: .trailing)
             }
-            .padding(.horizontal, 8).padding(.vertical, compact ? 6 : 10).frame(width: 112)
-            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream.opacity(live ? 0.97 : 0.7)))
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(tag == show.theme.main ? ShowUI.gold : .clear, lineWidth: 3))
+            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: compact ? 46 : 56)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.cream.opacity(live ? 0.97 : 0.7)))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(tag == show.theme.main ? ShowUI.gold : .clear, lineWidth: 3))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain).disabled(!live)
-        .accessibilityLabel("\(t.title): \(tag.map { "\($0.title) match plus \(bonus)" } ?? "no theme match"), \(Int((r * 100).rounded())) percent chance\(used ? ", used already" : "")")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(t.title), \(stars) star\(stars == 1 ? "" : "s"), \(pts) points\(tag.map { ", matches \($0.title)" } ?? "")\(used ? ", shown already" : "")")
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("trick-\(t.rawValue)")
     }
 }

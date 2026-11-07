@@ -186,6 +186,20 @@ nonisolated enum ShowTrickInfo {
     }
     /// The tricks a Jelbie can show on stage: everything learned but the come and the run (walks, not stage tricks: he would leave the spotlight).
     static let stageTricks: [VoiceTrick] = VoiceTrick.allCases.filter { $0 != .come && $0 != .run }
+    /// The tricks every Jelbie has on the menu, learned or not.
+    static let defaults: [VoiceTrick] = [.sit, .spin, .hop, .jacks]
+    /// The menu: the defaults plus whatever else he has learned (and owns the page for), in the fixed stage order.
+    static func menu(learned: some Collection<VoiceTrick>) -> [VoiceTrick] {
+        stageTricks.filter { defaults.contains($0) || learned.contains($0) }
+    }
+    /// Difficulty in stars, 1...3: harder tricks score more and slip more often.
+    static func difficulty(_ t: VoiceTrick) -> Int {
+        switch t {
+        case .sit, .hop, .look, .come, .run: return 1
+        case .jacks, .spin: return 2
+        case .flip: return 3
+        }
+    }
     static func symbol(_ t: VoiceTrick) -> String {
         switch t {
         case .spin: return "arrow.triangle.2.circlepath"; case .hop: return "arrow.up.to.line"
@@ -206,6 +220,21 @@ nonisolated struct ShowScores: Equatable, Codable, Sendable {
     var dancePts: Int { Int(dance.rounded()) }
     var trickPts: Int { Int(trick.rounded()) }
     var totalPts: Int { lookPts + dancePts + trickPts }
+}
+
+/// Every number of the Trick menu in one place.
+nonisolated enum ShowTuning {
+    /// Base points for 1 / 2 / 3 stars.
+    static let basePoints = [12, 18, 24]
+    /// A trick already shown this show scores this share of its base.
+    static let repeatFactor: Float = 2.0 / 3.0
+    /// The cute flop's points.
+    static let flopPoints = 8
+    /// Chance to slip at 1 / 2 / 3 stars for a Jelbie with no care at all (halved for a perfectly cared-for one).
+    static let missChance: [Float] = [0.03, 0.08, 0.15]
+    /// The rivals count as this well cared for.
+    static let rivalCare: Float = 0.7
+    static let turnMax = 30
 }
 
 nonisolated enum ShowScoring {
@@ -238,18 +267,22 @@ nonisolated enum ShowScoring {
 
     // MARK: Trick
     static let turns = 3
-    static let turnMax = 30
+    static let turnMax = ShowTuning.turnMax
     static let burstPoints = 10
     static let burstCheer: Float = 0.75, burstGlow: Float = 0.5
-    /// The spotlight ring closes over this long; the tap's error is judged against it.
-    /// (Accessibility: relaxed timing closes it at half speed; `ShowAssist.ringScale`.)
-    static var ringSeconds: Double { 1.2 * ShowAssist.ringScale }
-    /// t = 1 - |error| / 0.3 s, clamped (the window is wider under relaxed timing).
-    static func timing(error: Double) -> Float { Float(min(max(1 - abs(error) / (0.3 * ShowAssist.windowScale), 0), 1)) }
-    /// Points of one turn (max 30): base 18 on success (12 for a trick already shown this show), 8 for a cute flop; + theme 6 / 3; + 6 x timing.
-    static func turn(success: Bool, repeated: Bool, tags: [WearTag], theme: ShowTheme, timing t: Float) -> Int {
-        let base = success ? (repeated ? 12 : 18) : 8
-        return min(turnMax, base + theme.trickBonus(tags) + Int((6 * clamp01(t)).rounded()))
+    /// Base points of a trick by its stars (a repeat of the same trick in the same show is worth `repeatFactor` of it).
+    static func basePoints(difficulty d: Int, repeated: Bool) -> Int {
+        let base = ShowTuning.basePoints[min(max(d, 1), 3) - 1]
+        return repeated ? Int((Float(base) * ShowTuning.repeatFactor).rounded()) : base
+    }
+    /// Chance the trick slips into the cute flop: grows with the stars, drops for a well-cared-for Jelbie (care 0...1): x (0.5 + 0.5 x (1 - care)).
+    static func missChance(difficulty d: Int, care: Float) -> Float {
+        ShowTuning.missChance[min(max(d, 1), 3) - 1] * (0.5 + 0.5 * (1 - clamp01(care)))
+    }
+    /// Points of one turn (max 30): base by stars (a repeat is worth less) + theme 6 / 3; a cute flop scores `flopPoints` + the theme points.
+    static func turn(difficulty d: Int, success: Bool, repeated: Bool, tags: [WearTag], theme: ShowTheme) -> Int {
+        let base = success ? basePoints(difficulty: d, repeated: repeated) : ShowTuning.flopPoints
+        return min(turnMax, base + theme.trickBonus(tags))
     }
     /// The one-time Glow Burst (+10) is on offer when the crowd is cheering and he is shiny.
     static func burstReady(cheer: Float, glow: Float) -> Bool { cheer >= burstCheer && glow >= burstGlow }

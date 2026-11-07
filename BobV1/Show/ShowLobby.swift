@@ -34,7 +34,7 @@ extension GameCare {
         switch lowest {
         case 0: tip = match < 1 ? "Look is lowest. Wear \(theme.main.title) things." : (p.glow < 0.5 ? "Look is lowest. A Clean adds Glow." : "Look is lowest. \(theme.main.title) food helps.")
         case 1: tip = "Dance is lowest. Tap right on the beat."
-        default: tip = ShowTrickInfo.stageTricks.contains { p.tricks[$0] != nil } ? "Trick is lowest. Practice your tricks." : "Trick is lowest. Teach a trick."
+        default: tip = "Trick is lowest. Pick harder tricks (more stars) and keep him happy and clean."
         }
         return (total, rank.rivalEstimate, tip)
     }

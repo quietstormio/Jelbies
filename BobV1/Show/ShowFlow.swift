@@ -3,10 +3,10 @@
 //  The Jelly Show's whole trip, as one state machine (no bodies of its own; GameCare+Show.swift wires it to the Jelbies):
 //
 //      off -> fade to white -> [swap to the stage] -> fade in -> Look (a judged walk-on, auto-advances) -> Dance (3-2-1-GO on the stage music, the prompt
-//      lane) -> Trick (three turns: pick a trick, tap when the spotlight ring hugs him) -> results (podium, Drops, trophies) -> (Done) fade -> room.
+//      lane) -> Trick (three turns: pick a trick off his menu) -> results (podium, Drops, trophies) -> (Done) fade -> room.
 //
 //  The rules are `ShowSim`; this class adds time: the fade, the countdown that waits for the music, the song clock the dance is judged by, the
-//  closing ring, the seconds a trick takes to perform, the one-time settlement at the results, and the cues. `kind == .practice` is the Studio's
+//  seconds a trick takes to perform, the one-time settlement at the results, and the cues. `kind == .practice` is the Studio's
 //  dance drill: the same stage and lane, alone, studio music, the dance's skill grows at the end and nothing is paid.
 //
 
@@ -38,7 +38,7 @@ final class ShowFlow {
     /// The Dance round's clock.
     enum Beat: Equatable { case idle, countdown, dancing, danced }
     /// The Trick round's turn.
-    enum TrickStage: Equatable { case pick, ring, performing }
+    enum TrickStage: Equatable { case pick, performing }
 
     private(set) var phase: Phase = .off
     private(set) var kind: Kind = .show
@@ -79,8 +79,6 @@ final class ShowFlow {
 
     // the Trick round
     private(set) var trickStage: TrickStage = .pick
-    /// Seconds since the ring started closing (the view draws the ring from it).
-    @ObservationIgnored private(set) var ringAge: Double = 0
     @ObservationIgnored private var clock: Double = 0
     private(set) var lastTurn: ShowTrickTurn?
     @ObservationIgnored private var performLeft: Float = 0
@@ -126,10 +124,9 @@ final class ShowFlow {
     @ObservationIgnored var songClock: (SceneTrack) -> Double? = { AudioHub.shared.songTime(of: $0) }
     /// The music is up (muted = nothing to wait for).
     @ObservationIgnored var audioReady: (MusicScene) -> Bool = { AudioHub.shared.muted || AudioHub.shared.scenePlaying($0) }
-    /// Test / capture aid: the dance is tapped for him (a few late, one missed) and the ring is tapped near its best.
+    /// Test / capture aid: the dance is tapped for him (a few late, one missed) and the tricks are picked for him.
     @ObservationIgnored var auto = false
     @ObservationIgnored private var autoDone = 0
-    @ObservationIgnored private var ringNowSaid = false
     /// Dance prompts whose left / right audio cue has played (accessibility; PlayAssist.swift).
     @ObservationIgnored var danceCued = 0
     @ObservationIgnored private var autoTrickWait: Float = 0
@@ -140,8 +137,6 @@ final class ShowFlow {
     static let performSeconds: Float = 2.6
     /// How long the judged walk-on (Look) shows before it moves on by itself.
     static let lookSeconds: Float = 3
-    /// The ring is judged a miss (timing 0) this long after its best moment.
-    static let ringGrace: Double = 0.45
 
     init() {}
     nonisolated deinit {}
@@ -210,9 +205,9 @@ final class ShowFlow {
 
     private func resetStage() {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; danceGoSong = -10
-        trickStage = .pick; ringAge = 0; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
+        trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
-        autoDone = 0; autoTrickWait = 0; ringNowSaid = false; danceCued = 0
+        autoDone = 0; autoTrickWait = 0; danceCued = 0
         ShowAssist.refresh()
         practiceSeed = UInt64(dayKey) &+ UInt64(playerID) &* 977
     }
@@ -349,26 +344,18 @@ final class ShowFlow {
 
     // MARK: the Trick round
 
-    /// A trick card is tapped: the ring starts closing.
+    /// A menu row is tapped: he performs it at once (a slip is the cute flop).
     func pick(_ t: VoiceTrick) {
         guard var s = sim, s.round == .trick, trickStage == .pick, phase == .stage, !s.tricksDone else { return }
-        s.beginTurn(t, at: clock); sim = s
-        guard sim?.ringTrick != nil else { return }
-        trickStage = .ring; ringAge = 0; ringNowSaid = false; cue(.ring); A11yEvents.say(ShowAssist.ringScale > 1 ? "Ring closing slowly. Tap when you hear now" : "Ring closing. Tap when you hear now", .normal)
-        revision += 1
+        guard let turn = s.perform(t) else { return }
+        sim = s
+        land(turn)
     }
     /// The Glow Burst button.
     func armBurst() {
         guard var s = sim, s.round == .trick, s.burstReady else { return }
         s.armBurst(); sim = s
         revision += 1
-    }
-    /// The tap while the ring closes.
-    func tapRing() {
-        guard var s = sim, trickStage == .ring, phase == .stage else { return }
-        guard let turn = s.tapRing(at: clock) else { return }
-        sim = s
-        land(turn)
     }
     private func land(_ turn: ShowTrickTurn) {
         lastTurn = turn
@@ -378,9 +365,6 @@ final class ShowFlow {
         onPerform(turn.trick, turn.success)
         revision += 1
     }
-    /// The ring's progress 0 (open) ... 1 (hugging him) ... past 1 (too late).
-    var ringProgress: Double { trickStage == .ring ? ringAge / ShowScoring.ringSeconds : 0 }
-
     private func tickTrick(dt: Float) {
         clock += Double(dt)
         switch trickStage {
@@ -394,11 +378,6 @@ final class ShowFlow {
                     pick(t)
                 }
             }
-        case .ring:
-            ringAge += Double(dt)
-            if !ringNowSaid, ringAge >= ShowScoring.ringSeconds - 0.06 { ringNowSaid = true; A11yEvents.say("Now", .high) }          // for VoiceOver: the moment the ring hugs him
-            if auto || ShowAssist.autoDance, ringAge >= ShowScoring.ringSeconds - 0.04 { tapRing(); return }
-            if ringAge > ShowScoring.ringSeconds + Self.ringGrace, var s = sim, let turn = s.tapRing(at: clock) { sim = s; land(turn) }          // no tap: timing 0, still a turn
         case .performing:
             performLeft -= dt
             if performLeft <= 0 {

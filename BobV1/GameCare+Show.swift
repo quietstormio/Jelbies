@@ -78,7 +78,15 @@ extension GameCare {
         input.glow = p.grime.sparkle; input.dirt = p.grime.dirt
         input.dance = p.stats.bestDance; input.danceSkill = input.dance.map { p.stats.proficiency($0) } ?? 0
         for t in ShowTrickInfo.stageTricks where p.training.isLearned(t) && store.hasPage(t) { input.tricks[t] = p.training.reliability(t) }
+        input.care = showCare(jelly: id)
         return input
+    }
+    /// How well cared for he is, 0...1: the mean of his three needs (hunger, thirst, attention) and how clean he is. Lowers the chance a trick slips.
+    func showCare(jelly id: Int) -> Float {
+        guard let p = jelly(id) else { return 0.5 }
+        let n = NeedKind.allCases.map { p.needs.level($0) }
+        let all = n + [1 - p.grime.dirt]
+        return min(max(all.reduce(0, +) / Float(all.count), 0), 1)
     }
     /// The tags of what he wears, by slot (the Look round scores the rank's slots).
     func showOutfitTags(jelly id: Int) -> [WearSlot: [WearTag]] {
@@ -93,14 +101,14 @@ extension GameCare {
         var s = ShowScores()
         s.look = ShowScoring.look(outfit: ShowScoring.outfitMatch(items: items, slots: rank.slots, theme: theme), main: p.stat(theme.main), friend: p.stat(theme.friend), glow: p.glow, dirt: p.dirt)
         s.dance = ShowScoring.dance(accuracy: 0.7)
-        let known = ShowTrickInfo.stageTricks.filter { p.tricks[$0] != nil }
-        var trick: Float = 0
-        for k in 0..<ShowScoring.turns {
-            guard !known.isEmpty else { break }
-            let t = known[k % known.count], r = p.tricks[t] ?? 0
-            trick += r * 18 + (1 - r) * 8 + Float(theme.trickBonus(ShowTrickInfo.tags(t))) * 0.7 + 3.6
+        // the three best tricks on his menu, each worth its points less the chance it slips into the flop
+        let menu = ShowTrickInfo.menu(learned: p.tricks.keys)
+        let worth: [Float] = menu.map { t in
+            let d = ShowTrickInfo.difficulty(t), miss = ShowScoring.missChance(difficulty: d, care: p.care)
+            let tb = Float(theme.trickBonus(ShowTrickInfo.tags(t)))
+            return (1 - miss) * Float(ShowScoring.basePoints(difficulty: d, repeated: false)) + miss * Float(ShowTuning.flopPoints) + tb
         }
-        s.trick = min(100, trick)
+        s.trick = min(100, worth.sorted(by: >).prefix(ShowScoring.turns).reduce(0, +))
         return s
     }
 
