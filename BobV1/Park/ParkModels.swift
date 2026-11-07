@@ -285,6 +285,21 @@ nonisolated enum ParkPool {
         return w
     }
 
+    /// Re-checks saved visitor text (name, blurb, greeting, level lines) against the deny list. A failing name, blurb or greeting is replaced by the hand-written
+    /// one from `stock` (the generated pool); a failing level line is dropped so the hand-written ParkWords line shows. True when anything changed.
+    @discardableResult
+    static func sanitizeSaved(_ vs: inout [ParkVisitor], stock: [ParkVisitor]) -> Bool {
+        var changed = false
+        for i in vs.indices {
+            let s: ParkVisitor? = stock.indices.contains(vs[i].id) ? stock[vs[i].id] : nil
+            if !ParkTextSafety.isSafe(vs[i].name, isName: true) { vs[i].name = s?.name ?? ParkWords.names[vs[i].id % ParkWords.names.count]; changed = true }
+            if !ParkTextSafety.isSafe(vs[i].blurb) { var r = ParkRandom(UInt64(vs[i].id) &+ 0xB1); vs[i].blurb = s?.blurb ?? ParkWords.blurb(vs[i].style, &r); changed = true }
+            if !ParkTextSafety.isSafe(vs[i].greeting) { var r = ParkRandom(UInt64(vs[i].id) &+ 0x67); vs[i].greeting = s?.greeting ?? ParkWords.greeting(vs[i].name, vs[i].style, &r); changed = true }
+            for (k, line) in vs[i].levelLines where !ParkTextSafety.isSafe(line) { vs[i].levelLines[k] = nil; changed = true }
+        }
+        return changed
+    }
+
     /// A line made safe to show: one short line of plain text that passes the deny list (ParkTextSafety). Names are letters and spaces only.
     /// nil means "use the hand-written words".
     static func clean(_ raw: String, limit: Int, isName: Bool = false) -> String? {

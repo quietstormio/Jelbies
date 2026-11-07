@@ -42,7 +42,9 @@ final class ParkBook {
             // Colour-only migration: names, ids, friendship, wear and text stay; the colour (and so the signature) follows the species-consistent generator.
             var vs = v.map { var x = $0; if fresh.indices.contains(x.id) { x.colour = fresh[x.id].colour }; x.signature = x.colour.speciesFeature; return x }
             // Names (2026-11-05): twins merged, the other doubles and the Jelbie / personality-word names renamed (idempotent), saved right away.
-            if ParkNames.reconcile(&vs, reserved: reserved) {
+            // Safety (2026-11-07): saved model text from earlier builds is checked again; failures fall back to the hand-written words and the save is rewritten.
+            let cleaned = ParkPool.sanitizeSaved(&vs, stock: fresh)
+            if ParkNames.reconcile(&vs, reserved: reserved) || cleaned {
                 if let d = try? JSONEncoder().encode(vs) { defaults.set(d, forKey: Self.key) }
             }
             visitors = vs }
