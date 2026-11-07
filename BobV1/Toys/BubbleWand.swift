@@ -27,14 +27,14 @@ nonisolated enum BubbleTuning {
     static let holdStrength: Float = 0.6
     static let contactRadius: Float = 0.62          // a body touching a drifting bubble
     static let contactMaxY: Float = 1.7
-    nonisolated(unsafe) static var contactPopChance: Float = 0.35          // (var: tests set 1)
+    nonisolated(unsafe) static var contactPopChance: Float = 0.5          // (var: tests set 1)
     static let hopReach: Float = 2.0               // horizontal reach of a hop's top
     static let hopMaxY: Float = 2.2
     static let chaseMaxY: Float = 2.0
-    static let maxChasers = 2
-    static let thinkEvery: ClosedRange<Float> = 0.5...1.1
+    static let maxChasers = 3          // (2026-11-07: all of them want in)
+    static let thinkEvery: ClosedRange<Float> = 0.3...0.7
     static let streakWindow: Float = 8
-    static let streakForHearts = 3
+    static let streakForHearts = 2
     static let fxLife: Float = 0.5
     static let price = 40
 }
@@ -75,6 +75,13 @@ final class BubbleWand: PlayToy {
     @ObservationIgnored private var mouthBlend: Float = -1
     @ObservationIgnored private var states: [Int: JState] = [:]
     @ObservationIgnored private weak var care: GameCare?
+    /// The play area (2026-11-07): the floor the play camera shows above the HUD; every awake Jelbie keeps a spot in it for the whole mode (BlobBrain.bubbleLeash).
+    @ObservationIgnored private var areaCache: (size: CGSize, lo: SIMD2<Float>, hi: SIMD2<Float>)?
+    @ObservationIgnored private var slots: [Int: SIMD2<Float>] = [:]
+    @ObservationIgnored private var slotKey: [Int] = []
+    @ObservationIgnored private var slotSize = CGSize.zero
+    @ObservationIgnored private var leashed: [BlobBrain] = []
+    @ObservationIgnored private var superviseAt: Float = 0
     /// Totals (tests, report).
     @ObservationIgnored private(set) var popsByJelly: [Int: Int] = [:]
     @ObservationIgnored private(set) var chases = 0
@@ -115,6 +122,7 @@ final class BubbleWand: PlayToy {
     }
     func deactivate() {
         if let c = care, c.play.active { c.endPlay() }          // (Done / the picker's put-away: Play mode goes too; endPlay calls back, then `active` is already false)
+        releaseLeash()
         guard active else { return }
         active = false
         holding = false
@@ -123,7 +131,7 @@ final class BubbleWand: PlayToy {
     }
     /// Test seam: back to a fresh, put-away wand (counters too).
     func resetForTests() {
-        BubbleTuning.contactPopChance = 0.35
+        BubbleTuning.contactPopChance = 0.5
         deactivate(); active = false; clock = 0; demo = nil; burstUntil = -1; states.removeAll(); field = BubbleField()
         popsByJelly = [:]; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
     }
@@ -182,7 +190,8 @@ final class BubbleWand: PlayToy {
         // 3. they float; the ones that run out of time pop alone (softer, no sparkle credit)
         for b in field.step(dt: dt) { addFX(b, quiet: true) }
         fx.removeAll { clock - $0.born > BubbleTuning.fxLife }
-        // 4. the Jelbies
+        // 4. the Jelbies: first they stay in view, then they play
+        leashTick(jellies)
         jelliesTick(jellies)
         // 5. a soft purr under the thumbs while blowing
         if let h = haptics {
@@ -224,16 +233,16 @@ final class BubbleWand: PlayToy {
                 st.thinkAt = clock + Float.random(in: BubbleTuning.thinkEvery)
                 guard b.bubbleFree, !field.bubbles.isEmpty else { continue }
                 let roll = Float.random(in: 0..<1)
-                if roll < 0.42, chasing < BubbleTuning.maxChasers, let target = pickTarget(for: j) {
+                if roll < 0.72, chasing < BubbleTuning.maxChasers, let target = pickTarget(for: j) {
                     st.mode = .chase; st.bubble = target.id; st.until = clock + 6.5; st.retargetAt = 0; st.chaseStart = clock
                     field.claim(target.id, by: j.id)
                     chasing += 1; chases += 1
-                } else if roll < 0.75, let t = nearest(to: b.position) {
+                } else if roll < 0.92, let t = nearest(to: b.position) {
                     watches += 1
-                    _ = b.bubbleWatch(t, hold: Float.random(in: 1.0...2.2), excited: Float.random(in: 0..<1) < 0.4)
-                    st.thinkAt = clock + Float.random(in: 1.4...2.6)
+                    _ = b.bubbleWatch(t, hold: Float.random(in: 1.0...2.2), excited: Float.random(in: 0..<1) < 0.7)
+                    st.thinkAt = clock + Float.random(in: 0.9...1.8)
                 } else {
-                    st.thinkAt = clock + Float.random(in: 1.2...2.4)          // not every bubble needs a Jelbie
+                    st.thinkAt = clock + Float.random(in: 0.6...1.4)          // not every bubble needs a Jelbie
                 }
             case .chase:
                 guard let bub = field.bubble(st.bubble), clock < st.until, b.bubbleStillMine else {
@@ -248,7 +257,7 @@ final class BubbleWand: PlayToy {
                     }
                 } else if clock >= st.retargetAt {
                     st.retargetAt = clock + 0.45
-                    b.bubbleGo(floorPos(bub) + SIMD2(bub.vel.x, bub.vel.z) * 0.6)          // (a little ahead of a drifting bubble)
+                    b.bubbleGo(clampToArea(floorPos(bub) + SIMD2(bub.vel.x, bub.vel.z) * 0.6))          // (a little ahead of a drifting bubble)
                 }
                 if bub.pos.y > BubbleTuning.chaseMaxY + 0.3 { endChase(&st, j) }
             case .hop:
@@ -275,19 +284,98 @@ final class BubbleWand: PlayToy {
 
     private func endChase(_ st: inout JState, _ j: BubbleJelly) {
         field.release(jelly: j.id)
-        st.mode = .idle; st.bubble = -1; st.thinkAt = clock + Float.random(in: 0.8...1.8)
+        st.mode = .idle; st.bubble = -1; st.thinkAt = clock + Float.random(in: 0.3...0.9)
     }
 
     /// The bubble a Jelbie goes for: nearest in reach of the room, preferring ones nobody is after (now and then he takes one that is claimed).
     private func pickTarget(for j: BubbleJelly) -> Bubble? {
         let p = j.brain.position
-        let ok = field.bubbles.filter { $0.pos.y < BubbleTuning.chaseMaxY && simd_distance(floorPos($0), p) < 6 && $0.age > 0.6 && simd_distance(j.brain.fixed(floorPos($0)), floorPos($0)) < 0.45 }          // (only bubbles over floor he can stand on)
+        let ok = field.bubbles.filter { $0.pos.y < BubbleTuning.chaseMaxY && simd_distance(floorPos($0), p) < 6 && $0.age > 0.6 && inArea(floorPos($0)) && simd_distance(j.brain.fixed(floorPos($0)), floorPos($0)) < 0.45 }          // (only bubbles over floor he can stand on)
         let free = ok.filter { $0.claimedBy < 0 }
         let pool = (!free.isEmpty && Float.random(in: 0..<1) > 0.12) ? free : ok
         return pool.min { simd_distance(floorPos($0), p) < simd_distance(floorPos($1), p) }
     }
     private func nearest(to p: SIMD2<Float>) -> SIMD2<Float>? {
         field.bubbles.filter { $0.pos.y < 2.4 }.min { simd_distance(floorPos($0), p) < simd_distance(floorPos($1), p) }.map { floorPos($0) }
+    }
+
+    // MARK: the play area (stay in view)
+
+    /// The floor rectangle the play camera shows between the top of the room and the HUD (pill + wand): the Jelbies' bodies stay inside it. nil until the overlay knows the view size.
+    private func playArea() -> (lo: SIMD2<Float>, hi: SIMD2<Float>)? {
+        let size = viewSize
+        guard size.width > 1, size.height > 1 else { return nil }
+        if let c = areaCache, c.size == size { return (c.lo, c.hi) }
+        let was = GameCamera.playBlend
+        GameCamera.playBlend = 1; defer { GameCamera.playBlend = was }          // (the area of the settled play view, whatever the camera's ease is now)
+        let land = size.width > size.height
+        let xl: CGFloat = land ? 0.24 : 0.17, xr = 1 - xl
+        let yTop: CGFloat = 0.40, yBot: CGFloat = land ? 0.68 : 0.70
+        guard let back = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yTop), size: size),
+              let front = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yBot), size: size),
+              let l = GameCamera.floorPoint(screen: CGPoint(x: size.width * xl, y: size.height * yBot), size: size),
+              let r = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) else { return nil }
+        let hx = max(min(abs(l.x), abs(r.x)) - 0.8, 1.2)          // (a body's half width inside the near edge)
+        var zHi = min(front.y, GameCamera.roamMaxZ - 0.1)
+        var zLo = max(back.y, RoomLayout.minZ + 1.6)
+        if zHi - zLo < 1.6 { zLo = zHi - 1.6 }
+        zHi = max(zHi, zLo + 0.5)
+        areaCache = (size, SIMD2(-hx, zLo), SIMD2(hx, zHi))
+        return (SIMD2(-hx, zLo), SIMD2(hx, zHi))
+    }
+    private func inArea(_ p: SIMD2<Float>) -> Bool {
+        guard let a = playArea() else { return true }
+        return p.x >= a.lo.x - 1 && p.x <= a.hi.x + 1 && p.y >= a.lo.y - 1 && p.y <= a.hi.y + 1
+    }
+    private func clampToArea(_ p: SIMD2<Float>) -> SIMD2<Float> {
+        guard let a = playArea() else { return p }
+        return SIMD2(min(max(p.x, a.lo.x), a.hi.x), min(max(p.y, a.lo.y), a.hi.y))
+    }
+
+    /// His spots: one each, abreast across the area (the middle one of three a step further back so nobody hides anybody), left to right by where they stand now.
+    private func assignSlots(_ awake: [BubbleJelly], _ a: (lo: SIMD2<Float>, hi: SIMD2<Float>)) {
+        let hx = a.hi.x, span = a.hi.y - a.lo.y
+        let front = a.lo.y + 0.72 * span, back = a.lo.y + 0.38 * span, mid = a.lo.y + 0.58 * span
+        let spots: [SIMD2<Float>]
+        switch awake.count {
+        case 0: spots = []
+        case 1: spots = [SIMD2(0, mid)]
+        case 2: spots = [SIMD2(-0.5 * hx, mid), SIMD2(0.5 * hx, mid)]
+        default: spots = [SIMD2(-0.72 * hx, front), SIMD2(0, back), SIMD2(0.72 * hx, front)] + (3..<awake.count).map { SIMD2(Float($0 % 2 == 0 ? -1 : 1) * 0.35 * hx, a.lo.y + 0.9 * span) }
+        }
+        slots = [:]
+        for (k, j) in awake.sorted(by: { $0.brain.position.x < $1.brain.position.x }).enumerated() where k < spots.count { slots[j.id] = spots[k] }
+    }
+
+    /// Every step: awake Jelbies get their leash (area, spot, the wand to look at); when the set changes or the view is new they walk in to their spots; every half second a
+    /// straggler outside the area (a social, a dash that was already running) is called back. Sleepers are left asleep.
+    private func leashTick(_ js: [BubbleJelly]) {
+        for j in js where (j.brain.isSleeping || j.brain.isNapping) && j.brain.bubbleLeash != nil { j.brain.bubbleLeash = nil; j.brain.trackPoint = nil }
+        guard let a = playArea() else { return }
+        let awake = js.filter { !$0.brain.isSleeping && !$0.brain.isNapping && $0.brain.enabled }
+        let key = awake.map(\.id).sorted()
+        let gather = key != slotKey || slotSize != viewSize
+        if gather { slotKey = key; slotSize = viewSize; assignSlots(awake, a) }
+        let m = mouth, look = SIMD2(m.x, m.z)
+        for j in awake {
+            guard let slot = slots[j.id] else { continue }
+            let b = j.brain
+            if b.bubbleLeash == nil, !leashed.contains(where: { $0 === b }) { leashed.append(b) }
+            b.bubbleLeash = BubbleLeash(lo: a.lo, hi: a.hi, slot: slot, look: look)
+            let walkIn = gather && simd_distance(b.position, slot) > 1.0
+            let strayed = clock >= superviseAt && !b.bubbleLeash!.contains(b.position, margin: 0.6) && (states[j.id]?.mode ?? .idle) == .idle && b.idleState.kind == nil
+            if walkIn || strayed {
+                if b.attached, !b.commanded, b.social == nil, b.pending == nil || walkIn {
+                    if case .walk(let t, _) = b.script, !walkIn, b.bubbleLeash!.contains(t) { continue }
+                    b.requestNow(.goTo(slot))
+                }
+            }
+        }
+        if clock >= superviseAt { superviseAt = clock + 0.5 }
+    }
+    private func releaseLeash() {
+        for b in leashed { b.bubbleLeash = nil; b.trackPoint = nil }
+        leashed.removeAll(); slots = [:]; slotKey = []; areaCache = nil
     }
 
     // MARK: pops
@@ -303,7 +391,8 @@ final class BubbleWand: PlayToy {
         j.brain.face(.excited, hold: 1.4)
         let a = AudioHub.shared
         a.play(.bubblePop, jelly: j.id, x: j.brain.px, volume: 1)
-        if Float.random(in: 0..<1) < 0.5 { a.chirp(jelly: j.id, .happy, x: j.brain.px) } else if Float.random(in: 0..<1) < 0.5 { a.play(.bubbleChirp, jelly: j.id, x: j.brain.px, volume: 1) }
+        if Float.random(in: 0..<1) < 0.85 { a.chirp(jelly: j.id, .happy, x: j.brain.px) }
+        if Float.random(in: 0..<1) < 0.5 { a.play(.bubbleChirp, jelly: j.id, x: j.brain.px, volume: 1) }          // (the pop's own giggle, now often on top of the happy chirp)
         if b.pos.z > 0.8, let h = haptics { h.transient(now: CACurrentMediaTime(), intensity: 0.2, sharpness: 0.3) }
         if st.streak >= BubbleTuning.streakForHearts {
             st.streak = 0; heartBursts += 1

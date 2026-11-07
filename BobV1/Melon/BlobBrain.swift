@@ -212,6 +212,8 @@ final class BlobBrain {
     /// Play mode: the floor point a waiting Jelly keeps turning to (the ball); nil = none. And the controller's hook for the moment a bump's foot lands (BlobBrain+PlayToss.swift).
     var trackPoint: SIMD2<Float>?
     var tossFire: ((BlobBrain) -> Void)?
+    /// The bubble wand's play area while Play mode with the wand is on (Toys/BubbleWand.swift sets and clears it; BlobBrain+Bubbles.swift acts on it): he stays on his spot in view.
+    var bubbleLeash: BubbleLeash?
     var waitBounceT: Float = 0
     var held: Bool { idleBlocked || reserved }
     /// Jellies interacting (BlobSocial.swift): the running session and the per-brain bookkeeping.
@@ -806,6 +808,7 @@ final class BlobBrain {
         planBudget = 12; defer { planBudget = 99 }          // (the per-step probe budget, not this count, now bounds the cost; 2 left Jelly 0 short of the front in testRoomCoveragePortrait)
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
+        if let lz = bubbleLeash, !commanded { bubbleIdle(sim, lz); return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         var pt = CACurrentMediaTime()
         if socialMaybeStart(sim) { return }
@@ -953,6 +956,7 @@ final class BlobBrain {
     func finishScript(_ sim: SoftBody, after served: Bool) {
         script = .none
         restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively * vJit()          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
+        if bubbleLeash != nil { restTimer *= 0.3 }          // (bubble play: eager, the next little move comes quickly)
         if let j = job { job = nil; onFinished?(j) }
         _ = served
     }
