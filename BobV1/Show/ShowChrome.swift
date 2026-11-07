@@ -219,7 +219,7 @@ struct DanceRound: View {
                         AssistFoot(side: 0, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
                         VStack(spacing: 8) {
                             cheer
-                            ZStack { flash.padding(.bottom, 58); lane.padding(.top, 26) }.frame(height: 110)
+                            lane.frame(height: 122)
                             stats
                             if show.beat == .danced { next }
                         }
@@ -227,9 +227,9 @@ struct DanceRound: View {
                     }
                 } else {
                     cheer
-                    ZStack { flash; lane.padding(.top, 34) }.frame(height: 120)
+                    lane.frame(height: 250)
                     stats
-                    Text(show.rank.kindTiming ? "\(show.rank.title) timing is kind: Perfect within 80 ms." : "Perfect within 60 ms: tap right on the beat.").font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale)
+                    Text(show.rank.kindTiming ? "\(show.rank.title) timing is kind: Perfect within 80 ms." : "Perfect within 60 ms: tap as the note reaches the line.").font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale)
                     if show.beat == .danced { next } else {
                         AssistFeetRow(prefix: "show", live: show.buttonsLive, press: press)
                             .frame(height: 150)
@@ -238,7 +238,7 @@ struct DanceRound: View {
             }
             .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
             if show.showsCountdown { numeral("\(show.countdown)") }
-            if show.showsGo { numeral("GO!") }
+            TimelineView(.periodic(from: .now, by: 0.1)) { _ in if show.showsGo { numeral("GO!") } }
         }
         .animation(CareMenu.spring, value: show.beat)
     }
@@ -246,6 +246,7 @@ struct DanceRound: View {
     private func press(_ foot: Int) { light.impactOccurred(intensity: 0.5); show.tap(foot: foot) }
 
     private var cheer: some View {
+        _ = show.flashSerial          // (every judged note bumps it: the meter redraws)
         let c = show.sim?.cheer ?? 0
         return ShowCard(padding: 10) {
             VStack(spacing: 6) {
@@ -256,34 +257,16 @@ struct DanceRound: View {
         .accessibilityElement(children: .combine).accessibilityLabel("Cheer \(Int((c * 100).rounded())) percent").accessibilityIdentifier("dance-cheer")
     }
 
-    private var flash: some View {
-        VStack {
-            Group {
-                switch show.flash {
-                case .perfect?: Text("Perfect!").foregroundStyle(ShowUI.gold)
-                case .good?: Text("Good").foregroundStyle(.white)
-                case .miss?: Text("Slip").foregroundStyle(ShowUI.mist)
-                case nil: Text(" ")
-                }
-            }
-            .font(SK.font(28, .black)).shadow(color: .black.opacity(0.4), radius: 4, y: 2)
-            .id(show.flashSerial).transition(.scale(scale: 1.4).combined(with: .opacity))
-            .accessibilityIdentifier("dance-flash")
-            Spacer()
-        }
-        .animation(.easeOut(duration: 0.12), value: show.flashSerial)
-        .allowsHitTesting(false)
-    }
-
-    private var lane: some View { PromptLane(care: care).accessibilityIdentifier("dance-prompts") }
+    private var lane: some View { NoteHighway(care: care, compact: compact).accessibilityIdentifier("dance-prompts") }
 
     private var stats: some View {
+        _ = show.flashSerial          // (every judged note bumps it: the chips and the Cheer meter redraw)
         let d = show.sim?.dance
         return HStack(spacing: 8) {
-            chip("Beat \(min((d?.judged ?? 0) + 1, d?.total ?? show.rank.promptCount)) / \(d?.total ?? show.rank.promptCount)", bg: SK.cream, fg: SK.ink)
-            chip("Perfect \(d?.perfects ?? 0)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26))
-            chip("Good \(d?.goods ?? 0)", bg: Color(hex: 0xFFE7A8), fg: ShowUI.brownGold)
-            chip("Slip \(d?.misses ?? 0)", bg: Color(hex: 0xF2ECE6), fg: SK.muted)
+            chip("Hit \(d?.hits ?? 0) / \(d?.total ?? 0)", bg: SK.cream, fg: SK.ink)
+            chip("Combo \(d?.combo ?? 0)", bg: Color(hex: 0xFFE7A8), fg: ShowUI.brownGold)
+            if !compact { chip("Perfect \(d?.perfects ?? 0)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26)) }
+            chip("Miss \(d?.misses ?? 0)", bg: Color(hex: 0xF2ECE6), fg: SK.muted)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine).accessibilityIdentifier("dance-stats")
@@ -336,14 +319,81 @@ struct CheerMeter: View {
     }
 }
 
-/// The L / R prompts scrolling toward the ring, on the music's clock (the drill's lane, on the show's grid).
+/// The Jelly Show's dance highway: two lanes (left foot / right foot), notes falling to a glowing hit line just above the foot buttons, on the dance
+/// song's own clock (ShowFlow.danceNow = the audio engine's playback time). Grade pops and a small burst sit on the lane of the note; Reduce Motion
+/// drops the bursts and the pop's rise (the notes still fall: that is the game).
+struct NoteHighway: View {
+    let care: GameCare
+    var compact: Bool
+    private static let lane = [SK.sky, SK.pink]
+    var body: some View {
+        let show = care.show
+        TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
+            let now = show.danceNow()
+            let dance = show.sim?.dance
+            let items = dance?.falling(at: now) ?? []
+            let wall = CACurrentMediaTime()
+            let pops = show.pops.filter { wall - $0.at < 0.5 }
+            let calm = A11ySettings.shared.reduceMotion
+            GeometryReader { g in
+                let hitY = g.size.height - (compact ? 16 : 24)
+                let gap: CGFloat = 10
+                let laneW = min((g.size.width - gap) / 2, compact ? 130 : 170)
+                let noteH: CGFloat = compact ? 24 : 32
+                ZStack {
+                    HStack(spacing: gap) {
+                        ForEach(0..<2, id: \.self) { lane in
+                            ZStack(alignment: .top) {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color(red: 0.08, green: 0.05, blue: 0.13).opacity(0.62))
+                                RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Self.lane[lane].opacity(0.55), lineWidth: 2)
+                                // the hit line: a soft glow that swells while a note is close
+                                let near = items.contains { $0.prompt.foot == lane && abs($0.progress - 1) < 0.1 }
+                                Capsule().fill(SK.cream).frame(width: laneW - 20, height: 5).blur(radius: near ? 5 : 3).opacity(near ? 1 : 0.7).offset(y: hitY - 2)
+                                Capsule().fill(SK.cream).frame(width: laneW - 24, height: 4).offset(y: hitY - 2)
+                                ForEach(items.filter { $0.prompt.foot == lane }, id: \.prompt.index) { it in
+                                    let y = CGFloat(it.progress) * hitY
+                                    Text(lane == 0 ? "L" : "R").font(SK.font(compact ? 14 : 17, .black)).foregroundStyle(.white)
+                                        .frame(width: laneW - 30, height: noteH)
+                                        .background(Capsule().fill(Self.lane[lane]).overlay(Capsule().strokeBorder(.white.opacity(0.85), lineWidth: 2)))
+                                        .shadow(color: Self.lane[lane].opacity(0.7), radius: 5)
+                                        .opacity(it.progress > 1.0 ? max(0, 1 - (it.progress - 1) * 6) : min(1, 0.3 + it.progress * 2))
+                                        .offset(y: y - noteH / 2)
+                                }
+                                ForEach(pops.filter { $0.foot == lane }, id: \.serial) { pop in
+                                    let age = CGFloat(wall - pop.at)
+                                    if !calm, pop.grade != .miss {
+                                        Circle().strokeBorder(pop.grade == .perfect ? ShowUI.gold : .white, lineWidth: 3)
+                                            .frame(width: 40, height: 40).scaleEffect(0.6 + age * 3).opacity(max(0, 1 - age * 2.2)).offset(y: hitY - 20)
+                                    }
+                                    Text(pop.grade == .perfect ? "Perfect" : pop.grade == .good ? "Good" : "Miss").font(SK.font(compact ? 15 : 18, .black))
+                                        .foregroundStyle(pop.grade == .perfect ? ShowUI.gold : pop.grade == .good ? Color.white : ShowUI.mist)
+                                        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                                        .opacity(max(0, 1 - age * 2)).offset(y: hitY - (compact ? 44 : 60) - (calm ? 0 : age * 22))
+                                }
+                            }
+                            .frame(width: laneW)
+                        }
+                    }
+                    if let c = dance?.combo, c >= 3 {
+                        Text("\(c) combo").font(SK.font(compact ? 13 : 16, .black)).foregroundStyle(SK.cream).shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                            .frame(maxHeight: .infinity, alignment: .top).padding(.top, 6)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityElement().accessibilityLabel("Note highway: left and right foot lanes")
+    }
+}
+
+/// The L / R prompts scrolling toward the ring, on the music's clock (the drill's lane, on the show's grid). The Studio's dance drill uses it.
 struct PromptLane: View {
     let care: GameCare
     var body: some View {
         let show = care.show
         TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let song = AudioHub.shared.songTime(of: show.track) ?? show.song
-            let items = (show.isPractice ? show.practice?.visible(at: song) : show.sim?.dance?.visible(at: song)) ?? []
+            let items = show.practice?.visible(at: song) ?? []
             ZStack(alignment: .leading) {
                 Capsule().fill(Color(red: 0.08, green: 0.05, blue: 0.13).opacity(0.6))
                 Circle().strokeBorder(Color(hex: 0xFFF6EC), lineWidth: 4).frame(width: 60, height: 60).padding(.leading, 14)

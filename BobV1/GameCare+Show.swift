@@ -43,6 +43,7 @@ extension GameCare {
         show.onPerform = { [weak self] t, ok in self?.showPerform(t, success: ok) }
         show.onDance = { [weak self] d, on in self?.showDance(d, on: on) }
         show.onHit = { [weak self] g in self?.showHit(g) }
+        show.onNote = { [weak self] foot, g in self?.showNote(foot: foot, g) }
         show.onResults = { [weak self] place in self?.showCelebrate(place: place) }
         show.onBurst = { [weak self] in self?.showBurst() }
         let d = UserDefaults.standard
@@ -273,6 +274,12 @@ extension GameCare {
         case .good: b.face(.happy, hold: 0.4)
         case .miss: b.face(.oh, hold: 0.5); b.jellyKick = max(b.jellyKick, 1.2)
         }
+    }
+    /// A note hit on a foot: a small jiggle on the step and the dance move starts again at once if it had ended (a miss is `showHit`'s wobble).
+    private func showNote(foot: Int, _ g: DrillGrade) {
+        guard g != .miss, let a = stageActor(0), let b = a.brain else { return }
+        b.jellyKick = max(b.jellyKick, g == .perfect ? 0.7 : 0.4)
+        if let aid = showBook.performers.first, showBook.dancing[aid] != nil { showBook.danceRestart[aid] = min(showBook.danceRestart[aid] ?? 0, 0) }
     }
     private func showBurst() {
         guard let a = stageActor(0), let b = a.brain else { return }
