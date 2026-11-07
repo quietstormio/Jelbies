@@ -797,7 +797,7 @@ final class GameCare {
         tickNightRest(dt: dt)
         tickNightSkip(dt: dt)
         HopDiag.lap(.careNight, &ht)
-        LaunchTiming.mark("first stage tick"); LaunchGate.shared.stageTicked()
+        LaunchTiming.mark("first stage tick"); LaunchGate.shared.stageTicked(); ResumeFrames.ticks &+= 1
         select.tick(dt: dt)
         HopDiag.lap(.careSelect, &ht)
         if select.hopRequest == 0, let id = select.takeHopRequest(), id == 0, let sim, !focus.isActive, !brain.isSleeping { brain.startHopPlay(sim: sim, distance: 0.0001) }   // "he hops" (Bob; the others' hop is `tickOthers`)

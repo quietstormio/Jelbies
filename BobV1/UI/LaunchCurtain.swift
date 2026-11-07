@@ -114,7 +114,7 @@ struct LaunchCurtainArt: View {
                     .id(theme.palette.id).transition(.opacity)
                 VStack(spacing: 18 * u) {
                     logo(width: logoW)
-                    HStack(spacing: 12 * u) { ForEach(0..<3, id: \.self) { dot($0, u) } }.padding(.top, 4 * u)
+                    SpinningJelbie(still: reduceMotion || A11ySettings.shared.reduceMotion || !bounce, palette: theme.palette).frame(width: 74 * u + 10, height: 74 * u + 10).padding(.top, 4 * u)
                     Text("Waking up your Jelbies").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
                         .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white))
                 }
@@ -138,5 +138,42 @@ struct LaunchCurtainArt: View {
             .scaleEffect(x: bounce ? 0.92 : 1.1, y: bounce ? 1.08 : 0.9, anchor: .bottom)
             .offset(y: bounce ? -10 * u : 0)
             .animation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true).delay(Double(i) * 0.15), value: bounce)
+    }
+}
+
+/// Counts stage ticks (one per simulated frame of the room); the welcome-back cover waits for two fresh ones after a resume.
+@MainActor enum ResumeFrames { static var ticks: UInt = 0 }
+
+/// The loading Jelbie: the title's Jelbie shape (JelbieArt) turning on its vertical axis, about 1.2 s a turn, with a small hop. Theme colours.
+struct SpinningJelbie: View {
+    let still: Bool
+    let palette: ThemePalette
+    private static let turn = 1.2
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: still)) { tl in
+            let ph = still ? 0 : tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.turn) / Self.turn
+            let ang = ph * 2 * .pi
+            let hop = still ? 0 : abs(sin(ph * 2 * .pi)) * 0.10
+            Canvas { c, size in
+                let k = min(size.width, size.height) / 150
+                var cc = c
+                cc.translateBy(x: size.width / 2, y: size.height / 2 + 6 * k - hop * size.height)
+                cc.scaleBy(x: k, y: k)
+                for path in [JelbieArt.body, JelbieArt.circle(-52.5, 14, 10), JelbieArt.circle(52.5, 14, 10)] { cc.fill(path, with: .color(palette.rim)); cc.stroke(path, with: .color(palette.rim), style: StrokeStyle(lineWidth: 13, lineJoin: .round)) }
+                cc.fill(JelbieArt.body, with: .color(.white))
+                cc.fill(JelbieArt.circle(-52.5, 14, 10), with: .color(.white)); cc.fill(JelbieArt.circle(52.5, 14, 10), with: .color(.white))
+                cc.drawLayer { l in
+                    l.clip(to: JelbieArt.body)
+                    l.fill(JelbieArt.body, with: .color(palette.shade))
+                    l.fill(JelbieArt.body.applying(CGAffineTransform(translationX: -5, y: -6)), with: .color(.white))
+                }
+                if cos(ang) > 0 {          // the face is on the front only
+                    for x in [-19.5, 19.5] { cc.fill(JelbieArt.circle(x, -14, 4.8), with: .color(palette.eye)); cc.fill(JelbieArt.circle(x, -16.2, 1.7), with: .color(.white)) }
+                }
+            }
+            .rotation3DEffect(.radians(ang), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+        }
+        .accessibilityHidden(true)
     }
 }

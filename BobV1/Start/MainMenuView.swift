@@ -235,7 +235,7 @@ private struct TitleButtonStyle: ButtonStyle {
     }
 }
 
-private enum JelbieArt {
+enum JelbieArt {
     /// The mockup's body path in its own unit space (centre 0,0, ~102 wide).
     static let body: Path = {
         var p = Path()

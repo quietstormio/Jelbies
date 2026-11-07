@@ -33,6 +33,8 @@ struct GameScreen: View {
     @State private var welcomeCover = false
     @State private var welcomeLeftAt: Date?
     @State private var welcomeTask: Task<Void, Never>?
+    @State private var welcomeSafety: Task<Void, Never>?
+    static let welcomeMax: TimeInterval = 3.0, welcomeAway: TimeInterval = 8          // cover: hard max, and the shortest absence that shows it
     @State private var hudTopH: CGFloat = 52          // measured: the top bar, so the open paw menu scrolls inside what is really left
     @State private var hudInfoH: CGFloat = 0          // measured: the info row (sleep-until-morning) under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
@@ -395,20 +397,32 @@ struct GameScreen: View {
         .onChange(of: scenePhase) { _, p in
             switch p {
             case .background:
-                guard !welcomeCover else { break }
-                welcomeTask?.cancel(); welcomeLeftAt = Date()
+                welcomeTask?.cancel(); welcomeSafety?.cancel()          // leaving again while the cover is still up re-arms it from now
+                welcomeLeftAt = Date()
                 AudioHub.shared.holdEffects(true)          // effects stay silent under the cover
                 welcomeCover = true
             case .active:
+                welcomeSafety?.cancel()
+                if welcomeCover {          // whatever happens below, 3 s after becoming active the cover is gone and effects are released
+                    welcomeSafety = Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(GameScreen.welcomeMax + 0.1))
+                        guard !Task.isCancelled else { return }
+                        AudioHub.shared.holdEffects(false)
+                        withAnimation(.easeOut(duration: 0.2)) { welcomeCover = false }
+                    }
+                }
                 guard let left = welcomeLeftAt else { break }
                 welcomeLeftAt = nil
-                if Date().timeIntervalSince(left) <= 20 { welcomeCover = false; AudioHub.shared.holdEffects(false); break }
                 welcomeTask?.cancel()
+                if Date().timeIntervalSince(left) <= GameScreen.welcomeAway { welcomeSafety?.cancel(); welcomeCover = false; AudioHub.shared.holdEffects(false); break }
+                let ticks0 = ResumeFrames.ticks
                 welcomeTask = Task { @MainActor in
                     let t0 = Date()
-                    try? await Task.sleep(for: .milliseconds(500))          // min 0.5 s
-                    while !Task.isCancelled, Date().timeIntervalSince(t0) < 1.5, !AudioHub.shared.resumeReady { try? await Task.sleep(for: .milliseconds(50)) }          // max 1.5 s
+                    try? await Task.sleep(for: .milliseconds(600))          // min 0.6 s: never a flash
+                    // ready = music/session back AND the stage drew at least 2 fresh frames since we came back; hard max 3.0 s
+                    while !Task.isCancelled, Date().timeIntervalSince(t0) < GameScreen.welcomeMax, !(AudioHub.shared.resumeReady && ResumeFrames.ticks >= ticks0 &+ 2) { try? await Task.sleep(for: .milliseconds(50)) }
                     guard !Task.isCancelled else { return }
+                    welcomeSafety?.cancel()
                     AudioHub.shared.holdEffects(false)
                     withAnimation(.easeOut(duration: 0.35)) { welcomeCover = false }
                 }
