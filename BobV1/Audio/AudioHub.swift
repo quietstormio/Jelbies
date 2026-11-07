@@ -188,8 +188,25 @@ final class AudioHub {
         let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(plan.category, mode: .default, options: plan.options)
-        try? s.setActive(true)
+        do { try s.setActive(true); sessionRetry?.cancel() }
+        catch {
+            // right after a return from another app the other app can still hold the session: the old `try?` dropped the failure and the players then ran on a
+            // half-reactivated session (quiet / silent until something else poked it). Retry a few times, 0.25 s apart.
+            sessionRetry?.cancel()
+            sessionRetry = Task { @MainActor [weak self] in
+                for _ in 0..<8 {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    guard let self, !Task.isCancelled, self.started, self.active, !self.micSession, !self.earsSession else { return }
+                    let s = AVAudioSession.sharedInstance()
+                    let plan = SessionPolicy.plan(musicOn: self.settings.musicOn, otherAudioPlaying: self.otherAudioPlaying, micActive: false)
+                    try? s.setCategory(plan.category, mode: .default, options: plan.options)
+                    if (try? s.setActive(true)) != nil { for d in self.decks { d.player.play() }; self.layer?.player.play(); self.ambDay?.player.play(); self.ambEve?.player.play(); self.scene?.resume(); return }
+                }
+            }
+        }
     }
+    @ObservationIgnored private var sessionRetry: Task<Void, Never>?
+    @ObservationIgnored private var settleTask: Task<Void, Never>?
 
     /// The music setting flipped: re-apply the (mixing) category live.
     private func reapplySession() { if started { setUpSession() } }
@@ -257,10 +274,24 @@ final class AudioHub {
         active = on
         if on {
             lastTick = CACurrentMediaTime()
+            // Idempotent restore: every level multiplier is rebuilt from the settings (a duck / storm dip / dance dip / mode slew left over from before the
+            // background can never carry over), the effect players are rebuilt (their session was torn down while away), then the music fades back in.
+            stormDuck = 1; stormDuckLow = 1; stormDuckClock = 0
+            danceGain = danceTarget
+            mainSlew = MainGainSlew()
+            otherAudioPlaying = false          // re-read below from the session
             refreshOtherAudio()
+            pool.removeAll(); creating.removeAll()
             resumeAfterInterruption(verify: true)
+            // after the fade-in window the targets are forced once more (a tick that was starved, a failed reactivation) - never left below the setting
+            settleTask?.cancel()
+            settleTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(Double(Self.resumeFadeSeconds) + 0.7))
+                guard let self, !Task.isCancelled, self.active else { return }
+                self.resumeFade = 1; self.refreshOtherAudio(); self.applyLevels()
+            }
         } else {
-            verifyTask?.cancel()
+            verifyTask?.cancel(); settleTask?.cancel(); sessionRetry?.cancel()
             resumeFade = 0
             micSession = false          // the mic engine died with the background; a stale flag would skip setUpSession on return
             for d in decks { d.player.pause() }
@@ -627,9 +658,8 @@ final class AudioHub {
     nonisolated(unsafe) static var requestSrcTap: ((String, Int) -> Void)?
     func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
         Self.requestTap?(sfx.rawValue)
-        if sfx == .jump, !inGenericHop { lastExplicitJump[min(max(jelly ?? 0, 0), 2)] = Self.clock() }          // (the generic hop sound skips a take-off that has its own)
-        if !inGenericHop, let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
-        if !inGenericHop, let t = SoundCaptions.text(sfx, jelly: jelly.map { JellyRoster.name(slot: $0) }) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
+        if let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
+        if let t = SoundCaptions.text(sfx, jelly: jelly.map { JellyRoster.name(slot: $0) }) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
         if let w = gateWhy() { diag("play:\(sfx.rawValue)", jelly, w); return }
         let level = settings.sfxLevel * duck.gain
         let now = Self.clock()
@@ -644,22 +674,8 @@ final class AudioHub {
         diag("play:\(sfx.rawValue)", jelly, nil, v: vol)
         _playLog.append(sfx.rawValue); if _playLog.count > 64 { _playLog.removeFirst() }
         let v = picker.pick(sfx.rawValue, count: n) + 1
-        Self.firedJellyTap?(sfx.rawValue, jelly, inGenericHop)
         fire("\(sfx.rawValue)_\(v)", volume: vol, pan: panFor(x: x), rate: rate)
     }
-
-    // MARK: generic hop sounds (BlobBrain+HopSound.swift)
-    @ObservationIgnored private var lastExplicitJump: [Int: Double] = [:]
-    @ObservationIgnored private var inGenericHop = false
-    nonisolated(unsafe) static var firedJellyTap: ((String, Int?, Bool) -> Void)?   // (sfx, jelly, generic hop sound)
-    /// Take-off of a hop that made no sound of its own: skipped when an explicit `.jump` for this Jelbie was requested within 0.35 s. Same guards as every `play`.
-    func hopTakeoff(jelly: Int, x: Float, volume: Float, rate: Float) {
-        if let l = lastExplicitJump[min(max(jelly, 0), 2)], Self.clock() - l < 0.35 { return }
-        inGenericHop = true; defer { inGenericHop = false }
-        play(.jump, jelly: jelly, x: x, volume: volume, rate: rate)
-    }
-    /// A soft landing thump: the squish sample, quieter and lower.
-    func hopLanding(jelly: Int, x: Float, volume: Float, rate: Float) { inGenericHop = true; defer { inGenericHop = false }; play(.squish, jelly: jelly, x: x, volume: volume, rate: rate) }
 
     /// A sleeping Jelly's snore, in its own CHARACTER's voice (snore_jelly{c}_{1|2}, like the chirps; ~30% end in a bubble pop).
     func snore(jelly: Int, x: Float? = nil) {
