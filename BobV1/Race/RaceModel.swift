@@ -127,9 +127,11 @@ extension RivalSource {
 
 /// v1 rivals: names and pastel tints from small pools, stats near the player's.
 nonisolated struct LocalRivalSource: RivalSource {
-    static let names = ["Biscuit", "Pebble", "Noodle", "Mochi", "Sprout", "Waffles", "Dumpling", "Tofu", "Pudding", "Bean", "Maple", "Fizz"]
-    /// Hues (0...1) the pastel tints are drawn from: pink, peach, lilac, aqua, lavender-blue, lime.
-    static let hues: [Float] = [0.93, 0.05, 0.76, 0.50, 0.68, 0.22]
+    static let names = RivalNames.all
+    /// Hues (0...1) the pastel tints are drawn from (RivalNames.hues: 12, spread over the signature bands).
+    static let hues: [Float] = RivalNames.hues
+    /// Names met in the last races (RivalMemory): the draw skips them while enough other names are left.
+    var recent: [String] = []
     /// How far (waddle / focus) a rival may be from the player.
     static let waddleSpread: Float = 0.12, focusSpread: Float = 0.18
     /// The least waddle / focus a rival brings to each course (the field is better trained up the ranks; none on the Puddle).
@@ -151,7 +153,10 @@ nonisolated struct LocalRivalSource: RivalSource {
         var g = RaceRNG(seed: seed &* 0x9E3779B97F4A7C15 &+ 0x51ED)
         let playerHue = Self.hue(of: playerTint)
         var hues = Self.hues.filter { abs($0 - playerHue) > 0.09 && abs($0 - playerHue) < 0.91 }
-        var names = Self.names
+        if hues.count < count { hues = Self.hues }          // (never run dry: the player's own hue may then be shared)
+        let skip = Set(recent.map { $0.lowercased() })
+        var names = Self.names.filter { !skip.contains($0.lowercased()) }
+        if names.count < count { names = Self.names }
         var out: [Rival] = []
         let fl = Self.floor(tier)
         for _ in 0..<max(count, 0) {

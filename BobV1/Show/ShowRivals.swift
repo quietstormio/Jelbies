@@ -46,10 +46,10 @@ nonisolated struct ShowRival: Equatable, Codable, Sendable {
 }
 
 nonisolated enum ShowRivalSource {
-    static let names = ["Mochi", "Biscuit", "Pebble", "Noodle", "Sprout", "Waffles", "Dumpling", "Tofu", "Pudding", "Bean", "Maple", "Fizz"]
+    static let names = RivalNames.all
     static let headlinerName = "Duchess Marmalade"
-    /// Hues (0...1) the pastel tints are drawn from: mint, honey, lilac, peach, aqua, rose.
-    static let hues: [Float] = [0.38, 0.12, 0.76, 0.06, 0.50, 0.93]
+    /// Hues (0...1) the pastel tints are drawn from (shared with the races: RivalNames.hues).
+    static let hues: [Float] = RivalNames.hues
     static let jitter: Float = 0.08
     static let personaUp: Float = 0.12, personaDown: Float = 0.06
     static let firstShowEase: Float = 0.10

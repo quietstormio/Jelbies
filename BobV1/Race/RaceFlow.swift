@@ -93,6 +93,8 @@ final class RaceFlow {
     /// -RaceAuto also sends him home by himself this long after the card appears.
     @ObservationIgnored var autoReturnAfter: Float?
     @ObservationIgnored var rivalSource: RivalSource = LocalRivalSource()
+    /// Where the last rivals met are kept (nil = no memory).
+    @ObservationIgnored var recentRivals: UserDefaults? = .standard
     /// The input assist this trip runs with (A11ySettings at the start; Accessibility/PlayAssist.swift).
     var assist: RaceAssist = .off
     /// Seconds of white (fade out / hold / fade in).
@@ -137,7 +139,11 @@ final class RaceFlow {
         guard phase == .off else { return }
         var t = tier ?? courseTier
         if !progress.unlocked(t) { t = .puddle }
-        let rs = rivalSource.rivals(count: rivalCount, player: player, playerTint: playerTint, seed: seed, tier: t)
+        // a short memory of the last rivals met: the stock source skips them, and this race's rivals join the list (other sources are used as they are)
+        var source = rivalSource
+        if var local = source as? LocalRivalSource, let d = recentRivals { local.recent = RivalMemory.load(d); source = local }
+        let rs = source.rivals(count: rivalCount, player: player, playerTint: playerTint, seed: seed, tier: t)
+        if source is LocalRivalSource, let d = recentRivals { RivalMemory.remember(rs.map(\.name), in: d) }
         rivals = rs; playerName = name; playerID = id
         sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t))
         ui = RaceUI()
