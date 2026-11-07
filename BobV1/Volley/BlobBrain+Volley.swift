@@ -236,7 +236,7 @@ extension BlobBrain {
     }
     private func clearOfMate(_ q: SIMD2<Float>, from p: SIMD2<Float>) -> SIMD2<Float> {
         guard let m = volley.mate else { return q }
-        return VolleyTuning.clearOfMate(q, from: p, mate: m, lane: volley.side)
+        return VolleyTuning.clearOfMate(q, from: p, mate: m, lane: -volley.side)
     }
     /// Keeps a body's centre on its own side of the net with a margin (the body is ~1.1 wide).
     private func ownSide(_ x: Float) -> Float { volley.side > 0 ? min(x, -VolleyTuning.netMargin) : max(x, VolleyTuning.netMargin) }
@@ -396,6 +396,9 @@ extension BlobBrain {
         // tipped phase (jump, spike, block, dive, slide, peel, cheer), forced (the flip's foot rules) while he is tipped over
         let tipped = volley.phase == .dive || volley.phase == .slide || volley.phase == .peel
         driveBeansRigid(sim, skinner, dt, tuck: volley.tuck, force: tipped && Self.onePieceVolley, hold: volley.phase != .ground && Self.onePieceVolley)
+        // 2026-11-07 (arms stay on): 3968f667 dropped the arms' drive from this tick. The capsules are drawn in WORLD space from the body pose of THIS tick, so with no driveArms every
+        // airborne phase left them where they were at take-off while the body jumped / dived away under them (the same bug the race hop had, fixed 2026-11-06). Driven every tick, after the beans.
+        driveArms(sim, skinner, dt)
     }
 
     static let volleyFlipGrip: Float = 0.15

@@ -1777,7 +1777,7 @@ final class BlobBrain {
                 if skinner.beanStart[s].count == FootBean.vertexCount { for i in 0..<FootBean.vertexCount { skinner.beanStart[s][i] = now.centroid + dq.act(skinner.beanStart[s][i] - old.centroid) } }
                 attachBean(sim, now, lifted: now.tilt > 0.3 || (skinner.beanPos[s].map(\.y).min() ?? 0) - sim.floorY > 0.02, &skinner.beanPos[s])
                 attachBean(sim, now, lifted: true, &skinner.beanPos[s])
-                if (beanForceLast || beanFitHold > 0 || raceHopFitted) && Self.forceLegsFix { Self.liftOntoFloor(&skinner.beanPos[s], floorY: sim.floorY) } else { for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i].y = max(skinner.beanPos[s][i].y, sim.floorY) } }
+                if (beanForceLast || beanFitHold > 0 || raceHopFitted || volleyFitted) && Self.forceLegsFix { Self.liftOntoFloor(&skinner.beanPos[s], floorY: sim.floorY) } else { for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i].y = max(skinner.beanPos[s][i].y, sim.floorY) } }
                 beanCorr[s] = .zero
                 continue
             }
@@ -1875,7 +1875,7 @@ final class BlobBrain {
             splay += max(-Self.splayOut, min(Self.splayIn, target - splay))
             beanSplay = splay
         } else if scale != 1 { splay = 0 }
-        let hopping = raceHopFitted          // the whole race jump (crouch / flight / landing) on the fitted pose: no switch to the attractor pose at the 0.1 m / 0.12 gates (a 4-5 cm flicker of the soles in the landing)
+        let hopping = raceHopFitted || volleyFitted          // the whole race jump (crouch / flight / landing) on the fitted pose: no switch to the attractor pose at the 0.1 m / 0.12 gates (a 4-5 cm flicker of the soles in the landing)
         let useFit = beanForce || beanFitHold > 0 || fitNeeded || hopping
         let fitted: BodyPose? = useFit ? fit : nil
         if scale == 1 { beanFitUsed = fitted }
@@ -1924,6 +1924,9 @@ final class BlobBrain {
 
     /// A hurdle jump that is under way (crouch, flight or landing of the race's hop): its beans ride the fitted pose.
     var raceHopFitted: Bool { Self.raceHopFeet && race.jumping && gait.isHopping }
+    /// Every airborne / landing phase of a volleyball move (crouch, jump, spike, dive, slide, peel, land): the soft body lags the attractor (tens of degrees in a spike or a dive), so the beans
+    /// and the arm capsules ride the FITTED pose, whole and for the whole move (no flicker between the two poses, no limb left behind on the attractor's pose).
+    var volleyFitted: Bool { Self.onePieceVolley && volley.active && volley.phase != .ground }
     nonisolated(unsafe) static var raceHopFeet = true          // (false = the old race jump feet: before / after captures)
     /// The planted soles' pop at take-off: the drawn beans stood on the world-planted soles (ahead of / behind the body by up to a stride), the hop's first frame draws them body-rigid
     /// under the body. `raceCarry` is that horizontal offset per foot, eased out over the crouch (`raceCarryT` seconds left of `raceCarryTime`).
@@ -2242,8 +2245,10 @@ final class BlobBrain {
             armStartScratch = armScratch
         }
         let att = sim.attractor, sya = att.squash, sxza = 1 / sya.squareRoot(), c0 = sim.restCentroid
-        let RS = simd_float3x3(att.rotation) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
-        let org = att.anchor - RS * c0
+        var armQ = att.rotation, armAnchor = att.anchor
+        if volleyFitted { let fit = sim.bodyPose(iterations: 3); armQ = fit.rotation; armAnchor = fit.centroid }          // (volleyball: the capsules root in the body that is drawn, not in the attractor it lags)
+        let RS = simd_float3x3(armQ) * simd_float3x3(diagonal: SIMD3(sxza, sya, sxza))
+        let org = armAnchor - RS * c0
         for si in 0..<2 {
             let sg: Float = si == 0 ? -1 : 1
             if armWalkWant > 0 {
