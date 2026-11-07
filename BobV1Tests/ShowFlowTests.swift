@@ -60,8 +60,8 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertTrue(cues.contains(.go)); XCTAssertEqual(cues.filter { $0 == .countdown }.count, 3)
         run(f, seconds: 4) { f.round == .trick }
         XCTAssertEqual(dances.last?.1, false, "the dance stops")
-        // three turns: pick, perform; the Burst is on offer after a good dance with a shiny Jelbie
-        run(f, seconds: 30) { f.sim?.round == .results && f.trickStage == .pick }
+        // three turns: pick, perform, then each rival walks up and shows hers; the Burst is on offer after a good dance with a shiny Jelbie
+        run(f, seconds: 120) { f.sim?.round == .results && f.trickStage == .pick }
         XCTAssertEqual(f.sim!.turns.count, 3); XCTAssertEqual(performs.count, 3)
         XCTAssertEqual(Set(f.sim!.turns.map(\.trick)).count, 3, "the auto player shows three different tricks")
         XCTAssertTrue(f.sim!.burstUsed, "Cheer and Glow were high: the Burst fired"); XCTAssertTrue(cues.contains(.burst))
@@ -106,6 +106,10 @@ final class ShowFlowTests: XCTestCase {
         f.pick(.jacks)                    // not yet: he is still performing
         XCTAssertEqual(f.sim!.turns.count, 1)
         run(f, seconds: ShowFlow.performSeconds + 0.1)
+        XCTAssertEqual(f.trickStage, .rivals, "the rivals take their turn before his next one")
+        f.pick(.jacks)                    // not yet: it is the rivals' turn
+        XCTAssertEqual(f.sim!.turns.count, 1)
+        f.skipRivals()
         XCTAssertEqual(f.trickStage, .pick)
         f.pick(.jacks)
         XCTAssertEqual(f.sim!.turns.count, 2); XCTAssertEqual(f.lastTurn?.trick, .jacks)
@@ -156,7 +160,7 @@ final class ShowFlowTests: XCTestCase {
         var p = ShowPlayerInput(name: "Bob"); p.tricks = [:]
         f.begin(playerID: 0, name: "Bob", character: 0, input: p, rank: .puddle, dayKey: 20261023, bodies: 1, seed: 2)
         XCTAssertEqual(Set(f.sim!.knownTricks), Set(ShowTrickInfo.defaults))
-        run(f, seconds: 90) { f.hasResults }
+        run(f, seconds: 240) { f.hasResults }
         XCTAssertTrue(f.hasResults)
         XCTAssertEqual(f.sim!.turns.count, 3)
         for t in f.sim!.turns { XCTAssertTrue(ShowTrickInfo.defaults.contains(t.trick)); XCTAssertGreaterThanOrEqual(t.points, ShowTuning.flopPoints) }
@@ -216,6 +220,123 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertTrue(care.showHidesWear(1)); XCTAssertFalse(care.showHidesWear(0))
         care.show.abort()
         XCTAssertFalse(care.show.active); XCTAssertNil(care.showBlocker(jelly: 0))
+    }
+
+    // MARK: the rivals' turns
+
+    private final class Log { var a: [String] = [] }
+    /// A show at the Trick round with nothing automatic; `log` hears every performance in order.
+    private func showAtTrick(_ log: Log, day: Int = 20261021, seed: UInt64 = 3) -> ShowFlow {
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        f.onPerform = { t, _ in log.a.append("P:\(t.rawValue)") }
+        f.onRival = { c in
+            switch c {
+            case .playerAside(let a): log.a.append("aside:\(a)")
+            case .walkIn(let i): log.a.append("in:\(i)")
+            case .perform(let i, let t, _): log.a.append("R\(i):\(t.rawValue)")
+            case .walkOut(let i): log.a.append("out:\(i)")
+            case .snap: log.a.append("snap")
+            }
+        }
+        f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: day, bodies: 1, seed: seed)
+        run(f, seconds: 2) { f.phase == .stage }
+        f.finishLook()
+        run(f, seconds: 6) { f.beat == .dancing }
+        run(f, seconds: 30) { f.beat == .danced }
+        f.finishDance()
+        return f
+    }
+
+    /// Three turns, each: his trick, then every rival walks up, performs and steps back, in order; then his again.
+    func testTurnsAlternateThePlayerAndEachRivalThreeTimes() {
+        let log = Log()
+        let f = showAtTrick(log)
+        XCTAssertEqual(f.round, .trick)
+        let n = f.sim!.rivals.count
+        XCTAssertEqual(n, 3)
+        for (turn, t) in [VoiceTrick.sit, .jacks, .flip].enumerated() {
+            log.a.removeAll()
+            f.pick(t)
+            run(f, seconds: 5) { f.trickStage == .rivals }
+            XCTAssertEqual(f.trickStage, .rivals); XCTAssertEqual(f.rivalRound, turn)
+            run(f, seconds: 60) { f.trickStage == .pick }
+            XCTAssertEqual(f.trickStage, .pick)
+            var want = ["P:\(t.rawValue)", "aside:true"]
+            for i in 0..<n { want += ["in:\(i)", "R\(i):\(f.sim!.rivalTurns[i][turn].trick.rawValue)", "out:\(i)"] }
+            want.append("aside:false")
+            XCTAssertEqual(log.a, want, "turn \(turn + 1)")
+            XCTAssertEqual(f.sim!.turns.count, turn + 1)
+            for i in 0..<n { XCTAssertEqual(f.sim!.rivalTurns[i].count, turn + 1) }
+        }
+        XCTAssertEqual(f.sim!.round, .results); XCTAssertTrue(f.hasResults); XCTAssertTrue(f.settled)
+        XCTAssertEqual(f.sim!.entrants.count, n + 1)
+    }
+
+    /// Skip settles the rest of the rivals (their points count), snaps the bodies and opens his next turn; a tap on the banner skips only the rival under the lights.
+    func testSkipSettlesTheRestOfTheRivalsAndOpensHisNextTurn() {
+        let log = Log()
+        let f = showAtTrick(log)
+        f.pick(.sit)
+        run(f, seconds: 5) { f.trickStage == .rivals }
+        run(f, seconds: 5) { f.rivalStep == .perform }
+        XCTAssertEqual(f.rivalTurn, 0); XCTAssertNotNil(f.rivalNow)
+        f.skipCurrentRival()
+        XCTAssertEqual(f.rivalStep, .walkOut); XCTAssertEqual(log.a.last, "out:0")
+        run(f, seconds: 5) { f.rivalTurn == 1 }
+        XCTAssertEqual(f.rivalTurn, 1, "the next rival walks up")
+        let before = f.sim!.rivalTurns
+        f.skipRivals()
+        XCTAssertEqual(f.trickStage, .pick); XCTAssertEqual(log.a.last, "snap"); XCTAssertNil(f.rivalTurn)
+        XCTAssertEqual(f.sim!.rivalTurns, before, "their points were already counted")
+        for r in f.sim!.rivalTurns { XCTAssertEqual(r.count, 1) }
+        XCTAssertEqual(f.sim!.turns.count, 1)
+        f.pick(.jacks)
+        XCTAssertEqual(f.sim!.turns.count, 2, "his next turn is open at once")
+        run(f, seconds: 5) { f.trickStage == .rivals }
+        f.skipRivals()
+        f.pick(.flip)
+        run(f, seconds: 5) { f.trickStage == .rivals }
+        f.skipRivals()
+        XCTAssertEqual(f.sim!.round, .results); XCTAssertTrue(f.settled)
+        run(f, seconds: 1)
+        XCTAssertTrue(f.hasResults)
+        let s = f.sim!
+        for (i, e) in s.entrants.dropFirst().enumerated() {
+            XCTAssertEqual(s.rivalTurns[i].count, 3)
+            XCTAssertEqual(e.scores.trick, s.rivalScores(i).trick)
+        }
+    }
+
+    /// The glue: a roster of 2 has one spare Jelbie, so the other two rivals borrow park-visitor bodies for the Trick round, shown only then, and give them back.
+    func testRivalsBorrowBodiesAndGiveThemBack() {
+        let room = RaceThreeTests.Room(count: 2)
+        RaceThreeTests.keep.append(room)
+        let care = room.care
+        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.cue = { _ in }
+        func step() {
+            for a in room.actors + room.park { if let b = a.brain { b.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: false) } }
+            care.tickRace(room.actors, dt: 1 / 60)
+            care.tickShow(room.actors, dt: 1 / 60)
+        }
+        func run(_ s: Float, until: () -> Bool = { false }) { for _ in 0..<Int(s * 60) { step(); if until() { return } } }
+        care.startShow(jelly: 0, rank: .puddle, seed: 5)
+        run(4) { care.show.onStage }
+        XCTAssertTrue(care.show.onStage)
+        let book = care.showBook
+        XCTAssertEqual(book.extra.count, 2, "3 rivals, 1 spare Jelbie: two borrowed bodies")
+        XCTAssertEqual(room.park.count, 2)
+        XCTAssertEqual(book.rivalBody.count, 3); XCTAssertEqual(Set(book.rivalBody.values).count, 3, "every rival has her own body")
+        XCTAssertEqual(book.rivalBody[0], book.performers[1], "the spare Jelbie first")
+        for a in book.extra { XCTAssertTrue(care.showHides(a.id), "hidden until the Trick round") }
+        care.show.auto = true
+        run(120) { care.show.trickStage == .rivals }
+        XCTAssertEqual(care.show.trickStage, .rivals)
+        for a in book.extra { XCTAssertFalse(care.showHides(a.id), "on stage for the rivals' turn") }
+        XCTAssertFalse(care.showHides(book.rivalBody[0]!))
+        care.show.abort()
+        XCTAssertTrue(book.extra.isEmpty, "borrowed bodies released"); XCTAssertTrue(room.park.isEmpty)
+        XCTAssertTrue(book.rivalBody.isEmpty)
+        XCTAssertFalse(care.show.active)
     }
 
     func testSameDayReplayMeetsTheSameRivals() {

@@ -25,7 +25,7 @@ struct ShowChrome: View {
                     case .look: LookRound(care: care)
                     case .dance: DanceRound(care: care)
                     case .trick: TrickRound(care: care)
-                    case .results: if show.trickStage == .performing { TrickRound(care: care) } else { ResultsScreen(care: care) }
+                    case .results: if show.trickStage != .pick { TrickRound(care: care) } else { ResultsScreen(care: care) }          // (the last turn's rivals still perform)
                     }
                 }
             }
@@ -383,15 +383,17 @@ struct TrickRound: View {
                     if compact {
                         HStack(alignment: .top, spacing: 12) {
                             VStack(alignment: .leading) { StagePill(text: hint); Spacer(minLength: 0) }
-                            VStack(spacing: 8) { turns; meters; burst; menu }.frame(width: min(size.width * 0.52, 520))
+                            VStack(spacing: 8) { turns; if rivalsOn { rivalPanel } else { meters; burst; menu } }.frame(width: min(size.width * 0.52, 520))
                         }
                     } else {
                         turns
                         HStack { Spacer(); StagePill(text: hint); Spacer() }
                         Spacer(minLength: 0)
-                        meters
-                        burst
-                        menu
+                        if rivalsOn { rivalPanel } else {
+                            meters
+                            burst
+                            menu
+                        }
                     }
                 }
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
@@ -406,7 +408,70 @@ struct TrickRound: View {
         case .performing:
             guard let t = show.lastTurn else { return "" }
             return t.success ? "\(t.trick.title)! +\(t.points)\(t.burst ? " and Glow Burst +10" : "")" : "A cute flop. +\(t.points)"
+        case .rivals: return "Rival's turn \(show.rivalRound + 1) of 3"
         }
+    }
+
+    private var rivalsOn: Bool { show.trickStage == .rivals }
+
+    /// The rivals' turn: who is up with her trick, stars and points (tap it to skip just her), and the big Skip for the rest of this turn.
+    private var rivalPanel: some View {
+        VStack(spacing: compact ? 8 : 12) {
+            Button { AudioHub.shared.uiTap(); show.skipCurrentRival() } label: { rivalBanner }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("rival-banner")
+            Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); show.skipRivals() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "forward.fill").font(.system(size: 20, weight: .black))
+                    Text("Skip").font(SK.font(20, .black))
+                }
+                .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: compact ? 50 : 60)
+                .background(Capsule().fill(ShowUI.gold))
+                .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 3))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Skip rivals' tricks").accessibilityIdentifier("rivals-skip")
+        }
+    }
+    private var rivalBanner: some View {
+        let n = show.rivalNow, s = show.sim
+        return VStack(alignment: .leading, spacing: 4) {
+            if let n, let s {
+                let r = s.rivals[n.rival], t = n.turn, stars = ShowTrickInfo.difficulty(t.trick)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Rival's turn").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                    Spacer()
+                    Text(r.persona.title).font(SK.font(11, .black)).foregroundStyle(SK.ink)
+                }
+                HStack(spacing: 8) {
+                    RivalBlob(tint: r.tint, size: compact ? 30 : 38)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(r.name).font(SK.font(compact ? 16 : 19, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                        HStack(spacing: 6) {
+                            Text(t.trick.title).font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                            HStack(spacing: 2) { ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 10, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : SK.muted.opacity(0.5)) } }
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    Text(show.rivalScored ? (t.success ? "+\(t.points)" : "Cute flop +\(t.points)") : "\u{2026}").font(SK.font(show.rivalScored && !t.success ? 15 : 22, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                }
+            } else {
+                Text("Your turn next").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10).frame(maxWidth: .infinity, minHeight: compact ? 54 : 68)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.cream.opacity(0.97)))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(ShowUI.lilac, lineWidth: 3))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(rivalBannerLabel)
+        .accessibilityHint("Skips just this rival")
+        .accessibilityAddTraits(.isButton)
+    }
+    private var rivalBannerLabel: String {
+        guard let n = show.rivalNow, let s = show.sim else { return "Your turn next" }
+        let t = n.turn, stars = ShowTrickInfo.difficulty(t.trick)
+        let tail = show.rivalScored ? (t.success ? ", \(t.points) points" : ", a cute flop, \(t.points) points") : ""
+        return "Rival's turn: \(s.rivals[n.rival].name), \(t.trick.title), \(stars) star\(stars == 1 ? "" : "s")\(tail)"
     }
 
     private var turns: some View {
@@ -414,10 +479,11 @@ struct TrickRound: View {
         return HStack(spacing: 6) {
             ForEach(0..<3, id: \.self) { k in
                 let t = (s?.turns.count ?? 0) > k ? s?.turns[k] : nil
-                let now = (s?.turns.count ?? 0) == k && !(s?.tricksDone ?? false)
+                let rivalsNow = show.trickStage == .rivals && show.rivalRound == k
+                let now = ((s?.turns.count ?? 0) == k && !(s?.tricksDone ?? false)) || rivalsNow
                 HStack(spacing: 6) {
                     Text(t.map { "\(k + 1) \($0.trick.title)" } ?? "Turn \(k + 1)").font(SK.font(11, .black)).opacity(0.8)
-                    Text(t.map { "+\($0.points)" } ?? (now ? "Your go" : "\u{2014}")).font(SK.font(15, .black))
+                    Text(rivalsNow ? "Rivals" : (t.map { "+\($0.points)" } ?? (now ? "Your go" : "\u{2014}"))).font(SK.font(15, .black))
                 }
                 .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 44)
                 .background(Capsule().fill(now ? ShowUI.gold : SK.cream.opacity(0.95)))

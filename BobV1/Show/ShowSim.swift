@@ -78,6 +78,9 @@ nonisolated struct ShowSim: Sendable {
     /// The Glow Burst is armed for the turn under way.
     private(set) var burstArmed = false
     private var rng: RaceRNG
+    /// The rivals' tricks, one list per rival (index = rival), one entry per turn. Rolled the moment the player's turn lands, from the DAY's seed (never the
+    /// show's), so a same-day replay meets the same rivals doing the same tricks; ShowFlow only paces them on the stage.
+    private(set) var rivalTurns: [[ShowTrickTurn]] = []
 
     // results
     private(set) var entrants: [ShowEntrant] = []
@@ -85,6 +88,7 @@ nonisolated struct ShowSim: Sendable {
     init(rank: ShowRank, theme: ShowTheme, dayKey: Int, player: ShowPlayerInput, rivals: [ShowRival], seed: UInt64) {
         self.rank = rank; self.theme = theme; self.dayKey = dayKey; self.player = player; self.rivals = rivals; self.seed = seed
         rng = RaceRNG(seed: seed &* 0x2545F4914F6CDD1D &+ 0x51)
+        rivalTurns = Array(repeating: [], count: rivals.count)
         recomputeLook()
     }
 
@@ -179,8 +183,60 @@ nonisolated struct ShowSim: Sendable {
         if burst { burstUsed = true; burstArmed = false }
         let turn = ShowTrickTurn(trick: t, success: success, repeated: repeated, points: pts, burst: burst)
         turns.append(turn)
+        rollRivalTurns(turn: turns.count - 1)
         if tricksDone { finishTricks() }
         return turn
+    }
+
+    // MARK: the rivals' tricks
+
+    /// The generator of rival `i`'s turn `k` (a pick and a slip roll): fixed by the day and the rank only.
+    private func rivalRNG(_ i: Int, _ k: Int) -> RaceRNG {
+        var g = RaceRNG(seed: ShowSchedule.rivalSeed(dayKey: dayKey, rank: rank) &+ UInt64(i + 1) &* 0x9E3779B97F4A7C15 &+ UInt64(k + 1) &* 0xBF58476D1CE4E5B9)
+        _ = g.next()
+        return g
+    }
+    /// What rival `i` shows on turn `k` (given the turns she already took): the Trickster goes for the most stars, the Poser for a trick that matches the
+    /// theme (main, then friend), the Dancer for the middle (2 stars); nobody repeats while a fresh trick is left.
+    func rivalPick(_ i: Int, turn k: Int) -> VoiceTrick {
+        var g = rivalRNG(i, k)
+        let used = rivalTurns[i].prefix(k).map(\.trick)
+        var pool = ShowTrickInfo.stageTricks.filter { !used.contains($0) }
+        if pool.isEmpty { pool = ShowTrickInfo.stageTricks }
+        var want = pool
+        switch rivals[i].persona {
+        case .trickster:
+            let top = pool.map { ShowTrickInfo.difficulty($0) }.max() ?? 1
+            want = pool.filter { ShowTrickInfo.difficulty($0) == top }
+        case .poser:
+            let main = pool.filter { ShowTrickInfo.tags($0).contains(theme.main) }
+            let friend = pool.filter { ShowTrickInfo.tags($0).contains(theme.friend) }
+            want = !main.isEmpty ? main : (!friend.isEmpty ? friend : pool)
+        case .dancer:
+            let mid = pool.filter { ShowTrickInfo.difficulty($0) == 2 }
+            want = mid.isEmpty ? pool : mid
+        }
+        return want[Int(g.next() * Float(want.count)) % want.count]
+    }
+    /// Every rival takes her turn `k`: the player's rule (stars, theme, a repeat, the cap) with the miss chance at the rivals' care.
+    private mutating func rollRivalTurns(turn k: Int) {
+        for i in rivals.indices where rivalTurns[i].count == k {
+            let t = rivalPick(i, turn: k)
+            var g = rivalRNG(i, k)
+            _ = g.next(); _ = g.next()
+            let d = ShowTrickInfo.difficulty(t)
+            let success = g.next() >= ShowScoring.missChance(difficulty: d, care: ShowTuning.rivalCare)
+            let repeated = rivalTurns[i].contains { $0.trick == t }
+            let pts = ShowScoring.turn(difficulty: d, success: success, repeated: repeated, tags: ShowTrickInfo.tags(t), theme: theme)
+            rivalTurns[i].append(ShowTrickTurn(trick: t, success: success, repeated: repeated, points: pts, burst: false))
+        }
+    }
+    /// Rival `i`'s scores today: her Look and Dance are fixed with her, her Trick is what she really showed (plus her Burst).
+    func rivalScores(_ i: Int) -> ShowScores {
+        var sc = rivals[i].scores
+        let sum = rivalTurns[i].reduce(0) { $0 + $1.points } + (rivals[i].burst ? ShowScoring.burstPoints : 0)
+        sc.trick = Float(min(100, sum))
+        return sc
     }
 
     // MARK: results
@@ -189,7 +245,7 @@ nonisolated struct ShowSim: Sendable {
 
     private mutating func finishTricks() {
         var list = [ShowEntrant(name: player.name, isPlayer: true, persona: nil, tint: .zero, scores: playerScores, burst: burstUsed, rival: nil)]
-        for (i, r) in rivals.enumerated() { list.append(ShowEntrant(name: r.name, isPlayer: false, persona: r.persona, tint: r.tint, scores: r.scores, burst: r.burst, rival: i)) }
+        for (i, r) in rivals.enumerated() { list.append(ShowEntrant(name: r.name, isPlayer: false, persona: r.persona, tint: r.tint, scores: rivalScores(i), burst: r.burst, rival: i)) }
         let places = ShowScoring.places(totals: list.map { Float($0.scores.totalPts) })
         for i in list.indices { list[i].place = places[i] }
         entrants = list
@@ -199,7 +255,7 @@ nonisolated struct ShowSim: Sendable {
     mutating func settleNow() {
         if round == .look { round = .dance }
         if round == .dance { finishDance() }
-        if round == .trick, !tricksDone { while !tricksDone { turns.append(ShowTrickTurn(trick: .sit, success: false, repeated: true, points: 0, burst: false)) }; finishTricks() }
+        if round == .trick, !tricksDone { while !tricksDone { turns.append(ShowTrickTurn(trick: .sit, success: false, repeated: true, points: 0, burst: false)); rollRivalTurns(turn: turns.count - 1) }; finishTricks() }
     }
     var playerPlace: Int? { entrants.first(where: \.isPlayer)?.place }
     var playerDrops: Int { playerPlace.map { rank.drops(place: $0) } ?? 0 }
@@ -214,7 +270,7 @@ nonisolated struct ShowSim: Sendable {
     /// "Next time try ...": the round that cost the most against the field, and what raises it.
     var tip: String {
         let p = playerScores
-        let best = rivals.map(\.scores).reduce(ShowScores()) { ShowScores(look: max($0.look, $1.look), dance: max($0.dance, $1.dance), trick: max($0.trick, $1.trick)) }
+        let best = rivals.indices.map { rivalScores($0) }.reduce(ShowScores()) { ShowScores(look: max($0.look, $1.look), dance: max($0.dance, $1.dance), trick: max($0.trick, $1.trick)) }
         let gaps: [(ShowRound, Float)] = [(.look, best.look - p.look), (.dance, best.dance - p.dance), (.trick, best.trick - p.trick)]
         let worst = gaps.max { $0.1 < $1.1 }!
         let name = player.name
