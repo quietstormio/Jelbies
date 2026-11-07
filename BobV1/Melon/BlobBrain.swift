@@ -440,7 +440,7 @@ final class BlobBrain {
     nonisolated deinit {}
 
     /// A brain set up for the game screen: fixed camera, GameCamera floor bounds, faces the player when idle.
-    static func forGame() -> BlobBrain {
+    static func forGame(randomized: Bool = false) -> BlobBrain {
         let b = BlobBrain()
         b.followsStudioCamera = false
         b.cameraPosXZ = SIMD2(GameCamera.eye.x, GameCamera.eye.z)
@@ -452,6 +452,7 @@ final class BlobBrain {
         b.maxWanderLeg = 5.5
         b.facePlayerWhenIdle = true
         b.attentionPitch = 0.28
+        if randomized { b.randomizeSeedForLaunch() }
         let d = UserDefaults.standard
         if d.object(forKey: "BlobPitch") != nil { b.attentionPitch = Float(d.double(forKey: "BlobPitch")) }
         if d.integer(forKey: "BlobNoWander") != 0 { b.autonomy = false }
@@ -459,6 +460,17 @@ final class BlobBrain {
         if let n = d.string(forKey: "RunMove"), let k = IdleKind(rawValue: n), [.zoomies, .slide, .scoot].contains(k) { b.runMoveDemo = k; b.idleState.cooldown = 2 }
         if let name = d.string(forKey: "BlobGameDemo") { b.demo = name; b.autonomy = false; b.restTimer = 2.0 }
         return b
+    }
+
+    /// Production brains start from a fresh random stream (the field default is one fixed constant, so every launch, and both Jelbies, made the same first picks).
+    /// Under XCTest, or with `-BlobSeed n`, the stream stays fixed / the given one, so tests and captures stay deterministic.
+    nonisolated(unsafe) private static var seedCount: UInt64 = 0
+    func randomizeSeedForLaunch() {
+        let d = UserDefaults.standard
+        if d.object(forKey: "BlobSeed") != nil { Self.seedCount &+= 1; seed = UInt64(max(d.integer(forKey: "BlobSeed"), 0)) &+ Self.seedCount &* 0x9E3779B97F4A7C15; return }
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }
+        var g = SystemRandomNumberGenerator()
+        seed = g.next()
     }
 
     // MARK: demo (launch argument -BlobDemo <name>, for visual testing in the studio)

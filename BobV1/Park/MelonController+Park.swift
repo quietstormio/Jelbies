@@ -39,7 +39,7 @@ extension MelonController {
             a.sim.substeps = ParkTuning.visitorSubsteps
             a.sim.arenaCenter = GameCamera.arenaCenter
             a.sim.arenaRadius = GameCamera.arenaRadius
-            let b = BlobBrain.forGame()
+            let b = BlobBrain.forGame(randomized: true)
             b.demo = nil; b.runMoveDemo = nil
             b.autonomy = true
             model.care.wireWorld(b, isBob: false)

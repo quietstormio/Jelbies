@@ -759,7 +759,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     private func bobTick(reduce: Bool) {
-        if game && brain == nil { brain = BlobBrain.forGame() }
+        if game && brain == nil { brain = BlobBrain.forGame(randomized: true) }
         if let brain, brain.enabled {
             wasHopping = false
             if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
@@ -854,7 +854,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             }
             // the other Jellies: the game brain (floor rules, roaming, attention pitch) with the tray as an obstacle, steering around everybody
             for a in actors.dropFirst() {
-                let b = BlobBrain.forGame()
+                let b = BlobBrain.forGame(randomized: true)
                 b.demo = nil; b.runMoveDemo = nil
                 b.autonomy = UserDefaults.standard.integer(forKey: "BlobNoWander") == 0
                 model.care.wireWorld(b, isBob: false)
