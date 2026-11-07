@@ -133,7 +133,7 @@ final class ContactPolishTests: XCTestCase {
     /// Pair emotes (rig 0 starts it with rig 1): the CURATED entries (a name, a class, a prop, a time cap). `pairEntries` adds an automatic entry for any SocialKind nobody wrote one for.
     static let curatedPairEntries: [ContactEntry] = [
         ContactEntry(name: "boop", scenario: .social(.boop), stance: .touching, momentary: true), e("squabble", .squabble, .touching), e("bump", .bump, .touching), e("nuzzle", .nuzzle, .touching), e("sitTogether", .sitTogether, .touching),
-        e("sneak", .sneak, .touching), e("chestBump", .chestBump, .touching), e("highFive", .highFive, .touching), e("hum", .hum, .touching), e("cheekSquish", .cheekSquish, .touching),
+        e("sneak", .sneak, .touching), e("chestBump", .chestBump, .touching), e("highFive", .highFive, .touching), e("cheekSquish", .cheekSquish, .touching),
         e("bellyBounce", .bellyBounce, .touching), e("backToBack", .backToBack, .touching), e("cuddleLean", .cuddleLean, .touching),
         e("ringAround", .ringAround, .touching), e("swayHug", .swayHug, .touching), e("whisperGiggle", .whisperGiggle, .touching), e("spinHug", .spinHug, .touching),
         ContactEntry(name: "tag", scenario: .social(.tag), stance: .touching, momentary: true), ContactEntry(name: "chase", scenario: .social(.chase), stance: .touching, maxSec: 40, momentary: true),          // (tag / chase: the emote IS a soft bump in a run: its hold step is the chase itself, so a "hold median" read 59-94 cm of running; judged at the touch frames like a boop)
@@ -736,7 +736,7 @@ final class ContactPolishTests: XCTestCase {
     /// tag / chase are judged at their touch frames (a soft bump inside a run), the holding stances (hum ...) are the ones whose arrival / retreat apply, the pressing ones (bump ...) are not.
     func testHoldsStanceClassification() {
         func entry(_ k: SocialKind) -> ContactEntry { (Self.pairEntries + Self.groupEntries).first { Self.kindOf($0) == k }! }
-        for k in [SocialKind.hum, .nuzzle, .cheekSquish, .backToBack, .cuddleLean, .swayHug, .whisperGiggle, .groupHug, .highFive] { XCTAssertTrue(Self.holdsStance(entry(k)), "\(k) is a holding stance") }
+        for k in [SocialKind.nuzzle, .cheekSquish, .backToBack, .cuddleLean, .swayHug, .whisperGiggle, .groupHug, .highFive] { XCTAssertTrue(Self.holdsStance(entry(k)), "\(k) is a holding stance") }
         for k in [SocialKind.boop, .bump, .tag, .chase, .look, .follow] { XCTAssertFalse(Self.holdsStance(entry(k)), "\(k) is not") }
         XCTAssertTrue(entry(.tag).momentary && entry(.chase).momentary, "tag / chase: judged at the touch")
     }

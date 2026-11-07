@@ -11,7 +11,7 @@ import simd
 @MainActor
 final class FriendlySocialTests: XCTestCase {
     func testEachFriendlyKindRunsToTheEnd() {
-        for kind in [SocialKind.chestBump, .highFive, .hum, .cheekSquish, .twirl, .hopAlong] {
+        for kind in [SocialKind.chestBump, .highFive, .cheekSquish, .twirl, .hopAlong] {
             let lab = SocialTests.Lab(n: 2, positions: [SIMD2(-1.6, 0.5), SIMD2(1.0, 0.5)], quiet: true, seed: 3)
             let a = lab.rigs[0], b = lab.rigs[1]
             XCTAssertTrue(a.brain.socialStart(kind, with: b.brain, a.sim), "\(kind) starts")

@@ -230,7 +230,6 @@ final class SocialFeetTests: XCTestCase {
     func testSneak() { pair("sneak", .sneak) }
     func testChestBump() { pair("chestBump", .chestBump) }
     func testHighFive() { pair("highFive", .highFive) }
-    func testHum() { pair("hum", .hum) }
     func testCheekSquish() { pair("cheekSquish", .cheekSquish) }
     func testTag() { pair("tag", .tag) }
     func testBellyBounce() { pair("bellyBounce", .bellyBounce) }

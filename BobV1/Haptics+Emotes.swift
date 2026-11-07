@@ -186,7 +186,6 @@ enum HapticCue: Hashable, Sendable {
         case .cuddle: return CueSpec(i: 0.11, s: 0.04, n: 3, gap: 0.25, decay: 0.95)
         case .chestBump: return CueSpec(i: 0.39, s: 0.14, n: 3, gap: 0.07, decay: 0.5)
         case .highFive: return CueSpec(i: 0.30, s: 0.23, n: 1)
-        case .hum: return CueSpec(i: 0.08, s: 0.04, n: 4, gap: 0.22, decay: 0.95)
         case .cheekSquish: return CueSpec(i: 0.21, s: 0.10, n: 2, gap: 0.2, decay: 0.9)
         case .twirl: return CueSpec(i: 0.19, s: 0.12, n: 4, gap: 0.09, decay: 0.8)
         case .hopAlong: return CueSpec(i: 0.26, s: 0.17, n: 2, gap: 0.22, decay: 0.95)
