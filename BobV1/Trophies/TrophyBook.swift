@@ -68,7 +68,9 @@ nonisolated struct TrophyShelfSpec: Equatable, Sendable {
     var milestones: [Bool] = [false, false, false, false]
     /// The best Show placing (0 none).
     var contest: UInt8 = 0
-    var isEmpty: Bool { cups.allSatisfy { $0 == 0 } && !milestones.contains(true) && contest == 0 }
+    /// Per VolleyTier (in allCases order): a beach volleyball match was won on that court by any Jelbie (one cup per court, a beach ball on top).
+    var volley: [Bool] = Array(repeating: false, count: VolleyTier.allCases.count)
+    var isEmpty: Bool { cups.allSatisfy { $0 == 0 } && !milestones.contains(true) && contest == 0 && !volley.contains(true) }
 }
 
 @MainActor
@@ -119,6 +121,7 @@ final class TrophyBook {
                 if let b = s.bestRace(t) { spec.cups[k] = spec.cups[k] == 0 ? UInt8(b) : min(spec.cups[k], UInt8(b)) }
             }
             for (k, t) in [Trophy.wins5, .wins10, .wins25, .champion].enumerated() where s.has(t) { spec.milestones[k] = true }
+            for (k, t) in VolleyTier.allCases.enumerated() where s.volleyWon(t) > 0 { spec.volley[k] = true }
         }
         return spec
     }

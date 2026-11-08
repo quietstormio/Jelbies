@@ -42,7 +42,8 @@ nonisolated enum TrophyShelfGeometry {
         let depth: Float = 0.12
         let zc = back + depth + 0.01
         let upperY = sp.y + 0.62
-        for y in [sp.y, upperY] {
+        let volleyY = upperY + 0.62
+        for y in spec.volley.contains(true) ? [sp.y, upperY, volleyY] : [sp.y, upperY] {
             b.roundedBox(centre: SIMD3(sp.x, y - 0.025, zc), half: SIMD3(sp.width / 2, 0.025, depth), radius: 0.02, segments: 2, aoFloor: false, color: wood)
             for s in [Float(-1), 1] {          // two little brackets under each plank
                 b.roundedBox(centre: SIMD3(sp.x + s * (sp.width / 2 - 0.1), y - 0.11, back + 0.05), half: SIMD3(0.018, 0.06, 0.05), radius: 0.012, segments: 2, aoFloor: false, color: wood * 0.85)
@@ -63,10 +64,18 @@ nonisolated enum TrophyShelfGeometry {
             cup(b, x: x2(k + 1), y: upperY, z: zc, scale: 0.8 + 0.12 * Float(k), color: col, lid: false)
         }
         if spec.milestones[3] { cup(b, x: x2(4), y: upperY, z: zc, scale: 1.2, color: gold, lid: true) }
+        // third plank (only once a beach volleyball match is won): one cup per court, tinted like the court, a beach ball on top
+        let n3 = spec.volley.count, slot3 = sp.width / Float(n3)
+        for k in 0..<n3 where spec.volley[k] {
+            cup(b, x: sp.x - sp.width / 2 + slot3 * (Float(k) + 0.5), y: volleyY, z: zc, scale: 0.85, color: volleyTint[min(k, volleyTint.count - 1)], lid: false, ball: true)
+        }
     }
 
+    /// The volleyball cups' tints, by court: Sandcastle (sand), Shore (aqua), Reef (coral), Tidal (deep blue).
+    static let volleyTint: [SIMD3<Float>] = [RaceModels.srgb(0.93, 0.78, 0.48), RaceModels.srgb(0.40, 0.78, 0.84), RaceModels.srgb(0.95, 0.52, 0.46), RaceModels.srgb(0.32, 0.50, 0.90)]
+
     /// A goblet: foot, stem, bowl with a rim, two small handles; the Champion's has a lid and a ball on top.
-    private static func cup(_ b: RoomMeshBuilder, x: Float, y: Float, z: Float, scale k: Float, color: SIMD3<Float>, lid: Bool) {
+    private static func cup(_ b: RoomMeshBuilder, x: Float, y: Float, z: Float, scale k: Float, color: SIMD3<Float>, lid: Bool, ball: Bool = false) {
         typealias PP = RoomMeshBuilder.ProfilePoint
         func pp(_ r: Float, _ h: Float, _ nr: Float, _ ny: Float, _ ao: Float = 1) -> PP { PP(r: r * k, y: y + h * k, nr: nr, ny: ny, ao: ao) }
         var prof: [PP] = [
@@ -82,6 +91,15 @@ nonisolated enum TrophyShelfGeometry {
             b.roundedBox(centre: SIMD3(x + s * 0.112 * k, y + 0.165 * k, z), half: SIMD3(0.014 * k, 0.03 * k, 0.012 * k), radius: 0.012 * k, segments: 2, aoFloor: false, color: color)
         }
         if lid { b.roundedBox(centre: SIMD3(x, y + 0.285 * k, z), half: SIMD3(repeating: 0.03 * k), radius: 0.03 * k, segments: 3, aoFloor: false, color: color) }
+        if ball {          // a little beach ball resting in the bowl: white, with a red panel to the front, a yellow cap and a blue panel to each side
+            let r = 0.058 * k, cy = y + 0.255 * k
+            b.roundedBox(centre: SIMD3(x, cy, z), half: SIMD3(repeating: r), radius: r, segments: 3, aoFloor: false, color: RaceModels.srgb(0.97, 0.97, 0.95))
+            b.roundedBox(centre: SIMD3(x, cy, z + r * 0.85), half: SIMD3(r * 0.34, r * 0.8, r * 0.2), radius: r * 0.18, segments: 2, aoFloor: false, color: RaceModels.srgb(0.95, 0.32, 0.32))
+            b.roundedBox(centre: SIMD3(x, cy + r * 0.9, z), half: SIMD3(r * 0.34, r * 0.2, r * 0.34), radius: r * 0.18, segments: 2, aoFloor: false, color: RaceModels.srgb(0.99, 0.83, 0.25))
+            for s in [Float(-1), 1] {
+                b.roundedBox(centre: SIMD3(x + s * r * 0.85, cy, z), half: SIMD3(r * 0.2, r * 0.6, r * 0.34), radius: r * 0.18, segments: 2, aoFloor: false, color: RaceModels.srgb(0.30, 0.55, 0.92))
+            }
+        }
     }
 
     /// A rosette standing on the plank: a ring of eight round petals around a darker button, on a short stand, with two ribbon tails.

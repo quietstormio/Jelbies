@@ -268,14 +268,14 @@ enum VolleyBallMesh {
     }
 
     /// The ring at the feet of the Jelbie you steer, and a bobbing arrow over his head.
-    static func controlMark(x: Float, z: Float, top: Float, time: Float, into b: RoomMeshBuilder) {
+    static func controlMark(x: Float, z: Float, top: Float, time: Float, pop: Float = 0, into b: RoomMeshBuilder) {
         let col = ParkShapes.srgb(0.28, 0.78, 0.96)
-        let pulse = 0.04 * sinf(time * 5)
+        let pulse = 0.04 * sinf(time * 5) + 0.28 * pop * pop
         annulus(b, cx: x, cz: z, r0: 0.66 + pulse, r1: 0.74 + pulse, y: 0.045, color: col)
         b.material = .plain
         let first = b.mesh.vertices.count
         b.lathe(cx: 0, cz: 0, profile: [PP(r: 0.0, y: 0.0, nr: 0, ny: -1), PP(r: 0.13, y: 0.24, nr: 1, ny: 0.3), PP(r: 0.0, y: 0.24, nr: 0, ny: 1)], segments: 10, color: col)
-        let dy = top + 0.42 + 0.06 * sinf(time * 5)
+        let dy = top + 0.42 + 0.06 * sinf(time * 5) + 0.3 * pop
         for i in first..<b.mesh.vertices.count { b.mesh.vertices[i].pos.x += x; b.mesh.vertices[i].pos.y += dy; b.mesh.vertices[i].pos.z += z }
     }
 

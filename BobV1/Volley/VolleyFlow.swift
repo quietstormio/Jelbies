@@ -170,7 +170,8 @@ final class VolleyFlow {
             if win, let tb = trophies { awards = tb.recordVolleyWin(character: playerCharacter, tier: t) }
             A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) JellyCoins" : "They won \(s.score[1]) to \(s.score[0]). \(earned) JellyCoins", .high)
             if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
-            for tr in awards.trophies { A11yEvents.say("Trophy! \(tr.title)", .normal) }
+            for tr in awards.trophies { A11yEvents.say("New trophy! \(tr.title)", .normal) }
+            if !awards.trophies.isEmpty { AudioHub.shared.play(.sparkle, volume: 0.9) }          // (the same sparkle the combo cheer uses; the trophy now stands on the home shelf)
         }
         cueSerial += 1
     }
