@@ -13,7 +13,9 @@ import Foundation
 import simd
 
 nonisolated enum TossTuning {
-    static let gravity: Float = 9.5
+    /// Floaty ball (user 2026-11-07): every flight lasts `slow` x longer than before and gravity falls with its square, so the arcs keep their height and reach.
+    static let slow: Float = 1.25
+    static let gravity: Float = 9.5 / (slow * slow)
     static let restitution: Float = 0.58
     static let bounceFriction: Float = 0.90          // sideways speed kept by a floor bounce
     static let rollDecayPerS: Float = 1.15
@@ -71,6 +73,18 @@ nonisolated struct TossBall: Sendable {
     var speedXZ: Float { simd_length(SIMD2(vel.x, vel.z)) }
     var resting: Bool { onFloor && speedXZ < TossTuning.stopSpeed }
 
+    /// Where the ball will come down on the floor if nothing touches it (the same gravity as `sub`; there is no air drag): the xz point (kept inside the visible floor) and the seconds to go. Nil when it is not airborne.
+    func landing(xHalf: (Float) -> Float) -> (xz: SIMD2<Float>, t: Float)? {
+        let g = TossTuning.gravity
+        let y0 = pos.y - radius
+        guard y0 > 0.03 || vel.y > 0.5 else { return nil }
+        let t = (vel.y + (vel.y * vel.y + 2 * g * max(y0, 0)).squareRoot()) / g
+        let x = pos.x + vel.x * t, z = pos.z + vel.z * t
+        let zc = min(max(z, TossTuning.zBack + radius), 9 - radius)
+        let lim = max(xHalf(zc) - radius, 0.5)
+        return (SIMD2(min(max(x, -lim), lim), zc), t)
+    }
+
     /// One physics step of `dt` (sub-stepped). Returns what happened, in order.
     @discardableResult
     mutating func step(_ dt: Float, in w: TossWorld) -> [TossEvent] {
@@ -93,7 +107,7 @@ nonisolated struct TossBall: Sendable {
             pos.y = r
             if vel.y < 0 {
                 let vy = -vel.y
-                if vy > 0.7 {
+                if vy > 0.7 / TossTuning.slow {
                     vel.y = vy * TossTuning.restitution
                     vel.x *= TossTuning.bounceFriction; vel.z *= TossTuning.bounceFriction
                     floorBounces += 1
@@ -239,7 +253,7 @@ enum TossAim {
         }
         // the flight: longer for a longer throw
         let rng = simd_length(SIMD2(target.x - start.x, target.z - start.z))
-        let T = min(max(0.55 + 0.085 * rng, 0.55), 1.25)
+        let T = min(max(0.55 + 0.085 * rng, 0.55), 1.25) * TossTuning.slow
         let g = TossTuning.gravity
         let v = SIMD3<Float>((target.x - start.x) / T, (target.y - start.y + 0.5 * g * T * T) / T, (target.z - start.z) / T)
         return TossThrow(start: start, velocity: v, target: target, flight: T, assistedBody: assisted, assist: pull)

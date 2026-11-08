@@ -84,6 +84,9 @@ final class PlayToss {
     @ObservationIgnored private var catchT: Float = 0
     @ObservationIgnored private var bumper: Int?
     @ObservationIgnored private var passTo: Int?
+    /// Where a good return is meant to come down (the catch zone), and the steering assist that eases it there; the seconds the loose ball has lain still.
+    @ObservationIgnored private var returnAim: SIMD2<Float>?
+    @ObservationIgnored private var restT: Float = 0
     @ObservationIgnored private var bumpNeeded = false
     @ObservationIgnored private var interceptAt: [Int: (p: SIMD2<Float>, t: Float)] = [:]
     @ObservationIgnored private var saved: [Int: (reserved: Bool, idleBlocked: Bool, waitFocus: SIMD2<Float>?)] = [:]
@@ -104,7 +107,9 @@ final class PlayToss {
     static let handScreen = CGPoint(x: 0.5, y: 0.87)
     static let interceptReach: Float = 1.9
     static let looseWaitSpeed: Float = 1.3
-    static let rescueAfter: Float = 9.5
+    static let rescueAfter: Float = 6
+    /// A loose ball resting where nobody is sending it back for this long is lobbed to the hand (user 2026-11-07: > 2 s unreachable).
+    static let restRescueAfter: Float = 2
     static let passChance: Float = 0.16
 
     private func rand() -> Float {
@@ -218,6 +223,7 @@ final class PlayToss {
         phase = .flying
         rally = 0; nudges = 0; looseT = 0; flightT = 0; leftHand = false; touched = false; bumper = nil; passTo = nil; headers = 0; rescues = 0; passes = 0
         throwSerial += 1
+        returnAim = nil; restT = 0
         onEvent?(.release(speed: simd_length(t.velocity)))
     }
 
@@ -304,7 +310,8 @@ final class PlayToss {
         if leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
             caught(); return
         }
-        if phase == .flying { intercepts(dt: dt, before: before) }
+        if phase == .flying { steerReturn(dt: dt); intercepts(dt: dt, before: before) }
+        restWatch(dt: dt)
         if phase == .loose { looseT += dt; loose(dt: dt) }
     }
 
@@ -324,18 +331,21 @@ final class PlayToss {
         guard let j = jelly(id) else { return }
         var q: Quality = forceQuality ?? {
             let r = rand()
-            return r < 0.64 ? .good : (r < 0.90 ? .short : .weak)
+            return r < 0.74 ? .good : (r < 0.94 ? .short : .weak)
         }()
         // hitting a pass lands better: the friend meant it
         if passTo == id { q = .good }
         let from = ball.pos
         let hand = handWorld()
-        let target = SIMD3<Float>(hand.x * 0.5 + (rand() - 0.5) * 1.1, TossTuning.handHeight, catchZ() + 0.55)
+        let tz = catchZ() + 0.55
+        let tx = min(max(hand.x * 0.5 + (rand() - 0.5) * 0.9, -(DecorPlacement.visibleHalf(z: tz) - 0.9)), DecorPlacement.visibleHalf(z: tz) - 0.9)
+        let target = SIMD3<Float>(tx, TossTuning.handHeight, tz)
+        returnAim = nil
         let anotherHead = (passTo == nil && jellies.count > 1 && passes == 0 && rally >= 1 && rand() < Self.passChance) ? jellies.filter({ $0.id != id }).min(by: { simd_distance($0.pos, j.pos) < simd_distance($1.pos, j.pos) }) : nil
         var v: SIMD3<Float>
         if let o = anotherHead {
             let tgt = SIMD3<Float>(o.pos.x, o.headTop + ball.radius * 0.4, o.pos.y)
-            v = TossAim.ballistic(from: from, to: tgt, flight: 0.75 + 0.05 * simd_distance(o.pos, j.pos))
+            v = TossAim.ballistic(from: from, to: tgt, flight: (0.75 + 0.05 * simd_distance(o.pos, j.pos)) * TossTuning.slow)
             passTo = o.id; passes += 1
             onEvent?(.pass(from: id, to: o.id))
         } else {
@@ -343,23 +353,24 @@ final class PlayToss {
             let dist = simd_length(SIMD2(target.x - from.x, target.z - from.z))
             switch q {
             case .good:
-                v = TossAim.ballistic(from: from, to: target, flight: min(max(0.7 + 0.07 * dist, 0.8), 1.25))
+                v = TossAim.ballistic(from: from, to: target, flight: min(max(0.7 + 0.07 * dist, 0.8), 1.25) * TossTuning.slow)
+                returnAim = SIMD2(target.x, target.z)
             case .short:
-                let k = 0.30 + 0.2 * rand()
+                let k = 0.45 + 0.2 * rand()
                 let tgt = SIMD3<Float>(from.x + (target.x - from.x) * k, ball.radius, from.z + (target.z - from.z) * k)
-                let T = min(max(0.6 + 0.06 * dist * k, 0.7), 1.1)
+                let T = min(max(0.6 + 0.06 * dist * k, 0.7), 1.1) * TossTuning.slow
                 v = TossAim.ballistic(from: from, to: tgt, flight: T)
                 // it lands, bounces and rolls: aim the whole run (flight + bounce + roll) at the spot, not just the first landing
-                v.x *= T / (T + 0.9); v.z *= T / (T + 0.9)
+                v.x *= T / (T + 0.9 * TossTuning.slow); v.z *= T / (T + 0.9 * TossTuning.slow)
             case .weak:
                 let a = (rand() - 0.5) * 2.4
                 let d = SIMD2<Float>(sinf(a) * 0.6, 1)
                 let tgt = SIMD3<Float>(from.x + d.x * 1.4, ball.radius, from.z + 1.5 + 0.5 * rand())
-                v = TossAim.ballistic(from: from, to: tgt, flight: 0.55)
+                v = TossAim.ballistic(from: from, to: tgt, flight: 0.55 * TossTuning.slow)
                 v.x *= 0.55 / 1.45; v.z *= 0.55 / 1.45
             }
         }
-        v.y = max(v.y, 2.6)
+        v.y = max(v.y, 2.6 / TossTuning.slow)
         ball.vel = v
         ball.pos.y = max(ball.pos.y, j.headTop + ball.radius * 0.8)
         ball.ignoring = id; ball.ignoreT = 0.45
@@ -371,6 +382,29 @@ final class PlayToss {
         onEvent?(.header(id: id, quality: q))
     }
 
+    /// A good return that is drifting off its mark is eased (a gentle pull on its sideways speed, never a snap) so it comes down in the catch zone.
+    private func steerReturn(dt: Float) {
+        guard let aim = returnAim, ball.ignoring == nil, ball.vel.y < 1.5 || ball.pos.y > 1.0 else { return }
+        let g = TossTuning.gravity
+        let y0 = ball.pos.y - TossTuning.handHeight
+        let t = (ball.vel.y + (ball.vel.y * ball.vel.y + 2 * g * y0).squareRoot()) / g
+        guard y0 > 0, t > 0.12 else { return }
+        let want = (aim - SIMD2(ball.pos.x, ball.pos.z)) / t
+        let cur = SIMD2(ball.vel.x, ball.vel.z)
+        let n = cur + (want - cur) * min(1, dt * 5)
+        ball.vel.x = n.x; ball.vel.z = n.y
+    }
+
+    /// Safety nets for a ball that lies where nobody sends it back: after 2 s it is lobbed to the hand; a dropped ball that never left the hand is simply caught.
+    private func restWatch(dt: Float) {
+        guard phase == .loose || phase == .flying else { restT = 0; return }
+        if ball.onFloor, ball.speedXZ < 0.35, bumper == nil || !(jelly(bumper!)?.brain.tossBusy ?? false) { restT += dt } else { restT = 0 }
+        guard restT > (leftHand ? Self.restRescueAfter : 0.8) else { return }
+        restT = 0
+        if !leftHand { caught(); return }
+        rescue()
+    }
+
     // MARK: intercepts (the Jelbie it is heading for steps under it and hops)
 
     private func arrival(_ j: PlayJelly) -> (t: Float, xz: SIMD2<Float>)? {
@@ -380,7 +414,7 @@ final class PlayToss {
         guard y0 > -0.05 else { return nil }
         let disc = vy * vy + 2 * g * max(y0, 0)
         let t = (vy + disc.squareRoot()) / g
-        guard t > 0, t < 1.8 else { return nil }
+        guard t > 0, t < 1.8 * TossTuning.slow else { return nil }
         return (t, SIMD2(ball.pos.x + ball.vel.x * t, ball.pos.z + ball.vel.z * t))
     }
 
@@ -415,6 +449,7 @@ final class PlayToss {
 
     private func loose(dt: Float) {
         let r = ball.radius
+        if looseT > Self.rescueAfter { rescue(); return }
         // a Jelbie already on his way / mid-stomp: let him
         if let b = bumper, let j = jelly(b) {
             if !j.brain.tossBusy {
@@ -425,7 +460,6 @@ final class PlayToss {
         if ball.pos.y > 0.7 + r { return }
         let slow = ball.speedXZ < Self.looseWaitSpeed
         guard slow || looseT > 1.6 else { return }
-        if looseT > Self.rescueAfter { rescue(); return }
         // who goes: the nearest Jelbie that is free (the friend the last bump was passed to goes first)
         let free = jellies.filter { !$0.brain.tossBusy }
         let choice = (passTo.flatMap { id in free.first { $0.id == id } }) ?? free.min { simd_distance($0.pos, SIMD2(ball.pos.x, ball.pos.z)) < simd_distance($1.pos, SIMD2(ball.pos.x, ball.pos.z)) }
@@ -462,7 +496,7 @@ final class PlayToss {
         guard inReach, phase == .loose || phase == .flying else { onEvent?(.whiff(id: j.id)); return }
         let hand = handWorld()
         var target = SIMD2<Float>(hand.x * 0.5, catchZ() + 0.6)
-        var factor: Float = [0.62, 0.78, 0.95, 1.12, 1.3, 1.5][min(nudges, 5)] * (0.88 + 0.22 * rand())
+        var factor: Float = [0.8, 0.95, 1.1, 1.25, 1.4, 1.5][min(nudges, 5)] * (0.88 + 0.22 * rand())
         var err: Float = nudges < 3 ? (rand() - 0.5) * 0.35 : 0
         // a pass: to the friend
         if passTo == nil, jellies.count > 1, nudges == 0, rand() < Self.passChance, let o = jellies.filter({ $0.id != j.id }).min(by: { simd_distance($0.pos, ballXZ) < simd_distance($1.pos, ballXZ) }) {
@@ -487,12 +521,17 @@ final class PlayToss {
     /// The safety net: a ball that will not come (stuck behind furniture ...) is rolled to the front by a nudge from nobody in particular.
     private func rescue() {
         let ballXZ = SIMD2(ball.pos.x, ball.pos.z)
-        let target = SIMD2<Float>(handWorld().x * 0.5, catchZ() + 0.6)
-        var d = target - ballXZ
-        let L = simd_length(d)
-        d = L > 1e-3 ? d / L : SIMD2(0, 1)
-        let speed = min(max(L * TossTuning.rollDecayPerS * 1.3, 2), 6.5)
-        ball.vel = SIMD3(d.x * speed, 1.4, d.y * speed)
+        let tz = catchZ() + 0.6
+        let lim = DecorPlacement.visibleHalf(z: tz) - 0.9
+        let target = SIMD3<Float>(min(max(handWorld().x * 0.5, -lim), lim), ball.radius, tz)
+        let L = simd_length(SIMD2(target.x, target.z) - ballXZ)
+        // a lob (clears the furniture and the Jelbies' shoulders) that comes down in the catch zone
+        var v = TossAim.ballistic(from: ball.pos, to: target, flight: min(max(0.8 + 0.06 * L, 0.9), 1.4) * TossTuning.slow)
+        v.y = max(v.y, 3.2 / TossTuning.slow)
+        ball.vel = v
+        ball.pos.y = max(ball.pos.y, ball.radius + 0.02)
+        ball.ignoring = nil; touched = true
+        phase = .flying; returnAim = SIMD2(target.x, target.z)
         rescues += 1; looseT = 0
         onEvent?(.rescue)
     }
@@ -503,7 +542,7 @@ final class PlayToss {
         shownRally = rally
         catchSerial += 1
         onEvent?(.caught(rally: rally))
-        bumper = nil; passTo = nil
+        bumper = nil; passTo = nil; returnAim = nil; restT = 0
         for j in jellies { j.brain.tossFire = nil }
         RoomLayout.ballSpheres.removeAll { $0.uid == Self.sphereUID }
     }

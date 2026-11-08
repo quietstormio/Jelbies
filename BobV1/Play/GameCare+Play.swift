@@ -134,6 +134,15 @@ extension GameCare {
         let k = min(1, h / 3)
         let col = SIMD3<Float>(repeating: 0.55 + 0.25 * k) * SIMD3(0.9, 0.8, 0.7)
         if p.phase == .flying || p.phase == .loose { ParkScenery.disc(b, cx: ball.pos.x, cz: ball.pos.z, radius: ball.radius * (1.25 - 0.35 * k), y: 0.021, color: col) }
+        // the landing marker: a soft ring + dot at the predicted touch-down, closing in and brightening as the ball comes down (gone once it is down)
+        if p.phase == .flying || (p.phase == .loose && h > 0.15), h > 0.12, let l = ball.landing(xHalf: { DecorPlacement.visibleHalf(z: $0) }), l.t < 3 {
+            let prog = 1 - min(1, l.t / 1.6)                               // 0 = far, 1 = about to land
+            let r = ball.radius * (2.1 - 0.9 * prog)
+            let glow = SIMD3<Float>(0.70 + 0.30 * prog, 0.76 + 0.24 * prog, 0.86 + 0.14 * prog)
+            let haloC = SIMD3<Float>(repeating: 0.50 + 0.14 * prog) * SIMD3(0.9, 0.85, 0.8)
+            ParkScenery.disc(b, cx: l.xz.x, cz: l.xz.y, radius: r * 1.15, y: 0.024, color: haloC)
+            VolleyBallMesh.annulus(b, cx: l.xz.x, cz: l.xz.y, r0: r * 0.80, r1: r * 1.0, y: 0.03, color: glow)
+        }
         var a = DecorAnim(); a.rot = ball.rot; a.pos = SIMD2(ball.pos.x, ball.pos.z)
         let m = RoomMeshBuilder(); m.material = .plain
         DecorModels.add(p.ballKind, at: SIMD2(ball.pos.x, ball.pos.z), lift: h, anim: a, time: time, uid: 0, into: m)
