@@ -20,6 +20,8 @@ struct VolleyLobby: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sheet: Sheet?
     @State private var hint = LobbyHint()
+    /// The Jelbie the Upgrade sheet shows (a team member; reset to the first pick on open).
+    @State private var upgradeWho: Int?
     enum Sheet { case how, options, upgrade }
     private var book: VolleyBook { care.volley.book }
     private var compact: Bool { vsc == .compact }
@@ -37,16 +39,16 @@ struct VolleyLobby: View {
                     .padding(.top, compact ? 0 : 12)
             } bar: {
                 LobbyBottomBar(playID: "volley-play", playTitle: "Play", playIcon: needsPartner ? .lock : .ball, blocked: blocker != nil, upgradeID: "volley-upgrade",
-                               upgradePoints: care.jelly(who).map { care.upgrades.points(.volley, character: $0.character) } ?? 0, upgrade: { open(.upgrade) }, play: { play(book.chosen) })
+                               upgradePoints: teamPoints, upgrade: { upgradeWho = who; open(.upgrade) }, play: { play(book.chosen) })
             }
             .accessibilityHidden(sheet != nil)
             if let sheet {
                 Group {
                     switch sheet {
                     case .upgrade:
-                        if let p = care.jelly(who) {
-                            UpgradeSheet(care: care, who: p.id, config: care.volleyUpgradeConfig(p), buy: { care.volleyBuySkill($0, p) }, pick: { care.volleyPickPower($0, p) },
-                                         shop: shop.map { go in { close(); go() } }, done: { close() })
+                        if let first = care.jelly(who), let p = care.jelly(upgradeWho ?? who) {
+                            UpgradeSheet(care: care, who: p.id, config: care.volleyUpgradeConfig(p, team: first), buy: { care.volleyBuySkill($0, p) }, pick: { care.volleyPickPower($0, p) },
+                                         shop: shop.map { go in { close(); go() } }, switchTo: { upgradeWho = $0 }, done: { close() })
                         }
                     case .options:
                         LobbySheet(title: "Options", close: { close() }) { optionsCard.padding(.top, 4) }.accessibilityIdentifier("volley-options-sheet")
@@ -70,6 +72,13 @@ struct VolleyLobby: View {
             default: break
             }
         }
+    }
+
+    /// The Upgrade badge: the TOTAL points across the team members.
+    private var teamPoints: Int {
+        guard let me = care.jelly(who) else { return 0 }
+        let team = [me] + [care.volleyPartner(for: who)].compactMap { $0 }
+        return team.reduce(0) { $0 + care.upgrades.points(.volley, character: $1.character) }
     }
 
     private func open(_ s: Sheet) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { sheet = s } }

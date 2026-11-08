@@ -156,7 +156,7 @@ extension GameCare {
         if case .match = mode { partner = volleyPartner(for: id) }
         w.partnerID = partner?.id
         var mine = [volleyStartStats(prof)]
-        if let p = partner { mine.append(volley.book.stats(character: p.character)) }
+        if let p = partner { mine.append(volleyStartStats(p)) }          // (the partner's own chosen power-up counts too)
         var sim = VolleySim(mode: mode, mine: mine, seed: seed, firstServe: 0)
         let assist = A11ySettings.shared.raceAssist
         sim.ballSpeedScale = (volley.book.slowBall || A11ySettings.shared.reduceMotion) ? 0.72 : 1
