@@ -183,20 +183,23 @@ struct VolleyChrome: View {
         .ignoresSafeArea()
     }
 
-    /// A double-tap: the nearest of your two Jelbies to the finger takes control.
+    /// A double-tap: the nearest of your two Jelbies to the finger takes control. The hit zone is about a body and a half wide on the screen (a body is ~1.1 world
+    /// units across; the radius is measured from the projected court, so it scales with the portrait / landscape camera), around the middle of his body.
+    /// Nothing else happens on a double-tap: no hit, serve or aim (those live on the Hit button). The haptic and the hop come from the `.switched` event.
     private func pick(_ at: CGPoint, _ size: CGSize) {
-        guard volley.live else { return }
+        guard volley.live, volley.bodyPos.count >= 2 else { return }
         var best: (Int, CGFloat)?
-        for i in 0..<min(2, volley.bodyPos.count) {
+        for i in 0..<2 {
             let p = volley.bodyPos[i]
-            guard let pt = GameCamera.screenPoint(floor: SIMD2(p.x, p.z), y: p.y * 0.5, size: size) else { continue }
-            let d = hypot(pt.x - at.x, pt.y - at.y)
-            if d < 110, d < (best?.1 ?? .infinity) { best = (i, d) }
+            guard let c = GameCamera.screenPoint(floor: SIMD2(p.x, p.z), y: p.y * 0.5, size: size),
+                  let l = GameCamera.screenPoint(floor: SIMD2(p.x - 0.55, p.z), y: p.y * 0.5, size: size),
+                  let r = GameCamera.screenPoint(floor: SIMD2(p.x + 0.55, p.z), y: p.y * 0.5, size: size) else { continue }
+            let bodyW = hypot(r.x - l.x, r.y - l.y)
+            let reach = min(max(bodyW * 1.5, 64), 150)
+            let d = hypot(c.x - at.x, c.y - at.y)
+            if d < reach, d < (best?.1 ?? .infinity) { best = (i, d) }
         }
-        if let (i, _) = best {
-            if i != volley.ui.controlled { care.volleySwitch(to: i) }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        }
+        if let (i, _) = best, i != volley.ui.controlled { care.volleySwitch(to: i) }
     }
 
     private var controls: some View {
@@ -352,7 +355,7 @@ struct VolleyResultsCard: View {
                 if !volley.awards.isEmpty {
                     HStack(spacing: 8) {
                         if volley.awards.newRibbon { chip("New ribbon!", "rosette", "volley-new-ribbon") }
-                        if let t = volley.awards.trophies.first { chip("Trophy! \(t.title)", "trophy.fill", "volley-trophy") }
+                        if let t = volley.awards.trophies.first { chip(volley.awards.trophies.count > 1 ? "New trophy! \(t.title) +\(volley.awards.trophies.count - 1)" : "New trophy! \(t.title)", "trophy.fill", "volley-trophy") }
                     }
                 }
                 if let t = volley.unlockedNow { Text("\(t.title) unlocked!").playFont(15, .heavy).foregroundStyle(SK.pink).accessibilityIdentifier("volley-unlocked") }

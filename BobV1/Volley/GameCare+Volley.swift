@@ -34,6 +34,8 @@ final class VolleyWork {
     var trail: [SIMD3<Float>] = []
     var puffs: [(x: Float, z: Float, age: Float, size: Float)] = []
     var nudge: Float = 0
+    /// 1 -> 0 over a third of a second after a double-tap switch: the control ring swells and the arrow lifts.
+    var switchPop: Float = 0
     var captureDone = false
     var gapMin = [Float](repeating: .infinity, count: 2), gapWindow = [Float](repeating: .infinity, count: 2), gapTick = 0
     var gapNote = ["", ""]
@@ -348,6 +350,7 @@ extension GameCare {
         w.puffs.removeAll { $0.age > 0.6 }
         let want: Float = reduce ? 0 : max(-0.2, min(0.2, s.ball.pos.x * 0.05))
         w.nudge += (want - w.nudge) * min(1, dt * 1.5)
+        w.switchPop = max(0, w.switchPop - dt * 3)
         GameCamera.beachNudge = w.nudge
         if s.phase == .over { volley.settle() }
         volley.refreshUI()
@@ -383,7 +386,10 @@ extension GameCare {
             touchPlay?.haptics.transient(now: now, intensity: 0.45, sharpness: 0.6)
             let name = volley.teamNames.indices.contains(to) && !volley.teamNames[to].isEmpty ? volley.teamNames[to] : "your teammate"
             A11yEvents.say("Control switched to \(name)", .normal)
-            _ = auto
+            if !auto {          // a double-tap switch: the ring swells over him and he hops a little (not on a Reduce Motion setting, nor mid-move)
+                w.switchPop = 1
+                if !A11ySettings.shared.reduceMotion, s.players.indices.contains(to), s.players[to].act == .stand, let a = body(to) { a.brain?.volleyJump(sim: a.sim, dx: 0, apex: 0.2, cheer: true) }
+            }
         case .call(let i):
             AudioHub.shared.play(.select, volume: 0.35, rate: 1.9)
             volley.callUntil[i] = now + 1.1
@@ -436,7 +442,7 @@ extension GameCare {
         // the control ring under the Jelbie you steer, and an arrow over him
         if s.phase != .over, s.players.indices.contains(s.controlled) {
             let p = s.players[s.controlled]
-            VolleyBallMesh.controlMark(x: p.x, z: p.z, top: p.top, time: s.clock, into: b)
+            VolleyBallMesh.controlMark(x: p.x, z: p.z, top: p.top, time: s.clock, pop: w.switchPop, into: b)
         }
         room.setDecorActive(b.mesh)
         w.ballShown = true
