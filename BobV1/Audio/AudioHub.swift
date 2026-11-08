@@ -183,10 +183,25 @@ final class AudioHub {
         preloadEffects()
     }
 
-    private func setUpSession() {
+    /// `offMain`: the mic just let go of the session (every release). The category switch + reactivation are synchronous IPC to mediaserverd and
+    /// stalled the main thread (the game loop) for a visible hitch on every mic release, so that path runs them on `AudioSessionQueue` (ordered
+    /// before the next mic activation, which uses the same queue) and only the result comes back to the main actor.
+    private func setUpSession(offMain: Bool = false) {
         guard !micSession, !earsSession else { return }
         refreshOtherAudio()
         let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
+        if offMain {
+            sessionRetry?.cancel()
+            sessionRetry = Task { @MainActor [weak self] in
+                let ok: Bool = await withCheckedContinuation { c in
+                    AudioSessionQueue.shared.async { c.resume(returning: Self.applySession(plan)) }
+                }
+                guard let self, !Task.isCancelled else { return }
+                if ok { self.sessionRetry = nil; return }
+                await self.sessionRetryLoop()
+            }
+            return
+        }
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(plan.category, mode: .default, options: plan.options)
         do { try s.setActive(true); sessionRetry?.cancel(); sessionRetry = nil }
@@ -194,18 +209,27 @@ final class AudioHub {
             // right after a return from another app the other app can still hold the session: the old `try?` dropped the failure and the players then ran on a
             // half-reactivated session (quiet / silent until something else poked it). Retry a few times, 0.25 s apart.
             sessionRetry?.cancel()
-            sessionRetry = Task { @MainActor [weak self] in
-                for _ in 0..<8 {
-                    try? await Task.sleep(for: .milliseconds(250))
-                    guard let self, !Task.isCancelled, self.started, self.active, !self.micSession, !self.earsSession else { return }
-                    let s = AVAudioSession.sharedInstance()
-                    let plan = SessionPolicy.plan(musicOn: self.settings.musicOn, otherAudioPlaying: self.otherAudioPlaying, micActive: false)
-                    try? s.setCategory(plan.category, mode: .default, options: plan.options)
-                    if (try? s.setActive(true)) != nil { for d in self.decks { d.player.play() }; self.layer?.player.play(); self.ambDay?.player.play(); self.ambEve?.player.play(); self.scene?.resume(); self.sessionRetry = nil; return }
-                }
-                self?.sessionRetry = nil
-            }
+            sessionRetry = Task { @MainActor [weak self] in await self?.sessionRetryLoop() }
         }
+    }
+
+    /// The category + activation (any thread; the off-main path runs it on `AudioSessionQueue`). The category is only set when it differs.
+    nonisolated private static func applySession(_ plan: SessionPlan) -> Bool {
+        let s = AVAudioSession.sharedInstance()
+        if s.category != plan.category || s.categoryOptions != plan.options { try? s.setCategory(plan.category, mode: .default, options: plan.options) }
+        return (try? s.setActive(true)) != nil
+    }
+
+    private func sessionRetryLoop() async {
+        for _ in 0..<8 {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled, started, active, !micSession, !earsSession else { return }
+            let s = AVAudioSession.sharedInstance()
+            let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
+            try? s.setCategory(plan.category, mode: .default, options: plan.options)
+            if (try? s.setActive(true)) != nil { for d in decks { d.player.play() }; layer?.player.play(); ambDay?.player.play(); ambEve?.player.play(); scene?.resume(); sessionRetry = nil; return }
+        }
+        sessionRetry = nil
     }
     /// Welcome-back cover: effects stay silent until it begins to fade (`holdEffects`). `resumeReady`: the session is active again, no reactivation retry is pending and the music fade-in has started.
     @ObservationIgnored private var effectsHeld = false
@@ -318,7 +342,7 @@ final class AudioHub {
         micSession = false
         if earsSession { Ears.shared.voiceResume() }
         guard started else { return false }
-        setUpSession()
+        setUpSession(offMain: true)
         return true
     }
     /// Bob starts / stops listening: everything ducks to silence and returns after a short settle.

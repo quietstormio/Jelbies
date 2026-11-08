@@ -496,10 +496,6 @@ extension GameCare {
             let b = s.ball
             s.setStick(SIMD2(max(-1, min(1, (b.pos.x - p.x) / 0.9)), max(-1, min(1, (b.z - p.z) / 0.9))))
             if p.act == .stand, let r = s.ring, abs(r.tau - r.lead) < 0.03 { s.tap() }
-        case "sprint":          // the stick toward the next flag
-            guard s.phase == .rally, s.flagIndex < s.flags.count else { return }
-            let f = s.flags[s.flagIndex]
-            s.setStick(SIMD2(max(-1, min(1, (f.x - p.x) * 2)), max(-1, min(1, (f.y - p.z) * 2))))
         case "dig":
             guard s.phase == .rally else { return }
             if !w.ballShown || s.clock - w.demoT > 4.5 { w.demoT = s.clock; w.demoStage = 0 }

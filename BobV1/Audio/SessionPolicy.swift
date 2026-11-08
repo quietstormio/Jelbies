@@ -11,6 +11,12 @@ nonisolated struct SessionPlan: Equatable, Sendable {
     var options: AVAudioSession.CategoryOptions
 }
 
+/// One serial queue for every AVAudioSession category / activation change that must not run on the main thread (the voice mic's bring-up, the hub's
+/// put-back after the mic, Ears' input engine stop), so they stay in the order they were asked for.
+nonisolated enum AudioSessionQueue {
+    static let shared = DispatchQueue(label: "io.mgsllc.BobV1.audiosession", qos: .userInitiated)
+}
+
 nonisolated enum SessionPolicy {
     /// `.ambient` (always mixes, respects the silent switch) for play; `.playAndRecord` + mixWithOthers while a mic engine needs input.
     /// Never `.duckOthers` / `.interruptSpokenAudioAndMixWithOthers`. (musicOn / otherAudioPlaying do not change the category: both mix; they

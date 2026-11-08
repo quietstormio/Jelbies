@@ -494,11 +494,13 @@ final class DictationSpeechInput: SpeechInput {
     }
 
     nonisolated private static func activateSessionOffMain() throws {
-        let s = AVAudioSession.sharedInstance()
-        let plan = SessionPolicy.plan(musicOn: true, otherAudioPlaying: false, micActive: true)
-        try s.setCategory(plan.category, mode: .default, options: plan.options)
-        try s.setAllowHapticsAndSystemSoundsDuringRecording(true)
-        try s.setActive(true)
+        try AudioSessionQueue.shared.sync {          // ordered after any hub put-back / Ears engine stop still queued from the last release
+            let s = AVAudioSession.sharedInstance()
+            let plan = SessionPolicy.plan(musicOn: true, otherAudioPlaying: false, micActive: true)
+            try s.setCategory(plan.category, mode: .default, options: plan.options)
+            try s.setAllowHapticsAndSystemSoundsDuringRecording(true)
+            try s.setActive(true)
+        }
         Task { @MainActor in AudioHub.shared.micSessionBegan() }       // the audio hub owns the session; it keeps its hands off while the mic is up
     }
 
