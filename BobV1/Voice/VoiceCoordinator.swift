@@ -252,7 +252,6 @@ final class VoiceCoordinator {
         Ears.shared.voicePause()                       // Ears lets go of the input before the voice engine takes the session
         input.warmUp()
         intentModel?.prewarm()                         // the first request must not pay the model load
-        if let care { ai.router.prewarm(catalog: ai.catalog(care: care)) }      // Apple Intelligence: availability re-read, the next session built now
         guard mode.begin() else { return false }       // phase = .listening: the glow / pressed state read it on the very next view update
         Ears.shared.holdBegan()                        // Music Ears (when owned) listens for music on this same mic while the button is held
         if Self.logging { NSLog("[voice] begin() ran synchronously in %d ms (glow state set)", Int((CACurrentMediaTime() - downAt) * 1000)) }
@@ -274,6 +273,7 @@ final class VoiceCoordinator {
             guard let self else { return }
             // Everything slow runs behind the UI: let the glow / pressed state / tick commit first (audio before the engine is up is dropped).
             try? await Task.sleep(nanoseconds: 16_000_000)
+            if let care = self.care { self.ai.router.prewarm(catalog: self.ai.catalog(care: care)) }      // Apple Intelligence: availability re-read, the next session built now (after the glow committed, not on the press)
             let watcher = Task { @MainActor [weak self] in            // a first-use download shows its progress on the mic
                 while !Task.isCancelled {
                     self?.availability = self?.input.availability ?? .unknown

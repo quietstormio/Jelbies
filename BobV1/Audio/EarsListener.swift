@@ -179,6 +179,8 @@ nonisolated final class EarsHoldTap: @unchecked Sendable {
     private var building = false
     private var generation = 0
     private var appMusic: Float = 0
+    private var inFlight = 0
+    private static let maxInFlight = 6
 
     func setOn(_ v: Bool, classify c: Bool = true) {
         lock.lock(); defer { lock.unlock() }
@@ -196,7 +198,7 @@ nonisolated final class EarsHoldTap: @unchecked Sendable {
                 building = true
                 let fmt = buffer.format, gen = generation, cl = classify
                 lock.unlock()
-                DispatchQueue.global(qos: .userInitiated).async { [self] in
+                DispatchQueue.global(qos: .utility).async { [self] in
                     let np = EarsPipeline(format: fmt, classify: cl, musicHold: EarsTuning.holdMusicHold)
                     lock.lock()
                     if on, generation == gen { pipe = np; np.setAppMusic(appMusic) }
@@ -207,8 +209,15 @@ nonisolated final class EarsHoldTap: @unchecked Sendable {
             }
             lock.unlock(); return
         }
+        // Bounded backlog: if the analysis falls behind (a busy phone) buffers are dropped here instead of piling up (each queued closure holds a
+        // buffer) and the analysis catches up with the live mic. Counted under the same lock the audio thread already took.
+        guard inFlight < Self.maxInFlight else { lock.unlock(); return }
+        inFlight += 1
         lock.unlock()
-        p.queue.async { p.process(buffer, hostTime: hostTime) }
+        p.queue.async { [self] in
+            p.process(buffer, hostTime: hostTime)
+            lock.lock(); inFlight -= 1; lock.unlock()
+        }
     }
 
     /// Main thread: the pipeline's events since the last drain.
@@ -359,7 +368,7 @@ final class Ears {
         guard !voiceHeld else { return }
         voiceHeld = true
         guard !inert, wantsEngine, state != .denied else { return }
-        stopEngine()
+        stopEngine(offMain: true)          // (engine.stop() waits on the audio thread: never on the press)
         if state != .off { state = .paused(.voice) }
         hearing = nil; level = 0
         note("voice pause")
@@ -459,21 +468,29 @@ final class Ears {
     }
 
     nonisolated private static func activateSession() throws {
-        let s = AVAudioSession.sharedInstance()
-        let plan = SessionPolicy.plan(musicOn: true, otherAudioPlaying: false, micActive: true)
-        try s.setCategory(plan.category, mode: .default, options: plan.options)
-        try? s.setAllowHapticsAndSystemSoundsDuringRecording(true)
-        try s.setActive(true)
+        try AudioSessionQueue.shared.sync {
+            let s = AVAudioSession.sharedInstance()
+            let plan = SessionPolicy.plan(musicOn: true, otherAudioPlaying: false, micActive: true)
+            try s.setCategory(plan.category, mode: .default, options: plan.options)
+            try? s.setAllowHapticsAndSystemSoundsDuringRecording(true)
+            try s.setActive(true)
+        }
     }
 
-    private func stopEngine() {
+    /// `offMain`: the stop runs on `AudioSessionQueue`, ahead of the voice engine's session activation that queues behind it.
+    private func stopEngine(offMain: Bool = false) {
         for o in observers { NotificationCenter.default.removeObserver(o) }
         observers.removeAll()
         guard let e = engine else { return }
-        e.inputNode.removeTap(onBus: 0)
-        e.stop()
         engine = nil
         pipeline = nil
+        if offMain {
+            let box = EarsStopBox(engine: e)
+            AudioSessionQueue.shared.async { box.engine.inputNode.removeTap(onBus: 0); box.engine.stop() }
+        } else {
+            e.inputNode.removeTap(onBus: 0)
+            e.stop()
+        }
     }
 
     private func observe(_ e: AVAudioEngine) {
@@ -581,6 +598,7 @@ final class Ears {
 private enum EarsError: Error { case noInput }
 
 /// Hands the freshly started engine back to the main actor.
+private struct EarsStopBox: @unchecked Sendable { let engine: AVAudioEngine }
 private struct EarsEngineBox: @unchecked Sendable {
     let engine: AVAudioEngine
     let pipe: EarsPipeline
