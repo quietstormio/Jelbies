@@ -43,8 +43,7 @@ nonisolated enum VolleyTuning {
     static let ballZ: Float = 0.06
     static let bodyTop: Float = 1.35             // a resting Jelbie's crown
     // match
-    static let pointsToWin = 11              // rally scoring to 11, win by 2, capped at 15
-    static let winBy = 2, scoreCap = 15
+    static let pointsToWin = 3               // rally scoring: first to 3, no win-by-2, no cap
     static let maxTouches = 3                // bump, set, spike
     static let pointPause: Float = 2.1
     static let serveWaitAI: Float = 1.1

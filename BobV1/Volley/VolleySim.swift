@@ -1,7 +1,7 @@
 //
 //  VolleySim.swift
 //  The rules and the ball of Jelly Volleyball (v2) as one pure model (no bodies, no screen): a big floaty beach ball (slow gravity, gentle drag) that flies in x, y AND z
-//  (the court has depth now), four players (the human's team of two, two visitors), rally scoring to 11 (win by 2, cap 15), the real three-touch structure (BUMP, SET,
+//  (the court has depth now), four players (the human's team of two, two visitors), rally scoring to 3 (no win-by-2), the real three-touch structure (BUMP, SET,
 //  SPIKE, a fourth touch is a fault), the timing ring and its Perfect window, the combo, the body block, control switching (double-tap, auto-switch), the computer
 //  players' decisions (smart teammate, tiered opponents). 
 //
@@ -214,7 +214,7 @@ nonisolated struct VolleySim: Sendable {
     var servingPlayer: Int { serverIndex }
     var waitingToServe: Bool { phase == .serveWait }
     var humanTeamWon: Bool { winner == 0 }
-    var closeLoss: Bool { winner == 1 && score[0] >= score[1] - 2 }
+    var closeLoss: Bool { winner == 1 && score[0] >= score[1] - 1 }          // (lost by one point: at first-to-3 that is 2-3)
     private var params: [VolleyAIParams] { [.teammate, tier.map(VolleyAIParams.tier) ?? .teammate] }
 
     private mutating func fx(_ text: String, _ tone: Int) {
@@ -578,8 +578,7 @@ nonisolated struct VolleySim: Sendable {
     }
 
     private func wins(_ team: Int) -> Bool {
-        let s = score[team], o = score[1 - team]
-        return (s >= T.pointsToWin && s - o >= T.winBy) || s >= T.scoreCap
+        score[team] >= T.pointsToWin
     }
 
     private mutating func awardPoint(_ team: Int, out: Bool) {
@@ -599,8 +598,7 @@ nonisolated struct VolleySim: Sendable {
 
     /// Would this team win the match with one more point?
     private func matchPoint(_ team: Int) -> Bool {
-        let s = score[team] + 1, o = score[1 - team]
-        return (s >= T.pointsToWin && s - o >= T.winBy) || s >= T.scoreCap
+        score[team] + 1 >= T.pointsToWin
     }
 
     // MARK: contact

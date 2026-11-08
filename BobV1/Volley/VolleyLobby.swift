@@ -55,7 +55,7 @@ struct VolleyLobby: View {
                             (.three, "Three touches a side", "Bump, set, then spike it over the net."),
                             (.ring, "Tap on the ring", "Tap as the ring closes for a Perfect hit."),
                             (.tap, "Steer a Jelbie", "Double-tap a Jelbie to move them yourself."),
-                            (.trophy, "First to \(VolleyTuning.pointsToWin), win by 2", "Win a match to open the next court."),
+                            (.trophy, "First to \(VolleyTuning.pointsToWin) points", "Win a match to open the next court."),
                         ], close: { close() })
                     }
                 }

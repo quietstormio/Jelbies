@@ -99,7 +99,7 @@ struct VolleyChrome: View {
             .padding(.horizontal, 16).padding(.vertical, 8)
             .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Score. You \(u.score[0]), them \(u.score[1]). First to \(VolleyTuning.pointsToWin), win by 2. Controlling \(volley.teamNames.indices.contains(u.controlled) ? volley.teamNames[u.controlled] : "your Jelbie").")
+            .accessibilityLabel("Score. You \(u.score[0]), them \(u.score[1]). First to \(VolleyTuning.pointsToWin). Controlling \(volley.teamNames.indices.contains(u.controlled) ? volley.teamNames[u.controlled] : "your Jelbie").")
             .accessibilityIdentifier("volley-score")
         }
     }
