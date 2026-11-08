@@ -23,6 +23,8 @@ struct BubbleJelly {
 }
 
 nonisolated enum BubbleTuning {
+    /// Heart (attention) gained per bubble a Jelbie pops: a slight lift (~30 pops fill a whole empty heart).
+    static let attentionPerPop: Float = 0.03
     static let spawnPerSecond: ClosedRange<Float> = 1.5...6.5
     static let holdStrength: Float = 0.6
     static let contactRadius: Float = 0.62          // a body touching a drifting bubble
@@ -426,6 +428,7 @@ final class BubbleWand: PlayToy {
         st.streak = clock - st.lastPop < BubbleTuning.streakWindow ? st.streak + 1 : 1
         st.lastPop = clock
         popsByJelly[j.id, default: 0] += 1
+        care?.needs(for: j.id).gain(.attention, BubbleTuning.attentionPerPop)
         if hopped { hopPops += 1 }
         j.brain.face(.excited, hold: 1.6)
         AudioHub.shared.play(.bubblePop, jelly: j.id, x: j.brain.px, volume: 1)
