@@ -31,7 +31,16 @@ struct UpgradePowerTile: Identifiable {
     var owned: Bool { id == Self.noneID || count > 0 }
 }
 
+/// One chip of the team switcher (Volleyball with two Jelbies on the team): the Jelbie's slot, name and own points.
+struct UpgradeChip: Identifiable {
+    var id: Int
+    var name: String
+    var points: Int
+}
+
 struct UpgradeConfig {
+    /// The team's Jelbies to switch between (empty or one = no switcher, as the Track has).
+    var chips: [UpgradeChip] = []
     /// "Race" / "Volleyball": titles and accessibility words.
     var gameWord: String
     var heroName: String
@@ -66,6 +75,8 @@ struct UpgradeSheet: View {
     /// Picks a power-up tile (an owned one, or "none"); returns true when a food (not None) is now chosen.
     var pick: (String) -> Bool
     var shop: (() -> Void)?
+    /// Switches the sheet to another Jelbie of the team (slot id); nil = no switcher.
+    var switchTo: ((Int) -> Void)? = nil
     var done: () -> Void
 
     @Environment(\.verticalSizeClass) private var vsc
@@ -105,6 +116,36 @@ struct UpgradeSheet: View {
 
     private var hero: some View {
         UpgradeHero(care: care, who: who, config: config, emote: emote, emoteSerial: emoteSerial, chipText: chipText, chipSerial: chipSerial, reduceMotion: reduceMotion)
+            .overlay(alignment: .bottomLeading) { switcher.padding(8) }
+    }
+
+    /// The team toggle over the picture: a face chip per Jelbie with his points; shown only when the team has more than one.
+    @ViewBuilder
+    private var switcher: some View {
+        if let switchTo, config.chips.count > 1 {
+            HStack(spacing: 8) {
+                ForEach(config.chips) { c in
+                    let on = c.id == who
+                    Button { if !on { AudioHub.shared.uiTap(); switchTo(c.id) } } label: {
+                        ZStack(alignment: .topTrailing) {
+                            JelbiePortrait(care: care, who: c.id, size: 40, border: .white, outerRing: on ? 3 : 1, head: true)
+                                .overlay(Circle().strokeBorder(theme.primary, lineWidth: on ? 3 : 0).padding(-3))
+                                .padding(.top, 6).padding(.trailing, 6)
+                            Text("\(c.points)").font(SK.font(11, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                                .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18).background(Capsule().fill(.white))
+                                .overlay(Capsule().strokeBorder(SK.honeyDeep, lineWidth: 1.2))
+                        }
+                        .frame(minWidth: 48, minHeight: 48)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(c.name), \(c.points) points")
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .accessibilityIdentifier("upgrade-switch-\(c.id)")
+                }
+            }
+        }
     }
 
     /// The happy moment: the picture's emote (skipped under Reduce Motion), the chip, a soft haptic and the Jelbie's happy chirp.

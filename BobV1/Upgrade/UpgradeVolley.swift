@@ -14,7 +14,8 @@ extension GameCare {
         switch k { case .speed: return SK.sky; case .power: return SK.pink; case .hops: return SK.mint; case .timing: return SK.honeyDeep }
     }
 
-    func volleyUpgradeConfig(_ p: JellyProfile) -> UpgradeConfig {
+    /// `p` = the Jelbie shown; `first` = the lobby's first pick (the team is `first` + his partner).
+    func volleyUpgradeConfig(_ p: JellyProfile, team first: JellyProfile) -> UpgradeConfig {
         let book = upgrades
         _ = book.revision          // (the sheet redraws when points or the choice change)
         let st = volley.book.stats(character: p.character)
@@ -24,6 +25,9 @@ extension GameCare {
         }
         var c = UpgradeConfig(gameWord: "Volleyball", heroName: p.name, winLine: "Win = \(UpgradeTuning.volleyPoints(win: true)) points", points: book.points(.volley, character: p.character),
                               backdrop: Color(hex: 0xBFE4EE), podium: Color(hex: 0xE6CC8C), skills: skills, tiles: volleyPowerTiles(), selectedTile: volleyChosenTile(p))
+        // the team switcher: the first pick and his partner, each with his own points; none when the team is one Jelbie
+        let team = [first] + [volleyPartner(for: first.id)].compactMap { $0 }
+        c.chips = team.count > 1 ? team.map { UpgradeChip(id: $0.id, name: $0.name, points: book.points(.volley, character: $0.character)) } : []
         c.powerHeading = "Power-up for the next match"
         c.sand = Color(hex: 0xF3DFA8)
         c.heroHeight = 165
