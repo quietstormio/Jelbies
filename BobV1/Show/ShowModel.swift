@@ -312,6 +312,36 @@ nonisolated struct ShowBeat: Equatable, Sendable {
     func beat(atOrAfter t: Double) -> Int { Int(((t - firstBeat) / period).rounded(.up)) }
 }
 
+/// One of the four dance songs the Jelly Show plays once (show_dance_1...4.m4a). `grid` is the song's MEASURED beat grid in seconds of the file (the
+/// decoded audio, AAC priming removed, as AVAudioFile reads it): beat 0 is the first bar downbeat, the period is the measured one (these are NOT
+/// round BPMs: 119.7, 111.7, 119.7, 94.8). The prompts sit on beats `firstPromptBeat...lastBeat`, one per beat; `lastBeat` is the final downbeat.
+/// Re-measure with the scratchpad showdance/measure.py + sync_check.py if a song file changes.
+nonisolated struct DanceSong: Equatable, Sendable {
+    var song: Int
+    var title: String
+    var grid: ShowBeat
+    /// The beat index of the song's final downbeat (the last prompt).
+    var lastBeat: Int
+    /// The first prompt: four beats in, like the old 20-beat dance.
+    static let firstPromptBeat = 4
+    /// Seconds the dance runs on after the last prompt: the song's faded ring-out.
+    static let ringOut = 0.6
+
+    var track: SceneTrack { SceneTrack.danceSongs[min(max(song, 1), SceneTrack.danceSongs.count) - 1] }
+    var promptCount: Int { max(lastBeat - Self.firstPromptBeat + 1, 0) }
+    var bpm: Double { 60 / grid.period }
+
+    static let all: [DanceSong] = [
+        DanceSong(song: 1, title: "Bubble Pop Stage", grid: ShowBeat(firstBeat: 0.0158, period: 0.50120), lastBeat: 24),
+        DanceSong(song: 2, title: "Groove On The One", grid: ShowBeat(firstBeat: 0.0568, period: 0.53693), lastBeat: 24),
+        DanceSong(song: 3, title: "Pixel Party", grid: ShowBeat(firstBeat: 0.0163, period: 0.50134), lastBeat: 24),
+        DanceSong(song: 4, title: "Block Party", grid: ShowBeat(firstBeat: 0.0449, period: 0.63274), lastBeat: 16),
+    ]
+    static func song(_ n: Int) -> DanceSong { all.first { $0.song == n } ?? all[0] }
+    /// The song for a show's seed (deterministic).
+    static func pick(seed: UInt64) -> DanceSong { all[Int((seed &* 0x9E3779B97F4A7C15) >> 33) % all.count] }
+}
+
 /// One dance: `count` L / R prompts on the beat grid, each judged Perfect / Good / Slip from the tap's SONG time. Nothing fails: a Slip is just 0 points.
 nonisolated struct ShowDanceSim: Sendable {
     nonisolated struct Prompt: Equatable, Sendable {
@@ -336,6 +366,8 @@ nonisolated struct ShowDanceSim: Sendable {
     static let leadInBeats = 4
     static let latencyOffset = TrainingTuning.latencyOffset
     static let visibleBeats = 5
+    /// A song's dance: seconds the dance runs on after the last prompt is judged (the song's ring-out). 0 = the beat-grid drill.
+    private(set) var endHold: Double = 0
 
     var total: Int { prompts.count }
     var judged: Int { perfects + goods + misses }
@@ -358,6 +390,24 @@ nonisolated struct ShowDanceSim: Sendable {
         }
     }
 
+    /// A song's dance: one prompt on each beat `firstPromptBeat...lastBeat` of the song's measured grid (song time 0 = the file's first sample), feet alternating from a seeded start.
+    init(song: DanceSong, timing: ShowTiming, seed: UInt64, songTime: Double) {
+        self.grid = song.grid; self.timing = timing.scaled(ShowAssist.windowScale); self.songTime = songTime; self.endHold = DanceSong.ringOut
+        var rng = RaceRNG(seed: seed &* 0x9E3779B97F4A7C15 &+ 0xD17)
+        var foot = Int(rng.next() * 2) % 2
+        for (i, beat) in (DanceSong.firstPromptBeat...max(song.lastBeat, DanceSong.firstPromptBeat)).enumerated() {
+            prompts.append(Prompt(index: i, foot: foot, beat: beat, time: song.grid.time(ofBeat: beat)))
+            foot = 1 - foot
+        }
+    }
+
+    /// The prompt nearest to song time `t` (a tap's judged time), graded or not: (index, time).
+    func nearestPrompt(to t: Double) -> (index: Int, time: Double)? {
+        prompts.indices.min { abs(prompts[$0].time - t) < abs(prompts[$1].time - t) }.map { ($0, prompts[$0].time) }
+    }
+    /// The song time a tap at clock `t` is judged at.
+    static func judgedTime(_ t: Double) -> Double { t - latencyOffset }
+
     mutating func takeEvents() -> [Event] { let e = events; events.removeAll(keepingCapacity: true); return e }
     private var judgedTime: Double { songTime - Self.latencyOffset }
 
@@ -372,7 +422,7 @@ nonisolated struct ShowDanceSim: Sendable {
         guard !finished else { return }
         songTime = max(songTime, t)
         for i in prompts.indices where prompts[i].grade == nil && judgedTime > prompts[i].time + timing.good { judge(i, .miss) }
-        if !prompts.contains(where: { $0.grade == nil }), !finished { finished = true; events.append(.finished) }
+        if !prompts.contains(where: { $0.grade == nil }), !finished, judgedTime >= (prompts.last?.time ?? 0) + endHold { finished = true; events.append(.finished) }
     }
 
     mutating func tap(foot: Int, at t: Double) {
@@ -391,7 +441,10 @@ nonisolated struct ShowDanceSim: Sendable {
             if d <= timing.miss, best == nil || d < abs(prompts[best!].time - now) { best = i }
             if prompts[i].time - now > timing.miss { break }
         }
-        guard let i = best else { strays += 1; events.append(.stray); return }
+        guard let i = best else {
+            if endHold > 0, !prompts.contains(where: { $0.grade == nil }) { return }          // the song's last prompt is judged: a late tap in the ring-out is not a stray
+            strays += 1; events.append(.stray); return
+        }
         let err = abs(prompts[i].time - now)
         if prompts[i].foot != f, !ShowAssist.anyFoot { judge(i, .miss); return }
         if err <= timing.perfect { judge(i, .perfect) } else if err <= timing.good { judge(i, .good) } else { judge(i, .miss) }
@@ -407,6 +460,6 @@ nonisolated struct ShowDanceSim: Sendable {
         bestStreak = max(bestStreak, streak)
         cheer = ShowScoring.cheer(cheer, after: g)
         if g == .miss { events.append(.slip(index: i, foot: prompts[i].foot)) } else { events.append(.hit(index: i, foot: prompts[i].foot, grade: g)) }
-        if judged == total, !finished { finished = true; events.append(.finished) }
+        if judged == total, !finished, endHold == 0 { finished = true; events.append(.finished) }
     }
 }

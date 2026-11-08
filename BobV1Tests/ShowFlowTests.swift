@@ -53,7 +53,7 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertEqual(dances.first?.0, .sway); XCTAssertEqual(dances.first?.1, true)
         run(f, seconds: 5) { f.beat == .dancing }
         XCTAssertTrue(f.buttonsLive); XCTAssertNotNil(f.sim?.dance)
-        XCTAssertEqual(f.sim!.dance!.total, ShowRank.puddle.promptCount)
+        XCTAssertEqual(f.sim!.dance!.total, f.danceSong.promptCount, "one prompt per beat of the picked song")
         run(f, seconds: 30) { f.beat == .danced }
         XCTAssertTrue(f.sim!.danceDone); XCTAssertGreaterThan(f.sim!.danceScore!, 60, "the auto player dances well")
         XCTAssertGreaterThan(cues.filter { $0 == .perfect }.count, 8)
@@ -97,7 +97,7 @@ final class ShowFlowTests: XCTestCase {
         run(f, seconds: 5) { f.beat == .dancing }
         // (no taps: every prompt slips, no failing)
         run(f, seconds: 25) { f.beat == .danced }
-        XCTAssertEqual(f.sim!.dance!.misses, ShowRank.pond.promptCount); XCTAssertEqual(f.sim!.danceScore!, 0, accuracy: 1e-3, "all slips: 0 (the score is 100% accuracy)")
+        XCTAssertEqual(f.sim!.dance!.misses, f.danceSong.promptCount); XCTAssertEqual(f.sim!.danceScore!, 0, accuracy: 1e-3, "all slips: 0 (the score is 100% accuracy)")
         f.finishDance()
         XCTAssertFalse(f.sim!.burstReady, "no cheer: no Burst")
         f.pick(.sit)

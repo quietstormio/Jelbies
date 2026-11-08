@@ -64,6 +64,14 @@ final class ShowFlow {
     @ObservationIgnored private var countdownLeft: Float = 0
     @ObservationIgnored private var audioWait: Float = 0
     @ObservationIgnored private(set) var song: Double = 0
+    /// The dance song of this show (picked from the seed at `begin`); its clock is the song's own playback time.
+    @ObservationIgnored private(set) var danceSong: DanceSong = DanceSong.all[0]
+    /// The dance clock: seconds of the dance song as heard (0 = its first sample). Held at 0 until the song is audible, then the audio engine's own player time.
+    @ObservationIgnored private(set) var danceT: Double = 0
+    @ObservationIgnored private var danceMusicOn = false
+    @ObservationIgnored private var danceHeard = false
+    @ObservationIgnored private var danceAudioWait: Float = 0
+    @ObservationIgnored private var goAge: Float = 0
     @ObservationIgnored private var dancedAge: Float = 0
     /// Seconds the Look card has been up.
     @ObservationIgnored private(set) var lookAge: Float = 0
@@ -140,8 +148,7 @@ final class ShowFlow {
     var onStage: Bool { cameraBlend > 0 }
     var round: ShowRound { sim?.round ?? .look }
     var showsCountdown: Bool { phase == .stage && beat == .countdown && countdown > 0 }
-    var showsGo: Bool { phase == .stage && beat == .dancing && song - danceGoSong < 0.6 }
-    @ObservationIgnored private var danceGoSong: Double = -10
+    var showsGo: Bool { phase == .stage && beat == .dancing && goAge < 0.6 }
     /// The foot buttons are live.
     var buttonsLive: Bool { phase == .stage && beat == .dancing && wipe == 0 && !(sim?.danceDone ?? false) }
     var hasResults: Bool { sim?.round == .results && trickStage == .pick }
@@ -154,12 +161,17 @@ final class ShowFlow {
     var rivalScored: Bool { rivalStep == .perform || rivalStep == .walkOut }
     /// The scene track the stage plays now.
     var track: SceneTrack { .contestStage }
-    var grid: ShowBeat { ShowBeat.grid(for: track) }
+    /// The dance song's track (plays once under the dance) and its measured beat grid.
+    var danceTrack: SceneTrack { danceSong.track }
+    var grid: ShowBeat { danceSong.grid }
+    /// The dance song is playing under the dance.
+    var danceSongOn: Bool { beat == .dancing && danceMusicOn }
 
     /// What the stage plays (Audio/SceneMusic.swift): the stage music; silence at the results (a jingle plays) and on the way home.
     var musicScene: MusicScene {
         guard phase != .off, cameraBlend > 0, !(phase == .fade && fadeDest == .room) else { return .none }
         if hasResults { return .results }
+        if danceSongOn { return .danceSong(danceSong.song - 1) }          // the dance song plays once; the stage loop comes back after the dance
         return .show
     }
     /// How the camera frames the stage this moment (GameCamera.showPose).
@@ -181,6 +193,7 @@ final class ShowFlow {
         theme = ShowSchedule.theme(dayKey: day)
         let rivals = ShowRivalSource.rivals(dayKey: day, rank: r, theme: theme, firstShow: progress.firstShowEver)
         sim = ShowSim(rank: r, theme: theme, dayKey: day, player: input, rivals: rivals, seed: seed)
+        danceSong = DanceSong.pick(seed: seed)
         resetStage()
         phase = .fade; fadeDest = .stage; fadeStage = .out; holdT = 0; swapped = false; leaving = false
         started += 1
@@ -188,7 +201,8 @@ final class ShowFlow {
     }
 
     private func resetStage() {
-        beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; danceGoSong = -10
+        beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; goAge = 0
+        danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
         rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
@@ -230,7 +244,7 @@ final class ShowFlow {
     }
 
     private func tickDance(dt: Float) {
-        let now = songNow(dt: dt)
+        var now = songNow(dt: dt)
         switch beat {
         case .idle, .danced:
             if beat == .danced { dancedAge += dt }
@@ -242,32 +256,60 @@ final class ShowFlow {
                 countdown -= 1
                 if countdown > 0 { countdownLeft = Self.countdownBeat; cueSerial += 1; cue(.countdown) }
                 else {
-                    beat = .dancing; danceGoSong = now; cueSerial += 1; cue(.go)
-                    if var s = sim { s.beginDance(grid: grid, songTime: now); sim = s }
+                    beat = .dancing; goAge = 0; cueSerial += 1; cue(.go)
+                    if var s = sim {
+                        // the dance song starts now (the scene switches on the next frame) and its prompts are on ITS beats: the clock is the song's own
+                        // player time, held at 0 until the song is audible, so the start can never drift from the clock
+                        danceT = 0; danceMusicOn = true; danceHeard = false; danceAudioWait = 0
+                        s.beginDance(song: danceSong, songTime: 0); sim = s
+                        if AudioHub.audioLog { NSLog("[melon] dance start song=%d \"%@\" bpm=%.2f firstBeat=%.4f prompts=%d %.3f..%.3f s", danceSong.song, danceSong.title, danceSong.bpm, danceSong.grid.firstBeat, danceSong.promptCount, danceSong.grid.time(ofBeat: DanceSong.firstPromptBeat), danceSong.grid.time(ofBeat: danceSong.lastBeat)) }
+                    }
                     revision += 1
                 }
             }
         case .dancing:
-            flashAge += dt
+            flashAge += dt; goAge += dt
             if flashAge > 0.7, flash != nil { flash = nil }
+            now = danceClock(dt: dt)
             if auto || ShowAssist.autoDance { autoPlay(now) }
             promptCues(now: now)
             guard var s = sim else { return }
             let ev = s.tickDance(songTime: now)
             sim = s
             handle(ev)
-            if s.danceDone { beat = .danced; dancedAge = 0; cue(.applause); revision += 1 }
+            if s.danceDone { beat = .danced; dancedAge = 0; danceMusicOn = false; cue(.applause); revision += 1 }          // (the stage loop comes back)
         }
+    }
+
+    /// The dance clock, advanced once per tick: the song's OWN playback time from the audio engine (player sample time minus output latency), so the prompts
+    /// stay with the music however the frames drop. Held at 0 while the song decodes; frame counted only when there is no audio clock (muted, tests, a failed decode).
+    private func danceClock(dt: Float) -> Double {
+        if let a = songClock(danceTrack) {
+            if !danceHeard, AudioHub.audioLog { NSLog("[melon] dance song heard: clock %.3f s (output latency %.0f ms)", a, AudioHub.shared.outputLatencyMS) }
+            danceHeard = true; danceT = max(danceT, a); return danceT
+        }
+        if !danceHeard, !audioReady(.danceSong(danceSong.song - 1)), danceAudioWait < 1.5 { danceAudioWait += dt; return danceT }          // decoding: the prompts wait
+        danceT += Double(dt)
+        return danceT
+    }
+    /// The dance clock read now (a tap, the prompt lane's frame): the audio's latest answer once the song is heard.
+    func danceNow() -> Double {
+        guard danceMusicOn, danceHeard, let a = songClock(danceTrack) else { return danceT }
+        return max(danceT, a)
     }
 
     /// A tap of the foot button during the dance.
     func tap(foot: Int) {
         guard buttonsLive else { return }
-        let now = songClock(track) ?? song
-        song = max(song, now)
+        let now = danceNow()
+        danceT = max(danceT, now)
         guard var s = sim else { return }
-        let ev = s.tapDance(foot: foot, at: song)
+        let nearest = s.dance?.nearestPrompt(to: ShowDanceSim.judgedTime(now))
+        let ev = s.tapDance(foot: foot, at: now)
         sim = s
+        if AudioHub.audioLog, let n = nearest {          // the phone's proof of sync: how far each tap landed from the song's prompt (positive = late)
+            NSLog("[melon] dance tap song=%d foot=%d t=%.3f prompt#%d at %.3f err=%+.0f ms (heard=%d)", danceSong.song, foot, now, n.index, n.time, (ShowDanceSim.judgedTime(now) - n.time) * 1000, danceHeard ? 1 : 0)
+        }
         handle(ev)
     }
 

@@ -339,7 +339,7 @@ struct PromptLane: View {
     var body: some View {
         let show = care.show
         TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
-            let song = AudioHub.shared.songTime(of: show.track) ?? show.song
+            let song = show.danceNow()
             let items = show.sim?.dance?.visible(at: song) ?? []
             ZStack(alignment: .leading) {
                 Capsule().fill(Color(red: 0.08, green: 0.05, blue: 0.13).opacity(0.6))

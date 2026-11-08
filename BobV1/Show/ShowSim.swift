@@ -120,7 +120,12 @@ nonisolated struct ShowSim: Sendable {
 
     // MARK: Dance
 
-    /// GO: the prompts start `leadInBeats` after `songTime` on `grid`.
+    /// GO: the prompts sit on `song`'s own beats (song time 0 = the song's first sample, `songTime` is the clock now).
+    mutating func beginDance(song: DanceSong, songTime: Double) {
+        guard round == .dance, dance == nil else { return }
+        dance = ShowDanceSim(song: song, timing: rank.timing, seed: seed, songTime: songTime)
+    }
+    /// GO on a beat grid (the old fixed dance: `rank.promptCount` prompts from `leadInBeats` after `songTime`); tests and the grid drill.
     mutating func beginDance(grid: ShowBeat, songTime: Double) {
         guard round == .dance, dance == nil else { return }
         dance = ShowDanceSim(count: rank.promptCount, grid: grid, timing: rank.timing, seed: seed, songTime: songTime)

@@ -163,7 +163,7 @@ extension ShowFlow {
     func promptCues(now: Double) {
         guard A11ySettings.shared.relaxedTiming || UIAccessibility.isVoiceOverRunning || A11yEvents.forceActive else { return }
         let prompts = sim?.dance?.prompts ?? []
-        let lead = ShowBeat.stage.period * 0.5
+        let lead = grid.period * 0.5
         while danceCued < prompts.count {
             let p = prompts[danceCued]
             if p.time - lead > now - ShowDanceSim.latencyOffset { break }

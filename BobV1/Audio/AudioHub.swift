@@ -444,6 +444,8 @@ final class AudioHub {
         guard !muted, started, active else { return nil }
         return scene?.songTime(of: t)
     }
+    /// The route's output latency in ms (the Jelly Show's dance log; songTime already subtracts it).
+    var outputLatencyMS: Double { AVAudioSession.sharedInstance().outputLatency * 1000 }
     /// The track of this scene is decoded and playing.
     func scenePlaying(_ s: MusicScene) -> Bool { (director.scene == s ? director.sceneTrack : s.track).map { scene?.isPlaying($0) ?? false } ?? false }
 
