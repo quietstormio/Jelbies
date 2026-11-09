@@ -268,20 +268,23 @@ enum GameCamera {
 
     /// Where each of `ids` stands in the "everyone" row: abreast on the front line, in id order, centred on the call spot.
     /// Index 0 is the front Jelly (centre, on the call spot); the rest alternate left, right, a little behind.
-    static func focusRowSpots(count n: Int, anchor: SIMD2<Float> = callSpot) -> [SIMD2<Float>] {
+    static func focusRowSpots(count n: Int, anchor: SIMD2<Float> = callSpot, spacing: Float = focusRowSpacing) -> [SIMD2<Float>] {
         (0..<max(n, 0)).map { k in
             if k == 0 { return anchor }
             let side: Float = k % 2 == 1 ? -1 : 1, rank = Float((k + 1) / 2)
-            return SIMD2(anchor.x + side * rank * focusRowSpacing, anchor.y - focusRowBack)
+            return SIMD2(anchor.x + side * rank * spacing, anchor.y - focusRowBack)
         }
     }
 
     /// The exact row a preview group is born on and `FocusGroup.begin` lines up on (one place, so they cannot drift). One spot = the old single close-up spot.
-    static func previewRowSpots(count n: Int) -> [SIMD2<Float>] {
+    static func previewRowSpots(count n: Int, spacing: Float = focusRowSpacing) -> [SIMD2<Float>] {
         guard n > 1 else { return [FreeFloor.nearest(to: callSpot)] }
-        let offs = focusRowSpots(count: n, anchor: .zero)
-        return focusRowSpots(count: n, anchor: FreeFloor.nearest(to: callSpot, all: offs))
+        let offs = focusRowSpots(count: n, anchor: .zero, spacing: spacing)
+        return focusRowSpots(count: n, anchor: FreeFloor.nearest(to: callSpot, all: offs), spacing: spacing)
     }
+    /// The pick page's row (the Adoption Center only): wider apart than the game's "everyone" row (a body is 2R = 1.4 wide) so the three never overlap, wings and tails included.
+    static let pickRowSpacing: Float = 1.65
+    static func pickRowSpots(count n: Int) -> [SIMD2<Float>] { previewRowSpots(count: n, spacing: pickRowSpacing) }
 
     /// Where one body of a group close-up appears on the stage view (all 0...1 of the view, y down): feet, middle, top, and the body's width.
     struct RowProjection: Equatable { var foot: SIMD2<Float>; var mid: SIMD2<Float>; var top: SIMD2<Float>; var bodyW: Float }

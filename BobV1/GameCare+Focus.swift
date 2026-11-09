@@ -69,11 +69,14 @@ final class FocusGroup {
         id == front || ids.count < 3 || arrived.contains(front) || clock > Self.sidesWait || (frontDistance ?? 99) < 2.4
     }
 
+    /// Distance between neighbouring row centres: the game's, or the Adoption Center's wider pick row (set by `GameCare.beginFocus` for a preview).
+    var rowSpacing: Float = GameCamera.focusRowSpacing
+
     func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:]) {
         ids = new; arrived = []; clock = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
-            let row = GameCamera.previewRowSpots(count: new.count)          // (the same expression a preview group is born on)
+            let row = GameCamera.previewRowSpots(count: new.count, spacing: rowSpacing)          // (the same expression a preview group is born on)
             // no fixed spot per Jelly: whoever is nearest the middle takes it, the others the free slot on their side (`Lineup`), re-read while they come (`replan`)
             slots = row; slotOf = [:]; committed = []; replanClock = 0; replans = 0
             if floors.count == new.count {
@@ -146,6 +149,16 @@ extension GameCare {
         if let sim { b.startHopPlay(sim: sim, distance: 0.0001) } else { b.wantJoy() }
     }
 
+    /// A preview stage (the Adoption Center): every Jelbie that is not already facing the camera (heading 0) steps round to face it, so the species page, the pick row and the
+    /// naming step all show a friendly front view (a snapped arrival skips the come-walk's turn).
+    func previewFaceCamera() {
+        guard isPreview else { return }
+        for id in 0..<max(jellies.count, 1) {
+            guard let b = brainFor(id), abs(atan2f(sinf(b.yaw), cosf(b.yaw))) > 0.15, b.idleState.kind == nil, case .none = b.script else { continue }
+            if let sim = id == 0 ? lastSim : bathPlug.actors[id]?.actor?.sim { b.startTurn(to: 0, sim: sim) }
+        }
+    }
+
     /// "Pip and Moss, come here": just those run to the front row (the first named stands in front); the others keep roaming.
     func comeHere(jellies ids: [Int]) { beginFocus(ids: ids, front: ids.first) }
 
@@ -159,6 +172,7 @@ extension GameCare {
         // a close-up that has just ended hands the paused Jellies' wandering back one brain per step (`driveFocus`); a call landing inside that window used
         // to wipe `saved` in `begin` and leave them with autonomy off for good (2026-10-21: "the other ones are stuck"). Hand it back here first.
         for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a }
+        focusGroup.rowSpacing = isPreview ? GameCamera.pickRowSpacing : GameCamera.focusRowSpacing
         focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }))
         if ids.count > 1 { for id in ids { if let b = brainFor(id) { focusGroup.gapSaved[id] = b.peerGap; b.peerGap = min(b.peerGap, FocusGroup.rowSteerGap) } } }
         focus.beginApproach()

@@ -64,7 +64,7 @@ struct AdoptionCenter: View {
     /// Bumped once the camera preset is set, so the projected tap targets are read again.
     @State private var camEpoch = 0
     /// The three standing spots, cached when the pick step opens so the overlay and the stage agree.
-    @State private var rowSpots: [SIMD2<Float>] = GameCamera.previewRowSpots(count: JellyRoster.previewSlots)
+    @State private var rowSpots: [SIMD2<Float>] = GameCamera.pickRowSpots(count: JellyRoster.previewSlots)
     @State private var page: Int
     @State private var tab: PickerTab = .about
     @State private var name = ""
@@ -196,7 +196,7 @@ struct AdoptionCenter: View {
         .task { await runCover() }
         .onAppear {
             camera.reduceMotion = reduce
-            if step == .pick { rowSpots = GameCamera.previewRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick) } else { camera.setSpecies(pick); camera.engage() }
+            if step == .pick { rowSpots = GameCamera.pickRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick) } else if step == .naming { camera.setNaming() } else { camera.setSpecies(pick); camera.engage() }
             camEpoch += 1
             if !reduce { withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true } }
         }
@@ -276,8 +276,8 @@ struct AdoptionCenter: View {
         let showStage = !compact || su >= 0.25
         let stageS: CGFloat = compact ? su : 1
         let padNaming = HUDLayout.isPad && naming && !compact          // iPad naming step: a snug card with the button right under it (no empty lower half)
-        let cardH: CGFloat = compact ? 160 : padNaming ? 170 : 252
-        let cardY: CGFloat = compact ? 108 + (showStage ? 470 * su : 0) : 597
+        let cardH: CGFloat = compact ? Self.nameCardCompactH : naming ? Self.nameCardH : 252          // the naming card is snug: prompt, field, idea chips
+        let cardY: CGFloat = compact ? 108 + (showStage ? 470 * su : 0) : naming && !padNaming ? 849 - Self.nameCardH : 597          // (phone: its bottom stays where the tall card's was, right over the button)
         let ctaY: CGFloat = compact ? cardY + cardH + 6 : padNaming ? cardY + cardH + 16 : 862
         let canvasH: CGFloat = compact ? h : 956
         return ZStack(alignment: .topLeading) {
@@ -293,13 +293,17 @@ struct AdoptionCenter: View {
         .frame(width: size.width, height: size.height, alignment: .top)
     }
 
+    /// The naming card's design height (prompt, field, the "Ideas:" row) and its keyboard-up compact height.
+    private static let nameCardH: CGFloat = 220, nameCardCompactH: CGFloat = 192
+
     private func landscapeLayout(_ size: CGSize) -> some View {
         let half = size.width / 2
         let cap = Self.padCap(size)          // iPad-sized windows only; iPhone unchanged
         let us = min(half / 440, (size.height - 8) / 470, cap)
-        let ur = min((half - 20) / 440, (size.height - 12) / 500, cap)
+        let ur = min((half - 20) / 440, (size.height - 12) / (naming ? (mode == .more ? 172 : 150) + Self.nameCardH + 80 : 500), cap)
         let compact = naming && kbUp
-        let uc = min((half - 20) / 440, (size.height - 8) / 240, cap)  // name card + button only, above the keyboard
+        let compactH = Self.nameCardCompactH + 6 + 68
+        let uc = min((half - 20) / 440, (size.height - 8) / compactH, cap)  // name card + button only, above the keyboard
         return HStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
                 stageBlock(us).frame(width: 440, height: 470, alignment: .topLeading)
@@ -314,16 +318,15 @@ struct AdoptionCenter: View {
             VStack(spacing: 0) {
                 if compact {
                     VStack(spacing: 6) {
-                        sheetCard(uc, height: 160).frame(width: 408, height: 160)
+                        sheetCard(uc, height: Self.nameCardCompactH).frame(width: 408, height: Self.nameCardCompactH)
                         cta.frame(width: 400, height: 68)
                     }
-                    .frame(width: 440, height: 240, alignment: .top)
+                    .frame(width: 440, height: compactH, alignment: .top)
                     .scaleEffect(uc, anchor: .top)
-                    .frame(width: 440 * uc, height: 240 * uc, alignment: .top)
+                    .frame(width: 440 * uc, height: compactH * uc, alignment: .top)
                 } else {
-                    let padNaming = HUDLayout.isPad && naming          // iPad naming step: snug card, the whole column centred (no blank lower half)
-                    let headH: CGFloat = mode == .more ? 172 : 150, cardH: CGFloat = padNaming ? 170 : 252, ctaH: CGFloat = 68, gap: CGFloat = 6
-                    let colH: CGFloat = padNaming ? headH + cardH + ctaH + gap * 2 : 500          // iPad: the sum of the stacked parts, so it cannot clip
+                    let headH: CGFloat = mode == .more ? 172 : 150, cardH: CGFloat = naming ? Self.nameCardH : 252, ctaH: CGFloat = 68, gap: CGFloat = 6
+                    let colH: CGFloat = naming ? headH + cardH + ctaH + gap * 2 : 500          // naming: the sum of the stacked parts (a snug card, the column centred), so it cannot clip
                     VStack(spacing: gap) {
                         headerBlock.frame(width: 440, height: headH, alignment: .top)
                         sheetCard(ur, height: cardH).frame(width: 408, height: cardH)
@@ -416,6 +419,7 @@ struct AdoptionCenter: View {
             if naming {
                 Text(namingPrompt).font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                 nameField(1)
+                ideasRow(1)
             } else if step == .pick {
                 flowPick
             } else {
@@ -877,12 +881,22 @@ struct AdoptionCenter: View {
 
     private var aboutTab: some View {
         ZStack(alignment: .topLeading) {
-            Text(info.about).font(SK.font(16, .medium)).foregroundStyle(SK.ink).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
-                .frame(width: 345, alignment: .leading).offset(x: 22, y: 77)
-            tile("Best at", dot: SpeciesInfo.jarNames.firstIndex(of: info.bestAt).map { Self.jarColor($0) }, value: info.bestAt).offset(x: 14, y: 141)
-            tile("Signature", dot: nil, value: info.signature).offset(x: 145, y: 141)
-            tile("Loves", dot: nil, value: info.loves).offset(x: 277, y: 141)
+            // the text takes the first size that fits its 64-high box (16 pt, then 15, then 14 pt), so even a 3-line About never reaches the tiles below it
+            ViewThatFits(in: .vertical) {
+                aboutText(16, spacing: 4)
+                aboutText(15, spacing: 3)
+                aboutText(14, spacing: 2)
+            }
+            .frame(width: 345, height: 64, alignment: .topLeading).offset(x: 22, y: 76)
+            tile("Best at", dot: SpeciesInfo.jarNames.firstIndex(of: info.bestAt).map { Self.jarColor($0) }, value: info.bestAt).offset(x: 14, y: 156)
+            tile("Signature", dot: nil, value: info.signature).offset(x: 145, y: 156)
+            tile("Loves", dot: nil, value: info.loves).offset(x: 277, y: 156)
         }
+    }
+
+    private func aboutText(_ size: CGFloat, spacing: CGFloat) -> some View {
+        Text(info.about).font(SK.font(size, .medium)).foregroundStyle(SK.ink).lineSpacing(spacing).fixedSize(horizontal: false, vertical: true)
+            .frame(width: 345, alignment: .topLeading)
     }
 
     private func tile(_ title: String, dot: Color?, value: String) -> some View {
@@ -893,8 +907,8 @@ struct AdoptionCenter: View {
                 Text(value).font(SK.font(19, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
             }
         }
-        .padding(.leading, 13).padding(.bottom, 18)
-        .frame(width: 117, height: 91, alignment: .leading).offset(y: 0)
+        .padding(.leading, 13).padding(.bottom, 14)
+        .frame(width: 117, height: 84, alignment: .leading).offset(y: 0)
         .background(RoundedRectangle(cornerRadius: 17, style: .continuous).fill(SK.ink.opacity(0.055)))
         .accessibilityElement(children: .combine)
     }
@@ -1084,10 +1098,36 @@ struct AdoptionCenter: View {
 
     private func nameCard(_ u: CGFloat) -> some View {
         VStack(spacing: 14) {
-            Text(namingPrompt).font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+            Text(namingPrompt).font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
             nameField(u)
+            ideasRow(u)
         }
-        .padding(.horizontal, 24).padding(.top, 30).frame(width: 408, alignment: .top)
+        .padding(.horizontal, 20).padding(.top, kbUp ? 22 : 26).frame(width: 408, alignment: .top)
+    }
+
+    /// Three name ideas for the chosen Jelbie (the first is the name he gets when the field is left empty); a tap fills the name field.
+    private var nameIdeas: [String] { NameIdeas.ideas(species: pick, index: picked ?? 1, taken: home.map(JellyRoster.nameOf)) }
+
+    private func ideasRow(_ u: CGFloat) -> some View {
+        let h = min(max(36, hitMin(u)), 52)
+        let layout = dts.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 7))
+        return layout {
+            Text("Ideas:").font(SK.font(14, .bold)).foregroundStyle(SK.ink.opacity(0.62)).fixedSize().accessibilityHidden(true)
+            ForEach(Array(nameIdeas.enumerated()), id: \.offset) { k, idea in
+                let on = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == idea.lowercased()
+                Button { AudioHub.shared.uiTap(); name = idea } label: {
+                    Text(idea).font(SK.font(16, .heavy)).foregroundStyle(on ? SK.cream : SK.ink).lineLimit(1).minimumScaleFactor(0.6)
+                        .padding(.horizontal, 8).frame(maxWidth: .infinity, minHeight: 34, maxHeight: 34)
+                        .background(Capsule().fill(on ? SK.ink : Color.white.opacity(0.78)))
+                        .overlay(Capsule().strokeBorder(look.tabLine.opacity(on ? 0 : 0.9), lineWidth: 1.5))
+                        .frame(height: h).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Name idea: \(idea)").accessibilityAddTraits(on ? .isSelected : [])
+                .accessibilityIdentifier("adopt-idea-\(k)")
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var finalName: String {
@@ -1205,7 +1245,7 @@ struct AdoptionCenter: View {
         Self.setRowPreviews(candidates)
         picked = 1; tapped = false
         resetStage()
-        rowSpots = GameCamera.previewRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick); camEpoch += 1
+        rowSpots = GameCamera.pickRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick); camEpoch += 1
         withAnimation(.easeOut(duration: 0.2)) { step = .pick }
     }
 
@@ -1214,7 +1254,7 @@ struct AdoptionCenter: View {
         guard step == .pick, let c = pickedCand, canAdopt(c) else { return }
         Self.setSinglePreview(species: pick, variant: c.variant)
         resetStage()
-        camera.setSpecies(pick); camera.engage()
+        camera.setNaming()
         name = ""
         withAnimation(.easeOut(duration: 0.2)) { step = .naming }
         nameFocused = true
@@ -1225,7 +1265,7 @@ struct AdoptionCenter: View {
         nameFocused = false
         Self.setRowPreviews(candidates)
         resetStage()
-        rowSpots = GameCamera.previewRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick); camEpoch += 1
+        rowSpots = GameCamera.pickRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick); camEpoch += 1
         withAnimation(.easeOut(duration: 0.2)) { step = .pick }
     }
 
@@ -1243,6 +1283,7 @@ struct AdoptionCenter: View {
     private func stageReady(_ m: MelonModel, gen: Int) {
         guard gen == pageGen else { return }          // a stale stage (an old page or step) must never mark the new one ready
         stageModel = m
+        m.care.previewFaceCamera()
         if step == .pick { ready = true; landedRow(m); return }          // (the row stage waited for its close-up camera itself: `ShowcaseStage`)
         if HUDLayout.isPad {          // iPad: show him only once the close-up camera has settled (else a slow first frame shows him as a speck in the wide room view)
             Task { @MainActor in
