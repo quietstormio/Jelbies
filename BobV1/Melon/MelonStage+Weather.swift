@@ -10,7 +10,7 @@ import QuartzCore
 extension MelonController {
     /// The living room (with its windows) is what the player sees: not the track, the stage, the park, the bath, the species picker or a menu pause.
     var weatherRoomShown: Bool {
-        guard game, !model.paused, !model.cutout else { return false }
+        guard game, !model.paused, !model.cutout, !model.preview else { return false }
         let c = model.care
         return !c.race.trackVisible && !c.show.onStage && !c.park.inScene && !c.volley.inScene && !c.groom.inScene && !c.bath.look.visible && c.bath.cameraBlend <= 0.001
     }

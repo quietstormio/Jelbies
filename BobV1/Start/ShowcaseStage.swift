@@ -15,9 +15,17 @@ struct ShowcaseStage: View {
     var fullScreen = true
     /// Transparent, no room: only the Jelbie (the species picker draws its own stage and backdrop).
     var cutout = false
-    /// Called once the focused Jelbie has walked to the front (`focusFirst`), with the model (so the picker can ask for moves).
+    /// Called once the focused Jelbie stands at the close-up spot (`focusFirst`), with the model (so the picker can ask for moves).
+    /// A showcase Jelbie is BORN on that spot, so this is about a second after the stage goes live (never later than ~2.5 s), and exactly once while the stage stays on screen.
     var onReady: ((MelonModel) -> Void)?
+    /// The opening story's Jelbies stay quiet (no arrival chirp) until their drop pops.
+    var silent = false
     @State private var model: MelonModel?
+    @State private var readyTask: Task<Void, Never>?
+    @State private var readyFired = false
+
+    /// Seconds after `.live` by which `onReady` fires even if the arrival never registers.
+    static let readyDeadline: TimeInterval = 2.5
 
     var body: some View {
         ZStack {
@@ -26,28 +34,42 @@ struct ShowcaseStage: View {
         }
         .modifier(SafeAreaIf(on: fullScreen))
         .allowsHitTesting(false)
-        .onAppear { build() }
-        .onDisappear { model?.paused = true }
+        .onAppear { appear() }
+        .onDisappear { readyTask?.cancel(); readyTask = nil; model?.paused = true }
         .accessibilityHidden(true)
     }
 
-    private func build() {
-        guard model == nil else { return }
+    private func appear() {
+        if let m = model {
+            // back on screen after onDisappear paused it (a TabView page, a covering screen): run again, and redo the ready sequence if it never finished
+            if m.paused { m.paused = false }
+            if focusFirst, !readyFired, readyTask == nil { startReady(m) }
+            return
+        }
         JellyRoster.current = roster                       // the stage reads its characters from the process-wide roster
-        DayClock.shared.snapToNow()
-        let m = GameScreen.makeGameModel(jellyCount: roster.count)
+        // a PREVIEW model: awake, noon, no weather, fresh in-memory needs / stats / perks / words, no saved wear, nothing read from or written to the real save, no time away;
+        // so it can never refuse to come, nor alter an owned Jelbie (and it does not touch the process-wide DayClock any more)
+        let m = GameScreen.makeGameModel(jellyCount: roster.count, preview: true)
         m.care.touchPlay = m.touch
+        m.care.silentArrival = silent
         m.hideJellies = empty
         m.cutout = cutout
         model = m
-        guard focusFirst else { return }
-        Task { @MainActor in
-            for _ in 0..<40 where m.status != .live { try? await Task.sleep(nanoseconds: 100_000_000) }
-            try? await Task.sleep(nanoseconds: 900_000_000)
-            if !m.paused { m.care.comeHere(jelly: 0) }
-            for _ in 0..<50 where !m.paused && !m.care.focusGroup.arrived.contains(0) { try? await Task.sleep(nanoseconds: 100_000_000) }
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            if !m.paused { onReady?(m) }
+        if focusFirst { startReady(m) }
+    }
+
+    private func startReady(_ m: MelonModel) {
+        readyTask = Task { @MainActor in
+            for _ in 0..<80 where m.status != .live && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }          // (a stage that never goes live still gets its ready after the deadline)
+            let deadline = Date().addingTimeInterval(Self.readyDeadline)
+            while !Task.isCancelled, Date() < deadline, m.care.brainFor(0) == nil { try? await Task.sleep(nanoseconds: 50_000_000) }          // the first fixed step has run
+            guard !Task.isCancelled else { return }
+            m.care.comeHere(jelly: 0)          // already standing on the spot: it registers as arrived within ~0.3 s and the camera is simply in close-up (`BlobFocus.arrive(snap:)`)
+            while !Task.isCancelled, Date() < deadline, !m.care.focusGroup.arrived.contains(0) { try? await Task.sleep(nanoseconds: 50_000_000) }
+            if m.care.focusGroup.arrived.contains(0) { try? await Task.sleep(nanoseconds: 250_000_000) }          // (the drop from his birth height has settled)
+            guard !Task.isCancelled, !readyFired else { return }
+            readyFired = true
+            onReady?(m)
         }
     }
 }

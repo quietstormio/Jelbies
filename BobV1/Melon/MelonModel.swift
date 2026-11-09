@@ -22,6 +22,8 @@ final class MelonModel {
     var hideJellies: Bool = false
     /// The species picker: no room is drawn and the view is transparent; only the Jelly (and what it wears / grows) renders, over the SwiftUI backdrop.
     var cutout: Bool = false
+    /// A showcase stand-in (Start/ShowcaseStage.swift): the Jelbie starts at the close-up spot, always awake, noon light, no weather, and nothing of the real save is read or written.
+    private(set) var preview: Bool = false
     /// Care actions of the game screen (feed / water / call); ticked by the stage controller.
     let care: GameCare
     /// Touch play of focus mode (pet / pick up / bounce / cheeks reactions, hearts, haptics). See BlobBrain+Touch.swift.
@@ -79,8 +81,9 @@ final class MelonModel {
     var resetTick: Int = 0
 
     /// `jellyCount`: Jellies in the room (the game asks for `JellyRoster.launchCount()`; the studio and the tests use 1).
-    init(jellyCount: Int = 1) {
-        care = GameCare(jellyCount: jellyCount)
+    init(jellyCount: Int = 1, preview: Bool = false) {
+        care = GameCare(jellyCount: jellyCount, preview: preview)
+        self.preview = preview
         // `-MelonPalette <rawValue>` launch argument (screenshots / tests).
         if let raw = UserDefaults.standard.string(forKey: "MelonPalette"), let key = PaletteKey(rawValue: raw) { palette = key }
     }

@@ -642,7 +642,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         PerfProbe.end("audioSituation", pa)
         lapEnd(.audio, &lt)
         let pe = PerfProbe.begin()
-        if game { Ears.shared.tick(actors: actors, care: model.care, dt: sim.stepDt) }
+        if game, !model.preview { Ears.shared.tick(actors: actors, care: model.care, dt: sim.stepDt) }          // (a showcase does not listen: the real room's ears stay)
         PerfProbe.end("ears.tick", pe)      // sound reactions (Audio/EarsListener.swift)
         if game, BubbleWand.shared.active {          // the bubble wand toy (Toys/BubbleWand.swift): bubbles float, the Jelbies watch / chase / pop them
             let pb = PerfProbe.begin()
@@ -710,7 +710,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// Feeds the audio hub (music mood, snores, mood chirps) from the Jellies, about 10 times a second. A no-op while muted (tests).
     private var audioClock = 0
     private func audioSituation() {
-        guard game, !AudioHub.shared.muted else { return }
+        guard game, !model.preview, !AudioHub.shared.muted else { return }          // (a showcase must not steer the room's music / snores / ambient hook)
         audioClock += 1
         guard audioClock % 6 == 0 else { return }
         let brains = actors.map(\.brain)
@@ -764,9 +764,10 @@ final class MelonController: NSObject, MTKViewDelegate {
             wasHopping = false
             if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
             brain.amplitude = reduce ? 0.55 : 1
-            brain.idleNight = DayClock.shared.nightFactor; brain.idleMorning = DayClock.shared.morningFactor; brain.idleDeepNight = DayClock.shared.deepNightFactor
+            let pv = model.preview          // a showcase Jelbie: noon, never sleepy, never in bed
+            brain.idleNight = pv ? 0 : DayClock.shared.nightFactor; brain.idleMorning = pv ? 0 : DayClock.shared.morningFactor; brain.idleDeepNight = pv ? 0 : DayClock.shared.deepNightFactor
             let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(0)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
-            brain.sleepEnabled = roomLife; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
+            brain.sleepEnabled = roomLife && !pv; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
                 brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active || model.care.play.ballGame) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)
@@ -828,7 +829,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         let emb = LaunchTiming.span("embed") { ap.breed == .berry ? BobMeshCache.embedding : embed(simRest: sm.rest, tets: sm.tets, verts: rm.rest) }
         let count = model.gameMode ? min(max(model.care.jellyCount, 1), JellyRoster.maxCount) : 1
         if model.gameMode, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil { GameCamera.configureRoom(count: count) }          // 2-3 Jellies: the wider roaming camera and floor (one Jelly: the exact old pose; skipped in the test host, whose suites assume the base pose)
-        let spots = JellyRoster.spawnSpots(count: count)
+        let preview = model.gameMode && model.preview
+        var spots = JellyRoster.spawnSpots(count: count)
+        if preview { spots = [FreeFloor.nearest(to: GameCamera.callSpot)] }          // a showcase Jelbie is born on the close-up spot (no walk to it: `ShowcaseStage` is ready within a second)
         simMesh = sm
         renderMesh = rm
         ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount, tail: rm.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil }, index: rm.index)          // the contact profile samples the egg more sparsely than the limb blocks
@@ -869,7 +872,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 for id in ids.sorted() where id < self.actors.count { self.actors[id].brain?.commandedGoodnight = true }
             }
         }
-        for a in actors { a.reset(drop: model.reduceMotion ? 0 : 0.35, shift: count > 1) }
+        for a in actors { a.reset(drop: model.reduceMotion ? 0 : 0.35, shift: count > 1 || preview) }
         for a in actors { a.brain?.feature = a.profile?.feature ?? JellyRoster.feature(slot: a.id) }
         model.particles = body.n
         model.tets = body.nT
@@ -1264,8 +1267,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
         let camIn = game && model.care.focus.blend > 0.25
         var light = game ? GameCamera.light(centroids: model.care.litActors(actors, camIn: camIn).filter { !model.care.parkHides($0.id) }.map { $0.sim.centroid() } + parkActors.map { $0.sim.centroid() }) : rig.light(centroid: c)
-        if game { light.intensity *= DayLight.at(hour: DayClock.shared.displayHour).jellyMul }          // night: the Jellies' key light is dialled down (never dark)
-        if game { updateTuck(renderer, dt: 1.0 / 60) }
+        if game { light.intensity *= DayLight.at(hour: model.preview ? 12 : DayClock.shared.displayHour).jellyMul }          // night: the Jellies' key light is dialled down (never dark)
+        if game, !model.preview { updateTuck(renderer, dt: 1.0 / 60) }
 
         // MetalFX: the drawable stays native; the scene renders smaller and is upscaled. Otherwise render size == drawable size.
         var rw = Int(view.drawableSize.width), rh = Int(view.drawableSize.height)
@@ -1286,6 +1289,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             renderer.raceCourse = model.care.race.course.tier
             renderer.trophyShelf = model.care.race.trophies.roomShelf(contestBest: model.care.show.progress.bestCup)
             renderer.cutout = model.cutout
+            renderer.dayHourOverride = model.preview ? 12 : nil          // a showcase is always noon (the portrait path does the same, below)
             renderer.raceVisible = model.care.race.trackVisible
             renderer.showVisible = model.care.show.onStage
             renderer.parkVisible = model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene

@@ -60,9 +60,11 @@ final class BlobFocus {
         guard phase == .roaming else { return }
         phase = .approaching
     }
-    func arrive() {
+    /// `snap`: a showcase stage (ShowcaseStage) is born on its spot, so the close-up is simply there (no glide, no Reduce Motion veil over the app).
+    func arrive(snap: Bool = false) {
         guard phase == .approaching else { return }
         phase = .focused; goal = 1
+        if snap { blend = 1; vel = 0 }
     }
     /// The only way out. From `.approaching` it just cancels the walk's focus (camera never moved).
     func release() {

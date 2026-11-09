@@ -28,7 +28,16 @@ enum OpeningScript {
     /// The Jelbies, in the picker's order (blue, yellow, purple, green): character ids.
     static let characters = [0, 1, 3, 2]
     static let names = ["Blueberry", "Lemon Drop", "Taro", "Matcha"]
+    /// Earliest local time (s into beat 4) each drop may pop: 0.7 s apart. A drop pops only when its Jelbie is ready too, and never before the one before it (`pump`).
     static let popTimes: [Double] = [0.4, 1.1, 1.8, 2.5]
+    /// Beat 4 waits this long for the Jelbies at most (a stage that never comes cannot hang the story; its drop then pops the moment its Jelbie is ready, in order).
+    static let beatCap = 12.0
+    /// After the last pop (spaced 0.7 s apart): the pause before the next beat, and after a tap's quick pops.
+    static let afterLastPop = 1.2, afterQuickPop = 0.5
+    /// Seconds between pops: the normal rhythm, leftovers after the beat, and a tap's quick pops.
+    static let popGap = 0.7, lateGap = 0.3, quickGap = 0.15
+    /// The first Jelbie stage is mounted this long after the story starts (the first build is the heavy one; the opening fade and the music start first).
+    static let mountDelay = 1.5
     static func full(_ beat: Int) -> String { captions[beat].joined(separator: " ") }
 }
 
@@ -47,6 +56,9 @@ enum OpeningScript {
     var mounted = [false, false, false, false]
     var models: [MelonModel?] = [nil, nil, nil, nil]
     var mountStarted = false
+    var lastPopAt: Date?
+    var quick = false                     // a tap in beat 4 or later: the pops that are left come fast
+    var pumpTask: Task<Void, Never>?
     var leaving = false
     var sceneOpacity = 1.0
     var token = 0
@@ -125,10 +137,16 @@ struct OpeningStoryView: View {
         d.t = motion ? now.timeIntervalSince(st.storyStart) : 0
         d.dropT = st.dropStart.map { motion ? now.timeIntervalSince($0) : 9 }
         d.home = st.beat == 1 ? OArt.smooth(local / 1.6) : (st.beat == 2 ? OArt.smooth(1 - local / 1.0) : 0)
-        d.shiver = st.beat == 2 ? OArt.smooth((local - 4.6) / 1.2) : (st.beat == 3 ? max(0, 1 - local / 0.5) : 0)          // the four drops shimmer just before they wake
+        let waiting = st.beat >= 3 && st.popAt.contains { $0 == nil }
+        d.shiver = st.beat == 2 ? OArt.smooth((local - 4.6) / 1.2) : (st.beat == 3 ? max(waiting ? 0.15 : 0, 1 - local / 0.5) : (waiting ? 0.15 : 0))          // the four drops shimmer just before they wake (and a little while one waits for its Jelbie)
         for k in 0..<4 {
             d.gone[k] = st.popAt[k] != nil
-            if st.beat == 3, st.popAt[k] == nil { d.swell[k] = OArt.smooth(1 - (OpeningScript.popTimes[k] - local) / 0.45) }
+            if st.beat >= 3, st.popAt[k] == nil {
+                // swells to a gentle breathing (never full, so a drop that waits for its Jelbie neither bursts nor freezes)
+                let ramp = st.beat > 3 ? 1 : OArt.smooth(1 - (OpeningScript.popTimes[k] - local) / 0.45)
+                let breath = motion ? 0.5 + 0.5 * sin(now.timeIntervalSince(st.storyStart) * 7 + Double(k) * 1.7) : 0.5
+                d.swell[k] = ramp * (0.42 + 0.2 * breath)
+            }
         }
         let bob = d.bob
         return ZStack {
@@ -189,7 +207,7 @@ struct OpeningStoryView: View {
             ForEach(0..<4, id: \.self) { k in
                 if st.mounted[k] {
                     let st = pose(k, now: now, pr: pr, bob: bob, f: f)
-                    ShowcaseStage(roster: [OpeningScript.characters[k]], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(k, m) })
+                    ShowcaseStage(roster: [OpeningScript.characters[k]], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(k, m) }, silent: true)
                         .frame(width: f, height: f)
                         .scaleEffect(st.scale, anchor: .init(x: 0.5, y: 0.73))
                         .position(x: st.feet.x, y: st.feet.y - 0.23 * f)
@@ -222,9 +240,10 @@ struct OpeningStoryView: View {
         return (feet, max(0.05, 0.12 + 0.88 * back) * squash, min(1, age / 0.1))
     }
 
+    /// Jelbie k stands on its spot in its (invisible) stage. Its drop pops when its turn comes (`pump`): a drop never bursts without it, and it never leaps out of nothing.
     private func ready(_ k: Int, _ m: MelonModel) {
         st.models[k] = m
-        if st.popAt[k] != nil, st.appearAt[k] == nil { appear(k) }
+        pump()
     }
 
     private func appear(_ k: Int) {
@@ -423,6 +442,8 @@ struct OpeningStoryView: View {
         st.camFrom = first == 0 ? OpeningCam() : target(first - 1, size: size)
         AudioHub.shared.playOpening("opening_underscore", volume: 0.85, music: true, fadeIn: 1.5)
         enter(first, tapped: false, initial: true)
+        mountStages()
+        startPump()
     }
 
     private func enter(_ b: Int, tapped: Bool, initial: Bool = false) {
@@ -439,14 +460,13 @@ struct OpeningStoryView: View {
         st.beatStart = now
         let vo = UIAccessibility.isVoiceOverRunning ? 1.7 : 1
         let dur = OpeningScript.durations[b] * vo
-        st.beatEnd = now.addingTimeInterval(dur)
+        st.beatEnd = now.addingTimeInterval(b == 3 ? OpeningScript.beatCap * vo : dur)          // (beat 4 ends by itself: after the last pop, or at the cap; see `pump`)
         if !motion && !initial { st.sceneOpacity = 0; withAnimation(.easeInOut(duration: 0.6)) { st.sceneOpacity = 1 } }
         if b >= 2 && st.dropStart == nil { st.dropStart = now.addingTimeInterval(initial && holdBeat != nil && b >= 3 ? -5 : 0) }
-        if b >= 2 { mountStages(fast: b >= 3) }
-        if b >= 4 { for k in 0..<4 where st.popAt[k] == nil { popOrb(k, loud: false) } }
         A11yAnnounce.say(OpeningScript.full(b), priority: .high)
         schedule(b, token: st.token)
-        if holdBeat == nil { startTimer(after: dur) }
+        if holdBeat == nil, b != 3 { startTimer(after: dur) }
+        pump()
     }
 
     private func startTimer(after s: Double) {
@@ -468,6 +488,13 @@ struct OpeningStoryView: View {
     private func tapped() {
         guard !st.leaving else { return }
         if holdBeat != nil { return }
+        if st.beat >= 3 { st.quick = true }
+        if st.beat == 3 {
+            // the Jelbies that are ready pop at once, in order (0.15 s apart); the story moves on when the last one has (or at the cap, at most a few seconds from now)
+            st.beatEnd = min(st.beatEnd, Date().addingTimeInterval(4))
+            if st.popAt.allSatisfy({ $0 != nil }) { advance(tapped: true) } else { pump() }
+            return
+        }
         advance(tapped: true)
     }
 
@@ -479,7 +506,7 @@ struct OpeningStoryView: View {
     private func finish() {
         guard !st.leaving else { return }
         st.leaving = true
-        st.beatTask?.cancel(); st.stageTask?.cancel()
+        st.beatTask?.cancel(); st.stageTask?.cancel(); st.pumpTask?.cancel()
         st.token += 1
         AudioHub.shared.stopOpening(fade: 1.6)          // >= 1.5 s: the room theme fades in over 3 s underneath (AudioHub.start)
         let r = replay
@@ -492,7 +519,7 @@ struct OpeningStoryView: View {
     }
 
     private func teardown() {
-        st.beatTask?.cancel(); st.stageTask?.cancel()
+        st.beatTask?.cancel(); st.stageTask?.cancel(); st.pumpTask?.cancel()
         st.token += 1
         AudioHub.shared.stopOpening(fade: 1.0)
         if replay { AudioHub.shared.earsDancing(false); Self.restoreSnapshot(st.snapshot); st.snapshot = [:] }
@@ -525,7 +552,7 @@ struct OpeningStoryView: View {
             for (i, tm) in OArt.orbLand.enumerated() { cue(tm + 0.05, t) { sfx("opening_dew_chime", "A dew chime", 0.5 + 0.1 * Float(i)) } }
             cue(4.8, t) { sfx("opening_twinkle", "A tingly shimmer", 0.55) }
         case 3:
-            for k in 0..<4 { cue(OpeningScript.popTimes[k], t) { popOrb(k, loud: true) } }
+            break          // the pops are not on a clock: `pump` pops each drop when its Jelbie is ready
         case 4:
             for k in 0..<4 {
                 cue(0.4 + Double(k) * 0.3, t) {
@@ -541,29 +568,66 @@ struct OpeningStoryView: View {
         }
     }
 
-    private func popOrb(_ k: Int, loud: Bool) {
-        guard st.popAt[k] == nil else { return }
-        st.popAt[k] = Date()
-        if loud {
-            sfx("opening_pop", "Pop!", 1)
-            sfx("sparkle_\(k % 2 + 1)", "A sparkle", 0.6, after: 0.05)
+    /// Runs ~20 times a second from the start of the story (and straight from `ready` and a tap). From beat 4 on it pops the drops: the next unpopped one, only when
+    /// its Jelbie is ready, its popTime has come (beat 4, unless a tap made it quick) and the gap since the last pop has passed. So a drop never bursts without its
+    /// Jelbie leaping out of it, and they come out in order, evenly. Beat 4 ends 1.2 s after the last pop, or at the cap (a stage that is still not ready pops later,
+    /// in its own beat, with its own burst and sound; the ones after it wait for it).
+    private func pump() {
+        guard st.beat >= 3, !st.leaving else { return }
+        let now = Date()
+        let local = now.timeIntervalSince(st.beatStart)
+        if let k = (0..<4).first(where: { st.popAt[$0] == nil }) {
+            let gap = st.quick ? OpeningScript.quickGap : (st.beat > 3 ? OpeningScript.lateGap : OpeningScript.popGap)
+            let timeOK = st.beat > 3 || st.quick || local >= OpeningScript.popTimes[k]
+            let gapOK = st.lastPopAt.map { now.timeIntervalSince($0) >= gap } ?? true
+            if st.models[k] != nil, timeOK, gapOK { popOrb(k) }
         }
-        if st.models[k] != nil { appear(k) }
+        guard st.beat == 3 else { return }
+        if st.popAt.allSatisfy({ $0 != nil }), let l = st.lastPopAt {
+            let hold = (st.quick ? OpeningScript.afterQuickPop : OpeningScript.afterLastPop) * (UIAccessibility.isVoiceOverRunning ? 1.7 : 1)
+            st.beatEnd = min(st.beatEnd, l.addingTimeInterval(hold))
+        }
+        if holdBeat == nil, now >= st.beatEnd { advance(tapped: st.quick) }
     }
 
-    private func mountStages(fast: Bool) {
+    private func startPump() {
+        st.pumpTask?.cancel()
+        st.pumpTask = Task { @MainActor in
+            while !Task.isCancelled && !st.leaving {
+                pump()
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+    }
+
+    /// Drop k bursts and its Jelbie leaps out of it, in the same instant. Only called with the Jelbie ready.
+    private func popOrb(_ k: Int) {
+        guard st.popAt[k] == nil, st.models[k] != nil else { return }
+        let now = Date()
+        st.popAt[k] = now
+        st.lastPopAt = now
+        sfx("opening_pop", "Pop!", 1)
+        sfx("sparkle_\(k % 2 + 1)", "A sparkle", 0.6, after: 0.05)
+        appear(k)
+    }
+
+    /// Mounts the four Jelbie stages one after the other (each builds a real 3D room, so the next one waits until the last is standing: they are ready about a second after
+    /// they go live). Starts `mountDelay` into the story, in the quiet night-sky beat, so all four are ready long before the drops fall; never during the 2D animation's busiest beats.
+    private func mountStages() {
         guard !st.mountStarted else { return }
         st.mountStarted = true
         cameraRig.engage()
+        let delay = holdBeat != nil ? 0 : OpeningScript.mountDelay
         st.stageTask = Task { @MainActor in
+            if delay > 0 { try? await Task.sleep(nanoseconds: UInt64(delay * 1e9)) }
             var count = 4
             #if targetEnvironment(simulator)
             if UserDefaults.standard.object(forKey: "OpeningMount") != nil { count = UserDefaults.standard.integer(forKey: "OpeningMount") }          // capture aid: fewer live stages (the simulator is slow)
             #endif
-            for k in 0..<count {                      // one at a time: each builds a real 3D room, so wait for the last one to be standing before the next
+            for k in 0..<count {                      // one at a time
                 guard !Task.isCancelled else { return }
                 st.mounted[k] = true
-                for _ in 0..<(fast ? 20 : 60) where st.models[k] == nil && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }
+                for _ in 0..<100 where st.models[k] == nil && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }          // (a stage that never comes: the next one starts after 10 s)
                 try? await Task.sleep(nanoseconds: 150_000_000)
             }
         }

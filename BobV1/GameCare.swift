@@ -196,6 +196,10 @@ final class GameCare {
     /// under their id (JellyKeys). Care actions (meals, Clean, Come here, voice) still drive Jelly 0 only.
     private(set) var jellies: [JellyProfile] = []
     var jellyCount: Int { jellies.count }
+    /// A showcase stand-in (see `init(preview:)`): no save, no night routine, no widget, and none of the process-wide audio hooks.
+    @ObservationIgnored private(set) var isPreview = false
+    /// The opening story mounts its Jelbies long before they pop: no arrival chirp until the story says so.
+    @ObservationIgnored var silentArrival = false
     /// The characters in the room, by slot (JellyRoster).
     var roster: [Int] { jellies.map(\.character) }
     /// Phase A: the care menu (Feed / Drink / Come here / Clean) always acts on Bob, so it stays visible with several Jellies instead of waiting for a selection.
@@ -244,7 +248,11 @@ final class GameCare {
     /// `jellyCount`: Jellies in the room (1...3), the first that many of `JellyRoster.current`; `roster` names the characters by slot instead
     /// (SetRosterTests). `persistent: false` keeps the slots after 0 in memory (tests); `defaults` is where they save.
     /// Slot 0 wraps the legacy objects (`needs`, `bath.grime`, the voice training) under ITS CHARACTER's keys: with Bob there they are the old keys.
-    init(voice: VoiceCoordinator? = nil, jellyCount: Int = 1, roster: [Int]? = nil, persistent: Bool = true, defaults: UserDefaults = .standard) {
+    init(voice: VoiceCoordinator? = nil, jellyCount: Int = 1, roster: [Int]? = nil, persistent: Bool = true, defaults: UserDefaults = .standard, preview: Bool = false) {
+        // `preview` (the opening story, the first-gift picker and the Jelly Spring showcase): a stand-in for the Jelbie, fresh and fully in memory. Nothing is read from or
+        // written to the save (needs, dirt, stats, perks, words, the store, the wallet, the saved room and decor), there is no time away, and he starts happy.
+        let persistent = persistent && !preview
+        isPreview = preview
         var chars: [Int]
         if let roster { chars = JellyRoster.sanitised(roster) }
         else {
@@ -254,19 +262,19 @@ final class GameCare {
             chars = JellyRoster.sanitised(chars)
         }
         let c0 = chars[0]
-        needs = c0 == 0 ? BlobNeeds() : BlobNeeds(defaults: defaults, key: JellyKeys.needs(c0), persists: persistent)
-        bath = BathFlow(grimeKey: c0 == 0 ? nil : JellyKeys.grime(c0), grimeSeed: 0xB47B &+ UInt32(c0) &* 7919)
+        needs = (c0 == 0 && !preview) ? BlobNeeds() : BlobNeeds(defaults: defaults, key: JellyKeys.needs(c0), persists: persistent)
+        bath = BathFlow(persists: preview ? false : nil, grimeKey: (c0 == 0 && !preview) ? nil : JellyKeys.grime(c0), grimeSeed: 0xB47B &+ UInt32(c0) &* 7919)
         group = DiningGroup(dining: dining, shared: true)
-        store = StoreBook(wallet: bath.wallet, persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
-        let v = voice ?? VoiceCoordinator(training: c0 == 0 ? nil : VoiceTraining(defaults: defaults, key: JellyKeys.words(c0), name: JellyRoster.names[c0], persists: persistent))
+        store = StoreBook(wallet: bath.wallet, persists: !preview && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
+        let v = voice ?? VoiceCoordinator(training: (c0 == 0 && !preview) ? nil : VoiceTraining(defaults: defaults, key: JellyKeys.words(c0), name: JellyRoster.names[c0], persists: persistent), ai: preview ? AIHub(model: nil) : nil)
         self.voice = v
         upgrades = UpgradeBook(persists: persistent && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, defaults: defaults)
         v.care = self
         bath.wallet.onEarn = { [weak self] _ in self?.brainFor(0)?.wantJoy() }          // drops earned: a jump for joy
         let n = chars.count
-        let stats0: JellyStats? = c0 == 0 ? nil : JellyStats(persists: persistent, defaults: defaults, key: JellyKeys.stats(c0),
+        let stats0: JellyStats? = (c0 == 0 && !preview) ? nil : JellyStats(persists: persistent, defaults: defaults, key: JellyKeys.stats(c0),
                                                                 seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }))
-        let perks0: JellyPerks? = c0 == 0 ? nil : JellyPerks(persists: persistent, defaults: defaults, key: JellyKeys.perks(c0))
+        let perks0: JellyPerks? = (c0 == 0 && !preview) ? nil : JellyPerks(persists: persistent, defaults: defaults, key: JellyKeys.perks(c0))
         jellies = [JellyProfile(id: 0, character: c0, name: JellyRoster.names[c0], needs: needs, grime: bath.grime, training: v.training, stats: stats0, perks: perks0)]
             + chars.dropFirst().enumerated().map { JellyProfile(id: $0.offset + 1, character: $0.element, name: JellyRoster.names[$0.element], persists: persistent, defaults: defaults) }
         if n > 1 { select.setBlobs(JellyRoster.selectBlobs(roster: chars)) }
@@ -275,7 +283,7 @@ final class GameCare {
         bath.success = { [weak self] in UINotificationFeedbackGenerator().notificationOccurred(.success); self?.soapFinished() }
         store.rosterCharacters = { [weak self] in self?.jellies.map(\.character) ?? [0] }
         for j in jellies { let c = j.character; j.training.unlocked = { [weak self] t in self?.store.knows(t, character: c) ?? TrickCatalog.isDefault(t) } }          // what each Jelbie knows (Store/TrickCatalog.swift)
-        migrateTricks(defaults: defaults)
+        if !preview { migrateTricks(defaults: defaults) }
         if let ps = bath.sound as? BathSilence { ps.muted = { [weak self] in self?.voice.isListening ?? false } }
         wireRace()
         wireShow()
@@ -283,8 +291,12 @@ final class GameCare {
         wirePark()
         wireGroom()
         wireVolley()
-        applySavedRoom()
-        DecorField.shared.set(store.placedDecor)
+        if preview {
+            for j in jellies { for k in NeedKind.allCases { j.needs.set(k, 1) } }          // happy and rested: he comes when asked and never wants anything while he is on show
+        } else {
+            applySavedRoom()
+            DecorField.shared.set(store.placedDecor)          // (process-wide: a preview must not wipe the real room's decor)
+        }
         if persistent { MemoryPressure.register("care.save") { [weak self] in          // a memory warning: write needs and grime now (the OS may end the app next); the away stamp is NOT touched
             guard let self else { return false }
             for j in self.jellies { j.needs.save(); j.grime.save() }
@@ -602,8 +614,8 @@ final class GameCare {
     func enterFocus(brain: BlobBrain) {
         if !focusGroup.arrived.contains(0) { savedAutonomy = brain.autonomy }          // (once: in a group he waits here for the others and this is asked again, which would save the `false` set below)
         brain.autonomy = false                       // he stays on the front spot until released
-        if focusGroup.markArrived(0) { focus.arrive() }
-        AudioHub.shared.chirp(jelly: 0, .happy, src: "greet")
+        if focusGroup.markArrived(0) { focus.arrive(snap: isPreview) }
+        if !silentArrival { AudioHub.shared.chirp(jelly: 0, .happy, src: "greet") }          // (the opening story's Jelbies stay quiet until their drop pops)
     }
 
     /// Focus bookkeeping per fixed step: a stuck walk is retried, the camera spring runs, release hops and resumes roaming.
@@ -799,13 +811,12 @@ final class GameCare {
         HopDiag.lap(.careFocus, &ht)
         tickNeeds(brain: brain, sim: sim, dt: dt)
         HopDiag.lap(.careNeeds, &ht)
-        widget.tick(dt: dt) { widgetInputs() }
+        if !isPreview { widget.tick(dt: dt) { widgetInputs() } }          // (the widget shows the real Jelbies, never a preview's)
         HopDiag.lap(.careWidget, &ht)
         // selecting / highlighting never wakes a sleeper (a poke does: `pokeSleeper`); the night-rest rules decide who goes to bed
         for a in raceBook.actors { a.brain?.selectedNow = (a.id == select.selectedID) }
         selectWokeFor = select.selectedID
-        tickNightRest(dt: dt)
-        tickNightSkip(dt: dt)
+        if !isPreview { tickNightRest(dt: dt); tickNightSkip(dt: dt) }          // (a preview is always awake)
         HopDiag.lap(.careNight, &ht)
         LaunchTiming.mark("first stage tick"); LaunchGate.shared.stageTicked(); ResumeFrames.ticks &+= 1
         select.tick(dt: dt)
@@ -813,7 +824,7 @@ final class GameCare {
         if select.hopRequest == 0, let id = select.takeHopRequest(), id == 0, let sim, !focus.isActive, !brain.isSleeping { brain.startHopPlay(sim: sim, distance: 0.0001) }   // "he hops" (Bob; the others' hop is `tickOthers`)
         if !hooked {
             hooked = true
-            AudioHub.shared.onSnore = { [weak self] i in self?.sleepMasks.snore(i) }
+            if !isPreview { AudioHub.shared.onSnore = { [weak self] i in self?.sleepMasks.snore(i) } }          // (process-wide: the real room's hook stays)
             brain.onFinished = { [weak self] r in self?.finished.append(r) }
             wireWorld(brain, isBob: true)
         }
