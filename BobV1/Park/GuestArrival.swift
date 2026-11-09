@@ -19,6 +19,8 @@ import QuartzCore
 
 nonisolated enum ArrivalTuning {
     static let card: Float = 0.6, build: Float = 1.1, runIn: Float = 1.8, hug: Float = 2.6, done: Float = 3.4
+    /// A bought Jelbie runs in later than a friend does: his card ("Ding dong! <name> is here") stays up about 2 s so a child can read it.
+    static let newcomerRunIn: Float = 2.6
     static let dim = 0.25, dimFade = 0.3
     static let welcomeLife = 1.2
     static let happyHold: Float = 2
@@ -37,7 +39,7 @@ nonisolated struct ArrivalClock: Sendable {
     /// A bought Jelbie's arrival (GameCare+Newcomer.swift): the same doorbell, card and run-in; his body exists already, so there is no "getting the room ready" step, and the
     /// hug / party that follow are the welcome's own sequence (the clock ends once he is on his way).
     static let newcomerSchedule: [(at: Float, event: ArrivalEvent)] = [
-        (0, .doorbell), (ArrivalTuning.card, .showCard), (ArrivalTuning.runIn, .hideCard), (ArrivalTuning.runIn, .runIn), (ArrivalTuning.runIn + 0.1, .finished),
+        (0, .doorbell), (ArrivalTuning.card, .showCard), (ArrivalTuning.newcomerRunIn, .hideCard), (ArrivalTuning.newcomerRunIn, .runIn), (ArrivalTuning.newcomerRunIn + 0.1, .finished),
     ]
     let plan: [(at: Float, event: ArrivalEvent)]
     private(set) var t: Float = 0

@@ -65,6 +65,7 @@ final class LaunchGate {
     func evaluate() {
         guard visible else { return }
         let t = clock(), shown = t - shownAt
+        if GameCare.newcomerPending, GameCare.newcomerWithOthers, shown < Self.maxShow { return }          // a bought Jelbie is put off-screen by the first step that sees the roster; the room is not shown before (never seen at his spawn spot)
         if shown >= Self.maxShow || (shown >= minNow && ticked && (settleOK || t - settleStart >= Self.settleCap)) { visible = false; LaunchTiming.mark("curtain lifted (room visible)") }
     }
 }

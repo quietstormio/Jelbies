@@ -186,7 +186,7 @@ extension GameCare {
             for aid in book.parked {                 // practising alone: the others wait far off the track, and come back where they stood
                 let a = book.actors[aid]
                 guard let brain = a.brain else { continue }
-                book.homes[aid] = a.floor; book.autonomy[aid] = brain.autonomy; book.arena[aid] = a.sim.arenaRadius
+                book.homes[aid] = a.floor; book.autonomy[aid] = autonomySnapshot(aid, brain); book.arena[aid] = a.sim.arenaRadius
                 a.sim.arenaRadius = .infinity
                 let px = 40 + Float(aid) * 4
                 a.sim.teleport(toXZ: SIMD2(px, RaceTuning.startZ))
@@ -200,7 +200,7 @@ extension GameCare {
                 guard let brain = a.brain else { continue }
                 let r = sim.racers[k]
                 book.homes[aid] = a.floor
-                book.autonomy[aid] = brain.autonomy
+                book.autonomy[aid] = autonomySnapshot(aid, brain)
                 book.arena[aid] = a.sim.arenaRadius
                 a.sim.arenaRadius = .infinity
                 let spot = course.lanePoint(r.lane, at: 0)                  // on the start line of his lane, facing down the course

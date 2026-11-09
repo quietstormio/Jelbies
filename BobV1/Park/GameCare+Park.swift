@@ -291,7 +291,7 @@ extension GameCare {
             if book.comers.isEmpty { book.comers = Array(roster.indices) }
             for a in roster {
                 guard let brain = a.brain else { continue }
-                work.homes[a.id] = a.floor; work.autonomy[a.id] = brain.autonomy; work.arena[a.id] = a.sim.arenaRadius
+                work.homes[a.id] = a.floor; work.autonomy[a.id] = autonomySnapshot(a.id, brain); work.arena[a.id] = a.sim.arenaRadius
                 brain.abortAll(a.sim, a.skinner)
                 brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             }

@@ -29,7 +29,13 @@ import simd
 extension GameCare {
     /// Set by StartFlow.bringHome; the next room's first steps consume it.
     nonisolated(unsafe) static var newcomerPending = false
+    /// Set with it when others are at home: the launch curtain stays up until he has been put off-screen (`LaunchGate.evaluate`), so he is never seen at his spawn spot.
+    nonisolated(unsafe) static var newcomerWithOthers = false
     static let newcomerEdge = SIMD2<Float>(1.1, -2.2)
+
+    /// The autonomy a Jelbie gets back when a close-up, bath, race, outing or trip that snapshots it ends. A bought Jelbie still being welcomed (or healing) is held with
+    /// autonomy off: he is saved as "on" so the restore never leaves him frozen.
+    func autonomySnapshot(_ id: Int, _ b: BlobBrain) -> Bool { newcomerWelcome?.id == id ? true : b.autonomy }
 
     func tickNewcomer(_ actors: [JellyActor], dt: Float) {
         if let w = newcomerWelcome { tickNewcomerWelcome(w, actors, dt: dt); return }
@@ -41,18 +47,24 @@ extension GameCare {
             if n.calm > 0.3 || n.age > 14 || greetBlocked && n.age > 2 { newcomer = nil; raceWelcomeHome(n.id, won: false) } else { newcomer = n }
             return
         }
-        guard Self.newcomerPending, let last = actors.last, actors.count == max(jellies.count, 1), let b = last.brain else { return }
-        if actors.count > 1 {
-            // others at home: the arrival + welcome. A friend's arrival that is on finishes first (the pending flag waits).
-            let g = guestBook
-            guard g.actor == nil, !g.arrival.active, !g.party.active, g.arrivalCard == .hidden else { return }
-            Self.newcomerPending = false
+        guard Self.newcomerPending else { newcomerPendingT = 0; return }
+        // a stale flag never fires later: whatever kept the room from taking him within a few seconds drops it (he is then just a housemate, nothing pops in)
+        newcomerPendingT += dt
+        if newcomerPendingT > 10 { Self.newcomerPending = false; Self.newcomerWithOthers = false; newcomerPendingT = 0; return }
+        let rosterCount = max(jellies.count, 1)
+        // (a sleepover / play friend's body is the actor after the roster: he is not the newcomer)
+        guard actors.count >= rosterCount, actors.indices.contains(rosterCount - 1), let b = actors[rosterCount - 1].brain else { return }
+        let last = actors[rosterCount - 1]
+        if rosterCount > 1 {
+            // others at home: the arrival + welcome. He is taken off-screen on the very first step that sees the roster (the curtain is held for it: `LaunchGate.evaluate`),
+            // whether or not a friend is over; the arrival itself waits in `.holding` for a friend's own arrival / party to be over.
+            Self.newcomerPending = false; Self.newcomerWithOthers = false; newcomerPendingT = 0
             select.cancel()
             beginNewcomerWelcome(actors, last, b)
             return
         }
-        guard !LaunchGate.shared.visible else { return }
-        Self.newcomerPending = false
+        guard actors.count == 1, !LaunchGate.shared.visible else { return }
+        Self.newcomerPending = false; Self.newcomerWithOthers = false; newcomerPendingT = 0
         rehome(last, at: Self.newcomerEdge)
         b.requestNow(.come(to: VoiceCoordinator.comeSpot))
         newcomer = NewcomerWalk(id: last.id)
@@ -61,9 +73,9 @@ extension GameCare {
     // MARK: the arrival and welcome
 
     private func beginNewcomerWelcome(_ actors: [JellyActor], _ na: JellyActor, _ nb: BlobBrain) {
-        let household = Array(actors.dropLast())
-        let target = guestSpotNear(household)
-        let w = NewcomerWelcome(id: na.id, name: jelly(na.id)?.name ?? "Your Jelbie", target: target, quiet: household.contains { $0.brain?.isSleeping == true })
+        let others = actors.filter { $0.id != na.id }          // (a friend over counts for where he stands and for a sleeping house, not for the greetings)
+        let target = guestSpotNear(others)
+        let w = NewcomerWelcome(id: na.id, name: jelly(na.id)?.name ?? "Your Jelbie", target: target, quiet: others.contains { $0.brain?.isSleeping == true })
         rehome(na, at: guestArrivalEntry(toward: target))          // off the left edge, behind the curtain: he is never seen standing in the room first
         nb.autonomy = false; nb.hurry = false
         newcomerWelcome = w
@@ -75,11 +87,19 @@ extension GameCare {
         greetBlocked || tripActive || raceBusy || select.isSelecting || select.sheetOpen || arranging || greeting || roomSwitch.dest != nil || dining.phase != .absent
     }
 
-    func tickNewcomerWelcome(_ w: NewcomerWelcome, _ actors: [JellyActor], dt: Float) {
-        guard actors.count == max(jellies.count, 1), actors.indices.contains(w.id), let nb = actors[w.id].brain else { endNewcomerWelcome(w, actors, interrupted: false); return }
-        let na = actors[w.id]
+    func tickNewcomerWelcome(_ w: NewcomerWelcome, _ all: [JellyActor], dt: Float) {
+        let rosterCount = max(jellies.count, 1)
+        guard all.count >= rosterCount, all.indices.contains(w.id), let nb = all[w.id].brain else { endNewcomerWelcome(w, all, interrupted: false); return }
+        let na = all[w.id]
+        let actors = Array(all.prefix(rosterCount))          // the household: the roster only (a friend over is a watcher, he is not pulled into the hellos, the hug or the dance)
         if w.stage == .healing {
-            if !newcomerInterrupted { nb.autonomy = true; nb.hurry = false; newcomerWelcome = nil }
+            // Heal until nothing that snapshots / restores autonomy is going on (a close-up that began while he was held saved "off" and gives it back when it ends, an
+            // outing likewise) AND his autonomy has stayed on for a full second: it is put right every step until then.
+            let restoring = focus.phase != .roaming || focusGroup.saved[w.id] != nil || bath.active
+            if newcomerInterrupted || restoring { w.healT = 0; return }
+            nb.autonomy = true; nb.hurry = false
+            w.healT += dt
+            if w.healT >= 1 { newcomerWelcome = nil }
             return
         }
         w.t += dt; w.stageT += dt
@@ -93,12 +113,17 @@ extension GameCare {
         // the house went to bed mid-way (a long time in the background): it ends here, nobody is woken
         if !w.quiet, w.stage != .holding, w.stage != .card, w.stage != .runIn, household.contains(where: { $0.brain?.isSleeping == true }) { endNewcomerWelcome(w, actors, interrupted: false); return }
         // queued hearts (the bursts)
-        while let h = w.hearts.first, h.at <= w.t { w.hearts.removeFirst(); newcomerHeart(h.id) }
+        if w.hearts.contains(where: { $0.at <= w.t }) {          // (the bursts are queued out of time order: every one that is due, not just the head)
+            let due = w.hearts.filter { $0.at <= w.t }
+            w.hearts.removeAll { $0.at <= w.t }
+            for h in due { newcomerHeart(h.id) }
+        }
 
         switch w.stage {
         case .holding:
-            if !LaunchGate.shared.visible || w.t > 8 {
-                if w.quiet { startRunIn(w, na, actors) }
+            let friendBusy = g.arrival.active || g.party.active || g.arrivalCard != .hidden          // (a friend's own arrival / party: the card and the room are theirs first)
+            if (!LaunchGate.shared.visible || w.t > 8) && (!friendBusy || w.t > 40) {
+                if w.quiet { startRunIn(w, na, all) }
                 else { _ = w.clock.start(); w.go(.card) }
             }
         case .card:
@@ -107,7 +132,7 @@ extension GameCare {
                 case .doorbell: AudioHub.shared.play(.doorbell)
                 case .showCard: g.arrivalName = w.name; g.arrivalDim = true; g.arrivalCard = .hello          // (the overlay announces "<name> is here" to VoiceOver)
                 case .hideCard: g.arrivalCard = .hidden; g.arrivalDim = false
-                case .runIn: startRunIn(w, na, actors)
+                case .runIn: startRunIn(w, na, all)
                 default: break
                 }
             }
@@ -139,8 +164,8 @@ extension GameCare {
         }
     }
 
-    private func startRunIn(_ w: NewcomerWelcome, _ na: JellyActor, _ actors: [JellyActor]) {
-        arrivalRunIn(na, to: w.target, household: actors, voice: !w.quiet)
+    private func startRunIn(_ w: NewcomerWelcome, _ na: JellyActor, _ everyone: [JellyActor]) {
+        arrivalRunIn(na, to: w.target, household: everyone, voice: !w.quiet)
         if w.quiet { UIAccessibility.post(notification: .announcement, argument: "\(w.name) is here") }
         w.go(.runIn)
     }
@@ -162,7 +187,7 @@ extension GameCare {
             // everyone has said hello: the group moment (a house of two: a second pair emote)
             let awake = actors.filter { $0.brain?.isSleeping == false }
             if awake.count >= 3 || w.round2 { w.go(.group) }
-            else if let only = w.greeters.first { w.round2 = true; w.greeters = [only]; w.greetIndex = 0; w.greetPhase = .gap; w.phaseT = 0 }
+            else if let only = w.greeters.first(where: { actors.indices.contains($0) && actors[$0].brain?.isSleeping == false }) { w.round2 = true; w.greeters = [only]; w.greetIndex = 0; w.greetPhase = .gap; w.phaseT = 0 }
             else { w.go(.group) }
             return
         }
@@ -171,7 +196,11 @@ extension GameCare {
         w.phaseT += dt
         switch w.greetPhase {
         case .gap:
-            if w.phaseT > (w.greetIndex == 0 && !w.round2 ? 0.2 : 0.7) { w.greetPhase = .starting; w.phaseT = 0; w.attempt = 0; w.attemptT = 0 }
+            if w.phaseT > (w.greetIndex == 0 && !w.round2 ? 0.2 : 0.5) {
+                // a welcome that has run long: the later housemates say hello with the quick hop and a heart instead of a whole pair emote (about 25-35 s in all)
+                if w.t > Self.newcomerHelloBudget, !w.round2 { quickHello(w, actors, gid, gb, nb); return }
+                w.greetPhase = .starting; w.phaseT = 0; w.attempt = 0; w.attemptT = 0
+            }
         case .starting:
             w.attemptT -= dt
             if w.attemptT <= 0 {
@@ -184,26 +213,27 @@ extension GameCare {
                     return
                 }
             }
-            if w.phaseT > 4 {          // no pair emote fits right now: a little welcome of their own
-                gb.face(.excited, hold: 2); nb.face(.excited, hold: 2)
-                if gb.fxFree, gb.social == nil { gb.startHopPlay(sim: actors[gid].sim, distance: 0.0001) }
-                AudioHub.shared.chirp(jelly: gid, .happy)
-                w.beatHearts(gid, w.id, at: w.t)
-                w.nextGreeter()
-            }
+            if w.phaseT > 2 { quickHello(w, actors, gid, gb, nb) }          // no pair emote fits right now: a little welcome of their own
         case .running:
             let over = gb.social == nil && nb.social == nil && w.phaseT > 0.4
-            if over || w.phaseT > 12 {
+            if over || w.phaseT > Self.newcomerPairCap {          // (a pair emote that runs past the cap is wound down)
                 if !over { gb.stop(); nb.stop() }
-                if over || w.phaseT > 14 {
-                    // the pair is done: hearts over both, a happy voice each, a small love bump
-                    w.beatHearts(gid, w.id, at: w.t)
-                    AudioHub.shared.chirp(jelly: gid, .happy)
-                    AudioHub.shared.contextVoice(jelly: w.id, .aww, chance: 0.7)
-                    w.nextGreeter()
-                }
+                // the pair is done: hearts over both, a happy voice each, a small love bump
+                w.beatHearts(gid, w.id, at: w.t)
+                AudioHub.shared.chirp(jelly: gid, .happy)
+                AudioHub.shared.contextVoice(jelly: w.id, .aww, chance: 0.7)
+                w.nextGreeter()
             }
         }
+    }
+
+    /// The short hello: both look happy, the housemate hops once, a chirp, hearts over the pair.
+    private func quickHello(_ w: NewcomerWelcome, _ actors: [JellyActor], _ gid: Int, _ gb: BlobBrain, _ nb: BlobBrain) {
+        gb.face(.excited, hold: 2); nb.face(.excited, hold: 2)
+        if gb.fxFree, gb.social == nil, !gb.held { gb.startHopPlay(sim: actors[gid].sim, distance: 0.0001) }
+        AudioHub.shared.chirp(jelly: gid, .happy)
+        w.beatHearts(gid, w.id, at: w.t)
+        w.nextGreeter()
     }
 
     // MARK: the group moment
@@ -239,11 +269,14 @@ extension GameCare {
             if let s = nb.social, s.kind == .groupHug, s.impacted { homecomingPeak(w, actors, na) }
             else if w.party.stage == .dance || w.party.stage == .finale { homecomingPeak(w, actors, na) }
         }
-        if w.t > Self.newcomerBudget { w.party.skipToFinale() }          // about 25-30 s in all: the dance is dropped when the hellos ran long
+        if w.t > Self.newcomerBudget { w.party.skipToFinale() }          // about 25-35 s in all: the dance is dropped when the hellos ran long
         if !w.party.active { endNewcomerWelcome(w, actors, interrupted: false, finished: true) }
     }
     /// Seconds into the welcome after which the ring dance is skipped.
-    static let newcomerBudget: Float = 26
+    static let newcomerBudget: Float = 22
+    /// Past this many seconds into the welcome the next housemate gets the quick hop + heart; a pair emote is wound down after `newcomerPairCap` s.
+    static let newcomerHelloBudget: Float = 14
+    static let newcomerPairCap: Float = 10
 
     /// The soft haptic, the burst of hearts over everyone, the pill and the VoiceOver line.
     private func homecomingPeak(_ w: NewcomerWelcome, _ actors: [JellyActor], _ na: JellyActor) {
@@ -319,6 +352,7 @@ final class NewcomerWelcome {
     var party = GuestParty()
     var greeters: [Int] = [], greetIndex = 0, greetPhase: GreetPhase = .gap, attempt = 0, attemptT: Float = 0
     var round2 = false, peaked = false, announced = false
+    var healT: Float = 0
     var hearts: [(at: Float, id: Int)] = []
 
     init(id: Int, name: String, target: SIMD2<Float>, quiet: Bool) { self.id = id; self.name = name; self.target = target; self.quiet = quiet }

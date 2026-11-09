@@ -176,7 +176,7 @@ extension GameCare {
         }
         for a in book.actors {
             guard let brain = a.brain else { continue }
-            book.autonomy[a.id] = brain.autonomy; book.homes[a.id] = a.floor
+            book.autonomy[a.id] = autonomySnapshot(a.id, brain); book.homes[a.id] = a.floor
             brain.abortAll(a.sim, a.skinner)
             brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             brain.autonomy = false; brain.idleBlocked = true
