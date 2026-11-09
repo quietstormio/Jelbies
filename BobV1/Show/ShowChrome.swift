@@ -410,7 +410,7 @@ struct TrickRound: View {
                                 if rivalsOn { rivalPanel } else {
                                     meters
                                     burst
-                                    menuBox(rowCap: 4)
+                                    menuBox(rowCap: 6)
                                 }
                             }
                             .frame(maxWidth: 560)
@@ -593,14 +593,20 @@ struct TrickRound: View {
                 VStack(spacing: 6) { ForEach(known, id: \.rawValue) { t in row(t, live: live) } }.padding(.vertical, 2)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: Self.menuHeight(rows: rowCap.map { min(known.count, $0) } ?? known.count, compact: compact, scale: sc))
+            .frame(maxHeight: Self.menuHeight(rows: rowCap.map { min(known.count, $0) } ?? known.count, compact: compact, scale: sc, cap: rowCap))
+            .mask(alignment: .top) {
+                // iPad landscape column: a soft bottom fade hints that more rows scroll (only when the list is longer than the cap)
+                if let cap = rowCap, known.count > cap {
+                    VStack(spacing: 0) { Rectangle(); LinearGradient(colors: [.black, .black.opacity(0.1)], startPoint: .top, endPoint: .bottom).frame(height: 22) }
+                } else { Rectangle() }
+            }
         }
         .accessibilityIdentifier("trick-cards")
     }
     /// Four rows show at once (a phone on its side fewer); more scroll.
-    static func menuHeight(rows: Int, compact: Bool, scale: CGFloat = 1) -> CGFloat {
+    static func menuHeight(rows: Int, compact: Bool, scale: CGFloat = 1, cap: Int? = nil) -> CGFloat {
         let row: CGFloat = (compact ? 46 : 56) * scale, gap: CGFloat = 6
-        let shown = CGFloat(min(max(rows, 1), compact ? 3 : (scale > 1 ? 5 : 4)))
+        let shown = CGFloat(min(max(rows, 1), cap ?? (compact ? 3 : (scale > 1 ? 5 : 4))))
         return shown * row + (shown - 1) * gap + 4
     }
     private func row(_ t: VoiceTrick, live: Bool) -> some View {

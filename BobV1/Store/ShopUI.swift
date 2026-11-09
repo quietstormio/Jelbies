@@ -254,7 +254,7 @@ struct ItemSheet: View {
                 VStack(spacing: 0) {
                     ScrollView {
                         VStack(spacing: 12) {
-                            ItemPicture(care: care, item: item, who: who, size: isTrick ? 90 : 175).padding(.top, 34)
+                            ItemPicture(care: care, item: item, who: who, size: isTrick ? 68 : 130).padding(.top, 34)
                             Text(item.name).font(SK.font(26, .black)).foregroundStyle(SK.ink)
                             Text(item.description).font(SK.font(15, .semibold)).foregroundStyle(SK.muted).multilineTextAlignment(.center).padding(.horizontal, 24)
                             effectCard.padding(.horizontal, 16)
@@ -262,6 +262,11 @@ struct ItemSheet: View {
                         .padding(.bottom, 12)
                     }
                     .scrollBounceBehavior(.basedOnSize)
+                    .scrollIndicators(.visible)
+                    .scrollIndicatorsFlash(onAppear: true)
+                    .mask(alignment: .top) {
+                        VStack(spacing: 0) { Rectangle(); LinearGradient(colors: [.black, .black.opacity(0.15)], startPoint: .top, endPoint: .bottom).frame(height: 18) }
+                    }
                     buySection.padding(.top, 8).padding(.bottom, 24)
                 }
             } else {
