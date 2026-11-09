@@ -43,10 +43,13 @@ enum PeakTuning {
     nonisolated(unsafe) static var sqBase: Float = env("PEAK_SQ0", 0.015)
     nonisolated(unsafe) static var sqPerM: Float = env("PEAK_SQK", 1.5)
     static let rest: Float = -0.006          // (a hair deeper than the stance's -0.4 cm: the approach is asymptotic, and the touch gate fires at +0.5 cm)
+    /// Per-kind rest: the bump's squash bulge and the skin trailing the lean add ~0.3 cm of press on top of the lean's rest (measured: deepest -0.88 cm with -0.6), so its lean stops at -0.3 and the deepest frame lands in the approved -0.3..-0.6 band.
+    nonisolated(unsafe) static var bumpRest: Float = env("PEAK_BUMP_REST", -0.003)
+    static func rest(for k: SocialKind) -> Float { k == .bump ? bumpRest : rest }
 
     /// The range the drive's toward-partner lean (rad, excluding the engine's own `trim`) may take when the body now leans `now` rad toward the partner with the live skin gap `gap` (m): in at most up to
     /// contact (`rest`), away at most up to `openCap`. Both bodies lean, so the skin travel per radian is twice `reachPerRad`.
-    static func leanBounds(now: Float, trim: Float, gap: Float, openCap open: Float? = nil) -> (maxOut: Float, maxIn: Float) {
+    static func leanBounds(now: Float, trim: Float, gap: Float, openCap open: Float? = nil, rest: Float = PeakTuning.rest) -> (maxOut: Float, maxIn: Float) {
         let per = reachPerRad * 2
         let openCap = open ?? Self.openCap
         // (relaxing back to neutral is never blocked: the away bound only stops a lean that is already away from going further)
@@ -76,7 +79,7 @@ extension BlobBrain {
         let book = socialBook
         let wantM = book.wantPitch * uy - book.wantRoll * ux
         let nowM = book.pitch * uy - book.roll * ux
-        let b = PeakTuning.leanBounds(now: nowM, trim: book.leanTrim, gap: gap, openCap: PeakTuning.openCapByKind[s.kind] ?? PeakTuning.openCap(for: s.kind))
+        let b = PeakTuning.leanBounds(now: nowM, trim: book.leanTrim, gap: gap, openCap: PeakTuning.openCapByKind[s.kind] ?? PeakTuning.openCap(for: s.kind), rest: PeakTuning.rest(for: s.kind))
         var m = wantM
         if m > b.maxIn { m = b.maxIn }
         if m > PeakTuning.leanCap { m = PeakTuning.leanCap }

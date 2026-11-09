@@ -17,6 +17,11 @@
 import Foundation
 import simd
 
+/// The bump's strike (driveBump).
+enum BumpTuning {
+    nonisolated(unsafe) static var kickScale: Float = PeakTuning.env("BUMP_KICK", 0.5)
+}
+
 extension BlobBrain {
     // MARK: choosing
 
@@ -233,7 +238,8 @@ extension BlobBrain {
             if isA {
                 if !s.impacted, t >= 0.12 {
                     s.impacted = true
-                    jellyKick = max(jellyKick, impactKick(2.8)); o.jellyKick = max(o.jellyKick, impactKick(2.8))
+                    // (the impact kick is a skin displacement: at the full 0.8 it dipped the skins to -0.8 cm for a frame or two at the strike, past the approved -0.3..-0.6 press; half of it reads the same and stays in the band)
+                    jellyKick = max(jellyKick, impactKick(2.8) * BumpTuning.kickScale); o.jellyKick = max(o.jellyKick, impactKick(2.8) * BumpTuning.kickScale)
                     contactBoopFallback(o)
                     contactCueFallback(o, .boop, 0.9)
                 }
