@@ -97,6 +97,8 @@ struct EarsSettingsRow: View {
     let ears: Ears
     /// A phone on its side: smaller text, no extra spacing.
     var tight = false
+    /// Opens the Shop (on the Tricks tab) from the locked row. Nil where the screen has no Shop route (Park, Café): the button is left out.
+    var goShop: (() -> Void)? = nil
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
     private var tint: Color { ThemeStore.shared.controlAccent }
 
@@ -115,6 +117,17 @@ struct EarsSettingsRow: View {
                     .foregroundStyle(ink.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("sound-ears-locked-text")
+                if let goShop {
+                    Button { AudioHub.shared.uiTap(); goShop() } label: {
+                        Label("Go to Shop", systemImage: "bag.fill")
+                            .jFont(14, .semibold)
+                            .foregroundStyle(tint)
+                            .frame(minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("sound-ears-go-shop")
+                }
             } else {
             Toggle(isOn: on) {
                 Label("Ears", systemImage: "ear.fill").jFont(15, .semibold).foregroundStyle(ink)

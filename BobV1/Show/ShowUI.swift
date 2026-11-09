@@ -33,6 +33,13 @@ enum ShowUI {
 }
 
 /// A round dark card header: back, a title (cream on the dark hall) and a trailing view.
+extension GameCare {
+    /// The name to show for the Jelbie `who`: theirs, else the selected one's, else the first on the roster, else "Your Jelbie". (Never a made-up default.)
+    func rosterName(_ who: Int) -> String {
+        jelly(who)?.name ?? jelly(targetJelly)?.name ?? jellies.first?.name ?? "Your Jelbie"
+    }
+}
+
 struct ShowHeader<Trailing: View>: View {
     var title: String
     var kicker: String? = nil
@@ -495,7 +502,7 @@ struct StudioScreen: View {
             LobbyStatRow(label: "Diet", value: 0.7 * main + 0.3 * friend, color: SK.mint, note: "\(theme.main.title) \(ShowUI.pts(main)) \u{00B7} \(theme.friend.title) \(ShowUI.pts(friend))"),
             LobbyStatRow(label: "Score", value: Float(fc.total) / 300, color: SK.pinkStrong, note: "about \(fc.total) of 300\nrivals about \(fc.rivals)"),
         ])], id: "studio-ready", trailing: {
-            Button { AudioHub.shared.uiTap(); card() } label: { Text("\(p?.name ?? "Bob")'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44) }
+            Button { AudioHub.shared.uiTap(); card() } label: { Text("\(care.rosterName(who))'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44) }
                 .buttonStyle(.plain).padding(.vertical, -10).accessibilityIdentifier("studio-card")
         }, footer: {
             HStack(spacing: 7) {
@@ -620,7 +627,7 @@ struct ConditionScreen: View {
     }
 
     private func jars(_ p: JellyProfile?) -> some View {
-        let name = p?.name ?? "Bob"
+        let name = care.rosterName(who)
         let meal = lastMeal(p)
         let glow = p?.grime.sparkle ?? 0
         let levels = WearTag.jarOrder.map { p?.stats.condition($0.condition) ?? 0 }
@@ -662,7 +669,7 @@ struct ConditionScreen: View {
             VStack(spacing: 2) {
                 Text("Strongest: \(strongest.title) \u{00B7} Weakest: \(weakest.title)").font(SK.font(15, .black)).foregroundStyle(SK.ink)
                 if let target { Text("Gold dashed line: \(target.rank.title) target").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
-                else { Text("Every rank is open. Keep him fed and shiny!").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
+                else { Text("Every rank is open. Keep your Jelbie fed and shiny!").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
             }
             .accessibilityIdentifier("condition-summary")
         }
@@ -790,7 +797,7 @@ struct FoodDiarySheet: View {
                 Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("diary-close")
             }
-            if meals.isEmpty { Text("Nothing eaten from the bag yet. Store foods fill his jars: sushi is Sparkly, donuts are Sweet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true) }
+            if meals.isEmpty { Text("Nothing eaten from the bag yet. Store foods fill the jars: sushi is Sparkly, donuts are Sweet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true) }
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
@@ -827,7 +834,7 @@ struct TrophiesSheet: View {
         let t = care.show.progress.trophies(character: care.jelly(who)?.character ?? who)
         ScrollView(showsIndicators: false) { VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("\(care.jelly(who)?.name ?? "Bob")'s trophies").font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                Text("\(care.rosterName(who))'s trophies").font(SK.font(26, .black)).foregroundStyle(SK.ink)
                 Spacer()
                 Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("trophies-close")

@@ -269,7 +269,11 @@ final class Ears {
     private(set) var dancingIDs: [Int] = []
     @ObservationIgnored private var engine: AVAudioEngine?
     @ObservationIgnored private var pipeline: EarsPipeline?
+    /// The engine's own configuration-change observer: made with each engine, dropped with it.
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    /// The AVAudioSession interruption and media-services-reset observers: registered once in `init`, kept for Ears' whole lifetime
+    /// (a stopped engine must still hear the interruption END, or Ears stays paused after a phone call).
+    @ObservationIgnored private var lifeObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var sessionUp = false
     @ObservationIgnored private var jellies: [EarsReactor.Jelly] = []
     @ObservationIgnored private var injected: [EarEvent] = []
@@ -301,6 +305,7 @@ final class Ears {
         self.inert = inert ?? (env["XCTestConfigurationFilePath"] != nil || defaults.string(forKey: "EarsDemo") != nil)
         reactor.onDance = { [weak self] on in self?.danceHook(on) }
         if self.inert, defaults.string(forKey: "EarsDemo") != nil { applyDemo(defaults.string(forKey: "EarsDemo") ?? "") }
+        if !self.inert { observeSession() }
     }
     nonisolated deinit {}
 
@@ -498,14 +503,33 @@ final class Ears {
         observers.append(nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: e, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in self?.restart(reason: "route / configuration change") }
         })
-        observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
+    }
+
+    /// Session-wide observers (see `lifeObservers`). Never removed by `stopEngine`.
+    private func observeSession() {
+        let nc = NotificationCenter.default
+        lifeObservers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
             let type = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init)
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if type == .began { self.stopEngine(); self.state = .paused(.interrupted); self.note("interrupted") }
-                else if type == .ended { self.restart(reason: "interruption ended") }
-            }
+            let opts = AVAudioSession.InterruptionOptions(rawValue: (n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt) ?? 0)
+            Task { @MainActor [weak self] in self?.interruption(type, shouldResume: opts.contains(.shouldResume)) }
         })
+        lifeObservers.append(nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.restart(reason: "media services reset") }
+        })
+    }
+
+    /// An audio interruption (a call, Siri, an alarm): the engine stops at the start; at the end it comes back if the system says to resume.
+    func interruption(_ type: AVAudioSession.InterruptionType?, shouldResume: Bool) {
+        switch type {
+        case .began:
+            guard wantsEngine, foreground, !voiceHeld, engine != nil || starting else { return }          // (nothing running: a background / voice pause stands)
+            stopEngine(); state = .paused(.interrupted); note("interrupted")
+        case .ended:
+            guard state == .paused(.interrupted) else { return }
+            if shouldResume { restart(reason: "interruption ended") }
+            else { note("interruption ended, no resume asked: waits for the app to come forward") }
+        default: break
+        }
     }
 
     private func restart(reason: String) {

@@ -10,6 +10,7 @@ struct SoundSettingsPanel: View {
     @Bindable var hub: AudioHub
     var ears: Ears = .shared
     var nowPlaying: NowPlaying? = nil          // override for captures / tests (the XCTest hub is muted)
+    var goShop: (() -> Void)? = nil          // the locked Ears row's "Go to Shop"
     var openExtras: (() -> Void)? = nil          // the "Siri and Lock Screen" row (opens AppleExtrasPanel)
     var close: () -> Void
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side (~400 pt tall): a tighter layout
@@ -32,7 +33,7 @@ struct SoundSettingsPanel: View {
             nowPlayingRow
             row("Sound effects", symbol: "speaker.wave.2.fill", on: $hub.settings.sfxOn, volume: $hub.settings.sfxVolume, id: "sfx")
             Divider().overlay(ink.opacity(0.2))
-            EarsSettingsRow(ears: ears, tight: tight)
+            EarsSettingsRow(ears: ears, tight: tight, goShop: goShop)
             if let openExtras {
                 Divider().overlay(ink.opacity(0.2))
                 Button(action: openExtras) {

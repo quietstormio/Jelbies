@@ -81,7 +81,7 @@ nonisolated struct StoreItem: Identifiable, Sendable {
     /// A room to live in (Room/RoomDef.swift).
     var room: RoomID? = nil
     /// Bought once and kept (pages, wearables, rooms; decor placement is part B) as opposed to stacked and used up.
-    var unique: Bool { kind == .trickPage || kind == .shoes || kind == .wear || kind == .room }
+    var unique: Bool { kind == .trickPage || kind == .shoes || kind == .wear || kind == .room || kind == .toy }
     /// A wearable that is earned, not sold (the winner medal): never listed in the shop.
     var awarded = false
     var isWearable: Bool { kind == .shoes || kind == .wear }
@@ -127,8 +127,8 @@ nonisolated enum StoreCatalog {
 
     private static let base: [StoreItem] = [
         // food (hand-held, tossed into his mouth). Berries and pizza are the everyday basics: cheap, no perk.
-        StoreItem(id: "berries", name: "Berries", kind: .food, price: 4, perk: nil, description: "Sweet and simple. Fills his tummy a little.", symbol: "circle.hexagongrid.fill", food: "berries"),
-        StoreItem(id: "pizza", name: "Pizza", kind: .food, price: 8, perk: nil, description: "A cheesy slice. Fills his tummy and cheers him up.", symbol: "triangle.fill", food: "pizza"),
+        StoreItem(id: "berries", name: "Berries", kind: .food, price: 4, perk: nil, description: "Sweet and simple. Fills a Jelbie's tummy a little.", symbol: "circle.hexagongrid.fill", food: "berries"),
+        StoreItem(id: "pizza", name: "Pizza", kind: .food, price: 8, perk: nil, description: "A cheesy slice. Fills a Jelbie's tummy and cheers them up.", symbol: "triangle.fill", food: "pizza"),
         StoreItem(id: "nuggets", name: "Chicken nuggets", kind: .food, price: 12, perk: .fullBelly, description: "Crispy and filling. Hunger falls slower for 4 hours.", symbol: "fork.knife", food: "nuggets"),
         StoreItem(id: "fries", name: "Fries", kind: .food, price: 10, perk: .bouncy, description: "Salty and fun. More bouncing for an hour.", symbol: "fork.knife", food: "fries"),
         StoreItem(id: "sushi", name: "Sushi roll", kind: .food, price: 18, perk: .cozy, description: "Calm and cozy. Stays happy longer for 4 hours.", symbol: "fork.knife", food: "sushi"),

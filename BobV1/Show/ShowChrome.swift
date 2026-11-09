@@ -590,7 +590,7 @@ struct TrickRound: View {
         }
         .buttonStyle(.plain).disabled(!live)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(t.title), \(stars) star\(stars == 1 ? "" : "s"), \(pts) points\(tag.map { ", matches \($0.title)" } ?? "")\(used ? ", shown already" : "")\(scope.map { $0 == .everyone ? ", a trick for everyone" : ", his own trick" } ?? "")")
+        .accessibilityLabel("\(t.title), \(stars) star\(stars == 1 ? "" : "s"), \(pts) points\(tag.map { ", matches \($0.title)" } ?? "")\(used ? ", shown already" : "")\(scope.map { $0 == .everyone ? ", a trick for everyone" : ", one Jelbie's own trick" } ?? "")")
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("trick-\(t.rawValue)")
     }
