@@ -300,6 +300,13 @@ nonisolated enum ParkPool {
         return changed
     }
 
+    /// Only plain Latin text is shown (the deny list is English): ASCII, Latin letters with accents and curly quotes. Emoji and other scripts are rejected.
+    private static func allowedScalar(_ u: Unicode.Scalar) -> Bool {
+        if u.value < 0x80 { return true }
+        if u.properties.isEmojiPresentation { return false }
+        return (0xC0...0x24F).contains(u.value) || (0x2018...0x201D).contains(u.value) || u.value == 0x2026
+    }
+
     /// A line made safe to show: one short line of plain text that passes the deny list (ParkTextSafety). Names are letters and spaces only.
     /// nil means "use the hand-written words".
     static func clean(_ raw: String, limit: Int, isName: Bool = false) -> String? {
@@ -308,6 +315,7 @@ nonisolated enum ParkPool {
         t = t.split(whereSeparator: { $0 == " " }).joined(separator: " ")
         let cap = isName ? min(limit, 12) : min(limit, 60)
         guard !t.isEmpty, t.count <= cap, !t.lowercased().contains("http"), !t.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }),
+              !t.unicodeScalars.contains(where: { !allowedScalar($0) }),
               ParkTextSafety.isSafe(t, isName: isName) else { return nil }
         return t
     }

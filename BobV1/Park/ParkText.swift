@@ -18,7 +18,11 @@ nonisolated struct ParkWrittenText: Sendable {
 @MainActor
 enum ParkText {
     /// The model can be asked right now (Apple Intelligence on, downloaded). `-VoiceNoModel 1` turns it off here too.
-    static var available: Bool { AIAvailability.shared.refresh().isAvailable }
+    /// English only: the deny list (ParkTextSafety) is English, so in any other language the model is not asked and the hand-written words stand.
+    static var available: Bool {
+        guard Locale.current.language.languageCode?.identifier == "en" else { return false }
+        return AIAvailability.shared.refresh().isAvailable
+    }
 
     private static let instructions = """
     You write tiny bits of text for cute jelly pet creatures in a kids' game. Keep everything gentle, kind and silly. \
