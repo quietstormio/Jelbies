@@ -163,10 +163,13 @@ final class VolleyFlow {
         switch mode {
         case .match(let t):
             let win = s.humanTeamWon
-            earned = Int((Float(VolleyTuning.drops(win: win, tier: t)) * assistFactor).rounded(.down))
+            // a loss only pays (and only counts toward the close-loss unlock and Upgrade points) when the player really played
+            let played = win || s.humanPlayed
+            let close = played && s.closeLoss
+            earned = played ? Int((Float(VolleyTuning.drops(win: win, tier: t)) * assistFactor).rounded(.down)) : 0
             wallet?.add(earned)
-            unlockedNow = book.finishMatch(character: playerCharacter, tier: t, win: win, closeLoss: s.closeLoss)
-            awardPoints(win: win, closeLoss: s.closeLoss)
+            unlockedNow = book.finishMatch(character: playerCharacter, tier: t, win: win, closeLoss: close)
+            if played { awardPoints(win: win, closeLoss: close) }
             if win, let tb = trophies { awards = tb.recordVolleyWin(character: playerCharacter, tier: t) }
             A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) JellyCoins" : "They won \(s.score[1]) to \(s.score[0]). \(earned) JellyCoins", .high)
             if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }

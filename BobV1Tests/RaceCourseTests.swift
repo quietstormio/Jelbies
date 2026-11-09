@@ -340,8 +340,8 @@ final class CourseProgressionTests: XCTestCase {
         XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .puddle) }, [250, 140, 75])
         XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .ripple) }, [350, 190, 100])
         XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .splash) }, [500, 275, 150])
-        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .wave) }, [750, 400, 225])
-        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .tsunami) }, [1500, 825, 450])
+        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .wave) }, [600, 330, 180])
+        XCTAssertEqual([1, 2, 3].map { RaceTuning.drops(place: $0, tier: .tsunami) }, [750, 420, 225])
         for p in 1...3 { for t in CourseTier.allCases.dropFirst() { XCTAssertGreaterThan(RaceTuning.drops(place: p, tier: t), RaceTuning.drops(place: p, tier: t.below!)) } }
         XCTAssertEqual(RaceTuning.drops(place: 7, tier: .wave), 225)
         XCTAssertEqual(CourseTier.allCases.map(\.className), ["Starter", "Rookie", "Pro", "Champion", "Legend"])
@@ -414,9 +414,9 @@ final class CourseProgressionTests: XCTestCase {
         run(f, course: .splash)
         XCTAssertEqual(w.count, 250 + 350 + 500); XCTAssertEqual(f.unlockedNow, .wave)
         run(f, course: .wave)
-        XCTAssertEqual(w.count, 250 + 350 + 500 + 750); XCTAssertEqual(f.unlockedNow, .tsunami)
+        XCTAssertEqual(w.count, 250 + 350 + 500 + 600); XCTAssertEqual(f.unlockedNow, .tsunami)
         run(f, course: .tsunami)
-        XCTAssertEqual(w.count, 250 + 350 + 500 + 750 + 1500); XCTAssertNil(f.unlockedNow, "nothing left to open")
+        XCTAssertEqual(w.count, 250 + 350 + 500 + 600 + 750); XCTAssertNil(f.unlockedNow, "nothing left to open")
         XCTAssertEqual(f.progress.unlockedTiers, CourseTier.allCases)
         // GameCare's pick refuses a locked course and takes an open one
         let care = GameCare(jellyCount: 1, persistent: false)
