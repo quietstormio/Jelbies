@@ -90,6 +90,8 @@ enum PrivacyText {
             "Apple may download its speech model once over the internet. That download is done by iOS, not by Jelbies, and no game data goes with it."]),
         InfoSection(heading: "Photos", paragraphs: [
             "Photos taken in Photo mode stay inside the app. They only leave it if you choose to save them to your Photos or share them."]),
+        InfoSection(heading: "Grown-up check", paragraphs: [
+            "Anything that leaves the game is behind a grown-up hold button: sharing photos, opening the phone's Settings or Shortcuts, and emailing Support."]),
         InfoSection(heading: "Names and saves", paragraphs: [
             "The names you type and everything your Jelbies have earned stay on this phone."]),
         InfoSection(heading: "Widgets and Live Activities", paragraphs: [

@@ -5,3 +5,7 @@ __pycache__/
 dd_*/
 *.xcresult/
 DerivedData/
+
+# Xcode per-user data (never commit)
+xcuserdata/
+*.xcuserdatad/

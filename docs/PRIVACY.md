@@ -13,6 +13,9 @@ The microphone is only used while you hold the mic button, or while the optional
 ## Photos
 Photos taken in Photo mode stay inside the app. They only leave it if you choose to save them to your Photos or share them.
 
+## Grown-up check
+Anything that leaves the game is behind a grown-up hold button: sharing photos, opening the phone's Settings or Shortcuts, and emailing Support.
+
 ## Names and saves
 The names you type and everything your Jelbies have earned stay on this phone.
 

@@ -18,3 +18,5 @@ Open Settings in the game and tap Reset save, then hold the red button. This era
 
 ## Email us
 dione@mgsllc.io
+
+The app also has a **Write to us** button next to the address. It opens an email to the same address, after a grown-up holds the button.

@@ -405,7 +405,7 @@ final class BathFlow {
 
     /// What the prompt says while a stage is being worked, and once its goal is met.
     static func workPrompt(_ p: BathPhase) -> String? {
-        switch p { case .soap: return "Scrub on the jelly soap"; case .rinse: return "Rinse all the suds off"; case .shine: return "Rub to shine him up"; case .finish: return "Sparkling clean!"; default: return nil }
+        switch p { case .soap: return "Scrub on the jelly soap"; case .rinse: return "Rinse all the suds off"; case .shine: return "Rub to make it shine"; case .finish: return "Sparkling clean!"; default: return nil }
     }
     static func completePrompt(_ p: BathPhase) -> String? {
         switch p { case .soap: return "All soapy! Tap Next"; case .rinse: return "Squeaky clean! Tap Next"; case .shine: return "So shiny! Tap Next"; default: return nil }
