@@ -97,7 +97,11 @@ struct AdoptionCenter: View {
         }
         // Only the container (status bar / home indicator) is ignored: the keyboard still shrinks the space, so the naming step lifts above it.
         .ignoresSafeArea(.container)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in withAnimation(.easeOut(duration: 0.2)) { kbUp = true } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
+            // iPad with a hardware keyboard still posts this for its small shortcut bar: only a real on-screen keyboard (> 120 pt) compacts the layout.
+            let kbH = (n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height ?? 999
+            withAnimation(.easeOut(duration: 0.2)) { kbUp = !HUDLayout.isPad || kbH > 120 }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in withAnimation(.easeOut(duration: 0.2)) { kbUp = false } }
         .onAppear { camera.reduceMotion = reduce; camera.setSpecies(pick); camera.engage() }
         .onDisappear { camera.release(); emoteTask?.cancel(); JellyVariants.clearPreviews() }
@@ -134,9 +138,10 @@ struct AdoptionCenter: View {
         let su = min(0.7, max(0, h - 352) / 470)
         let showStage = !compact || su >= 0.25
         let stageS: CGFloat = compact ? su : 1
-        let cardH: CGFloat = compact ? 160 : 252
+        let padNaming = HUDLayout.isPad && naming && !compact          // iPad naming step: a snug card with the button right under it (no empty lower half)
+        let cardH: CGFloat = compact ? 160 : padNaming ? 170 : 252
         let cardY: CGFloat = compact ? 108 + (showStage ? 470 * su : 0) : 597
-        let ctaY: CGFloat = compact ? cardY + cardH + 6 : 862
+        let ctaY: CGFloat = compact ? cardY + cardH + 6 : padNaming ? cardY + cardH + 16 : 862
         let canvasH: CGFloat = compact ? h : 956
         return ZStack(alignment: .topLeading) {
             stageBlock(u).scaleEffect(stageS, anchor: .topLeading).offset(y: compact ? 100 : 130).opacity(showStage ? 1 : 0).allowsHitTesting(showStage)
@@ -177,14 +182,16 @@ struct AdoptionCenter: View {
                     .scaleEffect(uc, anchor: .top)
                     .frame(width: 440 * uc, height: 240 * uc, alignment: .top)
                 } else {
+                    let padNaming = HUDLayout.isPad && naming          // iPad naming step: snug card, the whole column centred (no blank lower half)
+                    let colH: CGFloat = padNaming ? (mode == .more ? 172 : 150) + 170 + 68 + 12 : 500
                     VStack(spacing: 6) {
                         headerBlock.frame(width: 440, height: mode == .more ? 172 : 150, alignment: .top).offset(x: slideX * 0.4).opacity(slideO)
-                        sheetCard(ur).frame(width: 408, height: 252)
+                        sheetCard(ur, height: padNaming ? 170 : 252).frame(width: 408, height: padNaming ? 170 : 252)
                         cta.frame(width: 400, height: 68)
                     }
-                    .frame(width: 440, height: 500, alignment: .top)
+                    .frame(width: 440, height: colH, alignment: .top)
                     .scaleEffect(ur, anchor: .top)
-                    .frame(width: 440 * ur, height: 500 * ur, alignment: .top)
+                    .frame(width: 440 * ur, height: colH * ur, alignment: .top)
                 }
             }
             .frame(width: half, height: size.height)
