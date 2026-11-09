@@ -104,16 +104,19 @@ struct GroomChrome: View {
                     .frame(width: geo.size.width, height: geo.size.height)
                 }
             } else {
-                // iPhone: exactly as at 3d340b3f (no GeometryReader, centred in the full screen)
-                Group {
-                    ViewThatFits(in: .vertical) {
-                        pickerContent.fixedSize(horizontal: false, vertical: true)
-                        ScrollView { pickerContent }.scrollBounceBehavior(.basedOnSize)
-                    }
+                // iPhone: the card hugs its content (a flexible maxHeight frame took the whole proposal and left a cream band above and below);
+                // same width cap and height cap as before, and it scrolls when the content is taller than the cap.
+                let cap: CGFloat = vsc == .compact ? 330 : 620
+                ScrollView(.vertical, showsIndicators: false) {
+                    pickerContent
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { padContentH = $0 }
                 }
-                .frame(maxWidth: 460, maxHeight: vsc == .compact ? 330 : 620)
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxWidth: 460)
+                .frame(height: padContentH > 0 ? min(padContentH, cap) : cap)
                 .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
                 .padding(.horizontal, 16)
+                .opacity(padContentH > 0 ? 1 : 0)
                 .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")
             }
         }

@@ -201,8 +201,32 @@ struct TownView: View {
     private var shown: [Place] { category == .all ? places : places.filter { $0.cats.contains(category) } }
 
     var body: some View {
+        if PadLayout.isPad {
+            // iPad: the column is centred in the real window width and sits below the status bar (the window's own top inset, in case the host ignores it)
+            GeometryReader { geo in
+                let top = max(geo.safeAreaInsets.top, Self.windowTopInset)
+                content.frame(maxWidth: 900)
+                    .padding(.horizontal, 16).padding(.top, 8 + top)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+                    .background(SK.cream.ignoresSafeArea())
+            }
+            .ignoresSafeArea()
+            .accessibilityElement(children: .contain).accessibilityIdentifier("town-screen")
+        } else {
+            content.padding(.horizontal, 16).padding(.top, 8)
+                .background(SK.cream.ignoresSafeArea())
+                .accessibilityElement(children: .contain).accessibilityIdentifier("town-screen")
+        }
+    }
+
+    private static var windowTopInset: CGFloat {
+        let w = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }
+        return w?.safeAreaInsets.top ?? 0
+    }
+
+    private var content: some View {
         let compact = vsc == .compact
-        VStack(spacing: compact ? 6 : 10) {
+        return VStack(spacing: compact ? 6 : 10) {
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); home() } label: {
                     HStack(spacing: 5) {
@@ -230,10 +254,6 @@ struct TownView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
-        .padReadable(900)
-        .padding(.horizontal, 16).padding(.top, 8)
-        .background(SK.cream.ignoresSafeArea())
-        .accessibilityElement(children: .contain).accessibilityIdentifier("town-screen")
     }
 
     /// iPhone: 4 columns on its side, else 2 (as before). iPad: as many ~190 pt tiles as fit the capped column.
