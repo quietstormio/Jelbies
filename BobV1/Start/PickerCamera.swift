@@ -25,7 +25,7 @@ final class PickerCamera {
         #if targetEnvironment(simulator)
         if UserDefaults.standard.object(forKey: "PickerRowYaw") != nil { return UserDefaults.standard.float(forKey: "PickerRowYaw") }
         #endif
-        return species == 1 ? 0.30 : 0.15
+        return species == 1 ? 0.20 : 0.10
     }
     static var rowZoomNow: Float {
         #if targetEnvironment(simulator)
@@ -35,6 +35,9 @@ final class PickerCamera {
     }
     /// The row page: the group close-up at its fixed view.
     func setRow(species: Int) { coasting?.cancel(); vYaw = 0; PhotoCam.reset(); PhotoCam.zoom = Self.rowZoomNow; PhotoCam.yaw = Self.rowYaw(species); PhotoCam.active = true }
+    /// The naming step: the chosen Jelbie in a friendly front three-quarter view whatever the species (Pip's page view is turned further to show his tail).
+    static let nameYaw: Float = 0.45
+    func setNaming() { coasting?.cancel(); vYaw = 0; yaw0 = Self.nameYaw; PhotoCam.reset(); PhotoCam.zoom = Self.startZoom; PhotoCam.yaw = yaw0; PhotoCam.active = true }
     private var yaw0: Float = 0.5
     /// Page changed: the new species' resting view (zoom and tilt reset).
     func setSpecies(_ c: Int) { coasting?.cancel(); vYaw = 0; yaw0 = Self.startYaw(c); PhotoCam.reset(); PhotoCam.zoom = Self.startZoom; PhotoCam.yaw = yaw0 }

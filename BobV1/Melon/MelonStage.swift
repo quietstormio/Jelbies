@@ -832,7 +832,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if model.gameMode, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil { GameCamera.configureRoom(count: count) }          // 2-3 Jellies: the wider roaming camera and floor (one Jelly: the exact old pose; skipped in the test host, whose suites assume the base pose)
         let preview = model.gameMode && model.preview
         var spots = JellyRoster.spawnSpots(count: count)
-        if preview { spots = GameCamera.previewRowSpots(count: count) }          // a showcase Jelbie is born on the close-up spot (no walk to it: `ShowcaseStage` is ready within a second); a group (the pick page) is born on its row
+        if preview { spots = GameCamera.pickRowSpots(count: count) }          // a showcase Jelbie is born on the close-up spot (no walk to it: `ShowcaseStage` is ready within a second); a group (the pick page) is born on its row
         simMesh = sm
         renderMesh = rm
         ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount, tail: rm.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil }, index: rm.index)          // the contact profile samples the egg more sparsely than the limb blocks

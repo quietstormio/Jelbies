@@ -200,9 +200,10 @@ final class PickThreeTests: XCTestCase {
     // MARK: row geometry
 
     func testThePreviewRowIsWhatTheFocusGroupLinesUpOn() {
-        let row = GameCamera.previewRowSpots(count: 3)
+        let row = GameCamera.pickRowSpots(count: 3)
         XCTAssertEqual(row.count, 3)
         let g = FocusGroup()
+        g.rowSpacing = GameCamera.pickRowSpacing
         g.begin(ids: [0, 1, 2])
         XCTAssertEqual(g.slots, row)
         XCTAssertEqual(GameCamera.previewRowSpots(count: 1), [FreeFloor.nearest(to: GameCamera.callSpot)])
@@ -213,7 +214,7 @@ final class PickThreeTests: XCTestCase {
         defer { PhotoCam.active = false; PhotoCam.reset() }
         for species in 0..<JellyRoster.knownCount {
             PhotoCam.reset(); PhotoCam.zoom = PickerCamera.rowZoom; PhotoCam.yaw = PickerCamera.rowYaw(species); PhotoCam.active = true
-            let p = GameCamera.projectRow(spots: GameCamera.previewRowSpots(count: 3))
+            let p = GameCamera.projectRow(spots: GameCamera.pickRowSpots(count: 3))
             let order = PickerRow.slotOfCandidate.map { p[$0] }          // candidate 0, 1, 2 left to right
             XCTAssertLessThan(order[0].foot.x, order[1].foot.x)
             XCTAssertLessThan(order[1].foot.x, order[2].foot.x)
