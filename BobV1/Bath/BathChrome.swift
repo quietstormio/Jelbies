@@ -16,6 +16,7 @@ struct BathChrome: View {
     @Environment(\.verticalSizeClass) private var vsc
     @State private var viewSize = CGSize(width: 1, height: 2)          // measured, so iPad landscape (vsc is .regular there) gets the landscape layout
     @State private var pulse = false
+    private var ps: CGFloat { HUDLayout.padScale(size: viewSize) }          // 1 on iPhone; ~1.1-1.3 on iPad
 
     /// "Next": the stage's goal is met; the player moves on when ready (nothing advances by itself).
     private var nextButton: some View {
@@ -115,9 +116,9 @@ struct BathChrome: View {
                     Image(systemName: bath.assistScrub ? "hand.raised.slash.fill" : "hand.point.up.left.fill")
                     Text(bath.assistScrub ? "Stop helping" : "Help me scrub")
                 }
-                .playFont(16, .bold)
+                .playFont(16 * ps, .bold)
                 .foregroundStyle(CareMenu.brown)
-                .padding(.horizontal, 22).frame(minHeight: 48)
+                .padding(.horizontal, 22 * ps).frame(minHeight: 48 * ps)
                 .background(Capsule().fill(bath.assistScrub ? Color.white : CareMenu.cream).shadow(color: .black.opacity(0.15), radius: 5, y: 2))
             }
             .buttonStyle(.plain)
@@ -129,13 +130,13 @@ struct BathChrome: View {
     }
 
     private var toolBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8 * ps) {
             ForEach(Array(Self.tools.enumerated()), id: \.offset) { _, t in
                 let on = bath.phase == t.0
-                VStack(spacing: 3) {
+                VStack(spacing: 3 * ps) {
                     Image(systemName: UIImage(systemName: t.2) != nil ? t.2 : "circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 44, height: 44)
+                        .font(.system(size: 18 * ps, weight: .semibold))
+                        .frame(width: 44 * ps, height: 44 * ps)
                         .background(Circle().fill(on ? Color.white : CareMenu.cream).shadow(color: .black.opacity(on ? 0.25 : 0.1), radius: on ? 7 : 3, y: 2))
                         .overlay(Circle().strokeBorder(on ? Color(red: 0.36, green: 0.62, blue: 0.95) : Color.white.opacity(0.5), lineWidth: on ? 2.5 : 1))
                         .scaleEffect(on ? 1.1 : 1)
@@ -146,7 +147,7 @@ struct BathChrome: View {
                             }
                         }
                     Text(t.1)
-                        .playFont(11, .semibold, relativeTo: .caption)
+                        .playFont(11 * ps, .semibold, relativeTo: .caption)
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(Capsule().fill(CareMenu.cream))
                 }

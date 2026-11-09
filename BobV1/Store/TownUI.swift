@@ -514,7 +514,17 @@ struct BagSheet: View {
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
                 LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 140, showNote: false, pick: { who = $0 })
-                ScrollViewReader { proxy in ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) {
+                if HUDLayout.isPad {          // iPad: all six tabs share the card's width (no clipped "Ro" at the edge); the label shrinks a touch if it must
+                    HStack(spacing: 6) {
+                        ForEach(tabs) { t in
+                            Button { AudioHub.shared.play(.pageTurn); tab = t } label: {
+                                Text("\(t.rawValue) \(count(t))").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
+                                    .padding(.horizontal, 6).frame(maxWidth: .infinity, minHeight: 44).background(Capsule().fill(t == tab ? SK.honey : Color.white.opacity(0.8)))
+                            }.buttonStyle(.plain).accessibilityIdentifier("bag-tab-\(t.rawValue.lowercased())")
+                        }
+                    }
+                } else {
+                    ScrollViewReader { proxy in ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) {
                     ForEach(tabs) { t in
                         Button { AudioHub.shared.play(.pageTurn); tab = t } label: {
                             Text("\(t.rawValue) \(count(t))").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
@@ -522,6 +532,7 @@ struct BagSheet: View {
                         }.buttonStyle(.plain).accessibilityIdentifier("bag-tab-\(t.rawValue.lowercased())").id(t)
                     }
                 }.onAppear { proxy.scrollTo(tab, anchor: .center) } } }
+                }
                 let list = entries(tab)
                 if tab == .wear { SlotChips(slot: $wearSlot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && book.owns($0) } }, idPrefix: "bag-slot-") }
                 if tab.isDecor, !book.placedDecor.isEmpty {

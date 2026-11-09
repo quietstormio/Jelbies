@@ -468,7 +468,7 @@ struct GameScreen: View {
                         .frame(width: min(g.size.width - 32, max(500, min(600, g.size.width * 0.42))), height: g.size.height)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .padding(.top, 56).padding(.bottom, 112).padding(.trailing, 16)   // bottom-right rail (heart) stays clear
+                .padding(.top, 56).padding(.bottom, (72 * HUDLayout.padScale(size: HUDLayout.measuredSize) + 26).rounded()).padding(.trailing, 16)   // bottom-right rail (heart, 72 x padScale + margin) stays clear
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
