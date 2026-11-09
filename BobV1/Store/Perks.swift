@@ -29,8 +29,8 @@ nonisolated enum PerkKind: String, CaseIterable, Codable, Sendable {
     var blurb: String {
         switch self {
         case .cozy: return "Stays happy longer and needs less love."
-        case .zoomies: return "Zoomies now, and a little faster in his next race."
-        case .focus: return "Fewer stumbles in his next race."
+        case .zoomies: return "Zoomies now, and a little faster in the next race."
+        case .focus: return "Fewer stumbles in the next race."
         case .fullBelly: return "Gets hungry much more slowly."
         case .shine: return "Clean shine lasts longer."
         case .tidy: return "Lint comes back slower."

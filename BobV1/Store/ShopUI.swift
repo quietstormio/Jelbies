@@ -391,7 +391,7 @@ struct ItemSheet: View {
         if item.kind == .decor { return item.roomUnits == 1 ? "Takes 1 spot" : "Takes \(item.roomUnits) spots" }
         if item.kind == .room { return "A new room to live in" }
         if item.kind == .toy { return "A toy to play with" }
-        if let c = item.food.flatMap({ Consumables.with(id: $0) }) { return c.kind == .drink ? "Quenches his thirst" : "Fills his tummy" }
+        if let c = item.food.flatMap({ Consumables.with(id: $0) }) { return c.kind == .drink ? "Quenches thirst" : "Fills the tummy" }
         if item.id == TrickCatalog.earsID { return "Music Ears \u{00B7} \(TrickScope.everyone.tag)" }
         if let t = item.trick, let d = TrickCatalog.def(t) { return "\(d.name) \u{00B7} \(String(repeating: "\u{2605}", count: d.stars)) \u{00B7} \(d.scope.tag)" }
         return "Goodies"
@@ -436,7 +436,7 @@ struct ItemPicture: View {
                 if fitted != nil { ItemArt(item: item, size: size * 0.3).padding(8) }
                 VStack {
                     HStack {
-                        Text("On \(care.jelly(who)?.name ?? "him")").font(SK.font(12, .heavy)).foregroundStyle(SK.ink)
+                        Text("On \(care.jelly(who)?.name ?? "your Jelbie")").font(SK.font(12, .heavy)).foregroundStyle(SK.ink)
                             .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(SK.cream.opacity(0.92)))
                         Spacer()
                     }

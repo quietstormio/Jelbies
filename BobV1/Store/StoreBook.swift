@@ -149,6 +149,7 @@ final class StoreBook {
             return !r.isEmpty && r.allSatisfy { knows(t, character: $0) }
         case .shoes, .wear: return item.wear.map { saved.wearables.contains($0.rawValue) } ?? false
         case .room: return item.room.map { ownsRoom($0) } ?? false
+        case .toy: return ownsToy(item.id.hasPrefix("toy-") ? String(item.id.dropFirst(4)) : item.id)          // (the same "toy-<id>" count the Play picker reads)
         default: return count(item.id) > 0
         }
     }

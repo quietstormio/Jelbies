@@ -17,7 +17,7 @@ nonisolated enum ShowRound: Int, Codable, Sendable, Comparable {
 
 /// What the player's Jelbie brings to the show (read from his real state when the show starts).
 nonisolated struct ShowPlayerInput: Equatable, Sendable {
-    var name = "Bob"
+    var name = "Jelbie"
     /// Condition in every stat (by WearTag).
     var condition: [WearTag: Float] = [:]
     var glow: Float = 0
@@ -283,8 +283,8 @@ nonisolated struct ShowSim: Sendable {
         case .look:
             let parts = lookParts
             if parts.outfit < 24 { return "Look was \(name)'s weakest at \(p.lookPts). Wear more \(theme.main.title) things: each matching item is worth a lot." }
-            if parts.glow < 12 { return "Look was \(name)'s weakest at \(p.lookPts). A Clean before the show makes him glow, and Glow is 20 of the 100." }
-            return "Look was \(name)'s weakest at \(p.lookPts). \(theme.main.title) food fills his \(theme.main.title) jar, which counts 70% of the stats part."
+            if parts.glow < 12 { return "Look was \(name)'s weakest at \(p.lookPts). A Clean before the show makes \(name) glow, and Glow is 20 of the 100." }
+            return "Look was \(name)'s weakest at \(p.lookPts). \(theme.main.title) food fills \(name)'s \(theme.main.title) jar, which counts 70% of the stats part."
         case .dance:
             return "Dance was \(name)'s lowest at \(p.dancePts). Tap right on the beat: Perfects are worth most."
         default:

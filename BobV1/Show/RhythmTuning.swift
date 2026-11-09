@@ -20,7 +20,7 @@ nonisolated enum DanceID: String, CaseIterable, Codable, Sendable {
     static let starter: DanceID = .sway
     /// A dance opens in the Studio once the one before it is known this well (the starter is always open).
     var opensAfter: (dance: DanceID, skill: Float)? { switch self { case .sway: return nil; case .bop: return (.sway, 0.5); case .twirl: return (.bop, 0.5) } }
-    var blurb: String { switch self { case .sway: return "Sits and sways to the beat"; case .bop: return "Happy hops on the spot"; case .twirl: return "Spins after his own tail" } }
+    var blurb: String { switch self { case .sway: return "Sits and sways to the beat"; case .bop: return "Happy hops on the spot"; case .twirl: return "Spins after its own tail" } }
 }
 
 /// The course the Jelly races on (Race/RaceCourse.swift has the shapes). 
