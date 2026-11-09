@@ -2,7 +2,7 @@
 //  AdoptionCenter.swift
 //  The species picker: a full-screen, swipeable page per species (Blueberry, Lemon Drop, Taro, Matcha) with the real 3D Jelbie on a round
 //  pedestal, a card with About / Traits / Moves, and the big button. Used for the first Jelbie of a new game (free) and for adopting more later
-//  (Drops via AdoptionPrice; "Already home" for the ones you have; stops at 3). Then the naming step and the welcome home.
+//  (Drops via AdoptionPrice; any species, duplicates included, until the room holds 3). Then the naming step and the welcome home.
 //  The layout follows the design boards (440 x 956 pt): everything is placed in that space and scaled to the screen. Landscape: the stage on the
 //  left, the header + card + button on the right (the same blocks, scaled).
 //  Content: SpeciesInfo.swift. Backdrop / pedestal: PickerBackdrop.swift. Camera orbit: PickerCamera.swift.
@@ -19,7 +19,8 @@ enum PickerTab: Int, CaseIterable {
 
 struct AdoptionCenter: View {
     let mode: StartFlow.AdoptMode
-    var done: (Int, String) -> Void
+    /// (species, name, the colour variant taken with him): StartFlow.bringHome gives him his instance id.
+    var done: (Int, String, JellyVariant?) -> Void
     var cancel: () -> Void
 
     @State private var page: Int
@@ -58,12 +59,13 @@ struct AdoptionCenter: View {
     @Environment(\.dynamicTypeSize) private var dts
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
 
-    init(mode: StartFlow.AdoptMode, done: @escaping (Int, String) -> Void, cancel: @escaping () -> Void) {
+    init(mode: StartFlow.AdoptMode, done: @escaping (Int, String, JellyVariant?) -> Void, cancel: @escaping () -> Void) {
         self.mode = mode; self.done = done; self.cancel = cancel
         let h = mode == .first ? [] : JellyRoster.savedIDs()
         _home = State(initialValue: h)
         _coverUp = State(initialValue: mode == .more)
-        var start = mode == .first ? 0 : (SpeciesInfo.pages(includingSpecial: mode == .more).firstIndex { !h.contains($0) } ?? 0)
+        let homeSpecies = h.map(JellyRoster.species)          // `h` holds INSTANCE ids; the pages are species
+        var start = mode == .first ? 0 : (SpeciesInfo.pages(includingSpecial: mode == .more).firstIndex { !homeSpecies.contains($0) } ?? 0)
         var t = PickerTab.about
         #if targetEnvironment(simulator)
         let d = UserDefaults.standard
@@ -83,16 +85,17 @@ struct AdoptionCenter: View {
     /// Today's Jelly Spring colour variant of the shown species (nil = classic; the free first gift is always classic).
     private var variant: JellyVariant? { Self.offer(mode: mode, character: pick) }
     static func offer(mode: StartFlow.AdoptMode, character: Int) -> JellyVariant? {
-        mode == .first || JellyRoster.savedIDs().contains(character) ? nil : JellyVariantBook.offer(species: character, dayKey: JellyVariantBook.dayKey())
+        mode == .first ? nil : JellyVariantBook.offer(species: character, dayKey: JellyVariantBook.dayKey())          // every species, the ones you already have included
     }
     /// Makes the stage draw `character` in today's variant (read when the stage body is built).
     static func previewOffer(mode: StartFlow.AdoptMode, character: Int) {
-        if mode == .more, JellyRoster.savedIDs().contains(character) { return }          // an owned Jelbie keeps his own (saved) colour
-        JellyVariants.setPreview(character, offer(mode: mode, character: character))
+        JellyVariants.setPreview(JellyRoster.previewID(character), offer(mode: mode, character: character))          // the scratch id: a preview never recolours an owned Jelbie
     }
     private var price: Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, rare: variant?.rare == true, special: info.isSpecial) }
-    private var isHome: Bool { home.contains(pick) }
-    private var canAdopt: Bool { !isHome && (price.map { $0 <= wallet.count } ?? false) }
+    /// Affordable and room for one more (the price is nil when the room is full). Owning the species already is fine: duplicates are allowed.
+    private var canAdopt: Bool { price.map { $0 <= wallet.count } ?? false }
+    /// The name he is given when the field is left empty: the species name, or "Teddy 2" when a Teddy is already home.
+    private var suggested: String { JellyRoster.suggestedName(species: pick, taken: home.map(JellyRoster.nameOf)) }
 
     var body: some View {
         GeometryReader { geo in
@@ -123,7 +126,10 @@ struct AdoptionCenter: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in withAnimation(.easeOut(duration: 0.2)) { kbUp = false } }
         .task { await runCover() }
         .onAppear { camera.reduceMotion = reduce; camera.setSpecies(pick); camera.engage() }
-        .onDisappear { camera.release(); emoteTask?.cancel(); JellyVariants.clearPreviews() }
+        .onDisappear {
+            camera.release(); emoteTask?.cancel(); JellyVariants.clearPreviews()
+            for s in 0..<JellyRoster.knownCount { StartFlow.resetCharacterState(JellyRoster.previewID(s)) }          // scratch preview ids never keep anything
+        }
         .accessibilityIdentifier("adoption-center")
     }
 
@@ -408,8 +414,7 @@ struct AdoptionCenter: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            Text(j.real ? "Strongest in \(SpeciesInfo.jarNames[best]). These are \(JellyRoster.names[pick])'s real stats."
-                        : "Strongest in \(SpeciesInfo.jarNames[best]). Jars fill up as you play together.")
+            Text("Strongest in \(SpeciesInfo.jarNames[best]). Jars fill up as you play together.")
                 .font(SK.font(14, .semibold)).foregroundStyle(SK.ink.opacity(0.62)).multilineTextAlignment(.center).frame(maxWidth: .infinity)
         }
     }
@@ -578,7 +583,7 @@ struct AdoptionCenter: View {
         .accessibilityHidden(true)
     }
 
-    private var headerLabel: String { "\(mode == .more ? "The Jelly Spring. \(roomText). Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")\(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(order.count)" }
+    private var headerLabel: String { "\(mode == .more ? "The Jelly Spring. \(roomText). Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")Jelbie \(page + 1) of \(order.count)" }
 
     // MARK: stage (design box 440 x 470, origin at canvas y 130)
 
@@ -594,7 +599,7 @@ struct AdoptionCenter: View {
                 .offset(x: slideX * 0.15).opacity(showPlaceholder ? slideO : 0)
                 .animation(.easeInOut(duration: 0.3), value: showPlaceholder)
                 .allowsHitTesting(false).accessibilityHidden(true)
-            ShowcaseStage(roster: [pick], focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen, expect = pick] m in stageReady(m, character: expect, gen: gen) })
+            ShowcaseStage(roster: [JellyRoster.previewID(pick)], focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen, expect = pick] m in stageReady(m, character: expect, gen: gen) })
                 .id(pick).frame(width: 420, height: 420)
                 .offset(x: 10, y: 46)
                 .opacity(ready ? slideO : 0).offset(x: slideX)
@@ -700,18 +705,8 @@ struct AdoptionCenter: View {
 
     static func jarColor(_ i: Int) -> Color { [SK.pink, SK.honeyDeep, SK.sky, Color(hex: 0xB58BDB), SK.mint][i % 5] }
 
-    /// The five jars: the species' starting profile, or the real stats of a Jelbie that is already home.
-    private var jarValues: (values: [Int], real: Bool) {
-        if isHome {
-            let key = JellyKeys.stats(pick)
-            if UserDefaults.standard.array(forKey: key) != nil {
-                let s = JellyStats(persists: true, key: key)
-                let v = SpeciesInfo.jarKeys.map { Int((s.condition($0) * 100).rounded()) }
-                if v.contains(where: { $0 > 0 }) { return (v, true) }
-            }
-        }
-        return (info.traits, false)
-    }
+    /// The five jars: always the species' starting profile (duplicates are allowed, so "the one at home" is no longer a single Jelbie).
+    private var jarValues: (values: [Int], real: Bool) { (info.traits, false) }
 
     private var traitsTab: some View {
         let j = jarValues
@@ -722,8 +717,7 @@ struct AdoptionCenter: View {
                 Text(SpeciesInfo.jarNames[i]).font(SK.font(13.5, .bold)).foregroundStyle(SK.ink).frame(width: 76).offset(x: 52 + CGFloat(i) * 76 - 38, y: 176)
                     .accessibilityHidden(true)
             }
-            Text(j.real ? "Strongest in \(SpeciesInfo.jarNames[best]). These are \(JellyRoster.names[pick])'s real stats."
-                        : "Strongest in \(SpeciesInfo.jarNames[best]). Jars fill up as you play together.")
+            Text("Strongest in \(SpeciesInfo.jarNames[best]). Jars fill up as you play together.")
                 .font(SK.font(14, .semibold)).foregroundStyle(SK.ink.opacity(0.62)).multilineTextAlignment(.center).frame(width: 380).offset(x: 14, y: 203)
         }
     }
@@ -758,7 +752,7 @@ struct AdoptionCenter: View {
 
     /// The name field: dark text on the white pill whatever the system appearance, a visible placeholder, 44 pt tall at least.
     private func nameField(_ u: CGFloat) -> some View {
-        TextField("", text: $name, prompt: Text(info.defaultName).foregroundStyle(SK.ink.opacity(0.4)))
+        TextField("", text: $name, prompt: Text(suggested).foregroundStyle(SK.ink.opacity(0.4)))
             .focused($nameFocused)
             .textInputAutocapitalization(.words).autocorrectionDisabled().submitLabel(.done)
             .font(SK.font(26, .heavy)).foregroundStyle(SK.ink).tint(SK.ink).multilineTextAlignment(.center)
@@ -780,7 +774,8 @@ struct AdoptionCenter: View {
 
     private var finalName: String {
         let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? info.defaultName : String(t.prefix(12))
+        if t.isEmpty { return suggested }
+        return JellyRoster.uniqueName(t, taken: home.map(JellyRoster.nameOf))          // a typed name equal to one at home becomes "Rex 2"
     }
 
     private var cta: some View {
@@ -791,12 +786,11 @@ struct AdoptionCenter: View {
     }
 
     @ViewBuilder private var ctaLabel: some View {
-        if isHome { Text("Already home") }
-        else if let p = price {
+        if let p = price {
             if mode == .first { Text("Choose \(info.name)") }
             else if p > wallet.count { Text("Need \(p - wallet.count) more JellyCoins") }
             else { HStack(spacing: 8) { Text("Adopt for"); JellyCoinIcon(size: 28); Text(p.coinText) } }
-        } else { Text("Your room is full: 3 Jelbies") }
+        } else { Text("Your home is full: \(JellyRoster.maxCount) Jelbies") }
     }
 
     /// The big dark-brown pill with a darker bottom lip.
@@ -914,10 +908,10 @@ struct AdoptionCenter: View {
         emoteTask?.cancel()
         withAnimation(.easeIn(duration: 0.2)) { celebrating = true }
         let c = pick, n = name
-        JellyVariants.adopt(c, variant)          // the colour he was shown is the colour he keeps (nil = the classic one)
+        let v = variant          // the colour he was shown is the colour he keeps (nil = the classic one): StartFlow.bringHome adopts it under his new instance id
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_800_000_000)
-            done(c, n)
+            done(c, n, v)
         }
     }
 }
