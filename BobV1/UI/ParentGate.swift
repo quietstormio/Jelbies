@@ -19,13 +19,13 @@ struct ParentGateView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Image(systemName: "person.2.fill")
-                        .font(.system(size: 34, weight: .semibold)).foregroundStyle(FocusStyle.brown)
+                        .font(.system(size: HUDLayout.isPad ? 44 : 34, weight: .semibold)).foregroundStyle(FocusStyle.brown)
                         .accessibilityHidden(true)
                     Text("Ask a grown-up")
-                        .font(SK.font(24, .heavy)).foregroundStyle(FocusStyle.brown)
+                        .font(SK.font(HUDLayout.isPad ? 32 : 24, .heavy)).foregroundStyle(FocusStyle.brown)
                         .accessibilityAddTraits(.isHeader)
                     Text("This goes outside Jelbies. A grown-up can press and hold the button for 2 seconds.")
-                        .font(SK.font(16, .medium)).foregroundStyle(FocusStyle.brown)
+                        .font(SK.font(HUDLayout.isPad ? 20 : 16, .medium)).foregroundStyle(FocusStyle.brown)
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                     HoldToConfirm(title: "Hold for a grown-up", id: "parent-gate-hold", tint: FocusStyle.brown,
                                   done: pass, accessibilityActivate: { confirmVO = true })
@@ -39,7 +39,7 @@ struct ParentGateView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("parent-gate-cancel")
                 }
-                .padding(24).frame(maxWidth: 440).frame(maxWidth: .infinity)
+                .padding(24).frame(maxWidth: HUDLayout.isPad ? 560 : 440).frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
         }

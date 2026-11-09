@@ -36,7 +36,20 @@ struct MenuMetrics {
         faceScale = max(1.0, min(4.8 * (pad ? min(w, h) : w) / 440, (0.91 * h - top) / 51.5))
         faceTop = top
         btnScale = sc; btnWidth = 300 * sc
-        if aspect > 1.6 {          // a short, wide screen (iPhone landscape): decouple width from height so the stack spans the screen
+        if pad && aspect > 1 && aspect <= 1.6 {          // iPad landscape: a big face peeks from the bottom and the whole stack (logo + pills) sits ABOVE its rim, so nothing covers the eyes
+            let sf = min(0.27 * h / 51.5, 0.46 * w / 102)
+            let eyesY = h * 0.93
+            let ft = eyesY - 51.5 * sf
+            let topPad: CGFloat = 30                                              // clears the status bar
+            let avail = ft - 12 - topPad
+            let sl = max(0.5, min(avail / content, 0.55 * w / 379, 0.40 * w / 300, min(w, h) / 440))
+            let freeP = max(0, avail - content * sl)
+            s = sl; btnScale = sl; btnWidth = 300 * sl
+            titleTop = topPad + freeP * topShare
+            buttonsGap = max(4, freeP * (1 - topShare))
+            faceScale = sf
+            faceTop = ft
+        } else if aspect > 1.6 {          // a short, wide screen (iPhone landscape): decouple width from height so the stack spans the screen
             let k: CGFloat = hasSave ? 0.75 : 0.9
             let sf: CGFloat = 3.6                                                // the Jelbie peeks with brows and eyes: ~49 % of the width incl. its rim
             let eyesY = h * 0.92                                                 // eyes ~8 % above the bottom edge

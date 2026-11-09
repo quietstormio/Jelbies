@@ -66,7 +66,8 @@ struct IntroView: View {
                 }
                 if A11ySettings.shared.captions, flow.stage == .playing, flow.shown {
                     Text("Soft music and sparkles")          // caption for the intro clip's sound
-                        .font(CloudTheme.font(16, .semibold)).foregroundStyle(CloudTheme.ink)
+                        .font(CloudTheme.font(HUDLayout.isPad ? 20 : 16, .semibold)).foregroundStyle(CloudTheme.ink)
+                        .frame(maxWidth: HUDLayout.isPad ? 560 : .infinity)
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .background(Capsule().fill(CloudTheme.mist))
                         .frame(maxHeight: .infinity, alignment: .top).padding(.top, max(48, geo.size.height * 0.08))
@@ -74,7 +75,7 @@ struct IntroView: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                Text("Skip").font(SK.font(15, .bold)).foregroundStyle(SK.ink)
+                Text("Skip").font(SK.font(HUDLayout.isPad ? 19 : 15, .bold)).foregroundStyle(SK.ink)
                     .padding(.horizontal, 18).padding(.vertical, 8)
                     .background(Capsule().fill(SK.cream))          // the HUD's opaque cream pill (no glass / blur)
                     .padding(.trailing, 22).padding(.bottom, 34)
@@ -115,7 +116,7 @@ struct LogoMoment: View {
     var body: some View {
         GeometryReader { geo in
             let u = min(geo.size.width, geo.size.height) / 440
-            let w = min(geo.size.width * 0.8, 360 * max(u, 0.8))
+            let w = min(geo.size.width * 0.8, 360 * max(u, 0.8), HUDLayout.isPad ? 560 : .infinity)
             ZStack {
                 TitleBackdrop(still: true, size: geo.size, landscape: geo.size.width > geo.size.height, palette: theme.palette, extras: false)
                 Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: w)
