@@ -28,9 +28,25 @@ final class PhotoAlbum {
         items = urls.filter { $0.pathExtension == "jpg" }.sorted { $0.lastPathComponent > $1.lastPathComponent }
     }
 
+    /// Longest edge kept on disk. A full-screen capture is ~1300x2800; this keeps the album small without a visible loss.
+    static let maxEdge: CGFloat = 2400
+
+    /// The photo, scaled down (never up) so its longest edge is at most `maxEdge` pixels.
+    static func capped(_ image: UIImage) -> UIImage {
+        let px = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        let longest = max(px.width, px.height)
+        guard longest > maxEdge else { return image }
+        let k = maxEdge / longest
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1; fmt.opaque = true
+        let size = CGSize(width: (px.width * k).rounded(), height: (px.height * k).rounded())
+        return UIGraphicsImageRenderer(size: size, format: fmt).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+    }
+
+    /// Saves into the in-game album. Nil when the photo could not be written (disk full, encode failure). The album is the player's own
+    /// keepsakes, so the folder stays in the device backup.
     @discardableResult
     func add(_ image: UIImage) -> URL? {
-        guard let data = image.jpegData(compressionQuality: 0.92) else { return nil }
+        guard let data = Self.capped(image).jpegData(compressionQuality: 0.9) else { return nil }
         try? FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss-SSS"; f.locale = Locale(identifier: "en_US_POSIX")
         let url = Self.folder.appending(path: "Jelbies-\(f.string(from: Date())).jpg")
@@ -42,13 +58,20 @@ final class PhotoAlbum {
     func delete(_ url: URL) { try? FileManager.default.removeItem(at: url); PhotoThumbs.cache.removeObject(forKey: url as NSURL); reload() }
 
     /// Add-only save to the system Photos library. True when it went in.
-    static func saveToPhotos(_ url: URL) async -> Bool {
+    enum SaveResult { case saved, noAccess, failed }
+    static func saveToPhotos(_ url: URL) async -> SaveResult {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited, let data = try? Data(contentsOf: url) else { return false }
+        guard status == .authorized || status == .limited else { return .noAccess }
+        guard let data = try? Data(contentsOf: url) else { return .failed }
         do {
             try await PHPhotoLibrary.shared().performChanges { PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil) }
-            return true
-        } catch { return false }
+            return .saved
+        } catch { return .failed }
+    }
+
+    static let noSpaceMessage = "Not enough space to keep this photo. Free up some storage and try again."
+    static func message(for r: SaveResult) -> String? {
+        switch r { case .saved: return nil; case .noAccess: return "Allow Photos access in Settings to save."; case .failed: return noSpaceMessage }
     }
 }
 
@@ -121,7 +144,7 @@ extension URL: @retroactive Identifiable { public var id: String { absoluteStrin
 private struct PhotoViewer: View {
     let url: URL
     var done: () -> Void
-    @State private var saved: Bool?
+    @State private var saved: PhotoAlbum.SaveResult?
     @State private var confirmDelete = false
 
     var body: some View {
@@ -133,13 +156,13 @@ private struct PhotoViewer: View {
                 HStack { Spacer(); GameCircleButton(systemName: "xmark", label: "Close photo") { done() } }
                 Spacer()
                 HStack(spacing: 10) {
-                    PhotoActionButton(title: saved == true ? "Saved" : "Save to Photos", symbol: saved == true ? "checkmark" : "square.and.arrow.down", prominent: true) {
+                    PhotoActionButton(title: saved == .saved ? "Saved" : "Save to Photos", symbol: saved == .saved ? "checkmark" : "square.and.arrow.down", prominent: true) {
                         Task { saved = await PhotoAlbum.saveToPhotos(url) }
                     }
                     if let img { ShareLink(item: Image(uiImage: img), preview: SharePreview("Jelbies photo", image: Image(uiImage: img))) { PhotoActionLabel(title: "Share", symbol: "square.and.arrow.up", prominent: false) } }
                     PhotoActionButton(title: "Delete", symbol: "trash", prominent: false) { confirmDelete = true }
                 }
-                if saved == false { Text("Allow Photos access in Settings to save.").font(SK.font(14, .bold)).foregroundStyle(.white).padding(.top, 4) }
+                if let m = saved.flatMap({ PhotoAlbum.message(for: $0) }) { Text(m).font(SK.font(14, .bold)).foregroundStyle(.white).multilineTextAlignment(.center).padding(.top, 4) }
             }
             .padding(16)
         }

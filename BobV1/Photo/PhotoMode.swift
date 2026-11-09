@@ -23,6 +23,8 @@ final class PhotoMode {
     var flash = false
     var shot: (image: UIImage, url: URL)?
     var albumOpen = false
+    /// Kind, short message shown over the room when a photo could not be kept.
+    var notice: String?
     @ObservationIgnored private weak var care: GameCare?
     nonisolated deinit {}
 
@@ -77,6 +79,14 @@ final class PhotoMode {
         brain.startTurn(to: brain.faceCameraYaw(), sim: care.raceBook.actors[id].sim)
     }
 
+    func showNotice(_ text: String) {
+        withAnimation(.easeOut(duration: 0.2)) { notice = text }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            withAnimation(.easeOut(duration: 0.3)) { if self?.notice == text { self?.notice = nil } }
+        }
+    }
+
     // MARK: shutter
 
     func shutter() {
@@ -96,7 +106,10 @@ final class PhotoMode {
         let out = r.uiImage ?? raw
         flash = true
         Task { @MainActor in try? await Task.sleep(nanoseconds: 60_000_000); withAnimation(.easeOut(duration: 0.4)) { flash = false } }
-        guard let url = PhotoAlbum.shared.add(out) else { return }
+        guard let url = PhotoAlbum.shared.add(out) else {
+            showNotice(PhotoAlbum.noSpaceMessage)
+            return
+        }
         panel = nil
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { shot = (out, url) }
     }
@@ -133,6 +146,17 @@ struct PhotoModeView: View {
                 .transition(.opacity)
             }
             if let s = mode.shot { PhotoPreview(image: s.image, url: s.url, landscape: landscape) { withAnimation(.easeInOut(duration: 0.25)) { mode.shot = nil } } }
+            if let n = mode.notice {
+                VStack {
+                    Text(n).font(SK.font(15, .bold)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(Capsule().fill(SK.cream.opacity(0.96)).shadow(color: SK.shadow.opacity(0.25), radius: 4, y: 2))
+                        .padding(.top, 60)
+                    Spacer()
+                }
+                .padding(.horizontal, 20).allowsHitTesting(false).transition(.opacity)
+                .accessibilityElement(children: .combine)
+            }
             Color.white.ignoresSafeArea().opacity(mode.flash ? 0.9 : 0).allowsHitTesting(false)
         }
         .onAppear { Task { try? await Task.sleep(nanoseconds: 4_500_000_000); withAnimation { hint = false } } }
@@ -238,7 +262,7 @@ private struct PhotoPreview: View {
     let url: URL
     let landscape: Bool
     var done: () -> Void
-    @State private var saved: Bool?
+    @State private var saved: PhotoAlbum.SaveResult?
 
     var body: some View {
         ZStack {
@@ -266,13 +290,13 @@ private struct PhotoPreview: View {
         VStack(spacing: 10) {
             Text("Kept in your album").font(SK.font(14, .bold)).foregroundStyle(.white)
             HStack(spacing: 10) {
-                PhotoActionButton(title: saved == true ? "Saved" : "Save to Photos", symbol: saved == true ? "checkmark" : "square.and.arrow.down", prominent: true) {
+                PhotoActionButton(title: saved == .saved ? "Saved" : "Save to Photos", symbol: saved == .saved ? "checkmark" : "square.and.arrow.down", prominent: true) {
                     Task { saved = await PhotoAlbum.saveToPhotos(url) }
                 }
                 ShareLink(item: Image(uiImage: image), preview: SharePreview("Jelbies photo", image: Image(uiImage: image))) { PhotoActionLabel(title: "Share", symbol: "square.and.arrow.up", prominent: false) }
             }
             .fixedSize(horizontal: false, vertical: true)
-            if saved == false { Text("Allow Photos access in Settings to save.").font(SK.font(13, .bold)).foregroundStyle(.white).multilineTextAlignment(.center) }
+            if let m = saved.flatMap({ PhotoAlbum.message(for: $0) }) { Text(m).font(SK.font(13, .bold)).foregroundStyle(.white).multilineTextAlignment(.center) }
             PhotoActionButton(title: "Done", symbol: "checkmark.circle", prominent: false) { done() }
         }
     }
