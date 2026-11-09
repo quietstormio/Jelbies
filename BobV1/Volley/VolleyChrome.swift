@@ -29,7 +29,7 @@ struct VolleyChrome: View {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
-                    if volley.showsCard { VolleyResultsCard(volley: volley) { volley.goHome() }.frame(maxWidth: PadLayout.isPad ? 560 : .infinity).padding(.horizontal, 24).transition(.scale(scale: 0.85).combined(with: .opacity)) }
+                    if volley.showsCard { VolleyResultsCard(volley: volley) { volley.goHome() }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(.scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if volley.phase == .playing, !volley.hasResults { controls }
                 }
