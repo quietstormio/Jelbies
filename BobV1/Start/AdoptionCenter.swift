@@ -176,7 +176,7 @@ struct AdoptionCenter: View {
                 if reduce { ProgressView().tint(SK.ink.opacity(0.6)).controlSize(.large).frame(height: 40) }
                 else { SpringLoaderDots(colors: order.map { SpeciesInfo.of($0).look.dot }).frame(height: 40) }
                 Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
-                    .multilineTextAlignment(.center).padding(.horizontal, 36)
+                    .lineLimit(3).minimumScaleFactor(0.8).multilineTextAlignment(.center).padding(.horizontal, 36)
             }
             .padding(.horizontal, 20)
             .accessibilityElement(children: .ignore).accessibilityLabel("Opening the Jelly Spring")
@@ -589,11 +589,16 @@ struct AdoptionCenter: View {
     private func stageBlock(_ u: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             PickerPedestal(look: look).offset(x: 66, y: 482 - 130 - PickerPedestal.topH / 2).offset(x: slideX * 0.15).opacity(slideO)
-            StagePlaceholder(color: look.dot, calm: reduce)
-                .frame(width: 120, height: 128).offset(x: 160, y: 350 - 128)       // stands on the pedestal's top (centre at local y 352)
-                .offset(x: slideX * 0.15).opacity(showPlaceholder ? slideO : 0)
-                .animation(.easeInOut(duration: 0.3), value: showPlaceholder)
-                .allowsHitTesting(false).accessibilityHidden(true)
+            Group {
+                if showPlaceholder {
+                    StagePlaceholder(color: look.dot, calm: reduce)
+                        .frame(width: 120, height: 128).offset(x: 160, y: 350 - 128)       // stands on the pedestal's top (centre at local y 352)
+                        .offset(x: slideX * 0.15).opacity(slideO)
+                        .transition(.opacity)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: showPlaceholder)
             ShowcaseStage(roster: [pick], focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen, expect = pick] m in stageReady(m, character: expect, gen: gen) })
                 .id(pick).frame(width: 420, height: 420)
                 .offset(x: 10, y: 46)
