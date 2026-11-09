@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 enum PickerTab: Int, CaseIterable {
     case about, traits, moves
@@ -38,6 +39,9 @@ struct AdoptionCenter: View {
     @State private var pinching = false
     @State private var emoteTask: Task<Void, Never>?
     @FocusState private var nameFocused: Bool
+    /// True while the software keyboard is up (the naming step then re-lays-out above it).
+    @State private var kbUp = false
+    @Environment(\.dynamicTypeSize) private var dts
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
 
     init(mode: StartFlow.AdoptMode, done: @escaping (Int, String) -> Void, cancel: @escaping () -> Void) {
@@ -79,13 +83,16 @@ struct AdoptionCenter: View {
             ZStack {
                 PickerBackdrop(top: look.top, bottom: look.bottom, calm: reduce, rayOriginY: landscape ? 0.45 : 0.38)
                     .animation(.easeInOut(duration: reduce ? 0.2 : 0.55), value: page)
-                if landscape { landscapeLayout(geo.size) } else { portraitLayout(geo.size) }
+                if bigText { flowLayout(geo.size, insets: geo.safeAreaInsets) } else if landscape { landscapeLayout(geo.size) } else { portraitLayout(geo.size) }
                 if celebrating { Celebration(name: name).transition(.opacity) }
             }
             .contentShape(Rectangle())
             .gesture(swipe)
         }
-        .ignoresSafeArea()
+        // Only the container (status bar / home indicator) is ignored: the keyboard still shrinks the space, so the naming step lifts above it.
+        .ignoresSafeArea(.container)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in withAnimation(.easeOut(duration: 0.2)) { kbUp = true } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in withAnimation(.easeOut(duration: 0.2)) { kbUp = false } }
         .onAppear { camera.reduceMotion = reduce; camera.setSpecies(pick); camera.engage() }
         .onDisappear { camera.release(); emoteTask?.cancel(); JellyVariants.clearPreviews() }
         .accessibilityIdentifier("adoption-center")
@@ -93,18 +100,34 @@ struct AdoptionCenter: View {
 
     // MARK: layouts (design space 440 x 956)
 
+    /// Larger text than the default: the fixed design canvas cannot hold it, so the page becomes a scrolling column (see flowLayout).
+    private var bigText: Bool { dts > .large }
+    /// Design-space size that is 44 pt on screen at canvas scale `u` (so small controls keep a 44 pt touch target).
+    private func hitMin(_ u: CGFloat) -> CGFloat { max(44, 44 / max(u, 0.1)) }
+
     private func portraitLayout(_ size: CGSize) -> some View {
-        let u = min(size.width / 440, size.height / 956)
+        // Naming with the keyboard up: the canvas keeps its width scale, drops the header, shrinks the Jelbie and stacks the name card and
+        // the button right under it, so both sit above the keyboard.
+        let compact = naming && kbUp
+        let u = compact ? min(size.width / 440, 1.2) : min(size.width / 440, size.height / 956)
+        let h = size.height / u                                   // visible design height
+        let su = min(0.7, max(0, h - 352) / 470)
+        let showStage = !compact || su >= 0.25
+        let stageS: CGFloat = compact ? su : 1
+        let cardH: CGFloat = compact ? 160 : 252
+        let cardY: CGFloat = compact ? 108 + (showStage ? 470 * su : 0) : 597
+        let ctaY: CGFloat = compact ? cardY + cardH + 6 : 862
+        let canvasH: CGFloat = compact ? h : 956
         return ZStack(alignment: .topLeading) {
-            stageBlock.offset(y: 130)
-            headerBlock.frame(width: 440).offset(y: 70).offset(x: slideX * 0.4).opacity(slideO)
-            topBar()
-            sheetCard.frame(width: 408, height: 252).offset(x: 16, y: 597)
-            cta.frame(width: 400, height: 68).offset(x: 20, y: 862)
+            stageBlock(u).scaleEffect(stageS, anchor: .topLeading).offset(y: compact ? 100 : 130).opacity(showStage ? 1 : 0).allowsHitTesting(showStage)
+            headerBlock.frame(width: 440).offset(y: 70).offset(x: slideX * 0.4).opacity(compact ? 0 : slideO).allowsHitTesting(!compact)
+            topBar(u: u)
+            sheetCard(u, height: cardH).frame(width: 408, height: cardH).offset(x: 16, y: cardY)
+            cta.frame(width: 400, height: 68).offset(x: 20, y: ctaY)
         }
-        .frame(width: 440, height: 956, alignment: .topLeading)
+        .frame(width: 440, height: canvasH, alignment: .topLeading)
         .scaleEffect(u, anchor: .topLeading)
-        .frame(width: 440 * u, height: 956 * u, alignment: .topLeading)
+        .frame(width: 440 * u, height: canvasH * u, alignment: .topLeading)
         .frame(width: size.width, height: size.height, alignment: .top)
     }
 
@@ -112,36 +135,249 @@ struct AdoptionCenter: View {
         let half = size.width / 2
         let us = min(half / 440, (size.height - 8) / 470)
         let ur = min((half - 20) / 440, (size.height - 12) / 500)
+        let compact = naming && kbUp
+        let uc = min((half - 20) / 440, (size.height - 8) / 240)  // name card + button only, above the keyboard
         return HStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
-                stageBlock.frame(width: 440, height: 470, alignment: .topLeading)
+                stageBlock(us).frame(width: 440, height: 470, alignment: .topLeading)
                     .scaleEffect(us, anchor: .topLeading).frame(width: 440 * us, height: 470 * us, alignment: .topLeading)
                     .frame(width: half, height: size.height, alignment: .center)
-                topBar(pill: false).frame(width: 440, height: 130, alignment: .topLeading).scaleEffect(min(1, us), anchor: .topLeading)
+                topBar(pill: false, u: min(1, us)).frame(width: 440, height: 130, alignment: .topLeading).scaleEffect(min(1, us), anchor: .topLeading)
                     .frame(width: half, height: 60, alignment: .topLeading).padding(.leading, 6).frame(width: half, height: size.height, alignment: .topLeading)
             }
             .frame(width: half, height: size.height)
             VStack(spacing: 0) {
-                VStack(spacing: 6) {
-                    headerBlock.frame(width: 440, height: mode == .more ? 172 : 150, alignment: .top).offset(x: slideX * 0.4).opacity(slideO)
-                    sheetCard.frame(width: 408, height: 252)
-                    cta.frame(width: 400, height: 68)
+                if compact {
+                    VStack(spacing: 6) {
+                        sheetCard(uc, height: 160).frame(width: 408, height: 160)
+                        cta.frame(width: 400, height: 68)
+                    }
+                    .frame(width: 440, height: 240, alignment: .top)
+                    .scaleEffect(uc, anchor: .top)
+                    .frame(width: 440 * uc, height: 240 * uc, alignment: .top)
+                } else {
+                    VStack(spacing: 6) {
+                        headerBlock.frame(width: 440, height: mode == .more ? 172 : 150, alignment: .top).offset(x: slideX * 0.4).opacity(slideO)
+                        sheetCard(ur).frame(width: 408, height: 252)
+                        cta.frame(width: 400, height: 68)
+                    }
+                    .frame(width: 440, height: 500, alignment: .top)
+                    .scaleEffect(ur, anchor: .top)
+                    .frame(width: 440 * ur, height: 500 * ur, alignment: .top)
                 }
-                .frame(width: 440, height: 500, alignment: .top)
-                .scaleEffect(ur, anchor: .top)
-                .frame(width: 440 * ur, height: 500 * ur, alignment: .top)
             }
             .frame(width: half, height: size.height)
         }
         .overlay(alignment: .topTrailing) { if mode == .more { dropsPill.padding(.top, 10).padding(.trailing, 16) } }
     }
 
+    // MARK: large-text layout (Dynamic Type above Large)
+
+    /// The same blocks as one scrolling column that grows with the text: back button, header, the Jelbie, the card, the button. The naming step
+    /// scrolls the field and the button into view above the keyboard.
+    private func flowLayout(_ size: CGSize, insets: EdgeInsets) -> some View {
+        let ss = min(0.75, (min(size.width, 560) - 32) / 440)
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 16) {
+                    HStack {
+                        roundButton(naming || mode == .first ? "chevron.left" : "xmark", label: naming ? "Back" : (mode == .first ? "Back to the menu" : "Close"), id: "adopt-back") {
+                            if naming { withAnimation(.easeOut(duration: 0.2)) { naming = false } } else { cancel() }
+                        }
+                        Spacer(minLength: 8)
+                        if mode == .more { dropsPill }
+                    }
+                    if !naming { flowHeader }
+                    stageBlock(1).frame(width: 440, height: 470, alignment: .topLeading)
+                        .scaleEffect(ss, anchor: .topLeading).frame(width: 440 * ss, height: 470 * ss, alignment: .topLeading)
+                        .frame(height: naming && kbUp ? 0 : 470 * ss).clipped().opacity(naming && kbUp ? 0 : 1)
+                    if !naming {
+                        HStack {
+                            roundButton("chevron.left", label: "Previous Jelbie") { step(-1) }
+                            Spacer()
+                            roundButton("chevron.right", label: "Next Jelbie") { step(1) }
+                        }
+                    }
+                    flowCard
+                    flowCTA.id("flow-cta")
+                }
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 16).padding(.top, max(insets.top, 20) + 6).padding(.bottom, max(insets.bottom, 0) + 24)
+                .frame(maxWidth: .infinity)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: naming) { _, on in if on { scrollToButton(proxy) } }
+            .onChange(of: kbUp) { _, up in if up && naming { scrollToButton(proxy) } }
+        }
+    }
+
+    private func scrollToButton(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("flow-cta", anchor: .bottom) }
+        }
+    }
+
+    private var flowHeader: some View {
+        VStack(spacing: 6) {
+            Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(SK.ink.opacity(0.78))
+            Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).minimumScaleFactor(0.5)
+            Text(info.epithet + (variant.map { " · \($0.title)" } ?? "")).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85))
+            if variant?.rare == true {
+                Text("Rare").font(SK.font(12.5, .black)).foregroundStyle(SK.ink)
+                    .padding(.horizontal, 10).padding(.vertical, 3)
+                    .background(Capsule().fill(Color(hex: 0xFFD65C)))
+                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
+                    .accessibilityIdentifier("adopt-rare-tag")
+            }
+            if mode == .more {
+                Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
+            }
+            HStack(spacing: 4) {
+                ForEach(0..<SpeciesInfo.order.count, id: \.self) { i in
+                    Circle().fill(SpeciesInfo.of(SpeciesInfo.order[i]).look.dot).frame(width: i == page ? 15 : 11, height: i == page ? 15 : 11)
+                        .padding(3).background(Circle().fill(Color.white))
+                }
+            }
+            .accessibilityHidden(true)
+        }
+        .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(headerLabel)
+        .accessibilityHint("Swipe up or down to change Jelbie")
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityAdjustableAction { dir in
+            switch dir { case .increment: step(1); case .decrement: step(-1); @unknown default: break }
+        }
+    }
+
+    private var flowCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if naming {
+                Text("What will you call your \(info.name)?").font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                nameField(1)
+            } else {
+                flowTabs
+                switch tab {
+                case .about: flowAbout
+                case .traits: flowTraits
+                case .moves: flowMoves
+                }
+            }
+        }
+        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(look.card).shadow(color: look.glow.opacity(0.22), radius: 6, y: 3))
+    }
+
+    private var flowTabs: some View {
+        HStack(spacing: 0) {
+            ForEach(PickerTab.allCases, id: \.rawValue) { t in
+                Button { AudioHub.shared.uiTap(); withAnimation(.easeOut(duration: 0.18)) { tab = t } } label: {
+                    Text(t.title).font(SK.font(16, tab == t ? .heavy : .bold)).foregroundStyle(tab == t ? SK.ink : SK.ink.opacity(0.62))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Capsule().fill(tab == t ? look.tabFill : Color.clear))
+                        .overlay(Capsule().strokeBorder(tab == t ? look.tabLine : Color.clear, lineWidth: 1.5))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain).accessibilityAddTraits(tab == t ? .isSelected : []).accessibilityIdentifier("picker-tab-\(t.title.lowercased())")
+            }
+        }
+        .padding(3).background(Capsule().fill(SK.ink.opacity(0.06)))
+    }
+
+    private var flowAbout: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(info.about).font(SK.font(16, .medium)).foregroundStyle(SK.ink).lineSpacing(4).fixedSize(horizontal: false, vertical: true)
+            flowTile("Best at", dot: SpeciesInfo.jarNames.firstIndex(of: info.bestAt).map { Self.jarColor($0) }, value: info.bestAt)
+            flowTile("Signature", dot: nil, value: info.signature)
+            flowTile("Loves", dot: nil, value: info.loves)
+        }
+    }
+
+    private func flowTile(_ title: String, dot: Color?, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(SK.font(12.5, .bold)).foregroundStyle(Color(hex: 0x8D7C6E))
+            HStack(spacing: 6) {
+                if let dot { Circle().fill(dot).frame(width: 13, height: 13) }
+                Text(value).font(SK.font(19, .black)).foregroundStyle(SK.ink)
+            }
+        }
+        .padding(13).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 17, style: .continuous).fill(SK.ink.opacity(0.055)))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var flowTraits: some View {
+        let j = jarValues
+        let best = j.values.enumerated().max { $0.element < $1.element }?.offset ?? 0
+        return VStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 2) {
+                ForEach(0..<5, id: \.self) { i in
+                    VStack(spacing: 6) {
+                        PickerJar(color: Self.jarColor(i), value: j.values[i], animate: !reduce)
+                        Text(SpeciesInfo.jarNames[i]).font(SK.font(13.5, .bold)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.6)
+                            .multilineTextAlignment(.center).accessibilityHidden(true)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            Text(j.real ? "Strongest in \(SpeciesInfo.jarNames[best]). These are \(JellyRoster.names[pick])'s real stats."
+                        : "Strongest in \(SpeciesInfo.jarNames[best]). Jars fill up as you play together.")
+                .font(SK.font(14, .semibold)).foregroundStyle(SK.ink.opacity(0.62)).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+        }
+    }
+
+    private var flowMoves: some View {
+        VStack(spacing: 8) {
+            ForEach(Array(info.moves.enumerated()), id: \.element.id) { k, m in
+                HStack(spacing: 10) {
+                    Image(systemName: m.icon).font(.system(size: 16, weight: .bold)).foregroundStyle(SK.ink)
+                        .frame(width: 38, height: 38).background(Circle().fill(k == 0 ? Color.white : SK.ink.opacity(0.07)))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(m.title).font(SK.font(19, .black)).foregroundStyle(SK.ink)
+                        Text(m.subtitle).font(SK.font(15, .semibold)).foregroundStyle(SK.ink.opacity(0.6))
+                    }
+                    Spacer(minLength: 4)
+                    Button { AudioHub.shared.uiTap(); perform(m.move) } label: {
+                        Image(systemName: "play.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.cream)
+                            .frame(width: 36, height: 36).background(Circle().fill(SK.ink))
+                            .frame(width: 44, height: 44).contentShape(Circle())
+                    }
+                    .buttonStyle(.plain).accessibilityLabel("Play \(m.title)")
+                }
+                .padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 17, style: .continuous).fill(k == 0 ? look.rowHi : Color.clear))
+            }
+        }
+    }
+
+    private var flowCTA: some View {
+        Group {
+            if naming { flowCtaButton(Text("Bring \(finalName) home"), enabled: true, id: "adopt-bring-home") { bringHome() } }
+            else { flowCtaButton(ctaLabel, enabled: canAdopt, id: "adopt-pick") { withAnimation(.easeOut(duration: 0.2)) { name = ""; naming = true }; nameFocused = true } }
+        }
+    }
+
+    /// The big dark-brown pill, growing with the text instead of clipping it.
+    private func flowCtaButton<T: View>(_ title: T, enabled: Bool, id: String, _ action: @escaping () -> Void) -> some View {
+        Button { AudioHub.shared.uiTap(); action() } label: {
+            title.font(SK.font(21, .black)).foregroundStyle(SK.cream).multilineTextAlignment(.center)
+                .padding(.horizontal, 16).padding(.vertical, 14).frame(maxWidth: .infinity, minHeight: 63)
+                .background(Capsule().fill(SK.ink))
+                .background(Capsule().fill(Color(hex: 0x2E1E12)).offset(y: 5))
+                .padding(.bottom, 5)
+                .opacity(enabled ? 1 : 0.5)
+        }
+        .buttonStyle(.plain).disabled(!enabled).accessibilityIdentifier(id)
+    }
+
     // MARK: top bar and header
 
     /// Back / close at the top left; the Drops pill at the top right when adopting more.
-    private func topBar(pill: Bool = true) -> some View {
+    private func topBar(pill: Bool = true, u: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
-            roundButton(naming || mode == .first ? "chevron.left" : "xmark", label: naming ? "Back" : (mode == .first ? "Back to the menu" : "Close"), id: "adopt-back") {
+            roundButton(naming || mode == .first ? "chevron.left" : "xmark", label: naming ? "Back" : (mode == .first ? "Back to the menu" : "Close"), id: "adopt-back", u: u) {
                 if naming { withAnimation(.easeOut(duration: 0.2)) { naming = false } } else { cancel() }
             }
             .offset(x: 20, y: 66)
@@ -162,14 +398,17 @@ struct AdoptionCenter: View {
         .accessibilityElement(children: .ignore).accessibilityLabel("\(wallet.count) JellyCoins").accessibilityIdentifier("drops-pill")
     }
 
-    private func roundButton(_ symbol: String, label: String, id: String? = nil, _ action: @escaping () -> Void) -> some View {
-        Button { AudioHub.shared.uiTap(); action() } label: {
+    private func roundButton(_ symbol: String, label: String, id: String? = nil, u: CGFloat = 1, _ action: @escaping () -> Void) -> some View {
+        let d = hitMin(u)
+        return Button { AudioHub.shared.uiTap(); action() } label: {
             Image(systemName: symbol).font(.system(size: 18, weight: .bold)).foregroundStyle(SK.ink)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(Color.white.opacity(0.58)))
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
                 .shadow(color: look.glow.opacity(0.25), radius: 6, y: 2)
+                .frame(width: d, height: d)             // 44 pt on screen even when the canvas is scaled down
                 .contentShape(Circle())
+                .padding(-(d - 44) / 2)                 // the look and position stay as designed
         }
         .buttonStyle(.plain).accessibilityLabel(label).accessibilityIdentifier(id ?? "picker-btn")
     }
@@ -210,7 +449,7 @@ struct AdoptionCenter: View {
         }
         .frame(width: 440, height: 150, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(mode == .more ? "The Jelly Spring. Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")\(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)")
+        .accessibilityLabel(headerLabel)
         .accessibilityHint("Swipe up or down to change Jelbie")
         .accessibilityAddTraits(.isHeader)
         .accessibilityAdjustableAction { dir in
@@ -218,10 +457,12 @@ struct AdoptionCenter: View {
         }
     }
 
+    private var headerLabel: String { "\(mode == .more ? "The Jelly Spring. Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")\(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)" }
+
     // MARK: stage (design box 440 x 470, origin at canvas y 130)
 
     /// The pedestal, the Jelbie standing on it (transparent 3D, no room), the arrows and the "Drag to spin" pill.
-    private var stageBlock: some View {
+    private func stageBlock(_ u: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             PickerPedestal(look: look).offset(x: 66, y: 482 - 130 - PickerPedestal.topH / 2).offset(x: slideX * 0.15).opacity(slideO)
             ShowcaseStage(roster: [pick], focusFirst: true, fullScreen: false, cutout: true, onReady: stageReady)
@@ -232,8 +473,8 @@ struct AdoptionCenter: View {
                 .allowsHitTesting(false)
             Rectangle().fill(Color.clear).contentShape(Rectangle()).frame(width: 330, height: 260)
                 .gesture(orbit.simultaneously(with: pinch)).offset(x: 55, y: 215)
-            roundButton("chevron.left", label: "Previous Jelbie") { step(-1) }.offset(x: 14, y: 399 - 130 - 22)
-            roundButton("chevron.right", label: "Next Jelbie") { step(1) }.offset(x: 382, y: 399 - 130 - 22)
+            roundButton("chevron.left", label: "Previous Jelbie", u: u) { step(-1) }.offset(x: 14, y: 399 - 130 - 22)
+            roundButton("chevron.right", label: "Next Jelbie", u: u) { step(1) }.offset(x: 382, y: 399 - 130 - 22)
             dragPill.offset(x: 220 - 60, y: 571 - 130 - 15)
         }
         .frame(width: 440, height: 470, alignment: .topLeading)
@@ -266,27 +507,27 @@ struct AdoptionCenter: View {
 
     // MARK: card (design box 408 x 252)
 
-    private var sheetCard: some View {
+    private func sheetCard(_ u: CGFloat, height: CGFloat = 252) -> some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 22, style: .continuous).fill(look.card).shadow(color: look.glow.opacity(0.22), radius: 6, y: 3)
             Capsule().fill(SK.ink.opacity(0.16)).frame(width: 22, height: 5).offset(x: 193, y: 8).accessibilityHidden(true)
-            if naming { nameCard } else {
-                tabs.offset(x: 14, y: 23)
+            if naming { nameCard(u) } else {
+                tabs(u).offset(x: 14, y: 23)
                 Group {
                     switch tab {
                     case .about: aboutTab
                     case .traits: traitsTab
-                    case .moves: movesTab
+                    case .moves: movesTab(u)
                     }
                 }
                 .frame(width: 408, height: 252, alignment: .topLeading)
                 .id("\(page)-\(tab.rawValue)").transition(.opacity)
             }
         }
-        .frame(width: 408, height: 252)
+        .frame(width: 408, height: height)
     }
 
-    private var tabs: some View {
+    private func tabs(_ u: CGFloat) -> some View {
         HStack(spacing: 0) {
             ForEach(PickerTab.allCases, id: \.rawValue) { t in
                 Button { AudioHub.shared.uiTap(); withAnimation(.easeOut(duration: 0.18)) { tab = t } } label: {
@@ -294,7 +535,8 @@ struct AdoptionCenter: View {
                         .frame(maxWidth: .infinity, minHeight: 34)
                         .background(Capsule().fill(tab == t ? look.tabFill : Color.clear))
                         .overlay(Capsule().strokeBorder(tab == t ? look.tabLine : Color.clear, lineWidth: 1.5))
-                        .contentShape(Capsule())
+                        .frame(minHeight: hitMin(u))        // a 44 pt touch target around the 34 pt pill
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).accessibilityAddTraits(tab == t ? .isSelected : []).accessibilityIdentifier("picker-tab-\(t.title.lowercased())")
             }
@@ -357,7 +599,7 @@ struct AdoptionCenter: View {
         }
     }
 
-    private var movesTab: some View {
+    private func movesTab(_ u: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(info.moves.enumerated()), id: \.element.id) { k, m in
                 let cy: CGFloat = [103, 160, 212][k], h: CGFloat = k == 0 ? 56 : 52
@@ -372,7 +614,8 @@ struct AdoptionCenter: View {
                     .offset(x: 61, y: (h - 40) / 2)
                     Button { AudioHub.shared.uiTap(); perform(m.move) } label: {
                         Image(systemName: "play.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.cream)
-                            .frame(width: 36, height: 36).background(Circle().fill(SK.ink)).contentShape(Circle())
+                            .frame(width: 36, height: 36).background(Circle().fill(SK.ink))
+                            .frame(width: hitMin(u), height: hitMin(u)).contentShape(Circle()).padding(-(hitMin(u) - 36) / 2)
                     }
                     .buttonStyle(.plain).accessibilityLabel("Play \(m.title)").offset(x: 330, y: (h - 36) / 2)
                 }
@@ -384,19 +627,24 @@ struct AdoptionCenter: View {
 
     // MARK: button and naming
 
-    private var nameCard: some View {
+    /// The name field: dark text on the white pill whatever the system appearance, a visible placeholder, 44 pt tall at least.
+    private func nameField(_ u: CGFloat) -> some View {
+        TextField("", text: $name, prompt: Text(info.defaultName).foregroundStyle(SK.ink.opacity(0.4)))
+            .focused($nameFocused)
+            .textInputAutocapitalization(.words).autocorrectionDisabled().submitLabel(.done)
+            .font(SK.font(26, .heavy)).foregroundStyle(SK.ink).tint(SK.ink).multilineTextAlignment(.center)
+            .padding(.horizontal, 14).frame(minHeight: max(56, hitMin(u)))
+            .background(Capsule().fill(Color.white.opacity(0.9)))
+            .overlay(Capsule().strokeBorder(look.tabLine, lineWidth: 3))
+            .onChange(of: name) { _, v in if v.count > 12 { name = String(v.prefix(12)) } }
+            .onSubmit { bringHome() }
+            .accessibilityIdentifier("adopt-name")
+    }
+
+    private func nameCard(_ u: CGFloat) -> some View {
         VStack(spacing: 14) {
             Text("What will you call your \(info.name)?").font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
-            TextField(info.defaultName, text: $name)
-                .focused($nameFocused)
-                .textInputAutocapitalization(.words).autocorrectionDisabled().submitLabel(.done)
-                .font(SK.font(26, .heavy)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
-                .padding(.horizontal, 14).frame(height: 56)
-                .background(Capsule().fill(Color.white.opacity(0.9)))
-                .overlay(Capsule().strokeBorder(look.tabLine, lineWidth: 3))
-                .onChange(of: name) { _, v in if v.count > 12 { name = String(v.prefix(12)) } }
-                .onSubmit { bringHome() }
-                .accessibilityIdentifier("adopt-name")
+            nameField(u)
         }
         .padding(.horizontal, 24).padding(.top, 30).frame(width: 408, alignment: .top)
     }
