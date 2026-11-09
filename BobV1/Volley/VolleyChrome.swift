@@ -171,7 +171,7 @@ struct VolleyChrome: View {
                             ForEach(volley.ui.calls, id: \.self) { i in
                                 if volley.bodyPos.indices.contains(i), let pt = GameCamera.screenPoint(floor: SIMD2(volley.bodyPos[i].x, volley.bodyPos[i].z), y: volley.bodyPos[i].y + 0.75, size: g.size) {
                                     Text("!").font(.system(size: 26, weight: .black, design: .rounded)).foregroundStyle(.white)
-                                        .frame(width: 36, height: 36).background(Circle().fill(FocusStyle.pink).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 4, y: 2))
+                                        .frame(width: 36, height: 36).background(Circle().fill(SK.pinkStrong).shadow(color: FocusStyle.shadow.opacity(0.3), radius: 4, y: 2))
                                         .position(pt)
                                 }
                             }
@@ -181,6 +181,7 @@ struct VolleyChrome: View {
             }
         }
         .ignoresSafeArea()
+        .defersSystemGestures(on: .bottom)          // the bottom-edge controls win over the home swipe on the first touch
     }
 
     /// A double-tap: the nearest of your two Jelbies to the finger takes control. The hit zone is about a body and a half wide on the screen (a body is ~1.1 world

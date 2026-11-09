@@ -37,7 +37,7 @@ struct BagButton: View {
                 .overlay(alignment: .topTrailing) {
                     if store.newCount > 0 {
                         Text("\(store.newCount)").font(SK.font(11, .black)).foregroundStyle(.white)
-                            .frame(minWidth: 20, minHeight: 20).background(Circle().fill(SK.pink))
+                            .frame(minWidth: 20, minHeight: 20).background(Circle().fill(SK.pinkStrong))
                             .overlay(Circle().strokeBorder(SK.cream, lineWidth: 2)).offset(x: -6, y: 8)
                     }
                 }
@@ -116,6 +116,7 @@ struct TownFlow: View {
             }
         }
         .transition(.opacity)
+        .accessibilityAddTraits(.isModal)          // VoiceOver stays inside the Town: the HUD and the Jelbies behind it are not reachable
         .onAppear { HeadPortraitCache.shared.prewarm(care: care) }          // the stage is paused behind the Town: draw every lobby picture now (one at a time, see prewarm)
         .onDisappear { HeadPortraitCache.shared.cancelPrewarm() }
         .simultaneousGesture(TapGesture().onEnded { HeadPortraitCache.shared.cancelPrewarm() })          // a tap: the player is busy, no more hitches from the warm-up
@@ -187,7 +188,7 @@ struct TownView: View {
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Beach", sub: "Volleyball fun", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
-            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Room full" : "Wake a new friend", symbol: "drop.fill", color: SK.sky, cats: [.friends]) { adopt() },
+            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Room full" : "Wake a new friend", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
         ]
     }
 

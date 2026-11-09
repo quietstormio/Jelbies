@@ -23,7 +23,7 @@ struct BathChrome: View {
                 .playFont(18, .bold)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 30).frame(minHeight: 44)
-                .background(Capsule().fill(FocusStyle.pink).shadow(color: .black.opacity(0.18), radius: 6, y: 2))
+                .background(Capsule().fill(SK.pinkStrong).shadow(color: .black.opacity(0.18), radius: 6, y: 2))
         }
         .buttonStyle(.plain)
         .scaleEffect(pulse && !A11ySettings.shared.reduceMotion ? 1.06 : 1)          // (static under Reduce Motion)
