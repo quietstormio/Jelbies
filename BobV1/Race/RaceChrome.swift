@@ -43,7 +43,7 @@ struct RaceChrome: View {
 
     private var topBar: some View {
         VStack(spacing: 8) {
-            Text(race.ui.course == .puddle ? "Waddle Sprint" : "Waddle Sprint · \(race.ui.course.title)")
+            Text(race.ui.course == .puddle ? "Jelly Race" : "Jelly Race · \(race.ui.course.title)")
                 .playFont(17, .bold)
                 .foregroundStyle(CareMenu.brown)
                 .padding(.horizontal, 16).padding(.vertical, 7)
@@ -271,7 +271,7 @@ struct RacePlacingsCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: "star.fill").font(.system(size: 16, weight: .black)).foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.35))
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("Race points  +\(race.ui.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
+                        Text("Jelly Race points  +\(race.ui.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
                         Text("\(race.ui.playerName) now has \(race.ui.pointsAfter) to spend").playFont(13, .medium).foregroundStyle(CareMenu.brown.opacity(0.85))
                     }
                 }

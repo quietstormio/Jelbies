@@ -30,7 +30,7 @@ struct VolleyLobby: View {
 
     var body: some View {
         ZStack {
-            LobbyScreen(header: AnyView(LobbyHeader(title: "Volleyball", wallet: care.bath.wallet, backID: "volley-back", helpID: "volley-help", back: back, help: { open(.how) },
+            LobbyScreen(header: AnyView(LobbyHeader(title: "Jelly Volleyball", wallet: care.bath.wallet, backID: "volley-back", helpID: "volley-help", back: back, help: { open(.how) },
                                                  optionsID: "volley-options", options: { open(.options) })),
                         why: needsPartner ? nil : blocker, whyID: "volley-why") {          // the partner rule is said under the picker instead
                 courts

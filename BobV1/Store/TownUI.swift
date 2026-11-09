@@ -21,7 +21,7 @@ struct GoOutButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Go out").accessibilityIdentifier("go-out")
-        .accessibilityHint("Opens the Town: Track, Store, Jelly Show")
+        .accessibilityHint("Opens the Town: Jelly Race, Shop, Jelly Show, Jelly Volleyball")
         .accessibilityShowsLargeContentViewer { Label("Go out", systemImage: "door.left.hand.open") }
         .keyboardShortcut("o", modifiers: .command)
     }
@@ -179,15 +179,15 @@ struct TownView: View {
         let full = JellyRoster.savedIDs().count >= JellyRoster.maxCount
         return [
             Place(id: "town-shop", title: "Shop", sub: "Food, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
-            Place(id: "town-track", title: "Track", sub: "Race for JellyCoins", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
-            Place(id: "town-studio", title: "Studio", sub: "Dress up, the Jelly Show", symbol: "sparkles", color: SK.honey, cats: [.play]) { go(.studio) },
+            Place(id: "town-track", title: "Jelly Race", sub: "Race for JellyCoins", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
+            Place(id: "town-studio", title: "Jelly Show", sub: "Dress up and dance", symbol: "sparkles", color: SK.honey, cats: [.play]) { go(.studio) },
             Place(id: "town-cafe", title: "Café", sub: care.cafeNobodyHungry ? "Nobody's hungry \u{00B7} drinks only" : "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
             Place(id: "town-park", title: "Park", sub: "Play with visitors", symbol: "tree.fill", color: SK.sky, cats: [.play, .friends]) { park() },
-            Place(id: "town-groom", title: "Groomer", sub: care.groomGuestBlocker ?? "Jelly Spa clean-up", symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops], enabled: care.groomGuestBlocker == nil) {
+            Place(id: "town-groom", title: "Jelly Spa", sub: care.groomGuestBlocker ?? "Bubbles and clean-up", symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops], enabled: care.groomGuestBlocker == nil) {
                 if care.groomGuestBlocker != nil { AudioHub.shared.play(.notEnough) } else { groom() }          // a friend is coming or here: the Jelly Wash stays closed (the tile says why)
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
-            Place(id: "town-beach", title: "Beach", sub: "Volleyball fun", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
+            Place(id: "town-beach", title: "Jelly Volleyball", sub: "Beach fun", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
             Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Room full" : "Wake a new friend", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
         ]
     }
@@ -314,8 +314,8 @@ struct MapStrip: View {
                 .stroke(Color(hex: 0xF3DDB0), style: StrokeStyle(lineWidth: 9, lineCap: .round, dash: [1, 12]))
                 place("house.fill", "Home", SK.honeyDeep, x: w * 0.14, y: h * 0.52)
                 place("bag.fill", "Shop", SK.pink, x: w * 0.5, y: h * 0.46)
-                place("flag.checkered", "Track", SK.cream, x: w * 0.86, y: h * 0.52)
-                place("sparkles", "Studio", SK.honey, x: w * 0.68, y: h * 0.30)
+                place("flag.checkered", "Jelly Race", SK.cream, x: w * 0.86, y: h * 0.52)
+                place("sparkles", "Jelly Show", SK.honey, x: w * 0.68, y: h * 0.30)
             }
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
@@ -357,7 +357,7 @@ struct TrackPanel: View {
     var body: some View {
         let prof = care.jelly(who)
         ZStack {
-            LobbyScreen(header: AnyView(LobbyHeader(title: "Track", wallet: care.bath.wallet, backID: "track-back", helpID: "track-help", back: back, help: { setHow(true) })),
+            LobbyScreen(header: AnyView(LobbyHeader(title: "Jelly Race", wallet: care.bath.wallet, backID: "track-back", helpID: "track-help", back: back, help: { setHow(true) })),
                         why: blocker, whyID: "track-why") {
                 CoursePicker(care: care, runner: prof?.character ?? who, bleed: !compact, hint: hint)
             } right: {
@@ -406,7 +406,7 @@ struct TrackPanel: View {
             return UpgradeSkillInfo(id: s.rawValue, title: s.title, blurb: s.blurb, symbols: s == .speed ? ["shoe.fill", "shoeprints.fill", "figure.run"] : ["scope", "target"],
                                     tint: s == .speed ? SK.pink.opacity(0.4) : SK.sky.opacity(0.4), level: lv, cost: UpgradeTuning.cost(level: lv))
         }
-        return UpgradeConfig(gameWord: "Race", heroName: p.name, winLine: "Win = \(UpgradeTuning.racePoints(place: 1)) points", points: book.points(.race, character: p.character),
+        return UpgradeConfig(gameWord: "Jelly Race", heroName: p.name, winLine: "Win = \(UpgradeTuning.racePoints(place: 1)) points", points: book.points(.race, character: p.character),
                              backdrop: Color(hex: 0xBFE3B4), podium: Color(hex: 0x8FC47F), skills: skills, tiles: powerTiles(), selectedTile: chosenTile(p))
     }
 

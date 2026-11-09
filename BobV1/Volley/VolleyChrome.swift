@@ -35,7 +35,7 @@ struct VolleyChrome: View {
                 }
                 .padding(.horizontal, 14).padding(.bottom, compact ? 8 : 14)
                 .animation(CareMenu.spring, value: volley.showsCard)
-                if volley.live, volley.ui.phase == .intro { banner("Beach volley!") }
+                if volley.live, volley.ui.phase == .intro { banner("Jelly Volleyball!") }
                 Text(fxText).font(.system(size: fxTone == 3 ? 52 : 40, weight: .heavy, design: .rounded))
                     .foregroundStyle(fxTone == 1 || fxTone == 3 ? Color(red: 1.0, green: 0.85, blue: 0.25) : fxTone == 2 ? Color.white.opacity(0.85) : .white)
                     .shadow(color: FocusStyle.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: FocusStyle.shadow.opacity(0.35), radius: 6, y: 3)
@@ -345,7 +345,7 @@ struct VolleyResultsCard: View {
                     HStack(spacing: 8) {
                         Image(systemName: "star.fill").font(.system(size: 16, weight: .black)).foregroundStyle(Color(red: 0.98, green: 0.80, blue: 0.35))
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("Volleyball points  +\(volley.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
+                            Text("Jelly Volleyball points  +\(volley.pointsEarned)").playFont(16, .bold).foregroundStyle(CareMenu.brown)
                             Text("\(volley.playerName) now has \(volley.pointsAfter) to spend").playFont(13, .medium).foregroundStyle(CareMenu.brown.opacity(0.85))
                         }
                     }
@@ -388,7 +388,7 @@ struct VolleyTrophiesSection: View {
     var body: some View {
         let shelf = care.race.trophies.shelf(character: care.jelly(who)?.character ?? who)
         VStack(alignment: .leading, spacing: 8) {
-            Text("Beach volleyball").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
+            Text("Jelly Volleyball").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).accessibilityAddTraits(.isHeader)
             FlowLayout(spacing: 6) {
                 ForEach(VolleyTier.allCases, id: \.rawValue) { t in
                     let n = shelf.volleyWon(t)
@@ -398,7 +398,7 @@ struct VolleyTrophiesSection: View {
                     }
                     .foregroundStyle(n > 0 ? SK.ink : SK.muted).padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Capsule().fill(n > 0 ? Color(red: 0.98, green: 0.80, blue: 0.35) : Color.white.opacity(0.5)))
-                    .accessibilityElement(children: .ignore).accessibilityLabel("\(t.title) volleyball ribbon: \(n) win\(n == 1 ? "" : "s")")
+                    .accessibilityElement(children: .ignore).accessibilityLabel("\(t.title) Jelly Volleyball ribbon: \(n) win\(n == 1 ? "" : "s")")
                 }
                 ForEach(Trophy.allVolley.filter { $0.id.hasPrefix("vwins") }) { t in
                     let has = shelf.has(t)

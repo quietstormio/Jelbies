@@ -1213,9 +1213,9 @@ struct CareMenu: View {
     /// Compete unfolds into Track (train or race) and Jelly Show, for the highlighted Jelbie.
     private var competeChips: some View {
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
-        let opts: [(String, String, TownScreen, Bool, String)] = [("Track", Self.raceSymbol, .track, care.canRace(jelly: id), "hud-compete-track"),
+        let opts: [(String, String, TownScreen, Bool, String)] = [("Jelly Race", Self.raceSymbol, .track, care.canRace(jelly: id), "hud-compete-track"),
                                                                     ("Jelly Show", "sparkles", .studio, care.canShow(jelly: id), "hud-compete-show"),
-                                                                    ("Volleyball", UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", .volley, care.canVolley(jelly: id), "hud-compete-volley")]
+                                                                    ("Jelly Volleyball", UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", .volley, care.canVolley(jelly: id), "hud-compete-volley")]
         return HStack(spacing: 10) {
             ForEach(Array(opts.enumerated()), id: \.offset) { i, o in
                 Button {

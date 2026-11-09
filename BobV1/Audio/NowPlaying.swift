@@ -20,15 +20,15 @@ nonisolated struct NowPlaying: Equatable, Sendable {
 
     static func sceneLabel(_ s: MusicScene) -> String {
         switch s {
-        case .race: return "Track"
+        case .race: return "Jelly Race"
         case .raceFinal: return "Final stretch"
         case .shop: return "Shop"
         case .town: return "Town"
         case .park: return "Park"
         case .cafe: return "Café"
-        case .volley: return "Beach"
-        case .studio: return "Studio"
-        case .show, .danceSong: return "Show"
+        case .volley: return "Jelly Volleyball"
+        case .studio: return "Jelly Show"
+        case .show, .danceSong: return "Jelly Show"
         case .results: return "Results"
         default: return "Screen"
         }

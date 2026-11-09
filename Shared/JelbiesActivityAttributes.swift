@@ -1,6 +1,6 @@
 //
 //  JelbiesActivityAttributes.swift
-//  The Live Activities (ActivityKit): a race in progress (Jelly Circuit) and the night nap.
+//  The Live Activities (ActivityKit): a race in progress (Jelly Race) and the night nap.
 //  One attributes type with a `kind`, so the widget extension has ONE ActivityConfiguration; the content state carries whatever the kind shows.
 //  Compiled into the app (which starts / updates / ends) and the widget extension (which draws). Local updates only: no push server.
 //
@@ -19,7 +19,7 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
     var jellyColor: String
     /// Seconds since 1970 the activity began.
     var startedAt: Double
-    /// The race's course title ("Puddle", "Ripple", "Splash", "Wave"); nil = the plain Jelly Circuit wording.
+    /// The race's course title ("Puddle", "Ripple", "Splash", "Wave"); nil = the plain Jelly Race wording.
     var course: String? = nil
 
     init(kind: Kind, jellyID: Int = 0, jellyName: String = "Jelbie", jellyColor: String = "blue", startedAt: Date = .now, course: String? = nil) {
@@ -90,7 +90,7 @@ extension JelbiesActivityAttributes {
     /// The second line: "2nd of 4 · lap 2 of 3" / "Up at 6:00 AM".
     nonisolated func detail(_ s: ContentState, timeStyle: DateFormatter.Style = .short) -> String {
         switch (kind, s.phase) {
-        case (.race, .finished): return "\(s.laps) lap\(s.laps == 1 ? "" : "s") on the \(course ?? "Jelly Circuit")"
+        case (.race, .finished): return "\(s.laps) lap\(s.laps == 1 ? "" : "s") on the \(course ?? "Jelly Race")"
         case (.race, _): return "\(ContentState.ordinal(s.position)) of \(s.racers) · lap \(s.lap) of \(s.laps)"
         case (.nap, .awake): return "Good morning!"
         case (.nap, _):

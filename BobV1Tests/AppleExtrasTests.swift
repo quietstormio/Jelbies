@@ -210,7 +210,7 @@ final class AppleExtrasTests: XCTestCase {
         XCTAssertEqual(a.headline(states[0]), "Pip is racing!")
         XCTAssertEqual(a.detail(states[0]), "2nd of 4 · lap 2 of 3")
         XCTAssertEqual(a.headline(states[1]), "🥇 Pip won! +12 JellyCoins")
-        XCTAssertEqual(a.detail(states[1]), "3 laps on the Jelly Circuit")
+        XCTAssertEqual(a.detail(states[1]), "3 laps on the Jelly Race")
         XCTAssertEqual(JelbiesActivityAttributes(kind: .race).headline(.finished(place: 3, racers: 4, drops: 4, laps: 3)), "🥉 Jelbie came 3rd! +4 JellyCoins")
         XCTAssertEqual(JelbiesActivityAttributes(kind: .race).headline(.finished(place: 4, racers: 4, drops: 0, laps: 1)), "🏁 Jelbie came 4th!")
         let nap = JelbiesActivityAttributes(kind: .nap)

@@ -121,10 +121,10 @@ struct IslandNode: Identifiable {
 }
 
 private let islandNodes: [IslandNode] = [
-    IslandNode(id: "studio", name: "Studio", cx: 130, cy: 58, r: 19, fill: 0xFFE07A, pill: 52.76, icon: IconDef(tx: 121.07, ty: 49.07, scale: 0.744, parts: [
+    IslandNode(id: "studio", name: "Jelly Show", cx: 130, cy: 58, r: 19, fill: 0xFFE07A, pill: 52.76, icon: IconDef(tx: 121.07, ty: 49.07, scale: 0.744, parts: [
         IconPart(d: "M10.5 5.2l1.6 4.4 4.4 1.6-4.4 1.6-1.6 4.4-1.6-4.4-4.4-1.6 4.4-1.6z", fill: ink),
         IconPart(d: "M17.6 2.8l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8zM17.4 15.4l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z", fill: ink)])),
-    IslandNode(id: "track", name: "Track", cx: 270, cy: 58, r: 19, fill: 0x7DBAD4, pill: 48.1, icon: IconDef(tx: 261.07, ty: 49.07, scale: 0.744, parts: [
+    IslandNode(id: "track", name: "Jelly Race", cx: 270, cy: 58, r: 19, fill: 0x7DBAD4, pill: 48.1, icon: IconDef(tx: 261.07, ty: 49.07, scale: 0.744, parts: [
         IconPart(d: "M5.6 21.2V3.4", stroke: ink, width: 2.2, round: true),
         IconPart(d: "M6.4 4h12.2c.5 0 .8.5.5.9l-2.2 3.4 2.2 3.4c.3.4 0 .9-.5.9H6.4z", fill: ink),
         IconPart(d: "M9.2 4h2.8v2.8H9.2zM14.8 4h2.8v2.8h-2.8zM12 6.8h2.8v2.8H12zM9.2 9.6h2.8v2.8H9.2zM14.8 9.6h2.8v2.8h-2.8z", fill: creamFill)])),
@@ -142,7 +142,7 @@ private let islandNodes: [IslandNode] = [
         IconPart(d: "M15.8 9.6h1.4a2.6 2.6 0 0 1 0 5.2h-1.8", stroke: ink, width: 1.9),
         IconPart(d: "M2.8 20.2h14.4", stroke: ink, width: 2.2, round: true),
         IconPart(d: "M8 3.4c-.8 1 .8 1.6 0 2.8M11.4 3.4c-.8 1 .8 1.6 0 2.8", stroke: ink, width: 1.5, round: true)])),
-    IslandNode(id: "groom", name: "Groomer", cx: 288, cy: 134, r: 19, fill: 0xEE96AC, pill: 66.93, icon: IconDef(tx: 279.07, ty: 125.07, scale: 0.744, parts: [
+    IslandNode(id: "groom", name: "Jelly Spa", cx: 288, cy: 134, r: 19, fill: 0xEE96AC, pill: 66.93, icon: IconDef(tx: 279.07, ty: 125.07, scale: 0.744, parts: [
         IconPart(d: "M15.1 14A5.7 5.7 0 1 1 3.7 14A5.7 5.7 0 1 1 15.1 14Z", fill: ink),
         IconPart(d: "M20.2 8.2A3.6 3.6 0 1 1 13 8.2A3.6 3.6 0 1 1 20.2 8.2Z", fill: ink),
         IconPart(d: "M19.8 17A2.4 2.4 0 1 1 15 17A2.4 2.4 0 1 1 19.8 17Z", fill: ink),

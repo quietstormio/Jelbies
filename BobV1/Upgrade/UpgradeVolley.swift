@@ -23,7 +23,7 @@ extension GameCare {
             let lv = book.level(k, stats: st)
             return UpgradeSkillInfo(id: k.rawValue, title: k.title, blurb: k.blurb, symbols: Self.volleySymbols[k] ?? [], tint: Self.volleyTint(k).opacity(0.4), level: lv, cost: UpgradeTuning.cost(level: lv))
         }
-        var c = UpgradeConfig(gameWord: "Volleyball", heroName: p.name, winLine: "Win = \(UpgradeTuning.volleyPoints(win: true)) points", points: book.points(.volley, character: p.character),
+        var c = UpgradeConfig(gameWord: "Jelly Volleyball", heroName: p.name, winLine: "Win = \(UpgradeTuning.volleyPoints(win: true)) points", points: book.points(.volley, character: p.character),
                               backdrop: Color(hex: 0xBFE4EE), podium: Color(hex: 0xE6CC8C), skills: skills, tiles: volleyPowerTiles(), selectedTile: volleyChosenTile(p))
         // the team switcher: the first pick and his partner, each with his own points; none when the team is one Jelbie
         let team = [first] + [volleyPartner(for: first.id)].compactMap { $0 }

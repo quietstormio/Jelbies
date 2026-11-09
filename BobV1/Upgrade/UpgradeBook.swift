@@ -12,7 +12,7 @@ import Observation
 nonisolated enum UpgradeGame: String, Codable, CaseIterable, Sendable {
     case race, volley
     /// "Race" / "Volleyball": the game word of the sheet.
-    var word: String { self == .race ? "Race" : "Volleyball" }
+    var word: String { self == .race ? "Jelly Race" : "Jelly Volleyball" }
 }
 
 nonisolated enum UpgradeTuning {

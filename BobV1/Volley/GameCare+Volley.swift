@@ -91,7 +91,7 @@ extension GameCare {
     /// Who plays beside a lone Jelbie: his closest real Park friend; nil when he has none (then Volleyball is locked).
     func volleyParkFriend() -> ParkVisitor? { closestParkFriends(1).first }
 
-    static let volleyNeedsPartner = "Volleyball needs a partner. Go to the Park and make a friend!"
+    static let volleyNeedsPartner = "Jelly Volleyball needs a partner. Go to the Park and make a friend!"
     /// A match needs two on the team: another Jelbie, or a Park friend. nil = fine (or not a lone Jelbie).
     func volleyPartnerBlocker(jelly id: Int) -> String? {
         volleyPartner(for: id) == nil && volleyParkFriend() == nil ? Self.volleyNeedsPartner : nil

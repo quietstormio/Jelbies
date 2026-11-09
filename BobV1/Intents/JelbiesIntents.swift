@@ -102,8 +102,8 @@ struct GoodnightJelbiesIntent: AppIntent {
 }
 
 struct StartRaceIntent: AppIntent {
-    static let title: LocalizedStringResource = "Start a race"
-    static let description = IntentDescription("Opens the game on the Jelly Circuit with that Jelbie picked.")
+    static let title: LocalizedStringResource = "Start Jelly Race"
+    static let description = IntentDescription("Opens the game on Jelly Race with that Jelbie picked.")
     static let openAppWhenRun = true
 
     @Parameter(title: "Jelbie")
@@ -177,10 +177,12 @@ nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
             intent: StartRaceIntent(),
             phrases: [
                 "Start a race in \(.applicationName)",
+                "Play Jelly Race in \(.applicationName)",
+                "Start Jelly Race in \(.applicationName)",
                 "Race \(\.$jelbie) in \(.applicationName)",
-                "Take \(\.$jelbie) to the Jelly Circuit in \(.applicationName)",
+                "Take \(\.$jelbie) to Jelly Race in \(.applicationName)",
             ],
-            shortTitle: "Race",
+            shortTitle: "Jelly Race",
             systemImageName: "flag.checkered"
         )
     }

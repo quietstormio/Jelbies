@@ -34,14 +34,14 @@ The one item still in flight (Pip's signature) is the only open feature work. Th
 - Toy play: Jelbies react when a toy is placed, take turns, and share a two-seat cushion pile.
 
 ### Places
-- Town, Shop, Café (Jelly Cup, Baby latte), the Adoption Center and the Beach (Volleyball).
+- Town, Shop, Café (Jelly Cup, Baby latte), the Adoption Center and Jelly Volleyball.
 - Park: a clean redesign (one lawn, round trees, flowering bushes, simple pond), up to five Jelbies, visitor Jelbies to befriend, love rises faster than petting, and Park-only toys (seesaw, spring bunny, sandbox).
 - Groomer (Jelly Spa in Town): Quick Splash 20, Bubble Spa 40 and Royal Pamper 70 Drops per Jelbie. A shop-front cut-scene with ElevenLabs sounds, then a shiny reveal at home.
 
 ### Games
-- Jelly Circuit: pick a Jelbie and race other Jelbies with two foot buttons; curved courses, hurdles with a Jump button, tiers up to Tsunami.
+- Jelly Race: pick a Jelbie and race other Jelbies with two foot buttons; curved courses, hurdles with a Jump button, tiers up to Tsunami.
 - Jelly Show: Look, Dance and Trick rounds, ranks from Puddle to Ocean.
-- Jelly Volleyball: 2v2 beach volleyball with body-only hits (head bonk, belly-flop spike, belly dig). Reached from the Beach in Town and a Compete chip. Tiers: Sandcastle, Shore, Reef and Tidal. Trainable Speed, Power, Hops and Timing through drills. Drops, ribbons and trophies.
+- Jelly Volleyball: 2v2 beach volleyball with body-only hits (head bonk, belly-flop spike, belly dig). Reached from Jelly Volleyball in Town and a Compete chip. Tiers: Sandcastle, Shore, Reef and Tidal. Trainable Speed, Power, Hops and Timing through drills. Drops, ribbons and trophies.
 
 ### Progression
 - Drops are earn-only; there are no purchases. Races pay most, care pays steadily.

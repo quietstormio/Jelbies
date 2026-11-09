@@ -250,12 +250,12 @@ final class JelbieA11yContainer {
     /// The real place name: the room's title, or the scene the Jelbies are away at during a trip.
     func roomLabel() -> String {
         guard let care else { return "Room" }
-        if care.race.active { return "Race track" }
+        if care.race.active { return "Jelly Race" }
         if care.show.active { return "Jelly Show" }
         if care.cafe.active { return "Café" }
         if care.park.active { return "Park" }
-        if care.groom.active { return "Groomer" }
-        if care.volley.active { return "Beach" }
+        if care.groom.active { return "Jelly Spa" }
+        if care.volley.active { return "Jelly Volleyball" }
         return RoomCatalog.def(care.roomID).title
     }
 
