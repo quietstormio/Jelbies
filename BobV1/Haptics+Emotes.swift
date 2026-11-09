@@ -160,6 +160,13 @@ enum HapticCue: Hashable, Sendable {
         case .politeBow: return CueSpec(i: 0.10, s: 0.15, n: 1)
         case .bellyDrum: return CueSpec(i: 0.14, s: 0.19, n: 2, gap: 0.12, decay: 0.8)
         case .signatureFlourish: return CueSpec(i: 0.13, s: 0.12, n: 2, gap: 0.15, decay: 0.8)
+        // hangout emotes (BlobBrain+Hangout.swift): the start; the beats are `.beat` cues from EmoteTreats.haptics
+        case .humTune: return CueSpec(i: 0.075, s: 0.11)
+        case .curiousPeek: return CueSpec(i: 0.065, s: 0.17)
+        case .bigStretch: return CueSpec(i: 0.11, s: 0.065, n: 2, gap: 0.17, decay: 0.85)
+        case .tailPeek: return CueSpec(i: 0.07, s: 0.15)
+        case .pawCheck: return CueSpec(i: 0.06, s: 0.18)
+        case .bugWatch: return CueSpec(i: 0.085, s: 0.21)
         }
     }
 

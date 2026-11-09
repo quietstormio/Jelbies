@@ -1015,6 +1015,30 @@ final class AudioHub {
         }
     }
 
+    // MARK: hangout voice (2026-11-09)
+
+    /// A hangout emote's own voice (BlobBrain+Hangout.swift): that Jelbie's context-voice file as a GUARANTEED one-shot: no chance roll, no emote / context hush, not dropped by the scene
+    /// gate (the muted / not started / background / level gates stay). Same gain as the chirps and the context voices (0.7 x sfx level x duck). It hushes that Jelbie's ambient
+    /// chirp for the chirp's own 2.2 s (`lastVoice`), not the 6 s emote hush, so the old chatter is not displaced.
+    @discardableResult
+    func hangoutVoice(jelly: Int, _ v: JellyVoice, x: Float = 0) -> Bool {
+        let what = "hangout:\(v.rawValue)"
+        Self.requestTap?(what)
+        guard v.isContext else { diag(what, jelly, "notContext"); return false }
+        if let w = gateWhy() { diag(what, jelly, w); return false }
+        let level = settings.sfxLevel * duck.gain
+        let i = min(max(jelly, 0), 2)
+        lastVoice[i] = Self.clock()
+        diag(what, jelly, nil, v: 0.7 * level)
+        CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))
+        let c = JellyRoster.character(jelly), j = i
+        var variant = 1
+        if v.hasVariants { repeat { variant = Int.random(in: 1...3) } while variant == lastVariant[j][v.rawValue] ?? 0 }
+        lastVariant[j][v.rawValue] = variant
+        fire(JellyVoiceSet.file(character: c, v, variant: variant), volume: 0.7 * level, pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, v))
+        return true
+    }
+
     // MARK: music
 
     private func loopPlayer(_ name: String) -> (player: AVAudioPlayer, fader: Fader)? {

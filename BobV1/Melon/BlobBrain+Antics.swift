@@ -38,6 +38,7 @@ extension BlobBrain {
         case .politeBow: return 40
         case .bellyDrum: return 35
         case .signatureFlourish: return 30
+        case .humTune, .curiousPeek, .bigStretch, .tailPeek, .pawCheck, .bugWatch: return 60
         case .sit, .look, .wander: return 8
         case .skipHop: return 12
         case .hopscotch: return 25

@@ -40,8 +40,11 @@ enum IdleTuning {
     /// roam goal score pushes him fully to the edges, the stand after a leg (x `idleLively`), and the wait after a wander pick that started no special.
     static let centreRadius: Float = 1.5
     static let centreDwellFull: Float = 15
-    static let restAfterLeg: ClosedRange<Float> = 1.5...3.5
-    static let wanderPickWait: ClosedRange<Float> = 3...6
+    /// (vars so the soak can measure the old gaps against the new ones; the values are read at every use)
+    nonisolated(unsafe) static var restAfterLeg: ClosedRange<Float> = 1.5...3.5
+    nonisolated(unsafe) static var wanderPickWait: ClosedRange<Float> = 3...6
+    /// The stand after a special / emote (x `idleLively`).
+    nonisolated(unsafe) static var restAfterSpecial: ClosedRange<Float> = 1.0...2.5
     /// A friend who just began a move blocks the same move (and its family) for this long (seconds): no copycats a moment after the friend.
     static let echoWindow: Float = 5
 }
@@ -95,6 +98,13 @@ enum IdleKind: String, CaseIterable, Sendable {
     case tapTilt       // (player) a tap on the glass near him: he turns and tilts his head toward it with a curious "hm?"
     case welcomeWiggle // (player) the app is opened again after a short break: an excited welcome wiggle
     case checkIn       // (player) nobody has touched the screen for a while: he turns to you and asks "hello?"
+    // hangout emotes (2026-11-09): six calm solo things to do while hanging out, on their own clock (BlobBrain+Hangout.swift)
+    case humTune       // eyes closed, a slow sway with a tiny bounce on each beat, hums
+    case curiousPeek   // turns toward a room direction away from the player, leans in with a head tilt, "ooh?", a second smaller lean
+    case bigStretch    // arms up, stretches tall (feet planted), a little shiver, drops back with a settle wobble and an "aww"
+    case tailPeek      // looks over a shoulder at his own back, turns a slow half circle in place, a puzzled "huh?", a shrug-bounce
+    case pawCheck      // lifts one stubby arm, looks down at it, wiggles it twice, then the other; a pleased nod
+    case bugWatch      // follows an imaginary fly with his head, "eep!", a small hop with one arm up to catch it, misses, a giggle
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -287,7 +297,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick, .soccerKick, .tossBump: return .walking
-        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader: return .playing
+        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader, .humTune, .bigStretch, .bugWatch: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -300,6 +310,7 @@ extension BlobBrain {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("idleMaybeStart", probe) }
         if sleepEnabled, runMoveDemo == nil, idleState.kind == nil, !held, attached, sleepWanted(), idleStart(.sleep, sim) { return true }
         if hmphMaybeStart(sim) { return true }
+        if hangoutMaybeStart(sim) { return true }          // (the six hangout emotes: BlobBrain+Hangout.swift, their own clock)
         if treat2MaybeStart(sim) { return true }          // (batch-2 treats: BlobBrain+Emotes2.swift; EmoteTreats.selfSchedule = false hands them to the treat slot)
         if idleState.kind == nil, !held, attached, flapHopMaybeStart(sim) { return true }          // Lavender's flap-hop urge (its own 25...40 s clock, BlobBrain+FlapHop.swift)
         guard idleState.kind == nil, !held, attached else { return false }
@@ -487,7 +498,7 @@ extension BlobBrain {
         decorRelease()
         if let k = idleState.kind {
             if k == .sleep { awakeMin = rand(SleepTuning.awakeMin.lowerBound, SleepTuning.awakeMin.upperBound) }          // he stays up a while after any wake (no sleep / wake / sleep loop)
-            let treat = Self.emoteKinds.contains(k) && idleState.resume == nil && idleState.reaction == nil && social == nil          // (a solo emote from the treat slot: not his pick, no last / recent, no cooldown of its own - the old cycle goes on as if he had only paused)
+            let treat = (Self.emoteKinds.contains(k) || Self.hangoutKinds.contains(k)) && idleState.resume == nil && idleState.reaction == nil && social == nil          // (a solo emote from the treat slot: not his pick, no last / recent, no cooldown of its own - the old cycle goes on as if he had only paused)
             let flourish = (Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)) || treat          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)
             idleState.counts[k, default: 0] += 1
@@ -686,6 +697,8 @@ extension BlobBrain {
         case .tossBump: return tossBumpStart(sim, stand: here, dir: SIMD2(0, 1))
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn:
             return emote2Begin(kind, sim)
+        case .humTune, .curiousPeek, .bigStretch, .tailPeek, .pawCheck, .bugWatch:
+            return hangoutBegin(kind, sim)
         case .joy:
             idleBegin(.joy)
             idleState.target = here
@@ -757,6 +770,7 @@ extension BlobBrain {
         case .tailHug: runTailHug(sim, skinner, dt)
         case .hiccup, .sneeze, .dizzyWobble, .politeBow, .bellyDrum, .signatureFlourish: runEmote(sim, skinner, dt)
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn: runEmote2(sim, skinner, dt)
+        case .humTune, .curiousPeek, .bigStretch, .tailPeek, .pawCheck, .bugWatch: runHangout(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
         case .decorHopscotch: runHopscotch(sim, skinner, dt)
@@ -1000,7 +1014,7 @@ extension BlobBrain {
         mouthOpen = 0
         armWalkWant = 0
         script = .none
-        restTimer = rand(1.0, 2.5) * idleLively
+        restTimer = rand(IdleTuning.restAfterSpecial.lowerBound, IdleTuning.restAfterSpecial.upperBound) * idleLively
     }
 
     // MARK: belly slide + scoot (the hop machinery owns the body, like the jacks)
@@ -1032,7 +1046,7 @@ extension BlobBrain {
         let here = SIMD2(pose.centroid.x, pose.centroid.z)
         let d = idleState.target - here
         let dl = simd_length(d)
-        var step = (idleState.kind == .bounce || idleState.kind == .joy || idleState.kind == .tossHeader) ? 0 : min(Self.scootHop, dl)
+        var step = (idleState.kind == .bounce || idleState.kind == .joy || idleState.kind == .tossHeader || idleState.kind == .bugWatch) ? 0 : min(Self.scootHop, dl)
         var u = dl > 1e-3 ? d / dl : SIMD2(sinf(yaw), cosf(yaw))
         if idleState.kind == .hopscotch {          // 0.34 u ahead along the leg, alternating 0.12 u to either side
             let f = SIMD2(sinf(idleState.baseYaw), cosf(idleState.baseYaw)), right = SIMD2(f.y, -f.x)
@@ -1040,7 +1054,7 @@ extension BlobBrain {
             step = simd_length(v); u = v / step
         }
         let rv = resolve(SIMD3(here.x + u.x * step, 0, here.y + u.y * step), footprint)
-        gait.facingYaw = idleState.kind == .startle ? yaw : atan2f(u.x, u.y)
+        gait.facingYaw = (idleState.kind == .startle || idleState.kind == .bugWatch) ? yaw : atan2f(u.x, u.y)
         gait.home = here
         poseW = 0; poseOn = false
         let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
@@ -1056,7 +1070,7 @@ extension BlobBrain {
         if bagBodyTick(sim, skinner, dt) { return true }
         if slideBodyTick(sim, skinner, dt) { return true }
         if hopscotchBodyTick(sim, skinner, dt) { return true }
-        guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce || kind == .tossHeader || kind == .skipHop || kind == .hopscotch || kind == .joy || kind == .startle, idleState.phase >= 1, case .idle = script else { return false }
+        guard let kind = idleState.kind, kind == .slide || kind == .scoot || kind == .bounce || kind == .tossHeader || kind == .skipHop || kind == .hopscotch || kind == .joy || kind == .startle || kind == .bugWatch, idleState.phase >= (kind == .bugWatch ? 2 : 1), case .idle = script else { return false }
         activity = .playing
         mouthOpen = 0
         idleState.phaseT += dt
@@ -1081,7 +1095,9 @@ extension BlobBrain {
             }
             let flap = sinf(2 * .pi * 5 * idleState.phaseT)
             armWalkWant = 1
-            if kind == .joy {          // the jacks' arms-up pose, one rep
+            if kind == .bugWatch {
+                bugHopTick()          // (BlobBrain+Hangout.swift: one arm up, the giggle)
+            } else if kind == .joy {          // the jacks' arms-up pose, one rep
                 armDirW = smooth01(min(1, idleState.phaseT / 0.12)); armDirEl = [0.95, 0.95]; armDirSa = [0.10, 0.10]; armDirOut = 0.07
             } else {
                 armDirW = 1; armDirEl = [0.45 + 0.1 * flap, 0.45 - 0.1 * flap]; armDirSa = [0.1, 0.1]; armDirOut = 0.05

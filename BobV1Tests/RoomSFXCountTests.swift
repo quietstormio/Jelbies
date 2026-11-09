@@ -72,13 +72,16 @@ final class RoomSFXCountTests: XCTestCase {
         // the new solo emotes are additions on top: they still happen, rarely (about one per 3 Jelbie-minutes)
         let emotes = BlobBrain.emoteKinds.reduce(0) { $0 + total["idle:\($1)", default: 0] }          // NEWONLY
         XCTAssertGreaterThan(emotes, 0, "the solo emotes still occur"); XCTAssertLessThan(emotes, 30, "and stay rare: \(emotes)")          // NEWONLY
+        // the six hangout emotes (2026-11-09) are their OWN family (own clock, about one per Jelbie per 40...70 s), outside the "emotes stay rare" ceiling above and outside the old-kind family below
+        let hangout = BlobBrain.hangoutKinds.reduce(0) { $0 + total["idle:\($1)", default: 0] }
+        XCTAssertGreaterThan(hangout, 0, "the hangout emotes occur"); XCTAssertLessThan(hangout, 80, "and stay a few per minute: \(hangout)")
         XCTAssertGreaterThan(total["hapticSink", default: 0], 20, "the room's moves reach the haptic sink")          // NEWONLY
         // NEWONLY-BEGIN
         // regression gate: every pre-existing kind keeps >= 90 % of the approved build (same seeds, same minutes)
         guard let text = try? String(contentsOfFile: Self.baselinePath, encoding: .utf8) else { print("no baseline at \(Self.baselinePath)"); return }
         let base = Self.parse(text)
         // (per-kind counts are chaotic - one changed random draw reshuffles a whole 3-minute run, +-35 % on a kind of ~15 - so the gate is on the families, each >= 75 % (5 seeds x 3 min: one changed random draw reshuffles a run, a family moves +-25 %; measured on this tree: old idle kinds 87-94 %, vocal 93-132 %, contact 90-110 %; a tighter gate needs 20+ seeds = hours); the big single kinds >= 40 %; vocal chatter also <= 140 %: a band, they must not speak too much)
-        let newIdle = Set(BlobBrain.emoteKinds.map { "idle:\($0)" }), newSoc: Set<String> = ["soc:congaLine", "soc:ringDance", "soc:highFive", "soc:squabble", "soc:shove"]
+        let newIdle = Set(BlobBrain.emoteKinds.union(BlobBrain.hangoutKinds).map { "idle:\($0)" }), newSoc: Set<String> = ["soc:congaLine", "soc:ringDance", "soc:highFive", "soc:squabble", "soc:shove"]
         func sum(_ d: [String: Int], _ pick: (String) -> Bool) -> Int { d.filter { pick($0.key) }.values.reduce(0, +) }
         let families: [(String, (String) -> Bool)] = [
             ("vocal chatter (chirps / babble)", { $0.hasPrefix("chirp:") }),
