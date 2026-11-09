@@ -97,6 +97,11 @@ final class UpgradeBook {
         var points: [String: Int] = [:]
         /// "<game>.<character>" -> chosen power-up item id.
         var chosen: [String: String] = [:]
+        init(points: [String: Int] = [:], chosen: [String: String] = [:]) { self.points = points; self.chosen = chosen }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            points = c.value(.points, [:]); chosen = c.value(.chosen, [:])
+        }
     }
     private var saved = Saved()
     /// Bumped on every change (views read it).
@@ -109,7 +114,7 @@ final class UpgradeBook {
 
     init(persists: Bool = true, defaults: UserDefaults = .standard, key: String = UpgradeTuning.defaultsKey) {
         self.persists = persists; self.defaults = defaults; self.key = key
-        if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = s }
+        if persists, let s = SaveRecovery.decode(Saved.self, key: key, defaults: defaults) { saved = s }
         // Dev launch arg `-UpgradePoints N`: tops every game x character balance up to at least N (saved).
         if persists, let i = ProcessInfo.processInfo.arguments.firstIndex(of: "-UpgradePoints"),
            i + 1 < ProcessInfo.processInfo.arguments.count, let n = Int(ProcessInfo.processInfo.arguments[i + 1]), n > 0 {

@@ -39,7 +39,7 @@ final class ParkBook {
         if UserDefaults.standard.integer(forKey: "SeedDupSave") != 0 { Self.writeDuplicateSave(defaults) }          // capture aid: an old save with doubled names, loaded through the real path below
         #endif
         let full = ParkPool.all(reserved: reserved)
-        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode([ParkVisitor].self, from: d), v.count == ParkTuning.poolSize || v.count == full.count {
+        if let v = SaveRecovery.decode([ParkVisitor].self, key: Self.key, defaults: defaults), !v.isEmpty, v.count <= full.count {
             // Colour-only migration: names, ids, friendship, wear and text stay; the colour (and so the signature) follows the species-consistent generator.
             var vs = v.map { var x = $0; if full.indices.contains(x.id) { x.colour = full[x.id].colour }; x.signature = x.colour.speciesFeature; return x }
             // Pool growth (2026-11-07): an old save of the stock 16 gets the extra visitors appended; everything it already holds stays.
@@ -52,7 +52,11 @@ final class ParkBook {
                 if let d = try? JSONEncoder().encode(vs) { defaults.set(d, forKey: Self.key) }
             }
             visitors = vs }
-        else { visitors = full }
+        else {
+            // A save that decoded but does not fit the pool (empty, or longer than the pool) is also kept before the fresh pool overwrites it.
+            if let raw = defaults.data(forKey: Self.key) { SaveRecovery.quarantine(raw, key: Self.key, defaults: defaults) }
+            visitors = full
+        }
     }
 
     /// The names a visitor may not take: the player's species / roster Jelbies, the personality words, the colours (ParkNames.reserved).
@@ -196,7 +200,14 @@ final class ParkBook {
 
     // MARK: the daily ledger (love given, the gift)
 
-    struct Ledger: Codable { var day = ""; var love: [String: Float] = [:]; var giftDay = ""; var lastVisitGifted: Bool? }
+    struct Ledger: Codable {
+        var day = ""; var love: [String: Float] = [:]; var giftDay = ""; var lastVisitGifted: Bool?
+        init(day: String = "", love: [String: Float] = [:], giftDay: String = "", lastVisitGifted: Bool? = nil) { self.day = day; self.love = love; self.giftDay = giftDay; self.lastVisitGifted = lastVisitGifted }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            day = c.value(.day, ""); love = c.value(.love, [:]); giftDay = c.value(.giftDay, ""); lastVisitGifted = c.value(.lastVisitGifted, nil)
+        }
+    }
     @ObservationIgnored private var ledgerCache: Ledger?
     static func dayString(_ d: Date = Date()) -> String {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: d)
@@ -204,7 +215,7 @@ final class ParkBook {
     }
     var ledger: Ledger {
         get {
-            var l = ledgerCache ?? (defaults.data(forKey: Self.ledgerKey).flatMap { try? JSONDecoder().decode(Ledger.self, from: $0) } ?? Ledger())
+            var l = ledgerCache ?? (SaveRecovery.decode(Ledger.self, key: Self.ledgerKey, defaults: defaults) ?? Ledger())
             if l.day != Self.dayString() { l.day = Self.dayString(); l.love = [:] }
             return l
         }

@@ -110,6 +110,13 @@ nonisolated struct VolleyStats: Codable, Equatable, Sendable {
     var speed: Float = 0.35, power: Float = 0.35, hops: Float = 0.35, timing: Float = 0.30
     var sessions = 0, day = 0, daySessions = 0
     var matches = 0, wins = 0
+    init(speed: Float = 0.35, power: Float = 0.35, hops: Float = 0.35, timing: Float = 0.30) { self.speed = speed; self.power = power; self.hops = hops; self.timing = timing }
+    init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        speed = c.value(.speed, speed); power = c.value(.power, power); hops = c.value(.hops, hops); timing = c.value(.timing, timing)
+        sessions = c.value(.sessions, 0); day = c.value(.day, 0); daySessions = c.value(.daySessions, 0); matches = c.value(.matches, 0); wins = c.value(.wins, 0)
+    }
     static func avg(_ a: VolleyStats, _ b: VolleyStats) -> VolleyStats {
         VolleyStats(speed: (a.speed + b.speed) / 2, power: (a.power + b.power) / 2, hops: (a.hops + b.hops) / 2, timing: (a.timing + b.timing) / 2)
     }
@@ -130,7 +137,14 @@ nonisolated enum VolleyStatKind: String, CaseIterable, Sendable {
 }
 
 /// Wins, close losses and unlocks per tier (a win, or three close losses, opens the next tier; saved).
-nonisolated struct VolleyRecord: Codable, Equatable, Sendable { var matches = 0, wins = 0, close = 0 }
+nonisolated struct VolleyRecord: Codable, Equatable, Sendable {
+    var matches = 0, wins = 0, close = 0
+    init(matches: Int = 0, wins: Int = 0, close: Int = 0) { self.matches = matches; self.wins = wins; self.close = close }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        matches = c.value(.matches, 0); wins = c.value(.wins, 0); close = c.value(.close, 0)
+    }
+}
 
 @MainActor
 @Observable
@@ -149,7 +163,14 @@ final class VolleyBook {
     static let key = "Volley.book.v1"
     nonisolated deinit {}
 
-    private struct Saved: Codable { var stats: [String: VolleyStats]; var records: [String: VolleyRecord]; var chosen: VolleyTier }
+    private struct Saved: Codable {
+        var stats: [String: VolleyStats]; var records: [String: VolleyRecord]; var chosen: VolleyTier
+        init(stats: [String: VolleyStats], records: [String: VolleyRecord], chosen: VolleyTier) { self.stats = stats; self.records = records; self.chosen = chosen }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            stats = c.value(.stats, [:]); records = c.value(.records, [:]); chosen = c.value(.chosen, .sandcastle)
+        }
+    }
 
     init(persists: Bool = false, defaults: UserDefaults = .standard, dayKey: @escaping () -> Int = { MainActor.assumeIsolated { DayClock.shared.dayKey } }) {
         self.persists = persists; self.defaults = defaults; self.dayKey = dayKey
@@ -157,7 +178,7 @@ final class VolleyBook {
         slowBall = defaults.bool(forKey: "volley.slowBall")
         autoSwitch = defaults.object(forKey: "volley.autoSwitch") == nil ? true : defaults.bool(forKey: "volley.autoSwitch")
         partner = defaults.object(forKey: "volley.partner") == nil ? nil : defaults.integer(forKey: "volley.partner")
-        if let d = defaults.data(forKey: Self.key), let s = try? JSONDecoder().decode(Saved.self, from: d) { stats = s.stats; records = s.records; chosen = s.chosen }
+        if let s = SaveRecovery.decode(Saved.self, key: Self.key, defaults: defaults) { stats = s.stats; records = s.records; chosen = s.chosen }
     }
 
     func stats(character c: Int) -> VolleyStats {

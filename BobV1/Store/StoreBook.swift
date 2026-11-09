@@ -9,6 +9,29 @@ import Observation
 
 nonisolated enum BuyResult: Equatable, Sendable { case bought, notEnough, alreadyOwned, unknown }
 
+/// Decoding a saved book without ever losing the only copy: when the stored bytes cannot be read, they are first copied to "<key>.corrupt" (kept once, never
+/// overwritten by a later failure) so the next save cannot destroy them, and the caller carries on with a fresh book.
+nonisolated enum SaveRecovery {
+    static func decode<T: Decodable>(_ type: T.Type, key: String, defaults: UserDefaults) -> T? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        do { return try JSONDecoder().decode(type, from: data) }
+        catch {
+            quarantine(data, key: key, defaults: defaults)
+            return nil
+        }
+    }
+    /// Keeps the raw bytes under "<key>.corrupt" unless an earlier unreadable copy is already there.
+    static func quarantine(_ data: Data, key: String, defaults: UserDefaults) {
+        let k = key + ".corrupt"
+        if defaults.data(forKey: k) == nil { defaults.set(data, forKey: k) }
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// A value, or `fallback` when the key is missing or unreadable (an older save, or one field of a newer shape).
+    nonisolated func value<T: Decodable>(_ key: Key, _ fallback: T) -> T { (try? decodeIfPresent(T.self, forKey: key)) ?? fallback }
+}
+
 @MainActor
 @Observable
 final class StoreBook {
@@ -68,7 +91,7 @@ final class StoreBook {
 
     init(wallet: DropsWallet, persists: Bool = true, defaults: UserDefaults = .standard, key: String = StoreBook.key) {
         self.wallet = wallet; self.persists = persists; self.defaults = defaults; storeKey = key
-        if persists, let d = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn)
+        if persists, let s = SaveRecovery.decode(Saved.self, key: key, defaults: defaults) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn)
             let (kept, refund) = Self.dropUnlisted(saved)
             if kept.unlistedRefunded != saved.unlistedRefunded { saved = kept; if refund > 0 { wallet.add(refund, silent: true) }; save() }
             // 2026-11-01: the Roll trick is gone from the game; a bought Roll page is dropped silently and its 55 JellyCoins go back to the wallet
@@ -437,5 +460,25 @@ final class StoreBook {
         saved.room = id == .home ? nil : id.rawValue
         save()
         return true
+    }
+}
+
+extension StoreBook.Saved {
+    /// Every key is optional on read: a save from an older build (or one missing a field) keeps what it has and never resets the player's goods.
+    enum CodingKeys: String, CodingKey {
+        case counts, pages, wearables, worn, starterGiven, newItems, placed, placedAt, nextDecorUID, awarded, unlistedRefunded, rooms, room, stash
+        case gardenRefunded, staplesGiven, retiredDecorRefunded, glovesRefunded, ownedTricks, everyone, tricksMigrated, earsChecked
+    }
+    init(from decoder: Decoder) throws {
+        self.init()
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        counts = c.value(.counts, counts); pages = c.value(.pages, pages); wearables = c.value(.wearables, wearables); worn = c.value(.worn, worn)
+        starterGiven = c.value(.starterGiven, starterGiven); newItems = c.value(.newItems, newItems); placed = c.value(.placed, placed)
+        placedAt = c.value(.placedAt, placedAt); nextDecorUID = c.value(.nextDecorUID, nextDecorUID); awarded = c.value(.awarded, awarded)
+        unlistedRefunded = c.value(.unlistedRefunded, unlistedRefunded); rooms = c.value(.rooms, rooms); room = c.value(.room, room); stash = c.value(.stash, stash)
+        gardenRefunded = c.value(.gardenRefunded, gardenRefunded); staplesGiven = c.value(.staplesGiven, staplesGiven)
+        retiredDecorRefunded = c.value(.retiredDecorRefunded, retiredDecorRefunded); glovesRefunded = c.value(.glovesRefunded, glovesRefunded)
+        ownedTricks = c.value(.ownedTricks, ownedTricks); everyone = c.value(.everyone, everyone); tricksMigrated = c.value(.tricksMigrated, tricksMigrated)
+        earsChecked = c.value(.earsChecked, earsChecked)
     }
 }
