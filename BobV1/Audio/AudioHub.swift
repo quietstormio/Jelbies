@@ -539,7 +539,8 @@ final class AudioHub {
 
     // MARK: opening story (Start/OpeningStory.swift)
 
-    @ObservationIgnored private var openingPlayers: [String: AVAudioPlayer] = [:]
+    /// The opening's players live on their own queue: `prepareToPlay`/`play` start the output device and blocked the main thread.
+    @ObservationIgnored private let openingPlayers = OpeningAudioPlayers()
 
     /// A clip of the game opening. `music` follows the Music setting (the underscore), otherwise the sound-effects level. Sets the session up itself
     /// (the opening plays before the room exists). Muted / the setting off = silent.
@@ -548,21 +549,14 @@ final class AudioHub {
         guard let u = url(name) else { return }
         if !started { setUpSession() }          // reads whether another app is playing, so the music level below respects it
         let level = music ? musicLevelNow : settings.sfxLevel          // opening music is silent while someone else's audio plays, like the room's music
-        guard level > 0.01, let p = try? AVAudioPlayer(contentsOf: u) else { return }
+        guard level > 0.01 else { return }
         let target = min(1, volume * level * (music ? 1 : AudioMix.sfxMaster * 1.2))
-        p.volume = fadeIn > 0 ? 0 : target
-        p.prepareToPlay(); p.play()
-        if fadeIn > 0 { p.setVolume(target, fadeDuration: fadeIn) }
-        if music { openingPlayers[name]?.stop(); openingPlayers[name] = p }
-        else { let key = name + "#\(openingPlayers.count)"; openingPlayers[key] = p; DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.openingPlayers[key] = nil } }
+        openingPlayers.play(url: u, name: name, target: target, fadeIn: fadeIn, music: music)
     }
 
     /// Fades the opening's sounds out (a skip, or the end).
     func stopOpening(fade: TimeInterval = 0.5) {
-        let all = openingPlayers
-        openingPlayers = [:]
-        for (_, p) in all { p.setVolume(0, fadeDuration: fade) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + fade + 0.05) { for (_, p) in all { p.stop() } }
+        openingPlayers.stop(fade: fade)
     }
 
     // MARK: effects
@@ -1150,5 +1144,38 @@ final class AudioHub {
         let cafeQuiet = homeAmbience          // the café has its own music: the home room's ambience bed fades off there (and back on leaving, whatever the exit)
         ambDay?.player.volume = Float(b.morning + b.day) * a * cafeQuiet
         ambEve?.player.volume = Float(b.evening + b.night) * a * cafeQuiet
+    }
+}
+
+/// Owns the opening story's players on a dedicated serial queue (not `AudioSessionQueue`: main-thread code does `.sync` on that one). A `stop`
+/// queued after a `play` always runs after it, so nothing can start after a skip.
+nonisolated private final class OpeningAudioPlayers: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "io.mgsllc.BobV1.openingAudio", qos: .userInitiated)
+    private var players: [String: AVAudioPlayer] = [:]   // queue only
+    private var counter = 0                              // queue only
+
+    func play(url: URL, name: String, target: Float, fadeIn: TimeInterval, music: Bool) {
+        queue.async { [self] in
+            guard let p = try? AVAudioPlayer(contentsOf: url) else { return }
+            p.volume = fadeIn > 0 ? 0 : target
+            p.prepareToPlay(); p.play()
+            if fadeIn > 0 { p.setVolume(target, fadeDuration: fadeIn) }
+            if music { players[name]?.stop(); players[name] = p }
+            else {
+                counter += 1
+                let key = name + "#\(counter)"
+                players[key] = p
+                queue.asyncAfter(deadline: .now() + 4) { [self] in players[key] = nil }
+            }
+        }
+    }
+
+    func stop(fade: TimeInterval) {
+        queue.async { [self] in
+            let all = players
+            players = [:]
+            for (_, p) in all { p.setVolume(0, fadeDuration: fade) }
+            queue.asyncAfter(deadline: .now() + fade + 0.05) { for (_, p) in all { p.stop() } }
+        }
     }
 }
