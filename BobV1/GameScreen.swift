@@ -32,6 +32,8 @@ struct GameScreen: View {
     @Environment(\.scenePhase) private var scenePhase
     /// "Welcome back" cover (resume after more than 20 s away; never at a cold launch): up the moment the app goes to the background, so the first frame back is never the half-restored room.
     @State private var welcomeCover = false
+    /// The app really went to the background (not just `.inactive`: a permission alert, Control Centre, the app switcher peek, a call banner). Only then is the leave work done and the return work needed.
+    @State private var wentBackground = false
     @State private var welcomeLeftAt: Date?
     @State private var welcomeTask: Task<Void, Never>?
     @State private var welcomeSafety: Task<Void, Never>?
@@ -91,6 +93,7 @@ struct GameScreen: View {
         ZStack {
             MelonStage(model: model)
                 .ignoresSafeArea()
+                .accessibilityHidden(town != nil)          // Town / Shop / Track cover the room: VoiceOver must not reach the Jelbies underneath
                 .onChange(of: perfOverlayTags, initial: true) { _, tags in PerfOverlay.set(tags) }          // PerfMeter ctx: which overlays are up
 
             // dim scrim behind the care / Go out menus; a tap anywhere outside collapses them
@@ -227,7 +230,7 @@ struct GameScreen: View {
             }.photoHidden()
             .opacity(model.care.nightSkip.active || model.care.arranging ? 0 : 1)          // "Sleep until morning": the HUD is away until the morning has been shown; arranging the room hides it too
             .allowsHitTesting(!model.care.nightSkip.active && !model.care.arranging)
-            .accessibilityHidden(model.care.arranging)
+            .accessibilityHidden(model.care.arranging || town != nil)          // (and under a Town screen)
             .animation(.easeInOut(duration: 0.6), value: model.care.nightSkip.active)
             .animation(.easeInOut(duration: 0.2), value: model.care.arranging)
 
@@ -292,9 +295,7 @@ struct GameScreen: View {
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
             AudioHub.shared.setTownScene(currentMusicScene)
-            Ears.shared.launch(care: model.care)
             PlayToyRegistry.registerBuiltIns()
-            LiveActivities.shared.cleanUp(names: jellyNames)                                           // orphans from a killed run; adopt a live nap / Pep card
             let care = model.care
             let toTrack: (Int) -> Void = { id in                 // Siri "race": the Track panel for that Jelbie (its Race button), like the voice command
                 guard !care.raceBusy, !care.cafe.active, !care.focus.isActive, !care.arranging, !care.bath.active, !care.trayOut else { care.openJelly(id); return }
@@ -304,7 +305,14 @@ struct GameScreen: View {
             router.onNoFood = { A11yAnnounce.say(GameRouter.noFoodLine); withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }          // Siri feed with an empty bag: the Feed row, "none left", spoken
             router.onBed = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
             router.apply(care: model.care)                                                             // a Siri route that launched the app cold
-            JelbiesShortcuts.updateAppShortcutParameters()                                             // Siri learns the Jelbies' names for "Feed Pip in Jelbies"
+            // Not needed for the first frame: after it (the Continue path built all of this inside onAppear).
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(600))
+                Ears.shared.launch(care: model.care)
+                LiveActivities.shared.cleanUp(names: jellyNames)                                       // orphans from a killed run; adopt a live nap / Pep card
+                try? await Task.sleep(for: .milliseconds(900))
+                JelbiesShortcuts.updateAppShortcutParameters()                                         // Siri learns the Jelbies' names for "Feed Pip in Jelbies"
+            }
         }
         .onChange(of: reduceMotionEnv) { _, on in A11ySettings.shared.systemReduceMotion = on }          // camera / effects only; the jelly physics never changes
         .fullScreenCover(isPresented: $settingsOpen) {
@@ -343,6 +351,8 @@ struct GameScreen: View {
         .onChange(of: router.serial) { _, _ in router.apply(care: model.care) }                       // Siri in-process, a drained queue
         .onChange(of: scenePhase) { _, p in
             if p == .active {
+                guard wentBackground else { return }          // an `.inactive` blip (alert, Control Centre, app-switcher peek): nothing was torn down, nothing to rebuild
+                wentBackground = false
                 model.care.skipNightCutscene(force: true)          // back mid "Sleep until morning": finish the skip now
                 DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the bedtime check and the director see the foreground
                 model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
@@ -352,7 +362,8 @@ struct GameScreen: View {
                 LiveActivities.shared.returnedActive(names: jellyNames)                                // by day the nap card says good morning
                 router.drainQueued()                                                                   // the widget's Water button / an intent run while away
                 router.apply(care: model.care)
-            } else {
+            } else if p == .background {
+                wentBackground = true
                 model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()
                 DayClock.shared.leaving()
                 AudioHub.shared.setForeground(false)

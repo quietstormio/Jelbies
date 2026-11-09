@@ -233,6 +233,10 @@ final class SceneMusicEngine {
     /// Starts `t` (fading in over `fade` s) and fades every other voice out. Decoding happens off the main thread; the voice starts when it is ready.
     func play(_ t: SceneTrack, fade: Double) {
         for v in voices where !v.stopping { v.stopping = true; v.fader.ramp(to: 0, over: fade) }
+        // Each decoded track is a whole-loop PCM buffer (tens of MB). Rapid scene hopping used to stack one per hop while the old ones faded: keep the
+        // newest fading voice plus the new one, free the older ones now.
+        let fading = voices.filter { $0.stopping }
+        if fading.count > 1 { for v in fading.dropLast() { drop(v) } }
         let v = Voice(track: t)
         v.fadeIn = fade
         v.fader.snap(0); v.fader.ramp(to: 1, over: fade)
@@ -280,6 +284,9 @@ final class SceneMusicEngine {
         if v.node.engine != nil { v.node.stop(); engine.detach(v.node) }
         voices.removeAll { $0 === v }
     }
+
+    /// Memory warning: free every voice that is already fading out (the playing track stays).
+    func trim() { for v in voices where v.stopping { drop(v) } }
 
     func pause() { for v in voices where v.ready { v.node.pause() }; if engine.isRunning { engine.pause() } }
     func resume() {

@@ -21,6 +21,7 @@ import Foundation
 import AVFoundation
 import Observation
 import QuartzCore
+import UIKit
 
 @MainActor
 @Observable
@@ -180,7 +181,24 @@ final class AudioHub {
         let t = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in Task { @MainActor in self?.tick() } }
         RunLoop.main.add(t, forMode: .common)
         timer = t
-        preloadEffects()
+        // The effect pool is built off the main thread and only after the first frames (350 AVAudioPlayers were created + prepared inside onAppear, the
+        // Continue path). A sound asked for before it lands is created on demand by `fire`, exactly as after the foreground rebuild.
+        preloadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard let self, !Task.isCancelled else { return }
+            self.preloadEffects()
+        }
+        observers.append(nc.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.relieveMemory() }
+        })
+    }
+
+    @ObservationIgnored private var preloadTask: Task<Void, Never>?
+
+    /// A system memory warning: drop the idle prepared effect players (they are rebuilt on demand) and the scene engine's stopping / surplus voices.
+    private func relieveMemory() {
+        for (k, ps) in pool { let busy = ps.filter { $0.isPlaying }; if busy.isEmpty { pool[k] = nil } else { pool[k] = busy } }
+        scene?.trim()
     }
 
     /// `offMain`: the mic just let go of the session (every release). The category switch + reactivation are synchronous IPC to mediaserverd and
@@ -227,7 +245,7 @@ final class AudioHub {
             let s = AVAudioSession.sharedInstance()
             let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
             try? s.setCategory(plan.category, mode: .default, options: plan.options)
-            if (try? s.setActive(true)) != nil { for d in decks { d.player.play() }; layer?.player.play(); ambDay?.player.play(); ambEve?.player.play(); scene?.resume(); sessionRetry = nil; return }
+            if (try? s.setActive(true)) != nil { for d in decks { d.player.play() }; layer?.player.play(); ambDay?.player.play(); ambEve?.player.play(); resumeLoops(); scene?.resume(); sessionRetry = nil; return }
         }
         sessionRetry = nil
     }
@@ -258,12 +276,19 @@ final class AudioHub {
         if !micSession { setUpSession() }
         for d in decks { d.player.play() }
         layer?.player.play(); ambDay?.player.play(); ambEve?.player.play()
+        resumeLoops()
         scene?.resume()
         ensureMusic(delay: false)
         if verify { verifyTask?.cancel(); verifyTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             if !Task.isCancelled { self?.ensureMusic(delay: true) }
         } }
+    }
+
+    /// The beach and crowd loops come back after a background / interruption when their scene still wants them (they were paused with the session).
+    private func resumeLoops() {
+        if beachWant, let p = beachPlayer, !p.isPlaying, settings.sfxLevel > 0.01 { p.play() }
+        if crowdWant, crowdPlayers.count == 2, !crowdPlayers[crowdCur].isPlaying { crowdPlayers[crowdCur].play(); crowdFade = -1 }
     }
 
     /// True when a main deck that should be audible is really playing.
@@ -327,6 +352,7 @@ final class AudioHub {
             for d in decks { d.player.pause() }
             layer?.player.pause(); ambDay?.player.pause(); ambEve?.player.pause()
             scene?.pause(); jingle?.pause()
+            beachPlayer?.pause(); for p in crowdPlayers where p.isPlaying { p.pause() }
             for ps in pool.values { for p in ps where p.isPlaying { p.stop() } }
         }
     }
@@ -519,9 +545,10 @@ final class AudioHub {
     /// (the opening plays before the room exists). Muted / the setting off = silent.
     func playOpening(_ name: String, volume: Float = 1, music: Bool = false, fadeIn: TimeInterval = 0) {
         guard !muted else { return }
-        let level = music ? settings.musicLevel : settings.sfxLevel
-        guard level > 0.01, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { return }
-        if !started { setUpSession() }
+        guard let u = url(name) else { return }
+        if !started { setUpSession() }          // reads whether another app is playing, so the music level below respects it
+        let level = music ? musicLevelNow : settings.sfxLevel          // opening music is silent while someone else's audio plays, like the room's music
+        guard level > 0.01, let p = try? AVAudioPlayer(contentsOf: u) else { return }
         let target = min(1, volume * level * (music ? 1 : AudioMix.sfxMaster * 1.2))
         p.volume = fadeIn > 0 ? 0 : target
         p.prepareToPlay(); p.play()
@@ -582,33 +609,62 @@ final class AudioHub {
         return n
     }
 
-    private func preloadEffects() {
+    /// One preload entry: the clip name, its file and whether it needs rate control.
+    private struct PreloadItem: Sendable { let name: String; let url: URL; let rate: Bool }
+    /// AVAudioPlayer is thread-safe to create and prepare; the box only carries finished players back to the main actor.
+    private struct PreloadBatch: @unchecked Sendable { var made: [(name: String, player: AVAudioPlayer)] = [] }
+
+    /// Every effect file the pool preloads (bundle lookups: a directory search each, so this runs off the main thread).
+    nonisolated private static func preloadItems() -> [PreloadItem] {
+        func find(_ n: String) -> URL? { Bundle.main.url(forResource: n, withExtension: "m4a") }
+        var out: [PreloadItem] = []
         for c in 0..<JellyVoiceSet.count { for r in [0.0, 0.99] {
             let name = JellyVoiceSet.snoreFile(character: c, roll: r)
-            guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
-            p.prepareToPlay(); pool[name] = [p]
+            if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: false)) }
         } }
         for c in 0..<JellyVoiceSet.count { for v in 1...JellyVoiceSet.sleepCooVariants {
             let name = JellyVoiceSet.sleepCooFile(character: c, roll: (Double(v) - 0.5) / Double(JellyVoiceSet.sleepCooVariants))
-            guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
-            p.prepareToPlay(); pool[name] = [p]
+            if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: false)) }
         } }
         for c in 0..<JellyVoiceSet.voiceSets { for v in JellyVoice.allCases { for k in 1...(v.hasVariants ? 3 : 1) {
             let name = JellyVoiceSet.file(character: c, v, variant: k)
-            guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
-            p.enableRate = true; p.prepareToPlay(); pool[name] = [p]
+            if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: true)) }
         } } }
         for s in SFX.allCases where s != .snore {
-            for v in 1...max(variants(s), 1) {
+            var n = 0
+            while find("\(s.rawValue)_\(n + 1)") != nil { n += 1 }
+            for v in 1...max(n, 1) {
                 let name = "\(s.rawValue)_\(v)"
-                guard pool[name] == nil, let u = url(name), let p = try? AVAudioPlayer(contentsOf: u) else { continue }
-                if s == .squeakPolish { p.enableRate = true }
-                p.prepareToPlay()
-                pool[name] = [p]
+                if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: s == .squeakPolish)) }
             }
         }
+        return out
+    }
+
+    private func preloadEffects() {
         if scrubPlayer == nil, let u = url("scrub_loop_1"), let p = try? AVAudioPlayer(contentsOf: u) {
             p.numberOfLoops = -1; p.volume = 0; p.prepareToPlay(); scrubPlayer = p
+        }
+        Task.detached(priority: .utility) { [weak self] in
+            let items = Self.preloadItems()
+            var i = 0
+            while i < items.count {
+                var batch = PreloadBatch()
+                for it in items[i..<min(i + 24, items.count)] {
+                    guard let p = try? AVAudioPlayer(contentsOf: it.url) else { continue }
+                    if it.rate { p.enableRate = true }
+                    p.prepareToPlay()
+                    batch.made.append((it.name, p))
+                }
+                i += 24
+                let done = batch
+                let alive: Bool = await MainActor.run {
+                    guard let self, self.started else { return false }
+                    for (name, p) in done.made where self.pool[name] == nil { self.pool[name] = [p] }          // a clip fired meanwhile already made its own
+                    return true
+                }
+                if !alive { return }
+            }
         }
     }
 
@@ -824,8 +880,10 @@ final class AudioHub {
     // MARK: beach ambience (Volley/): a quiet wave and breeze loop under the music while the court is up
 
     @ObservationIgnored private var beachPlayer: AVAudioPlayer?
+    @ObservationIgnored private var beachWant = false
     func beachAmbience(_ on: Bool) {
         guard !muted, started else { return }
+        beachWant = on
         if on {
             if beachPlayer == nil, let u = url("volley_beach_amb") { beachPlayer = try? AVAudioPlayer(contentsOf: u); beachPlayer?.numberOfLoops = -1; beachPlayer?.prepareToPlay() }
             beachPlayer?.volume = min(1, settings.sfxLevel * duck.gain * 0.25)
