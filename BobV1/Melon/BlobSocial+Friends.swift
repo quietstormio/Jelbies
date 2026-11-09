@@ -21,6 +21,13 @@ extension SocialKind {
     }
 }
 
+/// The high five's wind-up (BlobSocial+Friends.driveHighFive): the near arm lifts `windUp` rad above the meeting elevation in `windUpRise` s, swings back in `windUpFall` s and the hands meet.
+enum HighFiveTuning {
+    nonisolated(unsafe) static var windUp: Float = 0.45
+    nonisolated(unsafe) static var windUpRise: Float = 0.18
+    nonisolated(unsafe) static var windUpFall: Float = 0.22
+}
+
 enum FriendTuning {
     /// Base weights in the social pick (the older kinds: boop 3, follow 2 ...).
     // 2026-11-06 user: standing hand-holding too often; restore when the hands emotes get their own looks (r4-hands)
@@ -206,10 +213,10 @@ extension BlobBrain {
     /// thumb, never longer than the wave's) and the hands MEET tip to tip in the middle (the stance holds the hands' gap at a squeeze: hand to hand 0 +- 0.5 cm); a slap: a jelly kick, the boop, the one haptic tap, happy eyes and hearts;
     /// both spring back with a second jiggle, the arms go down and they part. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown). (The old version leaned the bodies together and raised no arm: the hands hovered 55 cm from the partner.)
     private func driveHighFive(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
-        let reach = { (w: Float) in self.socialBook.handWant = HandReach(side: self.handSide(toward: o), w: w, el: HandReach.elFive, seek: false, partner: o.steerID) }
+        let reach = { (w: Float, el: Float) in self.socialBook.handWant = HandReach(side: self.handSide(toward: o), w: w, el: el, seek: false, partner: o.steerID) }
         if openSideBySide(s, o, isA, settle: 0.7) {
             // the arms come up on the way in (the walk-up's touch distance then counts the hands: the last steps land the HANDS together, not the arm nubs)
-            reach(1)
+            reach(1, HandReach.elFive)
             return
         }
         let t = s.phaseT
@@ -217,13 +224,23 @@ extension BlobBrain {
         let g = socialGentle
         switch s.phase {
         case 2:
-            reach(1)
+            // THE WIND-UP (a readable high five): after the plant both lift the near arm HIGHER (elevation up by `HighFiveTuning.windUp`, which also draws the hands apart: the pole's reach is cos(el)) with a small
+            // body-weight dip, then swing the hands back in to meet at the walk's own elevation `elFive` (the stance's meeting distance was planned for it: a steeper MEET shortens the reach and opens the gap by itself).
+            // The stance row holds the pair at the stand-off through this phase (no press: the opened outline must not make the settle shuffle the feet); phase 3 is the slap.
+            let up = HighFiveTuning.windUp * pulse(t, up: HighFiveTuning.windUpRise, down: HighFiveTuning.windUpFall)
+            reach(1, HandReach.elFive + up)
+            socialBook.wantSquash = 1 - 0.02 * pulse(t, up: 0.12, down: 0.25) * g
+            socialBook.wantEyes = 1 - 0.55 * smooth01((t - 0.1) / 0.4)
+            if isA, t >= HighFiveTuning.windUpRise + HighFiveTuning.windUpFall { s.bumps = contactEvents + o.contactEvents; s.setPhase(3); s.impacted = false }
+        case 3:
+            reach(1, HandReach.elFive)
             let sinceBump = s.impacted ? t - s.bumpT : -1
             let press = s.impacted ? pulse(sinceBump, up: 0.07, down: 0.35) : 0
             socialBook.wantSquash = 1 - 0.025 * press * g          // (a squashed body is wider: the hands are the contact, a 7 % squash drives them into each other)
-            socialBook.wantEyes = 1 - 0.55 * smooth01((t - 0.1) / 0.4) * (s.impacted ? 0 : 1)
+            socialBook.wantEyes = 1 - 0.55 * (s.impacted ? 0 : 1)
             if isA {
-                if !s.impacted, t >= 0.45 {          // the hands meet
+                // the hands meet: the touch gate's own event (the wind-up opened the outline past its 3 cm re-arm, so it fires on the slap), or the timer if the gate never fires
+                if !s.impacted, contactEvents + o.contactEvents > s.bumps || t >= 0.35 {
                     s.impacted = true; s.bumpT = t
                     jellyKick = max(jellyKick, impactKick(2.0)); o.jellyKick = max(o.jellyKick, impactKick(2.0))
                     contactBoopFallback(o)
@@ -237,10 +254,10 @@ extension BlobBrain {
                         AudioHub.shared.chirp(jelly: steerID, .happy); AudioHub.shared.chirp(jelly: o.steerID, .happy)
                         onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                     }
-                    if s.passes == 1, t - s.bumpT > 1.2 { s.setPhase(3) }
+                    if s.passes == 1, t - s.bumpT > 1.2 { s.setPhase(4) }
                 }
             }
-        default:   // the happy look, the arms go down, then they part
+        default:   // phase 4: the happy look, the arms go down, then they part
             socialBook.wantEyes = 1
             if isA, s.phaseT > 0.6 { finishHappy(s, o) }
         }
