@@ -106,19 +106,27 @@ nonisolated enum JellyRoster {
     }
     /// Re-reads the species map and the extra names (after a wipe, or in tests).
     static func reloadSpecies(_ d: UserDefaults = .standard) { speciesMap = loadSpeciesMap(d); extraNames = loadExtraNames(d) }
-    /// The scratch instance id the Adoption Center's preview stage uses for `species`.
-    static func previewID(_ species: Int) -> Int { previewBase + min(max(species, 0), knownCount - 1) }
+    /// Preview slots: the pick-one-of-three page stands three Jelbies of one species side by side, so a species has `previewSlots` scratch ids.
+    static let previewSlots = 3
+    /// The scratch instance id the Adoption Center's preview stage uses for `species` (slot 0).
+    static func previewID(_ species: Int) -> Int { previewID(species: species, slot: 0) }
+    /// Scratch id of preview `slot` (0...2) of `species`: 1000 + slot * 10 + species. Slot 0 is the single-Jelbie page's id.
+    static func previewID(species: Int, slot: Int) -> Int { previewBase + min(max(slot, 0), previewSlots - 1) * 10 + min(max(species, 0), knownCount - 1) }
+    /// Whether `id` is a picker scratch id (never saved anywhere).
+    static func isPreview(_ id: Int) -> Bool { id >= previewBase }
+    /// The slot (0...2) a preview scratch id stands for.
+    static func previewSlot(_ id: Int) -> Int { max(id - previewBase, 0) / 10 }
     /// The species (look, voice, feature) of instance `id`: identity below 100, the saved map from 100, a preview scratch id resolves to its species.
     static func species(_ id: Int) -> Int {
         if (0..<knownCount).contains(id) { return id }
-        if id >= previewBase { return min(id - previewBase, knownCount - 1) }
+        if id >= previewBase { return min((id - previewBase) % 10, knownCount - 1) }
         if let s = speciesMap[id] { return s }
         return min(max(id, 0), knownCount - 1)
     }
     /// Whether `id` is a Jelbie that can exist: a species-id instance, a recorded duplicate, or a picker preview scratch id.
     static func isValid(_ id: Int) -> Bool {
         if (0..<knownCount).contains(id) { return true }
-        if id >= previewBase { return id < previewBase + knownCount }
+        if id >= previewBase { return (id - previewBase) / 10 < previewSlots && (id - previewBase) % 10 < knownCount }
         return speciesMap[id] != nil
     }
     /// A new Jelbie of `species` joining `roster` (instance ids): the species id itself when nobody of that species is in the room, else a fresh instance id
@@ -221,9 +229,10 @@ nonisolated enum JellyRoster {
         return Array(out.prefix(maxCount))
     }
     /// A saved / given list made valid: known characters, no repeats, 1...maxCount (empty -> the default roster).
-    static func sanitised(_ ids: [Int]) -> [Int] {
+    /// Picker scratch ids (>= 1000) are dropped unless `allowPreview`: only a preview GameCare asks for them, so no save or roster ever holds one.
+    static func sanitised(_ ids: [Int], allowPreview: Bool = false) -> [Int] {
         var out: [Int] = []
-        for c in ids where isValid(c) && !out.contains(c) { out.append(c) }
+        for c in ids where isValid(c) && (allowPreview || !isPreview(c)) && !out.contains(c) { out.append(c) }
         return out.isEmpty ? defaultIDs : Array(out.prefix(maxCount))
     }
     /// The roster saved in `d` (the default roster when none was saved).
@@ -316,7 +325,7 @@ nonisolated enum JellyRoster {
 
     /// Selection cards for a roster (slot ids, character names and tints).
     static func selectBlobs(roster: [Int]) -> [SelectBlob] {
-        sanitised(roster).enumerated().map { SelectBlob(id: $0.offset, name: nameOf($0.element), tint: tint($0.element)) }
+        sanitised(roster, allowPreview: true).enumerated().map { SelectBlob(id: $0.offset, name: nameOf($0.element), tint: tint($0.element)) }
     }
     /// The first `count` of the default roster.
     static func selectBlobs(count: Int) -> [SelectBlob] { selectBlobs(roster: Array(defaultIDs.prefix(min(max(count, 1), maxCount)))) }

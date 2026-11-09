@@ -254,12 +254,12 @@ final class GameCare {
         let persistent = persistent && !preview
         isPreview = preview
         var chars: [Int]
-        if let roster { chars = JellyRoster.sanitised(roster) }
+        if let roster { chars = JellyRoster.sanitised(roster, allowPreview: preview) }
         else {
             let n = min(max(jellyCount, 1), JellyRoster.maxCount)
             chars = Array(JellyRoster.current.prefix(n))
             for c in 0..<JellyRoster.characterCount where chars.count < n && !chars.contains(where: { JellyRoster.species($0) == c }) { chars.append(c) }     // a short roster is padded
-            chars = JellyRoster.sanitised(chars)
+            chars = JellyRoster.sanitised(chars, allowPreview: preview)
         }
         let c0 = chars[0]
         needs = (c0 == 0 && !preview) ? BlobNeeds() : BlobNeeds(defaults: defaults, key: JellyKeys.needs(c0), persists: persistent)
