@@ -32,7 +32,7 @@ struct GroomChrome: View {
                             .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white.opacity(0.9)))
                             .accessibilityIdentifier("groom-tier-name")
                         Spacer()
-                        Text("Tap to skip").font(SK.font(12, .heavy)).foregroundStyle(SK.ink.opacity(0.55)).padding(.bottom, 26)
+                        Text("Tap to skip").font(SK.font(12, .heavy)).foregroundStyle(SK.mutedStrong).padding(.bottom, 26)
                     }
                     .padding(.top, vsc == .compact ? 10 : 64).allowsHitTesting(false).transition(.opacity)
                 }
@@ -101,7 +101,7 @@ struct GroomChrome: View {
                         Spacer(minLength: 0)
                         DropsPill(wallet: care.bath.wallet)
                     }
-                    Text("A fresh, shiny clean-up without the scrubbing. Price is per Jelbie.").font(SK.font(13, .bold)).foregroundStyle(SK.muted)
+                    Text("A fresh, shiny clean-up without the scrubbing. Price is per Jelbie.").font(SK.font(13, .bold)).foregroundStyle(SK.mutedStrong)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 8) {
                         ForEach(care.jellies, id: \.id) { j in
@@ -127,12 +127,12 @@ struct GroomChrome: View {
                                     .frame(width: 50, height: 50).background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(tier == .royal ? SK.honey : tier == .spa ? SK.pink : SK.sky))
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(tier.name).font(SK.font(18, .black)).foregroundStyle(SK.ink)
-                                    Text(tier.blurb).font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+                                    Text(tier.blurb).font(SK.font(12, .bold)).foregroundStyle(SK.mutedStrong).fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer(minLength: 4)
                                 VStack(spacing: 0) {
                                     Text("\(total)").font(SK.font(20, .black)).foregroundStyle(SK.ink)
-                                    Text("JellyCoins").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                                    Text("JellyCoins").font(SK.font(11, .heavy)).foregroundStyle(SK.mutedStrong)
                                 }
                             }
                             .padding(10).frame(maxWidth: .infinity, minHeight: 66)
@@ -145,7 +145,7 @@ struct GroomChrome: View {
                         Text(r).font(SK.font(14, .heavy)).foregroundStyle(SK.pinkStrong).frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier("groom-refusal")
                     }
                     Button { AudioHub.shared.uiTap(); groom.cancelPicker() } label: {
-                        Text("Not now").font(SK.font(16, .heavy)).foregroundStyle(SK.muted).padding(.horizontal, 22).frame(minHeight: 44)
+                        Text("Not now").font(SK.font(16, .heavy)).foregroundStyle(SK.mutedStrong).padding(.horizontal, 22).frame(minHeight: 44)
                             .background(Capsule().fill(Color.white.opacity(0.8)))
                     }
                     .buttonStyle(.plain).accessibilityIdentifier("groom-cancel")

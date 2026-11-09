@@ -38,6 +38,7 @@ struct RaceChrome: View {
         }
         .allowsHitTesting(race.active)
         .accessibilityElement(children: .contain)
+        .defersSystemGestures(on: .bottom)
     }
 
     private var topBar: some View {
