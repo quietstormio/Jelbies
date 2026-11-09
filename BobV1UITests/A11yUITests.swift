@@ -54,12 +54,12 @@ final class A11yUITests: XCTestCase {
         let app = launch()
         waitHUD(app)
         sleep(2)
-        for id in ["care-menu", "go-out", "bag-button", "voice-mic", "voice-tricks", "studio-button", "sound-button", "roster-button"] {
+        for id in ["care-menu", "go-out", "bag-button", "voice-mic", "voice-tricks", "settings-button", "sound-button", "roster-button"] {
             let b = app.buttons[id]
             XCTAssertTrue(b.exists, id)
             XCTAssertFalse(b.label.isEmpty, "\(id) has a label")
         }
-        XCTAssertEqual(app.buttons["studio-button"].label, "Settings")
+        XCTAssertEqual(app.buttons["settings-button"].label, "Settings")
         for b in app.buttons.allElementsBoundByIndex.prefix(40) where b.exists && b.isHittable && !b.identifier.isEmpty {
             let f = b.frame
             if f.width > 300 || f.height > 300 { continue }          // full-screen surfaces
@@ -80,7 +80,7 @@ final class A11yUITests: XCTestCase {
     func testAccessibilitySheetIsReachableAndNative() throws {
         let app = launch()
         waitHUD(app)
-        app.buttons["studio-button"].tap()
+        app.buttons["settings-button"].tap()
         XCTAssertTrue(app.buttons["settings-accessibility"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["settings-studio"].exists)
         app.buttons["settings-accessibility"].tap()

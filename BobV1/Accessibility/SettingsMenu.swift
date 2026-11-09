@@ -1,13 +1,15 @@
 //
 //  SettingsMenu.swift
-//  The gear's popover: Accessibility (the in-app accessibility sheet) and Studio (the developer studio the gear used to open).
+//  The gear's popover: Accessibility (the in-app accessibility sheet) and (debug builds only) Studio.
 //
 
 import SwiftUI
 
 struct SettingsMenu: View {
     var openAccessibility: () -> Void
-    var openStudio: () -> Void
+    #if DEBUG
+    var openStudio: (() -> Void)? = nil
+    #endif
     /// Back to the main menu (Continue there resumes); nil hides the button.
     var mainMenu: (() -> Void)? = nil
     var close: () -> Void
@@ -17,7 +19,9 @@ struct SettingsMenu: View {
             Text("Settings").font(CloudTheme.font(20, .bold)).foregroundStyle(CloudTheme.ink)
                 .accessibilityAddTraits(.isHeader).padding(.leading, 4)
             row("Accessibility", "accessibility", id: "settings-accessibility", action: openAccessibility)
-            row("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio)
+            #if DEBUG
+            if let openStudio { row("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio) }
+            #endif
             if let mainMenu { row("Main menu", "house", id: "settings-main-menu", action: mainMenu) }
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
