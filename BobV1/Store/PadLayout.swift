@@ -7,11 +7,6 @@
 import SwiftUI
 import UIKit
 
-enum PadLayout {
-    /// True on an iPad (any window size).
-    static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-}
-
 extension View {
     /// On iPad: a centred readable column no wider than `maxWidth` (a background applied after this stays full-bleed). On iPhone: unchanged.
     @ViewBuilder func padReadable(_ maxWidth: CGFloat = 760) -> some View {
