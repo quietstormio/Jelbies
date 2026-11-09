@@ -193,7 +193,7 @@ extension GameCare {
     /// The group close-up frames the bodies where they REALLY stand (eased, so a sway or a settle never jitters the camera), not the slots they were sent to.
     func focusFrame(dt: Float) {
         let g = focusGroup
-        guard g.ids.count > 1, focus.phase == .focused else { return }          // (frozen while leaving: the camera eases out on the last frame)
+        guard !isPreview, g.ids.count > 1, focus.phase == .focused else { return }          // (a preview frames the slots the overlay projects; frozen while leaving: the camera eases out on the last frame)
         let now = g.ids.map { floorOf($0) ?? g.spot(of: $0) }
         if GameCamera.focusFramed.count != now.count { GameCamera.focusFramed = g.ids.map { g.spot(of: $0) } }
         let k = 1 - expf(-dt * 2.5)

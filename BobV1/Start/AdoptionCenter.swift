@@ -63,6 +63,8 @@ struct AdoptionCenter: View {
     @State private var breathe = false
     /// Bumped once the camera preset is set, so the projected tap targets are read again.
     @State private var camEpoch = 0
+    /// The three standing spots, cached when the pick step opens so the overlay and the stage agree.
+    @State private var rowSpots: [SIMD2<Float>] = GameCamera.previewRowSpots(count: JellyRoster.previewSlots)
     @State private var page: Int
     @State private var tab: PickerTab = .about
     @State private var name = ""
@@ -194,7 +196,7 @@ struct AdoptionCenter: View {
         .task { await runCover() }
         .onAppear {
             camera.reduceMotion = reduce
-            if step == .pick { camera.setRow(species: pick) } else { camera.setSpecies(pick); camera.engage() }
+            if step == .pick { rowSpots = GameCamera.previewRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick) } else { camera.setSpecies(pick); camera.engage() }
             camEpoch += 1
             if !reduce { withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true } }
         }
@@ -401,9 +403,10 @@ struct AdoptionCenter: View {
         .multilineTextAlignment(.center).frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(headerLabel)
-        .accessibilityHint("Swipe up or down to change Jelbie")
+        .accessibilityHint(step == .species ? "Swipe up or down to change Jelbie" : "")
         .accessibilityAddTraits(.isHeader)
         .accessibilityAdjustableAction { dir in
+            guard step == .species else { return }
             switch dir { case .increment: step(1); case .decrement: step(-1); @unknown default: break }
         }
     }
@@ -620,9 +623,10 @@ struct AdoptionCenter: View {
         .frame(width: 440, height: 150, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(headerLabel)
-        .accessibilityHint("Swipe up or down to change Jelbie")
+        .accessibilityHint(step == .species ? "Swipe up or down to change Jelbie" : "")
         .accessibilityAddTraits(.isHeader)
         .accessibilityAdjustableAction { dir in
+            guard step == .species else { return }
             switch dir { case .increment: step(1); case .decrement: step(-1); @unknown default: break }
         }
     }
@@ -645,7 +649,11 @@ struct AdoptionCenter: View {
     private var epithetLine: String { step == .pick ? "Which one will it be?" : info.epithet }
     private var headerLabel: String {
         let lead = mode == .more ? "The Jelly Spring. \(roomText). Every adoption helps the Spring care for the Jelbies still waiting. " : ""
-        return step == .species ? "\(lead)\(info.name), \(info.epithet). Jelbie \(page + 1) of \(order.count)" : "\(lead)Pick one of three \(info.name)"
+        switch step {
+        case .species: return "\(lead)\(info.name), \(info.epithet). Jelbie \(page + 1) of \(order.count)"
+        case .pick: return "\(lead)Pick one of three \(info.name)"
+        case .naming: return "Naming your \(info.name)"
+        }
     }
     private var namingPrompt: String { "What will you call your \(pickedCand.map { $0.traits.personality.title + " " } ?? "")\(info.name)?" }
 
@@ -670,7 +678,8 @@ struct AdoptionCenter: View {
     /// Where the three bodies appear on the 420 x 420 stage view (by stage slot), from the same row and camera the stage draws.
     private var rowProjection: [GameCamera.RowProjection] {
         _ = camEpoch
-        return GameCamera.projectRow(spots: GameCamera.previewRowSpots(count: JellyRoster.previewSlots))
+        guard step == .pick else { return [] }
+        return GameCamera.projectRow(spots: rowSpots)
     }
     /// Stage view (0...1) -> stage block design units: the view is 420 x 420 at (10, 46).
     private func dx(_ x: Float) -> CGFloat { 10 + 420 * CGFloat(x) }
@@ -752,7 +761,6 @@ struct AdoptionCenter: View {
 
     /// The three tap targets (vertical bands from the middle between neighbours, from a little above the body down to the chip) with the personality chips under the feet.
     private func rowBands(_ proj: [GameCamera.RowProjection], u: CGFloat, chips: Bool) -> some View {
-        let chipH = hitMin(u)
         let xs = (0..<3).map { dx(proj[PickerRow.slot(ofCandidate: $0)].foot.x) }
         return ZStack(alignment: .topLeading) {
             ForEach(0..<min(3, candidates.count), id: \.self) { i in
@@ -761,6 +769,9 @@ struct AdoptionCenter: View {
                 let x1: CGFloat = i == 2 ? 430 : (xs[i] + xs[i + 1]) / 2
                 let y0 = dy(p.top.y - 0.03)
                 let chipTop = dy(p.foot.y) + 14
+                let chipH = min(hitMin(u), max(26, 420 - chipTop))          // (the hint pill starts at 426: the chips never reach it)
+                let gap = min(i > 0 ? xs[i] - xs[i - 1] : .infinity, i < 2 ? xs[i + 1] - xs[i] : .infinity)
+                let chipW = min(90, gap * 0.9)
                 let sel = picked == i
                 let pers = candidates[i].traits.personality
                 Button { pickCandidate(i) } label: {
@@ -772,11 +783,11 @@ struct AdoptionCenter: View {
                                 Text(pers.title).font(SK.font(14, .black)).lineLimit(1).minimumScaleFactor(0.7)
                             }
                             .foregroundStyle(sel ? SK.cream : SK.ink)
-                            .padding(.horizontal, 6).frame(width: 90, height: chipH)
+                            .padding(.horizontal, 6).frame(width: chipW, height: chipH)
                             .background(Capsule().fill(sel ? SK.ink : Color.white.opacity(0.7)))
-                            .scaleEffect(sel ? 1.05 : (tapped || reduce ? 1 : (breathe ? 1.05 : 1)))
+                            .scaleEffect(sel ? 1 : (tapped || reduce ? 1 : (breathe ? 1.05 : 1)))
                             .animation(tapped || reduce ? nil : .easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(Double(i) * 0.25), value: breathe)
-                            .offset(x: xs[i] - x0 - 45, y: chipTop - y0)
+                            .offset(x: xs[i] - x0 - chipW / 2, y: chipTop - y0)
                         }
                     }
                     .frame(width: x1 - x0, height: chipTop + chipH - y0, alignment: .topLeading)
@@ -1194,7 +1205,7 @@ struct AdoptionCenter: View {
         Self.setRowPreviews(candidates)
         picked = 1; tapped = false
         resetStage()
-        camera.setRow(species: pick); camEpoch += 1
+        rowSpots = GameCamera.previewRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick); camEpoch += 1
         withAnimation(.easeOut(duration: 0.2)) { step = .pick }
     }
 
@@ -1214,7 +1225,7 @@ struct AdoptionCenter: View {
         nameFocused = false
         Self.setRowPreviews(candidates)
         resetStage()
-        camera.setRow(species: pick); camEpoch += 1
+        rowSpots = GameCamera.previewRowSpots(count: JellyRoster.previewSlots); camera.setRow(species: pick); camEpoch += 1
         withAnimation(.easeOut(duration: 0.2)) { step = .pick }
     }
 

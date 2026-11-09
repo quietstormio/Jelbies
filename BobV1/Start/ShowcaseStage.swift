@@ -68,7 +68,7 @@ struct ShowcaseStage: View {
             let deadline = Date().addingTimeInterval(group ? Self.readyDeadlineGroup : Self.readyDeadline)
             while !Task.isCancelled, Date() < deadline, !all.allSatisfy({ m.care.brainFor($0) != nil }) { try? await Task.sleep(nanoseconds: 50_000_000) }          // the first fixed step has run (for everybody)
             guard !Task.isCancelled else { return }
-            if group { m.care.comeHere(jellies: all) }          // born on the row's slots: they register as arrived within ~0.3 s and the close-up snaps (`focus.arrive(snap:)`)
+            if group { m.care.comeHere(jellies: all); if m.care.focus.phase != .approaching && m.care.focus.phase != .focused { try? await Task.sleep(nanoseconds: 200_000_000); m.care.comeHere(jellies: all) } }          // (one retry if the first was refused) born on the row's slots: they register as arrived within ~0.3 s and the close-up snaps (`focus.arrive(snap:)`)
             else { m.care.comeHere(jelly: 0) }          // already standing on the spot: it registers as arrived within ~0.3 s and the camera is simply in close-up (`BlobFocus.arrive(snap:)`)
             while !Task.isCancelled, Date() < deadline, !(group ? m.care.focusGroup.arrived.count == roster.count : m.care.focusGroup.arrived.contains(0)) { try? await Task.sleep(nanoseconds: 50_000_000) }
             if m.care.focusGroup.arrived.contains(0) { try? await Task.sleep(nanoseconds: 250_000_000) }          // (the drop from his birth height has settled)
