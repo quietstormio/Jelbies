@@ -22,7 +22,7 @@ nonisolated enum ParkNames {
     }
 
     /// More hand-written names, used when the model's name or a twin's name has to be replaced.
-    static let spare = ["Maple", "Rafi", "Gus", "Honey", "Ziggy", "Willow", "Cosmo", "Peanut", "Lulu", "Basil", "Fern", "Toffee", "Ripley", "Daisy-Mae", "Pixel",
+    static let spare = ["Maple", "Rafi", "Gus", "Hazel", "Ziggy", "Willow", "Cosmo", "Peanut", "Lulu", "Basil", "Fern", "Toffee", "Ripley", "Mabel", "Pixel",
                         "Skipper", "Moxie", "Beep", "Cricket", "Jellybean", "Nutmeg", "Opal", "Quill", "Rosie", "Sparky", "Tofu", "Umi", "Velvet", "Wiggle", "Yarrow"]
 
     /// A name not in `taken` (and not reserved): the hand-written lists first, then numbered.

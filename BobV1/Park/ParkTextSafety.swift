@@ -72,7 +72,7 @@ nonisolated enum ParkTextSafety {
         "lover", "lovers", "romance", "romantic", "crush", "sexy", "hottie", "babe", "honey", "darling", "sweetheart", "makeout", "smooch",
         // sexual
         "sex", "sexual", "porn", "porno", "nude", "nudes", "naked", "nsfw", "boob", "boobs", "tits", "tit", "titty", "penis", "vagina", "dick", "dicks",
-        "cock", "cocks", "pussy", "cum", "horny", "erotic", "fetish", "rape", "raped", "rapist", "molest", "incest", "anal", "orgy", "slut", "sluts",
+        "cock", "cocks", "cockring", "pussy", "cum", "horny", "erotic", "fetish", "rape", "rapes", "raped", "raping", "rapist", "molest", "incest", "anal", "orgy", "slut", "sluts",
         "whore", "hoe", "hoes", "milf", "dildo", "butt", "butts", "ass", "asses", "arse", "bum",
         // profanity
         "damn", "damned", "hell", "crap", "crappy", "piss", "pissed", "shit", "shits", "shitty", "bitch", "bitches", "bastard", "bollocks", "wtf", "stfu",
@@ -81,11 +81,11 @@ nonisolated enum ParkTextSafety {
         "stupid", "idiot", "dumb", "moron", "ugly", "fat", "loser", "hate", "hated", "hating", "shut",
         // violence and weapons
         "kill", "kills", "killed", "killer", "killing", "murder", "murders", "murdered", "die", "dies", "died", "dead", "death", "dying", "blood",
-        "bloody", "stab", "stabs", "stabbed", "shoot", "shot", "shooting", "gun", "guns", "rifle", "pistol", "knife", "knives", "sword", "bomb", "bombs",
+        "bloody", "stab", "stabs", "stabbed", "stabbing", "shoot", "shot", "shooting", "gun", "guns", "rifle", "pistol", "knife", "knives", "sword", "bomb", "bombs",
         "terror", "terrorist", "weapon", "weapons", "gore", "slaughter", "torture", "hang", "hanged", "strangle", "choke", "punch", "beat", "attack",
         "war", "violent", "violence", "corpse", "grave", "zombie", "abuse", "abused", "hurt", "hurts", "bleed",
         // drugs and alcohol
-        "drug", "drugs", "weed", "pot", "cocaine", "coke", "heroin", "meth", "lsd", "ecstasy", "molly", "opium", "marijuana", "cannabis", "stoned",
+        "drug", "drugs", "weed", "pot", "cocaine", "coke", "heroin", "meth", "methhead", "lsd", "ecstasy", "molly", "opium", "marijuana", "cannabis", "stoned",
         "high", "joint", "vape", "vaping", "cigarette", "cigarettes", "smoke", "smoking", "tobacco", "nicotine", "alcohol", "beer", "beers", "wine",
         "vodka", "whiskey", "whisky", "rum", "gin", "tequila", "booze", "boozy", "drunk", "drunken", "wasted", "tipsy", "hungover", "cocktail", "liquor",
         "champagne", "brandy", "overdose",
@@ -98,14 +98,16 @@ nonisolated enum ParkTextSafety {
         "poop", "poo", "pee", "wee", "boner", "balls", "nuts", "nipple", "nipples", "bra", "thong", "undies", "underwear",
     ]
 
+    /// "meth", "stab", "rape", "rapist", "cock" and "kill" are whole-word only (above): inside other words they are everywhere ("something", "grape",
+    /// "therapist", "peacock", "skill") and would reject real names and ordinary text.
     /// Caught anywhere, even inside a longer run of letters (all squashed, so "f u c k" and "xxfuckxx" fail). Only terms that are not hiding in
     /// ordinary words, so "assume" and "classic" stay fine.
     private static let substringTerms: [String] = [
-        "fuck", "fuk", "shit", "bitch", "cunt", "cock", "dick", "pussy", "whore", "slut", "bastard", "nigg", "fagg", "faggot", "retard", "tranny",
-        "chink", "kike", "wetback", "spick", "beaner", "nazi", "hitler", "rape", "rapist", "porn", "nude", "naked", "penis", "vagina", "boob",
+        "fuck", "fuk", "shit", "bitch", "cunt", "dick", "pussy", "whore", "slut", "bastard", "nigg", "fagg", "faggot", "retard", "tranny",
+        "chink", "kike", "wetback", "spick", "beaner", "nazi", "hitler", "porn", "nude", "naked", "penis", "vagina", "boob",
         "tits", "blowjob", "handjob", "orgasm", "erotic", "horny", "cumshot", "dildo", "masturbat", "pedo", "incest", "molest", "sexy", "sex",
-        "kill", "murder", "suicide", "stab", "bomb", "terror", "slaughter", "genocide", "torture", "gunshot",
-        "cocaine", "heroin", "meth", "marijuana", "cannabis", "vodka", "whiskey", "tequila", "alcohol", "drunk", "booze", "weed", "stoner",
+        "murder", "suicide", "bomb", "terror", "slaughter", "genocide", "torture", "gunshot",
+        "cocaine", "heroin", "marijuana", "cannabis", "vodka", "whiskey", "tequila", "alcohol", "drunk", "booze", "weed", "stoner",
         "kiss", "boyfriend", "girlfriend", "sweetheart", "romance",   // "lover" is whole-word only (it hides in "Clover")
         "selfharm", "killmyself", "kms", "kys", "hateyou", "idiot", "stupid",
     ]
