@@ -19,6 +19,20 @@
 import Foundation
 import simd
 
+/// Gate for every developer launch argument (`-UpgradePoints`, `-SleepNow`, `-ClockHour`, `-SetRoster`, `-ForceSpecies`, `-BlobCount`, ...).
+/// True in Debug, on the simulator, and in Release builds made with the JELBIES_DEV_ARGS compilation condition (the project's Release
+/// configuration sets it through the JELBIES_DEV_ARGS_COND build setting so local device installs keep diagnostics). The App Store archive
+/// must clear it: `JELBIES_DEV_ARGS_COND=` on the archive command (see docs/RELEASE-1.0.md).
+nonisolated enum DevArgs {
+    static var enabled: Bool {
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+}
+
 enum JellyKeys {
     static func needs(_ id: Int) -> String { suffixed(NeedsTuning.defaultsKey, id) }
     static func grime(_ id: Int) -> String { suffixed(GrimeTuning.defaultsKey, id) }
@@ -126,7 +140,7 @@ nonisolated enum JellyRoster {
     /// the first time his profile loads. Idempotent: the same argument again writes the same list; no argument leaves the saved roster alone.
     @discardableResult
     static func applySetRoster(_ d: UserDefaults = .standard) -> [Int] {
-        if let text = d.string(forKey: setRosterKey), let ids = parseRoster(text) {
+        if DevArgs.enabled, let text = d.string(forKey: setRosterKey), let ids = parseRoster(text) {
             if savedIDs(d) != ids { save(ids, to: d) }
             return ids
         }
@@ -136,8 +150,8 @@ nonisolated enum JellyRoster {
     static func launchIDs(_ d: UserDefaults = .standard) -> [Int] {
         var ids = applySetRoster(d)
         // `-ForceSpecies teddy`: that species takes slot 0 for this launch only (never saved), so a capture can spawn one without touching the saved roster
-        if let f = d.string(forKey: forceSpeciesKey), let c = characterID(named: f) { ids = Array(([c] + ids.filter { $0 != c }).prefix(maxCount)) }
-        guard d.object(forKey: "BlobCount") != nil else { return ids }
+        if DevArgs.enabled, let f = d.string(forKey: forceSpeciesKey), let c = characterID(named: f) { ids = Array(([c] + ids.filter { $0 != c }).prefix(maxCount)) }
+        guard DevArgs.enabled, d.object(forKey: "BlobCount") != nil else { return ids }
         return Array(ids.prefix(min(max(d.integer(forKey: "BlobCount"), 1), ids.count)))
     }
     /// How many Jelbies the room starts with (`launchIDs().count`).

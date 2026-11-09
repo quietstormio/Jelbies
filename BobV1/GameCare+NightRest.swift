@@ -25,9 +25,9 @@ enum NightRestTuning {
     /// Sleep hold for a bedtime sleep (the stage-3 morning rule ends it).
     static let untilMorning: Float = 36_000
     nonisolated(unsafe) static var debugLoaded = false
-    /// `-SleepNow 1` (works in Release): once the room is ready every home Jelbie is sent to bed through the normal bedtime (the group Bedtime button's path:
+    /// `-SleepNow 1` (dev builds only: see `DevArgs`): once the room is ready every home Jelbie is sent to bed through the normal bedtime (the group Bedtime button's path:
     /// registered as wanted, `commandedGoodnight`, retried until down). Use with `-ClockHour 3` so they stay down. Read once; tests set it directly.
-    nonisolated(unsafe) static var sleepNow: Bool = UserDefaults.standard.integer(forKey: "SleepNow") == 1
+    nonisolated(unsafe) static var sleepNow: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "SleepNow") == 1
     /// The order itself: every brain gets the goodnight (the same flag the Bedtime button sets).
     @MainActor static func sendToBed(_ brains: [BlobBrain]) { for b in brains { b.commandedGoodnight = true } }
 }

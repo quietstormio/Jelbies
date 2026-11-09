@@ -149,7 +149,7 @@ final class DayClock {
     init(defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init,
          uptime: @escaping () -> Double = { ProcessInfo.processInfo.systemUptime }, calendar: Calendar = .current) {
         self.defaults = defaults; self.now = now; self.uptime = uptime; self.calendar = calendar
-        if defaults.object(forKey: "ClockHour") != nil { forcedHour = defaults.double(forKey: "ClockHour") }
+        if DevArgs.enabled, defaults.object(forKey: "ClockHour") != nil { forcedHour = defaults.double(forKey: "ClockHour") }
         followReal = defaults.bool(forKey: Self.followKey)
         offsetHours = defaults.double(forKey: Self.offsetKey)
         offsetPhase = defaults.string(forKey: Self.offsetPhaseKey).flatMap(DayPhase.init(rawValue:))
