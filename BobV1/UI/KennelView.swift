@@ -35,8 +35,8 @@ struct KennelView: View {
             .presentationDetents([.large])
             .presentationCornerRadius(34)
         }
-        .sensoryFeedback(.selection, trigger: breed)
-        .sensoryFeedback(.impact(flexibility: .soft), trigger: rerolls)
+        .gatedSensoryFeedback(.selection, trigger: breed)
+        .gatedSensoryFeedback(.impact(flexibility: .soft), trigger: rerolls)
     }
 
     private var content: some View {
@@ -154,7 +154,7 @@ private struct CandidateCard: View {
         .padding(8)
         .frame(maxWidth: .infinity)
         .softPanel(radius: 22)
-        .sensoryFeedback(.impact(weight: .medium), trigger: candidate.id)
+        .gatedSensoryFeedback(.impact(weight: .medium), trigger: candidate.id)
     }
 
     private func tag(_ s: String) -> some View {
@@ -231,9 +231,9 @@ private struct NamingSheet: View {
             .padding(24)
         }
         .animation(UITheme.spring, value: welcome)
-        .sensoryFeedback(.selection, trigger: dice)
-        .sensoryFeedback(.success, trigger: welcome)
-        .sensoryFeedback(.error, trigger: error)
+        .gatedSensoryFeedback(.selection, trigger: dice)
+        .gatedSensoryFeedback(.success, trigger: welcome)
+        .gatedSensoryFeedback(.error, trigger: error)
         .onAppear { name = candidate.suggestedName }
     }
 

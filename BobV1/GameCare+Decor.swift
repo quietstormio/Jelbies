@@ -101,7 +101,7 @@ extension GameCare {
     func pickUpDecor(_ uid: Int) {
         guard !arranging, store.placedDecor.contains(where: { $0.uid == uid }), !tripActive, !bath.active, !focus.isActive else { return }
         if !decorBusy(uid) { startArrange(on: uid); return }
-        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        Haptic.notify(.warning)
         if let f = DecorField.shared.foot(uid) {
             releaseDecor(uid, foot: f)
         }
@@ -123,7 +123,7 @@ extension GameCare {
         arranging = true; arrangingUID = uid
         DecorField.shared.kick(uid, 0.8)
         AudioHub.shared.play(.placeItem)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptic.impact(.light)
     }
     func endArrange() { arranging = false; arrangingUID = nil; arrangeWait = nil }
 
@@ -177,7 +177,7 @@ extension GameCare {
             }
         }
         if let t = target { _ = store.move(uid, to: t) }          // (none: it stays at the saved pick-up spot)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptic.impact(.light)
         dropDecor(uid)
     }
     /// Turns the piece a quarter turn (nudged to a spot where it fits; a buzz and nothing else when there is none).
@@ -186,8 +186,8 @@ extension GameCare {
         if store.rotate(uid) {
             syncDecor(); DecorField.shared.kick(uid, 0.5)
             AudioHub.shared.play(.placeItem, volume: 0.7)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } else { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+            Haptic.impact(.light)
+        } else { Haptic.notify(.warning) }
     }
     /// The finger let go: the piece settles (a sound).
     func dropDecor(_ uid: Int) {
