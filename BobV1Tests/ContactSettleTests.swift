@@ -389,7 +389,36 @@ final class ContactSettleTests: XCTestCase {
         guard let g = arrival else { return XCTFail("the walk-up ends") }
         MotionLog.write(String(format: "ARRIVAL nuzzle: gap %.3f at the first planted frame of phase 1", g))
         XCTAssertGreaterThan(g, -0.015, "never inside him")
-        // KNOWN OPEN (r4-arrivalA-r2): in this cold-start scene the first planted frame of phase 1 still reads 3.7 cm; the bar is 1.5. Expected to fail until it is closed - remove the expectation then.
-        XCTExpectFailure("nuzzle arrives 3.7 cm apart in the cold-start Duo (bar <= 1.5 cm)", strict: false) { XCTAssertLessThan(g, 0.015, "arrival gap within the 1.5 cm bar") }
+        XCTAssertLessThan(g, 0.015, "arrival gap within the 1.5 cm bar")
+    }
+
+    /// r4-engine-arrival (2026-11-05, ported from 9d200976): a side-by-side stance walk lands on the standing touch spot. `fixed` ran the destination through the room's peer wall, which pushed it
+    /// 6 cm out. Measured at the first planted frame after the last step: gap in -1 ... +1.5 cm, no touch-and-retreat before the hold (the gap never rebounds past 3 cm).
+    func testSideBySideWalkUpPlantsOnTheTouchSpot() {
+        for (kind, seed) in [(SocialKind.swayHug, 31), (.cuddleLean, 32), (.whisperGiggle, 33), (.nuzzle, 34)] as [(SocialKind, UInt64)] {
+            let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: seed)
+            d.live = true
+            for _ in 0..<3 { d.tick() }
+            let a = d.lab.rigs[0], b = d.lab.rigs[1]
+            XCTAssertTrue(a.brain.socialStart(kind, with: b.brain, a.sim))
+            var lastStep = -1, plant: Float?, gaps: [Float] = [], rd: [Float] = []
+            for f in 0..<(60 * 12) {
+                d.tick()
+                let stepping = a.brain.stepLive || a.brain.gait.isBusy || b.brain.stepLive || b.brain.gait.isBusy
+                if stepping { lastStep = f; plant = nil }
+                else if lastStep >= 0, plant == nil, let g = ContactField.gap(0, 1) { plant = g }
+                gaps.append(ContactField.gap(0, 1) ?? 9); rd.append(simd_distance(ContactField.root(0), ContactField.root(1)))
+                if (a.brain.social?.phase ?? 0) >= 2 { break }
+            }
+            // the retreat is read after the FINAL step only (the gaps between the strides of the walk are the approach) and on the ROOT distance: the skin gap swings ~10 cm for ~0.4 s after the plant
+            // (the walking arm drops and the outline's reach shrinks) while the roots stay put to the millimetre (measured 1.411 m throughout), so a skin-gap rebound is not a retreat.
+            let window = min(lastStep + 1, gaps.count)..<min(lastStep + 40, gaps.count)
+            let rebound: Float = lastStep >= 0 ? ((rd[window].max() ?? 0) - rd[max(0, lastStep)]) : -1
+            let skinSwing: Float = lastStep >= 0 ? (gaps[window].max() ?? -1) : -1
+            guard let g = plant else { XCTFail("\(kind): the walk-up ends"); continue }
+            MotionLog.write(String(format: "SIDE ARRIVAL %@: plant gap %.3f, root retreat within 0.65 s %.4f (skin-gap outline swing %.3f)", kind.rawValue, g, rebound, skinSwing))
+            XCTAssertGreaterThan(g, -0.01, "\(kind): never inside him"); XCTAssertLessThan(g, 0.015, "\(kind): plants within the 1.5 cm arrival bar")
+            XCTAssertLessThan(rebound, 0.03, "\(kind): the roots do not bounce back past 3 cm after the stop")
+        }
     }
 }
