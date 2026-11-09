@@ -47,7 +47,10 @@ struct CafeChrome: View {
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else if HUDLayout.isPad && g.size.width > g.size.height {
                         // iPad landscape: the card sits on the right so the Jelbies at the table stay in view (a full-width bottom card hid the lower half of them)
-                        HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 150).frame(width: min(460, g.size.width * 0.4)).padding(.top, 72).padding(.bottom, cafe.phase == .done ? 150 : 16).padding(.trailing, 12) }
+                        // 520 pt wide at 1.25x (about 650 pt covered, readable on a 13-inch iPad); the scale does not change layout size, so the height cap is (free height) / scale
+                        let padScale: CGFloat = 1.25
+                        let free = max(200, g.size.height - 72 - (cafe.phase == .done ? 160 : 70))
+                        HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: free / padScale).frame(width: min(520, g.size.width * 0.42)).scaleEffect(padScale, anchor: .trailing).padding(.top, 72).padding(.bottom, cafe.phase == .done ? 150 : 16).padding(.trailing, 12) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
                         // the scale does not change the layout size, so cap the layout height at (share of the screen) / scale: the card never COVERS more than that share

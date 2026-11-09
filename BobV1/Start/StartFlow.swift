@@ -7,7 +7,7 @@
 //  Starting over: the menu's "Start over" (hold to confirm) and Settings > Reset save only open the opening story and the picker; the old save is wiped
 //  when the first Jelbie is chosen and named (`bringHome`), so backing out of the picker keeps it.
 //
-//  Launch flags (simulator and DEBUG builds only, except -NewGame / -ImportSave / -ClearGuest): -MainMenu 0 (skip the menu: the room, or the Adoption Center when there is no save), -ResetForAdoption 1 (simulator only:
+//  Launch flags (simulator, DEBUG and JELBIES_DEV_ARGS builds only; -NewGame / -ImportSave / -ClearGuest also work in a device Release build made with JELBIES_DEV_ARGS): -MainMenu 0 (skip the menu: the room, or the Adoption Center when there is no save), -ResetForAdoption 1 (simulator only:
 //  wipes everything before launch so the game starts fresh).
 //
 
@@ -64,12 +64,16 @@ final class StartFlow {
         #if DEBUG || targetEnvironment(simulator)
         if UserDefaults.standard.integer(forKey: "ResetForAdoption") != 0 { wipeAll() }
         #endif
+        // -ClearGuest / -NewGame / -ImportSave are dev arguments: local Release device installs keep them (JELBIES_DEV_ARGS, set by the Release configuration);
+        // the App Store archive clears JELBIES_DEV_ARGS_COND, so they do not exist there.
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
         applyClearGuest(arg: UserDefaults.standard.object(forKey: clearGuestKey) != nil ? UserDefaults.standard.integer(forKey: clearGuestKey) : nil)
-        // Not simulator-gated: a device Release build can restart the game with `-NewGame lavender,pearl,teddy [-NewGameCoins 10000]` (once per value).
+        // Not simulator-gated (but dev-args-gated): a device dev-args Release build can restart the game with `-NewGame lavender,pearl,teddy [-NewGameCoins 10000]` (once per value).
         applyNewGame(text: UserDefaults.standard.string(forKey: newGameKey),
                      coins: UserDefaults.standard.object(forKey: newGameCoinsKey) != nil ? UserDefaults.standard.integer(forKey: newGameCoinsKey) : 10_000)
         // Not simulator-gated: `-ImportSave 1` merges Documents/import_save.plist (an old save's room) into this game, once (`-ImportSave 0` re-arms). Runs before StoreBook is created.
         ImportSave.apply(arg: UserDefaults.standard.object(forKey: ImportSave.argKey) != nil ? UserDefaults.standard.integer(forKey: ImportSave.argKey) : nil)
+        #endif
     }
 
     static let clearGuestKey = "ClearGuest", clearGuestAppliedKey = "ClearGuest.applied"

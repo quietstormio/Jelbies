@@ -16,6 +16,9 @@ struct VolleyChrome: View {
     @State private var stickKnob: CGSize = .zero
     @State private var hitDown = false
     @State private var aimShown: SIMD2<Float>?
+    @State private var padH: CGFloat = 0
+    /// iPad: the 1.45x scale does not change layout size, so cap the card's layout height at (screen height minus the top bar band) / 1.45.
+    private var padCardMaxH: CGFloat { padH > 0 ? max(200, (padH - 150) / 1.45) : .infinity }
     @State private var fxText = ""
     @State private var fxTone = 0
     @State private var fxY: CGFloat = 0
@@ -29,7 +32,7 @@ struct VolleyChrome: View {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
-                    if volley.showsCard { VolleyResultsCard(volley: volley) { volley.goHome() }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(.scale(scale: 0.85).combined(with: .opacity)) }
+                    if volley.showsCard { PadResultsCardFit(maxH: padCardMaxH) { VolleyResultsCard(volley: volley) { volley.goHome() } }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(.scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if volley.phase == .playing, !volley.hasResults { controls }
                 }
@@ -49,6 +52,7 @@ struct VolleyChrome: View {
             }
             Color.white.opacity(Double(volley.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { padH = $0 }
         .allowsHitTesting(volley.active)
         .accessibilityElement(children: .contain)
         .padStatusBarHidden(volley.inScene)

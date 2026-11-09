@@ -472,6 +472,7 @@ struct TrackPanel: View {
 
 struct BagSheet: View {
     let care: GameCare
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State var who: Int
     var close: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
@@ -514,7 +515,7 @@ struct BagSheet: View {
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
                 LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 140, showNote: false, pick: { who = $0 })
-                if HUDLayout.isPad {          // iPad: all six tabs share the card's width (no clipped "Ro" at the edge); the label shrinks a touch if it must
+                if HUDLayout.isPad, typeSize < .xxxLarge {          // iPad (larger type falls back to the scrolling row below so labels never truncate): all six tabs share the card's width (no clipped "Ro" at the edge); the label shrinks a touch if it must
                     HStack(spacing: 6) {
                         ForEach(tabs) { t in
                             Button { AudioHub.shared.play(.pageTurn); tab = t } label: {

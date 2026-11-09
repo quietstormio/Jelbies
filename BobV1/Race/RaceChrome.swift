@@ -29,6 +29,9 @@ private struct RaceChromeLayout: View {
     /// iPad landscape: smaller corner buttons so the track's hedges stay visible.
     let padLandscape: Bool
     private var race: RaceFlow { care.race }
+    @State private var padH: CGFloat = 0
+    /// iPad: the 1.45x scale does not change layout size, so cap the card's layout height at (screen height minus the top bar band) / 1.45.
+    private var padCardMaxH: CGFloat { padH > 0 ? max(200, (padH - 150) / 1.45) : .infinity }
     private let light = UIImpactFeedbackGenerator(style: .light)
     private let rigid = UIImpactFeedbackGenerator(style: .rigid)
 
@@ -38,7 +41,7 @@ private struct RaceChromeLayout: View {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
-                    if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
+                    if race.showsCard { PadResultsCardFit(maxH: padCardMaxH) { RacePlacingsCard(race: race) { race.goHome() } }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if race.ui.phase != .results, !compact { footButtons }
                 }
@@ -54,6 +57,7 @@ private struct RaceChromeLayout: View {
             }
             Color.white.opacity(Double(race.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { padH = $0 }
         .allowsHitTesting(race.active)
         .accessibilityElement(children: .contain)
         .defersSystemGestures(on: .bottom)
@@ -328,5 +332,23 @@ struct RacePlacingsCard: View {
         .overlay(RoundedRectangle(cornerRadius: 34, style: .continuous).strokeBorder(Color.white.opacity(0.6), lineWidth: 1.5))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("race-card")
+    }
+}
+
+
+/// iPad results cards are drawn at 1.45x, which does not change layout size: hug the content, and scroll if it is taller than `maxH`. iPhone: the content unchanged.
+struct PadResultsCardFit<Content: View>: View {
+    let maxH: CGFloat
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        if PadLayout.isPad {
+            ViewThatFits(in: .vertical) {
+                content()
+                ScrollView(.vertical, showsIndicators: false) { content() }.scrollBounceBehavior(.basedOnSize)
+            }
+            .frame(maxHeight: maxH)
+        } else {
+            content()
+        }
     }
 }

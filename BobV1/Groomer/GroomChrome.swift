@@ -81,38 +81,41 @@ struct GroomChrome: View {
     @State private var padContentH: CGFloat = 0
 
     private var picker: some View {
-        GeometryReader { geo in
-            ZStack {
-                Color(red: 0.30, green: 0.20, blue: 0.14).opacity(0.28).ignoresSafeArea().onTapGesture { groom.cancelPicker() }.accessibilityHidden(true)
-                if PadLayout.isPad {
+        ZStack {
+            Color(red: 0.30, green: 0.20, blue: 0.14).opacity(0.28).ignoresSafeArea().onTapGesture { groom.cancelPicker() }.accessibilityHidden(true)
+            if PadLayout.isPad {
+                GeometryReader { geo in
                     // iPad: the card is exactly as tall as its content (a flexible maxHeight frame takes the whole proposal and left empty bands above and below),
                     // capped at the window height / the 1.25 scale; taller than that (big Dynamic Type, short window) it scrolls.
                     let avail = max(200, geo.size.height / 1.25 - 40)
-                    ScrollView(.vertical, showsIndicators: false) {
-                        pickerContent
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { padContentH = $0 }
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .frame(maxWidth: 580)
-                    .frame(height: min(padContentH > 0 ? padContentH : avail, avail))
-                    .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
-                    .padding(.horizontal, 16)
-                    .scaleEffect(1.25)   // iPad: larger type and targets
-                    .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")
-                } else {
-                    Group {
-                        ViewThatFits(in: .vertical) {
-                            pickerContent.fixedSize(horizontal: false, vertical: true)
-                            ScrollView { pickerContent }.scrollBounceBehavior(.basedOnSize)
+                    ZStack {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            pickerContent
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { padContentH = $0 }
                         }
+                        .scrollBounceBehavior(.basedOnSize)
+                        .frame(maxWidth: 580)
+                        .frame(height: min(padContentH > 0 ? padContentH : avail, avail))
+                        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
+                        .padding(.horizontal, 16)
+                        .scaleEffect(1.25)   // iPad: larger type and targets
+                        .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")
                     }
-                    .frame(maxWidth: 460, maxHeight: vsc == .compact ? 330 : 620)
-                    .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
-                    .padding(.horizontal, 16)
-                    .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")
+                    .frame(width: geo.size.width, height: geo.size.height)
                 }
+            } else {
+                // iPhone: exactly as at 3d340b3f (no GeometryReader, centred in the full screen)
+                Group {
+                    ViewThatFits(in: .vertical) {
+                        pickerContent.fixedSize(horizontal: false, vertical: true)
+                        ScrollView { pickerContent }.scrollBounceBehavior(.basedOnSize)
+                    }
+                }
+                .frame(maxWidth: 460, maxHeight: vsc == .compact ? 330 : 620)
+                .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
+                .padding(.horizontal, 16)
+                .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")
             }
-            .frame(width: geo.size.width, height: geo.size.height)
         }
         .transition(.opacity)
     }

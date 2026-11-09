@@ -11,7 +11,7 @@ The one item still in flight (Pip's signature) is the only open feature work. Th
 ### Start
 - A short intro video with its own music, skippable with a tap.
 - The blue title screen ("E · Title screen" design): scrolling blue Jelbie pattern, sparkles, a peeking Jelbie, lip buttons and the swing logo loop. Its colour follows the theme colour setting (8 presets plus custom), which also colours the loading screen.
-- New players start with Bob only. Adopt Pip, Moss and Lavender with Drops at the Adoption Center (second 120 Drops, third 180).
+- New players start with Bob only. Adopt Pip, Moss and Lavender with JellyCoins at the Adoption Center (second 120 JellyCoins, third 180).
 
 ### Room life
 - Care: feed, clean (de-lint, soap, rinse, shine, sparkle), pet, squish and play with jelly haptics.
@@ -36,15 +36,15 @@ The one item still in flight (Pip's signature) is the only open feature work. Th
 ### Places
 - Town, Shop, Café (Jelly Cup, Baby latte), the Adoption Center and Jelly Volleyball.
 - Park: a clean redesign (one lawn, round trees, flowering bushes, simple pond), up to five Jelbies, visitor Jelbies to befriend, love rises faster than petting, and Park-only toys (seesaw, spring bunny, sandbox).
-- Groomer (Jelly Spa in Town): Quick Splash 20, Bubble Spa 40 and Royal Pamper 70 Drops per Jelbie. A shop-front cut-scene with ElevenLabs sounds, then a shiny reveal at home.
+- Groomer (Jelly Spa in Town): Quick Splash 20, Bubble Spa 40 and Royal Pamper 70 JellyCoins per Jelbie. A shop-front cut-scene with ElevenLabs sounds, then a shiny reveal at home.
 
 ### Games
 - Jelly Race: pick a Jelbie and race other Jelbies with two foot buttons; curved courses, hurdles with a Jump button, tiers up to Tsunami.
 - Jelly Show: Look, Dance and Trick rounds, ranks from Puddle to Ocean.
-- Jelly Volleyball: 2v2 beach volleyball with body-only hits (head bonk, belly-flop spike, belly dig). Reached from Jelly Volleyball in Town and a Compete chip. Tiers: Sandcastle, Shore, Reef and Tidal. Trainable Speed, Power, Hops and Timing through drills. Drops, ribbons and trophies.
+- Jelly Volleyball: 2v2 beach volleyball with body-only hits (head bonk, belly-flop spike, belly dig). Reached from Jelly Volleyball in Town and a Compete chip. Tiers: Sandcastle, Shore, Reef and Tidal. Trainable Speed, Power, Hops and Timing through drills. JellyCoins, ribbons and trophies.
 
 ### Progression
-- Drops are earn-only; there are no purchases. Races pay most, care pays steadily.
+- JellyCoins are earn-only; there are no purchases. Races pay most, care pays steadily.
 - Ribbons and trophies per Jelbie, shown on a wall shelf and in a Trophies sheet.
 - Training improves speed and skills in the games.
 
@@ -83,7 +83,7 @@ ElevenLabs key renewed 2026-10-25. New audio covers the groomer and volleyball (
 - Walk speed +10% was not done (needs deeper foot crown work; the gait is locked).
 - In portrait, a front Jelbie can sit under the bottom HUD buttons.
 - Pre-existing test failures (likely Xcode 27.1 simulator drift): AnticsLab seed-7 soak, BathSootSeedZero hash, JellyJiggle settle, MotionFootRender slab tets, DecorTests min gap, IdleBehaviour x3, StoreFood toss, BlobBrain soak stumble.
-- App icon still missing. Six designs exist in the "Jelbies App Icons" artifact; the user is to pick.
+- App icon: done. AppIcon and 7 alternate icons (Pink, Mint, Lavender, Yellow, Peach, Teal, Navy) are in the asset catalog.
 - Nothing is pushed to a remote.
 
 ## App Store checklist
@@ -107,7 +107,6 @@ ElevenLabs key renewed 2026-10-25. New audio covers the groomer and volleyball (
   - Open (code, not project): a minimum window size (windowResizability(.contentMinSize) + frame(minWidth ~560, minHeight ~420)) in BobV1App.swift.
   - iPad screenshots (App Store Connect; at least one 13-inch set is REQUIRED, jpeg/png, no alpha, up to 10): 13-inch 2064x2752 or 2048x2732 portrait, 2752x2064 or 2732x2048 landscape. 11-inch (1668x2420, 1668x2388, 2420x1668) is optional and derived from the 13-inch set. Capture the real app on the iPad Pro 13-inch simulator: Jelly Race, Jelly Show, Jelly Volleyball, Jelly Spa, Jelly Spring. Strip alpha before upload.
 - Device and iOS support; Foundation Models features need a fallback on devices without Apple Intelligence (already plain-text fallbacks).
-- App icon.
 - TestFlight build and a pass before submission.
 
 ## Launch checks added 2026-11-09 (r2-tidy)

@@ -34,7 +34,7 @@
 	<true/>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.simulation-games</string>
-	<!-- Live Activities (race / nap / Pep refill): local updates only, no push. -->
+	<!-- Live Activities (race and nap): local updates only, no push. -->
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
