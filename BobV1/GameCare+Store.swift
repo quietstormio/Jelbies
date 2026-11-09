@@ -7,6 +7,7 @@
 
 import Foundation
 import simd
+import QuartzCore
 
 extension GameCare {
     /// Feeds the snack `itemID` (a store food or treat from the bag) to `jelly` (nil = nobody singled out: a group serving with several Jellies).
@@ -19,7 +20,11 @@ extension GameCare {
     /// each bite nudges his condition and starts his perk.
     func ate(jelly: Int, _ c: Consumable, pieces: Int) {
         guard pieces > 0, c.stored, let prof = self.jelly(jelly) else { return }
-        if !servingCharged, let id = c.storeID { servingCharged = true; store.use(id) }
+        if !servingCharged, let id = c.storeID {
+            servingCharged = true; store.use(id)
+            // his picked favourite snack (JellyTraits): one extra heart and an excited face on the first bite (no stat or coin bonus)
+            if !isPreview, prof.traits?.snack == c.id { bubbleHub.spawnHeart(for: jelly, now: CACurrentMediaTime()); brainFor(jelly)?.face(.excited, hold: 1.4) }
+        }
         let share = Float(pieces) / Float(DiningTiming.bitesPerServing)
         if !c.condition.isEmpty { prof.stats.nudge(c.condition.mapValues { $0 * share }, food: c.name) }
         if let perk = c.perk {

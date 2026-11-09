@@ -77,7 +77,7 @@ struct RosterPanel: View {
                         ScrollView {
                             VStack(spacing: 6) {
                                 ForEach(care.select.blobs) { b in
-                                    BlobCard(blob: b, needs: care.needs(for: b.id), perks: care.jelly(b.id).map { j in j.perks.active.map { ($0, j.perks.remaining($0)) } } ?? []) {
+                                    BlobCard(blob: b, needs: care.needs(for: b.id), perks: care.jelly(b.id).map { j in j.perks.active.map { ($0, j.perks.remaining($0)) } } ?? [], personality: care.jelly(b.id)?.traits?.summary) {
                                         UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                                         withAnimation(CareMenu.spring) { open = false }
                                         onPick(b.id)
@@ -110,6 +110,7 @@ struct BlobCard: View {
     let blob: SelectBlob
     let needs: BlobNeeds
     var perks: [(kind: PerkKind, left: TimeInterval)] = []          // active power-ups (Perks model), shown as chips with the time left
+    var personality: String? = nil          // "Cuddly · loves Bedtime cookie" (a picked Jelbie; nil for the older ones)
     let action: () -> Void
 
     static func moodColor(_ m: BlobMood) -> Color {
@@ -141,6 +142,7 @@ struct BlobCard: View {
                         .padding(.horizontal, 9).padding(.vertical, 3)
                         .background(Capsule().fill(Self.moodColor(needs.mood)))
                 }
+                if let personality { Text(personality).jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.7) }
                 let meters = dts.isAccessibilitySize
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(spacing: 6))
                 meters { ForEach(NeedKind.allCases, id: \.rawValue) { k in meter(k) } }          // the three bars only; no word rows
@@ -154,7 +156,7 @@ struct BlobCard: View {
                 }
             }
             .accessibilityElement(children: .ignore)          // one element per row: "<name>, <mood>, boosts: ..."
-            .accessibilityLabel("\(blob.name), \(needs.mood.word), boosts: \(boostSummary)")
+            .accessibilityLabel("\(blob.name), \(personality.map { $0 + ", " } ?? "")\(needs.mood.word), boosts: \(boostSummary)")
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.6)))

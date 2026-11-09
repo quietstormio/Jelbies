@@ -722,7 +722,7 @@ struct AdoptionCenter: View {
                 dragPill.offset(x: 220 - 60, y: 571 - 130 - 15)
             } else if row {
                 rowBands(proj, u: u, chips: chips)
-                hintPill.offset(x: 220 - 80, y: 571 - 130 - 15)
+                hintPill.offset(x: 220 - 105, y: 571 - 130 - 15)
             }
         }
         .frame(width: 440, height: 470, alignment: .topLeading)
@@ -769,14 +769,14 @@ struct AdoptionCenter: View {
                         if chips {
                             HStack(spacing: 5) {
                                 Image(systemName: pers.symbol).font(.system(size: 14, weight: .black))
-                                Text(pers.title).font(SK.font(15, .black)).lineLimit(1).minimumScaleFactor(0.7)
+                                Text(pers.title).font(SK.font(14, .black)).lineLimit(1).minimumScaleFactor(0.7)
                             }
                             .foregroundStyle(sel ? SK.cream : SK.ink)
-                            .padding(.horizontal, 8).frame(width: 100, height: chipH)
+                            .padding(.horizontal, 6).frame(width: 90, height: chipH)
                             .background(Capsule().fill(sel ? SK.ink : Color.white.opacity(0.7)))
-                            .scaleEffect(sel ? 1.08 : (tapped || reduce ? 1 : (breathe ? 1.05 : 1)))
+                            .scaleEffect(sel ? 1.05 : (tapped || reduce ? 1 : (breathe ? 1.05 : 1)))
                             .animation(tapped || reduce ? nil : .easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(Double(i) * 0.25), value: breathe)
-                            .offset(x: xs[i] - x0 - 50, y: chipTop - y0)
+                            .offset(x: xs[i] - x0 - 45, y: chipTop - y0)
                         }
                     }
                     .frame(width: x1 - x0, height: chipTop + chipH - y0, alignment: .topLeading)
@@ -793,7 +793,7 @@ struct AdoptionCenter: View {
     }
 
     private var hintPill: some View {
-        Text("Tap one to meet them").font(SK.font(15, .heavy)).foregroundStyle(SK.ink).frame(width: 160, height: 30)
+        Text("Tap one to meet them").font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1).frame(width: 210, height: 30)
             .background(Capsule().fill(Color.white.opacity(0.58)))
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
             .accessibilityHidden(true)

@@ -269,11 +269,14 @@ final class DuplicateJelbiesTests: XCTestCase {
         XCTAssertNil(AdoptionPrice.next(home: roster.count), "the 4th is refused")
         XCTAssertEqual(AdoptionPrice.next(home: 2), 800)
         XCTAssertEqual(AdoptionPrice.next(home: 1), 500)
-        // today's colour is offered for every species, the ones at home included
+        // today's colour is one of the pick page's three shades for every species, the ones at home included; the free first gift is classic for all three
+        let day = JellyVariantBook.dayKey()
         for s in 0...3 {
-            XCTAssertEqual(AdoptionCenter.offer(mode: .more, character: s), JellyVariantBook.offer(species: s, dayKey: JellyVariantBook.dayKey()))
+            let shades = JellyVariantBook.shades(species: s, dayKey: day, owned: 1)
+            XCTAssertEqual(shades.count, 3)
+            if let o = JellyVariantBook.offer(species: s, dayKey: day) { XCTAssertTrue(shades.contains { $0 == o }) }
         }
-        XCTAssertNil(AdoptionCenter.offer(mode: .first, character: 0))
+        XCTAssertTrue(AdoptionCenter.makeCandidates(mode: .first, species: 0, dayKey: day, home: []).allSatisfy { $0.variant == nil })
     }
 
     func testResetCharacterStateClearsAPreviewScratchId() {

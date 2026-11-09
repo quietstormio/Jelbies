@@ -148,3 +148,24 @@ Not in v1. When built, a special edition should be a material/finish layered on 
 - **Moss:** the daisy sits on the hat band when a hat is worn.
 - **Lavender:** wings fold rather than vanish under worn items, with periodic flap bursts and short flights.
 - Features are never hidden outright by wearables.
+
+## Pick one of three (Adoption Center)
+
+Species page -> "Meet the three" -> three Jelbies of that species side by side -> name -> bring home (the free first gift and the Jelly Spring alike).
+Code: `BobV1/Jelly/JellyTraits.swift`. The three are a pure function of (species, day, classic, owned): three distinct personalities, jars = species profile + personality tilt + seeded +-3 (15...98),
+a favourite snack (store food), and a slight colour shade (classic / Soft or Deep / today's Spring colour; specials and the first gift: classic for all three).
+
+| Personality | Jar tilt (Cute, Sweet, Sparkly, Cool, Sporty) | Snacks |
+|---|---|---|
+| Bouncy | 0, -4, 0, -8, +14 | donut, fries, taco |
+| Cuddly | +10, +8, 0, -8, -8 | cookie, cupcake, macncheese |
+| Curious | 0, -4, +10, +6, -8 | dumplings, sushi, sandwich |
+| Sleepy | +2, +12, -4, +2, -14 | cookie, popsicle, onigiri |
+| Giggly | +8, +2, +10, -10, 0 | cupcake, pancakestack, minipizza |
+| Brave | -8, -8, -2, +12, +12 | cheeseburger, taco, ramen |
+| Gentle | +4, +12, +2, -2, -14 | onigiri, fruitcup, popsicle |
+| Cheeky | -4, -10, +8, +10, +4 | nuggets, fries, cakeslice |
+
+Starting stats follow the jars (`StatTuning.seed`): each condition stat = jar/100 x 0.25 (half of it is an innate floor it never decays below), waddle = 0.30 + 0.35 x (0.6 sporty + 0.25 cool + 0.15 sparkly)/100,
+focus = 0.35 + 0.35 x (0.5 cool + 0.3 sweet + 0.2 cute)/100. Seeded lazily the first time the Jelbie's stats are built, from the per-instance `JellyTraits.v1` record (survives `resetCharacterState`).
+Preview scratch ids: `1000 + slot*10 + species`. Capture flags (simulator): `-PickerStep species|pick|name -PickerCandidate 0...2`.

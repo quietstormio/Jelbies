@@ -629,6 +629,13 @@ struct BagSheet: View {
                 }
                 else { Text("x\(book.count(item.id))").font(SK.font(13, .heavy)).foregroundStyle(SK.muted) }
                 if let p = item.perk { PerkChip(kind: p) }
+                if let f = item.food, let j = care.jelly(who), j.traits?.snack == f {          // the picked favourite snack of the Jelbie it is for (a small heart; an extra heart when he eats it)
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill").font(.system(size: 11, weight: .heavy)).foregroundStyle(SK.pink)
+                        Text("\(j.name)'s favourite").font(SK.font(12, .heavy)).foregroundStyle(SK.ink.opacity(0.75))
+                    }
+                    .accessibilityElement(children: .combine).accessibilityIdentifier("bag-favourite-\(item.id)")
+                }
             }
             Spacer(minLength: 0)
             actionButton(item)
