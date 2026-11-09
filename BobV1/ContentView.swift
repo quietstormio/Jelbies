@@ -40,7 +40,7 @@ struct ContentView: View {
     @ViewBuilder private var phaseView: some View {
         switch flow.phase {
         case .menu: MainMenuView(flow: flow)
-        case .wiping: SK.cream.ignoresSafeArea()
+        case .wiping: Color(hex: 0x070A2B).ignoresSafeArea()          // the night sky's colour: the opening starts from it (cream flashed for half a second between the menu and the night)
         case .opening:
             OpeningStoryView(replay: flow.replaying) { withAnimation(.easeInOut(duration: 1.0)) { flow.finishOpening() } }.transition(.opacity)
         case .adopt(let mode):
