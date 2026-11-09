@@ -128,19 +128,27 @@ final class RenderScalerTests: XCTestCase {
     }
 
     func testRateNeverHighOnLowPowerHotOr60HzPanel() {
-        for (t, lp, mx) in [(ProcessInfo.ThermalState.nominal, true, 120), (.serious, false, 120), (.nominal, false, 60), (.fair, false, 120)] {
+        for (t, lp, mx, want) in [(ProcessInfo.ThermalState.nominal, true, 120, [30]), (.serious, false, 120, [30]), (.critical, false, 120, [24]), (.nominal, false, 60, []), (.fair, false, 120, [])] {
             var g = RateGovernor(maxFPS: mx)
             var f: [Int] = []
             for _ in 0..<(60 * 8) { if let x = g.update(dt: dt, gpuMs: 2, thermal: t, lowPower: lp) { f.append(x) } }
-            XCTAssertEqual(f, [], "\(t) lp=\(lp) max=\(mx)")
+            XCTAssertEqual(f, want, "\(t) lp=\(lp) max=\(mx)")
         }
+    }
+
+    func testRateRecoversTo60AfterThermalCapLifts() {
+        var g = RateGovernor(maxFPS: 60)
+        XCTAssertEqual(g.update(dt: dt, gpuMs: 2, thermal: .serious, lowPower: false), 30)
+        var f: [Int] = []
+        for _ in 0..<(60 * 30) { if let x = g.update(dt: dt, gpuMs: 2, thermal: .fair, lowPower: false) { f.append(x) } }
+        XCTAssertEqual(f, [60])
     }
 
     func testRateDropsImmediatelyOnLowPower() {
         var g = RateGovernor(maxFPS: 120)
         for _ in 0..<(60 * 4) { _ = g.update(dt: dt, gpuMs: 3, thermal: .nominal, lowPower: false) }
         XCTAssertEqual(g.fps, 120)
-        XCTAssertEqual(g.update(dt: dt, gpuMs: 3, thermal: .nominal, lowPower: true), 60)
+        XCTAssertEqual(g.update(dt: dt, gpuMs: 3, thermal: .nominal, lowPower: true), 30)
     }
 
     func testRateOnlyAtNativeResolution() {
