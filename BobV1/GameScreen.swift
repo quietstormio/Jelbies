@@ -315,6 +315,7 @@ struct GameScreen: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.returnToMenu() } }
                 },
                 resetSave: {
+                    model.care.leftActive(); model.care.voice.training.save()          // the old save survives a back-out of the picker, so save it as the menu paths do
                     model.care.voice.cancel()
                     settingsOpen = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { StartFlow.shared.startOver() }
