@@ -501,10 +501,10 @@
 				INFOPLIST_FILE = "BobV1-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelbie photos to your Photos library.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies hear you when you hold to talk, with Ears on they listen for claps, whistles, laughter and music while the app is open. Sound is understood right on your phone. Nothing is recorded or sent anywhere.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies listen when you talk to them or turn on Ears. Sound is understood on your phone and is never recorded or sent anywhere.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your Jelbies turn what you say into words on your phone so they can learn their names and tricks. Nothing is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -540,10 +540,10 @@
 				INFOPLIST_FILE = "BobV1-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelbie photos to your Photos library.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies hear you when you hold to talk, with Ears on they listen for claps, whistles, laughter and music while the app is open. Sound is understood right on your phone. Nothing is recorded or sent anywhere.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies listen when you talk to them or turn on Ears. Sound is understood on your phone and is never recorded or sent anywhere.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your Jelbies turn what you say into words on your phone so they can learn their names and tricks. Nothing is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (

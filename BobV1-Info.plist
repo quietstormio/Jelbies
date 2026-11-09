@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- No non-exempt encryption (offline app, no networking): skips the export-compliance prompt on every upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- The UI is designed for Light only (Dark Mode broke text fields and the Accessibility form). -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 	<!-- Launch screen: plain white in light and dark, so launch hands over to the white intro without a flash. -->
 	<key>UILaunchScreen</key>
 	<dict>

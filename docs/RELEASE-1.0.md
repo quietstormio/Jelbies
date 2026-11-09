@@ -88,7 +88,12 @@ ElevenLabs key renewed 2026-10-25. New audio covers the groomer and volleyball (
 
 ## App Store checklist
 - Privacy: App Privacy "Data Not Collected" (no networking, no analytics).
-- Permission strings: microphone, speech recognition, photos add-only.
+- Permission strings: microphone, speech recognition (NSSpeechRecognitionUsageDescription), photos add-only. All set in the build settings (INFOPLIST_KEY_*); test a clean install on device.
+- Privacy manifests: BobV1/PrivacyInfo.xcprivacy and JelbiesWidget/PrivacyInfo.xcprivacy (no tracking, no collected data; UserDefaults, SystemBootTime, FileTimestamp reasons). Both folders are synced groups, so the files ship automatically. After archiving: Generate Privacy Report and Validate App.
+- Export compliance: ITSAppUsesNonExemptEncryption=false in BobV1-Info.plist.
+- Appearance: UIUserInterfaceStyle=Light (Light only).
+- Launch screen: declared once, in BobV1-Info.plist (UILaunchScreen, LaunchBackground).
+- Build number: CURRENT_PROJECT_VERSION is 1 in every config of every target. Before each upload bump it everywhere at once, with no CI: `agvtool new-version -all <n>` (if agvtool does not pick up the synced project, sed CURRENT_PROJECT_VERSION in project.pbxproj). App Store Connect rejects a repeated build number for the same version.
 - Age rating questionnaire; pricing (TBD by the user).
 - ElevenLabs commercial licence check for the generated music and sound effects.
 - Screenshots (portrait and landscape) and a preview video.
