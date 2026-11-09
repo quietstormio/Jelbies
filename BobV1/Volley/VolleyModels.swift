@@ -98,9 +98,9 @@ nonisolated enum VolleyTuning {
 
     static func clamp01(_ v: Float) -> Float { min(max(v, 0), 1) }
 
-    // payout: a win pays 250 / 400 / 700 / 1500 by tier, a loss 75 / 120 / 210 / 450
+    // payout: a win pays 250 / 400 / 550 / 750 by tier (top = 3x the first), a loss 75 / 120 / 165 / 225 (a loss pays only if the player played, see VolleyFlow.settle)
     static func drops(win: Bool, tier: VolleyTier) -> Int {
-        let w = [250, 400, 700, 1500], l = [75, 120, 210, 450]
+        let w = [250, 400, 550, 750], l = [75, 120, 165, 225]
         return win ? w[tier.index] : l[tier.index]
     }
 }

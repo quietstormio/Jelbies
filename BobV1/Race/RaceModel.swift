@@ -80,15 +80,15 @@ nonisolated enum RaceTuning {
     // MARK: payout
     /// Drops by place (1-based) on the Puddle. Races pay the most: 1st 250, 2nd 140, 3rd 75 (care pays 1 at a time).
     static func drops(place: Int) -> Int { drops(place: place, tier: .puddle) }
-    /// Drops by place and course: Puddle 250 / 140 / 75, Ripple 350 / 190 / 100, Splash 500 / 275 / 150, Wave 750 / 400 / 225, Tsunami 1500 / 825 / 450 (1st on the Tsunami is the grand championship).
+    /// Drops by place and course: Puddle 250 / 140 / 75, Ripple 350 / 190 / 100, Splash 500 / 275 / 150, Wave 600 / 330 / 180, Tsunami 750 / 420 / 225 (top tier = 3x the Puddle, like the Jelly Show's Ocean).
     static func drops(place: Int, tier: CourseTier) -> Int {
         let table: [Int]
         switch tier {
         case .puddle: table = [250, 140, 75]
         case .ripple: table = [350, 190, 100]
         case .splash: table = [500, 275, 150]
-        case .wave: table = [750, 400, 225]
-        case .tsunami: table = [1500, 825, 450]
+        case .wave: table = [600, 330, 180]
+        case .tsunami: table = [750, 420, 225]
         }
         return table[min(max(place, 1), 3) - 1]
     }

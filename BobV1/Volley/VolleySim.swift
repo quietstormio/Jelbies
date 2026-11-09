@@ -153,6 +153,8 @@ nonisolated struct VolleySim: Sendable {
     private(set) var lastHit = -1               // player index
     private(set) var touches = [0, 0]
     private(set) var clock: Float = 0
+    /// How many times the human actually played: Hit taps, fresh stick pushes and manual switches. An idle (AFK) player stays near 0.
+    private(set) var humanInputs = 0
     private(set) var phaseT: Float = 0
     private(set) var winner: Int?
     private(set) var events: [VolleyEvent] = []
@@ -214,6 +216,9 @@ nonisolated struct VolleySim: Sendable {
     var servingPlayer: Int { serverIndex }
     var waitingToServe: Bool { phase == .serveWait }
     var humanTeamWon: Bool { winner == 0 }
+    /// Enough real input that the match counts as played (an idle loss pays nothing, gives no points and no close-loss credit).
+    static let minInputsToCount = 3
+    var humanPlayed: Bool { humanInputs >= Self.minInputsToCount }
     var closeLoss: Bool { winner == 1 && score[0] >= score[1] - 1 }          // (lost by one point: at first-to-3 that is 2-3)
     private var params: [VolleyAIParams] { [.teammate, tier.map(VolleyAIParams.tier) ?? .teammate] }
 
@@ -227,6 +232,7 @@ nonisolated struct VolleySim: Sendable {
     /// The floating stick: x is toward the screen's right (+x on the court), y toward the camera (+z). Magnitude 0...1.
     mutating func setStick(_ s: SIMD2<Float>) {
         let m = simd_length(s)
+        if m > 0.3, simd_length(stick) <= 0.3 { humanInputs += 1 }          // (a fresh push, not a held stick)
         stick = m > 1 ? s / m : s
     }
 
@@ -236,6 +242,7 @@ nonisolated struct VolleySim: Sendable {
         controlled = i
         for k in players.indices { players[k].human = (k == i) }
         stick = .zero
+        if manual { humanInputs += 1 }
         if manual { lastManualSwitch = clock }
         events.append(.switched(to: i, auto: !manual))
     }
@@ -251,6 +258,7 @@ nonisolated struct VolleySim: Sendable {
     /// `lag`: seconds the sim state is behind the touch (positive: the touch came after the last step); the grade is taken at the touch, not at the next step.
     mutating func tap(lag: Float = 0) {
         guard players.indices.contains(controlled) else { return }
+        humanInputs += 1
         tapLag = max(-0.1, min(0.1, lag)); defer { tapLag = 0 }
         if phase == .serveWait {
             if serverIndex == controlled { toss(controlled) }
