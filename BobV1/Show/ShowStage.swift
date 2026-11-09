@@ -140,6 +140,10 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     /// The Trick round: the middle, the player's aside spot and the rivals' rest spots all in view (the rivals walk up to the middle in turn).
     static let trick = ShowFrame(spots: [ShowStage.playerSpot, ShowStage.playerAside, ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)],
                                  screenY: 0.33, fill: 0.80, landScreenY: 0.52, landFill: 0.62)
+    /// The Trick round on an iPad (idiom only): the bodies sit lower (the trick menu is bigger there, so the stage keeps the middle of the screen instead of
+    /// a band of backdrop above the menu), and in landscape they stay centred and a little bigger (no phone-style left third; the iPad's chrome is the portrait stack).
+    static let trickPad = ShowFrame(spots: trick.spots, screenY: 0.40, fill: 0.80, landScreenY: 0.36, landFill: 0.66, landLeft: false)
+    static func trick(pad: Bool) -> ShowFrame { pad ? trickPad : trick }
     /// `pad` (iPad idiom only): the row of four fills less of a tablet portrait's width, so the end Jelbies (nearer the camera) are not cropped; false = the phone's numbers.
     static func dance(bodies n: Int, pad: Bool = false) -> ShowFrame { ShowFrame(spots: ShowStage.spots(bodies: n), screenY: 0.30, fill: n > 1 ? (pad ? 0.66 : 0.84) : 0.46, landScreenY: 0.28, landFill: n > 1 ? 1.15 : 0.6, landLeft: false) }
     static let results = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.27, fill: 0.44, landScreenY: 0.22, landFill: 0.5, landLeft: false)

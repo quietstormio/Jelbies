@@ -84,8 +84,9 @@ struct RoundHeader: View {
 /// A line over the stage: the theme or a hint.
 struct StagePill: View {
     var text: String
+    var scale: CGFloat = 1          // iPad: larger
     var body: some View {
-        Text(text).font(SK.font(14, .black)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.7)
+        Text(text).font(SK.font(14 * scale, .black)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.7)
             .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(ShowUI.light.opacity(0.95)))
     }
 }
@@ -381,12 +382,14 @@ struct TrickRound: View {
     @Environment(\.verticalSizeClass) private var vsc
     private var compact: Bool { vsc == .compact }
     private var show: ShowFlow { care.show }
+    /// iPad only: the chips, cards and the trick menu are drawn ~1.35x; 1 on iPhone.
+    private var sc: CGFloat { PadLayout.isPad ? 1.35 : 1 }
 
     var body: some View {
         let _ = show.revision
         return GeometryReader { g in
             let size = g.size
-            let body = StageProject.body(ShowStage.playerSpot, frame: .trick, size: size)
+            let body = StageProject.body(ShowStage.playerSpot, frame: .trick(pad: PadLayout.isPad), size: size)
             ZStack(alignment: .top) {
                 if show.burstFlash > 0 { Confetti(serial: show.burstFlash, at: body.centre).allowsHitTesting(false) }
                 VStack(spacing: 8) {
@@ -397,14 +400,17 @@ struct TrickRound: View {
                             VStack(spacing: 8) { turns; if rivalsOn { rivalPanel } else { meters; burst; menu } }.frame(width: min(size.width * 0.52, 520))
                         }
                     } else {
-                        turns
-                        HStack { Spacer(); StagePill(text: hint); Spacer() }
+                        turns.padReadable(760)
+                        HStack { Spacer(); StagePill(text: hint, scale: sc); Spacer() }
                         Spacer(minLength: 0)
-                        if rivalsOn { rivalPanel } else {
-                            meters
-                            burst
-                            menu
+                        VStack(spacing: 8) {
+                            if rivalsOn { rivalPanel } else {
+                                meters
+                                burst
+                                menu
+                            }
                         }
+                        .padReadable(760)
                     }
                 }
                 .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
@@ -427,16 +433,16 @@ struct TrickRound: View {
 
     /// The rivals' turn: who is up with her trick, stars and points (tap it to skip just her), and the big Skip for the rest of this turn.
     private var rivalPanel: some View {
-        VStack(spacing: compact ? 8 : 12) {
+        VStack(spacing: (compact ? 8 : 12) * sc) {
             Button { AudioHub.shared.uiTap(); show.skipCurrentRival() } label: { rivalBanner }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("rival-banner")
             Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); show.skipRivals() } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "forward.fill").font(.system(size: 20, weight: .black))
-                    Text("Skip").font(SK.font(20, .black))
+                    Image(systemName: "forward.fill").font(.system(size: 20 * sc, weight: .black))
+                    Text("Skip").font(SK.font(20 * sc, .black))
                 }
-                .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: compact ? 50 : 60)
+                .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: (compact ? 50 : 60) * sc)
                 .background(Capsule().fill(ShowUI.gold))
                 .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 3))
             }
@@ -450,27 +456,27 @@ struct TrickRound: View {
             if let n, let s {
                 let r = s.rivals[n.rival], t = n.turn, stars = ShowTrickInfo.difficulty(t.trick)
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Rival's turn").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                    Text("Rival's turn").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.muted)
                     Spacer()
-                    Text(r.persona.title).font(SK.font(11, .black)).foregroundStyle(SK.ink)
+                    Text(r.persona.title).font(SK.font(11 * sc, .black)).foregroundStyle(SK.ink)
                 }
                 HStack(spacing: 8) {
-                    RivalBlob(tint: r.tint, size: compact ? 30 : 38)
+                    RivalBlob(tint: r.tint, size: (compact ? 30 : 38) * sc)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(r.name).font(SK.font(compact ? 16 : 19, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(r.name).font(SK.font((compact ? 16 : 19) * sc, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                         HStack(spacing: 6) {
-                            Text(t.trick.title).font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
-                            HStack(spacing: 2) { ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 10, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : SK.muted.opacity(0.5)) } }
+                            Text(t.trick.title).font(SK.font(14 * sc, .heavy)).foregroundStyle(SK.ink)
+                            HStack(spacing: 2) { ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 10 * sc, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : SK.muted.opacity(0.5)) } }
                         }
                     }
                     Spacer(minLength: 4)
-                    Text(show.rivalScored ? (t.success ? "+\(t.points)" : "Cute flop +\(t.points)") : "\u{2026}").font(SK.font(show.rivalScored && !t.success ? 15 : 22, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                    Text(show.rivalScored ? (t.success ? "+\(t.points)" : "Cute flop +\(t.points)") : "\u{2026}").font(SK.font((show.rivalScored && !t.success ? 15 : 22) * sc, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
             } else {
-                Text("Your turn next").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .center)
+                Text("Your turn next").font(SK.font(18 * sc, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 10).frame(maxWidth: .infinity, minHeight: compact ? 54 : 68)
+        .padding(.horizontal, 14).padding(.vertical, 10).frame(maxWidth: .infinity, minHeight: (compact ? 54 : 68) * sc)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.cream.opacity(0.97)))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(ShowUI.lilac, lineWidth: 3))
         .accessibilityElement(children: .ignore)
@@ -493,10 +499,10 @@ struct TrickRound: View {
                 let rivalsNow = show.trickStage == .rivals && show.rivalRound == k
                 let now = ((s?.turns.count ?? 0) == k && !(s?.tricksDone ?? false)) || rivalsNow
                 HStack(spacing: 6) {
-                    Text(t.map { "\(k + 1) \($0.trick.title)" } ?? "Turn \(k + 1)").font(SK.font(11, .black)).opacity(0.8)
-                    Text(rivalsNow ? "Rivals" : (t.map { "+\($0.points)" } ?? (now ? "Your go" : "\u{2014}"))).font(SK.font(15, .black))
+                    Text(t.map { "\(k + 1) \($0.trick.title)" } ?? "Turn \(k + 1)").font(SK.font(11 * sc, .black)).opacity(0.8)
+                    Text(rivalsNow ? "Rivals" : (t.map { "+\($0.points)" } ?? (now ? "Your go" : "\u{2014}"))).font(SK.font(15 * sc, .black))
                 }
-                .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 44)
+                .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 44 * sc)
                 .background(Capsule().fill(now ? ShowUI.gold : SK.cream.opacity(0.95)))
                 .overlay(Capsule().strokeBorder(now ? ShowUI.goldDeep : .clear, lineWidth: 3))
                 .accessibilityElement(children: .combine)
@@ -518,7 +524,7 @@ struct TrickRound: View {
     }
     private func meter(_ name: String, _ v: Float, _ c: Color, _ tick: Float, _ note: String) -> some View {
         VStack(spacing: 3) {
-            HStack(alignment: .firstTextBaseline) { Text(name).font(SK.font(15, .black)).foregroundStyle(SK.ink); Spacer(); Text("\(Int((v * 100).rounded()))%").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit() }
+            HStack(alignment: .firstTextBaseline) { Text(name).font(SK.font(15 * sc, .black)).foregroundStyle(SK.ink); Spacer(); Text("\(Int((v * 100).rounded()))%").font(SK.font(18 * sc, .black)).foregroundStyle(SK.ink).monospacedDigit() }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(ShowUI.bar)
@@ -526,7 +532,7 @@ struct TrickRound: View {
                     RoundedRectangle(cornerRadius: 2).fill(SK.ink).frame(width: 3, height: 20).offset(x: g.size.width * CGFloat(tick) - 1.5)
                 }
             }.frame(height: 14)
-            Text(note).font(SK.font(11, .heavy)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, alignment: .leading)
+            Text(note).font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine).accessibilityLabel("\(name) \(Int((v * 100).rounded())) percent. \(note)")
     }
@@ -537,10 +543,10 @@ struct TrickRound: View {
             Button { if ready { AudioHub.shared.uiConfirm(); show.armBurst() } } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "sparkles").font(.system(size: 24, weight: .black)).foregroundStyle(.white).shadow(color: SK.ink, radius: 1)
-                    Text("Glow Burst \u{00B7} +10").font(SK.font(20, .black)).foregroundStyle(SK.ink)
+                    Text("Glow Burst \u{00B7} +10").font(SK.font(20 * sc, .black)).foregroundStyle(SK.ink)
                     Text(s.burstUsed ? "Used" : armed ? "Armed" : "Ready").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.gold).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(SK.ink))
                 }
-                .frame(maxWidth: .infinity, minHeight: 56)
+                .frame(maxWidth: .infinity, minHeight: 56 * sc)
                 .background(Capsule().fill(s.burstUsed ? ShowUI.gold.opacity(0.4) : ShowUI.gold))
                 .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 3))
                 .shadow(color: ShowUI.gold.opacity(s.burstUsed ? 0 : 0.7), radius: 6)
@@ -559,22 +565,22 @@ struct TrickRound: View {
         let live = show.trickStage == .pick && !(s?.tricksDone ?? true)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Trick menu").font(SK.font(16, .black)).foregroundStyle(SK.cream)
+                Text("Trick menu").font(SK.font(16 * sc, .black)).foregroundStyle(SK.cream)
                 Spacer()
-                Text("More stars, more points").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.lilacPale)
+                Text("More stars, more points").font(SK.font(12 * sc, .heavy)).foregroundStyle(ShowUI.lilacPale)
             }
             ScrollView(.vertical, showsIndicators: known.count > 4) {
                 VStack(spacing: 6) { ForEach(known, id: \.rawValue) { t in row(t, live: live) } }.padding(.vertical, 2)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: Self.menuHeight(rows: known.count, compact: compact))
+            .frame(maxHeight: Self.menuHeight(rows: known.count, compact: compact, scale: sc))
         }
         .accessibilityIdentifier("trick-cards")
     }
     /// Four rows show at once (a phone on its side fewer); more scroll.
-    static func menuHeight(rows: Int, compact: Bool) -> CGFloat {
-        let row: CGFloat = compact ? 46 : 56, gap: CGFloat = 6
-        let shown = CGFloat(min(max(rows, 1), compact ? 3 : 4))
+    static func menuHeight(rows: Int, compact: Bool, scale: CGFloat = 1) -> CGFloat {
+        let row: CGFloat = (compact ? 46 : 56) * scale, gap: CGFloat = 6
+        let shown = CGFloat(min(max(rows, 1), compact ? 3 : (scale > 1 ? 5 : 4)))
         return shown * row + (shown - 1) * gap + 4
     }
     private func row(_ t: VoiceTrick, live: Bool) -> some View {
@@ -584,20 +590,20 @@ struct TrickRound: View {
         let scope = care.store.trickScope(t, character: show.character)          // nil = a default every Jelbie has
         return Button { if live { AudioHub.shared.uiTap(); show.pick(t) } } label: {
             HStack(spacing: 10) {
-                Image(systemName: ShowTrickInfo.symbol(t)).font(.system(size: 20, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 30)
+                Image(systemName: ShowTrickInfo.symbol(t)).font(.system(size: 20 * sc, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 30 * sc)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(t.title).font(SK.font(16, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(t.title).font(SK.font(16 * sc, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                     HStack(spacing: 2) {
-                        ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 10, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
-                        if used { Text("shown already").font(SK.font(10.5, .heavy)).foregroundStyle(SK.muted).padding(.leading, 4) }
-                        if let scope { Text(scope == .everyone ? "Everyone" : "\(show.playerName)'s own").font(SK.font(10.5, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).padding(.leading, 4) }
+                        ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 10 * sc, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
+                        if used { Text("shown already").font(SK.font(10.5 * sc, .heavy)).foregroundStyle(SK.muted).padding(.leading, 4) }
+                        if let scope { Text(scope == .everyone ? "Everyone" : "\(show.playerName)'s own").font(SK.font(10.5 * sc, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).padding(.leading, 4) }
                     }
                 }
                 Spacer(minLength: 4)
-                if let tag { Text(tag.title).font(SK.font(11, .black)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(ShowUI.tag(tag))) }
-                Text("+\(pts)").font(SK.font(20, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(minWidth: 44, alignment: .trailing)
+                if let tag { Text(tag.title).font(SK.font(11 * sc, .black)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(ShowUI.tag(tag))) }
+                Text("+\(pts)").font(SK.font(20 * sc, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(minWidth: 44 * sc, alignment: .trailing)
             }
-            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: compact ? 46 : 56)
+            .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: (compact ? 46 : 56) * sc)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(SK.cream.opacity(live ? 0.97 : 0.7)))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(tag == show.theme.main ? ShowUI.gold : .clear, lineWidth: 3))
             .contentShape(Rectangle())

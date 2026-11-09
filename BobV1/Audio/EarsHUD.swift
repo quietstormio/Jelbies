@@ -99,6 +99,8 @@ struct EarsSettingsRow: View {
     let ears: Ears
     /// A phone on its side: smaller text, no extra spacing.
     var tight = false
+    /// iPad: the type and the controls drawn larger (1 on iPhone).
+    var scale: CGFloat = 1
     /// Opens the Shop (on the Tricks tab) from the locked row. Nil where the screen has no Shop route (Park, Café): the button is left out.
     var goShop: (() -> Void)? = nil
     @State private var gateSettings = false
@@ -113,19 +115,19 @@ struct EarsSettingsRow: View {
         let on = Binding<Bool>(get: { ears.state.isOn }, set: { ears.setOn($0) })
         VStack(alignment: .leading, spacing: tight ? 2 : 4) {
             if ears.isLocked {
-                Label("Music Ears", systemImage: "lock.fill").jFont(15, .semibold).foregroundStyle(ink)
+                Label("Music Ears", systemImage: "lock.fill").jFont(15 * scale, .semibold).foregroundStyle(ink)
                     .accessibilityIdentifier("sound-ears-locked")
                 Text(Self.lockedText)
-                    .jFont(tight ? 11 : 12, .regular)
+                    .jFont((tight ? 11 : 12) * scale, .regular)
                     .foregroundStyle(ink.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("sound-ears-locked-text")
                 if let goShop {
                     Button { AudioHub.shared.uiTap(); goShop() } label: {
                         Label("Go to Shop", systemImage: "bag.fill")
-                            .jFont(14, .semibold)
+                            .jFont(14 * scale, .semibold)
                             .foregroundStyle(tint)
-                            .frame(minHeight: 44, alignment: .leading)
+                            .frame(minHeight: 44 * scale, alignment: .leading)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -133,19 +135,19 @@ struct EarsSettingsRow: View {
                 }
             } else {
             Toggle(isOn: on) {
-                Label("Ears", systemImage: "ear.fill").jFont(15, .semibold).foregroundStyle(ink)
+                Label("Ears", systemImage: "ear.fill").jFont(15 * scale, .semibold).foregroundStyle(ink)
             }
-            .toggleStyle(SoundSwitchStyle(tint: tint, compact: tight))
+            .toggleStyle(SoundSwitchStyle(tint: tint, compact: tight, scale: scale))
             .disabled(ears.state == .denied)
             .accessibilityIdentifier("sound-ears-toggle")
             Text(ears.state == .denied ? Self.deniedText : Self.privacyText)
-                .jFont(tight ? 11 : 12, .regular)
+                .jFont((tight ? 11 : 12) * scale, .regular)
                 .foregroundStyle(ink.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("sound-ears-privacy")
             if ears.state == .denied {
                 Button("Open Settings") { gateSettings = true }
-                    .jFont(13, .semibold)
+                    .jFont(13 * scale, .semibold)
                     .foregroundStyle(tint)
                     .buttonStyle(.plain)
                     .parentGate(isPresented: $gateSettings) { ears.openSettings() }
