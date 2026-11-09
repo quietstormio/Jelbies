@@ -8,6 +8,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var flow = StartFlow.shared
     @State private var introOn = IntroGate.shouldShow() && UserDefaults.standard.integer(forKey: "SkipIntro") == 0          // (-SkipIntro 1: capture aid)
+    @State private var logoOn = !IntroGate.shouldShow() && UserDefaults.standard.integer(forKey: "SkipIntro") == 0          // every later cold launch: the ~1 s logo moment
     #if DEBUG
     private let startInStudio = UserDefaults.standard.integer(forKey: "MelonStudio") != 0          // debug builds only (the studio is a developer tool)
     #endif
@@ -25,11 +26,13 @@ struct ContentView: View {
             ZStack {
                 if introOn {          // the menu's room is not built until the intro is done (it would starve the video)
                     IntroView { LaunchTiming.mark("intro done"); LaunchGate.shared.introCoveredLaunch(); withAnimation(.easeInOut(duration: IntroClip.fadeSeconds)) { introOn = false } }.transition(.opacity).zIndex(1)
+                } else if logoOn {
+                    LogoMoment { LaunchTiming.mark("logo moment done"); LaunchGate.shared.introCoveredLaunch(); withAnimation(.easeInOut(duration: 0.3)) { logoOn = false } }.transition(.opacity).zIndex(1)
                 } else { phaseView }
                 if let w = flow.welcome, flow.phase == .game { WelcomeBanner(name: w) { flow.welcome = nil } }
             }
             .onAppear { OrientationForce.apply() }
-            .overlay { if !introOn { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) } }          // no curtain over the intro clip
+            .overlay { if !introOn && !logoOn { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) } }          // no curtain over the intro clip
             .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)
         }
     }

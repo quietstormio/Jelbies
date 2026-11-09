@@ -3,7 +3,8 @@
 //  The launch intro: the full-screen Jelbies logo animation (paper background, its own sting) plays all the way through with no tap needed, holds its last frame
 //  (paused), then cross-fades to the menu over IntroClip.fadeSeconds and is torn down (IntroFlow.swift has the states). A tap jumps to the held last frame, never a replay.
 //  Reduce Motion shows the last frame, then the same fade. Rotating during playback swaps in the other variant at the same timestamp.
-//  Shown before the main menu on every cold launch (ContentView reads the gate once per process, so resuming from the background never replays it); -Intro 1 is accepted and changes nothing.
+//  Shown before the main menu on the very first launch only (the seen flag is set when it fades; an existing save counts as seen). Every later cold launch shows LogoMoment instead.
+//  ContentView reads the gate once per process, so resuming from the background never replays either.
 //  Swapping the clip: replace the files in Start/Resources (or change `IntroClip.resource(landscape:)`).
 //
 
@@ -38,7 +39,7 @@ enum IntroGate {
         #if targetEnvironment(simulator)
         if d.integer(forKey: "SkipIntro") != 0 { return false }          // capture aid (simulator only): -SkipIntro 1
         #endif
-        return true          // every cold launch; seenKey / markSeen stay only so StartFlow's wipe keeps compiling
+        return !d.bool(forKey: seenKey) && !StartFlow.hasSave(d)          // the full intro plays on the very first launch only (a player with a save has seen it)
     }
     static func markSeen(_ d: UserDefaults = .standard) { d.set(true, forKey: seenKey) }
 }
@@ -101,6 +102,34 @@ struct IntroView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Jumps to the end of the intro")
         .accessibilityIdentifier("intro")
+    }
+}
+
+/// Every cold launch after the first: the still official logo over the title backdrop for about a second, then straight on (a quick fade).
+struct LogoMoment: View {
+    static let holdSeconds: Double = 0.7
+    var done: () -> Void
+    private var theme = ThemeStore.shared
+    init(done: @escaping () -> Void) { self.done = done }
+
+    var body: some View {
+        GeometryReader { geo in
+            let u = min(geo.size.width, geo.size.height) / 440
+            let w = min(geo.size.width * 0.8, 360 * max(u, 0.8))
+            ZStack {
+                TitleBackdrop(still: true, size: geo.size, landscape: geo.size.width > geo.size.height, palette: theme.palette, extras: false)
+                Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: w)
+                    .shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * w / 364)
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                    .accessibilityLabel("Jelbies")
+            }
+        }
+        .ignoresSafeArea()
+        .task {
+            try? await Task.sleep(nanoseconds: UInt64(Self.holdSeconds * 1e9))
+            done()
+        }
+        .accessibilityIdentifier("logo-moment")
     }
 }
 
