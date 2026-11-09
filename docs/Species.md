@@ -2,6 +2,24 @@
 
 # Blob Species
 
+## Current species (1.0, 2026-11-09)
+
+Seven characters exist, all on Bob's locked base body. At most **three** live at home at once (`JellyRoster.maxCount`).
+
+| Character | Colour | Signature | How you get it |
+|---|---|---|---|
+| **Bob** | Blue | None | Free first Jelbie, or adopt |
+| **Pip** | Yellow | Pointed tail plus rounded orange spikes down the back | Free first Jelbie, or adopt (500 / 800 JellyCoins) |
+| **Moss** | Green | Head daisy | Free first Jelbie, or adopt (500 / 800 JellyCoins) |
+| **Lavender** | Purple | Wings | Free first Jelbie, or adopt (500 / 800 JellyCoins) |
+| **Teddy** | Light brown, cream belly | Round bear ears + pom tail | Jelly Spring, 2,000 JellyCoins |
+| **Pearl** | White | Wings | Jelly Spring, 2,000 JellyCoins |
+| **Panda** | Black and white | Black ears, eye patches, limbs, saddle and pom tail | Jelly Spring, 2,000 JellyCoins |
+
+- Prices live in `AdoptionPrice` (`Start/StartFlow.swift`): second adoption 500, third 800, +300 for a rare daily colour (never on a special); specials (`AdoptionPrice.special`) cost 2,000 whichever slot they fill.
+- Teddy, Pearl and Panda are "adopt more only": the first Jelbie is always one of the four starters (the free welcome gift), and a special is offered only once one Jelbie is already home and the room is not full.
+- The older sections below were written while Teddy, Panda and Pearl were look-only; where they say "not yet offered" or "unlock TBD", this section is current.
+
 ## Species signature rule (user decision, 2026-10-26)
 
 Signature features belong to a colour **species**, not to individual characters. A signature **never appears on another colour**.
@@ -13,13 +31,13 @@ Signature features belong to a colour **species**, not to individual characters.
 | Green (incl. park mint, lime) | Head daisy, sits on the hat band under hats |
 | Blue and every other colour | None |
 
-### Teddy (look phase only, 2026-10-31; user request, not yet offered anywhere)
+### Teddy (look phase 2026-10-31; now sold in the Jelly Spring, see the table above)
 
 Character 4, light brown with a lighter cream belly, signature = two round bear ears + a small puffy pom tail (`JellyFeature.ears`, `Features/TeddyFeature.swift`). It is NOT in the intro, the Jelly Spring picker, the starter roster, park visitors or any generator; it only spawns through the `-ForceSpecies teddy` (this launch only, slot 0, never saved) or `-SetRoster teddy` launch flags. Ears and pom are separate meshes bound to the egg surface (the body is never reshaped). Hat rule: an ear that clears the worn hat stays (with a nudge in / down the head if needed), an ear a snug hat would clip tucks away, the ear headbands (cat / frog / bunny) tuck the bear ears, and the pom tucks under pieces that cover the lower back (cape, backpack, ...). The belly is the blue-belly shader patch (`BlueBelly.swift`, branch g-bluebelly) in a warm cream tone (tone 3, mode 33).
 
-### Panda (look phase, 2026-11-03; user request, not yet offered anywhere)
+### Panda (look phase 2026-11-03; now sold in the Jelly Spring, see the table above)
 
-Character 6 (`JellyRoster.pandaID`), a soft warm-white body with black markings. Signature = black round bear ears + black eye patches + black arms and feet + a black shoulder saddle (over the shoulders and across the back into the arms; the chest and tummy stay white) + a black puffy pom tail. Same in-body ears and pom as Teddy (`JellyFeature.ears`, `Melon/TeddyBean.swift`; the ear shape is unchanged). Like Teddy and Pearl it is NOT in the intro, the Jelly Spring picker, the starter roster, park visitors or any generator (no park colour matches its palette); it only spawns through `-NewGame bob,panda`, `-SetRoster panda` or `-ForceSpecies panda`. Unlock method: TBD with the user. The markings are shader masks on the body plus a second charcoal draw of the ears / pom / walking limb pieces (`Melon/PandaMarks.h`, body modes 51 / 52, in the matte, bath and jersey shaders; look in `Features/PandaLook.swift`). Voice: shares Lavender's (see SOUND_STYLE.md); the widget / Siri intents show it as Lavender, like Teddy and Pearl (`WidgetBridge.colorName` clamps to 4 colours).
+Character 6 (`JellyRoster.pandaID`), a soft warm-white body with black markings. Signature = black round bear ears + black eye patches + black arms and feet + a black shoulder saddle (over the shoulders and across the back into the arms; the chest and tummy stay white) + a black puffy pom tail. Same in-body ears and pom as Teddy (`JellyFeature.ears`, `Melon/TeddyBean.swift`; the ear shape is unchanged). Like Teddy and Pearl it is NOT in the intro, the Jelly Spring picker, the starter roster, park visitors or any generator (no park colour matches its palette); it only spawns through `-NewGame bob,panda`, `-SetRoster panda` or `-ForceSpecies panda`. Unlock: Jelly Spring, 2,000 JellyCoins. The markings are shader masks on the body plus a second charcoal draw of the ears / pom / walking limb pieces (`Melon/PandaMarks.h`, body modes 51 / 52, in the matte, bath and jersey shaders; look in `Features/PandaLook.swift`). Voice: shares Lavender's (see SOUND_STYLE.md); the widget / Siri intents show it as Lavender, like Teddy and Pearl (`WidgetBridge.colorName` clamps to 4 colours).
 
 Code: starters in `JellyRoster.feature`; park visitors, guests and volleyball opponents derive it from colour via `ParkColour.speciesFeature` (Park/ParkModels.swift).
 

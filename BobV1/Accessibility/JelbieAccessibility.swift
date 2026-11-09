@@ -36,7 +36,7 @@ nonisolated enum JelbieA11yText {
         var xFraction: Double = 0.5          // the body's centre across the screen, 0 left ... 1 right
         var front = true                     // on the near half of the floor
         var mood: BlobMood = .happy
-        var wanting: [String] = []           // tier words of the needs he wants ("Hungry", "Lonely")
+        var wanting: [String] = []           // tier words of the needs wanted ("Hungry", "Lonely")
         var dirty = false
         var activity: JelbieActivity = .standing
         var highlighted = false
@@ -53,7 +53,7 @@ nonisolated enum JelbieA11yText {
         switch JellyRoster.feature(character) {
         case .none: return "blue and plain"
         case .spines: return "yellow with soft spines"
-        case .daisy: return "green with a daisy on his head"
+        case .daisy: return "green with a daisy on top"
         case .ears: return "light brown with round bear ears and a puffy tail"
         case .wings: return "lavender with little wings"
         }

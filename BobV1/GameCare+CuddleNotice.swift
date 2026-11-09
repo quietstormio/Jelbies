@@ -19,7 +19,7 @@ extension GameCare {
         guard focus.isFocused else { return [] }
         return focusGroup.ids.compactMap { id in
             let n = needs(for: id)
-            return Self.cuddleBlockLine(name: jelly(id)?.name ?? "He", mood: n.mood, wanted: n.wantedNeed, hungry: n.isWanting(.hunger), thirsty: n.isWanting(.thirst))
+            return Self.cuddleBlockLine(name: jelly(id)?.name ?? "Your Jelbie", mood: n.mood, wanted: n.wantedNeed, hungry: n.isWanting(.hunger), thirsty: n.isWanting(.thirst))
         }
     }
 }

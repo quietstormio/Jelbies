@@ -1,7 +1,7 @@
 //
 //  SupportPage.swift
 //  The in-app Help & Support page (Settings > Help & Support). The same text is published from docs/SUPPORT.md (keep the two in step).
-//  The address is selectable text, not a mailto link (there is no grown-up check in this build to put a link behind).
+//  The address is selectable text, and a "Write to us" button opens a mailto link behind the grown-up hold gate (UI/ParentGate.swift).
 //
 
 import SwiftUI
@@ -27,12 +27,22 @@ enum SupportText {
 struct SupportPage: View {
     let close: () -> Void
     private let ink = CloudTheme.ink
+    @Environment(\.openURL) private var openURL
     var body: some View {
         InfoPage(title: "Help & Support", sections: SupportText.sections, identifier: "support-page", close: close) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Email us").font(CloudTheme.font(18, .bold)).foregroundStyle(ink).accessibilityAddTraits(.isHeader)
                 Text(SupportText.email).font(CloudTheme.font(16, .bold)).foregroundStyle(ink).textSelection(.enabled)
                     .accessibilityIdentifier("support-email")
+                GatedButton {
+                    if let url = URL(string: "mailto:\(SupportText.email)") { openURL(url) }
+                } label: {
+                    Text("Write to us").font(CloudTheme.font(16, .heavy)).foregroundStyle(ink)
+                        .padding(.horizontal, 20).frame(minHeight: 44)
+                        .background(Capsule().fill(Color.white))
+                }
+                .accessibilityIdentifier("support-write")
+                .accessibilityHint("Asks a grown-up first, then opens Mail")
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading).cloudCard(radius: 26)
         }
