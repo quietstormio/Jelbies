@@ -24,6 +24,11 @@ enum GameCamera {
     nonisolated(unsafe) static var roomWideLift: Float = 0
     /// 1 in a portrait phone (aspect <= 0.8), 0 from square up, eased between so a rotation does not jump.
     static func portraitAmount(_ aspect: Float) -> Float { let t = min(max((1.0 - aspect) / 0.2, 0), 1); return t * t * (3 - 2 * t) }
+    /// The room's portrait widening for 2-3 Jellies: 1 for every phone portrait (aspect <= 0.6), eased to 0 by 0.8, so a tablet (3:4 = 0.75, squarer windows) is not pulled
+    /// far back (its width already shows ~1.6x what a phone's does). iPhone aspects (<= 0.56) are exactly 1, as before.
+    static func roomWideAmount(_ aspect: Float) -> Float { 1 - landscapeBlend(aspect, from: 0.6, to: 0.8) }
+    /// 0 up to `from`, 1 from `to`, smooth between: one continuous "how landscape" measure, so a resizable window never meets a hard switch.
+    static func landscapeBlend(_ aspect: Float, from: Float = 0.8, to: Float = 1.2) -> Float { let t = min(max((aspect - from) / (to - from), 0), 1); return t * t * (3 - 2 * t) }
     static let baseEye = SIMD3<Float>(0, 7.2, 14)
     static let baseTarget = SIMD3<Float>(0, 0.0, -0.3)
 
@@ -67,7 +72,8 @@ enum GameCamera {
     /// The aspect the close-up poses (focus, bath, race) are SIZED for. A phone on its side (aspect >= 1.2) keeps the portrait framing's height, so the Jelly / track is
     /// the same size on the screen's short side and the extra width shows more room, not a face-filling zoom. Below that nothing changes (portrait, the widget's square).
     static let landscapeFramingAspect: Float = 0.56
-    static func framingAspect(_ a: Float) -> Float { a >= 1.2 ? landscapeFramingAspect : a }
+    /// Continuous: identity up to 0.8 (every phone portrait and a tablet portrait), eased to the landscape height by 1.2 (a phone on its side, a tablet landscape).
+    static func framingAspect(_ a: Float) -> Float { let l = landscapeBlend(a); return a + (landscapeFramingAspect - a) * l }
     // MARK: Bath close-up
 
     /// Close-up of Bob in the washtub: one source of truth, `BathSet.closeUpPose`.
@@ -85,7 +91,7 @@ enum GameCamera {
         if groomOn { let p = groomPose(aspect: aspect); eye = p.eye; target = p.target; roomEye = p.eye; roomTarget = p.target; roomWideScale = 1 }          // the Jelly Spa street (Groomer/GroomRoom.swift)
         if beachOn { let p = beachPose(aspect: aspect); eye = p.eye; target = p.target; roomEye = p.eye; roomTarget = p.target; roomWideScale = 1 }          // the volleyball beach (Volley/VolleyScene.swift)
         if roomWideScale != 1 {
-            let pa = portraitAmount(aspect), lift = SIMD3<Float>(0, roomWideLift * pa, 0)
+            let pa = roomWideAmount(aspect), lift = SIMD3<Float>(0, roomWideLift * pa, 0)
             target = roomTarget + lift
             eye = roomTarget + (roomEye - roomTarget) * (1 + (roomWideScale - 1) * pa) + lift
         }
@@ -138,10 +144,10 @@ enum GameCamera {
     /// The play view from the room pose: the target moves forward and a touch up, the eye comes in and down, so the Jelbies stand in the upper-middle of the
     /// screen and the near floor (where the ball comes back) fills the lower third. A phone on its side keeps the portrait framing height.
     static func playPose(eye e: SIMD3<Float>, target t: SIMD3<Float>, aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
-        let wide = aspect >= 1.2       // landscape
-        let elev: Float = (wide ? 30 : 35) * .pi / 180
-        let dist: Float = wide ? 8.5 : 13.5
-        let tt = SIMD3<Float>(0, 0.6, wide ? 1.2 : 1.1)
+        let w = landscapeBlend(aspect)       // landscape (continuous; 0 or 1 on every phone)
+        let elev: Float = (35 - 5 * w) * .pi / 180
+        let dist: Float = 13.5 - 5.0 * w
+        let tt = SIMD3<Float>(0, 0.6, 1.1 + 0.1 * w)
         return (tt + SIMD3<Float>(0, sinf(elev), cosf(elev)) * dist, tt)
     }
 
@@ -278,14 +284,14 @@ enum GameCamera {
         for s in spots { lo = simd_min(lo, s); hi = simd_max(hi, s) }
         let mid = (lo + hi) * 0.5
         // a phone on its side: the bodies are drawn bigger (the screen is short), the solo rounds put him on the left third so the cards have the right
-        let land = aspect >= 1.2
-        let fill = land ? frame.landFill : frame.fill
-        let screenY = land ? frame.landScreenY : frame.screenY
+        let lw = landscapeBlend(aspect)
+        let fill = frame.fill + (frame.landFill - frame.fill) * lw
+        let screenY = frame.screenY + (frame.landScreenY - frame.screenY) * lw
         let visW = (hi.x - lo.x + 2 * BobShape.R) / max(fill, 0.2)
         let visH = visW / max(framingAspect(aspect), 0.2)
         let dist = visH / (2 * tanf(fovY / 2))
         let ty = 0.5 * BobShape.H - (0.5 - screenY) * visH
-        let tx = mid.x + (land && frame.landLeft ? 0.22 * visH * aspect : 0)
+        let tx = mid.x + (frame.landLeft ? 0.22 * visH * aspect * lw : 0)
         let t = SIMD3<Float>(tx, ty, hi.y)
         let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
         return (e, t)
