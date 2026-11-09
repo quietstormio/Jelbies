@@ -81,7 +81,7 @@ struct AdoptionCenter: View {
 
     var body: some View {
         GeometryReader { geo in
-            let landscape = geo.size.width > geo.size.height
+            let landscape = geo.size.width > geo.size.height * (min(geo.size.width, geo.size.height) > 600 ? 1.1 : 1)
             ZStack {
                 PickerBackdrop(top: look.top, bottom: look.bottom, calm: reduce, rayOriginY: landscape ? 0.45 : 0.38)
                     .animation(.easeInOut(duration: reduce ? 0.2 : 0.55), value: page)
@@ -107,11 +107,14 @@ struct AdoptionCenter: View {
     /// Design-space size that is 44 pt on screen at canvas scale `u` (so small controls keep a 44 pt touch target).
     private func hitMin(_ u: CGFloat) -> CGFloat { max(44, 44 / max(u, 0.1)) }
 
+    /// Largest canvas scale on an iPad-sized window (shorter side over 600 pt); unlimited on a phone.
+    private static func padCap(_ size: CGSize) -> CGFloat { min(size.width, size.height) > 600 ? 1.3 : .greatestFiniteMagnitude }
+
     private func portraitLayout(_ size: CGSize) -> some View {
         // Naming with the keyboard up: the canvas keeps its width scale, drops the header, shrinks the Jelbie and stacks the name card and
         // the button right under it, so both sit above the keyboard.
         let compact = naming && kbUp
-        let u = compact ? min(size.width / 440, 1.2) : min(size.width / 440, size.height / 956)
+        let u = compact ? min(size.width / 440, 1.2) : min(size.width / 440, size.height / 956, Self.padCap(size))
         let h = size.height / u                                   // visible design height
         let su = min(0.7, max(0, h - 352) / 470)
         let showStage = !compact || su >= 0.25
@@ -135,10 +138,11 @@ struct AdoptionCenter: View {
 
     private func landscapeLayout(_ size: CGSize) -> some View {
         let half = size.width / 2
-        let us = min(half / 440, (size.height - 8) / 470)
-        let ur = min((half - 20) / 440, (size.height - 12) / 500)
+        let cap = Self.padCap(size)          // iPad-sized windows only; iPhone unchanged
+        let us = min(half / 440, (size.height - 8) / 470, cap)
+        let ur = min((half - 20) / 440, (size.height - 12) / 500, cap)
         let compact = naming && kbUp
-        let uc = min((half - 20) / 440, (size.height - 8) / 240)  // name card + button only, above the keyboard
+        let uc = min((half - 20) / 440, (size.height - 8) / 240, cap)  // name card + button only, above the keyboard
         return HStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
                 stageBlock(us).frame(width: 440, height: 470, alignment: .topLeading)
