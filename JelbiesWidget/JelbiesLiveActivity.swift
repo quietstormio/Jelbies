@@ -1,6 +1,6 @@
 //
 //  JelbiesLiveActivity.swift
-//  The one ActivityConfiguration (race / nap / pep by `attributes.kind`): the Lock Screen banner and the Dynamic Island compact, minimal and
+//  The one ActivityConfiguration (race / nap by `attributes.kind`): the Lock Screen banner and the Dynamic Island compact, minimal and
 //  expanded presentations. The views live in Shared/JellyActivityViews.swift so the tests can render them.
 //
 
@@ -35,7 +35,6 @@ struct JelbiesLiveActivity: Widget {
     static func link(_ a: JelbiesActivityAttributes) -> URL {
         switch a.kind {
         case .race: return JellyRoute.race(a.jellyID).url
-        case .pep: return JellyRoute.train(a.jellyID).url
         case .nap: return JellyRoute.jelly(a.jellyID).url
         }
     }

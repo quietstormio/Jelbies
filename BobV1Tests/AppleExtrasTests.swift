@@ -106,7 +106,7 @@ final class AppleExtrasTests: XCTestCase {
     // MARK: routes and the queue
 
     func testRouteParsingAndURLs() {
-        let all: [JellyRoute] = [.jelly(0), .feed(nil), .feed(1), .water(nil), .water(2), .bed, .race(1), .train(2), .pet(0)]
+        let all: [JellyRoute] = [.jelly(0), .feed(nil), .feed(1), .water(nil), .water(2), .bed, .race(1), .pet(0)]
         for r in all { XCTAssertEqual(JellyRoute.parse(r.url), r, "\(r)") }
         XCTAssertEqual(JellyRoute.feed(nil).url.absoluteString, "jelbies://feed")
         XCTAssertEqual(JellyRoute.race(1).url.absoluteString, "jelbies://race/1")
@@ -198,7 +198,7 @@ final class AppleExtrasTests: XCTestCase {
     func testActivityStateCodableRoundTripAndWords() throws {
         let states: [JelbiesState] = [
             .race(position: 2, racers: 4, progress: 0.37, lap: 2, laps: 3), .finished(place: 1, racers: 4, drops: 12, laps: 3),
-            .sleeping(["Bob", "Pip"], wakeAt: t0), .awake(["Bob"]), .refilling(until: t0), .refilled,
+            .sleeping(["Bob", "Pip"], wakeAt: t0), .awake(["Bob"]),
         ]
         for s in states {
             let d = try JSONEncoder().encode(s)
@@ -211,15 +211,13 @@ final class AppleExtrasTests: XCTestCase {
         XCTAssertEqual(a.detail(states[0]), "2nd of 4 · lap 2 of 3")
         XCTAssertEqual(a.headline(states[1]), "🥇 Pip won! +12 JellyCoins")
         XCTAssertEqual(a.detail(states[1]), "3 laps on the Jelly Circuit")
-        XCTAssertEqual(JelbiesActivityAttributes(kind: .race).headline(.finished(place: 3, racers: 4, drops: 4, laps: 3)), "🥉 Bob came 3rd! +4 JellyCoins")
-        XCTAssertEqual(JelbiesActivityAttributes(kind: .race).headline(.finished(place: 4, racers: 4, drops: 0, laps: 1)), "🏁 Bob came 4th!")
+        XCTAssertEqual(JelbiesActivityAttributes(kind: .race).headline(.finished(place: 3, racers: 4, drops: 4, laps: 3)), "🥉 Jelbie came 3rd! +4 JellyCoins")
+        XCTAssertEqual(JelbiesActivityAttributes(kind: .race).headline(.finished(place: 4, racers: 4, drops: 0, laps: 1)), "🏁 Jelbie came 4th!")
         let nap = JelbiesActivityAttributes(kind: .nap)
         XCTAssertEqual(nap.headline(states[2]), "The Jelbies are sleeping")
         XCTAssertEqual(nap.headline(states[3]), "Bob is up!")
         XCTAssertEqual(nap.detail(states[3]), "Good morning!")
         XCTAssertTrue(nap.detail(states[2]).hasPrefix("Up at "))
-        XCTAssertEqual(JelbiesActivityAttributes(kind: .pep).headline(.refilled), "Pep is back!")
-        XCTAssertEqual(JelbiesActivityAttributes(kind: .pep, jellyName: "Moss").headline(states[4]), "Moss is out of Pep")
         for (n, w) in [(1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"), (11, "11th"), (12, "12th"), (13, "13th"), (21, "21st"), (22, "22nd")] { XCTAssertEqual(JelbiesState.ordinal(n), w) }
         XCTAssertEqual(JelbiesState.race(position: 1, racers: 4, progress: 1.7, lap: 3, laps: 3).progress, 1, "clamped")
         XCTAssertEqual(states[2].untilDate, t0)
@@ -278,7 +276,7 @@ final class AppleExtrasTests: XCTestCase {
         let dir = try tempDir()
         var clock = at(22)
         let (l, m) = live({ clock }, dir: dir)
-        XCTAssertTrue(l.napOn, "default on"); XCTAssertFalse(l.pepOn, "default off")
+        XCTAssertTrue(l.napOn, "default on")
         XCTAssertTrue(l.isNight()); XCTAssertFalse(l.isNight(at(12)))
         let names = ["Bob", "Pip"]
         l.leftActive(names: names)
@@ -310,34 +308,14 @@ final class AppleExtrasTests: XCTestCase {
         XCTAssertFalse(l.napLive, "off: no card at night either")
     }
 
-    func testPepCountdownOnlyWhenOnAndSettingsPersist() throws {
-        let dir = try tempDir()
-        let clock = at(15)
-        let (l, m) = live({ clock }, dir: dir)
-        l.pepDepleted(jellyID: 0, name: "Bob", color: "blue")
-        XCTAssertFalse(l.pepLive, "off by default")
-        l.pepOn = true
-        l.pepDepleted(jellyID: 0, name: "Bob", color: "blue")
-        XCTAssertTrue(l.pepLive)
-        guard case .start(.pep, let s) = m.calls[0] else { return XCTFail("start") }
-        XCTAssertEqual(s.phase, .refilling); XCTAssertEqual(s.pep, 0)
-        XCTAssertEqual(s.untilDate, LiveActivities.nextMidnight(after: clock, calendar: Self.utc))
-        XCTAssertEqual(s.untilDate, at(0, day: 21))
-        XCTAssertEqual(m.staleDates["a1"]!, s.untilDate)
-        l.pepDepleted(jellyID: 1, name: "Pip", color: "yellow")
-        XCTAssertEqual(m.calls.count, 1, "one countdown at a time")
-        l.pepRefilled()
-        XCTAssertFalse(l.pepLive)
-        guard case .end("a1", let e) = m.calls.last! else { return XCTFail("end") }
-        XCTAssertEqual(e.phase, .refilled); XCTAssertEqual(e.pep, 1)
-        // the settings persist and are read back
+    func testNapSettingPersists() throws {
         let d = suite("settings")
-        XCTAssertTrue(LiveActivitySettings.napOn(d)); XCTAssertFalse(LiveActivitySettings.pepOn(d))
+        XCTAssertTrue(LiveActivitySettings.napOn(d))
         let l2 = LiveActivities(driver: MockActivityDriver(), defaults: d); Self.keep.append(l2)
-        l2.napOn = false; l2.pepOn = true
-        XCTAssertFalse(LiveActivitySettings.napOn(d)); XCTAssertTrue(LiveActivitySettings.pepOn(d))
+        l2.napOn = false
+        XCTAssertFalse(LiveActivitySettings.napOn(d))
         let l3 = LiveActivities(driver: MockActivityDriver(), defaults: d); Self.keep.append(l3)
-        XCTAssertFalse(l3.napOn); XCTAssertTrue(l3.pepOn)
+        XCTAssertFalse(l3.napOn)
     }
 
     func testCleanUpEndsOrphansAndAdoptsLiveOnes() throws {
@@ -347,31 +325,17 @@ final class AppleExtrasTests: XCTestCase {
         let race = try m.start(JelbiesActivityAttributes(kind: .race), state: .race(position: 2, racers: 4, progress: 0.5, lap: 2, laps: 3), staleDate: nil)
         let oldNap = try m.start(JelbiesActivityAttributes(kind: .nap), state: .sleeping(["Bob"], wakeAt: clock.addingTimeInterval(-3600)), staleDate: nil)
         let nap = try m.start(JelbiesActivityAttributes(kind: .nap), state: .sleeping(["Bob"], wakeAt: clock.addingTimeInterval(3600)), staleDate: nil)
-        let pep = try m.start(JelbiesActivityAttributes(kind: .pep), state: .refilling(until: clock.addingTimeInterval(7200)), staleDate: nil)
-        let d = suite("cleanup"); d.set(true, forKey: LiveActivitySettings.pepKey)
+        let d = suite("cleanup")
         let l = LiveActivities(driver: m, defaults: d); l.now = { clock }; l.calendar = Self.utc; l.directory = dir; Self.keep.append(l)
         l.cleanUp(names: ["Bob"])
-        XCTAssertEqual(Set(m.live.keys), [nap, pep], "the race from a killed run and the nap past its wake are ended")
-        XCTAssertEqual(l.napID, nap); XCTAssertEqual(l.pepID, pep)
-        XCTAssertEqual(l.pepRefillAt, clock.addingTimeInterval(7200))
+        XCTAssertEqual(Set(m.live.keys), [nap], "the race from a killed run and the nap past its wake are ended")
+        XCTAssertEqual(l.napID, nap)
         XCTAssertFalse(l.raceLive)
         let ended = m.calls.compactMap { if case .end(let id, let s) = $0 { return (id, s) } else { return nil } }
         XCTAssertEqual(ended.first { $0.0 == race }?.1.phase, .finished)
         XCTAssertEqual(ended.first { $0.0 == race }?.1.place, 2)
         XCTAssertEqual(ended.first { $0.0 == oldNap }?.1.phase, .awake)
         XCTAssertEqual(m.dismissals[race]!, clock, "orphans go away at once")
-        // the setting turned off: the adopted card goes too, and the controller forgets it
-        l.pepOn = false
-        l.cleanUp(names: ["Bob"])
-        XCTAssertNil(l.pepID); XCTAssertFalse(l.pepLive); XCTAssertNil(m.live[pep])
-        XCTAssertEqual(l.napID, nap, "the nap stays")
-        // a refill time that has passed: refilled on launch
-        let m2 = MockActivityDriver(); Self.keep.append(m2)
-        let pep2 = try m2.start(JelbiesActivityAttributes(kind: .pep), state: .refilling(until: clock.addingTimeInterval(-60)), staleDate: nil)
-        let d2 = suite("cleanup2"); d2.set(true, forKey: LiveActivitySettings.pepKey)
-        let l2 = LiveActivities(driver: m2, defaults: d2); l2.now = { clock }; l2.calendar = Self.utc; l2.directory = dir; Self.keep.append(l2)
-        l2.cleanUp(names: ["Bob"])
-        XCTAssertNil(m2.live[pep2]); XCTAssertNil(l2.pepID)
     }
 
     // MARK: GameRouter on a real GameCare
@@ -399,11 +363,11 @@ final class AppleExtrasTests: XCTestCase {
         XCTAssertTrue(care.trayOut); XCTAssertEqual(care.servingKind, .food)
         XCTAssertEqual(r.pending, [.water(0)], "water waits for the tray to go")
         XCTAssertEqual(r.applied.last, .feed(0))
-        // goodnight, a race and training: the hooks (race) or the roster highlight (train, until its worker is merged)
-        r.request(.bed); r.request(.race(2)); r.request(.train(1))
+        // goodnight and a race: the hooks
+        r.request(.bed); r.request(.race(2))
         r.apply(care: care)
         XCTAssertEqual(beds, 1); XCTAssertEqual(raced, [2])
-        XCTAssertEqual(Array(r.applied.suffix(3)), [.bed, .race(2), .train(1)])
+        XCTAssertEqual(Array(r.applied.suffix(2)), [.bed, .race(2)])
         XCTAssertTrue(l.napLive, "goodnight: the nap card"); XCTAssertEqual(Bedtime.read(from: dir, now: clock), clock)
         guard case .start(.nap, let s) = m.calls[0] else { return XCTFail("nap") }
         XCTAssertEqual(s.sleepers, ["Bob", "Pip", "Moss"])

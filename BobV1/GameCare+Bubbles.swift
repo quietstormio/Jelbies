@@ -80,7 +80,7 @@ extension GameCare {
     func bubbleHead(_ id: Int) -> SIMD3<Float> { id == 0 ? headWorld : (bubbleHub.heads[id] ?? headWorld) }
     /// Whose bubble is up (or would be next).
     var bubbleJelly: Int { bubbleHub.owner }
-    var bubbleJellyName: String { jelly(bubbleHub.owner)?.name ?? "Bob" }
+    var bubbleJellyName: String { jelly(bubbleHub.owner)?.name ?? "Jelbie" }
 
     /// The pointed-at Jelly lights up (several Jellies only: a one-Jelly game keeps its screen exactly as it was).
     func selectForBubble(_ id: Int) { if jellyCount > 1 { select.pick(id, instant: selectBrain(id)?.isSleeping ?? false) } }
