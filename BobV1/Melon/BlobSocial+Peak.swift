@@ -15,7 +15,7 @@ enum PeakTuning {
     static let log = ProcessInfo.processInfo.environment["PEAK_LOG"] != nil
     nonisolated(unsafe) static var enabled = ProcessInfo.processInfo.environment["PEAK_OFF"] != "1"
     /// The press / strike moves whose lean is the move itself (the hold kinds - sways, cuddles, hugs - close the last centimetres with the engine's own lean, so the guard leaves them alone: measured, it left them 3-4 cm short).
-    static let strikeKinds: Set<SocialKind> = [.bump, .chestBump, .highFive, .bellyBounce, .squabble, .sneak, .cheekSquish, .whisperGiggle]
+    static let strikeKinds: Set<SocialKind> = [.chestBump, .highFive, .bellyBounce, .squabble, .sneak, .cheekSquish, .whisperGiggle]
     /// A/B switches of the two mechanisms (env PEAK_NOGUARD / PEAK_NOARM = 1).
     nonisolated(unsafe) static var guardOn = ProcessInfo.processInfo.environment["PEAK_NOGUARD"] != "1"
     nonisolated(unsafe) static var armOn = ProcessInfo.processInfo.environment["PEAK_NOARM"] != "1"
@@ -26,7 +26,7 @@ enum PeakTuning {
     /// The widest the drive's own lean-away (wind-up / recoil) may open the skin gap (m): beyond it the stance's settle walks the pair back together, which is what made the bumps oscillate +-15 cm.
     nonisolated(unsafe) static var openCap: Float = env("PEAK_OPEN", 0.045)
     /// The hop / lunge kinds (bump, chestBump, highFive, bellyBounce, sneak): the strike stays AT contact - no wind-up gap beyond 1.5 cm, no squash bulge beyond the live gap, a small impact kick.
-    static let pressKinds: Set<SocialKind> = [.bump, .chestBump, .highFive, .bellyBounce, .sneak]
+    static let pressKinds: Set<SocialKind> = [.chestBump, .highFive, .bellyBounce, .sneak]
     nonisolated(unsafe) static var pressOpenCap: Float = env("PEAK_POPEN", 0.015)
     static func openCap(for k: SocialKind) -> Float { pressKinds.contains(k) ? pressOpenCap : openCap }
     /// The strike of a press / bump move may start once the pair stands this close (skin gap, m) and is planted (a strike fired mid-walk adds its lean to the walk's closing speed).

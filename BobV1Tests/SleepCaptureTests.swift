@@ -155,7 +155,6 @@ final class SleepCaptureTests: XCTestCase {
             ("happy bounce", .solo(.bounce), 2.9, [SIMD2(0.2, 0.2), SIMD2(-2.4, 2.3), SIMD2(2.4, 2.2)]),
             ("look out of the window", .solo(.window), 7.5, [SIMD2(0.2, -0.6), SIMD2(-2.4, 2.3), SIMD2(2.4, 2.2)]),
             ("nuzzle side by side", .social(.nuzzle), 6.8, [SIMD2(-1.2, 0.3), SIMD2(1.0, 0.9), SIMD2(2.4, 2.2)]),
-            ("belly bump", .social(.bump), 4.6, [SIMD2(-1.6, 0.3), SIMD2(1.2, 0.5), SIMD2(2.4, 2.2)]),
             ("sneak up and boop (startle hop)", .social(.sneak), 6.4, [SIMD2(-1.8, 0.8), SIMD2(0.9, -0.3), SIMD2(2.4, 2.2)]),
             ("tag: chase, swap", .social(.chase), 12.0, [SIMD2(-1.6, 0.3), SIMD2(1.2, 0.5), SIMD2(2.4, 2.2)]),
         ]

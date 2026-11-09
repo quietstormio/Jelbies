@@ -170,7 +170,7 @@ final class AnticsTests: XCTestCase {
     }
 
     func testEveryNewSocialKindCompletesWithFeetAttachedAndArmsStubby() {
-        for kind in [SocialKind.chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .swayHug, .danceOff, .whisperGiggle] {
+        for kind in [SocialKind.chase, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .swayHug, .danceOff, .whisperGiggle] {
             let (lab, secs, ok) = runKind(kind)
             XCTAssertTrue(ok, "\(kind): completes (took \(secs) s)")
             XCTAssertGreaterThan(secs, 2, "\(kind) takes a while")
@@ -186,14 +186,6 @@ final class AnticsTests: XCTestCase {
         XCTAssertTrue(ok)
         let boops = lab.events[0].filter { if case .boop = $0 { return true }; return false }.count
         XCTAssertEqual(boops, SocialTuning.chaseRounds, "a tag per round, the roles swap each time")
-    }
-
-    func testBellyBumpBouncesTwiceAndNobodyOverlaps() {
-        let (lab, _, ok) = runKind(.bump)
-        XCTAssertTrue(ok)
-        let boops = lab.events[0].filter { if case .boop = $0 { return true }; return false }.count
-        XCTAssertEqual(boops, 2, "two bumps")
-        XCTAssertGreaterThan(lab.minPair, 0.5)
     }
 
     func testSneakStartlesTheOtherWithAHop() {

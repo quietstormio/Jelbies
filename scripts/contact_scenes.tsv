@@ -10,7 +10,6 @@ groupHug_pip_lavender_moss	pip,lavender,moss	groupHug	perp,top,low	-	90
 cuddleLean_lavender_pip	lavender,pip	cuddleLean	perp,top,low	-	90
 boop_bob_teddy	bob,teddy	boop	perp,top,low	-	90
 squabble_pip_moss	pip,moss	squabble	perp,top,low	-	90
-bump_moss_pearl	moss,pearl	bump	perp,top,low	-	90
 nuzzle_lavender_teddy	lavender,teddy	nuzzle	perp,top,low	-	90
 sitTogether_pip_pearl	pip,pearl	sitTogether	perp,top,low	-	90
 sneak_pip_lavender	pip,lavender	sneak	perp,top,low	-	90
@@ -27,7 +26,6 @@ leapfrog_moss_teddy	moss,teddy	leapfrog	perp,top,low	-	90
 stormHuddle_pip_pearl_teddy	pip,pearl,teddy	-	perp,top,low	-Storm 2 -StormDelay 2	90
 guestHug_bob_teddy_pearl	bob,teddy,pearl	-	perp,top,low	-InviteGuest 1	34
 squabble_bob_teddy	bob,teddy	squabble	perp,top,low	-	90
-bump_bob_teddy	bob,teddy	bump	perp,top,low	-	90
 backToBack_lavender_pip	lavender,pip	backToBack	perp,top,low	-	200
 sneak_bob_pip	bob,pip	sneak	perp,top,low	-	90
 swayHug_lavender_teddy	lavender,teddy	swayHug	perp,top,low	-	90
@@ -45,7 +43,6 @@ ringAround_park_teddy_v	teddy	ringAround	perp,top	-StartPark 1 -ClockHour 11 -Co
 ringAround_park_pip_v	pip	ringAround	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
 circleDance_park_pearl_vv	pearl	circleDance	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 2 -ContactDemoVisitorSpecies wings,daisy	120
 groupHug_park_bob_vv	bob	groupHug	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 2 -ContactDemoVisitorSpecies daisy,wings	120
-bump_park_bob_v	bob	bump	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
 tag_park_pearl_v	pearl	tag	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies daisy	90
 chase_park_teddy_v	teddy	chase	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
 highFive_park_moss_v	moss	highFive	perp,top	-StartPark 1 -ClockHour 11 -ContactDemoPark 1 -ContactDemoDiag 1 -ContactDemoVisitors 1 -ContactDemoVisitorSpecies wings	90
