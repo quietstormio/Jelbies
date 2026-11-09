@@ -69,14 +69,15 @@ final class WidgetPreviewTests: XCTestCase {
         JellyRecord(id: id, name: name, color: color, levels: levels, dirt: dirt, sparkle: sparkle, mood: AwayMath.mood(of: levels).rawValue)
     }
 
-    func testPortraitsAndEveryFamily() throws {
+    func testPortraitsAndEveryFamily() async throws {
         let out = try outDir()
         let group = FileManager.default.temporaryDirectory.appendingPathComponent("widget-group-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: group, withIntermediateDirectories: true)
 
         // 1. the in-app portrait path: real renderer -> PNG file, for three colours and three coats
         let t = Date()
-        let renderer = try XCTUnwrap(JellyPortraitRenderer(), "Metal renderer")
+        let made = await JellyPortraitRenderer.make()
+        let renderer = try XCTUnwrap(made, "Metal renderer")
         let setupSeconds = Date().timeIntervalSince(t)
         let looks: [(Int, Palette, Float, Float)] = [(0, WidgetBridge.palette(0), 0, 0), (1, WidgetBridge.palette(1), 0.5, 0), (2, WidgetBridge.palette(2), 0, 1)]
         let t1 = Date()
