@@ -354,7 +354,7 @@ struct StudioScreen: View {
     /// The shared lobby frame (Lobby/LobbyKit.swift) in the Studio's purple: the stage (the place), the Jelbie picker, the Show-ready card, Practise dance / Enter Jelly Show.
     var body: some View {
         ZStack {
-            LobbyScreen(header: AnyView(LobbyHeader(title: "Studio", wallet: care.bath.wallet, backID: "studio-back", helpID: "studio-help", back: back, help: { setHow(true) })),
+            LobbyScreen(header: AnyView(LobbyHeader(title: "Jelly Show", wallet: care.bath.wallet, backID: "studio-back", helpID: "studio-help", back: back, help: { setHow(true) })),
                         why: blocker, whyID: "studio-why") {
                 VStack(alignment: .leading, spacing: 0) {
                     LobbyLabelRow(title: "Stage", trailing: "\(ShowUI.dayName(day))'s theme: \(theme.title)").accessibilityIdentifier("studio-theme")
@@ -376,7 +376,7 @@ struct StudioScreen: View {
             if howOpen {
                 LobbyHowSheet(rows: [
                     (.hanger, "Dress for the theme", "Pick the rank, then tap Dress up. Things in today\u{2019}s style count most. Gold edge = a match."),
-                    (.drop, "Feed and shine", "Theme foods fill the jars. A Clean before the show adds Glow."),
+                    (.drop, "Feed and shine", "Theme foods fill the jars. A Clean before the Jelly Show adds Glow."),
                     (.trophy, "Enter the Jelly Show", "Look, Dance and Trick, each scored out of 100."),
                 ], close: { setHow(false) })
                 .zIndex(1)
@@ -429,7 +429,7 @@ struct StudioScreen: View {
                     }
                     .padding(.vertical, -4)
                     .buttonStyle(.plain).accessibilityIdentifier("studio-dress")
-                    .accessibilityHint(dressed ? "" : "Dress for \(theme.main.title) and \(theme.friend.title) before the show")
+                    .accessibilityHint(dressed ? "" : "Dress for \(theme.main.title) and \(theme.friend.title) before the Jelly Show")
                     .onAppear { if !reduceMotion { withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true } } else { pulse = true } }
                 }
                 .padding(.horizontal, 10)
@@ -866,7 +866,7 @@ struct TrophiesSheet: View {
                         .background(Capsule().fill(has ? ShowUI.light : .white.opacity(0.45)))
                 }
             }
-            Text(t.shows == 0 ? "No shows yet. The first one earns a sticker." : "\(t.shows) show\(t.shows == 1 ? "" : "s") so far.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
+            Text(t.shows == 0 ? "No Jelly Shows yet. The first one earns a sticker." : "\(t.shows) Jelly Show\(t.shows == 1 ? "" : "s") so far.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
             RaceTrophiesSection(care: care, who: who)          // (race ribbons and trophies: Trophies/)
             VolleyTrophiesSection(care: care, who: who)          // (beach volleyball ribbons and trophies: Volley/)
         } }

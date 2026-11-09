@@ -153,7 +153,7 @@ final class SystemCommandModel: AICommandModel, @unchecked Sendable {
         Pets in the room: \(c.jellies.map(\.name).joined(separator: ", ")). targets: the pet names addressed, ["everyone"] if all are, [] if none.
         action: come (call over), stop, stopFighting, praise (compliments), scold (no, bad), play, sit, jacks (jump), run, flip, look, spin, hop, \
         feed (eat / a food), drink (a drink), sleep (bed, nap, goodnight), wake (wake up, good morning), clean (bath, wash), goTo (go to / sit on decor), wear (put on), \
-        playWith (play a game with another pet: partner), race, whoIsHungry, whoIsThirsty, whoWantsLove, none (anything else).
+        playWith (play a game with another pet: partner), race (also "Jelly Race", circuit, track), whoIsHungry, whoIsThirsty, whoWantsLove, none (anything else).
         """
         for k in [CatalogItem.Kind.food, .drink, .decor, .toy, .wearable] {
             let l = c.promptList(of: k)

@@ -356,11 +356,11 @@ struct ItemSheet: View {
         if item.kind == .room && book.owns(item) { return "Live there from Rooms" }
         if item.kind == .trickPage {
             if ownedNow { return "Yours already" }
-            if left < 0 { return "Win races to earn more JellyCoins" }
+            if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
             return "You'll have \(left) JellyCoins left \u{00B7} \(item.scope == .everyone ? "Every Jelbie knows it at once" : "Ready at once")"
         }
         if item.unique && book.owns(item) { return "In your Bag" }
-        if left < 0 { return "Win races to earn more JellyCoins" }
+        if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
         let dest = item.kind == .room ? "Live there from Rooms" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
         return "You'll have \(left) JellyCoins left \u{00B7} \(dest)"
     }
@@ -398,7 +398,7 @@ struct ItemSheet: View {
     }
     private var effectBlurb: String {
         if let p = item.perk { return p.blurb }
-        if let w = item.wear { return w.isShoe ? "No effect on speed. Shows in the room and on the track." : "No effect on anything but looks. Wear it from your Bag, one piece per spot." }
+        if let w = item.wear { return w.isShoe ? "No effect on speed. Shows in the room and in the Jelly Race." : "No effect on anything but looks. Wear it from your Bag, one piece per spot." }
         if item.kind == .room { return "Your Jelbies move in and the room keeps its own furniture." }
         if item.kind == .decor { return "Your room has \(StoreTuning.roomCapacity) spots; \(book.roomUnitsUsed) used. Place it from your Bag, then drag it where you like." }
         if item.kind == .toy { return "Pick it from Play and the Jelbies join in." }

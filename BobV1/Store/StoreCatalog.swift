@@ -99,7 +99,7 @@ nonisolated enum StoreCatalog {
     /// The tricks for sale (Store/TrickCatalog.swift): one card each, with its stars, price and scope.
     static let trickItems: [StoreItem] = TrickCatalog.forSale.map { d in
         StoreItem(id: d.id, name: d.name, kind: .trickPage, price: d.price, perk: nil,
-                  description: d.scope == .everyone ? "Every Jelbie learns \(d.name.lowercased()) at once, adopted ones too. Say it or pick it in the show." : "One Jelbie learns \(d.name.lowercased()). Say it or pick it in the show.",
+                  description: d.scope == .everyone ? "Every Jelbie learns \(d.name.lowercased()) at once, adopted ones too. Say it or pick it in the Jelly Show." : "One Jelbie learns \(d.name.lowercased()). Say it or pick it in the Jelly Show.",
                   symbol: d.icon, trick: d.trick, scope: d.scope)
     }
 
@@ -132,11 +132,11 @@ nonisolated enum StoreCatalog {
         StoreItem(id: "nuggets", name: "Chicken nuggets", kind: .food, price: 12, perk: .fullBelly, description: "Crispy and filling. Hunger falls slower for 4 hours.", symbol: "fork.knife", food: "nuggets"),
         StoreItem(id: "fries", name: "Fries", kind: .food, price: 10, perk: .bouncy, description: "Salty and fun. More bouncing for an hour.", symbol: "fork.knife", food: "fries"),
         StoreItem(id: "sushi", name: "Sushi roll", kind: .food, price: 18, perk: .cozy, description: "Calm and cozy. Stays happy longer for 4 hours.", symbol: "fork.knife", food: "sushi"),
-        StoreItem(id: "sandwich", name: "Sandwich", kind: .food, price: 14, perk: .focus, description: "Brain food. Fewer stumbles in the next race.", symbol: "fork.knife", food: "sandwich"),
+        StoreItem(id: "sandwich", name: "Sandwich", kind: .food, price: 14, perk: .focus, description: "Brain food. Fewer stumbles in the next Jelly Race.", symbol: "fork.knife", food: "sandwich"),
         StoreItem(id: "minipizza", name: "Mini pizza", kind: .food, price: 14, perk: .social, description: "Share the slices. Plays with the others more for an hour.", symbol: "fork.knife", food: "minipizza"),
-        StoreItem(id: "taco", name: "Taco", kind: .food, price: 15, perk: .zoomies, description: "Spicy! Zoomies now and a quicker next race.", symbol: "fork.knife", food: "taco"),
+        StoreItem(id: "taco", name: "Taco", kind: .food, price: 15, perk: .zoomies, description: "Spicy! Zoomies now and a quicker next Jelly Race.", symbol: "fork.knife", food: "taco"),
         // treats
-        StoreItem(id: "donut", name: "Donut", kind: .treat, price: 14, perk: .zoomies, description: "Sugar rush! Zoomies now and a quicker next race.", symbol: "birthday.cake.fill", food: "donut"),
+        StoreItem(id: "donut", name: "Donut", kind: .treat, price: 14, perk: .zoomies, description: "Sugar rush! Zoomies now and a quicker next Jelly Race.", symbol: "birthday.cake.fill", food: "donut"),
         StoreItem(id: "popsicle", name: "Ice pop", kind: .treat, price: 12, perk: .cozy, description: "Cool and calm. Stays happy longer for 4 hours.", symbol: "birthday.cake.fill", food: "popsicle"),
         StoreItem(id: "onigiri", name: "Onigiri", kind: .treat, price: 12, perk: .fullBelly, description: "A rice ball. Hunger falls slower for 4 hours.", symbol: "birthday.cake.fill", food: "onigiri"),
         StoreItem(id: "cookie", name: "Bedtime cookie", kind: .treat, price: 10, perk: .bedtime, description: "Falls asleep fast and sleeps deep for 8 hours.", symbol: "moon.zzz.fill", food: "cookie"),

@@ -60,7 +60,7 @@ enum RuleParser {
     private static let sitPhrases = ["sit down", "take a seat", "have a seat", "sit here", "sit still", "park yourself", "sit there", "sit on"]
     private static let sitWords: Set<String> = ["sit", "sits", "seat", "sitting"]
     private static let goPhrases = ["go to", "go on", "go sit", "go lie", "get on", "get in", "hop on", "hop in", "go over to", "head to", "go to the", "jump on", "walk to", "climb on"]
-    private static let racePhrases = ["let s race", "go race", "time to race", "run a race", "do a race", "enter the race", "jelly circuit"]
+    private static let racePhrases = ["let s race", "go race", "time to race", "run a race", "do a race", "enter the race", "jelly circuit", "jelly race", "enter the jelly race"]
     private static let raceWords: Set<String> = ["race", "racing", "circuit", "racetrack"]
     private static let playPhrases = ["let s play", "wanna play", "want to play", "go play", "playtime", "play time", "play together", "play a game", "have fun"]
     private static let playWords: Set<String> = ["play", "playing", "soccer", "football", "ball", "fetch", "game", "tag"]

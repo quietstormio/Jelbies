@@ -63,7 +63,7 @@ extension VoiceCoordinator {
             understand(c.summary(names: names), kind: .command(.wear), ids: ids)
         case .race:
             // the Track panel for that Jelly (Race is its button): the same screen Go out -> Track opens
-            guard !locked, !held, !care.raceBusy, !care.focus.isActive, !care.arranging else { confused(ids: ids, reason: care.raceBusy ? "A race is already on" : nil); return }
+            guard !locked, !held, !care.raceBusy, !care.focus.isActive, !care.arranging else { confused(ids: ids, reason: care.raceBusy ? "A Jelly Race is already on" : nil); return }
             let id = ids[0]
             if !care.focus.isActive { (onSelect ?? { care.rosterPick($0, quietHop: true) })(id) }
             understand(c.summary(names: names), kind: .command(c.action), ids: [id])
