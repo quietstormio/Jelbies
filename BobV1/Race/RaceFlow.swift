@@ -253,7 +253,8 @@ final class RaceFlow {
         guard !settled, let s = sim else { return }
         settled = true
         earned = assistedDrops(s.playerDrops)
-        if let place = s.playerPlace {
+        // only a player who crossed the line is paid and ranked: an idle player (no taps) is placed behind the finishers but earns nothing
+        if s.playerFinished, let place = s.playerPlace {
             wallet?.add(earned)
             stats?.afterRace(place: place)
             if let up = upgrades {          // Upgrade points by place (once: `settled` guards the whole block)

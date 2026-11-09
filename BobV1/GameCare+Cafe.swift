@@ -229,7 +229,7 @@ extension GameCare {
             if book.servingOpen {
                 cancelGroup()
                 let atePieces = book.ate.values.reduce(0, +)
-                if CafeTuning.refundIfNothingEaten, atePieces == 0, book.charged > 0 { bath.wallet.add(book.charged, silent: true) }
+                if CafeTuning.refundIfNothingEaten, atePieces == 0, book.charged > 0 { refundCafeOrder(book.charged) }
                 for (id, n) in book.ate where n > 0 { needs(for: id).gain(.attention, CafeTuning.attentionBonus) }
                 book.servingOpen = false
             }
@@ -314,6 +314,12 @@ extension GameCare {
         return nil
     }
 
+    /// Nothing was eaten: the Drops come back and so does the stamp this paid order earned (a free order charged 0, so never lands here).
+    private func refundCafeOrder(_ charged: Int) {
+        bath.wallet.add(charged, silent: true)
+        cafe.stamps.set(cafe.stamps.card.count - 1)
+    }
+
     /// A Jelbie ate `pieces` more of `treat`: condition, the perk (a longer one than the store's) and, for sugar-rush zoomies, the run once he is home. Never touches the bag.
     func cafeAte(jelly id: Int, treat: CafeTreatID, pieces: Int) {
         guard pieces > 0, let prof = jelly(id) else { return }
@@ -338,7 +344,7 @@ extension GameCare {
         let book = cafeBook
         let atePieces = book.ate.values.reduce(0, +)
         for (id, n) in book.ate where n > 0 { needs(for: id).gain(.attention, CafeTuning.attentionBonus) }
-        if CafeTuning.refundIfNothingEaten, atePieces == 0, book.charged > 0 { bath.wallet.add(book.charged, silent: true) }
+        if CafeTuning.refundIfNothingEaten, atePieces == 0, book.charged > 0 { refundCafeOrder(book.charged) }
         if let p = book.plate { book.lastTreatByPlace = p.treatByPlace }
         book.hooks = nil; book.plate = nil; book.servingOpen = false
         for id in book.ate.keys where (book.ate[id] ?? 0) > 0 { cafe.served.insert(id) }

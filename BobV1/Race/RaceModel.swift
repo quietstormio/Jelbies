@@ -625,7 +625,9 @@ nonisolated struct RaceSim: Sendable {
     // MARK: results
 
     var playerPlace: Int? { placings.first(where: \.isPlayer)?.place }
-    /// Drops the player earns on this course (0 until the results are in).
-    var playerDrops: Int { playerPlace.map { RaceTuning.drops(place: $0, tier: course.tier) } ?? 0 }
+    /// Whether the player actually crossed the line (an idle player is ranked after the finishers but has not finished).
+    var playerFinished: Bool { racers.indices.contains(Self.playerIndex) && racers[Self.playerIndex].finished }
+    /// Drops the player earns on this course (0 until the results are in, and 0 when the player never crossed the line).
+    var playerDrops: Int { playerFinished ? (playerPlace.map { RaceTuning.drops(place: $0, tier: course.tier) } ?? 0) : 0 }
     var playerWon: Bool { playerPlace == 1 }
 }
