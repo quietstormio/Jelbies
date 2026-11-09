@@ -123,7 +123,7 @@ final class RoomAXElement: UIAccessibilityElement {
         accessibilityIdentifier = "room"
     }
     override var isAccessibilityElement: Bool { get { true } set {} }
-    override var accessibilityLabel: String? { get { "Living room" } set {} }
+    override var accessibilityLabel: String? { get { MainActor.assumeIsolated { hub.roomLabel() } } set {} }
     override var accessibilityValue: String? { get { MainActor.assumeIsolated { hub.roomValue() } } set {} }
     override var accessibilityTraits: UIAccessibilityTraits { get { .staticText } set {} }
     override var accessibilityFrameInContainerSpace: CGRect { get { MainActor.assumeIsolated { hub.bounds } } set {} }
@@ -247,6 +247,18 @@ final class JelbieA11yContainer {
         return "Double tap to highlight. Swipe up or down for actions like feed and call over"
     }
 
+    /// The real place name: the room's title, or the scene the Jelbies are away at during a trip.
+    func roomLabel() -> String {
+        guard let care else { return "Room" }
+        if care.race.active { return "Race track" }
+        if care.show.active { return "Jelly Show" }
+        if care.cafe.active { return "Café" }
+        if care.park.active { return "Park" }
+        if care.groom.active { return "Groomer" }
+        if care.volley.active { return "Beach" }
+        return RoomCatalog.def(care.roomID).title
+    }
+
     func roomValue() -> String {
         guard let care else { return "" }
         let placed = presentIDs.compactMap { id -> (String, Double)? in
@@ -296,7 +308,7 @@ final class JelbieA11yContainer {
     }
 
     func roomActions() -> [UIAccessibilityCustomAction] {
-        guard let care, JelbieActions.busyReason(care) == nil, !care.focus.isActive else { return [] }
+        guard let care, !care.tripActive, JelbieActions.busyReason(care) == nil, !care.focus.isActive else { return [] }
         var out: [UIAccessibilityCustomAction] = []
         out.append(UIAccessibilityCustomAction(name: "Everyone come here") { [weak care] _ in care?.comeHereEveryone(); return care != nil })
         out.append(UIAccessibilityCustomAction(name: "Bedtime for everyone") { [weak care] _ in
