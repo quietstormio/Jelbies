@@ -85,12 +85,43 @@ nonisolated enum JellyVariantBook {
         if Double(r.unit()) < VariantTuning.classicShare { return nil }
         let c = r.pick(colours(for: species))
         let t = (r.unit() * 2 - 1) * VariantTuning.toneJitter
-        func tone(_ v: SIMD3<Float>) -> SIMD3<Float> {
-            let target: Float = t >= 0 ? 1 : 0
-            return simd_clamp(v + (SIMD3<Float>(repeating: target) - v) * abs(t), SIMD3(repeating: 0.02), SIMD3(repeating: 0.99))
-        }
         let (f, d) = c.flesh
-        return JellyVariant(title: c.title, flesh: tone(f), deep: tone(d), rare: false)
+        return JellyVariant(title: c.title, flesh: tone(f, t), deep: tone(d, t), rare: false)
+    }
+
+    /// `v` moved `t` of the way toward white (t > 0) or black (t < 0).
+    private static func tone(_ v: SIMD3<Float>, _ t: Float) -> SIMD3<Float> {
+        let target: Float = t >= 0 ? 1 : 0
+        return simd_clamp(v + (SIMD3<Float>(repeating: target) - v) * abs(t), SIMD3(repeating: 0.02), SIMD3(repeating: 0.99))
+    }
+
+    /// How far the pick page's "Soft" / "Deep" shades move the classic colour toward white / black.
+    static let softShade: Float = 0.13, deepShade: Float = 0.14
+
+    /// The classic colour of a starter species (the same sources as `JellyRoster.palette`, bypassing variants).
+    static func classicPalette(_ species: Int) -> Palette {
+        switch species {
+        case 1: return PaletteKey.yellow.palette
+        case 2: return JellyPalettes.green
+        case 3: return JellyPalettes.lavender
+        default: return PaletteKey.blue.palette
+        }
+    }
+
+    /// Three slots for the pick page, left to right: the classic colour, a slight tone of it (Soft or Deep) and today's colour offer (`offer`, may be a rare exclusive);
+    /// on a day with no offer the third slot is the other tone, so no two slots match. Species 0...3 only; anything else is [nil, nil, nil].
+    static func shades(species: Int, dayKey: Int, owned: Int) -> [JellyVariant?] {
+        guard (0...3).contains(species) else { return [nil, nil, nil] }
+        var r = ParkRandom(VariantTuning.seed ^ 0x5AD3 &+ UInt64(bitPattern: Int64(dayKey)) &* 0x9E37_79B9 &+ UInt64(species) &* 0x1F3D &+ UInt64(max(owned, 0)) &* 0x7B1)
+        _ = r.next()
+        let p = classicPalette(species)
+        func shade(_ soft: Bool) -> JellyVariant {
+            let t = soft ? softShade : -deepShade
+            return JellyVariant(title: soft ? "Soft" : "Deep", flesh: tone(p.flesh, t), deep: tone(p.fleshDeep, t), rare: false)
+        }
+        let first = r.next() % 2 == 0
+        if let d = offer(species: species, dayKey: dayKey) { return [nil, shade(first), d] }
+        return [nil, shade(true), shade(false)]
     }
 }
 

@@ -37,7 +37,7 @@ final class JellyProfile: Identifiable {
         self.id = id; self.character = c; self.name = name; self.needs = needs; self.grime = grime; self.training = training
         self.perks = perks ?? JellyPerks(key: JellyKeys.perks(c))
         grime.perks = self.perks
-        self.stats = stats ?? JellyStats(key: JellyKeys.stats(c), seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }))
+        self.stats = stats ?? JellyStats(key: JellyKeys.stats(c), seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }), traitSeed: JellyTraitsBook.record(c).map { StatTuning.seed(jars: $0.jars) })
         refreshLook(force: true)
     }
 
@@ -54,10 +54,12 @@ final class JellyProfile: Identifiable {
         let grime = BlobGrime(persists: persists, seed: 0xB47B &+ UInt32(c) &* 7919, defaults: defaults, key: JellyKeys.grime(c), now: now)
         let training = VoiceTraining(defaults: defaults, key: JellyKeys.words(c), name: name, persists: persists)
         let stats = JellyStats(persists: persists, defaults: defaults, key: JellyKeys.stats(c),
-                               seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }))
+                               seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }), traitSeed: JellyTraitsBook.record(c).map { StatTuning.seed(jars: $0.jars) })
         self.init(id: id, character: c, name: name, needs: needs, grime: grime, training: training, stats: stats, perks: JellyPerks(persists: persists, defaults: defaults, key: JellyKeys.perks(c), now: now))
     }
 
+    /// What he is like (the picked personality, jars and favourite snack); nil for Jelbies from before the pick-one-of-three page.
+    var traits: JellyTraits? { JellyTraitsBook.record(character) }
     var coat: BlobGrime.CoatTier { grime.coat }
     /// What he looks and sounds like (the species of his instance id): palette / voice / feature switches use this, saved state uses `character`.
     var species: Int { JellyRoster.species(character) }

@@ -40,6 +40,31 @@ nonisolated enum StatTuning {
         let m = careLevels.isEmpty ? 0.7 : careLevels.reduce(0, +) / Float(careLevels.count)
         return min(max(seedBase + seedCare * min(max(m, 0), 1), 0), 1)
     }
+
+    // MARK: pick-one-of-three seeds (JellyTraits)
+    /// Jar index (Cute, Sweet, Sparkly, Cool, Sporty) -> the game's condition stat. (The enum's own order is cute, cool, sparkle, sweet, sporty: never assume they match.)
+    static let jarKeys: [ConditionKey] = [.cute, .sweet, .sparkle, .cool, .sporty]
+    /// A jar of 100 seeds a condition stat at this (= the Puddle rivals' main stat; Pond 0.45, Lagoon 0.65, Ocean 0.85).
+    static let condSeedScale: Float = 0.25
+    /// The condition never decays below this share of its seed: the personality does not fade away.
+    static let innateShare: Float = 0.5
+    struct TraitSeed: Equatable, Sendable {
+        var waddle: Float, focus: Float
+        /// By ConditionKey.rawValue.
+        var cond: [Float]
+        /// The innate floor, by ConditionKey.rawValue.
+        var floor: [Float] { cond.map { $0 * StatTuning.innateShare } }
+    }
+    /// Starting waddle (0.30...0.65), focus (0.35...0.70) and condition stats of a Jelbie with these picker jars.
+    static func seed(jars: [Int]) -> TraitSeed {
+        let j = (0..<5).map { jars.indices.contains($0) ? Float(min(max(jars[$0], 0), 100)) : 50 }
+        var cond = [Float](repeating: 0, count: ConditionKey.allCases.count)
+        for (i, k) in jarKeys.enumerated() { cond[k.rawValue] = j[i] / 100 * condSeedScale }
+        let cute = j[0], sweet = j[1], sparkly = j[2], cool = j[3], sporty = j[4]
+        let f = (0.6 * sporty + 0.25 * cool + 0.15 * sparkly) / 100
+        let g = (0.5 * cool + 0.3 * sweet + 0.2 * cute) / 100
+        return TraitSeed(waddle: min(max(seedBase + seedCare * f, 0.30), 0.65), focus: min(max(0.35 + 0.35 * g, 0.35), 0.70), cond: cond)
+    }
 }
 
 @MainActor
@@ -52,6 +77,8 @@ final class JellyStats {
     /// The condition stats as last stored (use `condition(_:)`, which applies the decay since `condStamp`).
     @ObservationIgnored private var cond: [Float] = Array(repeating: 0, count: ConditionKey.allCases.count)
     @ObservationIgnored private var condStamp: Date
+    /// The innate floor per condition stat (half of the picked Jelbie's seed; zeros for everyone else).
+    @ObservationIgnored private let innateFloor: [Float]
     /// Bumped on a change (UI).
     private(set) var conditionRevision = 0
     /// The last `mealsKept` meals, newest first (the Condition card's food diary; the Jelly Show's "+1" droplets read the newest).
@@ -70,13 +97,24 @@ final class JellyStats {
     nonisolated deinit {}
 
     /// `seedWaddle` is used only when nothing is saved under `key` yet.
-    init(persists: Bool = true, defaults: UserDefaults = .standard, key: String = StatTuning.defaultsKey, seedWaddle: Float = 0.5, seedFocus: Float = StatTuning.seedFocus, now: @escaping () -> Date = Date.init) {
+    /// `traitSeed` (a picked Jelbie's JellyTraits record): when nothing is saved under `key` yet it replaces the care seed (waddle, focus, condition stats); always, half of its
+    /// condition seed is the innate floor the stats never decay below.
+    init(persists: Bool = true, defaults: UserDefaults = .standard, key: String = StatTuning.defaultsKey, seedWaddle: Float = 0.5, seedFocus: Float = StatTuning.seedFocus,
+         traitSeed: StatTuning.TraitSeed? = nil, now: @escaping () -> Date = Date.init) {
         self.now = now; condStamp = now()
         self.persists = persists; self.defaults = defaults; self.key = key
+        innateFloor = traitSeed?.floor ?? Array(repeating: 0, count: ConditionKey.allCases.count)
         waddle = min(max(seedWaddle, 0), 1); focus = min(max(seedFocus, 0), 1)
         if persists, let a = defaults.array(forKey: key) as? [Double], a.count >= 4 {
             waddle = min(max(Float(a[0]), 0), 1); focus = min(max(Float(a[1]), 0), 1); races = Int(a[2]); wins = Int(a[3])
-        } else if persists { save() }
+        } else if persists {
+            if let s = traitSeed {
+                waddle = min(max(s.waddle, 0), 1); focus = min(max(s.focus, 0), 1)
+                cond = s.cond; condStamp = now()
+                saveCondition()          // (overwrites any stale ".cond" left under this key)
+            }
+            save()
+        }
         if persists, let c = defaults.array(forKey: key + ".cond") as? [Double], c.count == ConditionKey.allCases.count + 1 {
             cond = c.prefix(ConditionKey.allCases.count).map { min(max(Float($0), 0), 1) }
             condStamp = Date(timeIntervalSince1970: c[ConditionKey.allCases.count])
@@ -109,7 +147,7 @@ final class JellyStats {
     /// The stat now: the stored value less the slow decay since it was stored.
     func condition(_ k: ConditionKey) -> Float {
         let hours = Float(max(0, now().timeIntervalSince(condStamp)) / 3600)
-        return min(max(cond[k.rawValue] - ConditionTuning.decayPerHour * hours, 0), ConditionTuning.cap)
+        return min(max(cond[k.rawValue] - ConditionTuning.decayPerHour * hours, innateFloor[k.rawValue]), ConditionTuning.cap)
     }
     /// Eating (or wearing) nudges the stats up by `d`; capped at 1. Everything first takes its decay so the stamp can move.
     /// `food`: the meal's name, for the food diary (nil = not a meal: wearing shoes, tests).

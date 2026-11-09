@@ -167,7 +167,7 @@ final class StartFlow {
     /// A Jelbie of `species` is chosen, named and paid for (`variant` = the Spring colour taken with him, nil = classic): he gets his INSTANCE id (the species id when he is
     /// the first of his kind at home, else a fresh id from the counter: a second Bob is allowed), a fresh start for his state, his colour and name, and joins the roster; then the room.
     /// The species map is written by `allocateInstance` before the roster is saved, so the new id is valid when the roster is read back.
-    func bringHome(species s: Int, name: String, variant: JellyVariant? = nil) {
+    func bringHome(species s: Int, name: String, variant: JellyVariant? = nil, traits: JellyTraits? = nil) {
         let first = phase == .adopt(.first)
         if first { oldSaveSnapshot = nil; if Self.hasSave() { Self.wipeAll() } }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
         var ids = first ? [] : JellyRoster.savedIDs()
@@ -175,6 +175,7 @@ final class StartFlow {
         let id = JellyRoster.allocateInstance(species: s, roster: ids)
         Self.resetCharacterState(id)          // always: a preview (or an old, released slot) may have left something under his keys
         JellyVariants.adopt(id, variant)
+        JellyTraitsBook.adopt(id, traits)          // his personality, jars and favourite snack (his starting stats seed from it when his profile is first built)
         ids.append(id)
         JellyRoster.save(ids)
         JellyRoster.setName(id, name)
@@ -222,6 +223,7 @@ final class StartFlow {
         JellyRoster.names = JellyRoster.loadNames()
         JellyRoster.reloadSpecies()          // the duplicates' species map, counter and names died with the domain
         JellyVariants.reload()
+        JellyTraitsBook.reload()
         JellyRoster.current = [0]
         DecorField.shared.set([])
         DayClock.shared.resetForNewGame()          // Day 1, 8:00
@@ -231,6 +233,8 @@ final class StartFlow {
     /// A newcomer starts fresh: whatever a preview (the Adoption Center's stage) saved under his keys goes.
     static func resetCharacterState(_ c: Int, _ d: UserDefaults = .standard) {
         for k in [JellyKeys.needs(c), JellyKeys.grime(c), JellyKeys.words(c), JellyKeys.stats(c), JellyKeys.perks(c)] { d.removeObject(forKey: k) }
+        let stats = JellyKeys.stats(c)          // the stats' condition, meal diary and dances live under suffixed keys: a newcomer starts without them too
+        for s in [".cond", ".meals", ".dances"] { d.removeObject(forKey: stats + s) }          // (JellyTraits.v1 stays: the seed comes from it when his profile is first built)
     }
 }
 

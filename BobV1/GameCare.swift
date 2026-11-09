@@ -273,7 +273,7 @@ final class GameCare {
         bath.wallet.onEarn = { [weak self] _ in self?.brainFor(0)?.wantJoy() }          // drops earned: a jump for joy
         let n = chars.count
         let stats0: JellyStats? = (c0 == 0 && !preview) ? nil : JellyStats(persists: persistent, defaults: defaults, key: JellyKeys.stats(c0),
-                                                                seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }))
+                                                                seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }), traitSeed: JellyTraitsBook.record(c0).map { StatTuning.seed(jars: $0.jars) })
         let perks0: JellyPerks? = (c0 == 0 && !preview) ? nil : JellyPerks(persists: persistent, defaults: defaults, key: JellyKeys.perks(c0))
         jellies = [JellyProfile(id: 0, character: c0, name: JellyRoster.nameOf(c0), needs: needs, grime: bath.grime, training: v.training, stats: stats0, perks: perks0)]
             + chars.dropFirst().enumerated().map { JellyProfile(id: $0.offset + 1, character: $0.element, name: JellyRoster.nameOf($0.element), persists: persistent, defaults: defaults) }
