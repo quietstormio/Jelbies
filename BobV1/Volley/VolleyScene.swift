@@ -29,7 +29,7 @@ extension GameCamera {
     static func beachPose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let th = tanf(fovY / 2)
         let portrait = portraitAmount(aspect)
-        let needW: Float = 7.4, needH: Float = 5.6 + 2.8 * (1 - portrait)          // (7.4 wide in a portrait phone too: the whole court and the near Jelbie's reach fit; a phone on its side: more air over the court, the controls sit below it)
+        let needW: Float = 7.4 + 1.6 * GameCamera.landscapeBlend(aspect, from: 0.6, to: 0.7), needH: Float = 5.6 + 2.8 * (1 - portrait)          // (7.4 wide in a portrait phone too, 9.0 from a tablet's 3:4 up, where the left rail and the dive reach past the lines used to push a player off the left edge: the whole court and the near Jelbie's reach fit; a phone on its side: more air over the court, the controls sit below it)
         let distW = needW / (2 * th * max(aspect, 0.2)), distH = needH / (2 * th)
         let dist = max(distW, distH)
         let visH = 2 * dist * th
