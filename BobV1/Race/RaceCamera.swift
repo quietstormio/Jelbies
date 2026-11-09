@@ -38,7 +38,7 @@ struct RaceFollowPose: Equatable {
 
     static func distance(aspect: Float) -> Float {
         let th = tanf(GameCamera.fovY / 2)
-        return max(minDistance, halfWidth / (fill * th * max(GameCamera.framingAspect(aspect), 0.2)))
+        return max(minDistance, halfWidth / (fill * th * max(GameCamera.raceFramingAspect(aspect), 0.2)))
     }
 
     /// The pose a frame wants for `racers` on `course`.

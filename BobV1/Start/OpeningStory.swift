@@ -94,10 +94,13 @@ struct OpeningStoryView: View {
         .onGeometryChange(for: CGSize.self) { $0.size } action: { new in
             let changed = st.viewSize != .zero && st.viewSize != new
             st.viewSize = new
-            if changed {
-                // window resized / rotated mid-story: re-frame the current beat at once
-                let t = target(st.beat, size: new)
-                st.camFrom = t; st.camTo = t; st.camT0 = Date()
+            if changed && HUDLayout.isPad {
+                // iPad window resized / rotated mid-story: glide from where the camera is now to the new size's framing for this beat (no snap), over what is left
+                // of the beat's push. (iPhone never re-framed mid-beat; it keeps its slow push through a rotation.)
+                let now = Date()
+                let left = max(st.camDur - now.timeIntervalSince(st.camT0), 0.01)
+                st.camFrom = camera(at: now); st.camTo = target(st.beat, size: new)
+                st.camT0 = now; st.camDur = !motion ? 0.01 : max(left, 0.6)
             }
         }
         .task { begin() }

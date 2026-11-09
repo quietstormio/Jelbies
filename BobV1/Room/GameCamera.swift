@@ -22,8 +22,17 @@ enum GameCamera {
     /// W2 only: the camera rises this much (same angle) in portrait, so the room sits lower on screen and the empty foreground floor shrinks.
     static func wideLift(_ w: Int) -> Float { w == 2 ? 1.5 : 0 }
     nonisolated(unsafe) static var roomWideLift: Float = 0
-    /// 1 in a portrait phone (aspect <= 0.8), 0 from square up, eased between so a rotation does not jump.
-    static func portraitAmount(_ aspect: Float) -> Float { let t = min(max((1.0 - aspect) / 0.2, 0), 1); return t * t * (3 - 2 * t) }
+    /// 1 up to a square window (aspect <= 1.0: every phone portrait, a tablet portrait), 0 from 1.2 up (a phone on its side, a tablet landscape), eased between:
+    /// the same band as `framingAspect` and the close-ups, so the Spa street, the beach court and the close-ups switch together and a resizable window never jumps.
+    /// (Phone aspects 0.46...0.56 and ~2.17 are exactly 1 and 0, as before.)
+    static func portraitAmount(_ aspect: Float) -> Float { 1 - poseBlend(aspect) }
+    /// Landscape measure for the close-up poses: 0 up to a square window (1.0), 1 from 1.2. Identity below 1.0 keeps every phone aspect and the widget's square exactly as before.
+    static func poseBlend(_ aspect: Float) -> Float { landscapeBlend(aspect, from: 1.0, to: 1.2) }
+    /// 1 on a tablet's portrait-ish windows (0.7...0.85), 0 on every phone portrait (<= 0.56 -> 0 below 0.6...0.7) and from square up (0 by 1.0), so a close-up can be made
+    /// a little smaller there without touching a phone or the widget's square.
+    static func tabletPortraitAmount(_ aspect: Float) -> Float { landscapeBlend(aspect, from: 0.6, to: 0.7) * (1 - landscapeBlend(aspect, from: 0.85, to: 0.95)) }
+    /// 1 for the tablet aspects only (portrait 3:4 up to landscape 4:3 and a bit wider, 0.7 ... 1.6); 0 for every phone (<= 0.56, >= 2.0).
+    static func tabletBand(_ aspect: Float) -> Float { landscapeBlend(aspect, from: 0.6, to: 0.7) * (1 - landscapeBlend(aspect, from: 1.7, to: 2.0)) }
     /// The room's portrait widening for 2-3 Jellies: 1 for every phone portrait (aspect <= 0.6), eased to 0 by 0.8, so a tablet (3:4 = 0.75, squarer windows) is not pulled
     /// far back (its width already shows ~1.6x what a phone's does). iPhone aspects (<= 0.56) are exactly 1, as before.
     static func roomWideAmount(_ aspect: Float) -> Float { 1 - landscapeBlend(aspect, from: 0.6, to: 0.8) }
@@ -72,8 +81,14 @@ enum GameCamera {
     /// The aspect the close-up poses (focus, bath, race) are SIZED for. A phone on its side (aspect >= 1.2) keeps the portrait framing's height, so the Jelly / track is
     /// the same size on the screen's short side and the extra width shows more room, not a face-filling zoom. Below that nothing changes (portrait, the widget's square).
     static let landscapeFramingAspect: Float = 0.56
-    /// Continuous: identity up to 0.8 (every phone portrait and a tablet portrait), eased to the landscape height by 1.2 (a phone on its side, a tablet landscape).
-    static func framingAspect(_ a: Float) -> Float { let l = landscapeBlend(a); return a + (landscapeFramingAspect - a) * l }
+    /// Continuous: identity up to 1.0 (every phone portrait, a tablet portrait, the widget's square), eased to the landscape height by 1.2 (a phone on its side, a tablet landscape).
+    static func framingAspect(_ a: Float) -> Float { let l = poseBlend(a); return a + (landscapeFramingAspect - a) * l }
+    /// The Waddle Sprint's framing aspect: `framingAspect`, and on a tablet's landscape the track gets its own width (0.96) instead of the phone's 0.56, so it is not a narrow
+    /// corridor in the middle of a 4:3 screen. Phones (>= 2.0) and every aspect <= 1.0 are `framingAspect` exactly.
+    static func raceFramingAspect(_ a: Float) -> Float { framingAspect(a) + 0.4 * poseBlend(a) * tabletBand(a) }
+    /// Camera elevation of the straight track: 19 deg on a phone; 3 deg higher on a tablet so the finish gantry's banner (3.9 u up, between the eye and the starting
+    /// racers) passes above their feet, not across them.
+    static func raceElevation(aspect a: Float) -> Float { raceElevation + 3 * .pi / 180 * tabletBand(a) }
     // MARK: Bath close-up
 
     /// Close-up of Bob in the washtub: one source of truth, `BathSet.closeUpPose`.
@@ -144,7 +159,7 @@ enum GameCamera {
     /// The play view from the room pose: the target moves forward and a touch up, the eye comes in and down, so the Jelbies stand in the upper-middle of the
     /// screen and the near floor (where the ball comes back) fills the lower third. A phone on its side keeps the portrait framing height.
     static func playPose(eye e: SIMD3<Float>, target t: SIMD3<Float>, aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
-        let w = landscapeBlend(aspect)       // landscape (continuous; 0 or 1 on every phone)
+        let w = poseBlend(aspect)       // landscape (continuous; 0 or 1 on every phone and the same 1.0...1.2 band as the close-ups)
         let elev: Float = (35 - 5 * w) * .pi / 180
         let dist: Float = 13.5 - 5.0 * w
         let tt = SIMD3<Float>(0, 0.6, 1.1 + 0.1 * w)
@@ -187,10 +202,11 @@ enum GameCamera {
     /// Portrait phones are tall and narrow, so the track runs along the screen's height; the distance is set by the width it must hold at the finish line.
     static func racePose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let th = tanf(fovY / 2)
-        let toFinish = raceHalfWidth / (raceFill * th * max(framingAspect(aspect), 0.2))                    // depth of the finish line along the view axis
-        let dist = toFinish + (RaceTuning.finishZ - raceTargetZ) * cosf(raceElevation)
+        let toFinish = raceHalfWidth / (raceFill * th * max(raceFramingAspect(aspect), 0.2))                    // depth of the finish line along the view axis
+        let el = raceElevation(aspect: aspect)
+        let dist = toFinish + (RaceTuning.finishZ - raceTargetZ) * cosf(el)
         let t = SIMD3<Float>(0, 0.4, raceTargetZ)
-        return (t + SIMD3(0, sinf(raceElevation), cosf(raceElevation)) * dist, t)
+        return (t + SIMD3(0, sinf(el), cosf(el)) * dist, t)
     }
 
     // MARK: Drill follow camera (Rhythm Steps)
@@ -221,7 +237,7 @@ enum GameCamera {
 
     /// Eye / target of the close-up: centred on the front spot, facing him.
     static func focusPose(aspect: Float, spot: SIMD2<Float> = callSpot) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
-        let visW = 2 * BobShape.R / focusWidthFill
+        let visW = 2 * BobShape.R / (focusWidthFill - 0.16 * tabletPortraitAmount(aspect))          // a tablet's portrait: a little looser (he would be ~62% of the screen height)
         let visH = visW / max(framingAspect(aspect), 0.2)
         let dist = visH / (2 * tanf(fovY / 2))
         let mid = 0.5 * BobShape.H
@@ -284,7 +300,7 @@ enum GameCamera {
         for s in spots { lo = simd_min(lo, s); hi = simd_max(hi, s) }
         let mid = (lo + hi) * 0.5
         // a phone on its side: the bodies are drawn bigger (the screen is short), the solo rounds put him on the left third so the cards have the right
-        let lw = landscapeBlend(aspect)
+        let lw = poseBlend(aspect)
         let fill = frame.fill + (frame.landFill - frame.fill) * lw
         let screenY = frame.screenY + (frame.landScreenY - frame.screenY) * lw
         let visW = (hi.x - lo.x + 2 * BobShape.R) / max(fill, 0.2)
