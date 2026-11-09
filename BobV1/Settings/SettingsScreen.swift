@@ -13,6 +13,7 @@ struct SettingsScreen: View {
     var resetSave: () -> Void
     var openPhoto: () -> Void = {}
     var watchOpening: () -> Void = {}
+    var openShop: () -> Void = {}
     var close: () -> Void
 
     @Bindable private var hub = AudioHub.shared
@@ -26,8 +27,8 @@ struct SettingsScreen: View {
     private var landscape: Bool { vsc == .compact }
     private let ink = CloudTheme.ink
 
-    init(openStudio: @escaping () -> Void, mainMenu: @escaping () -> Void, resetSave: @escaping () -> Void, openPhoto: @escaping () -> Void = {}, watchOpening: @escaping () -> Void = {}, close: @escaping () -> Void) {
-        self.openStudio = openStudio; self.mainMenu = mainMenu; self.resetSave = resetSave; self.openPhoto = openPhoto; self.watchOpening = watchOpening; self.close = close
+    init(openStudio: @escaping () -> Void, mainMenu: @escaping () -> Void, resetSave: @escaping () -> Void, openPhoto: @escaping () -> Void = {}, watchOpening: @escaping () -> Void = {}, openShop: @escaping () -> Void = {}, close: @escaping () -> Void) {
+        self.openStudio = openStudio; self.mainMenu = mainMenu; self.resetSave = resetSave; self.openPhoto = openPhoto; self.watchOpening = watchOpening; self.openShop = openShop; self.close = close
     }
 
     var body: some View {
@@ -170,7 +171,7 @@ struct SettingsScreen: View {
 
     private var voice: some View {
         card("Voice and listening", "ear.fill") {
-            EarsSettingsRow(ears: .shared, tight: false)
+            EarsSettingsRow(ears: .shared, tight: false, goShop: openShop)
         }
     }
 

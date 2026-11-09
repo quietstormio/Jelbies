@@ -264,7 +264,11 @@ struct GameScreen: View {
                 .padding(.top, 8)
 
             if soundOpen {
-                SoundSettingsPanel(hub: AudioHub.shared, openExtras: { withAnimation(CareMenu.spring) { soundOpen = false; extrasOpen = true } }) { withAnimation(CareMenu.spring) { soundOpen = false } }
+                SoundSettingsPanel(hub: AudioHub.shared, goShop: {
+                    ShopTab.pending = .tricks
+                    withAnimation(CareMenu.spring) { soundOpen = false }
+                    withAnimation(.easeInOut(duration: 0.25)) { town = .shop }
+                }, openExtras: { withAnimation(CareMenu.spring) { soundOpen = false; extrasOpen = true } }) { withAnimation(CareMenu.spring) { soundOpen = false } }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(.leading, 16).padding(.top, 52)
                     .transition(.scale(scale: 0.8, anchor: .topLeading).combined(with: .opacity))
@@ -321,6 +325,11 @@ struct GameScreen: View {
                     model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()          // the same saves as leaving for the menu
                     settingsOpen = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.replayOpening() } }          // after the Settings cover is gone; no picker, no save changes
+                },
+                openShop: {
+                    settingsOpen = false; menuOpen = false; soundOpen = false; extrasOpen = false; rosterOpen = false
+                    ShopTab.pending = .tricks          // Music Ears is a page in the Tricks tab
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.25)) { town = .shop } }          // after the Settings cover is gone
                 },
                 close: { settingsOpen = false })
         }
