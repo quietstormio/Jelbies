@@ -349,7 +349,7 @@ final class SleepMaskSet {
         let op = RoomMeshBuilder(), tr = RoomMeshBuilder()
         op.material = .plain; tr.material = .plain
         guard !hidden else { return (op.mesh, tr.mesh) }
-        for (i, s) in slots.enumerated() where s.scale > 0.001 { EyeMaskModel.append(id: JellyRoster.character(i), to: op, scale: s.scale, carry: s.carry) }     // the mask palette is the character's
+        for (i, s) in slots.enumerated() where s.scale > 0.001 { EyeMaskModel.append(id: JellyRoster.speciesOf(slot: i), to: op, scale: s.scale, carry: s.carry) }     // the mask palette is the character's
         for s in slots { Self.appendZ(s, to: tr) }
         if puffs.isActive {
             if sphereTint != theme.tint { puffSphere = DiningModels.puffSphere(theme: theme); sphereTint = theme.tint }

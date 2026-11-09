@@ -216,8 +216,8 @@ final class GameCare {
     /// What the widget shows: one input per Jelly in the room (`jellies`, each with its own needs / grime; colour by roster id).
     func widgetInputs() -> [WidgetBridge.Input] {
         jellies.map { j in
-            WidgetBridge.Input(id: j.id, name: j.name, color: WidgetBridge.colorName(j.character), levels: NeedKind.allCases.map { j.needs.level($0) },
-                               dirt: j.grime.dirt, sparkle: j.grime.sparkle)
+            WidgetBridge.Input(id: j.id, name: j.name, color: WidgetBridge.colorName(JellyRoster.species(j.character)), levels: NeedKind.allCases.map { j.needs.level($0) },
+                               dirt: j.grime.dirt, sparkle: j.grime.sparkle, character: j.character)
         }
     }
     /// The select hook for the widget's deep link (`jelbies://jelly/<id>`): the game is already open, so this plays that Jelly's roster highlight.
@@ -258,7 +258,7 @@ final class GameCare {
         else {
             let n = min(max(jellyCount, 1), JellyRoster.maxCount)
             chars = Array(JellyRoster.current.prefix(n))
-            for c in 0..<JellyRoster.characterCount where chars.count < n && !chars.contains(c) { chars.append(c) }     // a short roster is padded
+            for c in 0..<JellyRoster.characterCount where chars.count < n && !chars.contains(where: { JellyRoster.species($0) == c }) { chars.append(c) }     // a short roster is padded
             chars = JellyRoster.sanitised(chars)
         }
         let c0 = chars[0]
@@ -266,7 +266,7 @@ final class GameCare {
         bath = BathFlow(persists: preview ? false : nil, grimeKey: (c0 == 0 && !preview) ? nil : JellyKeys.grime(c0), grimeSeed: 0xB47B &+ UInt32(c0) &* 7919)
         group = DiningGroup(dining: dining, shared: true)
         store = StoreBook(wallet: bath.wallet, persists: !preview && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
-        let v = voice ?? VoiceCoordinator(training: (c0 == 0 && !preview) ? nil : VoiceTraining(defaults: defaults, key: JellyKeys.words(c0), name: JellyRoster.names[c0], persists: persistent), ai: preview ? AIHub(model: nil) : nil)
+        let v = voice ?? VoiceCoordinator(training: (c0 == 0 && !preview) ? nil : VoiceTraining(defaults: defaults, key: JellyKeys.words(c0), name: JellyRoster.nameOf(c0), persists: persistent), ai: preview ? AIHub(model: nil) : nil)
         self.voice = v
         upgrades = UpgradeBook(persists: persistent && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, defaults: defaults)
         v.care = self
@@ -275,8 +275,8 @@ final class GameCare {
         let stats0: JellyStats? = (c0 == 0 && !preview) ? nil : JellyStats(persists: persistent, defaults: defaults, key: JellyKeys.stats(c0),
                                                                 seedWaddle: StatTuning.seedWaddle(careLevels: NeedKind.allCases.map { needs.level($0) }))
         let perks0: JellyPerks? = (c0 == 0 && !preview) ? nil : JellyPerks(persists: persistent, defaults: defaults, key: JellyKeys.perks(c0))
-        jellies = [JellyProfile(id: 0, character: c0, name: JellyRoster.names[c0], needs: needs, grime: bath.grime, training: v.training, stats: stats0, perks: perks0)]
-            + chars.dropFirst().enumerated().map { JellyProfile(id: $0.offset + 1, character: $0.element, name: JellyRoster.names[$0.element], persists: persistent, defaults: defaults) }
+        jellies = [JellyProfile(id: 0, character: c0, name: JellyRoster.nameOf(c0), needs: needs, grime: bath.grime, training: v.training, stats: stats0, perks: perks0)]
+            + chars.dropFirst().enumerated().map { JellyProfile(id: $0.offset + 1, character: $0.element, name: JellyRoster.nameOf($0.element), persists: persistent, defaults: defaults) }
         if n > 1 { select.setBlobs(JellyRoster.selectBlobs(roster: chars)) }
         store.characterOf = { [weak self] slot in self?.jelly(slot)?.character ?? slot }       // outfits are saved by character
         bath.haptic = { [weak self] i, s in self?.touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: i, sharpness: s) }

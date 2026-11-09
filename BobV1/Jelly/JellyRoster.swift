@@ -74,7 +74,94 @@ nonisolated enum JellyRoster {
     /// bought in the Jelly Spring (not in the intro, the starter roster or any generator); a roster also gets him by `-SetRoster` / `-NewGame` / a save.
     static let pearlID = 5
     static let namesKey = "JellyNames.v1"
+
+    // MARK: instances (duplicates)
+    //
+    // An INSTANCE id names one Jelbie (the roster holds instance ids; every save key, name, stat and book is keyed by it). A SPECIES id (0...6) says what it
+    // looks like and sounds like. The first Jelbie of a species has instance id == species id (so every v1 save is already valid); a second Bob (or Pip...)
+    // gets a fresh id from the saved counter (>= firstInstanceID, never reused) whose species is recorded in `speciesKey` BEFORE the roster is saved.
+    // Picker previews use scratch ids previewBase + species so a preview never touches an owned Jelbie's keys.
+    static let firstInstanceID = 100
+    static let previewBase = 1000
+    static let speciesKey = "JellySpeciesOf.v1"
+    static let nextInstanceKey = "JellyNextInstance.v1"
+    static let extraNamesKey = "JellyNamesExtra.v1"
+    /// instance id (>= firstInstanceID) -> species id. Loaded lazily from the save, so it is ready before `current = launchIDs()` runs (sanitised reads it).
+    nonisolated(unsafe) static var speciesMap: [Int: Int] = loadSpeciesMap()
+    /// Names of instances >= firstInstanceID (ids 0...6 keep using the v1 `names` array).
+    nonisolated(unsafe) static var extraNames: [Int: String] = loadExtraNames()
+    static func loadSpeciesMap(_ d: UserDefaults = .standard) -> [Int: Int] {
+        var out: [Int: Int] = [:]
+        for (k, v) in (d.dictionary(forKey: speciesKey) ?? [:]) {
+            if let i = Int(k), let sp = v as? Int, i >= firstInstanceID, i < previewBase, (0..<knownCount).contains(sp) { out[i] = sp }
+        }
+        return out
+    }
+    static func loadExtraNames(_ d: UserDefaults = .standard) -> [Int: String] {
+        var out: [Int: String] = [:]
+        for (k, v) in (d.dictionary(forKey: extraNamesKey) ?? [:]) {
+            if let i = Int(k), i >= firstInstanceID, let n = v as? String { out[i] = n }
+        }
+        return out
+    }
+    /// Re-reads the species map and the extra names (after a wipe, or in tests).
+    static func reloadSpecies(_ d: UserDefaults = .standard) { speciesMap = loadSpeciesMap(d); extraNames = loadExtraNames(d) }
+    /// The scratch instance id the Adoption Center's preview stage uses for `species`.
+    static func previewID(_ species: Int) -> Int { previewBase + min(max(species, 0), knownCount - 1) }
+    /// The species (look, voice, feature) of instance `id`: identity below 100, the saved map from 100, a preview scratch id resolves to its species.
+    static func species(_ id: Int) -> Int {
+        if (0..<knownCount).contains(id) { return id }
+        if id >= previewBase { return min(id - previewBase, knownCount - 1) }
+        if let s = speciesMap[id] { return s }
+        return min(max(id, 0), knownCount - 1)
+    }
+    /// Whether `id` is a Jelbie that can exist: a species-id instance, a recorded duplicate, or a picker preview scratch id.
+    static func isValid(_ id: Int) -> Bool {
+        if (0..<knownCount).contains(id) { return true }
+        if id >= previewBase { return id < previewBase + knownCount }
+        return speciesMap[id] != nil
+    }
+    /// A new Jelbie of `species` joining `roster` (instance ids): the species id itself when nobody of that species is in the room, else a fresh instance id
+    /// from the saved counter (never reused), recorded in the species map and saved to `d` right away (before the caller saves the roster).
+    static func allocateInstance(species s: Int, roster: [Int], _ d: UserDefaults = .standard) -> Int {
+        let sp = min(max(s, 0), knownCount - 1)
+        if !roster.contains(where: { species($0) == sp }) { return sp }
+        var id = max(d.integer(forKey: nextInstanceKey), firstInstanceID)
+        while speciesMap[id] != nil || roster.contains(id) { id += 1 }
+        d.set(id + 1, forKey: nextInstanceKey)
+        speciesMap[id] = sp
+        var raw: [String: Int] = [:]
+        for (k, v) in speciesMap { raw[String(k)] = v }
+        d.set(raw, forKey: speciesKey)
+        return id
+    }
+    /// The name a new `species` gets given the names already at home: the base name, else "Teddy 2", "Teddy 3" ...
+    static func suggestedName(species s: Int, taken: [String]) -> String {
+        let base = baseNames[min(max(s, 0), knownCount - 1)]
+        let used = Set(taken.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        if !used.contains(base.lowercased()) { return base }
+        var n = 2
+        while used.contains("\(base) \(n)".lowercased()) { n += 1 }
+        return "\(base) \(n)"
+    }
+    /// A name chosen by the player, made different from the names already at home (case-insensitive): "Rex" taken -> "Rex 2".
+    static func uniqueName(_ raw: String, taken: [String]) -> String {
+        let t = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(12))
+        let used = Set(taken.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        if !used.contains(t.lowercased()) { return t }
+        var n = 2
+        while used.contains("\(t) \(n)".lowercased()) { n += 1 }
+        return "\(t) \(n)"
+    }
+    /// The name of Jelbie `id` (instance id): the v1 names array below 7, the extra names from 100, a preview scratch id its species' base name.
+    static func nameOf(_ id: Int) -> String {
+        if names.indices.contains(id) { return names[id] }
+        if let n = extraNames[id], !n.isEmpty { return n }
+        return baseNames[species(id)]
+    }
+
     /// Names by CHARACTER: the base name, or the one the player typed when adopting (saved under `namesKey`; Start/StartFlow.swift).
+    /// Only ids 0...6: anything that may hold an instance id >= 100 goes through `nameOf`.
     nonisolated(unsafe) static var names: [String] = loadNames()
     static func loadNames(_ d: UserDefaults = .standard) -> [String] {
         let saved = d.stringArray(forKey: namesKey) ?? []
@@ -86,6 +173,15 @@ nonisolated enum JellyRoster {
     }
     /// Gives character `id` a name (empty = back to the base name) and saves it.
     static func setName(_ id: Int, _ raw: String, _ d: UserDefaults = .standard) {
+        if id >= firstInstanceID && id < previewBase {
+            guard speciesMap[id] != nil else { return }
+            let t = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(14))
+            extraNames[id] = t.isEmpty ? nil : t
+            var out: [String: String] = [:]
+            for (k, v) in extraNames { out[String(k)] = v }
+            d.set(out, forKey: extraNamesKey)
+            return
+        }
         guard (0..<knownCount).contains(id) else { return }
         var saved = d.stringArray(forKey: namesKey) ?? []
         while saved.count < baseNames.count { saved.append("") }
@@ -100,7 +196,8 @@ nonisolated enum JellyRoster {
     static let forceSpeciesKey = "ForceSpecies"
 
     /// Colour -> feature: blue none, yellow spines, green daisy, lavender wings. (By CHARACTER id.)
-    static func feature(_ id: Int) -> JellyFeature {
+    static func feature(_ instance: Int) -> JellyFeature {
+        let id = species(instance)
         if WhiteWing.isForced(id) { return .wings }          // -ForceSpecies whitewing (look-only candidate, captures)
         switch id { case 1: return .spines; case 2: return .daisy; case 3, pearlID: return .wings; case teddyID, pandaID: return .ears; default: return .none }
     }
@@ -126,7 +223,7 @@ nonisolated enum JellyRoster {
     /// A saved / given list made valid: known characters, no repeats, 1...maxCount (empty -> the default roster).
     static func sanitised(_ ids: [Int]) -> [Int] {
         var out: [Int] = []
-        for c in ids where (0..<knownCount).contains(c) && !out.contains(c) { out.append(c) }
+        for c in ids where isValid(c) && !out.contains(c) { out.append(c) }
         return out.isEmpty ? defaultIDs : Array(out.prefix(maxCount))
     }
     /// The roster saved in `d` (the default roster when none was saved).
@@ -167,7 +264,13 @@ nonisolated enum JellyRoster {
     }
     /// The slot a character is in; nil when he is not in the room.
     @MainActor static func slot(ofCharacter c: Int) -> Int? { current.firstIndex(of: c) }
-    @MainActor static func name(slot: Int) -> String { names[character(slot)] }
+    /// The species (look / voice) of the Jelbie in `slot`.
+    @MainActor static func speciesOf(slot: Int) -> Int { species(character(slot)) }
+    /// The slots holding a Jelbie of `species` (a duplicate means more than one).
+    @MainActor static func slots(ofSpecies s: Int) -> [Int] { current.indices.filter { species(current[$0]) == s } }
+    @MainActor static func name(slot: Int) -> String { nameOf(character(slot)) }
+    /// The names of the Jelbies in the room right now, by slot (duplicates included).
+    @MainActor static var currentNames: [String] { current.map { nameOf($0) } }
     @MainActor static func feature(slot: Int) -> JellyFeature { feature(character(slot)) }
     @MainActor static func palette(slot: Int) -> Palette? { palette(character(slot)) }
     @MainActor static func tint(slot: Int) -> SIMD3<Float> { tint(character(slot)) }
@@ -184,10 +287,10 @@ nonisolated enum JellyRoster {
     }
 
     /// Body colours by CHARACTER: Bob is the model's palette (baby blue in the game; nil); Pip is the existing yellow; Moss a green and Lavender a pastel lavender made the same way.
-    static func palette(_ id: Int) -> Palette? {
-        if WhiteWing.hasLook(id) { return WhiteWing.palette }
-        if let v = JellyVariants.active(id) { return v.palette }          // an adopted / previewed Jelly Spring colour variant (species + feature unchanged)
-        switch id {
+    static func palette(_ instance: Int) -> Palette? {
+        if WhiteWing.hasLook(instance) { return WhiteWing.palette }
+        if let v = JellyVariants.active(instance) { return v.palette }    // an adopted / previewed Jelly Spring colour variant (belongs to the INSTANCE; species + feature unchanged)
+        switch species(instance) {
         case 1: return PaletteKey.yellow.palette
         case 2: return JellyPalettes.green
         case 3: return JellyPalettes.lavender
@@ -198,10 +301,10 @@ nonisolated enum JellyRoster {
     }
 
     /// sRGB 0...1 swatch for the roster card / selection preview (by CHARACTER).
-    static func tint(_ id: Int) -> SIMD3<Float> {
-        if WhiteWing.hasLook(id) { return WhiteWing.swatch }
-        if let v = JellyVariants.active(id) { return v.swatch }
-        switch id {
+    static func tint(_ instance: Int) -> SIMD3<Float> {
+        if WhiteWing.hasLook(instance) { return WhiteWing.swatch }
+        if let v = JellyVariants.active(instance) { return v.swatch }
+        switch species(instance) {
         case 1: return SIMD3(0.99, 0.90, 0.62)
         case 2: return SIMD3(0.70, 0.90, 0.66)
         case 3: return SIMD3(0.80, 0.72, 0.93)
@@ -213,7 +316,7 @@ nonisolated enum JellyRoster {
 
     /// Selection cards for a roster (slot ids, character names and tints).
     static func selectBlobs(roster: [Int]) -> [SelectBlob] {
-        sanitised(roster).enumerated().map { SelectBlob(id: $0.offset, name: names[$0.element], tint: tint($0.element)) }
+        sanitised(roster).enumerated().map { SelectBlob(id: $0.offset, name: nameOf($0.element), tint: tint($0.element)) }
     }
     /// The first `count` of the default roster.
     static func selectBlobs(count: Int) -> [SelectBlob] { selectBlobs(roster: Array(defaultIDs.prefix(min(max(count, 1), maxCount)))) }

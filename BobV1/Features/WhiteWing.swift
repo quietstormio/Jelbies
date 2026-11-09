@@ -63,5 +63,5 @@ nonisolated enum WhiteWing {
     }
     static func isForced(_ character: Int) -> Bool { forcedCharacter == character }
     /// The white look (palette, swatch, pearl wing tint) applies to the real character Pearl (id 5) and to any character `-ForceSpecies whitewing` forces.
-    static func hasLook(_ character: Int) -> Bool { character == JellyRoster.pearlID || isForced(character) }
+    static func hasLook(_ character: Int) -> Bool { let s = JellyRoster.species(character); return s == JellyRoster.pearlID || isForced(s) }
 }

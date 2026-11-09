@@ -790,7 +790,7 @@ struct GameScreen: View {
             if m.contains("reset") { care.show.progress.resetAll() }
             if m.contains("reset") {          // a fresh Circuit record (a capture build keeps its saves between launches)
                 care.race.progress.records = [:]; care.race.courseTier = .puddle
-                for k in 0..<JellyRoster.names.count { care.race.trophies.setShelf(JelbieTrophies(), character: k) }
+                for k in Set(Array(0..<JellyRoster.knownCount) + care.jellies.map(\.character)) { care.race.trophies.setShelf(JelbieTrophies(), character: k) }
             }
             if m.contains("dress") {          // the user's phone: Pip in a pink beanie and heart sunglasses, Moss bare (his daisy), Lavender in pearls (her wings)
                 let outfits: [String: [WearLook]] = ["pip": [.beaniePink, .heartShades], "moss": [], "lavender": [.pearls]]

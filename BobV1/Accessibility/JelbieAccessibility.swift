@@ -47,7 +47,8 @@ nonisolated enum JelbieA11yText {
     static func label(name: String, character: Int) -> String {
         "\(name), \(description(character: character))"
     }
-    static func description(character: Int) -> String {
+    static func description(character instance: Int) -> String {
+        let character = JellyRoster.species(instance)          // a duplicate (instance id >= 100) looks like his species
         if character == JellyRoster.pearlID { return "white with pearly little wings" }
         if character == JellyRoster.pandaID { return "white with black patches round the eyes, round black bear ears, black arms and feet and a puffy black tail" }
         switch JellyRoster.feature(character) {

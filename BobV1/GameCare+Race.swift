@@ -142,7 +142,7 @@ extension GameCare {
         race.begin(playerID: id, name: prof.name, player: RacerStats(waddle: prof.stats.waddle, focus: prof.stats.focus),
                    playerTint: JellyRoster.tint(prof.character), rivalCount: rivals, seed: seed ?? Self.raceSeed, boost: raceStartBoost(prof), course: race.courseTier)
         if race.active {           // the race Live Activity (one sprint: lap 1 of 1)
-            live?.raceStarted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(prof.character), racers: race.sim?.racers.count ?? rivals + 1, laps: 1, course: race.courseTier.title)
+            live?.raceStarted(jellyID: id, name: prof.name, color: JelbieRoster.colorName(JellyRoster.species(prof.character)), racers: race.sim?.racers.count ?? rivals + 1, laps: 1, course: race.courseTier.title)
         }
     }
 
