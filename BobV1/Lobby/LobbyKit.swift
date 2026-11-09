@@ -77,14 +77,13 @@ struct LobbyScreen<Left: View, Right: View, Bar: View>: View {
                 VStack(spacing: 0) {
                     header.padding(.top, 8).padding(.horizontal, 16)
                     ViewThatFits(in: .vertical) {
-                        // everything fits: the content and the bar sit together, centred in the space under the header (no empty band above the footer)
+                        // everything fits: the content sits right under the header with the bar just below it (no empty band above the content)
                         VStack(spacing: 0) {
-                            Spacer(minLength: 0)
                             VStack(alignment: .leading, spacing: 0) {
                                 left.frame(maxWidth: .infinity, minHeight: Self.placeHeight, alignment: .topLeading)
                                 right
                             }
-                            .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 20)
+                            .padding(.horizontal, 16).padding(.top, 18).padding(.bottom, 20)
                             VStack(spacing: 0) { whyLine; bar }.padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 6)
                             Spacer(minLength: 0)
                         }

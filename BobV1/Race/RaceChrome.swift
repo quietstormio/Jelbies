@@ -38,7 +38,7 @@ private struct RaceChromeLayout: View {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
-                    if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.frame(maxWidth: PadLayout.isPad ? 560 : .infinity).padding(.horizontal, 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
+                    if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if race.ui.phase != .results, !compact { footButtons }
                 }
@@ -46,7 +46,7 @@ private struct RaceChromeLayout: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 14)
                 .overlay(alignment: .bottom) {
-                    if compact, race.ui.phase != .results { sideButtons.padding(.horizontal, padLandscape ? 4 : 14).padding(.bottom, padLandscape ? 6 : 12) }
+                    if compact, race.ui.phase != .results { sideButtons.padding(.horizontal, padLandscape ? 26 : 14).padding(.bottom, padLandscape ? 28 : 12) }
                 }
                 .animation(CareMenu.spring, value: race.showsCard)
                 if race.showsCountdown { numeral(race.ui.countdown == 0 ? "" : "\(race.ui.countdown)") }
