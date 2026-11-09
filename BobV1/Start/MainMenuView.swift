@@ -23,7 +23,8 @@ struct MenuMetrics {
         let content = titleUnits + btnUnits
         let faceGap = h * 0.015, minGaps = h * 0.07
         let fitH = (top - faceGap - minGaps) / content
-        var raw = min(w / 440, fitH)
+        let pad = min(w, h) > 600          // iPad-sized window: scale from the short side so a wide window does not blow the art up
+        var raw = min(pad ? min(w, h) / 440 : w / 440, fitH)
         if aspect > 1 { raw = min(raw, 0.55 * w / 379, 0.40 * w / 300) }          // landscape: the logo and buttons stay a sensible share of the width
         let sc = max(raw, Self.minScale)
         if raw < Self.minScale { top = max(top, content * sc + minGaps + 14 * sc) }          // short screen: the face peeks less
@@ -32,7 +33,7 @@ struct MenuMetrics {
         s = sc
         titleTop = max(8, free * topShare)
         buttonsGap = max(4, free * (1 - topShare))
-        faceScale = max(1.0, min(4.8 * w / 440, (0.91 * h - top) / 51.5))
+        faceScale = max(1.0, min(4.8 * (pad ? min(w, h) : w) / 440, (0.91 * h - top) / 51.5))
         faceTop = top
         btnScale = sc; btnWidth = 300 * sc
         if aspect > 1.6 {          // a short, wide screen (iPhone landscape): decouple width from height so the stack spans the screen

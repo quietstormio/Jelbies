@@ -54,6 +54,7 @@ enum OpeningScript {
     var stageTask: Task<Void, Never>?
     var soundCaption: (text: String, at: Date)?
     var snapshot: [String: Any] = [:]
+    var viewSize: CGSize = .zero          // the story view's own size (window, not display)
 }
 
 struct OpeningStoryView: View {
@@ -90,6 +91,15 @@ struct OpeningStoryView: View {
         .ignoresSafeArea()
         .opacity(st.leaving ? 0 : 1)
         .animation(.easeOut(duration: 0.4), value: st.leaving)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { new in
+            let changed = st.viewSize != .zero && st.viewSize != new
+            st.viewSize = new
+            if changed {
+                // window resized / rotated mid-story: re-frame the current beat at once
+                let t = target(st.beat, size: new)
+                st.camFrom = t; st.camTo = t; st.camT0 = Date()
+            }
+        }
         .task { begin() }
         .onDisappear { teardown() }
         .accessibilityElement(children: .contain)
@@ -394,10 +404,12 @@ struct OpeningStoryView: View {
 
     // MARK: flow
 
+    private var storySize: CGSize { st.viewSize == .zero ? (UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.coordinateSpace.bounds.size ?? .zero) : st.viewSize }
+
     private func begin() {
         if replay { st.snapshot = Self.saveSnapshot(); AudioHub.shared.earsDancing(true) }
         st.storyStart = Date()
-        let size = UIScreen.main.bounds.size
+        let size = storySize
         let first = holdBeat ?? 0
         Task { @MainActor in for _ in 0..<6 { LaunchGate.shared.stageTicked(); try? await Task.sleep(nanoseconds: 800_000_000) } }          // a cold launch straight into the story: let the curtain go
         st.camFrom = first == 0 ? OpeningCam() : target(first - 1, size: size)
@@ -409,7 +421,7 @@ struct OpeningStoryView: View {
         st.beatTask?.cancel()
         st.token += 1
         let now = Date()
-        let size = UIScreen.main.bounds.size
+        let size = storySize
         st.camFrom = initial && b == 0 ? OpeningCam() : camera(at: now)
         st.camTo = target(b, size: size)
         st.camT0 = now
