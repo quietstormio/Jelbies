@@ -384,9 +384,16 @@ struct StudioScreen: View {
     private var padLandscape: some View {
         VStack(spacing: 0) {
             lobbyHeader.padding(.top, 8).padding(.horizontal, 24)
-            HStack(alignment: .top, spacing: 28) {
-                ScrollView { leftColumn.frame(maxWidth: .infinity, alignment: .leading) }.scrollBounceBehavior(.basedOnSize)
-                ScrollView { rightColumn.frame(maxWidth: .infinity, alignment: .leading) }.scrollBounceBehavior(.basedOnSize)
+            // when both columns fit they take their natural height (so the Enter bar sits right under them); only if they do not fit do they scroll
+            ViewThatFits(in: .vertical) {
+                HStack(alignment: .top, spacing: 28) {
+                    leftColumn.frame(maxWidth: .infinity, alignment: .leading)
+                    rightColumn.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(alignment: .top, spacing: 28) {
+                    ScrollView { leftColumn.frame(maxWidth: .infinity, alignment: .leading) }.scrollBounceBehavior(.basedOnSize)
+                    ScrollView { rightColumn.frame(maxWidth: .infinity, alignment: .leading) }.scrollBounceBehavior(.basedOnSize)
+                }
             }
             .padding(.horizontal, 24).padding(.top, 6)
             VStack(spacing: 0) {
@@ -395,6 +402,7 @@ struct StudioScreen: View {
                 enterBar
             }
             .frame(maxWidth: 520).padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 14)
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: 1180).frame(maxWidth: .infinity)
         .background(LobbyTheme.studio.background.ignoresSafeArea())

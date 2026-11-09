@@ -329,7 +329,7 @@ struct CheerMeter: View {
     var color: Color
     var label: String
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: PadLayout.isPad ? 7 : 2) {
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(ShowUI.bar)
@@ -399,6 +399,22 @@ struct TrickRound: View {
                             VStack(alignment: .leading) { StagePill(text: hint); Spacer(minLength: 0) }
                             VStack(spacing: 8) { turns; if rivalsOn { rivalPanel } else { meters; burst; menu } }.frame(width: min(size.width * 0.52, 520))
                         }
+                    } else if PadLayout.isPad && size.width > size.height {
+                        // iPad landscape: the stage fills the left ~55% (the camera frame puts the Jelbies there); chips, hint and the menu / rival card are a clear right column
+                        HStack(alignment: .top, spacing: 24) {
+                            Color.clear.frame(width: size.width * 0.55 - 16)
+                            VStack(spacing: 10) {
+                                turns
+                                StagePill(text: hint, scale: sc)
+                                Spacer(minLength: 0)
+                                if rivalsOn { rivalPanel } else {
+                                    meters
+                                    burst
+                                    menuBox(rowCap: 4)
+                                }
+                            }
+                            .frame(maxWidth: 560)
+                        }
                     } else {
                         turns.padReadable(760)
                         HStack { Spacer(); StagePill(text: hint, scale: sc); Spacer() }
@@ -413,7 +429,7 @@ struct TrickRound: View {
                         .padReadable(760)
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
+                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, PadLayout.isPad ? 24 + g.safeAreaInsets.bottom : 14)
             }
         }
     }
@@ -500,7 +516,9 @@ struct TrickRound: View {
                 let now = ((s?.turns.count ?? 0) == k && !(s?.tricksDone ?? false)) || rivalsNow
                 HStack(spacing: 6) {
                     Text(t.map { "\(k + 1) \($0.trick.title)" } ?? "Turn \(k + 1)").font(SK.font(11 * sc, .black)).opacity(0.8)
+                        .lineLimit(PadLayout.isPad ? 1 : nil).minimumScaleFactor(PadLayout.isPad ? 0.6 : 1)
                     Text(rivalsNow ? "Rivals" : (t.map { "+\($0.points)" } ?? (now ? "Your go" : "\u{2014}"))).font(SK.font(15 * sc, .black))
+                        .lineLimit(PadLayout.isPad ? 1 : nil).minimumScaleFactor(PadLayout.isPad ? 0.6 : 1)
                 }
                 .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 44 * sc)
                 .background(Capsule().fill(now ? ShowUI.gold : SK.cream.opacity(0.95)))
@@ -559,7 +577,9 @@ struct TrickRound: View {
     }
 
     /// The trick menu, like a restaurant: one row per trick this Jelbie knows (icon, name, stars, points, theme tag). Tap a row and he performs it.
-    private var menu: some View {
+    private var menu: some View { menuBox(rowCap: nil) }
+    /// `rowCap` (iPad landscape's right column): show at most this many rows before it scrolls; nil = the usual.
+    private func menuBox(rowCap: Int?) -> some View {
         let s = show.sim
         let known = s?.knownTricks ?? []
         let live = show.trickStage == .pick && !(s?.tricksDone ?? true)
@@ -573,7 +593,7 @@ struct TrickRound: View {
                 VStack(spacing: 6) { ForEach(known, id: \.rawValue) { t in row(t, live: live) } }.padding(.vertical, 2)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: Self.menuHeight(rows: known.count, compact: compact, scale: sc))
+            .frame(maxHeight: Self.menuHeight(rows: rowCap.map { min(known.count, $0) } ?? known.count, compact: compact, scale: sc))
         }
         .accessibilityIdentifier("trick-cards")
     }
