@@ -67,9 +67,12 @@ struct PickerBackdrop: View {
 struct PickerPedestal: View {
     let look: SpeciesLook
     static let width: CGFloat = 308, topH: CGFloat = 86, thick: CGFloat = 35
+    /// The pick page stands three Jelbies on one wide pedestal (`width` 392): the top ellipse grows in height with the width, the rim stays as thick.
+    var width: CGFloat = PickerPedestal.width
+    var topH: CGFloat { Self.topH * width / Self.width }
 
     var body: some View {
-        let w = Self.width, th = Self.topH, k = Self.thick
+        let w = width, th = topH, k = Self.thick
         ZStack(alignment: .topLeading) {
             PedestalSide(topH: th, thick: k)
                 .fill(LinearGradient(colors: [look.rimTop, look.rimBottom], startPoint: .top, endPoint: .bottom))

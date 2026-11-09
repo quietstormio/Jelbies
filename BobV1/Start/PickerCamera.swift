@@ -18,6 +18,23 @@ final class PickerCamera {
         #endif
         switch character { case 1: return 1.2; case 3: return 0.7; default: return 0.5 }
     }
+    /// The pick page's row of three: a little wider than the single view so the outer bodies keep a margin, and a small fixed yaw (a big one would stack the row in depth
+    /// and overlap wings and tails). Orbit and pinch are off there. Simulator flags `-PickerRowZoom` / `-PickerRowYaw` try other values.
+    static let rowZoom: Float = 0.97
+    static func rowYaw(_ species: Int) -> Float {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "PickerRowYaw") != nil { return UserDefaults.standard.float(forKey: "PickerRowYaw") }
+        #endif
+        return species == 1 ? 0.30 : 0.15
+    }
+    static var rowZoomNow: Float {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.object(forKey: "PickerRowZoom") != nil { return UserDefaults.standard.float(forKey: "PickerRowZoom") }
+        #endif
+        return rowZoom
+    }
+    /// The row page: the group close-up at its fixed view.
+    func setRow(species: Int) { coasting?.cancel(); vYaw = 0; PhotoCam.reset(); PhotoCam.zoom = Self.rowZoomNow; PhotoCam.yaw = Self.rowYaw(species); PhotoCam.active = true }
     private var yaw0: Float = 0.5
     /// Page changed: the new species' resting view (zoom and tilt reset).
     func setSpecies(_ c: Int) { coasting?.cancel(); vYaw = 0; yaw0 = Self.startYaw(c); PhotoCam.reset(); PhotoCam.zoom = Self.startZoom; PhotoCam.yaw = yaw0 }

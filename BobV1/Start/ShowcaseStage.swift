@@ -26,6 +26,8 @@ struct ShowcaseStage: View {
 
     /// Seconds after `.live` by which `onReady` fires even if the arrival never registers.
     static let readyDeadline: TimeInterval = 2.5
+    /// The same for a group (three bodies on a row build and line up a little slower).
+    static let readyDeadlineGroup: TimeInterval = 3.5
 
     var body: some View {
         ZStack {
@@ -61,12 +63,19 @@ struct ShowcaseStage: View {
     private func startReady(_ m: MelonModel) {
         readyTask = Task { @MainActor in
             for _ in 0..<80 where m.status != .live && !Task.isCancelled { try? await Task.sleep(nanoseconds: 100_000_000) }          // (a stage that never goes live still gets its ready after the deadline)
-            let deadline = Date().addingTimeInterval(Self.readyDeadline)
-            while !Task.isCancelled, Date() < deadline, m.care.brainFor(0) == nil { try? await Task.sleep(nanoseconds: 50_000_000) }          // the first fixed step has run
+            let group = roster.count > 1          // the pick page: three bodies born on a row
+            let all = Array(0..<max(roster.count, 1))
+            let deadline = Date().addingTimeInterval(group ? Self.readyDeadlineGroup : Self.readyDeadline)
+            while !Task.isCancelled, Date() < deadline, !all.allSatisfy({ m.care.brainFor($0) != nil }) { try? await Task.sleep(nanoseconds: 50_000_000) }          // the first fixed step has run (for everybody)
             guard !Task.isCancelled else { return }
-            m.care.comeHere(jelly: 0)          // already standing on the spot: it registers as arrived within ~0.3 s and the camera is simply in close-up (`BlobFocus.arrive(snap:)`)
-            while !Task.isCancelled, Date() < deadline, !m.care.focusGroup.arrived.contains(0) { try? await Task.sleep(nanoseconds: 50_000_000) }
+            if group { m.care.comeHere(jellies: all) }          // born on the row's slots: they register as arrived within ~0.3 s and the close-up snaps (`focus.arrive(snap:)`)
+            else { m.care.comeHere(jelly: 0) }          // already standing on the spot: it registers as arrived within ~0.3 s and the camera is simply in close-up (`BlobFocus.arrive(snap:)`)
+            while !Task.isCancelled, Date() < deadline, !(group ? m.care.focusGroup.arrived.count == roster.count : m.care.focusGroup.arrived.contains(0)) { try? await Task.sleep(nanoseconds: 50_000_000) }
             if m.care.focusGroup.arrived.contains(0) { try? await Task.sleep(nanoseconds: 250_000_000) }          // (the drop from his birth height has settled)
+            if group, !Task.isCancelled {          // never show the wide room: at the deadline the row is accepted where it stands and the camera snapped in
+                if m.care.focus.phase == .approaching { for id in all { _ = m.care.focusGroup.markArrived(id) }; m.care.focus.arrive(snap: true) }
+                for _ in 0..<20 where m.care.focus.blend < 0.97 && !Task.isCancelled { try? await Task.sleep(nanoseconds: 50_000_000) }
+            }
             guard !Task.isCancelled, !readyFired else { return }
             readyFired = true
             onReady?(m)

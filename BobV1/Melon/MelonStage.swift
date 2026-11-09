@@ -745,9 +745,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard let brain = a.brain, brain.enabled else { return }
         if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
         brain.amplitude = reduce ? 0.55 : 1
-        brain.idleNight = DayClock.shared.nightFactor; brain.idleMorning = DayClock.shared.morningFactor; brain.idleDeepNight = DayClock.shared.deepNightFactor
+        let pv = model.preview          // a showcase Jelbie: noon, never sleepy, never in bed (like bobTick)
+        brain.idleNight = pv ? 0 : DayClock.shared.nightFactor; brain.idleMorning = pv ? 0 : DayClock.shared.morningFactor; brain.idleDeepNight = pv ? 0 : DayClock.shared.deepNightFactor
         let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(a.id)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
-        brain.sleepEnabled = roomLife; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
+        brain.sleepEnabled = roomLife && !pv; brain.anticsEnabled = roomLife && !pv; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
         if let o = Self.idleMoodOverride { brain.idleMood = o }
         var ht = CACurrentMediaTime()
         brain.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: touchHolds(a.id))
@@ -831,7 +832,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if model.gameMode, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil { GameCamera.configureRoom(count: count) }          // 2-3 Jellies: the wider roaming camera and floor (one Jelly: the exact old pose; skipped in the test host, whose suites assume the base pose)
         let preview = model.gameMode && model.preview
         var spots = JellyRoster.spawnSpots(count: count)
-        if preview { spots = [FreeFloor.nearest(to: GameCamera.callSpot)] }          // a showcase Jelbie is born on the close-up spot (no walk to it: `ShowcaseStage` is ready within a second)
+        if preview { spots = GameCamera.previewRowSpots(count: count) }          // a showcase Jelbie is born on the close-up spot (no walk to it: `ShowcaseStage` is ready within a second); a group (the pick page) is born on its row
         simMesh = sm
         renderMesh = rm
         ContactField.configure(eggLimit: rm.armCapsule?.firstVertex.min() ?? rm.vertexCount, tail: rm.armCapsule.flatMap { $0.tailFirst >= 0 ? $0.tailFirst..<($0.tailFirst + TailBean.vertexCount) : nil }, index: rm.index)          // the contact profile samples the egg more sparsely than the limb blocks

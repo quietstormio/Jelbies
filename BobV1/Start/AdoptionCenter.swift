@@ -6,7 +6,9 @@
 //  The layout follows the design boards (440 x 956 pt): everything is placed in that space and scaled to the screen. Landscape: the stage on the
 //  left, the header + card + button on the right (the same blocks, scaled).
 //  Content: SpeciesInfo.swift. Backdrop / pedestal: PickerBackdrop.swift. Camera orbit: PickerCamera.swift.
-//  Simulator-only capture flags: -PickerPage 0...3 (picker order), -PickerTab 0...2, -PickerMode more.
+//  Species page -> "Meet the three" -> PICK page (three Jelbies of the species side by side, each with its own personality, stats, favourite snack and a slight colour
+//  shade: JellyTraits.swift) -> naming -> bring home. The same flow serves the free first gift and the Jelly Spring.
+//  Simulator-only capture flags: -PickerPage 0...3 (picker order), -PickerTab 0...2, -PickerMode more, -PickerStep species|pick|name, -PickerCandidate 0...2.
 //
 
 import SwiftUI
@@ -17,15 +19,52 @@ enum PickerTab: Int, CaseIterable {
     var title: String { ["About", "Traits", "Moves"][rawValue] }
 }
 
+/// What the player chose: StartFlow.bringHome gives him his instance id.
+struct AdoptionResult {
+    let species: Int
+    let name: String
+    /// The colour shade he was shown (nil = the classic colour).
+    let variant: JellyVariant?
+    /// His personality, jars and favourite snack.
+    let traits: JellyTraits?
+}
+
+extension JellyPersonality {
+    /// The gentle in-place move or face the pick page shows while the player looks.
+    var emote: StageMove {
+        switch self {
+        case .bouncy: return .idle(.bounce)
+        case .cuddly: return .idle(.sway)
+        case .curious: return .idle(.look)
+        case .sleepy: return .idle(.stretch)
+        case .giggly, .brave: return .face(.excited)
+        case .gentle: return .face(.hopeful)
+        case .cheeky: return .idle(.tail)
+        }
+    }
+}
+
 struct AdoptionCenter: View {
     let mode: StartFlow.AdoptMode
-    /// (species, name, the colour variant taken with him): StartFlow.bringHome gives him his instance id.
-    var done: (Int, String, JellyVariant?) -> Void
+    var done: (AdoptionResult) -> Void
     var cancel: () -> Void
 
+    enum Step { case species, pick, naming }
+    @State private var step: Step
+    private var naming: Bool { step == .naming }
+    /// The three Jelbies of the shown species (pure function of species, `dayKey`, mode and how many are home): made when the pick page opens.
+    @State private var candidates: [JellyCandidate]
+    /// The picked candidate (left to right 0...2); the pick page opens on the middle one.
+    @State private var picked: Int?
+    /// Captured when the screen opens, so midnight cannot reshuffle the three.
+    private let dayKey: Int
+    /// A pick (or nothing yet) has been tapped: the chips stop breathing.
+    @State private var tapped = false
+    @State private var breathe = false
+    /// Bumped once the camera preset is set, so the projected tap targets are read again.
+    @State private var camEpoch = 0
     @State private var page: Int
     @State private var tab: PickerTab = .about
-    @State private var naming = false
     @State private var name = ""
     @State private var celebrating = false
     @State private var wallet = DropsWallet()
@@ -59,8 +98,10 @@ struct AdoptionCenter: View {
     @Environment(\.dynamicTypeSize) private var dts
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
 
-    init(mode: StartFlow.AdoptMode, done: @escaping (Int, String, JellyVariant?) -> Void, cancel: @escaping () -> Void) {
+    init(mode: StartFlow.AdoptMode, done: @escaping (AdoptionResult) -> Void, cancel: @escaping () -> Void) {
         self.mode = mode; self.done = done; self.cancel = cancel
+        let day = JellyVariantBook.dayKey()
+        dayKey = day
         let h = mode == .first ? [] : JellyRoster.savedIDs()
         _home = State(initialValue: h)
         _coverUp = State(initialValue: mode == .more)
@@ -72,8 +113,38 @@ struct AdoptionCenter: View {
         if d.object(forKey: "PickerPage") != nil { start = min(max(d.integer(forKey: "PickerPage"), 0), 3) }
         if d.object(forKey: "PickerTab") != nil { t = PickerTab(rawValue: min(max(d.integer(forKey: "PickerTab"), 0), 2)) ?? .about }
         #endif
+        var step0 = Step.species
+        var pick0: Int?
+        #if targetEnvironment(simulator)
+        if let s = d.string(forKey: "PickerStep") { step0 = s == "pick" ? .pick : s == "name" ? .naming : .species }
+        if d.object(forKey: "PickerCandidate") != nil { pick0 = min(max(d.integer(forKey: "PickerCandidate"), 0), 2) }
+        #endif
         _page = State(initialValue: start); _tab = State(initialValue: t)
-        Self.previewOffer(mode: mode, character: SpeciesInfo.pages(includingSpecial: mode == .more)[start])
+        let species = SpeciesInfo.pages(includingSpecial: mode == .more)[start]
+        let cands = step0 == .species ? [] : Self.makeCandidates(mode: mode, species: species, dayKey: day, home: h)
+        _step = State(initialValue: step0)
+        _candidates = State(initialValue: cands)
+        _picked = State(initialValue: step0 == .species ? nil : (pick0 ?? 1))
+        switch step0 {
+        case .species: Self.setSinglePreview(species: species, variant: nil)
+        case .pick: Self.setRowPreviews(cands)
+        case .naming: Self.setSinglePreview(species: species, variant: cands[pick0 ?? 1].variant)
+        }
+    }
+
+    /// The three Jelbies of `species` for this screen: classic colours for the free first gift and the special species.
+    static func makeCandidates(mode: StartFlow.AdoptMode, species: Int, dayKey: Int, home: [Int]) -> [JellyCandidate] {
+        let owned = home.filter { JellyRoster.species($0) == species }.count
+        return JellyCandidates.make(species: species, dayKey: dayKey, classic: mode == .first || SpeciesInfo.of(species).isSpecial, owned: owned)
+    }
+    /// The scratch ids the stage draws are recoloured before the stage body is built (read when its actors are made): a preview never recolours an owned Jelbie.
+    static func setRowPreviews(_ c: [JellyCandidate]) {
+        JellyVariants.clearPreviews()
+        for x in c { JellyVariants.setPreview(x.previewID, x.variant) }
+    }
+    static func setSinglePreview(species: Int, variant: JellyVariant?) {
+        JellyVariants.clearPreviews()
+        JellyVariants.setPreview(JellyRoster.previewID(species), variant)
     }
 
     private var reduce: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
@@ -82,18 +153,14 @@ struct AdoptionCenter: View {
     private var info: SpeciesInfo { SpeciesInfo.of(order[page]) }
     private var look: SpeciesLook { info.look }
     private var pick: Int { info.character }
-    /// Today's Jelly Spring colour variant of the shown species (nil = classic; the free first gift is always classic).
-    private var variant: JellyVariant? { Self.offer(mode: mode, character: pick) }
-    static func offer(mode: StartFlow.AdoptMode, character: Int) -> JellyVariant? {
-        mode == .first ? nil : JellyVariantBook.offer(species: character, dayKey: JellyVariantBook.dayKey())          // every species, the ones you already have included
-    }
-    /// Makes the stage draw `character` in today's variant (read when the stage body is built).
-    static func previewOffer(mode: StartFlow.AdoptMode, character: Int) {
-        JellyVariants.setPreview(JellyRoster.previewID(character), offer(mode: mode, character: character))          // the scratch id: a preview never recolours an owned Jelbie
-    }
-    private var price: Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, rare: variant?.rare == true, special: info.isSpecial) }
+    /// The picked candidate of the pick / naming step.
+    private var pickedCand: JellyCandidate? { picked.flatMap { candidates.indices.contains($0) ? candidates[$0] : nil } }
+    /// What this candidate costs (nil = the room is full): the rare colour (today's colour on a lucky day) is the only one that costs more.
+    private func price(for c: JellyCandidate) -> Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, rare: c.variant?.rare == true, special: info.isSpecial) }
+    private var price: Int? { pickedCand.flatMap { price(for: $0) } }
     /// Affordable and room for one more (the price is nil when the room is full). Owning the species already is fine: duplicates are allowed.
-    private var canAdopt: Bool { price.map { $0 <= wallet.count } ?? false }
+    private func canAdopt(_ c: JellyCandidate) -> Bool { price(for: c).map { $0 <= wallet.count } ?? false }
+    private var canAdopt: Bool { pickedCand.map { canAdopt($0) } ?? false }
     /// The name he is given when the field is left empty: the species name, or "Teddy 2" when a Teddy is already home.
     private var suggested: String { JellyRoster.suggestedName(species: pick, taken: home.map(JellyRoster.nameOf)) }
 
@@ -125,10 +192,15 @@ struct AdoptionCenter: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in withAnimation(.easeOut(duration: 0.2)) { kbUp = false } }
         .task { await runCover() }
-        .onAppear { camera.reduceMotion = reduce; camera.setSpecies(pick); camera.engage() }
+        .onAppear {
+            camera.reduceMotion = reduce
+            if step == .pick { camera.setRow(species: pick) } else { camera.setSpecies(pick); camera.engage() }
+            camEpoch += 1
+            if !reduce { withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true } }
+        }
         .onDisappear {
             camera.release(); emoteTask?.cancel(); JellyVariants.clearPreviews()
-            for s in 0..<JellyRoster.knownCount { StartFlow.resetCharacterState(JellyRoster.previewID(s)) }          // scratch preview ids never keep anything
+            for s in 0..<JellyRoster.knownCount { for k in 0..<JellyRoster.previewSlots { StartFlow.resetCharacterState(JellyRoster.previewID(species: s, slot: k)) } }          // scratch preview ids never keep anything
         }
         .accessibilityIdentifier("adoption-center")
     }
@@ -275,17 +347,16 @@ struct AdoptionCenter: View {
             ScrollView {
                 VStack(spacing: 16) {
                     HStack {
-                        roundButton(naming || mode == .first ? "chevron.left" : "xmark", label: naming ? "Back" : (mode == .first ? "Back to the menu" : "Close"), id: "adopt-back") {
-                            if naming { withAnimation(.easeOut(duration: 0.2)) { naming = false } } else { cancel() }
-                        }
+                        roundButton(backSymbol, label: backLabel, id: "adopt-back") { goBack() }
                         Spacer(minLength: 8)
                         if mode == .more { dropsPill }
                     }
                     if !naming { flowHeader }
-                    stageBlock(1).frame(width: 440, height: 470, alignment: .topLeading)
+                    stageBlock(1, chips: false).frame(width: 440, height: 470, alignment: .topLeading)
                         .scaleEffect(ss, anchor: .topLeading).frame(width: 440 * ss, height: 470 * ss, alignment: .topLeading)
                         .frame(height: naming && kbUp ? 0 : 470 * ss).clipped().opacity(naming && kbUp ? 0 : 1)
-                    if !naming {
+                    if step == .pick { candidateRow }
+                    if step == .species {
                         HStack {
                             roundButton("chevron.left", label: "Previous Jelbie") { step(-1) }
                             Spacer()
@@ -316,14 +387,7 @@ struct AdoptionCenter: View {
         VStack(spacing: 6) {
             Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(SK.ink.opacity(0.78))
             Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).minimumScaleFactor(0.5)
-            Text(info.epithet + (variant.map { " · \($0.title)" } ?? "")).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85))
-            if variant?.rare == true {
-                Text("Rare").font(SK.font(12.5, .black)).foregroundStyle(SK.ink)
-                    .padding(.horizontal, 10).padding(.vertical, 3)
-                    .background(Capsule().fill(Color(hex: 0xFFD65C)))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
-                    .accessibilityIdentifier("adopt-rare-tag")
-            }
+            Text(epithetLine).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85))
             if mode == .more { roomLine }
             HStack(spacing: 4) {
                 ForEach(0..<order.count, id: \.self) { i in
@@ -331,6 +395,7 @@ struct AdoptionCenter: View {
                         .padding(3).background(Circle().fill(Color.white))
                 }
             }
+            .opacity(step == .species ? 1 : 0)
             .accessibilityHidden(true)
         }
         .multilineTextAlignment(.center).frame(maxWidth: .infinity)
@@ -346,8 +411,10 @@ struct AdoptionCenter: View {
     private var flowCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             if naming {
-                Text("What will you call your \(info.name)?").font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                Text(namingPrompt).font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center).frame(maxWidth: .infinity)
                 nameField(1)
+            } else if step == .pick {
+                flowPick
             } else {
                 flowTabs
                 switch tab {
@@ -446,7 +513,7 @@ struct AdoptionCenter: View {
     private var flowCTA: some View {
         Group {
             if naming { flowCtaButton(Text("Bring \(finalName) home"), enabled: true, id: "adopt-bring-home") { bringHome() } }
-            else { flowCtaButton(ctaLabel, enabled: canAdopt, id: "adopt-pick") { withAnimation(.easeOut(duration: 0.2)) { name = ""; naming = true }; nameFocused = true } }
+            else { flowCtaButton(ctaLabel, enabled: ctaEnabled, id: ctaID) { ctaAction() } }
         }
     }
 
@@ -468,9 +535,7 @@ struct AdoptionCenter: View {
     /// Back / close at the top left; the Drops pill at the top right when adopting more.
     private func topBar(pill: Bool = true, u: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
-            roundButton(naming || mode == .first ? "chevron.left" : "xmark", label: naming ? "Back" : (mode == .first ? "Back to the menu" : "Close"), id: "adopt-back", u: u) {
-                if naming { withAnimation(.easeOut(duration: 0.2)) { naming = false } } else { cancel() }
-            }
+            roundButton(backSymbol, label: backLabel, id: "adopt-back", u: u) { goBack() }
             .offset(x: 20, y: 66)
             if mode == .more && pill { dropsPillCompact.position(x: 440 - 14 - Self.compactPillW / 2, y: 88) }
         }
@@ -528,15 +593,7 @@ struct AdoptionCenter: View {
             // Only the name, epithet and Rare tag slide and fade with a swipe; the overline, dots and room line stay put.
             ZStack(alignment: .topLeading) {
                 Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).frame(width: 330, height: 60).position(x: 220, y: 61)
-                Text(info.epithet + (variant.map { " · \($0.title)" } ?? "")).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
-                if variant?.rare == true {
-                    // Right of the name (the coin pill occupies the overline row's right end).
-                    Text("Rare").font(SK.font(12.5, .black)).foregroundStyle(SK.ink)
-                        .padding(.horizontal, 10).frame(height: 22)
-                        .background(Capsule().fill(Color(hex: 0xFFD65C)))
-                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
-                        .position(x: 396, y: 52).accessibilityIdentifier("adopt-rare-tag")
-                }
+                Text(epithetLine).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
             }
             .frame(width: 440, height: 150, alignment: .topLeading)
             .offset(x: slideX * 0.4).opacity(slideO)
@@ -557,6 +614,7 @@ struct AdoptionCenter: View {
                 }
             }
             .position(x: 221, y: 134)
+            .opacity(step == .species ? 1 : 0).allowsHitTesting(step == .species)
             .accessibilityHidden(true)
         }
         .frame(width: 440, height: 150, alignment: .topLeading)
@@ -583,40 +641,162 @@ struct AdoptionCenter: View {
         .accessibilityHidden(true)
     }
 
-    private var headerLabel: String { "\(mode == .more ? "The Jelly Spring. \(roomText). Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")Jelbie \(page + 1) of \(order.count)" }
+    /// The line under the big name: the species' epithet, or the pick page's question.
+    private var epithetLine: String { step == .pick ? "Which one will it be?" : info.epithet }
+    private var headerLabel: String {
+        let lead = mode == .more ? "The Jelly Spring. \(roomText). Every adoption helps the Spring care for the Jelbies still waiting. " : ""
+        return step == .species ? "\(lead)\(info.name), \(info.epithet). Jelbie \(page + 1) of \(order.count)" : "\(lead)Pick one of three \(info.name)"
+    }
+    private var namingPrompt: String { "What will you call your \(pickedCand.map { $0.traits.personality.title + " " } ?? "")\(info.name)?" }
 
     // MARK: stage (design box 440 x 470, origin at canvas y 130)
 
-    /// The pedestal, the Jelbie standing on it (transparent 3D, no room), the arrows and the "Drag to spin" pill.
-    /// The soft placeholder shows while the page's Jelbie builds (never under the loading cover, never while naming).
-    private var showPlaceholder: Bool { !ready && !naming && !coverUp }
+    /// The soft placeholder shows while the page's Jelbie(s) build (never under the loading cover).
+    private var showPlaceholder: Bool { !ready && !coverUp }
 
-    private func stageBlock(_ u: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            PickerPedestal(look: look).offset(x: 66, y: 482 - 130 - PickerPedestal.topH / 2).offset(x: slideX * 0.15).opacity(slideO)
+    /// The scratch ids the stage draws: the single page and the naming step stand ONE Jelbie; the pick page stands the three side by side (stage slot 0 in the middle).
+    private var stageRoster: [Int] {
+        step == .pick ? (0..<JellyRoster.previewSlots).map { JellyRoster.previewID(species: pick, slot: $0) } : [JellyRoster.previewID(pick)]
+    }
+    private var ownedOfPick: Int { home.filter { JellyRoster.species($0) == pick }.count }
+    private var stageID: String {
+        switch step {
+        case .species: return "single-\(pick)"
+        case .pick: return "row-\(pick)-\(ownedOfPick)"
+        case .naming: return "name-\(pick)-\(picked ?? 0)"
+        }
+    }
+
+    /// Where the three bodies appear on the 420 x 420 stage view (by stage slot), from the same row and camera the stage draws.
+    private var rowProjection: [GameCamera.RowProjection] {
+        _ = camEpoch
+        return GameCamera.projectRow(spots: GameCamera.previewRowSpots(count: JellyRoster.previewSlots))
+    }
+    /// Stage view (0...1) -> stage block design units: the view is 420 x 420 at (10, 46).
+    private func dx(_ x: Float) -> CGFloat { 10 + 420 * CGFloat(x) }
+    private func dy(_ y: Float) -> CGFloat { 46 + 420 * CGFloat(y) }
+
+    /// The pedestal (one wide one under the row), the Jelbie(s) standing on it (transparent 3D, no room), the arrows and the "Drag to spin" pill, or on the pick page the
+    /// tap bands with their name chips.
+    private func stageBlock(_ u: CGFloat, chips: Bool = true) -> some View {
+        let row = step == .pick
+        let proj = rowProjection
+        return ZStack(alignment: .topLeading) {
+            if row {
+                rowBackdrop(proj)
+            } else {
+                PickerPedestal(look: look).offset(x: 66, y: 482 - 130 - PickerPedestal.topH / 2).offset(x: slideX * 0.15).opacity(slideO)
+            }
             Group {
                 if showPlaceholder {
-                    StagePlaceholder(color: look.dot, calm: reduce)
-                        .frame(width: 120, height: 128).offset(x: 160, y: 350 - 128)       // stands on the pedestal's top (centre at local y 352)
-                        .offset(x: slideX * 0.15).opacity(slideO)
+                    if row {
+                        ForEach(0..<3, id: \.self) { slot in
+                            let p = proj[slot]
+                            StagePlaceholder(color: look.dot, calm: reduce)
+                                .frame(width: 120, height: 128).scaleEffect(max(0.5, CGFloat(p.bodyW) * 420 / 140), anchor: .bottom)
+                                .offset(x: dx(p.foot.x) - 60, y: dy(p.foot.y) - 128 + 2)
+                        }
                         .transition(.opacity)
                         .allowsHitTesting(false).accessibilityHidden(true)
+                    } else {
+                        StagePlaceholder(color: look.dot, calm: reduce)
+                            .frame(width: 120, height: 128).offset(x: 160, y: 350 - 128)       // stands on the pedestal's top (centre at local y 352)
+                            .offset(x: slideX * 0.15).opacity(slideO)
+                            .transition(.opacity)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: showPlaceholder)
-            ShowcaseStage(roster: [JellyRoster.previewID(pick)], focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen, expect = pick] m in stageReady(m, character: expect, gen: gen) })
-                .id(pick).frame(width: 420, height: 420)
+            ShowcaseStage(roster: stageRoster, focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen] m in stageReady(m, gen: gen) }, silent: row)
+                .id(stageID).frame(width: 420, height: 420)
                 .offset(x: 10, y: 46)
                 .opacity(ready ? slideO : 0).offset(x: slideX)
                 .animation(.easeInOut(duration: 0.3), value: ready)
                 .allowsHitTesting(false)
-            Rectangle().fill(Color.clear).contentShape(Rectangle()).frame(width: 330, height: 260)
-                .gesture(orbit.simultaneously(with: pinch)).offset(x: 55, y: 215)
-            roundButton("chevron.left", label: "Previous Jelbie", u: u) { step(-1) }.offset(x: 14, y: 399 - 130 - 22)
-            roundButton("chevron.right", label: "Next Jelbie", u: u) { step(1) }.offset(x: 382, y: 399 - 130 - 22)
-            dragPill.offset(x: 220 - 60, y: 571 - 130 - 15)
+            if step == .species {
+                Rectangle().fill(Color.clear).contentShape(Rectangle()).frame(width: 330, height: 260)
+                    .gesture(orbit.simultaneously(with: pinch)).offset(x: 55, y: 215)
+                roundButton("chevron.left", label: "Previous Jelbie", u: u) { step(-1) }.offset(x: 14, y: 399 - 130 - 22)
+                roundButton("chevron.right", label: "Next Jelbie", u: u) { step(1) }.offset(x: 382, y: 399 - 130 - 22)
+                dragPill.offset(x: 220 - 60, y: 571 - 130 - 15)
+            } else if row {
+                rowBands(proj, u: u, chips: chips)
+                hintPill.offset(x: 220 - 80, y: 571 - 130 - 15)
+            }
         }
         .frame(width: 440, height: 470, alignment: .topLeading)
+    }
+
+    /// One wide pedestal under the row, and (once a pick is made) the spotlight and the ring around the picked Jelbie's feet.
+    @ViewBuilder private func rowBackdrop(_ proj: [GameCamera.RowProjection]) -> some View {
+        let n = Float(max(proj.count, 1))
+        let xc = dx(proj.map(\.foot.x).reduce(0, +) / n)
+        let yf = dy(proj.map(\.foot.y).reduce(0, +) / n) + 2
+        let ped = PickerPedestal(look: look, width: 392)
+        ped.offset(x: xc - 196, y: yf - ped.topH / 2).offset(x: slideX * 0.15).opacity(slideO)
+        if let i = picked {
+            let p = proj[PickerRow.slot(ofCandidate: i)]
+            let bw = CGFloat(p.bodyW) * 420
+            Circle().fill(RadialGradient(colors: [Color.white.opacity(0.35), Color.white.opacity(0)], center: .center, startRadius: 0, endRadius: bw * 0.8))
+                .frame(width: bw * 1.6, height: bw * 1.6)
+                .offset(x: dx(p.mid.x) - bw * 0.8, y: dy(p.mid.y) - bw * 0.8)
+                .allowsHitTesting(false).accessibilityHidden(true)
+            Ellipse().strokeBorder(Color.white, lineWidth: 3)
+                .shadow(color: look.glow.opacity(0.5), radius: 6)
+                .frame(width: bw * 1.05, height: bw * 1.05 * 0.28)
+                .offset(x: dx(p.foot.x) - bw * 1.05 / 2, y: dy(p.foot.y) - bw * 1.05 * 0.14)
+                .allowsHitTesting(false).accessibilityHidden(true)
+        }
+    }
+
+    /// The three tap targets (vertical bands from the middle between neighbours, from a little above the body down to the chip) with the personality chips under the feet.
+    private func rowBands(_ proj: [GameCamera.RowProjection], u: CGFloat, chips: Bool) -> some View {
+        let chipH = hitMin(u)
+        let xs = (0..<3).map { dx(proj[PickerRow.slot(ofCandidate: $0)].foot.x) }
+        return ZStack(alignment: .topLeading) {
+            ForEach(0..<min(3, candidates.count), id: \.self) { i in
+                let p = proj[PickerRow.slot(ofCandidate: i)]
+                let x0: CGFloat = i == 0 ? 10 : (xs[i - 1] + xs[i]) / 2
+                let x1: CGFloat = i == 2 ? 430 : (xs[i] + xs[i + 1]) / 2
+                let y0 = dy(p.top.y - 0.03)
+                let chipTop = dy(p.foot.y) + 14
+                let sel = picked == i
+                let pers = candidates[i].traits.personality
+                Button { pickCandidate(i) } label: {
+                    ZStack(alignment: .topLeading) {
+                        Color.clear
+                        if chips {
+                            HStack(spacing: 5) {
+                                Image(systemName: pers.symbol).font(.system(size: 14, weight: .black))
+                                Text(pers.title).font(SK.font(15, .black)).lineLimit(1).minimumScaleFactor(0.7)
+                            }
+                            .foregroundStyle(sel ? SK.cream : SK.ink)
+                            .padding(.horizontal, 8).frame(width: 100, height: chipH)
+                            .background(Capsule().fill(sel ? SK.ink : Color.white.opacity(0.7)))
+                            .scaleEffect(sel ? 1.08 : (tapped || reduce ? 1 : (breathe ? 1.05 : 1)))
+                            .animation(tapped || reduce ? nil : .easeInOut(duration: 1.6).repeatForever(autoreverses: true).delay(Double(i) * 0.25), value: breathe)
+                            .offset(x: xs[i] - x0 - 50, y: chipTop - y0)
+                        }
+                    }
+                    .frame(width: x1 - x0, height: chipTop + chipH - y0, alignment: .topLeading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .offset(x: x0, y: y0)
+                .accessibilityLabel("\(pers.title), option \(i + 1) of 3").accessibilityHint("Opens their details")
+                .accessibilityAddTraits(sel ? .isSelected : [])
+                .accessibilityHidden(!chips)
+                .accessibilityIdentifier("adopt-cand-\(i)")
+            }
+        }
+    }
+
+    private var hintPill: some View {
+        Text("Tap one to meet them").font(SK.font(15, .heavy)).foregroundStyle(SK.ink).frame(width: 160, height: 30)
+            .background(Capsule().fill(Color.white.opacity(0.58)))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
+            .accessibilityHidden(true)
     }
 
     private var orbit: some Gesture {
@@ -650,7 +830,7 @@ struct AdoptionCenter: View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 22, style: .continuous).fill(look.card).shadow(color: look.glow.opacity(0.22), radius: 6, y: 3)
             Capsule().fill(SK.ink.opacity(0.16)).frame(width: 22, height: 5).offset(x: 193, y: 8).accessibilityHidden(true)
-            if naming { nameCard(u) } else {
+            if naming { nameCard(u) } else if step == .pick { pickCard(u) } else {
                 tabs(u).offset(x: 14, y: 23)
                 Group {
                     switch tab {
@@ -753,6 +933,128 @@ struct AdoptionCenter: View {
         }
     }
 
+    // MARK: the pick page's card (design box 408 x 252)
+
+    /// The food's name, symbol and tint (a store food id).
+    private func snackInfo(_ id: String) -> (name: String, symbol: String, tint: Color) {
+        guard let c = Consumables.with(id: id) else { return (id.capitalized, "fork.knife", SK.honeyDeep) }
+        func srgb(_ v: Float) -> Double { Double(v <= 0.0031308 ? 12.92 * v : 1.055 * powf(v, 1 / 2.4) - 0.055) }
+        let p = c.palette.primary
+        return (c.name, c.symbol, Color(red: srgb(p.x), green: srgb(p.y), blue: srgb(p.z)))
+    }
+    /// "Classic", "Soft", "Deep" or today's colour; its label and swatch.
+    private func shadeInfo(_ c: JellyCandidate) -> (label: String, value: String, dot: Color) {
+        guard let v = c.variant else { return ("Shade", "Classic", look.dot) }
+        let s = v.swatch
+        let dot = Color(red: Double(s.x), green: Double(s.y), blue: Double(s.z))
+        return (v.title == "Soft" || v.title == "Deep" ? "Shade" : "Today's colour", v.title, dot)
+    }
+    private func strongestJar(_ t: JellyTraits) -> String { SpeciesInfo.jarNames[t.jars.enumerated().max { $0.element < $1.element }?.offset ?? 0] }
+
+    private func rareTag(id: String = "adopt-rare-tag") -> some View {
+        Text("Rare").font(SK.font(12.5, .black)).foregroundStyle(SK.ink)
+            .padding(.horizontal, 10).frame(height: 22)
+            .background(Capsule().fill(Color(hex: 0xFFD65C)))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
+            .accessibilityIdentifier(id)
+    }
+
+    private func miniTile(_ title: String, symbol: String?, tint: Color, dot: Color?, value: String) -> some View {
+        HStack(spacing: 8) {
+            if let symbol { Image(systemName: symbol).font(.system(size: 17, weight: .bold)).foregroundStyle(tint).frame(width: 22) }
+            if let dot { Circle().fill(dot).frame(width: 18, height: 18).overlay(Circle().strokeBorder(Color.white.opacity(0.9), lineWidth: 1.5)) }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(SK.font(11.5, .bold)).foregroundStyle(Color(hex: 0x8D7C6E)).lineLimit(1)
+                Text(value).font(SK.font(15.5, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10).frame(width: 190, height: 40, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(SK.ink.opacity(0.055)))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func pickCard(_ u: CGFloat) -> some View {
+        Group {
+            if let c = pickedCand {
+                let t = c.traits, p = t.personality, snack = snackInfo(t.snack), shade = shadeInfo(c)
+                ZStack(alignment: .topLeading) {
+                    Circle().fill(look.rowHi).frame(width: 40, height: 40)
+                        .overlay(Image(systemName: p.symbol).font(.system(size: 18, weight: .bold)).foregroundStyle(SK.ink)).offset(x: 16, y: 16)
+                    Text(p.title).font(SK.font(26, .black)).foregroundStyle(SK.ink).lineLimit(1).frame(height: 40, alignment: .leading).offset(x: 66, y: 16)
+                    if c.variant?.rare == true { rareTag().offset(x: 408 - 16 - 56, y: 25) }
+                    Text(p.blurb).font(SK.font(15, .medium)).foregroundStyle(SK.ink.opacity(0.75)).lineLimit(1).offset(x: 18, y: 60)
+                    miniTile("Favourite snack", symbol: snack.symbol, tint: snack.tint, dot: nil, value: snack.name).offset(x: 14, y: 88)
+                    miniTile(shade.label, symbol: nil, tint: SK.ink, dot: shade.dot, value: shade.value).offset(x: 204, y: 88)
+                    ForEach(0..<5, id: \.self) { i in
+                        PickerJar(color: Self.jarColor(i), value: t.jars[i], animate: !reduce).offset(x: 52 + CGFloat(i) * 76 - 23, y: 134)
+                        Text(SpeciesInfo.jarNames[i]).font(SK.font(13.5, .bold)).foregroundStyle(SK.ink).frame(width: 76).offset(x: 52 + CGFloat(i) * 76 - 38, y: 228)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .frame(width: 408, height: 252, alignment: .topLeading)
+                .id("pick-\(picked ?? -1)").transition(.opacity)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("\(p.title). \(p.blurb) Favourite snack \(snack.name). Strongest in \(strongestJar(t)).")
+            } else {
+                Text("Tap a Jelbie to meet them").font(SK.font(19, .black)).foregroundStyle(SK.ink).frame(width: 408, height: 252)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: picked)
+    }
+
+    /// The pick page in the large-text column: the card's content stacked.
+    private var flowPick: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let c = pickedCand {
+                let t = c.traits, p = t.personality, snack = snackInfo(t.snack), shade = shadeInfo(c)
+                HStack(spacing: 10) {
+                    Circle().fill(look.rowHi).frame(width: 40, height: 40).overlay(Image(systemName: p.symbol).font(.system(size: 18, weight: .bold)).foregroundStyle(SK.ink))
+                    Text(p.title).font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                    Spacer(minLength: 4)
+                    if c.variant?.rare == true { rareTag() }
+                }
+                Text(p.blurb).font(SK.font(16, .medium)).foregroundStyle(SK.ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+                flowTile("Favourite snack", dot: nil, value: snack.name)
+                flowTile(shade.label, dot: shade.dot, value: shade.value)
+                HStack(alignment: .top, spacing: 2) {
+                    ForEach(0..<5, id: \.self) { i in
+                        VStack(spacing: 6) {
+                            PickerJar(color: Self.jarColor(i), value: t.jars[i], animate: !reduce)
+                            Text(SpeciesInfo.jarNames[i]).font(SK.font(13.5, .bold)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.6)
+                                .multilineTextAlignment(.center).accessibilityHidden(true)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                Text("Strongest in \(strongestJar(t)).").font(SK.font(14, .semibold)).foregroundStyle(SK.ink.opacity(0.62)).frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    /// Large text: the three choices as real buttons under the stage (the in-stage chips are too small to keep at 44 pt there).
+    private var candidateRow: some View {
+        let layout = dts.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
+            ForEach(0..<candidates.count, id: \.self) { i in
+                let p = candidates[i].traits.personality, sel = picked == i
+                Button { pickCandidate(i) } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: p.symbol)
+                        Text(p.title).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .font(SK.font(17, .black)).foregroundStyle(sel ? SK.cream : SK.ink)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(Capsule().fill(sel ? SK.ink : Color.white.opacity(0.7)))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(p.title), option \(i + 1) of 3").accessibilityHint("Opens their details")
+                .accessibilityAddTraits(sel ? .isSelected : []).accessibilityIdentifier("adopt-cand-\(i)")
+            }
+        }
+    }
+
     // MARK: button and naming
 
     /// The name field: dark text on the white pill whatever the system appearance, a visible placeholder, 44 pt tall at least.
@@ -771,7 +1073,7 @@ struct AdoptionCenter: View {
 
     private func nameCard(_ u: CGFloat) -> some View {
         VStack(spacing: 14) {
-            Text("What will you call your \(info.name)?").font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+            Text(namingPrompt).font(SK.font(19, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
             nameField(u)
         }
         .padding(.horizontal, 24).padding(.top, 30).frame(width: 408, alignment: .top)
@@ -783,19 +1085,37 @@ struct AdoptionCenter: View {
         return JellyRoster.uniqueName(t, taken: home.map(JellyRoster.nameOf))          // a typed name equal to one at home becomes "Rex 2"
     }
 
+    private var ctaID: String { step == .species ? "adopt-meet" : "adopt-pick" }
+    /// The species page always opens the pick page (browsing is never blocked); the price is checked per candidate there.
+    private var ctaEnabled: Bool { step == .pick ? canAdopt : true }
+    private func ctaAction() {
+        switch step {
+        case .species: toPick()
+        case .pick: toNaming()
+        case .naming: bringHome()
+        }
+    }
+
     private var cta: some View {
         Group {
             if naming { ctaButton(Text("Bring \(finalName) home"), enabled: true, id: "adopt-bring-home") { bringHome() } }
-            else { ctaButton(ctaLabel, enabled: canAdopt, id: "adopt-pick") { withAnimation(.easeOut(duration: 0.2)) { name = ""; naming = true }; nameFocused = true } }
+            else { ctaButton(ctaLabel, enabled: ctaEnabled, id: ctaID) { ctaAction() } }
         }
     }
 
     @ViewBuilder private var ctaLabel: some View {
-        if let p = price {
-            if mode == .first { Text("Choose \(info.name)") }
-            else if p > wallet.count { Text("Need \(p - wallet.count) more JellyCoins") }
-            else { HStack(spacing: 8) { Text("Adopt for"); JellyCoinIcon(size: 28); Text(p.coinText) } }
-        } else { Text("Your home is full: \(JellyRoster.maxCount) Jelbies") }
+        switch step {
+        case .species: Text("Meet the three")
+        case .naming: Text("Bring \(finalName) home")
+        case .pick:
+            if let c = pickedCand {
+                if let p = price(for: c) {
+                    if mode == .first { Text("This one!") }
+                    else if p > wallet.count { Text("Need \(p - wallet.count) more JellyCoins") }
+                    else { HStack(spacing: 8) { Text("This one!"); JellyCoinIcon(size: 28); Text(p.coinText) } }
+                } else { Text("Your home is full: \(JellyRoster.maxCount) Jelbies") }
+            } else { Text("Pick one of the three") }
+        }
     }
 
     /// The big dark-brown pill with a darker bottom lip.
@@ -817,19 +1137,19 @@ struct AdoptionCenter: View {
 
     private var swipe: some Gesture {
         DragGesture(minimumDistance: 30).onEnded { v in
-            guard !naming, !coverUp, abs(v.translation.width) > abs(v.translation.height) else { return }
+            guard step == .species, !coverUp, abs(v.translation.width) > abs(v.translation.height) else { return }
             step(v.translation.width < 0 ? 1 : -1)
         }
     }
 
     private func step(_ d: Int) {
-        guard !naming else { return }
+        guard step == .species else { return }
         let n = order.count
         move(to: (page + d + n) % n, dir: d)
     }
 
     private func jump(to i: Int) {
-        guard !naming, i != page else { return }
+        guard step == .species, i != page else { return }
         move(to: i, dir: i > page ? 1 : -1)
     }
 
@@ -842,7 +1162,7 @@ struct AdoptionCenter: View {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 170_000_000)
             ready = false; stageModel = nil; pageGen += 1
-            Self.previewOffer(mode: mode, character: order[next])
+            Self.setSinglePreview(species: order[next], variant: nil)
             page = next
             camera.setSpecies(order[next])
             slideX = reduce ? 0 : CGFloat(dir) * 160
@@ -851,11 +1171,68 @@ struct AdoptionCenter: View {
         }
     }
 
+    // MARK: steps (species -> pick -> naming)
+
+    private var backSymbol: String { step != .species || mode == .first ? "chevron.left" : "xmark" }
+    private var backLabel: String { step != .species ? "Back" : (mode == .first ? "Back to the menu" : "Close") }
+    /// One step back: naming -> pick (the pick is kept) -> species -> the menu / the room.
+    private func goBack() {
+        switch step {
+        case .naming: backToPick()
+        case .pick: backToSpecies()
+        case .species: cancel()
+        }
+    }
+
+    /// A step change swaps the stage (the old Jelbie(s) go, the placeholder covers the build); the generation makes a stale stage's ready callback harmless.
+    private func resetStage() { ready = false; stageModel = nil; pageGen += 1; emoteTask?.cancel() }
+
+    /// "Meet the three": the day's three Jelbies of this species stand side by side.
+    private func toPick() {
+        guard step == .species, !paging else { return }
+        candidates = Self.makeCandidates(mode: mode, species: pick, dayKey: dayKey, home: home)
+        Self.setRowPreviews(candidates)
+        picked = 1; tapped = false
+        resetStage()
+        camera.setRow(species: pick); camEpoch += 1
+        withAnimation(.easeOut(duration: 0.2)) { step = .pick }
+    }
+
+    /// "This one!": the chosen Jelbie alone, big, in its own colour, for the name.
+    private func toNaming() {
+        guard step == .pick, let c = pickedCand, canAdopt(c) else { return }
+        Self.setSinglePreview(species: pick, variant: c.variant)
+        resetStage()
+        camera.setSpecies(pick); camera.engage()
+        name = ""
+        withAnimation(.easeOut(duration: 0.2)) { step = .naming }
+        nameFocused = true
+    }
+
+    private func backToPick() {
+        guard step == .naming else { return }
+        nameFocused = false
+        Self.setRowPreviews(candidates)
+        resetStage()
+        camera.setRow(species: pick); camEpoch += 1
+        withAnimation(.easeOut(duration: 0.2)) { step = .pick }
+    }
+
+    private func backToSpecies() {
+        guard step == .pick else { return }
+        picked = nil
+        Self.setSinglePreview(species: pick, variant: nil)
+        resetStage()
+        camera.setSpecies(pick); camera.engage()
+        withAnimation(.easeOut(duration: 0.2)) { step = .species }
+    }
+
     // MARK: the Jelbie's moves
 
-    private func stageReady(_ m: MelonModel, character: Int, gen: Int) {
-        guard gen == pageGen, character == pick else { return }          // a stale stage (an old page) must never mark the new page ready
+    private func stageReady(_ m: MelonModel, gen: Int) {
+        guard gen == pageGen else { return }          // a stale stage (an old page or step) must never mark the new one ready
         stageModel = m
+        if step == .pick { ready = true; landedRow(m); return }          // (the row stage waited for its close-up camera itself: `ShowcaseStage`)
         if HUDLayout.isPad {          // iPad: show him only once the close-up camera has settled (else a slow first frame shows him as a speck in the wide room view)
             Task { @MainActor in
                 for _ in 0..<80 where m.care.focus.blend < 0.97 { try? await Task.sleep(nanoseconds: 100_000_000) }
@@ -875,30 +1252,89 @@ struct AdoptionCenter: View {
         startEmotes(for: pick)
     }
 
-    /// While the player reads, the Jelbie does one gentle, in-place move or expression every few seconds that suits its personality.
+    /// The three say hello left to right, then each shows its personality now and then.
+    private func landedRow(_ m: MelonModel) {
+        Task { @MainActor in
+            for i in 0..<3 {
+                try? await Task.sleep(nanoseconds: i == 0 ? 450_000_000 : 200_000_000)
+                guard step == .pick, stageModel === m, !m.paused else { return }
+                let slot = PickerRow.slot(ofCandidate: i)
+                if reduce { m.care.brainFor(slot)?.blinkRequested = true } else { m.care.previewHop(slot) }
+            }
+        }
+        startRowEmotes()
+    }
+
+    /// While the player reads, the Jelbie does one gentle, in-place move or expression every few seconds that suits its personality (the naming step: the chosen one's).
     private func startEmotes(for character: Int) {
         emoteTask?.cancel()
-        let list = SpeciesInfo.of(character).emotes
         emoteTask = Task { @MainActor in
-            var i = Int.random(in: 0..<list.count)
-            while !Task.isCancelled, pick == character {
+            var i = Int.random(in: 0..<10)
+            while !Task.isCancelled, pick == character, step != .pick {
                 try? await Task.sleep(nanoseconds: UInt64(Double.random(in: 4.0...6.5) * 1_000_000_000))
-                guard !Task.isCancelled, pick == character, !naming, !celebrating else { continue }
+                guard !Task.isCancelled, pick == character, step != .pick, !celebrating else { continue }
+                let list: [StageMove] = naming ? [pickedCand?.traits.personality.emote ?? .blink, .blink] : SpeciesInfo.of(character).emotes
                 perform(list[i % list.count]); i += 1
             }
         }
     }
 
-    /// Asks the stage's Jelbie for a move (when it is free to take one).
-    private func perform(_ move: StageMove) {
-        guard let m = stageModel, !m.paused, let b = m.care.brainFor(0) else { return }
+    /// The pick page: every 3.5-5.5 s one Jelbie shows its personality (round-robin until one is picked, then the picked one; the others blink).
+    private func startRowEmotes() {
+        emoteTask?.cancel()
+        emoteTask = Task { @MainActor in
+            var turn = 0
+            while !Task.isCancelled, step == .pick {
+                try? await Task.sleep(nanoseconds: UInt64(Double.random(in: 3.5...5.5) * 1_000_000_000))
+                guard !Task.isCancelled, step == .pick, !celebrating, candidates.count == 3 else { continue }
+                let i = tapped ? (picked ?? turn % 3) : turn % 3
+                turn += 1
+                perform(candidates[i].traits.personality.emote, slot: PickerRow.slot(ofCandidate: i), calm: reduce)
+                if tapped { for j in 0..<3 where j != i { perform(.blink, slot: PickerRow.slot(ofCandidate: j), calm: reduce) } }
+            }
+        }
+    }
+
+    /// A tap on one of the three: it hops in place with a chirp (the other two give a small happy face); its details fill the card.
+    private func pickCandidate(_ i: Int) {
+        guard step == .pick, candidates.indices.contains(i) else { return }
+        AudioHub.shared.uiTap()
+        tapped = true
+        let c = candidates[i]
+        withAnimation(reduce ? nil : .spring(response: 0.35, dampingFraction: 0.7)) { picked = i }
+        let t = c.traits
+        AccessibilityNotification.Announcement("\(t.personality.title). \(t.personality.blurb) Favourite snack \(snackInfo(t.snack).name). Strongest in \(strongestJar(t)).").post()
+        guard let m = stageModel, !m.paused else { return }
+        let slot = PickerRow.slot(ofCandidate: i)
+        if reduce { m.care.brainFor(slot)?.blinkRequested = true }
+        else {
+            m.care.previewHop(slot)
+            AudioHub.shared.chirp(jelly: slot, .happy, src: "pick")
+        }
+        var k = 0
+        for j in 0..<3 where j != i {
+            k += 1
+            let other = PickerRow.slot(ofCandidate: j), delay = UInt64(k) * 120_000_000
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: delay)
+                guard step == .pick, stageModel === m, let b = m.care.brainFor(other) else { return }
+                b.face(.happy, hold: 1.2); b.blinkRequested = true
+            }
+        }
+    }
+
+    /// Asks the stage's Jelbie in `slot` for a move (when it is free to take one). `calm`: Reduce Motion, only blinks and faces.
+    private func perform(_ move: StageMove, slot: Int = 0, calm: Bool = false) {
+        guard let m = stageModel, !m.paused, let b = m.care.brainFor(slot) else { return }
+        var move = move
+        if calm { switch move { case .idle, .hop: move = .blink; default: break } }
         switch move {
         case .blink: b.blinkRequested = true
         case .face(let f): b.face(f, hold: 1.6)
-        case .hop: b.wantJoy()
+        case .hop: m.care.previewHop(slot)
         case .idle(let k):
             guard b.commandedIdle == nil, b.idleState.kind == nil, case .none = b.script else { return }
-            if k == .flapHop, b.feature != .wings || b.wingsFolded { b.wantJoy(); return }
+            if k == .flapHop, b.feature != .wings || b.wingsFolded { m.care.previewHop(slot); return }
             b.commandedIdle = k
         }
     }
@@ -906,17 +1342,17 @@ struct AdoptionCenter: View {
     // MARK: bring home
 
     private func bringHome() {
-        guard !celebrating, canAdopt, let p = price else { return }
+        guard !celebrating, let c = pickedCand, canAdopt(c), let p = price(for: c) else { return }
         name = finalName
         if p > 0, !wallet.spend(p) { return }
         nameFocused = false
         emoteTask?.cancel()
         withAnimation(.easeIn(duration: 0.2)) { celebrating = true }
-        let c = pick, n = name
-        let v = variant          // the colour he was shown is the colour he keeps (nil = the classic one): StartFlow.bringHome adopts it under his new instance id
+        // the one he was shown is the one he keeps: his colour shade (nil = the classic one) and his personality go with him; StartFlow.bringHome adopts them under his new instance id
+        let result = AdoptionResult(species: pick, name: name, variant: c.variant, traits: c.traits)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_800_000_000)
-            done(c, n, v)
+            done(result)
         }
     }
 }

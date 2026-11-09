@@ -73,8 +73,7 @@ final class FocusGroup {
         ids = new; arrived = []; clock = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
-            let offs = GameCamera.focusRowSpots(count: new.count, anchor: .zero)
-            let row = GameCamera.focusRowSpots(count: new.count, anchor: FreeFloor.nearest(to: GameCamera.callSpot, all: offs))
+            let row = GameCamera.previewRowSpots(count: new.count)          // (the same expression a preview group is born on)
             // no fixed spot per Jelly: whoever is nearest the middle takes it, the others the free slot on their side (`Lineup`), re-read while they come (`replan`)
             slots = row; slotOf = [:]; committed = []; replanClock = 0; replans = 0
             if floors.count == new.count {
@@ -138,6 +137,14 @@ extension GameCare {
 
     /// "Everyone, come here": all of them run up side by side and the close-up frames the row.
     func comeHereEveryone() { beginFocus(ids: Array(0..<max(jellies.count, 1)), front: targetJelly) }
+
+    /// A preview stage (the Adoption Center): Jelbie `id` hops in place, with no gates. `wantJoy` is gated (antics, a 5 s expiry, "two fast movers at most"), so a second tap soon after
+    /// would silently do nothing; `startHopPlay` is the greeting / selection hop and always plays. Distance 0.0001 = on the spot.
+    func previewHop(_ id: Int) {
+        guard isPreview, let b = brainFor(id) else { return }
+        let sim = id == 0 ? lastSim : bathPlug.actors[id]?.actor?.sim
+        if let sim { b.startHopPlay(sim: sim, distance: 0.0001) } else { b.wantJoy() }
+    }
 
     /// "Pip and Moss, come here": just those run to the front row (the first named stands in front); the others keep roaming.
     func comeHere(jellies ids: [Int]) { beginFocus(ids: ids, front: ids.first) }
@@ -208,7 +215,7 @@ extension GameCare {
         g.clock += dt
         guard g.clock > min(FocusGroup.softAccept, FocusGroup.hardAccept) else { return }
         for id in g.ids where !g.arrived.contains(id) {
-            guard let b = brainFor(id) else { if g.markArrived(id) { focus.arrive() }; continue }
+            guard let b = brainFor(id) else { if g.markArrived(id) { focus.arrive(snap: isPreview) }; continue }
             let sim = id == 0 ? lastSim : bathPlug.actors[id]?.actor?.sim
             let d = simd_length(Self.floorPos(b, sim) - g.spot(of: id))
             guard d < FocusGroup.nearEnough || g.clock > FocusGroup.hardAccept else { continue }
@@ -219,7 +226,7 @@ extension GameCare {
                 enterFocus(brain: b)
             } else {
                 g.saved[id] = autonomySnapshot(id, b); b.autonomy = false; b.onFinished = nil
-                if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy, src: "group") }
+                if g.markArrived(id) { focus.arrive(snap: isPreview); if !silentArrival { AudioHub.shared.chirp(jelly: id, .happy, src: "group") } }
             }
             if !focus.isActive { return }
         }
@@ -260,7 +267,7 @@ extension GameCare {
             if simd_length(Self.floorPos(brain, sim) - g.spot(of: id)) < 0.25 { s.onSlot += dt } else { s.onSlot = 0 }
             if s.onSlot > 0.3 {
                 g.saved[id] = autonomySnapshot(id, brain); brain.autonomy = false; brain.onFinished = nil
-                if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy, src: "group") }
+                if g.markArrived(id) { focus.arrive(snap: isPreview); if !silentArrival { AudioHub.shared.chirp(jelly: id, .happy, src: "group") } }
                 return
             }
             let act = brain.activity
@@ -276,7 +283,7 @@ extension GameCare {
                 if simd_length(here - g.spot(of: id)) < 0.5 {
                     g.saved[id] = autonomySnapshot(id, brain); brain.autonomy = false
                     brain.onFinished = nil
-                    if g.markArrived(id) { focus.arrive(); AudioHub.shared.chirp(jelly: id, .happy, src: "group") }
+                    if g.markArrived(id) { focus.arrive(snap: isPreview); if !silentArrival { AudioHub.shared.chirp(jelly: id, .happy, src: "group") } }
                 } else if s.retries < 2 { s.retries += 1; s.age = 0; brain.requestNow(.come(to: g.spot(of: id))) }
                 else { focus.cancelApproach() }
             }

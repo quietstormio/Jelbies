@@ -782,7 +782,7 @@ final class GameCare {
             if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting, drainScale: brain.napDrainScale) }
             brain.idleMood = profile.needs.mood
             syncPerks(id: a.id, brain: brain)
-            brain.idleBlocked = (bath.active || play.ballGame) && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
+            brain.idleBlocked = (bath.active || play.ballGame || isPreview) && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
             brain.focusPaused = false
             driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
             tickDining(id: a.id, brain: brain, sim: a.sim, dt: dt)           // his meal, when the tray is for him (GameCare+Dining.swift)

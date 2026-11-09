@@ -38,6 +38,7 @@ extension GameCare {
     func autonomySnapshot(_ id: Int, _ b: BlobBrain) -> Bool { newcomerWelcome?.id == id ? true : b.autonomy }
 
     func tickNewcomer(_ actors: [JellyActor], dt: Float) {
+        guard !isPreview else { return }          // (a showcase stage never takes the pending arrival, and never greets anybody)
         if let w = newcomerWelcome { tickNewcomerWelcome(w, actors, dt: dt); return }
         if var n = newcomer {
             n.age += dt

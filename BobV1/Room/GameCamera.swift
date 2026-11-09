@@ -276,6 +276,31 @@ enum GameCamera {
         }
     }
 
+    /// The exact row a preview group is born on and `FocusGroup.begin` lines up on (one place, so they cannot drift). One spot = the old single close-up spot.
+    static func previewRowSpots(count n: Int) -> [SIMD2<Float>] {
+        guard n > 1 else { return [FreeFloor.nearest(to: callSpot)] }
+        let offs = focusRowSpots(count: n, anchor: .zero)
+        return focusRowSpots(count: n, anchor: FreeFloor.nearest(to: callSpot, all: offs))
+    }
+
+    /// Where one body of a group close-up appears on the stage view (all 0...1 of the view, y down): feet, middle, top, and the body's width.
+    struct RowProjection: Equatable { var foot: SIMD2<Float>; var mid: SIMD2<Float>; var top: SIMD2<Float>; var bodyW: Float }
+
+    /// Projects the standing spots of a group close-up (the picker's stage; `PhotoCam` applied when it is on) into the stage view, so SwiftUI can draw tap bands, chips,
+    /// a ring and a pedestal exactly where the Metal view draws the bodies. Pure: no ray casts into the renderer.
+    static func projectRow(spots: [SIMD2<Float>], aspect: Float = 1) -> [RowProjection] {
+        let p = spots.count > 1 ? focusPose(aspect: aspect, spots: spots) : focusPose(aspect: aspect, spot: spots.first ?? callSpot)
+        let (e, t) = PhotoCam.active ? PhotoCam.apply(eye: p.eye, target: p.target) : p
+        let vp = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: 60), M4.lookAt(eye: e, at: t, up: SIMD3(0, 1, 0)))
+        let fwd = simd_normalize(t - e), right = simd_normalize(simd_cross(fwd, SIMD3(0, 1, 0)))
+        func scr(_ w: SIMD3<Float>) -> SIMD2<Float> { let c = vp * SIMD4<Float>(w.x, w.y, w.z, 1); return SIMD2(c.x / c.w * 0.5 + 0.5, 0.5 - c.y / c.w * 0.5) }
+        return spots.map { s in
+            let b = SIMD3<Float>(s.x, 0, s.y)
+            return RowProjection(foot: scr(b), mid: scr(b + SIMD3(0, 0.5 * BobShape.H, 0)), top: scr(b + SIMD3(0, BobShape.H, 0)),
+                                 bodyW: abs(scr(b + right * BobShape.R).x - scr(b - right * BobShape.R).x))
+        }
+    }
+
     /// Eye / target framing every spot: the row's width (plus a body) fills the screen; a single spot is exactly `focusPose(spot:)`.
     static func focusPose(aspect: Float, spots: [SIMD2<Float>]) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         guard spots.count > 1 else { return focusPose(aspect: aspect, spot: spots.first ?? callSpot) }

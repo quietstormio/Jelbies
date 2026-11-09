@@ -10,7 +10,7 @@
 
 import Foundation
 
-nonisolated enum Personality: String, CaseIterable, Codable, Sendable {
+nonisolated enum JellyPersonality: String, CaseIterable, Codable, Sendable {
     case bouncy, cuddly, curious, sleepy, giggly, brave, gentle, cheeky
 
     var title: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
@@ -69,7 +69,7 @@ nonisolated enum Personality: String, CaseIterable, Codable, Sendable {
 }
 
 nonisolated struct JellyTraits: Codable, Equatable, Sendable {
-    var personality: Personality
+    var personality: JellyPersonality
     /// Five jars 15...98 in the order Cute, Sweet, Sparkly, Cool, Sporty.
     var jars: [Int]
     /// A store food id.
@@ -106,7 +106,7 @@ nonisolated enum JellyCandidates {
         var r = ParkRandom(JellyTraitsTuning.seed &+ UInt64(bitPattern: Int64(dayKey)) &* 0x9E37_79B9 &+ UInt64(max(species, 0)) &* 0x1F3D
                            &+ UInt64(classic ? 0x51 : 0xA7) &* 0xC2B2 &+ UInt64(max(owned, 0)) &* 0x7B1)
         _ = r.next()
-        var words = Personality.allCases
+        var words = JellyPersonality.allCases
         for i in stride(from: words.count - 1, to: 0, by: -1) { words.swapAt(i, Int(r.next() % UInt64(i + 1))) }
         let base = Self.baseJars(species)
         let shades: [JellyVariant?] = classic ? [nil, nil, nil] : JellyVariantBook.shades(species: species, dayKey: dayKey, owned: owned)
