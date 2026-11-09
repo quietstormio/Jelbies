@@ -144,7 +144,7 @@ struct VoiceFeedbackView: View {
             .foregroundStyle(accent ? Color.white : FocusStyle.brown)
             .lineLimit(3).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(Capsule().fill(accent ? FocusStyle.pink : FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
+            .background(Capsule().fill(accent ? SK.pinkStrong : FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
             .opacity(out)
             .accessibilityElement(children: .ignore)
@@ -234,7 +234,7 @@ struct VoiceBubble: View {
         switch a {
         case .feed: s = "fork.knife"; case .drink: s = CareMenu.waterSymbol; case .sleep: s = "moon.zzz.fill"; case .clean: s = CareMenu.cleanSymbol
         case .come: s = "arrow.down.circle.fill"; case .goTo: s = "figure.walk"; case .wear: s = "tshirt.fill"
-        case .playWith: s = "soccerball"; case .race: s = "flag.checkered"; case .train: s = "dumbbell.fill"
+        case .playWith: s = "soccerball"; case .race: s = "flag.checkered"
         default: s = "star.fill"
         }
         return UIImage(systemName: s) != nil ? s : "star.fill"

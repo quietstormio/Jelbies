@@ -65,7 +65,7 @@ struct RoundHeader: View {
                 Button { AudioHub.shared.uiTap(); show.goHome() } label: {
                     Image(systemName: "xmark").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
                         .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
-                }.buttonStyle(.plain).accessibilityLabel("Leave the show").accessibilityIdentifier("show-quit")
+                }.buttonStyle(.plain).accessibilityLabel("Leave the Jelly Show").accessibilityIdentifier("show-quit")
             }
             VStack(alignment: .leading, spacing: 0) {
                 Text(kicker ?? "ROUND \(round) OF 3 \u{00B7} \(show.rank.title.uppercased())").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
@@ -534,7 +534,7 @@ struct TrickRound: View {
             .buttonStyle(.plain).disabled(!ready)
             .accessibilityLabel("Glow Burst, \(s.burstUsed ? "used" : armed ? "armed for this trick" : "ready"). Plus 10 points").accessibilityIdentifier("trick-burst")
         } else if let s = show.sim {
-            Text("Glow Burst needs Cheer 75% and Glow 50%\(s.player.glow < ShowScoring.burstGlow ? " (a Clean before the show)" : "")").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.lilacPale)
+            Text("Glow Burst needs Cheer 75% and Glow 50%\(s.player.glow < ShowScoring.burstGlow ? " (a Clean before the Jelly Show)" : "")").font(SK.font(12, .heavy)).foregroundStyle(ShowUI.lilacPale)
         }
     }
 
@@ -796,7 +796,7 @@ struct ResultsScreen: View {
     private var buttons: some View {
         HStack(spacing: 10) {
             Button { AudioHub.shared.uiTap(); show.goHome(again: true) } label: {
-                Text("Show again").font(SK.font(17, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(SK.cream))
+                Text("Jelly Show again").font(SK.font(17, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 54).background(Capsule().fill(SK.cream))
             }.buttonStyle(.plain).accessibilityIdentifier("results-again")
             ShowCTA(title: "Done", id: "results-done", height: 54) { show.goHome() }
         }

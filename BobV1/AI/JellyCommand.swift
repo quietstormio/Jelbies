@@ -8,8 +8,7 @@
 
 import Foundation
 
-/// Everything a Jelly can be asked for. `JellyAction.supportedNow` gates what the room can carry out (everything, since checkpoint 7c: decor, the
-/// wardrobe and the Track); an action whose object is missing ("go to the beanbag" with none placed) gets a "No beanbag in the room" line.
+/// Everything a Jelly can be asked for. The room can carry out all of it (decor, the wardrobe and the Track); an action whose object is missing ("go to the beanbag" with none placed) gets a "No beanbag in the room" line.
 nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     case come, stop, stopFighting, praise, scold, play
     /// A learned trick (sit, jacks, run, flip, look, and the store pages spin, hop, roll; come is `.come`).
@@ -24,7 +23,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     case wear
     /// Play with another Jelly (`partner`), optionally with a toy (`object`).
     case playWith
-    case race, train
+    case race
     /// "Who's hungry / thirsty / wants love?"
     case whoIs(NeedKind)
     case none
@@ -35,7 +34,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
         case .come: return "come"; case .stop: return "stop"; case .stopFighting: return "stopFighting"; case .praise: return "praise"
         case .scold: return "scold"; case .play: return "play"; case .trick(let t): return t.rawValue
         case .feed: return "feed"; case .drink: return "drink"; case .sleep: return "sleep"; case .clean: return "clean"; case .wake: return "wake"
-        case .goTo: return "goTo"; case .wear: return "wear"; case .playWith: return "playWith"; case .race: return "race"; case .train: return "train"
+        case .goTo: return "goTo"; case .wear: return "wear"; case .playWith: return "playWith"; case .race: return "race"
         case .whoIs(.hunger): return "whoIsHungry"; case .whoIs(.thirst): return "whoIsThirsty"; case .whoIs(.attention): return "whoWantsLove"
         case .none: return "none"
         }
@@ -45,14 +44,14 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
         case "come": self = .come; case "stop": self = .stop; case "stopFighting": self = .stopFighting; case "praise": self = .praise
         case "scold": self = .scold; case "play": self = .play; case "feed": self = .feed; case "drink": self = .drink
         case "wake": self = .wake; case "sleep": self = .sleep; case "clean": self = .clean; case "goTo": self = .goTo; case "wear": self = .wear; case "playWith": self = .playWith
-        case "race": self = .race; case "train": self = .train; case "whoIsHungry": self = .whoIs(.hunger); case "whoIsThirsty": self = .whoIs(.thirst)
+        case "race": self = .race; case "whoIsHungry": self = .whoIs(.hunger); case "whoIsThirsty": self = .whoIs(.thirst)
         case "whoWantsLove": self = .whoIs(.attention); case "none": self = .none
         case "jumpingJacks": self = .trick(.jacks)
         default: if let t = VoiceTrick(rawValue: key), t != .come { self = .trick(t) } else { return nil }
         }
     }
     static let allKeys: [String] = ["come", "stop", "stopFighting", "praise", "scold", "play", "sit", "jacks", "run", "flip", "look", "spin", "hop", "feed", "drink",
-                                    "sleep", "wake", "clean", "goTo", "wear", "playWith", "race", "train", "whoIsHungry", "whoIsThirsty", "whoWantsLove", "none"]
+                                    "sleep", "wake", "clean", "goTo", "wear", "playWith", "race", "whoIsHungry", "whoIsThirsty", "whoWantsLove", "none"]
 
     /// The object kinds this action takes (nil = none; `.playWith` takes an optional toy; "go to" takes furniture or a toy).
     var objectKinds: Set<CatalogItem.Kind>? {
@@ -65,15 +64,13 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
     var needsObject: Bool { self == .goTo || self == .wear }
     var needsPartner: Bool { self == .playWith }
 
-    /// What this room can carry out today (everything since checkpoint 7c; kept as the gate for actions a future branch parses before it runs them).
-    var supportedNow: Bool { true }
     /// The HUD's word for it.
     var title: String {
         switch self {
         case .come: return "come here"; case .stop: return "stop"; case .stopFighting: return "stop fighting"; case .praise: return "good job"
         case .scold: return "no"; case .play: return "play"; case .trick(let t): return t.title.lowercased()
         case .feed: return "eat"; case .drink: return "drink"; case .sleep: return "sleep"; case .wake: return "wake up"; case .clean: return "bath time"
-        case .goTo: return "go to"; case .wear: return "put on"; case .playWith: return "play with"; case .race: return "race"; case .train: return "train"
+        case .goTo: return "go to"; case .wear: return "put on"; case .playWith: return "play with"; case .race: return "race"
         case .whoIs(.hunger): return "who's hungry?"; case .whoIs(.thirst): return "who's thirsty?"; case .whoIs(.attention): return "who wants love?"
         case .none: return "?"
         }

@@ -55,7 +55,9 @@ final class IntentRouter {
         else { return nil }
         let r = RoutedCommand(command: rules.command, path: path, ms: Int((CACurrentMediaTime() - t0) * 1000))
         last = r
+        #if DEBUG
         if VoiceCoordinator.logging { NSLog("AILOG route path=%@ ms=%d action=%@ text=\"%@\"", path, r.ms, rules.command.action.key, text) }
+        #endif
         return r
     }
 
@@ -64,7 +66,9 @@ final class IntentRouter {
         func done(_ c: JellyCommand, _ p: String) -> RoutedCommand {
             let r = RoutedCommand(command: c, path: p, ms: Int((CACurrentMediaTime() - t0) * 1000))
             last = r
+            #if DEBUG
             if VoiceCoordinator.logging { NSLog("AILOG route path=%@ ms=%d action=%@ text=\"%@\"", p, r.ms, c.action.key, text) }
+            #endif
             return r
         }
         let rules = RuleParser.parse(text, names: names, catalog: catalog)

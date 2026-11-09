@@ -282,7 +282,8 @@ final class VoiceIntegrationTests: XCTestCase {
         let v2 = VoiceCoordinator(training: training, input: s)
         XCTAssertTrue(v2.micUnusable)
         XCTAssertFalse(v2.begin(), "no listening on an unusable mic")
-        XCTAssertEqual(v2.bookRequest, 1, "the trick book is requested instead")
+        XCTAssertEqual(v2.notice, .unavailable, "the reason is shown instead of silently opening the trick book")
+        XCTAssertEqual(v2.bookRequest, 0)
         XCTAssertEqual(v2.mode.phase, .idle)
     }
 

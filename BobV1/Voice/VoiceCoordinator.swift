@@ -18,6 +18,12 @@ import QuartzCore
 import UIKit
 import simd
 
+/// Something the player should read about the mic.
+enum VoiceNotice: String, Identifiable, Equatable {
+    case explainer, denied, needsInternet, unavailable
+    var id: String { rawValue }
+}
+
 @MainActor
 @Observable
 final class VoiceCoordinator {
@@ -32,8 +38,51 @@ final class VoiceCoordinator {
     /// Mirror of the input's availability (the real input is not observable): the mic button shows a slash / a progress ring from it.
     private(set) var availability: VoiceAvailability = .unknown
     var _availabilityForTest: VoiceAvailability { get { availability } set { availability = newValue } }        // test seam
-    /// Bumped when the mic cannot be used and the trick book should open instead.
+    /// Bumped when the trick book should open (the close-up's Train button).
     private(set) var bookRequest = 0
+    /// A card the player should see about the mic: the first-press explainer, or why the mic cannot be used (GameScreen shows it as a sheet).
+    var notice: VoiceNotice?
+    func dismissNotice() { notice = nil }
+    /// The explainer's button: the system permission alert (and the first speech download) come right after it.
+    func explainerContinue() {
+        notice = nil
+        Task { [weak self] in
+            guard let self else { return }
+            await self.input.prepare(contextualWords: [])
+            self.availability = self.input.availability
+            if self.micUnusable { self.showNotice() }
+        }
+    }
+    /// The card for the current unusable state (none when the mic works).
+    private func showNotice() {
+        switch availability {
+        case .denied: notice = .denied
+        case .unavailable(let reason): notice = reason == DictationSpeechInput.needsInternetReason ? .needsInternet : .unavailable
+        default: break
+        }
+    }
+    /// The slashed mic was tapped: try again (the permission or the connection may be fixed now) and say why if it still cannot work.
+    func slashedTap() {
+        input.resetForRetry(); availability = input.availability
+        guard !micUnusable else { showNotice(); return }
+        notice = nil
+        Task { [weak self] in
+            guard let self else { return }
+            await self.input.prepare(contextualWords: [])
+            self.availability = self.input.availability
+            if self.micUnusable { self.showNotice() }
+        }
+    }
+    /// The app came back to the foreground: a failed first-run download or a permission changed in Settings gets another go.
+    func sceneBecameActive() {
+        guard micUnusable else { return }
+        input.resetForRetry(); availability = input.availability
+        prewarm()
+    }
+    /// The first press of a new player: the mic permission has never been asked, so explain it first (real mic only).
+    private var needsExplainer: Bool {
+        input is DictationSpeechInput && AVAudioApplication.shared.recordPermission == .undetermined
+    }
     /// W2: the close-up's "Train" opens the focused Jelly's trick book (the same request the unusable mic makes).
     func requestTrickBook() { bookRequest += 1 }
     /// W2: the book the last decision used (a Jelly other than slot 0 can be the subject), the brain the listening tilt sits on, and who the open listen was about.
@@ -244,7 +293,9 @@ final class VoiceCoordinator {
     func begin() -> Bool {
         guard mode.phase == .idle, !stopping else { return false }
         wake?()                                    // leave the 30 fps idle rest now (the mic button does not pass through the Metal view's touches)
-        if micUnusable { bookRequest += 1; return false }
+        if micUnusable { input.resetForRetry(); availability = input.availability }
+        if micUnusable { showNotice(); return false }
+        if needsExplainer { notice = .explainer; return false }
         downAt = CACurrentMediaTime()
         session = nextSession()
         glowLatencyMs = nil; audioLatencyMs = nil
@@ -291,7 +342,7 @@ final class VoiceCoordinator {
                 self.availability = self.input.availability
                 if self.mode.isListening { self.mode.cancel() }
                 Ears.shared.holdEnded()
-                if self.micUnusable { self.bookRequest += 1 }
+                if self.micUnusable { self.showNotice() }
             }
         }
         return true
@@ -363,7 +414,9 @@ final class VoiceCoordinator {
         guard let care else { return }
         // a meal / tray owns him: commands are ignored and nothing is learned
         if care.trayOut { enqueue(.ignore, nil); return }
+        #if DEBUG          // what the player said never reaches the system log in a shipped build
         if Self.logging { NSLog("[voice] process transcript=\"%@\" tokens=%@", transcript, VoiceMatcher.tokens(transcript).joined(separator: ",")) }
+        #endif
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         heardSeq += 1
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
@@ -408,7 +461,9 @@ final class VoiceCoordinator {
     private func recordParse(_ path: String, _ t0: Double, _ transcript: String) {
         let ms = Int((CACurrentMediaTime() - t0) * 1000)
         lastParse = (path, ms)
+        #if DEBUG
         if Self.logging { NSLog("VOICELOG parse path=%@ ms=%d text=\"%@\"", path, ms, transcript) }
+        #endif
     }
 
     /// (b) the model fallback: free phrasing -> a structured intent, within `modelBudget` seconds. Never produces text for the player.

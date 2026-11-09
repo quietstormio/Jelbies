@@ -30,7 +30,6 @@ extension VoiceCoordinator {
         guard !ids.isEmpty else { confused(ids: [], reason: nil); return }                 // a name for a Jelly that is not here
         if case .jellies = c.who, !care.focus.isActive, ids.count == 1 { (onSelect ?? { care.rosterPick($0, quietHop: true) })(ids[0]) }
         if c.who == .everyone { onEveryone?(ids) }
-        guard c.action.supportedNow else { confused(ids: ids, reason: Self.notYetLine(c, names: names)); return }
         if c.action.needsObject, c.object == nil { confused(ids: ids, reason: Self.missingLine(c)); return }         // "go to the beanbag": none placed
         let locked = care.trayOut || care.bath.active || (care.focus.isActive && care.focus.phase == .approaching)
         let held = care.touchPlay?.holdsBrain ?? false
@@ -62,9 +61,9 @@ extension VoiceCoordinator {
             guard !care.bath.active, !care.raceBusy else { confused(ids: ids, reason: nil); return }
             for id in ids { care.store.wear(look, on: id) }
             understand(c.summary(names: names), kind: .command(.wear), ids: ids)
-        case .race, .train:
-            // the Track panel for that Jelly (Race / Train are its buttons): the same screen Go out -> Track opens
-            guard !locked, !held, !care.raceBusy, !care.focus.isActive, !care.arranging else { confused(ids: ids, reason: care.raceBusy ? "A race is already on" : nil); return }
+        case .race:
+            // the Track panel for that Jelly (Race is its button): the same screen Go out -> Track opens
+            guard !locked, !held, !care.raceBusy, !care.focus.isActive, !care.arranging else { confused(ids: ids, reason: care.raceBusy ? "A Jelly Race is already on" : nil); return }
             let id = ids[0]
             if !care.focus.isActive { (onSelect ?? { care.rosterPick($0, quietHop: true) })(id) }
             understand(c.summary(names: names), kind: .command(c.action), ids: [id])
@@ -91,14 +90,6 @@ extension VoiceCoordinator {
         case .wear: return "No \(c.unknownObject ?? "outfit") in the wardrobe"
         case .playWith: return c.unknownObject.map { "No \($0) in the room" } ?? "Nothing to play with"
         default: return "Not here"
-        }
-    }
-    /// The "not yet" line for a parsed-but-unsupported command (nothing is gated today; kept for the next feature branch).
-    static func notYetLine(_ c: JellyCommand, names: (Int) -> String) -> String {
-        switch c.action {
-        case .race: return "The race track isn't open yet"
-        case .train: return "Training is gone: the Shop has power-ups soon"
-        default: return "Not yet"
         }
     }
     static func nobodyLine(_ k: NeedKind) -> String {

@@ -35,14 +35,14 @@ nonisolated enum ShowRank: String, CaseIterable, Codable, Sendable {
     var kindTiming: Bool { self == .puddle || self == .pond }
     var timing: ShowTiming { kindTiming ? .kind : .standard }
 
-    /// Drops by place (1-based). The user's table: Puddle 250 / 140 / 75 / 30, Pond 400 / 220 / 120 / 50, Lagoon 700 / 385 / 210 / 90, Ocean 1500 / 825 / 450 / 180.
+    /// Drops by place (1-based). The user's table: Puddle 250 / 140 / 75 / 30, Pond 400 / 220 / 120 / 50, Lagoon 700 / 385 / 210 / 90, Ocean 750 / 420 / 225 / 90 (Ocean capped at 3x Puddle for the same place; was 1500 / 825 / 450 / 180).
     func drops(place: Int) -> Int {
         let table: [Int]
         switch self {
         case .puddle: table = [250, 140, 75, 30]
         case .pond: table = [400, 220, 120, 50]
         case .lagoon: table = [700, 385, 210, 90]
-        case .ocean: table = [1500, 825, 450, 180]
+        case .ocean: table = [750, 420, 225, 90]
         }
         return table[min(max(place, 1), 4) - 1]
     }
