@@ -39,7 +39,7 @@ extension JellyPersonality {
         case .sleepy: return .idle(.stretch)
         case .giggly, .brave: return .face(.excited)
         case .gentle: return .face(.hopeful)
-        case .cheeky: return .idle(.tail)
+        case .cheeky: return .hop          // (front-facing: the tail idle turns the body away from the camera)
         }
     }
 }
@@ -281,7 +281,7 @@ struct AdoptionCenter: View {
         let ctaY: CGFloat = compact ? cardY + cardH + 6 : padNaming ? cardY + cardH + 16 : 862
         let canvasH: CGFloat = compact ? h : 956
         return ZStack(alignment: .topLeading) {
-            stageBlock(u).scaleEffect(stageS, anchor: .topLeading).offset(y: compact ? 100 : 130).opacity(showStage ? 1 : 0).allowsHitTesting(showStage)
+            stageBlock(u).scaleEffect(stageS, anchor: .top).offset(y: compact ? 100 : 130).opacity(showStage ? 1 : 0).allowsHitTesting(showStage)
             headerBlock.frame(width: 440).offset(y: 70).opacity(compact ? 0 : 1).allowsHitTesting(!compact)
             topBar(pill: !HUDLayout.isPad, u: u)
             sheetCard(u, height: cardH).frame(width: 408, height: cardH).offset(x: 16, y: cardY)
@@ -646,6 +646,8 @@ struct AdoptionCenter: View {
             Text(roomText).lineLimit(1).minimumScaleFactor(0.8)
         }
         .font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72)).multilineTextAlignment(.center)
+        .padding(.horizontal, 12).padding(.vertical, 4)
+        .background(Capsule().fill(SK.cream.opacity(0.85)))          // reads cleanly when a tall head feature (daisy, ears) rises behind it
         .accessibilityHidden(true)
     }
 
@@ -1379,15 +1381,33 @@ struct AdoptionCenter: View {
     private func perform(_ move: StageMove, slot: Int = 0, calm: Bool = false) {
         guard let m = stageModel, !m.paused, let b = m.care.brainFor(slot) else { return }
         var move = move
+        // pick and naming steps: front-facing moves only (a turning idle would show his back or tail); the species page keeps its own emotes
+        if step != .species, case .idle(let k) = move, Self.turningIdles.contains(k) { move = .hop }
         if calm { switch move { case .idle, .hop: move = .blink; default: break } }
         switch move {
         case .blink: b.blinkRequested = true
         case .face(let f): b.face(f, hold: 1.6)
-        case .hop: m.care.previewHop(slot)
+        case .hop: m.care.previewHop(slot); refaceSoon(m)
         case .idle(let k):
             guard b.commandedIdle == nil, b.idleState.kind == nil, case .none = b.script else { return }
             if k == .flapHop, b.feature != .wings || b.wingsFolded { m.care.previewHop(slot); return }
             b.commandedIdle = k
+            refaceSoon(m)
+        }
+    }
+
+    /// Idles that turn the body away from the camera.
+    private static let turningIdles: Set<IdleKind> = [.tail, .tailThump, .tailHug, .legSpin, .window, .peek, .hmph]
+
+    /// After a move on the pick/naming steps the Jelbie ends facing the camera again.
+    private func refaceSoon(_ m: MelonModel) {
+        guard step != .species else { return }
+        Task { @MainActor in
+            for ms in [1_500_000_000, 2_500_000_000, 3_000_000_000] as [UInt64] {
+                try? await Task.sleep(nanoseconds: ms)
+                guard stageModel === m, !m.paused else { return }
+                m.care.previewFaceCamera()
+            }
         }
     }
 
