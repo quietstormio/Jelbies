@@ -58,20 +58,20 @@ nonisolated enum JellyFeature: String, Codable, CaseIterable, Sendable {
 nonisolated enum JellyRoster {
     /// Jelbies in the room at once (the roster cap).
     static let maxCount = 3
-    /// Characters available (Bob, Pip, Moss, Lavender).
+    /// The four starter characters (Bob, Pip, Moss, Lavender); Teddy, Pearl and Panda are the specials (`knownCount`).
     static let characterCount = 4
     /// The species' own names (what the Adoption Center offers as the default).
     static let baseNames = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl", "Panda"]
-    /// Teddy (character 4): a species that exists but is NOT offered anywhere yet (not in the intro, the Jelly Spring picker or the starter roster; never
-    /// padded into a short roster, not in any default). Reachable only through the `-ForceSpecies teddy` / `-SetRoster teddy` test hooks.
+    /// Teddy (character 4): a special species bought in the Jelly Spring with JellyCoins (AdoptionPrice.special); NOT in the intro, the free first gift or the
+    /// starter roster, and never padded into a short roster or any default. Existing saves that hold him keep him; `-ForceSpecies teddy` / `-SetRoster teddy` still work.
     static let teddyID = 4
     /// Panda (character 6): Teddy's round bear ears + pom on a white body with black eye patches, ears, arms, feet, shoulder band and pom (PandaLook.swift).
-    /// Like Teddy and Pearl it is NOT offered anywhere yet (not in the intro, the Jelly Spring picker, the starter roster or any generator).
+    /// Like Teddy and Pearl it is a special species bought in the Jelly Spring (not in the intro, the starter roster or any generator).
     static let pandaID = 6
     /// Every character id that exists (the four on offer + Teddy, Pearl, Panda).
     static let knownCount = 7
-    /// Pearl (character 5): the white winged Jelbie (WhiteWing.swift): Lavender's wings re-tinted pearl, a soft white body. Like Teddy it is NOT offered anywhere
-    /// (not in the intro, the Jelly Spring picker, the starter roster or any generator); a roster gets him only by `-SetRoster` / `-NewGame` / a save.
+    /// Pearl (character 5): the white winged Jelbie (WhiteWing.swift): Lavender's wings re-tinted pearl, a soft white body. Like Teddy it is a special species
+    /// bought in the Jelly Spring (not in the intro, the starter roster or any generator); a roster also gets him by `-SetRoster` / `-NewGame` / a save.
     static let pearlID = 5
     static let namesKey = "JellyNames.v1"
     /// Names by CHARACTER: the base name, or the one the player typed when adopting (saved under `namesKey`; Start/StartFlow.swift).

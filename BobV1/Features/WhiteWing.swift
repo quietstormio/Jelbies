@@ -45,7 +45,7 @@ nonisolated enum WhiteWing {
     /// so the shaded side, the squish creases and the belly read.
     static let palette: Palette = {
         let unused = SIMD3<Float>(0.5, 0.5, 0.5)
-        return JellyPalettes.matte(Palette(name: "Whitewing", flesh: [0.925, 0.920, 0.935], fleshDeep: [0.655, 0.670, 0.745],
+        return JellyPalettes.matte(Palette(name: "Pearl", flesh: [0.925, 0.920, 0.935], fleshDeep: [0.655, 0.670, 0.745],
                                            pale: unused, skin: unused, stripe: unused, seed: PaletteKey.blue.palette.seed,
                                            shadowTint: [0.760, 0.770, 0.820], uiFlesh: [0.900, 0.900, 0.930]))
     }()

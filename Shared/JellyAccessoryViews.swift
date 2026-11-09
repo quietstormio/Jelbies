@@ -30,6 +30,9 @@ nonisolated enum JellyPalette {
         case "yellow": return Color(.sRGB, red: 0.97, green: 0.84, blue: 0.42)
         case "green": return Color(.sRGB, red: 0.56, green: 0.84, blue: 0.60)
         case "purple", "lavender": return Color(.sRGB, red: 0.76, green: 0.66, blue: 0.93)
+        case "teddy": return Color(.sRGB, red: 0.82, green: 0.66, blue: 0.48)
+        case "pearl": return Color(.sRGB, red: 0.93, green: 0.93, blue: 0.96)
+        case "panda": return Color(.sRGB, red: 0.90, green: 0.90, blue: 0.92)
         case "pink": return Color(.sRGB, red: 0.95, green: 0.62, blue: 0.74)
         default: return Color(.sRGB, red: 0.96, green: 0.70, blue: 0.66)
         }
@@ -40,6 +43,9 @@ nonisolated enum JellyPalette {
         case "yellow": return Color(.sRGB, red: 0.80, green: 0.62, blue: 0.20)
         case "green": return Color(.sRGB, red: 0.30, green: 0.60, blue: 0.36)
         case "purple", "lavender": return Color(.sRGB, red: 0.52, green: 0.40, blue: 0.74)
+        case "teddy": return Color(.sRGB, red: 0.60, green: 0.42, blue: 0.28)
+        case "pearl": return Color(.sRGB, red: 0.62, green: 0.64, blue: 0.76)
+        case "panda": return Color(.sRGB, red: 0.24, green: 0.24, blue: 0.28)
         default: return Color(.sRGB, red: 0.72, green: 0.42, blue: 0.40)
         }
     }

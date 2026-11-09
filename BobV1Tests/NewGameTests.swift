@@ -58,6 +58,7 @@ final class NewGameTests: XCTestCase {
         XCTAssertEqual(JellyRoster.characterCount, 4, "neither is on offer")
         XCTAssertFalse(JellyRoster.defaultIDs.contains(5))
         XCTAssertFalse(SpeciesInfo.order.contains(5))
+        XCTAssertTrue(SpeciesInfo.special.contains(5))
         XCTAssertEqual(JellyRoster.names.count, 7)
         _ = JellyRoster.selectBlobs(roster: [3, 5, 4])
         XCTAssertEqual(JelbieA11yText.description(character: 5), "white with pearly little wings")

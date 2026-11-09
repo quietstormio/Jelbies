@@ -2,7 +2,7 @@
 //  SpeciesInfo.swift
 //  The words and numbers behind the species picker (Adoption Center): species names, epithets, about lines, the starting trait jars and the
 //  moves each species shows off. Content as decided 2026-10-26 (docs/Species.md). Characters: 0 Bob (blue), 1 Pip (yellow), 2 Moss (green),
-//  3 Lavender (purple); the picker order is blue, yellow, purple, green.
+//  3 Lavender (purple); the picker order is blue, yellow, purple, green, then the specials Teddy (4), Pearl (5), Panda (6) when adopting more.
 //
 
 import SwiftUI
@@ -36,6 +36,11 @@ struct SpeciesInfo {
 
     /// Picker order (blue, yellow, purple, green), as character ids.
     static let order = [0, 1, 3, 2]
+    /// The special species sold in the Jelly Spring for JellyCoins (never the free first gift): Teddy, Pearl, Panda (AdoptionPrice.special).
+    static let special = [JellyRoster.teddyID, JellyRoster.pearlID, JellyRoster.pandaID]
+    /// The picker pages: the four starters, then (when adopting more, not the free first gift) the three specials.
+    static func pages(includingSpecial: Bool) -> [Int] { includingSpecial ? order + special : order }
+    var isSpecial: Bool { Self.special.contains(character) }
     static func of(_ character: Int) -> SpeciesInfo { all.first { $0.character == character } ?? all[0] }
 
     static let jarNames = ["Cute", "Sweet", "Sparkly", "Cool", "Sporty"]
@@ -76,6 +81,30 @@ struct SpeciesInfo {
                     moves: [SpeciesMoveInfo(title: "Big stretch", subtitle: "Signature move", icon: "figure.arms.open", move: .idle(.stretch)),
                             SpeciesMoveInfo(title: "Sleepy sway", subtitle: "When it's nap time", icon: "moon.zzz.fill", move: .idle(.sway))],
                     emotes: [.idle(.stretch), .face(.sleepy), .blink, .idle(.sway), .blink]),
+        SpeciesInfo(character: JellyRoster.teddyID, name: "Teddy", epithet: "The cuddly one",
+                    about: "Soft as a pillow, with round bear ears and a puffy tail. Loves hugs more than anything.",
+                    signature: "Bear ears", signatureIcon: "heart.fill",
+                    lore: "Woke up in a pile of warm blankets. Teddies are always ready for a cuddle, and they hum when they are happy.",
+                    bestAt: "Cute", bestAtKey: .cute, loves: "Cookie", traits: [88, 75, 40, 35, 40],
+                    moves: [SpeciesMoveInfo(title: "Sway", subtitle: "Signature move", icon: "heart.fill", move: .idle(.sway)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.sway), .blink, .hop, .face(.hopeful), .blink]),
+        SpeciesInfo(character: JellyRoster.pearlID, name: "Pearl", epithet: "The shimmery one",
+                    about: "Soft white and shiny, with little pearly wings. Floats, flutters and sparkles.",
+                    signature: "Pearly wings", signatureIcon: "bird.fill",
+                    lore: "Woke up inside a seashell at moonrise. Pearls glow a little in the dark, and their wings lift them for a happy flutter.",
+                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Onigiri", traits: [65, 60, 90, 45, 35],
+                    moves: [SpeciesMoveInfo(title: "Flutter hop", subtitle: "Signature move", icon: "bird.fill", move: .idle(.flapHop)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.flapHop), .face(.hopeful), .idle(.sway), .blink, .idle(.flapHop)]),
+        SpeciesInfo(character: JellyRoster.pandaID, name: "Panda", epithet: "The silly one",
+                    about: "Black ears, black patches and a big happy wobble. Loves to roll around and play.",
+                    signature: "Silly wobble", signatureIcon: "face.smiling.fill",
+                    lore: "Woke up in a bamboo grove, and has been snacking and giggling ever since. Pandas always find a sunny spot for a nap.",
+                    bestAt: "Sweet", bestAtKey: .sweet, loves: "Donut", traits: [70, 80, 35, 40, 55],
+                    moves: [SpeciesMoveInfo(title: "Stretch", subtitle: "Signature move", icon: "figure.arms.open", move: .idle(.stretch)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.stretch), .blink, .hop, .face(.excited), .idle(.sway)]),
     ]
 
     /// The mockup's palette for the picker screen (saturated page colours sampled from the design boards; purple follows the same family).
@@ -100,6 +129,12 @@ struct SpeciesLook {
                                    card: Color(hex: 0xF9F8ED), rowHi: Color(hex: 0xD3F1DF), padTop: Color(hex: 0xE8F0EB), glow: Color(hex: 0x4F9A76))
         case 3: return SpeciesLook(top: Color(hex: 0xD1BBF3), bottom: Color(hex: 0xA98BDD), dot: Color(hex: 0xAF8FE3), tabFill: Color(hex: 0xE7DBFA), tabLine: Color(hex: 0xBA9FEA),
                                    card: Color(hex: 0xF9F6F2), rowHi: Color(hex: 0xE7DBFA), padTop: Color(hex: 0xF0ECF6), glow: Color(hex: 0x7E62B8))
+        case JellyRoster.teddyID: return SpeciesLook(top: Color(hex: 0xEBC9A0), bottom: Color(hex: 0xD2A272), dot: Color(hex: 0xC99563), tabFill: Color(hex: 0xF6E3CB), tabLine: Color(hex: 0xD9AE82),
+                                   card: Color(hex: 0xFBF5EC), rowHi: Color(hex: 0xF6E3CB), padTop: Color(hex: 0xF2E8DC), glow: Color(hex: 0x9A6E44))
+        case JellyRoster.pearlID: return SpeciesLook(top: Color(hex: 0xE4E8F5), bottom: Color(hex: 0xB9C3E0), dot: Color(hex: 0xC4CCE6), tabFill: Color(hex: 0xEEF1FA), tabLine: Color(hex: 0xC4CCE6),
+                                   card: Color(hex: 0xFAF8F5), rowHi: Color(hex: 0xEEF1FA), padTop: Color(hex: 0xF1F2F7), glow: Color(hex: 0x7C88B4))
+        case JellyRoster.pandaID: return SpeciesLook(top: Color(hex: 0xBFE3C8), bottom: Color(hex: 0x8EC79C), dot: Color(hex: 0x4A4A4F), tabFill: Color(hex: 0xDCF0E1), tabLine: Color(hex: 0x9AD0A8),
+                                   card: Color(hex: 0xF9F8F0), rowHi: Color(hex: 0xDCF0E1), padTop: Color(hex: 0xEAF0EA), glow: Color(hex: 0x4F8A63))
         default: return SpeciesLook(top: Color(hex: 0x9DD0F2), bottom: Color(hex: 0x6DADE0), dot: Color(hex: 0x79B7E6), tabFill: Color(hex: 0xD4EAFA), tabLine: Color(hex: 0x8DC1EA),
                                     card: Color(hex: 0xF8F6F1), rowHi: Color(hex: 0xD4EAFA), padTop: Color(hex: 0xEAF0F5), glow: Color(hex: 0x4F83B5))
         }

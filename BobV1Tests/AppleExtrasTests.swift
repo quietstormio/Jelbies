@@ -53,6 +53,7 @@ final class AppleExtrasTests: XCTestCase {
         XCTAssertEqual(JelbieRoster.current(directory: dir, count: 3, roster: [1, 2, 3]).map(\.id), [0, 1, 2], "entity ids are slots")
         XCTAssertEqual(JelbieRoster.current(directory: dir, count: 3, roster: [1, 2, 3]).map(\.color), ["yellow", "green", "lavender"])
         XCTAssertEqual(JelbieRoster.colorName(3), "lavender", "the snapshot key WidgetBridge writes")
+        XCTAssertEqual(JelbieRoster.colorName(5), "pearl")
         JellySnapshot(savedAt: t0, jellies: [rec(1, "Pip", "yellow"), rec(0, "Bob")]).write(to: dir)
         let cur = JelbieRoster.current(directory: dir, count: 3)
         XCTAssertEqual(cur.map(\.id), [0, 1], "the published roster wins over the launch count, sorted by id")

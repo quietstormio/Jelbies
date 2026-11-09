@@ -12,7 +12,7 @@ extension GameCare {
         guard store.saved.tricksMigrated != true else { return }
         var learned: [Int: [VoiceTrick]] = [:]
         for j in jellies { learned[j.character] = VoiceTrick.allCases.filter { j.training.isLearned($0) } }
-        for c in 0..<JellyRoster.characterCount where learned[c] == nil {
+        for c in 0..<JellyRoster.knownCount where learned[c] == nil {
             learned[c] = VoiceTraining.savedLearnedTricks(defaults: defaults, key: JellyKeys.words(c))
         }
         store.migrateTricks(learned: learned, roster: jellies.map(\.character))

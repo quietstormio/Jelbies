@@ -70,9 +70,9 @@ final class WidgetBridge {
     // MARK: building the snapshot
 
     /// CHARACTER id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender: JellyRoster.palette).
-    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender"][min(max(id, 0), 3)] }
+    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda"][min(max(id, 0), 6)] }
     /// Colour name -> character (the inverse of `colorName`; the snapshot carries the colour, not the character).
-    static func character(ofColor c: String) -> Int { ["blue", "yellow", "green", "lavender"].firstIndex(of: c) ?? (c == "purple" ? 3 : 0) }
+    static func character(ofColor c: String) -> Int { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda"].firstIndex(of: c) ?? (c == "purple" ? 3 : 0) }
     /// The body palette of a colour name (each Jelly's own colours).
     static func palette(_ id: Int) -> Palette { JellyRoster.palette(id) ?? PaletteKey.blue.palette }
     static func palette(color c: String) -> Palette { palette(character(ofColor: c)) }

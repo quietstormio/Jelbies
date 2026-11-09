@@ -233,9 +233,13 @@ struct GameHost: View {
 /// Adoption prices (Drops). Rationale: a race pays 250-1500 for a win, so the second Jelbie (500) is about two Puddle wins and the third (800) a few more, well above the dearest trick page
 /// (55) and decor piece (90), so the room fills over weeks. A rare Jelly Spring colour (an exclusive mutation) costs +300 on top, so the most anyone pays is 1,100. The first Jelbie of a new game is free.
 enum AdoptionPrice {
+    static let special = 2000
     static let second = 500, third = 800, rareSurcharge = 300
+    /// Teddy, Pearl and Panda (Jelly Spring specials): 2,000 JellyCoins each, whichever slot they fill. That is 2.5x the dearest ordinary adoption (800) and 1.8x
+    /// the dearest rare colour (1,100): a long saving goal (about 2 Splash wins), so they feel earned. A special never carries a daily colour or the rare surcharge.
     /// Cost of the next Jelbie when `home` are in the room (nil = the room is full); `rare` = the offered colour is a rare mutation (+300; never on the free first gift).
-    static func next(home: Int, rare: Bool = false) -> Int? {
+    static func next(home: Int, rare: Bool = false, special: Bool = false) -> Int? {
+        if special { return home < 1 ? 0 : (home < JellyRoster.maxCount ? Self.special : nil) }
         switch home { case ..<1: return 0; case 1: return second + (rare ? rareSurcharge : 0); case 2: return third + (rare ? rareSurcharge : 0); default: return nil }
     }
 }

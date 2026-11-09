@@ -21,7 +21,7 @@ nonisolated struct JelbieEntity: AppEntity, Sendable {
     }
 
     static func colorWord(_ c: String) -> String {
-        switch c { case "blue": return "Blue"; case "yellow": return "Yellow"; case "green": return "Green"; case "purple", "lavender": return "Lavender"; default: return c.capitalized }
+        switch c { case "blue": return "Blue"; case "yellow": return "Yellow"; case "green": return "Green"; case "purple", "lavender": return "Lavender"; case "teddy": return "Brown"; case "pearl": return "White"; case "panda": return "Black and white"; default: return c.capitalized }
     }
 }
 
@@ -37,7 +37,7 @@ nonisolated enum JelbieRoster {
             .map { JelbieEntity(id: $0.offset, name: JellyRoster.names[$0.element], color: JelbieRoster.colorName($0.element)) }
     }
     /// CHARACTER id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender), the same as WidgetBridge.colorName (which is main-actor bound).
-    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender"][min(max(id, 0), 3)] }
+    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda"][min(max(id, 0), 6)] }
     /// A loose name match: case-insensitive, prefix or contained ("bob", "Bobby" -> Bob).
     static func match(_ text: String, in list: [JelbieEntity]) -> [JelbieEntity] {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

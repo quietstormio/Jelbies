@@ -108,6 +108,7 @@ final class FeatureTests: XCTestCase {
         let snap = try? JSONDecoder().decode(JellySnapshot.self, from: Data(old.utf8))
         XCTAssertEqual(snap?.jellies.first?.feature, "")
         XCTAssertEqual(WidgetBridge.colorName(3), "lavender")
+        XCTAssertEqual(WidgetBridge.character(ofColor: WidgetBridge.colorName(6)), 6, "Panda is not clamped to lavender")
     }
 
     // MARK: the mouth keep-out

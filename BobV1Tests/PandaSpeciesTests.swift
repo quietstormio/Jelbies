@@ -18,8 +18,9 @@ final class PandaSpeciesTests: XCTestCase {
         XCTAssertNotNil(JellyRoster.palette(JellyRoster.pandaID))
         XCTAssertEqual(JellyRoster.characterCount, 4, "not offered: the intro / Jelly Spring pickers still show four")
         XCTAssertFalse(JellyRoster.defaultIDs.contains(6))
-        XCTAssertFalse(SpeciesInfo.order.contains(6), "not in the Jelly Spring picker")
-        XCTAssertFalse(SpeciesInfo.all.contains { $0.character == 6 }, "no species card")
+        XCTAssertFalse(SpeciesInfo.order.contains(6), "not in the starter picker (the free first gift)")
+        XCTAssertTrue(SpeciesInfo.pages(includingSpecial: true).contains(6), "bought in the Jelly Spring")
+        XCTAssertEqual(AdoptionPrice.next(home: 1, special: true), AdoptionPrice.special)
         for n in 1...3 { XCTAssertFalse(JellyRoster.sanitised(Array(0..<n)).contains(6)) }
     }
 

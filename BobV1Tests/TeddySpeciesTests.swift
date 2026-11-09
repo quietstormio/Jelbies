@@ -23,8 +23,9 @@ final class TeddySpeciesTests: XCTestCase {
         XCTAssertNotNil(JellyRoster.palette(4))
         XCTAssertEqual(JellyRoster.characterCount, 4, "the characters on offer are still the four")
         XCTAssertFalse(JellyRoster.defaultIDs.contains(4), "not a starter")
-        XCTAssertFalse(SpeciesInfo.order.contains(4), "not in the Jelly Spring picker")
-        XCTAssertFalse(SpeciesInfo.all.contains { $0.character == 4 }, "no species card")
+        XCTAssertFalse(SpeciesInfo.order.contains(4), "not in the starter picker (the free first gift)")
+        XCTAssertTrue(SpeciesInfo.pages(includingSpecial: true).contains(4), "bought in the Jelly Spring")
+        XCTAssertNil(AdoptionPrice.next(home: 3, special: true), "room full")
         // a short roster is never padded with him
         for n in 1...3 { XCTAssertFalse(JellyRoster.sanitised(Array(0..<n)).contains(4)) }
     }

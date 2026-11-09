@@ -48,7 +48,7 @@ struct AdoptionCenter: View {
         self.mode = mode; self.done = done; self.cancel = cancel
         let h = mode == .first ? [] : JellyRoster.savedIDs()
         _home = State(initialValue: h)
-        var start = mode == .first ? 0 : (SpeciesInfo.order.firstIndex { !h.contains($0) } ?? 0)
+        var start = mode == .first ? 0 : (SpeciesInfo.pages(includingSpecial: mode == .more).firstIndex { !h.contains($0) } ?? 0)
         var t = PickerTab.about
         #if targetEnvironment(simulator)
         let d = UserDefaults.standard
@@ -56,11 +56,13 @@ struct AdoptionCenter: View {
         if d.object(forKey: "PickerTab") != nil { t = PickerTab(rawValue: min(max(d.integer(forKey: "PickerTab"), 0), 2)) ?? .about }
         #endif
         _page = State(initialValue: start); _tab = State(initialValue: t)
-        Self.previewOffer(mode: mode, character: SpeciesInfo.order[start])
+        Self.previewOffer(mode: mode, character: SpeciesInfo.pages(includingSpecial: mode == .more)[start])
     }
 
     private var reduce: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
-    private var info: SpeciesInfo { SpeciesInfo.of(SpeciesInfo.order[page]) }
+    /// The species pages of this screen: the four starters, plus Teddy, Pearl and Panda when adopting more (not the free first gift).
+    private var order: [Int] { SpeciesInfo.pages(includingSpecial: mode == .more) }
+    private var info: SpeciesInfo { SpeciesInfo.of(order[page]) }
     private var look: SpeciesLook { info.look }
     private var pick: Int { info.character }
     /// Today's Jelly Spring colour variant of the shown species (nil = classic; the free first gift is always classic).
@@ -73,7 +75,7 @@ struct AdoptionCenter: View {
         if mode == .more, JellyRoster.savedIDs().contains(character) { return }          // an owned Jelbie keeps his own (saved) colour
         JellyVariants.setPreview(character, offer(mode: mode, character: character))
     }
-    private var price: Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, rare: variant?.rare == true) }
+    private var price: Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, rare: variant?.rare == true, special: info.isSpecial) }
     private var isHome: Bool { home.contains(pick) }
     private var canAdopt: Bool { !isHome && (price.map { $0 <= wallet.count } ?? false) }
 
@@ -234,8 +236,8 @@ struct AdoptionCenter: View {
                 Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
             }
             HStack(spacing: 4) {
-                ForEach(0..<SpeciesInfo.order.count, id: \.self) { i in
-                    Circle().fill(SpeciesInfo.of(SpeciesInfo.order[i]).look.dot).frame(width: i == page ? 15 : 11, height: i == page ? 15 : 11)
+                ForEach(0..<order.count, id: \.self) { i in
+                    Circle().fill(SpeciesInfo.of(order[i]).look.dot).frame(width: i == page ? 15 : 11, height: i == page ? 15 : 11)
                         .padding(3).background(Circle().fill(Color.white))
                 }
             }
@@ -432,8 +434,8 @@ struct AdoptionCenter: View {
                     .multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.8).frame(width: 380).position(x: 220, y: 160)
             }
             HStack(spacing: 4) {
-                ForEach(0..<SpeciesInfo.order.count, id: \.self) { i in
-                    let s = SpeciesInfo.of(SpeciesInfo.order[i])
+                ForEach(0..<order.count, id: \.self) { i in
+                    let s = SpeciesInfo.of(order[i])
                     let on = i == page
                     ZStack {
                         Circle().fill(Color.white).frame(width: on ? 24 : 17, height: on ? 24 : 17)
@@ -457,7 +459,7 @@ struct AdoptionCenter: View {
         }
     }
 
-    private var headerLabel: String { "\(mode == .more ? "The Jelly Spring. Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")\(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(SpeciesInfo.order.count)" }
+    private var headerLabel: String { "\(mode == .more ? "The Jelly Spring. Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")\(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(order.count)" }
 
     // MARK: stage (design box 440 x 470, origin at canvas y 130)
 
@@ -696,7 +698,7 @@ struct AdoptionCenter: View {
 
     private func step(_ d: Int) {
         guard !naming else { return }
-        let n = SpeciesInfo.order.count
+        let n = order.count
         move(to: (page + d + n) % n, dir: d)
     }
 
@@ -714,9 +716,9 @@ struct AdoptionCenter: View {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 170_000_000)
             ready = false; stageModel = nil
-            Self.previewOffer(mode: mode, character: SpeciesInfo.order[next])
+            Self.previewOffer(mode: mode, character: order[next])
             page = next
-            camera.setSpecies(SpeciesInfo.order[next])
+            camera.setSpecies(order[next])
             slideX = reduce ? 0 : CGFloat(dir) * 160
             withAnimation(reduce ? .easeOut(duration: 0.25) : .spring(response: 0.42, dampingFraction: 0.8)) { slideX = 0; slideO = 1 }
             paging = false
@@ -729,7 +731,7 @@ struct AdoptionCenter: View {
         stageModel = m; ready = true
         Task { @MainActor in           // landing: a happy hop (or the flutter hop for wings)
             try? await Task.sleep(nanoseconds: 450_000_000)
-            perform(pick == 3 ? .idle(.flapHop) : .hop)
+            perform(pick == 3 || pick == JellyRoster.pearlID ? .idle(.flapHop) : .hop)
         }
         startEmotes(for: pick)
     }
