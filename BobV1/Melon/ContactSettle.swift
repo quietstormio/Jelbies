@@ -195,6 +195,16 @@ extension BlobBrain {
         return x.d
     }
 
+    /// The stance's destination through the room's floor rules WITHOUT the session partners' wall (r4-engine-arrival, 2026-11-05; ported from cd8ff63e + 9d200976 + 3e709647): `fixed` ran the target through `resolve`,
+    /// whose peer wall measures the partner against the walker's CURRENT walking outline and pushed every side-by-side destination ~6 cm further out (the walk stopped 6.4 cm apart). The spot is the touch spot by
+    /// construction, so the partners are exempt for this one call, but ONLY side by side (face to face, boop / highFive walk-ups failed with it on).
+    private func stanceFixed(_ p: SIMD2<Float>) -> SIMD2<Float> {
+        guard social.flatMap({ ContactStance.entry($0.kind)?.facing }) == .camera else { return fixed(p) }
+        stanceStepFree = true
+        defer { stanceStepFree = false }
+        return fixed(p)
+    }
+
     /// A walker never turns round to walk BACK (an overshoot): the turn on the spot swings the wide axis (arms, ears, 1.4 m across) through the partner. A destination behind the walker (against the way he
     /// was sent) becomes "stop here" (the walk ends with the current step); the settle's lean takes the rest.
     private func noTurnAround(_ want: SIMD2<Float>, was t: SIMD2<Float>, partner p: BlobBrain) -> SIMD2<Float> {
@@ -208,6 +218,7 @@ extension BlobBrain {
     /// every walk alone: it must not be rewritten to the touch point.
     func contactStanceWalk(partner p: BlobBrain, gapWanted: Float, features: Bool = true, retarget: Bool = true) {
         guard let sim = contactSim else { return }
+        if retarget, case .walk = script { contactSideFinal = social.flatMap { ContactStance.entry($0.kind)?.facing } == .camera } else { contactSideFinal = false }          // (the last stride's brake: side by side it is slower, see ContactTuning.sideFinalStepRate; per brain)
         if ContactTrace.on {
             var w = "noWalk", tg = "-"
             if case .walk(let t, _) = script {
@@ -249,7 +260,7 @@ extension BlobBrain {
                     let side: SIMD2<Float> = lo ? -m!.axis : m!.axis          // from the meeting point toward my side
                     stable = contactStableTouch(p, axis: side)
                     dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
-                    want = fixed(m!.mid + side * (dist / 2))
+                    want = stanceFixed(m!.mid + side * (dist / 2))
                     if ContactTrace.on { ContactTrace.mod(steerID) { $0.tgt += "|meet" } }
                     let okFix = simd_distance(want, m!.mid + side * (dist / 2)) < 0.25
                     want = noTurnAround(want, was: t, partner: p)
@@ -258,7 +269,7 @@ extension BlobBrain {
                 } else {
                     stable = contactStableTouch(p, axis: u)
                     dist = (stable ?? 1.405) + max(gapWanted, ContactStance.arrive) + ContactStance.walkShort
-                    want = fixed(p.position + u * dist)
+                    want = stanceFixed(p.position + u * dist)
                     let okFix = simd_distance(want, p.position + u * dist) < 0.25
                     want = noTurnAround(want, was: t, partner: p)
                     let dT = simd_distance(want, t)

@@ -363,6 +363,7 @@ final class BlobBrain {
     var stepYaw0: Float = 0, stepYawD: Float = 0
     /// Set only around the planning call of a stance walk's final step: `contactPartnerIDs` then tells the room's peer wall to skip the session partner (encoded as -(id+1)).
     var stanceStepFree = false
+    var contactSideFinal = false          // this walker's stance walk is side by side (slower last stride); written only by contactStanceWalk, every tick
     var armCalm: Float = 1          // 1 = the walk's full arm swing; less while a stance walker closes the last metre
     var walkFinal = false            // the step in progress squares his feet and ends the walk
     var pivotSide: Int?              // pivot the pose on this foot (wave: its planted spot; gait: its nominal spot under the root)
@@ -1362,7 +1363,7 @@ final class BlobBrain {
         rootD = got
         let wm = finalTurn ? max(-m, min(m, errF)) : (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err)))
         // the last stride of a stance walk is an unhurried one (people brake into a hug): the soft body keeps the walk's momentum for a few centimetres past the root when the root stops at once
-        let brake: Float = (exact && walkFinal) ? ContactTuning.finalStepRate : 1
+        let brake: Float = (exact && walkFinal) ? ContactTuning.finalStepRate(sideBySide: contactSideFinal) : 1
         startStep(rootD: rootD, dyaw: wm, reach: u * r, peak: stepLift * amplitude, rate: stepRate * runRateMul * locoRateMul * brake)
         return 0
     }
