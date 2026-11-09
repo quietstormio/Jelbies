@@ -451,7 +451,7 @@ extension BlobBrain {
         if case .walk(let target, _) = script, kind == .run, idleState.stumbleAt > 0, runW > 0.9,
            simd_length(target - SIMD2(px, pz)) < idleState.stumbleAt {
             idleState.kind = .stumble; idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0
-            AudioHub.shared.contextVoice(jelly: steerID, .uhoh, chance: 0.6, x: px)
+            if !voiceMuted { AudioHub.shared.contextVoice(jelly: steerID, .uhoh, chance: 0.6, x: px) }
             postEvent(.tripped)
             route = []; walkFinal = false
             script = .idle
@@ -542,7 +542,7 @@ extension BlobBrain {
 
     func idleBegin(_ kind: IdleKind) {
         varietyNote(kind)
-        if let c = JellyVoiceSet.contextVoice(forIdle: kind, mood: idleMood) { AudioHub.shared.contextVoice(jelly: steerID, c.voice, chance: c.chance, x: px) }          // (the home room's context voices: add variety on top of the chirps)
+        if !voiceMuted, let c = JellyVoiceSet.contextVoice(forIdle: kind, mood: idleMood) { AudioHub.shared.contextVoice(jelly: steerID, c.voice, chance: c.chance, x: px) }          // (the home room's context voices: add variety on top of the chirps)
         if kind != .wander { roomCue(.idle(kind)) }          // (its own haptic: Haptics+Emotes.swift)
         idleState.kind = kind; walkBoostK = 1
         idleState.t = 0; idleState.phase = 0; idleState.phaseT = 0; idleState.k = 0; idleState.yielding = false; idleState.yieldT = 0

@@ -243,15 +243,17 @@ struct OpeningStoryView: View {
     /// Jelbie k stands on its spot in its (invisible) stage. Its drop pops when its turn comes (`pump`): a drop never bursts without it, and it never leaps out of nothing.
     private func ready(_ k: Int, _ m: MelonModel) {
         st.models[k] = m
+        m.care.brainFor(0)?.voiceMuted = true          // (a drop that has not burst makes no sound)
         pump()
     }
 
     private func appear(_ k: Int) {
         st.appearAt[k] = Date()
         guard motion else { perform(k, [.blink]); return }
+        let t = st.token
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 760_000_000)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, st.token == t else { return }
             switch k {
             case 0: perform(k, [.idle(.look)])
             case 1: perform(k, [.idle(.tail)])
@@ -605,6 +607,7 @@ struct OpeningStoryView: View {
         guard st.popAt[k] == nil, st.models[k] != nil else { return }
         let now = Date()
         st.popAt[k] = now
+        st.models[k]?.care.brainFor(0)?.voiceMuted = false
         st.lastPopAt = now
         sfx("opening_pop", "Pop!", 1)
         sfx("sparkle_\(k % 2 + 1)", "A sparkle", 0.6, after: 0.05)

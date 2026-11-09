@@ -159,6 +159,8 @@ final class BlobBrain {
     var react = ReactState()
     var startingReaction = false
     weak var bus: ReactionBus?
+    /// True while this Jelbie is a hidden preview (the opening story's drop has not burst yet): its own idle voices stay quiet.
+    var voiceMuted = false
     var idleMood: IdleMood = .okay
     /// Time of day (DayClock): 0...1 night / morning weights. Night makes him sleepier (naps, yawns), morning makes him stretch and wake.
     var idleNight: Float = 0
