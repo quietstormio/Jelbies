@@ -59,8 +59,6 @@ final class PlayToss {
     private(set) var shownRally = 0
     private(set) var catchSerial = 0
     private(set) var throwSerial = 0
-    /// A toy that has no play yet (the wand stub) says so here for the UI to show once.
-    var stubNotice: String?
 
     // MARK: not observed (per-frame)
     @ObservationIgnored var ball = TossBall(pos: SIMD3(0, 0.27, 3), radius: 0.27)

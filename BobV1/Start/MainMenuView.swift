@@ -240,26 +240,64 @@ struct TitleBackdrop: View {
         return p
     }
 
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { tl in
-            let t = still ? 0 : tl.date.timeIntervalSinceReferenceDate
+    /// The rotated Jelbie pattern at phase 0, drawn once into a Metal-backed layer (`drawingGroup`) that is a little larger than the screen. It is
+    /// periodic, so the 9 s scroll is just this layer sliding by the phase offset; the ~361 tile paths are no longer re-filled at 30 Hz.
+    private struct PatternLayer: View, Equatable {
+        let w: Double, h: Double, opacity: Double
+        static let period = 72.0
+        var body: some View {
+            let ps = min(w, h) / 440
+            let m = 2 * Self.period * ps                       // margin >= the longest slide (one period along the diagonal)
             Canvas { ctx, sz in
-                let w = sz.width, h = sz.height
-                ctx.fill(Path(CGRect(origin: .zero, size: sz)), with: .color(palette.bg))
-                // Pattern
-                let ps = min(w, h) / 440
-                let phase = (t.truncatingRemainder(dividingBy: 9)) / 9
                 var pc = ctx
-                pc.translateBy(x: w / 2, y: h / 2)
+                pc.translateBy(x: sz.width / 2, y: sz.height / 2)
                 pc.rotate(by: .degrees(-10))
                 pc.scaleBy(x: ps, y: ps)
-                pc.translateBy(x: -phase * 72, y: -phase * 72)
-                let R = Int((hypot(w, h) / ps / 72).rounded(.up)) / 2 + 2
+                let R = Int((hypot(sz.width, sz.height) / ps / Self.period).rounded(.up)) / 2 + 2
                 let tilePath = JelbieArt.tile
+                let color = Color.white.opacity(opacity)
                 for i in -R...R { for j in -R...R {
-                    pc.fill(tilePath.applying(CGAffineTransform(translationX: Double(i) * 72, y: Double(j) * 72)), with: .color(.white.opacity(palette.patternOpacity)))
+                    pc.fill(tilePath.applying(CGAffineTransform(translationX: Double(i) * Self.period, y: Double(j) * Self.period)), with: .color(color))
                 } }
-                guard extras else { return }
+            }
+            .frame(width: w + 2 * m, height: h + 2 * m)
+            .drawingGroup()
+        }
+        /// Where the layer sits at this phase: the tile-space slide (-phase*72, -phase*72) scaled, then turned by the pattern's -10 degrees.
+        static func slide(phase: Double, w: Double, h: Double) -> CGSize {
+            let ps = min(w, h) / 440
+            let d = -phase * period * ps
+            let a = -10.0 * Double.pi / 180
+            return CGSize(width: d * cos(a) - d * sin(a), height: d * sin(a) + d * cos(a))
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { tl in
+                let t = still ? 0 : tl.date.timeIntervalSinceReferenceDate
+                let phase = (t.truncatingRemainder(dividingBy: 9)) / 9
+                let slide = PatternLayer.slide(phase: phase, w: geo.size.width, h: geo.size.height)
+                ZStack {
+                    palette.bg
+                    PatternLayer(w: geo.size.width, h: geo.size.height, opacity: palette.patternOpacity)
+                        .equatable()
+                        .offset(slide)
+                    if extras { foreground(t: t) }
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+            }
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    /// Sparkles and the peeking Jelbie (a few dozen paths; the only thing that still redraws each frame).
+    private func foreground(t: Double) -> some View {
+        Canvas { ctx, sz in
+            do {
+                let w = sz.width, h = sz.height
                 // Sparkles (positions are fractions of the 440x956 design)
                 let tw = still ? 1.0 : 0.65 + 0.35 * cos(t * 2 * .pi / 2.4)
                 let ds = Double(scale ?? w / 440)
@@ -301,7 +339,5 @@ struct TitleBackdrop: View {
                 for b in [l, r] { jc.stroke(b, with: .color(eye), style: StrokeStyle(lineWidth: 2.2, lineCap: .round)) }
             }
         }
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
     }
 }

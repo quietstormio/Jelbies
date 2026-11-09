@@ -21,15 +21,6 @@ struct PlayChrome: View {
     var body: some View {
         ZStack {
             if play.phase == .toy { toySurface } else if play.active { surface }
-            if let note = play.stubNotice {
-                Text(note).jFont(14, .semibold).foregroundStyle(FocusStyle.brown)
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).padding(.top, 70)
-                    .allowsHitTesting(false)
-                    .task(id: note) { try? await Task.sleep(nanoseconds: 2_600_000_000); play.stubNotice = nil }
-                    .accessibilityIdentifier("play-stub-notice")
-            }
         }
         .animation(.easeInOut(duration: 0.25), value: play.active)
         .onChange(of: play.active) { _, on in if on { thrown = false; hearts = []; rallyShown = 0; seenCatch = play.catchSerial } }
