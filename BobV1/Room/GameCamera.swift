@@ -257,6 +257,7 @@ enum GameCamera {
     nonisolated(unsafe) static var focusFramed: [SIMD2<Float>] = []
     /// Share of the screen width the row of Jellies fills in the wide close-up (a little looser than the single one), and how many body widths (2R) the outermost
     /// centres get as room each side (a wide body: ears, limbs, a necklace, a hat) so the whole body is inside with a margin.
+    static let focusRowTabletWiden: Float = 0.4
     static let focusRowFill: Float = 0.88, focusRowBodyRoom: Float = 1.2
     /// Where the row's middle sits on screen (0 top ... 1 bottom): lower than the single close-up so the pulled-back camera does not see past the room's near edge.
     static let focusRowScreenY: Float = 0.46
@@ -282,7 +283,8 @@ enum GameCamera {
         for s in spots { lo = simd_min(lo, s); hi = simd_max(hi, s) }
         let mid = (lo + hi) * 0.5
         let visW = (hi.x - lo.x + 2 * BobShape.R * focusRowBodyRoom) / focusRowFill
-        let visH = visW / max(framingAspect(aspect), 0.2)
+        // a tablet's landscape (~1.33): the row gets its own width (framing 0.96, not the phone's 0.56) so the trio fills ~64% of the screen, not ~37%. tabletBand is 0 for phones / 1.0.
+        let visH = visW / max(framingAspect(aspect) + focusRowTabletWiden * poseBlend(aspect) * tabletBand(aspect), 0.2)
         let dist = visH / (2 * tanf(fovY / 2))
         let ty = 0.5 * BobShape.H - (0.5 - focusRowScreenY) * visH
         let t = SIMD3<Float>(mid.x, ty, hi.y)
