@@ -81,7 +81,6 @@ final class AITierBTests: XCTestCase {
             ("Pip sit down", .jellies([1]), .trick(.sit), nil, nil),
             ("sit", .selected, .trick(.sit), nil, nil),
             ("let's race", .selected, .race, nil, nil),
-            ("Bob, time to train", .jellies([0]), .train, nil, nil),
             ("Bobby come here", .jellies([0]), .come, nil, nil),
             ("Pip and Moss come here", .jellies([1, 2]), .come, nil, nil),
             ("stop fighting you two", .everyone, .stopFighting, nil, nil),

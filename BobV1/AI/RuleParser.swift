@@ -62,8 +62,6 @@ enum RuleParser {
     private static let goPhrases = ["go to", "go on", "go sit", "go lie", "get on", "get in", "hop on", "hop in", "go over to", "head to", "go to the", "jump on", "walk to", "climb on"]
     private static let racePhrases = ["let s race", "go race", "time to race", "run a race", "do a race", "enter the race", "jelly circuit"]
     private static let raceWords: Set<String> = ["race", "racing", "circuit", "racetrack"]
-    private static let trainPhrases = ["let s train", "time to train", "do some training", "practice time", "let s practice", "go train"]
-    private static let trainWords: Set<String> = ["train", "training", "practice", "practise", "workout"]
     private static let playPhrases = ["let s play", "wanna play", "want to play", "go play", "playtime", "play time", "play together", "play a game", "have fun"]
     private static let playWords: Set<String> = ["play", "playing", "soccer", "football", "ball", "fetch", "game", "tag"]
     private static let gameWords: Set<String> = ["soccer", "football", "ball", "fetch", "tag", "catch", "frisbee", "bowling"]
@@ -170,11 +168,9 @@ enum RuleParser {
         // 6. clean
         if let p = has(toks, cleanPhrases) { return finish(.clean, strip: p, words: cleanWords) }
         if hasWord(toks, cleanWords) { return finish(.clean, words: cleanWords) }
-        // 7. races, training, playing with someone
+        // 7. races, playing with someone
         if let p = has(toks, racePhrases) { return finish(.race, strip: p, words: raceWords) }
         if hasWord(toks, raceWords) { return finish(.race, words: raceWords) }
-        if let p = has(toks, trainPhrases) { return finish(.train, strip: p, words: trainWords) }
-        if hasWord(toks, trainWords) { return finish(.train, words: trainWords) }
         if partner != nil || hasWord(toks, gameWords) {
             if hasWord(toks, playWords) || has(toks, playPhrases) != nil || hasWord(toks, gameWords) {
                 return finish(.playWith, strip: has(toks, playPhrases), words: ["play", "playing", "with"])
