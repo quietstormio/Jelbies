@@ -24,6 +24,7 @@ struct SettingsScreen: View {
     @State private var confirmReset = false
     @State private var replayIntro = UserDefaults.standard.integer(forKey: "Intro") != 0
     @State private var followReal = DayClock.shared.followReal
+    @AppStorage(HapticSettings.key) private var hapticsOn = true
     @Environment(\.verticalSizeClass) private var vsc
     private var landscape: Bool { vsc == .compact }
     private let ink = CloudTheme.ink
@@ -149,6 +150,9 @@ struct SettingsScreen: View {
             }
             slider("Sound effects", on: $hub.settings.sfxOn, volume: $hub.settings.sfxVolume, id: "sfx")
             Text("Jelbie voices follow the sound effects volume.").font(CloudTheme.font(12, .regular)).foregroundStyle(ink.opacity(0.65))
+            Toggle("Haptics", isOn: $hapticsOn)
+                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
+                .accessibilityIdentifier("settings-haptics-toggle")
         }
     }
 

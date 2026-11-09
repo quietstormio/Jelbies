@@ -94,7 +94,7 @@ extension GameCare {
     func playFeedback(_ e: PlayEvent) {
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playtoss] %@", String(describing: e)) }
         let hub = AudioHub.shared
-        func buzz(_ style: UIImpactFeedbackGenerator.FeedbackStyle, _ i: CGFloat) { guard HapticSettings.enabled else { return }; UIImpactFeedbackGenerator(style: style).impactOccurred(intensity: i) }
+        func buzz(_ style: UIImpactFeedbackGenerator.FeedbackStyle, _ i: CGFloat) { Haptic.impact(style, intensity: i) }
         switch e {
         case .release(let s):
             buzz(.soft, min(0.9, 0.35 + CGFloat(s) * 0.04)); hub.play(.tick, volume: 0.6, rate: 1.1)

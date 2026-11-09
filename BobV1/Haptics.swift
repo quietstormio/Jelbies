@@ -15,6 +15,8 @@
 import Foundation
 import QuartzCore
 import CoreHaptics
+import SwiftUI
+import UIKit
 
 // MARK: - Settings
 
@@ -25,6 +27,30 @@ enum HapticSettings {
     static var enabled: Bool {
         get { UserDefaults.standard.object(forKey: key) == nil ? true : UserDefaults.standard.bool(forKey: key) }
         set { UserDefaults.standard.set(newValue, forKey: key) }
+    }
+}
+
+/// The one gate for UIKit generators and SwiftUI `.sensoryFeedback`: every call checks the Settings toggle ("Haptics").
+/// (The CoreHaptics driver below has its own checks; this covers the system generators.)
+enum Haptic {
+    @MainActor static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle, intensity: CGFloat = 1) {
+        guard HapticSettings.enabled else { return }
+        UIImpactFeedbackGenerator(style: style).impactOccurred(intensity: intensity)
+    }
+    @MainActor static func notify(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        guard HapticSettings.enabled else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(type)
+    }
+    @MainActor static func selection() {
+        guard HapticSettings.enabled else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+}
+
+extension View {
+    /// `.sensoryFeedback(_:trigger:)` that stays silent while Haptics is off in Settings.
+    func gatedSensoryFeedback<T: Equatable>(_ feedback: SensoryFeedback, trigger: T) -> some View {
+        sensoryFeedback(trigger: trigger) { _, _ in HapticSettings.enabled ? feedback : nil }
     }
 }
 
@@ -205,8 +231,23 @@ final class CoreHapticsSink: HapticSink {
     /// nil where the hardware has no haptics (the simulator, iPads).
     static func make() -> CoreHapticsSink? { supported ? CoreHapticsSink() : nil }
 
-    init() {}
-    nonisolated deinit {}
+    nonisolated(unsafe) private var activeObserver: NSObjectProtocol?
+
+    init() {
+        // the system stops the engine in the background and the stopped / reset handlers do not always bring it back: revive on active
+        activeObserver = NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reviveIfNeeded() }
+        }
+    }
+    nonisolated deinit { if let o = activeObserver { NotificationCenter.default.removeObserver(o) } }
+
+    /// Scene became active: if focus / room cues still want the engine, start it again (rebuild when it is gone or will not start).
+    func reviveIfNeeded() {
+        guard wanted else { return }
+        players.removeAll(); running.removeAll(); lastLevel.removeAll(); silentSince.removeAll()
+        guard let e = engine else { start(); return }
+        do { try e.start(); try makePlayers() } catch { engine = nil; start() }
+    }
 
     func start() {
         wanted = true
@@ -241,8 +282,7 @@ final class CoreHapticsSink: HapticSink {
         // the system stopped it (audio session, background): the players are dead; start again if focus is still on
         players.removeAll(); running.removeAll(); lastLevel.removeAll()
         guard wanted else { engine = nil; return }
-        try? engine?.start()
-        try? makePlayers()
+        do { try engine?.start(); try makePlayers() } catch { engine = nil; start() }
     }
 
     private func rebuild() {

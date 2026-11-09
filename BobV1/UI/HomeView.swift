@@ -36,7 +36,7 @@ struct HomeView<Stage: View>: View {
         .onAppear {
             if events.selectedID == nil || store.blob(events.selectedID!) == nil { events.selectedID = store.blobs.first?.id }
         }
-        .sensoryFeedback(.impact(weight: .light), trigger: tick)
+        .gatedSensoryFeedback(.impact(weight: .light), trigger: tick)
     }
 
     private var chips: some View {
