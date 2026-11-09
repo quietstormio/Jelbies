@@ -196,10 +196,10 @@ extension TrophyBook {
 }
 
 extension Trophy {
-    static func volleyFirst(_ t: VolleyTier) -> Trophy { Trophy(id: "vfirst.\(t.rawValue)", title: "\(t.title) volley winner", detail: "First volleyball win at \(t.title)") }
-    static let volley5 = Trophy(id: "vwins5", title: "5 volley wins", detail: "Won 5 volleyball matches")
-    static let volley10 = Trophy(id: "vwins10", title: "10 volley wins", detail: "Won 10 volleyball matches")
-    static let volley25 = Trophy(id: "vwins25", title: "25 volley wins", detail: "Won 25 volleyball matches")
+    static func volleyFirst(_ t: VolleyTier) -> Trophy { Trophy(id: "vfirst.\(t.rawValue)", title: "\(t.title) Jelly Volleyball winner", detail: "First Jelly Volleyball win at \(t.title)") }
+    static let volley5 = Trophy(id: "vwins5", title: "Jelly Volleyball: 5 wins", detail: "Won 5 Jelly Volleyball matches")
+    static let volley10 = Trophy(id: "vwins10", title: "Jelly Volleyball: 10 wins", detail: "Won 10 Jelly Volleyball matches")
+    static let volley25 = Trophy(id: "vwins25", title: "Jelly Volleyball: 25 wins", detail: "Won 25 Jelly Volleyball matches")
     static let volleyMilestones: [(wins: Int, trophy: Trophy)] = [(5, volley5), (10, volley10), (25, volley25)]
     static var allVolley: [Trophy] { VolleyTier.allCases.map(volleyFirst) + volleyMilestones.map(\.trophy) }
 }

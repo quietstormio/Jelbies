@@ -187,7 +187,7 @@ struct TownView: View {
                 if care.groomGuestBlocker != nil { AudioHub.shared.play(.notEnough) } else { groom() }          // a friend is coming or here: the Jelly Wash stays closed (the tile says why)
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
-            Place(id: "town-beach", title: "Jelly Volleyball", sub: "Beach fun", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
+            Place(id: "town-beach", title: "Jelly Volleyball", sub: "Bump and spike", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
             Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Room full" : "Wake a new friend", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
         ]
     }
@@ -444,7 +444,7 @@ struct TrackPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             LobbyJelbiePicker(care: care, title: "Runner", selected: [who], selectCount: 1, id: "track-picker") { who = $0 }
                 .padding(.bottom, 6)
-            LobbyStatsCard(title: "Race stats", groups: [LobbyStatGroup(id: "track-stats", rows: [
+            LobbyStatsCard(title: "Jelly Race stats", groups: [LobbyStatGroup(id: "track-stats", rows: [
                 LobbyStatRow(label: "Speed", value: prof?.stats.waddle ?? 0, color: SK.pink),
                 LobbyStatRow(label: "Focus", value: prof?.stats.focus ?? 0, color: SK.sky),
             ])], id: "track-runner", trailing: {

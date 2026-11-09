@@ -21,9 +21,9 @@ nonisolated struct Trophy: Equatable, Sendable, Identifiable {
     var detail: String
 
     static func firstWin(_ t: CourseTier) -> Trophy { Trophy(id: "first.\(t.rawValue)", title: "\(t.title) winner", detail: "First win on \(t.title)") }
-    static let wins5 = Trophy(id: "wins5", title: "5 wins", detail: "Won 5 races")
-    static let wins10 = Trophy(id: "wins10", title: "10 wins", detail: "Won 10 races")
-    static let wins25 = Trophy(id: "wins25", title: "25 wins", detail: "Won 25 races")
+    static let wins5 = Trophy(id: "wins5", title: "5 wins", detail: "Won 5 Jelly Races")
+    static let wins10 = Trophy(id: "wins10", title: "10 wins", detail: "Won 10 Jelly Races")
+    static let wins25 = Trophy(id: "wins25", title: "25 wins", detail: "Won 25 Jelly Races")
     static let champion = Trophy(id: "champion", title: "Champion", detail: "Won on every course")
     /// The win counts that earn a milestone trophy, in order.
     static let milestones: [(wins: Int, trophy: Trophy)] = [(5, wins5), (10, wins10), (25, wins25)]

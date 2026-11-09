@@ -86,7 +86,7 @@ extension GameCare {
     /// straight at launch, or the game is paused behind it) simply has no bodies listed: that is not a reason, the bodies exist as soon as the room runs.
     func raceBlocker(jelly id: Int) -> String? {
         guard jelly(id) != nil else { return "No such Jelbie." }
-        if race.active { return "A race is already on." }
+        if race.active { return "Jelly Race is already on." }
         if show.active { return "He is at the Jelly Show." }
         if volley.active || volleyWork.wait != nil { return "He is at the beach." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let him finish first." }

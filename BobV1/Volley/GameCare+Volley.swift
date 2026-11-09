@@ -101,7 +101,7 @@ extension GameCare {
     func volleyBlocker(jelly id: Int, match: Bool = false) -> String? {
         guard jelly(id) != nil else { return "No such Jelbie." }
         if volley.active || volleyWork.wait != nil { return "A match is already on." }
-        if race.active || raceWait != nil { return "He is at the track." }
+        if race.active || raceWait != nil { return "He is at Jelly Race." }
         if show.active { return "He is at the Jelly Show." }
         if cafe.active || park.active { return "He is out already." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let him finish first." }

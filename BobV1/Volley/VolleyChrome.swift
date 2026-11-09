@@ -61,7 +61,7 @@ struct VolleyChrome: View {
                 Button { AudioHub.shared.uiTap(); volley.goHome() } label: {
                     Image(systemName: "xmark").font(.system(size: 16, weight: .black)).foregroundStyle(CareMenu.brown)
                         .frame(width: 44, height: 44).background(Circle().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
-                }.buttonStyle(.plain).accessibilityLabel("Leave the beach").accessibilityIdentifier("volley-leave")
+                }.buttonStyle(.plain).accessibilityLabel("Leave Jelly Volleyball").accessibilityIdentifier("volley-leave")
                 Spacer()
                 scoreBoard
                 Spacer()

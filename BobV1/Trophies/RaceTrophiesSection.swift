@@ -55,7 +55,7 @@ struct RaceTrophiesSection: View {
                     .accessibilityIdentifier("trophy-\(t.id)")
                 }
             }
-            Text(shelf.raceWins == 0 ? "No race wins yet." : "\(shelf.raceWins) race win\(shelf.raceWins == 1 ? "" : "s") so far.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
+            Text(shelf.raceWins == 0 ? "No Jelly Race wins yet." : "\(shelf.raceWins) Jelly Race win\(shelf.raceWins == 1 ? "" : "s") so far.").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("race-trophies")

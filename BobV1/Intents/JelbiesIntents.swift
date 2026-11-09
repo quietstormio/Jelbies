@@ -181,6 +181,7 @@ nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
                 "Start Jelly Race in \(.applicationName)",
                 "Race \(\.$jelbie) in \(.applicationName)",
                 "Take \(\.$jelbie) to Jelly Race in \(.applicationName)",
+                "Take \(\.$jelbie) to the Jelly Circuit in \(.applicationName)",
             ],
             shortTitle: "Jelly Race",
             systemImageName: "flag.checkered"
