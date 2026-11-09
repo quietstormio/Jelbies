@@ -285,6 +285,11 @@ final class GameCare {
         wireVolley()
         applySavedRoom()
         DecorField.shared.set(store.placedDecor)
+        if persistent { MemoryPressure.register("care.save") { [weak self] in          // a memory warning: write needs and grime now (the OS may end the app next); the away stamp is NOT touched
+            guard let self else { return false }
+            for j in self.jellies { j.needs.save(); j.grime.save() }
+            return true
+        } }
     }
 
     // Not isolated: Swift 6.2's implicit isolated deinit (swift_task_deinitOnExecutor) aborts on the iOS 26.2 runtime; see MelonModel.

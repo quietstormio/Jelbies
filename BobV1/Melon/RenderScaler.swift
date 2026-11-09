@@ -107,14 +107,18 @@ struct RenderScaler {
     }
 }
 
-/// Chooses 60 vs 120 Hz. 120 is only requested when the GPU has lots of headroom and the device is cool and not in
-/// Low Power Mode; it falls back to 60 under load and stays there for a while.
+/// Chooses the frame rate: 60 or 120 Hz when cool, 30 Hz under thermal `.serious` or Low Power Mode, 24 Hz under `.critical`.
+/// 120 is only requested when the GPU has lots of headroom and the device is cool and not in Low Power Mode; it falls back to 60 under
+/// load and stays there for a while. Nominal / fair behaviour (without Low Power Mode) is exactly the old 60 / 120 logic.
 struct RateGovernor {
     static let upBelowMs = 5.0          // 120 only if the smoothed GPU time is this low at the current scale
     static let downAboveMs = 7.0        // 8.33 ms x 0.85
     static let cpuUpBelowMs = 5.0       // 120 also needs the main thread under this (a 120 Hz frame is 8.33 ms of CPU too)
     static let cpuDownAboveMs = 7.0
     static let upAfter = 3.0, downAfter = 0.5, retryAfterDrop = 30.0
+    static let seriousFPS = 30          // thermal serious or Low Power Mode
+    static let criticalFPS = 24         // thermal critical (the display runs 24 Hz on every panel that has ProMotion; others round to 30)
+    static let recoverAfter = 20.0      // s a lower cap must have been lifted before the rate climbs back to 60 (no flapping at a thermal edge)
 
     let maxFPS: Int
     private(set) var fps = 60
@@ -123,19 +127,36 @@ struct RateGovernor {
 
     init(maxFPS: Int) { self.maxFPS = maxFPS }
 
+    /// The highest rate allowed by the thermal state and Low Power Mode (60 = no cap; the 60 / 120 choice is made below).
+    static func cap(thermal: ProcessInfo.ThermalState, lowPower: Bool) -> Int {
+        if thermal == .critical { return criticalFPS }
+        if thermal == .serious || lowPower { return seriousFPS }
+        return 60
+    }
+
     /// Returns the new preferred fps if it changed.
     mutating func update(dt: Double, gpuMs: Double?, thermal: ProcessInfo.ThermalState, lowPower: Bool, atNative: Bool = true, cpuMs: Double = 0) -> Int? {
         guard dt > 0, dt < 0.1 else { return nil }
         let hot = thermal == .serious || thermal == .critical
+        let cap = Self.cap(thermal: thermal, lowPower: lowPower)
         if hold > 0 { hold -= dt }
-        if (hot || lowPower || maxFPS < 120), fps != 60 { return set(60, hold: 0) }
+        if cap < 60 {
+            // thermal / Low Power cap: take it at once; the GPU headroom logic below is off while capped
+            if fps != cap { return set(cap, hold: Self.recoverAfter) }
+            return nil
+        }
+        if fps < 60 {          // the cap was lifted: back to 60 after a settling wait
+            if hold <= 0 { return set(60, hold: 0) }
+            return nil
+        }
+        if maxFPS < 120, fps != 60 { return set(60, hold: 0) }
         guard maxFPS >= 120, let g = gpuMs, g > 0 else { return nil }
         smoothed = smoothed.map { $0 + (g - $0) * min(1, dt / 0.15) } ?? g
         let ms = smoothed!
         if fps == 120 {
             overT = ms > Self.downAboveMs ? overT + dt : 0
             if overT >= Self.downAfter || cpuMs > Self.cpuDownAboveMs { return set(60, hold: Self.retryAfterDrop) }
-        } else if !hot, !lowPower, atNative, hold <= 0, thermal != .fair {   // only at full resolution: never trade resolution for Hz
+        } else if !hot, atNative, hold <= 0, thermal != .fair {   // only at full resolution: never trade resolution for Hz
             underT = (ms < Self.upBelowMs && cpuMs < Self.cpuUpBelowMs) ? underT + dt : 0          // CPU headroom too: cpuMs is the main thread's frame time (0 = not measured, tests)
             if underT >= Self.upAfter { return set(120, hold: 0) }
         }

@@ -392,6 +392,11 @@ final class MelonRenderer {
             room = RoomRenderer(device: device, library: library, colorFormat: Self.hdrFormat, depthFormat: Self.depthFormat, sampleCount: Self.msaa)
             if room == nil { print("MelonRenderer: room renderer failed; falling back to the studio backdrop") }
         }
+        MemoryPressure.register("renderer.\(ObjectIdentifier(self).hashValue)") { [weak self] in
+            guard let self else { return false }
+            self.releaseRoomCache()
+            return true
+        }
     }
 
     // Not isolated: with default MainActor isolation Swift 6.2 makes deinit an isolated deinit (swift_task_deinitOnExecutor), which
@@ -797,6 +802,9 @@ final class MelonRenderer {
     func resetRoomCacheCounters() { roomCacheState.resetCounters(); roomPixelsShaded = 0; roomPixelsBaseline = 0 }
     /// Test hook: forget the cache.
     func invalidateRoomCache() { roomCacheState.invalidate() }
+    /// Memory warning: forget the cache AND free its screen-sized texture. The next frames re-shade the whole room (a normal cache miss) and
+    /// rebuild the texture only once the room has been still for a few frames, so nothing visible changes.
+    func releaseRoomCache() { roomCacheState.invalidate(); roomCacheTex = nil }
 
     /// World AABB of the vertices Bob is drawn with this frame (CPU copy in the shared dynamic buffer; call after waitIfNeeded).
     private func bobBounds(_ body: Int = 0) -> (lo: SIMD3<Float>, hi: SIMD3<Float>) {

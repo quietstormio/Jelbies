@@ -94,5 +94,7 @@ nonisolated enum ActorPrebuild {
         guard let i = stash.firstIndex(where: { $0.firmness == firmness && $0.damping == damping }) else { return nil }
         return stash.remove(at: i).pair
     }
+    /// Memory warning: free the bodies built ahead and not yet taken (an actor that finds none builds its own).
+    static func drop() { lock.lock(); stash.removeAll(); lock.unlock() }
     static var count: Int { lock.lock(); defer { lock.unlock() }; return stash.count }
 }
