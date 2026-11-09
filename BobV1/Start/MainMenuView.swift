@@ -42,7 +42,7 @@ struct MenuMetrics {
             let ft = eyesY - 51.5 * sf
             let topPad: CGFloat = 30                                              // clears the status bar
             let avail = ft - 12 - topPad
-            let sl = max(0.5, min(avail / content, 0.55 * w / 379, 0.40 * w / 300, min(w, h) / 440))
+            let sl = max(0.5, min(0.88 * avail / content, 0.55 * w / 379, 0.40 * w / 300, min(w, h) / 440))
             let freeP = max(0, avail - content * sl)
             s = sl; btnScale = sl; btnWidth = 300 * sl
             titleTop = topPad + freeP * topShare
@@ -315,16 +315,19 @@ struct TitleBackdrop: View {
                 // Sparkles (positions are fractions of the 440x956 design)
                 let tw = still ? 1.0 : 0.65 + 0.35 * cos(t * 2 * .pi / 2.4)
                 let ds = Double(scale ?? w / 440)
+                // iPad-sized windows: this canvas is taller than the screen (it shares a ZStack with the oversized pattern layer, margin 2 x 72 x short/440 on
+                // every side) and so starts that far above it; move the drawing back by the margin so the face lands where MenuMetrics put it. iPhone: unchanged.
+                let padShift = (faceTop != nil && min(size.width, size.height) > 600) ? Double(2 * 72 * min(size.width, size.height) / 440) : 0
                 var sc = ctx
                 sc.opacity = tw
                 for (x, y, r) in [(52.0, 157.5, 7.5), (398.0, 337.5, 7.5), (380.0, 133.0, 5.0)] {
-                    sc.fill(Self.sparkle(w / 2 + (x - 220) * ds, y * ds, r * ds, t), with: .color(.white))
+                    sc.fill(Self.sparkle(w / 2 + (x - 220) * ds, y * ds + padShift, r * ds, t), with: .color(.white))
                 }
                 // Peeking Jelbie
                 let scale = Double(faceScale ?? CGFloat(4.8 * ds))      // zoomed in: just the head dome, brows and eyes
                 let cx = w / 2
                 let bob = still ? 0 : -10 * ds * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
-                let cy = (faceTop.map { Double($0) + 65.5 * scale } ?? 0.91 * h + 14 * scale) + bob                            // eyes sit ~9% of the screen above the bottom
+                let cy = (faceTop.map { Double($0) + 65.5 * scale } ?? 0.91 * h + 14 * scale) + bob + padShift                            // eyes sit ~9% of the screen above the bottom
                 var jc = ctx
                 jc.translateBy(x: cx, y: cy)
                 jc.scaleBy(x: scale, y: scale)
