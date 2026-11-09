@@ -25,6 +25,8 @@ protocol SpeechInput: AnyObject {
     var onLevel: ((Float) -> Void)? { get set }
     /// Permission + asset install + optional prepareToAnalyze. Never throws.
     func prepare(contextualWords: [String]) async
+    /// Make a failed `prepare` (offline first run, permission changed in Settings) retryable: back to `.unknown`.
+    func resetForRetry()
     func start(contextualWords: [String]) async throws
     /// Final transcript ("" if nothing). Keeps recording for a short post-roll first (the tail of the last word).
     func stop() async -> String
@@ -128,6 +130,10 @@ final class FakeSpeechInput: SpeechInput {
 }
 
 // MARK: - Factory
+
+extension SpeechInput {
+    func resetForRetry() {}
+}
 
 enum SpeechInputFactory {
     @MainActor
@@ -295,6 +301,18 @@ final class DictationSpeechInput: SpeechInput {
                              reportingOptions: [.volatileResults], attributeOptions: [])
     }
 
+    /// The `.unavailable` reason for a failed first-run speech download (the player needs the internet once).
+    static let needsInternetReason = "needs-internet"
+
+    func resetForRetry() {
+        guard !isRunning, !starting else { return }
+        switch availability {
+        case .unavailable: availability = .unknown
+        case .denied: if AVAudioApplication.shared.recordPermission != .denied { availability = .unknown }
+        default: break
+        }
+    }
+
     func prepare(contextualWords: [String]) async {
         // Permission.
         let granted = await AVAudioApplication.requestRecordPermission()
@@ -317,7 +335,10 @@ final class DictationSpeechInput: SpeechInput {
                     }
                 }
                 defer { watcher.cancel() }
-                try await req.downloadAndInstall()
+                do { try await req.downloadAndInstall() } catch {
+                    availability = .unavailable(reason: Self.needsInternetReason)          // retried on the next mic tap and on returning to the app
+                    return
+                }
             }
             _ = try? await AssetInventory.reserve(locale: loc)
             guard let fmt = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [module]) else {
@@ -434,11 +455,15 @@ final class DictationSpeechInput: SpeechInput {
                 for try await r in transcriber.results {
                     let text = String(r.text.characters)
                     acc.add(text: text, isFinal: r.isFinal)
+                    #if DEBUG
                     VoiceTranscriptLog.log("result \(r.isFinal ? "FINAL" : "volatile") at +\(Int((CACurrentMediaTime() - started) * 1000)) ms: \"\(text)\"")
+                    #endif
                 }
             } catch { VoiceTranscriptLog.log("results stream error: \(error)") }
             let out = acc.result
+            #if DEBUG
             VoiceTranscriptLog.log("final transcript: \"\(out)\" (finals \(acc.finals.count), volatile fallback \"\(acc.volatile)\")")
+            #endif
             return out
         }
         // Attach BEFORE the analyzer starts: buffered pre-roll is flushed into the stream and the stream holds it until the analyzer reads.
@@ -467,6 +492,8 @@ final class DictationSpeechInput: SpeechInput {
         let input = engine.inputNode
         input.removeTap(onBus: 0)
         let fmt = input.outputFormat(forBus: 0)
+        // A 0 Hz / 0 channel format (no input route yet, mic busy) would raise an NSException in installTap: fail as an error instead.
+        guard fmt.sampleRate > 0, fmt.channelCount > 0 else { throw SpeechInputError.noFormat }
         input.installTap(onBus: 0, bufferSize: 2048, format: fmt) { buffer, when in
             pipe.handle(buffer)
             // Music Ears shares this tap while the button is held (Audio/EarsListener.swift EarsHoldTap): no second engine, no session change

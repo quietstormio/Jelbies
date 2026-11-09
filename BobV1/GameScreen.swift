@@ -335,6 +335,7 @@ struct GameScreen: View {
             if p == .active {
                 model.care.skipNightCutscene(force: true)          // back mid "Sleep until morning": finish the skip now
                 DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the bedtime check and the director see the foreground
+                model.care.voice.sceneBecameActive()          // a failed first-run speech download / a permission changed in Settings is retried
                 model.care.returnedActive()          // time away: needs, dirt, sparkle (once per return) + the greeting
                 AudioHub.shared.setForeground(true)
                 AudioHub.shared.setTownScene(currentMusicScene)          // re-derive from the truth on every return: a stale café scene can never keep the room's sounds muted
@@ -343,7 +344,8 @@ struct GameScreen: View {
                 router.drainQueued()                                                                   // the widget's Water button / an intent run while away
                 router.apply(care: model.care)
             } else {
-                model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()
+                model.care.leftActive(); model.care.voice.training.save()
+                if p == .background { model.care.voice.cancel() }          // .inactive is the system's permission alert or a swipe: the listen is not cut then
                 DayClock.shared.leaving()
                 AudioHub.shared.setForeground(false)
                 Ears.shared.setForeground(false)
@@ -352,6 +354,13 @@ struct GameScreen: View {
         }
         .onChange(of: model.care.voice.bookRequest) { _, _ in bookOpen = true }       // the mic cannot be used: the trick book opens instead
         .onChange(of: bookOpen) { _, on in model.care.select.sheetOpen = on || rosterOpen }
+        .sheet(item: Binding(get: { model.care.voice.notice }, set: { if $0 == nil { model.care.voice.dismissNotice() } })) { n in
+            VoiceNoticeSheet(notice: n, primary: { model.care.voice.explainerContinue() },
+                             openBook: { model.care.voice.dismissNotice(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { bookOpen = true } },
+                             close: { model.care.voice.dismissNotice() })
+                .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
+                .presentationBackground(FocusStyle.cream)
+        }
         .sheet(isPresented: $bookOpen) {
             VoiceTrickBook(voice: model.care.voice) { bookOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])

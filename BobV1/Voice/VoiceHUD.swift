@@ -19,7 +19,7 @@ struct VoiceMicButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static func micLabel(slashed: Bool, name: String) -> String {
-        if slashed { return "Microphone unavailable. Open tricks" }
+        if slashed { return "Microphone unavailable. Tap to see why" }
         return VoiceCoordinator.tapMode ? "Talk to \(name)" : "Hold to talk to \(name)"
     }
     static func micHint(slashed: Bool) -> String {
@@ -198,16 +198,17 @@ struct VoiceTrickBook: View {
     }
     private var typedSection: some View {
         HStack(spacing: 8) {
-            TextField("Type a command, like sit or spin", text: $typedWord)
+            TextField("Type a command, like sit or spin", text: $typedWord, prompt: Text("Type a command, like sit or spin").foregroundStyle(FocusStyle.brown.opacity(0.6)))
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .playFont(15, .medium)
+                .foregroundStyle(FocusStyle.brown).tint(SK.pinkStrong)          // explicit inks: the cream field never turns white-on-cream in Dark Mode
                 .padding(.horizontal, 12).frame(minHeight: 44)
                 .background(Capsule().fill(FocusStyle.cream))
                 .submitLabel(.send).onSubmit { sendTyped() }
                 .accessibilityIdentifier("voice-typed-field")
             Button { sendTyped() } label: {
                 Image(systemName: "paperplane.fill").font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 44, height: 44).background(Circle().fill(FocusStyle.pink))
+                    .frame(width: 44, height: 44).background(Circle().fill(SK.pinkStrong))
             }
             .buttonStyle(.plain).disabled(VoiceMatcher.normalise(typedWord).isEmpty)
             .accessibilityIdentifier("voice-typed-send").accessibilityLabel("Send this command")
@@ -288,7 +289,7 @@ struct VoiceTrickBook: View {
                     .frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Name: \(name)").font(.system(size: 17, weight: .bold, design: .rounded)).foregroundStyle(FocusStyle.brown)
-                    Text("He knows it")
+                    Text("\(name) knows it")
                         .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(FocusStyle.brown.opacity(0.85))
                 }
                 Spacer()
@@ -296,29 +297,34 @@ struct VoiceTrickBook: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier("voice-name")
-            .accessibilityLabel("Name: \(name). He knows it")
+            .accessibilityLabel("Name: \(name). \(name) knows it")
             if !nicks.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(nicks, id: \.self) { n in
-                        Button { tr.names.removeNickname(n, for: id) } label: {
-                            HStack(spacing: 4) {
-                                Text(n).font(.system(size: 13, weight: .semibold, design: .rounded))
-                                Image(systemName: "xmark.circle.fill").font(.system(size: 12))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(nicks, id: \.self) { n in
+                            Button { tr.names.removeNickname(n, for: id) } label: {
+                                HStack(spacing: 4) {
+                                    Text(n).jFont(13, .semibold)
+                                    Image(systemName: "xmark.circle.fill").font(.system(size: 12))
+                                }
+                                .foregroundStyle(FocusStyle.brown)
+                                .padding(.horizontal, 12).frame(minHeight: 44)
+                                .background(Capsule().fill(FocusStyle.cream))
+                                .contentShape(Capsule())
                             }
-                            .foregroundStyle(FocusStyle.brown)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(Capsule().fill(FocusStyle.cream))
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("voice-nickname-\(n)").accessibilityLabel("Nickname \(n). Remove")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("voice-nickname-\(n)").accessibilityLabel("Nickname \(n). Remove")
                     }
                 }
             }
             HStack(spacing: 8) {
-                TextField("Add nickname", text: Binding(get: { drafts[id] ?? "" }, set: { drafts[id] = $0 }))
+                TextField("Add nickname", text: Binding(get: { drafts[id] ?? "" }, set: { drafts[id] = $0 }),
+                          prompt: Text("Add nickname").foregroundStyle(FocusStyle.brown.opacity(0.6)))
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .jFont(14, .medium)
+                    .foregroundStyle(FocusStyle.brown).tint(SK.pinkStrong)
+                    .padding(.horizontal, 10).frame(minHeight: 44)
                     .background(Capsule().fill(FocusStyle.cream))
                     .submitLabel(.done).onSubmit { addDraft(tr, id) }
                     .accessibilityIdentifier("voice-nickname-field")
@@ -397,11 +403,11 @@ private struct MicInput: ViewModifier {
             }
             .onEnded { _ in
                 down = false
-                if slashed { openBook() } else if !VoiceCoordinator.tapMode { voice.release() }
+                if slashed { voice.slashedTap() } else if !VoiceCoordinator.tapMode { voice.release() }          // slashed: retry + say why (VoiceNoticeSheet)
             }
     }
 
-    private func toggle() { if slashed { openBook() } else { voice.toggleListening() } }
+    private func toggle() { if slashed { voice.slashedTap() } else { voice.toggleListening() } }
 
     func body(content: Content) -> some View {
         content
