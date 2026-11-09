@@ -1,7 +1,7 @@
 //
 //  SettingsScreen.swift
 //  The gear's full Settings screen, in the themed title-screen style: Appearance (theme colour with a live mini title screen), Sound,
-//  Accessibility, Voice and listening, Game (main menu, replay intro, reset save) and About. One column in portrait, two in landscape.
+//  Accessibility, Voice and listening, Game (main menu, watch the opening, reset save) and About. One column in portrait, two in landscape.
 //  Everything reuses what exists: AudioHub.settings, EarsSettingsRow, AccessibilitySettingsView, StartFlow.
 //
 
@@ -23,7 +23,8 @@ struct SettingsScreen: View {
     @State private var showA11y = false
     @State private var matchIcon = AppIconSwitcher.enabled
     @State private var confirmReset = false
-    @State private var replayIntro = UserDefaults.standard.integer(forKey: "Intro") != 0
+    @State private var showPrivacy = false
+    @State private var showSupport = false
     @State private var followReal = DayClock.shared.followReal
     @AppStorage(HapticSettings.key) private var hapticsOn = true
     @Environment(\.verticalSizeClass) private var vsc
@@ -60,6 +61,8 @@ struct SettingsScreen: View {
         .sheet(isPresented: $showA11y) {
             AccessibilitySettingsView { showA11y = false }.presentationBackground(SK.cream)
         }
+        .sheet(isPresented: $showPrivacy) { PrivacyPage { showPrivacy = false }.presentationBackground(SK.cream) }
+        .sheet(isPresented: $showSupport) { SupportPage { showSupport = false }.presentationBackground(SK.cream) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("settings-screen")
         .accessibilityAction(.escape) { close() }
@@ -187,9 +190,6 @@ struct SettingsScreen: View {
             actionRow("Photo mode", "camera", id: "photo-button", action: openPhoto)
             actionRow("Main menu", "house", id: "settings-main-menu", action: mainMenu)
             actionRow("Watch the opening", "sparkles", id: "settings-watch-opening", action: watchOpening)
-            Toggle("Replay intro next launch", isOn: Binding(get: { replayIntro }, set: { replayIntro = $0; UserDefaults.standard.set($0 ? 1 : 0, forKey: "Intro") }))
-                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
-                .accessibilityIdentifier("settings-replay-intro")
             #if DEBUG
             if let openStudio { actionRow("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio) }
             #endif
@@ -222,6 +222,8 @@ struct SettingsScreen: View {
             Text("Jelbies").font(CloudTheme.font(18, .heavy)).foregroundStyle(ink)
             Text("Version \(v) (\(b))").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
             if DayClock.shared.showsDay { Text("Day \(DayClock.shared.day)").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75)) }
+            actionRow("Privacy", "hand.raised", id: "settings-privacy") { showPrivacy = true }
+            actionRow("Help & Support", "questionmark.circle", id: "settings-support") { showSupport = true }
             Text("Made with love.").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
             Text("Everything stays on this phone. No accounts, no internet.").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
