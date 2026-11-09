@@ -12,7 +12,9 @@ struct RaceChrome: View {
     private let light = UIImpactFeedbackGenerator(style: .light)
     private let rigid = UIImpactFeedbackGenerator(style: .rigid)
     @Environment(\.verticalSizeClass) private var vsc
-    private var compact: Bool { vsc == .compact }          // a phone on its side: the foot buttons go to the two sides, the track stays in the middle
+    /// iPad in landscape: wide enough for the side-edge foot buttons too (the iPhone path is unchanged: PadLayout.isPad is false there).
+    @State private var padWide = false
+    private var compact: Bool { vsc == .compact || (PadLayout.isPad && padWide) }          // a phone on its side: the foot buttons go to the two sides, the track stays in the middle
 
     var body: some View {
         ZStack {
@@ -20,7 +22,7 @@ struct RaceChrome: View {
                 VStack(spacing: 0) {
                     topBar
                     Spacer()
-                    if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.padding(.horizontal, 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
+                    if race.showsCard { RacePlacingsCard(race: race) { race.goHome() }.frame(maxWidth: PadLayout.isPad ? 560 : .infinity).padding(.horizontal, 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
                     if race.ui.phase != .results, !compact { footButtons }
                 }
@@ -36,6 +38,7 @@ struct RaceChrome: View {
             }
             Color.white.opacity(Double(race.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
+        .onGeometryChange(for: Bool.self) { $0.size.width > $0.size.height * 1.15 } action: { padWide = $0 }
         .allowsHitTesting(race.active)
         .accessibilityElement(children: .contain)
         .defersSystemGestures(on: .bottom)
@@ -89,7 +92,7 @@ struct RaceChrome: View {
     }
 
     private var footButtons: some View {
-        assistOrFeet(width: nil).frame(height: 170)
+        assistOrFeet(width: nil).frame(height: 170).frame(maxWidth: PadLayout.isPad ? 640 : .infinity)
     }
 
     /// The input for the chosen assist (Settings > Accessibility): two feet, one Step button, or a Cheer button while he runs by himself.
@@ -130,7 +133,7 @@ struct RaceChrome: View {
     private var sideButtons: some View {
         Group {
             if race.assist == .oneButton || race.assist == .auto {
-                assistOrFeet(width: nil).frame(height: 150).padding(.horizontal, 40)
+                assistOrFeet(width: nil).frame(height: 150).padding(.horizontal, 40).frame(maxWidth: PadLayout.isPad ? 520 : .infinity)
             } else {
                 HStack(alignment: .bottom, spacing: 0) {
                     FootButton(title: "Left", id: "race-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .leftArrow) { press(0) }

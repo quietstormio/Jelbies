@@ -7,6 +7,22 @@
 
 import SwiftUI
 
+// MARK: - iPad readable width
+
+/// iPad only: a readable column width for lobby content, cards and sheets (the phone layouts were drawn for 440 pt). On iPhone it is no limit at all.
+enum PadLayout {
+    static let isPad = UIDevice.current.userInterfaceIdiom == .pad
+    static let column: CGFloat = 700
+    static var maxColumn: CGFloat { isPad ? column : .infinity }
+}
+
+extension View {
+    /// Caps the width to `PadLayout.column` (iPad) and centres it; a no-op on iPhone.
+    @ViewBuilder func padColumn(_ width: CGFloat = PadLayout.column) -> some View {
+        if PadLayout.isPad { frame(maxWidth: width).frame(maxWidth: .infinity) } else { self }
+    }
+}
+
 // MARK: - Screen frame
 
 /// Header on top, a scrolling body (one column in portrait; two in landscape), the muted reason line and the pinned bottom bar.
@@ -63,6 +79,7 @@ struct LobbyScreen<Left: View, Right: View, Bar: View>: View {
                     .scrollBounceBehavior(.basedOnSize)
                     VStack(spacing: 0) { whyLine; bar }.padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 6).modifier(BarBand())
                 }
+                .padColumn()
             }
         }
         .background(theme.background.ignoresSafeArea())
@@ -515,11 +532,11 @@ struct LobbySheet<Content: View>: View {
                     ScrollView { content.padding(.bottom, full ? 0 : 94).background(GeometryReader { Color.clear.preference(key: SheetContentHeight.self, value: $0.size.height) }) }
                         .scrollBounceBehavior(.basedOnSize)
                         .onPreferenceChange(SheetContentHeight.self) { contentH = $0 }
-                        .modifier(SheetScrollHeight(full: full, height: contentH, cap: g.size.height - 120))
+                        .modifier(SheetScrollHeight(full: full, height: contentH, cap: (PadLayout.isPad ? min(g.size.height - 2, 900) : g.size.height - 2) - 118))
                 }
                 .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 12)
-                .frame(maxWidth: .infinity)
-                .modifier(SheetHeight(full: full, cap: g.size.height - 2))
+                .frame(maxWidth: PadLayout.isPad ? 680 : .infinity)
+                .modifier(SheetHeight(full: full, cap: PadLayout.isPad ? min(g.size.height - 2, 900) : g.size.height - 2))
                 .background(UnevenRoundedRectangle(topLeadingRadius: 34, topTrailingRadius: 34, style: .continuous).fill(SK.sheet).ignoresSafeArea(edges: .bottom))
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom))
             }
