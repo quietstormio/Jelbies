@@ -121,7 +121,7 @@ final class TrayObstacleTests: XCTestCase {
     /// Social walk-ups and runs between two Jelbies whose play floor has the tray in the middle (they use the same floor rules): the pair meets on the far side, through the tray if it let them.
     func testSocialWalkUpsAcrossTheTrayNeverEnterIt() {
         var startedKinds: [SocialKind] = []
-        for kind in [SocialKind.follow, .sneak, .bump, .boop, .chase] {
+        for kind in [SocialKind.follow, .sneak, .chestBump, .boop, .chase] {
             let r = room()
             standTray(r, n: 3, origin: SIMD2(0, 0.9))
             let d = r.care.dining

@@ -56,12 +56,12 @@ final class PeakDriveTests: XCTestCase {
         XCTAssertEqual(Int((1.5 * 2 * Float.pi / Friends2Tuning.ringHop).rounded()), 15, "1.5 turns of 36 degree hops")
     }
 
-    /// The hop / lunge kinds (bump, chestBump, highFive, bellyBounce, sneak) may open the gap by a wind-up only 1.5 cm; the squabble keeps the 4.5 cm.
+    /// The hop / lunge kinds (chestBump, highFive, bellyBounce, sneak) may open the gap by a wind-up only 1.5 cm; the squabble keeps the 4.5 cm.
     func testPressKindsHaveATightWindUp() {
-        XCTAssertEqual(PeakTuning.openCap(for: .bump), 0.015, accuracy: 1e-6)
+        XCTAssertEqual(PeakTuning.openCap(for: .chestBump), 0.015, accuracy: 1e-6)
         XCTAssertEqual(PeakTuning.openCap(for: .highFive), 0.015, accuracy: 1e-6)
         XCTAssertEqual(PeakTuning.openCap(for: .squabble), PeakTuning.openCap, accuracy: 1e-6)
-        let tight = PeakTuning.leanBounds(now: 0, trim: 0, gap: 0.0, openCap: PeakTuning.openCap(for: .bump)).maxOut
+        let tight = PeakTuning.leanBounds(now: 0, trim: 0, gap: 0.0, openCap: PeakTuning.openCap(for: .chestBump)).maxOut
         let wide = PeakTuning.leanBounds(now: 0, trim: 0, gap: 0.0, openCap: PeakTuning.openCap(for: .squabble)).maxOut
         XCTAssertGreaterThan(tight, wide, "the press kinds' lean-away room is smaller (less negative)")
     }

@@ -132,7 +132,7 @@ final class ContactPolishTests: XCTestCase {
     static func e(_ n: String, _ k: SocialKind, _ s: ContactClass, props: ContactProp = .none, sec: Float = 70) -> ContactEntry { ContactEntry(name: n, scenario: .social(k), stance: s, props: props, maxSec: sec) }
     /// Pair emotes (rig 0 starts it with rig 1): the CURATED entries (a name, a class, a prop, a time cap). `pairEntries` adds an automatic entry for any SocialKind nobody wrote one for.
     static let curatedPairEntries: [ContactEntry] = [
-        ContactEntry(name: "boop", scenario: .social(.boop), stance: .touching, momentary: true), e("squabble", .squabble, .touching), e("bump", .bump, .touching), e("nuzzle", .nuzzle, .touching), e("sitTogether", .sitTogether, .touching),
+        ContactEntry(name: "boop", scenario: .social(.boop), stance: .touching, momentary: true), e("squabble", .squabble, .touching), e("nuzzle", .nuzzle, .touching), e("sitTogether", .sitTogether, .touching),
         e("sneak", .sneak, .touching), e("chestBump", .chestBump, .touching), e("highFive", .highFive, .touching), e("cheekSquish", .cheekSquish, .touching),
         e("bellyBounce", .bellyBounce, .touching), e("backToBack", .backToBack, .touching), e("cuddleLean", .cuddleLean, .touching),
         e("ringAround", .ringAround, .touching), e("swayHug", .swayHug, .touching), e("whisperGiggle", .whisperGiggle, .touching), e("spinHug", .spinHug, .touching),
@@ -737,7 +737,7 @@ final class ContactPolishTests: XCTestCase {
     func testHoldsStanceClassification() {
         func entry(_ k: SocialKind) -> ContactEntry { (Self.pairEntries + Self.groupEntries).first { Self.kindOf($0) == k }! }
         for k in [SocialKind.nuzzle, .cheekSquish, .backToBack, .cuddleLean, .swayHug, .whisperGiggle, .groupHug, .highFive] { XCTAssertTrue(Self.holdsStance(entry(k)), "\(k) is a holding stance") }
-        for k in [SocialKind.boop, .bump, .tag, .chase, .look, .follow] { XCTAssertFalse(Self.holdsStance(entry(k)), "\(k) is not") }
+        for k in [SocialKind.boop, .tag, .chase, .look, .follow] { XCTAssertFalse(Self.holdsStance(entry(k)), "\(k) is not") }
         XCTAssertTrue(entry(.tag).momentary && entry(.chase).momentary, "tag / chase: judged at the touch")
     }
 
