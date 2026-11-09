@@ -30,6 +30,7 @@ struct AccessibilitySettingsView: View {
                         ForEach(RaceAssist.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     .accessibilityIdentifier("a11y-race-assist")
+                    .listRowBackground(SK.tile)
                     toggle("Jump for me over hurdles", $settings.autoJump, "a11y-auto-jump")
                     toggle("Relaxed rhythm timing", $settings.relaxedTiming, "a11y-relaxed-timing")
                 } header: { Text("Playing") } footer: {
@@ -45,16 +46,21 @@ struct AccessibilitySettingsView: View {
                         if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) }
                     }
                     .accessibilityIdentifier("a11y-system-settings")
+                    .listRowBackground(SK.tile)
                 } footer: {
                     Text("Jelbies also follows VoiceOver, Voice Control, Switch Control, Larger Text, Bold Text, Increase Contrast, Reduce Transparency and Reduce Motion.")
                 }
             }
             .scrollContentBackground(.hidden)
             .background(SK.cream)
+            // Explicit colours so the sheet reads the same under Dark Mode: ink text on light tile rows over the cream page.
+            .foregroundStyle(SK.ink)
+            .tint(SK.sky)
             .navigationTitle("Accessibility")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close).accessibilityIdentifier("a11y-done") } }
         }
+        .preferredColorScheme(.light)
         .accessibilityIdentifier("a11y-settings")
     }
 
@@ -71,6 +77,6 @@ struct AccessibilitySettingsView: View {
     }
 
     private func toggle(_ title: String, _ b: Binding<Bool>, _ id: String) -> some View {
-        Toggle(title, isOn: b).accessibilityIdentifier(id)
+        Toggle(title, isOn: b).accessibilityIdentifier(id).listRowBackground(SK.tile)
     }
 }
