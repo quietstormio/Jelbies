@@ -354,6 +354,7 @@ struct GameScreen: View {
         .sheet(isPresented: $a11yOpen) {
             AccessibilitySettingsView { a11yOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
+                .padSheetSizing()
                 .presentationBackground(SK.cream)
         }
         .onOpenURL { url in _ = router.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|train|pet
@@ -388,11 +389,13 @@ struct GameScreen: View {
                              openBook: { model.care.voice.dismissNotice(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { bookOpen = true } },
                              close: { model.care.voice.dismissNotice() })
                 .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
+                .padSheetSizing()
                 .presentationBackground(FocusStyle.cream)
         }
         .sheet(isPresented: $bookOpen) {
             VoiceTrickBook(voice: model.care.voice) { bookOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.medium, .large])
+                .padSheetSizing()
                 .presentationBackground(FocusStyle.cream)
         }
         .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
@@ -451,6 +454,7 @@ struct GameScreen: View {
         .sheet(isPresented: $bagOpen) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
+                .padSheetSizing()
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
         }
@@ -1047,7 +1051,7 @@ struct CareMenu: View {
     @AccessibilityFocusState private var focusedRow: HUDItem?
     private var calm: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var tight: Bool { vsc == .compact }          // a phone on its side: only ~400 pt of height, so the rows shrink
-    private var iconSize: CGFloat { tight ? 44 : 54 }
+    private var iconSize: CGFloat { tight ? 44 : (HUDLayout.isPad ? 64 : 54) }          // iPad: bigger targets on a big screen
     private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
@@ -1143,7 +1147,7 @@ struct CareMenu: View {
     /// The Feed / Drink picker: ONE row of picture cards that scrolls sideways when it is wider than the screen.
     private func pickerRow(kind: ConsumableKind) -> some View {
         let entries = pickEntries(kind)
-        let cap = max(160, UIScreen.main.bounds.width - 150)          // what the HUD row leaves beside the left rail (margins 16 x 2, rail 62, gaps, the menu's own padding)
+        let cap = max(160, HUDLayout.windowWidth() - 150)          // what the HUD row leaves beside the left rail (margins 16 x 2, rail 62, gaps, the menu's own padding)
         let noFood = kind == .food && entries.isEmpty          // an empty bag: say where food comes from
         let noToys = kind == .toy && entries.isEmpty          // no toy bought yet: the button goes to the Shop's Toys tab
         return VStack(spacing: 2) {

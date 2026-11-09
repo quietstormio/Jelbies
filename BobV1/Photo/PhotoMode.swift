@@ -130,10 +130,12 @@ struct PhotoModeView: View {
     @State private var album = PhotoAlbum.shared
     @State private var hint = true
     @Environment(\.verticalSizeClass) private var vsc
-    private var landscape: Bool { vsc == .compact }
+    @State private var viewSize = CGSize(width: 1, height: 2)
+    private var landscape: Bool { HUDLayout.isLandscape(vsc: vsc, size: viewSize) }
 
     var body: some View {
         ZStack {
+            Color.clear.onGeometryChange(for: CGSize.self) { $0.size } action: { viewSize = $0 }.allowsHitTesting(false)
             PhotoLook(filter: mode.filter, frame: mode.frame).ignoresSafeArea()
             if mode.shot == nil {
                 VStack(spacing: 8) {
