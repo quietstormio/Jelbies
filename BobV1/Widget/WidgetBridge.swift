@@ -6,12 +6,14 @@
 //      playing), every 5 min as a heartbeat, and always when the app leaves `.active`.
 //    - reloadAllTimelines: at most once a minute while playing (a throttled one is flushed by the next check); unconditional on leaving.
 //    - portraits: re-rendered (JellyPortraitRenderer, the real Metal renderer) only when the look changes meaningfully (colour, coat tier,
-//      dirt in steps of 0.1, shine). A changed look is rendered when leaving `.active` (the `.inactive` step still has the GPU; it is not
-//      allowed once backgrounded, and nobody sees the hitch); while playing only a MISSING portrait (first run) is rendered, at most every 5 min.
+//      dirt in steps of 0.1, shine), at most every 5 min, and ONLY while the app is active: the rig is built off the main thread / in short
+//      slices, the GPU encode is one short main-thread step, the rig is cached and freed on a memory warning, and a render that overruns its
+//      time budget is dropped (the previous PNG stays). Leaving `.active` (inactive / background) writes the snapshot JSON only, no render.
 //  The widget is read-only; nothing here is read back into the game.
 //
 
 import Foundation
+import UIKit
 import WidgetKit
 
 @MainActor
@@ -32,12 +34,16 @@ final class WidgetBridge {
     static let portraitEvery: TimeInterval = 300
     static let heartbeat: TimeInterval = 300
     static let checkEvery: Float = 10
+    /// Wall-clock budget of one portrait pass (rig build + all renders); an overrun keeps the previous PNGs.
+    static let renderBudget: TimeInterval = 8
 
     /// The App Group container (nil when unavailable); tests point it at a temp folder.
     var directory: URL?
     var reload: () -> Void
     var now: () -> Date
     var rendersPortraits: Bool
+    /// True while the app is `.active` (the only state a portrait may be rendered in); tests override it.
+    var isForeground: () -> Bool
     private(set) var writes = 0, reloads = 0, portraitRenders = 0
     @ObservationIgnored private var acc: Float = 0
     private var lastReload: Date?, lastPublish: Date?, lastRender: Date?
@@ -45,12 +51,20 @@ final class WidgetBridge {
     private var stateKey = ""
     private var rendered: [Int: String] = [:]
     private var rendering = false
+    private var renderer: JellyPortraitRenderer?
+    private var renderTask: Task<Void, Never>?
     private var lastInputs: [Input] = []
 
-    init(directory: URL? = JellyShare.containerURL, now: @escaping () -> Date = Date.init, rendersPortraits: Bool = true, reload: @escaping () -> Void = { WidgetCenter.shared.reloadAllTimelines() }) {
-        self.directory = directory; self.now = now; self.rendersPortraits = rendersPortraits; self.reload = reload
+    init(directory: URL? = JellyShare.containerURL, now: @escaping () -> Date = Date.init, rendersPortraits: Bool = true, isForeground: @escaping () -> Bool = { UIApplication.shared.applicationState == .active }, reload: @escaping () -> Void = { WidgetCenter.shared.reloadAllTimelines() }) {
+        self.directory = directory; self.now = now; self.rendersPortraits = rendersPortraits; self.isForeground = isForeground; self.reload = reload
         for r in JellySnapshot.read(from: directory)?.jellies ?? [] where !r.look.isEmpty { rendered[r.id] = r.look }
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.freeRenderer() }
+        }
     }
+
+    /// Drops the cached portrait rig (memory warning) and abandons a pass that is building one; the existing PNGs stay.
+    func freeRenderer() { renderTask?.cancel(); renderer = nil }
     nonisolated deinit {}
 
     // MARK: building the snapshot
@@ -88,7 +102,7 @@ final class WidgetBridge {
     // MARK: publishing
 
     /// Writes the snapshot and reloads the widget (throttled unless `force`), then refreshes stale portraits.
-    func publish(_ inputs: [Input], force: Bool) {
+    func publish(_ inputs: [Input], force: Bool, render: Bool = true) {
         lastInputs = inputs
         guard !inputs.isEmpty else { return }
         let t = now()
@@ -96,7 +110,7 @@ final class WidgetBridge {
         lastPublish = t
         stateKey = Self.stateKey(inputs)
         requestReload(force: force)
-        refreshPortraits(inputs, force: force)
+        if render { refreshPortraits(inputs) }
     }
 
     private func requestReload(force: Bool) {
@@ -119,41 +133,47 @@ final class WidgetBridge {
         } else {
             lastInputs = ins
             if pendingReload { requestReload(force: false) }
-            refreshPortraits(ins, force: false)
+            refreshPortraits(ins)
         }
     }
 
-    /// The app is leaving `.active` (still allowed to use the GPU in `.inactive`): the final snapshot, an unthrottled reload, a fresh portrait if stale.
-    func leftActive(_ inputs: [Input]) { publish(inputs, force: true) }
+    /// The app is leaving `.active` (inactive or background): the final snapshot and an unthrottled reload. No portrait is rendered here.
+    func leftActive(_ inputs: [Input]) { publish(inputs, force: true, render: false) }
 
     // MARK: portraits
 
     private func portraitURL(_ id: Int) -> URL? { directory?.appendingPathComponent(JellyShare.portraitFile(id)) }
 
-    private func refreshPortraits(_ inputs: [Input], force: Bool) {
-        guard rendersPortraits, !rendering, directory != nil else { return }
+    private func refreshPortraits(_ inputs: [Input]) {
+        guard rendersPortraits, !rendering, directory != nil, isForeground() else { return }
         let stale = inputs.filter { rendered[$0.id] != Self.lookKey($0) || !(portraitURL($0.id).map { FileManager.default.fileExists(atPath: $0.path) } ?? false) }
         guard !stale.isEmpty else { return }
-        // While playing, only a MISSING portrait is rendered (a first run): building the rig is a few hundred ms to seconds on the main thread, so a
-        // changed look waits for the app to leave `.active` (its `.inactive` step still has the GPU), where nobody sees the hitch.
-        let missing = stale.contains { !(portraitURL($0.id).map { FileManager.default.fileExists(atPath: $0.path) } ?? false) }
-        if !force && !missing { return }
-        if !force, let l = lastRender, now().timeIntervalSince(l) < Self.portraitEvery { return }
+        if let l = lastRender, now().timeIntervalSince(l) < Self.portraitEvery { return }
         rendering = true
-        Task { @MainActor [weak self] in
-            await Task.yield()
-            self?.renderNow(stale)
+        renderTask = Task { @MainActor [weak self] in
+            await self?.renderNow(stale)
         }
     }
 
-    private func renderNow(_ stale: [Input]) {
-        defer { rendering = false; lastRender = now() }
-        guard let renderer = JellyPortraitRenderer() else { return }
+    private func renderNow(_ stale: [Input]) async {
+        defer { rendering = false; lastRender = now(); renderTask = nil }
+        let deadline = ContinuousClock.now + .seconds(Self.renderBudget)
+        if renderer == nil {
+            let built = await JellyPortraitRenderer.make(deadline: deadline)
+            guard !Task.isCancelled else { return }          // a memory warning freed us while the rig was building
+            renderer = built
+        }
+        guard let renderer else { return }
         var any = false
         for i in stale {
-            guard let url = portraitURL(i.id),
-                  let px = renderer.render(palette: Self.palette(color: i.color), look: JellyPortraitRenderer.look(dirt: i.dirt, sparkle: i.sparkle)),
-                  JellyPortraitRenderer.writePNG(bgra: px, size: renderer.size, to: url) else { continue }
+            await Task.yield()
+            // GPU work only while active, and only inside the time budget: otherwise the previous PNG simply stays
+            guard !Task.isCancelled, isForeground(), ContinuousClock.now < deadline, let url = portraitURL(i.id) else { break }
+            guard let px = renderer.render(palette: Self.palette(color: i.color), look: JellyPortraitRenderer.look(dirt: i.dirt, sparkle: i.sparkle)) else {
+                self.renderer = nil; break          // the GPU refused: rebuild the rig next time
+            }
+            let size = renderer.size
+            guard await Task.detached(priority: .utility, operation: { JellyPortraitRenderer.writePNG(bgra: px, size: size, to: url) }).value else { continue }
             rendered[i.id] = Self.lookKey(i); portraitRenders += 1; any = true
         }
         guard any else { return }

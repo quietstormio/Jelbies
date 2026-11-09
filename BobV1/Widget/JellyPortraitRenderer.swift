@@ -4,7 +4,7 @@
 //  base body, skinned face and arms) offscreen, including his current dirt / sparkle look. This is the in-app twin of the capture tests' GfxLabScene path: a headless
 //  soft body stood up by the game brain for a second, one frame to a texture, PNG out.
 //
-//  It builds its own rig (so the live stage is never touched) and is thrown away after use; the meshes are built once per process.
+//  It builds its own rig (so the live stage is never touched) via `make` (off-main body, sliced walk); WidgetBridge caches it and frees it on a memory warning.
 //  Metal work is only allowed while the app is in the foreground, so callers render while active / inactive and treat a failed
 //  command buffer as "try again later" (`render` returns nil).
 //
@@ -28,34 +28,53 @@ final class JellyPortraitRenderer {
     private let ren: MelonRenderer
     private let target: MTLTexture
 
-    init?(size: Int = 360) {
-        self.size = size
-        let sm = Self.simMesh, rm = Self.renderMesh
-        let emb = embed(simRest: sm.rest, tets: sm.tets, verts: rm.rest)
-        skinner = Skinner(simTets: sm.tets, embedding: emb, vertexCount: rm.vertexCount,
-                          eyes: buildEyeRig(render: rm, sim: sm), antennae: buildAntennaRig(render: rm, sim: sm))
-        skinner.autoBlink = false
-        skinner.configureTail(rm)
-        sim = SoftBody(mesh: sm, firmness: 0.95)
-        sim.reset(drop: 0.35)
-        for _ in 0..<300 { sim.step() }
-        brain = BlobBrain.forGame()
+    private init(size: Int, sim: SoftBody, skinner: Skinner, brain: BlobBrain, ren: MelonRenderer, target: MTLTexture) {
+        self.size = size; self.sim = sim; self.skinner = skinner; self.brain = brain; self.ren = ren; self.target = target
+    }
+
+    /// The sim + skinner, built and settled off the main thread (both are `nonisolated`; the meshes come from the process-wide `BobMeshCache`).
+    private nonisolated final class Rig: @unchecked Sendable {
+        let sim: SoftBody, skinner: Skinner
+        init() {
+            let sm = BobMeshCache.sim, rm = BobMeshCache.render
+            skinner = Skinner(simTets: sm.tets, embedding: BobMeshCache.embedding, vertexCount: rm.vertexCount,
+                              eyes: buildEyeRig(render: rm, sim: sm), antennae: buildAntennaRig(render: rm, sim: sm))
+            skinner.autoBlink = false
+            skinner.configureTail(rm)
+            sim = SoftBody(mesh: sm, firmness: 0.95)
+            sim.reset(drop: 0.35)
+            for _ in 0..<300 { sim.step() }
+        }
+    }
+
+    /// Builds a portrait rig without a long stall of the main thread: the body is built and dropped off-main, the walk to the front spot (the brain is
+    /// main-actor) runs in short slices that yield in between. Returns nil when the GPU is unavailable, the task is cancelled or `deadline` passes.
+    static func make(size: Int = 360, deadline: ContinuousClock.Instant? = nil) async -> JellyPortraitRenderer? {
+        let rig = await Task.detached(priority: .utility) { Rig() }.value
+        let sim = rig.sim, skinner = rig.skinner
+        guard !Task.isCancelled else { return nil }
+        let rm = renderMesh
+        let brain = BlobBrain.forGame()
         brain.autonomy = false
         brain.attach(renderMesh: rm, synchronous: true)
         guard let device = MTLCreateSystemDefaultDevice(),
               let r = MelonRenderer(device: device, colorPixelFormat: .bgra8Unorm, mesh: rm, simEdges: sim.edges, particleCount: sim.n, game: true),
               r.room != nil
         else { return nil }
-        ren = r
-        ren.resize(width: size, height: size)
+        r.resize(width: size, height: size)
         let td = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: size, height: size, mipmapped: false)
         td.usage = [.renderTarget, .shaderRead]; td.storageMode = .shared
         guard let t = device.makeTexture(descriptor: td) else { return nil }
-        target = t
         // walk to the front (call) spot, face the camera and settle: the same spot the focus close-up frames
         brain.request(.goTo(GameCamera.callSpot))
-        for _ in 0..<(60 * 5) { brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: false); sim.step() }
-        for _ in 0..<30 { brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: false); sim.step() }
+        var left = 60 * 5 + 30
+        while left > 0 {
+            for _ in 0..<min(15, left) { brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: false); sim.step() }
+            left -= 15
+            await Task.yield()
+            if Task.isCancelled || deadline.map({ ContinuousClock.now >= $0 }) == true { return nil }
+        }
+        return JellyPortraitRenderer(size: size, sim: sim, skinner: skinner, brain: brain, ren: r, target: t)
     }
 
     nonisolated deinit {}
@@ -113,7 +132,7 @@ final class JellyPortraitRenderer {
     }
 
     /// PNG-encodes BGRA pixels (opaque) to `url`, atomically.
-    static func writePNG(bgra: [UInt8], size: Int, to url: URL) -> Bool {
+    nonisolated static func writePNG(bgra: [UInt8], size: Int, to url: URL) -> Bool {
         var data = bgra
         let ctx = data.withUnsafeMutableBytes { p in
             CGContext(data: p.baseAddress, width: size, height: size, bitsPerComponent: 8, bytesPerRow: size * 4, space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),

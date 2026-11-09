@@ -136,7 +136,7 @@ final class WidgetPreviewTests: XCTestCase {
         XCTAssertTrue(cond(), what)
     }
 
-    /// The bridge end to end: a first run renders the missing portrait while playing; a changed look waits for leaving `.active`.
+    /// The bridge end to end: a first run renders the missing portrait while playing; a changed look is re-rendered while active (throttled), never on leaving.
     func testBridgeRendersPortraitsAtTheRightTimes() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("widget-bridge-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -153,11 +153,11 @@ final class WidgetPreviewTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(reloadsAfterFirst, 2, "the new portrait forces a reload")
 
         clock = t0.addingTimeInterval(600)
-        b.publish([input(dirt: 0.6)], force: false)                           // dirtier while playing: no hitch now
+        b.leftActive([input(dirt: 0.6)])                                       // leaving `.active`: snapshot only, never a render
         RunLoop.current.run(until: Date().addingTimeInterval(1))
-        XCTAssertEqual(b.portraitRenders, 1, "a changed look is not rendered mid-play")
-        b.leftActive([input(dirt: 0.6)])                                       // leaving: now
-        waitFor("portrait on leave") { b.portraitRenders == 2 }
+        XCTAssertEqual(b.portraitRenders, 1, "leaving the foreground does not render")
+        b.publish([input(dirt: 0.6)], force: false)                           // dirtier while playing, 5 min later: re-rendered on the cached rig
+        waitFor("portrait while active") { b.portraitRenders == 2 }
         XCTAssertEqual(JellySnapshot.read(from: dir)?.jellies.first?.look, WidgetBridge.lookKey(input(dirt: 0.6)))
         let data = try Data(contentsOf: png)
         XCTAssertNotNil(UIImage(data: data))
