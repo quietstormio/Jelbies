@@ -39,6 +39,15 @@ struct ShopScreen: View {
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var wide: Bool { vsc == .compact }
     @Environment(\.dynamicTypeSize) private var dts
+    /// iPad only: the grid's width (columns follow it) and the scale of the card art, text and tabs (1 on iPhone, so the phone is unchanged).
+    @State private var gridSize = CGSize(width: 820, height: 1180)
+    private let pad = PadLayout.isPad
+    private var sc: CGFloat { pad ? 1.35 : 1 }
+    private var columnCount: Int {
+        if dts.isAccessibilitySize { return 1 }
+        if pad { return max(3, Int(gridSize.width / 230)) }          // portrait 3-4, landscape 5
+        return wide ? 4 : 2
+    }
     /// The Wear tab's slot filter (nil = all).
     @State private var wearSlot: WearSlot? = WearSlot(rawValue: UserDefaults.standard.string(forKey: "StoreSlot") ?? "")          // (-StoreSlot head: capture aid)
     private var shown: [StoreItem] { tab == .wear ? tab.items.filter { wearSlot == nil || $0.wear?.slot == wearSlot } : tab.items }
@@ -56,12 +65,13 @@ struct ShopScreen: View {
                     .padding(.horizontal, 16).padding(.top, 8)
             }
             ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: dts.isAccessibilitySize ? 1 : (wide ? 4 : 2)), spacing: 12) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount), spacing: 12) {
                     ForEach(shown) { item in card(item) }
                 }
                 .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 30)
             }
             .scrollBounceBehavior(.basedOnSize)
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { if pad { gridSize = $0 } }
         }
         .overlay(alignment: .bottom) {
             if let boughtToast {
@@ -80,6 +90,7 @@ struct ShopScreen: View {
                 Task { try? await Task.sleep(for: .seconds(2.2)); withAnimation { boughtToast = nil } }
             })
                 .presentationDetents(wide ? [.large] : [.height(560), .large])
+                .padSheetSizing()          // iPad: a centred page-sized card (the detents are ignored there); no-op on iPhone
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
         }
@@ -108,8 +119,8 @@ struct ShopScreen: View {
                         Button {
                             if t != tab { AudioHub.shared.play(.pageTurn); withAnimation(.easeInOut(duration: 0.15)) { tab = t } }
                         } label: {
-                            Text(t.rawValue).font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
-                                .padding(.horizontal, 16).frame(minHeight: 44)
+                            Text(t.rawValue).font(SK.font(pad ? 20 : 15, .heavy)).foregroundStyle(SK.ink)
+                                .padding(.horizontal, pad ? 26 : 16).frame(minHeight: pad ? 56 : 44)
                                 .background(Capsule().fill(t == tab ? SK.honey : SK.cream.opacity(0.92)))
                         }
                         .buttonStyle(.plain).accessibilityIdentifier("shop-tab-\(t.rawValue.lowercased())")
@@ -130,34 +141,34 @@ struct ShopScreen: View {
         return Button {
             AudioHub.shared.uiTap(); selected = item
         } label: {
-            VStack(spacing: 8) {
-                ItemArt(item: item, size: wide ? 84 : 104)
-                Text(item.name).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).jLine(1, scale: 0.8)
+            VStack(spacing: 8 * sc) {
+                ItemArt(item: item, size: pad ? 150 : (wide ? 84 : 104))
+                Text(item.name).font(SK.font(15 * sc, .heavy)).foregroundStyle(SK.ink).jLine(1, scale: 0.8)
                 if let p = item.perk { PerkChip(kind: p) }
-                else if item.kind == .room { Text("New room").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
-                else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
+                else if item.kind == .room { Text("New room").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
+                else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .trickPage {
                     VStack(spacing: 3) {
                         if let t = item.trick {
                             HStack(spacing: 2) {
-                                ForEach(0..<3, id: \.self) { k in Image(systemName: k < ShowTrickInfo.difficulty(t) ? "star.fill" : "star").font(.system(size: 11, weight: .black)).foregroundStyle(k < ShowTrickInfo.difficulty(t) ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
+                                ForEach(0..<3, id: \.self) { k in Image(systemName: k < ShowTrickInfo.difficulty(t) ? "star.fill" : "star").font(.system(size: 11 * sc, weight: .black)).foregroundStyle(k < ShowTrickInfo.difficulty(t) ? ShowUI.goldDeep : SK.muted.opacity(0.5)) }
                             }
                         }
-                        Text(item.scope?.tag ?? "New trick").font(SK.font(11, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(item.scope?.tag ?? "New trick").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                             .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(SK.mint.opacity(0.8)))
                     }
                 }
-                else { Text(item.isWearable ? (item.wear?.tags.prefix(2).map { $0.rawValue.capitalized }.joined(separator: " \u{00B7} ") ?? "Just for looks") : " ").font(SK.font(11, .bold)).foregroundStyle(SK.muted).padding(.vertical, 4) }
+                else { Text(item.isWearable ? (item.wear?.tags.prefix(2).map { $0.rawValue.capitalized }.joined(separator: " \u{00B7} ") ?? "Just for looks") : " ").font(SK.font(11 * sc, .bold)).foregroundStyle(SK.muted).padding(.vertical, 4) }
                 HStack(spacing: 6) {
                     HStack(spacing: 4) {
-                        JellyCoinIcon(size: 17).opacity(afford ? 1 : 0.5)
-                        Text("\(item.price)").font(SK.font(15, .black)).foregroundStyle(afford ? SK.ink : SK.muted)
+                        JellyCoinIcon(size: 17 * sc).opacity(afford ? 1 : 0.5)
+                        Text("\(item.price)").font(SK.font(15 * sc, .black)).foregroundStyle(afford ? SK.ink : SK.muted)
                     }
-                    .padding(.horizontal, 10).frame(minHeight: 44)
+                    .padding(.horizontal, 10).frame(minHeight: 44 * sc)
                     .background(Capsule().fill(Color.white.opacity(0.85)))
                     Spacer(minLength: 0)
                     if owned > 0 {
-                        Text(item.unique ? "Owned" : "owned x\(owned)").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                        Text(item.unique ? "Owned" : "owned x\(owned)").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.muted)
                     }
                 }
             }

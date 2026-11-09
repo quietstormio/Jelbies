@@ -359,25 +359,65 @@ struct StudioScreen: View {
     private var blocker: String? { care.showBlocker(jelly: who) }
 
     /// The shared lobby frame (Lobby/LobbyKit.swift) in the Studio's purple: the stage (the place), the Jelbie picker, the Show-ready card, Practise dance / Enter Jelly Show.
+    private var lobbyHeader: AnyView { AnyView(LobbyHeader(title: "Jelly Show", wallet: care.bath.wallet, backID: "studio-back", helpID: "studio-help", back: back, help: { setHow(true) })) }
+    private var leftColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            LobbyLabelRow(title: "Stage", trailing: "\(ShowUI.dayName(day))'s theme: \(theme.title)").accessibilityIdentifier("studio-theme")
+            stageCard
+            rankRow.padding(.top, 6)
+            LobbyPlaceInfo(text: rank.lobbyBlurb, textID: "studio-blurb", prizes: LobbyPrize.places((1...3).map { rank.drops(place: $0) }), prizeID: "studio-prizes")
+        }
+    }
+    private var rightColumn: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            LobbyJelbiePicker(care: care, title: "Contestant", selected: [who], selectCount: 1, id: "studio-picker", tileID: { "studio-who-\($0.id)" }) { who = $0 }
+                .padding(.bottom, 6)
+            readyCard
+        }
+    }
+    private var enterBar: some View {
+        LobbyBottomBar(playID: "studio-show", playTitle: "Enter Jelly Show", playIcon: .star, blocked: blocker != nil, play: { show() })
+    }
+
+    /// iPad landscape only: the stage, ranks and prizes on the left, the contestant picker and the Show-ready card on the right, the Enter bar right under them
+    /// (LobbyScreen's one capped column leaves wide empty sides and a gap above the button).
+    private var padLandscape: some View {
+        VStack(spacing: 0) {
+            lobbyHeader.padding(.top, 8).padding(.horizontal, 24)
+            HStack(alignment: .top, spacing: 28) {
+                ScrollView { leftColumn.frame(maxWidth: .infinity, alignment: .leading) }.scrollBounceBehavior(.basedOnSize)
+                ScrollView { rightColumn.frame(maxWidth: .infinity, alignment: .leading) }.scrollBounceBehavior(.basedOnSize)
+            }
+            .padding(.horizontal, 24).padding(.top, 6)
+            VStack(spacing: 0) {
+                Text(blocker ?? " ").font(SK.font(12, .bold)).foregroundStyle(LobbyTheme.studio.subheading).lineLimit(1).minimumScaleFactor(0.7).accessibilityIdentifier("studio-why")
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 8)
+                enterBar
+            }
+            .frame(maxWidth: 520).padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 14)
+        }
+        .frame(maxWidth: 1180).frame(maxWidth: .infinity)
+        .background(LobbyTheme.studio.background.ignoresSafeArea())
+    }
+
+    private var lobbyFrame: some View {
+        LobbyScreen(header: lobbyHeader, why: blocker, whyID: "studio-why") {
+            leftColumn
+        } right: {
+            rightColumn.padding(.top, compact ? 0 : 12)
+        } bar: {
+            enterBar
+        }
+    }
+
     var body: some View {
         ZStack {
-            LobbyScreen(header: AnyView(LobbyHeader(title: "Jelly Show", wallet: care.bath.wallet, backID: "studio-back", helpID: "studio-help", back: back, help: { setHow(true) })),
-                        why: blocker, whyID: "studio-why") {
-                VStack(alignment: .leading, spacing: 0) {
-                    LobbyLabelRow(title: "Stage", trailing: "\(ShowUI.dayName(day))'s theme: \(theme.title)").accessibilityIdentifier("studio-theme")
-                    stageCard
-                    rankRow.padding(.top, 6)
-                    LobbyPlaceInfo(text: rank.lobbyBlurb, textID: "studio-blurb", prizes: LobbyPrize.places((1...3).map { rank.drops(place: $0) }), prizeID: "studio-prizes")
-                }
-            } right: {
-                VStack(alignment: .leading, spacing: 0) {
-                    LobbyJelbiePicker(care: care, title: "Contestant", selected: [who], selectCount: 1, id: "studio-picker", tileID: { "studio-who-\($0.id)" }) { who = $0 }
-                        .padding(.bottom, 6)
-                    readyCard
-                }
-                .padding(.top, compact ? 0 : 12)
-            } bar: {
-                LobbyBottomBar(playID: "studio-show", playTitle: "Enter Jelly Show", playIcon: .star, blocked: blocker != nil, play: { show() })
+            Group {
+                if PadLayout.isPad {
+                    GeometryReader { g in
+                        if g.size.width > g.size.height { padLandscape } else { lobbyFrame }
+                    }
+                } else { lobbyFrame }
             }
             .accessibilityHidden(howOpen)
             if howOpen {

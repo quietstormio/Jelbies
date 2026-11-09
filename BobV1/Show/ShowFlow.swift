@@ -178,7 +178,7 @@ final class ShowFlow {
     var frame: ShowFrame {
         switch round {
         case .look: return .look
-        case .dance: return .dance(bodies: bodies)
+        case .dance: return .dance(bodies: bodies, pad: PadLayout.isPad)
         case .trick: return .trick
         case .results: return trickStage == .pick ? .results : .trick          // (the rivals' last turn still plays on the trick frame)
         }

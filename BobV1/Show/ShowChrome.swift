@@ -234,8 +234,22 @@ struct DanceRound: View {
                 }
             }
             .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
-            if show.showsCountdown { numeral("\(show.countdown)") }
-            if show.showsGo { numeral("GO!") }
+            if !PadLayout.isPad {
+                if show.showsCountdown { numeral("\(show.countdown)") }
+                if show.showsGo { numeral("GO!") }
+            }
+        }
+        .overlay {
+            // iPad: the count sits at a third of the screen height (the cheer bar and lane are in the lower half, in either orientation), never over them
+            if PadLayout.isPad {
+                GeometryReader { g in
+                    ZStack {
+                        if show.showsCountdown { numeral("\(show.countdown)") }
+                        if show.showsGo { numeral("GO!") }
+                    }
+                    .position(x: g.size.width / 2, y: g.size.height * 0.3)
+                }
+            }
         }
         .animation(CareMenu.spring, value: show.beat)
     }
@@ -302,7 +316,7 @@ struct DanceRound: View {
         Text(s).font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded)).foregroundStyle(.white)
             .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: .black.opacity(0.35), radius: 6, y: 3)
             .id(show.cueSerial).transition(.scale(scale: 1.6).combined(with: .opacity)).allowsHitTesting(false)
-            .offset(y: compact ? 20 : 40)
+            .offset(y: PadLayout.isPad ? 0 : (compact ? 20 : 40))
             .accessibilityIdentifier("show-count")
     }
 }
@@ -679,6 +693,7 @@ struct ResultsScreen: View {
                 buttons
             }
         }
+        .padReadable(560)          // iPad: the same 560 pt card width as the Race and Volleyball results
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
         .onAppear { withAnimation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.3)) { grown = true } }
         .accessibilityElement(children: .contain).accessibilityIdentifier("results-screen")
