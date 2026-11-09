@@ -29,7 +29,7 @@ struct ContentView: View {
                 } else if logoOn {
                     LogoMoment { LaunchTiming.mark("logo moment done"); LaunchGate.shared.introCoveredLaunch(); withAnimation(.easeInOut(duration: 0.3)) { logoOn = false } }.transition(.opacity).zIndex(1)
                 } else { phaseView }
-                if let w = flow.welcome, flow.phase == .game { WelcomeBanner(name: w) { flow.welcome = nil } }
+                if let w = flow.welcome, flow.phase == .game, JellyRoster.savedIDs().count < 2 { WelcomeBanner(name: w) { flow.welcome = nil } }          // (with others at home the arrival moment says it: GameCare+Newcomer.swift)
             }
             .onAppear { OrientationForce.apply() }
             .overlay { if !introOn && !logoOn { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) } }          // no curtain over the intro clip

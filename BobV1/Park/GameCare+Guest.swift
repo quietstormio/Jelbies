@@ -139,6 +139,7 @@ extension GameCare {
 
         if g.actor == nil {
             g.phase = .away
+            if newcomerWelcome != nil { g.knockT = 0; return }          // a bought Jelbie's arrival and welcome is on: the friend knocks when it is over
             if g.arrival.active { guestArrivalStep(actors, v, visit, dt: dt); return }          // the arrival moment (Park/GuestArrival.swift): the body is made behind the card
             guard guestRoomQuiet, parkBook.spawn != nil else { g.knockT = 0; return }
             if !visit.arrived, !GuestRules.canArrive(visit.kind, hour: DayClock.shared.hour) { g.knockT = 0; return }          // a sleepover friend only comes in the evening (and the knock waits for the player to be home: the room-quiet guard above)

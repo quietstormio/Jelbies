@@ -130,6 +130,10 @@ final class GuestBook {
     var arrivalDim = false
     var arrivalName = ""
     var welcomeAt: Double = 0
+    /// What the pill says, how long it stays and who it floats over (nil = the guest): "Welcome!" over the guest by default; the newcomer's homecoming sets its own (GameCare+Newcomer.swift).
+    var welcomeLine = "Welcome!"
+    var welcomeSpan: Double = 1.2
+    @ObservationIgnored var welcomeActor: JellyActor?
     @ObservationIgnored var arrival = ArrivalClock()
     @ObservationIgnored var arrivalTarget: SIMD2<Float>?
     /// The welcome party after the hug (Park/GuestParty.swift).

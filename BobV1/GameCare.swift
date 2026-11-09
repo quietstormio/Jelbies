@@ -410,6 +410,7 @@ final class GameCare {
     /// Jelbies in a warm social session right now (GameCare+SocialLove.swift).
     @ObservationIgnored var socialLoveActive: Set<Int> = []
     @ObservationIgnored var newcomer: NewcomerWalk?          // the bring-home walk (GameCare+Newcomer.swift)
+    @ObservationIgnored var newcomerWelcome: NewcomerWelcome?          // the bring-home arrival + welcome, when others are at home (GameCare+Newcomer.swift)
     @ObservationIgnored var greetOthers: [Int: (age: Float, spot: SIMD2<Float>, arrived: Float)] = [:]
     /// Where each Jelly stands for the greeting (Bob takes the usual front spot; the others fan out behind him).
     static func greetSpot(_ id: Int) -> SIMD2<Float> {
