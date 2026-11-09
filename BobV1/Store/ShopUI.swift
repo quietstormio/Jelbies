@@ -249,6 +249,19 @@ struct ItemSheet: View {
                     .scrollBounceBehavior(.basedOnSize)
                 }
                 .padding(.horizontal, 20)
+            } else if HUDLayout.isPad {
+                // iPad: the same column, but scrolling (a landscape page is short) with room above for the drag handle and below so the Buy clears the card's corners
+                ScrollView {
+                    VStack(spacing: 14) {
+                        ItemPicture(care: care, item: item, who: who, size: isTrick ? 110 : 230).padding(.top, 34)
+                        Text(item.name).font(SK.font(26, .black)).foregroundStyle(SK.ink)
+                        Text(item.description).font(SK.font(15, .semibold)).foregroundStyle(SK.muted).multilineTextAlignment(.center).padding(.horizontal, 24)
+                        effectCard.padding(.horizontal, 16)
+                        buySection
+                    }
+                    .padding(.bottom, 40)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             } else {
                 VStack(spacing: 14) {
                     ItemPicture(care: care, item: item, who: who, size: isTrick ? 110 : 230).padding(.top, 14)
