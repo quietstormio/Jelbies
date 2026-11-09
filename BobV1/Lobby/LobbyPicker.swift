@@ -44,6 +44,13 @@ extension EnvironmentValues {
     }
 }
 
+private extension View {
+    /// iPad only: take the children's own height (iPhone unchanged).
+    @ViewBuilder func padFitHeight(_ lobby: Bool) -> some View {
+        if PadLayout.isPad && lobby { fixedSize(horizontal: false, vertical: true) } else { self }
+    }
+}
+
 // MARK: - The Jelbie picker
 
 /// One rounded container (the stats card's radius) split into three equal segments by hairlines, full width and edge to edge: one segment per Jelbie (his whole head, large, and his
@@ -109,10 +116,11 @@ struct LobbyJelbiePicker: View {
                     .frame(maxWidth: .infinity)
                 }
             }
+            .padFitHeight(showNote)          // iPad: the hairline Rectangles must not stretch the row to the whole proposed height
             .background(theme.tile)
             .clipShape(shape)
             .overlay(shape.strokeBorder(SK.ink.opacity(0.14), lineWidth: 2))
-            .frame(maxWidth: Self.maxRow)
+            .frame(maxWidth: (PadLayout.isPad && showNote) ? .infinity : Self.maxRow)          // iPad: the row fills the column like the stats card
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowW = $0 }
             // one fixed slot under the strip, on every lobby: the hint, or the blocker in its place (with the way out beside it). Nothing below it ever moves.
             if showNote { HStack(spacing: 8) {
