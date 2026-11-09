@@ -51,6 +51,7 @@ struct VolleyChrome: View {
         }
         .allowsHitTesting(volley.active)
         .accessibilityElement(children: .contain)
+        .padStatusBarHidden(volley.inScene)
     }
 
     // MARK: top
