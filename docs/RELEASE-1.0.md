@@ -98,6 +98,14 @@ ElevenLabs key renewed 2026-10-25. New audio covers the groomer and volleyball (
 - Age rating questionnaire; pricing (TBD by the user).
 - ElevenLabs commercial licence check for the generated music and sound effects.
 - Screenshots (portrait and landscape) and a preview video.
+- iPad (ships in 1.0, TARGETED_DEVICE_FAMILY = 1,2 on the app):
+  - Resizable, not full-screen: UIRequiresFullScreen is deprecated (iPadOS 26) and ignored from the iOS/iPadOS 27 SDK (TN3192), so the key is deliberately absent. Every screen must survive arbitrary window sizes and rotation; layout comes from the available size, never UIScreen.
+  - All four iPad orientations are declared (INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad); iPhone keeps its three.
+  - Launch screen is required for submission from iOS/iPadOS 27 (TN3208): UILaunchScreen with LaunchBackground is in BobV1-Info.plist. Confirm Xcode validation accepts it.
+  - Single window: the scene manifest now lives in BobV1-Info.plist (UIApplicationSupportsMultipleScenes=false; INFOPLIST_KEY_UIApplicationSceneManifest_Generation=NO, because the generated manifest forced true). Built Info.plist verified (game state is global: camera, audio, save). Check on an iPad that Assistive Access still launches its scene.
+  - Haptics (no Taptic Engine) and Live Activities degrade gracefully; the widget keeps small/medium/large + accessory families.
+  - Open (code, not project): a minimum window size (windowResizability(.contentMinSize) + frame(minWidth ~560, minHeight ~420)) in BobV1App.swift.
+  - iPad screenshots (App Store Connect; at least one 13-inch set is REQUIRED, jpeg/png, no alpha, up to 10): 13-inch 2064x2752 or 2048x2732 portrait, 2752x2064 or 2732x2048 landscape. 11-inch (1668x2420, 1668x2388, 2420x1668) is optional and derived from the 13-inch set. Capture the real app on the iPad Pro 13-inch simulator: Jelly Race, Jelly Show, Jelly Volleyball, Jelly Spa, Jelly Spring. Strip alpha before upload.
 - Device and iOS support; Foundation Models features need a fallback on devices without Apple Intelligence (already plain-text fallbacks).
 - App icon.
 - TestFlight build and a pass before submission.

@@ -505,7 +505,7 @@
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelbie photos to your Photos library.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies listen when you talk to them or turn on Ears. Sound is understood on your phone and is never recorded or sent anywhere.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your Jelbies turn what you say into words on your phone so they can learn their names and tricks. Nothing is sent anywhere.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -544,7 +544,7 @@
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelbie photos to your Photos library.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies listen when you talk to them or turn on Ears. Sound is understood on your phone and is never recorded or sent anywhere.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your Jelbies turn what you say into words on your phone so they can learn their names and tricks. Nothing is sent anywhere.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
