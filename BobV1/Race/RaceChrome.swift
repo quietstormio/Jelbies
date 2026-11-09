@@ -8,13 +8,29 @@ import SwiftUI
 
 struct RaceChrome: View {
     let care: GameCare
+    @Environment(\.verticalSizeClass) private var vsc
+
+    var body: some View {
+        if PadLayout.isPad {
+            GeometryReader { g in
+                let land = HUDLayout.isLandscape(vsc: vsc, size: g.size)          // iPad landscape, measured synchronously (no first-frame flash from the bottom to the sides)
+                RaceChromeLayout(care: care, compact: land, padLandscape: land).statusBarHidden(care.race.trackVisible)
+            }
+        } else {
+            RaceChromeLayout(care: care, compact: vsc == .compact, padLandscape: false)
+        }
+    }
+}
+
+private struct RaceChromeLayout: View {
+    let care: GameCare
+    /// A phone on its side (or an iPad in landscape): the foot buttons go to the two sides, the track stays in the middle.
+    let compact: Bool
+    /// iPad landscape: smaller corner buttons so the track's hedges stay visible.
+    let padLandscape: Bool
     private var race: RaceFlow { care.race }
     private let light = UIImpactFeedbackGenerator(style: .light)
     private let rigid = UIImpactFeedbackGenerator(style: .rigid)
-    @Environment(\.verticalSizeClass) private var vsc
-    /// iPad in landscape: wide enough for the side-edge foot buttons too (the iPhone path is unchanged: PadLayout.isPad is false there).
-    @State private var padWide = false
-    private var compact: Bool { vsc == .compact || (PadLayout.isPad && padWide) }          // a phone on its side: the foot buttons go to the two sides, the track stays in the middle
 
     var body: some View {
         ZStack {
@@ -30,7 +46,7 @@ struct RaceChrome: View {
                 .padding(.horizontal, 14)
                 .padding(.bottom, 14)
                 .overlay(alignment: .bottom) {
-                    if compact, race.ui.phase != .results { sideButtons.padding(.horizontal, 14).padding(.bottom, 12) }
+                    if compact, race.ui.phase != .results { sideButtons.padding(.horizontal, padLandscape ? 4 : 14).padding(.bottom, padLandscape ? 6 : 12) }
                 }
                 .animation(CareMenu.spring, value: race.showsCard)
                 if race.showsCountdown { numeral(race.ui.countdown == 0 ? "" : "\(race.ui.countdown)") }
@@ -38,7 +54,6 @@ struct RaceChrome: View {
             }
             Color.white.opacity(Double(race.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
-        .onGeometryChange(for: Bool.self) { $0.size.width > $0.size.height * 1.15 } action: { padWide = $0 }
         .allowsHitTesting(race.active)
         .accessibilityElement(children: .contain)
         .defersSystemGestures(on: .bottom)
@@ -52,7 +67,7 @@ struct RaceChrome: View {
                 .padding(.horizontal, 16).padding(.vertical, 7)
                 .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
             if race.ui.stumbling, race.ui.tripped {
-                hint("Whoops! He tripped")
+                hint(race.ui.playerName.isEmpty ? "Whoops! A trip!" : "Whoops! \(race.ui.playerName) tripped")
             } else if race.ui.stumbling {
                 hint("Oops! Left, right, left, right")
             } else if race.ui.stalled {
@@ -133,15 +148,15 @@ struct RaceChrome: View {
     private var sideButtons: some View {
         Group {
             if race.assist == .oneButton || race.assist == .auto {
-                assistOrFeet(width: nil).frame(height: 150).padding(.horizontal, 40).frame(maxWidth: PadLayout.isPad ? 520 : .infinity)
+                assistOrFeet(width: nil).frame(height: padLandscape ? 110 : 150).padding(.horizontal, 40).frame(maxWidth: PadLayout.isPad ? 520 : .infinity)
             } else {
                 HStack(alignment: .bottom, spacing: 0) {
                     FootButton(title: "Left", id: "race-left", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .leftArrow) { press(0) }
-                        .frame(width: 190, height: 170)
+                        .frame(width: padLandscape ? 120 : 190, height: padLandscape ? 120 : 170)
                     Spacer(minLength: 0)
-                    if race.ui.hasHurdles { jumpButton.frame(width: 130, height: 170).padding(.trailing, 10) }          // (landscape: Jump just inside the Right foot)
+                    if race.ui.hasHurdles { jumpButton.frame(width: padLandscape ? 100 : 130, height: padLandscape ? 120 : 170).padding(.trailing, 10) }          // (landscape: Jump just inside the Right foot)
                     FootButton(title: "Right", id: "race-right", symbol: "shoeprints.fill", flip: true, live: race.buttonsLive, key: .rightArrow) { press(1) }
-                        .frame(width: 190, height: 170)
+                        .frame(width: padLandscape ? 120 : 190, height: padLandscape ? 120 : 170)
                 }
             }
         }

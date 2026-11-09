@@ -15,9 +15,16 @@ enum PadLayout {
     static let isPad = UIDevice.current.userInterfaceIdiom == .pad
     static let column: CGFloat = 700
     static var maxColumn: CGFloat { isPad ? column : .infinity }
+    /// iPad lobbies: wide enough for five course cards in one row.
+    static let wideColumn: CGFloat = 860
 }
 
 extension View {
+    /// iPad only: hides the status bar (its clock would sit over the score pill / a Jelbie in landscape play). A no-op on iPhone.
+    @ViewBuilder func padStatusBarHidden(_ hidden: Bool) -> some View {
+        if PadLayout.isPad { statusBarHidden(hidden) } else { self }
+    }
+
     /// Caps the width to `PadLayout.column` (iPad) and centres it; a no-op on iPhone.
     @ViewBuilder func padColumn(_ width: CGFloat = PadLayout.column) -> some View {
         if PadLayout.isPad { frame(maxWidth: width).frame(maxWidth: .infinity) } else { self }
@@ -66,6 +73,38 @@ struct LobbyScreen<Left: View, Right: View, Bar: View>: View {
                     }
                     .padding(.bottom, 2)
                 }
+            } else if PadLayout.isPad {
+                VStack(spacing: 0) {
+                    header.padding(.top, 8).padding(.horizontal, 16)
+                    ViewThatFits(in: .vertical) {
+                        // everything fits: the content and the bar sit together, centred in the space under the header (no empty band above the footer)
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+                            VStack(alignment: .leading, spacing: 0) {
+                                left.frame(maxWidth: .infinity, minHeight: Self.placeHeight, alignment: .topLeading)
+                                right
+                            }
+                            .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 20)
+                            VStack(spacing: 0) { whyLine; bar }.padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 6)
+                            Spacer(minLength: 0)
+                        }
+                        // too tall (landscape iPad, big text): scroll the body, bar pinned
+                        VStack(spacing: 0) {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    left.frame(maxWidth: .infinity, minHeight: Self.placeHeight, alignment: .topLeading)
+                                    right
+                                }
+                                .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .scrollBounceBehavior(.basedOnSize)
+                            VStack(spacing: 0) { whyLine; bar }.padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 6).modifier(BarBand())
+                        }
+                    }
+                    .frame(maxHeight: .infinity)
+                }
+                .padColumn(PadLayout.wideColumn)
             } else {
                 VStack(spacing: 0) {
                     header.padding(.top, 8).padding(.horizontal, 16)
@@ -509,11 +548,17 @@ struct LobbySheet<Content: View>: View {
     let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var contentH: CGFloat = 0
+    /// iPad only: the widest the centred card gets (default 680).
+    var padMaxWidth: CGFloat = 680
+    func padWidth(_ w: CGFloat) -> Self { var c = self; c.padMaxWidth = w; return c }
     init(title: String, full: Bool = false, close: @escaping () -> Void, @ViewBuilder content: () -> Content) { self.title = title; self.full = full; self.close = close; self.content = content() }
 
     var body: some View {
         GeometryReader { g in
-            ZStack(alignment: .bottom) {
+            // iPad: ONE presentation in every orientation: a centred card that is exactly as tall as its content (up to 90% of the window), never touching an edge.
+            let pad = PadLayout.isPad
+            let padCap = min(g.size.height * 0.9, 900)
+            ZStack(alignment: pad ? .center : .bottom) {
                 Color(red: 40 / 255, green: 26 / 255, blue: 14 / 255).opacity(0.38).ignoresSafeArea().onTapGesture { close() }.accessibilityHidden(true)
                 VStack(spacing: 0) {
                     VStack(spacing: 0) {
@@ -530,18 +575,20 @@ struct LobbySheet<Content: View>: View {
                     }
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 12).onEnded { if $0.translation.height > 60 { close() } })
-                    ScrollView { content.padding(.bottom, full ? 0 : 94).background(GeometryReader { Color.clear.preference(key: SheetContentHeight.self, value: $0.size.height) }) }
+                    ScrollView { content.padding(.bottom, full || pad ? 0 : 94).background(GeometryReader { Color.clear.preference(key: SheetContentHeight.self, value: $0.size.height) }) }
                         .scrollBounceBehavior(.basedOnSize)
                         .onPreferenceChange(SheetContentHeight.self) { contentH = $0 }
-                        .modifier(SheetScrollHeight(full: full, height: contentH, cap: (PadLayout.isPad ? min(g.size.height - 2, 900) : g.size.height - 2) - 118))
+                        .modifier(SheetScrollHeight(full: full && !pad, height: contentH, cap: (pad ? padCap : g.size.height - 2) - 118))
                 }
                 .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 12)
-                .frame(maxWidth: PadLayout.isPad ? 680 : .infinity)
-                .modifier(SheetHeight(full: full, cap: PadLayout.isPad ? min(g.size.height - 2, 900) : g.size.height - 2))
-                .background(UnevenRoundedRectangle(topLeadingRadius: 34, topTrailingRadius: 34, style: .continuous).fill(SK.sheet).ignoresSafeArea(edges: .bottom))
-                .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+                .frame(maxWidth: pad ? padMaxWidth : .infinity)
+                .modifier(SheetHeight(full: full && !pad, cap: g.size.height - 2))
+                .background(pad ? AnyView(RoundedRectangle(cornerRadius: 34, style: .continuous).fill(SK.sheet))
+                                : AnyView(UnevenRoundedRectangle(topLeadingRadius: 34, topTrailingRadius: 34, style: .continuous).fill(SK.sheet).ignoresSafeArea(edges: .bottom)))
+                .padding(pad ? 16 : 0)
+                .transition(reduceMotion ? .opacity : (pad ? .scale(scale: 0.94).combined(with: .opacity) : .move(edge: .bottom)))
             }
-            .frame(width: g.size.width, height: g.size.height, alignment: .bottom)
+            .frame(width: g.size.width, height: g.size.height, alignment: pad ? .center : .bottom)
         }
         .accessibilityAddTraits(.isModal)
         .accessibilityAction(.escape) { close() }

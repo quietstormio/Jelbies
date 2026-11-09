@@ -98,6 +98,26 @@ struct UpgradeSheet: View {
                         VStack(alignment: .leading, spacing: 8) { skillsHeader; skillRows }.frame(maxWidth: .infinity)
                         VStack(alignment: .leading, spacing: 8) { powerHeader; tiles; doneButton.padding(.top, 4) }.frame(maxWidth: .infinity)
                     }
+                } else if PadLayout.isPad {
+                    // iPad: two columns when the card is wide enough (landscape), else one column with a bigger hero
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 22) {
+                            hero.frame(width: 400, height: 430)
+                            VStack(alignment: .leading, spacing: 14) {
+                                VStack(alignment: .leading, spacing: 8) { skillsHeader; skillRows }
+                                VStack(alignment: .leading, spacing: 8) { powerHeader; tiles }
+                                doneButton.padding(.top, 2)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .frame(minWidth: 840)
+                        VStack(alignment: .leading, spacing: 14) {
+                            hero.frame(height: config.heroHeight * 1.4)
+                            VStack(alignment: .leading, spacing: 8) { skillsHeader; skillRows }
+                            VStack(alignment: .leading, spacing: 8) { powerHeader; tiles }
+                            doneButton.padding(.top, 2)
+                        }
+                    }
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
                         hero.frame(height: config.heroHeight)
@@ -109,6 +129,7 @@ struct UpgradeSheet: View {
             }
             .padding(.bottom, 8)
         }
+        .padWidth(980)
         .accessibilityIdentifier("upgrade-sheet")
     }
 
