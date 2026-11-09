@@ -42,9 +42,7 @@ struct AccessibilitySettingsView: View {
                     Text("Tap the mic once to start and once to stop.")
                 } }
                 Section {
-                    Button("System accessibility settings") {
-                        if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) }
-                    }
+                    GatedButton(action: { ParentGateActions.openSettings() }) { Text("System accessibility settings") }
                     .accessibilityIdentifier("a11y-system-settings")
                     .listRowBackground(SK.tile)
                 } footer: {

@@ -42,7 +42,14 @@ struct AppleExtrasPanel: View {
                 .siriTipViewStyle(.automatic)
             Text("Feed, water, goodnight and race work too.")
                 .jFont(12, .medium).foregroundStyle(ink.opacity(0.65))
-            HStack { Spacer(); ShortcutsLink().shortcutsLinkStyle(.automatic).fixedSize() }
+            HStack {
+                Spacer()
+                GatedButton(action: { ParentGateActions.openShortcuts() }) {
+                    Label("Open Shortcuts", systemImage: "square.stack.3d.up.fill").jFont(14, .semibold).foregroundStyle(ink)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).accessibilityIdentifier("extras-open-shortcuts")
+            }
         }
         .padding(16)
         .frame(width: 300)

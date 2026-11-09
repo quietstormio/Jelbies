@@ -293,7 +293,7 @@ private struct PhotoPreview: View {
                 PhotoActionButton(title: saved == .saved ? "Saved" : "Save to Photos", symbol: saved == .saved ? "checkmark" : "square.and.arrow.down", prominent: true) {
                     Task { saved = await PhotoAlbum.saveToPhotos(url) }
                 }
-                ShareLink(item: Image(uiImage: image), preview: SharePreview("Jelbies photo", image: Image(uiImage: image))) { PhotoActionLabel(title: "Share", symbol: "square.and.arrow.up", prominent: false) }
+                GatedShareButton(image: image)
             }
             .fixedSize(horizontal: false, vertical: true)
             if let m = saved.flatMap({ PhotoAlbum.message(for: $0) }) { Text(m).font(SK.font(13, .bold)).foregroundStyle(.white).multilineTextAlignment(.center) }

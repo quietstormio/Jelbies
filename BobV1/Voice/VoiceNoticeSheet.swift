@@ -38,6 +38,7 @@ struct VoiceNoticeSheet: View {
     var primary: () -> Void
     var openBook: () -> Void
     var close: () -> Void
+    @State private var gateSettings = false
 
     var body: some View {
         ScrollView {
@@ -55,7 +56,7 @@ struct VoiceNoticeSheet: View {
                     button("Turn on the mic", id: "voice-notice-continue", filled: true) { primary() }
                     button("Not now", id: "voice-notice-close", filled: false) { close() }
                 } else {
-                    if notice == .denied { button("Open Settings", id: "voice-notice-settings", filled: true) { VoiceNoticeText.openSettings() } }
+                    if notice == .denied { button("Open Settings", id: "voice-notice-settings", filled: true) { gateSettings = true } }
                     button("Open tricks", id: "voice-notice-book", filled: notice != .denied) { openBook() }
                     button("Close", id: "voice-notice-close", filled: false) { close() }
                 }
@@ -65,6 +66,7 @@ struct VoiceNoticeSheet: View {
         .scrollBounceBehavior(.basedOnSize)
         .background(FocusStyle.cream.ignoresSafeArea())
         .accessibilityIdentifier("voice-notice")
+        .parentGate(isPresented: $gateSettings) { VoiceNoticeText.openSettings() }
     }
 
     private func button(_ title: String, id: String, filled: Bool, action: @escaping () -> Void) -> some View {
