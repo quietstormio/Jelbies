@@ -116,7 +116,7 @@ struct PhotoAlbumView: View {
                     Spacer()
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: vsc == .compact ? 150 : 110), spacing: 8)], spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: vsc == .compact || HUDLayout.isPad ? 150 : 110), spacing: 8)], spacing: 8) {
                             ForEach(album.items, id: \.self) { url in
                                 Button { viewing = url } label: {
                                     Color.clear.aspectRatio(0.75, contentMode: .fit)

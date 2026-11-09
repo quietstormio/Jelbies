@@ -14,6 +14,7 @@ struct BathChrome: View {
         (.rinse, "Rinse", "drop.fill"), (.shine, "Shine", "sparkles")]
     private var bath: BathFlow { care.bath }
     @Environment(\.verticalSizeClass) private var vsc
+    @State private var viewSize = CGSize(width: 1, height: 2)          // measured, so iPad landscape (vsc is .regular there) gets the landscape layout
     @State private var pulse = false
 
     /// "Next": the stage's goal is met; the player moves on when ready (nothing advances by itself).
@@ -34,6 +35,7 @@ struct BathChrome: View {
 
     var body: some View {
         ZStack {
+            Color.clear.onGeometryChange(for: CGSize.self) { $0.size } action: { viewSize = $0 }.allowsHitTesting(false)
             if bath.showsChrome {
                 VStack(spacing: 0) {
                     HStack {
@@ -71,7 +73,7 @@ struct BathChrome: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("bath-done")
-                        } else if vsc == .compact {
+                        } else if HUDLayout.isLandscape(vsc: vsc, size: viewSize) {
                             toolBar
                             helpButton
                             HStack(spacing: 12) {

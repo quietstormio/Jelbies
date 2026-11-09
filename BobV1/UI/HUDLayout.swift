@@ -27,12 +27,18 @@ enum HUDLayout {
         vsc == .compact || (isPad && size.width > size.height)
     }
 
-    /// Width of the app's window in points (not the display: iPad windows resize). On iPhone the window is the screen, so this equals the old UIScreen width.
-    @MainActor static func windowWidth() -> CGFloat {
-        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive } ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        if let w = scene?.keyWindow?.bounds.width, w > 0 { return w }
-        return UIScreen.main.bounds.width
+    /// The HUD's measured size (the game screen's geometry, window not display), kept by GameScreen for the roam floor's rail cut-outs. Zero until measured.
+    nonisolated(unsafe) static var measuredSize: CGSize = .zero
+
+    /// iPad HUD scale from the measured short side (744 pt mini -> 1.1, 1032 pt 13-inch -> 1.3). Always 1 on iPhone, so the phone HUD is untouched.
+    static func padScale(short: CGFloat) -> CGFloat {
+        guard isPad, short > 0 else { return 1 }
+        return min(1.3, max(1.1, 1.1 + (short - 744) / 288 * 0.2))
     }
+    static func padScale(size: CGSize) -> CGFloat { padScale(short: min(size.width, size.height)) }
+
+    /// The size the iPad rails are laid out for: the measured HUD, else the screen.
+    private static var padSize: CGSize { measuredSize.width > 0 && measuredSize.height > 0 ? measuredSize : UIScreen.main.bounds.size }
 
     /// Screen rectangles (fractions of width/height, top-left origin) of the bottom-corner rails in portrait: the left glass capsule (16 pt in, 60 wide: book, bag, Go out, mic) and the right
     /// heart alone (72), measured from a 393 pt wide phone (wider phones have slimmer fractions, so this is a touch conservative), up to
@@ -48,11 +54,23 @@ enum HUDLayout {
     /// rectangle (fractions, top-left origin), a little oversized and reaching the bottom edge. Reference phone: 393 x 852 portrait (34 pt bottom safe area), 852 x 393 landscape (21 pt).
     static func parkHomeRect(aspect: Float) -> CGRect {
         let portrait = aspect < 1
-        let w: CGFloat = portrait ? 393 : 852, h: CGFloat = portrait ? 852 : 393, safe: CGFloat = portrait ? 34 : 21
+        var w: CGFloat = portrait ? 393 : 852, h: CGFloat = portrait ? 852 : 393, safe: CGFloat = portrait ? 34 : 21
+        if isPad { w = padSize.width; h = padSize.height; safe = 20 }          // iPad: the real window (the pill itself is not scaled)
         let pillW: CGFloat = 176, pillH: CGFloat = 54, margin: CGFloat = 10
         let top = (h - safe - 24 - pillH - margin) / h
         let halfW = (pillW / 2 + margin) / w
         return CGRect(x: 0.5 - halfW, y: top, width: 2 * halfW, height: 1 - top)
+    }
+
+    /// `railRects`, size-aware: on iPad the rails are scaled by `padScale` (and the window can be any size), so the cut-outs follow; on iPhone exactly `railRects`.
+    static func railRects(aspect: Float) -> [CGRect] {
+        guard isPad else { return railRects }
+        let size = padSize, s = padScale(size: size)
+        let w = size.width, h = size.height
+        return [
+            CGRect(x: 0, y: 1 - min(0.6, 250 * s / h), width: (16 + 60 * s + 4) / w, height: min(0.6, 250 * s / h)),
+            CGRect(x: 1 - (16 + 4 + 72 * s + 4) / w, y: 1 - (72 * s + 24) / h, width: (16 + 4 + 72 * s + 4) / w, height: (72 * s + 24) / h),
+        ]
     }
 
     /// True when a Jelbie centred at floor (x, z) has its body box (the same one the roam margins use) overlapping a rail rectangle on screen.
