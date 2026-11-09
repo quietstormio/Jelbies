@@ -136,7 +136,7 @@ extension SocialKind {
     /// The warm ones: a session of these that ends well gives each of them a small heart (the stage rate-limits it). Not the looks, the follow, the dashes, the tricks (sneak, keep-away) or the squabble.
     var isWarm: Bool {
         switch self {
-        case .boop, .greet, .bump, .nuzzle, .sitTogether, .dance, .line, .pass, .bagSit, .cuddle, .chase: return true
+        case .boop, .greet, .nuzzle, .sitTogether, .dance, .line, .pass, .bagSit, .cuddle, .chase: return true
         default: return isFriendly
         }
     }

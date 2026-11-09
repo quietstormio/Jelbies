@@ -57,7 +57,7 @@ extension BlobBrain {
             w.append((k, x * tod * nice))
         }
         add(.chase, 4.5, fast: true); add(.dance, 2.6, fast: true); add(.keepAway, 1.4, fast: true)
-        add(.bump, 2.6); add(.nuzzle, 2.2); add(.sitTogether, 1.5); add(.sneak, 2.0)
+        add(.nuzzle, 2.2); add(.sitTogether, 1.5); add(.sneak, 2.0)
         add(.line, others.count >= 2 ? 2.4 : 1.6)          // follow the leader: a line of three, or two
         if freeBall() != nil { add(.pass, 2.4) }
         if freeSeat() != nil { add(.bagSit, 1.8) }
@@ -79,16 +79,6 @@ extension BlobBrain {
             let s = newSession(kind, with: o, duration: kind == .sitTogether ? rand(4, 6) : rand(3.5, 4.5))
             s.goal = spot
             o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
-            if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
-        case .bump:
-            guard d > 0.5, d < 5.5 else { return false }
-            let away = (me - you) / max(d, 1e-3)
-            let want = you + away * standGap(o, along: away, peerGap * 0.92)
-            let spot = fixed(want)
-            guard simd_distance(spot, want) < 0.12, spotFree(spot, besides: [self, o]) else { return false }
-            let s = newSession(.bump, with: o, duration: 0)
-            s.goal = spot
-            o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(me)
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
         case .sneak:
             guard d > 1.2, d < 5.5, let spot = behindSpot(of: o, gap: peerGap * 0.92) else { return false }
@@ -131,7 +121,6 @@ extension BlobBrain {
         switch s.kind {
         case .sitTogether: driveSitTogether(s, o, isA, sim, dt)
         case .nuzzle: driveNuzzle(s, o, isA, sim, dt)
-        case .bump: driveBump(s, o, isA, sim, dt)
         case .sneak: driveSneak(s, o, isA, sim, dt)
         case .dance: driveDance(s, o, isA, sim, dt)
         case .chase: driveChase(s, o, isA, sim, dt)
@@ -210,44 +199,6 @@ extension BlobBrain {
                 if isA { contactBoopFallback(o) }
             }
             if isA, ft > s.duration { s.finish(.done) }
-        }
-    }
-
-    // MARK: belly bump
-
-    private func driveBump(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody, _ dt: Float) {
-        switch s.phase {
-        case 0:
-            if !isA { socialBook.hold = true; socialBook.faceYaw = yawTo(o.position); return }
-            _ = walkUpPhase(s, o, isA)
-        case 1:
-            faceEach(o)
-            if isA, s.phaseT > 0.45, peakArmed(o) || s.phaseT > 3 { s.setPhase(2); s.impacted = false }
-        case 2, 3:
-            faceEach(o)
-            let t = s.phaseT
-            let side: Float = isA ? 1 : -1
-            socialBook.wantPitch = 0.22 * pulse(t, up: 0.14, down: 0.30) - 0.12 * pulse(t - 0.32, up: 0.12, down: 0.35)
-            socialBook.wantRoll = side * 0.08 * pulse(t - 0.32, up: 0.12, down: 0.35)
-            socialBook.wantSquash = 1 - 0.12 * pulse(t - 0.08, up: 0.08, down: 0.28)
-            if isA {
-                if !s.impacted, t >= 0.12 {
-                    s.impacted = true
-                    jellyKick = max(jellyKick, impactKick(2.8)); o.jellyKick = max(o.jellyKick, impactKick(2.8))
-                    contactBoopFallback(o)
-                    contactCueFallback(o, .boop, 0.9)
-                }
-                if t > 0.95 { if s.phase == 2 { s.setPhase(3); s.impacted = false } else { s.setPhase(4) } }
-            }
-        default:    // bump-and-bounce: a couple of happy bounces each (b a beat later), a jelly kick on both
-            if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, isA || s.phaseT >= 0.18 {
-                socialBook.hopStarted = true
-                socialBook.hold = false; socialBook.faceYaw = nil
-                jellyKick = max(jellyKick, impactKick(2.0))
-                if idleStart(.bounce, sim) { idleState.reps = 2 } else { startHopPlay(sim: sim, distance: 0.0001) }
-            }
-            if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.4, scriptIsNone, o.scriptIsNone, idleState.kind == nil, o.idleState.kind == nil { s.finish(.done) }
-            else if isA, s.phaseT > 7 { s.finish(.done) }
         }
     }
 

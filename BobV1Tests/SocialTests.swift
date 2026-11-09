@@ -440,4 +440,14 @@ final class SocialTests: XCTestCase {
         let weighted = FriendTuning.base.map { $0.0 } + FriendTuning.taste.values.flatMap { Array($0) }
         XCTAssertFalse(weighted.contains { $0.rawValue.lowercased().contains("noseboop") || $0.rawValue.lowercased().contains("kiss") })
     }
+
+    /// 2026-11-09 user: close face-to-face emotes read as kissing in a kids' game. The belly bump (SocialKind.bump) is gone for good. Do not re-add it.
+    func testNoBumpKindExists() {
+        XCTAssertNil(SocialKind(rawValue: "bump"))
+        XCTAssertFalse(SocialKind.allCases.contains { $0.rawValue == "bump" })
+        XCTAssertNil(ContactStance.table.keys.first { $0.rawValue == "bump" })
+        let weighted = FriendTuning.base.map { $0.0 } + FriendTuning.taste.values.flatMap { Array($0) }
+        XCTAssertFalse(weighted.contains { $0.rawValue == "bump" })
+        XCTAssertNotNil(SocialKind(rawValue: "chestBump"), "the chest bump stays")
+    }
 }

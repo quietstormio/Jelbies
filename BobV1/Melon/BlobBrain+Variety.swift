@@ -42,7 +42,7 @@ enum VarietyTuning {
         .none: Personality(),
         .spines: Personality(     // Pip: energetic
             idle: [([.run, .joy], 1.3), ([.zoomies, .bounce, .skipHop], 1.15), ([.slide, .scoot, .hopscotch, .jacks, .decorHop, .decorKick, .soccerKick, .hiccup], 1.6), ([.sit, .lieDown, .flop, .slump, .sigh, .yawn], 0.6), ([.tail, .tailThump], 1.7), ([.tailHug], 1.3)],
-            social: [([.chase, .zoomies, .bump, .keepAway], 1.6)]),
+            social: [([.chase, .zoomies, .keepAway], 1.6)]),
         .ears: Personality(       // Teddy: cuddly (2026-11-02, the solo emotes)
             idle: [([.politeBow, .bellyDrum, .signatureFlourish], 1.4)]),
         .daisy: Personality(      // Moss: calm

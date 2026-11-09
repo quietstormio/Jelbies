@@ -29,7 +29,6 @@ enum SocialKind: String, CaseIterable, Sendable {
     case look, boop, follow, zoomies, greet, squabble
     // more play (2026-10-19), BlobSocial+Play.swift: all sequenced from the existing moves
     case chase          // tag: one runs, the other chases, a tag (a soft bump), the roles swap
-    case bump           // belly bump: both lean in and bounce off each other (a jelly kick each), then a hop
     case nuzzle         // side by side, heads leaning together, eyes half shut
     case sitTogether    // side by side on the rug: both sit
     case dance          // synchronised: both do the jumping jacks (or happy bounces)
@@ -189,7 +188,7 @@ final class SocialSession {
     var fightT: Float = 0
     var contactTouches = 0          // the gate's touches in this session (ContactStance.swift)
     var leaderWait: Float = 0
-    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .cheekSquish || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .congaLine || kind == .ringDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo || kind == .spinHug }
+    var closeOK: Bool { kind == .boop || kind == .squabble || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .cheekSquish || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .congaLine || kind == .ringDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo || kind == .spinHug }
     var round = 0, roles = 0, fastMoves = 0
     /// Group treats: the leader's planned path (waypoints), whether the crew are choreographed (they do not steer round each other), the time the line started moving.
     var path: [SIMD2<Float>] = [], choreo = false, moveT: Float = 0
@@ -377,7 +376,7 @@ extension BlobBrain {
             socialBook.lookHold = rand(1.4, 2.2)
             o.socialBook.glanceDelay = rand(0.5, 1.1)
             if !idleStart(.look, sim) { social = nil; o.social = nil; return false }
-        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle:
+        case .chase, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle:
             return socialStartPlay(kind, with: o, sim)
         case .chestBump, .highFive, .cheekSquish, .twirl, .hopAlong:
             return socialStartFriends(kind, with: o, sim)
@@ -721,7 +720,7 @@ extension BlobBrain {
         case .zoomies: driveZoomies(s, o, isA)
         case .greet: driveGreet(s, o, isA, sim, dt)
         case .look: driveLook(s, o, isA, sim, dt)
-        case .chase, .bump, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle: drivePlay(s, o, isA, sim, skinner, dt)
+        case .chase, .nuzzle, .sitTogether, .dance, .sneak, .keepAway, .line, .pass, .bagSit, .cuddle: drivePlay(s, o, isA, sim, skinner, dt)
         case .chestBump, .highFive, .cheekSquish, .twirl, .hopAlong: driveFriends(s, o, isA, sim, dt)
         case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround: driveMore(s, o, isA, sim, dt)
         case .swayHug, .danceOff, .whisperGiggle, .shyWave: driveFriends3(s, o, isA, sim, dt)

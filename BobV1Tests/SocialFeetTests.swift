@@ -224,7 +224,6 @@ final class SocialFeetTests: XCTestCase {
     func testBagSit() { pair("bagSit (beanbag)", .bagSit, props: .beanbag) }
     func testCuddle() { pair("cuddle (loveseat)", .cuddle, props: .loveseat) }
     func testSquabble() { pair("squabble", .squabble) }
-    func testBump() { pair("bump", .bump) }
     func testNuzzle() { pair("nuzzle", .nuzzle) }
     func testSitTogether() { pair("sitTogether", .sitTogether) }
     func testSneak() { pair("sneak", .sneak) }
