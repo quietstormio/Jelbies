@@ -143,7 +143,7 @@ final class StartFlow {
         guard phase == .opening else { return }
         if replaying {
             replaying = false
-            if let c = JellyRoster.savedIDs().first { phase = .firstDay(c, JellyRoster.names[c], true) } else { enterGame() }          // the replay shows the first-day beat with the player's own Jelbie
+            if let c = JellyRoster.savedIDs().first { phase = .firstDay(c, JellyRoster.nameOf(c), true) } else { enterGame() }          // the replay shows the first-day beat with the player's own Jelbie
         } else { phase = .adopt(.first) }
     }
 
@@ -164,19 +164,24 @@ final class StartFlow {
     /// Back out of adoption (or the cancel button): into the room as it was.
     func cancelAdoption() { enterGame() }
 
-    /// A Jelbie is chosen and named (and paid for): the roster, his name and a fresh start for his state, then the room.
-    func bringHome(character c: Int, name: String) {
+    /// A Jelbie of `species` is chosen, named and paid for (`variant` = the Spring colour taken with him, nil = classic): he gets his INSTANCE id (the species id when he is
+    /// the first of his kind at home, else a fresh id from the counter: a second Bob is allowed), a fresh start for his state, his colour and name, and joins the roster; then the room.
+    /// The species map is written by `allocateInstance` before the roster is saved, so the new id is valid when the roster is read back.
+    func bringHome(species s: Int, name: String, variant: JellyVariant? = nil) {
         let first = phase == .adopt(.first)
         if first { oldSaveSnapshot = nil; if Self.hasSave() { Self.wipeAll() } }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
         var ids = first ? [] : JellyRoster.savedIDs()
-        if !ids.contains(c) { Self.resetCharacterState(c) }
-        if !ids.contains(c) { ids.append(c) }
+        guard ids.count < JellyRoster.maxCount else { enterGame(); return }          // the room is full (the picker does not let it get here)
+        let id = JellyRoster.allocateInstance(species: s, roster: ids)
+        Self.resetCharacterState(id)          // always: a preview (or an old, released slot) may have left something under his keys
+        JellyVariants.adopt(id, variant)
+        ids.append(id)
         JellyRoster.save(ids)
-        JellyRoster.setName(c, name)
+        JellyRoster.setName(id, name)
         UserDefaults.standard.set(true, forKey: Self.startedKey)
         GameCare.newcomerPending = true; GameCare.newcomerWithOthers = ids.count > 1          // (others at home: the curtain is held until he is off-screen)
-        if first { welcome = nil; phase = .firstDay(c, name, false); return }          // the first day at home says "Welcome home" itself
-        welcome = JellyRoster.names[c]
+        if first { welcome = nil; phase = .firstDay(id, name, false); return }          // the first day at home says "Welcome home" itself
+        welcome = JellyRoster.nameOf(id)
         enterGame()
     }
 
@@ -215,6 +220,7 @@ final class StartFlow {
         let live = Activity<JelbiesActivityAttributes>.activities          // snapshot now: a Live Activity started later must not be ended by this
         Task { for a in live { await a.end(nil, dismissalPolicy: .immediate) } }
         JellyRoster.names = JellyRoster.loadNames()
+        JellyRoster.reloadSpecies()          // the duplicates' species map, counter and names died with the domain
         JellyVariants.reload()
         JellyRoster.current = [0]
         DecorField.shared.set([])

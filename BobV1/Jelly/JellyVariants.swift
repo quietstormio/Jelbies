@@ -101,10 +101,13 @@ nonisolated enum JellyVariants {
     nonisolated(unsafe) private static var previews: [Int: JellyVariant] = [:]
     nonisolated(unsafe) private static var classicPreviews: Set<Int> = []
 
+    /// Only the four starter species take a colour variant; the key is the INSTANCE id (a second Bob has his own colour).
+    static func takesVariant(_ id: Int) -> Bool { JellyRoster.isValid(id) && JellyRoster.species(id) <= 3 }
+
     static func load(_ d: UserDefaults = .standard) -> [Int: JellyVariant] {
         guard let raw = SaveRecovery.decode([String: JellyVariant].self, key: key, defaults: d) else { return [:] }
         var out: [Int: JellyVariant] = [:]
-        for (k, v) in raw { if let i = Int(k), (0...3).contains(i), v.flesh.count == 3, v.deep.count == 3 { out[i] = v } }
+        for (k, v) in raw { if let i = Int(k), takesVariant(i), v.flesh.count == 3, v.deep.count == 3 { out[i] = v } }
         return out
     }
     /// Re-reads the save (after a wipe, or in tests).
@@ -112,7 +115,7 @@ nonisolated enum JellyVariants {
 
     /// The variant a character wears now (preview first, then the save); nil = his own classic colour.
     static func active(_ id: Int) -> JellyVariant? {
-        guard (0...3).contains(id) else { return nil }
+        guard takesVariant(id) else { return nil }
         if classicPreviews.contains(id) { return nil }
         return previews[id] ?? saved[id]
     }
@@ -121,7 +124,7 @@ nonisolated enum JellyVariants {
 
     /// Adopting character `id` with `variant` (nil = classic clears any old one). Saved to `d`.
     static func adopt(_ id: Int, _ variant: JellyVariant?, _ d: UserDefaults = .standard) {
-        guard (0...3).contains(id) else { return }
+        guard takesVariant(id) else { return }
         saved[id] = variant
         var raw: [String: JellyVariant] = [:]
         for (k, v) in saved { raw[String(k)] = v }

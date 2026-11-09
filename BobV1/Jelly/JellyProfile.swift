@@ -13,7 +13,7 @@ import simd
 final class JellyProfile: Identifiable {
     /// His SLOT in the room (GameCare.jellies / the stage's actors / the renderer's body index).
     let id: Int
-    /// His CHARACTER (JellyRoster.names / palette / feature; the saved keys). Equal to `id` with the default roster.
+    /// His INSTANCE id (the saved keys, his name via JellyRoster.nameOf; `species` is his look). The first of a species has instance == species id. Equal to `id` with the default roster.
     let character: Int
     let name: String
     let needs: BlobNeeds
@@ -59,6 +59,8 @@ final class JellyProfile: Identifiable {
     }
 
     var coat: BlobGrime.CoatTier { grime.coat }
+    /// What he looks and sounds like (the species of his instance id): palette / voice / feature switches use this, saved state uses `character`.
+    var species: Int { JellyRoster.species(character) }
     /// What grows on him besides the body (Features/): Pip's spines, Moss's daisy, Lavender's wings. Follows the roster id, nothing to save.
     var feature: JellyFeature { JellyRoster.feature(character) }
 

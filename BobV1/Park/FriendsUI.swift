@@ -193,7 +193,7 @@ struct FriendsScreen: View {
         let t = JellyRoster.tint(j.character)
         return HStack(spacing: 5) {
             Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).frame(width: 14, height: 14)
-                .overlay(Circle().strokeBorder(j.character == JellyRoster.pandaID ? SK.ink : SK.muted.opacity(0.45), lineWidth: j.character == JellyRoster.pandaID ? 3 : 1.5))
+                .overlay(Circle().strokeBorder(j.species == JellyRoster.pandaID ? SK.ink : SK.muted.opacity(0.45), lineWidth: j.species == JellyRoster.pandaID ? 3 : 1.5))
             Text(j.name).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
             if level == .stranger {
                 Text("not yet").font(SK.font(11, .bold)).foregroundStyle(SK.muted)

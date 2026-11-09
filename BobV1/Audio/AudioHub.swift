@@ -788,7 +788,7 @@ final class AudioHub {
         diag("snore", jelly, nil)
         lastSleepAny = now
         lastPlay[key] = now
-        let name = JellyVoiceSet.snoreFile(character: JellyRoster.character(jelly), roll: Double.random(in: 0..<1))
+        let name = JellyVoiceSet.snoreFile(character: JellyRoster.speciesOf(slot: jelly), roll: Double.random(in: 0..<1))
         fire(name, volume: min(1, SFX.snore.gain * level * AudioMix.sfxMaster), pan: panFor(x: x))
     }
 
@@ -805,7 +805,7 @@ final class AudioHub {
         diag(what, jelly, nil)
         lastSleepAny = now
         lastPlay[key] = now
-        let c = JellyRoster.character(jelly)
+        let c = JellyRoster.speciesOf(slot: jelly)
         switch kind {
         case .coo:
             fire(JellyVoiceSet.sleepCooFile(character: c, roll: Double.random(in: 0..<1)), volume: min(1, SleepSoundScheduler.cooGain * level * AudioMix.sfxMaster), pan: panFor(x: x))
@@ -828,7 +828,7 @@ final class AudioHub {
         diag(what, jelly, nil, v: SleepMurmurTuning.gain * level)
         lastPlay["murmur#\(jelly)"] = now
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))
-        let c = JellyRoster.character(jelly)
+        let c = JellyRoster.speciesOf(slot: jelly)
         fire(JellyVoiceSet.file(character: c, v, variant: Int.random(in: 1...3)), volume: min(1, SleepMurmurTuning.gain * level * AudioMix.sfxMaster), pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, v))
     }
 
@@ -939,7 +939,7 @@ final class AudioHub {
     }
 
     /// The voice file of the Jelly in a SLOT: its CHARACTER's set (Bob / Pip / Moss / Lavender each sound different).
-    @MainActor static func voiceFile(slot: Int, _ v: JellyVoice) -> String { JellyVoiceSet.file(character: JellyRoster.character(slot), v) }
+    @MainActor static func voiceFile(slot: Int, _ v: JellyVoice) -> String { JellyVoiceSet.file(character: JellyRoster.speciesOf(slot: slot), v) }
 
     /// The Jelly's own voice (by slot -> character): happy / sad / babble.
     /// `src` names the caller ("idle", "greet", "wave", "cafe", ...; "other" when untagged). It only goes into the diag / AudioLog text and `requestSrcTap`;
@@ -959,7 +959,7 @@ final class AudioHub {
         lastVoice[i] = now
         let name = Self.voiceFile(slot: jelly, v)
         diag(what, jelly, nil, v: 0.7 * level)
-        if Self.audioLog { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.character(jelly), name) }
+        if Self.audioLog { NSLog("[audio] chirp slot %d char %d -> %@", jelly, JellyRoster.speciesOf(slot: jelly), name) }
         fire(name, volume: 0.7 * level, pan: panFor(x: x))
     }
 
@@ -984,7 +984,7 @@ final class AudioHub {
         diag(what, jelly, nil)
         lastContextVoice[i] = now
         CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))
-        let c = JellyRoster.character(jelly), j = min(max(jelly, 0), 2)
+        let c = JellyRoster.speciesOf(slot: jelly), j = min(max(jelly, 0), 2)
         var variant = 1
         if v.hasVariants { repeat { variant = Int.random(in: 1...3) } while variant == lastVariant[j][v.rawValue] ?? 0 }          // (a repeat of the same voice differs)
         lastVariant[j][v.rawValue] = variant

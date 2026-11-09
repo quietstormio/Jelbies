@@ -60,7 +60,7 @@ final class ParkBook {
     }
 
     /// The names a visitor may not take: the player's species / roster Jelbies, the personality words, the colours (ParkNames.reserved).
-    static func reservedNames() -> Set<String> { ParkNames.reserved(rosterNames: JellyRoster.baseNames + JellyRoster.names) }
+    static func reservedNames() -> Set<String> { ParkNames.reserved(rosterNames: JellyRoster.baseNames + JellyRoster.names + Array(JellyRoster.extraNames.values)) }
 
     /// The record for an id; a merged twin answers with the record it was folded into.
     func visitor(_ id: Int) -> ParkVisitor? {

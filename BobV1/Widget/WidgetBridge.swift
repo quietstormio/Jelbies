@@ -28,6 +28,8 @@ final class WidgetBridge {
         var levels: [Float]
         var dirt: Float
         var sparkle: Float
+        /// The Jelbie's INSTANCE id (a duplicate Bob has his own adopted colour); nil = the species of `color` (the old behaviour).
+        var character: Int? = nil
     }
 
     static let reloadEvery: TimeInterval = 60
@@ -69,7 +71,7 @@ final class WidgetBridge {
 
     // MARK: building the snapshot
 
-    /// CHARACTER id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender: JellyRoster.palette).
+    /// SPECIES id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender: JellyRoster.palette). Callers holding an instance id pass `JellyRoster.species(id)`.
     static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda"][min(max(id, 0), 6)] }
     /// Colour name -> character (the inverse of `colorName`; the snapshot carries the colour, not the character).
     static func character(ofColor c: String) -> Int { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda"].firstIndex(of: c) ?? (c == "purple" ? 3 : 0) }
@@ -89,7 +91,8 @@ final class WidgetBridge {
     /// What the portrait shows: changes only when the picture would meaningfully change.
     static func lookKey(_ i: Input) -> String {
         let coat = JellyCoatTier.of(dirt: i.dirt, sparkle: i.sparkle)
-        return "\(i.color)|\(coat.rawValue)|\(Int((min(max(i.dirt, 0), 1) * 10).rounded(.down)))|\(Int((i.sparkle * 2).rounded()))"
+        let who = (i.character ?? 0) >= JellyRoster.firstInstanceID ? "|i\(i.character ?? 0)" : ""          // a duplicate has his own colour; the first of a species keeps the old key
+        return "\(i.color)\(who)|\(coat.rawValue)|\(Int((min(max(i.dirt, 0), 1) * 10).rounded(.down)))|\(Int((i.sparkle * 2).rounded()))"
     }
     /// The tiers + mood of every Jelly: when this changes, the widget has something new to say.
     static func stateKey(_ inputs: [Input]) -> String {
@@ -169,7 +172,7 @@ final class WidgetBridge {
             await Task.yield()
             // GPU work only while active, and only inside the time budget: otherwise the previous PNG simply stays
             guard !Task.isCancelled, isForeground(), ContinuousClock.now < deadline, let url = portraitURL(i.id) else { break }
-            guard let px = renderer.render(palette: Self.palette(color: i.color), look: JellyPortraitRenderer.look(dirt: i.dirt, sparkle: i.sparkle)) else {
+            guard let px = renderer.render(palette: i.character.map { Self.palette($0) } ?? Self.palette(color: i.color), look: JellyPortraitRenderer.look(dirt: i.dirt, sparkle: i.sparkle)) else {
                 self.renderer = nil; break          // the GPU refused: rebuild the rig next time
             }
             let size = renderer.size

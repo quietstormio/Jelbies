@@ -136,10 +136,18 @@ final class JellyNames {
     static func absentID(_ character: Int) -> Int { JellyRoster.maxCount + character }
     /// Slot of a character (or his absent id).
     func id(ofCharacter c: Int) -> Int { roster.firstIndex(of: c) ?? Self.absentID(c) }
+    /// Slot answering to a SPECIES' base name ("bob"): with a duplicate, the Jelbie still called by the base name wins, else the first of that species in the room;
+    /// the species id's absent id when none is in the room. (Each duplicate also has his own name, which `JellyRoster.suggestedName` keeps different.)
+    func id(ofSpecies s: Int) -> Int {
+        let slots = roster.indices.filter { JellyRoster.species(roster[$0]) == s }
+        guard !slots.isEmpty else { return Self.absentID(s) }
+        let base = JellyRoster.baseNames.indices.contains(s) ? JellyRoster.baseNames[s].lowercased() : ""
+        return slots.first { VoiceMatcher.normalise(JellyRoster.nameOf(roster[$0])) == base } ?? slots[0]
+    }
     /// Character of a slot (or of an absent id; a slot past the roster is the same-numbered character, as before the roster existed).
     func character(_ id: Int) -> Int {
         if roster.indices.contains(id) { return roster[id] }
-        if id >= JellyRoster.maxCount, id - JellyRoster.maxCount < JellyRoster.knownCount, !roster.contains(id - JellyRoster.maxCount) { return id - JellyRoster.maxCount }
+        if id >= JellyRoster.maxCount, JellyRoster.isValid(id - JellyRoster.maxCount), !roster.contains(id - JellyRoster.maxCount) { return id - JellyRoster.maxCount }
         return min(max(id, 0), JellyRoster.knownCount - 1)
     }
     @ObservationIgnored private let defaults: UserDefaults
@@ -175,13 +183,13 @@ final class JellyNames {
     /// The player's name for him (Adoption rename), else the species name.
     func displayName(_ id: Int) -> String {
         let c = character(id)
-        return JellyRoster.names.indices.contains(c) ? JellyRoster.names[c] : (JellyNameRoster.name(c)?.display ?? "Jelbie")
+        return JellyRoster.nameOf(c)
     }
     /// Adoption-renamed characters: (character, normalised custom name) where it differs from the species name (which still matches as before).
     private var customNames: [(Int, String)] {
-        JellyRoster.names.enumerated().compactMap { c, raw in
-            let n = VoiceMatcher.normalise(raw)
-            return n.isEmpty || n == JellyRoster.baseNames[c].lowercased() ? nil : (c, n)
+        (Array(0..<JellyRoster.knownCount) + JellyRoster.extraNames.keys.sorted()).compactMap { c in          // every instance: the seven first ones + the duplicates (ids >= 100)
+            let n = VoiceMatcher.normalise(JellyRoster.nameOf(c))
+            return n.isEmpty || n == JellyRoster.baseNames[JellyRoster.species(c)].lowercased() ? nil : (c, n)
         }
     }
     func nicknames(for id: Int) -> [String] { nicknames[character(id)] ?? [] }
@@ -203,7 +211,7 @@ final class JellyNames {
         let n = VoiceMatcher.normalise(raw)
         let toks = n.split(separator: " ")
         let c = character(id)
-        guard JellyNameRoster.name(c) != nil, !toks.isEmpty, toks.count <= 2, n.count >= 2, n.count <= 16 else { return false }
+        guard JellyNameRoster.name(JellyRoster.species(c)) != nil, !toks.isEmpty, toks.count <= 2, n.count >= 2, n.count <= 16 else { return false }
         guard !nicknames(for: id).contains(n), nicknames(for: id).count < Self.maxNicknames else { return false }
         if toks.count == 1, let h = match(token: n), h.score >= 0.8 { return false }          // already one of the names
         if nicknames.values.contains(where: { $0.contains(n) }) { return false }               // another Jelly's nickname
@@ -243,7 +251,7 @@ final class JellyNames {
         let key = JellyNameRoster.phoneticKey(t)
         let stop = JellyNameRoster.stoplist.contains(t)
         for n in JellyNameRoster.all {
-            let id = self.id(ofCharacter: n.id)
+            let id = self.id(ofSpecies: n.id)
             if t == n.base { offer(id, 1); continue }
             if n.variants.contains(t) { offer(id, 0.9); continue }
             if n.nearMisses.contains(t) { offer(id, 0.8); continue }
@@ -274,7 +282,7 @@ final class JellyNames {
         let joined = a + b
         if joined.count >= 5, a.count >= 2, !JellyNameRoster.stoplist.contains(joined) {
             for n in JellyNameRoster.all where n.base.count >= 5 && (joined == n.base || n.nearMisses.contains(joined)) {
-                return NameHit(id: id(ofCharacter: n.id), score: 0.8, width: 2)
+                return NameHit(id: id(ofSpecies: n.id), score: 0.8, width: 2)
             }
         }
         return nil
