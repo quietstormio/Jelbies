@@ -221,8 +221,8 @@ struct TownView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     AroundTownIsland(active: { island($0) != nil }, go: { island($0)?.action() }, home: home)
-                        .frame(maxWidth: 520)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: compact ? 4 : 2), spacing: 12) {
+                        .frame(maxWidth: PadLayout.isPad ? 760 : 520)
+                    LazyVGrid(columns: gridColumns(compact: compact), spacing: 12) {
                         ForEach(shown) { p in tile(p, compact: compact) }
                     }
                 }
@@ -230,9 +230,16 @@ struct TownView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        .padReadable(900)
         .padding(.horizontal, 16).padding(.top, 8)
         .background(SK.cream.ignoresSafeArea())
         .accessibilityElement(children: .contain).accessibilityIdentifier("town-screen")
+    }
+
+    /// iPhone: 4 columns on its side, else 2 (as before). iPad: as many ~190 pt tiles as fit the capped column.
+    private func gridColumns(compact: Bool) -> [GridItem] {
+        if PadLayout.isPad { return [GridItem(.adaptive(minimum: 170, maximum: 230), spacing: 12)] }
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: compact ? 4 : 2)
     }
 
     private var chips: some View {

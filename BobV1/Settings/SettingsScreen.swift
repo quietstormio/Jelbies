@@ -40,7 +40,7 @@ struct SettingsScreen: View {
         ZStack {
             pal.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                header(pal)
+                header(pal).padReadable(landscape ? 1000 : 680)
                 ScrollView {
                     if landscape {
                         HStack(alignment: .top, spacing: 16) {
@@ -53,6 +53,7 @@ struct SettingsScreen: View {
                             .padding(16)
                     }
                 }
+                .padReadable(landscape ? 1000 : 680)          // iPad: a centred readable column (no-op on iPhone)
             }
             if confirmReset { resetCard }
         }
