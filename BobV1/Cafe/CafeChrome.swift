@@ -45,8 +45,14 @@ struct CafeChrome: View {
                     if vsc == .compact {
                         HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 64).frame(width: min(400, g.size.width * 0.46)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
+                    } else if HUDLayout.isPad && g.size.width > g.size.height {
+                        // iPad landscape: the card sits on the right so the Jelbies at the table stay in view (a full-width bottom card hid the lower half of them)
+                        HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 150).frame(width: min(460, g.size.width * 0.4)).padding(.top, 72).padding(.bottom, cafe.phase == .done ? 150 : 16).padding(.trailing, 12) }
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
-                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.5 : 0.3)).padReadable(640).scaleEffect(HUDLayout.isPad ? min(1.25, max(1, (g.size.width - 20) / 640)) : 1, anchor: .bottom).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 2) }
+                        // the scale does not change the layout size, so cap the layout height at (share of the screen) / scale: the card never COVERS more than that share
+                        let padScale: CGFloat = HUDLayout.isPad ? min(1.25, max(1, (g.size.width - 20) / 640)) : 1
+                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.5 : 0.3) / padScale).padReadable(640).scaleEffect(padScale, anchor: .bottom).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 2) }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
