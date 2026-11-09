@@ -11,6 +11,7 @@ import SwiftUI
 
 struct EarsButton: View {
     let ears: Ears
+    @State private var gateSettings = false
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
     private let cream = Color(red: 0.97, green: 0.94, blue: 0.88)
     private let glow = Color(red: 0.43, green: 0.70, blue: 0.82)
@@ -33,7 +34,7 @@ struct EarsButton: View {
         }()
         return Button {
             AudioHub.shared.uiTap()
-            if st == .denied { ears.openSettings() } else { ears.setOn(!on) }
+            if st == .denied { gateSettings = true } else { ears.setOn(!on) }
         } label: {
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .semibold))
@@ -73,6 +74,7 @@ struct EarsButton: View {
                 }
                 .animation(.spring(duration: 0.3), value: hearing)
                 .frame(width: 44, height: 44).contentShape(Circle())          // 44 pt hit target
+                .parentGate(isPresented: $gateSettings) { ears.openSettings() }
         }
         .buttonStyle(.plain)
         .accessibilityShowsLargeContentViewer { Label(label(st, hearing), systemImage: symbol) }
@@ -99,6 +101,7 @@ struct EarsSettingsRow: View {
     var tight = false
     /// Opens the Shop (on the Tricks tab) from the locked row. Nil where the screen has no Shop route (Park, Café): the button is left out.
     var goShop: (() -> Void)? = nil
+    @State private var gateSettings = false
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
     private var tint: Color { ThemeStore.shared.controlAccent }
 
@@ -141,10 +144,11 @@ struct EarsSettingsRow: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("sound-ears-privacy")
             if ears.state == .denied {
-                Button("Open Settings") { ears.openSettings() }
+                Button("Open Settings") { gateSettings = true }
                     .jFont(13, .semibold)
                     .foregroundStyle(tint)
                     .buttonStyle(.plain)
+                    .parentGate(isPresented: $gateSettings) { ears.openSettings() }
             }
             }
         }

@@ -9,7 +9,10 @@ import SwiftUI
 struct HoldToConfirm: View {
     var title: String
     var id: String = "settings-reset-hold"
+    var tint: Color = Color(hex: 0xB3261E)
     var done: () -> Void
+    /// VoiceOver activate; nil = do it directly (the reset button). The parent gate asks one more question here.
+    var accessibilityActivate: (() -> Void)? = nil
     @State private var progress: CGFloat = 0
     @State private var holding = false
 
@@ -19,7 +22,7 @@ struct HoldToConfirm: View {
             .background(
                 GeometryReader { g in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color(hex: 0xB3261E))
+                        Capsule().fill(tint)
                         Capsule().fill(Color.black.opacity(0.28)).frame(width: g.size.width * progress)
                     }
                 }
@@ -33,7 +36,7 @@ struct HoldToConfirm: View {
                 withAnimation(down ? .linear(duration: 2) : .easeOut(duration: 0.2)) { progress = down ? 1 : 0 }
             }
             .accessibilityElement().accessibilityLabel(title).accessibilityAddTraits(.isButton)
-            .accessibilityAction { done() }
+            .accessibilityAction { (accessibilityActivate ?? done)() }
             .accessibilityIdentifier(id)
     }
 }

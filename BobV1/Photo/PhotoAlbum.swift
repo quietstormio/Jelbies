@@ -159,7 +159,7 @@ private struct PhotoViewer: View {
                     PhotoActionButton(title: saved == .saved ? "Saved" : "Save to Photos", symbol: saved == .saved ? "checkmark" : "square.and.arrow.down", prominent: true) {
                         Task { saved = await PhotoAlbum.saveToPhotos(url) }
                     }
-                    if let img { ShareLink(item: Image(uiImage: img), preview: SharePreview("Jelbies photo", image: Image(uiImage: img))) { PhotoActionLabel(title: "Share", symbol: "square.and.arrow.up", prominent: false) } }
+                    if let img { GatedShareButton(image: img) }
                     PhotoActionButton(title: "Delete", symbol: "trash", prominent: false) { confirmDelete = true }
                 }
                 if let m = saved.flatMap({ PhotoAlbum.message(for: $0) }) { Text(m).font(SK.font(14, .bold)).foregroundStyle(.white).multilineTextAlignment(.center).padding(.top, 4) }
