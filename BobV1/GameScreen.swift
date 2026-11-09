@@ -465,10 +465,10 @@ struct GameScreen: View {
                         .background(SK.cream)
                         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                         .shadow(color: .black.opacity(0.25), radius: 14, y: 4)
-                        .frame(width: min(g.size.width - 32, max(420, min(600, g.size.width * 0.42))), height: g.size.height)
+                        .frame(width: min(g.size.width - 32, max(500, min(600, g.size.width * 0.42))), height: g.size.height)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .padding(.top, 56).padding(.bottom, 16).padding(.trailing, 16)
+                .padding(.top, 56).padding(.bottom, 112).padding(.trailing, 16)   // bottom-right rail (heart) stays clear
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
