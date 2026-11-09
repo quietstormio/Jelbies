@@ -209,7 +209,7 @@ struct CafeOrderCard: View {
     }
     private func tileRow(_ title: String, _ items: [CafeTreat]) -> some View {
         HStack(spacing: 4) {
-            Text(title).font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.7).frame(width: 38, alignment: .leading).accessibilityHidden(true)
+            Text(title).font(SK.font(11, .black)).foregroundStyle(SK.mutedStrong).lineLimit(1).minimumScaleFactor(0.7).frame(width: 38, alignment: .leading).accessibilityHidden(true)
             ForEach(items) { tile($0).frame(maxWidth: .infinity) }
             ForEach(0..<max(0, 5 - items.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
         }
@@ -224,7 +224,7 @@ struct CafeOrderCard: View {
                 if let r = refusal ?? cafe.cardRefusal {
                     Text(r).font(SK.font(12, .heavy)).foregroundStyle(Color(hex: 0xB0413E)).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("cafe-refusal")
                 } else {
-                    Text(editing ? "Tap a name, then pick for them" : "Served at your table").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
+                    Text(editing ? "Tap a name, then pick for them" : "Served at your table").font(SK.font(12, .bold)).foregroundStyle(SK.mutedStrong)
                 }
             }
             Spacer(minLength: 4)
@@ -259,11 +259,11 @@ struct CafeOrderCard: View {
                 } else {
                     Text(name(id)).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                     Spacer(minLength: 4)
-                    Text("Choose…").font(SK.font(13, .bold)).foregroundStyle(SK.muted)
+                    Text("Choose…").font(SK.font(13, .bold)).foregroundStyle(SK.mutedStrong)
                 }
                 if !editing {
                     Image(systemName: served ? "checkmark.circle.fill" : "circle.dotted").font(.system(size: 20, weight: .heavy))
-                        .foregroundStyle(served ? Color(hex: 0x3E9B63) : SK.muted)
+                        .foregroundStyle(served ? Color(hex: 0x3E9B63) : SK.mutedStrong)
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
@@ -287,7 +287,7 @@ struct CafeOrderCard: View {
             let paid = table && editing ? Int((Double(now) * CafeTuning.tableDiscount).rounded(.down)) : now
             HStack(spacing: 3) {
                 JellyCoinIcon(size: 14)
-                if paid != full, !compact { Text("\(full)").font(SK.font(11, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit().lineLimit(1).fixedSize() }
+                if paid != full, !compact { Text("\(full)").font(SK.font(11, .bold)).foregroundStyle(SK.mutedStrong).strikethrough().monospacedDigit().lineLimit(1).fixedSize() }
                 Text("\(paid)").font(SK.font(14, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).fixedSize()
             }
             .fixedSize().opacity(free ? 0.45 : 1)
@@ -332,7 +332,7 @@ struct CafeOrderCard: View {
             HStack(spacing: 5) {
                 Image(systemName: table ? "checkmark.circle.fill" : "circle").font(.system(size: 14, weight: .bold))
                 Text("All same").font(SK.font(12, .heavy)).lineLimit(1).minimumScaleFactor(0.8)
-                if table || compact { Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.muted).lineLimit(1).fixedSize() }
+                if table || compact { Text("-15%").font(SK.font(11, .black)).foregroundStyle(SK.mutedStrong).lineLimit(1).fixedSize() }
             }
             .foregroundStyle(SK.ink).padding(.horizontal, 8).frame(minHeight: compact ? 44 : 34)
             .background(Capsule().fill(table ? SK.honey : Color.white.opacity(0.7)))
@@ -357,12 +357,12 @@ struct CafeOrderCard: View {
             VStack(spacing: 0) {
                 ZStack(alignment: .topTrailing) {
                     thumb(t.id, size: 22).frame(maxWidth: .infinity)
-                    if isSpecial { Text("\u{2212}20%").font(SK.font(8, .black)).foregroundStyle(.white).padding(.horizontal, 3).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)).fixedSize() }
+                    if isSpecial { Text("\u{2212}20%").font(SK.font(10, .black)).foregroundStyle(.white).padding(.horizontal, 3).padding(.vertical, 1).background(Capsule().fill(SK.pinkStrong)).fixedSize() }
                 }
-                Text(t.name).font(SK.font(9.5, .heavy)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center).frame(height: 23)
+                Text(t.name).font(SK.font(11, .heavy)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center).frame(minHeight: 28)
                 HStack(spacing: 2) {
                     JellyCoinIcon(size: 11)
-                    if isSpecial { Text("\(t.price)").font(SK.font(9, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
+                    if isSpecial { Text("\(t.price)").font(SK.font(11, .bold)).foregroundStyle(SK.mutedStrong).strikethrough().monospacedDigit() }
                     Text("\(CafeMenu.price(t.id, special: special))").font(SK.font(12, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
             }
@@ -436,14 +436,14 @@ struct CafeOrderCard: View {
         return Group {
             if free {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Total").font(SK.font(11, .heavy)).foregroundStyle(SK.muted)
+                    Text("Total").font(SK.font(11, .heavy)).foregroundStyle(SK.mutedStrong)
                     Text("Free \u{00B7} stamp card").font(SK.font(13, .black)).foregroundStyle(SK.pinkStrong).lineLimit(1)
                 }
             } else {
                 HStack(spacing: 5) {
-                    Text("Total").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                    Text("Total").font(SK.font(12, .heavy)).foregroundStyle(SK.mutedStrong)
                     JellyCoinIcon(size: 18)
-                    if list > total, total > 0 || !editing { Text("\(list)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).strikethrough().monospacedDigit() }
+                    if list > total, total > 0 || !editing { Text("\(list)").font(SK.font(13, .bold)).foregroundStyle(SK.mutedStrong).strikethrough().monospacedDigit() }
                     Text("\(total)").font(SK.font(18, .black)).foregroundStyle(SK.ink).monospacedDigit()
                 }
             }

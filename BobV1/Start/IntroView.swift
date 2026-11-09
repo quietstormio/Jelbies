@@ -59,7 +59,7 @@ struct IntroView: View {
             ZStack {
                 IntroGate.background
                 if let player = flow.player {
-                    IntroPlayerView(player: player).frame(width: geo.size.width, height: geo.size.height)
+                    IntroPlayerView(player: player).frame(width: geo.size.width, height: geo.size.height).accessibilityIgnoresInvertColors()
                         .opacity(flow.shown ? 1 : 0)
                         .animation(.easeInOut(duration: 0.5), value: flow.shown)
                 }

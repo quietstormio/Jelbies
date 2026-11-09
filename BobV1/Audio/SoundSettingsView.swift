@@ -24,7 +24,7 @@ struct SoundSettingsPanel: View {
                 Text("Sound").font(CloudTheme.font(20, .bold)).foregroundStyle(ink)
                 Spacer()
                 Button(action: close) {
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(ink).padding(6)
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(ink).frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).accessibilityLabel("Close sound settings")
             }
@@ -37,7 +37,7 @@ struct SoundSettingsPanel: View {
                 Divider().overlay(ink.opacity(0.2))
                 Button(action: openExtras) {
                     HStack {
-                        Label("Siri and Lock Screen", systemImage: "sparkles.rectangle.stack").font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
+                        Label("Siri and Lock Screen", systemImage: "sparkles.rectangle.stack").jFont(15, .semibold, maxScale: 2).foregroundStyle(ink)
                         Spacer()
                         Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(ink.opacity(0.5))
                     }
@@ -70,16 +70,16 @@ struct SoundSettingsPanel: View {
         return HStack(spacing: 8) {
             Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(ink.opacity(0.7)).frame(width: 18)
             VStack(alignment: .leading, spacing: 0) {
-                Text(np.line).font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(np.line).jFont(13, .bold, maxScale: 2).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.8)
                 if showNote, let n = np.note {
-                    Text(hint ? "Tap to turn Music on" : n).font(.system(size: 11, weight: hint ? .semibold : .regular, design: .rounded)).foregroundStyle(hint ? tint : ink.opacity(0.6)).lineLimit(np.canSkip || tight ? 1 : 2).minimumScaleFactor(0.8)
+                    Text(hint ? "Tap to turn Music on" : n).jFont(12, hint ? .semibold : .regular, maxScale: 2).foregroundStyle(hint ? tint : ink.opacity(0.8)).lineLimit(np.canSkip || tight ? 1 : 2).minimumScaleFactor(0.8)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 4)
             Button { hub.skipTrack() } label: {
                 Label("Skip", systemImage: "forward.fill")
-                    .font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                    .jFont(13, .bold, maxScale: 2).foregroundStyle(.white)
                     .padding(.horizontal, tight ? 8 : 10).padding(.vertical, tight ? 3 : 5)
                     .background(Capsule().fill(np.canSkip ? tint : SoundSwitchStyle.offTrack.opacity(0.55)))
             }
@@ -102,7 +102,7 @@ struct SoundSettingsPanel: View {
     private func row(_ title: String, symbol: String, on: Binding<Bool>, volume: Binding<Float>, id: String) -> some View {
         VStack(alignment: .leading, spacing: tight ? 0 : 4) {
             Toggle(isOn: on) {
-                Label(title, systemImage: symbol).font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(ink)
+                Label(title, systemImage: symbol).jFont(15, .semibold, maxScale: 2).foregroundStyle(ink)
             }
             .toggleStyle(SoundSwitchStyle(tint: theme.controlAccent, compact: tight))
             .accessibilityIdentifier("sound-\(id)-toggle")
