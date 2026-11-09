@@ -89,7 +89,7 @@ struct FriendsScreen: View {
 
     var body: some View {
         let _ = care.parkBook.revision
-        VStack(spacing: vsc == .compact ? 8 : 14) {
+        VStack(spacing: vsc == .compact ? 8 : 14) {          // (iPad: capped to a readable column below)
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
@@ -114,6 +114,7 @@ struct FriendsScreen: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        .padReadable(720)
         .padding(.horizontal, 16).padding(.top, 8)
         .background(SK.cream.ignoresSafeArea())
         .accessibilityElement(children: .contain).accessibilityIdentifier("friends-screen")

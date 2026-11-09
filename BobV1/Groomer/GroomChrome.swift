@@ -85,7 +85,7 @@ struct GroomChrome: View {
                 pickerContent.fixedSize(horizontal: false, vertical: true)
                 ScrollView { pickerContent }.scrollBounceBehavior(.basedOnSize)
             }
-            .frame(maxWidth: 460, maxHeight: vsc == .compact ? 330 : 620)
+            .frame(maxWidth: PadLayout.isPad ? 580 : 460, maxHeight: vsc == .compact ? 330 : 620)
             .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
             .padding(.horizontal, 16)
             .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")

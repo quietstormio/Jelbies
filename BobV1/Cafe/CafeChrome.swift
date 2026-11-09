@@ -46,7 +46,7 @@ struct CafeChrome: View {
                         HStack { Spacer(); CafeOrderCard(care: care, compact: true, maxHeight: g.size.height - 64).frame(width: min(400, g.size.width * 0.46)).padding(.top, 58).padding(.bottom, 6).padding(.trailing, 8) }
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     } else {
-                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.5 : 0.3)).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 2) }
+                        VStack { Spacer(); CafeOrderCard(care: care, compact: false, maxHeight: g.size.height * (cafe.phase == .menu ? 0.5 : 0.3)).padReadable(640).padding(.horizontal, 10).padding(.bottom, cafe.phase == .done ? 150 : 2) }
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }

@@ -194,7 +194,7 @@ struct ParkChrome: View {
                     .buttonStyle(.plain).accessibilityIdentifier("park-go")
                 }
             }
-            .padding(16).frame(maxWidth: 440)
+            .padding(16).frame(maxWidth: PadLayout.isPad ? 560 : 440)
             .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
             .padding(.horizontal, 16)
             .accessibilityElement(children: .contain).accessibilityIdentifier("park-picker")
