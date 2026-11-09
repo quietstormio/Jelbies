@@ -469,6 +469,7 @@ struct GameScreen: View {
 
     /// Harmless launch args for captures: -GameAction feed|feed:pizza|water|drink:soda|call|callall|callids:1,2|wave (after 4 s), -GameScript 1 (timed demo of everything).
     @MainActor static func runDebugScript(model: MelonModel, open: Binding<Bool>, roster: Binding<Bool>, picker: Binding<ConsumableKind?>, book: Binding<Bool> = .constant(false), goOut: Binding<TownScreen?> = .constant(nil)) async {
+        guard DevArgs.enabled else { return }          // capture aids only: never in an App Store archive (they can grant Drops / the wardrobe)
         let d = UserDefaults.standard
         let care = model.care
         if d.string(forKey: "ContactDemo") != nil || d.string(forKey: "ContactCam") != nil { Task { @MainActor in await ContactDemo.run(care: care) } }          // capture aid, see Melon/ContactDemo.swift
@@ -869,6 +870,7 @@ struct GameScreen: View {
     }
     /// Capture aid: `-StoreOpen town|shop|item|bag|studio|condition|show` opens that screen at launch; `-StoreSeed 1` fills the bag and the wallet first.
     static func launchTown() -> TownScreen? {
+        guard DevArgs.enabled else { return nil }
         // capture aid: `-LobbyAuto volley|volleyTrain|volleyHow|track|trackHow` opens the Volleyball / Track lobby (and the sheet) at launch (the lobbies read the same argument)
         switch UserDefaults.standard.string(forKey: "LobbyAuto") {
         case "volley", "volleyTrain", "volleyHow": return .volley
@@ -887,6 +889,7 @@ struct GameScreen: View {
         }
     }
     @MainActor static func runStoreDemo(model: MelonModel) async {
+        guard DevArgs.enabled else { return }          // capture aids only (they grant Drops, the wardrobe, decor): never in an App Store archive
         let d = UserDefaults.standard
         // capture aid: -ShowSeedGoods 1 makes a cared-for Jelbie for the Jelly Show: fed to the day's theme, bathed, Sway half learned, the three trick pages
         // bought and every trick learned, the wardrobe owned and dressed to the theme
