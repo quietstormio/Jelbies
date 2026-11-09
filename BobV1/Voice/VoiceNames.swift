@@ -126,8 +126,12 @@ final class JellyNames {
     /// a name resolves to the slot his character is in; a character who is not in the room resolves to `absentID` (never a slot), so the
     /// callers' "not here" paths run as before. With the default roster slot == character.
     private(set) var nicknames: [Int: [String]] = [:]
-    /// The characters by slot (JellyRoster.current at creation; tests set their own).
-    var roster: [Int] = JellyRoster.current
+    /// The characters by slot: always the live JellyRoster.current (a new player's own Jelbie answers in the first session), unless a test set its own.
+    @ObservationIgnored private var rosterOverride: [Int]?
+    var roster: [Int] {
+        get { rosterOverride ?? JellyRoster.current }
+        set { rosterOverride = newValue }
+    }
     /// The id handed out for a character who is not in the room: past every slot, so `care.jelly(id)` is nil.
     static func absentID(_ character: Int) -> Int { JellyRoster.maxCount + character }
     /// Slot of a character (or his absent id).
@@ -142,6 +146,8 @@ final class JellyNames {
     @ObservationIgnored private let key: String
     @ObservationIgnored private let persists: Bool
 
+    @ObservationIgnored private var wipeObserver: NSObjectProtocol?
+
     nonisolated deinit {}
 
     init(defaults: UserDefaults = .standard, key: String = JellyNames.defaultsKey, persists: Bool = true) {
@@ -151,6 +157,18 @@ final class JellyNames {
             if let d = defaults.data(forKey: key), let m = try? JSONDecoder().decode([String: [String]].self, from: d) {
                 for (k, v) in m { if let id = Int(k) { nicknames[id] = v } }
             }
+            // A wipe (new game) posts "JelbiesDidWipe": forget the old nicknames and read the (now empty) defaults again.
+            wipeObserver = NotificationCenter.default.addObserver(forName: Notification.Name("JelbiesDidWipe"), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.reloadNicknames() }
+            }
+        }
+    }
+
+    /// Re-reads the saved nicknames (after a wipe the defaults are empty, so every book clears).
+    func reloadNicknames() {
+        nicknames = [:]
+        if let d = defaults.data(forKey: key), let m = try? JSONDecoder().decode([String: [String]].self, from: d) {
+            for (k, v) in m { if let id = Int(k) { nicknames[id] = v } }
         }
     }
 
