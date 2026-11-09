@@ -33,6 +33,10 @@ struct AdoptionCenter: View {
     @State private var slideX: CGFloat = 0
     @State private var slideO: Double = 1
     @State private var paging = false
+    /// Bumped on every page change; a stage's onReady is honoured only while its generation is still the current one.
+    @State private var pageGen = 0
+    /// Jelly Spring (mode .more) only: the branded loading cover, up until the first Jelbie is ready.
+    @State private var coverUp: Bool
     @State private var stageModel: MelonModel?
     @State private var camera = PickerCamera()
     @State private var lastDrag: CGSize = .zero
@@ -58,6 +62,7 @@ struct AdoptionCenter: View {
         self.mode = mode; self.done = done; self.cancel = cancel
         let h = mode == .first ? [] : JellyRoster.savedIDs()
         _home = State(initialValue: h)
+        _coverUp = State(initialValue: mode == .more)
         var start = mode == .first ? 0 : (SpeciesInfo.pages(includingSpecial: mode == .more).firstIndex { !h.contains($0) } ?? 0)
         var t = PickerTab.about
         #if targetEnvironment(simulator)
@@ -95,11 +100,14 @@ struct AdoptionCenter: View {
             ZStack {
                 PickerBackdrop(top: look.top, bottom: look.bottom, calm: reduce, rayOriginY: landscape ? 0.45 : 0.38)
                     .animation(.easeInOut(duration: reduce ? 0.2 : 0.55), value: page)
-                if bigText { flowLayout(geo.size, insets: geo.safeAreaInsets) } else if landscape { landscapeLayout(geo.size) } else { portraitLayout(geo.size) }
-                if HUDLayout.isPad, mode == .more, !landscape, !bigText {          // iPad portrait: the coin pill sits in the top-right corner, clear of the title and the status bar
-                    dropsPill.padding(.top, Self.padPillTop).padding(.trailing, 24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                Group {
+                    if bigText { flowLayout(geo.size, insets: geo.safeAreaInsets) } else if landscape { landscapeLayout(geo.size) } else { portraitLayout(geo.size) }
+                    if HUDLayout.isPad, mode == .more, !landscape, !bigText {          // iPad portrait: the coin pill sits in the top-right corner, clear of the title and the status bar
+                        dropsPill.padding(.top, Self.padPillTop).padding(.trailing, 24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    }
                 }
-                if HUDLayout.isPad, !ready, !naming, !bigText { padStagePlaceholder(landscape: landscape, size: geo.size) }
+                .accessibilityHidden(coverUp)
+                if coverUp { springCover(geo.size, landscape: landscape, insets: geo.safeAreaInsets).transition(.opacity).zIndex(5) }
                 if celebrating { Celebration(name: name).transition(.opacity) }
             }
             .contentShape(Rectangle())
@@ -113,6 +121,7 @@ struct AdoptionCenter: View {
             withAnimation(.easeOut(duration: 0.2)) { kbUp = !HUDLayout.isPad || Self.padKeyboardCoversWindow(n) }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in withAnimation(.easeOut(duration: 0.2)) { kbUp = false } }
+        .task { await runCover() }
         .onAppear { camera.reduceMotion = reduce; camera.setSpecies(pick); camera.engage() }
         .onDisappear { camera.release(); emoteTask?.cancel(); JellyVariants.clearPreviews() }
         .accessibilityIdentifier("adoption-center")
@@ -131,12 +140,50 @@ struct AdoptionCenter: View {
     /// iPad: the coin pill's distance from the top edge (the window ignores the safe area, and the iPad status bar is ~24 pt).
     private static let padPillTop: CGFloat = 40
 
-    /// iPad only: a spinner on the pedestal while the 3D Jelbie loads (he fades in once he has walked to the front), so the pedestal never looks empty.
-    @ViewBuilder private func padStagePlaceholder(landscape: Bool, size: CGSize) -> some View {
-        ProgressView().tint(SK.ink.opacity(0.55)).controlSize(.large)
-            .frame(width: 80, height: 80)
-            .position(x: landscape ? size.width / 4 : size.width / 2, y: landscape ? size.height * 0.5 : size.height * 0.36)
-            .allowsHitTesting(false).accessibilityHidden(true)
+    /// Jelly Spring: keeps the loading cover up for at least 0.6 s and until the first Jelbie is ready (6 s at the latest), then fades it out.
+    private func runCover() async {
+        guard coverUp else { return }
+        let start = Date()
+        while !Task.isCancelled {
+            let e = Date().timeIntervalSince(start)
+            if (ready && e >= 0.6) || e >= 6 { break }
+            try? await Task.sleep(nanoseconds: 40_000_000)
+        }
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: 0.35)) { coverUp = false }
+    }
+
+    /// Where the real close button sits (screen points, canvas scale for its size), so the cover's copy lands exactly on it.
+    private func coverClose(_ size: CGSize, landscape: Bool, insets: EdgeInsets) -> (center: CGPoint, u: CGFloat) {
+        if bigText { return (CGPoint(x: 16 + 22 + max(0, (size.width - 592) / 2), y: max(insets.top, 20) + 6 + 22), 1) }
+        if landscape {
+            let us = min(size.width / 2 / 440, (size.height - 8) / 470, Self.padCap(size)), s = min(1, us)
+            return (CGPoint(x: 6 + 42 * s, y: 88 * s), s)
+        }
+        let u = min(size.width / 440, size.height / 956, Self.padCap(size))
+        return (CGPoint(x: (size.width - 440 * u) / 2 + 42 * u, y: 88 * u), u)
+    }
+
+    /// The branded cover over the Jelly Spring page while the first Jelbie builds: backdrop, overline, big title, bouncing jelly dots, tagline.
+    private func springCover(_ size: CGSize, landscape: Bool, insets: EdgeInsets) -> some View {
+        let c = coverClose(size, landscape: landscape, insets: insets)
+        return ZStack {
+            PickerBackdrop(top: look.top, bottom: look.bottom, calm: reduce, rayOriginY: 0.42).ignoresSafeArea()
+                .contentShape(Rectangle()).onTapGesture { }
+            VStack(spacing: 14) {
+                Text("THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.2).foregroundStyle(SK.ink.opacity(0.78))
+                Text("Jelly Spring").font(SK.font(56, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5)
+                if reduce { ProgressView().tint(SK.ink.opacity(0.6)).controlSize(.large).frame(height: 40) }
+                else { SpringLoaderDots(colors: order.map { SpeciesInfo.of($0).look.dot }).frame(height: 40) }
+                Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
+                    .multilineTextAlignment(.center).padding(.horizontal, 36)
+            }
+            .padding(.horizontal, 20)
+            .accessibilityElement(children: .ignore).accessibilityLabel("Opening the Jelly Spring")
+            roundButton("xmark", label: "Close", id: "adopt-cover-close", u: c.u) { cancel() }
+                .scaleEffect(c.u).position(c.center)
+        }
+        .onAppear { AccessibilityNotification.Announcement("Opening the Jelly Spring").post() }
     }
 
     private func portraitLayout(_ size: CGSize) -> some View {
@@ -155,7 +202,7 @@ struct AdoptionCenter: View {
         let canvasH: CGFloat = compact ? h : 956
         return ZStack(alignment: .topLeading) {
             stageBlock(u).scaleEffect(stageS, anchor: .topLeading).offset(y: compact ? 100 : 130).opacity(showStage ? 1 : 0).allowsHitTesting(showStage)
-            headerBlock.frame(width: 440).offset(y: 70).offset(x: slideX * 0.4).opacity(compact ? 0 : slideO).allowsHitTesting(!compact)
+            headerBlock.frame(width: 440).offset(y: 70).opacity(compact ? 0 : 1).allowsHitTesting(!compact)
             topBar(pill: !HUDLayout.isPad, u: u)
             sheetCard(u, height: cardH).frame(width: 408, height: cardH).offset(x: 16, y: cardY)
             cta.frame(width: 400, height: 68).offset(x: 20, y: ctaY)
@@ -180,6 +227,8 @@ struct AdoptionCenter: View {
                     .frame(width: half, height: size.height, alignment: .center)
                 topBar(pill: false, u: min(1, us)).frame(width: 440, height: 130, alignment: .topLeading).scaleEffect(min(1, us), anchor: .topLeading)
                     .frame(width: half, height: 60, alignment: .topLeading).padding(.leading, 6).frame(width: half, height: size.height, alignment: .topLeading)
+                // iPhone landscape: the coin pill sits in the stage column's top-right corner, so it can never meet the centred title column
+                if mode == .more, !HUDLayout.isPad { dropsPillCompact.padding(.top, 10).padding(.trailing, 12).frame(width: half, height: size.height, alignment: .topTrailing) }
             }
             .frame(width: half, height: size.height)
             VStack(spacing: 0) {
@@ -196,7 +245,7 @@ struct AdoptionCenter: View {
                     let headH: CGFloat = mode == .more ? 172 : 150, cardH: CGFloat = padNaming ? 170 : 252, ctaH: CGFloat = 68, gap: CGFloat = 6
                     let colH: CGFloat = padNaming ? headH + cardH + ctaH + gap * 2 : 500          // iPad: the sum of the stacked parts, so it cannot clip
                     VStack(spacing: gap) {
-                        headerBlock.frame(width: 440, height: headH, alignment: .top).offset(x: slideX * 0.4).opacity(slideO)
+                        headerBlock.frame(width: 440, height: headH, alignment: .top)
                         sheetCard(ur, height: cardH).frame(width: 408, height: cardH)
                         cta.frame(width: 400, height: ctaH)
                     }
@@ -207,7 +256,7 @@ struct AdoptionCenter: View {
             }
             .frame(width: half, height: size.height)
         }
-        .overlay(alignment: .topTrailing) { if mode == .more { dropsPill.padding(.top, HUDLayout.isPad ? Self.padPillTop : 10).padding(.trailing, HUDLayout.isPad ? 24 : 16) } }
+        .overlay(alignment: .topTrailing) { if mode == .more, HUDLayout.isPad { dropsPill.padding(.top, Self.padPillTop).padding(.trailing, 24) } }
     }
 
     // MARK: large-text layout (Dynamic Type above Large)
@@ -269,9 +318,7 @@ struct AdoptionCenter: View {
                     .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
                     .accessibilityIdentifier("adopt-rare-tag")
             }
-            if mode == .more {
-                Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
-            }
+            if mode == .more { roomLine }
             HStack(spacing: 4) {
                 ForEach(0..<order.count, id: \.self) { i in
                     Circle().fill(SpeciesInfo.of(order[i]).look.dot).frame(width: i == page ? 15 : 11, height: i == page ? 15 : 11)
@@ -420,7 +467,7 @@ struct AdoptionCenter: View {
                 if naming { withAnimation(.easeOut(duration: 0.2)) { naming = false } } else { cancel() }
             }
             .offset(x: 20, y: 66)
-            if mode == .more && pill { dropsPill.position(x: 440 - 20 - 50, y: 88) }
+            if mode == .more && pill { dropsPillCompact.position(x: 440 - 14 - Self.compactPillW / 2, y: 88) }
         }
         .frame(width: 440, height: 130, alignment: .topLeading)
     }
@@ -434,6 +481,22 @@ struct AdoptionCenter: View {
         .padding(.horizontal, 14).frame(minWidth: 100, minHeight: 40)
         .background(Capsule().fill(Color.white).shadow(color: look.glow.opacity(0.25), radius: 6, y: 2))
         .fixedSize()
+        .accessibilityElement(children: .ignore).accessibilityLabel("\(wallet.count) JellyCoins").accessibilityIdentifier("drops-pill")
+    }
+
+    /// Width of the compact top-row pill in canvas points: its left edge (x 308) stays 10 pt clear of the overline's right edge (about x 298).
+    private static let compactPillW: CGFloat = 118
+
+    /// Portrait / landscape iPhone pill: coin 24, digits 19, padding 11, height 36, right-aligned in a 118-wide slot; the digits shrink instead of growing it.
+    private var dropsPillCompact: some View {
+        HStack(spacing: 6) {
+            JellyCoinIcon(size: 24)
+            Text(wallet.count.formatted()).font(SK.font(19, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                .frame(maxWidth: Self.compactPillW - 22 - 24 - 6)
+        }
+        .padding(.horizontal, 11).frame(height: 36)
+        .background(Capsule().fill(Color.white).shadow(color: look.glow.opacity(0.25), radius: 6, y: 2))
+        .frame(width: Self.compactPillW, height: 36, alignment: .trailing)
         .accessibilityElement(children: .ignore).accessibilityLabel("\(wallet.count) JellyCoins").accessibilityIdentifier("drops-pill")
     }
 
@@ -455,20 +518,25 @@ struct AdoptionCenter: View {
     /// Overline, name, epithet and the four colour dots (design: overline y 18, name y 61, epithet y 104, dots y 134 in this 150-high block).
     private var headerBlock: some View {
         ZStack(alignment: .top) {
-            Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(SK.ink.opacity(0.78))
+            Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.2).foregroundStyle(SK.ink.opacity(0.78))
                 .frame(height: 20).position(x: 220, y: 18)
-            Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).frame(width: 330, height: 60).position(x: 220, y: 61)
-            Text(info.epithet + (variant.map { " · \($0.title)" } ?? "")).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
-            if variant?.rare == true {
-                Text("Rare").font(SK.font(12.5, .black)).foregroundStyle(SK.ink)
-                    .padding(.horizontal, 10).frame(height: 22)
-                    .background(Capsule().fill(Color(hex: 0xFFD65C)))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
-                    .position(x: 380, y: 18).accessibilityIdentifier("adopt-rare-tag")
+            // Only the name, epithet and Rare tag slide and fade with a swipe; the overline, dots and room line stay put.
+            ZStack(alignment: .topLeading) {
+                Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).frame(width: 330, height: 60).position(x: 220, y: 61)
+                Text(info.epithet + (variant.map { " · \($0.title)" } ?? "")).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
+                if variant?.rare == true {
+                    // Right of the name (the coin pill occupies the overline row's right end).
+                    Text("Rare").font(SK.font(12.5, .black)).foregroundStyle(SK.ink)
+                        .padding(.horizontal, 10).frame(height: 22)
+                        .background(Capsule().fill(Color(hex: 0xFFD65C)))
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
+                        .position(x: 396, y: 52).accessibilityIdentifier("adopt-rare-tag")
+                }
             }
+            .frame(width: 440, height: 150, alignment: .topLeading)
+            .offset(x: slideX * 0.4).opacity(slideO)
             if mode == .more {
-                Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
-                    .multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.8).frame(width: 380).position(x: 220, y: 160)
+                roomLine.frame(width: 380).position(x: 220, y: 160)
             }
             HStack(spacing: 4) {
                 ForEach(0..<order.count, id: \.self) { i in
@@ -496,15 +564,37 @@ struct AdoptionCenter: View {
         }
     }
 
-    private var headerLabel: String { "\(mode == .more ? "The Jelly Spring. Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")\(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(order.count)" }
+    /// The still home-room status line (Jelly Spring only): how many Jelbies are home and how many more fit.
+    private var roomText: String {
+        let cap = JellyRoster.maxCount, n = min(home.count, cap), free = cap - n
+        return free > 0 ? "\(n) of \(cap) at home · room for \(free) more" : "Your home is full · \(n) of \(cap)"
+    }
+    private var roomLine: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "house.fill").font(.system(size: 12, weight: .bold))
+            Text(roomText).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72)).multilineTextAlignment(.center)
+        .accessibilityHidden(true)
+    }
+
+    private var headerLabel: String { "\(mode == .more ? "The Jelly Spring. \(roomText). Every adoption helps the Spring care for the Jelbies still waiting. " : "")\(info.name), \(info.epithet). \(variant.map { ($0.rare ? "Rare colour: " : "Today's colour: ") + $0.title + ". " } ?? "")\(isHome ? "Already home. " : "")Jelbie \(page + 1) of \(order.count)" }
 
     // MARK: stage (design box 440 x 470, origin at canvas y 130)
 
     /// The pedestal, the Jelbie standing on it (transparent 3D, no room), the arrows and the "Drag to spin" pill.
+    /// The soft placeholder shows while the page's Jelbie builds (never under the loading cover, never while naming).
+    private var showPlaceholder: Bool { !ready && !naming && !coverUp }
+
     private func stageBlock(_ u: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             PickerPedestal(look: look).offset(x: 66, y: 482 - 130 - PickerPedestal.topH / 2).offset(x: slideX * 0.15).opacity(slideO)
-            ShowcaseStage(roster: [pick], focusFirst: true, fullScreen: false, cutout: true, onReady: stageReady)
+            StagePlaceholder(color: look.dot, calm: reduce)
+                .frame(width: 120, height: 128).offset(x: 160, y: 350 - 128)       // stands on the pedestal's top (centre at local y 352)
+                .offset(x: slideX * 0.15).opacity(showPlaceholder ? slideO : 0)
+                .animation(.easeInOut(duration: 0.3), value: showPlaceholder)
+                .allowsHitTesting(false).accessibilityHidden(true)
+            ShowcaseStage(roster: [pick], focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen, expect = pick] m in stageReady(m, character: expect, gen: gen) })
                 .id(pick).frame(width: 420, height: 420)
                 .offset(x: 10, y: 46)
                 .opacity(ready ? slideO : 0).offset(x: slideX)
@@ -728,7 +818,7 @@ struct AdoptionCenter: View {
 
     private var swipe: some Gesture {
         DragGesture(minimumDistance: 30).onEnded { v in
-            guard !naming, abs(v.translation.width) > abs(v.translation.height) else { return }
+            guard !naming, !coverUp, abs(v.translation.width) > abs(v.translation.height) else { return }
             step(v.translation.width < 0 ? 1 : -1)
         }
     }
@@ -752,7 +842,7 @@ struct AdoptionCenter: View {
         withAnimation(.easeIn(duration: 0.16)) { slideX = reduce ? 0 : CGFloat(-dir) * 160; slideO = 0 }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 170_000_000)
-            ready = false; stageModel = nil
+            ready = false; stageModel = nil; pageGen += 1
             Self.previewOffer(mode: mode, character: order[next])
             page = next
             camera.setSpecies(order[next])
@@ -764,12 +854,13 @@ struct AdoptionCenter: View {
 
     // MARK: the Jelbie's moves
 
-    private func stageReady(_ m: MelonModel) {
+    private func stageReady(_ m: MelonModel, character: Int, gen: Int) {
+        guard gen == pageGen, character == pick else { return }          // a stale stage (an old page) must never mark the new page ready
         stageModel = m
         if HUDLayout.isPad {          // iPad: show him only once the close-up camera has settled (else a slow first frame shows him as a speck in the wide room view)
             Task { @MainActor in
                 for _ in 0..<80 where m.care.focus.blend < 0.97 { try? await Task.sleep(nanoseconds: 100_000_000) }
-                if stageModel === m { ready = true; landed(m) }
+                if stageModel === m, gen == pageGen { ready = true; landed(m) }
             }
             return
         }
@@ -905,5 +996,42 @@ private struct Celebration: View {
         .allowsHitTesting(true)
         .onAppear { go = true }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// A soft, pulsing jelly silhouette in the page's colour with a small spinner: stands on the pedestal while the 3D Jelbie builds.
+private struct StagePlaceholder: View {
+    let color: Color
+    let calm: Bool
+    @State private var pulse = false
+    var body: some View {
+        ZStack {
+            Ellipse().fill(Color.black.opacity(0.08)).frame(width: 110, height: 16).offset(y: 52)
+            RoundedRectangle(cornerRadius: 54, style: .continuous).fill(color.opacity(pulse ? 0.5 : 0.32))
+                .overlay(RoundedRectangle(cornerRadius: 54, style: .continuous).strokeBorder(Color.white.opacity(0.55), lineWidth: 2))
+                .frame(width: 104, height: 100).scaleEffect(pulse ? 1.04 : 0.98, anchor: .bottom).offset(y: -2)
+            ProgressView().tint(SK.ink.opacity(0.55)).offset(y: -4)
+        }
+        .onAppear { if !calm { withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true } } }
+    }
+}
+
+/// Four jelly dots that bounce in a wave (the Jelly Spring loading cover).
+private struct SpringLoaderDots: View {
+    let colors: [Color]
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 12) {
+                ForEach(0..<min(4, colors.count), id: \.self) { i in
+                    let w = abs(sin(t * 3.2 - Double(i) * 0.7))
+                    Circle().fill(colors[i]).frame(width: 22, height: 22)
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.9), lineWidth: 2))
+                        .scaleEffect(x: 1 + 0.12 * (1 - w), y: 1 - 0.12 * (1 - w), anchor: .bottom)
+                        .offset(y: -CGFloat(w) * 14)
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
