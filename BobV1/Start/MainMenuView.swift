@@ -133,14 +133,14 @@ struct MainMenuView: View {
     private var confirmCard: some View {
         ZStack {
             Color.white.opacity(0.6).ignoresSafeArea().onTapGesture { confirmNew = false }
+            ScrollView {
             VStack(spacing: 12) {
                 Text("Start over?").font(CloudTheme.font(26, .bold)).foregroundStyle(CloudTheme.ink).accessibilityAddTraits(.isHeader)
-                Text("Your Jelbies, JellyCoins and items will be gone.").font(CloudTheme.font(16, .medium)).foregroundStyle(CloudTheme.ink.opacity(0.8))
+                Text("Your Jelbies, JellyCoins and items will be gone for good once you bring a new Jelbie home. Press and hold the red button to confirm.").font(CloudTheme.font(16, .medium)).foregroundStyle(CloudTheme.ink.opacity(0.8))
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Button("Keep playing") { confirmNew = false }
                     .buttonStyle(JellyButtonStyle(.primary, size: 20, minHeight: 48)).accessibilityIdentifier("menu-keep")
-                Button("Start over") { confirmNew = false; begin { flow.startOver() } }
-                    .buttonStyle(JellyButtonStyle(.secondary, size: 18, minHeight: 44)).accessibilityIdentifier("menu-start-over")
+                HoldToConfirm(title: "Hold to start over", id: "menu-start-over") { confirmNew = false; begin { flow.startOver() } }
             }
             .padding(.horizontal, 22).padding(.vertical, 20)
             .frame(maxWidth: 340)
@@ -148,6 +148,9 @@ struct MainMenuView: View {
             .padding(24)
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)
+            .frame(maxWidth: .infinity)
+            }
+            .scrollBounceBehavior(.basedOnSize)          // large text / landscape: the card scrolls instead of clipping its buttons
         }
     }
 }

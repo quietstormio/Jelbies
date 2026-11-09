@@ -4,12 +4,17 @@
 //  bringing a newly adopted Jelbie home. ContentView draws `phase`; the room (GameScreen) only exists in the `.game` phase, and is rebuilt
 //  (new `session`) whenever the roster changed under it, because the roster is fixed per room build (JellyRoster.current).
 //
-//  Launch flags: -MainMenu 0 (skip the menu: the room, or the Adoption Center when there is no save), -ResetForAdoption 1 (simulator only:
+//  Starting over: the menu's "Start over" (hold to confirm) and Settings > Reset save only open the opening story and the picker; the old save is wiped
+//  when the first Jelbie is chosen and named (`bringHome`), so backing out of the picker keeps it.
+//
+//  Launch flags (simulator and DEBUG builds only, except -NewGame / -ImportSave / -ClearGuest): -MainMenu 0 (skip the menu: the room, or the Adoption Center when there is no save), -ResetForAdoption 1 (simulator only:
 //  wipes everything before launch so the game starts fresh).
 //
 
 import SwiftUI
 import Observation
+import WidgetKit
+import ActivityKit
 
 @MainActor
 @Observable
@@ -38,9 +43,11 @@ final class StartFlow {
 
     init() {
         let d = UserDefaults.standard
+        phase = .menu
+        #if DEBUG || targetEnvironment(simulator)
         let save = Self.hasSave(d)
         if d.object(forKey: "MainMenu") != nil, d.integer(forKey: "MainMenu") == 0 { phase = save ? .game : .adopt(.first) }
-        else { phase = .menu }
+        #endif
         #if targetEnvironment(simulator)
         if d.string(forKey: "PickerMode") == "more" { phase = .adopt(.more) }          // capture aid: the adopt-more picker
         if d.object(forKey: "FirstDayChar") != nil { let c = min(max(d.integer(forKey: "FirstDayChar"), 0), 3); phase = .firstDay(c, JellyRoster.baseNames[c], true) }          // capture aid: the first-day-home beat
@@ -51,7 +58,7 @@ final class StartFlow {
 
     /// Runs before anything reads a save: `-ResetForAdoption 1` (simulator builds only).
     static func applyLaunchArguments() {
-        #if targetEnvironment(simulator)
+        #if DEBUG || targetEnvironment(simulator)
         if UserDefaults.standard.integer(forKey: "ResetForAdoption") != 0 { wipeAll() }
         #endif
         applyClearGuest(arg: UserDefaults.standard.object(forKey: clearGuestKey) != nil ? UserDefaults.standard.integer(forKey: clearGuestKey) : nil)
@@ -112,12 +119,12 @@ final class StartFlow {
     /// Pause card: back to the main menu (the room is dropped; Continue brings it back from the save).
     func returnToMenu() { if phase == .game { phase = .menu } }
 
-    /// Menu: New game / Start. Clears the screen first (so the room stops writing), wipes, then the opening story, then the Adoption Center.
+    /// Menu: New game / Start (and Settings > Reset save). Clears the screen first (so the room stops writing), then the opening story, then the Adoption Center.
+    /// Nothing is wiped here: the old save goes when the first Jelbie is brought home (`bringHome`), so backing out keeps it.
     func startOver() {
         phase = .wiping
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
-            Self.wipeAll()
             phase = .opening
         }
     }
@@ -148,6 +155,7 @@ final class StartFlow {
     /// A Jelbie is chosen and named (and paid for): the roster, his name and a fresh start for his state, then the room.
     func bringHome(character c: Int, name: String) {
         let first = phase == .adopt(.first)
+        if first { Self.wipeAll() }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
         var ids = first ? [] : JellyRoster.savedIDs()
         if !ids.contains(c) { Self.resetCharacterState(c) }
         if !ids.contains(c) { ids.append(c) }
@@ -176,17 +184,29 @@ final class StartFlow {
 
     // MARK: saves
 
-    /// Everything the app saved (settings of this app's defaults, the old BobSave.json); the Photos album stays.
+    /// Posted after a wipe: observers (JellyNames, ...) drop their in-memory copies of the save.
+    static let didWipe = Notification.Name("JelbiesDidWipe")
+
+    /// Everything the app saved: this app's defaults, the old BobSave.json, the App Group files (widget snapshot + portraits), the Photos album,
+    /// widget timelines and Live Activities. (The intro-seen flag survives.)
     static func wipeAll() {
         let introSeen = UserDefaults.standard.bool(forKey: IntroGate.seenKey)
         if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
         if introSeen { IntroGate.markSeen() }          // starting over does not replay the intro
         try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: "BobSave.json"))
+        let fm = FileManager.default
+        if let group = JellyShare.containerURL, let items = try? fm.contentsOfDirectory(at: group, includingPropertiesForKeys: [.isRegularFileKey]) {
+            for u in items where (try? u.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true { try? fm.removeItem(at: u) }          // jellies.json, portrait-N.png, the Siri queue (not the group's Library)
+        }
+        try? fm.removeItem(at: URL.documentsDirectory.appending(path: "Photos", directoryHint: .isDirectory))
+        WidgetCenter.shared.reloadAllTimelines()
+        Task { for a in Activity<JelbiesActivityAttributes>.activities { await a.end(nil, dismissalPolicy: .immediate) } }
         JellyRoster.names = JellyRoster.loadNames()
         JellyVariants.reload()
         JellyRoster.current = [0]
         DecorField.shared.set([])
         DayClock.shared.resetForNewGame()          // Day 1, 8:00
+        NotificationCenter.default.post(name: didWipe, object: nil)
     }
 
     /// A newcomer starts fresh: whatever a preview (the Adoption Center's stage) saved under his keys goes.

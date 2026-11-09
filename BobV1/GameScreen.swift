@@ -10,8 +10,9 @@ import AppIntents
 
 struct GameScreen: View {
     @State private var model = GameScreen.makeGameModel()
-    @State private var showStudio = false
-    @State private var studioModel = ContentView.makeStudioModel()
+    #if DEBUG
+    @State private var showStudio = false          // the developer studio cover: debug builds only (its model is built inside StudioHost, only when shown)
+    #endif
     @State private var menuOpen = UserDefaults.standard.integer(forKey: "GameMenuOpen") != 0
     @State private var rosterOpen = false
     @State private var bookOpen = false                       // Voice v1 trick book
@@ -45,7 +46,13 @@ struct GameScreen: View {
         return town != nil || c.race.active || c.show.active || c.volley.active || c.cafe.active || c.park.active || c.groom.active
     }
     /// Town / Shop / Track, the gear's Settings and the Studio cover the whole game (the sheets leave part of it visible, so they do not count).
-    private var covered: Bool { town != nil || settingsOpen || showStudio }
+    private var covered: Bool {
+        #if DEBUG
+        return town != nil || settingsOpen || showStudio
+        #else
+        return town != nil || settingsOpen
+        #endif
+    }
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
     private var racing: Bool { model.care.tripActive || model.care.play.active }          // (Play mode hides the HUD like a trip: Done is its way out)
@@ -139,7 +146,7 @@ struct GameScreen: View {
                                         withAnimation(CareMenu.spring) { soundOpen = false; extrasOpen = false; menuOpen = false }; settingsOpen = true
                                     }
                                     .accessibilityValue(settingsOpen ? "expanded" : "collapsed")
-                                    .accessibilityIdentifier("studio-button")
+                                    .accessibilityIdentifier("settings-button")
                                     HUDGlassIcon(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
                                         AudioHub.shared.uiTap()
                                         withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false; settingsOpen = false } }
@@ -302,7 +309,6 @@ struct GameScreen: View {
         .onChange(of: reduceMotionEnv) { _, on in A11ySettings.shared.systemReduceMotion = on }          // camera / effects only; the jelly physics never changes
         .fullScreenCover(isPresented: $settingsOpen) {
             SettingsScreen(
-                openStudio: { settingsOpen = false; model.paused = true; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showStudio = true } },
                 mainMenu: {
                     model.care.leftActive(); model.care.voice.training.save(); model.care.voice.cancel()          // the same saves as leaving the app
                     settingsOpen = false
@@ -323,6 +329,9 @@ struct GameScreen: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.replayOpening() } }          // after the Settings cover is gone; no picker, no save changes
                 },
                 close: { settingsOpen = false })
+            #if DEBUG
+            .developerStudio { settingsOpen = false; model.paused = true; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showStudio = true } }
+            #endif
         }
         .sheet(isPresented: $a11yOpen) {
             AccessibilitySettingsView { a11yOpen = false }
@@ -424,17 +433,17 @@ struct GameScreen: View {
         }
         .onAppear { model.care.select.gateDraw = true }
         .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen, goOut: $town) }   // on the root: the HUD's pieces come and go with focus mode
+        #if DEBUG
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {
             ZStack(alignment: .topTrailing) {
-                MelonScreen(model: studioModel) {
-                    MelonStage(model: studioModel)
-                }
+                StudioHost()
                 GameCircleButton(systemName: "xmark", label: "Close studio") { showStudio = false }
                     .accessibilityIdentifier("studio-close")
                     .padding(.trailing, 16)
                     .padding(.top, 8)
             }
         }
+        #endif
     }
 
     /// Bottom-right care menu: one round button that expands upward into Feed / Drink / Come here.

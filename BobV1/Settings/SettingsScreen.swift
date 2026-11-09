@@ -8,7 +8,9 @@
 import SwiftUI
 
 struct SettingsScreen: View {
-    var openStudio: () -> Void
+    #if DEBUG
+    var openStudio: (() -> Void)? = nil          // developer studio: debug builds only
+    #endif
     var mainMenu: () -> Void
     var resetSave: () -> Void
     var openPhoto: () -> Void = {}
@@ -26,8 +28,8 @@ struct SettingsScreen: View {
     private var landscape: Bool { vsc == .compact }
     private let ink = CloudTheme.ink
 
-    init(openStudio: @escaping () -> Void, mainMenu: @escaping () -> Void, resetSave: @escaping () -> Void, openPhoto: @escaping () -> Void = {}, watchOpening: @escaping () -> Void = {}, close: @escaping () -> Void) {
-        self.openStudio = openStudio; self.mainMenu = mainMenu; self.resetSave = resetSave; self.openPhoto = openPhoto; self.watchOpening = watchOpening; self.close = close
+    init(mainMenu: @escaping () -> Void, resetSave: @escaping () -> Void, openPhoto: @escaping () -> Void = {}, watchOpening: @escaping () -> Void = {}, close: @escaping () -> Void) {
+        self.mainMenu = mainMenu; self.resetSave = resetSave; self.openPhoto = openPhoto; self.watchOpening = watchOpening; self.close = close
     }
 
     var body: some View {
@@ -65,8 +67,9 @@ struct SettingsScreen: View {
 
     private func header(_ pal: ThemePalette) -> some View {
         HStack {
-            Text("Settings").font(CloudTheme.font(28, .heavy)).foregroundStyle(.white)
-                .shadow(color: pal.shadow, radius: 0, y: 2)
+            Text("Settings").font(CloudTheme.font(28, .heavy)).foregroundStyle(ink)
+                .padding(.horizontal, 18).frame(minHeight: 44)
+                .background(Capsule().fill(Color.white).shadow(color: pal.lip, radius: 0, y: 3))          // readable on every theme colour (white on the pastel themes was not)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             Button { AudioHub.shared.uiTap(); close() } label: {
@@ -182,7 +185,9 @@ struct SettingsScreen: View {
             Toggle("Replay intro next launch", isOn: Binding(get: { replayIntro }, set: { replayIntro = $0; UserDefaults.standard.set($0 ? 1 : 0, forKey: "Intro") }))
                 .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-replay-intro")
-            actionRow("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio)
+            #if DEBUG
+            if let openStudio { actionRow("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio) }
+            #endif
             Toggle("Follow real clock", isOn: Binding(get: { followReal }, set: { followReal = $0; DayClock.shared.setFollowReal($0) }))
                 .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-follow-real-clock")
@@ -221,6 +226,7 @@ struct SettingsScreen: View {
     private var resetCard: some View {
         ZStack {
             Color.black.opacity(0.35).ignoresSafeArea().onTapGesture { confirmReset = false }
+            ScrollView {
             VStack(spacing: 12) {
                 Text("Reset your save?").font(CloudTheme.font(24, .bold)).foregroundStyle(ink).accessibilityAddTraits(.isHeader)
                 Text("Your Jelbies, JellyCoins and items will be gone for good. Press and hold the red button to confirm.")
@@ -232,42 +238,20 @@ struct SettingsScreen: View {
             }
             .padding(20).frame(maxWidth: 340).cloudCard(radius: 30).padding(24)
             .accessibilityElement(children: .contain).accessibilityAddTraits(.isModal)
+            .frame(maxWidth: .infinity)
+            }
+            .scrollBounceBehavior(.basedOnSize)          // large text / landscape: the card scrolls instead of clipping its buttons
         }
         .transition(.opacity)
     }
 }
 
-/// A red button that fills while it is held for 2 seconds. VoiceOver's double tap does it directly (its own confirm card came first).
-private struct HoldToConfirm: View {
-    var title: String
-    var done: () -> Void
-    @State private var progress: CGFloat = 0
-    @State private var holding = false
-
-    var body: some View {
-        Text(title).font(CloudTheme.font(18, .heavy)).foregroundStyle(.white)
-            .frame(maxWidth: .infinity, minHeight: 52)
-            .background(
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color(hex: 0xB3261E))
-                        Capsule().fill(Color.black.opacity(0.28)).frame(width: g.size.width * progress)
-                    }
-                }
-            )
-            .clipShape(Capsule())
-            .contentShape(Capsule())
-            .onLongPressGesture(minimumDuration: 2, maximumDistance: 40) {
-                done()
-            } onPressingChanged: { down in
-                holding = down
-                withAnimation(down ? .linear(duration: 2) : .easeOut(duration: 0.2)) { progress = down ? 1 : 0 }
-            }
-            .accessibilityElement().accessibilityLabel(title).accessibilityAddTraits(.isButton)
-            .accessibilityAction { done() }
-            .accessibilityIdentifier("settings-reset-hold")
-    }
+#if DEBUG
+extension SettingsScreen {
+    /// Debug builds only: adds the developer Studio row.
+    func developerStudio(_ open: @escaping () -> Void) -> SettingsScreen { var c = self; c.openStudio = open; return c }
 }
+#endif
 
 /// A small live picture of the title screen in the given palette.
 struct ThemeMiniPreview: View {
