@@ -47,6 +47,7 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         framebufferOnly = true
         preferredFramesPerSecond = 60      // RateGovernor raises this to 120 on ProMotion when the GPU has headroom
         isMultipleTouchEnabled = true
+        accessibilityIgnoresInvertColors = true          // Smart Invert must not invert the 3D scene
         isOpaque = true
         backgroundColor = UIColor(red: 0xE2 / 255, green: 0xDF / 255, blue: 0xDA / 255, alpha: 1)
         clearColor = MTLClearColor(red: 0.886, green: 0.875, blue: 0.855, alpha: 1)
@@ -730,7 +731,10 @@ final class MelonController: NSObject, MTKViewDelegate {
         let home = !c.tripActive && !c.bath.active
         let freeRoom = home && !model.paused && !c.focus.isActive && c.meal == nil
         let ambient = actors.indices.map { freeRoom && (brains[$0]?.enabled ?? false) && (brains[$0]?.ambientVoiceOK ?? false) }
-        if AudioHub.shared.onAmbient == nil { AudioHub.shared.onAmbient = { [weak self] i in self?.actors[i].brain?.ambientPulse() } }
+        if !ambientHookSet {          // this controller owns the hook; replaces any stale weak closure from a previous controller, once
+            ambientHookSet = true
+            AudioHub.shared.onAmbient = { [weak self] i in guard let self, self.actors.indices.contains(i) else { return }; self.actors[i].brain?.ambientPulse() }
+        }
         AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: raceScene != .none ? raceScene : model.care.show.musicScene,
                                   home: home, ambient: ambient, night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0),
                                   guest: model.care.guestBook.actor.flatMap { a in a.brain.map { (slot: a.id, napping: $0.isNapping, x: $0.px) } })
@@ -975,6 +979,15 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// `-ThermalFirst 0` goes back to the old "whatever fits in 16.7 ms" budget (diagnostics).
     private static let noThermalFirst = UserDefaults.standard.object(forKey: "ThermalFirst") != nil && !UserDefaults.standard.bool(forKey: "ThermalFirst")
     private let launchClock = CACurrentMediaTime()
+    private var ambientHookSet = false
+    /// The `[melon]` diagnostic lines (per-second perf/env, scale, thermal, frame-rate) are written only in Debug, with `-PerfLog 1`, `-AudioLog 1` or `-Perf 1`.
+    static let diagLogOn: Bool = {
+        #if DEBUG
+        return true
+        #else
+        return PerfMeter.on || AudioHub.audioLog || UserDefaults.standard.bool(forKey: "Perf") || UserDefaults.standard.bool(forKey: "PerfLog")
+        #endif
+    }()
     private var lastThermalLogged = ProcessInfo.ThermalState.nominal
     private func adaptScale(_ stage: MelonStageView, dt: Double) {
         guard Self.adaptiveEnabled else { return }
@@ -985,25 +998,25 @@ final class MelonController: NSObject, MTKViewDelegate {
             rateGov = RateGovernor(maxFPS: stage.window?.screen.maximumFramesPerSecond ?? 60)
             if let s = scaler?.scale, s < native - 0.01 {          // thermal-first: the scaler starts at its calm rung, not at native
                 if Self.metalFXFlag { fxScale = s } else { stage.contentScaleFactor = CGFloat(s) }
-                NSLog("%@", String(format: "[melon] scale: start at %.2fx (native %.0fx, thermal-first budget %.1f ms)", s, native, scaler?.budgetMs ?? 0))
+                if Self.diagLogOn { NSLog("%@", String(format: "[melon] scale: start at %.2fx (native %.0fx, thermal-first budget %.1f ms)", s, native, scaler?.budgetMs ?? 0)) }
             }
         }
         let gpu = renderer?.lastGPUMs
         let thermal = ProcessInfo.processInfo.thermalState
         if thermal != lastThermalLogged {
-            NSLog("%@", String(format: "[melon] thermal: %@ -> %@ at +%.0f s (scale %.2fx, gpu %.1f ms, cpu %.1f ms, lowPower %@)", Self.thermalName(lastThermalLogged), Self.thermalName(thermal), CACurrentMediaTime() - launchClock, scaler?.scale ?? 0, gpu ?? 0, lastCPUMs, ProcessInfo.processInfo.isLowPowerModeEnabled ? "ON" : "off"))
+            if Self.diagLogOn { NSLog("%@", String(format: "[melon] thermal: %@ -> %@ at +%.0f s (scale %.2fx, gpu %.1f ms, cpu %.1f ms, lowPower %@)", Self.thermalName(lastThermalLogged), Self.thermalName(thermal), CACurrentMediaTime() - launchClock, scaler?.scale ?? 0, gpu ?? 0, lastCPUMs, ProcessInfo.processInfo.isLowPowerModeEnabled ? "ON" : "off")) }
             lastThermalLogged = thermal
         }
         if let s = scaler?.update(dt: dt, gpuMs: gpu, thermal: thermal) {
             if Self.metalFXFlag { fxScale = s } else { stage.contentScaleFactor = CGFloat(s) }
             scaleChanges += 1
-            NSLog("%@", String(format: "[melon] scale: -> %.2fx (gpu %.1f ms, budget %.1f ms, thermal %d%@)", s, gpu ?? 0, scaler?.budgetMs ?? 0, thermal.rawValue, Self.metalFXFlag ? ", MetalFX" : ""))
+            if Self.diagLogOn { NSLog("%@", String(format: "[melon] scale: -> %.2fx (gpu %.1f ms, budget %.1f ms, thermal %d%@)", s, gpu ?? 0, scaler?.budgetMs ?? 0, thermal.rawValue, Self.metalFXFlag ? ", MetalFX" : "")) }
         }
         let atNative = (scaler?.level ?? 0) == 0
         if let f = rateGov?.update(dt: dt, gpuMs: gpu, thermal: thermal, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled, atNative: atNative, cpuMs: lastCPUMs), f != lastAppliedFPS {
             lastAppliedFPS = f
             applyFrameRate(stage)
-            NSLog("[melon] frame rate request -> %d Hz", f)
+            if Self.diagLogOn { NSLog("[melon] frame rate request -> %d Hz", f) }
         }
     }
 
@@ -1329,35 +1342,42 @@ final class MelonController: NSObject, MTKViewDelegate {
             let g = renderer.takeGPUStats()
             let picks = actors.reduce(0) { $0 + ($1.brain?.pickCount ?? 0) }, pickTimeouts = actors.reduce(0) { $0 + ($1.brain?.pickTimeoutCount ?? 0) }
             lastCPUMs = (dbgCPU - dbgWait) / f * 1000
-            NSLog("%@", String(format: "[melon] perf: cpu %.2f ms (+ gpu wait %.2f ms), gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps), skin %.2f ms, %d Jellies | %.1f fps, interval %.2f ms | picks %d, timed out %d",
-                         (dbgCPU - dbgWait) / f * 1000, dbgWait / f * 1000, g.avgMs, dbgSim / f * 1000,
-                         dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, dbgSkin / f * 1000, actors.count, f / el, el / f * 1000, picks, pickTimeouts))
+            if Self.diagLogOn {
+                NSLog("%@", String(format: "[melon] perf: cpu %.2f ms (+ gpu wait %.2f ms), gpu %.2f ms, sim %.2f ms (%.2f ms/step, %d steps), skin %.2f ms, %d Jellies | %.1f fps, interval %.2f ms | picks %d, timed out %d",
+                             (dbgCPU - dbgWait) / f * 1000, dbgWait / f * 1000, g.avgMs, dbgSim / f * 1000,
+                             dbgSteps > 0 ? dbgSim / Double(dbgSteps) * 1000 : 0, dbgSteps, dbgSkin / f * 1000, actors.count, f / el, el / f * 1000, picks, pickTimeouts))
+                NSLog("%@", String(format: "[melon] env: thermal %@, lowPower %@, drawable %dx%d @ %.2fx (native %.0fx), fps pref %d (display max %d, measured %.1f), focus %@, adaptive %@ (%d changes), gpu mem %.1f MB, target rebuilds %d | gfx: %@%@",
+                                   Self.thermalName(ProcessInfo.processInfo.thermalState), ProcessInfo.processInfo.isLowPowerModeEnabled ? "ON" : "off",
+                                   Int(view.drawableSize.width), Int(view.drawableSize.height), Double(stage.contentScaleFactor), Double(stage.window?.screen.scale ?? 0),
+                                   stage.preferredFramesPerSecond, stage.window?.screen.maximumFramesPerSecond ?? 0, f / el,
+                                   model.care.focus.isActive ? "ON" : "off", Self.adaptiveEnabled ? "on" : "off", scaleChanges,
+                                   Double(renderer.device.currentAllocatedSize) / 1_048_576, renderer.targetRebuilds, gfxSummary(renderer, frames: f, rw: rw, rh: rh),
+                                   renderer.perfPasses ? " | passes ms: " + renderer.takePassStats() : ""))
+                let slept = actors.reduce(0) { $0 + $1.sleptSteps }, wakes = actors.reduce(0) { $0 + $1.wakeCount }
+                NSLog("[melon] sleep: %d of %d Jelly-steps skipped, %d wakes, asleep now: %@", slept - lastSlept, dbgSteps * actors.count, wakes - lastWakes, actors.map { $0.asleep ? "z" : "-" }.joined())
+                lastSlept = slept; lastWakes = wakes
+                NSLog("%@", "[melon] parts (mean ms per frame / longest single call, main thread): " + Lap.allCases.map { String(format: "%@ %.2f/%.1f", $0.label, lap[$0.rawValue] / f * 1000, lapMax[$0.rawValue] * 1000) }.joined(separator: ", "))
+                NSLog("%@", "[melon] hop parts (mean ms per step / longest single call): " + HopDiag.take(steps: dbgSteps))
+                NSLog("[melon] planner: %@", BlobBrain.takePlanStats())
+                let bodies = JellyParallel.takeBodyTimes()
+                NSLog("%@", String(format: "[melon] bodies: %d steps, per-body step mean %.2f ms, slowest body mean %.2f ms / max %.2f ms (slowest = body %d), step wall (dispatch + wait) mean %.2f ms", bodies.steps, bodies.mean * 1000, bodies.slowestMean * 1000, bodies.max * 1000, bodies.maxIndex, bodies.wallMean * 1000))
+                if actors.count > 1 {
+                    NSLog("[melon] jellies: %@", actors.map { let c = $0.sim.centroid(); return String(format: "%d(%.2f,%.2f)%@", $0.id, c.x, c.z, $0.isWalking ? "w" : "") }.joined(separator: " "))
+                }
+                if game {
+                    let hc = model.touch.haptics.takeCost()
+                    NSLog("%@", String(format: "[touch] perf: sim step %.3f ms, brain %.3f ms/step, touch frame %.3f ms (haptics update %.4f ms) per frame",
+                                       dbgSteps > 0 ? dbgStepOnly / Double(dbgSteps) * 1000 : 0, dbgSteps > 0 ? dbgBrain / Double(dbgSteps) * 1000 : 0,
+                                       dbgTouch / f * 1000, hc.ms))
+                }
+            } else {          // still drain the per-window accumulators so they never grow
+                if renderer.perfPasses { _ = renderer.takePassStats() }; _ = HopDiag.take(steps: dbgSteps); _ = BlobBrain.takePlanStats(); _ = JellyParallel.takeBodyTimes()
+                renderer.resetRoomCacheCounters(); restFrames = 0; activeFrames = 0
+                lastSlept = actors.reduce(0) { $0 + $1.sleptSteps }; lastWakes = actors.reduce(0) { $0 + $1.wakeCount }
+                if game { _ = model.touch.haptics.takeCost() }
+            }
             for a in actors { a.brain?.pickCount = 0; a.brain?.pickTimeoutCount = 0 }
-            NSLog("%@", String(format: "[melon] env: thermal %@, lowPower %@, drawable %dx%d @ %.2fx (native %.0fx), fps pref %d (display max %d, measured %.1f), focus %@, adaptive %@ (%d changes), gpu mem %.1f MB, target rebuilds %d | gfx: %@%@",
-                               Self.thermalName(ProcessInfo.processInfo.thermalState), ProcessInfo.processInfo.isLowPowerModeEnabled ? "ON" : "off",
-                               Int(view.drawableSize.width), Int(view.drawableSize.height), Double(stage.contentScaleFactor), Double(stage.window?.screen.scale ?? 0),
-                               stage.preferredFramesPerSecond, stage.window?.screen.maximumFramesPerSecond ?? 0, f / el,
-                               model.care.focus.isActive ? "ON" : "off", Self.adaptiveEnabled ? "on" : "off", scaleChanges,
-                               Double(renderer.device.currentAllocatedSize) / 1_048_576, renderer.targetRebuilds, gfxSummary(renderer, frames: f, rw: rw, rh: rh),
-                               renderer.perfPasses ? " | passes ms: " + renderer.takePassStats() : ""))
-            let slept = actors.reduce(0) { $0 + $1.sleptSteps }, wakes = actors.reduce(0) { $0 + $1.wakeCount }
-            NSLog("[melon] sleep: %d of %d Jelly-steps skipped, %d wakes, asleep now: %@", slept - lastSlept, dbgSteps * actors.count, wakes - lastWakes, actors.map { $0.asleep ? "z" : "-" }.joined())
-            lastSlept = slept; lastWakes = wakes
-            NSLog("%@", "[melon] parts (mean ms per frame / longest single call, main thread): " + Lap.allCases.map { String(format: "%@ %.2f/%.1f", $0.label, lap[$0.rawValue] / f * 1000, lapMax[$0.rawValue] * 1000) }.joined(separator: ", "))
-            NSLog("%@", "[melon] hop parts (mean ms per step / longest single call): " + HopDiag.take(steps: dbgSteps))
-            NSLog("[melon] planner: %@", BlobBrain.takePlanStats())
-            let bodies = JellyParallel.takeBodyTimes()
-            NSLog("%@", String(format: "[melon] bodies: %d steps, per-body step mean %.2f ms, slowest body mean %.2f ms / max %.2f ms (slowest = body %d), step wall (dispatch + wait) mean %.2f ms", bodies.steps, bodies.mean * 1000, bodies.slowestMean * 1000, bodies.max * 1000, bodies.maxIndex, bodies.wallMean * 1000))
             for i in lap.indices { lap[i] = 0; lapMax[i] = 0 }
-            if actors.count > 1 {
-                NSLog("[melon] jellies: %@", actors.map { let c = $0.sim.centroid(); return String(format: "%d(%.2f,%.2f)%@", $0.id, c.x, c.z, $0.isWalking ? "w" : "") }.joined(separator: " "))
-            }
-            if game {
-                let hc = model.touch.haptics.takeCost()
-                NSLog("%@", String(format: "[touch] perf: sim step %.3f ms, brain %.3f ms/step, touch frame %.3f ms (haptics update %.4f ms) per frame",
-                                   dbgSteps > 0 ? dbgStepOnly / Double(dbgSteps) * 1000 : 0, dbgSteps > 0 ? dbgBrain / Double(dbgSteps) * 1000 : 0,
-                                   dbgTouch / f * 1000, hc.ms))
-            }
             dbgBrain = 0; dbgStepOnly = 0; dbgTouch = 0; dbgSkin = 0
             dbgFrames = 0; dbgStart = now; dbgCPU = 0; dbgWait = 0; dbgSim = 0; dbgSteps = 0
             fflush(stdout)
