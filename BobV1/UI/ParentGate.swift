@@ -16,7 +16,20 @@ struct ParentGateView: View {
     var body: some View {
         ZStack {
             FocusStyle.cream.ignoresSafeArea()
-            GeometryReader { geo in
+            if HUDLayout.isPad {
+                GeometryReader { geo in gateScroll(minHeight: geo.size.height) }          // iPad: centred on the screen, not pinned to the top
+            } else {
+                gateScroll(minHeight: nil)
+            }
+        }
+        .confirmationDialog("Are you a grown-up?", isPresented: $confirmVO, titleVisibility: .visible) {
+            Button("Yes, I am a grown-up") { pass() }
+            Button("Cancel", role: .cancel) { }
+        }
+        .accessibilityIdentifier("parent-gate")
+    }
+
+    private func gateScroll(minHeight: CGFloat?) -> some View {
             ScrollView {
                 VStack(spacing: 16) {
                     Image(systemName: "person.2.fill")
@@ -41,16 +54,9 @@ struct ParentGateView: View {
                     .accessibilityIdentifier("parent-gate-cancel")
                 }
                 .padding(24).frame(maxWidth: HUDLayout.isPad ? 560 : 440).frame(maxWidth: .infinity)
-                .frame(minHeight: HUDLayout.isPad ? geo.size.height : nil)          // iPad: centred on the screen, not pinned to the top
+                .frame(minHeight: minHeight)
             }
             .scrollBounceBehavior(.basedOnSize)
-            }
-        }
-        .confirmationDialog("Are you a grown-up?", isPresented: $confirmVO, titleVisibility: .visible) {
-            Button("Yes, I am a grown-up") { pass() }
-            Button("Cancel", role: .cancel) { }
-        }
-        .accessibilityIdentifier("parent-gate")
     }
 }
 

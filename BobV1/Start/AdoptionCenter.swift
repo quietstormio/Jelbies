@@ -39,6 +39,16 @@ struct AdoptionCenter: View {
     @State private var pinching = false
     @State private var emoteTask: Task<Void, Never>?
     @FocusState private var nameFocused: Bool
+    /// iPad only: true when the keyboard's end frame, in window coordinates, overlaps the window by more than a shortcut bar's height.
+    private static func padKeyboardCoversWindow(_ n: Notification) -> Bool {
+        guard let screenFrame = (n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) else { return true }
+        let window = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow }
+        guard let window else { return screenFrame.height > 120 }
+        let inWindow = window.convert(screenFrame, from: window.screen.coordinateSpace)
+        let overlap = inWindow.intersection(window.bounds)
+        return !overlap.isNull && overlap.height > 120
+    }
+
     /// True while the software keyboard is up (the naming step then re-lays-out above it).
     @State private var kbUp = false
     @Environment(\.dynamicTypeSize) private var dts
@@ -98,9 +108,9 @@ struct AdoptionCenter: View {
         // Only the container (status bar / home indicator) is ignored: the keyboard still shrinks the space, so the naming step lifts above it.
         .ignoresSafeArea(.container)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { n in
-            // iPad with a hardware keyboard still posts this for its small shortcut bar: only a real on-screen keyboard (> 120 pt) compacts the layout.
-            let kbH = (n.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.height ?? 999
-            withAnimation(.easeOut(duration: 0.2)) { kbUp = !HUDLayout.isPad || kbH > 120 }
+            // iPad: the hardware-keyboard shortcut bar is small, a floating keyboard is small and off the bottom. Decide from how much of the window
+            // the keyboard frame (screen coordinates, converted to window coordinates) actually covers; iPhone logic unchanged.
+            withAnimation(.easeOut(duration: 0.2)) { kbUp = !HUDLayout.isPad || Self.padKeyboardCoversWindow(n) }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in withAnimation(.easeOut(duration: 0.2)) { kbUp = false } }
         .onAppear { camera.reduceMotion = reduce; camera.setSpecies(pick); camera.engage() }
@@ -183,11 +193,12 @@ struct AdoptionCenter: View {
                     .frame(width: 440 * uc, height: 240 * uc, alignment: .top)
                 } else {
                     let padNaming = HUDLayout.isPad && naming          // iPad naming step: snug card, the whole column centred (no blank lower half)
-                    let colH: CGFloat = padNaming ? (mode == .more ? 172 : 150) + 170 + 68 + 12 : 500
-                    VStack(spacing: 6) {
-                        headerBlock.frame(width: 440, height: mode == .more ? 172 : 150, alignment: .top).offset(x: slideX * 0.4).opacity(slideO)
-                        sheetCard(ur, height: padNaming ? 170 : 252).frame(width: 408, height: padNaming ? 170 : 252)
-                        cta.frame(width: 400, height: 68)
+                    let headH: CGFloat = mode == .more ? 172 : 150, cardH: CGFloat = padNaming ? 170 : 252, ctaH: CGFloat = 68, gap: CGFloat = 6
+                    let colH: CGFloat = padNaming ? headH + cardH + ctaH + gap * 2 : 500          // iPad: the sum of the stacked parts, so it cannot clip
+                    VStack(spacing: gap) {
+                        headerBlock.frame(width: 440, height: headH, alignment: .top).offset(x: slideX * 0.4).opacity(slideO)
+                        sheetCard(ur, height: cardH).frame(width: 408, height: cardH)
+                        cta.frame(width: 400, height: ctaH)
                     }
                     .frame(width: 440, height: colH, alignment: .top)
                     .scaleEffect(ur, anchor: .top)
