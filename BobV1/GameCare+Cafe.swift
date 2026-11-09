@@ -184,7 +184,7 @@ extension GameCare {
             book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.ate = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; book.zoomed = []; book.charged = 0
             for a in actors {
                 guard let brain = a.brain else { continue }
-                book.homes[a.id] = a.floor; book.autonomy[a.id] = brain.autonomy; book.arena[a.id] = a.sim.arenaRadius
+                book.homes[a.id] = a.floor; book.autonomy[a.id] = autonomySnapshot(a.id, brain); book.arena[a.id] = a.sim.arenaRadius
                 brain.abortAll(a.sim, a.skinner)
                 brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             }

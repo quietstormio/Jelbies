@@ -41,7 +41,7 @@ extension GameCare {
             if wet > 0.001 { self.bathPlug.wet[who] = wet }
         }
         bath.returnSpot = Self.washReturnSpot(brain: brain, id: id, from: GameCare.floorPos(brain, a.sim))
-        bath.start(brain: brain, jelly: id, grime: profile.grime, look: profile.look)
+        bath.start(brain: brain, jelly: id, grime: profile.grime, look: profile.look, autonomy: autonomySnapshot(id, brain))
     }
 
     /// The Next button: the player moves to the next clean-up stage once the current one is complete (soap, rinse, shine).

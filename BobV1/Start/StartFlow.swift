@@ -174,7 +174,7 @@ final class StartFlow {
         JellyRoster.save(ids)
         JellyRoster.setName(c, name)
         UserDefaults.standard.set(true, forKey: Self.startedKey)
-        GameCare.newcomerPending = true
+        GameCare.newcomerPending = true; GameCare.newcomerWithOthers = ids.count > 1          // (others at home: the curtain is held until he is off-screen)
         if first { welcome = nil; phase = .firstDay(c, name, false); return }          // the first day at home says "Welcome home" itself
         welcome = JellyRoster.names[c]
         enterGame()

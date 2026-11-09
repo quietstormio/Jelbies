@@ -19,6 +19,8 @@ import QuartzCore
 
 nonisolated enum ArrivalTuning {
     static let card: Float = 0.6, build: Float = 1.1, runIn: Float = 1.8, hug: Float = 2.6, done: Float = 3.4
+    /// A bought Jelbie runs in later than a friend does: his card ("Ding dong! <name> is here") stays up about 2 s so a child can read it.
+    static let newcomerRunIn: Float = 2.6
     static let dim = 0.25, dimFade = 0.3
     static let welcomeLife = 1.2
     static let happyHold: Float = 2
@@ -34,9 +36,17 @@ nonisolated struct ArrivalClock: Sendable {
         (0, .doorbell), (ArrivalTuning.card, .showCard), (ArrivalTuning.build, .build),
         (ArrivalTuning.runIn, .hideCard), (ArrivalTuning.runIn, .runIn), (ArrivalTuning.hug, .hug), (ArrivalTuning.done, .finished),
     ]
+    /// A bought Jelbie's arrival (GameCare+Newcomer.swift): the same doorbell, card and run-in; his body exists already, so there is no "getting the room ready" step, and the
+    /// hug / party that follow are the welcome's own sequence (the clock ends once he is on his way).
+    static let newcomerSchedule: [(at: Float, event: ArrivalEvent)] = [
+        (0, .doorbell), (ArrivalTuning.card, .showCard), (ArrivalTuning.newcomerRunIn, .hideCard), (ArrivalTuning.newcomerRunIn, .runIn), (ArrivalTuning.newcomerRunIn + 0.1, .finished),
+    ]
+    let plan: [(at: Float, event: ArrivalEvent)]
     private(set) var t: Float = 0
     private(set) var active = false
     private var next = 0
+
+    init(plan: [(at: Float, event: ArrivalEvent)] = ArrivalClock.schedule) { self.plan = plan }
 
     /// False = an arrival is already running (a second one is ignored).
     @discardableResult
@@ -49,8 +59,8 @@ nonisolated struct ArrivalClock: Sendable {
         guard active else { return [] }
         t += dt
         var out = [ArrivalEvent]()
-        while next < Self.schedule.count, Self.schedule[next].at <= t {
-            out.append(Self.schedule[next].event); next += 1
+        while next < plan.count, plan[next].at <= t {
+            out.append(plan[next].event); next += 1
         }
         if out.last == .finished { active = false }
         return out
@@ -114,16 +124,8 @@ extension GameCare {
         case .hideCard:
             g.arrivalCard = .hidden; g.arrivalDim = false
         case .runIn:
-            guard let a = g.actor, let b = a.brain else { return }
-            let target = g.arrivalTarget ?? guestSpotNear(actors)
-            b.hurry = true
-            b.requestNow(.goTo(target))
-            AudioHub.shared.chirp(jelly: a.id, .babble)
-            // the household turns to look
-            for r in actors {
-                guard let rb = r.brain, !rb.isSleeping, rb.commandedIdle == nil, !rb.commanded else { continue }
-                _ = rb.beginLook(at: b.position, hold: 0.9, resume: nil, face: .excited, kind: .watch)
-            }
+            guard let a = g.actor else { return }
+            arrivalRunIn(a, to: g.arrivalTarget ?? guestSpotNear(actors), household: actors, voice: true)
         case .hug:
             g.hugWait = ArrivalTuning.hugWait
             if let a = g.actor, let b = a.brain { guestArrivalCheer(actors, a, b) }
@@ -132,6 +134,18 @@ extension GameCare {
             g.arrivalCard = .hidden; g.arrivalDim = false
             if let b = g.actor?.brain { b.autonomy = true; b.hurry = false }
             if g.hugWait != nil, let a = g.actor { g.hugWait = nil; if let b = a.brain { guestArrivalGather(actors, a, b) } }
+        }
+    }
+
+    /// He runs in (the run gait) to `target` and the household turns to look. Shared by a friend's arrival and a bought Jelbie's (`voice` false = the quiet, sleeping-house version).
+    func arrivalRunIn(_ a: JellyActor, to target: SIMD2<Float>, household: [JellyActor], voice: Bool) {
+        guard let b = a.brain else { return }
+        b.hurry = true
+        b.requestNow(.goTo(target))
+        if voice { AudioHub.shared.chirp(jelly: a.id, .babble) }
+        for r in household where r.id != a.id {
+            guard let rb = r.brain, !rb.isSleeping, rb.commandedIdle == nil, !rb.commanded else { continue }
+            _ = rb.beginLook(at: b.position, hold: 0.9, resume: nil, face: .excited, kind: .watch)
         }
     }
 
@@ -147,6 +161,7 @@ extension GameCare {
         for r in actors where r.id != 0 { bubbleHub.spawnHeart(for: r.id, now: now) }
         AudioHub.shared.chirp(jelly: a.id, .happy)
         for r in actors where r.id != a.id && r.id != 0 { AudioHub.shared.contextVoice(jelly: r.id, .hello, chance: 0.8) }
+        g.welcomeLine = "Welcome!"; g.welcomeSpan = ArrivalTuning.welcomeLife; g.welcomeActor = nil
         g.welcomeAt = now
     }
 
@@ -345,11 +360,11 @@ private struct WelcomePill: View {
         TimelineView(.animation(minimumInterval: 1.0 / 30)) { t in
             GeometryReader { geo in
                 let age = g.welcomeAt > 0 ? CACurrentMediaTime() - g.welcomeAt : 99
-                if age >= 0, age < ArrivalTuning.welcomeLife, let a = g.actor {
+                if age >= 0, age < g.welcomeSpan, let a = g.welcomeActor ?? g.actor {
                     let c = a.sim.centroid()
                     if let p = ThoughtBubbleView.project(SIMD3(c.x, c.y + Float(BlobShape.H) * 1.9, c.z), size: geo.size, focus: care.focus.blend) {
-                        let fade = age < 0.15 ? age / 0.15 : max(0, 1 - (age - 0.15) / (ArrivalTuning.welcomeLife - 0.15))
-                        Text("Welcome!")
+                        let fade = age < 0.15 ? age / 0.15 : max(0, 1 - (age - 0.15) / (g.welcomeSpan - 0.15))
+                        Text(g.welcomeLine)
                             .font(SK.font(17, .semibold)).foregroundStyle(Color(red: 74 / 255, green: 46 / 255, blue: 30 / 255))
                             .padding(.horizontal, 16).padding(.vertical, 7)
                             .background(Capsule().fill(SK.cream.opacity(0.85)))

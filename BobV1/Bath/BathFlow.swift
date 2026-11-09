@@ -154,7 +154,7 @@ final class BathFlow {
     // MARK: start / cancel
 
     /// Tapping "Clean". Ignored while anything else runs (the menu row is disabled then too).
-    func start(brain: BlobBrain, hurry: Bool = true, jelly: Int = 0, grime g: BlobGrime? = nil, look l: BathLook? = nil) {
+    func start(brain: BlobBrain, hurry: Bool = true, jelly: Int = 0, grime g: BlobGrime? = nil, look l: BathLook? = nil, autonomy: Bool? = nil) {
         guard phase == .off else { return }
         if jelly != 0, let g {
             targetID = jelly; bobGrime = grime; savedBobLook = look
@@ -163,7 +163,7 @@ final class BathFlow {
             nl.soot = BathLook.sootSeed(dirt: g.dirt)
             look = nl; sootSeededFor = g.dirt
         } else { targetID = 0 }
-        savedAutonomy = brain.autonomy
+        savedAutonomy = autonomy ?? brain.autonomy          // (a bought Jelbie still being welcomed is held with autonomy off: that is not what he gets back)
         brain.autonomy = false
         fenceLifted = true                      // sim fence: applied in `tick` (needs the sim); the brain's resolver reads this flag
         exitT = 0

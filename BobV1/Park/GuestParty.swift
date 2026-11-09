@@ -52,10 +52,13 @@ struct GuestParty {
 
     var active: Bool { stage != .off && stage != .done }
 
-    mutating func begin() {
+    /// `at`: the stage to begin in (a guest's party starts at the hug; the newcomer's welcome has had its hug started by hand and can begin at the dance or the finale).
+    mutating func begin(at start: Stage = .hug) {
         self = GuestParty()
-        stage = .hug
+        stage = start
     }
+    /// Over budget: the dance is skipped (only before it started) and the finale plays.
+    mutating func skipToFinale() { if (stage == .hug || stage == .dance) && !danceStarted { go(.finale) } }
     mutating func cancel() { stage = .off }
 
     /// Where a member's hop starts in the finale: each place `stagger` (0.2...0.5 s, a fixed non-uniform pattern) after the one before.

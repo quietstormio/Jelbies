@@ -422,6 +422,8 @@ final class GameCare {
     /// Jelbies in a warm social session right now (GameCare+SocialLove.swift).
     @ObservationIgnored var socialLoveActive: Set<Int> = []
     @ObservationIgnored var newcomer: NewcomerWalk?          // the bring-home walk (GameCare+Newcomer.swift)
+    @ObservationIgnored var newcomerPendingT: Float = 0          // how long the bring-home flag has waited (a stale one is dropped)
+    @ObservationIgnored var newcomerWelcome: NewcomerWelcome?          // the bring-home arrival + welcome, when others are at home (GameCare+Newcomer.swift)
     @ObservationIgnored var greetOthers: [Int: (age: Float, spot: SIMD2<Float>, arrived: Float)] = [:]
     /// Where each Jelly stands for the greeting (Bob takes the usual front spot; the others fan out behind him).
     static func greetSpot(_ id: Int) -> SIMD2<Float> {
@@ -476,7 +478,7 @@ final class GameCare {
         select.cancel()
         queued.removeAll(); callRunning = false
         voice.cancel()
-        bath.start(brain: brain)
+        bath.start(brain: brain, autonomy: autonomySnapshot(0, brain))
     }
     @ObservationIgnored var outfitSeen: [Int: Int] = [:]
     @ObservationIgnored weak var lastBrain: BlobBrain?
@@ -612,7 +614,7 @@ final class GameCare {
     }
 
     func enterFocus(brain: BlobBrain) {
-        if !focusGroup.arrived.contains(0) { savedAutonomy = brain.autonomy }          // (once: in a group he waits here for the others and this is asked again, which would save the `false` set below)
+        if !focusGroup.arrived.contains(0) { savedAutonomy = autonomySnapshot(0, brain) }          // (once: in a group he waits here for the others and this is asked again, which would save the `false` set below)
         brain.autonomy = false                       // he stays on the front spot until released
         if focusGroup.markArrived(0) { focus.arrive(snap: isPreview) }
         if !silentArrival { AudioHub.shared.chirp(jelly: 0, .happy, src: "greet") }          // (the opening story's Jelbies stay quiet until their drop pops)

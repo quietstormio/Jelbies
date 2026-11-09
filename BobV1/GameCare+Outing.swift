@@ -80,7 +80,7 @@ extension GameCare {
                 var r = r0
                 if o.t < r.delay { allOut = false; continue }
                 if !r.started {
-                    r.started = true; r.autonomy = b.autonomy; r.home = a.floor
+                    r.started = true; r.autonomy = autonomySnapshot(id, b); r.home = a.floor
                     o.lifted.insert(id); a.sim.arenaSuspended = true
                     b.autonomy = false
                     b.hurry = true; b.outingPace = r.pace
