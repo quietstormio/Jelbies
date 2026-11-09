@@ -86,8 +86,8 @@ struct ContactStance: Sendable {
         .bump: .pressing(from: 1, press: 2, until: 4, sound: .boop, volume: 0.9),          // (phase 4 = the happy bounces AFTER the bump: the pair may part and hop)
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
-        // high five (user rule 2): side by side, both arms are up from the first step (canonical pose) so the walk lands the hands together and the hands meet tip to tip (hand to hand, ready), the hold squeezes them to the press; phase 3: the arms go down, they part.
-        .highFive: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
+        // high five (user rule 2): side by side, both arms are up from the first step (canonical pose) so the walk lands the hands together and the hands meet tip to tip (hand to hand, ready), the hold squeezes them to the press; phase 2 is the wind-up (arms up and back in, held at the stand-off), phase 3 the slap + hold, phase 4: the arms go down, they part.
+        .highFive: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 3, target: hold), Step(from: 4, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
         .tag: .pressing(from: 1, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         .bellyBounce: .pressing(from: 1, press: 2, facing: .camera, until: 3, sound: .squish, volume: 0.9),
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
