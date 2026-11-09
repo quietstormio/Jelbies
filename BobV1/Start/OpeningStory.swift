@@ -456,7 +456,8 @@ struct OpeningStoryView: View {
         st.camFrom = initial && b == 0 ? OpeningCam() : camera(at: now)
         st.camTo = target(b, size: size)
         st.camT0 = now
-        st.camDur = !motion ? 0.01 : (initial && b > 0 ? 0.01 : (tapped ? 1.3 : [6.2, 6.0, 3.4, 3.2, 3.0, 3.5, 3.6][b]))
+        // (beat 4's pull-out is quick: the first Jelbie lands ~1 s in, far left, and must land inside the picture, not half off the edge)
+        st.camDur = !motion ? 0.01 : (initial && b > 0 ? 0.01 : (tapped ? 1.3 : [6.2, 6.0, 3.4, 1.3, 3.0, 3.5, 3.6][b]))
         if initial && b > 0 { st.camFrom = st.camTo }
         st.beat = b
         st.beatStart = now
