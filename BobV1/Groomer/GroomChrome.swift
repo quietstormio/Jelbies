@@ -81,13 +81,20 @@ struct GroomChrome: View {
     private var picker: some View {
         ZStack {
             Color(red: 0.30, green: 0.20, blue: 0.14).opacity(0.28).ignoresSafeArea().onTapGesture { groom.cancelPicker() }.accessibilityHidden(true)
-            ViewThatFits(in: .vertical) {
-                pickerContent.fixedSize(horizontal: false, vertical: true)
-                ScrollView { pickerContent }.scrollBounceBehavior(.basedOnSize)
+            Group {
+                if PadLayout.isPad {
+                    pickerContent.fixedSize(horizontal: false, vertical: true)   // iPad: hug the content (no empty bands)
+                } else {
+                    ViewThatFits(in: .vertical) {
+                        pickerContent.fixedSize(horizontal: false, vertical: true)
+                        ScrollView { pickerContent }.scrollBounceBehavior(.basedOnSize)
+                    }
+                }
             }
             .frame(maxWidth: PadLayout.isPad ? 580 : 460, maxHeight: vsc == .compact ? 330 : 620)
             .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
             .padding(.horizontal, 16)
+            .scaleEffect(PadLayout.isPad ? 1.25 : 1)   // iPad: larger type and targets
             .accessibilityElement(children: .contain).accessibilityIdentifier("groom-picker")
         }
         .transition(.opacity)
