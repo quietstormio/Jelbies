@@ -2,18 +2,16 @@
 //  LiveActivities.swift
 //  The app's side of the Live Activities (Shared/JelbiesActivityAttributes.swift): when to start, what to push, when to end.
 //    race  - starts with the race, updates only when the placing or the lap changes or a quarter of the track is passed (RaceActivityPolicy:
-//            the update budget), ends with the result ("🥇 Bob won! +12 Drops"), dismissed a few minutes later.
+//            the update budget), ends with the result ("🥇 Pip won! +12 JellyCoins"), dismissed a few minutes later.
 //    nap   - optional, default on: when the Jelbies go to bed (the app leaves the foreground at night, or "Put my Jelbies to bed"),
 //            a gentle "sleeping" card with the wake time (06:00); stale at the wake time; ended when they wake / the app is back by day.
-//    pep   - retired with training (nothing starts it any more); kept so an old card on the Lock Screen is still ended on launch.
 //  Every ActivityKit call goes through `ActivityDriver`, so the decisions are unit-tested against `MockActivityDriver`.
 //  Local updates only (no push). Orphans from a crashed / killed run are ended on launch (`cleanUp`).
 //
-//  Merge points for the race / training workers (call on the main actor):
+//  Entry points for the race (call on the main actor):
 //    LiveActivities.shared.raceStarted(jellyID:name:color:racers:laps:)
 //    LiveActivities.shared.raceProgress(position:progress:lap:)
 //    LiveActivities.shared.raceFinished(place:drops:)
-//    LiveActivities.shared.pepDepleted(jellyID:name:color:refillAt:) / pepRefilled()
 //
 
 import Foundation
@@ -114,9 +112,8 @@ nonisolated struct RaceActivityPolicy: Sendable {
 // MARK: - Settings
 
 nonisolated enum LiveActivitySettings {
-    static let napKey = "LiveActivity.nap.v1", pepKey = "LiveActivity.pep.v1"
+    static let napKey = "LiveActivity.nap.v1"
     static func napOn(_ d: UserDefaults = .standard) -> Bool { d.object(forKey: napKey) == nil ? true : d.bool(forKey: napKey) }
-    static func pepOn(_ d: UserDefaults = .standard) -> Bool { d.bool(forKey: pepKey) }
 }
 
 // MARK: - Controller
@@ -126,9 +123,8 @@ nonisolated enum LiveActivitySettings {
 final class LiveActivities {
     static let shared = LiveActivities()
 
-    /// Settings (persisted): the nap card (default on) and the Pep countdown (default off).
+    /// Settings (persisted): the nap card (default on).
     var napOn: Bool { didSet { defaults.set(napOn, forKey: LiveActivitySettings.napKey) } }
-    var pepOn: Bool { didSet { defaults.set(pepOn, forKey: LiveActivitySettings.pepKey) } }
 
     @ObservationIgnored let driver: ActivityDriver
     @ObservationIgnored private let defaults: UserDefaults
@@ -137,26 +133,22 @@ final class LiveActivities {
     @ObservationIgnored var directory: URL? = JellyShare.containerURL
     /// 0...23: the hour the room is "night" from and the one the Jelbies get up (DayPhase.night / .morning).
     static let nightFrom = 21, wakeAt = Bedtime.wakeHour
-    /// How long the finished race / morning / refilled card lingers before it is dismissed.
+    /// How long the finished race / morning card lingers before it is dismissed.
     static let linger: TimeInterval = 10 * 60
 
     @ObservationIgnored private(set) var raceID: String?
     @ObservationIgnored private(set) var raceAttrs: JelbiesActivityAttributes?
     @ObservationIgnored private(set) var racePolicy = RaceActivityPolicy()
     @ObservationIgnored private(set) var napID: String?
-    @ObservationIgnored private(set) var pepID: String?
-    @ObservationIgnored private(set) var pepAttrs: JelbiesActivityAttributes?
-    @ObservationIgnored private(set) var pepRefillAt: Date?
 
     init(driver: ActivityDriver = ActivityKitDriver(), defaults: UserDefaults = .standard) {
         self.driver = driver; self.defaults = defaults
-        napOn = LiveActivitySettings.napOn(defaults); pepOn = LiveActivitySettings.pepOn(defaults)
+        napOn = LiveActivitySettings.napOn(defaults)
     }
     nonisolated deinit {}
 
     var raceLive: Bool { raceID != nil }
     var napLive: Bool { napID != nil }
-    var pepLive: Bool { pepID != nil }
 
     // MARK: race
 
@@ -198,7 +190,7 @@ final class LiveActivities {
         if tuckIn { Bedtime.write(t, to: directory) }
         guard napOn, napID == nil, driver.enabled else { return }
         let wake = Bedtime.wakeDate(after: t, calendar: calendar)
-        let attrs = JelbiesActivityAttributes(kind: .nap, jellyID: 0, jellyName: names.first ?? "Bob", jellyColor: "blue", startedAt: t)
+        let attrs = JelbiesActivityAttributes(kind: .nap, jellyID: 0, jellyName: names.first ?? "Jelbie", jellyColor: "blue", startedAt: t)
         guard let id = try? driver.start(attrs, state: .sleeping(names, wakeAt: wake), staleDate: wake) else { return }
         napID = id
     }
@@ -219,31 +211,11 @@ final class LiveActivities {
     func returnedActive(names: [String]) {
         let tucked = Bedtime.read(from: directory, now: now())
         if !Bedtime.isSleeping(at: now(), tuckedIn: tucked, calendar: calendar) || !napOn { wake(names: names) }
-        if let r = pepRefillAt, r <= now() { pepRefilled() }          // midnight went by while away: the Pep is back
-    }
-
-    // MARK: pep
-
-    /// Retired with training (nothing calls it); the card kind stays so an old one can still be adopted and ended.
-    func pepDepleted(jellyID: Int, name: String, color: String, refillAt: Date? = nil) {
-        guard pepOn, pepID == nil, driver.enabled else { return }
-        let refill = refillAt ?? Self.nextMidnight(after: now(), calendar: calendar)
-        let attrs = JelbiesActivityAttributes(kind: .pep, jellyID: jellyID, jellyName: name, jellyColor: color, startedAt: now())
-        guard let id = try? driver.start(attrs, state: .refilling(until: refill), staleDate: refill) else { return }
-        pepID = id; pepAttrs = attrs; pepRefillAt = refill
-    }
-    func pepRefilled() {
-        guard let id = pepID else { return }
-        driver.end(id: id, state: .refilled, dismissAt: now().addingTimeInterval(Self.linger))
-        pepID = nil; pepAttrs = nil; pepRefillAt = nil
-    }
-    static func nextMidnight(after d: Date, calendar cal: Calendar) -> Date {
-        cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: d)) ?? d.addingTimeInterval(86400)
     }
 
     // MARK: housekeeping
 
-    /// On launch: adopt what is still running and end what is over (a race from a killed run, a nap past 06:00, a Pep past midnight,
+    /// On launch: adopt what is still running and end what is over (a race from a killed run, a nap past 06:00,
     /// anything the settings now say off).
     func cleanUp(names: [String]) {
         let t = now()
@@ -256,12 +228,7 @@ final class LiveActivities {
                 let over = !napOn || (a.state.untilDate.map { $0 <= t } ?? true)
                 if over { driver.end(id: a.id, state: .awake(a.state.sleepers), dismissAt: t); if napID == a.id { napID = nil } }
                 else if napID == nil { napID = a.id }
-            case .pep:
-                let over = !pepOn || (a.state.untilDate.map { $0 <= t } ?? true)
-                if over { driver.end(id: a.id, state: .refilled, dismissAt: t); if pepID == a.id { pepID = nil; pepAttrs = nil; pepRefillAt = nil } }
-                else if pepID == nil { pepID = a.id; pepAttrs = a.attributes; pepRefillAt = a.state.untilDate }
             }
         }
-        if let r = pepRefillAt, r <= t { pepRefilled() }
     }
 }

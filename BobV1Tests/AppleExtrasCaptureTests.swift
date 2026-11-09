@@ -2,7 +2,7 @@
 //  AppleExtrasCaptureTests.swift
 //  Renders the Apple extras with ImageRenderer (@3x) into APPLE_CAPS_OUT (default: the scratchpad apple_caps_v2/ folder), on stand-in
 //  wallpapers / the Island's black: the Lock Screen accessories (circular / rectangular / inline), StandBy small / medium at night, the three Live
-//  Activities (race / nap / pep) as the Lock Screen banner and the Dynamic Island compact + expanded, and the Siri snippet. Asserts every image
+//  Activities (race / nap) as the Lock Screen banner and the Dynamic Island compact + expanded, and the Siri snippet. Asserts every image
 //  renders at the expected size and is not blank.
 //
 
@@ -126,7 +126,6 @@ final class AppleExtrasCaptureTests: XCTestCase {
 
     private var raceAttrs: JelbiesActivityAttributes { JelbiesActivityAttributes(kind: .race, jellyID: 0, jellyName: "Bob", jellyColor: "blue", startedAt: t0) }
     private var napAttrs: JelbiesActivityAttributes { JelbiesActivityAttributes(kind: .nap, jellyID: 0, jellyName: "Bob", jellyColor: "blue", startedAt: t0) }
-    private var pepAttrs: JelbiesActivityAttributes { JelbiesActivityAttributes(kind: .pep, jellyID: 1, jellyName: "Pip", jellyColor: "yellow", startedAt: t0) }
     private var wake: Date { Calendar.current.date(bySettingHour: 6, minute: 0, second: 0, of: Date.now.addingTimeInterval(86400))! }
 
     /// The Lock Screen banner: cream card, 364 pt wide, its natural height.
@@ -149,8 +148,6 @@ final class AppleExtrasCaptureTests: XCTestCase {
         try save(banner(napAttrs, .sleeping(["Bob", "Pip", "Moss"], wakeAt: wake)), "la_nap_lock")
         try save(banner(napAttrs, .sleeping(["Bob"], wakeAt: wake)), "la_nap_one_lock")
         try save(banner(napAttrs, .awake(["Bob", "Pip", "Moss"])), "la_nap_morning_lock")
-        try save(banner(pepAttrs, .refilling(until: Date.now.addingTimeInterval(5 * 3600 + 23 * 60))), "la_pep_lock")
-        try save(banner(pepAttrs, .refilled), "la_pep_refilled_lock")
     }
 
     /// The Dynamic Island compact: leading | camera | trailing on the black pill.
@@ -187,15 +184,12 @@ final class AppleExtrasCaptureTests: XCTestCase {
         let race = JelbiesActivityAttributes.ContentState.race(position: 2, racers: 4, progress: 0.42, lap: 2, laps: 3)
         let won = JelbiesActivityAttributes.ContentState.finished(place: 1, racers: 4, drops: 12, laps: 3)
         let nap = JelbiesActivityAttributes.ContentState.sleeping(["Bob", "Pip", "Moss"], wakeAt: wake)
-        let pep = JelbiesActivityAttributes.ContentState.refilling(until: Date.now.addingTimeInterval(5 * 3600 + 23 * 60))
         try save(compact(raceAttrs, race), "di_compact_race", expect: CGSize(width: 214, height: 65))
         try save(compact(raceAttrs, won), "di_compact_race_won", expect: CGSize(width: 214, height: 65))
         try save(compact(napAttrs, nap), "di_compact_nap", expect: CGSize(width: 214, height: 65))
-        try save(compact(pepAttrs, pep), "di_compact_pep", expect: CGSize(width: 214, height: 65))
         try save(expanded(raceAttrs, race), "di_expanded_race")
         try save(expanded(raceAttrs, won), "di_expanded_race_won")
         try save(expanded(napAttrs, nap), "di_expanded_nap")
-        try save(expanded(pepAttrs, pep), "di_expanded_pep")
         // the minimal face
         let minimal = ZStack { Color(white: 0.12); ZStack { Circle().fill(Color.black); JellyIslandMinimal(attrs: napAttrs, state: nap) }.frame(width: 37, height: 37) }.frame(width: 65, height: 65)
         try save(minimal, "di_minimal_nap", expect: CGSize(width: 65, height: 65))

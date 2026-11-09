@@ -1,7 +1,6 @@
 //
 //  AppleExtrasPanel.swift
-//  The small settings card for the Apple extras (opened from the HUD like the sound panel): the two optional Live Activities (nap card,
-//  Pep countdown) and a Siri & Shortcuts row (the system SiriTipView for "Check on the Jelbies" and the Shortcuts app link).
+//  The small settings card for the Apple extras (opened from the HUD like the sound panel): the optional nap-card Live Activity and a Siri & Shortcuts row (the system SiriTipView for "Check on the Jelbies" and the Shortcuts app link).
 //
 
 import SwiftUI
@@ -21,7 +20,8 @@ struct AppleExtrasPanel: View {
                 Text("Siri & Lock Screen").jFont(17, .bold).foregroundStyle(ink)
                 Spacer()
                 Button(action: close) {
-                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(ink).padding(6)
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(ink)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).accessibilityLabel("Close Siri and Lock Screen settings")
             }

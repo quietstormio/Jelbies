@@ -1,6 +1,6 @@
 //
 //  JelbiesActivityAttributes.swift
-//  The Live Activities (ActivityKit): a race in progress (Jelly Circuit), the night nap, and the training Pep refill countdown.
+//  The Live Activities (ActivityKit): a race in progress (Jelly Circuit) and the night nap.
 //  One attributes type with a `kind`, so the widget extension has ONE ActivityConfiguration; the content state carries whatever the kind shows.
 //  Compiled into the app (which starts / updates / ends) and the widget extension (which draws). Local updates only: no push server.
 //
@@ -9,10 +9,10 @@ import Foundation
 import ActivityKit
 
 nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
-    nonisolated enum Kind: String, Codable, Sendable, CaseIterable { case race, nap, pep }
+    nonisolated enum Kind: String, Codable, Sendable, CaseIterable { case race, nap }
 
     var kind: Kind
-    /// The Jelbie it is about (the racer / the trainee); the nap lists everyone in `ContentState.sleepers`.
+    /// The Jelbie it is about (the racer); the nap lists everyone in `ContentState.sleepers`.
     var jellyID: Int
     var jellyName: String
     /// A PaletteKey raw value ("blue", "yellow", "green", "purple").
@@ -22,12 +22,12 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
     /// The race's course title ("Puddle", "Ripple", "Splash", "Wave"); nil = the plain Jelly Circuit wording.
     var course: String? = nil
 
-    init(kind: Kind, jellyID: Int = 0, jellyName: String = "Bob", jellyColor: String = "blue", startedAt: Date = .now, course: String? = nil) {
+    init(kind: Kind, jellyID: Int = 0, jellyName: String = "Jelbie", jellyColor: String = "blue", startedAt: Date = .now, course: String? = nil) {
         self.kind = kind; self.jellyID = jellyID; self.jellyName = jellyName; self.jellyColor = jellyColor; self.startedAt = startedAt.timeIntervalSince1970; self.course = course
     }
 
     nonisolated struct ContentState: Codable, Hashable, Sendable {
-        nonisolated enum Phase: String, Codable, Sendable { case running, finished, sleeping, awake, refilling, refilled }
+        nonisolated enum Phase: String, Codable, Sendable { case running, finished, sleeping, awake }
         var phase: Phase
         // race
         /// 1-based position and the number of racers.
@@ -43,11 +43,8 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
         // nap
         /// Names of the Jelbies asleep.
         var sleepers: [String] = []
-        /// Seconds since 1970 they are expected up (nap) / Pep is back (pep).
+        /// Seconds since 1970 they are expected up (nap).
         var until: Double? = nil
-        // pep
-        /// Pep left 0...1 (0 while refilling).
-        var pep: Double = 0
 
         var untilDate: Date? { until.map { Date(timeIntervalSince1970: $0) } }
 
@@ -55,7 +52,7 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
         static func race(position: Int, racers: Int, progress: Double, lap: Int, laps: Int) -> ContentState {
             ContentState(phase: .running, position: position, racers: racers, progress: min(max(progress, 0), 1), lap: lap, laps: laps)
         }
-        /// The race result ("🥇 Bob won! +12 Drops").
+        /// The race result ("🥇 Pip won! +12 JellyCoins").
         static func finished(place: Int, racers: Int, drops: Int, laps: Int) -> ContentState {
             ContentState(phase: .finished, position: place, racers: racers, progress: 1, lap: laps, laps: laps, place: place, drops: drops)
         }
@@ -63,8 +60,6 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
             ContentState(phase: .sleeping, sleepers: names, until: wakeAt.timeIntervalSince1970)
         }
         static func awake(_ names: [String]) -> ContentState { ContentState(phase: .awake, sleepers: names) }
-        static func refilling(until: Date) -> ContentState { ContentState(phase: .refilling, until: until.timeIntervalSince1970, pep: 0) }
-        static let refilled = ContentState(phase: .refilled, pep: 1)
 
         /// "1st" / "2nd" / "3rd" / "4th".
         static func ordinal(_ n: Int) -> String {
@@ -80,7 +75,7 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
 // MARK: - Words
 
 extension JelbiesActivityAttributes {
-    /// The race headline: "Bob is racing!" / "🥇 Bob won! +12 Drops" / "🥈 Bob came 2nd! +6 Drops".
+    /// The race headline: "Pip is racing!" / "🥇 Pip won! +12 JellyCoins" / "🥈 Pip came 2nd! +6 JellyCoins".
     nonisolated func headline(_ s: ContentState) -> String {
         switch (kind, s.phase) {
         case (.race, .finished):
@@ -90,11 +85,9 @@ extension JelbiesActivityAttributes {
         case (.race, _): return course.map { "\(jellyName) is racing on the \($0)!" } ?? "\(jellyName) is racing!"
         case (.nap, .awake): return s.sleepers.count > 1 ? "The Jelbies are up!" : "\(s.sleepers.first ?? jellyName) is up!"
         case (.nap, _): return s.sleepers.count > 1 ? "The Jelbies are sleeping" : "\(s.sleepers.first ?? jellyName) is sleeping"
-        case (.pep, .refilled): return "Pep is back!"
-        case (.pep, _): return "\(jellyName) is out of Pep"
         }
     }
-    /// The second line: "2nd of 4 · lap 2 of 3" / "Up at 6:00 AM" / "Refills at midnight".
+    /// The second line: "2nd of 4 · lap 2 of 3" / "Up at 6:00 AM".
     nonisolated func detail(_ s: ContentState, timeStyle: DateFormatter.Style = .short) -> String {
         switch (kind, s.phase) {
         case (.race, .finished): return "\(s.laps) lap\(s.laps == 1 ? "" : "s") on the \(course ?? "Jelly Circuit")"
@@ -104,8 +97,6 @@ extension JelbiesActivityAttributes {
             guard let w = s.untilDate else { return "Shh…" }
             let f = DateFormatter(); f.timeStyle = timeStyle; f.dateStyle = .none
             return "Up at \(f.string(from: w))"
-        case (.pep, .refilled): return "Ready to train"
-        case (.pep, _): return "Pep refills at midnight"
         }
     }
 }

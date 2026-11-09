@@ -1,7 +1,7 @@
 //
 //  JelbiesWidgetBundle.swift
 //  The Jelbies widget: the Jelbies' needs on the Home Screen, the Lock Screen (circular / rectangular / inline) and in StandBy, plus the
-//  Live Activities (race / nap / pep). Read-only apart from the Water button, which only QUEUES a drink (Shared/JellyQuickIntents.swift).
+//  Live Activities (race / nap). Read-only apart from the Water button, which only QUEUES a drink (Shared/JellyQuickIntents.swift).
 //
 
 import WidgetKit

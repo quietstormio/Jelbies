@@ -9,7 +9,6 @@
 //    water[/<id>] open the game and serve water
 //    bed          goodnight: the Jelbies go to bed (nap Live Activity, night room)
 //    race/<id>    open the Track panel with that Jelbie picked (Jelly Circuit)
-//    train/<id>   open training for that Jelbie
 //    pet/<id>     call that Jelbie over for a cuddle (focus mode)
 //
 //  Queued actions (`pending.json` in the App Group): an intent that runs without the app on screen (Siri with the phone locked, a widget button)
@@ -27,13 +26,12 @@ nonisolated enum JellyRoute: Equatable, Hashable, Codable, Sendable {
     case water(Int?)
     case bed
     case race(Int)
-    case train(Int)
     case pet(Int)
 
     /// The Jelbie the route is about (nil: everyone / none).
     var jellyID: Int? {
         switch self {
-        case .jelly(let id), .race(let id), .train(let id), .pet(let id): return id
+        case .jelly(let id), .race(let id), .pet(let id): return id
         case .feed(let id), .water(let id): return id
         case .bed: return nil
         }
@@ -47,7 +45,6 @@ nonisolated enum JellyRoute: Equatable, Hashable, Codable, Sendable {
         case .water(let id): s += "water" + (id.map { "/\($0)" } ?? "")
         case .bed: s += "bed"
         case .race(let id): s += "race/\(id)"
-        case .train(let id): s += "train/\(id)"
         case .pet(let id): s += "pet/\(id)"
         }
         return URL(string: s)!
@@ -69,7 +66,6 @@ nonisolated enum JellyRoute: Equatable, Hashable, Codable, Sendable {
         case "water", "drink": return .water(id)
         case "bed", "goodnight": return parts.isEmpty ? .bed : nil
         case "race": return id.map { .race($0) }
-        case "train": return id.map { .train($0) }
         case "pet": return id.map { .pet($0) }
         default: return nil
         }

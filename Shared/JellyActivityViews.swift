@@ -1,6 +1,6 @@
 //
 //  JellyActivityViews.swift
-//  The Live Activity faces (race / nap / pep): the Lock Screen banner and the Dynamic Island regions, in the game palette (cream, ink, rounded).
+//  The Live Activity faces (race / nap): the Lock Screen banner and the Dynamic Island regions, in the game palette (cream, ink, rounded).
 //  The regions are plain named views so the tests can render them on a black pill with ImageRenderer; JelbiesWidget wires them into
 //  `DynamicIsland { ... }` (which cannot be rendered outside WidgetKit).
 //
@@ -69,17 +69,6 @@ struct JellyActivityLockView: View {
                             }
                         }
                     }
-                case .pep:
-                    if state.phase == .refilling, let d = state.untilDate {
-                        HStack(spacing: 6) {
-                            Image(systemName: "bolt.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(JellyPalette.inkSoft)
-                            Text(timerInterval: Date.now...max(d, .now), countsDown: true)
-                                .font(JellyPalette.font(15)).foregroundStyle(JellyPalette.ink).monospacedDigit()
-                            Text("to refill").font(JellyPalette.font(13, .semibold)).foregroundStyle(JellyPalette.inkSoft)
-                        }
-                    } else {
-                        Text(attrs.detail(state)).font(JellyPalette.font(13, .semibold)).foregroundStyle(JellyPalette.inkSoft)
-                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,7 +101,6 @@ struct JellyActivityLockView: View {
         switch (attrs.kind, state.phase) {
         case (.nap, .sleeping): return .sleeping
         case (.race, .finished): return (state.place ?? 1) <= 3 ? .happy : .okay
-        case (.pep, .refilling): return .okay
         default: return .happy
         }
     }
@@ -130,10 +118,6 @@ struct JellyActivityLockView: View {
             Image(systemName: "moon.stars.fill").font(.system(size: 24, weight: .bold)).foregroundStyle(JellyPalette.bodyDeep("yellow"))
         case (.nap, _):
             Image(systemName: "sun.max.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(JellyPalette.bodyDeep("yellow"))
-        case (.pep, .refilling):
-            Image(systemName: "bolt.slash.fill").font(.system(size: 24, weight: .bold)).foregroundStyle(JellyPalette.inkSoft)
-        case (.pep, _):
-            Image(systemName: "bolt.fill").font(.system(size: 26, weight: .bold)).foregroundStyle(JellyPalette.bodyDeep("yellow"))
         default: EmptyView()
         }
     }
@@ -146,13 +130,13 @@ struct JellyIslandCompactLeading: View {
     let attrs: JelbiesActivityAttributes
     let state: JelbiesActivityAttributes.ContentState
     var body: some View {
-        JellyFaceGlyph(color: attrs.jellyColor, mood: attrs.kind == .nap && state.phase == .sleeping ? .sleeping : (state.phase == .refilling ? .okay : .happy), ink: .white)
+        JellyFaceGlyph(color: attrs.jellyColor, mood: attrs.kind == .nap && state.phase == .sleeping ? .sleeping : JellyFaceMood.happy, ink: .white)
             .frame(width: 22, height: 22)
             .padding(.leading, 2)
     }
 }
 
-/// Compact trailing: the position ("2nd"), Zs, or the Pep countdown.
+/// Compact trailing: the position ("2nd") or Zs.
 struct JellyIslandCompactTrailing: View {
     let attrs: JelbiesActivityAttributes
     let state: JelbiesActivityAttributes.ContentState
@@ -162,11 +146,6 @@ struct JellyIslandCompactTrailing: View {
         case (.race, _): Text(JelbiesActivityAttributes.ContentState.ordinal(state.position)).font(JellyPalette.font(14)).foregroundStyle(JellyPalette.body(attrs.jellyColor))
         case (.nap, .sleeping): Text("zZ").font(JellyPalette.font(14)).foregroundStyle(JellyPalette.moon)
         case (.nap, _): Image(systemName: "sun.max.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(JellyPalette.moon)
-        case (.pep, .refilling):
-            if let d = state.untilDate {
-                Text(timerInterval: Date.now...max(d, .now), countsDown: true, showsHours: true).font(JellyPalette.font(13)).monospacedDigit().foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.6).frame(minWidth: 44)
-            } else { Image(systemName: "bolt.slash.fill").foregroundStyle(.white) }
-        case (.pep, _): Image(systemName: "bolt.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(JellyPalette.body("yellow"))
         }
     }
 }
@@ -180,7 +159,7 @@ struct JellyIslandMinimal: View {
     }
 }
 
-/// Expanded: face on the left, headline + detail in the centre, the track / Zs / countdown along the bottom. White on the Island's black.
+/// Expanded: face on the left, headline + detail in the centre, the track / Zs along the bottom. White on the Island's black.
 struct JellyIslandExpanded: View {
     let attrs: JelbiesActivityAttributes
     let state: JelbiesActivityAttributes.ContentState
@@ -207,10 +186,6 @@ struct JellyIslandExpanded: View {
                     Text(JelbiesActivityAttributes.ContentState.medal(state.place ?? state.position)).font(.system(size: 30))
                 case (.nap, .sleeping):
                     Image(systemName: "moon.stars.fill").font(.system(size: 22, weight: .bold)).foregroundStyle(JellyPalette.moon)
-                case (.pep, .refilling):
-                    if let d = state.untilDate {
-                        Text(timerInterval: Date.now...max(d, .now), countsDown: true).font(JellyPalette.font(20)).monospacedDigit().foregroundStyle(.white).frame(width: 90, alignment: .trailing)
-                    }
                 default: EmptyView()
                 }
             }
