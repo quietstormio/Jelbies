@@ -307,7 +307,14 @@ nonisolated enum CourseTuning {
 @MainActor
 @Observable
 final class CourseProgress {
-    nonisolated struct Record: Codable, Equatable, Sendable { var races = 0; var wins = 0; var topTwo = 0 }
+    nonisolated struct Record: Codable, Equatable, Sendable {
+        var races = 0; var wins = 0; var topTwo = 0
+        init(races: Int = 0, wins: Int = 0, topTwo: Int = 0) { self.races = races; self.wins = wins; self.topTwo = topTwo }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            races = c.value(.races, 0); wins = c.value(.wins, 0); topTwo = c.value(.topTwo, 0)
+        }
+    }
     var records: [CourseTier: Record] = [:]
     /// The course the player picked last (kept if it is open).
     var chosen: CourseTier = .puddle { didSet { save() } }
@@ -321,7 +328,7 @@ final class CourseProgress {
     init(persists: Bool = false, defaults: UserDefaults = .standard) {
         self.persists = persists; self.defaults = defaults
         guard persists else { return }
-        if let d = defaults.data(forKey: Self.key), let r = try? JSONDecoder().decode([String: Record].self, from: d) {
+        if let r = SaveRecovery.decode([String: Record].self, key: Self.key, defaults: defaults) {
             for (k, v) in r { if let t = CourseTier(rawValue: k) { records[t] = v } }
         }
         if let c = defaults.string(forKey: Self.chosenKey), let t = CourseTier(rawValue: c), unlocked(t) { chosen = t }

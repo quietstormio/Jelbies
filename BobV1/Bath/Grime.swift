@@ -98,6 +98,14 @@ final class BlobGrime {
     private struct Saved: Codable {
         struct Bit: Codable { var k: UInt8; var d: [Float]; var s: Float; var z: Float }
         var bits: [Bit]?; var sparkle: Float; var distance: Float; var made: Int?; var at: Double; var dirt: Float?
+        init(bits: [Bit]?, sparkle: Float, distance: Float, made: Int?, at: Double, dirt: Float?) {
+            self.bits = bits; self.sparkle = sparkle; self.distance = distance; self.made = made; self.at = at; self.dirt = dirt
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            bits = c.value(.bits, nil); sparkle = c.value(.sparkle, 0); distance = c.value(.distance, 0); made = c.value(.made, nil)
+            at = c.value(.at, Date().timeIntervalSince1970); dirt = c.value(.dirt, nil)
+        }
     }
     func save() {
         guard persists else { return }
@@ -105,7 +113,7 @@ final class BlobGrime {
         if let data = try? JSONEncoder().encode(s) { defaults.set(data, forKey: key) }
     }
     private func load() {
-        guard let data = defaults.data(forKey: key), let s = try? JSONDecoder().decode(Saved.self, from: data) else { return }
+        guard let s = SaveRecovery.decode(Saved.self, key: key, defaults: defaults) else { return }
         distance = s.distance; dirt = min(1, max(0, s.dirt ?? 0))
         sparkle = s.sparkle
         applyAway(seconds: now().timeIntervalSince1970 - s.at, endingAt: now())

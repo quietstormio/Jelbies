@@ -31,6 +31,15 @@ nonisolated struct GuestVisit: Codable, Equatable, Sendable {
     /// whenever the game clock runs the day (nil = the wall clock decides: an old save, or "follow real clock").
     var endsGame: Double? = nil
     var arrived: Bool { arrivedAt > 0 }
+
+    init(visitor: Int, kind: Kind, invitedAt: Double, arrivedAt: Double = 0, endsAt: Double = 0, endsGame: Double? = nil) {
+        self.visitor = visitor; self.kind = kind; self.invitedAt = invitedAt; self.arrivedAt = arrivedAt; self.endsAt = endsAt; self.endsGame = endsGame
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        visitor = try c.decode(Int.self, forKey: .visitor); kind = try c.decode(Kind.self, forKey: .kind); invitedAt = try c.decode(Double.self, forKey: .invitedAt)
+        arrivedAt = c.value(.arrivedAt, 0); endsAt = c.value(.endsAt, 0); endsGame = c.value(.endsGame, nil)
+    }
 }
 
 nonisolated enum GuestTuning {
@@ -152,7 +161,7 @@ final class GuestBook {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        if let d = defaults.data(forKey: Self.key), let v = try? JSONDecoder().decode(GuestVisit.self, from: d) { visit = v }
+        if let v = SaveRecovery.decode(GuestVisit.self, key: Self.key, defaults: defaults) { visit = v }
     }
 
     var present: Bool { actor != nil }

@@ -39,6 +39,11 @@ nonisolated struct JelbieTrophies: Codable, Equatable, Sendable {
     var earned: [String] = []
     /// Beach volleyball match wins per tier (Volley/VolleyFlow.swift); optional so older saves decode.
     var volleyWins: [String: Int]? = nil
+    init(race: [String: [Int]] = [:], earned: [String] = [], volleyWins: [String: Int]? = nil) { self.race = race; self.earned = earned; self.volleyWins = volleyWins }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        race = c.value(.race, [:]); earned = c.value(.earned, []); volleyWins = c.value(.volleyWins, nil)
+    }
     var volleyTotal: Int { (volleyWins ?? [:]).values.reduce(0, +) }
     func volleyWon(_ t: VolleyTier) -> Int { volleyWins?[t.rawValue] ?? 0 }
 
@@ -84,7 +89,7 @@ final class TrophyBook {
 
     init(persists: Bool = false, defaults: UserDefaults = .standard) {
         self.persists = persists; self.defaults = defaults
-        guard persists, let d = defaults.data(forKey: Self.key), let s = try? JSONDecoder().decode([String: JelbieTrophies].self, from: d) else { return }
+        guard persists, let s = SaveRecovery.decode([String: JelbieTrophies].self, key: Self.key, defaults: defaults) else { return }
         shelves = s
     }
 

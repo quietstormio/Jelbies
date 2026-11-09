@@ -38,6 +38,11 @@ nonisolated struct JellyVariant: Codable, Equatable, Sendable {
         return JellyPalettes.matte(Palette(name: title, flesh: fleshV, fleshDeep: deepV, pale: unused, skin: unused, stripe: unused, seed: PaletteKey.blue.palette.seed,
                                            shadowTint: deepV * 0.5 + fleshV * 0.5, uiFlesh: fleshV * 0.93))
     }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title = try c.decode(String.self, forKey: .title); flesh = try c.decode([Float].self, forKey: .flesh); deep = try c.decode([Float].self, forKey: .deep)
+        rare = c.value(.rare, false)
+    }
     init(title: String, flesh: SIMD3<Float>, deep: SIMD3<Float>, rare: Bool) {
         self.title = title; self.flesh = [flesh.x, flesh.y, flesh.z]; self.deep = [deep.x, deep.y, deep.z]; self.rare = rare
     }
@@ -97,7 +102,7 @@ nonisolated enum JellyVariants {
     nonisolated(unsafe) private static var classicPreviews: Set<Int> = []
 
     static func load(_ d: UserDefaults = .standard) -> [Int: JellyVariant] {
-        guard let data = d.data(forKey: key), let raw = try? JSONDecoder().decode([String: JellyVariant].self, from: data) else { return [:] }
+        guard let raw = SaveRecovery.decode([String: JellyVariant].self, key: key, defaults: d) else { return [:] }
         var out: [Int: JellyVariant] = [:]
         for (k, v) in raw { if let i = Int(k), (0...3).contains(i), v.flesh.count == 3, v.deep.count == 3 { out[i] = v } }
         return out
