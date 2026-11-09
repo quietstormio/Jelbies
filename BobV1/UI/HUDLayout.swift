@@ -5,6 +5,7 @@
 //
 
 import SwiftUI
+import UIKit
 import simd
 
 enum HUDTuning {
@@ -18,6 +19,21 @@ enum HUDTuning {
 }
 
 enum HUDLayout {
+    /// True on iPad. Every iPad-only adaptation is gated on this (or on a measured size), so the iPhone path is untouched.
+    static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
+    /// Landscape layout wanted: a phone on its side (vsc .compact, as before) OR, on iPad only, a window wider than tall (iPad's vsc is .regular in every orientation).
+    static func isLandscape(vsc: UserInterfaceSizeClass?, size: CGSize) -> Bool {
+        vsc == .compact || (isPad && size.width > size.height)
+    }
+
+    /// Width of the app's window in points (not the display: iPad windows resize). On iPhone the window is the screen, so this equals the old UIScreen width.
+    @MainActor static func windowWidth() -> CGFloat {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive } ?? UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        if let w = scene?.keyWindow?.bounds.width, w > 0 { return w }
+        return UIScreen.main.bounds.width
+    }
+
     /// Screen rectangles (fractions of width/height, top-left origin) of the bottom-corner rails in portrait: the left glass capsule (16 pt in, 60 wide: book, bag, Go out, mic) and the right
     /// heart alone (72), measured from a 393 pt wide phone (wider phones have slimmer fractions, so this is a touch conservative), up to
     /// `railHeightFraction` of the screen height from the bottom.
@@ -105,3 +121,11 @@ extension View {
         }
     }
 }
+
+/// Sheet presentation for regular width: on iPad a sheet is a floating form/page card, so detents are ignored; ask for a full page card. A no-op on iPhone.
+struct PadSheetSizing: ViewModifier {
+    func body(content: Content) -> some View {
+        if HUDLayout.isPad { content.presentationSizing(.page) } else { content }
+    }
+}
+extension View { func padSheetSizing() -> some View { modifier(PadSheetSizing()) } }

@@ -77,7 +77,7 @@ struct PlayChrome: View {
                             .padding(.horizontal, 18).padding(.vertical, 10)
                             .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
                             .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-                            .padding(.bottom, size.height * (vsc == .compact ? 0.19 : 0.20))
+                            .padding(.bottom, size.height * (HUDLayout.isLandscape(vsc: vsc, size: size) ? 0.19 : 0.20))
                             .transition(.opacity).allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }
@@ -110,7 +110,7 @@ struct PlayChrome: View {
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.18), radius: 5, y: 2))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, size.height * (vsc == .compact ? 0.25 : 0.23))
+                    .padding(.bottom, size.height * (HUDLayout.isLandscape(vsc: vsc, size: size) ? 0.25 : 0.23))
                     .transition(.scale(scale: 0.7).combined(with: .opacity))
                     .allowsHitTesting(false)
                     .accessibilityLabel("\(rallyShown) in a row")
