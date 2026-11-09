@@ -106,7 +106,7 @@ struct LaunchCurtainArt: View {
     var body: some View {
         GeometryReader { geo in
             let u = min(geo.size.width, geo.size.height) / 440
-            let logoW = min(geo.size.width * 0.8, 360 * max(u, 0.8))
+            let logoW = min(geo.size.width * 0.8, 360 * max(u, 0.8), HUDLayout.isPad ? 560 : .infinity)
             ZStack {
                 TitleBackdrop(still: reduceMotion || A11ySettings.shared.reduceMotion, size: geo.size, landscape: geo.size.width > geo.size.height, palette: theme.palette, extras: false)
                     .id(theme.palette.id).transition(.opacity)
@@ -150,8 +150,8 @@ struct WelcomeCoverArt: View {
             ZStack {
                 TitleBackdrop(still: !running || reduceMotion || A11ySettings.shared.reduceMotion, size: geo.size, landscape: geo.size.width > geo.size.height, palette: theme.palette, extras: false)
                 VStack(spacing: 18 * u) {
-                    Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: min(geo.size.width * 0.8, 360 * max(u, 0.8)))
-                        .shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * min(geo.size.width * 0.8, 360 * max(u, 0.8)) / 364)
+                    Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: min(geo.size.width * 0.8, 360 * max(u, 0.8), HUDLayout.isPad ? 560 : .infinity))
+                        .shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * min(geo.size.width * 0.8, 360 * max(u, 0.8), HUDLayout.isPad ? 560 : .infinity) / 364)
                     ThemedSpinner(palette: theme.palette).padding(.vertical, 8 * u)
                     Text("Waking up your Jelbies").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
                         .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white))

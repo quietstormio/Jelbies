@@ -81,11 +81,15 @@ struct AdoptionCenter: View {
 
     var body: some View {
         GeometryReader { geo in
-            let landscape = geo.size.width > geo.size.height * (min(geo.size.width, geo.size.height) > 600 ? 1.1 : 1)
+            let landscape = HUDLayout.isPad ? HUDLayout.isLandscape(vsc: .regular, size: geo.size) : geo.size.width > geo.size.height
             ZStack {
                 PickerBackdrop(top: look.top, bottom: look.bottom, calm: reduce, rayOriginY: landscape ? 0.45 : 0.38)
                     .animation(.easeInOut(duration: reduce ? 0.2 : 0.55), value: page)
                 if bigText { flowLayout(geo.size, insets: geo.safeAreaInsets) } else if landscape { landscapeLayout(geo.size) } else { portraitLayout(geo.size) }
+                if HUDLayout.isPad, mode == .more, !landscape, !bigText {          // iPad portrait: the coin pill sits in the top-right corner, clear of the title and the status bar
+                    dropsPill.padding(.top, Self.padPillTop).padding(.trailing, 24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
+                if HUDLayout.isPad, !ready, !naming, !bigText { padStagePlaceholder(landscape: landscape, size: geo.size) }
                 if celebrating { Celebration(name: name).transition(.opacity) }
             }
             .contentShape(Rectangle())
@@ -110,6 +114,17 @@ struct AdoptionCenter: View {
     /// Largest canvas scale on an iPad-sized window (shorter side over 600 pt); unlimited on a phone.
     private static func padCap(_ size: CGSize) -> CGFloat { min(size.width, size.height) > 600 ? 1.3 : .greatestFiniteMagnitude }
 
+    /// iPad: the coin pill's distance from the top edge (the window ignores the safe area, and the iPad status bar is ~24 pt).
+    private static let padPillTop: CGFloat = 40
+
+    /// iPad only: a spinner on the pedestal while the 3D Jelbie loads (he fades in once he has walked to the front), so the pedestal never looks empty.
+    @ViewBuilder private func padStagePlaceholder(landscape: Bool, size: CGSize) -> some View {
+        ProgressView().tint(SK.ink.opacity(0.55)).controlSize(.large)
+            .frame(width: 80, height: 80)
+            .position(x: landscape ? size.width / 4 : size.width / 2, y: landscape ? size.height * 0.5 : size.height * 0.36)
+            .allowsHitTesting(false).accessibilityHidden(true)
+    }
+
     private func portraitLayout(_ size: CGSize) -> some View {
         // Naming with the keyboard up: the canvas keeps its width scale, drops the header, shrinks the Jelbie and stacks the name card and
         // the button right under it, so both sit above the keyboard.
@@ -126,7 +141,7 @@ struct AdoptionCenter: View {
         return ZStack(alignment: .topLeading) {
             stageBlock(u).scaleEffect(stageS, anchor: .topLeading).offset(y: compact ? 100 : 130).opacity(showStage ? 1 : 0).allowsHitTesting(showStage)
             headerBlock.frame(width: 440).offset(y: 70).offset(x: slideX * 0.4).opacity(compact ? 0 : slideO).allowsHitTesting(!compact)
-            topBar(u: u)
+            topBar(pill: !HUDLayout.isPad, u: u)
             sheetCard(u, height: cardH).frame(width: 408, height: cardH).offset(x: 16, y: cardY)
             cta.frame(width: 400, height: 68).offset(x: 20, y: ctaY)
         }
@@ -174,7 +189,7 @@ struct AdoptionCenter: View {
             }
             .frame(width: half, height: size.height)
         }
-        .overlay(alignment: .topTrailing) { if mode == .more { dropsPill.padding(.top, 10).padding(.trailing, 16) } }
+        .overlay(alignment: .topTrailing) { if mode == .more { dropsPill.padding(.top, HUDLayout.isPad ? Self.padPillTop : 10).padding(.trailing, HUDLayout.isPad ? 24 : 16) } }
     }
 
     // MARK: large-text layout (Dynamic Type above Large)
@@ -732,7 +747,19 @@ struct AdoptionCenter: View {
     // MARK: the Jelbie's moves
 
     private func stageReady(_ m: MelonModel) {
-        stageModel = m; ready = true
+        stageModel = m
+        if HUDLayout.isPad {          // iPad: show him only once the close-up camera has settled (else a slow first frame shows him as a speck in the wide room view)
+            Task { @MainActor in
+                for _ in 0..<80 where m.care.focus.blend < 0.97 { try? await Task.sleep(nanoseconds: 100_000_000) }
+                if stageModel === m { ready = true; landed(m) }
+            }
+            return
+        }
+        ready = true
+        landed(m)
+    }
+
+    private func landed(_ m: MelonModel) {
         Task { @MainActor in           // landing: a happy hop (or the flutter hop for wings)
             try? await Task.sleep(nanoseconds: 450_000_000)
             perform(pick == 3 || pick == JellyRoster.pearlID ? .idle(.flapHop) : .hop)
