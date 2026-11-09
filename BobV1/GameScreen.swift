@@ -130,6 +130,9 @@ struct GameScreen: View {
 
             // HUD
             GeometryReader { g in
+            let hudSize = CGSize(width: g.size.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom)
+            let ps = HUDLayout.padScale(size: hudSize)          // 1 on iPhone; about 1.1-1.3 on iPad (from the measured short side)
+            let landscapeHUD = HUDLayout.isLandscape(vsc: vsc, size: hudSize)
             ZStack {
                 VStack {
                     HStack {
@@ -159,6 +162,7 @@ struct GameScreen: View {
                                 .padding(.horizontal, 4)
                                 .hudFrost(in: .capsule)
                             }
+                            .scaleEffect(ps, anchor: .topLeading)          // (iPad only; 1 = no change)
                             .transition(.opacity)
                         }
                         Spacer()
@@ -169,10 +173,11 @@ struct GameScreen: View {
                                     RosterButton(care: model.care, open: $rosterOpen)
                                 }
                             }
+                            .scaleEffect(ps, anchor: .topTrailing)
                             .transition(.opacity)
                         }
                     }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudTopH = $0 }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudTopH = $0 * ps }
                     .accessibilityElement(children: .contain)
                     .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
                     CuddleNoticeRow(care: model.care)          // "Teddy is too hungry to cuddle": under "Let them go" while a need blocks the hearts
@@ -206,18 +211,19 @@ struct GameScreen: View {
                                 .frame(width: HUDTuning.railWidth)
                                 .hudFrost(in: .capsule)
                             }
+                            .scaleEffect(ps, anchor: .bottomLeading)          // (iPad only)
                             .accessibilityElement(children: .contain)
                             .accessibilitySortPriority(3)
                             Spacer()
                             // RIGHT: the one main control (group / individual), alone
                             if !focus.isActive {
-                                careSlot
+                                careSlot(padScale: ps, hudWidth: hudSize.width)
                                 .transition(a11yMotionReduced ? .opacity : .scale(scale: 0.5, anchor: .bottomTrailing).combined(with: .opacity))
                                 .accessibilityElement(children: .contain)
                                 .accessibilitySortPriority(1)
                             }
                         }
-                        .padding(.bottom, HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact))
+                        .padding(.bottom, HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: landscapeHUD))
                     }
                 }
                 .animation(CareMenu.spring, value: focus.phase)
@@ -225,8 +231,9 @@ struct GameScreen: View {
                 .padding(.vertical, 8)
             }
             .jHUDCap()
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { HUDLayout.measuredSize = CGSize(width: $0.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, height: $0.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom) }
             .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudInfoH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
-                - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: vsc == .compact)))
+                - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: landscapeHUD)))
             }.photoHidden()
             .opacity(model.care.nightSkip.active || model.care.arranging ? 0 : 1)          // "Sleep until morning": the HUD is away until the morning has been shown; arranging the room hides it too
             .allowsHitTesting(!model.care.nightSkip.active && !model.care.arranging)
@@ -451,7 +458,21 @@ struct GameScreen: View {
         .overlay { GuestArrivalOverlay(care: model.care) }
         .overlay { NightSkipVeil(care: model.care) }
         .overlay { if BubbleWand.shared.active { BubbleLayerRepresentable().ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true) } }          // the bubble wand's bubbles (Toys/)
-        .sheet(isPresented: $bagOpen) {
+        .overlay(alignment: .trailing) {          // iPad: the Bag is a side card (the room stays visible beside it), not a bottom sheet
+            if HUDLayout.isPad, bagOpen {
+                GeometryReader { g in
+                    BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { withAnimation(CareMenu.spring) { bagOpen = false } }
+                        .background(SK.cream)
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .shadow(color: .black.opacity(0.25), radius: 14, y: 4)
+                        .frame(width: min(g.size.width - 32, max(420, min(600, g.size.width * 0.42))), height: g.size.height)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .padding(.top, 56).padding(.bottom, 16).padding(.trailing, 16)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .sheet(isPresented: Binding(get: { bagOpen && !HUDLayout.isPad }, set: { bagOpen = $0 })) {
             BagSheet(care: model.care, who: bagWho ?? model.care.targetJelly, tab: bagTab) { bagOpen = false }
                 .presentationDetents(vsc == .compact ? [.large] : [.large, .medium])
                 .padSheetSizing()
@@ -480,10 +501,11 @@ struct GameScreen: View {
     }
 
     /// Bottom-right care menu: one round button that expands upward into Feed / Drink / Come here.
-    private var careSlot: some View {
+    private func careSlot(padScale: CGFloat, hudWidth: CGFloat) -> some View {
         CareMenu(open: $menuOpen, care: model.care, openPicker: $openPicker,
                  openBag: { tab, who in bagTab = tab; bagWho = who; bagOpen = true },
-                 openTown: { t, who in withAnimation(.easeInOut(duration: 0.25)) { town = t }; model.care.select.sheetOpen = false })
+                 openTown: { t, who in withAnimation(.easeInOut(duration: 0.25)) { town = t }; model.care.select.sheetOpen = false },
+                 windowWidth: hudWidth, padScale: padScale)
         .padding(.trailing, 4)
 
     }
@@ -1021,6 +1043,9 @@ struct CareMenu: View {
     /// Dress / Play / Decor ask the screen for the Bag on a tab; Compete asks for the Track / Show screens.
     var openBag: (BagSheet.BagTab, Int) -> Void = { _, _ in }
     var openTown: (TownScreen, Int) -> Void = { _, _ in }
+    /// The measured width of the HUD (the game screen's geometry; 0 = not measured yet) and the iPad scale (1 on iPhone), passed down so a Split View / Stage Manager resize or a rotation reaches the picker.
+    var windowWidth: CGFloat = 0
+    var padScale: CGFloat = 1
 
     static let spring = Animation.spring(response: 0.42, dampingFraction: 0.72)
     /// Closing is a quick calm fade in place: easeOut so it starts on the first frame, no overshoot (the spring above bounces, which threw the leaving rows sideways).
@@ -1050,15 +1075,15 @@ struct CareMenu: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
     @AccessibilityFocusState private var focusedRow: HUDItem?
     private var calm: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
-    private var tight: Bool { vsc == .compact }          // a phone on its side: only ~400 pt of height, so the rows shrink
-    private var iconSize: CGFloat { tight ? 44 : (HUDLayout.isPad ? 64 : 54) }          // iPad: bigger targets on a big screen
+    private var tight: Bool { vsc == .compact }          // (an iPad window is never that short, so iPad landscape keeps the roomy rows)          // a phone on its side: only ~400 pt of height, so the rows shrink
+    private var iconSize: CGFloat { tight ? 44 : (HUDLayout.isPad ? (54 * padScale).rounded() : 54) }          // iPad: bigger targets on a big screen (54 x the iPad scale, ~64-70)
     private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
         // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Decor, Bedtime come back when it folds).
         let all = HUDMenu.visibleItems(mode, care: care)
         let items = tight && picker != nil ? all.filter { picker == .toy ? $0 == .play : ($0 == .feed || $0 == .drink) } : all
-        CareScroller(natural: $careNatural, reserved: tight ? 58 : 72) {
+        CareScroller(natural: $careNatural, reserved: tight ? 58 : 72 * padScale) {
             VStack(alignment: .trailing, spacing: rowGap) {
                 if open {
                     ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
@@ -1123,16 +1148,17 @@ struct CareMenu: View {
     /// Feed: every food in the bag in shop order (foods, then treats), owned foods only. Drink: water, soda, then the bought drinks.
     private func pickEntries(_ kind: ConsumableKind) -> [PickEntry] {
         let jelly = care.singledOutForFood
+        let artSize: CGFloat = HUDLayout.isPad ? 72 : 50          // iPad: bigger picture cards
         if kind == .toy {
             return PlayToyRegistry.offered(book: care.store).compactMap { t in
                 guard let item = StoreCatalog.item(t.storeID) else { return nil }
-                return PickEntry(id: t.toyID, name: t.title, art: AnyView(ItemArt(item: item, size: 50)), count: nil, ident: "play-toy-\(t.toyID)") { t.activate(care: care) }
+                return PickEntry(id: t.toyID, name: t.title, art: AnyView(ItemArt(item: item, size: artSize)), count: nil, ident: "play-toy-\(t.toyID)") { t.activate(care: care) }
             }
         }
         if kind == .drink {
             return care.drinkChoices.map { c in
                 let item = c.stored ? StoreCatalog.item(forFood: c.id) : nil
-                let art: AnyView = item.map { AnyView(ItemArt(item: $0, size: 50)) } ?? AnyView(ConsumableArt(consumable: c, size: 50))
+                let art: AnyView = item.map { AnyView(ItemArt(item: $0, size: artSize)) } ?? AnyView(ConsumableArt(consumable: c, size: artSize))
                 return PickEntry(id: c.id, name: c.name, art: art, count: item.map { care.store.count($0.id) }, ident: "care-drink-\(c.id)") { care.drink(c.id, jelly: jelly) }
             }
         }
@@ -1140,15 +1166,18 @@ struct CareMenu: View {
             guard it.food != nil, it.kind != .drink else { return nil }
             let n = care.store.count(it.id)
             guard Self.foodIsListed(count: n) else { return nil }
-            return PickEntry(id: it.id, name: it.name, art: AnyView(ItemArt(item: it, size: 50)), count: n, ident: "care-food-\(it.id)") { care.feedSnack(it.id, jelly: jelly) }
+            return PickEntry(id: it.id, name: it.name, art: AnyView(ItemArt(item: it, size: artSize)), count: n, ident: "care-food-\(it.id)") { care.feedSnack(it.id, jelly: jelly) }
         }
     }
 
     /// The Feed / Drink picker: ONE row of picture cards that scrolls sideways when it is wider than the screen.
     private func pickerRow(kind: ConsumableKind) -> some View {
         let entries = pickEntries(kind)
-        let cap = max(160, HUDLayout.windowWidth() - 150)          // what the HUD row leaves beside the left rail (margins 16 x 2, rail 62, gaps, the menu's own padding)
+        let cap = max(160, (windowWidth > 0 ? windowWidth : 390) - 150 * padScale)          // what the HUD row leaves beside the left rail (margins 16 x 2, rail 62, gaps, the menu's own padding)
         let noFood = kind == .food && entries.isEmpty          // an empty bag: say where food comes from
+        let pad = HUDLayout.isPad
+        let chipW: CGFloat = 108          // iPad: chips of one fixed width, so the row's width is known up front (the measured width lagged and clipped the first chip)
+        let padRowW = CGFloat(entries.count) * chipW + CGFloat(max(0, entries.count - 1)) * 10 + 16
         let noToys = kind == .toy && entries.isEmpty          // no toy bought yet: the button goes to the Shop's Toys tab
         return VStack(spacing: 2) {
         if !noFood { ScrollView(.horizontal, showsIndicators: false) {
@@ -1168,7 +1197,8 @@ struct CareMenu: View {
                                 }
                             }
                             .opacity(e.out ? 0.45 : 1)
-                            Text(e.name).jFont(11, .semibold).foregroundStyle(Self.brown).lineLimit(1)
+                            Text(e.name).jFont(pad ? 14 : 11, .semibold).foregroundStyle(Self.brown).lineLimit(1).minimumScaleFactor(pad ? 0.7 : 1)
+                                .frame(maxWidth: pad ? chipW - 12 : nil)
                                 .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Self.cream))
                         }
                     }
@@ -1181,7 +1211,7 @@ struct CareMenu: View {
             .padding(.horizontal, 8).padding(.vertical, 8)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pickerWidth = $0 }
         }
-        .frame(width: min(max(pickerWidth, 1), cap))
+        .frame(width: min(pad ? padRowW : max(pickerWidth, 1), cap))
         .padding(.trailing, 0)
         }
             if noToys {
@@ -1275,12 +1305,12 @@ struct CareMenu: View {
         } label: {
             HStack(spacing: 10) {
                 Text(title)
-                    .jFont(16, .semibold)
+                    .jFont(16 * padScale, .semibold)
                     .foregroundStyle(Self.brown)
                     .padding(.horizontal, 15).padding(.vertical, tight ? 5 : 8)
                     .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.18), radius: 6, y: 2))
                 Image(systemName: HUDMenu.symbol(item))
-                    .font(.system(size: tight ? 17 : 21, weight: .semibold))
+                    .font(.system(size: (tight ? 17 : 21) * padScale, weight: .semibold))
                     .foregroundStyle(Self.brown)
                     .frame(width: iconSize, height: iconSize)
                     .background(Circle().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.22), radius: 7, y: 3))
@@ -1341,18 +1371,18 @@ struct CareMenu: View {
             } label: {
                 ZStack {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 29, weight: .semibold))
+                        .font(.system(size: 29 * padScale, weight: .semibold))
                         .opacity(open ? 0 : 1)
                         .rotationEffect(.degrees(open ? 90 : 0))
                         .scaleEffect(open ? 0.4 : 1)
                     Image(systemName: "xmark")
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 24 * padScale, weight: .bold))
                         .opacity(open ? 1 : 0)
                         .rotationEffect(.degrees(open ? 0 : -90))
                         .scaleEffect(open ? 1 : 0.4)
                 }
                 .foregroundStyle(Color.white)
-                .frame(width: tight ? 58 : 72, height: tight ? 58 : 72)
+                .frame(width: tight ? 58 : 72 * padScale, height: tight ? 58 : 72 * padScale)
                 .contentShape(Circle())
                 .overlay { if let ring { Circle().strokeBorder(ring, lineWidth: 3) } }
             }

@@ -164,7 +164,7 @@ extension GameCamera {
         let maxZ = min(max(zb - roamBodyDepth, walkMaxZ), roamMaxZCap)
         let c = roamFurnitureClearance
         let cam = camera(aspect: aspect)
-        let rails = (aspect < 1 ? HUDLayout.railRects : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
+        let rails = (aspect < 1 ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
         let minZ = RoomLayout.minZ + c
         let wallX = RoomLayout.maxX - (roamLateralExtent + 0.05)          // (the body, wings and shadow stay off the side walls too)
         var zs = [Float](), hw = [Float](), free = [[ClosedRange<Float>]]()
