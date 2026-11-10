@@ -895,7 +895,6 @@ struct GameScreen: View {
         }
     }
 
-    /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop, the rest the town's.
     /// The music scene the screen in front really wants, read from the model (not from change events, which a rebuilt view can miss).
     private var currentMusicScene: MusicScene {
         if model.care.cafe.inScene { return CafeTuning.music }
@@ -903,12 +902,13 @@ struct GameScreen: View {
         if model.care.volley.inScene { return .volley }
         return GameScreen.townMusic(town)
     }
+    /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).
     static func townMusic(_ t: TownScreen?) -> MusicScene {
         switch t {
         case nil: return .none
         case .shop?: return .shop
         case .studio?, .condition?: return .studio
-        default: return .town
+        default: return .none
         }
     }
     /// Capture aid: `-StoreOpen town|shop|item|bag|studio|condition|show` opens that screen at launch; `-StoreSeed 1` fills the bag and the wallet first.
