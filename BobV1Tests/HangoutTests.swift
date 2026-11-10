@@ -31,12 +31,12 @@ final class HangoutTests: XCTestCase {
     }
 
     static let wanted: [(IdleKind, [String], [String])] = [
-        (.humTune, ["humTune.hum", "humTune.beat"], ["hangout:hum"]),
-        (.curiousPeek, ["curiousPeek.lean", "curiousPeek.lean2"], ["hangout:ooh"]),          // (voiced on the seeded roll: the test forces it)
+        (.humTune, ["humTune.hum"], ["hangout:hum"]),
+        (.curiousPeek, ["curiousPeek.lean"], ["hangout:ooh"]),          // (voiced on the seeded roll: the test forces it)
         (.bigStretch, ["bigStretch.top", "bigStretch.settle"], ["hangout:aww"]),
-        (.tailPeek, ["tailPeek.look", "tailPeek.shrug"], []),          // (silent)
-        (.pawCheck, ["pawCheck.raise", "pawCheck.nod"], []),          // (silent)
-        (.bugWatch, ["bugWatch.eep", "bugWatch.hop"], ["hangout:eep", "hangout:giggle"]),
+        (.tailPeek, ["tailPeek.look"], []),          // (silent)
+        (.pawCheck, ["pawCheck.raise"], []),          // (silent)
+        (.bugWatch, ["bugWatch.hop"], ["hangout:eep", "hangout:giggle"]),
     ]
 
     // MARK: each emote
@@ -203,35 +203,54 @@ final class HangoutTests: XCTestCase {
 
     // MARK: haptics (light: the user's "not overwhelming but a nice touch")
 
-    /// Each kind has an idle spec and 2 beat keys (start cue + 2 beats = at most 3 cues), each beat <= 0.14 intensity / 0.20 sharpness, and a run reaches the haptic sink with a few light transients, no buzz.
+    /// Round 3 ("not overwhelming but a nice touch"): no start cue; ONE key-moment cue per emote of ONE pulse (bigStretch: peak + release, 2 pulses), each <= 0.14 intensity / 0.20 sharpness;
+    /// a real run reaches the sink with exactly those transients and nothing else.
     func testHangoutHapticsAreLightAndFire() {
         let caps: (i: Float, s: Float) = (0.14, 0.20)
         let hapticsWas = UserDefaults.standard.object(forKey: HapticSettings.key); UserDefaults.standard.removeObject(forKey: HapticSettings.key)          // (default = on)
         defer { if let v = hapticsWas { UserDefaults.standard.set(v, forKey: HapticSettings.key) } }
         for (kind, beats, _) in Self.wanted {
-            let startPulses = HapticCue.idle(kind).pulses(energy: 1, jitter: 1)
-            XCTAssertFalse(startPulses.isEmpty, "\(kind) has a start cue")
-            for p in startPulses { XCTAssertLessThanOrEqual(p.i, caps.i, "\(kind) start"); XCTAssertLessThanOrEqual(p.s, caps.s + 0.001, "\(kind) start") }
+            XCTAssertFalse(HapticCue.idle(kind).pulses(energy: 1, jitter: 1).isEmpty, "\(kind) still has a spec (the switch is exhaustive) but it is never played")
             let keys = EmoteTreats.haptics.keys.filter { $0.hasPrefix("\(kind).") }
             XCTAssertEqual(Set(keys), Set(beats), "\(kind) beat keys")
-            XCTAssertLessThanOrEqual(keys.count + 1, 3, "\(kind): at most 3 cues")
-            for k in keys { for p in EmoteTreats.haptics[k]! { XCTAssertLessThanOrEqual(p.i, caps.i, k); XCTAssertLessThanOrEqual(p.s, caps.s, k); XCTAssertLessThanOrEqual(p.delay, 0.3, "\(k): no buzz") } }
+            XCTAssertEqual(keys.count, kind == .bigStretch ? 2 : 1, "\(kind): one cue (bigStretch peak + release)")
+            let pulses = keys.reduce(0) { $0 + EmoteTreats.haptics[$1]!.count }
+            XCTAssertLessThanOrEqual(pulses, 2, "\(kind): at most 2 pulses per play"); if kind != .bigStretch { XCTAssertEqual(pulses, 1, "\(kind): one pulse") }
+            for k in keys { for p in EmoteTreats.haptics[k]! { XCTAssertLessThanOrEqual(p.i, caps.i, k); XCTAssertLessThanOrEqual(p.s, caps.s, k) } }
             // a real run through the one HapticDriver
+            HangoutTuning.lastCue = -1e9; HangoutTuning.lastOwner = -1; HangoutTuning.lastKind = nil
             let l = lab(); let r = l.rigs[0]; r.brain.idleForced = true
             let sink = RecordingHapticSink(); let driver = HapticDriver(sinks: [sink]); HapticDriver.room = driver;          // (room is weak: keep the driver alive)
-             HapticDriver.roomBusy = nil; HapticDriver.jitter = { 1 }
+            HapticDriver.roomBusy = nil; HapticDriver.jitter = { 1 }
             var now = 3000.0; HapticDriver.clock = { now }; HapticDriver.after = { _, f in f() }
             var cues: [String] = []; HapticDriver.cueTap = { cues.append($0.name) }; defer { HapticDriver.cueTap = nil }
             XCTAssertTrue(r.brain.idleStart(kind, r.sim))
             var f = 0, began = false
             while f < 60 * 14 { l.tick(); now += 1.0 / 60; f += 1; if r.brain.idleState.kind != nil { began = true }; if began, r.brain.idleState.kind == nil, f > 10 { break } }
-            let n = sink.events.filter { $0.kind == .transient }.count
-            let diag = "enabled \(HapticSettings.enabled) cues \(cues) events \(sink.events.count) room \(HapticDriver.room != nil)"
-            XCTAssertGreaterThanOrEqual(n, 2, "\(kind): fires (\(n) transients; \(diag))"); XCTAssertLessThanOrEqual(n, 9, "\(kind): stays light (\(n) transients)")
-            for e in sink.events where e.kind == .transient { XCTAssertLessThanOrEqual(e.intensity, caps.i + 0.001, "\(kind) transient"); XCTAssertLessThanOrEqual(e.sharpness, caps.s + 0.001, "\(kind) transient") }
+            XCTAssertEqual(cues.sorted(), beats.map { "beat.\($0)" }.sorted(), "\(kind): no start cue, only its key moment(s)")
+            let tr = sink.events.filter { $0.kind == .transient }
+            XCTAssertEqual(tr.count, pulses, "\(kind): exactly its pulses reach the sink (enabled \(HapticSettings.enabled))")
+            for e in tr { XCTAssertLessThanOrEqual(e.intensity, caps.i + 0.001, "\(kind) transient"); XCTAssertLessThanOrEqual(e.sharpness, caps.s + 0.001, "\(kind) transient") }
             withExtendedLifetime(driver) {}
             HapticDriver.room = nil; HapticDriver.clock = { CACurrentMediaTime() }; HapticDriver.after = { d, f in DispatchQueue.main.asyncAfter(deadline: .now() + d) { MainActor.assumeIsolated { f() } } }; HapticDriver.jitter = { 1 + Float.random(in: -0.15...0.15) }
         }
+    }
+
+    /// The room limiter: one hangout cue per 4 s across Jelbies; the two beats of one emote are exempt.
+    func testHangoutCueRoomLimiter() {
+        HangoutTuning.lastCue = -1e9; HangoutTuning.lastOwner = -1; HangoutTuning.lastKind = nil
+        let l = lab(n: 2); let a = l.rigs[0].brain, b = l.rigs[1].brain
+        a.idleForced = true; b.idleForced = true
+        a.steerID = 0; b.steerID = 1
+        var now = 5000.0; HapticDriver.clock = { now }
+        defer { HapticDriver.clock = { CACurrentMediaTime() }; HangoutTuning.lastCue = -1e9; HangoutTuning.lastOwner = -1; HangoutTuning.lastKind = nil }
+        XCTAssertTrue(a.idleStart(.bigStretch, l.rigs[0].sim)); XCTAssertTrue(b.idleStart(.humTune, l.rigs[1].sim))
+        XCTAssertTrue(a.hangoutCueAllowed(), "the first cue")
+        XCTAssertFalse(b.hangoutCueAllowed(), "a second Jelbie in the same moment")
+        now += 3.9; XCTAssertFalse(b.hangoutCueAllowed(), "3.9 s later")
+        XCTAssertTrue(a.hangoutCueAllowed(), "the same emote's own second beat is exempt")
+        now += 3.9; XCTAssertFalse(b.hangoutCueAllowed(), "3.9 s after the last grant")
+        now += 0.2; XCTAssertTrue(b.hangoutCueAllowed(), "4.1 s after the last grant")
     }
 
     // MARK: the soak table (before / after)
@@ -321,7 +340,7 @@ final class HangoutTests: XCTestCase {
         report += String(format: "standing %.3f -> %.3f (%.2fx); standing AND facing the camera (yaw < 0.3 rad) %.3f -> %.3f (%.2fx)\n", before.standing, after.standing, after.standing / max(before.standing, 1e-9), before.standingFacing, after.standingFacing, after.standingFacing / max(before.standingFacing, 1e-9))
         report += "kind | before | after\n" + IdleKind.allCases.map { "idle:\($0)" }.filter { before.idle[$0] != nil || after.idle[$0] != nil }.map { "\($0) | \(before.idle[$0, default: 0]) | \(after.idle[$0, default: 0])" }.joined(separator: "\n") + "\n"
         // haptic events per Jelbie-minute: pulses of the start cue + every keyed beat, once per start (the batch-1 EmoteCue beats are not keyed, so the old-emote figure is a floor)
-        func pulses(_ k: IdleKind) -> Int { HapticCue.idle(k).pulses(energy: 1, jitter: 1).count + EmoteTreats.haptics.filter { $0.key.hasPrefix("\(k).") }.values.reduce(0) { $0 + $1.count } }
+        func pulses(_ k: IdleKind) -> Int { (BlobBrain.hangoutKinds.contains(k) ? 0 : HapticCue.idle(k).pulses(energy: 1, jitter: 1).count) + EmoteTreats.haptics.filter { $0.key.hasPrefix("\(k).") }.values.reduce(0) { $0 + $1.count } }
         let jm = Double(Self.soakSeeds.count * 3 * 3)
         let hangEvents = BlobBrain.hangoutKinds.reduce(0) { $0 + after.idle["idle:\($1)", default: 0] * pulses($1) }
         let oldEmoteKinds = BlobBrain.emoteKinds.union(BlobBrain.emote2Kinds)

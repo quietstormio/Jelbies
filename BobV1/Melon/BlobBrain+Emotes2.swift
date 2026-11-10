@@ -89,19 +89,14 @@ enum EmoteTreats {
         "welcomeWiggle.wiggle": [Pulse(delay: 0, i: 0.26, s: 0.20), Pulse(delay: 0.16, i: 0.20, s: 0.20), Pulse(delay: 0.32, i: 0.14, s: 0.20)],
         "checkIn.hello": [Pulse(delay: 0, i: 0.16, s: 0.18), Pulse(delay: 0.14, i: 0.10, s: 0.14)],          // (a soft two-tap hello: its own pattern, not tapTilt's single tilt tap)
         "hearts.pop": [Pulse(delay: 0, i: 0.10, s: 0.20)],
-        // hangout emotes (BlobBrain+Hangout.swift): light (intensity <= 0.14, sharpness <= 0.20: the gentlest batch-2 beats are 0.12 / 0.08 ... 0.18 / 0.20), at most 3 cues per emote with the start cue, no buzz
-        "humTune.hum": [Pulse(delay: 0, i: 0.12, s: 0.12), Pulse(delay: 0.22, i: 0.09, s: 0.10)],
-        "humTune.beat": [Pulse(delay: 0, i: 0.10, s: 0.16)],
+        // hangout emotes (BlobBrain+Hangout.swift): ONE key-moment cue each, one pulse (bigStretch: peak + release), intensity <= 0.14, sharpness <= 0.20; the start cue is suppressed in roomCue
+        "humTune.hum": [Pulse(delay: 0, i: 0.12, s: 0.12)],
         "curiousPeek.lean": [Pulse(delay: 0, i: 0.12, s: 0.19)],
-        "curiousPeek.lean2": [Pulse(delay: 0, i: 0.08, s: 0.18)],
-        "bigStretch.top": [Pulse(delay: 0, i: 0.11, s: 0.09), Pulse(delay: 0.18, i: 0.08, s: 0.09)],
-        "bigStretch.settle": [Pulse(delay: 0, i: 0.13, s: 0.07), Pulse(delay: 0.20, i: 0.09, s: 0.07)],
+        "bigStretch.top": [Pulse(delay: 0, i: 0.11, s: 0.09)],
+        "bigStretch.settle": [Pulse(delay: 0, i: 0.13, s: 0.07)],
         "tailPeek.look": [Pulse(delay: 0, i: 0.10, s: 0.19)],
-        "tailPeek.shrug": [Pulse(delay: 0, i: 0.12, s: 0.17), Pulse(delay: 0.14, i: 0.08, s: 0.17)],
         "pawCheck.raise": [Pulse(delay: 0, i: 0.09, s: 0.19)],
-        "pawCheck.nod": [Pulse(delay: 0, i: 0.11, s: 0.20), Pulse(delay: 0.18, i: 0.07, s: 0.20)],
-        "bugWatch.eep": [Pulse(delay: 0, i: 0.13, s: 0.20)],
-        "bugWatch.hop": [Pulse(delay: 0, i: 0.14, s: 0.18), Pulse(delay: 0.12, i: 0.09, s: 0.18)],
+        "bugWatch.hop": [Pulse(delay: 0, i: 0.14, s: 0.18)],
     ]
     /// Test seam: every request ("floorNapFlop.flop" ...), before the stage's rate limit.
     nonisolated(unsafe) static var requestTap: ((String) -> Void)?

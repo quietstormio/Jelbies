@@ -117,4 +117,15 @@ final class HapticCueTests: XCTestCase {
         r.brain.roomCue(.idle(.bounce))
         XCTAssertTrue(got.isEmpty)
     }
+
+    /// The six hangout emotes (2026-11-09) have a spec each (the switch is exhaustive) but NO start cue: their one key-moment beat is the cue. Every other move keeps its start cue.
+    func testHangoutKindsHaveNoStartCueAndOthersKeepTheirs() {
+        let r = MotionRig(game: true)
+        var got: [String] = []
+        HapticDriver.cueTap = { got.append($0.name) }
+        for k in BlobBrain.hangoutKinds { XCTAssertFalse(HapticCue.idle(k).pulses(energy: 1, jitter: 1).isEmpty, "\(k) has a spec"); now += 5; r.brain.roomCue(.idle(k)) }
+        XCTAssertTrue(got.isEmpty, "no start cue for the hangout kinds: \(got)")
+        now += 5; r.brain.roomCue(.idle(.hiccup)); now += 5; r.brain.roomCue(.idle(.bounce)); now += 5; r.brain.roomCue(.beat("stargazing.twinkle"))
+        XCTAssertEqual(got, ["idle.hiccup", "idle.bounce", "beat.stargazing.twinkle"], "every other cue is untouched")
+    }
 }

@@ -266,6 +266,7 @@ extension BlobBrain {
     /// A move's haptic (not while this Jelbie races or plays volleyball: they give their own; the global guards are in `HapticDriver.cue`).
     func roomCue(_ c: HapticCue, energy: Float = 1) {
         guard !race.active, !volley.active else { return }
+        if case .idle(let k) = c, Self.hangoutKinds.contains(k) { return }          // (the hangout emotes have no start cue: their ONE key-moment beat is `hangoutCueAllowed` + EmoteTreats.haptics)
         HapticDriver.room?.cue(c, energy: energy)
     }
     func emoteHaptic(_ p: EmoteCue, energy: Float = 1) { roomCue(.emote(p), energy: energy) }

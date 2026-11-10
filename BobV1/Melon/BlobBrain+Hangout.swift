@@ -27,6 +27,11 @@ enum HangoutTuning {
     nonisolated(unsafe) static var voiceChance: Float = 0.35
     /// No hangout emote from this `idleNight` on; below it the gap grows up to 4x.
     static let nightStop: Float = 0.6
+    /// Room-wide haptic limiter: at most one hangout cue per this many seconds across all Jelbies.
+    static let cueGap: Double = 4
+    nonisolated(unsafe) static var lastCue: Double = -1e9
+    nonisolated(unsafe) static var lastOwner = -1
+    nonisolated(unsafe) static var lastKind: IdleKind?
 }
 
 /// Per-brain bookkeeping of the hangout slot. Its own random stream: the brain's `rand()` sequence belongs to the seeded suites.
@@ -111,7 +116,17 @@ extension BlobBrain {
     }
 
     /// One soft haptic beat ("<move>.<beat>" in `EmoteTreats.haptics`).
-    private func hHaptic(_ key: String, energy: Float = 1) { treatHaptic(key, energy: energy) }
+    /// The room limiter: one hangout cue per `HangoutTuning.cueGap` s across all Jelbies (the two beats of ONE emote, bigStretch's peak and release, are exempt). Uses the haptic clock.
+    func hangoutCueAllowed() -> Bool {
+        let now = HapticDriver.clock()
+        if now - HangoutTuning.lastCue >= HangoutTuning.cueGap || (HangoutTuning.lastOwner == steerID && HangoutTuning.lastKind == idleState.kind) {
+            HangoutTuning.lastCue = now; HangoutTuning.lastOwner = steerID; HangoutTuning.lastKind = idleState.kind
+            return true
+        }
+        return false
+    }
+    /// The ONE key-moment cue of an emote (`EmoteTreats.haptics`, one pulse; bigStretch two cues of one pulse).
+    private func hHaptic(_ key: String, energy: Float = 1) { if hangoutCueAllowed() { treatHaptic(key, energy: energy) } }
 
     private func hVoice(_ v: JellyVoice) {
         guard !voiceMuted, hang.voiceOn else { return }
@@ -160,7 +175,6 @@ extension BlobBrain {
         }
         if hOnce(0, t, at: 0.05) { face(.joyArc, hold: T - 0.1) }
         if hOnce(1, t, at: 0.3) { hVoice(.hum); hHaptic("humTune.hum") }
-        if hOnce(2, t, at: 2.5) { hHaptic("humTune.beat") }
         if t > T && !feet.active { hDone(skinner) }
     }
 
@@ -175,7 +189,6 @@ extension BlobBrain {
         squash *= 1 + 0.02 * (b1 + b2) * a
         if hOnce(0, t, at: 0.4) { face(.curious, hold: 3.0) }
         if hOnce(1, t, at: 0.6) { hVoice(.ooh); hHaptic("curiousPeek.lean") }
-        if hOnce(2, t, at: 2.1) { hHaptic("curiousPeek.lean2") }
         if t > T && !feet.active { hDone(skinner) }
     }
 
@@ -210,7 +223,8 @@ extension BlobBrain {
         let stopped = idleState.hold > 0
         let lead = stopped ? 1 - smooth01((t - idleState.hold) / 0.4) : smooth01(t / 0.4)
         twist = d * 0.35 * lead * a
-        if hOnce(0, t, at: 0.05) { face(.curious, hold: 3.4); hHaptic("tailPeek.look") }          // (the look over the shoulder)
+        if hOnce(0, t, at: 0.05) { face(.curious, hold: 3.4) }
+        if hOnce(3, t, at: 0.6) { hHaptic("tailPeek.look") }          // (the look over the shoulder, as he starts to turn)
         if !stopped {
             // the half circle: short turn-in-place legs until it is done (or the time is up)
             if t > 0.5, !feet.active {
@@ -229,7 +243,7 @@ extension BlobBrain {
         let b = hBump(s, 0.7, 1.0) + hBump(s, 1.05, 1.35)
         squash *= 1 + 0.04 * b * a
         pitch += -0.03 * b * a
-        if hOnce(2, t, at: idleState.hold + 0.7) { hHaptic("tailPeek.shrug"); jellyKick = max(jellyKick, 0.6) }          // (the shrug-bounce)
+        if hOnce(2, t, at: idleState.hold + 0.7) { jellyKick = max(jellyKick, 0.6) }          // (the shrug-bounce)
         if s > 1.8 && !feet.active { hDone(skinner) }
     }
 
@@ -254,7 +268,7 @@ extension BlobBrain {
         pitch += 0.07 * (hBump(t, 3.7, 4.0) + hBump(t, 4.05, 4.35)) * a
         if hOnce(0, t, at: 0.3) { face(.focused, hold: 3.3) }
         if hOnce(1, t, at: 0.5) { hHaptic("pawCheck.raise") }
-        if hOnce(2, t, at: 3.7) { face(.happy, hold: 1.2); blushBump(hold: 2.0, peak: 0.5); hHaptic("pawCheck.nod") }
+        if hOnce(2, t, at: 3.7) { face(.happy, hold: 1.2); blushBump(hold: 2.0, peak: 0.5) }
         if t > T && !feet.active { hDone(skinner) }
     }
 
@@ -268,7 +282,7 @@ extension BlobBrain {
         pitch += -0.14 * up * a
         roll += 0.03 * sinf(2 * .pi * 0.6 * t) * a
         if hOnce(0, t, at: 0.15) { face(.focused, hold: 3.4) }
-        if hOnce(1, t, at: 3.2) { face(.surprised, hold: 0.8); hVoice(.eep); hHaptic("bugWatch.eep"); jellyKick = max(jellyKick, 0.7) }
+        if hOnce(1, t, at: 3.2) { face(.surprised, hold: 0.8); hVoice(.eep); jellyKick = max(jellyKick, 0.7) }
         if t >= 3.75, !feet.active {
             // the grab: the joy hop's machinery takes the body (feet reset, in-place hop); the arm and the giggle are in `bugHopTick`
             idleState.target = position
