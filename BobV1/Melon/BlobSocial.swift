@@ -190,6 +190,8 @@ final class SocialSession {
     var leaderWait: Float = 0
     var closeOK: Bool { kind == .boop || kind == .squabble || kind == .bump || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .hum || kind == .cheekSquish || kind == .noseBoop || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .congaLine || kind == .ringDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo || kind == .spinHug }
     var round = 0, roles = 0, fastMoves = 0
+    /// Circle dance: everybody hops on the same beat (the initiator raises it once ALL are ready; a hop that starts earlier than its neighbour's lands in the place the neighbour has not left yet).
+    var syncGo = false
     /// Group treats: the leader's planned path (waypoints), whether the crew are choreographed (they do not steer round each other), the time the line started moving.
     var path: [SIMD2<Float>] = [], choreo = false, moveT: Float = 0
     /// Ball pass: the decor piece, the passes made / wanted.

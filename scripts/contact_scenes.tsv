@@ -21,10 +21,10 @@ hum_moss_lavender	moss,lavender	hum	perp,top,low	-	90
 cheekSquish_teddy_bob	teddy,bob	cheekSquish	perp,top,low	-	90
 tag_lavender_pip	lavender,pip	tag	perp,top,low	-	90
 bellyBounce_pip_pearl	pip,pearl	bellyBounce	perp,top,low	-	90
-ringAround_teddy_pearl	teddy,pearl	ringAround	perp,top,low	-	90
+ringAround_teddy_pearl	teddy,pearl	ringAround	perp,top,low	-ContactDemoDiag 1	90
 whisperGiggle_teddy_moss	teddy,moss	whisperGiggle	perp,top,low	-	90
 spinHug_pearl_pip	pearl,pip	spinHug	perp,top,low	-	90
-circleDance_pip_lavender_teddy	pip,lavender,teddy	circleDance	perp,top,low	-	90
+circleDance_pip_lavender_teddy	pip,lavender,teddy	circleDance	perp,top,low	-ContactDemoDiag 1	90
 leapfrog_moss_teddy	moss,teddy	leapfrog	perp,top,low	-	90
 stormHuddle_pip_pearl_teddy	pip,pearl,teddy	-	perp,top,low	-Storm 2 -StormDelay 2	90
 guestHug_bob_teddy_pearl	bob,teddy,pearl	-	perp,top,low	-InviteGuest 1	34

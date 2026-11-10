@@ -458,7 +458,8 @@ extension BlobBrain {
         case 2:    // everyone hops to the next place round the ring, facing the middle (the ring turns)
             stepKey(1800 + s.round)
             if !socialBook.hopStarted { if fxFree { faceCentre(s) } }
-            if !socialBook.hopStarted, fxFree, t > (s.round == 0 ? 0.3 : 0.1), turnedTo(yawTo(s.home0), tol: 0.2) {
+            if isA, !s.syncGo, !s.members.contains(where: { $0.socialBook.hopStarted }), t > (s.round == 0 ? 0.3 : 0.1), everyone(mem, { $0.fxFree && $0.scriptIsNone && $0.turnedTo($0.yawTo(s.home0), tol: 0.2) }) { s.syncGo = true }
+            if !socialBook.hopStarted, fxFree, s.syncGo {
                 socialBook.hopStarted = true
                 let dir: Float = s.round < GroupTuning.steps / 2 ? 1 : -1          // (round one way, then back the other)
                 let k = Float(s.round < GroupTuning.steps / 2 ? s.round + 1 : GroupTuning.steps - s.round - 1)
@@ -467,13 +468,14 @@ extension BlobBrain {
                 // (the place I hop to is my neighbour's place a moment ago, he leaves it in the same beat: only the PLAN of this one hop ignores the bodies, the wall is back at once)
                 socialBook.passThrough = true
                 startHopTo(sim, s.home0 + SIMD2(sinf(ang), cosf(ang)) * s.ringR, facing: ang + .pi)          // (lands facing the middle: no turn on the spot at contact)
+                if UserDefaults.standard.integer(forKey: "ContactDemoDiag") != 0 { ContactDemo.note(" circleHop id%d round%d from (%.2f,%.2f) r_now=%.2f -> ringR %.2f centre (%.2f,%.2f)", steerID, s.round, position.x, position.y, simd_distance(position, s.home0), s.ringR, s.home0.x, s.home0.y) }
                 socialBook.passThrough = false
                 if myIndex == 0 { jellyKick = max(jellyKick, 0.6); if s.round % 3 == 0 { AudioHub.shared.chirp(jelly: steerID, .happy) } }
                 if myIndex == 1, s.round % 3 == 1 { AudioHub.shared.chirp(jelly: steerID, .babble) }
             }
             if isA {
                 if everyone(mem, { $0.socialBook.hopStarted && $0.fxFree }), t > 0.45 {
-                    s.round += 1
+                    s.round += 1; s.syncGo = false
                     if s.round >= GroupTuning.steps { s.setPhase(3) } else { s.setPhase(2) }
                 } else if t > 4 { s.finish(.aborted) }
             }

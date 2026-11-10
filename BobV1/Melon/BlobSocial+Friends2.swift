@@ -111,7 +111,7 @@ extension BlobBrain {
 
     func driveMore(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody, _ dt: Float) {
         // (the peer push stays off only for the length of a leapfrog hop)
-        if s.kind != .leapfrog, s.kind != .ringAround, socialBook.passThrough { socialBook.passThrough = false }
+        if s.kind != .leapfrog, socialBook.passThrough { socialBook.passThrough = false }
         switch s.kind {
         case .littleRace: driveRace(s, o, isA, sim)
         case .tag: driveTag(s, o, isA, sim)
@@ -546,7 +546,8 @@ extension BlobBrain {
                 //  compass touch: that one put the pair 1.6-1.9 m apart with 40-110 cm of floor between them for the whole dance. + a 1.2 cm margin: the chord of a hop pulls the pair 1 - cos(hop/2) closer in the air.)
                 let u = (position - o.position) / max(simd_distance(position, o.position), 1e-3)
                 let face = touchRadiusFacing(o, along: u, .each) ?? ringTouch(o)
-                r = max(0.3, min(1.0, (face + Friends2Tuning.ringFaceMargin) / 2))
+                r = max(0.3, min(1.0, (face / cosf(Friends2Tuning.ringHop / 2) + Friends2Tuning.ringFaceMargin) / 2))          // (the hop moves each body along a chord: mid-flight the pair is 1 - cos(hop/2) closer than on the ring; the radius is sized so that closest moment just keeps the skins apart)
+                if UserDefaults.standard.integer(forKey: "ContactDemoDiag") != 0 { ContactDemo.note(" ringRadius r=%.3f face=%@ ringTouch=%.3f brainDist=%.3f", r, touchRadiusFacing(o, along: u, .each).map { String(format: "%.3f", $0) } ?? "nil", ringTouch(o), dBrain) }
                 if PeakTuning.log { print(String(format: "[peak] ring radius %.3f (brain dist %.3f)", r, dBrain)) }
                 s.goal = SIMD2(r, atan2f(position.x - s.home0.x, position.y - s.home0.y))          // (radius, A's angle)
             }
@@ -558,21 +559,25 @@ extension BlobBrain {
                 if simd_distance(position, spot) > 0.06, simd_distance(closeFixed(spot), spot) < 0.08 { socialWalk(to: spot, sim) }
             }
             if !scriptIsNone { return }          // (still walking out)
-            socialBook.passThrough = true
             stepKey(900 + s.round)
             if !socialBook.hopStarted { if fxFree { faceEach(o) } }
-            if !socialBook.hopStarted, fxFree, t > (s.round == 0 ? 0.35 : 0.12), turnedTo(yawTo(o.position), tol: 0.2) {
+            // (round 4: both hop on the SAME beat - the initiator raises syncGo once both stand ready. A hop that started before the partner's moved one body 22.5 degrees round the ring while the other
+            //  still stood, pulling the pair 2 - 4 cm into each other for the whole flight; and the wall is ON now, only the plan of the hop ignores the partner, whose spot is the one he is leaving)
+            if isA, !s.syncGo, !socialBook.hopStarted, !o.socialBook.hopStarted, t > (s.round == 0 ? 0.35 : 0.12), fxFree, o.fxFree, scriptIsNone, o.scriptIsNone, turnedTo(yawTo(o.position), tol: 0.2), o.turnedTo(o.yawTo(position), tol: 0.2) { s.syncGo = true }
+            if !socialBook.hopStarted, fxFree, s.syncGo {
                 socialBook.hopStarted = true
                 let ang = s.goal.y + (Float(s.round) + 1) * Friends2Tuning.ringHop + (isA ? 0 : .pi)
                 letGo()
+                socialBook.passThrough = true
                 startHopTo(sim, s.home0 + SIMD2(sinf(ang), cosf(ang)) * s.goal.x, facing: ang + .pi)          // (lands facing the partner across the ring: no turn in place at contact)
+                socialBook.passThrough = false
                 if isA, s.round % 4 == 0 { AudioHub.shared.chirp(jelly: steerID, .happy) }
                 if !isA, s.round % 4 == 2 { AudioHub.shared.chirp(jelly: steerID, .babble) }
                 if isA { jellyKick = max(jellyKick, 0.6) }
             }
             if isA {
                 if socialBook.hopStarted, o.socialBook.hopStarted, t > 0.5, fxFree, o.fxFree {
-                    s.round += 1
+                    s.round += 1; s.syncGo = false
                     s.setPhase(s.round >= steps ? 3 : 2)
                 } else if t > 4 { s.finish(.aborted) }
             }
