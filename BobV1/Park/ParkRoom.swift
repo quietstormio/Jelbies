@@ -1,8 +1,8 @@
 //
 //  ParkRoom.swift
 //  The park as a visiting room (like the café's): a RoomDef applied with `RoomLayout.apply` under the white fade WITHOUT `store.moveIn`, so nothing is saved.
-//  It is not in `RoomCatalog.all`. The scenery is built here in code (ParkScenery: one even lawn, a gentle path, pond, bench, round trees, flowering bushes and a sky pane that follows the
-//  time of day); the colliders below are the bench, the flower bed and the pond at the back. Also the park's camera: higher and further back than the room's, so
+//  It is not in `RoomCatalog.all`. The scenery is built here in code (ParkScenery: a tessellated lawn, a gravel path, pond, bench, trees, shrubs and a sky pane that follows the
+//  time of day; redesigned 2026-11-09 as a stylised-natural town park: see ParkNature.swift); the colliders below are the bench, the flower bed and the pond at the back. Also the park's camera: higher and further back than the room's, so
 //  five Jelbies fit in portrait and landscape.
 //
 
@@ -58,77 +58,73 @@ enum ParkScenery {
         var r = ParkRandom(0x7A11)
         typealias S = ParkShapes
 
-        // ---- sky: a glow pane behind everything (its colours become the dawn / dusk / night sky through the room's daylight) ----
+        // ---- sky: a glow pane behind everything (its colours become the dawn / dusk / night sky through the room's daylight): clear blue, paler at the horizon ----
         b.material = .glow
-        let lo = S.srgb(0.78, 0.89, 0.97), hi = S.srgb(0.55, 0.77, 0.95)
-        b.flatQuad(SIMD3(-70, 0, -9.6), SIMD3(70, 0, -9.6), SIMD3(70, 22, -9.6), SIMD3(-70, 22, -9.6), normal: SIMD3(0, 0, 1), colors: [lo, lo, hi, hi])
-
-        // ---- the ground: ONE even lawn colour ----
+        // (the glow pane is drawn at albedo x 1.25 ... 1.875 by height up to y 14, so the baked colours are the wanted sky divided by that)
+        let lo = S.srgb(0.74, 0.87, 0.96) / 1.25, hi = S.srgb(0.30, 0.56, 0.90) / 1.875
+        b.flatQuad(SIMD3(-70, 0, -9.6), SIMD3(70, 0, -9.6), SIMD3(70, 14, -9.6), SIMD3(-70, 14, -9.6), normal: SIMD3(0, 0, 1), colors: [lo, lo, hi, hi])
+        b.flatQuad(SIMD3(-70, 14, -9.6), SIMD3(70, 14, -9.6), SIMD3(70, 30, -9.6), SIMD3(-70, 30, -9.6), normal: SIMD3(0, 0, 1), colors: [hi, hi, hi, hi])
         b.material = .plain
-        let lawn = S.srgb(0.60, 0.80, 0.50)
-        b.flatQuad(SIMD3(-70, 0, -9.5), SIMD3(70, 0, -9.5), SIMD3(70, 0, 45), SIMD3(-70, 0, 45), normal: SIMD3(0, 1, 0), colors: [lawn, lawn, lawn, lawn])
-        // a gentle curved path from the front to the bench, one soft sand colour
-        let pathCol = S.srgb(0.95, 0.89, 0.74)
-        func px(_ zz: Float) -> Float { 0.7 * sinf(zz * 0.34) }
-        var z: Float = 13
-        while z > -3.7 {
-            let z2 = z - 0.5, w: Float = 0.62
-            b.flatQuad(SIMD3(px(z) - w, 0.012, z), SIMD3(px(z) + w, 0.012, z), SIMD3(px(z2) + w, 0.012, z2), SIMD3(px(z2) - w, 0.012, z2), normal: SIMD3(0, 1, 0), colors: [pathCol, pathCol, pathCol, pathCol])
-            z = z2
-        }
 
-        // ---- a calm back: two soft hills and a tree line of smooth round canopies ----
-        for (x, rx, ry) in [(-14 as Float, 14 as Float, 2.8 as Float), (14, 15, 3.2)] {
-            blob(b, SIMD3(x, -0.5, -8.8), rx: rx, ry: ry, rz: 2.2, color: S.srgb(0.52, 0.74, 0.46), segments: 28, rings: 10)
-        }
-        let leaf = S.srgb(0.36, 0.64, 0.36), leaf2 = S.srgb(0.44, 0.70, 0.40), far = S.srgb(0.42, 0.66, 0.46), pine = S.srgb(0.26, 0.52, 0.34)
-        // the forest edge: a far row (hazier, taller, with conifers) behind a nearer row of rounded trees, all on jittered spacing
-        var tx: Float = -16
+        // ---- distance: three overlapping ridges fading with haze, a few cumulus ----
+        hills(b)
+        clouds(b)
+
+        // ---- the forest edge and the planted trees: natural greens, jittered spacing, gaps where the sky shows ----
+        var shadows: [ParkShadow] = []
+        let leaf = S.srgb(0.24, 0.45, 0.17), leaf2 = S.srgb(0.26, 0.47, 0.18), hazy = S.srgb(0.22, 0.42, 0.20), pine = S.srgb(0.24, 0.45, 0.17)
+        // far row: hazier, taller, with spruces; sizes and gaps vary
+        var tx: Float = -17
         var k = 0
-        while tx <= 16 {
-            roundTree(b, x: tx + (r.unit() - 0.5) * 1.4, z: -8.7 - 0.3 * r.unit(), trunk: 0.8, radius: 1.5 + 0.7 * r.unit(), canopy: k % 3 == 1 ? pine : far, shape: k % 3 == 1 ? .conifer : .round, rng: &r)
-            tx += 3.1 + 0.6 * r.unit(); k += 1
+        while tx <= 17 {
+            let conifer = r.unit() < 0.34
+            let rad = 1.2 + 0.9 * r.unit()
+            let z = -9.0 - 0.5 * r.unit()
+            if r.unit() > 0.12 { roundTree(b, x: tx, z: z, trunk: 0.8, radius: rad, canopy: conifer ? pine : hazy, shape: conifer ? .conifer : .round, species: k % 3, far: true, rng: &r) }
+            tx += 2.9 + 2.2 * r.unit(); k += 1
         }
+        // nearer back row: oak / beech / birch mixed, leaving breaks
         tx = -15; k = 0
         while tx <= 15 {
-            roundTree(b, x: tx + (r.unit() - 0.5) * 1.2, z: -7.6 + (r.unit() - 0.5) * 0.7, trunk: 0.6 + 0.4 * r.unit(), radius: 1.35 + 0.65 * r.unit(), canopy: k % 2 == 0 ? leaf : leaf2, shape: k % 5 == 3 ? .conifer : .round, rng: &r)
-            tx += 3.3 + 0.9 * r.unit(); k += 1
-        }
-        // two hero trees at the edges (one soft blush)
-        roundTree(b, x: -6.4, z: -3.2, trunk: 1.0, radius: 1.5, canopy: leaf2, shape: .round, rng: &r)
-        roundTree(b, x: 6.8, z: -1.2, trunk: 1.0, radius: 1.4, canopy: S.srgb(0.97, 0.74, 0.80), shape: .round, rng: &r)
-
-        // ---- flowering bushes at the edges, a couple of low blossom patches ----
-        let blush = S.srgb(0.98, 0.62, 0.74), butter = S.srgb(0.99, 0.90, 0.55), cream = S.srgb(0.99, 0.96, 0.88), lilac = S.srgb(0.80, 0.70, 0.95)
-        floweringBush(b, x: -3.5, z: -4.3, scale: 1.25, bloom: blush, rng: &r)
-        floweringBush(b, x: -5.6, z: 1.6, scale: 1.0, bloom: butter, rng: &r)
-        floweringBush(b, x: 5.6, z: 3.4, scale: 1.0, bloom: lilac, rng: &r)
-        floweringBush(b, x: -5.2, z: 6.4, scale: 0.9, bloom: cream, rng: &r)
-        flowerPatch(b, x: 4.8, z: 1.9, scale: 1.0, bloom: cream, rng: &r)
-        flowerPatch(b, x: -3.6, z: 3.8, scale: 1.0, bloom: blush, rng: &r)
-
-        // ---- the pond (right, at the back): a cream stone rim, soft water, a few lily pads ----
-        let pond = pondCentre
-        disc(b, cx: pond.x, cz: pond.y, radius: 1.42, y: 0.010, color: S.srgb(0.96, 0.92, 0.82))
-        disc(b, cx: pond.x, cz: pond.y, radius: 1.24, y: 0.03, color: S.srgb(0.52, 0.80, 0.90))
-        disc(b, cx: pond.x + 0.3, cz: pond.y + 0.2, radius: 0.55, y: 0.034, color: S.srgb(0.60, 0.85, 0.93))
-        lilyPads(b, centre: pond, rng: &r)
-
-        // ---- the bench (back centre): chunky, rounded, honey wood on cream legs ----
-        let wood = S.srgb(0.94, 0.76, 0.44), leg = S.srgb(0.97, 0.93, 0.84)
-        b.roundedBox(centre: SIMD3(0, 0.50, -4.48), half: SIMD3(1.28, 0.07, 0.30), radius: 0.06, segments: 3, aoFloor: false, color: wood)
-        b.roundedBox(centre: SIMD3(0, 0.88, -4.80), half: SIMD3(1.28, 0.20, 0.06), radius: 0.06, segments: 3, aoFloor: false, color: wood)
-        for sx: Float in [-1.08, 1.08] {
-            b.roundedBox(centre: SIMD3(sx, 0.24, -4.50), half: SIMD3(0.10, 0.24, 0.26), radius: 0.08, segments: 3, aoFloor: false, color: leg)
-            b.roundedBox(centre: SIMD3(sx, 0.62, -4.78), half: SIMD3(0.07, 0.40, 0.05), radius: 0.04, segments: 3, aoFloor: false, color: leg)
-        }
-
-        // ---- three soft clouds ----
-        for (x, y, s) in [(-9 as Float, 11 as Float, 1.0 as Float), (8, 10, 1.2), (0, 13, 0.8)] {
-            for k in 0..<3 {
-                blob(b, SIMD3(x + Float(k - 1) * 1.6 * s, y + (k == 1 ? 0.5 : 0), -9.2), rx: 1.8 * s, ry: 0.7 * s, rz: 0.5, color: S.srgb(0.99, 0.99, 1.0), segments: 14, rings: 6)
+            let conifer = r.unit() < 0.2
+            let rad = 0.8 + 0.5 * r.unit()
+            let x = tx + (r.unit() - 0.5) * 0.8, z = -7.5 + (r.unit() - 0.5) * 1.0
+            if r.unit() > 0.18 {
+                roundTree(b, x: x, z: z, trunk: 0.7, radius: rad, canopy: r.unit() < 0.5 ? leaf : leaf2, shape: conifer ? .conifer : .round, species: (k + Int(r.unit() * 2)) % 3, far: abs(x) > 3.2 || conifer, rng: &r)
+                shadows.append(ParkShadow(x: x, z: z, r: 1.7 * rad, h: 3.4 * rad))
             }
+            tx += 3.6 + 2.6 * r.unit(); k += 1
         }
+        // two hero trees at the edges: a broad oak left, a beech right (full detail, standing on the lawn)
+        roundTree(b, x: -6.4, z: -3.2, trunk: 1.0, radius: 1.0, canopy: leaf2, shape: .round, species: 0, far: false, rng: &r)
+        shadows.append(ParkShadow(x: -6.4, z: -3.2, r: 2.4, h: 2.8))
+        roundTree(b, x: 6.9, z: -1.4, trunk: 1.0, radius: 1.15, canopy: leaf, shape: .round, species: 1, far: false, rng: &r)
+        shadows.append(ParkShadow(x: 6.9, z: -1.4, r: 2.1, h: 4.4))
+        // a clipped hedge and a post-and-rail fence along the back of the lawn, in front of the tree line
+        hedge(b, x: -2.4, z: -6.0, scale: 1.5, yaw: 0, rng: &r); hedge(b, x: 0.8, z: -6.05, scale: 1.5, yaw: 0, rng: &r)
+        fence(b, z: -6.45, x0: -14, x1: 14, skip: -4.0...2.4)
+
+        // ---- natural shrubs at the edges, a few garden-flower patches ----
+        let white = S.srgb(0.98, 0.97, 0.92), gold = S.srgb(0.96, 0.76, 0.14), poppy = S.srgb(0.86, 0.24, 0.10), violet = S.srgb(0.62, 0.48, 0.82)
+        floweringBush(b, x: -3.7, z: -4.5, scale: 1.2, bloom: white, rng: &r); shadows.append(ParkShadow(x: -3.7, z: -4.5, r: 1.5, h: 1.2))
+        floweringBush(b, x: -5.6, z: 1.6, scale: 1.0, bloom: gold, rng: &r); shadows.append(ParkShadow(x: -5.6, z: 1.6, r: 1.3, h: 1.1))
+        floweringBush(b, x: 5.6, z: 3.4, scale: 1.0, bloom: violet, rng: &r); shadows.append(ParkShadow(x: 5.6, z: 3.4, r: 1.3, h: 1.1))
+        floweringBush(b, x: -5.2, z: 6.4, scale: 0.9, bloom: white, rng: &r); shadows.append(ParkShadow(x: -5.2, z: 6.4, r: 1.2, h: 1.0))
+        flowerPatch(b, x: 4.8, z: 1.9, scale: 1.0, bloom: gold, rng: &r)
+        flowerPatch(b, x: -3.6, z: 3.8, scale: 1.0, bloom: poppy, rng: &r)
+        flowerPatch(b, x: 5.3, z: -0.6, scale: 0.9, bloom: white, rng: &r)
+        flowerPatch(b, x: -4.6, z: -1.0, scale: 0.9, bloom: violet, rng: &r)
+
+        // ---- the ground: a tessellated lawn that carries mowing bands, sun patches, soft tree shadows and worn earth; the gravel path ----
+        lawn(b, shadows: shadows)
+        gravelPath(b, rng: &r)
+
+        // ---- the pond (right, at the back): irregular stones, deep teal water, reeds, lily pads ----
+        pond(b, rng: &r)
+
+        // ---- the bench (back centre): timber slats on cast-iron frames, and a park lamp post beside it ----
+        bench(b)
+        lampPost(b, x: -1.95, z: -4.7)
         return b.mesh
     }
 
