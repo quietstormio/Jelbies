@@ -35,8 +35,14 @@ final class FormationTests: XCTestCase {
     enum Outcome { case arrived, aborted, timedOut, refused }
     struct Rec { var outcome: Outcome; var t1: Float?; var t2: Float?; var gap: Float?; var cf: Float?; var nilCF = false; var note = "" }
 
-    override func setUp() { RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12 }
-    override func tearDown() { RoomLayout.dynamicBoxes = [] }
+    nonisolated(unsafe) static var savedPickChance: Float = 0.9
+    override func setUp() { Self.savedPickChance = SocialTuning.pickChance; RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12 }
+    /// (leaves nothing behind for the suites that run after it: the Duo's contact profiles and clip eggs are global)
+    override func tearDown() {
+        SocialTuning.pickChance = Self.savedPickChance
+        FeatureClip.enabled = true; LieClearTuning.enabled = true; FeatureClip.eggs = []; ContactField.reset(); ContactField.enabled = true
+        RoomLayout.dynamicBoxes = []
+    }
 
     static let floorMin = SIMD2<Float>(-2.0, -2.0), floorMax = SIMD2<Float>(2.0, 2.9)
     static let maxSeconds: Float = 25
@@ -181,6 +187,49 @@ final class FormationTests: XCTestCase {
                       (gaps.min() ?? .nan) * 100, (gaps.max() ?? .nan) * 100, worst * 100, (cfs.max() ?? .nan) * 100, nils, touching ? " (touching)" : "")
     }
 
+    // MARK: assertions
+    // Limits per soak line (tag): (allowed aborted + timed-out sessions, ceiling for the p90 seconds from the start to the emote proper, ceiling for the worst skin gap in cm when the emote begins).
+    // The aborted ceiling is the BEFORE count (the soak on the commit-1 code, same layouts) for the newcomer-welcome kinds - swayHug, spinHug, cuddleLean, cheekSquish, highFive, and the groups -
+    // and the larger of the BEFORE / AFTER counts for the others (a touching emote that cannot reach its stance is now cancelled where it used to play apart: tag 0 -> 2, squabble 1 -> 3; sneak stays 2).
+    // The time and gap ceilings are the AFTER run of 2026-11-09 with headroom (the gap is the whole-skin gap of the pair when the emote proper begins; the huddle / ring kinds and sneak close it later).
+    static let limits: [String: (aborts: Int, p90: Float, gapCm: Float)] = [
+        "groupHug/3": (0, 4.5, 71),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 3.8, AFTER worst gap 67.1 cm
+        "groupCheer/3": (0, 4.5, 81),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 4.0, AFTER worst gap 77.8 cm
+        "circleDance/3": (0, 4.5, 74),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 3.8, AFTER worst gap 70.8 cm
+        "ringDance/3": (0, 5.0, 101),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 4.2, AFTER worst gap 97.5 cm
+        "groupHug/4": (0, 5.5, 58),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 5.0, AFTER worst gap 54.5 cm
+        "groupCheer/4": (2, 5.0, 64),          // BEFORE aborts 2, AFTER aborts 0, AFTER p90 4.2, AFTER worst gap 60.4 cm
+        "circleDance/4": (0, 6.0, 53),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 5.1, AFTER worst gap 49.3 cm
+        "ringDance/4": (0, 4.5, 102),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 3.8, AFTER worst gap 98.5 cm
+        "groupHug/5": (0, 3.0, 36),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 2.2, AFTER worst gap 32.6 cm
+        "groupCheer/5": (0, 3.5, 43),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 2.6, AFTER worst gap 39.2 cm
+        "circleDance/5": (0, 3.0, 39),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 2.2, AFTER worst gap 36.0 cm
+        "ringDance/5": (0, 3.0, 100),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 2.3, AFTER worst gap 96.7 cm
+        "chestBump": (1, 6.5, 14),          // BEFORE aborts 0, AFTER aborts 1, AFTER p90 5.9, AFTER worst gap 10.7 cm
+        "squabble": (3, 5.0, 14),          // BEFORE aborts 1, AFTER aborts 3, AFTER p90 4.1, AFTER worst gap 10.1 cm
+        "highFive": (2, 8.0, 14),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 7.5, AFTER worst gap 10.6 cm
+        "nuzzle": (2, 8.0, 10),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 7.5, AFTER worst gap 6.1 cm
+        "swayHug": (1, 8.5, 18),          // BEFORE aborts 1, AFTER aborts 1, AFTER p90 8.0, AFTER worst gap 14.6 cm
+        "cheekSquish": (2, 7.5, 3),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 7.0, AFTER worst gap 0.0 cm
+        "sneak": (2, 9.0, 70),          // BEFORE aborts 2, AFTER aborts 2, AFTER p90 8.2, AFTER worst gap 66.6 cm
+        "tag": (2, 5.0, 21),          // BEFORE aborts 0, AFTER aborts 2, AFTER p90 4.2, AFTER worst gap 17.6 cm
+        "leapfrog": (0, 9.0, 51),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 8.1, AFTER worst gap 47.3 cm
+        "spinHug": (2, 7.0, 35),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 6.4, AFTER worst gap 31.8 cm
+        "cuddleLean": (2, 8.0, 35),          // BEFORE aborts 2, AFTER aborts 2, AFTER p90 7.5, AFTER worst gap 31.4 cm
+        "boop": (2, 8.0, 4),          // BEFORE aborts 2, AFTER aborts 2, AFTER p90 7.1, AFTER worst gap 0.9 cm
+    ]
+
+    func check(_ tag: String, _ recs: [Rec], touching: Bool) {
+        guard let lim = Self.limits[tag] else { XCTFail("no limits for \(tag)"); return }
+        let bad = recs.filter { $0.outcome == .aborted || $0.outcome == .timedOut }.count
+        XCTAssertLessThanOrEqual(bad, lim.aborts, "\(tag): aborted / timed-out walk-ups")
+        let t2 = recs.compactMap(\.t2)
+        if !t2.isEmpty { XCTAssertLessThanOrEqual(Self.pct(t2, 0.9), lim.p90, "\(tag): p90 seconds to the emote") }
+        let gaps = recs.compactMap(\.gap)
+        if touching, !gaps.isEmpty { XCTAssertLessThanOrEqual(gaps.map { abs($0) }.max()! * 100, lim.gapCm, "\(tag): worst gap when the emote begins (cm)") }
+        XCTAssertGreaterThan(recs.filter { $0.outcome == .arrived }.count, 0, "\(tag): at least one session arrived")
+    }
+
     static let layouts = 16
 
     func testPairFormation() {
@@ -197,6 +246,7 @@ final class FormationTests: XCTestCase {
             }
             MotionLog.write(line(kind.rawValue, recs, touching: touching))
             for (i, r) in recs.enumerated() where r.outcome == .aborted || r.outcome == .timedOut { MotionLog.write("FORMATION-DETAIL \(kind.rawValue) layout \(i): \(r.note)") }
+            check(kind.rawValue, recs, touching: touching)
             total += recs.count
         }
         XCTAssertEqual(total, Self.pairKinds.count * Self.layouts, "every session ran")
@@ -216,6 +266,7 @@ final class FormationTests: XCTestCase {
                     recs.append(session(d, kind: kind, proper: 2))
                 }
                 MotionLog.write(line("\(kind.rawValue)/\(n)", recs, touching: touching))
+                check("\(kind.rawValue)/\(n)", recs, touching: touching)
                 total += recs.count
             }
         }

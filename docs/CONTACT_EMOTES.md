@@ -402,3 +402,51 @@ Why the old poses could never work: the arms are 0.225 m stubs (capped by the wa
 - Known limits: the stance walk's destination estimate (`contactStableTouch`, frozen / locked 0.8 m out) depends on the profile of the bodies at the first ticks, and ContactPolishTests reuses body ids 0/1 across emotes (stale profiles): the same row gives different arrival / min gap depending on which emotes ran before it in the process (cheekSquish -0.2 vs -4.4 min gap). Reaching AFTER the walk (walk stops a reach short) was tried and measured worse in the full-order run (arrival 3-11 cm).
 
 **2026-11-09:** `SocialKind.bump` (the belly bump) was removed for good: close face-to-face emotes read as kissing in a kids' game. Rows and numbers above that mention bump are historical. `chestBump` and `ringAround` stay.
+
+### 5.13 Formation (the walk-up before an emote; formation-smooth-r1, 2026-11-09)
+
+User: "when they're preparing for an emote they get stuck or take a long time getting into formation". The walk itself (gait, stride, feet) is untouched: only where / when a walk starts or re-targets, and the pick of the partner / side.
+
+Traced causes and what changed (`formationWalkUp`, BlobSocial+Play.swift; called by `walkUpPhase` for every pair kind, and by the squabble and sneak drives):
+
+- **A blocked walk-up was dropped and never re-issued.** `socialWalk` is steered like a wander leg (patience 0.6 s / 1.0 s for a standing blocker, then `steerGiveUp`; the stall detector ends it after 3 s without progress). Phase 0 never asked again: the partner stood frozen until the 18 s / 16 s ceiling. Now, when the walk script has ended short of its destination, the walk is issued again. A try that got somewhere (root moved > 25 cm) is free; three in a row that went nowhere cancel the session (`SocialEnd.aborted`, `social == nil`). From the second try on the spot is re-planned from where both stand now (other side for side-by-side kinds, a recomputed away-axis for face-to-face kinds) and the walk gets a corner round whatever stands in the way (`detourWaypoint`: a free floor point on a ring round the nearest Jelbie, reachable from here with a clear leg to the goal).
+- **"Arrived" is judged by the right thing.** Face to face (posture unchanged after the walk): the stance's own skin gap (`ContactField.gap`) within `formationSlack` = 10 cm of the stance's phase-0 target (the phase-1 settle closes the rest; before, "arrived" meant "closer than 2.2 m", which let phase 2 begin up to ~1 m short of the touch). Side by side the body still turns to the camera after the walk (the outline - and the gap - change by up to 20 cm while it does): the walk must have ended within 15 cm of the destination it was going to (`SocialSession.walkTo`, the stance re-targets it), then, once the body stands in the pose, the gap decides too.
+- **A touching emote never plays apart.** Budget = 3 s + distance / 1.1 m/s, +2.5 s for the last stance walk; out of budget = cancel. Non-touching kinds keep the old rule (start in place when they stand within `walkUpFar`). The newcomer-welcome kinds (swayHug, spinHug, cuddleLean, cheekSquish, highFive; `GameCare+Newcomer` waits for `social == nil` and the abort counts must not rise) also keep it: out of budget they start from where they stand when close, as before, instead of being cancelled. The 18 s / 16 s limits stay as backstops.
+- **`sideSpot`** picks the free side with the shorter WALK from where the walker stands (a leg that is not clear, or that passes the partner / a third Jelbie, costs +1.5 m; a spot within 0.3 m is taken at once), not the side nearer by world x. The squabble start now refuses a face-off spot a third Jelbie stands on.
+- **Partner choice** weights the candidates 1 / max(d, 1) (kind weights are unchanged).
+- **`socialWalk`** clears the planner's back-off (`planCool`), so a re-issued walk plans its route at once instead of inheriting the failed walk's 0.3 / 0.6 s wait. (The steering patience for a standing blocker - 0.6 s / 1.0 s for an autonomous leg - was tried at 1.0 s / 2.5 s and made the stuck cases slower: left as it was.)
+- **Groups** (`gather`, BlobSocial+Group.swift): a member that is free and more than 0.45 m off his slot, and whose small hop to the place has been used or cannot reach (>= 1.4 m), is sent again (at most 4 times; the slots stay as assigned - no swapping mid-walk); the gather has a budget of 3 s + the farthest member's walk / 1.1 (16 s stays as the backstop); the phase-1 yaw wait is 1 s (was 2.5 s). On timeout the loose kinds (groupCheer, ringDance: `proximity` in the table) start when everybody is within 0.8 m of his slot; the touching ones (groupHug and circleDance: `holding` in the table) are cancelled.
+- **Not changed:** the walk, the stance rows, the press depths, the choreography; the kind weights; `Lineup.swift`. Known remaining: a walker boxed in between the partner and a third Jelbie whose steering finds no way round is cancelled after three tries (before: it stood until the ceiling and was cancelled then); the room's `clearWay` (MelonStage) asks standing Jelbies to step aside only for `job` walks, not for social walk-ups - the next lever, in a file this round does not touch.
+
+Measured with `FormationTests` (seeded soak: 16 pair layouts per kind, distance 0.8 - 4.8 m, random facings, half with a third Jelbie between / beside / far; groups of 3 / 4 / 5 with one member 4 - 4.8 m out; prints `FORMATION` lines: seconds to phase 1 and to the emote proper, outcomes, the skin gap when the emote begins):
+
+B = BEFORE (the commit-1 code), A = AFTER (this round), same `FormationTests` file and seeds. `n` = 16 pair layouts / 8 group layouts per line; `refused` = the start API said no (the layout does not fit, or a third Jelbie stands on the spot). Times: seconds from the start call to the emote proper (phase 2; the squabble's face-off is its phase 1). The gap is the whole-skin gap of the pair when the emote proper begins (the huddle / ring kinds close it later: those lines are unchanged and measure the gather only; the /5 lines are 7 of 8 refused in both runs - five bodies rarely fit the arena - and ringDance /4 and /5 are 3-member sessions).
+
+| kind | arrived B/A | aborted+timeout B/A | refused B/A | to-emote med B/A (s) | to-emote p90 B/A (s) | worst gap at emote start B/A (cm) |
+|---|---|---|---|---|---|---|
+| groupHug/3 | 8/8 | 0/0 | 0/0 | 2.9/2.9 | 3.8/3.8 | 67.1/67.1 |
+| groupCheer/3 | 8/8 | 0/0 | 0/0 | 3.1/3.1 | 4.0/4.0 | 77.8/77.8 |
+| circleDance/3 | 8/8 | 0/0 | 0/0 | 3.3/3.3 | 3.8/3.8 | 70.8/70.8 |
+| ringDance/3 | 8/8 | 0/0 | 0/0 | 2.7/2.7 | 4.2/4.2 | 97.5/97.5 |
+| groupHug/4 | 5/5 | 0/0 | 3/3 | 3.2/3.2 | 5.0/5.0 | 54.5/54.5 |
+| groupCheer/4 | 2/3 | 2/0 | 4/5 | 3.9/3.9 | 3.9/4.2 | 60.4/60.4 |
+| circleDance/4 | 5/5 | 0/0 | 3/3 | 4.8/4.8 | 5.6/5.1 | 47.8/49.3 |
+| ringDance/4 | 4/4 | 0/0 | 4/4 | 2.6/2.6 | 3.8/3.8 | 99.3/98.5 |
+| groupHug/5 | 1/1 | 0/0 | 7/7 | 2.2/2.2 | 2.2/2.2 | 32.6/32.6 |
+| groupCheer/5 | 1/1 | 0/0 | 7/7 | 2.6/2.6 | 2.6/2.6 | 39.2/39.2 |
+| circleDance/5 | 1/1 | 0/0 | 7/7 | 2.2/2.2 | 2.2/2.2 | 36.0/36.0 |
+| ringDance/5 | 1/1 | 0/0 | 7/7 | 2.3/2.3 | 2.3/2.3 | 96.7/96.7 |
+| chestBump | 8/8 | 0/1 | 8/7 | 2.9/3.4 | 4.2/5.9 | 21.6/10.7 |
+| squabble | 14/9 | 1/3 | 1/4 | 2.3/2.9 | 2.9/4.1 | 120.4/10.1 |
+| highFive | 9/10 | 2/1 | 5/5 | 4.5/5.5 | 6.3/7.5 | 17.3/10.6 |
+| nuzzle | 8/10 | 2/1 | 6/5 | 4.6/5.3 | 5.2/7.5 | 38.2/6.1 |
+| swayHug | 9/9 | 1/1 | 6/6 | 3.5/5.5 | 6.0/8.0 | 34.4/14.6 |
+| cheekSquish | 8/9 | 2/1 | 6/6 | 5.4/5.3 | 6.8/7.0 | 1.5/0.0 |
+| sneak | 3/3 | 2/2 | 11/11 | 3.7/5.4 | 4.1/8.2 | 64.8/66.6 |
+| tag | 8/6 | 0/2 | 8/8 | 2.7/3.4 | 4.8/4.2 | 64.9/17.6 |
+| leapfrog | 10/10 | 0/0 | 6/6 | 4.3/4.3 | 5.8/8.1 | 37.5/47.3 |
+| spinHug | 8/9 | 2/1 | 6/6 | 4.1/5.5 | 4.9/6.4 | 38.6/31.8 |
+| cuddleLean | 9/10 | 2/2 | 5/4 | 3.5/4.7 | 5.4/7.5 | 36.5/31.4 |
+| boop | 8/8 | 2/2 | 6/6 | 4.1/4.6 | 5.4/7.1 | 37.7/0.9 |
+
+Reading it: where the walk-up used to end short, the emote now begins touching (squabble 120 -> 10 cm, boop 38 -> 1, nuzzle 38 -> 6, tag 65 -> 18, chestBump 22 -> 11), at the price of a median 0.5 - 2 s longer walk-up for those (the last 10 - 30 cm is now a real walk, not a start from where they stood). The newcomer-welcome kinds are never cancelled more often than before (highFive 2 -> 1, swayHug 1 -> 1, cheekSquish 2 -> 1, spinHug 2 -> 1, cuddleLean 2 -> 2) but, keeping the old start-from-where-they-stand fallback, spinHug / cuddleLean / swayHug can still begin 15 - 32 cm apart when the walker is boxed in. Touching kinds that are not newcomer kinds are cancelled where they could not reach the stance (tag 0 -> 2, squabble 1 -> 3). Not solved: a walker boxed in between the partner and a third Jelbie (the straight leg to the far-side spot runs past the partner, `peerOnLeg` makes the steering wait, it gives the leg up after its patience, every re-issue repeats it; the corner round the partner found none): they are cancelled after three tries, ~5 - 8 s after the start; the lever is `clearWay` in `MelonStage` (standing Jelbies step aside only for `job` walks), a file this round does not touch.

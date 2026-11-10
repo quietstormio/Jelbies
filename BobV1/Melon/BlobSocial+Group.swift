@@ -170,6 +170,7 @@ extension BlobBrain {
             m.socialBook.wakeGreet = -1
             m.socialBook.glanceDone = false; m.socialBook.apartStarted = false; m.socialBook.sheepishStarted = false; m.socialBook.hopStarted = false; m.socialBook.hopStarted2 = false
             m.socialBook.roundSeen = -1
+            m.socialBook.regathers = 0
             m.socialBook.groupIdle = 0
             if let x = crew.first(where: { $0 !== m }) { m.onSocial?(.began(kind, partner: x.steerID)) }
             if m === crew.first { m.roomCue(.social(kind)) }
@@ -206,6 +207,12 @@ extension BlobBrain {
                 letGo()
                 if simd_distance(position, spot) > 0.12 { socialWalk(to: spot, sim) }
             }
+            // (formation 2026-11-09: a walk that ended short - given up on the way, a crossing walker in the way - is started again, like the conga line's: the slot stays the one assigned, nobody swaps. The small hop to the place (below) comes first where it can reach: it is the quicker move)
+            if socialBook.hopStarted, fxFree, !feet.active, s.phaseT > 0.3, simd_distance(position, spot) > 0.45, socialBook.hopStarted2 || simd_distance(position, spot) >= 1.4, socialBook.regathers < 4 {
+                socialBook.regathers += 1
+                letGo()
+                socialWalk(to: spot, sim)
+            }
             if socialBook.hopStarted, fxFree, simd_distance(position, spot) > 0.15, simd_distance(position, spot) < 1.4, socialBook.hopStarted2 == false {
                 socialBook.hopStarted2 = true          // (the walk stopped short of the place: a small hop to it)
                 startHopTo(sim, spot)
@@ -213,14 +220,19 @@ extension BlobBrain {
             if scriptIsNone, idleState.kind == nil { faceCentre(s) }
             if isA {
                 let arrived = everyone(mem) { $0.socialBook.hopStarted && $0.fxFree && simd_distance($0.position, $0.slot(s)) < 0.45 }
+                // the budget scales with the farthest member (3 s + the walk at 1.1 m/s); the 16 s stays as the backstop
+                if s.walkBudget == 0 { s.walkBudget = 3 + (mem.map { simd_distance($0.position, $0.slot(s)) }.max() ?? 0) / 1.1 }
+                let touching = ContactStance.entry(s.kind)?.cls == .touching
                 if arrived, s.phaseT > 0.3 { s.setPhase(1) }
+                else if s.phaseT > s.walkBudget, !touching, everyone(mem, { $0.fxFree && simd_distance($0.position, $0.slot(s)) < 0.8 }) { s.setPhase(1) }          // (a loose group may start from where everybody stands near his place; a touching one never plays apart)
+                else if touching, s.phaseT > s.walkBudget + 2.5 { s.finish(.aborted) }
                 else if s.phaseT > 16 { s.finish(.aborted) }
             }
             return true
         case 1:
             faceCentre(s)
             socialBook.wantSquash = 1 - 0.04 * smooth01(s.phaseT / 0.4) * socialGentle
-            if isA, s.phaseT > settle, everyone(mem, { $0.turnedTo($0.yawTo(s.home0), tol: 0.2) }) || s.phaseT > settle + 2.5 { s.setPhase(2) }
+            if isA, s.phaseT > settle, everyone(mem, { $0.turnedTo($0.yawTo(s.home0), tol: 0.2) }) || s.phaseT > settle + 1.0 { s.setPhase(2) }
             return true
         default: return false
         }
