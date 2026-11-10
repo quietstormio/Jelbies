@@ -112,6 +112,7 @@ struct BlobCard: View {
     var perks: [(kind: PerkKind, left: TimeInterval)] = []          // active power-ups (Perks model), shown as chips with the time left
     var personality: String? = nil          // "Cuddly · loves Bedtime cookie" (a picked Jelbie; nil for the older ones)
     let action: () -> Void
+    @State private var openPerk: PerkKind?          // the boost whose one-line explanation is showing (derived against `perks` below)
 
     static func moodColor(_ m: BlobMood) -> Color {
         switch m {
@@ -126,9 +127,14 @@ struct BlobCard: View {
         perks.isEmpty ? "none" : perks.map { "\($0.kind.title) \(SK.timeLeft($0.left)) left" }.joined(separator: ", ")
     }
 
+    /// "Deep sleep: <blurb>" for each active boost, for VoiceOver.
+    var boostExplanations: String {
+        perks.map { "\($0.kind.title): \($0.kind.blurb)" }.joined(separator: " ")
+    }
+
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 6) {
+        let shown = perks.first(where: { $0.kind == openPerk })?.kind
+        VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Circle().fill(Color(red: Double(blob.tint.x), green: Double(blob.tint.y), blue: Double(blob.tint.z)))
                         .frame(width: 18, height: 18)
@@ -150,19 +156,39 @@ struct BlobCard: View {
                 if perks.isEmpty {
                     Text("No Boosts").jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.75))
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 4) {          // wraps instead of clipping
-                        ForEach(perks, id: \.kind.rawValue) { p in PerkChip(kind: p.kind, left: p.left) }
+                    PerkWrapRow(spacing: 6, lineSpacing: 4) {          // natural-width chips that wrap instead of truncating
+                        ForEach(perks, id: \.kind.rawValue) { p in
+                            Button {
+                                AudioHub.shared.uiTap()
+                                withAnimation(.easeInOut(duration: 0.15)) { openPerk = (openPerk == p.kind) ? nil : p.kind }
+                            } label: {
+                                PerkChip(kind: p.kind, left: p.left)
+                                    .overlay(Capsule().strokeBorder(FocusStyle.brown, lineWidth: shown == p.kind ? 1.5 : 0))
+                                    .padding(.vertical, 6).contentShape(Rectangle())          // ~34 pt tall tap target ...
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.vertical, -6)          // ... without making the row taller
+                        }
+                    }
+                    if let shown {
+                        Text("\(shown.title): \(shown.blurb)")
+                            .jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-            }
-            .accessibilityElement(children: .ignore)          // one element per row: "<name>, <mood>, boosts: ..."
-            .accessibilityLabel("\(blob.name), \(personality.map { $0 + ", " } ?? "")\(needs.mood.word), boosts: \(boostSummary)")
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.6)))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(needs.wantedNeed != nil ? FocusStyle.pink.opacity(0.55) : Color.clear, lineWidth: 1.5))
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(needs.wantedNeed != nil ? FocusStyle.pink.opacity(0.55) : Color.clear, lineWidth: 1.5))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onTapGesture(perform: action)          // the whole card opens the Jelbie; the chip Buttons above take their own taps first
+        .accessibilityElement(children: .ignore)          // one element per row: "<name>, <mood>, boosts: ..."
+        .accessibilityLabel("\(blob.name), \(personality.map { $0 + ", " } ?? "")\(needs.mood.word), boosts: \(boostSummary)")
+        .accessibilityValue(boostExplanations)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { action() }
         .accessibilityIdentifier("roster-card-\(blob.id)")
     }
 
@@ -186,5 +212,33 @@ struct BlobCard: View {
         .frame(maxWidth: .infinity)
         .background(Capsule().fill(want ? FocusStyle.pink.opacity(0.16) : Color.clear))
         .overlay(Capsule().strokeBorder(want ? FocusStyle.pink.opacity(0.7) : Color.clear, lineWidth: 1.2))
+    }
+}
+
+/// A wrapping row: every child keeps its natural width and wraps to the next line; a child wider than the row is proposed the row width (so a one-line chip truncates instead of overflowing).
+private struct PerkWrapRow: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 4
+
+    private func arrange(_ width: CGFloat, _ subviews: Subviews) -> (frames: [CGRect], size: CGSize) {
+        var frames: [CGRect] = []
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0, maxX: CGFloat = 0
+        for s in subviews {
+            var sz = s.sizeThatFits(.unspecified)
+            if sz.width > width { sz = s.sizeThatFits(ProposedViewSize(width: width, height: nil)) }
+            if x > 0, x + sz.width > width { x = 0; y += rowH + lineSpacing; rowH = 0 }
+            frames.append(CGRect(x: x, y: y, width: min(sz.width, width), height: sz.height))
+            x += sz.width + spacing; rowH = max(rowH, sz.height); maxX = max(maxX, x - spacing)
+        }
+        return (frames, CGSize(width: min(maxX, width), height: y + rowH))
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(proposal.width ?? 300, subviews).size
+    }
+    func placeSubviews(in r: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let a = arrange(r.width, subviews)
+        for (s, f) in zip(subviews, a.frames) {
+            s.place(at: CGPoint(x: r.minX + f.minX, y: r.minY + f.minY), proposal: ProposedViewSize(width: f.width, height: f.height))
+        }
     }
 }
