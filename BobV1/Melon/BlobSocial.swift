@@ -210,6 +210,8 @@ final class SocialSession {
     var swapped = false, sideKind = false, swapT: Float = 0
     var fmTicks = 0, fmLand = 0, fmBeat = 0
     /// Meet in the middle (round 3): both walk to stance spots round the midpoint; `dg` = the stand-off of the first plan, `partnerGoal` the partner's spot, `partnerDoneT` when he stood still.
+    /// `holdPartner` (default false): the starter sets it right after a successful `socialStart` (the newcomer welcome: greeter = initiator, newcomer = partner) = the partner never walks to meet; read once, on the first phase-0 tick (never inside `socialStart`).
+    var holdPartner = false
     var meet = false, meetUsed = false, goal0 = SIMD2<Float>.zero, dg: Float = 0, partnerGoal = SIMD2<Float>.zero, partnerDoneT: Float = -1
     /// Friends2: the second runner's goal, the two start spots, the lane / orbit angle, the plan is made.
     var goal2 = SIMD2<Float>.zero, home0 = SIMD2<Float>.zero, home1 = SIMD2<Float>.zero, laneYaw: Float = 0, ready = false

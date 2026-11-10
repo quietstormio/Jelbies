@@ -209,7 +209,7 @@ extension BlobBrain {
     /// side by side: on the pair's mean line, each on his own side. Not for kinds whose spot is tied to the partner's facing (sneak, peekaboo), when he is busy, when a spot is not free, or when he would walk less than 0.6 m.
     /// Anything that goes wrong (either walk is given up, the budget) hands back to the old plan: he stays where he is and the initiator walks the rest (`formationMeetRevert`).
     func formationMeet(_ s: SocialSession, _ o: BlobBrain) {
-        guard !Self.fmOff("meet"), !Self.newcomerKinds.contains(s.kind), s.kind != .sneak, s.kind != .peekaboo, s.dg > 0, !o.socialTaken, o.scriptIsNone, !o.feet.active, o.idleState.kind == nil,
+        guard !Self.fmOff("meet"), !s.holdPartner, s.kind != .sneak, s.kind != .peekaboo, s.dg > 0, !o.socialTaken, o.scriptIsNone, !o.feet.active, o.idleState.kind == nil,
               let sim = contactSim, let osim = o.contactSim else { return }
         let me = position, you = o.position, D = simd_distance(me, you)
         guard D > s.dg + 1.0 else { return }

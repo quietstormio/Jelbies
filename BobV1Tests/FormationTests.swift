@@ -35,7 +35,9 @@ final class FormationTests: XCTestCase {
     enum Outcome { case arrived, aborted, timedOut, refused }
     struct Rec { var outcome: Outcome; var t1: Float?; var t2: Float?; var gap: Float?; var cf: Float?; var nilCF = false; var note = ""; var land: Float = 0, beat: Float = 0; var swapped = false, met = false
         /// where the seconds go (ticks / 60): phase 0 with a walk running (of which after the first re-issue), phase 0 with no walk running, phase 1; the gap when phase 1 began; ticks simulated
-        var tWalk: Float = 0, tReWalk: Float = 0, tWait: Float = 0, tP1: Float = 0, gapP1: Float?, simTicks = 0 }
+        var tWalk: Float = 0, tReWalk: Float = 0, tWait: Float = 0, tP1: Float = 0, gapP1: Float?, simTicks = 0
+        /// the farthest the partner's root got from where he stood at the start while the session was in phase 0 (m)
+        var pMoved: Float = 0 }
 
     nonisolated(unsafe) static var savedPickChance: Float = 0.9
     override func setUp() { Self.savedPickChance = SocialTuning.pickChance; RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12 }
@@ -145,14 +147,16 @@ final class FormationTests: XCTestCase {
         return g
     }
 
-    func session(_ d: FeatureClipTests.Duo, kind: SocialKind, proper: Int) -> Rec {
+    func session(_ d: FeatureClipTests.Duo, kind: SocialKind, proper: Int, holdPartner: Bool = false) -> Rec {
         let a = d.lab.rigs[0]
         let others = d.lab.rigs.dropFirst().map { $0.brain }
         guard a.brain.socialStart(kind, with: others[0], a.sim), let s = a.brain.social else { return Rec(outcome: .refused, t1: nil, t2: nil, gap: nil) }
+        if holdPartner { s.holdPartner = true }          // (exactly what the newcomer welcome does right after its socialStart)
         var rec = Rec(outcome: .timedOut, t1: nil, t2: nil, gap: nil)
         let p0 = a.brain.position
         var moved: Float = 0
         let b = d.lab.rigs[1]
+        let q0 = b.brain.position
         var nWalk = 0, nRe = 0, nWait = 0, nP1 = 0, ticks = 0
         for tick in 1...Int(Self.maxSeconds * 60) {
             d.tick()
@@ -160,6 +164,7 @@ final class FormationTests: XCTestCase {
             if s.phase == 0 { if a.brain.isWalkScript || b.brain.isWalkScript { nWalk += 1; if s.rewalks > 0 { nRe += 1 } } else { nWait += 1 } } else if s.phase == 1 { nP1 += 1 }
             if s.phase >= 1, rec.t1 == nil { rec.gapP1 = ContactField.gap(0, 1, features: true) }
             moved = max(moved, simd_distance(a.brain.position, p0))
+            if s.phase == 0 { rec.pMoved = max(rec.pMoved, simd_distance(b.brain.position, q0)) }
             let t = Float(tick) / 60
             if s.phase >= 1, rec.t1 == nil { rec.t1 = t }
             if s.phase >= proper {
@@ -274,6 +279,28 @@ final class FormationTests: XCTestCase {
 
     /// Roaming rates (for the clearWay ON / OFF arms and against the base): 3 Jelbies roam on their own for 10 simulated minutes; prints how many step-aside requests (a `goTo` job a free bystander receives from the room) and how many
     /// idle moves, social sessions (by kind) and walks started, and the simulated seconds. Run once per arm; compare the counts (each rate must stay >= 90 % of the base arm).
+    /// holdPartner (the newcomer welcome sets it right after its socialStart): a far-apart pair of a welcome kind, third Jelbie far off. With the flag the partner's root stays put during phase 0 and `meetUsed` stays false;
+    /// the same start without the flag meets in the middle (`meetUsed`). Written, not run yet.
+    func testHoldPartner() {
+        var compared = 0
+        for kind in [SocialKind.highFive, .swayHug, .spinHug, .cuddleLean, .cheekSquish] {
+            var res: [Rec] = []
+            for hold in [false, true] {
+                let d = FeatureClipTests.Duo(positions: [SIMD2(-1.7, 0.5), SIMD2(1.7, 0.5), SIMD2(0, 2.7)], features: [.none, .none, .none], seed: 77)
+                d.live = true
+                for _ in 0..<3 { d.tick() }
+                arrange(d, [SIMD2(-1.7, 0.5), SIMD2(1.7, 0.5), SIMD2(0, 2.7)], [.pi / 2, -.pi / 2, 0])
+                res.append(session(d, kind: kind, proper: 2, holdPartner: hold))
+            }
+            MotionLog.write("FORMATION-HOLD \(kind.rawValue) free: \(res[0].outcome) met \(res[0].met) partner-moved \(String(format: "%.2f", res[0].pMoved)) | held: \(res[1].outcome) met \(res[1].met) partner-moved \(String(format: "%.2f", res[1].pMoved))")
+            guard res[0].outcome != .refused, res[1].outcome != .refused else { continue }
+            XCTAssertFalse(res[1].met, "\(kind): holdPartner set: no meet in the middle")
+            if res[0].met { compared += 1; XCTAssertGreaterThan(res[0].pMoved, 0.3, "\(kind): without the flag the partner walks to meet") }
+            if !res[1].swapped { XCTAssertLessThan(res[1].pMoved, 0.1, "\(kind): holdPartner set: the partner's position does not move in phase 0") }
+        }
+        XCTAssertGreaterThan(compared, 0, "at least one welcome kind meets in the middle without the flag")
+    }
+
     func testRoamRates() {
         let lab = SocialTests.Lab(n: 3, positions: SocialTests.starts, quiet: false, seed: 31)
         SocialTuning.pickChance = 0.9
