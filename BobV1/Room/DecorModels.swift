@@ -51,7 +51,7 @@ enum DecorModels {
 
     static func add(_ kind: DecorKind, at p: SIMD2<Float>, lift: Float, anim a: DecorAnim, time: Float, uid: Int, into b: RoomMeshBuilder) {
         b.material = .plain
-        if let art = DecorMeshes.loaded[kind], addArt(kind, art, at: p, lift: lift, anim: a, time: time, uid: uid, into: b) { b.material = .plain; return }
+        if let art = (kind == .slide && uid == ParkToys.slideUID ? ParkSlideSkin.art : nil) ?? DecorMeshes.loaded[kind], addArt(kind, art, at: p, lift: lift, anim: a, time: time, uid: uid, into: b) { b.material = .plain; return }
         switch kind {
         case .beanbag: beanbag(p, lift, a, b)
         case .cushion: cushion(p, lift, a, b)

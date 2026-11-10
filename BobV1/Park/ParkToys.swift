@@ -70,8 +70,8 @@ extension DecorModels {
 
     // MARK: meshes
 
-    private static let wood = hex2(0xF2C46B), plank = hex2(0xF9CC59), padA = hex2(0xE98AA4), padB = hex2(0x6EB3D1), post = hex2(0xF7F0E0)
-    private static let sandC = hex2(0xF0DDB0)
+    private static let wood = hex2(0x7A5634), plank = hex2(0x8A5E36), padA = hex2(0xA8372A), padB = hex2(0x35607F), post = hex2(0x2B3430)
+    private static let sandC = hex2(0xC9B183)
     private static func hex2(_ v: UInt32) -> SIMD3<Float> {
         OKLab.srgbToLinear(SIMD3(Float((v >> 16) & 255) / 255, Float((v >> 8) & 255) / 255, Float(v & 255) / 255))
     }

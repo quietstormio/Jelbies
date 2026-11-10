@@ -38,10 +38,14 @@ extension DecorModels {
     static func addHopscotchCourt(_ b: RoomMeshBuilder, at o: SIMD3<Float>) {
         let h = HopscotchCourt.slabHalf, half = HopscotchCourt.cell / 2
         // a dark, slightly warm asphalt patch with chalk on it (no pastel fills, no cream slab)
-        let asphalt = S.srgb(0.16, 0.15, 0.14), grainLo = S.srgb(0.12, 0.115, 0.11), grainHi = S.srgb(0.22, 0.21, 0.195)
-        let chalk = S.srgb(0.90, 0.89, 0.86), dust = S.srgb(0.40, 0.39, 0.37)
+        let asphalt = S.srgb(0.22, 0.23, 0.25), grainLo = S.srgb(0.17, 0.18, 0.20), grainHi = S.srgb(0.29, 0.30, 0.32), wornEdge = S.srgb(0.31, 0.31, 0.30)
+        let chalk = S.srgb(0.95, 0.94, 0.88), numChalk = S.srgb(0.96, 0.91, 0.66), dust = S.srgb(0.44, 0.44, 0.43)
         b.roundedBox(centre: o + SIMD3(0, 0.02, 0), half: SIMD3(h.x, 0.02, h.y), radius: 0.05, segments: 3, aoFloor: false, color: asphalt)
         let top: Float = 0.041
+        // a soft worn edge: a faded, lighter rim where the blacktop meets the grass
+        for (sx, sz, ex, ez) in [(0, -1, h.x, 0.07), (0, 1, h.x, 0.07), (-1, 0, 0.07, h.y), (1, 0, 0.07, h.y)] as [(Float, Float, Float, Float)] {
+            hsQuad(b, o.x + sx * (h.x - ex), o.z + sz * (h.y - ez), ex, ez, y: top + 0.0005, wornEdge)
+        }
         // blacktop grain: a deterministic scatter of tiny darker and lighter flecks
         for i in 0..<140 {
             let gx = (hsNoise(i, 11) * 2 - 1) * (h.x - 0.08), gz = (hsNoise(i, 12) * 2 - 1) * (h.y - 0.08)
@@ -63,13 +67,13 @@ extension DecorModels {
             for (n, sg) in segments[i].enumerated() {
                 let sd = i * 10 + 5 + n
                 switch sg {
-                case "a": hsChalk(b, cx, cz - hh, w, st / 2, y: y, seed: sd, chalk, dust)
-                case "d": hsChalk(b, cx, cz + hh, w, st / 2, y: y, seed: sd, chalk, dust)
-                case "g": hsChalk(b, cx, cz, w, st / 2, y: y, seed: sd, chalk, dust)
-                case "b": hsChalk(b, cx + w, cz - hh / 2, st / 2, hh / 2 + st / 2, y: y, seed: sd, chalk, dust)
-                case "c": hsChalk(b, cx + w, cz + hh / 2, st / 2, hh / 2 + st / 2, y: y, seed: sd, chalk, dust)
-                case "f": hsChalk(b, cx - w, cz - hh / 2, st / 2, hh / 2 + st / 2, y: y, seed: sd, chalk, dust)
-                default: hsChalk(b, cx - w, cz + hh / 2, st / 2, hh / 2 + st / 2, y: y, seed: sd, chalk, dust)          // "e"
+                case "a": hsChalk(b, cx, cz - hh, w, st / 2, y: y, seed: sd, numChalk, dust)
+                case "d": hsChalk(b, cx, cz + hh, w, st / 2, y: y, seed: sd, numChalk, dust)
+                case "g": hsChalk(b, cx, cz, w, st / 2, y: y, seed: sd, numChalk, dust)
+                case "b": hsChalk(b, cx + w, cz - hh / 2, st / 2, hh / 2 + st / 2, y: y, seed: sd, numChalk, dust)
+                case "c": hsChalk(b, cx + w, cz + hh / 2, st / 2, hh / 2 + st / 2, y: y, seed: sd, numChalk, dust)
+                case "f": hsChalk(b, cx - w, cz - hh / 2, st / 2, hh / 2 + st / 2, y: y, seed: sd, numChalk, dust)
+                default: hsChalk(b, cx - w, cz + hh / 2, st / 2, hh / 2 + st / 2, y: y, seed: sd, numChalk, dust)          // "e"
                 }
             }
         }
