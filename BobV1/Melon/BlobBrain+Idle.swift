@@ -320,9 +320,9 @@ extension BlobBrain {
         }
         guard idleState.cooldown <= 0 else { return false }
         if anticsEnabled, runMoveDemo == nil, idleState.treat <= 0, treatMaybeStart(sim) { return true }
-        let decorOffers: Set<IdleKind> = anticsEnabled && !sleepLocked ? Self.decorOffers() : []
+        let decorOffers: Set<IdleKind> = anticsEnabled && !decorLocked ? Self.decorOffers() : []
         // a toy is out: a direct chance (ToyTuning.directChance) to go and play with one, before the bag; not the toy he used last, at least directGap s between his sessions
-        if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleMood != .grumpy, idleNight < 0.6, variety.now - toy.lastDirect >= ToyTuning.directGap, rand() < ToyTuning.directChance {
+        if anticsEnabled, runMoveDemo == nil, !decorOffers.isEmpty, idleMood != .grumpy, idleNight < 0.6, variety.now - toy.lastDirect >= (outingPlay ? ParkPlayTuning.directGap : ToyTuning.directGap), rand() < (outingPlay ? ParkPlayTuning.directChance : ToyTuning.directChance) {
             var kinds = Array(decorOffers)
             for i in kinds.indices.reversed() where i > 0 { kinds.swapAt(i, min(i, Int(rand() * Float(i + 1)))) }
             for k in kinds where !varietyPeerJustStarted(k) && decorStart(k, sim) {

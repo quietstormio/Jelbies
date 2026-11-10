@@ -99,6 +99,10 @@ extension GameCare {
         }
         #endif
         if park.active { for a in actors { a.brain?.sleepLocked = true } }
+        // the pieces and toys are open to the ones who came and the visitors while the park plays (sleep and bedtime stay locked); cleared every step otherwise, so it never leaks home
+        let playing = park.active && park.inScene && park.phase == .playing
+        for (k, a) in actors.enumerated() { a.brain?.outingPlay = playing && parkBook.comers.contains(k) }
+        for a in parkBook.actors { a.brain?.outingPlay = playing }
         park.step(dt: dt, blocked: park.phase == .goOut && parkFadeBlocked)
         guard park.active else { return }
         guard park.inScene else { return }
@@ -295,6 +299,7 @@ extension GameCare {
                 brain.abortAll(a.sim, a.skinner)
                 brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             }
+            HopscotchTuning.joinChance = ParkPlayTuning.hopscotchJoin
             RoomLayout.apply(RoomCatalog.park)
             GameCamera.configurePark()
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
@@ -333,6 +338,7 @@ extension GameCare {
             book.clear?()
             book.actors = []; book.cast = []
             book.save()
+            HopscotchTuning.joinChance = 0.35
             RoomLayout.apply(RoomCatalog.def(store.currentRoom))
             GameCamera.endPark(count: max(jellies.count, 1))
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {

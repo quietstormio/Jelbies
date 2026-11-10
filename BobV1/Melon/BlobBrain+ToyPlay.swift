@@ -48,7 +48,7 @@ extension BlobBrain {
 
     /// Nothing owns him: a toy may take him now.
     private var toyFree: Bool {
-        anticsEnabled && !sleepLocked && reactFree && scriptIsNone && idleState.kind == nil && !race.active && idleMood != .grumpy && idleNight < 0.6
+        anticsEnabled && !decorLocked && reactFree && scriptIsNone && idleState.kind == nil && !race.active && idleMood != .grumpy && idleNight < 0.6
     }
 
     /// Does the toy take several players at once (so everyone present joins at once)?
@@ -71,7 +71,7 @@ extension BlobBrain {
         let f = DecorField.shared
         var best: Float = 0
         for p in f.feet where p.kind.activeInteraction != nil && f.available(p) { best = max(best, f.toyPull(p.uid)) }
-        return Int((2 * best).rounded())
+        return Int((2 * best).rounded()) + (outingPlay ? ParkPlayTuning.bagBonus : 0)
     }
 
     // MARK: the tick (idleGate, no behaviour running)
@@ -211,7 +211,7 @@ extension BlobBrain {
         }
     }
     /// A waiter is only dropped by a real owner (a touch, a meal, a request); a look or the walk to the spot is his own.
-    private var toyFreeForQueue: Bool { attached && !held && !commanded && social == nil && job == nil && !sleepLocked && !race.active && commandedIdle == nil }
+    private var toyFreeForQueue: Bool { attached && !held && !commanded && social == nil && job == nil && !decorLocked && !race.active && commandedIdle == nil }
 
     /// The oldest waiter at this piece goes first (ties by id).
     private func toyFirstInQueue(_ uid: Int) -> Bool {

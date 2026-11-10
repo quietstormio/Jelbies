@@ -54,7 +54,7 @@ extension BlobBrain {
 
     func kindCooldownStart(_ k: IdleKind) {
         if k == .flapHop { kindCool[k] = rand(Self.flapHopUrge.lowerBound, Self.flapHopUrge.upperBound); return }
-        let c = Self.kindCooldown(k); if c > 0 { kindCool[k] = c }
+        let c = Self.kindCooldown(k) * (outingPlay && Self.decorKinds.contains(k) ? ParkPlayTuning.cooldownMul : 1); if c > 0 { kindCool[k] = c }
     }
     /// Kinds that may not be picked now: on their own cooldown, or what the others are doing this moment (two Jellies do not do the same thing at once).
     var kindCooling: Set<IdleKind> {

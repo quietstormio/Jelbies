@@ -51,11 +51,11 @@ extension BlobBrain {
 
     /// Nothing owns him: he may start something of his own.
     var bubbleFree: Bool {
-        anticsEnabled && autonomy && !held && !sleepLocked && reactFree && scriptIsNone && pending == nil && idleState.kind == nil
+        anticsEnabled && autonomy && !held && !decorLocked && reactFree && scriptIsNone && pending == nil && idleState.kind == nil
             && !race.active && social == nil && !commanded && idleMood != .grumpy && idleNight < 0.6
     }
     /// He is on his own errand (a walk) and nobody has taken him over since: keep going.
-    var bubbleStillMine: Bool { attached && !held && !sleepLocked && social == nil && !commanded && !race.active }
+    var bubbleStillMine: Bool { attached && !held && !decorLocked && social == nil && !commanded && !race.active }
 
     /// Turn and watch the bubble at floor point `p` (excited face), for `hold` seconds.
     @discardableResult
