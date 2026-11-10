@@ -600,6 +600,11 @@ struct AdoptionCenter: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: showPlaceholder)
+            if ready, let m = stageModel {          // his soft contact shadow on the pedestal (the cut-out stage draws no floor)
+                ShowcaseContactShadow(model: m).id(pick).frame(width: 420, height: 420)
+                    .offset(x: 10, y: 46)
+                    .opacity(slideO).offset(x: slideX)
+            }
             ShowcaseStage(roster: [pick], focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen, expect = pick] m in stageReady(m, character: expect, gen: gen) })
                 .id(pick).frame(width: 420, height: 420)
                 .offset(x: 10, y: 46)
