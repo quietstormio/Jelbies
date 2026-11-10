@@ -646,7 +646,7 @@ extension BlobBrain {
     private func sleepStaggeredYawn(_ sim: SoftBody, _ skinner: Skinner) {
         if !sleep.staggerSet {
             sleep.staggerSet = true
-            sleep.pre1 = rand(0, 0.8); sleep.pre2 = rand(0, 0.6)
+            sleep.pre1 = rand(0, 0.4); sleep.pre2 = rand(0, 0.6)
             sleep.yawnScale = rand(0.85, 1.3); sleep.yawn2 = rand() < 1.0 / 3
         }
         let Y1 = SleepTuning.yawnTime * sleep.yawnScale, Y2 = 0.6 * SleepTuning.yawnTime, gap: Float = 0.35
@@ -1037,7 +1037,7 @@ enum SleepOrder {
     /// Seconds from the call to his own start. Bed: ~0-0.5 / 1.0-1.8 / 2.2-3.2 (a linger before the walk). Wake and morning: 0-0.3 / 0.7-1.5 / 1.6-2.8 (lying still before the stir).
     static func delay(_ kind: Kind, slot: Int, rand: (Float, Float) -> Float) -> Float {
         switch kind {
-        case .bed: return slot == 0 ? rand(0, 0.5) : slot == 1 ? rand(1.0, 1.8) : rand(2.2, 3.2) + 0.9 * Float(slot - 2)
+        case .bed: return slot == 0 ? rand(0, 0.4) : slot == 1 ? rand(1.2, 1.8) : rand(2.4, 3.2) + 0.9 * Float(slot - 2)
         case .wake, .morning: return slot == 0 ? rand(0, 0.3) : slot == 1 ? rand(0.7, 1.5) : rand(1.6, 2.8) + 0.8 * Float(slot - 2)
         }
     }
