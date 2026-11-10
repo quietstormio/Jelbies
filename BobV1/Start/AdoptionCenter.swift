@@ -6,7 +6,8 @@
 //  The layout follows the design boards (440 x 956 pt): everything is placed in that space and scaled to the screen. Landscape: the stage on the
 //  left, the header + card + button on the right (the same blocks, scaled).
 //  Content: SpeciesInfo.swift. Backdrop / pedestal: PickerBackdrop.swift. Camera orbit: PickerCamera.swift.
-//  Simulator-only capture flags: -PickerPage 0...3 (picker order), -PickerTab 0...2, -PickerMode more.
+//  Simulator-only capture flags: -PickerPage 0...6 (picker order; 4...6 = Teddy, Pearl, Panda with -PickerMode more), -PickerTab 0...2, -PickerMode more,
+//  -PickerEmote <n> (the species' n-th emote, every 4 s, instead of the random loop).
 //
 
 import SwiftUI
@@ -67,7 +68,7 @@ struct AdoptionCenter: View {
         var t = PickerTab.about
         #if targetEnvironment(simulator)
         let d = UserDefaults.standard
-        if d.object(forKey: "PickerPage") != nil { start = min(max(d.integer(forKey: "PickerPage"), 0), 3) }
+        if d.object(forKey: "PickerPage") != nil { start = min(max(d.integer(forKey: "PickerPage"), 0), SpeciesInfo.pages(includingSpecial: mode == .more).count - 1) }
         if d.object(forKey: "PickerTab") != nil { t = PickerTab(rawValue: min(max(d.integer(forKey: "PickerTab"), 0), 2)) ?? .about }
         #endif
         _page = State(initialValue: start); _tab = State(initialValue: t)
@@ -887,10 +888,14 @@ struct AdoptionCenter: View {
         let list = SpeciesInfo.of(character).emotes
         emoteTask = Task { @MainActor in
             var i = Int.random(in: 0..<list.count)
+            var fixed = false
+            #if targetEnvironment(simulator)
+            if UserDefaults.standard.object(forKey: "PickerEmote") != nil { i = UserDefaults.standard.integer(forKey: "PickerEmote"); fixed = true }
+            #endif
             while !Task.isCancelled, pick == character {
-                try? await Task.sleep(nanoseconds: UInt64(Double.random(in: 4.0...6.5) * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: fixed ? 4_000_000_000 : UInt64(Double.random(in: 4.0...6.5) * 1_000_000_000))
                 guard !Task.isCancelled, pick == character, !naming, !celebrating else { continue }
-                perform(list[i % list.count]); i += 1
+                perform(list[i % list.count]); if !fixed { i += 1 }
             }
         }
     }
