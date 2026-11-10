@@ -4,8 +4,8 @@
 //  character id, never by colour); only the rare mutation days change the body colour of a species on offer.
 //
 //  - The Spring shows every species in its own classic colour. On about 4% of species-days (seeded daily, the same on every device that day) it offers
-//    one rare exclusive mutation instead (below); there is no other daily colour.
-//  - Rare mutations (`VariantTuning.rareRate`, ~4% of species-days) are one of a small fixed set of EXCLUSIVE off-palette colours. Exclusives never
+//    its one rare jewel tone instead (below); there is no other daily colour.
+//  - Rare mutations (`VariantTuning.rareRate`, ~4% of species-days) are ONE jewel tone per species in its own colour family (Sapphire, Amber, Emerald, Amethyst). Exclusives never
 //    appear in the Park (`ParkPool.generate` filters them; none is a `ParkColour`), and the Spring card shows a "Rare" tag.
 //  - An adopted variant is saved per CHARACTER id ("JellyVariants.v1"); `JellyRoster.palette/tint` read it, so the roster, profile, widget and
 //    selection all follow. A character with no saved variant (Bob, Pearl, Teddy, Panda, every old save) is untouched. Only ids 0...3 take variants.
@@ -43,31 +43,37 @@ nonisolated struct JellyVariant: Codable, Equatable, Sendable {
         self.title = title; self.flesh = [flesh.x, flesh.y, flesh.z]; self.deep = [deep.x, deep.y, deep.z]; self.rare = rare
     }
     /// Whether this colour is one of the Park-excluded exclusives.
-    var isExclusive: Bool { JellyVariantBook.exclusives.contains { $0.title == title } }
+    var isExclusive: Bool { JellyVariantBook.isExclusiveTitle(title) }
 }
 
 nonisolated enum JellyVariantBook {
-    /// The fixed exclusive set: off-palette colours that never show in the Park. The rare mutation draws from these.
+    /// The rare jewel tones, index = species (0 Bob blue, 1 Pip yellow, 2 Moss green, 3 Lavender purple): each species keeps to its own colour family.
+    /// They never show in the Park (no title is a `ParkColour` raw value).
     static let exclusives: [JellyVariant] = [
-        JellyVariant(title: "Sunbeam gold", flesh: [1.000, 0.835, 0.330], deep: [0.900, 0.620, 0.090], rare: true),
-        JellyVariant(title: "Midnight", flesh: [0.300, 0.340, 0.620], deep: [0.140, 0.160, 0.400], rare: true),
-        JellyVariant(title: "Moonstone", flesh: [0.880, 0.930, 1.000], deep: [0.620, 0.700, 0.900], rare: true),
-        JellyVariant(title: "Rose quartz", flesh: [1.000, 0.740, 0.860], deep: [0.860, 0.440, 0.640], rare: true),
-        JellyVariant(title: "Aurora", flesh: [0.560, 0.960, 0.800], deep: [0.250, 0.700, 0.760], rare: true),
+        JellyVariant(title: "Sapphire", flesh: [0.240, 0.430, 0.860], deep: [0.090, 0.200, 0.600], rare: true),
+        JellyVariant(title: "Amber", flesh: [0.900, 0.560, 0.140], deep: [0.640, 0.320, 0.030], rare: true),
+        JellyVariant(title: "Emerald", flesh: [0.160, 0.640, 0.420], deep: [0.040, 0.400, 0.250], rare: true),
+        JellyVariant(title: "Amethyst", flesh: [0.500, 0.300, 0.800], deep: [0.280, 0.130, 0.540], rare: true),
     ]
+    /// The five off-palette exclusives of the first release line. No longer offered, but a Jelbie that already wears one (saved by value) keeps its colour and still counts as exclusive.
+    static let legacyExclusiveTitles: [String] = ["Sunbeam gold", "Midnight", "Moonstone", "Rose quartz", "Aurora"]
+    static func isExclusiveTitle(_ t: String) -> Bool { exclusives.contains { $0.title == t } || legacyExclusiveTitles.contains(t) }
 
     /// Park colours a visitor may have: everything except an exclusive (today none collides, so the pool is unchanged).
-    static func parkEligible(_ c: ParkColour) -> Bool { !exclusives.contains { $0.title.lowercased() == c.rawValue } }
+    static func parkEligible(_ c: ParkColour) -> Bool { !(exclusives.map(\.title) + legacyExclusiveTitles).contains { $0.lowercased() == c.rawValue } }
 
     /// Days since the epoch in the local calendar (what the daily seed is keyed by).
     static func dayKey(_ date: Date = Date(), calendar: Calendar = .current) -> Int { calendar.ordinality(of: .day, in: .era, for: date) ?? 0 }
 
-    /// The Spring's offer for `species` on `dayKey`: nil = the species' own classic colour (almost always); about 4% of days a rare exclusive. Deterministic.
+    /// The Spring's offer for `species` on `dayKey`: nil = the species' own classic colour (almost always); about 4% of days that species' own rare jewel tone (`exclusives[species]`). Deterministic. `-RareDay 1` (dev builds only) makes every day rare.
     static func offer(species: Int, dayKey: Int) -> JellyVariant? {
         guard (0...3).contains(species) else { return nil }
         var r = ParkRandom(VariantTuning.seed &+ UInt64(bitPattern: Int64(dayKey)) &* 0x9E37_79B9 &+ UInt64(species) &* 0x1F3D)
         _ = r.next()
-        if Double(r.unit()) < VariantTuning.rareRate { return r.pick(exclusives) }
+        #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "RareDay") == 1 { return exclusives[species] }          // capture aid: every day is a rare day
+        #endif
+        if Double(r.unit()) < VariantTuning.rareRate { return exclusives[species] }
         return nil
     }
 

@@ -923,7 +923,8 @@ struct GameScreen: View {
         let awayMin = UserDefaults.standard.double(forKey: "AdoptAwayMin")
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(4))
-            guard !JellyRoster.savedIDs().contains(c), JellyRoster.savedIDs().count < JellyRoster.maxCount else { NSLog("[adoptnow] not adopted (already home or room full)"); return }
+            let rareDay = UserDefaults.standard.integer(forKey: "RareDay") == 1          // `-RareDay 1`: he comes home in his rare colour, even next to a classic one of his species (pictures)
+            guard rareDay || !JellyRoster.savedIDs().contains(c), JellyRoster.savedIDs().count < JellyRoster.maxCount else { NSLog("[adoptnow] not adopted (already home or room full)"); return }
             if awayMin > 0 {
                 care.leftActive(at: Date().addingTimeInterval(-awayMin * 60))
                 for j in care.jellies { j.needs.save(); j.grime.save() }
@@ -932,7 +933,7 @@ struct GameScreen: View {
             StartFlow.shared.openAdoption()          // like the real flow: the room is gone while the picker is up (the old room must not see the bought-Jelbie flag)
             try? await Task.sleep(for: .seconds(1))
             NSLog("[adoptnow] bringHome %d (%@) away=%.0f min", c, JellyRoster.baseNames[c], awayMin)
-            StartFlow.shared.bringHome(species: c, name: JellyRoster.baseNames[c])
+            StartFlow.shared.bringHome(species: c, name: JellyRoster.baseNames[c], variant: rareDay ? JellyVariantBook.offer(species: c, dayKey: JellyVariantBook.dayKey()) : nil)
             NSLog("[adoptnow] roster now %@ current %@", JellyRoster.savedIDs().description, JellyRoster.current.description)
         }
     }

@@ -71,4 +71,44 @@ struct JellyVariantTests {
         #expect(pool.map(\.id) == Array(0..<ParkTuning.poolSize))
         #expect(Set(pool.filter { $0.colour.isClassic }.map(\.colour)) == Set(ParkColour.classics))
     }
+
+    // MARK: one rare jewel tone per species
+
+    @Test func everySpeciesOnlyGetsItsOwnRare() {
+        #expect(JellyVariantBook.exclusives.map(\.title) == ["Sapphire", "Amber", "Emerald", "Amethyst"])
+        var seen = [Int: Int]()
+        for day in 0..<5000 { for s in 0...3 { if let o = JellyVariantBook.offer(species: s, dayKey: day) { #expect(o == JellyVariantBook.exclusives[s], "species \(s) day \(day)"); seen[s, default: 0] += 1 } } }
+        for s in 0...3 { #expect((seen[s] ?? 0) > 100, "species \(s) has rare days") }
+    }
+
+    @Test func rareDaysAreTheSameDaysAsBefore() {
+        // the old rule, verbatim (same seed, same first draws): only the colour changed
+        for day in 0..<20000 {
+            for s in 0...3 {
+                var r = ParkRandom(VariantTuning.seed &+ UInt64(bitPattern: Int64(day)) &* 0x9E37_79B9 &+ UInt64(s) &* 0x1F3D)
+                _ = r.next()
+                let oldRare = Double(r.unit()) < VariantTuning.rareRate
+                #expect((JellyVariantBook.offer(species: s, dayKey: day) != nil) == oldRare, "day \(day) species \(s)")
+            }
+        }
+    }
+
+    @Test func legacyExclusiveColoursStayExclusive() {
+        let legacy: [(String, [Float], [Float])] = [("Sunbeam gold", [1.000, 0.835, 0.330], [0.900, 0.620, 0.090]), ("Midnight", [0.300, 0.340, 0.620], [0.140, 0.160, 0.400]),
+            ("Moonstone", [0.880, 0.930, 1.000], [0.620, 0.700, 0.900]), ("Rose quartz", [1.000, 0.740, 0.860], [0.860, 0.440, 0.640]), ("Aurora", [0.560, 0.960, 0.800], [0.250, 0.700, 0.760])]
+        #expect(JellyVariantBook.legacyExclusiveTitles == legacy.map(\.0))
+        let suite = "JellyVariantTests.legacy.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: suite)!
+        defer { d.removePersistentDomain(forName: suite); JellyVariants.reload() }
+        for (i, l) in legacy.enumerated() {
+            let v = JellyVariant(title: l.0, flesh: SIMD3(l.1[0], l.1[1], l.1[2]), deep: SIMD3(l.2[0], l.2[1], l.2[2]), rare: true)
+            #expect(v.isExclusive)
+            JellyVariants.adopt(i % 4, v, d)          // saved by value: reads back with its own colour, still rare
+            let back = JellyVariants.load(d)[i % 4]
+            #expect(back == v && back?.isExclusive == true && back?.rare == true)
+            #expect(JellyRoster.tint(i % 4) == v.swatch)
+        }
+        for c in ParkColour.allCases { #expect(JellyVariantBook.parkEligible(c)) }
+        #expect(!ParkColour.allCases.map(\.rawValue).contains { r in JellyVariantBook.exclusives.contains { $0.title.lowercased() == r } })
+    }
 }
