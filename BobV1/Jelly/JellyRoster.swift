@@ -109,10 +109,12 @@ nonisolated enum JellyRoster {
     /// The scratch instance id the Adoption Center's preview stage uses for `species`.
     static func previewID(_ species: Int) -> Int { previewBase + min(max(species, 0), knownCount - 1) }
     /// The species (look, voice, feature) of instance `id`: identity below 100, the saved map from 100, a preview scratch id resolves to its species.
+    /// An instance id (100..<1000) with no recorded species (never allocated) is species 0; ids below 100 outside the known species keep the clamp.
     static func species(_ id: Int) -> Int {
         if (0..<knownCount).contains(id) { return id }
         if id >= previewBase { return min(id - previewBase, knownCount - 1) }
         if let s = speciesMap[id] { return s }
+        if id >= firstInstanceID { return 0 }
         return min(max(id, 0), knownCount - 1)
     }
     /// Whether `id` is a Jelbie that can exist: a species-id instance, a recorded duplicate, or a picker preview scratch id.
