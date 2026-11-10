@@ -601,7 +601,7 @@ extension BlobBrain {
         socialBook.lookPeer = nil; socialBook.lookAway = false
         // (leaving a close partner: the first turns away must not swing the skin into him)
         if let s, s.closeOK, !s.kind.isGroup, let o = (s.a === self ? s.b : s.a) { startParting(from: o) }
-        social = nil
+        social = nil; contactSideFinal = false          // (the side-by-side brake never outlives the session)
         socialBook.drought = 0
         guard let s else { return }
         if s.kind == .pass, s.uid >= 0 {          // (the ball is free again)

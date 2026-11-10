@@ -407,7 +407,7 @@ final class ContactSettleTests: XCTestCase {
                 let stepping = a.brain.stepLive || a.brain.gait.isBusy || b.brain.stepLive || b.brain.gait.isBusy
                 if stepping { lastStep = f; plant = nil }
                 else if lastStep >= 0, plant == nil, let g = ContactField.gap(0, 1) { plant = g }
-                if lastStep >= 0, f > lastStep, f < lastStep + 40, let g = ContactField.gap(0, 1) { rebound = max(rebound, g) }
+                if lastStep >= 0, f > lastStep, f < lastStep + 40, let g = ContactField.gap(0, 1) { if g > rebound { MotionLog.write(String(format: "DIAG %@ f%d stepping %d lastStep %d phase %d gap %.3f", kind.rawValue, f, stepping ? 1 : 0, lastStep, a.brain.social?.phase ?? -1, g)) }; rebound = max(rebound, g) }
                 if (a.brain.social?.phase ?? 0) >= 2 { break }
             }
             guard let g = plant else { XCTFail("\(kind): the walk-up ends"); continue }
