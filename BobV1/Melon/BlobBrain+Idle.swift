@@ -41,10 +41,10 @@ enum IdleTuning {
     static let centreRadius: Float = 1.5
     static let centreDwellFull: Float = 15
     /// (vars so the soak can measure the old gaps against the new ones; the values are read at every use)
-    nonisolated(unsafe) static var restAfterLeg: ClosedRange<Float> = 1.0...2.5
-    nonisolated(unsafe) static var wanderPickWait: ClosedRange<Float> = 2.5...4.5
+    nonisolated(unsafe) static var restAfterLeg: ClosedRange<Float> = 0.8...2.0
+    nonisolated(unsafe) static var wanderPickWait: ClosedRange<Float> = 2.0...3.5
     /// The stand after a special / emote (x `idleLively`).
-    nonisolated(unsafe) static var restAfterSpecial: ClosedRange<Float> = 0.7...1.8
+    nonisolated(unsafe) static var restAfterSpecial: ClosedRange<Float> = 0.5...1.4
     /// A friend who just began a move blocks the same move (and its family) for this long (seconds): no copycats a moment after the friend.
     static let echoWindow: Float = 5
 }

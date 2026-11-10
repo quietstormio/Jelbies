@@ -5,8 +5,13 @@ import simd
 /// The room's per-Jelbie sound requests over 180 simulated seconds with 3 Jelbies (the 2026-11-01 "they stopped making noise" report).
 @MainActor
 final class RoomSFXCountTests: XCTestCase {
-    override func setUp() { super.setUp(); BlobBrain.pickBudgetSeconds = .infinity; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }   // (the goal search stops at a wall-clock budget: a loaded machine would skip runs and lower the counts)
-    override func tearDown() { super.tearDown(); BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds; AudioHub.requestTap = nil; ContactField.reset(); RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+    /// HANGOUT_OFF=1 (TEST_RUNNER_HANGOUT_OFF under xcodebuild): the BEFORE mode of the hangout soak (no hangout emotes, the old standing gaps), to tell this change's effect from the stale baseline file.
+    private var hangoutOff: Bool { ProcessInfo.processInfo.environment["HANGOUT_OFF"] != nil }
+    private var savedGaps: (ClosedRange<Float>, ClosedRange<Float>, ClosedRange<Float>)?
+    override func setUp() {
+        if hangoutOff { savedGaps = (IdleTuning.restAfterLeg, IdleTuning.restAfterSpecial, IdleTuning.wanderPickWait); HangoutTuning.enabled = false; IdleTuning.restAfterLeg = 1.5...3.5; IdleTuning.restAfterSpecial = 1.0...2.5; IdleTuning.wanderPickWait = 3...6 }
+        super.setUp(); BlobBrain.pickBudgetSeconds = .infinity; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }   // (the goal search stops at a wall-clock budget: a loaded machine would skip runs and lower the counts)
+    override func tearDown() { if let g = savedGaps { IdleTuning.restAfterLeg = g.0; IdleTuning.restAfterSpecial = g.1; IdleTuning.wanderPickWait = g.2; HangoutTuning.enabled = true; savedGaps = nil }; super.tearDown(); BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds; AudioHub.requestTap = nil; ContactField.reset(); RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     static let seeds: [UInt64] = [11, 23, 37, 41, 59]
     /// Where the approved build's counts live (`scripts/regression-gate.sh` regenerates them from the approved commit and passes `SFXCOUNT_BASELINE`).

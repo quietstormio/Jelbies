@@ -2,7 +2,7 @@
 //  BlobBrain+Hangout.swift
 //  Six more SOLO "hangout" emotes (2026-11-09, "add more random emotes for a single Jelbie to do when they're just hanging out ... they should rarely just be standing around looking at the user").
 //  Calm, self-absorbed little things: the Jelbie is busy with itself, three-quarter to the camera or looking where it is looking, never staring into the lens.
-//    humTune      eyes closed (joyArc), a slow side-to-side sway with a tiny bounce on each beat, hums (his own .hum, then .lala)
+//    humTune      eyes closed (joyArc), a slow side-to-side sway with a tiny bounce on each beat, one hum (his own .hum)
 //    curiousPeek  turns toward a room direction away from the player, leans in a little with a head tilt, "ooh?", a second smaller lean, straightens
 //    bigStretch   both stubby arms up, the body stretches tall (feet planted), a little shiver at the top, drops back with a soft settle wobble and a content "aww"
 //    tailPeek     looks over a shoulder at his own back, turns a slow half circle in place (the turn-in-place steps) trying to see it, stops, a puzzled "huh?", a small shrug-bounce
@@ -21,8 +21,10 @@ enum HangoutTuning {
     /// False = the hangout slot never starts (the headless soak's "before").
     nonisolated(unsafe) static var enabled = true
     /// Seconds between two hangout emotes of one Jelbie (a Jelbie's first one comes `firstGap` after he starts roaming, staggered per Jelbie).
-    nonisolated(unsafe) static var gap: ClosedRange<Float> = 40...70
-    nonisolated(unsafe) static var firstGap: ClosedRange<Float> = 12...40
+    nonisolated(unsafe) static var gap: ClosedRange<Float> = 25...45
+    nonisolated(unsafe) static var firstGap: ClosedRange<Float> = 8...25
+    /// curiousPeek / bugWatch voice on this seeded roll (the others: humTune and bigStretch always, pawCheck and tailPeek never): the vocal family stays under its ceiling.
+    nonisolated(unsafe) static var voiceChance: Float = 0.35
     /// No hangout emote from this `idleNight` on; below it the gap grows up to 4x.
     static let nightStop: Float = 0.6
 }
@@ -33,6 +35,7 @@ struct HangoutState {
     var last: IdleKind?
     var rngS: UInt64 = 0xA24BAED4963EE407
     var turnLeft: Float = 0
+    var voiceOn = true
     var plays: [IdleKind: Int] = [:]
     /// Voices that PLAYED (past every gate), per kind (the soak's numbers).
     var voices: [IdleKind: Int] = [:]
@@ -83,6 +86,11 @@ extension BlobBrain {
         default: idleState.goalYaw = cam + s * hang.rnd(0.5, 0.8)          // (three-quarter view, either side)
         }
         hang.turnLeft = kind == .tailPeek ? 2.3 : 0
+        switch kind {
+        case .humTune, .bigStretch: hang.voiceOn = true
+        case .curiousPeek, .bugWatch: hang.voiceOn = hang.rnd() < HangoutTuning.voiceChance
+        default: hang.voiceOn = false          // (pawCheck, tailPeek: silent)
+        }
         idleState.phase = 0; idleState.phaseT = 0
         return true
     }
@@ -106,7 +114,7 @@ extension BlobBrain {
     private func hHaptic(_ key: String, energy: Float = 1) { treatHaptic(key, energy: energy) }
 
     private func hVoice(_ v: JellyVoice) {
-        guard !voiceMuted else { return }
+        guard !voiceMuted, hang.voiceOn else { return }
         if AudioHub.shared.hangoutVoice(jelly: steerID, v, x: px), let k = idleState.kind { hang.voices[k, default: 0] += 1 }
     }
 
@@ -152,7 +160,7 @@ extension BlobBrain {
         }
         if hOnce(0, t, at: 0.05) { face(.joyArc, hold: T - 0.1) }
         if hOnce(1, t, at: 0.3) { hVoice(.hum); hHaptic("humTune.hum") }
-        if hOnce(2, t, at: 2.5) { hVoice(.lala); hHaptic("humTune.lala") }
+        if hOnce(2, t, at: 2.5) { hHaptic("humTune.beat") }
         if t > T && !feet.active { hDone(skinner) }
     }
 
@@ -202,7 +210,7 @@ extension BlobBrain {
         let stopped = idleState.hold > 0
         let lead = stopped ? 1 - smooth01((t - idleState.hold) / 0.4) : smooth01(t / 0.4)
         twist = d * 0.35 * lead * a
-        if hOnce(0, t, at: 0.05) { face(.curious, hold: 3.4) }
+        if hOnce(0, t, at: 0.05) { face(.curious, hold: 3.4); hHaptic("tailPeek.look") }          // (the look over the shoulder)
         if !stopped {
             // the half circle: short turn-in-place legs until it is done (or the time is up)
             if t > 0.5, !feet.active {
@@ -217,11 +225,11 @@ extension BlobBrain {
         }
         // stopped: puzzled, a small shrug-bounce
         let s = t - idleState.hold
-        if hOnce(1, t, at: idleState.hold + 0.25) { face(.worried, hold: 1.3); hVoice(.huh); hHaptic("tailPeek.huh") }
+        if hOnce(1, t, at: idleState.hold + 0.25) { face(.worried, hold: 1.3) }
         let b = hBump(s, 0.7, 1.0) + hBump(s, 1.05, 1.35)
         squash *= 1 + 0.04 * b * a
         pitch += -0.03 * b * a
-        if hOnce(2, t, at: idleState.hold + 0.7) { hHaptic("tailPeek.shrug"); jellyKick = max(jellyKick, 0.6) }
+        if hOnce(2, t, at: idleState.hold + 0.7) { hHaptic("tailPeek.shrug"); jellyKick = max(jellyKick, 0.6) }          // (the shrug-bounce)
         if s > 1.8 && !feet.active { hDone(skinner) }
     }
 
@@ -246,7 +254,7 @@ extension BlobBrain {
         pitch += 0.07 * (hBump(t, 3.7, 4.0) + hBump(t, 4.05, 4.35)) * a
         if hOnce(0, t, at: 0.3) { face(.focused, hold: 3.3) }
         if hOnce(1, t, at: 0.5) { hHaptic("pawCheck.raise") }
-        if hOnce(2, t, at: 3.7) { face(.happy, hold: 1.2); blushBump(hold: 2.0, peak: 0.5); hVoice(.ooh); hHaptic("pawCheck.nod") }
+        if hOnce(2, t, at: 3.7) { face(.happy, hold: 1.2); blushBump(hold: 2.0, peak: 0.5); hHaptic("pawCheck.nod") }
         if t > T && !feet.active { hDone(skinner) }
     }
 
