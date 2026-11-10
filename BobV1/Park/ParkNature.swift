@@ -214,7 +214,9 @@ extension ParkScenery {
         S.cylinder(b, x: x, z: z, r: 0.09, y0: 0.12, y1: 0.30, color: green, segments: 10)
         S.stem(b, x: x, z: z, y0: 0.3, y1: 2.12, r: 0.04, color: green, segments: 8)
         S.cylinder(b, x: x, z: z, r: 0.14, y0: 2.10, y1: 2.16, color: green, segments: 8)
+        b.material = .lamp          // (the glass: material 5 glows with the room's lamp glow, which comes up at dusk)
         S.cylinder(b, x: x, z: z, r: 0.095, y0: 2.16, y1: 2.50, color: glass, segments: 10)
+        b.material = .plain
         for (dx, dz) in [(0.115 as Float, 0.0 as Float), (-0.115, 0), (0, 0.115), (0, -0.115)] { S.stem(b, x: x + dx, z: z + dz, y0: 2.14, y1: 2.52, r: 0.016, color: green, segments: 4) }
         b.lathe(cx: x, cz: z, profile: [PP(r: 0.0, y: 2.49, nr: 0, ny: -1), PP(r: 0.19, y: 2.49, nr: 0, ny: -1), PP(r: 0.19, y: 2.53, nr: 1, ny: 0), PP(r: 0.0, y: 2.76, nr: 0.55, ny: 0.85)], segments: 10, color: green)
         S.ball(b, V3(x, 2.79, z), 0.035, green, segments: 6, rings: 3)
@@ -245,14 +247,23 @@ extension ParkScenery {
         for (x, rx, ry) in [(-14 as Float, 14 as Float, 3.0 as Float), (8, 12, 3.4), (26, 15, 2.8)] { blob(b, V3(x, -0.6, -9.34), rx: rx, ry: ry, rz: 0.4, color: near, segments: 28, rings: 10) }
     }
 
-    /// A few soft white cumulus with grey-blue undersides.
+    /// A few small, distant, rounded cumulus: bright tops fading to a soft pale blue-grey underside (per-vertex, no flat base), in the sky band between the ridge tops and the top UI.
     static func clouds(_ b: RoomMeshBuilder) {
-        let top = S.srgb(0.99, 0.99, 1.0), under = S.srgb(0.70, 0.78, 0.90)
-        for (x, y, s) in [(3.6 as Float, 8.7 as Float, 0.95 as Float), (-1.2, 10.9, 1.0), (6.2, 11.6, 0.8), (-5.6, 9.2, 0.85), (-9.5, 11.5, 1.0), (10.5, 9.0, 1.0), (14, 12, 1.0)] {
-            blob(b, V3(x, y - 0.32 * s, -9.25), rx: 2.7 * s, ry: 0.45 * s, rz: 0.4, color: under, segments: 14, rings: 5)
-            for (k, (dx, dy, rr)) in ([(-1.5, 0.0, 0.85), (-0.5, 0.4, 1.1), (0.7, 0.35, 1.0), (1.7, 0.0, 0.75)] as [(Float, Float, Float)]).enumerated() {
-                blob(b, V3(x + dx * s, y + dy * s, -9.2 + 0.01 * Float(k)), rx: rr * 1.15 * s, ry: rr * 0.66 * s, rz: 0.5, color: top, segments: 14, rings: 6)
+        let top = S.srgb(1.0, 1.0, 1.0), under = S.srgb(0.80, 0.87, 0.95)
+        func puff(_ c: V3, _ rx: Float, _ ry: Float) {
+            let first = b.mesh.vertices.count
+            blob(b, c, rx: rx, ry: ry, rz: 0.45, color: top, segments: 14, rings: 7)
+            for i in first..<b.mesh.vertices.count {
+                let t = (b.mesh.vertices[i].pos.y - (c.y - ry)) / (2 * ry)          // 0 at the bottom, 1 at the top
+                let k = sstep(0.05, 0.62, t)
+                b.mesh.vertices[i].color = SIMD4(simd_mix(under, top, V3(repeating: k)), 1)
             }
+        }
+        for (x, y, s) in [(-4.4 as Float, 7.7 as Float, 0.65 as Float), (-0.2, 8.2, 0.8), (3.6, 7.1, 0.7), (7.0, 7.6, 0.65), (10.4, 7.4, 0.8)] {
+            puff(V3(x, y, -9.2), 0.95 * s, 0.55 * s)
+            puff(V3(x - 0.85 * s, y - 0.12 * s, -9.18), 0.7 * s, 0.42 * s)
+            puff(V3(x + 0.85 * s, y - 0.1 * s, -9.19), 0.75 * s, 0.45 * s)
+            puff(V3(x + 0.15 * s, y + 0.32 * s, -9.21), 0.6 * s, 0.42 * s)
         }
     }
 }

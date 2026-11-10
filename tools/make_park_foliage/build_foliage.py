@@ -24,7 +24,7 @@ def rot_about(v, axis, ang):
 
 
 # ---------------------------------------------------------------- palettes (sRGB)
-CORE = (0.09, 0.20, 0.10)
+CORE = (0.10, 0.22, 0.11)
 PAL_OAK = dict(shade=(0.10, 0.25, 0.11), mid=(0.22, 0.43, 0.15), sun=(0.42, 0.62, 0.20), hi=(0.55, 0.70, 0.26))
 PAL_BEECH = dict(shade=(0.11, 0.26, 0.12), mid=(0.24, 0.45, 0.16), sun=(0.44, 0.63, 0.20), hi=(0.56, 0.71, 0.26))
 PAL_BIRCH = dict(shade=(0.17, 0.33, 0.12), mid=(0.33, 0.52, 0.17), sun=(0.58, 0.72, 0.26), hi=(0.70, 0.80, 0.34))
@@ -86,7 +86,7 @@ def bough_bm(L, W, droop, thick=0.45, sides=6, segs=4, jag=0.0):
     return bm
 
 # ---------------------------------------------------------------- bark
-BARK_SHADE = (0.17, 0.13, 0.11); BARK_SUN = (0.46, 0.38, 0.30)
+BARK_SHADE = (0.25, 0.20, 0.16); BARK_SUN = (0.60, 0.51, 0.41)
 def bark_fn(pale=False, seed=0.0):
     def fn(p, n):
         s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
@@ -109,19 +109,32 @@ def commit_raw(P, N, C, F):
 class Leaves:
     """Accumulates single-sided leaf cards (a pointed oval folded along its midrib: 2 triangles) with spherical-blend normals and baked colours."""
     def __init__(self): self.P = []; self.N = []; self.C = []; self.F = []
-    def add(self, stem, axis, width_dir, L, W, n_shade, col, fold=0.12):
+    def add(self, stem, axis, width_dir, L, W, n_shade, col, fold=0.12, soft=False):
         n_face = width_dir.cross(axis).normalized()
         if n_face.dot(n_shade) < 0: n_face = -n_face
-        mid = stem + axis * (L * 0.46)
-        left = mid + width_dir * (W * 0.5) + n_face * (L * fold)
-        right = mid - width_dir * (W * 0.5) + n_face * (L * fold)
-        tip = stem + axis * L + n_face * (L * 0.02)
-        nrm = (n_shade * 0.7 + n_face * 0.3).normalized()
+        dark = tuple(c * 0.90 for c in col); lite = tuple(min(1.0, c * 1.04) for c in col)
         base = len(self.P)
-        dark = tuple(c * 0.86 for c in col); lite = tuple(min(1.0, c * 1.06) for c in col)
-        for p, c in ((stem, dark), (left, col), (right, col), (tip, lite)):
+        if soft:
+            # a rounded, slightly cupped oval with a soft point: 4 triangles (base, two shoulders, tip); normal 85% mass-spherical / 15% leaf face
+            nrm = (n_shade * 0.85 + n_face * 0.15).normalized()
+            lift = L * fold
+            pts = [stem,
+                   stem + axis * (L * 0.38) + width_dir * (W * 0.5) + n_face * lift,
+                   stem + axis * (L * 0.38) - width_dir * (W * 0.5) + n_face * lift,
+                   stem + axis * (L * 0.74) + width_dir * (W * 0.34) + n_face * (lift * 0.8),
+                   stem + axis * (L * 0.74) - width_dir * (W * 0.34) + n_face * (lift * 0.8),
+                   stem + axis * L - n_face * (L * 0.02)]
+            cols = [dark, col, col, col, col, lite]
+            tris = ((0, 1, 2), (1, 3, 2), (2, 3, 4), (3, 5, 4))
+        else:
+            mid = stem + axis * (L * 0.46)
+            pts = [stem, mid + width_dir * (W * 0.5) + n_face * (L * fold), mid - width_dir * (W * 0.5) + n_face * (L * fold), stem + axis * L + n_face * (L * 0.02)]
+            cols = [tuple(c * 0.86 for c in col), col, col, lite]
+            nrm = (n_shade * 0.7 + n_face * 0.3).normalized()
+            tris = ((0, 1, 3), (0, 3, 2))
+        for p, c in zip(pts, cols):
             self.P.append(tuple(p)); self.N.append(tuple(nrm)); self.C.append(c)
-        for tri in ((0, 1, 3), (0, 3, 2)):
+        for tri in tris:
             a, b, c2 = [self.P[base + i] for i in tri]
             nn = (Vector(b) - Vector(a)).cross(Vector(c2) - Vector(a))
             if nn.dot(n_face) >= 0: self.F.append((base + tri[0], base + tri[1], base + tri[2]))
@@ -135,7 +148,7 @@ def rand_perp(rng, n):
     a = a - n * a.dot(n)
     return a.normalized() if a.length > 1e-4 else Vector((1, 0, 0))
 
-def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, tilt=0.30, cover_top=0.97, cover_bot=0.65, sunk=0.0, hang=0.0):
+def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, tilt=0.30, cover_top=0.97, cover_bot=0.65, sunk=0.0, hang=0.0, soft=False):
     """Leaf cards over every mass surface: tilted outward and downward, stem end toward the mass, sticking past the surface; coverage heavier on top."""
     cols = [(rng.uniform(-1, 1)) for _ in masses]
     for i, m in enumerate(masses):
@@ -154,7 +167,7 @@ def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, 
             if any((p - c2).length < r2 * 0.80 for j, (c2, r2, f2, t2) in enumerate(masses) if j != i): continue
             down_v = Vector((0, -1, 0)); tg = down_v - n_out * down_v.dot(n_out)
             tg = tg.normalized() if tg.length > 0.15 else rand_perp(rng, n_out)
-            axis = (tg * (down + hang * (1 - n_out.y)) + n_out * tilt + rand_perp(rng, n_out) * 0.35).normalized()
+            axis = (tg * (down + hang * (1 - n_out.y)) + n_out * (0.16 if soft else tilt) + rand_perp(rng, n_out) * 0.35).normalized()
             wd = n_out.cross(axis)
             if wd.length < 1e-3: wd = rand_perp(rng, axis)
             wd = wd.normalized()
@@ -163,14 +176,16 @@ def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, 
             L = Lm * rng.uniform(0.8, 1.25)
             stem = p - n_out * (L * 0.18)
             t = light_t(p, n_out, [(m2[0], m2[1]) for m2 in masses], i, cc, cr, y0, y1, sunk)
-            t = clamp01(t + rng.uniform(-0.07, 0.07))
-            if t > 0.8 and rng.random() < 0.7: t = 0.8
+            jit = 0.03 if soft else 0.07
+            t = clamp01(t + rng.uniform(-jit, jit))
+            if t > 0.8 and not (soft and n_out.y > 0.55 and rng.random() < 0.25) and rng.random() < 0.7: t = 0.8
             col = pal_mix(pal, t)
-            if hue > 0: col = mix(col, YG, 0.22 * hue * (0.4 + t))
-            else: col = mix(col, BG, 0.22 * -hue * (0.4 + t))
-            v = 1 + rng.uniform(-0.06, 0.06)
+            hs = 0.12 if soft else 0.22
+            if hue > 0: col = mix(col, YG, hs * hue * (0.4 + t))
+            else: col = mix(col, BG, hs * -hue * (0.4 + t))
+            v = 1 + rng.uniform(-(0.03 if soft else 0.06), 0.03 if soft else 0.06)
             col = tuple(min(1.0, x * v) for x in col)
-            lv.add(stem, axis, wd, L, L * Wr, n_out, col)
+            lv.add(stem, axis, wd, L, L * Wr, n_out, col, soft=soft)
 
 def core_masses(masses, cc, cr, y0, y1, pal, seed, sub=2, frac=0.68, bump=0.25):
     for i, (c, r, fl, tl) in enumerate(masses):
@@ -223,7 +238,7 @@ def limbs(rng, top, Rh, yb, Hc, nm, r0, bfn, sides, lod, sub_n=(2, 3), up=0.0):
 
 def deciduous(iid, seed, spec, pal, lod=0, pale=False):
     rng = random.Random(seed); lib.reset(); reset()
-    sides = 8 if lod == 0 else 5
+    sides = 10 if lod == 0 else 5
     bfn = bark_fn(pale, seed)
     kind = spec['kind']
     begin("bark")
@@ -257,17 +272,17 @@ def deciduous(iid, seed, spec, pal, lod=0, pale=False):
     begin("leaf")
     core_masses(masses, ctr, cr, y0, y1, pal, seed, sub=2 if not lod else 1)
     lv = Leaves()
-    dens = spec['dens'] * (0.45 if lod else 1.0)
+    dens = spec.get('dens_far', spec['dens'] * 0.45) if lod else spec['dens']
     Lm = spec['leaf'] * (1.45 if lod else 1.0)
-    shell_leaves(lv, rng, masses, pal, ctr, cr, y0, y1, Lm, spec['wr'], dens, down=spec.get('down', 0.75), hang=spec.get('hang', 0.0))
+    shell_leaves(lv, rng, masses, pal, ctr, cr, y0, y1, Lm, spec['wr'], dens, down=spec.get('down', 0.75), hang=spec.get('hang', 0.0), soft=bool(spec.get('soft')) and not lod)
     nleaf = len(lv.P) // 4
     lv.flush()
     return dict(kind="tree", canopy_radius=Rh, height=y1, leaves=nleaf)
 
 OAK = dict(kind='dome', trunk=0.95, r0=0.19, flare=0.35, Rh=1.55, Hc=1.85, yb=1.2, nm=5, nbig=24, rbig=0.46, flat=0.66, tiers=[0.42, 0.62, 0.80, 0.97], droop=0.12,
-           leaf=0.19, wr=0.74, dens=300)
+           leaf=0.15, wr=0.80, dens=230, dens_far=135, soft=True)
 BEECH = dict(kind='oval', trunk=1.2, r0=0.14, flare=0.6, Rh=1.1, Hc=2.7, yb=1.15, nm=4, nbig=36, rbig=0.34, flat=0.84, tall=1.1, up=0.1, shell=0.25, droop=0.15,
-             leaf=0.15, wr=0.60, dens=430)
+             leaf=0.12, wr=0.70, dens=400, dens_far=190, soft=True)
 BIRCH = dict(kind='oval', trunk=2.2, r0=0.085, flare=0.4, Rh=1.15, Hc=2.5, yb=1.45, nm=4, nbig=60, rbig=0.19, flat=0.9, tall=2.2, up=0.1, shell=0.45, droop=1.0,
              leaf=0.12, wr=0.55, dens=520, stems=3, hang=0.9, down=1.0)
 
