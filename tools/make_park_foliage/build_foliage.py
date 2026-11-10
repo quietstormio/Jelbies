@@ -199,7 +199,7 @@ def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, 
             col = tuple(min(1.0, x * v) for x in col)
             lv.add(stem, axis, wd, L, L * (Wr + 0.15 * rim if soft else Wr - 0.30 * rim), n_out, col, soft=soft)          # (far kites turn narrow and pointed at the rim: no square corners against the sky)
 
-def core_masses(masses, cc, cr, y0, y1, pal, seed, sub=2, frac=0.68, bump=0.25, core=None):
+def core_masses(masses, cc, cr, y0, y1, pal, seed, sub=2, frac=0.68, bump=0.25, core=None, topsub=0):
     """The dark cores under the leaf shells. Colour is a leaf-shadow green, lighter toward the top (a top-light gradient), so a patch that shows reads as leaf mass in shade, not as a dark block."""
     lo = core or CORE
     hi = (min(1.0, lo[0] * 1.9), min(1.0, lo[1] * 1.7), min(1.0, lo[2] * 1.6))
@@ -209,7 +209,9 @@ def core_masses(masses, cc, cr, y0, y1, pal, seed, sub=2, frac=0.68, bump=0.25, 
             col = mix(lo, hi, t)
             s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
             return tuple(min(1.0, x * (0.9 + 0.25 * s01)) for x in col)
-        commit(clump_bm(r * frac, fl, sub, bump, seed + i * 1.3, tl), fn, sharp=100, xf=T(tuple(c), ry=i * 1.3))
+        top = (c.y - y0) / max(0.01, y1 - y0)
+        s_i, f_i = (topsub, frac * 0.85) if (topsub and top > 0.72) else (sub, frac)          # the top cores are rounder (more faces) and smaller: no straight-edged polygon under the camera
+        commit(clump_bm(r * f_i, fl, s_i, bump, seed + i * 1.3, tl), fn, sharp=100, xf=T(tuple(c), ry=i * 1.3))
 
 # ---------------------------------------------------------------- crowns + limbs
 def crown_dome(rng, Rh, yb, Hc, nbig, rbig, tiers, droop):
@@ -307,7 +309,7 @@ def deciduous(iid, seed, spec, pal, lod=0, pale=False):
     ctr = Vector((0, yb + Hc * 0.5, 0)); cr = max(Rh, Hc * 0.5) * 1.15
     y0 = yb; y1 = yb + Hc
     begin("leaf")
-    core_masses(masses, ctr, cr, y0, y1, pal, seed, sub=2 if not lod else 1, frac=0.44 if lod else 0.60, core=(0.12, 0.26, 0.12) if lod else (0.11, 0.24, 0.11))          # (a far core that peeks through reads as a leaf mass in shade, not a black polygon)
+    core_masses(masses, ctr, cr, y0, y1, pal, seed, sub=2 if not lod else 1, frac=0.44 if lod else 0.60, core=(0.12, 0.26, 0.12) if lod else (0.11, 0.24, 0.11), topsub=2 if lod else 0)          # (a far core that peeks through reads as a leaf mass in shade, not a black polygon)
     lv = Leaves()
     dens = spec.get('dens_far', spec['dens'] * 0.45) if lod else spec['dens']
     Lm = spec['leaf'] * (1.65 if lod else 1.0)
