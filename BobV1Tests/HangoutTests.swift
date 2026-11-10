@@ -47,6 +47,7 @@ final class HangoutTests: XCTestCase {
             let r = l.rigs[0]
             r.brain.idleForced = true
             HangoutTuning.voiceChance = 1
+            HangoutTuning.lastCue = -1e9; HangoutTuning.lastOwner = -1; HangoutTuning.lastKind = nil          // (the room limiter: one cue per 4 s: each kind starts fresh)
             let hub = AudioHub.shared; hub._openForTest(); AudioHub.dryRun = true
             var simNow = 50_000.0; AudioHub.clock = { simNow }
             var haptics: [String] = [], asked: [String] = []
