@@ -9,8 +9,8 @@ struct JellyVariantTests {
         for day in 700_000..<700_040 {
             for s in 0...3 { #expect(JellyVariantBook.offer(species: s, dayKey: day) == JellyVariantBook.offer(species: s, dayKey: day)) }
         }
-        let distinct = Set((700_000..<700_060).map { JellyVariantBook.offer(species: 0, dayKey: $0)?.title ?? "classic" })
-        #expect(distinct.count > 3)
+        // The Spring shows the species' own colour: every non-nil offer is a rare exclusive, never a Park-table colour.
+        for day in 700_000..<700_400 { for s in 0...3 { if let o = JellyVariantBook.offer(species: s, dayKey: day) { #expect(o.rare && JellyVariantBook.exclusives.contains(o)) } } }
         #expect(JellyVariantBook.offer(species: 4, dayKey: 1) == nil)          // Teddy / Pearl / Panda are never offered variants
     }
 

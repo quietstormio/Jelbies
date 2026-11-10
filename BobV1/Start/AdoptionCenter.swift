@@ -82,12 +82,12 @@ struct AdoptionCenter: View {
     private var info: SpeciesInfo { SpeciesInfo.of(order[page]) }
     private var look: SpeciesLook { info.look }
     private var pick: Int { info.character }
-    /// Today's Jelly Spring colour variant of the shown species (nil = classic; the free first gift is always classic).
+    /// Today's Jelly Spring offer for the shown species: nil = its own classic colour (almost always), or a rare exclusive mutation on about 4% of days (the free first gift is always classic).
     private var variant: JellyVariant? { Self.offer(mode: mode, character: pick) }
     static func offer(mode: StartFlow.AdoptMode, character: Int) -> JellyVariant? {
         mode == .first ? nil : JellyVariantBook.offer(species: character, dayKey: JellyVariantBook.dayKey())          // every species, the ones you already have included
     }
-    /// Makes the stage draw `character` in today's variant (read when the stage body is built).
+    /// Makes the stage draw `character` in today's offer (its classic colour, or the rare mutation; read when the stage body is built).
     static func previewOffer(mode: StartFlow.AdoptMode, character: Int) {
         JellyVariants.setPreview(JellyRoster.previewID(character), offer(mode: mode, character: character))          // the scratch id: a preview never recolours an owned Jelbie
     }
