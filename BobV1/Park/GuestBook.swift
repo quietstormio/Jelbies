@@ -134,6 +134,10 @@ final class GuestBook {
     var welcomeLine = "Welcome!"
     var welcomeSpan: Double = 1.2
     @ObservationIgnored var welcomeActor: JellyActor?
+    /// The bought Jelbie's confetti (GameCare+Newcomer.swift, drawn by `GuestArrivalOverlay`): when each burst started (CACurrentMediaTime), 0 = none. The overlay's view exists only while one is on.
+    var confettiSide: Double = 0
+    var confettiRain: Double = 0
+    @ObservationIgnored var confettiActor: JellyActor?
     @ObservationIgnored var arrival = ArrivalClock()
     @ObservationIgnored var arrivalTarget: SIMD2<Float>?
     /// The welcome party after the hug (Park/GuestParty.swift).
