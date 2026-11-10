@@ -13,7 +13,7 @@ final class AmbientVoiceTests: XCTestCase {
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
-    /// (below 10_000: RoomSFXCountTests.testPlayedRoomSounds starts the shared hub's clock at 10_000 and a LATER-than-that gap stamp would hush every sound there)
+    /// (below 100_000: RoomSFXCountTests.testPlayedRoomSounds starts the shared hub's clock at 100_000 and a LATER-than-that gap stamp would hush every sound there; the 5-seed roam soak pushed this base past the old 10_000)
     nonisolated(unsafe) static var clockBase = 1_000.0
     struct Result { var played: [String: Int] = [:]; var voices = 0, newVoices = 0, ambientTags = 0, ctxReq = 0, jellyCount = 0; var drops: [String: Int] = [:]; var minVoiceGap = 999.0, minAnyGap = 999.0; var minutes = 0.0 }
 
