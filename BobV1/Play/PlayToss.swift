@@ -463,7 +463,11 @@ final class PlayToss {
         let choice = (passTo.flatMap { id in free.first { $0.id == id } }) ?? free.min { simd_distance($0.pos, SIMD2(ball.pos.x, ball.pos.z)) < simd_distance($1.pos, SIMD2(ball.pos.x, ball.pos.z)) }
         guard let j = choice else { return }
         // where it will lie: its roll runs out in v / decay
-        var ballXZ = SIMD2(ball.pos.x, ball.pos.z) + SIMD2(ball.vel.x, ball.vel.z) / TossTuning.rollDecayPerS * 0.8
+        // (a ball still in the air / bouncing travels on through its bounces before the roll starts: counted, or he stands short and the stomp whiffs)
+        let gq = TossTuning.gravity, e = TossTuning.restitution
+        let vLand = (ball.vel.y * ball.vel.y + 2 * gq * max(ball.pos.y - r, 0)).squareRoot()
+        let airT = ball.pos.y > r + 0.03 || abs(ball.vel.y) > 0.5 ? min((ball.vel.y + vLand) / gq + 2 * vLand * e / (1 - e) / gq, 1.6) : 0
+        var ballXZ = SIMD2(ball.pos.x, ball.pos.z) + SIMD2(ball.vel.x, ball.vel.z) * (airT * 0.75 + 0.8 / TossTuning.rollDecayPerS)
         let lim = DecorPlacement.visibleHalf(z: ballXZ.y) - r
         ballXZ = SIMD2(min(max(ballXZ.x, -lim), lim), min(max(ballXZ.y, TossTuning.zBack + r), catchZ()))
         let target = SIMD2<Float>(handWorld().x * 0.5, catchZ() + 0.6)
