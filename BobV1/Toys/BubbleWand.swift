@@ -20,6 +20,8 @@ struct BubbleJelly {
     var id: Int
     var brain: BlobBrain
     var sim: SoftBody
+    /// A park visitor: chases and pops bubbles but is not given a spot on the leash line.
+    var free = false
 }
 
 nonisolated enum BubbleTuning {
@@ -357,7 +359,7 @@ final class BubbleWand: PlayToy {
               let r = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) else { return nil }
         let hx = max(min(abs(l.x), abs(r.x)) - 0.8, 1.2)          // (a body's half width inside the near edge)
         var zHi = min(front.y, GameCamera.roamMaxZ - 0.1)
-        var zLo = max(back.y, RoomLayout.minZ + 1.6)
+        var zLo = max(back.y, GameCamera.parkRoamMaxZ != nil ? GameCamera.roamRect.min.y : RoomLayout.minZ + 1.6)          // (the park: its roam rect's back edge)
         if zHi - zLo < 1.6 { zLo = zHi - 1.6 }
         zHi = max(zHi, zLo + 0.5)
         areaCache = (size, SIMD2(-hx, zLo), SIMD2(hx, zHi))
@@ -392,7 +394,7 @@ final class BubbleWand: PlayToy {
     private func leashTick(_ js: [BubbleJelly]) {
         for j in js where (j.brain.isSleeping || j.brain.isNapping) && j.brain.bubbleLeash != nil { j.brain.bubbleLeash = nil; j.brain.trackPoint = nil; j.brain.bubbleHold = false }
         guard let a = playArea() else { return }
-        let awake = js.filter { !$0.brain.isSleeping && !$0.brain.isNapping && $0.brain.enabled }
+        let awake = js.filter { !$0.free && !$0.brain.isSleeping && !$0.brain.isNapping && $0.brain.enabled }
         let key = awake.map(\.id).sorted()
         let gather = key != slotKey || slotSize != viewSize
         if gather { slotKey = key; slotSize = viewSize; assignSlots(awake, a) }

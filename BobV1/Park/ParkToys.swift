@@ -29,8 +29,17 @@ nonisolated enum ParkToys {
         return k.category == .toys && k.activeInteraction != nil && !k.isRetired && !DecorKind.parkOnly.contains(k) && k != .slide && k != .playtunnel && s.units <= 1 && max(s.half.x, s.half.y) <= 0.55
     }
     /// Up to three of the room's placed toys (in placement order), moved to the park's spots with their own uids; the room's list is only read.
-    static func ownToys(from room: [PlacedDecor]) -> [PlacedDecor] {
-        room.filter { isCarryable($0.kind) }.prefix(ownSpots.count).enumerated().map { PlacedDecor(uid: ownUIDBase + $0.offset, kind: $0.element.kind, x: ownSpots[$0.offset].x, z: ownSpots[$0.offset].y, turns: nil) }
+    static func ownToys(from room0: [PlacedDecor]) -> [PlacedDecor] {
+        var room = room0
+        #if targetEnvironment(simulator)
+        // capture aid: `-ParkToys kindA,kindB,kindC` brings those toys instead of the save's (any raw value; `list` logs the kinds that travel)
+        if let s = UserDefaults.standard.string(forKey: "ParkToys") {
+            NSLog("[parktoys] carryable: %@", DecorKind.allCases.filter { isCarryable($0) }.map(\.rawValue).joined(separator: ","))
+            room = s.split(separator: ",").enumerated().compactMap { i, n in DecorKind(rawValue: String(n)).map { PlacedDecor(uid: 100 + i, kind: $0, x: 0, z: 0, turns: nil) } }
+            return room.prefix(ownSpots.count).enumerated().map { PlacedDecor(uid: ownUIDBase + $0.offset, kind: $0.element.kind, x: ownSpots[$0.offset].x, z: ownSpots[$0.offset].y, turns: nil) }
+        }
+        #endif
+        return room.filter { isCarryable($0.kind) }.prefix(ownSpots.count).enumerated().map { PlacedDecor(uid: ownUIDBase + $0.offset, kind: $0.element.kind, x: ownSpots[$0.offset].x, z: ownSpots[$0.offset].y, turns: nil) }
     }
 }
 

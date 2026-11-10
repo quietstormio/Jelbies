@@ -646,7 +646,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         PerfProbe.end("ears.tick", pe)      // sound reactions (Audio/EarsListener.swift)
         if game, BubbleWand.shared.active {          // the bubble wand toy (Toys/BubbleWand.swift): bubbles float, the Jelbies watch / chase / pop them
             let pb = PerfProbe.begin()
-            let js = actors.compactMap { a in a.brain.map { BubbleJelly(id: a.id, brain: $0, sim: a.sim) } }
+            let js = actors.filter { !model.care.parkHides($0.id) }.compactMap { a in a.brain.map { BubbleJelly(id: a.id, brain: $0, sim: a.sim) } } + (model.care.park.inScene ? parkActors.compactMap { a in a.brain.map { BubbleJelly(id: a.id, brain: $0, sim: a.sim, free: true) } } : [])
             BubbleWand.shared.tick(jellies: js, dt: sim.stepDt, haptics: model.touch.haptics)
             PerfProbe.end("bubbleWand", pb)
         }

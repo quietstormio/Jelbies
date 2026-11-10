@@ -56,9 +56,15 @@ extension GameCare {
     /// Capture aid: `-StartHopscotch 1` has the first Jelbie who came start the hopscotch ~4 s into the park, `-StartSlide 1` the slide.
     nonisolated(unsafe) static var demoToys: [(key: String, kind: DecorKind, move: IdleKind)] = {
         let all: [(key: String, kind: DecorKind, move: IdleKind)] = [("StartHopscotch", DecorKind.hopscotch, IdleKind.decorHopscotch), ("StartSlide", DecorKind.slide, IdleKind.decorSlide)]
-        return all.filter { UserDefaults.standard.integer(forKey: $0.key) != 0 }
+        var out = all.filter { UserDefaults.standard.integer(forKey: $0.key) != 0 }
+        // `-StartToy <kind>`: the first Jelbie who came goes to that piece (bring it with `-ParkToys <kind>`; any DecorKind raw value)
+        if let s = UserDefaults.standard.string(forKey: "StartToy"), let k = DecorKind(rawValue: s), let m = k.interaction { out.append((key: "StartToy", kind: k, move: m)) }
+        return out
     }()
     nonisolated(unsafe) static var demoToyFrames = 0
+    /// Capture aid: `-StartParkPlay ball|wand` opens Play mode with that toy ~5 s into the park (the picker needs a tap, which a command line cannot do).
+    nonisolated(unsafe) static var demoPlay = UserDefaults.standard.string(forKey: "StartParkPlay")
+    nonisolated(unsafe) static var demoPlayFrames = 0
     #endif
 
     /// The Town's Park row: blocked = a friendly toast; else the picker (who comes along) opens.
@@ -126,6 +132,12 @@ extension GameCare {
                 if UserDefaults.standard.integer(forKey: "HopscotchJoin") != 0 { HopscotchTuning.joinChance = 1 }          // (a sure line for the capture)
                 _ = b.startCommandedDecor(d.move, only: d.kind, actors[k].sim, actors[k].skinner)
             }
+        }
+        #endif
+        #if targetEnvironment(simulator)
+        if let m = Self.demoPlay, park.phase == .playing {
+            Self.demoPlayFrames += 1
+            if Self.demoPlayFrames == 300 { if m == "wand" { beginPlay(wand: BubbleWand.shared); BubbleWand.shared.startDemo(mode: 2, care: self) } else { beginPlay(ball: .ball) } }
         }
         #endif
         work.saveT += dt

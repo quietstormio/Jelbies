@@ -11,16 +11,18 @@ import simd
 extension GameCare {
     /// Play may start: roaming in the room, nothing else going on, and somebody awake to play with.
     var canPlay: Bool {
-        focus.phase == .roaming && !bath.active && !tripActive && !raceBusy && !trayOut && !cafe.active && !arranging && !park.inScene && !volley.inScene && !groom.inScene
+        focus.phase == .roaming && !bath.active && (!tripActive || parkPlayOpen) && !raceBusy && !trayOut && !cafe.active && !arranging && (!park.inScene || parkPlayOpen) && !volley.inScene && !groom.inScene
             && !guestBook.present && !nightSkip.active && !play.active && !playJellies().isEmpty
     }
+    /// The park is up and playing: the ball and the bubble wand work there too (never while it fades in or out; the other trips still block Play).
+    var parkPlayOpen: Bool { park.phase == .playing }
     /// Why Play is not available (VoiceOver), nil = it is.
     var playBlocker: String? {
         if play.active { return "Already playing" }
         if focus.isActive { return "Not in the close-up" }
         if bath.active { return "Not while cleaning" }
         if trayOut { return "Food is already out" }
-        if tripActive || raceBusy || cafe.active { return "Not while away" }
+        if (tripActive && !parkPlayOpen) || raceBusy || cafe.active { return "Not while away" }
         if guestBook.present { return "Not while a friend is over" }
         if playJellies().isEmpty { return "Everybody is asleep" }
         return nil
@@ -28,17 +30,27 @@ extension GameCare {
 
     /// The awake Jelbies in the room, as the controller sees them.
     func playJellies() -> [PlayJelly] {
-        playActors.compactMap { a in
+        let own: [PlayJelly] = playActors.compactMap { a in
             guard let b = a.brain, !parkHides(a.id), !b.isSleeping, !b.isNapping else { return nil }
             return PlayJelly(id: a.id, brain: b, sim: a.sim, skinner: a.skinner)
         }
+        guard park.inScene else { return own }
+        // the park's visitors head and kick the ball back too, but keep roaming (they are not set on the play line)
+        return own + parkBook.actors.compactMap { a in
+            guard let b = a.brain, !b.isSleeping, !b.isNapping else { return nil }
+            return PlayJelly(id: a.id, brain: b, sim: a.sim, skinner: a.skinner, free: true)
+        }
     }
+
+    /// The ball's back wall: the room's, or the park's roam rect (GameCamera.configurePark).
+    private func applyPlayWorld() { TossTuning.zBack = park.inScene ? GameCamera.roamRect.min.y : -2.4 }
 
     /// A toy was picked: Play mode on with that ball.
     func beginPlay(ball kind: DecorKind) {
         guard canPlay else { AudioHub.shared.play(.notEnough); return }
         select.cancel()
         clearHighlight()
+        applyPlayWorld()
         play.onEvent = { [weak self] e in self?.playFeedback(e) }
         play.begin(ball: kind, title: kind.title, jellies: playJellies())
         AudioHub.shared.play(.uiconfirm)
@@ -50,6 +62,7 @@ extension GameCare {
         select.cancel()
         clearHighlight()
         play.onEvent = nil
+        applyPlayWorld()
         play.beginToy(title: wand.title)
         wand.begin(care: self)
         AudioHub.shared.play(.uiconfirm)
@@ -58,6 +71,7 @@ extension GameCare {
     func endPlay() {
         play.end()
         play.onEvent = nil
+        TossTuning.zBack = -2.4
         BubbleWand.shared.deactivate()          // (no-op unless the wand was out)
     }
 
@@ -65,7 +79,7 @@ extension GameCare {
     func tickPlay(_ actors: [JellyActor], dt: Float) {
         playActors = actors
         guard play.active || play.camBlend > 0 || GameCamera.playBlend != 0 else { return }
-        if play.active, focus.isActive || bath.active || tripActive || guestBook.present { endPlay() }
+        if play.active, focus.isActive || bath.active || (tripActive && !parkPlayOpen) || (park.active && !parkPlayOpen) || guestBook.present { endPlay() }          // (Go home / the bedtime call ends the park's play first)
         play.tick(dt: dt, world: tossWorld(), jellies: play.active ? playJellies() : [])
         if play.active, UserDefaults.standard.integer(forKey: "PlayDemo") > 0, Int(play.clock * 60) % 15 == 0 {
             let b = play.ball

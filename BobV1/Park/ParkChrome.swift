@@ -10,6 +10,7 @@ struct ParkChrome: View {
     let care: GameCare
     @Environment(\.verticalSizeClass) private var vsc
     @State private var soundOpen = false
+    @State private var toysOpen = false
     private var park: ParkTrip { care.park }
     private var book: ParkBook { care.parkBook }
 
@@ -24,7 +25,7 @@ struct ParkChrome: View {
         GeometryReader { g in
             ZStack {
                 if park.picking { picker }
-                if park.inScene {
+                if park.inScene, !care.play.active {          // (Play mode has its own Done pill in the corner: the park's bar steps aside, like the home HUD)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top) {
                             HStack(spacing: 7) {
@@ -44,7 +45,7 @@ struct ParkChrome: View {
                     }
                     .padding(.horizontal, 16).padding(.top, 8)
                 }
-                if soundOpen, park.inScene {
+                if soundOpen, park.inScene, !care.play.active {
                     VStack {
                         HStack { SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } }; Spacer() }
                         Spacer()
@@ -52,7 +53,7 @@ struct ParkChrome: View {
                     .padding(.top, 60).padding(.leading, 12)
                     .transition(.scale(scale: 0.9, anchor: .topLeading).combined(with: .opacity))
                 }
-                if park.phase == .playing {
+                if park.phase == .playing, !care.play.active {
                     if let vid = park.card, let v = book.visitor(vid) {
                         if vsc == .compact {
                             HStack { Spacer(); VisitorCard(care: care, visitor: v).frame(width: min(320, g.size.width * 0.38)).padding(.top, 112).padding(.bottom, 80).padding(.trailing, 8) }
@@ -62,15 +63,17 @@ struct ParkChrome: View {
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
-                    VStack {
+                    VStack(spacing: 10) {
                         Spacer()
-                        Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); park.goHome() } label: {
+                        if toysOpen { toyStrip.transition(.scale(scale: 0.9, anchor: .bottomLeading).combined(with: .opacity)) }
+                        Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); toysOpen = false; park.goHome() } label: {
                             HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Go home") }
                                 .font(SK.font(19, .black)).foregroundStyle(SK.ink)
                                 .padding(.horizontal, 26).frame(minHeight: 54)
                                 .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
                         }
                         .buttonStyle(.plain).accessibilityIdentifier("park-home")
+                        .overlay(alignment: .leading) { playButton.offset(x: -(HUDLayout.parkPlaySize + HUDLayout.parkPlayGap)) }          // (round, left of the pill, centred on it; HUDLayout.parkHomeRect keeps the roam floor clear of both)
                     }
                     .padding(.bottom, 24)
                     .transition(.opacity)
@@ -102,11 +105,66 @@ struct ParkChrome: View {
             .frame(width: g.size.width, height: g.size.height)
             .animation(.easeInOut(duration: 0.25), value: park.card)
             .animation(.easeInOut(duration: 0.25), value: park.phase == .playing)
+            .animation(.easeInOut(duration: 0.2), value: toysOpen)
+            .onChange(of: care.play.active) { _, on in if on { toysOpen = false } }
             .animation(.easeInOut(duration: 0.2), value: park.toast)
             .animation(.easeInOut(duration: 0.25), value: park.gift?.itemID)
             .onChange(of: park.toast) { _, t in if let t { A11yAnnounce.say(t) } }
         }
         .allowsHitTesting(park.active || park.toast != nil || park.gift != nil)
+    }
+
+    /// The home Play row's round button (GameScreen.swift CareMenu.row: cream circle, brown teddy, white rim), opening the toy picker.
+    private var playButton: some View {
+        let on = care.canPlay
+        return Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            withAnimation(CareMenu.spring) { toysOpen.toggle() }
+        } label: {
+            Image(systemName: HUDMenu.symbol(.play))
+                .font(.system(size: 21, weight: .semibold)).foregroundStyle(CareMenu.brown)
+                .frame(width: HUDLayout.parkPlaySize, height: HUDLayout.parkPlaySize)
+                .background(Circle().fill(CareMenu.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.22), radius: 7, y: 3))
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                .opacity(on ? 1 : 0.45)
+        }
+        .buttonStyle(.plain).disabled(!on)
+        .accessibilityIdentifier("park-play").accessibilityLabel("Play").accessibilityHint(care.playBlocker ?? "Pick a toy to play with")
+    }
+
+    /// The toy picker, the same entries as the home Play row (the toys the player owns): tap one to start the ball or the bubble wand.
+    private var toyStrip: some View {
+        let toys = PlayToyRegistry.offered(book: care.store)
+        return Group {
+            if toys.isEmpty {
+                Text("No toys yet. Get a ball in the Shop").font(SK.font(13, .heavy)).foregroundStyle(CareMenu.brown)
+                    .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(CareMenu.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
+                    .accessibilityIdentifier("play-toys-empty")
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(toys, id: \.toyID) { t in
+                            if let item = StoreCatalog.item(t.storeID) {
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                                    withAnimation(CareMenu.spring) { toysOpen = false }
+                                    t.activate(care: care)
+                                } label: {
+                                    VStack(spacing: 3) {
+                                        ItemArt(item: item, size: HUDLayout.isPad ? 72 : 50)
+                                        Text(t.title).font(SK.font(11, .semibold)).foregroundStyle(CareMenu.brown).lineLimit(1)
+                                            .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(CareMenu.cream))
+                                    }
+                                }
+                                .buttonStyle(.plain).accessibilityIdentifier("play-toy-\(t.toyID)").accessibilityLabel(t.title)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 8)
+                }
+                .frame(maxWidth: 360)
+            }
+        }
     }
 
     /// The same button as the café's (the home HUD's sound look): opens the Sound panel, whose Skip cycles the park playlist.
