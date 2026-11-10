@@ -29,7 +29,8 @@ nonisolated enum TossTuning {
     /// The hand: the ball is held at this height above the floor under the finger.
     static let handHeight: Float = 0.8
     /// Back wall z, and the floor's far corners (the soccer ball's floor).
-    static let zBack: Float = -2.4
+    /// (a var: the park's play sets its own back edge for the visit, GameCare+Play.swift)
+    nonisolated(unsafe) static var zBack: Float = -2.4
     /// The largest step the physics takes (a third of the smallest ball's radius).
     static let maxStep: Float = 0.05
 }

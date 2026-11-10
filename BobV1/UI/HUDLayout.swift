@@ -52,6 +52,8 @@ enum HUDLayout {
 
     /// The park's bottom-centre "Go home" pill (Park/ParkChrome.swift: capsule minHeight 54, 26 pt side padding, font 19, 24 pt bottom padding above the safe area) as a screen
     /// rectangle (fractions, top-left origin), a little oversized and reaching the bottom edge. Reference phone: 393 x 852 portrait (34 pt bottom safe area), 852 x 393 landscape (21 pt).
+    /// The park's round Play button: its diameter and the gap to the Go home pill.
+    static let parkPlaySize: CGFloat = 54, parkPlayGap: CGFloat = 12
     static func parkHomeRect(aspect: Float) -> CGRect {
         let portrait = aspect < 1
         var w: CGFloat = portrait ? 393 : 852, h: CGFloat = portrait ? 852 : 393, safe: CGFloat = portrait ? 34 : 21
@@ -59,7 +61,8 @@ enum HUDLayout {
         let pillW: CGFloat = 176, pillH: CGFloat = 54, margin: CGFloat = 10
         let top = (h - safe - 24 - pillH - margin) / h
         let halfW = (pillW / 2 + margin) / w
-        return CGRect(x: 0.5 - halfW, y: top, width: 2 * halfW, height: 1 - top)
+        let playW = (parkPlaySize + parkPlayGap) / w          // the round Play button stands to the left of the pill (ParkChrome.swift)
+        return CGRect(x: 0.5 - halfW - playW, y: top, width: 2 * halfW + playW, height: 1 - top)
     }
 
     /// `railRects`, size-aware: on iPad the rails are scaled by `padScale` (and the window can be any size), so the cut-outs follow; on iPhone exactly `railRects`.

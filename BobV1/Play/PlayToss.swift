@@ -24,6 +24,8 @@ struct PlayJelly {
     let brain: BlobBrain
     let sim: SoftBody
     let skinner: Skinner
+    /// A park visitor: heads and kicks the ball back when it comes to him, but is not placed on the play line.
+    var free = false
     var pos: SIMD2<Float> { brain.position }
     /// The crown's height now (the body's centre + half the height: the squash, the hop and the wobble are in the centroid).
     var headTop: Float { sim.centroid().y + BobShape.H * 0.5 }
@@ -165,8 +167,9 @@ final class PlayToss {
 
     /// Where the Jelbies stand to play: abreast on a line across the floor, the nearest one to the middle in front.
     func placeJellies() {
-        spots = Self.playSpots(count: jellies.count, size: viewSize)
-        let order = jellies.sorted { $0.pos.x < $1.pos.x }
+        let line = jellies.filter { !$0.free }
+        spots = Self.playSpots(count: line.count, size: viewSize)
+        let order = line.sorted { $0.pos.x < $1.pos.x }
         for (k, j) in order.enumerated() {
             saved[j.id] = (j.brain.reserved, j.brain.idleBlocked, j.brain.waitFocus)
             j.brain.reserved = true; j.brain.idleBlocked = true

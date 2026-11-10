@@ -162,8 +162,9 @@ enum GameCamera {
     static func playPose(eye e: SIMD3<Float>, target t: SIMD3<Float>, aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let w = poseBlend(aspect)       // landscape (continuous; 0 or 1 on every phone and the same 1.0...1.2 band as the close-ups)
         let elev: Float = (35 - 5 * w) * .pi / 180
-        let dist: Float = 13.5 - 5.0 * w
-        let tt = SIMD3<Float>(0, 0.6, 1.1 + 0.1 * w)
+        var dist: Float = 13.5 - 5.0 * w
+        var tt = SIMD3<Float>(0, 0.6, 1.1 + 0.1 * w)
+        if parkRoamMaxZ != nil { dist *= 1.7; tt = SIMD3(0, 0.3, parkLookZ - 0.5 + 0.1 * w) }          // the park (ParkRoom.swift): the same low view from a little further back, centred on the lawn (its back edge is z -3.4, the room's -2.4)
         return (tt + SIMD3<Float>(0, sinf(elev), cosf(elev)) * dist, tt)
     }
 
