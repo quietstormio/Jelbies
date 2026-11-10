@@ -191,7 +191,7 @@ extension BlobBrain {
             }
         default:    // a happy hop each and a cheer
             faceEach(o)
-            if !socialBook.apartStarted, scriptIsNone, idleState.kind == nil, isA || t >= 0.18 {
+            if !socialBook.apartStarted, scriptIsNone, idleState.kind == nil, hopFootFree(s), isA || t >= 0.18 {
                 socialBook.apartStarted = true; socialBook.hold = false; socialBook.faceYaw = nil
                 startHopPlay(sim: sim, distance: 0.0001)
                 face(.joyArc, hold: 1.2)

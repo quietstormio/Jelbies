@@ -42,6 +42,8 @@ extension BlobBrain {
     // MARK: small helpers
 
     var fxFree: Bool { scriptIsNone && idleState.kind == nil }
+    /// A joy hop may start: no step is live (a hop launched in the middle of a swing step snaps the planted sole 10+ cm in one tick: bellyBounce Moss+Pearl frame 330, 0.33 m of "skate"), or the phase is old enough that the step is stuck (then the hop goes anyway).
+    func hopFootFree(_ s: SocialSession) -> Bool { !feet.active || s.phaseT > 1.2 }
     /// `fixed` for a spot beside a partner: the close-social gap applies (the room's peer push is shorter for a pair that is about to touch).
     func closeFixed(_ p: SIMD2<Float>) -> SIMD2<Float> { socialBook.closePending = true; defer { socialBook.closePending = false }; return fixed(p) }
     var inCloseSocial: Bool { socialBook.closePending || (social?.closeOK == true && social?.end == nil) }
@@ -131,7 +133,7 @@ extension BlobBrain {
     /// Ends a play where both do a last cheer hop and A finishes with the make-up hearts. `at`: the phase time to start (b a beat later).
     private func cheerEnd(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody, key: Int) {
         stepKey(key)
-        if !socialBook.apartStarted, fxFree, s.phaseT >= (isA ? 0.1 : 0.3) {
+        if !socialBook.apartStarted, fxFree, hopFootFree(s), s.phaseT >= (isA ? 0.1 : 0.3) {
             socialBook.apartStarted = true
             hopJoy(sim)
             AudioHub.shared.chirp(jelly: steerID, .happy)

@@ -240,7 +240,7 @@ extension BlobBrain {
                 if t > 0.95 { if s.phase == 2 { s.setPhase(3); s.impacted = false } else { s.setPhase(4) } }
             }
         default:    // bump-and-bounce: a couple of happy bounces each (b a beat later), a jelly kick on both
-            if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, isA || s.phaseT >= 0.18 {
+            if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, hopFootFree(s), isA || s.phaseT >= 0.18 {
                 socialBook.hopStarted = true
                 socialBook.hold = false; socialBook.faceYaw = nil
                 jellyKick = max(jellyKick, impactKick(2.0))

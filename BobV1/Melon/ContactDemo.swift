@@ -126,6 +126,7 @@ enum ContactDemo {
                 for (x, p) in cast.enumerated() { for q in cast[(x + 1)...] { dmin = min(dmin, simd_distance(p.position, q.position)) } }
                 let ph = lead.social?.phase ?? -1
                 note(" tick t=%.2f ph=%d d=%.2f%@", Date().timeIntervalSince1970, ph, dmin, gl.sample(ph: ph, dmin: dmin))
+                for b in cast where b.hasTailToPlay { note(" tail id%d curl=%.1f side=%.0f isB=%d", b.steerID, b.tailPlay.curl, b.tailPlay.socialSide, b.social?.b === b ? 1 : 0) }
                 if ProcessInfo.processInfo.environment["CONTACT_PARK_DIAG"] != nil || UserDefaults.standard.integer(forKey: "ContactDemoDiag") != 0 {
                     note(" diag %@", cast.map { b in String(format: "[id%d (%.2f,%.2f) valid=%d partners=%@ pass=%d scr=%@ act=%@]", b.steerID, b.position.x, b.position.y, ContactField.isValid(b.steerID) ? 1 : 0, "\(b.contactPartnerIDs().sorted())", b.socialBook.passThrough ? 1 : 0, "\(b.script)", "\(b.activity)") }.joined(separator: " "))
                 }
