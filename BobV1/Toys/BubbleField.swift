@@ -20,6 +20,10 @@ nonisolated struct Bubble: Equatable, Sendable {
     var claimedBy: Int = -1
     /// Already bumped by a body (a bubble that is only nudged away is not bumped again).
     var touched = false
+    /// The height a claimed bubble eases to (the wand sets it: the crown + the chosen hop's apex), nil = none.
+    var reachY: Float?
+    /// Seconds a claimed bubble has been kept from expiring (capped at `BubbleField.claimExtendMax`).
+    var extended: Float = 0
     /// Squash of the wobble, -1...1 (the renderer stretches by it).
     var wobble: Float { sinf(age * 5.2 + phase) }
 }
@@ -27,6 +31,9 @@ nonisolated struct Bubble: Equatable, Sendable {
 nonisolated struct BubbleField: Sendable {
     static let cap = 40
     static let ceiling: Float = 2.7
+    /// A claimed bubble waits for him: its life is stretched by at most this many seconds, and its horizontal drift stops within ~0.6 s.
+    static let claimExtendMax: Float = 3
+    static let claimedDrag: Float = 5.5
     private(set) var bubbles: [Bubble] = []
     private(set) var nextID = 1
     /// Totals (tests, report).
@@ -70,7 +77,19 @@ nonisolated struct BubbleField: Sendable {
         var i = 0
         while i < bubbles.count {
             var b = bubbles[i]
-            b.age += dt
+            if b.claimedBy >= 0, b.reachY != nil, b.extended < Self.claimExtendMax, b.age >= b.life - 0.5 { b.extended += dt }          // (a claimed bubble does not expire for up to 3 s)
+            else { b.age += dt }
+            if b.claimedBy >= 0, b.reachY != nil {
+                // the one he is going for waits: the drift eases to a near stop (~0.6 s), the height eases to the reach the wand set (no snapping: the rise's own rates)
+                let k = max(0, 1 - Self.claimedDrag * dt)
+                b.vel.x *= k; b.vel.z *= k
+                let goalY = min(max(b.reachY ?? b.pos.y, 0.95), 1.6)          // (a bubble below 0.95 first rises)
+                let vy: Float = max(-0.4, min(0.45, (goalY - b.pos.y) * 0.9))
+                b.vel.y += (vy - b.vel.y) * 1.2 * dt
+                b.pos += b.vel * dt
+                if b.age >= b.life || b.pos.y >= Self.ceiling { gone.append(b); bubbles.remove(at: i); popped += 1 } else { bubbles[i] = b; i += 1 }
+                continue
+            }
             // a soft air drag on the push, a gentle lateral sway, a slow rise that eases
             b.vel.z *= max(0, 1 - 0.25 * dt)
             b.vel.x += sinf(b.age * 1.7 + b.phase) * 0.35 * dt
@@ -93,7 +112,9 @@ nonisolated struct BubbleField: Sendable {
     }
 
     mutating func claim(_ id: Int, by jelly: Int) { if let i = bubbles.firstIndex(where: { $0.id == id }) { bubbles[i].claimedBy = jelly } }
-    mutating func release(jelly: Int) { for i in bubbles.indices where bubbles[i].claimedBy == jelly { bubbles[i].claimedBy = -1 } }
+    mutating func release(jelly: Int) { for i in bubbles.indices where bubbles[i].claimedBy == jelly { bubbles[i].claimedBy = -1; bubbles[i].reachY = nil } }
+    /// The height the claimed bubble `id` waits at (the crown + the hop's apex; clamped by the step to 0.95...1.6).
+    mutating func setReach(_ id: Int, y: Float) { if let i = bubbles.firstIndex(where: { $0.id == id }) { bubbles[i].reachY = y } }
     func bubble(_ id: Int) -> Bubble? { bubbles.first { $0.id == id } }
     mutating func clear() { bubbles.removeAll(keepingCapacity: true) }
 }
