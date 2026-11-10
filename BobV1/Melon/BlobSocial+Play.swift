@@ -209,7 +209,7 @@ extension BlobBrain {
     /// side by side: on the pair's mean line, each on his own side. Not for kinds whose spot is tied to the partner's facing (sneak, peekaboo), when he is busy, when a spot is not free, or when he would walk less than 0.6 m.
     /// Anything that goes wrong (either walk is given up, the budget) hands back to the old plan: he stays where he is and the initiator walks the rest (`formationMeetRevert`).
     func formationMeet(_ s: SocialSession, _ o: BlobBrain) {
-        guard !Self.fmOff("meet"), s.kind != .sneak, s.kind != .peekaboo, s.dg > 0, !o.socialTaken, o.scriptIsNone, !o.feet.active, o.idleState.kind == nil,
+        guard !Self.fmOff("meet"), !Self.newcomerKinds.contains(s.kind), s.kind != .sneak, s.kind != .peekaboo, s.dg > 0, !o.socialTaken, o.scriptIsNone, !o.feet.active, o.idleState.kind == nil,
               let sim = contactSim, let osim = o.contactSim else { return }
         let me = position, you = o.position, D = simd_distance(me, you)
         guard D > s.dg + 1.0 else { return }
@@ -234,7 +234,10 @@ extension BlobBrain {
     /// Back to the old plan: the partner stands where he is (his walk is stopped once his foot is down), the initiator's goal is the first plan's stand-off from where he stands now.
     func formationMeetRevert(_ s: SocialSession, _ o: BlobBrain) {
         s.meet = false
-        if !o.scriptIsNone { if o.feet.active { s.meet = true; return }; o.script = .none; o.scriptT = 0; o.route = [] }
+        if case .walk = o.script {          // (only his walk is stopped - the same three fields BlobBrain.step(after:giveUp:) clears; any other script is left alone)
+            if o.feet.active { s.meet = true; return }
+            o.script = .none; o.scriptT = 0; o.route = []
+        }
         s.goal = replanGoal(s, o) ?? s.goal0
         s.walkTo = nil; s.issuePos = position; s.stalls = 0; s.retryAt = s.t + 0.05; s.walkBudget = max(s.walkBudget, s.t + 3 + simd_distance(position, s.goal) / 1.1)
         if let sim = contactSim { socialWalk(to: s.goal, sim) }
@@ -254,8 +257,8 @@ extension BlobBrain {
             if case .walk(let t, _) = script {
                 s.walkTo = t          // (where this walk is going: the stance may have re-targeted it)
                 // boxed in: waiting for the steering with no step made. The blocker is usually the partner himself when he is near: then do not wait out the patience (0.4 s / 0.6 s instead of 0.8 s / 1.2 s)
-                let near = simd_distance(position, o.position) < 2.4
-                if !s.swapped, steerWait > (near ? 0.4 : 0.8), s.t > (near ? 0.6 : 1.2), simd_distance(position, s.issuePos) < 0.25 {
+                let partnerNear = simd_distance(position, o.position) < 2.4
+                if !s.swapped, steerWait > (partnerNear ? 0.4 : 0.8), s.t > (partnerNear ? 0.6 : 1.2), simd_distance(position, s.issuePos) < 0.25 {
                     if s.meet { formationMeetRevert(s, o); return false }
                     if formationSwap(s, o) { return false }
                 }

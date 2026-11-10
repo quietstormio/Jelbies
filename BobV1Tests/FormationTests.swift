@@ -33,7 +33,9 @@ struct FormationRNG {
 @MainActor
 final class FormationTests: XCTestCase {
     enum Outcome { case arrived, aborted, timedOut, refused }
-    struct Rec { var outcome: Outcome; var t1: Float?; var t2: Float?; var gap: Float?; var cf: Float?; var nilCF = false; var note = ""; var land: Float = 0, beat: Float = 0; var swapped = false }
+    struct Rec { var outcome: Outcome; var t1: Float?; var t2: Float?; var gap: Float?; var cf: Float?; var nilCF = false; var note = ""; var land: Float = 0, beat: Float = 0; var swapped = false, met = false
+        /// where the seconds go (ticks / 60): phase 0 with a walk running (of which after the first re-issue), phase 0 with no walk running, phase 1; the gap when phase 1 began; ticks simulated
+        var tWalk: Float = 0, tReWalk: Float = 0, tWait: Float = 0, tP1: Float = 0, gapP1: Float?, simTicks = 0 }
 
     nonisolated(unsafe) static var savedPickChance: Float = 0.9
     override func setUp() { Self.savedPickChance = SocialTuning.pickChance; RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12 }
@@ -150,8 +152,13 @@ final class FormationTests: XCTestCase {
         var rec = Rec(outcome: .timedOut, t1: nil, t2: nil, gap: nil)
         let p0 = a.brain.position
         var moved: Float = 0
+        let b = d.lab.rigs[1]
+        var nWalk = 0, nRe = 0, nWait = 0, nP1 = 0, ticks = 0
         for tick in 1...Int(Self.maxSeconds * 60) {
             d.tick()
+            ticks = tick
+            if s.phase == 0 { if a.brain.isWalkScript || b.brain.isWalkScript { nWalk += 1; if s.rewalks > 0 { nRe += 1 } } else { nWait += 1 } } else if s.phase == 1 { nP1 += 1 }
+            if s.phase >= 1, rec.t1 == nil { rec.gapP1 = ContactField.gap(0, 1, features: true) }
             moved = max(moved, simd_distance(a.brain.position, p0))
             let t = Float(tick) / 60
             if s.phase >= 1, rec.t1 == nil { rec.t1 = t }
@@ -170,6 +177,7 @@ final class FormationTests: XCTestCase {
             rec.note = String(format: "start (%.1f,%.1f) moved %.2f end %@ t %.1f phase %d rewalks %d dist %.2f gap %@ script %@ initiator@(%.1f,%.1f) partner@(%.1f,%.1f) third@(%.1f,%.1f)", p0.x, p0.y, moved, s.end.map { "\($0)" } ?? "none", s.t, s.phase, s.rewalks, simd_distance(a.brain.position, others[0].position), gap, a.brain.scriptIsNone ? "none" : "walk",
                                   a.brain.position.x, a.brain.position.y, others[0].position.x, others[0].position.y, d.lab.rigs.last!.brain.position.x, d.lab.rigs.last!.brain.position.y)
         }
+        rec.tWalk = Float(nWalk) / 60; rec.tReWalk = Float(nRe) / 60; rec.tWait = Float(nWait) / 60; rec.tP1 = Float(nP1) / 60; rec.simTicks = ticks; rec.met = s.meetUsed
         rec.land = Float(s.fmLand) / 60; rec.beat = Float(s.fmBeat) / 60; rec.swapped = s.swapped
         stopAll(d)
         return rec
@@ -230,6 +238,15 @@ final class FormationTests: XCTestCase {
         let gaps = recs.compactMap(\.gap)
         if touching, !gaps.isEmpty { XCTAssertLessThanOrEqual(gaps.map { abs($0) }.max()! * 100, lim.gapCm, "\(tag): worst gap when the emote begins (cm)") }
         XCTAssertGreaterThan(recs.filter { $0.outcome == .arrived }.count, 0, "\(tag): at least one session arrived")
+    }
+
+    /// One FORMATION-BREAKDOWN line per kind (arrived sessions): p50 / p90 seconds in phase 0 walking, of which after the first re-issue, phase 0 not walking, phase 1; the worst gap when phase 1 began (cm); how many met in the middle / swapped; the simulated seconds of the soak (steps / 60: a starved host shows here).
+    func breakdown(_ tag: String, _ recs: [Rec]) -> String {
+        let ok = recs.filter { $0.outcome == .arrived }
+        func pp(_ f: (Rec) -> Float) -> String { let v = ok.map(f); return String(format: "%.1f/%.1f", Self.pct(v, 0.5), Self.pct(v, 0.9)) }
+        let g1 = ok.compactMap(\.gapP1).map { abs($0) * 100 }.max() ?? .nan
+        let sim = recs.reduce(0) { $0 + $1.simTicks }
+        return String(format: "FORMATION-BREAKDOWN %@ n=%d | walk %@ re-walk %@ wait %@ phase1 %@ | gap@phase1 max %.1f | met %d swapped %d | sim-seconds %.0f", tag, ok.count, pp(\.tWalk), pp(\.tReWalk), pp(\.tWait), pp(\.tP1), g1, ok.filter { $0.met }.count, ok.filter { $0.swapped }.count, Float(sim) / 60)
     }
 
     static let layouts = 16
@@ -293,6 +310,7 @@ final class FormationTests: XCTestCase {
                 recs.append(session(d, kind: kind, proper: proper))
             }
             MotionLog.write(line(kind.rawValue, recs, touching: touching))
+            MotionLog.write(breakdown(kind.rawValue, recs))
             for (i, r) in recs.enumerated() where r.outcome == .aborted || r.outcome == .timedOut { MotionLog.write("FORMATION-DETAIL \(kind.rawValue) layout \(i): \(r.note)") }
             check(kind.rawValue, recs, touching: touching)
             total += recs.count
@@ -314,6 +332,7 @@ final class FormationTests: XCTestCase {
                     recs.append(session(d, kind: kind, proper: 2))
                 }
                 MotionLog.write(line("\(kind.rawValue)/\(n)", recs, touching: touching))
+                MotionLog.write(breakdown("\(kind.rawValue)/\(n)", recs))
                 check("\(kind.rawValue)/\(n)", recs, touching: touching)
                 total += recs.count
             }
