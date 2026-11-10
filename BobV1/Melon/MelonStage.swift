@@ -736,7 +736,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             AudioHub.shared.onAmbient = { [weak self] i in guard let self, self.actors.indices.contains(i) else { return }; self.actors[i].brain?.ambientPulse() }
         }
         AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: raceScene != .none ? raceScene : model.care.show.musicScene,
-                                  home: home, ambient: ambient, night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0),
+                                  home: home, ambient: ambient, walking: actors.map(\.isWalking), night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0),
                                   guest: model.care.guestBook.actor.flatMap { a in a.brain.map { (slot: a.id, napping: $0.isNapping, x: $0.px) } })
     }
 

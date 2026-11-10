@@ -80,11 +80,11 @@ extension GameCare {
 
     // MARK: waking
 
-    /// Wake ONLY this Jelbie (a name, a poke). A no-op on an awake one besides the bookkeeping.
-    func wakeSleeper(_ id: Int, groggy: Bool = true) {
+    /// Wake ONLY this Jelbie (a name, a poke). A no-op on an awake one besides the bookkeeping. `fast` = something needs him now (the newcomer welcome): the quick wake, never the soft staggered one.
+    func wakeSleeper(_ id: Int, groggy: Bool = true, fast: Bool = false) {
         if let b = selectBrain(id), b.isSleeping, !b.sleep.wakeAsked {
             b.commandedGoodnight = false
-            b.sleepWake(groggy: groggy)
+            b.sleepWake(groggy: groggy, fast: fast)
             if isBedtimeHours { nightRest.nightWoken.insert(id) }
         }
         nightRest.wanted.remove(id); nightRest.dayOnce.remove(id)          // a named command also cancels a pending bedtime for an awake one
@@ -128,7 +128,7 @@ extension GameCare {
         let ids = raceBook.actors.sorted { $0.id < $1.id }
         nightRest.arrivalIDs = []
         for a in ids {
-            guard let b = a.brain, b.sleepEnabled else { continue }
+            guard let b = a.brain, b.sleepEnabled, !isNewcomerHeld(a.id) else { continue }          // (a bought Jelbie still being welcomed is not put to bed: GameCare+Newcomer.swift wakes the house for him)
             b.abortAll(a.sim, a.skinner)
             b.pending = nil
             b.sleepInstant(a.sim, a.skinner)
@@ -155,7 +155,7 @@ extension GameCare {
         for id in ids { book.personal[id, default: 0] += dt }
         // busy states restart the clocks: the player is playing with them
         if focus.isActive || focus.phase != .roaming || trayOut || meal != nil || wanted != nil || groupActive || bath.active || tripActive
-            || arranging || voice.mode.phase != .idle || select.sheetOpen { book.roomIdle = 0; book.autoFired = false }
+            || arranging || voice.mode.phase != .idle || select.sheetOpen || newcomerWelcome != nil { book.roomIdle = 0; book.autoFired = false }
         if focus.isActive { for id in focusGroup.ids { book.personal[id] = 0 } }
         if bath.active { book.personal[bath.targetID] = 0 }
         if select.selectedID != book.lastSelected {          // a new highlight is a touch; a highlight that stays keeps nobody awake

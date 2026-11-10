@@ -19,8 +19,6 @@ import QuartzCore
 
 nonisolated enum ArrivalTuning {
     static let card: Float = 0.6, build: Float = 1.1, runIn: Float = 1.8, hug: Float = 2.6, done: Float = 3.4
-    /// A bought Jelbie runs in later than a friend does: his card ("Ding dong! <name> is here") stays up about 2 s so a child can read it.
-    static let newcomerRunIn: Float = 2.6
     static let dim = 0.25, dimFade = 0.3
     static let welcomeLife = 1.2
     static let happyHold: Float = 2
@@ -36,11 +34,8 @@ nonisolated struct ArrivalClock: Sendable {
         (0, .doorbell), (ArrivalTuning.card, .showCard), (ArrivalTuning.build, .build),
         (ArrivalTuning.runIn, .hideCard), (ArrivalTuning.runIn, .runIn), (ArrivalTuning.hug, .hug), (ArrivalTuning.done, .finished),
     ]
-    /// A bought Jelbie's arrival (GameCare+Newcomer.swift): the same doorbell, card and run-in; his body exists already, so there is no "getting the room ready" step, and the
-    /// hug / party that follow are the welcome's own sequence (the clock ends once he is on his way).
-    static let newcomerSchedule: [(at: Float, event: ArrivalEvent)] = [
-        (0, .doorbell), (ArrivalTuning.card, .showCard), (ArrivalTuning.newcomerRunIn, .hideCard), (ArrivalTuning.newcomerRunIn, .runIn), (ArrivalTuning.newcomerRunIn + 0.1, .finished),
-    ]
+    // (A bought Jelbie has no schedule of this kind any more: no doorbell, no card, no dimming. His arrival is the stage machine of GameCare+Newcomer.swift: hold, wake the house, the
+    // "ta-da" and the run-in, the cheer, the greetings. This clock and `schedule` are the friend's visit only.)
     let plan: [(at: Float, event: ArrivalEvent)]
     private(set) var t: Float = 0
     private(set) var active = false
@@ -196,9 +191,12 @@ extension GameCare {
     }
 
     /// Off the left edge of the room, at the depth of the spot he runs to (just past the screen's side, never past the invisible round wall).
-    func guestArrivalEntry(toward target: SIMD2<Float>) -> SIMD2<Float> {
+    /// `offScreen` (a bought Jelbie): really out of sight in every window (portrait or landscape, phone or tablet), past the whole visible width plus his body, the wall or not (the caller
+    /// lifts his arena wall while he is out there; the room's wall is at about 3.3 and the portrait phone shows 4 on each side of the middle, a landscape phone 10).
+    func guestArrivalEntry(toward target: SIMD2<Float>, offScreen: Bool = false) -> SIMD2<Float> {
         let aspect = GameCamera.aspect
         let hw = GameCamera.visibleHalfWidthAtBody(z: target.y, aspect: aspect)
+        if offScreen { return SIMD2(-(hw + 1.3), target.y) }
         let c = GameCamera.arenaCenter, r = GameCamera.arenaRadius
         let dz = target.y - c.y
         let wallX = c.x - sqrt(max(r * r - dz * dz, 0.25)) + 0.25
@@ -227,6 +225,8 @@ struct GuestArrivalOverlay: View {
                         .transition(calm ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
                 WelcomePill(care: care).allowsHitTesting(false)
+                if !calm, g.confettiSide > 0 { ArrivalConfetti(care: care, kind: .side, born: g.confettiSide).allowsHitTesting(false).accessibilityHidden(true) }
+                if !calm, g.confettiRain > 0 { ArrivalConfetti(care: care, kind: .rain, born: g.confettiRain).allowsHitTesting(false).accessibilityHidden(true) }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(calm ? .easeInOut(duration: 0.25) : .spring(response: 0.42, dampingFraction: 0.82), value: g.arrivalCard)
@@ -364,17 +364,88 @@ private struct WelcomePill: View {
                     let c = a.sim.centroid()
                     if let p = ThoughtBubbleView.project(SIMD3(c.x, c.y + Float(BlobShape.H) * 1.9, c.z), size: geo.size, focus: care.focus.blend) {
                         let fade = age < 0.15 ? age / 0.15 : max(0, 1 - (age - 0.15) / (g.welcomeSpan - 0.15))
+                        let px = min(max(p.x, 150), max(geo.size.width - 150, 150))          // (never cut off at the screen's edge: he may stand near it)
                         Text(g.welcomeLine)
                             .font(SK.font(17, .semibold)).foregroundStyle(Color(red: 74 / 255, green: 46 / 255, blue: 30 / 255))
                             .padding(.horizontal, 16).padding(.vertical, 7)
                             .background(Capsule().fill(SK.cream.opacity(0.85)))
                             .opacity(fade)
-                            .position(x: p.x, y: p.y)
+                            .position(x: px, y: p.y)
                             .accessibilityHidden(true)
                     }
                 }
                 let _ = t.date
             }
         }
+    }
+}
+
+// MARK: the bought Jelbie's confetti
+
+nonisolated enum ArrivalConfettiTuning {
+    /// Seconds a burst is on screen: burst 1 from the left edge as he runs into view; burst 2 falling over the room for about 2.5 s (its pieces start staggered over the first 0.9 s and cross the screen in about 2 s).
+    static let sideLife: Double = 1.9, rainLife: Double = 3.2
+    static let side = 46, rain = 70
+}
+
+/// Plain opaque confetti (the look of the Show's `Confetti` and the gift card's: rounded rectangles in honey / pink / sky / mint / white; no blur, no material, no translucency, so
+/// it costs the Metal view nothing). Fixed pseudo-random pieces, no state. The view exists only while its burst is on (GameCare removes the flag), so no TimelineView keeps running.
+private struct ArrivalConfetti: View {
+    enum Kind { case side, rain }
+    let care: GameCare
+    let kind: Kind
+    let born: Double
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { tl in
+            let tick = tl.date          // (the canvas depends on it: it is redrawn every frame)
+            Canvas { ctx, size in
+                    _ = tick
+                    let age = CACurrentMediaTime() - born
+                    let palette: [Color] = [Color(red: 1, green: 0.78, blue: 0.28), Color(red: 0.95, green: 0.42, blue: 0.62), Color(red: 0.36, green: 0.68, blue: 0.98),
+                                            Color(red: 0.42, green: 0.84, blue: 0.62), Color(red: 0.62, green: 0.48, blue: 0.95)]          // (the Show's confetti colours, saturated so they read on the light room)
+                    switch kind {
+                    case .side:
+                        guard age >= 0, age < ArrivalConfettiTuning.sideLife else { return }
+                        // from the left edge at his height (his projected head height; the middle of the screen when he cannot be projected)
+                        var y = size.height * 0.55
+                        if let a = care.guestBook.confettiActor {
+                            let c = a.sim.centroid()
+                            if let p = ThoughtBubbleView.project(SIMD3(c.x, c.y + Float(BlobShape.H) * 0.6, c.z), size: size, focus: care.focus.blend) { y = p.y }
+                        }
+                        let t = CGFloat(age)
+                        for k in 0..<ArrivalConfettiTuning.side {
+                            let f = Double(k)
+                            let ang = -0.15 - abs(sin(f * 3.1)) * 1.1 + sin(f * 1.7) * 0.15          // up and to the right
+                            let speed = 260 + 330 * abs(sin(f * 2.3 + 0.4))
+                            let x = 4 + CGFloat(cos(ang) * speed) * t
+                            let py = y + CGFloat(sin(ang) * speed) * t + 380 * t * t
+                            piece(&ctx, x: x, y: py, rot: f * 1.3 + Double(t) * (3 + f.truncatingRemainder(dividingBy: 4)), color: palette[k % palette.count], w: 8, h: 11)
+                        }
+                    case .rain:
+                        guard age >= 0, age < ArrivalConfettiTuning.rainLife else { return }
+                        // falling over the middle of the room: each piece starts above the top at its own moment and drifts down, swaying
+                        for k in 0..<ArrivalConfettiTuning.rain {
+                            let f = Double(k)
+                            let delay = (f * 0.6180339).truncatingRemainder(dividingBy: 1) * 0.9
+                            let t = age - delay
+                            guard t > 0 else { continue }
+                            let x0 = size.width * (0.12 + 0.76 * (f * 0.7548776).truncatingRemainder(dividingBy: 1))
+                            let fall = 340 + 160 * abs(sin(f * 2.1))
+                            let x = x0 + CGFloat(sin(t * 3 + f) * 22)
+                            let y = -20 + CGFloat(fall * t)
+                            guard y < size.height + 20 else { continue }
+                            piece(&ctx, x: x, y: y, rot: f + t * (2 + f.truncatingRemainder(dividingBy: 3)), color: palette[(k + 2) % palette.count], w: 8, h: 11)
+                        }
+                    }
+            }
+        }
+    }
+
+    private func piece(_ ctx: inout GraphicsContext, x: CGFloat, y: CGFloat, rot: Double, color: Color, w: CGFloat, h: CGFloat) {
+        var c = ctx
+        c.translateBy(x: x, y: y)
+        c.rotate(by: .radians(rot))
+        c.fill(Path(roundedRect: CGRect(x: -w / 2, y: -h / 2, width: w, height: h), cornerRadius: 2), with: .color(color))
     }
 }

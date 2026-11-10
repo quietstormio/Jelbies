@@ -64,6 +64,9 @@ final class StartFlow {
         #if DEBUG || targetEnvironment(simulator)
         if UserDefaults.standard.integer(forKey: "ResetForAdoption") != 0 { wipeAll() }
         #endif
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.integer(forKey: "FootCollarOld") != 0 { Skinner.collarCrossing = false }          // capture aid: the old tangent foot collar (before / after stills)
+        #endif
         // -ClearGuest / -NewGame / -ImportSave are dev arguments: local Release device installs keep them (JELBIES_DEV_ARGS, set by the Release configuration);
         // the App Store archive clears JELBIES_DEV_ARGS_COND, so they do not exist there.
         #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
