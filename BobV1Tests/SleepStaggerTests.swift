@@ -106,35 +106,58 @@ final class SleepStaggerTests: XCTestCase {
         XCTAssertLessThan(drift, 0.001, "a lying sleeper never slides during the stir")
     }
 
-    func testThreeWakeCallsOnOneTickFirstAtOnceOthersStaggeredAndSoft() {
+    func testThreeWakeCallsOnOneTickAllStirFirstWithZeroLagOthersStaggered() {
         let lab = night()
         allToBed(lab)
         SleepOrder.reset()
         let brains = lab.rigs.map(\.brain)
         for b in brains { b.sleepWake(groggy: true) }
-        XCTAssertEqual(brains[0].sleep.stage, 4, "the first caller wakes at once, as today")
-        XCTAssertTrue(brains[0].sleep.wakeAsked); XCTAssertFalse(brains[0].sleep.softWake)
-        for i in 1..<3 {
-            XCTAssertEqual(brains[i].sleep.stage, 3, "rig \(i) is still lying")
+        for i in 0..<3 {
+            XCTAssertEqual(brains[i].sleep.stage, 3, "rig \(i) is still lying (the first caller was put back into a stir)")
             XCTAssertTrue(brains[i].sleep.softWake); XCTAssertGreaterThanOrEqual(brains[i].sleep.stirT, 0)
             XCTAssertFalse(brains[i].sleep.wakeAsked, "wakeAsked waits for the roll (the mask and snores stay on)")
             XCTAssertTrue(brains[i].isNapping)
         }
+        XCTAssertEqual(brains[0].sleep.stirLag, 0, accuracy: 0.001, "the first has no lag")
+        lab.tick(watching: false)
+        XCTAssertTrue(brains.allSatisfy { $0.sleep.stage != 4 && $0.isNapping }, "none is at stage 4 on the next tick")
         var roll = [Float?](repeating: nil, count: 3), rollEnd = [Float?](repeating: nil, count: 3)
         var t: Float = 0
+        var napDuringStir = true
         while t < 30, rollEnd.contains(where: { $0 == nil }) {
             lab.tick(watching: false); t += dt
             for (i, b) in brains.enumerated() {
+                if b.idleState.kind == .sleep, b.sleep.stage == 3, !b.sleep.wakeAsked, !b.isNapping { napDuringStir = false }
                 if roll[i] == nil, b.sleep.stage == 4, b.idleState.kind == .sleep { roll[i] = t }
                 if roll[i] != nil, rollEnd[i] == nil, b.sleep.stage >= 5 || b.idleState.kind == nil { rollEnd[i] = t }
             }
         }
         MotionLog.write("SLEEPSTAGGER wake3 roll \(roll) end \(rollEnd)")
-        XCTAssertLessThan(roll[0] ?? 99, 0.1)
+        XCTAssertTrue(napDuringStir)
+        XCTAssertGreaterThanOrEqual(roll[0] ?? 0, 0.75, "even the first stirs before he rolls")
         XCTAssertGreaterThanOrEqual(roll[1] ?? 0, 1.4, "the second stirs ~0.7-1.5 s after, then rolls")
         XCTAssertGreaterThanOrEqual(roll[2] ?? 0, 2.3, "the third ~1.6-2.8 s after")
-        XCTAssertEqual((rollEnd[0] ?? 0) - (roll[0] ?? 0), SleepTuning.rollBackTime, accuracy: 0.08, "the first one's roll is today's quick one")
-        for i in 1..<3 { XCTAssertGreaterThanOrEqual((rollEnd[i] ?? 0) - (roll[i] ?? 0), 0.75, "rig \(i): the soft roll-up is slow") }
+        for i in 0..<3 { XCTAssertGreaterThanOrEqual((rollEnd[i] ?? 0) - (roll[i] ?? 0), 0.75, "rig \(i): the soft roll-up is slow") }
+    }
+
+    /// Per-tick order: A is woken, ticks once (his roll has begun by a tick), then B joins later in the same moment: A is softened too.
+    func testFirstWakerIsSoftenedWhenASecondJoinsAfterOneTick() {
+        let lab = night()
+        allToBed(lab)
+        SleepOrder.reset()
+        let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        a.sleepWake(groggy: true)
+        XCTAssertEqual(a.sleep.stage, 4, "alone so far: today's quick path")
+        lab.tick(watching: false)
+        b.sleepWake(groggy: true)
+        XCTAssertEqual(a.sleep.stage, 3, "A is put back into a stir")
+        XCTAssertTrue(a.sleep.softWake); XCTAssertFalse(a.sleep.wakeAsked); XCTAssertTrue(a.isNapping)
+        XCTAssertTrue(b.sleep.softWake); XCTAssertTrue(b.isNapping)
+        // a wake that stays single, much later (a new moment), is the quick one
+        for _ in 0..<(60 * 20) { lab.tick(watching: false) }
+        SleepOrder.reset()
+        let c = lab.rigs[2].brain
+        if c.isNapping { c.sleepWake(groggy: true); XCTAssertEqual(c.sleep.stage, 4); XCTAssertFalse(c.sleep.softWake) }
     }
 
     func testOneWakeAloneIsTodaysQuickWake() {

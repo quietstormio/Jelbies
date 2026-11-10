@@ -520,6 +520,8 @@ extension BlobBrain {
         // `fast` (race, volley, show: something needs him NOW) never. Only a settled sleeper stirs: mid-flop he just gets up.
         if sleep.stage == 3, sleep.mealWake || !fast {
             let slot = SleepOrder.slot(.wake, self)
+            // a second brain joined the moment: this is a group wake, so the first caller (who took the quick path a tick or so ago) is softened too, invisibly
+            if slot == 1, !sleep.mealWake, let f = SleepOrder.first(.wake, self), f !== self { f.sleepSoftenQuickWake() }
             if sleep.mealWake || slot > 0 {
                 sleepBeginStir(lag: SleepOrder.delay(.wake, slot: slot, rand: { self.rand($0, $1) }), groggy: groggy)
                 return
@@ -534,6 +536,14 @@ extension BlobBrain {
         sleep.groggy = groggy
         sleep.stirT = -1
         if sleep.stage == 3 || sleep.stage == 2 { sleep.kStart = sleep.k; sleep.stage = 4; sleep.t = 0; sleep.stageStart = true }
+    }
+
+    /// Group wake, first caller: his quick roll has barely begun (stage 4 from a settled sleep, at most ~3 ticks): put him back to the lying pose in a zero-lag stir.
+    /// `wakeAsked` is cleared again, so `isNapping` (mask, snores) never blinked. Anything further along (or `fast`, which never joins a group) is left alone.
+    func sleepSoftenQuickWake() {
+        guard idleState.kind == .sleep, sleep.stage == 4, !sleep.softWake, !sleep.mealWake, sleep.kStart > 0.99, sleep.t <= 0.05 else { return }
+        sleep.stage = 3; sleep.t = 0; sleep.k = 1; sleep.kStart = 1; sleep.wakeAsked = false
+        sleepBeginStir(lag: 0, groggy: true)
     }
 
     /// The soft wake begins: `lag` s of just lying there, then a stir (an eye crack + a small slow wiggle, still lying, still `isNapping`), then `sleepStirTick` starts the slow roll.
@@ -1018,6 +1028,8 @@ enum SleepOrder {
         groups[kind.rawValue] = Group(first: b, firstClock: clocks[id] ?? 0, ids: [id], wall: ProcessInfo.processInfo.systemUptime)
         return 0
     }
+    /// The first caller of the open group (nil when none is open for this brain).
+    static func first(_ kind: Kind, _ b: BlobBrain) -> BlobBrain? { open(kind, b)?.first }
     /// Has this brain already been counted in the open group of this kind?
     static func sameMoment(_ kind: Kind, _ b: BlobBrain) -> Bool { open(kind, b)?.ids.contains(ObjectIdentifier(b)) ?? false }
 

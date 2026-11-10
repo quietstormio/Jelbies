@@ -130,7 +130,7 @@ final class DiningGroup {
         guard plan != placeOf else { return }
         for i in brains.indices where plan[i] != placeOf[i] && !committed[i] {
             placeOf[i] = plan[i]; replans += 1
-            brains[i].requestNow(.goTo(approachPoint(blob: i)))
+            brains[i].callToMeal(.goTo(approachPoint(blob: i)))
         }
     }
 
@@ -299,7 +299,7 @@ final class DiningGroup {
                 idle[i] += dt
                 if idle[i] > 0.5 {
                     idle[i] = 0
-                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].requestNow(.goTo(approachPoint(blob: i))) } else { end(); gaveUp = true; return }
+                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { end(); gaveUp = true; return }
                 }
             }
         case .serving:
