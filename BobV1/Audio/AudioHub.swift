@@ -408,7 +408,7 @@ final class AudioHub {
     // MARK: situation (from the stage, once per sim step; cheap)
 
     /// `napping[i]`: Jelly i is settled in a night nap. `playing`: any Jelly zooms / plays (with each other or a toy). `xs`: their floor x (pan).
-    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none, home: Bool = false, ambient: [Bool] = [], night: Double = 0, guest: (slot: Int, napping: Bool, x: Float)? = nil) {
+    func situation(napping: [Bool], playing: Bool, xs: [Float], moods: [BlobMood], scene: MusicScene = .none, home: Bool = false, ambient: [Bool] = [], walking: [Bool] = [], night: Double = 0, guest: (slot: Int, napping: Bool, x: Float)? = nil) {
         guard !muted, started else { return }
         atHome = home && scene == .none && director.scene == .none && townScene == .none
         input.allNapping = !napping.isEmpty && !napping.contains(false)
@@ -448,7 +448,7 @@ final class AudioHub {
         if AmbientVoiceTuning.enabled, atHome, !ambient.isEmpty, gateWhy() == nil {
             let since = (0..<3).map { secondsSinceVoice(slot: $0) }
             let eligible = (0..<3).map { $0 < ambient.count && ambient[$0] && !($0 < napping.count && napping[$0]) }
-            for i in ambientSched.due(eligible: eligible, since: since, now: now, night: night, random: { Double.random(in: $0) }) {
+            for i in ambientSched.due(eligible: eligible, walking: walking, since: since, now: now, night: night, random: { Double.random(in: $0) }) {
                 let v = AmbientVoiceTuning.pick(night: night, grumpy: i < moods.count && moods[i] == .grumpy, random: { Double.random(in: $0) })
                 if v.isContext { Self.requestSrcTap?("voice:\(v.rawValue)@ambient", i); contextVoice(jelly: i, v, chance: 1, x: i < xs.count ? xs[i] : 0) }
                 else { chirp(jelly: i, v, x: i < xs.count ? xs[i] : 0, src: "ambient") }
