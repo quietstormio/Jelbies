@@ -175,6 +175,48 @@ final class SleepStaggerTests: XCTestCase {
         XCTAssertTrue(lab.rigs[0].brain.isNapping && lab.rigs[2].brain.isNapping, "the others sleep on")
     }
 
+    /// A tap that cuts a stir short is the quick wake: no soft roll time or flag leaks into it.
+    func testQuickWakeAfterAStirDoesNotInheritTheSoftRollTime() {
+        let lab = night()
+        allToBed(lab)
+        SleepOrder.reset()
+        let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        a.sleepWake(groggy: true); b.sleepWake(groggy: true)
+        XCTAssertTrue(b.sleep.softWake)
+        XCTAssertNotEqual(b.sleep.rollDur, SleepTuning.rollBackTime, "the soft roll time is set")
+        for _ in 0..<30 { lab.tick(watching: false) }
+        SleepOrder.reset()
+        b.sleepWake(groggy: true)          // a tap during the stir
+        XCTAssertEqual(b.sleep.stage, 4); XCTAssertFalse(b.sleep.softWake)
+        XCTAssertEqual(b.sleep.rollDur, SleepTuning.rollBackTime)
+    }
+
+    /// One sleeping Jelbie called to a one-diner meal: stir, roll (4), stretch (5), then he eats.
+    func testSingleSleeperCalledToAMealStirsRollsStretchesThenEats() {
+        let lab = night()
+        allToBed(lab)
+        SleepOrder.reset()
+        let b = lab.rigs[0].brain
+        for r in lab.rigs { r.brain.idleNight = 0; r.brain.idleDeepNight = 0; r.brain.autonomy = false }
+        let group = DiningGroup()
+        group.start(Consumables.berries, brains: [b], floor: { _ in b.position })
+        XCTAssertTrue(b.isSleeping, "not hard-aborted")
+        var stir = false, saw4 = false, saw5 = false, ate: Float?
+        var t: Float = 0
+        while t < 70, ate == nil {
+            lab.tick(watching: false); group.tick(dt: lab.rigs[0].sim.stepDt); t += dt
+            if b.idleState.kind == .sleep {
+                if b.sleep.stage == 3, b.sleep.stirT >= 0 { stir = true }
+                if b.sleep.stage == 4 { saw4 = true }
+                if b.sleep.stage == 5 { saw5 = true }
+            }
+            if b.activity == .eating || b.activity == .drinking { ate = t }
+        }
+        XCTAssertTrue(stir && saw4 && saw5, "stir \(stir), roll \(saw4), stretch \(saw5)")
+        XCTAssertNotNil(ate, "he eats")
+        group.cancel(); group.dining.reset()
+    }
+
     func testFastWakeIsTodaysTimingWithNoStagger() {
         let lab = night()
         allToBed(lab)

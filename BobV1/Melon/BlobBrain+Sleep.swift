@@ -535,6 +535,7 @@ extension BlobBrain {
         sleep.wakeAsked = true
         sleep.groggy = groggy
         sleep.stirT = -1
+        sleep.softWake = false; sleep.rollDur = SleepTuning.rollBackTime          // (a quick wake never inherits a soft wake's roll time)
         if sleep.stage == 3 || sleep.stage == 2 { sleep.kStart = sleep.k; sleep.stage = 4; sleep.t = 0; sleep.stageStart = true }
     }
 
