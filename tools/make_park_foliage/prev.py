@@ -29,7 +29,7 @@ for iid in ids:
     hh = max(v[1] for v in V)
     ob.rotation_euler = (math.pi / 2, 0, 0)
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam")); sc.collection.objects.link(cam); sc.camera = cam
-    for name, (az, el) in (("a", (24, 12)), ("b", (-50, 20))):
+    for name, (az, el) in (("a", (24, 12)), ("b", (-50, 20)), ("c", (0, 35))):
         d = 3.2 + hh * 1.5; tgt = Vector((0, 0, hh * 0.47))
         azr, elr = math.radians(az), math.radians(el)
         cam.location = tgt + Vector((math.sin(azr) * math.cos(elr), -math.cos(azr) * math.cos(elr), math.sin(elr))) * d

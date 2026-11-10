@@ -122,9 +122,17 @@ extension GameCare {
         parkBook.roster = actors
         tickGuest(actors, dt: dt)          // a friend over at home (GameCare+Guest.swift)
         #if targetEnvironment(simulator)
-        if Self.startParkPending, park.phase == .off {          // capture aid: `-StartPark 1` goes straight to the park once the room is up
-            Self.startParkFrames += 1
-            if Self.startParkFrames > 90 { Self.startParkPending = false; requestPark(); startPark() }
+        // capture aid: `-StartPark 1` goes straight to the park once the room is up. It RETRIES (every ~0.75 s, not while an outing is walking) until the park opens: a single shot at frame 90 failed
+        // whenever parkBlocker() said no at that moment (a Jelbie mid-meal / asleep / the room moving / voice listening). The real gate rules are untouched; this only repeats the request.
+        if Self.startParkPending {
+            if park.phase != .off { Self.startParkPending = false }
+            else {
+                Self.startParkFrames += 1
+                if Self.startParkFrames > 90, Self.startParkFrames % 45 == 0, !outing.running, !park.picking {
+                    if let why = parkBlocker() { NSLog("[startpark] blocked at frame %d: %@", Self.startParkFrames, why) }
+                    else { Self.startParkPending = false; requestPark(); startPark() }          // (issued once; only a BLOCKED request is retried)
+                }
+            }
         }
         #endif
         if park.active { for a in actors { a.brain?.sleepLocked = true } }

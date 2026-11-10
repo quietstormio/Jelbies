@@ -43,7 +43,7 @@ extension GameCare {
     }
 
     /// The ball's back wall: the room's, or the park's roam rect (GameCamera.configurePark).
-    private func applyPlayWorld() { TossTuning.zBack = park.inScene ? GameCamera.roamRect.min.y : -2.4; TossTuning.zFront = park.inScene ? 5.3 : 9 }
+    private func applyPlayWorld() { TossTuning.zBack = park.inScene ? GameCamera.roamRect.min.y : -2.4; TossTuning.zFront = park.inScene ? 4.95 : 9 }
 
     /// A toy was picked: Play mode on with that ball.
     func beginPlay(ball kind: DecorKind) {

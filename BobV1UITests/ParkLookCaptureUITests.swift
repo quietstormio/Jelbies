@@ -54,7 +54,7 @@ final class ParkLookCaptureUITests: XCTestCase {
             }
         }
         let home = app.buttons["park-home"]
-        let opened = flow == "toytap" ? true : home.waitForExistence(timeout: 90)
+        let opened = flow == "toytap" ? true : home.waitForExistence(timeout: 300)
         if !opened { shot("FAILED_no_park") }
         XCTAssertTrue(opened, "the park never opened (no park-home button) in \(tag)")
         if flow == "slide" {

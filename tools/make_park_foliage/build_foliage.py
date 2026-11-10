@@ -18,6 +18,7 @@ from mathutils import Vector
 import bmesh
 
 SUN = Vector((0.45, 0.8, 0.4)).normalized()
+VIEW = Vector((0.0, 0.57, 0.82)).normalized()          # toward the park camera (elevation ~35 degrees, in front)
 def clamp01(x): return max(0.0, min(1.0, x))
 def rot_about(v, axis, ang):
     return Matrix.Rotation(ang, 3, axis) @ v
@@ -148,19 +149,23 @@ def rand_perp(rng, n):
     a = a - n * a.dot(n)
     return a.normalized() if a.length > 1e-4 else Vector((1, 0, 0))
 
-def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, tilt=0.30, cover_top=0.97, cover_bot=0.65, sunk=0.0, hang=0.0, soft=False, ell=None):
+def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, tilt=0.30, cover_top=0.97, cover_bot=0.65, sunk=0.0, hang=0.0, soft=False, ell=None, view=None, vs=0.0):
     """Leaf cards over every mass surface: tilted outward and downward, stem end toward the mass, sticking past the surface; coverage heavier on top."""
     cols = [(rng.uniform(-1, 1)) for _ in masses]
     for i, m in enumerate(masses):
         c, r, fl, tl = m
         ry = r * fl * tl
         area = 4 * math.pi * ((r * r * r * ry) ** (2 / 3))
-        n_try = int(area * dens)
+        topness = clamp01((c.y - y0) / max(0.01, y1 - y0)) if view else 0.0
+        n_try = int(area * dens * ((1 + 0.55 * vs) * (1 + 1.0 * vs * topness - 0.35 * vs * (1 - topness)) if view else 1))          # (and more on the top masses, fewer on the low ones)          # (more attempts where the camera looks: the rejected back / underside ones are not lost)
         hue = cols[i]
         for _ in range(n_try):
             d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, 1))).normalized()
             n_out = Vector((d.x / r, d.y / ry, d.z / r)).normalized()
             keep = cover_bot + (cover_top - cover_bot) * clamp01(n_out.y * 0.5 + 0.5)
+            if view:
+                vis = clamp01((n_out.dot(view) + 0.35) / 1.0)
+                keep *= (1 - vs) + vs * (0.12 + 0.88 * vis ** 0.8)          # the park camera pans but never orbits: leaves go to the top and the camera-facing side
             if rng.random() > keep: continue
             if soft and ell and rng.random() < 0.0: continue
             lump = 1 + 0.10 * nz(d * 2.6, 1.0, i * 1.7)
@@ -175,6 +180,7 @@ def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, 
             roll = rng.uniform(-0.6, 0.6)
             wd = (wd * math.cos(roll) + n_out * math.sin(roll)).normalized()
             L = Lm * rng.uniform(0.8, 1.25)
+            if view: L *= 1 + 0.22 * vs * max(0.0, n_out.y)          # somewhat larger leaves on the top shell
             if ell:
                 q = math.sqrt(((p.x - cc.x) / ell[0]) ** 2 + ((p.z - cc.z) / ell[0]) ** 2 + ((p.y - cc.y) / ell[1]) ** 2)          # 1 = the crown's outer surface
                 rim = clamp01((q - 0.82) / 0.18)
@@ -194,10 +200,15 @@ def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, 
             lv.add(stem, axis, wd, L, L * (Wr + 0.15 * rim if soft else Wr - 0.30 * rim), n_out, col, soft=soft)          # (far kites turn narrow and pointed at the rim: no square corners against the sky)
 
 def core_masses(masses, cc, cr, y0, y1, pal, seed, sub=2, frac=0.68, bump=0.25, core=None):
+    """The dark cores under the leaf shells. Colour is a leaf-shadow green, lighter toward the top (a top-light gradient), so a patch that shows reads as leaf mass in shade, not as a dark block."""
+    lo = core or CORE
+    hi = (min(1.0, lo[0] * 1.9), min(1.0, lo[1] * 1.7), min(1.0, lo[2] * 1.6))
     for i, (c, r, fl, tl) in enumerate(masses):
         def fn(p, n, c=c, r=r):
+            t = clamp01(n.y * 0.5 + 0.5) ** 1.3
+            col = mix(lo, hi, t)
             s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
-            return tuple(min(1.0, x * (0.8 + 0.5 * s01)) for x in (core or CORE))
+            return tuple(min(1.0, x * (0.9 + 0.25 * s01)) for x in col)
         commit(clump_bm(r * frac, fl, sub, bump, seed + i * 1.3, tl), fn, sharp=100, xf=T(tuple(c), ry=i * 1.3))
 
 # ---------------------------------------------------------------- crowns + limbs
@@ -296,19 +307,19 @@ def deciduous(iid, seed, spec, pal, lod=0, pale=False):
     ctr = Vector((0, yb + Hc * 0.5, 0)); cr = max(Rh, Hc * 0.5) * 1.15
     y0 = yb; y1 = yb + Hc
     begin("leaf")
-    core_masses(masses, ctr, cr, y0, y1, pal, seed, sub=2 if not lod else 1, frac=0.60 if lod else 0.68, core=(0.11, 0.24, 0.12) if lod else None)          # (a far core that peeks through reads as a leaf mass in shade, not a black polygon)
+    core_masses(masses, ctr, cr, y0, y1, pal, seed, sub=2 if not lod else 1, frac=0.44 if lod else 0.60, core=(0.12, 0.26, 0.12) if lod else (0.11, 0.24, 0.11))          # (a far core that peeks through reads as a leaf mass in shade, not a black polygon)
     lv = Leaves()
     dens = spec.get('dens_far', spec['dens'] * 0.45) if lod else spec['dens']
     Lm = spec['leaf'] * (1.65 if lod else 1.0)
-    shell_leaves(lv, rng, masses, pal, ctr, cr, y0, y1, Lm, spec['wr'], dens, down=spec.get('down', 0.75), hang=spec.get('hang', 0.0), soft=bool(spec.get('soft')) and not lod, ell=(Rh, Hc / 2) if spec.get('soft') else None)
+    shell_leaves(lv, rng, masses, pal, ctr, cr, y0, y1, Lm, spec['wr'], dens, down=spec.get('down', 0.75), hang=spec.get('hang', 0.0), soft=bool(spec.get('soft')) and not lod, ell=(Rh, Hc / 2) if spec.get('soft') else None, view=VIEW if spec.get('soft') else None, vs=(0.7 if lod else 0.4))
     nleaf = len(lv.P) // 4
     lv.flush()
     return dict(kind="tree", canopy_radius=Rh, height=y1, leaves=nleaf)
 
 OAK = dict(kind='dome', trunk=0.95, r0=0.19, flare=0.85, Rh=1.55, Hc=1.85, yb=1.2, nm=5, nbig=24, rbig=0.46, flat=0.66, tiers=[0.42, 0.62, 0.80, 0.97], droop=0.12,
-           leaf=0.15, wr=0.80, dens=230, dens_far=135, soft=True)
+           leaf=0.15, wr=0.80, dens=190, dens_far=104, soft=True)
 BEECH = dict(kind='oval', trunk=1.2, r0=0.14, flare=0.7, Rh=1.1, Hc=2.7, yb=1.15, nm=4, nbig=36, rbig=0.34, flat=0.84, tall=1.1, up=0.1, shell=0.25, droop=0.15,
-             leaf=0.12, wr=0.70, dens=400, dens_far=190, soft=True)
+             leaf=0.12, wr=0.70, dens=340, dens_far=152, soft=True)
 BIRCH = dict(kind='oval', trunk=2.2, r0=0.085, flare=0.4, Rh=1.15, Hc=2.5, yb=1.45, nm=4, nbig=60, rbig=0.19, flat=0.9, tall=2.2, up=0.1, shell=0.45, droop=1.0,
              leaf=0.12, wr=0.55, dens=520, stems=3, hang=0.9, down=1.0)
 
