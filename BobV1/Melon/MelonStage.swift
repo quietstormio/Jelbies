@@ -901,7 +901,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         c.preferredFPS = view?.preferredFramesPerSecond ?? 0
         c.maxFPS = view?.window?.screen.maximumFramesPerSecond ?? 0
         c.renderScale = Double(view?.contentScaleFactor ?? 0)
-        if Self.metalFXFlag { c.renderScale = fxScale }
+        if Self.metalFXFlag && !model.cutout { c.renderScale = fxScale }
         c.ctx = [renderer?.takePerfContext() ?? "", brainTop(), FootLog.on ? FootLog.shared.summary : ""].filter { !$0.isEmpty }.joined(separator: " ")
         c.tier = String(format: "adaptive %@ level %d, MetalFX %@, fastMatte %d, roomCache %@, idleRest %@%@", Self.adaptiveEnabled ? "on" : "off", scaler?.level ?? 0,
                         Self.metalFXFlag ? "on" : "off", Self.gfxOptFlags.fastMatteTier, Self.roomCacheFlag ? "on" : "off", idleRest.resting ? "RESTING" : "awake", lastAppliedFPS == 0 ? "" : " (gov \(lastAppliedFPS) Hz)")
@@ -1272,9 +1272,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game, !model.preview { updateTuck(renderer, dt: 1.0 / 60) }
 
         // MetalFX: the drawable stays native; the scene renders smaller and is upscaled. Otherwise render size == drawable size.
+        // A cut-out stage (Jelly Spring pedestal, opening story, first day home) is composited over SwiftUI with alpha, and MetalFX spatial has no alpha: the renderer
+        // skips the upscale there and its tone map copies pixel for pixel, so a smaller render landed in the view's top-left corner at 73% / 50% size (phone only:
+        // the simulator never scales). A cut-out therefore always renders at the drawable's own size.
+        let fx = Self.metalFXFlag && !model.cutout
         var rw = Int(view.drawableSize.width), rh = Int(view.drawableSize.height)
-        renderer.metalFXEnabled = Self.metalFXFlag
-        if Self.metalFXFlag {
+        renderer.metalFXEnabled = fx
+        if fx {
             let native = Double(stage.window?.screen.scale ?? stage.contentScaleFactor)
             if fxScale == 0 { fxScale = native }          // (the scaler's top rung; it steps down from there)
             let k = min(1, fxScale / max(native, 1))
