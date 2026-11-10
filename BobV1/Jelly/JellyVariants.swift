@@ -59,6 +59,11 @@ nonisolated enum JellyVariantBook {
     static let legacyExclusiveTitles: [String] = ["Sunbeam gold", "Midnight", "Moonstone", "Rose quartz", "Aurora"]
     static func isExclusiveTitle(_ t: String) -> Bool { exclusives.contains { $0.title == t } || legacyExclusiveTitles.contains(t) }
 
+    /// The spike colour (linear) for a Pip wearing this variant: only the Amber rare, whose body is the same orange as the spike art (a deep russet so the spikes read);
+    /// nil for every other colour (classic Pip and all others keep the art as drawn). Derived from the title, nothing saved.
+    static let amberSpikeTint = SIMD3<Float>(0.72, 0.26, 0.08)
+    static func spikeTint(for v: JellyVariant?) -> SIMD3<Float>? { v?.title == "Amber" ? amberSpikeTint : nil }
+
     /// Park colours a visitor may have: everything except an exclusive (today none collides, so the pool is unchanged).
     static func parkEligible(_ c: ParkColour) -> Bool { !(exclusives.map(\.title) + legacyExclusiveTitles).contains { $0.lowercased() == c.rawValue } }
 

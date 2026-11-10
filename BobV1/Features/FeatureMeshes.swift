@@ -74,16 +74,21 @@ nonisolated enum FeatureMeshes {
     }
 
     /// The prepared feature (cached per placement). `body` binds the part pivots.
-    static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared, ridge: RidgeLayout? = nil, wingTint: WingTint? = nil) -> FeaturePrepared? {
+    static func prepare(_ f: JellyFeature, placement p: Placement = Placement(), body: WearBody, spec: FeatureSpec = .shared, ridge: RidgeLayout? = nil, wingTint: WingTint? = nil, spikeTint: SIMD3<Float>? = nil) -> FeaturePrepared? {
         guard f != .none else { return nil }
         if f == .ears { return TeddyMesh.prepare(slide: p.slide, body: body) }          // built in code (TeddyFeature.swift)
         if f == .spines {          // Pip: the original spikes spaced down his back + on his tail (PipSpikes); none on his head
             // (the re-flowed rows are cached per layout: the hat's brim height and the neck pieces threaded around)
             let layout = ridge ?? .bare
-            let ck = layout.key
+            // a spike tint (the Amber rare only) is part of the key; with none the key and the mesh are exactly the classic ones
+            let ck = layout.key + (spikeTint.map { String(format: "|t%.3f,%.3f,%.3f", $0.x, $0.y, $0.z) } ?? "")
             lock.lock(); let c = prepared[ck]; lock.unlock()
             if let c { return c }
-            let r = PipSpikes.build(body: body, spec: spec, layout: layout)
+            var r = PipSpikes.build(body: body, spec: spec, layout: layout)
+            if let t = spikeTint {          // scale the baked colours toward the tint (the art's own light / dark variation stays)
+                let k = t / PipSpikes.bakedMean
+                r.col = r.col.map { $0 * k }
+            }
             lock.lock(); prepared[ck] = r; lock.unlock()
             return r
         }

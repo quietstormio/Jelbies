@@ -118,6 +118,8 @@ nonisolated enum PipSpikes {
         return j
     }
 
+    /// The mean baked vertex colour of the spike art (linear); a spike tint is expressed against it.
+    static let bakedMean = SIMD3<Float>(0.92, 0.52, 0.15)
     /// The shipped spikes' orange (the mean vertex colour of the art, measured from feature_pip_c_final.bin: about (0.92, 0.52, 0.15) linear).
     static func tones(spec: FeatureSpec) -> (base: SIMD3<Float>, tip: SIMD3<Float>) { (SIMD3(0.92, 0.48, 0.13), SIMD3(0.95, 0.56, 0.17)) }
 
