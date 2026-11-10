@@ -29,9 +29,6 @@ final class StartFlow {
     private(set) var session = 0
     /// Settings > Watch the opening: the story plays over the room and ends back in it (no picker, no save changes).
     var replaying = false
-    /// Start over: the old save's per-Jelbie keys as they were before the opening / picker previews (which write needs, stats, words...) ran over them.
-    /// Put back when the player backs out to the menu; dropped once `bringHome` wipes for real.
-    private var oldSaveSnapshot: [String: Any]?
     /// The name of the Jelbie just brought home: the room shows a welcome banner for it.
     var welcome: String?
     /// Photo mode registers the album screen here; the menu's Photos button shows only when it is set.
@@ -128,7 +125,6 @@ final class StartFlow {
         phase = .wiping
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
-            if Self.hasSave() { oldSaveSnapshot = OpeningStoryView.saveSnapshot() }          // after the room has stopped writing, before the previews start
             phase = .opening
         }
     }
@@ -148,11 +144,7 @@ final class StartFlow {
     func replayOpening() { replaying = true; phase = .opening }
 
     /// The first-adoption picker's back button: to the title menu.
-    func backToMenu() {
-        guard case .adopt = phase else { return }
-        if let s = oldSaveSnapshot { OpeningStoryView.restoreSnapshot(s); oldSaveSnapshot = nil }          // the previews' writes go; the old save is as it was
-        phase = .menu
-    }
+    func backToMenu() { if case .adopt = phase { phase = .menu } }
 
     /// Town: Adoption Center row.
     func openAdoption() { phase = .adopt(.more) }
@@ -163,7 +155,7 @@ final class StartFlow {
     /// A Jelbie is chosen and named (and paid for): the roster, his name and a fresh start for his state, then the room.
     func bringHome(character c: Int, name: String) {
         let first = phase == .adopt(.first)
-        if first { oldSaveSnapshot = nil; if Self.hasSave() { Self.wipeAll() } }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
+        if first { Self.wipeAll() }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
         var ids = first ? [] : JellyRoster.savedIDs()
         if !ids.contains(c) { Self.resetCharacterState(c) }
         if !ids.contains(c) { ids.append(c) }
@@ -208,8 +200,7 @@ final class StartFlow {
         }
         try? fm.removeItem(at: URL.documentsDirectory.appending(path: "Photos", directoryHint: .isDirectory))
         WidgetCenter.shared.reloadAllTimelines()
-        let live = Activity<JelbiesActivityAttributes>.activities          // snapshot now: a Live Activity started later must not be ended by this
-        Task { for a in live { await a.end(nil, dismissalPolicy: .immediate) } }
+        Task { for a in Activity<JelbiesActivityAttributes>.activities { await a.end(nil, dismissalPolicy: .immediate) } }
         JellyRoster.names = JellyRoster.loadNames()
         JellyVariants.reload()
         JellyRoster.current = [0]
