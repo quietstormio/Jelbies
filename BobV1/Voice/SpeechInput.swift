@@ -423,7 +423,7 @@ final class DictationSpeechInput: SpeechInput {
     /// One permission + asset + analyzer preparation at a time (the warm path and `start` share it).
     private func prepareOnce() async {
         if let t = prepareTask { await t.value; return }
-        let t = Task { [weak self] in await self?.prepare(contextualWords: []) }
+        let t = Task<Void, Never> { [weak self] in _ = await self?.prepare(contextualWords: []) }
         prepareTask = t
         await t.value
         prepareTask = nil

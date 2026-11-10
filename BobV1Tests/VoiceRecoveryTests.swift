@@ -35,7 +35,7 @@ final class VoiceRecoveryTests: XCTestCase {
     }
 
     func testAudioBufferedBeforeAttachIsDelivered() async throws {
-        let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        let fmt = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: false)!
         let pipe = AudioPipe(format: fmt)
         func buf() -> AVAudioPCMBuffer {
             let b = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 1600)!
@@ -55,7 +55,7 @@ final class VoiceRecoveryTests: XCTestCase {
     }
 
     func testPreRollRingIsBounded() async {
-        let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        let fmt = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: false)!
         let pipe = AudioPipe(format: fmt)
         for _ in 0..<100 {            // 10 s of audio
             let b = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 1600)!; b.frameLength = 1600
@@ -68,7 +68,7 @@ final class VoiceRecoveryTests: XCTestCase {
     }
 
     func testFirstBufferSignalDoesNotDisturbPreRoll() async throws {
-        let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        let fmt = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: false)!
         let pipe = AudioPipe(format: fmt, onFirstBuffer: {})
         pipe.arm()
         for _ in 0..<3 { let b = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 1600)!; b.frameLength = 1600; pipe.handle(b) }
