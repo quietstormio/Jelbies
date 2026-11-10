@@ -33,7 +33,7 @@ struct FormationRNG {
 @MainActor
 final class FormationTests: XCTestCase {
     enum Outcome { case arrived, aborted, timedOut, refused }
-    struct Rec { var outcome: Outcome; var t1: Float?; var t2: Float?; var gap: Float?; var cf: Float?; var nilCF = false; var note = "" }
+    struct Rec { var outcome: Outcome; var t1: Float?; var t2: Float?; var gap: Float?; var cf: Float?; var nilCF = false; var note = ""; var land: Float = 0, beat: Float = 0; var swapped = false }
 
     nonisolated(unsafe) static var savedPickChance: Float = 0.9
     override func setUp() { Self.savedPickChance = SocialTuning.pickChance; RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12 }
@@ -170,6 +170,7 @@ final class FormationTests: XCTestCase {
             rec.note = String(format: "start (%.1f,%.1f) moved %.2f end %@ t %.1f phase %d rewalks %d dist %.2f gap %@ script %@ initiator@(%.1f,%.1f) partner@(%.1f,%.1f) third@(%.1f,%.1f)", p0.x, p0.y, moved, s.end.map { "\($0)" } ?? "none", s.t, s.phase, s.rewalks, simd_distance(a.brain.position, others[0].position), gap, a.brain.scriptIsNone ? "none" : "walk",
                                   a.brain.position.x, a.brain.position.y, others[0].position.x, others[0].position.y, d.lab.rigs.last!.brain.position.x, d.lab.rigs.last!.brain.position.y)
         }
+        rec.land = Float(s.fmLand) / 60; rec.beat = Float(s.fmBeat) / 60; rec.swapped = s.swapped
         stopAll(d)
         return rec
     }
@@ -181,10 +182,11 @@ final class FormationTests: XCTestCase {
         let gaps = recs.compactMap(\.gap)
         let worst = gaps.map { abs($0) }.max() ?? .nan
         let cfs = recs.compactMap(\.cf), nils = recs.filter { $0.nilCF }.count
-        return String(format: "FORMATION %@ n=%d arrived=%d aborted=%d timeout=%d refused=%d | to-phase1 med %.1f p90 %.1f max %.1f | to-emote med %.1f p90 %.1f max %.1f | gap(cm) min %.1f max %.1f worst|.| %.1f | stance-gap max %.1f nil %d%@",
+        let lands = recs.filter { $0.outcome == .arrived }.map(\.land), beats = recs.filter { $0.outcome == .arrived }.map(\.beat), swaps = recs.filter { $0.swapped }.count
+        return String(format: "FORMATION %@ n=%d arrived=%d aborted=%d timeout=%d refused=%d | to-phase1 med %.1f p90 %.1f max %.1f | to-emote med %.1f p90 %.1f max %.1f | gap(cm) min %.1f max %.1f worst|.| %.1f | stance-gap max %.1f nil %d | waits land p90 %.1f max %.1f beat p90 %.1f swapped %d%@",
                       tag, recs.count, n(.arrived), n(.aborted), n(.timedOut), n(.refused),
                       Self.pct(t1, 0.5), Self.pct(t1, 0.9), t1.max() ?? .nan, Self.pct(t2, 0.5), Self.pct(t2, 0.9), t2.max() ?? .nan,
-                      (gaps.min() ?? .nan) * 100, (gaps.max() ?? .nan) * 100, worst * 100, (cfs.max() ?? .nan) * 100, nils, touching ? " (touching)" : "")
+                      (gaps.min() ?? .nan) * 100, (gaps.max() ?? .nan) * 100, worst * 100, (cfs.max() ?? .nan) * 100, nils, Self.pct(lands, 0.9), lands.max() ?? .nan, Self.pct(beats, 0.9), swaps, touching ? " (touching)" : "")
     }
 
     // MARK: assertions
@@ -206,17 +208,17 @@ final class FormationTests: XCTestCase {
         "circleDance/5": (0, 3.0, 39),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 2.2, AFTER worst gap 36.0 cm
         "ringDance/5": (0, 3.0, 100),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 2.3, AFTER worst gap 96.7 cm
         "chestBump": (1, 6.5, 14),          // BEFORE aborts 0, AFTER aborts 1, AFTER p90 5.9, AFTER worst gap 10.7 cm
-        "squabble": (3, 5.0, 14),          // BEFORE aborts 1, AFTER aborts 3, AFTER p90 4.1, AFTER worst gap 10.1 cm
-        "highFive": (2, 8.0, 14),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 7.5, AFTER worst gap 10.6 cm
-        "nuzzle": (2, 8.0, 10),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 7.5, AFTER worst gap 6.1 cm
-        "swayHug": (1, 8.5, 18),          // BEFORE aborts 1, AFTER aborts 1, AFTER p90 8.0, AFTER worst gap 14.6 cm
-        "cheekSquish": (2, 7.5, 3),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 7.0, AFTER worst gap 0.0 cm
-        "sneak": (2, 9.0, 70),          // BEFORE aborts 2, AFTER aborts 2, AFTER p90 8.2, AFTER worst gap 66.6 cm
-        "tag": (2, 5.0, 21),          // BEFORE aborts 0, AFTER aborts 2, AFTER p90 4.2, AFTER worst gap 17.6 cm
-        "leapfrog": (0, 9.0, 51),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 8.1, AFTER worst gap 47.3 cm
-        "spinHug": (2, 7.0, 35),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 6.4, AFTER worst gap 31.8 cm
-        "cuddleLean": (2, 8.0, 35),          // BEFORE aborts 2, AFTER aborts 2, AFTER p90 7.5, AFTER worst gap 31.4 cm
-        "boop": (2, 8.0, 4),          // BEFORE aborts 2, AFTER aborts 2, AFTER p90 7.1, AFTER worst gap 0.9 cm
+        "squabble": (1, 6.0, 10),          // BEFORE aborts 1, AFTER aborts 1, AFTER p90 5.4, AFTER worst gap 6.9 cm
+        "highFive": (2, 8.0, 6),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 7.5, AFTER worst gap 2.1 cm
+        "nuzzle": (2, 8.0, 18),          // BEFORE aborts 2, AFTER aborts 0, AFTER p90 7.4, AFTER worst gap 14.4 cm
+        "swayHug": (1, 8.0, 16),          // BEFORE aborts 1, AFTER aborts 0, AFTER p90 7.2, AFTER worst gap 12.8 cm
+        "cheekSquish": (2, 7.5, 6),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 7.0, AFTER worst gap 2.5 cm
+        "sneak": (3, 6.0, 71),          // BEFORE aborts 2, AFTER aborts 3, AFTER p90 5.4, AFTER worst gap 67.5 cm
+        "tag": (0, 6.5, 68),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 5.7, AFTER worst gap 64.9 cm
+        "leapfrog": (0, 8.5, 38),          // BEFORE aborts 0, AFTER aborts 0, AFTER p90 7.9, AFTER worst gap 34.1 cm
+        "spinHug": (2, 7.5, 41),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 6.6, AFTER worst gap 37.5 cm
+        "cuddleLean": (2, 10.0, 18),          // BEFORE aborts 2, AFTER aborts 1, AFTER p90 9.5, AFTER worst gap 14.6 cm
+        "boop": (2, 7.5, 28),          // BEFORE aborts 2, AFTER aborts 0, AFTER p90 6.9, AFTER worst gap 24.7 cm
     ]
 
     func check(_ tag: String, _ recs: [Rec], touching: Bool) {
@@ -231,6 +233,27 @@ final class FormationTests: XCTestCase {
     }
 
     static let layouts = 16
+
+    /// Boxed in, deterministic (seeded layouts): prints FORMATION-BOXED lines: outcome and the seconds to the emote.
+    func testBoxedIn() {
+        // the stuck layouts of the soak (the walker 1.2 - 1.4 m in front of the partner, a third Jelbie beside / behind: pairLayout 1, 3, 13, 14): side by side and face to face kinds
+        for (kind, proper, layout) in [(SocialKind.cheekSquish, 2, 14), (.nuzzle, 2, 14), (.squabble, 1, 13), (.squabble, 1, 5), (.squabble, 1, 9), (.squabble, 1, 3), (.tag, 2, 2), (.tag, 2, 12), (.chestBump, 2, 2)] {
+            let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9), SIMD2(0, 2.4)], features: [.none, .none, .none], seed: 77)
+            d.live = true
+            for _ in 0..<3 { d.tick() }
+            let l = Self.pairLayout(layout)
+            arrange(d, l.pos, l.yaw)
+            let r = session(d, kind: kind, proper: proper)
+            MotionLog.write(String(format: "FORMATION-BOXED %@ layout %d outcome %@ t-phase1 %.1f t-emote %.1f gap(cm) %.1f swapped %d%@", kind.rawValue, layout, "\(r.outcome)", r.t1 ?? -1, r.t2 ?? -1, (r.gap ?? .nan) * 100, r.swapped ? 1 : 0, r.note.isEmpty ? "" : " " + r.note))
+            // the side-by-side stuck layout (the walker in front of the partner, the third beside): BEFORE the swap it was cancelled after three tries, now the partner walks and the emote starts touching
+            if kind == .cheekSquish || kind == .nuzzle {
+                XCTAssertEqual(r.outcome, .arrived, "\(kind) layout \(layout) boxed in: the emote starts")
+                XCTAssertTrue(r.swapped, "\(kind) layout \(layout) boxed in: the partner took over the walk")
+                XCTAssertLessThanOrEqual(abs(r.gap ?? 1) * 100, 10, "\(kind) layout \(layout): it starts touching")
+                XCTAssertLessThanOrEqual(r.t2 ?? 99, 8, "\(kind) layout \(layout): within 8 s")
+            }
+        }
+    }
 
     func testPairFormation() {
         let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9), SIMD2(0, 2.4)], features: [.none, .none, .none], seed: 77)

@@ -206,6 +206,9 @@ final class SocialSession {
     /// Corners already tried for a blocked walk-up (a re-issue never takes the same one twice).
     var tried: [SIMD2<Float>] = []
     var retryAt: Float = 0, stalls = 0, issuePos = SIMD2<Float>.zero, landedT: Float = -1
+    /// Boxed-in swap: the partner walks (swapped), the spot was a side-by-side one (sideKind), when it happened; tick counters of the formation waits (read by FormationTests).
+    var swapped = false, sideKind = false, swapT: Float = 0
+    var fmTicks = 0, fmLand = 0, fmBeat = 0
     /// Friends2: the second runner's goal, the two start spots, the lane / orbit angle, the plan is made.
     var goal2 = SIMD2<Float>.zero, home0 = SIMD2<Float>.zero, home1 = SIMD2<Float>.zero, laneYaw: Float = 0, ready = false
     init(kind: SocialKind, a: BlobBrain, b: BlobBrain) { self.kind = kind; self.a = a; self.b = b; idA = a.steerID; idB = b.steerID }
@@ -321,7 +324,7 @@ extension BlobBrain {
 
     func socialWalk(to t: SIMD2<Float>, _ sim: SoftBody) {
         currentPose(sim)
-        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil; planCool = 0
+        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil; if !Self.fmOff("plan") { planCool = 0 }
         script = .walk(target: t, then: .none); activity = .walking
     }
 
