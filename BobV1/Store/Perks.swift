@@ -9,7 +9,7 @@
 //    fullBelly  hunger falls slower (x0.5)
 //    shine      the shine after a Clean lasts longer (sparkle fades x0.4 as fast)
 //    tidy       lint comes back slower (dirt builds x0.5)
-//    bedtime    falls asleep faster, deeper (night naps drain slower) - the "bedtime cookie"
+//    bedtime    longer naps (x1.35) and slower need drain while napping (0.35 instead of 0.5) - the "bedtime cookie"
 //    bouncy     more antics while you watch
 //    social     plays with the others more
 //
@@ -23,7 +23,7 @@ nonisolated enum PerkKind: String, CaseIterable, Codable, Sendable {
     var title: String {
         switch self {
         case .cozy: return "Cozy"; case .zoomies: return "Sugar rush"; case .focus: return "Focused"; case .fullBelly: return "Full belly"
-        case .shine: return "Shiny"; case .tidy: return "Tidy"; case .bedtime: return "Sleepy"; case .bouncy: return "Bouncy"; case .social: return "Social"
+        case .shine: return "Shiny"; case .tidy: return "Tidy"; case .bedtime: return "Deep sleep"; case .bouncy: return "Bouncy"; case .social: return "Social"
         }
     }
     var blurb: String {
@@ -34,7 +34,7 @@ nonisolated enum PerkKind: String, CaseIterable, Codable, Sendable {
         case .fullBelly: return "Gets hungry much more slowly."
         case .shine: return "Clean shine lasts longer."
         case .tidy: return "Lint comes back slower."
-        case .bedtime: return "Falls asleep fast and sleeps deep."
+        case .bedtime: return "Naps last longer, and needs drop slower while asleep."
         case .bouncy: return "Bounces and plays more."
         case .social: return "Plays with the others more."
         }

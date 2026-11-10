@@ -139,7 +139,7 @@ nonisolated enum StoreCatalog {
         StoreItem(id: "donut", name: "Donut", kind: .treat, price: 14, perk: .zoomies, description: "Sugar rush! Zoomies now and a quicker next Jelly Race.", symbol: "birthday.cake.fill", food: "donut"),
         StoreItem(id: "popsicle", name: "Ice pop", kind: .treat, price: 12, perk: .cozy, description: "Cool and calm. Stays happy longer for 4 hours.", symbol: "birthday.cake.fill", food: "popsicle"),
         StoreItem(id: "onigiri", name: "Onigiri", kind: .treat, price: 12, perk: .fullBelly, description: "A rice ball. Hunger falls slower for 4 hours.", symbol: "birthday.cake.fill", food: "onigiri"),
-        StoreItem(id: "cookie", name: "Bedtime cookie", kind: .treat, price: 10, perk: .bedtime, description: "Falls asleep fast and sleeps deep for 8 hours.", symbol: "moon.zzz.fill", food: "cookie"),
+        StoreItem(id: "cookie", name: "Bedtime cookie", kind: .treat, price: 10, perk: .bedtime, description: "Naps last longer and needs drop slower while asleep. Lasts 8 hours.", symbol: "moon.zzz.fill", food: "cookie"),
         // care supplies (used from Clean)
         StoreItem(id: "lavender", name: "Lavender soap", kind: .supply, price: 20, perk: .shine, description: "The shine after a Clean lasts much longer (12 hours).", symbol: "sparkles"),
         StoreItem(id: "lintguard", name: "Lint-guard spray", kind: .supply, price: 18, perk: .tidy, description: "Lint comes back half as fast for 6 hours.", symbol: "wind"),
