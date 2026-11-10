@@ -22,13 +22,21 @@ extension BlobBrain {
 
     /// A spot beside `o` (along the world x), on the side nearer to me, clear of everybody else.
     func sideSpot(of o: BlobBrain, gap: Float, extra: Float = 0) -> SIMD2<Float>? {
+        // (formation 2026-11-09: the side with the SHORTER WALK from where I stand, not the one nearer by world x; a spot I already stand within 0.3 m of is taken at once)
         let dir: Float = position.x >= o.position.x ? 1 : -1
+        var best: (p: SIMD2<Float>, cost: Float)?
         for sgn in [dir, -dir] {
             let p = o.position + SIMD2(sgn * (standGap(o, along: SIMD2(sgn, 0), gap) + extra), 0)          // (never inside him: the touch distance + the approach margin, ContactStance.swift)
             let q = closeFixed(p)
-            if simd_distance(p, q) < 0.2, spotFree(q, besides: [self, o]) { return q }
+            guard simd_distance(p, q) < 0.2, spotFree(q, besides: [self, o]) else { continue }
+            var cost = simd_distance(position, q)
+            if cost < 0.3 { socialBook.sideSpotAt = q; return q }
+            if !legClear(position, q, margin: steerMargin) { cost += 1.5 }
+            if peerOnLeg(position, q) { cost += 1.5 }          // (the way to it passes him or a third one: the steering would wait there)
+            if best == nil || cost < best!.cost { best = (q, cost) }
         }
-        return nil
+        socialBook.sideSpotAt = best?.p
+        return best?.p
     }
     /// A spot behind `o` (opposite to where he faces).
     func behindSpot(of o: BlobBrain, gap: Float) -> SIMD2<Float>? {
@@ -140,10 +148,128 @@ extension BlobBrain {
         if !isA { return true }
         if scriptIsNone && faceBoth { faceEach(o) }
         if s.t > 18 { s.finish(.aborted); return true }
-        if scriptIsNone && s.phaseT > 0.3 {
-            if simd_distance(position, o.position) < max(peerGap + near, Self.walkUpFar) { s.setPhase(1) } else { s.finish(.aborted) }          // (the walk-up ends where the stance stands - 1.445 and more, the widest touch + the approach margin - which is farther than peerGap + near: the stance's own walk closes the rest in phase 1)
-        }
+        _ = formationWalkUp(s, o, near: near, facing: faceBoth)
         return true
+    }
+
+    /// How far (m) the skin gap may still be above the stance's own target when a touching walk-up counts as arrived (the phase-1 settle closes the rest), and how close to its spot a walk counts as arrived.
+    static let formationSlack: Float = 0.10
+    /// The kinds of the newcomer welcome (GameCare+Newcomer): swayHug, spinHug, cuddleLean, cheekSquish, highFive (the groups: groupHug, ringDance, have their own gather).
+    static let newcomerKinds: Set<SocialKind> = [.swayHug, .spinHug, .cuddleLean, .cheekSquish, .highFive]
+    /// FORMATION (2026-11-09, "they get stuck or take a long time getting into formation"): the initiator's phase 0, one call per tick. While the walk script runs nothing happens (the walk is locked: only
+    /// where and when it starts / re-targets is decided here). When it has ended: arrived (touching kinds: the skin gap is within `formationSlack` of the stance's target; the others: the old rule, closer than
+    /// `walkUpFar`; side by side: the walk ended where it was going, and once in the pose the gap decides too) = phase 1. Short of it: the walk is issued AGAIN - a try that got somewhere (root moved > 25 cm) is free, three
+    /// in a row that went nowhere cancel; from the second the spot is re-planned from where both stand now (the other side, a recomputed away-axis) and the walk gets a corner round whatever is in the way - inside the budget
+    /// (3 s + the distance at 1.1 m/s, + 2.5 s for the last stance walk). Out of budget = the session is cancelled (`.aborted`): a touching emote never plays apart (the newcomer-welcome kinds keep the old fallback: they start
+    /// from where they stand when close, so their abort counts do not rise). True = phase 1 was just entered.
+    @discardableResult
+    func formationWalkUp(_ s: SocialSession, _ o: BlobBrain, near: Float, facing: Bool) -> Bool {
+        if s.walkBudget == 0 { s.walkBudget = 3 + simd_distance(position, s.goal == .zero ? o.position : s.goal) / 1.1 }
+        let st = ContactStance.entry(s.kind)
+        let touching = st?.cls == .touching
+        let newcomer = Self.newcomerKinds.contains(s.kind)          // (the newcomer welcome waits for `social == nil` and counts aborts: these kinds keep the old fallback - start from where they stand when close - instead of being cancelled)
+        guard scriptIsNone, !feet.active, s.phaseT > 0.3 else {
+            if case .walk(let t, _) = script { s.walkTo = t }          // (where this walk is going: the stance may have re-targeted it)
+            if touching, !newcomer, s.t > s.walkBudget + 2.5 { s.finish(.aborted) }          // (still walking, long past the budget: a walk that never lands)
+            return false
+        }
+        let d = simd_distance(position, o.position)
+        // Arrived? FACE TO FACE the posture does not change after the walk, so the stance's own skin gap decides (within `formationSlack` of its phase-0 target). SIDE BY SIDE the body still turns to the camera after the
+        // walk (the outline - and so the gap - changes by up to 20 cm while it does), so the judge is the walk itself: it ended within 15 cm of the destination it was going to (a walk that was given up on the way did not).
+        var need: Float?
+        let inPose = facing || abs(wrapAngle(yaw - faceCameraYaw())) < 0.3          // (side by side: the walk turns into the pose on its last steps)
+        if touching, inPose, let st, ContactField.enabled, let g = ContactField.gap(steerID, o.steerID, features: st.features) { need = g - (st.steps.first?.target ?? ContactStance.near) }
+        let ref = s.walkTo ?? (s.goal == .zero ? nil : s.goal)
+        let short: Bool
+        if let need { short = need > Self.formationSlack }
+        else if touching, let ref {
+            short = simd_distance(position, ref) > 0.15
+            if !short {
+                if s.landedT < 0 { s.landedT = s.t }
+                if s.t < s.landedT + 1.0 { return false }          // (landed, but still turning into the pose: the gap is read once it stands in it - for at most 1 s)
+            }
+        }
+        else { short = d >= max(peerGap + near, Self.walkUpFar) }
+        guard short else { s.setPhase(1); return true }
+        let over = s.t > s.walkBudget + (touching ? 2.5 : 0)
+        guard !over, s.stalls < 3, let sim = contactSim else {
+            // out of budget / out of tries: a touching emote is cancelled (never plays apart); the others may start in place when they stand near him (the old rule)
+            if !touching || newcomer, d < Self.walkUpFar { s.setPhase(1); return true }
+            s.finish(.aborted); return false
+        }
+        guard s.t >= s.retryAt else { return false }          // (a beat between two tries)
+        // a try that got somewhere (the root moved more than 25 cm since the last one) does not count against the three that are allowed; three in a row that went nowhere cancel the session
+        s.stalls = simd_distance(position, s.issuePos) > 0.25 || s.rewalks == 0 ? 0 : s.stalls + 1
+        s.issuePos = position
+        guard s.stalls < 3 else {
+            if !touching || newcomer, d < Self.walkUpFar { s.setPhase(1); return true }          // (three tries that went nowhere: the same fallback as above)
+            s.finish(.aborted); return false
+        }
+        s.rewalks += 1
+        s.retryAt = s.t + 0.3
+        if s.goal == .zero || s.stalls >= 1 { if let g2 = replanGoal(s, o) { s.goal = g2; s.walkTo = nil } }
+        var aim = s.stalls >= 1 ? s.goal : (s.walkTo ?? s.goal)
+        if aim == .zero || (simd_distance(position, aim) < 0.12 && (need ?? 0) > Self.formationSlack) {          // (standing at the spot and still far from him: close the gap along the line to him)
+            let u = simd_normalize(o.position - position + SIMD2(1e-6, 0))
+            aim = closeFixed(position + u * min(max(need ?? 0.3, 0.1), 0.6))
+            if simd_distance(aim, position) < 0.06 { s.rewalks -= 1; s.stalls = max(0, s.stalls - 1); s.retryAt = s.t + 0.5; return false }          // (the floor / his wall keeps it where it is: nothing to walk now; try again in a beat, the budget ends it)
+        }
+        socialWalk(to: aim, sim)
+        // a re-issue that is the second or third try: the first one got nowhere, usually boxed in between him and a third Jelbie - give the walk a corner round them (the steering found none)
+        if let wp = detourWaypoint(to: aim, around: o, avoiding: s.tried) { route = [wp]; s.tried.append(wp) }
+        return false
+    }
+
+    /// A corner for a walk to `goal` round whatever stands in the way (the Jelbie nearest to the straight leg: the partner, or a third one; `o` when nobody is near it): a free floor point on a ring round him, reachable from here and
+    /// with a clear leg on to the goal, the shortest way, and not one that was tried already. Corners whose two legs pass nobody come first; when there is none the legs may pass within the usual gap (the walk then squeezes by:
+    /// the room's wall keeps the bodies apart). nil = none.
+    func detourWaypoint(to goal: SIMD2<Float>, around o: BlobBrain, avoiding tried: [SIMD2<Float>]) -> SIMD2<Float>? {
+        var blocker = o.position, nearest: Float = .infinity
+        let leg = goal - position, L2 = max(simd_length_squared(leg), 1e-4)
+        for p in steerPeers() {
+            let u = max(0, min(1, simd_dot(p.pos - position, leg) / L2))
+            let d = simd_distance(p.pos, position + leg * u)
+            if d < nearest { nearest = d; blocker = p.pos }
+        }
+        if nearest > 1.6 { blocker = o.position }
+        for strict in [true, false] {
+            var best: (cost: Float, p: SIMD2<Float>)?
+            for k in 0..<16 {
+                let a = Float(k) * .pi / 8
+                for r: Float in [1.5, 1.9] {
+                    let p = blocker + SIMD2(sinf(a), cosf(a)) * r
+                    let q = fixed(p)
+                    guard simd_distance(p, q) < 0.1, steerPeers().allSatisfy({ simd_distance($0.pos, q) >= peerGap * 0.8 }), !tried.contains(where: { simd_distance($0, q) < 0.6 }), legClear(position, q, margin: steerMargin), legClear(q, goal, margin: steerMargin) else { continue }
+                    if strict { if peerOnLeg(position, q) || peerOnLeg(q, goal) { continue } }
+                    else if !softLegClear(position, q, r: peerGap * 0.8) || !softLegClear(q, goal, r: peerGap * 0.8) { continue }
+                    let cost = simd_distance(position, q) + simd_distance(q, goal)
+                    if best == nil || cost < best!.cost { best = (cost, q) }
+                }
+            }
+            if let b = best { return b.p }
+        }
+        return nil
+    }
+
+    /// The meeting spot again, from where both stand NOW, at the stand-off distance of the first plan: side by side = the free side with the shorter walk, face to face = on the line from him to me, behind (sneak) / the peekaboo spot unchanged.
+    func replanGoal(_ s: SocialSession, _ o: BlobBrain) -> SIMD2<Float>? {
+        if s.kind == .sneak || s.kind == .peekaboo { return nil }
+        let dg = s.goal == .zero ? peerGap : simd_distance(s.goal, o.position)
+        guard dg > 0.4 else { return nil }
+        if let at = socialBook.sideSpotAt, s.goal != .zero, simd_distance(at, s.goal) < 0.01 {
+            var best: (p: SIMD2<Float>, cost: Float)?
+            for sgn: Float in [1, -1] {
+                let p = o.position + SIMD2(sgn * dg, 0), q = closeFixed(p)
+                guard simd_distance(p, q) < 0.2, spotFree(q, besides: [self, o]) else { continue }
+                let cost = simd_distance(position, q) + (legClear(position, q, margin: steerMargin) ? 0 : 1.5)
+                if best == nil || cost < best!.cost { best = (q, cost) }
+            }
+            if let b = best { socialBook.sideSpotAt = b.p; return b.p }
+            return nil
+        }
+        let away = simd_normalize(position - o.position + SIMD2(1e-6, 0))
+        let want = o.position + away * dg, q = closeFixed(want)
+        return simd_distance(want, q) < 0.14 && spotFree(q, besides: [self, o]) ? q : nil
     }
 
     func leanSign(toward p: SIMD2<Float>) -> Float {
@@ -209,9 +335,7 @@ extension BlobBrain {
         case 0:   // b stands, looking the other way; a walks round behind him
             if !isA { socialBook.hold = true; return }
             if s.t > 18 { s.finish(.aborted); return }
-            if scriptIsNone, s.phaseT > 0.3 {
-                if simd_distance(position, o.position) < max(peerGap + 0.4, Self.walkUpFar) { s.setPhase(1) } else { s.finish(.aborted) }
-            }
+            _ = formationWalkUp(s, o, near: 0.4, facing: true)
         case 1:   // a creeps the last bit: stands, squashes a little, face to his back
             if !isA { socialBook.hold = true; return }
             socialBook.hold = true; socialBook.faceYaw = yawTo(o.position)

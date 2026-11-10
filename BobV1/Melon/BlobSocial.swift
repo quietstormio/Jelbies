@@ -120,6 +120,10 @@ struct SocialBook {
     var soccerStompSide = 0, soccerReturned = false
     /// ringAround: this one has walked out to his spot on the ring.
     var ringSpread = false
+    /// The spot the last `sideSpot` returned (a side-by-side walk-up: the formation re-plans it from where both stand, BlobSocial+Play).
+    var sideSpotAt: SIMD2<Float>?
+    /// Group gather: how often this member's walk to his slot was re-issued (BlobSocial+Group `gather`).
+    var regathers = 0
     var started: [SocialKind: Int] = [:]
     /// How close this Jelly is to each other one (by steerID): 1 = housemates; the Park sets 0.55 (stranger) ... 2.1 (best friend). Close friends do the friendly kinds more often.
     var close: [Int: Float] = [:]
@@ -195,8 +199,13 @@ final class SocialSession {
     /// Ball pass: the decor piece, the passes made / wanted.
     var uid = -1, passes = 0, passTarget = 3
     var goal = SIMD2<Float>.zero
-    /// Walk-ups re-issued so far (read by FormationTests; the formation round counts its re-issues here).
-    var rewalks = 0
+    /// Formation (BlobSocial+Play `formationWalkUp`): walks re-issued so far, the phase-0 time budget (0 = not set yet).
+    var rewalks = 0, walkBudget: Float = 0
+    /// The destination of the phase-0 walk as it last ran (the stance may re-target it): a walk that ended farther from it than 15 cm did not land.
+    var walkTo: SIMD2<Float>?
+    /// Corners already tried for a blocked walk-up (a re-issue never takes the same one twice).
+    var tried: [SIMD2<Float>] = []
+    var retryAt: Float = 0, stalls = 0, issuePos = SIMD2<Float>.zero, landedT: Float = -1
     /// Friends2: the second runner's goal, the two start spots, the lane / orbit angle, the plan is made.
     var goal2 = SIMD2<Float>.zero, home0 = SIMD2<Float>.zero, home1 = SIMD2<Float>.zero, laneYaw: Float = 0, ready = false
     init(kind: SocialKind, a: BlobBrain, b: BlobBrain) { self.kind = kind; self.a = a; self.b = b; idA = a.steerID; idB = b.steerID }
@@ -312,7 +321,7 @@ extension BlobBrain {
 
     func socialWalk(to t: SIMD2<Float>, _ sim: SoftBody) {
         currentPose(sim)
-        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil; planCool = 0
         script = .walk(target: t, then: .none); activity = .walking
     }
 
@@ -356,8 +365,10 @@ extension BlobBrain {
                 spot = side
             }
             guard simd_distance(spot, you) < gap + 0.3 || kind == .boop else { return false }
+            if kind == .squabble, !spotFree(spot, besides: [self, o]) { return false }          // (a third Jelbie stands where the face-off would be: no walk-up could get there)
             let s = newSession(kind, with: o, duration: kind == .squabble ? rand(5, 8) : 0)
-            if kind == .boop { s.goal = spot; o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw() }
+            s.goal = spot
+            if kind == .boop { o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw() }
             else { o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(me) }
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
         case .follow:
@@ -419,7 +430,13 @@ extension BlobBrain {
         }
         if cands.isEmpty { return false }
         guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) else { return false }
-        let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
+        // (formation 2026-11-09: mildly toward the nearer one, weight 1 / max(d, 1); the kind weights below are untouched)
+        let o: BlobBrain = {
+            let wts = cands.map { 1 / max($0.1, 1) }
+            var x = rand() * wts.reduce(0, +)
+            for (i, w) in wts.enumerated() { if x < w { return cands[i].0 }; x -= w }
+            return cands[cands.count - 1].0
+        }()
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         // 2026-11-06: boop 3 -> 1.5. The user: "they do the hand holding emote a little too much ... not as often" (the standing side-by-side hand-on-arm boop): halved, not replaced.
         var w: [(SocialKind, Float)] = [(.boop, 0.6), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
@@ -778,9 +795,7 @@ extension BlobBrain {
             if !isA { socialBook.hold = true; socialBook.faceYaw = yawTo(o.position); return }
             if scriptIsNone { faceEach(o) }
             if s.t > 16 { s.finish(.aborted); return }
-            if scriptIsNone && s.phaseT > 0.3 {
-                if d < max(peerGap + 0.4, Self.walkUpFar) { s.setPhase(1); s.fightT = 0 } else { s.finish(.aborted) }
-            }
+            if formationWalkUp(s, o, near: 0.4, facing: true) { s.fightT = 0 }
         case 1: // the face-off + shove-bumps
             faceEach(o)
             if isA { s.fightT += dt }
