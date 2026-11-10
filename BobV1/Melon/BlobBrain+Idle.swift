@@ -725,9 +725,19 @@ extension BlobBrain {
     // MARK: running the .idle script
 
     /// New foot step with the planted feet's reach (used by sit / get up: the feet go forward and come back under him).
-    func idleFootStep(reach: Float, rate: Float = 2.6, peak: Float = 0.055) {
+    func idleFootStep(reach: Float, rate: Float = 2.6, peak: Float = 0.055, extra: SIMD2<Float> = .zero) {
         let u = SIMD2(sinf(yaw), cosf(yaw))
-        startStep(reach: u * reach, peak: peak * amplitude, rate: rate, swingFrac: 0.8)
+        startStep(rootD: extra, reach: u * reach, peak: peak * amplitude, rate: rate, swingFrac: 0.8)
+    }
+
+    /// The sit-down steps of a sitTogether carry the sitter toward his partner by what the skins still have to close (r4-standing): a SEATED body is narrower than the standing outline the walk-up stopped on (the arms
+    /// tuck), and it cannot shuffle and its lean (budget 3.4 cm) saturates: the room held a 5-9 cm gap for the whole sit. A real foot step toward him: no rigid shift, no sliding soles.
+    func sitCloseStep() -> SIMD2<Float> {
+        guard let s = social, s.kind == .sitTogether, s.end == nil, let pid = socialPartnerID, let o = socialBrain(pid), ContactField.enabled,
+              let g = ContactField.gap(steerID, pid, features: true) else { return .zero }
+        let d = max(0, min(ContactTuning.sitCloseMax, (g - ContactStance.hold) * ContactTuning.sitCloseShare))
+        let dir = simd_normalize(o.position - position + SIMD2(1e-6, 0))
+        return dir * d
     }
 
     func runIdle(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {

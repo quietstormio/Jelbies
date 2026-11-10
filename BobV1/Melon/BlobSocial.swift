@@ -149,6 +149,7 @@ struct SocialBook {
     /// The settle's rigid warp of an AIRBORNE body, summed over the hop in flight (and the clock of its last push: a push more than 0.2 s after the last one is a new hop): `ContactTuning.hopWarpMax` bounds it (r4-park-fix).
     var airWarp = SIMD2<Float>.zero, airWarpT: Float = -10
     var leanTrim: Float = 0, trimPartner = -1, shuffleReq = 0          // the settle's output for a planted body: lean toward the partner (rad), and a request for one shuffle step
+    var scoots = 0          // sitTogether: the small real foot steps toward the partner taken from the seat (BlobSocial+Play)
     var shiftPending = SIMD2<Float>.zero          // the settle's root nudges not yet applied to the sim body (ContactSettle.swift)
     var contactAwayT: [Int: Float] = [:]          // per other body: seconds the skins have been > 3 cm apart (the re-arm of the touch sound)
     var glow: [Int: Float] = [:]          // after a session: partner id -> seconds the pair is still kept apart (ContactStance.swift)

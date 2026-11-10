@@ -171,6 +171,7 @@ extension BlobBrain {
             if scriptIsNone { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw() }
             _ = walkUpPhase(s, o, isA, faceBoth: false, near: 0.55)
         case 1:
+            socialBook.scoots = 0
             if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil, isA || s.phaseT > 0.25 {
                 socialBook.hold = false; socialBook.faceYaw = nil
                 if idleStart(.sit, sim) { idleState.hold = s.duration; socialBook.hopStarted = true }
@@ -179,6 +180,11 @@ extension BlobBrain {
             if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.5, idleState.kind == .sit, o.idleState.kind == .sit, idleState.phase >= 2, o.idleState.phase >= 2 { s.setPhase(2) }          // (the hold's lean starts once both are DOWN: it chased the lowering bodies and sank them -2.5 cm)
             else if isA, s.phaseT > 8 { s.finish(.aborted) }
         default:
+            if s.phase == 2, idleState.kind == .sit, idleState.phase == 2, !feet.active, socialBook.scoots < ContactTuning.sitScoots, s.phaseT > 0.5 + 0.9 * Float(socialBook.scoots) {          // a seated body cannot shuffle and its lean saturates: a real small foot step toward him closes what is left
+                let st = sitCloseStep()
+                socialBook.scoots += 1
+                if simd_length(st) > 0.012 { idleFootStep(reach: 0, extra: st) }
+            }
             if isA, s.phase == 2, (idleState.kind == .sit && idleState.phase >= 3) || (o.idleState.kind == .sit && o.idleState.phase >= 3) { s.setPhase(3) }          // (the get-up: the stance lets go - the hold's lean chased the rising bodies and sank them -4 cm)
             if s.phase < 3, idleState.kind == .sit || idleState.kind == .sleep { socialBook.wantRoll = leanSign(toward: o.position) * 0.05 }
             if isA, idleState.kind == nil, o.idleState.kind == nil, s.phaseT > 1 { s.finish(.done) }
