@@ -23,6 +23,6 @@ extension StoreCatalog {
         StoreItem(id: "boba", name: "Boba milk tea", kind: .drink, price: 14, perk: .social, description: "Chewy pearls and a big sip. Plays with the others more for an hour.", symbol: "cup.and.saucer.fill", food: "boba"),
         StoreItem(id: "smoothie", name: "Berry smoothie", kind: .drink, price: 12, perk: .fullBelly, description: "Thick and fruity. Hunger falls slower for 4 hours.", symbol: "cup.and.saucer.fill", food: "smoothie"),
         StoreItem(id: "lemonade", name: "Pink lemonade", kind: .drink, price: 11, perk: .bouncy, description: "Fizzy-fresh and zingy. More bouncing for an hour.", symbol: "cup.and.saucer.fill", food: "lemonade"),
-        StoreItem(id: "cocoa", name: "Hot cocoa", kind: .drink, price: 12, perk: .bedtime, description: "Warm and sleepy, with marshmallows. Falls asleep fast and sleeps deep for 8 hours.", symbol: "mug.fill", food: "cocoa"),
+        StoreItem(id: "cocoa", name: "Hot cocoa", kind: .drink, price: 12, perk: .bedtime, description: "Warm and sleepy, with marshmallows. Naps last longer and needs drop slower while asleep. Lasts 8 hours.", symbol: "mug.fill", food: "cocoa"),
     ]
 }
