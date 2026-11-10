@@ -1453,6 +1453,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         if hp != nil, let b = a.brain {
             let fs = FeatureSet(); fs.body = WearBody.shared; fs.ignoreHide = true
             let feature: JellyFeature = hp?.borrowed == true ? .none : (a.profile?.feature ?? JellyRoster.feature(slot: id))
+            // the player's own adopted Amber Pip keeps his russet spikes in a lobby picture; a rival / Park visitor drawn on this body never gets them
+            fs.setSpikeTint(id, feature == .spines && hp?.colour == nil && hp?.rivalTint == nil ? JellyVariantBook.spikeTint(for: JellyVariants.active(a.profile?.character ?? JellyRoster.character(id))) : nil)
             var worn: [String] = []
             for sl in WearSlot.allCases where sl != .feet { if let l = w.shown(id, sl), !l.art.isEmpty { worn.append(l.art) } }
             let drive = TeddyDrive.portrait(fs: fs, id: id, brain: b, sim: a.sim, feature: feature, worn: worn)
