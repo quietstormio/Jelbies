@@ -110,6 +110,7 @@ enum GameCamera {
             target = roomTarget + lift
             eye = roomTarget + (roomEye - roomTarget) * (1 + (roomWideScale - 1) * pa) + lift
         }
+        if parkRoamMaxZ != nil { let d = parkPan(aspect: aspect); eye += d; target += d }          // the park only: pan so the roam floor's front edge sits low on the screen (Park/ParkRoom.swift)
         var e = eye, t = target, up = SIMD3<Float>(0, 1, 0)
         if focus != 0 {
             let p = focusSpots.isEmpty ? focusPose(aspect: aspect) : focusPose(aspect: aspect, spots: focusFramed.count == focusSpots.count ? focusFramed : focusSpots)

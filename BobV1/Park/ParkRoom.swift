@@ -39,6 +39,21 @@ extension GameCamera {
         parkRoamMaxZ = 4.5
     }
 
+    /// Where the roam floor's front edge (x 0, z `parkRoamMaxZ`) sits on the screen, as a fraction of the screen height from the top, in every aspect (2026-11-09: the front third was bare lawn).
+    /// (0.79 on a phone / tablet in portrait; 0.73 from a phone's landscape up, so a Jelbie standing at the front edge in the middle is just above the Go home pill, whose top is at about 76%.)
+    static func parkFrontFraction(aspect: Float) -> Float { 0.79 - 0.06 * poseBlend(aspect) }
+
+    /// The park pan: eye and target move together along the camera's own up vector (same elevation, same distance, so on-screen widths and the look do not change) by the amount that puts
+    /// the front edge at `parkFrontFraction` of the screen height. Computed from the pose in use (`eye`, `target` after the portrait widening), so it is aspect-aware by construction.
+    static func parkPan(aspect: Float) -> SIMD3<Float> {
+        guard let zf = parkRoamMaxZ else { return .zero }
+        let fw = simd_normalize(target - eye), rt = simd_normalize(simd_cross(fw, SIMD3<Float>(0, 1, 0))), up = simd_cross(rt, fw)
+        let p = SIMD3<Float>(0, 0, zf) - eye
+        let depth = simd_dot(p, fw), yc = simd_dot(p, up)
+        let want = (1 - 2 * parkFrontFraction(aspect: aspect)) * depth * tanf(fovY / 2)
+        return up * (yc - want)
+    }
+
     /// Back to the room's camera and floor for `count` Jelbies (what the stage set up at launch).
     static func endPark(count: Int) {
         parkRoamMaxZ = nil
@@ -117,7 +132,7 @@ enum ParkScenery {
         flowerPatch(b, x: 4.8, z: 1.9, scale: 1.0, bloom: gold, rng: &r)
         flowerPatch(b, x: -3.6, z: 3.8, scale: 1.0, bloom: poppy, rng: &r)
         flowerPatch(b, x: 5.3, z: -0.6, scale: 0.9, bloom: white, rng: &r)
-        flowerPatch(b, x: -4.6, z: -1.0, scale: 0.9, bloom: violet, rng: &r)
+        flowerPatch(b, x: -5.4, z: -0.5, scale: 0.9, bloom: violet, rng: &r)
 
         // ---- the ground: a tessellated lawn that carries mowing bands, sun patches, soft tree shadows and worn earth; the gravel path ----
         lawn(b, shadows: shadows)
@@ -126,9 +141,13 @@ enum ParkScenery {
         // ---- the pond (right, at the back): irregular stones, deep teal water, reeds, lily pads ----
         pond(b, rng: &r)
 
+        // ---- the entrance border below the roam floor's front edge ----
+        entrance(b, rng: &r)
+
         // ---- the bench (back centre): timber slats on cast-iron frames, and a park lamp post beside it ----
         bench(b)
         lampPost(b, x: 1.72, z: -4.85)
+        NSLog("PARKTRIS %d", b.mesh.indices.count / 3)
         return b.mesh
     }
 

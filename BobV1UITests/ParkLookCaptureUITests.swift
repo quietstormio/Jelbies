@@ -25,27 +25,23 @@ final class ParkLookCaptureUITests: XCTestCase {
         app.terminate()
     }
 
-    /// Landscape (or `PARK_LOOK_ORIENT=portrait`): the same launch, rotated; it WAITS for the park's Go home button (`park-home`) and fails if the park does not open within 60 s,
-    /// then saves land_1...land_3 (or port_*) a few seconds apart. (Round 2 captured the home room by mistake because nothing checked the park had opened.)
+    /// Landscape (or `PARK_LOOK_ORIENT=portrait`) capture of a park that is ALREADY OPEN in a separately launched app. Finding (2026-11-09): when XCUIApplication launches the app, the park never opens, neither
+    /// through the `-StartPark 1` hook nor by tapping Go out > Park > Go (cause not found; XCTest also changes the app's persistence / forced-hour / audio paths), in portrait as well as landscape. So this
+    /// test does NOT launch the app: start it from outside with `simctl launch ... -StartPark 1` while this test sleeps (PARK_LOOK_WAIT seconds, default 50), then it rotates the device and saves
+    /// <tag>_1...3. The test cannot see the app's elements without relaunching it, so whoever runs it must LOOK at the pictures.
     @MainActor
     func testParkLandscape() throws {
         try XCTSkipIf(out.isEmpty, "PARK_LOOK_OUT not set")
         try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
-        let portrait = ProcessInfo.processInfo.environment["PARK_LOOK_ORIENT"] == "portrait"
+        let env = ProcessInfo.processInfo.environment
+        let portrait = env["PARK_LOOK_ORIENT"] == "portrait"
+        let wait = UInt32(env["PARK_LOOK_WAIT"] ?? "50") ?? 50
+        sleep(wait)
         XCUIDevice.shared.orientation = portrait ? .portrait : .landscapeLeft
-        let app = XCUIApplication()
-        app.launchArguments += ["-SetRoster", "bob,pearl,teddy", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES",
-                                "-BlobDrops.v1", "1024", "-ClockHour", "12", "-StartPark", "1"]
-        app.launch()
-        let home = app.buttons["park-home"]
-        let opened = home.waitForExistence(timeout: 60)
-        let tag = portrait ? "port" : "land"
-        if !opened { try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: "\(out)/\(tag)_FAILED_no_park.png")) }
-        XCTAssertTrue(opened, "the park never opened (no park-home button) in \(tag)")
+        let tag = portrait ? "port" : "land"          // (no XCUIApplication here at all: activate() / element queries would RELAUNCH the app without the -StartPark argument and show the title screen)
         for k in 0..<3 {
-            sleep(6)
+            sleep(5)
             try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: "\(out)/\(tag)_\(k + 1).png"))
         }
-        app.terminate()
     }
 }

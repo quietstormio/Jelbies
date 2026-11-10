@@ -338,7 +338,7 @@ def conifer(iid, seed, tiers=10, H=3.9, R=1.2, pal=PAL_SPRUCE, lod=0, trunk_h=0.
     return dict(kind="conifer", canopy_radius=R, height=H + 0.12, leaves=nleaf)
 
 # ---------------------------------------------------------------- shrubs
-def bush(iid, seed, R=1.0, nbl=14, hedge=False, lod=0):
+def bush(iid, seed, R=1.0, nbl=14, hedge=False, lod=0, lite=False):
     rng = random.Random(seed); lib.reset(); reset()
     masses = []
     if hedge:
@@ -357,7 +357,7 @@ def bush(iid, seed, R=1.0, nbl=14, hedge=False, lod=0):
     begin("leaf")
     core_masses(masses, ctr, cr, 0.0, R * 0.95, PAL_BUSH, seed, sub=2, frac=0.82, bump=0.22)
     lv = Leaves()
-    shell_leaves(lv, rng, masses, PAL_BUSH, ctr, cr, 0.0, R * 0.95, 0.09, 0.60, 540 if not hedge else 600, down=0.5, tilt=0.55, cover_top=0.95, cover_bot=0.8, sunk=0.03)
+    shell_leaves(lv, rng, masses, PAL_BUSH, ctr, cr, 0.0, R * 0.95, 0.10, 0.60, 540 if not hedge else (290 if lite else 600), down=0.5, tilt=0.55, cover_top=0.95, cover_bot=0.8, sunk=0.03)
     lv.flush()
     begin("bloom")
     if not hedge:
@@ -404,6 +404,7 @@ REG = [
     ("bush_a", lambda: bush("bush_a", 3, nbl=12)),
     ("bush_b", lambda: bush("bush_b", 8, nbl=10, R=0.9)),
     ("hedge", lambda: bush("hedge", 5, R=1.0, hedge=True)),
+    ("hedge_low", lambda: bush("hedge_low", 7, R=1.0, hedge=True, lite=True)),
     ("flowers", lambda: flowers("flowers", 4)),
 ]
 

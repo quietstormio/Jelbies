@@ -20,6 +20,7 @@ extension ParkScenery {
         static let pinesFar = load(["pine_a_far", "pine_b_far"])
         static let bushes = load(["bush_a", "bush_b"])
         static let hedge = load(["hedge"])
+        static let hedgeLow = load(["hedge_low"])
         static let flowers = load(["flowers"])
     }
     /// The nominal leaf colour the assets are painted for: an instance's `canopy` colour tints the baked leaves by `canopy / leafRef`.
@@ -70,8 +71,8 @@ extension ParkScenery {
     }
 
     /// A clipped hedge run at (x, z), `s` times the asset's 2 m length.
-    static func hedge(_ b: RoomMeshBuilder, x: Float, z: Float, scale s: Float, yaw: Float, rng r: inout ParkRandom) {
-        guard let a = Art.hedge.first else { return }
+    static func hedge(_ b: RoomMeshBuilder, x: Float, z: Float, scale s: Float, yaw: Float, low: Bool = false, rng r: inout ParkRandom) {
+        guard let a = (low ? Art.hedgeLow.first ?? Art.hedge.first : Art.hedge.first) else { return }
         stamp(b, a, at: V3(x, 0, z), yaw: yaw, k: s, ky: s * (0.95 + 0.1 * r.unit()), tint: ["leaf": V3(0.95 + 0.1 * r.unit(), 1.0, 0.95 + 0.1 * r.unit())])
     }
 

@@ -259,11 +259,39 @@ extension ParkScenery {
                 b.mesh.vertices[i].color = SIMD4(simd_mix(under, top, V3(repeating: k)), 1)
             }
         }
-        for (x, y, s) in [(-4.4 as Float, 7.7 as Float, 0.65 as Float), (-0.2, 8.2, 0.8), (3.6, 7.1, 0.7), (7.0, 7.6, 0.65), (10.4, 7.4, 0.8)] {
+        for (x, y, s) in [(-3.6 as Float, 9.6 as Float, 0.75 as Float), (0.8, 10.6, 0.9), (4.2, 9.1, 0.8), (-7.2, 10.2, 0.85), (7.8, 10.4, 0.9), (-0.2, 8.4, 0.55)] {
             puff(V3(x, y, -9.2), 0.95 * s, 0.55 * s)
             puff(V3(x - 0.85 * s, y - 0.12 * s, -9.18), 0.7 * s, 0.42 * s)
             puff(V3(x + 0.85 * s, y - 0.1 * s, -9.19), 0.75 * s, 0.45 * s)
             puff(V3(x + 0.15 * s, y + 0.32 * s, -9.21), 0.6 * s, 0.42 * s)
         }
+    }
+
+    /// The park's entrance border (below the roam floor's front edge, z 4.5): low clipped hedge runs either side of the path with the opening where the path comes through, two stone piers,
+    /// flower drifts, a few rocks and larger shrubs in the two bottom corners. Nothing here is taller than the rule 1.44 x height < distance in front of z 4.5 allows (hedges 0.5 from z 5.7,
+    /// piers 0.7 from z 5.7); the bottom centre (the path, where the Go home pill sits) stays open.
+    static func entrance(_ b: RoomMeshBuilder, rng r: inout ParkRandom) {
+        let zh: Float = 5.95, px = pathX(zh)
+        for (i, x) in ([-1.25, -2.9, -4.55, -6.2, -7.85, -9.5] as [Float]).enumerated() { hedge(b, x: px + x - 0.6 + 0.0 * Float(i), z: zh + (r.unit() - 0.5) * 0.1, scale: 0.85, yaw: (r.unit() - 0.5) * 0.06, low: true, rng: &r) }
+        for x in ([2.55, 4.2, 5.85, 7.5, 9.15] as [Float]) { hedge(b, x: px + x - 0.6, z: zh + (r.unit() - 0.5) * 0.1, scale: 0.85, yaw: (r.unit() - 0.5) * 0.06, low: true, rng: &r) }
+        // two plain stone gate piers at the opening
+        let stone = S.srgb(0.55, 0.53, 0.50)
+        for sx: Float in [-1.02, 1.02] {
+            b.roundedBox(centre: V3(px + sx, 0.30, zh), half: V3(0.16, 0.30, 0.16), radius: 0.03, segments: 2, aoFloor: false, color: stone)
+            b.roundedBox(centre: V3(px + sx, 0.63, zh), half: V3(0.21, 0.04, 0.21), radius: 0.02, segments: 2, aoFloor: false, color: stone * 1.12)
+        }
+        // flower drifts (natural garden colours) well in front of the hedge, off the path
+        let white = S.srgb(0.98, 0.97, 0.92), gold = S.srgb(0.96, 0.76, 0.14), poppy = S.srgb(0.86, 0.24, 0.10), violet = S.srgb(0.62, 0.48, 0.82)
+        for (x, z, c) in [(-2.3 as Float, 7.1 as Float, gold), (-3.1, 8.5, violet), (-1.7, 9.3, white), (2.7, 7.4, poppy), (3.5, 8.9, white), (-4.4, 6.9, white)] {
+            flowerPatch(b, x: x, z: z, scale: 0.95, bloom: c, rng: &r)
+        }
+        // rocks
+        for (x, z, s) in [(-1.7 as Float, 6.9 as Float, 1.0 as Float), (2.4, 6.7, 0.8), (-3.7, 7.7, 1.2), (4.0, 8.0, 1.0), (-2.7, 9.1, 0.9), (1.9, 8.5, 0.7), (4.6, 7.2, 0.8)] {
+            let k = 0.8 + 0.4 * r.unit()
+            S.blob(b, V3(x, 0.06 * s, z), rx: 0.26 * s, ry: 0.14 * s, rz: 0.2 * s, color: S.srgb(0.50, 0.46, 0.41) * k, segments: 8, rings: 4, ao: 0.9)
+        }
+        // larger shrubs frame the two bottom corners
+        floweringBush(b, x: -4.2, z: 8.2, scale: 1.1, bloom: S.srgb(0.98, 0.97, 0.92), rng: &r)
+        floweringBush(b, x: 4.5, z: 8.4, scale: 1.1, bloom: S.srgb(0.62, 0.48, 0.82), rng: &r)
     }
 }
