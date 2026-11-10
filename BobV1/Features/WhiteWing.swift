@@ -53,7 +53,7 @@ nonisolated enum WhiteWing {
     static let swatch = SIMD3<Float>(0.96, 0.95, 0.97)
 
     /// The character a launch argument turns into this look; nil = none (the normal game).
-    nonisolated(unsafe) static var forcedCharacter: Int? = DevArgs.enabled ? parse(UserDefaults.standard.string(forKey: forceKey)) : nil
+    nonisolated(unsafe) static var forcedCharacter: Int? = parse(UserDefaults.standard.string(forKey: forceKey))
     static func parse(_ raw: String?) -> Int? {
         guard let raw else { return nil }
         let parts = raw.lowercased().split(separator: ":").map(String.init)

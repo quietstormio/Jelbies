@@ -23,8 +23,6 @@ import simd
 /// True in Debug, on the simulator, and in Release builds made with the JELBIES_DEV_ARGS compilation condition (the project's Release
 /// configuration sets it through the JELBIES_DEV_ARGS_COND build setting so local device installs keep diagnostics). The App Store archive
 /// must clear it: `JELBIES_DEV_ARGS_COND=` on the archive command (see docs/RELEASE-1.0.md).
-/// `-AudioLog` (AudioHub) is intentionally NOT gated: it is a silent, read-only diagnostic that grants nothing.
-/// Capture-aid blocks in GameScreen (runDebugScript, runStoreDemo, launchTown) are gated at their entry; Park/Volley/Groom Start* hooks are simulator-only.
 nonisolated enum DevArgs {
     static var enabled: Bool {
         #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
