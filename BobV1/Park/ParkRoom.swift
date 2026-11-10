@@ -147,7 +147,6 @@ enum ParkScenery {
         // ---- the bench (back centre): timber slats on cast-iron frames, and a park lamp post beside it ----
         bench(b)
         lampPost(b, x: 1.72, z: -4.85)
-        NSLog("PARKTRIS %d", b.mesh.indices.count / 3)
         return b.mesh
     }
 
