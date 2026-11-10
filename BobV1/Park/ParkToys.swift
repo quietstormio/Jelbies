@@ -17,6 +17,21 @@ nonisolated enum ParkToys {
         PlacedDecor(uid: slideUID, kind: .slide, x: 2.9, z: 1.0, turns: nil)          // (STRAIGHT, on the right lawn where the sandbox was: the chute points down the screen toward the camera. Footprint x 2.1...3.7, z -0.4...2.4, whose back edge is 2.8 clear of the pond (pond (3.5, -4.2) r 1.0): the tall ladder posts at its back would overlap the pond on screen if it stood further back (at z -0.3 they did). The climb spot behind it is z -1.17; the rider lands at z 3.19 on open lawn, well off the path (its right edge is x 1.2 there), and a body there is above the Go home pill's roam cut-out in landscape (HUDLayout.parkHomeRect). The park floor's front edge is back at z 4.5)
     ]
     static var placed: [PlacedDecor] { layout }
+
+    /// The player's own floor toys that come along (up to 3, GameCare+Park.swift): fixed spots in the back corners of the lawn, clear of the path (centre x = 0.7 sin(0.34 z), half width 0.62),
+    /// the hopscotch court (x -3.05...-1.15, z -0.75...4.55) and its queue (z about -1.1), the slide (x 2.1...3.7, z -0.4...2.4) and its climb spot (2.9, -1.17), the pond (3.5, -4.2) r 1.0,
+    /// the bench, the flower bed and the Go home pill's cut-out (bottom centre). The first is where the seesaw stood.
+    static let ownSpots: [SIMD2<Float>] = [SIMD2(-2.7, -2.3), SIMD2(1.7, -2.8), SIMD2(2.95, -2.65)]
+    static let ownUIDBase = 9101
+    /// The pieces a Jelbie plays with by himself on the floor, small enough for a spot (a seat, a rolling ball, a booped or kicked toy; not the big ones, the slide or the park-only pieces).
+    static func isCarryable(_ k: DecorKind) -> Bool {
+        let s = k.spec
+        return k.category == .toys && k.activeInteraction != nil && !k.isRetired && !DecorKind.parkOnly.contains(k) && k != .slide && k != .playtunnel && s.units <= 1 && max(s.half.x, s.half.y) <= 0.55
+    }
+    /// Up to three of the room's placed toys (in placement order), moved to the park's spots with their own uids; the room's list is only read.
+    static func ownToys(from room: [PlacedDecor]) -> [PlacedDecor] {
+        room.filter { isCarryable($0.kind) }.prefix(ownSpots.count).enumerated().map { PlacedDecor(uid: ownUIDBase + $0.offset, kind: $0.element.kind, x: ownSpots[$0.offset].x, z: ownSpots[$0.offset].y, turns: nil) }
+    }
 }
 
 extension DecorKind {

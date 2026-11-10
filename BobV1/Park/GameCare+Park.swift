@@ -26,6 +26,8 @@ final class ParkWork {
     var giftGiver = 0, giftSlot = 0
     var giftNicer = false
     var saveT: Float = 0
+    /// The player's own toys that came along (ParkToys.ownToys): added to the park's decor list while the visit lasts.
+    var ownToys: [PlacedDecor] = []
     /// The friendly social last paid its start bonus, by Jelbie slot (the session's identity).
     var friendSession: [Int: ObjectIdentifier] = [:]
     nonisolated deinit {}
@@ -300,6 +302,7 @@ extension GameCare {
                 brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             }
             HopscotchTuning.joinChance = ParkPlayTuning.hopscotchJoin
+            work.ownToys = ParkToys.ownToys(from: store.placedDecor)
             RoomLayout.apply(RoomCatalog.park)
             GameCamera.configurePark()
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
@@ -339,6 +342,7 @@ extension GameCare {
             book.actors = []; book.cast = []
             book.save()
             HopscotchTuning.joinChance = 0.35
+            work.ownToys = []
             RoomLayout.apply(RoomCatalog.def(store.currentRoom))
             GameCamera.endPark(count: max(jellies.count, 1))
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
