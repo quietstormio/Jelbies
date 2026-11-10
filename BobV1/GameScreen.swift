@@ -67,8 +67,12 @@ struct GameScreen: View {
         // Voice: a light tick as he starts and stops listening (works roaming; HapticDriver is only warm in focus mode)
         let voiceTick = UIImpactFeedbackGenerator(style: .light)
         voiceTick.prepare()                                  // warm, so the tick lands on the touch-down frame
-        model.care.voice.mode.onOpen = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare(); AudioHub.shared.micListening(true) }
-        model.care.voice.mode.onClose = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare(); AudioHub.shared.micListening(false) }
+        model.care.voice.mode.onOpen = { AudioHub.shared.micListening(true) }                    // the duck stays instant at finger-down
+        model.care.voice.onLive = { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare() }          // the tick waits for the mic's first buffer
+        model.care.voice.mode.onClose = { [weak voice = model.care.voice] in
+            if voice?.micLive == true { voiceTick.impactOccurred(intensity: 0.6); voiceTick.prepare() }       // no close tick for a press that never went live
+            AudioHub.shared.micListening(false)
+        }
         model.care.voice.prewarm()
     }
 

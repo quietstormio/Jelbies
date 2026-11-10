@@ -67,6 +67,15 @@ final class VoiceRecoveryTests: XCTestCase {
         XCTAssertGreaterThan(kept, 5)
     }
 
+    func testFirstBufferSignalDoesNotDisturbPreRoll() async throws {
+        let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
+        let pipe = AudioPipe(format: fmt, onFirstBuffer: {})
+        pipe.arm()
+        for _ in 0..<3 { let b = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 1600)!; b.frameLength = 1600; pipe.handle(b) }
+        let (_, cont) = AsyncStream<AnalyzerInput>.makeStream()
+        XCTAssertEqual(pipe.attach(cont), 3, "arming the live signal keeps every pre-roll buffer")
+    }
+
     func testPostRollTuning() {
         XCTAssertEqual(VoiceAudioTuning.postRoll, 0.4, accuracy: 0.001)
         XCTAssertEqual(DictationSpeechInput().postRoll, VoiceAudioTuning.postRoll, accuracy: 0.001)

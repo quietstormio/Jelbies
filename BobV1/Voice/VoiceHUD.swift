@@ -124,7 +124,7 @@ struct VoiceTip: View {
 
 /// Edge glow in Bob's tint, pulsing with the (smoothed) mic level; static under Reduce Motion. Never takes touches.
 /// Four edge gradients, no blur: a full-screen Gaussian blur is an offscreen pass (plus a first-use shader compile) that cost the first glow
-/// frames on a phone. It exists exactly while `isListening`, with no transition or animation either way (a fade reads as lag).
+/// frames on a phone. It exists exactly while `isListening && micLive`, with no transition or animation either way (a fade reads as lag).
 struct VoiceGlow: View {
     let voice: VoiceCoordinator
     let care: GameCare
@@ -132,7 +132,7 @@ struct VoiceGlow: View {
 
     var body: some View {
         Group {
-            if voice.isListening {
+            if voice.isListening && voice.micLive {          // the glow waits for the mic's first real buffer (the pressed state is instant)
                 let t = care.select.blobs.first?.tint ?? SIMD3(0.70, 0.83, 0.945)
                 let c = Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))
                 let k = reduceMotion ? 0.35 : 0.15 + 0.85 * Double(voice.mode.glowLevel)     // calm at silence, clearly moving with speech

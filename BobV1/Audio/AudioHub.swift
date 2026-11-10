@@ -210,9 +210,14 @@ final class AudioHub {
         let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
         if offMain {
             sessionRetry?.cancel()
+            let gen = PutBackGate.shared.enqueue()
             sessionRetry = Task { @MainActor [weak self] in
                 let ok: Bool = await withCheckedContinuation { c in
-                    AudioSessionQueue.shared.async { c.resume(returning: Self.applySession(plan)) }
+                    AudioSessionQueue.shared.async {
+                        // a mic press that came in before this ran voids it: no `.ambient` bounce in front of the next `.playAndRecord`
+                        guard PutBackGate.shared.shouldRun(gen) else { c.resume(returning: true); return }
+                        c.resume(returning: Self.applySession(plan))
+                    }
                 }
                 guard let self, !Task.isCancelled else { return }
                 if ok { self.sessionRetry = nil; return }

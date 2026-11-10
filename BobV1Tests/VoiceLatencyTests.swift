@@ -17,7 +17,8 @@ final class VoiceLatencyTests: XCTestCase {
         XCTAssertTrue(v.begin())
         let dt = (CACurrentMediaTime() - t0) * 1000
         XCTAssertTrue(v.isListening, "listening state is set before begin() returns")
-        XCTAssertEqual(ticks, 1, "the open haptic fires inside the press")
+        XCTAssertEqual(ticks, 1, "the open hook (pressed state + duck) fires inside the press")
+        XCTAssertFalse(v.micLive, "the glow / tick follow the mic, not the finger")
         XCTAssertLessThan(dt, 50, "begin() returns within the one-frame budget (\(dt) ms)")
         XCTAssertFalse(input.isStarted, "the real start runs behind the UI, not inside the press")
         v.cancel()
@@ -29,6 +30,7 @@ final class VoiceLatencyTests: XCTestCase {
         try await Task.sleep(nanoseconds: 400_000_000)
         XCTAssertTrue(input.isStarted, "audio running shortly after")
         XCTAssertNotNil(v.audioLatencyMs)
+        XCTAssertTrue(v.micLive, "the fake mic's first buffer made the glow's gate true")
         XCTAssertGreaterThan(v.level, 0, "the fake mic's synthetic level reaches the glow / bars / halo")
         v.cancel()
         try await Task.sleep(nanoseconds: 100_000_000)

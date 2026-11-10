@@ -15,6 +15,17 @@ final class MicWarmGateTests: XCTestCase {
         XCTAssertEqual(g.makes, 2)
     }
 
+    func testWouldWarmMirrorsWhetherWarmStarts() async {
+        let g = MicWarmGate()
+        XCTAssertTrue(g.wouldWarm)
+        g.warm { false }
+        _ = await g.value()
+        XCTAssertTrue(g.wouldWarm, "a finished FAILED warm-up is replaced")
+        g.warm { true }
+        _ = await g.value()
+        XCTAssertFalse(g.wouldWarm, "a good warm-up is kept")
+    }
+
     func testSuccessfulWarmIsReused() async {
         let g = MicWarmGate()
         g.warm { true }
