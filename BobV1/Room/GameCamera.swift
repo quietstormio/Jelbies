@@ -163,7 +163,7 @@ enum GameCamera {
         let elev: Float = (35 - 5 * w) * .pi / 180
         var dist: Float = 13.5 - 5.0 * w
         var tt = SIMD3<Float>(0, 0.6, 1.1 + 0.1 * w)
-        if parkRoamMaxZ != nil { dist *= 2.0; tt = SIMD3(0, 0.3, parkLookZ - 0.2 + 0.1 * w) }          // the park (ParkRoom.swift): the same low view from a little further back, centred on the lawn (its back edge is z -3.4, the room's -2.4)
+        if parkRoamMaxZ != nil { dist *= 1.7; tt = SIMD3(0, 0.3, parkLookZ - 0.5 + 0.1 * w) }          // the park (ParkRoom.swift): the same low view from a little further back, centred on the lawn (its back edge is z -3.4, the room's -2.4)
         return (tt + SIMD3<Float>(0, sinf(elev), cosf(elev)) * dist, tt)
     }
 

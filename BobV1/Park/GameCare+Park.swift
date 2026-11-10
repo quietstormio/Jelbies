@@ -28,6 +28,8 @@ final class ParkWork {
     var saveT: Float = 0
     /// The player's own toys that came along (ParkToys.ownToys): added to the park's decor list while the visit lasts.
     var ownToys: [PlacedDecor] = []
+    /// Seconds into the visit until a visitor starts the first hopscotch turn (so it is never a long wait; nil = done / not planned). The others join by the court's own invitation.
+    var hopHost: Float?
     /// The friendly social last paid its start bonus, by Jelbie slot (the session's identity).
     var friendSession: [Int: ObjectIdentifier] = [:]
     nonisolated deinit {}
@@ -58,13 +60,32 @@ extension GameCare {
         let all: [(key: String, kind: DecorKind, move: IdleKind)] = [("StartHopscotch", DecorKind.hopscotch, IdleKind.decorHopscotch), ("StartSlide", DecorKind.slide, IdleKind.decorSlide)]
         var out = all.filter { UserDefaults.standard.integer(forKey: $0.key) != 0 }
         // `-StartToy <kind>`: the first Jelbie who came goes to that piece (bring it with `-ParkToys <kind>`; any DecorKind raw value)
-        if let s = UserDefaults.standard.string(forKey: "StartToy"), let k = DecorKind(rawValue: s), let m = k.interaction { out.append((key: "StartToy", kind: k, move: m)) }
+        for n in (UserDefaults.standard.string(forKey: "StartToy") ?? "").split(separator: ",") {          // (a comma list: one after the other, ~12 s apart, each sent to a different Jelbie of the ones who came)
+            if let k = DecorKind(rawValue: String(n)), let m = k.interaction { out.append((key: "StartToy", kind: k, move: m)) }
+        }
         return out
     }()
     nonisolated(unsafe) static var demoToyFrames = 0
+    nonisolated(unsafe) static var demoToyServed = 0
     /// Capture aid: `-StartParkPlay ball|wand` opens Play mode with that toy ~5 s into the park (the picker needs a tap, which a command line cannot do).
     nonisolated(unsafe) static var demoPlay = UserDefaults.standard.string(forKey: "StartParkPlay")
     nonisolated(unsafe) static var demoPlayFrames = 0
+    /// Capture aid (`-ParkTrace 1`): logs every change of what a Jelbie / visitor does with a piece (kind, piece, hopscotch square / slide stage), for the proof sequences.
+    nonisolated(unsafe) static var traceLast: [Int: String] = [:]
+    nonisolated(unsafe) static var traceOn = UserDefaults.standard.integer(forKey: "ParkTrace") != 0
+    func parkTrace(_ bodies: [JellyActor]) {
+        for a in bodies {
+            guard let b = a.brain else { continue }
+            var s = "-"
+            if let k = b.idleState.kind, BlobBrain.decorKinds.contains(k) || k == .hopscotch {
+                let pk = DecorField.shared.foot(b.idleState.decorUID)?.kind.rawValue ?? "?"
+                s = "\(k) piece=\(pk)#\(b.idleState.decorUID)"
+                if k == .decorHopscotch || k == .decorSlide { s += " stage=\(b.idleState.slideStage) step=\(b.idleState.slideStep)" }
+                else { s += " phase=\(b.idleState.phase)" }
+            }
+            if Self.traceLast[a.id] != s { Self.traceLast[a.id] = s; NSLog("[trace] %.1f body=%d %@ at (%.1f,%.1f)", CACurrentMediaTime().truncatingRemainder(dividingBy: 10000), a.id, s, a.floor.x, a.floor.y) }
+        }
+    }
     #endif
 
     /// The Town's Park row: blocked = a friendly toast; else the picker (who comes along) opens.
@@ -126,8 +147,9 @@ extension GameCare {
         #if targetEnvironment(simulator)
         if !Self.demoToys.isEmpty, park.phase == .playing {
             Self.demoToyFrames += 1
-            if Self.demoToyFrames == 240, let k = book.comers.sorted().first, k < actors.count, let b = actors[k].brain {
-                let d = Self.demoToys.removeFirst(); Self.demoToyFrames = 0
+            let sorted = book.comers.sorted()
+            if Self.demoToyFrames == (Self.demoToyServed == 0 ? 240 : 720), !sorted.isEmpty, case let k = sorted[Self.demoToyServed % sorted.count], k < actors.count, let b = actors[k].brain {
+                let d = Self.demoToys.removeFirst(); Self.demoToyFrames = 0; Self.demoToyServed += 1
                 b.anticsEnabled = true; b.idleState.cooldown = 0
                 if UserDefaults.standard.integer(forKey: "HopscotchJoin") != 0 { HopscotchTuning.joinChance = 1 }          // (a sure line for the capture)
                 _ = b.startCommandedDecor(d.move, only: d.kind, actors[k].sim, actors[k].skinner)
@@ -135,11 +157,23 @@ extension GameCare {
         }
         #endif
         #if targetEnvironment(simulator)
+        if Self.traceOn, park.phase == .playing { parkTrace(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors) }
         if let m = Self.demoPlay, park.phase == .playing {
             Self.demoPlayFrames += 1
+            if m != "wand", play.active, play.phase == .inHand, play.camBlend > 0.95, Self.demoPlayFrames > 420, Self.demoPlayFrames % 240 == 0 {          // (a flick at the middle every 4 s: the ball flies, a Jelbie heads / kicks it back)
+                let sz = play.viewSize, dx: CGFloat = [0, -0.18, 0.2, 0.05][(Self.demoPlayFrames / 240) % 4] * sz.width
+                play.flick(from: CGPoint(x: sz.width * 0.5, y: sz.height * 0.83), velocity: CGVector(dx: dx * 2, dy: -sz.height * 1.8))
+            }
             if Self.demoPlayFrames == 300 { if m == "wand" { beginPlay(wand: BubbleWand.shared); BubbleWand.shared.startDemo(mode: 2, care: self) } else { beginPlay(ball: .ball) } }
         }
         #endif
+        if park.phase == .playing, let t = work.hopHost {          // the first hopscotch turn: a visitor who is free goes (the line's invitation brings the others)
+            work.hopHost = t - dt
+            if t - dt <= 0 {
+                let free = book.actors.filter { a in a.brain.map { $0.idleState.kind == nil && $0.scriptIsNone && !$0.held } ?? false }
+                if let a = free.randomElement(), let b = a.brain, b.startCommandedDecor(.decorHopscotch, only: .hopscotch, a.sim, a.skinner) { work.hopHost = nil } else { work.hopHost = 3 }
+            }
+        }
         work.saveT += dt
         if work.saveT >= ParkTuning.saveEvery { work.saveT = 0; book.save() }
         if park.phase == .playing, isBedtimeHours { park.say("It is getting late. Time to go home!"); park.goHome() }
@@ -315,6 +349,7 @@ extension GameCare {
             }
             HopscotchTuning.joinChance = ParkPlayTuning.hopscotchJoin
             work.ownToys = ParkToys.ownToys(from: store.placedDecor)
+            work.hopHost = Float.random(in: ParkPlayTuning.hopHostAfter)
             RoomLayout.apply(RoomCatalog.park)
             GameCamera.configurePark()
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
@@ -354,7 +389,7 @@ extension GameCare {
             book.actors = []; book.cast = []
             book.save()
             HopscotchTuning.joinChance = 0.35
-            work.ownToys = []
+            work.ownToys = []; work.hopHost = nil
             RoomLayout.apply(RoomCatalog.def(store.currentRoom))
             GameCamera.endPark(count: max(jellies.count, 1))
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {

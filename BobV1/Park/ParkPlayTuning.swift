@@ -16,4 +16,6 @@ nonisolated enum ParkPlayTuning {
     static let bagBonus = 2
     /// Hopscotch: the chance a free Jelbie joins a line that has started (home value HopscotchTuning.joinChance).
     static let hopscotchJoin: Float = 0.7
+    /// A visitor starts the first hopscotch turn this many seconds into the visit (if nobody has by then), so the court is never a long wait.
+    static let hopHostAfter: ClosedRange<Float> = 15...30
 }

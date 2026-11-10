@@ -10,8 +10,10 @@ import Foundation
 
 nonisolated enum ParkToys {
     /// Uids well clear of any saved piece. Positions are on the lawn's two flanks so the middle stays clear for the Jelbies.
-    static let hopscotchUID = 9005, slideUID = 9006          // (9001, the park seesaw, was removed 2026-11-09 and 9003, the park sandbox, 2026-11-05: nobody used them; the DecorKinds stay, so old tests and the sit engine still serve them)
+    static let seesawUID = 9001, hopscotchUID = 9005, slideUID = 9006          // (9003, the park sandbox, was removed 2026-11-05: the slide stands in its place)
     nonisolated(unsafe) static var layout: [PlacedDecor] = [
+        // the seesaw on the back left, moved from x -2.7 to -3.2 (2026-11-09: its right pad sat on the path's edge): its right end (footprint half x 1.47) is at -1.73, 0.62 clear of the path's left edge (-1.11 at z -2.3)
+        PlacedDecor(uid: seesawUID, kind: .seesaw, x: -3.2, z: -2.3, turns: nil),
         // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide on the right where the sandbox used to be (the sandbox was removed from the park 2026-11-05, and so was the play tunnel)
         PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),
         PlacedDecor(uid: slideUID, kind: .slide, x: 2.9, z: 1.0, turns: nil)          // (STRAIGHT, on the right lawn where the sandbox was: the chute points down the screen toward the camera. Footprint x 2.1...3.7, z -0.4...2.4, whose back edge is 2.8 clear of the pond (pond (3.5, -4.2) r 1.0): the tall ladder posts at its back would overlap the pond on screen if it stood further back (at z -0.3 they did). The climb spot behind it is z -1.17; the rider lands at z 3.19 on open lawn, well off the path (its right edge is x 1.2 there), and a body there is above the Go home pill's roam cut-out in landscape (HUDLayout.parkHomeRect). The park floor's front edge is back at z 4.5)
@@ -20,8 +22,8 @@ nonisolated enum ParkToys {
 
     /// The player's own floor toys that come along (up to 3, GameCare+Park.swift): fixed spots in the back corners of the lawn, clear of the path (centre x = 0.7 sin(0.34 z), half width 0.62),
     /// the hopscotch court (x -3.05...-1.15, z -0.75...4.55) and its queue (z about -1.1), the slide (x 2.1...3.7, z -0.4...2.4) and its climb spot (2.9, -1.17), the pond (3.5, -4.2) r 1.0,
-    /// the bench, the flower bed and the Go home pill's cut-out (bottom centre). The first is where the seesaw stood.
-    static let ownSpots: [SIMD2<Float>] = [SIMD2(-2.7, -2.3), SIMD2(1.7, -2.8), SIMD2(2.95, -2.65)]
+    /// the bench, the flower bed and the Go home pill's cut-out (bottom centre). The first is on the left lawn beside the court's far side (the seesaw stands in the back left corner).
+    static let ownSpots: [SIMD2<Float>] = [SIMD2(-3.7, 1.9), SIMD2(1.7, -2.8), SIMD2(2.95, -2.65)]
     static let ownUIDBase = 9101
     /// The pieces a Jelbie plays with by himself on the floor, small enough for a spot (a seat, a rolling ball, a booped or kicked toy; not the big ones, the slide or the park-only pieces).
     static func isCarryable(_ k: DecorKind) -> Bool {
