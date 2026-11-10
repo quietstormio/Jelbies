@@ -19,6 +19,8 @@ final class MicWarmGate {
     nonisolated deinit {}
 
     var isWarming: Bool { task != nil }
+    /// `warm` would start a new warm-up right now (none in flight, or the last one failed).
+    var wouldWarm: Bool { task == nil || failed }
     /// The current warm task finished and failed, and nothing has replaced it.
     var isSettledFailed: Bool { task != nil && failed }
 
@@ -56,4 +58,36 @@ final class MicWarmGate {
     }
 
     func invalidate() { task = nil; failed = false }
+}
+
+/// Cancels the hub's queued `.ambient` put-back when the mic is pressed again before it ran. Every release queues a put-back on
+/// `AudioSessionQueue` (AudioHub.setUpSession); a quick re-press would otherwise run it first and bounce the session
+/// (`.playAndRecord` -> `.ambient` -> `.playAndRecord`) before the mic could start. Thread-safe: queued blocks check it on the session queue.
+nonisolated final class PutBackGate: @unchecked Sendable {
+    static let shared = PutBackGate()
+    private let lock = NSLock()
+    private var generation = 0
+    private var pending = 0
+    private var skipped = 0
+    init() {}
+
+    /// A put-back is being queued: the generation it must still match when it runs.
+    func enqueue() -> Int { lock.lock(); defer { lock.unlock() }; pending += 1; return generation }
+    /// The queued block is running: false = a newer mic press voided it, skip it.
+    func shouldRun(_ gen: Int) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        pending = max(0, pending - 1)
+        if gen != generation { skipped += 1; return false }
+        return true
+    }
+    /// A mic bring-up is starting: every put-back still queued is void. Returns how many were pending.
+    @discardableResult
+    func voidQueued() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let n = pending
+        if n > 0 { generation += 1 }
+        return n
+    }
+    var skippedTotal: Int { lock.lock(); defer { lock.unlock() }; return skipped }
+    var pendingCount: Int { lock.lock(); defer { lock.unlock() }; return pending }
 }

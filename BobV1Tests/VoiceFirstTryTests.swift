@@ -20,6 +20,7 @@ final class VoiceFirstTryTests: XCTestCase {
         XCTAssertTrue(v.begin())                          // second down
         await v._startTask?.value
         XCTAssertTrue(input.isStarted, "the retry brought the mic up inside the same press")
+        XCTAssertTrue(v.micLive, "and the glow's gate opened once it did")
         XCTAssertTrue(v.isListening)
         XCTAssertEqual(v.openCount, 1)
         clock += 0.6

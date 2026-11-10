@@ -357,7 +357,8 @@ final class BobV1UITests: XCTestCase {
         XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 10), .completed, "the glow is gone after the release")
     }
 
-    /// The glow is drawn within a frame or so of the press (budget generous for the simulator) and the level feedback exists.
+    /// The pressed state is drawn within a frame or so of the press (budget generous for the simulator); the glow follows the mic going live
+    /// (micLive), not the finger, so it only has to appear while the hold lasts, and the level feedback exists.
     @MainActor
     func testVoiceGlowAppearsQuicklyAfterPress() throws {
         let app = voiceApp(["-VoiceLog", "1"])
@@ -368,10 +369,11 @@ final class BobV1UITests: XCTestCase {
         let v = mic.value as? String ?? ""
         let ms = Int(v.components(separatedBy: "glow ").last?.components(separatedBy: " ms").first ?? "") ?? 9999
         XCTAssertGreaterThanOrEqual(ms, 0)
-        XCTAssertLessThan(ms, 100, "touch-down to glow visible: \(ms) ms (\(v))")
+        // pressed state < 100 ms is budgeted in VoiceLatencyTests (begin() < 50 ms, synchronous); the glow waits for micLive, which the 1.2 s watchdog bounds (1200 ms + slack)
+        XCTAssertLessThan(ms, 1500, "touch-down to glow (after micLive): \(ms) ms (\(v))")
     }
 
-    /// Double-tap-hold on EMPTY space: the glow is drawn on the second touch-down (not after the hold threshold), within the latency budget,
+    /// Double-tap-hold on EMPTY space: the glow is drawn once the mic is live after the second touch-down (not after the hold threshold), within the latency budget,
     /// and it is gone right after the finger lifts (no lingering fade).
     @MainActor
     func testVoiceDoubleTapHoldGlowIsInstantAndGoneOnRelease() throws {
@@ -388,7 +390,7 @@ final class BobV1UITests: XCTestCase {
         let v = mic.value as? String ?? ""
         let ms = Int(v.components(separatedBy: "glow ").last?.components(separatedBy: " ms").first ?? "") ?? 9999
         XCTAssertGreaterThanOrEqual(ms, 0)
-        XCTAssertLessThan(ms, 100, "second tap-down to glow visible: \(ms) ms (\(v))")
+        XCTAssertLessThan(ms, 1500, "second tap-down to glow (after micLive): \(ms) ms (\(v))")
     }
 
     /// A failed first-tap warm-up must not cost a second gesture: one double-tap-hold opens the listen.

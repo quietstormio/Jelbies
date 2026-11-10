@@ -96,6 +96,17 @@ final class VoiceCoordinator {
     /// Touch-down -> glow drawn, in ms (nil until the first glow of a listen); the HUD exposes it and the UI test budgets it.
     private(set) var glowLatencyMs: Int?
     private(set) var audioLatencyMs: Int?
+    /// True once the first real input buffer of THIS press arrived from the mic tap (or the 1.2 s watchdog found the engine running). The edge glow
+    /// and the open tick wait for it; the pressed state and the duck do not. False on release / cancel / failure.
+    private(set) var micLive = false
+    /// Touch-down -> mic live, in ms (nil until live; the "mic live after N ms" log line and the tests read it).
+    private(set) var micLiveMs: Int?
+    /// Fires once per press when the mic goes live (the open haptic tick).
+    @ObservationIgnored var onLive: (() -> Void)?
+    @ObservationIgnored private var liveWatch: Task<Void, Never>?
+    @ObservationIgnored private var liveWatchFired = false
+    /// The watchdog: no buffer this long after touch-down and the recovery / fallback path runs.
+    static let liveWatchSeconds: Double = 1.2
     @ObservationIgnored private var downAt: Double = 0
     /// Wakes the graphics idle-rest governor (set by the stage; `begin()` calls it).
     @ObservationIgnored var wake: (() -> Void)?
@@ -299,13 +310,21 @@ final class VoiceCoordinator {
         downAt = CACurrentMediaTime()
         session = nextSession()
         glowLatencyMs = nil; audioLatencyMs = nil
+        micLive = false; micLiveMs = nil; liveWatchFired = false; liveWatch?.cancel()
         levelMin = 1; levelMax = 0; levelCount = 0; offMain = 0
+        input.warmUp()                                 // first: the session + engine bring-up is spawned off the main thread at touch-down
         Ears.shared.voicePause()                       // Ears lets go of the input before the voice engine takes the session
-        input.warmUp()
         intentModel?.prewarm()                         // the first request must not pay the model load
         guard mode.begin() else { return false }       // phase = .listening: the glow / pressed state read it on the very next view update
         Ears.shared.holdBegan()                        // Music Ears (when owned) listens for music on this same mic while the button is held
         if Self.logging { NSLog("[voice] begin() ran synchronously in %d ms (glow state set)", Int((CACurrentMediaTime() - downAt) * 1000)) }
+        let liveSession = session
+        input.armLive { [weak self] in self?.goLive(session: liveSession, watchdog: false) }
+        liveWatch = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.liveWatchSeconds * 1e9))
+            guard !Task.isCancelled else { return }
+            self?.liveWatchdog(session: liveSession)
+        }
         openCount += 1
         subjectAtOpen = subjectID
         runningAtOpen = brainRef.map { subjectBrain($0) }.flatMap(Self.running)
@@ -336,16 +355,41 @@ final class VoiceCoordinator {
                 try await self.input.start(contextualWords: words); self.availability = self.input.availability
                 let ms = Int((CACurrentMediaTime() - t0) * 1000)
                 self.audioLatencyMs = ms
+                if self.liveWatchFired { self.goLive(session: liveSession, watchdog: true) }          // the watchdog ran before the engine finished starting
                 if Self.logging { NSLog("[voice] open latency: touch-down -> glow visible %d ms, -> audio running %d ms", self.glowLatencyMs ?? -1, ms) }
             }
             catch {
                 self.availability = self.input.availability
                 if self.mode.isListening { self.mode.cancel() }
+                self.liveWatch?.cancel(); self.micLive = false
                 Ears.shared.holdEnded()
                 if self.micUnusable { self.showNotice() }
             }
         }
         return true
+    }
+
+    /// The mic is live for this press: the glow (it reads `micLive`) appears and the open tick fires, once.
+    private func goLive(session s: Int, watchdog: Bool) {
+        guard s == session, mode.isListening, !micLive else { return }
+        let ms = Int((CACurrentMediaTime() - downAt) * 1000)
+        micLive = true
+        micLiveMs = ms
+        liveWatch?.cancel()
+        if Self.logging {
+            let skipped = (input as? DictationSpeechInput)?.lastPutBackSkipped ?? false
+            NSLog("[voice] mic live after %d ms%@ (put-back skipped: %@)", ms, watchdog ? " (watchdog: engine running, no buffer signal)" : "", skipped ? "yes" : "no")
+        }
+        onLive?()
+    }
+
+    /// 1.2 s after touch-down. A mic that reports running (`start` returned) is live even if the buffer signal was missed (the glow must never stay off
+    /// for a working mic). Otherwise the engine is still starting: `start` going live later, or its failure (cancel + notice), is the recovery path.
+    private func liveWatchdog(session s: Int) {
+        guard s == session, mode.isListening, !micLive else { return }
+        liveWatchFired = true
+        if audioLatencyMs != nil { goLive(session: s, watchdog: true) }
+        else if Self.logging { NSLog("[voice] no mic buffer %.1f s after touch-down; engine still starting (recovery path armed)", Self.liveWatchSeconds) }
     }
 
     /// Release (button up / finger lifted). A hold under 0.25 s is a cancel; otherwise the transcript is collected and `hear` runs.
@@ -358,6 +402,7 @@ final class VoiceCoordinator {
         let st = startTask
         // The glow / pressed state end on THIS call: the transcript (analyzer finalise) can take a second, the UI never waits for it.
         let long = mode.endHold()
+        liveWatch?.cancel(); micLive = false          // (after endHold: its close tick reads `micLive`)
         if !long {
             Task { [input] in await st?.value; await input.abort() }
             return
@@ -384,6 +429,7 @@ final class VoiceCoordinator {
         let st = startTask
         Ears.shared.holdEnded()
         if mode.phase != .idle { mode.cancel(); mode.finish(); Task { [input] in await st?.value; await input.abort() } }
+        liveWatch?.cancel(); micLive = false
     }
 
     func enqueue(_ r: VoiceReaction, _ kind: VoiceFeedback.Kind?, ids: [Int] = [], target: VoiceTarget = .selected) { queue.append((r, kind, ids, target)) }
