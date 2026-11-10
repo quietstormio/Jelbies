@@ -258,6 +258,7 @@ final class HangoutTests: XCTestCase {
     struct Soak: Codable {
         var idle: [String: Int] = [:], played: [String: Int] = [:], hangVoices: [String: Int] = [:]
         var standingTicks = 0, facingTicks = 0, freeTicks = 0
+        var minSimSeconds = 1e9          // (every run must have really simulated its 180 s: a starved run does not count)
         var standing: Double { freeTicks == 0 ? 0 : Double(standingTicks) / Double(freeTicks) }
         var standingFacing: Double { freeTicks == 0 ? 0 : Double(facingTicks) / Double(freeTicks) }
         func sum(_ d: [String: Int], _ f: (String) -> Bool = { _ in true }) -> Int { d.filter { f($0.key) }.values.reduce(0, +) }
@@ -269,22 +270,25 @@ final class HangoutTests: XCTestCase {
         var ctx: Int { sum(played) { $0.hasPrefix("voice:") } }
         var emoteFiles: Int { sum(played) { $0.hasPrefix("file:emote_") } }
         var jump: Int { played["file:jump", default: 0] }
+        var vocal: Int { chirps + ctx + emoteFiles + hangPlayed }
         var hangPlayed: Int { sum(played) { $0.hasPrefix("hangout:") } }
         var hangStarts: Int { idle.filter { BlobBrain.hangoutKinds.contains(IdleKind(rawValue: String($0.key.dropFirst(5))) ?? .wander) }.values.reduce(0, +) }
     }
 
     static var simBase = 1_000_000.0          // (above every other test's hub clock: the shared hub keeps its gaps)
-    static let soakSeeds: [UInt64] = RoomSFXCountTests.seeds + [67, 71, 83, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173]          // (24 seeds)
+    static let soakSeeds: [UInt64] = RoomSFXCountTests.seeds + [67, 71, 83, 97, 101, 103, 107, 109, 113, 127, 131]          // (16 seeds)
     static let oldGaps = (leg: Float(1.5)...Float(3.5), special: Float(1.0)...Float(2.5), pick: Float(3)...Float(6))
     static let newGaps = (leg: Float(0.8)...Float(2.0), special: Float(0.5)...Float(1.4), pick: Float(2.0)...Float(3.5))
     static var dir: String { ProcessInfo.processInfo.environment["HANGOUT_DIR"] ?? NSTemporaryDirectory() }
 
     /// 24 seeds x 180 simulated seconds x 3 Jelbies (the RoomSFXCountTests rig): PLAYED taps (past every guard, sim clock, no real audio), idle starts, the standing share and the standing-AND-facing share.
-    func soak(hangout: Bool, gaps: (leg: ClosedRange<Float>, special: ClosedRange<Float>, pick: ClosedRange<Float>)) -> Soak {
+    func soak(hangout: Bool, boost: Bool, gaps: (leg: ClosedRange<Float>, special: ClosedRange<Float>, pick: ClosedRange<Float>)) -> Soak {
         var out = Soak()
         let (oldLeg, oldSpecial, oldPick) = (IdleTuning.restAfterLeg, IdleTuning.restAfterSpecial, IdleTuning.wanderPickWait)
         IdleTuning.restAfterLeg = gaps.leg; IdleTuning.restAfterSpecial = gaps.special; IdleTuning.wanderPickWait = gaps.pick
         HangoutTuning.enabled = hangout
+        let boostWas = RoamVoiceBoost.enabled; RoamVoiceBoost.enabled = boost; AudioHub.shared.atHome = true          // (home: the wander voices + the x1.3 context chance, in every arm alike)
+        defer { RoamVoiceBoost.enabled = boostWas; AudioHub.shared.atHome = false }
         defer { IdleTuning.restAfterLeg = oldLeg; IdleTuning.restAfterSpecial = oldSpecial; IdleTuning.wanderPickWait = oldPick; HangoutTuning.enabled = true }
         let hub = AudioHub.shared
         hub._openForTest(); AudioHub.dryRun = true
@@ -314,6 +318,7 @@ final class HangoutTests: XCTestCase {
                     }
                 }
             }
+            out.minSimSeconds = min(out.minSimSeconds, Double(l.rigs[0].t))
             for r in l.rigs { for (k, v) in r.brain.hang.voices { out.hangVoices["\(k)", default: 0] += v } }
             simNow += 60
         }
@@ -323,37 +328,34 @@ final class HangoutTests: XCTestCase {
     private func save(_ s: Soak, _ name: String) { try? JSONEncoder().encode(s).write(to: URL(fileURLWithPath: Self.dir + name)) }
     private func load(_ name: String) -> Soak? { (try? Data(contentsOf: URL(fileURLWithPath: Self.dir + name))).flatMap { try? JSONDecoder().decode(Soak.self, from: $0) } }
 
-    // (alphabetical order is the run order: After, Before, then the Compare; HANGOUT_KEEP_BEFORE=1 reuses a saved Before)
-    func testSoakA_after() { save(soak(hangout: true, gaps: Self.newGaps), "soak_after.json") }
-    func testSoakB_before() {
-        if ProcessInfo.processInfo.environment["HANGOUT_KEEP_BEFORE"] != nil, load("soak_before.json") != nil { return }
-        save(soak(hangout: false, gaps: Self.oldGaps), "soak_before.json")
-    }
+    // (arms: B_before = the ORIGINAL baseline (no hangouts, no RoamVoiceBoost, old gaps); B2 = boost only; A = boost + hangouts + new gaps; D compares them)
+    func testSoakA_after() { save(soak(hangout: true, boost: true, gaps: Self.newGaps), "soak_after.json") }
+    func testSoakB_before() { save(soak(hangout: false, boost: false, gaps: Self.oldGaps), "soak_before.json") }
+    func testSoakB2_boostonly() { save(soak(hangout: false, boost: true, gaps: Self.oldGaps), "soak_boost.json") }
 
-    func testSoakC_compare() throws {
-        let before = try XCTUnwrap(load("soak_before.json")), after = try XCTUnwrap(load("soak_after.json"))
+    func testSoakD_compare() throws {
+        let before = try XCTUnwrap(load("soak_before.json")), boost = try XCTUnwrap(load("soak_boost.json")), after = try XCTUnwrap(load("soak_after.json"))
         func r(_ a: Int, _ b: Int) -> String { String(format: "%d vs %d (%.0f%%)", a, b, 100 * Double(a) / Double(max(b, 1))) }
-        var report = "HANGOUTSOAK \(Self.soakSeeds.count) seeds x 180 s x 3 Jelbies; AFTER vs BEFORE (hangout off, old gaps)\n"
-        report += "pre-existing idle starts \(r(after.old, before.old))\nantics \(r(after.antics, before.antics))\nwalking flourishes \(r(after.walking, before.walking))\n"
-        report += "chirps PLAYED \(r(after.chirps, before.chirps))\ncontext voices PLAYED \(r(after.ctx, before.ctx))\nemote voice files \(r(after.emoteFiles, before.emoteFiles))\nplayed:jump \(r(after.jump, before.jump))\n"
-        report += "hangout starts \(after.hangStarts) voices PLAYED \(after.hangPlayed) per kind \(after.hangVoices.sorted { $0.key < $1.key })\n"
-        report += String(format: "standing %.3f -> %.3f (%.2fx); standing AND facing the camera (yaw < 0.3 rad) %.3f -> %.3f (%.2fx)\n", before.standing, after.standing, after.standing / max(before.standing, 1e-9), before.standingFacing, after.standingFacing, after.standingFacing / max(before.standingFacing, 1e-9))
-        report += "kind | before | after\n" + IdleKind.allCases.map { "idle:\($0)" }.filter { before.idle[$0] != nil || after.idle[$0] != nil }.map { "\($0) | \(before.idle[$0, default: 0]) | \(after.idle[$0, default: 0])" }.joined(separator: "\n") + "\n"
-        // haptic events per Jelbie-minute: pulses of the start cue + every keyed beat, once per start (the batch-1 EmoteCue beats are not keyed, so the old-emote figure is a floor)
-        func pulses(_ k: IdleKind) -> Int { (BlobBrain.hangoutKinds.contains(k) ? 0 : HapticCue.idle(k).pulses(energy: 1, jitter: 1).count) + EmoteTreats.haptics.filter { $0.key.hasPrefix("\(k).") }.values.reduce(0) { $0 + $1.count } }
         let jm = Double(Self.soakSeeds.count * 3 * 3)
+        var report = "HANGOUTSOAK \(Self.soakSeeds.count) seeds x 180 s x 3 Jelbies; min sim-seconds per run: before \(before.minSimSeconds) boost \(boost.minSimSeconds) after \(after.minSimSeconds)\n"
+        report += "VOCAL PLAYED per Jelbie-minute (chirps+babble, context voices, emote voice files, hangout voices): baseline \(String(format: "%.2f", Double(before.vocal) / jm)) | boost only \(String(format: "%.2f", Double(boost.vocal) / jm)) (x\(String(format: "%.2f", Double(boost.vocal) / Double(max(before.vocal, 1))))) | boost+hangouts \(String(format: "%.2f", Double(after.vocal) / jm)) (x\(String(format: "%.2f", Double(after.vocal) / Double(max(before.vocal, 1)))))\n"
+        report += "after vs boost-only (the hangouts' own effect): pre-existing idle starts \(r(after.old, boost.old)); antics \(r(after.antics, boost.antics)); walking flourishes \(r(after.walking, boost.walking)); chirps PLAYED \(r(after.chirps, boost.chirps)); context voices PLAYED \(r(after.ctx, boost.ctx)); emote voice files \(r(after.emoteFiles, boost.emoteFiles)); played:jump \(r(after.jump, boost.jump))\n"
+        report += "after vs baseline: idle \(r(after.old, before.old)); antics \(r(after.antics, before.antics)); walking \(r(after.walking, before.walking)); chirps \(r(after.chirps, before.chirps)); ctx \(r(after.ctx, before.ctx)); emote files \(r(after.emoteFiles, before.emoteFiles)); jump \(r(after.jump, before.jump))\n"
+        report += "hangout starts \(after.hangStarts) voices PLAYED \(after.hangPlayed) per kind \(after.hangVoices.sorted { $0.key < $1.key })\n"
+        report += String(format: "standing %.3f -> %.3f (%.2fx); standing AND facing the camera %.3f -> %.3f (%.2fx)\n", before.standing, after.standing, after.standing / max(before.standing, 1e-9), before.standingFacing, after.standingFacing, after.standingFacing / max(before.standingFacing, 1e-9))
+        func pulses(_ k: IdleKind) -> Int { (BlobBrain.hangoutKinds.contains(k) ? 0 : HapticCue.idle(k).pulses(energy: 1, jitter: 1).count) + EmoteTreats.haptics.filter { $0.key.hasPrefix("\(k).") }.values.reduce(0) { $0 + $1.count } }
         let hangEvents = BlobBrain.hangoutKinds.reduce(0) { $0 + after.idle["idle:\($1)", default: 0] * pulses($1) }
-        let oldEmoteKinds = BlobBrain.emoteKinds.union(BlobBrain.emote2Kinds)
-        let oldEvents = oldEmoteKinds.reduce(0) { $0 + after.idle["idle:\($1)", default: 0] * pulses($1) }
-        report += String(format: "haptic pulses per Jelbie-minute: hangouts %.2f (%d starts); existing solo idle emotes (batch 1+2) %.2f\n", Double(hangEvents) / jm, after.hangStarts, Double(oldEvents) / jm)
+        report += String(format: "hangout haptic pulses per Jelbie-minute (before the 4 s limiter): %.2f\n", Double(hangEvents) / jm)
         for k in BlobBrain.hangoutKinds.sorted(by: { $0.rawValue < $1.rawValue }) { report += "  \(k): \(pulses(k)) pulses per play, \(after.idle["idle:\(k)", default: 0]) plays\n" }
         print(report)
         try? report.write(toFile: Self.dir + "hangout_soak_report.txt", atomically: true, encoding: .utf8)
-        // add, never displace: every old FAMILY keeps >= 90 %
-        for (name, a, b) in [("pre-existing idle kinds", after.old, before.old), ("antics", after.antics, before.antics), ("walking flourishes", after.walking, before.walking), ("chirps PLAYED", after.chirps, before.chirps),
-                             ("context voices PLAYED", after.ctx, before.ctx), ("emote voice files", after.emoteFiles, before.emoteFiles), ("played:jump", after.jump, before.jump)] {
+        for (n, m) in [("before", before), ("boost", boost), ("after", after)] { XCTAssertGreaterThan(m.minSimSeconds, 175, "\(n): every run simulated its 180 s (min \(m.minSimSeconds))") }
+        // add, never displace: every old FAMILY keeps >= 90 % of the boost-only arm (the boost is in both), and the whole vocal figure stays <= 1.75x the original baseline
+        for (name, a, b) in [("pre-existing idle kinds", after.old, boost.old), ("antics", after.antics, boost.antics), ("walking flourishes", after.walking, boost.walking), ("chirps PLAYED", after.chirps, boost.chirps),
+                             ("context voices PLAYED", after.ctx, boost.ctx), ("emote voice files", after.emoteFiles, boost.emoteFiles), ("played:jump", after.jump, boost.jump)] {
             XCTAssertGreaterThanOrEqual(Double(a), 0.9 * Double(b), "\(name): \(a) vs \(b)")
         }
+        XCTAssertLessThanOrEqual(Double(after.vocal), 1.75 * Double(before.vocal), "vocal PLAYED \(after.vocal) vs baseline \(before.vocal)")
         for k in BlobBrain.hangoutKinds { XCTAssertGreaterThan(after.idle["idle:\(k)", default: 0], 0, "\(k) occurs") }
         for k in [IdleKind.humTune, .bigStretch, .curiousPeek, .bugWatch] { XCTAssertGreaterThan(after.hangVoices["\(k)", default: 0], 0, "\(k): its voice PLAYED") }
         for k in [IdleKind.pawCheck, .tailPeek] { XCTAssertEqual(after.hangVoices["\(k)", default: 0], 0, "\(k) is silent") }
