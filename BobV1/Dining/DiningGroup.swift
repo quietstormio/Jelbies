@@ -130,7 +130,7 @@ final class DiningGroup {
         guard plan != placeOf else { return }
         for i in brains.indices where plan[i] != placeOf[i] && !committed[i] {
             placeOf[i] = plan[i]; replans += 1
-            brains[i].requestNow(.goTo(approachPoint(blob: i)))
+            brains[i].callToMeal(.goTo(approachPoint(blob: i)))
         }
     }
 
@@ -197,7 +197,7 @@ final class DiningGroup {
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
         if forcedOrigin != nil { spawnTray() }          // (the café's table is out already: the food lands on it at once; a fresh tray waits for the gathering, see `tick`)
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
-        for i in brains.indices where !released[i] { brains[i].requestNow(.goTo(approachPoint(blob: i))) }
+        for i in brains.indices where !released[i] { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken softly, not hard-aborted: BlobBrain+SleepForce)
         requested = true
     }
 
@@ -299,7 +299,7 @@ final class DiningGroup {
                 idle[i] += dt
                 if idle[i] > 0.5 {
                     idle[i] = 0
-                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].requestNow(.goTo(approachPoint(blob: i))) } else { end(); gaveUp = true; return }
+                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { end(); gaveUp = true; return }
                 }
             }
         case .serving:

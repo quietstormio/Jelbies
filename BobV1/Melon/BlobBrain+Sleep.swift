@@ -59,6 +59,26 @@ struct SleepState {
     var forceRetried = false
     /// Small life while asleep (stage 3 only): shifts, rolls, scoots, twitches, a half-wake. Timers only; see `sleepFidgetTick`.
     var fid = SleepFidget()
+    // MARK: staggered bedtime (2026-11-09: three Jelbies yawned, lay down and slept in sync) -- all zero / off for a plain sleep (a daytime nap, `sleepInstant`)
+    /// A bedtime from the goodnight: stand with heavy eyes for `linger` s before the walk (stage 0, script .idle), then walk to `lingerTarget` (nil = already there: stage 1).
+    var stagger = false
+    var lingering = false
+    var linger: Float = 0
+    var lingerTarget: SIMD2<Float>?
+    /// Per-Jelbie yawn timeline (set when the turn is done): a pause, the yawn (x `yawnScale`), maybe a second smaller one, a pause, then the flop.
+    var staggerSet = false
+    var pre1: Float = 0, pre2: Float = 0, yawnScale: Float = 1
+    var yawn2 = false
+    // MARK: soft wake (stir in place, slow roll-up, groggy stretch, a half-lid look round): `wakeAsked` is NOT set until the roll starts (mask + snores stay on)
+    var softWake = false
+    var stirT: Float = -1            // -1 = not stirring; else seconds since the wake was asked (the first `stirLag` of them he just lies there)
+    var stirLag: Float = 0, stirDur: Float = 1
+    var stirStarted = false
+    var stirEye: Float = 0           // the eye crack the stir opened (carried into the roll, fading as the lie blend falls)
+    var rollDur: Float = SleepTuning.rollBackTime
+    var lookT0: Float = -1
+    /// Woken by the meal tray (`callToMeal`): soft wake whatever the call; shown as a non-idle activity so the tray's "stuck idle" retry never re-sends him.
+    var mealWake = false
 }
 
 struct SleepFidget {
@@ -91,6 +111,9 @@ enum SleepTuning {
     /// The wake: a quick ease-out roll-up (a pop) and a short stretch. (The hats' / mask's poof at `holdRoll` of the roll scales with it.)
     static let rollBackTime: Float = 0.5
     static let stretchTime: Float = 1.5
+    /// The soft wake (user 2026-11-09 "a slightly slow wake up that's slightly staggered"): stir lying down, a slow smoothstep roll-up, a groggy stretch (x `softStretch`), a short half-lid look round.
+    static let stirTime: ClosedRange<Float> = 0.8...1.2, softRollTime: ClosedRange<Float> = 0.8...1.0
+    static let softStretch: Float = 1.15, softLookTime: Float = 0.55, stirEyeCrack: Float = 0.24
     /// The yawn before the flop (seconds).
     static let yawnTime: Float = 1.8
     /// Impact: the squash dips to about 0.82 (x lieSquash 0.94 * (1 - impactDip)), the jelly kick.
@@ -351,7 +374,7 @@ extension BlobBrain {
         pending = nil
         commanded = true
         currentPose(sim)
-        if sleepBegin(sim, night: bedtimeHours, force: true) {
+        if sleepBegin(sim, night: bedtimeHours, force: true, linger: true) {
             sleep.tucked = true
             sleep.hold = max(sleep.hold, hold)
             restTimer = max(restTimer, 1)
@@ -364,7 +387,8 @@ extension BlobBrain {
     // MARK: starting
 
     /// `idleStart(.sleep)`.
-    func sleepBegin(_ sim: SoftBody, night: Bool, force: Bool = false) -> Bool {
+    /// `linger`: a bedtime from the goodnight (not a nap, not `sleepInstant`): he first stands a per-Jelbie while with heavy eyes (`SleepOrder`), so three do not set off together.
+    func sleepBegin(_ sim: SoftBody, night: Bool, force: Bool = false, linger: Bool = false) -> Bool {
         // a free pet bed is the preferred spot for a Jelly who sleeps alone: he hops over its rim and curls up on the mattress
         var bed: (foot: DecorFoot, stand: SIMD2<Float>)?
         if sleepMates.isEmpty { bed = freeBed() }
@@ -384,20 +408,49 @@ extension BlobBrain {
         if perkFlags.bedtime { sleep.hold *= 1.35 }          // the bedtime perk: a deeper, longer sleep
         if bedtimeHours { sleep.hold = NightRestTuning.untilMorning }
         sleep.minHold = night ? 20 : 12
+        if linger {
+            sleep.stagger = true
+            sleep.linger = SleepOrder.delay(.bed, slot: SleepOrder.slot(.bed, self), rand: { self.rand($0, $1) })
+        }
         if let b = bed {
             sleep.bed = b.foot.uid; sleep.stage = 0
             idleState.decorUID = b.foot.uid; DecorField.shared.occupant[b.foot.uid] = steerID; decorIgnore = b.foot.uid
+            if sleepLingerStart(target: b.stand) { return true }
             script = .walk(target: b.stand, then: .none); activity = .walking
             return true
         }
         if simd_distance(position, c.spot) > 0.25 {
-            script = .walk(target: c.spot, then: .none); activity = .walking
             sleep.stage = 0
+            if sleepLingerStart(target: c.spot) { return true }
+            script = .walk(target: c.spot, then: .none); activity = .walking
         } else {
             script = .idle; activity = .lookingAround
             sleep.stage = 1
+            if sleep.linger > 0.05 { sleep.stage = 0; _ = sleepLingerStart(target: nil) }
         }
         return true
+    }
+
+    /// Stage 0 linger (he is `isSleeping` from now: the Cancel pill, `bedtimeWalking` and the NightRest retry loop see him at once): stand still, heavy eyes, then the walk / the turn.
+    private func sleepLingerStart(target: SIMD2<Float>?) -> Bool {
+        guard sleep.stagger, sleep.linger > 0.05 else { return false }
+        sleep.lingering = true; sleep.lingerTarget = target; sleep.t = 0
+        script = .idle; activity = .lookingAround
+        return true
+    }
+    /// The linger is over: on to the walk (or, already at the spot, the turn + yawn).
+    private func sleepLingerEnd(_ skinner: Skinner) {
+        sleep.lingering = false; sleep.t = 0
+        skinner.setEyeOpenness(1)
+        if let tgt = sleep.lingerTarget {
+            sleep.lingerTarget = nil
+            scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+            script = .walk(target: tgt, then: .none); activity = .walking
+        } else {
+            sleep.stage = 1; sleep.stageStart = true
+            idleState.phaseT = 0
+            script = .idle; activity = .lookingAround
+        }
     }
 
     /// The walk to the spot is over (script .none). Short of it (the leg was given up: somebody stood in the way) he tries again, up to three times,
@@ -458,10 +511,67 @@ extension BlobBrain {
         guard idleState.kind == .sleep else { return }
         if sleep.stage <= 1 { idleState.yielding = true; return }          // not down yet: the usual yield ends it
         if sleep.stage >= 4 { return }
+        // a stir in hand: the meal's request just waits for it; a same-moment repeat is ignored; a new ask (a tap, a command) cuts the stir short: today's quick wake
+        if sleep.stirT >= 0, !sleep.wakeAsked {
+            if sleep.mealWake || SleepOrder.sameMoment(.wake, self) { return }
+            sleepRollNow(groggy: groggy); return
+        }
+        // the soft wake: a meal call always; a group of wake calls in one moment from the 2nd on (the first takes today's quick wake, so a single wake is never slowed);
+        // `fast` (race, volley, show: something needs him NOW) never. Only a settled sleeper stirs: mid-flop he just gets up.
+        if sleep.stage == 3, sleep.mealWake || !fast {
+            let slot = SleepOrder.slot(.wake, self)
+            // a second brain joined the moment: this is a group wake, so the first caller (who took the quick path a tick or so ago) is softened too, invisibly
+            if slot == 1, !sleep.mealWake, let f = SleepOrder.first(.wake, self), f !== self { f.sleepSoftenQuickWake() }
+            if sleep.mealWake || slot > 0 {
+                sleepBeginStir(lag: SleepOrder.delay(.wake, slot: slot, rand: { self.rand($0, $1) }), groggy: groggy)
+                return
+            }
+        }
+        sleepRollNow(groggy: groggy)
+    }
+
+    /// Today's wake: roll back now.
+    private func sleepRollNow(groggy: Bool) {
         sleep.wakeAsked = true
         sleep.groggy = groggy
+        sleep.stirT = -1
+        sleep.softWake = false; sleep.rollDur = SleepTuning.rollBackTime          // (a quick wake never inherits a soft wake's roll time)
         if sleep.stage == 3 || sleep.stage == 2 { sleep.kStart = sleep.k; sleep.stage = 4; sleep.t = 0; sleep.stageStart = true }
-        _ = fast
+    }
+
+    /// Group wake, first caller: his quick roll has barely begun (stage 4 from a settled sleep, at most ~3 ticks): put him back to the lying pose in a zero-lag stir.
+    /// `wakeAsked` is cleared again, so `isNapping` (mask, snores) never blinked. Anything further along (or `fast`, which never joins a group) is left alone.
+    func sleepSoftenQuickWake() {
+        guard idleState.kind == .sleep, sleep.stage == 4, !sleep.softWake, !sleep.mealWake, sleep.kStart > 0.99, sleep.t <= 0.05 else { return }
+        sleep.stage = 3; sleep.t = 0; sleep.k = 1; sleep.kStart = 1; sleep.wakeAsked = false
+        sleepBeginStir(lag: 0, groggy: true)
+    }
+
+    /// The soft wake begins: `lag` s of just lying there, then a stir (an eye crack + a small slow wiggle, still lying, still `isNapping`), then `sleepStirTick` starts the slow roll.
+    func sleepBeginStir(lag: Float, groggy: Bool) {
+        sleep.softWake = true
+        sleep.stirT = 0; sleep.stirLag = lag; sleep.stirStarted = false
+        sleep.stirDur = rand(SleepTuning.stirTime.lowerBound, SleepTuning.stirTime.upperBound)
+        sleep.rollDur = rand(SleepTuning.softRollTime.lowerBound, SleepTuning.softRollTime.upperBound)
+    }
+
+    /// Stage 3, while stirring. Positions are never touched (a lying sleeper never slides); the wiggle is the fidget's own eased lean.
+    private func sleepStirTick(_ dt: Float) {
+        sleep.stirT += dt
+        let s = sleep.stirT - sleep.stirLag
+        if s < 0 { return }
+        if !sleep.stirStarted {
+            sleep.stirStarted = true
+            if sleep.fid.kind == 0 {
+                let sc: Float = amplitude < 0.7 ? 0.4 : 1
+                sleep.fid.kind = 1; sleep.fid.u = 0; sleep.fid.dur = sleep.stirDur + 0.05; sleep.fid.wigAmp = (rand() < 0.5 ? -1 : 1) * 0.07 * sc
+            }
+        }
+        sleep.stirEye = SleepTuning.stirEyeCrack * smooth01(s / sleep.stirDur)
+        if s >= sleep.stirDur {
+            sleep.groggy = true; sleep.wakeAsked = true
+            sleep.kStart = 1; sleep.stage = 4; sleep.t = 0; sleep.stageStart = true
+        }
     }
 
     // MARK: per-stage work in the normal flow (stages 1 and 5)
@@ -478,6 +588,14 @@ extension BlobBrain {
             return
         }
         switch sleep.stage {
+        case 0:
+            // the linger before the walk (a goodnight only): he stands with heavy eyes and one slow blink, for his own time
+            guard sleep.lingering else { break }
+            gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
+            let lt = sleep.t, mid = sleep.linger * 0.55
+            let blink = powf(sinf(.pi * max(0, min(1, (lt - mid) / 0.55))), 2)
+            skinner.setEyeOpenness(max(0.1, 1 - 0.4 * smooth01(lt / 0.6) - 0.35 * blink))
+            if lt >= sleep.linger { sleepLingerEnd(skinner) }
         case 1:
             // turn to the lying heading, then a big yawn, then down
             if !sleep.turned {
@@ -486,6 +604,7 @@ extension BlobBrain {
                 if !turning && !feet.active { sleep.turned = true; sleep.t = 0 }
                 return
             }
+            if sleep.stagger { sleepStaggeredYawn(sim, skinner); return }
             // (the old 3.0 s yawn's shape, played in `yawnTime`)
             let u = sleep.t * 3.0 / SleepTuning.yawnTime
             let k = smooth01(u / 0.8) * (1 - smooth01((u - 2.3) / 0.6))
@@ -496,12 +615,20 @@ extension BlobBrain {
         case 5:
             // the stretch after the roll back (groggy = slower and sleepier, eyes only half open)
             // (the old 2.7 s stretch's shape, played in `stretchTime`; a groggy one is half again as long)
-            let slow: Float = (sleep.groggy ? 1.5 : 1) * SleepTuning.stretchTime / 2.7
+            if sleep.mealWake { activity = .turning }
+            let slow: Float = (sleep.groggy ? (sleep.softWake ? SleepTuning.softStretch : 1.5) : 1) * SleepTuning.stretchTime / 2.7
             let t = sleep.t / slow
             let k = smooth01(t / 0.8) * (1 - smooth01((t - 1.7) / 0.6))
             let m = smooth01((t - 0.7) / 0.4) * (1 - smooth01((t - 1.35) / 0.4))
             sleepYawnPose(skinner, k: k, mouth: sleep.groggy ? 0.95 * m : 0, shake: false, sleepy: max(0.95 * (1 - smooth01(sleep.t / (0.6 * SleepTuning.stretchTime / 2.7))), sleep.groggy ? 0.5 * (1 - smooth01((t - 1.6) / 1.2)) : 0))
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
+            if sleep.softWake, t > 2.7, !feet.active, sleep.bed < 0 || sleep.bedHop != 0 {
+                // the half-lid look round before he carries on (a pet bed's hop out comes straight after the stretch, as today)
+                if sleep.lookT0 < 0 { sleep.lookT0 = sleep.t }
+                let lu = (sleep.t - sleep.lookT0) / SleepTuning.softLookTime
+                sleepYawnPose(skinner, k: 0, mouth: 0, shake: false, sleepy: 0.4 * (1 - smooth01(lu)))
+                if lu < 1 { return }
+            }
             if t > 2.7 && !feet.active {
                 skinner.setEyeOpenness(1); mouthOpen = 0; armDirW = 0; armDirOut = 0; armWalkWant = 0
                 if sleep.bed >= 0, sleep.bedHop == 0, let f = DecorField.shared.foot(sleep.bed) {
@@ -513,6 +640,33 @@ extension BlobBrain {
             }
         default: break
         }
+    }
+
+    /// Stage 1 after the turn, a goodnight bedtime: a pause (heavy eyes), the yawn (x `yawnScale`), for about one in three a gap and a second smaller yawn, a pause, then the flop (unchanged).
+    private func sleepStaggeredYawn(_ sim: SoftBody, _ skinner: Skinner) {
+        if !sleep.staggerSet {
+            sleep.staggerSet = true
+            sleep.pre1 = rand(0, 0.4); sleep.pre2 = rand(0, 0.6)
+            sleep.yawnScale = rand(0.85, 1.3); sleep.yawn2 = rand() < 1.0 / 3
+        }
+        let Y1 = SleepTuning.yawnTime * sleep.yawnScale, Y2 = 0.6 * SleepTuning.yawnTime, gap: Float = 0.35
+        let t0 = sleep.pre1, t1 = t0 + Y1
+        let t1b = sleep.yawn2 ? t1 + gap : t1, t2 = sleep.yawn2 ? t1b + Y2 : t1
+        let tEnd = t2 + sleep.pre2
+        let t = sleep.t
+        func yawn(_ yt: Float, _ dur: Float, _ amp: Float) {
+            let u = yt * 3.0 / dur
+            let k = smooth01(u / 0.8) * (1 - smooth01((u - 2.3) / 0.6))
+            let m = smooth01((u - 0.8) / 0.45) * (1 - smooth01((u - 1.9) / 0.45))
+            sleepYawnPose(skinner, k: k * amp, mouth: 0.95 * m * amp, shake: amp > 0.9 && u > 0.8 && u < 1.9, sleepy: 0.5 * smooth01((u - 1.5) / 1.4))
+        }
+        if t < t0 { sleepYawnPose(skinner, k: 0, mouth: 0, shake: false, sleepy: 0.4 * smooth01(t / 0.5)) }
+        else if t < t1 { yawn(t - t0, Y1, 1) }
+        else if t < t1b { sleepYawnPose(skinner, k: 0, mouth: 0, shake: false, sleepy: 0.5) }
+        else if t < t2 { yawn(t - t1b, Y2, 0.6) }
+        else { sleepYawnPose(skinner, k: 0, mouth: 0, shake: false, sleepy: 0.5) }
+        gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
+        if t > tEnd && !feet.active { sleepToLie(sim, skinner) }
     }
 
     /// The yawn posture (the same numbers as the idle yawn: arms up as thumbs, the body elongates, a little tip back), eyes squeezed shut.
@@ -539,9 +693,10 @@ extension BlobBrain {
 
     /// Ticked from `BlobBrain.tick` right after the idle gate; true = this tick is fully handled.
     func sleepBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        SleepOrder.advance(self, dt)          // (the shared "same moment" reading: every ticking brain's own clock)
         if bedHopTick(sim, skinner, dt) { return true }
         guard idleState.kind == .sleep, case .idle = script, sleep.stage >= 2, sleep.stage <= 4 else { return false }
-        activity = .lookingAround
+        activity = sleep.mealWake ? .turning : .lookingAround          // (a meal-woken sleeper is never "idle" to the tray's stuck-idle retry)
         mouthOpen = 0
         sleep.t += dt
         poseOn = true
@@ -563,13 +718,17 @@ extension BlobBrain {
             else if sleep.breath - dt < SleepTuning.breathPeriod * 0.5, sleep.breath >= SleepTuning.breathPeriod * 0.5 { jellyKick = max(jellyKick, SleepTuning.breathKick * 0.45) }          // (and out)
             if !sleep.wakeAsked { sleepFidgetTick(dt) }
             let morning = idleDeepNight < 0.5 && idleNight < SleepTuning.nightEdge
-            if sleep.wakeAsked || sleep.t >= sleep.hold || (morning && sleep.t >= sleep.minHold && sleep.hold > 600) {
+            if sleep.stirT >= 0, !sleep.wakeAsked { sleepStirTick(dt) }
+            if sleep.wakeAsked || sleep.t >= sleep.hold {
                 sleep.kStart = 1; sleep.stage = 4; sleep.t = 0
+            } else if morning && sleep.t >= sleep.minHold && sleep.hold > 600 && sleep.stirT < 0 {
+                // the morning: a soft, per-Jelbie-lagged wake (they do not flip on the same frame)
+                sleepBeginStir(lag: SleepOrder.delay(.morning, slot: SleepOrder.slot(.morning, self), rand: { self.rand($0, $1) }), groggy: true)
             }
         default:    // 4: roll back over the way he went down
-            let x = min(sleep.t / SleepTuning.rollBackTime, 1)
-            sleep.k = sleep.kStart * (1 - x) * (1 - x)          // ease-out: the roll-up pops up fast, then settles onto his feet
-            if sleep.t >= SleepTuning.rollBackTime {
+            let x = min(sleep.t / sleep.rollDur, 1)
+            sleep.k = sleep.kStart * (sleep.softWake ? 1 - smooth01(x) : (1 - x) * (1 - x))          // ease-out: the roll-up pops up fast, then settles onto his feet (a soft wake: a slow smoothstep)
+            if sleep.t >= sleep.rollDur {
                 sleep.k = 0
                 sleepStand(sim, skinner)
                 return false
@@ -718,7 +877,7 @@ extension BlobBrain {
         var sq = 1 - (1 - SleepTuning.lieSquash) * min(k, 1)
         if sleep.stage == 2 { sq *= 1 - SleepTuning.impactDip * SleepTuning.flopDip(sleep.t) }          // the squash on impact (exactly 1x in stage 3)
         else if sleep.stage == 4 {                                                                          // the wake pop: a taller body for a beat as he comes up
-            let x = sleep.t / SleepTuning.rollBackTime
+            let x = sleep.t / sleep.rollDur
             if x > 0.5 { sq *= 1 + 0.07 * sinf(.pi * min((x - 0.5) / 0.5, 1)) }
         }
         sim.attractor.rotation = q
@@ -736,7 +895,7 @@ extension BlobBrain {
         sim.attractor.anchor = a
         sim.attractor.strength = kPose
         poseW = 1
-        skinner.setEyeOpenness(1 - 0.96 * smooth01(min(1, k * 1.6)) + (fa && fid.halfU >= 0 ? fid.halfAmp * sinf(.pi * fid.halfU) : 0))
+        skinner.setEyeOpenness(min(1, 1 - 0.96 * smooth01(min(1, k * 1.6)) + (fa && fid.halfU >= 0 ? fid.halfAmp * sinf(.pi * fid.halfU) : 0) + sleep.stirEye))
         // feet: the rigid beans ride the body, arms stay the rest nubs
         armWalkWant = 0; armDirW = 0
         if sleep.holdW > 0.001 {
@@ -754,7 +913,7 @@ extension BlobBrain {
 
     /// Back on his feet: hand the body to the normal pose path (feet re-seeded square under the root).
     private func sleepStand(_ sim: SoftBody, _ skinner: Skinner) {
-        sleep.stage = 5; sleep.t = 0
+        sleep.stage = 5; sleep.t = 0; sleep.stirEye = 0; sleep.lookT0 = -1
         jellyKick = max(jellyKick, SleepTuning.wakeKick)
         // a good-morning from the nearest awake Jelly (a look at him, then a hop)
         if let g = socialOthers().filter({ $0 !== self && $0.idleState.kind == nil && $0.social == nil && simd_distance($0.position, position) < 6 }).min(by: { simd_distance($0.position, position) < simd_distance($1.position, position) }) {
@@ -833,5 +992,53 @@ extension BlobBrain {
             }
         }
         return true
+    }
+}
+
+// MARK: - staggering: who goes first
+
+/// Hands out an order index to bedtime / wake calls that reach different Jelbies in the same moment (a loop over the room: the goodnight, "wake up everyone", the tray, the morning),
+/// so three Jelbies do not yawn, lie down and wake on the same frame (user 2026-11-09). Each brain only knows itself, so the "same moment" is read off the brains' own clocks:
+/// every ticking brain adds its dt to `clocks` (`sleepBodyTick`, once per normal tick); a call joins the open group of its kind while the group's FIRST caller (who must be this brain
+/// or one of his room mates) has ticked less than `window`. No wall time except a long expiry, so a test that ticks deterministically gets deterministic groups.
+enum SleepOrder {
+    enum Kind: Int { case bed = 0, wake = 1, morning = 2 }
+    struct Group { weak var first: BlobBrain?; var firstClock: Float = 0; var ids: [ObjectIdentifier] = []; var wall: Double = 0 }
+    nonisolated(unsafe) static var clocks: [ObjectIdentifier: Float] = [:]
+    nonisolated(unsafe) static var groups = [Group](repeating: Group(), count: 3)
+    static let window: Float = 0.3, wallExpiry = 5.0
+
+    static func reset() { clocks = [:]; groups = [Group](repeating: Group(), count: 3) }
+    static func advance(_ b: BlobBrain, _ dt: Float) { clocks[ObjectIdentifier(b), default: 0] += dt }
+
+    private static func open(_ kind: Kind, _ b: BlobBrain) -> Group? {
+        let g = groups[kind.rawValue]
+        guard let f = g.first, ProcessInfo.processInfo.systemUptime - g.wall < wallExpiry else { return nil }
+        guard f === b || b.socialOthers().contains(where: { $0 === f }) else { return nil }          // (the same room: a stale group from another room / test is never joined)
+        guard (clocks[ObjectIdentifier(f)] ?? 0) - g.firstClock < window else { return nil }
+        return g
+    }
+    /// 0 for the first caller in a moment, 1 for the second, ... (the same brain asked again in the same moment keeps his index).
+    static func slot(_ kind: Kind, _ b: BlobBrain) -> Int {
+        let id = ObjectIdentifier(b)
+        if var g = open(kind, b) {
+            if let i = g.ids.firstIndex(of: id) { return i }
+            g.ids.append(id); groups[kind.rawValue] = g
+            return g.ids.count - 1
+        }
+        groups[kind.rawValue] = Group(first: b, firstClock: clocks[id] ?? 0, ids: [id], wall: ProcessInfo.processInfo.systemUptime)
+        return 0
+    }
+    /// The first caller of the open group (nil when none is open for this brain).
+    static func first(_ kind: Kind, _ b: BlobBrain) -> BlobBrain? { open(kind, b)?.first }
+    /// Has this brain already been counted in the open group of this kind?
+    static func sameMoment(_ kind: Kind, _ b: BlobBrain) -> Bool { open(kind, b)?.ids.contains(ObjectIdentifier(b)) ?? false }
+
+    /// Seconds from the call to his own start. Bed: ~0-0.5 / 1.0-1.8 / 2.2-3.2 (a linger before the walk). Wake and morning: 0-0.3 / 0.7-1.5 / 1.6-2.8 (lying still before the stir).
+    static func delay(_ kind: Kind, slot: Int, rand: (Float, Float) -> Float) -> Float {
+        switch kind {
+        case .bed: return slot == 0 ? rand(0, 0.4) : slot == 1 ? rand(1.2, 1.8) : rand(2.4, 3.2) + 0.9 * Float(slot - 2)
+        case .wake, .morning: return slot == 0 ? rand(0, 0.3) : slot == 1 ? rand(0.7, 1.5) : rand(1.6, 2.8) + 0.8 * Float(slot - 2)
+        }
     }
 }

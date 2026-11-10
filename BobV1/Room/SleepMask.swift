@@ -245,7 +245,7 @@ final class SleepMaskSet {
     static func wanted(_ brain: BlobBrain) -> Bool { brain.isNapping && !brain.race.active }
     /// While waking, a mask that is on stays until the roll back is about half done (not in a race; not for a pick up / abort, which end the sleep at once).
     static func lingers(_ brain: BlobBrain) -> Bool {
-        brain.idleState.kind == .sleep && brain.sleep.stage == 4 && brain.sleep.kStart > 0.99 && brain.sleep.t < SleepTuning.rollBackTime * SleepMaskTuning.holdRoll && !brain.race.active
+        brain.idleState.kind == .sleep && brain.sleep.stage == 4 && brain.sleep.kStart > 0.99 && brain.sleep.t < brain.sleep.rollDur * SleepMaskTuning.holdRoll && !brain.race.active
     }
 
     func reset() { slots = slots.map { _ in Slot() }; puffs.reset() }

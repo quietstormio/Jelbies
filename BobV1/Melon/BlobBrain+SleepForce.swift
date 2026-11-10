@@ -60,4 +60,14 @@ extension BlobBrain {
         sleepToLie(sim, skinner)
         sleep.stage = 2; sleep.t = SleepTuning.lieTime; sleep.impacted = true; sleep.k = 1
     }
+
+    /// The meal tray's call (`DiningGroup.beginApproach`): a Jelbie lying asleep is NOT hard-aborted (`requestNow` would snap him up and walking). The request just waits (`request`), the gentle wake
+    /// (BlobBrain+Idle: yielding + `sleepWake(fast: true)`) sees `mealWake` and gives the soft, staggered wake: stir, roll up, stretch, then the walk to the tray. Everybody else: `requestNow`, as before.
+    func callToMeal(_ r: BlobRequest) {
+        if idleState.kind == .sleep, sleep.stage >= 2, sleep.stage <= 4, !sleep.wakeAsked || sleep.stage == 4 {
+            sleep.mealWake = true
+            activity = .turning
+            request(r)
+        } else { requestNow(r) }
+    }
 }

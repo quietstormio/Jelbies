@@ -596,7 +596,7 @@ final class GameCare {
         brain.dineHooks = Self.hooks(for: c, tray: dining)
         brain.dinePlan = Self.plan(for: c, tier: mealTier, tray: dining)
         if !eagerWhenFamished { brain.dinePlan.pace = 1 }
-        brain.requestNow(mealRequest(c))
+        brain.callToMeal(mealRequest(c))
     }
     /// The brain request for place `i` of tray `d` (sip stands a little closer, eating a little farther back). `pieces` caps what he takes this meal.
     static func mealRequest(_ c: Consumable, tray dining: DiningSet, place i: Int, pieces: Int = DiningTiming.bitesPerServing) -> BlobRequest {
@@ -736,12 +736,12 @@ final class GameCare {
         let approach = SIMD2(stand.x, stand.y - Self.approachBack)
         if !standRequested {
             standRequested = true; standIdle = 0
-            brain.requestNow(.goTo(approach))
+            brain.callToMeal(.goTo(approach))
         } else if act == .idle || act == .lookingAround || act == .steppingInPlace {
             standIdle += dt
             if standIdle > 0.8 {
                 standIdle = 0
-                if standRetries < 3 { standRetries += 1; brain.requestNow(.goTo(approach)) } else { wanted = nil; resetStandWalk() }
+                if standRetries < 3 { standRetries += 1; brain.callToMeal(.goTo(approach)) } else { wanted = nil; resetStandWalk() }
             }
         } else { standIdle = 0 }
     }

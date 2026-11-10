@@ -52,8 +52,8 @@ final class SleepMaskTests: XCTestCase {
         while set.phase(0) != .poofOut && n < 120 { step(r, set); n += 1 }
         XCTAssertEqual(set.phase(0), .poofOut, "\(what): poofing", file: file, line: line)
         if r.brain.idleState.kind == .sleep && r.brain.sleep.stage == 4 {
-            XCTAssertGreaterThan(r.brain.sleep.t, SleepTuning.rollBackTime * 0.45, "\(what): the mask stays until the roll back is about half done", file: file, line: line)
-            XCTAssertLessThan(r.brain.sleep.t, SleepTuning.rollBackTime * 0.7, "\(what): ... and then poofs", file: file, line: line)
+            XCTAssertGreaterThan(r.brain.sleep.t, r.brain.sleep.rollDur * 0.45, "\(what): the mask stays until the roll back is about half done", file: file, line: line)
+            XCTAssertLessThan(r.brain.sleep.t, r.brain.sleep.rollDur * 0.7, "\(what): ... and then poofs", file: file, line: line)
         }
         let spawns = set.puffSpawns
         XCTAssertEqual(spawns, 2, "\(what): one puff in, one puff away", file: file, line: line)

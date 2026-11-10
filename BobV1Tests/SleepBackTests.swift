@@ -182,7 +182,8 @@ final class SleepBackTests: XCTestCase {
         // morning
         for r in lab.rigs { r.brain.idleNight = 0; r.brain.idleDeepNight = 0 }
         for _ in 0..<(60 * 40) { lab.tick(watching: false) }
-        XCTAssertTrue(lab.rigs.allSatisfy { $0.brain.idleState.kind != .sleep }, "up in the morning: \(lab.rigs.map { String(describing: $0.brain.idleState.kind) })")
+        // (a fresh daytime nap, hold < 600, is not the night's sleep: with the soft, staggered wake they are up a few seconds later, which leaves the autonomous nap roll more room in the 40 s)
+        XCTAssertTrue(lab.rigs.allSatisfy { $0.brain.idleState.kind != .sleep || $0.brain.sleep.hold < 600 }, "up in the morning: \(lab.rigs.map { String(describing: $0.brain.idleState.kind) })")
     }
 
     /// 2026-11-06 `-SleepNow 1` (with `-ClockHour 3`): the launch order is the normal goodnight; everybody is asleep within about 10 sim-s (hold = until morning),
