@@ -209,6 +209,8 @@ final class SocialSession {
     /// Boxed-in swap: the partner walks (swapped), the spot was a side-by-side one (sideKind), when it happened; tick counters of the formation waits (read by FormationTests).
     var swapped = false, sideKind = false, swapT: Float = 0
     var fmTicks = 0, fmLand = 0, fmBeat = 0
+    /// Meet in the middle (round 3): both walk to stance spots round the midpoint; `dg` = the stand-off of the first plan, `partnerGoal` the partner's spot, `partnerDoneT` when he stood still.
+    var meet = false, meetUsed = false, goal0 = SIMD2<Float>.zero, dg: Float = 0, partnerGoal = SIMD2<Float>.zero, partnerDoneT: Float = -1
     /// Friends2: the second runner's goal, the two start spots, the lane / orbit angle, the plan is made.
     var goal2 = SIMD2<Float>.zero, home0 = SIMD2<Float>.zero, home1 = SIMD2<Float>.zero, laneYaw: Float = 0, ready = false
     init(kind: SocialKind, a: BlobBrain, b: BlobBrain) { self.kind = kind; self.a = a; self.b = b; idA = a.steerID; idB = b.steerID }

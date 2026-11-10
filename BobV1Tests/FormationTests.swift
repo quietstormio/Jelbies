@@ -255,6 +255,31 @@ final class FormationTests: XCTestCase {
         }
     }
 
+    /// Roaming rates (for the clearWay ON / OFF arms and against the base): 3 Jelbies roam on their own for 10 simulated minutes; prints how many step-aside requests (a `goTo` job a free bystander receives from the room) and how many
+    /// idle moves, social sessions (by kind) and walks started, and the simulated seconds. Run once per arm; compare the counts (each rate must stay >= 90 % of the base arm).
+    func testRoamRates() {
+        let lab = SocialTests.Lab(n: 3, positions: SocialTests.starts, quiet: false, seed: 31)
+        SocialTuning.pickChance = 0.9
+        var stepAside = 0, idleStarts = 0, walkStarts = 0, ticks = 0
+        var wasGoTo = [Bool](repeating: false, count: 3), wasIdle = [Bool](repeating: false, count: 3), wasWalk = [Bool](repeating: false, count: 3)
+        var kinds: [String: Int] = [:], lastSession = [ObjectIdentifier?](repeating: nil, count: 3)
+        for _ in 0..<(60 * 600) {
+            lab.tick(watching: false); ticks += 1
+            for (i, r) in lab.rigs.enumerated() {
+                let b = r.brain
+                let goTo = "\(String(describing: b.job))".contains("goTo")
+                if goTo, !wasGoTo[i], !b.isSocial { stepAside += 1 }; wasGoTo[i] = goTo
+                let idle = b.idleState.kind != nil
+                if idle, !wasIdle[i] { idleStarts += 1 }; wasIdle[i] = idle
+                let walk = b.isWalkScript
+                if walk, !wasWalk[i] { walkStarts += 1 }; wasWalk[i] = walk
+                if let s = b.social, s.idA == b.steerID { let id = ObjectIdentifier(s); if lastSession[i] != id { lastSession[i] = id; kinds[s.kind.rawValue, default: 0] += 1 } } else if b.social == nil { lastSession[i] = nil }
+            }
+        }
+        MotionLog.write("FORMATION-ROAM step-aside \(stepAside) idle-starts \(idleStarts) walk-starts \(walkStarts) sessions \(kinds.values.reduce(0, +)) \(kinds.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ",")) sim-seconds \(ticks / 60)")
+        XCTAssertEqual(ticks, 36000)
+    }
+
     func testPairFormation() {
         let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9), SIMD2(0, 2.4)], features: [.none, .none, .none], seed: 77)
         d.live = true
