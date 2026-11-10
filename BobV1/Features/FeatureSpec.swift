@@ -77,6 +77,9 @@ extension FeatureSpec {
         "wayfarer_black": "sunglasses_star", "wayfarer_tortoise": "sunglasses_star", "cat_eye_shades": "sunglasses_star",
         "vest_puffer": "bib_sky", "cardigan_cable": "bib_sky", "bag_crossbody": "bib_sky",
         "scarf_silk": "scarf_cosy", "chain_gold": "pearls", "diamond_j": "pearls",
+        // the 2026-11-04 colourways (batch 4): vertex positions byte-identical to the sibling, so identical rules and wing tables
+        "bucket_hat_honey": "bucket_hat", "beanie_mint": "beanie_honey", "bandana_sun": "bandana_coral",
+        "bib_honey": "bib_sky", "bib_mint": "bib_sky", "scarf_plum": "scarf_cosy",
     ]
     /// Shipped pieces whose wing table was missing (the wings clipped them at a full flap): they take the pirate hat's measured table.
     static let wingBorrow: [String: String] = ["beret": "pirate_hat"]
@@ -89,6 +92,8 @@ extension FeatureSpec {
             if pairs[new] == nil, let p = pairs[base] { pairs[new] = p }
             if wingLimits[new] == nil, let w = wingLimits[base] { wingLimits[new] = w }
         }
+        // the mint beanie borrowed the honey one's rule, but Moss's no-pom hat must be drawn in mint (Features/Resources/wear_beanie_mint_nopom.bin)
+        if var p = pairs["beanie_mint"], p.moss.variant == "beanie_honey_nopom" { p.moss.variant = "beanie_mint_nopom"; pairs["beanie_mint"] = p }
         // the Viking helmet's dome is taller than the pirate hat's crown: the sprout sits on top of it
         if var p = pairs["viking_hat"], p.moss.rule == "adjust" { p.moss.anchor = [0.0, 1.494, 0.0]; pairs["viking_hat"] = p }
     }

@@ -206,6 +206,21 @@ final class FeatureTests: XCTestCase {
         }
     }
 
+    /// Guard: a new head piece must get a compat rule (or an alias to a sibling with identical art) the day it is added, and every rule's variant mesh
+    /// must exist. (2026-11-04: six pieces shipped with no entry; a beanie let the wings and the daisy through.) No head piece is exempt today; an
+    /// exemption must be listed here with its reason.
+    func testEveryHeadWearableHasACompatRuleAndEveryVariantExists() {
+        let spec = FeatureSpec.shared
+        let exempt: [String: String] = [:]
+        for look in WearLook.pieces where look.slot == .head {
+            if let why = exempt[look.art] { _ = why; continue }
+            XCTAssertNotNil(spec.pairs[look.art], "\(look.art): head piece with no compat rule and no alias (FeatureSpec.aliases / feature_compat.json)")
+        }
+        for (id, pair) in spec.pairs {
+            if let v = pair.moss.variant { XCTAssertNotNil(WearMeshes.art(v), "\(id): Moss variant mesh \(v) is not in the bundle") }
+        }
+    }
+
     func testCompatRulesHoldForEveryWearable() {
         let body = WearBody.shared
         // a grazing contact up to 2 cm passes (on a hat too: the daisy is PLACED clear of the hat, with its stem rooted in it)
