@@ -27,6 +27,9 @@ struct SettingsScreen: View {
     @State private var showSupport = false
     @State private var followReal = DayClock.shared.followReal
     @AppStorage(HapticSettings.key) private var hapticsOn = true
+    #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+    @State private var jiggleLevel = JellyJiggle.sharedLevel          // TEMPORARY owner A/B switch for the walking jiggle (dev builds only)
+    #endif
     @Environment(\.verticalSizeClass) private var vsc
     private var landscape: Bool { vsc == .compact }
     private let ink = CloudTheme.ink
@@ -193,6 +196,15 @@ struct SettingsScreen: View {
             actionRow("Watch the opening", "sparkles", id: "settings-watch-opening", action: watchOpening)
             #if DEBUG
             if let openStudio { actionRow("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio) }
+            #endif
+            #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Jiggle (test)").font(CloudTheme.font(16, .semibold)).foregroundStyle(ink)
+                Picker("Jiggle (test)", selection: Binding(get: { jiggleLevel }, set: { jiggleLevel = $0; JellyJiggle.choose($0) })) {
+                    Text("Today").tag(0); Text("A little more").tag(1); Text("More").tag(2)
+                }
+                .pickerStyle(.segmented).accessibilityIdentifier("settings-jiggle-level")
+            }
             #endif
             Toggle("Follow real clock", isOn: Binding(get: { followReal }, set: { followReal = $0; DayClock.shared.setFollowReal($0) }))
                 .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)

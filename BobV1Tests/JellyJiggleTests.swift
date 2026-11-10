@@ -13,6 +13,11 @@ import simd
 final class JellyJiggleTests: XCTestCase {
     private let H = Float(BobForm.top)
 
+    /// These assert today's numbers, so the whole class is pinned to level 0 ("Today"); the three-level tests are in JellyJiggleLevelTests.
+    private var savedLevel = 1
+    override func setUp() { super.setUp(); savedLevel = JellyJiggle.sharedLevel; JellyJiggle.sharedLevel = 0 }
+    override func tearDown() { JellyJiggle.sharedLevel = savedLevel; super.tearDown() }
+
     private func step(_ r: MotionRig) {
         r.tick()
         r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
