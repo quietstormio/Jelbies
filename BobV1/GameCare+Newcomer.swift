@@ -10,7 +10,7 @@
 //  stays fully visible so the run-in is seen (the friend's visit keeps its doorbell and card).
 //    holding  behind the LaunchGate curtain he is put OFF-SCREEN beyond the left edge whatever the window (Park/GuestArrival.swift `guestArrivalEntry(offScreen:)`; his arena wall is lifted
 //             while he is out there) and held still
-//    waking   a sleeping house (night, or naps by day) is woken for the big moment: every sleeping housemate gets the quick, non-groggy wake (`wakeSleeper`), up to 4 s; they are
+//    waking   a sleeping house (night, or naps by day) is woken for the big moment: every sleeping housemate gets the quick, non-groggy wake (`wakeSleeper(…, fast: true)`), up to 4 s; they are
 //             remembered, and (never ordered to bed at once) they go back to bed by themselves about 75 s after the welcome if left alone in bedtime hours
 //    run      about 0.5 s later a short "ta-da" chime, VoiceOver "<name> is home", and he RUNS in from the left to his spot (the run gait) while everyone at home turns to watch with
 //             excited faces; as he crosses into view: confetti burst 1 from the left edge at his height
@@ -92,7 +92,7 @@ extension GameCare {
         greeting = false; greetPending = []; greetOthers = [:]; queued.removeAll { if case .come = $0 { return true }; return false }
         w.arena = na.sim.arenaRadius
         na.sim.arenaRadius = .infinity          // the round wall is lifted while he is out there: he is put really off-screen, whatever the window
-        if nb.isSleeping { wakeSleeper(na.id, groggy: false) }
+        if nb.isSleeping { wakeSleeper(na.id, groggy: false, fast: true) }
         let entry = guestArrivalEntry(toward: target, offScreen: true)
         rehome(na, at: entry)          // off the left edge, behind the curtain: he is never seen standing in the room first
         nb.autonomy = false; nb.hurry = false
@@ -163,10 +163,10 @@ extension GameCare {
             if (!LaunchGate.shared.visible || w.t > 8) && (!friendBusy || w.t > 40) {
                 // a sleeping house is woken for this big moment (the quick, non-groggy wake); they go back to bed afterwards
                 w.slept = household.filter { $0.brain?.isSleeping == true }.map(\.id)
-                if nb.isSleeping { wakeSleeper(w.id, groggy: false) }
+                if nb.isSleeping { wakeSleeper(w.id, groggy: false, fast: true) }
                 if w.slept.isEmpty { w.go(.entrance) }
                 else {
-                    for id in w.slept { wakeSleeper(id, groggy: false) }
+                    for id in w.slept { wakeSleeper(id, groggy: false, fast: true) }
                     NSLog("[newcomer] wake ids=%@ t=%.1f", w.slept.description, w.t)
                     w.go(.waking)
                 }
