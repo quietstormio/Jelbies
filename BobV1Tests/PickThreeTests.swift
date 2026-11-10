@@ -68,7 +68,8 @@ final class PickThreeTests: XCTestCase {
                 XCTAssertEqual(sh.count, 3)
                 XCTAssertNil(sh[0], "slot 0 is the classic colour")
                 XCTAssertLessThanOrEqual(sh.filter { $0?.rare == true }.count, 1)
-                if let o = JellyVariantBook.offer(species: s, dayKey: d) { XCTAssertTrue(sh.contains { $0 == o }, "today's colour is in a slot unchanged") }
+                for v in sh.compactMap({ $0 }) where !v.rare { XCTAssertTrue(v.title == "Soft" || v.title == "Deep", "non-rare slots are the species' own Soft / Deep shades") }
+                if let o = JellyVariantBook.offer(species: s, dayKey: d) { XCTAssertTrue(sh.contains { $0 == o }, "the rare mutation is in a slot unchanged") }
                 else { XCTAssertNotEqual(sh[1]?.flesh, sh[2]?.flesh, "two different tones on a classic day") }
             }
         }

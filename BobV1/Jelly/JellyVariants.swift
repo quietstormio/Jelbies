@@ -1,10 +1,10 @@
 //
 //  JellyVariants.swift
 //  Jelly Spring colour variants. The SPECIES stay fixed (blue none, yellow tail + spikes, green daisy, purple wings: JellyRoster.feature is by
-//  character id, never by colour); only the body colour of a species on offer changes from day to day.
+//  character id, never by colour); only the rare mutation days change the body colour of a species on offer.
 //
-//  - The Spring shows ONE seeded-daily colour variant per species (same on every device that day). It is built from the Park visitor palette table
-//    (`ParkColour.flesh` -> `JellyPalettes` matte treatment) with a small seeded tone jitter, or it is the species' classic colour.
+//  - The Spring shows every species in its own classic colour. On about 4% of species-days (seeded daily, the same on every device that day) it offers
+//    one rare exclusive mutation instead (below); there is no other daily colour.
 //  - Rare mutations (`VariantTuning.rareRate`, ~4% of species-days) are one of a small fixed set of EXCLUSIVE off-palette colours. Exclusives never
 //    appear in the Park (`ParkPool.generate` filters them; none is a `ParkColour`), and the Spring card shows a "Rare" tag.
 //  - An adopted variant is saved per CHARACTER id ("JellyVariants.v1"); `JellyRoster.palette/tint` read it, so the roster, profile, widget and
@@ -17,10 +17,6 @@ import simd
 nonisolated enum VariantTuning {
     /// Chance that a species-day offers a rare mutation (one constant).
     static let rareRate: Double = 0.04
-    /// Chance that a normal day shows the species' classic colour.
-    static let classicShare: Double = 0.30
-    /// Seeded tone jitter (towards white / black) applied to a Park-table colour.
-    static let toneJitter: Float = 0.05
     static let seed: UInt64 = 0x57_12_91_AB_E3
 }
 
@@ -63,30 +59,16 @@ nonisolated enum JellyVariantBook {
     /// Park colours a visitor may have: everything except an exclusive (today none collides, so the pool is unchanged).
     static func parkEligible(_ c: ParkColour) -> Bool { !exclusives.contains { $0.title.lowercased() == c.rawValue } }
 
-    /// Tasteful Park-table colours per species (character 0 blue, 1 yellow, 2 green, 3 purple).
-    static func colours(for species: Int) -> [ParkColour] {
-        switch species {
-        case 0: return [.teal, .grey, .cream, .mint]
-        case 1: return [.orange, .peach, .cream, .lime]
-        case 2: return [.mint, .lime, .teal, .cream]
-        default: return [.plum, .pink, .coral, .grey]
-        }
-    }
-
     /// Days since the epoch in the local calendar (what the daily seed is keyed by).
     static func dayKey(_ date: Date = Date(), calendar: Calendar = .current) -> Int { calendar.ordinality(of: .day, in: .era, for: date) ?? 0 }
 
-    /// The Spring's offer for `species` on `dayKey`: nil = the classic colour. Deterministic.
+    /// The Spring's offer for `species` on `dayKey`: nil = the species' own classic colour (almost always); about 4% of days a rare exclusive. Deterministic.
     static func offer(species: Int, dayKey: Int) -> JellyVariant? {
         guard (0...3).contains(species) else { return nil }
         var r = ParkRandom(VariantTuning.seed &+ UInt64(bitPattern: Int64(dayKey)) &* 0x9E37_79B9 &+ UInt64(species) &* 0x1F3D)
         _ = r.next()
         if Double(r.unit()) < VariantTuning.rareRate { return r.pick(exclusives) }
-        if Double(r.unit()) < VariantTuning.classicShare { return nil }
-        let c = r.pick(colours(for: species))
-        let t = (r.unit() * 2 - 1) * VariantTuning.toneJitter
-        let (f, d) = c.flesh
-        return JellyVariant(title: c.title, flesh: tone(f, t), deep: tone(d, t), rare: false)
+        return nil
     }
 
     /// `v` moved `t` of the way toward white (t > 0) or black (t < 0).
@@ -108,8 +90,8 @@ nonisolated enum JellyVariantBook {
         }
     }
 
-    /// Three slots for the pick page, left to right: the classic colour, a slight tone of it (Soft or Deep) and today's colour offer (`offer`, may be a rare exclusive);
-    /// on a day with no offer the third slot is the other tone, so no two slots match. Species 0...3 only; anything else is [nil, nil, nil].
+    /// Three slots for the pick page, left to right: the classic colour, a slight tone of it (Soft or Deep) and a third slot that is the rare mutation only on a rare day
+    /// (`offer`); otherwise the three are classic / Soft / Deep, all the species' own colour, so no two slots match. Species 0...3 only; anything else is [nil, nil, nil].
     static func shades(species: Int, dayKey: Int, owned: Int) -> [JellyVariant?] {
         guard (0...3).contains(species) else { return [nil, nil, nil] }
         var r = ParkRandom(VariantTuning.seed ^ 0x5AD3 &+ UInt64(bitPattern: Int64(dayKey)) &* 0x9E37_79B9 &+ UInt64(species) &* 0x1F3D &+ UInt64(max(owned, 0)) &* 0x7B1)

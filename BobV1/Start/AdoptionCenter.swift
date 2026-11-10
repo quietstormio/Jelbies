@@ -157,7 +157,7 @@ struct AdoptionCenter: View {
     private var pick: Int { info.character }
     /// The picked candidate of the pick / naming step.
     private var pickedCand: JellyCandidate? { picked.flatMap { candidates.indices.contains($0) ? candidates[$0] : nil } }
-    /// What this candidate costs (nil = the room is full): the rare colour (today's colour on a lucky day) is the only one that costs more.
+    /// What this candidate costs (nil = the room is full): the rare colour (the Spring's rare mutation on a lucky day) is the only one that costs more.
     private func price(for c: JellyCandidate) -> Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, rare: c.variant?.rare == true, special: info.isSpecial) }
     private var price: Int? { pickedCand.flatMap { price(for: $0) } }
     /// Affordable and room for one more (the price is nil when the room is full). Owning the species already is fine: duplicates are allowed.
@@ -969,12 +969,12 @@ struct AdoptionCenter: View {
         let p = c.palette.primary
         return (c.name, c.symbol, Color(red: srgb(p.x), green: srgb(p.y), blue: srgb(p.z)))
     }
-    /// "Classic", "Soft", "Deep" or today's colour; its label and swatch.
+    /// "Classic", "Soft", "Deep" or the rare colour; its label and swatch.
     private func shadeInfo(_ c: JellyCandidate) -> (label: String, value: String, dot: Color) {
         guard let v = c.variant else { return ("Shade", "Classic", look.dot) }
         let s = v.swatch
         let dot = Color(red: Double(s.x), green: Double(s.y), blue: Double(s.z))
-        return (v.title == "Soft" || v.title == "Deep" ? "Shade" : "Today's colour", v.title, dot)
+        return (v.title == "Soft" || v.title == "Deep" ? "Shade" : "Rare colour", v.title, dot)
     }
     private func strongestJar(_ t: JellyTraits) -> String { SpeciesInfo.jarNames[t.jars.enumerated().max { $0.element < $1.element }?.offset ?? 0] }
 

@@ -85,7 +85,7 @@ nonisolated struct JellyCandidate: Equatable, Sendable {
     let index: Int
     let species: Int
     let traits: JellyTraits
-    /// The slight shade (or today's colour); nil = the classic colour.
+    /// The slight shade (or the rare mutation); nil = the classic colour.
     let variant: JellyVariant?
     /// The scratch id its stage actor wears (JellyRoster.previewID(species:slot:)).
     let previewID: Int
