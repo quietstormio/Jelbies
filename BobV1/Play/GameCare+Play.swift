@@ -43,7 +43,7 @@ extension GameCare {
     }
 
     /// The ball's back wall: the room's, or the park's roam rect (GameCamera.configurePark).
-    private func applyPlayWorld() { TossTuning.zBack = park.inScene ? GameCamera.roamRect.min.y : -2.4 }
+    private func applyPlayWorld() { TossTuning.zBack = park.inScene ? GameCamera.roamRect.min.y : -2.4; TossTuning.zFront = park.inScene ? 5.3 : 9 }
 
     /// A toy was picked: Play mode on with that ball.
     func beginPlay(ball kind: DecorKind) {
@@ -71,7 +71,7 @@ extension GameCare {
     func endPlay() {
         play.end()
         play.onEvent = nil
-        TossTuning.zBack = -2.4
+        TossTuning.zBack = -2.4; TossTuning.zFront = 9
         BubbleWand.shared.deactivate()          // (no-op unless the wand was out)
     }
 

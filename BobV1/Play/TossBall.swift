@@ -31,6 +31,8 @@ nonisolated enum TossTuning {
     /// Back wall z, and the floor's far corners (the soccer ball's floor).
     /// (a var: the park's play sets its own back edge for the visit, GameCare+Play.swift)
     nonisolated(unsafe) static var zBack: Float = -2.4
+    /// Front wall z: 9 in the room; the park stops the ball in front of its entrance hedge (z 5.66 and beyond), see `applyPlayWorld`.
+    nonisolated(unsafe) static var zFront: Float = 9
     /// The largest step the physics takes (a third of the smallest ball's radius).
     static let maxStep: Float = 0.05
 }
@@ -53,7 +55,7 @@ nonisolated enum TossEvent: Equatable, Sendable {
 nonisolated struct TossWorld {
     var bodies: [TossBody] = []
     var xHalf: (Float) -> Float = { _ in 4 }
-    var zFront: Float = 9
+    var zFront: Float = TossTuning.zFront
     var solid: ((SIMD2<Float>) -> Float)?
     var solidTop: Float = 0.9
 }
@@ -81,7 +83,7 @@ nonisolated struct TossBall: Sendable {
         guard y0 > 0.03 || vel.y > 0.5 else { return nil }
         let t = (vel.y + (vel.y * vel.y + 2 * g * max(y0, 0)).squareRoot()) / g
         let x = pos.x + vel.x * t, z = pos.z + vel.z * t
-        let zc = min(max(z, TossTuning.zBack + radius), 9 - radius)
+        let zc = min(max(z, TossTuning.zBack + radius), TossTuning.zFront - radius)
         let lim = max(xHalf(zc) - radius, 0.5)
         return (SIMD2(min(max(x, -lim), lim), zc), t)
     }

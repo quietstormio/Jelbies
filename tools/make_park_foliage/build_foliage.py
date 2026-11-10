@@ -148,7 +148,7 @@ def rand_perp(rng, n):
     a = a - n * a.dot(n)
     return a.normalized() if a.length > 1e-4 else Vector((1, 0, 0))
 
-def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, tilt=0.30, cover_top=0.97, cover_bot=0.65, sunk=0.0, hang=0.0, soft=False):
+def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, tilt=0.30, cover_top=0.97, cover_bot=0.65, sunk=0.0, hang=0.0, soft=False, ell=None):
     """Leaf cards over every mass surface: tilted outward and downward, stem end toward the mass, sticking past the surface; coverage heavier on top."""
     cols = [(rng.uniform(-1, 1)) for _ in masses]
     for i, m in enumerate(masses):
@@ -162,6 +162,7 @@ def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, 
             n_out = Vector((d.x / r, d.y / ry, d.z / r)).normalized()
             keep = cover_bot + (cover_top - cover_bot) * clamp01(n_out.y * 0.5 + 0.5)
             if rng.random() > keep: continue
+            if soft and ell and rng.random() < 0.0: continue
             lump = 1 + 0.10 * nz(d * 2.6, 1.0, i * 1.7)
             p = c + Vector((d.x * r, d.y * ry, d.z * r)) * lump
             if any((p - c2).length < r2 * 0.80 for j, (c2, r2, f2, t2) in enumerate(masses) if j != i): continue
@@ -174,6 +175,11 @@ def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, 
             roll = rng.uniform(-0.6, 0.6)
             wd = (wd * math.cos(roll) + n_out * math.sin(roll)).normalized()
             L = Lm * rng.uniform(0.8, 1.25)
+            if ell:
+                q = math.sqrt(((p.x - cc.x) / ell[0]) ** 2 + ((p.z - cc.z) / ell[0]) ** 2 + ((p.y - cc.y) / ell[1]) ** 2)          # 1 = the crown's outer surface
+                rim = clamp01((q - 0.82) / 0.18)
+            else: rim = 0.0          # toward the crown's outer boundary (sides AND top): smaller, rounder leaves break the outline
+            L *= 1 - (0.40 if soft else 0.38) * rim
             stem = p - n_out * (L * 0.18)
             t = light_t(p, n_out, [(m2[0], m2[1]) for m2 in masses], i, cc, cr, y0, y1, sunk)
             jit = 0.03 if soft else 0.07
@@ -185,13 +191,13 @@ def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, 
             else: col = mix(col, BG, hs * -hue * (0.4 + t))
             v = 1 + rng.uniform(-(0.03 if soft else 0.06), 0.03 if soft else 0.06)
             col = tuple(min(1.0, x * v) for x in col)
-            lv.add(stem, axis, wd, L, L * Wr, n_out, col, soft=soft)
+            lv.add(stem, axis, wd, L, L * (Wr + 0.15 * rim if soft else Wr - 0.30 * rim), n_out, col, soft=soft)          # (far kites turn narrow and pointed at the rim: no square corners against the sky)
 
-def core_masses(masses, cc, cr, y0, y1, pal, seed, sub=2, frac=0.68, bump=0.25):
+def core_masses(masses, cc, cr, y0, y1, pal, seed, sub=2, frac=0.68, bump=0.25, core=None):
     for i, (c, r, fl, tl) in enumerate(masses):
         def fn(p, n, c=c, r=r):
             s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
-            return tuple(min(1.0, x * (0.8 + 0.5 * s01)) for x in CORE)
+            return tuple(min(1.0, x * (0.8 + 0.5 * s01)) for x in (core or CORE))
         commit(clump_bm(r * frac, fl, sub, bump, seed + i * 1.3, tl), fn, sharp=100, xf=T(tuple(c), ry=i * 1.3))
 
 # ---------------------------------------------------------------- crowns + limbs
@@ -236,24 +242,44 @@ def limbs(rng, top, Rh, yb, Hc, nm, r0, bfn, sides, lod, sub_n=(2, 3), up=0.0):
             tips.append(E)
     return tips
 
+
+def base_tufts(rng, rb, n, lod):
+    """Low grass / leaf blades ringed round a trunk's foot: they hide the trunk's polygon rim against the lawn, so it reads as growing out of the ground (round, soft, no hard cut)."""
+    lv = Leaves()
+    for k in range(n):
+        a = k / n * 2 * math.pi + rng.uniform(-0.12, 0.12)
+        rad = rb * rng.uniform(0.95, 1.30)
+        pw = Vector((math.cos(a) * rad, 0.0, math.sin(a) * rad))
+        axis = Vector((math.cos(a) * 0.45, 1.0, math.sin(a) * 0.45)).normalized()
+        n_out = Vector((math.cos(a) * 0.5, 1.0, math.sin(a) * 0.5)).normalized()
+        wd = n_out.cross(axis)
+        wd = wd.normalized() if wd.length > 1e-3 else Vector((1, 0, 0))
+        Lc = rng.uniform(0.15, 0.26) * (1.2 if lod else 1.0) * (rb / 0.3)
+        v = rng.uniform(0.9, 1.1)
+        col = (0.20 * v, 0.40 * v, 0.14 * v)
+        lv.add(pw - axis * Lc * 0.15, axis, wd, Lc, Lc * 0.30, n_out, col, fold=0.05)
+    lv.flush()
+
 def deciduous(iid, seed, spec, pal, lod=0, pale=False):
     rng = random.Random(seed); lib.reset(); reset()
     sides = 10 if lod == 0 else 5
     bfn = bark_fn(pale, seed)
     kind = spec['kind']
-    begin("bark")
+    begin("bark", ao_floor=0.93)
     H = spec['trunk']; r0 = spec['r0']; Rh = spec['Rh']; Hc = spec['Hc']; yb = spec.get('yb', H + 0.1)
     if pale:
         for k in range(spec['stems']):
             a = k / spec['stems'] * 6.283 + 0.6
             lean = Vector((math.cos(a), 0, math.sin(a))) * (0.10 + 0.08 * k)
             pts = [Vector((lean.x * (t ** 1.5) * 1.2, H * t, lean.z * (t ** 1.5) * 1.2)) for t in [i / 13 for i in range(14)]]
-            add_tube(pts, 0.1, bfn, sides=6 if lod == 0 else 4, radfn=lambda t, k=k: r0 * (1 + 0.5 * max(0, 1 - t * 8) ** 2) * (1 - 0.55 * t) * (1 - 0.08 * k), cap=True)
+            add_tube(pts, 0.1, bfn, sides=6 if lod == 0 else 5, radfn=lambda t, k=k: r0 * (1 + 0.5 * max(0, 1 - t * 8) ** 2) * (1 - 0.55 * t) * (1 - 0.08 * k), cap=True)
         top = Vector((0.04, H, 0.02))
     else:
-        pts = [Vector((0, H * t, 0)) for t in [i / 6 for i in range(7)]]
-        add_tube(pts, 0.1, bfn, sides=sides, radfn=lambda t: r0 * (1 + spec['flare'] * max(0, 1 - t * 3.2) ** 2) * (1 - 0.34 * t), cap=True)
+        TS = [0, 0.012, 0.03, 0.06, 0.11, 0.18, 0.3, 0.5, 0.7, 0.85, 1.0]
+        pts = [Vector((0, -0.2 + (H + 0.2) * t, 0)) for t in TS]          # (starts a little below the ground)
+        add_tube(pts, 0.1, bfn, sides=20 if lod == 0 else 16, radfn=lambda u: (lambda t: r0 * (1 + spec["flare"] * math.exp(-t * 12.0)) * (1 - 0.34 * t))(TS[min(len(TS) - 1, int(round(u * (len(TS) - 1))))]), cap=True)          # a smooth, round root flare into the ground
         top = pts[-1]
+        Rb = r0 * (1 + spec['flare'])
     tips = limbs(rng, top, Rh, yb, Hc, spec['nm'], r0, bfn, sides, lod, up=spec.get('up', 0.0))
     nb = spec['nbig'] if not lod else max(10, int(spec['nbig'] * 0.55))
     if kind == 'dome': cl = crown_dome(rng, Rh, yb, Hc, nb, spec['rbig'] * (1.2 if lod else 1), spec['tiers'], spec['droop'])
@@ -270,18 +296,18 @@ def deciduous(iid, seed, spec, pal, lod=0, pale=False):
     ctr = Vector((0, yb + Hc * 0.5, 0)); cr = max(Rh, Hc * 0.5) * 1.15
     y0 = yb; y1 = yb + Hc
     begin("leaf")
-    core_masses(masses, ctr, cr, y0, y1, pal, seed, sub=2 if not lod else 1)
+    core_masses(masses, ctr, cr, y0, y1, pal, seed, sub=2 if not lod else 1, frac=0.60 if lod else 0.68, core=(0.11, 0.24, 0.12) if lod else None)          # (a far core that peeks through reads as a leaf mass in shade, not a black polygon)
     lv = Leaves()
     dens = spec.get('dens_far', spec['dens'] * 0.45) if lod else spec['dens']
-    Lm = spec['leaf'] * (1.45 if lod else 1.0)
-    shell_leaves(lv, rng, masses, pal, ctr, cr, y0, y1, Lm, spec['wr'], dens, down=spec.get('down', 0.75), hang=spec.get('hang', 0.0), soft=bool(spec.get('soft')) and not lod)
+    Lm = spec['leaf'] * (1.65 if lod else 1.0)
+    shell_leaves(lv, rng, masses, pal, ctr, cr, y0, y1, Lm, spec['wr'], dens, down=spec.get('down', 0.75), hang=spec.get('hang', 0.0), soft=bool(spec.get('soft')) and not lod, ell=(Rh, Hc / 2) if spec.get('soft') else None)
     nleaf = len(lv.P) // 4
     lv.flush()
     return dict(kind="tree", canopy_radius=Rh, height=y1, leaves=nleaf)
 
-OAK = dict(kind='dome', trunk=0.95, r0=0.19, flare=0.35, Rh=1.55, Hc=1.85, yb=1.2, nm=5, nbig=24, rbig=0.46, flat=0.66, tiers=[0.42, 0.62, 0.80, 0.97], droop=0.12,
+OAK = dict(kind='dome', trunk=0.95, r0=0.19, flare=0.85, Rh=1.55, Hc=1.85, yb=1.2, nm=5, nbig=24, rbig=0.46, flat=0.66, tiers=[0.42, 0.62, 0.80, 0.97], droop=0.12,
            leaf=0.15, wr=0.80, dens=230, dens_far=135, soft=True)
-BEECH = dict(kind='oval', trunk=1.2, r0=0.14, flare=0.6, Rh=1.1, Hc=2.7, yb=1.15, nm=4, nbig=36, rbig=0.34, flat=0.84, tall=1.1, up=0.1, shell=0.25, droop=0.15,
+BEECH = dict(kind='oval', trunk=1.2, r0=0.14, flare=0.7, Rh=1.1, Hc=2.7, yb=1.15, nm=4, nbig=36, rbig=0.34, flat=0.84, tall=1.1, up=0.1, shell=0.25, droop=0.15,
              leaf=0.12, wr=0.70, dens=400, dens_far=190, soft=True)
 BIRCH = dict(kind='oval', trunk=2.2, r0=0.085, flare=0.4, Rh=1.15, Hc=2.5, yb=1.45, nm=4, nbig=60, rbig=0.19, flat=0.9, tall=2.2, up=0.1, shell=0.45, droop=1.0,
              leaf=0.12, wr=0.55, dens=520, stems=3, hang=0.9, down=1.0)
@@ -289,7 +315,7 @@ BIRCH = dict(kind='oval', trunk=2.2, r0=0.085, flare=0.4, Rh=1.15, Hc=2.5, yb=1.
 # ---------------------------------------------------------------- conifers
 def conifer(iid, seed, tiers=10, H=3.9, R=1.2, pal=PAL_SPRUCE, lod=0, trunk_h=0.7):
     rng = random.Random(seed); lib.reset(); reset()
-    begin("bark")
+    begin("bark", ao_floor=0.93)
     bfn = bark_fn(False, seed)
     add_tube([Vector((0, 0, 0)), Vector((0, 0.5, 0)), Vector((0, 1.4, 0)), Vector((0, H * 0.8, 0)), Vector((0, H, 0))], 0.1, bfn, sides=6 if lod else 8,
              radfn=lambda t: 0.15 * (1 + 0.9 * max(0, 1 - t * 8) ** 2) * (1 - 0.88 * t))
@@ -333,8 +359,25 @@ def conifer(iid, seed, tiers=10, H=3.9, R=1.2, pal=PAL_SPRUCE, lod=0, trunk_h=0.
                 lv.add(pw - axis * Lc * 0.1, axis, wd, Lc, Lc * 0.24, n_out, col, fold=0.08)
     nleaf = len(lv.P) // 4
     lv.flush()
-    lead = lathe_bm([(0, ring[-1][0] - 0.1), (0.13, ring[-1][0] - 0.02), (0.09, ring[-1][0] + 0.3), (0.0, H + 0.12)], 6)
-    commit(lead, lambda p, n: CORE, sharp=60)
+    # a real pointed leader: a fine needle-coloured cone (no dark disc) with a spray of upward needle cards round it
+    topy = ring[-1][0]
+    tip = H + 0.20
+    lead = lathe_bm([(0, topy - 0.12), (0.10, topy - 0.04), (0.06, topy + (tip - topy) * 0.45), (0.025, topy + (tip - topy) * 0.8), (0, tip)], 8)
+    commit(lead, lambda p, n: pal_mix(pal, 0.50 + 0.2 * clamp01(n.y)), sharp=100)
+    lv = Leaves()
+    for kk in range(26 if not lod else 12):
+        a = kk / (26 if not lod else 12) * 6.283 + rng.uniform(-0.2, 0.2)
+        yy = topy - 0.02 + (tip - topy) * rng.uniform(0.0, 0.7)
+        rad = 0.05 * (1 - (yy - topy) / (tip - topy + 0.01))
+        pw = Vector((math.cos(a) * rad, yy, math.sin(a) * rad))
+        axis = Vector((math.cos(a) * 0.55, 1.0, math.sin(a) * 0.55)).normalized()
+        n_out = Vector((math.cos(a), 0.6, math.sin(a))).normalized()
+        wd = n_out.cross(axis).normalized()
+        Lc = (0.24 if not lod else 0.32) * rng.uniform(0.85, 1.25) * (1 - 0.35 * (yy - topy) / (tip - topy + 0.01))
+        col = pal_mix(pal, clamp01(0.55 + rng.uniform(-0.1, 0.12)))
+        lv.add(pw - axis * Lc * 0.1, axis, wd, Lc, Lc * 0.30, n_out, col, fold=0.06)
+    nleaf += len(lv.P) // 4
+    lv.flush()
     return dict(kind="conifer", canopy_radius=R, height=H + 0.12, leaves=nleaf)
 
 # ---------------------------------------------------------------- shrubs
@@ -350,14 +393,14 @@ def bush(iid, seed, R=1.0, nbl=14, hedge=False, lod=0, lite=False):
             hh = R * (0.20 + 0.45 * (1 - d / R))
             masses.append((Vector((math.cos(a) * d * 1.1, hh * rng.uniform(0.7, 1.1), math.sin(a) * d * 0.85)), R * rng.uniform(0.24, 0.34), 0.85, 1.0))
     ctr = Vector((0, 0.4 * R, 0)); cr = R * 1.2
-    begin("bark")
+    begin("bark", ao_floor=0.93)
     for k in range(3):
         a = rng.uniform(0, 6.28)
         add_tube([Vector((math.cos(a) * 0.08, 0, math.sin(a) * 0.08)), Vector((math.cos(a) * 0.14, 0.2 * R, math.sin(a) * 0.14))], 0.02, bark_fn(False, seed), sides=4, radfn=lambda t: 0.035 * (1 - 0.4 * t))
     begin("leaf")
     core_masses(masses, ctr, cr, 0.0, R * 0.95, PAL_BUSH, seed, sub=2, frac=0.82, bump=0.22)
     lv = Leaves()
-    shell_leaves(lv, rng, masses, PAL_BUSH, ctr, cr, 0.0, R * 0.95, 0.10, 0.60, 540 if not hedge else (290 if lite else 600), down=0.5, tilt=0.55, cover_top=0.95, cover_bot=0.8, sunk=0.03)
+    shell_leaves(lv, rng, masses, PAL_BUSH, ctr, cr, 0.0, R * 0.95, 0.10, 0.60, 540 if not hedge else (250 if lite else 600), down=0.5, tilt=0.55, cover_top=0.95, cover_bot=0.8, sunk=0.03)
     lv.flush()
     begin("bloom")
     if not hedge:

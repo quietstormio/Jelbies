@@ -21,9 +21,9 @@ def lit(c,k=0.18,d=0.12):
 GROUPS = []      # [name, pivot, material, wfn, [parts]]
 CUR = None
 def reset(): GROUPS.clear()
-def begin(name, pivot=(0,0,0), material=0, w=None):
+def begin(name, pivot=(0,0,0), material=0, w=None, ao_floor=0.60):
     global CUR
-    CUR = dict(name=name, pivot=tuple(pivot), material=material, w=w, parts=[]); GROUPS.append(CUR)
+    CUR = dict(name=name, pivot=tuple(pivot), material=material, w=w, parts=[], ao_floor=ao_floor); GROUPS.append(CUR)
 def commit(bm, color, mods=(), sharp=50, xf=None):
     p = lib.commit(bm, color, mods=mods, sharp=sharp, xf=xf); lib.PARTS.pop(); CUR['parts'].append(p); return p
 BEV = lambda w, seg=3: [('BEVEL', dict(width=w, segments=seg, limit_method='ANGLE', angle_limit=math.radians(35)))]
@@ -100,19 +100,19 @@ def add_slab(poly, thick, color, xf, bevel=0.006):
 
 # ---- export ----
 def export(iid, meta):
-    P=[]; N=[]; C=[]; W=[]; groups=[]
+    P=[]; N=[]; C=[]; W=[]; FL=[]; groups=[]
     for g in GROUPS:
         o = len(P); nf = 0
         for p in g['parts']:
             base = len(P) - o
             for q, n, c in zip(p['P'], p['N'], p['C']):
-                P.append(q); N.append(n); C.append(c); W.append(g['w'](Vector(q)) if g['w'] else 0.0)
+                P.append(q); N.append(n); C.append(c); W.append(g['w'](Vector(q)) if g['w'] else 0.0); FL.append(g.get('ao_floor', 0.60))
         faces = []; off = o
         for p in g['parts']:
             faces += [(a+off, b+off, c+off) for a, b, c in p['F']]; off += len(p['P'])
         groups.append((g['name'], g['pivot'], g['material'], faces))
     P = np.array(P); Nn = np.array(N)
-    y = P[:,1]; ao = 0.60 + 0.40*np.vectorize(lambda t: sstep(0, 0.40, t))(y)
+    y = P[:,1]; FLa = np.array(FL); ao = FLa + (1-FLa)*np.vectorize(lambda t: sstep(0, 0.40, t))(y)
     ao = ao*(0.88 + 0.12*(Nn[:,1]*0.5+0.5)); ao = np.clip(ao, 0.5, 1.0)
     os.makedirs(OUT, exist_ok=True)
     with open(f"{OUT}/{iid}.obj", "w") as fh:
