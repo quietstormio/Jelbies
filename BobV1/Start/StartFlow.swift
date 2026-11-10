@@ -240,7 +240,7 @@ enum AdoptionPrice {
     static let special = 2000
     static let second = 500, third = 800, rareSurcharge = 300
     /// Teddy, Pearl and Panda (Jelly Spring specials): 2,000 JellyCoins each, whichever slot they fill. That is 2.5x the dearest ordinary adoption (800) and 1.8x
-    /// the dearest rare colour (1,100): a long saving goal (about 2 Splash wins), so they feel earned. A special never carries a daily colour or the rare surcharge.
+    /// the dearest rare colour (1,100): a long saving goal (about 2 Splash wins), so they feel earned. A special never carries a rare colour or the rare surcharge.
     /// Cost of the next Jelbie when `home` are in the room (nil = the room is full); `rare` = the offered colour is a rare mutation (+300; never on the free first gift).
     static func next(home: Int, rare: Bool = false, special: Bool = false) -> Int? {
         if special { return home < 1 ? 0 : (home < JellyRoster.maxCount ? Self.special : nil) }
