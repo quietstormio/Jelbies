@@ -117,10 +117,12 @@ nonisolated enum JellyRoster {
     /// The slot (0...2) a preview scratch id stands for.
     static func previewSlot(_ id: Int) -> Int { max(id - previewBase, 0) / 10 }
     /// The species (look, voice, feature) of instance `id`: identity below 100, the saved map from 100, a preview scratch id resolves to its species.
+    /// An instance id (100..<1000) with no recorded species (never allocated) is species 0; ids below 100 outside the known species keep the clamp.
     static func species(_ id: Int) -> Int {
         if (0..<knownCount).contains(id) { return id }
         if id >= previewBase { return min((id - previewBase) % 10, knownCount - 1) }
         if let s = speciesMap[id] { return s }
+        if id >= firstInstanceID { return 0 }
         return min(max(id, 0), knownCount - 1)
     }
     /// Whether `id` is a Jelbie that can exist: a species-id instance, a recorded duplicate, or a picker preview scratch id.
@@ -243,12 +245,14 @@ nonisolated enum JellyRoster {
     /// Saves `ids` (sanitised) as the roster.
     static func save(_ ids: [Int], to d: UserDefaults = .standard) { d.set(sanitised(ids), forKey: rosterKey) }
 
+    /// Set by the development `-AdoptNow` argument once its Jelbie is bought: `-SetRoster` then no longer re-applies on rebuilding the room (it would drop him again).
+    nonisolated(unsafe) static var setRosterSuspended = false
     /// Applies `-SetRoster a,b,c` when the launch argument is present: the saved roster becomes exactly that list. Returns the roster now in force.
     /// Each character keeps whatever is saved under his own keys (nothing is copied or cleared); a character with no saved data starts fresh
     /// the first time his profile loads. Idempotent: the same argument again writes the same list; no argument leaves the saved roster alone.
     @discardableResult
     static func applySetRoster(_ d: UserDefaults = .standard) -> [Int] {
-        if DevArgs.enabled, let text = d.string(forKey: setRosterKey), let ids = parseRoster(text) {
+        if DevArgs.enabled, !setRosterSuspended, let text = d.string(forKey: setRosterKey), let ids = parseRoster(text) {
             if savedIDs(d) != ids { save(ids, to: d) }
             return ids
         }

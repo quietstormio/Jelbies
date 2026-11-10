@@ -8,7 +8,8 @@
 //  Content: SpeciesInfo.swift. Backdrop / pedestal: PickerBackdrop.swift. Camera orbit: PickerCamera.swift.
 //  Species page -> "Meet the three" -> PICK page (three Jelbies of the species side by side, each with its own personality, stats, favourite snack and a slight colour
 //  shade: JellyTraits.swift) -> naming -> bring home. The same flow serves the free first gift and the Jelly Spring.
-//  Simulator-only capture flags: -PickerPage 0...3 (picker order), -PickerTab 0...2, -PickerMode more, -PickerStep species|pick|name, -PickerCandidate 0...2.
+//  Simulator-only capture flags: -PickerPage 0...6 (picker order; 4...6 = Teddy, Pearl, Panda with -PickerMode more), -PickerTab 0...2, -PickerMode more,
+//  -PickerStep species|pick|name, -PickerCandidate 0...2, -PickerEmote <n> (the species' n-th emote, every 4 s, instead of the random loop; species/naming steps).
 //
 
 import SwiftUI
@@ -112,7 +113,7 @@ struct AdoptionCenter: View {
         var t = PickerTab.about
         #if targetEnvironment(simulator)
         let d = UserDefaults.standard
-        if d.object(forKey: "PickerPage") != nil { start = min(max(d.integer(forKey: "PickerPage"), 0), 3) }
+        if d.object(forKey: "PickerPage") != nil { start = min(max(d.integer(forKey: "PickerPage"), 0), SpeciesInfo.pages(includingSpecial: mode == .more).count - 1) }
         if d.object(forKey: "PickerTab") != nil { t = PickerTab(rawValue: min(max(d.integer(forKey: "PickerTab"), 0), 2)) ?? .about }
         #endif
         var step0 = Step.species
@@ -1324,11 +1325,15 @@ struct AdoptionCenter: View {
         emoteTask?.cancel()
         emoteTask = Task { @MainActor in
             var i = Int.random(in: 0..<10)
+            var fixed = false
+            #if targetEnvironment(simulator)
+            if UserDefaults.standard.object(forKey: "PickerEmote") != nil { i = UserDefaults.standard.integer(forKey: "PickerEmote"); fixed = true }
+            #endif
             while !Task.isCancelled, pick == character, step != .pick {
-                try? await Task.sleep(nanoseconds: UInt64(Double.random(in: 4.0...6.5) * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: fixed ? 4_000_000_000 : UInt64(Double.random(in: 4.0...6.5) * 1_000_000_000))
                 guard !Task.isCancelled, pick == character, step != .pick, !celebrating else { continue }
                 let list: [StageMove] = naming ? [pickedCand?.traits.personality.emote ?? .blink, .blink] : SpeciesInfo.of(character).emotes
-                perform(list[i % list.count]); i += 1
+                perform(list[i % list.count]); if !fixed { i += 1 }
             }
         }
     }

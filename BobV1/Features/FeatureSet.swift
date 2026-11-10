@@ -81,6 +81,8 @@ final class FeatureSet {
         var sigFlap: Float = 0, sigSpin: Float = 0, sigCone: Float = 0, sigEars = SIMD2<Float>.zero
         /// Wings: a re-tint of the art's colours (the white candidate species); nil = the art as drawn.
         var wingTint: WingTint?
+        /// Spines: a recolour of the baked spike colours (only the Amber rare Pip; see JellyVariantBook.spikeTint); nil = the art as drawn.
+        var spikeTint: SIMD3<Float>?
         /// Wings: the flap burst. `burstWait` = seconds until the next may start; while one runs `burstT` counts up to `burstN / burstHz`.
         var burstWait: Float = 6, burstT: Float = -1, burstN = 3, burstHz: Float = 7, burstAmp: Float = 42, burstDeg: Float = 0
         var burstActive: Bool { burstT >= 0 }
@@ -108,6 +110,10 @@ final class FeatureSet {
     func setWingTint(_ id: Int, _ t: WingTint?) {
         while slots.count <= id { slots.append(Self.newSlot(slots.count)) }
         if slots[id].wingTint != t { slots[id].wingTint = t }
+    }
+    func setSpikeTint(_ id: Int, _ t: SIMD3<Float>?) {
+        while slots.count <= id { slots.append(Self.newSlot(slots.count)) }
+        if slots[id].spikeTint != t { slots[id].spikeTint = t }
     }
     func reset() { slots = slots.indices.map { Self.newSlot($0) } }
     /// A fresh slot with its own (non-zero) random seed per Jelly.
@@ -426,9 +432,9 @@ final class FeatureSet {
             if s.feature == .daisy { pl.onHat = s.fit.onHat; pl.anchor = s.fit.anchor; pl.tilt = s.fit.tilt; pl.sink = s.fit.sink }
             if s.feature == .wings { pl.dy = s.fit.wingDY }
             if s.feature == .ears { pl.slide = s.fit.earSlide }
-            guard let p = FeatureMeshes.prepare(s.feature, placement: pl, body: body, spec: spec, ridge: s.feature == .spines ? s.layoutTo : nil, wingTint: s.wingTint) else { continue }
+            guard let p = FeatureMeshes.prepare(s.feature, placement: pl, body: body, spec: spec, ridge: s.feature == .spines ? s.layoutTo : nil, wingTint: s.wingTint, spikeTint: s.feature == .spines ? s.spikeTint : nil) else { continue }
             let first = m.vertices.count
-            if s.feature == .spines, s.layoutW < 1, s.layoutFrom != s.layoutTo, let pf = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridge: s.layoutFrom) {
+            if s.feature == .spines, s.layoutW < 1, s.layoutFrom != s.layoutTo, let pf = FeatureMeshes.prepare(.spines, body: body, spec: spec, ridge: s.layoutFrom, spikeTint: s.spikeTint) {
                 // gliding between two ridge layouts: both are emitted (same topology), the vertices blended by the eased progress
                 var a = RoomMesh(), b = RoomMesh()
                 Self.emit(pf, into: &a, slot: s, skin: skin(id), spec: spec)

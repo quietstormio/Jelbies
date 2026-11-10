@@ -266,8 +266,12 @@ nonisolated final class Skinner {
     nonisolated(unsafe) static var collarRing = 9
     static let joinMinDepth: Float = 0.015, joinMaxPull: Float = 0.06
     static let collarReach: Float = 0.34
-    /// Fillet radius of the quarter-circle collar (the skin rises along the foot axis by `r` at the foot's outline and meets the flat skin tangentially `r` away).
+    /// Fillet height / reach of the collar (the skin rises along the foot axis by up to `r` around the foot's outline and meets the flat skin tangentially `r` outside it).
     nonisolated(unsafe) static var collarK: Float = 0.07
+    /// How far inside the outline the fillet reaches its full height (m), and over how much further in it eases back to 0 (hidden inside the piece).
+    nonisolated(unsafe) static var collarIn: Float = 0.03
+    nonisolated(unsafe) static var collarInFade: Float = 0.07
+    nonisolated(unsafe) static var collarCrossing = true          // (false = the old quarter-circle collar that stood tangent to the piece wall: before / after captures)
     var joinEnabled = true, collarEnabled = true
     /// 2026-11-01: 1 = the collar fillet at full height; the brain lowers it while BOTH feet are off the floor (jacks, hops, flips, the run's flight): the fillet pushes skin 7 cm along the foot axis in a polar frame about the piece,
     /// and with a lifted, rounded piece that came out as a saw-toothed rim and a pit round the leg root (the user's 'foot comes off when Teddy jumps'). One foot lifted (the walk's swing) leaves it untouched.
@@ -487,10 +491,16 @@ nonisolated final class Skinner {
                 let rk = Int(retractK[v])
                 if rk >= 0, retractSide[rk] < 0 { inward = Float(BlobBrain.retractSink) * retractWeight[rk] * beanBlend }
                 if dd >= kk { joinDent[s] = max(joinDent[s], inward); continue }
-                // quarter-circle fillet: height kk at the outline (the wall), 0 and tangent to the skin kk away; a little further inside the outline it fades out (the skin is under the foot there)
+                // fillet that CROSSES the wall (2026-11-10, the user's "feet look like separate pieces"): one smoothstep from 0 (tangent to the flat skin, kk outside the outline) up to kk
+                // (`collarIn` inside the outline), so at the wall the skin slopes in at ~45 degrees and goes on rising into the piece, where it is hidden. The old quarter circle stood
+                // VERTICAL at the outline and fell back inside it: a ridge whose crest lay along the piece's wall, tangent to it, so where the two meshes crossed wandered with the 2 cm
+                // skin triangles (the sawtooth join). Deeper inside it eases back down, hidden in the piece (the skin is under the foot there).
                 var bump: Float
-                if dd <= 0 { bump = kk * max(0, 1 + dd / 0.03) }
-                else { let q = kk - dd; bump = kk - (kk * kk - q * q).squareRoot() }
+                let kin = Self.collarIn
+                if !Self.collarCrossing {          // (the old quarter circle, for before / after captures and FootJoinLineTests' self-check)
+                    if dd <= 0 { bump = kk * max(0, 1 + dd / 0.03) } else { let q = kk - dd; bump = kk - (kk * kk - q * q).squareRoot() }
+                } else if dd <= -kin { bump = kk * max(0, 1 - (-kin - dd) / Self.collarInFade) }
+                else { let t = (kk - dd) / (kk + kin); bump = kk * t * t * (3 - 2 * t) }
                 bump *= collarEnabled ? beanBlend * (Self.collarAirFade ? collarFade : 1) : 0
                 joinDent[s] = max(joinDent[s], inward - bump)
                 let o = 6 * v

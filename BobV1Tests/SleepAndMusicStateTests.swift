@@ -19,6 +19,14 @@ final class SleepAndMusicStateTests: XCTestCase {
         XCTAssertEqual(HomeAmbience.slew(1, scene: .cafe, dt: 0.05), 1 - 0.05 / HomeAmbience.fadeSeconds, accuracy: 0.001)          // a fade, not a step
     }
 
+    @MainActor
+    func testOnlyShopAndStudioScreensPlayTheirOwnMusic() {
+        for t: TownScreen? in [nil, .town, .track, .friends, .volley] { XCTAssertEqual(GameScreen.townMusic(t), MusicScene.none, "\(String(describing: t))") }          // the menu and the plain lobbies: the home music carries on
+        XCTAssertEqual(GameScreen.townMusic(.shop), .shop)
+        XCTAssertEqual(GameScreen.townMusic(.studio), .studio)
+        XCTAssertEqual(GameScreen.townMusic(.condition), .studio)
+    }
+
     func testWatchdogRestartsSilentMusicThenRetriesSlowly() {
         var w = MusicWatchdog()
         var fires = 0

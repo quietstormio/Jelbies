@@ -303,6 +303,7 @@ struct GameScreen: View {
             setUpSelect(); model.care.touchPlay = model.touch
             DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep), and before the bedtime check
             model.care.launched()
+            Self.devAdoptNow(model.care)
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
             AudioHub.shared.setTownScene(currentMusicScene)
@@ -895,7 +896,6 @@ struct GameScreen: View {
         }
     }
 
-    /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop, the rest the town's.
     /// The music scene the screen in front really wants, read from the model (not from change events, which a rebuilt view can miss).
     private var currentMusicScene: MusicScene {
         if model.care.cafe.inScene { return CafeTuning.music }
@@ -903,12 +903,38 @@ struct GameScreen: View {
         if model.care.volley.inScene { return .volley }
         return GameScreen.townMusic(town)
     }
+    /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).
     static func townMusic(_ t: TownScreen?) -> MusicScene {
         switch t {
         case nil: return .none
         case .shop?: return .shop
         case .studio?, .condition?: return .studio
-        default: return .town
+        default: return .none
+        }
+    }
+    /// Done once per process (the rebuilt room runs `onAppear` again).
+    nonisolated(unsafe) private static var adoptNowDone = false
+    /// Development argument `-AdoptNow <name or id>` (gated like `-SetRoster`: `DevArgs.enabled`): about 4 s after the room appears, opens the Adoption Center, then 1 s later brings that Jelbie home through the very call the
+    /// Adoption Center makes (`StartFlow.bringHome`), so the room is rebuilt and the bought-Jelbie arrival runs. `-AdoptAwayMin <minutes>` first backdates the needs stamp, as if the player had
+    /// spent that long on the adoption screen (the stamp is what the new room measures its time away from: 5 minutes at night is the "already asleep" path). `-SetRoster` stops re-applying once he is bought.
+    static func devAdoptNow(_ care: GameCare) {
+        guard DevArgs.enabled, !adoptNowDone, let text = UserDefaults.standard.string(forKey: "AdoptNow"), let c = JellyRoster.characterID(named: text) else { return }
+        adoptNowDone = true
+        let awayMin = UserDefaults.standard.double(forKey: "AdoptAwayMin")
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(4))
+            let rareDay = UserDefaults.standard.integer(forKey: "RareDay") == 1          // `-RareDay 1`: he comes home in his rare colour, even next to a classic one of his species (pictures)
+            guard rareDay || !JellyRoster.savedIDs().contains(c), JellyRoster.savedIDs().count < JellyRoster.maxCount else { NSLog("[adoptnow] not adopted (already home or room full)"); return }
+            if awayMin > 0 {
+                care.leftActive(at: Date().addingTimeInterval(-awayMin * 60))
+                for j in care.jellies { j.needs.save(); j.grime.save() }
+            }
+            JellyRoster.setRosterSuspended = true
+            StartFlow.shared.openAdoption()          // like the real flow: the room is gone while the picker is up (the old room must not see the bought-Jelbie flag)
+            try? await Task.sleep(for: .seconds(1))
+            NSLog("[adoptnow] bringHome %d (%@) away=%.0f min", c, JellyRoster.baseNames[c], awayMin)
+            StartFlow.shared.bringHome(species: c, name: JellyRoster.baseNames[c], variant: rareDay ? JellyVariantBook.offer(species: c, dayKey: JellyVariantBook.dayKey()) : nil)
+            NSLog("[adoptnow] roster now %@ current %@", JellyRoster.savedIDs().description, JellyRoster.current.description)
         }
     }
     /// Capture aid: `-StoreOpen town|shop|item|bag|studio|condition|show` opens that screen at launch; `-StoreSeed 1` fills the bag and the wallet first.

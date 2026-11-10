@@ -342,6 +342,9 @@ extension BlobBrain {
                                                  scale: anticsEnabled ? { [unowned self] in self.varietyScale($0) } : nil, family: vFamily)
         if sleepEnabled, runMoveDemo == nil, kind != .wander, kind != .sleep, idleNight < 0.2, rand() < 0.012 { kind = .sleep }       // a daytime nap now and then
         if varietyPeerJustStarted(kind) { kind = .wander }          // (never two of the same special within 10 s)
+        if kind == .wander, RoamVoiceBoost.enabled, !voiceMuted, AudioHub.shared.atHome, let c = JellyVoiceSet.contextVoice(forIdle: .wander, mood: idleMood) {          // (2026-11-09: a walking Jelbie hums along: lala / pfft, home only)
+            AudioHub.shared.contextVoice(jelly: steerID, c.voice, chance: RoamVoiceBoost.wanderChance, x: px)
+        }
         if kind == .wander { idleState.cooldown = rand(IdleTuning.wanderPickWait.lowerBound, IdleTuning.wanderPickWait.upperBound) * idleLively * vJit(); return false }          // (was 5...9)
         if kind == .look { socialPrepareLook(sim) }          // sometimes at a nearby Jelly, who glances back
         if anticsEnabled, Self.fastKinds.contains(kind), fastOthers() >= 2 { idleState.cooldown = rand(1.2, 2.5); return false }          // at most two Jellies in fast moves at once

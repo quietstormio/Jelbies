@@ -736,7 +736,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             AudioHub.shared.onAmbient = { [weak self] i in guard let self, self.actors.indices.contains(i) else { return }; self.actors[i].brain?.ambientPulse() }
         }
         AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: raceScene != .none ? raceScene : model.care.show.musicScene,
-                                  home: home, ambient: ambient, night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0),
+                                  home: home, ambient: ambient, walking: actors.map(\.isWalking), night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0),
                                   guest: model.care.guestBook.actor.flatMap { a in a.brain.map { (slot: a.id, napping: $0.isNapping, x: $0.px) } })
     }
 
@@ -901,7 +901,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         c.preferredFPS = view?.preferredFramesPerSecond ?? 0
         c.maxFPS = view?.window?.screen.maximumFramesPerSecond ?? 0
         c.renderScale = Double(view?.contentScaleFactor ?? 0)
-        if Self.metalFXFlag { c.renderScale = fxScale }
+        if Self.metalFXFlag && !model.cutout { c.renderScale = fxScale }
         c.ctx = [renderer?.takePerfContext() ?? "", brainTop(), FootLog.on ? FootLog.shared.summary : ""].filter { !$0.isEmpty }.joined(separator: " ")
         c.tier = String(format: "adaptive %@ level %d, MetalFX %@, fastMatte %d, roomCache %@, idleRest %@%@", Self.adaptiveEnabled ? "on" : "off", scaler?.level ?? 0,
                         Self.metalFXFlag ? "on" : "off", Self.gfxOptFlags.fastMatteTier, Self.roomCacheFlag ? "on" : "off", idleRest.resting ? "RESTING" : "awake", lastAppliedFPS == 0 ? "" : " (gov \(lastAppliedFPS) Hz)")
@@ -1272,9 +1272,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         if game, !model.preview { updateTuck(renderer, dt: 1.0 / 60) }
 
         // MetalFX: the drawable stays native; the scene renders smaller and is upscaled. Otherwise render size == drawable size.
+        // A cut-out stage (Jelly Spring pedestal, opening story, first day home) is composited over SwiftUI with alpha, and MetalFX spatial has no alpha: the renderer
+        // skips the upscale there and its tone map copies pixel for pixel, so a smaller render landed in the view's top-left corner at 73% / 50% size (phone only:
+        // the simulator never scales). A cut-out therefore always renders at the drawable's own size.
+        let fx = Self.metalFXFlag && !model.cutout
         var rw = Int(view.drawableSize.width), rh = Int(view.drawableSize.height)
-        renderer.metalFXEnabled = Self.metalFXFlag
-        if Self.metalFXFlag {
+        renderer.metalFXEnabled = fx
+        if fx {
             let native = Double(stage.window?.screen.scale ?? stage.contentScaleFactor)
             if fxScale == 0 { fxScale = native }          // (the scaler's top rung; it steps down from there)
             let k = min(1, fxScale / max(native, 1))
@@ -1449,6 +1453,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         if hp != nil, let b = a.brain {
             let fs = FeatureSet(); fs.body = WearBody.shared; fs.ignoreHide = true
             let feature: JellyFeature = hp?.borrowed == true ? .none : (a.profile?.feature ?? JellyRoster.feature(slot: id))
+            // the player's own adopted Amber Pip keeps his russet spikes in a lobby picture; a rival / Park visitor drawn on this body never gets them
+            fs.setSpikeTint(id, feature == .spines && hp?.colour == nil && hp?.rivalTint == nil ? JellyVariantBook.spikeTint(for: JellyVariants.active(a.profile?.character ?? JellyRoster.character(id))) : nil)
             var worn: [String] = []
             for sl in WearSlot.allCases where sl != .feet { if let l = w.shown(id, sl), !l.art.isEmpty { worn.append(l.art) } }
             let drive = TeddyDrive.portrait(fs: fs, id: id, brain: b, sim: a.sim, feature: feature, worn: worn)
