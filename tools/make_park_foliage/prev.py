@@ -23,7 +23,7 @@ for iid in ids:
     sh = sc.display.shading; sh.light = "STUDIO"; sh.color_type = "VERTEX"; sh.show_shadows = False; sh.show_cavity = False
     sc.view_settings.view_transform = "Standard"
     sc.render.film_transparent = False
-    sc.render.resolution_x = 560; sc.render.resolution_y = 560
+    R = int(os.environ.get("PREV_RES", "560")); sc.render.resolution_x = R; sc.render.resolution_y = R
     w = bpy.data.worlds.new("w"); w.color = (0.62, 0.78, 0.95); sc.world = w
     sh.background_type = "WORLD"
     hh = max(v[1] for v in V)

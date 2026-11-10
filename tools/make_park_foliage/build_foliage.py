@@ -1,4 +1,4 @@
-"""Build the Park's foliage in headless Blender and export OBJ+JSON (2026-11-09 redesign: structured trees, not cotton-ball canopies).
+"""Build the Park's foliage in headless Blender and export OBJ+JSON (round 2: leaf-card shells over dark cores).
 
   /Applications/Blender.app/Contents/MacOS/Blender -b -P build_foliage.py -- [ids...]
   python3 convert.py <export dir> BobV1/Room/Resources        # -> park_<id>.bin (same .bin format as decor_<id>.bin)
@@ -22,52 +22,48 @@ def clamp01(x): return max(0.0, min(1.0, x))
 def rot_about(v, axis, ang):
     return Matrix.Rotation(ang, 3, axis) @ v
 
+
 # ---------------------------------------------------------------- palettes (sRGB)
-PAL_OAK = dict(shade=(0.09, 0.23, 0.10), mid=(0.21, 0.42, 0.14), sun=(0.46, 0.62, 0.20))
-PAL_BEECH = dict(shade=(0.10, 0.25, 0.11), mid=(0.24, 0.45, 0.15), sun=(0.50, 0.66, 0.21))
-PAL_BIRCH = dict(shade=(0.16, 0.33, 0.12), mid=(0.33, 0.52, 0.17), sun=(0.60, 0.72, 0.27))
-PAL_SPRUCE = dict(shade=(0.05, 0.16, 0.12), mid=(0.12, 0.31, 0.19), sun=(0.28, 0.48, 0.24))
-PAL_FIR = dict(shade=(0.06, 0.19, 0.12), mid=(0.15, 0.35, 0.18), sun=(0.34, 0.54, 0.24))
-PAL_BUSH = dict(shade=(0.10, 0.25, 0.11), mid=(0.23, 0.43, 0.16), sun=(0.44, 0.62, 0.21))
+CORE = (0.09, 0.20, 0.10)
+PAL_OAK = dict(shade=(0.10, 0.25, 0.11), mid=(0.22, 0.43, 0.15), sun=(0.42, 0.62, 0.20), hi=(0.55, 0.70, 0.26))
+PAL_BEECH = dict(shade=(0.11, 0.26, 0.12), mid=(0.24, 0.45, 0.16), sun=(0.44, 0.63, 0.20), hi=(0.56, 0.71, 0.26))
+PAL_BIRCH = dict(shade=(0.17, 0.33, 0.12), mid=(0.33, 0.52, 0.17), sun=(0.58, 0.72, 0.26), hi=(0.70, 0.80, 0.34))
+PAL_SPRUCE = dict(shade=(0.05, 0.15, 0.11), mid=(0.12, 0.30, 0.18), sun=(0.27, 0.47, 0.23), hi=(0.36, 0.55, 0.28))
+PAL_FIR = dict(shade=(0.06, 0.18, 0.12), mid=(0.15, 0.34, 0.18), sun=(0.33, 0.53, 0.23), hi=(0.42, 0.60, 0.28))
+PAL_BUSH = dict(shade=(0.10, 0.25, 0.11), mid=(0.23, 0.43, 0.16), sun=(0.42, 0.62, 0.21), hi=(0.55, 0.70, 0.27))
 YG = (0.42, 0.56, 0.13); BG = (0.12, 0.36, 0.26)
 
 def pal_mix(pal, t):
-    return mix(pal['shade'], pal['mid'], t * 2) if t < 0.5 else mix(pal['mid'], pal['sun'], (t - 0.5) * 2)
+    if t < 0.5: return mix(pal['shade'], pal['mid'], t * 2)
+    if t < 0.88: return mix(pal['mid'], pal['sun'], (t - 0.5) / 0.38)
+    return mix(pal['sun'], pal['hi'], (t - 0.88) / 0.12)
 
-def leaf_color(pal, clumps, me, cc, cr, y0, y1, hue=0.0, seed=0.0, sunk=0.0):
-    """Vertex colour fn for a leaf clump: sun term, AO from the other clumps, dark interior, hue drift, fine speckle."""
-    def fn(p, n):
-        s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
-        h = clamp01((p.y - y0) / max(0.01, y1 - y0))
-        q = p + n * 0.10
-        occ = 0.0
-        for i, (c, r) in enumerate(clumps):
-            if i == me: continue
-            d = (q - c).length
-            if d < r: occ += (1 - d / r)
-        occ = min(1.0, occ)
-        outer = clamp01((p - cc).length / cr)
-        t = clamp01(0.04 + 0.64 * s01 ** 1.4 + 0.30 * h - 0.45 * occ * (1 - 0.4 * s01) - sunk)
-        t *= 0.52 + 0.48 * outer
-        col = pal_mix(pal, t)
-        if hue > 0: col = mix(col, YG, 0.28 * hue * (0.4 + t))
-        elif hue < 0: col = mix(col, BG, 0.28 * -hue * (0.4 + t))
-        sp = 1 + 0.08 * nz(p, 9.0, seed)
-        return tuple(min(1.0, c * sp) for c in col)
-    return fn
+def light_t(p, n, masses, me, cc, cr, y0, y1, sunk=0.0):
+    """0..1 light for a point: sun term on the (spherical) normal, height, AO from the other masses and from the crown interior."""
+    s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
+    h = clamp01((p.y - y0) / max(0.01, y1 - y0))
+    q = p + n * 0.10
+    occ = 0.0
+    for i, (c, r) in enumerate(masses):
+        if i == me: continue
+        d = (q - c).length
+        if d < r: occ += (1 - d / r)
+    occ = min(1.0, occ)
+    outer = clamp01((p - cc).length / cr)
+    t = clamp01(0.04 + 0.70 * s01 ** 1.5 + 0.28 * h - 0.45 * occ * (1 - 0.4 * s01) - sunk)
+    return t * (0.50 + 0.50 * outer)
 
 # ---------------------------------------------------------------- shapes
 def clump_bm(r, flat, sub, bump, seed, tall=1.0):
-    """A lobed leaf mass: displaced icosphere, large lobes plus leaf-scale bumps (smooth-shaded)."""
+    """A lobed core / mass: displaced icosphere (smooth-shaded)."""
     bm = sph_bm(r, r * flat * tall, r, sub)
     for v in bm.verts:
         d = v.co.normalized()
-        k = 1 + bump * (nz(d * 2.4, 1.0, seed) + 0.8 * nz(d * 5.2, 1.0, seed + 5) + 0.5 * nz(d * 10.0, 1.0, seed + 9))
-        v.co = v.co * k
+        v.co = v.co * (1 + bump * (nz(d * 2.4, 1.0, seed) + 0.8 * nz(d * 5.2, 1.0, seed + 5)))
     return bm
 
 def bough_bm(L, W, droop, thick=0.45, sides=6, segs=4, jag=0.0):
-    """One tapered, down-curved spruce bough along +x (closed, pointed tip)."""
+    """One tapered, down-curved spruce bough along +x (closed, pointed tip): the dark core of a spray."""
     bm = bmesh.new(); rings = []
     for k in range(segs + 1):
         t = k / segs
@@ -90,7 +86,7 @@ def bough_bm(L, W, droop, thick=0.45, sides=6, segs=4, jag=0.0):
     return bm
 
 # ---------------------------------------------------------------- bark
-BARK_SHADE = (0.20, 0.16, 0.13); BARK_SUN = (0.46, 0.38, 0.30)
+BARK_SHADE = (0.17, 0.13, 0.11); BARK_SUN = (0.46, 0.38, 0.30)
 def bark_fn(pale=False, seed=0.0):
     def fn(p, n):
         s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
@@ -100,24 +96,90 @@ def bark_fn(pale=False, seed=0.0):
             if m > 0.18 and p.y > 0.2: c = mix(c, (0.12, 0.10, 0.09), clamp01((m - 0.18) * 5))
             return c
         c = mix(BARK_SHADE, BARK_SUN, s01 ** 1.2)
-        k = 1 + 0.10 * nz(Vector((p.x * 7, p.y * 2.2, p.z * 7)), 1.0, seed)
+        streak = 1 + 0.16 * nz(Vector((p.x * 22, p.y * 1.4, p.z * 22)), 1.0, seed)          # vertical value streaks
+        fork = 1 - 0.30 * clamp01((p.y - 0.5) / 1.5) ** 2 * 0.0
         low = clamp01(1 - p.y / 1.2) * 0.18
-        return tuple(max(0, min(1, x * k * (1 - low))) for x in c)
+        return tuple(max(0, min(1, x * streak * fork * (1 - low))) for x in c)
     return fn
 
-# ---------------------------------------------------------------- tufts + crowns
-def tufts_bm(items):
-    """items: (pos, dir, L, W). One closed flattened bipyramid per tuft (a little leaf cluster), all in one bmesh."""
-    bm = bmesh.new()
-    for pos, d, L, W in items:
-        q = Vector((1, 0, 0)).rotation_difference(d.normalized()).to_matrix()
-        loc = [(0, 0, 0), (L, 0, 0), (L * 0.4, W, 0), (L * 0.4, -W, 0), (L * 0.4, 0, W * 0.45), (L * 0.4, 0, -W * 0.45)]
-        v = [bm.verts.new(pos + q @ Vector(p)) for p in loc]
-        A, B, C, D, E_, F = v
-        for f in ((A, C, E_), (A, E_, D), (A, D, F), (A, F, C), (B, E_, C), (B, D, E_), (B, F, D), (B, C, F)):
-            bm.faces.new(f)
-    return bm
+# ---------------------------------------------------------------- leaf cards
+def commit_raw(P, N, C, F):
+    import dk as _dk; _dk.CUR['parts'].append(dict(P=P, N=N, C=C, F=F))
 
+class Leaves:
+    """Accumulates single-sided leaf cards (a pointed oval folded along its midrib: 2 triangles) with spherical-blend normals and baked colours."""
+    def __init__(self): self.P = []; self.N = []; self.C = []; self.F = []
+    def add(self, stem, axis, width_dir, L, W, n_shade, col, fold=0.12):
+        n_face = width_dir.cross(axis).normalized()
+        if n_face.dot(n_shade) < 0: n_face = -n_face
+        mid = stem + axis * (L * 0.46)
+        left = mid + width_dir * (W * 0.5) + n_face * (L * fold)
+        right = mid - width_dir * (W * 0.5) + n_face * (L * fold)
+        tip = stem + axis * L + n_face * (L * 0.02)
+        nrm = (n_shade * 0.7 + n_face * 0.3).normalized()
+        base = len(self.P)
+        dark = tuple(c * 0.86 for c in col); lite = tuple(min(1.0, c * 1.06) for c in col)
+        for p, c in ((stem, dark), (left, col), (right, col), (tip, lite)):
+            self.P.append(tuple(p)); self.N.append(tuple(nrm)); self.C.append(c)
+        for tri in ((0, 1, 3), (0, 3, 2)):
+            a, b, c2 = [self.P[base + i] for i in tri]
+            nn = (Vector(b) - Vector(a)).cross(Vector(c2) - Vector(a))
+            if nn.dot(n_face) >= 0: self.F.append((base + tri[0], base + tri[1], base + tri[2]))
+            else: self.F.append((base + tri[0], base + tri[2], base + tri[1]))
+    def flush(self):
+        if self.P: commit_raw(self.P, self.N, self.C, self.F)
+        self.__init__()
+
+def rand_perp(rng, n):
+    a = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, 1)))
+    a = a - n * a.dot(n)
+    return a.normalized() if a.length > 1e-4 else Vector((1, 0, 0))
+
+def shell_leaves(lv, rng, masses, pal, cc, cr, y0, y1, Lm, Wr, dens, down=0.75, tilt=0.30, cover_top=0.97, cover_bot=0.65, sunk=0.0, hang=0.0):
+    """Leaf cards over every mass surface: tilted outward and downward, stem end toward the mass, sticking past the surface; coverage heavier on top."""
+    cols = [(rng.uniform(-1, 1)) for _ in masses]
+    for i, m in enumerate(masses):
+        c, r, fl, tl = m
+        ry = r * fl * tl
+        area = 4 * math.pi * ((r * r * r * ry) ** (2 / 3))
+        n_try = int(area * dens)
+        hue = cols[i]
+        for _ in range(n_try):
+            d = Vector((rng.gauss(0, 1), rng.gauss(0, 1), rng.gauss(0, 1))).normalized()
+            n_out = Vector((d.x / r, d.y / ry, d.z / r)).normalized()
+            keep = cover_bot + (cover_top - cover_bot) * clamp01(n_out.y * 0.5 + 0.5)
+            if rng.random() > keep: continue
+            lump = 1 + 0.10 * nz(d * 2.6, 1.0, i * 1.7)
+            p = c + Vector((d.x * r, d.y * ry, d.z * r)) * lump
+            if any((p - c2).length < r2 * 0.80 for j, (c2, r2, f2, t2) in enumerate(masses) if j != i): continue
+            down_v = Vector((0, -1, 0)); tg = down_v - n_out * down_v.dot(n_out)
+            tg = tg.normalized() if tg.length > 0.15 else rand_perp(rng, n_out)
+            axis = (tg * (down + hang * (1 - n_out.y)) + n_out * tilt + rand_perp(rng, n_out) * 0.35).normalized()
+            wd = n_out.cross(axis)
+            if wd.length < 1e-3: wd = rand_perp(rng, axis)
+            wd = wd.normalized()
+            roll = rng.uniform(-0.6, 0.6)
+            wd = (wd * math.cos(roll) + n_out * math.sin(roll)).normalized()
+            L = Lm * rng.uniform(0.8, 1.25)
+            stem = p - n_out * (L * 0.18)
+            t = light_t(p, n_out, [(m2[0], m2[1]) for m2 in masses], i, cc, cr, y0, y1, sunk)
+            t = clamp01(t + rng.uniform(-0.07, 0.07))
+            if t > 0.8 and rng.random() < 0.7: t = 0.8
+            col = pal_mix(pal, t)
+            if hue > 0: col = mix(col, YG, 0.22 * hue * (0.4 + t))
+            else: col = mix(col, BG, 0.22 * -hue * (0.4 + t))
+            v = 1 + rng.uniform(-0.06, 0.06)
+            col = tuple(min(1.0, x * v) for x in col)
+            lv.add(stem, axis, wd, L, L * Wr, n_out, col)
+
+def core_masses(masses, cc, cr, y0, y1, pal, seed, sub=2, frac=0.68, bump=0.25):
+    for i, (c, r, fl, tl) in enumerate(masses):
+        def fn(p, n, c=c, r=r):
+            s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
+            return tuple(min(1.0, x * (0.8 + 0.5 * s01)) for x in CORE)
+        commit(clump_bm(r * frac, fl, sub, bump, seed + i * 1.3, tl), fn, sharp=100, xf=T(tuple(c), ry=i * 1.3))
+
+# ---------------------------------------------------------------- crowns + limbs
 def crown_dome(rng, Rh, yb, Hc, nbig, rbig, tiers, droop):
     out = [(Vector((0, yb + Hc * 0.93, 0)), rbig * 1.05)]
     for i in range(nbig):
@@ -141,7 +203,6 @@ def crown_oval(rng, Rh, yb, Hc, nbig, rbig, droop=0.0, shell=0.0):
     return out
 
 def limbs(rng, top, Rh, yb, Hc, nm, r0, bfn, sides, lod, sub_n=(2, 3), up=0.0):
-    """Heavy main limbs from the fork into the crown, each forking into sub-limbs and twigs; the crown clumps sit on top, limbs show in the gaps below."""
     tips = []
     az0 = rng.uniform(0, 6.283)
     sd = max(4, sides - (2 if lod else 0))
@@ -151,16 +212,13 @@ def limbs(rng, top, Rh, yb, Hc, nm, r0, bfn, sides, lod, sub_n=(2, 3), up=0.0):
         M = Vector((dx * Rh * 0.42, yb + Hc * (0.30 + up) + rng.uniform(-0.1, 0.1), dz * Rh * 0.42))
         mid = (top + M) * 0.5 + Vector((0, 0.05, 0)) + Vector((dz, 0, -dx)) * rng.uniform(-0.12, 0.12)
         add_tube([top, mid, M], 0.05, bfn, sides=sd + 1, radfn=lambda t: r0 * 0.62 * (1 - 0.35 * t))
+        tips.append(M)
         for j in range(rng.choice(sub_n)):
             az2 = az + rng.uniform(-0.8, 0.8)
             E = Vector((math.cos(az2) * Rh * rng.uniform(0.70, 0.92), yb + Hc * rng.uniform(0.28, 0.62 + up), math.sin(az2) * Rh * rng.uniform(0.70, 0.92)))
             mid2 = (M + E) * 0.5 + Vector((0, 0.08, 0))
             add_tube([M, mid2, E], 0.04, bfn, sides=max(4, sd - 1), radfn=lambda t: r0 * 0.34 * (1 - 0.55 * t))
             tips.append(E)
-            if not lod:
-                for k in range(2):
-                    T2 = E + Vector((rng.uniform(-0.3, 0.3), rng.uniform(0.15, 0.45), rng.uniform(-0.3, 0.3)))
-                    add_tube([E, T2], 0.02, bfn, sides=4, radfn=lambda t: r0 * 0.14 * (1 - 0.6 * t))
     return tips
 
 def deciduous(iid, seed, spec, pal, lod=0, pale=False):
@@ -182,159 +240,116 @@ def deciduous(iid, seed, spec, pal, lod=0, pale=False):
         add_tube(pts, 0.1, bfn, sides=sides, radfn=lambda t: r0 * (1 + spec['flare'] * max(0, 1 - t * 3.2) ** 2) * (1 - 0.34 * t), cap=True)
         top = pts[-1]
     tips = limbs(rng, top, Rh, yb, Hc, spec['nm'], r0, bfn, sides, lod, up=spec.get('up', 0.0))
-    nb, ns = spec['nbig'], spec['nsmall']
-    if lod: nb, ns = max(8, int(nb * 0.62)), int(ns * 0.5)
-    if kind == 'dome': cl = crown_dome(rng, Rh, yb, Hc, nb, spec['rbig'], spec['tiers'], spec['droop'])
-    else: cl = crown_oval(rng, Rh, yb, Hc, nb, spec['rbig'], spec.get('droop', 0.0), spec.get('shell', 0.0))
-    sm = []
-    for i in range(ns):
-        c, r = cl[rng.randrange(len(cl))]
-        d = Vector((rng.uniform(-1, 1), rng.uniform(-0.25, 1), rng.uniform(-1, 1))).normalized()
-        sm.append((c + d * r * 0.85, r * rng.uniform(0.35, 0.55)))
+    nb = spec['nbig'] if not lod else max(10, int(spec['nbig'] * 0.55))
+    if kind == 'dome': cl = crown_dome(rng, Rh, yb, Hc, nb, spec['rbig'] * (1.2 if lod else 1), spec['tiers'], spec['droop'])
+    else: cl = crown_oval(rng, Rh, yb, Hc, nb, spec['rbig'] * (1.2 if lod else 1), spec.get('droop', 0.0), spec.get('shell', 0.0))
     flat = spec['flat']; tall = spec.get('tall', 1.0)
-    allc = cl + sm
+    masses = [(c, r, flat * rng.uniform(0.9, 1.1), tall) for c, r in cl]
+    # thin twigs from the nearest limb end into the masses (seen in the gaps)
+    if not lod:
+        for i, m in enumerate(masses):
+            if i % 2: continue
+            e = min(tips, key=lambda t: (t - m[0]).length)
+            if (e - m[0]).length < 1.0:
+                add_tube([e, (e + m[0]) * 0.5 + Vector((0, 0.05, 0)), m[0]], 0.02, bfn, sides=4, radfn=lambda t: r0 * 0.13 * (1 - 0.6 * t))
     ctr = Vector((0, yb + Hc * 0.5, 0)); cr = max(Rh, Hc * 0.5) * 1.15
     y0 = yb; y1 = yb + Hc
     begin("leaf")
-    for i, (c, r) in enumerate(allc):
-        big = i < len(cl)
-        sub = 3 if (big and i < (9 if lod == 0 else 2)) else (2 if (big or lod == 0) else 1)
-        col = leaf_color(pal, allc, i, ctr, cr, y0, y1, hue=rng.uniform(-1, 1), seed=i * 3.1)
-        if lod: r *= 1.22
-        commit(clump_bm(r, flat, sub, spec.get('bump', 0.2), seed + i * 1.7, tall), col, sharp=100, xf=T(tuple(c), ry=rng.uniform(0, 6.28)))
-    nt = spec['ntuft'] if lod == 0 else spec['ntuft'] // 3
-    items = []
-    tries = 0
-    while len(items) < nt and tries < nt * 6:
-        tries += 1
-        c, r = allc[rng.randrange(len(allc))]
-        d = Vector((rng.gauss(0, 1), rng.gauss(0, 1) * 0.8, rng.gauss(0, 1))).normalized()
-        p = c + Vector((d.x * r, d.y * r * flat * tall, d.z * r)) * 0.96
-        if sum(1 for (c2, r2) in allc if (p - c2).length < r2 * 0.92) > 0: continue
-        out = d + Vector((0, -0.35 - 0.3 * rng.random(), 0))
-        L = spec['tuft'] * rng.uniform(0.8, 1.4) * (1.7 if lod else 1.0)
-        items.append((p, out, L, L * 0.42))
-    tcol = leaf_color(pal, allc, -1, ctr, cr, y0, y1, hue=0.0, seed=77)
-    def tfn(p, n):
-        h = nz(p, 2.6, 5.0)
-        c = tcol(p, n)
-        c = mix(c, YG if h > 0 else BG, 0.22 * abs(h))
-        return tuple(min(1.0, x * 1.12) for x in c)
-    if items: commit(tufts_bm(items), tfn, sharp=100)
-    return dict(kind="tree", canopy_radius=Rh, height=y1)
+    core_masses(masses, ctr, cr, y0, y1, pal, seed, sub=2 if not lod else 1)
+    lv = Leaves()
+    dens = spec['dens'] * (0.45 if lod else 1.0)
+    Lm = spec['leaf'] * (1.45 if lod else 1.0)
+    shell_leaves(lv, rng, masses, pal, ctr, cr, y0, y1, Lm, spec['wr'], dens, down=spec.get('down', 0.75), hang=spec.get('hang', 0.0))
+    nleaf = len(lv.P) // 4
+    lv.flush()
+    return dict(kind="tree", canopy_radius=Rh, height=y1, leaves=nleaf)
 
-OAK = dict(kind='dome', trunk=0.95, r0=0.20, flare=0.7, Rh=1.55, Hc=1.85, yb=1.2, nm=5, nbig=24, rbig=0.46, nsmall=40, flat=0.66, bump=0.30,
-           tiers=[0.42, 0.62, 0.80, 0.97], droop=0.40, ntuft=420, tuft=0.17)
-BEECH = dict(kind='oval', trunk=1.2, r0=0.14, flare=0.6, Rh=1.1, Hc=2.7, yb=1.15, nm=4, nbig=26, rbig=0.40, nsmall=40, flat=0.84, tall=1.1, bump=0.28,
-             droop=0.15, ntuft=420, tuft=0.16, up=0.1, shell=0.25)
-BIRCH = dict(kind='oval', trunk=2.2, r0=0.085, flare=0.4, Rh=1.15, Hc=2.5, yb=1.45, nm=4, nbig=64, rbig=0.17, nsmall=30, flat=0.9, tall=2.3, bump=0.30,
-             droop=1.0, ntuft=380, tuft=0.14, stems=3, up=0.1, shell=0.45)
+OAK = dict(kind='dome', trunk=0.95, r0=0.19, flare=0.35, Rh=1.55, Hc=1.85, yb=1.2, nm=5, nbig=24, rbig=0.46, flat=0.66, tiers=[0.42, 0.62, 0.80, 0.97], droop=0.12,
+           leaf=0.19, wr=0.74, dens=300)
+BEECH = dict(kind='oval', trunk=1.2, r0=0.14, flare=0.6, Rh=1.1, Hc=2.7, yb=1.15, nm=4, nbig=36, rbig=0.34, flat=0.84, tall=1.1, up=0.1, shell=0.25, droop=0.15,
+             leaf=0.15, wr=0.60, dens=430)
+BIRCH = dict(kind='oval', trunk=2.2, r0=0.085, flare=0.4, Rh=1.15, Hc=2.5, yb=1.45, nm=4, nbig=60, rbig=0.19, flat=0.9, tall=2.2, up=0.1, shell=0.45, droop=1.0,
+             leaf=0.12, wr=0.55, dens=520, stems=3, hang=0.9, down=1.0)
 
 # ---------------------------------------------------------------- conifers
-def conifer(iid, seed, tiers=9, H=3.8, R=1.15, pal=PAL_SPRUCE, lod=0, trunk_h=0.8):
+def conifer(iid, seed, tiers=10, H=3.9, R=1.2, pal=PAL_SPRUCE, lod=0, trunk_h=0.7):
     rng = random.Random(seed); lib.reset(); reset()
     begin("bark")
     bfn = bark_fn(False, seed)
     add_tube([Vector((0, 0, 0)), Vector((0, 0.5, 0)), Vector((0, 1.4, 0)), Vector((0, H * 0.8, 0)), Vector((0, H, 0))], 0.1, bfn, sides=6 if lod else 8,
              radfn=lambda t: 0.15 * (1 + 0.9 * max(0, 1 - t * 8) ** 2) * (1 - 0.88 * t))
     begin("leaf")
-    ytop = H
+    lv = Leaves()
     ring = []
-    tl = []
     for t in range(tiers):
         f = t / (tiers - 1)
         y = trunk_h + (H * 0.93 - trunk_h) * f
-        rr = R * (1 - f) ** 0.8 * 1.0 + 0.10
-        nb = max(5, int(round((13 - 4 * f) * (0.62 if lod else 1.0))))
+        rr = R * (1 - f) ** 0.8 + 0.10
+        nb = max(6, int(round((13 - 4 * f) * (0.62 if lod else 1.0))))
         ring.append((y, rr, nb))
-    def cfn(y, rr):
-        def fn(p, n):
-            s01 = clamp01(n.dot(SUN) * 0.5 + 0.5)
-            h = clamp01((p.y - trunk_h) / (H - trunk_h))
-            outer = clamp01(math.hypot(p.x, p.z) / max(0.1, rr))
-            under = clamp01(1 - (p.y - (y - 0.5)) * 0.0)
-            t = clamp01(0.04 + 0.60 * s01 ** 1.5 + 0.22 * h) * (0.42 + 0.58 * outer ** 0.8)
-            col = pal_mix(pal, t)
-            col = mix(col, YG, 0.10 * t) if t > 0.5 else col
-            return tuple(min(1, c * (1 + 0.07 * nz(p, 8.0, y))) for c in col)
-        return fn
+    cc = Vector((0, H * 0.5, 0)); cr = R * 1.1
     for ti, (y, rr, nb) in enumerate(ring):
         ph = rng.uniform(0, 6.28)
         for i in range(nb):
             a = ph + i / nb * 6.283 + rng.uniform(-0.12, 0.12)
             L = rr * rng.uniform(0.82, 1.12)
-            W = max(0.12, rr * 0.50) * rng.uniform(0.9, 1.2)
+            W = max(0.10, rr * 0.40) * rng.uniform(0.9, 1.2)
             dr = L * rng.uniform(0.28, 0.42)
-            bm = bough_bm(L, W, dr, thick=0.60, sides=5 if lod else 6, segs=3 if lod else 4, jag=0.10)
-            # roll slightly so the fan's top planes face up and out
             xm = T((0, y + rng.uniform(-0.04, 0.04), 0), ry=-a, rz=rng.uniform(0.05, 0.22))
-            commit(bm, cfn(y, rr), sharp=100, xf=xm)
-            for kk in range(2 if lod else 4):
-                t = rng.uniform(0.35, 0.95); sd = rng.choice((-1, 1))
-                pw = xm @ Vector((L * t, -dr * t * t + 0.01, sd * W * 0.55 * (1 - t) ** 0.5))
-                dw = xm.to_3x3() @ Vector((0.7, -0.45, sd * 0.9))
-                tl.append((pw, dw, 0.13 * (1.6 if lod else 1.0) * rng.uniform(0.8, 1.3), 0.05 * (1.6 if lod else 1.0)))
-            if lod == 0 and rr > 0.55 and i % 2 == 0:
-                # shorter, higher inner boughs fill the middle and give the tier thickness
-                bm2 = bough_bm(L * 0.62, W * 0.9, dr * 0.5, thick=0.5, sides=5, segs=3, jag=0.06)
-                commit(bm2, cfn(y + 0.14, rr), sharp=100, xf=T((0, y + 0.13, 0), ry=-(a + 0.5 / nb * 6.283), rz=rng.uniform(0.12, 0.3)))
-    commit(tufts_bm(tl), cfn(H * 0.5, R), sharp=100)
-    # a pointed leader
+            bm = bough_bm(L, W * 0.62, dr, thick=0.55, sides=5, segs=3 if lod else 4, jag=0.0)
+            commit(bm, lambda p, n: CORE, sharp=100, xf=xm)
+            R3 = xm.to_3x3()
+            ncard = (10 if lod else 26)
+            for kk in range(ncard):
+                t = rng.uniform(0.08, 0.98); sd = rng.uniform(-1, 1)
+                loc = Vector((L * t, -dr * t * t + 0.02, sd * W * 0.55 * (1 - t) ** 0.5))
+                pw = xm @ loc
+                nloc = Vector((0.0, 0.55, sd * 0.6)).normalized()
+                n_out = (R3 @ nloc).normalized()
+                axis = (R3 @ Vector((0.75, -0.45, sd * 0.55 + rng.uniform(-0.3, 0.3)))).normalized()
+                wd = n_out.cross(axis)
+                if wd.length < 1e-3: wd = rand_perp(rng, axis)
+                wd = wd.normalized()
+                Lc = (0.24 if not lod else 0.34) * rng.uniform(0.8, 1.25)
+                tt = light_t(pw, n_out, [], -1, cc, cr, trunk_h, H, 0.0) * (0.55 + 0.45 * clamp01(t * 1.3))
+                tt = clamp01(tt + rng.uniform(-0.07, 0.07))
+                col = pal_mix(pal, tt)
+                col = tuple(min(1.0, x * (1 + rng.uniform(-0.06, 0.06))) for x in col)
+                lv.add(pw - axis * Lc * 0.1, axis, wd, Lc, Lc * 0.24, n_out, col, fold=0.08)
+    nleaf = len(lv.P) // 4
+    lv.flush()
     lead = lathe_bm([(0, ring[-1][0] - 0.1), (0.13, ring[-1][0] - 0.02), (0.09, ring[-1][0] + 0.3), (0.0, H + 0.12)], 6)
-    commit(lead, cfn(H, 0.2), sharp=60)
-    return dict(kind="conifer", canopy_radius=R, height=H + 0.12)
+    commit(lead, lambda p, n: CORE, sharp=60)
+    return dict(kind="conifer", canopy_radius=R, height=H + 0.12, leaves=nleaf)
 
 # ---------------------------------------------------------------- shrubs
 def bush(iid, seed, R=1.0, nbl=14, hedge=False, lod=0):
     rng = random.Random(seed); lib.reset(); reset()
-    cl = []
+    masses = []
     if hedge:
-        cl.append((Vector((0, 0.27 * R, 0)), 1.0))
+        for i in range(7): masses.append((Vector(((i - 3) * 0.30, 0.27, 0)), 0.30, 0.9, 1.0))
     else:
-        cl.append((Vector((0, 0.42 * R, 0)), 0.40 * R))
-        for i in range(11):
+        masses.append((Vector((0, 0.42 * R, 0)), 0.42 * R, 0.85, 1.0))
+        for i in range(8):
             a = rng.uniform(0, 6.28); d = R * rng.uniform(0.25, 0.80)
             hh = R * (0.20 + 0.45 * (1 - d / R))
-            cl.append((Vector((math.cos(a) * d * 1.1, hh * rng.uniform(0.7, 1.1), math.sin(a) * d * 0.85)), R * rng.uniform(0.20, 0.30)))
-    ctr = Vector((0, 0.4 * R, 0))
+            masses.append((Vector((math.cos(a) * d * 1.1, hh * rng.uniform(0.7, 1.1), math.sin(a) * d * 0.85)), R * rng.uniform(0.24, 0.34), 0.85, 1.0))
+    ctr = Vector((0, 0.4 * R, 0)); cr = R * 1.2
     begin("bark")
     for k in range(3):
         a = rng.uniform(0, 6.28)
         add_tube([Vector((math.cos(a) * 0.08, 0, math.sin(a) * 0.08)), Vector((math.cos(a) * 0.14, 0.2 * R, math.sin(a) * 0.14))], 0.02, bark_fn(False, seed), sides=4, radfn=lambda t: 0.035 * (1 - 0.4 * t))
     begin("leaf")
-    allc = [(c, r) for c, r in cl]
-    items = []
-    if hedge:
-        # a clipped hedge: a squarish rounded run with a leafy, slightly irregular surface
-        bm = pill_bm(1.0, 0.27, 0.27, 0.42, 4)
-        for v in bm.verts:
-            d = v.co.normalized()
-            v.co = v.co * (1 + 0.05 * (nz(d * 6.0, 1.0, seed) + 0.6 * nz(d * 13.0, 1.0, seed + 3)))
-        hc = leaf_color(PAL_BUSH, [(Vector((0, 0.27, 0)), 0.5)], -1, Vector((0, 0.27, 0)), 1.1, 0.0, 0.55, hue=0.3, seed=2.0, sunk=0.03)
-        commit(bm, hc, sharp=100, xf=T((0, 0.27, 0)))
-        for k in range(320):
-            a = rng.uniform(0, 6.283)
-            d = Vector((rng.uniform(-1, 1) * 0.9, math.sin(a) * 0.7 + 0.1, math.cos(a) * 0.7))
-            p = Vector((d.x * 0.97, 0.27 + d.y * 0.27, d.z * 0.27))
-            items.append((p, Vector((d.x * 0.3, d.y, d.z)) + Vector((0, -0.25, 0)), 0.12 * rng.uniform(0.8, 1.3), 0.05))
-    else:
-        for i, (c, r) in enumerate(cl):
-            col = leaf_color(PAL_BUSH, allc, i, ctr, R * 1.1, 0.0, R * 0.95, hue=rng.uniform(-1, 1), seed=i * 2.3, sunk=0.03)
-            commit(clump_bm(r, 0.80, 3 if i == 0 else 2, 0.28, seed + i * 2.1), col, sharp=100, xf=T(tuple(c), ry=rng.uniform(0, 6.28)))
-        for k in range(150):
-            c, r = cl[rng.randrange(len(cl))]
-            d = Vector((rng.gauss(0, 1), rng.gauss(0, 1) * 0.8, rng.gauss(0, 1))).normalized()
-            p = c + Vector((d.x * r, d.y * r * 0.8, d.z * r)) * 0.96
-            if sum(1 for (c2, r2) in allc if (p - c2).length < r2 * 0.9) > 0: continue
-            items.append((p, d + Vector((0, -0.3, 0)), 0.13 * rng.uniform(0.8, 1.3), 0.055))
-    tc = leaf_color(PAL_BUSH, allc, -1, ctr, R * 1.1, 0.0, R * 0.95, hue=0.0, seed=5.0)
-    if items: commit(tufts_bm(items), lambda p, n: tuple(min(1, x * 1.15) for x in tc(p, n)), sharp=100)
+    core_masses(masses, ctr, cr, 0.0, R * 0.95, PAL_BUSH, seed, sub=2, frac=0.82, bump=0.22)
+    lv = Leaves()
+    shell_leaves(lv, rng, masses, PAL_BUSH, ctr, cr, 0.0, R * 0.95, 0.09, 0.60, 540 if not hedge else 600, down=0.5, tilt=0.55, cover_top=0.95, cover_bot=0.8, sunk=0.03)
+    lv.flush()
     begin("bloom")
     if not hedge:
         for k in range(nbl):
-            c, r = cl[rng.randrange(len(cl))]
+            c, r, f, t = masses[rng.randrange(len(masses))]
             d = Vector((rng.uniform(-1, 1), rng.uniform(0.3, 1), rng.uniform(-1, 1))).normalized()
-            p = c + Vector((d.x * r, d.y * r * 0.8, d.z * r)) * 1.05
+            p = c + Vector((d.x * r, d.y * r * 0.8, d.z * r)) * 1.08
             def bcol(q, n): return mix((0.72, 0.68, 0.64), (1.0, 0.99, 0.96), clamp01(n.dot(SUN) * 0.5 + 0.5))
             commit(sph_bm(0.045, 0.035, 0.045, 1), bcol, sharp=100, xf=T(tuple(p)))
     return dict(kind="bush")
@@ -364,13 +379,13 @@ REG = [
     ("tree_a", lambda: deciduous("tree_a", 11, OAK, PAL_OAK)),
     ("tree_b", lambda: deciduous("tree_b", 23, BEECH, PAL_BEECH)),
     ("tree_c", lambda: deciduous("tree_c", 37, BIRCH, PAL_BIRCH, pale=True)),
-    ("pine_a", lambda: conifer("pine_a", 5, tiers=9, H=3.9, R=1.15, pal=PAL_SPRUCE)),
-    ("pine_b", lambda: conifer("pine_b", 9, tiers=8, H=3.1, R=1.0, pal=PAL_FIR)),
+    ("pine_a", lambda: conifer("pine_a", 5, tiers=10, H=3.9, R=1.2, pal=PAL_SPRUCE)),
+    ("pine_b", lambda: conifer("pine_b", 9, tiers=9, H=3.1, R=1.05, pal=PAL_FIR)),
     ("tree_a_far", lambda: deciduous("tree_a_far", 11, OAK, PAL_OAK, lod=1)),
     ("tree_b_far", lambda: deciduous("tree_b_far", 23, BEECH, PAL_BEECH, lod=1)),
     ("tree_c_far", lambda: deciduous("tree_c_far", 37, BIRCH, PAL_BIRCH, lod=1, pale=True)),
-    ("pine_a_far", lambda: conifer("pine_a_far", 5, tiers=8, H=3.9, R=1.15, pal=PAL_SPRUCE, lod=1)),
-    ("pine_b_far", lambda: conifer("pine_b_far", 9, tiers=7, H=3.1, R=1.0, pal=PAL_FIR, lod=1)),
+    ("pine_a_far", lambda: conifer("pine_a_far", 5, tiers=9, H=3.9, R=1.2, pal=PAL_SPRUCE, lod=1)),
+    ("pine_b_far", lambda: conifer("pine_b_far", 9, tiers=8, H=3.1, R=1.05, pal=PAL_FIR, lod=1)),
     ("bush_a", lambda: bush("bush_a", 3, nbl=12)),
     ("bush_b", lambda: bush("bush_b", 8, nbl=10, R=0.9)),
     ("hedge", lambda: bush("hedge", 5, R=1.0, hedge=True)),
@@ -383,4 +398,4 @@ if __name__ == "__main__":
     for iid, fn in REG:
         if only and iid not in only: continue
         meta = fn(); info = export(iid, meta)
-        print("EXPORT", iid, info["tris"], info["verts"], [(s["name"], s["tris"]) for s in info["sub_meshes"]], info["bounds_min"], info["bounds_max"], flush=True)
+        print("EXPORT", iid, info["tris"], info["verts"], meta.get("leaves", ""), [(s["name"], s["tris"]) for s in info["sub_meshes"]], flush=True)

@@ -76,8 +76,11 @@ extension ParkScenery {
     /// worn earth where the path meets the grass and at the slide's landing.
     static func lawnColor(_ x: Float, _ z: Float, shadows: [ParkShadow]) -> V3 {
         var c = S.srgb(0.29, 0.51, 0.21)
+        c *= 1 - 0.14 * sstep(1.5, 7.5, z)          // a little darker toward the near edge
+        c = simd_mix(c, S.srgb(0.44, 0.60, 0.22), V3(repeating: 0.45 * sstep(0.62, 0.9, vnoise(x * 0.09, z * 0.11, 21))))          // broad sunlit patches
+        c = simd_mix(c, S.srgb(0.20, 0.42, 0.19), V3(repeating: 0.45 * sstep(0.62, 0.92, vnoise(x * 0.08, z * 0.1, 33))))          // damp, darker patches
         let band = 0.5 + 0.5 * sinf(z * 0.95 + 1.6 * vnoise(x * 0.12, z * 0.2, 1) + x * 0.06)
-        c *= 1 + 0.12 * (2 * band - 1)
+        c *= 1 + 0.10 * (2 * band - 1)
         c *= 1 + 0.09 * (2 * vnoise(x * 0.3, z * 0.3, 7) - 1)
         c = simd_mix(c, S.srgb(0.43, 0.59, 0.21), V3(repeating: 0.55 * sstep(0.55, 0.85, vnoise(x * 0.16, z * 0.16, 3))))
         c = simd_mix(c, S.srgb(0.23, 0.46, 0.22), V3(repeating: 0.25 * sstep(0.55, 0.9, vnoise(x * 0.22, z * 0.22, 11))))
@@ -90,11 +93,11 @@ extension ParkScenery {
         }
         if z < 13.5, z > -3.9 {
             let dx = fabsf(x - pathX(z)) - 0.62
-            let a = (1 - sstep(0.0, 0.22, dx)) * (0.25 + 0.5 * vnoise(x * 0.9, z * 0.9, 5))
-            c = simd_mix(c, S.srgb(0.47, 0.38, 0.25), V3(repeating: min(0.6, a)))
+            let a = (1 - sstep(0.0, 0.13, dx)) * (0.30 + 0.4 * vnoise(x * 0.9, z * 0.9, 5))
+            c = simd_mix(c, S.srgb(0.40, 0.34, 0.22), V3(repeating: min(0.55, a)))
         }
-        let ld = hypotf((x - 2.9) / 0.95, (z - 3.2) / 0.7)
-        c = simd_mix(c, S.srgb(0.47, 0.38, 0.25), V3(repeating: 0.6 * (1 - sstep(0.35, 1.0, ld)) * (0.6 + 0.4 * vnoise(x * 2, z * 2, 9))))
+        let ld = hypotf((x - 2.9) / 0.62, (z - 3.25) / 0.42)
+        c = simd_mix(c, S.srgb(0.40, 0.34, 0.22), V3(repeating: 0.42 * (1 - sstep(0.4, 1.0, ld))))
         return c
     }
 
@@ -204,14 +207,17 @@ extension ParkScenery {
         }
     }
 
-    /// A classic dark-green park lamp post (static, plain material).
+    /// A classic dark-green park lamp post with a real lantern: base plate, slim post, a four-post frame round warm glass, a dark cap with a finial (static, plain material).
     static func lampPost(_ b: RoomMeshBuilder, x: Float, z: Float) {
-        let green = S.srgb(0.09, 0.22, 0.15)
-        S.cylinder(b, x: x, z: z, r: 0.13, y0: 0, y1: 0.22, color: green, segments: 10)
-        S.stem(b, x: x, z: z, y0: 0.2, y1: 2.15, r: 0.045, color: green, segments: 8)
-        S.cylinder(b, x: x, z: z, r: 0.075, y0: 1.95, y1: 2.02, color: green, segments: 8)
-        S.blob(b, V3(x, 2.33, z), rx: 0.15, ry: 0.22, rz: 0.15, color: S.srgb(0.96, 0.92, 0.74), segments: 10, rings: 5)
-        S.blob(b, V3(x, 2.58, z), rx: 0.20, ry: 0.07, rz: 0.20, color: green, segments: 10, rings: 4)
+        let green = S.srgb(0.09, 0.22, 0.15), glass = S.srgb(0.98, 0.88, 0.58)
+        S.cylinder(b, x: x, z: z, r: 0.14, y0: 0, y1: 0.12, color: green, segments: 10)
+        S.cylinder(b, x: x, z: z, r: 0.09, y0: 0.12, y1: 0.30, color: green, segments: 10)
+        S.stem(b, x: x, z: z, y0: 0.3, y1: 2.12, r: 0.04, color: green, segments: 8)
+        S.cylinder(b, x: x, z: z, r: 0.14, y0: 2.10, y1: 2.16, color: green, segments: 8)
+        S.cylinder(b, x: x, z: z, r: 0.095, y0: 2.16, y1: 2.50, color: glass, segments: 10)
+        for (dx, dz) in [(0.115 as Float, 0.0 as Float), (-0.115, 0), (0, 0.115), (0, -0.115)] { S.stem(b, x: x + dx, z: z + dz, y0: 2.14, y1: 2.52, r: 0.016, color: green, segments: 4) }
+        b.lathe(cx: x, cz: z, profile: [PP(r: 0.0, y: 2.49, nr: 0, ny: -1), PP(r: 0.19, y: 2.49, nr: 0, ny: -1), PP(r: 0.19, y: 2.53, nr: 1, ny: 0), PP(r: 0.0, y: 2.76, nr: 0.55, ny: 0.85)], segments: 10, color: green)
+        S.ball(b, V3(x, 2.79, z), 0.035, green, segments: 6, rings: 3)
     }
 
     /// A low timber post-and-rail fence along z, in front of the tree line (`skip` = a span left open where the hedge stands).
@@ -232,19 +238,20 @@ extension ParkScenery {
 
     /// Three overlapping ridges fading with haze (far bluish, mid, near).
     static func hills(_ b: RoomMeshBuilder) {
-        let far = S.srgb(0.42, 0.58, 0.56), mid = S.srgb(0.33, 0.52, 0.38), near = S.srgb(0.28, 0.48, 0.27)
-        for (x, rx, ry) in [(-27 as Float, 17 as Float, 5.0 as Float), (-8, 14, 6.2), (12, 16, 4.6), (30, 17, 5.6)] { blob(b, V3(x, -0.6, -9.4), rx: rx, ry: ry, rz: 0.9, color: far, segments: 28, rings: 10) }
-        for (x, rx, ry) in [(-21 as Float, 13 as Float, 3.6 as Float), (-1, 12, 4.2), (19, 14, 3.2)] { blob(b, V3(x, -0.6, -9.1), rx: rx, ry: ry, rz: 1.4, color: mid, segments: 28, rings: 10) }
-        for (x, rx, ry) in [(-14 as Float, 14 as Float, 2.6 as Float), (8, 12, 2.9), (26, 15, 2.4)] { blob(b, V3(x, -0.6, -8.8), rx: rx, ry: ry, rz: 1.9, color: near, segments: 28, rings: 10) }
+        // (drawn behind the whole tree line: thin in z, so no ridge ever stands in front of a tree)
+        let far = S.srgb(0.62, 0.74, 0.80), mid = S.srgb(0.47, 0.64, 0.60), near = S.srgb(0.34, 0.53, 0.40)
+        for (x, rx, ry) in [(-27 as Float, 17 as Float, 6.2 as Float), (-8, 14, 7.4), (12, 16, 5.8), (30, 17, 6.8)] { blob(b, V3(x, -0.6, -9.50), rx: rx, ry: ry, rz: 0.4, color: far, segments: 28, rings: 10) }
+        for (x, rx, ry) in [(-21 as Float, 13 as Float, 4.6 as Float), (-1, 12, 5.4), (19, 14, 4.0)] { blob(b, V3(x, -0.6, -9.42), rx: rx, ry: ry, rz: 0.4, color: mid, segments: 28, rings: 10) }
+        for (x, rx, ry) in [(-14 as Float, 14 as Float, 3.0 as Float), (8, 12, 3.4), (26, 15, 2.8)] { blob(b, V3(x, -0.6, -9.34), rx: rx, ry: ry, rz: 0.4, color: near, segments: 28, rings: 10) }
     }
 
     /// A few soft white cumulus with grey-blue undersides.
     static func clouds(_ b: RoomMeshBuilder) {
-        let top = S.srgb(0.98, 0.99, 1.0), under = S.srgb(0.72, 0.79, 0.90)
-        for (x, y, s) in [(-10 as Float, 12 as Float, 1.0 as Float), (7, 10.5, 1.25), (-1, 14.5, 0.8), (17, 14, 0.9)] {
-            blob(b, V3(x, y - 0.35 * s, -9.25), rx: 2.6 * s, ry: 0.45 * s, rz: 0.4, color: under, segments: 14, rings: 5)
-            for (k, (dx, dy, rr)) in ([(-1.5, 0.0, 0.85), (-0.5, 0.35, 1.1), (0.7, 0.3, 1.0), (1.7, 0.0, 0.75)] as [(Float, Float, Float)]).enumerated() {
-                blob(b, V3(x + dx * s, y + dy * s, -9.2 + 0.01 * Float(k)), rx: rr * 1.1 * s, ry: rr * 0.62 * s, rz: 0.5, color: top, segments: 14, rings: 6)
+        let top = S.srgb(0.99, 0.99, 1.0), under = S.srgb(0.70, 0.78, 0.90)
+        for (x, y, s) in [(3.6 as Float, 8.7 as Float, 0.95 as Float), (-1.2, 10.9, 1.0), (6.2, 11.6, 0.8), (-5.6, 9.2, 0.85), (-9.5, 11.5, 1.0), (10.5, 9.0, 1.0), (14, 12, 1.0)] {
+            blob(b, V3(x, y - 0.32 * s, -9.25), rx: 2.7 * s, ry: 0.45 * s, rz: 0.4, color: under, segments: 14, rings: 5)
+            for (k, (dx, dy, rr)) in ([(-1.5, 0.0, 0.85), (-0.5, 0.4, 1.1), (0.7, 0.35, 1.0), (1.7, 0.0, 0.75)] as [(Float, Float, Float)]).enumerated() {
+                blob(b, V3(x + dx * s, y + dy * s, -9.2 + 0.01 * Float(k)), rx: rr * 1.15 * s, ry: rr * 0.66 * s, rz: 0.5, color: top, segments: 14, rings: 6)
             }
         }
     }

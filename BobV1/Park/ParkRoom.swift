@@ -73,28 +73,32 @@ enum ParkScenery {
         // ---- the forest edge and the planted trees: natural greens, jittered spacing, gaps where the sky shows ----
         var shadows: [ParkShadow] = []
         let leaf = S.srgb(0.24, 0.45, 0.17), leaf2 = S.srgb(0.26, 0.47, 0.18), hazy = S.srgb(0.22, 0.42, 0.20), pine = S.srgb(0.24, 0.45, 0.17)
-        // far row: hazier, taller, with spruces; sizes and gaps vary
-        var tx: Float = -17
+        // far row: hazier, taller, mixed spruces / beeches / oaks / birches standing right behind the fence; sizes and gaps vary so the sky and haze show between crowns
+        var tx: Float = -13.5
         var k = 0
-        while tx <= 17 {
-            let conifer = r.unit() < 0.34
-            let rad = 1.2 + 0.9 * r.unit()
-            let z = -9.0 - 0.5 * r.unit()
-            if r.unit() > 0.12 { roundTree(b, x: tx, z: z, trunk: 0.8, radius: rad, canopy: conifer ? pine : hazy, shape: conifer ? .conifer : .round, species: k % 3, far: true, rng: &r) }
-            tx += 2.9 + 2.2 * r.unit(); k += 1
+        while tx <= 13.5 {
+            let conifer = r.unit() < 0.32
+            let rad = 1.35 + 0.9 * r.unit()
+            let z = -8.5 - 0.5 * r.unit()
+            if r.unit() > 0.22 { roundTree(b, x: tx, z: z, trunk: 0.8, radius: rad, canopy: conifer ? pine : hazy, shape: conifer ? .conifer : .round, species: k % 3, far: true, rng: &r) }
+            tx += 3.0 + 2.2 * r.unit(); k += 1
         }
-        // nearer back row: oak / beech / birch mixed, leaving breaks
-        tx = -15; k = 0
-        while tx <= 15 {
-            let conifer = r.unit() < 0.2
-            let rad = 0.8 + 0.5 * r.unit()
-            let x = tx + (r.unit() - 0.5) * 0.8, z = -7.5 + (r.unit() - 0.5) * 1.0
-            if r.unit() > 0.18 {
+        // nearer row: oak / beech / birch mixed, leaving breaks
+        tx = -13; k = 0
+        while tx <= 13 {
+            let conifer = r.unit() < 0.22
+            let rad = 0.75 + 0.35 * r.unit()
+            let x = tx + (r.unit() - 0.5) * 0.8, z = -7.3 + (r.unit() - 0.5) * 0.8
+            if r.unit() > 0.15 {
                 roundTree(b, x: x, z: z, trunk: 0.7, radius: rad, canopy: r.unit() < 0.5 ? leaf : leaf2, shape: conifer ? .conifer : .round, species: (k + Int(r.unit() * 2)) % 3, far: abs(x) > 3.2 || conifer, rng: &r)
                 shadows.append(ParkShadow(x: x, z: z, r: 1.7 * rad, h: 3.4 * rad))
             }
-            tx += 3.6 + 2.6 * r.unit(); k += 1
+            tx += 3.3 + 2.2 * r.unit(); k += 1
         }
+        // three feature trees in the portrait window behind the fence so the tree line always reads: a beech, a birch, a far oak
+        roundTree(b, x: 2.5, z: -7.7, trunk: 0.8, radius: 0.95, canopy: leaf, shape: .round, species: 1, far: false, rng: &r)
+        roundTree(b, x: 5.3, z: -7.4, trunk: 0.8, radius: 1.0, canopy: leaf2, shape: .round, species: 2, far: false, rng: &r)
+        roundTree(b, x: -0.2, z: -8.9, trunk: 0.8, radius: 1.5, canopy: hazy, shape: .round, species: 0, far: true, rng: &r)
         // two hero trees at the edges: a broad oak left, a beech right (full detail, standing on the lawn)
         roundTree(b, x: -6.4, z: -3.2, trunk: 1.0, radius: 1.0, canopy: leaf2, shape: .round, species: 0, far: false, rng: &r)
         shadows.append(ParkShadow(x: -6.4, z: -3.2, r: 2.4, h: 2.8))
@@ -124,7 +128,7 @@ enum ParkScenery {
 
         // ---- the bench (back centre): timber slats on cast-iron frames, and a park lamp post beside it ----
         bench(b)
-        lampPost(b, x: -1.95, z: -4.7)
+        lampPost(b, x: 1.72, z: -4.85)
         return b.mesh
     }
 
