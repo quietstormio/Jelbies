@@ -269,7 +269,7 @@ final class DuplicateJelbiesTests: XCTestCase {
         XCTAssertNil(AdoptionPrice.next(home: roster.count), "the 4th is refused")
         XCTAssertEqual(AdoptionPrice.next(home: 2), 800)
         XCTAssertEqual(AdoptionPrice.next(home: 1), 500)
-        // today's colour is offered for every species, the ones at home included
+        // the Spring's offer (own colour, or the rare mutation) is the same for every species, the ones at home included
         for s in 0...3 {
             XCTAssertEqual(AdoptionCenter.offer(mode: .more, character: s), JellyVariantBook.offer(species: s, dayKey: JellyVariantBook.dayKey()))
         }
