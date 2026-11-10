@@ -932,7 +932,7 @@ struct GameScreen: View {
             StartFlow.shared.openAdoption()          // like the real flow: the room is gone while the picker is up (the old room must not see the bought-Jelbie flag)
             try? await Task.sleep(for: .seconds(1))
             NSLog("[adoptnow] bringHome %d (%@) away=%.0f min", c, JellyRoster.baseNames[c], awayMin)
-            StartFlow.shared.bringHome(character: c, name: JellyRoster.baseNames[c])
+            StartFlow.shared.bringHome(species: c, name: JellyRoster.baseNames[c])
             NSLog("[adoptnow] roster now %@ current %@", JellyRoster.savedIDs().description, JellyRoster.current.description)
         }
     }
