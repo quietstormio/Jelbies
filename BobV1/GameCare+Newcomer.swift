@@ -11,7 +11,7 @@
 //    holding  behind the LaunchGate curtain he is put OFF-SCREEN beyond the left edge whatever the window (Park/GuestArrival.swift `guestArrivalEntry(offScreen:)`; his arena wall is lifted
 //             while he is out there) and held still
 //    waking   a sleeping house (night, or naps by day) is woken for the big moment: every sleeping housemate gets the quick, non-groggy wake (`wakeSleeper`), up to 4 s; they are
-//             remembered, and sent back to bed with him when it is all over if it is still bedtime hours
+//             remembered, and (never ordered to bed at once) they go back to bed by themselves about 75 s after the welcome if left alone in bedtime hours
 //    run      about 0.5 s later a short "ta-da" chime, VoiceOver "<name> is home", and he RUNS in from the left to his spot (the run gait) while everyone at home turns to watch with
 //             excited faces; as he crosses into view: confetti burst 1 from the left edge at his height
 //    cheer    the moment he is there and calm: everybody (every awake housemate and he) hops in place three times together, about 0.55 s apart, facing him, a heart over EVERY Jelbie on
@@ -21,7 +21,7 @@
 //    group    everybody in a group emote, he in the ring: the group hug (a soft haptic and hearts over everyone at its squish, no second pill), then the
 //             ring dance and the staggered hop finale (Park/GuestParty.swift, the friend's party, started at the hug / dance / finale as the house needs). A house of two
 //             has no group (it takes three): a second pair emote is their "everyone" moment
-//    then     autonomy on, nothing held, a small love bump for everyone; the ones who were woken (and he) go back to bed if it is still bedtime hours.
+//    then     autonomy on, nothing held, a small love bump for everyone; the ones who were woken (and he) go back to bed by themselves about 75 s later if left alone in bedtime hours (never ordered at once).
 //  Any interruption (a close-up, the Bag, an outing, the bath, a meal, a voice command) ends it at once and leaves nobody frozen or with autonomy off (an outing started while he was
 //  still held snapshots his autonomy as off: `healing` puts it right when the outing is over). One interrupted before he ran in never leaves him teleported into the room unseen: he
 //  runs in on his own (only when the room is not on screen at all, an outing or a close-up, is he put at his spot).
@@ -440,11 +440,16 @@ extension GameCare {
                 a.brain?.face(.happy, hold: 2)
             }
         }
-        // the ones woken for him (and he) go back to bed when it is still bedtime hours, so the player does not have to
+        // the ones woken for him (and he) are NOT ordered to bed the moment it ends: the player has just got a new Jelbie and may want to pet him, and an interruption IS the player doing
+        // something. In bedtime hours they are treated like Jelbies woken at night: back to bed by themselves after about `NewcomerCheer.bedAfter` s of being left alone (the `nightWoken`
+        // rule of GameCare+NightRest.swift; a touch restarts the usual 2 minutes).
         let bed = NewcomerCheer.backToBed(slept: w.slept, newcomer: w.id, bedtimeHours: isBedtimeHours)
         if !bed.isEmpty {
-            if canBedtime { bedtime(ids: bed) } else { registerBedtime(bed) }
-            NSLog("[newcomer] back to bed ids=%@ canBedtime=%d", bed.description, canBedtime ? 1 : 0)
+            for id in bed {
+                nightRest.nightWoken.insert(id); nightRest.wanted.remove(id); nightRest.dayOnce.remove(id)
+                nightRest.personal[id] = max(0, NightRestTuning.backToBed - NewcomerCheer.bedAfter)
+            }
+            NSLog("[newcomer] back to bed later ids=%@ after about %.0f s alone", bed.description, NewcomerCheer.bedAfter)
         }
         NSLog("[newcomer] end interrupted=%d finished=%d t=%.1f", interrupted ? 1 : 0, finished ? 1 : 0, w.t)
         if interrupted { w.stage = .healing; w.blockedT = 0 } else { newcomerWelcome = nil }
@@ -465,6 +470,8 @@ nonisolated enum NewcomerCheer {
     static let wakeCap: Float = 4
     /// How long the "Welcome home, <name>!" pill stays.
     static let pillSpan: Double = 3.2
+    /// After a night welcome: how long the woken house (and he) stay up when left alone before they go back to bed by themselves.
+    static let bedAfter: Float = 75
 
     /// Who chirps on hop `hop` (0-based): the newcomer and one housemate on the first, then a different one each time (never everybody).
     static func voices(hop: Int, cast: [Int], newcomer: Int) -> [Int] {
