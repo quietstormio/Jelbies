@@ -78,7 +78,32 @@ final class BubbleWandTests: XCTestCase {
         XCTAssertTrue(f.bubbles.isEmpty)
     }
 
+    func testClaimedBubbleWaitsGentlyAndKeepsItsLife() {
+        var f = BubbleField()
+        let id = f.insert(at: SIMD3(0, 1.1, 2), radius: 0.2, life: 4)!
+        f.nudge(id, awayFrom: SIMD2(-1, 3))          // (a push of ~0.9 u/s)
+        f.claim(id, by: 0); f.setReach(id, y: 1.5)
+        var t: Float = 0
+        var maxStepDy: Float = 0, lastY = f.bubbles[0].pos.y
+        while t < 0.7 { f.step(dt: 1.0 / 60); t += 1.0 / 60; maxStepDy = max(maxStepDy, abs(f.bubbles[0].pos.y - lastY)); lastY = f.bubbles[0].pos.y }
+        let b = f.bubble(id)!
+        XCTAssertLessThan(simd_length(SIMD2(b.vel.x, b.vel.z)), 0.1, "a claimed bubble drifts to a near stop within ~0.6 s")
+        XCTAssertLessThan(maxStepDy, 0.01, "no snapping in height")
+        while t < 3.0 { f.step(dt: 1.0 / 60); t += 1.0 / 60 }
+        XCTAssertEqual(f.bubble(id)!.pos.y, 1.5, accuracy: 0.08, "it eases to the reach height")
+        // life 4 s: it does not expire while claimed, up to the 3 s cap
+        while t < 6.5 { f.step(dt: 1.0 / 60); t += 1.0 / 60 }
+        XCTAssertNotNil(f.bubble(id), "a claimed bubble lives past its life (cap \(BubbleField.claimExtendMax) s)")
+        while t < 9 { f.step(dt: 1.0 / 60); t += 1.0 / 60 }
+        XCTAssertNil(f.bubble(id), "but not forever")
+        // released: back to the old behaviour
+        let id2 = f.insert(at: SIMD3(0, 1.0, 2), radius: 0.2, life: 6)!
+        f.claim(id2, by: 1); f.setReach(id2, y: 1.4); f.release(jelly: 1)
+        XCTAssertEqual(f.bubble(id2)?.claimedBy, -1); XCTAssertNil(f.bubble(id2)?.reachY)
+    }
+
     // MARK: the wand
+
 
     /// Wand + n Jelbies at spots (the rig's brains, ticked like the stage).
     func rigs(_ spots: [SIMD2<Float>]) -> [MotionRig] {

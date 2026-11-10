@@ -14,7 +14,7 @@ import simd
 @MainActor
 final class BubbleFeetTests: XCTestCase {
     override func setUp() { super.setUp(); EmoteFeetTests.reset(); BubbleWand.shared.resetForTests() }
-    override func tearDown() { BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
+    override func tearDown() { BubbleTuning.forceMove = nil; BubbleTuning.classic = false; BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
     static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/bubbles/"
     typealias SC = LegsDrawnAuditTests.Scenario
@@ -22,7 +22,7 @@ final class BubbleFeetTests: XCTestCase {
     /// The moves the wand uses: walking / standing, the turn-and-watch, the two hops.
     static func isWandMove(_ b: BlobBrain) -> Bool {
         guard let k = b.idleState.kind else { return true }
-        return k == .stopLook || k == .bounce || k == .skipHop
+        return k == .stopLook || k == .bounce || k == .skipHop || k == .tossHeader || k == .flapHop
     }
 
     static func scenario(_ name: String) -> SC {
@@ -43,6 +43,15 @@ final class BubbleFeetTests: XCTestCase {
                 if n % 360 == 30 { let c = r.brain.position; _ = wand.insertBubble(at: SIMD3(c.x + 1.3, 1.3, c.y - 0.9), radius: 0.25) }
                 wand.tick(jellies: join(r), dt: r.sim.stepDt)
                 if n % 360 == 31, let b = wand.field.bubbles.first { _ = b }
+            })
+        case "pop header", "pop leap", "pop bounce", "pop flap", "pop skip":          // each new pop move: the real wand, the move forced, a bubble put where that move can reach it
+            let move = BubblePopMove(rawValue: String(name.dropFirst(4)))!
+            return SC(name: "bubble: \(name)", game: true, seconds: 14, setup: { r, _ in
+                n = 0; wand.resetForTests(); BubbleTuning.forceMove = move; r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); return true
+            }, each: { r in
+                n += 1
+                if n % 300 == 30 { let c = r.brain.position; _ = wand.insertBubble(at: SIMD3(c.x + 1.1, move == .skip ? 1.0 : 1.4, c.y - 0.8), radius: 0.25) }
+                wand.tick(jellies: join(r), dt: r.sim.stepDt)
             })
         case "stream":           // the real wand: a steady blow, the Jelbie watches / chases / pops as he likes
             return SC(name: "bubble: stream", game: true, seconds: 24, setup: { r, _ in
@@ -95,4 +104,9 @@ final class BubbleFeetTests: XCTestCase {
     func testLookUp() { bubbles("look up") }
     func testWalkUnderAndHopPop() { bubbles("hop pop") }
     func testStream() { bubbles("stream") }
+    func testPopHeader() { bubbles("pop header") }
+    func testPopLeap() { bubbles("pop leap") }
+    func testPopBounce() { bubbles("pop bounce") }
+    func testPopFlap() { bubbles("pop flap") }          // (non-winged characters run it too: the wand falls back to the header when the flap cannot start)
+    func testPopSkip() { bubbles("pop skip") }
 }
