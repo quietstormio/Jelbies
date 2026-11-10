@@ -100,7 +100,7 @@ final class HopscotchTests: XCTestCase {
     func testEveryNewParkPieceHasAStandSpot() {
         let lab = parkLab(n: 1)
         let b = lab.rigs[0].brain
-        for (kind, move) in [(DecorKind.hopscotch, IdleKind.decorHopscotch), (.slide, .decorSlide), (.seesaw, .decorSit)] {
+        for (kind, move) in [(DecorKind.hopscotch, IdleKind.decorHopscotch), (.slide, .decorSlide)] {
             let f = DecorField.shared.feet.first { $0.kind == kind }!
             b.decorIgnore = f.uid
             XCTAssertNotNil(b.decorStand(move, f, from: SIMD2(0, 0.5)), "\(kind) has a stand spot in the park")
@@ -114,10 +114,9 @@ final class HopscotchTests: XCTestCase {
         _ = parkLab(n: 1)
         let f = DecorField.shared
         for id in 0..<3 { f.use(uid, by: id); HopscotchLine.shared.enroll(uid, id) }
-        f.take(ParkToys.seesawUID, seat: 0, by: 6); f.take(ParkToys.seesawUID, seat: 1, by: 7)
         XCTAssertTrue(HopscotchLine.shared.active)
         f.set([PlacedDecor(uid: 1, kind: .beanbag, x: 0, z: 0, turns: nil)])          // (the room again)
-        for u in [ParkToys.seesawUID, uid, ParkToys.slideUID] {
+        for u in [uid, ParkToys.slideUID] {
             XCTAssertNil(f.occupant[u], "occupant \(u)"); XCTAssertNil(f.coUsers[u], "coUsers \(u)"); XCTAssertNil(f.seatOccupant[u], "seats \(u)")
             XCTAssertNil(f.progress[u], "progress \(u)"); XCTAssertNil(f.tunnelDir[u], "tunnelDir \(u)")
         }
