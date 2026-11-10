@@ -197,7 +197,7 @@ final class DiningGroup {
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
         if forcedOrigin != nil { spawnTray() }          // (the café's table is out already: the food lands on it at once; a fresh tray waits for the gathering, see `tick`)
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
-        for i in brains.indices where !released[i] { brains[i].requestNow(.goTo(approachPoint(blob: i))) }
+        for i in brains.indices where !released[i] { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken softly, not hard-aborted: BlobBrain+SleepForce)
         requested = true
     }
 
