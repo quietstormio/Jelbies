@@ -293,13 +293,12 @@ def flowers(iid, seed):
         lean = Vector((math.cos(dr), 0, math.sin(dr))) * hgt * rng.uniform(0.25, 0.7)
         pts = [base, base + lean * 0.3 + Vector((0, hgt * 0.55, 0)), base + lean + Vector((0, hgt, 0))]
         add_tube(pts, 0.02, gcol, sides=3, radfn=lambda t: 0.020 * (1 - 0.95 * t))
-    add_sph((0, 0.025, 0), (0.30, 0.06, 0.26), (0.10, 0.26, 0.10), sub=1)
     begin("bloom")
     for k in range(7):
         a = k / 7 * 2 * math.pi + rng.uniform(-0.3, 0.3); d = 0.06 if k == 0 else rng.uniform(0.12, 0.34)
         fh = rng.uniform(0.20, 0.34)
         pos = Vector((math.cos(a) * d, fh, math.sin(a) * d * 0.85))
-        commit(sph_bm(0.04, 0.03, 0.04, 1), lambda p, n: mix((0.70, 0.66, 0.62), (1.0, 0.99, 0.96), clamp01(n.dot(SUN) * 0.5 + 0.5)), sharp=100, xf=T(tuple(pos)))
+        commit(sph_bm(0.062, 0.045, 0.062, 1), lambda p, n: mix((0.70, 0.66, 0.62), (1.0, 0.99, 0.96), clamp01(n.dot(SUN) * 0.5 + 0.5)), sharp=100, xf=T(tuple(pos)))
     return dict(kind="flowers")
 
 REG = [
