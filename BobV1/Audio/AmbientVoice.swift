@@ -40,6 +40,16 @@ nonisolated enum HomeVoiceTuning {
     }
 }
 
+/// 2026-11-09, "add 10% more Jelbie noises as they're just walking around": at home, awake (a) the wander pick (the brain just walks on, no special) now voices its lala / pfft
+/// (before, the wander branch returned before idleBegin, so those two voices -- in the catalog since 11-05 -- were never played), with `wanderChance` as base chance (x1.3 at home like every
+/// context voice; hushes as always), and (b) the silence filler waits only `quietScaleWalking` x as long while that Jelbie walks. Volumes, park / cafe / race and sleepers do not change.
+/// `enabled` is the soak test's before / after switch.
+nonisolated enum RoamVoiceBoost {
+    nonisolated(unsafe) static var enabled = true
+    nonisolated(unsafe) static var wanderChance: Double = 0.3
+    nonisolated(unsafe) static var quietScaleWalking: Double = 0.6
+}
+
 extension AmbientVoiceTuning {
     /// What the filler says: chirp / babble stay the most common. By day: happy 3, babble 3 (as before: add, never displace), then giggle 1.5, curious 2, hum 1.2, ooh 1. Evening / awake at night (night >= 0.3):
     /// hum 2, yawn 1.5, happy 1.5, babble 1.5 (soft and sleepy). A grumpy one: sad 3, babble 2, hum 1 (no giggles).
@@ -62,14 +72,15 @@ nonisolated struct AmbientVoiceScheduler: Sendable {
     private(set) var notBefore: [Double] = [0, 0, 0]
 
     /// The slots that should voice now. `since[i]`: seconds since slot i last voiced (any kind); `night` 0...1.
-    mutating func due(eligible: [Bool], since: [Double], now: Double, night: Double, random: (ClosedRange<Double>) -> Double) -> [Int] {
+    mutating func due(eligible: [Bool], walking: [Bool] = [], since: [Double], now: Double, night: Double, random: (ClosedRange<Double>) -> Double) -> [Int] {
         var out: [Int] = []
         let roomRecent = (since.min() ?? 999) < AmbientVoiceTuning.roomGap
         for i in eligible.indices where i < quiet.count && i < since.count {
             guard eligible[i] else { quiet[i] = 0; notBefore[i] = now + AmbientVoiceTuning.returnHoldoff; continue }
             guard now >= notBefore[i] else { continue }
             if quiet[i] == 0 { quiet[i] = random(AmbientVoiceTuning.quietFor) * (1 + AmbientVoiceTuning.nightExtra * night) }
-            guard since[i] >= quiet[i] else { continue }
+            let scale = RoamVoiceBoost.enabled && i < walking.count && walking[i] ? RoamVoiceBoost.quietScaleWalking : 1
+            guard since[i] >= quiet[i] * scale else { continue }
             if roomRecent || !out.isEmpty { notBefore[i] = now + random(AmbientVoiceTuning.retry); continue }
             out.append(i)
             quiet[i] = 0

@@ -105,7 +105,7 @@ final class RoomSFXCountTests: XCTestCase {
     func testPlayedRoomSounds() {
         let hub = AudioHub.shared
         hub._openForTest(); AudioHub.dryRun = true
-        var simNow = 10_000.0; AudioHub.clock = { simNow }
+        var simNow = 100_000.0; AudioHub.clock = { simNow }
         var played: [String: Int] = [:]
         AudioHub.firedTap = { n in
             var k = n; if let r = k.range(of: #"_\d+$"#, options: .regularExpression) { k.removeSubrange(r) }

@@ -7,26 +7,26 @@ import XCTest
 final class AmbientVoiceTests: XCTestCase {
     override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
     override func tearDown() {
-        AudioHub.firedTap = nil; AudioHub.requestSrcTap = nil; AudioHub.requestTap = nil; HomeVoiceTuning.contextFloor = 0.45; AudioHub.dropTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; AmbientVoiceTuning.enabled = true
+        AudioHub.firedTap = nil; AudioHub.requestSrcTap = nil; AudioHub.requestTap = nil; HomeVoiceTuning.contextFloor = 0.45; AudioHub.dropTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }; AmbientVoiceTuning.enabled = true; RoamVoiceBoost.enabled = true; RoamVoiceBoost.quietScaleWalking = 0.6; RoamVoiceBoost.wanderChance = 0.3
         HomeVoiceTuning.enabled = true; HomeVoiceTuning.floorEnabled = true; AmbientVoiceTuning.newDaySet = true; SnoreScheduler.speedUp = 1.35; IdleTuning.treatGap = (200 / IdleTuning.treatSpeedUp)...(380 / IdleTuning.treatSpeedUp)
         AudioHub.shared.atHome = false
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
-    /// (below 10_000: RoomSFXCountTests.testPlayedRoomSounds starts the shared hub's clock at 10_000 and a LATER-than-that gap stamp would hush every sound there)
+    /// (below 100_000: RoomSFXCountTests.testPlayedRoomSounds starts the shared hub's clock at 100_000 and a LATER-than-that gap stamp would hush every sound there; the 5-seed roam soak pushed this base past the old 10_000)
     nonisolated(unsafe) static var clockBase = 1_000.0
     struct Result { var played: [String: Int] = [:]; var voices = 0, newVoices = 0, ambientTags = 0, ctxReq = 0, jellyCount = 0; var drops: [String: Int] = [:]; var minVoiceGap = 999.0, minAnyGap = 999.0; var minutes = 0.0 }
 
     /// One soak: `n` Jelbies (features from `chars`), 3 seeds x 3 min, `situation` fed every 6 steps like the stage does (10 Hz).
-    func soak(n: Int, chars: [Int]?, ambient: Bool, night: Bool = false, floor: Bool = true) -> Result {
+    func soak(n: Int, chars: [Int]?, ambient: Bool, night: Bool = false, floor: Bool = true, roam: Bool = false, seedCount: Int = 3) -> Result {
         let hub = AudioHub.shared
         hub._openForTest(); AudioHub.dryRun = true
         var simNow = Self.clockBase; AudioHub.clock = { simNow }          // (one shared clock across soaks: the hub's per-sound gaps must see time only move forward)
         defer { Self.clockBase = simNow + 120 }
-        AmbientVoiceTuning.enabled = ambient; HomeVoiceTuning.enabled = ambient; HomeVoiceTuning.floorEnabled = ambient && floor; AmbientVoiceTuning.newDaySet = ambient && floor        // (the whole home-voice boost: filler, context chance x1.3, emote treat gap, snore pace)
+        RoamVoiceBoost.enabled = roam; AmbientVoiceTuning.enabled = ambient; HomeVoiceTuning.enabled = ambient; HomeVoiceTuning.floorEnabled = ambient && floor; AmbientVoiceTuning.newDaySet = ambient && floor        // (the whole home-voice boost: filler, context chance x1.3, emote treat gap, snore pace)
         IdleTuning.treatGap = ambient ? (200 / IdleTuning.treatSpeedUp)...(380 / IdleTuning.treatSpeedUp) : 200...380
         SnoreScheduler.speedUp = ambient ? 1.35 : 1
-        let seeds = night ? Array(RoomSFXCountTests.seeds.prefix(1)) : Array(RoomSFXCountTests.seeds.prefix(3))          // (3 seeds x 3 min; the night soak 1)
+        let seeds = night ? Array(RoomSFXCountTests.seeds.prefix(1)) : Array(RoomSFXCountTests.seeds.prefix(seedCount))          // (3 seeds x 3 min; the night soak 1)
         var res = Result()
         var lastByChar: [String: Double] = [:], lastAnyByChar: [String: Double] = [:]
         AudioHub.requestTap = { if $0.hasPrefix("voice:") { res.ctxReq += 1 } }
@@ -68,7 +68,7 @@ final class AmbientVoiceTests: XCTestCase {
                     let napping = lab.rigs.map { $0.brain.isNapping }
                     if night, t > 1800 { sleepers = max(sleepers, lab.rigs.filter { $0.brain.idleState.kind == .sleep }.count) }
                     hub.situation(napping: napping, playing: false, xs: lab.rigs.map { $0.brain.px }, moods: lab.rigs.map { _ in .happy }, home: true,
-                                  ambient: lab.rigs.map { $0.brain.ambientVoiceOK }, night: night ? 1 : 0)
+                                  ambient: lab.rigs.map { $0.brain.ambientVoiceOK }, walking: lab.rigs.map { $0.brain.activity == .walking || $0.brain.activity == .coming }, night: night ? 1 : 0)
                 }
             }
             if night { XCTAssertGreaterThan(sleepers, 0, "the night soak has sleepers (seed \(seed))"); XCTAssertEqual(violations, 0, "ambient chirp from a sleeping / held Jelbie (seed \(seed))") }
@@ -140,6 +140,27 @@ final class AmbientVoiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(Double(sumN), 0.9 * Double(sumP), "\(label): non-vocal sounds \(sumN) vs \(sumP)")
         XCTAssertGreaterThanOrEqual(now.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelbie too close")
         XCTAssertGreaterThanOrEqual(now.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps of one Jelbie within 2.2 s")
+    }
+    /// 2026-11-09, "10% more Jelbie noises as they're just walking around": RoamVoiceBoost off vs on (everything else on), same sim seeds (5 seeds x 3 min x 3 Jelbies). PLAYED counts.
+    /// The hub's chance rolls are not seeded, so single families of 10-60 voices move +-30 % between two identical runs: the family gate is 0.8x on families with >= 20 PLAYED, and the
+    /// sum of everything that is not a new filler voice must hold (0.97x); the printed table has every number.
+    func testRoamBoostTenPercent() {
+        let n = 3
+        let off = soak(n: n, chars: nil, ambient: true, roam: false, seedCount: 5), on = soak(n: n, chars: nil, ambient: true, roam: true, seedCount: 5)
+        let perOff = Double(off.voices) / Double(n) / off.minutes, perOn = Double(on.voices) / Double(n) / on.minutes
+        let ratio = perOn / max(perOff, 0.001)
+        func cnt(_ r: Result, _ v: String) -> Int { r.played.filter { $0.key.hasPrefix(v == "happy" ? "chirp_" : "\(v)_") }.values.reduce(0, +) }
+        let fams = ["happy", "babble", "giggle", "curious", "hum", "ooh", "yawn", "sad", "wheee", "lala", "pfft", "nyoo", "uhoh", "eep", "huh", "aww"]
+        print("ROAMBOOST total voices/Jelbie/min \(String(format: "%.3f", perOff)) -> \(String(format: "%.3f", perOn)) x\(String(format: "%.3f", ratio)) (\(off.voices) -> \(on.voices)); filler requests \(off.ambientTags) -> \(on.ambientTags)")
+        print("ROAMBOOST PLAYED per family (off -> on): " + fams.map { "\($0) \(cnt(off, $0))->\(cnt(on, $0))" }.joined(separator: ", "))
+        let sumOff = off.played.filter { !($0.key.hasPrefix("chirp_") || $0.key.hasPrefix("babble_")) }.values.reduce(0, +), sumOn = on.played.filter { !($0.key.hasPrefix("chirp_") || $0.key.hasPrefix("babble_")) }.values.reduce(0, +)
+        print("ROAMBOOST all non-chirp/babble PLAYED \(sumOff) -> \(sumOn); min any-voice gap \(off.minAnyGap) -> \(on.minAnyGap); min chirp gap \(off.minVoiceGap) -> \(on.minVoiceGap)")
+        XCTAssertGreaterThanOrEqual(ratio, 1.10, "total voices ratio")
+        XCTAssertLessThanOrEqual(ratio, 1.20, "total voices ratio")
+        for f in fams where cnt(off, f) >= 20 { XCTAssertGreaterThanOrEqual(Double(cnt(on, f)), 0.8 * Double(cnt(off, f)), "\(f) rarer with the boost on") }
+        XCTAssertGreaterThanOrEqual(Double(sumOn), 0.97 * Double(sumOff), "non-voice + context sounds")
+        XCTAssertGreaterThanOrEqual(on.minAnyGap, 0.5 - 1e-6, "two voices of one Jelbie too close")
+        XCTAssertGreaterThanOrEqual(on.minVoiceGap, 2.2 - 1e-6, "two chirps of one Jelbie within 2.2 s")
     }
     func testContextFloorDefaultRoster() { reportFloor("default3", n: 3, chars: nil) }
     func testContextFloorTeddyPanda() { reportFloor("teddy+panda", n: 2, chars: [JellyRoster.teddyID, JellyRoster.pandaID]) }
