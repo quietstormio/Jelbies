@@ -221,7 +221,7 @@ extension DecorKind {
     /// A hop-sit piece with no backrest (pouf, stools, swing, cushion pile, rocking horse, rocket, seesaw, spring bunny, sandbox): he hops up as usual but STANDS on it, upright,
     /// both feet planted on the seat inside its footprint, a small knee-bob and arms out for balance, riding the seat's motion a little less than a sitter. One rule for
     /// every Jelbie (the player's, the park visitors) and every new piece: a new `sitPoints` piece without a back stands without any other change.
-    var standsOn: Bool { hopSit && !hasBackrest }
+    var standsOn: Bool { hopSit && !hasBackrest && self != .seesaw }          // (the Park seesaw is SAT on, on its cushions: Park/SeesawRide.swift)
     /// The pieces whose Jelly behaviour is wired (the rest are scenery that is walked round).
     static let wired: Set<DecorKind> = Set(DecorKind.allCases)
     /// What a Jelly may actually pick with it right now (`interaction` for a wired piece).
@@ -621,6 +621,7 @@ final class DecorField {
     /// World position of a seat (xz) and height of its surface right now.
     func seatWorld(_ uid: Int, seat: Int) -> SIMD3<Float>? {
         guard let f = foot(uid), !f.kind.sitPoints.isEmpty else { return nil }
+        if f.kind == .seesaw { let p = SeesawTuning.seatLocal(seat: seat, theta: SeesawRide.shared.theta(uid)); let w = f.turned(SIMD2(p.x, p.z)); return SIMD3(f.centre.x + w.x, p.y + f.lift, f.centre.y + w.y) }          // (the seat on the turning plank)
         let p = DecorModels.seatPoint(f.kind, seat: seat, anim: anim[uid] ?? DecorAnim(), lift: f.lift)
         let w = f.turned(SIMD2(p.x, p.z))
         return SIMD3(f.centre.x + w.x, p.y, f.centre.y + w.y)
@@ -738,6 +739,7 @@ final class DecorField {
         ballContactStep(dt: dt)          // (balls are solid: bodies push them, they push each other: Room/DecorField+BallContact.swift)
         for uid in Array(anim.keys) {
             guard var a = anim[uid], let f = foot(uid) else { continue }
+            if f.kind == .seesaw { a.rockWant = SeesawRide.shared.tick(uid, dt: dt, field: self) ? 1 : 0 }          // (the plank's ride advances every step, also with nobody on it; rockWant keeps the piece active while it moves)
             if a.active {
                 a.sink += (a.sinkWant - a.sink) * min(1, dt * (a.sinkWant > a.sink ? 5 : 3.2))
                 if a.sinkWant == 0, a.sink < 0.002 { a.sink = 0 }

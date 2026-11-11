@@ -102,6 +102,7 @@ enum DecorModels {
                 let q = simd_quatf(angle: 0.45 * s1 * w, axis: SIMD3(0, 0, 1)) * simd_quatf(angle: 0.34 * s2 * w, axis: SIMD3(1, 0, 0))
                 return rotated(v, n, about: pv, q)
             })
+        case .seesaw: addParkToy(kind, at: p, anim: a, time: time, uid: uid, into: b)          // (the plank's angle and the bumper press come from Park/SeesawRide.swift; the baked parts are posed in ParkToys.swift)
         case .ball:
             guard let ball = art.part("ball") else { return false }
             let q = a.rot, pv = ball.pivot

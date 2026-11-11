@@ -44,10 +44,10 @@ struct ToyBrain {
 }
 
 extension BlobBrain {
-    private var toyPeers: [BlobBrain] { socialOthers().filter { $0 !== self } }
+    var toyPeers: [BlobBrain] { socialOthers().filter { $0 !== self } }          // (was private: the seesaw's invitation, Park/SeesawRide.swift, ranks the free Jelbies)
 
     /// Nothing owns him: a toy may take him now.
-    private var toyFree: Bool {
+    var toyFree: Bool {          // (was private: same reason)
         anticsEnabled && !decorLocked && reactFree && scriptIsNone && idleState.kind == nil && !race.active && idleMood != .grumpy && idleNight < 0.6
     }
 
@@ -133,6 +133,7 @@ extension BlobBrain {
     private func toyShouldNotice(_ n: ToyNews) -> Bool {
         let f = DecorField.shared
         guard let foot = f.foot(n.uid) else { return false }
+        if SeesawRide.shared.isInvite(n.serial) { return seesawJoinRoll(n) }          // (a lone seesaw rider asks for company: one roll, the nearest free Jelbie: Park/SeesawRide.swift)
         if foot.kind == .hopscotch { return HopscotchLine.shared.invitation(foot.uid, steerID, roll: rand()) }          // (a line started: each free Jelbie rolls once for joining it)
         // the goal stands for its ball
         var uid = n.uid, kind = foot.kind

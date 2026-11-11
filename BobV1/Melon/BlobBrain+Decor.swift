@@ -162,7 +162,7 @@ extension BlobBrain {
         let c = DecorField.shared.position(f)
         switch kind {
         case .decorSit where f.kind.hopSit && f.kind != .beanbag:
-            return hopStand(f, seat: seat)
+            return f.kind == .seesaw ? seesawFreeSpot(f, seat: seat, from: here) : hopStand(f, seat: seat)          // (the seesaw's own spots: Park/SeesawRide.swift)
         case .decorSlide where f.kind == .kickscooter:
             return scooterStand(f, from: here)
         case .decorSlide:
@@ -514,6 +514,7 @@ extension BlobBrain {
     /// Stage 0 (turn to the seat, then hop up) and stage 2 (on top: rests, then hops off), run as the posture.
     func runBagSit(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let f = DecorField.shared.foot(idleState.decorUID) else { idleFinish(skinner); return }
+        if f.kind == .seesaw { seesawRunBagSit(sim, skinner, dt, f); return }          // (the seesaw's ride: Park/SeesawRide.swift)
         let c = f.centre
         // From the hop up until he is down again the gait and the seat have the body, not a pose: his floor spot (px, pz: what the others steer
         // around, GameCare.floorPos) follows the body, or they would see him where he stood BEFORE the hop and walk straight over the seat.
@@ -599,16 +600,10 @@ extension BlobBrain {
     private func seatMotion(_ f: DecorFoot, k: Float, ride: Float = 1) {
         let pitch0 = pitch, roll0 = roll
         // (a stander leans with a swinging / bouncing seat `ride` as much as a sitter; on a TILTING plank or saddle (seesaw, horse, rocket) he tilts with it fully, so both soles stay flat on it)
-        let flat = f.kind.standsOn && (f.kind == .seesaw || f.kind.rockRide)
+        let flat = f.kind.standsOn && f.kind.rockRide
         defer { if ride != 1 { pitch = pitch0 + (pitch - pitch0) * ride; if !flat { roll = roll0 + (roll - roll0) * ride } } }
         let uid = f.uid
         if f.kind == .sandbox { DecorField.shared.rock(uid, idleState.phase == 2 ? 1 : 0.4) }          // (digging: the sand puffs)
-        if f.kind.parkRocker {
-            let on = idleState.phase == 2 && k > 0.5 || idleState.phase == 1 && k > 0.3
-            DecorField.shared.rock(uid, on ? 1 : 0.35)
-            seatFollow(f)
-            if f.kind == .seesaw, f.kind.standsOn { roll += DecorModels.seesawAngle(DecorField.shared.anim[uid] ?? DecorAnim()) }          // (the plank tilts under his feet about its z axis = his roll)
-        }
         if f.kind.rockRide {
             // astride the horse / rocket: it rocks on its runners and carries him; he leans with it (about the piece's z axis, which is his pitch: he faces its nose)
             let on = k > 0.5 && idleState.phase == 2 || idleState.phase == 1 && k > 0.3
@@ -682,6 +677,7 @@ extension BlobBrain {
     /// The two hops of the seat sit (they own the body like the bounce): true = this step is handled.
     func bagBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
         guard isBagSit, idleState.bagStage == 1 || idleState.bagStage == 3, case .idle = script else { return false }
+        if sitPiece?.kind == .seesaw { return seesawBodyTick(sim, skinner, dt) }          // (the seesaw's two hops: Park/SeesawRide.swift)
         let uid = idleState.decorUID
         activity = .playing
         mouthOpen = 0

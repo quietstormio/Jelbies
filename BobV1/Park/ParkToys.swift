@@ -52,7 +52,7 @@ extension DecorKind {
 
     var parkSpec: DecorSpec {
         switch self {
-        case .seesaw: return DecorSpec(half: SIMD2(1.05, 0.30), height: 0.55, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
+        case .seesaw: return DecorSpec(half: SIMD2(1.05, 0.28), height: 0.55, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
         case .sandbox: return DecorSpec(half: SIMD2(1.25, 0.90), height: 0.22, solid: true, units: 3, corner: 0.25, reach: 1, box: true)
         case .hopscotch: return DecorSpec(half: HopscotchCourt.slabHalf, height: 0.05, solid: false, units: 3, corner: 0.1, reach: 0.5, box: true)
         default: return DecorSpec(half: SIMD2(0.4, 0.4), height: 1, solid: true, units: 1, corner: 0.2, reach: 1, box: true)
@@ -60,7 +60,7 @@ extension DecorKind {
     }
     var parkSitPoints: [SIMD3<Float>] {
         switch self {
-        case .seesaw: return [SIMD3(-0.66, 0.475, 0), SIMD3(0.66, 0.475, 0)]          // (the pad's top: 0.34 pivot + 0.09 + 0.045; a sitter's rear sank into the pad, a stander's soles must not)
+        case .seesaw: return [SIMD3(-0.66, 0.475, 0), SIMD3(0.66, 0.475, 0)]          // (the cushion's flat top, 0.475: the beam's top 0.345, the hinge 0.3775 and the pad's underside 0.41 under it; they SIT on it now, see Park/SeesawRide.swift; the footprint's half depth 0.28 x 1.4 = 0.392 covers the base's axle caps (|z| 0.272 x 1.4 = 0.381) and the stand spot in front is 0.81 from the seat, 0.31 clear of the cushion's edge for a body of radius 0.5)
         case .sandbox: return [SIMD3(-0.72, 0.16, -0.25), SIMD3(0.72, 0.16, -0.25), SIMD3(0, 0.16, 0.45)]          // (three bodies of ~1.0 stand in a triangle with >1.1 between centres)
         default: return []
         }
@@ -70,7 +70,7 @@ extension DecorKind {
     }
     var parkUse: String {
         switch self {
-        case .seesaw: return "A Park seesaw. Two Jelbies stand on it and ride up and down."
+        case .seesaw: return "A Park seesaw. Two Jelbies sit on it and ride up and down."
         case .sandbox: return "A Park sandbox. Up to three stand in it and dig."
         case .hopscotch: return "A Park hopscotch court. Short legs, so they hop square to square, and friends line up behind."
         default: return ""
@@ -80,18 +80,8 @@ extension DecorKind {
 
 extension DecorModels {
     // seesaw: plank pivot and swing; spring rider: base of the spring and the bounce
-    static let seesawPivotY: Float = 0.34
-    static func seesawAngle(_ a: DecorAnim) -> Float { 0.26 * sinf(2 * .pi * a.rockT / 1.7) * min(a.rockAmp, 1) }
-
-    static func parkSeatPoint(_ kind: DecorKind, seat: Int, anim a: DecorAnim) -> SIMD3<Float> {
-        let sp = kind.sitPoints[min(seat, kind.sitPoints.count - 1)], k = kind.scale
-        switch kind {
-        case .seesaw:
-            let th = seesawAngle(a), py = seesawPivotY * k
-            return SIMD3(sp.x * cosf(th), py + (sp.y - py) * cosf(th) + sp.x * sinf(th), sp.z)
-        default: return SIMD3(sp.x, sp.y - 0.03 * a.sink, sp.z)
-        }
-    }
+    static let seesawPivotY: Float = SeesawTuning.pivotY
+    // (the plank's angle and the seats' frame: Park/SeesawRide.swift)
 
     // MARK: meshes
 
@@ -107,31 +97,56 @@ extension DecorModels {
         func rbox(_ c: SIMD3<Float>, _ h: SIMD3<Float>, _ r: Float, _ col: SIMD3<Float>) { b.roundedBox(centre: o + c, half: h, radius: r, segments: 3, aoFloor: false, color: col) }
         switch kind {
         case .seesaw:
-            // two chunky rounded feet, a fat fulcrum, a tilting plank with a pad and a grip at each end, rubber bumpers on the ground
+            // the baked model (decor_seesaw.bin, already at the piece's scale: DecorMeshes.loaded scales positions and pivots), contract v2: the base as it is, the plank turned by theta about its
+            // pivot on z, each seat (seatL / seatR) only TRANSLATED by what its hinge point travels with the plank and never turned (so it stays level), and a rubber bumper under each end
+            // scaled in height about its floor pivot so its top follows the plank's underside. The angle is the one the riders were placed with in this step (`drawnTheta`).
+            // An art file of the old contract (no seat parts, another plank pivot) falls through to the procedural piece below.
+            if let art = DecorMeshes.loaded[.seesaw], let base = art.part("base"), let plankPart = art.part("plank"), let bl = art.part("bumperL"), let br = art.part("bumperR"),
+               let seatL = art.part("seatL"), let seatR = art.part("seatR"), abs(plankPart.pivot.y - SeesawTuning.pivotY * k0) < 0.004 {
+                let th = SeesawRide.shared.drawnTheta(uid), q = simd_quatf(angle: th, axis: SIMD3(0, 0, 1)), pv = plankPart.pivot
+                DecorMeshes.emit(base, into: b, offset: o)
+                DecorMeshes.emit(plankPart, into: b, offset: o, pose: { v, n, _ in (pv + q.act(v - pv), q.act(n)) })
+                for seat in [seatL, seatR] {
+                    let h = seat.pivot - pv, d = q.act(h) - h
+                    DecorMeshes.emit(seat, into: b, offset: o, pose: { v, n, _ in (v + d, n) })
+                }
+                for (part, sx) in [(bl, Float(-1)), (br, Float(1))] {
+                    let sy = SeesawTuning.bumperTop(side: sx, theta: th) / SeesawTuning.bumperRest
+                    DecorMeshes.emit(part, into: b, offset: o, pose: { v, n, _ in (SIMD3(v.x, v.y * sy, v.z), simd_normalize(SIMD3(n.x, n.y / max(sy, 0.05), n.z))) })
+                }
+                return          // (no second scale: the art is scaled already)
+            }
+            // fallback without the art file: the procedural piece to the same contract (SeesawTuning, model units)
+            // the contract (SeesawTuning, model units): two chunky feet and a fat fulcrum (all within |x| 0.24), a plank 0.09 thick turned by theta about the pivot (0.27) with a T-handle at each end,
+            // two LEVEL pads (top y 0.475) on a small hinge block each, translated with their hinge point and never turned, and a rubber dome on the ground under each end that the underside
+            // presses down (apex = underside at its centre line)
             rbox(SIMD3(0, 0.10, -0.2), SIMD3(0.20, 0.10, 0.10), 0.09, post)
             rbox(SIMD3(0, 0.10, 0.2), SIMD3(0.20, 0.10, 0.10), 0.09, post)
-            rbox(SIMD3(0, 0.25, 0), SIMD3(0.14, 0.15, 0.14), 0.12, post)
-            let th = seesawAngle(a), q = simd_quatf(angle: th, axis: SIMD3(0, 0, 1)), pv = SIMD3<Float>(0, seesawPivotY, 0)
-            func on(_ v: SIMD3<Float>) -> SIMD3<Float> { pv + q.act(v) }
-            // plank as a rotated rounded box: build it unrotated then rotate its vertices
-            let v0 = b.mesh.vertices.count
-            func addRot(_ c: SIMD3<Float>, _ h: SIMD3<Float>, _ r: Float, _ col: SIMD3<Float>) {
+            rbox(SIMD3(0, 0.20, 0), SIMD3(0.14, 0.10, 0.14), 0.09, post)
+            let th = SeesawRide.shared.drawnTheta(uid), q = simd_quatf(angle: th, axis: SIMD3(0, 0, 1)), pv = SIMD3<Float>(0, SeesawTuning.pivotY, 0)
+            // a rounded box built unrotated, then its vertices turned about the pivot with the plank (or, `turn` false, only moved by `shift`)
+            func addRot(_ c: SIMD3<Float>, _ h: SIMD3<Float>, _ r: Float, _ col: SIMD3<Float>, turn: Bool = true, shift: SIMD3<Float> = .zero) {
                 let first = b.mesh.vertices.count
                 b.roundedBox(centre: c, half: h, radius: r, segments: 3, aoFloor: false, color: col)
                 for i in first..<b.mesh.vertices.count {
                     let pp = b.mesh.vertices[i].pos, n = b.mesh.vertices[i].normal
-                    let rp = pv + q.act(SIMD3(pp.x, pp.y, pp.z) - pv), rn = q.act(SIMD3(n.x, n.y, n.z))
+                    let p3 = SIMD3(pp.x, pp.y, pp.z)
+                    let rp = turn ? pv + q.act(p3 - pv) : p3 + shift, rn = turn ? q.act(SIMD3(n.x, n.y, n.z)) : SIMD3(n.x, n.y, n.z)
                     b.mesh.vertices[i].pos = SIMD4(rp + o, pp.w); b.mesh.vertices[i].normal = SIMD4(rn, n.w)
                 }
             }
-            _ = on; _ = v0
-            addRot(SIMD3(0, pv.y + 0.02, 0), SIMD3(1.05, 0.055, 0.19), 0.05, plank)
+            addRot(SIMD3(0, SeesawTuning.beamCentreY, 0), SeesawTuning.beamHalf, 0.04, plank)
             for sx: Float in [-1, 1] {
-                let squash = 1 - 0.18 * max(0, -sx * sinf(th) * 3.2)          // the low end's pad squishes
-                addRot(SIMD3(sx * 0.70, pv.y + 0.09, 0), SIMD3(0.24, 0.045 * squash, 0.17), 0.045, sx < 0 ? padA : padB)
-                addRot(SIMD3(sx * 0.22, pv.y + 0.22, 0.12), SIMD3(0.025, 0.07, 0.025), 0.02, post)
-                // bumper on the ground under the end
-                S.blob(b, o + SIMD3(sx * 1.05, 0.07, 0), rx: 0.11, ry: 0.07, rz: 0.11, color: padA * 0.9, segments: 10, rings: 5, ao: 0.9)
+                // the pad (level) and its hinge block under it, moved by the seat's shift: the hinge point of the plank is the block's centre
+                let shift = SeesawTuning.seatShift(seat: sx < 0 ? 0 : 1, theta: th)
+                addRot(SIMD3(sx * SeesawTuning.cushionX, SeesawTuning.cushionCentreY, 0), SeesawTuning.cushionHalf, 0.028, sx < 0 ? padA : padB, turn: false, shift: shift)
+                addRot(SIMD3(sx * SeesawTuning.hingeX, SeesawTuning.hingeY - 0.012, 0), SIMD3(0.07, 0.04, 0.09), 0.03, post, turn: false, shift: shift)
+                // the T-handle: one central post from the plank up, a crossbar along z (reaching +-0.136), top y 0.636, nothing of it beyond |x| 0.235
+                let postTop = SeesawTuning.handleTopY - 0.036, postBot = SeesawTuning.handleBottomY
+                addRot(SIMD3(sx * SeesawTuning.handleX, (postTop + postBot) / 2, 0), SIMD3(0.02, (postTop - postBot) / 2, 0.02), 0.018, post)
+                addRot(SIMD3(sx * SeesawTuning.handleX, SeesawTuning.handleTopY - 0.018, 0), SIMD3(SeesawTuning.handleBarHalfX, 0.018, SeesawTuning.handleBarHalfZ), 0.016, post)
+                // the rubber bumper: a dome (its lower half is under the lawn) whose apex follows the plank's underside while pressed
+                S.blob(b, o + SIMD3(sx * SeesawTuning.bumperX, 0, 0), rx: SeesawTuning.bumperRadius, ry: SeesawTuning.bumperTop(side: sx, theta: th), rz: SeesawTuning.bumperRadius, color: padA * 0.9, segments: 10, rings: 5, ao: 0.9)
             }
         case .sandbox:
             // a low rounded frame, soft sand with a gentle mound, a bucket and a spade
