@@ -548,7 +548,7 @@ extension BlobBrain {
                 if phT >= (stand ? 0.45 : 1.15) && !feet.active { idleState.phase = 2; idleState.phaseT = 0 }
             case 2:
                 k = 1
-                if phT >= idleState.hold { idleState.phase = 3; idleState.phaseT = 0; idleState.steps = 0 }
+                if phT >= idleState.hold, phT >= idleState.hold + Self.hopExitWait || hopExitNear(f) { idleState.phase = 3; idleState.phaseT = 0; idleState.steps = 0 }
             default:
                 k = 1 - smooth01(phT / (stand ? 0.4 : 1.0))
                 if !stand, !feet.active && idleState.steps < 2 && phT > Float(idleState.steps) * 0.3 { idleFootStep(reach: 0); idleState.steps += 1 }
