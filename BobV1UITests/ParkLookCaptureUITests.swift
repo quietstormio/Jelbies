@@ -39,6 +39,8 @@ final class ParkLookCaptureUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-SetRoster", "bob,pearl,teddy", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES",
                                 "-BlobDrops.v1", "1024", "-ClockHour", ProcessInfo.processInfo.environment["PARK_LOOK_HOUR"] ?? "12", "-StartPark", "1"]
+        if let r = ProcessInfo.processInfo.environment["PARK_LOOK_ROSTER"], let i = app.launchArguments.firstIndex(of: "-SetRoster") { app.launchArguments[i + 1] = r }          // (e.g. bob,teddy)
+        if let extra = ProcessInfo.processInfo.environment["PARK_LOOK_ARGS"] { app.launchArguments += extra.split(separator: " ").map(String.init) }          // (extra launch arguments, space separated)
         let flow = ProcessInfo.processInfo.environment["PARK_LOOK_FLOW"] ?? "picker"          // picker: tap Play and look at the toy strip; play: `-StartParkPlay ball` (the player owns no toys under XCTest, whose store does not persist) then Done
         if flow == "toytap" { app.launchArguments.removeLast(2) }          // (no -StartPark: this flow walks the real UI)
         if flow == "play" || flow == "flick" { app.launchArguments += ["-StartParkPlay", "ball"] }
@@ -53,6 +55,7 @@ final class ParkLookCaptureUITests: XCTestCase {
                 frames += "  \(id): exists=\(e.exists) hittable=\(e.exists && e.isHittable) frame=\(e.exists ? "\(e.frame)" : "-")\n"
             }
         }
+        if let w = ProcessInfo.processInfo.environment["PARK_LOOK_PREWAIT"].flatMap(Double.init) { sleep(UInt32(w)) }          // (a busy host: do not query the app while it loads the park, its main thread answers no snapshot within 30 s)
         let home = app.buttons["park-home"]
         let opened = flow == "toytap" ? true : home.waitForExistence(timeout: 300)
         if !opened { shot("FAILED_no_park") }
