@@ -628,18 +628,55 @@ final class RacePullTests: XCTestCase {
             let c = RaceCourse.course(tier)
             // (A perfect player ends the race before most rivals finish, so a rival who has not finished counts with the time his average pace so far gives:
             // clock x length / distance. A mean over the finishers alone would drop the slow ones and look faster than it is.)
-            func times(_ run: PullRun) -> [Float] {
-                run.sim.racers.dropFirst().map { $0.finishTime ?? run.sim.clock * c.length / max($0.dist, 1e-3) }
+            func times(_ run: PullRun) -> [(slot: Int, t: Float)] {
+                run.sim.racers.indices.dropFirst().map { i in
+                    let r = run.sim.racers[i]
+                    return ((i - 1 + Int(run.sim.seed % 2)) % 2, r.finishTime ?? run.sim.clock * c.length / max(r.dist, 1e-3))
+                }
             }
-            var on: [Float] = [], offT: [Float] = []
+            var on: [(slot: Int, t: Float)] = [], offT: [(slot: Int, t: Float)] = []
             for seed in UInt64(1)...100 {
                 on += times(Self.pullRun(seed: seed, bot: .perfect, course: c, keep: false))
                 offT += times(Self.pullRun(seed: seed, bot: .perfect, course: c, tuning: off, keep: false))
             }
-            let a = on.reduce(0, +) / Float(max(on.count, 1)), b = offT.reduce(0, +) / Float(max(offT.count, 1))
+            func mean(_ x: [(slot: Int, t: Float)], _ slot: Int?) -> Float {
+                let v = x.filter { slot == nil || $0.slot == slot }.map(\.t)
+                return v.reduce(0, +) / Float(max(v.count, 1))
+            }
+            let a = mean(on, nil), b = mean(offT, nil)
             print("[pullcal] sharp player, \(tier): rivals' mean finish mirror on \(a) s, off \(b) s, ratio \(a / b)")
+            print("[pullcal] sharp player, \(tier): slot A ratio \(mean(on, 0) / mean(offT, 0)) slot B ratio \(mean(on, 1) / mean(offT, 1))")
             XCTAssertLessThanOrEqual(a / b, 1.03, "\(tier): the mirror slows the rivals by more than 3 % for a perfect player")
             XCTAssertGreaterThanOrEqual(a / b, 0.995, "\(tier): the mirror makes the rivals faster")
+        }
+    }
+
+    /// Prints (no assertion) the mean seconds from a landing to the same racer's next hop, the player and the two rival slots, mirror on, landings that ended in a trip left out.
+    func testGroundTimePrints() {
+        for tier in [CourseTier.ripple, .tsunami] {
+            let c = RaceCourse.course(tier)
+            for kind in [PullBot.Kind.relaxed, .perfect] {
+                var sum = [Float](repeating: 0, count: 3), n = [Int](repeating: 0, count: 3)
+                for seed in UInt64(1)...20 {
+                    let run = Self.pullRun(seed: seed, bot: kind, course: c)
+                    var landClock: [Int: Float] = [:], tripped: Set<Int> = []
+                    for (k, e) in run.events.enumerated() {
+                        switch e {
+                        case .landed(let r): landClock[r] = run.clocks[k]; tripped.remove(r)
+                        case .trip(let r): tripped.insert(r)
+                        case .hop(let r, _, _, _, _, _, _):
+                            if let t0 = landClock[r], !tripped.contains(r) {
+                                let col = r == 0 ? 0 : 1 + (r - 1 + Int(seed % 2)) % 2
+                                sum[col] += run.clocks[k] - t0; n[col] += 1
+                            }
+                            landClock[r] = nil
+                        default: break
+                        }
+                    }
+                }
+                let m = (0..<3).map { sum[$0] / Float(max(n[$0], 1)) }
+                print("[pullcal] ground \(tier) \(kind): player \(m[0]) s, slot A \(m[1]) s, slot B \(m[2]) s")
+            }
         }
     }
 
@@ -869,7 +906,7 @@ final class RacePullTests: XCTestCase {
                 print("[pullcal] rivalLength (\(label)): NO VALUE IN 0.80 ... 1.00 PASSES TWICE IN A ROW (committed value kept)")
                 return committed.rivalLength
             }
-            if ch >= 0.9999 { print("[pullcal] rivalLength (\(label)): 1.00 STILL PASSES (top of the range)") }
+            if ch >= 0.9999 { print("[pullcal] rivalLength (\(label)): 1.00 passes: the design cap") }
             print("[pullcal] rivalLength chosen (\(label)) = \(ch)")
             return ch
         }
@@ -905,7 +942,7 @@ final class RacePullTests: XCTestCase {
         // 5. a second pass for rivalLength when tripScale moved
         if abs(tripChosen - committed.tripScale) > 0.26 { tune.rivalLength = rivalLengthPass("pass 2") }
 
-        // 3. rivalLengthPuddle: the first-timer wins >= 55 % and is in the top two >= 85 %, and the value below does too
+        // 3. rivalLengthPuddle: the first-timer wins >= 55 % and is in the top two >= 85 %, the relaxed player wins >= 85 %, and the value below does too
         var puddleChosen: Float?
         var prevOK = false
         var k = 0
@@ -914,7 +951,7 @@ final class RacePullTests: XCTestCase {
             if v < 0.4999 { break }
             tune.rivalLengthPuddle = v
             let f = Self.board(.firstTimer, Self.newJelbie, .puddle, tune, seeds), rx = Self.board(.relaxed, Self.newJelbie, .puddle, tune, seeds), s = Self.board(.steady, Self.newJelbie, .puddle, tune, seeds)
-            let ok = f.wins >= 110 && f.top2 >= 170
+            let ok = f.wins >= 110 && f.top2 >= 170 && rx.wins >= 170
             print("[pullcal] rivalLengthPuddle \(v): firstTimer wins \(f.wins)/\(f.n) top two \(f.top2)/\(f.n) | relaxed wins \(rx.wins)/\(rx.n) | steady wins \(s.wins)/\(s.n)" + (ok ? "  PASS" : ""))
             if ok, prevOK { puddleChosen = r2(v + 0.01); break }
             prevOK = ok

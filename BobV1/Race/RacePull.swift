@@ -93,8 +93,8 @@ nonisolated struct RacePullTuning: Sendable {
     var mirrorGroundInit: Float = 0.15
     var mirrorGroundRate: Float = 0.2
     var mirrorGroundMax: Float = 1.2
-    /// Per rival slot (s).
-    var mirrorGroundOff: [Float] = [0, 0.03]
+    /// Per rival slot, a share of the player's own time on the ground: one rival keeps the player's rhythm, one stands a quarter longer. Against a player who never waits on the ground both are exactly themselves.
+    var mirrorGroundMul: [Float] = [1.0, 1.25]
     /// A rival does not leave before the player's first hop, or this many seconds after GO.
     var startHold: Float = 1.2
 

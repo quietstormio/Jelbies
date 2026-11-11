@@ -759,12 +759,14 @@ extension RaceSim {
                     let brake = CourseTuning.rivalBrake(course: course, at: r.dist, stats: r.stats, nominal: r.pullPace)
                     let j = r.rng.range(0.6, 1.4)
                     let own = (0.03 + 0.12 * (1 - skill)) * j
-                    var wait = own
-                    if pt.mirror, !r.isPlayer {           // never quicker on the ground than the player has shown himself to be
-                        let slot = mirrorSlot(i)
-                        wait = max(own, pt.landHold + max(0, mirrorGround + pt.mirrorGroundOff[slot % pt.mirrorGroundOff.count]) * j)
+                    let a2 = own + cycle * (brake - 1)            // stage A2's wait, turn braking included
+                    if pt.mirror, !r.isPlayer {
+                        // never quicker on the ground than the player has shown himself to be, never quicker than himself
+                        let shown = pt.landHold + mirrorGround * pt.mirrorGroundMul[mirrorSlot(i) % pt.mirrorGroundMul.count] * j
+                        r.aiWait = max(a2, shown)
+                    } else {
+                        r.aiWait = a2
                     }
-                    r.aiWait = wait + cycle * (brake - 1)
                 }
                 r.hopBars = []; r.hopBarCursor = 0
             }
