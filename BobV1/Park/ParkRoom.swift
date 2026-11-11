@@ -113,7 +113,7 @@ enum ParkScenery {
         // three feature trees in the portrait window behind the fence so the tree line always reads: a beech, a birch, a far oak
         roundTree(b, x: 2.5, z: -7.7, trunk: 0.8, radius: 0.95, canopy: leaf, shape: .round, species: 1, far: false, rng: &r)
         roundTree(b, x: 5.3, z: -7.4, trunk: 0.8, radius: 1.0, canopy: leaf2, shape: .round, species: 2, far: false, rng: &r)
-        roundTree(b, x: -0.2, z: -8.9, trunk: 0.8, radius: 1.5, canopy: hazy, shape: .round, species: 0, far: true, rng: &r)
+        roundTree(b, x: -0.2, z: -8.9, trunk: 0.8, radius: 1.0, canopy: hazy, shape: .round, species: 0, far: true, rng: &r)
         // two hero trees at the edges: a broad oak left, a beech right (full detail, standing on the lawn)
         roundTree(b, x: -6.4, z: -3.2, trunk: 1.0, radius: 1.0, canopy: leaf2, shape: .round, species: 0, far: false, rng: &r)
         shadows.append(ParkShadow(x: -6.4, z: -3.2, r: 2.4, h: 2.8))
