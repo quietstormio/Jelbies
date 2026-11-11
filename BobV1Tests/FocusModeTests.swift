@@ -15,7 +15,7 @@ final class FocusRun {
     let care = GameCare()
     var brain: BlobBrain { rig.brain }
     var focus: BlobFocus { care.focus }
-    init() { rig.brain.autonomy = true; rig.brain.seed = 7 }
+    init() { rig.brain.autonomy = true; rig.brain.seed = 7; care.store.grant("berries", 3) }          // (berries are a store food: fed from the bag, a bare feed("berries") is refused)
     func tick() {
         brain.tick(sim: rig.sim, skinner: rig.skinner, dt: rig.sim.stepDt, touched: false)
         care.tick(brain: brain, renderer: nil, dt: rig.sim.stepDt, sim: rig.sim)
