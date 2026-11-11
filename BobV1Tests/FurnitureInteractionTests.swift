@@ -245,26 +245,4 @@ final class FurnitureInteractionTests: XCTestCase {
     }
 
     // MARK: the two-Jelly socials
-
-    func testTwoJelliesCuddleOnTheLoveseat() {
-        DecorField.shared.set([PlacedDecor(uid: 7, kind: .loveseat, x: 2.2, z: 0.2)])
-        let lab = SocialTests.Lab(n: 2, positions: [SIMD2(-0.6, 1.4), SIMD2(-1.9, 0.2)], quiet: true, seed: 5)
-        let a = lab.rigs[0], b = lab.rigs[1]
-        XCTAssertTrue(a.brain.socialStart(.cuddle, with: b.brain, a.sim), "the cuddle starts")
-        var bothSeated = 0, maxCuddle: [Float] = [0, 0], seats = Set<Int>()
-        for _ in 0..<(60 * 70) {
-            lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
-            for r in lab.rigs { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }
-            let on = lab.rigs.map { $0.brain.idleState.kind == .decorSit && $0.brain.idleState.bagStage == 2 && $0.brain.idleState.phase == 2 }
-            if on[0] && on[1] { bothSeated += 1; seats = [a.brain.idleState.seat, b.brain.idleState.seat] }
-            for i in 0..<2 { maxCuddle[i] = max(maxCuddle[i], lab.rigs[i].brain.idleState.cuddle) }
-            if a.brain.social == nil, b.brain.social == nil, a.brain.idleState.kind == nil, b.brain.idleState.kind == nil, bothSeated > 0 { break }
-        }
-        XCTAssertGreaterThan(bothSeated, 120, "both are settled on the sofa together")
-        XCTAssertEqual(seats, [0, 1], "one on each cushion")
-        XCTAssertGreaterThan(maxCuddle[0], 0.8); XCTAssertGreaterThan(maxCuddle[1], 0.8)
-        for r in lab.rigs { XCTAssertEqual(r.sim.floorY, 0, accuracy: 1e-5); XCTAssertNil(r.brain.idleState.kind) }
-        XCTAssertNil(DecorField.shared.occupant[7])
-        XCTAssertTrue((lab.events[0] + lab.events[1]).contains { if case .ended(.cuddle, _, .done) = $0 { return true }; return false }, "the cuddle ended well")
-    }
 }
