@@ -57,7 +57,7 @@ nonisolated enum BubbleTuning {
     nonisolated(unsafe) static var playWatchThink: ClosedRange<Float> = 0.25...0.6
     nonisolated(unsafe) static var playAfterChase: ClosedRange<Float> = 0.08...0.3
     nonisolated(unsafe) static var playPickRadius: Float = 5.0
-    nonisolated(unsafe) static var playSpotHold: ClosedRange<Float> = 0.2...0.3
+    nonisolated(unsafe) static var playSpotHold: ClosedRange<Float> = 0.35...0.5          // (round 1 made it 0.2...0.3: the walk order then cut the look off while it was still turning, and testPopFlap opened the foot join; the BEFORE value is back)
     /// The ground time (s) between the take-off of two of his hops (a hop is ~0.5 s long: the landing squash must read).
     nonisolated(unsafe) static var playHopSpacing: Float = 0.95
     /// Under a bubble that is not in reach yet: a small hop on the spot every so often (the first after `playWaitHopFirst`), each time with the chance `playWaitHopChance` x `playEnergy`.
@@ -78,7 +78,7 @@ nonisolated enum BubbleTuning {
     /// The walk order to a bubble (`bubbleGo` = `requestNow`, which aborts the running script) waits until his own hop (the happy hop of `bubbleIdle`, a wait hop, a pop move) has landed.
     nonisolated(unsafe) static var goWaitsForHop = true
     /// The spot look before a chase ends (and the walk order follows) only when his feet are still, not in the middle of the look's turn.
-    nonisolated(unsafe) static var spotWaitsForFeet = true
+    nonisolated(unsafe) static var spotWaitsForFeet = false
     /// THE dial (1.0 = this round's tuning): above 1 he thinks and waits for shorter times and hops on the spot more often, below 1 the other way round. Scales `playThinkEvery`, `playWatchThink`,
     /// `playAfterChase`, `playWaitHop`, `playWaitHopFirst` (divided) and `playWaitHopChance` (multiplied). The ground-time limit `playHopSpacing` is NOT scaled.
     nonisolated(unsafe) static var playEnergy: Float = 1.0
@@ -109,11 +109,11 @@ nonisolated enum BubbleTuning {
         classic = false; forceMove = nil; playEnergy = 1.0
         leapRange = 0.35...0.8
         playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.08...0.3
-        playPickRadius = 5.0; playSpotHold = 0.2...0.3; playHopSpacing = 0.95
+        playPickRadius = 5.0; playSpotHold = 0.35...0.5; playHopSpacing = 0.95
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.35...0.8; playWaitHopChance = 0.8; playWaitHopEnabled = true
         bounceWeightLow = 1; bounceWeightHigh = 2; pickDistanceFactor = 1.5
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
-        busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = true
+        busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false
     }
     static let lightBeat: Float = 0.18
     static let aimMax: Float = 3.5                 // how long he waits under a bubble for it to be in reach

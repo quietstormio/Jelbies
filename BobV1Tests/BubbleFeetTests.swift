@@ -72,7 +72,7 @@ final class BubbleFeetTests: XCTestCase {
         for c in 0..<OnePieceInvariantTests.characters.count {
             for shoes in [false, true] {
                 var buf: [String] = []
-                BubbleTuning.seedRandom(UInt64(c * 2 + (shoes ? 1 : 0) + 1))          // (the wand's dice fixed per character: a failure repeats)
+                BubbleTuning.seedRandom(UInt64(c * 2 + (shoes ? 1 : 0) + 1) + (ProcessInfo.processInfo.environment["BUBBLE_SEED"].flatMap(UInt64.init) ?? 0))          // (the wand's dice fixed per character, shifted by TEST_RUNNER_BUBBLE_SEED: a failure repeats, and repeated runs can use other dice)
                 var air = 0, badFrame = -1, badInfo = "", tiltMax: Float = 0, tiltInfo = "", leashFrame = -1
                 var worst: (ratio: Float, join: Float, collar: Float) = (.infinity, .infinity, 0)
                 let a = OnePieceInvariantTests.run(Self.scenario(name), char: c, shoes: shoes, pacing: .hz60, seed: 3) { frame, r, f in
@@ -118,7 +118,7 @@ final class BubbleFeetTests: XCTestCase {
 
     // Fault A (round 2): testPopFlap failed with the round-1 tuning ("the join is open: 2.4 to 3.1 cm", a walk with the body still tilted, both feet off the floor). Found by switches: round 1's numbers
     // (`round1()`: this round's tuning but `goWaitsForHop` off, the walk order may abort a hop in the air) with ONE group of them put back to the BEFORE values each.
-    static func round1() { BubbleTuning.restoreHead(); BubbleTuning.goWaitsForHop = false; BubbleTuning.spotWaitsForFeet = false; BubbleTuning.bounceWeightHigh = 4 }
+    static func round1() { BubbleTuning.restoreHead(); BubbleTuning.goWaitsForHop = false; BubbleTuning.spotWaitsForFeet = false; BubbleTuning.playSpotHold = 0.2...0.3; BubbleTuning.bounceWeightHigh = 4 }
     func testPopFlapRound1() { Self.round1(); bubbles("pop flap") }
     func testPopFlapRound1BusyLookingOff() { Self.round1(); BubbleTuning.busyLookingChases = false; bubbles("pop flap") }
     func testPopFlapRound1IdleCutsBefore() { Self.round1(); BubbleTuning.idleCuts = (0.32, 0.72, 0.86); BubbleTuning.idleStepDur = 0.8...1.6; bubbles("pop flap") }
