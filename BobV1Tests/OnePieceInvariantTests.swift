@@ -28,6 +28,8 @@ final class OnePieceInvariantTests: XCTestCase {
         let e = ProcessInfo.processInfo.environment
         if let v = e["ONEPIECE_COLLAR_R"], let f = Float(v) { Skinner.collarK = f }
         if let v = e["ONEPIECE_COLLAR_RING"], let n = Int(v) { Skinner.collarRing = n }
+        if let v = e["ONEPIECE_JIGGLE"], let n = Int(v) { JellyJiggle.sharedLevel = min(2, max(0, n)) }          // (inert when unset: the walking-jiggle level for a filtered run)
+        if e["ONEPIECE_NOSCOOTERFIX"] != nil { BlobBrain.scooterHopFit = false }          // (the scooter hops' beans on the attractor pose: the before run)
         if before { BlobBrain.retractBand = 0.10; BlobBrain.retractSink = 0.025; FootBean.creaseFadeAmount = 0; BlobBrain.onePieceVolley = false }
     }()
 
