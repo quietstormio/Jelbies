@@ -112,6 +112,8 @@ final class DiningGroup {
         let L = DiningLayout.make(n: max(n, 1))
         return (bystanderLies() + dinerLies()).contains { DiningSpot.lieDistance(from: $0.c, yaw: $0.yaw, origin: origin, layout: L) < DiningSpot.lieMargin }
     }
+    /// Diagnostics: is the tray's spot (rectangle + stands + approach strips) free of food / toys / decor right now?
+    var spotFreeNow: Bool { DiningSpot.spotFree(origin: origin, layout: DiningLayout.make(n: max(n, 1))) }
     /// Diagnostics: distance from the drawn tray's rectangle to this lying body's footprint (0 = overlap); .infinity when he is not lying.
     func lieDistanceNow(_ b: BlobBrain) -> Float {
         guard b.idleState.kind == .sleep, b.sleep.stage >= 2, b.sleep.stage <= 4 else { return .infinity }
