@@ -67,14 +67,17 @@ nonisolated struct RacePullTuning: Sendable {
     var stretchHi: Float = 1.35
     var stretchMax: Float = 1.10
     var stretchFloor: Float = 0.80
-    /// Trip chance scale (x the taps model's per-step chance x L / stride). CAL.
-    var tripScale: Float = 4.5
+    /// Trip chance scale (x the taps model's per-step chance x L / stride). CAL: the rivals' trips per race, summed over the five courses, equal the taps rivals' (sweep 1.0 ... 8.0).
+    var tripScale: Float = 4.3
     /// A rival's chance of a green pull: `rivalGreenBase + rivalGreenSkill x skill`; the auto player's is `autoGreen`.
     var rivalGreenBase: Float = 0.35
     var rivalGreenSkill: Float = 0.45
-    /// Rivals' hop length scale (calibrated so their finish times match the taps race), and the Puddle's own. CAL.
-    var rivalLength: Float = 0.79
-    var rivalLengthPuddle: Float = 0.632
+    /// Rivals' hop length scale from the Ripple up. CAL: the largest value (0.80 ... 1.10) at which a steady player (60 % green pulls, a new Jelbie) wins at least
+    /// 70 % on the Ripple, 55 % on the Splash and 35 % on the Wave: about as hard as the taps race is for a perfect tapper, a touch kinder.
+    var rivalLength: Float = 0.88
+    /// The Puddle's own rival length, the easy first course. CAL: the largest value (at most `rivalLength` and 0.90) at which a first-timer with a new Jelbie wins
+    /// at least 40 % and is in the top two at least 75 %.
+    var rivalLengthPuddle: Float = 0.64
     var autoGreen: Float = 0.5
 
     // MARK: 1. the shot
