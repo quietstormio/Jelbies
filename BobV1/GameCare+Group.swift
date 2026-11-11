@@ -20,6 +20,8 @@ import simd
 }
 
 extension GameCare {
+    /// How long a group serving keeps asking for a free spot for the table before it is refused (s).
+    static let noRoomWait: Float = 4
     /// A group serving is asked for or running (menu, tests and the tray flag read it).
     var groupActive: Bool { groupWanted != nil || group.isActive || !groupQueue.isEmpty }
     /// Centre gap the diners keep from each other while they drink (nil = the room's usual gap; MelonStage.keepApart).
@@ -57,6 +59,7 @@ extension GameCare {
 
     /// Once per fixed step (end of `tickOthers`, which sees every Jelly): starts the wanted group serving, then runs the group.
     func tickGroup(_ actors: [JellyActor], dt: Float) {
+        DiningSpot.floorThings = play.active ? [(c: SIMD2(play.ball.pos.x, play.ball.pos.z), r: play.ball.radius)] : []
         if let c = groupWanted {
             groupAge += dt
             let ready = actors.count == jellies.count && actors.allSatisfy { $0.brain != nil } && !callRunning && queued.isEmpty && (dining.phase == .absent || cafeBook.tableOut)
@@ -89,10 +92,16 @@ extension GameCare {
             group.start(c, brains: brains, floor: { floors[$0]() }, ids: sorted.map(\.id))
             if let cafeHooks = cafeBook.hooks, group.isActive { cafeHooks.seated(group.memberIDs, group.placeOf) }
             groupWanted = nil
-            if !group.isActive { groupQueueClear() }
+            if !group.isActive {
+                if group.noRoom, groupAge < Self.noRoomWait { groupWanted = c }          // (nothing is free for the table right now: bodies move; ask again each tick for a few seconds)
+                else {
+                    if group.noRoom { noticeAtBob = true; notice = "No room for the table — move a toy or try again"; noticeSerial += 1; noticeAge = 0 }
+                    groupQueueClear()
+                }
+            }
             return
         }
-        if group.gaveUp { if !gaveUpShown { gaveUpShown = true; tapRefused("Couldn't get the food to the table — try again") } } else { gaveUpShown = false }          // (a serving the diners could not reach was given up silently)
+        if group.gaveUp { if !gaveUpShown { gaveUpShown = true; tapRefused(group.noRoom ? "No room for the table — move a toy or try again" : "Couldn't get the food to the table — try again") } } else { gaveUpShown = false }          // (a serving the diners could not reach was given up silently)
         guard group.isActive else {
             // a sitting just ended: the waiting Jellies get theirs next (the tray pops again once this one has gone)
             if let c = groupNext, !groupQueue.isEmpty {

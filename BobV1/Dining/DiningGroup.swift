@@ -78,6 +78,8 @@ final class DiningGroup {
     /// Re-serves used (a displaced Blob: the tray poofs, everybody re-forms behind it, it pops again). Bounded like GameCare.
     private(set) var reserves = 0
     private(set) var gaveUp = false
+    /// No spot on the floor was free of food / toys / decor / bodies for this sitting (`start` did not begin; GameCare retries for 4 s, then refuses with a notice), or the spot got blocked and stayed so.
+    private(set) var noRoom = false
     /// Diner i was taken out of this sitting because HE could not be served (diagnostics / tests); the others carry on.
     private(set) var excused: [Bool] = []
     /// Debug switch for the before / after survey: false restores the old rule (one stuck diner ends the meal for everybody).
@@ -182,7 +184,21 @@ final class DiningGroup {
         if ProcessInfo.processInfo.environment["DINING_SOFT"] != nil { BlobBrain.softMealWake = true }          // (survey only: env DINING_SOFT=1 turns the soft tray wake on; inert in the app)
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
         memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
-        origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) }, lies: Self.trayFirst ? avoidLies + dinerLies() : [])
+        noRoom = false
+        if Self.trayFirst, forcedOrigin == nil {
+            // the owner's placement rule: never on food, a toy, decor or anything that could block; every diner's place reachable; the spot with the fewest diners in front of their line
+            let L = DiningLayout.make(n: n), floors = brains.indices.map { f($0) }
+            let sipping = c.eatStyle == .sip
+            func slots(_ o: SIMD2<Float>) -> [SIMD2<Float>] { L.places.map { p in var s = o + p.rel; s.y += sipping ? GameCare.sipCloser : GameCare.eatCloser; return SIMD2(s.x, s.y - GameCare.approachBack) } }
+            func lineup(_ o: SIMD2<Float>) -> [Int] { Lineup.best(from: floors, slots: slots(o), locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil) }
+            let chosen = DiningSpot.chooseStrict(layout: L, jellies: avoid + floors, lies: avoidLies + dinerLies(),
+                accept: { o in let po = lineup(o), sl = slots(o); return floors.indices.allSatisfy { DiningSpot.walkable(from: floors[$0], to: sl[po[$0]]) } },
+                score: { o in let po = lineup(o), sl = slots(o); return floors.indices.filter { floors[$0].y > sl[po[$0]].y + GameCare.approachBack + GameCare.popTolerance }.count })
+            guard let o = chosen else { noRoom = true; return }
+            origin = o
+        } else {
+            origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) }, lies: [])
+        }
         // nearest free spot for everybody (first claim wins by distance)
         let spots = DiningLayout.make(n: n).places.map { p -> SIMD2<Float> in
             var s = origin + p.rel
@@ -362,7 +378,9 @@ final class DiningGroup {
             if Self.trayFirst, forcedOrigin == nil {
                 if !trayOut, dining.phase == .absent {
                     let lie = lieBlocked
-                    if (trayFirstClear && !lie && (crossersBehind || age > Self.crossCap)) || (!lie && age > Self.crossCap + (trayFirstClear ? 0 : 4)) || age > Self.lieCap { spawnTray() }
+                    let blocked = !DiningSpot.spotFree(origin: origin, layout: DiningLayout.make(n: max(n, 1)))
+                    if age > Self.lieCap, lie || blocked { noRoom = true; end(); gaveUp = true; return }
+                    if (trayFirstClear && !lie && !blocked && (crossersBehind || age > Self.crossCap)) || (!lie && !blocked && age > Self.crossCap + (trayFirstClear ? 0 : 4)) || age > Self.lieCap { spawnTray() }
                 }
             } else if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) + (Self.robust && stillWaking ? Self.wakeExtra : 0) { spawnTray() }
             replan(dt: dt)

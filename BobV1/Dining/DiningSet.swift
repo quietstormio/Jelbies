@@ -132,6 +132,82 @@ nonisolated enum DiningSpot {
         }
         return d
     }
+    // MARK: what may not lie under the tray (the owner's rule 2026-11-10: "don't put food where food is, a toy is, or something that could block")
+
+    /// Floor things that move and are not decor: set by GameCare every tick (the toss ball while a ball game runs). (centre, radius)
+    nonisolated(unsafe) static var floorThings: [(c: SIMD2<Float>, r: Float)] = []
+    /// A flat piece with a footprint at least this wide (rug, bouncy mat) is walk-over: Jelbies stand on it and the tray may sit on it. Every other piece (flat or not: frisbee, footbag, skateboard, ball ...) blocks.
+    static let walkOverRadius: Float = 0.5
+    /// Does a disc (centre p, radius r) touch anything the tray or a standing / walking diner must keep off: any placed decor that is not walk-over (solid or not, rolling toys and the scooter at
+    /// their CURRENT spot), the player's tray collider, the café tables, the bowls, the call spot, the loose floor things (ball), the sofa and the room's cylinders?
+    static func touchesBlocker(_ p: SIMD2<Float>, radius r: Float) -> Bool {
+        let L = RoomLayout.self
+        for f in L.decorFeet {
+            if f.spec.flat, f.spec.radius >= walkOverRadius { continue }
+            var g = f; g.centre = DecorField.shared.position(f)
+            if g.distance(p) < r { return true }
+        }
+        for b in L.dynamicBoxes where L.boxDistanceXZ(p, b) < r { return true }
+        for b in L.tableBoxes.values where L.boxDistanceXZ(p, b) < r { return true }
+        for sp in [GameCamera.foodBowlSpot, GameCamera.waterBowlSpot] where simd_distance(p, sp) < r + 0.3 { return true }
+        if simd_distance(p, GameCamera.callSpot) < r + 0.2 { return true }
+        for t in floorThings where simd_distance(p, t.c) < r + t.r { return true }
+        if L.sofaDistanceXZ(p) < r * 0.8 { return true }
+        for c in L.cylinders where simd_distance(p, c.centre) < c.radius + r { return true }
+        return false
+    }
+    /// The tray rectangle (a body-width margin all round), each place's stand and the approach strip behind it are free of `touchesBlocker`.
+    static func spotFree(origin o: SIMD2<Float>, layout L: TrayLayout) -> Bool {
+        var x = -L.half.x
+        while x <= L.half.x + 1e-4 {
+            var z = -L.half.y
+            while z <= L.half.y + 1e-4 { if touchesBlocker(o + SIMD2(x, z), radius: 0.3) { return false }; z += 0.25 }
+            if touchesBlocker(o + SIMD2(x, L.half.y), radius: 0.3) { return false }
+            x += 0.25
+        }
+        for p in L.places {
+            let st = o + p.rel
+            for k in 0...2 where touchesBlocker(st - SIMD2(0, Float(k) * 0.125), radius: 0.5) { return false }          // (stand ... approach strip, 0.25 behind)
+        }
+        return true
+    }
+    /// Can a walker standing at `a` get to `b`? The straight line, else a detour through either side of its middle (no path finder: the walkers' own resolver steers round small things).
+    static func walkable(from a: SIMD2<Float>, to b: SIMD2<Float>, radius r: Float = 0.4) -> Bool {
+        func clear(_ p: SIMD2<Float>, _ q: SIMD2<Float>) -> Bool {
+            let n = max(2, Int(simd_distance(p, q) / 0.2))
+            for k in 1..<n { let t = Float(k) / Float(n); if touchesBlocker(p + (q - p) * t, radius: r) { return false } }
+            return true
+        }
+        if clear(a, b) { return true }
+        let m = (a + b) / 2, d = b - a, l = max(simd_length(d), 1e-3), perp = SIMD2(-d.y, d.x) / l * 0.9
+        return (!touchesBlocker(m + perp, radius: r) && clear(a, m + perp) && clear(m + perp, b)) || (!touchesBlocker(m - perp, radius: r) && clear(a, m - perp) && clear(m - perp, b))
+    }
+    /// The group's placement: like `choose` but never a fallback. A candidate must pass the old tests, the lying footprints, `spotFree` and the caller's `accept` (reachability); among the candidates the
+    /// ones with the lowest `score` (diners in front of their line) are kept and one is picked as `pickOpen` does. The whole allowed floor is tried (the front half first, then behind it). nil = no room.
+    static func chooseStrict(layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>], lies: [(c: SIMD2<Float>, yaw: Float)],
+                             accept: (SIMD2<Float>) -> Bool, score: (SIMD2<Float>) -> Int) -> SIMD2<Float>? {
+        for zRange in [(Float(0.6), maxZ), (minZ + 1.2, Float(0.6) - 0.01)] {
+            var open: [SIMD2<Float>] = []
+            var cx: Float = -1.6
+            while cx <= 1.6001 {
+                var cz = zRange.0
+                while cz <= zRange.1 + 1e-4 {
+                    let o = SIMD2<Float>(cx, cz)
+                    if isClear(origin: o, layout: L, of: SIMD2(99, 99), aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear,
+                       lies.allSatisfy({ lieDistance(from: $0.c, yaw: $0.yaw, origin: o, layout: L) >= lieMargin }), FreeFloor.isFree(o, radius: 0.9),
+                       L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) }), spotFree(origin: o, layout: L), accept(o) { open.append(o) }
+                    cz += 0.2
+                }
+                cx += 0.2
+            }
+            if !open.isEmpty {
+                let best = open.map(score).min() ?? 0
+                return pickOpen(open.filter { score($0) == best })
+            }
+        }
+        return nil
+    }
+
     /// The same front spot every time; if Bob stands on it, the nearest clear spot beside (or behind) him, always fully on screen.
     /// `jellies`: every Jelbie's floor spot; a spot whose tray rectangle comes within `jellyClear` (body radius + margin) of one is rejected, so food never
     /// appears under a standing Jelbie. The pick stays random among the free spots; with none free, the spot farthest from every Jelbie.
