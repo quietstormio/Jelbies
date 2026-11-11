@@ -284,7 +284,11 @@ final class WeatherTests: XCTestCase {
         XCTAssertTrue(end == .calm || end == .arc, "he ends calm or in a comfort hold: \(diag)")
     }
 
-    func testReliefShakesOffAndScattersAndRestoresEverything() {
+    /// The relief with the comfort code on (shipping) or off (the base's behaviour): the trace of the 14 s after it, one line per sim-second. Returns (cluster, widest mean gap, when, end).
+    @discardableResult
+    func reliefRun(comfort: Bool, assertScatter: Bool) -> (cluster: Float, widest: Float, at: Float, end: Float) {
+        StormReactor.comfortOn = comfort
+        defer { StormReactor.comfortOn = true }
         let room = Room(book: WeatherBook(defaults: suite()))
         let before = Snapshot(room)
         var ticks = 0
@@ -297,20 +301,40 @@ final class WeatherTests: XCTestCase {
         room.run(0.5)
         XCTAssertEqual(room.book.phase, .clearing)
         var shook = Set<Int>()
-        for _ in 0..<(60 * 14) {
+        var widest: Float = 0, widestAt: Float = 0
+        MotionLog.write(String(format: "RELIEF comfort=%@ cluster=%.3f need=%.3f", comfort ? "ON" : "OFF", cluster, cluster + 0.2))
+        for s in 0..<(60 * 14) {
             room.step()
             for (i, r) in room.lab.rigs.enumerated() where r.brain.idleState.kind == .shake { shook.insert(i) }
+            let g = room.gaps.reduce(0, +) / 3
+            if g > widest { widest = g; widestAt = Float(s) / 60 }
+            if s % 60 == 59 {
+                let rs = room.lab.rigs
+                func p(_ i: Int) -> String { String(format: "%.2f,%.2f", rs[i].brain.position.x, rs[i].brain.position.y) }
+                func k(_ i: Int) -> String { rs[i].brain.idleState.kind.map { String(describing: $0) } ?? "-" }
+                func e(_ i: Int) -> String { rs[i].brain.socialKind.map { String(describing: $0) } ?? "-" }
+                MotionLog.write("RELIEF t=\(s / 60 + 1) gapMean=\(String(format: "%.3f", g)) p0=\(p(0)) p1=\(p(1)) p2=\(p(2)) k0=\(k(0)) k1=\(k(1)) k2=\(k(2)) e0=\(e(0)) e1=\(e(1)) e2=\(e(2)) act0=\(rs[0].brain.activity) act1=\(rs[1].brain.activity) act2=\(rs[2].brain.activity) members=\(room.reactor.members.count)")
+            }
         }
+        let end = room.gaps.reduce(0, +) / 3
+        MotionLog.write(String(format: "RELIEF comfort=%@ widest=%.3f at t=%.1f end=%.3f", comfort ? "ON" : "OFF", widest, widestAt, end))
+        guard assertScatter else { return (cluster, widest, widestAt, end) }
         XCTAssertEqual(shook, [0, 1, 2], "the group shakes it off")
         XCTAssertEqual(ticks, 1, "one soft haptic tick for the relieved shake-off, not one per Jelbie")
         XCTAssertTrue(room.reactor.members.isEmpty, "everyone is free: \(room.reactor.log)")
         XCTAssertTrue(room.lab.rigs.allSatisfy { $0.brain.storm.isNeutral && !$0.brain.hurry })
-        XCTAssertGreaterThan(room.gaps.reduce(0, +) / 3, cluster + 0.2, "they scattered")
+        XCTAssertGreaterThan(widest, cluster + 0.2, "they scattered (widest mean gap in the 14 s after the relief)")
         room.skip(to: plan.total)
         room.run(1)
         XCTAssertFalse(room.reactor.stormOn)
         XCTAssertEqual(Snapshot(room), before, "all state restored")
+        return (cluster, widest, widestAt, end)
     }
+
+    func testReliefShakesOffAndScattersAndRestoresEverything() { reliefRun(comfort: true, assertScatter: true) }
+
+    /// The trace of the base's relief (comfort code off): printed, not asserted.
+    func testReliefTraceWithTheComfortOff() { reliefRun(comfort: false, assertScatter: false) }
 
     func testOneJelbieNoticesAtTheWindowFirst() {
         let room = Room(book: WeatherBook(defaults: suite()))

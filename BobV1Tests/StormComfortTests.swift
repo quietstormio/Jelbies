@@ -158,7 +158,7 @@ final class StormComfortTests: XCTestCase {
                 }
                 let g = room.duo.truthGap(i, j)
                 out.holdGapMin = min(out.holdGapMin, g)
-                if let k = room.rigs[i].brain.socialKind?.rawValue { out.gapByKind[k] = min(out.gapByKind[k] ?? .infinity, g) }
+                if let k = room.rigs[i].brain.socialKind.map({ "\($0.rawValue)/\(i)-\(j)" }) { out.gapByKind[k] = min(out.gapByKind[k] ?? .infinity, g) }
                 out.holdFrames += 1
             }
             if Self.tracing, steps % 3 == 0, let arc = room.reactor.arcs.first(where: { ($0.stage == .hold || $0.stage == .holding) && $0.b >= 0 }) {
@@ -168,7 +168,7 @@ final class StormComfortTests: XCTestCase {
                 var line = String(format: "STORMTRACE %@ seed %d t %.2f stage %@ %@ ph %d gap %.2f cm dist %.3f", cast.name, Int(seed), rclock, String(describing: arc.stage), s?.kind.rawValue ?? "-", s?.phase ?? -1, g * 100, simd_distance(room.rigs[i].brain.position, room.rigs[j].brain.position))
                 for k in [i, j] {
                     let b = room.rigs[k].brain, m = room.reactor.members[k]
-                    line += String(format: " | J%d trem %.2f fl %.2f p %.4f r %.4f s %.4f soc %@", k, m?.tremble ?? -1, m?.flinch ?? -1, b.storm.pitch, b.storm.roll, b.storm.squash, String(describing: b.socialKind))
+                    line += String(format: " | J%d trem %.2f fl %.2f p %.4f r %.4f s %.4f ke %.5f soc %@", k, m?.tremble ?? -1, m?.flinch ?? -1, b.storm.pitch, b.storm.roll, b.storm.squash, room.rigs[k].sim.kineticEnergy() / room.rigs[k].sim.totalMass, String(describing: b.socialKind))
                 }
                 MotionLog.write(line)
             }
@@ -258,7 +258,11 @@ final class StormComfortTests: XCTestCase {
                 report += String(format: " | hold frames %d, closest skin gap %.2f cm, feature inside other body %.2f cm, limb %.2f cm", r.holdFrames, r.holdGapMin * 100, r.featPen * 100, r.limbPen * 100)
                 // the storm hold may be as deep as the same plain emote, not deeper (ruling of the integrator 2026-11-11), and never below -1.0 cm
                 for (k, g) in r.gapByKind.sorted(by: { $0.key < $1.key }) {
-                    let plain = SocialKind(rawValue: k).map { plainGap(cast, $0) } ?? -0.01
+                    // k = "emote/i-j": the plain start of the same emote for the same two bodies (their species, so Teddy's belly and the wings are the same)
+                    let parts = k.split(separator: "/").map(String.init)
+                    let ij = parts[1].split(separator: "-").compactMap { Int($0) }
+                    let pair = Cast(name: ij.map { String(describing: cast.features[$0]) }.joined(separator: " + "), features: ij.map { cast.features[$0] }, positions: [SIMD2(-1.4, 0.8), SIMD2(1.5, 0.5)])
+                    let plain = SocialKind(rawValue: parts[0]).map { plainGap(pair, $0) } ?? -0.01
                     let limit = max(plain - 0.001, -0.010)
                     report += String(format: " | HOLD %@ seed %d: storm %.2f cm, plain %.2f cm, limit %.2f cm", k, Int(seed), g * 100, plain * 100, limit * 100)
                     MotionLog.write(String(format: "STORMCOMFORT DEPTH %@ | %@ | seed %d | plain %.2f cm | storm %.2f cm | limit %.2f cm", cast.name, k, Int(seed), plain * 100, g * 100, limit * 100))
@@ -404,11 +408,15 @@ final class StormComfortTests: XCTestCase {
         d.place([SIMD2(-0.735, 0.9), SIMD2(0.735, 0.9)]); d.live = true
         for _ in 0..<3 { d.tick() }
         let a = d.lab.rigs[0], b = d.lab.rigs[1]
-        guard a.brain.socialStart(kind, with: b.brain, a.sim) else { return -0.010 }
+        guard a.brain.socialStart(kind, with: b.brain, a.sim) else { XCTFail("the plain \(kind.rawValue) of \(cast.name) did not start: no plain depth to compare with"); return -0.010 }
         var gmin = Float.infinity
         for s in 0..<(60 * 14) {
             d.tick()
-            if s % 3 == 0, let sess = a.brain.social, sess.phase >= 2 { gmin = min(gmin, d.truthGap(0, 1)) }
+            if s % 3 == 0, let sess = a.brain.social, sess.phase >= 2 {
+                let g = d.truthGap(0, 1)
+                gmin = min(gmin, g)
+                if Self.tracing { MotionLog.write(String(format: "STORMTRACE PLAIN %@ %@ step %d ph %d gap %.2f cm ke %.5f %.5f", cast.name, kind.rawValue, s, sess.phase, g * 100, a.sim.kineticEnergy() / a.sim.totalMass, b.sim.kineticEnergy() / b.sim.totalMass)) }
+            }
             if a.brain.social == nil, s > 30 { break }
         }
         return gmin
