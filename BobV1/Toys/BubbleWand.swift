@@ -62,14 +62,16 @@ nonisolated enum BubbleTuning {
     nonisolated(unsafe) static var playHopSpacing: Float = 0.95
     /// Under a bubble that is not in reach yet: a small hop on the spot every so often (the first after `playWaitHopFirst`), each time with the chance `playWaitHopChance` x `playEnergy`.
     nonisolated(unsafe) static var playWaitHop: ClosedRange<Float> = 1.0...1.7
-    nonisolated(unsafe) static var playWaitHopFirst: ClosedRange<Float> = 0.35...0.8
+    nonisolated(unsafe) static var playWaitHopFirst: ClosedRange<Float> = 0.2...0.45
     nonisolated(unsafe) static var playWaitHopChance: Float = 0.8
     nonisolated(unsafe) static var playWaitHopEnabled = true
     /// Weights of the bounce in `planMove` (below the crown / above it); the others are fixed there.
-    nonisolated(unsafe) static var bounceWeightLow: Float = 1
+    nonisolated(unsafe) static var bounceWeightLow: Float = 0.5          // (the BEFORE value: the skip keeps its share)
+    /// The flap's weight where it is not the first choice (a bubble in the middle band, winged only).
+    nonisolated(unsafe) static var flapWeightMid: Float = 2          // (1 before)
     nonisolated(unsafe) static var bounceWeightHigh: Float = 2          // (1.5 before; 4 in round 1 crowded the other pops out)
     /// `pickTarget`: the bubble's distance counts this many times in the score.
-    nonisolated(unsafe) static var pickDistanceFactor: Float = 1.5
+    nonisolated(unsafe) static var pickDistanceFactor: Float = 3          // (1 before; 1.5 in round 1)
     /// `bubbleIdle`: the cumulative shares of a happy hop on the spot / the look up / a step in place (the rest is a short shuffle), and how long the step in place lasts.
     nonisolated(unsafe) static var idleCuts: (hop: Float, look: Float, step: Float) = (0.62, 0.80, 0.90)
     nonisolated(unsafe) static var idleStepDur: ClosedRange<Float> = 0.5...1.0
@@ -100,7 +102,7 @@ nonisolated enum BubbleTuning {
         leapRange = 0.35...0.9
         playThinkEvery = thinkEvery; playChaseRoll = chaseRoll; playWatchHold = 1.0...2.2; playWatchThink = 0.9...1.8; playAfterChase = 0.3...0.9
         playPickRadius = 4.5; playSpotHold = 0.35...0.5; playHopSpacing = 0; playWaitHopEnabled = false
-        bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1
+        bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1; flapWeightMid = 1
         idleCuts = (0.32, 0.72, 0.86); idleStepDur = 0.8...1.6
         busyLookingChases = false; goWaitsForHop = false; spotWaitsForFeet = false
     }
@@ -110,8 +112,8 @@ nonisolated enum BubbleTuning {
         leapRange = 0.35...0.8
         playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.08...0.3
         playPickRadius = 5.0; playSpotHold = 0.35...0.5; playHopSpacing = 0.95
-        playWaitHop = 1.0...1.7; playWaitHopFirst = 0.35...0.8; playWaitHopChance = 0.8; playWaitHopEnabled = true
-        bounceWeightLow = 1; bounceWeightHigh = 2; pickDistanceFactor = 1.5
+        playWaitHop = 1.0...1.7; playWaitHopFirst = 0.2...0.45; playWaitHopChance = 0.8; playWaitHopEnabled = true
+        bounceWeightLow = 0.5; bounceWeightHigh = 2; pickDistanceFactor = 3; flapWeightMid = 2
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
         busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false
     }
@@ -453,7 +455,7 @@ final class BubbleWand: PlayToy {
         var w: [(BubblePopMove, Float)] = []
         if bub.pos.y < crown + 0.15 { w = [(.skip, 3), (.leap, 1.5), (.bounce, BubbleTuning.bounceWeightLow)] }          // (at or below the crown: a skip into it)
         else if bub.pos.y > crown + 0.2 && winged { w = [(.flap, 3), (.leap, 1.5), (.bounce, 1)] }
-        else { w = [(.leap, 3), (.header, 1.5), (.bounce, BubbleTuning.bounceWeightHigh)] + (winged ? [(.flap, 1)] : []) }
+        else { w = [(.leap, 3), (.header, 1.5), (.bounce, BubbleTuning.bounceWeightHigh)] + (winged ? [(.flap, BubbleTuning.flapWeightMid)] : []) }
         let total = w.reduce(0) { $0 + $1.1 }
         var r = BubbleTuning.rnd(in: 0..<total)
         for (m, x) in w { if r < x { return m }; r -= x }
