@@ -44,7 +44,7 @@ nonisolated struct RacePullTuning: Sendable {
 
     // MARK: ours
     /// Prototype length units -> world units, per u/s of the racer's top pace (stride x step rate). CAL.
-    var hopScale: Float = 0.096
+    var hopScale: Float = 0.0995
     /// No hop is longer than this (u).
     var hopCap: Float = 0.90
     /// The settle after a landing before the next hop can leave (no momentum decays inside it, a release buffered in the air waits this long).
@@ -68,13 +68,13 @@ nonisolated struct RacePullTuning: Sendable {
     var stretchMax: Float = 1.10
     var stretchFloor: Float = 0.80
     /// Trip chance scale (x the taps model's per-step chance x L / stride). CAL.
-    var tripScale: Float = 1.0
+    var tripScale: Float = 4.5
     /// A rival's chance of a green pull: `rivalGreenBase + rivalGreenSkill x skill`; the auto player's is `autoGreen`.
     var rivalGreenBase: Float = 0.35
     var rivalGreenSkill: Float = 0.45
     /// Rivals' hop length scale (calibrated so their finish times match the taps race), and the Puddle's own. CAL.
-    var rivalLength: Float = 1.0
-    var rivalLengthPuddle: Float = 1.0
+    var rivalLength: Float = 0.79
+    var rivalLengthPuddle: Float = 0.632
     var autoGreen: Float = 0.5
 
     // MARK: 1. the shot
