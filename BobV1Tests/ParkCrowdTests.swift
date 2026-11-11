@@ -41,6 +41,7 @@ final class ParkCrowdTests: XCTestCase {
         let s: SocialSession, kind: SocialKind, t0: Float
         var gather: Float = 0, pressed0: Float = 0, inside0: Float = 0, pressedL: Float = 0, insideL: Float = 0
         var minSolid: Float = .infinity, minLanding: Float = .infinity
+        var bys0Pressed: Float = 0, bys0Inside: Float = 0          // (a member with passThrough in phase 0 against a body that is NOT in this session)
         var members = 0
         init(_ s: SocialSession, t0: Float) { self.s = s; kind = s.kind; self.t0 = t0 }
     }
@@ -54,11 +55,12 @@ final class ParkCrowdTests: XCTestCase {
         var hist: [[SIMD2<Float>]]
         var stuckSince: [Float?]
         var episodes: [Episode] = []
+        var stuckOn: [Bool], unstuckT: [Float], stuckBody: [String: Float] = [:]
         var t: Float = 0
         let seed: UInt64
         var insideRun: [Int: Float] = [:], worstInsideRun: Float = 0, worstInsideRunPhase0: Float = 0
         var pressedTotal: Float = 0, insideTotal: Float = 0
-        init(lab: SocialTests.Lab, seed: UInt64) { self.lab = lab; self.seed = seed; hist = Array(repeating: [], count: lab.rigs.count); stuckSince = Array(repeating: nil, count: lab.rigs.count) }
+        init(lab: SocialTests.Lab, seed: UInt64) { self.lab = lab; self.seed = seed; hist = Array(repeating: [], count: lab.rigs.count); stuckSince = Array(repeating: nil, count: lab.rigs.count); stuckOn = Array(repeating: false, count: lab.rigs.count); unstuckT = Array(repeating: 0, count: lab.rigs.count) }
 
         func doing(_ i: Int) -> String {
             let b = lab.rigs[i].brain
@@ -93,12 +95,14 @@ final class ParkCrowdTests: XCTestCase {
                 if d < 0.8 * gap {
                     inside = d < 0.7 * gap
                     let pass = bi.socialBook.passThrough || bj.socialBook.passThrough
-                    let soc = same ? "\(bi.social!.kind.rawValue)/p\(bi.social!.phase)" : (bi.social != nil || bj.social != nil ? "other-social" : "-")
+                    func lbl(_ b: BlobBrain) -> String { b.social.map { "\($0.kind.rawValue)/p\($0.phase)" } ?? "-" }
+                    let soc = same ? "SAME " + lbl(bi) : [lbl(bi), lbl(bj)].sorted().joined(separator: " x ")
                     let scr = [bi.scriptKindName, bj.scriptKindName].sorted().joined(separator: "+")
                     let dec = [bi, bj].contains { b in b.idleState.kind.map { BlobBrain.decorKinds.contains($0) || $0 == .hopscotch } ?? false } ? "decor" : "free"
                     let key = "soc=\(soc) pass=\(pass ? 1 : 0) scr=\(scr) \(dec)"
                     pressedSec[key, default: 0] += dt; pressedTotal += dt
                     if inside { insideSec[key, default: 0] += dt; insideTotal += dt }
+                    for (x, y) in [(bi, bj), (bj, bi)] { if let xs = x.social, xs.kind.isGroup, xs.phase == 0, x.socialBook.passThrough, y.social !== xs, let rec = recs[ObjectIdentifier(xs)] { rec.bys0Pressed += dt; if inside { rec.bys0Inside += dt } } }
                     if same, let rec = recs[ObjectIdentifier(bi.social!)] {
                         if bi.social!.phase == 0 { rec.pressed0 += dt; if inside { rec.inside0 += dt } } else { rec.pressedL += dt; if inside { rec.insideL += dt } }
                     }
@@ -109,17 +113,22 @@ final class ParkCrowdTests: XCTestCase {
                 else if inside { insideRun[k, default: 0] += dt } else { insideRun[k] = 0 }
                 worstInsideRun = max(worstInsideRun, insideRun[k] ?? 0)
             } }
-            // stuck walkers
+            // stuck walkers (body-seconds, no overlap; an episode ends after 1 s of moving)
             for i in 0..<n {
                 hist[i].append(roots[i]); if hist[i].count > 181 { hist[i].removeFirst() }
                 let stuck = hist[i].count > 180 && isWalk(i) && simd_distance(hist[i][0], roots[i]) < 0.25
-                if stuck, stuckSince[i] == nil {
-                    stuckSince[i] = t - 3
+                if stuck {
+                    unstuckT[i] = 0
+                    var nearest: Float = 9
                     var near: [String] = []
-                    for j in 0..<n where j != i && simd_distance(roots[i], roots[j]) < 1.3 * gap { near.append("#\(j) d=\(String(format: "%.2f", simd_distance(roots[i], roots[j]) / gap)) \(doing(j))") }
-                    episodes.append(Episode(seed: seed, body: i, t: t - 3, dur: 3, at: roots[i], near: near.joined(separator: "; "), solid: solidDist(roots[i]), doing: doing(i)))
-                } else if stuck, let s0 = stuckSince[i] { episodes[episodes.lastIndex { $0.body == i }!].dur = t - s0 }
-                else if !stuck { stuckSince[i] = nil }
+                    for j in 0..<n where j != i { let dj = simd_distance(roots[i], roots[j]); nearest = min(nearest, dj); if dj < 1.3 * gap { near.append("#\(j) d=\(String(format: "%.2f", dj / gap)) \(doing(j))") } }
+                    var scriptWalk = false; if case .walk = lab.rigs[i].brain.script { scriptWalk = true }
+                    stuckBody["scriptWalk=\(scriptWalk ? 1 : 0) nearest=\(nearest < 0.8 * gap ? "<0.8gap" : nearest < 1.3 * gap ? "<1.3gap" : "none")", default: 0] += dt
+                    if !stuckOn[i] {
+                        stuckOn[i] = true
+                        episodes.append(Episode(seed: seed, body: i, t: t - 3, dur: 3, at: roots[i], near: near.joined(separator: "; "), solid: solidDist(roots[i]), doing: doing(i)))
+                    } else { episodes[episodes.lastIndex { $0.body == i }!].dur += dt }
+                } else if stuckOn[i] { unstuckT[i] += dt; if unstuckT[i] >= 1 { stuckOn[i] = false } }
             }
         }
     }
@@ -144,7 +153,10 @@ final class ParkCrowdTests: XCTestCase {
         for (k, v) in pr.sorted(by: { $0.value > $1.value }).prefix(25) { o += "- pressed \(Self.fmt(v)) inside \(Self.fmt(ins[k] ?? 0))  \(k)\n" }
         o += "\n## (b) stuck walkers (walk script, moved < 0.25 m in 3 s)\n"
         let eps = probes.flatMap { $0.episodes }
-        o += "episodes \(eps.count), total \(Self.fmt(eps.reduce(0) { $0 + $1.dur })) s, longest \(Self.fmt(eps.map { $0.dur }.max() ?? 0)) s, stuckRepicks total \(probes.reduce(0) { $0 + $1.lab.rigs.reduce(0) { $0 + $1.brain.stuckRepicks } })\n"
+        o += "episodes \(eps.count) (mean \(Self.fmt(eps.reduce(0) { $0 + $1.dur } / Float(max(eps.count, 1)))) s), stuck body-seconds (no overlap) \(Self.fmt(probes.reduce(0) { $0 + $1.stuckBody.values.reduce(0, +) })), longest \(Self.fmt(eps.map { $0.dur }.max() ?? 0)) s, stuckRepicks total \(probes.reduce(0) { $0 + $1.lab.rigs.reduce(0) { $0 + $1.brain.stuckRepicks } })\n"
+        var sb: [String: Float] = [:]
+        for p in probes { for (k, v) in p.stuckBody { sb[k, default: 0] += v } }
+        for (k, v) in sb.sorted(by: { $0.key < $1.key }) { o += "- stuck body-seconds \(k): \(Self.fmt(v))\n" }
         var byDoing: [String: (Int, Float)] = [:]
         for e in eps { let k = e.doing; byDoing[k] = ((byDoing[k]?.0 ?? 0) + 1, (byDoing[k]?.1 ?? 0) + e.dur) }
         for (k, v) in byDoing.sorted(by: { $0.value.1 > $1.value.1 }) { o += "- stuck walker doing \(k): \(v.0) episodes, \(Self.fmt(v.1)) s\n" }
@@ -159,7 +171,7 @@ final class ParkCrowdTests: XCTestCase {
             o += "- \(k.rawValue): started \(rs.count), done \(done), aborted \(ab), other/unfinished \(rs.count - done - ab); gather mean \(Self.fmt(g.reduce(0, +) / Float(g.count))) s max \(Self.fmt(g.max() ?? 0)) s; pressed ph0 \(Self.fmt(rs.reduce(0) { $0 + $1.pressed0 })) later \(Self.fmt(rs.reduce(0) { $0 + $1.pressedL })), inside ph0 \(Self.fmt(rs.reduce(0) { $0 + $1.inside0 })) later \(Self.fmt(rs.reduce(0) { $0 + $1.insideL }))\n"
         }
         let rings = recs.filter { $0.kind == .groupHug || $0.kind == .circleDance || $0.kind == .groupCheer }
-        for r in rings { o += "  ring \(r.kind.rawValue) n=\(r.members) t0=\(Self.fmt(r.t0)) minSolidDist \(String(format: "%.2f", r.minSolid)) minLandingDist \(String(format: "%.2f", r.minLanding)) gather \(Self.fmt(r.gather)) end \(String(describing: r.s.end)) inside ph0 \(Self.fmt(r.inside0))\n" }
+        for r in rings { o += "  ring \(r.kind.rawValue) n=\(r.members) t0=\(Self.fmt(r.t0)) minSolidDist \(String(format: "%.2f", r.minSolid)) minLandingDist \(String(format: "%.2f", r.minLanding)) gather \(Self.fmt(r.gather)) end \(String(describing: r.s.end)) inside ph0 \(Self.fmt(r.inside0)) bystander-pass ph0 pressed \(Self.fmt(r.bys0Pressed)) inside \(Self.fmt(r.bys0Inside))\n" }
         o += "  rings with a place < 0.35 of a solid piece: \(rings.filter { $0.minSolid < 0.35 }.count) of \(rings.count); places < peerGap (\(MelonController.jellyGap)) from the slide landing: \(rings.filter { $0.minLanding < MelonController.jellyGap }.count)\n"
         o += "  worst continuous inside-run (any pair) \(Self.fmt(probes.map { $0.worstInsideRun }.max() ?? 0)) s; during a group gather (phase 0) \(Self.fmt(probes.map { $0.worstInsideRunPhase0 }.max() ?? 0)) s\n"
         let hc = recs.filter { ($0.kind == .groupHug || $0.kind == .circleDance) && $0.s.end == .done }.count
