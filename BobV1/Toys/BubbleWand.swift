@@ -76,7 +76,7 @@ nonisolated enum BubbleTuning {
     /// `pickTarget`: the bubble's distance counts this many times in the score.
     nonisolated(unsafe) static var pickDistanceFactor: Float = 1.5          // (1 before; 3 was tried in round 2 and did not help)
     /// Hops of one bounce (3 before: one for the target, the rest for other bubbles in reach).
-    nonisolated(unsafe) static var bounceReps = 5
+    nonisolated(unsafe) static var bounceReps = 6
     /// `bubbleIdle`: the cumulative shares of a happy hop on the spot / the look up / a step in place (the rest is a short shuffle), and how long the step in place lasts.
     nonisolated(unsafe) static var idleCuts: (hop: Float, look: Float, step: Float) = (0.62, 0.80, 0.90)
     nonisolated(unsafe) static var idleStepDur: ClosedRange<Float> = 0.5...1.0
@@ -120,7 +120,7 @@ nonisolated enum BubbleTuning {
         playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.3...0.9
         playPickRadius = 5.0; playSpotHold = 0.35...0.5; playHopSpacing = 0.8
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.2...0.45; playWaitHopChance = 0.8; playWaitHopEnabled = true
-        bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 8; flapWeightHigh = 12; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 5
+        bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 8; flapWeightHigh = 12; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 6
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
         busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false; flapBeforeHeader = true
     }
