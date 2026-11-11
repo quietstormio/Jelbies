@@ -307,6 +307,8 @@ final class TouchPlay {
     private var heartT: Float = 0
     static let rippleOn: Float = 0.25, rippleOff: Float = 0.1     // u/s of surface normal velocity under the finger
     private(set) var rippleV: Float = 0
+    /// The cuddle layer (CuddleJiggle) still has a drawn offset on a skin: keep the touch frame running until it is zero.
+    private(set) var cuddleLive = false
     private var lastRipple: Double = -1
     private var prevA: Float = 0
     /// Ripple transients fired (tests / log).
@@ -401,7 +403,7 @@ final class TouchPlay {
     /// True while anything of the touch play is still showing (the stage skips the frame work otherwise).
     var isActive: Bool {
         cheekOn || pinch > 0 || visPinch != 0 || contact || ramp > 0 || love > 0 || speed > 0.001 || squishDepth > 0 || cheeksPinch > 0 || !hearts.isEmpty
-            || purrLevel > 0 || annoyK > 0 || hmphT > 0 || motionActive || whoaT > 0 || boopT > 0 || excitement > 0 || happyKick > 0 || !tapQueue.isEmpty
+            || cuddleLive || purrLevel > 0 || annoyK > 0 || hmphT > 0 || motionActive || whoaT > 0 || boopT > 0 || excitement > 0 || happyKick > 0 || !tapQueue.isEmpty
     }
 
     // MARK: pet
@@ -489,6 +491,7 @@ final class TouchPlay {
         skinner.normalSmoothing = ramp > 0 ? ramp : 0          // the dent reads as a soft dimple: skin relaxed + normals blurred around it
         if let h = hit ?? lastHit { skinner.smoothCenter = h.point }
         react(dt: dt, now: now, brain: brain, skinner: skinner, screen: screen)
+        cuddleFrame(dt: dt, now: now, hit: hit, sim: sim, skinner: skinner)
 
         // a wobble wave passing under the finger: the surface there swings in and out; each swing past a threshold is one ripple tick
         if let h = hit ?? lastHit, ramp > 0.4 {
@@ -545,6 +548,17 @@ final class TouchPlay {
         haptics.update(now: now, petIntensity: pi, petSharpness: ps, squishIntensity: si, squishSharpness: ss)
     }
 
+    /// The cuddle layer (CuddleJiggle.swift): drawn-only, level 0 = nothing. Fed the fingertip hit, the dent engagement and his pose; its let-go wobble taps go
+    /// through the one haptic driver (`softTap`: no sound, so every existing cuddle sound stays exactly as it is).
+    private func cuddleFrame(dt: Float, now: Double, hit: BodyEllipsoid.Hit?, sim: SoftBody, skinner: Skinner) {
+        let c = skinner.cuddle
+        guard c.enabled, c.level > 0 else { if c.active { c.reset() }; cuddleLive = false; return }
+        let pose: BodyPose? = (hit != nil || c.active) ? sim.bodyPose(iterations: 4) : nil
+        c.step(dt: dt, contact: hit != nil, ramp: ramp, point: hit?.point, normal: hit?.normal, pose: pose, annoyed: annoyed)
+        if c.tap > 0 { haptics.softTap(now: now, intensity: c.tap, sharpness: 0.1) }
+        cuddleLive = c.active
+    }
+
     /// A train of transients at `hz` (taps, flutter).
     private func train(dt: Float, hz: Float, now: Double, intensity: Float, sharpness: Float) {
         trainPhase += dt * hz
@@ -560,7 +574,7 @@ final class TouchPlay {
 
     private func react(dt: Float, now: Double, brain: BlobBrain?, skinner: Skinner, screen: SIMD2<Float>?) {
         updateEyes(skinner)
-        if !bodyReactions { outPitch = 0; outRoll = 0; outSquash = 1; compose(brain); return }
+        if !bodyReactions { outPitch = 0; outRoll = 0; outSquash = 1; skinner.cuddle.setPet(roll: 0, squash: 0); compose(brain); return }
         // lean into the finger (toward the side it is on, a little forward) + a slow happy jiggle; the zones add their own
         var wantPitch: Float = 0, wantRoll: Float = 0
         if let l = hitLocal, love > 0 {
@@ -586,6 +600,7 @@ final class TouchPlay {
             default: break
             }
         }
+        skinner.cuddle.setPet(roll: roll, squash: sq)          // the cuddle layer draws an extra x(scale - 1) of the happy jiggle on top (level 0: nothing)
         // purr: soft breathing in step with the haptic pulse
         sq += 0.016 * purrLevel * sinf(2 * .pi * purrPhase)
         outRoll = lean.y + roll; outPitch = lean.x; outSquash = 1 + sq
@@ -1084,8 +1099,9 @@ final class TouchPlay {
     }
 
     /// The finger's dent ends at once (the press turned out to be a pick up or a pinch, which have their own contacts).
-    func releaseContact(sim: SoftBody) {
+    func releaseContact(sim: SoftBody, skinner: Skinner? = nil) {
         sim.endPress()
+        if let skinner { skinner.cuddle.reset(); cuddleLive = false }
         contact = false; ramp = 0; speed = 0; prevLocal = nil; lastHit = nil; easedCenter = nil; hitLocal = nil; zone = .none
     }
 
@@ -1099,6 +1115,7 @@ final class TouchPlay {
         brain?.endExcited()
         brain?.hurry = false
         skinner.extraVertices = []; skinner.extraDelta = []; skinner.normalSmoothing = 0
+        skinner.cuddle.reset(); cuddleLive = false
         if eyesTouched { eyesTouched = false; skinner.setEyeOpenness(1); skinner.autoBlink = savedAutoBlink }
         haptics.update(now: CACurrentMediaTime(), petIntensity: 0, petSharpness: 0.1, squishIntensity: 0, squishSharpness: 0.5)
     }

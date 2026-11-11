@@ -29,6 +29,9 @@ nonisolated final class Skinner {
     /// Automatic blinking (random 2-6 s apart, ~120 ms, sometimes a double blink). Turn off for scripted expressions.
     var autoBlink = true
     let jelly = JellyJiggle()
+    /// The cuddle layer (CuddleJiggle.swift): a drawn skin offset while a finger pets him; a no-op unless active.
+    let cuddle = CuddleJiggle()
+    private var cuddleMask: [Bool] = []
     var dbgJellyOff = UserDefaults.standard.integer(forKey: "JellyOff") != 0
     /// Touch play: 0...1, blurs the skin normals over their neighbours while a finger dents him, so the dent reads as a soft dimple and the steep
     /// walls of the coarse sim mesh never shade as dark brown blotches. 0 = exactly the plain normals (the default, the cost is zero).
@@ -852,6 +855,7 @@ nonisolated final class Skinner {
         }
         if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }          // jelly follow-through (JellyJiggle.swift): a no-op unless he is moving
         if normalSmoothing > 0.001 { smoothDentPositions(dyn, index: index) }
+        if cuddle.active { applyCuddle(dyn) }          // the cuddle jiggle (CuddleJiggle.swift): drawn dent / drag / let-go spring on the BODY skin only
         applyBeanGuard(dyn)
         applyBeanJoin(dyn)
         applyBeanCollar(dyn)
@@ -859,6 +863,17 @@ nonisolated final class Skinner {
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
         blendTailNormals(dyn)
+    }
+
+    /// Body skin = the egg's vertices (below the first arm / foot / tail block) without the eyes, glints and brows.
+    private func applyCuddle(_ dyn: UnsafeMutablePointer<Float>) {
+        if cuddleMask.count != vertexCount {
+            let limit = armFirst.min() ?? vertexCount
+            cuddleMask = [Bool](repeating: false, count: vertexCount)
+            for v in 0..<min(limit, vertexCount) { cuddleMask[v] = true }
+            for v in faceFeatureVertices where Int(v) < vertexCount { cuddleMask[Int(v)] = false }
+        }
+        cuddleMask.withUnsafeBufferPointer { cuddle.apply(dyn, count: vertexCount, mask: $0.baseAddress!, floorY: jelly.floorY, H: jelly.H) }
     }
 
     private func applyTail(_ dyn: UnsafeMutablePointer<Float>) {
