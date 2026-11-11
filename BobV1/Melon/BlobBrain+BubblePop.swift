@@ -38,7 +38,7 @@ extension BlobBrain {
         guard bubbleCanHop else { return false }
         face(.excited, hold: 1.6)
         guard idleStart(.bounce, sim) else { return false }
-        idleState.reps = 3          // (three hops: one for the target, up to two more for another bubble in reach)
+        idleState.reps = BubbleTuning.bounceReps          // (hops: one for the target, the rest for another bubble in reach; 3 before 2026-11-11)
         return true
     }
     /// The winged species' flap-hop (false for everybody else, folded wings, or no room ahead).
