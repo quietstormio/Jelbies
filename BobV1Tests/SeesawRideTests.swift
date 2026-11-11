@@ -174,6 +174,9 @@ final class SeesawRideTests: XCTestCase {
         var maxAmp: Float = 0, swings: Float = 0
         var finished = false, seatedAll = false
         var endInner: Float = .infinity, endOuter: Float = .infinity          // lowest skin vs the TILTED cushion plane at the swing's ends (|theta| > 0.2), inner / outer side of the patch
+        var waitMinZ: Float = .infinity
+        var standWhere = "", levelMin: Float = .infinity, levelMax: Float = -.infinity
+        var standMinZ: Float = .infinity, standRootZ: Float = 0, riderSkin: Float = .infinity
         var standClear: Float = .infinity, armMax = 0.0, featureBeam: Float = 0, featureHandle: Float = .infinity
     }
 
@@ -186,7 +189,7 @@ final class SeesawRideTests: XCTestCase {
     func runSequence(chars: [Int], seed: UInt64, callAway: Bool, label: String) -> Report {
         var rep = Report(); rep.tag = label
         RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: 440.0 / 956.0)
-        let starts: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2)]
+        let starts: [SIMD2<Float>] = [SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4)]
         let lab = SocialTests.Lab(n: chars.count, positions: Array(starts.prefix(chars.count)), quiet: true, seed: seed)
         Self.keep.append(lab)
         for (k, r) in lab.rigs.enumerated() {
@@ -210,6 +213,8 @@ final class SeesawRideTests: XCTestCase {
         var prevC = lab.rigs.map { $0.sim.centroid() }
         var prevStep = [Float](repeating: 0, count: n)
         var prevKey = [[Int]](repeating: [-1, -1, -1], count: n)
+        var hopWho = [String](repeating: "", count: n)
+        var prevRoot = lab.rigs.map { $0.brain.position }, diagLines = 0
         var prevStage = [Int](repeating: 0, count: n), hopFrom = [SIMD3<Float>](repeating: .zero, count: n), hopThetaStart = [Float](repeating: 0, count: n)
         var hopStartVsSeat = [Float](repeating: 0, count: n), hopForced = [Bool](repeating: false, count: n), hopSeat = [Int](repeating: 0, count: n)
         var prevTh: Float = 0, prevD: Float = 0, lastCall = -1000
@@ -240,14 +245,16 @@ final class SeesawRideTests: XCTestCase {
                     let seat = st.seat
                     hopFrom[j] = prevC[j]; hopThetaStart[j] = th; hopSeat[j] = seat
                     let sw = field.seatWorld(uid, seat: seat) ?? .zero
-                    hopStartVsSeat[j] = simd_distance(SIMD2(prevC[j].x, prevC[j].z), SIMD2(sw.x, sw.z))
+                    hopStartVsSeat[j] = simd_distance(prevRoot[j], SIMD2(sw.x, sw.z))          // (the ROOT against the seat point: the body's centroid sits ~15 cm off it)
                     hopForced[j] = R.rides[uid]?.riders[seat]?.forced ?? false
+                    hopWho[j] = String(format: "rider %d seat %d occupants %@ root rel (%.2f, %.2f) mode %@ theta %.3f i %d", j, seat, "\(field.seatOccupant[uid] ?? [:])", prevRoot[j].x - centre.x, prevRoot[j].y - centre.y, "\(mode)", th, i)
                     if stage == 1 { hopStartVsSeat[j] = 0 }
                 }
                 if (prevStage[j] == 1 && stage == 2) || (prevStage[j] == 3 && stage != 3) {
                     let landing: Float
                     if prevStage[j] == 1 { let sw = field.seatWorld(uid, seat: st.seat) ?? .zero; landing = simd_distance(SIMD2(cen.x, cen.z), SIMD2(sw.x, sw.z)) } else { landing = 0 }
                     if prevStage[j] == 3 { afterOff[j] = 20 }
+                    if simd_distance(SIMD2(cen.x, cen.z), SIMD2(hopFrom[j].x, hopFrom[j].z)) > 1.1 { MotionLog.write("SEESAW LONG HOP \(label): \(hopWho[j]) from (\(hopFrom[j].x - centre.x), \(hopFrom[j].z - centre.y)) to (\(cen.x - centre.x), \(cen.z - centre.y)) kind \(prevStage[j] == 1 ? "on" : "off")") }
                     rep.hops.append((prevStage[j] == 1 ? "on" : "off", simd_distance(SIMD2(cen.x, cen.z), SIMD2(hopFrom[j].x, hopFrom[j].z)), hopThetaStart[j], hopStartVsSeat[j], landing, hopForced[j]))
                 }
                 // pops
@@ -257,7 +264,11 @@ final class SeesawRideTests: XCTestCase {
                     rep.maxSeatedStep = max(rep.maxSeatedStep, step)
                     if prevStage[j] == 2, key != prevKey[j] { rep.worstJump = max(rep.worstJump, step - prevStep[j]) }
                 }
-                prevKey[j] = key; prevStep[j] = step; prevC[j] = cen; prevStage[j] = stage
+                if diagLines < 40, (stage == 1 || stage == 3) && step > 0.06 || stage == 2 && step > 0.02 || stage == 2 && prevStage[j] == 2 && key != prevKey[j] && step - prevStep[j] > 0.005 {
+                    diagLines += 1
+                    MotionLog.write(String(format: "SEESAW DIAG %@ i %d rider %d stage %d phase %d k %.2f mode %@ theta %.4f amp %.3f gait %@ step %.2f cm (prev %.2f) d(xz) %.2f dy %.2f cm", label, i, j, stage, st.phase, st.k, "\(mode)", th, R.amp(uid), "\(b.gait.phase)", step * 100, prevStep[j] * 100, simd_distance(SIMD2(cen.x, cen.z), SIMD2(prevC[j].x, prevC[j].z)) * 100, (cen.y - prevC[j].y) * 100))
+                }
+                prevKey[j] = key; prevStep[j] = step; prevC[j] = cen; prevStage[j] = stage; prevRoot[j] = b.position
                 let standing = (stage == 0 && b.activity != .walking && st.phaseT > 0.3) || afterOff[j] > 0
                 if afterOff[j] > 0 { afterOff[j] -= 1 }
                 guard stage >= 1 || standing else { continue }
@@ -269,6 +280,21 @@ final class SeesawRideTests: XCTestCase {
                     if pull > 0.002 { rep.leashFrames += 1; rep.leashMax = max(rep.leashMax, pull) }
                 }
                 if standing {
+                    var zmin = Float.infinity
+                    r.dyn.withUnsafeBufferPointer { d in
+                        var v = 0
+                        while v + 2 < bodyEnd { if d[v + 1] > 0.25, d[v + 1] < 0.9, abs(d[v] - centre.x) < 1.5 { zmin = min(zmin, abs(d[v + 2] - centre.y)) }; v += 6 }
+                    }
+                    if stage == 0 { rep.waitMinZ = min(rep.waitMinZ, zmin) }
+                    if zmin < rep.standMinZ {
+                        rep.standMinZ = zmin; rep.standRootZ = abs(b.position.y - centre.y)
+                        var wv = -1
+                        r.dyn.withUnsafeBufferPointer { d in
+                            var v = 0
+                            while v + 2 < bodyEnd { if d[v + 1] > 0.25, d[v + 1] < 0.9, abs(d[v] - centre.x) < 1.5, abs(abs(d[v + 2] - centre.y) - zmin) < 1e-6 { wv = v / 6; break }; v += 6 }
+                        }
+                        rep.standWhere = String(format: "vertex %d at rel (%.2f, %.2f, %.2f), root rel (%.2f, %.2f), stage %d, activity %@, phaseT %.2f, i %d", wv, wv >= 0 ? r.dyn[6 * wv] - centre.x : 0, wv >= 0 ? r.dyn[6 * wv + 1] : 0, wv >= 0 ? r.dyn[6 * wv + 2] - centre.y : 0, b.position.x - centre.x, b.position.y - centre.y, stage, "\(b.activity)", st.phaseT, i)
+                    }
                     // the smallest distance from the skin to the piece (beam, cushions, base, handles; level plank) while he waits on his stand spot / just after the hop off
                     r.dyn.withUnsafeBufferPointer { d in
                         var v = 0
@@ -309,6 +335,7 @@ final class SeesawRideTests: XCTestCase {
                         }
                     }
                     if lowest.isFinite { rep.minMargin = min(rep.minMargin, lowest); rep.maxMargin = max(rep.maxMargin, lowest) }
+                    if lowest.isFinite, abs(th) < 0.003 { rep.levelMin = min(rep.levelMin, lowest); rep.levelMax = max(rep.levelMax, lowest) }
                     if abs(th) > 0.2 { rep.endInner = min(rep.endInner, lowInner); rep.endOuter = min(rep.endOuter, lowOuter) }
                 }
                 // nothing of the rider inside the beam or the handle (every skin vertex, the feet and the tail included), every 2nd step
@@ -349,10 +376,28 @@ final class SeesawRideTests: XCTestCase {
                     }
                 }
             }
+            if n == 2, i % 6 == 0, lab.rigs.allSatisfy({ $0.brain.idleState.bagStage == 2 && $0.brain.idleState.kind == .decorSit }) {
+                var best = Float.infinity
+                lab.rigs[0].dyn.withUnsafeBufferPointer { a in
+                    lab.rigs[1].dyn.withUnsafeBufferPointer { c in
+                        var u = 0
+                        while u + 2 < bodyEnd {
+                            var w = 0
+                            while w + 2 < bodyEnd {
+                                let dx = a[u] - c[w], dy = a[u + 1] - c[w + 1], dz = a[u + 2] - c[w + 2]
+                                best = min(best, dx * dx + dy * dy + dz * dz)
+                                w += 48
+                            }
+                            u += 48
+                        }
+                    }
+                }
+                rep.riderSkin = min(rep.riderSkin, best.squareRoot())
+            }
             if n == 2, lab.rigs.allSatisfy({ $0.brain.idleState.bagStage == 2 && $0.brain.idleState.kind == .decorSit }) {
                 rep.bodyGapMin = min(rep.bodyGapMin, simd_distance(lab.rigs[0].sim.centroid(), lab.rigs[1].sim.centroid()))
             }
-            if callAway, !called, mode == .pairRide, (R.rides[uid]?.modeT ?? 0) > 3 { called = true; lab.rigs[1].brain.idleState.hold = 0 }
+            if callAway, !called, mode == .pairRide, (R.rides[uid]?.modeT ?? 0) > 3 { called = true; lab.rigs[1].brain.idleState.hold = 0; lab.rigs[1].brain.anticsEnabled = false }          // (he does not pick the seesaw again on his own)
             if everSeated.count == n { rep.seatedAll = true }
             if rep.seatedAll, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { if doneAt < 0 { doneAt = i }; if i - doneAt > 180 { break } }
         }
@@ -365,10 +410,11 @@ final class SeesawRideTests: XCTestCase {
     func check(_ rep: Report, pair: Bool, callAway: Bool) {
         let t = rep.tag
         let hopsOn = rep.hops.filter { $0.kind == "on" }, hopsOff = rep.hops.filter { $0.kind == "off" }
-        MotionLog.write(String(format: "SEESAW %@: finished %@ seated %@ | root-seat max %.2f cm, centroid-seat max %.2f cm | step seated max %.2f cm, hop max %.2f cm, worst first-step excess %.2f cm | dtheta %.4f ddtheta %.5f (call %.5f) | skin vs cushion %.2f..%.2f cm | leash frames %d (max %.1f cm) | beam depth %.2f cm, handle min %.2f cm, riders %.2f m | swings %.1f amp max %.2f | hops on %d off %d, longest %.2f m | tilted-plane margin at swing ends inner %.2f outer %.2f cm | stand clearance %.2f cm | arm %.4f (max %.4f) | wings/ears beam %.2f cm handle %.2f cm",
+        MotionLog.write(String(format: "SEESAW %@: finished %@ seated %@ | root-seat max %.2f cm, centroid-seat max %.2f cm | step seated max %.2f cm, hop max %.2f cm, worst first-step excess %.2f cm | dtheta %.4f ddtheta %.5f (call %.5f) | skin vs cushion %.2f..%.2f cm | leash frames %d (max %.1f cm) | beam depth %.2f cm, handle min %.2f cm, riders %.2f m | swings %.1f amp max %.2f | hops on %d off %d, longest %.2f m | tilted-plane margin at swing ends inner %.2f outer %.2f cm | stand clearance %.2f cm | arm %.4f (max %.4f) | wings/ears beam %.2f cm handle %.2f cm | stand reach: skin z %.1f cm from the piece centre line (root %.1f cm) | rider skin to rider skin min %.1f cm",
                               t, rep.finished ? "Y" : "N", rep.seatedAll ? "Y" : "N", rep.maxRootSeat * 100, rep.maxCentroidSeat * 100, rep.maxSeatedStep * 100, rep.maxHopStep * 100, rep.worstJump * 100,
                               rep.maxD, rep.maxDD, rep.maxDDCall, rep.minMargin * 100, rep.maxMargin * 100, rep.leashFrames, rep.leashMax * 100, rep.beamDepth * 100, rep.handleMin * 100, rep.bodyGapMin,
-                              rep.swings, rep.maxAmp, hopsOn.count, hopsOff.count, rep.hops.map { $0.dist }.max() ?? 0, rep.endInner * 100, rep.endOuter * 100, rep.standClear * 100, rep.armMax, ArmCap.maximum, rep.featureBeam * 100, rep.featureHandle * 100))
+                              rep.swings, rep.maxAmp, hopsOn.count, hopsOff.count, rep.hops.map { $0.dist }.max() ?? 0, rep.endInner * 100, rep.endOuter * 100, rep.standClear * 100, rep.armMax, ArmCap.maximum, rep.featureBeam * 100, rep.featureHandle * 100, rep.standMinZ * 100, rep.standRootZ * 100, rep.riderSkin * 100))
+        MotionLog.write(String(format: "SEESAW %@: level plank (|theta| < 0.003) skin vs cushion %.2f..%.2f cm; deepest stand reach: %@ | waiting on the stand spot (stage 0): skin %.1f cm from the centre line (cushion edge 28 cm)", t, rep.levelMin * 100, rep.levelMax * 100, rep.standWhere, rep.waitMinZ * 100))
         for h in rep.hops { MotionLog.write(String(format: "SEESAW %@:   hop %@ %.2f m, theta at start %.4f, start vs seat %.2f cm, landing error %.2f cm%@", t, h.kind, h.dist, h.thetaAtStart, h.startVsSeat * 100, h.landing * 100, h.forced ? " (called away)" : "")) }
         XCTAssertTrue(rep.seatedAll, "\(t): everybody sat down"); XCTAssertTrue(rep.finished, "\(t): everybody got off")
         // 1
@@ -390,6 +436,7 @@ final class SeesawRideTests: XCTestCase {
         // 6
         XCTAssertLessThan(rep.beamDepth, 0.01, "\(t): nothing of the rider is more than 1 cm inside the beam")
         XCTAssertGreaterThanOrEqual(rep.handleMin, -0.005, "\(t): nothing of the rider is inside a handle")
+        if pair { XCTAssertGreaterThanOrEqual(rep.riderSkin, 0.20, "\(t): rider skin to rider skin stays at least 20 cm apart") }
         if pair { XCTAssertGreaterThan(rep.bodyGapMin, 1.2, "\(t): the riders' bodies stay apart") }
         XCTAssertGreaterThanOrEqual(rep.standClear, 0.01, "\(t): standing on the stand spot or just landed, the body is at least 1 cm from the cushion, beam, base and handles")
         XCTAssertLessThanOrEqual(rep.armMax, ArmCap.maximum * 1.02, "\(t): the arms stay stubby")

@@ -16,7 +16,7 @@ nonisolated enum SeesawTuning {
     /// Each rider is turned this far from facing across the plank toward the camera, so his face reads (a constant: the lead compares 0 and 25 degrees in captures).
     static let faceTurn: Float = 25 * .pi / 180
     /// How much of the plank's angle the body leans with (about the world z axis, split into his own pitch and roll by the way he faces).
-    static let leanShare: Float = 0.6
+    static let leanShare: Float = 1.0
     /// Extra lift of the body's seat above the cushion's top (world units), the knob for the per-species seat height if the skin test asks for one.
     static let seatLift: Float = 0
 
@@ -42,13 +42,21 @@ nonisolated enum SeesawTuning {
     static let soloHold: ClosedRange<Float> = 7...12
     static let levelTol: Float = 0.01         // "level and still": |theta| below this (and amp exactly 0)
     /// No hop on or off this piece travels farther than this over the floor (metres). A normal seat hop here is 0.84 m (the stand spot in front of the footprint, like every furniture hop): the rule is about multi-metre hops.
-    static let maxHop: Float = 0.9
+    static let maxHop: Float = 1.05
+    /// How far in front of the centre line (toward the camera) a rider stands to hop on and lands from the hop off, world metres. A body landing or waiting reaches 0.71 m from its root
+    /// (measured), the cushion's edge is 0.28 from the centre line: 0.28 + 0.71 + 0.01 = 1.0 keeps a body 1 cm off the cushion.
+    static let standDz: Float = 1.0
     /// The brain's hold timer while on the seesaw: huge on purpose. The idle code sets `hold` to 0 to end a sit (come-here, feeding, a request): that is how a call-away is told.
     static let holdMarker: Float = 1e6
     /// How far the feet slide forward on the cushion when he sits down (world units; the beanbag's is 0.27: the handle is in front of him here).
-    static let footReach: Float = 0.2
+    static let footReach: Float = 0.15
+    /// The sit-down's foot steps are slower than the sofa's (a step's rate; the stock 2.6 slid the body 2 to 2.7 cm per step).
+    static let footRate: Float = 1.7
+    /// The hops up and down take this much longer than the stock bag hop (its rise to a 0.67 m seat peaked at 9.7 cm per step, 5.8 m/s).
+    static let hopSlow: Float = 1.7
     /// The seated rider's turn toward a comer (rad, at most) and the pose's squash is the ordinary sit's.
-    static let lookMax: Float = 0.3
+    static let lookMax: Float = 0.2
+    static let lookTime: Float = 1.2
 
     // MARK: the contract (model units; x along the plank, y up, z toward the camera)
     static let pivotY: Float = 0.34
@@ -206,7 +214,7 @@ final class SeesawRide {
     /// Eases the rider's look toward a comer (0...1) and returns it.
     func lookStep(_ uid: Int, _ seat: Int, want: Float, dt: Float) -> Float {
         guard var r = rides[uid], var rd = r.riders[seat] else { return 0 }
-        rd.look += max(-dt / 0.5, min(dt / 0.5, want - rd.look))
+        rd.look += max(-dt / SeesawTuning.lookTime, min(dt / SeesawTuning.lookTime, want - rd.look))
         r.riders[seat] = rd; rides[uid] = r
         return rd.look
     }
@@ -323,7 +331,7 @@ extension BlobBrain {
     /// (the footprint's half depth is 0.28, the stand gap 0.42: 0.70 straight in front, 0.73 at 0.2 to the side).
     func seesawStandSpots(_ f: DecorFoot, seat: Int) -> [SIMD2<Float>] {
         let sp = f.kind.sitPoints[min(seat, f.kind.sitPoints.count - 1)]
-        let dz = f.kind.spec.half.y - sp.z + Self.bagHopGap
+        let dz = SeesawTuning.standDz - sp.z
         return [Float(0), 0.2, -0.2].map { f.centre + f.turned(SIMD2(sp.x + $0, sp.z + dz)) }
     }
     /// The first of those a body can stand on and no friend stands near, nearest to the seat first.
@@ -352,14 +360,18 @@ extension BlobBrain {
             guard !turning, !feet.active, idleState.phaseT > 0.1 else { return }
             let g = seesawNeutral(f)
             // a hop never travels over maxHop: from farther (a walk that ended short, or the far side spot the generic stand picker may give) he walks to the near spot first
-            if simd_distance(position, g.xz) > SeesawTuning.maxHop {
-                if idleState.decorRetry < Self.standRetries + 3, let spot = seesawFreeSpot(f, seat: seat, from: position) {
+            // (and he waits and hops from OUR spot, 1.0 m out, clear of the cushion: the generic stand spot is 0.81 out, where a landing body reaches into the cushion)
+            let far = simd_distance(position, g.xz) > SeesawTuning.maxHop
+            let spot = seesawFreeSpot(f, seat: seat, from: position)
+            if far || (spot.map { simd_distance(position, $0) > 0.15 } ?? false) {
+                if idleState.decorRetry < Self.standRetries + 3, let spot {
                     idleState.decorRetry += 1
                     idleState.target = spot; idleState.decorGo = true
                     scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0
                     script = .walk(target: spot, then: .none); activity = .walking
-                } else if idleState.phaseT > 6 { idleFinish(skinner) }
-                return
+                    return
+                }
+                if far { if idleState.phaseT > 6 { idleFinish(skinner) }; return }
             }
             // the plank must be level and still (and nobody else in a hop), else he waits at his spot (up to 14 s)
             guard R.mayHopOn(uid, seat) else { if idleState.phaseT > 14 { idleFinish(skinner) }; return }
@@ -375,7 +387,7 @@ extension BlobBrain {
             if crowded { if idleState.phaseT > 3 { idleFinish(skinner) }; return }
             idleState.bagStage = 1; idleState.phaseT = 0; idleState.decorBooped = false
             R.report(uid, seat, .boarding)
-            bagHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: idleState.goalYaw)
+            seesawHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: idleState.goalYaw)
         case 2:
             seesawSeated(sim, skinner, dt, f)
         default: break
@@ -392,7 +404,7 @@ extension BlobBrain {
         case 1:
             R.report(uid, seat, .boarding)
             k = smooth01(phT / 1.15)
-            if !feet.active && idleState.steps < 2 && phT > Float(idleState.steps) * 0.35 { idleFootStep(reach: SeesawTuning.footReach); idleState.steps += 1 }
+            if !feet.active && idleState.steps < 2 && phT > Float(idleState.steps) * 0.35 { idleFootStep(reach: SeesawTuning.footReach, rate: SeesawTuning.footRate); idleState.steps += 1 }
             if forced { idleState.phase = 3; idleState.phaseT = 0; idleState.steps = 0 }
             else if phT >= 1.15 && !feet.active { idleState.phase = 2; idleState.phaseT = 0 }
         case 2:
@@ -413,7 +425,7 @@ extension BlobBrain {
                     idleState.k = 0; sitPose(skinner, 0, slump: false)
                     idleState.bagStage = 3; idleState.phaseT = 0
                     R.report(uid, seat, .hopOff)
-                    bagHop(sim, to: goal, ground: 0, apex: Self.bagApexDown + max(0, seesawNeutral(f).y - 0.45) * 0.3)
+                    seesawHop(sim, to: goal, ground: 0, apex: Self.bagApexDown + max(0, seesawNeutral(f).y - 0.45) * 0.3)
                     return
                 }
             }
@@ -445,6 +457,22 @@ extension BlobBrain {
         idleState.slideS -= runDt
         if idleState.slideS <= 0, idleState.phase == 2, R.amp(uid) > 0.05 { face(.happy, hold: 2.0); idleState.slideS = 1.8 }
         if R.takeTop(uid, seat), !voiceMuted, rand() < 0.6 { AudioHub.shared.chirp(jelly: steerID, .happy, x: px, src: "seesaw") }
+    }
+
+    /// `bagHop` with a slower hop (`hopSlow`): the same set-up (BlobBrain+Decor.swift), only the duration differs.
+    func seesawHop(_ sim: SoftBody, to goal: SIMD2<Float>, ground: Float, apex: Float, facing: Float? = nil) {
+        AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6)
+        sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
+        gait.wander = false
+        let pose = sim.bodyPose(iterations: 6)
+        gait.facingYaw = facing ?? faceCameraYaw()
+        gait.home = SIMD2(pose.centroid.x, pose.centroid.z)
+        poseW = 0; poseOn = false
+        gait.hopApex = apex
+        gait.hopDuration = SeesawTuning.hopSlow * 0.26 * sqrtf(apex / 0.10) * (1 + 5.0 * max(0, abs(ground - sim.floorY) - 0.41))
+        gait.hopToGround = ground
+        gait.hop(sim, to: goal, reduceMotion: amplitude < 0.7, chained: false)
+        idleState.landT = 0
     }
 
     /// `bagBodyTick` for the seesaw: the two hops (up, down) own the body like the bounce. Same as the ordinary tick, with the ride's reports and no seat kick.
