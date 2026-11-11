@@ -16,6 +16,8 @@ final class BubbleFeetTests: XCTestCase {
     override func setUp() { super.setUp(); BubbleTuning.restoreHead(); EmoteFeetTests.reset(); BubbleWand.shared.resetForTests() }
     override func tearDown() { BubbleTuning.restoreHead(); BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
+    nonisolated(unsafe) static var traceFrames: ClosedRange<Int>?
+    nonisolated(unsafe) static var traceRun = 0
     static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/bubbles/"
     typealias SC = LegsDrawnAuditTests.Scenario
 
@@ -47,11 +49,12 @@ final class BubbleFeetTests: XCTestCase {
         case "pop header", "pop leap", "pop bounce", "pop flap", "pop skip":          // each new pop move: the real wand, the move forced, a bubble put where that move can reach it
             let move = BubblePopMove(rawValue: String(name.dropFirst(4)))!
             return SC(name: "bubble: \(name)", game: true, seconds: 14, setup: { r, _ in
-                n = 0; wand.resetForTests(); BubbleTuning.forceMove = move; r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); return true
+                n = 0; Self.traceRun += 1; wand.resetForTests(); BubbleTuning.forceMove = move; r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); return true
             }, each: { r in
                 n += 1
                 if n % 300 == 30 { let c = r.brain.position; _ = wand.insertBubble(at: SIMD3(c.x + 1.1, move == .skip ? 1.0 : 1.4, c.y - 0.8), radius: 0.25) }
                 wand.tick(jellies: join(r), dt: r.sim.stepDt)
+                if let tr = Self.traceFrames, Self.traceRun == 1, tr.contains(n) { print("FLAPTRACE n \(n) \(wand.debugLine(join(r))) lift \(String(format: "%.3f", r.sim.minY() - r.sim.floorY)) pending \(r.brain.pending != nil) hold \(r.brain.bubbleHold) feetActive \(r.brain.feet.active) act \(r.brain.activity)") }
             })
         case "stream":           // the real wand: a steady blow, the Jelbie watches / chases / pops as he likes
             return SC(name: "bubble: stream", game: true, seconds: 24, setup: { r, _ in
@@ -124,5 +127,6 @@ final class BubbleFeetTests: XCTestCase {
     }
     func testPopFlapRound1GoWaitsOn() { Self.round1(); BubbleTuning.goWaitsForHop = true; bubbles("pop flap") }
     func testPopFlapRound1SpotWaitsOn() { Self.round1(); BubbleTuning.spotWaitsForFeet = true; bubbles("pop flap") }
+    func testPopFlapRound1Trace() { Self.round1(); Self.traceFrames = 690...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }
