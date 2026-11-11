@@ -55,7 +55,7 @@ nonisolated enum BubbleTuning {
     nonisolated(unsafe) static var playChaseRoll: Float = 0.96
     nonisolated(unsafe) static var playWatchHold: ClosedRange<Float> = 0.5...1.0
     nonisolated(unsafe) static var playWatchThink: ClosedRange<Float> = 0.25...0.6
-    nonisolated(unsafe) static var playAfterChase: ClosedRange<Float> = 0.08...0.3
+    nonisolated(unsafe) static var playAfterChase: ClosedRange<Float> = 0.3...0.9          // (the BEFORE value: round 1's 0.08...0.3 sent him on the next walk straight after a pop, and testPopFlap opened the foot join; found by BubbleFeetTests.testPopFlapHeadAfterChaseBefore)
     nonisolated(unsafe) static var playPickRadius: Float = 5.0
     nonisolated(unsafe) static var playSpotHold: ClosedRange<Float> = 0.35...0.5          // (round 1 made it 0.2...0.3: the walk order then cut the look off while it was still turning, and testPopFlap opened the foot join; the BEFORE value is back)
     /// The ground time (s) between the take-off of two of his hops (a hop is ~0.5 s long: the landing squash must read).
@@ -117,7 +117,7 @@ nonisolated enum BubbleTuning {
     static func restoreHead() {
         classic = false; forceMove = nil; playEnergy = 1.0
         leapRange = 0.35...0.8
-        playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.08...0.3
+        playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.3...0.9
         playPickRadius = 5.0; playSpotHold = 0.35...0.5; playHopSpacing = 0.8
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.2...0.45; playWaitHopChance = 0.8; playWaitHopEnabled = true
         bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 8; flapWeightHigh = 12; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 5
