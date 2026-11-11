@@ -163,13 +163,32 @@ final class RacePullFlowTests: XCTestCase {
 
     private func empty() -> FeetAttachTests.FootFrame { .init(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity) }
 
-    private func feetRace(_ name: String, tier: CourseTier, seed: UInt64) {
-        let r = PullRace(tier: tier, seed: seed)
+    /// What a feet race measured (the trace test and the numbers table read it).
+    struct FeetSummary {
+        var hits = [0, 0, 0]
+        var worstRise = [Float](repeating: -1, count: 3), worstCentre = [Float](repeating: -1, count: 3)
+        /// Every skinned step in which the leash / tether moved a piece: racer, step, frame disagreement (distance, angle), the deepest probe in the brain's own pose (before the leash), the pull.
+        var hitSteps: [(k: Int, n: Int, dc: Float, ang: Float, depth: Float, pull: Float)] = []
+        /// Largest frame disagreement per "<player|rival> <phase>": distance (+ where) and angle (+ where).
+        var maxFD: [String: (dc: Float, dcNote: String, ang: Float, angNote: String)] = [:]
+        var leashDist: Float = 0, leashAng: Float = 0
+        var finish: Float = 0
+    }
+
+    @discardableResult
+    private func feetRace(_ name: String, tier: CourseTier, seed: UInt64, trace: Bool = false, landmarkOff: Bool = false, assert doAssert: Bool = true, jiggleOff: Bool = false, taps: Bool = false) -> FeetSummary {
+        if landmarkOff { Skinner.frameDisagreeDist = 9; Skinner.frameDisagreeAngle = 9 }
+        defer { Skinner.frameDisagreeDist = 0.12; Skinner.frameDisagreeAngle = 0.35 }
+        var summary = FeetSummary()
+        let r = PullRace(tier: tier, seed: seed, taps: taps)
+        if taps { r.script = nil }
+        var tapT: Float = 0, tapFoot = 0
         let room = r.room, care = r.care, rm = MotionRig.renderMesh
         for (k, f) in [JellyFeature.spines, .daisy, .wings].enumerated() {
             let a = room.actors[k]
             a.brain?.feature = f; a.skinner.configureTail(rm); a.skinner.tailOn = f == .spines; a.brain?.skinnerRef = a.skinner
         }
+        if jiggleOff { for a in room.actors { a.skinner.jelly.enabled = false } }
         var dyn = room.actors.map { _ in [Float](repeating: 0, count: rm.vertexCount * 6) }
         let bean: [[[Int32]]] = room.actors.map { _ in [-1, 1].map { side in let f = rm.armCapsule!.beanFirst(side: side); return (f..<(f + FootBean.vertexCount)).map { Int32($0) } } }
         let core: [[[Int32]]] = room.actors.map { a in (0..<2).map { a.brain!.footCoreVertices($0, sim: a.sim, skinner: a.skinner) } }
@@ -180,12 +199,17 @@ final class RacePullFlowTests: XCTestCase {
         defer { Skinner.leashObserver = nil }
         var worst: [String: FeetAttachTests.FootFrame] = [:], frames: [String: Int] = [:]
         var prevJumping = [false, false, false], chainIdx = [0, 0, 0], sinceHop = [999, 999, 999], logSeen = 0
+        var hopL = [Float](repeating: 0, count: 3), hopT = [Float](repeating: 0.37, count: 3), landSteps = [0, 0, 0], prevPhase = ["", "", ""], lastCrouchLine = ["", "", ""]
         r.perStep = { r in
             let sim = care.race.sim
+            if taps, care.race.phase == .racing, sim?.phase == .running || sim?.phase == .finishing {          // (today's race: the player taps and the hands-free assist clears the bars)
+                care.race.sim?.autoJumpPlayer = true
+                tapT += r.dt; while tapT >= 1 / 3 { tapT -= 1 / 3; _ = care.race.tap(foot: tapFoot); tapFoot = 1 - tapFoot }
+            }
             for e in r.log[logSeen...] {
                 if case .hop(let ri, _, _, _, _, _, _) = e.e, let k = care.raceBook.racers.indices.contains(ri) ? care.raceBook.racers[ri] : nil, room.actors.indices.contains(k) {
                     if !prevJumping[k] { chainIdx[k] = 0 } else { chainIdx[k] += 1 }
-                    if case .hop(_, _, let ap, _, _, _, _) = e.e { lastApex[k] = ap }
+                    if case .hop(_, let ln, let ap, let air, _, _, _) = e.e { lastApex[k] = ap; hopL[k] = ln; hopT[k] = air }
                 }
             }
             logSeen = r.log.count
@@ -232,23 +256,124 @@ final class RacePullFlowTests: XCTestCase {
                 }
                 if beans, f.soleRise > worstRise[k] { worstRise[k] = f.soleRise; riseNote[k] = info[k] }
                 _ = ri
+                // the skin's own numbers of this pass (after `update`)
+                let ph = "\(b.gait.phase)"
+                if ph == "land" { landSteps[k] += 1 } else { landSteps[k] = 0 }
+                let fd = a.skinner.frameDisagree
+                var preDepth: Float = -1
+                var depthText = ""
+                if beans, let jp = a.skinner.joinPose {
+                    for sd in 0..<2 where a.skinner.beanPos.count == 2 && a.skinner.beanPos[sd].count == FootBean.vertexCount {
+                        let bp = a.skinner.beanPos[sd]
+                        var best = -Float.infinity
+                        best = max(best, Skinner.fittedDepth(bp[FootBean.vertexCount - 1], jp).0)
+                        for rr in Skinner.joinNeckRings { for j in Swift.stride(from: 0, to: FootBean.around, by: 2) { best = max(best, Skinner.fittedDepth(bp[1 + FootBean.around * rr + j], jp).0) } }
+                        depthText += String(format: " d%d %.3f", sd, best)
+                        preDepth = preDepth < 0 ? best : min(preDepth, best)
+                    }
+                }
+                let phaseKey = (k == 0 ? "player " : "rival ") + (b.race.pullDone ? "coast" : (ph == "crouch" || ph == "air" || ph == "land") ? ph : "stand")
+                let v = hopT[k] > 0 ? hopL[k] / hopT[k] : 0
+                let hopNote = String(format: "step %d chain %d v %.2f", r.n, chainIdx[k], v)
+                var m = summary.maxFD[phaseKey] ?? (0, "", 0, "")
+                if fd.0 > m.dc { m.dc = fd.0; m.dcNote = hopNote }
+                if fd.1 > m.ang { m.ang = fd.1; m.angNote = hopNote }
+                summary.maxFD[phaseKey] = m
+                if framePull[k] > 0.005 { summary.hitSteps.append((k, r.n, fd.0, fd.1, preDepth, framePull[k])) }
+                if trace {
+                    let ri2 = ri
+                    let rc = sim?.racers[ri2]
+                    let c = a.sim.centroid()
+                    let sNow = sim.map { $0.course.progress(of: SIMD2(c.x, c.z), lane: rc?.lane ?? 1, near: rc?.dist ?? 0) } ?? 0
+                    let h = sim?.course.pose(at: sNow).heading ?? 0
+                    let fwd = SIMD3<Float>(sinf(h), 0, cosf(h)), rt = SIMD3<Float>(cosf(h), 0, -sinf(h))
+                    let dA = a.sim.attractor.anchor - pose.centroid
+                    let line = String(format: "FEETTRACE %d step %d phase %@ chain %d pullDone %d L %.3f T %.3f v %.2f | frame %.3f m %.3f rad | leashPre %.3f %.3f joinLeash %.3f %.3f |%@ | tilt %.3f | anchor-fit along %.3f across %.3f up %.3f | squash %.3f strength %.0f", k, r.n, ph, chainIdx[k], b.race.pullDone ? 1 : 0, hopL[k], hopT[k], v, fd.0, fd.1, a.skinner.leashPre[0], a.skinner.leashPre[1], a.skinner.joinLeash[0], a.skinner.joinLeash[1], depthText, pose.tilt, simd_dot(dA, fwd), simd_dot(dA, rt), dA.y, a.sim.attractor.squash, a.sim.attractor.strength)
+                    let detail = (1...3).contains(chainIdx[k]) || (38...43).contains(chainIdx[k])
+                    if ph == "crouch" || ph == "air" || (ph == "land" && landSteps[k] <= 3) {
+                        if detail { MotionLog.write(line) }
+                        else if ph == "air", prevPhase[k] == "crouch" { MotionLog.write(lastCrouchLine[k].replacingOccurrences(of: "FEETTRACE", with: "FEETTRACE lastcrouch")) }
+                    }
+                    lastCrouchLine[k] = line
+                }
+                prevPhase[k] = ph
                 let key = "\(k) \(tag) \(beans ? "bean" : "embedded")"
                 var w = worst[key] ?? self.empty()
                 FeetAttachTests.accumulate(&w, f); worst[key] = w; frames[key, default: 0] += 1
             }
         }
         XCTAssertTrue(r.runToResults(), "\(name): results reached")
+        summary.hits = guardHits
+        summary.finish = r.sim?.racers[0].finishTime ?? 0
+        for k in 0..<3 {
+            summary.worstRise[k] = worstRise[k]
+            summary.worstCentre[k] = worst.filter { $0.key.hasPrefix("\(k) ") && $0.key.hasSuffix("bean") }.map { $0.value.centreHeight }.max() ?? -1
+        }
+        if !doAssert {
+            for k in 0..<3 { MotionLog.write(String(format: "PULLFEET %@ racer %d: guard hits %d, worst bean sole rise %.3f, worst foot-centre height %.3f", name, k, guardHits[k], worstRise[k], summary.worstCentre[k])) }
+            return summary
+        }
         for k in worst.keys.sorted() { FeetAttachTests.check("pull race \(name) racer \(k)", worst[k]!, frames: frames[k]!, core: k.hasSuffix("embedded")) }
         for k in 0..<3 { MotionLog.write(String(format: "PULLFEET %@ racer %d worst bean sole rise %.3f at %@", name, k, worstRise[k], riseNote[k])) }
         for k in 0..<3 { MotionLog.write("PULLFEET \(name) racer \(k): guard hits \(guardHits[k]) (\(guardNote[k]))"); XCTAssertEqual(guardHits[k], 0, "\(name) racer \(k): the leash / tether moved a foot piece (\(guardNote[k]))") }
         for tag in ["first hop", "chain hop", "coast"] { XCTAssertGreaterThan((frames["0 \(tag) bean"] ?? 0) + (frames["0 \(tag) embedded"] ?? 0), 0, "\(name): the player's frames in '\(tag)' were measured") }
         MotionLog.write("PULLFEET \(name): frames per phase (player): " + frames.filter { $0.key.hasPrefix("0 ") }.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))
+        return summary
+    }
+
+    /// B1b: why do the leash hits come? Prints only (asserts nothing): the per-step trace of a Splash pull race, then the same race with the skin's landmark-frame switch turned off.
+    func testFeetTraceInALongChain() throws {
+        try diagOnly()
+        BlobBrain.raceChainRoot = false; defer { BlobBrain.raceChainRoot = true }
+        let a = feetRace("splash trace", tier: .splash, seed: 7, trace: true, assert: false)
+        let b = feetRace("splash (landmark frame off)", tier: .splash, seed: 7, landmarkOff: true, assert: false)
+        let j = feetRace("splash (jiggle off)", tier: .splash, seed: 7, assert: false, jiggleOff: true)
+        for k in 0..<3 { MotionLog.write(String(format: "PULLFEET splash racer %d (jiggle off, frame on): guard hits %d, worst sole rise %.3f, worst centre height %.3f", k, j.hits[k], j.worstRise[k], j.worstCentre[k])) }
+        for (key, m) in j.maxFD.sorted(by: { $0.key < $1.key }) { MotionLog.write(String(format: "FEETFD jiggle off %@: dist %.3f (%@) angle %.3f (%@)", key, m.dc, m.dcNote, m.ang, m.angNote)) }
+        for (key, m) in a.maxFD.sorted(by: { $0.key < $1.key }) { MotionLog.write(String(format: "FEETFD jiggle on %@: dist %.3f (%@) angle %.3f (%@)", key, m.dc, m.dcNote, m.ang, m.angNote)) }
+        for k in 0..<3 { MotionLog.write(String(format: "PULLFEET splash racer %d (landmark frame off): guard hits %d, worst sole rise %.3f, worst centre height %.3f   [frame on: hits %d, rise %.3f, centre %.3f]", k, b.hits[k], b.worstRise[k], b.worstCentre[k], a.hits[k], a.worstRise[k], a.worstCentre[k])) }
+        for h in a.hitSteps.prefix(400) { MotionLog.write(String(format: "FEETHIT racer %d step %d frame %.3f m %.3f rad, deepest probe in the brain's pose %.3f, pull %.1f cm, past limit %d", h.k, h.n, h.dc, h.ang, h.depth, h.pull * 100, (h.dc > 0.12 || h.ang > 0.35) ? 1 : 0)) }
+        let pastLimit = a.hitSteps.filter { $0.dc > 0.12 || $0.ang > 0.35 }.count, deepOK = a.hitSteps.filter { $0.depth >= 0.02 }.count
+        let gone = b.hits.reduce(0, +) == 0
+        let allHitsPast = !a.hitSteps.isEmpty && pastLimit == a.hitSteps.count && deepOK == a.hitSteps.count
+        MotionLog.write("FEETCAUSE landmark frame: \(gone && allHitsPast ? "yes" : "no") (hit steps \(a.hitSteps.count), past a limit \(pastLimit), brain piece depth >= 0.02 in \(deepOK); hits with the frame switch off: \(b.hits))")
     }
 
     func testFeetStayAttachedThroughAPullRace() {
         feetRace("puddle", tier: .puddle, seed: 3)
         feetRace("splash (bars)", tier: .splash, seed: 7)
+        feetRace("tsunami (the highest momentum)", tier: .tsunami, seed: 11)
     }
+
+    /// B1b 2.1: the skin's frame disagreement per phase on every course (the numbers for the Main session). Prints only.
+    private func fdTable(_ rows: [(CourseTier, UInt64)], taps: Bool = false) {
+        for (tier, seed) in rows {
+            let name = "\(taps ? "taps" : "pull") \(tier) seed \(seed)"
+            let m = feetRace(name, tier: tier, seed: seed, assert: false, taps: taps)
+            for (key, v) in m.maxFD.sorted(by: { $0.key < $1.key }) { MotionLog.write(String(format: "FEETFD %@ | %@: dist %.3f (%@) angle %.3f (%@)", name, key, v.dc, v.dcNote, v.ang, v.angNote)) }
+            MotionLog.write("FEETFD \(name) | guard hits \(m.hits), worst sole rise \(m.worstRise.map { String(format: "%.3f", $0) }), worst centre \(m.worstCentre.map { String(format: "%.3f", $0) }), hit steps \(m.hitSteps.count)")
+        }
+    }
+    /// Diagnostics of B1b (they print only and are skipped unless PULL_DIAG is set: each runs two to four whole races with the skin pass on every body).
+    private func diagOnly() throws { try XCTSkipUnless(ProcessInfo.processInfo.environment["PULL_DIAG"] != nil, "diagnostic: set TEST_RUNNER_PULL_DIAG=1") }
+
+    /// The lever (`BlobBrain.raceChainRoot`) off and on, Splash seed 7: what it did to the frame disagreement, the hits and the pace.
+    func testFeetLever() throws {
+        try diagOnly()
+        var base: Float = 0
+        for (name, root) in [("root left behind (B1)", false), ("root follows the body", true)] {
+            BlobBrain.raceChainRoot = root
+            defer { BlobBrain.raceChainRoot = true }
+            let m = feetRace("lever \(name)", tier: .splash, seed: 7, assert: false)
+            let dist = m.maxFD.values.map(\.dc).max() ?? 0, ang = m.maxFD.values.map(\.ang).max() ?? 0
+            if !root { base = m.finish }
+            MotionLog.write(String(format: "FEETLEVER %@: largest frame distance %.3f m, largest angle %.3f rad, guard hits %@, worst sole rise %@, worst centre %@, player finish %.3f s (%+.2f %% against B1)", name, dist, ang, "\(m.hits)", "\(m.worstRise.map { String(format: "%.3f", $0) })", "\(m.worstCentre.map { String(format: "%.3f", $0) })", m.finish, 100 * (m.finish / max(base, 1e-3) - 1)))
+        }
+    }
+    /// 2.1: the frame disagreement of the B1 behaviour (lever off) per phase; and of today's taps race.
+    func testFeetFrameNumbersA1() throws { try diagOnly(); BlobBrain.raceChainRoot = false; defer { BlobBrain.raceChainRoot = true }; fdTable([(.puddle, 4), (.ripple, 5)]) }
+    func testFeetFrameNumbersA2() throws { try diagOnly(); BlobBrain.raceChainRoot = false; defer { BlobBrain.raceChainRoot = true }; fdTable([(.ripple, 6), (.splash, 8)]) }
+    func testFeetFrameNumbersTaps() throws { try diagOnly(); fdTable([(.puddle, 3), (.splash, 7)], taps: true) }
 
     // MARK: 4
 

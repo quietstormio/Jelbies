@@ -55,6 +55,12 @@ struct RaceDrive {
 }
 
 extension BlobBrain {
+    /// B1b (2026-11-11): while a pull racer's hop chain carries him, the brain's root (`px`, `pz`) follows the body each tick. The skin's jiggle (JellyJiggle.apply) displaces the skinned vertices by
+    /// `twist x (vertex - root)` and `bulge x (vertex - root)`: with a root left behind at the first take-off (tens of metres by the end of a chain) the whole skin is pushed by decimetres, the
+    /// skin's tail-landmark frame then disagrees with the brain's fit by up to 0.6 m / 1.1 rad, and the leash moves correctly placed feet. Taps races and the room are not touched.
+    nonisolated(unsafe) static var raceChainRoot = true
+    // (B1b tried "a chained hop takes off from the attractor's anchor on the lane" (takeoff: = anchor): no effect at all on the frame disagreement, the hits or the pace, so it is gone.)
+
     /// He can take one more committed step: nothing is waiting (one step ahead is the most; the feet start it the tick the last one ends).
     var raceStepFree: Bool {
         guard race.active else { return false }
@@ -326,6 +332,7 @@ extension BlobBrain {
             return s
         }
         let c = sim.centroid()
+        if race.pull, Self.raceChainRoot { px = c.x; pz = c.z }          // (see `raceChainRoot`)
         race.spotOff *= 0.9
         race.spot = SIMD2(c.x, c.z) + race.spotOff; race.spotLive = true
         let s = race.course.progress(of: race.spot, lane: race.lane, near: race.lastS)
