@@ -140,20 +140,23 @@ nonisolated enum DiningSpot {
     static let walkOverRadius: Float = 0.5
     /// Does a disc (centre p, radius r) touch anything the tray or a standing / walking diner must keep off: any placed decor that is not walk-over (solid or not, rolling toys and the scooter at
     /// their CURRENT spot), the player's tray collider, the café tables, the bowls, the call spot, the loose floor things (ball), the sofa and the room's cylinders?
-    static func touchesBlocker(_ p: SIMD2<Float>, radius r: Float) -> Bool {
+    nonisolated(unsafe) static var lastBlocker = ""
+    static func touchesBlocker(_ p: SIMD2<Float>, radius r: Float, forWalker: Bool = false) -> Bool {
         let L = RoomLayout.self
         for f in L.decorFeet {
             if f.spec.flat, f.spec.radius >= walkOverRadius { continue }
             var g = f; g.centre = DecorField.shared.position(f)
-            if g.distance(p) < r { return true }
+            if g.distance(p) < r { lastBlocker = "decor \(f.kind)"; return true }
         }
-        for b in L.dynamicBoxes where L.boxDistanceXZ(p, b) < r { return true }
-        for b in L.tableBoxes.values where L.boxDistanceXZ(p, b) < r { return true }
-        for sp in [GameCamera.foodBowlSpot, GameCamera.waterBowlSpot] where simd_distance(p, sp) < r + 0.3 { return true }
-        if simd_distance(p, GameCamera.callSpot) < r + 0.2 { return true }
-        for t in floorThings where simd_distance(p, t.c) < r + t.r { return true }
-        if L.sofaDistanceXZ(p) < r * 0.8 { return true }
-        for c in L.cylinders where simd_distance(p, c.centre) < c.radius + r { return true }
+        for b in L.dynamicBoxes where L.boxDistanceXZ(p, b) < r { lastBlocker = "dynamicBox"; return true }
+        for b in L.tableBoxes.values where L.boxDistanceXZ(p, b) < r { lastBlocker = "tableBox"; return true }
+        // (the bowls and the loose ball are small: a walker goes round them, so only the tray / stands keep off them; the call spot is a floor marker, not an object: not a blocker)
+        if !forWalker {
+            for sp in [GameCamera.foodBowlSpot, GameCamera.waterBowlSpot] where simd_distance(p, sp) < r + 0.2 { lastBlocker = "bowl"; return true }
+            for t in floorThings where simd_distance(p, t.c) < r + t.r { lastBlocker = "floorThing"; return true }
+        }
+        if L.sofaDistanceXZ(p) < r * 0.8 { lastBlocker = "sofa"; return true }
+        for c in L.cylinders where simd_distance(p, c.centre) < c.radius + r { lastBlocker = "cylinder"; return true }
         return false
     }
     /// The tray rectangle (a body-width margin all round), each place's stand and the approach strip behind it are free of `touchesBlocker`.
@@ -175,20 +178,21 @@ nonisolated enum DiningSpot {
     static func walkable(from a: SIMD2<Float>, to b: SIMD2<Float>, radius r: Float = 0.4) -> Bool {
         func clear(_ p: SIMD2<Float>, _ q: SIMD2<Float>) -> Bool {
             let n = max(2, Int(simd_distance(p, q) / 0.2))
-            for k in 1..<n { let t = Float(k) / Float(n); if touchesBlocker(p + (q - p) * t, radius: r) { return false } }
+            for k in 1..<n { let t = Float(k) / Float(n); if touchesBlocker(p + (q - p) * t, radius: r, forWalker: true) { return false } }
             return true
         }
         if clear(a, b) { return true }
         let m = (a + b) / 2, d = b - a, l = max(simd_length(d), 1e-3), perp = SIMD2(-d.y, d.x) / l * 0.9
-        return (!touchesBlocker(m + perp, radius: r) && clear(a, m + perp) && clear(m + perp, b)) || (!touchesBlocker(m - perp, radius: r) && clear(a, m - perp) && clear(m - perp, b))
+        return (!touchesBlocker(m + perp, radius: r, forWalker: true) && clear(a, m + perp) && clear(m + perp, b)) || (!touchesBlocker(m - perp, radius: r, forWalker: true) && clear(a, m - perp) && clear(m - perp, b))
     }
     /// The group's placement: like `choose` but never a fallback. A candidate must pass the old tests, the lying footprints, `spotFree` and the caller's `accept` (reachability); among the candidates the
     /// ones with the lowest `score` (diners in front of their line) are kept and one is picked as `pickOpen` does. The whole allowed floor is tried (the front half first, then behind it). nil = no room.
     /// Diagnostics: per test, how many candidates of the last `chooseStrict` call failed it first.
     nonisolated(unsafe) static var rejects: [String: Int] = [:]
+    nonisolated(unsafe) static var rejectBy: [String: Int] = [:]
     static func chooseStrict(layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>], lies: [(c: SIMD2<Float>, yaw: Float)],
                              accept: @escaping (SIMD2<Float>) -> Bool, score: (SIMD2<Float>) -> Int) -> SIMD2<Float>? {
-        rejects = [:]
+        rejects = [:]; rejectBy = [:]
         // Things that do not move (decor, toys, boxes, bowls ...) are never overlapped. Bodies are a preference: a spot clear of every body comes first; else the spot with the fewest
         // overlapped bodies (a standing one walks off / is a diner on his way; a lying one is waited for by the pop clearance, then the meal is refused: DiningGroup).
         var clear: [SIMD2<Float>] = [], crowded: [(o: SIMD2<Float>, bodies: Int)] = []
@@ -200,7 +204,7 @@ nonisolated enum DiningSpot {
                     let o = SIMD2<Float>(cx, cz)
                     cz += 0.2
                     let tests: [(String, () -> Bool)] = [("isClear", { isClear(origin: o, layout: L, of: SIMD2(99, 99), aspect: aspect) }), ("free", { FreeFloor.isFree(o, radius: 0.9) }),
-                        ("places", { L.places.allSatisfy { FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) } }), ("blockers", { spotFree(origin: o, layout: L) }), ("accept", { accept(o) })]
+                        ("places", { L.places.allSatisfy { FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) } }), ("blockers", { spotFree(origin: o, layout: L) || { rejectBy[lastBlocker, default: 0] += 1; return false }() }), ("accept", { accept(o) })]
                     var ok = true
                     for (name, t) in tests where !t() { rejects[name, default: 0] += 1; ok = false; break }          // (diagnostics: the first test a candidate fails)
                     guard ok else { continue }
