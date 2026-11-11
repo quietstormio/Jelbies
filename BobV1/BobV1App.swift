@@ -8,7 +8,9 @@
 import SwiftUI
 import UIKit
 
-@main
+/// Entry point: strips launch arguments in a store build before ANY UserDefaults read (stored-property initialisers of the App run before its init()).
+@main enum BobV1Main { static func main() { DevArgs.stripLaunchArguments(); BobV1App.main() } }
+
 struct BobV1App: App {
     init() {
         #if !DEBUG
