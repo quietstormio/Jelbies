@@ -140,6 +140,8 @@ nonisolated enum DiningSpot {
     static let walkOverRadius: Float = 0.5
     /// Does a disc (centre p, radius r) touch anything the tray or a standing / walking diner must keep off: any placed decor that is not walk-over (solid or not, rolling toys and the scooter at
     /// their CURRENT spot), the player's tray collider, the café tables, the bowls, the call spot, the loose floor things (ball), the sofa and the room's cylinders?
+    /// The player's tray registers its collider in `dynamicBoxes`; the group places / checks its OWN tray while none is out (a leftover box is stale), so it sets this around its calls.
+    nonisolated(unsafe) static var ignoreDynamicBoxes = false
     nonisolated(unsafe) static var lastBlocker = ""
     static func touchesBlocker(_ p: SIMD2<Float>, radius r: Float, forWalker: Bool = false) -> Bool {
         let L = RoomLayout.self
@@ -148,7 +150,7 @@ nonisolated enum DiningSpot {
             var g = f; g.centre = DecorField.shared.position(f)
             if g.distance(p) < r { lastBlocker = "decor \(f.kind)"; return true }
         }
-        for b in L.dynamicBoxes where L.boxDistanceXZ(p, b) < r { lastBlocker = "dynamicBox"; return true }
+        if !ignoreDynamicBoxes { for b in L.dynamicBoxes where L.boxDistanceXZ(p, b) < r { lastBlocker = "dynamicBox"; return true } }
         for b in L.tableBoxes.values where L.boxDistanceXZ(p, b) < r { lastBlocker = "tableBox"; return true }
         // (the bowls and the loose ball are small: a walker goes round them, so only the tray / stands keep off them; the call spot is a floor marker, not an object: not a blocker)
         if !forWalker {

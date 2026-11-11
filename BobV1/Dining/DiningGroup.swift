@@ -192,13 +192,14 @@ final class DiningGroup {
         if Self.trayFirst, forcedOrigin == nil {
             // the owner's placement rule: never on food, a toy, decor or anything that could block; every diner's place reachable; the spot with the fewest diners in front of their line
             let L = DiningLayout.make(n: n), floors = brains.indices.map { f($0) }
+            DiningSpot.ignoreDynamicBoxes = true; defer { DiningSpot.ignoreDynamicBoxes = false }          // (no tray is out: a box in the list is stale)
             let sipping = c.eatStyle == .sip
             func slots(_ o: SIMD2<Float>) -> [SIMD2<Float>] { L.places.map { p in var s = o + p.rel; s.y += sipping ? GameCare.sipCloser : GameCare.eatCloser; return SIMD2(s.x, s.y - GameCare.approachBack) } }
             func lineup(_ o: SIMD2<Float>) -> [Int] { Lineup.best(from: floors, slots: slots(o), locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil) }
             let chosen = DiningSpot.chooseStrict(layout: L, jellies: avoid + floors, lies: avoidLies + dinerLies(),
                 accept: { o in let po = lineup(o), sl = slots(o); return floors.indices.allSatisfy { DiningSpot.walkable(from: floors[$0], to: sl[po[$0]]) } },
                 score: { o in let po = lineup(o), sl = slots(o); return floors.indices.filter { floors[$0].y > sl[po[$0]].y + GameCare.approachBack + GameCare.popTolerance }.count })
-            guard let o = chosen else { noRoom = true; return }
+            guard let o = chosen else { noRoom = true; if ProcessInfo.processInfo.environment["DINING_DEBUG"] != nil { print("DINING noRoom rejects \(DiningSpot.rejects) by \(DiningSpot.rejectBy) floors \(floors)") }; return }
             origin = o
         } else {
             origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) }, lies: [])
@@ -382,6 +383,7 @@ final class DiningGroup {
             if Self.trayFirst, forcedOrigin == nil {
                 if !trayOut, dining.phase == .absent {
                     let lie = lieBlocked
+                    DiningSpot.ignoreDynamicBoxes = true; defer { DiningSpot.ignoreDynamicBoxes = false }
                     let blocked = !DiningSpot.spotFree(origin: origin, layout: DiningLayout.make(n: max(n, 1)))
                     if age > Self.lieCap, lie || blocked { noRoom = true; end(); gaveUp = true; return }
                     if (trayFirstClear && !lie && !blocked && (crossersBehind || age > Self.crossCap)) || (!lie && !blocked && age > Self.crossCap + (trayFirstClear ? 0 : 4)) || age > Self.lieCap { spawnTray() }
