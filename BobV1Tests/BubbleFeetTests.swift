@@ -14,7 +14,7 @@ import simd
 @MainActor
 final class BubbleFeetTests: XCTestCase {
     override func setUp() { super.setUp(); BubbleTuning.restoreHead(); EmoteFeetTests.reset(); BubbleWand.shared.resetForTests() }
-    override func tearDown() { BubbleTuning.restoreHead(); BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
+    override func tearDown() { BubbleTuning.seedRandom(nil); BubbleTuning.restoreHead(); BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
     nonisolated(unsafe) static var traceFrames: ClosedRange<Int>?
     nonisolated(unsafe) static var traceRun = 0
@@ -72,6 +72,7 @@ final class BubbleFeetTests: XCTestCase {
         for c in 0..<OnePieceInvariantTests.characters.count {
             for shoes in [false, true] {
                 var buf: [String] = []
+                BubbleTuning.seedRandom(UInt64(c * 2 + (shoes ? 1 : 0) + 1))          // (the wand's dice fixed per character: a failure repeats)
                 var air = 0, badFrame = -1, badInfo = "", tiltMax: Float = 0, tiltInfo = "", leashFrame = -1
                 var worst: (ratio: Float, join: Float, collar: Float) = (.infinity, .infinity, 0)
                 let a = OnePieceInvariantTests.run(Self.scenario(name), char: c, shoes: shoes, pacing: .hz60, seed: 3) { frame, r, f in
@@ -129,6 +130,6 @@ final class BubbleFeetTests: XCTestCase {
     }
     func testPopFlapRound1GoWaitsOn() { Self.round1(); BubbleTuning.goWaitsForHop = true; bubbles("pop flap") }
     func testPopFlapRound1SpotWaitsOn() { Self.round1(); BubbleTuning.spotWaitsForFeet = true; bubbles("pop flap") }
-    func testPopFlapRound1Trace() { Self.round1(); Self.traceFrames = 700...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
+    func testPopFlapRound1Trace() { Self.round1(); Self.traceFrames = 640...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }
