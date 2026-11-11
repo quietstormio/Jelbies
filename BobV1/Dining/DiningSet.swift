@@ -184,8 +184,11 @@ nonisolated enum DiningSpot {
     }
     /// The group's placement: like `choose` but never a fallback. A candidate must pass the old tests, the lying footprints, `spotFree` and the caller's `accept` (reachability); among the candidates the
     /// ones with the lowest `score` (diners in front of their line) are kept and one is picked as `pickOpen` does. The whole allowed floor is tried (the front half first, then behind it). nil = no room.
+    /// Diagnostics: per test, how many candidates of the last `chooseStrict` call failed it first.
+    nonisolated(unsafe) static var rejects: [String: Int] = [:]
     static func chooseStrict(layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>], lies: [(c: SIMD2<Float>, yaw: Float)],
                              accept: (SIMD2<Float>) -> Bool, score: (SIMD2<Float>) -> Int) -> SIMD2<Float>? {
+        rejects = [:]
         for zRange in [(Float(0.6), maxZ), (minZ + 1.2, Float(0.6) - 0.01)] {
             var open: [SIMD2<Float>] = []
             var cx: Float = -1.6
@@ -193,9 +196,12 @@ nonisolated enum DiningSpot {
                 var cz = zRange.0
                 while cz <= zRange.1 + 1e-4 {
                     let o = SIMD2<Float>(cx, cz)
-                    if isClear(origin: o, layout: L, of: SIMD2(99, 99), aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear,
-                       lies.allSatisfy({ lieDistance(from: $0.c, yaw: $0.yaw, origin: o, layout: L) >= lieMargin }), FreeFloor.isFree(o, radius: 0.9),
-                       L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) }), spotFree(origin: o, layout: L), accept(o) { open.append(o) }
+                    let tests: [(String, () -> Bool)] = [("isClear", { isClear(origin: o, layout: L, of: SIMD2(99, 99), aspect: aspect) }), ("jellies", { minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear }),
+                        ("lies", { lies.allSatisfy { lieDistance(from: $0.c, yaw: $0.yaw, origin: o, layout: L) >= lieMargin } }), ("free", { FreeFloor.isFree(o, radius: 0.9) }),
+                        ("places", { L.places.allSatisfy { FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) } }), ("blockers", { spotFree(origin: o, layout: L) }), ("accept", { accept(o) })]
+                    var ok = true
+                    for (name, t) in tests where !t() { rejects[name, default: 0] += 1; ok = false; break }          // (diagnostics: the first test a candidate fails)
+                    if ok { open.append(o) }
                     cz += 0.2
                 }
                 cx += 0.2
