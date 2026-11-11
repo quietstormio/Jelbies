@@ -97,8 +97,8 @@ final class RaceFlow {
     /// `-RaceControl taps` / `-RaceControl pull` always wins (tests set it before `startRace`).
     @ObservationIgnored var control: RaceControl = RaceFlow.defaultControl()
     /// `-RaceControl` (UserDefaults string) first; with none: taps when the process is a unit-test host, pull otherwise.
-    nonisolated static func defaultControl(defaults: UserDefaults = .standard, environment: [String: String] = ProcessInfo.processInfo.environment) -> RaceControl {
-        if let c = defaults.string(forKey: "RaceControl"), let k = RaceControl(rawValue: c) { return k }
+    nonisolated static func defaultControl(defaults: UserDefaults = .standard, environment: [String: String] = ProcessInfo.processInfo.environment, devArgs: Bool = DevArgs.enabled) -> RaceControl {
+        if devArgs, let c = defaults.string(forKey: "RaceControl"), let k = RaceControl(rawValue: c) { return k }
         return environment["XCTestConfigurationFilePath"] != nil ? .taps : .pull
     }
     /// Pull control: the player's `.hop` / `.trip` events so far this race (the chrome's pops read them).
@@ -239,7 +239,7 @@ final class RaceFlow {
             while autoT >= 1 / max(r, 0.1) { autoT -= 1 / max(r, 0.1); _ = tap(foot: autoFoot); autoFoot = 1 - autoFoot }
         }
         // capture aid: -RaceJumpEvery <seconds of race time> presses the Jump button on its own (a hurdle jump in the first seconds of the run, not after the long walk to the first bar)
-        let every = UserDefaults.standard.double(forKey: "RaceJumpEvery")
+        let every = DevArgs.enabled ? UserDefaults.standard.double(forKey: "RaceJumpEvery") : 0
         if control == .taps, every > 0, buttonsLive, sim!.phase == .running { jumpAidT += dt; if jumpAidT >= Float(every) { jumpAidT = 0; _ = jump() } }
         sim!.tick(dt: dt, bodyFree: bodyFree, bodyReady: bodyReady, bodyBetween: bodyBetween)
         let ev = sim!.takeEvents()

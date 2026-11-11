@@ -45,7 +45,7 @@ final class RacePullChromeTests: XCTestCase {
     /// The resting thumb: the whole demo (top of the label to the bottom of the hand) is inside the safe area, clear of the title / hint pills and outside the Jelbie box
     /// (portrait: y from 0.40 h to 0.67 h at any x; landscape: x from 0.30 w to 0.70 w at any y), on the four device sizes.
     func testTheThumbDemoRestsOffTheJelbies() {
-        let k = RacePullGesture.demoScale
+        let k: CGFloat = 1          // (the phone's ghost scale; the iPad's is demoScale(size:safe:pad:), tested below)
         let cases: [(String, CGSize, EdgeInsets)] = [
             ("phone portrait", CGSize(width: 402, height: 874), EdgeInsets(top: 62, leading: 0, bottom: 34, trailing: 0)),
             ("phone landscape", CGSize(width: 874, height: 402), EdgeInsets(top: 0, leading: 62, bottom: 21, trailing: 62)),
@@ -78,6 +78,60 @@ final class RacePullChromeTests: XCTestCase {
             let a = RacePullGesture.restAnchor(size: size, safe: safe, k: k13)
             XCTAssertLessThanOrEqual(a.y, size.height - safe.bottom, "\(name): the gauge anchor is on screen")
         }
+    }
+
+    /// The phone's layout did not move with the iPad pad: the two anchors of the b3 hand-over.
+    func testPhoneAnchorsArePinned() {
+        let p = RacePullGesture.restAnchor(size: CGSize(width: 402, height: 874), safe: EdgeInsets(top: 62, leading: 0, bottom: 34, trailing: 0), k: 1)
+        XCTAssertEqual(p.x, 201, accuracy: 0.05); XCTAssertEqual(p.y, 662.2, accuracy: 0.05)
+        let l = RacePullGesture.restAnchor(size: CGSize(width: 874, height: 402), safe: EdgeInsets(top: 0, leading: 62, bottom: 21, trailing: 62), k: 1)
+        XCTAssertEqual(l.x, 699.2, accuracy: 0.05); XCTAssertEqual(l.y, 203.2, accuracy: 0.05)
+        XCTAssertEqual(RacePullGesture.demoScale(size: CGSize(width: 402, height: 874), safe: EdgeInsets(), pad: false), 1)
+    }
+
+    /// The iPad: the ghost at 1.3 on every iPad window, beside the track in landscape, and the capture gauge's three steps stay on screen.
+    func testIPadDemoScaleAnchorAndCaptureGauge() {
+        let safe = EdgeInsets(top: 24, leading: 0, bottom: 20, trailing: 0)
+        let portraits: [CGSize] = [CGSize(width: 744, height: 1133), CGSize(width: 820, height: 1180), CGSize(width: 834, height: 1194),
+                                   CGSize(width: 834, height: 1210), CGSize(width: 1024, height: 1366), CGSize(width: 1032, height: 1376)]
+        for portrait in portraits {
+            for size in [portrait, CGSize(width: portrait.height, height: portrait.width)] {
+                let land = size.width > size.height
+                let name = "\(Int(size.width)) x \(Int(size.height))"
+                let k = RacePullGesture.demoScale(size: size, safe: safe, pad: true)
+                let a = RacePullGesture.restAnchor(size: size, safe: safe, k: k, pad: true)
+                let f = RacePullGesture.demoFrame(size: size, safe: safe, k: k, pad: true)
+                print("PADDEMO \(name): scale \(k) anchor (\(a.x), \(a.y)) frame y \(f.minY) ... \(f.maxY) x \(f.minX) ... \(f.maxX) fits(1.3) \(RacePullGesture.demoFits(size: size, safe: safe, k: 1.3, pad: true))")
+                XCTAssertEqual(k, 1.3, "\(name): the ghost's scale")
+                XCTAssertTrue(RacePullGesture.demoFits(size: size, safe: safe, k: k, pad: true), "\(name): demoFits \(f)")
+                if land { XCTAssertEqual(a.x, 0.88 * size.width, accuracy: 0.01, "\(name): beside the track") }
+                else { XCTAssertEqual(a.x, 0.5 * size.width, accuracy: 0.01, "\(name)") }
+                // the capture gauge (scale 1.3, from the pad anchor): the finger dot's lowest point is inside the safe area at every step
+                let ag = RacePullGesture.restAnchor(size: size, safe: safe, k: 1.3, pad: true)
+                for p: Float in [0.45, 0.80, 1.05] {
+                    let len = CGFloat(p) * RacePullGesture.dragMaxFor(size: size, startY: ag.y, bottomInset: safe.bottom, scale: 1.3)
+                    let lowest = ag.y + len + 16 * 1.3
+                    print("PADGAUGE \(name): step \(p) finger y \(ag.y + len) lowest \(lowest) of safe bottom \(size.height - safe.bottom)")
+                    XCTAssertLessThanOrEqual(lowest, size.height - safe.bottom + 0.01, "\(name): step \(p) inside the safe area")
+                }
+            }
+        }
+        // the numbers of the brief for 834 x 1194 / 1194 x 834
+        let pp = RacePullGesture.restAnchor(size: CGSize(width: 834, height: 1194), safe: safe, k: 1.3, pad: true)
+        XCTAssertEqual(pp.y, 827.25, accuracy: 0.01); XCTAssertEqual(pp.y - RacePullGesture.labelAbove(1.3), 736.25, accuracy: 0.01)
+        let ll = RacePullGesture.restAnchor(size: CGSize(width: 1194, height: 834), safe: safe, k: 1.3, pad: true)
+        XCTAssertEqual(ll.x, 1050.72, accuracy: 0.01); XCTAssertEqual(ll.y, 467.25, accuracy: 0.01)
+    }
+
+    /// A narrow iPad window (Split View): a scale comes back and the whole demo is inside the safe area.
+    func testNarrowIPadWindow() {
+        let size = CGSize(width: 507, height: 1194), safe = EdgeInsets(top: 24, leading: 0, bottom: 20, trailing: 0)
+        let k = RacePullGesture.demoScale(size: size, safe: safe, pad: true)
+        let f = RacePullGesture.demoFrame(size: size, safe: safe, k: k, pad: true)
+        print("PADDEMO narrow 507 x 1194: scale \(k) frame \(f) fits \(RacePullGesture.demoFits(size: size, safe: safe, k: k, pad: true))")
+        XCTAssertTrue([1.3, 1.2, 1.1, 1.0].contains(k))
+        XCTAssertGreaterThanOrEqual(f.minX, 0); XCTAssertLessThanOrEqual(f.maxX, size.width)
+        XCTAssertGreaterThanOrEqual(f.minY, safe.top); XCTAssertLessThanOrEqual(f.maxY, size.height - safe.bottom)
     }
 
     func testZone() {
@@ -113,6 +167,16 @@ final class RacePullChromeTests: XCTestCase {
         XCTAssertEqual(RaceFlow.defaultControl(defaults: d, environment: [:]), .taps, "the argument wins in the app")
         d.set("pull", forKey: "RaceControl")
         XCTAssertEqual(RaceFlow.defaultControl(defaults: d, environment: ["XCTestConfigurationFilePath": "x"]), .pull, "the argument wins in a test host")
+    }
+
+    /// `RaceControl` is a developer argument: read only when the dev-arg gate is open (the App Store archive ignores it).
+    func testRaceControlKeyNeedsTheDevGate() {
+        let name = "RacePullChrome.gate.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: name)!
+        defer { d.removePersistentDomain(forName: name) }
+        d.set("taps", forKey: "RaceControl")
+        XCTAssertEqual(RaceFlow.defaultControl(defaults: d, environment: [:], devArgs: false), .pull, "gate closed: the key is not read")
+        XCTAssertEqual(RaceFlow.defaultControl(defaults: d, environment: [:], devArgs: true), .taps, "gate open: the key wins")
     }
 
     func testForgivingWidensTheGreenAndMatchesTheModel() {
