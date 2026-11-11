@@ -250,7 +250,11 @@ final class RaceFlow {
         if u != ui { ui = u }
     }
 
+    /// Test seam: every race event of the step, in order (the tests read the hop / landed / trip events the glue consumes).
+    @ObservationIgnored var eventTap: ((RaceEvent) -> Void)?
+
     func handle(_ e: RaceEvent) {
+        eventTap?(e)
         announceRace(e)
         switch e {
         case .countdown: cueSerial += 1; cue(.countdownBeep)
