@@ -93,6 +93,8 @@ final class RaceFlow {
     /// -RaceAuto also sends him home by himself this long after the card appears.
     @ObservationIgnored var autoReturnAfter: Float?
     @ObservationIgnored var rivalSource: RivalSource = LocalRivalSource()
+    /// The control the next race runs with: the two foot buttons (default) or the pull-back-and-release hop (`-RaceControl pull`; tests set it before `startRace`).
+    @ObservationIgnored var control: RaceControl = UserDefaults.standard.string(forKey: "RaceControl") == "pull" ? .pull : .taps
     /// Where the last rivals met are kept (nil = no memory).
     @ObservationIgnored var recentRivals: UserDefaults? = .standard
     /// The input assist this trip runs with (A11ySettings at the start; Accessibility/PlayAssist.swift).
@@ -145,12 +147,13 @@ final class RaceFlow {
         let rs = source.rivals(count: rivalCount, player: player, playerTint: playerTint, seed: seed, tier: t)
         if source is LocalRivalSource, let d = recentRivals { RivalMemory.remember(rs.map(\.name), in: d) }
         rivals = rs; playerName = name; playerID = id
-        sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t))
+        sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t), control: control)
         ui = RaceUI()
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
         settled = false; earned = 0; pointsEarned = 0; pointsAfter = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
         applyAssistAtStart()
         sim?.autoJumpPlayer = assist == .auto || A11ySettings.shared.autoJump          // (the hands-free run clears the hurdles for him)
+        if control == .pull, autoRate != nil { sim?.autoHopPlayer = true }          // (capture aid: with -RaceAuto the model plays the pull player)
         started += 1
     }
 
@@ -161,10 +164,19 @@ final class RaceFlow {
         phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
     }
 
-    /// A tap of the player's foot button (0 left, 1 right).
+    /// The player lets go of the pull (pull control only): the model stores it and the hop leaves inside `tick`.
+    @discardableResult
+    func release(pull: Float) -> RaceRelease {
+        guard buttonsLive, control == .pull else { return .ignored }
+        let o = sim?.playerRelease(pull: pull) ?? .ignored
+        refreshUI()
+        return o
+    }
+
+    /// A tap of the player's foot button (0 left, 1 right). Ignored in a pull race.
     @discardableResult
     func tap(foot: Int) -> RaceTapModel.Outcome {
-        guard buttonsLive else { return .ignored }
+        guard buttonsLive, control == .taps else { return .ignored }
         let o = sim?.playerTap(foot: foot) ?? .ignored
         refreshUI()
         return o
@@ -173,7 +185,7 @@ final class RaceFlow {
     /// The Jump button: the take-off waits for his feet to be planted, and a bar reached in the middle of the flight is cleared (Race/Hurdles.swift).
     @discardableResult
     func jump() -> Bool {
-        guard buttonsLive else { return false }
+        guard buttonsLive, control == .taps else { return false }
         let ok = sim?.playerJump() ?? false
         if ok { refreshUI() }
         return ok
@@ -193,13 +205,13 @@ final class RaceFlow {
         }
         guard sim != nil, wipe == 0 else { return [] }
         if sim!.phase == .countdown, introT < Self.introPause { introT += dt; return [] }
-        if let r = autoRate ?? autoAssistRate, buttonsLive {
+        if control == .taps, let r = autoRate ?? autoAssistRate, buttonsLive {
             autoT += dt
             while autoT >= 1 / max(r, 0.1) { autoT -= 1 / max(r, 0.1); _ = tap(foot: autoFoot); autoFoot = 1 - autoFoot }
         }
         // capture aid: -RaceJumpEvery <seconds of race time> presses the Jump button on its own (a hurdle jump in the first seconds of the run, not after the long walk to the first bar)
         let every = UserDefaults.standard.double(forKey: "RaceJumpEvery")
-        if every > 0, buttonsLive, sim!.phase == .running { jumpAidT += dt; if jumpAidT >= Float(every) { jumpAidT = 0; _ = jump() } }
+        if control == .taps, every > 0, buttonsLive, sim!.phase == .running { jumpAidT += dt; if jumpAidT >= Float(every) { jumpAidT = 0; _ = jump() } }
         sim!.tick(dt: dt, bodyFree: bodyFree, bodyReady: bodyReady, bodyBetween: bodyBetween)
         let ev = sim!.takeEvents()
         for e in ev { handle(e) }
@@ -224,6 +236,7 @@ final class RaceFlow {
         u.inTurn = u.live && s.inTurn(0)
         u.course = s.course.tier
         u.hasHurdles = s.course.hasHurdles
+        u.pull = s.control == .pull
         if u.hasHurdles, u.live {
             let r = s.racers[0]
             u.hurdleAhead = r.nextHurdle < s.course.hurdles.count && s.course.hurdles[r.nextHurdle] - r.dist < HurdleTuning.hintAhead && !r.inJump
@@ -335,6 +348,8 @@ struct RaceUI: Equatable {
     /// The course has hurdles (the Jump button shows), and the next bar is close ahead (the "Jump!" hint).
     var hasHurdles = false
     var hurdleAhead = false
+    /// The race runs with the pull control (no foot buttons).
+    var pull = false
     var placings: [RacePlacing] = []
     var earned = 0
     var pointsEarned = 0
