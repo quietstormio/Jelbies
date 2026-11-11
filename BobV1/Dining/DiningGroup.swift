@@ -151,6 +151,7 @@ final class DiningGroup {
 
     func start(_ c: Consumable, brains bs: [BlobBrain], floor f: @escaping (Int) -> SIMD2<Float>, ids: [Int]? = nil) {
         guard state == .idle, dining.phase == .absent || (forcedOrigin != nil && dining.phase != .poofing), !bs.isEmpty else { return }
+        if ProcessInfo.processInfo.environment["DINING_SOFT"] != nil { BlobBrain.softMealWake = true }          // (survey only: env DINING_SOFT=1 turns the soft tray wake on; inert in the app)
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
         memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
         origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) })
