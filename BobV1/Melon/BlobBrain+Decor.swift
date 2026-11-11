@@ -221,7 +221,7 @@ extension BlobBrain {
         let here = SIMD2(px, pz)
         let field = DecorField.shared
         let exiting = decorIgnore          // (still standing in the bag he sat in: that stays soft for him)
-        let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (only == nil || $0.kind == only) && (onlyUID == nil || $0.uid == onlyUID) }
+        let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (commanded || ParkVisitPlan.allows($0.kind, outing: outingPlay)) && (only == nil || $0.kind == only) && (onlyUID == nil || $0.uid == onlyUID) }
         guard !wanted.isEmpty else { return false }
         // nearest first, with a little luck in it, then the first one he can walk to
         let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6) - (anticsEnabled ? 2.5 * field.toyPull(f.uid) : 0) + (f.uid == toy.lastUID ? 6 : 0)) }.sorted { $0.1 < $1.1 }          // (the fresher / less played toy wins over a nearer stale one)
