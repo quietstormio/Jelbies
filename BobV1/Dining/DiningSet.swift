@@ -178,7 +178,11 @@ nonisolated enum DiningSpot {
     static func walkable(from a: SIMD2<Float>, to b: SIMD2<Float>, radius r: Float = 0.4) -> Bool {
         func clear(_ p: SIMD2<Float>, _ q: SIMD2<Float>) -> Bool {
             let n = max(2, Int(simd_distance(p, q) / 0.2))
-            for k in 1..<n { let t = Float(k) / Float(n); if touchesBlocker(p + (q - p) * t, radius: r, forWalker: true) { return false } }
+            for k in 1..<n {
+                let t = Float(k) / Float(n), x = p + (q - p) * t
+                if simd_distance(x, a) < 0.7 || simd_distance(x, b) < 0.5 { continue }          // (he already stands where he stands, and the end is the stand strip, checked by `spotFree`)
+                if touchesBlocker(x, radius: r, forWalker: true) { return false }
+            }
             return true
         }
         if clear(a, b) { return true }
