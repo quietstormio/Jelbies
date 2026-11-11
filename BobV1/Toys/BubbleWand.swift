@@ -67,7 +67,7 @@ nonisolated enum BubbleTuning {
     nonisolated(unsafe) static var playWaitHopEnabled = true
     /// Weights of the bounce in `planMove` (below the crown / above it); the others are fixed there.
     nonisolated(unsafe) static var bounceWeightLow: Float = 1
-    nonisolated(unsafe) static var bounceWeightHigh: Float = 4
+    nonisolated(unsafe) static var bounceWeightHigh: Float = 2          // (1.5 before; 4 in round 1 crowded the other pops out)
     /// `pickTarget`: the bubble's distance counts this many times in the score.
     nonisolated(unsafe) static var pickDistanceFactor: Float = 1.5
     /// `bubbleIdle`: the cumulative shares of a happy hop on the spot / the look up / a step in place (the rest is a short shuffle), and how long the step in place lasts.
@@ -107,7 +107,7 @@ nonisolated enum BubbleTuning {
         playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.08...0.3
         playPickRadius = 5.0; playSpotHold = 0.2...0.3; playHopSpacing = 0.95
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.35...0.8; playWaitHopChance = 0.8; playWaitHopEnabled = true
-        bounceWeightLow = 1; bounceWeightHigh = 4; pickDistanceFactor = 1.5
+        bounceWeightLow = 1; bounceWeightHigh = 2; pickDistanceFactor = 1.5
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
         busyLookingChases = true
     }
