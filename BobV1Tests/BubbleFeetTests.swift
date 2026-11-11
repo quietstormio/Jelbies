@@ -71,12 +71,13 @@ final class BubbleFeetTests: XCTestCase {
         var report = String(format: "BUBBLE %@\nchar shoes | frames | leash frames | airborne frames | min ring ratio | worst join (cm; need >= 1) | max collar (cm; need <= 2) | max tilt (rad; need <= 0.5) | pops\n", name)
         for c in 0..<OnePieceInvariantTests.characters.count {
             for shoes in [false, true] {
+                var buf: [String] = []
                 var air = 0, badFrame = -1, badInfo = "", tiltMax: Float = 0, tiltInfo = "", leashFrame = -1
                 var worst: (ratio: Float, join: Float, collar: Float) = (.infinity, .infinity, 0)
                 let a = OnePieceInvariantTests.run(Self.scenario(name), char: c, shoes: shoes, pacing: .hz60, seed: 3) { frame, r, f in
                     // the stream scenario runs the Jelbie's other autonomous idles too (a belly slide tips him 0.7 rad by design): only the wand's own moves (walk, look, hop) are held to the pose limits
                     guard Self.isWandMove(r.brain) else { return }
-                    if let tr = Self.traceFrames, Self.traceRun == 3, tr.contains(frame) { print("FLAPTRACE f \(frame) \(BubbleWand.shared.debugLine([BubbleJelly(id: 0, brain: r.brain, sim: r.sim)])) lift \(String(format: "%.3f", r.sim.minY() - r.sim.floorY)) tilt \(String(format: "%.2f", f.tilt)) beans \(f.beans) join \(String(format: "%.3f", f.join)) feetActive \(r.brain.feet.active) act \(r.brain.activity) poseW \(String(format: "%.2f", r.brain.poseW))") }
+                    if let tr = Self.traceFrames, tr.contains(frame) { buf.append("FLAPTRACE f \(frame) \(BubbleWand.shared.debugLine([BubbleJelly(id: 0, brain: r.brain, sim: r.sim)])) lift \(String(format: "%.3f", r.sim.minY() - r.sim.floorY)) tilt \(String(format: "%.2f", f.tilt)) beans \(f.beans) join \(String(format: "%.3f", f.join)) feetActive \(r.brain.feet.active) act \(r.brain.activity) poseW \(String(format: "%.2f", r.brain.poseW))") }
                     if f.tilt > tiltMax { tiltMax = f.tilt; tiltInfo = "frame \(frame) idle \(r.brain.idleState.kind.map { $0.rawValue } ?? "-") script \(r.brain.scriptKindName) wand pops \(BubbleWand.shared.popsByJelly.values.reduce(0, +))" }
                     if leashFrame < 0, f.beans, f.leash > 0.002 || f.weldPull > 0.002 { leashFrame = frame }
                     guard let s = EmoteFeetTests.sample(r, frame: frame) else { return }
@@ -84,6 +85,7 @@ final class BubbleFeetTests: XCTestCase {
                     if (s.ratio < EmoteFeetTests.minRatio || s.join < OnePieceInvariantTests.minNeck || s.collar > EmoteFeetTests.maxCollar) && badFrame < 0 { badFrame = frame; badInfo = s.info + " idle \(r.brain.idleState.kind.map { $0.rawValue } ?? "-") script \(r.brain.scriptKindName)" }
                     worst = (min(worst.ratio, s.ratio), min(worst.join, s.join), max(worst.collar, s.collar))
                 }
+                if badFrame >= 0, !buf.isEmpty { print("FLAPTRACE RUN char \(c) shoes \(shoes) bad frame \(badFrame)\n" + buf.joined(separator: "\n")) }
                 let who = "bubble \(name), \(OnePieceInvariantTests.characters[c].0) \(shoes ? "with shoes" : "bare")"
                 guard a.started else { XCTFail("\(who): did not start", file: file, line: line); continue }
                 let pops = BubbleWand.shared.popsByJelly.values.reduce(0, +)
