@@ -57,6 +57,7 @@ extension GameCare {
 
     /// Once per fixed step (end of `tickOthers`, which sees every Jelly): starts the wanted group serving, then runs the group.
     func tickGroup(_ actors: [JellyActor], dt: Float) {
+        placeForTrace(actors)          // (simulator, `-MealStart`: once, as soon as every Jelly exists)
         if let c = groupWanted {
             if groupAge == 0 { MealTrace.begin(groupQueue.isEmpty ? "order food/drink tap (first tickGroup)" : "order2 second sitting") }
             groupAge += dt
@@ -68,7 +69,7 @@ extension GameCare {
             if !ready { traceWaiting(actors) }
             guard ready else { return }
             MealTrace.log("group ready after \(groupAge) s")
-            placeForTrace(actors)
+            releaseTraceHold(actors)
             let kind: NeedKind = c.kind == .food ? .hunger : .thirst
             // who sits now: the queued ids (a second sitting), else everybody; three at most, the rest wait for the next sitting
             let candidates = groupQueue.isEmpty ? actors.map(\.id) : groupQueue
@@ -124,10 +125,11 @@ extension GameCare {
         #endif
     }
 
-    /// `-MealStart` (simulator only, once): puts the Jelbies, in id order, on the given floor points right before the group starts.
+    /// `-MealStart` (simulator only, once, at launch as soon as every Jelly exists): puts the Jelbies, in id order, on the given floor points and holds them there
+    /// (no autonomy) until the Feed order, which lets them go (`releaseTraceHold`).
     private func placeForTrace(_ actors: [JellyActor]) {
         #if targetEnvironment(simulator)
-        guard let pts = MealTrace.takeStarts() else { return }
+        guard MealTrace.hasStarts, actors.count == jellies.count, actors.allSatisfy({ $0.brain != nil }), let pts = MealTrace.takeStarts() else { return }
         for (k, a) in actors.sorted(by: { $0.id < $1.id }).enumerated() where k < pts.count {
             guard let brain = a.brain else { continue }
             if let sk = brain.skinnerRef { brain.abortScript(a.sim, sk) } else { brain.pending = nil; brain.feet.reset(); brain.feetInit = false; brain.poseW = 0 }
@@ -136,8 +138,20 @@ extension GameCare {
             brain.currentPose(a.sim)
             brain.runW = 0; brain.zoomW = 0
             brain.skinnerRef?.jelly.reset()
-            MealTrace.log("MealStart: jelly \(a.id) placed at (\(pts[k].x),\(pts[k].y))")
+            brain.autonomy = false
+            MealTrace.held = true
+            NSLog("[meal] MealStart: jelly %d placed at (%.2f, %.2f), held", a.id, pts[k].x, pts[k].y)
         }
+        #endif
+    }
+
+    /// The Feed order lets the Jelbies held by `-MealStart` go (simulator only).
+    private func releaseTraceHold(_ actors: [JellyActor]) {
+        #if targetEnvironment(simulator)
+        guard MealTrace.held else { return }
+        MealTrace.held = false
+        for a in actors { a.brain?.autonomy = true }
+        MealTrace.log("MealStart hold released")
         #endif
     }
 

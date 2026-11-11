@@ -91,6 +91,16 @@ nonisolated enum MealTrace {
         #endif
     }
 
+    /// `-MealStart` was given and not placed yet / the Jelbies are held at their start points until the order.
+    static var hasStarts: Bool {
+        #if targetEnvironment(simulator)
+        return startOnce != nil
+        #else
+        return false
+        #endif
+    }
+    nonisolated(unsafe) static var held = false
+
     /// Simulator only: the one-shot start points from `-MealStart`.
     static func takeStarts() -> [SIMD2<Float>]? {
         #if targetEnvironment(simulator)

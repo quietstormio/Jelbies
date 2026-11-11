@@ -194,11 +194,25 @@ final class DiningGroup {
     static let gatherCap: Float = 12
     /// A diner who has eaten his share is released (and a started, idle one re-asked) even while another diner is still on his way. `-MealOld 1` (simulator) turns it off.
     nonisolated(unsafe) static var releaseWhileComing = !MealTrace.oldFlow
+    /// The tray pops as soon as no unstarted diner is in front of his line (nearer the camera, +z) and no diner's body is near the tray's rectangle, instead of waiting until everybody
+    /// has gathered. Whoever stands at his place eats at once; the others join as they arrive. The cap and `trayBusy` are unchanged. `-MealOld 1` (simulator) turns it off.
+    nonisolated(unsafe) static var popWhenBehind = !MealTrace.oldFlow
+    /// Floor distance from the tray's rectangle inside which a diner's body holds the `popWhenBehind` pop back.
+    static let behindBodyClear: Float = 0.3
     /// A bystander closer than this to the tray's rectangle holds the pop-in back (his belly + a margin), for at most 4 s past the cap.
     static let trayClearance: Float = 0.7
     /// Floor distance from `p` to the tray's rectangle (the tray as it will be drawn at its spot).
     func trayDistance(_ p: SIMD2<Float>) -> Float { DiningSpot.distance(from: p, origin: origin, layout: DiningLayout.make(n: max(n, 1))) }
     private var gathered: Bool { brains.indices.allSatisfy { (released.indices.contains($0) && released[$0]) || (ready($0) && isIdle(brains[$0])) } }
+    /// Every unreleased, unstarted diner is at (or behind) his place's line (floor +z is toward the camera) and no diner's body is near the tray's rectangle.
+    private var noneInFront: Bool {
+        brains.indices.allSatisfy { i in
+            if released.indices.contains(i), released[i] { return true }
+            let f = floor(i)
+            if trayDistance(f) < Self.behindBodyClear { return false }
+            return started.indices.contains(i) && started[i] ? true : f.y <= stands[placeOf[i]].y + GameCare.popTolerance
+        }
+    }
     private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } }
 
     private func beginApproach() {
@@ -330,8 +344,8 @@ final class DiningGroup {
         traceTick()
         switch state {
         case .approaching:
-            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) {
-                popReason = forcedOrigin != nil ? "cafe" : (gathered && !trayBusy ? "gathered" : "cap")
+            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || ((Self.popWhenBehind ? noneInFront : gathered) && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) {
+                popReason = forcedOrigin != nil ? "cafe" : ((Self.popWhenBehind ? noneInFront : gathered) && !trayBusy ? (Self.popWhenBehind ? "behind" : "gathered") : "cap")
                 spawnTray()
             }
             replan(dt: dt)
