@@ -396,9 +396,9 @@ final class BubbleWand: PlayToy {
         let crown = crownRest(j)
         let winged = j.brain.feature == .wings && !j.brain.wingsFolded
         var w: [(BubblePopMove, Float)] = []
-        if bub.pos.y < crown + 0.15 { w = [(.skip, 3), (.leap, 1.5), (.bounce, 0.5)] }          // (at or below the crown: a skip into it)
+        if bub.pos.y < crown + 0.15 { w = [(.skip, 3), (.leap, 1.5), (.bounce, BubbleTuning.classic ? 0.5 : 1)] }          // (at or below the crown: a skip into it)
         else if bub.pos.y > crown + 0.2 && winged { w = [(.flap, 3), (.leap, 1.5), (.bounce, 1)] }
-        else { w = [(.leap, 3), (.header, 1.5), (.bounce, BubbleTuning.classic ? 1.5 : 2.5)] + (winged ? [(.flap, 1)] : []) }
+        else { w = [(.leap, 3), (.header, 1.5), (.bounce, BubbleTuning.classic ? 1.5 : 4)] + (winged ? [(.flap, 1)] : []) }
         let total = w.reduce(0) { $0 + $1.1 }
         var r = Float.random(in: 0..<total)
         for (m, x) in w { if r < x { return m }; r -= x }
@@ -439,7 +439,7 @@ final class BubbleWand: PlayToy {
         // spot it: turn and look at that bubble with the excited face, then go
         let hold = Float.random(in: BubbleTuning.playSpotHold)
         st.lookUntil = clock + hold
-        _ = j.brain.bubbleWatch(floorPos(target), hold: hold, excited: true)
+        if j.brain.bubbleFree { _ = j.brain.bubbleWatch(floorPos(target), hold: hold, excited: true) } else { st.lookUntil = clock }          // (a look or a walk of his own is running: the walk to the bubble takes over from it)
     }
 
     private func playTick(_ j: BubbleJelly, _ st: inout JState, _ chasing: inout Int, _ js: [BubbleJelly]) {
@@ -448,13 +448,14 @@ final class BubbleWand: PlayToy {
         case .idle:
             guard clock >= st.thinkAt else { return }
             st.thinkAt = clock + Float.random(in: BubbleTuning.playThinkEvery)
-            guard b.bubbleFree, !field.bubbles.isEmpty else { note("idle \(field.bubbles.isEmpty ? "noBubbles" : "busy \(b.scriptKindName)/\(b.idleState.kind.map { $0.rawValue } ?? "-")\(b.bubbleHold ? "/hold" : "")")"); return }
+            let free = b.bubbleFree
+            guard !field.bubbles.isEmpty, free || b.bubbleBusyLooking else { note("idle \(field.bubbles.isEmpty ? "noBubbles" : "busy \(b.scriptKindName)/\(b.idleState.kind.map { $0.rawValue } ?? "-")\(b.bubbleHold ? "/hold" : "")")"); return }
             if clock - st.hopStart < BubbleTuning.playHopSpacing { st.thinkAt = clock + 0.1; return }          // (still landing: the squash reads, then the next hop)
             let roll = Float.random(in: 0..<1)
             if roll < BubbleTuning.playChaseRoll, chasing < BubbleTuning.maxChasers, let target = pickTarget(for: j, among: js) {
                 startPlayChase(j, &st, target)
                 chasing += 1; chases += 1
-            } else if roll < 0.97, let t = nearest(to: b.position) {
+            } else if free, roll < 0.97, let t = nearest(to: b.position) {
                 note("idle watch (\(chasing >= BubbleTuning.maxChasers ? "maxChasers" : "noTarget"))")
                 watches += 1
                 _ = b.bubbleWatch(t, hold: Float.random(in: BubbleTuning.playWatchHold), excited: Float.random(in: 0..<1) < 0.7)
@@ -620,7 +621,7 @@ final class BubbleWand: PlayToy {
                 if segmentDistance(op, p, fp) < 0.6 { pen += 1.5 }
             }
             if lost { continue }
-            let score = d + 0.8 * max(0, b.pos.y - 1.0) + 0.6 * simd_length(SIMD2(b.vel.x, b.vel.z)) + pen + Float.random(in: 0..<0.3)
+            let score = (BubbleTuning.classic ? d : 1.5 * d) + 0.8 * max(0, b.pos.y - 1.0) + 0.6 * simd_length(SIMD2(b.vel.x, b.vel.z)) + pen + Float.random(in: 0..<0.3)
             if best == nil || score < best!.1 { best = (b, score) }
         }
         return best?.0
