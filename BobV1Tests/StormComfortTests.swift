@@ -92,7 +92,7 @@ final class StormComfortTests: XCTestCase {
         var agg = OnePieceInvariantTests.Agg(), leashHits = 0, tiltMax: Float = 0
         var firstLie: Float?, lieBreaks = 0, eyesShutFrames = 0, lieFrames = 0, joyHops = 0, flops = 0
         var endNeutral = false, membersAtEnd = -1, stormSeconds: Float = 0
-        var log: [String] = []
+        var log: [String] = [], odd: [String] = []
     }
 
     /// Notice to clear, for `cast` and storm `seed`.
@@ -146,7 +146,9 @@ final class StormComfortTests: XCTestCase {
             }
             // the feet, the neck join, the leash (the checks of StormFeetTests), every 6th frame
             if steps % 6 == 0 {
-                for r in room.rigs {
+                for (ri, r) in room.rigs.enumerated() {
+                    // only while the reactor owns him: the autonomous slides / runs / tags of the quiet lab outside the storm are not this change's (round 1: all tilt > 0.5 and most leash frames came after the storm)
+                    guard room.reactor.members[ri] != nil else { continue }
                     var hit = 0
                     Skinner.leashObserver = { _, _, _ in hit += 1 }
                     r.render()
@@ -154,6 +156,10 @@ final class StormComfortTests: XCTestCase {
                     out.leashHits += hit
                     let f = OnePieceInvariantTests.frame(r)
                     out.tiltMax = max(out.tiltMax, f.tilt)
+                    if hit > 0 || f.tilt > 0.5, out.odd.count < 8 {
+                        let stages = room.reactor.arcs.map { "\($0.kind)/\($0.stage)" }
+                        out.odd.append("t \(rclock) J\(ri) leash \(hit) tilt \(f.tilt) idle \(String(describing: r.brain.idleState.kind)) social \(String(describing: r.brain.socialKind)) mode \(String(describing: room.reactor.members[ri]?.mode)) arcs \(stages)")
+                    }
                     out.agg.add(f, frame: steps)
                 }
             }
@@ -229,6 +235,7 @@ final class StormComfortTests: XCTestCase {
         // 5. the end: everybody free, no pose left
         XCTAssertEqual(r.membersAtEnd, 0, "\(who): the reactor still holds Jelbies after the storm", file: file, line: line)
         XCTAssertTrue(r.endNeutral, "\(who): a storm pose / hurry / lying pose is left after the storm", file: file, line: line)
+        report += " | ODD \(r.odd)"
         report += String(format: " | feet: frames %d beans %d leashed %d detached %d neckBad %d tilt %.3f", r.agg.frames, r.agg.beanFrames, r.agg.leashed, r.agg.detached, r.agg.neckBad, r.tiltMax)
         print(report)
         MotionLog.write(report)
@@ -311,6 +318,66 @@ final class StormComfortTests: XCTestCase {
         b.activity = .idle
         room.run(16)
         XCTAssertNotEqual(room.reactor.members[1]?.mode, .comforted)
+    }
+
+    // MARK: controls (printed, not asserted): is the hold overlap the emote's own?
+
+    private func controlGap(_ cast: Cast, _ kind: SocialKind) -> String {
+        let d = FeatureClipTests.Duo(positions: cast.positions, features: cast.features, seed: 11)
+        d.place([SIMD2(-0.735, 0.9), SIMD2(0.735, 0.9)]); d.live = true
+        for _ in 0..<3 { d.tick() }
+        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        guard a.brain.socialStart(kind, with: b.brain, a.sim) else { return "\(cast.name) \(kind.rawValue): did not start" }
+        var gmin = Float.infinity, frames = 0
+        for s in 0..<(60 * 14) {
+            d.tick()
+            if s % 3 == 0, let sess = a.brain.social, sess.phase >= 2 { gmin = min(gmin, d.truthGap(0, 1)); frames += 1 }
+            if a.brain.social == nil, s > 30 { break }
+        }
+        return String(format: "%@ %@ without any storm: %d hold frames, closest skin gap %.2f cm", cast.name, kind.rawValue, frames, gmin * 100)
+    }
+
+    func testControlHoldGapWithoutStorm() {
+        var lines: [String] = []
+        for c in [Self.bobPip, Self.teddyLavender] { for k in [SocialKind.swayHug, .cuddleLean] { lines.append(controlGap(c, k)) } }
+        for l in lines { MotionLog.write("STORMCOMFORT CONTROL " + l) }
+    }
+
+    /// The relief test of WeatherTests (cluster, then scatter) with the comfort code off and on: same numbers = the comfort code does not change it.
+    func testControlReliefScatterWithAndWithoutComfort() {
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
+        ToyTuning.settle = 5
+        defer { StormReactor.comfortOn = true; ToyTuning.settle = 0; _ = GameCamera.camera(aspect: 603.0 / 1311.0) }
+        for on in [false, true] {
+            StormReactor.comfortOn = on
+            let lab = SocialTests.Lab(n: 3, quiet: true, seed: 11)
+            let reactor = StormReactor()
+            let book = WeatherBook(defaults: UserDefaults(suiteName: "stormcomfort-ctl-\(UUID().uuidString)")!)
+            let js = lab.rigs.enumerated().map { StormReactor.Jelly(id: $0.offset, brain: $0.element.brain, sim: $0.element.sim, skinner: $0.element.skinner) }
+            for r in lab.rigs { r.brain.anticsEnabled = true }
+            func step() {
+                let ev = book.tick(dt: 1.0 / 60)
+                if !ev.isEmpty { reactor.handle(ev, plan: book.plan, jellies: js, care: nil) }
+                reactor.tick(jellies: js, care: nil, dt: 1.0 / 60)
+                lab.tick(watching: false)
+                for r in lab.rigs { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }
+            }
+            func meanGap() -> Float { (lab.centreGap(0, 1) + lab.centreGap(0, 2) + lab.centreGap(1, 2)) / 3 }
+            let ev = book.begin(seed: 4, jumpTo: .peak)
+            reactor.handle(ev, plan: book.plan, jellies: js, care: nil)
+            var t = 0
+            while t < 25 * 60 { step(); t += 1; if (0..<3).allSatisfy({ reactor.members[$0]?.mode == .huddle }) { break } }
+            for _ in 0..<60 { step() }
+            let cluster = meanGap()
+            let plan = book.plan!
+            while book.stormTime < plan.clearStart - 0.2 - 0.01 && book.isStorming {
+                let e = book.tick(dt: min(4.9, plan.clearStart - 0.2 - book.stormTime))
+                if !e.isEmpty { reactor.handle(e, plan: book.plan, jellies: js, care: nil) }
+            }
+            for _ in 0..<30 { step() }
+            for _ in 0..<(60 * 14) { step() }
+            MotionLog.write(String(format: "STORMCOMFORT CONTROL relief scatter, comfort %@: huddled after %.1f s, cluster %.3f, after the scatter %.3f (the test wants > cluster + 0.2)", on ? "ON" : "OFF", Float(t) / 60, cluster, meanGap()))
+        }
     }
 
     // MARK: the schedule

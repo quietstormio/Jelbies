@@ -180,6 +180,8 @@ final class StormReactor {
     var onComfortVoice: ((Int, Bool) -> Void)?
     var onComfortHaptic: (() -> Void)?
     /// The comfort arcs running, what has run (tests), when each Jelbie got better (the reactor's clock), the clock itself.
+    /// The comfort arcs (and the come-here guard of `lateJoiners`) are on; a test switches them off to compare with the storm as it was before.
+    nonisolated(unsafe) static var comfortOn = true
     private(set) var arcs: [Arc] = []
     private(set) var arcLog: [ArcRecord] = []
     private(set) var calmAt: [Int: Float] = [:]
@@ -635,7 +637,7 @@ final class StormReactor {
     /// Twice a second during the peak: who has trembled long enough gets an arc. One scared: a calm friend comes, else (nobody else here) it sighs and lies down, else it calms where it stands.
     /// Two or more: the bravest comforts the most scared (or, for two, now and then they hold each other); the rest pair up; a left-over one calms beside them.
     private func planArcs(care: GameCare?) {
-        guard peakOn, huddleOn, !locks.blocksAll else { return }
+        guard Self.comfortOn, peakOn, huddleOn, !locks.blocksAll else { return }
         let S = StormComfortTuning.self
         let huddlers = jellies.filter { members[$0.id]?.mode == .huddle && !$0.brain.isSleeping }
         guard !huddlers.isEmpty else { return }
@@ -669,7 +671,7 @@ final class StormReactor {
         var arc = Arc(id: nextArc, kind: kind, a: a, b: b)
         nextArc += 1
         arc.braveCalm = braveCalm
-        arc.emote = arcRng.next() < 0.6 ? .swayHug : .cuddleLean
+        arc.emote = (nextArc + (arcRng.next() < 0.5 ? 1 : 0)) % 2 == 0 ? .swayHug : .cuddleLean
         switch kind {
         case .comfort: arc.stage = braveCalm ? .hold : .breath
         case .mutual: arc.stage = .hold
@@ -753,6 +755,12 @@ final class StormReactor {
             case .breath:
                 if arc.t >= S.breath + 0.15 { arc.go(.hold); arc.retryAt = clock }
             case .hold:
+                // the scared one's tremble (both, for two scared ones) fades BEFORE the emote starts: a pose on the body during the hold broke the contact gap (round 1: -0.8...-2.3 cm)
+                for id in (arc.kind == .mutual ? [arc.a, arc.b] : [arc.b]) where (members[id]?.tremble ?? 0) > 0 && (members[id]?.fadeRate ?? 0) == 0 {
+                    members[id]?.fadeRate = 1 / (arc.kind == .mutual ? S.mutualFade : S.scaredFade)
+                }
+                arc.faded = true
+                if (members[arc.a]?.tremble ?? 0) > 0.02 || (members[arc.b]?.tremble ?? 0) > 0.02 { return }
                 if clock < arc.retryAt { return }
                 if arc.tries >= S.maxTries { arc.fallback = true; arc.go(.walkBeside); return }
                 ja.brain.hurry = false; jb.brain.hurry = false
@@ -1014,7 +1022,7 @@ final class StormReactor {
     /// A Jelbie who becomes free during the peak (woke up, was let go by the player, finished a move) joins the cluster beside it.
     private func lateJoiners(care: GameCare?) {
         guard !locks.focus else { return }
-        for j in jellies where members[j.id] == nil && available(j, care: care) && !j.brain.isSleeping && !comforted(j, care: care) && j.brain.idleState.kind != .sleep && j.brain.pending == nil && j.brain.activity != .coming {          // (a request of the player's is his own until it is done: a Jelbie let go by a come-here does not rejoin the huddle mid-walk)
+        for j in jellies where members[j.id] == nil && available(j, care: care) && !j.brain.isSleeping && !comforted(j, care: care) && j.brain.idleState.kind != .sleep && (!Self.comfortOn || (j.brain.pending == nil && j.brain.activity != .coming)) {          // (a request of the player's is his own until it is done: a Jelbie let go by a come-here does not rejoin the huddle mid-walk)
             var m = Member(mode: .gather); m.phase = Float(j.id) * 1.7
             members[j.id] = m
             if !assignLate(j.id, care: care) { members[j.id] = nil }
