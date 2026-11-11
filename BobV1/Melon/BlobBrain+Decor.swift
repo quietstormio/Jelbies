@@ -110,13 +110,9 @@ extension BlobBrain {
         if !f.kind.rockRide { spots += [Float(0), 0.35, -0.35].map { c + f.turned(SIMD2(sp.x + $0, sp.z - dz)) } }
         return spots
     }
-    /// The first spot in front of the seat he can stand on, nil when there is none.
+    /// The nearest usable spot to the seat he can stand on (the front row first, never the far side of the piece), nil when there is none.
     func hopStand(_ f: DecorFoot, seat: Int) -> SIMD2<Float>? {
-        for p in hopStandSpots(f, seat: seat) {
-            let q = fixed(p)
-            if simd_distance(p, q) < 0.06, peerFree(q) { return p }
-        }
-        return nil
+        return hopNearStand(f, seat: seat)
     }
     /// A spot `gap` from the piece's edge on the side he comes from (a rounded-box piece: found by walking out from its centre).
     func edgeStand(_ f: DecorFoot, from here: SIMD2<Float>, gap: Float) -> SIMD2<Float>? {
@@ -656,13 +652,7 @@ extension BlobBrain {
     /// a crowded corner used to throw him forward onto the plant beside it.
     func hopExitSpot(_ f: DecorFoot) -> SIMD2<Float> {
         if f.kind != .beanbag {
-            let ignore = decorIgnore
-            for p in hopStandSpots(f, seat: idleState.seat) {
-                let q = fixed(p)
-                if simd_distance(p, q) < 0.05, peerFree(q) { return p }
-            }
-            decorIgnore = ignore
-            return fixed(hopStandSpots(f, seat: idleState.seat)[0])
+            return hopExitPick(f)
         }
         return bagExitSpot(f.centre, radius: f.spec.radius)
     }
