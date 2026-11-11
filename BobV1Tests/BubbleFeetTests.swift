@@ -131,5 +131,13 @@ final class BubbleFeetTests: XCTestCase {
     func testPopFlapRound1GoWaitsOn() { Self.round1(); BubbleTuning.goWaitsForHop = true; bubbles("pop flap") }
     func testPopFlapRound1SpotWaitsOn() { Self.round1(); BubbleTuning.spotWaitsForFeet = true; bubbles("pop flap") }
     func testPopFlapHeadTrace() { Self.traceFrames = 680...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
+    // Round 2 bisect on the HEAD configuration (run with TEST_RUNNER_BUBBLE_SEED=100, which fails the head): one group back to the BEFORE values each.
+    func testPopFlapHeadBusyLookingOff() { BubbleTuning.busyLookingChases = false; bubbles("pop flap") }
+    func testPopFlapHeadIdleCutsBefore() { BubbleTuning.idleCuts = (0.32, 0.72, 0.86); BubbleTuning.idleStepDur = 0.8...1.6; bubbles("pop flap") }
+    func testPopFlapHeadGoWaitsOff() { BubbleTuning.goWaitsForHop = false; bubbles("pop flap") }
+    func testPopFlapHeadTimingBefore() {
+        BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8
+        BubbleTuning.playAfterChase = 0.3...0.9; BubbleTuning.playHopSpacing = 0; BubbleTuning.playWaitHopEnabled = false; bubbles("pop flap")
+    }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }
