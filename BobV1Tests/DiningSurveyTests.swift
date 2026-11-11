@@ -117,8 +117,8 @@ final class DiningSurveyTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         try XCTSkipUnless(env["TRAY_SURVEY"] == "1", "tray survey is off (set TRAY_SURVEY=1)")
         let arm = env["TRAY_ARM"] ?? "plain"
-        DiningGroup.robust = env["TRAY_ROBUST"] != "0"
-        defer { DiningGroup.robust = true }
+        DiningGroup.robust = env["TRAY_ROBUST"] != "0" && env["DINING_OLD"] == nil
+        defer { DiningGroup.robust = ProcessInfo.processInfo.environment["DINING_OLD"] == nil }
         XCTAssertTrue(arm == "plain" || arm == "applike", "TRAY_ARM must be plain or applike")
         if env["TRAY_STANDS"] == "old" { XCTFail("TRAY_STANDS=old needs the solo-hangout tuning vars; not on this tree"); return }
         // SOLO-ONLY-BEGIN (switch on on the branch where IdleTuning is `var` and restAfterSpecial exists; then handle TRAY_STANDS == "old" here instead of failing above)

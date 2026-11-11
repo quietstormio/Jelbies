@@ -78,7 +78,7 @@ final class DiningGroup {
     /// Diner i was taken out of this sitting because HE could not be served (diagnostics / tests); the others carry on.
     private(set) var excused: [Bool] = []
     /// Debug switch for the before / after survey: false restores the old rule (one stuck diner ends the meal for everybody).
-    nonisolated(unsafe) static var robust = true
+    nonisolated(unsafe) static var robust = ProcessInfo.processInfo.environment["DINING_OLD"] == nil          // (env DINING_OLD=1 = the old rule, for the survey; inert in the app)
     /// A walker who does not move: his floor spot and how long he has stood there while walking.
     private var stallPos: [SIMD2<Float>] = []
     private var stallClock: [Float] = []
