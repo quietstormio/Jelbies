@@ -34,6 +34,9 @@ final class DiningGroup {
     var eager = true
     /// Every Jelbie's floor spot when the serving is asked for (GameCare sets it): the tray never appears on one of them.
     var avoid: [SIMD2<Float>] = []
+    /// The lying Jelbies who are NOT at this sitting (GameCare sets it every tick; centre + heading): the tray is never placed on / popped over their lying footprint.
+    var bystanderLies: () -> [(c: SIMD2<Float>, yaw: Float)] = { [] }
+    var avoidLies: [(c: SIMD2<Float>, yaw: Float)] = []
     /// The café: the table is already out at this spot (restocked, not popped) and stays out when the sitting ends (the café despawns it).
     var forcedOrigin: SIMD2<Float>?
     var keepTable = false
@@ -98,6 +101,22 @@ final class DiningGroup {
     static let wakePatience: Float = 12
     static let wakeGrace: Float = 6
     private func sleeping(_ i: Int) -> Bool { brains[i].idleState.kind == .sleep }
+    /// Lying diners' footprints (stage 2...4: off his feet; before that he is a standing body, already a point).
+    private func dinerLies() -> [(c: SIMD2<Float>, yaw: Float)] {
+        brains.filter { $0.idleState.kind == .sleep && $0.sleep.stage >= 2 && $0.sleep.stage <= 4 }.flatMap { [(c: $0.sleep.spot, yaw: $0.sleep.lieYaw), (c: $0.position, yaw: $0.sleep.lieYaw)] }
+    }
+    /// A lying body (diner or bystander) overlaps the tray rectangle (with `lieMargin`) as it will be drawn.
+    private var lieBlocked: Bool {
+        let L = DiningLayout.make(n: max(n, 1))
+        return (bystanderLies() + dinerLies()).contains { DiningSpot.lieDistance(from: $0.c, yaw: $0.yaw, origin: origin, layout: L) < DiningSpot.lieMargin }
+    }
+    /// Diagnostics: distance from the drawn tray's rectangle to this lying body's footprint (0 = overlap); .infinity when he is not lying.
+    func lieDistanceNow(_ b: BlobBrain) -> Float {
+        guard b.idleState.kind == .sleep, b.sleep.stage >= 2, b.sleep.stage <= 4 else { return .infinity }
+        return DiningSpot.lieDistance(from: b.sleep.spot, yaw: b.sleep.lieYaw, origin: origin, layout: DiningLayout.make(n: max(n, 1)))
+    }
+    /// Tray-first: the longest the tray waits for a lying body to get up off its spot (a diner is hard-woken at `wakePatience`).
+    static let lieCap: Float = 18
     private var hooked = false
     var isActive: Bool { state != .idle }
 
@@ -163,7 +182,7 @@ final class DiningGroup {
         if ProcessInfo.processInfo.environment["DINING_SOFT"] != nil { BlobBrain.softMealWake = true }          // (survey only: env DINING_SOFT=1 turns the soft tray wake on; inert in the app)
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
         memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
-        origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) })
+        origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) }, lies: Self.trayFirst ? avoidLies + dinerLies() : [])
         // nearest free spot for everybody (first claim wins by distance)
         let spots = DiningLayout.make(n: n).places.map { p -> SIMD2<Float> in
             var s = origin + p.rel
@@ -341,7 +360,10 @@ final class DiningGroup {
         switch state {
         case .approaching:
             if Self.trayFirst, forcedOrigin == nil {
-                if !trayOut, dining.phase == .absent, (trayFirstClear && (crossersBehind || age > Self.crossCap)) || age > Self.crossCap + (trayFirstClear ? 0 : 4) { spawnTray() }
+                if !trayOut, dining.phase == .absent {
+                    let lie = lieBlocked
+                    if (trayFirstClear && !lie && (crossersBehind || age > Self.crossCap)) || (!lie && age > Self.crossCap + (trayFirstClear ? 0 : 4)) || age > Self.lieCap { spawnTray() }
+                }
             } else if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) + (Self.robust && stillWaking ? Self.wakeExtra : 0) { spawnTray() }
             replan(dt: dt)
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }

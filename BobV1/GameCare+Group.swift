@@ -85,6 +85,7 @@ extension GameCare {
                 group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
             }
             group.avoid = jellyFloors
+            group.avoidLies = actors.filter { a in !sorted.contains { $0.id == a.id } }.compactMap { $0.brain }.filter { $0.idleState.kind == .sleep && $0.sleep.stage >= 2 && $0.sleep.stage <= 4 }.flatMap { [(c: $0.sleep.spot, yaw: $0.sleep.lieYaw), (c: $0.position, yaw: $0.sleep.lieYaw)] }
             group.start(c, brains: brains, floor: { floors[$0]() }, ids: sorted.map(\.id))
             if let cafeHooks = cafeBook.hooks, group.isActive { cafeHooks.seated(group.memberIDs, group.placeOf) }
             groupWanted = nil
@@ -99,6 +100,7 @@ extension GameCare {
             }
             return
         }
+        group.bystanderLies = { actors.filter { !self.group.memberIDs.contains($0.id) }.compactMap { $0.brain }.filter { $0.idleState.kind == .sleep && $0.sleep.stage >= 2 && $0.sleep.stage <= 4 }.flatMap { [(c: $0.sleep.spot, yaw: $0.sleep.lieYaw), (c: $0.position, yaw: $0.sleep.lieYaw)] } }
         group.bystanders = { actors.filter { !self.group.memberIDs.contains($0.id) && $0.brain != nil }.map { Self.floorPos($0.brain!, $0.sim) } }
         for a in actors {
             guard let b = a.brain else { continue }

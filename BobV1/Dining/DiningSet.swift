@@ -118,6 +118,20 @@ nonisolated enum DiningSpot {
         return o.y + b.minZ > RoomLayout.minZ + 0.2
     }
 
+    /// A lying Jelbie's footprint (BlobBrain.lieClash's ellipse: across `footHalfWid`, along the heading `footHalfLen`, + `footMargin`) at `c` with heading `yaw`.
+    /// Distance from the tray rectangle to the nearest point of that ellipse (0 = overlap). The tray keeps `lieMargin` from it (a standing body is kept 0.55-0.7 centre to rectangle, a body radius + 0.15).
+    static let lieMargin: Float = 0.15
+    static func lieDistance(from c: SIMD2<Float>, yaw: Float, origin o: SIMD2<Float>, layout L: TrayLayout) -> Float {
+        let hw = SleepTuning.footHalfWid + SleepTuning.footMargin / 2, hl = SleepTuning.footHalfLen * (1 + SleepTuning.footMargin / (2 * SleepTuning.footHalfWid))
+        let across = SIMD2(cosf(yaw), -sinf(yaw)), along = SIMD2(sinf(yaw), cosf(yaw))
+        var d = distance(from: c, origin: o, layout: L)
+        if d == 0 { return 0 }
+        for k in 0..<24 {
+            let a = Float(k) / 24 * 2 * .pi
+            d = min(d, distance(from: c + across * (hw * cosf(a)) + along * (hl * sinf(a)), origin: o, layout: L))
+        }
+        return d
+    }
     /// The same front spot every time; if Bob stands on it, the nearest clear spot beside (or behind) him, always fully on screen.
     /// `jellies`: every Jelbie's floor spot; a spot whose tray rectangle comes within `jellyClear` (body radius + margin) of one is rejected, so food never
     /// appears under a standing Jelbie. The pick stays random among the free spots; with none free, the spot farthest from every Jelbie.
@@ -137,14 +151,14 @@ nonisolated enum DiningSpot {
         let q = GameCamera.constrain(SIMD3(p.x, 0, p.y), radius: 0.7, lowPropScale: RoomLayout.lowPropRadiusScale)
         return abs(q.x - p.x) < placeReachSlack
     }
-    static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>] = []) -> SIMD2<Float> {
+    static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>] = [], lies: [(c: SIMD2<Float>, yaw: Float)] = []) -> SIMD2<Float> {
         var open: [SIMD2<Float>] = []
         var cx: Float = -1.6
         while cx <= 1.6001 {
             var cz: Float = 0.6
             while cz <= maxZ + 1e-4 {
                 let o = SIMD2<Float>(cx, cz)
-                if isClear(origin: o, layout: L, of: bob, aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear, FreeFloor.isFree(o, radius: 0.9),
+                if isClear(origin: o, layout: L, of: bob, aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear, lies.allSatisfy({ lieDistance(from: $0.c, yaw: $0.yaw, origin: o, layout: L) >= lieMargin }), FreeFloor.isFree(o, radius: 0.9),
                    L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) }) { open.append(o) }
                 cz += 0.2
             }
@@ -159,7 +173,7 @@ nonisolated enum DiningSpot {
                 while fz <= maxZ + 1e-4 {
                     let o = SIMD2<Float>(fx, fz)
                     if isClear(origin: o, layout: L, of: bob, aspect: aspect), FreeFloor.isFree(o, radius: 0.9) {
-                        let d = minJellyDistance(o, layout: L, jellies: jellies)
+                        let d = min(minJellyDistance(o, layout: L, jellies: jellies), (lies.map { lieDistance(from: $0.c, yaw: $0.yaw, origin: o, layout: L) }.min() ?? .infinity) + jellyClear)
                         if d > bestD { bestD = d; bestO = o }
                     }
                     fz += 0.2
