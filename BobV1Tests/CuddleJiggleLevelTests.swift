@@ -13,7 +13,7 @@ import simd
 final class CuddleJiggleLevelTests: XCTestCase {
     private let eye = SIMD3<Float>(0, 0.9, 6)
     /// Recorded by running `scriptedSkinHash` on the UNMODIFIED sources (git 3fa412cc, Release, simulator): see the report.
-    static let golden: UInt64 = 0
+    static let golden: UInt64 = 4428818767705735065
 
     /// The scripted touch: 0.5 s rest, touch-down (0.5 s still), a 2 s stroke, release, 2 s rest. Hashes every drawn float (positions + normals) after each frame.
     /// Written against APIs that exist at 3fa412cc: the golden was recorded by running THIS function on the unmodified sources.
@@ -36,7 +36,7 @@ final class CuddleJiggleLevelTests: XCTestCase {
         r.rig.skinner.cuddle.levelOverride = level
         return r
     }
-    private func eggLimit(_ r: TouchPetTests.Run) -> Int { r.rig.skinner.armFirst.min() ?? (r.rig.dyn.count / 6) }
+    private func eggLimit(_ r: TouchPetTests.Run) -> Int { (r.rig.skinner.bodyVertexLimit >= 0 ? r.rig.skinner.bodyVertexLimit : r.rig.dyn.count / 6) }
 
     /// The drawn offset of the cuddle layer on every vertex: the plain skin (layer switched off) and the layer's own `apply` run on a copy of it with the skin's
     /// real body mask (two full renders of the same sim state are not identical: the dent relax rebuilds its lists on every 8th call).

@@ -229,11 +229,12 @@ nonisolated final class CuddleJiggle {
             let px = dyn[o], py = dyn[o + 1], pz = dyn[o + 2]
             let hN = (py - floorY) * invH
             var off = SIMD3<Float>.zero
+            let fh = smoothstep(0.15, 0.30, hN)                          // 0 at the foot join, 1 from the lower belly up
+            if fh == 0 { continue }
             if nearOn {
                 let dv = SIMD3<Float>(px - c.x, py - c.y, pz - c.z)
                 let d2 = simd_length_squared(dv)
                 if d2 < reach2, simd_dot(dv, n) > -0.5 {
-                    let fh = smoothstep(0.15, 0.30, hN)                          // 0 at the foot join, 1 from the lower belly up
                     if fh > 0 {
                         let d = d2.squareRoot(), u = d * invR
                         let wd = 1 - smoothstep(0.25, 1.6, u)                    // the dent / spring profile
@@ -250,8 +251,8 @@ nonisolated final class CuddleJiggle {
                 let t = min(1, max(0, (hN - 0.1) * (1 / 0.9)))
                 if t > 0 {
                     let sm = t * t * (3 - 2 * t), w = sm * sm
-                    off.x += -pr * (py - floorY) * w
-                    off.y += ps * (py - floorY) * sm
+                    off.x += -pr * (py - floorY) * w * fh
+                    off.y += ps * (py - floorY) * sm * fh
                 }
             }
             let m = simd_length(off)
