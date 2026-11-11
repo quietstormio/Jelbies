@@ -36,9 +36,11 @@ final class HopNearCapTests: XCTestCase {
             let s = r.brain.idleState
             if s.kind == .decorSit, s.bagStage == 0, !s.decorGo, !moved, away > 0 {
                 moved = true
-                r.sim.teleport(toXZ: seatP + SIMD2(-away, 0))
+                let to = seatP + SIMD2(-away, 0)
+                r.sim.teleport(toXZ: to)
                 for _ in 0..<30 { r.sim.step() }
                 r.brain.currentPose(r.sim)
+                r.brain.px = to.x; r.brain.pz = to.y          // (the brain's floor spot follows the body only on the next tick)
                 startDist = simd_distance(r.brain.position, seatP)
             }
             if s.kind == .decorSit, s.bagStage >= 1, !hopped { hopped = true; takeOff = simd_distance(prev, seatP) }
