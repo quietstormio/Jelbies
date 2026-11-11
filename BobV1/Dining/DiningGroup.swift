@@ -99,6 +99,8 @@ final class DiningGroup {
     /// A sleeper's patience: when he was called (`age`), and when he was hard-woken (`requestNow`) after `wakePatience` (nil = not yet).
     private var calledAt: [Float] = []
     private var hardWokenAt: [Float?] = []
+    /// A sleeper (not yet started) was seen asleep: his place is held for him while he gets up; when he stands up it is re-planned from where he stands and he is sent again.
+    private var wasSleeping: [Bool] = []
     /// A diner still in a sleep state (lying / stirring / rolling / stretching) this long after the call is woken hard; 6 s after that he is excused.
     static let wakePatience: Float = 12
     static let wakeGrace: Float = 6
@@ -214,7 +216,7 @@ final class DiningGroup {
         reserves = 0; gaveUp = false; age = 0; displacedSends = 0
         excused = [Bool](repeating: false, count: n)
         stallPos = brains.indices.map { f($0) }; stallClock = [Float](repeating: 0, count: n)
-        calledAt = [Float](repeating: 0, count: n); hardWokenAt = [Float?](repeating: nil, count: n)
+        calledAt = [Float](repeating: 0, count: n); hardWokenAt = [Float?](repeating: nil, count: n); wasSleeping = [Bool](repeating: false, count: n)
         tiers = [NeedTier](repeating: .famished, count: n); paid = [Int](repeating: 0, count: n); piecesFor = [Int](repeating: DiningTiming.bitesPerServing, count: n)
         savedFinished = brains.map { $0.onFinished }; savedGap = brains.map { $0.peerGap }; savedPeers = brains.map { $0.peers }
         for (i, b) in brains.enumerated() {
@@ -385,7 +387,15 @@ final class DiningGroup {
                     if (trayFirstClear && !lie && !blocked && (crossersBehind || age > Self.crossCap)) || (!lie && !blocked && age > Self.crossCap + (trayFirstClear ? 0 : 4)) || age > Self.lieCap { spawnTray() }
                 }
             } else if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) + (Self.robust && stillWaking ? Self.wakeExtra : 0) { spawnTray() }
+            var wokeNow: [Int] = []
+            if Self.robust, Self.trayFirst {
+                for i in brains.indices where !started[i] && !released[i] {
+                    if sleeping(i) { committed[i] = true; wasSleeping[i] = true }          // (nobody else is handed his place while he is still getting up)
+                    else if wasSleeping[i] { wasSleeping[i] = false; committed[i] = false; replanClock = Lineup.period; wokeNow.append(i) }          // (up: planned afresh from where he stands)
+                }
+            }
             replan(dt: dt)
+            for i in wokeNow where !started[i] { stallClock[i] = 0; stallPos[i] = floor(i); brains[i].callToMeal(.goTo(approachPoint(blob: i))) }
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }
             if Self.robust, Self.trayFirst, finished.allSatisfy({ $0 }) { settlePay(); end(); return }
