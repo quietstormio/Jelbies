@@ -443,8 +443,9 @@ final class RacePullTests: XCTestCase {
     }
 
     /// The rivals' mean finish time, pull race / taps race, with the committed numbers. The pull race is faster than the taps race BY DESIGN (a pull player is faster
-    /// than a tapper, so the rivals from the Ripple up are set by what a steady player gets); the Puddle's rivals are slower on purpose. A guard against an accidental change.
-    static let rivalPaceVsTaps: [CourseTier: Float] = [.puddle: 1.274, .ripple: 0.934, .splash: 0.913, .wave: 0.902, .tsunami: 0.880]
+    /// than a tapper, so the rivals are set by what a relaxed player gets, with the mirror on); measured with the mirror off (the rivals at their own skill and rhythm).
+    /// A guard against an accidental change.
+    static let rivalPaceVsTaps: [CourseTier: Float] = [.puddle: 0.952, .ripple: 0.944, .splash: 0.926, .wave: 0.910, .tsunami: 0.889]
 
     func testRivalPaceGuard() {
         var own = RacePullTuning(); own.mirror = false          // (the rivals at their own skill and rhythm)
