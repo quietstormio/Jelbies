@@ -13,7 +13,7 @@ import XCTest
 
 /// A bot that releases the pull. It has its own seeded generator, never the sim's.
 struct PullBot {
-    enum Kind { case perfect, steady, firstTimer, weakOnly, afk }
+    enum Kind { case perfect, skilled, steady, casual, firstTimer, weakOnly, afk }
     var kind: Kind
     var rng: RaceRNG
     var due: Float?
@@ -26,7 +26,9 @@ struct PullBot {
         case .perfect: return 0.81
         case .weakOnly: return 0.5
         case .afk: return 0
+        case .skilled: return mix(green: 0.85, weak: 0.10, weakLo: 0.55)
         case .steady: return mix(green: 0.60, weak: 0.30, weakLo: 0.45)
+        case .casual: return mix(green: 0.50, weak: 0.35, weakLo: 0.40, overHi: 1.10)
         case .firstTimer: return mix(green: 0.45, weak: 0.40, weakLo: 0.30, overHi: 1.10)
         }
     }
@@ -41,10 +43,11 @@ struct PullBot {
         guard sim.phase == .running || sim.phase == .finishing else { return }
         switch kind {
         case .afk: return
-        case .perfect, .weakOnly, .steady:
+        case .perfect, .weakOnly, .skilled, .steady:
             if !sim.pullState(0).buffered { sim.playerRelease(pull: pull()) }
-        case .firstTimer:
-            for e in evs { if case .landed(let r) = e, r == 0 { due = sim.clock + rng.range(0, 0.35) } }
+        case .firstTimer, .casual:
+            let wait: Float = kind == .casual ? 0.20 : 0.35
+            for e in evs { if case .landed(let r) = e, r == 0 { due = sim.clock + rng.range(0, wait) } }
             if !started { started = true; due = sim.clock + rng.range(0.5, 1.0) }
             if let d = due, sim.clock >= d {
                 if sim.playerRelease(pull: pull()) == .ignored { due = sim.clock + 0.1 } else { due = nil }
@@ -593,11 +596,27 @@ final class RacePullTests: XCTestCase {
 
     // MARK: - calibration (PULLCAL=1)
 
+    /// Win / top-two counts of one bot kind against the course's rivals, seeds `seeds` (a racer that does not finish is neither).
+    static func board(_ kind: PullBot.Kind, _ stats: RacerStats, _ c: RaceCourse, _ t: RacePullTuning, _ seeds: ClosedRange<UInt64> = 1...200) -> (wins: Int, top2: Int, n: Int) {
+        var wins = 0, top2 = 0, n = 0
+        for seed in seeds {
+            let r = pullRun(seed: seed, player: stats, bot: kind, course: c, tuning: t, keep: false)
+            n += 1
+            if let p = r.place, r.sim.playerFinished { if p == 1 { wins += 1 }; if p <= 2 { top2 += 1 } }
+        }
+        return (wins, top2, n)
+    }
+
     func testCalibrationSweep() throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["PULLCAL"] == "1", "calibration only: PULLCAL=1")
-        var tune = RacePullTuning()
+        let committed = RacePullTuning()
+        var tune = committed
         let seeds = UInt64(1)...200
-        // 1. hopScale from the chain speed
+        func r2(_ x: Float) -> Float { (x * 100).rounded() / 100 }
+        func r1(_ x: Float) -> Float { (x * 10).rounded() / 10 }
+        func pct(_ w: Int, _ n: Int) -> Int { Int((Double(w) * 100 / Double(max(n, 1))).rounded()) }
+
+        // 1. the chain speed (a print only: hopScale is never rescaled)
         func chain(_ t: RacePullTuning, _ stats: RacerStats) -> Float {
             var sp: [Float] = []
             for seed in UInt64(1)...12 {
@@ -611,12 +630,9 @@ final class RacePullTests: XCTestCase {
             }
             return sp.reduce(0, +) / Float(max(sp.count, 1)) / (RaceTuning.stride(waddle: stats.waddle) * RaceTuning.maxRate(waddle: stats.waddle))
         }
-        let ratio0 = chain(tune, Self.newJelbie)
-        print("[pullcal] hopScale \(tune.hopScale): chain speed = \(ratio0) x pace (target 1.25); half \(chain(tune, Self.halfTrained)), full \(chain(tune, Self.fullTrained))")
-        tune.hopScale *= 1.25 / ratio0
-        print("[pullcal] hopScale -> \(tune.hopScale): new \(chain(tune, Self.newJelbie)), half \(chain(tune, Self.halfTrained)), full \(chain(tune, Self.fullTrained))")
+        print("[pullcal] hopScale \(tune.hopScale) (kept): chain speed = new \(chain(tune, Self.newJelbie)) half \(chain(tune, Self.halfTrained)) full \(chain(tune, Self.fullTrained)) x pace")
 
-        // 2. rivalLength against the taps race
+        // the taps rivals
         func statsFor(_ seed: UInt64) -> RacerStats { seed % 2 == 0 ? Self.newJelbie : Self.halfTrained }
         var tapsTime: [CourseTier: Float] = [:], tapsTrips: [CourseTier: Double] = [:]
         for c in Self.allCourses {
@@ -638,67 +654,92 @@ final class RacePullTests: XCTestCase {
             }
             return (ts.reduce(0, +) / Float(max(ts.count, 1)), Double(trips) / 200)
         }
-        var matches: [CourseTier: Float] = [:]
-        var prev: [CourseTier: (Float, Float)] = [:]
-        var rl: Float = 0.80
-        while rl <= 1.4001 {
-            tune.rivalLength = rl; tune.rivalLengthPuddle = rl
-            var line = "[pullcal] rivalLength \(rl):"
-            for c in Self.allCourses {
-                let m = pullRivals(tune, c).time
-                line += " \(c.tier) \(m / tapsTime[c.tier]!)"
-                if let p = prev[c.tier], matches[c.tier] == nil, (p.1 - tapsTime[c.tier]!) * (m - tapsTime[c.tier]!) <= 0 {
-                    let f = (p.1 - tapsTime[c.tier]!) / (p.1 - m)
-                    matches[c.tier] = p.0 + f * (rl - p.0)
-                }
-                prev[c.tier] = (rl, m)
-            }
-            print(line)
-            rl += 0.05
-        }
-        print("[pullcal] rivalLength matches per course: \(matches)")
-        let chosen = matches.isEmpty ? 1.0 : matches.values.reduce(0, +) / Float(matches.count)
-        tune.rivalLength = chosen; tune.rivalLengthPuddle = chosen
-        print("[pullcal] rivalLength chosen (mean of the matches) = \(chosen)")
-        for c in Self.allCourses { print("[pullcal]   at \(chosen): \(c.tier) \(pullRivals(tune, c).time / tapsTime[c.tier]!)") }
 
-        // 3. tripScale
-        var best: Float = 1
+        // 2. rivalLength: the largest value at which a steady player with a new Jelbie wins >= 70 % Ripple, >= 55 % Splash, >= 35 % Wave
+        var rivalLengthFound = true
+        func rivalLengthPass(_ label: String) -> Float {
+            var chosen: Float?
+            var passes: [Float] = []
+            for k in 0...15 {
+                let rl = r2(0.80 + 0.02 * Float(k))
+                tune.rivalLength = rl
+                var line = "[pullcal] rivalLength \(rl) (\(label)):", win: [CourseTier: Int] = [:]
+                for tier in [CourseTier.ripple, .splash, .wave, .tsunami] {
+                    let c = RaceCourse.course(tier)
+                    let n = Self.board(.steady, Self.newJelbie, c, tune, seeds), h = Self.board(.steady, Self.halfTrained, c, tune, seeds)
+                    win[tier] = pct(n.wins, n.n)
+                    line += " \(tier) new \(pct(n.wins, n.n))/\(pct(n.top2, n.n)) half \(pct(h.wins, h.n)) |"
+                }
+                line.removeLast()
+                let ok = win[.ripple]! >= 70 && win[.splash]! >= 55 && win[.wave]! >= 35
+                print(line + (ok ? "  PASS" : ""))
+                if ok { chosen = rl; passes.append(rl) }
+            }
+            guard let ch = chosen else {
+                rivalLengthFound = false
+                print("[pullcal] rivalLength (\(label)): NO VALUE IN 0.80 ... 1.10 PASSES ALL THREE BANDS (committed value kept)")
+                return committed.rivalLength
+            }
+            if ch >= 1.0999 { print("[pullcal] rivalLength (\(label)): 1.10 STILL PASSES (top of the range)") }
+            print("[pullcal] rivalLength chosen (\(label)) = \(ch)")
+            return ch
+        }
+        tune.rivalLength = rivalLengthPass("pass 1")
+        tune.rivalLengthPuddle = min(tune.rivalLength, 0.90)           // (until step 3)
+
+        // 4. tripScale: the rivals' trips per race, summed over the five courses, equal the taps rivals'
+        var tripChosen = committed.tripScale
+        let sumT = tapsTrips.values.reduce(0, +)
         var prevTrips: (Float, Double)?
-        var ts: Float = 0.5
-        while ts <= 4.0001 {
+        var tripFound = false
+        for k in 0...14 {
+            let ts = 1.0 + 0.5 * Float(k)
             tune.tripScale = ts
             var line = "[pullcal] tripScale \(ts):", sumP = 0.0
             for c in Self.allCourses { let r = pullRivals(tune, c).trips; sumP += r; line += " \(c.tier) \(r)/\(tapsTrips[c.tier]!)" }
-            let sumT = tapsTrips.values.reduce(0, +)
-            line += " | total \(sumP) vs taps \(sumT)"
+            line += " | total pull \(sumP) vs taps \(sumT)"
             print(line)
-            if let p = prevTrips, (p.1 - sumT) * (sumP - sumT) <= 0, p.1 != sumP { best = p.0 + Float((p.1 - sumT) / (p.1 - sumP)) * (ts - p.0) }
+            if !tripFound, let p = prevTrips, (p.1 - sumT) * (sumP - sumT) <= 0, p.1 != sumP {
+                tripChosen = r1(p.0 + Float((p.1 - sumT) / (p.1 - sumP)) * (ts - p.0)); tripFound = true
+            }
             prevTrips = (ts, sumP)
-            ts += 0.5
         }
-        tune.tripScale = best
-        print("[pullcal] tripScale chosen = \(best)")
-        for c in Self.allCourses { print("[pullcal]   at \(best): \(c.tier) trips \(pullRivals(tune, c).trips) vs taps \(tapsTrips[c.tier]!), time ratio \(pullRivals(tune, c).time / tapsTime[c.tier]!)") }
+        if !tripFound { print("[pullcal] tripScale: NO MATCH in 1.0 ... 8.0 (committed value kept)") }
+        tune.tripScale = tripChosen
+        print("[pullcal] tripScale chosen = \(tripChosen)")
+        for c in Self.allCourses { let r = pullRivals(tune, c); print("[pullcal]   at \(tripChosen): \(c.tier) trips pull \(r.trips) vs taps \(tapsTrips[c.tier]!)") }
 
-        // 4. the Puddle's own rival length, from the beginner test
-        func beginner(_ t: RacePullTuning) -> (Int, Int) {
-            var wins = 0, top2 = 0
-            for seed in seeds { let r = Self.pullRun(seed: seed, bot: .firstTimer, tuning: t, keep: false); if let p = r.place, r.sim.playerFinished { if p == 1 { wins += 1 }; if p <= 2 { top2 += 1 } } }
-            return (wins, top2)
+        // 5. a second pass for rivalLength when tripScale moved
+        if abs(tripChosen - committed.tripScale) > 0.25 {
+            tune.rivalLength = rivalLengthPass("pass 2")
+            tune.rivalLengthPuddle = min(tune.rivalLength, 0.90)
         }
-        let floorMul: Float = 0.80
-        var mul: Float = 1.0
-        while mul >= floorMul - 0.0001 {
-            tune.rivalLengthPuddle = tune.rivalLength * mul
-            let b = beginner(tune)
-            print("[pullcal] rivalLengthPuddle \(tune.rivalLengthPuddle) (x\(mul) of rivalLength): firstTimer wins \(b.0)/200, top two \(b.1)/200")
-            if b.0 >= 100, Double(b.1) / 200 >= 0.85 { break }
-            mul -= 0.025
-        }
-        print("[pullcal] FINAL hopScale \(tune.hopScale) rivalLength \(tune.rivalLength) rivalLengthPuddle \(tune.rivalLengthPuddle) tripScale \(tune.tripScale)")
 
-        // 5. the tables
+        // 3. rivalLengthPuddle: the first-timer wins >= 40 % and is in the top two >= 75 %
+        var puddleChosen: Float?
+        let start = min(tune.rivalLength, 0.90)
+        var k = 0
+        while true {
+            let v = r2(start - 0.02 * Float(k))
+            if v < 0.4999 { break }
+            tune.rivalLengthPuddle = v
+            let f = Self.board(.firstTimer, Self.newJelbie, .puddle, tune, seeds), s = Self.board(.steady, Self.newJelbie, .puddle, tune, seeds)
+            let ok = f.wins >= 80 && f.top2 >= 150
+            print("[pullcal] rivalLengthPuddle \(v): firstTimer wins \(f.wins)/\(f.n) top two \(f.top2)/\(f.n) | steady wins \(s.wins)/\(s.n)" + (ok ? "  PASS" : ""))
+            if ok { puddleChosen = v; break }
+            k += 1
+        }
+        if let p = puddleChosen { print("[pullcal] rivalLengthPuddle chosen = \(p)") }
+        else { print("[pullcal] rivalLengthPuddle: THE RULE FAILS DOWN TO 0.50 (committed value kept)") }
+        tune.rivalLengthPuddle = puddleChosen ?? committed.rivalLengthPuddle
+
+        print("[pullcal] FINAL rivalLength \(tune.rivalLength) rivalLengthPuddle \(tune.rivalLengthPuddle) tripScale \(tune.tripScale)")
+        let consistent = rivalLengthFound && tripFound && puddleChosen != nil
+            && abs(tune.rivalLength - committed.rivalLength) <= 0.011 && abs(tune.rivalLengthPuddle - committed.rivalLengthPuddle) <= 0.011
+            && abs(tune.tripScale - committed.tripScale) <= 0.26
+        print("[pullcal] CONSISTENT \(consistent ? "yes" : "no") (committed: rivalLength \(committed.rivalLength) rivalLengthPuddle \(committed.rivalLengthPuddle) tripScale \(committed.tripScale))")
+
+        // 6. the tables, with the chosen values
         let boards: [(String, RacerStats)] = [("new", Self.newJelbie), ("half", Self.halfTrained)]
         for c in Self.allCourses {
             for (name, stats) in boards {
@@ -713,7 +754,8 @@ final class RacePullTests: XCTestCase {
                     }
                     print("[pullcal] table \(c.tier) \(name) \(label): win \(wins / 2)%, top2 \(top2 / 2)%, mean time \(times.reduce(0, +) / Float(max(times.count, 1))) s, dnf \(dnf), bar hits/race \(Double(hits) / 200), trips/race \(Double(trips) / 200), green hops <0.12 from a bar \(cg) of \(hops)")
                 }
-                for (label, kind) in [("pull perfect", PullBot.Kind.perfect), ("pull steady", .steady), ("pull firstTimer", .firstTimer)] {
+                let kinds: [(String, PullBot.Kind)] = [("pull perfect", .perfect), ("pull skilled", .skilled), ("pull steady", .steady), ("pull casual", .casual), ("pull firstTimer", .firstTimer)]
+                for (label, kind) in kinds {
                     row(label) { seed in
                         let r = Self.pullRun(seed: seed, player: stats, bot: kind, course: c, tuning: tune, keep: false)
                         let p = r.sim.player
@@ -728,6 +770,12 @@ final class RacePullTests: XCTestCase {
                     }
                 }
             }
+        }
+
+        // 7. the rival pace against the taps race, with the chosen values
+        for c in Self.allCourses {
+            let mp = pullRivals(tune, c).time, mt = tapsTime[c.tier]!
+            print("[pullcal] rival time \(c.tier): pull \(mp) s taps \(mt) s ratio \(mp / mt)")
         }
     }
 }
