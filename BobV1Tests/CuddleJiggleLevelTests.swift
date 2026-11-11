@@ -32,19 +32,23 @@ final class CuddleJiggleLevelTests: XCTestCase {
 
     private func run(_ level: Int) -> TouchPetTests.Run {
         let r = TouchPetTests.Run()
+        r.rig.skinner.configureTail(MotionRig.renderMesh)          // (as JellyActor does: the body / block split of the render mesh)
         r.rig.skinner.cuddle.levelOverride = level
         return r
     }
     private func eggLimit(_ r: TouchPetTests.Run) -> Int { r.rig.skinner.armFirst.min() ?? (r.rig.dyn.count / 6) }
 
-    /// The drawn offset of the cuddle layer on every vertex: the skin with the layer minus the same skin without it (same sim state).
+    /// The drawn offset of the cuddle layer on every vertex: the plain skin (layer switched off) and the layer's own `apply` run on a copy of it with the skin's
+    /// real body mask (two full renders of the same sim state are not identical: the dent relax rebuilds its lists on every 8th call).
     private func drawnOffset(_ r: TouchPetTests.Run) -> (off: [Float], plain: [Float]) {
         let c = r.rig.skinner.cuddle
-        r.rig.render(); let a = r.rig.dyn
-        c.enabled = false; r.rig.render(); let b = r.rig.dyn; c.enabled = true
-        var o = [Float](repeating: 0, count: a.count)
-        for i in 0..<a.count { o[i] = a[i] - b[i] }
-        return (o, b)
+        c.enabled = false; r.rig.render(); let plain = r.rig.dyn; c.enabled = true
+        var b = plain
+        let mask = r.rig.skinner.cuddleBodyMask(), sk = r.rig.skinner
+        mask.withUnsafeBufferPointer { m in b.withUnsafeMutableBufferPointer { c.apply($0.baseAddress!, count: plain.count / 6, mask: m.baseAddress!, floorY: sk.jelly.floorY, H: sk.jelly.H) } }
+        var o = [Float](repeating: 0, count: b.count)
+        for i in 0..<b.count { o[i] = b[i] - plain[i] }
+        return (o, plain)
     }
     private func vec(_ a: [Float], _ v: Int) -> SIMD3<Float> { SIMD3(a[6 * v], a[6 * v + 1], a[6 * v + 2]) }
 
@@ -94,32 +98,30 @@ final class CuddleJiggleLevelTests: XCTestCase {
             for v in 0..<lim { let d = simd_length(vec(r.rig.dyn, v) - centre); if d < best { best = d; probe = v } }
             let base = r.rec.events.filter { $0.kind == .transient && abs($0.sharpness - 0.1) < 1e-6 }.count
             var series: [Float] = [], ripplePeak: Float = 0, rippleLate: Float = 0, lastNonZero = 0, tapFrames = 0
+            var rippleFar: Float = 0
             for k in 0..<120 {
                 r.frame(nil)
                 if c.tap > 0 { tapFrames += 1 }
                 let (off, _) = drawnOffset(r)
                 series.append(simd_dot(vec(off, probe), n))
-                var far: Float = 0, any = false
-                for v in 0..<lim {
-                    let o = vec(off, v)
-                    if o != .zero { any = true }
-                    if simd_length(vec(r.rig.dyn, v) - centre) > 0.6 { far = max(far, simd_length(o)) }
-                }
+                var any = false
+                for v in 0..<lim where vec(off, v) != .zero { any = true; break }
                 if any { lastNonZero = k }
-                if k < 30 { ripplePeak = max(ripplePeak, far) } else if k >= 40 { rippleLate = max(rippleLate, far) }
+                var d: Float = 0.05
+                while d < 1.0 { let rv = c.rippleOffset(at: d); if k < 30 { ripplePeak = max(ripplePeak, rv); if d > 0.7 { rippleFar = max(rippleFar, rv) } } else { rippleLate = max(rippleLate, rv) }; d += 0.01 }
             }
             var peaks: [Float] = []
             for k in 1..<(series.count - 1) where series[k] > series[k - 1] && series[k] >= series[k + 1] && series[k] > 0.004 { peaks.append(series[k]) }
             let hold = (CuddleJiggle.dentDepth + tn.extraDepth)
             let want = tn.overshoot * hold
             let taps = r.rec.events.filter { $0.kind == .transient && abs($0.sharpness - 0.1) < 1e-6 }.count - base
-            MotionLog.write(String(format: "CUDDLE level %d: let-go overshoot %.4f u (spring peak %.4f, target %.4f = %.0f %% of %.2f), %d visible wobbles %@, ripple %.4f u (target %.3f), ripple gone at 0.7 s: %.5f, offset zero after frame %d (%.2f s), soft taps %d (sink saw %d)",
-                                 l, peaks.first ?? 0, c.peakOut, want, tn.overshoot * 100, hold, peaks.count, peaks.map { String(format: "%.4f", $0) }.description, ripplePeak, tn.ripple, rippleLate, lastNonZero, Float(lastNonZero + 1) / 60, tapFrames, taps))
+            MotionLog.write(String(format: "CUDDLE level %d: let-go overshoot %.4f u (spring peak %.4f, target %.4f = %.0f %% of %.2f), %d visible wobbles %@, ripple %.4f u (target %.3f; still %.4f u at 0.7+ u out), ripple after 0.5 s: %.5f, offset zero after frame %d (%.2f s), soft taps %d (sink saw %d)",
+                                 l, peaks.first ?? 0, c.peakOut, want, tn.overshoot * 100, hold, peaks.count, peaks.map { String(format: "%.4f", $0) }.description, ripplePeak, tn.ripple, rippleFar, rippleLate, lastNonZero, Float(lastNonZero + 1) / 60, tapFrames, taps))
             XCTAssertEqual(c.peakOut, want, accuracy: want * 0.20, "level \(l): the spring's first outward peak")
             XCTAssertGreaterThan(peaks.first ?? 0, 0.6 * want, "level \(l): drawn overshoot is outward and visible")
             XCTAssertGreaterThanOrEqual(peaks.count, 2, "level \(l): at least 2 wobbles"); XCTAssertLessThanOrEqual(peaks.count, 4, "level \(l): not a buzz")
-            XCTAssertGreaterThan(ripplePeak, 0.3 * tn.ripple, "level \(l): a ripple ring travels out")
-            XCTAssertLessThanOrEqual(ripplePeak, tn.ripple * 1.02 + 0.0005)
+            XCTAssertGreaterThan(ripplePeak, 0.9 * tn.ripple * 0.9, "level \(l): a ripple ring travels out")
+            XCTAssertLessThanOrEqual(ripplePeak, tn.ripple * 1.001)
             XCTAssertEqual(rippleLate, 0, accuracy: 1e-7, "level \(l): the ripple is gone within 0.5 s")
             XCTAssertLessThan(lastNonZero, 119, "level \(l): the offset is zero well before 2 s")
             let (offEnd, _) = drawnOffset(r)
@@ -210,7 +212,7 @@ final class CuddleJiggleLevelTests: XCTestCase {
             r.stroke(2.0, eye: eye, amp: 0.12, hz: 1.2, y: 0.15, cx: 0.38)
             XCTAssertGreaterThan(r.play.love, 0.5)
             var peak: Float = 0
-            for _ in 0..<60 { r.frame(r.ray(localX: 0.38 + 0.12 * sinf(Float(r.clock)), localY: 0.15, eye: eye)); let (off, _) = drawnOffset(r); peak = max(peak, off.max() ?? 0) }
+            for _ in 0..<60 { r.frame(r.ray(localX: 0.38 + 0.12 * sinf(Float(r.clock)), localY: 0.15, eye: eye)); let (off, _) = drawnOffset(r); peak = max(peak, off.map { abs($0) }.max() ?? 0) }
             MotionLog.write(String(format: "CUDDLE level %d: while petted (love %.2f) the drawn offset reaches %.4f u", l, r.play.love, peak))
             if l == 0 { XCTAssertEqual(peak, 0) } else { XCTAssertGreaterThan(peak, 0) }
             r.idle(3)

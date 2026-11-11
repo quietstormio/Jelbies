@@ -198,6 +198,17 @@ nonisolated final class CuddleJiggle {
 
     // MARK: apply
 
+    /// The ripple ring's outward displacement at distance `d` from the release point, `age` s after it (a raised ring 0.12 u wide that travels at 1.5 u/s and fades
+    /// linearly to nothing at 0.5 s).
+    static func rippleValue(d: Float, age: Float, amp: Float) -> Float {
+        guard age < rippleLife, amp > 0 else { return 0 }
+        let x = d - (rippleSpeed * age + 0.1)
+        guard abs(x) < rippleWidth else { return 0 }
+        return amp * (1 - age / rippleLife) * 0.5 * (1 + cosf(.pi * x / rippleWidth))
+    }
+    /// Tests: the ring's displacement now at distance `d`.
+    func rippleOffset(at d: Float) -> Float { Self.rippleValue(d: d, age: rippleAge, amp: rippleAmp) }
+
     /// Displace the skinned body vertices (`dyn`: 6 floats per vertex, position first; `mask[v]` = a body skin vertex, not an arm / foot / tail piece, not a
     /// face feature). A no-op unless `active`; a layer nobody has stepped for half a second is dropped (it must never freeze on the skin).
     func apply(_ dyn: UnsafeMutablePointer<Float>, count: Int, mask: UnsafePointer<Bool>, floorY: Float, H: Float) {
@@ -209,9 +220,7 @@ nonisolated final class CuddleJiggle {
         let nearOn = (s != 0 || rimAmt != 0 || drag != .zero || rippleAge < Self.rippleLife) && haveCentre
         let dragV = drag
         let sOut = s, rim = rimAmt
-        let rr = Self.rippleSpeed * min(rippleAge, Self.rippleLife) + 0.1
-        let life = rippleAge < Self.rippleLife ? 1 - rippleAge / Self.rippleLife : 0
-        let rAmp = rippleAmp * life * life
+        let rAge = rippleAge, rAmp0 = rippleAmp, rippling = rippleAge < Self.rippleLife && rippleAmp > 0
         let invH = 1 / H, cap = Self.maxOffset, reach2 = Self.reach * Self.reach
         let pr = petRoll, ps = petSq, petOn = pr != 0 || ps != 0
         let invR = 1 / R
@@ -231,7 +240,7 @@ nonisolated final class CuddleJiggle {
                         var along = sOut * wd
                         let t = (u - 1.0) / 1.2
                         if rim > 0, t > 0, t < 1 { let sn = sinf(.pi * t); along += rim * sn * sn }       // the displaced jelly bunches up just outside the finger
-                        if rAmp > 0 { let x = d - rr; if abs(x) < Self.rippleWidth { along += rAmp * 0.5 * (1 + cosf(.pi * x / Self.rippleWidth)) } }
+                        if rippling { along += Self.rippleValue(d: d, age: rAge, amp: rAmp0) }
                         off = n * along + dragV * (1 - smoothstep(0, 1.6, u))
                         off *= fh
                     }
