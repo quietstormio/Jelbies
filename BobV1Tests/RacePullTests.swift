@@ -574,6 +574,71 @@ final class RacePullTests: XCTestCase {
         }
     }
 
+    /// Stage A2's rivals, pinned: every racer's finish time (-1 = none) and the number of `.hop` events, seeds 1...4 x five courses x afk / steady, with the A2 numbers.
+    /// (Later stages add a mirror; with `mirror = false` these must not move.) `PULLGOLDEN=1` prints the table instead of asserting.
+    static let a2Golden: [String: (times: [Float], hops: Int)] = [
+        "puddle-afk-1": ([-1.0000, 16.8496, 22.2068], 72),
+        "puddle-afk-2": ([-1.0000, 23.0186, 19.9397], 78),
+        "puddle-afk-3": ([-1.0000, 20.8788, 24.2914], 79),
+        "puddle-afk-4": ([-1.0000, 20.3477, 20.3989], 78),
+        "puddle-steady-1": ([11.1784, -1.0000, -1.0000], 82),
+        "puddle-steady-2": ([12.4533, -1.0000, -1.0000], 87),
+        "puddle-steady-3": ([11.0170, -1.0000, -1.0000], 79),
+        "puddle-steady-4": ([11.1678, -1.0000, -1.0000], 84),
+        "ripple-afk-1": ([-1.0000, 25.5148, 29.7176], 100),
+        "ripple-afk-2": ([-1.0000, 30.9562, 31.2492], 110),
+        "ripple-afk-3": ([-1.0000, 29.0923, 27.8925], 104),
+        "ripple-afk-4": ([-1.0000, 25.3468, 29.3418], 101),
+        "ripple-steady-1": ([22.1250, 25.5148, -1.0000], 135),
+        "ripple-steady-2": ([24.2851, -1.0000, -1.0000], 146),
+        "ripple-steady-3": ([23.0405, -1.0000, 27.8925], 145),
+        "ripple-steady-4": ([20.8061, 25.3468, -1.0000], 135),
+        "splash-afk-1": ([-1.0000, 37.9950, 34.3582], 127),
+        "splash-afk-2": ([-1.0000, 32.4750, 34.4878], 123),
+        "splash-afk-3": ([-1.0000, 34.5409, 35.3266], 127),
+        "splash-afk-4": ([-1.0000, 36.9322, 35.9305], 131),
+        "splash-steady-1": ([30.1948, -1.0000, 34.3582], 176),
+        "splash-steady-2": ([34.9004, 32.4750, 34.4878], 184),
+        "splash-steady-3": ([29.7157, 34.5409, -1.0000], 182),
+        "splash-steady-4": ([28.9917, -1.0000, -1.0000], 178),
+        "wave-afk-1": ([-1.0000, 41.9477, 41.5611], 149),
+        "wave-afk-2": ([-1.0000, 40.0610, 40.9535], 142),
+        "wave-afk-3": ([-1.0000, 40.1577, 44.1200], 147),
+        "wave-afk-4": ([-1.0000, 42.5406, 45.5342], 155),
+        "wave-steady-1": ([37.8990, 41.9477, 41.5611], 220),
+        "wave-steady-2": ([38.4036, 40.0610, 40.9535], 213),
+        "wave-steady-3": ([40.6048, 40.1577, 44.1200], 221),
+        "wave-steady-4": ([37.3591, -1.0000, -1.0000], 219),
+        "tsunami-afk-1": ([-1.0000, 58.5410, 55.2360], 197),
+        "tsunami-afk-2": ([-1.0000, 59.5926, 55.3436], 198),
+        "tsunami-afk-3": ([-1.0000, 53.8757, 59.0446], 198),
+        "tsunami-afk-4": ([-1.0000, 54.2375, 58.7765], 196),
+        "tsunami-steady-1": ([56.8940, 58.5410, 55.2360], 300),
+        "tsunami-steady-2": ([65.3488, 59.5926, 55.3436], 312),
+        "tsunami-steady-3": ([62.8496, 53.8757, 59.0446], 307),
+        "tsunami-steady-4": ([58.1155, 54.2375, 58.7765], 303),
+    ]
+
+    func testMirrorOffIsStageA2() {
+        let printing = ProcessInfo.processInfo.environment["PULLGOLDEN"] == "1"
+        var t = RacePullTuning(); t.rivalLength = 0.88; t.rivalLengthPuddle = 0.64; t.tripScale = 4.3
+        for c in Self.allCourses {
+            for (name, kind) in [("afk", PullBot.Kind.afk), ("steady", .steady)] {
+                for seed in UInt64(1)...4 {
+                    let run = Self.pullRun(seed: seed, bot: kind, course: c, tuning: t)
+                    let times = run.sim.racers.map { $0.finishTime ?? -1 }
+                    let hops = run.events.filter { if case .hop = $0 { return true }; return false }.count
+                    let key = "\(c.tier)-\(name)-\(seed)"
+                    if printing { print("[golden] \"\(key)\": ([\(times.map { String(format: "%.4f", $0) }.joined(separator: ", "))], \(hops)),") ; continue }
+                    guard let g = Self.a2Golden[key] else { XCTFail("no golden for \(key)"); continue }
+                    XCTAssertEqual(times.count, g.times.count, key)
+                    for (a, b) in zip(times, g.times) { XCTAssertEqual(a, b, accuracy: 1e-3, "\(key) finish time") }
+                    XCTAssertEqual(hops, g.hops, "\(key) hop events")
+                }
+            }
+        }
+    }
+
     func testTheTapsControlIsUnchanged() {
         func events(_ course: RaceCourse, seed: UInt64, control: RaceControl?) -> ([RaceEvent], [UInt32]) {
             let stats = Self.newJelbie
