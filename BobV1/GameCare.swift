@@ -35,6 +35,9 @@ final class GameCare {
     @ObservationIgnored var queued: [BlobRequest] = []      // one-shot brain requests (wave / come)
     @ObservationIgnored private var hooked = false
     @ObservationIgnored var callRunning = false
+    @ObservationIgnored private var callIdle: Float = 0
+    /// Test switch: off = the old behaviour (no watchdog) for the before-fix run.
+    nonisolated(unsafe) static var callWatchdog = true
     @ObservationIgnored private var finished: [BlobRequest] = []
     @ObservationIgnored var wanted: Consumable?             // picked, the tray not out yet
     @ObservationIgnored var meal: Consumable?               // the tray is out and he is working on it
@@ -880,8 +883,16 @@ final class GameCare {
             } else {
                 queued.removeFirst()
                 brain.requestNow(r)
-                if isCome { callRunning = true }
+                if isCome { callRunning = true; callIdle = 0 }
             }
+        }
+        // Watchdog: a `.come` can vanish without `onFinished` (`abortAll` / `sleepLingerEnd` set `job = nil`); a stuck `callRunning` fails every later meal. Clear it once no come has been in flight (pending, running, or just finished) for 0.3 s.
+        if Self.callWatchdog, callRunning {
+            var inFlight = brain.isCome || finished.contains { if case .come = $0 { return true }; return false }
+            if case .some(.come) = brain.pending { inFlight = true }
+            if case .some(.come) = queued.first { inFlight = true }
+            callIdle = inFlight ? 0 : callIdle + dt
+            if callIdle > 0.3 { callRunning = false; retries = 0; callIdle = 0 }
         }
 
         // the meal for Jelly 0 (the other Jellies' meals run from `tickOthers`): GameCare+Dining.swift
