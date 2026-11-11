@@ -77,9 +77,6 @@ struct SleepState {
     var stirEye: Float = 0           // the eye crack the stir opened (carried into the roll, fading as the lie blend falls)
     var rollDur: Float = SleepTuning.rollBackTime
     var lookT0: Float = -1
-    /// The hop out of a pet bed: `exitT0` = `sleep.t` when the first try found no free spot (-1 = not waiting), `exitNext` = the `sleep.t` of the next try, `exitSpot` = the spot he chose.
-    var exitT0: Float = -1, exitNext: Float = 0
-    var exitSpot = SIMD2<Float>(0, 0)
     /// Woken by the meal tray (`callToMeal`): soft wake whatever the call; shown as a non-idle activity so the tray's "stuck idle" retry never re-sends him.
     var mealWake = false
 }
@@ -635,17 +632,8 @@ extension BlobBrain {
             if t > 2.7 && !feet.active {
                 skinner.setEyeOpenness(1); mouthOpen = 0; armDirW = 0; armDirOut = 0; armWalkWant = 0
                 if sleep.bed >= 0, sleep.bedHop == 0, let f = DecorField.shared.foot(sleep.bed) {
-                    // (a free spot, or after `bedExitGiveUp` s the one with the most room: until then he stays as he is, in his awake pose, and looks again every `bedExitRetry`)
-                    if sleep.exitT0 >= 0, sleep.t < sleep.exitNext { return }
-                    let waited = sleep.exitT0 < 0 ? 0 : sleep.t - sleep.exitT0
-                    guard let spot = bedExitSpot(f, forced: waited >= Self.bedExitGiveUp) else {
-                        if sleep.exitT0 < 0 { sleep.exitT0 = sleep.t }
-                        sleep.exitNext = sleep.t + Self.bedExitRetry
-                        return
-                    }
-                    sleep.exitT0 = -1; sleep.exitSpot = spot
                     sleep.bedHop = 3; sleep.t = 0          // up and over the rim again
-                    bagHop(sim, to: spot, ground: 0, apex: 0.42)
+                    bagHop(sim, to: bedExitSpot(f), ground: 0, apex: 0.42)
                     return
                 }
                 sleepFinish(sim, skinner)
@@ -935,7 +923,7 @@ extension BlobBrain {
 
     /// Back on his feet: hand the body to the normal pose path (feet re-seeded square under the root).
     private func sleepStand(_ sim: SoftBody, _ skinner: Skinner) {
-        sleep.stage = 5; sleep.t = 0; sleep.stirEye = 0; sleep.lookT0 = -1; sleep.exitT0 = -1; sleep.exitNext = 0
+        sleep.stage = 5; sleep.t = 0; sleep.stirEye = 0; sleep.lookT0 = -1
         jellyKick = max(jellyKick, SleepTuning.wakeKick)
         // a good-morning from the nearest awake Jelly (a look at him, then a hop)
         if let g = socialOthers().filter({ $0 !== self && $0.idleState.kind == nil && $0.social == nil && simd_distance($0.position, position) < 6 }).min(by: { simd_distance($0.position, position) < simd_distance($1.position, position) }) {
@@ -968,34 +956,13 @@ extension BlobBrain {
         }
         return nil
     }
-    /// How long a Jelbie who cannot get out of the bed (every spot taken) waits before he takes the roomiest one, and how often he looks again meanwhile (s).
-    static let bedExitGiveUp: Float = 3, bedExitRetry: Float = 0.4
-    /// A spot of the bed's ring: walkable (the floor rules move it less than 0.06), no other Jelbie within `peerGap`, and off the dynamic boxes (the tray) by his base radius.
-    func bedExitUsable(_ p: SIMD2<Float>) -> Bool {
-        guard simd_distance(p, fixed(p)) < 0.06 else { return false }
-        let m = footprint * RoomLayout.lowPropRadiusScale
-        if RoomLayout.dynamicBoxes.contains(where: { RoomLayout.boxDistanceXZ(p, $0) < m }) { return false }
-        return peerFree(fixed(p))
-    }
-    /// The spots he may hop down to, in order: today's stand spots (front first), then a ring of 16 at the same distance round the bed (the old unchecked fallback is the first stand spot).
-    func bedExitCandidates(_ f: DecorFoot) -> [SIMD2<Float>] {
-        let r = f.kind.spec.half.y + 0.4
-        return bedStandSpots(f) + (0..<16).map { f.centre + f.turned(SIMD2(sinf(0.2 + Float($0) * .pi / 8), cosf(0.2 + Float($0) * .pi / 8)) * r) }
-    }
-    /// Where he hops down to: the first free spot (the same one as before when a normal spot is free). Nothing free: nil (he stays in bed and asks again), or with `forced` the spot with
-    /// the largest clearance from the others (walkable and off the tray spots first), so he never waits for ever.
-    func bedExitSpot(_ f: DecorFoot, forced: Bool = false) -> SIMD2<Float>? {
-        let all = bedExitCandidates(f)
-        if let p = all.first(where: { bedExitUsable($0) }) { return p }
-        guard forced else { return nil }
-        let others = steerPeers().map(\.pos)
-        func room(_ p: SIMD2<Float>) -> Float { others.map { simd_distance($0, fixed(p)) }.min() ?? .infinity }
-        func off(_ p: SIMD2<Float>) -> Bool {
-            let m = footprint * RoomLayout.lowPropRadiusScale
-            return simd_distance(p, fixed(p)) < 0.06 && !RoomLayout.dynamicBoxes.contains(where: { RoomLayout.boxDistanceXZ(p, $0) < m })
+    /// Where he hops down to: the nearest clear spot round the bed to his front.
+    func bedExitSpot(_ f: DecorFoot) -> SIMD2<Float> {
+        for p in bedStandSpots(f) {
+            let q = fixed(p)
+            if simd_distance(p, q) < 0.06, peerFree(q) { return p }
         }
-        let pool = all.filter(off).isEmpty ? all : all.filter(off)
-        return pool.max(by: { room($0) < room($1) })
+        return f.centre + f.turned(SIMD2(0, f.kind.spec.half.y + 0.4))
     }
 
     /// The two hops over the rim own the body (like the beanbag's): true = this step is handled.
