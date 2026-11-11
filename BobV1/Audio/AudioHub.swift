@@ -914,7 +914,8 @@ final class AudioHub {
     }
     /// The rain on the glass: a quiet loop that follows the storm's rain amount (0 = off).
     func stormBed(rain: Float) {
-        rainLevel += max(-1.0 / 120, min(1.0 / 180, rain - rainLevel))
+        let want: Float = rain <= 0.004 ? 0 : AudioMix.stormRainFloor + (1 - AudioMix.stormRainFloor) * rain
+        rainLevel += max(-1.0 / 240, min(1.0 / 150, want - rainLevel))
         guard !muted, started else { return }
         if rainLevel > 0.002 {
             if rainPlayer == nil, let u = url("storm_rain_loop") { rainPlayer = try? AVAudioPlayer(contentsOf: u); rainPlayer?.numberOfLoops = -1; rainPlayer?.prepareToPlay() }
