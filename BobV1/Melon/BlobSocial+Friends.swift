@@ -32,7 +32,7 @@ enum FriendTuning {
     /// Base weights in the social pick (the older kinds: boop 3, follow 2 ...).
     // 2026-11-06 user: standing hand-holding too often; restore when the hands emotes get their own looks (r4-hands)
     static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.cheekSquish, 0.4), (.twirl, 2.0), (.hopAlong, 2.0),
-                                                      (.littleRace, 1.3), (.tag, 1.3), (.leapfrog, 1.2), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2),
+                                                      (.littleRace, 1.3), (.tag, 1.3), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2),
                                                       (.swayHug, 1.5), (.danceOff, 1.3), (.whisperGiggle, 0.3), (.shyWave, 1.2)]
     /// Closeness multiplier by friendship level (stranger, pal, friend, best friend); housemates are 1.
     static let closeMul: [Float] = [0.55, 0.95, 1.5, 2.1]
@@ -41,7 +41,7 @@ enum FriendTuning {
     /// Per-character taste: the kinds a character likes a bit more (JellyFeature: none = Bob, spines = Pip, daisy = Moss, wings = Lavender).
     static let taste: [JellyFeature: Set<SocialKind>] = [
         .none: [.highFive, .chestBump, .littleRace, .peekaboo],
-        .spines: [.chestBump, .highFive, .hopAlong, .tag, .leapfrog, .littleRace],
+        .spines: [.chestBump, .highFive, .hopAlong, .tag, .littleRace],
         .daisy: [.cheekSquish, .cuddleLean, .backToBack],
         .wings: [.twirl, .hopAlong, .mirrorDance, .ringAround, .peekaboo],
     ]

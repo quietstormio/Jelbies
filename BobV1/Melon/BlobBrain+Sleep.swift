@@ -636,20 +636,10 @@ extension BlobBrain {
                     bagHop(sim, to: bedExitSpot(f), ground: 0, apex: 0.42)
                     return
                 }
-                sleepFinish(sim, skinner)
+                idleFinish(skinner)
             }
         default: break
         }
-    }
-
-    /// The end of the wake (`idleFinish`). A meal-woken sleeper (`callToMeal`) takes the tray's queued request in THIS tick, so `activity` goes from the shown `.turning` straight to `.walking`
-    /// (script `.none` would read `.idle` to the tray's stuck-idle check for a tick). `mealWake` is cleared here: it never outlives the wake (a new sleep, `sleepInstant`, resets `sleep` as well).
-    func sleepFinish(_ sim: SoftBody, _ skinner: Skinner) {
-        let meal = sleep.mealWake
-        idleFinish(skinner)
-        guard meal else { return }
-        sleep.mealWake = false
-        if let r = pending { pending = nil; start(request: r, sim) }
     }
 
     /// Stage 1 after the turn, a goodnight bedtime: a pause (heavy eyes), the yawn (x `yawnScale`), for about one in three a gap and a second smaller yawn, a pause, then the flop (unchanged).
@@ -998,7 +988,7 @@ extension BlobBrain {
                 script = .idle; activity = .lookingAround
             } else {
                 sleep.bedHop = 0
-                sleepFinish(sim, skinner)
+                idleFinish(skinner)
             }
         }
         return true
