@@ -54,13 +54,11 @@ extension BlobBrain {
         anticsEnabled && autonomy && !held && !decorLocked && reactFree && scriptIsNone && pending == nil && idleState.kind == nil
             && !race.active && social == nil && !commanded && idleMood != .grumpy && idleNight < 0.6
     }
-    /// Not free only because a look (`stopLook`, his own or a reaction to a friend's hop) or a walk of his own is running: the wand's chase may take over (its first order, `bubbleGo`, yields a
-    /// look in 0.2 s and interrupts a walk, the same way the spot-look before every chase already ends). 2026-11-11: in a crowd the looks at each other's hops kept 50-70 % of the Jelbies from chasing.
+    /// Not free only because a look (`stopLook`, his own or a reaction to a friend's hop) is running: the wand's chase may take over (its first order, `bubbleGo`, yields a
+    /// look in 0.2 s, the same way the spot-look before every chase already ends). 2026-11-11: in a crowd the looks at each other's hops kept 50-70 % of the Jelbies from chasing.
     var bubbleBusyLooking: Bool {
         guard anticsEnabled && autonomy && !held && !decorLocked && reactFree && !race.active && social == nil && !commanded && idleMood != .grumpy && idleNight < 0.6 else { return false }
-        if idleState.kind == .stopLook { return true }
-        if idleState.kind == nil, case .walk = script { return true }
-        return false
+        return idleState.kind == .stopLook          // (a walk of his own is NOT taken over: interrupting a stride opened the foot join in BubbleFeetTests.testPopFlap)
     }
     /// He is on his own errand (a walk) and nobody has taken him over since: keep going.
     var bubbleStillMine: Bool { attached && !held && !decorLocked && social == nil && !commanded && !race.active }
