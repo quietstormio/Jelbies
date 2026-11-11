@@ -54,7 +54,6 @@ final class BubbleFeetTests: XCTestCase {
                 n += 1
                 if n % 300 == 30 { let c = r.brain.position; _ = wand.insertBubble(at: SIMD3(c.x + 1.1, move == .skip ? 1.0 : 1.4, c.y - 0.8), radius: 0.25) }
                 wand.tick(jellies: join(r), dt: r.sim.stepDt)
-                if let tr = Self.traceFrames, Self.traceRun == 3, tr.contains(n) { print("FLAPTRACE n \(n) \(wand.debugLine(join(r))) lift \(String(format: "%.3f", r.sim.minY() - r.sim.floorY)) pending \(r.brain.pending != nil) hold \(r.brain.bubbleHold) tilt \(String(format: "%.2f", r.sim.bodyPose(iterations: 4).tilt)) feetActive \(r.brain.feet.active) act \(r.brain.activity)") }
             })
         case "stream":           // the real wand: a steady blow, the Jelbie watches / chases / pops as he likes
             return SC(name: "bubble: stream", game: true, seconds: 24, setup: { r, _ in
@@ -77,6 +76,7 @@ final class BubbleFeetTests: XCTestCase {
                 let a = OnePieceInvariantTests.run(Self.scenario(name), char: c, shoes: shoes, pacing: .hz60, seed: 3) { frame, r, f in
                     // the stream scenario runs the Jelbie's other autonomous idles too (a belly slide tips him 0.7 rad by design): only the wand's own moves (walk, look, hop) are held to the pose limits
                     guard Self.isWandMove(r.brain) else { return }
+                    if let tr = Self.traceFrames, Self.traceRun == 3, tr.contains(frame) { print("FLAPTRACE f \(frame) \(BubbleWand.shared.debugLine([BubbleJelly(id: 0, brain: r.brain, sim: r.sim)])) lift \(String(format: "%.3f", r.sim.minY() - r.sim.floorY)) tilt \(String(format: "%.2f", f.tilt)) beans \(f.beans) join \(String(format: "%.3f", f.join)) feetActive \(r.brain.feet.active) act \(r.brain.activity) poseW \(String(format: "%.2f", r.brain.poseW))") }
                     if f.tilt > tiltMax { tiltMax = f.tilt; tiltInfo = "frame \(frame) idle \(r.brain.idleState.kind.map { $0.rawValue } ?? "-") script \(r.brain.scriptKindName) wand pops \(BubbleWand.shared.popsByJelly.values.reduce(0, +))" }
                     if leashFrame < 0, f.beans, f.leash > 0.002 || f.weldPull > 0.002 { leashFrame = frame }
                     guard let s = EmoteFeetTests.sample(r, frame: frame) else { return }
@@ -127,6 +127,6 @@ final class BubbleFeetTests: XCTestCase {
     }
     func testPopFlapRound1GoWaitsOn() { Self.round1(); BubbleTuning.goWaitsForHop = true; bubbles("pop flap") }
     func testPopFlapRound1SpotWaitsOn() { Self.round1(); BubbleTuning.spotWaitsForFeet = true; bubbles("pop flap") }
-    func testPopFlapRound1Trace() { Self.round1(); Self.traceFrames = 600...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
+    func testPopFlapRound1Trace() { Self.round1(); Self.traceFrames = 700...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }
