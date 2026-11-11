@@ -73,8 +73,6 @@ extension GameCare {
     /// Capture aid (`-ParkTrace 1`): logs every change of what a Jelbie / visitor does with a piece (kind, piece, hopscotch square / slide stage), for the proof sequences.
     nonisolated(unsafe) static var traceLast: [Int: String] = [:]
     nonisolated(unsafe) static var traceOn = UserDefaults.standard.integer(forKey: "ParkTrace") != 0
-    nonisolated(unsafe) static var crowdLast: Double = 0
-    nonisolated(unsafe) static var crowdAnchor: [Int: (t: Double, p: SIMD2<Float>)] = [:]
     func parkTrace(_ bodies: [JellyActor]) {
         for a in bodies {
             guard let b = a.brain else { continue }
@@ -87,10 +85,11 @@ extension GameCare {
             }
             if Self.traceLast[a.id] != s { Self.traceLast[a.id] = s; NSLog("[trace] %.1f body=%d %@ at (%.1f,%.1f)", CACurrentMediaTime().truncatingRemainder(dividingBy: 10000), a.id, s, a.floor.x, a.floor.y) }
         }
+        enum CrowdState { nonisolated(unsafe) static var last: Double = 0; nonisolated(unsafe) static var anchor: [Int: (t: Double, p: SIMD2<Float>)] = [:] }
         // `[crowd]` (park-crowd-r1): at most once a second, one line per pair closer than 0.80 x jellyGap and one per walker that has not moved 0.25 m in 3 s
         let now = CACurrentMediaTime()
-        guard now - Self.crowdLast >= 1 else { return }
-        Self.crowdLast = now
+        guard now - CrowdState.last >= 1 else { return }
+        CrowdState.last = now
         let gap = MelonController.jellyGap
         for (i, a) in bodies.enumerated() {
             guard let b = a.brain else { continue }
@@ -101,12 +100,12 @@ extension GameCare {
                 let soc = (b.social != nil && b.social === d.social) ? "\(b.social!.kind.rawValue)/\(b.social!.phase)" : "-"
                 NSLog("[crowd] t %.0f pair %d-%d d=%.2f social=%@ pass=%d idle=%@/%@", now.truncatingRemainder(dividingBy: 10000), a.id, c.id, dist, soc, (b.socialBook.passThrough || d.socialBook.passThrough) ? 1 : 0, String(describing: b.idleState.kind), String(describing: d.idleState.kind))
             }
-            var walking = false
+            var walking = b.activity == .walking || b.activity == .coming
             if case .walk = b.script { walking = true }
-            if let old = Self.crowdAnchor[a.id], now - old.t >= 3 {
+            if let old = CrowdState.anchor[a.id], now - old.t >= 3 {
                 if walking, simd_distance(old.p, a.floor) < 0.25 { NSLog("[crowd] t %.0f stuck body=%d at (%.1f,%.1f) social=%@ idle=%@", now.truncatingRemainder(dividingBy: 10000), a.id, a.floor.x, a.floor.y, b.social.map { "\($0.kind.rawValue)/\($0.phase)" } ?? "-", String(describing: b.idleState.kind)) }
-                Self.crowdAnchor[a.id] = (now, a.floor)
-            } else if Self.crowdAnchor[a.id] == nil { Self.crowdAnchor[a.id] = (now, a.floor) }
+                CrowdState.anchor[a.id] = (now, a.floor)
+            } else if CrowdState.anchor[a.id] == nil { CrowdState.anchor[a.id] = (now, a.floor) }
         }
     }
     #endif

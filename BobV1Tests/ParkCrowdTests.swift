@@ -25,6 +25,8 @@ final class ParkCrowdTests: XCTestCase {
 
     /// The park the way HopscotchTests.parkLab sets it up (copied, that file is not edited), five bodies, autonomy on (quiet false), outingPlay on every brain as a park visit sets it.
     func parkLab(n: Int = 5, seed: UInt64) -> SocialTests.Lab {
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0          // (every seed starts from a clean park: no taken toy spot, no hopscotch line left over)
+        for (uid, ps) in HopscotchLine.shared.lines { for pl in ps { HopscotchLine.shared.remove(uid, pl.id) } }
         RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: 440.0 / 956.0)
         let lab = SocialTests.Lab(n: n, positions: Array(Self.starts5.prefix(n)), quiet: false, seed: seed)
         for r in lab.rigs { r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius; r.brain.anticsEnabled = true; r.brain.idleMood = .happy; r.brain.outingPlay = true }
@@ -62,9 +64,9 @@ final class ParkCrowdTests: XCTestCase {
             let b = lab.rigs[i].brain
             if let s = b.social { return "social:\(s.kind.rawValue)/p\(s.phase)" }
             if let k = b.idleState.kind { return "idle:\(k)" }
-            return "script:\(b.scriptKindName)"
+            return "script:\(b.scriptKindName)/\(b.activity)"
         }
-        func isWalk(_ i: Int) -> Bool { if case .walk = lab.rigs[i].brain.script { return true }; return false }
+        func isWalk(_ i: Int) -> Bool { let b = lab.rigs[i].brain; if case .walk = b.script { return true }; return b.activity == .walking || b.activity == .coming }          // (a decor approach is script .idle with activity .walking)
         func solidDist(_ p: SIMD2<Float>) -> Float { DecorField.shared.feet.filter { $0.spec.solid }.map { $0.distance(p) }.min() ?? 9 }
 
         func step() {
