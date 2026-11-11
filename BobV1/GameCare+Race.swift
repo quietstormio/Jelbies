@@ -278,7 +278,7 @@ extension GameCare {
         let actors = book.extra.isEmpty ? actors : actors + book.extra
         for (k, aid) in book.racers.enumerated() where actors.indices.contains(aid) && sim.racers.indices.contains(k) {
             guard let b = actors[aid].brain else { continue }
-            spots.append(RaceFollowPose.Racer(pos: SIMD2(b.px, b.pz), s: sim.racers[k].dist, isPlayer: k == 0))
+            spots.append(RaceFollowPose.Racer(pos: b.raceSpot, s: sim.racers[k].dist, isPlayer: k == 0))
         }
         guard !spots.isEmpty else { return book.follow }
         let want = RaceFollowPose.aim(course: sim.course, racers: spots)

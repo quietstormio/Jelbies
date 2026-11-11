@@ -15,7 +15,7 @@ final class RaceThreeUITests: XCTestCase {
         let app = XCUIApplication()
         let env = ProcessInfo.processInfo.environment
         app.launchArguments += ["-SetRoster", env["CAPTURE_ROSTER"] ?? "teddy,panda", "-MainMenu", "0", "-Intro", "0", "-BlobDrops.v1", "1024", "-BlobNoWander", "1", "-ClockHour", "12", "-volley.partner", "99",
-                                "-Mute", "1", "-NeedsHappy", "1", "-RaceStart", "1", "-RaceStartDelay", "6", "-RaceSeed", env["CAPTURE_SEED"] ?? "7", "-RaceAuto", "4", "-A11yAutoJump", "1"]
+                                "-Mute", "1", "-NeedsHappy", "1", "-RaceStart", "1", "-RaceStartDelay", "6", "-RaceSeed", env["CAPTURE_SEED"] ?? "7", "-RaceAuto", "4", "-A11yAutoJump", "1", "-RaceControl", "taps"]
         app.launch()
         if env["CAPTURE_LANDSCAPE"] == "1" { XCUIDevice.shared.orientation = .landscapeLeft } else { XCUIDevice.shared.orientation = .portrait }
         let cont = app.buttons["Continue"]          // (a cold launch can land on the title screen)

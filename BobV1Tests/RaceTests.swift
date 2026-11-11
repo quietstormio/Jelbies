@@ -265,7 +265,7 @@ final class RaceModelTests: XCTestCase {
         XCTAssertEqual(sim.phase, .results)
         XCTAssertEqual(sim.playerPlace, 2)
         XCTAssertNil(sim.placings.last?.time)
-        XCTAssertEqual(sim.playerDrops, 140)
+        XCTAssertEqual(sim.playerDrops, 0)   // (a racer who never finishes earns nothing: playerDrops)
     }
 
     func testStatsGrowAfterARace() {

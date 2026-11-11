@@ -67,9 +67,9 @@ struct AccessibilitySettingsView: View {
 
     static func raceFootnote(_ a: RaceAssist) -> String {
         switch a {
-        case .off: return "Off: two foot buttons."
-        case .forgiving: return "Forgiving: the same foot twice is OK."
-        case .oneButton: return "One button: a single Step button."
+        case .off: return "Off: pull down and let go to hop."
+        case .forgiving: return "Forgiving: a wider green zone."
+        case .oneButton: return "One button: a single Hop button."
         case .auto: return "Auto run: your Jelbie runs, you cheer."
         }
     }
