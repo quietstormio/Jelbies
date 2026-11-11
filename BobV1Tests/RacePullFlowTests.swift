@@ -176,7 +176,7 @@ final class RacePullFlowTests: XCTestCase {
     }
 
     @discardableResult
-    private func feetRace(_ name: String, tier: CourseTier, seed: UInt64, trace: Bool = false, landmarkOff: Bool = false, assert doAssert: Bool = true, jiggleOff: Bool = false, taps: Bool = false) -> FeetSummary {
+    private func feetRace(_ name: String, tier: CourseTier, seed: UInt64, trace: Bool = false, landmarkOff: Bool = false, assert doAssert: Bool = true, jiggleOff: Bool = false, taps: Bool = false, level: Int? = nil) -> FeetSummary {
         if landmarkOff { Skinner.frameDisagreeDist = 9; Skinner.frameDisagreeAngle = 9 }
         defer { Skinner.frameDisagreeDist = 0.12; Skinner.frameDisagreeAngle = 0.35 }
         var summary = FeetSummary()
@@ -189,6 +189,7 @@ final class RacePullFlowTests: XCTestCase {
             a.brain?.feature = f; a.skinner.configureTail(rm); a.skinner.tailOn = f == .spines; a.brain?.skinnerRef = a.skinner
         }
         if jiggleOff { for a in room.actors { a.skinner.jelly.enabled = false } }
+        if let level { for a in room.actors { a.skinner.jelly.levelOverride = level } }          // (the jiggle level of every racer, set before the race)
         var dyn = room.actors.map { _ in [Float](repeating: 0, count: rm.vertexCount * 6) }
         let bean: [[[Int32]]] = room.actors.map { _ in [-1, 1].map { side in let f = rm.armCapsule!.beanFirst(side: side); return (f..<(f + FootBean.vertexCount)).map { Int32($0) } } }
         let core: [[[Int32]]] = room.actors.map { a in (0..<2).map { a.brain!.footCoreVertices($0, sim: a.sim, skinner: a.skinner) } }
@@ -343,6 +344,15 @@ final class RacePullFlowTests: XCTestCase {
         feetRace("puddle", tier: .puddle, seed: 3)
         feetRace("splash (bars)", tier: .splash, seed: 7)
         feetRace("tsunami (the highest momentum)", tier: .tsunami, seed: 11)
+    }
+
+    /// The jiggle level is a player setting: the feet stay attached at the lowest and the highest level too (each log line has the course and the level).
+    func testFeetStayAttachedAtEveryJiggleLevel() {
+        for level in [0, 2] {
+            feetRace("puddle level \(level)", tier: .puddle, seed: 3, level: level)
+            feetRace("splash level \(level)", tier: .splash, seed: 7, level: level)
+            feetRace("tsunami level \(level)", tier: .tsunami, seed: 11, level: level)
+        }
     }
 
     /// B1b 2.1: the skin's frame disagreement per phase on every course (the numbers for the Main session). Prints only.
