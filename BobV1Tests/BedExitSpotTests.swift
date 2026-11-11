@@ -16,7 +16,7 @@ final class BedExitSpotTests: XCTestCase {
     private func room() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
 
     /// A Jelbie going to sleep in the pet bed (uid 7); `others` are the other Jelbies' floor positions, seen only from the stretch (stage 5) on, so they cannot stop his walk to the bed.
-    private final class Scene {
+    @MainActor private final class Scene {
         let rig: MotionRig
         let foot: DecorFoot
         var others: [SIMD2<Float>] = []
@@ -46,6 +46,7 @@ final class BedExitSpotTests: XCTestCase {
         XCTAssertTrue(r.brain.idleStart(.sleep, r.sim), "he goes to bed")
         r.brain.sleep.hold = 3
         let s = Scene(rig: r, foot: DecorField.shared.foot(7)!)
+        Self.keep.append(s)
         r.brain.peers = { [unowned s] in s.armed ? s.others.enumerated().map { (id: 100 + $0.offset, pos: $0.element) } : [] }
         return s
     }
@@ -83,7 +84,7 @@ final class BedExitSpotTests: XCTestCase {
             let c = untilChosen(s)
             XCTAssertNotNil(c.chosen, "seed \(seed): he chose a spot")
             let gap = s.brain.peerGap
-            for o in s.others { XCTAssertGreaterThanOrEqual(simd_distance(s.brain.sleep.exitSpot, o), gap - 1e-4, "seed \(seed): the spot keeps peerGap from a peer") }
+            for o in s.others { XCTAssertGreaterThanOrEqual(simd_distance(s.brain.fixed(s.brain.sleep.exitSpot), o), gap - 1e-4, "seed \(seed): the spot keeps peerGap from a peer") }
             s.run(8, until: { s.brain.idleState.kind == nil })
             XCTAssertNil(s.brain.idleState.kind, "seed \(seed): up")
             let p = s.brain.position
@@ -98,7 +99,7 @@ final class BedExitSpotTests: XCTestCase {
         for seed in UInt64(11)...12 {
             let s = bedScene(seed: seed)
             let front = ring(s.foot, 0)
-            let box = RoomLayout.FlatBox(centre: front, half: SIMD2(0.55, 0.4), height: 0.3)
+            let box = RoomLayout.FlatBox(centre: front, half: SIMD2(0.45, 0.4), height: 0.3)
             s.others = blockers(s.foot, openFront: 0.7)
             RoomLayout.dynamicBoxes = [box]
             let c = untilChosen(s)
@@ -118,10 +119,11 @@ final class BedExitSpotTests: XCTestCase {
         for seed in UInt64(11)...12 {
             let s = bedScene(seed: seed)
             s.others = blockers(s.foot)
-            var freedAt: Float?
+            var freedAt: Float?, firstWait: Float?
             var chosenAt: Float?
             s.run(70, until: {
-                if freedAt == nil, s.brain.sleep.exitT0 >= 0, s.rig.t - s.brain.sleep.exitT0 >= 1.0 { s.others = [] ; freedAt = s.rig.t }
+                if firstWait == nil, s.brain.sleep.exitT0 >= 0 { firstWait = s.rig.t }
+                if freedAt == nil, let w = firstWait, s.rig.t - w >= 1.0 { s.others = []; freedAt = s.rig.t }
                 if s.brain.idleState.kind == .sleep, s.brain.sleep.bedHop == 3 { chosenAt = s.rig.t; return true }
                 return false
             })
