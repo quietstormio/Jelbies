@@ -161,14 +161,14 @@ final class StormComfortTests: XCTestCase {
                 if let k = room.rigs[i].brain.socialKind.map({ "\($0.rawValue)/\(i)-\(j)" }) { out.gapByKind[k] = min(out.gapByKind[k] ?? .infinity, g) }
                 out.holdFrames += 1
             }
-            if Self.tracing, steps % 3 == 0, let arc = room.reactor.arcs.first(where: { ($0.stage == .hold || $0.stage == .holding) && $0.b >= 0 }) {
+            if Self.tracing, let arc = room.reactor.arcs.first(where: { ($0.stage == .hold || $0.stage == .holding) && $0.b >= 0 }) {
                 let i = arc.a, j = arc.b
                 let g = room.duo.truthGap(i, j)
                 let s = room.rigs[i].brain.social ?? room.rigs[j].brain.social
                 var line = String(format: "STORMTRACE %@ seed %d t %.2f stage %@ %@ ph %d gap %.2f cm dist %.3f", cast.name, Int(seed), rclock, String(describing: arc.stage), s?.kind.rawValue ?? "-", s?.phase ?? -1, g * 100, simd_distance(room.rigs[i].brain.position, room.rigs[j].brain.position))
                 for k in [i, j] {
                     let b = room.rigs[k].brain, m = room.reactor.members[k]
-                    line += String(format: " | J%d trem %.2f fl %.2f p %.4f r %.4f s %.4f ke %.5f soc %@", k, m?.tremble ?? -1, m?.flinch ?? -1, b.storm.pitch, b.storm.roll, b.storm.squash, room.rigs[k].sim.kineticEnergy() / room.rigs[k].sim.totalMass, String(describing: b.socialKind))
+                    line += String(format: " | J%d trem %.2f fl %.2f p %.4f r %.4f s %.4f ke %.5f pos %.3f,%.3f yaw %.3f kick %.2f idle %@ cmd %@ react %@ act %@ scr %@ soc %@", k, m?.tremble ?? -1, m?.flinch ?? -1, b.storm.pitch, b.storm.roll, b.storm.squash, room.rigs[k].sim.kineticEnergy() / room.rigs[k].sim.totalMass, b.position.x, b.position.y, b.yaw, b.jellyKick, String(describing: b.idleState.kind), String(describing: b.commandedIdle), String(describing: b.react.pending != nil), String(describing: b.activity), String(describing: b.script), String(describing: b.socialKind))
                 }
                 MotionLog.write(line)
             }
@@ -209,7 +209,7 @@ final class StormComfortTests: XCTestCase {
     /// The same hold started the plain way (nobody scared, two Jelbies 1.47 m apart): its deepest skin gap in m. One run per pair and emote (the cast fixes the bodies).
     nonisolated(unsafe) static var plainGaps: [String: Float] = [:]
     func plainGap(_ cast: Cast, _ kind: SocialKind) -> Float {
-        let key = cast.name + "/" + kind.rawValue
+        let key = cast.name + "/" + kind.rawValue + "/" + cast.positions.map { "\($0.x),\($0.y)" }.joined(separator: ";")
         if let g = Self.plainGaps[key] { return g }
         let g = controlGapValue(cast, kind)
         Self.plainGaps[key] = g
@@ -261,7 +261,7 @@ final class StormComfortTests: XCTestCase {
                     // k = "emote/i-j": the plain start of the same emote for the same two bodies (their species, so Teddy's belly and the wings are the same)
                     let parts = k.split(separator: "/").map(String.init)
                     let ij = parts[1].split(separator: "-").compactMap { Int($0) }
-                    let pair = Cast(name: ij.map { String(describing: cast.features[$0]) }.joined(separator: " + "), features: ij.map { cast.features[$0] }, positions: [SIMD2(-1.4, 0.8), SIMD2(1.5, 0.5)])
+                    let pair = Cast(name: ij.map { String(describing: cast.features[$0]) }.joined(separator: " + "), features: ij.map { cast.features[$0] }, positions: ij.map { cast.positions[$0] })
                     let plain = SocialKind(rawValue: parts[0]).map { plainGap(pair, $0) } ?? -0.01
                     let limit = max(plain - 0.001, -0.010)
                     report += String(format: " | HOLD %@ seed %d: storm %.2f cm, plain %.2f cm, limit %.2f cm", k, Int(seed), g * 100, plain * 100, limit * 100)
@@ -316,6 +316,32 @@ final class StormComfortTests: XCTestCase {
             MotionLog.write("STORMTRACE ===== hold at rest \(rest): deepest gap by emote \(r.gapByKind) =====")
         }
         StormReactor.holdAtRest = true
+    }
+
+    /// STORM_TRACE=1 only: why does the same hold ring harder in a storm than in the plain start? Teddy + Lavender, seed 9, cuddleLean, the deepest skin gap of the hold under variants.
+    func testProbeTeddyHoldVariants() throws {
+        try XCTSkipUnless(Self.tracing, "set TEST_RUNNER_STORM_TRACE=1")
+        let swappedTL = Cast(name: "Lavender + Teddy", features: [.wings, .ears], positions: Self.teddyLavender.positions)
+        let swappedBP = Cast(name: "Pip + Bob", features: [.spines, .none], positions: Self.bobPip.positions)
+        let cases: [(String, Cast, UInt64)] = [("Teddy + Lavender", Self.teddyLavender, 9), ("Lavender + Teddy", swappedTL, 9), ("Teddy + Lavender", Self.teddyLavender, 5), ("Lavender + Teddy", swappedTL, 5),
+                                               ("Teddy + Lavender", Self.teddyLavender, 6), ("Lavender + Teddy", swappedTL, 6), ("Bob + Pip", Self.bobPip, 9), ("Pip + Bob", swappedBP, 9), ("Bob + Pip", Self.bobPip, 5), ("Pip + Bob", swappedBP, 5)]
+        for (label, cast, seed) in cases {
+            StormReactor.forceEmote = .cuddleLean
+            let room = Room(cast)
+            let ev0 = room.book.begin(seed: seed)
+            room.reactor.handle(ev0, plan: room.book.plan, jellies: room.js, care: nil)
+            var gmin: Float = .infinity, frames = 0, sawHold = false, at = ""
+            for _ in 0..<(60 * 100) {
+                room.step()
+                if let (i, j) = room.holdPair() {
+                    if !sawHold { at = String(format: "J0 x %.2f z %.2f, J1 x %.2f z %.2f, starter %@", room.rigs[0].brain.position.x, room.rigs[0].brain.position.y, room.rigs[1].brain.position.x, room.rigs[1].brain.position.y, room.rigs[i].brain.social?.a === room.rigs[i].brain ? "first" : "second") }
+                    sawHold = true
+                    gmin = min(gmin, room.duo.truthGap(i, j)); frames += 1
+                } else if sawHold, room.reactor.arcs.isEmpty || room.reactor.arcs.allSatisfy({ $0.stage != .holding }) { break }
+            }
+            MotionLog.write(String(format: "STORMCOMFORT PROBE %@ (rig 0 first) seed %d cuddleLean: %d hold frames, deepest gap %.2f cm | %@", label, Int(seed), frames, gmin * 100, at))
+            StormReactor.forceEmote = nil
+        }
     }
 
     /// The reactor's own choice is seeded and about half and half; and the choice is what the arc really runs.
@@ -403,19 +429,21 @@ final class StormComfortTests: XCTestCase {
 
     // MARK: controls (printed, not asserted): is the hold overlap the emote's own?
 
-    private func controlGapValue(_ cast: Cast, _ kind: SocialKind) -> Float {
-        let d = FeatureClipTests.Duo(positions: cast.positions, features: cast.features, seed: 11)
-        d.place([SIMD2(-0.735, 0.9), SIMD2(0.735, 0.9)]); d.live = true
+    private func controlGapValue(_ cast: Cast, _ kind: SocialKind, antics: Bool = false, seed: UInt64 = 11, at spots: [SIMD2<Float>] = [SIMD2(-0.735, 0.9), SIMD2(0.735, 0.9)], initiator: Int = 0) -> Float {
+        MotionLog.write("CONTROL start \(cast.name) \(kind.rawValue) antics \(antics) seed \(seed) spots \(spots) initiator \(initiator)")
+        let d = FeatureClipTests.Duo(positions: cast.positions, features: cast.features, seed: seed)
+        if antics { for r in d.lab.rigs { r.brain.anticsEnabled = true } }
+        d.place(spots); d.live = true
         for _ in 0..<3 { d.tick() }
-        let a = d.lab.rigs[0], b = d.lab.rigs[1]
+        let a = d.lab.rigs[initiator], b = d.lab.rigs[1 - initiator]
         guard a.brain.socialStart(kind, with: b.brain, a.sim) else { XCTFail("the plain \(kind.rawValue) of \(cast.name) did not start: no plain depth to compare with"); return -0.010 }
         var gmin = Float.infinity
         for s in 0..<(60 * 14) {
             d.tick()
-            if s % 3 == 0, let sess = a.brain.social, sess.phase >= 2 {
+            if s % (Self.tracing ? 1 : 3) == 0, let sess = a.brain.social, sess.phase >= 2 {
                 let g = d.truthGap(0, 1)
                 gmin = min(gmin, g)
-                if Self.tracing { MotionLog.write(String(format: "STORMTRACE PLAIN %@ %@ step %d ph %d gap %.2f cm ke %.5f %.5f", cast.name, kind.rawValue, s, sess.phase, g * 100, a.sim.kineticEnergy() / a.sim.totalMass, b.sim.kineticEnergy() / b.sim.totalMass)) }
+                if Self.tracing { MotionLog.write(String(format: "STORMTRACE PLAIN %@ %@ step %d ph %d gap %.2f cm ke %.5f %.5f pos %.3f,%.3f %.3f,%.3f yaw %.3f %.3f kick %.2f %.2f", cast.name, kind.rawValue, s, sess.phase, g * 100, a.sim.kineticEnergy() / a.sim.totalMass, b.sim.kineticEnergy() / b.sim.totalMass, a.brain.position.x, a.brain.position.y, b.brain.position.x, b.brain.position.y, a.brain.yaw, b.brain.yaw, a.brain.jellyKick, b.brain.jellyKick)) }
             }
             if a.brain.social == nil, s > 30 { break }
         }
@@ -429,6 +457,28 @@ final class StormComfortTests: XCTestCase {
         var lines: [String] = []
         for c in [Self.bobPip, Self.teddyLavender] { for k in [SocialKind.swayHug, .cuddleLean] { lines.append(controlGap(c, k)) } }
         for l in lines { MotionLog.write("STORMCOMFORT CONTROL " + l) }
+        // the sides (the storm's Teddy + Lavender stood Teddy on the right, Lavender left, Teddy starting): the same two species swapped, either one starting
+        for k in [SocialKind.swayHug, .cuddleLean] {
+            let swapped = Cast(name: "Lavender left + Teddy right", features: [.wings, .ears], positions: Self.teddyLavender.positions)
+            let leftStarts = controlGapValue(swapped, k, initiator: 0)
+            let rightStarts = controlGapValue(swapped, k, initiator: 1)
+            MotionLog.write(String(format: "STORMCOMFORT CONTROL sides: %@ %@ Lavender (left) starts %.2f cm, Teddy (right) starts %.2f cm", swapped.name, k.rawValue, leftStarts * 100, rightStarts * 100))
+        }
+        // where the pair stands: the plain emote at other spots of the room (centre x, z; 1.47 m apart)
+        for c in [Self.teddyLavender] { for k in [SocialKind.swayHug, .cuddleLean] {
+            var gs: [String] = []
+            for (cx, cz) in [(0.0, 0.9), (0.357, 1.315), (0.0, 1.315), (0.357, 0.9), (0.0, 0.5), (-0.5, 1.3), (0.8, 0.8)] {
+                let g = controlGapValue(c, k, at: [SIMD2(Float(cx) - 0.735, Float(cz)), SIMD2(Float(cx) + 0.735, Float(cz))])
+                gs.append(String(format: "(%.2f,%.2f): %.2f", cx, cz, g * 100))
+            }
+            MotionLog.write("STORMCOMFORT CONTROL spots: \(c.name) \(k.rawValue) deepest gap cm at centre (x,z): \(gs.joined(separator: "  "))")
+        } }
+        // the storm tests run with the antics on: does the plain emote bounce deeper then? (several lab seeds)
+        for c in [Self.bobPip, Self.teddyLavender] { for k in [SocialKind.swayHug, .cuddleLean] {
+            var gs: [String] = []
+            for seed: UInt64 in 11...16 { gs.append(String(format: "%.2f", controlGapValue(c, k, antics: true, seed: seed) * 100)) }
+            MotionLog.write("STORMCOMFORT CONTROL antics ON, lab seeds 11...16: \(c.name) \(k.rawValue) deepest gap cm: \(gs.joined(separator: " "))")
+        } }
     }
 
     /// The relief test of WeatherTests (cluster, then scatter) with the comfort code off and on: same numbers = the comfort code does not change it.
