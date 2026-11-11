@@ -30,13 +30,15 @@ final class HopNearCapTests: XCTestCase {
         let f = DecorField.shared.foot(7)!
         let seatP = r.brain.hopSeatXZ(f, seat: r.brain.idleState.seat)
         var moved = false, hopped = false, takeOff: Float = -1, startDist: Float = -1, finished = false
-        var prev = r.brain.position, trace = 0
+        var prev = r.brain.position, trace = 0, pin: SIMD2<Float>? = nil
         for _ in 0..<(60 * 40) {
+            if moved, !hopped, r.brain.idleState.bagStage == 0, let to = pin { r.brain.px = to.x; r.brain.pz = to.y }          // (the walk script pulls the floor spot back to the stand spot: hold it out there until stage 0 decides)
             r.tick(); DecorField.shared.tick(dt: 1.0 / 60)
             let s = r.brain.idleState
             if s.kind == .decorSit, s.bagStage == 0, !s.decorGo, !moved, away > 0 {
                 moved = true
                 let to = seatP + SIMD2(-away, 0)
+                pin = to
                 r.sim.teleport(toXZ: to)
                 for _ in 0..<30 { r.sim.step() }
                 r.brain.currentPose(r.sim)
