@@ -88,6 +88,7 @@ final class DiningSurveyTests: XCTestCase {
             if gaveUp == nil, group.gaveUp {
                 gaveUp = t
                 if (0..<3).contains(where: { lastEating[$0].map { t - $0 < 1.0 } ?? false }) { dropEating = true }
+                if abs(t - GameCare.mealTimeout) >= 0.2, ate.contains(where: { $0 != nil }) { dropEating = true }          // (dropped for all by a retry rule while somebody had eaten)
                 if abs(t - GameCare.mealTimeout) < 0.2 { reason = "timeout" } else {
                     let notEating = (0..<3).filter { ate[$0] == nil }
                     let walk = (0..<3).filter { group.walkRetries.indices.contains($0) && group.walkRetries[$0] >= 3 && ate[$0] == nil }
@@ -108,7 +109,7 @@ final class DiningSurveyTests: XCTestCase {
         let n40 = ate.compactMap { $0 }.filter { $0 <= 40 }.count
         let nAll = ate.compactMap { $0 }.count
         let heldStr = maxRig < 0 ? "none" : String(format: "%.1f%@ rig %d", maxHeld, open ? "+" : "", maxRig)
-        print("TRAYSURVEY arm \(arm) seed \(seed) | all asleep \(allAsleep) | rig2 start (\(spot.x), \(spot.y)) | ate rig0 \(Self.f(ate[0])) rig1 \(Self.f(ate[1])) rig2 \(Self.f(ate[2])) | ate<=40s \(n40) | ate<=window \(nAll) | gaveUp \(Self.f(gaveUp)) \(reason) | over \(Self.f(over)) | max held after eating \(heldStr) | excused \(group.excused) | droppedWhileEating \(dropEating) | sim \(Self.f(t)) s")
+        print("TRAYSURVEY arm \(arm) seed \(seed) | all asleep \(allAsleep) | rig2 start (\(spot.x), \(spot.y)) | ate rig0 \(Self.f(ate[0])) rig1 \(Self.f(ate[1])) rig2 \(Self.f(ate[2])) | ate<=40s \(n40) | ate<=window \(nAll) | gaveUp \(Self.f(gaveUp)) \(reason) | over \(Self.f(over)) | max held after eating \(heldStr) | excused \(group.excused) | end \((0..<3).map { "\(brains[$0].activity)/\(String(format: "%.2f", simd_distance(brains[$0].position, group.approachPoint(blob: $0))))/wr\(group.walkRetries.indices.contains($0) ? group.walkRetries[$0] : -1)" }) | droppedWhileEating \(dropEating) | sim \(Self.f(t)) s")
         group.cancel(); group.dining.reset()
         return Result(ate: ate, gaveUp: gaveUp, gaveReason: reason, over: over, maxHeld: maxHeld, maxHeldRig: maxRig, maxHeldOpen: open, excused: group.excused.filter { $0 }.count, droppedWhileEating: dropEating)
     }
