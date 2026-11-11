@@ -38,18 +38,37 @@ struct RaceDrive {
     /// A hurdle jump was asked while a step was still under way: it starts the moment the feet are planted. `jumping`: the hop's apex / airtime are the race's.
     var jumpQueued = false
     var jumping = false
+    // pull control (Race/RacePull.swift): none of this is touched by a taps race
+    /// He has received a `.hop` event: his senses are the pull race's (a hop is crouch, air, landing; he may chain the next one from the landing).
+    var pull = false
+    /// He has crossed the line: no more hops; the coast steps are the taps race's.
+    var pullDone = false
+    /// A hop that arrived while a step was still under way (never at the start of a race): leaves when the feet are planted.
+    var hopQueued: (length: Float, apex: Float, air: Float, crouch: Float)?
+    /// A look-around asked while he was still in a landing: starts the moment he stands.
+    var lookQueued = false
+    /// Where the body really is while a hop carries it (the centroid read for the race's progress this tick); `spotLive` = valid.
+    var spot = SIMD2<Float>.zero
+    var spotLive = false
 }
 
 extension BlobBrain {
     /// He can take one more committed step: nothing is waiting (one step ahead is the most; the feet start it the tick the last one ends).
     var raceStepFree: Bool {
-        guard race.active, case .race = script else { return false }
+        guard race.active else { return false }
+        // pull control: a new hop can leave from the landing (the gait takes a hop in its land phase), not from the crouch or the air; none after the line
+        if race.pull, case .hopPlay = script { return !race.pullDone && gait.phase == .land && race.stumbleT <= 0 }
+        guard case .race = script else { return false }
+        if race.pull, !race.pullDone, feet.active || race.lookQueued || race.hopQueued != nil { return false }
         return race.pendingFoot == nil && race.stumbleT <= 0
     }
     /// His feet are planted between two steps.
     var raceBetweenSteps: Bool {
-        guard race.active, case .race = script else { return false }
-        return !feet.active && race.pendingFoot == nil
+        guard race.active else { return false }
+        // pull control: on the ground the moment the hop touches down (the land phase), not when the landing is over
+        if race.pull, case .hopPlay = script { return gait.phase == .land }
+        guard case .race = script else { return false }
+        return !feet.active && race.pendingFoot == nil && race.hopQueued == nil
     }
     /// He can start a look-around (a pause): racing, between steps.
     var raceCanLook: Bool {
@@ -57,7 +76,7 @@ extension BlobBrain {
         return !feet.active && race.pendingFoot == nil
     }
     /// Back on the track after a look-around (or never left).
-    var raceBodyReady: Bool { race.active && idleState.kind == nil && !commanded }
+    var raceBodyReady: Bool { race.active && idleState.kind == nil && !commanded && !race.lookQueued }
 
     /// Takes the track: stands square on lane `x`, facing `heading` (0 = toward the camera). With a `course` and `lane` his steps follow that lane
     /// round its bends; without, a straight along `heading` from where he stands (the drill, the parked Jellies, the tests).
@@ -125,6 +144,45 @@ extension BlobBrain {
         script = .hopPlay; activity = .playing
     }
 
+    /// Pull control: one hop of the race's chain. The EXISTING hop (`raceJump`'s: same feet release, bean carry, `.hopPlay`), with the numbers of the model's event:
+    /// it lands on HIS LANE `length` further along than where the race measures him now, facing along the lane there; the crouch, flight and height are the event's.
+    /// From a landing (the gait's land phase) the next hop starts right there: no return to the walk script, no second bean carry.
+    func raceHop(_ sim: SoftBody, length: Float, apex: Float, air: Float, crouch: Float, sound: Bool = true) {
+        guard race.active, !race.pullDone else { return }
+        race.pull = true
+        let chain: Bool
+        if case .hopPlay = script, gait.phase == .land { chain = true }
+        else if case .race = script {
+            chain = false
+            if feet.active { race.hopQueued = (length, apex, air, crouch); return }
+        } else { return }
+        race.hopQueued = nil
+        let s = raceProgress(sim: sim)          // (the progress the race was given this tick)
+        let reduce = amplitude < 0.7
+        let to = race.course.lanePoint(race.lane, at: s + length)
+        if sound { AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.45) }
+        var takeoff: SIMD2<Float>? = nil
+        if !chain {
+            if Self.raceHopFeet, let sk = skinnerRef, sk.beansActive, sk.beanPos[0].count == FootBean.vertexCount, sk.beanPos[1].count == FootBean.vertexCount {
+                raceCarryFrom = (0..<2).map { k in sk.beanPos[k].reduce(SIMD2<Float>.zero) { $0 + SIMD2($1.x, $1.z) } / Float(FootBean.vertexCount) }
+                raceCarryT = Self.raceCarryTime
+            }
+            takeoff = hopTakeoff()
+            sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
+            gait.wander = false
+            poseW = 0
+            race.jumping = true
+        }
+        gait.facingYaw = race.course.pose(at: s + length).heading          // (he stands facing along the lane at the landing point)
+        gait.home = to                                                         // (the gait's own chained re-hop toward `home` has nowhere to go)
+        // the gait's flight is `hopDuration` x 1.25 under Reduce Motion: divide it back so the body is in the air as long as the model says; a quarter of a step less,
+        // because the gait counts whole steps (it lands on the first step at or after its time)
+        gait.hopApex = apex; gait.hopDuration = air / (reduce ? 1.25 : 1) - 0.004
+        // a short crouch (the gait's chained one: 0.4 x 0.13 = 0.052 s) when the model's is short
+        gait.hop(sim, to: to, reduceMotion: reduce, chained: crouch < 0.1, takeoff: takeoff)
+        script = .hopPlay; activity = .playing
+    }
+
     /// A focus pause: he stops and looks around (the existing look behaviour, shortened). False = not possible right now.
     @discardableResult
     func raceLook(_ sim: SoftBody) -> Bool {
@@ -140,7 +198,17 @@ extension BlobBrain {
     }
 
     /// Per fixed step (the race flow): a look-around that has ended hands him back to the race script.
-    func raceKeepAlive() {
+    func raceKeepAlive(dt: Float = 1.0 / 60) {
+        // pull control: the stumble runs through the landing too (the hop script owns the pose then, `raceRun` does not run): the timer is counted here, and the
+        // wobble's pulses go to the jelly's skin (`jellyKick`) while the landing lasts
+        if race.active, race.pull, race.stumbleT > 0 {
+            let before = race.stumbleT
+            race.stumbleT = max(0, before - dt)
+            if case .hopPlay = script, race.stumbleLen > 0 {
+                let period: Float = 0.22, a = race.stumbleLen - before, b = race.stumbleLen - race.stumbleT
+                if Int(b / period) > Int(a / period) { jellyKick = max(jellyKick, 1.8 * race.stumbleT / race.stumbleLen) }
+            }
+        }
         guard race.active, case .none = script, idleState.kind == nil, pending == nil else { return }
         if race.jumping { race.jumping = false; gait.hopApex = 0.10; gait.hopDuration = 0.26 }          // (the jump is over: the roaming hop's numbers again)
         script = .race; activity = .walking
@@ -152,8 +220,10 @@ extension BlobBrain {
         switch e {
         case .step(_, let foot, let stride, let rate, let final): raceCommit(foot: foot, stride: stride, rate: rate, final: final)
         case .stumble, .trip: raceStumble(RaceTuning.stumbleTime)
-        case .pauseBegan: raceLook(sim)
+        case .pauseBegan: if !raceLook(sim), race.pull { race.lookQueued = true }          // (in a landing: it starts when he stands)
         case .jump: raceJump(sim)
+        case .hop(let r, let length, let apex, let air, let crouch, _, _): raceHop(sim, length: length, apex: apex, air: air, crouch: crouch, sound: r == RaceSim.playerIndex)
+        case .finished: if race.pull { race.pullDone = true; race.hopQueued = nil; race.lookQueued = false }          // (the flight is finished, then he coasts with ordinary steps)
         default: break
         }
     }
@@ -163,9 +233,11 @@ extension BlobBrain {
     /// `.race`, once per fixed step (BlobBrain.runScript): pose like the walk; start the committed step when the feet are free.
     func raceRun(_ sim: SoftBody, _ dt: Float) {
         if race.jumpQueued, !feet.active, race.pendingFoot == nil { raceJump(sim); return }
+        if race.pull, let q = race.hopQueued, !feet.active { raceHop(sim, length: q.length, apex: q.apex, air: q.air, crouch: q.crouch, sound: false); if race.hopQueued == nil { return } }
+        if race.pull, race.lookQueued, raceCanLook, raceLook(sim) { race.lookQueued = false; return }
         poseOn = true; ensureFeet(sim)
         if feet.active { race.idle = 0 } else { race.idle += dt }
-        if race.stumbleT > 0 { race.stumbleT = max(0, race.stumbleT - dt) }
+        if race.stumbleT > 0, !race.pull { race.stumbleT = max(0, race.stumbleT - dt) }          // (a pull racer's is counted in raceKeepAlive: it runs through the landing too)
         if !feet.active, race.stumbleT <= 0, let foot = race.pendingFoot {
             race.pendingFoot = nil
             raceStartStep(foot: foot, stride: race.pendingStride, rate: race.pendingRate, final: race.pendingFinal)
@@ -227,9 +299,19 @@ extension BlobBrain {
     /// (the hop carries the body, not the root), so the arc length is read from the body itself. Without this the race's distance stood still for the whole
     /// flight, the bar was "reached" only after the landing and every jump (rivals' too) counted as a hit.
     func raceProgress(sim: SoftBody) -> Float {
-        guard race.jumping else { return raceProgress }
+        guard race.jumping else {
+            race.spotLive = false
+            let s = raceProgress
+            if race.pull { race.lastS = s }
+            return s
+        }
         let c = sim.centroid()
-        return race.course.progress(of: SIMD2(c.x, c.z), lane: race.lane, near: race.lastS)
+        race.spot = SIMD2(c.x, c.z); race.spotLive = true
+        let s = race.course.progress(of: race.spot, lane: race.lane, near: race.lastS)
+        if race.pull { race.lastS = s }          // (a hop is a long way for the projection's tie-break: keep it current)
+        return s
     }
+    /// Where the body really is on the ground (the camera follows it): the centroid read for the race's progress while a hop carries it (the root `px`, `pz` is not moved by a hop), else the root.
+    var raceSpot: SIMD2<Float> { race.spotLive && race.jumping ? race.spot : SIMD2(px, pz) }
     var raceLateral: Float { race.course.lateral(of: SIMD2(px, pz), lane: race.lane, at: raceProgress) }
 }
