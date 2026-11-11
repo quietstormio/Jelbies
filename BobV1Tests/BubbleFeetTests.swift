@@ -54,7 +54,7 @@ final class BubbleFeetTests: XCTestCase {
                 n += 1
                 if n % 300 == 30 { let c = r.brain.position; _ = wand.insertBubble(at: SIMD3(c.x + 1.1, move == .skip ? 1.0 : 1.4, c.y - 0.8), radius: 0.25) }
                 wand.tick(jellies: join(r), dt: r.sim.stepDt)
-                if let tr = Self.traceFrames, Self.traceRun == 1, tr.contains(n) { print("FLAPTRACE n \(n) \(wand.debugLine(join(r))) lift \(String(format: "%.3f", r.sim.minY() - r.sim.floorY)) pending \(r.brain.pending != nil) hold \(r.brain.bubbleHold) feetActive \(r.brain.feet.active) act \(r.brain.activity)") }
+                if let tr = Self.traceFrames, Self.traceRun == 3, tr.contains(n) { print("FLAPTRACE n \(n) \(wand.debugLine(join(r))) lift \(String(format: "%.3f", r.sim.minY() - r.sim.floorY)) pending \(r.brain.pending != nil) hold \(r.brain.bubbleHold) tilt \(String(format: "%.2f", r.sim.bodyPose(iterations: 4).tilt)) feetActive \(r.brain.feet.active) act \(r.brain.activity)") }
             })
         case "stream":           // the real wand: a steady blow, the Jelbie watches / chases / pops as he likes
             return SC(name: "bubble: stream", game: true, seconds: 24, setup: { r, _ in
@@ -127,6 +127,6 @@ final class BubbleFeetTests: XCTestCase {
     }
     func testPopFlapRound1GoWaitsOn() { Self.round1(); BubbleTuning.goWaitsForHop = true; bubbles("pop flap") }
     func testPopFlapRound1SpotWaitsOn() { Self.round1(); BubbleTuning.spotWaitsForFeet = true; bubbles("pop flap") }
-    func testPopFlapRound1Trace() { Self.round1(); Self.traceFrames = 690...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
+    func testPopFlapRound1Trace() { Self.round1(); Self.traceFrames = 600...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }

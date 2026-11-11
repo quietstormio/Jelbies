@@ -211,8 +211,13 @@ final class BubbleJumpRateTests: XCTestCase {
     static let floor: [Float] = [1.45, 1.45, 1.40, 1.30]
     /// Take-offs of different Jelbies within 0.1 s of each other: chance alone gives ~10 % at these rates; more than this is lockstep.
     static let maxLockstep: Float = 0.25
-    // BASELINE: filled in from testBaselineRates (BubbleTuning.applyBaseline, 6 seeds x 60 sim-s per cast, the wand's dice seeded).
-    static let baseHops: [Float] = [0, 0, 0, 0]
-    static let baseApexMax: Float = 9
-    static let baseStyle: [[String: Float]] = [[:], [:], [:], [:]]
+    // BASELINE (2026-11-11, base c56733e7 + round 1's switches back: BubbleTuning.applyBaseline; testBaselineRates, 6 seeds x 60 sim-s per cast, the wand's dice seeded; per-seed hops/min ranges 16-26, 10-24, 5-12.7, 7.3-12).
+    static let baseHops: [Float] = [20.50, 14.92, 9.11, 9.56]
+    static let baseApexMax: Float = 0.350
+    static let baseStyle: [[String: Float]] = [
+        ["bounce": 4.00, "header": 2.33, "leap": 5.33, "skip": 0.17, "flap": 0.00],
+        ["bounce": 3.25, "header": 3.92, "leap": 3.00, "skip": 0.25, "flap": 0.42],
+        ["bounce": 1.56, "header": 1.39, "leap": 3.44, "skip": 0.00, "flap": 0.11],
+        ["bounce": 0.67, "header": 2.17, "leap": 4.17, "skip": 0.28, "flap": 0.17],
+    ]
 }
