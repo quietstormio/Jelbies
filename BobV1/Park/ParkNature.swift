@@ -32,7 +32,7 @@ extension ParkScenery {
     static func lilyPads(_ b: RoomMeshBuilder, centre c: SIMD2<Float>, rng r: inout ParkRandom) {
         let spots: [(Float, Float, Float)] = [(-0.45, 0.35, 0.27), (0.3, -0.45, 0.23), (0.45, 0.35, 0.22), (-0.2, -0.2, 0.18)]
         for (k, p) in spots.enumerated() {
-            let col = S.srgb(0.15, 0.36, 0.17) * (0.95 + 0.1 * r.unit())
+            let col = S.srgb(0.30, 0.52, 0.30) * (0.95 + 0.1 * r.unit())
             let px = c.x + p.0, pz = c.y + p.1
             // a disc with a wedge missing: a fan of triangles
             let hub = b.vertex(V3(px, 0.045, pz), V3(0, 1, 0), color: col * 1.1)
@@ -75,21 +75,21 @@ extension ParkScenery {
     /// The lawn's colour at (x, z): real grass with broad soft mowing bands, sunlit yellower patches, cool shadow pools under trees and shrubs (thrown away from the sun) and
     /// worn earth where the path meets the grass and at the slide's landing.
     static func lawnColor(_ x: Float, _ z: Float, shadows: [ParkShadow]) -> V3 {
-        var c = S.srgb(0.29, 0.51, 0.21)
+        var c = S.srgb(0.30, 0.50, 0.25)
         c *= 1 - 0.14 * sstep(1.5, 7.5, z)          // a little darker toward the near edge
-        c = simd_mix(c, S.srgb(0.44, 0.60, 0.22), V3(repeating: 0.45 * sstep(0.62, 0.9, vnoise(x * 0.09, z * 0.11, 21))))          // broad sunlit patches
-        c = simd_mix(c, S.srgb(0.20, 0.42, 0.19), V3(repeating: 0.45 * sstep(0.62, 0.92, vnoise(x * 0.08, z * 0.1, 33))))          // damp, darker patches
+        c = simd_mix(c, S.srgb(0.34, 0.56, 0.28), V3(repeating: 0.45 * sstep(0.62, 0.9, vnoise(x * 0.09, z * 0.11, 21))))          // broad sunlit patches
+        c = simd_mix(c, S.srgb(0.26, 0.44, 0.22), V3(repeating: 0.45 * sstep(0.62, 0.92, vnoise(x * 0.08, z * 0.1, 33))))          // damp, darker patches
         let band = 0.5 + 0.5 * sinf(z * 0.95 + 1.6 * vnoise(x * 0.12, z * 0.2, 1) + x * 0.06)
-        c *= 1 + 0.10 * (2 * band - 1)
-        c *= 1 + 0.09 * (2 * vnoise(x * 0.3, z * 0.3, 7) - 1)
-        c = simd_mix(c, S.srgb(0.43, 0.59, 0.21), V3(repeating: 0.55 * sstep(0.55, 0.85, vnoise(x * 0.16, z * 0.16, 3))))
-        c = simd_mix(c, S.srgb(0.23, 0.46, 0.22), V3(repeating: 0.25 * sstep(0.55, 0.9, vnoise(x * 0.22, z * 0.22, 11))))
+        c *= 1 + 0.06 * (2 * band - 1)
+        c *= 1 + 0.05 * (2 * vnoise(x * 0.3, z * 0.3, 7) - 1)
+        c = simd_mix(c, S.srgb(0.33, 0.54, 0.27), V3(repeating: 0.55 * sstep(0.55, 0.85, vnoise(x * 0.16, z * 0.16, 3))))
+        c = simd_mix(c, S.srgb(0.27, 0.46, 0.23), V3(repeating: 0.25 * sstep(0.55, 0.9, vnoise(x * 0.22, z * 0.22, 11))))
         let off = -SIMD2<Float>(sunDir.x, sunDir.z) / sunDir.y
         for sh in shadows {
             let cx = sh.x + off.x * sh.h * 0.35, cz = sh.z + off.y * sh.h * 0.35
             let d = hypotf(x - cx, (z - cz) * 1.15) / (sh.r * 0.95)
             let a = 1 - sstep(0.25, 1.0, d)
-            c = simd_mix(c, c * V3(0.55, 0.70, 0.82), V3(repeating: 0.9 * a))
+            c = simd_mix(c, c * V3(0.74, 0.80, 0.84), V3(repeating: 0.8 * a))
         }
         if z < 13.5, z > -3.9 {
             let dx = fabsf(x - pathX(z)) - 0.62
@@ -146,13 +146,13 @@ extension ParkScenery {
         }
     }
 
-    /// The pond: dark mud ring, irregular grey-brown rim stones, deep teal water lightening toward a sky-reflecting centre, reeds with cattails at the back, lily pads.
+    /// The pond: dark mud ring, irregular grey-brown rim stones, light sky-reflecting blue water (round 8), a little deeper toward the rim, reeds with cattails at the back, lily pads.
     static func pond(_ b: RoomMeshBuilder, rng r: inout ParkRandom) {
         let c = pondCentre
-        disc(b, cx: c.x, cz: c.y, radius: 1.55, y: 0.008, color: S.srgb(0.27, 0.23, 0.16))
+        disc(b, cx: c.x, cz: c.y, radius: 1.55, y: 0.008, color: S.srgb(0.36, 0.31, 0.23))
         // water: a radial gradient fan
         let radii: [Float] = [0, 0.45, 0.85, 1.12, 1.27]
-        let cols = [S.srgb(0.42, 0.64, 0.76), S.srgb(0.34, 0.56, 0.68), S.srgb(0.24, 0.46, 0.56), S.srgb(0.18, 0.40, 0.48), S.srgb(0.15, 0.34, 0.42)]
+        let cols = [S.srgb(0.68, 0.84, 0.95), S.srgb(0.62, 0.80, 0.93), S.srgb(0.56, 0.76, 0.90), S.srgb(0.50, 0.71, 0.86), S.srgb(0.45, 0.66, 0.82)]
         let n = 40
         var rings: [[UInt32]] = []
         for (k, rad) in radii.enumerated() {
@@ -241,7 +241,7 @@ extension ParkScenery {
     /// Three overlapping ridges fading with haze (far bluish, mid, near).
     static func hills(_ b: RoomMeshBuilder) {
         // (drawn behind the whole tree line: thin in z, so no ridge ever stands in front of a tree)
-        let far = S.srgb(0.62, 0.74, 0.80), mid = S.srgb(0.47, 0.64, 0.60), near = S.srgb(0.34, 0.53, 0.40)
+        let far = S.srgb(0.62, 0.74, 0.80), mid = S.srgb(0.52, 0.68, 0.58), near = S.srgb(0.38, 0.56, 0.38)
         for (x, rx, ry) in [(-27 as Float, 17 as Float, 6.2 as Float), (-8, 14, 7.4), (12, 16, 5.8), (30, 17, 6.8)] { blob(b, V3(x, -0.6, -9.50), rx: rx, ry: ry, rz: 0.4, color: far, segments: 28, rings: 10) }
         for (x, rx, ry) in [(-21 as Float, 13 as Float, 4.6 as Float), (-1, 12, 5.4), (19, 14, 4.0)] { blob(b, V3(x, -0.6, -9.42), rx: rx, ry: ry, rz: 0.4, color: mid, segments: 28, rings: 10) }
         for (x, rx, ry) in [(-14 as Float, 14 as Float, 3.0 as Float), (8, 12, 3.4), (26, 15, 2.8)] { blob(b, V3(x, -0.6, -9.34), rx: rx, ry: ry, rz: 0.4, color: near, segments: 28, rings: 10) }
@@ -281,9 +281,9 @@ extension ParkScenery {
             b.roundedBox(centre: V3(px + sx, 0.63, zh), half: V3(0.21, 0.04, 0.21), radius: 0.02, segments: 2, aoFloor: false, color: stone * 1.12)
         }
         // flower drifts (natural garden colours) well in front of the hedge, off the path
-        let white = S.srgb(0.98, 0.97, 0.92), gold = S.srgb(0.96, 0.76, 0.14), poppy = S.srgb(0.86, 0.24, 0.10), violet = S.srgb(0.62, 0.48, 0.82)
-        for (x, z, c) in [(-2.3 as Float, 7.1 as Float, gold), (-3.1, 8.5, violet), (-1.7, 9.3, white), (2.7, 7.4, poppy), (3.5, 8.9, white), (-4.4, 6.9, white)] {
-            flowerPatch(b, x: x, z: z, scale: 0.95, bloom: c, rng: &r)
+        let cream = S.srgb(0.95, 0.92, 0.82), butter = S.srgb(0.93, 0.86, 0.58), lavender = S.srgb(0.74, 0.68, 0.84)
+        for (x, z, c) in [(-2.5 as Float, 7.3 as Float, cream), (-4.2, 8.7, lavender), (3.0, 7.9, butter)] {
+            flowerPatch(b, x: x, z: z, scale: 0.8, bloom: c, rng: &r)
         }
         // rocks
         for (x, z, s) in [(-1.7 as Float, 6.9 as Float, 1.0 as Float), (2.4, 6.7, 0.8), (-3.7, 7.7, 1.2), (4.0, 8.0, 1.0), (-2.7, 9.1, 0.9), (1.9, 8.5, 0.7), (4.6, 7.2, 0.8)] {
@@ -291,7 +291,7 @@ extension ParkScenery {
             S.blob(b, V3(x, 0.06 * s, z), rx: 0.26 * s, ry: 0.14 * s, rz: 0.2 * s, color: S.srgb(0.50, 0.46, 0.41) * k, segments: 8, rings: 4, ao: 0.9)
         }
         // larger shrubs frame the two bottom corners
-        floweringBush(b, x: -4.2, z: 8.2, scale: 1.1, bloom: S.srgb(0.98, 0.97, 0.92), rng: &r)
-        floweringBush(b, x: 4.5, z: 8.4, scale: 1.1, bloom: S.srgb(0.62, 0.48, 0.82), rng: &r)
+        floweringBush(b, x: -4.2, z: 8.2, scale: 1.1, bloom: S.srgb(0.95, 0.92, 0.82), rng: &r)
+        floweringBush(b, x: 4.5, z: 8.4, scale: 1.1, bloom: S.srgb(0.74, 0.68, 0.84), rng: &r)
     }
 }

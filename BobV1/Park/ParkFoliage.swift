@@ -48,7 +48,7 @@ extension ParkScenery {
     /// `far` picks the cheap variant (nil = trees behind z -6, i.e. the back rows and the groomer's street). (`trunk` is kept for the callers; the assets carry their own trunk.)
     static func roundTree(_ b: RoomMeshBuilder, x: Float, z: Float, trunk h0: Float, radius R0: Float, canopy: V3, shape: TreeShape = .auto, species: Int? = nil, far: Bool? = nil, rng r: inout ParkRandom) {
         let sc = 0.88 + 0.26 * r.unit(), tall = 0.92 + 0.16 * r.unit(), yaw = r.unit() * 6.283
-        let hue = V3(0.94 + 0.12 * r.unit(), 0.95 + 0.10 * r.unit(), 0.92 + 0.16 * r.unit())
+        let hue = V3(0.98 + 0.04 * r.unit(), 0.98 + 0.04 * r.unit(), 0.97 + 0.06 * r.unit())          // (barely varied: one green family)
         var conifer = shape == .conifer
         if shape == .auto { conifer = r.unit() < 0.26 }
         let pick = species.map { (Float($0) + 0.5) / 3 } ?? r.unit()
