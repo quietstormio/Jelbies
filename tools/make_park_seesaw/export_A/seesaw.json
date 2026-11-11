@@ -1,0 +1,83 @@
+{
+ "id": "seesaw",
+ "tris": 1884,
+ "verts": 1223,
+ "variant": "A",
+ "sub_meshes": [
+  {
+   "name": "base",
+   "pivot": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 492
+  },
+  {
+   "name": "plank",
+   "pivot": [
+    0.0,
+    0.27,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 488
+  },
+  {
+   "name": "bumperL",
+   "pivot": [
+    -0.96,
+    0.0,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 84
+  },
+  {
+   "name": "bumperR",
+   "pivot": [
+    0.96,
+    0.0,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 84
+  },
+  {
+   "name": "seatL",
+   "pivot": [
+    -0.62,
+    0.3775,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 368
+  },
+  {
+   "name": "seatR",
+   "pivot": [
+    0.62,
+    0.3775,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 368
+  }
+ ],
+ "bounds_min": [
+  -1.06,
+  0.0,
+  -0.272
+ ],
+ "bounds_max": [
+  1.06,
+  0.6347,
+  0.272
+ ],
+ "anchor_rest": [
+  0,
+  0,
+  0
+ ]
+}

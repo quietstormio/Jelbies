@@ -222,8 +222,8 @@ final class FurnitureFitTests: XCTestCase {
     /// Every piece with no backrest (`standsOn`) is STOOD on: alone and (where it has several seats) with every seat taken, the body does not sink into the drawn piece
     /// (the ropes, the plank grips, the bunny's ears and the horse's neck included), the soles are on the seat's surface and attached, and two bodies never touch.
     func testStandersFitEveryBacklessSeat() {
-        XCTAssertEqual(Set(DecorKind.allCases.filter { $0.standsOn }), [.pouf, .diningset, .swing, .cushionpile, .rockinghorse, .toyrocket, .seesaw, .sandbox], "the stand-on set")
-        XCTAssertEqual(Set(DecorKind.allCases.filter { $0.hopSit && !$0.standsOn }), [.beanbag, .armchair, .loveseat, .rockingchair], "the sit set: a real backrest")
+        XCTAssertEqual(Set(DecorKind.allCases.filter { $0.standsOn }), [.pouf, .diningset, .swing, .cushionpile, .rockinghorse, .toyrocket, .sandbox], "the stand-on set (the Park seesaw is sat on: SeesawRideTests)")
+        XCTAssertEqual(Set(DecorKind.allCases.filter { $0.hopSit && !$0.standsOn }), [.beanbag, .armchair, .loveseat, .rockingchair, .seesaw], "the sit set: a real backrest, and the seesaw's cushions")
         let only = ProcessInfo.processInfo.environment["STAND_FIT_ONLY"]
         for kind in DecorKind.allCases where kind.standsOn && (only == nil || only == "\(kind)") {
             for n in Set([1, min(2, kind.sitPoints.count)]) {
