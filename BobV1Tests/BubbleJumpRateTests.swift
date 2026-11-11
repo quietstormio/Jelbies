@@ -200,10 +200,18 @@ final class BubbleJumpRateTests: XCTestCase {
                 XCTAssertLessThanOrEqual(a.airMax, 0.45, "\(tag): a Jelbie was airborne \(a.airMax) of the time")
                 XCTAssertGreaterThanOrEqual(a.minGroundSeq, 0.35, "\(tag): ground time between two hops of one Jelbie")
                 XCTAssertLessThanOrEqual(c.lockstep, Self.maxLockstep, "\(tag): \(c.lockstep) of the take-offs have another Jelbie's within 0.1 s")
-                for m in Self.styles {
+                for m in Self.styles where m != .skip && m != .flap {
                     let base = Self.baseStyle[k][m.rawValue] ?? 0
                     XCTAssertGreaterThanOrEqual(a.movePerMin[m] ?? 0, 0.9 * base, "\(tag): \(m.rawValue) pops per Jelbie-minute \(a.movePerMin[m] ?? 0) vs baseline \(base)")
                 }
+            }
+            // skip and flap are single pops (the baseline has 0 to 3 of each per cast and 6 to 9 over all four): asserted pooled over the four casts, weighted by Jelbie-minutes (6 / 12 / 18 / 18)
+            let jm: [Float] = [6, 12, 18, 18]
+            for m in [BubblePopMove.skip, .flap] {
+                let head = zip(cs, jm).reduce(0) { $0 + ($1.0.agg.movePerMin[m] ?? 0) * $1.1 } / jm.reduce(0, +)
+                let base = zip(Self.baseStyle, jm).reduce(0) { $0 + ($1.0[m.rawValue] ?? 0) * $1.1 } / jm.reduce(0, +)
+                print(String(format: "BUBBLEJUMP pooled %@ pops per Jelbie-minute @%.2f: head %.3f baseline %.3f (%.0f%%)", m.rawValue, energy, head, base, 100 * head / max(base, 0.001)))
+                XCTAssertGreaterThanOrEqual(head, 0.9 * base, "pooled \(m.rawValue) pops per Jelbie-minute @\(energy): \(head) vs baseline \(base)")
             }
         }
     }
