@@ -38,18 +38,19 @@ private struct RaceChromeLayout: View {
     var body: some View {
         ZStack {
             if race.trackVisible {
+                if pullSurfaceOn { RacePullSurface(race: race) }          // (pull control: the whole screen is the control, under everything else)
                 VStack(spacing: 0) {
-                    topBar
+                    topBar.allowsHitTesting(!race.ui.pull)          // (a pull may start on the title pill)
                     Spacer()
                     if race.showsCard { PadResultsCardFit(maxH: padCardMaxH) { RacePlacingsCard(race: race) { race.goHome() } }.frame(maxWidth: PadLayout.isPad ? 440 : .infinity).scaleEffect(PadLayout.isPad ? 1.45 : 1).padding(.horizontal, PadLayout.isPad ? 0 : 24).transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 0.85).combined(with: .opacity)) }
                     Spacer()
-                    if race.ui.phase != .results, !compact { footButtons }
+                    if race.ui.phase != .results, !compact, hasAssistButtons { footButtons }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 14)
                 .padding(.bottom, 14)
                 .overlay(alignment: .bottom) {
-                    if compact, race.ui.phase != .results { sideButtons.padding(.horizontal, padLandscape ? 26 : 14).padding(.bottom, padLandscape ? 28 : 12) }
+                    if compact, race.ui.phase != .results, hasAssistButtons { sideButtons.padding(.horizontal, padLandscape ? 26 : 14).padding(.bottom, padLandscape ? 28 : 12) }
                 }
                 .animation(CareMenu.spring, value: race.showsCard)
                 if race.showsCountdown { numeral(race.ui.countdown == 0 ? "" : "\(race.ui.countdown)") }
@@ -60,8 +61,16 @@ private struct RaceChromeLayout: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { padH = $0 }
         .allowsHitTesting(race.active)
         .accessibilityElement(children: .contain)
-        .defersSystemGestures(on: .bottom)
+        .defersSystemGestures(on: race.ui.pull ? .all : .bottom)
+        .onChange(of: race.ui.bonkSerial) { _, _ in rigid.impactOccurred(intensity: 0.9) }          // (the player's trip, pull control)
     }
+
+    /// Pull control with no assist button: the whole screen is the control (the pull surface), no buttons at all.
+    private var pullSurfaceOn: Bool {
+        race.ui.pull && race.ui.phase != .results && (race.assist == .off || race.assist == .forgiving)
+    }
+    /// The foot buttons (taps) or the Hop / Cheer button of an assist (pull); none when the pull surface is the control.
+    private var hasAssistButtons: Bool { !race.ui.pull || race.assist == .oneButton || race.assist == .auto }
 
     private var topBar: some View {
         VStack(spacing: 8) {
@@ -70,7 +79,9 @@ private struct RaceChromeLayout: View {
                 .foregroundStyle(CareMenu.brown)
                 .padding(.horizontal, 16).padding(.vertical, 7)
                 .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
-            if race.ui.stumbling, race.ui.tripped {
+            if race.ui.pull {
+                RacePullTopRow(race: race)
+            } else if race.ui.stumbling, race.ui.tripped {
                 hint(race.ui.playerName.isEmpty ? "Whoops! A trip!" : "Whoops! \(race.ui.playerName) tripped")
             } else if race.ui.stumbling {
                 hint("Oops! Left, right, left, right")
@@ -118,6 +129,8 @@ private struct RaceChromeLayout: View {
     @ViewBuilder
     private func assistOrFeet(width: CGFloat?) -> some View {
         switch race.assist {
+        case .oneButton where race.ui.pull:
+            FootButton(title: "Hop", id: "race-hop", symbol: "arrow.up.circle.fill", flip: false, live: race.buttonsLive, tilt: false, key: .space) { hop() }
         case .oneButton:
             HStack(spacing: 14) {
                 FootButton(title: "Step", id: "race-step", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .space) { press(-1) }
@@ -137,6 +150,11 @@ private struct RaceChromeLayout: View {
     /// The Jump button of a hurdle course (the Jelbie does his hop; timed just before a bar he clears it).
     private var jumpButton: some View {
         FootButton(title: "Jump", id: "race-jump", symbol: "arrow.up.circle.fill", flip: false, live: race.buttonsLive, tilt: false, key: .upArrow) { jump() }
+    }
+
+    /// The one-button assist's Hop in a pull race.
+    private func hop() {
+        if race.hopAssist() != .ignored { light.impactOccurred(intensity: 0.6) }
     }
 
     private func jump() {
