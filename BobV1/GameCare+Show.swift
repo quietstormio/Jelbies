@@ -76,7 +76,6 @@ extension GameCare {
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelbie") finish first." }
         if bath.active { return "The clean-up is going on." }
         if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelbie") is in the close-up. Let go first." }
-        if raceBook.returner != nil { return "Welcome \(jelly(id)?.name ?? "Your Jelbie") home first." }
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelbie") is listening to you." }
         if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelbie") is not in the room." }
         return nil
@@ -144,6 +143,7 @@ extension GameCare {
         let r = rank.flatMap { show.progress.unlocked($0) ? $0 : nil } ?? show.progress.chosen
         for a in raceBook.actors { if let b = a.brain, b.isSleeping { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) } }
         select.cancel()
+        cutWelcomeHome()
         queued.removeAll(); callRunning = false
         voice.cancel()
         if outingGate([id], again: { [weak self] in self?.startShow(jelly: id, rank: rank, seed: seed) }) { return }          // he runs out of the room first

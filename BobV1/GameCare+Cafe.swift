@@ -89,7 +89,7 @@ extension GameCare {
     func cafeBlocker() -> CafeBlock? {
         if cafe.active { return .busy }
         if isBedtimeHours { return .night }
-        if raceBusy || show.active || raceBook.returner != nil { return .competition }
+        if raceBusy || show.active { return .competition }
         if roomSwitch.active { return .moving }
         if let b = roomActivityBlocker() {
             switch b {
@@ -114,7 +114,7 @@ extension GameCare {
             AudioHub.shared.play(.notEnough)
             return
         }
-        select.cancel(); queued.removeAll(); callRunning = false
+        select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         if outingGate(Array(jellies.indices), again: { [weak self] in self?.requestCafe() }) { return }          // everybody runs out of the room first (GameCare+Outing.swift)
         cafe.begin()
