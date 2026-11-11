@@ -32,7 +32,7 @@ final class ToyPlayTests: XCTestCase {
         let rig = MotionRig(game: true)
         Self.keep.append(rig)
         rig.brain.anticsEnabled = true
-        for kind in Self.interactive {
+        for kind in Self.interactive where !kind.isRetired && !DecorKind.parkOnly.contains(kind) {          // (only what a player can place at home; the park's pieces are checked at their real place: HopscotchTests)
             var row = "\(kind.rawValue):"
             for q in 0..<4 {
                 var ok = 0, valid = 0
