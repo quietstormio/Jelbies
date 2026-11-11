@@ -69,13 +69,28 @@ nonisolated enum ParkVisitPlan {
         return current
     }
 
-    /// May a Jelbie of its own accord use a piece of this kind? Always at home (`outing` false); in the park the seesaw and the hopscotch follow the plan, every other piece is open.
-    static func allows(_ kind: DecorKind, outing: Bool) -> Bool {
+    /// The pure decision: may a Jelbie of its own accord use a piece of this kind? Always at home (`outing` false); in the park the seesaw and the hopscotch follow the plan, or are
+    /// open while the piece is already in use (only a use the player asked for can have started it, so a friend may join it); every other piece is open.
+    static func allows(_ kind: DecorKind, outing: Bool, inUse: Bool) -> Bool {
         guard outing else { return true }
         switch kind {
-        case .seesaw: return current.seesaw
-        case .hopscotch: return current.hopscotch
+        case .seesaw: return current.seesaw || inUse
+        case .hopscotch: return current.hopscotch || inUse
         default: return true
         }
+    }
+
+    /// The same, reading whether the piece is in use now from the shared state (the hopscotch line, the seesaw's seats). Main actor: `DecorField` and `HopscotchLine` live there, and
+    /// its only caller is `BlobBrain.decorStart`.
+    @MainActor
+    static func allows(_ kind: DecorKind, outing: Bool) -> Bool {
+        guard outing else { return true }
+        let inUse: Bool
+        switch kind {
+        case .hopscotch: inUse = HopscotchLine.shared.active
+        case .seesaw: inUse = DecorField.shared.feet.contains { $0.kind == .seesaw && (DecorField.shared.occupant[$0.uid] != nil || !(DecorField.shared.seatOccupant[$0.uid]?.isEmpty ?? true)) }
+        default: inUse = false
+        }
+        return allows(kind, outing: outing, inUse: inUse)
     }
 }

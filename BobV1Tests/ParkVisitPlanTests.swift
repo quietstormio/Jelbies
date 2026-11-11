@@ -135,4 +135,118 @@ final class ParkVisitPlanTests: XCTestCase {
         XCTAssertFalse(ParkVisitPlan.allows(.seesaw, outing: true))
         XCTAssertTrue(ParkVisitPlan.allows(.hopscotch, outing: true))
     }
+
+    func testAllowsPureFormWithInUse() {
+        let off = ParkVisitPlan.Plan(visit: 1, seesaw: false, hopscotch: false)
+        ParkVisitPlan.current = off
+        for k in [DecorKind.seesaw, .hopscotch] {
+            XCTAssertTrue(ParkVisitPlan.allows(k, outing: true, inUse: true), "\(k): off but in use, a friend may join")
+            XCTAssertFalse(ParkVisitPlan.allows(k, outing: true, inUse: false), "\(k): off and not in use")
+            XCTAssertTrue(ParkVisitPlan.allows(k, outing: false, inUse: false), "\(k): at home")
+        }
+        for k in [DecorKind.slide, .ball, .beanbag] {
+            XCTAssertTrue(ParkVisitPlan.allows(k, outing: true, inUse: false), "\(k): never gated")
+        }
+        ParkVisitPlan.current = .all
+        for k in [DecorKind.seesaw, .hopscotch] {
+            XCTAssertTrue(ParkVisitPlan.allows(k, outing: true, inUse: false), "\(k): on")
+        }
+    }
+
+    /// The shared-state form: the hopscotch line and the seesaw's seats count as "in use".
+    func testAllowsReadsTheSharedState() {
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
+        DecorField.shared.set(ParkToys.placed)
+        defer { DecorField.shared.clear(); DecorField.shared.toys = ToyBook() }
+        ParkVisitPlan.current = ParkVisitPlan.Plan(visit: 1, seesaw: false, hopscotch: false)
+        XCTAssertFalse(ParkVisitPlan.allows(.hopscotch, outing: true))
+        XCTAssertFalse(ParkVisitPlan.allows(.seesaw, outing: true))
+        HopscotchLine.shared.enroll(ParkToys.hopscotchUID, 0)
+        DecorField.shared.take(ParkToys.seesawUID, seat: 0, by: 0)
+        XCTAssertTrue(ParkVisitPlan.allows(.hopscotch, outing: true), "a line is running")
+        XCTAssertTrue(ParkVisitPlan.allows(.seesaw, outing: true), "a seat is taken")
+        HopscotchLine.shared.remove(ParkToys.hopscotchUID, 0)
+        DecorField.shared.leave(ParkToys.seesawUID, by: 0)
+        XCTAssertFalse(ParkVisitPlan.allows(.hopscotch, outing: true))
+        XCTAssertFalse(ParkVisitPlan.allows(.seesaw, outing: true))
+    }
+}
+
+/// The plan inside a headless park (HopscotchTests' park lab, three Jelbies with their autonomy on): a visit without the seesaw has no autonomous seesaw sit, the other toys are still used,
+/// the Jelbies do not stand around more, and a commanded seesaw start still works.
+@MainActor
+final class ParkVisitPlanSimTests: XCTestCase {
+    override func setUp() {
+        ParkVisitPlan.current = .all
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0
+        HopscotchTuning.joinChance = 0.35
+    }
+    override func tearDown() {
+        ParkVisitPlan.current = .all
+        DecorField.shared.clear(); ToyTuning.settle = 5; HopscotchTuning.joinChance = 0.35
+        HopscotchLine.shared.prune(keeping: [])
+        GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0)
+        GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
+    }
+
+    struct Tally { var starts = 0, seesawSits = 0, hopscotch = 0, slide = 0, commandedOK: Bool? }
+
+    /// About `minutes` sim-minutes in the park with three Jelbies (outingPlay on, like the visit); `commanded` ends with a commanded seesaw start.
+    func runPark(plan: ParkVisitPlan.Plan, seed: UInt64, minutes: Int, commanded: Bool) -> Tally {
+        ParkVisitPlan.current = plan
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); HopscotchLine.shared.prune(keeping: [])
+        RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: 440.0 / 956.0)
+        let starts: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4)]
+        let lab = SocialTests.Lab(n: 3, positions: starts, quiet: false, seed: seed)
+        for r in lab.rigs {
+            r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
+            r.brain.anticsEnabled = true; r.brain.idleMood = .happy; r.brain.outingPlay = true
+        }
+        DecorField.shared.set(ParkToys.placed)
+        DecorField.shared.toys.news.removeAll()
+        var t = Tally()
+        var prev: [IdleKind?] = [nil, nil, nil]
+        for _ in 0..<(60 * 60 * minutes) {
+            lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+            for (i, r) in lab.rigs.enumerated() {
+                let now = r.brain.idleState.kind
+                if prev[i] == nil, let k = now {
+                    t.starts += 1
+                    let uid = r.brain.idleState.decorUID
+                    if k == .decorSit, uid >= 0, DecorField.shared.foot(uid)?.kind == .seesaw { t.seesawSits += 1 }
+                    if k == .decorHopscotch { t.hopscotch += 1 }
+                    if k == .decorSlide { t.slide += 1 }
+                }
+                prev[i] = now
+            }
+        }
+        if commanded {
+            let r = lab.rigs[0]
+            r.brain.abortAll(r.sim, r.skinner)
+            t.commandedOK = r.brain.startCommandedDecor(.decorSit, only: .seesaw, r.sim, r.skinner)
+        }
+        return t
+    }
+
+    func testSeesawOffVisitHasNoAutonomousSeesawAndNoStandingAround() {
+        let minutes = 6
+        var all = Tally(), off = Tally()
+        for (n, seed) in [UInt64(5), 17].enumerated() {
+            let a = runPark(plan: .all, seed: seed, minutes: minutes, commanded: false)
+            let o = runPark(plan: ParkVisitPlan.Plan(visit: 1, seesaw: false, hopscotch: true), seed: seed, minutes: minutes, commanded: n == 0)
+            print("[visitplan] seed \(seed): all in play \(a), seesaw off \(o)")
+            all.starts += a.starts; all.seesawSits += a.seesawSits; all.hopscotch += a.hopscotch; all.slide += a.slide
+            off.starts += o.starts; off.seesawSits += o.seesawSits; off.hopscotch += o.hopscotch; off.slide += o.slide
+            if n == 0 { off.commandedOK = o.commandedOK }
+        }
+        let jelbieMinutes = Double(3 * minutes * 2)
+        let rateAll = Double(all.starts) / jelbieMinutes, rateOff = Double(off.starts) / jelbieMinutes
+        print("[visitplan] idle starts per Jelbie-minute: all in play \(rateAll), seesaw off \(rateOff) (\(rateAll > 0 ? rateOff / rateAll : 0) of it); seesaw sits \(all.seesawSits) vs \(off.seesawSits); hopscotch \(all.hopscotch) vs \(off.hopscotch); slide \(all.slide) vs \(off.slide)")
+        XCTAssertGreaterThan(all.starts, 0)
+        XCTAssertEqual(off.seesawSits, 0, "no autonomous seesaw sit on a visit without the seesaw")
+        XCTAssertGreaterThan(off.hopscotch, 0, "the hopscotch is still used")
+        XCTAssertGreaterThan(off.slide, 0, "the slide is still used")
+        XCTAssertGreaterThanOrEqual(rateOff, 0.9 * rateAll, "they must not stand around more")
+        XCTAssertEqual(off.commandedOK, true, "a commanded seesaw start still works")
+    }
 }
