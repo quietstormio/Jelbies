@@ -130,7 +130,7 @@ private struct RaceChromeLayout: View {
     private func assistOrFeet(width: CGFloat?) -> some View {
         switch race.assist {
         case .oneButton where race.ui.pull:
-            FootButton(title: "Hop", id: "race-hop", symbol: "arrow.up.circle.fill", flip: false, live: race.buttonsLive, tilt: false, key: .space) { hop() }
+            FootButton(title: "Hop", id: "race-hop", symbol: "arrow.up.circle.fill", flip: false, live: race.buttonsLive, tilt: false, key: .space, liveValue: "\(race.ui.hopSerial) hops") { hop() }
         case .oneButton:
             HStack(spacing: 14) {
                 FootButton(title: "Step", id: "race-step", symbol: "shoeprints.fill", flip: false, live: race.buttonsLive, key: .space) { press(-1) }
@@ -204,6 +204,8 @@ struct FootButton: View {
     let live: Bool
     var tilt = true
     var key: KeyEquivalent?
+    /// What the element reports while it is live (the pull race's Hop button reports the hops, like the pull pad); nil = nothing.
+    var liveValue: String?
     let action: () -> Void
     @State private var down = false
 
@@ -236,7 +238,7 @@ struct FootButton: View {
         }
         .accessibilityElement()
         .accessibilityLabel(title == "Left" || title == "Right" ? "\(title) foot" : title)
-        .accessibilityValue(live ? "" : "waiting")
+        .accessibilityValue(live ? (liveValue ?? "") : "waiting")
         .accessibilityIdentifier(id)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { action() }
