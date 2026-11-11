@@ -25,6 +25,7 @@ final class StormComfortTests: XCTestCase {
     override func tearDown() {
         AudioHub.firedTap = nil; AudioHub.dropTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }
         Skinner.leashObserver = nil
+        StormReactor.holdAtRest = true; StormReactor.forceEmote = nil
         FeatureClip.enabled = true; LieClearTuning.enabled = true; FeatureClip.eggs = []; ContactField.reset(); ContactField.enabled = true
         ToyTuning.settle = 5; DecorField.shared.clear()
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
@@ -93,11 +94,18 @@ final class StormComfortTests: XCTestCase {
         var firstLie: Float?, lieBreaks = 0, eyesShutFrames = 0, lieFrames = 0, joyHops = 0, flops = 0
         var endNeutral = false, membersAtEnd = -1, stormSeconds: Float = 0
         var log: [String] = [], odd: [String] = []
+        /// The deepest skin gap of each hold, by emote (what the plain start of the same emote is compared with), and the emote each hold ran.
+        var gapByKind: [String: Float] = [:]
+        var beats: [String] = []
     }
+
+    /// STORM_TRACE=1: the per-frame trace of the holds and of the frames before a leash hit (printed into the test log).
+    static let tracing = ProcessInfo.processInfo.environment["STORM_TRACE"] != nil
 
     /// Notice to clear, for `cast` and storm `seed`.
     func runStorm(_ cast: Cast, seed: UInt64) -> Run {
         let room = Room(cast)
+        var ring = [[String]](repeating: [], count: cast.features.count)
         let n = cast.features.count
         var out = Run()
         out.n = n
@@ -134,6 +142,13 @@ final class StormComfortTests: XCTestCase {
                     else if out.firstLie != nil, room.book.phase == .peak { out.lieBreaks += 1 }
                 }
             }
+            if Self.tracing {
+                for i in 0..<n {
+                    let b = room.rigs[i].brain, m = room.reactor.members[i]
+                    ring[i].append(String(format: "t %.2f J%d mode %@ trem %.2f flinch %.2f storm p %.4f r %.4f s %.4f want r %.4f s %.4f act %@ idle %@ soc %@ ph %d yaw %.3f", rclock, i, String(describing: m?.mode), m?.tremble ?? -1, m?.flinch ?? -1, b.storm.pitch, b.storm.roll, b.storm.squash, b.storm.wantRoll, b.storm.wantSquash, String(describing: b.activity), String(describing: b.idleState.kind), String(describing: b.socialKind), b.social?.phase ?? -1, b.yaw))
+                    if ring[i].count > 48 { ring[i].removeFirst() }
+                }
+            }
             // the contact during a hold: the skin gap of the pair, features and limbs inside the other body
             if steps % 3 == 0, let (i, j) = room.holdPair() {
                 let feat = room.duo.skinAll()
@@ -141,8 +156,21 @@ final class StormComfortTests: XCTestCase {
                     out.featPen = max(out.featPen, room.duo.penetration(feat[k], owner: k))
                     out.limbPen = max(out.limbPen, room.duo.penetration(room.duo.limbPoints(k), owner: k))
                 }
-                out.holdGapMin = min(out.holdGapMin, room.duo.truthGap(i, j))
+                let g = room.duo.truthGap(i, j)
+                out.holdGapMin = min(out.holdGapMin, g)
+                if let k = room.rigs[i].brain.socialKind?.rawValue { out.gapByKind[k] = min(out.gapByKind[k] ?? .infinity, g) }
                 out.holdFrames += 1
+            }
+            if Self.tracing, steps % 3 == 0, let arc = room.reactor.arcs.first(where: { ($0.stage == .hold || $0.stage == .holding) && $0.b >= 0 }) {
+                let i = arc.a, j = arc.b
+                let g = room.duo.truthGap(i, j)
+                let s = room.rigs[i].brain.social ?? room.rigs[j].brain.social
+                var line = String(format: "STORMTRACE %@ seed %d t %.2f stage %@ %@ ph %d gap %.2f cm dist %.3f", cast.name, Int(seed), rclock, String(describing: arc.stage), s?.kind.rawValue ?? "-", s?.phase ?? -1, g * 100, simd_distance(room.rigs[i].brain.position, room.rigs[j].brain.position))
+                for k in [i, j] {
+                    let b = room.rigs[k].brain, m = room.reactor.members[k]
+                    line += String(format: " | J%d trem %.2f fl %.2f p %.4f r %.4f s %.4f soc %@", k, m?.tremble ?? -1, m?.flinch ?? -1, b.storm.pitch, b.storm.roll, b.storm.squash, String(describing: b.socialKind))
+                }
+                MotionLog.write(line)
             }
             // the feet, the neck join, the leash (the checks of StormFeetTests), every 6th frame
             if steps % 6 == 0 {
@@ -156,6 +184,7 @@ final class StormComfortTests: XCTestCase {
                     out.leashHits += hit
                     let f = OnePieceInvariantTests.frame(r)
                     out.tiltMax = max(out.tiltMax, f.tilt)
+                    if hit > 0, Self.tracing { for l in ring[ri] { MotionLog.write("STORMLEASH \(cast.name) seed \(seed) \(l)") } }
                     if hit > 0 || f.tilt > 0.5, out.odd.count < 8 {
                         let stages = room.reactor.arcs.map { "\($0.kind)/\($0.stage)" }
                         out.odd.append("t \(rclock) J\(ri) leash \(hit) tilt \(f.tilt) idle \(String(describing: r.brain.idleState.kind)) social \(String(describing: r.brain.socialKind)) mode \(String(describing: room.reactor.members[ri]?.mode)) arcs \(stages)")
@@ -177,7 +206,20 @@ final class StormComfortTests: XCTestCase {
         return out
     }
 
-    func check(_ cast: Cast, seed: UInt64, file: StaticString = #filePath, line: UInt = #line) {
+    /// The same hold started the plain way (nobody scared, two Jelbies 1.47 m apart): its deepest skin gap in m. One run per pair and emote (the cast fixes the bodies).
+    nonisolated(unsafe) static var plainGaps: [String: Float] = [:]
+    func plainGap(_ cast: Cast, _ kind: SocialKind) -> Float {
+        let key = cast.name + "/" + kind.rawValue
+        if let g = Self.plainGaps[key] { return g }
+        let g = controlGapValue(cast, kind)
+        Self.plainGaps[key] = g
+        return g
+    }
+
+    /// `emote`: the hold every arc of this storm uses (so a run of seeds covers both); nil = the reactor's own seeded choice.
+    func check(_ cast: Cast, seed: UInt64, emote: SocialKind? = nil, file: StaticString = #filePath, line: UInt = #line) {
+        StormReactor.forceEmote = emote
+        defer { StormReactor.forceEmote = nil; StormReactor.holdAtRest = true }
         let r = runStorm(cast, seed: seed)
         let who = "\(cast.name), seed \(seed)"
         let n = r.n
@@ -206,10 +248,23 @@ final class StormComfortTests: XCTestCase {
             for i in 0..<n { XCTAssertGreaterThanOrEqual(r.hearts[i], 1, "\(who): no hearts over Jelbie \(i)", file: file, line: line) }
             XCTAssertEqual(r.haptics, r.arcs.filter { $0.haptics > 0 }.count, "\(who): one haptic per arc", file: file, line: line)
             report += " | hearts \(r.hearts), haptics \(r.haptics), voices played \(r.played.count), chirps fired \(r.fired.count)"
+            for a in r.arcs where a.endedAt != nil {
+                let t0 = r.firstTremble.compactMap { $0 }.min() ?? 0
+                MotionLog.write(String(format: "STORMCOMFORT BEATS %@ seed %d arc %@ %@: first tremble %.1f -> comfort starts %.1f -> hold %@ -> calm %@ | hearts %d, played %d, haptics %d", cast.name, Int(seed), String(describing: a.kind), a.ids.description, t0, a.startedAt,
+                                      a.holdStart.map { String(format: "%.1f-%@", $0, a.holdEnd.map { String(format: "%.1f", $0) } ?? "?") } ?? "none", a.ids.compactMap { r.calmAt[$0] }.max().map { String(format: "%.1f", $0) } ?? "?", a.hearts, r.played.filter { $0.t >= a.startedAt && $0.t <= (a.endedAt ?? a.startedAt) + 1 }.count, a.haptics))
+            }
             // 3. the contact during the holds (only when an emote really held them)
             if r.holdFrames > 0 {
                 report += String(format: " | hold frames %d, closest skin gap %.2f cm, feature inside other body %.2f cm, limb %.2f cm", r.holdFrames, r.holdGapMin * 100, r.featPen * 100, r.limbPen * 100)
-                XCTAssertGreaterThanOrEqual(r.holdGapMin, -0.006, "\(who): the bodies overlap during the hold (gap \(r.holdGapMin * 100) cm; a press is -0.3...-0.6 cm)", file: file, line: line)
+                // the storm hold may be as deep as the same plain emote, not deeper (ruling of the integrator 2026-11-11), and never below -1.0 cm
+                for (k, g) in r.gapByKind.sorted(by: { $0.key < $1.key }) {
+                    let plain = SocialKind(rawValue: k).map { plainGap(cast, $0) } ?? -0.01
+                    let limit = max(plain - 0.001, -0.010)
+                    report += String(format: " | HOLD %@ seed %d: storm %.2f cm, plain %.2f cm, limit %.2f cm", k, Int(seed), g * 100, plain * 100, limit * 100)
+                    MotionLog.write(String(format: "STORMCOMFORT DEPTH %@ | %@ | seed %d | plain %.2f cm | storm %.2f cm | limit %.2f cm", cast.name, k, Int(seed), plain * 100, g * 100, limit * 100))
+                    XCTAssertGreaterThanOrEqual(g, limit, "\(who): the \(k) hold is deeper than the plain emote (storm \(g * 100) cm, plain \(plain * 100) cm, limit \(limit * 100) cm)", file: file, line: line)
+                }
+                XCTAssertGreaterThanOrEqual(r.holdGapMin, -0.010, "\(who): the bodies overlap during the hold (gap \(r.holdGapMin * 100) cm; never below -1.0 cm)", file: file, line: line)
                 XCTAssertLessThanOrEqual(r.holdGapMin, 0.005, "\(who): the bodies never touched during the hold (closest gap \(r.holdGapMin * 100) cm)", file: file, line: line)
                 XCTAssertLessThanOrEqual(r.featPen, FeatureClipTests.tol, "\(who): a feature is inside the other body (\(r.featPen * 100) cm)", file: file, line: line)
                 XCTAssertLessThanOrEqual(r.limbPen, FeatureClipTests.tol, "\(who): a limb is inside the other body (\(r.limbPen * 100) cm)", file: file, line: line)
@@ -242,9 +297,31 @@ final class StormComfortTests: XCTestCase {
     }
 
     func testLoneJelbieSighsLiesDownEyesShutAndGetsUp() { for seed: UInt64 in [4, 9] { check(Self.solo, seed: seed) } }
-    func testBobAndPipComfortEachOther() { for seed: UInt64 in [4, 9] { check(Self.bobPip, seed: seed) } }
-    func testTeddyAndLavenderComfortEachOther() { for seed: UInt64 in [4, 9] { check(Self.teddyLavender, seed: seed) } }
-    func testThreeJelbiesTheBraveOneComfortsAndNobodyIsLeftOut() { for seed: UInt64 in [4, 9] { check(Self.trio, seed: seed) } }
+    /// Both holds run in every cast: seed 4 with swayHug, seed 9 with cuddleLean (the contact limits are asserted on each).
+    func testBobAndPipComfortEachOther() { check(Self.bobPip, seed: 4, emote: .swayHug); check(Self.bobPip, seed: 9, emote: .cuddleLean) }
+    func testTeddyAndLavenderComfortEachOther() { check(Self.teddyLavender, seed: 4, emote: .swayHug); check(Self.teddyLavender, seed: 9, emote: .cuddleLean) }
+    func testThreeJelbiesTheBraveOneComfortsAndNobodyIsLeftOut() { check(Self.trio, seed: 4, emote: .swayHug); check(Self.trio, seed: 9, emote: .cuddleLean) }
+
+    /// STORM_TRACE=1 only: the worst Teddy + Lavender seed (9, cuddleLean) with round 1's hold (storm pose still on a held body) and with the hold at rest, per-frame trace lines STORMTRACE (gap, tremble, storm pose, emote phase).
+    func testTraceTeddyLavenderHoldBeforeAndAfter() throws {
+        try XCTSkipUnless(Self.tracing, "set TEST_RUNNER_STORM_TRACE=1")
+        for rest in [false, true] {
+            StormReactor.holdAtRest = rest; StormReactor.forceEmote = .cuddleLean
+            MotionLog.write("STORMTRACE ===== hold at rest: \(rest) =====")
+            let r = runStorm(Self.teddyLavender, seed: 9)
+            MotionLog.write("STORMTRACE ===== hold at rest \(rest): deepest gap by emote \(r.gapByKind) =====")
+        }
+        StormReactor.holdAtRest = true
+    }
+
+    /// The reactor's own choice is seeded and about half and half; and the choice is what the arc really runs.
+    func testTheHoldIsASeededChoiceOfBoth() {
+        var sway = 0, lean = 0
+        for key in UInt64(1000)..<UInt64(1400) { for arc in 0..<3 { if StormReactor.emoteChoice(stormKey: key, arc: arc) == .swayHug { sway += 1 } else { lean += 1 } } }
+        MotionLog.write("STORMCOMFORT CHOICE swayHug \(sway), cuddleLean \(lean) of \(sway + lean)")
+        XCTAssertEqual(Double(sway) / Double(sway + lean), 0.5, accuracy: 0.08, "about half and half")
+        XCTAssertEqual(StormReactor.emoteChoice(stormKey: 4321, arc: 1), StormReactor.emoteChoice(stormKey: 4321, arc: 1), "seeded: the same storm chooses the same")
+    }
 
     // MARK: the player
 
@@ -322,19 +399,22 @@ final class StormComfortTests: XCTestCase {
 
     // MARK: controls (printed, not asserted): is the hold overlap the emote's own?
 
-    private func controlGap(_ cast: Cast, _ kind: SocialKind) -> String {
+    private func controlGapValue(_ cast: Cast, _ kind: SocialKind) -> Float {
         let d = FeatureClipTests.Duo(positions: cast.positions, features: cast.features, seed: 11)
         d.place([SIMD2(-0.735, 0.9), SIMD2(0.735, 0.9)]); d.live = true
         for _ in 0..<3 { d.tick() }
         let a = d.lab.rigs[0], b = d.lab.rigs[1]
-        guard a.brain.socialStart(kind, with: b.brain, a.sim) else { return "\(cast.name) \(kind.rawValue): did not start" }
-        var gmin = Float.infinity, frames = 0
+        guard a.brain.socialStart(kind, with: b.brain, a.sim) else { return -0.010 }
+        var gmin = Float.infinity
         for s in 0..<(60 * 14) {
             d.tick()
-            if s % 3 == 0, let sess = a.brain.social, sess.phase >= 2 { gmin = min(gmin, d.truthGap(0, 1)); frames += 1 }
+            if s % 3 == 0, let sess = a.brain.social, sess.phase >= 2 { gmin = min(gmin, d.truthGap(0, 1)) }
             if a.brain.social == nil, s > 30 { break }
         }
-        return String(format: "%@ %@ without any storm: %d hold frames, closest skin gap %.2f cm", cast.name, kind.rawValue, frames, gmin * 100)
+        return gmin
+    }
+    private func controlGap(_ cast: Cast, _ kind: SocialKind) -> String {
+        String(format: "%@ %@ without any storm: closest skin gap %.2f cm", cast.name, kind.rawValue, plainGap(cast, kind) * 100)
     }
 
     func testControlHoldGapWithoutStorm() {

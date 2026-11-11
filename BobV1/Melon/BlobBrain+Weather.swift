@@ -182,12 +182,24 @@ final class StormReactor {
     /// The comfort arcs running, what has run (tests), when each Jelbie got better (the reactor's clock), the clock itself.
     /// The comfort arcs (and the come-here guard of `lateJoiners`) are on; a test switches them off to compare with the storm as it was before.
     nonisolated(unsafe) static var comfortOn = true
+    /// A held body is at rest (no storm pose on it during an emote, the emote waits for rest). A test switches it off to trace round 1's hold next to this one.
+    nonisolated(unsafe) static var holdAtRest = true
     private(set) var arcs: [Arc] = []
     private(set) var arcLog: [ArcRecord] = []
     private(set) var calmAt: [Int: Float] = [:]
     private(set) var clock: Float = 0
     private var arcRng = WeatherRNG(seed: 4242)
     private var arcDelay: Float = 6
+    /// The storm's seed (the roll of the comfort), the same number the arcs' rng starts from.
+    private var stormKey: UInt64 = 1
+    /// A test pins the hold's emote (so both occur in a run of seeds); nil in the app.
+    nonisolated(unsafe) static var forceEmote: SocialKind?
+    /// Which side-by-side hold an arc uses: about half and half, by the storm's seed and the arc's number (splitmix64 of both).
+    nonisolated static func emoteChoice(stormKey: UInt64, arc: Int) -> SocialKind {
+        var z = stormKey &* 0x9E3779B97F4A7C15 &+ UInt64(arc + 1) &* 0xBF58476D1CE4E5B9
+        z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27)) &* 0x94D049BB133111EB; z ^= z >> 31
+        return (z >> 20) & 1 == 0 ? .swayHug : .cuddleLean
+    }
     private var nextArc = 0
     private var planClock: Float = 0
     private var relean: (a: Int, b: Int, at: Float)?
@@ -266,7 +278,8 @@ final class StormReactor {
                 stormOn = true; peakOn = false; firstCloseDone = false; huddleOn = false; gatherAt = nil; seenSleep = []; noticer = nil
                 // the comfort: a new seeded roll per storm (who is brave, which hold, how long they shake first)
                 arcs = []; arcLog = []; calmAt = [:]; relean = nil; lastRelean = -999; planClock = 0
-                var g = WeatherRNG(seed: UInt64(max(1, Int(((plan?.peak ?? 70) * 1000).rounded()))) &+ 7919)
+                stormKey = UInt64(max(1, Int(((plan?.peak ?? 70) * 1000).rounded())))
+                var g = WeatherRNG(seed: stormKey &+ 7919)
                 arcDelay = Float(g.range(StormComfortTuning.delay))
                 arcRng = g
                 note("storm begins")
@@ -556,7 +569,8 @@ final class StormReactor {
             pose.pitch += 0.06 * exhale
             if u > L { m.breathT = -1 }
         }
-        if b.isSocial { pose.roll = 0 }
+        // a side-by-side emote has him (or is forming): the contact settle places a body that is at rest, so nothing of the storm is on it: no tremble, no flinch, no breath. A flash during the hold is the face's only (flinchAll).
+        if b.isSocial, Self.holdAtRest { pose = (0, 0, 1); m.flinch = -1; m.breathT = -1 } else if b.isSocial { pose.roll = 0 }
         b.storm.write(pitch: pose.pitch, roll: pose.roll, squash: pose.squash)
         b.storm.dancing = false
     }
@@ -564,6 +578,7 @@ final class StormReactor {
     /// A Jelbie who got better: no tremble for the rest of the storm, only the small flinch; the lying one stays down (eyes shut) however long the peak lasts.
     private func calmStep(_ m: inout Member, _ j: Jelly, dt: Float) {
         let b = j.brain
+        if b.isSocial, Self.holdAtRest { m.flinch = -1 }          // (a lean-in or a sit together has him: a flash moves nothing of the held body)
         let k = stormFlinch(m.flinch)
         if k > 0 {
             let s = StormComfortTuning.flinchScale * b.amplitude * k
@@ -671,7 +686,7 @@ final class StormReactor {
         var arc = Arc(id: nextArc, kind: kind, a: a, b: b)
         nextArc += 1
         arc.braveCalm = braveCalm
-        arc.emote = (nextArc + (arcRng.next() < 0.5 ? 1 : 0)) % 2 == 0 ? .swayHug : .cuddleLean
+        arc.emote = Self.forceEmote ?? Self.emoteChoice(stormKey: stormKey, arc: arc.id)
         switch kind {
         case .comfort: arc.stage = braveCalm ? .hold : .breath
         case .mutual: arc.stage = .hold
@@ -761,6 +776,9 @@ final class StormReactor {
                 }
                 arc.faded = true
                 if (members[arc.a]?.tremble ?? 0) > 0.02 || (members[arc.b]?.tremble ?? 0) > 0.02 { return }
+                // both bodies fully at rest before the emote forms (like a plain start): the tremble is exactly zero, no flinch or breath is on them, the storm channel is neutral
+                if Self.holdAtRest { for id in [arc.a, arc.b] { members[id]?.tremble = 0 } }
+                if Self.holdAtRest, !(ja.brain.storm.isNeutral && jb.brain.storm.isNeutral) || (members[arc.a]?.flinch ?? -1) >= 0 || (members[arc.b]?.flinch ?? -1) >= 0 || (members[arc.a]?.breathT ?? -1) >= 0 { return }
                 if clock < arc.retryAt { return }
                 if arc.tries >= S.maxTries { arc.fallback = true; arc.go(.walkBeside); return }
                 ja.brain.hurry = false; jb.brain.hurry = false
