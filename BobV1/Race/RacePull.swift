@@ -7,6 +7,11 @@
 //  landing, a hurdle hit stuns. The numbers come from the prototype's physics (prototype_waddle_sprint.html lines 212-434); the conversion to this
 //  game's units (`hopScale`, the stride and step rate of the racer) and the bar rules are ours.
 //
+//  The pack follows the player (`mirror`, the prototype's "a struggling player meets a gentler pack, a sharp one meets each opponent's full skill"): a rival is never
+//  better than his own skill, but he is also never greener (green pulls), never quicker on the ground between hops, and never off the line earlier than the player has
+//  shown himself to be: the sim keeps a picture of the player (`RaceSim.mirrorGreen`, `mirrorGround`) that follows his hops. A perfect player meets the pack at its own
+//  skill (the numbers are calibrated at 0.87 / 0.87, so a relaxed player is about level with it); `mirror = false` gives the pack at its own skill and rhythm.
+//
 //    RaceControl        which control a race uses (`.taps` = the two foot buttons, the default; `.pull` = this one).
 //    RacePullTuning     every number, as an instance (the calibration test tries many values through `RaceSim.pullTuning`) + the pure functions.
 //    RaceBarPass        one bar a hop passes, with its outcome decided at launch.
@@ -67,15 +72,37 @@ nonisolated struct RacePullTuning: Sendable {
     var stretchHi: Float = 1.35
     var stretchMax: Float = 1.10
     var stretchFloor: Float = 0.80
-    /// Trip chance scale (x the taps model's per-step chance x L / stride). CAL.
-    var tripScale: Float = 4.5
+    /// Trip chance scale (x the taps model's per-step chance x L / stride). CAL: the rivals' trips per race, summed over the five courses, equal the taps rivals' (sweep 1.0 ... 8.0).
+    var tripScale: Float = 4.3
     /// A rival's chance of a green pull: `rivalGreenBase + rivalGreenSkill x skill`; the auto player's is `autoGreen`.
     var rivalGreenBase: Float = 0.35
     var rivalGreenSkill: Float = 0.45
-    /// Rivals' hop length scale (calibrated so their finish times match the taps race), and the Puddle's own. CAL.
-    var rivalLength: Float = 0.79
-    var rivalLengthPuddle: Float = 0.632
+    /// Rivals' hop length scale from the Ripple up. CAL (the mirror on): the largest value in 0.80 ... 1.00 at which a relaxed player (the steady pulls, 0.10 ... 0.35 s
+    /// after each landing, a new Jelbie) wins at least 70 % on the Ripple, 55 % on the Splash and 35 % on the Wave, and so does the value one step below. 1.00 is a cap by
+    /// design: a rival never hops further than the player's own physics give for the same pull.
+    var rivalLength: Float = 0.87
+    /// The Puddle's own rival length, the easy first course. CAL (the mirror on): the largest value from `rivalLength` down to 0.50 at which a first-timer with a new Jelbie
+    /// wins at least 55 % and is in the top two at least 85 %, and a relaxed player wins at least 85 %; the value one step below passes too.
+    var rivalLengthPuddle: Float = 0.87
     var autoGreen: Float = 0.5
+
+    // MARK: the pack follows the player
+    /// false = stage A2's rivals exactly (own skill, own rhythm, no start hold).
+    var mirror = true
+    /// The picture of the player's green rate before he has hopped, how fast it follows his hops, and its floor.
+    var mirrorGreenInit: Float = 0.55
+    var mirrorGreenRate: Float = 0.18
+    var mirrorGreenFloor: Float = 0.08
+    /// Per rival slot: one rival close to the player's rate, one a little behind.
+    var mirrorGreenOff: [Float] = [-0.02, -0.10]
+    /// The picture of the player's seconds on the ground beyond `landHold`: initial value, how fast it follows, the most one sample counts.
+    var mirrorGroundInit: Float = 0.15
+    var mirrorGroundRate: Float = 0.2
+    var mirrorGroundMax: Float = 1.2
+    /// Per rival slot, a share of the player's own time on the ground: one rival keeps the player's rhythm, one stands a quarter longer. Against a player who never waits on the ground both are exactly themselves.
+    var mirrorGroundMul: [Float] = [1.0, 1.25]
+    /// A rival does not leave before the player's first hop, or this many seconds after GO.
+    var startHold: Float = 1.2
 
     // MARK: 1. the shot
     /// What a release at `pull` gives (the prototype's snapParams, with the green zone widened by `widen` for a perk). `streak` = perfects in a row BEFORE this hop.
