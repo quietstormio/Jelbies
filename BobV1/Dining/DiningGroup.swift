@@ -208,6 +208,9 @@ final class DiningGroup {
     /// Floor distance from `p` to the tray's rectangle (the tray as it will be drawn at its spot).
     func trayDistance(_ p: SIMD2<Float>) -> Float { DiningSpot.distance(from: p, origin: origin, layout: DiningLayout.make(n: max(n, 1))) }
     private var gathered: Bool { brains.indices.allSatisfy { (released.indices.contains($0) && released[$0]) || (ready($0) && isIdle(brains[$0])) } }
+    /// Somebody who has not started is still in a sleep state (the soft wake is slow): the tray waits a little longer for him (a late waker cannot pass the tray's corridor), not forever.
+    static let wakeExtra: Float = 3
+    private var stillWaking: Bool { brains.indices.contains { !started[$0] && !released[$0] && sleeping($0) } }
     private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } }
 
     private func beginApproach() {
@@ -319,7 +322,7 @@ final class DiningGroup {
         if age > GameCare.mealTimeout { end(); gaveUp = true; return }
         switch state {
         case .approaching:
-            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) { spawnTray() }
+            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) + (Self.robust && stillWaking ? Self.wakeExtra : 0) { spawnTray() }
             replan(dt: dt)
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }
