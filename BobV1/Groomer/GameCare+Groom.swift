@@ -27,7 +27,7 @@ extension GameCare {
         if groom.active { return "Already at the Jelly Spa!" }
         if let why = groomGuestBlocker { return why }          // a friend is coming or here: the Jelly Wash is closed
         if isBedtimeHours { return "The Jelly Spa is closed at night. Come back in the morning!" }
-        if tripActive || raceBusy || raceBook.returner != nil { return "Finish this trip first." }
+        if tripActive || raceBusy { return "Finish this trip first." }
         if let b = cafeBlocker(), b != .noDrops { return b.message }
         if bath.wallet.count < GroomTier.cheapest { return "The Jelly Spa starts at \(GroomTier.cheapest) JellyCoins per Jelbie. Win a race first!" }
         return nil
@@ -40,7 +40,7 @@ extension GameCare {
             AudioHub.shared.play(.notEnough)
             return
         }
-        select.cancel(); queued.removeAll(); callRunning = false
+        select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         groom.openPicker(all: Array(jellies.indices))
     }

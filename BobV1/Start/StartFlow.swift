@@ -180,6 +180,7 @@ final class StartFlow {
         JellyVariants.adopt(id, variant)
         JellyTraitsBook.adopt(id, traits)          // his personality, jars and favourite snack (his starting stats seed from it when his profile is first built)
         ids.append(id)
+        JellyRoster.setRosterSuspended = true          // a developer `-SetRoster` must never put the old list back over the roster that now holds him
         JellyRoster.save(ids)
         JellyRoster.setName(id, name)
         UserDefaults.standard.set(true, forKey: Self.startedKey)

@@ -247,12 +247,15 @@ nonisolated enum JellyRoster {
 
     /// Set by the development `-AdoptNow` argument once its Jelbie is bought: `-SetRoster` then no longer re-applies on rebuilding the room (it would drop him again).
     nonisolated(unsafe) static var setRosterSuspended = false
+    /// True once `-SetRoster` has been written in this process: it is a LAUNCH argument, so it applies once; a later roster change (an adoption) is never overwritten by it. Tests clear it.
+    nonisolated(unsafe) static var setRosterApplied = false
     /// Applies `-SetRoster a,b,c` when the launch argument is present: the saved roster becomes exactly that list. Returns the roster now in force.
     /// Each character keeps whatever is saved under his own keys (nothing is copied or cleared); a character with no saved data starts fresh
-    /// the first time his profile loads. Idempotent: the same argument again writes the same list; no argument leaves the saved roster alone.
+    /// the first time his profile loads. Applied at most once per process (`setRosterApplied`): later calls return the saved roster; no argument leaves the saved roster alone.
     @discardableResult
     static func applySetRoster(_ d: UserDefaults = .standard) -> [Int] {
-        if DevArgs.enabled, !setRosterSuspended, let text = d.string(forKey: setRosterKey), let ids = parseRoster(text) {
+        if DevArgs.enabled, !setRosterSuspended, !setRosterApplied, let text = d.string(forKey: setRosterKey), let ids = parseRoster(text) {
+            setRosterApplied = true
             if savedIDs(d) != ids { save(ids, to: d) }
             return ids
         }

@@ -107,7 +107,6 @@ extension GameCare {
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelbie") finish first." }
         if bath.active { return "The clean-up is going on." }
         if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelbie") is in the close-up. Let go first." }
-        if raceBook.returner != nil { return "Welcome \(jelly(id)?.name ?? "Your Jelbie") home first." }
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelbie") is listening to you." }
         if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelbie") is not in the room." }
         if match, let m = volleyPartnerBlocker(jelly: id) { return m }
@@ -123,7 +122,7 @@ extension GameCare {
     func startVolley(jelly id: Int, mode: VolleyMode, seed: UInt64? = nil) {
         guard canVolley(jelly: id) else { return }
         if case .match = mode, volleyPartnerBlocker(jelly: id) != nil { return }          // no teammate (no other Jelbie, no Park friend): no match
-        select.cancel(); queued.removeAll(); callRunning = false
+        select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }
         let s = seed ?? UInt64(Date().timeIntervalSince1970 * 1000) & 0xFFFFFF

@@ -32,6 +32,8 @@ final class ParkWork {
     var hopHost: Float?
     /// The friendly social last paid its start bonus, by Jelbie slot (the session's identity).
     var friendSession: [Int: ObjectIdentifier] = [:]
+    /// Shared seesaw rides / hopscotch lines with a visitor (ParkSharedPlay.swift): the visit's awards so far.
+    var shared = SharedPlayTracker()
     nonisolated deinit {}
 }
 
@@ -117,7 +119,7 @@ extension GameCare {
             AudioHub.shared.play(.notEnough)
             return
         }
-        select.cancel(); queued.removeAll(); callRunning = false
+        select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         park.openPicker(all: Array(jellies.indices))
     }
@@ -174,6 +176,7 @@ extension GameCare {
         guard park.phase == .playing || park.phase == .arriveIn else { return }
         tickVisitors(dt: dt)
         tickFriends(actors, dt: dt)
+        tickSharedPlay(actors, dt: dt)
         #if targetEnvironment(simulator)
         if !Self.demoToys.isEmpty, park.phase == .playing {
             Self.demoToyFrames += 1
@@ -282,6 +285,31 @@ extension GameCare {
         tickGift(actors, dt: dt)
     }
 
+    /// A home Jelbie and a visitor on the same seesaw ride or in the same hopscotch line: a one-off friendship bonus (ParkSharedPlay.swift), a small heart over the home Jelbie.
+    private func tickSharedPlay(_ actors: [JellyActor], dt: Float) {
+        let book = parkBook, field = DecorField.shared
+        var visitors: [Int: Int] = [:]          // body id -> index in the cast
+        for (i, a) in book.actors.enumerated() where book.cast.indices.contains(i) { visitors[a.id] = i }
+        let seesaws = field.feet.filter { $0.kind == .seesaw }.map { f in
+            SharedSeesaw(uid: f.uid, mode: SeesawRide.shared.mode(f.uid), seats: (field.seatOccupant[f.uid] ?? [:]).sorted { $0.key < $1.key }.map(\.value))
+        }
+        let courts = field.feet.filter { $0.kind == .hopscotch }.map { f in
+            SharedCourt(uid: f.uid, players: HopscotchLine.shared.players(f.uid).map { (id: $0.id, sq: $0.sq) })
+        }
+        let comers = Set(book.comers.filter { actors.indices.contains($0) && jelly($0) != nil })
+        let awards = book.work.shared.step(dt: dt, seesaws: seesaws, courts: courts, isHome: { comers.contains($0) }, isVisitor: { visitors[$0] != nil })
+        for w in awards {
+            guard let i = visitors[w.visitor], let prof = jelly(w.home) else { continue }
+            let vid = book.cast[i], a = book.actors[i], k = w.home
+            if let up = book.add(points: w.points, visitor: vid, character: prof.character) { parkLevelUp(visitor: vid, slot: k, level: up, visitorBody: a) }
+            let now = CACurrentMediaTime()
+            if k == 0 { touchPlay?.spawnHeart(now: now) } else { bubbleHub.spawnHeart(for: k, now: now) }
+            #if targetEnvironment(simulator)
+            if Self.traceOn { NSLog("[pals] +%.0f %@ slot=%d visitor=%d total=%.1f", w.points, w.kind == .ride ? "ride" : "line", k, vid, book.visitor(vid)?.points(with: prof.character) ?? -1) }
+            #endif
+        }
+    }
+
     func parkLevelUp(visitor vid: Int, slot: Int, level: ParkFriendLevel, visitorBody: JellyActor) {
         let book = parkBook
         guard let v = book.visitor(vid), let prof = jelly(slot) else { return }
@@ -369,7 +397,7 @@ extension GameCare {
         let roster = book.roster
         switch dest {
         case .park:
-            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftState = 0; work.saveT = 0; work.friendSession = [:]
+            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftState = 0; work.saveT = 0; work.friendSession = [:]; work.shared.reset()
             book.comers = park.picked.filter { roster.indices.contains($0) && $0 < jellies.count }
             if book.comers.isEmpty { book.comers = Array(roster.indices) }
             for a in roster {
