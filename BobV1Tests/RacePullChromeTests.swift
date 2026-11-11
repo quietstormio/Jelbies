@@ -41,6 +41,44 @@ final class RacePullChromeTests: XCTestCase {
         XCTAssertEqual(RacePullGesture.dragMaxFor(size: size, startY: 300, bottomInset: inset, scale: 1.3), RacePullGesture.dragMax(size: size) * 1.3, accuracy: 1e-3, "iPad scale")
     }
 
+    /// The resting thumb: the whole demo (top of the label to the bottom of the hand) is inside the safe area, clear of the title / hint pills and outside the Jelbie box
+    /// (portrait: y from 0.40 h to 0.67 h at any x; landscape: x from 0.30 w to 0.70 w at any y), on the four device sizes.
+    func testTheThumbDemoRestsOffTheJelbies() {
+        let k = RacePullGesture.demoScale
+        let cases: [(String, CGSize, EdgeInsets)] = [
+            ("phone portrait", CGSize(width: 402, height: 874), EdgeInsets(top: 62, leading: 0, bottom: 34, trailing: 0)),
+            ("phone landscape", CGSize(width: 874, height: 402), EdgeInsets(top: 0, leading: 62, bottom: 21, trailing: 62)),
+            ("iPad portrait", CGSize(width: 834, height: 1194), EdgeInsets(top: 24, leading: 0, bottom: 20, trailing: 0)),
+            ("iPad landscape", CGSize(width: 1194, height: 834), EdgeInsets(top: 24, leading: 0, bottom: 20, trailing: 0)),
+        ]
+        for (name, size, safe) in cases {
+            let a = RacePullGesture.restAnchor(size: size, safe: safe, k: k)
+            let f = RacePullGesture.demoFrame(size: size, safe: safe, k: k)
+            let land = size.width > size.height
+            print("REST \(name) anchor (\(a.x), \(a.y)) demo y \(f.minY) ... \(f.maxY) x \(f.minX) ... \(f.maxX) of \(size.width) x \(size.height)")
+            XCTAssertEqual(a.x, size.width * (land ? 0.8 : 0.5), accuracy: 0.01, "\(name): x")
+            XCTAssertGreaterThanOrEqual(a.y, size.height * (land ? 0.36 : 0.70) - 0.01, "\(name): never higher than the floor of the rule")
+            XCTAssertGreaterThanOrEqual(f.minY, safe.top, "\(name): inside the safe area (top)")
+            XCTAssertLessThanOrEqual(f.maxY, size.height - safe.bottom - 12 + 0.01, "\(name): the hand ends 12 pt above the bottom safe area")
+            XCTAssertGreaterThanOrEqual(f.minX, safe.leading, "\(name): inside the safe area (left)")
+            XCTAssertLessThanOrEqual(f.maxX, size.width - safe.trailing, "\(name): inside the safe area (right)")
+            XCTAssertGreaterThanOrEqual(f.minY, RacePullGesture.topPillsBottom(safeTop: safe.top) + 4, "\(name): the label clears the title and hint pills")
+            let box = land ? CGRect(x: 0.30 * size.width, y: 0, width: 0.40 * size.width, height: size.height)
+                           : CGRect(x: 0, y: 0.40 * size.height, width: size.width, height: 0.27 * size.height)
+            XCTAssertFalse(f.intersects(box), "\(name): the demo \(f) is outside the Jelbie box \(box)")
+            // the demo's length is a pull the player could make from there (the room rule)
+            let len = RacePullGesture.demoLength(size: size, anchor: a, safe: safe, k: k)
+            XCTAssertLessThanOrEqual(a.y + len + 8, size.height - safe.bottom + 0.01, "\(name): room under the anchor")
+            XCTAssertEqual(Float(len / RacePullGesture.dragMaxFor(size: size, startY: a.y, bottomInset: safe.bottom, scale: k)), RacePullGesture.demoPull, accuracy: 1e-4, "\(name): the demo shows a green pull")
+        }
+        // the capture gauge uses the same anchor at the real scale: it stays inside the safe area at its largest step too
+        for (name, size, safe) in cases {
+            let k13: CGFloat = size.width >= 800 && size.height >= 800 ? 1.3 : 1
+            let a = RacePullGesture.restAnchor(size: size, safe: safe, k: k13)
+            XCTAssertLessThanOrEqual(a.y, size.height - safe.bottom, "\(name): the gauge anchor is on screen")
+        }
+    }
+
     func testZone() {
         XCTAssertEqual(RacePullGesture.zone(pull: 0.69, lo: 0.7, hi: 0.92), .weak)
         XCTAssertEqual(RacePullGesture.zone(pull: 0.7, lo: 0.7, hi: 0.92), .green)
