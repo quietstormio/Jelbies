@@ -386,7 +386,9 @@ final class DiningGroup {
                     DiningSpot.ignoreDynamicBoxes = true; defer { DiningSpot.ignoreDynamicBoxes = false }
                     let blocked = !DiningSpot.spotFree(origin: origin, layout: DiningLayout.make(n: max(n, 1)))
                     if age > Self.lieCap, lie || blocked { noRoom = true; end(); gaveUp = true; return }
-                    if (trayFirstClear && !lie && !blocked && (crossersBehind || age > Self.crossCap)) || (!lie && !blocked && age > Self.crossCap + (trayFirstClear ? 0 : 4)) || age > Self.lieCap { spawnTray() }
+                    // never over a body: the tray waits (past `crossCap` for the crossers, but NOT for a body on its rectangle) until `lieCap`; then refused if it is still not free
+                    if age > Self.lieCap, !trayFirstClear { noRoom = true; end(); gaveUp = true; return }
+                    if trayFirstClear && !lie && !blocked && (crossersBehind || age > Self.crossCap) { spawnTray() } else if age > Self.lieCap { spawnTray() }
                 }
             } else if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) + (Self.robust && stillWaking ? Self.wakeExtra : 0) { spawnTray() }
             var wokeNow: [Int] = []
