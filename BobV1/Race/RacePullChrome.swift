@@ -211,6 +211,10 @@ struct RacePullSurface: View {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first(where: \.isKeyWindow)?.safeAreaInsets ?? .zero
     }
 
+    private static var windowSize: CGSize? {
+        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first(where: \.isKeyWindow)?.bounds.size
+    }
+
     private static var safeEdgeInsets: EdgeInsets {
         let i = safeInsets
         return EdgeInsets(top: i.top, leading: i.left, bottom: i.bottom, trailing: i.right)
@@ -282,7 +286,7 @@ struct RacePullSurface: View {
             .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
         }
         .ignoresSafeArea()
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size = Self.windowSize ?? $0 }          // (the whole screen: the measured size left out the safe areas and put the rest anchor 96 pt too high)
         .onChange(of: race.buttonsLive) { _, live in if live, goAt == nil { goAt = Date() } }
         .onChange(of: ui.stalled) { _, s in stalledAt = s ? Date() : nil }
         .onChange(of: zoneKey) { old, new in
