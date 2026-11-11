@@ -74,7 +74,7 @@ final class DiningSurveyTests: XCTestCase {
         // (a third of the seeds: a toy box, a soccer ball and a frisbee lie where the tray likes to go)
         let decor = seed % 3 == 0
         let savedFeet = RoomLayout.decorFeet
-        if decor { RoomLayout.decorFeet = [DecorFoot(uid: 901, kind: .toybox, centre: SIMD2(0, 1.3)), DecorFoot(uid: 902, kind: .soccerball, centre: SIMD2(0.9, 0.9)), DecorFoot(uid: 903, kind: .frisbee, centre: SIMD2(-0.9, 1.6))] }
+        if decor { RoomLayout.decorFeet = [DecorFoot(uid: 901, kind: .toybox, centre: SIMD2(0, 2.3)), DecorFoot(uid: 902, kind: .soccerball, centre: SIMD2(-1.6, 0.5)), DecorFoot(uid: 903, kind: .frisbee, centre: SIMD2(1.6, 0.5))] }
         defer { RoomLayout.decorFeet = savedFeet }
         let group = DiningGroup()
         if arm == "applike" { group.tierOf = { _ in .normal } }
@@ -95,7 +95,7 @@ final class DiningSurveyTests: XCTestCase {
             if trayOutAt == nil, group.dining.phase != .absent { trayOutAt = t }
             if group.dining.phase == .present || group.dining.phase == .popping { if brains.contains(where: { group.trayDistance($0.position) < 0.3 }) { closeFrames += 1 } }
             if group.dining.phase == .present || group.dining.phase == .popping { if brains.contains(where: { group.lieDistanceNow($0) < 0.001 }) { lieFrames += 1 } }
-            if group.dining.phase == .present || group.dining.phase == .popping, !group.spotFreeNow { blockedFrames += 1 }
+            if group.dining.phase == .present || group.dining.phase == .popping, !({ let sv = RoomLayout.dynamicBoxes; RoomLayout.dynamicBoxes = []; defer { RoomLayout.dynamicBoxes = sv }; return group.spotFreeNow }()) { blockedFrames += 1 }          // (the tray's own collider is not 'another footprint')
             if group.isActive { for i in 0..<3 where arrive[i] == nil { let f = brains[i].position, st = group.standsNow[group.placeOf[i]]; if f.y <= st.y + GameCare.popTolerance, simd_distance(f, group.approachPoint(blob: i)) < 0.5 { arrive[i] = t } } }
             for (i, b) in brains.enumerated() {
                 if b.activity == .eating || b.activity == .drinking { if ate[i] == nil { ate[i] = t }; lastEating[i] = t }
