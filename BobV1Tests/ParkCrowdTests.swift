@@ -37,7 +37,7 @@ final class ParkCrowdTests: XCTestCase {
 
     // MARK: the probe
 
-    final class Rec {
+    @MainActor final class Rec {
         let s: SocialSession, kind: SocialKind, t0: Float
         var gather: Float = 0, pressed0: Float = 0, inside0: Float = 0, pressedL: Float = 0, insideL: Float = 0
         var minSolid: Float = .infinity, minLanding: Float = .infinity
@@ -46,7 +46,7 @@ final class ParkCrowdTests: XCTestCase {
     }
     struct Episode { var seed: UInt64, body: Int, t: Float, dur: Float, at: SIMD2<Float>, near: String, solid: Float, doing: String }
 
-    final class Probe {
+    @MainActor final class Probe {
         let lab: SocialTests.Lab
         let gap = MelonController.jellyGap
         var pressedSec: [String: Float] = [:], insideSec: [String: Float] = [:]
