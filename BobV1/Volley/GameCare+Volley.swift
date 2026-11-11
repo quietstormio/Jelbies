@@ -386,9 +386,8 @@ extension GameCare {
             touchPlay?.haptics.transient(now: now, intensity: 0.45, sharpness: 0.6)
             let name = volley.teamNames.indices.contains(to) && !volley.teamNames[to].isEmpty ? volley.teamNames[to] : "your teammate"
             A11yEvents.say("Control switched to \(name)", .normal)
-            if !auto {          // a double-tap switch: the ring swells over him and he hops a little (not on a Reduce Motion setting, nor mid-move)
+            if !auto {          // a double-tap switch: the ring swells over him (no hop: a jump pressed right after the switch must be accepted)
                 w.switchPop = 1
-                if !A11ySettings.shared.reduceMotion, s.players.indices.contains(to), s.players[to].act == .stand, let a = body(to) { a.brain?.volleyJump(sim: a.sim, dx: 0, apex: 0.2, cheer: true) }
             }
         case .call(let i):
             AudioHub.shared.play(.select, volume: 0.35, rate: 1.9)
