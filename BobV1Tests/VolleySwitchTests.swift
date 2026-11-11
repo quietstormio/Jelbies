@@ -60,7 +60,8 @@ final class VolleySwitchTests: XCTestCase {
             if ph == .crouch || ph == .air { bad.append(k) }
         }
         XCTAssertTrue(bad.isEmpty, "he went into crouch / air on ticks \(bad.prefix(5)) after the switch")
-        XCTAssertLessThan(after.max()! - before.max()!, 0.015, "his body rose after the switch")
+        // Once he is the steered one he walks to his own spot (a walk bob of about 7 cm in the centre height was measured); the old cheer hop lifted the centre by 25 cm.
+        XCTAssertLessThan(after.max()! - before.max()!, 0.12, "his body rose like a hop after the switch: before \(before.min()!)...\(before.max()!), after \(after.min()!)...\(after.max()!)")
         XCTAssertEqual(c.care.volley.sim?.players[1].act, .stand)
     }
 
