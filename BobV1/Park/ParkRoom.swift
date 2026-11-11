@@ -87,7 +87,7 @@ enum ParkScenery {
 
         // ---- the forest edge and the planted trees: natural greens, jittered spacing, gaps where the sky shows ----
         var shadows: [ParkShadow] = []
-        let leaf = S.srgb(0.24, 0.45, 0.17), leaf2 = S.srgb(0.26, 0.47, 0.18), hazy = S.srgb(0.22, 0.42, 0.20), pine = S.srgb(0.24, 0.45, 0.17)
+        let leaf = S.srgb(0.24, 0.45, 0.17), leaf2 = leaf, hazy = leaf, pine = leaf          // (round 8: one canopy colour; the assets carry the one green family)
         // far row: hazier, taller, mixed spruces / beeches / oaks / birches standing right behind the fence; sizes and gaps vary so the sky and haze show between crowns
         var tx: Float = -13.5
         var k = 0
@@ -113,7 +113,7 @@ enum ParkScenery {
         // three feature trees in the portrait window behind the fence so the tree line always reads: a beech, a birch, a far oak
         roundTree(b, x: 2.5, z: -7.7, trunk: 0.8, radius: 0.95, canopy: leaf, shape: .round, species: 1, far: false, rng: &r)
         roundTree(b, x: 5.3, z: -7.4, trunk: 0.8, radius: 1.0, canopy: leaf2, shape: .round, species: 2, far: false, rng: &r)
-        roundTree(b, x: -0.2, z: -8.9, trunk: 0.8, radius: 1.5, canopy: hazy, shape: .round, species: 0, far: true, rng: &r)
+        roundTree(b, x: -0.2, z: -8.9, trunk: 0.8, radius: 1.0, canopy: hazy, shape: .round, species: 0, far: true, rng: &r)
         // two hero trees at the edges: a broad oak left, a beech right (full detail, standing on the lawn)
         roundTree(b, x: -6.4, z: -3.2, trunk: 1.0, radius: 1.0, canopy: leaf2, shape: .round, species: 0, far: false, rng: &r)
         shadows.append(ParkShadow(x: -6.4, z: -3.2, r: 2.4, h: 2.8))
@@ -124,15 +124,13 @@ enum ParkScenery {
         fence(b, z: -6.45, x0: -14, x1: 14, skip: -4.0...2.4)
 
         // ---- natural shrubs at the edges, a few garden-flower patches ----
-        let white = S.srgb(0.98, 0.97, 0.92), gold = S.srgb(0.96, 0.76, 0.14), poppy = S.srgb(0.86, 0.24, 0.10), violet = S.srgb(0.62, 0.48, 0.82)
+        let white = S.srgb(0.95, 0.92, 0.82), gold = S.srgb(0.93, 0.86, 0.58), violet = S.srgb(0.74, 0.68, 0.84)          // (muted: cream, pale yellow, soft lavender)
         floweringBush(b, x: -3.7, z: -4.5, scale: 1.2, bloom: white, rng: &r); shadows.append(ParkShadow(x: -3.7, z: -4.5, r: 1.5, h: 1.2))
         floweringBush(b, x: -5.6, z: 1.6, scale: 1.0, bloom: gold, rng: &r); shadows.append(ParkShadow(x: -5.6, z: 1.6, r: 1.3, h: 1.1))
         floweringBush(b, x: 5.6, z: 3.4, scale: 1.0, bloom: violet, rng: &r); shadows.append(ParkShadow(x: 5.6, z: 3.4, r: 1.3, h: 1.1))
         floweringBush(b, x: -5.2, z: 6.4, scale: 0.9, bloom: white, rng: &r); shadows.append(ParkShadow(x: -5.2, z: 6.4, r: 1.2, h: 1.0))
-        flowerPatch(b, x: 4.8, z: 1.9, scale: 1.0, bloom: gold, rng: &r)
-        flowerPatch(b, x: -3.6, z: 3.8, scale: 1.0, bloom: poppy, rng: &r)
-        flowerPatch(b, x: 5.3, z: -0.6, scale: 0.9, bloom: white, rng: &r)
-        flowerPatch(b, x: -5.4, z: -0.5, scale: 0.9, bloom: violet, rng: &r)
+        flowerPatch(b, x: 7.0, z: 0.4, scale: 0.8, bloom: white, rng: &r)          // (round 8: only along the edges, none by the hopscotch, slide or seesaw)
+        flowerPatch(b, x: -7.0, z: 3.6, scale: 0.8, bloom: violet, rng: &r)
 
         // ---- the ground: a tessellated lawn that carries mowing bands, sun patches, soft tree shadows and worn earth; the gravel path ----
         lawn(b, shadows: shadows)

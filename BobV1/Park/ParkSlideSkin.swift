@@ -14,9 +14,9 @@ nonisolated enum ParkSlideSkin {
         guard var a = DecorMeshes.loaded[.slide] else { return nil }
         func srgb(_ r: Float, _ g: Float, _ b: Float) -> SIMD3<Float> { OKLab.srgbToLinear(SIMD3(r, g, b)) }
         func lum(_ c: SIMD3<Float>) -> Float { simd_dot(c, SIMD3(0.2126, 0.7152, 0.0722)) }
-        // round 5: from the park camera the old skin read as a grey box. Now: a signal-red chute (a clear ramp), galvanised steel side walls and top bars, stained timber platform and step block,
+        // round 5: from the park camera the old skin read as a grey box. Now: a muted terracotta chute (round 8: was signal red), galvanised steel side walls and top bars, stained timber platform and step block,
         // dark forest-green posts and caps. Same geometry, same anchors.
-        let red = srgb(0.74, 0.19, 0.12), steel = srgb(0.60, 0.64, 0.67), timber = srgb(0.52, 0.35, 0.20), step = srgb(0.64, 0.46, 0.27), green = srgb(0.10, 0.27, 0.18)
+        let red = srgb(0.72, 0.41, 0.28), steel = srgb(0.60, 0.64, 0.67), timber = srgb(0.52, 0.35, 0.20), step = srgb(0.64, 0.46, 0.27), green = srgb(0.10, 0.27, 0.18)
         let refCream = lum(srgb(0.97, 0.94, 0.88)), refHoney = lum(srgb(0.97, 0.80, 0.35)), refMint = lum(srgb(0.62, 0.85, 0.69)), refCoral = lum(srgb(0.96, 0.55, 0.43)), refPink = lum(srgb(0.91, 0.54, 0.64))
         // centre and half width of the chute (the mint vertices facing up)
         var sx: Float = 0, n: Float = 0
