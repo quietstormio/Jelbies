@@ -119,6 +119,8 @@ final class DiningSurveyTests: XCTestCase {
         try XCTSkipUnless(env["TRAY_SURVEY"] == "1", "tray survey is off (set TRAY_SURVEY=1)")
         let arm = env["TRAY_ARM"] ?? "plain"
         DiningGroup.robust = env["TRAY_ROBUST"] != "0" && env["DINING_OLD"] == nil
+        let soft = env["SOFT_MEAL"] == "1"; BlobBrain.softMealWake = soft; print("TRAYSURVEY mode softMealWake=\(soft) robust=\(DiningGroup.robust)")
+        defer { BlobBrain.softMealWake = false }
         defer { DiningGroup.robust = ProcessInfo.processInfo.environment["DINING_OLD"] == nil }
         XCTAssertTrue(arm == "plain" || arm == "applike", "TRAY_ARM must be plain or applike")
         if env["TRAY_STANDS"] == "old" { XCTFail("TRAY_STANDS=old needs the solo-hangout tuning vars; not on this tree"); return }
@@ -136,6 +138,6 @@ final class DiningSurveyTests: XCTestCase {
         let gave = res.filter { $0.gaveUp != nil }
         let worst = res.filter { $0.maxHeldRig >= 0 }.max { $0.maxHeld < $1.maxHeld }
         let worstStr = worst.map { String(format: "%.1f%@", $0.maxHeld, $0.maxHeldOpen ? "+" : "") } ?? "none"
-        print("TRAYSURVEY TOTALS arm \(arm) robust \(DiningGroup.robust) | dropped-for-all-while-eating \(res.filter(\.droppedWhileEating).count) | excuses \(res.map(\.excused).reduce(0, +)) | over>45s or never \(res.filter { ($0.over ?? 999) > 45 }.count) | held>3s \(res.filter { $0.maxHeldRig >= 0 && $0.maxHeld > 3 }.count) | seeds \(res.count) | >=2 ate within 40 s \(res.filter { n40($0) >= 2 }.count) | all 3 within 40 s \(res.filter { n40($0) >= 3 }.count) | all 3 within window \(res.filter { $0.ate.allSatisfy { $0 != nil } }.count) | gave up \(gave.count) (timeout \(gave.filter(\.timeout).count), retries \(gave.filter { !$0.timeout }.count)) | median over \(Self.f(median)) | largest held \(worstStr)")
+        print("TRAYSURVEY TOTALS arm \(arm) softMealWake \(BlobBrain.softMealWake) robust \(DiningGroup.robust) | dropped-for-all-while-eating \(res.filter(\.droppedWhileEating).count) | excuses \(res.map(\.excused).reduce(0, +)) | over>45s or never \(res.filter { ($0.over ?? 999) > 45 }.count) | held>3s \(res.filter { $0.maxHeldRig >= 0 && $0.maxHeld > 3 }.count) | seeds \(res.count) | >=2 ate within 40 s \(res.filter { n40($0) >= 2 }.count) | all 3 within 40 s \(res.filter { n40($0) >= 3 }.count) | all 3 within window \(res.filter { $0.ate.allSatisfy { $0 != nil } }.count) | gave up \(gave.count) (timeout \(gave.filter(\.timeout).count), retries \(gave.filter { !$0.timeout }.count)) | median over \(Self.f(median)) | largest held \(worstStr)")
     }
 }
