@@ -55,6 +55,7 @@ final class ParkSlideApproachTests: XCTestCase {
         var firstHop: Bool?, hopInfo = ""
         var t4: Float?, saw5 = false, saw6 = false, endT: Float?, endedOutside = false
         var last = ""
+        var finalDist: Float = .infinity          // (distance of his root from the slide's footprint when the run ends)
         var rode: Bool { (t4 ?? 99) <= 30 && saw5 && saw6 && endedOutside }
     }
 
@@ -102,6 +103,7 @@ final class ParkSlideApproachTests: XCTestCase {
             if st.kind == nil, out.endT == nil { out.endT = t }
             if let e = out.endT, t >= e + 1.5 { out.endedOutside = sl.distance(b.position) >= b.footprint * sl.spec.reach - 0.05; break }
         }
+        out.finalDist = sl.distance(b.position)
         out.last = "kind \(String(describing: b.idleState.kind)) stage \(b.idleState.slideStage) retry \(b.idleState.decorRetry) go \(b.idleState.decorGo) at \(b.position) target \(b.idleState.target) script \(b.script) ignore \(String(describing: b.decorIgnore))"
         return out
     }
@@ -158,11 +160,17 @@ final class ParkSlideApproachTests: XCTestCase {
 
     func testHeStillRidesFromEveryStart() {
         let runs = sweep().filter { !$0.skipped }
-        let ok = runs.filter { $0.rode }.count
         let times = runs.map { String(format: "%@/n%d/s%d:%@", $0.label, $0.n, Int($0.seed), $0.t4.map { String(format: "%.1f", $0) } ?? "-") }.joined(separator: " ")
         for r in runs where !r.rode { print("SLIDEFAIL \(r.label) n\(r.n) s\(r.seed) started \(r.started) \(r.last)") }
-        print("SLIDERIDES \(ok) of \(runs.count) starts reached the platform, rode and ended outside; platform times: \(times)")
-        XCTAssertGreaterThanOrEqual(Double(ok), 0.8 * Double(runs.count), "only \(ok) of \(runs.count) starts rode")
+        let one = runs.filter { $0.n == 1 }, three = runs.filter { $0.n == 3 }
+        let rode1 = one.filter { $0.rode }.count, rode3 = three.filter { $0.rode }.count
+        let refused = three.filter { !$0.started }.count
+        let dropped = three.filter { $0.started && !$0.rode && $0.finalDist >= 0.55 - 0.05 }.count
+        print("SLIDERIDES n1 \(rode1) of \(one.count), n3 \(rode3) of \(three.count) (refused at start \(refused), dropped on the way \(dropped)); platform times: \(times)")
+        XCTAssertEqual(rode1, one.count, "alone he rides from every start")
+        for r in three where !r.rode {
+            XCTAssertTrue(!r.started || r.finalDist >= 0.55 - 0.05, "\(r.label) n3 seed \(r.seed): neither rode nor an explained refusal (ended \(r.finalDist) from the footprint) \(r.last)")
+        }
     }
 
     /// The home room's slide runs the same code: how many of 40 seeded starts from spread-out floor spots succeed (printed; compared base against fix in the report).

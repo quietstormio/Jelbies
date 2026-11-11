@@ -228,6 +228,26 @@ extension BlobBrain {
     func slideHopReady(_ f: DecorFoot) -> Bool {
         simd_distance(position, f.centre + f.turned(SIMD2(0, -DecorKind.slideApproach))) <= 0.9 && slideBehind(f, position) > 0
     }
+    /// `fixed` on the ROOM's solids only (walls, pond, pieces; the park slide always counts, even while it is soft for him). BODIES DO NOT COUNT: `resolve` (so `fixed`,
+    /// `intrusion`, `legClear` too) also pushes him off the other Jelbies (the stage wraps the floor rule with `keepApart`), and the gate, the corners and the later legs
+    /// of the way round the slide are reached seconds from now, when the friends stand somewhere else.
+    private func slideWallFixed(_ p: SIMD2<Float>, margin: Float = 0) -> SIMD2<Float> {
+        let r = GameCamera.constrain(SIMD3(p.x, 0, p.y), radius: footprint + margin, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: decorIgnore == ParkToys.slideUID ? nil : decorIgnore)
+        return SIMD2(r.x, r.z)
+    }
+    private func slideWallDepth(_ p: SIMD2<Float>) -> Float { simd_length(slideWallFixed(p, margin: steerMargin) - p) }
+    /// `legClear` against the room's solids only (same sampling and tolerances; bodies are not looked at).
+    private func slideLegFree(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+        let d = b - a, L = simd_length(d)
+        if L < 1e-3 { return true }
+        let n = max(2, Int(L / 0.07)), a0 = slideWallDepth(a)
+        for i in 1...n {
+            let p = a + d * (Float(i) / Float(n))
+            if simd_length(b - p) < 0.3 { break }
+            if slideWallDepth(p) > max(0.012, a0 + 0.004) { return false }
+        }
+        return true
+    }
     /// The first leg of the walk to the slide's ladder, with the slide SOLID: (spot, leg). Leg 2 = already behind and close (straight to the climb spot, the slide soft),
     /// leg 1 = a gate spot behind the slide that he walks round to. nil = no way to the back right now.
     private func slideFirstLeg(_ f: DecorFoot, climb: SIMD2<Float>, from here: SIMD2<Float>) -> (SIMD2<Float>, Int)? {
@@ -240,33 +260,33 @@ extension BlobBrain {
         for l in cands {
             let p = f.centre + f.turned(l)
             guard slideBehind(f, p) > 0.1, f.distance(p) >= need else { continue }
-            let q = fixed(p)
-            guard simd_distance(p, q) < 0.06, f.distance(q) >= need, peerFree(q) else { continue }
+            let q = slideWallFixed(p)
+            guard simd_distance(p, q) < 0.06, f.distance(q) >= need else { continue }
             gate = q; break
         }
-        guard let gate else { print("SLIDELEG no gate from \(here)"); return nil }
+        guard let gate else { return nil }
         if simd_distance(here, gate) < Self.standTolerance { return (climb, 2) }
-        if legClear(here, gate, margin: steerMargin) { return (gate, 1) }
+        if slideLegFree(here, gate), legClear(here, gate, margin: steerMargin) { return (gate, 1) }
         // round the slide: the corners of its footprint, a body's width off the edge (both sides, front and back); the walk's own planner does not go round a slide that long
         let h = f.quarter & 1 == 0 ? f.spec.half : SIMD2(f.spec.half.y, f.spec.half.x)
         let lat = h.x + footprint * f.spec.reach + 0.1, zf = h.y + footprint * f.spec.reach + 0.1
         var corners: [SIMD2<Float>] = []
         for sx: Float in [-1, 1] {
-            for (z, wide) in [(zf, Float(0)), (-zf, 0), (zf, 0.9), (-zf, 0.9), (zf, 1.8), (-zf, 1.8)] {          // (a friend standing beside the slide: a wider corner goes round him)
-                let p = f.centre + f.turned(SIMD2(sx * (lat + wide), z))
-                let q = fixed(p)
-                if simd_distance(p, q) < 0.4, f.distance(q) >= footprint * f.spec.reach - 0.05, peerFree(q) { corners.append(q) }          // (a wall or the pond may nudge a corner a little)
+            for z in [zf, -zf] {
+                let p = f.centre + f.turned(SIMD2(sx * lat, z))
+                let q = slideWallFixed(p)
+                if simd_distance(p, q) < 0.4, f.distance(q) >= footprint * f.spec.reach - 0.05 { corners.append(q) }          // (a wall or the pond may nudge a corner a little; bodies do not count, they will have moved)
             }
         }
+        // the leg he walks NOW must be free of the room and of bodies; the later legs only of the room (the next leg is checked again at each corner)
         var best: (SIMD2<Float>, Float)?
-        for w in corners where simd_distance(here, w) > 0.3 && legClear(here, w, margin: steerMargin) {
+        for w in corners where simd_distance(here, w) > 0.3 && slideLegFree(here, w) && legClear(here, w, margin: steerMargin) {
             var len: Float?
-            if legClear(w, gate, margin: steerMargin) { len = simd_distance(here, w) + simd_distance(w, gate) }
-            else if let w2 = corners.first(where: { simd_distance($0, w) > 0.3 && legClear(w, $0, margin: steerMargin) && legClear($0, gate, margin: steerMargin) }) { len = simd_distance(here, w) + simd_distance(w, w2) + simd_distance(w2, gate) }
+            if slideLegFree(w, gate) { len = simd_distance(here, w) + simd_distance(w, gate) }
+            else if let w2 = corners.first(where: { simd_distance($0, w) > 0.3 && slideLegFree(w, $0) && slideLegFree($0, gate) }) { len = simd_distance(here, w) + simd_distance(w, w2) + simd_distance(w2, gate) }
             if let len, best == nil || len < best!.1 { best = (w, len) }
         }
         if let best { return (best.0, 3) }
-        print("SLIDELEG nil from \(here) gate \(gate) corners \(corners) legs \(corners.map { legClear(here, $0, margin: steerMargin) }) cornerToGate \(corners.map { legClear($0, gate, margin: steerMargin) })")
         return nil
     }
 
@@ -288,7 +308,6 @@ extension BlobBrain {
             var slideLeg = 0
             var standSpot = decorStand(kind, f, from: here, seat: seat)
             if roundSlide {
-                print("SLIDESTART here \(here) stand \(String(describing: standSpot)) onlyUID \(String(describing: onlyUID))")
                 guard let climb = standSpot, simd_distance(here, climb) > 0.35 || onlyUID != nil, let first = slideFirstLeg(f, climb: climb, from: here) else { decorIgnore = exiting; continue }
                 standSpot = first.0; slideLeg = first.1
                 if slideLeg == 2 { decorIgnore = f.uid }
@@ -369,7 +388,6 @@ extension BlobBrain {
                 // at a corner of the way round: the next leg from here (the gate, or the next corner)
                 idleState.slideS += 1
                 let climb = decorStand(.decorSlide, f, from: position)
-                print("SLIDECORNER at \(position) s \(idleState.slideS) climb \(String(describing: climb)) leg \(String(describing: climb.flatMap { slideFirstLeg(f, climb: $0, from: position) }))")
                 guard idleState.slideS <= 4, let climb, let next = slideFirstLeg(f, climb: climb, from: position) else { idleFinish(skinner); return }
                 idleState.slideStage = -next.1; idleState.target = next.0; idleState.decorRetry = 0
                 if next.1 == 2 { decorIgnore = f.uid }
