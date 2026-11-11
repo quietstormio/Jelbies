@@ -178,6 +178,7 @@ final class RaceFlow {
             if assist == .auto { sim?.autoHopPlayer = true }          // (he hops by himself; the Cheer button as today)
         }
         if control == .pull, autoRate != nil { sim?.autoHopPlayer = true }          // (capture aid: with -RaceAuto the model plays the pull player)
+        if control == .pull { refreshUI() }          // (so the pull chrome, not the foot buttons, is up from the first frame of the fade-in)
         started += 1
     }
 
