@@ -47,7 +47,8 @@ final class ToyPlayTests: XCTestCase {
                     rig.brain.px = -0.5; rig.brain.pz = 1.2
                     let mv = kind.activeInteraction!
                     rig.brain.decorIgnore = (mv == .decorSit || mv == .decorHop || mv == .decorSlide) ? 7 : nil          // (as decorStart sets it)
-                    if rig.brain.decorStand(mv, f, from: SIMD2(-0.5, 1.2), seat: 0) != nil { ok += 1 } else { misses += 1; row += " MISS(q\(q) @\(at.x),\(at.y))" }
+                    // (some seat has a stand spot: a two-seat piece whose first seat has none is sat on from the other, `hopNearSeat`)
+                    if (0..<max(1, f.kind.sitPoints.count)).contains(where: { rig.brain.decorStand(mv, f, from: SIMD2(-0.5, 1.2), seat: $0) != nil }) { ok += 1 } else { misses += 1; row += " MISS(q\(q) @\(at.x),\(at.y))" }
                 }
                 row += " q\(q)=\(ok)/\(valid)"
             }

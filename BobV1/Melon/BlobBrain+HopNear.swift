@@ -40,6 +40,20 @@ extension BlobBrain {
         return f.centre + f.turned(SIMD2(sp.x, sp.z))
     }
 
+    /// The seat to sit on: the picked one when it has a stand spot (always for the beanbag and a one-seat piece), else the nearest FREE other seat that has one,
+    /// else the picked seat unchanged (the caller's guard then skips the piece, as it always did). Changes no state.
+    func hopNearSeat(_ f: DecorFoot, seat: Int) -> Int {
+        let n = f.kind.sitPoints.count
+        if f.kind == .beanbag || n <= 1 { return seat }
+        let here = SIMD2(px, pz)
+        if decorStand(.decorSit, f, from: here, seat: seat) != nil { return seat }
+        let mine = hopSeatXZ(f, seat: seat)
+        let others = (0..<n).filter { $0 != seat && DecorField.shared.seatOccupant[f.uid]?[$0] == nil }
+            .sorted { simd_distance(hopSeatXZ(f, seat: $0), mine) < simd_distance(hopSeatXZ(f, seat: $1), mine) }
+        for s in others where decorStand(.decorSit, f, from: here, seat: s) != nil { return s }
+        return seat
+    }
+
     /// The floor-legal candidates in pick order, and the near limit L. Legal = outside the piece's own footprint, within `hopFar` of the seat, and the floor
     /// (walls, other pieces; not the peers) leaves it where it is (`tolerance`). Order: the front-row candidates within L in today's order, then every other
     /// candidate by hop length, nearest first (ties keep today's order).
