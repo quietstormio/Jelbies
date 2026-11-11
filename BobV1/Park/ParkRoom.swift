@@ -40,8 +40,8 @@ extension GameCamera {
     }
 
     /// Where the roam floor's front edge (x 0, z `parkRoamMaxZ`) sits on the screen, as a fraction of the screen height from the top, in every aspect (2026-11-09: the front third was bare lawn).
-    /// (0.79 on a phone / tablet in portrait; 0.73 from a phone's landscape up, so a Jelbie standing at the front edge in the middle is just above the Go home pill, whose top is at about 76%.)
-    static func parkFrontFraction(aspect: Float) -> Float { 0.79 - 0.06 * poseBlend(aspect) }
+    /// (0.79 on a phone / tablet in portrait; 0.685 from a phone's landscape up (round 8 follow-up: at 0.73 the last three roam rows fell under the Go home + Play cut-out, whose top is at 72.3% of a phone's landscape height).)
+    static func parkFrontFraction(aspect: Float) -> Float { 0.79 - 0.105 * poseBlend(aspect) }
 
     /// The park pan: eye and target move together along the camera's own up vector (same elevation, same distance, so on-screen widths and the look do not change) by the amount that puts
     /// the front edge at `parkFrontFraction` of the screen height. Computed from the pose in use (`eye`, `target` after the portrait widening), so it is aspect-aware by construction.
