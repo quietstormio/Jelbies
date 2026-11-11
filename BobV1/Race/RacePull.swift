@@ -80,6 +80,24 @@ nonisolated struct RacePullTuning: Sendable {
     var rivalLengthPuddle: Float = 0.64
     var autoGreen: Float = 0.5
 
+    // MARK: the pack follows the player
+    /// false = stage A2's rivals exactly (own skill, own rhythm, no start hold).
+    var mirror = true
+    /// The picture of the player's green rate before he has hopped, how fast it follows his hops, and its floor.
+    var mirrorGreenInit: Float = 0.55
+    var mirrorGreenRate: Float = 0.18
+    var mirrorGreenFloor: Float = 0.08
+    /// Per rival slot: one rival close to the player's rate, one a little behind.
+    var mirrorGreenOff: [Float] = [-0.02, -0.10]
+    /// The picture of the player's seconds on the ground beyond `landHold`: initial value, how fast it follows, the most one sample counts.
+    var mirrorGroundInit: Float = 0.15
+    var mirrorGroundRate: Float = 0.2
+    var mirrorGroundMax: Float = 1.2
+    /// Per rival slot (s).
+    var mirrorGroundOff: [Float] = [0, 0.03]
+    /// A rival does not leave before the player's first hop, or this many seconds after GO.
+    var startHold: Float = 1.2
+
     // MARK: 1. the shot
     /// What a release at `pull` gives (the prototype's snapParams, with the green zone widened by `widen` for a perk). `streak` = perfects in a row BEFORE this hop.
     func shot(pull: Float, streak: Int, widen: Float) -> (grade: RaceHopGrade, v0: Float, vy: Float) {

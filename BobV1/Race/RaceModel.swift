@@ -389,6 +389,9 @@ nonisolated struct RaceRacer: Sendable {
     var aiWait: Float = 0
     /// Green hops that started closer than 0.12 to a bar (a report counter).
     var closeGreens = 0
+    /// The last landing ended in a trip / a focus pause began since the last landing (the mirror's ground samples skip both).
+    var landedInTrip = false
+    var pausedSinceLand = false
 
     /// The player's perk boost (never a rival's); capped at the fully trained stride / rate (RaceBoost.apply).
     var boost = RaceBoost.none
@@ -426,6 +429,13 @@ nonisolated struct RaceSim: Sendable {
     var playerZoneWiden: Float = 0
     /// Pull control: the player hops on his own (the auto-run assist): needs no release, green treatment on every bar.
     var autoHopPlayer = false
+    /// Pull control, the pack follows the player (RacePullTuning, `// MARK: the pack follows the player`): the picture of the player's green rate and ground wait.
+    /// They read the tuning's initial values until a hop / a sample has moved them (a test may replace `pullTuning` after the init).
+    private var mirrorGreenValue: Float?
+    private var mirrorGroundValue: Float?
+    private var mirrorGroundSamples = 0
+    var mirrorGreen: Float { mirrorGreenValue ?? pullTuning.mirrorGreenInit }
+    var mirrorGround: Float { mirrorGroundValue ?? pullTuning.mirrorGroundInit }
 
     var player: RaceRacer { racers[0] }
     var countdownTotal: Float { 3 * RaceTuning.countdownBeat }
@@ -732,6 +742,7 @@ extension RaceSim {
                 if r.measured == nil { r.dist = r.hopFrom + r.hopLen }
                 r.vs = pt.base + (r.hopVsLaunch - pt.base) * expf(-pt.kAir * r.hopProtoT)
                 r.landAge = 0; r.sinceStep = 0
+                r.landedInTrip = r.hopTrips; r.pausedSinceLand = false
                 landedNow = true
                 events.append(.landed(racer: i))
                 if r.hopTrips {
@@ -746,7 +757,14 @@ extension RaceSim {
                     let skill = 0.5 * RaceTuning.clamp01(r.stats.focus) + 0.5 * RaceTuning.clamp01(r.stats.waddle)
                     let cycle = r.hopCrouch + r.hopAir + pt.landHold
                     let brake = CourseTuning.rivalBrake(course: course, at: r.dist, stats: r.stats, nominal: r.pullPace)
-                    r.aiWait = (0.03 + 0.12 * (1 - skill)) * r.rng.range(0.6, 1.4) + cycle * (brake - 1)
+                    let j = r.rng.range(0.6, 1.4)
+                    let own = (0.03 + 0.12 * (1 - skill)) * j
+                    var wait = own
+                    if pt.mirror, !r.isPlayer {           // never quicker on the ground than the player has shown himself to be
+                        let slot = mirrorSlot(i)
+                        wait = max(own, pt.landHold + max(0, mirrorGround + pt.mirrorGroundOff[slot % pt.mirrorGroundOff.count]) * j)
+                    }
+                    r.aiWait = wait + cycle * (brake - 1)
                 }
                 r.hopBars = []; r.hopBarCursor = 0
             }
@@ -756,7 +774,8 @@ extension RaceSim {
         // on the ground: he stands (no drift); momentum bleeds away once the landing hold is over
         if !landedNow { r.landAge += dt }
         if r.landAge > pt.landHold { r.vs = pt.base + (r.vs - pt.base) * expf(-pt.kGround * dt) }
-        if r.aiWait > 0 { r.aiWait -= dt }
+        let holding = pullStartHold(r)
+        if r.aiWait > 0, !holding { r.aiWait -= dt }
         // focus pause (the existing rule and numbers; it can only begin here, on the ground, before any hop start)
         if r.paused {
             r.pauseLeft -= dt
@@ -769,14 +788,33 @@ extension RaceSim {
         if r.pauseWanted {
             if free, between {
                 r.pauseWanted = false
-                r.paused = true; r.pauseLeft = RaceTuning.pauseTime
+                r.paused = true; r.pauseLeft = RaceTuning.pauseTime; r.pausedSinceLand = true
                 events.append(.pauseBegan(racer: i))
             }
             return
         }
         // start a hop
-        guard r.landAge >= pt.landHold - 1e-4, !r.tap.stumbling, free else { return }
+        guard r.landAge >= pt.landHold - 1e-4, !r.tap.stumbling, free, !holding else { return }
         pullLaunch(&r, i)
+    }
+
+    /// A rival's slot (which of the mirror's per-rival offsets he uses): the close rival is not always in the same lane.
+    private func mirrorSlot(_ i: Int) -> Int { (i - 1 + Int(seed % 2)) % max(pullTuning.mirrorGreenOff.count, 1) }
+
+    /// The start: a rival who has not hopped yet waits for the player's first hop, or `startHold` seconds after GO (his first wait does not run down meanwhile).
+    private func pullStartHold(_ r: RaceRacer) -> Bool {
+        pullTuning.mirror && !r.isPlayer && r.hopCount == 0 && clock < pullTuning.startHold && racers[0].hopCount == 0
+    }
+
+    /// The player's hop starts: the picture of him moves (grade known, nothing of the racer changed yet).
+    private mutating func mirrorLearn(_ r: RaceRacer, grade: RaceHopGrade) {
+        let pt = pullTuning
+        mirrorGreenValue = mirrorGreen + ((grade == .perfect ? 1 : 0) - mirrorGreen) * pt.mirrorGreenRate
+        guard r.hopCount > 0, !r.landedInTrip, !r.pausedSinceLand else { return }
+        let g = min(max(r.landAge - pt.landHold, 0), pt.mirrorGroundMax)
+        let w = max(pt.mirrorGroundRate, 1 / Float(mirrorGroundSamples + 1))
+        mirrorGroundValue = mirrorGround + (g - mirrorGround) * w
+        mirrorGroundSamples += 1
     }
 
     /// Announces the next bar of the running hop (its outcome was decided at launch).
@@ -817,7 +855,10 @@ extension RaceSim {
                 r.planFor = r.nextHurdle
                 r.planJump = r.isPlayer || r.rng.next() < HurdleTuning.rivalSuccess(skill: skill)
             }
-            let pp = r.isPlayer ? pt.autoGreen : pt.rivalGreenBase + pt.rivalGreenSkill * skill
+            var pp = r.isPlayer ? pt.autoGreen : pt.rivalGreenBase + pt.rivalGreenSkill * skill
+            if pt.mirror, !r.isPlayer {           // never greener than the player has shown himself to be (and never better than his own skill)
+                pp = min(pp, max(pt.mirrorGreenFloor, mirrorGreen + pt.mirrorGreenOff[mirrorSlot(i) % pt.mirrorGreenOff.count]))
+            }
             if r.rng.next() < pp { pull = r.rng.range(0.73, 0.89) }
             else if r.rng.next() < 0.72 { pull = r.rng.range(0.42, 0.67) }
             else { pull = r.rng.range(0.95, 1.07) }
@@ -828,6 +869,7 @@ extension RaceSim {
         // the shot and its length
         let s = pt.shot(pull: pull, streak: streak0, widen: widen)
         let vsL = min(pt.vsMax, pt.carry * vs0 + s.v0)
+        if r.isPlayer { mirrorLearn(r, grade: s.grade) }
         let T = pt.protoFlight(vy: s.vy)
         var len = shotLength(pull)
         var apex = pt.apex(vy: s.vy)

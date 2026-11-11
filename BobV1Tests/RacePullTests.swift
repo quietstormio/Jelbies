@@ -13,7 +13,7 @@ import XCTest
 
 /// A bot that releases the pull. It has its own seeded generator, never the sim's.
 struct PullBot {
-    enum Kind { case perfect, skilled, steady, casual, firstTimer, weakOnly, afk }
+    enum Kind { case perfect, skilled, steady, casual, relaxed, firstTimer, weakOnly, afk }
     var kind: Kind
     var rng: RaceRNG
     var due: Float?
@@ -27,7 +27,7 @@ struct PullBot {
         case .weakOnly: return 0.5
         case .afk: return 0
         case .skilled: return mix(green: 0.85, weak: 0.10, weakLo: 0.55)
-        case .steady: return mix(green: 0.60, weak: 0.30, weakLo: 0.45)
+        case .steady, .relaxed: return mix(green: 0.60, weak: 0.30, weakLo: 0.45)
         case .casual: return mix(green: 0.50, weak: 0.35, weakLo: 0.40, overHi: 1.10)
         case .firstTimer: return mix(green: 0.45, weak: 0.40, weakLo: 0.30, overHi: 1.10)
         }
@@ -45,10 +45,10 @@ struct PullBot {
         case .afk: return
         case .perfect, .weakOnly, .skilled, .steady:
             if !sim.pullState(0).buffered { sim.playerRelease(pull: pull()) }
-        case .firstTimer, .casual:
-            let wait: Float = kind == .casual ? 0.20 : 0.35
-            for e in evs { if case .landed(let r) = e, r == 0 { due = sim.clock + rng.range(0, wait) } }
-            if !started { started = true; due = sim.clock + rng.range(0.5, 1.0) }
+        case .firstTimer, .casual, .relaxed:
+            let lo: Float = kind == .relaxed ? 0.10 : 0, wait: Float = kind == .casual ? 0.20 : (kind == .relaxed ? 0.35 : 0.35)
+            for e in evs { if case .landed(let r) = e, r == 0 { due = sim.clock + rng.range(lo, wait) } }
+            if !started { started = true; due = sim.clock + (kind == .relaxed ? rng.range(0.35, 0.70) : rng.range(0.5, 1.0)) }
             if let d = due, sim.clock >= d {
                 if sim.playerRelease(pull: pull()) == .ignored { due = sim.clock + 0.1 } else { due = nil }
             }
@@ -568,9 +568,78 @@ final class RacePullTests: XCTestCase {
 
     func testSameSeedSameBotSameEvents() {
         for c in [RaceCourse.puddle, .wave] {
-            let a = Self.pullRun(seed: 7, bot: .steady, course: c), b = Self.pullRun(seed: 7, bot: .steady, course: c)
-            XCTAssertEqual(a.events, b.events)
-            XCTAssertEqual(a.sim.racers.map { $0.dist.bitPattern }, b.sim.racers.map { $0.dist.bitPattern })
+            for kind in [PullBot.Kind.steady, .relaxed] {
+                let a = Self.pullRun(seed: 7, bot: kind, course: c), b = Self.pullRun(seed: 7, bot: kind, course: c)
+                XCTAssertEqual(a.events, b.events, "\(c.tier) \(kind)")
+                XCTAssertEqual(a.sim.racers.map { $0.dist.bitPattern }, b.sim.racers.map { $0.dist.bitPattern })
+            }
+        }
+    }
+
+    // MARK: - M2. the pack follows the player (the mirror)
+
+    func testTheStartWaitsForThePlayer() {
+        let hold = RacePullTuning().startHold
+        var off = RacePullTuning(); off.mirror = false
+        for c in [RaceCourse.puddle, .ripple] {
+            for seed in UInt64(1)...50 {
+                for kind in [PullBot.Kind.relaxed, .casual] {
+                    let run = Self.pullRun(seed: seed, bot: kind, course: c)
+                    var playerFirst: Float?
+                    for (k, e) in run.events.enumerated() { if case .hop(0, _, _, _, _, _, _) = e { playerFirst = run.clocks[k]; break } }
+                    guard let pf = playerFirst else { XCTFail("\(c.tier) seed \(seed) \(kind): the player never hopped"); continue }
+                    for (k, e) in run.events.enumerated() {
+                        if case .hop(let r, _, _, _, _, _, _) = e, r != 0 {
+                            XCTAssertTrue(run.clocks[k] >= pf || run.clocks[k] >= hold, "\(c.tier) seed \(seed) \(kind): rival \(r) hopped at \(run.clocks[k]) before the player (\(pf)) and before \(hold)")
+                        }
+                    }
+                }
+                for (label, tuning, lo, hi) in [("afk", RacePullTuning(), hold, hold + 0.25), ("afk, mirror off", off, 0, 0.25)] {
+                    let run = Self.pullRun(seed: seed, bot: .afk, course: c, tuning: tuning)
+                    var first: [Int: Float] = [:]
+                    for (k, e) in run.events.enumerated() { if case .hop(let r, _, _, _, _, _, _) = e, first[r] == nil { first[r] = run.clocks[k] } }
+                    XCTAssertEqual(first.count, 2, "\(c.tier) seed \(seed) \(label): both rivals hop")
+                    for (r, t) in first { XCTAssertTrue(t >= lo && t <= hi, "\(c.tier) seed \(seed) \(label): rival \(r) first hop at \(t), expected \(lo) ... \(hi)") }
+                }
+            }
+        }
+    }
+
+    func testTheMirrorFollowsThePlayer() {
+        let t = RacePullTuning()
+        var perfectG: [Float] = [], perfectGr: [Float] = [], relaxedGr: [Float] = []
+        for seed in UInt64(1)...20 {
+            let p = Self.pullRun(seed: seed, bot: .perfect, course: .ripple, keep: false).sim
+            XCTAssertGreaterThanOrEqual(p.mirrorGreen, 0.9, "seed \(seed): perfect green"); XCTAssertLessThanOrEqual(p.mirrorGround, 0.03, "seed \(seed): perfect ground")
+            perfectG.append(p.mirrorGreen); perfectGr.append(p.mirrorGround)
+            let r = Self.pullRun(seed: seed, bot: .relaxed, course: .ripple, keep: false).sim
+            XCTAssertTrue((0.05...0.22).contains(r.mirrorGround), "seed \(seed): relaxed ground \(r.mirrorGround)")
+            relaxedGr.append(r.mirrorGround)
+            let a = Self.pullRun(seed: seed, bot: .afk, course: .ripple, keep: false).sim
+            XCTAssertEqual(a.mirrorGreen, t.mirrorGreenInit); XCTAssertEqual(a.mirrorGround, t.mirrorGroundInit)
+        }
+        print("[pullcal] mirror at the end, Ripple: perfect green min \(perfectG.min()!) ground max \(perfectGr.max()!); relaxed ground \(relaxedGr.min()!) ... \(relaxedGr.max()!)")
+    }
+
+    /// A sharp player meets the full pack: with a perfect player the mirror changes the rivals' mean finish time by at most 3 %, and never makes them faster.
+    func testASharpPlayerMeetsTheFullPack() {
+        var off = RacePullTuning(); off.mirror = false
+        for tier in [CourseTier.ripple, .splash, .wave, .tsunami] {
+            let c = RaceCourse.course(tier)
+            // (A perfect player ends the race before most rivals finish, so a rival who has not finished counts with the time his average pace so far gives:
+            // clock x length / distance. A mean over the finishers alone would drop the slow ones and look faster than it is.)
+            func times(_ run: PullRun) -> [Float] {
+                run.sim.racers.dropFirst().map { $0.finishTime ?? run.sim.clock * c.length / max($0.dist, 1e-3) }
+            }
+            var on: [Float] = [], offT: [Float] = []
+            for seed in UInt64(1)...100 {
+                on += times(Self.pullRun(seed: seed, bot: .perfect, course: c, keep: false))
+                offT += times(Self.pullRun(seed: seed, bot: .perfect, course: c, tuning: off, keep: false))
+            }
+            let a = on.reduce(0, +) / Float(max(on.count, 1)), b = offT.reduce(0, +) / Float(max(offT.count, 1))
+            print("[pullcal] sharp player, \(tier): rivals' mean finish mirror on \(a) s, off \(b) s, ratio \(a / b)")
+            XCTAssertLessThanOrEqual(a / b, 1.03, "\(tier): the mirror slows the rivals by more than 3 % for a perfect player")
+            XCTAssertGreaterThanOrEqual(a / b, 0.995, "\(tier): the mirror makes the rivals faster")
         }
     }
 
@@ -621,7 +690,7 @@ final class RacePullTests: XCTestCase {
 
     func testMirrorOffIsStageA2() {
         let printing = ProcessInfo.processInfo.environment["PULLGOLDEN"] == "1"
-        var t = RacePullTuning(); t.rivalLength = 0.88; t.rivalLengthPuddle = 0.64; t.tripScale = 4.3
+        var t = RacePullTuning(); t.rivalLength = 0.88; t.rivalLengthPuddle = 0.64; t.tripScale = 4.3; t.mirror = false
         for c in Self.allCourses {
             for (name, kind) in [("afk", PullBot.Kind.afk), ("steady", .steady)] {
                 for seed in UInt64(1)...4 {
