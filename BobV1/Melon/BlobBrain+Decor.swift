@@ -523,6 +523,7 @@ extension BlobBrain {
                 // the seat must be clear of anyone walking past (a Jelly sitting on, or coming to, this piece - the other seat - does not count); he waits a
                 // little for them to pass, else the sit is given up: nobody lands beside a passer-by
                 let here = position
+                if simd_distance(here, g.xz) > Self.hopFar + 0.3 { idleFinish(skinner); return }          // (never a hop across the room: the sit is dropped)
                 let others = socialOthers().filter { o in o !== self && !(o.idleState.kind == .decorSit && o.idleState.decorUID == f.uid) && !(social.map { $0.a === o || $0.b === o } ?? false) }          // (the other seat's sitter, seated or on his way, and the partner of a sit-together are no passers-by)
                 let crowded = others.contains { o in
                     if simd_distance(o.position, g.xz) < peerGap { return true }
