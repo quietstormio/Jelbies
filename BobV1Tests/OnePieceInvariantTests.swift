@@ -20,6 +20,7 @@ import simd
 final class OnePieceInvariantTests: XCTestCase {
     static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/onepiece/"
     nonisolated(unsafe) static var keep: [AnyObject] = []
+    nonisolated(unsafe) static var guardHits = 0          // (FEET GUARD failures so far: the progress line of testEveryMoveEveryCharacter)
     static let before = ProcessInfo.processInfo.environment["ONEPIECE_BEFORE"] != nil
     static let maxLegSdf: Float = -0.01, minNeck: Float = 0.010, maxDent: Float = 0.008, maxPadMove: Float = 0.10, maxStretch: Float = 1.15
 
@@ -226,7 +227,7 @@ final class OnePieceInvariantTests: XCTestCase {
         if Self.guardArmed { Skinner.leashObserver = { _, pull, _ in hits += 1; if firstHit < 0 { firstHit = hitFrame }; maxPull = max(maxPull, pull) } }
         defer {
             Skinner.leashObserver = nil
-            if hits > 0 { XCTFail("FEET GUARD: emote '\(sc.name)', \(characters[char].0) \(shoes ? "with shoes" : "bare"): the leash / tether moved a foot piece in \(hits) frames, first at frame \(firstHit), max pull \(String(format: "%.1f", maxPull * 100)) cm: the brain placed the feet away from the body") }
+            if hits > 0 { Self.guardHits += 1; XCTFail("FEET GUARD: emote '\(sc.name)', \(characters[char].0) \(shoes ? "with shoes" : "bare"): the leash / tether moved a foot piece in \(hits) frames, first at frame \(firstHit), max pull \(String(format: "%.1f", maxPull * 100)) cm: the brain placed the feet away from the body") }
         }
         guard sc.setup(r, seed) else { out.started = false; return out }
         let stepDt = r.sim.stepDt
@@ -278,7 +279,9 @@ final class OnePieceInvariantTests: XCTestCase {
         defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
         var report = "mode: \(Self.before ? "BEFORE (e4062d6 look)" : "AFTER")\nmove | char shoes pacing | frames bean pad | neckMin(cm)@f | joinMax(deg)@f | padMove stretch | neckBad joinBad | idealMax(cm) | dentMax(cm) tippedPadFrames | maxPoleToHip(cm)\n"
         var tot = Agg(), tippedMoves = Set<String>(), leashedMoves = Set<String>(), notStarted: [String] = [], worstNeck: (Float, String) = (.infinity, ""), worstJoin: (Float, String) = (0, "")
-        for (ji, job) in Self.jobs().enumerated() {
+        let allJobs = Self.jobs(), t0 = Date()
+        for (ji, job) in allJobs.enumerated() {
+            defer { print("PROGRESS move \(ji + 1)/\(allJobs.count) '\(job.name)' t=\(Int(Date().timeIntervalSince(t0))) s FEET GUARD hits so far \(Self.guardHits)"); fflush(stdout) }
             var anyStarted = false
             let lim = Int(ProcessInfo.processInfo.environment["ONEPIECE_VARIANTS"] ?? "") ?? job.chars.count
             for vi in 0..<min(lim, job.chars.count) {
