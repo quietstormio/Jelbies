@@ -78,6 +78,15 @@ final class DiningGroup {
     /// Diner i was taken out of this sitting because HE could not be served (diagnostics / tests); the others carry on.
     private(set) var excused: [Bool] = []
     /// Debug switch for the before / after survey: false restores the old rule (one stuck diner ends the meal for everybody).
+    /// The owner's meal rule (2026-11-10): the tray is out at once, each diner eats the moment he is at his place, each leaves the moment his share is gone. false = the 11-05 gather-first
+    /// flow (the tray waits for everybody to stand at his place). Env DINING_GATHER=1 = false (survey only, inert in the app).
+    nonisolated(unsafe) static var trayFirst = ProcessInfo.processInfo.environment["DINING_GATHER"] == nil
+    /// Tray-first: how long the tray waits for the diners who are still in front of their line to cross behind it (they are called at once; the tray never waits for anybody to ARRIVE).
+    static let crossCap: Float = 4
+    /// Tray-first: a diner's body closer than this to the tray's rectangle holds the pop back (he stands 0.4 from it at his place by design).
+    static let dinerClearance: Float = 0.3
+    /// Diagnostics: per-diner sends back from in front of the place (instead of re-forming the whole group).
+    private(set) var displacedSends = 0
     nonisolated(unsafe) static var robust = ProcessInfo.processInfo.environment["DINING_OLD"] == nil          // (env DINING_OLD=1 = the old rule, for the survey; inert in the app)
     /// A walker who does not move: his floor spot and how long he has stood there while walking.
     private var stallPos: [SIMD2<Float>] = []
@@ -165,7 +174,7 @@ final class DiningGroup {
         placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
-        reserves = 0; gaveUp = false; age = 0
+        reserves = 0; gaveUp = false; age = 0; displacedSends = 0
         excused = [Bool](repeating: false, count: n)
         stallPos = brains.indices.map { f($0) }; stallClock = [Float](repeating: 0, count: n)
         calledAt = [Float](repeating: 0, count: n); hardWokenAt = [Float?](repeating: nil, count: n)
@@ -211,6 +220,15 @@ final class DiningGroup {
     /// Somebody who has not started is still in a sleep state (the soft wake is slow): the tray waits a little longer for him (a late waker cannot pass the tray's corridor), not forever.
     static let wakeExtra: Float = 3
     private var stillWaking: Bool { brains.indices.contains { !started[$0] && !released[$0] && sleeping($0) } }
+    /// Tray-first: is diner i on the tray's side of his line (in front of it: he would have to cross the rectangle)?
+    private func inFront(_ i: Int) -> Bool { floor(i).y > stands[placeOf[i]].y + GameCare.popTolerance }
+    /// Tray-first pop rule: no body on the rectangle (bystanders as before, diners by `dinerClearance`) and every AWAKE diner who has not started is behind his line (or `crossCap` has passed).
+    private var trayFirstClear: Bool {
+        if trayBusy { return false }
+        if brains.indices.contains(where: { !released[$0] && trayDistance(floor($0)) < Self.dinerClearance }) { return false }
+        return true
+    }
+    private var crossersBehind: Bool { brains.indices.allSatisfy { released[$0] || started[$0] || sleeping($0) || !inFront($0) } }
     private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } }
 
     private func beginApproach() {
@@ -322,10 +340,13 @@ final class DiningGroup {
         if age > GameCare.mealTimeout { end(); gaveUp = true; return }
         switch state {
         case .approaching:
-            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) + (Self.robust && stillWaking ? Self.wakeExtra : 0) { spawnTray() }
+            if Self.trayFirst, forcedOrigin == nil {
+                if !trayOut, dining.phase == .absent, (trayFirstClear && (crossersBehind || age > Self.crossCap)) || age > Self.crossCap + (trayFirstClear ? 0 : 4) { spawnTray() }
+            } else if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) + (Self.robust && stillWaking ? Self.wakeExtra : 0) { spawnTray() }
             replan(dt: dt)
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }
+            if Self.robust, Self.trayFirst, finished.allSatisfy({ $0 }) { settlePay(); end(); return }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
             if Self.robust {
                 // (robust) a diner in a sleep state is never idle / stalled for the group (the soft wake is slow: stir, roll, stretch, look round): he only has his own patience clock
@@ -390,6 +411,12 @@ final class DiningGroup {
                 let st = dining.places[placeOf[i]].stand
                 if floor(i).y > st.y + GameCare.popTolerance + 0.05 {
                     // displaced in front of his place (the tray is between): everybody re-forms behind the tray, bounded
+                    if Self.robust, Self.trayFirst {
+                        // (tray-first) only HE goes back behind his place; the tray stays and the others keep eating
+                        displacedSends += 1; started[i] = false; state = .approaching; stallClock[i] = 0; stallPos[i] = floor(i)
+                        if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { excuse(i) }
+                        return
+                    }
                     if reserves < GameCare.maxReserves { reserves += 1; settlePay(); dining.despawn(); finished = finished.indices.map { released[$0] }; beginApproach() } else { end(); gaveUp = true }
                     return
                 } else if mealRetries[i] < GameCare.maxReserves {

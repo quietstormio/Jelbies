@@ -46,6 +46,9 @@ final class DiningSurveyTests: XCTestCase {
         if p.count == 2, p[0] <= p[1] { return Array(p[0]...p[1]) }
         return s.split(separator: ",").compactMap { UInt64($0.trimmingCharacters(in: .whitespaces)) }
     }
+    /// Per seed, for the owner's three sentences.
+    private struct Metric { var trayOut: Float?; var arrive: [Float?]; var ate: [Float?]; var lastBite: [Float?]; var released: [Float?]; var closeFrames: Int; var excused: Int; var reforms: Int; var front: Int; var onRect: Int }
+    private var metrics: [Metric] = []
     private static func f(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "nil" }
 
     private func runSeed(_ seed: UInt64, arm: String) -> Result {
@@ -71,6 +74,9 @@ final class DiningSurveyTests: XCTestCase {
         let group = DiningGroup()
         if arm == "applike" { group.tierOf = { _ in .normal } }
         group.start(Consumables.berries, brains: brains, floor: { lab.rigs[$0].brain.position })
+        var callFront = 0, callOnRect = 0
+        if group.isActive { for i in 0..<3 { let f = brains[i].position, st = group.standsNow[group.placeOf[i]]; if f.y > st.y + GameCare.popTolerance { callFront += 1 }; if group.trayDistance(f) <= 0.001 { callOnRect += 1 } } }
+        var trayOutAt: Float?, arrive = [Float?](repeating: nil, count: 3), closeFrames = 0
 
         var ate = [Float?](repeating: nil, count: 3)
         var lastEating = [Float?](repeating: nil, count: 3)       // last tick each rig was eating / drinking
@@ -80,6 +86,9 @@ final class DiningSurveyTests: XCTestCase {
         var t: Float = 0
         while t < Self.window {
             lab.tick(watching: false); group.tick(dt: lab.rigs[0].sim.stepDt); t += dt
+            if trayOutAt == nil, group.dining.phase != .absent { trayOutAt = t }
+            if group.dining.phase == .present || group.dining.phase == .popping { if brains.contains(where: { group.trayDistance($0.position) < 0.3 }) { closeFrames += 1 } }
+            if group.isActive { for i in 0..<3 where arrive[i] == nil { let f = brains[i].position, st = group.standsNow[group.placeOf[i]]; if f.y <= st.y + GameCare.popTolerance, simd_distance(f, group.approachPoint(blob: i)) < 0.5 { arrive[i] = t } } }
             for (i, b) in brains.enumerated() {
                 if b.activity == .eating || b.activity == .drinking { if ate[i] == nil { ate[i] = t }; lastEating[i] = t }
                 if releasedAt[i] == nil, ate[i] != nil, !group.isHolding(i) { releasedAt[i] = t }
@@ -110,6 +119,8 @@ final class DiningSurveyTests: XCTestCase {
         let nAll = ate.compactMap { $0 }.count
         let heldStr = maxRig < 0 ? "none" : String(format: "%.1f%@ rig %d", maxHeld, open ? "+" : "", maxRig)
         print("TRAYSURVEY arm \(arm) seed \(seed) | all asleep \(allAsleep) | rig2 start (\(spot.x), \(spot.y)) | ate rig0 \(Self.f(ate[0])) rig1 \(Self.f(ate[1])) rig2 \(Self.f(ate[2])) | ate<=40s \(n40) | ate<=window \(nAll) | gaveUp \(Self.f(gaveUp)) \(reason) | over \(Self.f(over)) | max held after eating \(heldStr) | excused \(group.excused) | end \((0..<3).map { "\(brains[$0].activity)/\(String(format: "%.2f", simd_distance(brains[$0].position, group.approachPoint(blob: $0))))/wr\(group.walkRetries.indices.contains($0) ? group.walkRetries[$0] : -1)" }) | droppedWhileEating \(dropEating) | sim \(Self.f(t)) s")
+        print("TRAYSURVEY call: seed \(seed) inFrontOfLine \(callFront) onTrayRect \(callOnRect) | trayOut \(Self.f(trayOutAt)) | arrive \(arrive.map { Self.f($0) }) | lastBite \(lastEating.map { Self.f($0) }) | released \(releasedAt.map { Self.f($0) }) | closeFrames \(closeFrames) | displacedSends \(group.displacedSends) reserves \(group.reserves)")
+        metrics.append(Metric(trayOut: trayOutAt, arrive: arrive, ate: ate, lastBite: lastEating, released: releasedAt, closeFrames: closeFrames, excused: group.excused.filter { $0 }.count, reforms: group.reserves + group.displacedSends, front: callFront, onRect: callOnRect))
         group.cancel(); group.dining.reset()
         return Result(ate: ate, gaveUp: gaveUp, gaveReason: reason, over: over, maxHeld: maxHeld, maxHeldRig: maxRig, maxHeldOpen: open, excused: group.excused.filter { $0 }.count, droppedWhileEating: dropEating)
     }
@@ -141,6 +152,11 @@ final class DiningSurveyTests: XCTestCase {
         let firsts = res.compactMap { $0.ate.compactMap { $0 }.min() }.sorted(), lasts = res.compactMap { r -> Float? in r.ate.allSatisfy({ $0 != nil }) ? r.ate.compactMap { $0 }.max() : nil }.sorted()
         let med = { (a: [Float]) -> String in a.isEmpty ? "nil" : Self.f(a[a.count / 2]) }
         print("TRAYSURVEY TOTALS2 mode softMealWake \(BlobBrain.softMealWake) robust \(DiningGroup.robust) | >=2 ate within 45 s \(res.filter { r in r.ate.compactMap { $0 }.filter { $0 <= 45 }.count >= 2 }.count) | all 3 within 60 s \(res.filter { r in r.ate.allSatisfy { ($0 ?? 99) <= 60 } }.count) | first bite median \(med(firsts)) worst \(Self.f(firsts.last)) late>16 \(firsts.filter { $0 > 16 }.count) (nobody ate: \(res.count - firsts.count)) | last diner first bite (all-3 seeds) median \(med(lasts)) worst \(Self.f(lasts.last)) n \(lasts.count)")
+        func stat(_ a: [Float]) -> String { let b = a.sorted(); return b.isEmpty ? "n0" : "med \(Self.f(b[b.count / 2])) worst \(Self.f(b.last)) n\(b.count)" }
+        let tr = metrics.compactMap(\.trayOut)
+        let arrToBite = metrics.flatMap { m in (0..<3).compactMap { i in m.ate[i].flatMap { a in m.arrive[i].map { max(0, a - $0) } } } }
+        let biteToGo = metrics.flatMap { m in (0..<3).compactMap { i in m.released[i].flatMap { r in m.lastBite[i].map { r - $0 } } } }
+        print("TRAYSURVEY OWNER tray=\(DiningGroup.trayFirst ? "first" : "gather") soft=\(BlobBrain.softMealWake) | call->trayOut \(stat(tr)) | arrival->first bite \(stat(arrToBite)) | last bite->released \(stat(biteToGo)) | frames body<0.3 of tray \(metrics.map(\.closeFrames).reduce(0, +)) (seeds with any \(metrics.filter { $0.closeFrames > 0 }.count)) | re-forms+displaced \(metrics.map(\.reforms).reduce(0, +)) | diners never ate \(metrics.flatMap { $0.ate }.filter { $0 == nil }.count) | excused \(metrics.map(\.excused).reduce(0, +)) | at call: diners in front of line \(metrics.map(\.front).reduce(0, +)) / \(metrics.count * 3), on tray rect \(metrics.map(\.onRect).reduce(0, +)), seeds with >=1 in front \(metrics.filter { $0.front > 0 }.count)")
         print("TRAYSURVEY TOTALS arm \(arm) softMealWake \(BlobBrain.softMealWake) robust \(DiningGroup.robust) | dropped-for-all-while-eating \(res.filter(\.droppedWhileEating).count) | excuses \(res.map(\.excused).reduce(0, +)) | over>45s or never \(res.filter { ($0.over ?? 999) > 45 }.count) | held>3s \(res.filter { $0.maxHeldRig >= 0 && $0.maxHeld > 3 }.count) | seeds \(res.count) | >=2 ate within 40 s \(res.filter { n40($0) >= 2 }.count) | all 3 within 40 s \(res.filter { n40($0) >= 3 }.count) | all 3 within window \(res.filter { $0.ate.allSatisfy { $0 != nil } }.count) | gave up \(gave.count) (timeout \(gave.filter(\.timeout).count), retries \(gave.filter { !$0.timeout }.count)) | median over \(Self.f(median)) | largest held \(worstStr)")
     }
 }
