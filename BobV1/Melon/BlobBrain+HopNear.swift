@@ -12,7 +12,14 @@ extension BlobBrain {
     /// The hop length a front-row spot may have and still keep its place first (the limit grows to the shortest legal hop + 0.05 when every spot is farther).
     static let hopNear: Float = 1.2
     /// No stand spot is farther than this from the seat's floor spot (this drops exactly the far end of a two-seat piece).
-    static let hopFar: Float = 2.0
+    static let hopReach: Float = 2.0
+    #if targetEnvironment(simulator)
+    /// The sit is dropped when he stands farther than this (+ 0.3) from the seat at take-off. Simulator aid HOPNEAR_OFF bit 8: no cap.
+    static let hopFar: Float = HopNearAid.off & 8 != 0 ? 1_000_000 : hopReach
+    #else
+    /// The sit is dropped when he stands farther than this (+ 0.3) from the seat at take-off.
+    static let hopFar: Float = hopReach
+    #endif
     /// A candidate closer than this to the piece's edge is inside the piece's own footprint (the "behind" spots of an off-centre seat) and is no stand spot.
     static let hopOwnClear: Float = bagHopGap - 0.05
     /// How long he stays seated past the rest while no near spot is free to hop down to.
@@ -41,9 +48,12 @@ extension BlobBrain {
         var legal: [HopCandidate] = []
         var order: [Int] = []
         for (i, p) in hopStandSpots(f, seat: seat).enumerated() {
+            #if targetEnvironment(simulator)
+            if HopNearAid.noFront && i < 5 { continue }          // (simulator aid HOPNEAR_NOFRONT: the front row does not count)
+            #endif
             guard f.distance(p) >= Self.hopOwnClear else { continue }
             let hop = simd_distance(p, seatP)
-            guard hop <= Self.hopFar, simd_distance(p, fixed(p)) < tolerance else { continue }
+            guard hop <= Self.hopReach, simd_distance(p, fixed(p)) < tolerance else { continue }
             legal.append(HopCandidate(spot: p, hop: hop, front: i < 5)); order.append(i)
         }
         guard let shortest = legal.map(\.hop).min() else { return ([], Self.hopNear) }
@@ -58,6 +68,15 @@ extension BlobBrain {
 
     /// The hop-on pick: the first candidate in pick order with nobody on it, nil when there is none (the piece is skipped).
     func hopNearStand(_ f: DecorFoot, seat: Int) -> SIMD2<Float>? {
+        #if targetEnvironment(simulator)
+        if HopNearAid.off & 1 != 0 {          // (simulator aid HOPNEAR_OFF bit 1: the hop-on pick of the base, verbatim)
+            for (i, p) in hopStandSpots(f, seat: seat).enumerated() where !(HopNearAid.noFront && i < 5) {
+                let q = fixed(p)
+                if simd_distance(p, q) < 0.06, peerFree(q) { return p }
+            }
+            return nil
+        }
+        #endif
         for c in hopNearOrder(f, seat: seat, tolerance: 0.06).spots where peerFree(fixed(c.spot)) { return c.spot }
         return nil
     }
@@ -65,6 +84,16 @@ extension BlobBrain {
     /// The hop-off pick (every piece but the beanbag): the first free candidate within L, else the first free one of the whole order, else the front spot as it was.
     func hopExitPick(_ f: DecorFoot) -> SIMD2<Float> {
         let ignore = decorIgnore
+        #if targetEnvironment(simulator)
+        if HopNearAid.off & 2 != 0 {          // (simulator aid HOPNEAR_OFF bit 2: the hop-off pick of the base, verbatim)
+            for (i, p) in hopStandSpots(f, seat: idleState.seat).enumerated() where !(HopNearAid.noFront && i < 5) {
+                let q = fixed(p)
+                if simd_distance(p, q) < 0.05, peerFree(q) { return p }
+            }
+            decorIgnore = ignore
+            return fixed(hopStandSpots(f, seat: idleState.seat)[0])
+        }
+        #endif
         let o = hopNearOrder(f, seat: idleState.seat, tolerance: 0.05)
         if let c = o.spots.first(where: { $0.hop <= o.near && peerFree(fixed($0.spot)) }) { return c.spot }
         if let c = o.spots.first(where: { peerFree(fixed($0.spot)) }) { return c.spot }
@@ -75,8 +104,21 @@ extension BlobBrain {
     /// Whether he can hop down now: true for the beanbag and when there is no legal candidate at all (nothing to wait for), else when a free spot within L exists.
     func hopExitNear(_ f: DecorFoot) -> Bool {
         if f.kind == .beanbag { return true }
+        #if targetEnvironment(simulator)
+        if HopNearAid.off & 4 != 0 { return true }          // (simulator aid HOPNEAR_OFF bit 4: no seated wait)
+        #endif
         let o = hopNearOrder(f, seat: idleState.seat, tolerance: 0.05)
         if o.spots.isEmpty { return true }
         return o.spots.contains { $0.hop <= o.near && peerFree(fixed($0.spot)) }
     }
 }
+
+#if targetEnvironment(simulator)
+/// Simulator-only switches for before / after runs (compiled out on a device). Off (0) = the behaviour of the rule.
+/// HOPNEAR_OFF is a bit mask: 1 = the hop-on pick of the base, 2 = the hop-off pick of the base, 4 = no seated wait, 8 = no cap on the hop on; 15 = the base.
+/// HOPNEAR_NOFRONT=1: the five front-row candidates count as not usable (new order and base paths alike), so "the front is taken" is reproducible.
+enum HopNearAid {
+    static let off: Int = Int(ProcessInfo.processInfo.environment["HOPNEAR_OFF"] ?? "") ?? 0
+    static let noFront: Bool = ProcessInfo.processInfo.environment["HOPNEAR_NOFRONT"] == "1"
+}
+#endif
