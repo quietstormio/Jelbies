@@ -730,7 +730,7 @@ final class BlobBrain {
         case .spin, .hopPlay, .flipPlay: activity = .playing
         case .eat(_, _, _, let drink): activity = drink ? .drinking : .eating
         case .dine: activity = dine.mode == .sip ? .drinking : .eating
-        case .idle: activity = idleActivity
+        case .idle: activity = (idleState.kind == .sleep && sleep.mealWake) ? .turning : idleActivity
         case .race: activity = .walking
         }
     }
