@@ -68,8 +68,8 @@ nonisolated enum BubbleTuning {
     /// Weights of the bounce in `planMove` (below the crown / above it); the others are fixed there.
     nonisolated(unsafe) static var bounceWeightLow: Float = 0.5          // (the BEFORE value: the skip keeps its share)
     /// The flap's weight where it is not the first choice (a bubble in the middle band, winged only).
-    nonisolated(unsafe) static var flapWeightMid: Float = 4          // (1 before)
-    nonisolated(unsafe) static var flapWeightHigh: Float = 6          // (3 before: a winged one under a high bubble)
+    nonisolated(unsafe) static var flapWeightMid: Float = 8          // (1 before)
+    nonisolated(unsafe) static var flapWeightHigh: Float = 12          // (3 before: a winged one under a high bubble)
     nonisolated(unsafe) static var skipWeight: Float = 6          // (3 before: a low bubble)
     nonisolated(unsafe) static var leapWeightMid: Float = 4.5          // (3 before: the bounce of four hops would otherwise take the leap's share)
     nonisolated(unsafe) static var bounceWeightHigh: Float = 3.5          // (1.5 before; 4 in round 1 crowded the other pops out)
@@ -118,7 +118,7 @@ nonisolated enum BubbleTuning {
         playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.08...0.3
         playPickRadius = 5.0; playSpotHold = 0.35...0.5; playHopSpacing = 0.8
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.2...0.45; playWaitHopChance = 0.8; playWaitHopEnabled = true
-        bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 4; flapWeightHigh = 6; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 5
+        bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 8; flapWeightHigh = 12; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 5
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
         busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false
     }
