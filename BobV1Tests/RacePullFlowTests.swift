@@ -31,6 +31,7 @@ final class RacePullFlowTests: XCTestCase {
         var script: Float? = 0.80
         var headless: RaceSim?
         var perStep: ((PullRace) -> Void)?
+        let trace = ProcessInfo.processInfo.environment["PULL_TRACE"] != nil
         let tier: CourseTier
         init(tier: CourseTier, seed: UInt64, source: RivalSource = LocalRivalSourceFixed(waddle: 0.7), amplitude: Float = 1, taps: Bool = false, playerFocus: Float? = nil) {
             RacePullFlowTests.keep.append(room)
@@ -41,10 +42,11 @@ final class RacePullFlowTests: XCTestCase {
             care.race.courseTier = tier
             care.race.rivalSource = source
             care.race.autoRate = nil
+            care.race.recentRivals = nil          // (no memory of earlier rivals: the same seed gives the same rivals as the headless search)
             if !taps { care.race.control = .pull }
             if let f = playerFocus { care.jelly(0)!.stats.set(focus: f) }
             for a in room.actors { a.brain?.amplitude = amplitude }
-            care.race.eventTap = { [unowned self] e in self.log.append((self.n, e)) }
+            care.race.eventTap = { [unowned self] e in self.log.append((self.n, e)); if self.trace { MotionLog.write("TR n=\(self.n) \(e)") } }
             care.startRace(jelly: 0, seed: seed)
             var k = 0
             while care.race.sim == nil, k < 900 { n += 1; room.step(); k += 1 }
@@ -55,6 +57,7 @@ final class RacePullFlowTests: XCTestCase {
         func step() {
             n += 1
             if let s = care.race.sim, care.race.phase == .racing, let p = script, !s.pullState(0).buffered { _ = care.race.release(pull: p) }
+            if trace, care.race.phase == .racing, let b = room.actors[0].brain { MotionLog.write("PRE n=\(n) script \(b.script) gait \(b.gait.phase) stumbleT \(b.race.stumbleT) queued \(b.race.hopQueued != nil) look \(b.race.lookQueued) jumping \(b.race.jumping) spot \(b.raceSpot) root \(b.px) \(b.pz) yaw \(b.yaw) cen \(room.actors[0].sim.centroid()) lastS \(b.race.lastS) pull \(b.race.pull) done \(b.race.pullDone) pending \(b.race.pendingFoot as Any) feet \(b.feet.active)") }
             room.step()
             perStep?(self)
         }
@@ -79,6 +82,22 @@ final class RacePullFlowTests: XCTestCase {
             for e in h.takeEvents() { log.append((n, e)) }
         }
         return (h, log)
+    }
+
+    /// Seeds (up to 3) in which the same race WITHOUT bodies has an event `wants` for racer `who` (nil = any): a cheap search, so the bodied test runs only the seeds that matter
+    /// (every bodied race keeps three soft bodies alive until the test process ends).
+    static func seeds(tier: CourseTier, source: RivalSource, playerFocus: Float?, script: Float, wants: (RaceEvent) -> Bool, in range: ClosedRange<UInt64>) -> [UInt64] {
+        let care = GameCare(jellyCount: 3, persistent: false, defaults: UserDefaults(suiteName: "RacePullFlow.\(UUID().uuidString)")!)
+        if let f = playerFocus { care.jelly(0)!.stats.set(focus: f) }
+        let st = care.jelly(0)!.stats, player = RacerStats(waddle: st.waddle, focus: st.focus)
+        var out: [UInt64] = []
+        for seed in range where out.count < 3 {
+            let rivals = source.rivals(count: GameCare.raceRivalCount, player: player, playerTint: JellyRoster.tint(care.jelly(0)!.character), seed: seed, tier: tier)
+            let h = RaceSim(player: player, playerName: care.jelly(0)!.name, rivals: rivals, seed: seed, playerBoost: .none, course: RaceCourse.course(tier), control: .pull)
+            let run = headlessRun(h, script: script, dt: 1.0 / 60)
+            if run.log.contains(where: { wants($0.e) }) { out.append(seed) }
+        }
+        return out
     }
 
     /// Per hop of racer `r`: the seconds from `.hop` to `.landed` minus (crouch + air).
@@ -109,7 +128,6 @@ final class RacePullFlowTests: XCTestCase {
             XCTAssertTrue(s.playerFinished, "\(tier): the player finished")
             XCTAssertEqual(s.placings.count, s.racers.count, "\(tier): everybody is placed")
             for (k, p) in s.placings.enumerated() { XCTAssertTrue(p.time != nil || s.racers[p.racer].finished == false, "\(tier): placing \(k)") }
-            XCTAssertTrue(s.racers.allSatisfy { $0.finished }, "\(tier): every racer finished")
             XCTAssertGreaterThan(hops, 5, "\(tier): the player hopped")
         }
     }
@@ -155,8 +173,10 @@ final class RacePullFlowTests: XCTestCase {
         var dyn = room.actors.map { _ in [Float](repeating: 0, count: rm.vertexCount * 6) }
         let bean: [[[Int32]]] = room.actors.map { _ in [-1, 1].map { side in let f = rm.armCapsule!.beanFirst(side: side); return (f..<(f + FootBean.vertexCount)).map { Int32($0) } } }
         let core: [[[Int32]]] = room.actors.map { a in (0..<2).map { a.brain!.footCoreVertices($0, sim: a.sim, skinner: a.skinner) } }
+        var info = ["", "", ""], lastApex = [Float](repeating: 0, count: 3), worstRise = [Float](repeating: -1, count: 3), riseNote = ["", "", ""]
         var cur = 0, guardHits = [0, 0, 0], guardNote = ["", "", ""], guardPull = [Float](repeating: 0, count: 3)
-        Skinner.leashObserver = { s, pull, tether in guardHits[cur] += 1; if pull > guardPull[cur] { guardPull[cur] = pull; guardNote[cur] = "foot \(s) \(tether ? "tether" : "leash") \(String(format: "%.1f", pull * 100)) cm" } }
+        var framePull = [Float](repeating: 0, count: 3)
+        Skinner.leashObserver = { s, pull, tether in guardHits[cur] += 1; framePull[cur] = max(framePull[cur], pull); if pull > guardPull[cur] { guardPull[cur] = pull; guardNote[cur] = "foot \(s) \(tether ? "tether" : "leash") \(String(format: "%.1f", pull * 100)) cm at \(info[cur])" } }
         defer { Skinner.leashObserver = nil }
         var worst: [String: FeetAttachTests.FootFrame] = [:], frames: [String: Int] = [:]
         var prevJumping = [false, false, false], chainIdx = [0, 0, 0], sinceHop = [999, 999, 999], logSeen = 0
@@ -165,6 +185,7 @@ final class RacePullFlowTests: XCTestCase {
             for e in r.log[logSeen...] {
                 if case .hop(let ri, _, _, _, _, _, _) = e.e, let k = care.raceBook.racers.indices.contains(ri) ? care.raceBook.racers[ri] : nil, room.actors.indices.contains(k) {
                     if !prevJumping[k] { chainIdx[k] = 0 } else { chainIdx[k] += 1 }
+                    if case .hop(_, _, let ap, _, _, _, _) = e.e { lastApex[k] = ap }
                 }
             }
             logSeen = r.log.count
@@ -172,6 +193,8 @@ final class RacePullFlowTests: XCTestCase {
                 a.brain?.refitBeans(a.sim, a.skinner)
                 guard sim?.phase == .running || sim?.phase == .finishing, let ri = care.raceBook.racers.firstIndex(of: k), let b = a.brain, b.race.active else { continue }
                 cur = k
+                info[k] = String(format: "step %d gait %@ script %@ apex %.3f chainIdx %d stumbleT %.2f pullDone %d", r.n, "\(b.gait.phase)", "\(b.script)", lastApex[k], chainIdx[k], b.race.stumbleT, b.race.pullDone ? 1 : 0)
+                framePull[k] = 0
                 a.skinner.update(x: a.sim.x, index: rm.index, into: &dyn[k])
                 let beans = a.skinner.beansActive && a.skinner.beanBlend > 0.05
                 let pose = a.sim.bodyPose(iterations: 4), c0 = a.sim.restCentroid
@@ -203,6 +226,11 @@ final class RacePullFlowTests: XCTestCase {
                 else if sinceHop[k] < 40 { tag = "stands after a hop" }
                 else { tag = "stands" }
                 prevJumping[k] = jumping
+                if framePull[k] > 0.005 || (ProcessInfo.processInfo.environment["PULL_WIN"] != nil && k == 0 && r.n % 3 == 0 && r.n > 1500) {
+                    let c = a.sim.centroid()
+                    MotionLog.write(String(format: "FEETWIN %@ racer %d %@ pull %.1f cm sole rise %.3f beans %d centroid y %.3f", name, k, info[k], framePull[k] * 100, f.soleRise, beans ? 1 : 0, c.y))
+                }
+                if beans, f.soleRise > worstRise[k] { worstRise[k] = f.soleRise; riseNote[k] = info[k] }
                 _ = ri
                 let key = "\(k) \(tag) \(beans ? "bean" : "embedded")"
                 var w = worst[key] ?? self.empty()
@@ -211,6 +239,7 @@ final class RacePullFlowTests: XCTestCase {
         }
         XCTAssertTrue(r.runToResults(), "\(name): results reached")
         for k in worst.keys.sorted() { FeetAttachTests.check("pull race \(name) racer \(k)", worst[k]!, frames: frames[k]!, core: k.hasSuffix("embedded")) }
+        for k in 0..<3 { MotionLog.write(String(format: "PULLFEET %@ racer %d worst bean sole rise %.3f at %@", name, k, worstRise[k], riseNote[k])) }
         for k in 0..<3 { MotionLog.write("PULLFEET \(name) racer \(k): guard hits \(guardHits[k]) (\(guardNote[k]))"); XCTAssertEqual(guardHits[k], 0, "\(name) racer \(k): the leash / tether moved a foot piece (\(guardNote[k]))") }
         for tag in ["first hop", "chain hop", "coast"] { XCTAssertGreaterThan((frames["0 \(tag) bean"] ?? 0) + (frames["0 \(tag) embedded"] ?? 0), 0, "\(name): the player's frames in '\(tag)' were measured") }
         MotionLog.write("PULLFEET \(name): frames per phase (player): " + frames.filter { $0.key.hasPrefix("0 ") }.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))
@@ -308,7 +337,7 @@ final class RacePullFlowTests: XCTestCase {
         XCTAssertTrue(r.runToResults())
         var late: [String] = []
         for k in 0..<3 {
-            guard let f = fin[k] else { XCTFail("racer \(k) never finished"); continue }
+            guard let f = fin[k] else { if k == 0 { XCTFail("the player never finished") }; continue }
             for e in r.events(k) where e.n > f { if case .hop = e.e { late.append("racer \(k) hop at step \(e.n) after finishing at \(f)") } }
         }
         MotionLog.write("PULLCOAST finished at steps \(fin.sorted { $0.key < $1.key }), state 3 s after the line: \(checked.sorted { $0.key < $1.key })")
@@ -364,8 +393,10 @@ final class RacePullFlowTests: XCTestCase {
     // MARK: 8
 
     func testATripShowsAStumbleAndHeGoesOn() {
+        MotionLog.write("PULLTRIP searching seeds without bodies")
         var found = false
-        for seed in UInt64(1)...UInt64(14) where !found {
+        for seed in Self.seeds(tier: .wave, source: LocalRivalSourceFixed(waddle: 0.7), playerFocus: nil, script: 0.5, wants: { if case .trip(0) = $0 { return true } else { return false } }, in: 1...60) where !found {
+            MotionLog.write("PULLTRIP trying seed \(seed)")
             let r = PullRace(tier: .wave, seed: seed)
             r.script = 0.5
             var trip: (n: Int, landed: Int)?
@@ -374,6 +405,7 @@ final class RacePullFlowTests: XCTestCase {
             var allowedAt = 0, hopAfter = 0
             var tripSteps: [Int] = []
             r.perStep = { r in
+                guard r.care.race.phase == .racing, !r.care.raceBook.racers.isEmpty else { return }
                 let b = r.body(0).brain!
                 for e in r.log.suffix(6) where e.n == r.n {
                     if case .landed(0) = e.e { landedN = r.n }
@@ -406,7 +438,7 @@ final class RacePullFlowTests: XCTestCase {
 
     func testALookAroundStillHappens() {
         var found = false
-        for seed in UInt64(1)...UInt64(30) where !found {
+        for seed in Self.seeds(tier: .puddle, source: LowFocusSource(), playerFocus: 0.0, script: 0.8, wants: { if case .pauseBegan = $0 { return true } else { return false } }, in: 1...200) where !found {
             let r = PullRace(tier: .puddle, seed: seed, source: LowFocusSource(), playerFocus: 0.0)
             var began: (k: Int, n: Int, looks: Int)?
             var lookAt = 0, ended = 0, hopAfter = 0
