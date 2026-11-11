@@ -96,6 +96,7 @@ extension BlobBrain {
             let turning = turnSteps(goal: idleState.goalYaw, tol: 0.08)
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             if !turning && !feet.active && idleState.phaseT > 0.15 {
+                guard f.uid != ParkToys.slideUID || slideHopReady(f) else { idleFinish(skinner); return }          // (the hops start only from behind the slide, next to the climb spot)
                 idleState.slideStep = 0; idleState.phaseT = 0
                 slideHop(sim, f)
             }
