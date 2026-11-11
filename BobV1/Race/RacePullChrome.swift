@@ -324,9 +324,10 @@ enum RacePullTopText {
     /// The hint for the state, nil for none. `barHints`: the bar hints shown so far this race (the first three bars only).
     static func hint(_ ui: RaceUI, assist: RaceAssist, autoJump: Bool, barHints: Int) -> String? {
         if ui.stumbling, ui.tripped { return ui.playerName.isEmpty ? "Whoops! A trip!" : "Whoops! \(ui.playerName) tripped" }
-        if ui.stalled { return "Pull down and let go!" }
-        if ui.hurdleAhead, assist != .auto, !autoJump, barHints <= 3 { return "Green clears the bar!" }
-        if ui.phase == .countdown { return "Pull down anywhere. Let go in the green!" }
+        let button = assist == .oneButton          // (the one-button assist: there is no pull, the Hop button is the control)
+        if ui.stalled { return assist == .auto ? nil : button ? "Press Hop!" : "Pull down and let go!" }
+        if ui.hurdleAhead, assist != .auto, !autoJump, barHints <= 3 { return button ? "Hop to clear the bar!" : "Green clears the bar!" }
+        if ui.phase == .countdown { return assist == .auto ? nil : button ? "Press Hop to hop along!" : "Pull down anywhere. Let go in the green!" }
         return nil          // (no bend hint: the pull model has no reason to ease off in a bend for the player)
     }
 }
@@ -374,6 +375,7 @@ struct RacePullTopRow: View {
         }
         .onChange(of: ui.hopSerial) { _, _ in
             let u = race.ui
+            if race.assist == .auto { return }          // (he hops by himself: no grade to cheer or scold)
             switch u.hopGrade {
             case .perfect: show(u.streak >= 2 ? "Perfect ×\(u.streak)" : "Perfect!", bg: hexColor(0xD5F2EA), ink: hexColor(0x1D6A5A))
             case .over: show("Too far!", bg: hexColor(0xFFF0D2), ink: hexColor(0x7A500C))

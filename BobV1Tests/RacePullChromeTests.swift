@@ -146,6 +146,21 @@ final class RacePullChromeTests: XCTestCase {
         XCTAssertEqual(f.ui.streak, 0, "a trip breaks the streak")
     }
 
+    func testHintsNeverTeachTapsAndFollowTheAssist() {
+        var ui = RaceUI(); ui.phase = .countdown; ui.pull = true
+        XCTAssertEqual(RacePullTopText.hint(ui, assist: .off, autoJump: false, barHints: 0), "Pull down anywhere. Let go in the green!")
+        XCTAssertEqual(RacePullTopText.hint(ui, assist: .oneButton, autoJump: false, barHints: 0), "Press Hop to hop along!")
+        XCTAssertNil(RacePullTopText.hint(ui, assist: .auto, autoJump: false, barHints: 0))
+        ui.phase = .running; ui.stalled = true
+        XCTAssertEqual(RacePullTopText.hint(ui, assist: .off, autoJump: false, barHints: 0), "Pull down and let go!")
+        ui.stalled = false; ui.hurdleAhead = true
+        XCTAssertEqual(RacePullTopText.hint(ui, assist: .off, autoJump: false, barHints: 1), "Green clears the bar!")
+        XCTAssertNil(RacePullTopText.hint(ui, assist: .off, autoJump: false, barHints: 4), "the first three bars only")
+        XCTAssertNil(RacePullTopText.hint(ui, assist: .off, autoJump: true, barHints: 1), "not with Jump for me")
+        ui.inTurn = true; ui.hurdleAhead = false
+        XCTAssertNil(RacePullTopText.hint(ui, assist: .off, autoJump: false, barHints: 0), "no bend hint")
+    }
+
     func testAReleaseDuringAStumbleIsIgnored() {
         let f = pullRace(.off, course: .splash)
         var n = 0
