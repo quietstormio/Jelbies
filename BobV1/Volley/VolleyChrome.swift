@@ -191,7 +191,7 @@ struct VolleyChrome: View {
 
     /// A double-tap: the nearest of your two Jelbies to the finger takes control. The hit zone is about a body and a half wide on the screen (a body is ~1.1 world
     /// units across; the radius is measured from the projected court, so it scales with the portrait / landscape camera), around the middle of his body.
-    /// Nothing else happens on a double-tap: no hit, serve or aim (those live on the Hit button). The haptic and the hop come from the `.switched` event.
+    /// Nothing else happens on a double-tap: no hit, serve or aim (those live on the Hit button). The haptic comes from the `.switched` event.
     private func pick(_ at: CGPoint, _ size: CGSize) {
         guard volley.live, volley.bodyPos.count >= 2 else { return }
         var best: (Int, CGFloat)?

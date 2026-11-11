@@ -12,7 +12,7 @@ import XCTest
 final class VolleySwitchTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
 
-    private struct Court {
+    @MainActor private struct Court {
         let room: RaceThreeTests.Room
         var care: GameCare { room.care }
         var mate: JellyActor { room.care.volleyWork.players[1] }
