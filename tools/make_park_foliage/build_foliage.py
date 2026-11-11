@@ -71,7 +71,7 @@ def lobe_color(pal, lobes, me, y0, y1, vtone):
 def crown(lobes, pal, sub, y0, y1, seed, bump=0.05):
     rng = random.Random(seed)
     for i, (c, rx, ry, rz) in enumerate(lobes):
-        commit(lobe_bm(c, rx, ry, rz, sub, bump, seed + i * 1.7), lobe_color(pal, lobes, i, y0, y1, 1 + rng.uniform(-0.04, 0.04)), sharp=100)
+        commit(lobe_bm(c, rx, ry, rz, sub + (1 if (i == 0 and sub == 3) else 0), bump, seed + i * 1.7), lobe_color(pal, lobes, i, y0, y1, 1 + rng.uniform(-0.04, 0.04)), sharp=100)
 
 def trunk(H, r0, flare, bfn, sides, lean=(0.0, 0.0), top_r=0.62):
     TS = [0, 0.012, 0.03, 0.055, 0.09, 0.14, 0.21, 0.3, 0.42, 0.56, 0.72, 0.86, 1.0]
