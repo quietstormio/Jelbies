@@ -142,6 +142,44 @@ final class HopNearTests: XCTestCase {
         DecorField.shared.clear()
     }
 
+    // MARK: real sits, one Jelbie, the front row switched off (TEST_RUNNER_HOPNEAR_NOFRONT=1; HOPNEAR_OFF=15 = the base)
+
+    /// One Jelbie in the open sits on loveseat / dining set / armchair / swing / sandbox from the left. Run with HOPNEAR_NOFRONT=1 (the front row does not count) it is "front blocked"
+    /// without a crowd; with HOPNEAR_OFF=15 as well it is the base. Prints the real hop on and hop off and how long he sat; the asserts hold for the rule (red on the base, the "before").
+    func testARealSitWithTheFrontRowSwitchedOffNeverHopsAcrossThePiece() {
+        let env = ProcessInfo.processInfo.environment
+        print("HOPNEAR-REAL env HOPNEAR_OFF=\(env["HOPNEAR_OFF"] ?? "-") HOPNEAR_NOFRONT=\(env["HOPNEAR_NOFRONT"] ?? "-")")
+        for kind in [DecorKind.loveseat, .diningset, .armchair, .swing, .sandbox] {
+            DecorField.shared.clear(); room()
+            DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: Self.at.x, z: Self.at.y)])
+            let f = DecorField.shared.foot(7)!
+            let r = MotionRig(game: true); Self.keep.append(r)
+            r.brain.anticsEnabled = true; r.brain.sleepEnabled = true
+            r.brain.abortScript(r.sim, r.skinner)
+            r.sim.teleport(toXZ: SIMD2(Self.at.x - 1.6, Self.at.y + 2.0))
+            for _ in 0..<120 { r.sim.step() }
+            r.brain.currentPose(r.sim)
+            r.brain.idleForced = true
+            guard r.brain.idleStart(.decorSit, r.sim) else { print("HOPNEAR-REAL \(kind) NO-START"); XCTFail("\(kind): the sit does not start"); continue }
+            let seat = r.brain.idleState.seat
+            let seatP = seatXZ(f, seat)
+            var prev = r.brain.position, on: Float = -1, off: Float = -1, sat = 0, sawHop = false, done = false
+            r.run(70, until: { done }) {
+                DecorField.shared.tick(dt: 1.0 / 60)
+                let s = r.brain.idleState
+                if s.kind == .decorSit {
+                    if s.bagStage >= 1, !sawHop { sawHop = true; on = simd_distance(prev, seatP) }
+                    if s.bagStage == 2 { sat += 1 }
+                } else if s.kind == nil, sawHop { done = true; off = simd_distance(r.brain.position, seatP) }
+                prev = r.brain.position
+            }
+            print(String(format: "HOPNEAR-REAL %@ seat %d on %.2f off %.2f sat %.1f", "\(kind)", seat, on, off, Float(sat) / 60))
+            XCTAssertGreaterThanOrEqual(on, 0, "\(kind): he hopped on"); XCTAssertTrue(done, "\(kind): he hopped off")
+            XCTAssertLessThanOrEqual(on, 2.3, "\(kind): the hop on"); XCTAssertLessThanOrEqual(off, 2.0 + 0.05, "\(kind): the hop off")
+        }
+        DecorField.shared.clear()
+    }
+
     // MARK: the stand-spot audit misses
 
     /// Replays the placements of ToyPlayTests' two stand-spot audits (portrait, landscape): for every piece / placement / rotation with no stand spot for seat 0 it prints, per other seat,
