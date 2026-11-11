@@ -871,7 +871,16 @@ nonisolated final class Skinner {
     /// Body skin = the egg's vertices (below the first arm / foot / tail block) without the eyes, glints and brows.
     private func applyCuddle(_ dyn: UnsafeMutablePointer<Float>) {
         let m = cuddleBodyMask()
-        m.withUnsafeBufferPointer { cuddle.apply(dyn, count: vertexCount, mask: $0.baseAddress!, floorY: jelly.floorY, H: jelly.H) }
+        let g = cuddleFeatureGroups()
+        m.withUnsafeBufferPointer { cuddle.apply(dyn, count: vertexCount, mask: $0.baseAddress!, floorY: jelly.floorY, H: jelly.H, groups: g, dt: frameDt) }
+    }
+    private var cuddleGroups: [[Int32]]? = nil
+    /// The face-feature groups that ride the skin rigidly: each eye with its glints, each brow.
+    func cuddleFeatureGroups() -> [[Int32]] {
+        if let g = cuddleGroups { return g }
+        let g = [eyeIdx[0] + glintIdx[0], eyeIdx[1] + glintIdx[1], browIdx[0], browIdx[1]].filter { !$0.isEmpty }
+        cuddleGroups = g
+        return g
     }
     func cuddleBodyMask() -> [Bool] {
         let limit = bodyVertexLimit >= 0 ? bodyVertexLimit : (armFirst.min() ?? vertexCount)

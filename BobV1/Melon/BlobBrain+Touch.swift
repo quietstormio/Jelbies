@@ -1101,7 +1101,7 @@ final class TouchPlay {
     /// The finger's dent ends at once (the press turned out to be a pick up or a pinch, which have their own contacts).
     func releaseContact(sim: SoftBody, skinner: Skinner? = nil) {
         sim.endPress()
-        if let skinner { skinner.cuddle.reset(); cuddleLive = false }
+        if let skinner { skinner.cuddle.easeOut(); cuddleLive = false }
         contact = false; ramp = 0; speed = 0; prevLocal = nil; lastHit = nil; easedCenter = nil; hitLocal = nil; zone = .none
     }
 
@@ -1115,7 +1115,7 @@ final class TouchPlay {
         brain?.endExcited()
         brain?.hurry = false
         skinner.extraVertices = []; skinner.extraDelta = []; skinner.normalSmoothing = 0
-        skinner.cuddle.reset(); cuddleLive = false
+        skinner.cuddle.easeOut(); cuddleLive = false
         if eyesTouched { eyesTouched = false; skinner.setEyeOpenness(1); skinner.autoBlink = savedAutoBlink }
         haptics.update(now: CACurrentMediaTime(), petIntensity: 0, petSharpness: 0.1, squishIntensity: 0, squishSharpness: 0.5)
     }

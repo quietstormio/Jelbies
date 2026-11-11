@@ -74,6 +74,10 @@ nonisolated final class CuddleJiggle {
     private var taps = 0
     private var petRoll: Float = 0, petSq: Float = 0
     private var sinceStep = 0
+    private var easing = false
+    private var fadeK: Float = 1, fadeDur: Float = 0.1
+    private var petBlocked = false                                       // after an ease-out the petted extra stays off until his happy jiggle has fully died
+    private var sideW = SIMD3<Float>(1, 0, 0)                            // his own sideways direction (world), for the petted roll
     /// Soft taps fired by the last `step` (intensity 0 = none), read once by TouchPlay.
     private(set) var tap: Float = 0
     /// Peak outward displacement of the let-go spring so far (tests / log).
@@ -81,12 +85,14 @@ nonisolated final class CuddleJiggle {
 
     func reset() {
         active = false; contactOn = false; haveCentre = false; prevTarget = nil; fingerV = .zero; drag = .zero; s = 0; sV = 0; depthNow = 0; rimAmt = 0
-        rippleAge = 99; rippleAmp = 0; wasEngaged = 0; taps = 0; petRoll = 0; petSq = 0; tap = 0; peakOut = 0
+        rippleAge = 99; rippleAmp = 0; wasEngaged = 0; taps = 0; petRoll = 0; petSq = 0; tap = 0; peakOut = 0; easing = false; fadeK = 1; fadeDur = 0.1; sinceStep = 0
     }
 
     /// TouchPlay's happy jiggle gives its roll (rad) and squash fraction (+ = taller) here every frame; the extra drawn part is (scale - 1) of them.
     func setPet(roll: Float, squash: Float) {
         let k = tune.petScale - 1
+        if easing { return }
+        if petBlocked { if roll == 0 && squash == 0 { petBlocked = false }; return }
         if k <= 0 || !enabled { petRoll = 0; petSq = 0; return }
         petRoll = roll * k; petSq = squash * k
         if petRoll != 0 || petSq != 0 { active = true; sinceStep = 0 }
@@ -102,7 +108,10 @@ nonisolated final class CuddleJiggle {
     func step(dt rawDt: Float, contact: Bool, ramp: Float, point: SIMD3<Float>?, normal: SIMD3<Float>?, pose: BodyPose?, annoyed: Bool) {
         tap = 0
         guard enabled, level > 0 else { if active { reset() }; return }
+        if annoyed { easeOut(); if easing { return } }
+        if easing { return }
         sinceStep = 0
+        if let pose { sideW = pose.rotation.act(SIMD3<Float>(1, 0, 0)) }
         let dt = min(max(rawDt, 0), 0.25)
         let tn = tune
         let engaged = contact && !annoyed
@@ -209,57 +218,92 @@ nonisolated final class CuddleJiggle {
     /// Tests: the ring's displacement now at distance `d`.
     func rippleOffset(at d: Float) -> Float { Self.rippleValue(d: d, age: rippleAge, amp: rippleAmp) }
 
+    /// Everything `displacement` needs, worked out once per apply.
+    struct Field {
+        var c: SIMD3<Float>, n: SIMD3<Float>, drag: SIMD3<Float>, side: SIMD3<Float>
+        var nearOn: Bool, s: Float, rim: Float, rippling: Bool, rAge: Float, rAmp: Float
+        var pr: Float, ps: Float, petOn: Bool, floorY: Float, invH: Float, fade: Float
+    }
+    private func field(floorY: Float, H: Float) -> Field {
+        Field(c: cW, n: nW, drag: drag, side: sideW,
+              nearOn: (s != 0 || rimAmt != 0 || drag != .zero || rippleAge < Self.rippleLife) && haveCentre,
+              s: s, rim: rimAmt, rippling: rippleAge < Self.rippleLife && rippleAmp > 0, rAge: rippleAge, rAmp: rippleAmp,
+              pr: petRoll, ps: petSq, petOn: petRoll != 0 || petSq != 0, floorY: floorY, invH: 1 / H, fade: fadeK)
+    }
+    /// The one displacement field (dent / spring + rim + ripple + drag + petted wobble, foot-join fade, cap). Body skin vertices sample it at their own position,
+    /// each face-feature group samples it once at its centroid.
+    @inline(__always) private func displacement(_ p: SIMD3<Float>, _ F: Field) -> SIMD3<Float> {
+        let hN = (p.y - F.floorY) * F.invH
+        let fh = smoothstep(0.15, 0.30, hN)                          // 0 at the foot join, 1 from the lower belly up
+        if fh == 0 { return .zero }
+        var off = SIMD3<Float>.zero
+        if F.nearOn {
+            let dv = p - F.c
+            let d2 = simd_length_squared(dv)
+            if d2 < Self.reach * Self.reach, simd_dot(dv, F.n) > -0.5 {
+                let d = d2.squareRoot(), u = d * (1 / Self.fingerRadius)
+                let wd = 1 - smoothstep(0.25, 1.6, u)                    // the dent / spring profile
+                var along = F.s * wd
+                let t = (u - 1.0) / 1.2
+                if F.rim > 0, t > 0, t < 1 { let sn = sinf(.pi * t); along += F.rim * sn * sn }       // the displaced jelly bunches up just outside the finger
+                if F.rippling { along += Self.rippleValue(d: d, age: F.rAge, amp: F.rAmp) }
+                off = F.n * along + F.drag * (1 - smoothstep(0, 1.6, u))
+                off *= fh
+            }
+        }
+        if F.petOn {
+            let t = min(1, max(0, (hN - 0.1) * (1 / 0.9)))
+            if t > 0 {
+                let sm = t * t * (3 - 2 * t), w = sm * sm
+                off += F.side * (-F.pr * (p.y - F.floorY) * w * fh)      // roll about HIS forward axis (his sideways direction, not the world's)
+                off.y += F.ps * (p.y - F.floorY) * sm * fh
+            }
+        }
+        if F.fade != 1 { off *= F.fade }
+        let m = simd_length(off)
+        if m == 0 || !m.isFinite { return .zero }
+        return m > Self.maxOffset ? off * (Self.maxOffset / m) : off
+    }
+    /// Tests: the field at a point.
+    func displacementAt(_ p: SIMD3<Float>, floorY: Float, H: Float) -> SIMD3<Float> { displacement(p, field(floorY: floorY, H: H)) }
+
+    /// Start easing everything out: the offsets (frozen as they are) fade to zero within 0.1 s, with no overshoot, no ripple, no taps. Used where the layer used to be
+    /// hard-reset (a press that turns into a pick-up or a pinch, the cheeks' second finger, a grumpy touch, focus ending, a layer nobody steps any more).
+    func easeOut() {
+        guard active, !easing else { return }
+        easing = true; fadeK = 1; contactOn = false; tap = 0; petBlocked = true
+        // 0.1 s, or a little longer when the offsets are big, so no vertex ever moves more than ~0.011 u in one 60 fps frame
+        // (the dent, drag and ring peak at different places, so about 55 % of their sum is the most any one vertex gets: measured 0.049 u against a sum of 0.094 u)
+        let near = 0.55 * (abs(s) + max(rimAmt, rippleAmp) + simd_length(drag)), pet = (abs(petRoll) + abs(petSq)) * 1.4
+        let big = min(Self.maxOffset, max(near, pet))
+        fadeDur = max(0.1, big / (0.011 * 60))
+    }
+    var isEasing: Bool { easing }
+
     /// Displace the skinned body vertices (`dyn`: 6 floats per vertex, position first; `mask[v]` = a body skin vertex, not an arm / foot / tail piece, not a
-    /// face feature). A no-op unless `active`; a layer nobody has stepped for half a second is dropped (it must never freeze on the skin).
-    func apply(_ dyn: UnsafeMutablePointer<Float>, count: Int, mask: UnsafePointer<Bool>, floorY: Float, H: Float) {
+    /// face feature) and carry each face-feature group (`groups`: an eye with its glints, a brow) rigidly by the field at its centroid, so eyes and brows ride the skin
+    /// (no sinking, no standing proud, no shape change). A no-op unless `active`.
+    func apply(_ dyn: UnsafeMutablePointer<Float>, count: Int, mask: UnsafePointer<Bool>, floorY: Float, H: Float, groups: [[Int32]] = [], dt: Float = 1.0 / 60) {
         guard enabled, active else { return }
         sinceStep += 1
-        if sinceStep > 30 { reset(); return }
-        let R = Self.fingerRadius
-        let c = cW, n = nW
-        let nearOn = (s != 0 || rimAmt != 0 || drag != .zero || rippleAge < Self.rippleLife) && haveCentre
-        let dragV = drag
-        let sOut = s, rim = rimAmt
-        let rAge = rippleAge, rAmp0 = rippleAmp, rippling = rippleAge < Self.rippleLife && rippleAmp > 0
-        let invH = 1 / H, cap = Self.maxOffset, reach2 = Self.reach * Self.reach
-        let pr = petRoll, ps = petSq, petOn = pr != 0 || ps != 0
-        let invR = 1 / R
+        if sinceStep > 30 { easeOut() }                       // nobody steps the layer any more: it must never freeze on the skin
+        if easing {
+            fadeK -= dt / fadeDur
+            if fadeK <= 0 { reset(); return }
+        }
+        let F = field(floorY: floorY, H: H)
         for v in 0..<count where mask[v] {
             let o = 6 * v
-            let px = dyn[o], py = dyn[o + 1], pz = dyn[o + 2]
-            let hN = (py - floorY) * invH
-            var off = SIMD3<Float>.zero
-            let fh = smoothstep(0.15, 0.30, hN)                          // 0 at the foot join, 1 from the lower belly up
-            if fh == 0 { continue }
-            if nearOn {
-                let dv = SIMD3<Float>(px - c.x, py - c.y, pz - c.z)
-                let d2 = simd_length_squared(dv)
-                if d2 < reach2, simd_dot(dv, n) > -0.5 {
-                    if fh > 0 {
-                        let d = d2.squareRoot(), u = d * invR
-                        let wd = 1 - smoothstep(0.25, 1.6, u)                    // the dent / spring profile
-                        var along = sOut * wd
-                        let t = (u - 1.0) / 1.2
-                        if rim > 0, t > 0, t < 1 { let sn = sinf(.pi * t); along += rim * sn * sn }       // the displaced jelly bunches up just outside the finger
-                        if rippling { along += Self.rippleValue(d: d, age: rAge, amp: rAmp0) }
-                        off = n * along + dragV * (1 - smoothstep(0, 1.6, u))
-                        off *= fh
-                    }
-                }
-            }
-            if petOn {
-                let t = min(1, max(0, (hN - 0.1) * (1 / 0.9)))
-                if t > 0 {
-                    let sm = t * t * (3 - 2 * t), w = sm * sm
-                    off.x += -pr * (py - floorY) * w * fh
-                    off.y += ps * (py - floorY) * sm * fh
-                }
-            }
-            let m = simd_length(off)
-            if m == 0 { continue }
-            if !m.isFinite { continue }
-            if m > cap { off *= cap / m }
+            let off = displacement(SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]), F)
+            if off == .zero { continue }
             dyn[o] += off.x; dyn[o + 1] += off.y; dyn[o + 2] += off.z
+        }
+        for g in groups where !g.isEmpty {
+            var c = SIMD3<Float>.zero
+            for vi in g { let o = 6 * Int(vi); c += SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) }
+            let off = displacement(c / Float(g.count), F)
+            if off == .zero { continue }
+            for vi in g { let o = 6 * Int(vi); dyn[o] += off.x; dyn[o + 1] += off.y; dyn[o + 2] += off.z }
         }
     }
 }
