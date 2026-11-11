@@ -27,78 +27,54 @@ final class ParkVisitPlanTests: XCTestCase {
 
     // MARK: the draw
 
-    func testDrawGuardsAndRatesOverTenThousandVisits() {
-        var sOff = 0, hOff = 0
-        var sOn = 0, hOn = 0
-        var sMaxOff = 0, hMaxOff = 0
-        var prev: (Bool, Bool)?
-        var sOnOn = 0, sOffOff = 0, hOnOn = 0, hOffOff = 0
-        let n = 10_000
-        for v in 1...n {
-            let d = ParkVisitPlan.draw(visit: v, seesawOff: sOff, hopscotchOff: hOff)
-            XCTAssertTrue(d.seesaw || d.hopscotch, "visit \(v): both off")
-            sOff = d.seesaw ? 0 : sOff + 1; hOff = d.hopscotch ? 0 : hOff + 1
-            sMaxOff = max(sMaxOff, sOff); hMaxOff = max(hMaxOff, hOff)
-            if d.seesaw { sOn += 1 }; if d.hopscotch { hOn += 1 }
-            if let p = prev {
-                if p.0 && d.seesaw { sOnOn += 1 }; if !p.0 && !d.seesaw { sOffOff += 1 }
-                if p.1 && d.hopscotch { hOnOn += 1 }; if !p.1 && !d.hopscotch { hOffOff += 1 }
-            }
-            prev = (d.seesaw, d.hopscotch)
+    func testNeverBothAndEachPieceEveryOtherVisit() {
+        var seesawVisits: [Int] = [], hopscotchVisits: [Int] = []
+        for v in 1...20 {
+            let d = ParkVisitPlan.draw(visit: v, seesawOff: 0, hopscotchOff: 0)
+            XCTAssertFalse(d.seesaw && d.hopscotch, "visit \(v): both pieces in play")
+            XCTAssertTrue(d.seesaw || d.hopscotch, "visit \(v): neither piece in play")
+            if d.seesaw { seesawVisits.append(v) }; if d.hopscotch { hopscotchVisits.append(v) }
         }
-        let sRate = Double(sOn) / Double(n), hRate = Double(hOn) / Double(n)
-        print("[visitplan] seesaw in play \(sRate), hopscotch in play \(hRate); longest off run \(sMaxOff) / \(hMaxOff); on-on \(sOnOn)/\(hOnOn), off-off \(sOffOff)/\(hOffOff)")
-        XCTAssertLessThanOrEqual(sMaxOff, 2)
-        XCTAssertLessThanOrEqual(hMaxOff, 2)
-        XCTAssertGreaterThanOrEqual(sRate, 0.55); XCTAssertLessThanOrEqual(sRate, 0.75)
-        XCTAssertGreaterThanOrEqual(hRate, 0.55); XCTAssertLessThanOrEqual(hRate, 0.75)
-        XCTAssertGreaterThan(sOnOn, 0, "the seesaw sequence is a strict alternation (no on, on)")
-        XCTAssertGreaterThan(sOffOff, 0, "the seesaw sequence is a strict alternation (no off, off)")
-        XCTAssertGreaterThan(hOnOn, 0, "the hopscotch sequence is a strict alternation (no on, on)")
-        XCTAssertGreaterThan(hOffOff, 0, "the hopscotch sequence is a strict alternation (no off, off)")
-    }
-
-    func testDrawIsDeterministic() {
-        for v in 1...200 {
-            let a = ParkVisitPlan.draw(visit: v, seesawOff: 0, hopscotchOff: 1)
-            let b = ParkVisitPlan.draw(visit: v, seesawOff: 0, hopscotchOff: 1)
+        XCTAssertEqual(seesawVisits.count, 10); XCTAssertEqual(hopscotchVisits.count, 10)
+        for list in [seesawVisits, hopscotchVisits] {
+            for (a, b) in zip(list, list.dropFirst()) { XCTAssertEqual(b - a, 2, "a piece appears in exactly every other visit") }
+        }
+        // the saved streaks never change the answer
+        for v in 1...20 {
+            let a = ParkVisitPlan.draw(visit: v, seesawOff: 0, hopscotchOff: 0), b = ParkVisitPlan.draw(visit: v, seesawOff: 2, hopscotchOff: 2)
             XCTAssertTrue(a.seesaw == b.seesaw && a.hopscotch == b.hopscotch)
-        }
-    }
-
-    func testStreakForcesOn() {
-        for v in 1...500 {
-            XCTAssertTrue(ParkVisitPlan.draw(visit: v, seesawOff: 2, hopscotchOff: 0).seesaw)
-            XCTAssertTrue(ParkVisitPlan.draw(visit: v, seesawOff: 0, hopscotchOff: 2).hopscotch)
-            let both = ParkVisitPlan.draw(visit: v, seesawOff: 2, hopscotchOff: 2)
-            XCTAssertTrue(both.seesaw && both.hopscotch)
         }
     }
 
     // MARK: begin
 
-    func testBeginPersistsAndContinues() {
-        let d = freshDefaults()
-        XCTAssertNil(d.dictionary(forKey: ParkVisitPlan.key), "an empty store")
-        // the first visit is drawn like any other (visit 1, no streaks)
-        let first = ParkVisitPlan.begin(defaults: d)
-        let want1 = ParkVisitPlan.draw(visit: 1, seesawOff: 0, hopscotchOff: 0)
-        XCTAssertEqual(first.visit, 1)
-        XCTAssertTrue(first.seesaw == want1.seesaw && first.hopscotch == want1.hopscotch)
-        XCTAssertEqual(ParkVisitPlan.current, first)
-        // carry the streaks by hand over 60 visits, reading the store fresh each time
-        var sOff = want1.seesaw ? 0 : 1, hOff = want1.hopscotch ? 0 : 1
-        for v in 2...60 {
-            let saved = d.dictionary(forKey: ParkVisitPlan.key)
-            XCTAssertEqual(saved?["visit"] as? Int, v - 1)
-            XCTAssertEqual(saved?["seesawOff"] as? Int, sOff)
-            XCTAssertEqual(saved?["hopscotchOff"] as? Int, hOff)
-            let p = ParkVisitPlan.begin(defaults: d)
-            let w = ParkVisitPlan.draw(visit: v, seesawOff: sOff, hopscotchOff: hOff)
-            XCTAssertEqual(p.visit, v)
-            XCTAssertTrue(p.seesaw == w.seesaw && p.hopscotch == w.hopscotch, "visit \(v)")
-            sOff = w.seesaw ? 0 : sOff + 1; hOff = w.hopscotch ? 0 : hOff + 1
+    /// 20 consecutive visits through the persisted counter (each one reading the store fresh, as a relaunch does): never both, alternating, from any starting counter.
+    func testBeginAlternatesAcrossRelaunches() {
+        for start in [0, 1, 7] {
+            let d = freshDefaults()
+            if start > 0 { d.set(["visit": start, "seesawOff": 0, "hopscotchOff": 0], forKey: ParkVisitPlan.key) }
+            var plans: [ParkVisitPlan.Plan] = []
+            for v in 1...20 {
+                let p = ParkVisitPlan.begin(defaults: d)
+                XCTAssertEqual(p.visit, start + v)
+                XCTAssertEqual(ParkVisitPlan.current, p)
+                XCTAssertEqual(d.dictionary(forKey: ParkVisitPlan.key)?["visit"] as? Int, start + v)
+                XCTAssertFalse(p.seesaw && p.hopscotch, "visit \(p.visit): both")
+                XCTAssertTrue(p.seesaw != p.hopscotch, "visit \(p.visit): exactly one")
+                plans.append(p)
+            }
+            XCTAssertEqual(plans.filter(\.seesaw).count, 10, "start \(start)")
+            XCTAssertEqual(plans.filter(\.hopscotch).count, 10, "start \(start)")
+            for (a, b) in zip(plans, plans.dropFirst()) { XCTAssertNotEqual(a.seesaw, b.seesaw, "visit \(b.visit) alternates") }
         }
+    }
+
+    /// The capture / test bypass still brings everything: both pieces in play, nothing written.
+    func testForcingArgumentStillGivesBoth() {
+        XCTAssertTrue(ParkVisitPlan.allInPlayAlways)
+        let p = ParkVisitPlan.begin()
+        XCTAssertTrue(p.seesaw && p.hopscotch)
+        XCTAssertEqual(p, .all)
     }
 
     func testBeginUsesOnlyItsOwnKey() {
