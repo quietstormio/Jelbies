@@ -192,6 +192,8 @@ final class DiningGroup {
     /// The tray is drawn only once every diner stands at his place (his approach point), so no body ever walks across it on the way: the floor beside it is no wider than
     /// a body, there is no way round its ends (GameCare.serveWanted). Past this many seconds it pops in anyway (a diner that cannot get there is handled by the retries).
     static let gatherCap: Float = 12
+    /// A diner who has eaten his share is released (and a started, idle one re-asked) even while another diner is still on his way. `-MealOld 1` (simulator) turns it off.
+    nonisolated(unsafe) static var releaseWhileComing = !MealTrace.oldFlow
     /// A bystander closer than this to the tray's rectangle holds the pop-in back (his belly + a margin), for at most 4 s past the cap.
     static let trayClearance: Float = 0.7
     /// Floor distance from `p` to the tray's rectangle (the tray as it will be drawn at its spot).
@@ -335,6 +337,18 @@ final class DiningGroup {
             replan(dt: dt)
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; MealTrace.log("diner \(memberIDs[i]) started place=\(placeOf[i])"); startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }
+            if Self.releaseWhileComing {
+                settlePay(); releaseFinished()
+                // a diner who has started but stands idle without having finished is asked again (as in `.serving`, but no re-serve and no give-up: the others are still coming)
+                for i in brains.indices where started[i] && !finished[i] && !released[i] {
+                    guard isIdle(brains[i]) else { idle[i] = 0; continue }
+                    idle[i] += dt
+                    guard idle[i] > 0.8, mealRetries[i] < GameCare.maxReserves else { continue }
+                    idle[i] = 0; mealRetries[i] += 1
+                    MealTrace.log("re-ask (approaching) diner=\(memberIDs[i]) retry=\(mealRetries[i])")
+                    startSitting(i)
+                }
+            }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
             for i in brains.indices where !started[i] && !ready(i) && isIdle(brains[i]) {
                 // (while another Jelly is still walking in he may brush past and nudge a waiting one off his spot: nobody is given up on, or sent again, until the room has settled)
