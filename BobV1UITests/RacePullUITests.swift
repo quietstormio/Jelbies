@@ -73,6 +73,56 @@ final class RacePullUITests: XCTestCase {
         app.terminate()
     }
 
+    override func tearDown() {
+        XCUIDevice.shared.orientation = .portrait
+        super.tearDown()
+    }
+
+    /// Six pulls from (`dx`, `dy`) of the window; the drag is 0.8 x the ROOM rule of the app (`RacePullGesture.dragMaxFor`, written out here because a UI test cannot import the app):
+    /// `min(dragMax, max(80, height - bottomInset - startY - 8))`, with `dragMax = min(max(0.36 x short side, 110), 230)`.
+    private func sixPulls(_ app: XCUIApplication, dx: CGFloat, dy: CGFloat, bottomInset: CGFloat, prefix: String) {
+        let pad = element(app, "race-pull")
+        XCTAssertTrue(pad.exists)
+        let win = app.windows.element(boundBy: 0)
+        let size = win.frame.size
+        let dragMax = min(max(min(size.width, size.height) * 0.36, 110), 230)
+        let startY = dy * size.height
+        let room = min(dragMax, max(80, size.height - bottomInset - startY - 8))
+        let start = win.coordinate(withNormalizedOffset: CGVector(dx: dx, dy: dy))
+        let end = start.withOffset(CGVector(dx: 0, dy: 0.8 * room))
+        save(app, "\(prefix)_0_go")
+        for i in 1...6 {
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.15)
+            save(app, "\(prefix)_\(i)_after")
+            Thread.sleep(forTimeInterval: 0.7)
+        }
+        let n = hops(pad)
+        XCTAssertGreaterThanOrEqual(n, 4, "\(prefix): six pulls from the low start, at least four hops (the pad reports \(n))")
+    }
+
+    /// A pull that STARTS LOW (0.5 w, 0.80 h) in portrait. On the 402 x 874 phone simulator (bottom inset 34): room = min(144.7, max(80, 874 - 34 - 699.2 - 8)) = 132.8,
+    /// the drag 0.8 x 132.8 = 106.2 pt: a pull of 0.80 (the green is 0.70 ... 0.92).
+    @MainActor
+    func testALowStartPullMakesHopsInPortrait() {
+        let app = launch()
+        waitForGo(app, anchor: "race-pull")
+        sixPulls(app, dx: 0.5, dy: 0.80, bottomInset: 34, prefix: "low_p")
+        app.terminate()
+    }
+
+    /// The same in landscape (start 0.80 w, 0.80 h). On the 874 x 402 phone simulator (bottom inset 21): room = min(144.7, max(80, 402 - 21 - 321.6 - 8)) = max(80, 51.4) = 80 pt,
+    /// the drag 64 pt = a pull of 0.80 (the finger ends 4.6 pt into the bottom inset; a few points of error either way keep the pull inside 0.70 ... 0.92).
+    @MainActor
+    func testALowStartPullMakesHopsInLandscape() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments += home
+        app.launch()
+        waitForGo(app, anchor: "race-pull")
+        sixPulls(app, dx: 0.80, dy: 0.80, bottomInset: 21, prefix: "low_l")
+        app.terminate()
+    }
+
     @MainActor
     func testTheHopButton() {
         let app = launch(["-A11yRaceAssist", "oneButton"])
