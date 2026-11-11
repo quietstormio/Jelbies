@@ -93,7 +93,6 @@ extension GameCare {
         if bath.active { return "The clean-up is going on." }
         if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelbie") is in the close-up. Let go first." }
         if raceWait != nil { return "Waking everybody up." }
-        if raceBook.returner != nil { return "Welcome \(jelly(id)?.name ?? "Your Jelbie") home first." }
         if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelbie") is listening to you." }
         if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelbie") is not in the room." }
         return nil
@@ -133,6 +132,7 @@ extension GameCare {
     private func beginRace(jelly id: Int, seed: UInt64?) {
         guard let prof = jelly(id) else { return }
         select.cancel()
+        cutWelcomeHome()
         queued.removeAll(); callRunning = false
         voice.cancel()
         if outingGate([id], again: { [weak self] in self?.beginRace(jelly: id, seed: seed) }) { return }          // he runs out of the room first (GameCare+Outing.swift)
@@ -350,6 +350,15 @@ extension GameCare {
             greeting = true; greetHop = false
             queued = [.come(to: greetSpotNow(0))]
         }
+    }
+
+    /// An outing is asked during the welcome home: the welcome simply ends here (the Jelbies are not left waiting to greet, and nothing can leave `callRunning` set).
+    func cutWelcomeHome() {
+        guard raceBook.returner != nil else { return }
+        raceBook.returner = nil; raceBook.celebrated = true
+        greetPending = []; greetOthers = [:]; greeting = false; greetHop = false
+        queued.removeAll { if case .come = $0 { return true }; return false }
+        callRunning = false
     }
 
     /// Where a Jelly stands for the greeting: the usual spots, except that after a race the RETURNER takes the front spot and the others fan out behind him.

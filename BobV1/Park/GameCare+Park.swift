@@ -95,7 +95,7 @@ extension GameCare {
             AudioHub.shared.play(.notEnough)
             return
         }
-        select.cancel(); queued.removeAll(); callRunning = false
+        select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         park.openPicker(all: Array(jellies.indices))
     }

@@ -11,6 +11,21 @@ import XCTest
 final class SetRosterTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []         // the runtime aborts when a GameCare is released (see MelonModel)
 
+    override func setUp() { super.setUp(); JellyRoster.setRosterApplied = false }
+    override func tearDown() { JellyRoster.setRosterApplied = false; super.tearDown() }
+
+    /// The phone bug: `-SetRoster 0,4` was still on the command line when a Jelbie was adopted; entering the room applied it again and the newcomer vanished.
+    func testSetRosterArgumentDoesNotOverwriteAnAdoptionLaterInTheSameLaunch() {
+        let d = suite("adopt")
+        d.set([0, 4], forKey: JellyRoster.rosterKey)
+        d.set("0,4", forKey: JellyRoster.setRosterKey)
+        XCTAssertEqual(JellyRoster.applySetRoster(d), [0, 4], "the launch applies the argument")
+        JellyRoster.save([0, 4, 2], to: d)                                   // the adoption
+        XCTAssertEqual(JellyRoster.applySetRoster(d), [0, 4, 2], "entering the room again keeps the adopted roster")
+        XCTAssertEqual(d.array(forKey: JellyRoster.rosterKey) as? [Int], [0, 4, 2], "and nothing was written back over it")
+        XCTAssertEqual(JellyRoster.launchIDs(d), [0, 4, 2])
+    }
+
     private func suite(_ name: String) -> UserDefaults {
         let d = UserDefaults(suiteName: "SetRoster.\(name)")!
         d.removePersistentDomain(forName: "SetRoster.\(name)")
