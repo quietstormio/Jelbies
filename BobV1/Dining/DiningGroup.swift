@@ -75,6 +75,13 @@ final class DiningGroup {
     /// Re-serves used (a displaced Blob: the tray poofs, everybody re-forms behind it, it pops again). Bounded like GameCare.
     private(set) var reserves = 0
     private(set) var gaveUp = false
+    /// Diner i was taken out of this sitting because HE could not be served (diagnostics / tests); the others carry on.
+    private(set) var excused: [Bool] = []
+    /// Debug switch for the before / after survey: false restores the old rule (one stuck diner ends the meal for everybody).
+    nonisolated(unsafe) static var robust = true
+    /// A walker who does not move: his floor spot and how long he has stood there while walking.
+    private var stallPos: [SIMD2<Float>] = []
+    private var stallClock: [Float] = []
     private var hooked = false
     var isActive: Bool { state != .idle }
 
@@ -131,6 +138,7 @@ final class DiningGroup {
         for i in brains.indices where plan[i] != placeOf[i] && !committed[i] {
             placeOf[i] = plan[i]; replans += 1
             brains[i].callToMeal(.goTo(approachPoint(blob: i)))
+            stallClock[i] = 0
         }
     }
 
@@ -150,6 +158,8 @@ final class DiningGroup {
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
+        excused = [Bool](repeating: false, count: n)
+        stallPos = brains.indices.map { f($0) }; stallClock = [Float](repeating: 0, count: n)
         tiers = [NeedTier](repeating: .famished, count: n); paid = [Int](repeating: 0, count: n); piecesFor = [Int](repeating: DiningTiming.bitesPerServing, count: n)
         savedFinished = brains.map { $0.onFinished }; savedGap = brains.map { $0.peerGap }; savedPeers = brains.map { $0.peers }
         for (i, b) in brains.enumerated() {
@@ -196,7 +206,7 @@ final class DiningGroup {
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
         if forcedOrigin != nil { spawnTray() }          // (the café's table is out already: the food lands on it at once; a fresh tray waits for the gathering, see `tick`)
-        for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
+        for i in brains.indices { idle[i] = 0; walkRetries[i] = 0; stallClock[i] = 0; stallPos[i] = floor(i) }
         for i in brains.indices where !released[i] { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken softly, not hard-aborted: BlobBrain+SleepForce)
         requested = true
     }
@@ -280,6 +290,18 @@ final class DiningGroup {
         }
     }
 
+    /// Takes diner `i` out of THIS sitting and hands him back to his own life (he could not be served: the others carry on). His pay for what he ate is settled,
+    /// his hooks / reserve / idle block / wait-focus / peers are restored as `releaseFinished` does, and every loop skips him from now on (started / finished / released).
+    /// When nobody is left in the sitting the meal is over (`gaveUp`).
+    private func excuse(_ i: Int) {
+        guard i < savedFinished.count, !excused[i] else { return }
+        let b = brains[i]
+        if let pay { let k = min(eaten(i), piecesFor[i]); if k > paid[i] { pay(memberIDs[i], k - paid[i]); paid[i] = k } }
+        excused[i] = true; started[i] = true; finished[i] = true; released[i] = true
+        b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.peers = savedPeers[i]
+        if excused.allSatisfy({ $0 }) { end(); gaveUp = true }
+    }
+
     func tick(dt: Float) {
         defer { if !shared { dining.update(dt: dt) } }
         guard state != .idle else { return }
@@ -299,8 +321,39 @@ final class DiningGroup {
                 idle[i] += dt
                 if idle[i] > 0.5 {
                     idle[i] = 0
-                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { end(); gaveUp = true; return }
+                    if walkRetries[i] < 3 { walkRetries[i] += 1; stallClock[i] = 0; brains[i].callToMeal(.goTo(approachPoint(blob: i))) }
+                    else if Self.robust { excuse(i); if state == .idle { return } }
+                    else { end(); gaveUp = true; return }
                 }
+            }
+            guard Self.robust else { break }
+            // (robust) the ones already eating are looked after here too: paid, handed back when done, asked again when their dine walk gave up silently
+            settlePay()
+            releaseFinished()
+            for i in brains.indices where started[i] && !finished[i] {
+                guard isIdle(brains[i]) else { idle[i] = 0; continue }
+                idle[i] += dt
+                guard idle[i] > 0.8 else { continue }
+                idle[i] = 0
+                if floor(i).y > dining.places[placeOf[i]].stand.y + GameCare.popTolerance + 0.05 {
+                    // displaced in front of his place: he alone goes back to his approach point (the others keep eating)
+                    started[i] = false
+                    if walkRetries[i] < 3 { walkRetries[i] += 1; stallClock[i] = 0; stallPos[i] = floor(i); brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { excuse(i) }
+                } else if mealRetries[i] < GameCare.maxReserves {
+                    mealRetries[i] += 1
+                    startSitting(i)
+                } else { excuse(i) }
+                if state == .idle { return }
+            }
+            // (robust) a walker who stands still: sent again, a few times, then excused (a sleeper being woken softly is not `.walking`, so he never counts)
+            for i in brains.indices {
+                guard !started[i], !ready(i), brains[i].activity == .walking else { stallClock[i] = 0; stallPos[i] = floor(i); continue }
+                let f = floor(i)
+                if simd_distance(f, stallPos[i]) >= 0.05 { stallPos[i] = f; stallClock[i] = 0; continue }
+                stallClock[i] += dt
+                guard stallClock[i] >= 2.0 else { continue }
+                stallClock[i] = 0; stallPos[i] = f
+                if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { excuse(i); if state == .idle { return } }
             }
         case .serving:
             settlePay()
@@ -319,7 +372,8 @@ final class DiningGroup {
                 } else if mealRetries[i] < GameCare.maxReserves {
                     mealRetries[i] += 1
                     startSitting(i)
-                } else { end(); gaveUp = true; return }
+                } else if Self.robust { excuse(i); if state == .idle { return } }
+                else { end(); gaveUp = true; return }
             }
         case .idle: break
         }
