@@ -269,10 +269,19 @@ final class WeatherTests: XCTestCase {
         XCTAssertEqual(b.position, pos, "he did not run off to the others")
         XCTAssertEqual(room.reactor.members[2]?.mode, .comforted)
         XCTAssertFalse(room.reactor.members.filter { $0.key != 2 }.isEmpty, "the others still huddle")
-        // let go: he comes back to the huddle while the peak lasts
+        // let go: a stroke of 1.5 s or more makes the calm stick (storm comfort): he never goes back to trembling or to the huddle, and ends calm or in a comfort hold
         b.activity = .idle
-        room.run(16)
-        XCTAssertEqual(room.reactor.members[2]?.mode, .huddle, "after the petting he rejoins: \(room.reactor.log) member \(String(describing: room.reactor.members[2])) act \(b.activity) pending \(String(describing: b.pending)) script \(b.script) pos \(b.position) slots \(room.reactor.slots)")
+        var trembled = 0, backInHuddle = 0
+        for _ in 0..<(16 * 60) {
+            room.step()
+            if abs(b.storm.wantRoll) > 1e-6 { trembled += 1 }
+            if room.reactor.members[2]?.mode == .huddle { backInHuddle += 1 }
+        }
+        let diag = "\(room.reactor.log) member \(String(describing: room.reactor.members[2])) act \(b.activity) pending \(String(describing: b.pending)) script \(b.script) pos \(b.position) slots \(room.reactor.slots)"
+        XCTAssertEqual(trembled, 0, "after a long enough stroke he does not tremble again: \(diag)")
+        XCTAssertEqual(backInHuddle, 0, "...and does not rejoin the huddle: \(diag)")
+        let end = room.reactor.members[2]?.mode
+        XCTAssertTrue(end == .calm || end == .arc, "he ends calm or in a comfort hold: \(diag)")
     }
 
     func testReliefShakesOffAndScattersAndRestoresEverything() {
