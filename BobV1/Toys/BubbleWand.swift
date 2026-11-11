@@ -84,6 +84,8 @@ nonisolated enum BubbleTuning {
     nonisolated(unsafe) static var busyLookingChases = true
     /// The walk order to a bubble (`bubbleGo` = `requestNow`, which aborts the running script) waits until his own hop (the happy hop of `bubbleIdle`, a wait hop, a pop move) has landed.
     nonisolated(unsafe) static var goWaitsForHop = true
+    /// A winged Jelbie tries the flap before the header when the planned move does not fit.
+    nonisolated(unsafe) static var flapBeforeHeader = true
     /// The spot look before a chase ends (and the walk order follows) only when his feet are still, not in the middle of the look's turn.
     nonisolated(unsafe) static var spotWaitsForFeet = false
     /// THE dial (1.0 = this round's tuning): above 1 he thinks and waits for shorter times and hops on the spot more often, below 1 the other way round. Scales `playThinkEvery`, `playWatchThink`,
@@ -109,7 +111,7 @@ nonisolated enum BubbleTuning {
         playPickRadius = 4.5; playSpotHold = 0.35...0.5; playHopSpacing = 0; playWaitHopEnabled = false
         bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1; flapWeightMid = 1; flapWeightHigh = 3; skipWeight = 3; leapWeightMid = 3; bounceReps = 3
         idleCuts = (0.32, 0.72, 0.86); idleStepDur = 0.8...1.6
-        busyLookingChases = false; goWaitsForHop = false; spotWaitsForFeet = false
+        busyLookingChases = false; goWaitsForHop = false; spotWaitsForFeet = false; flapBeforeHeader = false
     }
     /// This round's tuning (the values above); tests only.
     static func restoreHead() {
@@ -120,7 +122,7 @@ nonisolated enum BubbleTuning {
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.2...0.45; playWaitHopChance = 0.8; playWaitHopEnabled = true
         bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 8; flapWeightHigh = 12; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 5
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
-        busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false
+        busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false; flapBeforeHeader = true
     }
     static let lightBeat: Float = 0.18
     static let aimMax: Float = 3.5                 // how long he waits under a bubble for it to be in reach
@@ -568,7 +570,8 @@ final class BubbleWand: PlayToy {
             }
             func travels(_ m: BubblePopMove) -> Bool { m == .leap || m == .skip || m == .flap }
             var order: [BubblePopMove] = [st.move]
-            for m in [BubblePopMove.header, .leap, .bounce, .skip, .flap] where m != st.move && BubbleTuning.forceMove == nil { order.append(m) }
+            let others: [BubblePopMove] = BubbleTuning.flapBeforeHeader && j.brain.feature == .wings ? [.flap, .header, .leap, .bounce, .skip] : [.header, .leap, .bounce, .skip, .flap]          // (a winged one takes the flap when it fits: it lost it to the header that fits the same bubble)
+            for m in others where m != st.move && BubbleTuning.forceMove == nil { order.append(m) }
             guard let m = order.first(where: fits) else {
                 if clock - st.hopStart > 0 { }
                 if clock - st.chaseStart > 0 { note("noFit \(st.move) dh\(dh > 0.33 ? ">" : "<") dy\(String(format: "%+.1f", pp.y - crown))") }
