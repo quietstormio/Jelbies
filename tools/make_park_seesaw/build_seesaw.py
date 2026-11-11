@@ -3,7 +3,7 @@
   /Applications/Blender.app/Contents/MacOS/Blender -b -P tools/make_park_seesaw/build_seesaw.py -- A      (or B)
   python3 -I tools/make_park_seesaw/convert_seesaw.py tools/make_park_seesaw/export_A BobV1/Room/Resources   (writes decor_seesaw.bin)
 
-Parts (exact names): base, plank (pivot 0,.34,0), bumperL (pivot -.96,0,0), bumperR (pivot .96,0,0). Vertices are absolute (the pivot is only the turning point).
+Parts (exact names, contract v2): base, plank (pivot 0,.27,0), bumperL (pivot -.96,0,0), bumperR (pivot .96,0,0), seatL (pivot -.62,.3775,0), seatR (pivot .62,.3775,0). Vertices are absolute (the pivot is only the turning point).
 One final colour set, taken from the park's slide (chute, step timber, timber, deep-green posts) plus one cream; render with tools/make_park_seesaw/render_seesaw.py.
 Geometry is built as lofted rings (rounded-rectangle outlines with bevel profiles) and lathes; the AO is baked with BVH ray casts at rest. Exports OBJ + JSON in the format
 tools/convert_decor_art.py reads (the shared tool files are not modified).
@@ -123,36 +123,42 @@ def lathe(part, prof, sides, origin, axis, color, caps=(False, False)):
 # ---------------------------------------------------------------- the model
 def build():
     base, plank, bl, br = Part(), Part(), Part(), Part()
-    # --- plank: beam (stadium, top 0.415, underside 0.325, bevelled all round)
-    beam = [(0.030, 0.325), (0.009, 0.3325), (0.0, 0.352), (0.0, 0.388), (0.009, 0.4075), (0.030, 0.415)]
+    seats = {-1: Part(), 1: Part()}
+    # --- plank: beam (stadium, top 0.345, underside 0.255, bevelled all round); the plank pivots at (0, 0.27, 0)
+    beam = [(0.030, 0.255), (0.009, 0.2625), (0.0, 0.282), (0.0, 0.318), (0.009, 0.3375), (0.030, 0.345)]
     loft(plank, 1.05, 0.17, 0.17, 5, beam, lambda u, v, h: (u, h, v), WOOD, smooth_caps=True)
-    # --- seat cushions: puffy rounded pads, flat top (0.475) over |x-0.62|<=0.28, |z|<=0.14
-    cush = [(0.050, 0.396), (0.0, 0.422), (0.0, 0.448), (0.012, 0.466), (0.055, 0.475)]
+    # --- seats: each its own part (pivot = hinge point (+-0.62, 0.3775, 0)); puffy rounded pad with a closed underside, flat top 0.475 over |x-0.62|<=0.28, |z|<=0.14
+    # plus a cream barrel hinge along z (radius 0.035: sunk 0.0025 into the beam top 0.345 and the pad underside 0.410)
+    cush = [(0.050, 0.410), (0.0, 0.430), (0.0, 0.452), (0.012, 0.467), (0.055, 0.475)]
+    HY = 0.3775; RB = 0.035; ZH = 0.150; ZC = 0.115
     for sx in (-1, 1):
-        loft(plank, 0.35, 0.20, 0.085, 4, cush, lambda u, v, h, sx=sx: (sx * (0.62 + u), h, v), TERRA, smooth_caps=True)
-    # --- T handles at |x| = 0.20: centre post + crossbar along z (top 0.636), round caps
+        loft(seats[sx], 0.35, 0.20, 0.085, 5, cush, lambda u, v, h, sx=sx: (sx * (0.62 + u), h, v), TERRA, smooth_caps=True)
+        e45 = RB * math.sqrt(0.5)   # end caps: a 45 degree ring, then the pole (a rounded end)
+        bprof = [(0.0, -ZH), (e45, -ZC - e45), (RB, -ZC), (RB, ZC), (e45, ZC + e45), (0.0, ZH)]
+        lathe(seats[sx], bprof, 16, (sx * 0.62, HY, 0), "z", CREAM)
+    # --- T handles at |x| = 0.20: centre post + crossbar along z (top 0.6347), round caps; post starts at the lowered beam (flare bottom 0.332)
     for sx in (-1, 1):
         x = sx * 0.20
-        lathe(plank, [(0.031, 0.402), (0.0245, 0.428), (0.024, 0.600)], 8, (x, 0, 0), "y", CREAM)
+        lathe(plank, [(0.031, 0.332), (0.0245, 0.358), (0.024, 0.600)], 8, (x, 0, 0), "y", CREAM)
         zb = 0.110; rb = 0.026; yb = 0.636 - rb
         s50, c50 = math.sin(math.radians(50)), math.cos(math.radians(50))
         prof = [(0.0, -zb - rb), (rb * s50, -zb - rb * c50), (rb, -zb), (rb, zb), (rb * s50, zb + rb * c50), (0.0, zb + rb)]
         lathe(plank, prof, 10, (x, yb, 0), "z", CREAM)
-    # --- base: low rounded block, two cheeks with rounded tops, axle ends with round caps
-    # a stand: tapered (x to 72% at the top, z to 94%: the cheeks' outer faces at z 0.23 must still stand on it), rounded edges
-    blk = [(0.035, 0.0), (0.010, 0.014), (0.0, 0.045), (0.0, 0.150), (0.050, 0.220)]
-    ax_ = lambda h: 0.24 - (0.24 - 0.173) * (h / 0.22); bz_ = lambda h: 0.27 - (0.27 - 0.255) * (h / 0.22)
+    # --- base: low rounded block (0.15 high), two cheeks with rounded tops (top 0.37), axle ends with round caps on the pivot (y 0.27)
+    blk = [(0.035, 0.0), (0.010, 0.014), (0.0, 0.045), (0.0, 0.095), (0.050, 0.150)]
+    ax_ = lambda h: 0.24 - (0.24 - 0.173) * (h / 0.15); bz_ = lambda h: 0.27 - (0.27 - 0.255) * (h / 0.15)
     rings = [[(u, h, v) for (u, v) in rrect(ax_(h) - d, bz_(h) - d, 0.09 - d, 3)] for d, h in blk]
     base.add_grid(rings, (False, True), FULC, True)
     cheek = [(0.012, 0.185), (0.0, 0.197), (0.0, 0.218), (0.012, 0.230)]
     cap = [(0.050, 0.226), (0.052, 0.240), (0.040, 0.262), (0.0, 0.272)]
     for sz in (-1, 1):
-        loft(base, 0, 0, 0, 0, cheek, lambda u, v, h, sz=sz: (u, v, sz * h), FULC, outline=lambda d: dshape(0.11, 0.18, 0.33, d, 10), smooth_caps=True)
-        lathe(base, [(r, sz * t) for r, t in cap], 14, (0, 0.34, 0), "z", FCAPS)
+        loft(base, 0, 0, 0, 0, cheek, lambda u, v, h, sz=sz: (u, v, sz * h), FULC, outline=lambda d: dshape(0.11, 0.11, 0.26, d, 10), smooth_caps=True)
+        lathe(base, [(r, sz * t) for r, t in cap], 14, (0, 0.27, 0), "z", FCAPS)
     # --- rubber bumpers: dome 0.10 radius, 0.11 high, pivot at the floor centre
     dome = [(0.100, 0.0), (0.0975, 0.035), (0.078, 0.080), (0.040, 0.104), (0.0, 0.110)]
     lathe(bl, dome, 12, (-0.96, 0, 0), "y", BUMP); lathe(br, dome, 12, (0.96, 0, 0), "y", BUMP)
-    return [("base", (0, 0, 0), base), ("plank", (0, 0.34, 0), plank), ("bumperL", (-0.96, 0, 0), bl), ("bumperR", (0.96, 0, 0), br)]
+    return [("base", (0, 0, 0), base), ("plank", (0, 0.27, 0), plank), ("bumperL", (-0.96, 0, 0), bl), ("bumperR", (0.96, 0, 0), br),
+            ("seatL", (-0.62, HY, 0), seats[-1]), ("seatR", (0.62, HY, 0), seats[1])]
 
 def bake_ao(parts):
     """Per-vertex AO by cosine-weighted ray casts against the whole piece at rest plus the ground; clamped 0.6..1."""

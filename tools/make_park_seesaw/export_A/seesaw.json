@@ -1,7 +1,7 @@
 {
  "id": "seesaw",
- "tris": 1548,
- "verts": 1035,
+ "tris": 1884,
+ "verts": 1223,
  "variant": "A",
  "sub_meshes": [
   {
@@ -18,11 +18,11 @@
    "name": "plank",
    "pivot": [
     0.0,
-    0.34,
+    0.27,
     0.0
    ],
    "material": "plain",
-   "tris": 888
+   "tris": 488
   },
   {
    "name": "bumperL",
@@ -43,6 +43,26 @@
    ],
    "material": "plain",
    "tris": 84
+  },
+  {
+   "name": "seatL",
+   "pivot": [
+    -0.62,
+    0.3775,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 368
+  },
+  {
+   "name": "seatR",
+   "pivot": [
+    0.62,
+    0.3775,
+    0.0
+   ],
+   "material": "plain",
+   "tris": 368
   }
  ],
  "bounds_min": [

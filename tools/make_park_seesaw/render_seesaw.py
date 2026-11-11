@@ -1,6 +1,7 @@
 """Renders the CONVERTED decor_seesaw.bin (vertex colours x baked AO, as the game shows it) on a lawn-green ground with soft sun and sky.
 
-  Blender -b -t 4 -P tools/make_park_seesaw/render_seesaw.py -- <decor_seesaw.bin> <variant letter> <out dir> [views comma list: hero,tilt_left,tilt_right,side,close] [samples]
+  Blender -b -t 4 -P tools/make_park_seesaw/render_seesaw.py -- <decor_seesaw.bin> <variant letter> <out dir> [views comma list: hero,tilt_left,tilt_right,side,side_tilt,close,close_high,close_low] [samples]
+Posing (contract v2): plank rotated by the angle about its pivot, each seat TRANSLATED by R(angle) h - h (never rotated), pressed bumper scaled in y. Variant "R2" gives R2_<view>.png.
 Game axes (x along the plank, y up, z toward the camera) are mapped to Blender by (x, -z, y).
 """
 import sys, os, math, struct
@@ -10,7 +11,7 @@ from mathutils import Vector
 
 args = sys.argv[sys.argv.index("--") + 1:]
 BIN, VAR, OUTDIR = args[0], args[1], args[2]
-VIEWS = (args[3] if len(args) > 3 else "hero,tilt_left,tilt_right,side,close").split(",")
+VIEWS = (args[3] if len(args) > 3 else "hero,tilt_left,tilt_right,side,side_tilt,close_high,close_low").split(",")
 SAMPLES = int(args[4]) if len(args) > 4 else 48
 os.makedirs(OUTDIR, exist_ok=True)
 
@@ -89,12 +90,17 @@ so.rotation_euler = (math.radians(48), 0, math.radians(-125))   # sun from the u
 
 def build_scene(angle=0.0):
     for ob in [o for o in bpy.data.objects if o.name.startswith("part_")]: bpy.data.objects.remove(ob)
-    pv = (0, 0.34, 0)
     datas = {p["name"]: part_data(p) for p in PARTS}
+    pv = [p["pivot"] for p in PARTS if p["name"] == "plank"][0]
+    DEP = pv[1] - 0.255      # plank pivot height minus the beam underside
     for p in PARTS:
         v, f = datas[p["name"]]; v = v.copy()
         if p["name"] == "plank" and angle != 0.0:
             P, N = rot_z(v[:, 0:3], v[:, 3:6], angle, pv); v[:, 0:3] = P; v[:, 3:6] = N
+        if p["name"] in ("seatL", "seatR") and angle != 0.0:
+            # the game's rule: a seat is only TRANSLATED by d = R(angle) h - h (h = hinge point minus plank pivot), never rotated
+            hx, hy = p["pivot"][0] - pv[0], p["pivot"][1] - pv[1]; c_, s_ = math.cos(angle), math.sin(angle)
+            v[:, 0] += c_ * hx - s_ * hy - hx; v[:, 1] += s_ * hx + c_ * hy - hy
         if p["name"] in ("bumperL", "bumperR") and angle != 0.0:
             # the pressed bumper (low end) is scaled in height so its apex just meets the plank's underside, as the game does
             side = -1 if p["name"] == "bumperL" else 1
@@ -103,7 +109,7 @@ def build_scene(angle=0.0):
                 s_, c_ = math.sin(angle), math.cos(angle); k = 1.0
                 for x, y in zip(v[:, 0], v[:, 1]):
                     if y < 0.01: continue
-                    yu = 0.34 + ((x - (-0.015 * s_)) / c_) * s_ - 0.015 * c_        # underside line at world x
+                    yu = pv[1] + x * math.tan(angle) - DEP / c_        # underside line at world x (contract: 0.27 - 0.96 tan a - 0.015 / cos a)
                     k = min(k, (yu - 0.004) / y)
                 v[:, 1] *= k; print("BUMPER", p["name"], "scale", round(k, 3))
         ob = make_mesh("part_" + p["name"], v, f); ob.rotation_euler = (0, 0, 0)
@@ -120,10 +126,14 @@ def camera(pos, target, lens=45, ortho=None):
 
 VIEWSPEC = {
     "hero": dict(angle=0.0, pos=(1.7, 1.15, 2.6), target=(0, 0.28, 0), lens=42),
-    "tilt_left": dict(angle=0.25, pos=(1.7, 1.15, 2.6), target=(0, 0.3, 0), lens=42),
-    "tilt_right": dict(angle=-0.25, pos=(1.7, 1.15, 2.6), target=(0, 0.3, 0), lens=42),
+    "tilt_left": dict(angle=0.176, pos=(1.7, 1.15, 2.6), target=(0, 0.3, 0), lens=42),
+    "tilt_right": dict(angle=-0.176, pos=(1.7, 1.15, 2.6), target=(0, 0.3, 0), lens=42),
     "side": dict(angle=0.0, pos=(0, 0.33, 8), target=(0, 0.33, 0), lens=50, ortho=2.9),
+    "side_tilt": dict(angle=0.176, pos=(0, 0.33, 8), target=(0, 0.33, 0), lens=50, ortho=2.9),
     "close": dict(angle=0.0, pos=(1.25, 0.55, 1.25), target=(0.45, 0.48, 0), lens=50),
+    # full tilt (+0.176 raises +x): the right seat is HIGH, the left seat LOW; low and close cameras
+    "close_high": dict(angle=0.176, pos=(1.15, 0.42, 0.95), target=(0.62, 0.5, 0), lens=50),
+    "close_low": dict(angle=0.176, pos=(-0.5, 0.2, 0.9), target=(-0.62, 0.32, 0), lens=50),
 }
 for v in VIEWS:
     sp = VIEWSPEC[v]; build_scene(sp["angle"]); camera(sp["pos"], sp["target"], sp["lens"], sp.get("ortho"))
