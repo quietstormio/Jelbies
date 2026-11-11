@@ -358,7 +358,7 @@ extension GameCare {
             }
             HopscotchTuning.joinChance = ParkPlayTuning.hopscotchJoin
             work.ownToys = ParkToys.ownToys(from: store.placedDecor)
-            work.hopHost = Float.random(in: ParkPlayTuning.hopHostAfter)
+            let plan = ParkVisitPlan.begin(); work.hopHost = plan.hopscotch ? Float.random(in: ParkPlayTuning.hopHostAfter) : nil
             RoomLayout.apply(RoomCatalog.park)
             GameCamera.configurePark()
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
