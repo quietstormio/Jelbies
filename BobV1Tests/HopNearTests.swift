@@ -141,4 +141,58 @@ final class HopNearTests: XCTestCase {
         }
         DecorField.shared.clear()
     }
+
+    // MARK: the stand-spot audit misses
+
+    /// Replays the placements of ToyPlayTests' two stand-spot audits (portrait, landscape): for every piece / placement / rotation with no stand spot for seat 0 it prints, per other seat,
+    /// whether it has one (with its hop length), the candidates the rule leaves, and what the base pick would have been. Print only (the audits assert).
+    func testPerMissTableOfTheStandAudits() {
+        let spots: [SIMD2<Float>] = [SIMD2(2.8, 0.6), SIMD2(-2.8, -1.5), SIMD2(0.4, -3.2), SIMD2(-2.9, 2.3), SIMD2(2.9, 2.6)]
+        for (label, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
+            _ = GameCamera.camera(aspect: aspect)
+            let rig = MotionRig(game: true); Self.keep.append(rig)
+            rig.brain.anticsEnabled = true
+            var total = 0, recoverable = 0, none = 0, noneHopsit = 0
+            var baseHops: [String] = []
+            for kind in ToyPlayTests.interactive {
+                let mv = kind.activeInteraction!
+                for q in 0..<4 {
+                    for p in spots {
+                        var at = p
+                        let lim = DecorPlacement.xLimit(kind, z: p.y, quarter: q)
+                        at.x = max(-lim, min(lim, at.x))
+                        guard DecorPlacement.isValid(kind, at: at, among: [], ignoring: nil, quarter: q) else { continue }
+                        DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: at.x, z: at.y, turns: q)])
+                        let f = DecorField.shared.foot(7)!
+                        let b = rig.brain
+                        b.px = -0.5; b.pz = 1.2
+                        b.decorIgnore = (mv == .decorSit || mv == .decorHop || mv == .decorSlide) ? 7 : nil
+                        let seats = max(1, f.kind.sitPoints.count)
+                        guard b.decorStand(mv, f, from: SIMD2(-0.5, 1.2), seat: 0) == nil else { continue }
+                        total += 1
+                        var line = String(format: "HOPNEAR-MISS %@ %@ q%d @(%.2f,%.2f) seat0 none", label, "\(kind)", q, at.x, at.y)
+                        var other = false
+                        if f.kind.hopSit && f.kind != .beanbag && mv == .decorSit {
+                            let legal = b.hopNearOrder(f, seat: 0, tolerance: 0.06).spots.count
+                            var baseHop = "none"
+                            for sp in b.hopStandSpots(f, seat: 0) { let qq = b.fixed(sp); if simd_distance(sp, qq) < 0.06, b.peerFree(qq) { baseHop = String(format: "%.2f", simd_distance(sp, b.hopSeatXZ(f, seat: 0))); break } }
+                            line += " | rule-legal candidates \(legal), base-replica pick hop \(baseHop)"
+                            for s in 1..<max(seats, 1) {
+                                if let r = b.decorStand(mv, f, from: SIMD2(-0.5, 1.2), seat: s) { other = true; line += String(format: " | seat %d spot, hop %.2f", s, simd_distance(r, b.hopSeatXZ(f, seat: s))) }
+                                else { line += " | seat \(s) none" }
+                            }
+                            if !other { noneHopsit += 1; baseHops.append("\(kind) q\(q) @(\(at.x),\(at.y)): \(baseHop)") }
+                        } else {
+                            let hs = mv == .decorHopscotch ? b.hopscotchStand(f) : nil
+                            line += " | not a hop-sit piece: move \(mv); path decorStandRaw -> " + (mv == .decorHopscotch ? "hopscotchStand " + (hs == nil ? "= nil (the court's queue spot is blocked / the line is full)" : "= \(hs!) (the spot exists: decorStand's walk-floor clamp or peerFree dropped it)") : "see decorStandRaw")
+                        }
+                        if other { recoverable += 1 } else { none += 1 }
+                        print(line)
+                    }
+                }
+            }
+            print("HOPNEAR-MISS SUMMARY \(label): misses in total \(total), recovered by another seat \(recoverable), no seat has a spot \(none) (of them hop-sit pieces \(noneHopsit)); base-replica pick for the hop-sit ones with no seat: \(baseHops)")
+        }
+        DecorField.shared.clear()
+    }
 }
