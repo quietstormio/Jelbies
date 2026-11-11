@@ -45,6 +45,7 @@ final class HopNearSeatTests: XCTestCase {
     }
 
     private func newRig(_ c: Case) -> MotionRig {
+        DecorField.shared.clear()          // (a seat taken by the previous case's sitter stays on a re-set piece of the same kind and uid)
         room()
         DecorField.shared.set([PlacedDecor(uid: 7, kind: c.kind, x: c.at.x, z: c.at.y, turns: c.q)])
         let r = MotionRig(game: true); Self.keep.append(r)
@@ -65,6 +66,15 @@ final class HopNearSeatTests: XCTestCase {
         for c in s.recover.prefix(6) {
             let r = newRig(c)
             let f = DecorField.shared.foot(7)!
+            do {
+                let b = r.brain
+                b.decorIgnore = 7
+                let ds = (0..<f.kind.sitPoints.count).map { b.decorStand(.decorSit, f, from: SIMD2(b.px, b.pz), seat: $0) }
+                let ns = b.hopNearSeat(f, seat: 0)
+                let reach = ds.compactMap { $0 }.map { b.reachable(SIMD2(b.px, b.pz), $0) }
+                print("HOPNEAR-SEATDIAG \(c.kind) q\(c.q) @\(c.at): decorStand per seat \(ds), hopNearSeat(0) \(ns), reachable \(reach), decorLocked \(b.decorLocked), pos \(b.position), available \(DecorField.shared.available(f)), freeSeat \(String(describing: DecorField.shared.freeSeat(f, preferring: b.px - f.centre.x)))")
+                b.decorIgnore = nil
+            }
             XCTAssertTrue(r.brain.idleStart(.decorSit, r.sim), "\(c.kind) q\(c.q) @\(c.at): the sit starts on the other seat")
             let seat = r.brain.idleState.seat
             let seatP = r.brain.hopSeatXZ(f, seat: seat)
