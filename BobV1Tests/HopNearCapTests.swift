@@ -30,7 +30,7 @@ final class HopNearCapTests: XCTestCase {
         let f = DecorField.shared.foot(7)!
         let seatP = r.brain.hopSeatXZ(f, seat: r.brain.idleState.seat)
         var moved = false, hopped = false, takeOff: Float = -1, startDist: Float = -1, finished = false
-        var prev = r.brain.position
+        var prev = r.brain.position, trace = 0
         for _ in 0..<(60 * 40) {
             r.tick(); DecorField.shared.tick(dt: 1.0 / 60)
             let s = r.brain.idleState
@@ -43,6 +43,7 @@ final class HopNearCapTests: XCTestCase {
                 r.brain.px = to.x; r.brain.pz = to.y          // (the brain's floor spot follows the body only on the next tick)
                 startDist = simd_distance(r.brain.position, seatP)
             }
+            if moved, trace < 40 { trace += 1; let c = r.sim.centroid(); print(String(format: "HOPNEAR-CAPTRACE tick %d stage %d kind %@ pos (%.2f, %.2f) centroid (%.2f, %.2f) seat (%.2f, %.2f)", trace, s.bagStage, "\(String(describing: s.kind))", r.brain.px, r.brain.pz, c.x, c.z, seatP.x, seatP.y)) }
             if s.kind == .decorSit, s.bagStage >= 1, !hopped { hopped = true; takeOff = simd_distance(prev, seatP) }
             if s.kind == nil, hopped || moved { finished = true }
             prev = r.brain.position
