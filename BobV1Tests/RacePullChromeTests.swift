@@ -4,6 +4,7 @@
 //
 
 import XCTest
+import SwiftUI
 import simd
 @testable import BobV1
 
