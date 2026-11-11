@@ -57,6 +57,7 @@ final class RacePullChromeTests: XCTestCase {
         f.cue = { _ in }; f.jingle = { _ in }
         f.recentRivals = nil
         f.control = .pull
+        for b in CourseTier.allCases where b.index < course.index { f.progress.records[b] = CourseProgress.Record(races: 1, wins: 1, topTwo: 1) }          // (the courses below are won: this one is open)
         f.begin(playerID: 0, name: "Bob", player: RacerStats(waddle: 0.9, focus: 1), playerTint: JellyRoster.tint(0), rivalCount: 2, seed: seed, course: course)
         var n = 0
         if live { while !f.buttonsLive, n < 60 * 20 { step(f); n += 1 } }
