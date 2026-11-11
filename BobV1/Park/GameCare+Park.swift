@@ -126,6 +126,7 @@ extension GameCare {
         #if targetEnvironment(simulator)
         // capture aid: `-StartPark 1` goes straight to the park once the room is up. It RETRIES (every ~0.75 s, not while an outing is walking) until the park opens: a single shot at frame 90 failed
         // whenever parkBlocker() said no at that moment (a Jelbie mid-meal / asleep / the room moving / voice listening). The real gate rules are untouched; this only repeats the request.
+        ParkWatch.tick(self, actors, dt: dt)
         if Self.startParkPending {
             if park.phase != .off { Self.startParkPending = false }
             else {
