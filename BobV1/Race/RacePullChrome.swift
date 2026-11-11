@@ -39,8 +39,6 @@ enum RacePullGesture {
 
     // MARK: where a resting thumb starts (the thumb demo and the -RacePullDemo gauge)
 
-    /// The thumb demo is drawn at phone size on every device (a ghost needs no thumb-size scaling, and on an iPad portrait the 1.3x demo would not fit under the Jelbies).
-    static let demoScale: CGFloat = 1
     /// The pull the demo shows (in the green).
     static let demoPull: Float = 0.8
     /// From the anchor up to the top of the "Let go!" label (ring radius 34, gap 12, label height about 24) and from the finger down to the bottom of the hand symbol, x `k`.
@@ -48,26 +46,64 @@ enum RacePullGesture {
     static func handBelow(_ k: CGFloat) -> CGFloat { 50 * k }
     /// The title pill + the hint pill the chrome draws under the top safe area (8 + 36 + 8 + 32), for the label's clearance.
     static func topPillsBottom(safeTop: CGFloat) -> CGFloat { safeTop + 84 }
+    /// iPad portrait: the Jelbies and their shadows end at about this fraction of the height (measured on the b3 frames).
+    static let padPortraitBoxBottom: CGFloat = 0.60
 
-    /// Where a resting thumb starts its pull: portrait at the middle (0.5 w), landscape at the right thumb (0.80 w, over the grass); as low as the whole demo
+    /// Where a resting thumb starts its pull. `pad == false` (phone): portrait at the middle (0.5 w), landscape at the right thumb (0.80 w, over the grass); as low as the whole demo
     /// (the hand symbol ends 12 pt above the bottom safe area) allows, never higher than 0.70 h in portrait / 0.36 h in landscape.
-    static func restAnchor(size: CGSize, safe: EdgeInsets, k: CGFloat) -> CGPoint {
+    /// `pad == true` (iPad): portrait 0.5 w, landscape 0.88 w (beside the track); as low as the demo's pull OR the finger dot of the capture gauge's too-far step (1.05) reaches,
+    /// never higher than 0.36 h in landscape / the iPad Jelbie box bottom plus the label in portrait.
+    static func restAnchor(size: CGSize, safe: EdgeInsets, k: CGFloat, pad: Bool = false) -> CGPoint {
         let landscape = size.width > size.height
-        let low = size.height - safe.bottom - 12 - handBelow(k) - CGFloat(demoPull) * dragMax(size: size) * k
-        let top = size.height * (landscape ? 0.36 : 0.70)
-        return CGPoint(x: size.width * (landscape ? 0.80 : 0.5), y: max(low, top))
+        if !pad {
+            let low = size.height - safe.bottom - 12 - handBelow(k) - CGFloat(demoPull) * dragMax(size: size) * k
+            let top = size.height * (landscape ? 0.36 : 0.70)
+            return CGPoint(x: size.width * (landscape ? 0.80 : 0.5), y: max(low, top))
+        }
+        let dm = dragMax(size: size) * k
+        let below = max(handBelow(k) + CGFloat(demoPull) * dm, 16 * k + 1.05 * dm)
+        let low = size.height - safe.bottom - 12 - below
+        let top = landscape ? size.height * 0.36 : size.height * padPortraitBoxBottom + labelAbove(k)
+        return CGPoint(x: size.width * (landscape ? 0.88 : 0.5), y: max(low, top))
     }
 
     /// The drag length of the demo's pull from `anchor`: the same room rule as a real pull.
-    static func demoLength(size: CGSize, anchor: CGPoint, safe: EdgeInsets, k: CGFloat) -> CGFloat {
+    static func demoLength(size: CGSize, anchor: CGPoint, safe: EdgeInsets, k: CGFloat, pad: Bool = false) -> CGFloat {
         CGFloat(demoPull) * dragMaxFor(size: size, startY: anchor.y, bottomInset: safe.bottom, scale: k)
     }
 
     /// Everything the demo draws, from the top of its label to the bottom of the hand (and the ring / label width).
-    static func demoFrame(size: CGSize, safe: EdgeInsets, k: CGFloat) -> CGRect {
-        let a = restAnchor(size: size, safe: safe, k: k)
-        let top = a.y - labelAbove(k), bottom = a.y + demoLength(size: size, anchor: a, safe: safe, k: k) + handBelow(k)
+    static func demoFrame(size: CGSize, safe: EdgeInsets, k: CGFloat, pad: Bool = false) -> CGRect {
+        let a = restAnchor(size: size, safe: safe, k: k, pad: pad)
+        let top = a.y - labelAbove(k), bottom = a.y + demoLength(size: size, anchor: a, safe: safe, k: k, pad: pad) + handBelow(k)
         return CGRect(x: a.x - 46 * k, y: top, width: 92 * k, height: bottom - top)
+    }
+
+    /// Where the Jelbies (and on an iPad landscape also the track's right edge) are: the demo must stay off this box.
+    static func jelbieBox(size: CGSize, pad: Bool) -> CGRect {
+        let landscape = size.width > size.height
+        switch (pad, landscape) {
+        case (false, false): return CGRect(x: 0, y: 0.40 * size.height, width: size.width, height: 0.27 * size.height)
+        case (false, true): return CGRect(x: 0.30 * size.width, y: 0, width: 0.40 * size.width, height: size.height)
+        case (true, false): return CGRect(x: 0, y: 0.36 * size.height, width: size.width, height: (padPortraitBoxBottom - 0.36) * size.height)
+        case (true, true): return CGRect(x: 0.30 * size.width, y: 0, width: 0.52 * size.width, height: size.height)
+        }
+    }
+
+    /// The whole demo is inside the safe area, at least 4 pt under the title / hint pills, at least 12 pt above the bottom safe area, and off the Jelbie box.
+    /// (The 0.01 pt is float rounding only: on the iPad portrait floor the label top sits exactly on the box edge.)
+    static func demoFits(size: CGSize, safe: EdgeInsets, k: CGFloat, pad: Bool) -> Bool {
+        let f = demoFrame(size: size, safe: safe, k: k, pad: pad), box = jelbieBox(size: size, pad: pad)
+        guard f.minX >= safe.leading, f.maxX <= size.width - safe.trailing, f.minY >= safe.top else { return false }
+        guard f.minY >= topPillsBottom(safeTop: safe.top) + 4, f.maxY <= size.height - safe.bottom - 12 + 0.01 else { return false }
+        let ox = min(f.maxX, box.maxX) - max(f.minX, box.minX), oy = min(f.maxY, box.maxY) - max(f.minY, box.minY)
+        return !(ox > 0.01 && oy > 0.01)
+    }
+
+    /// The ghost's scale: the phone 1; the iPad the largest of 1.3, 1.2, 1.1, 1.0 whose demo fits (an iPad window can be narrow); 1.0 when none does.
+    static func demoScale(size: CGSize, safe: EdgeInsets, pad: Bool) -> CGFloat {
+        guard pad else { return 1 }
+        return [1.3, 1.2, 1.1, 1.0].first { demoFits(size: size, safe: safe, k: $0, pad: true) } ?? 1.0
     }
 
     /// weak below `lo`, green up to `hi`, over past it.
@@ -239,7 +275,7 @@ struct RacePullSurface: View {
         if Self.demoGauge {
             let steps: [Float] = [0.45, 0.80, 1.05]
             let p = steps[Int(date.timeIntervalSinceReferenceDate / 2) % 3]
-            let a = RacePullGesture.restAnchor(size: size, safe: Self.safeEdgeInsets, k: k)          // (where a resting thumb starts, off the Jelbies)
+            let a = RacePullGesture.restAnchor(size: size, safe: Self.safeEdgeInsets, k: k, pad: PadLayout.isPad)          // (where a resting thumb starts, off the Jelbies)
             let len = CGFloat(p) * dragMax(startY: a.y)
             return RacePullGaugeState(anchor: a, finger: CGPoint(x: a.x, y: a.y + len), pull: p, lo: ui.zoneLo, hi: ui.zoneHi, pullMin: ui.pullMin, pullMax: ui.pullMax)
         }
@@ -273,7 +309,7 @@ struct RacePullSurface: View {
                             .opacity(ui.stumbling ? 0.4 : 1)
                     }
                     if demoShows(at: tl.date), touch == nil {
-                        RacePullThumbDemo(size: size, safe: Self.safeEdgeInsets, k: RacePullGesture.demoScale, lo: ui.zoneLo, hi: ui.zoneHi, pullMin: ui.pullMin, pullMax: ui.pullMax, at: tl.date)
+                        RacePullThumbDemo(size: size, safe: Self.safeEdgeInsets, k: RacePullGesture.demoScale(size: size, safe: Self.safeEdgeInsets, pad: PadLayout.isPad), pad: PadLayout.isPad, lo: ui.zoneLo, hi: ui.zoneHi, pullMin: ui.pullMin, pullMax: ui.pullMax, at: tl.date)
                     }
                 }
             }
@@ -334,6 +370,7 @@ private struct RacePullThumbDemo: View {
     let size: CGSize
     let safe: EdgeInsets
     let k: CGFloat
+    let pad: Bool
     let lo: Float, hi: Float, pullMin: Float, pullMax: Float
     let at: Date
     private var reduceMotion: Bool { A11ySettings.shared.reduceMotion }
@@ -346,8 +383,8 @@ private struct RacePullThumbDemo: View {
         let target = RacePullGesture.demoPull
         let pull = reduceMotion ? target : target * Float(eased)
         let opacity = reduceMotion ? 0.85 : (t < 0.15 ? t / 0.15 : (t < 1.2 ? 1 : max(0, 1 - (t - 1.2) / 0.4))) * 0.85
-        let anchor = RacePullGesture.restAnchor(size: size, safe: safe, k: k)
-        let len = (reduceMotion ? 1 : CGFloat(eased)) * RacePullGesture.demoLength(size: size, anchor: anchor, safe: safe, k: k)
+        let anchor = RacePullGesture.restAnchor(size: size, safe: safe, k: k, pad: pad)
+        let len = (reduceMotion ? 1 : CGFloat(eased)) * RacePullGesture.demoLength(size: size, anchor: anchor, safe: safe, k: k, pad: pad)
         let finger = CGPoint(x: anchor.x, y: anchor.y + len)
         return ZStack {
             RacePullGauge(g: RacePullGaugeState(anchor: anchor, finger: finger, pull: pull, lo: lo, hi: hi, pullMin: pullMin, pullMax: pullMax), k: k, safeTop: 0)
