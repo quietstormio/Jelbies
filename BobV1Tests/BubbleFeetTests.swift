@@ -13,8 +13,8 @@ import simd
 
 @MainActor
 final class BubbleFeetTests: XCTestCase {
-    override func setUp() { super.setUp(); EmoteFeetTests.reset(); BubbleWand.shared.resetForTests() }
-    override func tearDown() { BubbleTuning.forceMove = nil; BubbleTuning.classic = false; BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
+    override func setUp() { super.setUp(); BubbleTuning.restoreHead(); EmoteFeetTests.reset(); BubbleWand.shared.resetForTests() }
+    override func tearDown() { BubbleTuning.restoreHead(); BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
     static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/bubbles/"
     typealias SC = LegsDrawnAuditTests.Scenario
@@ -109,4 +109,14 @@ final class BubbleFeetTests: XCTestCase {
     func testPopBounce() { bubbles("pop bounce") }
     func testPopFlap() { bubbles("pop flap") }          // (non-winged characters run it too: the wand falls back to the header when the flap cannot start)
     func testPopSkip() { bubbles("pop skip") }
+
+    // Fault A (round 2): testPopFlap failed with the round-1 tuning ("the join is open: 2.4 to 3.1 cm"). Each of these puts ONE group of round-1 numbers back to the BEFORE values, so the cause is found by switches, not by guessing.
+    func testPopFlapBusyLookingOff() { BubbleTuning.busyLookingChases = false; bubbles("pop flap") }
+    func testPopFlapIdleCutsBefore() { BubbleTuning.idleCuts = (0.32, 0.72, 0.86); BubbleTuning.idleStepDur = 0.8...1.6; bubbles("pop flap") }
+    func testPopFlapTimingBefore() {
+        BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8
+        BubbleTuning.playAfterChase = 0.3...0.9; BubbleTuning.playSpotHold = 0.35...0.5; BubbleTuning.playHopSpacing = 0; BubbleTuning.playWaitHopEnabled = false; bubbles("pop flap")
+    }
+    func testPopFlapPickBefore() { BubbleTuning.pickDistanceFactor = 1; BubbleTuning.playPickRadius = 4.5; bubbles("pop flap") }
+    func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }

@@ -14,8 +14,8 @@ import simd
 @MainActor
 final class BubbleJumpRateTests: XCTestCase {
     var wand: BubbleWand { BubbleWand.shared }
-    override func setUp() { super.setUp(); wand.resetForTests(); EmoteFeetTests.reset(); BubbleTuning.classic = false; BubbleTuning.forceMove = nil }
-    override func tearDown() { BubbleTuning.classic = false; BubbleTuning.forceMove = nil; wand.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
+    override func setUp() { super.setUp(); wand.resetForTests(); EmoteFeetTests.reset(); BubbleTuning.restoreHead() }
+    override func tearDown() { BubbleTuning.restoreHead(); wand.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
     static let seconds = 60
     /// (name, feature) of the species used in the casts (OnePieceInvariantTests.characters).
