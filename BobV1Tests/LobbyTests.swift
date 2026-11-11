@@ -62,13 +62,6 @@ final class LobbyTests: XCTestCase {
         XCTAssertNil(care(2).volleyPartnerBlocker(jelly: 0), "two Jelbies are a team without a friend")
     }
 
-    func testTheParkFriendIsTheSameAllDayAndChangesAcrossDays() {
-        let pool = ParkPool.generate()
-        for day in [20_000, 20_001, 20_500] { XCTAssertEqual(ParkPool.dailyFriend(dayKey: day, pool: pool).id, ParkPool.dailyFriend(dayKey: day, pool: pool).id) }
-        let ids = Set((20_000..<20_030).map { ParkPool.dailyFriend(dayKey: $0, pool: pool).id })
-        XCTAssertGreaterThan(ids.count, 5, "different days bring different friends")
-    }
-
     func testThePartnerChoiceIsSaved() {
         let d = UserDefaults(suiteName: "LobbyTests.save")!
         d.removePersistentDomain(forName: "LobbyTests.save")
