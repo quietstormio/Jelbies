@@ -7,6 +7,11 @@
 //  landing, a hurdle hit stuns. The numbers come from the prototype's physics (prototype_waddle_sprint.html lines 212-434); the conversion to this
 //  game's units (`hopScale`, the stride and step rate of the racer) and the bar rules are ours.
 //
+//  The pack follows the player (`mirror`, the prototype's "a struggling player meets a gentler pack, a sharp one meets each opponent's full skill"): a rival is never
+//  better than his own skill, but he is also never greener (green pulls), never quicker on the ground between hops, and never off the line earlier than the player has
+//  shown himself to be: the sim keeps a picture of the player (`RaceSim.mirrorGreen`, `mirrorGround`) that follows his hops. A perfect player meets the pack at its own
+//  skill (the numbers are calibrated at 0.87 / 0.87, so a relaxed player is about level with it); `mirror = false` gives the pack at its own skill and rhythm.
+//
 //    RaceControl        which control a race uses (`.taps` = the two foot buttons, the default; `.pull` = this one).
 //    RacePullTuning     every number, as an instance (the calibration test tries many values through `RaceSim.pullTuning`) + the pure functions.
 //    RaceBarPass        one bar a hop passes, with its outcome decided at launch.
@@ -72,12 +77,13 @@ nonisolated struct RacePullTuning: Sendable {
     /// A rival's chance of a green pull: `rivalGreenBase + rivalGreenSkill x skill`; the auto player's is `autoGreen`.
     var rivalGreenBase: Float = 0.35
     var rivalGreenSkill: Float = 0.45
-    /// Rivals' hop length scale from the Ripple up. CAL: the largest value (0.80 ... 1.10) at which a steady player (60 % green pulls, a new Jelbie) wins at least
-    /// 70 % on the Ripple, 55 % on the Splash and 35 % on the Wave: about as hard as the taps race is for a perfect tapper, a touch kinder.
-    var rivalLength: Float = 0.88
-    /// The Puddle's own rival length, the easy first course. CAL: the largest value (at most `rivalLength` and 0.90) at which a first-timer with a new Jelbie wins
-    /// at least 40 % and is in the top two at least 75 %.
-    var rivalLengthPuddle: Float = 0.64
+    /// Rivals' hop length scale from the Ripple up. CAL (the mirror on): the largest value in 0.80 ... 1.00 at which a relaxed player (the steady pulls, 0.10 ... 0.35 s
+    /// after each landing, a new Jelbie) wins at least 70 % on the Ripple, 55 % on the Splash and 35 % on the Wave, and so does the value one step below. 1.00 is a cap by
+    /// design: a rival never hops further than the player's own physics give for the same pull.
+    var rivalLength: Float = 0.87
+    /// The Puddle's own rival length, the easy first course. CAL (the mirror on): the largest value from `rivalLength` down to 0.50 at which a first-timer with a new Jelbie
+    /// wins at least 55 % and is in the top two at least 85 %, and a relaxed player wins at least 85 %; the value one step below passes too.
+    var rivalLengthPuddle: Float = 0.87
     var autoGreen: Float = 0.5
 
     // MARK: the pack follows the player

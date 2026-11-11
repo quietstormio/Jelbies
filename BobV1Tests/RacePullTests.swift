@@ -422,15 +422,16 @@ final class RacePullTests: XCTestCase {
                 XCTAssertEqual(r.sim.player.tap.trips, 0, "\(c.tier) seed \(seed): perfect hops never trip")
             }
             var pullTrips = 0, tapsTrips = 0, fullPull = 0, fullTaps = 0
+            var own = RacePullTuning(); own.mirror = false          // (the rule is about the rivals at their own skill)
             for seed in UInt64(1)...200 {
                 let stats = seed % 2 == 0 ? Self.newJelbie : Self.halfTrained
                 let rs = Self.rivals(seed: seed, player: stats, course: c)
-                pullTrips += Self.pullRun(seed: seed, player: stats, bot: .afk, course: c, rivals: rs, keep: false).rivalTrips
+                pullTrips += Self.pullRun(seed: seed, player: stats, bot: .afk, course: c, rivals: rs, tuning: own, keep: false).rivalTrips
                 tapsTrips += Self.tapsRun(seed: seed, player: stats, rate: 0, course: c, rivals: rs, autoJump: false).racers.dropFirst().reduce(0) { $0 + $1.tap.trips }
                 guard seed <= 50 else { continue }
                 let full = [Rival(name: "A", tint: .one, stats: Self.fullTrained), Rival(name: "B", tint: .one, stats: Self.fullTrained)]
                 // (a bar a rival fails to jump is a trip by design, even for a fully trained one: only trips on the open track count here)
-                fullPull += Self.pullRun(seed: seed, player: stats, bot: .afk, course: c, rivals: full, keep: false).sim.racers.dropFirst().reduce(0) { $0 + $1.tap.trips - $1.hurdlesHit }
+                fullPull += Self.pullRun(seed: seed, player: stats, bot: .afk, course: c, rivals: full, tuning: own, keep: false).sim.racers.dropFirst().reduce(0) { $0 + $1.tap.trips - $1.hurdlesHit }
                 fullTaps += Self.tapsRun(seed: seed, player: stats, rate: 0, course: c, rivals: full, autoJump: false).racers.dropFirst().reduce(0) { $0 + $1.tap.trips - $1.hurdlesHit }
             }
             let ratio = Double(pullTrips) / Double(max(tapsTrips, 1))
@@ -446,12 +447,13 @@ final class RacePullTests: XCTestCase {
     static let rivalPaceVsTaps: [CourseTier: Float] = [.puddle: 1.274, .ripple: 0.934, .splash: 0.913, .wave: 0.902, .tsunami: 0.880]
 
     func testRivalPaceGuard() {
+        var own = RacePullTuning(); own.mirror = false          // (the rivals at their own skill and rhythm)
         for c in Self.allCourses {
             var pullT: [Float] = [], tapsT: [Float] = []
             for seed in UInt64(1)...200 {
                 let stats = seed % 2 == 0 ? Self.newJelbie : Self.halfTrained
                 let rs = Self.rivals(seed: seed, player: stats, course: c)
-                pullT += Self.pullRun(seed: seed, player: stats, bot: .afk, course: c, rivals: rs, keep: false).rivalTimes
+                pullT += Self.pullRun(seed: seed, player: stats, bot: .afk, course: c, rivals: rs, tuning: own, keep: false).rivalTimes
                 tapsT += Self.tapsRun(seed: seed, player: stats, rate: 0, course: c, rivals: rs, autoJump: false).racers.dropFirst().compactMap(\.finishTime)
             }
             let mp = pullT.reduce(0, +) / Float(max(pullT.count, 1)), mt = tapsT.reduce(0, +) / Float(max(tapsT.count, 1))
@@ -463,62 +465,77 @@ final class RacePullTests: XCTestCase {
     // MARK: - J. a beginner
 
     func testABeginnerWinsOftenOnThePuddle() {
-        var wins = 0, top2 = 0, n = 0
-        for seed in UInt64(1)...200 {
-            let r = Self.pullRun(seed: seed, bot: .firstTimer, keep: false)
-            n += 1
-            if let p = r.place, r.sim.playerFinished { if p == 1 { wins += 1 }; if p <= 2 { top2 += 1 } }
-        }
-        print("[pullcal] firstTimer, new Jelbie, Puddle: wins \(wins)/\(n), top two \(top2)/\(n)")
-        XCTAssertGreaterThanOrEqual(Double(wins) / Double(n), 0.35, "a first-timer wins at least 35 % (the calibration rule is 40 %)")
-        XCTAssertGreaterThanOrEqual(Double(top2) / Double(n), 0.70, "and is in the top two at least 70 % (the calibration rule is 75 %)")
-        let st = Self.board(.steady, Self.newJelbie, .puddle, RacePullTuning())
-        print("[pullcal] steady, new Jelbie, Puddle: wins \(st.wins)/\(st.n)")
-        XCTAssertGreaterThanOrEqual(Double(st.wins) / Double(st.n), 0.90, "a steady player wins the Puddle at least 90 %")
+        let t = RacePullTuning()
+        let f = Self.board(.firstTimer, Self.newJelbie, .puddle, t), rx = Self.board(.relaxed, Self.newJelbie, .puddle, t), st = Self.board(.steady, Self.newJelbie, .puddle, t)
+        print("[pullcal] Puddle, new Jelbie: firstTimer wins \(f.wins)/\(f.n), top two \(f.top2)/\(f.n) | relaxed wins \(rx.wins)/\(rx.n) | steady wins \(st.wins)/\(st.n)")
+        XCTAssertGreaterThanOrEqual(Double(f.wins) / Double(f.n), 0.50, "a first-timer wins at least 50 % (the calibration rule is 55 %)")
+        XCTAssertGreaterThanOrEqual(Double(f.top2) / Double(f.n), 0.80, "and is in the top two at least 80 % (the calibration rule is 85 %)")
+        XCTAssertGreaterThanOrEqual(Double(rx.wins) / Double(rx.n), 0.80, "a relaxed player wins the Puddle at least 80 %")
+        XCTAssertGreaterThanOrEqual(Double(st.wins) / Double(st.n), 0.75, "a steady player wins the Puddle at least 75 % (with the mirror every player meets a pack near his own level)")
     }
 
-    // MARK: - J2. what the design wants: a steady player, training, skill
+    // MARK: - J2. what the design wants: a relaxed player, training, tempo, skill
 
-    /// A steady player (60 % green) with a new Jelbie is about a perfect tapper of today's game, a touch kinder: Ripple 70, Splash 55, Wave 35 are the calibration bands.
-    func testASteadyPlayerIsAboutAPerfectTapper() {
+    /// A relaxed player (the steady pulls, 0.10 ... 0.35 s after each landing) with a new Jelbie is about a perfect tapper of today's game, a touch kinder.
+    func testARelaxedPlayerIsAboutAPerfectTapper() {
         var win: [CourseTier: Int] = [:], top2: [CourseTier: Int] = [:]
         for c in Self.allCourses {
-            let b = Self.board(.steady, Self.newJelbie, c, RacePullTuning())
+            let b = Self.board(.relaxed, Self.newJelbie, c, RacePullTuning()), s = Self.board(.steady, Self.newJelbie, c, RacePullTuning())
             win[c.tier] = b.wins; top2[c.tier] = b.top2
-            print("[pullcal] steady, new Jelbie, \(c.tier): wins \(b.wins)/\(b.n) (\(Double(b.wins) / 2) %), top two \(b.top2)/\(b.n)")
+            print("[pullcal] relaxed, new Jelbie, \(c.tier): wins \(b.wins)/\(b.n) (\(Double(b.wins) / 2) %), top two \(b.top2)/\(b.n) | steady wins \(s.wins)/\(s.n), top two \(s.top2)/\(s.n)")
         }
-        XCTAssertTrue((120...184).contains(win[.ripple]!), "Ripple win \(win[.ripple]!)/200 not within 60...92 %")
+        XCTAssertTrue((120...190).contains(win[.ripple]!), "Ripple win \(win[.ripple]!)/200 not within 60...95 %")
         XCTAssertTrue((90...180).contains(win[.splash]!), "Splash win \(win[.splash]!)/200 not within 45...90 %")
         XCTAssertTrue((56...150).contains(win[.wave]!), "Wave win \(win[.wave]!)/200 not within 28...75 %")
         XCTAssertLessThanOrEqual(win[.tsunami]!, 100, "Tsunami win \(win[.tsunami]!)/200 above 50 %")
         XCTAssertGreaterThanOrEqual(top2[.ripple]!, 160, "Ripple top two \(top2[.ripple]!)/200 below 80 %")
     }
 
-    /// Training a Jelbie still matters: half-trained beats new by 15 points on the Wave and the Tsunami, and is not worse on the Ripple and the Splash.
+    /// Training a Jelbie still matters on the upper courses. On the Ripple and the Splash the rivals are drawn around the player's own stats (LocalRivalSource: player +- spread,
+    /// the floors are below a new Jelbie), so training is not meant to change the result there; the assertion only guards against a large loss.
     func testTrainingStillMatters() {
         for c in Self.allCourses where c.tier != .puddle {
-            let n = Self.board(.steady, Self.newJelbie, c, RacePullTuning()), h = Self.board(.steady, Self.halfTrained, c, RacePullTuning())
+            let n = Self.board(.relaxed, Self.newJelbie, c, RacePullTuning()), h = Self.board(.relaxed, Self.halfTrained, c, RacePullTuning())
+            let sn = Self.board(.steady, Self.newJelbie, c, RacePullTuning()), sh = Self.board(.steady, Self.halfTrained, c, RacePullTuning())
             let nw = Double(n.wins) / 2, hw = Double(h.wins) / 2
-            print("[pullcal] training \(c.tier): new \(nw) % half \(hw) % (gain \(hw - nw) points)")
+            print("[pullcal] training \(c.tier): relaxed new \(nw) % half \(hw) % (gain \(hw - nw) points) | steady new \(Double(sn.wins) / 2) % half \(Double(sh.wins) / 2) %")
             switch c.tier {
             case .wave, .tsunami: XCTAssertGreaterThanOrEqual(hw, nw + 15, "\(c.tier): half-trained \(hw) % vs new \(nw) %")
-            default: XCTAssertGreaterThanOrEqual(hw, nw - 5, "\(c.tier): half-trained \(hw) % vs new \(nw) %")
+            default: XCTAssertGreaterThanOrEqual(hw, nw - 12, "\(c.tier): half-trained \(hw) % vs new \(nw) %")
             }
         }
     }
 
-    /// A better player is faster: mean finish time perfect < skilled < steady < casual < firstTimer (new Jelbie, seeds 1...100, every course).
+    /// A human tempo is not punished, and sloppiness is not rewarded (new Jelbie, seeds 1...200, win %).
+    func testAHumanTempoIsNotPunished() {
+        var off = RacePullTuning(); off.mirror = false
+        for tier in [CourseTier.ripple, .splash] {
+            let c = RaceCourse.course(tier)
+            var on: [PullBot.Kind: Double] = [:], offW: [PullBot.Kind: Double] = [:]
+            for kind in [PullBot.Kind.steady, .relaxed, .casual, .firstTimer] {
+                on[kind] = Double(Self.board(kind, Self.newJelbie, c, RacePullTuning()).wins) / 2
+                offW[kind] = Double(Self.board(kind, Self.newJelbie, c, off).wins) / 2
+            }
+            print("[pullcal] tempo \(tier) mirror on: steady \(on[.steady]!) relaxed \(on[.relaxed]!) casual \(on[.casual]!) firstTimer \(on[.firstTimer]!) | mirror off: steady \(offW[.steady]!) relaxed \(offW[.relaxed]!) casual \(offW[.casual]!) firstTimer \(offW[.firstTimer]!)")
+            XCTAssertGreaterThanOrEqual(on[.relaxed]!, on[.steady]! - 12, "\(tier): relaxed \(on[.relaxed]!) vs steady \(on[.steady]!)")
+            XCTAssertGreaterThanOrEqual(on[.casual]!, on[.steady]! - 30, "\(tier): casual \(on[.casual]!) vs steady \(on[.steady]!)")
+            XCTAssertLessThanOrEqual(on[.casual]!, on[.steady]! + 15, "\(tier): casual \(on[.casual]!) vs steady \(on[.steady]!): sloppiness rewarded")
+            XCTAssertLessThanOrEqual(on[.firstTimer]!, on[.steady]! + 15, "\(tier): firstTimer \(on[.firstTimer]!) vs steady \(on[.steady]!): sloppiness rewarded")
+        }
+    }
+
+    /// A better player is faster: mean finish time perfect < skilled < steady < casual < firstTimer (new Jelbie, seeds 1...100, every course); relaxed is printed as a sixth mean.
     func testSkillPays() {
         let kinds: [PullBot.Kind] = [.perfect, .skilled, .steady, .casual, .firstTimer]
         for c in Self.allCourses {
             var means: [Float] = []
-            for kind in kinds {
+            for kind in kinds + [.relaxed] {
                 var ts: [Float] = []
                 for seed in UInt64(1)...100 { if let t = Self.pullRun(seed: seed, bot: kind, course: c, keep: false).sim.player.finishTime { ts.append(t) } }
                 means.append(ts.reduce(0, +) / Float(max(ts.count, 1)))
             }
-            print("[pullcal] skill \(c.tier): perfect \(means[0]) skilled \(means[1]) steady \(means[2]) casual \(means[3]) firstTimer \(means[4]) s")
-            for i in 0..<(means.count - 1) { XCTAssertLessThan(means[i], means[i + 1], "\(c.tier): \(kinds[i]) \(means[i]) s is not faster than \(kinds[i + 1]) \(means[i + 1]) s") }
+            print("[pullcal] skill \(c.tier): perfect \(means[0]) skilled \(means[1]) steady \(means[2]) casual \(means[3]) firstTimer \(means[4]) relaxed \(means[5]) s")
+            for i in 0..<(kinds.count - 1) { XCTAssertLessThan(means[i], means[i + 1], "\(c.tier): \(kinds[i]) \(means[i]) s is not faster than \(kinds[i + 1]) \(means[i + 1]) s") }
         }
     }
 
