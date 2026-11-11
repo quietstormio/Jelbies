@@ -68,8 +68,11 @@ nonisolated enum BubbleTuning {
     /// Weights of the bounce in `planMove` (below the crown / above it); the others are fixed there.
     nonisolated(unsafe) static var bounceWeightLow: Float = 0.5          // (the BEFORE value: the skip keeps its share)
     /// The flap's weight where it is not the first choice (a bubble in the middle band, winged only).
-    nonisolated(unsafe) static var flapWeightMid: Float = 2          // (1 before)
-    nonisolated(unsafe) static var bounceWeightHigh: Float = 3          // (1.5 before; 4 in round 1 crowded the other pops out)
+    nonisolated(unsafe) static var flapWeightMid: Float = 4          // (1 before)
+    nonisolated(unsafe) static var flapWeightHigh: Float = 6          // (3 before: a winged one under a high bubble)
+    nonisolated(unsafe) static var skipWeight: Float = 6          // (3 before: a low bubble)
+    nonisolated(unsafe) static var leapWeightMid: Float = 4.5          // (3 before: the bounce of four hops would otherwise take the leap's share)
+    nonisolated(unsafe) static var bounceWeightHigh: Float = 3.5          // (1.5 before; 4 in round 1 crowded the other pops out)
     /// `pickTarget`: the bubble's distance counts this many times in the score.
     nonisolated(unsafe) static var pickDistanceFactor: Float = 1.5          // (1 before; 3 was tried in round 2 and did not help)
     /// Hops of one bounce (3 before: one for the target, the rest for other bubbles in reach).
@@ -104,7 +107,7 @@ nonisolated enum BubbleTuning {
         leapRange = 0.35...0.9
         playThinkEvery = thinkEvery; playChaseRoll = chaseRoll; playWatchHold = 1.0...2.2; playWatchThink = 0.9...1.8; playAfterChase = 0.3...0.9
         playPickRadius = 4.5; playSpotHold = 0.35...0.5; playHopSpacing = 0; playWaitHopEnabled = false
-        bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1; flapWeightMid = 1; bounceReps = 3
+        bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1; flapWeightMid = 1; flapWeightHigh = 3; skipWeight = 3; leapWeightMid = 3; bounceReps = 3
         idleCuts = (0.32, 0.72, 0.86); idleStepDur = 0.8...1.6
         busyLookingChases = false; goWaitsForHop = false; spotWaitsForFeet = false
     }
@@ -115,7 +118,7 @@ nonisolated enum BubbleTuning {
         playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.08...0.3
         playPickRadius = 5.0; playSpotHold = 0.35...0.5; playHopSpacing = 0.8
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.2...0.45; playWaitHopChance = 0.8; playWaitHopEnabled = true
-        bounceWeightLow = 0.5; bounceWeightHigh = 3; pickDistanceFactor = 1.5; flapWeightMid = 2; bounceReps = 4
+        bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 4; flapWeightHigh = 6; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 4
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
         busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false
     }
@@ -455,9 +458,9 @@ final class BubbleWand: PlayToy {
         let crown = crownRest(j)
         let winged = j.brain.feature == .wings && !j.brain.wingsFolded
         var w: [(BubblePopMove, Float)] = []
-        if bub.pos.y < crown + 0.15 { w = [(.skip, 3), (.leap, 1.5), (.bounce, BubbleTuning.bounceWeightLow)] }          // (at or below the crown: a skip into it)
-        else if bub.pos.y > crown + 0.2 && winged { w = [(.flap, 3), (.leap, 1.5), (.bounce, 1)] }
-        else { w = [(.leap, 3), (.header, 1.5), (.bounce, BubbleTuning.bounceWeightHigh)] + (winged ? [(.flap, BubbleTuning.flapWeightMid)] : []) }
+        if bub.pos.y < crown + 0.15 { w = [(.skip, BubbleTuning.skipWeight), (.leap, 1.5), (.bounce, BubbleTuning.bounceWeightLow)] }          // (at or below the crown: a skip into it)
+        else if bub.pos.y > crown + 0.2 && winged { w = [(.flap, BubbleTuning.flapWeightHigh), (.leap, 1.5), (.bounce, 1)] }
+        else { w = [(.leap, BubbleTuning.leapWeightMid), (.header, 1.5), (.bounce, BubbleTuning.bounceWeightHigh)] + (winged ? [(.flap, BubbleTuning.flapWeightMid)] : []) }
         let total = w.reduce(0) { $0 + $1.1 }
         var r = BubbleTuning.rnd(in: 0..<total)
         for (m, x) in w { if r < x { return m }; r -= x }
