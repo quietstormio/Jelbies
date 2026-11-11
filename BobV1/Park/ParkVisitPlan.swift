@@ -43,13 +43,29 @@ nonisolated enum ParkVisitPlan {
     static func begin(defaults: UserDefaults = .standard) -> Plan {
         if defaults === UserDefaults.standard, allInPlayAlways { current = .all; return current }
         let saved = defaults.dictionary(forKey: key) ?? [:]
-        let visit = max(0, saved["visit"] as? Int ?? 0) + 1
+        var visit = max(0, saved["visit"] as? Int ?? 0) + 1
+        #if targetEnvironment(simulator)
+        if defaults === UserDefaults.standard, UserDefaults.standard.object(forKey: "ParkVisit") != nil { visit = max(1, UserDefaults.standard.integer(forKey: "ParkVisit")) }          // capture aid: `-ParkVisit n` is visit number n (odd: hopscotch, even: seesaw); each capture run starts on a fresh simulator clone, whose counter would always be 1
+        #endif
         let seesawOff = max(0, saved["seesawOff"] as? Int ?? 0), hopscotchOff = max(0, saved["hopscotchOff"] as? Int ?? 0)
         let d = draw(visit: visit)
         defaults.set(["visit": visit, "seesawOff": d.seesaw ? 0 : seesawOff + 1, "hopscotchOff": d.hopscotch ? 0 : hopscotchOff + 1], forKey: key)
         current = Plan(visit: visit, seesaw: d.seesaw, hopscotch: d.hopscotch)
         return current
     }
+
+    /// Is a piece of this kind DRAWN and placed in the park on this visit? The seesaw only on the seesaw visits, the hopscotch court only on the hopscotch visits (the plan that lets the
+    /// Jelbies use a piece is the plan that shows it); every other piece is always there. `current` is `.all` until a visit has begun, in tests and with `-ParkToys`, so those show both.
+    static func shows(_ kind: DecorKind) -> Bool {
+        switch kind {
+        case .seesaw: return current.seesaw
+        case .hopscotch: return current.hopscotch
+        default: return true
+        }
+    }
+
+    /// The park's own pieces for this visit (`ParkToys.placed` without the big toy that is not in today's plan).
+    static var placedToday: [PlacedDecor] { ParkToys.placed.filter { shows($0.kind) } }
 
     /// The pure decision: may a Jelbie of its own accord use a piece of this kind? Always at home (`outing` false); in the park the seesaw and the hopscotch follow the plan, or are
     /// open while the piece is already in use (only a use the player asked for can have started it, so a friend may join it); every other piece is open.

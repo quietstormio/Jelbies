@@ -69,6 +69,26 @@ final class ParkVisitPlanTests: XCTestCase {
         }
     }
 
+    /// Only the piece that is in today's plan is placed (drawn): one of the seesaw / the court, always the slide; the forcing argument and the default plan show both.
+    func testOnlyTodaysBigToyIsPlaced() {
+        let d = freshDefaults()
+        for _ in 0..<6 {
+            let p = ParkVisitPlan.begin(defaults: d)
+            let kinds = ParkVisitPlan.placedToday.map(\.kind)
+            XCTAssertTrue(kinds.contains(.slide), "visit \(p.visit): the slide is always there")
+            XCTAssertEqual(kinds.contains(.seesaw), p.seesaw, "visit \(p.visit)")
+            XCTAssertEqual(kinds.contains(.hopscotch), p.hopscotch, "visit \(p.visit)")
+            XCTAssertEqual(kinds.filter { $0 == .seesaw || $0 == .hopscotch }.count, 1, "visit \(p.visit): exactly one big toy")
+            XCTAssertEqual(kinds.count, ParkToys.placed.count - 1)
+            XCTAssertTrue(ParkVisitPlan.shows(.slide) && ParkVisitPlan.shows(.ball))
+        }
+        ParkVisitPlan.current = .all
+        let all = ParkVisitPlan.placedToday.map(\.kind)
+        XCTAssertTrue(all.contains(.seesaw) && all.contains(.hopscotch) && all.contains(.slide), "the default plan / forcing argument show everything")
+        XCTAssertEqual(ParkVisitPlan.begin().seesaw && ParkVisitPlan.begin().hopscotch, true)
+        XCTAssertEqual(ParkVisitPlan.placedToday.count, ParkToys.placed.count)
+    }
+
     /// The capture / test bypass still brings everything: both pieces in play, nothing written.
     func testForcingArgumentStillGivesBoth() {
         XCTAssertTrue(ParkVisitPlan.allInPlayAlways)
