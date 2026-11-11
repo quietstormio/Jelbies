@@ -139,5 +139,11 @@ final class BubbleFeetTests: XCTestCase {
         BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8
         BubbleTuning.playAfterChase = 0.3...0.9; BubbleTuning.playHopSpacing = 0; BubbleTuning.playWaitHopEnabled = false; bubbles("pop flap")
     }
+    // The timing group was the discriminator (seed 100): which number of it?
+    func testPopFlapHeadThinkBefore() { BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; bubbles("pop flap") }
+    func testPopFlapHeadChaseRollBefore() { BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; bubbles("pop flap") }
+    func testPopFlapHeadWatchBefore() { BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8; bubbles("pop flap") }
+    func testPopFlapHeadAfterChaseBefore() { BubbleTuning.playAfterChase = 0.3...0.9; bubbles("pop flap") }
+    func testPopFlapHeadSpacingBefore() { BubbleTuning.playHopSpacing = 0; bubbles("pop flap") }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }
