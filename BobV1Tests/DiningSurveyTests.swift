@@ -138,6 +138,9 @@ final class DiningSurveyTests: XCTestCase {
         let gave = res.filter { $0.gaveUp != nil }
         let worst = res.filter { $0.maxHeldRig >= 0 }.max { $0.maxHeld < $1.maxHeld }
         let worstStr = worst.map { String(format: "%.1f%@", $0.maxHeld, $0.maxHeldOpen ? "+" : "") } ?? "none"
+        let firsts = res.compactMap { $0.ate.compactMap { $0 }.min() }.sorted(), lasts = res.compactMap { r -> Float? in r.ate.allSatisfy({ $0 != nil }) ? r.ate.compactMap { $0 }.max() : nil }.sorted()
+        let med = { (a: [Float]) -> String in a.isEmpty ? "nil" : Self.f(a[a.count / 2]) }
+        print("TRAYSURVEY TOTALS2 mode softMealWake \(BlobBrain.softMealWake) robust \(DiningGroup.robust) | >=2 ate within 45 s \(res.filter { r in r.ate.compactMap { $0 }.filter { $0 <= 45 }.count >= 2 }.count) | all 3 within 60 s \(res.filter { r in r.ate.allSatisfy { ($0 ?? 99) <= 60 } }.count) | first bite median \(med(firsts)) worst \(Self.f(firsts.last)) late>16 \(firsts.filter { $0 > 16 }.count) (nobody ate: \(res.count - firsts.count)) | last diner first bite (all-3 seeds) median \(med(lasts)) worst \(Self.f(lasts.last)) n \(lasts.count)")
         print("TRAYSURVEY TOTALS arm \(arm) softMealWake \(BlobBrain.softMealWake) robust \(DiningGroup.robust) | dropped-for-all-while-eating \(res.filter(\.droppedWhileEating).count) | excuses \(res.map(\.excused).reduce(0, +)) | over>45s or never \(res.filter { ($0.over ?? 999) > 45 }.count) | held>3s \(res.filter { $0.maxHeldRig >= 0 && $0.maxHeld > 3 }.count) | seeds \(res.count) | >=2 ate within 40 s \(res.filter { n40($0) >= 2 }.count) | all 3 within 40 s \(res.filter { n40($0) >= 3 }.count) | all 3 within window \(res.filter { $0.ate.allSatisfy { $0 != nil } }.count) | gave up \(gave.count) (timeout \(gave.filter(\.timeout).count), retries \(gave.filter { !$0.timeout }.count)) | median over \(Self.f(median)) | largest held \(worstStr)")
     }
 }

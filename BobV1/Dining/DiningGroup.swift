@@ -82,6 +82,13 @@ final class DiningGroup {
     /// A walker who does not move: his floor spot and how long he has stood there while walking.
     private var stallPos: [SIMD2<Float>] = []
     private var stallClock: [Float] = []
+    /// A sleeper's patience: when he was called (`age`), and when he was hard-woken (`requestNow`) after `wakePatience` (nil = not yet).
+    private var calledAt: [Float] = []
+    private var hardWokenAt: [Float?] = []
+    /// A diner still in a sleep state (lying / stirring / rolling / stretching) this long after the call is woken hard; 6 s after that he is excused.
+    static let wakePatience: Float = 12
+    static let wakeGrace: Float = 6
+    private func sleeping(_ i: Int) -> Bool { brains[i].idleState.kind == .sleep }
     private var hooked = false
     var isActive: Bool { state != .idle }
 
@@ -160,6 +167,7 @@ final class DiningGroup {
         reserves = 0; gaveUp = false; age = 0
         excused = [Bool](repeating: false, count: n)
         stallPos = brains.indices.map { f($0) }; stallClock = [Float](repeating: 0, count: n)
+        calledAt = [Float](repeating: 0, count: n); hardWokenAt = [Float?](repeating: nil, count: n)
         tiers = [NeedTier](repeating: .famished, count: n); paid = [Int](repeating: 0, count: n); piecesFor = [Int](repeating: DiningTiming.bitesPerServing, count: n)
         savedFinished = brains.map { $0.onFinished }; savedGap = brains.map { $0.peerGap }; savedPeers = brains.map { $0.peers }
         for (i, b) in brains.enumerated() {
@@ -206,7 +214,7 @@ final class DiningGroup {
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
         if forcedOrigin != nil { spawnTray() }          // (the café's table is out already: the food lands on it at once; a fresh tray waits for the gathering, see `tick`)
-        for i in brains.indices { idle[i] = 0; walkRetries[i] = 0; stallClock[i] = 0; stallPos[i] = floor(i) }
+        for i in brains.indices { idle[i] = 0; walkRetries[i] = 0; stallClock[i] = 0; stallPos[i] = floor(i); calledAt[i] = age; hardWokenAt[i] = nil }
         for i in brains.indices where !released[i] { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken softly, not hard-aborted: BlobBrain+SleepForce)
         requested = true
     }
@@ -315,7 +323,18 @@ final class DiningGroup {
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
-            for i in brains.indices where !started[i] && !ready(i) && isIdle(brains[i]) {
+            if Self.robust {
+                // (robust) a diner in a sleep state is never idle / stalled for the group (the soft wake is slow: stir, roll, stretch, look round): he only has his own patience clock
+                for i in brains.indices where !started[i] && sleeping(i) {
+                    idle[i] = 0; stallClock[i] = 0; stallPos[i] = floor(i)
+                    if let h = hardWokenAt[i] {
+                        if age - h >= Self.wakeGrace { excuse(i); if state == .idle { return } }
+                    } else if age - calledAt[i] >= Self.wakePatience {
+                        hardWokenAt[i] = age; brains[i].requestNow(.goTo(approachPoint(blob: i)))
+                    }
+                }
+            }
+            for i in brains.indices where !started[i] && !ready(i) && isIdle(brains[i]) && !(Self.robust && sleeping(i)) {
                 // (while another Jelly is still walking in he may brush past and nudge a waiting one off his spot: nobody is given up on, or sent again, until the room has settled)
                 guard !started[i] else { continue }
                 idle[i] += dt
@@ -347,7 +366,7 @@ final class DiningGroup {
             }
             // (robust) a walker who stands still: sent again, a few times, then excused (a sleeper being woken softly is not `.walking`, so he never counts)
             for i in brains.indices {
-                guard !started[i], !ready(i), brains[i].activity == .walking else { stallClock[i] = 0; stallPos[i] = floor(i); continue }
+                guard !started[i], !ready(i), !sleeping(i), brains[i].activity == .walking else { stallClock[i] = 0; stallPos[i] = floor(i); continue }
                 let f = floor(i)
                 if simd_distance(f, stallPos[i]) >= 0.05 { stallPos[i] = f; stallClock[i] = 0; continue }
                 stallClock[i] += dt
