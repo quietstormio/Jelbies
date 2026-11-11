@@ -193,6 +193,7 @@ final class SleepStaggerTests: XCTestCase {
 
     /// One sleeping Jelbie called to a one-diner meal: stir, roll (4), stretch (5), then he eats.
     func testSingleSleeperCalledToAMealStirsRollsStretchesThenEats() {
+        BlobBrain.softMealWake = true; defer { BlobBrain.softMealWake = false }
         // (a room of one: with two other sleepers lying about, his walk to the tray can be blocked by them, which is not what this test is about)
         let lab = SocialTests.Lab(n: 1, quiet: false, seed: 21)
         for r in lab.rigs {
@@ -243,6 +244,7 @@ final class SleepStaggerTests: XCTestCase {
     /// (Whether the THIRD diner then finds a way to the tray in this lab is the DiningGroup choreography's own business: with awake Jelbies standing in the same places and the old
     ///  `requestNow` call he is left behind in the same way, measured 2026-11-10: ate [12.8 s, 12.6 s, nil], gaveUp. So at least two must eat.)
     func testTrayWakesThreeSleepersSoftlyAndTheyEatStaggered() {
+        BlobBrain.softMealWake = true; defer { BlobBrain.softMealWake = false }
         let lab = night()
         allToBed(lab)
         SleepOrder.reset()

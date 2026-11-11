@@ -451,6 +451,12 @@ final class HapticDriver {
         for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
     }
 
+    /// A soft tap with NO sound (the cuddle let-go wobble, CuddleJiggle.swift): the same transient to the sinks, no AudioHub request, no LetGoRing reset.
+    func softTap(now: Double, intensity: Float, sharpness: Float) {
+        guard warm, enabled else { return }
+        for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
+    }
+
     /// A squash peak of a let-go settle: the same haptic as `transient`; the sound is the soft let-go boing (one per ring).
     func jellyPulse(now: Double, intensity: Float, sharpness: Float) {
         guard warm else { return }

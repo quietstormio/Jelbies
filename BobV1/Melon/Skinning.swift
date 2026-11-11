@@ -29,6 +29,11 @@ nonisolated final class Skinner {
     /// Automatic blinking (random 2-6 s apart, ~120 ms, sometimes a double blink). Turn off for scripted expressions.
     var autoBlink = true
     let jelly = JellyJiggle()
+    /// The cuddle layer (CuddleJiggle.swift): a drawn skin offset while a finger pets him; a no-op unless active.
+    let cuddle = CuddleJiggle()
+    private var cuddleMask: [Bool] = [], cuddleMaskLimit = -2
+    /// First vertex of the arm / foot / tail blocks (the end of the body egg), from the render mesh in `configureTail`; -1 = not configured (then `armFirst`, else all).
+    var bodyVertexLimit = -1
     var dbgJellyOff = UserDefaults.standard.integer(forKey: "JellyOff") != 0
     /// Touch play: 0...1, blurs the skin normals over their neighbours while a finger dents him, so the dent reads as a soft dimple and the steep
     /// walls of the coarse sim mesh never shade as dark brown blotches. 0 = exactly the plain normals (the default, the cost is zero).
@@ -88,6 +93,7 @@ nonisolated final class Skinner {
     private var tailLM: [Int] = [], tailLMRest: [SIMD3<Float>] = []
     /// Where Pip's tail block is and which three egg vertices carry it (see TailBean.landmarks).
     func configureTail(_ rm: RenderMesh) {
+        bodyVertexLimit = rm.armCapsule?.firstVertex.min() ?? -1
         configureTeddy(rm)
         guard let cap = rm.armCapsule, cap.tailFirst >= 0 else { return }
         tailFirst = cap.tailFirst
@@ -852,6 +858,7 @@ nonisolated final class Skinner {
         }
         if !dbgJellyOff { jelly.apply(dyn, count: vertexCount) }          // jelly follow-through (JellyJiggle.swift): a no-op unless he is moving
         if normalSmoothing > 0.001 { smoothDentPositions(dyn, index: index) }
+        if cuddle.active { applyCuddle(dyn) }          // the cuddle jiggle (CuddleJiggle.swift): drawn dent / drag / let-go spring on the BODY skin only
         applyBeanGuard(dyn)
         applyBeanJoin(dyn)
         applyBeanCollar(dyn)
@@ -859,6 +866,31 @@ nonisolated final class Skinner {
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
         blendTailNormals(dyn)
+    }
+
+    /// Body skin = the egg's vertices (below the first arm / foot / tail block) without the eyes, glints and brows.
+    private func applyCuddle(_ dyn: UnsafeMutablePointer<Float>) {
+        let m = cuddleBodyMask()
+        let g = cuddleFeatureGroups()
+        m.withUnsafeBufferPointer { cuddle.apply(dyn, count: vertexCount, mask: $0.baseAddress!, floorY: jelly.floorY, H: jelly.H, groups: g, dt: frameDt) }
+    }
+    private var cuddleGroups: [[Int32]]? = nil
+    /// The face-feature groups that ride the skin rigidly: each eye with its glints, each brow.
+    func cuddleFeatureGroups() -> [[Int32]] {
+        if let g = cuddleGroups { return g }
+        let g = [eyeIdx[0] + glintIdx[0], eyeIdx[1] + glintIdx[1], browIdx[0], browIdx[1]].filter { !$0.isEmpty }
+        cuddleGroups = g
+        return g
+    }
+    func cuddleBodyMask() -> [Bool] {
+        let limit = bodyVertexLimit >= 0 ? bodyVertexLimit : (armFirst.min() ?? vertexCount)
+        if cuddleMask.count != vertexCount || cuddleMaskLimit != limit {
+            cuddleMaskLimit = limit
+            cuddleMask = [Bool](repeating: false, count: vertexCount)
+            for v in 0..<min(limit, vertexCount) { cuddleMask[v] = true }
+            for v in faceFeatureVertices where Int(v) < vertexCount { cuddleMask[Int(v)] = false }
+        }
+        return cuddleMask
     }
 
     private func applyTail(_ dyn: UnsafeMutablePointer<Float>) {

@@ -28,6 +28,7 @@ struct SettingsScreen: View {
     @State private var followReal = DayClock.shared.followReal
     @AppStorage(HapticSettings.key) private var hapticsOn = true
     #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
+    @State private var cuddleLevel = CuddleJiggle.sharedLevel         // TEMPORARY owner A/B switch for the cuddle jiggle (dev builds only)
     @State private var jiggleLevel = JellyJiggle.sharedLevel          // TEMPORARY owner A/B switch for the walking jiggle (dev builds only)
     #endif
     @Environment(\.verticalSizeClass) private var vsc
@@ -204,6 +205,13 @@ struct SettingsScreen: View {
                     Text("Today").tag(0); Text("A little more").tag(1); Text("More").tag(2)
                 }
                 .pickerStyle(.segmented).accessibilityIdentifier("settings-jiggle-level")
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Cuddle jiggle (test)").font(CloudTheme.font(16, .semibold)).foregroundStyle(ink)
+                Picker("Cuddle jiggle (test)", selection: Binding(get: { cuddleLevel }, set: { cuddleLevel = $0; CuddleJiggle.choose($0) })) {
+                    Text("Today").tag(0); Text("A little more").tag(1); Text("More").tag(2)
+                }
+                .pickerStyle(.segmented).accessibilityIdentifier("settings-cuddle-jiggle-level")
             }
             #endif
             Toggle("Follow real clock", isOn: Binding(get: { followReal }, set: { followReal = $0; DayClock.shared.setFollowReal($0) }))

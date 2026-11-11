@@ -1959,7 +1959,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     private func beginPickUp(_ p: CGPoint, _ size: CGSize) {
         guard let hit = gestureHit else { return }
-        model.touch.releaseContact(sim: tSim)
+        model.touch.releaseContact(sim: tSim, skinner: tSkinner)
         mode = .grab
         twist = 0
         planeP = hit
@@ -2013,7 +2013,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 gesture.down(t: now, p: p, armed: pickArm.touchDown(time: now, point: p))
             } else if mode == .pending, id != dragID, pickJelly(p, size)?.id == touchID, !gesture.armed, gesture.secondDown(t: now) {
                 mode = .cheeks; touchSize = size
-                model.touch.releaseContact(sim: tSim)
+                model.touch.releaseContact(sim: tSim, skinner: tSkinner)
                 cheekFingers = [(dragID!, petPoint), (id, p)]
             }
             return
