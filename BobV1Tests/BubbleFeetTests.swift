@@ -130,6 +130,6 @@ final class BubbleFeetTests: XCTestCase {
     }
     func testPopFlapRound1GoWaitsOn() { Self.round1(); BubbleTuning.goWaitsForHop = true; bubbles("pop flap") }
     func testPopFlapRound1SpotWaitsOn() { Self.round1(); BubbleTuning.spotWaitsForFeet = true; bubbles("pop flap") }
-    func testPopFlapRound1Trace() { Self.round1(); Self.traceFrames = 640...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
+    func testPopFlapHeadTrace() { Self.traceFrames = 680...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }
