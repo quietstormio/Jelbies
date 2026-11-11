@@ -256,6 +256,8 @@ final class BubbleWand: PlayToy {
         deactivate(); active = false; clock = 0; demo = nil; burstUntil = -1; states.removeAll(); cheers = [:]; lastHopStart = -9; field = BubbleField()
         popsByJelly = [:]; diag = [:]; waitHops = 0; modeSeconds = [:]; chaseRecords = []; claimToPop = []; movePops = [:]; moveStarts = [:]; extraPops = 0; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
     }
+    /// Test seam: the bubble stream's own dice (the field's) follow the seed too, so seeds differ in the bubbles as well as in the Jelbies.
+    func reseedField(_ seed: UInt64) { field = BubbleField(seed: seed &* 0x2545F4914F6CDD1D | 1) }
     /// Test seam: a bubble right there.
     @discardableResult func insertBubble(at p: SIMD3<Float>, radius: Float = 0.2) -> Int? { field.insert(at: p, radius: radius) }
     func clearBubbles() { field.clear() }

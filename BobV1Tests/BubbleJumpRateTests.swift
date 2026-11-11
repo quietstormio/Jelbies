@@ -39,7 +39,7 @@ final class BubbleJumpRateTests: XCTestCase {
     }
 
     func run(cast: [String], seed: Int, park: Bool, free: Set<Int> = [], size: CGSize = CGSize(width: 440, height: 956)) -> Result {
-        wand.resetForTests(); BubbleTuning.forceMove = nil; BubbleTuning.seedRandom(UInt64(seed + 1))
+        wand.resetForTests(); BubbleTuning.forceMove = nil; BubbleTuning.seedRandom(UInt64(seed + 1)); wand.reseedField(UInt64(seed + 1))
         _ = OnePieceInvariantTests.configured
         ToyTuning.settle = 0
         if park { GameCamera.configurePark() } else { GameCamera.configureRoom(count: 3, option: .A, wide: 2) }
