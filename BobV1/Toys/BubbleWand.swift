@@ -75,6 +75,8 @@ nonisolated enum BubbleTuning {
     nonisolated(unsafe) static var idleStepDur: ClosedRange<Float> = 0.5...1.0
     /// `bubbleBusyLooking`: a look (`stopLook`) does not keep him from going for a bubble.
     nonisolated(unsafe) static var busyLookingChases = true
+    /// The walk order to a bubble (`bubbleGo` = `requestNow`, which aborts the running script) waits until his own hop (the happy hop of `bubbleIdle`, a wait hop, a pop move) has landed.
+    nonisolated(unsafe) static var goWaitsForHop = true
     /// THE dial (1.0 = this round's tuning): above 1 he thinks and waits for shorter times and hops on the spot more often, below 1 the other way round. Scales `playThinkEvery`, `playWatchThink`,
     /// `playAfterChase`, `playWaitHop`, `playWaitHopFirst` (divided) and `playWaitHopChance` (multiplied). The ground-time limit `playHopSpacing` is NOT scaled.
     nonisolated(unsafe) static var playEnergy: Float = 1.0
@@ -98,7 +100,7 @@ nonisolated enum BubbleTuning {
         playPickRadius = 4.5; playSpotHold = 0.35...0.5; playHopSpacing = 0; playWaitHopEnabled = false
         bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1
         idleCuts = (0.32, 0.72, 0.86); idleStepDur = 0.8...1.6
-        busyLookingChases = false
+        busyLookingChases = false; goWaitsForHop = false
     }
     /// This round's tuning (the values above); tests only.
     static func restoreHead() {
@@ -109,7 +111,7 @@ nonisolated enum BubbleTuning {
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.35...0.8; playWaitHopChance = 0.8; playWaitHopEnabled = true
         bounceWeightLow = 1; bounceWeightHigh = 2; pickDistanceFactor = 1.5
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
-        busyLookingChases = true
+        busyLookingChases = true; goWaitsForHop = true
     }
     static let lightBeat: Float = 0.18
     static let aimMax: Float = 3.5                 // how long he waits under a bubble for it to be in reach
@@ -527,7 +529,7 @@ final class BubbleWand: PlayToy {
                 st.mode = .aim; st.aimAt = clock; st.until = clock + BubbleTuning.aimMax; st.retargetAt = clock + 0.3
                 st.waitHopAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playWaitHopFirst))
                 b.bubbleHold = true
-            } else if clock >= st.retargetAt {
+            } else if clock >= st.retargetAt, !(BubbleTuning.goWaitsForHop && b.bubbleHopBusy) {          // (never order a walk over a hop in the air: the order aborts the script, the body is still tilted and the feet join opens)
                 // go: only when the goal moved more than 0.35 from the last one issued (the walk is not restarted twice a second), or the walk ended short of it
                 if st.goal == nil || simd_distance(st.goal!, stand) > 0.35 || (quiet && ds >= arrive) {
                     st.retargetAt = clock + 0.5

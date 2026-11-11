@@ -110,14 +110,17 @@ final class BubbleFeetTests: XCTestCase {
     func testPopFlap() { bubbles("pop flap") }          // (non-winged characters run it too: the wand falls back to the header when the flap cannot start)
     func testPopSkip() { bubbles("pop skip") }
 
-    // Fault A (round 2): testPopFlap failed with the round-1 tuning ("the join is open: 2.4 to 3.1 cm"). Each of these puts ONE group of round-1 numbers back to the BEFORE values, so the cause is found by switches, not by guessing.
-    func testPopFlapBusyLookingOff() { BubbleTuning.busyLookingChases = false; bubbles("pop flap") }
-    func testPopFlapIdleCutsBefore() { BubbleTuning.idleCuts = (0.32, 0.72, 0.86); BubbleTuning.idleStepDur = 0.8...1.6; bubbles("pop flap") }
-    func testPopFlapTimingBefore() {
+    // Fault A (round 2): testPopFlap failed with the round-1 tuning ("the join is open: 2.4 to 3.1 cm", a walk with the body still tilted, both feet off the floor). Found by switches: round 1's numbers
+    // (`round1()`: this round's tuning but `goWaitsForHop` off, the walk order may abort a hop in the air) with ONE group of them put back to the BEFORE values each.
+    static func round1() { BubbleTuning.restoreHead(); BubbleTuning.goWaitsForHop = false; BubbleTuning.bounceWeightHigh = 4 }
+    func testPopFlapRound1() { Self.round1(); bubbles("pop flap") }
+    func testPopFlapRound1BusyLookingOff() { Self.round1(); BubbleTuning.busyLookingChases = false; bubbles("pop flap") }
+    func testPopFlapRound1IdleCutsBefore() { Self.round1(); BubbleTuning.idleCuts = (0.32, 0.72, 0.86); BubbleTuning.idleStepDur = 0.8...1.6; bubbles("pop flap") }
+    func testPopFlapRound1SpotHoldBefore() { Self.round1(); BubbleTuning.playSpotHold = 0.35...0.5; bubbles("pop flap") }
+    func testPopFlapRound1TimingBefore() {
+        Self.round1()
         BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8
-        BubbleTuning.playAfterChase = 0.3...0.9; BubbleTuning.playSpotHold = 0.35...0.5; BubbleTuning.playHopSpacing = 0; BubbleTuning.playWaitHopEnabled = false; bubbles("pop flap")
+        BubbleTuning.playAfterChase = 0.3...0.9; BubbleTuning.playHopSpacing = 0; BubbleTuning.playWaitHopEnabled = false; bubbles("pop flap")
     }
-    func testPopFlapSpotHoldBefore() { BubbleTuning.playSpotHold = 0.35...0.5; bubbles("pop flap") }
-    func testPopFlapPickBefore() { BubbleTuning.pickDistanceFactor = 1; BubbleTuning.playPickRadius = 4.5; bubbles("pop flap") }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }
