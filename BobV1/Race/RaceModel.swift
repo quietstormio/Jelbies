@@ -298,13 +298,17 @@ nonisolated enum RaceEvent: Equatable, Sendable {
     case jump(racer: Int), hurdleCleared(racer: Int), hurdleHit(racer: Int)
     case finished(racer: Int, place: Int)
     case results
+    /// Pull control only: a hop starts (the START of its crouch; the flight is `air` long after the crouch, `length` u forward, `apex` high); `streak` counts perfects in a row including this hop.
+    case hop(racer: Int, length: Float, apex: Float, air: Float, crouch: Float, grade: RaceHopGrade, streak: Int)
+    /// Pull control only: the hop's landing.
+    case landed(racer: Int)
 }
 
 extension RaceEvent {
     /// The racer an event is about (nil = the whole race).
     var racer: Int? {
         switch self {
-        case .step(let r, _, _, _, _), .stumble(let r), .trip(let r), .pauseBegan(let r), .pauseEnded(let r), .finished(let r, _), .jump(let r), .hurdleCleared(let r), .hurdleHit(let r): return r
+        case .step(let r, _, _, _, _), .stumble(let r), .trip(let r), .pauseBegan(let r), .pauseEnded(let r), .finished(let r, _), .jump(let r), .hurdleCleared(let r), .hurdleHit(let r), .hop(let r, _, _, _, _, _, _), .landed(let r): return r
         default: return nil
         }
     }
@@ -363,6 +367,29 @@ nonisolated struct RaceRacer: Sendable {
     var planLead: Float = 0.55
     var inJump: Bool { airT != nil || recover > 0 }
 
+    // pull control (Race/RacePull.swift; the taps path never reads these)
+    /// Momentum in the prototype's units (its `base` = 1.5 at rest), perfects in a row, hops made.
+    var vs: Float = 1.5
+    var streak = 0
+    var hopCount = 0
+    /// Clock of the running hop (nil = on the ground): starts at `-crouch`, the flight is `0 ... hopAir`.
+    var hopT: Float?
+    var hopFrom: Float = 0, hopLen: Float = 0, hopApex: Float = 0, hopAir: Float = 0
+    var hopVsLaunch: Float = 0, hopProtoT: Float = 0, hopCrouch: Float = 0
+    var hopGrade = RaceHopGrade.weak
+    /// The hop ends in a trip (a bar hit or a rolled trip); the bars it passes with their outcome (decided at launch, announced in the flight) and how many are announced.
+    var hopTrips = false
+    var hopBars: [RaceBarPass] = []
+    var hopBarCursor = 0
+    /// Seconds since his last landing.
+    var landAge: Float = 99
+    /// A release made while a hop could not start: it fires at the next chance (the latest wins; does not expire).
+    var bufferedPull: Float?
+    /// A rival's (or the auto player's) wait before the next hop.
+    var aiWait: Float = 0
+    /// Green hops that started closer than 0.12 to a bar (a report counter).
+    var closeGreens = 0
+
     /// The player's perk boost (never a rival's); capped at the fully trained stride / rate (RaceBoost.apply).
     var boost = RaceBoost.none
     var stride: Float { boost.apply(stride: RaceTuning.stride(waddle: stats.waddle), rate: 0).stride }
@@ -389,6 +416,16 @@ nonisolated struct RaceSim: Sendable {
     static let playerIndex = 0
     /// The auto-run assist jumps every hurdle for the player.
     var autoJumpPlayer = false
+    /// The control of this race: `.taps` (the two foot buttons, the default: every race runs exactly as before) or `.pull` (Race/RacePull.swift).
+    let control: RaceControl
+    /// Pull control: every number of the model (an instance, so a test can sweep them).
+    var pullTuning = RacePullTuning()
+    /// Pull control: scales every hop's air time (stage B may set it for Reduce Motion).
+    var airScale: Float = 1
+    /// Pull control: the player's green zone is this much wider (a perk; set to 0.05 at init when the boost has grace).
+    var playerZoneWiden: Float = 0
+    /// Pull control: the player hops on his own (the auto-run assist): needs no release, green treatment on every bar.
+    var autoHopPlayer = false
 
     var player: RaceRacer { racers[0] }
     var countdownTotal: Float { 3 * RaceTuning.countdownBeat }
@@ -399,9 +436,10 @@ nonisolated struct RaceSim: Sendable {
     /// The racer is in a turn (the HUD's "ease off" hint).
     func inTurn(_ i: Int) -> Bool { racers.indices.contains(i) && course.turnRadius(at: racers[i].dist) != nil }
 
-    init(player: RacerStats, playerName: String, rivals: [Rival], seed: UInt64, playerBoost: RaceBoost = .none, course: RaceCourse = .puddle) {
+    init(player: RacerStats, playerName: String, rivals: [Rival], seed: UInt64, playerBoost: RaceBoost = .none, course: RaceCourse = .puddle, control: RaceControl = .taps) {
         self.seed = seed
         self.course = course
+        self.control = control
         var rs = [RaceRacer(name: playerName, stats: player, isPlayer: true, lane: RaceTuning.playerLane)]
         rs[0].boost = playerBoost; rs[0].tap.grace = playerBoost.grace
         // lanes: the player in the middle, the rivals either side
@@ -411,6 +449,10 @@ nonisolated struct RaceSim: Sendable {
             rs[i].rng = RaceRNG(seed: seed &* 6364136223846793005 &+ UInt64(i + 1) &* 1442695040888963407)
             rs[i].aiFoot = Int(rs[i].rng.next() * 2) % 2
             rs[i].aiTimer = rs[i].rng.range(0.02, 0.2)
+        }
+        if control == .pull {          // (no new draw: the rivals' first hop waits the reaction time the taps path draws for its first tap)
+            for i in rs.indices { rs[i].aiWait = rs[i].aiTimer }
+            if playerBoost.grace > 0 { playerZoneWiden = 0.05 }
         }
         racers = rs
         countdownLeft = 3 * RaceTuning.countdownBeat
@@ -424,7 +466,7 @@ nonisolated struct RaceSim: Sendable {
     /// A tap of the player's foot button. Only meaningful while racing.
     @discardableResult
     mutating func playerTap(foot: Int) -> RaceTapModel.Outcome {
-        guard phase == .running || phase == .finishing, !racers[0].finished else { return .ignored }
+        guard control == .taps, phase == .running || phase == .finishing, !racers[0].finished else { return .ignored }
         let o = racers[0].tap.tap(foot, canStep: !racers[0].paused)
         if o == .stumble { events.append(.stumble(racer: 0)) }
         return o
@@ -433,7 +475,7 @@ nonisolated struct RaceSim: Sendable {
     /// A press of the Jump button: the take-off waits (up to `HurdleTuning.jumpBuffer`) for his feet to be planted. Only on a course with hurdles.
     @discardableResult
     mutating func playerJump() -> Bool {
-        guard course.hasHurdles, phase == .running || phase == .finishing, !racers[0].finished, racers[0].airT == nil else { return false }          // (a press during the landing waits for the next take-off)
+        guard control == .taps, course.hasHurdles, phase == .running || phase == .finishing, !racers[0].finished, racers[0].airT == nil else { return false }          // (a press during the landing waits for the next take-off)
         racers[0].jumpWant = HurdleTuning.jumpBuffer
         return true
     }
@@ -474,6 +516,7 @@ nonisolated struct RaceSim: Sendable {
         if r.stepLeft > 0 { r.stepLeft = max(0, r.stepLeft - dt) }
         if r.slow > 0 { r.slow = max(0, r.slow - dt) }
         if r.jumpWant > 0 { r.jumpWant = max(0, r.jumpWant - dt) }
+        if control == .pull { pullTickRacer(&r, i, dt: dt, free: free, ready: ready, between: between); return }
         // distance: the body's own measurement when it has one
         let before = r.measured ?? r.dist
         if let m = r.measured { r.dist = m }
@@ -630,4 +673,211 @@ nonisolated struct RaceSim: Sendable {
     /// Drops the player earns on this course (0 until the results are in, and 0 when the player never crossed the line).
     var playerDrops: Int { playerFinished ? (playerPlace.map { RaceTuning.drops(place: $0, tier: course.tier) } ?? 0) : 0 }
     var playerWon: Bool { playerPlace == 1 }
+}
+
+// MARK: - pull control
+//
+// The pull-back-and-release hop (Race/RacePull.swift has the numbers and the pure functions). Everything here runs only when `control == .pull`;
+// the taps path never enters it. The sim's state is private(set), so the code that changes it lives here, in the same file.
+
+extension RaceRacer {
+    /// His top pace (u/s): his own stride times his own top step rate, perk boost included (RaceBoost.apply caps both at the fully trained value).
+    var pullPace: Float { stride * rate }
+}
+
+extension RaceSim {
+    /// What a release at `pull` would do for the player now (the gauge): grade, hop length (u), apex (u) and air time (s); bars not considered.
+    func previewPlayer(pull: Float) -> (grade: RaceHopGrade, length: Float, apex: Float, air: Float) {
+        let r = racers[0]
+        return pullTuning.preview(pull: pull, streak: r.streak, widen: playerZoneWiden, vs: r.vs, pace: r.pullPace, slow: r.slow > 0, airScale: airScale)
+    }
+
+    /// One racer's pull-control state, for the body and the gauge.
+    func pullState(_ racer: Int) -> (inHop: Bool, streak: Int, buffered: Bool, vs: Float) {
+        guard racers.indices.contains(racer) else { return (false, 0, false, 1.5) }
+        let r = racers[racer]
+        return (r.hopT != nil, r.streak, r.bufferedPull != nil, r.vs)
+    }
+
+    /// The player lets go of the pull. The hop itself always leaves inside `tick`; this stores the pull (the latest release wins) and says what will happen.
+    @discardableResult
+    mutating func playerRelease(pull: Float) -> RaceRelease {
+        guard control == .pull, phase == .running || phase == .finishing else { return .ignored }
+        let r = racers[0]
+        guard !r.finished, !r.tap.stumbling, pull >= pullTuning.minPull else { return .ignored }
+        racers[0].bufferedPull = pull
+        if r.hopT != nil || r.landAge < pullTuning.landHold - 1e-4 || r.paused || r.pauseWanted { return .buffered }
+        return .hopped(pullTuning.shot(pull: pull, streak: r.streak, widen: playerZoneWiden).grade)
+    }
+
+    /// One racer's tick in pull mode (the shared timers have run).
+    fileprivate mutating func pullTickRacer(_ r: inout RaceRacer, _ i: Int, dt: Float, free: Bool, ready: Bool, between: Bool) {
+        let pt = pullTuning
+        let before = r.dist
+        if let m = r.measured { r.dist = m }
+        var landedNow = false
+        // the running hop
+        if let t0 = r.hopT {
+            let t = t0 + dt
+            r.hopT = t
+            if r.measured == nil, t > 0 { r.dist = r.hopFrom + r.hopLen * min(max(t / r.hopAir, 0), 1) }
+        }
+        // the finish line (in the air too: the flight is completed, then he coasts)
+        if !r.finished, r.dist >= course.length { cross(&r, i, before: before, dt: dt); r.bufferedPull = nil }
+        if let t = r.hopT {
+            if t >= 0 { while r.hopBarCursor < r.hopBars.count, t / r.hopAir >= r.hopBars[r.hopBarCursor].u { pullAnnounceBar(&r, i) } }
+            if t >= r.hopAir, between {
+                while r.hopBarCursor < r.hopBars.count { pullAnnounceBar(&r, i) }
+                r.hopT = nil
+                if r.measured == nil { r.dist = r.hopFrom + r.hopLen }
+                r.vs = pt.base + (r.hopVsLaunch - pt.base) * expf(-pt.kAir * r.hopProtoT)
+                r.landAge = 0; r.sinceStep = 0
+                landedNow = true
+                events.append(.landed(racer: i))
+                if r.hopTrips {
+                    let hit = r.hopBars.contains { $0.hit }
+                    r.tap.trip()
+                    events.append(.trip(racer: i))
+                    r.streak = 0; r.bufferedPull = nil; r.vs = pt.base
+                    if hit { r.slow = HurdleTuning.slowTime }
+                    r.hopTrips = false
+                }
+                if !r.finished, !r.isPlayer || autoHopPlayer {
+                    let skill = 0.5 * RaceTuning.clamp01(r.stats.focus) + 0.5 * RaceTuning.clamp01(r.stats.waddle)
+                    let cycle = r.hopCrouch + r.hopAir + pt.landHold
+                    let brake = CourseTuning.rivalBrake(course: course, at: r.dist, stats: r.stats, nominal: r.pullPace)
+                    r.aiWait = (0.03 + 0.12 * (1 - skill)) * r.rng.range(0.6, 1.4) + cycle * (brake - 1)
+                }
+                r.hopBars = []; r.hopBarCursor = 0
+            }
+        }
+        if r.finished { if r.hopT == nil { coastTick(&r, i, free: free) }; return }
+        guard r.hopT == nil else { return }
+        // on the ground: he stands (no drift); momentum bleeds away once the landing hold is over
+        if !landedNow { r.landAge += dt }
+        if r.landAge > pt.landHold { r.vs = pt.base + (r.vs - pt.base) * expf(-pt.kGround * dt) }
+        if r.aiWait > 0 { r.aiWait -= dt }
+        // focus pause (the existing rule and numbers; it can only begin here, on the ground, before any hop start)
+        if r.paused {
+            r.pauseLeft -= dt
+            if r.pauseLeft <= 0 && ready { r.paused = false; r.pauseCooldown = RaceTuning.pauseCooldown; events.append(.pauseEnded(racer: i)) }
+            return
+        }
+        r.pauseCooldown -= dt
+        if !r.pauseWanted, r.pauseCooldown <= 0, clock > RaceTuning.pauseFreeStart, r.dist < course.length - RaceTuning.pauseFreeFinish,
+           r.rng.next() < RaceTuning.pauseHazard(focus: r.stats.focus) * dt { r.pauseWanted = true }
+        if r.pauseWanted {
+            if free, between {
+                r.pauseWanted = false
+                r.paused = true; r.pauseLeft = RaceTuning.pauseTime
+                events.append(.pauseBegan(racer: i))
+            }
+            return
+        }
+        // start a hop
+        guard r.landAge >= pt.landHold - 1e-4, !r.tap.stumbling, free else { return }
+        pullLaunch(&r, i)
+    }
+
+    /// Announces the next bar of the running hop (its outcome was decided at launch).
+    private mutating func pullAnnounceBar(_ r: inout RaceRacer, _ i: Int) {
+        let b = r.hopBars[r.hopBarCursor]
+        r.hopBarCursor += 1
+        r.nextHurdle = max(r.nextHurdle, b.index + 1)
+        if b.hit { r.hurdlesHit += 1; events.append(.hurdleHit(racer: i)) } else { r.hurdlesCleared += 1; events.append(.hurdleCleared(racer: i)) }
+    }
+
+    /// The hop of a racer who is free to leave now: the player's buffered pull, or a rival's (the auto player's) own choice once his wait is over.
+    private mutating func pullLaunch(_ r: inout RaceRacer, _ i: Int) {
+        let pt = pullTuning
+        let hs = course.hurdles
+        let selfDriven = !r.isPlayer || autoHopPlayer
+        let assist = r.isPlayer && (autoHopPlayer || autoJumpPlayer)
+        let widen: Float = r.isPlayer ? playerZoneWiden : 0
+        let rivalMul: Float = r.isPlayer ? 1 : (course.tier == .puddle ? pt.rivalLengthPuddle : pt.rivalLength)
+        let pace = r.pullPace
+        let dist0 = r.dist, vs0 = r.vs, streak0 = r.streak, slow0 = r.slow > 0
+        func d(_ k: Int) -> Float { max(0, hs[k] - HurdleTuning.contactLead - dist0) }
+        func shotLength(_ pull: Float) -> Float {
+            let s = pt.shot(pull: pull, streak: streak0, widen: widen)
+            let vsL = min(pt.vsMax, pt.carry * vs0 + s.v0)
+            return min(pt.hopLength(vsLaunch: vsL, flight: pt.protoFlight(vy: s.vy), pace: pace, slow: slow0) * rivalMul, pt.hopCap)
+        }
+        var pull: Float
+        var planClear = false, planFail = false
+        if r.isPlayer, let b = r.bufferedPull {
+            pull = b; r.bufferedPull = nil
+        } else if !selfDriven {
+            return
+        } else {
+            guard r.aiWait <= 0 else { return }
+            let skill = 0.5 * RaceTuning.clamp01(r.stats.focus) + 0.5 * RaceTuning.clamp01(r.stats.waddle)
+            // the bar ahead: planned once, as the taps path does
+            if r.nextHurdle < hs.count, r.planFor != r.nextHurdle, hs[r.nextHurdle] - dist0 < HurdleTuning.lookAhead {
+                r.planFor = r.nextHurdle
+                r.planJump = r.isPlayer || r.rng.next() < HurdleTuning.rivalSuccess(skill: skill)
+            }
+            let pp = r.isPlayer ? pt.autoGreen : pt.rivalGreenBase + pt.rivalGreenSkill * skill
+            if r.rng.next() < pp { pull = r.rng.range(0.73, 0.89) }
+            else if r.rng.next() < 0.72 { pull = r.rng.range(0.42, 0.67) }
+            else { pull = r.rng.range(0.95, 1.07) }
+            if r.nextHurdle < hs.count, r.planFor == r.nextHurdle, shotLength(pull) > d(r.nextHurdle) - pt.landShort {
+                if r.planJump { pull = r.rng.range(0.73, 0.89); planClear = true } else { pull = r.rng.range(0.42, 0.67); planFail = true }
+            }
+        }
+        // the shot and its length
+        let s = pt.shot(pull: pull, streak: streak0, widen: widen)
+        let vsL = min(pt.vsMax, pt.carry * vs0 + s.v0)
+        let T = pt.protoFlight(vy: s.vy)
+        var len = shotLength(pull)
+        var apex = pt.apex(vy: s.vy)
+        // the bars this hop passes
+        let green = s.grade == .perfect || assist || planClear
+        var bars: [RaceBarPass] = []
+        var hit = false
+        let k0 = r.nextHurdle
+        if k0 < hs.count {
+            if green {
+                let d1 = d(k0)
+                let m = pt.magnet(length: len, apex: apex, toBar: d1, toNext: k0 + 1 < hs.count ? d(k0 + 1) : nil)
+                len = m.length; apex = m.apex
+                if d1 < 0.12 { apex = pt.magnetApex; r.closeGreens += 1 }
+                var k = k0
+                while k < hs.count, d(k) <= len { bars.append(RaceBarPass(index: k, u: min(d(k) / max(len, 1e-4), 1), hit: false)); k += 1 }
+            } else {
+                var k = k0, cur = len
+                while k < hs.count {
+                    let dk = d(k)
+                    if cur <= dk - pt.landShort { break }
+                    if cur < dk { if dk - pt.landShort >= 0.5 * cur { cur = dk - pt.landShort }; break }
+                    let u = dk / cur
+                    let ok = !(planFail && bars.isEmpty) && u >= pt.uMin && u <= 0.8 && apex * 4 * u * (1 - u) >= pt.barTop
+                    if ok { bars.append(RaceBarPass(index: k, u: u, hit: false)); k += 1; continue }
+                    cur = min(cur, dk + pt.landBeyond)
+                    bars.append(RaceBarPass(index: k, u: dk / cur, hit: true))
+                    hit = true
+                    break
+                }
+                len = cur
+                for b in bars.indices where !bars[b].hit { bars[b].u = min(d(bars[b].index) / max(len, 1e-4), 1) }
+            }
+        }
+        let air = pt.air(apex: apex) * airScale
+        let crouch = r.landAge <= pt.chainWindow ? pt.crouchChained : pt.crouchStanding
+        // the trip roll: only a hop that is not green and hit no bar
+        var trips = hit
+        if !green, !hit, r.hopCount >= RaceTuning.tripFreeSteps, dist0 < course.length - RaceTuning.pauseFreeFinish {
+            let hopPace = len / (crouch + air + pt.landHold)
+            let q = RaceTuning.tripChance(waddle: r.stats.waddle, focus: r.stats.focus) + CourseTuning.hazard(course: course, at: dist0, pace: hopPace, stats: r.stats)
+            let p = min(0.5, pt.tripScale * q * len / r.stride)
+            if r.rng.next() < p { trips = true }
+        }
+        r.streak = s.grade == .perfect ? streak0 + 1 : 0
+        r.hopCount += 1; r.sinceStep = 0
+        r.hopFrom = dist0; r.hopLen = len; r.hopApex = apex; r.hopAir = air; r.hopCrouch = crouch
+        r.hopVsLaunch = vsL; r.hopProtoT = T; r.hopGrade = s.grade
+        r.hopTrips = trips; r.hopBars = bars; r.hopBarCursor = 0
+        r.hopT = -crouch
+        events.append(.hop(racer: i, length: len, apex: apex, air: air, crouch: crouch, grade: s.grade, streak: r.streak))
+    }
 }
