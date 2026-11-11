@@ -25,6 +25,30 @@ final class ParkLookCaptureUITests: XCTestCase {
         app.terminate()
     }
 
+    /// Rotation at the park: portrait, landscape, portrait again (each frame 12 s after the turn, once the stage has settled), saved as PARK_LOOK_TAG + rot_1_portrait / rot_2_landscape / rot_3_portrait.
+    /// Extra launch arguments come from PARK_LOOK_ARGS like in `testParkLandscape`.
+    @MainActor
+    func testParkRotate() throws {
+        try XCTSkipIf(out.isEmpty, "PARK_LOOK_OUT not set")
+        try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
+        let tag = ProcessInfo.processInfo.environment["PARK_LOOK_TAG"] ?? ""
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments += ["-SetRoster", ProcessInfo.processInfo.environment["PARK_LOOK_ROSTER"] ?? "bob,teddy", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES",
+                                "-BlobDrops.v1", "1024", "-ClockHour", "12", "-StartPark", "1"]
+        if let extra = ProcessInfo.processInfo.environment["PARK_LOOK_ARGS"] { app.launchArguments += extra.split(separator: " ").map(String.init) }
+        app.launch()
+        if let w = ProcessInfo.processInfo.environment["PARK_LOOK_PREWAIT"].flatMap(Double.init) { sleep(UInt32(w)) }
+        XCTAssertTrue(app.buttons["park-home"].waitForExistence(timeout: 300), "the park never opened")
+        func shot(_ name: String) { try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: "\(out)/\(tag)\(name).png")) }
+        sleep(6); shot("rot_1_portrait")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        sleep(12); shot("rot_2_landscape")
+        XCUIDevice.shared.orientation = .portrait
+        sleep(12); shot("rot_3_portrait")
+        app.terminate()
+    }
+
     /// The merged-branch capture: launches the app (`-StartPark 1`), rotates (`PARK_LOOK_ORIENT=portrait|landscape`, default landscape), WAITS for the park's Go home button (`park-home`) and FAILS
     /// if it does not appear in 90 s, then saves <tag>_roam, taps the round Play button (`park-play`) and saves <tag>_picker, taps the first toy (`play-toy-*`) and saves <tag>_play after 4 s, taps
     /// Done (`play-done`) and saves <tag>_after; <tag>_frames.txt lists the frames and hit-ability of the HUD buttons at each step. Meant for a RELEASE build of the app (the Debug build runs at
@@ -39,6 +63,8 @@ final class ParkLookCaptureUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-SetRoster", "bob,pearl,teddy", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES",
                                 "-BlobDrops.v1", "1024", "-ClockHour", ProcessInfo.processInfo.environment["PARK_LOOK_HOUR"] ?? "12", "-StartPark", "1"]
+        if let r = ProcessInfo.processInfo.environment["PARK_LOOK_ROSTER"], let i = app.launchArguments.firstIndex(of: "-SetRoster") { app.launchArguments[i + 1] = r }          // (e.g. bob,teddy)
+        if let extra = ProcessInfo.processInfo.environment["PARK_LOOK_ARGS"] { app.launchArguments += extra.split(separator: " ").map(String.init) }          // (extra launch arguments, space separated)
         let flow = ProcessInfo.processInfo.environment["PARK_LOOK_FLOW"] ?? "picker"          // picker: tap Play and look at the toy strip; play: `-StartParkPlay ball` (the player owns no toys under XCTest, whose store does not persist) then Done
         if flow == "toytap" { app.launchArguments.removeLast(2) }          // (no -StartPark: this flow walks the real UI)
         if flow == "play" || flow == "flick" { app.launchArguments += ["-StartParkPlay", "ball"] }
@@ -53,6 +79,7 @@ final class ParkLookCaptureUITests: XCTestCase {
                 frames += "  \(id): exists=\(e.exists) hittable=\(e.exists && e.isHittable) frame=\(e.exists ? "\(e.frame)" : "-")\n"
             }
         }
+        if let w = ProcessInfo.processInfo.environment["PARK_LOOK_PREWAIT"].flatMap(Double.init) { sleep(UInt32(w)) }          // (a busy host: do not query the app while it loads the park, its main thread answers no snapshot within 30 s)
         let home = app.buttons["park-home"]
         let opened = flow == "toytap" ? true : home.waitForExistence(timeout: 300)
         if !opened { shot("FAILED_no_park") }

@@ -26,6 +26,7 @@ struct ParkChrome: View {
             ZStack {
                 if park.picking { picker }
                 if park.inScene, !care.play.active {          // (Play mode has its own Done pill in the corner: the park's bar steps aside, like the home HUD)
+                    let wide = g.size.width > g.size.height          // landscape: the visitor chips join the top row (they scroll sideways inside it) so they never cover the lawn
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top) {
                             HStack(spacing: 7) {
@@ -37,10 +38,10 @@ struct ParkChrome: View {
                             .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
                             .accessibilityElement(children: .ignore).accessibilityLabel("Park").accessibilityIdentifier("park-chip")
                             musicButton
-                            Spacer()
+                            if wide { friends.frame(maxWidth: .infinity) } else { Spacer() }
                             DropsPill(wallet: care.bath.wallet)
                         }
-                        friends
+                        if !wide { friends }
                         Spacer()
                     }
                     .padding(.horizontal, 16).padding(.top, 8)
