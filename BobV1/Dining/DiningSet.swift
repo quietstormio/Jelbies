@@ -138,6 +138,11 @@ nonisolated enum DiningSpot {
         return abs(q.x - p.x) < placeReachSlack
     }
     static func choose(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>] = []) -> SIMD2<Float> {
+        let r = chooseTraced(bob: bob, layout: L, aspect: aspect, jellies: jellies)
+        MealTrace.log("choose branch=\(r.branch) spot=(\(r.spot.x),\(r.spot.y)) n=\(L.places.count) jellies=\(jellies.count)")
+        return r.spot
+    }
+    private static func chooseTraced(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float, jellies: [SIMD2<Float>]) -> (spot: SIMD2<Float>, branch: String) {
         var open: [SIMD2<Float>] = []
         var cx: Float = -1.6
         while cx <= 1.6001 {
@@ -150,7 +155,7 @@ nonisolated enum DiningSpot {
             }
             cx += 0.2
         }
-        if let pick = pickOpen(open) { return pick }
+        if let pick = pickOpen(open) { return (pick, "open") }
         if !jellies.isEmpty {          // crowded: the on-screen, decor-free spot farthest from every Jelbie
             var bestO: SIMD2<Float>?, bestD: Float = -1
             var fx: Float = -1.6
@@ -166,9 +171,9 @@ nonisolated enum DiningSpot {
                 }
                 fx += 0.2
             }
-            if let b = bestO { return b }
+            if let b = bestO { return (b, "farthest") }
         }
-        if isClear(origin: preferred, layout: L, of: bob, aspect: aspect) { return preferred }
+        if isClear(origin: preferred, layout: L, of: bob, aspect: aspect) { return (preferred, "preferred") }
         var best = preferred, bestCost = Float.infinity
         var fallback = preferred, fallbackD: Float = -1
         var x: Float = -1.6
@@ -188,7 +193,7 @@ nonisolated enum DiningSpot {
             }
             x += 0.05
         }
-        return bestCost < .infinity ? best : fallback
+        return bestCost < .infinity ? (best, "nearPreferred") : (fallback, "fallback")
     }
 }
 

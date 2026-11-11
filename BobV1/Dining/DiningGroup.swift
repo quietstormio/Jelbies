@@ -138,7 +138,9 @@ final class DiningGroup {
         guard state == .idle, dining.phase == .absent || (forcedOrigin != nil && dining.phase != .poofing), !bs.isEmpty else { return }
         brains = Array(bs.prefix(Self.maxDiners)); n = brains.count; serving = c; floor = f
         memberIDs = Array((ids ?? Array(bs.indices)).prefix(n))
-        origin = forcedOrigin ?? DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) })
+        if let fo = forcedOrigin { origin = fo }
+        else if let s = MealTrace.takeSpot() { origin = s; MealTrace.log("choose branch=forced spot=(\(s.x),\(s.y)) (-DiningSpot)") }
+        else { origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: avoid + brains.indices.map { f($0) }) }
         // nearest free spot for everybody (first claim wins by distance)
         let spots = DiningLayout.make(n: n).places.map { p -> SIMD2<Float> in
             var s = origin + p.rel
@@ -155,7 +157,7 @@ final class DiningGroup {
         for (i, b) in brains.enumerated() {
             let prev = b.onFinished
             b.onFinished = { [weak self] r in
-                switch r { case .dine, .sip: self?.finished[i] = true; default: break }
+                switch r { case .dine, .sip: self?.finished[i] = true; MealTrace.log("diner \(self?.memberIDs[i] ?? -1) finished (onFinished)"); default: break }
                 prev?(r)
             }
             if tierOf != nil {
@@ -175,6 +177,12 @@ final class DiningGroup {
         hooked = true
         for b in brains { b.reserved = true; b.waitFocus = origin }          // everybody waits where he stands (look / step / bounce) until the meal is over
         beginApproach()
+        traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; inBoxTicks = 0; popReason = "gathered"
+        MealTrace.log("group start n=\(n) kind=\(serving.kind == .food ? "food" : "drink") origin=(\(origin.x),\(origin.y)) inFront=\(frontCount())")
+        for i in brains.indices {
+            let st = stands[placeOf[i]], ap = approachPoint(blob: i), f = floor(i)
+            MealTrace.log("  diner id=\(memberIDs[i]) floor=(\(f.x),\(f.y)) place=\(placeOf[i]) stand=(\(st.x),\(st.y)) trayDist(stand)=\(trayDistance(st)) trayDist(approach)=\(trayDistance(ap))")
+        }
     }
 
     // MARK: gather first, then the tray
@@ -204,6 +212,7 @@ final class DiningGroup {
     /// Pops the tray in at the chosen spot (once the old one has gone) and fixes each diner's plan from his tier.
     private func spawnTray() {
         if forcedOrigin != nil, dining.phase == .present || dining.phase == .popping, dining.n == n, dining.restock(serving: serving) {          // the café's table is already out: the food lands on it
+            MealTrace.log("tray restock reason=cafe")
             for i in brains.indices {
                 paid[i] = 0
                 if let tierOf { tiers[i] = tierOf(memberIDs[i]); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
@@ -211,6 +220,7 @@ final class DiningGroup {
             return
         }
         guard dining.phase == .absent, dining.spawn(serving: serving, n: n, bobAt: SIMD2(99, 99), forcedOrigin: origin) else { return }
+        MealTrace.log("tray pop reason=\(popReason) inFront=\(frontCount()) age=\(age)")
         for i in brains.indices {
             paid[i] = 0
             if let tierOf { tiers[i] = tierOf(memberIDs[i]); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
@@ -227,6 +237,7 @@ final class DiningGroup {
 
     private func end() {
         settlePay()
+        MealTrace.log("end gaveUp=\(gaveUp) trayDespawn=\(!keepTable) inBoxTicks=\(inBoxTicks) sim-age=\(age)")
         if !keepTable { dining.despawn() }
         state = .idle; requested = false
         for (i, b) in brains.enumerated() where i < savedFinished.count {
@@ -276,8 +287,36 @@ final class DiningGroup {
             guard started[i], trayOut, eaten(i) >= piecesFor[i] else { continue }
             if let pay { let k = min(eaten(i), piecesFor[i]); if k > paid[i] { pay(memberIDs[i], k - paid[i]); paid[i] = k } }
             released[i] = true
+            MealTrace.log("diner \(memberIDs[i]) released eaten=\(eaten(i)) state=\(state)")
             b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.peers = savedPeers[i]
         }
+    }
+
+    // MARK: meal trace (simulator-only output, see MealTrace)
+    private var traceReadyIDs: Set<Int> = [], traceBiteIDs: Set<Int> = [], traceShareIDs: Set<Int> = []
+    private var popReason = "gathered"
+    /// Ticks in which a held diner's floor point lay inside the drawn tray box while the tray was out (must stay 0).
+    private(set) var inBoxTicks = 0
+    /// Unreleased, unstarted diners nearer the camera (+z) than their place's line.
+    private func frontCount() -> Int {
+        brains.indices.filter { !(released.indices.contains($0) && released[$0]) && !(started.indices.contains($0) && started[$0]) && floor($0).y > stands[placeOf[$0]].y + GameCare.popTolerance }.count
+    }
+    private func traceTick() {
+        #if targetEnvironment(simulator)
+        let box = dining.drawnBox(scale: max(dining.scale, 0.001))
+        for i in brains.indices where !(released.indices.contains(i) && released[i]) {
+            let id = memberIDs[i], f = floor(i)
+            if !traceReadyIDs.contains(i), ready(i), isIdle(brains[i]) { traceReadyIDs.insert(i); MealTrace.log("diner \(id) ready floor=(\(f.x),\(f.y)) place=\(placeOf[i])") }
+            if started[i], trayOut {
+                if !traceBiteIDs.contains(i), eaten(i) > 0 { traceBiteIDs.insert(i); MealTrace.log("diner \(id) first bite") }
+                if !traceShareIDs.contains(i), eaten(i) >= piecesFor[i] { traceShareIDs.insert(i); MealTrace.log("diner \(id) ate its share (\(eaten(i)) of \(piecesFor[i]))") }
+            }
+            if trayOut, abs(f.x - box.centre.x) < box.half.x, abs(f.y - box.centre.y) < box.half.y {
+                inBoxTicks += 1
+                if inBoxTicks == 1 { MealTrace.log("INBOX diner \(id) floor=(\(f.x),\(f.y)) box c=(\(box.centre.x),\(box.centre.y)) half=(\(box.half.x),\(box.half.y))") }
+            }
+        }
+        #endif
     }
 
     func tick(dt: Float) {
@@ -285,12 +324,16 @@ final class DiningGroup {
         guard state != .idle else { return }
         if tierOf != nil { for (i, b) in brains.enumerated() where !(released.indices.contains(i) && released[i]) { b.idleBlocked = true } }          // no idle trick mid-sitting (Bob's walk to the tray is never cut for a flip)
         age += dt
-        if age > GameCare.mealTimeout { end(); gaveUp = true; return }
+        if age > GameCare.mealTimeout { MealTrace.log("giveup reason=timeout"); end(); gaveUp = true; return }
+        traceTick()
         switch state {
         case .approaching:
-            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) { spawnTray() }
+            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) {
+                popReason = forcedOrigin != nil ? "cafe" : (gathered && !trayBusy ? "gathered" : "cap")
+                spawnTray()
+            }
             replan(dt: dt)
-            for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; startSitting(i) }
+            for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; MealTrace.log("diner \(memberIDs[i]) started place=\(placeOf[i])"); startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
             for i in brains.indices where !started[i] && !ready(i) && isIdle(brains[i]) {
@@ -299,7 +342,7 @@ final class DiningGroup {
                 idle[i] += dt
                 if idle[i] > 0.5 {
                     idle[i] = 0
-                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { end(); gaveUp = true; return }
+                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { MealTrace.log("giveup reason=walkRetries diner=\(memberIDs[i])"); end(); gaveUp = true; return }
                 }
             }
         case .serving:
@@ -314,12 +357,13 @@ final class DiningGroup {
                 let st = dining.places[placeOf[i]].stand
                 if floor(i).y > st.y + GameCare.popTolerance + 0.05 {
                     // displaced in front of his place (the tray is between): everybody re-forms behind the tray, bounded
-                    if reserves < GameCare.maxReserves { reserves += 1; settlePay(); dining.despawn(); finished = finished.indices.map { released[$0] }; beginApproach() } else { end(); gaveUp = true }
+                    if reserves < GameCare.maxReserves { reserves += 1; MealTrace.log("re-serve #\(reserves) displaced diner=\(memberIDs[i])"); settlePay(); dining.despawn(); finished = finished.indices.map { released[$0] }; beginApproach() } else { MealTrace.log("giveup reason=displaced diner=\(memberIDs[i])"); end(); gaveUp = true }
                     return
                 } else if mealRetries[i] < GameCare.maxReserves {
                     mealRetries[i] += 1
+                    MealTrace.log("re-ask diner=\(memberIDs[i]) retry=\(mealRetries[i])")
                     startSitting(i)
-                } else { end(); gaveUp = true; return }
+                } else { MealTrace.log("giveup reason=mealRetries diner=\(memberIDs[i])"); end(); gaveUp = true; return }
             }
         case .idle: break
         }
