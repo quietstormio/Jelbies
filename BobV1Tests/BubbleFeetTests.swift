@@ -117,6 +117,7 @@ final class BubbleFeetTests: XCTestCase {
         BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8
         BubbleTuning.playAfterChase = 0.3...0.9; BubbleTuning.playSpotHold = 0.35...0.5; BubbleTuning.playHopSpacing = 0; BubbleTuning.playWaitHopEnabled = false; bubbles("pop flap")
     }
+    func testPopFlapSpotHoldBefore() { BubbleTuning.playSpotHold = 0.35...0.5; bubbles("pop flap") }
     func testPopFlapPickBefore() { BubbleTuning.pickDistanceFactor = 1; BubbleTuning.playPickRadius = 4.5; bubbles("pop flap") }
     func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }

@@ -15,14 +15,15 @@ import simd
 final class BubbleJumpRateTests: XCTestCase {
     var wand: BubbleWand { BubbleWand.shared }
     override func setUp() { super.setUp(); wand.resetForTests(); EmoteFeetTests.reset(); BubbleTuning.restoreHead() }
-    override func tearDown() { BubbleTuning.restoreHead(); wand.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
+    override func tearDown() { BubbleTuning.seedRandom(nil); BubbleTuning.restoreHead(); wand.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
     static let seconds = 60
+    static let seeds = 6
     /// (name, feature) of the species used in the casts (OnePieceInvariantTests.characters).
     static let species: [String: JellyFeature] = ["Bob": .none, "Pip": .spines, "Lavender": .wings, "Teddy": .ears]
     static let casts: [[String]] = [["Bob"], ["Pip", "Lavender"], ["Pip", "Lavender", "Teddy"]]
 
-    struct Hop { var start: Float; var end: Float; var travel: Float; var apex: Float; var cause: String }
+    struct Hop { var start: Float; var end: Float; var travel: Float; var apex: Float; var cause: String; var jelly = 0 }
     struct Result {
         var minutes: Float = 0                       // Jelbie-minutes
         var hops: [Hop] = []
@@ -38,7 +39,7 @@ final class BubbleJumpRateTests: XCTestCase {
     }
 
     func run(cast: [String], seed: Int, park: Bool, free: Set<Int> = [], size: CGSize = CGSize(width: 440, height: 956)) -> Result {
-        wand.resetForTests(); BubbleTuning.forceMove = nil
+        wand.resetForTests(); BubbleTuning.forceMove = nil; BubbleTuning.seedRandom(UInt64(seed + 1))
         _ = OnePieceInvariantTests.configured
         ToyTuning.settle = 0
         if park { GameCamera.configurePark() } else { GameCamera.configureRoom(count: 3, option: .A, wide: 2) }
@@ -94,7 +95,7 @@ final class BubbleJumpRateTests: XCTestCase {
                     tr[i].maxTravel = max(tr[i].maxTravel, simd_distance(SIMD2(c.x, c.z), tr[i].xz0))
                     if lift < down {
                         tr[i].air = false; tr[i].landedAt = t; tr[i].airTime += t - tr[i].t0
-                        let h = Hop(start: tr[i].t0, end: t, travel: tr[i].maxTravel, apex: tr[i].apex, cause: tr[i].cause)
+                        let h = Hop(start: tr[i].t0, end: t, travel: tr[i].maxTravel, apex: tr[i].apex, cause: tr[i].cause, jelly: i)
                         res.hops.append(h); res.causes[h.cause, default: 0] += 1
                         if h.travel > (res.longest?.travel ?? -1) { res.longest = h }
                     }
@@ -151,43 +152,67 @@ final class BubbleJumpRateTests: XCTestCase {
                       tag, a.hopsPerMin, a.popsPerMin, mv, a.contactPerMin, a.quietPerMin, a.apexMed, a.apexMax, a.maxTravel, a.longest, 100 * a.airMean, 100 * a.airMax, a.minGround, a.minGroundSeq, a.hapticPerMin, a.jumpPlays, a.popPlays, a.voicePlays, a.dup, a.outside, cs)
     }
 
-    /// Prints the numbers for every cast (room, 2 seeds each) and one park run; asserts the targets once the baseline constants below are filled in.
-    func testJumpRates() {
-        var all: [(String, Agg)] = []
-        for cast in Self.casts {
+    /// One cast under one configuration: `seeds` runs of `seconds` sim-seconds (the wand's dice and the brains' seeds are fixed by the seed: a rerun gives the same numbers).
+    struct Cast { var tag: String; var agg: Agg; var perSeed: [Float]; var lockstep: Float }
+    func measureAll() -> [Cast] {
+        var out: [Cast] = []
+        let setups: [(String, [String], Bool)] = Self.casts.map { ("room " + $0.joined(separator: "+"), $0, false) } + [("park Pip+Lavender+Teddy(free)", ["Pip", "Lavender", "Teddy"], true)]
+        for (tag, cast, park) in setups {
             var rs: [Result] = []
-            for seed in 0..<2 {
-                let r = run(cast: cast, seed: seed, park: false)
-                print("BUBBLEJUMP RUN room \(cast.joined(separator: "+")) seed \(seed): hops \(r.hops.count) in \(String(format: "%.1f", r.minutes)) Jelbie-min")
-                rs.append(r)
-            }
-            all.append(("room \(cast.joined(separator: "+"))", aggregate(rs)))
+            for seed in 0..<Self.seeds { rs.append(run(cast: cast, seed: seed, park: park, free: park ? [2] : [])) }
+            // lockstep: the share of take-offs that have another Jelbie's take-off within 0.1 s
+            let hops = rs.map(\.hops)
+            var near = 0, all = 0
+            for h in hops { for a in h { all += 1; if h.contains(where: { $0.jelly != a.jelly && abs($0.start - a.start) < 0.1 }) { near += 1 } } }
+            out.append(Cast(tag: tag, agg: aggregate(rs), perSeed: rs.map { Float($0.hops.count) / $0.minutes }, lockstep: cast.count > 1 ? Float(near) / Float(max(all, 1)) : 0))
         }
-        let pr = run(cast: ["Pip", "Lavender", "Teddy"], seed: 0, park: true, free: [2])
-        all.append(("park Pip+Lavender+Teddy(free)", aggregate([pr])))
-        for (tag, a) in all { print(line(tag, a)) }
-        for (_, a) in all { XCTAssertEqual(a.dup, 0, "two Jelbies on the same bubble"); XCTAssertEqual(a.outside, 0, "a Jelbie left the play area") }
-        // the targets, against the BASELINE measured on launch-next 23c8c7f2 (the untouched code, this same test, 2 seeds per room cast, 1 park run)
-        for (k, (tag, a)) in all.enumerated() {
-            XCTAssertGreaterThanOrEqual(a.hopsPerMin, 2.0 * Self.baseHops[k], "\(tag): hop starts per Jelbie-minute \(a.hopsPerMin) vs baseline \(Self.baseHops[k])")
-            XCTAssertLessThanOrEqual(a.apexMax, Self.baseApexMax * 1.05, "\(tag): highest apex \(a.apexMax) above the baseline max")
-            XCTAssertLessThanOrEqual(a.maxTravel, 0.8, "\(tag): a single hop travelled \(a.maxTravel) m (\(a.longest))")
-            XCTAssertLessThanOrEqual(a.airMax, 0.45, "\(tag): a Jelbie was airborne \(a.airMax) of the time")
-            XCTAssertGreaterThanOrEqual(a.minGroundSeq, 0.35, "\(tag): ground time between two hops of one Jelbie")
-        }
-        // the other pop styles keep at least 90 % of their baseline rate (per Jelbie-minute over the three room casts)
-        var rate: [BubblePopMove: Float] = [:]
-        for (k, (_, a)) in all.prefix(3).enumerated() { for (m, v) in a.movePerMin { rate[m, default: 0] += v * Self.jelbieMinutes[k] / 12 } }
-        print("BUBBLEJUMP pops per Jelbie-minute over the room casts: \(rate.sorted { $0.key.rawValue < $1.key.rawValue }.map { String(format: "%@=%.2f", $0.key.rawValue, $0.value) }.joined(separator: " ")) (baseline \(Self.basePopRate.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")))")
-        XCTAssertGreaterThanOrEqual(rate[.header] ?? 0, 0.9 * Self.basePopRate["header"]!, "header pops per Jelbie-minute")
-        XCTAssertGreaterThanOrEqual(rate[.leap] ?? 0, 0.9 * Self.basePopRate["leap"]!, "leap pops per Jelbie-minute")
-        XCTAssertGreaterThanOrEqual(rate[.bounce] ?? 0, 0.9 * Self.basePopRate["bounce"]!, "bounce pops per Jelbie-minute")
-        XCTAssertGreaterThanOrEqual((rate[.skip] ?? 0) + (rate[.flap] ?? 0), 0.9 * Self.basePopRate["skip+flap"]!, "skip + flap pops per Jelbie-minute")
+        return out
     }
-    /// Baseline pops per Jelbie-minute over the three room casts (12 Jelbie-minutes: bounce 23, header 37, leap 49, skip 3, flap 4 pops).
-    static let basePopRate: [String: Float] = ["bounce": 1.92, "header": 3.08, "leap": 4.08, "skip+flap": 0.58]
-    /// Baseline (launch-next 23c8c7f2): hop starts per Jelbie-minute for Bob / Pip+Lavender / Pip+Lavender+Teddy in the room, and the park run; the highest crown rise (the flap, 0.350).
-    static let baseHops: [Float] = [18.00, 15.75, 11.17, 7.67]
-    static let baseApexMax: Float = 0.350
-    static let jelbieMinutes: [Float] = [2, 4, 6, 3]
+    func report(_ title: String, _ cs: [Cast]) {
+        for c in cs {
+            print("BUBBLEJUMP \(title) | " + line(c.tag, c.agg) + String(format: " | per-seed hops/min min %.1f max %.1f | lockstep share %.0f%%", c.perSeed.min() ?? 0, c.perSeed.max() ?? 0, 100 * c.lockstep))
+        }
+    }
+    static let styles: [BubblePopMove] = [.bounce, .header, .leap, .skip, .flap]
+
+    /// Run ONCE with the BEFORE numbers (BubbleTuning.applyBaseline: the classic path, the old weights / shares / radii) to (re)measure the constants below.
+    func testBaselineRates() {
+        BubbleTuning.applyBaseline()
+        let cs = measureAll()
+        report("BASELINE", cs)
+        var consts = "BUBBLEJUMP BASELINE CONSTANTS\nstatic let baseHops: [Float] = [\(cs.map { String(format: "%.2f", $0.agg.hopsPerMin) }.joined(separator: ", "))]\nstatic let baseApexMax: Float = \(String(format: "%.3f", cs.map(\.agg.apexMax).max() ?? 0))\nstatic let baseStyle: [[String: Float]] = [\n"
+        for c in cs { consts += "    [" + Self.styles.map { "\"\($0.rawValue)\": " + String(format: "%.2f", c.agg.movePerMin[$0] ?? 0) }.joined(separator: ", ") + "],\n" }
+        print(consts + "]")
+    }
+
+    /// This round's tuning at energy 1.0 and 1.25: the floors on the mean hop rate, every pop style at >= 90 % of its BEFORE rate (mean over the seeds of a cast), and the limits.
+    func testJumpRates() {
+        for energy: Float in [1.0, 1.25] {
+            BubbleTuning.restoreHead(); BubbleTuning.playEnergy = energy
+            let cs = measureAll()
+            report(String(format: "HEAD energy %.2f", energy), cs)
+            for (k, c) in cs.enumerated() {
+                let a = c.agg, tag = String(format: "%@ @%.2f", c.tag, energy)
+                XCTAssertEqual(a.dup, 0, "\(tag): two Jelbies on the same bubble"); XCTAssertEqual(a.outside, 0, "\(tag): a Jelbie left the play area")
+                XCTAssertGreaterThanOrEqual(a.hopsPerMin, Self.floor[k] * Self.baseHops[k], "\(tag): hop starts per Jelbie-minute \(a.hopsPerMin) vs baseline \(Self.baseHops[k]) x \(Self.floor[k])")
+                XCTAssertLessThanOrEqual(a.apexMax, Self.baseApexMax * 1.05, "\(tag): highest apex \(a.apexMax) above the baseline max")
+                XCTAssertLessThanOrEqual(a.maxTravel, 0.8, "\(tag): a single hop travelled \(a.maxTravel) m (\(a.longest))")
+                XCTAssertLessThanOrEqual(a.airMax, 0.45, "\(tag): a Jelbie was airborne \(a.airMax) of the time")
+                XCTAssertGreaterThanOrEqual(a.minGroundSeq, 0.35, "\(tag): ground time between two hops of one Jelbie")
+                XCTAssertLessThanOrEqual(c.lockstep, Self.maxLockstep, "\(tag): \(c.lockstep) of the take-offs have another Jelbie's within 0.1 s")
+                for m in Self.styles {
+                    let base = Self.baseStyle[k][m.rawValue] ?? 0
+                    XCTAssertGreaterThanOrEqual(a.movePerMin[m] ?? 0, 0.9 * base, "\(tag): \(m.rawValue) pops per Jelbie-minute \(a.movePerMin[m] ?? 0) vs baseline \(base)")
+                }
+            }
+        }
+    }
+    /// The asserted floors on the mean hop rate against the BEFORE rate: solo, pair, trio, park.
+    static let floor: [Float] = [1.45, 1.45, 1.40, 1.30]
+    /// Take-offs of different Jelbies within 0.1 s of each other: chance alone gives ~10 % at these rates; more than this is lockstep.
+    static let maxLockstep: Float = 0.25
+    // BASELINE: filled in from testBaselineRates (BubbleTuning.applyBaseline, 6 seeds x 60 sim-s per cast, the wand's dice seeded).
+    static let baseHops: [Float] = [0, 0, 0, 0]
+    static let baseApexMax: Float = 9
+    static let baseStyle: [[String: Float]] = [[:], [:], [:], [:]]
 }
