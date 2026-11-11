@@ -234,6 +234,37 @@ final class HopscotchTests: XCTestCase {
         }
     }
 
+    /// iPad 13-inch windows (1032 x 1376 pt, both orientations): same front-floor rule as the phone. Runs only on an iPad simulator (the pill rect then uses the real window).
+    func testParkRoamFloorKeepsOffTheGoHomePillOnAnIPad13Window() throws {
+        try XCTSkipUnless(HUDLayout.isPad, "iPad simulator only")
+        RoomLayout.apply(RoomCatalog.park)
+        defer { HUDLayout.measuredSize = .zero }
+        for (label, size) in [("ipad portrait", CGSize(width: 1032, height: 1376)), ("ipad landscape", CGSize(width: 1376, height: 1032))] {
+            HUDLayout.measuredSize = size
+            let aspect = Float(size.width / size.height)
+            GameCamera.configurePark()
+            guard let rf = GameCamera.refreshRoam(aspect: aspect) else { return XCTFail("\(label): no roam floor") }
+            let cam = GameCamera.camera(aspect: aspect)
+            let pill = [HUDLayout.parkHomeRect(aspect: aspect)]
+            let box = CGSize(width: CGFloat(1000 * aspect), height: 1000)
+            var hits = 0, freeFront = 0
+            for (i, z) in rf.zs.enumerated() where z >= 4.0 {
+                for span in rf.free[i] {
+                    var x = span.lowerBound
+                    while x <= span.upperBound {
+                        freeFront += 1
+                        if HUDLayout.bodyHitsRail(x: x, z: z, viewProj: cam.viewProj, size: box, rails: pill) { hits += 1 }
+                        x += 0.1
+                    }
+                }
+            }
+            XCTAssertGreaterThanOrEqual(rf.maxZ, 4.25, "\(label): the floor reaches the front edge")
+            XCTAssertEqual(hits, 0, "\(label): \(hits) free spots have a body under the Go home pill")
+            XCTAssertGreaterThan(freeFront, 20, "\(label): there is still floor at the front (\(freeFront))")
+            XCTAssertTrue(rf.free.last.map { !$0.isEmpty } ?? false, "\(label): the front row has free floor")
+        }
+    }
+
     // MARK: the slide is solid
 
     /// The park has no tunnel, and over a long soak (many seeds) nobody has a root inside the slide's footprint except while really using it (the ladder, the platform, the ride, getting up).
