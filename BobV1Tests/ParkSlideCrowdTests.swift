@@ -65,12 +65,12 @@ final class ParkSlideCrowdTests: XCTestCase {
         let rider = lab.rigs[0], b0 = rider.brain
         let st = [lab.rigs[1], lab.rigs[2]]
         let want1 = landing + SIMD2(-0.8 * b0.peerGap, 0)
-        let want2 = want1 + SIMD2(-0.7, 0.7) * gap
+        let want2 = want1 + SIMD2(-1.0 * gap, 0.3)          // (one gap toward the path; the floor's front edge (z 4.28) leaves no room to go much further to the front)
         let sp1 = b0.fixed(want1), sp2 = b0.fixed(want2)
         let mid = (sp1 + sp2) / 2
         let dirC = simd_normalize(mid - climb)
         let starts: [(String, SIMD2<Float>)] = [("F1", landing + SIMD2(0, 1.2)),
-                                                ("F2", mid + dirC * 1.6),
+                                                ("F2", mid + dirC * 0.9),
                                                 ("F3", SIMD2(sl.centre.x - half.x - 1.2, sl.centre.y))]
         let startWant = starts[start].1
         let startPos = b0.fixed(startWant)
