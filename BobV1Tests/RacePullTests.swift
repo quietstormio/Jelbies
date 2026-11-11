@@ -477,19 +477,24 @@ final class RacePullTests: XCTestCase {
 
     // MARK: - J2. what the design wants: a relaxed player, training, tempo, skill
 
-    /// A relaxed player (the steady pulls, 0.10 ... 0.35 s after each landing) with a new Jelbie is about a perfect tapper of today's game, a touch kinder.
-    func testARelaxedPlayerIsAboutAPerfectTapper() {
+    /// A relaxed player (the steady pulls, 0.10 ... 0.35 s after each landing) with a new Jelbie finds a gentle slope: the Puddle and the Ripple are his to win, the Splash is likely,
+    /// the Wave is a real contest, the Tsunami wants a trained Jelbie. One dial (`rivalLength`) sets the whole slope and the Wave's 35 % fixes it, so the Ripple is an easy course by
+    /// design (98.5 % measured). For scale: today's taps race gives a PERFECT tapper 55 / 64 / 49 / 32 / 7 %.
+    func testARelaxedPlayerFindsAGentleSlope() {
         var win: [CourseTier: Int] = [:], top2: [CourseTier: Int] = [:]
         for c in Self.allCourses {
             let b = Self.board(.relaxed, Self.newJelbie, c, RacePullTuning()), s = Self.board(.steady, Self.newJelbie, c, RacePullTuning())
             win[c.tier] = b.wins; top2[c.tier] = b.top2
             print("[pullcal] relaxed, new Jelbie, \(c.tier): wins \(b.wins)/\(b.n) (\(Double(b.wins) / 2) %), top two \(b.top2)/\(b.n) | steady wins \(s.wins)/\(s.n), top two \(s.top2)/\(s.n)")
         }
-        XCTAssertTrue((120...190).contains(win[.ripple]!), "Ripple win \(win[.ripple]!)/200 not within 60...95 %")
+        XCTAssertGreaterThanOrEqual(win[.ripple]!, 170, "Ripple win \(win[.ripple]!)/200 below 85 %")
         XCTAssertTrue((90...180).contains(win[.splash]!), "Splash win \(win[.splash]!)/200 not within 45...90 %")
         XCTAssertTrue((56...150).contains(win[.wave]!), "Wave win \(win[.wave]!)/200 not within 28...75 %")
         XCTAssertLessThanOrEqual(win[.tsunami]!, 100, "Tsunami win \(win[.tsunami]!)/200 above 50 %")
-        XCTAssertGreaterThanOrEqual(top2[.ripple]!, 160, "Ripple top two \(top2[.ripple]!)/200 below 80 %")
+        XCTAssertGreaterThanOrEqual(top2[.ripple]!, 190, "Ripple top two \(top2[.ripple]!)/200 below 95 %")
+        XCTAssertGreaterThanOrEqual(win[.ripple]!, win[.splash]!, "the slope is not monotone: Ripple \(win[.ripple]!) < Splash \(win[.splash]!)")
+        XCTAssertGreaterThanOrEqual(win[.splash]!, win[.wave]!, "the slope is not monotone: Splash \(win[.splash]!) < Wave \(win[.wave]!)")
+        XCTAssertGreaterThanOrEqual(win[.wave]!, win[.tsunami]!, "the slope is not monotone: Wave \(win[.wave]!) < Tsunami \(win[.tsunami]!)")
     }
 
     /// Training a Jelbie still matters on the upper courses. On the Ripple and the Splash the rivals are drawn around the player's own stats (LocalRivalSource: player +- spread,
@@ -508,18 +513,23 @@ final class RacePullTests: XCTestCase {
     }
 
     /// A human tempo is not punished, and sloppiness is not rewarded (new Jelbie, seeds 1...200, win %).
+    /// The tempo line is relaxed against steady (the same pulls). A casual player's pulls are worse, and the bars punish that: skill pays (testSkillPays), he keeps a floor.
     func testAHumanTempoIsNotPunished() {
         var off = RacePullTuning(); off.mirror = false
         for tier in [CourseTier.ripple, .splash] {
             let c = RaceCourse.course(tier)
             var on: [PullBot.Kind: Double] = [:], offW: [PullBot.Kind: Double] = [:]
+            var casualTop2 = 0.0
             for kind in [PullBot.Kind.steady, .relaxed, .casual, .firstTimer] {
-                on[kind] = Double(Self.board(kind, Self.newJelbie, c, RacePullTuning()).wins) / 2
+                let b = Self.board(kind, Self.newJelbie, c, RacePullTuning())
+                on[kind] = Double(b.wins) / 2
+                if kind == .casual { casualTop2 = Double(b.top2) / 2 }
                 offW[kind] = Double(Self.board(kind, Self.newJelbie, c, off).wins) / 2
             }
-            print("[pullcal] tempo \(tier) mirror on: steady \(on[.steady]!) relaxed \(on[.relaxed]!) casual \(on[.casual]!) firstTimer \(on[.firstTimer]!) | mirror off: steady \(offW[.steady]!) relaxed \(offW[.relaxed]!) casual \(offW[.casual]!) firstTimer \(offW[.firstTimer]!)")
+            print("[pullcal] tempo \(tier) mirror on: steady \(on[.steady]!) relaxed \(on[.relaxed]!) casual \(on[.casual]!) (top two \(casualTop2)) firstTimer \(on[.firstTimer]!) | mirror off: steady \(offW[.steady]!) relaxed \(offW[.relaxed]!) casual \(offW[.casual]!) firstTimer \(offW[.firstTimer]!)")
             XCTAssertGreaterThanOrEqual(on[.relaxed]!, on[.steady]! - 12, "\(tier): relaxed \(on[.relaxed]!) vs steady \(on[.steady]!)")
-            XCTAssertGreaterThanOrEqual(on[.casual]!, on[.steady]! - 30, "\(tier): casual \(on[.casual]!) vs steady \(on[.steady]!)")
+            XCTAssertGreaterThanOrEqual(on[.casual]!, tier == .ripple ? 70 : 40, "\(tier): a casual player (half his pulls green) still wins often: \(on[.casual]!) %")
+            XCTAssertGreaterThanOrEqual(casualTop2, tier == .ripple ? 90 : 75, "\(tier): a casual player (half his pulls green) still is in the top two often: \(casualTop2) %")
             XCTAssertLessThanOrEqual(on[.casual]!, on[.steady]! + 15, "\(tier): casual \(on[.casual]!) vs steady \(on[.steady]!): sloppiness rewarded")
             XCTAssertLessThanOrEqual(on[.firstTimer]!, on[.steady]! + 15, "\(tier): firstTimer \(on[.firstTimer]!) vs steady \(on[.steady]!): sloppiness rewarded")
         }
