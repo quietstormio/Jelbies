@@ -30,6 +30,19 @@ extension MelonController {
             let c = self.model.care
             StormHaptics.shared.request(.softTick, now: CACurrentMediaTime(), blocked: c.race.active || c.volley.active || c.volley.inScene || c.bath.active || c.tripActive, driver: c.touchPlay?.haptics)
         }
+        // the comfort arcs' beats (BlobBrain+Weather): hearts over a comforted Jelbie (the stage's own social heart: at most one per Jelbie every 2.2 s, so the emote's own hearts never double them),
+        // a soft chirp / babble (the existing voice set, src "storm"), and ONE light haptic per arc (the same soft tick as the relieved shake-off, never over a race / volleyball / the bath)
+        reactor.onComfortHearts = { [weak self] id in self?.socialHeart(id, now: CACurrentMediaTime()) }
+        reactor.onComfortVoice = { [weak self] id, comforter in
+            guard let self else { return }
+            let x = self.actors.indices.contains(id) ? (self.actors[id].brain?.px ?? 0) : 0
+            StormReactor.playComfortVoice(id: id, comforter: comforter, x: x)
+        }
+        reactor.onComfortHaptic = { [weak self] in
+            guard let self else { return }
+            let c = self.model.care
+            StormHaptics.shared.request(.softTick, now: CACurrentMediaTime(), blocked: c.race.active || c.volley.active || c.volley.inScene || c.bath.active || c.tripActive, driver: c.touchPlay?.haptics)
+        }
         let js = reactor.refresh(actors: actors)
         if !events.isEmpty {
             let c = model.care

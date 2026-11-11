@@ -9,7 +9,10 @@
 //               the body, the feet and the walk are untouched, so the feet stay attached by construction (StormFeetTests).
 //    comfort    a Jelbie the player is holding or petting (a finger on him, a close-up) stays with the player and calms: no gather, no tremble, a calm face
 //    sleepers   flinch (a jelly wobble), and at the first close thunder of the peak wake grumpy and join the others
-//    relief     when the storm clears the cluster breaks with a relieved group shake-off (the `shake` move), a sigh, and they scatter
+//    comfort    (2026-11-11) after a few seconds of trembling every scared Jelbie gets better while the storm goes on, and stays better: one calm, brave Jelbie comes to the most scared and holds it side by side
+//               (swayHug / cuddleLean: hearts, a soft chirp each, one light haptic), two scared ones hold each other, a left-over one calms beside them, a lone one sighs, lies down with its eyes closed
+//               (floorNapFlop) and settles; a stroking finger of 1.5 s makes the calm stick. A comforted Jelbie only flinches a little at later thunder.
+//    relief     when the storm clears the cluster breaks with a relieved group shake-off (the `shake` move), a sigh, and they scatter; the comforted ones skip it: a stretch, a happy hop, free
 //  Busy Jelbies (a meal, the bath, a race or any trip, a voice lesson) skip all of it; a lock that starts mid-huddle lets everybody go at once.
 //
 
@@ -31,6 +34,31 @@ nonisolated enum StormTuning {
     static let gatherLimit: Float = 12
     /// The shake-offs are staggered this much; the scatter walks start after the shake.
     static let shakeStagger: Float = 0.28, shakeTime: Float = 3.2, scatterTime: Float = 5
+}
+
+/// The comfort arcs (user 2026-11-11: "they shake in fear but never comfort or get better"). Times in seconds.
+nonisolated enum StormComfortTuning {
+    /// A comfort arc starts when the latest arrival of the huddle has stood trembling this long (random per storm) and the earliest has trembled at least `firstTremble` (so the first scared one has shaken 6...9 s or more).
+    static let delay: ClosedRange<Double> = 4.5...7.5
+    static let firstTremble: Float = 6
+    /// The brave one's breath (a sigh's squash curve in the storm channel) and the fade of its tremble.
+    static let breath: Float = 1.5
+    /// The scared one's tremble fades over this once the comforter has arrived (or `fadeLatest` after the hold was started); two scared ones hold each other and fade over `mutualFade`.
+    static let scaredFade: Float = 2.0, mutualFade: Float = 2.5, fadeLatest: Float = 1.6
+    /// Retries of the side-by-side emote (it needs a free side spot), the wait between them, and the walk limit of the last resort.
+    static let maxTries = 6, retryEvery: Float = 1.2, walkLimit: Float = 3.0
+    /// Seconds into the hold (or into the in-place calm): the one light haptic, the hearts, the comforter's chirp, the comforted one's babble.
+    static let hapticAt: Float = 0.4, heartTimes: [Float] = [0.5, 2.8], voiceA: Float = 0.6, voiceB: Float = 1.2
+    /// The in-place calm of the last resort takes this long.
+    static let calmPlaceTime: Float = 3.0
+    /// Two scared ones (not a comforter and one scared) hold each other this often; the chance that the pair sits together afterwards.
+    static let mutualChance = 0.45, sitChance = 0.6
+    /// A comforted Jelbie's flash flinch is this fraction of the huddle's; a small chirp now and then; the chance that a calm pair leans in again after a close flash, and the wait between two.
+    static let flinchScale: Float = 0.35, calmChirp = 0.35, releanChance = 0.15, releanCool: Float = 25
+    /// A finger on a trembling Jelbie this long makes the calm stick for the rest of the storm.
+    static let petStick: Float = 1.5
+    /// The clearing: comforted Jelbies wait this long (staggered by id) before the stretch, give up after `cheerLimit`.
+    static let cheerStagger: Float = 0.5, cheerLimit: Float = 22
 }
 
 extension BlobBrain {
@@ -73,7 +101,50 @@ final class StormReactor {
         var meal = false, focus = false, focusApproach = false, bath = false, voice = false, training = false, race = false, trip = false
         var blocksAll: Bool { meal || focusApproach || bath || voice || training || race || trip }
     }
-    enum Mode: Equatable { case startled, gather, huddle, comforted, shaking, scatter }
+    /// `comforted` = the player's finger is on him; `arc` = he is in a comfort arc (his tremble fades, `arcs` drives the rest); `calm` = he got better and stays so for the rest of the storm (still the reactor's);
+    /// `cheer` = the storm is clearing: a stretch and a happy hop, then free.
+    enum Mode: Equatable { case startled, gather, huddle, comforted, shaking, scatter, arc, calm, cheer }
+    enum ArcKind: Equatable { case comfort, mutual, alone, inPlace }
+    enum ArcStage: Equatable { case breath, hold, holding, walkBeside, calmPlace, together, lie, done }
+    /// One comfort arc: `a` is the brave one (comfort), the first one (mutual), or the lone / left-over one; `b` the scared one (-1 when alone).
+    struct Arc {
+        let id: Int
+        let kind: ArcKind
+        var a: Int, b: Int
+        var stage: ArcStage = .hold
+        var t: Float = 0
+        /// The comforter was already calm (a friend who got better before): no breath.
+        var braveCalm = false
+        var emote: SocialKind = .swayHug
+        var flip = false
+        var tries = 0
+        var retryAt: Float = 0
+        /// Seconds since the emote started (-1 = not running), seconds of the hold proper (the emote's phase 2), the beats already given.
+        var emoteAge: Float = -1
+        var holdT: Float = 0
+        var faded = false
+        var hapticDone = false, voiceA = false, voiceB = false
+        var hearts = 0
+        var closing = false
+        var wantSit = false, sitDecided = false, sitTries = 0
+        var asked: Float = -1
+        var walking = false
+        var fallback = false
+        var sighStarted = false, lieStarted = false
+        var log = -1
+        mutating func go(_ s: ArcStage) { stage = s; t = 0 }
+    }
+    /// What the tests read: what ran, when.
+    struct ArcRecord {
+        var kind: ArcKind
+        var ids: [Int]
+        var emote: SocialKind?
+        var fallback = false
+        var startedAt: Float
+        var holdStart: Float?, holdEnd: Float?, endedAt: Float?
+        var tries = 0
+        var hearts = 0, haptics = 0, voices = 0
+    }
     struct Member {
         var mode: Mode
         var t: Float = 0
@@ -88,11 +159,37 @@ final class StormReactor {
         var shakeAt: Float = 0
         var shook = false
         var spot = SIMD2<Float>.zero
+        /// The comfort: the tremble's strength (1 = the full huddle tremble, fading to 0), the fade's rate (1/s; 0 = not fading), the breath's clock (-1 = none), the arc he is in (-1 none),
+        /// "got better for the rest of the storm", seconds of the player's stroking, lying down with his eyes shut (the alone arc), seconds since the lie-down ended by itself, the clearing's step.
+        var tremble: Float = 1
+        var fadeRate: Float = 0
+        var breathT: Float = -1
+        var arc = -1
+        var calm = false
+        var petT: Float = 0
+        var lying = false
+        var lieGone: Float = 0
+        var cheerStage = 0
     }
 
     var locks = Locks()
     /// The first shake-off of the relief (one soft haptic tick goes with it).
     var onFirstShake: (() -> Void)?
+    /// The comfort arcs' beats (wired in MelonStage+Weather): hearts over a Jelbie (id), a soft chirp / babble (id, the comforter?), ONE light haptic per arc.
+    var onComfortHearts: ((Int) -> Void)?
+    var onComfortVoice: ((Int, Bool) -> Void)?
+    var onComfortHaptic: (() -> Void)?
+    /// The comfort arcs running, what has run (tests), when each Jelbie got better (the reactor's clock), the clock itself.
+    private(set) var arcs: [Arc] = []
+    private(set) var arcLog: [ArcRecord] = []
+    private(set) var calmAt: [Int: Float] = [:]
+    private(set) var clock: Float = 0
+    private var arcRng = WeatherRNG(seed: 4242)
+    private var arcDelay: Float = 6
+    private var nextArc = 0
+    private var planClock: Float = 0
+    private var relean: (a: Int, b: Int, at: Float)?
+    private var lastRelean: Float = -999
     private var shakeTicked = false
     private(set) var members: [Int: Member] = [:]
     private(set) var slots: [SIMD2<Float>] = []
@@ -101,7 +198,6 @@ final class StormReactor {
     private(set) var huddleOn = false
     private(set) var firstCloseDone = false
     private var gatherAt: Float?
-    private var clock: Float = 0
     private var noticer: Int?
     private var noticeFace: Float = 0, noticeClock: Float = 0
     private var joinClock: Float = 0
@@ -166,6 +262,11 @@ final class StormReactor {
             switch e.kind {
             case .began:
                 stormOn = true; peakOn = false; firstCloseDone = false; huddleOn = false; gatherAt = nil; seenSleep = []; noticer = nil
+                // the comfort: a new seeded roll per storm (who is brave, which hold, how long they shake first)
+                arcs = []; arcLog = []; calmAt = [:]; relean = nil; lastRelean = -999; planClock = 0
+                var g = WeatherRNG(seed: UInt64(max(1, Int(((plan?.peak ?? 70) * 1000).rounded()))) &+ 7919)
+                arcDelay = Float(g.range(StormComfortTuning.delay))
+                arcRng = g
                 note("storm begins")
             case .phase(let ph):
                 if ph == .peak { peakOn = true }
@@ -202,13 +303,36 @@ final class StormReactor {
     private func flinchAll(care: GameCare?, big: Bool) {
         for j in jellies {
             if j.brain.isSleeping { j.brain.jellyKick = max(j.brain.jellyKick, big ? 0.6 : 0.3); continue }
-            if var m = members[j.id], m.mode == .huddle || m.mode == .gather { m.flinch = 0; members[j.id] = m; if m.mode == .huddle { j.brain.face(.surprised, hold: 0.45) } }
+            if var m = members[j.id], m.mode == .huddle || m.mode == .gather || m.mode == .arc || m.mode == .calm {
+                m.flinch = 0; members[j.id] = m
+                switch m.mode {
+                case .huddle: j.brain.face(.surprised, hold: 0.45)
+                case .arc: if m.tremble > 0.3, !j.brain.isSocial { j.brain.face(.surprised, hold: 0.45) }
+                case .calm:
+                    // a comforted one only flinches a little (calmStep draws it), looks round, and now and then a small chirp: no tremble, no going back
+                    if big, !m.lying, !j.brain.isSocial, j.brain.idleState.kind == nil {
+                        j.brain.face(.curious, hold: 0.9)
+                        if arcRng.next() < StormComfortTuning.calmChirp { onComfortVoice?(j.id, false) }
+                    }
+                default: break
+                }
+            }
             else if members[j.id] == nil, available(j, care: care), !comforted(j, care: care), j.brain.activity == .idle {
                 var m = Member(mode: .startled); m.flinch = 0; m.inPlace = true
                 members[j.id] = m
                 j.brain.face(.surprised, hold: 0.6)
             }
         }
+        if big { maybeRelean() }
+    }
+
+    /// After a close flash two calm, free friends may lean in to each other once more (a short cuddleLean, rarely).
+    private func maybeRelean() {
+        guard relean == nil, clock - lastRelean > StormComfortTuning.releanCool else { return }
+        let calm = jellies.filter { members[$0.id]?.mode == .calm && members[$0.id]?.lying == false }
+        guard calm.count >= 2, arcRng.next() < StormComfortTuning.releanChance else { return }
+        relean = (a: calm[0].id, b: calm[1].id, at: clock + 1.2)
+        lastRelean = clock
     }
 
     /// The thunder of a close strike: the first one at the peak startles everybody and starts the gather; sleepers wake grumpy.
@@ -251,7 +375,11 @@ final class StormReactor {
             if joinClock >= 0.5 { joinClock = 0; lateJoiners(care: care) }
             replanClock += dt
             if replanClock >= Lineup.period { replanClock = 0; replan(care: care) }
+            planClock += dt
+            if planClock >= 0.5 { planClock = 0; planArcs(care: care) }
         }
+        tickArcs(care: care, dt: dt)
+        tickRelean()
         if noticeFace > 0, let n = noticer, let j = jellies.first(where: { $0.id == n }) {
             noticeFace -= dt
             noticeClock += dt
@@ -271,26 +399,37 @@ final class StormReactor {
         m.t += dt
         if m.flinch >= 0 { m.flinch += dt; if m.flinch > 0.9 { m.flinch = -1 } }
         // the stage must not let him wander off: hold the autonomous pick back like the dance does
-        if m.mode != .shaking, m.mode != .scatter {
+        if m.mode != .shaking, m.mode != .scatter, m.mode != .cheer {
             b.restTimer = max(b.restTimer, 1.5)
             b.idleState.cooldown = max(b.idleState.cooldown, 1.5)
+            if m.mode == .arc || m.mode == .calm { b.socialBook.cooldown = max(b.socialBook.cooldown, 2) }          // (nothing else pulls a comforted Jelbie into a social of its own either)
         }
         if b.hurry { b.hurryUpdate(dt: dt) }
-        // the player has him: he stays with the player and calms
+        // the player has him: he stays with the player and calms (and after a stroke of `petStick` seconds the calm sticks for the rest of the storm)
         if m.mode != .shaking, m.mode != .scatter, comforted(j, care: care) {
-            if m.mode != .comforted { setComforted(j); m.mode = .comforted; m.t = 0; m.slot = -1; slotOf[j.id] = nil; committed.remove(j.id); note("\(j.id) comforted") }
+            if m.mode != .comforted {
+                setComforted(j); m.mode = .comforted; m.t = 0; m.slot = -1; slotOf[j.id] = nil; committed.remove(j.id)
+                m.petT = 0; m.lying = false; m.breathT = -1; m.fadeRate = 0; m.arc = -1
+                note("\(j.id) comforted")
+            }
+            m.petT += dt
+            if m.petT >= StormComfortTuning.petStick, !m.calm { m.calm = true; m.tremble = 0; if calmAt[j.id] == nil { calmAt[j.id] = clock }; note("\(j.id) calm (the player's hand)") }
             b.storm.clear()
             m.faceClock += dt
             if m.faceClock >= 1.5 { m.faceClock = 0; b.face(.neutral, hold: 1.6) }
             return true
         }
         if m.mode == .comforted {
-            // let go again: back to the huddle while the peak lasts, else free
+            m.petT = 0
+            // let go again: he stays calm when the stroke was long enough; else back to the huddle while the peak lasts, else free
+            if m.calm, peakOn { m.mode = .calm; m.t = 0; m.flinch = -1; return true }
             if peakOn, huddleOn, !locks.blocksAll { m.mode = .gather; m.asked = -1; m.tries = 0; m.t = 0; m.inPlace = false; members[j.id] = m; _ = assignLate(j.id, care: care); m = members[j.id] ?? m }
             else { return release(j, care: care) }
             return true
         }
         if b.isSleeping { b.storm.clear(); return release(j, care: care) }
+        // a comforted one the player calls (a request, a meal coming) is released at once: the player's commands always win
+        if m.mode == .calm || m.mode == .cheer, b.pending != nil || b.reserved { return release(j, care: care) }
         let amp = b.amplitude
         switch m.mode {
         case .startled:
@@ -352,6 +491,14 @@ final class StormReactor {
             let idle = b.pending == nil && b.activity == .idle && { if case .none = b.script { return true }; return false }()
             if (m.asked > 0.4 && idle) || m.asked > StormTuning.scatterTime { return release(j, care: care) }
             return true
+        case .arc:
+            arcPose(&m, j, dt: dt)
+            return true
+        case .calm:
+            calmStep(&m, j, dt: dt)
+            return true
+        case .cheer:
+            return cheerStep(&m, j, care: care)
         default:
             return true
         }
@@ -371,6 +518,412 @@ final class StormReactor {
         j.brain.hurry = false
         j.brain.storm.clear()
         j.brain.face(.neutral, hold: 1.6)
+    }
+
+    // MARK: comfort
+
+    private func jelly(_ id: Int) -> Jelly? { jellies.first { $0.id == id } }
+
+    private func rec(_ arc: Arc, _ f: (inout ArcRecord) -> Void) { if arcLog.indices.contains(arc.log) { f(&arcLog[arc.log]) } }
+
+    /// A comfort-arc member's pose: the huddle tremble at its fading strength (none once the fade is through), the brave one's breath, the small flinch. Never a roll while a side-by-side emote holds him (the contact).
+    private func arcPose(_ m: inout Member, _ j: Jelly, dt: Float) {
+        let b = j.brain, S = StormComfortTuning.self
+        if m.fadeRate > 0 {
+            m.tremble = max(0, m.tremble - m.fadeRate * dt)
+            if m.tremble <= 0, !m.calm { m.calm = true; if calmAt[j.id] == nil { calmAt[j.id] = clock }; note("\(j.id) calm") }
+        }
+        let amp = b.amplitude
+        let free = b.idleState.kind == nil && !b.isSocial
+        var pose: (pitch: Float, roll: Float, squash: Float) = (0, 0, 1)
+        m.faceClock += dt
+        if m.tremble > 0.001 {
+            if m.faceClock >= 1.3 { m.faceClock = 0; if free { b.face(m.tremble > 0.5 ? .worried : .neutral, hold: 1.6) } }
+            pose = StormPose.huddle(t: clock, standing: m.t, phase: m.phase, flinch: m.flinch, amplitude: amp * m.tremble)
+        } else {
+            if m.faceClock >= 1.5 { m.faceClock = 0; if free { b.face(.neutral, hold: 1.6) } }
+            let s = S.flinchScale * amp * stormFlinch(m.flinch)
+            pose = (StormTuning.flinchPitch * s, 0, 1 - StormTuning.flinchSquash * s)
+        }
+        if m.breathT >= 0 {          // a sigh's squash curve (BlobBrain+Flourish runSigh) in the storm channel: up a little, then the slump
+            m.breathT += dt
+            let u = m.breathT, L = S.breath
+            let inhale: Float = u < 0.6 ? sinf(.pi * u / 0.6) : 0
+            let exhale: Float = u >= 0.6 ? sinf(.pi * min(1, (u - 0.6) / (L - 0.6))) : 0
+            pose.squash *= 1 + 0.035 * inhale - 0.05 * exhale
+            pose.pitch += 0.06 * exhale
+            if u > L { m.breathT = -1 }
+        }
+        if b.isSocial { pose.roll = 0 }
+        b.storm.write(pitch: pose.pitch, roll: pose.roll, squash: pose.squash)
+        b.storm.dancing = false
+    }
+
+    /// A Jelbie who got better: no tremble for the rest of the storm, only the small flinch; the lying one stays down (eyes shut) however long the peak lasts.
+    private func calmStep(_ m: inout Member, _ j: Jelly, dt: Float) {
+        let b = j.brain
+        let k = stormFlinch(m.flinch)
+        if k > 0 {
+            let s = StormComfortTuning.flinchScale * b.amplitude * k
+            b.storm.write(pitch: StormTuning.flinchPitch * s, roll: 0, squash: 1 - StormTuning.flinchSquash * s)
+        } else { b.storm.clear() }
+        b.storm.dancing = false
+        if m.lying {
+            if b.idleState.kind == .floorNapFlop {
+                if b.idleState.phase == 2 { b.idleState.hold = max(b.idleState.hold, b.idleState.phaseT + 3) }          // (the flop's own 3...6 s hold never runs out while the storm lasts)
+                m.lieGone = 0
+            } else {
+                m.lieGone += dt
+                if m.lieGone > 1.5, b.commandedIdle == nil, b.pending == nil, b.scriptIsNone, !b.isSocial { b.commandedIdle = .floorNapFlop; m.lieGone = -1.5 }
+            }
+        } else {
+            m.faceClock += dt
+            if m.faceClock >= 1.5 { m.faceClock = 0; if b.idleState.kind == nil, !b.isSocial { b.face(.neutral, hold: 1.6) } }
+        }
+    }
+
+    /// The clearing, for a comforted one: up again (the flop's push-up has its stretch) or a stretch, then a small happy hop, then free.
+    private func cheerStep(_ m: inout Member, _ j: Jelly, care: GameCare?) -> Bool {
+        let b = j.brain
+        b.storm.clear()
+        if m.t < m.shakeAt { return true }
+        if m.t > StormComfortTuning.cheerLimit { return release(j, care: care) }
+        switch m.cheerStage {
+        case 0:
+            if b.idleState.kind == .floorNapFlop {
+                b.idleState.hold = 0
+                m.cheerStage = 1; b.face(.happy, hold: 2)
+            } else if b.social == nil, b.idleState.kind == nil, b.commandedIdle == nil, b.pending == nil, b.scriptIsNone {
+                b.commandedIdle = .stretch; b.face(.happy, hold: 2.2)
+                m.cheerStage = 1
+            }
+        case 1:
+            if b.social == nil, b.idleState.kind == nil, b.commandedIdle == nil {
+                b.commandedIdle = .joy; b.face(.joyArc, hold: 1.4)
+                m.cheerStage = 2
+            }
+        default:
+            if b.idleState.kind == nil, b.commandedIdle == nil { return release(j, care: care) }
+        }
+        return true
+    }
+
+    /// How brave he is this storm: a little by character (Moss calm, Teddy cuddly, Pip excitable), a seeded roll on top. (There is no stored courage trait.)
+    private func courage(_ j: Jelly) -> Float {
+        let base: Float
+        switch j.brain.personalityKey {
+        case .daisy: base = 0.30
+        case .ears: base = 0.15
+        case .none: base = 0.05
+        case .spines: base = -0.10
+        default: base = 0
+        }
+        return base + Float(arcRng.next()) * 0.45
+    }
+
+    /// The nearest calm, free friend (not in an arc, not lying, free for a social) within reach of `id`.
+    private func nearestCalmFree(to id: Int) -> Int? {
+        guard let t = jelly(id) else { return nil }
+        let tp = GameCare.floorPos(t.brain, t.sim)
+        let cands = jellies.filter { j in
+            guard let m = members[j.id], m.mode == .calm, m.arc < 0, !m.lying else { return false }
+            return j.brain.socialFree && simd_distance(GameCare.floorPos(j.brain, j.sim), tp) < 4.5
+        }
+        return cands.min { simd_distance(GameCare.floorPos($0.brain, $0.sim), tp) < simd_distance(GameCare.floorPos($1.brain, $1.sim), tp) }?.id
+    }
+
+    /// Twice a second during the peak: who has trembled long enough gets an arc. One scared: a calm friend comes, else (nobody else here) it sighs and lies down, else it calms where it stands.
+    /// Two or more: the bravest comforts the most scared (or, for two, now and then they hold each other); the rest pair up; a left-over one calms beside them.
+    private func planArcs(care: GameCare?) {
+        guard peakOn, huddleOn, !locks.blocksAll else { return }
+        let S = StormComfortTuning.self
+        let huddlers = jellies.filter { members[$0.id]?.mode == .huddle && !$0.brain.isSleeping }
+        guard !huddlers.isEmpty else { return }
+        let ready = huddlers.filter { (members[$0.id]?.t ?? 0) >= arcDelay }
+        guard !ready.isEmpty else { return }
+        let oldest = ready.map { members[$0.id]?.t ?? 0 }.max() ?? 0
+        guard oldest >= S.firstTremble else { return }
+        // somebody is still on the way or only just arrived: wait a few seconds so the pair / the trio is planned together
+        let stillComing = members.values.contains { $0.mode == .gather || $0.mode == .startled } || ready.count < huddlers.count
+        if stillComing, oldest < S.firstTremble + 3 { return }
+        var score: [Int: Float] = [:]
+        for j in ready { score[j.id] = courage(j) }
+        var pool = ready.map(\.id).sorted { (score[$0] ?? 0) > (score[$1] ?? 0) }          // bravest first
+        if locks.focus { for id in pool { startArc(.inPlace, a: id) }; return }          // (a close-up: nobody walks, everybody calms where he stands)
+        if pool.count == 1 {
+            let id = pool[0]
+            if let c = nearestCalmFree(to: id) { startArc(.comfort, a: c, b: id, braveCalm: true) }
+            else if members.count > 1 { if (members[id]?.t ?? 0) >= arcDelay + 2.5 { startArc(.inPlace, a: id) } }
+            else { startArc(.alone, a: id) }
+            return
+        }
+        if pool.count == 2, arcRng.next() < S.mutualChance { startArc(.mutual, a: pool[0], b: pool[1]); return }
+        let brave = pool.removeFirst(), scared = pool.removeLast()
+        startArc(.comfort, a: brave, b: scared)
+        while pool.count >= 2 { let x = pool.removeFirst(), y = pool.removeFirst(); startArc(.mutual, a: x, b: y) }
+        if let last = pool.first { startArc(.inPlace, a: last) }
+    }
+
+    private func startArc(_ kind: ArcKind, a: Int, b: Int = -1, braveCalm: Bool = false) {
+        let S = StormComfortTuning.self
+        var arc = Arc(id: nextArc, kind: kind, a: a, b: b)
+        nextArc += 1
+        arc.braveCalm = braveCalm
+        arc.emote = arcRng.next() < 0.6 ? .swayHug : .cuddleLean
+        switch kind {
+        case .comfort: arc.stage = braveCalm ? .hold : .breath
+        case .mutual: arc.stage = .hold
+        case .alone: arc.stage = .breath
+        case .inPlace: arc.stage = .calmPlace
+        }
+        for id in [a, b] where id >= 0 { members[id]?.mode = .arc; members[id]?.arc = arc.id; members[id]?.faceClock = 0 }
+        if kind == .comfort, !braveCalm { members[a]?.breathT = 0; members[a]?.fadeRate = 1 / S.breath }
+        arcLog.append(ArcRecord(kind: kind, ids: b >= 0 ? [a, b] : [a], emote: nil, startedAt: clock))
+        arc.log = arcLog.count - 1
+        arcs.append(arc)
+        note("comfort arc \(kind): \(a)" + (b >= 0 ? " + \(b)" : ""))
+    }
+
+    /// The player's hand or call on one of them ends the arc; everything else is the arcs' own sequence.
+    private func tickArcs(care: GameCare?, dt: Float) {
+        guard !arcs.isEmpty else { return }
+        var finished: Set<Int> = []
+        for idx in arcs.indices {
+            var arc = arcs[idx]
+            arc.t += dt
+            guard let ja = jelly(arc.a), members[arc.a] != nil else { cancelArc(arc, why: "a member is gone"); finished.insert(arc.id); continue }
+            var jb: Jelly?
+            if arc.b >= 0 {
+                guard let x = jelly(arc.b), members[arc.b] != nil else { cancelArc(arc, why: "a member is gone"); finished.insert(arc.id); continue }
+                jb = x
+            }
+            if comforted(ja, care: care) || (jb.map { comforted($0, care: care) } ?? false) { cancelArc(arc, why: "the player has one"); finished.insert(arc.id); continue }
+            if taken(ja, arc) || (jb.map { taken($0, arc) } ?? false) { dropArc(arc, why: "the player called one"); finished.insert(arc.id); continue }
+            advance(&arc, ja, jb, dt: dt)
+            if arc.stage == .done { finishArc(arc); finished.insert(arc.id) } else { arcs[idx] = arc }
+        }
+        if !finished.isEmpty { arcs.removeAll { finished.contains($0.id) } }
+    }
+
+    /// Something of the player's (a request, a meal coming, a race) has one of them: the arc ends for both at once.
+    private func taken(_ j: Jelly, _ arc: Arc) -> Bool {
+        let b = j.brain
+        if b.reserved || b.race.active || b.volley.active || !b.enabled { return true }
+        if b.pending != nil, !(arc.walking && j.id == arc.a) { return true }
+        return false
+    }
+
+    private func advance(_ arc: inout Arc, _ ja: Jelly, _ jb: Jelly?, dt: Float) {
+        let S = StormComfortTuning.self
+        switch arc.kind {
+        case .inPlace:
+            calmPlace(&arc, dt: dt)
+        case .alone:
+            switch arc.stage {
+            case .breath:
+                // the real sigh (4.3 s) and the fade of the tremble with it; then down on its belly, eyes shut
+                if !arc.sighStarted {
+                    arc.sighStarted = true
+                    ja.brain.hurry = false
+                    ja.brain.commandedIdle = .sigh
+                    members[arc.a]?.fadeRate = 1 / S.breath
+                }
+                let sighDone = ja.brain.idleState.kind == nil && ja.brain.commandedIdle == nil
+                if (arc.t >= S.breath && sighDone) || arc.t > 8 { arc.go(.lie) }
+            case .lie:
+                if !arc.lieStarted {
+                    arc.lieStarted = true
+                    if ja.brain.isSocial { ja.brain.stop() }
+                    ja.brain.commandedIdle = .floorNapFlop
+                }
+                if ja.brain.idleState.kind == .floorNapFlop, ja.brain.idleState.phase >= 2 {
+                    arc.hapticDone = true
+                    rec(arc) { $0.holdStart = clock; $0.haptics += 1; $0.voices += 1 }
+                    onComfortHaptic?(); onComfortVoice?(arc.a, false)
+                    arc.stage = .done
+                } else if arc.t > 6 { arc.fallback = true; arc.go(.calmPlace) }
+            case .calmPlace:
+                calmPlace(&arc, dt: dt)
+            default:
+                arc.stage = .done
+            }
+        case .comfort, .mutual:
+            guard let jb else { arc.stage = .done; return }
+            switch arc.stage {
+            case .breath:
+                if arc.t >= S.breath + 0.15 { arc.go(.hold); arc.retryAt = clock }
+            case .hold:
+                if clock < arc.retryAt { return }
+                if arc.tries >= S.maxTries { arc.fallback = true; arc.go(.walkBeside); return }
+                ja.brain.hurry = false; jb.brain.hurry = false
+                let (i, o) = arc.flip ? (jb, ja) : (ja, jb)
+                if i.brain.socialFree, o.brain.socialFree, i.brain.socialStart(arc.emote, with: o.brain, i.sim) {
+                    arc.go(.holding); arc.emoteAge = 0
+                    rec(arc) { $0.emote = arc.emote; $0.tries = arc.tries }
+                } else {
+                    arc.tries += 1; arc.retryAt = clock + S.retryEvery
+                    if arc.tries == 2 { arc.emote = arc.emote == .swayHug ? .cuddleLean : .swayHug }
+                    if arc.tries == 4 { arc.flip.toggle() }
+                }
+            case .holding:
+                arc.emoteAge += dt
+                let sess = ja.brain.social ?? jb.brain.social
+                let ph = sess?.phase ?? 0
+                if !arc.faded, ph >= 1 || arc.emoteAge >= S.fadeLatest {          // the scared one's tremble fades as the friend arrives (two scared ones: both)
+                    arc.faded = true
+                    if arc.kind == .mutual { members[arc.a]?.fadeRate = 1 / S.mutualFade; members[arc.b]?.fadeRate = 1 / S.mutualFade }
+                    else { members[arc.b]?.fadeRate = 1 / S.scaredFade }
+                }
+                if ph >= 2 {
+                    if arc.holdT == 0 { rec(arc) { $0.holdStart = clock } }
+                    arc.holdT += dt
+                    comfortBeats(&arc)
+                }
+                let over = ja.brain.social == nil && jb.brain.social == nil
+                if over, arc.emoteAge > 0.3 {
+                    if arc.holdT < 1.0 {          // it did not hold (a Jelbie was taken away for a moment): again
+                        arc.tries += 1; arc.retryAt = clock + S.retryEvery; arc.emoteAge = -1; arc.holdT = 0
+                        arc.go(.hold)
+                    } else { rec(arc) { $0.holdEnd = clock }; arc.go(.together) }
+                } else if arc.emoteAge > 14 {
+                    ja.brain.stop(); jb.brain.stop()
+                    rec(arc) { $0.holdEnd = clock }
+                    arc.go(.together)
+                }
+            case .walkBeside:
+                // the last resort: the comforter walks to a spot beside the scared one and they calm side by side where they stand
+                ja.brain.hurry = false
+                if arc.asked < 0 {
+                    guard let spot = besideSpot(of: jb, for: ja) else { arc.go(.calmPlace); return }
+                    if ja.brain.isSocial { ja.brain.stop() }
+                    ja.brain.requestNow(.come(to: spot))
+                    arc.asked = 0; arc.walking = true
+                }
+                arc.asked += dt
+                let idle = ja.brain.pending == nil && ja.brain.activity == .idle && ja.brain.scriptIsNone
+                if (arc.asked > 0.4 && idle) || arc.asked > S.walkLimit { arc.walking = false; arc.go(.calmPlace) }
+            case .calmPlace:
+                calmPlace(&arc, dt: dt)
+            case .together:
+                // they stay together and calm; now and then they sit side by side a while
+                if !arc.sitDecided { arc.sitDecided = true; arc.wantSit = !arc.closing && arcRng.next() < S.sitChance; arc.retryAt = clock + 0.8 }
+                if arc.wantSit, peakOn, clock >= arc.retryAt {
+                    if ja.brain.socialFree, jb.brain.socialFree, ja.brain.socialStart(.sitTogether, with: jb.brain, ja.sim) { arc.wantSit = false; arc.stage = .done; return }
+                    arc.sitTries += 1; arc.retryAt = clock + 1.0
+                    if arc.sitTries >= 3 { arc.wantSit = false }
+                }
+                if !arc.wantSit || arc.t > 6 { arc.stage = .done }
+            default:
+                arc.stage = .done
+            }
+        }
+    }
+
+    /// The in-place calm (a close-up, a left-over one, the last resort): the tremble fades, hearts, a chirp, one light haptic; nobody walks.
+    private func calmPlace(_ arc: inout Arc, dt: Float) {
+        let S = StormComfortTuning.self
+        if !arc.faded {
+            arc.faded = true
+            for id in [arc.a, arc.b] where id >= 0 { if (members[id]?.tremble ?? 0) > 0 { members[id]?.fadeRate = 1 / S.mutualFade } }
+            if arc.kind == .alone { arc.hearts = S.heartTimes.count }          // (a lone one has nobody to hug: no hearts)
+            rec(arc) { $0.fallback = true; $0.holdStart = clock }
+        }
+        arc.holdT += dt
+        comfortBeats(&arc)
+        if arc.t >= S.calmPlaceTime { rec(arc) { $0.holdEnd = clock }; arc.stage = .done }
+    }
+
+    /// The beats of a hold (or an in-place calm), by the seconds of it: ONE light haptic, hearts over both, the comforter's chirp, then the comforted one's babble.
+    private func comfortBeats(_ arc: inout Arc) {
+        let S = StormComfortTuning.self
+        let t = arc.holdT
+        if !arc.hapticDone, t >= S.hapticAt { arc.hapticDone = true; rec(arc) { $0.haptics += 1 }; onComfortHaptic?() }
+        if arc.hearts < S.heartTimes.count, t >= S.heartTimes[arc.hearts] {
+            arc.hearts += 1
+            if arc.kind != .alone { rec(arc) { $0.hearts += 1 }; onComfortHearts?(arc.a); if arc.b >= 0 { onComfortHearts?(arc.b) } }
+        }
+        if !arc.voiceA, t >= S.voiceA { arc.voiceA = true; rec(arc) { $0.voices += 1 }; onComfortVoice?(arc.a, arc.kind == .comfort) }
+        if !arc.voiceB, arc.b >= 0, t >= S.voiceB { arc.voiceB = true; rec(arc) { $0.voices += 1 }; onComfortVoice?(arc.b, false) }
+    }
+
+    /// A floor spot a gap from `target` that the resolver leaves alone and nobody else stands on; the one nearest to `walker`.
+    private func besideSpot(of target: Jelly, for walker: Jelly) -> SIMD2<Float>? {
+        let gap = MelonController.jellyGap * StormTuning.gapFactor
+        let tpos = GameCare.floorPos(target.brain, target.sim)
+        let here = GameCare.floorPos(walker.brain, walker.sim)
+        let others = jellies.filter { $0.id != target.id && $0.id != walker.id }.map { GameCare.floorPos($0.brain, $0.sim) }
+        var best: (d: Float, p: SIMD2<Float>)?
+        for k in 0..<16 {
+            let ang = Float(k) * (.pi / 8)
+            let p = tpos + SIMD2(cosf(ang), sinf(ang)) * gap
+            let q = walker.brain.resolve(SIMD3(p.x, 0, p.y), walker.brain.footprint)
+            guard simd_distance(SIMD2(q.x, q.z), p) < 0.05, others.allSatisfy({ simd_distance($0, p) >= gap * 0.99 }) else { continue }
+            let d = simd_distance(here, p)
+            if best == nil || d < best!.d { best = (d, p) }
+        }
+        return best?.p
+    }
+
+    /// The arc is over: both stay calm (the reactor's, no tremble) until the clearing, or cheer at once when the storm is already clearing.
+    private func finishArc(_ arc: Arc) {
+        for id in [arc.a, arc.b] where id >= 0 {
+            guard var m = members[id] else { continue }
+            m.arc = -1; m.breathT = -1; m.fadeRate = 0; m.tremble = 0; m.calm = true
+            if calmAt[id] == nil { calmAt[id] = clock }
+            if arc.kind == .alone, !arc.closing, arc.stage == .done, !arc.fallback { m.lying = true; m.lieGone = 0 }
+            if arc.closing { m.mode = .cheer; m.t = 0; m.cheerStage = 0; m.shakeAt = StormComfortTuning.cheerStagger * Float(id % 3) } else { m.mode = .calm }
+            members[id] = m
+        }
+        rec(arc) { $0.endedAt = clock }
+    }
+
+    /// The arc stops (the player has one of them, the clearing came early): a Jelbie who had already calmed stays calm, a still scared one goes back to the huddle (and is planned again).
+    private func cancelArc(_ arc: Arc, why: String) {
+        for id in [arc.a, arc.b] where id >= 0 {
+            guard var m = members[id] else { continue }
+            if let j = jelly(id), let k = j.brain.socialKind, k == .swayHug || k == .cuddleLean { j.brain.stop() }
+            m.arc = -1; m.breathT = -1; m.fadeRate = 0
+            if m.calm { m.mode = .calm; m.tremble = 0 } else { m.mode = .huddle; m.tremble = 1; m.t = max(m.t, arcDelay) }
+            members[id] = m
+        }
+        rec(arc) { $0.endedAt = clock }
+        note("comfort arc cancelled: \(why)")
+    }
+
+    /// The player called one of them: both are free at once (nothing of the storm or the emote is left on them).
+    private func dropArc(_ arc: Arc, why: String) {
+        for id in [arc.a, arc.b] where id >= 0 {
+            if let j = jelly(id) {
+                letGo(j, lying: members[id]?.lying ?? false)
+                if j.brain.isSocial { j.brain.stop() }
+            }
+            members[id] = nil; committed.remove(id); slotOf[id] = nil
+        }
+        rec(arc) { $0.endedAt = clock }
+        note("comfort arc dropped: \(why)")
+    }
+
+    /// A calm pair that flinched together leans in once more (a short cuddleLean): only when both are free for it.
+    private func tickRelean() {
+        guard let r = relean, clock >= r.at else { return }
+        relean = nil
+        guard peakOn, !locks.blocksAll, let ja = jelly(r.a), let jb = jelly(r.b),
+              members[r.a]?.mode == .calm, members[r.b]?.mode == .calm, members[r.a]?.lying == false, members[r.b]?.lying == false,
+              ja.brain.socialFree, jb.brain.socialFree else { return }
+        _ = ja.brain.socialStart(.cuddleLean, with: jb.brain, ja.sim)
+    }
+
+    /// His storm pose and speed off him; the lying one gets up (his hold ends, and the voice command flag that kept the meal from lifting him is dropped).
+    private func letGo(_ j: Jelly, lying: Bool) {
+        let b = j.brain
+        b.storm.clear()
+        b.hurry = false
+        if lying, b.idleState.kind == .floorNapFlop { b.idleState.hold = 0; b.commanded = false }
+    }
+
+    /// The comfort sound the stage and the tests share: the comforter's happy chirp, the comforted one's babble (the existing chirp / babble voice set, deterministic: no chance roll).
+    static func playComfortVoice(on hub: AudioHub = .shared, id: Int, comforter: Bool, x: Float) {
+        hub.chirp(jelly: id, comforter ? .happy : .babble, x: x, src: "storm")
     }
 
     // MARK: the huddle
@@ -461,7 +1014,7 @@ final class StormReactor {
     /// A Jelbie who becomes free during the peak (woke up, was let go by the player, finished a move) joins the cluster beside it.
     private func lateJoiners(care: GameCare?) {
         guard !locks.focus else { return }
-        for j in jellies where members[j.id] == nil && available(j, care: care) && !j.brain.isSleeping && !comforted(j, care: care) && j.brain.idleState.kind != .sleep {
+        for j in jellies where members[j.id] == nil && available(j, care: care) && !j.brain.isSleeping && !comforted(j, care: care) && j.brain.idleState.kind != .sleep && j.brain.pending == nil && j.brain.activity != .coming {          // (a request of the player's is his own until it is done: a Jelbie let go by a come-here does not rejoin the huddle mid-walk)
             var m = Member(mode: .gather); m.phase = Float(j.id) * 1.7
             members[j.id] = m
             if !assignLate(j.id, care: care) { members[j.id] = nil }
@@ -504,6 +1057,12 @@ final class StormReactor {
     private func reliefBegin(care: GameCare?) {
         gatherAt = nil
         shakeTicked = false
+        // the comfort: a hold that is on finishes (then they cheer); an arc that has not got there is cancelled (the one who had calmed stays calm, a still scared one gets today's relief)
+        for i in arcs.indices {
+            if arcs[i].stage == .holding || arcs[i].stage == .together { arcs[i].closing = true }
+            else { cancelArc(arcs[i], why: "the storm is clearing"); arcs[i].stage = .done }
+        }
+        arcs.removeAll { $0.stage == .done }
         let ids = members.keys.sorted()
         guard !ids.isEmpty else { huddleOn = false; return }
         var centre = SIMD2<Float>.zero, n: Float = 0
@@ -512,6 +1071,12 @@ final class StormReactor {
         for (k, id) in ids.enumerated() {
             guard var m = members[id], let j = jellies.first(where: { $0.id == id }) else { continue }
             if m.mode == .comforted { j.brain.face(.happy, hold: 2.0); continue }
+            if m.mode == .arc { continue }          // (a hold that is on: finishArc sends them to cheer)
+            if m.mode == .calm {          // comforted: no frantic shake-off, a stretch and a happy hop (cheerStep), then free
+                m.mode = .cheer; m.t = 0; m.cheerStage = 0; m.shakeAt = StormComfortTuning.cheerStagger * Float(k); m.flinch = -1
+                members[id] = m
+                continue
+            }
             j.brain.hurry = false
             m.mode = .shaking; m.t = 0; m.shook = false; m.shakeAt = Float(k) * StormTuning.shakeStagger; m.inPlace = false
             // the scatter: away from the cluster, each in his own direction, onto floor the resolver accepts
@@ -537,16 +1102,20 @@ final class StormReactor {
     /// He is a free Jelbie again.
     @discardableResult
     private func release(_ j: Jelly, care: GameCare?) -> Bool {
-        j.brain.storm.clear()
-        j.brain.hurry = false
+        letGo(j, lying: members[j.id]?.lying ?? false)
         committed.remove(j.id); slotOf[j.id] = nil
         return false
     }
 
-    /// Everything back (a lock started, the storm ended).
+    /// Everything back (a lock started, the storm ended): every storm pose, the comfort arcs and the side-by-side emotes they started, the lying one gets up.
     func releaseAll(note why: String = "") {
-        for (id, _) in members { if let j = jellies.first(where: { $0.id == id }) { j.brain.storm.clear(); j.brain.hurry = false } }
+        for (id, m) in members {
+            guard let j = jellies.first(where: { $0.id == id }) else { continue }
+            letGo(j, lying: m.lying)
+            if let k = j.brain.socialKind, k == .swayHug || k == .cuddleLean || k == .sitTogether { j.brain.stop() }
+        }
         members = [:]; slots = []; committed = []; slotOf = [:]; gatherAt = nil; replans = 0
+        arcs = []; relean = nil
         if !why.isEmpty { note(why) }
     }
 
@@ -554,6 +1123,7 @@ final class StormReactor {
     func reset() {
         releaseAll(); stormOn = false; peakOn = false; huddleOn = false; firstCloseDone = false; noticer = nil; noticeFace = 0; plan = nil; jellies = []; log = []
         clock = 0; joinClock = 0; replanClock = 0; seenSleep = []
+        arcs = []; arcLog = []; calmAt = [:]; planClock = 0; lastRelean = -999
     }
 
     private func note(_ s: String) { log.append(s); if log.count > 80 { log.removeFirst() } }
