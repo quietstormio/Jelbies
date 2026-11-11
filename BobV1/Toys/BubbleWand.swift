@@ -77,6 +77,8 @@ nonisolated enum BubbleTuning {
     nonisolated(unsafe) static var busyLookingChases = true
     /// The walk order to a bubble (`bubbleGo` = `requestNow`, which aborts the running script) waits until his own hop (the happy hop of `bubbleIdle`, a wait hop, a pop move) has landed.
     nonisolated(unsafe) static var goWaitsForHop = true
+    /// The spot look before a chase ends (and the walk order follows) only when his feet are still, not in the middle of the look's turn.
+    nonisolated(unsafe) static var spotWaitsForFeet = true
     /// THE dial (1.0 = this round's tuning): above 1 he thinks and waits for shorter times and hops on the spot more often, below 1 the other way round. Scales `playThinkEvery`, `playWatchThink`,
     /// `playAfterChase`, `playWaitHop`, `playWaitHopFirst` (divided) and `playWaitHopChance` (multiplied). The ground-time limit `playHopSpacing` is NOT scaled.
     nonisolated(unsafe) static var playEnergy: Float = 1.0
@@ -100,7 +102,7 @@ nonisolated enum BubbleTuning {
         playPickRadius = 4.5; playSpotHold = 0.35...0.5; playHopSpacing = 0; playWaitHopEnabled = false
         bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1
         idleCuts = (0.32, 0.72, 0.86); idleStepDur = 0.8...1.6
-        busyLookingChases = false; goWaitsForHop = false
+        busyLookingChases = false; goWaitsForHop = false; spotWaitsForFeet = false
     }
     /// This round's tuning (the values above); tests only.
     static func restoreHead() {
@@ -111,7 +113,7 @@ nonisolated enum BubbleTuning {
         playWaitHop = 1.0...1.7; playWaitHopFirst = 0.35...0.8; playWaitHopChance = 0.8; playWaitHopEnabled = true
         bounceWeightLow = 1; bounceWeightHigh = 2; pickDistanceFactor = 1.5
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
-        busyLookingChases = true; goWaitsForHop = true
+        busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = true
     }
     static let lightBeat: Float = 0.18
     static let aimMax: Float = 3.5                 // how long he waits under a bubble for it to be in reach
@@ -518,7 +520,7 @@ final class BubbleWand: PlayToy {
             }
         case .spot:
             guard field.bubble(st.bubble) != nil, clock < st.until, b.bubbleStillMine else { endChase(&st, j); return }
-            if clock >= st.lookUntil { st.mode = .chase; st.retargetAt = 0 }
+            if clock >= st.lookUntil, !(BubbleTuning.spotWaitsForFeet && b.feet.active && clock < st.lookUntil + 0.6) { st.mode = .chase; st.retargetAt = 0 }          // (the order to walk aborts a look that is still turning: its feet are mid-step and the body still leans)
         case .chase:
             guard let bub = field.bubble(st.bubble), clock < st.until, b.bubbleStillMine, bub.pos.y < BubbleTuning.chaseMaxY + 0.3 else { endChase(&st, j); return }
             let stand = standPoint(j, bub, st.move)
@@ -552,7 +554,7 @@ final class BubbleWand: PlayToy {
                 let apexY = crown + (BubbleTuning.apex[m] ?? 0.1)
                 switch m {
                 case .header, .bounce: return dh <= BubbleTuning.hopReach && abs(pp.y - apexY) <= band && pp.y >= BubbleTuning.hopMinY
-                case .flap: return b.flapHopAllowed && dh <= BubbleTuning.hopReach + 0.2 && abs(pp.y - apexY) <= band + 0.1
+                case .flap: return b.bubbleFlapProbe() == "ok" && dh <= BubbleTuning.hopReach + 0.2 && abs(pp.y - apexY) <= band + 0.1
                 case .leap: return BubbleTuning.leapRange.contains(dh) && abs(pp.y - apexY) <= band && pp.y >= BubbleTuning.hopMinY
                 case .skip: return dh >= 0.3 && dh <= 0.85 && pp.y < crown - 0.05 && pp.y >= 0.7
                 }
@@ -599,7 +601,7 @@ final class BubbleWand: PlayToy {
                 trace("jelly \(j.id) \(used) at bubble \(bub.id) y=\(String(format: "%.2f", bub.pos.y)) crown \(String(format: "%.2f", crown)) dh \(String(format: "%.2f", dh))")
             } else {
                 st.startFails += 1
-                note("startFail \(m) \(m == .skip ? b.bubbleSkipProbe() : "")")
+                note("startFail \(m) \(m == .skip ? b.bubbleSkipProbe() : m == .flap ? b.bubbleFlapProbe() : "")")
                 st.retargetAt = clock + 0.4
                 if travels(m), BubbleTuning.forceMove == nil {          // (no room / a friend ahead for the travelling move: under it for a header instead)
                     st.move = .header; field.setReach(st.bubble, y: reachHeight(.header, j)); st.mode = .chase; st.goal = nil; st.goalTries = 0; st.retargetAt = 0

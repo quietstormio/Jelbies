@@ -65,6 +65,18 @@ extension BlobBrain {
         if !peerFree(goal) { return "peer" }
         return "ok"
     }
+    /// Whether the flap-hop will start now (the gate of `flapHopBegin`, without starting it): "ok", "notWinged", "folded", "notAllowed", "bounds" (no floor for the drift ahead), "peer", "leg".
+    func bubbleFlapProbe() -> String {
+        guard feature == .wings else { return "notWinged" }
+        guard !wingsFolded else { return "folded" }
+        guard flapHopAllowed else { return "notAllowed" }
+        let here = position, goal = here + SIMD2(sinf(yaw), cosf(yaw)) * FeatureSpec.shared.hop.drift
+        let rv = resolve(SIMD3(goal.x, 0, goal.y), footprint)
+        guard simd_distance(SIMD2(rv.x, rv.z), goal) < 0.05 else { return "bounds" }
+        guard peerFree(SIMD2(rv.x, rv.z)) else { return "peer" }
+        guard legClear(here, SIMD2(rv.x, rv.z), margin: steerMargin) else { return "leg" }
+        return "ok"
+    }
     /// Which hop of a bounce / skip is running (0-based), for the lighter beat of the second and third pop.
     var bubbleHopIndex: Int { idleState.hop }
     /// The yaw from here to a floor point (for the facing check before a travelling move).
