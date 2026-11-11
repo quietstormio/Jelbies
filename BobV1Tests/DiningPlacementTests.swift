@@ -35,7 +35,10 @@ final class DiningPlacementTests: XCTestCase {
     }
 
     func testEmptyRoomHasASpot() {
+        var seen: [SIMD2<Float>] = []
+        DiningSpot.pickOpen = { seen = $0; return $0.first }
         XCTAssertNotNil(pick(), "an empty room has room for the table")
+        print("PLACEMENT open spots in the empty room (n=3): \(seen.count) \(seen)")
     }
 
     func testDecorAndToysOnThePreferredSpotAreKeptOff() throws {
