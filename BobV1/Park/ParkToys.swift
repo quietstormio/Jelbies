@@ -52,7 +52,7 @@ extension DecorKind {
 
     var parkSpec: DecorSpec {
         switch self {
-        case .seesaw: return DecorSpec(half: SIMD2(1.05, 0.20), height: 0.55, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
+        case .seesaw: return DecorSpec(half: SIMD2(1.05, 0.28), height: 0.55, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
         case .sandbox: return DecorSpec(half: SIMD2(1.25, 0.90), height: 0.22, solid: true, units: 3, corner: 0.25, reach: 1, box: true)
         case .hopscotch: return DecorSpec(half: HopscotchCourt.slabHalf, height: 0.05, solid: false, units: 3, corner: 0.1, reach: 0.5, box: true)
         default: return DecorSpec(half: SIMD2(0.4, 0.4), height: 1, solid: true, units: 1, corner: 0.2, reach: 1, box: true)
@@ -60,7 +60,7 @@ extension DecorKind {
     }
     var parkSitPoints: [SIMD3<Float>] {
         switch self {
-        case .seesaw: return [SIMD3(-0.66, 0.475, 0), SIMD3(0.66, 0.475, 0)]          // (the cushion's flat top: beam top 0.415 + 0.06; they SIT on it now, see Park/SeesawRide.swift; the footprint's half depth 0.20 x 1.4 = the cushion's 0.28 edge, so the stand spot in front is 0.70 from the seat)
+        case .seesaw: return [SIMD3(-0.66, 0.475, 0), SIMD3(0.66, 0.475, 0)]          // (the cushion's flat top: beam top 0.415 + 0.06; they SIT on it now, see Park/SeesawRide.swift; the footprint's half depth 0.28 x 1.4 = 0.392 covers the base's axle caps (|z| 0.272 x 1.4 = 0.381) and the stand spot in front is 0.81 from the seat, 0.31 clear of the cushion's edge for a body of radius 0.5)
         case .sandbox: return [SIMD3(-0.72, 0.16, -0.25), SIMD3(0.72, 0.16, -0.25), SIMD3(0, 0.16, 0.45)]          // (three bodies of ~1.0 stand in a triangle with >1.1 between centres)
         default: return []
         }
@@ -97,6 +97,19 @@ extension DecorModels {
         func rbox(_ c: SIMD3<Float>, _ h: SIMD3<Float>, _ r: Float, _ col: SIMD3<Float>) { b.roundedBox(centre: o + c, half: h, radius: r, segments: 3, aoFloor: false, color: col) }
         switch kind {
         case .seesaw:
+            // the baked model (decor_seesaw.bin, already at the piece's scale: DecorMeshes.loaded scales positions and pivots): the base as it is, the plank (with its cushions and
+            // handles) turned by theta about its pivot on z, and a rubber bumper under each end scaled in height about its floor pivot so its top follows the plank's underside
+            if let art = DecorMeshes.loaded[.seesaw], let base = art.part("base"), let plankPart = art.part("plank"), let bl = art.part("bumperL"), let br = art.part("bumperR") {
+                let th = SeesawRide.shared.theta(uid), q = simd_quatf(angle: th, axis: SIMD3(0, 0, 1)), pv = plankPart.pivot
+                DecorMeshes.emit(base, into: b, offset: o)
+                DecorMeshes.emit(plankPart, into: b, offset: o, pose: { v, n, _ in (pv + q.act(v - pv), q.act(n)) })
+                for (part, sx) in [(bl, Float(-1)), (br, Float(1))] {
+                    let sy = SeesawTuning.bumperTop(side: sx, theta: th) / SeesawTuning.bumperRest
+                    DecorMeshes.emit(part, into: b, offset: o, pose: { v, n, _ in (SIMD3(v.x, v.y * sy, v.z), simd_normalize(SIMD3(n.x, n.y / max(sy, 0.05), n.z))) })
+                }
+                return          // (no second scale: the art is scaled already)
+            }
+            // fallback without the art file: the procedural piece to the same contract (SeesawTuning, model units)
             // the contract (SeesawTuning, model units): two chunky feet and a fat fulcrum (all within |x| 0.24), a plank 0.09 thick turned by theta about the pivot with a flat cushion (top y 0.475)
             // and a T-handle at each end of it, and a rubber dome on the ground under each end that the underside presses down (apex = underside at its centre line)
             rbox(SIMD3(0, 0.10, -0.2), SIMD3(0.20, 0.10, 0.10), 0.09, post)

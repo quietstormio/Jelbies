@@ -133,6 +133,33 @@ final class SeesawRideTests: XCTestCase {
         f.clear()
     }
 
+    /// A ride left mid-swing, the layout rebuilt as on a new park visit: the plank is level and still on the first step.
+    func testStaleRideStartsFreshOnANewVisit() {
+        let f = DecorField.shared, R = SeesawRide.shared
+        let place = [PlacedDecor(uid: uid, kind: .seesaw, x: 0, z: 0, turns: nil)]
+        f.set(place)
+        f.take(uid, seat: 0, by: 1); f.take(uid, seat: 1, by: 2)
+        R.report(uid, 0, .seated); R.report(uid, 1, .seated)
+        var swinging = false
+        for _ in 0..<(60 * 12) { f.tick(dt: 1.0 / 60); if R.mode(uid) == .pairRide, abs(R.theta(uid)) > 0.1 { swinging = true; break } }
+        XCTAssertTrue(swinging, "mid-swing")
+        // the riders are gone with the park, the piece comes back with the next visit
+        f.leave(uid, by: 1); f.leave(uid, by: 2)
+        f.set([])
+        f.set(place)
+        f.tick(dt: 1.0 / 60)
+        XCTAssertEqual(R.theta(uid), 0, "level on the first step of the new visit"); XCTAssertEqual(R.amp(uid), 0)
+        XCTAssertTrue(R.still(uid))
+        // and a rider who is on the piece when the version moves is never reset
+        f.take(uid, seat: 0, by: 1); R.report(uid, 0, .seated)
+        for _ in 0..<(60 * 4) { f.tick(dt: 1.0 / 60) }
+        let before = R.theta(uid)
+        f.set(place + [PlacedDecor(uid: 5, kind: .rug, x: 3, z: 3, turns: nil)])
+        f.tick(dt: 1.0 / 60)
+        XCTAssertEqual(R.theta(uid), before, accuracy: 0.012, "no reset under a rider")
+        f.clear()
+    }
+
     // MARK: full sequences with bodies
 
     struct Report {
@@ -146,6 +173,8 @@ final class SeesawRideTests: XCTestCase {
         var hops: [(kind: String, dist: Float, thetaAtStart: Float, startVsSeat: Float, landing: Float, forced: Bool)] = []
         var maxAmp: Float = 0, swings: Float = 0
         var finished = false, seatedAll = false
+        var endInner: Float = .infinity, endOuter: Float = .infinity          // lowest skin vs the TILTED cushion plane at the swing's ends (|theta| > 0.2), inner / outer side of the patch
+        var standClear: Float = .infinity, armMax = 0.0, featureBeam: Float = 0, featureHandle: Float = .infinity
     }
 
     /// One body's distance outside a box (negative = inside by that much), the box given by its centre and half extents (plank frame, model units).
@@ -166,6 +195,10 @@ final class SeesawRideTests: XCTestCase {
             r.brain.feature = JellyRoster.feature(chars[k])
             r.skinner.configureTail(MotionRig.renderMesh); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
         }
+        WearBody.install(MotionRig.renderMesh)
+        var feats: [FeatureSet] = []
+        for _ in chars { let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f); feats.append(f) }
+        var afterOff = [Int](repeating: 0, count: chars.count)
         let place = ParkToys.placed.filter { $0.kind == .seesaw }
         DecorField.shared.set(place)
         DecorField.shared.toys.news.removeAll()
@@ -196,6 +229,7 @@ final class SeesawRideTests: XCTestCase {
             rep.maxAmp = max(rep.maxAmp, R.amp(uid))
             if mode == .pairRide { pairRideSteps += 1 }
             let c0 = cosf(-th), s0 = sinf(-th), k = DecorKind.seesaw.scale
+            for (j, r) in lab.rigs.enumerated() { feats[j].tick(id: 0, brain: r.brain, sim: r.sim, feature: JellyRoster.feature(chars[j]), worn: [], hideAll: false, dt: 1.0 / 60) }
             for (j, r) in lab.rigs.enumerated() {
                 let b = r.brain, st = b.idleState
                 let cen = r.sim.centroid()
@@ -213,6 +247,7 @@ final class SeesawRideTests: XCTestCase {
                 if (prevStage[j] == 1 && stage == 2) || (prevStage[j] == 3 && stage != 3) {
                     let landing: Float
                     if prevStage[j] == 1 { let sw = field.seatWorld(uid, seat: st.seat) ?? .zero; landing = simd_distance(SIMD2(cen.x, cen.z), SIMD2(sw.x, sw.z)) } else { landing = 0 }
+                    if prevStage[j] == 3 { afterOff[j] = 20 }
                     rep.hops.append((prevStage[j] == 1 ? "on" : "off", simd_distance(SIMD2(cen.x, cen.z), SIMD2(hopFrom[j].x, hopFrom[j].z)), hopThetaStart[j], hopStartVsSeat[j], landing, hopForced[j]))
                 }
                 // pops
@@ -223,12 +258,34 @@ final class SeesawRideTests: XCTestCase {
                     if prevStage[j] == 2, key != prevKey[j] { rep.worstJump = max(rep.worstJump, step - prevStep[j]) }
                 }
                 prevKey[j] = key; prevStep[j] = step; prevC[j] = cen; prevStage[j] = stage
-                guard stage >= 1 || stage == 3 else { continue }
+                let standing = (stage == 0 && b.activity != .walking && st.phaseT > 0.3) || afterOff[j] > 0
+                if afterOff[j] > 0 { afterOff[j] -= 1 }
+                guard stage >= 1 || standing else { continue }
                 r.render()
+                if b.armG > 0.5 { for si in 0..<2 { let g = b.armLastGeom[si]; rep.armMax = max(rep.armMax, ArmCap.exposed(a: SIMD3<Double>(g.a), b: SIMD3<Double>(g.b), r2: Double(g.r2))) } }
                 // feet: the leash never moves a foot piece
                 if r.skinner.beansActive {
                     let pull = max(max(r.skinner.joinLeash[0], r.skinner.joinLeash[1]), max(r.skinner.weldPull[0], r.skinner.weldPull[1]))
                     if pull > 0.002 { rep.leashFrames += 1; rep.leashMax = max(rep.leashMax, pull) }
+                }
+                if standing {
+                    // the smallest distance from the skin to the piece (beam, cushions, base, handles; level plank) while he waits on his stand spot / just after the hop off
+                    r.dyn.withUnsafeBufferPointer { d in
+                        var v = 0
+                        while v + 2 < d.count {
+                            let p = SIMD3<Float>((d[v] - centre.x) / k, d[v + 1] / k, (d[v + 2] - centre.y) / k)
+                            if abs(p.x) < 1.6, p.y < 0.8, abs(p.z) < 1.2 {
+                                var m = Self.boxDist(p, SIMD3(0, SeesawTuning.beamCentreY, 0), SeesawTuning.beamHalf)
+                                for sx: Float in [-1, 1] {
+                                    m = min(m, Self.boxDist(p, SIMD3(sx * SeesawTuning.cushionX, SeesawTuning.cushionCentreY, 0), SeesawTuning.cushionHalf))
+                                    m = min(m, Self.boxDist(p, SIMD3(sx * SeesawTuning.handleX, 0.5185, 0), SIMD3(SeesawTuning.handleHalfX, 0.1165, SeesawTuning.handleBarHalfZ)))
+                                }
+                                m = min(m, Self.boxDist(p, SIMD3(0, 0.22, 0), SIMD3(0.2263, 0.22, 0.272)))
+                                rep.standClear = min(rep.standClear, m * k)
+                            }
+                            v += 6
+                        }
+                    }
                 }
                 if stage == 2 { everSeated.insert(j) }
                 // seated and settled: the root is on the seat; the lowest skin point against the cushion plane
@@ -236,17 +293,23 @@ final class SeesawRideTests: XCTestCase {
                     let sw = field.seatWorld(uid, seat: st.seat)!
                     rep.maxRootSeat = max(rep.maxRootSeat, simd_distance(b.position, SIMD2(sw.x, sw.z)))
                     rep.maxCentroidSeat = max(rep.maxCentroidSeat, simd_distance(SIMD2(cen.x, cen.z), SIMD2(sw.x, sw.z)))
-                    var lowest = Float.infinity
-                    let slope = tanf(th)
+                    var lowest = Float.infinity, lowInner = Float.infinity, lowOuter = Float.infinity
+                    let slope = tanf(th), innerSign: Float = st.seat == 0 ? 1 : -1          // (toward the fulcrum)
                     r.dyn.withUnsafeBufferPointer { d in
                         var v = 0
                         while v + 2 < bodyEnd {
                             let dx = d[v] - sw.x, dz = d[v + 2] - sw.z
-                            if abs(dx) < 0.49, abs(dz) < 0.28 { lowest = min(lowest, d[v + 1] - (sw.y + slope * dx)) }
+                            // the cushion's flat top: |x - 0.62| <= 0.28, |z| <= 0.14 (model units x 1.4)
+                            if abs(dx) < 0.28, abs(dz) < 0.196 {
+                                let m = d[v + 1] - (sw.y + slope * dx)
+                                lowest = min(lowest, m)
+                                if dx * innerSign > 0 { lowInner = min(lowInner, m) } else { lowOuter = min(lowOuter, m) }
+                            }
                             v += 6
                         }
                     }
                     if lowest.isFinite { rep.minMargin = min(rep.minMargin, lowest); rep.maxMargin = max(rep.maxMargin, lowest) }
+                    if abs(th) > 0.2 { rep.endInner = min(rep.endInner, lowInner); rep.endOuter = min(rep.endOuter, lowOuter) }
                 }
                 // nothing of the rider inside the beam or the handle (every skin vertex, the feet and the tail included), every 2nd step
                 if i % 2 == 0 {
@@ -261,12 +324,27 @@ final class SeesawRideTests: XCTestCase {
                                 let beam = -Self.boxDist(p, SIMD3(0, SeesawTuning.beamCentreY, 0), SeesawTuning.beamHalf) * k
                                 rep.beamDepth = max(rep.beamDepth, beam)
                                 for sx: Float in [-1, 1] {
-                                    let post = Self.boxDist(p, SIMD3(sx * SeesawTuning.handleX, 0.5075, 0), SIMD3(0.02, 0.0925, 0.02)) * k
-                                    let bar = Self.boxDist(p, SIMD3(sx * SeesawTuning.handleX, SeesawTuning.handleTopY - 0.018, 0), SIMD3(SeesawTuning.handleBarHalfX, 0.018, SeesawTuning.handleBarHalfZ)) * k
-                                    rep.handleMin = min(rep.handleMin, post, bar)
+                                    // (one box round the whole handle: x 0.169..0.231, y 0.402..0.6347, z +-0.136)
+                                    let hy = (SeesawTuning.handleTopY + SeesawTuning.handleBottomY) / 2, hh = (SeesawTuning.handleTopY - SeesawTuning.handleBottomY) / 2
+                                    rep.handleMin = min(rep.handleMin, Self.boxDist(p, SIMD3(sx * SeesawTuning.handleX, hy, 0), SIMD3(SeesawTuning.handleHalfX, hh, SeesawTuning.handleBarHalfZ)) * k)
                                 }
                             }
                             v += 6
+                        }
+                    }
+                }
+            }
+            if i % 4 == 0 {
+                for (j, r) in lab.rigs.enumerated() where lab.rigs[j].brain.idleState.kind == .decorSit && lab.rigs[j].brain.idleState.bagStage == 2 {
+                    let ff = r.dyn.withUnsafeBufferPointer { p in feats[j].frame { _ in p.baseAddress } }
+                    for v in ff.vertices {
+                        let wx = v.pos.x - centre.x, wy = v.pos.y, wz = v.pos.z - centre.y
+                        let x = wx / k, y = wy / k - SeesawTuning.pivotY, z = wz / k
+                        let p = SIMD3<Float>(x * c0 - y * s0, SeesawTuning.pivotY + x * s0 + y * c0, z)
+                        rep.featureBeam = max(rep.featureBeam, -Self.boxDist(p, SIMD3(0, SeesawTuning.beamCentreY, 0), SeesawTuning.beamHalf) * k)
+                        for sx: Float in [-1, 1] {
+                            let hy = (SeesawTuning.handleTopY + SeesawTuning.handleBottomY) / 2, hh = (SeesawTuning.handleTopY - SeesawTuning.handleBottomY) / 2
+                            rep.featureHandle = min(rep.featureHandle, Self.boxDist(p, SIMD3(sx * SeesawTuning.handleX, hy, 0), SIMD3(SeesawTuning.handleHalfX, hh, SeesawTuning.handleBarHalfZ)) * k)
                         }
                     }
                 }
@@ -287,10 +365,10 @@ final class SeesawRideTests: XCTestCase {
     func check(_ rep: Report, pair: Bool, callAway: Bool) {
         let t = rep.tag
         let hopsOn = rep.hops.filter { $0.kind == "on" }, hopsOff = rep.hops.filter { $0.kind == "off" }
-        MotionLog.write(String(format: "SEESAW %@: finished %@ seated %@ | root-seat max %.2f cm, centroid-seat max %.2f cm | step seated max %.2f cm, hop max %.2f cm, worst first-step excess %.2f cm | dtheta %.4f ddtheta %.5f (call %.5f) | skin vs cushion %.2f..%.2f cm | leash frames %d (max %.1f cm) | beam depth %.2f cm, handle min %.2f cm, riders %.2f m | swings %.1f amp max %.2f | hops on %d off %d, longest %.2f m",
+        MotionLog.write(String(format: "SEESAW %@: finished %@ seated %@ | root-seat max %.2f cm, centroid-seat max %.2f cm | step seated max %.2f cm, hop max %.2f cm, worst first-step excess %.2f cm | dtheta %.4f ddtheta %.5f (call %.5f) | skin vs cushion %.2f..%.2f cm | leash frames %d (max %.1f cm) | beam depth %.2f cm, handle min %.2f cm, riders %.2f m | swings %.1f amp max %.2f | hops on %d off %d, longest %.2f m | tilted-plane margin at swing ends inner %.2f outer %.2f cm | stand clearance %.2f cm | arm %.4f (max %.4f) | wings/ears beam %.2f cm handle %.2f cm",
                               t, rep.finished ? "Y" : "N", rep.seatedAll ? "Y" : "N", rep.maxRootSeat * 100, rep.maxCentroidSeat * 100, rep.maxSeatedStep * 100, rep.maxHopStep * 100, rep.worstJump * 100,
                               rep.maxD, rep.maxDD, rep.maxDDCall, rep.minMargin * 100, rep.maxMargin * 100, rep.leashFrames, rep.leashMax * 100, rep.beamDepth * 100, rep.handleMin * 100, rep.bodyGapMin,
-                              rep.swings, rep.maxAmp, hopsOn.count, hopsOff.count, rep.hops.map { $0.dist }.max() ?? 0))
+                              rep.swings, rep.maxAmp, hopsOn.count, hopsOff.count, rep.hops.map { $0.dist }.max() ?? 0, rep.endInner * 100, rep.endOuter * 100, rep.standClear * 100, rep.armMax, ArmCap.maximum, rep.featureBeam * 100, rep.featureHandle * 100))
         for h in rep.hops { MotionLog.write(String(format: "SEESAW %@:   hop %@ %.2f m, theta at start %.4f, start vs seat %.2f cm, landing error %.2f cm%@", t, h.kind, h.dist, h.thetaAtStart, h.startVsSeat * 100, h.landing * 100, h.forced ? " (called away)" : "")) }
         XCTAssertTrue(rep.seatedAll, "\(t): everybody sat down"); XCTAssertTrue(rep.finished, "\(t): everybody got off")
         // 1
@@ -313,6 +391,10 @@ final class SeesawRideTests: XCTestCase {
         XCTAssertLessThan(rep.beamDepth, 0.01, "\(t): nothing of the rider is more than 1 cm inside the beam")
         XCTAssertGreaterThanOrEqual(rep.handleMin, -0.005, "\(t): nothing of the rider is inside a handle")
         if pair { XCTAssertGreaterThan(rep.bodyGapMin, 1.2, "\(t): the riders' bodies stay apart") }
+        XCTAssertGreaterThanOrEqual(rep.standClear, 0.01, "\(t): standing on the stand spot or just landed, the body is at least 1 cm from the cushion, beam, base and handles")
+        XCTAssertLessThanOrEqual(rep.armMax, ArmCap.maximum * 1.02, "\(t): the arms stay stubby")
+        XCTAssertLessThan(rep.featureBeam, 0.01, "\(t): wings / ears / features not inside the beam")
+        XCTAssertGreaterThanOrEqual(rep.featureHandle, -0.005, "\(t): wings / ears / features not inside a handle")
         // 7
         for h in rep.hops {
             XCTAssertLessThanOrEqual(h.dist, SeesawTuning.maxHop, "\(t): a hop \(h.kind) travels \(h.dist) m (limit 0.8)")

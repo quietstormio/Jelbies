@@ -41,8 +41,8 @@ nonisolated enum SeesawTuning {
     static let swings: ClosedRange<Float> = 5...8
     static let soloHold: ClosedRange<Float> = 7...12
     static let levelTol: Float = 0.01         // "level and still": |theta| below this (and amp exactly 0)
-    /// No hop on or off this piece travels farther than this over the floor (metres).
-    static let maxHop: Float = 0.8
+    /// No hop on or off this piece travels farther than this over the floor (metres). A normal seat hop here is 0.84 m (the stand spot in front of the footprint, like every furniture hop): the rule is about multi-metre hops.
+    static let maxHop: Float = 0.9
     /// The brain's hold timer while on the seesaw: huge on purpose. The idle code sets `hold` to 0 to end a sit (come-here, feeding, a request): that is how a call-away is told.
     static let holdMarker: Float = 1e6
     /// How far the feet slide forward on the cushion when he sits down (world units; the beanbag's is 0.27: the handle is in front of him here).
@@ -57,7 +57,7 @@ nonisolated enum SeesawTuning {
     static let beamCentreY: Float = 0.37
     static let cushionX: Float = 0.62, cushionHalf = SIMD3<Float>(0.35, 0.03, 0.20), cushionCentreY: Float = 0.445          // x 0.27...0.97, flat top y 0.475
     static let seatX: Float = 0.66, seatTopY: Float = 0.475
-    static let handleX: Float = 0.20, handleTopY: Float = 0.636, handleBarHalfZ: Float = 0.136, handleBarHalfX: Float = 0.035
+    static let handleX: Float = 0.20, handleHalfX: Float = 0.031, handleTopY: Float = 0.6347, handleBottomY: Float = 0.402, handleBarHalfZ: Float = 0.136, handleBarHalfX: Float = 0.035
     static let bumperX: Float = 0.96, bumperRadius: Float = 0.10, bumperRest: Float = 0.11
     /// The bumper's apex stays this far under the plank's underside while pressed: the dome's flank is not flat, so a tilted plank touches it a little off its centre line.
     static let bumperClearance: Float = 0.0015
@@ -142,6 +142,7 @@ final class SeesawRide {
         var look: Float = 0
         var prevH: Float = 0, rising = false, topFlag = false
     }
+
     struct Ride {
         var phi: Float = 0
         var ramp = SeesawRamp()
@@ -154,6 +155,8 @@ final class SeesawRide {
         var soloHold: Float = 9
         var order: [Int] = []
         var rng: UInt64 = 0x2545F4914F6CDD1D
+        /// The field's layout version this ride last saw (a rebuilt layout with a fresh animation = a new park visit).
+        var version = -1
         mutating func rnd(_ r: ClosedRange<Float>) -> Float {
             rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17
             return r.lowerBound + (r.upperBound - r.lowerBound) * Float(rng >> 40) / Float(1 << 24)
@@ -217,6 +220,12 @@ final class SeesawRide {
         var r = rides[uid] ?? Ride()
         let occ = Set((field.seatOccupant[uid] ?? [:]).keys)
         r.riders = r.riders.filter { occ.contains($0.key) }
+        // a new park visit: the layout was rebuilt (its version moved) and the piece has a fresh animation (rockT 0: a piece that has been ticking keeps a running clock). A ride left mid-swing
+        // starts level and still, and only when nobody is on the piece or coming to it (never a reset under a rider).
+        if r.version != field.version {
+            if occ.isEmpty, r.version >= 0, field.anim[uid]?.rockT == 0, r.amp != 0 || r.theta != 0 || r.mode != .idle { let rng = r.rng; r = Ride(); r.rng = rng }
+            r.version = field.version
+        }
         for s in occ where r.riders[s] == nil { r.riders[s] = Rider() }
         for s in Array(r.riders.keys) {
             if r.riders[s]!.stage == .seated { r.riders[s]!.seatedT += dt }
