@@ -275,4 +275,91 @@ final class ParkSlideCrowdTests: XCTestCase {
         for seed in UInt64(1)...4 { lines.append(foot(seed: seed)) }
         if let dir = ProcessInfo.processInfo.environment["CROWD_OUT"] { try? lines.joined(separator: "\n").write(toFile: dir + "/foot_lines.txt", atomically: true, encoding: .utf8) }
     }
+
+    // MARK: r4 - a stander inside the slide's zone steps off
+
+    func bState(_ b: BlobBrain, _ f: DecorFoot, _ landing: SIMD2<Float>, _ t: Float) -> String {
+        "[stepoff-t] t=\(String(format: "%.2f", t)) script=\(b.scriptKindName) act=\(b.activity) pending=\(String(describing: b.pending)) interrupt=\(b.interruptScript) pos=(\(String(format: "%.2f,%.2f", b.position.x, b.position.y))) yaw=\(String(format: "%.2f", b.yaw)) feetActive=\(b.feet.active) steerWait=\(String(format: "%.2f", b.steerWait)) walkStallT=\(String(format: "%.2f", b.walkStallT)) scriptT=\(String(format: "%.2f", b.scriptT)) decorIgnore=\(String(describing: b.decorIgnore)) insideDecorT=\(String(format: "%.2f", b.insideDecorT)) insideStuckT=\(String(format: "%.2f", b.insideStuckT)) dLanding=\(String(format: "%.2f", simd_distance(b.position, landing))) dBox=\(String(format: "%.2f", f.distance(b.position))) walkOutFrom=\(String(describing: b.walkOutFrom))"
+    }
+
+    func stepoff(variant: String, seed: UInt64, spotB: SIMD2<Float>, spotC: SIMD2<Float>) -> String {
+        let lab = parkLab(seed: seed)
+        let sl = DecorField.shared.foot(ParkToys.slideUID)!
+        let rigs = lab.rigs
+        let landing = rigs[0].brain.slideLanding(sl)
+        let peer = rigs[0].brain.peerGap
+        place(rigs[1], spotB); place(rigs[2], spotC); place(rigs[0], rigs[0].brain.fixed(SIMD2(-1.6, 4.3)))
+        for _ in 0..<5 { lab.tick(watching: false) }
+        let b = rigs[1].brain
+        var t: Float = 0, tCmd: Float = -1
+        var started = false, walkStarts = 0, prevNone = true
+        var leftAt: Float?
+        var minBox = sl.distance(b.position); let startBox = minBox
+        var stuckRun: Float = 0, stuckMax: Float = 0, lastPos = b.position, lastChk: Float = 0
+        var ph2: Float = 0, hold: Float = 0, t6: Float?, minD: Float = .infinity, endAt: Float?
+        while t < 60 {
+            if t >= 1, !started { started = rigs[0].brain.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner); tCmd = t }
+            lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
+            var isNone = true; if case .none = b.script { isNone = true } else { isNone = false }
+            if prevNone, case .walk = b.script { walkStarts += 1 }
+            prevNone = isNone
+            if started, leftAt == nil, simd_distance(b.position, landing) >= peer { leftAt = t - tCmd }
+            minBox = min(minBox, sl.distance(b.position))
+            if t - lastChk >= 0.5 {
+                var walking = false; if case .walk = b.script { walking = true }
+                if walking, simd_distance(b.position, lastPos) < 0.05 { stuckRun += 0.5; stuckMax = max(stuckMax, stuckRun) } else { stuckRun = 0 }
+                lastPos = b.position; lastChk = t
+            }
+            if Int(t * 60) % 15 == 0 { print(bState(b, sl, landing, t)) }
+            let s = rigs[0].brain.idleState
+            if s.kind == .decorSlide {
+                if s.slideStage == 4, s.phase == 2 { ph2 += 1.0 / 60; hold = s.hold }
+                if s.slideStage == 6, t6 == nil { t6 = t }
+            }
+            if let s6 = t6, t - s6 <= 1.5 { minD = min(minD, [1, 2].map { simd_distance(rigs[0].root, rigs[$0].root) }.min()!) }
+            if t6 != nil, rigs[0].brain.idleState.kind == nil, endAt == nil { endAt = t + 3 }
+            if let e = endAt, t >= e { break }
+        }
+        func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
+        let line = "[stepoff] v=\(variant) seed=\(seed) walkStarts=\(walkStarts) leftFootAt=\(ft(leftAt))s stuckMax=\(String(format: "%.1f", stuckMax))s minBox=\(String(format: "%.2f", minBox)) (start \(String(format: "%.2f", startBox))) A: platformPh2=\(String(format: "%.1f", ph2))s (hold \(String(format: "%.1f", hold))) minD1.5sAfterFloor=\(String(format: "%.2f", minD)) rode=\(t6 != nil) end t=\(String(format: "%.1f", t))"
+        print(line)
+        XCTAssertNotNil(leftAt, "\(line)")
+        if let l = leftAt { XCTAssertLessThanOrEqual(l, 8, "leftFootAt. \(line)") }
+        XCTAssertLessThanOrEqual(walkStarts, 2, "walkStarts. \(line)")
+        XCTAssertLessThanOrEqual(stuckMax, 3, "stuckMax. \(line)")
+        XCTAssertGreaterThanOrEqual(minBox, min(startBox, 0.15) - 0.05, "minBox. \(line)")
+        XCTAssertLessThanOrEqual(ph2, hold + 1.5, "A platformPh2. \(line)")
+        XCTAssertGreaterThanOrEqual(minD, 0.98, "A minD. \(line)")
+        return line
+    }
+
+    func testStanderInsideTheSlideZoneStepsOff() {
+        for seed in UInt64(1)...4 {
+            _ = stepoff(variant: "V1", seed: seed, spotB: SIMD2(2.3, 2.9), spotC: SIMD2(1.58, 2.73))
+            _ = stepoff(variant: "V2", seed: seed, spotB: SIMD2(1.76, 3.23), spotC: SIMD2(0.38, 3.49))
+        }
+    }
+
+    /// Measurement only: the generic walk-out of `decorExitCheck` (no slide ride at all).
+    func testMeasureGenericWalkOut() {
+        for (name, withFriend) in [("alone", false), ("friend", true)] { for seed in UInt64(1)...2 {
+            let lab = parkLab(seed: seed)
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!
+            let rigs = lab.rigs, b = rigs[1].brain
+            place(rigs[0], rigs[0].brain.fixed(SIMD2(-2.6, -1.0))); place(rigs[2], withFriend ? SIMD2(1.58, 2.73) : rigs[0].brain.fixed(SIMD2(-3.0, 0.5))); place(rigs[1], SIMD2(2.3, 2.9))
+            for _ in 0..<5 { lab.tick(watching: false) }
+            let landing = b.slideLanding(sl)
+            var t: Float = 0, walkStarts = 0, prevNone = true
+            var outAt: Float?
+            while t < 20 {
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
+                var isNone = true; if case .none = b.script { isNone = true } else { isNone = false }
+                if prevNone, case .walk = b.script { walkStarts += 1 }
+                prevNone = isNone
+                if outAt == nil, sl.distance(b.position) >= b.footprint * sl.spec.reach + 0.05 { outAt = t }
+                if Int(t * 60) % 15 == 0 { print(bState(b, sl, landing, t)) }
+            }
+            print("[walkout] case=\(name) seed=\(seed) walkStarts=\(walkStarts) outOfZoneAt=\(outAt.map { String(format: "%.1f", $0) } ?? "-")s")
+        } }
+    }
 }
