@@ -318,32 +318,38 @@ final class FootJoinLineTests: XCTestCase {
         let eggEnd = cap.firstVertex.min()!, tail0 = cap.tailFirst
         let restY = (0..<eggEnd).map { rm.rest[3 * $0 + 1] }
         func run(_ name: String, char: Int, seconds: Float, start: (MotionRig) -> Void) {
-            let r = MotionRig(game: true, settle: 0.5)
-            r.skinner.autoBlink = false
-            r.brain.seed = 11
-            r.brain.feature = JellyRoster.feature(char)
-            r.skinner.configureTail(rm); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
-            start(r)
-            var above20: Float = 0, above25: Float = 0, above30: Float = 0, tailMax: Float = 0, landing: Float = 0, airborne = false, landFrame = -1
+            // two rigs in lockstep (same seed, same commands): one skinned with the follow, one without, each skinned once per frame (the tail's own clock advances once per skin)
+            func make() -> MotionRig {
+                let r = MotionRig(game: true, settle: 0.5)
+                r.skinner.autoBlink = false
+                r.brain.seed = 11
+                r.brain.feature = JellyRoster.feature(char)
+                r.skinner.configureTail(rm); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
+                start(r)
+                return r
+            }
+            let ra = make(), rb = make()
+            var above20: Float = 0, above25: Float = 0, above30: Float = 0, tailMax: Float = 0, landing: Float = 0, airborne = false, landFrame = -1, simDiff: Float = 0
             let f0 = Skinner.weldFollow
             defer { Skinner.weldFollow = f0 }
             for frame in 0..<Int(60 * seconds) {
-                r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
-                Skinner.weldFollow = f0; r.render(); let on = r.dyn
-                Skinner.weldFollow = 0; r.render(); let off = r.dyn
+                for r in [ra, rb] { r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }
+                for i in 0..<ra.sim.x.count { simDiff = max(simDiff, abs(ra.sim.x[i] - rb.sim.x[i])) }
+                Skinner.weldFollow = f0; ra.render(); let on = ra.dyn
+                Skinner.weldFollow = 0; rb.render(); let off = rb.dyn
+                Skinner.weldFollow = f0
                 var a20: Float = 0, a25: Float = 0, a30: Float = 0
                 for v in 0..<eggEnd {
                     let d = simd_distance(SIMD3(on[6 * v], on[6 * v + 1], on[6 * v + 2]), SIMD3(off[6 * v], off[6 * v + 1], off[6 * v + 2]))
                     if restY[v] > 0.20 { a20 = max(a20, d) }; if restY[v] > 0.25 { a25 = max(a25, d) }; if restY[v] > 0.30 { a30 = max(a30, d) }
                 }
                 above20 = max(above20, a20); above25 = max(above25, a25); above30 = max(above30, a30)
-                if tail0 >= 0 && r.skinner.tailOn { tailMax = max(tailMax, simd_distance(SIMD3(on[6 * tail0], on[6 * tail0 + 1], on[6 * tail0 + 2]), SIMD3(off[6 * tail0], off[6 * tail0 + 1], off[6 * tail0 + 2]))) }
-                // the landing: the lower foot back on the floor after both were up
-                let low = (0..<2).map { k in r.skinner.beanPos[k].map(\.y).min() ?? 0 }.min() ?? 0
-                if r.skinner.beansActive && low - r.sim.floorY > 0.01 { airborne = true }
-                else if airborne && low - r.sim.floorY < 0.003 { airborne = false; landFrame = frame; landing = max(landing, a20) }
+                if tail0 >= 0 && ra.skinner.tailOn { tailMax = max(tailMax, simd_distance(SIMD3(on[6 * tail0], on[6 * tail0 + 1], on[6 * tail0 + 2]), SIMD3(off[6 * tail0], off[6 * tail0 + 1], off[6 * tail0 + 2]))) }
+                let low = (0..<2).map { k in ra.skinner.beanPos[k].map(\.y).min() ?? 0 }.min() ?? 0
+                if ra.skinner.beansActive && low - ra.sim.floorY > 0.01 { airborne = true }
+                else if airborne && low - ra.sim.floorY < 0.003 { airborne = false; landFrame = frame; landing = max(landing, a20) }
             }
-            print(String(format: "[legweld] follow displacement %@ char %d: egg above rest y 0.20 %.2f cm, 0.25 %.2f cm, 0.30 %.2f cm | Pip tail root %.2f cm | at landing (y>0.20) %.2f cm (landing frame %d)", name, char, above20 * 100, above25 * 100, above30 * 100, tailMax * 100, landing * 100, landFrame))
+            print(String(format: "[legweld] follow displacement %@ char %d: egg above rest y 0.20 %.2f cm, 0.25 %.2f cm, 0.30 %.2f cm | Pip tail root %.2f cm | at landing (y>0.20) %.2f cm (landing frame %d) | lockstep sim difference %.5f", name, char, above20 * 100, above25 * 100, above30 * 100, tailMax * 100, landing * 100, landFrame, simDiff))
         }
         run("walk", char: 0, seconds: 4) { $0.brain.request(.goTo(SIMD2(1.6, 0.4))) }
         run("walk", char: 1, seconds: 4) { $0.brain.request(.goTo(SIMD2(1.6, 0.4))) }
