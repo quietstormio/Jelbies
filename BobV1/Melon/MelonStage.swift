@@ -1190,13 +1190,14 @@ final class MelonController: NSObject, MTKViewDelegate {
             if parkOn, model.care.parkHides(a.id) { ContactField.invalidate(a.id); continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
             if bathHides, a.id != washedID { ContactField.invalidate(a.id); continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
             // the leg weld is off while shoes are worn (the sneaker shell is fitted to the closed pieces): the brain's flag, every frame, so a fitting in the shop, a load or a wash switches it at once
-            let weldOff = a.skinner.weld != nil && (a.brain?.shoesWorn ?? false)
-            a.skinner.weldOff = weldOff; renderer.setWeldOff(weldOff, body: a.id)
+            a.skinner.weldShoes = a.skinner.weld != nil && (a.brain?.shoesWorn ?? false)
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor))
         }
         for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
+        for j in skinJobs { renderer.setWeldOff(j.skinner.weldOffUsed, body: j.id) }          // (the weld at rest only / shoes: draw the index set the skin just used)
+        weldLog(skinJobs.map { ($0.id, $0.skinner) })
         FeatureClip.apply(jobs: skinJobs)          // a limb / ear / tail drawn inside ANOTHER Jelbie goes out to his surface (FeatureClip.swift); also the table the features read
         PerfMeter.end(.skin, pmK)
         if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift). Only the actors skinned this frame (hidden ones keep stale values).
@@ -1446,6 +1447,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         if skinLater {}
         else if hp != nil { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
         else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
+        renderer.setWeldOff(a.skinner.weldOffUsed, body: id)
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
             w.tick(id: id, brain: b, sim: a.sim, outfit: hp?.borrowed == true ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), role: .none, hideAll: false, dt: 1.0 / 60)
@@ -1466,6 +1468,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             let liveSkin = (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway)
             drive.apply(to: a.skinner)
             a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
+            renderer.setWeldOff(a.skinner.weldOffUsed, body: id)
             (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway) = liveSkin
             if let fl = fs.slot(id) { w.setArtOverride(id, fl.fit.hatVariant) }
             fs.syncCarry(id, sim: a.sim)
@@ -2254,4 +2257,19 @@ final class MelonController: NSObject, MTKViewDelegate {
         if s >= durs[demoStep] { demoStep += 1; demoStepT0 = t; demoFresh = false }
     }
     #endif
+
+}
+
+extension MelonController {
+    /// -LegsWeldLog 1: every 10 s, per body, the share of skin updates drawn welded (the weld at rest only).
+    private static let weldLogOn = UserDefaults.standard.integer(forKey: "LegsWeldLog") != 0
+    nonisolated(unsafe) private static var weldLogT = CACurrentMediaTime()
+    func weldLog(_ bodies: [(Int, Skinner)]) {
+        guard Self.weldLogOn, CACurrentMediaTime() - Self.weldLogT > 10 else { return }
+        Self.weldLogT = CACurrentMediaTime()
+        for (id, sk) in bodies where sk.allUpdates > 0 {
+            NSLog("%@", String(format: "[legweld] body %d welded %.0f %% of %d updates (last pose %.1f cm, %.1f deg)", id, 100 * Double(sk.weldedUpdates) / Double(sk.allUpdates), sk.allUpdates, sk.restPose.off * 100, sk.restPose.yaw * 180 / .pi))
+            sk.resetWeldCounters()
+        }
+    }
 }

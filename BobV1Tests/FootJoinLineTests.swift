@@ -217,8 +217,17 @@ final class FootJoinLineTests: XCTestCase {
         return out
     }
     static let foldDumpDir = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/49d32754-b08a-4bfd-999b-3f9f0cada45f/scratchpad/legs/weld/obj3"
-    static func dumpObj(_ r: MotionRig, _ name: String) {
+    static func dumpObj(_ r: MotionRig, _ name: String, index ix: [UInt32]? = nil) {
         let rm = MotionRig.renderMesh
+        if let ix {
+            try? FileManager.default.createDirectory(atPath: foldDumpDir, withIntermediateDirectories: true)
+            var o = ""
+            for v in 0..<rm.vertexCount { o += String(format: "v %.5f %.5f %.5f\n", r.dyn[6 * v], r.dyn[6 * v + 1], r.dyn[6 * v + 2]) }
+            var t = 0
+            while t + 2 < ix.count { o += "f \(ix[t] + 1) \(ix[t + 1] + 1) \(ix[t + 2] + 1)\n"; t += 3 }
+            try? o.write(toFile: foldDumpDir + "/\(name).obj", atomically: true, encoding: .utf8)
+            return
+        }
         try? FileManager.default.createDirectory(atPath: foldDumpDir, withIntermediateDirectories: true)
         var o = ""
         for v in 0..<rm.vertexCount { o += String(format: "v %.5f %.5f %.5f\n", r.dyn[6 * v], r.dyn[6 * v + 1], r.dyn[6 * v + 2]) }
@@ -236,14 +245,16 @@ final class FootJoinLineTests: XCTestCase {
         r.skinner.configureTail(rm); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
         r.brain.prepareBeans(r.sim, r.skinner)          // (the stage's warmFeet: the bean guard's egg triangles, the retract table)
         start(r)
-        var misses = 0, skirtUs: Double = 0, skirtN = 0, minFeet: Float = .infinity
+        var misses = 0, skirtUs: Double = 0, skirtN = 0, minFeet: Float = .infinity, weldedFrames = 0
         var p90: Float = 0, mx: Float = 0, folds = 0, frames = 0, out = 0, guardMax: Float = 0, leashMax: Float = 0
         var worstInfo = "", okOff: Float = 0, okYaw: Float = 0, badOff: Float = .infinity, badYaw: Float = .infinity, allOff: Float = 0, allYaw: Float = 0
         for frame in 0..<Int(60 * seconds) {
             r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
+            r.render()          // (every frame: the weld-at-rest switch runs on the skinner's own clock)
             guard frame % 3 == 0 else { continue }
-            r.render()
             frames += 1
+            if r.skinner.weldOffUsed { continue }          // (the weld at rest only: the old pieces were drawn this frame; folds / seams only where the weld is drawn)
+            weldedFrames += 1
             if r.skinner.beansActive { out += 1 }
             let m = Self.seams(r)
             p90 = max(p90, m.p90); mx = max(mx, m.max)
@@ -267,6 +278,7 @@ final class FootJoinLineTests: XCTestCase {
             guardMax = max(guardMax, simd_length(r.skinner.guardShift[0]), simd_length(r.skinner.guardShift[1]))
             leashMax = max(leashMax, r.skinner.joinLeash[0], r.skinner.joinLeash[1])
         }
+        print("[legweld] \(name) char \(char): weld drawn in \(weldedFrames) of \(frames) sampled frames")
         print(String(format: "[legweld] %@ char %d: frames %d (legs out %d) | seam break p90 %.1f deg, max %.1f deg | folded band triangles %d | guard shift max %.1f cm, leash max %.1f cm", name, char, frames, out, p90, mx, folds, guardMax * 100, leashMax * 100))
         if rm.armCapsule?.weld?.skirt == true { print(String(format: "[legweld] SKIRT %@ char %d: folds %d | landing misses %d | cup-ring seam p90 %.1f deg | skirt %.0f us per update | closest feet %.1f cm", name, char, folds, misses, p90, skirtN > 0 ? skirtUs / Double(skirtN) : 0, minFeet * 100)) }
         print(String(format: "[legweld] %@ legs: max offset %.1f cm, max |yaw| %.0f deg | fold-free up to offset %.1f cm, |yaw| %.0f deg | first fold at offset >= %.1f cm or |yaw| >= %.0f deg | worst frame: %@", name, allOff, allYaw, okOff, okYaw, badOff.isFinite ? badOff : -1, badYaw.isFinite ? badYaw : -1, worstInfo))
@@ -318,6 +330,99 @@ final class FootJoinLineTests: XCTestCase {
         }
     }
 
+    // MARK: the weld at rest only: the switch
+
+    /// Distance (m) from each drawn vertex of surface `a` near the legs to the nearest triangle of surface `b` near the legs; the max both ways.
+    static func surfaceGap(_ da: [Float], _ ia: [UInt32], _ db: [Float], _ ib: [UInt32], centres: [SIMD3<Float>], reach: Float) -> Float {
+        func near(_ p: SIMD3<Float>) -> Bool { centres.contains { simd_distance($0, p) < reach } }
+        func pts(_ d: [Float], _ ix: [UInt32]) -> [SIMD3<Float>] { Set(ix.map { Int($0) }).map { SIMD3(d[6 * $0], d[6 * $0 + 1], d[6 * $0 + 2]) }.filter(near) }
+        func tris(_ d: [Float], _ ix: [UInt32]) -> [(SIMD3<Float>, SIMD3<Float>, SIMD3<Float>)] {
+            var o: [(SIMD3<Float>, SIMD3<Float>, SIMD3<Float>)] = []; var t = 0
+            while t + 2 < ix.count { let p = [0, 1, 2].map { k in SIMD3(d[6 * Int(ix[t + k])], d[6 * Int(ix[t + k]) + 1], d[6 * Int(ix[t + k]) + 2]) }; if near(p[0]) || near(p[1]) || near(p[2]) { o.append((p[0], p[1], p[2])) }; t += 3 }
+            return o
+        }
+        func one(_ P: [SIMD3<Float>], _ T: [(SIMD3<Float>, SIMD3<Float>, SIMD3<Float>)]) -> Float {
+            var worst: Float = 0
+            for p in P {
+                var best = Float.infinity
+                for (a, b, c) in T { best = min(best, simd_distance(p, DrawnGeom.closest(p, a, b, c).0)) }
+                worst = max(worst, best)
+            }
+            return worst
+        }
+        return max(one(pts(da, ia), tris(db, ib)), one(pts(db, ib), tris(da, ia)))
+    }
+
+    func testWeldRestSwitch() throws {
+        let rm = MotionRig.renderMesh
+        guard let cap = rm.armCapsule, let w = cap.weld, !w.skirt, Skinner.weldRestOnly else { throw XCTSkip("weld at rest only is off") }
+        let body = Array(rm.index[0..<(rm.body.first + rm.body.count)])
+        let weldIx = Array(body[0..<w.bandIndexFirst]) + Array(body[w.bandIndexFirst...])
+        var unweldIx = Array(body[0..<w.bandIndexFirst]) + Array(body[(w.bandIndexFirst + w.bandIndexCount)...])
+        unweldIx += Array(rm.index[w.unweldEggFirst..<(w.unweldBeanFirst + w.unweldBeanCount)])
+        let scenarios: [(String, Float, (MotionRig) -> Void)] = [
+            ("stand->walk", 1.5, { $0.brain.request(.goTo(SIMD2(1.6, 0.4))) }),
+            ("stand->hop", 1.5, { $0.brain.startHopPlay(sim: $0.sim) }),
+            ("stand->sit", 1.5, { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sit, r.sim) }),
+            ("walk->stand", 0.2, { $0.brain.request(.goTo($0.root + SIMD2(0, 0.5))) }),
+        ]
+        for (name, delay, start) in scenarios {
+            let r = MotionRig(game: true, settle: 0.5)
+            r.skinner.autoBlink = false; r.brain.seed = 11
+            r.skinner.configureTail(rm); r.brain.skinnerRef = r.skinner; r.brain.prepareBeans(r.sim, r.skinner)
+            var prev = r.skinner.weldOffUsed, events: [String] = [], worst: Float = 0, started = false, lastDyn = r.dyn
+            for frame in 0..<Int(60 * (delay + 5)) {
+                if !started && Float(frame) >= delay * 60 { start(r); started = true }
+                r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
+                r.render()
+                let now = r.skinner.weldOffUsed
+                let drawn = r.dyn
+                if now != prev {
+                    // the drawn frame before the switch against the drawn frame at the switch (one frame of motion included: the real pop the eye sees)
+                    let tagR = name.replacingOccurrences(of: "->", with: "_to_") + "_\(events.count + 1)"
+                    let saved = r.dyn
+                    r.dyn = lastDyn; Self.dumpObj(r, "real_\(tagR)_before", index: prev ? unweldIx : weldIx)
+                    r.dyn = saved; Self.dumpObj(r, "real_\(tagR)_after", index: now ? unweldIx : weldIx)
+                    // the same sim state drawn both ways (the rest envelope paused for the probe): how far the drawn surface jumps at the switch
+                    Skinner.weldRestOnly = false
+                    r.skinner.weldForceOn = true; r.render(); let a = r.dyn
+                    r.skinner.weldForceOn = false; r.skinner.weldOff = true; r.render(); let b = r.dyn
+                    r.skinner.weldOff = false; Skinner.weldRestOnly = true
+                    var cs: [SIMD3<Float>] = []
+                    for sd in w.sides { var c = SIMD3<Float>.zero; for j in 0..<FootBean.around { let v = sd.beanFirst + 1 + FootBean.around * w.ring + j; c += SIMD3(a[6 * v], a[6 * v + 1], a[6 * v + 2]) }; cs.append(c / Float(FootBean.around)) }
+                    let g = Self.surfaceGap(a, weldIx, b, unweldIx, centres: cs, reach: 0.3)
+                    worst = max(worst, g)
+                    events.append(String(format: "%@ at %.2f s: surface jump %.2f cm (pose %.1f cm, %.1f deg)", now ? "weld->pieces" : "pieces->weld", Float(frame) / 60, g * 100, r.skinner.restPose.off * 100, r.skinner.restPose.yaw * 180 / .pi))
+                    let tag = name.replacingOccurrences(of: "->", with: "_to_") + "_\(events.count)"
+                    Skinner.weldRestOnly = false
+                    r.skinner.weldOff = true; r.render(); Self.dumpObj(r, "sw_\(tag)_pieces", index: unweldIx)
+                    r.skinner.weldOff = false; r.skinner.weldForceOn = true; r.render(); Self.dumpObj(r, "sw_\(tag)_weld", index: weldIx)
+                    r.skinner.weldForceOn = false; Skinner.weldRestOnly = true
+                    prev = now
+                }
+                lastDyn = drawn
+            }
+            print("[legweld] SWITCH \(name): \(events.count) switches, worst surface jump \(String(format: "%.2f", worst * 100)) cm | " + events.prefix(6).joined(separator: " ; "))
+        }
+    }
+
+    /// How much of the time a Jelbie is drawn welded in 60 s of the room's normal autonomous idle.
+    func testWeldRestShareInIdle() throws {
+        let rm = MotionRig.renderMesh
+        guard rm.armCapsule?.weld != nil, Skinner.weldRestOnly else { throw XCTSkip("weld at rest only is off") }
+        for char in [0, 4, 6] {
+            let r = MotionRig(game: true, settle: 0.5)
+            r.skinner.autoBlink = false; r.brain.seed = UInt64(7 + char)
+            r.brain.feature = JellyRoster.feature(char)
+            r.skinner.configureTail(rm); r.brain.skinnerRef = r.skinner; r.brain.prepareBeans(r.sim, r.skinner)
+            r.brain.autonomy = true
+            r.skinner.resetWeldCounters()
+            var switches = 0, prev = r.skinner.weldOffUsed
+            for _ in 0..<3600 { r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); r.render(); if r.skinner.weldOffUsed != prev { switches += 1; prev = r.skinner.weldOffUsed } }
+            print(String(format: "[legweld] IDLE char %d: welded %.0f %% of 60 s (%d switches)", char, 100 * Double(r.skinner.weldedUpdates) / Double(max(1, r.skinner.allUpdates)), switches))
+        }
+    }
+
     /// The same moves with the loop also turning with the leg's yaw (-LegsWeldYaw 1): numbers only (no assertion), for the design choice.
     func testWeldSeamsWithYawFollow() throws {
         guard MotionRig.renderMesh.armCapsule?.weld != nil else { throw XCTSkip("legs not welded in this process") }
@@ -333,6 +438,9 @@ final class FootJoinLineTests: XCTestCase {
     func testWeldOffSwitchHasNoStaleState() throws {
         let rm = MotionRig.renderMesh
         guard let w = rm.armCapsule?.weld else { throw XCTSkip("legs not welded in this process") }
+        let ro = Skinner.weldRestOnly
+        Skinner.weldRestOnly = false
+        defer { Skinner.weldRestOnly = ro }
         let r = MotionRig(game: true, settle: 0.5)
         r.skinner.autoBlink = false
         r.brain.seed = 11

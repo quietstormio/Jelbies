@@ -71,7 +71,7 @@ nonisolated enum LegWeld {
     static var buildRows: Int { UserDefaults.standard.object(forKey: "LegsWeldRows") != nil ? max(2, min(16, UserDefaults.standard.integer(forKey: "LegsWeldRows"))) : 12 }
     static var buildMargin: Double { UserDefaults.standard.object(forKey: "LegsWeldMargin") != nil ? UserDefaults.standard.double(forKey: "LegsWeldMargin") : 0.08 }
     /// Front (toe side) margin: the toe stands out in front of the egg, a full margin there climbs the front wall.
-    static var buildFront: Double { UserDefaults.standard.object(forKey: "LegsWeldFront") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFront") : 0.12 }
+    static var buildFront: Double { UserDefaults.standard.object(forKey: "LegsWeldFront") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFront") : 0.08 }
     /// The loops stay this far from the midline (the inner foot walls are only 12 cm apart).
     static var buildInnerX: Double { UserDefaults.standard.object(forKey: "LegsWeldInnerX") != nil ? UserDefaults.standard.double(forKey: "LegsWeldInnerX") : 0.025 }
     static let yMax = 0.40

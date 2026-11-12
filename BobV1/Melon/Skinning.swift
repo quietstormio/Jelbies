@@ -170,10 +170,64 @@ nonisolated final class Skinner {
             guard u1 <= index.count, b1 <= index.count else { return index }
             indexCache = (index.count, Array(index[0..<u0]) + Array(index[u1...]), Array(index[0..<b0]) + Array(index[b1...]))
         }
-        return weldOff ? indexCache!.unweld : indexCache!.weld
+        return effOff ? indexCache!.unweld : indexCache!.weld
     }
     /// Per body: draw this one with the old closed pieces + collar (shoes on: the sneaker shell is fitted to the closed piece). Set each frame by the stage from the brain's shoesWorn.
     var weldOff = false
+    // MARK: weld at rest only (fallback design, -LegsWeldRestOnly 1, default on)
+    /// The weld is drawn only while both legs are within a small envelope of their rest pose and the body is upright; the old closed pieces otherwise.
+    /// Leaves at `restOut` (offset m / yaw rad), comes back only after `restBackTime` s inside `restIn`.
+    nonisolated(unsafe) static var weldRestOnly: Bool = UserDefaults.standard.object(forKey: "LegsWeldRestOnly") != nil ? UserDefaults.standard.integer(forKey: "LegsWeldRestOnly") != 0 : true
+    nonisolated(unsafe) static var restOut: (off: Float, yaw: Float) = (0.005, 2 * .pi / 180), restIn: (off: Float, yaw: Float) = (0.003, 1.5 * .pi / 180)
+    nonisolated(unsafe) static var restBackTime: Float = 0.3
+    /// Shoes worn (the stage sets it from the brain every frame): the old pieces always.
+    var weldShoes = false
+    /// Tests: force the weld drawn (overrides the rest envelope / shoes).
+    var weldForceOn = false
+    /// The weld state the LAST update used (the renderer draws the matching index set: MelonStage copies it after the skin pass).
+    private(set) var weldOffUsed = false
+    private var effOff = false
+    private var restUnwelded = false, restInside: Float = 0
+    /// The cross-fade at the switch (-LegsWeldFade seconds, 0 = none): 0 = the weld band, 1 = the band laid onto the old body surface it replaces (each band vertex is
+    /// embedded at its projection onto the rest body, so its plain skinned position IS the old surface there); the index set switches only at 1.
+    nonisolated(unsafe) static var weldFadeTime: Float = UserDefaults.standard.object(forKey: "LegsWeldFade") != nil ? UserDefaults.standard.float(forKey: "LegsWeldFade") : 0
+    private(set) var weldFade: Float = 0
+    /// Diagnostics: updates drawn welded / all updates (since the last reset), and the leg pose measured at the last update (m, rad).
+    private(set) var weldedUpdates = 0, allUpdates = 0
+    private(set) var restPose: (off: Float, yaw: Float) = (0, 0)
+    func resetWeldCounters() { weldedUpdates = 0; allUpdates = 0 }
+    /// End of an update: where the legs are against their rest pose (the brain's target pieces against the ghosts), and the hysteresis for the next update.
+    private func updateRestEnvelope(_ dyn: UnsafeMutablePointer<Float>) {
+        guard let w = weld, !w.skirt else { return }
+        var off: Float = 0, yaw: Float = 0
+        if beansActive {
+            let A = FootBean.around, R = w.ring
+            for (s, sd) in w.sides.enumerated() where beanPos[s].count == FootBean.vertexCount {
+                var c = SIMD3<Float>.zero, g = SIMD3<Float>.zero
+                for j in 0..<A { c += beanPos[s][1 + A * R + j]; let v = 6 * (sd.ghostFirst + 1 + A * R + j); g += SIMD3(dyn[v], dyn[v + 1], dyn[v + 2]) }
+                c /= Float(A); g /= Float(A)
+                off = max(off, simd_distance(c, g))
+                let a = simd_normalize(c - beanPos[s][0])
+                var u = beanPos[s][1 + A * R] - c; u -= a * simd_dot(u, a)
+                let gv = 6 * (sd.ghostFirst + 1 + A * R)
+                var ug = SIMD3(dyn[gv], dyn[gv + 1], dyn[gv + 2]) - g; ug -= a * simd_dot(ug, a)
+                if simd_length(u) > 1e-6 && simd_length(ug) > 1e-6 {
+                    u = simd_normalize(u); ug = simd_normalize(ug)
+                    yaw = max(yaw, abs(atan2f(simd_dot(simd_cross(ug, u), a), simd_dot(ug, u))))
+                }
+            }
+        }
+        restPose = (off, yaw)
+        let tipped = joinTilt > 0.3
+        if !restUnwelded {
+            if tipped || off > Self.restOut.off || yaw > Self.restOut.yaw { restUnwelded = true; restInside = 0 }
+        } else {
+            if !tipped && off < Self.restIn.off && yaw < Self.restIn.yaw { restInside += frameDt } else { restInside = 0 }
+            if restInside >= Self.restBackTime { restUnwelded = false }
+        }
+        let target: Float = restUnwelded ? 1 : 0
+        if Self.weldFadeTime <= 0 { weldFade = target } else { weldFade += max(-frameDt / Self.weldFadeTime, min(frameDt / Self.weldFadeTime, target - weldFade)) }
+    }
     nonisolated(unsafe) static var weldShoeK0: Float = UserDefaults.standard.object(forKey: "LegsWeldShoeK0") != nil ? UserDefaults.standard.float(forKey: "LegsWeldShoeK0") : 2.2
     /// The weld of this skinner's mesh (nil = old mesh).
     var weld: LegWeldInfo? = nil
@@ -304,9 +358,11 @@ nonisolated final class Skinner {
                 var t1 = rad - n1 * simd_dot(rad, n1); let l1 = simd_length(t1); t1 = l1 > 1e-6 ? t1 / l1 : SIMD3(0, 1, 0)
                 let c = simd_distance(p0, p1)
                 let m0 = t0 * (c * k0), m1 = t1 * (c * k1)
+                let fade = Self.weldRestOnly && !weldForceOn ? weldFade : 0
                 for k in 1...K {
-                    let q = LegWeld.hermiteF(p0, m0, p1, m1, Float(LegWeld.rowS(k, K)))
+                    var q = LegWeld.hermiteF(p0, m0, p1, m1, Float(LegWeld.rowS(k, K)))
                     let o = 6 * (sd.bandFirst + (k - 1) * A + j)
+                    if fade > 0 { q += (SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) - q) * fade }          // (the cross-fade: toward the old surface, the band vertex's own skinned place)
                     dyn[o] = q.x; dyn[o + 1] = q.y; dyn[o + 2] = q.z
                 }
             }
@@ -931,6 +987,7 @@ nonisolated final class Skinner {
     }
 
     func update(x: UnsafePointer<Float>, index fullIndex: [UInt32], into dyn: UnsafeMutablePointer<Float>) {
+        effOff = !weldForceOn && (weldOff || weldShoes || (Self.weldRestOnly && restUnwelded && weldFade >= 1))
         let index = activeIndex(fullIndex)
         skinIdx.withUnsafeBufferPointer { si in
             skinW.withUnsafeBufferPointer { sw in
@@ -982,7 +1039,7 @@ nonisolated final class Skinner {
             for s in 0..<2 {
                 let f = beanFirst[s]
                 // welded: the piece grows out of its ghost (the rest foot, sim-skinned: where the welded leg stands at rest), not out of the inset piece in the belly
-                let g = weldOff ? -1 : (weld.map { $0.sides[s].ghostFirst } ?? -1)
+                let g = (weldOff || weldShoes) ? -1 : (weld.map { $0.sides[s].ghostFirst } ?? -1)          // (the rest-only switch keeps the ghost start both ways: the piece does not jump at the switch)
                 for i in 0..<FootBean.vertexCount {
                     let o = 6 * (f + i), t = beanPos[s][i]
                     let a = g >= 0 ? SIMD3(dyn[6 * (g + i)], dyn[6 * (g + i) + 1], dyn[6 * (g + i) + 2]) : beanStart[s][i]
@@ -991,8 +1048,8 @@ nonisolated final class Skinner {
             }
             let M = retractMatrix
             // (welded: the embedded foot's skin is inside the loops and not drawn; the egg outside them is never pulled in)
-            let notSkin = weld.map { $0.sides.map(\.ghostFirst).min() ?? Int.max } ?? Int.max
-            for (k, vi) in retractVertices.enumerated() where !Skinner.dbgNoRetract && (weld == nil || weldOff || weld!.skirt) && Int(vi) < notSkin {
+            let notSkin = weld.map { $0.sides.map(\.ghostFirst).min() ?? Int.max } ?? Int.max, bandFrom = weld.map { $0.sides.map(\.bandFirst).min() ?? Int.max } ?? Int.max
+            for (k, vi) in retractVertices.enumerated() where !Skinner.dbgNoRetract && (weld == nil || effOff || weld!.skirt || weldFade > 0) && (Int(vi) < notSkin || Int(vi) >= bandFrom) {
                 var d = M * retractRest[k]
                 let sd = retractSide[k]
                 if sd >= 0 { d -= retractShift[Int(sd)] }
@@ -1000,7 +1057,7 @@ nonisolated final class Skinner {
                 dyn[o] += d.x * w; dyn[o + 1] += d.y * w; dyn[o + 2] += d.z * w
             }
         }
-        if !beansActive, !weldOff, let w = weld, w.skirt, !retractVertices.isEmpty, tailLM.count == 3, !Skinner.dbgNoRetract {
+        if !beansActive, !effOff, let w = weld, w.skirt, !retractVertices.isEmpty, tailLM.count == 3, !Skinner.dbgNoRetract {
             // the sliding skirt keeps every egg triangle: at rest too the built-in foot is pulled onto the footless egg (body-rigid frame of the three back landmarks)
             func lm(_ k: Int) -> SIMD3<Float> { let o = 6 * tailLM[k]; return SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) }
             func frame(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> simd_float3x3 {
@@ -1014,7 +1071,7 @@ nonisolated final class Skinner {
                 dyn[o] += d.x * wgt; dyn[o + 1] += d.y * wgt; dyn[o + 2] += d.z * wgt
             }
         }
-        if !beansActive, !weldOff, let w = weld {
+        if !beansActive, !effOff, let w = weld {
             // welded, feet at rest: the piece IS the rest foot, skinned with the body (its ghost)
             for sd in w.sides {
                 for i in 0..<FootBean.vertexCount {
@@ -1064,11 +1121,14 @@ nonisolated final class Skinner {
         if cuddle.active { applyCuddle(dyn) }          // the cuddle jiggle (CuddleJiggle.swift): drawn dent / drag / let-go spring on the BODY skin only
         applyBeanGuard(dyn)
         applyBeanJoin(dyn)
-        if let w = weld, !weldOff { if w.skirt { applySkirt(dyn) } else { applyWeldBand(dyn) } } else { applyBeanCollar(dyn) }
+        if let w = weld, !effOff { if w.skirt { applySkirt(dyn) } else { applyWeldBand(dyn) } } else { applyBeanCollar(dyn) }
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
         blendTailNormals(dyn)
+        weldOffUsed = effOff
+        if weld != nil { allUpdates += 1; if !effOff { weldedUpdates += 1 } }
+        if Self.weldRestOnly { updateRestEnvelope(dyn) }
     }
 
     /// Body skin = the egg's vertices (below the first arm / foot / tail block) without the eyes, glints and brows.
