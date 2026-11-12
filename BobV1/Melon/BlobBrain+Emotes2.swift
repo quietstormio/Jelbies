@@ -332,7 +332,7 @@ extension BlobBrain {
         if e2Opening() { return }
         let a = amplitude
         let t = idleState.phaseT
-        let total: Float = 3.5
+        let total: Float = commanded ? 1.8 : 3.5          // (the Shop trick's cut: 4 steps, then the hop; the Show gives it 3.2 s)
         let env = smooth01(t / 0.35) * (1 - smooth01((t - (total - 0.4)) / 0.4))
         if t < total, !feet.active {
             startStep(peak: 0.095 * a, rate: 2.2, swingFrac: 0.8, inPlace: true)
@@ -360,7 +360,7 @@ extension BlobBrain {
             face(.joyArc, hold: 1.0)
             AudioHub.shared.chirp(jelly: steerID, .happy, x: px)
             treatHaptic("proudStrut.hop")
-            kindCool[.proudStrut] = rand(420, 700)
+            if !commanded { kindCool[.proudStrut] = rand(420, 700) }
         }
     }
 

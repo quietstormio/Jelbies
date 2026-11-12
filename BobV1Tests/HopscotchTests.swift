@@ -217,13 +217,10 @@ final class HopscotchTests: XCTestCase {
             XCTAssertGreaterThan(freeFront, 20, "\(label): there is still floor at the front")
             // the sides of the front row stay reachable
             XCTAssertTrue(rf.free.last.map { !$0.isEmpty } ?? false, "\(label): the front row has free floor")
-            // the slide (where the sandbox was) is off the pond, and the spot behind it where a Jelbie climbs is a body's width off the water
+            // (the pond is gone: its separation asserts are removed; the slide and its climb spot are checked against the placement rules below)
             DecorField.shared.set(ParkToys.placed)
             let slideF = DecorField.shared.foot(ParkToys.slideUID)!, hs = DecorKind.slide.spec(quarter: slideF.quarter).half
-            let nearest = SIMD2(min(max(ParkScenery.pondCentre.x, slideF.centre.x - hs.x), slideF.centre.x + hs.x), min(max(ParkScenery.pondCentre.y, slideF.centre.y - hs.y), slideF.centre.y + hs.y))
-            XCTAssertGreaterThanOrEqual(simd_distance(nearest, ParkScenery.pondCentre) - 1.0, 0.3, "\(label): the slide is at least 0.3 off the pond")
             let climb = slideF.centre + slideF.turned(SIMD2(0, -DecorKind.slideApproach))
-            XCTAssertGreaterThanOrEqual(simd_distance(climb, ParkScenery.pondCentre), 1.5, "\(label): the climb spot is off the water")
             XCTAssertTrue(DecorPlacement.isValid(.slide, at: slideF.centre, among: [], quarter: slideF.quarter), "\(label): the placement rules accept the slide")
             XCTAssertFalse(DecorField.shared.feet.contains { $0.kind == .sandbox }, "\(label): the park has no sandbox")
             // the slide's rider lands inside a free span, with a body clear of the pill

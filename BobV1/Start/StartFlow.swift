@@ -104,6 +104,7 @@ final class StartFlow {
     /// Returns true when it applied.
     @discardableResult
     static func applyNewGame(text: String?, coins: Int, defaults d: UserDefaults = .standard, wipe: (() -> Void)? = nil) -> Bool {
+        if text?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "first" { return applyNewGameFirst(coins: coins, defaults: d, wipe: wipe) }
         guard let text, let ids = JellyRoster.parseRoster(text) else { return false }
         let value = "\(ids.map(String.init).joined(separator: ","))|\(coins)"
         guard d.string(forKey: newGameAppliedKey) != value else { return false }
@@ -119,6 +120,38 @@ final class StartFlow {
         JellyRoster.names = JellyRoster.loadNames(d)
         JellyRoster.current = ids
         return true
+    }
+
+    static let firstCoinsKey = "NewGame.firstCoins"
+
+    /// `-NewGame first`: wipes everything and leaves NO save (no roster, wallet, started flag, store flags, intro-seen), so the next launch is a true first launch (menu without
+    /// Continue, intro, opening story, first picker, first-day beat). The wanted balance waits under `NewGame.firstCoins` until the first Jelbie comes home (`applyPendingFirstCoins`).
+    /// Applied once per coins value (marker "first|coins"). Returns true when it applied.
+    @discardableResult
+    static func applyNewGameFirst(coins: Int, defaults d: UserDefaults = .standard, wipe: (() -> Void)? = nil) -> Bool {
+        let value = "first|\(coins)|intro2"
+        guard d.string(forKey: newGameAppliedKey) != value else { return false }
+        if let wipe { wipe() } else { wipeAll() }
+        d.removeObject(forKey: IntroGate.seenKey); d.set(true, forKey: IntroGate.pendingKey)          // a genuine first launch: the intro plays again (wipeAll keeps "seen" for the player's own Start over)
+        d.set(max(coins, 0), forKey: firstCoinsKey)
+        d.set(value, forKey: newGameAppliedKey)
+        JellyRoster.names = JellyRoster.loadNames(d)          // wipeAll already reset the in-memory roster (names, species, [0]); with a custom wipe this keeps the same state
+        JellyRoster.current = [0]
+        return true
+    }
+
+    /// The first Jelbie is home and the roster saved: the pending `-NewGame first` balance becomes the wallet (DropsWallet.key) and the pending key goes. The store's one-time 40-Drop
+    /// starter is marked given as well, so the room opens with EXACTLY that balance (GameScreen runs `grantStarterIfNeeded` on entering the room). Does nothing unless `first` and pending.
+    /// Returns the applied balance (nil = nothing applied).
+    @discardableResult
+    static func applyPendingFirstCoins(_ pending: Int?, first: Bool, defaults d: UserDefaults = .standard) -> Int? {
+        guard first, let pending else { return nil }
+        d.set(pending, forKey: DropsWallet.key)
+        var store = StoreBook.Saved()
+        store.starterGiven = true; store.unlistedRefunded = true; store.gardenRefunded = true
+        if let data = try? JSONEncoder().encode(store) { d.set(data, forKey: StoreBook.key) }
+        d.removeObject(forKey: firstCoinsKey)
+        return pending
     }
 
     // MARK: moves
@@ -172,6 +205,7 @@ final class StartFlow {
     /// The species map is written by `allocateInstance` before the roster is saved, so the new id is valid when the roster is read back.
     func bringHome(species s: Int, name: String, variant: JellyVariant? = nil, traits: JellyTraits? = nil) {
         let first = phase == .adopt(.first)
+        let pendingCoins = DevArgs.enabled ? UserDefaults.standard.object(forKey: Self.firstCoinsKey) as? Int : nil          // `-NewGame first`: read before the wipe below
         if first { oldSaveSnapshot = nil; if Self.hasSave() { Self.wipeAll() } }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
         var ids = first ? [] : JellyRoster.savedIDs()
         guard ids.count < JellyRoster.maxCount else { enterGame(); return }          // the room is full (the picker does not let it get here)
@@ -184,6 +218,7 @@ final class StartFlow {
         JellyRoster.save(ids)
         JellyRoster.setName(id, name)
         UserDefaults.standard.set(true, forKey: Self.startedKey)
+        if DevArgs.enabled { Self.applyPendingFirstCoins(pendingCoins, first: first) }          // the room's wallet is created after this (it reads the key in init), so it shows the balance at once
         GameCare.newcomerPending = true; GameCare.newcomerWithOthers = ids.count > 1          // (others at home: the curtain is held until he is off-screen)
         if first { welcome = nil; phase = .firstDay(id, name, false); return }          // the first day at home says "Welcome home" itself
         welcome = JellyRoster.nameOf(id)

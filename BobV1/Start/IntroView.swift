@@ -39,9 +39,17 @@ enum IntroGate {
         #if targetEnvironment(simulator)
         if d.integer(forKey: "SkipIntro") != 0 { return false }          // capture aid (simulator only): -SkipIntro 1
         #endif
-        return !d.bool(forKey: seenKey) && !StartFlow.hasSave(d)          // the full intro plays on the very first launch only (a player with a save has seen it)
+        let show = (d.bool(forKey: pendingKey) || !d.bool(forKey: seenKey)) && !StartFlow.hasSave(d)          // the full intro plays on the very first launch only (a player with a save has seen it)
+        if show { shownThisProcess = true }
+        return show
     }
-    static func markSeen(_ d: UserDefaults = .standard) { d.set(true, forKey: seenKey) }
+    /// `-NewGame first` asks for the full intro on the NEXT launch: set by the reset, cleared only once the full intro has really been shown (the short logo of the reset launch does not count).
+    static let pendingKey = "NewGame.firstIntro"
+    nonisolated(unsafe) static var shownThisProcess = false
+    static func markSeen(_ d: UserDefaults = .standard) {
+        if d.bool(forKey: pendingKey), !shownThisProcess { return }
+        d.set(true, forKey: seenKey); d.removeObject(forKey: pendingKey)
+    }
 }
 
 struct IntroView: View {

@@ -65,4 +65,22 @@ final class GuestArrivalTests: XCTestCase {
         XCTAssertFalse(book.arrival.active, "the end of the visit clears the arrival")
         XCTAssertEqual(book.arrivalCard, .hidden)
     }
+
+    /// 2026-11-11: a friend comes in from, and goes out through, the screen's LEFT edge in every window: the point is left of the visible floor, and the body's RIGHT edge
+    /// (x + 0.9, projected through the real camera) is left of pixel 0, in portrait and landscape, phone and tablet.
+    func testEntryAndExitAreOffTheLeftEdgeInEveryWindow() {
+        defer { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+        for aspect: Float in [440.0 / 956.0, 0.75, 1.33, 2.17] {
+            GameCamera.configureRoom(count: 1)
+            _ = GameCamera.camera(aspect: aspect)
+            let size = CGSize(width: CGFloat(1000 * aspect), height: 1000)
+            for z: Float in [-1.0, 0.5, 2.4] {
+                let p = GuestEdge.offLeft(z: z, aspect: aspect)
+                XCTAssertLessThan(p.x, -GameCamera.visibleHalfWidthAtBody(z: z, aspect: aspect), "left of the visible floor at aspect \(aspect) z \(z)")
+                if let s = ThoughtBubbleView.project(SIMD3(p.x + 0.9, 0.7, z), size: size, focus: 0) {
+                    XCTAssertLessThan(s.x, 0, "the body's right edge is off the left of the screen at aspect \(aspect) z \(z): \(s.x)")
+                } else { XCTFail("not projectable at aspect \(aspect)") }
+            }
+        }
+    }
 }

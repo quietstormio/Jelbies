@@ -15,8 +15,10 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
     case sit, jacks, run, flip, look, come
     /// Store trick pages: locked until the page is bought (StoreBook), then taught like the others.
     case spin, hop
+    /// Shop tricks that reuse or add a move (stage 1 of the trick plan: show off, strut, sing).
+    case showOff, strut, sing
 
-    var isStarter: Bool { switch self { case .spin, .hop: return false; default: return true } }
+    var isStarter: Bool { switch self { case .sit, .jacks, .run, .flip, .look, .come: return true; default: return false } }
     static var starters: [VoiceTrick] { allCases.filter(\.isStarter) }
 
     /// Our UI name (the trick book), never the player's word.
@@ -25,6 +27,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .sit: return "Sit"; case .jacks: return "Jumping jacks"; case .run: return "Run"
         case .flip: return "Flip"; case .look: return "Look"; case .come: return "Come"
         case .spin: return "Spin"; case .hop: return "Hop"
+        case .showOff: return "Show off"; case .strut: return "Strut"; case .sing: return "Sing"
         }
     }
     /// The words that command this trick (exact match, short commands). A trick the Jelbie owns is commanded with these; a word taught in the old
@@ -34,6 +37,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .sit: return ["sit"]; case .jacks: return ["jump", "jacks", "jumping jacks"]; case .run: return ["run"]
         case .flip: return ["flip"]; case .look: return ["look"]; case .come: return []
         case .spin: return ["spin"]; case .hop: return ["hop"]
+        case .showOff: return ["show off", "showoff", "show it off"]; case .strut: return ["strut"]; case .sing: return ["sing", "sing a song"]
         }
     }
     /// A word to suggest, in the tip text only.
@@ -42,6 +46,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .sit: return "sit"; case .jacks: return "jump"; case .run: return "run"
         case .flip: return "flip"; case .look: return "look"; case .come: return "come"
         case .spin: return "spin"; case .hop: return "hop"
+        case .showOff: return "show off"; case .strut: return "strut"; case .sing: return "sing"
         }
     }
 }
@@ -239,9 +244,18 @@ final class VoiceTraining {
 
     /// The known trick a short command names by its plain word, if any (a taught word is matched separately).
     private func plainTrick(in rest: [String], known: Bool) -> VoiceTrick? {
-        guard rest.count <= 3, Set(rest).isDisjoint(with: VoiceTuning.placeWords) else { return nil }
+        guard rest.count <= 3 else { return nil }
         let cands = Set(VoiceMatcher.candidates(rest))
-        return VoiceTrick.allCases.first { $0 != .come && knows($0) == known && $0.commandWords.contains { cands.contains($0) } }
+        // longest matched command word wins ("show off" over a shorter word); ties keep declaration order. A place word ("hop ON the couch") spoils a match
+        // unless it is part of the command word itself ("show OFF").
+        var best: (t: VoiceTrick, len: Int)?
+        for t in VoiceTrick.allCases where t != .come && knows(t) == known {
+            for w in t.commandWords where cands.contains(w) {
+                guard Set(rest).subtracting(w.split(separator: " ").map(String.init)).isDisjoint(with: VoiceTuning.placeWords) else { continue }
+                if w.count > (best?.len ?? 0) { best = (t, w.count) }
+            }
+        }
+        return best?.t
     }
 
     /// The highest listen-session id this book has handed out (the coordinator keeps ids unique ACROSS books).
