@@ -326,7 +326,7 @@ nonisolated final class Skinner {
     nonisolated(unsafe) static var joinBlend = true          // master switch (simulator launch argument -FootJoinBlend 0 = off, for before / after stills)
     nonisolated(unsafe) static var joinBlendNormal = true, joinBlendMat = true, joinBlendRest = true
     /// How far outside the piece's outline (m) the skin's weight falls to 0; how far below the crossing (m, in egg height) the piece's weight falls to 0; the egg height of the crossing.
-    nonisolated(unsafe) static var joinBandSkin: Float = 0.07, joinBandBean: Float = 0.07, joinCrossE: Float = 0.075
+    nonisolated(unsafe) static var joinBandSkin: Float = 0.11, joinBandBean: Float = 0.13, joinCrossE: Float = 0.10
     /// The bean ring whose rest coordinate the skin near the crossing follows.
     nonisolated(unsafe) static var joinRestRing = 10
     private var bandV: [Int32] = [], bandSide: [Int8] = [], bandDD: [Float] = [], bandJ: [Int32] = [], bandT: [Float] = []

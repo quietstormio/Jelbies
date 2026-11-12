@@ -18,9 +18,34 @@ import simd
 @MainActor
 final class FootJoinLineTests: XCTestCase {
     static let maxSawtooth: Float = 0.008          // m
-    static let minCrossingAngle: Float = 25         // degrees, 10th percentile
+    static let maxNormalBreakP90: Float = 8         // degrees: the shading-normal break across the crossing, 90th percentile (the old crease requirement of 25 degrees is gone: the join must not be a crease)
+    static let maxShadowStep: Float = 0.03          // the baked-shadow (mat) step across the crossing
 
-    struct Line { var saw: Float; var p10: Float; var points: Int }
+    struct Line { var saw: Float; var p10: Float; var points: Int; var breaks: [Float] = []; var matStep: Float = 0 }
+
+
+    /// Closest point on triangle (a, b, c) to p, with its barycentric weights (Ericson, Real-Time Collision Detection).
+    static func closest(_ p: SIMD3<Float>, _ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> (SIMD3<Float>, SIMD3<Float>) {
+        let ab = b - a, ac = c - a, ap = p - a
+        let d1 = simd_dot(ab, ap), d2 = simd_dot(ac, ap)
+        if d1 <= 0 && d2 <= 0 { return (a, SIMD3(1, 0, 0)) }
+        let bp = p - b, d3 = simd_dot(ab, bp), d4 = simd_dot(ac, bp)
+        if d3 >= 0 && d4 <= d3 { return (b, SIMD3(0, 1, 0)) }
+        let vc = d1 * d4 - d3 * d2
+        if vc <= 0 && d1 >= 0 && d3 <= 0 { let v = d1 / (d1 - d3); return (a + ab * v, SIMD3(1 - v, v, 0)) }
+        let cp = p - c, d5 = simd_dot(ab, cp), d6 = simd_dot(ac, cp)
+        if d6 >= 0 && d5 <= d6 { return (c, SIMD3(0, 0, 1)) }
+        let vb = d5 * d2 - d1 * d6
+        if vb <= 0 && d2 >= 0 && d6 <= 0 { let w = d2 / (d2 - d6); return (a + ac * w, SIMD3(1 - w, 0, w)) }
+        let va = d3 * d6 - d5 * d4
+        if va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0 { let w = (d4 - d3) / ((d4 - d3) + (d5 - d6)); return (b + (c - b) * w, SIMD3(0, 1 - w, w)) }
+        let den = 1 / (va + vb + vc), v = vb * den, w = vc * den
+        return (a + ab * v + ac * w, SIMD3(1 - v - w, v, w))
+    }
+
+    /// The shadow value each vertex is drawn with this frame: baked, or moved by the join writes of the frame just rendered (set by `shading`; empty elsewhere).
+    static var joinMat: [Int32: Float] = [:]
+    static func effMat(_ v: Int) -> Float { joinMat[Int32(v)] ?? MotionRig.renderMesh.mat[v] }
 
     static func line(_ r: MotionRig, _ s: Int) -> Line {
         let rm = MotionRig.renderMesh
@@ -60,6 +85,7 @@ final class FootJoinLineTests: XCTestCase {
         let bins = 60
         var binH = [Float](repeating: -.infinity, count: bins), binA = [Float](repeating: 0, count: bins)
         var seen = Set<Int>(), t = 0
+        var breaksAll: [Float] = [], matStepMax: Float = 0
         let limit = rm.armCapsule?.indexFirst ?? rm.index.count
         while t < limit {
             let tri = [Int(rm.index[t]), Int(rm.index[t + 1]), Int(rm.index[t + 2])]; t += 3
@@ -78,6 +104,22 @@ final class FootJoinLineTests: XCTestCase {
                 var bestD = Float.infinity, bn = SIMD3<Float>(0, 1, 0)
                 for i in 0..<nB { let dd = simd_distance_squared(P(f + i), x); if dd < bestD { bestD = dd; bn = N(f + i) } }
                 let ang = acosf(min(1, abs(simd_dot(simd_normalize(bn), fn)))) * 180 / .pi
+                // shading-normal break: the skin edge's interpolated vertex normal against the piece triangle's interpolated vertex normal at the crossing point
+                let ea = P(i0 ? v1 : v0), eb = P(i0 ? v0 : v1), tp = simd_length(eb - ea) > 1e-7 ? min(1, max(0, simd_dot(x - ea, eb - ea) / simd_length_squared(eb - ea))) : 0
+                let ns = simd_normalize(N(i0 ? v1 : v0) * (1 - tp) + N(i0 ? v0 : v1) * tp)
+                var bestTri = 0, bestQ = Float.infinity, bestW = SIMD3<Float>(1, 0, 0)
+                var q = 0
+                while q < bt.count {
+                    let (cp, w) = Self.closest(x, P(Int(bt[q])), P(Int(bt[q + 1])), P(Int(bt[q + 2])))
+                    let dq = simd_distance_squared(cp, x)
+                    if dq < bestQ { bestQ = dq; bestTri = q; bestW = w }
+                    q += 3
+                }
+                let nb = simd_normalize(N(Int(bt[bestTri])) * bestW.x + N(Int(bt[bestTri + 1])) * bestW.y + N(Int(bt[bestTri + 2])) * bestW.z)
+                let brk = acosf(min(1, max(-1, simd_dot(ns, nb)))) * 180 / .pi
+                let sm = Self.effMat(i0 ? v1 : v0) * (1 - tp) + Self.effMat(i0 ? v0 : v1) * tp
+                let bm = Self.effMat(Int(bt[bestTri])) * bestW.x + Self.effMat(Int(bt[bestTri + 1])) * bestW.y + Self.effMat(Int(bt[bestTri + 2])) * bestW.z
+                breaksAll.append(brk); matStepMax = max(matStepMax, abs(sm - bm))
                 let th = atan2f(simd_dot(u, e2), simd_dot(u, e1)), h = simd_dot(u, a)
                 let b = min(bins - 1, Int((th + .pi) / (2 * .pi) * Float(bins)))
                 if h > binH[b] { binH[b] = h; binA[b] = ang }
@@ -93,11 +135,12 @@ final class FootJoinLineTests: XCTestCase {
             saw = max(saw, min(abs(binH[b] - l), abs(binH[b] - r)))
         }
         angs.sort()
-        return Line(saw: saw, p10: angs.isEmpty ? 90 : angs[angs.count / 10], points: angs.count)
+        return Line(saw: saw, p10: angs.isEmpty ? 90 : angs[angs.count / 10], points: angs.count, breaks: breaksAll, matStep: matStepMax)
     }
 
     func run(_ name: String, char: Int, start: (MotionRig) -> Void) -> (saw: Float, p10: Float, frames: Int) {
         let rm = MotionRig.renderMesh
+        Self.joinMat = [:]
         let r = MotionRig(game: true, settle: 0.5)
         r.skinner.autoBlink = false
         r.brain.seed = 11          // (deterministic: the look's direction and the idles' choices)
@@ -131,7 +174,6 @@ final class FootJoinLineTests: XCTestCase {
                 guard m.frames > 0 else { continue }
                 measured += 1
                 XCTAssertLessThanOrEqual(m.saw, Self.maxSawtooth, "\(name) char \(char): the body / foot join is a sawtooth (\(m.saw * 100) cm)")
-                XCTAssertGreaterThanOrEqual(m.p10, Self.minCrossingAngle, "\(name) char \(char): the skin meets the foot piece nearly tangentially (\(m.p10) deg): a ragged join")
             }
         }
         XCTAssertGreaterThanOrEqual(measured, 4, "too few moves put the foot pieces out")
@@ -143,6 +185,63 @@ final class FootJoinLineTests: XCTestCase {
         defer { Skinner.collarCrossing = true }
         let m = run("look (old collar)", char: 0) { r in r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim) }
         XCTAssertGreaterThan(m.frames, 0)
-        XCTAssertTrue(m.saw > Self.maxSawtooth || m.p10 < Self.minCrossingAngle, "the old collar's sawtooth join was not detected (\(m.saw * 100) cm, \(m.p10) deg)")
+        XCTAssertTrue(m.saw > Self.maxSawtooth, "the old collar's sawtooth join was not detected (\(m.saw * 100) cm)")
+    }
+    // MARK: shading continuity (2026-11-11, the user's third complaint: "the legs are separate ... not ready for production")
+    /// The moves that put the pieces out, per character, over EVERY frame the pieces are out (transitions and landings included, not only planted frames).
+    static let moves: [(String, (MotionRig) -> Void)] = [
+        ("look", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim) }),
+        ("sway", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sway, r.sim) }),
+        ("hop", { r in r.brain.startHopPlay(sim: r.sim) }),
+        ("flapHop", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.flapHop, r.sim) }),
+        ("turn", { r in r.brain.startTurn(to: r.brain.yaw + 2.0, sim: r.sim) }),
+    ]
+
+    /// (90th percentile normal break in degrees, largest shadow step, crossings measured, frames) over a move of a character.
+    func shading(_ name: String, char: Int, start: (MotionRig) -> Void) -> (p90: Float, step: Float, n: Int, frames: Int) {
+        let rm = MotionRig.renderMesh
+        let r = MotionRig(game: true, settle: 0.5)
+        r.skinner.autoBlink = false
+        r.brain.seed = 11
+        r.brain.feature = JellyRoster.feature(char)
+        r.skinner.configureTail(rm); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
+        start(r)
+        var breaks: [Float] = [], step: Float = 0, frames = 0
+        for frame in 0..<(60 * 3) {
+            r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
+            guard frame % 5 == 0, r.skinner.beansActive, r.skinner.beanBlend > 0.9 else { continue }
+            r.render()
+            frames += 1
+            Self.joinMat = [:]
+            if let w = r.skinner.takeJoinWrites() { for (k, v) in w.v.enumerated() { let b = rm.mat[Int(v)]; Self.joinMat[v] = b + (w.matT[k] - b) * w.matW[k] } }
+            for s in 0..<2 { let l = Self.line(r, s); if l.points >= 10 { breaks += l.breaks; step = max(step, l.matStep) } }
+        }
+        breaks.sort()
+        let p90 = breaks.isEmpty ? 0 : breaks[min(breaks.count - 1, breaks.count * 9 / 10)]
+        print(String(format: "[footjoinshade] %@ char %d (blend %@): frames %d crossings %d | normal break p90 %.1f deg | shadow step %.3f", name, char, Skinner.joinBlend ? "on" : "off", frames, breaks.count, p90, step))
+        return (p90, step, breaks.count, frames)
+    }
+
+    func testShadingIsContinuousAcrossTheJoinWhileLegsAreOut() {
+        var measured = 0
+        for (name, start) in Self.moves {
+            for char in 0..<7 {
+                let m = shading(name, char: char, start: start)
+                guard m.frames > 0, m.n >= 10 else { continue }
+                measured += 1
+                XCTAssertLessThanOrEqual(m.p90, Self.maxNormalBreakP90, "\(name) char \(char): the shading normal breaks \(m.p90) deg across the skin / foot crossing (p90)")
+                XCTAssertLessThanOrEqual(m.step, Self.maxShadowStep, "\(name) char \(char): the baked shadow steps \(m.step) across the crossing")
+            }
+        }
+        XCTAssertGreaterThanOrEqual(measured, 20, "too few (move, character) pairs put the pieces out")
+    }
+
+    /// The measure itself: with the blend off the normal break must be caught (else the test could not see the defect it guards).
+    func testNormalBreakIsCaughtWithTheBlendOff() {
+        Skinner.joinBlend = false
+        defer { Skinner.joinBlend = true }
+        let m = shading("look (blend off)", char: 0) { r in r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim) }
+        XCTAssertGreaterThan(m.n, 10)
+        XCTAssertGreaterThan(m.p90, Self.maxNormalBreakP90, "the unblended join's normal break was not detected (\(m.p90) deg)")
     }
 }
