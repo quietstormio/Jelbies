@@ -86,7 +86,7 @@ extension BlobBrain {
             if !celebrating {
                 let goal = hopscotchWorld(f, HopscotchCourt.squares[t])
                 // (a friend who just stands on the square gets a few seconds to move on; a body only half over it is no reason to stop the game)
-                let clear: Float = phT > 4 ? 0.6 : HopscotchTuning.landingClear
+                let clear: Float = phT > 4 ? 0.9 : HopscotchTuning.landingClear
                 let free = !steerPeers().contains { $0.id != me && simd_distance($0.pos, goal) < clear }
                 guard line.mayHop(uid, me, to: t), free else {
                     if phT > HopscotchTuning.patience { idleFinish(skinner) }

@@ -15,8 +15,8 @@ nonisolated enum HopscotchTuning {
     static let joinRange: ClosedRange<Float> = 0.30...0.40
     /// Most Jelbies in one line.
     static let maxPlayers = 4
-    /// A follower may hop to square `s` only when the one ahead has landed on square `s + spacingAhead` or later (squares are ~0.85 apart: 2 = 1.7 u, a body is ~1.0 across).
-    static let spacingAhead = 2
+    /// A follower may hop to square `s` only when the one ahead has landed on square `s + spacingAhead` or later (squares are ~0.85 apart: 3 = 2.55 u, a body is ~1.0 across).
+    static let spacingAhead = 3
     /// ... and he may step up to the start only when the one ahead is on at least this square (0-based): "a couple of squares in".
     static let startAfter = 2
     /// Least distance (u) between a hopper's landing spot and any other Jelbie.
