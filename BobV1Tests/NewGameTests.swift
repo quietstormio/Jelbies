@@ -86,7 +86,7 @@ final class NewGameFirstTests: XCTestCase {
         XCTAssertFalse(StartFlow.hasSave(d))
         XCTAssertFalse(d.bool(forKey: IntroGate.seenKey))
         XCTAssertEqual(d.object(forKey: StartFlow.firstCoinsKey) as? Int, 10_000)
-        XCTAssertEqual(d.string(forKey: StartFlow.newGameAppliedKey), "first|10000|intro")
+        XCTAssertEqual(d.string(forKey: StartFlow.newGameAppliedKey), "first|10000|intro2")
         XCTAssertEqual(JellyRoster.current, [0])
         d.set(5, forKey: StartFlow.firstCoinsKey)
         XCTAssertFalse(StartFlow.applyNewGame(text: "first", coins: 10_000, defaults: d, wipe: wipe))
