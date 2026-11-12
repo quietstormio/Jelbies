@@ -63,7 +63,7 @@ nonisolated struct WearHide: OptionSet, Sendable {
     static let eating = WearHide(rawValue: 2)
     /// Off in the wash scene (like the shoes). EVERYTHING.
     static let wash = WearHide(rawValue: 4)
-    /// Off during flips and rolls where it would clip the floor or itself (tall hats, ears, cape, backpack).
+    /// Candidates for hiding during flips (tall hats, ears, cape, backpack). NO EFFECT since hold-wear-r1: `WornSet.hidden` also asks `WornSet.hidesWhileTipped`, which is false for every piece (clothes stay on held / flipped / thrown).
     static let flip = WearHide(rawValue: 8)
 }
 

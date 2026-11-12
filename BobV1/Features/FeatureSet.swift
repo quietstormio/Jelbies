@@ -130,7 +130,7 @@ final class FeatureSet {
     static func hidden(_ f: JellyFeature, _ b: BlobBrain) -> Bool {
         switch f {
         case .ears where TeddyEarsVariant.active.inBody: return false          // body-mesh ears + pom ride the body through flips; only the pom lifts off the floor asleep (tick)
-        case .spines, .wings, .ears: return WornSet.sleepHides(b) || WornSet.flipping(b)          // Teddy's ears + pom lie on the floor then, like the wings
+        case .spines, .wings, .ears: return WornSet.sleepHides(b) || (WornSet.flipping(b) && WornSet.hidesWhileTipped(f))          // asleep only (hidesWhileTipped is false: the features ride the body's full rotation, held / flipped / thrown)
         default: return false
         }
     }
