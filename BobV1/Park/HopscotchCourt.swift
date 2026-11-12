@@ -40,14 +40,14 @@ nonisolated enum HopscotchCourt {
     /// Half extents of the slab (x, z).
     static let slabHalf = SIMD2<Float>(double + cell / 2 + 0.14, 2.5 * pitch + cell / 2 + 0.14)
     /// Where the line forms: slot 0 is the start, behind square 1; slot 1 is beside it to the right, slots 2 and 3 a row further back in a fan (all `queueGap` apart, the park keeps
-    /// bodies 1.4 apart; the +0.1 on slot 3 keeps it out of the seesaw's zone).
+    /// bodies 1.4 apart; slot 3 is the far end of that row, to the right of slot 2, clear of the seesaw (park-room-r2: seesaw at (-3.2, -3.2)) and of the slide's approach).
     static func queueSpot(slot: Int) -> SIMD2<Float> {
         let g = HopscotchTuning.queueGap, z0 = squares[0].y - 0.9
         switch slot {
         case ...0: return SIMD2(0, z0)
         case 1: return SIMD2(g, z0)
         case 2: return SIMD2(1.5 * g, z0 - 0.866 * g)
-        default: return SIMD2(0.5 * g + 0.1, z0 - 0.866 * g)
+        default: return SIMD2(2.5 * g, z0 - 0.866 * g)
         }
     }
     /// Where the finished hopper walks: past the last square, to the side.

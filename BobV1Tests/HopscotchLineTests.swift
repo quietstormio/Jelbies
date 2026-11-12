@@ -51,7 +51,7 @@ final class HopscotchLineTests: XCTestCase {
             var trace = [String](repeating: "", count: 4), maxPlayers = 0, stuckNote = [Bool](repeating: false, count: 4)
             let court = DecorField.shared.foot(uid)!
             var seqs = [[Int]](repeating: [], count: 4), entries = [Int](repeating: 0, count: 4), prevStage = [Int](repeating: -9, count: 4)
-            var minGap = Float.infinity, finishedAt: Float = -1, allLanded: Float = -1
+            var minGap = Float.infinity, finishedAt: Float = -1, allLanded: Float = -1, minWhere = ""
             for i in 0..<(60 * 90) {
                 lab.tick(watching: false); DecorField.shared.tick(dt: dt)
                 maxPlayers = max(maxPlayers, line.players(uid).count)
@@ -70,13 +70,20 @@ final class HopscotchLineTests: XCTestCase {
                         trace[a] += " [STUCK at t=\(Int(Float(i) / 60)) step \(b.idleState.slideStep) goal \(goal): " + (0..<4).map { String(format: "#%d %.2f", $0, simd_distance(lab.snapshot[$0].pos, goal)) }.joined(separator: ", ") + "]"
                     }
                     prevStage[a] = stage
-                    for c in (a + 1)..<4 where c < 4 { minGap = min(minGap, simd_distance(lab.snapshot[a].pos, lab.snapshot[c].pos)) }
+                    for c in (a + 1)..<4 where c < 4 {
+                        let g = simd_distance(lab.snapshot[a].pos, lab.snapshot[c].pos)
+                        if g < minGap {
+                            minGap = g
+                            func st(_ k: Int) -> String { let bb = lab.rigs[k].brain; return "#\(k) kind \(bb.idleState.kind.map { "\($0)" } ?? "-") stage \(bb.idleState.slideStage) step \(bb.idleState.slideStep) act \(bb.activity) poseW \(bb.poseW) snap \(lab.snapshot[k].pos) brainPos \(bb.position) sq \(line.square(uid, k))" }
+                            minWhere = "t=\(Float(i) / 60) \(st(a)) | \(st(c))"
+                        }
+                    }
                 }
                 // all four have landed 1...8: nobody starts a second lap from here, they walk off and the line must empty
                 if allLanded < 0, seqs.allSatisfy({ $0.count == 8 }) { allLanded = Float(i) / 60; for r in lab.rigs { r.brain.autonomy = false; r.brain.idleForced = false } }
                 if allLanded >= 0, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { finishedAt = Float(i) / 60; break }
             }
-            print("[hopline] seed \(seed): started \(started) all four landed at \(allLanded) s, line empty at \(finishedAt) s, min centre gap \(minGap), stage-4 entries \(entries), seqs \(seqs.map { $0.count }), most in the line \(maxPlayers)\n  traces (stage@sim-s r<retries>): \(trace)")
+            print("[hopline] seed \(seed): started \(started) closest pair at \(minWhere); all four landed at \(allLanded) s, line empty at \(finishedAt) s, min centre gap \(minGap), stage-4 entries \(entries), seqs \(seqs.map { $0.count }), most in the line \(maxPlayers)\n  traces (stage@sim-s r<retries>): \(trace)")
             XCTAssertTrue(started.allSatisfy { $0 }, "seed \(seed): the leader started")
             XCTAssertEqual(maxPlayers, 4, "seed \(seed): all four joined the line")
             XCTAssertGreaterThan(finishedAt, 0, "seed \(seed): the line is done within 90 sim-s; line \(line.players(uid).map { "\($0.id):slot \($0.slot) sq \($0.sq)" }) kinds \(lab.rigs.map { $0.brain.idleState.kind.map { "\($0)" } ?? "-" }) stages \(lab.rigs.map { $0.brain.idleState.slideStage })")
@@ -155,7 +162,8 @@ final class HopscotchLineTests: XCTestCase {
         let court = DecorField.shared.foot(uid)!
         let solids = DecorField.shared.feet.filter { $0.kind != .hopscotch && $0.spec.solid }
         let slideCorners: [(String, SIMD2<Float>)] = [("slideLB", SIMD2(1.45, -1.4)), ("slideLF", SIMD2(1.45, 3.4)), ("ladder", SIMD2(2.9, -1.17))]
-        let seesaw = SIMD2<Float>(-2.28, -1.49)
+        let seesaw = SIMD2<Float>(-2.54, -2.2)          // (park-room-r2: the seesaw's right stand spot; the left one is (-3.86, -2.2))
+        let seeStands: [SIMD2<Float>] = [SIMD2(-3.86, -2.2), SIMD2(-2.54, -2.2)]
         let own: [SIMD2<Float>] = [SIMD2(-3.7, 1.9), SIMD2(1.7, -2.8), SIMD2(2.95, -2.65)]
         for (label, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
             GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: aspect)
@@ -177,6 +185,11 @@ final class HopscotchLineTests: XCTestCase {
                 let dSee = seeF.map { $0.distance(p) } ?? .infinity, dSlide = slideF.map { $0.distance(p) } ?? .infinity
                 let need = brain.footprint + 0.3
                 print(String(format: "[qspot] %@ slot %d clearance: seesaw %.2f, slide %.2f (body radius %.2f + 0.3 = %.2f needed)%@", label, slot, dSee, dSlide, brain.footprint, need, slot == 0 ? " (the start: known, accepted)" : ""))
+                let dStand = seeStands.map { simd_distance(p, $0) }.min()!
+                let bench = DecorField.shared.feet.isEmpty ? Float.infinity : { () -> Float in let c = SIMD2<Float>(1.0, -4.55), h = SIMD2<Float>(1.35, 0.35); let d = simd_max(simd_abs(p - c) - h, .zero); return simd_length(d) }()
+                print(String(format: "[qspot] %@ slot %d: nearest seesaw stand spot %.2f, bench box %.2f", label, slot, dStand, bench))
+                XCTAssertGreaterThanOrEqual(dStand, 1.0, "\(label) slot \(slot) is \(dStand) from a seesaw stand spot")
+                XCTAssertGreaterThanOrEqual(bench, 1.0, "\(label) slot \(slot) is \(bench) from the bench")
                 if slot >= 1 {
                     XCTAssertGreaterThanOrEqual(dSee, need, "\(label) slot \(slot) is only \(dSee) from the seesaw")
                     XCTAssertGreaterThanOrEqual(dSlide, need, "\(label) slot \(slot) is only \(dSlide) from the slide")
