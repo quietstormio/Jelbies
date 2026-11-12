@@ -60,7 +60,7 @@ nonisolated enum LegWeld {
     static var buildInnerX: Double { UserDefaults.standard.object(forKey: "LegsWeldInnerX") != nil ? UserDefaults.standard.double(forKey: "LegsWeldInnerX") : 0.025 }
     static let yMax = 0.40
     static var followReach: Double { UserDefaults.standard.object(forKey: "LegsWeldFollowReach") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFollowReach") : 0.20 }
-    static var restPow: Double { UserDefaults.standard.object(forKey: "LegsWeldRestPow") != nil ? UserDefaults.standard.double(forKey: "LegsWeldRestPow") : 2.0 }
+    static var restPow: Double { UserDefaults.standard.object(forKey: "LegsWeldRestPow") != nil ? UserDefaults.standard.double(forKey: "LegsWeldRestPow") : 3.0 }
 
     /// The mesh last built with the weld (vertex count, info): a Skinner built for that mesh picks the weld up even where nobody calls configureTail (lock tests, portraits).
     nonisolated(unsafe) static var lastBuilt: (vertexCount: Int, info: LegWeldInfo)? = nil
@@ -107,6 +107,8 @@ nonisolated enum LegWeld {
         var ring: Int, rows: Int
         /// Per side: the band's rest positions / normals / mat, rows 1...K x around.
         var bandPos: [[SIMD3<Double>]], bandNrm: [[SIMD3<Double>]], bandMat: [[Float]]
+        /// The band's rest SHAPE (bandPos is the rest stream, its parameter pulled toward the leg): what the triangles are wound against.
+        var bandShape: [[SIMD3<Double>]] = []
         /// Egg vertices near the feet re-baked against the welded shape (vertex, mat).
         var bodyMat: [(Int, Float)] = []
     }
@@ -131,6 +133,7 @@ nonisolated enum LegWeld {
         for t in 0..<(tri.count / 3) { for k in 0..<3 { vt[Int(tri[3 * t + k])].append(t) } }
         var removed = [Bool](repeating: false, count: tri.count / 3)
         var sides: [LegWeldSide] = []
+        var bandShape: [[SIMD3<Double>]] = []
         var bandPos: [[SIMD3<Double>]] = [], bandNrm: [[SIMD3<Double>]] = [], bandMat: [[Float]] = []
         let footMat = FootBean.matValues()
         for sigma in [-1.0, 1.0] {
@@ -271,7 +274,7 @@ nonisolated enum LegWeld {
             }
             // the band at rest
             let rs = FootBean.restStream(sigma: sigma)
-            var bp: [SIMD3<Double>] = [], bn: [SIMD3<Double>] = [], bm: [Float] = []
+            var bp: [SIMD3<Double>] = [], bn: [SIMD3<Double>] = [], bm: [Float] = [], bsh: [SIMD3<Double>] = []
             var ringC = SIMD3<Double>.zero
             for j in 0..<A { ringC += rs[1 + A * R + j] }
             ringC /= Double(A)
@@ -293,13 +296,14 @@ nonisolated enum LegWeld {
                     let m0v = t0 * c * Double(Skinner.weldK0), m1v = t1 * c * Double(Skinner.weldK1)
                     bp.append(hermite(p0, m0v, p1, m1v, pow(s, restPow)))
                     let shapeP = hermite(p0, m0v, p1, m1v, s)
+                    bsh.append(shapeP)
                     let n1 = simd_normalize(N[la] + (N[lb] - N[la]) * w), n0 = FootBean.local.nrm[i0]
                     bn.append(simd_normalize(n0 + (n1 - n0) * s))
                     _ = footMat
                     bm.append(matW(shapeP))
                 }
             }
-            sides.append(side); bandPos.append(bp); bandNrm.append(bn); bandMat.append(bm)
+            sides.append(side); bandPos.append(bp); bandNrm.append(bn); bandMat.append(bm); bandShape.append(bsh)
         }
         // the two regions must not touch
         if !Set(sides[0].hidden + sides[0].loop).isDisjoint(with: sides[1].hidden + sides[1].loop) { return nil }
@@ -317,18 +321,20 @@ nonisolated enum LegWeld {
         var egg: [UInt32] = []
         egg.reserveCapacity(tri.count)
         for t in 0..<(tri.count / 3) where !removed[t] { egg += [tri[3 * t], tri[3 * t + 1], tri[3 * t + 2]] }
-        return Plan(eggTri: egg, sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat, bodyMat: bodyMat)
+        return Plan(eggTri: egg, sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat, bandShape: bandShape, bodyMat: bodyMat)
     }
 
     /// The band quads (seam ring -> row K) and the stitch (row K -> loop) of one side, wound outward against the rest positions `pos` (flat xyz) and rest normals `nrm`.
     /// `seamRest` = rest positions of the seam ring (the piece's own rest stream: its `pos` entries are the hidden ball).
     static func bandTriangles(side sd: LegWeldSide, ring R: Int, rows K: Int, seamRest: [SIMD3<Double>], seamNrm: [SIMD3<Double>],
-                              pos: [Double], nrm: [Double]) -> [UInt32] {
+                              pos: [Double], nrm: [Double], bandShape: [SIMD3<Double>] = []) -> [UInt32] {
         func seam(_ j: Int) -> Int { sd.beanFirst + 1 + A * R + (j % A) }
         func band(_ k: Int, _ j: Int) -> Int { k == 0 ? seam(j) : sd.bandFirst + (k - 1) * A + (j % A) }
         func P(_ v: Int) -> SIMD3<Double> {
             let r = v - (sd.beanFirst + 1 + A * R)
             if r >= 0 && r < A { return seamRest[r] }
+            let b = v - sd.bandFirst
+            if b >= 0 && b < bandShape.count { return bandShape[b] }
             return SIMD3(pos[3 * v], pos[3 * v + 1], pos[3 * v + 2])
         }
         func Nn(_ v: Int) -> SIMD3<Double> {

@@ -1165,7 +1165,7 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
         for (si, sigma) in [-1.0, 1.0].enumerated() {
             let rs = FootBean.restStream(sigma: sigma), R = wp.ring, A = FootBean.around
             let seamRest = (0..<A).map { rs[1 + A * R + $0] }, seamNrm = (0..<A).map { FootBean.local.nrm[1 + A * R + $0] }
-            band += LegWeld.bandTriangles(side: wp.sides[si], ring: R, rows: wp.rows, seamRest: seamRest, seamNrm: seamNrm, pos: pos, nrm: nrm)
+            band += LegWeld.bandTriangles(side: wp.sides[si], ring: R, rows: wp.rows, seamRest: seamRest, seamNrm: seamNrm, pos: pos, nrm: nrm, bandShape: wp.bandShape[si])
         }
         idx.insert(contentsOf: band, at: capIndexFirst)
         bodyIndexCountW += band.count; seedStartW += band.count

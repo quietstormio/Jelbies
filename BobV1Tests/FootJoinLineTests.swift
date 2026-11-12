@@ -191,7 +191,7 @@ final class FootJoinLineTests: XCTestCase {
         r.brain.feature = JellyRoster.feature(char)
         r.skinner.configureTail(rm); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
         start(r)
-        var p90: Float = 0, mx: Float = 0, folds = 0, frames = 0, out = 0
+        var p90: Float = 0, mx: Float = 0, folds = 0, frames = 0, out = 0, guardMax: Float = 0, leashMax: Float = 0
         for frame in 0..<Int(60 * seconds) {
             r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
             guard frame % 3 == 0 else { continue }
@@ -200,8 +200,10 @@ final class FootJoinLineTests: XCTestCase {
             if r.skinner.beansActive { out += 1 }
             let m = Self.seams(r)
             p90 = max(p90, m.p90); mx = max(mx, m.max); folds = max(folds, m.folds)
+            guardMax = max(guardMax, simd_length(r.skinner.guardShift[0]), simd_length(r.skinner.guardShift[1]))
+            leashMax = max(leashMax, r.skinner.joinLeash[0], r.skinner.joinLeash[1])
         }
-        print(String(format: "[legweld] %@ char %d: frames %d (legs out %d) | seam break p90 %.1f deg, max %.1f deg | folded band triangles %d", name, char, frames, out, p90, mx, folds))
+        print(String(format: "[legweld] %@ char %d: frames %d (legs out %d) | seam break p90 %.1f deg, max %.1f deg | folded band triangles %d | guard shift max %.1f cm, leash max %.1f cm", name, char, frames, out, p90, mx, folds, guardMax * 100, leashMax * 100))
         return (p90, mx, folds, frames, out)
     }
 
@@ -209,7 +211,7 @@ final class FootJoinLineTests: XCTestCase {
         guard MotionRig.renderMesh.armCapsule?.weld != nil else { throw XCTSkip("legs not welded in this process (-LegsWeld 0)") }
         var worst: Float = 0
         for (name, start) in Self.weldMoves {
-            for char in [0, 4] {
+            for char in (name == "flapHop" ? [3] : [0]) {          // (flapHop only starts on the winged characters; the body mesh is the same for every other one)
                 let m = weldRun(name, char: char, start: start)
                 worst = max(worst, m.p90)
                 XCTAssertLessThanOrEqual(m.p90, Self.maxSeamBreakP90, "\(name) char \(char): the welded leg's seams break the surface (p90 \(m.p90) deg)")
