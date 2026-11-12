@@ -229,6 +229,47 @@ final class FootJoinLineTests: XCTestCase {
         XCTAssertGreaterThan(m.p90, Self.maxSeamBreakP90, "a straight (creased) band was not detected")
     }
 
+    /// Diagnostic: the drawn body (egg + band + limbs) at rest and in a few walk frames as OBJ files (env LEGWELD_OBJ_DIR), for inspection off the device.
+    func testWeldDumpObj() throws {
+        guard let dir = ProcessInfo.processInfo.environment["LEGWELD_OBJ_DIR"] ?? Optional("/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/49d32754-b08a-4bfd-999b-3f9f0cada45f/scratchpad/legs/weld/obj") else { return }
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let rm = MotionRig.renderMesh
+        let r = MotionRig(game: true, settle: 0.5)
+        r.skinner.autoBlink = false
+        r.brain.seed = 11
+        func dump(_ name: String) {
+            r.render()
+            var o = ""
+            for v in 0..<rm.vertexCount { o += String(format: "v %.5f %.5f %.5f\n", r.dyn[6 * v], r.dyn[6 * v + 1], r.dyn[6 * v + 2]) }
+            var t = rm.body.first
+            while t < rm.body.first + rm.body.count { o += "f \(rm.index[t] + 1) \(rm.index[t + 1] + 1) \(rm.index[t + 2] + 1)\n"; t += 3 }
+            try? o.write(toFile: dir + "/\(name).obj", atomically: true, encoding: .utf8)
+            let m = Self.seams(r)
+            print(String(format: "[legweld] dump %@: seam p90 %.1f max %.1f folds %d edges %d", name, m.p90, m.max, m.folds, m.edges))
+        }
+        // closure: every edge of the drawn body (egg, band, limbs, tail, ears) is shared by exactly two triangles
+        var ec: [UInt64: Int] = [:]
+        var t = rm.body.first
+        while t < rm.body.first + rm.body.count {
+            for k in 0..<3 { let a = UInt64(rm.index[t + k]), b = UInt64(rm.index[t + (k + 1) % 3]); ec[min(a, b) << 32 | max(a, b), default: 0] += 1 }
+            t += 3
+        }
+        let open = ec.filter { $0.value != 2 }
+        print("[legweld] open edges \(open.count): \(open.prefix(12).map { "(\($0.key >> 32),\($0.key & 0xffffffff))x\($0.value)" })")
+        dump("rest")
+        r.brain.request(.goTo(SIMD2(1.6, 0.4)))
+        for k in 0..<4 { r.run(0.5); dump("walk\(k)") }
+        // skinner cost (this process's mesh: welded, or -LegsWeld 0 / defaults LegsWeld 0 for the old one), legs out mid-walk
+        do {
+            let n = 300
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            for _ in 0..<n { r.render() }
+            let us = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1000 / Double(n)
+            print(String(format: "[legweld] skinner cost %.1f us per update (welded %@, legs out %@)", us, rm.armCapsule?.weld != nil ? "yes" : "no", r.skinner.beansActive ? "yes" : "no"))
+        }
+        if let w = rm.armCapsule?.weld { print("[legweld] band first \(w.sides.map(\.bandFirst)) ghost \(w.sides.map(\.ghostFirst)) bean \(w.sides.map(\.beanFirst)) bandIdx \(w.bandIndexCount) capIdx \(rm.armCapsule!.indexFirst)") }
+    }
+
     /// Where the weld sits, and the pieces' poses are the brain's (the band changes no foot vertex below the seam).
     func testWeldPlanIsSimple() throws {
         let rm = MotionRig.renderMesh

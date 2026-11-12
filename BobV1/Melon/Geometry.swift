@@ -1005,6 +1005,7 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
     var weldPlan = weldOn ? LegWeld.plan(P: P, N: Nb, M: Mb, tri: net.tri) : nil
     if weldOn && weldPlan == nil { NSLog("%@", "[melon] leg weld: the loops could not be made simple; old mesh") }
     idx = weldPlan?.eggTri ?? net.tri
+    for (v, m) in weldPlan?.bodyMat ?? [] { mat[v] = m }
 
     // wave arm capsules (one per side, appended to the body range): hidden inside the rest skin until a wave runs
     // (see ArmPath.swift / ArmKeyframes.swift). `rest` holds the hidden position (used for the sim embedding); the renderer's
@@ -1021,7 +1022,7 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
         // the foot bean of the same side, in the same block: [arm capsule, bean] (hidden deep inside the belly until he moves his feet)
         let beanFirst = pos.count / 3
         let hidden = FootBean.inactive(sigma: sigma)
-        let footMat = FootBean.matValues()
+        let footMat = weldPlan != nil ? LegWeld.pieceMat(sigma: sigma) : FootBean.matValues()
         for i in 0..<FootBean.vertexCount { add(hidden[i], FootBean.local.nrm[i], footMat[i]) }
         if weldPlan != nil {
             // welded: the piece is an open cup from the sole up to the seam ring (sole fan + the ring quads below the seam)
@@ -1135,9 +1136,9 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
 
     // the weld's ghosts (the piece at the rest foot, sim-skinned: the welded leg's pose at rest) and band rows: appended after the decals
     if weldPlan != nil {
-        let footMat = FootBean.matValues()
         for (si, sigma) in [-1.0, 1.0].enumerated() {
             weldPlan!.sides[si].ghostFirst = pos.count / 3
+            let footMat = LegWeld.pieceMat(sigma: sigma)
             for (i, p) in FootBean.restStream(sigma: sigma).enumerated() { add(p, FootBean.local.nrm[i], footMat[i]) }
         }
         for si in 0..<2 {

@@ -65,12 +65,43 @@ nonisolated enum LegWeld {
         return 1 / pow(max(a, 1e-12), 1 / p)
     }
 
+    // MARK: the weld's baked crease shadow
+    // The body's `mat` was baked against the tight rest fillet (footBlend 4.5 cm): around the foot root the egg is crease-dark right up to where the old foot met it, the
+    // foot piece's top 85% lighter. Across the plush band that read as a ragged light patch (first captures). Near the feet everything (egg, cup, band, ghost) is baked
+    // again against the welded shape: the same egg and arms, the feet joined with a wide blend (`blendW`).
+    static var blendW: Double { UserDefaults.standard.object(forKey: "LegsWeldAOBlend") != nil ? UserDefaults.standard.double(forKey: "LegsWeldAOBlend") : 0.14 }
+    static func sdfW(_ p: SIMD3<Double>) -> Double {
+        let q = SIMD3(abs(p.x), p.y, p.z)
+        let arm = BobForm.armSDF(q)
+        let u = 1 - min(max(arm.t / 0.55, 0), 1)
+        let k = BobForm.armTipBlend + (BobForm.armBlend - BobForm.armTipBlend) * (u * u * (3 - 2 * u))
+        return BobForm.smin(BobForm.smin(BobForm.bodySDF(p), arm.d, k), BobForm.footSDF(q), blendW)
+    }
+    static func normalW(_ p: SIMD3<Double>) -> SIMD3<Double> {
+        let e = 0.0015
+        let g = SIMD3(sdfW(p + SIMD3(e, 0, 0)) - sdfW(p - SIMD3(e, 0, 0)), sdfW(p + SIMD3(0, e, 0)) - sdfW(p - SIMD3(0, e, 0)), sdfW(p + SIMD3(0, 0, e)) - sdfW(p - SIMD3(0, 0, e)))
+        return simd_length(g) > 1e-12 ? simd_normalize(g) : SIMD3(0, 1, 0)
+    }
+    /// Baked `mat` (0...0.4) of rest point `p` against the welded shape (projected onto it first).
+    static func matW(_ p0: SIMD3<Double>) -> Float {
+        var p = p0
+        for _ in 0..<4 { let f = sdfW(p), n = normalW(p); p -= n * f }
+        let n = normalW(p)
+        var occ = 0.0, w = 1.0
+        for k in 1...5 { let h = 0.05 * Double(k); occ += max(h - sdfW(p + n * h), 0) / h * w; w *= 0.7 }
+        return Float(0.4 * min(max(occ * 1.1, 0), 1))
+    }
+    /// The welded `mat` of the foot piece's vertices at the rest foot (cup + ghost), side `sigma`.
+    static func pieceMat(sigma: Double) -> [Float] { FootBean.restStream(sigma: sigma).map { matW($0) } }
+
     struct Plan {
         var eggTri: [UInt32]
         var sides: [LegWeldSide]
         var ring: Int, rows: Int
         /// Per side: the band's rest positions / normals / mat, rows 1...K x around.
         var bandPos: [[SIMD3<Double>]], bandNrm: [[SIMD3<Double>]], bandMat: [[Float]]
+        /// Egg vertices near the feet re-baked against the welded shape (vertex, mat).
+        var bodyMat: [(Int, Float)] = []
     }
 
     /// Cubic Hermite.
@@ -98,15 +129,22 @@ nonisolated enum LegWeld {
         for sigma in [-1.0, 1.0] {
             let cx = sigma * BobForm.footX, cz = BobForm.footZ
             var inside = [Bool](repeating: false, count: nV)
+            // the drawn cup at rest (sole up to the seam ring): the loop is `margin` from it in 3D (the egg's lower walls stand within a footprint-plus-margin
+            // disc almost all the way round, so an xz distance took the whole lower body: first try)
+            let rsC = FootBean.restStream(sigma: sigma)
+            let cup = Array(rsC[0..<(1 + A * (R + 1))])
             for v in 0..<nV {
                 let p = P[v]
                 guard p.y < yMax, sigma * p.x > buildInnerX else { continue }
+                let q = SIMD3(abs(p.x), p.y, p.z)
+                if BobForm.armSDF(q).d < 0.04 { continue }
                 let dx = p.x - cx, dz = p.z - cz, r = (dx * dx + dz * dz).squareRoot()
-                let fr = footRadius(dx, dz)
                 // margin: full at the sides and the heel, `buildFront` toward the toe
                 let front = max(0, dz / max(r, 1e-9))
                 let mg = buildMargin + (buildFront - buildMargin) * front * front
-                if r - fr < mg { inside[v] = true }
+                var d2 = Double.infinity
+                for b in cup { d2 = min(d2, simd_distance_squared(b, p)) }
+                if d2 < mg * mg { inside[v] = true }
             }
             var loop: [Int] = []
             var ok = false
@@ -166,10 +204,13 @@ nonisolated enum LegWeld {
             var a0 = loop.map { a -> Double in var x = ang(a); while x < 0 { x += 2 * .pi }; return x }
             let iMin = a0.indices.min { a0[$0] < a0[$1] }!
             loop = Array(loop[iMin...] + loop[..<iMin]); a0 = Array(a0[iMin...] + a0[..<iMin])
-            var un = [a0[0]]
-            for i in 1..<a0.count { var x = a0[i]; while x < un[i - 1] { x += 2 * .pi }; while x - un[i - 1] > 2 * .pi { x -= 2 * .pi }; un.append(x) }
-            // (monotone: a loop that turns back locally is clamped; its stitch stays valid)
-            for i in 1..<un.count { un[i] = max(un[i], un[i - 1] + 1e-6) }
+            // unwrapped by the smallest step (a loop that turns back locally is clamped to monotone; its stitch stays valid)
+            var raw = [a0[0]], un = [a0[0]]
+            for i in 1..<a0.count {
+                var d = a0[i] - a0[i - 1]; while d > .pi { d -= 2 * .pi }; while d < -.pi { d += 2 * .pi }
+                raw.append(raw[i - 1] + d); un.append(max(raw[i], un[i - 1] + 1e-6))
+            }
+            if un[un.count - 1] >= un[0] + 2 * .pi { return nil }
             for t in 0..<(tri.count / 3) where (0..<3).contains(where: { inside[Int(tri[3 * t + $0])] }) { removed[t] = true }
             // outer partner: the outside egg vertex nearest to 4 cm further out along the body (radial direction projected onto the tangent plane)
             let loopSet = Set(loop)
@@ -219,19 +260,29 @@ nonisolated enum LegWeld {
                     bp.append(hermite(p0, t0 * c * Double(Skinner.weldK0), p1, t1 * c * Double(Skinner.weldK1), s))
                     let n1 = simd_normalize(N[la] + (N[lb] - N[la]) * w), n0 = FootBean.local.nrm[i0]
                     bn.append(simd_normalize(n0 + (n1 - n0) * s))
-                    let m1 = M[la] + (M[lb] - M[la]) * Float(w), m0 = footMat[i0]
-                    let ss = Float(s * s * (3 - 2 * s))
-                    bm.append(m0 + (m1 - m0) * ss)
+                    _ = footMat
+                    bm.append(matW(bp[bp.count - 1]))
                 }
             }
             sides.append(side); bandPos.append(bp); bandNrm.append(bn); bandMat.append(bm)
         }
         // the two regions must not touch
         if !Set(sides[0].hidden + sides[0].loop).isDisjoint(with: sides[1].hidden + sides[1].loop) { return nil }
+        // the egg near the feet: re-baked against the welded shape, fading back to the old bake 18...30 cm from the cups
+        var bodyMat: [(Int, Float)] = []
+        let cups = [-1.0, 1.0].map { sg in Array(FootBean.restStream(sigma: sg)[0..<(1 + A * (R + 1))]) }
+        for v in 0..<nV where P[v].y < 0.6 {
+            var d2 = Double.infinity
+            for c in cups { for b in c { d2 = min(d2, simd_distance_squared(b, P[v])) } }
+            let d = d2.squareRoot()
+            if d > 0.30 { continue }
+            let t = min(1, max(0, (d - 0.18) / 0.12)), wgt = Float(1 - t * t * (3 - 2 * t))
+            bodyMat.append((v, M[v] + (matW(P[v]) - M[v]) * wgt))
+        }
         var egg: [UInt32] = []
         egg.reserveCapacity(tri.count)
         for t in 0..<(tri.count / 3) where !removed[t] { egg += [tri[3 * t], tri[3 * t + 1], tri[3 * t + 2]] }
-        return Plan(eggTri: egg, sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat)
+        return Plan(eggTri: egg, sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat, bodyMat: bodyMat)
     }
 
     /// The band quads (seam ring -> row K) and the stitch (row K -> loop) of one side, wound outward against the rest positions `pos` (flat xyz) and rest normals `nrm`.
