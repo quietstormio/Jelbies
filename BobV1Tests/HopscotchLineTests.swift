@@ -137,6 +137,15 @@ final class HopscotchLineTests: XCTestCase {
                 let toOwn = own.map { String(format: "%.2f", simd_distance(p, $0)) }.joined(separator: "/")
                 let toEntry = entries.map { String(format: "%.2f", simd_distance(p, $0)) }.joined(separator: "/")
                 print(String(format: "[qspot] %@ slot %d world (%.2f, %.2f) fixedMoved %.3f constrainMoved %.3f nearestSolid %@ %.2f | %@ | seesaw %.2f | own %@ | entry %@", label, slot, p.x, p.y, moved, cMoved, near.kind, near.d, toSlide, simd_distance(p, seesaw), toOwn, toEntry))
+                // the seesaw and the slide present together (launch-next 4e4855c6): clearance of the body's edge from each footprint
+                let seeF = DecorField.shared.feet.first { $0.kind == .seesaw }, slideF = DecorField.shared.feet.first { $0.kind == .slide }
+                let dSee = seeF.map { $0.distance(p) } ?? .infinity, dSlide = slideF.map { $0.distance(p) } ?? .infinity
+                let need = brain.footprint + 0.3
+                print(String(format: "[qspot] %@ slot %d clearance: seesaw %.2f, slide %.2f (body radius %.2f + 0.3 = %.2f needed)%@", label, slot, dSee, dSlide, brain.footprint, need, slot == 0 ? " (the start: known, accepted)" : ""))
+                if slot >= 1 {
+                    XCTAssertGreaterThanOrEqual(dSee, need, "\(label) slot \(slot) is only \(dSee) from the seesaw")
+                    XCTAssertGreaterThanOrEqual(dSlide, need, "\(label) slot \(slot) is only \(dSlide) from the slide")
+                }
                 XCTAssertLessThan(moved, 0.05, "\(label) slot \(slot): the room moves the spot by \(moved)")
                 XCTAssertLessThan(cMoved, 0.05, "\(label) slot \(slot): constrain moves the spot by \(cMoved)")
                 for (n, corner) in slideCorners { XCTAssertGreaterThanOrEqual(simd_distance(p, corner), 1.0, "\(label) slot \(slot) is \(simd_distance(p, corner)) from \(n)") }
