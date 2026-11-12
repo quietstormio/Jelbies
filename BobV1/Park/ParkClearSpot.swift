@@ -28,11 +28,16 @@ enum ParkClearSpot {
         return courts.contains { $0.distance(p) < 0 }
     }
 
+    /// How many roam-pick candidates were checked / rejected by `legCrossesSolid` (park only; the tests print them).
+    nonisolated(unsafe) static var legChecks = 0, legRejects = 0
+    /// Test switch for the "before" measurement (always true in the game).
+    nonisolated(unsafe) static var legCheckEnabled = true
     /// The straight leg a-b (sampled every 0.1 m) passes through a keep-out of the park. Always false outside the park. (Not called by the walk code: offered for the wander pick.)
     static func legCrossesSolid(_ a: SIMD2<Float>, _ b: SIMD2<Float>, radius: Float) -> Bool {
-        guard inPark else { return false }
+        guard inPark, legCheckEnabled else { return false }
+        legChecks += 1
         let n = max(1, Int(simd_distance(a, b) / 0.1))
-        for i in 0...n where blocked(a + (b - a) * (Float(i) / Float(n)), radius: radius) { return true }
+        for i in 0...n where blocked(a + (b - a) * (Float(i) / Float(n)), radius: radius) { legRejects += 1; return true }
         return false
     }
 

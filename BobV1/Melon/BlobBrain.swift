@@ -912,7 +912,7 @@ final class BlobBrain {
             let raw = zone.map { rf.sampleZone($0, rand(), rand(), rand()) } ?? rf.sampleArea(rand(), rand(), rand())
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             let d = simd_length(cand - here)
-            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), reachable(here, cand) else { continue }
+            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), reachable(here, cand), !ParkClearSpot.legCrossesSolid(here, cand, radius: footprint) else { continue }
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
