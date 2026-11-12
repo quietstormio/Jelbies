@@ -711,9 +711,9 @@ extension BlobBrain {
     /// Ticked from `BlobBrain.tick` right after the idle gate; true = this tick is fully handled.
     func sleepBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
         SleepOrder.advance(self, dt)          // (the shared "same moment" reading: every ticking brain's own clock)
+        if idleState.kind == .sleep, sleep.mealWake { sleep.mealWakeT += dt }          // (the meal wake's clock runs in EVERY stage of the wake: the stir, the roll, the stretch (stage 5) and a bed hop out, not only 2...4)
         if bedHopTick(sim, skinner, dt) { return true }
         guard idleState.kind == .sleep, case .idle = script, sleep.stage >= 2, sleep.stage <= 4 else { return false }
-        if sleep.mealWake { sleep.mealWakeT += dt }
         activity = sleep.mealWake ? .turning : .lookingAround          // (a meal-woken sleeper is never "idle" to the tray's stuck-idle retry)
         mouthOpen = 0
         sleep.t += dt
