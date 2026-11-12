@@ -22,11 +22,11 @@ final class ParkSlideCrowdTests: XCTestCase {
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
     }
 
-    func parkLab(seed: UInt64) -> SocialTests.Lab {
+    func parkLab(seed: UInt64, n: Int = 3) -> SocialTests.Lab {
         DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0
         for (uid, ps) in HopscotchLine.shared.lines { for pl in ps { HopscotchLine.shared.remove(uid, pl.id) } }
         RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: 440.0 / 956.0)
-        let lab = SocialTests.Lab(n: 3, positions: [SIMD2(-2.1, -1.6), SIMD2(-0.6, 0.5), SIMD2(0.6, -0.8)], quiet: true, seed: seed)
+        let lab = SocialTests.Lab(n: n, positions: Array([SIMD2<Float>(-2.1, -1.6), SIMD2(-0.6, 0.5), SIMD2(0.6, -0.8), SIMD2(1.0, 2.7), SIMD2(-0.5, 3.3)].prefix(n)), quiet: true, seed: seed)
         for r in lab.rigs { r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius; r.brain.anticsEnabled = true; r.brain.idleMood = .happy; r.brain.outingPlay = true }
         DecorField.shared.set(ParkToys.placed)
         DecorField.shared.toys.news.removeAll()
@@ -361,5 +361,45 @@ final class ParkSlideCrowdTests: XCTestCase {
             }
             print("[walkout] case=\(name) seed=\(seed) walkStarts=\(walkStarts) outOfZoneAt=\(outAt.map { String(format: "%.1f", $0) } ?? "-")s")
         } }
+    }
+
+    // MARK: r5 - the ex-rider leaves when the lawn spots are taken
+
+    /// The ex-rider (A, from F3) with a friend parked on each of the three out spots (5 bodies): `slideWalkOut` has nothing from the spots. He must still be off the landing within 6 s of touching the floor, never inside the box, with at most 3 walk starts.
+    func testExRiderLeavesWhenTheLawnSpotsAreTaken() {
+        for seed in UInt64(1)...3 {
+            let lab = parkLab(seed: seed, n: 5)
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!
+            let rigs = lab.rigs, a = rigs[0].brain
+            let landing = a.slideLanding(sl), peer = a.peerGap
+            let half = sl.quarter & 1 == 0 ? sl.spec.half : SIMD2(sl.spec.half.y, sl.spec.half.x)
+            for k in 0..<3 { place(rigs[1 + k], sl.centre + sl.turned(BlobBrain.slideOutSpots[k])) }          // (a friend on every out spot: all three are refused)
+            place(rigs[4], a.fixed(SIMD2(-2.4, -1.6))); place(rigs[0], a.fixed(SIMD2(sl.centre.x - half.x - 1.2, sl.centre.y)))
+            for _ in 0..<5 { lab.tick(watching: false) }
+            var t: Float = 0, started = false, t6: Float?, prevNone = true, walkStarts = 0
+            var refusedAtFloor: String = "?", leftAt: Float?, minBox = Float.infinity
+            while t < 60 {
+                if t >= 1, !started { started = a.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner) }
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
+                let s = a.idleState
+                if s.kind == .decorSlide, s.slideStage == 6, t6 == nil { t6 = t; refusedAtFloor = a.slideWalkOut(sl) == nil ? "nil (all spots refused)" : "has a spot" }
+                guard let f6 = t6 else { continue }
+                var isNone = true; if case .none = a.script { isNone = true } else { isNone = false }
+                if prevNone, case .walk = a.script { walkStarts += 1 }
+                prevNone = isNone
+                if t - f6 >= 1.5 { minBox = min(minBox, sl.distance(a.position)) }
+                if leftAt == nil, simd_distance(a.position, landing) >= peer { leftAt = t - f6 }
+                if Int(t * 60) % 30 == 0 { print(bState(a, sl, landing, t - f6)) }
+                if t - f6 > 10 { break }
+            }
+            func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
+            let line = "[exrider] seed=\(seed) slideWalkOut at the floor: \(refusedAtFloor) | leftLandingAt=\(ft(leftAt))s after the floor walkStarts=\(walkStarts) minBox(after 1.5 s)=\(String(format: "%.2f", minBox)) rode=\(t6 != nil)"
+            print(line)
+            XCTAssertNotNil(t6, line)
+            XCTAssertNotNil(leftAt, line)
+            if let l = leftAt { XCTAssertLessThanOrEqual(l, 6, "off the landing within 6 s. \(line)") }
+            XCTAssertLessThanOrEqual(walkStarts, 3, "walkStarts. \(line)")
+            XCTAssertGreaterThanOrEqual(minBox, 0, "never inside the box. \(line)")
+        }
     }
 }
