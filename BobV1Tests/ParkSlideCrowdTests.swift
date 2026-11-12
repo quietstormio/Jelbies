@@ -238,6 +238,7 @@ final class ParkSlideCrowdTests: XCTestCase {
                     if s.slideStage == 5, !pushSeen[i] { pushSeen[i] = true; R[i].pushed = others.contains { simd_distance(rigs[$0].root, landing) < peer } }
                     if s.slideStage == 6, R[i].t6 == nil { R[i].t6 = t }
                 }
+                if i == 0, seed == 2, let s6 = R[0].t6, t - s6 <= 6, Int(t * 60) % 15 == 0 { print(bState(rigs[0].brain, sl, landing, t - s6).replacingOccurrences(of: "[stepoff-t]", with: "[foot-A]")) }
                 if let s6 = R[i].t6, t - s6 <= 5 {
                     R[i].min5 = min(R[i].min5, others.map { simd_distance(rigs[i].root, rigs[$0].root) }.min()!)
                     if t - s6 > 4.98 { R[i].exit = rigs[i].root }
