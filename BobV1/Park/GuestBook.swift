@@ -161,6 +161,11 @@ final class GuestBook {
     /// A group serving was on last step (the guest cheers with the Jelbies when it ends).
     @ObservationIgnored var snack = false
     @ObservationIgnored var spawnFailT: Float = 0
+    /// His arena wall is lifted while he is off-screen on the left (the run-in and the run-out); restored once he is inside.
+    @ObservationIgnored var arenaLifted = false
+    /// Seconds the arrival's hug was held back for a guest still running in from off-screen (landscape: the edge is a long way off).
+    @ObservationIgnored var runHold: Float = 0
+    @ObservationIgnored var exitT: Float = 0
     @ObservationIgnored var friendSession: [Int: ObjectIdentifier] = [:]
     /// A note to show once (a visit that ended while the app was closed).
     @ObservationIgnored var pendingNote: String?

@@ -1189,11 +1189,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in actors {
             if parkOn, model.care.parkHides(a.id) { ContactField.invalidate(a.id); continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
             if bathHides, a.id != washedID { ContactField.invalidate(a.id); continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
+            a.skinner.legBlendShoes = a.brain?.shoesWorn ?? false          // (legs blend: shoes-worn bodies stay exactly as they are)
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor))
         }
-        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
+        for a in parkActors { a.skinner.legBlendShoes = a.brain?.shoesWorn ?? false; skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
+        for j in skinJobs { renderer.setLegBlend(j.skinner.legBlend, body: j.id) }
         FeatureClip.apply(jobs: skinJobs)          // a limb / ear / tail drawn inside ANOTHER Jelbie goes out to his surface (FeatureClip.swift); also the table the features read
         PerfMeter.end(.skin, pmK)
         if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift). Only the actors skinned this frame (hidden ones keep stale values).
@@ -1601,7 +1603,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard game, !model.care.focus.isActive, !model.care.tripActive else { return }
         guard !model.care.arranging else { return }
         refreshOutlines()
-        if let id = model.care.select.hit(p) {          // a Jelly under the finger: highlight him; double-tapping an already highlighted sleeper pokes him awake (interim gesture)
+        // The silhouette hit stays first (several Jellies: unchanged); the live skin pick (as the single tap uses) is the fallback: with ONE Jelbie no silhouettes are published until a pick is
+        // already running, so the outline hit alone never found him (a voice name started a pick, which is why it "worked after voice").
+        let size = stageView?.bounds.size ?? touchSize
+        let under = model.care.select.hit(p) ?? (size.width > 1 ? pickJelly(p, size)?.id : nil)
+        if let id = under {          // a Jelly under the finger: highlight him; double-tapping an already highlighted sleeper pokes him awake (interim gesture)
             if model.care.select.highlighted == id, model.care.selectBrain(id)?.isSleeping == true { model.care.pokeSleeper(id); return }
             model.care.tapJelly(id); return
         }

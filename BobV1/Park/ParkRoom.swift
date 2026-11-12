@@ -1,8 +1,8 @@
 //
 //  ParkRoom.swift
 //  The park as a visiting room (like the café's): a RoomDef applied with `RoomLayout.apply` under the white fade WITHOUT `store.moveIn`, so nothing is saved.
-//  It is not in `RoomCatalog.all`. The scenery is built here in code (ParkScenery: a tessellated lawn, a gravel path, pond, bench, trees, shrubs and a sky pane that follows the
-//  time of day; redesigned 2026-11-09 as a stylised-natural town park: see ParkNature.swift); the colliders below are the bench, the flower bed and the pond at the back. Also the park's camera: higher and further back than the room's, so
+//  It is not in `RoomCatalog.all`. The scenery is built here in code (ParkScenery: a tessellated lawn, a gravel path, bench, trees, shrubs and a sky pane that follows the
+//  time of day; redesigned 2026-11-09 as a stylised-natural town park: see ParkNature.swift); the one collider below is the bench at the back. Also the park's camera: higher and further back than the room's, so
 //  five Jelbies fit in portrait and landscape.
 //
 
@@ -11,12 +11,11 @@ import Foundation
 
 extension RoomCatalog {
     static let park = RoomDef(
-        id: .park, title: "Park", blurb: "A lawn, a pond and a bench to play on.",
+        id: .park, title: "Park", blurb: "A lawn, a slide and a bench to play on.",
         theme: RoomTheme(tint: SIMD3(0.56, 0.74, 0.44), chromaScale: 0.7, lightnessShift: 0.02),
-        couch: .init(centre: SIMD3(0, 0.45, -4.55), halfExtents: SIMD3(1.35, 0.45, 0.35), radius: 0.15),
-        boxes: [.init(centre: SIMD3(-3.5, 0.25, -4.35), halfExtents: SIMD3(1.1, 0.25, 0.55), radius: 0.2)],
-        cylinders: [.init(centre: SIMD2(3.5, -4.2), radius: 1.0, height: 0.3)],
-        lampTable: .init(centre: SIMD2(3.5, -4.2), radius: 1.0, height: 0.3), lamp: SIMD3(0, 1.5, -40),
+        couch: .init(centre: SIMD3(ParkScenery.benchX, 0.45, -4.55), halfExtents: SIMD3(1.35, 0.45, 0.35), radius: 0.15),
+        boxes: [], cylinders: [],          // (2026-11-11: the pond's cylinder and the flower bed's box are gone: the back lawn is walkable)
+        lampTable: .init(centre: SIMD2(30, -40), radius: 1.0, height: 0.3), lamp: SIMD3(0, 1.5, -40),          // (no side table in the park: far off the floor like the Spa's and the beach's; `RoomLayout.table` is only read by the sleep spot check and the lamp default the renderer overrides with `lamp`)
         windows: RoomWindows(xs: [], halfW: 0, y0: 0, y1: 14, proceduralFrames: false),
         floor: .chevron, wall: .plain, rug: .rings, art: nil)
 }
@@ -35,7 +34,7 @@ extension GameCamera {
         eye = p; target = t; roomEye = p; roomTarget = t
         roomWideScale = wideScale(2); roomWideLift = wideLift(2)
         walkMaxZ = 4.5; arenaCenter = SIMD2(0, 0.2); arenaRadius = 6.5
-        roamRect = (SIMD2(-3.5, -3.4), SIMD2(3.5, 4.5)); roamRectWide = (SIMD2(-4.2, -3.6), SIMD2(4.2, 4.5))
+        roamRect = (SIMD2(-3.5, -3.6), SIMD2(3.5, 4.5)); roamRectWide = (SIMD2(-4.2, -3.6), SIMD2(4.2, 4.5))
         parkRoamMaxZ = 4.5
     }
 
@@ -80,9 +79,6 @@ extension GameCamera {
 /// so the dusk / night sky and the stars come for free.
 enum ParkScenery {
     typealias PP = RoomMeshBuilder.ProfilePoint
-    /// The pond's centre (x, z): the park's cylinder collider.
-    static let pondCentre = SIMD2<Float>(3.5, -4.2)
-
     static func build(theme: RoomTheme) -> RoomMesh {
         let b = RoomMeshBuilder()
         var r = ParkRandom(0x7A11)
@@ -140,7 +136,7 @@ enum ParkScenery {
 
         // ---- natural shrubs at the edges, a few garden-flower patches ----
         let white = S.srgb(0.95, 0.92, 0.82), gold = S.srgb(0.93, 0.86, 0.58), violet = S.srgb(0.74, 0.68, 0.84)          // (muted: cream, pale yellow, soft lavender)
-        floweringBush(b, x: -3.7, z: -4.5, scale: 1.2, bloom: white, rng: &r); shadows.append(ParkShadow(x: -3.7, z: -4.5, r: 1.5, h: 1.2))
+        floweringBush(b, x: -6.0, z: -4.6, scale: 1.2, bloom: white, rng: &r); shadows.append(ParkShadow(x: -6.0, z: -4.6, r: 1.5, h: 1.2))          // (moved off the floor from (-3.7, -4.5) with the flower bed's collider; same rng draws)
         floweringBush(b, x: -5.6, z: 1.6, scale: 1.0, bloom: gold, rng: &r); shadows.append(ParkShadow(x: -5.6, z: 1.6, r: 1.3, h: 1.1))
         floweringBush(b, x: 5.6, z: 3.4, scale: 1.0, bloom: violet, rng: &r); shadows.append(ParkShadow(x: 5.6, z: 3.4, r: 1.3, h: 1.1))
         floweringBush(b, x: -5.2, z: 6.4, scale: 0.9, bloom: white, rng: &r); shadows.append(ParkShadow(x: -5.2, z: 6.4, r: 1.2, h: 1.0))
@@ -151,15 +147,15 @@ enum ParkScenery {
         lawn(b, shadows: shadows)
         gravelPath(b, rng: &r)
 
-        // ---- the pond (right, at the back): irregular stones, deep teal water, reeds, lily pads ----
-        pond(b, rng: &r)
+        // (the pond was here: it drew 204 random values (22 rim stones x 6, 16 reeds x 4, 4 lily pads x 2); they are drawn and dropped so the entrance border keeps its look)
+        for _ in 0..<204 { _ = r.unit() }
 
         // ---- the entrance border below the roam floor's front edge ----
         entrance(b, rng: &r)
 
         // ---- the bench (back centre): timber slats on cast-iron frames, and a park lamp post beside it ----
         bench(b)
-        lampPost(b, x: 1.72, z: -4.85)
+        lampPost(b, x: benchX + 1.72, z: -4.85)
         return b.mesh
     }
 

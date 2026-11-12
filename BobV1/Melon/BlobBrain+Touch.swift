@@ -835,7 +835,7 @@ final class TouchPlay {
         switch getUpPhase {
         case .off:
             if let brain { brain.hurryUpdate(dt: dt) }
-            if let brain, brain.isFlipping || brain.isLying { stillT = 0; return false }          // (the sleep lies on his back ON PURPOSE: tilt 1.05 + the flop overshoot is past `lying`, and the touch target was righted and woken the moment he settled)      // the flip's faceplant lies face-down ON PURPOSE and gets up by itself
+            if let brain, brain.isFlipping || brain.isLying || brain.trickTipped { stillT = 0; return false }          // (the sleep lies on his back ON PURPOSE: tilt 1.05 + the flop overshoot is past `lying`, and the touch target was righted and woken the moment he settled)      // the flip's faceplant lies face-down ON PURPOSE and gets up by itself
             // just let go and still in the air: stay hands-off (the brain's recovery must not start mid-fall and be torn down at the landing)
             if !thrown, !dropHandled, releasedT < 1.0, impacts == impactsAtRelease, sim.minY() > 0.08 { stillT = 0; return true }
             let pose = sim.bodyPose(iterations: 4)

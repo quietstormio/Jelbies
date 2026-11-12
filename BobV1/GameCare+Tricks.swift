@@ -58,11 +58,13 @@ extension GameCare {
     @discardableResult
     func performTrick(_ t: VoiceTrick, jelly id: Int) -> Bool {
         guard trickBlocker(jelly: id) == nil, knows(t, jelly: id), let b = brainFor(id) else { return false }
+        b.idleState.trickFailNext = false          // (the button always succeeds: a flop flag left over from the Show must not turn this into a flop)
         if t == .flip {
             b.flipCompact = focus.isActive
             b.commandedFlipFail = false
             b.commandedFlip = true
         } else if let k = VoiceCoordinator.idleKind(for: t) {
+            if t == .superSpring || t == .corkscrew || t == .moonwalk { b.flipCompact = focus.isActive }
             b.commandedIdle = k
         } else { return false }
         b.face(.excited, hold: 1.2)

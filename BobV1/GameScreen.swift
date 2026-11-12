@@ -520,7 +520,7 @@ struct GameScreen: View {
         guard DevArgs.enabled else { return }          // capture aids only: never in an App Store archive (they can grant Drops / the wardrobe)
         let d = UserDefaults.standard
         let care = model.care
-        if d.string(forKey: "ContactDemo") != nil || d.string(forKey: "ContactCam") != nil { Task { @MainActor in await ContactDemo.run(care: care) } }          // capture aid, see Melon/ContactDemo.swift
+        if d.string(forKey: "ContactDemo") != nil || d.string(forKey: "ContactCam") != nil || d.object(forKey: "LegsCam") != nil { Task { @MainActor in await ContactDemo.run(care: care) } }          // capture aid, see Melon/ContactDemo.swift
         func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1e9)) }
         func idleWait() async {
             await sleep(1.5)
@@ -589,6 +589,12 @@ struct GameScreen: View {
             for k in 0..<max(care.jellyCount, 1) { if let c = care.jelly(k)?.character { _ = care.parkBook.add(points: 100, visitor: vid, character: c) } }
             NSLog("[arrival] invite")
             care.inviteFriend(vid, kind: .playDate)
+            // capture aid: -GuestGoodbye <seconds> ends the visit that long after the invitation (the run-out through the left edge)
+            if d.integer(forKey: "GuestGoodbye") > 0 {
+                await sleep(Double(d.integer(forKey: "GuestGoodbye")))
+                NSLog("[arrival] goodbye")
+                care.guestSayGoodbye()
+            }
         }
         // capture aid: -NeedsDemo bubble (the bubble pops, its tap opens Feed, he eats, it poofs) | roster (open it, tap Bob's card)
         if let demo = d.string(forKey: "NeedsDemo") {
