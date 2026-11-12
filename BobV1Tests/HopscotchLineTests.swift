@@ -83,21 +83,25 @@ final class HopscotchLineTests: XCTestCase {
         XCTAssertTrue(lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: uid))
         XCTAssertTrue(lab.rigs[1].brain.decorStart(.decorHopscotch, lab.rigs[1].sim, only: nil, uid: uid))
         let joiner = lab.rigs[1].brain
-        var blocked = false, blockedAt: Float = 0, endedAt: Float = -1, entries = 0, prevStage = -9
+        var blocked = false, blockedAt: Float = 0, endedAt: Float = -1, entries = 0, prevStage = -9, maxSq = -1
+        var minToStart = Float.infinity, trace = ""
         for i in 0..<(60 * 90) {
             lab.tick(watching: false); DecorField.shared.tick(dt: dt)
             if !blocked, line.square(uid, 0) >= 0 { blocked = true; blockedAt = Float(i) / 60 }
             if blocked {
                 let b = lab.rigs[2]
-                if simd_distance(b.brain.position, start) > 0.15 { b.sim.teleport(toXZ: start); b.brain.currentPose(b.sim) }
+                b.sim.teleport(toXZ: start); b.brain.currentPose(b.sim)          // (held there every tick: nothing moves him off)
+                minToStart = min(minToStart, simd_distance(joiner.position, start)); maxSq = max(maxSq, line.square(uid, 1))
             }
             let stage = joiner.idleState.kind == .decorHopscotch ? joiner.idleState.slideStage : -9
             if stage == 4, prevStage != 4 { entries += 1 }
+            if stage != prevStage, blocked { trace += " \(stage)@\(Int(Float(i) / 60 - blockedAt))" }
             prevStage = stage
             if blocked, joiner.idleState.kind == nil, !line.contains(uid, 1) { endedAt = Float(i) / 60 - blockedAt; break }
             if blocked, Float(i) / 60 - blockedAt > 40 { break }
         }
-        print("[hopline] blocked start: joiner's hopscotch ended \(endedAt) s after the block, stage-4 entries \(entries)")
+        print("[hopline] blocked start: joiner's hopscotch ended \(endedAt) s after the block, stage-4 entries \(entries), joiner closest to the start \(minToStart), his highest square \(maxSq), stages:\(trace)")
+        XCTAssertLessThan(maxSq, 0, "the joiner must not hop while the start is blocked (a scenario where he gets on anyway proves nothing)")
         XCTAssertGreaterThan(endedAt, 0, "the joiner gave the game up; stage \(joiner.idleState.slideStage) kind \(String(describing: joiner.idleState.kind)) pos \(joiner.position) line \(line.players(uid).map { "\($0.id):slot \($0.slot) sq \($0.sq)" })")
         XCTAssertLessThanOrEqual(endedAt, 25)
         XCTAssertLessThanOrEqual(entries, startTries + 1, "stage-4 entries \(entries)")
