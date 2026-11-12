@@ -749,6 +749,11 @@ final class TouchPlay {
     private var heldT: Float = 0
     private var releasedT: Float = 99
     private var impactsAtRelease = 0
+    /// A plain drop (a release that is not a throw) that has landed is owned by `getUpFrame` until it has put him back on his feet (hold-wear-r1: the brain's own
+    /// recovery waited for a 0.5 s run of near-zero wobble energy, up to 6 s). Reset on every grab.
+    private var dropHandled = false
+    /// How long after a release a landing still counts as that drop's (s).
+    static let dropWindow: Float = 4
     /// The soft warm pulse that is felt while he is held (read by `petFrameIdle`, a slow swell, never a flutter).
     private(set) var heldPulse: Float = 0
     /// A gentle ~1 Hz roll (rad) the stage adds to the grab rotation so he sways like a happy pendulum while he is held.
@@ -763,7 +768,7 @@ final class TouchPlay {
         if grabbing {
             liftedT = liftHeight > 0.04 ? liftedT + dt : 0
             heldT += dt
-            releasedT = 0; impactsAtRelease = impacts
+            releasedT = 0; impactsAtRelease = impacts; dropHandled = false
         } else { liftedT = 0; heldT = 0; releasedT += dt }
         if grabbing { skinner.normalSmoothing = 0 }
         let happyHold = grabbing && (liftedT > 0.2 || heldT > 0.5)
@@ -831,9 +836,12 @@ final class TouchPlay {
         case .off:
             if let brain { brain.hurryUpdate(dt: dt) }
             if let brain, brain.isFlipping || brain.isLying { stillT = 0; return false }          // (the sleep lies on his back ON PURPOSE: tilt 1.05 + the flop overshoot is past `lying`, and the touch target was righted and woken the moment he settled)      // the flip's faceplant lies face-down ON PURPOSE and gets up by itself
+            // just let go and still in the air: stay hands-off (the brain's recovery must not start mid-fall and be torn down at the landing)
+            if !thrown, !dropHandled, releasedT < 1.0, impacts == impactsAtRelease, sim.minY() > 0.08 { stillT = 0; return true }
             let pose = sim.bodyPose(iterations: 4)
             let lying = pose.tilt > 1.0
-            guard thrown || lying else { stillT = 0; return false }
+            let dropped = !thrown && !dropHandled && releasedT < Self.dropWindow && impacts > impactsAtRelease          // a plain drop that has landed (cuddle / pet / cheeks never release a grab, so never match)
+            guard thrown || lying || dropped else { stillT = 0; return false }
             // on the floor (the apex of a bounce is not) and slow: the bouncing is over; a lying jelly keeps rocking a little, so the energy limit is loose
             sinceImpact += dt
             // not while a rebound is still due (the instant of landing is slow too): the last landing was too weak to bounce, all bounces are used, or it has been quiet
@@ -841,11 +849,19 @@ final class TouchPlay {
             let calm = spent && sim.kineticEnergy() / sim.totalMass < 1.0 && simd_length(sim.meanVelocity()) < 1.0 && sim.minY() < 0.12
             stillT = calm ? stillT + dt : max(0, stillT - 0.5 * dt)
             if stillT >= Self.stillBeforeGetUp, let brain {
+                if dropped && !lying && pose.tilt <= 0.5 {
+                    // dropped and already standing: no roll-up; skip the brain's own 0.5 s "calm" wait and go back to life at once
+                    dropHandled = true; stillT = 0
+                    brain.clearTouch()
+                    brain.finishTouchRecovery(sim: sim)
+                    return false
+                }
+                dropHandled = true
                 getUpPhase = .righting; getUpT = 0; getUps += 1
                 gq0 = pose.rotation; gu = 0; guv = 0; gxz = SIMD2(pose.centroid.x, pose.centroid.z)
                 brain.clearTouch()
             }
-            return thrown
+            return thrown || dropped          // (a landed drop keeps the brain hands-off until it is up; after `dropWindow` s the brain's own recovery takes over as before)
         case .righting:
             guard let brain else { getUpPhase = .off; return false }
             getUpT += dt
