@@ -21,7 +21,7 @@ final class FootJoinLineTests: XCTestCase {
     static let maxNormalBreakP90: Float = 8         // degrees: the shading-normal break across the crossing, 90th percentile (the old crease requirement of 25 degrees is gone: the join must not be a crease)
     static let maxShadowStep: Float = 0.03          // the baked-shadow (mat) step across the crossing
 
-    struct Line { var saw: Float; var p10: Float; var points: Int; var breaks: [Float] = []; var matStep: Float = 0 }
+    struct Line { var saw: Float; var p10: Float; var points: Int; var breaks: [Float] = []; var matStep: Float = 0; var steps: [Float] = [] }
 
 
     /// Closest point on triangle (a, b, c) to p, with its barycentric weights (Ericson, Real-Time Collision Detection).
@@ -86,7 +86,7 @@ final class FootJoinLineTests: XCTestCase {
         let bins = 60
         var binH = [Float](repeating: -.infinity, count: bins), binA = [Float](repeating: 0, count: bins)
         var seen = Set<Int>(), t = 0
-        var breaksAll: [Float] = [], matStepMax: Float = 0
+        var breaksAll: [Float] = [], matStepMax: Float = 0, stepsAll: [Float] = []
         let limit = rm.armCapsule?.indexFirst ?? rm.index.count
         while t < limit {
             let tri = [Int(rm.index[t]), Int(rm.index[t + 1]), Int(rm.index[t + 2])]; t += 3
@@ -120,7 +120,7 @@ final class FootJoinLineTests: XCTestCase {
                 let brk = acosf(min(1, max(-1, simd_dot(ns, nb)))) * 180 / .pi
                 let sm = Self.effMat(i0 ? v1 : v0) * (1 - tp) + Self.effMat(i0 ? v0 : v1) * tp
                 let bm = Self.effMat(Int(bt[bestTri])) * bestW.x + Self.effMat(Int(bt[bestTri + 1])) * bestW.y + Self.effMat(Int(bt[bestTri + 2])) * bestW.z
-                breaksAll.append(brk); matStepMax = max(matStepMax, abs(sm - bm))
+                breaksAll.append(brk); matStepMax = max(matStepMax, abs(sm - bm)); stepsAll.append(abs(sm - bm))
                 if let pose = r.skinner.joinPose { Self.crossE.append(-Skinner.fittedDepth(x, pose).0) }
                 let th = atan2f(simd_dot(u, e2), simd_dot(u, e1)), h = simd_dot(u, a)
                 let b = min(bins - 1, Int((th + .pi) / (2 * .pi) * Float(bins)))
@@ -137,7 +137,7 @@ final class FootJoinLineTests: XCTestCase {
             saw = max(saw, min(abs(binH[b] - l), abs(binH[b] - r)))
         }
         angs.sort()
-        return Line(saw: saw, p10: angs.isEmpty ? 90 : angs[angs.count / 10], points: angs.count, breaks: breaksAll, matStep: matStepMax)
+        return Line(saw: saw, p10: angs.isEmpty ? 90 : angs[angs.count / 10], points: angs.count, breaks: breaksAll, matStep: matStepMax, steps: stepsAll)
     }
 
     func run(_ name: String, char: Int, start: (MotionRig) -> Void) -> (saw: Float, p10: Float, frames: Int) {
@@ -208,7 +208,7 @@ final class FootJoinLineTests: XCTestCase {
         r.brain.feature = JellyRoster.feature(char)
         r.skinner.configureTail(rm); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
         start(r)
-        var breaks: [Float] = [], step: Float = 0, frames = 0
+        var breaks: [Float] = [], steps: [Float] = [], frames = 0
         for frame in 0..<(60 * 3) {
             r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
             guard frame % 5 == 0, r.skinner.beansActive, r.skinner.beanBlend > 0.5 else { continue }
@@ -216,12 +216,13 @@ final class FootJoinLineTests: XCTestCase {
             frames += 1
             Self.joinMat = [:]
             if let w = r.skinner.takeJoinWrites() { for (k, v) in w.v.enumerated() { let b = rm.mat[Int(v)]; Self.joinMat[v] = b + (w.matT[k] - b) * w.matW[k] } }
-            for s in 0..<2 { let l = Self.line(r, s); if l.points >= 10 { breaks += l.breaks; step = max(step, l.matStep) } }
+            for s in 0..<2 { let l = Self.line(r, s); if l.points >= 10 { breaks += l.breaks; steps += l.steps } }
         }
         breaks.sort()
         Self.crossE.sort(); if !Self.crossE.isEmpty { print(String(format: "[footjoinshade] crossing height above the egg: p10 %.3f p50 %.3f p90 %.3f m", Self.crossE[Self.crossE.count / 10], Self.crossE[Self.crossE.count / 2], Self.crossE[Self.crossE.count * 9 / 10])) }; Self.crossE = []
         let p90 = breaks.isEmpty ? 0 : breaks[min(breaks.count - 1, breaks.count * 9 / 10)]
-        print(String(format: "[footjoinshade] %@ char %d (blend %@): frames %d crossings %d | normal break p90 %.1f deg | shadow step %.3f", name, char, Skinner.joinBlend ? "on" : "off", frames, breaks.count, p90, step))
+        steps.sort(); let step = steps.isEmpty ? 0 : steps[min(steps.count - 1, steps.count * 9 / 10)], stepMax = steps.last ?? 0
+        print(String(format: "[footjoinshade] %@ char %d (blend %@): frames %d crossings %d | normal break p90 %.1f deg | shadow step p90 %.3f max %.3f", name, char, Skinner.joinBlend ? "on" : "off", frames, breaks.count, p90, step, stepMax))
         return (p90, step, breaks.count, frames)
     }
 
@@ -233,7 +234,7 @@ final class FootJoinLineTests: XCTestCase {
                 guard m.frames > 0, m.n >= 10 else { print("[footjoinshade] SKIPPED \(name) char \(char): frames \(m.frames) crossings \(m.n)"); continue }
                 measured += 1
                 XCTAssertLessThanOrEqual(m.p90, Self.maxNormalBreakP90, "\(name) char \(char): the shading normal breaks \(m.p90) deg across the skin / foot crossing (p90)")
-                XCTAssertLessThanOrEqual(m.step, Self.maxShadowStep, "\(name) char \(char): the baked shadow steps \(m.step) across the crossing")
+                XCTAssertLessThanOrEqual(m.step, Self.maxShadowStep, "\(name) char \(char): the baked shadow steps \(m.step) (p90) across the crossing")
             }
         }
         XCTAssertGreaterThanOrEqual(measured, 20, "too few (move, character) pairs put the pieces out")

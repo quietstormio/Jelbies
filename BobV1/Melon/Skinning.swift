@@ -511,7 +511,7 @@ nonisolated final class Skinner {
             var w: Float = 0
             if let pose {
                 let (d, gr) = Self.fittedDepth(P(v), pose)
-                w = g * Self.smooth(-d / Self.joinSkinRamp)
+                w = g * max(Self.smooth(-d / Self.joinSkinRamp), dd <= 0 ? 1 : 1 - Self.smooth(dd / 0.03))          // (skin inside the piece's outline, even deep inside the egg, belongs to the join: it is half of the crossing triangles)
                 if w >= 0.002, Skinner.joinBlendNormal { pull(v, w, -gr) }
             }
             var rw: Float = -1, rt = SIMD3<Float>.zero
