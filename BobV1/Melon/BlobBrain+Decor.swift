@@ -304,8 +304,8 @@ extension BlobBrain {
     }
     /// A leg of the way round (stage -1 / -3) that stands still, waiting for a friend who stands on it: asks for another leg, the other way round (`avoid`), once the wait has lasted a moment.
     /// (The walk itself waits up to 6 s for a standing friend on a requested leg, and the plan was only asked again at the end of a leg.)
-    private func slideStallReplan(_ f: DecorFoot) {
-        guard case .walk = script, steerWait > 1.2 || walkStallT > 1.5, idleState.slideS < 8 else { return }
+    private func slideStallReplan(_ f: DecorFoot, dt: Float) {
+        guard case .walk = script, steerStall > 1.5 || steerWait > 1.2 || walkStallT > 1.5, idleState.slideS < 8, Int(scriptT * 4) != Int((scriptT - dt) * 4) else { return }          // (asked four times a second at most)
         guard let climb = decorStand(.decorSlide, f, from: position), let next = slideFirstLeg(f, climb: climb, from: position, avoid: idleState.target), simd_distance(next.0, idleState.target) > 0.3 else { return }
         idleState.slideS += 1
         idleState.slideStage = -next.1; idleState.target = next.0; idleState.decorRetry = 0
@@ -359,7 +359,7 @@ extension BlobBrain {
     /// Every step while a decor behaviour runs (before the gait): the kick lands when the ball is within reach.
     func decorTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let kind = idleState.kind, idleState.decorUID >= 0, let f = DecorField.shared.foot(idleState.decorUID) else { return }
-        if kind == .decorSlide, f.uid == ParkToys.slideUID, idleState.slideStage == -1 || idleState.slideStage == -3 { slideStallReplan(f) }          // (the way round the park slide)
+        if kind == .decorSlide, f.uid == ParkToys.slideUID, idleState.slideStage == -1 || idleState.slideStage == -3 { slideStallReplan(f, dt: dt) }          // (the way round the park slide)
         if kind == .soccerKick { soccerTick(sim, skinner, dt, f); return }
         if kind == .decorKick, idleState.decorGo, !idleState.decorKicked {
             let ball = DecorField.shared.position(f)
