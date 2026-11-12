@@ -37,7 +37,12 @@ enum ParkClearSpot {
         guard inPark, legCheckEnabled else { return false }
         legChecks += 1
         let n = max(1, Int(simd_distance(a, b) / 0.1))
-        for i in 0...n where blocked(a + (b - a) * (Float(i) / Float(n)), radius: radius) { legRejects += 1; return true }
+        // (solids only: the flat hopscotch court is walked over; `blocked` would also count it and rejected half of the roam picks)
+        for i in 0...n {
+            let p = a + (b - a) * (Float(i) / Float(n))
+            let q = RoomLayout.resolve(position: SIMD3(p.x, 0, p.y), radius: radius, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: nil)
+            if simd_distance(SIMD2(q.x, q.z), p) > 1e-4 { legRejects += 1; return true }
+        }
         return false
     }
 
