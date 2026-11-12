@@ -26,7 +26,13 @@ struct BubbleJelly {
 
 nonisolated enum BubbleTuning {
     /// Heart (attention) gained per bubble a Jelbie pops: a slight lift (~30 pops fill a whole empty heart).
-    static let attentionPerPop: Float = 0.03
+    /// (0.03 before 2026-11-11: ~30 pops filled a heart, the player never saw the love go up. Now ~17 pops; `loveCapPerSecond` keeps bubbles under petting's 0.05 / s.)
+    nonisolated(unsafe) static var attentionPerPop: Float = 0.06
+    /// Love a Jelbie can gain from bubble pops per second, averaged (a bucket of `loveBucket`): 0.03 / s = 1.8 per minute; petting pays 0.05 / s (3 per minute), a purr 0.15 / s (9 per minute) (the meter is 0...1).
+    nonisolated(unsafe) static var loveCapPerSecond: Float = 0.03
+    static let loveBucket: Float = 0.12
+    /// A heart over him after this many pops in a streak (within `streakWindow`): 3 or 4, drawn each time (2 before).
+    nonisolated(unsafe) static var heartPops: ClosedRange<Int> = 3...4
     static let spawnPerSecond: ClosedRange<Float> = 1.5...6.5
     static let holdStrength: Float = 0.6
     static let contactRadius: Float = 0.62          // a body touching a drifting bubble
@@ -103,6 +109,28 @@ nonisolated enum BubbleTuning {
     }
     static func rnd(in r: ClosedRange<Float>) -> Float { rngState == nil ? Float.random(in: r) : r.lowerBound + (r.upperBound - r.lowerBound) * next() }
     static func rnd(in r: Range<Float>) -> Float { rngState == nil ? Float.random(in: r) : r.lowerBound + (r.upperBound - r.lowerBound) * next() }
+    /// 2026-11-11 round 3, the HOP CHAIN: while a bubble is in reach he does not go back to think / look / walk; on a landing he picks the next reachable bubble and hops from the landing's own rebound.
+    nonisolated(unsafe) static var chainEnabled = true
+    /// Reach of one hop from where he stands (floor distance to the bubble): the longest leap (0.8) + a little; the skip's 0.85 is its own.
+    nonisolated(unsafe) static var chainReach: Float = 0.85
+    /// The ground time (s) of a landing before the next chained hop starts (the squash must read; the gait's own landing lasts 0.55 s).
+    nonisolated(unsafe) static var chainLandHold: ClosedRange<Float> = 0.12...0.2
+    /// The most he turns in one crouch (rad, 60 degrees): a bubble further round is reached over two hops (a short turn hop first).
+    nonisolated(unsafe) static var chainMaxTurn: Float = 1.047
+    nonisolated(unsafe) static var chainTurnHop: Float = 0.22
+    /// The chained hop's centroid apex (BlobBrain.bubbleDefaultApex = 0.10 is the plain hop's) is picked from the bubble's height: the crown rises about `apex + chainRiseBase` (the leap: 0.10 -> 0.19). To be measured in phase 2.
+    nonisolated(unsafe) static var chainVariesApex = true
+    nonisolated(unsafe) static var chainApexRange: ClosedRange<Float> = 0.06...0.13
+    nonisolated(unsafe) static var chainRiseBase: Float = 0.09
+    /// Gap between two hop starts anywhere while chaining (`popGap` 0.4 before), and the take-off stagger between two Jelbies (no lockstep).
+    nonisolated(unsafe) static var chainPopGap: Float = 0.08
+    nonisolated(unsafe) static var chainStagger: Float = 0.1
+    /// After a chain ends with nothing in reach: the next chain attempt (the idle path's own think time stays the after-chase delay: round 2's foot-join finding).
+    nonisolated(unsafe) static var chainRetry: ClosedRange<Float> = 0.05...0.12
+    /// The brain's root follows the body through a chain of hops (as the race chain does: a root left behind skews the skin's jiggle and opens the foot join).
+    nonisolated(unsafe) static var chainFollowRoot = true
+    /// A bubble he missed three times in a row is left alone by him for this long.
+    static let chainGiveUp: Float = 2.0
     /// The numbers of the play BEFORE 2026-11-11 (round 1's baseline: the play path `playTick` with the old pacing, weights, shares and radii; `classic` stays off); tests only.
     static func applyBaseline() {
         restoreHead()
@@ -112,6 +140,7 @@ nonisolated enum BubbleTuning {
         bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1; flapWeightMid = 1; flapWeightHigh = 3; skipWeight = 3; leapWeightMid = 3; bounceReps = 3
         idleCuts = (0.32, 0.72, 0.86); idleStepDur = 0.8...1.6
         busyLookingChases = false; goWaitsForHop = false; spotWaitsForFeet = false; flapBeforeHeader = false
+        chainEnabled = false; attentionPerPop = 0.03; loveCapPerSecond = 1000; heartPops = 2...2; streakForHearts = 2
     }
     /// This round's tuning (the values above); tests only.
     static func restoreHead() {
@@ -123,13 +152,16 @@ nonisolated enum BubbleTuning {
         bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 8; flapWeightHigh = 12; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 6
         idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
         busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false; flapBeforeHeader = true
+        chainEnabled = true; chainReach = 0.85; chainLandHold = 0.12...0.2; chainMaxTurn = 1.047; chainTurnHop = 0.22; chainVariesApex = true; chainApexRange = 0.06...0.13; chainRiseBase = 0.09
+        chainPopGap = 0.08; chainStagger = 0.1; chainRetry = 0.05...0.12; chainFollowRoot = true
+        attentionPerPop = 0.06; loveCapPerSecond = 0.03; heartPops = 3...4; streakForHearts = 2
     }
     static let lightBeat: Float = 0.18
     static let aimMax: Float = 3.5                 // how long he waits under a bubble for it to be in reach
     static let maxChasers = 3          // (2026-11-07: all of them want in)
     static let thinkEvery: ClosedRange<Float> = 0.3...0.7
     static let streakWindow: Float = 8
-    static let streakForHearts = 2
+    nonisolated(unsafe) static var streakForHearts = 2          // (the classic path's)
     static let fxLife: Float = 0.36
     static let price = 40
 }
@@ -237,7 +269,22 @@ final class BubbleWand: PlayToy {
         var extra = 0
         var startFails = 0
         var waitHopAt: Float = 0   // the next small hop on the spot while the bubble is out of reach
+        // the hop chain (round 3)
+        var chainAt: Float = 0          // idle: the next chain attempt
+        var chainLinks = 0              // hops chained since the chain began (0 = not in a chain)
+        var landSeen: Float = -1        // when the landing phase of the running hop was first seen
+        var landHold: Float = 0.15      // ground time this link waits before the next hop
+        var turnOnly = false            // this link is a short turn hop (the bubble is more than `chainMaxTurn` round)
+        var lastMiss = -1, missRun = 0  // the bubble he keeps missing
+        var skipBubble = -1, skipUntil: Float = 0
+        var heartNeed = 0               // pops in the streak for the next heart (drawn from `heartPops`)
     }
+    @ObservationIgnored private var lastTakeoff: [Int: Float] = [:]
+    /// Love from pops: the bucket per Jelbie (tests, report): the gained total and the bucket's fill.
+    @ObservationIgnored private var loveBucket: [Int: Float] = [:]
+    @ObservationIgnored private(set) var loveGained: [Int: Float] = [:]
+    @ObservationIgnored private(set) var chainHops = 0
+    @ObservationIgnored private(set) var chainStarts = 0
 
     nonisolated deinit {}
     init() {}
@@ -268,6 +315,7 @@ final class BubbleWand: PlayToy {
         BubbleTuning.contactPopChance = 0.12
         deactivate(); active = false; clock = 0; demo = nil; burstUntil = -1; states.removeAll(); cheers = [:]; lastHopStart = -9; field = BubbleField()
         popsByJelly = [:]; diag = [:]; waitHops = 0; modeSeconds = [:]; chaseRecords = []; claimToPop = []; movePops = [:]; moveStarts = [:]; extraPops = 0; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
+        lastTakeoff = [:]; loveBucket = [:]; loveGained = [:]; chainHops = 0; chainStarts = 0
     }
     /// Test seam: the bubble stream's own dice (the field's) follow the seed too, so seeds differ in the bubbles as well as in the Jelbies.
     func reseedField(_ seed: UInt64) { field = BubbleField(seed: seed &* 0x2545F4914F6CDD1D | 1) }
@@ -329,6 +377,7 @@ final class BubbleWand: PlayToy {
         // 4. the Jelbies: first they stay in view, then they play
         leashTick(jellies)
         cheerTick(jellies)
+        refillLove(jellies.map(\.id))
         jelliesTick(jellies)
         // 5. a soft purr under the thumbs while blowing
         if let h = haptics {
@@ -508,8 +557,15 @@ final class BubbleWand: PlayToy {
 
     private func playTick(_ j: BubbleJelly, _ st: inout JState, _ chasing: inout Int, _ js: [BubbleJelly]) {
         let b = j.brain
+        let chainOn = BubbleTuning.chainEnabled && BubbleTuning.forceMove == nil
         switch st.mode {
         case .idle:
+            b.bubbleChainRestoreApex()
+            // the hop chain: a bubble in reach and he is standing quietly: no think, no look, no walk, hop at it now
+            if BubbleTuning.chainEnabled, BubbleTuning.forceMove == nil, clock >= st.chainAt, chasing < BubbleTuning.maxChasers, !field.bubbles.isEmpty, b.bubbleFree, b.bubbleCanHop {
+                st.chainAt = clock + BubbleTuning.rnd(in: BubbleTuning.chainRetry)
+                if let link = chainPick(j, js, st, fromLand: false), chainLaunch(j, &st, link, fromLand: false) { chasing += 1; chases += 1; chainStarts += 1; return }
+            }
             guard clock >= st.thinkAt else { return }
             st.thinkAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playThinkEvery))
             let free = b.bubbleFree
@@ -578,10 +634,10 @@ final class BubbleWand: PlayToy {
                 let stand = standPoint(j, bub, st.move)
                 if simd_distance(stand, b.position) > 0.25 { if clock >= st.retargetAt { st.retargetAt = clock + 0.5; st.goal = stand; b.bubbleGo(stand) }; return }
                 // 2026-11-11 "jump a lot more": under it and it is not in reach yet: small excited hops on the spot (not standing and looking up); the bubble is popped only by the real pop moves
-                if !BubbleTuning.classic, BubbleTuning.playWaitHopEnabled, BubbleTuning.forceMove == nil, clock >= st.waitHopAt, clock - lastHopStart >= BubbleTuning.popGap, clock - st.hopStart >= BubbleTuning.playHopSpacing, b.bubbleCanHop {
+                if !BubbleTuning.classic, BubbleTuning.playWaitHopEnabled, BubbleTuning.forceMove == nil, clock >= st.waitHopAt, clock - lastHopStart >= popGapNow, clock - st.hopStart >= BubbleTuning.playHopSpacing, b.bubbleCanHop {
                     if BubbleTuning.rnd(in: 0..<1) >= min(1, BubbleTuning.playWaitHopChance * BubbleTuning.playEnergy) { st.waitHopAt = clock + 0.4 }
                     else if b.bubbleLeap(j.sim, distance: 0.0001) {
-                        st.waitHopAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playWaitHop)); st.hopStart = clock; lastHopStart = clock; waitHops += 1
+                        st.waitHopAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playWaitHop)); st.hopStart = clock; lastHopStart = clock; lastTakeoff[j.id] = clock; waitHops += 1
                     }
                 }
                 return
@@ -593,7 +649,7 @@ final class BubbleWand: PlayToy {
                 else if clock >= st.retargetAt { st.retargetAt = clock + 0.5; _ = b.bubbleWatch(pxz, hold: 0.3, excited: true) }
                 return
             }
-            guard clock - lastHopStart >= BubbleTuning.popGap, b.bubbleCanHop else { return }          // (the feet may still be settling from the walk: wait, that is not a failed start)
+            guard clock - lastHopStart >= popGapNow, b.bubbleCanHop else { return }          // (the feet may still be settling from the walk: wait, that is not a failed start)
             var ok = false
             var used = m
             switch m {
@@ -606,7 +662,7 @@ final class BubbleWand: PlayToy {
             if !ok, m != .header, dh <= BubbleTuning.hopReach, fits(.header) { ok = b.bubbleHeaderHop(j.sim); used = .header }
             if ok {
                 st.move = used
-                st.mode = .hop; st.hopStart = clock; lastHopStart = clock; st.done = false; st.extra = 0
+                st.mode = .hop; st.hopStart = clock; lastHopStart = clock; lastTakeoff[j.id] = clock; st.done = false; st.extra = 0; st.landSeen = -1; st.landHold = BubbleTuning.rnd(in: BubbleTuning.chainLandHold); st.turnOnly = false
                 moveStarts[used, default: 0] += 1
                 trace("jelly \(j.id) \(used) at bubble \(bub.id) y=\(String(format: "%.2f", bub.pos.y)) crown \(String(format: "%.2f", crown)) dh \(String(format: "%.2f", dh))")
             } else {
@@ -630,7 +686,7 @@ final class BubbleWand: PlayToy {
             }
             func popped(_ bub: Bubble, light: Bool) {
                 popBubble(bub.id, by: j, hopped: true, light: light)
-                if let n = states[j.id] { st.streak = n.streak; st.lastPop = n.lastPop }
+                if let n = states[j.id] { st.streak = n.streak; st.lastPop = n.lastPop; st.heartNeed = n.heartNeed }
                 movePops[st.move, default: 0] += 1
             }
             if !st.done {
@@ -646,7 +702,7 @@ final class BubbleWand: PlayToy {
                     popped(bub, light: false)
                     claimToPop.append(clock - st.claimAt)
                     st.done = true
-                    if st.move != .bounce { endChase(&st, j); return }
+                    if st.move != .bounce, !chainOn { endChase(&st, j); return }
                 }
             } else if st.extra < 2, st.move == .bounce {
                 // a later hop of the same bounce: another unclaimed bubble on the crown is claimed and popped (a lighter beat)
@@ -656,6 +712,15 @@ final class BubbleWand: PlayToy {
                 }
             }
             let over = b.idleState.kind == nil && b.scriptIsNone && age > 0.2
+            // the chain: the landing of a chained hop (after its ground time), or the end of any other move, hands over to the next link at once
+            if chainOn {
+                if b.bubbleInLanding { if st.landSeen < 0 { st.landSeen = clock } } else { st.landSeen = -1 }
+                if BubbleTuning.chainFollowRoot { b.bubbleChainFollowRoot(j.sim) }
+                let landed = b.bubbleInLanding && st.landSeen >= 0 && clock - st.landSeen >= st.landHold && (st.move == .leap || st.turnOnly)
+                if landed || over {
+                    if chainContinue(j, &st, js, fromLand: landed) { return }
+                } else if age <= 3 { return }
+            }
             if st.done { if over || age > 3 { endChase(&st, j) }; return }
             if over || age > 3 {          // missed (it drifted): a hopeful look, one more try
                 b.face(.hopeful, hold: 1.0)
@@ -710,6 +775,7 @@ final class BubbleWand: PlayToy {
         st.done = false; st.extra = 0; st.goal = nil; st.goalTries = 0; st.startFails = 0
         field.release(jelly: j.id)
         j.brain.bubbleHold = false
+        st.chainLinks = 0; st.turnOnly = false; st.landSeen = -1; st.chainAt = clock + BubbleTuning.rnd(in: BubbleTuning.chainRetry)
         st.mode = .idle; st.bubble = -1; st.thinkAt = clock + BubbleTuning.rnd(in: BubbleTuning.classic ? 0.3...0.9 : BubbleTuning.scaled(BubbleTuning.playAfterChase))
     }
 
@@ -804,6 +870,140 @@ final class BubbleWand: PlayToy {
         leashed.removeAll(); slots = [:]; slotKey = []; areaCache = nil
     }
 
+
+    // MARK: love from pops (2026-11-11: "when you play bubbles the heart status love goes up")
+
+    /// A pop's love: the existing path (`Needs.gain(.attention, ...)`, what the park love and the cafe use; petting pays through `Needs.step` at `NeedsTuning.petRate` 0.05 / s = 3 per minute,
+    /// a purr 0.15 / s). `attentionPerPop` per pop out of a bucket that refills at `loveCapPerSecond` (0.03 / s = 1.8 per minute, under petting), so a long chain of pops does not out-pay petting.
+    private func gainLove(_ id: Int) {
+        let have = loveBucket[id] ?? BubbleTuning.loveBucket
+        let amount = min(BubbleTuning.attentionPerPop, have)
+        loveBucket[id] = have - amount
+        guard amount > 0 else { return }
+        loveGained[id, default: 0] += amount
+        care?.needs(for: id).gain(.attention, amount)
+    }
+    private func refillLove(_ ids: [Int]) {
+        for id in ids { loveBucket[id] = min(BubbleTuning.loveBucket, (loveBucket[id] ?? BubbleTuning.loveBucket) + BubbleTuning.loveCapPerSecond * dtNow) }
+    }
+
+    // MARK: the hop chain (round 3)
+
+    /// Tests / report: a bubble is in his reach now (the same bounds as `chainPick`, no dice): nobody else's, within `chainReach`, in the height band of a chained hop or low enough for the skip.
+    func bubbleInReach(_ j: BubbleJelly) -> Bool {
+        let c = j.sim.centroid(), here = SIMD2(c.x, c.z)
+        let crown = crownRest(j)
+        let lo = crown + BubbleTuning.chainRiseBase + BubbleTuning.chainApexRange.lowerBound, hi = crown + BubbleTuning.chainRiseBase + BubbleTuning.chainApexRange.upperBound
+        for bub in field.bubbles where (bub.claimedBy < 0 || bub.claimedBy == j.id) && bub.age > 0.3 {
+            let pxz = floorPos(bub)
+            guard simd_distance(pxz, here) <= BubbleTuning.chainReach, bub.pos.y >= 0.7, bub.pos.y <= BubbleTuning.chaseMaxY, inArea(pxz) else { continue }
+            let band = 0.12 + 0.5 * bub.radius + 0.08
+            if bub.pos.y >= lo - band && bub.pos.y <= hi + band || bub.pos.y < crown - 0.05 { return true }
+        }
+        return false
+    }
+
+    private var popGapNow: Float { BubbleTuning.chainEnabled && BubbleTuning.forceMove == nil ? BubbleTuning.chainPopGap : BubbleTuning.popGap }
+
+    private struct ChainLink { var bub: Bubble; var move: BubblePopMove; var length: Float; var apex: Float?; var turnOnly: Bool }
+
+    /// No other Jelbie took off within `chainStagger` (no lockstep).
+    private func staggerOK(_ id: Int) -> Bool {
+        for (o, t) in lastTakeoff where o != id && clock - t < BubbleTuning.chainStagger { return false }
+        return true
+    }
+
+    /// REACH: a bubble is reachable from where he stands when one hop can pop it: floor distance <= `chainReach` (the longest leap 0.8, a skip 0.85), over floor he may stand on (inside the play area),
+    /// and its height inside the band of what a hop of the chain's apex range can lift the crown to (rest crown + `chainRiseBase` + the apex range, +- the pop band); a low bubble is the skip's (from a stand).
+    /// Nearest first, never one another Jelbie has claimed (`claimedBy`: the claim is exclusive, set in `chainLaunch` before the hop), nor the one he keeps missing.
+    private func chainPick(_ j: BubbleJelly, _ js: [BubbleJelly], _ st: JState, fromLand: Bool) -> ChainLink? {
+        let b = j.brain
+        let c = j.sim.centroid(), here = SIMD2(c.x, c.z)
+        let crown = crownRest(j)
+        let winged = b.feature == .wings && !b.wingsFolded
+        var best: (bub: Bubble, dh: Float, fits: [BubblePopMove], err: Float)?
+        for bub in field.bubbles where bub.claimedBy < 0 && bub.age > 0.3 && !(bub.id == st.skipBubble && clock < st.skipUntil) {
+            let pp = bub.pos + bub.vel * 0.3
+            let pxz = SIMD2(pp.x, pp.z)
+            let dh = simd_distance(pxz, here)
+            guard dh <= BubbleTuning.chainReach, pp.y >= 0.7, pp.y <= BubbleTuning.chaseMaxY, inArea(pxz) else { continue }
+            let band = 0.12 + 0.5 * bub.radius + 0.08
+            let err = b.bubbleYawError(to: pxz)
+            var fits: [BubblePopMove] = []
+            let lo = crown + BubbleTuning.chainRiseBase + BubbleTuning.chainApexRange.lowerBound, hi = crown + BubbleTuning.chainRiseBase + BubbleTuning.chainApexRange.upperBound
+            if pp.y >= lo - band, pp.y <= hi + band { fits.append(.leap) }
+            if !fromLand {
+                let hy = abs(pp.y - (crown + (BubbleTuning.apex[.header] ?? 0.24))) <= band && pp.y >= BubbleTuning.hopMinY
+                if dh <= BubbleTuning.hopReach, hy { fits.append(.header); fits.append(.bounce) }
+                if winged, dh <= BubbleTuning.hopReach + 0.2, abs(pp.y - (crown + (BubbleTuning.apex[.flap] ?? 0.35))) <= band + 0.1, err <= 0.45, b.bubbleFlapProbe() == "ok" { fits.append(.flap) }
+                if dh >= 0.3, dh <= 0.85, pp.y < crown - 0.05, err <= 0.45, b.bubbleSkipProbe() == "ok" { fits.append(.skip) }
+            }
+            guard !fits.isEmpty else { continue }
+            if best == nil || dh + BubbleTuning.rnd(in: 0..<0.1) < best!.dh { best = (bub, dh, fits, err) }
+        }
+        guard let pick = best else { return nil }
+        // the kind: the planned move (the same dice as before: the special pops keep their share) when it fits, else the first that does (a winged one tries the flap first)
+        var m = planMove(j, pick.bub)
+        if !pick.fits.contains(m) {
+            let others: [BubblePopMove] = j.brain.feature == .wings ? [.flap, .header, .leap, .bounce, .skip] : [.header, .leap, .bounce, .skip, .flap]
+            m = others.first(where: pick.fits.contains) ?? .leap
+        }
+        let pp = pick.bub.pos + pick.bub.vel * 0.3
+        let turn = pick.err > BubbleTuning.chainMaxTurn
+        var apex: Float?
+        if BubbleTuning.chainVariesApex {
+            let want = pp.y - crown - BubbleTuning.chainRiseBase
+            apex = min(max(want, BubbleTuning.chainApexRange.lowerBound), BubbleTuning.chainApexRange.upperBound)
+        }
+        let length = m == .leap ? (turn ? min(pick.dh, BubbleTuning.chainTurnHop) : pick.dh) : 0
+        return ChainLink(bub: pick.bub, move: m, length: length, apex: m == .leap ? apex : nil, turnOnly: m == .leap && turn)
+    }
+
+    /// Start the link: claim the bubble, then a chained leap-style hop at once (from the landing's own rebound, or from standing), or hand a special pop (header, bounce, flap, skip) to `.aim`
+    /// (it starts as soon as the landing is over: the `.aim` code of `playTick` is unchanged). False: the hop cannot start (no room / a friend ahead / a friend just took off): nothing was claimed.
+    private func chainLaunch(_ j: BubbleJelly, _ st: inout JState, _ link: ChainLink, fromLand: Bool) -> Bool {
+        let b = j.brain
+        if link.move == .leap {
+            guard staggerOK(j.id), clock - lastHopStart >= BubbleTuning.chainPopGap else { return false }
+            let aimAt = floorPos(link.bub) + SIMD2(link.bub.vel.x, link.bub.vel.z) * 0.3
+            guard b.bubbleChainHop(j.sim, toward: aimAt, length: link.length, apex: link.apex, maxTurn: BubbleTuning.chainMaxTurn) else {
+                note("chain startFail"); st.skipBubble = link.bub.id; st.skipUntil = clock + 0.5; return false }
+            b.face(.excited, hold: 1.2)
+            st.mode = .hop; st.hopStart = clock; lastHopStart = clock; lastTakeoff[j.id] = clock
+            moveStarts[.leap, default: 0] += 1; chainHops += 1
+        } else {
+            st.mode = .aim; st.aimAt = clock; st.retargetAt = clock + 0.2
+            st.waitHopAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playWaitHopFirst))
+            b.bubbleHold = true
+        }
+        st.bubble = link.bub.id; st.move = link.move; st.turnOnly = link.turnOnly
+        st.done = false; st.extra = 0; st.tries = 0; st.claimAt = clock; st.chaseStart = clock; st.walkTime = 0; st.goal = nil; st.goalTries = 0; st.startFails = 0
+        st.landSeen = -1; st.landHold = BubbleTuning.rnd(in: BubbleTuning.chainLandHold); st.chainLinks += 1; st.until = clock + (link.move == .leap ? 6.5 : BubbleTuning.aimMax)
+        field.claim(link.bub.id, by: j.id)
+        let rise = link.apex.map { $0 + BubbleTuning.chainRiseBase } ?? (BubbleTuning.apex[link.move] ?? 0.12)
+        field.setReach(link.bub.id, y: link.move == .skip ? 1.0 : crownRest(j) + rise)
+        trace("jelly \(j.id) chain \(link.move) at bubble \(link.bub.id) turnOnly \(link.turnOnly) len \(String(format: "%.2f", link.length))")
+        return true
+    }
+
+    /// The running link is over (landed, or the move ended): close its record and go to the next bubble in reach. False: none in reach (the caller ends the chase: the walk / wait-hop flow takes over).
+    private func chainContinue(_ j: BubbleJelly, _ st: inout JState, _ js: [BubbleJelly], fromLand: Bool) -> Bool {
+        let b = j.brain
+        guard b.bubbleStillMine, !b.held else { return false }
+        if st.done { st.missRun = 0 }
+        else if st.bubble == st.lastMiss { st.missRun += 1 } else { st.lastMiss = st.bubble; st.missRun = 1 }
+        if !st.done, st.missRun >= 3 { st.skipBubble = st.bubble; st.skipUntil = clock + BubbleTuning.chainGiveUp; st.missRun = 0 }
+        // my own claim is let go for the pick (it may be the same bubble again when he missed it)
+        let mine = st.bubble
+        field.release(jelly: j.id)
+        guard let link = chainPick(j, js, st, fromLand: fromLand) else { field.claim(mine, by: j.id); return false }
+        guard staggerOK(j.id) else { field.claim(mine, by: j.id); return true }          // (a friend took off just now: this tick waits)
+        if st.mode != .idle { note("end \(st.mode) \(st.move) \(st.done ? "popped" : "no")"); chaseRecords.append(ChaseRecord(popped: st.done, seconds: clock - st.claimAt, walking: st.walkTime, move: st.move)) }
+        if chainLaunch(j, &st, link, fromLand: fromLand) { return true }
+        field.claim(mine, by: j.id)
+        return false
+    }
+
     // MARK: pops
 
     /// The pop, at the frame the bubble meets his crown: the burst, the pop sound and a light haptic tick right now; the voice (one, not two) comes after he lands (`cheerTick`).
@@ -814,13 +1014,14 @@ final class BubbleWand: PlayToy {
         st.streak = clock - st.lastPop < BubbleTuning.streakWindow ? st.streak + 1 : 1
         st.lastPop = clock
         popsByJelly[j.id, default: 0] += 1
-        care?.needs(for: j.id).gain(.attention, BubbleTuning.attentionPerPop)
+        gainLove(j.id)
         if hopped { hopPops += 1 }
         j.brain.face(.excited, hold: 1.6)
         AudioHub.shared.play(.bubblePop, jelly: j.id, x: j.brain.px, volume: 1)
         if hopped || b.pos.z > 0.8, let h = haptics { h.transient(now: CACurrentMediaTime(), intensity: light ? BubbleTuning.lightBeat : 0.25, sharpness: 0.5) }
         var hearts = false
-        if st.streak >= BubbleTuning.streakForHearts { st.streak = 0; heartBursts += 1; hearts = true }
+        if st.heartNeed <= 0 { st.heartNeed = BubbleTuning.classic ? BubbleTuning.streakForHearts : BubbleTuning.heartPops.lowerBound + Int(BubbleTuning.rnd(in: 0..<Float(BubbleTuning.heartPops.count))) }
+        if st.streak >= st.heartNeed { st.streak = 0; st.heartNeed = 0; heartBursts += 1; hearts = true }
         cheers[j.id] = (clock + (hopped ? 0.4 : 0.15), hearts)          // (the hop's landing is ~0.25 s after its top)
         states[j.id] = st
     }
