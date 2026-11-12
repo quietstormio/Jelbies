@@ -244,13 +244,16 @@ final class VoiceTraining {
 
     /// The known trick a short command names by its plain word, if any (a taught word is matched separately).
     private func plainTrick(in rest: [String], known: Bool) -> VoiceTrick? {
-        guard rest.count <= 3, Set(rest).isDisjoint(with: VoiceTuning.placeWords) else { return nil }
+        guard rest.count <= 3 else { return nil }
         let cands = Set(VoiceMatcher.candidates(rest))
-        // longest matched command word wins ("show off" over a shorter word); ties keep declaration order
+        // longest matched command word wins ("show off" over a shorter word); ties keep declaration order. A place word ("hop ON the couch") spoils a match
+        // unless it is part of the command word itself ("show OFF").
         var best: (t: VoiceTrick, len: Int)?
         for t in VoiceTrick.allCases where t != .come && knows(t) == known {
-            guard let len = t.commandWords.filter({ cands.contains($0) }).map(\.count).max() else { continue }
-            if len > (best?.len ?? 0) { best = (t, len) }
+            for w in t.commandWords where cands.contains(w) {
+                guard Set(rest).subtracting(w.split(separator: " ").map(String.init)).isDisjoint(with: VoiceTuning.placeWords) else { continue }
+                if w.count > (best?.len ?? 0) { best = (t, w.count) }
+            }
         }
         return best?.t
     }

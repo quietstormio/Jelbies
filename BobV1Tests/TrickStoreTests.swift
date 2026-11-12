@@ -48,6 +48,26 @@ final class TrickStoreTests: XCTestCase {
         XCTAssertTrue(b.owns(item))
     }
 
+    /// Stage 1 of the trick plan: Show off (3 stars, one Jelbie), Strut and Sing (1 star, everyone).
+    func testStageOneTrickRows() {
+        let want: [(VoiceTrick, Int, TrickScope, Int)] = [(.showOff, 3, .perJelbie, 110), (.strut, 1, .everyone, 40), (.sing, 1, .everyone, 40)]
+        for (t, stars, scope, price) in want {
+            let d = TrickCatalog.def(t)
+            XCTAssertEqual(d?.stars, stars, "\(t) stars"); XCTAssertEqual(d?.scope, scope, "\(t) scope"); XCTAssertEqual(d?.price, price, "\(t) price")
+            XCTAssertEqual(d?.scope.tag, scope == .everyone ? "For all your Jelbies" : "Only one Jelbie")
+            XCTAssertFalse(TrickCatalog.isDefault(t)); XCTAssertTrue(ShowTrickInfo.stageTricks.contains(t))
+            XCTAssertNotNil(VoiceCoordinator.idleKind(for: t), "\(t) has a move"); XCTAssertEqual(VoiceCoordinator.trick(for: VoiceCoordinator.idleKind(for: t)), t)
+            XCTAssertNotNil(StoreCatalog.item("trick-\(t.rawValue)"), "\(t) is in the Shop")
+            XCTAssertGreaterThan(ShowTrickInfo.seconds(t), 3, "the stage waits for the longer moves")
+        }
+        XCTAssertEqual(VoiceCoordinator.idleKind(for: .showOff), .signatureFlourish); XCTAssertEqual(VoiceCoordinator.idleKind(for: .strut), .proudStrut); XCTAssertEqual(VoiceCoordinator.idleKind(for: .sing), .sing)
+        XCTAssertEqual(ShowTrickInfo.seconds(.sit), 2.6, "the others keep the old time")
+        let (b, w) = book(500)
+        XCTAssertEqual(b.buyTrick(.strut, for: nil), .bought); XCTAssertEqual(w.count, 460)
+        XCTAssertTrue(b.knows(.strut, character: 2), "everyone")
+        XCTAssertEqual(b.buyTrick(.showOff, for: 1), .bought); XCTAssertFalse(b.knows(.showOff, character: 0))
+    }
+
     func testTrickNeedsEnoughCoins() {
         let (b, w) = book(10)
         XCTAssertEqual(b.buyTrick(.flip, for: 0), .notEnough)

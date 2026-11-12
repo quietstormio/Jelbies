@@ -75,14 +75,14 @@ extension BlobBrain {
                 let h = SingTuning.notes[n.index].height
                 mouthOpen = SingTuning.mouth * n.env * (0.8 + 0.2 * h)
                 squash *= 1 + 0.03 * n.env * a
-                pitch -= 0.03 * h * n.env * a
+                pitch -= 0.05 * h * n.env * a
                 if idleState.hop != n.index + 1 { idleState.hop = n.index + 1; jellyKick = max(jellyKick, 0.4 + 0.3 * h) }
             } else { mouthOpen = 0 }
-            roll += 0.05 * sinf(2 * .pi * song / 0.76) * a
+            roll += 0.07 * sinf(2 * .pi * song / 0.76) * a
             // the held last note: head back, arms a little out, up on the toes
             let lastOn = SingTuning.notes.last?.onset ?? 0
             let hold = smooth01((song - lastOn) / 0.2) * (1 - smooth01((song - SingTuning.length + 0.1) / 0.2))
-            pitch -= 0.10 * hold * a
+            pitch -= 0.14 * hold * a
             squash *= 1 + 0.05 * hold * a
             armDirW = hold; armDirOut = 0.03
             for s in 0..<2 { armDirEl[s] = 0.35; armDirSa[s] = s == 0 ? 0.9 : -0.9 }
