@@ -292,7 +292,7 @@ final class ParkSlideCrowdTests: XCTestCase {
         for _ in 0..<5 { lab.tick(watching: false) }
         let b = rigs[1].brain
         var t: Float = 0, tCmd: Float = -1
-        var started = false, walkStarts = 0, prevNone = true
+        var started = false, walkStarts = 0, walkStartsWin = 0, prevNone = true
         var leftAt: Float?
         var minBox = sl.distance(b.position); let startBox = minBox
         var stuckRun: Float = 0, stuckMax: Float = 0, lastPos = b.position, lastChk: Float = 0
@@ -301,7 +301,7 @@ final class ParkSlideCrowdTests: XCTestCase {
             if t >= 1, !started { started = rigs[0].brain.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner); tCmd = t }
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
             var isNone = true; if case .none = b.script { isNone = true } else { isNone = false }
-            if prevNone, case .walk = b.script { walkStarts += 1 }
+            if prevNone, case .walk = b.script { walkStarts += 1; if started, t - tCmd <= (leftAt ?? 1e9) + 3 { walkStartsWin += 1 } }          // (walkStartsWin: from the command until 3 s after he is off the foot; walkStarts also counts his later own walks)
             prevNone = isNone
             if started, leftAt == nil, simd_distance(b.position, landing) >= peer { leftAt = t - tCmd }
             minBox = min(minBox, sl.distance(b.position))
@@ -321,11 +321,11 @@ final class ParkSlideCrowdTests: XCTestCase {
             if let e = endAt, t >= e { break }
         }
         func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
-        let line = "[stepoff] v=\(variant) seed=\(seed) walkStarts=\(walkStarts) leftFootAt=\(ft(leftAt))s stuckMax=\(String(format: "%.1f", stuckMax))s minBox=\(String(format: "%.2f", minBox)) (start \(String(format: "%.2f", startBox))) A: platformPh2=\(String(format: "%.1f", ph2))s (hold \(String(format: "%.1f", hold))) minD1.5sAfterFloor=\(String(format: "%.2f", minD)) rode=\(t6 != nil) end t=\(String(format: "%.1f", t))"
+        let line = "[stepoff] v=\(variant) seed=\(seed) walkStartsWin=\(walkStartsWin) walkStartsAll=\(walkStarts) leftFootAt=\(ft(leftAt))s stuckMax=\(String(format: "%.1f", stuckMax))s minBox=\(String(format: "%.2f", minBox)) (start \(String(format: "%.2f", startBox))) A: platformPh2=\(String(format: "%.1f", ph2))s (hold \(String(format: "%.1f", hold))) minD1.5sAfterFloor=\(String(format: "%.2f", minD)) rode=\(t6 != nil) end t=\(String(format: "%.1f", t))"
         print(line)
         XCTAssertNotNil(leftAt, "\(line)")
         if let l = leftAt { XCTAssertLessThanOrEqual(l, 8, "leftFootAt. \(line)") }
-        XCTAssertLessThanOrEqual(walkStarts, 2, "walkStarts. \(line)")
+        XCTAssertLessThanOrEqual(walkStartsWin, 2, "walkStartsWin. \(line)")
         XCTAssertLessThanOrEqual(stuckMax, 3, "stuckMax. \(line)")
         XCTAssertGreaterThanOrEqual(minBox, min(startBox, 0.15) - 0.05, "minBox. \(line)")
         XCTAssertLessThanOrEqual(ph2, hold + 1.5, "A platformPh2. \(line)")
