@@ -129,6 +129,7 @@ extension GameCare {
         MealTrace.awakeDone = true
         b.sleepEnabled = false          // (he stays up: the night's retry loop does not send him back to bed)
         b.commandedGoodnight = false
+        nightRest.wanted.remove(k); nightRest.dayOnce.remove(k); nightRest.nightWoken.insert(k)          // (the night's retry loop does not send him back to bed for 120 s)
         b.requestNow(.goTo(b.position))
         NSLog("[mealtrace] MealAwake: woke jelly %d", k)
         MealTrace.log("MealAwake: woke jelly \(k)")
