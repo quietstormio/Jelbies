@@ -55,7 +55,8 @@ final class ParkSlideRoundTests: XCTestCase {
         var legs: [String] = [], tLadder: Float?, maxDepth: Float = 0, depthAt = "", still: Float = 0, stillAt = "", endedBefore = false, endT: Float = 0
     }
 
-    func runSolo(_ label: String, _ p: SIMD2<Float>, aspect: Float, seed: UInt64 = 5) -> Solo {
+    /// `afterRide`: the start is as right after a ride (the slide is soft for him until he is 0.55 clear of it: `decorIgnore` = the slide).
+    func runSolo(_ label: String, _ p: SIMD2<Float>, aspect: Float, seed: UInt64 = 5, afterRide: Bool = false) -> Solo {
         var out = Solo(); out.label = label
         let lab = parkLab(n: 1, seed: seed, aspect: aspect)
         let sl = DecorField.shared.foot(ParkToys.slideUID)!
@@ -65,6 +66,7 @@ final class ParkSlideRoundTests: XCTestCase {
         if simd_distance(p, q) > 0.1 { out.skipped = true; return out }
         place(r, q)
         for _ in 0..<5 { lab.tick(watching: false) }
+        if afterRide { b.decorIgnore = ParkToys.slideUID }
         out.started = b.startCommandedDecor(.decorSlide, only: .slide, r.sim, r.skinner)
         if !out.started { return out }
         var t: Float = 0, lastStage = 99, lastTarget = SIMD2<Float>(99, 99)
@@ -106,11 +108,12 @@ final class ParkSlideRoundTests: XCTestCase {
     func testWalkRoundNeverEntersTheSlide() {
         var bad: [String] = [], lines: [String] = []
         for (aname, aspect) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
-            for (name, p) in soloStarts() {
-                var o = runSolo(name, p, aspect: aspect)
+            var all: [(String, SIMD2<Float>)] = soloStarts()
+            for s in soloStarts() where s.0 == "C1real" || s.0 == "foot" || s.0.hasPrefix("corner") { all.append((s.0 + "+afterRide", s.1)) }
+            for (name0, p) in all {
+                let after = name0.hasSuffix("+afterRide"), name = name0
+                var o = runSolo(name, p, aspect: aspect, afterRide: after)
                 if o.skipped {
-                    // a start outside this aspect's floor: clamp onto it (the lab's own floor rule) and try again
-                    _ = parkLab(n: 1, seed: 5, aspect: aspect)
                     lines.append("PSR T1 \(aname) \(name) skipped (off the floor)"); continue
                 }
                 o.label = "\(aname) \(name)"
