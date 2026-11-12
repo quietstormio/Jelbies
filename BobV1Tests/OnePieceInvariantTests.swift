@@ -18,7 +18,7 @@ import simd
 
 @MainActor
 final class OnePieceInvariantTests: XCTestCase {
-    static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/onepiece/"
+    static let out = ProcessInfo.processInfo.environment["ONEPIECE_OUT"] ?? "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/onepiece/"          // (ONEPIECE_OUT: a run writes its report into its own folder)
     nonisolated(unsafe) static var keep: [AnyObject] = []
     nonisolated(unsafe) static var guardHits = 0          // (FEET GUARD failures so far: the progress line of testEveryMoveEveryCharacter)
     static let before = ProcessInfo.processInfo.environment["ONEPIECE_BEFORE"] != nil
@@ -90,6 +90,7 @@ final class OnePieceInvariantTests: XCTestCase {
         .stargazing: Entry(seconds: 16), .proudStrut: Entry(seconds: 9), .floorNapFlop: Entry(seconds: 11), .tapTilt: Entry(seconds: 5), .welcomeWiggle: Entry(seconds: 4), .checkIn: Entry(seconds: 5),
         .sing: Entry(seconds: 4),          // (trick-only: BlobBrain+Tricks.swift)
         .hula: Entry(seconds: 6), .superSpring: Entry(seconds: 6), .corkscrew: Entry(seconds: 6), .oneLegSpin: Entry(seconds: 6),
+        .moonwalk: Entry(seconds: 10), .backBounce: Entry(seconds: 5), .headstand: Entry(seconds: 6),          // (stage 3 prototypes: TrickAcro.swift, BlobBrain+Moonwalk.swift)
     ]
 
     /// Gait / volley / touch moves that are not an IdleKind. Script cases covered here or by the idle table (`.idle`): see testEveryMoveIsListed.

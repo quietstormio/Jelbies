@@ -38,8 +38,9 @@ final class TrickStageTwoTests: XCTestCase {
 
     // MARK: hula
 
-    /// The base circles (the root swings by at least the hip radius) while the head stays over the spot, it speeds up, and he ends on the spot he started from.
-    func testHulaCirclesTheHipsAndKeepsTheHeadOverTheSpot() {
+    /// The base circles while the whole body LEANS round against it (stage 3 repair: the crown swings round opposite the hips, so the lean reads; stage 2 kept the head still over
+    /// the spot and it read as a small sway), it speeds up, and he ends on the spot he started from.
+    func testHulaCirclesTheHipsAndLeansRoundAgainstThem() {
         var hip: [SIMD2<Float>] = [], head: [SIMD2<Float>] = [], times: [Float] = []
         var top = -1
         var base = SIMD2<Float>.zero
@@ -55,8 +56,13 @@ final class TrickStageTwoTests: XCTestCase {
         func spread(_ p: [SIMD2<Float>]) -> Float { let m = idx.reduce(SIMD2<Float>.zero) { $0 + p[$1] } / Float(idx.count); return idx.map { simd_length(p[$0] - m) }.max() ?? 0 }
         let hipR = spread(hip), headR = spread(head)
         MotionLog.write(String(format: "HULA hip radius %.3f u, head radius %.3f u", hipR, headR))
-        XCTAssertGreaterThan(hipR, 0.08, "the hips circle (8 cm or more)")
-        XCTAssertLessThan(headR, 0.8 * hipR, "the head stays over the spot: it moves far less than the hips (the counter-tilt; not the dizzy wobble, where the crown circles)")
+        // the crown goes the OTHER way round from the hips: the lean (head minus hips) is bigger than either alone
+        let mh = idx.reduce(SIMD2<Float>.zero) { $0 + head[$1] } / Float(idx.count), mp = idx.reduce(SIMD2<Float>.zero) { $0 + hip[$1] } / Float(idx.count)
+        let against = idx.filter { simd_dot(head[$0] - mh, hip[$0] - mp) < 0 }.count
+        MotionLog.write(String(format: "HULA lean: crown against the hips in %d of %d frames", against, idx.count))
+        XCTAssertGreaterThan(hipR, 0.07, "the hips circle (7 cm or more)")
+        XCTAssertGreaterThan(headR, 0.10, "the crown swings round too: the whole body leans round the circle")
+        XCTAssertGreaterThan(Float(against), 0.7 * Float(idx.count), "the crown swings round opposite the hips (a lean, not a slide)")
         XCTAssertLessThan(simd_length(hip.last! - base), 0.002, "back on the spot he started from")
         // it speeds up: more root-circle turns in the last second of the swing than in the first
         func turns(_ lo: Float, _ hi: Float) -> Float {

@@ -50,7 +50,7 @@ nonisolated enum JellyAction: Equatable, Sendable, Hashable {
         default: if let t = VoiceTrick(rawValue: key), t != .come { self = .trick(t) } else { return nil }
         }
     }
-    static let allKeys: [String] = ["come", "stop", "stopFighting", "praise", "scold", "play", "sit", "jacks", "run", "flip", "look", "spin", "hop", "showOff", "strut", "sing", "hula", "superSpring", "corkscrew", "oneLegSpin", "feed", "drink",
+    static let allKeys: [String] = ["come", "stop", "stopFighting", "praise", "scold", "play", "sit", "jacks", "run", "flip", "look", "spin", "hop", "showOff", "strut", "sing", "hula", "superSpring", "corkscrew", "oneLegSpin", "moonwalk", "backBounce", "headstand", "feed", "drink",
                                     "sleep", "wake", "clean", "goTo", "wear", "playWith", "race", "whoIsHungry", "whoIsThirsty", "whoWantsLove", "none"]
 
     /// The object kinds this action takes (nil = none; `.playWith` takes an optional toy; "go to" takes furniture or a toy).
