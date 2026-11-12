@@ -59,11 +59,10 @@ extension BlobBrain {
         }
     }
 
-    /// Of the ones still queued (slot != 0) he is the nearest to the start: one steps up at a time.
-    private func hopscotchIsFront(_ uid: Int, _ start: SIMD2<Float>) -> Bool {
-        let queued = Set(HopscotchLine.shared.players(uid).filter { $0.slot != 0 && $0.id != steerID }.map(\.id))
-        let mine = simd_distance(position, start)
-        return !steerPeers().contains { queued.contains($0.id) && simd_distance($0.pos, start) < mine - 0.05 }
+    /// Of the ones still queued (slot != 0) he is the first in the line's order: one steps up at a time, first come first served
+    /// (a nearest-to-the-start test cannot see friends who stand still: the roster hands those out under a placeholder id).
+    private func hopscotchIsFront(_ uid: Int) -> Bool {
+        HopscotchLine.shared.players(uid).first { $0.slot != 0 }?.id == steerID
     }
     private func hopscotchStepUp(_ start: SIMD2<Float>) {
         let spot = fixed(start)
@@ -88,7 +87,7 @@ extension BlobBrain {
                 if idleState.seat == 0 {
                     // already stepped up, the walk stopped short (a friend on the start): wait a moment, try again (bounded in hopscotchWalkDone)
                     if phT > (idleState.decorRetry > 0 ? 1.5 : 0.15) { hopscotchStepUp(start) }
-                } else if line.startOpen(uid), hopscotchIsFront(uid, start) {
+                } else if line.startOpen(uid), hopscotchIsFront(uid) {
                     line.start(uid, me); idleState.seat = 0; idleState.decorRetry = 0
                     hopscotchStepUp(start)
                 } else if phT > HopscotchTuning.patience { idleFinish(skinner) }

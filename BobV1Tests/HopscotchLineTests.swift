@@ -113,6 +113,31 @@ final class HopscotchLineTests: XCTestCase {
         XCTAssertLessThanOrEqual(entries, startTries + 1, "stage-4 entries \(entries)")
     }
 
+    // 4: the three-Jelbie line of HopscotchTests.testFollowersQueueKeepSpacingAndNeverOverlap, with the stage trace printed
+    func testThreeInALineTrace() {
+        HopscotchTuning.joinChance = 1
+        let lab = parkLab(positions: [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4)], seed: 5)
+        let line = HopscotchLine.shared
+        for r in lab.rigs { r.brain.autonomy = true }
+        lab.rigs[0].brain.idleForced = true
+        XCTAssertTrue(lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: uid))
+        var trace = [String](repeating: "", count: 3), prev = [Int](repeating: -9, count: 3), seqs = [[Int]](repeating: [], count: 3)
+        for i in 0..<(60 * 80) {
+            lab.tick(watching: false); DecorField.shared.tick(dt: dt)
+            for a in 0..<3 {
+                let b = lab.rigs[a].brain
+                let stage = b.idleState.kind == .decorHopscotch ? b.idleState.slideStage : -9
+                if stage != prev[a] { trace[a] += " \(stage)@\(Int(Float(i) / 60))r\(b.idleState.decorRetry)s\(b.idleState.seat)" }
+                prev[a] = stage
+                let s = line.square(uid, a)
+                if s >= 0, s < 8, seqs[a].last != s { seqs[a].append(s) }
+            }
+            if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { break }
+        }
+        print("[hopline] three: seqs \(seqs.map { $0.count }) traces (stage@sim-s r<retries> s<seat>): \(trace)")
+        for a in 0..<3 { XCTAssertEqual(seqs[a], Array(0..<8), "Jelbie \(a) landed on squares 1...8 in order") }
+    }
+
     // 3
     func testQueueSpotsAreOnOpenFloor() {
         let lab = parkLab(positions: [SIMD2(0, 3)], seed: 1)
