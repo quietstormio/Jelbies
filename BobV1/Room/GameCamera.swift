@@ -63,7 +63,8 @@ enum GameCamera {
     /// Sets the roaming camera and the floor the Jellies use for `count` Jellies. Call before the brains are made (`forGame` reads `roamRect`).
     static func configureRoom(count: Int, option: RoomCam = RoomCam.launch, wide: Int = wideLaunch) {
         roamFloor = nil; RoomLayout.setFront(z: RoomLayout.maxZ)          // (a new set-up: the old fixed floor until `refreshRoam`)
-        if count <= 1 || option == .current {
+        // (2026-11-11: the wide room view is the home view at ANY Jelbie count; `count` no longer picks the pose. Only the explicit `-RoomCam current` keeps the old close pose.)
+        if option == .current {
             eye = baseEye; target = baseTarget; roomEye = baseEye; roomTarget = baseTarget; roomWideScale = 1; roomWideLift = 0
             walkMaxZ = 3.0; arenaCenter = SIMD2(0, 0.5); arenaRadius = 3.3; roamRect = (SIMD2(-2.2, -2.3), SIMD2(2.2, 3.1)); roamRectWide = (SIMD2(-3.2, -2.6), SIMD2(3.2, 3.1))
             return

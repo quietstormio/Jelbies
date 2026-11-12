@@ -65,7 +65,14 @@ final class CameraAspectTests: XCTestCase {
             XCTAssertLessThan(simd_distance(GameCamera.target, expected.target), 1e-3, "\(d.name): target \(GameCamera.target) expected \(expected.target)")
             XCTAssertEqual(GameCamera.portraitAmount(aspect), aspect < 1 ? 1 : 0, "\(d.name): every phone is fully portrait or fully landscape")
         }
-        GameCamera.configureRoom(count: 1)
+        GameCamera.configureRoom(count: 1)          // (2026-11-11: one Jelbie has the same wide home view; the old close pose is `option: .current`)
+        for d in Self.drawables {
+            let aspect = Float(d.w) / Float(d.h)
+            _ = GameCamera.camera(aspect: aspect)
+            let expected = aspect < 1 ? widePortrait : a
+            XCTAssertLessThan(simd_distance(GameCamera.eye, expected.eye), 1e-3, d.name); XCTAssertLessThan(simd_distance(GameCamera.target, expected.target), 1e-3, d.name)
+        }
+        GameCamera.configureRoom(count: 1, option: .current)
         for d in Self.drawables {
             _ = GameCamera.camera(aspect: Float(d.w) / Float(d.h))
             XCTAssertEqual(GameCamera.eye, GameCamera.baseEye, d.name); XCTAssertEqual(GameCamera.target, GameCamera.baseTarget, d.name)
