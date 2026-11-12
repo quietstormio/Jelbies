@@ -47,6 +47,12 @@ enum RuleParser {
     private static let cleanWords: Set<String> = ["bath", "bathe", "wash", "clean", "shower", "scrub", "soap", "rinse", "dirty", "filthy"]
     private static let spinPhrases = ["spin around", "turn around", "do a spin", "spin round", "do a twirl"]
     private static let spinWords: Set<String> = ["spin", "twirl", "pirouette", "spinny", "spins"]
+    private static let showOffPhrases = ["show off", "show it off", "do a show off"]
+    private static let showOffWords: Set<String> = ["showoff"]
+    private static let strutPhrases = ["strut your stuff", "do a strut"]
+    private static let strutWords: Set<String> = ["strut", "struts", "strutting"]
+    private static let singPhrases = ["sing a song", "sing me a song", "sing for me"]
+    private static let singWords: Set<String> = ["sing", "sings", "singing"]
     private static let jacksPhrases = ["jumping jacks", "jumping jack", "jump up and down", "do some jumps", "star jumps"]
     private static let jacksWords: Set<String> = ["jump", "jumps", "jumping", "exercise", "workout"]
     private static let hopPhrases = ["hop hop", "do a hop", "hop up", "hop up and down", "bounce around"]
@@ -177,6 +183,12 @@ enum RuleParser {
             }
         }
         // 8. moves: spin, jacks, flip, run, look, go to decor, sit
+        if let p = has(toks, showOffPhrases) { return finish(.trick(.showOff), strip: p, words: showOffWords) }
+        if hasWord(toks, showOffWords) { return finish(.trick(.showOff), words: showOffWords) }
+        if let p = has(toks, strutPhrases) { return finish(.trick(.strut), strip: p, words: strutWords) }
+        if hasWord(toks, strutWords) { return finish(.trick(.strut), words: strutWords) }
+        if let p = has(toks, singPhrases) { return finish(.trick(.sing), strip: p, words: singWords) }
+        if hasWord(toks, singWords) { return finish(.trick(.sing), words: singWords) }
         if let p = has(toks, spinPhrases) { return finish(.trick(.spin), strip: p, words: spinWords) }
         if hasWord(toks, spinWords) { return finish(.trick(.spin), words: spinWords) }
         if let p = has(toks, jacksPhrases) { return finish(.trick(.jacks), strip: p, words: jacksWords) }

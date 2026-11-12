@@ -672,6 +672,9 @@ final class VoiceCoordinator {
         case .look: return .look
         case .tail: return .spin
         case .bounce: return .hop
+        case .signatureFlourish: return .showOff
+        case .proudStrut: return .strut
+        case .sing: return .sing
         default: return nil
         }
     }
@@ -683,6 +686,9 @@ final class VoiceCoordinator {
         case .look: return .look
         case .spin: return .tail
         case .hop: return .bounce
+        case .showOff: return .signatureFlourish
+        case .strut: return .proudStrut
+        case .sing: return .sing
         case .flip, .come: return nil
         }
     }

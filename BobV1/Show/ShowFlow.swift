@@ -366,7 +366,7 @@ final class ShowFlow {
     }
     private func land(_ turn: ShowTrickTurn) {
         lastTurn = turn
-        trickStage = .performing; performLeft = Self.performSeconds
+        trickStage = .performing; performLeft = ShowTrickInfo.seconds(turn.trick)
         cue(turn.success ? .land : .flop)
         if turn.burst { burstFlash += 1; cue(.burst); onBurst() }
         onPerform(turn.trick, turn.success)
@@ -427,7 +427,7 @@ final class ShowFlow {
             guard let i = rivalTurn, rivalT >= 0.5, rivalReady(i, true) || rivalT > 4 else { return }
             startRivalPerform(i)
         case .perform:
-            guard let i = rivalTurn, rivalT >= Self.performSeconds else { return }
+            guard let i = rivalTurn, rivalT >= ShowTrickInfo.seconds(rivalNow?.turn.trick ?? .sit) else { return }
             rivalStep = .walkOut; rivalT = 0; onRival(.walkOut(i)); revision += 1
         case .walkOut:
             guard let i = rivalTurn, rivalT >= 0.4, rivalReady(i, false) || rivalT > 3 else { return }

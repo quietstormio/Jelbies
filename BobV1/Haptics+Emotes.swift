@@ -150,6 +150,7 @@ enum HapticCue: Hashable, Sendable {
         // batch 2 (BlobBrain+Emotes2.swift): the move's start; its key frames are the `.beat` cues from EmoteTreats.haptics
         case .stargazing: return CueSpec(i: 0.07, s: 0.30)
         case .proudStrut: return CueSpec(i: 0.15, s: 0.14, n: 2, gap: 0.2, decay: 0.9)
+        case .sing: return CueSpec(i: 0.08, s: 0.20, n: 3, gap: 0.38, decay: 0.8)          // (a soft tick per phrase: the voice carries it)
         case .floorNapFlop: return CueSpec(i: 0.10, s: 0.06, n: 2, gap: 0.25, decay: 0.7)
         case .tapTilt: return CueSpec(i: 0.075, s: 0.20)
         case .welcomeWiggle: return CueSpec(i: 0.14, s: 0.17, n: 2, gap: 0.13, decay: 0.8)

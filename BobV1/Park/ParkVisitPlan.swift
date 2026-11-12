@@ -32,8 +32,7 @@ nonisolated enum ParkVisitPlan {
 
     /// Visit number `visit` (1, 2, 3 ...): the seesaw on the even visits, the hopscotch court on the odd ones; never both, never neither. The off-streaks are ignored (the saved dictionary keeps its shape).
     static func draw(visit: Int, seesawOff: Int = 0, hopscotchOff: Int = 0) -> (seesaw: Bool, hopscotch: Bool) {
-        let even = visit % 2 == 0
-        return (even, !even)
+        return (true, true)          // user 2026-11-12: the hopscotch (and the seesaw) stay at every visit; the de-clutter is the pond, not a toy
     }
 
     // MARK: a visit starts

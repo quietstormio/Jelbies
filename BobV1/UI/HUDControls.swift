@@ -11,11 +11,11 @@ enum HUDMode: Equatable { case group, individual(Int) }
 
 enum HUDItem: String, CaseIterable {           // the raw value is the accessibility identifier
     case callAll = "hud-call-all", feed = "care-feed", drink = "care-water", play = "hud-play", decor = "hud-decor", bedtime = "hud-bedtime"
-    case come = "hud-come", dress = "hud-dress", clean = "care-clean", compete = "hud-compete"
+    case come = "hud-come", dress = "hud-dress", clean = "care-clean", tricks = "hud-tricks", compete = "hud-compete"
 }
 
 enum HUDRoute: Equatable {
-    case none, picker(ConsumableKind), bag(BagSheet.BagTab, who: Int), town(TownScreen, who: Int), competeChips
+    case none, picker(ConsumableKind), bag(BagSheet.BagTab, who: Int), town(TownScreen, who: Int), competeChips, trickChips
 }
 
 @MainActor
@@ -41,7 +41,7 @@ enum HUDMenu {
     static func items(_ mode: HUDMode) -> [HUDItem] {
         switch mode {
         case .group: return [.feed, .drink, .play, .decor, .bedtime, .callAll]
-        case .individual: return [.dress, .clean, .compete, .come]
+        case .individual: return [.dress, .clean, .tricks, .compete, .come]
         }
     }
 
@@ -58,6 +58,7 @@ enum HUDMenu {
         case .bedtime: return bedtimeTitle(phase: DayClock.shared.phase)
         case .dress: return "Dress"
         case .clean: return "Clean"
+        case .tricks: return "Tricks"
         case .compete: return "Compete"
         }
     }
@@ -86,6 +87,7 @@ enum HUDMenu {
         case .bedtime: return "moon.zzz.fill"
         case .dress: return "tshirt.fill"
         case .clean: return CareMenu.cleanSymbol
+        case .tricks: return sym("sparkles", "star.fill")
         case .compete: return CareMenu.raceSymbol
         }
     }
@@ -99,7 +101,7 @@ enum HUDMenu {
         case .come: return care.focus.phase == .roaming && !care.bath.active && !care.tripActive && !care.raceBusy
         case .compete: return care.canRace(jelly: id) || care.canShow(jelly: id)
         case .bedtime: return !care.raceBusy && !care.trayOut && !care.bath.active
-        case .play, .decor, .dress: return true
+        case .play, .decor, .dress, .tricks: return true          // (Tricks can always be opened: the chips say why one cannot run now)
         }
     }
 
@@ -126,7 +128,7 @@ enum HUDMenu {
             if care.trayOut { return "Food is already out" }
             return "Not while cleaning"
         case .play: return care.playBlocker
-        case .decor, .dress: return nil
+        case .decor, .dress, .tricks: return nil
         }
     }
 
@@ -145,6 +147,7 @@ enum HUDMenu {
         case .clean: care.clean(jelly: id); return .none
         case .come: care.comeHere(jelly: id); return .none
         case .compete: return .competeChips
+        case .tricks: return .trickChips
         }
     }
 

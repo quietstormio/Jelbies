@@ -24,6 +24,9 @@ extension FeatureCaptureTests {
             ("bellyDrum", .bellyDrum, 0, [0.3, 0.5, 0.8, 1.1, 1.5, 2.0], 0), ("bellyDrum34", .bellyDrum, 0, [0.5, 0.65, 0.8, 0.95, 1.1, 1.25], 0.7),
             ("sig_bob", .signatureFlourish, 0, sig, 0), ("sig_pip", .signatureFlourish, 1, sig, 0), ("sig_moss", .signatureFlourish, 2, sig, 0),
             ("sig_lavender", .signatureFlourish, 3, sig, 0), ("sig_teddy", .signatureFlourish, 4, sig, 0), ("sig_pearl", .signatureFlourish, 5, sig, 0),
+            // Shop tricks (trick plan stage 1): sing, and the strut as the Shop / the Tricks button run it (`commanded`: the shorter cut)
+            ("trick_sing", .sing, 0, [0.2, 0.5, 0.9, 1.4, 2.0, 2.6], 0), ("trick_sing_yellow", .sing, 1, [0.2, 0.5, 0.9, 1.4, 2.0, 2.6], 0),
+            ("trick_strut", .proudStrut, 0, [0.3, 0.6, 0.9, 1.3, 1.8, 2.3], 0), ("trick_strut_yellow", .proudStrut, 1, [0.3, 0.6, 0.9, 1.3, 1.8, 2.3], 0),
         ]
         for (name, kind, id, times, az) in cases where only.isEmpty || only.contains(name) {
             let chars = [Char(id: id)]
@@ -34,6 +37,7 @@ extension FeatureCaptureTests {
                 let d = dress(lab, chars)
                 let (ren, target) = try renderer(lab)
                 r.brain.idleForced = true
+                if name.hasPrefix("trick_") { r.brain.commanded = true }          // (as startCommanded does)
                 XCTAssertTrue(r.brain.idleStart(kind, r.sim), "\(name) did not start")
                 var start = -1, end = -1, tiles: [UIImage] = []
                 var cam0: CameraState?

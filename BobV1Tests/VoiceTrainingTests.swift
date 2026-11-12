@@ -86,6 +86,17 @@ final class VoiceTrainingTests: XCTestCase {
         }
     }
 
+    /// Longest command word wins; the shop tricks' words never swallow the old ones ("spin", "jump").
+    func testShopTrickWordsAndCollisions() {
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
+        for (said, t) in [("spin", VoiceTrick.spin), ("show off", .showOff), ("showoff", .showOff), ("show it off", .showOff), ("sing", .sing), ("sing a song", .sing), ("strut", .strut),
+                          ("jump", .jacks), ("jumping jacks", .jacks), ("hop", .hop), ("flip", .flip), ("Bob sing", .sing)] {
+            XCTAssertEqual(v.decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(t), said)
+        }
+        XCTAssertEqual(VoiceTrick.starters, [.sit, .jacks, .run, .flip, .look, .come], "the starters are explicit")
+        for t in [VoiceTrick.showOff, .strut, .sing] { XCTAssertFalse(t.isStarter) }
+    }
+
     func testAnOldTaughtWordKeepsWorkingWithItsOwnReliability() {
         let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
         legacy(v, "mochi", .sit, 0.6)

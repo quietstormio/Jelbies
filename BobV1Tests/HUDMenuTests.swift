@@ -52,7 +52,7 @@ final class HUDMenuTests: XCTestCase {
         tickSelect(care, 2.5)
         XCTAssertEqual(care.select.highlighted, 1); XCTAssertFalse(care.select.isSelecting)
         XCTAssertEqual(HUDMenu.mode(care), .individual(1))
-        XCTAssertEqual(HUDMenu.items(.individual(1)), [.dress, .clean, .compete, .come])
+        XCTAssertEqual(HUDMenu.items(.individual(1)), [.dress, .clean, .tricks, .compete, .come])
         XCTAssertEqual(care.targetJelly, 1); XCTAssertEqual(care.singledOutJelly, 1)
     }
 
@@ -119,6 +119,7 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(HUDMenu.perform(.play, .group, care: care), .picker(.toy))          // (2026-11-02: Play opens the toy picker)
         XCTAssertEqual(HUDMenu.perform(.decor, .group, care: care), .bag(.furniture, who: 0))
         XCTAssertEqual(HUDMenu.perform(.compete, .individual(2), care: care), .competeChips)
+        XCTAssertEqual(HUDMenu.perform(.tricks, .individual(2), care: care), .trickChips)
         XCTAssertEqual(HUDMenu.compete(.track, id: 2), .town(.track, who: 2))
         XCTAssertEqual(HUDMenu.compete(.studio, id: 2), .town(.studio, who: 2))
         XCTAssertEqual(HUDMenu.perform(.feed, .group, care: care), .picker(.food))
@@ -192,5 +193,44 @@ final class HUDMenuTests: XCTestCase {
             if r.care.bath.phase == .soap { break }
         }
         XCTAssertEqual(r.care.bath.phase, .soap, "clean reached the soap for a sleeper")
+    }
+
+    // MARK: the Tricks row (stage 1 of the trick plan)
+
+    func testTricksRowSitsBetweenCleanAndCompeteAndIsAlwaysEnabled() {
+        let care = care3()
+        let items = HUDMenu.items(.individual(0))
+        XCTAssertEqual(items.firstIndex(of: .tricks), items.firstIndex(of: .clean)! + 1)
+        XCTAssertEqual(items.firstIndex(of: .compete), items.firstIndex(of: .tricks)! + 1)
+        XCTAssertFalse(HUDMenu.items(.group).contains(.tricks), "a Jelbie's row, not the group's")
+        XCTAssertEqual(HUDMenu.title(.tricks, .individual(0), care: care), "Tricks")
+        XCTAssertEqual(HUDItem.tricks.rawValue, "hud-tricks")
+        XCTAssertTrue(HUDMenu.enabled(.tricks, .individual(0), care: care))
+        XCTAssertNil(HUDMenu.disabledReason(.tricks, .individual(0), care: care))
+        XCTAssertFalse(HUDMenu.symbol(.tricks).isEmpty)
+    }
+
+    func testTrickChipsListKnownThenLockedAndPerformIsInstant() {
+        let r = room()
+        let care = r.care
+        let id = 0
+        let ch = care.jelly(id)!.character
+        let menu = care.trickMenu(jelly: id)
+        XCTAssertEqual(menu.filter(\.known).map(\.trick), [.sit, .jacks, .look, .flip, .spin, .hop].filter { care.knows($0, jelly: id) }, "the defaults first")
+        for t in [VoiceTrick.showOff, .strut, .sing] { XCTAssertEqual(menu.first { $0.trick == t }?.known, false, "\(t) starts locked"); XCTAssertEqual(menu.first { $0.trick == t }?.price, TrickCatalog.def(t)?.price) }
+        let firstLocked = menu.firstIndex { !$0.known }!
+        XCTAssertTrue(menu[firstLocked...].allSatisfy { !$0.known }, "locked chips come after the known ones")
+        XCTAssertFalse(care.performTrick(.strut, jelly: id), "a trick he does not know does nothing")
+        care.store.grantTrick(.strut, to: ch)
+        XCTAssertEqual(care.trickMenu(jelly: id).first { $0.trick == .strut }?.known, true)
+        let b = care.brainFor(id)!
+        XCTAssertNil(care.trickBlocker(jelly: id))
+        XCTAssertTrue(care.performTrick(.strut, jelly: id))
+        XCTAssertEqual(b.commandedIdle, .proudStrut, "the chip makes him do it at once, no reliability roll")
+        b.commandedIdle = nil
+        b.idleBlocked = true          // held by the player
+        XCTAssertNotNil(care.trickBlocker(jelly: id))
+        XCTAssertFalse(care.performTrick(.strut, jelly: id), "blocked: no trick, one reason")
+        b.idleBlocked = false
     }
 }

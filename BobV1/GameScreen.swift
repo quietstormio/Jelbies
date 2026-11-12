@@ -964,6 +964,8 @@ struct GameScreen: View {
     @MainActor static func runStoreDemo(model: MelonModel) async {
         guard DevArgs.enabled else { return }          // capture aids only (they grant Drops, the wardrobe, decor): never in an App Store archive
         let d = UserDefaults.standard
+        // capture aid: -GrantTrick <rawValue> buys that Shop trick for everyone (the Tricks row shows it unlocked, the rest locked)
+        if let g = d.string(forKey: "GrantTrick"), let t = VoiceTrick(rawValue: g) { model.care.store.grantTrickToEveryone(t) }
         // capture aid: -ShowSeedGoods 1 makes a cared-for Jelbie for the Jelly Show: fed to the day's theme, bathed, Sway half learned, the three trick pages
         // bought and every trick learned, the wardrobe owned and dressed to the theme
         if d.integer(forKey: "ShowSeedGoods") != 0 {
@@ -1100,6 +1102,8 @@ struct CareMenu: View {
     @State private var pickerWidth: CGFloat = 0
     /// Compete is unfolded into its two chips (Track / Jelly Show).
     @State private var competeRow = false
+    /// Tricks is unfolded into one scrolling row of chips (what this Jelbie knows, then the locked ones with their price).
+    @State private var trickRow = false
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.dynamicTypeSize) private var dts
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnv
@@ -1112,16 +1116,14 @@ struct CareMenu: View {
     var body: some View {
         // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Decor, Bedtime come back when it folds).
         let all = HUDMenu.visibleItems(mode, care: care)
-        let items = tight && picker != nil ? all.filter { picker == .toy ? $0 == .play : ($0 == .feed || $0 == .drink) } : all
+        let items = tight && trickRow ? all.filter { $0 == .tricks }          // (a phone on its side: only the Tricks row and its chips fit)
+            : tight && picker != nil ? all.filter { picker == .toy ? $0 == .play : ($0 == .feed || $0 == .drink) } : all
         CareScroller(natural: $careNatural, reserved: tight ? 58 : 72 * padScale) {
             VStack(alignment: .trailing, spacing: rowGap) {
                 if open {
                     ForEach(Array(items.enumerated()), id: \.element.rawValue) { index, item in
                         row(item, count: items.count, index: index)
-                        if picker == .food, item == .feed { pickerRow(kind: .food) }
-                        if picker == .drink, item == .drink { pickerRow(kind: .drink) }
-                        if picker == .toy, item == .play { pickerRow(kind: .toy) }
-                        if competeRow, item == .compete { competeChips }
+                        unfolded(under: item)
                     }
                 }
             }
@@ -1130,10 +1132,10 @@ struct CareMenu: View {
             mainButton
         }
         .onChange(of: open) { _, isOpen in
-            if !isOpen { picker = nil; competeRow = false }
+            if !isOpen { picker = nil; competeRow = false; trickRow = false }
             else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.visibleItems(mode, care: care).first } }      // focus moves into the opened rows
         }
-        .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; competeRow = false } }
+        .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false } }
         .onChange(of: picker) { _, k in care.pickerShowing = k != nil }          // the need bubbles stay out of the way of an open Feed / Drink / Play row
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
@@ -1274,6 +1276,85 @@ struct CareMenu: View {
         }
     }
 
+    /// The unfolded picker / chip row under a row (Feed, Drink, Play, Tricks, Compete).
+    @ViewBuilder private func unfolded(under item: HUDItem) -> some View {
+        if picker == .food, item == .feed { pickerRow(kind: .food) }
+        if picker == .drink, item == .drink { pickerRow(kind: .drink) }
+        if picker == .toy, item == .play { pickerRow(kind: .toy) }
+        if competeRow, item == .compete { competeChips }
+        if trickRow, item == .tricks { trickChips }
+    }
+
+    /// Tricks unfolds into ONE row of chips that scrolls sideways: the tricks this Jelbie knows (tap = he does it now), then the locked ones
+    /// (dimmed, with the price; tap opens the Shop's Tricks tab). A single reason line shows when he cannot perform right now.
+    private var trickChips: some View {
+        let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
+        let chips = care.trickMenu(jelly: id)
+        let blocker = care.trickBlocker(jelly: id)
+        let cap = max(160, (windowWidth > 0 ? windowWidth : 390) - 150 * padScale)
+        return VStack(alignment: .trailing, spacing: 4) {
+            if let blocker {
+                Text(blocker).jFont(12, .bold).foregroundStyle(Self.brown)
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 16).fill(Self.cream))
+                    .accessibilityIdentifier("hud-tricks-blocker")
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(chips.enumerated()), id: \.element.id) { i, c in
+                        trickChip(c, jelly: id, blocked: blocker != nil, index: i)
+                    }
+                }
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { pickerWidth = $0 }
+            }
+            .frame(width: min(max(pickerWidth, 1), cap))
+        }
+        .frame(maxWidth: cap, alignment: .trailing)
+        .padding(.trailing, 0)
+    }
+
+    private func trickChip(_ c: GameCare.TrickChip, jelly id: Int, blocked: Bool, index i: Int) -> some View {
+        let t = c.trick
+        let stars = ShowTrickInfo.difficulty(t)
+        let dim = c.known ? blocked : true
+        let label = c.known ? (blocked ? "\(t.title), not now" : t.title) : "\(t.title), locked, \(c.price) coins, opens the Shop"
+        return Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            if c.known {
+                guard !blocked else { return }
+                if care.performTrick(t, jelly: id) { withAnimation(Self.spring) { trickRow = false; open = false } }
+            } else {
+                ShopTab.pending = .tricks
+                withAnimation(Self.spring) { trickRow = false; open = false }
+                openTown(.shop, id)
+            }
+        } label: {
+            VStack(spacing: 3) {
+                HStack(spacing: 6) {
+                    Image(systemName: VoiceTrickBook.symbol(t)).font(.system(size: 15, weight: .semibold))
+                    Text(t.title).jFont(15, .semibold).lineLimit(1)
+                }
+                HStack(spacing: 2) {
+                    ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 9, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : Self.brown.opacity(0.35)) }
+                    if !c.known {
+                        Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold)).padding(.leading, 4)
+                        JellyCoinIcon(size: 12)
+                        Text("\(c.price)").jFont(11, .black)
+                    }
+                }
+            }
+            .foregroundStyle(Self.brown)
+            .padding(.horizontal, 14).padding(.vertical, 4).frame(minHeight: 44)
+            .background(Capsule().fill(Self.cream).shadow(color: Color(red: 0.3, green: 0.2, blue: 0.12).opacity(0.2), radius: 6, y: 2))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+            .opacity(dim ? 0.45 : 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("hud-trick-\(t.rawValue)").accessibilityLabel(label)
+        .transition(chipTransition(i))
+    }
+
     /// Compete unfolds into Track (train or race) and Jelly Show, for the highlighted Jelbie.
     private var competeChips: some View {
         let id: Int = { if case .individual(let n) = mode { return n }; return care.targetJelly }()
@@ -1316,7 +1397,8 @@ struct CareMenu: View {
             if k == .toy { withAnimation(Self.spring) { picker = picker == .toy ? nil : .toy; competeRow = false }; return }
             if care.drinkChoices.count >= 2 { withAnimation(Self.spring) { picker = picker == .drink ? nil : .drink; competeRow = false }; return }
             care.drink(care.drinkChoices.first?.id ?? "water", jelly: care.singledOutJelly)         // one drink: starts directly (nobody singled out = the group serving)
-        case .competeChips: withAnimation(Self.spring) { competeRow.toggle(); picker = nil }; return
+        case .competeChips: withAnimation(Self.spring) { competeRow.toggle(); trickRow = false; picker = nil }; return
+        case .trickChips: withAnimation(Self.spring) { trickRow.toggle(); competeRow = false; picker = nil }; return
         case .bag(let tab, let who): openBag(tab, who)
         case .town(let t, let who): openTown(t, who)
         case .none: break
