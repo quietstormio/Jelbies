@@ -319,6 +319,7 @@ extension BlobBrain {
         guard case .walk = script, steerStall > 0.9 || steerWait > 0.9 || walkStallT > 1.2, idleState.slideS < 8, Int(scriptT * 4) != Int((scriptT - dt) * 4) else { return }          // (asked four times a second at most)
         var st = Self.slideBans[steerID] ?? (banned: [], fails: 0)
         if st.fails >= 2 {
+            guard idleState.slideStage == -3 else { return }          // (the gate leg: a friend in the queue at the ladder is waited for, as before; only the corners drop the attempt)
             Self.slideLog?("replan body \(steerID) fail \(st.fails + 1): drop the attempt at \(position) stage \(idleState.slideStage) target \(idleState.target)")
             Self.slideBans[steerID] = nil
             idleFinish(skinner)
