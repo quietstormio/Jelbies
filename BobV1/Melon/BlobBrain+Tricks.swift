@@ -120,16 +120,20 @@ struct TrickIdle {
     var flags = 0
 }
 
-/// HULA: the hips circle round and round with the feet planted, speeding up; the head stays over the spot (a counter-tilt), the arms sway, then a ta-da.
+/// HULA: the hips circle round and round with the feet planted, speeding up; the whole body LEANS against the hips (the crown swings round the other way: stage 3
+/// repair, the stage-2 version kept the head still over the spot and read as a small sway), the arms out and swaying, then a ta-da.
 nonisolated enum HulaTuning {
     /// Seconds of circling at full size (the clean one / the Show's flop), the settle back to the spot, and the ta-da.
     static let swing: Float = 2.9, failSwing: Float = 2.0, settle: Float = 0.3, tada: Float = 0.5
     /// The circling speed (Hz) at the start and the end of the swing; the flop speeds up further.
     static let f0: Float = 0.9, f1: Float = 2.2, f1Fail: Float = 3.3
     /// The hip circle's radius (u) at the start and the end of the swing (the flop's end).
-    nonisolated(unsafe) static var r0: Float = 0.080, r1: Float = 0.150, r1Fail: Float = 0.170
-    /// 1 = the head stays exactly over the spot (the counter-tilt cancels the base's circle); the height of the head above the soles (u).
-    nonisolated(unsafe) static var counter: Float = 1.0
+    nonisolated(unsafe) static var r0: Float = 0.050, r1: Float = 0.110, r1Fail: Float = 0.120
+    /// The lean against the hips: 1 = the head stays exactly over the spot (stage 2: too small to read), > 1 = the crown swings round opposite the hips, the whole body
+    /// leaning round the circle (lean = counter * r / headHeight rad); the height of the head above the soles (u).
+    nonisolated(unsafe) static var counter: Float = 3.1
+    /// The belly's twist with the hips (rad), the arms' sway (el, sa) and the squash ripple.
+    nonisolated(unsafe) static var twistAmp: Float = 0.30, armEl: Float = 0.30, armElSway: Float = 0.30, armSaSway: Float = 0.65, ripple: Float = 0.06
     static let headHeight: Float = 0.9
     static var total: Float { swing + settle + tada }
     static func f1(fail: Bool) -> Float { fail ? f1Fail : f1 }
@@ -219,14 +223,14 @@ extension BlobBrain {
             // the counter-tilt keeps the head over the spot: a roll by dx / h cancels the sideways swing of the crown, a pitch by -dz / h the forward one
             roll += HulaTuning.counter * d.x / HulaTuning.headHeight
             pitch += -HulaTuning.counter * d.y / HulaTuning.headHeight
-            twist = 0.22 * env * sinf(phi + 0.6) * a
-            squash *= 1 + 0.050 * env * sinf(2 * phi) * a
+            twist = HulaTuning.twistAmp * env * sinf(phi + 0.6) * a
+            squash *= 1 + HulaTuning.ripple * env * sinf(2 * phi) * a
             // the arms sway out and in with the hips (a stub: only the direction turns)
             armDirW = smooth01(env * 3)
             for s in 0..<2 {
                 let side: Float = s == 0 ? 1 : -1
-                armDirEl[s] = 0.25 + 0.16 * sinf(phi + (s == 0 ? 0 : .pi))
-                armDirSa[s] = side * (0.9 + 0.30 * sinf(phi + (s == 0 ? 0.8 : 0.8 + .pi)))
+                armDirEl[s] = HulaTuning.armEl + HulaTuning.armElSway * sinf(phi + (s == 0 ? 0 : .pi))
+                armDirSa[s] = side * (0.9 + HulaTuning.armSaSway * sinf(phi + (s == 0 ? 0.8 : 0.8 + .pi)))
             }
             armDirOut = 0.03
             if idleState.hop != Int(phi / (2 * .pi)) + 1 { idleState.hop = Int(phi / (2 * .pi)) + 1; jellyKick = max(jellyKick, 0.35) }          // a little wobble on every turn of the hips
