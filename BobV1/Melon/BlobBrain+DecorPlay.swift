@@ -156,7 +156,7 @@ extension BlobBrain {
                 currentPose(sim)
                 // the chute ends only ~0.4 beyond the footprint's edge, less than a body: he walks on to the nearest clear floor (the normal gait) instead of standing half inside
                 // the slide for `decorExitCheck` to drag out. Handed over as its own walk-out is (soft to the slide, its timers charged), so it does not cut this walk short.
-                let out = decorFreeSpot(near: position)
+                let out = slideWalkOut(f) ?? decorFreeSpot(near: position)          // (park slide: off to the lawn, the foot stays free for the next rider)
                 idleFinish(skinner)
                 // the ride's hops left the beans placed on the fitted body pose (`beanFitUsed`, set by `driveBeansRigid`; only that call ever refreshes it). The walk places them on world foot
                 // paths and the post-step refit would keep carrying them rigidly with the body: the planted foot rode up with the walk's stretch (stance foot 3 cm off the floor, the neck open).
