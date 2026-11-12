@@ -179,6 +179,67 @@ nonisolated final class Skinner {
     var weld: LegWeldInfo? = nil
     var welded: Bool { weld != nil }
 
+    // MARK: sliding skirt (proof stage)
+    /// Last frame: landing rays that met no egg triangle (per side), and the time the skirt took (us).
+    private(set) var skirtMisses: [Int] = [0, 0]
+    private(set) var skirtMicros: Double = 0
+    /// Each meridian of each band hangs from the seam ring and lands where a ray from the piece's crown (in that meridian's half-plane through the current leg axis, at
+    /// LegWeld.skirtCone from the downward axis) leaves the drawn egg (guardTris), arriving tangent to the egg and sunk LegWeld.skirtSink under it. No egg vertex moves.
+    private func applySkirt(_ dyn: UnsafeMutablePointer<Float>) {
+        guard let w = weld else { return }
+        let t0c = DispatchTime.now().uptimeNanoseconds
+        defer { skirtMicros = Double(DispatchTime.now().uptimeNanoseconds - t0c) / 1000 }
+        @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
+        let A = FootBean.around, R = w.ring, K = w.rows
+        let k0 = Self.weldK0, k1 = Self.weldK1, cone = LegWeld.skirtCone, sink = LegWeld.skirtSink
+        skirtMisses = [0, 0]
+        for (si, sd) in w.sides.enumerated() {
+            var ringC = SIMD3<Float>.zero
+            for j in 0..<A { ringC += P(sd.beanFirst + 1 + A * R + j) }
+            ringC /= Float(A)
+            var axis = ringC - P(sd.beanFirst); let al = simd_length(axis); axis = al > 1e-6 ? axis / al : SIMD3(0, 1, 0)
+            let crown = P(sd.beanFirst + FootBean.vertexCount - 1)
+            let tris = si < guardTris.count ? guardTris[si] : []
+            for j in 0..<A {
+                let i0 = sd.beanFirst + 1 + A * R + j, im = sd.beanFirst + 1 + A * (R - 1) + j
+                let p0 = P(i0)
+                var t0 = p0 - P(im); let l0 = simd_length(t0); t0 = l0 > 1e-6 ? t0 / l0 : axis
+                var r = p0 - ringC; r -= axis * simd_dot(r, axis); let rl = simd_length(r); r = rl > 1e-6 ? r / rl : SIMD3(1, 0, 0)
+                let dir = simd_normalize(-axis * cosf(cone) + r * sinf(cone))
+                // the ray's FIRST exit through the drawn egg (Moller-Trumbore over the egg triangles round this foot)
+                var best = Float.infinity, bestN = SIMD3<Float>(0, -1, 0)
+                var t = 0
+                while t + 2 < tris.count {
+                    let a = P(Int(tris[t])), e1 = P(Int(tris[t + 1])) - a, e2 = P(Int(tris[t + 2])) - a; t += 3
+                    let pv = simd_cross(dir, e2), det = simd_dot(e1, pv)
+                    if abs(det) < 1e-12 { continue }
+                    let inv = 1 / det, tv = crown - a, u = simd_dot(tv, pv) * inv
+                    if u < 0 || u > 1 { continue }
+                    let qv = simd_cross(tv, e1), v = simd_dot(dir, qv) * inv
+                    if v < 0 || u + v > 1 { continue }
+                    let d = simd_dot(e2, qv) * inv
+                    if d > 1e-4 && d < best { best = d; bestN = simd_cross(e1, e2) }
+                }
+                var p1: SIMD3<Float>, n: SIMD3<Float>
+                if best.isFinite {
+                    n = simd_normalize(bestN); if simd_dot(n, dir) < 0 { n = -n }          // outward = the way the ray leaves
+                    p1 = crown + dir * best - n * sink
+                } else {
+                    skirtMisses[si] += 1
+                    n = dir; p1 = crown + dir * 0.15
+                }
+                var t1 = r - n * simd_dot(r, n); let tl = simd_length(t1); t1 = tl > 1e-6 ? t1 / tl : r
+                let c = simd_distance(p0, p1)
+                let m0 = t0 * (c * k0), m1 = t1 * (c * k1)
+                for k in 1...K {
+                    let q = LegWeld.hermiteF(p0, m0, p1, m1, Float(LegWeld.skirtS(k, K)))
+                    let o = 6 * (sd.bandFirst + (k - 1) * A + j)
+                    dyn[o] = q.x; dyn[o + 1] = q.y; dyn[o + 2] = q.z
+                }
+            }
+        }
+    }
+
     /// Rebuild both bands from this frame's seam rings (the cup's top ring, wherever the brain / guard / leash put the piece) and loops (the drawn egg).
     private func applyWeldBand(_ dyn: UnsafeMutablePointer<Float>) {
         guard let w = weld else { return }
@@ -930,12 +991,27 @@ nonisolated final class Skinner {
             }
             let M = retractMatrix
             // (welded: the embedded foot's skin is inside the loops and not drawn; the egg outside them is never pulled in)
-            for (k, vi) in retractVertices.enumerated() where !Skinner.dbgNoRetract && (weld == nil || weldOff) {
+            let notSkin = weld.map { $0.sides.map(\.ghostFirst).min() ?? Int.max } ?? Int.max
+            for (k, vi) in retractVertices.enumerated() where !Skinner.dbgNoRetract && (weld == nil || weldOff || weld!.skirt) && Int(vi) < notSkin {
                 var d = M * retractRest[k]
                 let sd = retractSide[k]
                 if sd >= 0 { d -= retractShift[Int(sd)] }
                 let o = 6 * Int(vi), w = retractWeight[k] * bl
                 dyn[o] += d.x * w; dyn[o + 1] += d.y * w; dyn[o + 2] += d.z * w
+            }
+        }
+        if !beansActive, !weldOff, let w = weld, w.skirt, !retractVertices.isEmpty, tailLM.count == 3, !Skinner.dbgNoRetract {
+            // the sliding skirt keeps every egg triangle: at rest too the built-in foot is pulled onto the footless egg (body-rigid frame of the three back landmarks)
+            func lm(_ k: Int) -> SIMD3<Float> { let o = 6 * tailLM[k]; return SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]) }
+            func frame(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> simd_float3x3 {
+                let x = simd_normalize(b - a), z = simd_normalize(simd_cross(x, c - a)), y = simd_cross(z, x)
+                return simd_float3x3(columns: (x, y, z))
+            }
+            let rr = tailLMRest, Rot = frame(lm(0), lm(1), lm(2)) * frame(rr[0], rr[1], rr[2]).transpose
+            let skip = w.sides.map(\.ghostFirst).min() ?? Int.max          // (the ghosts and the band are not body skin: never retracted)
+            for (k, vi) in retractVertices.enumerated() where Int(vi) < skip {
+                let d = Rot * retractRest[k], o = 6 * Int(vi), wgt = retractWeight[k]
+                dyn[o] += d.x * wgt; dyn[o + 1] += d.y * wgt; dyn[o + 2] += d.z * wgt
             }
         }
         if !beansActive, !weldOff, let w = weld {
@@ -988,7 +1064,7 @@ nonisolated final class Skinner {
         if cuddle.active { applyCuddle(dyn) }          // the cuddle jiggle (CuddleJiggle.swift): drawn dent / drag / let-go spring on the BODY skin only
         applyBeanGuard(dyn)
         applyBeanJoin(dyn)
-        if weld != nil && !weldOff { applyWeldBand(dyn) } else { applyBeanCollar(dyn) }
+        if let w = weld, !weldOff { if w.skirt { applySkirt(dyn) } else { applyWeldBand(dyn) } } else { applyBeanCollar(dyn) }
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }

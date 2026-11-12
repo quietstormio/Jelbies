@@ -56,6 +56,8 @@ nonisolated struct LegWeldInfo: Sendable {
     var restTeddy: [Float] = []
     /// Band triangles drawn with the egg (the upper rows + the stitch); the lower rows follow them and are drawn in Panda's all-charcoal limb pass.
     var bandEggCount: Int = 0
+    /// The sliding-skirt variant (LegWeld.planSkirt): no loop, every egg triangle kept, the band lands on the egg by ray each frame.
+    var skirt = false
     /// First index of the band block (ArmCapsuleInfo.indexFirst).
     var bandIndexFirst: Int = 0
     /// For a body with the weld off (shoes): the egg triangles inside the loops and the pieces' upper triangles (rings above the seam + crown), drawn instead of the band.
@@ -152,6 +154,58 @@ nonisolated enum LegWeld {
     /// Band row parameter (row 1...K) from the seam ring (0) to the loop (1): cosine spacing, rows closer together at both seams (the curve turns fastest there).
     @inline(__always) static func rowS(_ k: Int, _ K: Int) -> Double { rowCosine ? (1 - cos(Double.pi * Double(k) / Double(K + 1))) / 2 : Double(k) / Double(K + 1) }
     static var rowCosine: Bool { UserDefaults.standard.object(forKey: "LegsWeldRowCos") != nil ? UserDefaults.standard.integer(forKey: "LegsWeldRowCos") != 0 : true }
+
+    // MARK: sliding skirt (proof stage, -LegsSkirt 1)
+    /// The skirt variant: every egg triangle stays; the band (quads only, no stitch, no loop) hangs from the seam ring and lands on the egg wherever a ray from the
+    /// piece's crown in that meridian's half-plane meets the drawn egg (Skinner.applySkirt).
+    static var skirt: Bool { UserDefaults.standard.integer(forKey: "LegsSkirt") != 0 }
+    /// Cone angle of the landing rays from the leg axis (down = 0), rad (-LegsSkirtCone, degrees).
+    static var skirtCone: Float { Float((UserDefaults.standard.object(forKey: "LegsSkirtCone") != nil ? UserDefaults.standard.double(forKey: "LegsSkirtCone") : 58) * Double.pi / 180) }
+    static let skirtSink: Float = 0.003
+    /// Skirt row parameter (row 1...K): cosine spacing that reaches the landing (1) on the last row.
+    @inline(__always) static func skirtS(_ k: Int, _ K: Int) -> Double { (1 - cos(Double.pi * Double(k) / Double(K))) / 2 }
+
+    static func planSkirt(P: [SIMD3<Double>], N: [SIMD3<Double>], M: [Float], tri: [UInt32]) -> Plan {
+        let R = buildRing, K = buildRows
+        var sides: [LegWeldSide] = []
+        var bandPos: [[SIMD3<Double>]] = [], bandNrm: [[SIMD3<Double>]] = [], bandMat: [[Float]] = []
+        let cone = Double(skirtCone)
+        for sigma in [-1.0, 1.0] {
+            sides.append(LegWeldSide(loop: [], outer: [], mA: [], mB: [], mW: [], hidden: []))
+            let rs = FootBean.restStream(sigma: sigma)
+            var ringC = SIMD3<Double>.zero
+            for j in 0..<A { ringC += rs[1 + A * R + j] }
+            ringC /= Double(A)
+            let axis = simd_normalize(ringC - rs[0]), crown = rs[FootBean.vertexCount - 1]
+            var bp: [SIMD3<Double>] = [], bn: [SIMD3<Double>] = [], bm: [Float] = []
+            var land: [SIMD3<Double>] = [], landT: [SIMD3<Double>] = [], landN: [SIMD3<Double>] = []
+            for j in 0..<A {
+                let p0 = rs[1 + A * R + j]
+                var r = p0 - ringC; r -= axis * simd_dot(r, axis); r = simd_normalize(r)
+                let dir = simd_normalize(-axis * cos(cone) + r * sin(cone))
+                var t = 0.0
+                while t < 0.8 && BobForm.bodySDF(SIMD3(abs((crown + dir * t).x), (crown + dir * t).y, (crown + dir * t).z)) < 0 { t += 0.002 }
+                let L = crown + dir * t
+                let n = BobForm.normal(L)
+                var tt = r - n * simd_dot(r, n); tt = simd_length(tt) > 1e-9 ? simd_normalize(tt) : r
+                land.append(L - n * Double(skirtSink)); landT.append(tt); landN.append(n)
+            }
+            for k in 1...K {
+                let s = skirtS(k, K)
+                for j in 0..<A {
+                    let i0 = 1 + A * R + j, im = 1 + A * (R - 1) + j
+                    let p0 = rs[i0], t0 = simd_normalize(rs[i0] - rs[im]), p1 = land[j], c = simd_distance(p0, p1)
+                    bp.append(hermite(p0, t0 * c * Double(Skinner.weldK0), p1, landT[j] * c * Double(Skinner.weldK1), s))
+                    let n0 = FootBean.local.nrm[i0]
+                    bn.append(simd_normalize(n0 + (landN[j] - n0) * s))
+                    bm.append(0)
+                }
+            }
+            bandPos.append(bp); bandNrm.append(bn); bandMat.append(bm)
+        }
+        return Plan(eggTri: tri, removedTri: [], sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat,
+                    bandShape: bandPos, bandPanda: bandPos, bandTeddy: bandPos, bodyMat: [])
+    }
 
     /// Choose the loops, drop the egg triangles inside them, and lay out the band at rest. nil = the loops could not be made simple (the caller builds the old mesh).
     static func plan(P: [SIMD3<Double>], N: [SIMD3<Double>], M: [Float], tri: [UInt32]) -> Plan? {
@@ -412,6 +466,7 @@ nonisolated enum LegWeld {
         for k in 0..<K {
             for j in 0..<A { tri(band(k, j), band(k + 1, j), band(k, j + 1)); tri(band(k, j + 1), band(k + 1, j), band(k + 1, j + 1)) }
         }
+        if sd.loop.isEmpty { return out }          // (the sliding skirt: no loop, no stitch)
         // stitch row K (A vertices at the meridian angles) to the loop (in increasing angle); the meridian j lies on loop segment mA[j] -> mB[j]
         let nL = sd.loop.count
         // position of meridian j along the loop, in loop-index units (0 ..< nL), and of loop vertex i = i

@@ -234,7 +234,9 @@ final class FootJoinLineTests: XCTestCase {
         r.brain.seed = 11
         r.brain.feature = JellyRoster.feature(char)
         r.skinner.configureTail(rm); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
+        r.brain.prepareBeans(r.sim, r.skinner)          // (the stage's warmFeet: the bean guard's egg triangles, the retract table)
         start(r)
+        var misses = 0, skirtUs: Double = 0, skirtN = 0, minFeet: Float = .infinity
         var p90: Float = 0, mx: Float = 0, folds = 0, frames = 0, out = 0, guardMax: Float = 0, leashMax: Float = 0
         var worstInfo = "", okOff: Float = 0, okYaw: Float = 0, badOff: Float = .infinity, badYaw: Float = .infinity, allOff: Float = 0, allYaw: Float = 0
         for frame in 0..<Int(60 * seconds) {
@@ -247,6 +249,16 @@ final class FootJoinLineTests: XCTestCase {
             p90 = max(p90, m.p90); mx = max(mx, m.max)
             if m.folds > folds || (frames == 1 && m.folds == 0) { Self.dumpObj(r, name.replacingOccurrences(of: " ", with: "_")); worstInfo = Self.legPose(r).map { String(format: "off %.1f cm yaw %.0f deg folds band %d stitch %d", $0.off, $0.yaw, $0.band, $0.stitch) }.joined(separator: " / ") + " @frame \(frame)" }
             folds = max(folds, m.folds)
+            misses = max(misses, r.skinner.skirtMisses[0] + r.skinner.skirtMisses[1])
+            if rm.armCapsule?.weld?.skirt == true {
+                skirtUs += r.skinner.skirtMicros; skirtN += 1
+                if char == 0 && frame == 120 { Self.dumpObj(r, "plain_" + name) }
+                if char == 0, let w = rm.armCapsule?.weld {          // the frame where the two seam rings come closest (the feet crossing)
+                    func rc(_ f: Int) -> SIMD3<Float> { var c = SIMD3<Float>.zero; for j in 0..<FootBean.around { let v = f + 1 + FootBean.around * w.ring + j; c += SIMD3(r.dyn[6 * v], r.dyn[6 * v + 1], r.dyn[6 * v + 2]) }; return c / Float(FootBean.around) }
+                    let dd = simd_distance(rc(w.sides[0].beanFirst), rc(w.sides[1].beanFirst))
+                    if dd < minFeet { minFeet = dd; Self.dumpObj(r, "cross_" + name) }
+                }
+            }
             for lp in Self.legPose(r) {
                 if lp.band + lp.stitch == 0 { okOff = max(okOff, lp.off); okYaw = max(okYaw, abs(lp.yaw)) }
                 else { badOff = min(badOff, lp.off); badYaw = min(badYaw, abs(lp.yaw)) }
@@ -256,6 +268,7 @@ final class FootJoinLineTests: XCTestCase {
             leashMax = max(leashMax, r.skinner.joinLeash[0], r.skinner.joinLeash[1])
         }
         print(String(format: "[legweld] %@ char %d: frames %d (legs out %d) | seam break p90 %.1f deg, max %.1f deg | folded band triangles %d | guard shift max %.1f cm, leash max %.1f cm", name, char, frames, out, p90, mx, folds, guardMax * 100, leashMax * 100))
+        if rm.armCapsule?.weld?.skirt == true { print(String(format: "[legweld] SKIRT %@ char %d: folds %d | landing misses %d | cup-ring seam p90 %.1f deg | skirt %.0f us per update | closest feet %.1f cm", name, char, folds, misses, p90, skirtN > 0 ? skirtUs / Double(skirtN) : 0, minFeet * 100)) }
         print(String(format: "[legweld] %@ legs: max offset %.1f cm, max |yaw| %.0f deg | fold-free up to offset %.1f cm, |yaw| %.0f deg | first fold at offset >= %.1f cm or |yaw| >= %.0f deg | worst frame: %@", name, allOff, allYaw, okOff, okYaw, badOff.isFinite ? badOff : -1, badYaw.isFinite ? badYaw : -1, worstInfo))
         return (p90, mx, folds, frames, out)
     }
@@ -272,6 +285,37 @@ final class FootJoinLineTests: XCTestCase {
             }
         }
         print(String(format: "[legweld] worst p90 %.1f deg", worst))
+    }
+
+    /// Sliding skirt proof (-LegsSkirt 1, build-time): every move on blue, yellow (tail), Teddy, Panda; gate = 0 folds, 0 landing misses; plus the egg above 20 cm untouched.
+    func testSkirtProof() throws {
+        let rm = MotionRig.renderMesh
+        guard let cap = rm.armCapsule, cap.weld?.skirt == true else { throw XCTSkip("skirt off in this process (defaults LegsSkirt 1)") }
+        for char in [0, 1, 4, 6] {
+            for (name, start) in Self.weldMoves {
+                let c = name == "flapHop" && char == 0 ? 3 : char
+                _ = weldRun(name, char: c, start: start)
+            }
+        }
+        // the belly above the leg root: skirt (with the built-in foot retracted) against the same frames with nothing retracted, two rigs in lockstep
+        let eggEnd = cap.firstVertex.min()!
+        let restY = (0..<eggEnd).map { rm.rest[3 * $0 + 1] }
+        for (name, start) in [("walk", { (r: MotionRig) in r.brain.request(.goTo(SIMD2(1.6, 0.4))) }), ("turn", { (r: MotionRig) in r.brain.startTurn(to: r.poseYaw + 2.4, sim: r.sim) }), ("hop", { (r: MotionRig) in r.brain.startHopPlay(sim: r.sim) })] {
+            func make() -> MotionRig {
+                let r = MotionRig(game: true, settle: 0.5); r.skinner.autoBlink = false; r.brain.seed = 11
+                r.skinner.configureTail(rm); r.brain.skinnerRef = r.skinner; r.brain.prepareBeans(r.sim, r.skinner); start(r); return r
+            }
+            let ra = make(), rb = make()
+            var a20: Float = 0, simDiff: Float = 0
+            for _ in 0..<240 {
+                for r in [ra, rb] { r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }
+                for i in 0..<ra.sim.x.count { simDiff = max(simDiff, abs(ra.sim.x[i] - rb.sim.x[i])) }
+                Skinner.dbgNoRetract = false; ra.render()
+                Skinner.dbgNoRetract = true; rb.render(); Skinner.dbgNoRetract = false
+                for v in 0..<eggEnd where restY[v] > 0.20 { a20 = max(a20, simd_distance(SIMD3(ra.dyn[6 * v], ra.dyn[6 * v + 1], ra.dyn[6 * v + 2]), SIMD3(rb.dyn[6 * v], rb.dyn[6 * v + 1], rb.dyn[6 * v + 2]))) }
+            }
+            print(String(format: "[legweld] SKIRT displacement %@: egg above rest y 0.20 moved %.2f cm (lockstep sim difference %.5f)", name, a20 * 100, simDiff))
+        }
     }
 
     /// The same moves with the loop also turning with the leg's yaw (-LegsWeldYaw 1): numbers only (no assertion), for the design choice.

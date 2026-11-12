@@ -1002,7 +1002,7 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
         Nb.append(n); Mb.append(m)
     }
     // the leg weld (LegWeld.swift): the egg triangles inside each foot loop are dropped; the band is added at the head of the capsule index block
-    var weldPlan = weldOn ? LegWeld.plan(P: P, N: Nb, M: Mb, tri: net.tri) : nil
+    var weldPlan = weldOn ? (LegWeld.skirt ? LegWeld.planSkirt(P: P, N: Nb, M: Mb, tri: net.tri) : LegWeld.plan(P: P, N: Nb, M: Mb, tri: net.tri)) : nil
     if weldOn && weldPlan == nil { NSLog("%@", "[melon] leg weld: the loops could not be made simple; old mesh") }
     idx = weldPlan?.eggTri ?? net.tri
     for (v, m) in weldPlan?.bodyMat ?? [] { mat[v] = m }
@@ -1136,7 +1136,7 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
 
     // a body with the weld off (shoes) draws the egg inside the loops and the pieces' upper rings instead of the band: two blocks after the decals (outside the body range)
     var unweldEggFirst = 0, unweldBeanFirst = 0, unweldBeanCount = 0
-    if let wp = weldPlan {
+    if let wp = weldPlan, !LegWeld.skirt {
         unweldEggFirst = idx.count
         idx += wp.removedTri
         unweldBeanFirst = idx.count
@@ -1187,7 +1187,7 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
         idx.insert(contentsOf: band, at: capIndexFirst)
         bodyIndexCountW += band.count; seedStartW += band.count
         weldInfo = LegWeldInfo(sides: wp.sides, ring: wp.ring, rows: wp.rows, bandIndexCount: band.count)
-        weldInfo!.bandEggCount = bandEggCount; weldInfo!.bandIndexFirst = capIndexFirst
+        weldInfo!.bandEggCount = bandEggCount; weldInfo!.bandIndexFirst = capIndexFirst; weldInfo!.skirt = LegWeld.skirt
         weldInfo!.unweldEggFirst = unweldEggFirst + band.count; weldInfo!.unweldEggCount = wp.removedTri.count
         weldInfo!.unweldBeanFirst = unweldBeanFirst + band.count; weldInfo!.unweldBeanCount = unweldBeanCount
         for si in 0..<2 {
