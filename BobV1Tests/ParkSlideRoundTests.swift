@@ -143,6 +143,7 @@ final class ParkSlideRoundTests: XCTestCase {
 
     func testWalkRoundWithFriendsRarelyDrops() {
         var attempts = 0, dropped = 0, still3 = 0, still6 = 0, boxSamples = 0, heldWp = 0, boxEpisodes = 0
+        var deepest: Float = 0
         var notes: [String] = []
         for (aname, aspect) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
             for seed in UInt64(1)...6 {
@@ -154,7 +155,7 @@ final class ParkSlideRoundTests: XCTestCase {
                 var still = [Float](repeating: 0, count: 3), stillCounted3 = [Bool](repeating: false, count: 3), stillCounted6 = [Bool](repeating: false, count: 3)
                 var wpHold = [Float](repeating: 0, count: 3), wpTarget = [SIMD2<Float>](repeating: .zero, count: 3), wpCounted = [Bool](repeating: false, count: 3)
                 var t: Float = 0
-                var inBox = [Bool](repeating: false, count: 3)
+                var inBox = [Bool](repeating: false, count: 3), boxMax = [Float](repeating: 0, count: 3)
                 for i in 0..<(90 * 60) {
                     if i % 30 == 5 {
                         for (k, r) in lab.rigs.enumerated() where r.brain.idleState.kind == nil && !r.brain.isSocial && r.brain.pending == nil {
@@ -169,13 +170,14 @@ final class ParkSlideRoundTests: XCTestCase {
                         if open[k], !using { if !reached[k] { dropped += 1; notes.append("drop \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) at (\(String(format: "%.2f,%.2f", b.position.x, b.position.y)))") }; open[k] = false }
                         if using, st.slideStage < 1, insideDepth(bx, b.position) > 0.02 {
                             boxSamples += 1
-                            if !inBox[k] { inBox[k] = true; boxEpisodes += 1; if boxEpisodes <= 12 { notes.append("box \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) \(diag(lab, k))") } }
-                        } else { inBox[k] = false }
+                            boxMax[k] = max(boxMax[k], insideDepth(bx, b.position))
+                            if !inBox[k] { inBox[k] = true; boxEpisodes += 1; boxMax[k] = insideDepth(bx, b.position); if boxEpisodes <= 12 { notes.append("box \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) \(diag(lab, k))") } }
+                        } else if inBox[k] { inBox[k] = false; deepest = max(deepest, boxMax[k]); notes.append("boxend \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) max depth \(boxMax[k]) stage \(st.slideStage) ignore \(String(describing: b.decorIgnore))") }
                         if using, st.slideStage < 0 {
                             // a waypoint held with nobody near
                             if simd_distance(st.target, wpTarget[k]) > 0.01 { wpTarget[k] = st.target; wpHold[k] = 0; wpCounted[k] = false }
                             let near = lab.rigs.enumerated().contains { $0.offset != k && simd_distance($0.element.brain.position, b.position) < 2.0 }
-                            if simd_distance(b.position, wpTarget[k]) < 1.0, !near { wpHold[k] += 1.0 / 60; if wpHold[k] > 1.5, !wpCounted[k] { wpCounted[k] = true; heldWp += 1; notes.append("held wp \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) at \(b.position) target \(st.target)") } } else { wpHold[k] = 0 }
+                            if simd_distance(b.position, wpTarget[k]) < 1.0, !near { wpHold[k] += 1.0 / 60; if wpHold[k] > 1.5, !wpCounted[k] { wpCounted[k] = true; heldWp += 1; notes.append("held wp \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) \(diag(lab, k))") } } else { wpHold[k] = 0 }
                         } else { wpHold[k] = 0 }
                     }
                     if t - refT >= 0.5 {
@@ -183,7 +185,7 @@ final class ParkSlideRoundTests: XCTestCase {
                             let b = r.brain, st = b.idleState
                             let neg = st.kind == .decorSlide && st.decorUID == ParkToys.slideUID && st.slideStage < 0
                             if neg, simd_distance(b.position, ref[k]) < 0.05 { still[k] += 0.5 } else { still[k] = 0; stillCounted3[k] = false; stillCounted6[k] = false }
-                            if still[k] > 3, !stillCounted3[k] { stillCounted3[k] = true; still3 += 1; notes.append("still3 \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) at \(b.position) stage \(st.slideStage) target \(st.target)") }
+                            if still[k] > 3, !stillCounted3[k] { stillCounted3[k] = true; still3 += 1; notes.append("still3 \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) \(diag(lab, k))") }
                             if still[k] > 6, !stillCounted6[k] { stillCounted6[k] = true; still6 += 1 }
                             ref[k] = b.position
                         }
@@ -193,9 +195,9 @@ final class ParkSlideRoundTests: XCTestCase {
                 for r in lab.rigs { r.brain.abortAll(r.sim, r.skinner) }
             }
         }
-        for n in notes.prefix(60) { print("PSR T2 note \(n)") }
+        for n in notes.prefix(120) { print("PSR T2 note \(n)") }
         let rate = attempts > 0 ? Float(dropped) / Float(attempts) : 0
-        print("PSR T2 attempts \(attempts) dropped \(dropped) (\(rate)) still>3s \(still3) still>6s \(still6) box samples \(boxSamples) waypoint held >1.5 s with nobody within 2.0: \(heldWp)")
+        print("PSR T2 attempts \(attempts) dropped \(dropped) (\(rate)) still>3s \(still3) still>6s \(still6) box samples \(boxSamples) (episodes \(boxEpisodes), deepest \(deepest)) waypoint held >1.5 s with nobody within 2.0: \(heldWp)")
         XCTAssertGreaterThan(attempts, 20, "enough attempts")
         XCTAssertLessThanOrEqual(rate, 0.2, "dropped before the ladder \(dropped) of \(attempts)")
         XCTAssertEqual(still6, 0, "no stand-still over 6 s")
