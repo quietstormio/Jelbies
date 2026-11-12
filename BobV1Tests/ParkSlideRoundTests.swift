@@ -153,7 +153,7 @@ final class ParkSlideRoundTests: XCTestCase {
                 var open = [Bool](repeating: false, count: 3), reached = [Bool](repeating: false, count: 3)
                 var ref = lab.rigs.map { $0.brain.position }, refT: Float = 0
                 var still = [Float](repeating: 0, count: 3), stillCounted3 = [Bool](repeating: false, count: 3), stillCounted6 = [Bool](repeating: false, count: 3)
-                var wpHold = [Float](repeating: 0, count: 3), wpTarget = [SIMD2<Float>](repeating: .zero, count: 3), wpCounted = [Bool](repeating: false, count: 3)
+                var wpHold = [Float](repeating: 0, count: 3), wpTarget = [SIMD2<Float>](repeating: .zero, count: 3), wpCounted = [Bool](repeating: false, count: 3), wpRef = [SIMD2<Float>](repeating: .zero, count: 3)
                 var t: Float = 0
                 var inBox = [Bool](repeating: false, count: 3), boxMax = [Float](repeating: 0, count: 3)
                 for i in 0..<(90 * 60) {
@@ -173,12 +173,13 @@ final class ParkSlideRoundTests: XCTestCase {
                             boxMax[k] = max(boxMax[k], insideDepth(bx, b.position))
                             if !inBox[k] { inBox[k] = true; boxEpisodes += 1; boxMax[k] = insideDepth(bx, b.position); if boxEpisodes <= 12 { notes.append("box \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) \(diag(lab, k))") } }
                         } else if inBox[k] { inBox[k] = false; deepest = max(deepest, boxMax[k]); notes.append("boxend \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) max depth \(boxMax[k]) stage \(st.slideStage) ignore \(String(describing: b.decorIgnore))") }
-                        if using, st.slideStage < 0 {
-                            // a waypoint held with nobody near
-                            if simd_distance(st.target, wpTarget[k]) > 0.01 { wpTarget[k] = st.target; wpHold[k] = 0; wpCounted[k] = false }
+                        if using, st.slideStage == -1 || st.slideStage == -3 {
+                            // a waypoint of the way round (a corner, the gate) held: not moving (under 0.1 in 1.5 s), nobody within 2.0
                             let near = lab.rigs.enumerated().contains { $0.offset != k && simd_distance($0.element.brain.position, b.position) < 2.0 }
-                            if simd_distance(b.position, wpTarget[k]) < 1.0, !near { wpHold[k] += 1.0 / 60; if wpHold[k] > 1.5, !wpCounted[k] { wpCounted[k] = true; heldWp += 1; notes.append("held wp \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) \(diag(lab, k))") } } else { wpHold[k] = 0 }
-                        } else { wpHold[k] = 0 }
+                            if simd_distance(st.target, wpTarget[k]) > 0.01 || simd_distance(b.position, wpTarget[k]) > 99 { wpTarget[k] = st.target; wpHold[k] = 0; wpCounted[k] = false; wpRef[k] = b.position }
+                            if simd_distance(b.position, wpRef[k]) > 0.1 || near { wpRef[k] = b.position; wpHold[k] = 0 }
+                            else { wpHold[k] += 1.0 / 60; if wpHold[k] > 1.5, !wpCounted[k] { wpCounted[k] = true; heldWp += 1; notes.append("held wp \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) \(diag(lab, k))") } }
+                        } else { wpHold[k] = 0; wpRef[k] = b.position }
                     }
                     if t - refT >= 0.5 {
                         for (k, r) in lab.rigs.enumerated() {
