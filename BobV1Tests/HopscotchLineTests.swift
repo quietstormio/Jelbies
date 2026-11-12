@@ -12,6 +12,8 @@ final class HopscotchLineTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     let uid = ParkToys.hopscotchUID
     let dt: Float = 1.0 / 60
+    /// (= `HopscotchTuning.startTries` once it exists: the brief's value)
+    let startTries = 3
 
     override func setUp() {
         DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0
@@ -65,7 +67,7 @@ final class HopscotchLineTests: XCTestCase {
             for a in 0..<4 { XCTAssertEqual(seqs[a], Array(0..<8), "seed \(seed): Jelbie \(a) landed on squares 1...8 in order: \(seqs[a])") }
             XCTAssertFalse(line.active, "seed \(seed): the line is empty at the end")
             XCTAssertGreaterThan(minGap, 0.75, "seed \(seed): bodies never overlap (closest centres \(minGap))")
-            for a in 0..<4 { XCTAssertLessThanOrEqual(entries[a], HopscotchTuning.startTries + 1, "seed \(seed): Jelbie \(a) stepped up \(entries[a]) times") }
+            for a in 0..<4 { XCTAssertLessThanOrEqual(entries[a], startTries + 1, "seed \(seed): Jelbie \(a) stepped up \(entries[a]) times") }
         }
     }
 
@@ -98,7 +100,7 @@ final class HopscotchLineTests: XCTestCase {
         print("[hopline] blocked start: joiner's hopscotch ended \(endedAt) s after the block, stage-4 entries \(entries)")
         XCTAssertGreaterThan(endedAt, 0, "the joiner gave the game up; stage \(joiner.idleState.slideStage) kind \(String(describing: joiner.idleState.kind)) pos \(joiner.position) line \(line.players(uid).map { "\($0.id):slot \($0.slot) sq \($0.sq)" })")
         XCTAssertLessThanOrEqual(endedAt, 25)
-        XCTAssertLessThanOrEqual(entries, HopscotchTuning.startTries + 1, "stage-4 entries \(entries)")
+        XCTAssertLessThanOrEqual(entries, startTries + 1, "stage-4 entries \(entries)")
     }
 
     // 3
