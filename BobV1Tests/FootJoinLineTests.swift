@@ -260,4 +260,28 @@ final class FootJoinLineTests: XCTestCase {
         XCTAssertGreaterThan(m.n, 10)
         XCTAssertGreaterThan(m.p90, Self.maxNormalBreakP90, "the unblended join's normal break was not detected (\(m.p90) deg)")
     }
+
+    /// Cost of the join blend: the skinner's `update` per Jelbie while the pieces are out, blend off against on (printed; no threshold).
+    func testBlendCost() {
+        let rm = MotionRig.renderMesh
+        var ms: [Bool: Double] = [:]
+        for on in [false, true, false, true] {
+            Skinner.joinBlend = on
+            let r = MotionRig(game: true, settle: 0.5)
+            r.skinner.autoBlink = false; r.brain.seed = 11
+            r.skinner.configureTail(rm); r.brain.skinnerRef = r.skinner
+            r.brain.idleForced = true; _ = r.brain.idleStart(.sway, r.sim)
+            var n = 0, total = 0.0
+            for _ in 0..<240 {
+                r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
+                guard r.skinner.beansActive, r.skinner.beanBlend > 0.9 else { continue }
+                let t0 = CFAbsoluteTimeGetCurrent(); r.render(); total += CFAbsoluteTimeGetCurrent() - t0; n += 1
+                _ = r.skinner.takeJoinWrites()
+            }
+            if n > 0 { ms[on] = min(ms[on] ?? .infinity, total / Double(n) * 1000) }
+            print(String(format: "[footjoincost] blend %@: %.3f ms per skinned frame (%d frames)", on ? "on" : "off", n > 0 ? total / Double(n) * 1000 : 0, n))
+        }
+        Skinner.joinBlend = true
+        if let a = ms[false], let b = ms[true] { print(String(format: "[footjoincost] difference %.3f ms per Jelbie (best of two runs each)", b - a)) }
+    }
 }
