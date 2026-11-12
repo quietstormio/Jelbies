@@ -533,7 +533,7 @@ nonisolated final class Skinner {
         guard let pose else { return }
         for s in 0..<2 {
             let f = beanFirst[s]
-            for r in 5..<FootBean.rings {
+            for r in 3..<FootBean.rings {
                 for j in 0..<A {
                     let v = f + 1 + A * r + j
                     let (d, gr) = Self.eggDepthNormal(P(v), pose)
@@ -594,7 +594,7 @@ nonisolated final class Skinner {
                     R = max(R, Rk)
                 }
                 let dd = rr - R
-                if Skinner.joinBlend, dd < Self.joinBandSkin, dd > -0.06 {          // (the band round the crossing: the blend below reads it)
+                if Skinner.joinBlend, dd < Self.joinBandSkin, dd > -0.15 {          // (the band round the crossing: the blend below reads it)
                     bandV.append(vi); bandSide.append(Int8(s)); bandDD.append(dd); bandJ.append(segJ); bandT.append(segT)
                 }
                 var inward: Float = 0
