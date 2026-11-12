@@ -26,7 +26,7 @@ final class TrickStageTwoTests: XCTestCase {
 
     // MARK: the typed / spoken words (RuleParser)
 
-    private static let ruleWords: [(String, VoiceTrick)] = [("do the hula", .hula), ("hula", .hula), ("Bob hula dance", .hula), ("spin around", .spin), ("jump", .jacks)]
+    private static let ruleWords: [(String, VoiceTrick)] = [("do the hula", .hula), ("hula", .hula), ("Bob hula dance", .hula), ("super spring", .superSpring), ("do a super spring", .superSpring), ("spin around", .spin), ("jump", .jacks)]
     func testRuleParserFindsTheStageTwoWords() {
         let n = "TrickStageTwoTests.\(UUID().uuidString)"
         defer { UserDefaults.standard.removePersistentDomain(forName: n) }
@@ -73,5 +73,54 @@ final class TrickStageTwoTests: XCTestCase {
         var kinds = Set<IdleKind>()
         _ = run(.hula, seconds: 9, fail: true) { r in if let k = r.brain.idleState.kind { kinds.insert(k) } }
         XCTAssertTrue(kinds.contains(.hula)); XCTAssertTrue(kinds.contains(.dizzyWobble), "the flop spins out into the dizzy wobble")
+    }
+
+    // MARK: super spring
+
+    /// A plain hop's rise (the centroid's, in u), for the comparison.
+    private func plainHopRise() -> Float {
+        let r = MotionRig(game: true)
+        r.brain.startHopPlay(sim: r.sim)
+        var lo = Float.infinity, hi: Float = -.infinity
+        r.run(2.0, each: { let y = r.sim.centroid().y; if r.brain.activity == .playing { lo = min(lo, y); hi = max(hi, y) } })
+        return hi - r.sim.restCentroid.y
+    }
+
+    /// Squashes very low and holds it, launches about twice a normal hop, a big landing, and puts the gait knobs back.
+    func testSuperSpringIsDeepHeldAndAboutTwiceAHop() {
+        let rest = MotionRig(game: true).sim.restCentroid.y
+        var maxY: Float = -.infinity, minSq: Float = 1, holdTicks = 0, landMin: Float = 1, landing = false, kicked: Float = 0
+        let r = run(.superSpring, seconds: 8) { r in
+            guard r.brain.idleState.kind == .superSpring, r.brain.idleState.phase >= 1 else { return }
+            maxY = max(maxY, r.sim.centroid().y)
+            let sq = r.sim.attractor.squash
+            if r.brain.gait.phase == .crouch { minSq = min(minSq, sq); if sq < 0.76 { holdTicks += 1 } }
+            if r.brain.gait.phase == .land { landing = true }
+            if landing, r.brain.gait.phase == .land { landMin = min(landMin, sq) }
+            kicked = max(kicked, r.brain.jellyKick)
+        }
+        let rise = maxY - rest, hop = plainHopRise()
+        MotionLog.write(String(format: "SPRING rise %.3f u (plain hop %.3f) deepest crouch squash %.2f held %.2f s, landing squash %.2f, kick %.1f", rise, hop, minSq, Float(holdTicks) / 60, landMin, kicked))
+        XCTAssertGreaterThan(rise, 1.6 * hop, "about twice a normal hop")
+        XCTAssertLessThan(minSq, 0.77, "squashes very low")
+        XCTAssertGreaterThan(Float(holdTicks) / 60, 0.2, "the squash is held")
+        XCTAssertLessThan(landMin, 0.82, "a big landing squash")
+        XCTAssertGreaterThanOrEqual(kicked, 3.0, "a big landing jiggle")
+        XCTAssertNil(r.brain.idleState.kind, "the move ends")
+        let g = r.brain.gait
+        XCTAssertEqual(g.crouchDepth, 0.18); XCTAssertEqual(g.crouchHold, 0); XCTAssertEqual(g.airStretch, 0.12); XCTAssertEqual(g.landDepth, 0.2, "the knobs are back to the ordinary hop's")
+        XCTAssertEqual(r.brain.gait.hopApex, 0.10, accuracy: 1e-6)
+    }
+
+    func testSuperSpringFlopIsAWeakHopAndALurch() {
+        var maxY: Float = -.infinity, pitchMax: Float = 0, ok = false
+        let rest = MotionRig(game: true).sim.restCentroid.y
+        _ = run(.superSpring, seconds: 8, fail: true) { r in
+            guard r.brain.idleState.kind == .superSpring, r.brain.idleState.phase >= 1 else { return }
+            ok = true; maxY = max(maxY, r.sim.centroid().y); pitchMax = max(pitchMax, r.brain.gait.basePitch)
+        }
+        XCTAssertTrue(ok)
+        XCTAssertLessThan(maxY - rest, 0.5 * plainHopRise() + 0.08, "the flop barely leaves the floor")
+        XCTAssertGreaterThan(pitchMax, 0.08, "the forward lurch")
     }
 }

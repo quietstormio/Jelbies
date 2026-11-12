@@ -64,6 +64,7 @@ extension GameCare {
             b.commandedFlipFail = false
             b.commandedFlip = true
         } else if let k = VoiceCoordinator.idleKind(for: t) {
+            if t == .superSpring { b.flipCompact = focus.isActive }
             b.commandedIdle = k
         } else { return false }
         b.face(.excited, hold: 1.2)

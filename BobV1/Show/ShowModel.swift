@@ -186,6 +186,7 @@ nonisolated enum ShowTrickInfo {
         case .strut: return [.cool]
         case .sing: return [.sweet, .cute]
         case .hula: return [.cute, .sweet]
+        case .superSpring: return [.sporty]
         }
     }
     /// The tricks a Jelbie can show on stage: everything learned but the come and the run (walks, not stage tricks: he would leave the spotlight).
@@ -200,18 +201,18 @@ nonisolated enum ShowTrickInfo {
     static func difficulty(_ t: VoiceTrick) -> Int {
         switch t {
         case .sit, .hop, .look, .come, .run, .strut, .sing, .hula: return 1
-        case .jacks, .spin: return 2
+        case .jacks, .spin, .superSpring: return 2
         case .flip, .showOff: return 3
         }
     }
     /// The moves with their OWN fail variant (the Jelly Show sets `idleState.trickFailNext` instead of cutting the move short into a wobble).
-    static let ownsFlop: Set<VoiceTrick> = [.hula]
+    static let ownsFlop: Set<VoiceTrick> = [.hula, .superSpring]
     static func symbol(_ t: VoiceTrick) -> String {
         switch t {
         case .spin: return "arrow.triangle.2.circlepath"; case .hop: return "arrow.up.to.line"
         case .flip: return "arrow.uturn.up"; case .jacks: return "figure.jumprope"; case .sit: return "chair.fill"; case .look: return "eye.fill"
         case .come: return "figure.walk"; case .run: return "figure.run"
-        case .showOff: return "crown.fill"; case .strut: return "figure.walk.motion"; case .sing: return "music.note"; case .hula: return "figure.dance"
+        case .showOff: return "crown.fill"; case .strut: return "figure.walk.motion"; case .sing: return "music.note"; case .hula: return "figure.dance"; case .superSpring: return "arrow.up.to.line.circle.fill"
         }
     }
     /// How long the stage gives a trick to play out (seconds). The move runs to its own end; the old fixed 2.6 s cut the longer ones short.
@@ -220,6 +221,7 @@ nonisolated enum ShowTrickInfo {
         case .showOff, .strut: return 3.2
         case .sing: return 3.6
         case .hula: return 3.8
+        case .superSpring: return 2.8
         default: return 2.6
         }
     }

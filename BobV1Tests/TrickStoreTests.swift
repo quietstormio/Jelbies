@@ -70,7 +70,7 @@ final class TrickStoreTests: XCTestCase {
 
     /// Stage 2 of the trick plan: the four new moves (rows, stars, scope, price, moves both ways, the Show's time and its own fail variant).
     func testStageTwoTrickRows() {
-        let want: [(VoiceTrick, Int, TrickScope, Int, IdleKind)] = [(.hula, 1, .everyone, 40, .hula)]
+        let want: [(VoiceTrick, Int, TrickScope, Int, IdleKind)] = [(.hula, 1, .everyone, 40, .hula), (.superSpring, 2, .everyone, 70, .superSpring)]
         for (t, stars, scope, price, kind) in want {
             let d = TrickCatalog.def(t)
             XCTAssertEqual(d?.stars, stars, "\(t) stars"); XCTAssertEqual(d?.scope, scope, "\(t) scope"); XCTAssertEqual(d?.price, price, "\(t) price")

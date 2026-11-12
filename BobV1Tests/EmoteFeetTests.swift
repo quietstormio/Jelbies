@@ -160,6 +160,7 @@ final class EmoteFeetTests: XCTestCase {
     func testLegSpin() throws { try emote("legSpin", "idle legSpin") }          // (the Jelly Spa exit pool: legSpin, skipHop, bounce, jacks, proudStrut, signatureFlourish)
     func testBounce() throws { try emote("bounce", "idle bounce") }
     func testProudStrut() throws { try emote("proudStrut", "idle proudStrut") }
+    func testSuperSpring() throws { try emote("superSpring", "idle superSpring") }          // (the Super spring trick: a deep held crouch, a high launch, a big landing)
     func testHula() throws { try emote("hula", "idle hula") }          // (the Hula trick: standing, the base circles over planted feet)
     func testSing() throws { try emote("sing", "idle sing") }          // (the Sing trick: standing, feet planted)
     func testSignatureFlourish() throws { try emote("signatureFlourish", "idle signatureFlourish") }

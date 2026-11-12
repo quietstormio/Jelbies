@@ -152,6 +152,7 @@ extension BlobBrain {
     static func trickMoveSeconds(_ k: IdleKind) -> Float? {
         switch k {
         case .hula: return HulaTuning.total
+        case .superSpring: return SpringTuning.total
         default: return nil
         }
     }

@@ -98,6 +98,7 @@ enum IdleKind: String, CaseIterable, Sendable {
     // Shop tricks that are new moves (trick plan, stage 1): trick-only, never picked by the scheduler: BlobBrain+Tricks.swift
     case sing          // turns to the camera, a breath, a short tune (mouth on each note, head up, a sway), the last note held, a small bow
     // Stage 2 of the trick plan (BlobBrain+Tricks.swift, +TrickHops.swift): trick-only too
+    case superSpring   // crouches very low (held, trembling), launches about twice a normal hop with the arms up, a big landing squash and jiggle, a small rebound
     case hula          // the hips circle round and round with the feet planted, faster and faster; the head stays over the spot, the arms sway, a ta-da
 }
 
@@ -295,7 +296,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick, .soccerKick, .tossBump: return .walking
-        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader, .sing, .hula: return .playing
+        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader, .sing, .hula, .superSpring: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -511,6 +512,7 @@ extension BlobBrain {
         armDirW = 0; armDirOut = 0
         idleState.jackRoll = 0
         if !nameHopping { gait.hopApex = 0.10; gait.hopDuration = 0.26 }       // the jacks' higher hop ends with them
+        gait.flipTwist = 0; gait.crouchDepth = 0.18; gait.crouchHold = 0; gait.airStretch = 0.12; gait.landDepth = 0.2          // (the trick hops' knobs go with them)
         skinner?.setEyeOpenness(1)
     }
 
@@ -695,7 +697,7 @@ extension BlobBrain {
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn:
             return emote2Begin(kind, sim)
         case .sing: return singBegin(sim)
-        case .hula: return trickBegin(kind, sim)
+        case .hula, .superSpring: return trickBegin(kind, sim)
         case .joy:
             idleBegin(.joy)
             idleState.target = here
@@ -769,6 +771,7 @@ extension BlobBrain {
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn: runEmote2(sim, skinner, dt)
         case .sing: runSing(sim, skinner, dt)
         case .hula: runHula(sim, skinner, dt)
+        case .superSpring: runTrickHopTurn(sim, skinner, dt)
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
         case .decorHopscotch: runHopscotch(sim, skinner, dt)
@@ -1065,6 +1068,7 @@ extension BlobBrain {
 
     /// Belly slide and scoot, ticked each step while they run (true = this tick is fully handled).
     func idleBodyMoveTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        if trickBodyTick(sim, skinner, dt) { return true }          // (stage-2 tricks: BlobBrain+TrickHops.swift)
         if bagBodyTick(sim, skinner, dt) { return true }
         if slideBodyTick(sim, skinner, dt) { return true }
         if hopscotchBodyTick(sim, skinner, dt) { return true }

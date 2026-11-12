@@ -89,7 +89,7 @@ final class OnePieceInvariantTests: XCTestCase {
         .tossHeader: Entry(seconds: 5), .tossBump: Entry(seconds: 7),
         .stargazing: Entry(seconds: 16), .proudStrut: Entry(seconds: 9), .floorNapFlop: Entry(seconds: 11), .tapTilt: Entry(seconds: 5), .welcomeWiggle: Entry(seconds: 4), .checkIn: Entry(seconds: 5),
         .sing: Entry(seconds: 4),          // (trick-only: BlobBrain+Tricks.swift)
-        .hula: Entry(seconds: 6),
+        .hula: Entry(seconds: 6), .superSpring: Entry(seconds: 6),
     ]
 
     /// Gait / volley / touch moves that are not an IdleKind. Script cases covered here or by the idle table (`.idle`): see testEveryMoveIsListed.
