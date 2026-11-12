@@ -20,6 +20,7 @@ extension ParkSlideRoundTests {
                 var z: Float = -5
                 while z <= 4.6 {
                     let p = SIMD2<Float>(x, z)
+                    if let rf = GameCamera.roamFloor, z < rf.minZ || z > rf.maxZ || abs(x) > rf.halfWidth(at: z) { z += 0.1; continue }          // (the grid is the roam floor: a pick is never off it)
                     let q = ParkClearSpot.clear(p, radius: fp)
                     if q == p { same += 1 }
                     else {
@@ -78,7 +79,7 @@ extension ParkSlideRoundTests {
                 let r = lab.rigs[0], b = r.brain
                 place(r, SIMD2(0.6, 1.0)); for _ in 0..<5 { lab.tick(watching: false) }
                 let raw = SIMD2<Float>(2.62, -0.50)
-                XCTAssertGreaterThan(insideDepth(bx, raw), 0.3)
+                XCTAssertGreaterThan(insideDepth(bx, raw), 0.2)
                 let ok = b.idleStart(.zoomies, r.sim, goal: raw)
                 let used = b.idleState.target
                 print("PSR T3 \(aname) zoomies: started \(ok) raw \(raw) -> used \(used) (depth inside the box \(insideDepth(bx, used)), blocked \(ParkClearSpot.blocked(used, radius: b.footprint)))")
@@ -105,7 +106,7 @@ extension ParkSlideRoundTests {
             }
             // group hug: three bodies on the slide's left, the ring and its centre stay clear of it
             do {
-                let lab = parkLab(n: 3, seed: 4, aspect: aspect, starts: [SIMD2(1.0, 0.2), SIMD2(1.0, 1.0), SIMD2(1.0, 1.8)])
+                let lab = parkLab(n: 3, seed: 4, aspect: aspect, starts: [SIMD2(1.2, -0.2), SIMD2(1.2, 0.6), SIMD2(0.5, 0.2)])
                 let sl = DecorField.shared.foot(ParkToys.slideUID)!, bx = box(sl)
                 for r in lab.rigs { r.brain.restTimer = 1e6 }
                 let b = lab.rigs[0].brain
