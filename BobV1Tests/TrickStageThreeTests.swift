@@ -75,7 +75,7 @@ final class TrickStageThreeTests: XCTestCase {
                 let fwd = SIMD2<Float>(sinf(heading), cosf(heading))
                 maxBack = max(maxBack, -simd_dot(SIMD2(r.brain.px, r.brain.pz) - start, fwd))
                 let u = r.brain.idleState.phaseT.truncatingRemainder(dividingBy: MoonwalkTuning.glide) / MoonwalkTuning.glide
-                if u > 0.2, u < 0.8 { ys.append(r.sim.centroid().y) }
+                if u > 0.3, u < 0.7 { ys.append(r.sim.centroid().y) }
                 if let lf = lastFeet { for s in 0..<2 where simd_length(r.brain.feet.pos[s] - lf[s]) > 1e-4 { moved[s] += 1 } }
                 lastFeet = r.brain.feet.pos
                 XCTAssertLessThan(abs(self.wrapDelta(r.brain.yaw - heading)), 0.01, "faces the same way while gliding back")

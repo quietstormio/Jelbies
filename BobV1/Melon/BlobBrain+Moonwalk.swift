@@ -19,20 +19,28 @@ import simd
 
 nonisolated enum MoonwalkTuning {
     /// Seconds of the set, of one glide, of the point.
-    nonisolated(unsafe) static var prep: Float = 0.40, glide: Float = 0.62, point: Float = 0.95
+    /// Seconds of the set, of one glide (one swap of the feet: round 3 "a steady beat, about 0.35 s per swap"), of the point (spin, toe-stand, point, ta-da).
+    nonisolated(unsafe) static var prep: Float = 0.35, glide: Float = 0.36, point: Float = 1.15
     /// Glides in the full / the close-up (focus) version.
-    nonisolated(unsafe) static var glides = 4, glidesCompact = 2
+    nonisolated(unsafe) static var glides = 6, glidesCompact = 3
     /// How far the root glides back in one glide (u): the slider travels twice that in the world, so each foot stays within +-half of it of the root.
-    nonisolated(unsafe) static var stride: Float = 0.13
-    /// The forward lean (rad), the dip at each switch (squash), the hips' roll and twist per glide (rad).
-    nonisolated(unsafe) static var lean: Float = 0.16, dip: Float = 0.035, hipRoll: Float = 0.05, twist: Float = 0.10
-    /// The heading off the camera (rad): three-quarter on.
-    nonisolated(unsafe) static var turnOff: Float = 1.1
+    /// 6 x 0.17 = 1.0 u of travel (about 1.25 body widths).
+    nonisolated(unsafe) static var stride: Float = 0.17
+    /// The forward lean against the travel (rad), the dip at each switch (squash), the hips' roll and twist per glide (rad), the head's counter-nod at a swap (rad).
+    nonisolated(unsafe) static var lean: Float = 0.12, dip: Float = 0.03, hipRoll: Float = 0.04, twist: Float = 0.06, nod: Float = 0.07
+    /// The heading off the camera (rad): pi/2 = pure side profile (three-quarter hid the feet behind the belly: round 2 strips).
+    nonisolated(unsafe) static var turnOff: Float = .pi / 2
     /// v2: the standing foot up on its toe (rad about the toe; 0 = v1, no hook). v1's in-place swing of the standing foot: its lift (u) and toe-down tilt (rad).
-    nonisolated(unsafe) static var heelUp: Float = 0.55
+    nonisolated(unsafe) static var heelUp: Float = 0.60
+    /// The toe-stand at the end (both heels up, rad).
+    nonisolated(unsafe) static var toeStand: Float = 0.55
+    /// Both feet shifted forward of their rest spots through the glides (u): side on, a foot behind the middle hides under the belly (round 3 clip), so the swap
+    /// happens out in front where it shows.
+    nonisolated(unsafe) static var bias: Float = 0.10
     nonisolated(unsafe) static var v1Lift: Float = 0.030, v1Tilt: Float = 0.45
     /// The foot's length (u, heel to toe of the boot): raising the heel by `footLen * sin(a)` while tilting the toe down by `a` turns the foot about its toe.
-    static let footLen: Float = 0.11
+    /// (The whole bean's z extent is 0.315 u: used as the length it over-lifted the heel and the floor clamp cut the foot into shards: round 3 clip.)
+    nonisolated(unsafe) static var footLen: Float = 0.11
     /// The walk back to the spot he started from (false = he stays where the glides took him).
     nonisolated(unsafe) static var walkBack = true
     static let walkBackPhase = 4
@@ -102,7 +110,7 @@ extension BlobBrain {
         let D = T.stride * a
         let s0 = idleState.trick.stage
         let base = idleState.trick.base
-        let off = [rotXZ(geom.off[0], yaw), rotXZ(geom.off[1], yaw)]
+        let off = [rotXZ(geom.off[0], yaw) + fwd * T.bias * a, rotXZ(geom.off[1], yaw) + fwd * T.bias * a]
         pivotSide = nil; pivotNominal = false
         stepLive = false
         armWalkWant = 0
@@ -173,18 +181,19 @@ extension BlobBrain {
         // the body: the lean, NO bob through the slide, a small dip at each switch, the hips roll toward the standing foot and twist with the slider
         let sw = 1 - smooth01(min(u, 1 - u) / xf)          // 1 at a switch, 0 mid-glide
         let side: Float = stand == 1 ? 1 : -1
-        pitch += T.lean * a
+        pitch += T.lean * a + T.nod * a * sw
         squash = 1 - T.dip * sw * a
         roll = -side * T.hipRoll * a * (1 - sw)
         twist = side * T.twist * a * sinf(.pi * u)
         lift = 0
-        // the arms: bent, swinging a little against the slider (stubs: only the direction turns)
-        armDirW = 1; armDirOut = 0.04
+        // the arms: one stub forward, one back, swapping with the feet (the arm on the standing foot's side forward; only the direction turns, the cap holds)
+        armDirW = 1; armDirOut = 0.03
+        let swap = gIdx < n - 1 ? smooth01((u - (1 - xf)) / xf) : 0          // (the arms change over at the switch)
         for s in 0..<2 {
-            let sd: Float = s == 0 ? -1 : 1
-            let sway: Float = (s == slider ? 1 : -1) * 0.35 * sinf(.pi * u)
-            armDirEl[s] = 0.32 + 0.10 * sway
-            armDirSa[s] = sd * (0.55 + sway)
+            var fwdW: Float = s == stand ? 1 : 0
+            fwdW += (1 - 2 * fwdW) * swap
+            armDirEl[s] = 0.05 + 0.10 * fwdW
+            armDirSa[s] = -0.45 + 1.55 * fwdW          // (sa: 0 = out to the side, + = forward, - = back)
         }
         if idleState.hop != gIdx + 1 { idleState.hop = gIdx + 1; jellyKick = max(jellyKick, 0.3); if gIdx > 0 { AudioHub.shared.footstep(jelly: steerID, x: px, running: false) } }
         if t >= Float(n) * gl { moonwalkLeaveGlides(sim, skinner, toPoint: true) }
@@ -218,28 +227,36 @@ extension BlobBrain {
     }
 
     private func runMoonwalkPoint(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        // turn to the camera with steps, then the pose: one arm flicked out and up (within the stub's cap), up on the toes, a giggle
-        if idleState.trick.flags & 2 == 0 {
-            let turning = turnSteps(goal: idleState.goalYaw, tol: 0.15)
-            gaitPose(sway: 0.04, bob: 0.02, rock: 0.3)
-            trickArms((0.30, 0.15, 0.04, 0.08, 0.6), dt)
-            if turning || feet.active { idleState.phaseT = 0; return }
-            idleState.trick.flags |= 2; idleState.phaseT = 0
-        }
+        // stop, a quick spin to the camera (0.25 s, the feet re-planted under him as he turns), then up on both toes, the point, the ta-da
+        typealias T = MoonwalkTuning
         let t = idleState.phaseT, a = amplitude
-        let k = smooth01(t / 0.14) * (1 - smooth01((t - (MoonwalkTuning.point - 0.25)) / 0.25))
-        squash *= 1 + 0.06 * k * a
-        roll += Float(idleState.sign) * 0.06 * k * a
+        let spinT: Float = 0.25
+        if idleState.trick.flags & 2 == 0 { idleState.trick.flags |= 2; idleState.trick.twist = yaw }
+        if t < spinT {
+            yaw = idleState.trick.twist + wrapAngle(idleState.goalYaw - idleState.trick.twist) * smooth01(t / spinT)
+            feetInit = false; feet.reset()          // (re-seeded under him every tick of the spin: the feet turn with him)
+            squash = 1.02; idleState.trick.heelUp = .zero
+            trickArms((0.30, 0.15, 0.04, 0.06, 0.6), dt)
+            return
+        }
+        yaw = idleState.goalYaw
+        let u = t - spinT
+        let k = smooth01(u / 0.12) * (1 - smooth01((u - (T.point - spinT - 0.25)) / 0.25))
+        idleState.trick.heelUp = SIMD2(repeating: T.toeStand * k * a)          // the toe-stand (the v2 hook: both heels up)
+        squash *= 1 + 0.07 * k * a
+        roll += Float(idleState.sign) * 0.05 * k * a
         armWalkWant = 0
         armDirW = k; armDirOut = 0.06
         let pt = idleState.sign > 0 ? 1 : 0
         for s in 0..<2 {
             let sd: Float = s == 0 ? -1 : 1
-            armDirEl[s] = s == pt ? 0.55 : 0.20
-            armDirSa[s] = sd * (s == pt ? 1.1 : 0.4)
+            armDirEl[s] = s == pt ? 0.60 : 0.20
+            armDirSa[s] = s == pt ? 0.9 : 0.1
+            _ = sd
         }
-        if mwOnce(2) { face(.excited, hold: 1.0); skinner.setEyeOpenness(1); jellyKick = max(jellyKick, 1.2); AudioHub.shared.chirp(jelly: steerID, .giggle, x: px); blushBump(hold: 1.4, peak: 0.4) }
-        if t > MoonwalkTuning.point, !feet.active { armDirW = 0; armDirOut = 0; moonwalkWalkBack(sim, skinner) }
+        if mwOnce(2) { face(.excited, hold: 1.0); skinner.setEyeOpenness(1); jellyKick = max(jellyKick, 1.4); AudioHub.shared.chirp(jelly: steerID, .giggle, x: px); blushBump(hold: 1.4, peak: 0.4) }
+        if u > 0.45, mwOnce(3) { face(.joyArc, hold: 0.8); jellyKick = max(jellyKick, 1.2) }          // the ta-da
+        if t > T.point { idleState.trick.heelUp = .zero; armDirW = 0; armDirOut = 0; moonwalkWalkBack(sim, skinner) }
     }
 
     private func moonwalkWalkBack(_ sim: SoftBody, _ skinner: Skinner) {

@@ -163,3 +163,67 @@ extension FeatureCaptureTests {
         if !blueRows.isEmpty { try write(vstack(blueRows), dir + "/s3_all_blue\(tag).png") }
     }
 }
+
+// MARK: - moonwalk round 3
+
+extension FeatureCaptureTests {
+    /// Moonwalk round 3: a 12-frame strip at 600 px tiles (blue Bob, yellow Pip) from the game camera, and a real-motion clip (blue Bob, portrait 540x960, every second sim
+    /// frame = 30 fps) as PNG frames in `<EMOTE_STRIP_DIR>/clip_v3/` (encoded to s3_moonwalk_v3.mp4 on the host). The camera is fixed, aimed at the middle of the glide.
+    /// Env: EMOTE_STRIP_DIR, MW_HEELUP, MW_STRIDE, STRIP_TAG.
+    func testMoonwalkV3StripAndClip() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let dir = env["EMOTE_STRIP_DIR"], !dir.isEmpty else { throw XCTSkip("EMOTE_STRIP_DIR not set") }
+        if let v = env["MW_HEELUP"].flatMap(Float.init) { MoonwalkTuning.heelUp = v }; if let v = env["MW_STRIDE"].flatMap(Float.init) { MoonwalkTuning.stride = v }; if let v = env["MW_BIAS"].flatMap(Float.init) { MoonwalkTuning.bias = v }; if let v = env["MW_FOOTLEN"].flatMap(Float.init) { MoonwalkTuning.footLen = v }
+        let tag = env["STRIP_TAG"] ?? ""
+        try FileManager.default.createDirectory(atPath: dir + "/clip_v3", withIntermediateDirectories: true)
+        DayClock.shared.forcedHour = 12
+        let times: [Float] = [0.10, 0.53, 0.71, 0.89, 1.07, 1.25, 1.61, 1.97, 2.33, 2.62, 2.95, 3.40]
+        var rows: [UIImage] = []
+        for id in [0, 1] {
+            func pass(frames: Set<Int>?, clip: Bool, cam: CameraState?, tileSide: CGFloat) throws -> (start: Int, end: Int, base: SIMD3<Float>, fwd: SIMD2<Float>, tiles: [UIImage]) {
+                if clip { W = 540; H = 960 } else { W = 600; H = 600 }
+                let ch = [Char(id: id)]
+                let lab = setUpLab([SIMD2(0.2, 0.6)], chars: ch, seed: 3)
+                let r = lab.rigs[0]
+                let d = dress(lab, ch)
+                let (ren, target) = try renderer(lab)
+                r.brain.idleForced = true; r.brain.commanded = true
+                XCTAssertTrue(r.brain.idleStart(.moonwalk, r.sim))
+                var start = -1, end = -1, base = SIMD3<Float>.zero, fwd = SIMD2<Float>.zero, tiles: [UIImage] = [], n = 0
+                for f in 0..<1600 {
+                    lab.tick(watching: false)
+                    tick(d, 0, r, ch[0])
+                    if start < 0, r.brain.idleState.kind == .moonwalk, r.brain.idleState.phase >= 1 { start = f; base = r.sim.centroid(); fwd = SIMD2(sinf(r.brain.yaw), cosf(r.brain.yaw)) }
+                    if start >= 0, end < 0, r.brain.idleState.kind == nil { end = f }
+                    let want = clip ? (f % 2 == 0) : (frames?.contains(f) ?? false)
+                    if want, let cam {
+                        let img = composite(lab, d, ch, ren, target, cam: cam)
+                        if clip {
+                            try img.uiImage()!.pngData()!.write(to: URL(fileURLWithPath: String(format: "%@/clip_v3/frame_%04d.png", dir, n))); n += 1
+                        } else {
+                            let small = UIGraphicsImageRenderer(size: CGSize(width: tileSide, height: tileSide), format: { let f = UIGraphicsImageRendererFormat(); f.scale = 1; return f }()).image { _ in img.uiImage()!.draw(in: CGRect(x: 0, y: 0, width: tileSide, height: tileSide)) }
+                            tiles.append(labelled(small, String(format: "moonwalk v3 #%d t=%.2fs", id, Float(f - start) / 60)))
+                        }
+                    }
+                    if end >= 0 && f > end + 30 { break }
+                    if frames == nil && !clip && end >= 0 { break }
+                }
+                return (start, end, base, fwd, tiles)
+            }
+            let probe = try pass(frames: nil, clip: false, cam: nil, tileSide: 600)
+            XCTAssertGreaterThan(probe.start, -1)
+            let mid = SIMD2(probe.base.x, probe.base.z) - probe.fwd * (MoonwalkTuning.stride * Float(MoonwalkTuning.glides) * 0.5)
+            let cp = GameCamera.camera(aspect: 1, focus: 0).pos
+            let dirv = simd_normalize(SIMD3<Float>(cp.x - mid.x, 0, cp.z - mid.y))
+            let camSq = Self.lookCamera(target: SIMD3(mid.x, probe.base.y + 0.25, mid.y), dir: dirv, dist: 3.9, aspect: 1, lift: 0.12)
+            let shots = try pass(frames: Set(times.map { probe.start + Int($0 * 60) }), clip: false, cam: camSq, tileSide: 600)
+            rows.append(hstack(Array(shots.tiles.prefix(6)))); rows.append(hstack(Array(shots.tiles.dropFirst(6))))
+            if id == 0 {
+                let camP = Self.lookCamera(target: SIMD3(mid.x, probe.base.y + 0.25, mid.y), dir: dirv, dist: 4.6, aspect: 540.0 / 960.0, lift: 0.12)
+                _ = try pass(frames: nil, clip: true, cam: camP, tileSide: 0)
+            }
+            print("MOONWALK V3 #\(id): active \(Float(probe.end - probe.start) / 60) s, footLen \(MoonwalkTuning.footLen)")
+        }
+        try write(vstack(rows), dir + "/s3_moonwalk_v3\(tag).png")
+    }
+}
