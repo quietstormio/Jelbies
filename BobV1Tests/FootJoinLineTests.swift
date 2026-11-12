@@ -45,6 +45,7 @@ final class FootJoinLineTests: XCTestCase {
 
     /// The shadow value each vertex is drawn with this frame: baked, or moved by the join writes of the frame just rendered (set by `shading`; empty elsewhere).
     static var joinMat: [Int32: Float] = [:]
+    static var diag: [(Float, Float, Float, Float, Float)] = []          // (diagnostic) per crossing: skin normal vs egg normal (deg), piece normal vs egg normal, height above egg, the two skin vertices' shadow
     static var crossE: [Float] = []          // (diagnostic) the crossing points' height above the fitted egg, m
     static func effMat(_ v: Int) -> Float { joinMat[Int32(v)] ?? MotionRig.renderMesh.mat[v] }
 
@@ -122,6 +123,11 @@ final class FootJoinLineTests: XCTestCase {
                 let bm = Self.effMat(Int(bt[bestTri])) * bestW.x + Self.effMat(Int(bt[bestTri + 1])) * bestW.y + Self.effMat(Int(bt[bestTri + 2])) * bestW.z
                 breaksAll.append(brk); matStepMax = max(matStepMax, abs(sm - bm)); stepsAll.append(abs(sm - bm))
                 if let pose = r.skinner.joinPose { Self.crossE.append(-Skinner.fittedDepth(x, pose).0) }
+                if let pose = r.skinner.joinPose {
+                    let en = -Skinner.fittedDepth(x, pose).1
+                    let as_ = acosf(min(1, max(-1, simd_dot(ns, en)))) * 180 / .pi, ab = acosf(min(1, max(-1, simd_dot(nb, en)))) * 180 / .pi
+                    Self.diag.append((as_, ab, -Skinner.fittedDepth(x, pose).0, Self.effMat(i0 ? v1 : v0), Self.effMat(i0 ? v0 : v1)))
+                }
                 let th = atan2f(simd_dot(u, e2), simd_dot(u, e1)), h = simd_dot(u, a)
                 let b = min(bins - 1, Int((th + .pi) / (2 * .pi) * Float(bins)))
                 if h > binH[b] { binH[b] = h; binA[b] = ang }
@@ -219,6 +225,12 @@ final class FootJoinLineTests: XCTestCase {
             for s in 0..<2 { let l = Self.line(r, s); if l.points >= 10 { breaks += l.breaks; steps += l.steps } }
         }
         breaks.sort()
+        do {
+            let a = Self.diag.map(\.0).sorted(), b = Self.diag.map(\.1).sorted()
+            if !a.isEmpty { print(String(format: "[footjoindiag] skin-vs-egg p50 %.1f p90 %.1f | piece-vs-egg p50 %.1f p90 %.1f deg", a[a.count / 2], a[a.count * 9 / 10], b[b.count / 2], b[b.count * 9 / 10])) }
+            for d in Self.diag.sorted(by: { max($0.0, $0.1) > max($1.0, $1.1) }).prefix(4) { print(String(format: "[footjoindiag]   worst: skin %.0f piece %.0f deg at e %.3f, skin mats %.2f %.2f", d.0, d.1, d.2, d.3, d.4)) }
+            Self.diag = []
+        }
         Self.crossE.sort(); if !Self.crossE.isEmpty { print(String(format: "[footjoinshade] crossing height above the egg: p10 %.3f p50 %.3f p90 %.3f m", Self.crossE[Self.crossE.count / 10], Self.crossE[Self.crossE.count / 2], Self.crossE[Self.crossE.count * 9 / 10])) }; Self.crossE = []
         let p90 = breaks.isEmpty ? 0 : breaks[min(breaks.count - 1, breaks.count * 9 / 10)]
         steps.sort(); let step = steps.isEmpty ? 0 : steps[min(steps.count - 1, steps.count * 9 / 10)], stepMax = steps.last ?? 0

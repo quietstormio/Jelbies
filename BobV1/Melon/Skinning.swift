@@ -482,6 +482,12 @@ nonisolated final class Skinner {
         }
     }
 
+    /// Depth in the fitted egg and the egg's OUTWARD normal at the nearest surface point (a point deep inside is first projected out: the gradient there is that of the medial axis, not of the surface above it).
+    private static func eggDepthNormal(_ p: SIMD3<Float>, _ pose: (centroid: SIMD3<Float>, rotation: simd_quatf, restCentroid: SIMD3<Float>)) -> (Float, SIMD3<Float>) {
+        let (d, g) = fittedDepth(p, pose)
+        if d > 0.005 { let (_, g2) = fittedDepth(p - g * d, pose); return (d, -g2) }
+        return (d, -g)
+    }
     @inline(__always) private static func smooth(_ x: Float) -> Float { let t = min(1, max(0, x)); return t * t * (3 - 2 * t) }
     /// After the normal pass: the shared normal / shadow / fur coordinate across the skin-piece crossing (see the comment at `joinBlend`).
     private func blendJoin(_ dyn: UnsafeMutablePointer<Float>) {
@@ -510,9 +516,9 @@ nonisolated final class Skinner {
             // weight by height above the fitted egg (the crossing lies 4...11 cm above it, wandering with the 2 cm triangles, so the weight is 1 from the ramp's top inward and falls to 0 at the egg surface)
             var w: Float = 0
             if let pose {
-                let (d, gr) = Self.fittedDepth(P(v), pose)
+                let (d, gr) = Self.eggDepthNormal(P(v), pose)
                 w = g * max(Self.smooth(-d / Self.joinSkinRamp), dd <= 0 ? 1 : 1 - Self.smooth(dd / 0.03))          // (skin inside the piece's outline, even deep inside the egg, belongs to the join: it is half of the crossing triangles)
-                if w >= 0.002, Skinner.joinBlendNormal { pull(v, w, -gr) }
+                if w >= 0.002, Skinner.joinBlendNormal { pull(v, w, gr) }
             }
             var rw: Float = -1, rt = SIMD3<Float>.zero
             if Skinner.joinBlendRest {
@@ -530,10 +536,10 @@ nonisolated final class Skinner {
             for r in 5..<FootBean.rings {
                 for j in 0..<A {
                     let v = f + 1 + A * r + j
-                    let (d, gr) = Self.fittedDepth(P(v), pose)
+                    let (d, gr) = Self.eggDepthNormal(P(v), pose)
                     let w = g * (1 - Self.smooth((-d - Self.joinCrossE) / Self.joinBandBean))
                     if w < 0.002 { continue }
-                    if Skinner.joinBlendNormal { pull(v, w, -gr) }
+                    if Skinner.joinBlendNormal { pull(v, w, gr) }
                     if Skinner.joinBlendMat { outV.append(Int32(v)); outRW.append(-1); outRT.append(.zero); outMW.append(w); outMT.append(T) }
                 }
             }
