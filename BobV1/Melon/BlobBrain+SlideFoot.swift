@@ -55,11 +55,11 @@ extension BlobBrain {
         let landing = slideLanding(f)
         let n = Self.slideOutSpots.count
         let exRider = idleState.kind == .decorSlide
-        var best: (q: SIMD2<Float>, clear: Float)?
+        var rest: [(q: SIMD2<Float>, clear: Float)] = []          // (passed everything but the leg-friend check)
         func consider(_ q: SIMD2<Float>) -> SIMD2<Float>? {
             let c = legClearance(position, q)
             if c >= 0.9 { return q }
-            if best == nil || c > best!.clear { best = (q, c) }
+            rest.append((q, c))
             return nil
         }
         for k in 0..<n {
@@ -84,7 +84,10 @@ extension BlobBrain {
             guard !DecorField.shared.feet.contains(where: { $0.spec.solid && $0.distance(q) < footprint * $0.spec.reach + 0.12 }) else { continue }
             if let ok = consider(q) { return ok }
         }
-        if let b = best { Self.slideNoClearLeg += 1; return b.q }
+        // none has a clear leg: the ex-rider must still leave. Only candidates at least peerGap from the landing, the one with the largest leg clearance; if none is that far, the farthest
+        // from the landing whose leg clearance is at least 0.45.
+        if let b = rest.filter({ simd_distance($0.q, landing) >= peerGap }).max(by: { $0.clear < $1.clear }) { Self.slideNoClearLeg += 1; return b.q }
+        if let b = rest.filter({ $0.clear >= 0.45 }).max(by: { simd_distance($0.q, landing) < simd_distance($1.q, landing) }) { Self.slideNoClearLeg += 1; return b.q }
         return nil
     }
 
