@@ -32,4 +32,30 @@ final class ParkRoomFloorTests: XCTestCase {
             XCTAssertGreaterThan(RoomLayout.sofaDistanceXZ(SIMD2(-3.5, -4.35)), 0.5, "the flower bed's box is gone")
         }
     }
+
+    /// Seesaw <-> hopscotch room (2026-11-12): the seesaw's stand spots and footprint against the court's queue fan and slab; every spot on the roam floor and clear of the solids.
+    func testSeesawHasRoomFromTheHopscotchCourt() {
+        RoomLayout.apply(RoomCatalog.park)
+        DecorField.shared.set(ParkToys.placed)
+        defer { DecorField.shared.set([]) }
+        guard let sf = DecorField.shared.foot(ParkToys.seesawUID), let cf = DecorField.shared.foot(ParkToys.hopscotchUID) else { return XCTFail("pieces") }
+        let sh = DecorKind.seesaw.spec(quarter: sf.quarter).half
+        let stands = [SIMD2<Float>(-0.66, SeesawTuning.standDz), SIMD2(0.66, SeesawTuning.standDz)].map { sf.centre + $0 }
+        let queue = (0..<4).map { cf.centre + HopscotchCourt.queueSpot(slot: $0) }
+        let slabBack = cf.centre.y - HopscotchCourt.slabHalf.y, seesawFront = sf.centre.y + sh.y
+        var minSpot = Float.infinity
+        for s in stands { for q in queue { minSpot = min(minSpot, simd_distance(s, q)) } }
+        print("[parkroom] seesaw centre \(sf.centre) half \(sh) front z \(seesawFront); court centre \(cf.centre) slab back z \(slabBack); footprint gap \(slabBack - seesawFront); stands \(stands); queue \(queue); closest stand<->queue centre distance \(minSpot)")
+        XCTAssertGreaterThanOrEqual(minSpot, 0.9, "a stand spot is at least a body width from every queue spot")
+        for (label, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(852.0 / 393.0))] {
+            GameCamera.configurePark()
+            guard let rf = GameCamera.refreshRoam(aspect: aspect) else { return XCTFail("\(label): no roam floor") }
+            for (name, p) in zip(["stand L", "stand R"] + (0..<4).map { "queue \($0)" }, stands + queue) {
+                let row = rf.zs.lastIndex { $0 <= p.y } ?? 0
+                XCTAssertTrue(rf.contains(p), "\(label): \(name) \(p) is on the roam floor")
+                XCTAssertTrue(rf.free[row].contains { $0.contains(p.x) }, "\(label): \(name) \(p) is in a free span")
+                XCTAssertGreaterThan(RoomLayout.sofaDistanceXZ(p), 0.5, "\(label): \(name) is clear of the bench")
+            }
+        }
+    }
 }
