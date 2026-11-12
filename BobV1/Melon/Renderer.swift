@@ -105,6 +105,8 @@ final class BodySlot {
     }
     var foamAny = false
     var sootAny = false
+    /// The leg / belly join's smooth-union shading data for this body (zeros = off; Skinner.computeLegBlend).
+    var legBlend = [SIMD4<Float>](repeating: .zero, count: Skinner.legBlendCount)
     /// The Circuit jersey this body wears (Wear/GfxJersey.metal); nil = the locked body shader.
     var jersey: WearTeam?
 
@@ -511,6 +513,7 @@ final class MelonRenderer {
     /// The jersey band colour of a body (nil = none: the locked body shader draws him).
     func setJersey(_ team: WearTeam?, body i: Int) { if i < slots.count { slots[i].jersey = team } }
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
+    func setLegBlend(_ lb: [SIMD4<Float>], body i: Int) { if i < slots.count, lb.count == Skinner.legBlendCount { slots[i].legBlend = lb } }
     func setBathLook(_ look: BathLook, body i: Int) { if i < slots.count { slots[i].bathLook = look } }
     /// A clean, neutral body for one picture (lobby portraits): no dirt / soot / lint / shine, mouth shut, no blush. Returns what puts the live state back.
     func neutralBody(_ i: Int) -> () -> Void {
@@ -1219,6 +1222,7 @@ final class MelonRenderer {
                     if sp != nil { e.setFragmentTexture(fibreNoiseTexture(), index: 0) }
                     e.setRenderPipelineState(sp ?? pMatte)
                 }
+                slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }          // (the body shaders' fragment buffer 6: zeros = the join shaded as before)
                 if !bodyProbe.contains(.skipBody) {
                     // Panda (BlueBelly mode 51): the egg is drawn as is (the shader paints the eye patches, band, arms, feet); everything after it in the body index range
                     // (the walking arm capsules, the foot beans, the ears + pom) is drawn again as the same shader's all-charcoal mode 52. Teddy's / every other body: one draw, as before.
@@ -1329,6 +1333,7 @@ final class MelonRenderer {
             e.setCullMode(.none)
             e.drawPrimitives(type: tri, vertexStart: 0, vertexCount: 3)
             e.setRenderPipelineState(useMatte ? pMatte : pJelly)
+            slots[0].legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }
             e.setDepthStencilState(dsLessWrite)
             e.setCullMode(.back)
             e.setVertexBuffer(dynBuf, offset: 0, index: 1)

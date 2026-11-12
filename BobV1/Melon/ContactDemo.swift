@@ -47,6 +47,39 @@ enum ContactDemo {
         }
     }
 
+    /// Capture aid (legs-blend): `-LegsCam <slot>` keeps a low camera on one Jelbie's feet (`-LegsCamYaw` rad round it, 0 = from the room's front,
+    /// `-LegsCamDist` u, `-LegsCamEl` rad) and loops walk across - turn - walk back - hop - hop - sit, so the leg / belly join is seen in motion.
+    @MainActor static func legsScene(care: GameCare) async {
+        let d = UserDefaults.standard
+        for _ in 0..<300 where care.raceBook.actors.isEmpty || care.raceBook.actors.contains(where: { $0.brain == nil }) { try? await Task.sleep(nanoseconds: 100_000_000) }
+        let actors = care.raceBook.actors, slot = d.integer(forKey: "LegsCam")
+        guard actors.indices.contains(slot), let b = actors[slot].brain else { return }
+        for (i, a) in actors.enumerated() { a.brain?.autonomy = false; a.brain?.idleForced = true; if i != slot { a.brain?.requestNow(.goTo(SIMD2(-3.5 + Float(i) * 0.9, -2.6))) } }
+        Task { @MainActor in await keepNeedsFull(actors) }
+        let yaw = Float(d.double(forKey: "LegsCamYaw")), dist = d.object(forKey: "LegsCamDist") != nil ? Float(d.double(forKey: "LegsCamDist")) : 2.6
+        let el = d.object(forKey: "LegsCamEl") != nil ? Float(d.double(forKey: "LegsCamEl")) : 0.10
+        Task { @MainActor in
+            var mid = b.position
+            while !Task.isCancelled {
+                mid += (b.position - mid) * 0.15
+                let tgt = SIMD3<Float>(mid.x, 0.32, mid.y)
+                pose = (tgt + SIMD3(cosf(el) * sinf(yaw), sinf(el), cosf(el) * cosf(yaw)) * dist, tgt)
+                try? await Task.sleep(nanoseconds: 33_000_000)
+            }
+        }
+        let sim = actors[slot].sim
+        while !Task.isCancelled {
+            for g in [SIMD2<Float>(-1.2, 0.2), SIMD2<Float>(1.2, 0.2)] {
+                b.requestNow(.goTo(g))
+                for _ in 0..<60 { try? await Task.sleep(nanoseconds: 100_000_000); if simd_distance(b.position, g) < 0.3 { break } }
+                try? await Task.sleep(nanoseconds: 600_000_000)
+            }
+            b.startHopPlay(sim: sim, distance: 0.0001); try? await Task.sleep(nanoseconds: 1_600_000_000)
+            b.startHopPlay(sim: sim, distance: 0.0001); try? await Task.sleep(nanoseconds: 1_600_000_000)
+            b.commandedIdle = .sit; try? await Task.sleep(nanoseconds: 3_500_000_000)
+        }
+    }
+
     /// Result line to the console and (simulator shares the host filesystem) to $CONTACTDEMO_LOG when set.
     static func note(_ f: String, _ a: CVarArg...) {
         let line = String(format: f, arguments: a)
@@ -168,6 +201,7 @@ enum ContactDemo {
 
     @MainActor static func run(care: GameCare) async {
         let d = UserDefaults.standard
+        if d.object(forKey: "LegsCam") != nil { await legsScene(care: care); return }
         applyCamera()
         guard let name = d.string(forKey: "ContactDemo"), !name.isEmpty else { return }
         try? await Task.sleep(nanoseconds: UInt64((d.double(forKey: "ContactDemoDelay") > 0 ? d.double(forKey: "ContactDemoDelay") : 4) * 1e9))
