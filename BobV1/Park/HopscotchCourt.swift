@@ -23,6 +23,12 @@ nonisolated enum HopscotchTuning {
     static let landingClear: Float = 1.05
     /// Seconds a follower waits for its turn before it gives up and wanders off.
     static let patience: Float = 30
+    /// Queue spots are this far apart (the park keeps bodies 1.4 apart; 1.0 was refused by `peerFree`).
+    static let queueGap: Float = 1.7
+    /// Walks to the start a stepped-up Jelbie tries before he gives the game up (a blocked start must not loop).
+    static let startTries = 3
+    /// A walk that stops further from the start than this is still travelling (it does not use up a try).
+    static let startBlockedWithin: Float = 2.5
 }
 
 nonisolated enum HopscotchCourt {
@@ -35,8 +41,17 @@ nonisolated enum HopscotchCourt {
     static let count = 8
     /// Half extents of the slab (x, z).
     static let slabHalf = SIMD2<Float>(double + cell / 2 + 0.14, 2.5 * pitch + cell / 2 + 0.14)
-    /// Where the line forms: behind square 1, then off to the right, one body (1.0 u) apart.
-    static func queueSpot(slot: Int) -> SIMD2<Float> { SIMD2(1.0 * Float(slot), squares[0].y - 0.9) }
+    /// Where the line forms: slot 0 is the start, behind square 1; slot 1 is beside it to the right, slots 2 and 3 a row further back in a fan (all `queueGap` apart, the park keeps
+    /// bodies 1.4 apart; slot 3 is the far end of that row, to the right of slot 2, clear of the seesaw (park-room-r2: seesaw at (-3.2, -3.2)) and of the slide's approach).
+    static func queueSpot(slot: Int) -> SIMD2<Float> {
+        let g = HopscotchTuning.queueGap, z0 = squares[0].y - 0.9
+        switch slot {
+        case ...0: return SIMD2(0, z0)
+        case 1: return SIMD2(g, z0)
+        case 2: return SIMD2(1.5 * g, z0 - 0.866 * g)
+        default: return SIMD2(2.5 * g, z0 - 0.866 * g)
+        }
+    }
     /// Where the finished hopper walks: past the last square, to the side.
     static let exitSpot = SIMD2<Float>(1.5, squares[7].y + 0.25)
 }
@@ -75,7 +90,6 @@ final class HopscotchLine {
         lines[uid] = l.isEmpty ? nil : l
         if l.isEmpty { rolled[uid] = nil }
     }
-    func setSlot(_ uid: Int, _ id: Int, _ slot: Int) { if let i = lines[uid]?.firstIndex(where: { $0.id == id }) { lines[uid]![i].slot = slot } }
     func landed(_ uid: Int, _ id: Int, _ sq: Int) { if let i = lines[uid]?.firstIndex(where: { $0.id == id }) { lines[uid]![i].sq = sq } }
     func square(_ uid: Int, _ id: Int) -> Int { lines[uid]?.first { $0.id == id }?.sq ?? -1 }
     /// The player right in front of `id` in the line.
@@ -83,10 +97,17 @@ final class HopscotchLine {
         guard let l = lines[uid], let i = l.firstIndex(where: { $0.id == id }), i > 0 else { return nil }
         return l[i - 1]
     }
-    /// May he leave the queue and step up to the start? (Nobody ahead, or the one ahead is a couple of squares in.)
-    func mayStart(_ uid: Int, _ id: Int) -> Bool {
-        guard let a = ahead(uid, id) else { return true }
-        return a.sq >= HopscotchTuning.startAfter
+    /// Is the start free for the next one? (Nobody has stepped up, or the last one who did is a couple of squares in.)
+    func startOpen(_ uid: Int) -> Bool {
+        guard let last = lines[uid]?.last(where: { $0.slot == 0 }) else { return true }
+        return last.sq >= HopscotchTuning.startAfter
+    }
+    /// `id` leaves the queue for the start: slot 0, and his place in the order is right behind the last one who stepped up (the hop spacing follows the order).
+    func start(_ uid: Int, _ id: Int) {
+        guard var l = lines[uid], let i = l.firstIndex(where: { $0.id == id }) else { return }
+        var p = l.remove(at: i); p.slot = 0
+        let at = (l.lastIndex(where: { $0.slot == 0 }) ?? -1) + 1
+        l.insert(p, at: at); lines[uid] = l
     }
     /// May he hop to square `target` now? (The one ahead is at least `spacingAhead` squares beyond it, or has finished.)
     func mayHop(_ uid: Int, _ id: Int, to target: Int) -> Bool {
