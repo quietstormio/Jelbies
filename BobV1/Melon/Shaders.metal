@@ -316,6 +316,45 @@ struct JellyOut {
     float mat;
 };
 
+// LEGS-BLEND (legs-blend-r1; the user's yes of 2026-11-12 to a small edit of the locked body shading at the leg / belly join).
+// While a foot piece is out, the CPU finds, per leg, where the piece's surface crosses the belly along 32 directions round the leg axis (radius, height in the
+// leg's frame) and the smooth-union normal there (the two surfaces' normals averaged). Every pixel of the piece and of the belly near that crossing curve is
+// shaded with its normal, crease shadow and fur / paint coordinate blended toward the SAME values on both sides of the curve, so neither the lighting, the
+// shadow nor the fur jumps there; above the join (up to lb[0].w) the fur coordinate is un-stretched and the normal eased toward the fitted belly.
+// Fragment buffer 6, a flat float4 array: [0] (x = on, y = join mat, z = blend width m, w = calm patch height m), [1...4] world -> rest columns,
+// [5, 6] leg centre (w = 1 while out), [7, 8] leg axis, [9, 10] frame x, [11...26] / [27...42] (radius, height) pairs, [43...74] / [75...106] union normals,
+// [107...138] / [139...170] the fitted belly's normal above each crossing.
+// lb[0].x = 0 (-LegsBlend 0, no piece out, shoes): nothing below runs (pixel-identical).
+static float legBlendAt(float3 p, constant float4* lb, thread float3& nOut, thread float& wUp) {
+    float wBest = 0.0, uBest = 0.0;
+    float3 nb = float3(0.0, 1.0, 0.0);
+    float k = lb[0].z, ku = lb[0].w;
+    for (int s = 0; s < 2; s++) {
+        if (lb[5 + s].w < 0.5) { continue; }
+        float3 a = lb[7 + s].xyz, e1 = lb[9 + s].xyz, e2 = cross(a, e1);
+        float3 q = p - lb[5 + s].xyz;
+        float h = dot(q, a), x = dot(q, e1), y = dot(q, e2), rho = length(float2(x, y));
+        float f = fract(atan2(y, x) / 6.2831853 + 1.0) * 32.0;
+        int j0 = int(floor(f)) % 32, j1 = (j0 + 1) % 32;
+        float t = fract(f);
+        float4 p0 = lb[11 + 16 * s + j0 / 2], p1 = lb[11 + 16 * s + j1 / 2];
+        float2 x0 = (j0 % 2 == 0) ? p0.xy : p0.zw, x1 = (j1 % 2 == 0) ? p1.xy : p1.zw;
+        float2 X = mix(x0, x1, t);
+        float dh = h - X.y;
+        float w = 1.0 - smoothstep(0.0, k, length(float2(rho - X.x, dh)));
+        float u = (ku > 0.0 && dh > 0.0) ? (1.0 - smoothstep(0.0, ku, dh)) * (1.0 - smoothstep(X.x, X.x + ku, rho)) : 0.0;
+        if (max(w, u) > max(wBest, uBest)) {
+            float3 nj = normalize(mix(lb[43 + 32 * s + j0].xyz, lb[43 + 32 * s + j1].xyz, t));
+            float3 nu = ku > 0.0 ? normalize(mix(lb[107 + 32 * s + j0].xyz, lb[107 + 32 * s + j1].xyz, t)) : nj;
+            nb = normalize(mix(nj, nu, ku > 0.0 ? clamp(dh / (0.5 * ku), 0.0, 1.0) : 0.0));
+            wBest = w; uBest = u;
+        }
+    }
+    nOut = nb;
+    wUp = uBest;
+    return wBest;
+}
+
 // LOCKED BASE BODY — do not change; see docs/BaseBody.md; guarded by BaseBodyLockTests
 // (body functions: vsJelly, fsSoftMatte (matte look + crinkle; the mouth block only draws while mouthOpen > 0), fsEyesMatte, vsMesh, postFS and their helpers)
 vertex JellyOut vsJelly(MeshIn v [[stage_in]], constant Uniforms& u [[buffer(0)]]) {
@@ -469,10 +508,19 @@ static float matteFibre(float3 Q) {
 
 fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
                             bool ff [[front_facing]],
-                            constant Uniforms& u [[buffer(0)]]) {
+                            constant Uniforms& u [[buffer(0)]],
+                            constant float4* lb [[buffer(6)]]) {
     float3 N = normalize(i.n);
     if (!ff) { N = -N; }
     float3 Q = i.rest;
+    float mt = i.mat;
+    if (lb[0].x > 0.5) {          // LEGS-BLEND
+        float3 nj;
+        float wu;
+        float wj = legBlendAt(i.wp, lb, nj, wu);
+        float wn = max(wj, 0.7 * wu), wq = max(wj, wu);
+        if (wq > 0.0) { N = normalize(mix(N, nj, wn)); Q = mix(Q, (float4x4(lb[1], lb[2], lb[3], lb[4]) * float4(i.wp, 1.0)).xyz, wq); mt = mix(mt, lb[0].y, wj); }
+    }
     // faint crinkled micro-normal in rest space (rides with the body, no streaks)
     float e = 0.012;
     float c0 = matteCrinkle(Q);
@@ -487,7 +535,7 @@ fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
 
     float3 L = normalize(u.keyDir.xyz);
     float d = dot(N, L);
-    float occ = clamp(i.mat / 0.4, 0.0, 1.0);
+    float occ = clamp(mt / 0.4, 0.0, 1.0);
     float down = clamp(-N.y, 0.0, 1.0);
     float s = clamp(0.26 + 0.80 * d - 0.5 * max(-d - 0.04, 0.0) - 0.16 * down, 0.0, 1.0);
     s *= 1.0 - 0.62 * occ;
@@ -497,6 +545,7 @@ fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
     col *= 1.0 + (matteCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
     col *= 1.0 + 0.04 * fb;
+    Q = i.rest;          // LEGS-BLEND: the paint (belly / Teddy / Panda marks, mouth) keeps the unblended rest coordinate: no smear of the painted boundaries
     // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
     float bb = u.shape.w;
     float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
