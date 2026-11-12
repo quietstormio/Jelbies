@@ -64,3 +64,58 @@ final class NewGameTests: XCTestCase {
         XCTAssertEqual(JelbieA11yText.description(character: 5), "white with pearly little wings")
     }
 }
+
+@MainActor
+final class NewGameFirstTests: XCTestCase {
+    private func suite(_ name: String) -> UserDefaults {
+        let d = UserDefaults(suiteName: "NewGameFirstTests.\(name)")!
+        d.removePersistentDomain(forName: "NewGameFirstTests.\(name)")
+        return d
+    }
+
+    func testFirstWipesLeavesNoSaveAndAppliesOnce() {
+        let d = suite("first")
+        let saved = (JellyRoster.current, JellyRoster.names)
+        defer { JellyRoster.current = saved.0; JellyRoster.names = saved.1 }
+        JellyRoster.save([3, 5], to: d); d.set(77, forKey: DropsWallet.key); d.set(true, forKey: StartFlow.startedKey)
+        XCTAssertTrue(StartFlow.hasSave(d))
+        var wipes = 0
+        let wipe = { wipes += 1; for k in [JellyRoster.rosterKey, DropsWallet.key, StartFlow.startedKey] { d.removeObject(forKey: k) } }
+        XCTAssertTrue(StartFlow.applyNewGame(text: " First ", coins: 10_000, defaults: d, wipe: wipe))
+        XCTAssertEqual(wipes, 1)
+        XCTAssertFalse(StartFlow.hasSave(d))
+        XCTAssertFalse(d.bool(forKey: IntroGate.seenKey))
+        XCTAssertEqual(d.object(forKey: StartFlow.firstCoinsKey) as? Int, 10_000)
+        XCTAssertEqual(d.string(forKey: StartFlow.newGameAppliedKey), "first|10000")
+        XCTAssertEqual(JellyRoster.current, [0])
+        d.set(5, forKey: StartFlow.firstCoinsKey)
+        XCTAssertFalse(StartFlow.applyNewGame(text: "first", coins: 10_000, defaults: d, wipe: wipe))
+        XCTAssertEqual(wipes, 1)
+        XCTAssertEqual(d.object(forKey: StartFlow.firstCoinsKey) as? Int, 5)
+        XCTAssertTrue(StartFlow.applyNewGame(text: "first", coins: 20, defaults: d, wipe: wipe))
+        XCTAssertEqual(d.object(forKey: StartFlow.firstCoinsKey) as? Int, 20)
+    }
+
+    func testPendingCoinsApplyOnlyOnFirstAdoption() {
+        let d = suite("pending")
+        XCTAssertNil(StartFlow.applyPendingFirstCoins(10_000, first: false, defaults: d))
+        XCTAssertFalse(StartFlow.hasSave(d))
+        XCTAssertNil(StartFlow.applyPendingFirstCoins(nil, first: true, defaults: d))
+        XCTAssertFalse(StartFlow.hasSave(d))
+        d.set(10_000, forKey: StartFlow.firstCoinsKey)
+        XCTAssertEqual(StartFlow.applyPendingFirstCoins(10_000, first: true, defaults: d), 10_000)
+        XCTAssertEqual(d.integer(forKey: DropsWallet.key), 10_000)
+        XCTAssertNil(d.object(forKey: StartFlow.firstCoinsKey))
+        let store = try? JSONDecoder().decode(StoreBook.Saved.self, from: d.data(forKey: StoreBook.key) ?? Data())
+        XCTAssertEqual(store?.starterGiven, true, "no 40-Drop starter on top of the pending balance")
+    }
+
+    func testStarterDoesNotAddOnTopOfPendingBalance() {
+        let d = suite("starter")
+        StartFlow.applyPendingFirstCoins(10_000, first: true, defaults: d)
+        let w = DropsWallet(persists: false); w.add(10_000, silent: true)
+        let b = StoreBook(wallet: w, persists: true, defaults: d)
+        XCTAssertFalse(b.grantStarterIfNeeded())
+        XCTAssertEqual(w.count, 10_000)
+    }
+}
