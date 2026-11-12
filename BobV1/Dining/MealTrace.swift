@@ -40,6 +40,7 @@ nonisolated enum MealTrace {
 
     /// Single-flow trace state (GameCare+Dining.traceSingle).
     nonisolated(unsafe) static var singleActive = false
+    nonisolated(unsafe) static var singleTray = false, singleBite = false, singleGone = false
 
     /// True when `-MealOld 1` asks for the old behaviour (simulator only).
     static var oldFlow: Bool {
