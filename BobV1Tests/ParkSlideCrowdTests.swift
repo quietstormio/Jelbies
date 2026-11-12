@@ -169,4 +169,110 @@ final class ParkSlideCrowdTests: XCTestCase {
         if let dir = ProcessInfo.processInfo.environment["CROWD_OUT"] { try? o.write(toFile: dir + "/slide_scene_raw.md", atomically: true, encoding: .utf8) }
         XCTAssertEqual(all.count, 6 * seeds)
     }
+
+    // MARK: r3 - the foot stays free
+
+    /// T1: the three out spots (slide frame) are on open lawn, clear of the landing and the court, one gap apart.
+    func testSlideOutSpotsAreOnOpenLawn() {
+        let want: [SIMD2<Float>] = [SIMD2(-0.35, 3.5), SIMD2(-0.5, 2.1), SIMD2(-0.5, 0.65)]
+        for (name, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
+            let lab = parkLab(seed: 5)
+            _ = GameCamera.refreshRoam(aspect: aspect)
+            let b = lab.rigs[0].brain
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!, court = DecorField.shared.foot(ParkToys.hopscotchUID)!
+            let landing = b.slideLanding(sl)
+            let pts = BlobBrain.slideOutSpots.map { sl.centre + sl.turned($0) }
+            let solids = DecorField.shared.feet.filter { $0.spec.solid }
+            for (k, q) in pts.enumerated() {
+                let c = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: b.footprint)
+                let moved = simd_distance(SIMD2(c.x, c.z), q)
+                let sq = HopscotchCourt.squares.map { simd_distance(q, court.centre + court.turned($0)) }.min() ?? 99
+                let sd = solids.map { $0.distance(q) }.min() ?? 99
+                let others = pts.enumerated().filter { $0.offset != k }.map { simd_distance(q, $0.element) }
+                print(String(format: "[spots] %@ #%d world (%.2f,%.2f) onFloor=%@ (moved %.2f) toLanding %.2f nearestSquare %.2f nearestSolid %.2f toOthers %.2f/%.2f", name, k, q.x, q.y, moved < 0.03 ? "yes" : "no", moved, simd_distance(q, landing), sq, sd, others[0], others[1]))
+                if name == "portrait" {
+                    XCTAssertLessThan(simd_distance(q, want[k]), 0.05, "spot \(k) world point \(q)")
+                    XCTAssertGreaterThanOrEqual(simd_distance(q, landing), b.peerGap + 0.3, "spot \(k) to the landing")
+                    XCTAssertGreaterThanOrEqual(sq, 1.15, "spot \(k) to the nearest square")
+                    XCTAssertGreaterThanOrEqual(others.min() ?? 9, 1.4, "spot \(k) pairwise")
+                    XCTAssertLessThan(moved, 0.03, "spot \(k) is on the floor")
+                }
+            }
+        }
+    }
+
+    struct FootRide { var started = false, ph2: Float = 0, hold: Float = 0, pushed = false, t6: Float?, exit: SIMD2<Float>?, min5: Float = .infinity }
+
+    /// T2: A rides, then B is commanded to the slide; the standers are free. The foot must be clear for B.
+    func foot(seed: UInt64) -> String {
+        let lab = parkLab(seed: seed)
+        let sl = DecorField.shared.foot(ParkToys.slideUID)!
+        let rigs = lab.rigs
+        let landing = rigs[0].brain.slideLanding(sl)
+        let gap = MelonController.jellyGap
+        let peer = rigs[0].brain.peerGap
+        let half = sl.quarter & 1 == 0 ? sl.spec.half : SIMD2(sl.spec.half.y, sl.spec.half.x)
+        let sp1 = rigs[0].brain.fixed(landing + SIMD2(-0.8 * peer, 0))
+        let sp2 = rigs[0].brain.fixed(sp1 + SIMD2(-1.0 * gap, 0.3))
+        place(rigs[1], sp1); place(rigs[2], sp2); place(rigs[0], rigs[0].brain.fixed(SIMD2(sl.centre.x - half.x - 1.2, sl.centre.y)))
+        for _ in 0..<5 { lab.tick(watching: false) }
+        var t: Float = 0
+        var R = [FootRide(), FootRide()]
+        var aDone = false, lastTry: Float = -1, tries = 0
+        var endAt: Float?
+        var leftB: Float?, leftC: Float?
+        var minPair = Float.infinity, minPairAt = ""
+        var pushSeen = [false, false]
+        while t < 120 {
+            if t >= 1, !R[0].started { R[0].started = rigs[0].brain.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner) }
+            if aDone, !R[1].started, tries < 21, t - lastTry >= 0.5 {
+                lastTry = t; tries += 1
+                R[1].started = rigs[1].brain.startCommandedDecor(.decorSlide, only: .slide, rigs[1].sim, rigs[1].skinner)
+            }
+            lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
+            for i in 0..<2 {
+                let s = rigs[i].brain.idleState
+                let others = i == 0 ? [1, 2] : [0, 2]
+                if s.kind == .decorSlide {
+                    if s.slideStage == 4, s.phase == 2 { R[i].ph2 += 1.0 / 60; R[i].hold = s.hold }
+                    if s.slideStage == 5, !pushSeen[i] { pushSeen[i] = true; R[i].pushed = others.contains { simd_distance(rigs[$0].root, landing) < peer } }
+                    if s.slideStage == 6, R[i].t6 == nil { R[i].t6 = t }
+                }
+                if let s6 = R[i].t6, t - s6 <= 5 {
+                    R[i].min5 = min(R[i].min5, others.map { simd_distance(rigs[i].root, rigs[$0].root) }.min()!)
+                    if t - s6 > 4.98 { R[i].exit = rigs[i].root }
+                }
+            }
+            if leftB == nil, simd_distance(rigs[1].root, landing) > peer { leftB = t }
+            if leftC == nil, simd_distance(rigs[2].root, landing) > peer { leftC = t }
+            for a in 0..<3 { for c in (a + 1)..<3 { let d = simd_distance(rigs[a].root, rigs[c].root); if d < minPair { minPair = d; minPairAt = "t=\(String(format: "%.1f", t)) ids \(a),\(c)" } } }
+            if !aDone, R[0].t6 != nil, rigs[0].brain.idleState.kind == nil, DecorField.shared.occupant[ParkToys.slideUID] == nil { aDone = true }
+            if R[1].t6 != nil, rigs[1].brain.idleState.kind == nil, endAt == nil { endAt = t + 5 }
+            if let e = endAt, t >= e { break }
+        }
+        let A = R[0], B = R[1]
+        let court = DecorField.shared.foot(ParkToys.hopscotchUID)!
+        let standing = rigs.map { $0.root }
+        let sqEnd = standing.map { p in HopscotchCourt.squares.map { simd_distance(p, court.centre + court.turned($0)) }.min() ?? 99 }.min() ?? 99
+        func p(_ v: SIMD2<Float>?) -> String { v.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-" }
+        func d(_ v: SIMD2<Float>?) -> String { v.map { String(format: "%.2f", simd_distance($0, landing)) } ?? "-" }
+        func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
+        let line = "[foot] seed=\(seed) | A: platformPh2=\(String(format: "%.1f", A.ph2))s (hold \(String(format: "%.1f", A.hold))) pushedWithBody=\(A.pushed ? "yes" : "no") exit=\(p(A.exit)) exitToLanding=\(d(A.exit)) minD5sAfterFloor=\(String(format: "%.2f", A.min5)) | standers: B leftFootAt=\(ft(leftB))s C leftFootAt=\(ft(leftC))s endB=\(p(standing[1])) endC=\(p(standing[2])) | B: started=\(B.started ? "yes" : "no") (tries \(tries)) platformPh2=\(String(format: "%.1f", B.ph2))s (hold \(String(format: "%.1f", B.hold))) pushedWithBody=\(B.pushed ? "yes" : "no") exit=\(p(B.exit)) exitToLanding=\(d(B.exit)) minD5sAfterFloor=\(String(format: "%.2f", B.min5)) | minPairDistanceWholeRun=\(String(format: "%.2f", minPair))@\(minPairAt) | nearestSquareOfAnyStandingBodyAtEnd=\(String(format: "%.2f", sqEnd)) | end t=\(String(format: "%.1f", t))"
+        print(line)
+        XCTAssertTrue(A.started && B.started, "seed \(seed): both rode. \(line)")
+        for (n, r) in [("A", A), ("B", B)] {
+            XCTAssertLessThanOrEqual(r.ph2, r.hold + 1.5, "seed \(seed) \(n) platformPh2. \(line)")
+            XCTAssertFalse(r.pushed, "seed \(seed) \(n) pushed with a body inside peerGap. \(line)")
+            if let e = r.exit { XCTAssertGreaterThanOrEqual(simd_distance(e, landing), peer + 0.2, "seed \(seed) \(n) exit. \(line)") }
+            XCTAssertGreaterThanOrEqual(r.min5, 0.98, "seed \(seed) \(n) minD5sAfterFloor. \(line)")
+        }
+        XCTAssertGreaterThanOrEqual(minPair, 0.90, "seed \(seed) whole-run minimum pair distance. \(line)")
+        return line
+    }
+
+    func testFootClearsForTheNextRider() {
+        var lines: [String] = []
+        for seed in UInt64(1)...4 { lines.append(foot(seed: seed)) }
+        if let dir = ProcessInfo.processInfo.environment["CROWD_OUT"] { try? lines.joined(separator: "\n").write(toFile: dir + "/foot_lines.txt", atomically: true, encoding: .utf8) }
+    }
 }
