@@ -24,8 +24,13 @@ import simd
 nonisolated struct LegWeldSide: Sendable {
     /// Egg vertices of the loop, in increasing angle about the foot centre (xz plane).
     var loop: [Int32]
-    /// Per loop vertex, an egg vertex a few cm further out (the body's slope at the loop: loop -> outer).
+    /// Per loop vertex, an egg vertex a few cm further out (diagnostic; the first version took the body's slope from it: noisy, it flipped stitch triangles).
     var outer: [Int32]
+    /// Per loop vertex, its egg triangles (outward-wound vertex triples, flat): the body's own normal at the loop, from this frame's drawn egg.
+    var nTriStart: [Int32] = [], nTris: [Int32] = []
+    /// The egg round the loop that follows the leg (vertex, weight 1 at the loop ... 0 `followReach` further out): the loop slides with the foot, so a stepping
+    /// leg never strides out past its own loop (the first version folded the band inside out on every step: the stride is longer than the margin).
+    var followV: [Int32] = [], followW: [Float] = []
     /// Per meridian j of the seam ring: the loop point at the meridian's angle = loop[mA] + (loop[mB] - loop[mA]) * mW (indices into `loop`).
     var mA: [Int32], mB: [Int32], mW: [Float]
     /// Egg vertices inside the loop (not drawn while welded).
@@ -47,13 +52,15 @@ nonisolated enum LegWeld {
     static var A: Int { FootBean.around }
     // build-time tunables (launch arguments; a relaunch, not a rebuild)
     static var buildRing: Int { UserDefaults.standard.object(forKey: "LegsWeldRing") != nil ? max(3, min(10, UserDefaults.standard.integer(forKey: "LegsWeldRing"))) : 6 }
-    static var buildRows: Int { UserDefaults.standard.object(forKey: "LegsWeldRows") != nil ? max(2, min(12, UserDefaults.standard.integer(forKey: "LegsWeldRows"))) : 6 }
+    static var buildRows: Int { UserDefaults.standard.object(forKey: "LegsWeldRows") != nil ? max(2, min(16, UserDefaults.standard.integer(forKey: "LegsWeldRows"))) : 10 }
     static var buildMargin: Double { UserDefaults.standard.object(forKey: "LegsWeldMargin") != nil ? UserDefaults.standard.double(forKey: "LegsWeldMargin") : 0.08 }
     /// Front (toe side) margin: the toe stands out in front of the egg, a full margin there climbs the front wall.
-    static var buildFront: Double { UserDefaults.standard.object(forKey: "LegsWeldFront") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFront") : 0.06 }
+    static var buildFront: Double { UserDefaults.standard.object(forKey: "LegsWeldFront") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFront") : 0.08 }
     /// The loops stay this far from the midline (the inner foot walls are only 12 cm apart).
     static var buildInnerX: Double { UserDefaults.standard.object(forKey: "LegsWeldInnerX") != nil ? UserDefaults.standard.double(forKey: "LegsWeldInnerX") : 0.025 }
     static let yMax = 0.40
+    static var followReach: Double { UserDefaults.standard.object(forKey: "LegsWeldFollowReach") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFollowReach") : 0.20 }
+    static var restPow: Double { UserDefaults.standard.object(forKey: "LegsWeldRestPow") != nil ? UserDefaults.standard.double(forKey: "LegsWeldRestPow") : 2.0 }
 
     /// The mesh last built with the weld (vertex count, info): a Skinner built for that mesh picks the weld up even where nobody calls configureTail (lock tests, portraits).
     nonisolated(unsafe) static var lastBuilt: (vertexCount: Int, info: LegWeldInfo)? = nil
@@ -242,11 +249,33 @@ nonisolated enum LegWeld {
                 if ia == nL - 1 && w == 0 { let lo = un[nL - 1], hi = un[0] + 2 * .pi; w = min(1, max(0, (th - lo) / max(hi - lo, 1e-9))) }
                 mA.append(Int32(ia)); mB.append(Int32((ia + 1) % nL)); mW.append(Float(w))
             }
-            let side = LegWeldSide(loop: loop.map { Int32($0) }, outer: outer, mA: mA, mB: mB, mW: mW,
+            var side = LegWeldSide(loop: loop.map { Int32($0) }, outer: outer, mA: mA, mB: mB, mW: mW,
                                    hidden: (0..<nV).filter { inside[$0] }.map { Int32($0) })
+            for v in loop {
+                side.nTriStart.append(Int32(side.nTris.count))
+                for t in vt[v] {
+                    let a = Int(tri[3 * t]), b = Int(tri[3 * t + 1]), c = Int(tri[3 * t + 2])
+                    if inside[a] || inside[b] || inside[c] { continue }          // (dropped: inside the loop)
+                    let fn = simd_cross(P[b] - P[a], P[c] - P[a])
+                    if simd_dot(fn, N[a] + N[b] + N[c]) < 0 { side.nTris += [Int32(a), Int32(c), Int32(b)] } else { side.nTris += [Int32(a), Int32(b), Int32(c)] }
+                }
+            }
+            side.nTriStart.append(Int32(side.nTris.count))
+            for v in 0..<nV where !inside[v] && !vt[v].isEmpty && P[v].y < 0.7 {
+                var d2 = Double.infinity
+                for b in cup { d2 = min(d2, simd_distance_squared(b, P[v])) }
+                let d = d2.squareRoot()
+                let t = min(1, max(0, (d - buildMargin) / followReach))
+                if t >= 1 { continue }
+                side.followV.append(Int32(v)); side.followW.append(Float(1 - t * t * (3 - 2 * t)))
+            }
             // the band at rest
             let rs = FootBean.restStream(sigma: sigma)
             var bp: [SIMD3<Double>] = [], bn: [SIMD3<Double>] = [], bm: [Float] = []
+            var ringC = SIMD3<Double>.zero
+            for j in 0..<A { ringC += rs[1 + A * R + j] }
+            ringC /= Double(A)
+            let legAxis = simd_normalize(ringC - rs[0])
             for k in 1...K {
                 let s = rowS(k, K)
                 for j in 0..<A {
@@ -254,14 +283,20 @@ nonisolated enum LegWeld {
                     let p0 = rs[i0], t0 = simd_normalize(rs[i0] - rs[im])
                     let la = loop[Int(mA[j])], lb = loop[Int(mB[j])], w = Double(mW[j])
                     let p1 = P[la] + (P[lb] - P[la]) * w
-                    let o1 = P[Int(outer[Int(mA[j])])] + (P[Int(outer[Int(mB[j])])] - P[Int(outer[Int(mA[j])])]) * w
-                    let t1 = simd_normalize(o1 - p1)
+                    let n1r = simd_normalize(N[la] + (N[lb] - N[la]) * w)
+                    var rad = p1 - ringC; rad -= legAxis * simd_dot(rad, legAxis)
+                    var t1 = rad - n1r * simd_dot(rad, n1r); t1 = simd_length(t1) > 1e-9 ? simd_normalize(t1) : SIMD3(0, 1, 0)
                     let c = simd_distance(p0, p1)
-                    bp.append(hermite(p0, t0 * c * Double(Skinner.weldK0), p1, t1 * c * Double(Skinner.weldK1), s))
+                    // the rest stream (crinkle texture + the rest-space paint: Panda's foot mask, Teddy's patch) runs along the band's rest shape, with its parameter
+                    // pulled toward the leg (`restPow`): the leg's paint carries up most of the band and fades in its outer part (a linear map faded Panda's charcoal across
+                    // the whole band, a white smudge on the inner top of each leg)
+                    let m0v = t0 * c * Double(Skinner.weldK0), m1v = t1 * c * Double(Skinner.weldK1)
+                    bp.append(hermite(p0, m0v, p1, m1v, pow(s, restPow)))
+                    let shapeP = hermite(p0, m0v, p1, m1v, s)
                     let n1 = simd_normalize(N[la] + (N[lb] - N[la]) * w), n0 = FootBean.local.nrm[i0]
                     bn.append(simd_normalize(n0 + (n1 - n0) * s))
                     _ = footMat
-                    bm.append(matW(bp[bp.count - 1]))
+                    bm.append(matW(shapeP))
                 }
             }
             sides.append(side); bandPos.append(bp); bandNrm.append(bn); bandMat.append(bm)

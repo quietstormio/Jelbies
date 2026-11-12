@@ -156,6 +156,9 @@ nonisolated final class Skinner {
     /// Tangent scales of the band's Hermite curves (x the seam-to-loop distance): leg side, body side. Launch arguments -LegsWeldK0 / -LegsWeldK1.
     nonisolated(unsafe) static var weldK0: Float = UserDefaults.standard.object(forKey: "LegsWeldK0") != nil ? UserDefaults.standard.float(forKey: "LegsWeldK0") : 1.0
     nonisolated(unsafe) static var weldK1: Float = UserDefaults.standard.object(forKey: "LegsWeldK1") != nil ? UserDefaults.standard.float(forKey: "LegsWeldK1") : 1.0
+    /// How much of the leg's offset from its rest place the egg round the loop follows (1 = the loop moves with the leg), and the longest offset it follows (m).
+    nonisolated(unsafe) static var weldFollow: Float = UserDefaults.standard.object(forKey: "LegsWeldFollow") != nil ? UserDefaults.standard.float(forKey: "LegsWeldFollow") : 1.0
+    nonisolated(unsafe) static var weldFollowMax: Float = UserDefaults.standard.object(forKey: "LegsWeldFollowMax") != nil ? UserDefaults.standard.float(forKey: "LegsWeldFollowMax") : 0.14
     /// The weld of this skinner's mesh (nil = old mesh).
     var weld: LegWeldInfo? = nil
     var welded: Bool { weld != nil }
@@ -166,7 +169,22 @@ nonisolated final class Skinner {
         @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
         let A = FootBean.around, R = w.ring, K = w.rows
         let k0 = Self.weldK0, k1 = Self.weldK1
+        // the egg round each loop follows its leg's offset from the rest foot (the ghost): the welded skin is carried along with a stepping foot
+        if Self.weldFollow > 0 {
+            for sd in w.sides {
+                var now = SIMD3<Float>.zero, rest = SIMD3<Float>.zero
+                for j in 0..<A { now += P(sd.beanFirst + 1 + A * R + j); rest += P(sd.ghostFirst + 1 + A * R + j) }
+                var d = (now - rest) / Float(A) * Self.weldFollow
+                let l = simd_length(d); if l > Self.weldFollowMax { d *= Self.weldFollowMax / l }
+                if l < 1e-5 { continue }
+                for (k, v) in sd.followV.enumerated() { let o = 6 * Int(v), ww = sd.followW[k]; dyn[o] += d.x * ww; dyn[o + 1] += d.y * ww; dyn[o + 2] += d.z * ww }
+            }
+        }
         for sd in w.sides {
+            var ringC = SIMD3<Float>.zero
+            for j in 0..<A { ringC += P(sd.beanFirst + 1 + A * R + j) }
+            ringC /= Float(A)
+            var legAxis = ringC - P(sd.beanFirst); let la0 = simd_length(legAxis); legAxis = la0 > 1e-6 ? legAxis / la0 : SIMD3(0, 1, 0)
             for j in 0..<A {
                 let i0 = sd.beanFirst + 1 + A * R + j, im = sd.beanFirst + 1 + A * (R - 1) + j
                 let p0 = P(i0)
@@ -174,8 +192,19 @@ nonisolated final class Skinner {
                 let a = Int(sd.mA[j]), b = Int(sd.mB[j]), ww = sd.mW[j]
                 let la = P(Int(sd.loop[a])), lb = P(Int(sd.loop[b]))
                 let p1 = la + (lb - la) * ww
-                let oa = P(Int(sd.outer[a])), ob = P(Int(sd.outer[b]))
-                var t1 = (oa + (ob - oa) * ww) - p1; let l1 = simd_length(t1); t1 = l1 > 1e-6 ? t1 / l1 : SIMD3(0, 1, 0)
+                // the body's slope at the loop: the chord projected onto the egg's tangent plane there (the egg's own triangles round the two loop vertices)
+                func eggN(_ i: Int) -> SIMD3<Float> {
+                    var n = SIMD3<Float>.zero, t = Int(sd.nTriStart[i])
+                    while t < Int(sd.nTriStart[i + 1]) {
+                        let q0 = P(Int(sd.nTris[t])); n += simd_cross(P(Int(sd.nTris[t + 1])) - q0, P(Int(sd.nTris[t + 2])) - q0); t += 3
+                    }
+                    return n
+                }
+                var n1 = eggN(a) * (1 - ww) + eggN(b) * ww
+                let nl = simd_length(n1); n1 = nl > 1e-12 ? n1 / nl : SIMD3(0, -1, 0)
+                // outward = away from the leg's axis (not the chord: with the leg hanging straight under the loop the chord is along the egg normal and its projection flips)
+                var rad = p1 - ringC; rad -= legAxis * simd_dot(rad, legAxis)
+                var t1 = rad - n1 * simd_dot(rad, n1); let l1 = simd_length(t1); t1 = l1 > 1e-6 ? t1 / l1 : SIMD3(0, 1, 0)
                 let c = simd_distance(p0, p1)
                 let m0 = t0 * (c * k0), m1 = t1 * (c * k1)
                 for k in 1...K {

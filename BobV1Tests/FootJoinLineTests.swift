@@ -237,6 +237,19 @@ final class FootJoinLineTests: XCTestCase {
         let r = MotionRig(game: true, settle: 0.5)
         r.skinner.autoBlink = false
         r.brain.seed = 11
+        do {          // Lemon Drop (the tail's swell moves the lower back): its rest dump, and where the band folds
+            let y = MotionRig(game: true, settle: 0.5)
+            y.brain.feature = JellyRoster.feature(1)
+            y.skinner.configureTail(rm); y.skinner.tailOn = true; y.brain.skinnerRef = y.skinner
+            y.run(0.5); y.render()
+            var o = ""
+            for v in 0..<rm.vertexCount { o += String(format: "v %.5f %.5f %.5f\n", y.dyn[6 * v], y.dyn[6 * v + 1], y.dyn[6 * v + 2]) }
+            var t = rm.body.first
+            while t < rm.body.first + rm.body.count { o += "f \(rm.index[t] + 1) \(rm.index[t + 1] + 1) \(rm.index[t + 2] + 1)\n"; t += 3 }
+            try? o.write(toFile: dir + "/yellow_rest.obj", atomically: true, encoding: .utf8)
+            let m = Self.seams(y)
+            print(String(format: "[legweld] dump yellow rest: seam p90 %.1f max %.1f folds %d", m.p90, m.max, m.folds))
+        }
         func dump(_ name: String) {
             r.render()
             var o = ""
