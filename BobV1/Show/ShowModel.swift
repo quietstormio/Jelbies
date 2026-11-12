@@ -182,6 +182,9 @@ nonisolated enum ShowTrickInfo {
         case .look: return [.cute]
         case .come: return [.sweet]
         case .run: return [.cool]
+        case .showOff: return [.cute, .sparkly]
+        case .strut: return [.cool]
+        case .sing: return [.sweet, .cute]
         }
     }
     /// The tricks a Jelbie can show on stage: everything learned but the come and the run (walks, not stage tricks: he would leave the spotlight).
@@ -195,9 +198,9 @@ nonisolated enum ShowTrickInfo {
     /// Difficulty in stars, 1...3: harder tricks score more and slip more often.
     static func difficulty(_ t: VoiceTrick) -> Int {
         switch t {
-        case .sit, .hop, .look, .come, .run: return 1
+        case .sit, .hop, .look, .come, .run, .strut, .sing: return 1
         case .jacks, .spin: return 2
-        case .flip: return 3
+        case .flip, .showOff: return 3
         }
     }
     static func symbol(_ t: VoiceTrick) -> String {
@@ -205,6 +208,15 @@ nonisolated enum ShowTrickInfo {
         case .spin: return "arrow.triangle.2.circlepath"; case .hop: return "arrow.up.to.line"
         case .flip: return "arrow.uturn.up"; case .jacks: return "figure.jumprope"; case .sit: return "chair.fill"; case .look: return "eye.fill"
         case .come: return "figure.walk"; case .run: return "figure.run"
+        case .showOff: return "crown.fill"; case .strut: return "figure.walk.motion"; case .sing: return "music.note"
+        }
+    }
+    /// How long the stage gives a trick to play out (seconds). The move runs to its own end; the old fixed 2.6 s cut the longer ones short.
+    static func seconds(_ t: VoiceTrick) -> Float {
+        switch t {
+        case .showOff, .strut: return 3.2
+        case .sing: return 3.6
+        default: return 2.6
         }
     }
 }

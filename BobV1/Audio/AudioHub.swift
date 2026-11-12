@@ -963,6 +963,29 @@ final class AudioHub {
         fire(name, volume: 0.7 * level, pan: panFor(x: x))
     }
 
+    /// The Sing trick's voice (stage 1 of the trick plan): `sing_jelly{n}` when that file is in the bundle (the real tune arrives later), otherwise the
+    /// existing `lala_jelly{n}` as the placeholder. Not an `SFX` case on purpose (the SFX suites demand `_1` files and a caption per case). Its own 3 s gate per
+    /// Jelbie (a repeated tap still animates but does not stack voices); stamps `lastVoice` / `lastEmoteVoice` so the ambient chirps hush while he sings.
+    @ObservationIgnored private var lastSing: [Double] = [-100, -100, -100]
+    @discardableResult
+    func sing(jelly: Int, x: Float = 0) -> String? {
+        CaptionCenter.shared.post(SoundCaptions.voice(.lala, name: JellyRoster.name(slot: jelly)))          // a11y: captions even when muted
+        let what = "sing"
+        if let w = gateWhy() { diag(what, jelly, w); return nil }
+        let level = settings.sfxLevel * duck.gain
+        let i = min(max(jelly, 0), 2)
+        let now = Self.clock()
+        if now - lastSing[i] < 3 { diag(what, jelly, "hush sing"); return nil }
+        let c = JellyRoster.speciesOf(slot: jelly)
+        let n = JellyVoiceSet.borrowed(JellyVoiceSet.index(character: c))
+        let real = "sing_jelly\(n)"
+        let name = url(real) != nil ? real : "lala_jelly\(n)"
+        lastSing[i] = now; lastVoice[i] = now; lastEmoteVoice[i] = now
+        diag(what, jelly, nil, v: 0.8 * level)
+        fire(name, volume: 0.8 * level, pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, .lala))
+        return name
+    }
+
     @ObservationIgnored private var lastSleepAny: Double = -100
     @ObservationIgnored private var lastContextVoice: [Double] = [-100, -100, -100]
     /// The context voices (curious / ooh / hum / giggle / hello / yawn / yay / uhoh): a short call that fits what the Jelbie is doing, in the home room only. They ADD variety:
