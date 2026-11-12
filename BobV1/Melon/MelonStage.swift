@@ -1408,6 +1408,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     func headSnapshot(_ key: HeadPortraitKey) -> UIImage? { renderSnapshot(look: nil, jelly: key.jelly, headPortrait: key) }
 
     private func renderSnapshot(look: WearLook?, jelly id: Int, headPortrait hp: HeadPortraitKey?) -> UIImage? {
+        let tA = CACurrentMediaTime()
+        defer { if look != nil { WearPreviewLog.write("snapshot-total ms=\(Int((CACurrentMediaTime() - tA) * 1000)) size=\(lastRW)x\(lastRH)") } }
         guard game, let renderer, let room = renderer.room, actors.indices.contains(id) else { return nil }
         // the size of the last frame (nil until the stage has drawn one: the caller asks again)
         let W = lastRW, H = lastRH
@@ -1539,8 +1541,11 @@ final class MelonController: NSObject, MTKViewDelegate {
             fitTex = renderer.device.makeTexture(descriptor: td)
         }
         guard let tex = fitTex, let cmd = renderer.queue.makeCommandBuffer() else { return nil }
+        let tB = CACurrentMediaTime()
         renderer.draw(to: tex, commandBuffer: cmd, showMesh: false)
+        let tC = CACurrentMediaTime()
         cmd.waitUntilCompleted()
+        if look != nil { WearPreviewLog.write("phases setup=\(Int((tB - tA) * 1000)) encode=\(Int((tC - tB) * 1000)) gpuwait=\(Int((CACurrentMediaTime() - tC) * 1000))") }
         var px = [UInt8](repeating: 0, count: W * H * 4)
         px.withUnsafeMutableBytes { tex.getBytes($0.baseAddress!, bytesPerRow: W * 4, from: MTLRegionMake2D(0, 0, W, H), mipmapLevel: 0) }
         let side = min(W, H)

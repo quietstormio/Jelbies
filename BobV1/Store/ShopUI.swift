@@ -452,6 +452,11 @@ struct ItemPicture: View {
     @State private var fitted: UIImage?
     @State private var tried = false
 
+    init(care: GameCare, item: StoreItem, who: Int, size: CGFloat) {
+        self.care = care; self.item = item; self.who = who; self.size = size
+        _fitted = State(initialValue: item.wear.flatMap { WearFittingCache.shared.cached($0, who: who, care: care) })          // a hit is in the first frame
+    }
+
     var body: some View {
         if let look = item.wear {
             ZStack(alignment: .bottomTrailing) {
@@ -477,13 +482,20 @@ struct ItemPicture: View {
             .frame(width: size, height: size)
             .accessibilityIdentifier("fitting-room")
             .task(id: look) {
-                // the stage may not be up yet (a shop opened at launch): ask again a few times
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                for _ in 0..<40 {
+                let tOpen = CACurrentMediaTime(), hit = fitted != nil
+                defer { WearPreviewLog.write("preview-ready look=\(look.rawValue) ms=\(Int((CACurrentMediaTime() - tOpen) * 1000)) cached=\(hit) shown=\(fitted != nil)") }
+                if hit { return }
+                let cache = WearFittingCache.shared
+                // Draws on the main actor (the renderer's rule), so Buy waits only for the render itself (~25 ms in the simulator); a short settle lets the sheet's slide-up finish first.
+                // The stage may not be up yet (a shop opened at launch): ask again every 100 ms, and after 1 s show the item's own art in place of the spinner (the picture still swaps in when it comes).
+                let enabled = WearFittingCache.enabled
+                try? await Task.sleep(nanoseconds: enabled ? 120_000_000 : 700_000_000)
+                for _ in 0..<(enabled ? 120 : 40) {
                     await Task.yield()
-                    if let img = care.fittingProvider?(look, who) { fitted = img; break }
-                    try? await Task.sleep(nanoseconds: 300_000_000)
                     if Task.isCancelled { return }
+                    if let img = cache.render(look, who: who, care: care) { fitted = img; return }
+                    if enabled, CACurrentMediaTime() - tOpen > 1.0 { tried = true }
+                    try? await Task.sleep(nanoseconds: enabled ? 100_000_000 : 300_000_000)
                 }
                 tried = true
             }
