@@ -97,6 +97,26 @@ final class VoiceTrainingTests: XCTestCase {
         for t in [VoiceTrick.showOff, .strut, .sing] { XCTAssertFalse(t.isStarter) }
     }
 
+    /// Stage 2: the new moves' words, and the old words they must not swallow ("spin" stays spin, "jump" stays jumping jacks).
+    func testStageTwoTrickWordsAndCollisions() {
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
+        for (said, t) in [("hula", VoiceTrick.hula), ("hula dance", .hula), ("super spring", .superSpring), ("spring", .superSpring), ("corkscrew jump", .corkscrew), ("corkscrew", .corkscrew), ("one leg spin", .oneLegSpin), ("pirouette", .oneLegSpin), ("spin", .spin), ("jump", .jacks), ("hop", .hop)] {
+            XCTAssertEqual(v.decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(t), said)
+        }
+        XCTAssertFalse(VoiceTrick.hula.isStarter)
+        XCTAssertEqual(JellyAction(key: "hula"), .trick(.hula))
+    }
+
+    /// Stage 3: the prototypes' words, and the old words they must not swallow ("bounce" alone stays the hop; "walk" / "stand" are not tricks).
+    func testStageThreeTrickWordsAndCollisions() {
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
+        for (said, t) in [("moonwalk", VoiceTrick.moonwalk), ("moon walk", .moonwalk), ("back bounce", .backBounce), ("headstand", .headstand), ("head stand", .headstand), ("hop", .hop), ("flip", .flip), ("jump", .jacks)] {
+            XCTAssertEqual(v.decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(t), said)
+        }
+        XCTAssertNotEqual(v.decide(transcript: "bounce", runningMove: nil, mood: .happy, session: 1), .perform(.backBounce), "bounce alone is not the back bounce")
+        for t in [VoiceTrick.moonwalk, .backBounce, .headstand] { XCTAssertFalse(t.isStarter); XCTAssertEqual(JellyAction(key: t.rawValue), .trick(t)) }
+    }
+
     func testAnOldTaughtWordKeepsWorkingWithItsOwnReliability() {
         let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
         legacy(v, "mochi", .sit, 0.6)

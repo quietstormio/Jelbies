@@ -80,6 +80,23 @@ extension GameCare {
         g.arrival.cancel()
         g.arrivalCard = .hidden; g.arrivalDim = false; g.hugWait = nil
         if let b = g.actor?.brain { b.hurry = false; b.autonomy = true }
+        guestRestoreArena()
+    }
+
+    /// The arena wall comes back once he is inside the room (it was lifted for the run-in from off-screen).
+    func guestRestoreArena(force: Bool = false) {
+        let g = guestBook
+        guard g.arenaLifted, let a = g.actor else { g.arenaLifted = false; return }
+        let c = GameCamera.arenaCenter, r = GameCamera.arenaRadius
+        if force || simd_distance(a.floor, c) < r - 0.4 {
+            a.sim.arenaCenter = c; a.sim.arenaRadius = r
+            g.arenaLifted = false
+        }
+    }
+
+    /// True while his body is still (partly) off the left edge of the screen.
+    func guestIsOutsideView(_ a: JellyActor) -> Bool {
+        a.floor.x < -(GameCamera.visibleHalfWidthAtBody(z: a.floor.y, aspect: GameCamera.aspect) - 0.3)
     }
 
     /// One fixed step of the arrival. Returns false when it ended (cancelled by a failed body).
@@ -87,7 +104,10 @@ extension GameCare {
         let g = guestBook
         if g.arrival.active {
             let t0 = g.arrival.t
-            for e in g.arrival.advance(dt) { guestArrivalEvent(e, actors, v, visit) }
+            // the hug waits for him to be on screen (a long run-in from beyond a landscape screen's edge); at most 9 s
+            var adv = dt
+            if g.runHold < 9, t0 + dt >= ArrivalTuning.hug, let a = g.actor, guestIsOutsideView(a) { adv = 0; g.runHold += dt }
+            for e in g.arrival.advance(adv) { guestArrivalEvent(e, actors, v, visit) }
             if Int(g.arrival.t * 10) != Int(t0 * 10) { NSLog("[arrival] t=%.1f", Float(Int(g.arrival.t * 10)) / 10) }          // (capture aid: nominal time per 0.1 s)
         }
         if let w = g.hugWait, let a = g.actor, let b = a.brain {
@@ -120,6 +140,7 @@ extension GameCare {
             g.arrivalCard = .hidden; g.arrivalDim = false
         case .runIn:
             guard let a = g.actor else { return }
+            g.runHold = 0
             arrivalRunIn(a, to: g.arrivalTarget ?? guestSpotNear(actors), household: actors, voice: true)
         case .hug:
             g.hugWait = ArrivalTuning.hugWait
@@ -196,11 +217,19 @@ extension GameCare {
     func guestArrivalEntry(toward target: SIMD2<Float>, offScreen: Bool = false) -> SIMD2<Float> {
         let aspect = GameCamera.aspect
         let hw = GameCamera.visibleHalfWidthAtBody(z: target.y, aspect: aspect)
-        if offScreen { return SIMD2(-(hw + 1.3), target.y) }
+        if offScreen { return GuestEdge.offLeft(z: target.y, aspect: aspect) }
         let c = GameCamera.arenaCenter, r = GameCamera.arenaRadius
         let dz = target.y - c.y
         let wallX = c.x - sqrt(max(r * r - dz * dz, 0.25)) + 0.25
         return SIMD2(max(-(hw + 0.8), wallX), target.y)
+    }
+}
+
+/// Where a visiting friend comes in and goes out: off the LEFT edge of the screen, whatever the window (portrait or landscape, phone or tablet).
+nonisolated enum GuestEdge {
+    /// The floor point at depth `z` that is past the screen's left edge by a whole body (the visible half width at the body's height, plus 1.3).
+    @MainActor static func offLeft(z: Float, aspect: Float) -> SIMD2<Float> {
+        SIMD2(-(GameCamera.visibleHalfWidthAtBody(z: z, aspect: aspect) + 1.3), z)
     }
 }
 

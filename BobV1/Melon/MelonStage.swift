@@ -1601,7 +1601,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard game, !model.care.focus.isActive, !model.care.tripActive else { return }
         guard !model.care.arranging else { return }
         refreshOutlines()
-        if let id = model.care.select.hit(p) {          // a Jelly under the finger: highlight him; double-tapping an already highlighted sleeper pokes him awake (interim gesture)
+        // The silhouette hit stays first (several Jellies: unchanged); the live skin pick (as the single tap uses) is the fallback: with ONE Jelbie no silhouettes are published until a pick is
+        // already running, so the outline hit alone never found him (a voice name started a pick, which is why it "worked after voice").
+        let size = stageView?.bounds.size ?? touchSize
+        let under = model.care.select.hit(p) ?? (size.width > 1 ? pickJelly(p, size)?.id : nil)
+        if let id = under {          // a Jelly under the finger: highlight him; double-tapping an already highlighted sleeper pokes him awake (interim gesture)
             if model.care.select.highlighted == id, model.care.selectBrain(id)?.isSleeping == true { model.care.pokeSleeper(id); return }
             model.care.tapJelly(id); return
         }
