@@ -126,7 +126,9 @@ extension GameCare {
         MealTrace.awakeT += dt
         guard MealTrace.awakeT > 4, let a = actors.first(where: { $0.id == k }), let b = a.brain else { return }
         MealTrace.awakeDone = true
+        b.sleepEnabled = false          // (he stays up: the night's retry loop does not send him back to bed)
         b.requestNow(.goTo(b.position))
+        NSLog("[mealtrace] MealAwake: woke jelly %d", k)
         MealTrace.log("MealAwake: woke jelly \(k)")
         #endif
     }
