@@ -90,7 +90,7 @@ final class HopscotchLineTests: XCTestCase {
             if !blocked, line.square(uid, 0) >= 0 { blocked = true; blockedAt = Float(i) / 60 }
             if blocked {
                 let b = lab.rigs[2]
-                b.sim.teleport(toXZ: start); b.brain.currentPose(b.sim)          // (held there every tick: nothing moves him off)
+                b.brain.autonomy = false; b.brain.px = start.x; b.brain.pz = start.y; b.sim.teleport(toXZ: start); b.brain.currentPose(b.sim)          // (held there every tick, floor spot and body: nothing moves him off)
                 minToStart = min(minToStart, simd_distance(joiner.position, start)); maxSq = max(maxSq, line.square(uid, 1))
             }
             let stage = joiner.idleState.kind == .decorHopscotch ? joiner.idleState.slideStage : -9
