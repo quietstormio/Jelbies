@@ -49,18 +49,32 @@ final class SoftMealWakeClockTests: XCTestCase {
         XCTAssertFalse(care2.callRunning, "drink: same")
     }
 
-    /// Item 1: a single flow's sleeper whose wake is stuck past `wakeCap` is called the hard way once.
+    /// Item 1: a single flow's sleeper whose wake is stuck past `wakeCap` is called the hard way once (tray wanted: the walk to his place; tray out: his meal), then eats and the meal ends.
     func testSingleFlowStuckWakeFallsBack() {
-        let lab = night(n: 1, seed: 3)
-        let b = lab.rigs[0].brain
-        let care = GameCare()
-        care.wanted = Consumables.berries
-        b.callToMeal(.goTo(SIMD2(0.5, 0.5)))
-        XCTAssertTrue(b.mealWaking)
-        b.sleep.mealWakeT = DiningGroup.wakeCap + 1
-        care.tickDining(id: 0, brain: b, sim: lab.rigs[0].sim, dt: dt)
-        XCTAssertFalse(b.mealWaking, "called the hard way")
-        XCTAssertFalse(b.sleep.mealWake)
+        for stuckAt in ["wanted", "meal"] {
+            let lab = night(n: 1, seed: 3)
+            let b = lab.rigs[0].brain, sim = lab.rigs[0].sim
+            let care = GameCare()
+            care.wanted = Consumables.berries
+            care.mealJelly = 0
+            b.callToMeal(.goTo(SIMD2(0.5, 0.5)))
+            XCTAssertTrue(b.mealWaking)
+            var t: Float = 0
+            if stuckAt == "meal" {
+                while t < 20, care.meal == nil { lab.tick(watching: false); care.tickDining(id: 0, brain: b, sim: sim, dt: dt); care.dining.update(dt: dt); t += dt }
+                XCTAssertNotNil(care.meal, "the tray came out")
+            }
+            let forced = b.mealWaking
+            XCTAssertTrue(forced, "\(stuckAt): he is still waking when the clock is forced")
+            if b.mealWaking {
+                b.sleep.mealWakeT = DiningGroup.wakeCap + 1
+                lab.tick(watching: false); care.tickDining(id: 0, brain: b, sim: sim, dt: dt); care.dining.update(dt: dt)
+                XCTAssertFalse(b.mealWaking, "\(stuckAt): called the hard way"); XCTAssertFalse(b.sleep.mealWake)
+            }
+            var ate = false; t = 0
+            while t < 40, !ate { lab.tick(watching: false); care.tickDining(id: 0, brain: b, sim: sim, dt: dt); care.dining.update(dt: dt); t += dt; if b.activity == .eating { ate = true } }
+            XCTAssertTrue(ate, "\(stuckAt): he eats (the own meal's end runs in GameCare.tick, outside this harness)"); XCTAssertFalse(care.callRunning)
+        }
     }
 
     /// Item 2: `mealWakeT` ticks in every stage of the wake (stir 3, roll 4, stretch 5) and at the end of the wake equals the time since the call.
@@ -139,6 +153,7 @@ final class SoftMealWakeClockTests: XCTestCase {
             let line = "SOFTWAKE-AWAKE seed \(seed) allAsleep tray \(f(r.tray)) ate \(r.ate.map(f)) end \(f(r.end))"
             MotionLog.write(line); print(line)
             XCTAssertGreaterThan(r.tray ?? 0, 3, "seed \(seed): not at t = 0")
+            XCTAssertNotEqual(r.reason, "awake-first", "seed \(seed): nobody was awake at the order: today's gathering")
             XCTAssertEqual(r.left, 0)
         }
     }
