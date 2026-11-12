@@ -67,6 +67,11 @@ extension GameCare {
         }
         return out
     }()
+    /// Capture aid: `-ParkSpots "x,z;x,z"` puts the Jelbies who came on these floor spots at the park's start (in the order they came) instead of the entry row.
+    nonisolated(unsafe) static var demoSpots: [SIMD2<Float>] = (UserDefaults.standard.string(forKey: "ParkSpots") ?? "").split(separator: ";").compactMap { s in
+        let v = s.split(separator: ",").compactMap { Float($0) }
+        return v.count == 2 ? SIMD2<Float>(v[0], v[1]) : nil
+    }
     nonisolated(unsafe) static var demoToyFrames = 0
     nonisolated(unsafe) static var demoToyServed = 0
     /// Capture aid: `-StartParkPlay ball|wand` opens Play mode with that toy ~5 s into the park (the picker needs a tap, which a command line cannot do).
@@ -409,7 +414,11 @@ extension GameCare {
             parkPlanGift()
             for (k, slot) in comers.enumerated() where roster.indices.contains(slot) {
                 let a = roster[slot]
-                rehome(a, at: spots[k])
+                var at = spots[k]
+                #if targetEnvironment(simulator)
+                if Self.demoSpots.indices.contains(k) { at = Self.demoSpots[k] }
+                #endif
+                rehome(a, at: at)
                 guard let brain = a.brain else { continue }
                 brain.autonomy = UserDefaults.standard.integer(forKey: "BlobNoWander") == 0; brain.idleBlocked = false; brain.restTimer = 1.2
                 brain.startTurn(to: 0, sim: a.sim)
