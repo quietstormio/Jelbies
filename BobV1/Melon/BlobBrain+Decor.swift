@@ -251,7 +251,7 @@ extension BlobBrain {
     }
     /// The first leg of the walk to the slide's ladder, with the slide SOLID: (spot, leg). Leg 2 = already behind and close (straight to the climb spot, the slide soft),
     /// leg 1 = a gate spot behind the slide that he walks round to. nil = no way to the back right now.
-    private func slideFirstLeg(_ f: DecorFoot, climb: SIMD2<Float>, from here: SIMD2<Float>) -> (SIMD2<Float>, Int)? {
+    private func slideFirstLeg(_ f: DecorFoot, climb: SIMD2<Float>, from here: SIMD2<Float>, avoid: [SIMD2<Float>] = []) -> (SIMD2<Float>, Int)? {
         if simd_distance(here, climb) <= 0.9, slideBehind(f, here) > 0 { return (climb, 2) }
         let need = footprint * f.spec.reach + 0.05
         var cands: [SIMD2<Float>] = []
@@ -267,7 +267,7 @@ extension BlobBrain {
         }
         guard let gate else { return nil }
         if simd_distance(here, gate) < Self.standTolerance { return (climb, 2) }
-        if slideLegFree(here, gate) { return (gate, 1) }
+        if slideLegFree(here, gate), avoid.allSatisfy({ simd_distance($0, gate) > 0.3 }) { return (gate, 1) }          // (`avoid`: the leg that has stood still behind a friend is not taken again: round the slide the other way)
         // round the slide: the corners of its footprint, a body's width off the edge (both sides, front and back); the walk's own planner does not go round a slide that long
         let h = f.quarter & 1 == 0 ? f.spec.half : SIMD2(f.spec.half.y, f.spec.half.x)
         let lat = h.x + footprint * f.spec.reach + 0.1, zf = h.y + footprint * f.spec.reach + 0.1
@@ -277,7 +277,7 @@ extension BlobBrain {
                 for z in [zf, -zf] {
                     let p = f.centre + f.turned(SIMD2(sx * (lat + wide), z))
                     let q = slideWallFixed(p)
-                    if simd_distance(p, q) < 0.4, f.distance(q) >= footprint * f.spec.reach - 0.05 { corners.append(q) }          // (a wall or the pond may nudge a corner a little; bodies do not count, they will have moved)
+                    if simd_distance(p, q) < 0.4, f.distance(q) >= footprint * f.spec.reach - 0.05, avoid.allSatisfy({ simd_distance($0, q) > 0.3 }) { corners.append(q) }          // (a wall or the pond may nudge a corner a little; bodies do not count, they will have moved)
                 }
             }
         }
@@ -296,6 +296,67 @@ extension BlobBrain {
         }
         if let best { return (best.0, 3) }
         return nil
+    }
+
+    /// The slide is a wall again for a leg of the way round (the gate, a corner): a Jelbie who has just ridden it still carries the slide as his soft piece (`decorIgnore`, until he is clear of it),
+    /// and the walk's friend side-steps and route planner then went straight through the frame. Only while he is outside its footprint (inside it, the floor rules walk him out as before).
+    private func slideSolidAgain(_ f: DecorFoot) {
+        if decorIgnore == f.uid, f.distance(position) > 0 { decorIgnore = nil }
+    }
+    /// Distance from `p` to the segment a-b.
+    private func slideSegmentDistance(_ p: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+        let ab = b - a, l2 = max(simd_dot(ab, ab), 1e-6)
+        let t = min(max(simd_dot(p - a, ab) / l2, 0), 1)
+        return simd_distance(p, a + ab * t)
+    }
+    /// Capture / test aid: a line per re-plan decision of the way round (nil in the game).
+    nonisolated(unsafe) static var slideLog: ((String) -> Void)?
+    /// Per Jelbie (steerID), for the attempt in hand: the legs that stood still (never taken again) and how many times a leg stood still.
+    nonisolated(unsafe) private static var slideBans: [Int: (banned: [SIMD2<Float>], fails: Int)] = [:]
+    /// A leg of the way round (stage -1 / -3) that stands still, waiting for a friend who stands on it. First stand: a side-step round the friend; else the other way round; the leg that stood
+    /// still is never planned again in this attempt; the third stand ends the attempt (he is free). (The walk waits up to 2 s for a standing friend on these legs, BlobBrain.steerTarget; before,
+    /// the re-plan only banned the current leg and flipped between the two corners every 0.8 s for 12 s.)
+    private func slideStallReplan(_ f: DecorFoot, dt: Float, skinner: Skinner) {
+        guard case .walk = script, steerStall > 0.9 || steerWait > 0.9 || walkStallT > 1.2, idleState.slideS < 8, Int(scriptT * 4) != Int((scriptT - dt) * 4) else { return }          // (asked four times a second at most)
+        var st = Self.slideBans[steerID] ?? (banned: [], fails: 0)
+        Self.slideLog?("stall body \(steerID) stage \(idleState.slideStage) at \(position) target \(idleState.target) banned \(st.banned) fails \(st.fails) steerWait \(steerWait) steerStall \(steerStall) walkStallT \(walkStallT) slideS \(idleState.slideS)")
+        if st.fails >= 2 {
+            guard idleState.slideStage == -3 else { return }          // (the gate leg: a friend in the queue at the ladder is waited for, as before; only the corners drop the attempt)
+            // the third stall: dropped only while a standing friend is still within 1.6 m or on the next leg; else one more re-plan (four at most)
+            let standingFriend = steerPeers().contains { $0.id >= Int.max / 4 && (simd_distance($0.pos, position) < 1.6 || slideSegmentDistance($0.pos, position, idleState.target) < 0.8) }
+            if st.fails >= 4 || standingFriend {
+                Self.slideLog?("replan body \(steerID) fail \(st.fails + 1): drop the attempt at \(position) stage \(idleState.slideStage) target \(idleState.target) friend \(standingFriend)")
+                Self.slideBans[steerID] = nil
+                idleFinish(skinner)
+                return
+            }
+        }
+        st.banned.append(idleState.target)          // (kept only when a different leg is really taken: with none to take he waits as before)
+        var chosen: (SIMD2<Float>, Int)?
+        // 1. round the standing friend on the leg
+        let toward = idleState.target - position
+        let tl = simd_length(toward)
+        if tl > 0.5, let fr = steerPeers().filter({ simd_distance($0.pos, position) < 2.5 && simd_dot($0.pos - position, toward / tl) > 0 }).min(by: { simd_distance($0.pos, position) < simd_distance($1.pos, position) }) {
+            var best: SIMD2<Float>?
+            for k in 0..<16 {
+                let a = Float(k) * .pi / 8
+                let c = fr.pos + SIMD2(sinf(a), cosf(a)) * 1.1
+                guard ParkClearSpot.clear(c, radius: footprint) == c, simd_distance(slideWallFixed(c), c) < 0.06, f.distance(c) >= footprint * f.spec.reach, slideLegFree(position, c),
+                      simd_distance(c, idleState.target) < tl - 0.3, slideSegmentDistance(fr.pos, position, c) >= 0.8, !steerPeers().contains(where: { simd_distance($0.pos, c) < 0.9 }) else { continue }
+                if best == nil || simd_distance(c, idleState.target) < simd_distance(best!, idleState.target) { best = c }
+            }
+            if let best { chosen = (best, 3) }
+        }
+        // 2. the other way round the slide (the banned legs are not planned again)
+        if chosen == nil, let climb = decorStand(.decorSlide, f, from: position), let next = slideFirstLeg(f, climb: climb, from: position, avoid: st.banned), simd_distance(next.0, idleState.target) > 0.3 { chosen = next }
+        guard let next = chosen else { Self.slideLog?("replan body \(steerID) no other leg from \(position), target \(idleState.target) stays"); return }
+        st.fails += 1; Self.slideBans[steerID] = st
+        Self.slideLog?("replan body \(steerID) fail \(st.fails): from \(position) target \(idleState.target) -> \(next.0) leg \(next.1)")
+        idleState.slideS += 1
+        idleState.slideStage = -next.1; idleState.target = next.0; idleState.decorRetry = 0
+        if next.1 == 2 { decorIgnore = f.uid } else { slideSolidAgain(f) }
+        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; steerWait = 0; walkStallT = 0
+        script = .walk(target: next.0, then: .none); activity = .walking
     }
 
     func decorStart(_ kind: IdleKind, _ sim: SoftBody, only: DecorKind? = nil, uid onlyUID: Int? = nil) -> Bool {
@@ -318,12 +379,13 @@ extension BlobBrain {
             if roundSlide {
                 guard let climb = standSpot, simd_distance(here, climb) > 0.35 || onlyUID != nil, let first = slideFirstLeg(f, climb: climb, from: here) else { decorIgnore = exiting; continue }
                 standSpot = first.0; slideLeg = first.1
-                if slideLeg == 2 { decorIgnore = f.uid }
+                if slideLeg == 2 { decorIgnore = f.uid } else { slideSolidAgain(f) }
             }
             guard let stand = standSpot,
                   roundSlide || simd_distance(here, stand) > 0.35 || onlyUID != nil || kind == .decorHop || kind == .decorHopscotch || (kind == .decorSit && f.kind.hopSit) || kind == .soccerKick,
                   roundSlide || reachable(here, stand) else { decorIgnore = exiting; continue }
             idleBegin(kind)
+            if roundSlide { Self.slideBans[steerID] = nil }
             idleState.decorUID = f.uid; idleState.decorGo = true; idleState.decorKicked = false; idleState.decorBooped = false
             idleState.target = stand; idleState.decorRetry = 0
             idleState.seat = seat; idleState.seatShift = .zero; idleState.cuddle = 0
@@ -343,6 +405,7 @@ extension BlobBrain {
     /// Every step while a decor behaviour runs (before the gait): the kick lands when the ball is within reach.
     func decorTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let kind = idleState.kind, idleState.decorUID >= 0, let f = DecorField.shared.foot(idleState.decorUID) else { return }
+        if kind == .decorSlide, f.uid == ParkToys.slideUID, idleState.slideStage == -1 || idleState.slideStage == -3 { slideStallReplan(f, dt: dt, skinner: skinner) }          // (the way round the park slide)
         if kind == .soccerKick { soccerTick(sim, skinner, dt, f); return }
         if kind == .decorKick, idleState.decorGo, !idleState.decorKicked {
             let ball = DecorField.shared.position(f)
@@ -391,7 +454,7 @@ extension BlobBrain {
                 if !leg2, idleState.slideS < 8, let climb = decorStand(.decorSlide, f, from: position), let next = slideFirstLeg(f, climb: climb, from: position), simd_distance(next.0, idleState.target) > 0.3 {
                     idleState.slideS += 1
                     idleState.slideStage = -next.1; idleState.target = next.0; idleState.decorRetry = 0
-                    if next.1 == 2 { decorIgnore = f.uid }
+                    if next.1 == 2 { decorIgnore = f.uid } else { slideSolidAgain(f) }
                     scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0
                     script = .walk(target: next.0, then: .none); activity = .walking
                     return
@@ -407,7 +470,7 @@ extension BlobBrain {
                 let climb = decorStand(.decorSlide, f, from: position)
                 guard idleState.slideS <= 8, let climb, let next = slideFirstLeg(f, climb: climb, from: position) else { idleFinish(skinner); return }
                 idleState.slideStage = -next.1; idleState.target = next.0; idleState.decorRetry = 0
-                if next.1 == 2 { decorIgnore = f.uid }
+                if next.1 == 2 { decorIgnore = f.uid } else { slideSolidAgain(f) }
                 scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0
                 script = .walk(target: next.0, then: .none); activity = .walking
                 return

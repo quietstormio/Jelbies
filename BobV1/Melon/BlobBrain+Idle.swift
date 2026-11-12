@@ -578,7 +578,7 @@ extension BlobBrain {
         case .wander, .stumble: return false
         case .zoomies, .slide:
             // a dash across the rug like the run (slide: the last ~0.9 u is the belly slide, so the goal is the end of the slide)
-            guard let g = goal ?? pickRunGoal(from: here, minD: kind == .slide ? 2.6 : 2.6, maxD: kind == .slide ? 4.4 : 4.2) else { return false }
+            guard let g = (goal ?? pickRunGoal(from: here, minD: kind == .slide ? 2.6 : 2.6, maxD: kind == .slide ? 4.4 : 4.2)).map({ ParkClearSpot.clear($0, radius: footprint) }) else { return false }          // (park only: a goal inside a solid piece comes out clear, see ParkClearSpot)
             idleBegin(kind)
             idleState.target = g
             AudioHub.shared.play(.zoomies, jelly: steerID, x: px)

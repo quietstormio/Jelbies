@@ -108,7 +108,7 @@ extension BlobBrain {
         case .trot:
             idleBegin(.trot)
             idleState.resume = nil
-            idleState.target = resume ?? here + dir * 2.2
+            idleState.target = ParkClearSpot.clear(resume ?? here + dir * 2.2, radius: footprint)          // (park only: a trot from standing does not run through a solid piece, see ParkClearSpot)
             if resume == nil { script = .walk(target: idleState.target, then: .none); activity = .walking }
         case .skipHop, .hopscotch:
             let n = kind == .skipHop ? 2 : 3
