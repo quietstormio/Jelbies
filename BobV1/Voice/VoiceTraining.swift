@@ -18,7 +18,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
     /// Shop tricks that reuse or add a move (stage 1 of the trick plan: show off, strut, sing).
     case showOff, strut, sing
     /// Stage 2 of the trick plan (new moves): hula, ...
-    case hula, superSpring, corkscrew
+    case hula, superSpring, corkscrew, oneLegSpin
 
     var isStarter: Bool { switch self { case .sit, .jacks, .run, .flip, .look, .come: return true; default: return false } }
     static var starters: [VoiceTrick] { allCases.filter(\.isStarter) }
@@ -30,7 +30,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .flip: return "Flip"; case .look: return "Look"; case .come: return "Come"
         case .spin: return "Spin"; case .hop: return "Hop"
         case .showOff: return "Show off"; case .strut: return "Strut"; case .sing: return "Sing"
-        case .hula: return "Hula"; case .superSpring: return "Super spring"; case .corkscrew: return "Corkscrew jump"
+        case .hula: return "Hula"; case .superSpring: return "Super spring"; case .corkscrew: return "Corkscrew jump"; case .oneLegSpin: return "One-leg spin"
         }
     }
     /// The words that command this trick (exact match, short commands). A trick the Jelbie owns is commanded with these; a word taught in the old
@@ -41,7 +41,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .flip: return ["flip"]; case .look: return ["look"]; case .come: return []
         case .spin: return ["spin"]; case .hop: return ["hop"]
         case .showOff: return ["show off", "showoff", "show it off"]; case .strut: return ["strut"]; case .sing: return ["sing", "sing a song"]
-        case .hula: return ["hula", "hula dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]
+        case .hula: return ["hula", "hula dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]; case .oneLegSpin: return ["one leg spin", "pirouette", "tiptoe spin"]
         }
     }
     /// A word to suggest, in the tip text only.
@@ -51,7 +51,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .flip: return "flip"; case .look: return "look"; case .come: return "come"
         case .spin: return "spin"; case .hop: return "hop"
         case .showOff: return "show off"; case .strut: return "strut"; case .sing: return "sing"
-        case .hula: return "hula"; case .superSpring: return "super spring"; case .corkscrew: return "corkscrew"
+        case .hula: return "hula"; case .superSpring: return "super spring"; case .corkscrew: return "corkscrew"; case .oneLegSpin: return "one leg spin"
         }
     }
 }

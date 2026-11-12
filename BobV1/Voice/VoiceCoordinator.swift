@@ -678,6 +678,7 @@ final class VoiceCoordinator {
         case .hula: return .hula
         case .superSpring: return .superSpring
         case .corkscrew: return .corkscrew
+        case .oneLegSpin: return .oneLegSpin
         default: return nil
         }
     }
@@ -695,6 +696,7 @@ final class VoiceCoordinator {
         case .hula: return .hula
         case .superSpring: return .superSpring
         case .corkscrew: return .corkscrew
+        case .oneLegSpin: return .oneLegSpin
         case .flip, .come: return nil
         }
     }

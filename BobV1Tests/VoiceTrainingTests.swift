@@ -100,7 +100,7 @@ final class VoiceTrainingTests: XCTestCase {
     /// Stage 2: the new moves' words, and the old words they must not swallow ("spin" stays spin, "jump" stays jumping jacks).
     func testStageTwoTrickWordsAndCollisions() {
         let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
-        for (said, t) in [("hula", VoiceTrick.hula), ("hula dance", .hula), ("super spring", .superSpring), ("spring", .superSpring), ("corkscrew jump", .corkscrew), ("corkscrew", .corkscrew), ("spin", .spin), ("jump", .jacks), ("hop", .hop)] {
+        for (said, t) in [("hula", VoiceTrick.hula), ("hula dance", .hula), ("super spring", .superSpring), ("spring", .superSpring), ("corkscrew jump", .corkscrew), ("corkscrew", .corkscrew), ("one leg spin", .oneLegSpin), ("pirouette", .oneLegSpin), ("spin", .spin), ("jump", .jacks), ("hop", .hop)] {
             XCTAssertEqual(v.decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(t), said)
         }
         XCTAssertFalse(VoiceTrick.hula.isStarter)

@@ -26,7 +26,7 @@ final class TrickStageTwoTests: XCTestCase {
 
     // MARK: the typed / spoken words (RuleParser)
 
-    private static let ruleWords: [(String, VoiceTrick)] = [("do the hula", .hula), ("hula", .hula), ("Bob hula dance", .hula), ("super spring", .superSpring), ("do a super spring", .superSpring), ("corkscrew jump", .corkscrew), ("do a corkscrew", .corkscrew), ("spin around", .spin), ("jump", .jacks)]
+    private static let ruleWords: [(String, VoiceTrick)] = [("do the hula", .hula), ("hula", .hula), ("Bob hula dance", .hula), ("super spring", .superSpring), ("do a super spring", .superSpring), ("corkscrew jump", .corkscrew), ("do a corkscrew", .corkscrew), ("pirouette", .oneLegSpin), ("do a pirouette", .oneLegSpin), ("one leg spin", .oneLegSpin), ("do a tiptoe spin", .oneLegSpin), ("spin around", .spin), ("jump", .jacks)]
     func testRuleParserFindsTheStageTwoWords() {
         let n = "TrickStageTwoTests.\(UUID().uuidString)"
         defer { UserDefaults.standard.removePersistentDomain(forName: n) }
@@ -159,5 +159,72 @@ final class TrickStageTwoTests: XCTestCase {
         }
         XCTAssertTrue(kinds.contains(.corkscrew) && kinds.contains(.dizzyWobble), "ends in the dizzy wobble")
         XCTAssertEqual(afterLand, 0.5 * .pi, accuracy: 0.5, "he lands about a quarter turn off")
+    }
+
+    // MARK: one-leg spin
+
+    /// Up on one foot: the other foot is off the floor and out to the side (not hidden under the belly) through a full pirouette that ends on its heading.
+    func testOneLegSpinLiftsOneFootToTheSideThroughAFullTurn() {
+        var prev: Float?, first: Float = 0, turned: Float = 0, last: Float = 0
+        var bestLift: Float = 0, bestSide: Float = 0, standGap: Float = 0, standMax: Float = 0
+        let r = run(.oneLegSpin, seconds: 8) { r in
+            guard r.brain.idleState.kind == .oneLegSpin, r.brain.idleState.phase >= 1 else { return }
+            let y = r.sim.bodyPose(iterations: 4).yaw
+            if let p = prev { turned += self.wrapDelta(y - p) } else { first = y }
+            prev = y; last = y
+            guard r.skinner.beansActive, r.skinner.beanPos[0].count == FootBean.vertexCount, r.skinner.beanPos[1].count == FootBean.vertexCount else { return }
+            let gaps = (0..<2).map { (r.skinner.beanPos[$0].map(\.y).min() ?? 0) - r.sim.floorY }
+            let lift = max(gaps[0], gaps[1]), li = gaps[0] > gaps[1] ? 0 : 1
+            if r.brain.idleState.phaseT > 0.4, r.brain.idleState.phaseT < 1.2 { standMax = max(standMax, min(gaps[0], gaps[1])) }          // (through the pirouette)
+            if lift > bestLift {
+                bestLift = lift; standGap = min(gaps[0], gaps[1])
+                // how far out of the body's axis the lifted foot's middle is, in the body frame (x = sideways)
+                let pose = r.sim.bodyPose(iterations: 4)
+                var c = SIMD3<Float>.zero; for p in r.skinner.beanPos[li] { c += p }; c /= Float(FootBean.vertexCount)
+                bestSide = abs(pose.rotation.inverse.act(c - pose.centroid).x)
+            }
+        }
+        MotionLog.write(String(format: "ONE-LEG lifted foot %.3f u up, %.3f u out to the side, standing foot gap in the spin %.3f, turned %.2f rad, ends %.2f off", bestLift, bestSide, standMax, turned, wrapDelta(last - first)))
+        XCTAssertGreaterThan(bestLift, 0.05, "the other foot is lifted"); XCTAssertLessThan(standMax, 0.02, "the standing foot is on the floor through the pirouette")
+        XCTAssertGreaterThan(bestSide, 0.10, "the lifted foot is out to the side, not under the belly")
+        XCTAssertGreaterThan(abs(turned), 2 * .pi * 0.92, "a full pirouette"); XCTAssertLessThan(abs(turned), 2 * .pi * 1.10)
+        XCTAssertEqual(wrapDelta(last - first), 0, accuracy: 0.25, "ends on its heading")
+        XCTAssertNil(r.brain.idleState.kind)
+    }
+
+    func testOneLegSpinFlopGivesUpPartWay() {
+        var prev: Float?, turned: Float = 0, kicked: Float = 0
+        let r = run(.oneLegSpin, seconds: 8, fail: true) { r in
+            guard r.brain.idleState.kind == .oneLegSpin, r.brain.idleState.phase >= 1 else { return }
+            let y = r.sim.bodyPose(iterations: 4).yaw
+            if let p = prev { turned += self.wrapDelta(y - p) }
+            prev = y; kicked = max(kicked, r.brain.jellyKick)
+        }
+        XCTAssertLessThan(abs(turned), 2 * .pi * 0.9, "the flop does not finish its turn"); XCTAssertGreaterThanOrEqual(kicked, 2.0, "and plops")
+        XCTAssertNil(r.brain.idleState.kind)
+    }
+
+    // MARK: an interrupted move
+
+    /// Any stage-2 move cut short (a tap, the Show's walk-out, a voice stop) leaves him standing, the gait knobs back at the ordinary hop's, no twist left over.
+    func testAbortingAStageTwoMoveLeavesHimStandingWithTheKnobsReset() {
+        let restTilt: Float = { let b = MotionRig(game: true); b.run(2); return b.sim.bodyPose(iterations: 6).tilt }()          // (the game's own idle tip-back toward the camera)
+        for kind in [IdleKind.hula, .superSpring, .corkscrew, .oneLegSpin] {
+            for abortAt: Float in [0.3, 0.7, 1.1] {
+                let r = MotionRig(game: true)
+                r.brain.idleForced = true; r.brain.commanded = true
+                XCTAssertTrue(r.brain.idleStart(kind, r.sim), "\(kind)")
+                var started = false, n = 0
+                r.run(6, until: { if r.brain.idleState.phase >= 1 { started = true }; if started { n += 1 }; return Float(n) / 60 >= abortAt })
+                r.brain.abortAll(r.sim, r.skinner)
+                r.run(3.0)
+                let who = "\(kind) aborted at \(abortAt) s"
+                XCTAssertFalse(r.sim.hasNonFinite(), who); XCTAssertNil(r.brain.idleState.kind, who)
+                XCTAssertLessThan(r.sim.bodyPose(iterations: 6).tilt, restTilt + 0.08, "\(who): standing as upright as he stands at rest"); XCTAssertFalse(r.brain.gait.isBusy, who)
+                let g = r.brain.gait
+                XCTAssertEqual(g.crouchDepth, 0.18, who); XCTAssertEqual(g.crouchHold, 0, who); XCTAssertEqual(g.airStretch, 0.12, who); XCTAssertEqual(g.landDepth, 0.2, who); XCTAssertEqual(g.flipTwist, 0, who); XCTAssertEqual(g.twistNow, 0, who)
+                XCTAssertEqual(r.brain.armDirW, 0, who)
+            }
+        }
     }
 }

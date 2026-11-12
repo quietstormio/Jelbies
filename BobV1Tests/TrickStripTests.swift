@@ -24,6 +24,8 @@ extension FeatureCaptureTests {
             ("hula", .hula, false, hula, 0), ("hula_fail", .hula, true, hulaFail, 0),
             ("superSpring", .superSpring, false, [0.05, 0.25, 0.42, 0.55, 0.68, 0.85, 1.05, 1.45], 0), ("superSpring_fail", .superSpring, true, [0.05, 0.25, 0.42, 0.52, 0.62, 0.78, 0.95, 1.3], 0),
             ("corkscrew", .corkscrew, false, [0.03, 0.18, 0.30, 0.42, 0.52, 0.62, 0.78, 1.15], 0), ("corkscrew_fail", .corkscrew, true, [0.03, 0.18, 0.30, 0.42, 0.52, 0.62, 0.80, 1.4], 0),
+            ("oneLegSpin", .oneLegSpin, false, [0.10, 0.30, 0.55, 0.80, 1.05, 1.30, 1.70, 2.10], 0), ("oneLegSpin_az07", .oneLegSpin, false, [0.10, 0.30, 0.55, 0.80, 1.05, 1.30, 1.70, 2.10], 0.7),
+            ("oneLegSpin_fail", .oneLegSpin, true, [0.10, 0.30, 0.55, 0.80, 1.00, 1.25, 1.55, 2.00], 0),
         ]
         let chars = [0, 1, 3]
         for (name, kind, fail, times, az) in cases where only.isEmpty || only.contains(name) {

@@ -154,6 +154,7 @@ extension BlobBrain {
         case .hula: return HulaTuning.total
         case .superSpring: return SpringTuning.total
         case .corkscrew: return CorkscrewTuning.total
+        case .oneLegSpin: return OneLegTuning.total
         default: return nil
         }
     }
@@ -244,5 +245,122 @@ extension BlobBrain {
             if trickOnce(1) { skinner.setEyeOpenness(1); face(.joyArc, hold: 1.0); blushBump(hold: 1.6, peak: 0.45); jellyKick = max(jellyKick, 1.5); AudioHub.shared.chirp(jelly: steerID, .happy, x: px) }
             if u > HulaTuning.tada, !feet.active { armDirW = 0; armDirOut = 0; skinner.setEyeOpenness(1); idleFinish(skinner) }
         }
+    }
+}
+
+// MARK: - one-leg spin
+
+/// ONE-LEG SPIN: up on one foot (the other lifted out to the side), a full pirouette about his own axis, a wobble, a landing. Its own tick (the body is driven from here).
+nonisolated enum OneLegTuning {
+    static let rise: Float = 0.30, spin: Float = 0.95, wobble: Float = 0.60, land: Float = 0.30
+    static let failTurn: Float = 0.62          // the flop turns this fraction of the way, then loses it
+    static var total: Float { rise + spin + wobble + land }
+    /// The lifted foot: kicked out to its side about its buried hip by `splay` (rad: the flight legs' V, 1.15 in a flip), a little longer, and up (u); the standing foot moves in under
+    /// the belly by `stand` of its offset; the lean toward it (rad). (A foot merely lifted under the egg disappears into the belly from the front camera: the strip showed it.)
+    nonisolated(unsafe) static var lift: Float = 0.05, splay: Float = 1.25, stretch: Float = 0.45, stand: Float = 0.9, lean: Float = 0.10
+    /// The start heading's turn off the camera (rad): a quarter turn shows the lifted foot in profile from the front camera.
+    nonisolated(unsafe) static var startTurn: Float = 0
+}
+
+extension BlobBrain {
+    /// Phase 0 (from `runIdle`): square to the camera (plus `startTurn`), then up.
+    func runOneLegTurn(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        guard idleState.phase == 0 else { return }
+        let turning = turnSteps(goal: idleState.goalYaw + OneLegTuning.startTurn, tol: 0.08)
+        gaitPose(sway: 0.04, bob: 0.02, rock: 0.3)
+        armWalkWant = 0
+        if turning || feet.active { idleState.phaseT = 0; return }
+        if idleState.phaseT > 0.25 {
+            idleState.trick.root = SIMD3(px, pz, yaw)
+            idleState.trick.stage = idleState.sign > 0 ? 1 : 0          // the lifted foot (0 = the -x foot)
+            idleState.trick.el = 0.3; idleState.trick.sa = 0.1; idleState.trick.out = 0.05; idleState.trick.armA = 0
+            sim.targets = []
+            idleState.phase = 1; idleState.phaseT = 0
+        }
+    }
+
+    /// Ticked from `trickBodyTick`: true = the spin owns this step.
+    func oneLegTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        guard geom.valid else { idleFinish(skinner); return true }
+        activity = .playing
+        mouthOpen = 0
+        idleState.phaseT += dt
+        let t = idleState.phaseT, a = amplitude, fail = idleState.trick.fail
+        typealias T = OneLegTuning
+        let t1 = T.rise, t2 = t1 + T.spin, t3 = t2 + T.wobble, tEnd = t3 + T.land
+        let lifted = idleState.trick.stage, stand = 1 - lifted
+        let side: Float = lifted == 1 ? 1 : -1          // body-frame x of the lifted foot
+        // the lift: up over the rise, held through the pirouette, down over the wobble
+        let lg = smooth01(t / T.rise) * (1 - smooth01((t - (t2 + (fail ? -0.15 : 0.10))) / 0.35))
+        // the pirouette: one trapezoid-speed turn about his own axis (the flop turns most of the way and gives up)
+        let turn = (fail ? T.failTurn : 1) * 2 * .pi
+        let v = (t - t1) / T.spin
+        var yawA = turn * GaitDriver.flipProfile(v)
+        if fail, t > t1 + T.spin * 0.8 { yawA = turn * GaitDriver.flipProfile(0.8) + 0.6 * sinf(2 * .pi * 2.2 * (t - t1 - T.spin * 0.8)) * expf(-(t - t1 - T.spin * 0.8) / 0.5) }
+        // the lean toward the standing foot, the wobble after the turn (3 Hz, dying out), the landing's squash
+        let w = max(0, t - t2)
+        let wobAmp: Float = fail ? 0.30 : 0.10
+        let wob = wobAmp * expf(-w / (fail ? 0.55 : 0.35)) * sinf(2 * .pi * 3 * w) * smooth01(w / 0.05)
+        let leanSign: Float = stand == 0 ? 1 : -1          // roll > 0 tips the crown to -x
+        var sq: Float = 1 + 0.03 * lg * a
+        if t >= t3 { let u = t - t3; sq = 1 - (fail ? 0.22 : 0.10) * expf(-u / 0.10) * cosf(2 * .pi * 4 * u) }
+        // events
+        if idleState.steps & 1 == 0 { idleState.steps |= 1; face(.happy, hold: 0.5); AudioHub.shared.chirp(jelly: steerID, .wheee, x: px) }
+        if t >= t2, idleState.steps & 2 == 0 { idleState.steps |= 2; face(fail ? .worried : .oh, hold: T.wobble + 0.1) }
+        if t >= t3, idleState.steps & 4 == 0 { idleState.steps |= 4; jellyKick = max(jellyKick, fail ? 2.4 : 1.4); face(fail ? .worried : .joyArc, hold: 1.0) }
+        // the body: root fixed on the spot, the heading spinning, the pose pivots on the soles' middle (the soles slide under him: no sole targets)
+        let root = idleState.trick.root
+        px = root.x; pz = root.y
+        yaw = wrapAngle(root.z + yawA)
+        roll = leanSign * T.lean * lg * a + wob * a
+        pitch = 0; squash = sq; lift = 0; twist = 0
+        pitchBase += max(-1.2 * dt, min(1.2 * dt, 0 - pitchBase))
+        pivotSide = nil; pivotNominal = false
+        poseOn = true
+        sim.targets = []
+        drivePose(sim, dt)
+        // arms: out a little and fluttering through the wobble
+        let flutter: Float = t >= t2 ? 0.35 * sinf(2 * .pi * 7 * (t - t2)) * expf(-(t - t2) / 0.5) : 0
+        trickArms((0.7 * lg + 0.3 * (1 - lg) + flutter, 0.1 + 0.5 * lg, 0.05, 0.06, 1), dt)
+        // the feet: both beans on the body-rigid pose, the standing one moved in under the belly, the other lifted out to its side with the toe tipped down
+        let pose = sim.bodyPose(iterations: 3)
+        prepareBeans(sim, skinner)
+        if footSkin.valid {
+            if beanScratch[0].count != FootBean.vertexCount { beanScratch = [[SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount), [SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount)] }
+            footShift = [.zero, .zero]
+            fillBeansRigid(sim, into: &beanScratch, tuck: 0)
+            let R = sim.attractor.rotation
+            for s in 0..<2 {
+                if s == stand {
+                    let d = R.act(SIMD3<Float>(-geom.contact[s].x * T.stand * lg, 0, 0))
+                    for i in 0..<FootBean.vertexCount { beanScratch[s][i] += d }
+                    attachBean(sim, pose, lifted: false, &beanScratch[s])
+                    // the standing foot stays planted: the lean and the squash must not hover it
+                    let lo = (beanScratch[s].map(\.y).min() ?? sim.floorY) - sim.floorY
+                    if lo > 0.0005, lo < 0.05 { for i in 0..<FootBean.vertexCount { beanScratch[s][i].y -= lo } }
+                } else {
+                    // the leg swings out to the side about its buried hip (the crown), in the body's x-y plane
+                    let hip = beanScratch[s][FootBean.vertexCount - 1]
+                    let phi = side * T.splay * lg * a, cs = cosf(phi), sn = sinf(phi)
+                    let Ri = R.inverse, up = R.act(SIMD3<Float>(0, T.lift * lg * a, 0))
+                    for i in 0..<FootBean.vertexCount {
+                        var l = Ri.act(beanScratch[s][i] - hip)
+                        l.y *= 1 + T.stretch * lg
+                        l = SIMD3(l.x * cs - l.y * sn, l.x * sn + l.y * cs, l.z)
+                        beanScratch[s][i] = hip + R.act(l) + up
+                    }
+                    attachBean(sim, pose, lifted: true, &beanScratch[s])
+                    attachBean(sim, pose, lifted: true, &beanScratch[s])
+                }
+            }
+            commitBeans(sim, skinner, dt, want: true)
+        }
+        driveArms(sim, skinner, dt)
+        if t >= tEnd {
+            armDirW = 0; armDirOut = 0; idleState.trick.armA = 0
+            roll = 0; yaw = root.z
+            idleFinish(skinner)
+        }
+        return true
     }
 }
