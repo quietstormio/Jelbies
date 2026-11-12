@@ -1170,6 +1170,10 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
         idx.insert(contentsOf: band, at: capIndexFirst)
         bodyIndexCountW += band.count; seedStartW += band.count
         weldInfo = LegWeldInfo(sides: wp.sides, ring: wp.ring, rows: wp.rows, bandIndexCount: band.count)
+        for si in 0..<2 {
+            for p in wp.bandPos[si] { weldInfo!.restDefault += [Float(p.x), Float(p.y), Float(p.z)] }
+            for p in wp.bandPanda[si] { weldInfo!.restPanda += [Float(p.x), Float(p.y), Float(p.z)] }
+        }
     }
     let vCount = pos.count / 3
     if let w = weldInfo { LegWeld.lastBuilt = (vCount, w) }

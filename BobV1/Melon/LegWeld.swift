@@ -46,19 +46,26 @@ nonisolated struct LegWeldInfo: Sendable {
     var rows: Int
     /// Band + stitch triangles at the head of the capsule index block (indices, not triangles).
     var bandIndexCount: Int
+    /// The band's two paint / crinkle streams (xyz per band vertex, side -1 then +1, in band-vertex order): `restDefault` (in the mesh's rest stream) = the old rest
+    /// body's own surface at that place (the band point projected onto the rest form with the tight foot fillet, so Teddy's patch, the blue belly, Panda's
+    /// marks all end exactly where they ended on the rest body); `restPanda` = the leg's own coordinates up most of the band, fading to the egg's in its
+    /// outer rows (Panda's charcoal covers the band up to near the loop: no white smear on the leg top). The renderer writes the Panda one into a Panda slot.
+    var restDefault: [Float] = [], restPanda: [Float] = []
 }
 
 nonisolated enum LegWeld {
     static var A: Int { FootBean.around }
     // build-time tunables (launch arguments; a relaunch, not a rebuild)
     static var buildRing: Int { UserDefaults.standard.object(forKey: "LegsWeldRing") != nil ? max(3, min(10, UserDefaults.standard.integer(forKey: "LegsWeldRing"))) : 6 }
-    static var buildRows: Int { UserDefaults.standard.object(forKey: "LegsWeldRows") != nil ? max(2, min(16, UserDefaults.standard.integer(forKey: "LegsWeldRows"))) : 10 }
+    static var buildRows: Int { UserDefaults.standard.object(forKey: "LegsWeldRows") != nil ? max(2, min(16, UserDefaults.standard.integer(forKey: "LegsWeldRows"))) : 12 }
     static var buildMargin: Double { UserDefaults.standard.object(forKey: "LegsWeldMargin") != nil ? UserDefaults.standard.double(forKey: "LegsWeldMargin") : 0.08 }
     /// Front (toe side) margin: the toe stands out in front of the egg, a full margin there climbs the front wall.
-    static var buildFront: Double { UserDefaults.standard.object(forKey: "LegsWeldFront") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFront") : 0.08 }
+    static var buildFront: Double { UserDefaults.standard.object(forKey: "LegsWeldFront") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFront") : 0.12 }
     /// The loops stay this far from the midline (the inner foot walls are only 12 cm apart).
     static var buildInnerX: Double { UserDefaults.standard.object(forKey: "LegsWeldInnerX") != nil ? UserDefaults.standard.double(forKey: "LegsWeldInnerX") : 0.025 }
     static let yMax = 0.40
+    /// Panda's band paint: the leg's own coordinates up to this fraction of the band, then into the egg's (launch argument -LegsWeldPandaCut).
+    static var pandaCut: Double { UserDefaults.standard.object(forKey: "LegsWeldPandaCut") != nil ? UserDefaults.standard.double(forKey: "LegsWeldPandaCut") : 0.85 }
     static var followReach: Double { UserDefaults.standard.object(forKey: "LegsWeldFollowReach") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFollowReach") : 0.20 }
     static var restPow: Double { UserDefaults.standard.object(forKey: "LegsWeldRestPow") != nil ? UserDefaults.standard.double(forKey: "LegsWeldRestPow") : 3.0 }
 
@@ -109,6 +116,7 @@ nonisolated enum LegWeld {
         var bandPos: [[SIMD3<Double>]], bandNrm: [[SIMD3<Double>]], bandMat: [[Float]]
         /// The band's rest SHAPE (bandPos is the rest stream, its parameter pulled toward the leg): what the triangles are wound against.
         var bandShape: [[SIMD3<Double>]] = []
+        var bandPanda: [[SIMD3<Double>]] = []
         /// Egg vertices near the feet re-baked against the welded shape (vertex, mat).
         var bodyMat: [(Int, Float)] = []
     }
@@ -123,7 +131,9 @@ nonisolated enum LegWeld {
         return p0 * (2 * s3 - 3 * s2 + 1) + m0 * (s3 - 2 * s2 + s) + p1 * (-2 * s3 + 3 * s2) + m1 * (s3 - s2)
     }
     /// Band row parameter (row 1...K): even steps from the seam ring (0) to the loop (1).
-    @inline(__always) static func rowS(_ k: Int, _ K: Int) -> Double { Double(k) / Double(K + 1) }
+    /// Band row parameter (row 1...K) from the seam ring (0) to the loop (1): cosine spacing, rows closer together at both seams (the curve turns fastest there).
+    @inline(__always) static func rowS(_ k: Int, _ K: Int) -> Double { rowCosine ? (1 - cos(Double.pi * Double(k) / Double(K + 1))) / 2 : Double(k) / Double(K + 1) }
+    static var rowCosine: Bool { UserDefaults.standard.object(forKey: "LegsWeldRowCos") != nil ? UserDefaults.standard.integer(forKey: "LegsWeldRowCos") != 0 : true }
 
     /// Choose the loops, drop the egg triangles inside them, and lay out the band at rest. nil = the loops could not be made simple (the caller builds the old mesh).
     static func plan(P: [SIMD3<Double>], N: [SIMD3<Double>], M: [Float], tri: [UInt32]) -> Plan? {
@@ -133,7 +143,7 @@ nonisolated enum LegWeld {
         for t in 0..<(tri.count / 3) { for k in 0..<3 { vt[Int(tri[3 * t + k])].append(t) } }
         var removed = [Bool](repeating: false, count: tri.count / 3)
         var sides: [LegWeldSide] = []
-        var bandShape: [[SIMD3<Double>]] = []
+        var bandShape: [[SIMD3<Double>]] = [], bandPanda: [[SIMD3<Double>]] = []
         var bandPos: [[SIMD3<Double>]] = [], bandNrm: [[SIMD3<Double>]] = [], bandMat: [[Float]] = []
         let footMat = FootBean.matValues()
         for sigma in [-1.0, 1.0] {
@@ -274,7 +284,7 @@ nonisolated enum LegWeld {
             }
             // the band at rest
             let rs = FootBean.restStream(sigma: sigma)
-            var bp: [SIMD3<Double>] = [], bn: [SIMD3<Double>] = [], bm: [Float] = [], bsh: [SIMD3<Double>] = []
+            var bp: [SIMD3<Double>] = [], bn: [SIMD3<Double>] = [], bm: [Float] = [], bsh: [SIMD3<Double>] = [], bpP: [SIMD3<Double>] = []
             var ringC = SIMD3<Double>.zero
             for j in 0..<A { ringC += rs[1 + A * R + j] }
             ringC /= Double(A)
@@ -294,16 +304,22 @@ nonisolated enum LegWeld {
                     // pulled toward the leg (`restPow`): the leg's paint carries up most of the band and fades in its outer part (a linear map faded Panda's charcoal across
                     // the whole band, a white smudge on the inner top of each leg)
                     let m0v = t0 * c * Double(Skinner.weldK0), m1v = t1 * c * Double(Skinner.weldK1)
-                    bp.append(hermite(p0, m0v, p1, m1v, pow(s, restPow)))
                     let shapeP = hermite(p0, m0v, p1, m1v, s)
                     bsh.append(shapeP)
+                    // default paint / crinkle stream: the rest body's own surface there (the old egg + tight foot fillet that this band replaces)
+                    let proj = BobForm.project(shapeP, steps: 6)
+                    bp.append(simd_length(proj - shapeP) < 0.12 ? proj : shapeP)
+                    // Panda: the leg's own coordinates (straight up the leg from the seam ring) up to 70 % of the band, then into the egg's
+                    let up = p0 + t0 * (simd_distance(p0, p1) * s * 0.3)
+                    let tP = max(0, min(1, (s - pandaCut) / (1 - pandaCut))), wP = tP * tP * (3 - 2 * tP)
+                    bpP.append(up + (bp[bp.count - 1] - up) * wP)
                     let n1 = simd_normalize(N[la] + (N[lb] - N[la]) * w), n0 = FootBean.local.nrm[i0]
                     bn.append(simd_normalize(n0 + (n1 - n0) * s))
                     _ = footMat
                     bm.append(matW(shapeP))
                 }
             }
-            sides.append(side); bandPos.append(bp); bandNrm.append(bn); bandMat.append(bm); bandShape.append(bsh)
+            sides.append(side); bandPos.append(bp); bandNrm.append(bn); bandMat.append(bm); bandShape.append(bsh); bandPanda.append(bpP)
         }
         // the two regions must not touch
         if !Set(sides[0].hidden + sides[0].loop).isDisjoint(with: sides[1].hidden + sides[1].loop) { return nil }
@@ -321,7 +337,7 @@ nonisolated enum LegWeld {
         var egg: [UInt32] = []
         egg.reserveCapacity(tri.count)
         for t in 0..<(tri.count / 3) where !removed[t] { egg += [tri[3 * t], tri[3 * t + 1], tri[3 * t + 2]] }
-        return Plan(eggTri: egg, sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat, bandShape: bandShape, bodyMat: bodyMat)
+        return Plan(eggTri: egg, sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat, bandShape: bandShape, bandPanda: bandPanda, bodyMat: bodyMat)
     }
 
     /// The band quads (seam ring -> row K) and the stitch (row K -> loop) of one side, wound outward against the rest positions `pos` (flat xyz) and rest normals `nrm`.

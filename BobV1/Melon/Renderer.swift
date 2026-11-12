@@ -105,6 +105,25 @@ final class BodySlot {
     }
     var foamAny = false
     var sootAny = false
+    /// Which leg-weld band paint stream this slot's static stream holds (0 = the mesh's default, 1 = Panda's: LegWeldInfo.restPanda).
+    var weldPaint = 0
+    /// Writes the weld band's paint / crinkle stream for this body (Panda: the leg's charcoal carried up the band; everyone else: the rest body's own).
+    func setWeldPaint(_ panda: Bool, weld w: LegWeldInfo) {
+        let want = panda ? 1 : 0
+        guard weldPaint != want else { return }
+        weldPaint = want
+        let src = panda ? w.restPanda : w.restDefault
+        let A = FootBean.around, per = w.rows * A
+        guard src.count == 3 * 2 * per else { return }
+        for (si, sd) in w.sides.enumerated() {
+            for k in 0..<per {
+                let v = sd.bandFirst + k, o = 3 * (si * per + k)
+                guard 4 * v + 2 < staticMaster.count else { continue }
+                staticMaster[4 * v] = src[o]; staticMaster[4 * v + 1] = src[o + 1]; staticMaster[4 * v + 2] = src[o + 2]
+            }
+        }
+        staticChanged()
+    }
     /// The Circuit jersey this body wears (Wear/GfxJersey.metal); nil = the locked body shader.
     var jersey: WearTeam?
 
@@ -1224,6 +1243,7 @@ final class MelonRenderer {
                     // (the walking arm capsules, the foot beans, the ears + pom) is drawn again as the same shader's all-charcoal mode 52. Teddy's / every other body: one draw, as before.
                     let pandaBody = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
                     let isPanda = pandaBody > 50.5 && pandaBody < 51.5
+                    if let w = m.armCapsule?.weld { slot.setWeldPaint(isPanda, weld: w) }
                     if isPanda, let cap = m.armCapsule, cap.indexFirst > m.body.first {
                         // (the leg weld's band sits at the head of the capsule block and is drawn with the egg: its rest-space foot mask fades the charcoal across it)
                         let limbFirst = cap.limbIndexFirst
