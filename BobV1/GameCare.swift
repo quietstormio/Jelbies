@@ -48,6 +48,8 @@ final class GameCare {
     @ObservationIgnored var standSettle: Float = 0
     @ObservationIgnored var standRetries = 0
     @ObservationIgnored var wantedAge: Float = 0
+    /// Seconds since this single order (tray wanted or out): ticks every step in `tickDining`, also while a Come call holds `serveWanted` back (`wantedAge` does not), so the `callRunning` watchdog always fires.
+    @ObservationIgnored var orderAge: Float = 0
     @ObservationIgnored var wantedOrigin: SIMD2<Float>?
     /// Every Jelbie's floor spot as of the last `tickOthers` (reused array): where food must not appear.
     @ObservationIgnored var jellyFloors: [SIMD2<Float>] = []
@@ -515,7 +517,7 @@ final class GameCare {
         mealJelly = jellies.indices.contains(jelly) ? jelly : 0
         wanted = c; servingKind = c.kind; trayOut = true
         retries = 0                                  // a fresh tap: the re-serve budget (`Self.maxReserves`) starts over
-        resetStandWalk()
+        resetStandWalk(); orderAge = 0
     }
     /// The café's serving (GameCare+Cafe.swift): a group serving that skips the trip guard; `tickGroup` takes the café's hooks (cafeBook.hooks).
     func beginCafeServing(_ c: Consumable) { mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0 }

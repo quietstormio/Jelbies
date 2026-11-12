@@ -49,8 +49,21 @@ extension GameCare {
             }
             eaterFinished.removeAll()
         }
-        if own, callRunning, Self.softMealWakeWatchdog(age: wanted != nil ? wantedAge : mealAge) { MealTrace.log("callRunning watchdog cleared (single)"); callRunning = false }
+        orderAge += dt
+        if own, callRunning, Self.softMealWakeWatchdog(age: orderAge) { MealTrace.log("callRunning watchdog cleared (single)"); callRunning = false }
         let free = !own || (!callRunning && queued.isEmpty)
+        // a meal-woken sleeper whose wake has run past its longest legal length (a stuck stage) is called the hard way, once (the group's `wakeCap` fallback, for the single flow)
+        if brain.mealWaking, brain.sleep.mealWakeT > DiningGroup.wakeCap {
+            MealTrace.log("wake FALLBACK single jelly=\(id) after \(brain.sleep.mealWakeT) s")
+            brain.sleep.mealWake = false; brain.sleep.mealCall = nil
+            if let c = meal { brain.requestNow(Self.mealRequest(c, tray: dining, place: 0)) }
+            else if let c = wanted {
+                var stand = (wantedOrigin ?? DiningSpot.preferred) + DiningLayout.make(n: 1).places[0].rel
+                stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
+                standRequested = true; standIdle = 0
+                brain.requestNow(.goTo(SIMD2(stand.x, stand.y - Self.approachBack)))
+            }
+        }
 
         // pop the tray in once he is at (or behind) his place; in front of it he walks there first
         if let c = wanted, free { serveWanted(c, brain: brain, here: Self.floorPos(brain, sim), act: act, dt: dt) }
