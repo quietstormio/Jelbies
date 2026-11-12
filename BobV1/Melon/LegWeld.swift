@@ -64,6 +64,7 @@ nonisolated enum LegWeld {
     /// The loops stay this far from the midline (the inner foot walls are only 12 cm apart).
     static var buildInnerX: Double { UserDefaults.standard.object(forKey: "LegsWeldInnerX") != nil ? UserDefaults.standard.double(forKey: "LegsWeldInnerX") : 0.025 }
     static let yMax = 0.40
+    static var paintMode: Int { UserDefaults.standard.object(forKey: "LegsWeldPaint") != nil ? UserDefaults.standard.integer(forKey: "LegsWeldPaint") : 0 }
     /// Panda's band paint: the leg's own coordinates up to this fraction of the band, then into the egg's (launch argument -LegsWeldPandaCut).
     static var pandaCut: Double { UserDefaults.standard.object(forKey: "LegsWeldPandaCut") != nil ? UserDefaults.standard.double(forKey: "LegsWeldPandaCut") : 0.85 }
     static var followReach: Double { UserDefaults.standard.object(forKey: "LegsWeldFollowReach") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFollowReach") : 0.20 }
@@ -307,8 +308,29 @@ nonisolated enum LegWeld {
                     let shapeP = hermite(p0, m0v, p1, m1v, s)
                     bsh.append(shapeP)
                     // default paint / crinkle stream: the rest body's own surface there (the old egg + tight foot fillet that this band replaces)
-                    let proj = BobForm.project(shapeP, steps: 6)
-                    bp.append(simd_length(proj - shapeP) < 0.12 ? proj : shapeP)
+                    let proj0 = BobForm.project(shapeP, steps: 6)
+                    let proj = simd_length(proj0 - shapeP) < 0.12 ? proj0 : shapeP
+                    // (launch argument -LegsWeldPaint: 0 = projected onto the rest body, 1 = straight blend seam ring -> loop (smoothstep), 2 = half of each)
+                    let sm = s * s * (3 - 2 * s), lin = p0 + (p1 - p0) * sm
+                    // 3 = cast along the band's own normal onto the rest body (continuous, unlike the nearest point, which jumps from the egg to the foot wall)
+                    func cast() -> SIMD3<Double> {
+                        let nn = simd_normalize(FootBean.local.nrm[i0] + (simd_normalize(N[la] + (N[lb] - N[la]) * w) - FootBean.local.nrm[i0]) * s)
+                        func f(_ t: Double) -> Double { BobForm.sdf(shapeP - nn * t) }
+                        var best: Double? = nil, prevT = -0.08, prevF = f(-0.08)
+                        var t = -0.08 + 0.004
+                        while t <= 0.16 {
+                            let ft = f(t)
+                            if (prevF > 0) != (ft > 0) {
+                                var lo = prevT, hi = t, flo = prevF
+                                for _ in 0..<30 { let m = (lo + hi) / 2, fm = f(m); if (fm > 0) == (flo > 0) { lo = m; flo = fm } else { hi = m } }
+                                let r = (lo + hi) / 2
+                                if best == nil || abs(r) < abs(best!) { best = r }
+                            }
+                            prevT = t; prevF = ft; t += 0.004
+                        }
+                        return best.map { shapeP - nn * $0 } ?? proj
+                    }
+                    switch paintMode { case 1: bp.append(lin); case 2: bp.append((proj + lin) * 0.5); case 3: bp.append(cast()); default: bp.append(proj) }
                     // Panda: the leg's own coordinates (straight up the leg from the seam ring) up to 70 % of the band, then into the egg's
                     let up = p0 + t0 * (simd_distance(p0, p1) * s * 0.3)
                     let tP = max(0, min(1, (s - pandaCut) / (1 - pandaCut))), wP = tP * tP * (3 - 2 * tP)
