@@ -100,7 +100,7 @@ extension DecorModels {
             // pivot on z, each seat (seatL / seatR) only TRANSLATED by what its hinge point travels with the plank and never turned (so it stays level), and a rubber bumper under each end
             // scaled in height about its floor pivot so its top follows the plank's underside. The angle is the one the riders were placed with in this step (`drawnTheta`).
             // An art file of the old contract (no seat parts, another plank pivot) falls through to the procedural piece below.
-            if let art = DecorMeshes.loaded[.seesaw], let base = art.part("base"), let plankPart = art.part("plank"), let bl = art.part("bumperL"), let br = art.part("bumperR"),
+            if let art = ParkSeesawSkin.art ?? DecorMeshes.loaded[.seesaw], let base = art.part("base"), let plankPart = art.part("plank"), let bl = art.part("bumperL"), let br = art.part("bumperR"),
                let seatL = art.part("seatL"), let seatR = art.part("seatR"), abs(plankPart.pivot.y - SeesawTuning.pivotY * k0) < 0.004 {
                 let th = SeesawRide.shared.drawnTheta(uid), q = simd_quatf(angle: th, axis: SIMD3(0, 0, 1)), pv = plankPart.pivot
                 DecorMeshes.emit(base, into: b, offset: o)
