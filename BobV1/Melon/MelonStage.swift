@@ -1189,11 +1189,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in actors {
             if parkOn, model.care.parkHides(a.id) { ContactField.invalidate(a.id); continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
             if bathHides, a.id != washedID { ContactField.invalidate(a.id); continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
+            a.skinner.legBlendShoes = a.brain?.shoesWorn ?? false          // (legs blend: shoes-worn bodies stay exactly as they are)
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor))
         }
-        for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
+        for a in parkActors { a.skinner.legBlendShoes = a.brain?.shoesWorn ?? false; skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
+        for j in skinJobs { renderer.setLegBlend(j.skinner.legBlend, body: j.id) }
         FeatureClip.apply(jobs: skinJobs)          // a limb / ear / tail drawn inside ANOTHER Jelbie goes out to his surface (FeatureClip.swift); also the table the features read
         PerfMeter.end(.skin, pmK)
         if FootLog.on {          // -FootLog 1: after the whole skin pass (weld + leash), log any foot piece that was outside the body or had to be pulled (Melon/FootLog.swift). Only the actors skinned this frame (hidden ones keep stale values).
