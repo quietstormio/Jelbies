@@ -40,11 +40,15 @@ extension ParkSlideRoundTests {
     }
 
     func testRoamPickRejectsLegsThroughTheSlide() {
-        let off = wanderRun(check: false)
-        let on = wanderRun(check: true)
+        // (on, off, on, off: the first run of a process is not slower or different than the second)
+        let on1 = wanderRun(check: true), off1 = wanderRun(check: false), on2 = wanderRun(check: true), off2 = wanderRun(check: false)
+        var off = WanderRun(), on = WanderRun()
+        off.starts = off1.starts + off2.starts; off.boxSamples = off1.boxSamples + off2.boxSamples; off.silentBodies = off1.silentBodies + off2.silentBodies
+        on.starts = on1.starts + on2.starts; on.boxSamples = on1.boxSamples + on2.boxSamples; on.silentBodies = on1.silentBodies + on2.silentBodies; on.checks = on1.checks + on2.checks; on.rejects = on1.rejects + on2.rejects
+        print("PSR WANDER runs: on \(on1.starts) \(on2.starts), off \(off1.starts) \(off2.starts)")
         let picks = max(on.starts, 1)
-        print("PSR WANDER off: starts \(off.starts) (per minute \(Float(off.starts) / 3)) box samples \(off.boxSamples) silent bodies \(off.silentBodies)")
-        print("PSR WANDER on: starts \(on.starts) (per minute \(Float(on.starts) / 3)) box samples \(on.boxSamples) silent bodies \(on.silentBodies); candidates checked \(on.checks), rejected \(on.rejects) (\(Float(on.rejects) / Float(picks)) per started pick)")
+        print("PSR WANDER off: starts \(off.starts) (per minute \(Float(off.starts) / 6)) box samples \(off.boxSamples) silent bodies \(off.silentBodies)")
+        print("PSR WANDER on: starts \(on.starts) (per minute \(Float(on.starts) / 6)) box samples \(on.boxSamples) silent bodies \(on.silentBodies); candidates checked \(on.checks), rejected \(on.rejects) (\(Float(on.rejects) / Float(picks)) per started pick)")
         XCTAssertGreaterThan(off.starts, 10, "wander happens")
         XCTAssertGreaterThanOrEqual(Float(on.starts), 0.9 * Float(off.starts), "wander starts per minute stay at 90% or more")
         XCTAssertEqual(on.silentBodies, 0, "nobody ends the minute without a goal")

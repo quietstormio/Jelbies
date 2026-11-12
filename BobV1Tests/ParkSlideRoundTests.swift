@@ -23,6 +23,7 @@ final class ParkSlideRoundTests: XCTestCase {
     }
 
     func parkLab(n: Int, seed: UInt64, aspect: Float, starts: [SIMD2<Float>]? = nil, quiet: Bool = true) -> SocialTests.Lab {
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
         RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: aspect)
         let dflt: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4), SIMD2(-1.2, 2.2), SIMD2(0.9, 2.4)]
         let lab = SocialTests.Lab(n: n, positions: Array((starts ?? dflt).prefix(n)), quiet: quiet, seed: seed)

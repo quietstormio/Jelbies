@@ -23,6 +23,7 @@ final class ParkSlideApproachTests: XCTestCase {
     }
 
     func parkLab(n: Int, seed: UInt64 = 5, quiet: Bool = true) -> SocialTests.Lab {
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook()          // (a run that ended with a rider still on the slide must not refuse the next run's start)
         RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: 440.0 / 956.0)
         let starts: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4), SIMD2(-1.2, 2.2), SIMD2(0.9, 2.4)]
         let lab = SocialTests.Lab(n: n, positions: Array(starts.prefix(n)), quiet: quiet, seed: seed)
