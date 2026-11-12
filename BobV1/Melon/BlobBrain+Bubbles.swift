@@ -36,14 +36,15 @@ extension BlobBrain {
             return
         }
         let r = rand()
-        if r < 0.32 {
+        let cuts = BubbleTuning.idleCuts          // (0.32 / 0.72 / 0.86 before 2026-11-11 "jump a lot more": the stand-and-look share went to the hops)
+        if r < cuts.hop {
             face(.excited, hold: 1.2)
             startHop(sim, distance: 0.0001)          // (a happy hop on the spot)
-        } else if r < 0.72 {
+        } else if r < cuts.look {
             trackPoint = lz.look
             waitPose(sim)          // (look up at the wand; or step in place / a bounce and a blink)
-        } else if r < 0.86 {
-            script = .stepInPlace(t: 0, dur: rand(0.8, 1.6)); activity = .steppingInPlace
+        } else if r < cuts.step {
+            script = .stepInPlace(t: 0, dur: rand(BubbleTuning.idleStepDur.lowerBound, BubbleTuning.idleStepDur.upperBound)); activity = .steppingInPlace
         } else {
             walk(lz.slot + SIMD2(rand(-0.6, 0.6), rand(-0.45, 0.45)))
         }
@@ -53,6 +54,12 @@ extension BlobBrain {
     var bubbleFree: Bool {
         anticsEnabled && autonomy && !held && !decorLocked && reactFree && scriptIsNone && pending == nil && idleState.kind == nil
             && !race.active && social == nil && !commanded && idleMood != .grumpy && idleNight < 0.6
+    }
+    /// Not free only because a look (`stopLook`, his own or a reaction to a friend's hop) is running: the wand's chase may take over (its first order, `bubbleGo`, yields a
+    /// look in 0.2 s, the same way the spot-look before every chase already ends). 2026-11-11: in a crowd the looks at each other's hops kept 50-70 % of the Jelbies from chasing.
+    var bubbleBusyLooking: Bool {
+        guard anticsEnabled && autonomy && !held && !decorLocked && reactFree && !race.active && social == nil && !commanded && idleMood != .grumpy && idleNight < 0.6 else { return false }
+        return idleState.kind == .stopLook          // (a walk of his own is NOT taken over: interrupting a stride opened the foot join in BubbleFeetTests.testPopFlap)
     }
     /// He is on his own errand (a walk) and nobody has taken him over since: keep going.
     var bubbleStillMine: Bool { attached && !held && !decorLocked && social == nil && !commanded && !race.active }

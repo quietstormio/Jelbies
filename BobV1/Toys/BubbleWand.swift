@@ -48,7 +48,82 @@ nonisolated enum BubbleTuning {
     static let apex: [BubblePopMove: Float] = [.header: 0.24, .leap: 0.19, .bounce: 0.21, .flap: 0.35, .skip: 0.15]
     /// How far from the bubble (floor) he stands before the move: 0 = under it.
     static let standoff: [BubblePopMove: Float] = [.header: 0, .leap: 0.6, .bounce: 0, .flap: 0.25, .skip: 0.65]
-    static let leapRange: ClosedRange<Float> = 0.35...0.9
+    /// 2026-11-11 "jump a lot more": every number of that round is a switch (`var`) so a test can put single ones back to their BEFORE values (`applyBaseline`, `restoreHead`).
+    /// The play's own pacing (the classic path keeps the constants above): he thinks again sooner, goes for a bubble nearly every time, watches only briefly, re-targets right after the landing.
+    nonisolated(unsafe) static var leapRange: ClosedRange<Float> = 0.35...0.8          // (0.9 before: no single hop travels more than 0.8 m)
+    nonisolated(unsafe) static var playThinkEvery: ClosedRange<Float> = 0.12...0.35
+    nonisolated(unsafe) static var playChaseRoll: Float = 0.96
+    nonisolated(unsafe) static var playWatchHold: ClosedRange<Float> = 0.5...1.0
+    nonisolated(unsafe) static var playWatchThink: ClosedRange<Float> = 0.25...0.6
+    nonisolated(unsafe) static var playAfterChase: ClosedRange<Float> = 0.3...0.9          // (the BEFORE value: round 1's 0.08...0.3 sent him on the next walk straight after a pop, and testPopFlap opened the foot join; found by BubbleFeetTests.testPopFlapHeadAfterChaseBefore)
+    nonisolated(unsafe) static var playPickRadius: Float = 5.0
+    nonisolated(unsafe) static var playSpotHold: ClosedRange<Float> = 0.35...0.5          // (round 1 made it 0.2...0.3: the walk order then cut the look off while it was still turning, and testPopFlap opened the foot join; the BEFORE value is back)
+    /// The ground time (s) between the take-off of two of his hops (a hop is ~0.5 s long: the landing squash must read).
+    nonisolated(unsafe) static var playHopSpacing: Float = 0.8
+    /// Under a bubble that is not in reach yet: a small hop on the spot every so often (the first after `playWaitHopFirst`), each time with the chance `playWaitHopChance` x `playEnergy`.
+    nonisolated(unsafe) static var playWaitHop: ClosedRange<Float> = 1.0...1.7
+    nonisolated(unsafe) static var playWaitHopFirst: ClosedRange<Float> = 0.2...0.45
+    nonisolated(unsafe) static var playWaitHopChance: Float = 0.8
+    nonisolated(unsafe) static var playWaitHopEnabled = true
+    /// Weights of the bounce in `planMove` (below the crown / above it); the others are fixed there.
+    nonisolated(unsafe) static var bounceWeightLow: Float = 0.5          // (the BEFORE value: the skip keeps its share)
+    /// The flap's weight where it is not the first choice (a bubble in the middle band, winged only).
+    nonisolated(unsafe) static var flapWeightMid: Float = 8          // (1 before)
+    nonisolated(unsafe) static var flapWeightHigh: Float = 12          // (3 before: a winged one under a high bubble)
+    nonisolated(unsafe) static var skipWeight: Float = 6          // (3 before: a low bubble)
+    nonisolated(unsafe) static var leapWeightMid: Float = 4.5          // (3 before: the bounce of four hops would otherwise take the leap's share)
+    nonisolated(unsafe) static var bounceWeightHigh: Float = 3.5          // (1.5 before; 4 in round 1 crowded the other pops out)
+    /// `pickTarget`: the bubble's distance counts this many times in the score.
+    nonisolated(unsafe) static var pickDistanceFactor: Float = 1.5          // (1 before; 3 was tried in round 2 and did not help)
+    /// Hops of one bounce (3 before: one for the target, the rest for other bubbles in reach).
+    nonisolated(unsafe) static var bounceReps = 6
+    /// `bubbleIdle`: the cumulative shares of a happy hop on the spot / the look up / a step in place (the rest is a short shuffle), and how long the step in place lasts.
+    nonisolated(unsafe) static var idleCuts: (hop: Float, look: Float, step: Float) = (0.62, 0.80, 0.90)
+    nonisolated(unsafe) static var idleStepDur: ClosedRange<Float> = 0.5...1.0
+    /// `bubbleBusyLooking`: a look (`stopLook`) does not keep him from going for a bubble.
+    nonisolated(unsafe) static var busyLookingChases = true
+    /// The walk order to a bubble (`bubbleGo` = `requestNow`, which aborts the running script) waits until his own hop (the happy hop of `bubbleIdle`, a wait hop, a pop move) has landed.
+    nonisolated(unsafe) static var goWaitsForHop = true
+    /// A winged Jelbie tries the flap before the header when the planned move does not fit.
+    nonisolated(unsafe) static var flapBeforeHeader = true
+    /// The spot look before a chase ends (and the walk order follows) only when his feet are still, not in the middle of the look's turn.
+    nonisolated(unsafe) static var spotWaitsForFeet = false
+    /// THE dial (1.0 = this round's tuning): above 1 he thinks and waits for shorter times and hops on the spot more often, below 1 the other way round. Scales `playThinkEvery`, `playWatchThink`,
+    /// `playAfterChase`, `playWaitHop`, `playWaitHopFirst` (divided) and `playWaitHopChance` (multiplied). The ground-time limit `playHopSpacing` is NOT scaled.
+    nonisolated(unsafe) static var playEnergy: Float = 1.0
+    static func scaled(_ r: ClosedRange<Float>) -> ClosedRange<Float> { (r.lowerBound / max(playEnergy, 0.1))...(r.upperBound / max(playEnergy, 0.1)) }
+    /// The wand's dice. The system generator in the app; tests call `seedRandom` so a run is the same every time (the brains' own dice are seeded by the tests already).
+    nonisolated(unsafe) private static var rngState: UInt64?
+    static func seedRandom(_ s: UInt64?) { rngState = s.map { $0 &* 0x9E3779B97F4A7C15 | 1 } }
+    private static func next() -> Float {
+        guard var z = rngState else { return Float.random(in: 0..<1) }
+        z = z &+ 0x9E3779B97F4A7C15; rngState = z
+        z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27)) &* 0x94D049BB133111EB; z ^= z >> 31
+        return Float(z >> 40) / Float(1 << 24)
+    }
+    static func rnd(in r: ClosedRange<Float>) -> Float { rngState == nil ? Float.random(in: r) : r.lowerBound + (r.upperBound - r.lowerBound) * next() }
+    static func rnd(in r: Range<Float>) -> Float { rngState == nil ? Float.random(in: r) : r.lowerBound + (r.upperBound - r.lowerBound) * next() }
+    /// The numbers of the play BEFORE 2026-11-11 (round 1's baseline: the play path `playTick` with the old pacing, weights, shares and radii; `classic` stays off); tests only.
+    static func applyBaseline() {
+        restoreHead()
+        leapRange = 0.35...0.9
+        playThinkEvery = thinkEvery; playChaseRoll = chaseRoll; playWatchHold = 1.0...2.2; playWatchThink = 0.9...1.8; playAfterChase = 0.3...0.9
+        playPickRadius = 4.5; playSpotHold = 0.35...0.5; playHopSpacing = 0; playWaitHopEnabled = false
+        bounceWeightLow = 0.5; bounceWeightHigh = 1.5; pickDistanceFactor = 1; flapWeightMid = 1; flapWeightHigh = 3; skipWeight = 3; leapWeightMid = 3; bounceReps = 3
+        idleCuts = (0.32, 0.72, 0.86); idleStepDur = 0.8...1.6
+        busyLookingChases = false; goWaitsForHop = false; spotWaitsForFeet = false; flapBeforeHeader = false
+    }
+    /// This round's tuning (the values above); tests only.
+    static func restoreHead() {
+        classic = false; forceMove = nil; playEnergy = 1.0
+        leapRange = 0.35...0.8
+        playThinkEvery = 0.12...0.35; playChaseRoll = 0.96; playWatchHold = 0.5...1.0; playWatchThink = 0.25...0.6; playAfterChase = 0.3...0.9
+        playPickRadius = 5.0; playSpotHold = 0.35...0.5; playHopSpacing = 0.8
+        playWaitHop = 1.0...1.7; playWaitHopFirst = 0.2...0.45; playWaitHopChance = 0.8; playWaitHopEnabled = true
+        bounceWeightLow = 0.5; bounceWeightHigh = 3.5; pickDistanceFactor = 1.5; flapWeightMid = 8; flapWeightHigh = 12; skipWeight = 6; leapWeightMid = 4.5; bounceReps = 6
+        idleCuts = (0.62, 0.80, 0.90); idleStepDur = 0.5...1.0
+        busyLookingChases = true; goWaitsForHop = true; spotWaitsForFeet = false; flapBeforeHeader = true
+    }
     static let lightBeat: Float = 0.18
     static let aimMax: Float = 3.5                 // how long he waits under a bubble for it to be in reach
     static let maxChasers = 3          // (2026-11-07: all of them want in)
@@ -121,6 +196,9 @@ final class BubbleWand: PlayToy {
     @ObservationIgnored private(set) var movePops: [BubblePopMove: Int] = [:]
     @ObservationIgnored private(set) var moveStarts: [BubblePopMove: Int] = [:]
     @ObservationIgnored private(set) var extraPops = 0
+    /// Small hops on the spot under a bubble that was not in reach yet, and the seconds the Jelbies spent in each mode (tests, report).
+    @ObservationIgnored private(set) var waitHops = 0
+    @ObservationIgnored private(set) var modeSeconds: [String: Float] = [:]
     /// Why chases ended and which fallbacks ran (tests, report).
     @ObservationIgnored private(set) var diag: [String: Int] = [:]
     private func note(_ k: String) { diag[k, default: 0] += 1 }
@@ -158,6 +236,7 @@ final class BubbleWand: PlayToy {
         var done = false          // the target is popped (a bounce goes on for its extras)
         var extra = 0
         var startFails = 0
+        var waitHopAt: Float = 0   // the next small hop on the spot while the bubble is out of reach
     }
 
     nonisolated deinit {}
@@ -188,8 +267,10 @@ final class BubbleWand: PlayToy {
     func resetForTests() {
         BubbleTuning.contactPopChance = 0.12
         deactivate(); active = false; clock = 0; demo = nil; burstUntil = -1; states.removeAll(); cheers = [:]; lastHopStart = -9; field = BubbleField()
-        popsByJelly = [:]; diag = [:]; chaseRecords = []; claimToPop = []; movePops = [:]; moveStarts = [:]; extraPops = 0; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
+        popsByJelly = [:]; diag = [:]; waitHops = 0; modeSeconds = [:]; chaseRecords = []; claimToPop = []; movePops = [:]; moveStarts = [:]; extraPops = 0; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
     }
+    /// Test seam: the bubble stream's own dice (the field's) follow the seed too, so seeds differ in the bubbles as well as in the Jelbies.
+    func reseedField(_ seed: UInt64) { field = BubbleField(seed: seed &* 0x2545F4914F6CDD1D | 1) }
     /// Test seam: a bubble right there.
     @discardableResult func insertBubble(at p: SIMD3<Float>, radius: Float = 0.2) -> Int? { field.insert(at: p, radius: radius) }
     func clearBubbles() { field.clear() }
@@ -273,7 +354,7 @@ final class BubbleWand: PlayToy {
             let p = j.brain.position
             for b in field.bubbles where b.pos.y < BubbleTuning.contactMaxY && !b.touched && b.claimedBy < 0 {
                 if simd_distance(floorPos(b), p) < BubbleTuning.contactRadius + b.radius * 0.5 {
-                    if Float.random(in: 0..<1) < BubbleTuning.contactPopChance { contactPops += 1; popBubble(b.id, by: j, hopped: false) }
+                    if BubbleTuning.rnd(in: 0..<1) < BubbleTuning.contactPopChance { contactPops += 1; popBubble(b.id, by: j, hopped: false) }
                     else { field.nudge(b.id, awayFrom: p); nudges += 1 }          // (most just bounce off him and float on)
                 }
             }
@@ -281,8 +362,9 @@ final class BubbleWand: PlayToy {
         let chasers = states.values.filter { $0.mode != .idle }.count
         var chasing = chasers
         for j in js {
-            var st = states[j.id] ?? JState(thinkAt: clock + Float.random(in: 0.2...0.8))
+            var st = states[j.id] ?? JState(thinkAt: clock + BubbleTuning.rnd(in: 0.2...0.8))
             defer { states[j.id] = st }
+            modeSeconds["\(st.mode)", default: 0] += dtNow
             if st.mode != .idle, case .walk = j.brain.script { st.walkTime += dtNow }
             if BubbleTuning.classic { classicTick(j, &st, &chasing, js) } else { playTick(j, &st, &chasing, js) }
         }
@@ -294,19 +376,19 @@ final class BubbleWand: PlayToy {
         switch st.mode {
         case .idle, .spot:
             guard clock >= st.thinkAt else { return }
-            st.thinkAt = clock + Float.random(in: BubbleTuning.thinkEvery)
+            st.thinkAt = clock + BubbleTuning.rnd(in: BubbleTuning.thinkEvery)
             guard b.bubbleFree, !field.bubbles.isEmpty else { return }
-            let roll = Float.random(in: 0..<1)
+            let roll = BubbleTuning.rnd(in: 0..<1)
             if roll < BubbleTuning.classicChaseRoll, chasing < BubbleTuning.maxChasers, let target = classicPick(for: j) {
                 st.mode = .chase; st.bubble = target.id; st.until = clock + 6.5; st.retargetAt = 0; st.chaseStart = clock; st.tries = 0; st.claimAt = clock; st.walkTime = 0; st.done = false; st.move = .header
                 field.claim(target.id, by: j.id)
                 chasing += 1; chases += 1
             } else if roll < 0.92, let t = nearest(to: b.position) {
                 watches += 1
-                _ = b.bubbleWatch(t, hold: Float.random(in: 1.0...2.2), excited: Float.random(in: 0..<1) < 0.7)
-                st.thinkAt = clock + Float.random(in: 0.9...1.8)
+                _ = b.bubbleWatch(t, hold: BubbleTuning.rnd(in: 1.0...2.2), excited: BubbleTuning.rnd(in: 0..<1) < 0.7)
+                st.thinkAt = clock + BubbleTuning.rnd(in: 0.9...1.8)
             } else {
-                st.thinkAt = clock + Float.random(in: 0.6...1.4)          // not every bubble needs a Jelbie
+                st.thinkAt = clock + BubbleTuning.rnd(in: 0.6...1.4)          // not every bubble needs a Jelbie
             }
         case .chase:
             // 1. walk under it (a little ahead of a drifting bubble)
@@ -378,11 +460,11 @@ final class BubbleWand: PlayToy {
         let crown = crownRest(j)
         let winged = j.brain.feature == .wings && !j.brain.wingsFolded
         var w: [(BubblePopMove, Float)] = []
-        if bub.pos.y < crown + 0.15 { w = [(.skip, 3), (.leap, 1.5), (.bounce, 0.5)] }          // (at or below the crown: a skip into it)
-        else if bub.pos.y > crown + 0.2 && winged { w = [(.flap, 3), (.leap, 1.5), (.bounce, 1)] }
-        else { w = [(.leap, 3), (.header, 1.5), (.bounce, 1.5)] + (winged ? [(.flap, 1)] : []) }
+        if bub.pos.y < crown + 0.15 { w = [(.skip, BubbleTuning.skipWeight), (.leap, 1.5), (.bounce, BubbleTuning.bounceWeightLow)] }          // (at or below the crown: a skip into it)
+        else if bub.pos.y > crown + 0.2 && winged { w = [(.flap, BubbleTuning.flapWeightHigh), (.leap, 1.5), (.bounce, 1)] }
+        else { w = [(.leap, BubbleTuning.leapWeightMid), (.header, 1.5), (.bounce, BubbleTuning.bounceWeightHigh)] + (winged ? [(.flap, BubbleTuning.flapWeightMid)] : []) }
         let total = w.reduce(0) { $0 + $1.1 }
-        var r = Float.random(in: 0..<total)
+        var r = BubbleTuning.rnd(in: 0..<total)
         for (m, x) in w { if r < x { return m }; r -= x }
         return .header
     }
@@ -419,9 +501,9 @@ final class BubbleWand: PlayToy {
         field.claim(target.id, by: j.id)
         field.setReach(target.id, y: reachHeight(st.move, j))
         // spot it: turn and look at that bubble with the excited face, then go
-        let hold = Float.random(in: 0.35...0.5)
+        let hold = BubbleTuning.rnd(in: BubbleTuning.playSpotHold)
         st.lookUntil = clock + hold
-        _ = j.brain.bubbleWatch(floorPos(target), hold: hold, excited: true)
+        if j.brain.bubbleFree { _ = j.brain.bubbleWatch(floorPos(target), hold: hold, excited: true) } else { st.lookUntil = clock }          // (a look or a walk of his own is running: the walk to the bubble takes over from it)
     }
 
     private func playTick(_ j: BubbleJelly, _ st: inout JState, _ chasing: inout Int, _ js: [BubbleJelly]) {
@@ -429,22 +511,25 @@ final class BubbleWand: PlayToy {
         switch st.mode {
         case .idle:
             guard clock >= st.thinkAt else { return }
-            st.thinkAt = clock + Float.random(in: BubbleTuning.thinkEvery)
-            guard b.bubbleFree, !field.bubbles.isEmpty else { return }
-            let roll = Float.random(in: 0..<1)
-            if roll < BubbleTuning.chaseRoll, chasing < BubbleTuning.maxChasers, let target = pickTarget(for: j, among: js) {
+            st.thinkAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playThinkEvery))
+            let free = b.bubbleFree
+            guard !field.bubbles.isEmpty, free || (BubbleTuning.busyLookingChases && b.bubbleBusyLooking) else { note("idle \(field.bubbles.isEmpty ? "noBubbles" : "busy \(b.scriptKindName)/\(b.idleState.kind.map { $0.rawValue } ?? "-")\(b.bubbleHold ? "/hold" : "")")"); return }
+            if clock - st.hopStart < BubbleTuning.playHopSpacing { st.thinkAt = clock + 0.1; return }          // (still landing: the squash reads, then the next hop)
+            let roll = BubbleTuning.rnd(in: 0..<1)
+            if roll < BubbleTuning.playChaseRoll, chasing < BubbleTuning.maxChasers, let target = pickTarget(for: j, among: js) {
                 startPlayChase(j, &st, target)
                 chasing += 1; chases += 1
-            } else if roll < 0.97, let t = nearest(to: b.position) {
+            } else if free, roll < 0.97, let t = nearest(to: b.position) {
+                note("idle watch (\(chasing >= BubbleTuning.maxChasers ? "maxChasers" : "noTarget"))")
                 watches += 1
-                _ = b.bubbleWatch(t, hold: Float.random(in: 1.0...2.2), excited: Float.random(in: 0..<1) < 0.7)
-                st.thinkAt = clock + Float.random(in: 0.9...1.8)
+                _ = b.bubbleWatch(t, hold: BubbleTuning.rnd(in: BubbleTuning.playWatchHold), excited: BubbleTuning.rnd(in: 0..<1) < 0.7)
+                st.thinkAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playWatchThink))
             } else {
-                st.thinkAt = clock + Float.random(in: 0.6...1.4)
+                st.thinkAt = clock + BubbleTuning.rnd(in: 0.6...1.4)
             }
         case .spot:
             guard field.bubble(st.bubble) != nil, clock < st.until, b.bubbleStillMine else { endChase(&st, j); return }
-            if clock >= st.lookUntil { st.mode = .chase; st.retargetAt = 0 }
+            if clock >= st.lookUntil, !(BubbleTuning.spotWaitsForFeet && b.feet.active && clock < st.lookUntil + 0.6) { st.mode = .chase; st.retargetAt = 0 }          // (the order to walk aborts a look that is still turning: its feet are mid-step and the body still leans)
         case .chase:
             guard let bub = field.bubble(st.bubble), clock < st.until, b.bubbleStillMine, bub.pos.y < BubbleTuning.chaseMaxY + 0.3 else { endChase(&st, j); return }
             let stand = standPoint(j, bub, st.move)
@@ -453,8 +538,9 @@ final class BubbleWand: PlayToy {
             let arrive: Float = (BubbleTuning.standoff[st.move] ?? 0) > 0 ? 0.14 : 0.3
             if quiet, ds < arrive || (st.goalTries >= 3 && simd_distance(floorPos(bub), b.position) < 1.3) {
                 st.mode = .aim; st.aimAt = clock; st.until = clock + BubbleTuning.aimMax; st.retargetAt = clock + 0.3
+                st.waitHopAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playWaitHopFirst))
                 b.bubbleHold = true
-            } else if clock >= st.retargetAt {
+            } else if clock >= st.retargetAt, !(BubbleTuning.goWaitsForHop && b.bubbleHopBusy) {          // (never order a walk over a hop in the air: the order aborts the script, the body is still tilted and the feet join opens)
                 // go: only when the goal moved more than 0.35 from the last one issued (the walk is not restarted twice a second), or the walk ended short of it
                 if st.goal == nil || simd_distance(st.goal!, stand) > 0.35 || (quiet && ds >= arrive) {
                     st.retargetAt = clock + 0.5
@@ -477,19 +563,27 @@ final class BubbleWand: PlayToy {
                 let apexY = crown + (BubbleTuning.apex[m] ?? 0.1)
                 switch m {
                 case .header, .bounce: return dh <= BubbleTuning.hopReach && abs(pp.y - apexY) <= band && pp.y >= BubbleTuning.hopMinY
-                case .flap: return b.flapHopAllowed && dh <= BubbleTuning.hopReach + 0.2 && abs(pp.y - apexY) <= band + 0.1
+                case .flap: return b.bubbleFlapProbe() == "ok" && dh <= BubbleTuning.hopReach + 0.2 && abs(pp.y - apexY) <= band + 0.1
                 case .leap: return BubbleTuning.leapRange.contains(dh) && abs(pp.y - apexY) <= band && pp.y >= BubbleTuning.hopMinY
                 case .skip: return dh >= 0.3 && dh <= 0.85 && pp.y < crown - 0.05 && pp.y >= 0.7
                 }
             }
             func travels(_ m: BubblePopMove) -> Bool { m == .leap || m == .skip || m == .flap }
             var order: [BubblePopMove] = [st.move]
-            for m in [BubblePopMove.header, .leap, .bounce, .skip, .flap] where m != st.move && BubbleTuning.forceMove == nil { order.append(m) }
+            let others: [BubblePopMove] = BubbleTuning.flapBeforeHeader && j.brain.feature == .wings ? [.flap, .header, .leap, .bounce, .skip] : [.header, .leap, .bounce, .skip, .flap]          // (a winged one takes the flap when it fits: it lost it to the header that fits the same bubble)
+            for m in others where m != st.move && BubbleTuning.forceMove == nil { order.append(m) }
             guard let m = order.first(where: fits) else {
                 if clock - st.hopStart > 0 { }
                 if clock - st.chaseStart > 0 { note("noFit \(st.move) dh\(dh > 0.33 ? ">" : "<") dy\(String(format: "%+.1f", pp.y - crown))") }
                 let stand = standPoint(j, bub, st.move)
-                if simd_distance(stand, b.position) > 0.25, clock >= st.retargetAt { st.retargetAt = clock + 0.5; st.goal = stand; b.bubbleGo(stand) }
+                if simd_distance(stand, b.position) > 0.25 { if clock >= st.retargetAt { st.retargetAt = clock + 0.5; st.goal = stand; b.bubbleGo(stand) }; return }
+                // 2026-11-11 "jump a lot more": under it and it is not in reach yet: small excited hops on the spot (not standing and looking up); the bubble is popped only by the real pop moves
+                if !BubbleTuning.classic, BubbleTuning.playWaitHopEnabled, BubbleTuning.forceMove == nil, clock >= st.waitHopAt, clock - lastHopStart >= BubbleTuning.popGap, clock - st.hopStart >= BubbleTuning.playHopSpacing, b.bubbleCanHop {
+                    if BubbleTuning.rnd(in: 0..<1) >= min(1, BubbleTuning.playWaitHopChance * BubbleTuning.playEnergy) { st.waitHopAt = clock + 0.4 }
+                    else if b.bubbleLeap(j.sim, distance: 0.0001) {
+                        st.waitHopAt = clock + BubbleTuning.rnd(in: BubbleTuning.scaled(BubbleTuning.playWaitHop)); st.hopStart = clock; lastHopStart = clock; waitHops += 1
+                    }
+                }
                 return
             }
             if travels(m), faceErr > 0.45 {
@@ -517,7 +611,7 @@ final class BubbleWand: PlayToy {
                 trace("jelly \(j.id) \(used) at bubble \(bub.id) y=\(String(format: "%.2f", bub.pos.y)) crown \(String(format: "%.2f", crown)) dh \(String(format: "%.2f", dh))")
             } else {
                 st.startFails += 1
-                note("startFail \(m) \(m == .skip ? b.bubbleSkipProbe() : "")")
+                note("startFail \(m) \(m == .skip ? b.bubbleSkipProbe() : m == .flap ? b.bubbleFlapProbe() : "")")
                 st.retargetAt = clock + 0.4
                 if travels(m), BubbleTuning.forceMove == nil {          // (no room / a friend ahead for the travelling move: under it for a header instead)
                     st.move = .header; field.setReach(st.bubble, y: reachHeight(.header, j)); st.mode = .chase; st.goal = nil; st.goalTries = 0; st.retargetAt = 0
@@ -580,7 +674,7 @@ final class BubbleWand: PlayToy {
             let rest = fp + SIMD2(b.vel.x, b.vel.z) / BubbleField.claimedDrag          // (where it stops once somebody is after it: he must be able to stand under it, inside the play area)
             guard b.pos.y < BubbleTuning.chaseMaxY, b.pos.y > BubbleTuning.hopMinY - 0.25, b.age > 0.6, inArea(fp), simd_distance(clampToArea(rest), rest) < 0.25 else { continue }
             let d = simd_distance(fp, p)
-            guard d < 4.5, simd_distance(j.brain.fixed(fp), fp) < 0.45 else { continue }
+            guard d < BubbleTuning.playPickRadius, simd_distance(j.brain.fixed(fp), fp) < 0.45 else { continue }
             let tArrive = d / BubbleTuning.walkSpeed + 1.0
             guard tArrive <= b.life - b.age + 2.0 else { continue }          // (a claimed bubble waits: up to 3 s more life, 2 of them counted)
             let predY = b.pos.y < 1.0 ? min(1.5, b.pos.y + 0.3 * tArrive) : b.pos.y
@@ -593,7 +687,7 @@ final class BubbleWand: PlayToy {
                 if segmentDistance(op, p, fp) < 0.6 { pen += 1.5 }
             }
             if lost { continue }
-            let score = d + 0.8 * max(0, b.pos.y - 1.0) + 0.6 * simd_length(SIMD2(b.vel.x, b.vel.z)) + pen + Float.random(in: 0..<0.3)
+            let score = (BubbleTuning.pickDistanceFactor * d) + 0.8 * max(0, b.pos.y - 1.0) + 0.6 * simd_length(SIMD2(b.vel.x, b.vel.z)) + pen + BubbleTuning.rnd(in: 0..<0.3)
             if best == nil || score < best!.1 { best = (b, score) }
         }
         return best?.0
@@ -616,7 +710,7 @@ final class BubbleWand: PlayToy {
         st.done = false; st.extra = 0; st.goal = nil; st.goalTries = 0; st.startFails = 0
         field.release(jelly: j.id)
         j.brain.bubbleHold = false
-        st.mode = .idle; st.bubble = -1; st.thinkAt = clock + Float.random(in: 0.3...0.9)
+        st.mode = .idle; st.bubble = -1; st.thinkAt = clock + BubbleTuning.rnd(in: BubbleTuning.classic ? 0.3...0.9 : BubbleTuning.scaled(BubbleTuning.playAfterChase))
     }
 
     /// The bubble a Jelbie goes for: nearest in reach of the room, preferring ones nobody is after (now and then he takes one that is claimed).
@@ -624,7 +718,7 @@ final class BubbleWand: PlayToy {
         let p = j.brain.position
         let ok = field.bubbles.filter { $0.pos.y < BubbleTuning.chaseMaxY && $0.pos.y > BubbleTuning.hopMinY - 0.25 && simd_distance(floorPos($0), p) < 4.5 && $0.age > 0.6 && inArea(floorPos($0)) && simd_distance(j.brain.fixed(floorPos($0)), floorPos($0)) < 0.45 }          // (only bubbles over floor he can stand on)
         let free = ok.filter { $0.claimedBy < 0 }
-        let pool = (!free.isEmpty && Float.random(in: 0..<1) > 0.12) ? free : ok
+        let pool = (!free.isEmpty && BubbleTuning.rnd(in: 0..<1) > 0.12) ? free : ok
         return pool.min { simd_distance(floorPos($0), p) < simd_distance(floorPos($1), p) }
     }
     private func nearest(to p: SIMD2<Float>) -> SIMD2<Float>? {
@@ -738,7 +832,7 @@ final class BubbleWand: PlayToy {
             cheers[id] = nil
             guard let j = js.first(where: { $0.id == id }) else { continue }
             let a = AudioHub.shared
-            let r = Float.random(in: 0..<1)
+            let r = BubbleTuning.rnd(in: 0..<1)
             if r < 0.6 { a.chirp(jelly: id, .happy, x: j.brain.px) } else { a.play(.bubbleChirp, jelly: id, x: j.brain.px, volume: 1) }
             if c.hearts, let care {
                 let now = CACurrentMediaTime()

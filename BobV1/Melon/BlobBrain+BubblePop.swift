@@ -38,7 +38,7 @@ extension BlobBrain {
         guard bubbleCanHop else { return false }
         face(.excited, hold: 1.6)
         guard idleStart(.bounce, sim) else { return false }
-        idleState.reps = 3          // (three hops: one for the target, up to two more for another bubble in reach)
+        idleState.reps = BubbleTuning.bounceReps          // (hops: one for the target, the rest for another bubble in reach; 3 before 2026-11-11)
         return true
     }
     /// The winged species' flap-hop (false for everybody else, folded wings, or no room ahead).
@@ -63,6 +63,18 @@ extension BlobBrain {
         if simd_distance(goal, want) >= 0.12 { return "bounds" }
         if !legClear(here, goal, margin: steerMargin) { return "leg" }
         if !peerFree(goal) { return "peer" }
+        return "ok"
+    }
+    /// Whether the flap-hop will start now (the gate of `flapHopBegin`, without starting it): "ok", "notWinged", "folded", "notAllowed", "bounds" (no floor for the drift ahead), "peer", "leg".
+    func bubbleFlapProbe() -> String {
+        guard feature == .wings else { return "notWinged" }
+        guard !wingsFolded else { return "folded" }
+        guard flapHopAllowed else { return "notAllowed" }
+        let here = position, goal = here + SIMD2(sinf(yaw), cosf(yaw)) * FeatureSpec.shared.hop.drift
+        let rv = resolve(SIMD3(goal.x, 0, goal.y), footprint)
+        guard simd_distance(SIMD2(rv.x, rv.z), goal) < 0.05 else { return "bounds" }
+        guard peerFree(SIMD2(rv.x, rv.z)) else { return "peer" }
+        guard legClear(here, SIMD2(rv.x, rv.z), margin: steerMargin) else { return "leg" }
         return "ok"
     }
     /// Which hop of a bounce / skip is running (0-based), for the lighter beat of the second and third pop.

@@ -13,9 +13,11 @@ import simd
 
 @MainActor
 final class BubbleFeetTests: XCTestCase {
-    override func setUp() { super.setUp(); EmoteFeetTests.reset(); BubbleWand.shared.resetForTests() }
-    override func tearDown() { BubbleTuning.forceMove = nil; BubbleTuning.classic = false; BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
+    override func setUp() { super.setUp(); BubbleTuning.restoreHead(); EmoteFeetTests.reset(); BubbleWand.shared.resetForTests() }
+    override func tearDown() { BubbleTuning.seedRandom(nil); BubbleTuning.restoreHead(); BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
+    nonisolated(unsafe) static var traceFrames: ClosedRange<Int>?
+    nonisolated(unsafe) static var traceRun = 0
     static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/bubbles/"
     typealias SC = LegsDrawnAuditTests.Scenario
 
@@ -47,7 +49,7 @@ final class BubbleFeetTests: XCTestCase {
         case "pop header", "pop leap", "pop bounce", "pop flap", "pop skip":          // each new pop move: the real wand, the move forced, a bubble put where that move can reach it
             let move = BubblePopMove(rawValue: String(name.dropFirst(4)))!
             return SC(name: "bubble: \(name)", game: true, seconds: 14, setup: { r, _ in
-                n = 0; wand.resetForTests(); BubbleTuning.forceMove = move; r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); return true
+                n = 0; Self.traceRun += 1; wand.resetForTests(); BubbleTuning.forceMove = move; r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); return true
             }, each: { r in
                 n += 1
                 if n % 300 == 30 { let c = r.brain.position; _ = wand.insertBubble(at: SIMD3(c.x + 1.1, move == .skip ? 1.0 : 1.4, c.y - 0.8), radius: 0.25) }
@@ -69,11 +71,14 @@ final class BubbleFeetTests: XCTestCase {
         var report = String(format: "BUBBLE %@\nchar shoes | frames | leash frames | airborne frames | min ring ratio | worst join (cm; need >= 1) | max collar (cm; need <= 2) | max tilt (rad; need <= 0.5) | pops\n", name)
         for c in 0..<OnePieceInvariantTests.characters.count {
             for shoes in [false, true] {
+                var buf: [String] = []
+                BubbleTuning.seedRandom(UInt64(c * 2 + (shoes ? 1 : 0) + 1) + (ProcessInfo.processInfo.environment["BUBBLE_SEED"].flatMap(UInt64.init) ?? 0))          // (the wand's dice fixed per character, shifted by TEST_RUNNER_BUBBLE_SEED: a failure repeats, and repeated runs can use other dice)
                 var air = 0, badFrame = -1, badInfo = "", tiltMax: Float = 0, tiltInfo = "", leashFrame = -1
                 var worst: (ratio: Float, join: Float, collar: Float) = (.infinity, .infinity, 0)
                 let a = OnePieceInvariantTests.run(Self.scenario(name), char: c, shoes: shoes, pacing: .hz60, seed: 3) { frame, r, f in
                     // the stream scenario runs the Jelbie's other autonomous idles too (a belly slide tips him 0.7 rad by design): only the wand's own moves (walk, look, hop) are held to the pose limits
                     guard Self.isWandMove(r.brain) else { return }
+                    if let tr = Self.traceFrames, tr.contains(frame) { buf.append("FLAPTRACE f \(frame) \(BubbleWand.shared.debugLine([BubbleJelly(id: 0, brain: r.brain, sim: r.sim)])) lift \(String(format: "%.3f", r.sim.minY() - r.sim.floorY)) tilt \(String(format: "%.2f", f.tilt)) beans \(f.beans) join \(String(format: "%.3f", f.join)) feetActive \(r.brain.feet.active) act \(r.brain.activity) poseW \(String(format: "%.2f", r.brain.poseW))") }
                     if f.tilt > tiltMax { tiltMax = f.tilt; tiltInfo = "frame \(frame) idle \(r.brain.idleState.kind.map { $0.rawValue } ?? "-") script \(r.brain.scriptKindName) wand pops \(BubbleWand.shared.popsByJelly.values.reduce(0, +))" }
                     if leashFrame < 0, f.beans, f.leash > 0.002 || f.weldPull > 0.002 { leashFrame = frame }
                     guard let s = EmoteFeetTests.sample(r, frame: frame) else { return }
@@ -81,6 +86,7 @@ final class BubbleFeetTests: XCTestCase {
                     if (s.ratio < EmoteFeetTests.minRatio || s.join < OnePieceInvariantTests.minNeck || s.collar > EmoteFeetTests.maxCollar) && badFrame < 0 { badFrame = frame; badInfo = s.info + " idle \(r.brain.idleState.kind.map { $0.rawValue } ?? "-") script \(r.brain.scriptKindName)" }
                     worst = (min(worst.ratio, s.ratio), min(worst.join, s.join), max(worst.collar, s.collar))
                 }
+                if badFrame >= 0, !buf.isEmpty { print("FLAPTRACE RUN char \(c) shoes \(shoes) bad frame \(badFrame)\n" + buf.joined(separator: "\n")) }
                 let who = "bubble \(name), \(OnePieceInvariantTests.characters[c].0) \(shoes ? "with shoes" : "bare")"
                 guard a.started else { XCTFail("\(who): did not start", file: file, line: line); continue }
                 let pops = BubbleWand.shared.popsByJelly.values.reduce(0, +)
@@ -109,4 +115,35 @@ final class BubbleFeetTests: XCTestCase {
     func testPopBounce() { bubbles("pop bounce") }
     func testPopFlap() { bubbles("pop flap") }          // (non-winged characters run it too: the wand falls back to the header when the flap cannot start)
     func testPopSkip() { bubbles("pop skip") }
+
+    // Fault A (round 2): testPopFlap failed with the round-1 tuning ("the join is open: 2.4 to 3.1 cm", a walk with the body still tilted, both feet off the floor). Found by switches: round 1's numbers
+    // (`round1()`: this round's tuning but `goWaitsForHop` off, the walk order may abort a hop in the air) with ONE group of them put back to the BEFORE values each.
+    static func round1() { BubbleTuning.restoreHead(); BubbleTuning.goWaitsForHop = false; BubbleTuning.spotWaitsForFeet = false; BubbleTuning.playSpotHold = 0.2...0.3; BubbleTuning.bounceWeightHigh = 4 }
+    func testPopFlapRound1() { Self.round1(); bubbles("pop flap") }
+    func testPopFlapRound1BusyLookingOff() { Self.round1(); BubbleTuning.busyLookingChases = false; bubbles("pop flap") }
+    func testPopFlapRound1IdleCutsBefore() { Self.round1(); BubbleTuning.idleCuts = (0.32, 0.72, 0.86); BubbleTuning.idleStepDur = 0.8...1.6; bubbles("pop flap") }
+    func testPopFlapRound1SpotHoldBefore() { Self.round1(); BubbleTuning.playSpotHold = 0.35...0.5; bubbles("pop flap") }
+    func testPopFlapRound1TimingBefore() {
+        Self.round1()
+        BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8
+        BubbleTuning.playAfterChase = 0.3...0.9; BubbleTuning.playHopSpacing = 0; BubbleTuning.playWaitHopEnabled = false; bubbles("pop flap")
+    }
+    func testPopFlapRound1GoWaitsOn() { Self.round1(); BubbleTuning.goWaitsForHop = true; bubbles("pop flap") }
+    func testPopFlapRound1SpotWaitsOn() { Self.round1(); BubbleTuning.spotWaitsForFeet = true; bubbles("pop flap") }
+    func testPopFlapHeadTrace() { Self.traceFrames = 680...752; Self.traceRun = 0; bubbles("pop flap"); Self.traceFrames = nil }
+    // Round 2 bisect on the HEAD configuration (run with TEST_RUNNER_BUBBLE_SEED=100, which fails the head): one group back to the BEFORE values each.
+    func testPopFlapHeadBusyLookingOff() { BubbleTuning.busyLookingChases = false; bubbles("pop flap") }
+    func testPopFlapHeadIdleCutsBefore() { BubbleTuning.idleCuts = (0.32, 0.72, 0.86); BubbleTuning.idleStepDur = 0.8...1.6; bubbles("pop flap") }
+    func testPopFlapHeadGoWaitsOff() { BubbleTuning.goWaitsForHop = false; bubbles("pop flap") }
+    func testPopFlapHeadTimingBefore() {
+        BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8
+        BubbleTuning.playAfterChase = 0.3...0.9; BubbleTuning.playHopSpacing = 0; BubbleTuning.playWaitHopEnabled = false; bubbles("pop flap")
+    }
+    // The timing group was the discriminator (seed 100): which number of it?
+    func testPopFlapHeadThinkBefore() { BubbleTuning.playThinkEvery = BubbleTuning.thinkEvery; bubbles("pop flap") }
+    func testPopFlapHeadChaseRollBefore() { BubbleTuning.playChaseRoll = BubbleTuning.chaseRoll; bubbles("pop flap") }
+    func testPopFlapHeadWatchBefore() { BubbleTuning.playWatchHold = 1.0...2.2; BubbleTuning.playWatchThink = 0.9...1.8; bubbles("pop flap") }
+    func testPopFlapHeadAfterChaseBefore() { BubbleTuning.playAfterChase = 0.3...0.9; bubbles("pop flap") }
+    func testPopFlapHeadSpacingBefore() { BubbleTuning.playHopSpacing = 0; bubbles("pop flap") }
+    func testPopFlapAllBefore() { BubbleTuning.applyBaseline(); bubbles("pop flap") }
 }
