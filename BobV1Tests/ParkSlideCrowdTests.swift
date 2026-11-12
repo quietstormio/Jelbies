@@ -223,6 +223,7 @@ final class ParkSlideCrowdTests: XCTestCase {
         var leftB: Float?, leftC: Float?
         var minPair = Float.infinity, minPairAt = ""
         var pushSeen = [false, false]
+        var lastGate = ["-", "-"]
         while t < 120 {
             if t >= 1, !R[0].started { R[0].started = rigs[0].brain.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner) }
             if aDone, !R[1].started, tries < 21, t - lastTry >= 0.5 {
@@ -234,8 +235,14 @@ final class ParkSlideCrowdTests: XCTestCase {
                 let s = rigs[i].brain.idleState
                 let others = i == 0 ? [1, 2] : [0, 2]
                 if s.kind == .decorSlide {
-                    if s.slideStage == 4, s.phase == 2 { R[i].ph2 += 1.0 / 60; R[i].hold = s.hold }
-                    if s.slideStage == 5, !pushSeen[i] { pushSeen[i] = true; R[i].pushed = others.contains { simd_distance(rigs[$0].root, landing) < peer } }
+                    if s.slideStage == 4, s.phase == 2 {
+                        R[i].ph2 += 1.0 / 60; R[i].hold = s.hold
+                        lastGate[i] = "phaseT=\(String(format: "%.2f", s.phaseT)) hold=\(String(format: "%.2f", s.hold)) yielding=\(s.yielding) pending=\(String(describing: rigs[i].brain.pending)) steerPeersWithinPeerGap=\(rigs[i].brain.steerPeers().filter { simd_distance($0.pos, landing) < peer }.map { "\($0.id)@\(String(format: "%.2f,%.2f", $0.pos.x, $0.pos.y))" })"
+                    }
+                    if s.slideStage == 5, !pushSeen[i] {
+                        if seed == 2 || seed == 4 { print("[pushoff] seed \(seed) rider \(i) t=\(String(format: "%.1f", t)) gate before: \(lastGate[i]) | bodies: " + (0..<3).map { k in "id\(k) pos=(\(String(format: "%.2f,%.2f", rigs[k].brain.position.x, rigs[k].brain.position.y))) script=\(rigs[k].brain.scriptKindName) stage=\(rigs[k].brain.idleState.slideStage) kind=\(String(describing: rigs[k].brain.idleState.kind)) toLanding=\(String(format: "%.2f", simd_distance(rigs[k].brain.position, landing))) root=\(String(format: "%.2f", simd_distance(rigs[k].root, landing)))" }.joined(separator: " ; ")) }
+                        pushSeen[i] = true; R[i].pushed = others.contains { simd_distance(rigs[$0].root, landing) < peer }
+                    }
                     if s.slideStage == 6, R[i].t6 == nil { R[i].t6 = t }
                 }
                 if i == 0, seed == 2, let s6 = R[0].t6, t - s6 <= 6, Int(t * 60) % 15 == 0 { print(bState(rigs[0].brain, sl, landing, t - s6).replacingOccurrences(of: "[stepoff-t]", with: "[foot-A]")) }
@@ -422,11 +429,17 @@ final class ParkSlideCrowdTests: XCTestCase {
             let fallbackBefore = BlobBrain.slideNoClearLeg
             var t: Float = 0, started = false, t6: Float?
             var leftAt: Float?, minBox = Float.infinity, spotRun: Float = 0, spotMax: Float = 0, lastPos = a.position, lastChk: Float = 0, minLeg: Float = 9
+            var chosen = "?", probeInc = 0
             while t < 60 {
                 if t >= 1, !started { started = a.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner) }
                 lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
                 let s = a.idleState
-                if s.kind == .decorSlide, s.slideStage == 6, t6 == nil { t6 = t }
+                if s.kind == .decorSlide, s.slideStage == 6, t6 == nil {
+                    t6 = t
+                    let c0 = BlobBrain.slideNoClearLeg
+                    if let ch = a.slideWalkOut(sl) { chosen = String(format: "(%.2f,%.2f) toLanding %.2f legClearance %.2f", ch.x, ch.y, simd_distance(ch, landing), a.legClearance(a.position, ch)) } else { chosen = "nil" }
+                    probeInc = BlobBrain.slideNoClearLeg - c0
+                }
                 guard let f6 = t6 else { continue }
                 if t - f6 >= 1.5 { minBox = min(minBox, sl.distance(a.position)) }
                 if leftAt == nil, simd_distance(a.position, landing) >= peer { leftAt = t - f6 }
@@ -439,7 +452,7 @@ final class ParkSlideCrowdTests: XCTestCase {
                 if t - f6 > 12 { break }
             }
             func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
-            let line = "[legfriend] seed=\(seed) leftLandingAt=\(ft(leftAt))s after the floor walkOnSpotMax=\(String(format: "%.1f", spotMax))s minBox(after 1.5 s)=\(String(format: "%.2f", minBox)) bestClearanceFallbacks=\(BlobBrain.slideNoClearLeg - fallbackBefore) rode=\(t6 != nil)"
+            let line = "[legfriend] seed=\(seed) leftLandingAt=\(ft(leftAt))s after the floor walkOnSpotMax=\(String(format: "%.1f", spotMax))s minBox(after 1.5 s)=\(String(format: "%.2f", minBox)) bestClearanceFallbacks=\(BlobBrain.slideNoClearLeg - fallbackBefore - probeInc) chosen=\(chosen) endsAt=(\(String(format: "%.2f,%.2f", a.position.x, a.position.y))) toLanding \(String(format: "%.2f", simd_distance(a.position, landing))) rode=\(t6 != nil)"
             print(line)
             _ = minLeg; minLeg = 0
             XCTAssertNotNil(t6, line)
