@@ -318,14 +318,13 @@ extension BlobBrain {
     private func slideStallReplan(_ f: DecorFoot, dt: Float, skinner: Skinner) {
         guard case .walk = script, steerStall > 0.9 || steerWait > 0.9 || walkStallT > 1.2, idleState.slideS < 8, Int(scriptT * 4) != Int((scriptT - dt) * 4) else { return }          // (asked four times a second at most)
         var st = Self.slideBans[steerID] ?? (banned: [], fails: 0)
-        st.banned.append(idleState.target); st.fails += 1
-        Self.slideBans[steerID] = st
-        if st.fails > 2 {
-            Self.slideLog?("replan body \(steerID) fail \(st.fails): drop the attempt at \(position) stage \(idleState.slideStage) target \(idleState.target)")
+        if st.fails >= 2 {
+            Self.slideLog?("replan body \(steerID) fail \(st.fails + 1): drop the attempt at \(position) stage \(idleState.slideStage) target \(idleState.target)")
             Self.slideBans[steerID] = nil
             idleFinish(skinner)
             return
         }
+        st.banned.append(idleState.target)          // (kept only when a different leg is really taken: with none to take he waits as before)
         var chosen: (SIMD2<Float>, Int)?
         // 1. round the standing friend on the leg
         let toward = idleState.target - position
@@ -343,7 +342,8 @@ extension BlobBrain {
         }
         // 2. the other way round the slide (the banned legs are not planned again)
         if chosen == nil, let climb = decorStand(.decorSlide, f, from: position), let next = slideFirstLeg(f, climb: climb, from: position, avoid: st.banned), simd_distance(next.0, idleState.target) > 0.3 { chosen = next }
-        guard let next = chosen else { Self.slideLog?("replan body \(steerID) fail \(st.fails): no other leg from \(position), target \(idleState.target) stays"); return }
+        guard let next = chosen else { Self.slideLog?("replan body \(steerID) no other leg from \(position), target \(idleState.target) stays"); return }
+        st.fails += 1; Self.slideBans[steerID] = st
         Self.slideLog?("replan body \(steerID) fail \(st.fails): from \(position) target \(idleState.target) -> \(next.0) leg \(next.1)")
         idleState.slideS += 1
         idleState.slideStage = -next.1; idleState.target = next.0; idleState.decorRetry = 0
