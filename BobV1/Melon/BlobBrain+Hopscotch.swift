@@ -49,6 +49,13 @@ extension BlobBrain {
         script = .idle; activity = .lookingAround
         switch idleState.slideStage {
         case 3: idleFinish(skinner)
+        case 4 where idleState.slideStep == 7:
+            // (the sideways leg is done: down the side to the row of the start, then the last straight leg (stage 5 sends him in))
+            let side: Float = f.local(position - f.centre).x < 0 ? -1 : 1
+            let b = f.centre + f.turned(SIMD2(side * HopscotchTuning.laneClear, HopscotchCourt.queueSpot(slot: 0).y))
+            hopscotchWalk(to: fixed(b), step: 8)
+        case 4 where idleState.slideStep == 8:
+            idleState.slideStep = 0; idleState.slideStage = 5          // (not a blocked start: no try is used up)
         default:
             // (stepped up (slot 0) but the walk stopped over 0.5 short of the start - a friend on it: a bounded number of tries, then he gives the game up)
             let short = idleState.seat == 0 ? simd_distance(position, hopscotchWorld(f, HopscotchCourt.queueSpot(slot: 0))) : 0          // (the same start and 0.5 as stage 5 measures)
@@ -66,8 +73,49 @@ extension BlobBrain {
         let queued = HopscotchLine.shared.players(uid).filter { $0.slot != 0 }
         return queued.min { $0.slot < $1.slot }?.id == steerID
     }
+    /// r13: the way to the start must not run down the court's lane (a hopper standing on a square waits while anyone is within a body of it, and the court is a straight lane: the two stood
+    /// 32 s). When the straight walk to the start would pass within `laneClear` of the court's centre line beside or past the squares, his first leg goes sideways out of the lane
+    /// (`slideStep` 7), the second down the side to the row of the start (8), the last straight in. nil = the straight walk is clear of the lane or no side is clear.
+    private func hopscotchSideLeg(_ f: DecorFoot, to start: SIMD2<Float>) -> (a: SIMD2<Float>, b: SIMD2<Float>)? {
+        let from = f.local(position - f.centre), to = f.local(start - f.centre)
+        let z0 = HopscotchCourt.squares[0].y - 0.4
+        var inLane = false
+        for i in 0...12 {
+            let p = from + (to - from) * (Float(i) / 12)
+            if abs(p.x) < HopscotchTuning.laneClear, p.y > z0 { inLane = true; break }
+        }
+        guard inLane else { return nil }
+        let rowZ = to.y, endZ = HopscotchCourt.squares[HopscotchCourt.count - 1].y + 0.6
+        let slide = DecorField.shared.foot(ParkToys.slideUID)
+        var best: (a: SIMD2<Float>, b: SIMD2<Float>, score: Float)?
+        for side: Float in [1, -1] {
+            let sx = side * HopscotchTuning.laneClear
+            let aL = SIMD2<Float>(sx, min(max(from.y, rowZ), endZ)), bL = SIMD2<Float>(sx, rowZ)
+            let a = f.centre + f.turned(aL), b = f.centre + f.turned(bL)
+            var ok = true
+            for k in 0...6 {          // (the sideways step, the way down the side and the end of it: clear floor, off the bench's path strip, outside the slide's box)
+                let p = k <= 2 ? a + (b - a) * (Float(k) / 2) : a + (b - a) * (Float(k - 3) / 3)
+                if ParkClearSpot.blocked(p, radius: 0.5) || abs(p.x - ParkScenery.pathX(p.y)) < HopscotchTuning.pathKeepOut { ok = false; break }
+                if let slide, slide.distance(p) < 0.9 { ok = false; break }
+            }
+            guard ok else { continue }
+            let score = slide.map { simd_distance(a, $0.centre) } ?? 0
+            if best == nil || score > best!.score { best = (a, b, score) }
+        }
+        return best.map { ($0.a, $0.b) }
+    }
+    private func hopscotchWalk(to spot: SIMD2<Float>, step: Int) {
+        idleState.slideStage = 4; idleState.slideStep = step; idleState.decorGo = true; idleState.target = spot
+        route = []; scriptT = 0; stuckT = 0; bestDist = .infinity; steerStall = 0
+        script = .walk(target: spot, then: .none); activity = .walking
+    }
     private func hopscotchStepUp(_ start: SIMD2<Float>) {
+        if let f = DecorField.shared.foot(idleState.decorUID), let leg = hopscotchSideLeg(f, to: start) {
+            hopscotchWalk(to: fixed(leg.a), step: 7)
+            return
+        }
         let spot = fixed(start)
+        idleState.slideStep = 0
         idleState.slideStage = 4; idleState.decorGo = true; idleState.target = spot
         route = []; scriptT = 0; stuckT = 0; bestDist = .infinity; steerStall = 0
         script = .walk(target: spot, then: .none); activity = .walking
@@ -109,7 +157,7 @@ extension BlobBrain {
                 let clear: Float = phT > 4 ? 0.9 : HopscotchTuning.landingClear
                 let free = !steerPeers().contains { $0.id != me && simd_distance($0.pos, goal) < clear }
                 guard line.mayHop(uid, me, to: t), free else {
-                    if phT > HopscotchTuning.patience { idleFinish(skinner) }
+                    if phT > (free ? HopscotchTuning.patience : HopscotchTuning.blockedPatience) { idleFinish(skinner) }
                     return
                 }
             }
