@@ -84,6 +84,23 @@ final class TrickStoreTests: XCTestCase {
         XCTAssertEqual(VoiceTrick.hula.rawValue, "hula", "the raw value is the save key")
     }
 
+    /// Stage 3 of the trick plan (prototypes): moonwalk, back bounce, headstand.
+    func testStageThreeTrickRows() {
+        let want: [(VoiceTrick, Int, TrickScope, Int, IdleKind)] = [(.moonwalk, 3, .perJelbie, 110, .moonwalk), (.backBounce, 2, .perJelbie, 70, .backBounce), (.headstand, 3, .perJelbie, 110, .headstand)]
+        for (t, stars, scope, price, kind) in want {
+            let d = TrickCatalog.def(t)
+            XCTAssertEqual(d?.stars, stars, "\(t) stars"); XCTAssertEqual(d?.scope, scope, "\(t) scope"); XCTAssertEqual(d?.price, price, "\(t) price")
+            XCTAssertFalse(TrickCatalog.isDefault(t)); XCTAssertFalse(t.isStarter); XCTAssertTrue(ShowTrickInfo.stageTricks.contains(t))
+            XCTAssertEqual(VoiceCoordinator.idleKind(for: t), kind); XCTAssertEqual(VoiceCoordinator.trick(for: kind), t)
+            XCTAssertNotNil(StoreCatalog.item("trick-\(t.rawValue)"), "\(t) is in the Shop")
+            XCTAssertFalse(ShowTrickInfo.symbol(t).isEmpty); XCTAssertFalse(ShowTrickInfo.tags(t).isEmpty)
+            XCTAssertTrue(ShowTrickInfo.ownsFlop.contains(t), "\(t) has its own fail variant")
+            XCTAssertGreaterThanOrEqual(ShowTrickInfo.seconds(t), BlobBrain.trickMoveSeconds(kind) ?? 0, "the stage waits for the whole \(t)")
+            XCTAssertEqual(ShowTrickInfo.difficulty(t), stars)
+        }
+        XCTAssertEqual(VoiceTrick.moonwalk.rawValue, "moonwalk"); XCTAssertEqual(VoiceTrick.backBounce.rawValue, "backBounce"); XCTAssertEqual(VoiceTrick.headstand.rawValue, "headstand")
+    }
+
     func testTrickNeedsEnoughCoins() {
         let (b, w) = book(10)
         XCTAssertEqual(b.buyTrick(.flip, for: 0), .notEnough)

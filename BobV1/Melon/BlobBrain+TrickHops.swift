@@ -100,6 +100,7 @@ extension BlobBrain {
     /// Ticked from `idleBodyMoveTick`: true = the jump owns this step.
     func trickBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
         if idleState.kind == .oneLegSpin, idleState.phase == 1, case .idle = script { return oneLegTick(sim, skinner, dt) }          // (BlobBrain+Tricks.swift)
+        if idleState.kind == .backBounce || idleState.kind == .headstand, idleState.phase == 1, case .idle = script { return acroTick(sim, skinner, dt) }          // (TrickAcro.swift)
         guard let kind = idleState.kind, kind == .superSpring || kind == .corkscrew, idleState.phase == 1, case .idle = script else { return false }
         activity = .playing
         mouthOpen = 0

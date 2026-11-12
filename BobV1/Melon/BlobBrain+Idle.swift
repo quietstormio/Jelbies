@@ -102,6 +102,10 @@ enum IdleKind: String, CaseIterable, Sendable {
     case corkscrew     // the flip's machinery with the turn about the vertical axis: a high jump with one full twist, a squishy landing, a held ta-da
     case oneLegSpin    // up on one foot (the other lifted out to the side), a full pirouette, a wobble, a landing
     case hula          // the hips circle round and round with the feet planted, faster and faster; the head stays over the spot, the arms sway, a ta-da
+    // Stage 3 of the trick plan (prototypes: BlobBrain+Moonwalk.swift, TrickAcro.swift): trick-only too
+    case moonwalk      // three-quarter on: glides smoothly BACKWARD while the feet alternate as if stepping forward (one heel up, the other sliding back flat), a point, a walk back
+    case backBounce    // side on: sits back, tips onto his back, bounces on it like a ball with the feet kicking, springs back onto his feet
+    case headstand     // side on: tips forward onto his head, the feet kick in the air, a held beat, pops over upright
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -298,7 +302,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick, .soccerKick, .tossBump: return .walking
-        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader, .sing, .hula, .superSpring, .corkscrew, .oneLegSpin: return .playing
+        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader, .sing, .hula, .superSpring, .corkscrew, .oneLegSpin, .moonwalk, .backBounce, .headstand: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -417,7 +421,7 @@ extension BlobBrain {
         switch script {
         case .idle: mine = true
         case .spin: mine = kind == .tail || kind == .legSpin
-        case .walk: mine = (kind == .tossBump && idleState.toss.walking) || (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || (idleState.windowGo && Self.walksFirst(kind))
+        case .walk: mine = (kind == .tossBump && idleState.toss.walking) || (Self.decorKinds.contains(kind) && idleState.decorGo) || kind == .run || kind == .stumble || kind == .zoomies || (kind == .slide && idleState.phase == 0) || (kind == .sleep && sleep.stage == 0) || (kind == .peek && idleState.phase == 0) || kind == .trot || (kind == .moonwalk && idleState.phase == MoonwalkTuning.walkBackPhase) || (idleState.windowGo && Self.walksFirst(kind))
         case .none:
             // the zoomies' dash is over (the walk planted him): the dead stop and the big wobble
             if kind == .zoomies && idleState.phase == 0 {
@@ -427,6 +431,7 @@ extension BlobBrain {
                 jellyKick = 3.2
             }
             else if kind == .tossBump && idleState.toss.walking { mine = true; tossBumpArrived() }
+            else if kind == .moonwalk && idleState.phase == MoonwalkTuning.walkBackPhase { mine = true; moonwalkHome(skinner); return }          // (the walk back to his spot is over)
             else if kind == .sleep && sleep.stage == 0 { mine = true; sleepArrived(sim, skinner) }
             else if kind == .peek && idleState.phase == 0 { mine = true; peekArrived() }
             else if idleState.windowGo && Self.walksFirst(kind) { mine = true; idleState.windowGo = false; idleState.phase = 0; idleState.phaseT = 0; idleState.t = 0; idleState.baseYaw = yaw; script = .idle; activity = .lookingAround }
@@ -522,6 +527,7 @@ extension BlobBrain {
     func idleReset(_ skinner: Skinner?) {
         guard idleState.kind != nil || armDirW != 0 || runW != 0 else { return }
         let wasRun = runW != 0 || zoomW != 0
+        if trickTipped, let sim = simRef { acroAbortHold(sim) }          // (a stop while a trick has him on his back / his head: held still for the recover path: TrickAcro.swift)
         idleEnd(skinner, cooldown: idleState.kind != nil)
         idleState.phase = 0
         if wasRun { runW = 0; zoomW = 0 }
@@ -699,7 +705,7 @@ extension BlobBrain {
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn:
             return emote2Begin(kind, sim)
         case .sing: return singBegin(sim)
-        case .hula, .superSpring, .corkscrew, .oneLegSpin: return trickBegin(kind, sim)
+        case .hula, .superSpring, .corkscrew, .oneLegSpin, .moonwalk, .backBounce, .headstand: return trickBegin(kind, sim)
         case .joy:
             idleBegin(.joy)
             idleState.target = here
@@ -775,6 +781,8 @@ extension BlobBrain {
         case .hula: runHula(sim, skinner, dt)
         case .superSpring: runTrickHopTurn(sim, skinner, dt)
         case .oneLegSpin: runOneLegTurn(sim, skinner, dt)
+        case .moonwalk: runMoonwalk(sim, skinner, dt)
+        case .backBounce, .headstand: runAcroTurn(sim, skinner, dt)
         case .corkscrew: if idleState.phase == 0 { runTrickHopTurn(sim, skinner, dt) } else if idleState.phase == 2 { runCorkscrewTada(sim, skinner, dt) }
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)

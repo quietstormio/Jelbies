@@ -47,11 +47,11 @@ extension ParkScenery {
         return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fz
     }
     static func sstep(_ a: Float, _ b: Float, _ x: Float) -> Float { let t = min(1, max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
-    /// The bench's centre x (2026-11-12: moved 1.0 to the right into the lawn the pond left; it was 0). Its collider (ParkRoom.swift), the lamp post and the path's end follow it.
-    static let benchX: Float = 1.0
-    /// The path: the old gentle bend (x = 0.7 sin(0.34 z)) from the gate, and from z 3 back a smooth ease (zero slope at both ends) that slides it right so it ends at the bench's front centre (z -3.7) instead of 0.67 left of it.
+    /// The bench's centre x (2026-11-12: moved right into the lawn the pond left, 0 then 1.0 then 1.75 to take up the empty lawn up to the right fence). Its collider (ParkRoom.swift), the lamp post and the path's end follow it.
+    static let benchX: Float = 1.75
+    /// The path: the old gentle bend (x = 0.7 sin(0.34 z)) from the gate, and from z 2.4 back (the upper third) a smooth ease (zero slope at both ends) that slides it right so it ends at the bench's front centre (z -3.7) instead of 0.67 left of it.
     static func pathX(_ z: Float) -> Float {
-        let end: Float = 0.7 * sinf(-3.7 * 0.34), u = min(max((3 - z) / 6.7, 0), 1)
+        let end: Float = 0.7 * sinf(-3.7 * 0.34), u = min(max((2.4 - z) / 6.1, 0), 1)
         return 0.7 * sinf(z * 0.34) + (benchX - end) * u * u * (3 - 2 * u)
     }
 

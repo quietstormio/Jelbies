@@ -76,3 +76,154 @@ extension FeatureCaptureTests {
         }
     }
 }
+
+// MARK: - stage 3
+
+extension FeatureCaptureTests {
+    /// Stage 3 (trick plan): 12-frame strips of the moonwalk, back bounce, headstand and the repaired hula on blue Bob, yellow Pip (tail) and winged Lavender, each from the
+    /// game camera and a three-quarter camera (az 0.8), tiles 300 px. Writes `s3_<name><STRIP_TAG>.png` and `s3_all_blue<STRIP_TAG>.png` (the game-camera blue rows, 6 tiles a
+    /// row). Env: EMOTE_STRIP_DIR, EMOTE_STRIP_ONLY, EMOTE_STRIP_CHARS ("0,1,3"), STRIP_TAG, and the tuning knobs MW_HEELUP, MW_STRIDE, MW_LEAN, HULA_COUNTER, HULA_R0,
+    /// HULA_R1, ACRO_HEAD_PITCH, ACRO_KICK (prototype tuning without a rebuild).
+    func testStageThreeTrickStrips() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let dir = env["EMOTE_STRIP_DIR"], !dir.isEmpty else { throw XCTSkip("EMOTE_STRIP_DIR not set") }
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        func knob(_ k: String) -> Float? { env[k].flatMap { Float($0) } }
+        if let v = knob("MW_HEELUP") { MoonwalkTuning.heelUp = v }; if let v = knob("MW_STRIDE") { MoonwalkTuning.stride = v }; if let v = knob("MW_LEAN") { MoonwalkTuning.lean = v }
+        if let v = knob("HULA_COUNTER") { HulaTuning.counter = v }; if let v = knob("HULA_R0") { HulaTuning.r0 = v }; if let v = knob("HULA_R1") { HulaTuning.r1 = v }
+        if let v = knob("ACRO_HEAD_PITCH") { AcroTuning.headPitch = v }; if let v = knob("ACRO_HEAD_TURN") { AcroTuning.headTurnOff = v }; if let v = knob("ACRO_HEAD_SPLAY") { AcroTuning.headSplay = v }; if let v = knob("ACRO_KICK") { AcroTuning.kick = v }
+        let tag = env["STRIP_TAG"] ?? ""
+        let only = (env["EMOTE_STRIP_ONLY"] ?? "").split(separator: ",").map(String.init)
+        let chars = (env["EMOTE_STRIP_CHARS"] ?? "0,1,3").split(separator: ",").compactMap { Int($0) }
+        DayClock.shared.forcedHour = 12
+        let hula = Swift.stride(from: 1.0, through: 3.25, by: 0.25).map { HulaTuning.time(forCycles: Float($0)) } + [HulaTuning.swing + HulaTuning.settle + 0.12, HulaTuning.swing + HulaTuning.settle + 0.32]
+        let cases: [(String, IdleKind, Bool, [Float])] = [
+            ("moonwalk", .moonwalk, false, [0.15, 0.45, 0.60, 0.75, 0.90, 1.05, 1.25, 1.55, 1.85, 2.45, 2.85, 3.9]),
+            ("moonwalk_fail", .moonwalk, true, [0.15, 0.45, 0.70, 0.95, 1.10, 1.25, 1.40, 1.55, 1.75, 2.0, 2.4, 3.0]),
+            ("backBounce", .backBounce, false, [0.15, 0.30, 0.45, 0.58, 0.75, 0.88, 1.10, 1.30, 1.50, 1.65, 1.85, 2.05]),
+            ("backBounce_fail", .backBounce, true, [0.15, 0.45, 0.75, 1.10, 1.30, 1.55, 1.80, 2.05, 2.30, 2.55, 2.80, 3.10]),
+            ("headstand", .headstand, false, [0.15, 0.40, 0.60, 0.80, 1.00, 1.25, 1.50, 1.75, 2.10, 2.30, 2.50, 2.75]),
+            ("headstand_fail", .headstand, true, [0.40, 0.80, 1.10, 1.40, 1.60, 1.80, 2.00, 2.30, 2.60, 2.90, 3.20, 3.45]),
+            ("hula", .hula, false, hula),
+        ]
+        var blueRows: [UIImage] = []
+        for (name, kind, fail, times) in cases where only.isEmpty || only.contains(name) {
+            func pass(_ id: Int, az: Float, frames: [Int]?) throws -> (start: Int, end: Int, tiles: [UIImage]) {
+                W = 560; H = 560
+                let ch = [Char(id: id)]
+                let lab = setUpLab([SIMD2(0.2, 0.6)], chars: ch, seed: 3)
+                let r = lab.rigs[0]
+                let d = dress(lab, ch)
+                let (ren, target) = try renderer(lab)
+                r.brain.idleForced = true
+                r.brain.commanded = true
+                r.brain.idleState.trickFailNext = fail
+                XCTAssertTrue(r.brain.idleStart(kind, r.sim), "\(name) did not start")
+                var start = -1, end = -1, tiles: [UIImage] = []
+                var cam0: CameraState?
+                for f in 0..<1600 {
+                    lab.tick(watching: false)
+                    tick(d, 0, r, ch[0])
+                    if start < 0, r.brain.idleState.kind == kind, r.brain.idleState.phase >= 1 { start = f }
+                    if start >= 0, end < 0, r.brain.idleState.kind == nil { end = f; if frames == nil { break } }
+                    if let frames, frames.contains(f) {
+                        let cc = r.sim.centroid()
+                        if cam0 == nil {
+                            let cp = GameCamera.camera(aspect: 1, focus: 0).pos
+                            var dir = SIMD3<Float>(cp.x - cc.x, 0, cp.z - cc.z); dir = simd_normalize(dir)
+                            // the three-quarter camera swings round toward the side his face is on (the move turns him off the camera)
+                            let face = SIMD3<Float>(sinf(r.brain.yaw), 0, cosf(r.brain.yaw))
+                            func rot(_ a: Float) -> SIMD3<Float> { SIMD3(dir.x * cosf(a) + dir.z * sinf(a), 0, -dir.x * sinf(a) + dir.z * cosf(a)) }
+                            if az != 0 { let side = kind == .moonwalk; dir = (simd_dot(rot(az), face) >= simd_dot(rot(-az), face)) != side ? rot(az) : rot(-az) }          // (the moonwalk's: toward his side, the glide across the picture)
+                            cam0 = Self.lookCamera(target: SIMD3(cc.x, cc.y + 0.25, cc.z), dir: dir, dist: 3.7, aspect: 1, lift: 0.12)
+                        }
+                        let img = composite(lab, d, ch, ren, target, cam: cam0)
+                        let small = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 300), format: { let f = UIGraphicsImageRendererFormat(); f.scale = 1; return f }()).image { _ in img.uiImage()!.draw(in: CGRect(x: 0, y: 0, width: 300, height: 300)) }
+                        tiles.append(labelled(small, String(format: "%@ #%d%@ t=%.2fs", name, id, az == 0 ? "" : " 3/4", Float(f - start) / 60)))
+                    }
+                    if r.brain.idleState.kind == nil && start >= 0 && frames != nil && f > (frames?.last ?? 0) { break }
+                }
+                return (start, end, tiles)
+            }
+            var rows: [UIImage] = []
+            for id in chars {
+                let probe = try pass(id, az: 0, frames: nil)
+                XCTAssertGreaterThan(probe.start, -1, "\(name) #\(id): never reached its active phase")
+                let frames = times.map { probe.start + Int($0 * 60) }
+                for az: Float in [0, 0.8] {
+                    let shots = try pass(id, az: az, frames: frames)
+                    XCTAssertEqual(shots.tiles.count, times.count, "\(name) #\(id): frames \(frames)")
+                    rows.append(hstack(shots.tiles))
+                    if id == 0, az == 0, !name.hasSuffix("_fail") { blueRows.append(hstack(Array(shots.tiles.prefix(6)))); blueRows.append(hstack(Array(shots.tiles.dropFirst(6)))) }
+                }
+                print("TRICK STRIP \(name) #\(id): active \(Float(probe.end - probe.start) / 60) s")
+            }
+            try write(vstack(rows), dir + "/s3_\(name)\(tag).png")
+        }
+        if !blueRows.isEmpty { try write(vstack(blueRows), dir + "/s3_all_blue\(tag).png") }
+    }
+}
+
+// MARK: - moonwalk round 3
+
+extension FeatureCaptureTests {
+    /// Moonwalk round 3: a 12-frame strip at 600 px tiles (blue Bob, yellow Pip) from the game camera, and a real-motion clip (blue Bob, portrait 540x960, every second sim
+    /// frame = 30 fps) as PNG frames in `<EMOTE_STRIP_DIR>/clip_v3/` (encoded to s3_moonwalk_v3.mp4 on the host). The camera is fixed, aimed at the middle of the glide.
+    /// Env: EMOTE_STRIP_DIR, MW_HEELUP, MW_STRIDE, STRIP_TAG.
+    func testMoonwalkV3StripAndClip() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let dir = env["EMOTE_STRIP_DIR"], !dir.isEmpty else { throw XCTSkip("EMOTE_STRIP_DIR not set") }
+        if let v = env["MW_HEELUP"].flatMap(Float.init) { MoonwalkTuning.heelUp = v }; if let v = env["MW_STRIDE"].flatMap(Float.init) { MoonwalkTuning.stride = v }; if let v = env["MW_BIAS"].flatMap(Float.init) { MoonwalkTuning.bias = v }; if let v = env["MW_FOOTLEN"].flatMap(Float.init) { MoonwalkTuning.footLen = v }
+        let tag = env["STRIP_TAG"] ?? ""
+        try FileManager.default.createDirectory(atPath: dir + "/clip_v3", withIntermediateDirectories: true)
+        DayClock.shared.forcedHour = 12
+        let times: [Float] = [0.10, 0.53, 0.71, 0.89, 1.07, 1.25, 1.61, 1.97, 2.33, 2.62, 2.95, 3.40]
+        var rows: [UIImage] = []
+        for id in [0, 1] {
+            func pass(frames: Set<Int>?, clip: Bool, cam: CameraState?, tileSide: CGFloat) throws -> (start: Int, end: Int, base: SIMD3<Float>, fwd: SIMD2<Float>, tiles: [UIImage]) {
+                if clip { W = 540; H = 960 } else { W = 600; H = 600 }
+                let ch = [Char(id: id)]
+                let lab = setUpLab([SIMD2(0.2, 0.6)], chars: ch, seed: 3)
+                let r = lab.rigs[0]
+                let d = dress(lab, ch)
+                let (ren, target) = try renderer(lab)
+                r.brain.idleForced = true; r.brain.commanded = true
+                XCTAssertTrue(r.brain.idleStart(.moonwalk, r.sim))
+                var start = -1, end = -1, base = SIMD3<Float>.zero, fwd = SIMD2<Float>.zero, tiles: [UIImage] = [], n = 0
+                for f in 0..<1600 {
+                    lab.tick(watching: false)
+                    tick(d, 0, r, ch[0])
+                    if start < 0, r.brain.idleState.kind == .moonwalk, r.brain.idleState.phase >= 1 { start = f; base = r.sim.centroid(); fwd = SIMD2(sinf(r.brain.yaw), cosf(r.brain.yaw)) }
+                    if start >= 0, end < 0, r.brain.idleState.kind == nil { end = f }
+                    let want = clip ? (f % 2 == 0) : (frames?.contains(f) ?? false)
+                    if want, let cam {
+                        let img = composite(lab, d, ch, ren, target, cam: cam)
+                        if clip {
+                            try img.uiImage()!.pngData()!.write(to: URL(fileURLWithPath: String(format: "%@/clip_v3/frame_%04d.png", dir, n))); n += 1
+                        } else {
+                            let small = UIGraphicsImageRenderer(size: CGSize(width: tileSide, height: tileSide), format: { let f = UIGraphicsImageRendererFormat(); f.scale = 1; return f }()).image { _ in img.uiImage()!.draw(in: CGRect(x: 0, y: 0, width: tileSide, height: tileSide)) }
+                            tiles.append(labelled(small, String(format: "moonwalk v3 #%d t=%.2fs", id, Float(f - start) / 60)))
+                        }
+                    }
+                    if end >= 0 && f > end + 30 { break }
+                    if frames == nil && !clip && end >= 0 { break }
+                }
+                return (start, end, base, fwd, tiles)
+            }
+            let probe = try pass(frames: nil, clip: false, cam: nil, tileSide: 600)
+            XCTAssertGreaterThan(probe.start, -1)
+            let mid = SIMD2(probe.base.x, probe.base.z) - probe.fwd * (MoonwalkTuning.stride * Float(MoonwalkTuning.glides) * 0.5)
+            let cp = GameCamera.camera(aspect: 1, focus: 0).pos
+            let dirv = simd_normalize(SIMD3<Float>(cp.x - mid.x, 0, cp.z - mid.y))
+            let camSq = Self.lookCamera(target: SIMD3(mid.x, probe.base.y + 0.25, mid.y), dir: dirv, dist: 3.9, aspect: 1, lift: 0.12)
+            let shots = try pass(frames: Set(times.map { probe.start + Int($0 * 60) }), clip: false, cam: camSq, tileSide: 600)
+            rows.append(hstack(Array(shots.tiles.prefix(6)))); rows.append(hstack(Array(shots.tiles.dropFirst(6))))
+            if id == 0 {
+                let camP = Self.lookCamera(target: SIMD3(mid.x, probe.base.y + 0.25, mid.y), dir: dirv, dist: 4.6, aspect: 540.0 / 960.0, lift: 0.12)
+                _ = try pass(frames: nil, clip: true, cam: camP, tileSide: 0)
+            }
+            print("MOONWALK V3 #\(id): active \(Float(probe.end - probe.start) / 60) s, footLen \(MoonwalkTuning.footLen)")
+        }
+        try write(vstack(rows), dir + "/s3_moonwalk_v3\(tag).png")
+    }
+}

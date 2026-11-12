@@ -194,6 +194,7 @@ struct VoiceTrickBook: View {
         case .flip: s = "figure.gymnastics"; case .look: s = "eye.fill"; case .come: s = "arrow.down.circle.fill"
         case .spin: s = "arrow.triangle.2.circlepath"; case .hop: s = "arrow.up.circle.fill"
         case .showOff: s = "crown.fill"; case .strut: s = "figure.walk.motion"; case .sing: s = "music.note"; case .hula: s = "figure.dance"; case .superSpring: s = "arrow.up.to.line.circle.fill"; case .corkscrew: s = "tornado"; case .oneLegSpin: s = "figure.skating"
+        case .moonwalk: s = "moon.stars.fill"; case .backBounce: s = "figure.fall"; case .headstand: s = "figure.yoga"
         }
         return UIImage(systemName: s) != nil ? s : "star.fill"
     }
