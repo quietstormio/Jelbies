@@ -679,6 +679,9 @@ final class VoiceCoordinator {
         case .superSpring: return .superSpring
         case .corkscrew: return .corkscrew
         case .oneLegSpin: return .oneLegSpin
+        case .moonwalk: return .moonwalk
+        case .backBounce: return .backBounce
+        case .headstand: return .headstand
         default: return nil
         }
     }
@@ -697,6 +700,9 @@ final class VoiceCoordinator {
         case .superSpring: return .superSpring
         case .corkscrew: return .corkscrew
         case .oneLegSpin: return .oneLegSpin
+        case .moonwalk: return .moonwalk
+        case .backBounce: return .backBounce
+        case .headstand: return .headstand
         case .flip, .come: return nil
         }
     }
@@ -948,7 +954,7 @@ final class VoiceCoordinator {
     func stopNow(brain: BlobBrain) {
         voiceGoing = false; pendingHop = false; walkAfterHop = false; hopWait = 0; comeUntil = 0
         nameHop = false; nameTurning = false; nameWalking = false; holdLeft = 0
-        guard Self.running(brain) != .flip, Self.running(brain) != .superSpring, Self.running(brain) != .corkscrew else { return }          // (a flip, a spring or a corkscrew in the air lands first)
+        guard Self.running(brain) != .flip, Self.running(brain) != .superSpring, Self.running(brain) != .corkscrew, Self.running(brain) != .backBounce, Self.running(brain) != .headstand else { return }          // (a flip, a spring or a corkscrew in the air lands first; on his back / his head he gets up by himself)
         brain.interruptScript = true
         brain.commandedIdle = nil
         if brain.idleState.kind != nil, !brain.idleState.yielding { brain.idleState.yielding = true; brain.idleState.yieldT = 0 }
@@ -992,8 +998,8 @@ final class VoiceCoordinator {
             brain.flipCompact = focused
             brain.commandedFlipFail = rollFlipFail()
             brain.commandedFlip = true
-        case .superSpring, .corkscrew:
-            brain.flipCompact = focused          // (a lower jump in the close-up)
+        case .superSpring, .corkscrew, .moonwalk:
+            brain.flipCompact = focused          // (a lower jump in the close-up; the moonwalk's short version)
             brain.commandedIdle = Self.idleKind(for: t)
         default:
             brain.commandedIdle = Self.idleKind(for: t)

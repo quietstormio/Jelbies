@@ -42,6 +42,9 @@ nonisolated enum TrickCatalog {
         Def(trick: .superSpring, scope: .everyone, price: price(stars: 2)),
         Def(trick: .corkscrew, scope: .perJelbie, price: price(stars: 2)),
         Def(trick: .oneLegSpin, scope: .perJelbie, price: price(stars: 2)),
+        Def(trick: .moonwalk, scope: .perJelbie, price: price(stars: 3)),
+        Def(trick: .backBounce, scope: .perJelbie, price: price(stars: 2)),
+        Def(trick: .headstand, scope: .perJelbie, price: price(stars: 3)),
     ]
     static func def(_ t: VoiceTrick) -> Def? { forSale.first { $0.trick == t } }
 

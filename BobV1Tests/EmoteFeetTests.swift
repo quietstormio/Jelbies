@@ -24,7 +24,7 @@ final class EmoteFeetTests: XCTestCase {
         GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
-    static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/feetsrc/"
+    static let out = ProcessInfo.processInfo.environment["EMOTEFEET_OUT"] ?? "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/feetsrc/"          // (EMOTEFEET_OUT: a run writes its reports into its own folder)
     static let maxCollar: Float = 0.02, minRatio: Float = 0.7
     static let A = FootBean.around
 
@@ -163,6 +163,9 @@ final class EmoteFeetTests: XCTestCase {
     func testSuperSpring() throws { try emote("superSpring", "idle superSpring") }          // (the Super spring trick: a deep held crouch, a high launch, a big landing)
     func testCorkscrew() throws { try emote("corkscrew", "idle corkscrew") }          // (the Corkscrew jump: the flip's machinery, a twist about the vertical axis)
     func testOneLegSpin() throws { try emote("oneLegSpin", "idle oneLegSpin") }          // (the One-leg spin: one foot lifted out to the side through a pirouette)
+    func testMoonwalk() throws { try emote("moonwalk", "idle moonwalk") }          // (the Moonwalk: feet planted / sliding flat under a gliding root, a walk back)
+    func testBackBounce() throws { try emote("backBounce", "idle backBounce") }          // (the Back bounce: on his back, the feet kicking, forced beans)
+    func testHeadstand() throws { try emote("headstand", "idle headstand") }          // (the Headstand: on his head, the feet kicking in the air, forced beans)
     func testHula() throws { try emote("hula", "idle hula") }          // (the Hula trick: standing, the base circles over planted feet)
     func testSing() throws { try emote("sing", "idle sing") }          // (the Sing trick: standing, feet planted)
     func testSignatureFlourish() throws { try emote("signatureFlourish", "idle signatureFlourish") }

@@ -118,6 +118,11 @@ struct TrickIdle {
     /// Free counter / flags of the move.
     var stage = 0
     var flags = 0
+    /// Stage 3: the moonwalk's feet at the set and the heel-up of each foot (rad about the toe: the v2 hook in driveLimbs reads it ONLY while the moonwalk runs);
+    /// the tipped tricks' attractor strength at the hand-over.
+    var feet0: [SIMD2<Float>] = [.zero, .zero]
+    var heelUp = SIMD2<Float>.zero
+    var strength: Float = 0
 }
 
 /// HULA: the hips circle round and round with the feet planted, speeding up; the whole body LEANS against the hips (the crown swings round the other way: stage 3
@@ -159,6 +164,8 @@ extension BlobBrain {
         case .superSpring: return SpringTuning.total
         case .corkscrew: return CorkscrewTuning.total
         case .oneLegSpin: return OneLegTuning.total
+        case .moonwalk: return MoonwalkTuning.total()
+        case .backBounce, .headstand: return AcroProfile.total(k, fail: false)
         default: return nil
         }
     }
