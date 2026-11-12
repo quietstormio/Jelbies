@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-/// What a Moves-tab play button (or an idle emote) makes the stage's Jelbie do. Existing moves only.
+/// What an "Already knows" tab play button (or an idle emote) makes the stage's Jelbie do. Existing moves only.
 enum StageMove: Equatable {
     case idle(IdleKind)      // a commanded idle move (look, roll, tail spin, stretch, sway, flap-hop...)
     case hop                 // the jump for joy

@@ -1,7 +1,7 @@
 //
 //  AdoptionCenter.swift
 //  The species picker: a full-screen, swipeable page per species (Blueberry, Lemon Drop, Taro, Matcha) with the real 3D Jelbie on a round
-//  pedestal, a card with About / Traits / Moves, and the big button. Used for the first Jelbie of a new game (free) and for adopting more later
+//  pedestal, a card with About / Traits / Already knows, and the big button. Used for the first Jelbie of a new game (free) and for adopting more later
 //  (Drops via AdoptionPrice; any species, duplicates included, until the room holds 3). Then the naming step and the welcome home.
 //  The layout follows the design boards (440 x 956 pt): everything is placed in that space and scaled to the screen. Landscape: the stage on the
 //  left, the header + card + button on the right (the same blocks, scaled).
@@ -17,7 +17,11 @@ import UIKit
 
 enum PickerTab: Int, CaseIterable {
     case about, traits, moves
-    var title: String { ["About", "Traits", "Moves"][rawValue] }
+    var title: String { ["About", "Traits", "Already knows"][rawValue] }
+    /// The accessibility-id suffix (picker-tab-about / -traits / -moves): fixed, whatever the visible title says.
+    var idName: String { ["about", "traits", "moves"][rawValue] }
+    /// The tab's width in the card's 380-wide tab row (design B: 108 / 108 / 158).
+    var width: CGFloat { [108, 108, 158][rawValue] }
 }
 
 /// What the player chose: StartFlow.bringHome gives him his instance id.
@@ -238,7 +242,7 @@ struct AdoptionCenter: View {
     private func coverClose(_ size: CGSize, landscape: Bool, insets: EdgeInsets) -> (center: CGPoint, u: CGFloat) {
         if bigText { return (CGPoint(x: 16 + 22 + max(0, (size.width - 592) / 2), y: max(insets.top, 20) + 6 + 22), 1) }
         if landscape {
-            let us = min(size.width / 2 / 440, (size.height - 8) / 470, Self.padCap(size)), s = min(1, us)
+            let us = min(size.width / 2 / 440, (size.height - 8) / Self.stageH, Self.padCap(size)), s = min(1, us)
             return (CGPoint(x: 6 + 42 * s, y: 88 * s), s)
         }
         let u = min(size.width / 440, size.height / 956, Self.padCap(size))
@@ -277,8 +281,8 @@ struct AdoptionCenter: View {
         let showStage = !compact || su >= 0.25
         let stageS: CGFloat = compact ? su : 1
         let padNaming = HUDLayout.isPad && naming && !compact          // iPad naming step: a snug card with the button right under it (no empty lower half)
-        let cardH: CGFloat = compact ? Self.nameCardCompactH : naming ? Self.nameCardH : 252          // the naming card is snug: prompt, field, idea chips
-        let cardY: CGFloat = compact ? 108 + (showStage ? 470 * su : 0) : naming && !padNaming ? 849 - Self.nameCardH : 597          // (phone: its bottom stays where the tall card's was, right over the button)
+        let cardH: CGFloat = compact ? Self.nameCardCompactH : naming ? Self.nameCardH : step == .species ? Self.speciesCardH : 252          // the naming card is snug: prompt, field, idea chips; the species card (design B) is 238 high at y 611, the pick card keeps 252 at 597 (same bottom, 849)
+        let cardY: CGFloat = compact ? 108 + (showStage ? 470 * su : 0) : naming && !padNaming ? 849 - Self.nameCardH : step == .species ? 611 : 597          // (phone: its bottom stays where the tall card's was, right over the button)
         let ctaY: CGFloat = compact ? cardY + cardH + 6 : padNaming ? cardY + cardH + 16 : 862
         let canvasH: CGFloat = compact ? h : 956
         return ZStack(alignment: .topLeading) {
@@ -296,19 +300,21 @@ struct AdoptionCenter: View {
 
     /// The naming card's design height (prompt, field, the "Ideas:" row) and its keyboard-up compact height.
     private static let nameCardH: CGFloat = 220, nameCardCompactH: CGFloat = 192
+    /// The species page's card (design B): 238 high. The header block above the stage is 124 high; the stage block (pedestal, Jelbie, "Drag to spin" plaque, colour dots) is 472 high.
+    private static let speciesCardH: CGFloat = 238, headerH: CGFloat = 124, stageH: CGFloat = 472
 
     private func landscapeLayout(_ size: CGSize) -> some View {
         let half = size.width / 2
         let cap = Self.padCap(size)          // iPad-sized windows only; iPhone unchanged
-        let us = min(half / 440, (size.height - 8) / 470, cap)
-        let ur = min((half - 20) / 440, (size.height - 12) / (naming ? (mode == .more ? 172 : 150) + Self.nameCardH + 80 : 500), cap)
+        let us = min(half / 440, (size.height - 8) / Self.stageH, cap)
+        let ur = min((half - 20) / 440, (size.height - 12) / (naming ? Self.headerH + Self.nameCardH + 80 : Self.headerH + 252 + 68 + 12), cap)
         let compact = naming && kbUp
         let compactH = Self.nameCardCompactH + 6 + 68
         let uc = min((half - 20) / 440, (size.height - 8) / compactH, cap)  // name card + button only, above the keyboard
         return HStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
-                stageBlock(us).frame(width: 440, height: 470, alignment: .topLeading)
-                    .scaleEffect(us, anchor: .topLeading).frame(width: 440 * us, height: 470 * us, alignment: .topLeading)
+                stageBlock(us).frame(width: 440, height: Self.stageH, alignment: .topLeading)
+                    .scaleEffect(us, anchor: .topLeading).frame(width: 440 * us, height: Self.stageH * us, alignment: .topLeading)
                     .frame(width: half, height: size.height, alignment: .center)
                 topBar(pill: false, u: min(1, us)).frame(width: 440, height: 130, alignment: .topLeading).scaleEffect(min(1, us), anchor: .topLeading)
                     .frame(width: half, height: 60, alignment: .topLeading).padding(.leading, 6).frame(width: half, height: size.height, alignment: .topLeading)
@@ -326,8 +332,8 @@ struct AdoptionCenter: View {
                     .scaleEffect(uc, anchor: .top)
                     .frame(width: 440 * uc, height: compactH * uc, alignment: .top)
                 } else {
-                    let headH: CGFloat = mode == .more ? 172 : 150, cardH: CGFloat = naming ? Self.nameCardH : 252, ctaH: CGFloat = 68, gap: CGFloat = 6
-                    let colH: CGFloat = naming ? headH + cardH + ctaH + gap * 2 : 500          // naming: the sum of the stacked parts (a snug card, the column centred), so it cannot clip
+                    let headH: CGFloat = Self.headerH, cardH: CGFloat = naming ? Self.nameCardH : 252, ctaH: CGFloat = 68, gap: CGFloat = 6
+                    let colH: CGFloat = headH + cardH + ctaH + gap * 2          // the sum of the stacked parts (naming: a snug card), the column centred, so it cannot clip
                     VStack(spacing: gap) {
                         headerBlock.frame(width: 440, height: headH, alignment: .top)
                         sheetCard(ur, height: cardH).frame(width: 408, height: cardH)
@@ -358,9 +364,9 @@ struct AdoptionCenter: View {
                         if mode == .more { dropsPill }
                     }
                     if !naming { flowHeader }
-                    stageBlock(1, chips: false).frame(width: 440, height: 470, alignment: .topLeading)
-                        .scaleEffect(ss, anchor: .topLeading).frame(width: 440 * ss, height: 470 * ss, alignment: .topLeading)
-                        .frame(height: naming && kbUp ? 0 : 470 * ss).clipped().opacity(naming && kbUp ? 0 : 1)
+                    stageBlock(1, chips: false).frame(width: 440, height: Self.stageH, alignment: .topLeading)
+                        .scaleEffect(ss, anchor: .topLeading).frame(width: 440 * ss, height: Self.stageH * ss, alignment: .topLeading)
+                        .frame(height: naming && kbUp ? 0 : Self.stageH * ss).clipped().opacity(naming && kbUp ? 0 : 1)
                     if step == .pick { candidateRow }
                     if step == .species {
                         HStack {
@@ -394,15 +400,6 @@ struct AdoptionCenter: View {
             Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(SK.ink.opacity(0.78))
             Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).minimumScaleFactor(0.5)
             Text(epithetLine).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85))
-            if mode == .more { roomLine }
-            HStack(spacing: 4) {
-                ForEach(0..<order.count, id: \.self) { i in
-                    Circle().fill(SpeciesInfo.of(order[i]).look.dot).frame(width: i == page ? 15 : 11, height: i == page ? 15 : 11)
-                        .padding(3).background(Circle().fill(Color.white))
-                }
-            }
-            .opacity(step == .species ? 1 : 0)
-            .accessibilityHidden(true)
         }
         .multilineTextAlignment(.center).frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
@@ -447,7 +444,7 @@ struct AdoptionCenter: View {
                         .overlay(Capsule().strokeBorder(tab == t ? look.tabLine : Color.clear, lineWidth: 1.5))
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain).accessibilityAddTraits(tab == t ? .isSelected : []).accessibilityIdentifier("picker-tab-\(t.title.lowercased())")
+                .buttonStyle(.plain).accessibilityAddTraits(tab == t ? .isSelected : []).accessibilityIdentifier("picker-tab-\(t.idName)")
             }
         }
         .padding(3).background(Capsule().fill(SK.ink.opacity(0.06)))
@@ -593,39 +590,20 @@ struct AdoptionCenter: View {
         .buttonStyle(.plain).accessibilityLabel(label).accessibilityIdentifier(id ?? "picker-btn")
     }
 
-    /// Overline, name, epithet and the four colour dots (design: overline y 18, name y 61, epithet y 104, dots y 134 in this 150-high block).
+    /// Overline, name and epithet (design: overline y 18, name y 61, epithet y 104 in this 124-high block; the colour dots and the room line live under the pedestal / in the button now).
     private var headerBlock: some View {
         ZStack(alignment: .top) {
             Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.2).foregroundStyle(SK.ink.opacity(0.78))
                 .frame(height: 20).position(x: 220, y: 18)
-            // Only the name, epithet and Rare tag slide and fade with a swipe; the overline, dots and room line stay put.
+            // Only the name, epithet and Rare tag slide and fade with a swipe; the overline stays put.
             ZStack(alignment: .topLeading) {
                 Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).frame(width: 330, height: 60).position(x: 220, y: 61)
                 Text(epithetLine).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
             }
-            .frame(width: 440, height: 150, alignment: .topLeading)
+            .frame(width: 440, height: Self.headerH, alignment: .topLeading)
             .offset(x: slideX * 0.4).opacity(slideO)
-            if mode == .more {
-                roomLine.frame(width: 380).position(x: 220, y: 160)
-            }
-            HStack(spacing: 4) {
-                ForEach(0..<order.count, id: \.self) { i in
-                    let s = SpeciesInfo.of(order[i])
-                    let on = i == page
-                    ZStack {
-                        Circle().fill(Color.white).frame(width: on ? 24 : 17, height: on ? 24 : 17)
-                        if on { Circle().strokeBorder(s.look.dot.opacity(0.85), lineWidth: 1.5).frame(width: 24, height: 24) }
-                        Circle().fill(s.look.dot).frame(width: on ? 15 : 11, height: on ? 15 : 11)
-                    }
-                    .frame(width: 26, height: 26).contentShape(Circle())
-                    .onTapGesture { jump(to: i) }
-                }
-            }
-            .position(x: 221, y: 134)
-            .opacity(step == .species ? 1 : 0).allowsHitTesting(step == .species)
-            .accessibilityHidden(true)
         }
-        .frame(width: 440, height: 150, alignment: .topLeading)
+        .frame(width: 440, height: Self.headerH, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(headerLabel)
         .accessibilityHint(step == .species ? "Swipe up or down to change Jelbie" : "")
@@ -636,20 +614,15 @@ struct AdoptionCenter: View {
         }
     }
 
-    /// The still home-room status line (Jelly Spring only): how many Jelbies are home and how many more fit.
+    /// The home-room status (Jelly Spring only): how many Jelbies are home and how many more fit. VoiceOver's header label reads it.
     private var roomText: String {
         let cap = JellyRoster.maxCount, n = min(home.count, cap), free = cap - n
         return free > 0 ? "\(n) of \(cap) at home · room for \(free) more" : "Your home is full · \(n) of \(cap)"
     }
-    private var roomLine: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "house.fill").font(.system(size: 12, weight: .bold))
-            Text(roomText).lineLimit(1).minimumScaleFactor(0.8)
-        }
-        .font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72)).multilineTextAlignment(.center)
-        .padding(.horizontal, 12).padding(.vertical, 4)
-        .background(Capsule().fill(SK.cream.opacity(0.85)))          // reads cleanly when a tall head feature (daisy, ears) rises behind it
-        .accessibilityHidden(true)
+    /// The same status as the second line of the big button (design B): "Room for 1 more at home" / "Your home is full".
+    private var ctaRoomText: String {
+        let free = JellyRoster.maxCount - min(home.count, JellyRoster.maxCount)
+        return free > 0 ? "Room for \(free) more at home" : "Your home is full"
     }
 
     /// The line under the big name: the species' epithet, or the pick page's question.
@@ -735,13 +708,50 @@ struct AdoptionCenter: View {
                     .gesture(orbit.simultaneously(with: pinch)).offset(x: 55, y: 215)
                 roundButton("chevron.left", label: "Previous Jelbie", u: u) { step(-1) }.offset(x: 14, y: 399 - 130 - 22)
                 roundButton("chevron.right", label: "Next Jelbie", u: u) { step(1) }.offset(x: 382, y: 399 - 130 - 22)
-                dragPill.offset(x: 220 - 60, y: 571 - 130 - 15)
+                spinPlaque.offset(x: 161, y: 530 - 130)
+                speciesDots(u: u).offset(x: 220 - CGFloat(order.count) * 15, y: 571 - 130)          // 7 pages: x 115 (the design's 210-wide row); 4 pages: centred
             } else if row {
                 rowBands(proj, u: u, chips: chips)
                 hintPill.offset(x: 220 - 105, y: 571 - 130 - 15)
             }
         }
-        .frame(width: 440, height: 470, alignment: .topLeading)
+        .frame(width: 440, height: Self.stageH, alignment: .topLeading)
+    }
+
+    /// The seven (four) colour dots under the plaque (design B: canvas 115, 571; 210 x 30): real buttons, one per species page.
+    private func speciesDots(u: CGFloat) -> some View {
+        let hit = max(30, hitMin(u))          // a 44 pt touch target on screen, taller than the 30 pt row (the width stays 30: the neighbours share the row)
+        return HStack(spacing: 0) {
+            ForEach(0..<order.count, id: \.self) { i in
+                let s = SpeciesInfo.of(order[i])
+                let on = i == page
+                Button { jump(to: i) } label: {
+                    ZStack {
+                        Circle().fill(Color.white).frame(width: on ? 24 : 17, height: on ? 24 : 17)
+                        if on { Circle().strokeBorder(s.look.dot.opacity(0.85), lineWidth: 1.5).frame(width: 24, height: 24) }
+                        Circle().fill(s.look.dot).frame(width: on ? 15 : 11, height: on ? 15 : 11)
+                    }
+                    .frame(width: 30, height: hit).contentShape(Rectangle())
+                    .padding(.vertical, -(hit - 30) / 2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(s.name).accessibilityAddTraits(on ? .isSelected : [])
+                .accessibilityIdentifier("picker-dot-\(i)")
+            }
+        }
+        .frame(width: CGFloat(order.count) * 30, height: 30)
+    }
+
+    /// "Drag to spin" under the pedestal (design B: canvas 161, 530; 118 x 24): a cream plaque with the spin arrows. Never over the Jelbie; touches pass through to the orbit area.
+    private var spinPlaque: some View {
+        HStack(spacing: 5) {
+            SpinGlyphIcon(size: 12)
+            Text("Drag to spin").font(SK.font(13, .heavy)).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .foregroundStyle(SK.ink).frame(width: 118, height: 24)
+        .background(Capsule().fill(SK.cream).shadow(color: Color(hex: 0x2E1E12).opacity(0.28), radius: 0, y: 1.5))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     /// One wide pedestal under the row, and (once a pick is made) the spotlight and the ring around the picked Jelbie's feet.
@@ -831,25 +841,17 @@ struct AdoptionCenter: View {
         }.onEnded { _ in pinching = false }
     }
 
-    private var dragPill: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "arrow.counterclockwise").font(.system(size: 13, weight: .heavy))
-            Text("Drag to spin").font(SK.font(15, .heavy))
-        }
-        .foregroundStyle(SK.ink).frame(width: 120, height: 30)
-        .background(Capsule().fill(Color.white.opacity(0.58)))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
-        .accessibilityHidden(true)
-    }
-
-    // MARK: card (design box 408 x 252)
+    // MARK: card (design B: the species card is 408 x 238; the pick / naming cards keep their own heights)
 
     private func sheetCard(_ u: CGFloat, height: CGFloat = 252) -> some View {
-        ZStack(alignment: .topLeading) {
+        let speciesCard = !naming && step == .species
+        let bgH = speciesCard ? min(height, Self.speciesCardH) : height          // landscape: the 252-high slot holds the 238-high card at its top
+        return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 22, style: .continuous).fill(look.card).shadow(color: look.glow.opacity(0.22), radius: 6, y: 3)
+                .frame(width: 408, height: bgH)
             Capsule().fill(SK.ink.opacity(0.16)).frame(width: 22, height: 5).offset(x: 193, y: 8).accessibilityHidden(true)
             if naming { nameCard(u) } else if step == .pick { pickCard(u) } else {
-                tabs(u).offset(x: 14, y: 23)
+                tabs(u).offset(x: 14, y: 22)
                 Group {
                     switch tab {
                     case .about: aboutTab
@@ -857,11 +859,11 @@ struct AdoptionCenter: View {
                     case .moves: movesTab(u)
                     }
                 }
-                .frame(width: 408, height: 252, alignment: .topLeading)
+                .frame(width: 408, height: Self.speciesCardH, alignment: .topLeading)
                 .id("\(page)-\(tab.rawValue)").transition(.opacity)
             }
         }
-        .frame(width: 408, height: height)
+        .frame(width: 408, height: height, alignment: .topLeading)
     }
 
     private func tabs(_ u: CGFloat) -> some View {
@@ -869,13 +871,14 @@ struct AdoptionCenter: View {
             ForEach(PickerTab.allCases, id: \.rawValue) { t in
                 Button { AudioHub.shared.uiTap(); withAnimation(.easeOut(duration: 0.18)) { tab = t } } label: {
                     Text(t.title).font(SK.font(16, tab == t ? .heavy : .bold)).foregroundStyle(tab == t ? SK.ink : SK.ink.opacity(0.62))
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(width: t.width, height: 34)
                         .background(Capsule().fill(tab == t ? look.tabFill : Color.clear))
                         .overlay(Capsule().strokeBorder(tab == t ? look.tabLine : Color.clear, lineWidth: 1.5))
-                        .frame(minHeight: hitMin(u))        // a 44 pt touch target around the 34 pt pill
+                        .frame(width: t.width, height: max(34, hitMin(u)))        // a 44 pt touch target around the 34 pt pill
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain).accessibilityAddTraits(tab == t ? .isSelected : []).accessibilityIdentifier("picker-tab-\(t.title.lowercased())")
+                .buttonStyle(.plain).accessibilityAddTraits(tab == t ? .isSelected : []).accessibilityIdentifier("picker-tab-\(t.idName)")
             }
         }
         .padding(3).frame(width: 380, height: 40)
@@ -884,34 +887,34 @@ struct AdoptionCenter: View {
 
     private var aboutTab: some View {
         ZStack(alignment: .topLeading) {
-            // the text takes the first size that fits its 64-high box (16 pt, then 15, then 14 pt), so even a 3-line About never reaches the tiles below it
+            // design B: 15 pt / 21 line, centred in its 64-high box at (22, 74); a longer About takes 14 pt, so it never reaches the tiles below it
             ViewThatFits(in: .vertical) {
-                aboutText(16, spacing: 4)
                 aboutText(15, spacing: 3)
                 aboutText(14, spacing: 2)
             }
-            .frame(width: 345, height: 64, alignment: .topLeading).offset(x: 22, y: 76)
-            tile("Best at", dot: SpeciesInfo.jarNames.firstIndex(of: info.bestAt).map { Self.jarColor($0) }, value: info.bestAt).offset(x: 14, y: 156)
-            tile("Signature", dot: nil, value: info.signature).offset(x: 145, y: 156)
-            tile("Loves", dot: nil, value: info.loves).offset(x: 277, y: 156)
+            .frame(width: 345, height: 64, alignment: .leading).offset(x: 22, y: 74)
+            tile("Best at", dot: SpeciesInfo.jarNames.firstIndex(of: info.bestAt).map { Self.jarColor($0) }, value: info.bestAt).offset(x: 14, y: 152)
+            tile("Signature", dot: nil, value: info.signature).offset(x: 145, y: 152)
+            tile("Loves", dot: nil, value: info.loves).offset(x: 277, y: 152)
         }
     }
 
     private func aboutText(_ size: CGFloat, spacing: CGFloat) -> some View {
         Text(info.about).font(SK.font(size, .medium)).foregroundStyle(SK.ink).lineSpacing(spacing).fixedSize(horizontal: false, vertical: true)
-            .frame(width: 345, alignment: .topLeading)
+            .frame(width: 345, alignment: .leading)
     }
 
+    /// An About tile (design B: 117 x 74, radius 17, 13 pt in from the left, the two lines centred, 6 pt apart).
     private func tile(_ title: String, dot: Color?, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text(title).font(SK.font(12.5, .bold)).foregroundStyle(Color(hex: 0x8D7C6E))
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(SK.font(12.5, .bold)).foregroundStyle(Color(hex: 0x8D7C6E)).frame(height: 15)
             HStack(spacing: 6) {
                 if let dot { Circle().fill(dot).frame(width: 13, height: 13) }
-                Text(value).font(SK.font(19, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(value).font(SK.font(19, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7).frame(height: 23)
             }
         }
-        .padding(.leading, 13).padding(.bottom, 14)
-        .frame(width: 117, height: 84, alignment: .leading).offset(y: 0)
+        .padding(.leading, 13)
+        .frame(width: 117, height: 74, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 17, style: .continuous).fill(SK.ink.opacity(0.055)))
         .accessibilityElement(children: .combine)
     }
@@ -935,28 +938,37 @@ struct AdoptionCenter: View {
         }
     }
 
+    /// "Already knows" (design B): the same moves, the same play buttons. Two moves: an intro line (22, 72) and rows at tops 99 / 161 (heights 56 / 52);
+    /// three moves (Taro): no intro, rows at tops 74 / 130 / 180 (heights 52 / 46 / 46) so all three fit the 238-high card.
     private func movesTab(_ u: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(info.moves.enumerated()), id: \.element.id) { k, m in
-                let cy: CGFloat = [103, 160, 212][k], h: CGFloat = k == 0 ? 56 : 52
+        let three = info.moves.count == 3
+        let tops: [CGFloat] = three ? [74, 130, 180] : [99, 161]
+        let heights: [CGFloat] = three ? [52, 46, 46] : [56, 52]
+        return ZStack(alignment: .topLeading) {
+            if !three {
+                Text("Every \(info.name) knows these moves from day one.").font(SK.font(13.5, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
+                    .lineLimit(1).minimumScaleFactor(0.8).frame(width: 364, height: 18, alignment: .leading).offset(x: 22, y: 72)
+            }
+            ForEach(Array(info.moves.prefix(tops.count).enumerated()), id: \.element.id) { k, m in
+                let h = heights[k]
                 ZStack(alignment: .topLeading) {
                     if k == 0 { RoundedRectangle(cornerRadius: 17, style: .continuous).fill(look.rowHi).frame(width: 380, height: h) }
                     Circle().fill(k == 0 ? Color.white : SK.ink.opacity(0.07)).frame(width: 38, height: 38).offset(x: 14, y: (h - 38) / 2)
                     Image(systemName: m.icon).font(.system(size: 16, weight: .bold)).foregroundStyle(SK.ink).frame(width: 38, height: 38).offset(x: 14, y: (h - 38) / 2)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(m.title).font(SK.font(19, .black)).foregroundStyle(SK.ink)
-                        Text(m.subtitle).font(SK.font(15, .semibold)).foregroundStyle(SK.ink.opacity(0.6))
+                        Text(m.title).font(SK.font(19, .black)).foregroundStyle(SK.ink).frame(height: 23)
+                        Text(m.subtitle).font(SK.font(15, .semibold)).foregroundStyle(SK.ink.opacity(0.6)).frame(height: 18)
                     }
-                    .offset(x: 61, y: (h - 40) / 2)
+                    .offset(x: 61, y: (h - 42) / 2)
                     Button { AudioHub.shared.uiTap(); perform(m.move) } label: {
-                        Image(systemName: "play.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.cream)
+                        Image(systemName: "play.fill").font(.system(size: 13, weight: .black)).foregroundStyle(SK.cream).offset(x: 1)
                             .frame(width: 36, height: 36).background(Circle().fill(SK.ink))
                             .frame(width: hitMin(u), height: hitMin(u)).contentShape(Circle()).padding(-(hitMin(u) - 36) / 2)
                     }
                     .buttonStyle(.plain).accessibilityLabel("Play \(m.title)").offset(x: 330, y: (h - 36) / 2)
                 }
                 .frame(width: 380, height: h, alignment: .topLeading)
-                .offset(x: 14, y: cy - h / 2)
+                .offset(x: 14, y: tops[k])
             }
         }
     }
@@ -1159,7 +1171,17 @@ struct AdoptionCenter: View {
 
     @ViewBuilder private var ctaLabel: some View {
         switch step {
-        case .species: Text("Meet the three")
+        case .species:
+            if mode == .more {          // design B: the title and, under it, the room status (900 21/25, then a house + 600 13/16 at 0.82 cream)
+                VStack(spacing: 1) {
+                    Text("Meet the three")
+                    HStack(spacing: 5) {
+                        HomeGlyphIcon(size: 13)
+                        Text(ctaRoomText).font(SK.font(13, .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .foregroundStyle(SK.cream.opacity(0.82))
+                }
+            } else { Text("Meet the three") }
         case .naming: Text("Bring \(finalName) home")
         case .pick:
             if let c = pickedCand {
