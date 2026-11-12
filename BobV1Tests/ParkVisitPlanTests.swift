@@ -1,6 +1,6 @@
 //
 //  ParkVisitPlanTests.swift
-//  Which park toys the Jelbies use on their own during a visit (Park/ParkVisitPlan.swift): the draw's guards and rates, the persisted counter, `allows`, and the test-run bypass.
+//  Which park toys the Jelbies use on their own during a visit (Park/ParkVisitPlan.swift): the draw (both pieces at every visit), the persisted counter, `allows`, and the test-run bypass.
 //
 
 import XCTest
@@ -27,65 +27,63 @@ final class ParkVisitPlanTests: XCTestCase {
 
     // MARK: the draw
 
-    func testNeverBothAndEachPieceEveryOtherVisit() {
-        var seesawVisits: [Int] = [], hopscotchVisits: [Int] = []
+    func testEveryVisitHasBothPieces() {
         for v in 1...20 {
             let d = ParkVisitPlan.draw(visit: v, seesawOff: 0, hopscotchOff: 0)
-            XCTAssertFalse(d.seesaw && d.hopscotch, "visit \(v): both pieces in play")
-            XCTAssertTrue(d.seesaw || d.hopscotch, "visit \(v): neither piece in play")
-            if d.seesaw { seesawVisits.append(v) }; if d.hopscotch { hopscotchVisits.append(v) }
-        }
-        XCTAssertEqual(seesawVisits.count, 10); XCTAssertEqual(hopscotchVisits.count, 10)
-        for list in [seesawVisits, hopscotchVisits] {
-            for (a, b) in zip(list, list.dropFirst()) { XCTAssertEqual(b - a, 2, "a piece appears in exactly every other visit") }
-        }
-        // the saved streaks never change the answer
-        for v in 1...20 {
-            let a = ParkVisitPlan.draw(visit: v, seesawOff: 0, hopscotchOff: 0), b = ParkVisitPlan.draw(visit: v, seesawOff: 2, hopscotchOff: 2)
-            XCTAssertTrue(a.seesaw == b.seesaw && a.hopscotch == b.hopscotch)
+            XCTAssertTrue(d.seesaw, "visit \(v): the seesaw is in play")
+            XCTAssertTrue(d.hopscotch, "visit \(v): the hopscotch court is in play")
+            // the saved streaks never change the answer
+            let b = ParkVisitPlan.draw(visit: v, seesawOff: 2, hopscotchOff: 2)
+            XCTAssertTrue(b.seesaw && b.hopscotch, "visit \(v): streaks are ignored")
         }
     }
 
     // MARK: begin
 
-    /// 20 consecutive visits through the persisted counter (each one reading the store fresh, as a relaunch does): never both, alternating, from any starting counter.
-    func testBeginAlternatesAcrossRelaunches() {
+    /// 20 consecutive visits through the persisted counter (each one reading the store fresh, as a relaunch does): the counter advances from any starting value and every visit has both pieces.
+    func testBeginAdvancesCounterAndAlwaysHasBoth() {
         for start in [0, 1, 7] {
             let d = freshDefaults()
             if start > 0 { d.set(["visit": start, "seesawOff": 0, "hopscotchOff": 0], forKey: ParkVisitPlan.key) }
-            var plans: [ParkVisitPlan.Plan] = []
             for v in 1...20 {
                 let p = ParkVisitPlan.begin(defaults: d)
                 XCTAssertEqual(p.visit, start + v)
                 XCTAssertEqual(ParkVisitPlan.current, p)
                 XCTAssertEqual(d.dictionary(forKey: ParkVisitPlan.key)?["visit"] as? Int, start + v)
-                XCTAssertFalse(p.seesaw && p.hopscotch, "visit \(p.visit): both")
-                XCTAssertTrue(p.seesaw != p.hopscotch, "visit \(p.visit): exactly one")
-                plans.append(p)
+                XCTAssertTrue(p.seesaw && p.hopscotch, "visit \(p.visit): both pieces")
             }
-            XCTAssertEqual(plans.filter(\.seesaw).count, 10, "start \(start)")
-            XCTAssertEqual(plans.filter(\.hopscotch).count, 10, "start \(start)")
-            for (a, b) in zip(plans, plans.dropFirst()) { XCTAssertNotEqual(a.seesaw, b.seesaw, "visit \(b.visit) alternates") }
         }
     }
 
-    /// Only the piece that is in today's plan is placed (drawn): one of the seesaw / the court, always the slide; the forcing argument and the default plan show both.
-    func testOnlyTodaysBigToyIsPlaced() {
+    /// The counter survives a relaunch: a store written by one run is read by the next, which continues from it.
+    func testCounterSurvivesRelaunch() {
         let d = freshDefaults()
-        for _ in 0..<6 {
+        XCTAssertEqual(ParkVisitPlan.begin(defaults: d).visit, 1)
+        XCTAssertEqual(ParkVisitPlan.begin(defaults: d).visit, 2)
+        ParkVisitPlan.current = .all          // a relaunch: the in-memory plan is gone, the store stays
+        let p = ParkVisitPlan.begin(defaults: d)
+        XCTAssertEqual(p.visit, 3)
+        XCTAssertTrue(p.seesaw && p.hopscotch)
+        XCTAssertEqual(d.dictionary(forKey: ParkVisitPlan.key)?["visit"] as? Int, 3)
+    }
+
+    /// Every visit places the slide, the seesaw and the court; the forcing argument and the default plan show everything too.
+    func testEveryPieceIsPlacedAtEveryVisit() {
+        let d = freshDefaults()
+        for _ in 0..<20 {
             let p = ParkVisitPlan.begin(defaults: d)
             let kinds = ParkVisitPlan.placedToday.map(\.kind)
-            XCTAssertTrue(kinds.contains(.slide), "visit \(p.visit): the slide is always there")
-            XCTAssertEqual(kinds.contains(.seesaw), p.seesaw, "visit \(p.visit)")
-            XCTAssertEqual(kinds.contains(.hopscotch), p.hopscotch, "visit \(p.visit)")
-            XCTAssertEqual(kinds.filter { $0 == .seesaw || $0 == .hopscotch }.count, 1, "visit \(p.visit): exactly one big toy")
-            XCTAssertEqual(kinds.count, ParkToys.placed.count - 1)
-            XCTAssertTrue(ParkVisitPlan.shows(.slide) && ParkVisitPlan.shows(.ball))
+            XCTAssertTrue(kinds.contains(.slide), "visit \(p.visit): the slide is there")
+            XCTAssertTrue(kinds.contains(.seesaw), "visit \(p.visit): the seesaw is there")
+            XCTAssertTrue(kinds.contains(.hopscotch), "visit \(p.visit): the court is there")
+            XCTAssertEqual(kinds.count, ParkToys.placed.count, "visit \(p.visit): nothing is left out")
+            XCTAssertTrue(ParkVisitPlan.shows(.slide) && ParkVisitPlan.shows(.ball) && ParkVisitPlan.shows(.seesaw) && ParkVisitPlan.shows(.hopscotch))
         }
         ParkVisitPlan.current = .all
         let all = ParkVisitPlan.placedToday.map(\.kind)
         XCTAssertTrue(all.contains(.seesaw) && all.contains(.hopscotch) && all.contains(.slide), "the default plan / forcing argument show everything")
-        XCTAssertEqual(ParkVisitPlan.begin().seesaw && ParkVisitPlan.begin().hopscotch, true)
+        let p = ParkVisitPlan.begin()
+        XCTAssertTrue(p.seesaw && p.hopscotch)
         XCTAssertEqual(ParkVisitPlan.placedToday.count, ParkToys.placed.count)
     }
 
@@ -116,6 +114,21 @@ final class ParkVisitPlanTests: XCTestCase {
     }
 
     // MARK: allows
+
+    /// At every visit's plan both big toys are open to the Jelbies in the park, and at home.
+    func testAllowsBothAtEveryVisit() {
+        let d = freshDefaults()
+        for _ in 0..<20 {
+            let p = ParkVisitPlan.begin(defaults: d)
+            for k in [DecorKind.seesaw, .hopscotch] {
+                XCTAssertTrue(ParkVisitPlan.allows(k, outing: true, inUse: false), "visit \(p.visit): \(k) in the park")
+                XCTAssertTrue(ParkVisitPlan.allows(k, outing: false, inUse: false), "visit \(p.visit): \(k) at home")
+            }
+        }
+        ParkVisitPlan.current = .all
+        XCTAssertTrue(ParkVisitPlan.allows(.seesaw, outing: true))
+        XCTAssertTrue(ParkVisitPlan.allows(.hopscotch, outing: true))
+    }
 
     func testAllows() {
         ParkVisitPlan.current = ParkVisitPlan.Plan(visit: 1, seesaw: false, hopscotch: false)

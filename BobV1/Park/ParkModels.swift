@@ -174,7 +174,7 @@ nonisolated enum ParkWords {
     static func blurb(_ s: ParkStyle, _ r: inout ParkRandom) -> String {
         let l: [String]
         switch s {
-        case .energetic: l = ["Never stops bouncing.", "Races everyone to the pond.", "Always the first to zoom."]
+        case .energetic: l = ["Never stops bouncing.", "Races everyone to the slide.", "Always the first to zoom."]
         case .calm: l = ["Loves a quiet sit in the sun.", "Takes everything nice and slow.", "Hums softly to the flowers."]
         case .playful: l = ["Giggles at everything.", "Always up for a silly game.", "Dances when nobody is looking."]
         case .balanced: l = ["Friendly with everyone.", "Happy to play or to rest.", "Likes a bit of everything."]
