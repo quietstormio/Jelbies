@@ -46,13 +46,21 @@ enum RuleParser {
     private static let cleanPhrases = ["bath time", "take a bath", "get clean", "clean up", "wash up", "time for a bath", "have a bath", "get washed", "shower time"]
     private static let cleanWords: Set<String> = ["bath", "bathe", "wash", "clean", "shower", "scrub", "soap", "rinse", "dirty", "filthy"]
     private static let spinPhrases = ["spin around", "turn around", "do a spin", "spin round", "do a twirl"]
-    private static let spinWords: Set<String> = ["spin", "twirl", "pirouette", "spinny", "spins"]
+    private static let spinWords: Set<String> = ["spin", "twirl", "spinny", "spins"]
     private static let showOffPhrases = ["show off", "show it off", "do a show off"]
     private static let showOffWords: Set<String> = ["showoff"]
     private static let strutPhrases = ["strut your stuff", "do a strut"]
     private static let strutWords: Set<String> = ["strut", "struts", "strutting"]
     private static let singPhrases = ["sing a song", "sing me a song", "sing for me"]
     private static let singWords: Set<String> = ["sing", "sings", "singing"]
+    private static let hulaPhrases = ["do the hula", "hula dance", "dance the hula"]
+    private static let hulaWords: Set<String> = ["hula", "hulas"]
+    private static let legSpinPhrases = ["one leg spin", "one legged spin", "one foot spin", "tiptoe spin", "spin on one leg", "spin on one foot"]
+    private static let legSpinWords: Set<String> = ["pirouette", "pirouettes"]
+    private static let corkPhrases = ["corkscrew jump", "do a corkscrew", "corkscrew spin"]
+    private static let corkWords: Set<String> = ["corkscrew", "corkscrews"]
+    private static let springPhrases = ["super spring", "do a super spring", "spring up"]
+    private static let springWords: Set<String> = ["spring", "springs"]
     private static let jacksPhrases = ["jumping jacks", "jumping jack", "jump up and down", "do some jumps", "star jumps"]
     private static let jacksWords: Set<String> = ["jump", "jumps", "jumping", "exercise", "workout"]
     private static let hopPhrases = ["hop hop", "do a hop", "hop up", "hop up and down", "bounce around"]
@@ -189,6 +197,14 @@ enum RuleParser {
         if hasWord(toks, strutWords) { return finish(.trick(.strut), words: strutWords) }
         if let p = has(toks, singPhrases) { return finish(.trick(.sing), strip: p, words: singWords) }
         if hasWord(toks, singWords) { return finish(.trick(.sing), words: singWords) }
+        if let p = has(toks, legSpinPhrases) { return finish(.trick(.oneLegSpin), strip: p, words: legSpinWords.union(spinWords)) }
+        if hasWord(toks, legSpinWords) { return finish(.trick(.oneLegSpin), words: legSpinWords) }
+        if let p = has(toks, corkPhrases) { return finish(.trick(.corkscrew), strip: p, words: corkWords) }
+        if hasWord(toks, corkWords) { return finish(.trick(.corkscrew), words: corkWords) }
+        if let p = has(toks, springPhrases) { return finish(.trick(.superSpring), strip: p, words: springWords) }
+        if hasWord(toks, springWords) { return finish(.trick(.superSpring), words: springWords) }
+        if let p = has(toks, hulaPhrases) { return finish(.trick(.hula), strip: p, words: hulaWords) }
+        if hasWord(toks, hulaWords) { return finish(.trick(.hula), words: hulaWords) }
         if let p = has(toks, spinPhrases) { return finish(.trick(.spin), strip: p, words: spinWords) }
         if hasWord(toks, spinWords) { return finish(.trick(.spin), words: spinWords) }
         if let p = has(toks, jacksPhrases) { return finish(.trick(.jacks), strip: p, words: jacksWords) }

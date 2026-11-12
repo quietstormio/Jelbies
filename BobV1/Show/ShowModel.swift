@@ -185,6 +185,10 @@ nonisolated enum ShowTrickInfo {
         case .showOff: return [.cute, .sparkly]
         case .strut: return [.cool]
         case .sing: return [.sweet, .cute]
+        case .hula: return [.cute, .sweet]
+        case .superSpring: return [.sporty]
+        case .corkscrew: return [.sporty, .cool]
+        case .oneLegSpin: return [.sparkly]
         }
     }
     /// The tricks a Jelbie can show on stage: everything learned but the come and the run (walks, not stage tricks: he would leave the spotlight).
@@ -198,17 +202,19 @@ nonisolated enum ShowTrickInfo {
     /// Difficulty in stars, 1...3: harder tricks score more and slip more often.
     static func difficulty(_ t: VoiceTrick) -> Int {
         switch t {
-        case .sit, .hop, .look, .come, .run, .strut, .sing: return 1
-        case .jacks, .spin: return 2
+        case .sit, .hop, .look, .come, .run, .strut, .sing, .hula: return 1
+        case .jacks, .spin, .superSpring, .corkscrew, .oneLegSpin: return 2
         case .flip, .showOff: return 3
         }
     }
+    /// The moves with their OWN fail variant (the Jelly Show sets `idleState.trickFailNext` instead of cutting the move short into a wobble).
+    static let ownsFlop: Set<VoiceTrick> = [.hula, .superSpring, .corkscrew, .oneLegSpin]
     static func symbol(_ t: VoiceTrick) -> String {
         switch t {
         case .spin: return "arrow.triangle.2.circlepath"; case .hop: return "arrow.up.to.line"
         case .flip: return "arrow.uturn.up"; case .jacks: return "figure.jumprope"; case .sit: return "chair.fill"; case .look: return "eye.fill"
         case .come: return "figure.walk"; case .run: return "figure.run"
-        case .showOff: return "crown.fill"; case .strut: return "figure.walk.motion"; case .sing: return "music.note"
+        case .showOff: return "crown.fill"; case .strut: return "figure.walk.motion"; case .sing: return "music.note"; case .hula: return "figure.dance"; case .superSpring: return "arrow.up.to.line.circle.fill"; case .corkscrew: return "tornado"; case .oneLegSpin: return "figure.skating"
         }
     }
     /// How long the stage gives a trick to play out (seconds). The move runs to its own end; the old fixed 2.6 s cut the longer ones short.
@@ -216,6 +222,10 @@ nonisolated enum ShowTrickInfo {
         switch t {
         case .showOff, .strut: return 3.2
         case .sing: return 3.6
+        case .hula: return 3.8
+        case .superSpring: return 2.8
+        case .corkscrew: return 2.4
+        case .oneLegSpin: return 2.8
         default: return 2.6
         }
     }

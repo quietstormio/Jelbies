@@ -45,6 +45,19 @@ struct GaitDriver {
     /// Fraction of the stiff foot-sole targets used during a flip (1 = the full 60000: the soles snap onto the rigid pose and the catch-up is the fastest motion in the flip).
     static let flipFootGrip: Float = 0.15
     var flipFail = false
+    // Trick knobs (trick plan stage 2: corkscrew jump, super spring). Every one DEFAULTS TO TODAY'S VALUE (GaitDriverDefaultsTests): an ordinary hop and flip are unchanged.
+    /// Corkscrew: the full twist (rad) about the vertical axis through the air phase (0 = a plain flip). While it is non-zero the flip's pitch stays 0.
+    var flipTwist: Float = 0
+    /// Corkscrew: the twist (rad) added to the heading right now (the heading itself wraps to +-pi and cannot carry a full turn).
+    private(set) var twistNow: Float = 0
+    /// Hop: how deep the crouch squashes (1 - this), and the same figure at take-off.
+    var crouchDepth: Float = 0.18
+    /// Hop / flip: seconds the crouch is held at its deepest before the launch.
+    var crouchHold: Float = 0
+    /// Hop: the stretch at take-off (1 + this).
+    var airStretch: Float = 0.12
+    /// Hop: the landing squash (1 - this x decaying cosine).
+    var landDepth: Float = 0.2
     /// Rotation (rad) of a clean flip / of the failed one (about 281 deg: he lands nose first).
     static let flipCleanTurn: Float = 2 * .pi
     static let flipFailTurn: Float = 4.9
@@ -124,7 +137,7 @@ struct GaitDriver {
     /// A flip owns the body (the beans stay in their leg shape in its air / landing phases: BlobBrain.driveBeansRigid).
     var isSpinMove: Bool { move == .flip }
     private func yawQ(_ y: Float) -> simd_quatf {
-        let q = simd_quatf(angle: y, axis: SIMD3<Float>(0, 1, 0))
+        let q = simd_quatf(angle: twistNow == 0 ? y : y + twistNow, axis: SIMD3<Float>(0, 1, 0))
         let p = basePitch + flipPitch + slidePitchNow
         return p == 0 ? q : q * simd_quatf(angle: p, axis: SIMD3<Float>(1, 0, 0))
     }
@@ -148,7 +161,7 @@ struct GaitDriver {
     }
 
     mutating func cancel(_ sim: SoftBody) {
-        phase = .idle; chained = false; tuck = 0; flipPitch = 0; slidePitchNow = 0; slideT = 0; flipFail = false
+        phase = .idle; chained = false; tuck = 0; flipPitch = 0; twistNow = 0; slidePitchNow = 0; slideT = 0; flipFail = false
         sim.attractor.strength = 0
         if !sim.targets.isEmpty { sim.targets = [] }
     }
@@ -247,9 +260,10 @@ struct GaitDriver {
 
         case .crouch:
             tMove = t
-            let tc = move == .flip ? flipCrouch : (chained ? crouchTime * 0.4 : crouchTime)
-            let u = t / tc
-            let sy = 1 - (move == .flip ? 0.24 : 0.18) * amp * smooth(u)
+            let tcDown = move == .flip ? flipCrouch : (chained ? crouchTime * 0.4 : crouchTime)
+            let tc = tcDown + crouchHold          // (the deepest squash is held for `crouchHold` seconds: 0 = the old crouch)
+            let u = crouchHold == 0 ? t / tc : min(1, t / tcDown)
+            let sy = 1 - (move == .flip ? 0.24 : crouchDepth) * amp * smooth(u)
             let k = (move == .flip ? kFlip : kHop) * min(1, t / 0.06)
             let yawNow = move == .flip ? yaw0 : yawEase(t / (tc + 0.3))
             if move == .flip { flipClock = min(t, tc) }
@@ -303,7 +317,8 @@ struct GaitDriver {
             let turn = flipFail ? Self.flipFailTurn : Self.flipCleanTurn
             let v = flipFail ? min(1, max(0, u / 0.995)) : min(1, max(0, u / 0.995))
             flipV = v
-            flipPitch = -turn * Self.flipProfile(v)
+            if flipTwist != 0 { flipPitch = 0; twistNow = flipTwist * Self.flipProfile(v) }          // (the corkscrew: the turn is about the vertical axis)
+            else { flipPitch = -turn * Self.flipProfile(v) }
             // a touch of stretch at take-off, a subtle tuck through the turn, open again to land
             // (the squash rises out of the crouch's over 0.10 s: a jump from 0.76 to 1.05 in one step is the fastest thing in the whole flip)
             let crouchSy = 1 - 0.24 * amp
@@ -315,7 +330,7 @@ struct GaitDriver {
             // 2026-10-25 (legs2): NO sim-sole targets in the air. They pulled the foot slab toward the ATTRACTOR's pose while the soft body lags it by tens of
             // degrees in a flip, so the embedded feet stretched off the surface ("feet come off"). The feet are the rigid beans there (`beanForce`).
             if !sim.targets.isEmpty { sim.targets = [] }; tuck = 0
-            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0; flipLandT = 0; if !flipFail { flipPitch = 0 } }
+            if t >= T { phase = .land; t = 0; sim.targets = []; tuck = 0; flipLandT = 0; if !flipFail { flipPitch = 0 }; if flipTwist != 0 { twistNow = wrap(flipTwist) } }          // (a whole turn lands on the heading it left; a short one lands turned)
 
         case .land where move == .flip && flipFail:
             // faceplant: nose-first impact (the body presses into the floor: front squash), a beat lying there, a body-led push back up onto the
@@ -365,7 +380,7 @@ struct GaitDriver {
             let fade = 1 - smooth((t - (sq + flipSettle - 0.15)) / 0.15)
             flipPitch = jig
             setUpright(sim, xz: from, yaw: yaw0, squash: sy, lift: 0, strength: kFlip * max(0, fade))
-            if t >= sq + flipSettle { flipPitch = 0; endMove(sim) }
+            if t >= sq + flipSettle { flipPitch = 0; endMove(sim) }          // (twistNow is left for the brain to fold into the heading: see endMove)
 
         case .air:
             let T = hopDuration * (reduce ? 1.25 : 1), apex = hopApex * amp
@@ -373,8 +388,8 @@ struct GaitDriver {
             let u = min(1, t / T)
             let h = apex * 4 * u * (1 - u)
             let vy = 4 * apex * (1 - 2 * u) / T, vy0 = 4 * apex / T
-            let stretch = 1 + 0.12 * amp * min(1, abs(vy) / max(vy0, 1e-3))
-            let crouchSy = 1 - 0.18 * amp
+            let stretch = 1 + airStretch * amp * min(1, abs(vy) / max(vy0, 1e-3))
+            let crouchSy = 1 - crouchDepth * amp
             let sy = crouchSy + (stretch - crouchSy) * smooth(t / 0.08)
             let xz = from + (to - from) * u
             let yawNow = yawEase(tMove / (crouchTime + 0.3))
@@ -388,7 +403,7 @@ struct GaitDriver {
         case .land:
             let amp2 = amp
             // squash on impact (0.80), then a decaying 5 Hz jiggle (1.06 -> 0.97 -> 1.0)
-            let sy = 1 - 0.2 * amp2 * expf(-t / 0.08) * cosf(2 * .pi * 5 * t)
+            let sy = 1 - landDepth * amp2 * expf(-t / 0.08) * cosf(2 * .pi * 5 * t)
             let faceT = chained ? 0 : smooth((t - 0.1) / 0.4)
             let yawNow = yaw1 + wrap(facingYaw - yaw1) * faceT
             let k = kHop * (1 - smooth((t - 0.4) / 0.25))
@@ -442,7 +457,7 @@ struct GaitDriver {
     }
 
     private mutating func endMove(_ sim: SoftBody) {
-        phase = .idle; chained = false; tuck = 0; flipPitch = 0; slidePitchNow = 0
+        phase = .idle; chained = false; tuck = 0; flipPitch = 0; twistNow = 0; slidePitchNow = 0
         sim.attractor.strength = 0
         sim.targets = []
         waitTimer = (0.25 + 0.45 * rand()) * (reduce ? 1.4 : 1)
