@@ -47,7 +47,13 @@ extension ParkScenery {
         return (a + (b - a) * fx) + ((c + (d - c) * fx) - (a + (b - a) * fx)) * fz
     }
     static func sstep(_ a: Float, _ b: Float, _ x: Float) -> Float { let t = min(1, max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
-    static func pathX(_ z: Float) -> Float { 0.7 * sinf(z * 0.34) }
+    /// The bench's centre x (2026-11-12: moved 1.0 to the right into the lawn the pond left; it was 0). Its collider (ParkRoom.swift), the lamp post and the path's end follow it.
+    static let benchX: Float = 1.0
+    /// The path: the old gentle bend (x = 0.7 sin(0.34 z)) from the gate, and from z 3 back a smooth ease (zero slope at both ends) that slides it right so it ends at the bench's front centre (z -3.7) instead of 0.67 left of it.
+    static func pathX(_ z: Float) -> Float {
+        let end: Float = 0.7 * sinf(-3.7 * 0.34), u = min(max((3 - z) / 6.7, 0), 1)
+        return 0.7 * sinf(z * 0.34) + (benchX - end) * u * u * (3 - 2 * u)
+    }
 
     /// The lawn's colour at (x, z): real grass with broad soft mowing bands, sunlit yellower patches, cool shadow pools under trees and shrubs (thrown away from the sun) and
     /// worn earth where the path meets the grass and at the slide's landing.
@@ -125,21 +131,22 @@ extension ParkScenery {
 
     /// A slatted timber bench on cast-iron frames (the exact footprint of the old one: x +-1.28, z -4.78 ... -4.22).
     static func bench(_ b: RoomMeshBuilder) {
+        let cx = benchX
         let iron = S.srgb(0.13, 0.16, 0.15)
         for (i, dz) in ([-0.225, -0.075, 0.075, 0.225] as [Float]).enumerated() {
             let k = 0.94 + 0.1 * Float(i % 3) / 2
-            b.roundedBox(centre: V3(0, 0.50, -4.48 + dz), half: V3(1.28, 0.05, 0.066), radius: 0.02, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
+            b.roundedBox(centre: V3(cx, 0.50, -4.48 + dz), half: V3(1.28, 0.05, 0.066), radius: 0.02, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
         }
         for (i, y) in ([0.74, 0.87, 1.0] as [Float]).enumerated() {
             let k = 0.96 + 0.08 * Float(i % 2)
-            b.roundedBox(centre: V3(0, y, -4.80), half: V3(1.28, 0.052, 0.04), radius: 0.018, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
+            b.roundedBox(centre: V3(cx, y, -4.80), half: V3(1.28, 0.052, 0.04), radius: 0.018, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
         }
         for sx: Float in [-1.1, 1.1] {
-            b.roundedBox(centre: V3(sx, 0.23, -4.30), half: V3(0.04, 0.23, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
-            b.roundedBox(centre: V3(sx, 0.52, -4.80), half: V3(0.04, 0.52, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
-            b.roundedBox(centre: V3(sx, 0.40, -4.55), half: V3(0.035, 0.035, 0.27), radius: 0.015, segments: 2, aoFloor: false, color: iron)
-            b.roundedBox(centre: V3(sx * 1.07, 0.76, -4.55), half: V3(0.05, 0.03, 0.28), radius: 0.02, segments: 2, aoFloor: false, color: iron)          // armrest
-            b.roundedBox(centre: V3(sx * 1.07, 0.60, -4.30), half: V3(0.03, 0.17, 0.03), radius: 0.015, segments: 2, aoFloor: false, color: iron)
+            b.roundedBox(centre: V3(cx + sx, 0.23, -4.30), half: V3(0.04, 0.23, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
+            b.roundedBox(centre: V3(cx + sx, 0.52, -4.80), half: V3(0.04, 0.52, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
+            b.roundedBox(centre: V3(cx + sx, 0.40, -4.55), half: V3(0.035, 0.035, 0.27), radius: 0.015, segments: 2, aoFloor: false, color: iron)
+            b.roundedBox(centre: V3(cx + sx * 1.07, 0.76, -4.55), half: V3(0.05, 0.03, 0.28), radius: 0.02, segments: 2, aoFloor: false, color: iron)          // armrest
+            b.roundedBox(centre: V3(cx + sx * 1.07, 0.60, -4.30), half: V3(0.03, 0.17, 0.03), radius: 0.015, segments: 2, aoFloor: false, color: iron)
         }
     }
 
