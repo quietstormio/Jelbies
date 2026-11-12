@@ -42,6 +42,7 @@ extension BlobBrain {
     /// footprint (a piece put down, dragged or turned onto him, or a push) is soft to that piece and, after a moment, walks out to the nearest free floor
     /// (before, he stayed standing inside it: "stuck behind the table").
     func decorExitCheck(dt: Float = 0) {
+        slideFootCheck()          // (first: a stander on the slide's foot is inside its footprint, so the walk-out branch below returns before the end)
         var inside: DecorFoot?
         for f in DecorField.shared.feet where f.spec.solid && f.distance(position) < footprint * f.spec.reach - 0.05 { inside = f; break }
         if let f = inside {
