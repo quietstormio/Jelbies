@@ -98,14 +98,14 @@ struct ShopScreen: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 22) {          // (was 10: the pills row sat tight under the subtitle)
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
                         .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
                 }
                 .buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("shop-back")
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {          // (was 0: the subtitle sat tight under the title)
                     Text("Shop").font(SK.font(28, .black)).foregroundStyle(.white)
                     Text("Spend your JellyCoins on goodies").font(SK.font(12, .bold)).foregroundStyle(.white.opacity(0.9))
                 }
@@ -129,7 +129,7 @@ struct ShopScreen: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .padding(.bottom, 26)          // the wave's crests reach 14 pt above the header's bottom edge (WavyBottom): 12 pt of clear pink stays under the tabs
+            .padding(.bottom, 32)          // the wave's crests reach 14 pt above the header's bottom edge (WavyBottom): 18 pt of clear pink stays under the tabs (was 12)
         }
         .background(SK.pinkStrong.clipShape(WavyBottom()).ignoresSafeArea(edges: [.top, .horizontal]))
         .padding(.bottom, 4)
@@ -452,6 +452,11 @@ struct ItemPicture: View {
     @State private var fitted: UIImage?
     @State private var tried = false
 
+    init(care: GameCare, item: StoreItem, who: Int, size: CGFloat) {
+        self.care = care; self.item = item; self.who = who; self.size = size
+        _fitted = State(initialValue: item.wear.flatMap { WearFittingCache.shared.cached($0, who: who, care: care) })          // a hit is in the first frame
+    }
+
     var body: some View {
         if let look = item.wear {
             ZStack(alignment: .bottomTrailing) {
@@ -477,13 +482,20 @@ struct ItemPicture: View {
             .frame(width: size, height: size)
             .accessibilityIdentifier("fitting-room")
             .task(id: look) {
-                // the stage may not be up yet (a shop opened at launch): ask again a few times
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                for _ in 0..<40 {
+                let tOpen = CACurrentMediaTime(), hit = fitted != nil
+                defer { WearPreviewLog.write("preview-ready look=\(look.rawValue) ms=\(Int((CACurrentMediaTime() - tOpen) * 1000)) cached=\(hit) shown=\(fitted != nil)") }
+                if hit { return }
+                let cache = WearFittingCache.shared
+                // Draws on the main actor (the renderer's rule), so Buy waits only for the render itself (~25 ms in the simulator); a short settle lets the sheet's slide-up finish first.
+                // The stage may not be up yet (a shop opened at launch): ask again every 100 ms, and after 1 s show the item's own art in place of the spinner (the picture still swaps in when it comes).
+                let enabled = WearFittingCache.enabled
+                try? await Task.sleep(nanoseconds: enabled ? 120_000_000 : 700_000_000)
+                for _ in 0..<(enabled ? 120 : 40) {
                     await Task.yield()
-                    if let img = care.fittingProvider?(look, who) { fitted = img; break }
-                    try? await Task.sleep(nanoseconds: 300_000_000)
                     if Task.isCancelled { return }
+                    if let img = cache.render(look, who: who, care: care) { fitted = img; return }
+                    if enabled, CACurrentMediaTime() - tOpen > 1.0 { tried = true }
+                    try? await Task.sleep(nanoseconds: enabled ? 100_000_000 : 300_000_000)
                 }
                 tried = true
             }
