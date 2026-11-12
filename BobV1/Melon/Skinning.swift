@@ -159,6 +159,7 @@ nonisolated final class Skinner {
     /// How much of the leg's offset from its rest place the egg round the loop follows (1 = the loop moves with the leg), and the longest offset it follows (m).
     nonisolated(unsafe) static var weldFollow: Float = UserDefaults.standard.object(forKey: "LegsWeldFollow") != nil ? UserDefaults.standard.float(forKey: "LegsWeldFollow") : 1.0
     nonisolated(unsafe) static var weldFollowMax: Float = UserDefaults.standard.object(forKey: "LegsWeldFollowMax") != nil ? UserDefaults.standard.float(forKey: "LegsWeldFollowMax") : 0.14
+    nonisolated(unsafe) static var weldShoeK0: Float = UserDefaults.standard.object(forKey: "LegsWeldShoeK0") != nil ? UserDefaults.standard.float(forKey: "LegsWeldShoeK0") : 2.2
     /// The weld of this skinner's mesh (nil = old mesh).
     var weld: LegWeldInfo? = nil
     var welded: Bool { weld != nil }
@@ -168,7 +169,8 @@ nonisolated final class Skinner {
         guard let w = weld else { return }
         @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
         let A = FootBean.around, R = w.ring, K = w.rows
-        let k0 = Self.weldK0, k1 = Self.weldK1
+        // shoes on (the brain sets guardExtra): the leg side of the fillet stands straighter, so the band rises inside the shoe's collar before it turns out to the belly
+        let k0 = guardExtra > 0 ? max(Self.weldK0, Self.weldShoeK0) : Self.weldK0, k1 = Self.weldK1
         // the egg round each loop follows its leg's offset from the rest foot (the ghost): the welded skin is carried along with a stepping foot
         if Self.weldFollow > 0 {
             for sd in w.sides {
