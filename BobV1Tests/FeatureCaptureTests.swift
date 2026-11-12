@@ -105,7 +105,7 @@ final class FeatureCaptureTests: XCTestCase {
             } else {
                 ren.room!.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); ren.room!.setShoes(RoomMesh()); ren.setJersey(nil, body: 0)
             }
-            ren.setMouth(0, body: 0)
+            ren.setMouth(r.brain.mouthOpen, body: 0)          // (the brain's mouth: only the singing / eating moves set it, every other strip draws none)
             ren.setBathLook(Self.forceBath ?? .dry, body: 0)
             var fp = FrameParams()
             fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale)
