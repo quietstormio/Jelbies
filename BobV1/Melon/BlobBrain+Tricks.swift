@@ -136,7 +136,7 @@ nonisolated enum HulaTuning {
     nonisolated(unsafe) static var r0: Float = 0.050, r1: Float = 0.110, r1Fail: Float = 0.120
     /// The lean against the hips: 1 = the head stays exactly over the spot (stage 2: too small to read), > 1 = the crown swings round opposite the hips, the whole body
     /// leaning round the circle (lean = counter * r / headHeight rad); the height of the head above the soles (u).
-    nonisolated(unsafe) static var counter: Float = 3.1
+    nonisolated(unsafe) static var counter: Float = 2.5          // (3.1 put a foot neck 1.3 cm out in 5 OnePiece frames at the peak lean)
     /// The belly's twist with the hips (rad), the arms' sway (el, sa) and the squash ripple.
     nonisolated(unsafe) static var twistAmp: Float = 0.30, armEl: Float = 0.30, armElSway: Float = 0.30, armSaSway: Float = 0.65, ripple: Float = 0.06
     static let headHeight: Float = 0.9
