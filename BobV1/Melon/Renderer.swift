@@ -105,6 +105,8 @@ final class BodySlot {
     }
     var foamAny = false
     var sootAny = false
+    /// The leg weld is off for this body (shoes on): see MelonRenderer.bodyRanges.
+    var weldOff = false
     /// Which leg-weld band paint stream this slot's static stream holds (0 = the mesh's default, 1 = Panda's, 2 = Teddy's: LegWeldInfo.restPanda / restTeddy).
     var weldPaint = 0
     /// Writes the weld band's paint / crinkle stream for this body (Panda: the leg's charcoal carried up the band; everyone else: the rest body's own).
@@ -530,6 +532,20 @@ final class MelonRenderer {
     /// The jersey band colour of a body (nil = none: the locked body shader draws him).
     func setJersey(_ team: WearTeam?, body i: Int) { if i < slots.count { slots[i].jersey = team } }
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
+    /// The leg weld off for one body (shoes on): it draws the egg inside the loops and the closed pieces instead of the band.
+    func setWeldOff(_ off: Bool, body i: Int) { if i < slots.count { slots[i].weldOff = off } }
+    /// The body's index ranges for a slot (limb = Panda's all-charcoal pass): with the weld, the band; with the weld off for this body, the old egg + closed pieces.
+    func bodyRanges(_ slot: BodySlot) -> [(first: Int, count: Int, limb: Bool)] {
+        let m = mesh, end = m.body.first + m.body.count
+        guard let cap = m.armCapsule, cap.indexFirst > m.body.first else { return [(m.body.first, m.body.count, false)] }
+        if let w = cap.weld, slot.weldOff, w.unweldEggCount > 0 {
+            let afterBand = cap.indexFirst + w.bandIndexCount
+            return [(m.body.first, cap.indexFirst - m.body.first, false), (w.unweldEggFirst, w.unweldEggCount, false),
+                    (afterBand, end - afterBand, true), (w.unweldBeanFirst, w.unweldBeanCount, true)]
+        }
+        let lf = cap.limbIndexFirst
+        return [(m.body.first, lf - m.body.first, false), (lf, end - lf, true)]
+    }
     func setBathLook(_ look: BathLook, body i: Int) { if i < slots.count { slots[i].bathLook = look } }
     /// A clean, neutral body for one picture (lobby portraits): no dirt / soot / lint / shine, mouth shut, no blush. Returns what puts the live state back.
     func neutralBody(_ i: Int) -> () -> Void {
@@ -1038,7 +1054,12 @@ final class MelonRenderer {
             e.setVertexBuffer(mbuf, offset: 0, index: 0)
             for slot in slots where !slot.hidden {
                 e.setVertexBuffer(slot.dynBuf, offset: 0, index: 1)
-                e.drawIndexedPrimitives(type: tri, indexCount: bodyAndSeeds, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: 0)
+                if m.armCapsule?.weld == nil {
+                    e.drawIndexedPrimitives(type: tri, indexCount: bodyAndSeeds, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: 0)
+                } else {
+                    for r in bodyRanges(slot) where r.count > 0 { e.drawIndexedPrimitives(type: tri, indexCount: r.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: r.first * 4) }
+                    if m.seeds.count > 0 { e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4) }
+                }
             }
             e.endEncoding()
             split(&cmd, label)
@@ -1244,19 +1265,19 @@ final class MelonRenderer {
                     let pandaBody = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
                     let isPanda = pandaBody > 50.5 && pandaBody < 51.5
                     if let w = m.armCapsule?.weld { slot.setWeldPaint(isPanda ? 1 : (pandaBody > 39.5 && pandaBody < 50.5 ? 2 : 0), weld: w) }
+                    let ranges = bodyRanges(slot)
                     if isPanda, let cap = m.armCapsule, cap.indexFirst > m.body.first {
-                        // (the leg weld's band sits at the head of the capsule block and is drawn with the egg: its rest-space foot mask fades the charcoal across it)
-                        let limbFirst = cap.limbIndexFirst
+                        // (the leg weld's band: its upper rows + stitch are drawn with the egg (rest-space foot mask), its lower rows in the all-charcoal limb pass)
                         var ub = slot.uboBuf.contents().load(as: MelonUniforms.self)
                         ub.shape.w = 51
                         e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
-                        e.drawIndexedPrimitives(type: tri, indexCount: limbFirst - m.body.first, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+                        for r in ranges where !r.limb && r.count > 0 { e.drawIndexedPrimitives(type: tri, indexCount: r.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: r.first * 4) }
                         ub.shape.w = 52
                         e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
-                        e.drawIndexedPrimitives(type: tri, indexCount: m.body.first + m.body.count - limbFirst, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: limbFirst * 4)
+                        for r in ranges where r.limb && r.count > 0 { e.drawIndexedPrimitives(type: tri, indexCount: r.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: r.first * 4) }
                         e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)
                     } else {
-                        e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+                        for r in ranges where r.count > 0 { e.drawIndexedPrimitives(type: tri, indexCount: r.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: r.first * 4) }
                     }
                 }
                 if m.seeds.count > 0 && !bodyProbe.contains(.skipEyes) {
@@ -1325,7 +1346,7 @@ final class MelonRenderer {
             e.setVertexBuffer(uboBuf, offset: 0, index: 0)
             e.setFragmentBuffer(uboBuf, offset: 0, index: 0)
             e.setVertexBuffer(dynBuf, offset: 0, index: 1)
-            e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+            for r in bodyRanges(slots[0]) where r.count > 0 { e.drawIndexedPrimitives(type: tri, indexCount: r.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: r.first * 4) }
             e.endEncoding()
         }
 
@@ -1355,7 +1376,7 @@ final class MelonRenderer {
             e.setCullMode(.back)
             e.setVertexBuffer(dynBuf, offset: 0, index: 1)
             e.setVertexBuffer(staticBuf, offset: 0, index: 2)
-            e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+            for r in bodyRanges(slots[0]) where r.count > 0 { e.drawIndexedPrimitives(type: tri, indexCount: r.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: r.first * 4) }
             if useMatte && m.seeds.count > 0 {
                 e.setRenderPipelineState(pEyes)
                 e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)

@@ -986,6 +986,23 @@ struct GameScreen: View {
             if !dressed.contains(.neck), let bow = WearLook.allCases.first(where: { $0.slot == .neck && $0.tags.contains(theme.friend) && !WearLook.retired.contains($0) }) { care.store.wear(bow, on: 0) }
             care.bath.wallet.add(max(0, 106 - care.bath.wallet.count), silent: true)
         }
+        #if targetEnvironment(simulator)
+        // capture aid (legs-weld-r1): -WeldShoeToggle <seconds> takes the sneakers off and puts them back on Jelbie -WearWho every <seconds>, in the running room
+        // (the leg weld switches off while shoes are worn; this shows the switch both ways at runtime)
+        if d.object(forKey: "WeldShoeToggle") != nil {
+            let care = model.care, who = d.integer(forKey: "WearWho"), period = max(1.0, d.double(forKey: "WeldShoeToggle"))
+            for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
+            Task { @MainActor in
+                var on = care.store.outfit(who)[.feet] != nil
+                while true {
+                    try? await Task.sleep(nanoseconds: UInt64(period * 1_000_000_000))
+                    if on { care.store.takeOff(.feet, from: who) } else { _ = care.store.wear(.sneakerMint, on: who) }
+                    on.toggle()
+                    NSLog("%@", "[legweld] shoes \(on ? "on" : "off") for \(who)")
+                }
+            }
+        }
+        #endif
         // capture aid: -WearList "bowtieSky,tutuPink,beanieHoney" -WearWho 0 owns and dresses that Jelbie (only those pieces) in exactly these looks
         if let list = d.string(forKey: "WearList") {
             let care = model.care

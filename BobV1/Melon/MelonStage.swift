@@ -1189,6 +1189,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in actors {
             if parkOn, model.care.parkHides(a.id) { ContactField.invalidate(a.id); continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
             if bathHides, a.id != washedID { ContactField.invalidate(a.id); continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
+            // the leg weld is off while shoes are worn (the sneaker shell is fitted to the closed pieces): the brain's flag, every frame, so a fitting in the shop, a load or a wash switches it at once
+            let weldOff = a.skinner.weld != nil && (a.brain?.shoesWorn ?? false)
+            a.skinner.weldOff = weldOff; renderer.setWeldOff(weldOff, body: a.id)
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor))
         }
         for a in parkActors { skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }

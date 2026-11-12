@@ -159,6 +159,21 @@ nonisolated final class Skinner {
     /// How much of the leg's offset from its rest place the egg round the loop follows (1 = the loop moves with the leg), and the longest offset it follows (m).
     nonisolated(unsafe) static var weldFollow: Float = UserDefaults.standard.object(forKey: "LegsWeldFollow") != nil ? UserDefaults.standard.float(forKey: "LegsWeldFollow") : 1.0
     nonisolated(unsafe) static var weldFollowMax: Float = UserDefaults.standard.object(forKey: "LegsWeldFollowMax") != nil ? UserDefaults.standard.float(forKey: "LegsWeldFollowMax") : 0.14
+    nonisolated(unsafe) static var weldYawFollow: Float = UserDefaults.standard.object(forKey: "LegsWeldYaw") != nil ? UserDefaults.standard.float(forKey: "LegsWeldYaw") : 0
+    nonisolated(unsafe) static var weldYawMax: Float = 0.8
+    /// The triangles that are drawn for this body: the welded set (no inside-the-loop egg / upper piece rings) or, with the weld off, the old set (no band).
+    private var indexCache: (n: Int, weld: [UInt32], unweld: [UInt32])? = nil
+    func activeIndex(_ index: [UInt32]) -> [UInt32] {
+        guard let w = weld, w.unweldEggCount > 0 else { return index }
+        if indexCache?.n != index.count {
+            let u0 = w.unweldEggFirst, u1 = w.unweldBeanFirst + w.unweldBeanCount, b0 = w.bandIndexFirst, b1 = w.bandIndexFirst + w.bandIndexCount
+            guard u1 <= index.count, b1 <= index.count else { return index }
+            indexCache = (index.count, Array(index[0..<u0]) + Array(index[u1...]), Array(index[0..<b0]) + Array(index[b1...]))
+        }
+        return weldOff ? indexCache!.unweld : indexCache!.weld
+    }
+    /// Per body: draw this one with the old closed pieces + collar (shoes on: the sneaker shell is fitted to the closed piece). Set each frame by the stage from the brain's shoesWorn.
+    var weldOff = false
     nonisolated(unsafe) static var weldShoeK0: Float = UserDefaults.standard.object(forKey: "LegsWeldShoeK0") != nil ? UserDefaults.standard.float(forKey: "LegsWeldShoeK0") : 2.2
     /// The weld of this skinner's mesh (nil = old mesh).
     var weld: LegWeldInfo? = nil
@@ -176,10 +191,29 @@ nonisolated final class Skinner {
             for sd in w.sides {
                 var now = SIMD3<Float>.zero, rest = SIMD3<Float>.zero
                 for j in 0..<A { now += P(sd.beanFirst + 1 + A * R + j); rest += P(sd.ghostFirst + 1 + A * R + j) }
-                var d = (now - rest) / Float(A) * Self.weldFollow
+                now /= Float(A); rest /= Float(A)
+                var d = (now - rest) * Self.weldFollow
                 let l = simd_length(d); if l > Self.weldFollowMax { d *= Self.weldFollowMax / l }
-                if l < 1e-5 { continue }
-                for (k, v) in sd.followV.enumerated() { let o = 6 * Int(v), ww = sd.followW[k]; dyn[o] += d.x * ww; dyn[o + 1] += d.y * ww; dyn[o + 2] += d.z * ww }
+                // (optional, -LegsWeldYaw 1) the loop also turns with the leg's yaw about its own axis (the seam ring's first meridian against the ghost's)
+                var rot: simd_quatf? = nil
+                if Self.weldYawFollow > 0 {
+                    let a = simd_normalize(now - P(sd.beanFirst))
+                    var u = P(sd.beanFirst + 1 + A * R) - now; u -= a * simd_dot(u, a)
+                    var ug = P(sd.ghostFirst + 1 + A * R) - rest; ug -= a * simd_dot(ug, a)
+                    if simd_length(u) > 1e-5 && simd_length(ug) > 1e-5 {
+                        u = simd_normalize(u); ug = simd_normalize(ug)
+                        var yaw = atan2f(simd_dot(simd_cross(ug, u), a), simd_dot(ug, u)) * Self.weldYawFollow
+                        yaw = max(-Self.weldYawMax, min(Self.weldYawMax, yaw))
+                        rot = simd_quatf(angle: yaw, axis: a)
+                    }
+                }
+                if l < 1e-5 && rot == nil { continue }
+                for (k, v) in sd.followV.enumerated() {
+                    let o = 6 * Int(v), ww = sd.followW[k]
+                    var dv = d
+                    if let q = rot { let p0 = P(Int(v)) - rest; dv += q.act(p0) - p0 }
+                    dyn[o] += dv.x * ww; dyn[o + 1] += dv.y * ww; dyn[o + 2] += dv.z * ww
+                }
             }
         }
         for sd in w.sides {
@@ -250,6 +284,15 @@ nonisolated final class Skinner {
                 }
                 if near { list.append(Int32(index[t])); list.append(Int32(index[t + 1])); list.append(Int32(index[t + 2])) }
                 t += 3
+            }
+            if let w = weld, w.unweldEggCount > 0, w.unweldEggFirst + w.unweldEggCount <= index.count {          // (the egg inside the loops: hidden while welded, the drawn egg with the weld off)
+                var t2 = w.unweldEggFirst
+                while t2 + 2 < w.unweldEggFirst + w.unweldEggCount {
+                    var near = false
+                    for k in 0..<3 { let v = 3 * Int(index[t2 + k]); if simd_distance_squared(SIMD3(rest[v], rest[v + 1], rest[v + 2]), c) < Self.guardReach * Self.guardReach { near = true; break } }
+                    if near { list.append(Int32(index[t2])); list.append(Int32(index[t2 + 1])); list.append(Int32(index[t2 + 2])) }
+                    t2 += 3
+                }
             }
             guardTris[s] = list
             // the collar set: egg skin vertices within reach of the foot's rest place (one-piece join, see applyBeanCollar)
@@ -826,7 +869,8 @@ nonisolated final class Skinner {
         }
     }
 
-    func update(x: UnsafePointer<Float>, index: [UInt32], into dyn: UnsafeMutablePointer<Float>) {
+    func update(x: UnsafePointer<Float>, index fullIndex: [UInt32], into dyn: UnsafeMutablePointer<Float>) {
+        let index = activeIndex(fullIndex)
         skinIdx.withUnsafeBufferPointer { si in
             skinW.withUnsafeBufferPointer { sw in
                 for v in 0..<vertexCount {
@@ -877,7 +921,7 @@ nonisolated final class Skinner {
             for s in 0..<2 {
                 let f = beanFirst[s]
                 // welded: the piece grows out of its ghost (the rest foot, sim-skinned: where the welded leg stands at rest), not out of the inset piece in the belly
-                let g = weld.map { $0.sides[s].ghostFirst } ?? -1
+                let g = weldOff ? -1 : (weld.map { $0.sides[s].ghostFirst } ?? -1)
                 for i in 0..<FootBean.vertexCount {
                     let o = 6 * (f + i), t = beanPos[s][i]
                     let a = g >= 0 ? SIMD3(dyn[6 * (g + i)], dyn[6 * (g + i) + 1], dyn[6 * (g + i) + 2]) : beanStart[s][i]
@@ -886,7 +930,7 @@ nonisolated final class Skinner {
             }
             let M = retractMatrix
             // (welded: the embedded foot's skin is inside the loops and not drawn; the egg outside them is never pulled in)
-            for (k, vi) in retractVertices.enumerated() where !Skinner.dbgNoRetract && weld == nil {
+            for (k, vi) in retractVertices.enumerated() where !Skinner.dbgNoRetract && (weld == nil || weldOff) {
                 var d = M * retractRest[k]
                 let sd = retractSide[k]
                 if sd >= 0 { d -= retractShift[Int(sd)] }
@@ -894,7 +938,7 @@ nonisolated final class Skinner {
                 dyn[o] += d.x * w; dyn[o + 1] += d.y * w; dyn[o + 2] += d.z * w
             }
         }
-        if !beansActive, let w = weld {
+        if !beansActive, !weldOff, let w = weld {
             // welded, feet at rest: the piece IS the rest foot, skinned with the body (its ghost)
             for sd in w.sides {
                 for i in 0..<FootBean.vertexCount {
@@ -944,7 +988,7 @@ nonisolated final class Skinner {
         if cuddle.active { applyCuddle(dyn) }          // the cuddle jiggle (CuddleJiggle.swift): drawn dent / drag / let-go spring on the BODY skin only
         applyBeanGuard(dyn)
         applyBeanJoin(dyn)
-        if weld != nil { applyWeldBand(dyn) } else { applyBeanCollar(dyn) }
+        if weld != nil && !weldOff { applyWeldBand(dyn) } else { applyBeanCollar(dyn) }
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }

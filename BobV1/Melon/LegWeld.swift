@@ -54,6 +54,12 @@ nonisolated struct LegWeldInfo: Sendable {
     /// Teddy: the egg's own coordinates (the cream patch) carried down the band to near the seam ring, fading to the leg's over the lowest rows, so the patch's lower
     /// edge lies on the leg's upright wall where it is seen softly, not on the down-facing band where it read as a hard line.
     var restTeddy: [Float] = []
+    /// Band triangles drawn with the egg (the upper rows + the stitch); the lower rows follow them and are drawn in Panda's all-charcoal limb pass.
+    var bandEggCount: Int = 0
+    /// First index of the band block (ArmCapsuleInfo.indexFirst).
+    var bandIndexFirst: Int = 0
+    /// For a body with the weld off (shoes): the egg triangles inside the loops and the pieces' upper triangles (rings above the seam + crown), drawn instead of the band.
+    var unweldEggFirst = 0, unweldEggCount = 0, unweldBeanFirst = 0, unweldBeanCount = 0
 }
 
 nonisolated enum LegWeld {
@@ -67,10 +73,14 @@ nonisolated enum LegWeld {
     /// The loops stay this far from the midline (the inner foot walls are only 12 cm apart).
     static var buildInnerX: Double { UserDefaults.standard.object(forKey: "LegsWeldInnerX") != nil ? UserDefaults.standard.double(forKey: "LegsWeldInnerX") : 0.025 }
     static let yMax = 0.40
+    /// Band rows (quads from the seam ring) drawn in Panda's charcoal pass (-LegsWeldPandaRows).
+    static var pandaRows: Int { UserDefaults.standard.object(forKey: "LegsWeldPandaRows") != nil ? UserDefaults.standard.integer(forKey: "LegsWeldPandaRows") : 10 }
     static var teddyFade: Double { UserDefaults.standard.object(forKey: "LegsWeldTeddyFade") != nil ? UserDefaults.standard.double(forKey: "LegsWeldTeddyFade") : 0.35 }
     static var paintMode: Int { UserDefaults.standard.object(forKey: "LegsWeldPaint") != nil ? UserDefaults.standard.integer(forKey: "LegsWeldPaint") : 0 }
     /// Panda's band paint: the leg's own coordinates up to this fraction of the band, then into the egg's (launch argument -LegsWeldPandaCut).
     static var pandaCut: Double { UserDefaults.standard.object(forKey: "LegsWeldPandaCut") != nil ? UserDefaults.standard.double(forKey: "LegsWeldPandaCut") : 0.95 }
+    /// Rest height above which the egg never follows the leg (-LegsWeldFollowTop; the follow fades out over the 4 cm below it).
+    static var followTop: Double { UserDefaults.standard.object(forKey: "LegsWeldFollowTop") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFollowTop") : 0.20 }
     static var followReach: Double { UserDefaults.standard.object(forKey: "LegsWeldFollowReach") != nil ? UserDefaults.standard.double(forKey: "LegsWeldFollowReach") : 0.20 }
     static var restPow: Double { UserDefaults.standard.object(forKey: "LegsWeldRestPow") != nil ? UserDefaults.standard.double(forKey: "LegsWeldRestPow") : 3.0 }
 
@@ -115,6 +125,8 @@ nonisolated enum LegWeld {
 
     struct Plan {
         var eggTri: [UInt32]
+        /// The egg triangles inside the loops (drawn instead of the band for a body with the weld off: shoes).
+        var removedTri: [UInt32] = []
         var sides: [LegWeldSide]
         var ring: Int, rows: Int
         /// Per side: the band's rest positions / normals / mat, rows 1...K x around.
@@ -286,7 +298,10 @@ nonisolated enum LegWeld {
                 let d = d2.squareRoot()
                 let t = min(1, max(0, (d - buildMargin) / followReach))
                 if t >= 1 { continue }
-                side.followV.append(Int32(v)); side.followW.append(Float(1 - t * t * (3 - 2 * t)))
+                // (round 3: the approved walk may not move the body above the leg root: the follow fades out between the loop's own height and `followTop`)
+                let hy = max(0, min(1, (P[v].y - followTop + 0.04) / 0.04)), hw = 1 - hy * hy * (3 - 2 * hy)
+                if hw <= 0 { continue }
+                side.followV.append(Int32(v)); side.followW.append(Float((1 - t * t * (3 - 2 * t)) * hw))
             }
             // the band at rest
             let rs = FootBean.restStream(sigma: sigma)
@@ -366,7 +381,9 @@ nonisolated enum LegWeld {
         var egg: [UInt32] = []
         egg.reserveCapacity(tri.count)
         for t in 0..<(tri.count / 3) where !removed[t] { egg += [tri[3 * t], tri[3 * t + 1], tri[3 * t + 2]] }
-        return Plan(eggTri: egg, sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat, bandShape: bandShape, bandPanda: bandPanda, bandTeddy: bandTeddy, bodyMat: bodyMat)
+        var removedTri: [UInt32] = []
+        for t in 0..<(tri.count / 3) where removed[t] { removedTri += [tri[3 * t], tri[3 * t + 1], tri[3 * t + 2]] }
+        return Plan(eggTri: egg, removedTri: removedTri, sides: sides, ring: R, rows: K, bandPos: bandPos, bandNrm: bandNrm, bandMat: bandMat, bandShape: bandShape, bandPanda: bandPanda, bandTeddy: bandTeddy, bodyMat: bodyMat)
     }
 
     /// The band quads (seam ring -> row K) and the stitch (row K -> loop) of one side, wound outward against the rest positions `pos` (flat xyz) and rest normals `nrm`.

@@ -1134,6 +1134,18 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
     }
     let seedCount = idx.count - seedStart
 
+    // a body with the weld off (shoes) draws the egg inside the loops and the pieces' upper rings instead of the band: two blocks after the decals (outside the body range)
+    var unweldEggFirst = 0, unweldBeanFirst = 0, unweldBeanCount = 0
+    if let wp = weldPlan {
+        unweldEggFirst = idx.count
+        idx += wp.removedTri
+        unweldBeanFirst = idx.count
+        for sd in wp.sides {
+            let all = FootBean.triangles(firstVertex: sd.beanFirst)
+            idx += all.suffix(from: 3 * (FootBean.around + 2 * FootBean.around * wp.ring))
+        }
+        unweldBeanCount = idx.count - unweldBeanFirst
+    }
     // the weld's ghosts (the piece at the rest foot, sim-skinned: the welded leg's pose at rest) and band rows: appended after the decals
     if weldPlan != nil {
         for (si, sigma) in [-1.0, 1.0].enumerated() {
@@ -1161,15 +1173,23 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
     var weldInfo: LegWeldInfo? = nil
     var bodyIndexCountW = bodyIndexCount, seedStartW = seedStart
     if let wp = weldPlan {
-        var band: [UInt32] = []
+        var band: [UInt32] = [], lower: [UInt32] = []
+        let cut = max(0, min(wp.rows, LegWeld.pandaRows))
         for (si, sigma) in [-1.0, 1.0].enumerated() {
             let rs = FootBean.restStream(sigma: sigma), R = wp.ring, A = FootBean.around
             let seamRest = (0..<A).map { rs[1 + A * R + $0] }, seamNrm = (0..<A).map { FootBean.local.nrm[1 + A * R + $0] }
-            band += LegWeld.bandTriangles(side: wp.sides[si], ring: R, rows: wp.rows, seamRest: seamRest, seamNrm: seamNrm, pos: pos, nrm: nrm, bandShape: wp.bandShape[si])
+            let t = LegWeld.bandTriangles(side: wp.sides[si], ring: R, rows: wp.rows, seamRest: seamRest, seamNrm: seamNrm, pos: pos, nrm: nrm, bandShape: wp.bandShape[si])
+            let nLow = 6 * A * cut
+            lower += t.prefix(nLow); band += t.suffix(from: nLow)
         }
+        let bandEggCount = band.count
+        band += lower
         idx.insert(contentsOf: band, at: capIndexFirst)
         bodyIndexCountW += band.count; seedStartW += band.count
         weldInfo = LegWeldInfo(sides: wp.sides, ring: wp.ring, rows: wp.rows, bandIndexCount: band.count)
+        weldInfo!.bandEggCount = bandEggCount; weldInfo!.bandIndexFirst = capIndexFirst
+        weldInfo!.unweldEggFirst = unweldEggFirst + band.count; weldInfo!.unweldEggCount = wp.removedTri.count
+        weldInfo!.unweldBeanFirst = unweldBeanFirst + band.count; weldInfo!.unweldBeanCount = unweldBeanCount
         for si in 0..<2 {
             for p in wp.bandPos[si] { weldInfo!.restDefault += [Float(p.x), Float(p.y), Float(p.z)] }
             for p in wp.bandPanda[si] { weldInfo!.restPanda += [Float(p.x), Float(p.y), Float(p.z)] }

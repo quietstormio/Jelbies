@@ -528,7 +528,7 @@ nonisolated struct ArmCapsuleInfo: Sendable {
     /// The leg weld (LegWeld.swift); nil = the closed foot pieces of the old mesh.
     var weld: LegWeldInfo? = nil
     /// Where Panda's all-charcoal limb pass starts: after the weld band (the band is painted by the egg pass's rest-space foot mask).
-    var limbIndexFirst: Int { indexFirst + (weld?.bandIndexCount ?? 0) }
+    var limbIndexFirst: Int { indexFirst + (weld?.bandEggCount ?? 0) }
     func first(side: Int) -> Int { side < 0 ? firstVertex[0] : firstVertex[1] }
     /// First vertex of the foot bean of a side: it follows the arm capsule inside the same block.
     func beanFirst(side: Int) -> Int { first(side: side) + ArmCapsule.vertexCount }
