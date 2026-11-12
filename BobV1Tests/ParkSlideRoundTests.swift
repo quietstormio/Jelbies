@@ -62,11 +62,13 @@ final class ParkSlideRoundTests: XCTestCase {
         let sl = DecorField.shared.foot(ParkToys.slideUID)!
         let bx = box(sl)
         let r = lab.rigs[0], b = r.brain
+        if afterRide { b.decorIgnore = ParkToys.slideUID }
         let q = b.fixed(p)
         if simd_distance(p, q) > 0.1 { out.skipped = true; return out }
         place(r, q)
         for _ in 0..<5 { lab.tick(watching: false) }
         if afterRide { b.decorIgnore = ParkToys.slideUID }
+        if simd_distance(b.position, sl.centre + sl.turned(SIMD2(0, -DecorKind.slideApproach))) <= 0.35 { out.skipped = true; return out }          // (already on the climb spot: no walk to take)
         out.started = b.startCommandedDecor(.decorSlide, only: .slide, r.sim, r.skinner)
         if !out.started { return out }
         var t: Float = 0, lastStage = 99, lastTarget = SIMD2<Float>(99, 99)
@@ -102,6 +104,7 @@ final class ParkSlideRoundTests: XCTestCase {
         l.append(("foot", SIMD2(2.9, 3.24))); l.append(("corner1", SIMD2(3.13, 3.55))); l.append(("corner2", SIMD2(1.30, 3.55)))
         l.append(("C1real", SIMD2(1.86, 2.40)))
         l.append(("C1real2", SIMD2(1.30, 3.55)))
+        l.append(("west0", SIMD2(1.2, 0.0))); l.append(("west1", SIMD2(1.5, 1.5))); l.append(("frontL", SIMD2(2.0, 3.3))); l.append(("northW", SIMD2(1.0, -1.0)))
         return l
     }
 
@@ -109,7 +112,7 @@ final class ParkSlideRoundTests: XCTestCase {
         var bad: [String] = [], lines: [String] = []
         for (aname, aspect) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
             var all: [(String, SIMD2<Float>)] = soloStarts()
-            for s in soloStarts() where s.0 == "C1real" || s.0 == "foot" || s.0.hasPrefix("corner") { all.append((s.0 + "+afterRide", s.1)) }
+            for s in soloStarts() where s.0 == "C1real" || s.0 == "foot" || s.0.hasPrefix("corner") || s.0 == "west1" || s.0 == "frontL" { all.append((s.0 + "+afterRide", s.1)) }
             for (name0, p) in all {
                 let after = name0.hasSuffix("+afterRide"), name = name0
                 var o = runSolo(name, p, aspect: aspect, afterRide: after)
@@ -131,8 +134,15 @@ final class ParkSlideRoundTests: XCTestCase {
 
     // MARK: T2
 
+    /// One line about body k: where, which slide stage and target, what the walk is doing, who is near.
+    func diag(_ lab: SocialTests.Lab, _ k: Int) -> String {
+        let b = lab.rigs[k].brain, st = b.idleState
+        let near = lab.rigs.enumerated().filter { $0.offset != k }.map { String(format: "b%d@%.2f(%@/%@)", $0.offset, simd_distance($0.element.brain.position, b.position), "\($0.element.brain.activity)", "\(String(describing: $0.element.brain.idleState.kind))") }.joined(separator: " ")
+        return String(format: "at (%.2f,%.2f) stage %d slideS %d retry %d target (%.2f,%.2f) act %@ commanded %d decorIgnore %@ route %d scriptT %.1f walkStallT %.1f stuckT %.1f steerWait %.1f | %@", b.position.x, b.position.y, st.slideStage, st.slideS, st.decorRetry, st.target.x, st.target.y, "\(b.activity)", b.commanded ? 1 : 0, "\(String(describing: b.decorIgnore))", b.route.count, b.scriptT, b.walkStallT, b.stuckT, b.steerWait, near)
+    }
+
     func testWalkRoundWithFriendsRarelyDrops() {
-        var attempts = 0, dropped = 0, still3 = 0, still6 = 0, boxSamples = 0, heldWp = 0
+        var attempts = 0, dropped = 0, still3 = 0, still6 = 0, boxSamples = 0, heldWp = 0, boxEpisodes = 0
         var notes: [String] = []
         for (aname, aspect) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
             for seed in UInt64(1)...6 {
@@ -144,6 +154,7 @@ final class ParkSlideRoundTests: XCTestCase {
                 var still = [Float](repeating: 0, count: 3), stillCounted3 = [Bool](repeating: false, count: 3), stillCounted6 = [Bool](repeating: false, count: 3)
                 var wpHold = [Float](repeating: 0, count: 3), wpTarget = [SIMD2<Float>](repeating: .zero, count: 3), wpCounted = [Bool](repeating: false, count: 3)
                 var t: Float = 0
+                var inBox = [Bool](repeating: false, count: 3)
                 for i in 0..<(90 * 60) {
                     if i % 30 == 5 {
                         for (k, r) in lab.rigs.enumerated() where r.brain.idleState.kind == nil && !r.brain.isSocial && r.brain.pending == nil {
@@ -156,7 +167,10 @@ final class ParkSlideRoundTests: XCTestCase {
                         let using = st.kind == .decorSlide && st.decorUID == ParkToys.slideUID
                         if using, st.slideStage >= 1 { reached[k] = true }
                         if open[k], !using { if !reached[k] { dropped += 1; notes.append("drop \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) at (\(String(format: "%.2f,%.2f", b.position.x, b.position.y)))") }; open[k] = false }
-                        if using, st.slideStage < 1, insideDepth(bx, b.position) > 0.02 { boxSamples += 1 }
+                        if using, st.slideStage < 1, insideDepth(bx, b.position) > 0.02 {
+                            boxSamples += 1
+                            if !inBox[k] { inBox[k] = true; boxEpisodes += 1; if boxEpisodes <= 12 { notes.append("box \(aname) s\(seed) body\(k) t\(String(format: "%.1f", t)) \(diag(lab, k))") } }
+                        } else { inBox[k] = false }
                         if using, st.slideStage < 0 {
                             // a waypoint held with nobody near
                             if simd_distance(st.target, wpTarget[k]) > 0.01 { wpTarget[k] = st.target; wpHold[k] = 0; wpCounted[k] = false }
