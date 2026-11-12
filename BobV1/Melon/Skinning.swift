@@ -324,7 +324,9 @@ nonisolated final class Skinner {
     // piece's top rings are pulled toward ONE shared attribute set, with weight 1 at the crossing fading to 0 at the band's edges: (a) the shading normal (the fitted egg's outward normal),
     // (b) the baked crease shadow (`mat`), (c) the fur-texture coordinate (the skin follows the piece's rest coordinate). Gated on the legs-out state only: at rest nothing here runs.
     nonisolated(unsafe) static var joinBlend = true          // master switch (simulator launch argument -FootJoinBlend 0 = off, for before / after stills)
-    nonisolated(unsafe) static var joinBlendNormal = true, joinBlendMat = true
+    nonisolated(unsafe) static var joinBlendNormal = true
+    /// The shadow (`mat`) blend (b) is OFF by default: on the Spring pedestal it lightened a ragged patch of belly skin (the weight follows 2 cm triangles) that read worse than the step it removes. `-FootJoinParts 3` turns it on.
+    nonisolated(unsafe) static var joinBlendMat = false
     /// The fur-coordinate follow (c) is OFF by default: the rest coordinate also decides where Teddy's cream and Panda's charcoal end (and shifts the fur of every colour), and following the piece's coordinate moved those boundaries up the belly (seen on the Spring pedestal). `-FootJoinParts 7` turns it on for experiments.
     nonisolated(unsafe) static var joinBlendRest = false
     /// How far outside the piece's outline (m) the skin's weight falls to 0; how far below the crossing (m, in egg height) the piece's weight falls to 0; the egg height of the crossing.
