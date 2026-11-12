@@ -326,7 +326,7 @@ nonisolated final class Skinner {
     nonisolated(unsafe) static var joinBlend = true          // master switch (simulator launch argument -FootJoinBlend 0 = off, for before / after stills)
     nonisolated(unsafe) static var joinBlendNormal = true, joinBlendMat = true, joinBlendRest = true
     /// How far outside the piece's outline (m) the skin's weight falls to 0; how far below the crossing (m, in egg height) the piece's weight falls to 0; the egg height of the crossing.
-    nonisolated(unsafe) static var joinBandSkin: Float = 0.11, joinBandBean: Float = 0.13, joinCrossE: Float = 0.10, joinBandRest: Float = 0.05
+    nonisolated(unsafe) static var joinBandSkin: Float = 0.11, joinBandBean: Float = 0.10, joinCrossE: Float = 0.12, joinBandRest: Float = 0.05, joinSkinRamp: Float = 0.05
     /// The bean ring whose rest coordinate the skin near the crossing follows.
     nonisolated(unsafe) static var joinRestRing = 10
     private var bandV: [Int32] = [], bandSide: [Int8] = [], bandDD: [Float] = [], bandJ: [Int32] = [], bandT: [Float] = []
@@ -507,16 +507,21 @@ nonisolated final class Skinner {
         // the skin
         for k in 0..<bandV.count {
             let v = Int(bandV[k]), dd = bandDD[k], s = Int(bandSide[k])
-            let w = g * (dd <= 0 ? 1 : 1 - Self.smooth(dd / Self.joinBandSkin))
-            if w < 0.002 { continue }
-            if Skinner.joinBlendNormal, let pose { let (_, gr) = Self.fittedDepth(P(v), pose); pull(v, w, -gr) }
-            var rw: Float = 0, rt = SIMD3<Float>.zero
+            // weight by height above the fitted egg (the crossing lies 4...11 cm above it, wandering with the 2 cm triangles, so the weight is 1 from the ramp's top inward and falls to 0 at the egg surface)
+            var w: Float = 0
+            if let pose {
+                let (d, gr) = Self.fittedDepth(P(v), pose)
+                w = g * Self.smooth(-d / Self.joinSkinRamp)
+                if w >= 0.002, Skinner.joinBlendNormal { pull(v, w, -gr) }
+            }
+            var rw: Float = -1, rt = SIMD3<Float>.zero
             if Skinner.joinBlendRest {
                 let j = Int(bandJ[k]), j1 = (j + 1) % A, ring = Self.joinRestRing, tab = Self.beanRestTab[s]
                 rt = tab[1 + A * ring + j] + (tab[1 + A * ring + j1] - tab[1 + A * ring + j]) * bandT[k]
                 rw = g * (dd <= 0 ? 1 : 1 - Self.smooth(dd / Self.joinBandRest))
             }
-            outV.append(Int32(v)); outRW.append(rw); outRT.append(rt); outMW.append(Skinner.joinBlendMat ? w : 0); outMT.append(T)
+            if w < 0.002 && rw < 0.002 { continue }
+            outV.append(Int32(v)); outRW.append(max(rw, Skinner.joinBlendRest ? 0 : -1)); outRT.append(rt); outMW.append(Skinner.joinBlendMat ? w : 0); outMT.append(T)
         }
         // the piece's visible top rings: weight by the height above the fitted egg (1 up to the crossing, 0 `joinBandBean` below it)
         guard let pose else { return }
