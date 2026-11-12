@@ -98,14 +98,14 @@ struct ShopScreen: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 22) {          // (was 10: the pills row sat tight under the subtitle)
             HStack(spacing: 10) {
                 Button { AudioHub.shared.uiTap(); back() } label: {
                     Image(systemName: "chevron.left").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
                         .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
                 }
                 .buttonStyle(.plain).accessibilityLabel("Back").accessibilityIdentifier("shop-back")
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 4) {          // (was 0: the subtitle sat tight under the title)
                     Text("Shop").font(SK.font(28, .black)).foregroundStyle(.white)
                     Text("Spend your JellyCoins on goodies").font(SK.font(12, .bold)).foregroundStyle(.white.opacity(0.9))
                 }
@@ -129,7 +129,7 @@ struct ShopScreen: View {
                 }
                 .padding(.horizontal, 16)
             }
-            .padding(.bottom, 26)          // the wave's crests reach 14 pt above the header's bottom edge (WavyBottom): 12 pt of clear pink stays under the tabs
+            .padding(.bottom, 32)          // the wave's crests reach 14 pt above the header's bottom edge (WavyBottom): 18 pt of clear pink stays under the tabs (was 12)
         }
         .background(SK.pinkStrong.clipShape(WavyBottom()).ignoresSafeArea(edges: [.top, .horizontal]))
         .padding(.bottom, 4)
