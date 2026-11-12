@@ -115,7 +115,7 @@ extension ParkScenery {
             // edging: alternating stone / timber blocks
             for sd: Float in [-1, 1] {
                 let k = 0.82 + 0.28 * Float((row * 7 + (sd > 0 ? 3 : 0)) % 5) / 4
-                let col = S.srgb(0.48, 0.43, 0.37) * k
+                let col = ParkPalette.linear(\.stone, or: S.srgb(0.48, 0.43, 0.37)) * k
                 let ix = sd < 0 ? -w : w - e, ox = sd < 0 ? -w + e : w
                 b.flatQuad(V3(pathX(z) + ix, 0.016, z), V3(pathX(z) + ox, 0.016, z), V3(pathX(z2) + ox, 0.016, z2), V3(pathX(z2) + ix, 0.016, z2), normal: V3(0, 1, 0), colors: [col, col, col, col])
             }
@@ -125,14 +125,14 @@ extension ParkScenery {
 
     /// A slatted timber bench on cast-iron frames (the exact footprint of the old one: x +-1.28, z -4.78 ... -4.22).
     static func bench(_ b: RoomMeshBuilder) {
-        let iron = S.srgb(0.13, 0.16, 0.15)
+        let iron = ParkPalette.linear(\.frame, or: S.srgb(0.13, 0.16, 0.15)), slat = ParkPalette.linear(\.wood, or: S.srgb(0.52, 0.36, 0.21))
         for (i, dz) in ([-0.225, -0.075, 0.075, 0.225] as [Float]).enumerated() {
             let k = 0.94 + 0.1 * Float(i % 3) / 2
-            b.roundedBox(centre: V3(0, 0.50, -4.48 + dz), half: V3(1.28, 0.05, 0.066), radius: 0.02, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
+            b.roundedBox(centre: V3(0, 0.50, -4.48 + dz), half: V3(1.28, 0.05, 0.066), radius: 0.02, segments: 2, aoFloor: false, color: slat * k)
         }
         for (i, y) in ([0.74, 0.87, 1.0] as [Float]).enumerated() {
             let k = 0.96 + 0.08 * Float(i % 2)
-            b.roundedBox(centre: V3(0, y, -4.80), half: V3(1.28, 0.052, 0.04), radius: 0.018, segments: 2, aoFloor: false, color: S.srgb(0.52, 0.36, 0.21) * k)
+            b.roundedBox(centre: V3(0, y, -4.80), half: V3(1.28, 0.052, 0.04), radius: 0.018, segments: 2, aoFloor: false, color: slat * k)
         }
         for sx: Float in [-1.1, 1.1] {
             b.roundedBox(centre: V3(sx, 0.23, -4.30), half: V3(0.04, 0.23, 0.04), radius: 0.02, segments: 2, aoFloor: false, color: iron)
@@ -145,7 +145,7 @@ extension ParkScenery {
 
     /// A classic dark-green park lamp post with a real lantern: base plate, slim post, a four-post frame round warm glass, a dark cap with a finial (static, plain material).
     static func lampPost(_ b: RoomMeshBuilder, x: Float, z: Float) {
-        let green = S.srgb(0.09, 0.22, 0.15), glass = S.srgb(0.98, 0.88, 0.58)
+        let green = ParkPalette.linear(\.frame, or: S.srgb(0.09, 0.22, 0.15)), glass = S.srgb(0.98, 0.88, 0.58)
         S.cylinder(b, x: x, z: z, r: 0.14, y0: 0, y1: 0.12, color: green, segments: 10)
         S.cylinder(b, x: x, z: z, r: 0.09, y0: 0.12, y1: 0.30, color: green, segments: 10)
         S.stem(b, x: x, z: z, y0: 0.3, y1: 2.12, r: 0.04, color: green, segments: 8)
@@ -160,7 +160,7 @@ extension ParkScenery {
 
     /// A low timber post-and-rail fence along z, in front of the tree line (`skip` = a span left open where the hedge stands).
     static func fence(_ b: RoomMeshBuilder, z: Float, x0: Float, x1: Float, skip: ClosedRange<Float>) {
-        let wood = S.srgb(0.42, 0.32, 0.21)
+        let wood = ParkPalette.linear(\.frame, or: S.srgb(0.42, 0.32, 0.21))          // (palette lab: the fence is `frame`)
         var x = x0, prev: Float?
         while x <= x1 {
             if !skip.contains(x) {
@@ -211,23 +211,23 @@ extension ParkScenery {
         for (i, x) in ([-1.25, -2.9, -4.55, -6.2, -7.85, -9.5] as [Float]).enumerated() { hedge(b, x: px + x - 0.6 + 0.0 * Float(i), z: zh + (r.unit() - 0.5) * 0.1, scale: 0.85, yaw: (r.unit() - 0.5) * 0.06, low: true, rng: &r) }
         for x in ([2.55, 4.2, 5.85, 7.5, 9.15] as [Float]) { hedge(b, x: px + x - 0.6, z: zh + (r.unit() - 0.5) * 0.1, scale: 0.85, yaw: (r.unit() - 0.5) * 0.06, low: true, rng: &r) }
         // two plain stone gate piers at the opening
-        let stone = S.srgb(0.55, 0.53, 0.50)
+        let stone = ParkPalette.linear(\.stone, or: S.srgb(0.55, 0.53, 0.50)), cap = ParkPalette.current == nil ? stone * 1.12 : ParkPalette.linear(\.trim, or: stone)          // (palette lab: caps = trim)
         for sx: Float in [-1.02, 1.02] {
             b.roundedBox(centre: V3(px + sx, 0.30, zh), half: V3(0.16, 0.30, 0.16), radius: 0.03, segments: 2, aoFloor: false, color: stone)
-            b.roundedBox(centre: V3(px + sx, 0.63, zh), half: V3(0.21, 0.04, 0.21), radius: 0.02, segments: 2, aoFloor: false, color: stone * 1.12)
+            b.roundedBox(centre: V3(px + sx, 0.63, zh), half: V3(0.21, 0.04, 0.21), radius: 0.02, segments: 2, aoFloor: false, color: cap)
         }
         // flower drifts (natural garden colours) well in front of the hedge, off the path
-        let cream = S.srgb(0.95, 0.92, 0.82), butter = S.srgb(0.93, 0.86, 0.58), lavender = S.srgb(0.74, 0.68, 0.84)
+        let cream = ParkPalette.bloom(0, or: S.srgb(0.95, 0.92, 0.82)), butter = ParkPalette.bloom(1, or: S.srgb(0.93, 0.86, 0.58)), lavender = ParkPalette.bloom(2, or: S.srgb(0.74, 0.68, 0.84))
         for (x, z, c) in [(-2.5 as Float, 7.3 as Float, cream), (-4.2, 8.7, lavender), (3.0, 7.9, butter)] {
             flowerPatch(b, x: x, z: z, scale: 0.8, bloom: c, rng: &r)
         }
         // rocks
         for (x, z, s) in [(-1.7 as Float, 6.9 as Float, 1.0 as Float), (2.4, 6.7, 0.8), (-3.7, 7.7, 1.2), (4.0, 8.0, 1.0), (-2.7, 9.1, 0.9), (1.9, 8.5, 0.7), (4.6, 7.2, 0.8)] {
             let k = 0.8 + 0.4 * r.unit()
-            S.blob(b, V3(x, 0.06 * s, z), rx: 0.26 * s, ry: 0.14 * s, rz: 0.2 * s, color: S.srgb(0.50, 0.46, 0.41) * k, segments: 8, rings: 4, ao: 0.9)
+            S.blob(b, V3(x, 0.06 * s, z), rx: 0.26 * s, ry: 0.14 * s, rz: 0.2 * s, color: ParkPalette.linear(\.stone, or: S.srgb(0.50, 0.46, 0.41)) * k, segments: 8, rings: 4, ao: 0.9)
         }
         // larger shrubs frame the two bottom corners
-        floweringBush(b, x: -4.2, z: 8.2, scale: 1.1, bloom: S.srgb(0.95, 0.92, 0.82), rng: &r)
-        floweringBush(b, x: 4.5, z: 8.4, scale: 1.1, bloom: S.srgb(0.74, 0.68, 0.84), rng: &r)
+        floweringBush(b, x: -4.2, z: 8.2, scale: 1.1, bloom: cream, rng: &r)
+        floweringBush(b, x: 4.5, z: 8.4, scale: 1.1, bloom: lavender, rng: &r)
     }
 }

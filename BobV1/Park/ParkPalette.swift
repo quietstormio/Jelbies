@@ -51,6 +51,17 @@ nonisolated enum ParkPalette {
         }
     }()
 
+    // MARK: call-site helpers (return LINEAR, ready for the builders; `old` is returned untouched in `today`)
+
+    static func linear(_ role: KeyPath<Colours, SIMD3<Float>>, or old: SIMD3<Float>) -> SIMD3<Float> {
+        guard let p = current else { return old }
+        return OKLab.srgbToLinear(p[keyPath: role])
+    }
+    static func bloom(_ i: Int, or old: SIMD3<Float>) -> SIMD3<Float> {
+        guard let p = current else { return old }
+        return OKLab.srgbToLinear(p.bloom[i])
+    }
+
     // MARK: the one-tint recipe (the living room's: one hue, five value steps)
 
     /// frame = swatch 1, wood = 2, seat = 3, trim = 4, stone = 2 darkened toward 1, asphalt = 1 toward 0, blooms = 4 / 3 / 2, numbers = 3. (`swatch(i)` is linear: stored here as sRGB.)

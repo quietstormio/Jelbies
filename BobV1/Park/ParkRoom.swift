@@ -135,7 +135,7 @@ enum ParkScenery {
         fence(b, z: -6.45, x0: -14, x1: 14, skip: -4.0...2.4)
 
         // ---- natural shrubs at the edges, a few garden-flower patches ----
-        let white = S.srgb(0.95, 0.92, 0.82), gold = S.srgb(0.93, 0.86, 0.58), violet = S.srgb(0.74, 0.68, 0.84)          // (muted: cream, pale yellow, soft lavender)
+        let white = ParkPalette.bloom(0, or: S.srgb(0.95, 0.92, 0.82)), gold = ParkPalette.bloom(1, or: S.srgb(0.93, 0.86, 0.58)), violet = ParkPalette.bloom(2, or: S.srgb(0.74, 0.68, 0.84))          // (muted: cream, pale yellow, soft lavender)
         floweringBush(b, x: -6.0, z: -4.6, scale: 1.2, bloom: white, rng: &r); shadows.append(ParkShadow(x: -6.0, z: -4.6, r: 1.5, h: 1.2))          // (moved off the floor from (-3.7, -4.5) with the flower bed's collider; same rng draws)
         floweringBush(b, x: -5.6, z: 1.6, scale: 1.0, bloom: gold, rng: &r); shadows.append(ParkShadow(x: -5.6, z: 1.6, r: 1.3, h: 1.1))
         floweringBush(b, x: 5.6, z: 3.4, scale: 1.0, bloom: violet, rng: &r); shadows.append(ParkShadow(x: 5.6, z: 3.4, r: 1.3, h: 1.1))
