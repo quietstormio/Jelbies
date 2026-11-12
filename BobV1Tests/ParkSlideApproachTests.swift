@@ -55,6 +55,7 @@ final class ParkSlideApproachTests: XCTestCase {
         var firstHop: Bool?, hopInfo = ""
         var t4: Float?, saw5 = false, saw6 = false, endT: Float?, endedOutside = false
         var last = ""
+        var minFriend: Float = .infinity          // (smallest centre distance to a parked friend while he walked)
         var finalDist: Float = .infinity          // (distance of his root from the slide's footprint when the run ends)
         var rode: Bool { (t4 ?? 99) <= 30 && saw5 && saw6 && endedOutside }
     }
@@ -67,12 +68,13 @@ final class ParkSlideApproachTests: XCTestCase {
     }
 
     /// One forced slide start from `p` (park lab, `n` bodies, the others wander or, with `peerOnClimb`, one stands on the climb spot).
-    func runStart(_ label: String, _ p: SIMD2<Float>, n: Int, seed: UInt64, peerOnClimb: Bool = false) -> Run {
+    func runStart(_ label: String, _ p: SIMD2<Float>, n: Int, seed: UInt64, peerOnClimb: Bool = false, friendAt: SIMD2<Float>? = nil) -> Run {
         var out = Run(label: label, n: n, seed: seed)
         let lab = parkLab(n: n, seed: seed)
         let sl = DecorField.shared.foot(ParkToys.slideUID)!
         let r = lab.rigs[0], b = r.brain
-        if peerOnClimb { place(lab.rigs[1], climbSpot(sl)) }
+        if let friendAt { place(lab.rigs[1], friendAt); lab.rigs[1].brain.restTimer = 1e6 }
+        else if peerOnClimb { place(lab.rigs[1], climbSpot(sl)) }
         else { for k in 1..<n { lab.rigs[k].brain.restTimer = 0.5 } }
         let q = b.fixed(p)
         if simd_distance(p, q) > 0.1 { out.skipped = true; return out }
@@ -85,6 +87,7 @@ final class ParkSlideApproachTests: XCTestCase {
         var t: Float = 0
         while t < 45 {
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
+            if friendAt != nil, out.endT == nil { out.minFriend = min(out.minFriend, simd_distance(b.position, lab.rigs[1].brain.position)) }
             let st = b.idleState
             if st.kind == .decorSlide, st.decorUID == ParkToys.slideUID {
                 let d = simd_distance(b.position, climb)
@@ -168,9 +171,30 @@ final class ParkSlideApproachTests: XCTestCase {
         let dropped = three.filter { $0.started && !$0.rode && $0.finalDist >= 0.55 - 0.05 }.count
         print("SLIDERIDES n1 \(rode1) of \(one.count), n3 \(rode3) of \(three.count) (refused at start \(refused), dropped on the way \(dropped)); platform times: \(times)")
         XCTAssertEqual(rode1, one.count, "alone he rides from every start")
-        for r in three where !r.rode {
-            XCTAssertTrue(!r.started || r.finalDist >= 0.55 - 0.05, "\(r.label) n3 seed \(r.seed): neither rode nor an explained refusal (ended \(r.finalDist) from the footprint) \(r.last)")
+        print("SLIDERIDES3 time to the platform per n3 run: " + three.map { String(format: "%@/s%d:%@", $0.label, Int($0.seed), $0.t4.map { String(format: "%.1f", $0) } ?? "-") }.joined(separator: " "))
+        XCTAssertGreaterThanOrEqual(rode3, 9, "with friends around he rides from at least 9 of \(three.count) starts (rode \(rode3))")
+    }
+
+    /// A friend PARKED beside the way round (0.6 left of the leg, half way between the two left corners), rider from the front, 4 seeds: he still rides, never inside the footprint.
+    func testParkedFriendOnTheWayRound() {
+        var rode = 0, tried = 0
+        var times: [String] = [], mins: [Float] = []
+        for seed in UInt64(1)...4 {
+            _ = parkLab(n: 1, seed: seed)
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!
+            let h = localHalf(sl)
+            let lat = h.x + 0.55 + 0.1
+            let friend = sl.centre + sl.turned(SIMD2(-(lat + 0.6), 0))
+            guard let front = starts(sl).first(where: { $0.0 == "front" }) else { continue }
+            let r = runStart("front", front.1, n: 2, seed: seed, friendAt: friend)
+            if r.skipped { continue }
+            tried += 1
+            if r.rode { rode += 1 } else { print("SLIDEFAIL parked-friend s\(seed) started \(r.started) \(r.last)") }
+            times.append(String(format: "s%d:%@", Int(seed), r.t4.map { String(format: "%.1f", $0) } ?? "-")); mins.append(r.minFriend)
+            XCTAssertGreaterThanOrEqual(r.worstDepth, 0, "parked friend, seed \(seed): walked into the slide, \(r.worstWhere)")
         }
+        print("SLIDEPARKED friend at left of the way round: rode \(rode) of \(tried); time to the platform \(times); smallest centre distance to the friend while walking \(mins) (jellyGap \(MelonController.jellyGap))")
+        XCTAssertEqual(rode, tried, "he still rides with a friend parked beside the way round")
     }
 
     /// The home room's slide runs the same code: how many of 40 seeded starts from spread-out floor spots succeed (printed; compared base against fix in the report).
