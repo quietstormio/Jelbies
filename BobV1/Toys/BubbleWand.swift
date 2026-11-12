@@ -279,6 +279,9 @@ final class BubbleWand: PlayToy {
         var skipBubble = -1, skipUntil: Float = 0
         var heartNeed = 0               // pops in the streak for the next heart (drawn from `heartPops`)
     }
+    /// The pops since the park's shared-play tracker last took them (body id, floor position of the popper): `takePops`.
+    @ObservationIgnored private var popLog: [(id: Int, pos: SIMD2<Float>)] = []
+    func takePops() -> [(id: Int, pos: SIMD2<Float>)] { defer { popLog.removeAll() }; return popLog }
     @ObservationIgnored private var lastTakeoff: [Int: Float] = [:]
     /// Love from pops: the bucket per Jelbie (tests, report): the gained total and the bucket's fill.
     @ObservationIgnored private var loveBucket: [Int: Float] = [:]
@@ -1014,6 +1017,7 @@ final class BubbleWand: PlayToy {
         st.streak = clock - st.lastPop < BubbleTuning.streakWindow ? st.streak + 1 : 1
         st.lastPop = clock
         popsByJelly[j.id, default: 0] += 1
+        if popLog.count < 64 { popLog.append((j.id, j.brain.position)) }
         gainLove(j.id)
         if hopped { hopPops += 1 }
         j.brain.face(.excited, hold: 1.6)

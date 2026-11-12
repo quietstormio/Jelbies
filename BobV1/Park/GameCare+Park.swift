@@ -280,7 +280,8 @@ extension GameCare {
             SharedCourt(uid: f.uid, players: HopscotchLine.shared.players(f.uid).map { (id: $0.id, sq: $0.sq) })
         }
         let comers = Set(book.comers.filter { actors.indices.contains($0) && jelly($0) != nil })
-        let awards = book.work.shared.step(dt: dt, seesaws: seesaws, courts: courts, isHome: { comers.contains($0) }, isVisitor: { visitors[$0] != nil })
+        var awards = book.work.shared.step(dt: dt, seesaws: seesaws, courts: courts, isHome: { comers.contains($0) }, isVisitor: { visitors[$0] != nil })
+        awards += book.work.shared.bubbleStep(dt: dt, pops: BubbleWand.shared.takePops(), isHome: { comers.contains($0) }, isVisitor: { visitors[$0] != nil })          // (bubble play together: a home pop + a visitor's pop close by)
         for w in awards {
             guard let i = visitors[w.visitor], let prof = jelly(w.home) else { continue }
             let vid = book.cast[i], a = book.actors[i], k = w.home
@@ -288,7 +289,7 @@ extension GameCare {
             let now = CACurrentMediaTime()
             if k == 0 { touchPlay?.spawnHeart(now: now) } else { bubbleHub.spawnHeart(for: k, now: now) }
             #if targetEnvironment(simulator)
-            if Self.traceOn { NSLog("[pals] +%.0f %@ slot=%d visitor=%d total=%.1f", w.points, w.kind == .ride ? "ride" : "line", k, vid, book.visitor(vid)?.points(with: prof.character) ?? -1) }
+            if Self.traceOn { NSLog("[pals] +%.0f %@ slot=%d visitor=%d total=%.1f", w.points, w.kind == .ride ? "ride" : w.kind == .line ? "line" : "bubbles", k, vid, book.visitor(vid)?.points(with: prof.character) ?? -1) }
             #endif
         }
     }

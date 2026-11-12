@@ -5,11 +5,15 @@
 //
 
 import Foundation
+import simd
 
 enum SharedPlayTuning {
     static let rideBonus: Float = 8        // one shared seesaw ride
     static let hopBonus: Float = 6         // one shared hopscotch line
     static let rideSeconds: Float = 4      // seconds of real pair riding before the ride counts
+    static let bubbleBonus: Float = 3      // a home Jelbie and a visitor each popped a bubble close by within the window (bubble wand at the park)
+    static let bubbleWindow: Float = 5     // seconds between the two pops
+    static let bubbleDistance: Float = 2   // metres between the two poppers
     static let capPerPair = 3              // awards per (home Jelbie, visitor) per park visit, rides and lines together
 }
 
@@ -27,7 +31,7 @@ struct SharedCourt {
 }
 
 struct SharedPlayAward: Equatable {
-    enum Kind { case ride, line }
+    enum Kind { case ride, line, bubbles }
     var home: Int, visitor: Int
     var points: Float
     var uid: Int
@@ -40,8 +44,31 @@ struct SharedPlayTracker {
     private var rides: [Int: Ride] = [:]
     private var lines: [Int: Set<Pair>] = [:]
     private var counts: [Pair: Int] = [:]
+    private var recentPops: [(id: Int, pos: SIMD2<Float>, age: Float)] = []
 
-    mutating func reset() { rides = [:]; lines = [:]; counts = [:] }
+    mutating func reset() { rides = [:]; lines = [:]; counts = [:]; recentPops = [] }
+
+    /// Bubble play together: `pops` are the pops since the last call (body id, floor position of the popper). A home pop and a visitor pop within `bubbleWindow` s and `bubbleDistance` m
+    /// of each other pay the pair once (the two pops are used up); the award counts against `capPerPair` with rides and lines. Two home Jelbies or a lone popper pay nothing.
+    mutating func bubbleStep(dt: Float, pops: [(id: Int, pos: SIMD2<Float>)], isHome: (Int) -> Bool, isVisitor: (Int) -> Bool) -> [SharedPlayAward] {
+        var out: [SharedPlayAward] = []
+        for i in recentPops.indices { recentPops[i].age += dt }
+        recentPops.removeAll { $0.age > SharedPlayTuning.bubbleWindow }
+        for p in pops {
+            let h = isHome(p.id), v = isVisitor(p.id)
+            guard h || v else { continue }
+            if let k = recentPops.firstIndex(where: { o in (h ? isVisitor(o.id) : isHome(o.id)) && simd_distance(o.pos, p.pos) <= SharedPlayTuning.bubbleDistance }) {
+                let o = recentPops[k]
+                recentPops.remove(at: k)
+                let pair = h ? Pair(home: p.id, visitor: o.id) : Pair(home: o.id, visitor: p.id)
+                if counts[pair, default: 0] < SharedPlayTuning.capPerPair {
+                    counts[pair, default: 0] += 1
+                    out.append(SharedPlayAward(home: pair.home, visitor: pair.visitor, points: SharedPlayTuning.bubbleBonus, uid: 0, kind: .bubbles))
+                }
+            } else { recentPops.append((p.id, p.pos, 0)) }
+        }
+        return out
+    }
 
     mutating func step(dt: Float, seesaws: [SharedSeesaw], courts: [SharedCourt], isHome: (Int) -> Bool, isVisitor: (Int) -> Bool) -> [SharedPlayAward] {
         var out: [SharedPlayAward] = []

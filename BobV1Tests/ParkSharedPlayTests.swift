@@ -177,4 +177,32 @@ final class ParkSharedPlayTests: XCTestCase {
         XCTAssertEqual(awards.count, 1, "exactly one award during the line: \(awards)")
         XCTAssertEqual(awards.first?.points, SharedPlayTuning.hopBonus)
     }
+
+    // bubble play together (round 3)
+    func pops(_ t: inout SharedPlayTracker, _ p: [(id: Int, pos: SIMD2<Float>)], dt: Float = 0.1) -> [SharedPlayAward] {
+        t.bubbleStep(dt: dt, pops: p, isHome: isHome, isVisitor: isVisitor)
+    }
+    func testBubblePairPaysOnce() {
+        var t = SharedPlayTracker()
+        XCTAssertTrue(pops(&t, [(0, SIMD2(0, 0))]).isEmpty, "a lone popper pays nothing")
+        let a = pops(&t, [(10, SIMD2(1.5, 0))])
+        XCTAssertEqual(a, [SharedPlayAward(home: 0, visitor: 10, points: SharedPlayTuning.bubbleBonus, uid: 0, kind: .bubbles)])
+        XCTAssertTrue(pops(&t, [(0, SIMD2(0, 0))]).isEmpty, "the two pops were used up")
+    }
+    func testBubbleNeverBeyondCapOrApartOrLate() {
+        var t = SharedPlayTracker()
+        var n = 0
+        for _ in 0..<6 { _ = pops(&t, [(0, .zero)]); n += pops(&t, [(10, SIMD2(1, 0))]).count }
+        XCTAssertEqual(n, SharedPlayTuning.capPerPair, "capped per pair")
+        var u = SharedPlayTracker()
+        _ = pops(&u, [(1, .zero)]); XCTAssertTrue(pops(&u, [(11, SIMD2(3, 0))]).isEmpty, "more than 2 m apart")
+        var w = SharedPlayTracker()
+        _ = pops(&w, [(1, .zero)], dt: 0.1); XCTAssertTrue(pops(&w, [(11, .zero)], dt: 6).isEmpty, "more than 5 s apart")
+    }
+    func testBubbleTwoHomeJelbiesPayNothing() {
+        var t = SharedPlayTracker()
+        _ = pops(&t, [(0, .zero)]); XCTAssertTrue(pops(&t, [(1, SIMD2(0.5, 0))]).isEmpty)
+        var u = SharedPlayTracker()
+        _ = pops(&u, [(10, .zero)]); XCTAssertTrue(pops(&u, [(11, SIMD2(0.5, 0))]).isEmpty, "two visitors neither")
+    }
 }
