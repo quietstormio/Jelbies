@@ -94,6 +94,7 @@ nonisolated final class Skinner {
     /// Where Pip's tail block is and which three egg vertices carry it (see TailBean.landmarks).
     func configureTail(_ rm: RenderMesh) {
         bodyVertexLimit = rm.armCapsule?.firstVertex.min() ?? -1
+        weld = rm.armCapsule?.weld
         configureTeddy(rm)
         guard let cap = rm.armCapsule, cap.tailFirst >= 0 else { return }
         tailFirst = cap.tailFirst
@@ -148,6 +149,43 @@ nonisolated final class Skinner {
     var retractMatrix = matrix_identity_float3x3      // body-rigid pose (rotation * squash) that carries a rest delta into the world
     var retractShift: [SIMD3<Float>] = [.zero, .zero]  // how far each sim foot slab sits from the body-rigid pose (world): removed from its vertices
     func clearBeans() { hipSeen = [false, false]; beanBlend = 0; beanPos = [[], []]; beanStart = [[], []] }
+
+    // MARK: leg weld (LegWeld.swift)
+    /// 2026-11-11 prototype: each leg is welded to the body by a band rebuilt every frame (see LegWeld.swift). `-LegsWeld 0` = the old closed pieces + collar (read once, at the mesh build).
+    nonisolated(unsafe) static var weldLegs: Bool = UserDefaults.standard.object(forKey: "LegsWeld") == nil ? true : UserDefaults.standard.integer(forKey: "LegsWeld") != 0
+    /// Tangent scales of the band's Hermite curves (x the seam-to-loop distance): leg side, body side. Launch arguments -LegsWeldK0 / -LegsWeldK1.
+    nonisolated(unsafe) static var weldK0: Float = UserDefaults.standard.object(forKey: "LegsWeldK0") != nil ? UserDefaults.standard.float(forKey: "LegsWeldK0") : 1.0
+    nonisolated(unsafe) static var weldK1: Float = UserDefaults.standard.object(forKey: "LegsWeldK1") != nil ? UserDefaults.standard.float(forKey: "LegsWeldK1") : 1.0
+    /// The weld of this skinner's mesh (nil = old mesh).
+    var weld: LegWeldInfo? = nil
+    var welded: Bool { weld != nil }
+
+    /// Rebuild both bands from this frame's seam rings (the cup's top ring, wherever the brain / guard / leash put the piece) and loops (the drawn egg).
+    private func applyWeldBand(_ dyn: UnsafeMutablePointer<Float>) {
+        guard let w = weld else { return }
+        @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
+        let A = FootBean.around, R = w.ring, K = w.rows
+        let k0 = Self.weldK0, k1 = Self.weldK1
+        for sd in w.sides {
+            for j in 0..<A {
+                let i0 = sd.beanFirst + 1 + A * R + j, im = sd.beanFirst + 1 + A * (R - 1) + j
+                let p0 = P(i0)
+                var t0 = p0 - P(im); let l0 = simd_length(t0); t0 = l0 > 1e-6 ? t0 / l0 : SIMD3(0, 1, 0)
+                let a = Int(sd.mA[j]), b = Int(sd.mB[j]), ww = sd.mW[j]
+                let la = P(Int(sd.loop[a])), lb = P(Int(sd.loop[b]))
+                let p1 = la + (lb - la) * ww
+                let oa = P(Int(sd.outer[a])), ob = P(Int(sd.outer[b]))
+                var t1 = (oa + (ob - oa) * ww) - p1; let l1 = simd_length(t1); t1 = l1 > 1e-6 ? t1 / l1 : SIMD3(0, 1, 0)
+                let c = simd_distance(p0, p1)
+                let m0 = t0 * (c * k0), m1 = t1 * (c * k1)
+                for k in 1...K {
+                    let q = LegWeld.hermiteF(p0, m0, p1, m1, Float(LegWeld.rowS(k, K)))
+                    let o = 6 * (sd.bandFirst + (k - 1) * A + j)
+                    dyn[o] = q.x; dyn[o + 1] = q.y; dyn[o + 2] = q.z
+                }
+            }
+        }
+    }
     var beansActive: Bool { beanBlend > 0 && beanPos[0].count == FootBean.vertexCount && beanStart[0].count == FootBean.vertexCount && beanFirst.count == 2 }
 
     // MARK: drawn-space bean guard
@@ -591,6 +629,7 @@ nonisolated final class Skinner {
         }
         skinIdx = idx
         skinW = embedding.w
+        if let lb = LegWeld.lastBuilt, lb.vertexCount == vertexCount { weld = lb.info }
         if let e = eyes {
             eyeIdx = e.eye; glintIdx = e.glint; browIdx = e.brow
             var ai = [Int32](repeating: 0, count: 16)
@@ -806,18 +845,31 @@ nonisolated final class Skinner {
             }
             for s in 0..<2 {
                 let f = beanFirst[s]
+                // welded: the piece grows out of its ghost (the rest foot, sim-skinned: where the welded leg stands at rest), not out of the inset piece in the belly
+                let g = weld.map { $0.sides[s].ghostFirst } ?? -1
                 for i in 0..<FootBean.vertexCount {
-                    let o = 6 * (f + i), t = beanPos[s][i], a = beanStart[s][i]
+                    let o = 6 * (f + i), t = beanPos[s][i]
+                    let a = g >= 0 ? SIMD3(dyn[6 * (g + i)], dyn[6 * (g + i) + 1], dyn[6 * (g + i) + 2]) : beanStart[s][i]
                     dyn[o] = a.x + (t.x - a.x) * bl; dyn[o + 1] = a.y + (t.y - a.y) * bl; dyn[o + 2] = a.z + (t.z - a.z) * bl
                 }
             }
             let M = retractMatrix
-            for (k, vi) in retractVertices.enumerated() where !Skinner.dbgNoRetract {
+            // (welded: the embedded foot's skin is inside the loops and not drawn; the egg outside them is never pulled in)
+            for (k, vi) in retractVertices.enumerated() where !Skinner.dbgNoRetract && weld == nil {
                 var d = M * retractRest[k]
                 let sd = retractSide[k]
                 if sd >= 0 { d -= retractShift[Int(sd)] }
                 let o = 6 * Int(vi), w = retractWeight[k] * bl
                 dyn[o] += d.x * w; dyn[o + 1] += d.y * w; dyn[o + 2] += d.z * w
+            }
+        }
+        if !beansActive, let w = weld {
+            // welded, feet at rest: the piece IS the rest foot, skinned with the body (its ghost)
+            for sd in w.sides {
+                for i in 0..<FootBean.vertexCount {
+                    let o = 6 * (sd.beanFirst + i), g = 6 * (sd.ghostFirst + i)
+                    dyn[o] = dyn[g]; dyn[o + 1] = dyn[g + 1]; dyn[o + 2] = dyn[g + 2]
+                }
             }
         }
         if armCapsulesActive {
@@ -861,7 +913,7 @@ nonisolated final class Skinner {
         if cuddle.active { applyCuddle(dyn) }          // the cuddle jiggle (CuddleJiggle.swift): drawn dent / drag / let-go spring on the BODY skin only
         applyBeanGuard(dyn)
         applyBeanJoin(dyn)
-        applyBeanCollar(dyn)
+        if weld != nil { applyWeldBand(dyn) } else { applyBeanCollar(dyn) }
         if Skinner.scatterNormals { scatterNormals(dyn, index: index) } else { gatherNormals(dyn, index: index) }
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }

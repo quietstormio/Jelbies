@@ -1225,13 +1225,15 @@ final class MelonRenderer {
                     let pandaBody = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
                     let isPanda = pandaBody > 50.5 && pandaBody < 51.5
                     if isPanda, let cap = m.armCapsule, cap.indexFirst > m.body.first {
+                        // (the leg weld's band sits at the head of the capsule block and is drawn with the egg: its rest-space foot mask fades the charcoal across it)
+                        let limbFirst = cap.limbIndexFirst
                         var ub = slot.uboBuf.contents().load(as: MelonUniforms.self)
                         ub.shape.w = 51
                         e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
-                        e.drawIndexedPrimitives(type: tri, indexCount: cap.indexFirst - m.body.first, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+                        e.drawIndexedPrimitives(type: tri, indexCount: limbFirst - m.body.first, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
                         ub.shape.w = 52
                         e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
-                        e.drawIndexedPrimitives(type: tri, indexCount: m.body.first + m.body.count - cap.indexFirst, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: cap.indexFirst * 4)
+                        e.drawIndexedPrimitives(type: tri, indexCount: m.body.first + m.body.count - limbFirst, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: limbFirst * 4)
                         e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)
                     } else {
                         e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)

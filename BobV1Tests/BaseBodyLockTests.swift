@@ -89,7 +89,11 @@ final class BaseBodyLockTests: XCTestCase {
         var dyn = [Float](repeating: 0, count: rm.vertexCount * 6)
         dyn.withUnsafeMutableBufferPointer { skinner.update(x: body.x, index: rm.index, into: $0.baseAddress!) }
         var worstRest = -Double.infinity, worstSkinned = -Double.infinity
-        for v in caps.vertexRange {
+        // 2026-11-11 leg weld (user: "we need to unify the body"; LegWeld.swift): the welded foot pieces stand at the rest foot (they ARE the visible foot now) and the weld band
+        // sits at the head of the capsule index block; only the arm capsules stay hidden, and only the limb triangles after the band must keep to the block.
+        let weld = rm.armCapsule?.weld
+        let beanRanges: [Range<Int>] = weld == nil ? [] : (rm.armCapsule.map { c in [-1, 1].map { c.beanFirst(side: $0)..<(c.beanFirst(side: $0) + FootBean.vertexCount) } } ?? [])
+        for v in caps.vertexRange where !beanRanges.contains(where: { $0.contains(v) }) {
             let p = SIMD3<Double>(Double(rm.rest[3 * v]), Double(rm.rest[3 * v + 1]), Double(rm.rest[3 * v + 2]))
             let q = SIMD3<Double>(Double(dyn[6 * v]), Double(dyn[6 * v + 1]), Double(dyn[6 * v + 2]))
             worstRest = max(worstRest, BobForm.sdf(p)); worstSkinned = max(worstSkinned, BobForm.sdf(q))
@@ -97,7 +101,7 @@ final class BaseBodyLockTests: XCTestCase {
         XCTAssertLessThan(worstRest, -0.01, "\(lockBanner): a wave-arm capsule vertex pokes out of the body at rest (rest mesh)")
         XCTAssertLessThan(worstSkinned, -0.01, "\(lockBanner): a wave-arm capsule vertex pokes out of the body at rest (skinned)")
         // capsule triangles must touch capsule vertices only (so base vertex normals cannot change)
-        var t = caps.indexFirst
+        var t = caps.indexFirst + (weld?.bandIndexCount ?? 0)
         while t < caps.indexFirst + caps.indexCount {
             for k in 0..<3 { XCTAssertTrue(caps.vertexRange.contains(Int(rm.index[t + k])), "\(lockBanner): capsule triangle uses a body vertex") }
             t += 3

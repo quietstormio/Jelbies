@@ -690,7 +690,7 @@ func buildRenderMesh(appearance: BlobAppearance = .berry) -> RenderMesh {
 /// picks the finished result up. The values are immutable structs (copied on use).
 nonisolated enum BobMeshCache {
     static let sim = buildSimMeshBob(h: 0.2, layers: 7)
-    static let render = buildRenderMeshBob()
+    static let render = buildRenderMeshBob(weld: Skinner.weldLegs)
     static let embedding = embed(simRest: sim.rest, tets: sim.tets, verts: render.rest)
     /// Builds them all (call off the main thread, at low priority).
     static func warm() { _ = sim; _ = render; _ = embedding }
@@ -960,7 +960,10 @@ private func surfaceNets(cell h: Double, lo: SIMD3<Double>, hi: SIMD3<Double>, f
 
 // MARK: Render mesh
 
-private func buildRenderMeshBob() -> RenderMesh {
+/// Tests: the Bob render mesh with the leg weld on / off (not cached; BobMeshCache.render is the process's own).
+func buildRenderMeshBobUncached(weld: Bool) -> RenderMesh { buildRenderMeshBob(weld: weld) }
+
+private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
     var pos: [Double] = [], nrm: [Double] = [], mat: [Float] = []
     var idx: [UInt32] = []
     @discardableResult
@@ -990,12 +993,18 @@ private func buildRenderMeshBob() -> RenderMesh {
         for v in 0..<Q.count { Q[v] = BobForm.project(Q[v], steps: 3) }
         P = Q
     }
+    var Nb: [SIMD3<Double>] = [], Mb: [Float] = []
     for v in 0..<P.count {
         P[v].y = max(P[v].y, 0)
         let n = BobForm.normal(P[v])
-        add(P[v], n, Float(0.4 * BobForm.occlusion(P[v], n)))      // body: baked crease occlusion in `mat` (0...0.4)
+        let m = Float(0.4 * BobForm.occlusion(P[v], n))
+        add(P[v], n, m)      // body: baked crease occlusion in `mat` (0...0.4)
+        Nb.append(n); Mb.append(m)
     }
-    idx = net.tri
+    // the leg weld (LegWeld.swift): the egg triangles inside each foot loop are dropped; the band is added at the head of the capsule index block
+    var weldPlan = weldOn ? LegWeld.plan(P: P, N: Nb, M: Mb, tri: net.tri) : nil
+    if weldOn && weldPlan == nil { NSLog("%@", "[melon] leg weld: the loops could not be made simple; old mesh") }
+    idx = weldPlan?.eggTri ?? net.tri
 
     // wave arm capsules (one per side, appended to the body range): hidden inside the rest skin until a wave runs
     // (see ArmPath.swift / ArmKeyframes.swift). `rest` holds the hidden position (used for the sim embedding); the renderer's
@@ -1014,7 +1023,14 @@ private func buildRenderMeshBob() -> RenderMesh {
         let hidden = FootBean.inactive(sigma: sigma)
         let footMat = FootBean.matValues()
         for i in 0..<FootBean.vertexCount { add(hidden[i], FootBean.local.nrm[i], footMat[i]) }
-        idx += FootBean.triangles(firstVertex: beanFirst)
+        if weldPlan != nil {
+            // welded: the piece is an open cup from the sole up to the seam ring (sole fan + the ring quads below the seam)
+            let all = FootBean.triangles(firstVertex: beanFirst)
+            idx += all.prefix(3 * (FootBean.around + 2 * FootBean.around * weldPlan!.ring))
+            weldPlan!.sides[sigma < 0 ? 0 : 1].beanFirst = beanFirst
+        } else {
+            idx += FootBean.triangles(firstVertex: beanFirst)
+        }
     }
     // Pip's tail (TailBean): after the foot beans, still in the body index range; skinned like the body, collapsed for every Jelly but Pip (Skinner)
     let tailFirst = pos.count / 3
@@ -1117,6 +1133,18 @@ private func buildRenderMeshBob() -> RenderMesh {
     }
     let seedCount = idx.count - seedStart
 
+    // the weld's ghosts (the piece at the rest foot, sim-skinned: the welded leg's pose at rest) and band rows: appended after the decals
+    if weldPlan != nil {
+        let footMat = FootBean.matValues()
+        for (si, sigma) in [-1.0, 1.0].enumerated() {
+            weldPlan!.sides[si].ghostFirst = pos.count / 3
+            for (i, p) in FootBean.restStream(sigma: sigma).enumerated() { add(p, FootBean.local.nrm[i], footMat[i]) }
+        }
+        for si in 0..<2 {
+            weldPlan!.sides[si].bandFirst = pos.count / 3
+            for (k, p) in weldPlan!.bandPos[si].enumerated() { add(p, weldPlan!.bandNrm[si][k], weldPlan!.bandMat[si][k]) }
+        }
+    }
     var i = 0
     while i < idx.count {
         let a = Int(idx[i]), b1 = Int(idx[i + 1]), c = Int(idx[i + 2])
@@ -1128,10 +1156,28 @@ private func buildRenderMeshBob() -> RenderMesh {
         if d < 0 { idx[i + 1] = UInt32(c); idx[i + 2] = UInt32(b1) }
         i += 3
     }
+    // the band + stitch triangles (wound here against the band's rest geometry: the generic pass above would judge the seam ring by the hidden ball) at the head of the capsule block
+    var weldInfo: LegWeldInfo? = nil
+    var bodyIndexCountW = bodyIndexCount, seedStartW = seedStart
+    if let wp = weldPlan {
+        var band: [UInt32] = []
+        for (si, sigma) in [-1.0, 1.0].enumerated() {
+            let rs = FootBean.restStream(sigma: sigma), R = wp.ring, A = FootBean.around
+            let seamRest = (0..<A).map { rs[1 + A * R + $0] }, seamNrm = (0..<A).map { FootBean.local.nrm[1 + A * R + $0] }
+            band += LegWeld.bandTriangles(side: wp.sides[si], ring: R, rows: wp.rows, seamRest: seamRest, seamNrm: seamNrm, pos: pos, nrm: nrm)
+        }
+        idx.insert(contentsOf: band, at: capIndexFirst)
+        bodyIndexCountW += band.count; seedStartW += band.count
+        weldInfo = LegWeldInfo(sides: wp.sides, ring: wp.ring, rows: wp.rows, bandIndexCount: band.count)
+    }
+    let vCount = pos.count / 3
+    if let w = weldInfo { LegWeld.lastBuilt = (vCount, w) }
+    var capInfo = ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCountW - capIndexFirst, tailFirst: tailFirst, teddyFirst: teddyFirst)
+    capInfo.weld = weldInfo
     return RenderMesh(
         rest: pos.map { Float($0) }, restNormal: nrm.map { Float($0) }, mat: mat, index: idx,
-        body: (0, bodyIndexCount), seeds: (seedStart, seedCount), bubbles: (idx.count, 0), seedCount: 2, antennae: [],
-        armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst, tailFirst: tailFirst, teddyFirst: teddyFirst))
+        body: (0, bodyIndexCountW), seeds: (seedStartW, seedCount), bubbles: (idx.count, 0), seedCount: 2, antennae: [],
+        armCapsule: capInfo)
 }
 
 nonisolated private func buildEyeRigBob(render rm: RenderMesh, sim: SimMesh) -> EyeRig {

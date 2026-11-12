@@ -117,7 +117,132 @@ final class FootJoinLineTests: XCTestCase {
         return (saw, p10, frames)
     }
 
-    func testJoinLineIsCleanWhilePiecesAreOut() {
+    // MARK: welded legs (LegWeld.swift, 2026-11-11): no crease at all
+
+    /// The weld's continuity measure, at 90th percentile, across both seams (cup top ring | band, band | egg loop): the angle between the two faces on either side of every seam edge.
+    /// (Vertex normals are shared there by construction, so comparing them would be 0 deg vacuously; the face angle is what the shading interpolates across.)
+    static let maxSeamBreakP90: Float = 8
+
+    struct Seams { var p90: Float; var max: Float; var folds: Int; var edges: Int }
+
+    /// Seam edges and their two faces, from the index buffer (built once).
+    struct SeamTopo { var edges: [(Int, Int, Int, Int)] = []; var band: [Int] = [] }          // (v0, v1, face a, face b) ; face = first index of the triangle
+    static var topoCache: SeamTopo?
+    static func topo() -> SeamTopo {
+        if let t = topoCache { return t }
+        let rm = MotionRig.renderMesh
+        guard let cap = rm.armCapsule, let w = cap.weld else { return SeamTopo() }
+        var faces: [UInt64: [Int]] = [:]
+        func key(_ a: Int, _ b: Int) -> UInt64 { UInt64(min(a, b)) << 32 | UInt64(max(a, b)) }
+        var t = 0
+        let end = rm.body.first + rm.body.count
+        while t < end { for k in 0..<3 { faces[key(Int(rm.index[t + k]), Int(rm.index[t + (k + 1) % 3])), default: []].append(t) }; t += 3 }
+        var out = SeamTopo()
+        let A = FootBean.around
+        for sd in w.sides {
+            var pairs: [(Int, Int)] = []
+            for j in 0..<A { pairs.append((sd.beanFirst + 1 + A * w.ring + j, sd.beanFirst + 1 + A * w.ring + (j + 1) % A)) }
+            for i in 0..<sd.loop.count { pairs.append((Int(sd.loop[i]), Int(sd.loop[(i + 1) % sd.loop.count]))) }
+            for (a, b) in pairs { if let f = faces[key(a, b)], f.count == 2 { out.edges.append((a, b, f[0], f[1])) } }
+        }
+        out.band = Array(stride(from: cap.indexFirst, to: cap.indexFirst + w.bandIndexCount, by: 3))
+        topoCache = out
+        return out
+    }
+
+    static func seams(_ r: MotionRig) -> Seams {
+        let rm = MotionRig.renderMesh, d = r.dyn, tp = topo()
+        @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(d[6 * v], d[6 * v + 1], d[6 * v + 2]) }
+        @inline(__always) func N(_ v: Int) -> SIMD3<Float> { SIMD3(d[6 * v + 3], d[6 * v + 4], d[6 * v + 5]) }
+        func fn(_ t: Int) -> SIMD3<Float> {
+            let a = Int(rm.index[t]), b = Int(rm.index[t + 1]), c = Int(rm.index[t + 2])
+            let n = simd_cross(P(b) - P(a), P(c) - P(a)); let l = simd_length(n)
+            return l > 1e-12 ? n / l : SIMD3(0, 0, 0)
+        }
+        var angs: [Float] = []
+        for (_, _, fa, fb) in tp.edges { angs.append(acosf(max(-1, min(1, simd_dot(fn(fa), fn(fb))))) * 180 / .pi) }
+        var folds = 0
+        for t in tp.band {
+            let a = Int(rm.index[t]), b = Int(rm.index[t + 1]), c = Int(rm.index[t + 2])
+            if simd_dot(fn(t), N(a) + N(b) + N(c)) < 0 { folds += 1 }
+        }
+        angs.sort()
+        return Seams(p90: angs.isEmpty ? 180 : angs[angs.count * 9 / 10], max: angs.last ?? 180, folds: folds, edges: angs.count)
+    }
+
+    static let weldMoves: [(String, (MotionRig) -> Void)] = [
+        ("rest", { _ in }),
+        ("look", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim) }),
+        ("sway", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sway, r.sim) }),
+        ("stretch", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.stretch, r.sim) }),
+        ("hop", { r in r.brain.startHopPlay(sim: r.sim) }),
+        ("walk", { r in r.brain.request(.goTo(SIMD2(1.6, 0.4))) }),
+        ("turn", { r in r.brain.startTurn(to: r.poseYaw + 2.4, sim: r.sim) }),
+        ("sit", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sit, r.sim) }),
+        ("flapHop", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.flapHop, r.sim) }),
+    ]
+
+    /// Every frame (transition, airborne and landing frames too), every sampled move.
+    func weldRun(_ name: String, char: Int, seconds: Float = 4, start: (MotionRig) -> Void) -> (p90: Float, max: Float, folds: Int, frames: Int, out: Int) {
+        let rm = MotionRig.renderMesh
+        let r = MotionRig(game: true, settle: 0.5)
+        r.skinner.autoBlink = false
+        r.brain.seed = 11
+        r.brain.feature = JellyRoster.feature(char)
+        r.skinner.configureTail(rm); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
+        start(r)
+        var p90: Float = 0, mx: Float = 0, folds = 0, frames = 0, out = 0
+        for frame in 0..<Int(60 * seconds) {
+            r.tick(); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt)
+            guard frame % 3 == 0 else { continue }
+            r.render()
+            frames += 1
+            if r.skinner.beansActive { out += 1 }
+            let m = Self.seams(r)
+            p90 = max(p90, m.p90); mx = max(mx, m.max); folds = max(folds, m.folds)
+        }
+        print(String(format: "[legweld] %@ char %d: frames %d (legs out %d) | seam break p90 %.1f deg, max %.1f deg | folded band triangles %d", name, char, frames, out, p90, mx, folds))
+        return (p90, mx, folds, frames, out)
+    }
+
+    func testWeldSeamsAreContinuous() throws {
+        guard MotionRig.renderMesh.armCapsule?.weld != nil else { throw XCTSkip("legs not welded in this process (-LegsWeld 0)") }
+        var worst: Float = 0
+        for (name, start) in Self.weldMoves {
+            for char in [0, 4] {
+                let m = weldRun(name, char: char, start: start)
+                worst = max(worst, m.p90)
+                XCTAssertLessThanOrEqual(m.p90, Self.maxSeamBreakP90, "\(name) char \(char): the welded leg's seams break the surface (p90 \(m.p90) deg)")
+                XCTAssertEqual(m.folds, 0, "\(name) char \(char): the weld band folds over")
+            }
+        }
+        print(String(format: "[legweld] worst p90 %.1f deg", worst))
+    }
+
+    /// The measure itself: a band with no tangent matching (straight chords) must fail it.
+    func testWeldSeamMeasureCatchesACrease() throws {
+        guard MotionRig.renderMesh.armCapsule?.weld != nil else { throw XCTSkip("legs not welded in this process (-LegsWeld 0)") }
+        let k0 = Skinner.weldK0, k1 = Skinner.weldK1
+        Skinner.weldK0 = 0; Skinner.weldK1 = 0
+        defer { Skinner.weldK0 = k0; Skinner.weldK1 = k1 }
+        let m = weldRun("rest (straight band)", char: 0, seconds: 1) { _ in }
+        XCTAssertGreaterThan(m.p90, Self.maxSeamBreakP90, "a straight (creased) band was not detected")
+    }
+
+    /// Where the weld sits, and the pieces' poses are the brain's (the band changes no foot vertex below the seam).
+    func testWeldPlanIsSimple() throws {
+        let rm = MotionRig.renderMesh
+        guard let w = rm.armCapsule?.weld else { throw XCTSkip("legs not welded in this process") }
+        for (k, sd) in w.sides.enumerated() {
+            print("[legweld] side \(k): loop \(sd.loop.count) vertices, hidden \(sd.hidden.count), ring \(w.ring), rows \(w.rows), band indices \(w.bandIndexCount)")
+            XCTAssertGreaterThan(sd.loop.count, 16)
+            XCTAssertEqual(Set(sd.loop).count, sd.loop.count)
+        }
+        XCTAssertTrue(Set(w.sides[0].loop + w.sides[0].hidden).isDisjoint(with: w.sides[1].loop + w.sides[1].hidden))
+    }
+
+    func testJoinLineIsCleanWhilePiecesAreOut() throws {
+        if MotionRig.renderMesh.armCapsule?.weld != nil { throw XCTSkip("welded legs: no crossing line (testWeldSeamsAreContinuous)") }
         let moves: [(String, (MotionRig) -> Void)] = [
             ("look", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim) }),
             ("sway", { r in r.brain.idleForced = true; _ = r.brain.idleStart(.sway, r.sim) }),
@@ -138,7 +263,8 @@ final class FootJoinLineTests: XCTestCase {
     }
 
     /// The measure itself: the old tangent collar must fail it (else the test could not see the defect it guards).
-    func testOldTangentCollarIsCaught() {
+    func testOldTangentCollarIsCaught() throws {
+        if MotionRig.renderMesh.armCapsule?.weld != nil { throw XCTSkip("welded legs: no collar") }
         Skinner.collarCrossing = false
         defer { Skinner.collarCrossing = true }
         let m = run("look (old collar)", char: 0) { r in r.brain.idleForced = true; _ = r.brain.idleStart(.look, r.sim) }

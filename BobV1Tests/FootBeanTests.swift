@@ -15,6 +15,25 @@ final class FootBeanTests: XCTestCase {
         let skinner = Skinner(simTets: sm.tets, embedding: emb, vertexCount: rm.vertexCount, eyes: rig, antennae: buildAntennaRig(render: rm, sim: sm))
         var dyn = [Float](repeating: 0, count: rm.vertexCount * 6)
         dyn.withUnsafeMutableBufferPointer { skinner.update(x: body.x, index: rm.index, into: $0.baseAddress!) }
+        if let w = caps.weld {
+            // welded legs (LegWeld.swift): at rest each piece IS the rest foot, sim-skinned (its ghost), not hidden in the belly
+            for (k, side) in [-1, 1].enumerated() {
+                let f = caps.beanFirst(side: side), g = w.sides[k].ghostFirst
+                var worst: Float = 0
+                for i in 0..<FootBean.vertexCount { for c in 0..<3 { worst = max(worst, abs(dyn[6 * (f + i) + c] - dyn[6 * (g + i) + c])) } }
+                XCTAssertLessThan(worst, 1e-5, "welded piece (side \(side)) is not at the rest foot at rest")
+            }
+            // the limb triangles (after the weld band) use only their own block's vertices
+            var t = caps.limbIndexFirst
+            while t < caps.indexFirst + caps.indexCount {
+                let a = Int(rm.index[t])
+                let side = (a >= caps.firstVertex[1]) ? 1 : 0
+                let lo = caps.firstVertex[side], hi = lo + ArmCapsule.vertexCount + FootBean.vertexCount
+                for k in 0..<3 { let v = Int(rm.index[t + k]); XCTAssertTrue(v >= lo && v < hi, "capsule-range triangle crosses blocks") }
+                t += 3
+            }
+            return
+        }
         for side in [-1, 1] {
             var worstRest = -Double.infinity, worstSkinned = -Double.infinity
             let f = caps.beanFirst(side: side)
