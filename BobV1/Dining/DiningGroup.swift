@@ -199,14 +199,27 @@ final class DiningGroup {
     /// Floor distance from `p` to the tray's rectangle (the tray as it will be drawn at its spot).
     func trayDistance(_ p: SIMD2<Float>) -> Float { DiningSpot.distance(from: p, origin: origin, layout: DiningLayout.make(n: max(n, 1))) }
     private var gathered: Bool { brains.indices.allSatisfy { (released.indices.contains($0) && released[$0]) || (ready($0) && isIdle(brains[$0])) } }
+    /// One awake diner is ready at his place and every other waiting diner is a meal-waking sleeper who lies behind his place's line and clear of the tray: the tray comes out now and the awake one eats at the
+    /// normal time; each sleeper joins once he is up (the meal already takes a late arrival). Never true for an all-awake or all-asleep meal, nor with a sleeper in front of his line (today's timing then).
+    private var awakeFirst: Bool {
+        guard BlobBrain.softMealWakeOn else { return false }
+        var awake = false
+        for i in brains.indices {
+            if released.indices.contains(i), released[i] { continue }
+            if ready(i), isIdle(brains[i]) { if awakeAtStart.indices.contains(i), awakeAtStart[i] { awake = true }; continue }          // (only a diner who was UP at the order counts: a sleeper who has just woken does not set the tray off early)
+            guard brains[i].mealWaking, floor(i).y <= stands[placeOf[i]].y + GameCare.popTolerance, trayDistance(floor(i)) >= Self.trayClearance else { return false }
+        }
+        return awake
+    }
     private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } }
 
     private func beginApproach() {
-        state = .approaching; requested = false; settle = 0
+        state = .approaching; requested = false; settle = 0; earlyPop = false
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
         if forcedOrigin != nil { spawnTray() }          // (the café's table is out already: the food lands on it at once; a fresh tray waits for the gathering, see `tick`)
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
+        awakeAtStart = brains.map { !$0.isSleeping }
         for i in brains.indices where !released[i] { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken softly, not hard-aborted: BlobBrain+SleepForce)
         requested = true
     }
@@ -296,7 +309,11 @@ final class DiningGroup {
 
     // MARK: meal trace (simulator-only output, see MealTrace)
     private var traceReadyIDs: Set<Int> = [], traceBiteIDs: Set<Int> = [], traceShareIDs: Set<Int> = []
-    private var popReason = "gathered"
+    private(set) var popReason = "gathered"
+    /// The tray came out for the awake diner(s) while sleepers were still waking (`awakeFirst`).
+    private var earlyPop = false
+    /// Per diner: was he on his feet (not asleep) when the meal was asked?
+    private var awakeAtStart: [Bool] = []
     /// Ticks in which a held diner's floor point lay inside the drawn tray box while the tray was out (must stay 0).
     private(set) var inBoxTicks = 0
     /// Unreleased, unstarted diners nearer the camera (+z) than their place's line.
@@ -330,10 +347,15 @@ final class DiningGroup {
         traceTick()
         switch state {
         case .approaching:
-            if !trayOut, dining.phase == .absent || forcedOrigin != nil, forcedOrigin != nil || (gathered && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) {
-                popReason = forcedOrigin != nil ? "cafe" : (gathered && !trayBusy ? "gathered" : "cap")
-                spawnTray()
+            if !trayOut, dining.phase == .absent || forcedOrigin != nil {
+                let early = !gathered && awakeFirst
+                if forcedOrigin != nil || ((gathered || early) && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) {
+                    popReason = forcedOrigin != nil ? "cafe" : (gathered && !trayBusy ? "gathered" : (early && !trayBusy ? "awake-first" : "cap"))
+                    earlyPop = popReason == "awake-first"
+                    spawnTray()
+                }
             }
+            if earlyPop { releaseFinished() }          // (an awake diner who has eaten his share does not stand held until the last sleeper has come)
             replan(dt: dt)
             for i in brains.indices where !started[i] && ready(i) && isIdle(brains[i]) && trayOut { started[i] = true; idle[i] = 0; MealTrace.log("diner \(memberIDs[i]) started place=\(placeOf[i])"); startSitting(i) }
             if started.allSatisfy({ $0 }) { state = .serving; return }
