@@ -320,13 +320,15 @@ struct JellyOut {
 // While a foot piece is out, the CPU finds, per leg, where the piece's surface crosses the belly along 32 directions round the leg axis (radius, height in the
 // leg's frame) and the smooth-union normal there (the two surfaces' normals averaged). Every pixel of the piece and of the belly near that crossing curve is
 // shaded with its normal, crease shadow and fur / paint coordinate blended toward the SAME values on both sides of the curve, so neither the lighting, the
-// shadow nor the fur jumps there. Fragment buffer 6, a flat float4 array: [0] on (x = on, y = join mat, z = blend width m), [1...4] world -> rest columns,
-// [5, 6] leg centre (w = 1 while out), [7, 8] leg axis, [9, 10] frame x, [11...26] / [27...42] (radius, height) pairs, [43...74] / [75...106] union normals.
-// lb[0].x = 0 (the default, -LegsBlend 0): nothing below runs (pixel-identical).
-static float legBlendAt(float3 p, constant float4* lb, thread float3& nOut) {
-    float wBest = 0.0;
+// shadow nor the fur jumps there; above the join (up to lb[0].w) the fur coordinate is un-stretched and the normal eased toward the fitted belly.
+// Fragment buffer 6, a flat float4 array: [0] (x = on, y = join mat, z = blend width m, w = calm patch height m), [1...4] world -> rest columns,
+// [5, 6] leg centre (w = 1 while out), [7, 8] leg axis, [9, 10] frame x, [11...26] / [27...42] (radius, height) pairs, [43...74] / [75...106] union normals,
+// [107...138] / [139...170] the fitted belly's normal above each crossing.
+// lb[0].x = 0 (-LegsBlend 0, no piece out, shoes): nothing below runs (pixel-identical).
+static float legBlendAt(float3 p, constant float4* lb, thread float3& nOut, thread float& wUp) {
+    float wBest = 0.0, uBest = 0.0;
     float3 nb = float3(0.0, 1.0, 0.0);
-    float k = lb[0].z;
+    float k = lb[0].z, ku = lb[0].w;
     for (int s = 0; s < 2; s++) {
         if (lb[5 + s].w < 0.5) { continue; }
         float3 a = lb[7 + s].xyz, e1 = lb[9 + s].xyz, e2 = cross(a, e1);
@@ -338,10 +340,18 @@ static float legBlendAt(float3 p, constant float4* lb, thread float3& nOut) {
         float4 p0 = lb[11 + 16 * s + j0 / 2], p1 = lb[11 + 16 * s + j1 / 2];
         float2 x0 = (j0 % 2 == 0) ? p0.xy : p0.zw, x1 = (j1 % 2 == 0) ? p1.xy : p1.zw;
         float2 X = mix(x0, x1, t);
-        float w = 1.0 - smoothstep(0.0, k, length(float2(rho - X.x, h - X.y)));
-        if (w > wBest) { nb = normalize(mix(lb[43 + 32 * s + j0].xyz, lb[43 + 32 * s + j1].xyz, t)); wBest = w; }
+        float dh = h - X.y;
+        float w = 1.0 - smoothstep(0.0, k, length(float2(rho - X.x, dh)));
+        float u = (ku > 0.0 && dh > 0.0) ? (1.0 - smoothstep(0.0, ku, dh)) * (1.0 - smoothstep(X.x, X.x + ku, rho)) : 0.0;
+        if (max(w, u) > max(wBest, uBest)) {
+            float3 nj = normalize(mix(lb[43 + 32 * s + j0].xyz, lb[43 + 32 * s + j1].xyz, t));
+            float3 nu = ku > 0.0 ? normalize(mix(lb[107 + 32 * s + j0].xyz, lb[107 + 32 * s + j1].xyz, t)) : nj;
+            nb = normalize(mix(nj, nu, ku > 0.0 ? clamp(dh / (0.5 * ku), 0.0, 1.0) : 0.0));
+            wBest = w; uBest = u;
+        }
     }
     nOut = nb;
+    wUp = uBest;
     return wBest;
 }
 
@@ -506,8 +516,10 @@ fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
     float mt = i.mat;
     if (lb[0].x > 0.5) {          // LEGS-BLEND
         float3 nj;
-        float wj = legBlendAt(i.wp, lb, nj);
-        if (wj > 0.0) { N = normalize(mix(N, nj, wj)); Q = mix(Q, (float4x4(lb[1], lb[2], lb[3], lb[4]) * float4(i.wp, 1.0)).xyz, wj); mt = mix(mt, lb[0].y, wj); }
+        float wu;
+        float wj = legBlendAt(i.wp, lb, nj, wu);
+        float wn = max(wj, 0.7 * wu), wq = max(wj, wu);
+        if (wq > 0.0) { N = normalize(mix(N, nj, wn)); Q = mix(Q, (float4x4(lb[1], lb[2], lb[3], lb[4]) * float4(i.wp, 1.0)).xyz, wq); mt = mix(mt, lb[0].y, wj); }
     }
     // faint crinkled micro-normal in rest space (rides with the body, no streaks)
     float e = 0.012;

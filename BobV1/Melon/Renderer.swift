@@ -106,7 +106,7 @@ final class BodySlot {
     var foamAny = false
     var sootAny = false
     /// The leg / belly join's smooth-union shading data for this body (zeros = off; Skinner.computeLegBlend).
-    var legBlend = [SIMD4<Float>](repeating: .zero, count: 107)
+    var legBlend = [SIMD4<Float>](repeating: .zero, count: Skinner.legBlendCount)
     /// The Circuit jersey this body wears (Wear/GfxJersey.metal); nil = the locked body shader.
     var jersey: WearTeam?
 
@@ -513,7 +513,7 @@ final class MelonRenderer {
     /// The jersey band colour of a body (nil = none: the locked body shader draws him).
     func setJersey(_ team: WearTeam?, body i: Int) { if i < slots.count { slots[i].jersey = team } }
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
-    func setLegBlend(_ lb: [SIMD4<Float>], body i: Int) { if i < slots.count, lb.count == 107 { slots[i].legBlend = lb } }
+    func setLegBlend(_ lb: [SIMD4<Float>], body i: Int) { if i < slots.count, lb.count == Skinner.legBlendCount { slots[i].legBlend = lb } }
     func setBathLook(_ look: BathLook, body i: Int) { if i < slots.count { slots[i].bathLook = look } }
     /// A clean, neutral body for one picture (lobby portraits): no dirt / soot / lint / shine, mouth shut, no blush. Returns what puts the live state back.
     func neutralBody(_ i: Int) -> () -> Void {

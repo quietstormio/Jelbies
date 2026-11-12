@@ -190,6 +190,7 @@ nonisolated final class Skinner {
                 if simd_distance(SIMD3(rest[o], rest[o + 1], rest[o + 2]), c) < Self.collarReach { ids.insert(v) }
             }
             collarIds[s] = ids.sorted()
+            lbIds[s] = collarIds[s].filter { v in let o = 3 * Int(v); return simd_distance(SIMD3(rest[o], rest[o + 1], rest[o + 2]), c) < Self.lbReach }          // (legs blend: the skin that can meet the piece's wall)
         }
         guardCand = [Int32](repeating: 0, count: max(guardTris[0].count, guardTris[1].count) / 3 + 8)
     }
@@ -869,100 +870,171 @@ nonisolated final class Skinner {
         computeLegBlend(dyn)
     }
 
-    // MARK: legs blend (shader route, -LegsBlend 1)
-    /// Per body, for the body shader's smooth-union shading of the leg / belly join (LegBlendU in Shaders.metal / GfxBodyFast.metal). Off (zeros) unless
-    /// -LegsBlend 1, a piece is out and no shoes are worn (the stage sets `legBlendShoes`). Reads the drawn skin only; moves nothing.
-    nonisolated(unsafe) static var legsBlend: Bool = UserDefaults.standard.integer(forKey: "LegsBlend") != 0
+    // MARK: legs blend (shader route; on unless -LegsBlend 0)
+    /// Per body, for the body shader's smooth shading of the leg / belly join (legBlendAt in Shaders.metal / GfxBodyFast.metal). Zeros (= the old shading)
+    /// with -LegsBlend 0, while no piece is out, or while shoes are worn (the stage sets `legBlendShoes`). Reads the drawn skin only; moves nothing.
+    nonisolated(unsafe) static var legsBlend: Bool = UserDefaults.standard.object(forKey: "LegsBlend") == nil || UserDefaults.standard.integer(forKey: "LegsBlend") != 0
     nonisolated(unsafe) static var legsBlendK: Float = UserDefaults.standard.object(forKey: "LegsBlendK") != nil ? UserDefaults.standard.float(forKey: "LegsBlendK") : 0.07
     nonisolated(unsafe) static var legsBlendMat: Float = UserDefaults.standard.object(forKey: "LegsBlendMat") != nil ? UserDefaults.standard.float(forKey: "LegsBlendMat") : 0.10
+    /// The calmer patch above a leg (fur coordinate + normal toward the fitted belly, fading out over this height above the join); 0 = off.
+    nonisolated(unsafe) static var legsBlendUp: Float = UserDefaults.standard.object(forKey: "LegsBlendUp") != nil ? UserDefaults.standard.float(forKey: "LegsBlendUp") : 0.10
+    static let legBlendCount = 171
     var legBlendShoes = false
     /// Flat float4 array for the body shaders' fragment buffer 6 (layout in Shaders.metal at legBlendAt); all zeros = off.
-    private(set) var legBlend = [SIMD4<Float>](repeating: .zero, count: 107)
+    private(set) var legBlend = [SIMD4<Float>](repeating: .zero, count: Skinner.legBlendCount)
+    private var lbIds: [[Int32]] = [[], []]
+    private var lbHot: [[Int32]] = [[], []]
+    private var lbFrame = 0
+    static let lbRescan = 6
+    static let lbReach: Float = 0.24
     private var lbCross = [SIMD4<Float>](repeating: .zero, count: 32)          // per bean meridian: angle, radius, height, valid
     private var lbNrm = [SIMD3<Float>](repeating: .zero, count: 32)
-    private var lbMerH = [[Float]](repeating: [], count: 32), lbMerR = [[Float]](repeating: [], count: 32), lbMerA = [Float](repeating: 0, count: 32)
+    private var lbMerH = [Float](repeating: 0, count: 32 * 13), lbMerR = [Float](repeating: 0, count: 32 * 13), lbMerA = [Float](repeating: 0, count: 32)
     private var lbSumH = [Float](repeating: 0, count: 32), lbSumW = [Float](repeating: 0, count: 32), lbSumN = [SIMD3<Float>](repeating: .zero, count: 32)
+    private var lbKey = [SIMD3<Float>](repeating: .zero, count: 8)
+    private var lbRH = [SIMD2<Float>](repeating: .zero, count: 32), lbNN = [SIMD3<Float>](repeating: .zero, count: 32)
     nonisolated(unsafe) static var lbWall: Float = 0.02
+    #if targetEnvironment(simulator)
+    nonisolated(unsafe) static var lbTime = UserDefaults.standard.bool(forKey: "LegsBlendTime")
+    private var lbTimeSum: Double = 0, lbTimeN = 0
+    #endif
+    private var lbWasOn = false
     private func computeLegBlend(_ dyn: UnsafeMutablePointer<Float>) {
-        for k in 0..<legBlend.count { legBlend[k] = .zero }
-        guard Self.legsBlend, !legBlendShoes, beansActive, beanBlend > 0.05, beanFirst.count == 2, tailLM.count == 3, let pose = bodyFrame(dyn) else { return }
+        guard Self.legsBlend, !legBlendShoes, beansActive, beanBlend > 0.05, beanFirst.count == 2, tailLM.count == 3, let pose = bodyFrame(dyn) else {
+            if lbWasOn { for k in 0..<legBlend.count { legBlend[k] = .zero }; lbWasOn = false; lbHot[0].removeAll(keepingCapacity: true); lbHot[1].removeAll(keepingCapacity: true) }
+            return
+        }
+        #if targetEnvironment(simulator)
+        let t0 = Self.lbTime ? CFAbsoluteTimeGetCurrent() : 0
+        defer {
+            if Self.lbTime {
+                lbTimeSum += CFAbsoluteTimeGetCurrent() - t0; lbTimeN += 1
+                if lbTimeN == 600 { NSLog("[legblend] compute %.4f ms per call (600 calls)", lbTimeSum / 600 * 1000); lbTimeSum = 0; lbTimeN = 0 }
+            }
+        }
+        #endif
+        lbWasOn = true
+        lbFrame &+= 1
+        // (local copies, swapped in and out: class-property access checks in the loops below cost more than the maths)
+        var _lb = [SIMD4<Float>](); swap(&_lb, &legBlend)
+        var _lbMerH = [Float](); swap(&_lbMerH, &lbMerH)
+        var _lbMerR = [Float](); swap(&_lbMerR, &lbMerR)
+        var _lbMerA = [Float](); swap(&_lbMerA, &lbMerA)
+        var _lbSumH = [Float](); swap(&_lbSumH, &lbSumH)
+        var _lbSumW = [Float](); swap(&_lbSumW, &lbSumW)
+        var _lbSumN = [SIMD3<Float>](); swap(&_lbSumN, &lbSumN)
+        var _lbCross = [SIMD4<Float>](); swap(&_lbCross, &lbCross)
+        var _lbNrm = [SIMD3<Float>](); swap(&_lbNrm, &lbNrm)
+        var _lbRH = [SIMD2<Float>](); swap(&_lbRH, &lbRH)
+        var _lbNN = [SIMD3<Float>](); swap(&_lbNN, &lbNN)
+        var _lbKey = [SIMD3<Float>](); swap(&_lbKey, &lbKey)
+        var _lbHot = [[Int32]](); swap(&_lbHot, &lbHot)
+        let lbIdsL = lbIds
+        defer {
+            swap(&_lb, &legBlend)
+            swap(&_lbMerH, &lbMerH)
+            swap(&_lbMerR, &lbMerR)
+            swap(&_lbMerA, &lbMerA)
+            swap(&_lbSumH, &lbSumH)
+            swap(&_lbSumW, &lbSumW)
+            swap(&_lbSumN, &lbSumN)
+            swap(&_lbCross, &lbCross)
+            swap(&_lbNrm, &lbNrm)
+            swap(&_lbRH, &lbRH)
+            swap(&_lbNN, &lbNN)
+            swap(&_lbKey, &lbKey)
+            swap(&_lbHot, &lbHot)
+        }
+        for k in 0..<_lb.count { _lb[k] = .zero }
         @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
         @inline(__always) func N(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v + 3], dyn[6 * v + 4], dyn[6 * v + 5]) }
-        let A = FootBean.around
-        legBlend[0] = SIMD4(1, Self.legsBlendMat, Self.legsBlendK, 0)
+        @inline(__always) func wrapA(_ x: Float) -> Float { var v = x; if v > .pi { v -= 2 * .pi } else if v < -.pi { v += 2 * .pi }; return v }
+        let A = FootBean.around, R = FootBean.rings, dA = 2 * Float.pi / Float(A)
+        _lb[0] = SIMD4(1, Self.legsBlendMat, Self.legsBlendK, Self.legsBlendUp)
         for s in 0..<2 {
             let f = beanFirst[s]
             var c = SIMD3<Float>.zero
             for j in 0..<A { c += P(f + 1 + A * Self.collarRing + j) }
             c /= Float(A)
             var a = c - P(f); let al = simd_length(a); a = al > 1e-6 ? a / al : SIMD3(0, 1, 0)
-            let t0: SIMD3<Float> = abs(a.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
-            let e1 = simd_normalize(simd_cross(a, t0)), e2 = simd_cross(a, e1)
-            // where each meridian of the piece goes behind the DRAWN belly skin (the collar-raised egg vertices round this leg): every skin vertex within
-            // `lbWall` of the piece's wall at its own height votes for its meridian's crossing height. (The fitted analytic egg sits up to ~12 cm off the drawn
-            // skin there; it is only the fallback for a leg with too few votes.)
+            let tUp: SIMD3<Float> = abs(a.y) < 0.9 ? SIMD3(0, 1, 0) : SIMD3(1, 0, 0)
+            let e1 = simd_normalize(simd_cross(a, tUp)), e2 = simd_cross(a, e1)
+            // the piece's meridians in the leg frame (height, radius per ring); the wall radius range bounds the skin that can vote
+            var rMin = Float.infinity, rMax: Float = 0
             for j in 0..<A {
-                var hs: [Float] = [], rs: [Float] = []
-                var ang: Float = 0
-                for r in 0..<FootBean.rings {
-                    let q = P(f + 1 + A * r + j) - c, xx = simd_dot(q, e1), yy = simd_dot(q, e2)
-                    hs.append(simd_dot(q, a)); rs.append((xx * xx + yy * yy).squareRoot())
-                    if r == Self.collarRing { ang = atan2f(yy, xx) }
+                for r in 0..<R {
+                    let q = P(f + 1 + A * r + j) - c, xx = simd_dot(q, e1), yy = simd_dot(q, e2), rr = (xx * xx + yy * yy).squareRoot()
+                    _lbMerH[j * R + r] = simd_dot(q, a); _lbMerR[j * R + r] = rr
+                    if r == Self.collarRing { _lbMerA[j] = atan2f(yy, xx) }
+                    if r >= Self.collarRing - 4 { rMin = min(rMin, rr); rMax = max(rMax, rr) }
                 }
-                lbMerH[j] = hs; lbMerR[j] = rs; lbMerA[j] = ang
             }
-            // the piece's radius on meridian j at height h (the bracket nearest the top: the wall the skin meets)
-            func merR(_ j: Int, _ h: Float) -> (Float, Int, Float)? {
-                let hs = lbMerH[j], rs = lbMerR[j]
-                var r = FootBean.rings - 2
+            let dir: Float = wrapA(_lbMerA[1] - _lbMerA[0]) >= 0 ? 1 : -1          // (which way the meridian index runs round the axis)
+            // the piece's radius on meridian j at height h (the bracket nearest the top: the wall the skin meets); r < 0 = none
+            @inline(__always) func merR(_ j: Int, _ h: Float) -> (Float, Int, Float) {
+                var r = R - 2
                 while r >= 0 {
-                    let h0 = hs[r], h1 = hs[r + 1]
-                    if (h - h0) * (h - h1) <= 0, abs(h1 - h0) > 1e-6 { let t = (h - h0) / (h1 - h0); return (rs[r] + (rs[r + 1] - rs[r]) * t, r, t) }
+                    let h0 = _lbMerH[j * R + r], h1 = _lbMerH[j * R + r + 1]
+                    if (h - h0) * (h - h1) <= 0, abs(h1 - h0) > 1e-6 { let t = (h - h0) / (h1 - h0); return (_lbMerR[j * R + r] + (_lbMerR[j * R + r + 1] - _lbMerR[j * R + r]) * t, r, t) }
                     r -= 1
                 }
-                return nil
+                return (0, -1, 0)
             }
-            func wrapA(_ x: Float) -> Float { var v = x; while v > .pi { v -= 2 * .pi }; while v < -.pi { v += 2 * .pi }; return v }
-            for j in 0..<A { lbSumH[j] = 0; lbSumW[j] = 0; lbSumN[j] = .zero }
-            for vi in collarIds[s] {
+            // where each meridian goes behind the DRAWN belly skin: every skin vertex within `lbWall` of the piece's wall at its own height votes for its
+            // meridian's crossing height. (The fitted analytic egg sits up to ~12 cm off the drawn skin there: only the fallback for a leg with too few votes.)
+            for j in 0..<A { _lbSumH[j] = 0; _lbSumW[j] = 0; _lbSumN[j] = .zero }
+            let wall = Self.lbWall
+            // (cost: a full pass over the skin round the leg every `lbRescan` frames keeps the vertices near the wall (3 x the vote band); the frames in between
+            // only look at those)
+            let full = (lbFrame + 3 * s) % Self.lbRescan == 0 || _lbHot[s].isEmpty          // (the two legs on different frames)
+            if full { _lbHot[s].removeAll(keepingCapacity: true) }
+            let list = full ? lbIdsL[s] : _lbHot[s]
+            for vi in list {
                 let v = Int(vi), q = P(v) - c, h = simd_dot(q, a)
                 if abs(h) > 0.2 { continue }
-                let xx = simd_dot(q, e1), yy = simd_dot(q, e2), rv = (xx * xx + yy * yy).squareRoot(), th = atan2f(yy, xx)
-                var jb = 0, db = Float.infinity
-                for j in 0..<A { let d = abs(wrapA(lbMerA[j] - th)); if d < db { db = d; jb = j } }
-                guard let mr = merR(jb, h) else { continue }
-                let rb = mr.0
-                let dd = abs(rv - rb)
-                if dd >= Self.lbWall { continue }
-                let w = 1 - dd / Self.lbWall
-                lbSumH[jb] += w * h; lbSumW[jb] += w; lbSumN[jb] += w * N(v)
+                let xx = simd_dot(q, e1), yy = simd_dot(q, e2), rv = (xx * xx + yy * yy).squareRoot()
+                if full { if rv < rMin - 3 * wall || rv > rMax + 3 * wall { continue }; _lbHot[s].append(vi) }
+                if rv < rMin - wall || rv > rMax + wall { continue }
+                let th = atan2f(yy, xx)
+                var j0 = Int((wrapA(th - _lbMerA[0]) * dir / dA).rounded()); j0 = ((j0 % A) + A) % A
+                var jb = j0, db = abs(wrapA(_lbMerA[j0] - th))
+                let jm = (j0 + A - 1) % A, jp = (j0 + 1) % A
+                let dm = abs(wrapA(_lbMerA[jm] - th)), dp = abs(wrapA(_lbMerA[jp] - th))
+                if dm < db { db = dm; jb = jm }; if dp < db { db = dp; jb = jp }
+                let mr = merR(jb, h)
+                if mr.1 < 0 { continue }
+                let dd = abs(rv - mr.0)
+                if dd >= wall { continue }
+                let w = 1 - dd / wall
+                _lbSumH[jb] += w * h; _lbSumW[jb] += w; _lbSumN[jb] += w * N(v)
             }
             var nValid = 0
             for j in 0..<A {
-                lbCross[j] = .zero
-                guard lbSumW[j] > 1e-4 else { continue }
-                let h = lbSumH[j] / lbSumW[j]
-                guard let mr = merR(j, h) else { continue }
-                let rb = mr.0, r = mr.1, t = mr.2
+                _lbCross[j] = .zero
+                guard _lbSumW[j] > 1e-4 else { continue }
+                let h = _lbSumH[j] / _lbSumW[j]
+                let mr = merR(j, h)
+                if mr.1 < 0 { continue }
+                let r = mr.1, t = mr.2
                 let nL = simd_normalize(N(f + 1 + A * r + j) + (N(f + 1 + A * (r + 1) + j) - N(f + 1 + A * r + j)) * t)
-                let nE = simd_length(lbSumN[j]) > 1e-6 ? simd_normalize(lbSumN[j]) : nL
-                lbCross[j] = SIMD4(lbMerA[j], rb, h, 1)
-                lbNrm[j] = simd_normalize(nL + nE)
+                let nE = simd_length(_lbSumN[j]) > 1e-6 ? simd_normalize(_lbSumN[j]) : nL
+                _lbCross[j] = SIMD4(_lbMerA[j], mr.0, h, 1)
+                _lbNrm[j] = simd_normalize(nL + nE)
                 nValid += 1
             }
             if nValid < 8 {
                 nValid = 0
                 for j in 0..<A {
-                    lbCross[j] = .zero
+                    _lbCross[j] = .zero
                     var prevP = P(f + 1 + j), prevD = Self.fittedDepth(prevP, pose).0, prevN = N(f + 1 + j)
-                    for r in 1..<FootBean.rings {
-                        let v = f + 1 + A * r + j, pv = P(v), (d, dir) = Self.fittedDepth(pv, pose)
+                    for r in 1..<R {
+                        let v = f + 1 + A * r + j, pv = P(v), (d, dr) = Self.fittedDepth(pv, pose)
                         if prevD < 0 && d >= 0 {
                             let t = -prevD / max(d - prevD, 1e-6), x = prevP + (pv - prevP) * t
-                            let nL = simd_normalize(prevN + (N(v) - prevN) * t), nE = -dir
+                            let nL = simd_normalize(prevN + (N(v) - prevN) * t), nE = -dr
                             let q = x - c, h = simd_dot(q, a), xx = simd_dot(q, e1), yy = simd_dot(q, e2)
-                            lbCross[j] = SIMD4(atan2f(yy, xx), (xx * xx + yy * yy).squareRoot(), h, 1)
-                            lbNrm[j] = simd_normalize(nL + nE)
+                            _lbCross[j] = SIMD4(atan2f(yy, xx), (xx * xx + yy * yy).squareRoot(), h, 1)
+                            _lbNrm[j] = simd_normalize(nL + nE)
                             nValid += 1
                             break
                         }
@@ -972,24 +1044,38 @@ nonisolated final class Skinner {
             }
             guard nValid >= 8 else { continue }
             // resample on 32 even angles round the axis (nearest valid crossings either side, by angle)
-            var rh = [SIMD2<Float>](repeating: .zero, count: A), nn = [SIMD3<Float>](repeating: SIMD3(0, 1, 0), count: A)
             for k in 0..<A {
-                let th = 2 * Float.pi * Float(k) / Float(A)
+                let th = dA * Float(k)
                 var bestLo = -1, bestHi = -1, dLo = Float.infinity, dHi = Float.infinity
-                for j in 0..<A where lbCross[j].w > 0.5 {
-                    var d = lbCross[j].x - th; while d > .pi { d -= 2 * .pi }; while d < -.pi { d += 2 * .pi }
+                for j in 0..<A where _lbCross[j].w > 0.5 {
+                    var d = _lbCross[j].x - th; while d > .pi { d -= 2 * .pi }; while d < -.pi { d += 2 * .pi }
                     if d <= 0 && -d < dLo { dLo = -d; bestLo = j }
                     if d >= 0 && d < dHi { dHi = d; bestHi = j }
                 }
-                if bestLo < 0 { bestLo = bestHi }; if bestHi < 0 { bestHi = bestLo }
+                if bestLo < 0 { bestLo = bestHi; dLo = 0 }; if bestHi < 0 { bestHi = bestLo; dHi = 0 }          // (all valid crossings on one side: the nearest one)
                 let t = dLo + dHi > 1e-6 ? dLo / (dLo + dHi) : 0
-                let cl = lbCross[bestLo], ch = lbCross[bestHi]
-                rh[k] = SIMD2(cl.y + (ch.y - cl.y) * t, cl.z + (ch.z - cl.z) * t)
-                nn[k] = simd_normalize(lbNrm[bestLo] + (lbNrm[bestHi] - lbNrm[bestLo]) * t)
+                let cl = _lbCross[bestLo], ch = _lbCross[bestHi]
+                _lbRH[k] = SIMD2(cl.y + (ch.y - cl.y) * t, cl.z + (ch.z - cl.z) * t)
+                _lbNN[k] = simd_normalize(_lbNrm[bestLo] + (_lbNrm[bestHi] - _lbNrm[bestLo]) * t)
             }
-            legBlend[5 + s] = SIMD4(c, 1); legBlend[7 + s] = SIMD4(a, 0); legBlend[9 + s] = SIMD4(e1, 0)
-            for k in 0..<(A / 2) { legBlend[11 + 16 * s + k] = SIMD4(rh[2 * k].x, rh[2 * k].y, rh[2 * k + 1].x, rh[2 * k + 1].y) }
-            for k in 0..<A { legBlend[43 + 32 * s + k] = SIMD4(nn[k], 0) }
+            _lb[5 + s] = SIMD4(c, 1); _lb[7 + s] = SIMD4(a, 0); _lb[9 + s] = SIMD4(e1, 0)
+            for k in 0..<(A / 2) { _lb[11 + 16 * s + k] = SIMD4(_lbRH[2 * k].x, _lbRH[2 * k].y, _lbRH[2 * k + 1].x, _lbRH[2 * k + 1].y) }
+            for k in 0..<A { _lb[43 + 32 * s + k] = SIMD4(_lbNN[k], 0) }
+            // the calm patch above the join: the fitted belly's normal a little above each crossing (where the pulled-in skin folds)
+            if Self.legsBlendUp > 0 {
+                // (8 samples round the leg, every 4th direction, linear in between: the fitted belly's normal changes slowly)
+                for m in 0..<8 {
+                    let k = 4 * m, th = dA * Float(k), rh = _lbRH[k]
+                    let x = c + a * (rh.y + 0.5 * Self.legsBlendUp) + (e1 * cosf(th) + e2 * sinf(th)) * (rh.x + 0.03)
+                    var n = _lbNN[k]
+                    if x.x.isFinite && x.y.isFinite && x.z.isFinite { let g = -Self.fittedDepth(x, pose).1; if simd_dot(g, n) > 0 { n = simd_normalize(g) } }
+                    _lbKey[m] = n
+                }
+                for k in 0..<A {
+                    let m0 = k / 4, m1 = (m0 + 1) % 8, t = Float(k % 4) / 4
+                    _lb[107 + 32 * s + k] = SIMD4(simd_normalize(_lbKey[m0] + (_lbKey[m1] - _lbKey[m0]) * t), 0)
+                }
+            }
         }
         // world -> rest: the rigid frame of the three back landmarks (as the tail rides)
         func lm(_ k: Int) -> SIMD3<Float> { P(tailLM[k]) }
@@ -1000,7 +1086,7 @@ nonisolated final class Skinner {
         let rr = tailLMRest, Rot = frame(lm(0), lm(1), lm(2)) * frame(rr[0], rr[1], rr[2]).transpose
         let Cr = (rr[0] + rr[1] + rr[2]) / 3, Cs = (lm(0) + lm(1) + lm(2)) / 3
         let Ri = Rot.transpose, tr = Cr - Ri * Cs
-        legBlend[1] = SIMD4(Ri.columns.0, 0); legBlend[2] = SIMD4(Ri.columns.1, 0); legBlend[3] = SIMD4(Ri.columns.2, 0); legBlend[4] = SIMD4(tr, 1)
+        _lb[1] = SIMD4(Ri.columns.0, 0); _lb[2] = SIMD4(Ri.columns.1, 0); _lb[3] = SIMD4(Ri.columns.2, 0); _lb[4] = SIMD4(tr, 1)
     }
 
     /// Body skin = the egg's vertices (below the first arm / foot / tail block) without the eyes, glints and brows.
