@@ -44,15 +44,19 @@ final class HopscotchLineTests: XCTestCase {
             let lab = parkLab(positions: [SIMD2(-2.1, -1.35), SIMD2(0.694, -1.541), SIMD2(-0.748, -0.395), SIMD2(-0.547, -1.721)], seed: seed)
             let line = HopscotchLine.shared
             for r in lab.rigs { r.brain.autonomy = true; r.brain.idleForced = true }
+            for a in 1..<4 { lab.rigs[a].brain.autonomy = false }          // (the joiners do nothing of their own: not the seesaw either; they come in through `toyGo`)
             // the leader starts it; the others come in the way the game does: the line posts its news, each free Jelbie rolls once (joinChance 1) and walks to his queue spot
             // (a direct `decorStart` for all four is refused for good: the others stand within the park's 1.4 of every queue spot)
             let started = [lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: uid)]
-            var trace = [String](repeating: "", count: 4), maxPlayers = 0
+            var trace = [String](repeating: "", count: 4), maxPlayers = 0, stuckNote = [Bool](repeating: false, count: 4)
+            let court = DecorField.shared.foot(uid)!
             var seqs = [[Int]](repeating: [], count: 4), entries = [Int](repeating: 0, count: 4), prevStage = [Int](repeating: -9, count: 4)
             var minGap = Float.infinity, finishedAt: Float = -1
             for i in 0..<(60 * 90) {
                 lab.tick(watching: false); DecorField.shared.tick(dt: dt)
                 maxPlayers = max(maxPlayers, line.players(uid).count)
+                // the others come in as the game does (BlobBrain.toyGo, retried every half second like its queue does) until each is in the line
+                if i % 30 == 0, i < 60 * 20 { for a in 1..<4 where !line.contains(uid, a) && lab.rigs[a].brain.idleState.kind == nil { lab.rigs[a].brain.toyGo(uid, lab.rigs[a].sim) } }
                 for a in 0..<4 {
                     let s = line.square(uid, a)
                     if s >= 0, s < 8, seqs[a].last != s { seqs[a].append(s) }
@@ -60,6 +64,11 @@ final class HopscotchLineTests: XCTestCase {
                     let stage = b.idleState.kind == .decorHopscotch ? b.idleState.slideStage : -9
                     if stage == 4, prevStage[a] != 4 { entries[a] += 1 }
                     if stage != prevStage[a] { trace[a] += " \(stage)@\(Int(Float(i) / 60))r\(b.idleState.decorRetry)" }
+                    if stage == 6, b.idleState.phaseT > 10, !stuckNote[a] {
+                        stuckNote[a] = true
+                        let goal = court.centre + court.turned(HopscotchCourt.squares[min(b.idleState.slideStep, 7)])
+                        trace[a] += " [STUCK at t=\(Int(Float(i) / 60)) step \(b.idleState.slideStep) goal \(goal): " + (0..<4).map { String(format: "#%d %.2f", $0, simd_distance(lab.snapshot[$0].pos, goal)) }.joined(separator: ", ") + "]"
+                    }
                     if s == HopscotchLine.done { b.autonomy = false; b.idleForced = false }          // (done: he stays off the court, no second lap)
                     prevStage[a] = stage
                     for c in (a + 1)..<4 where c < 4 { minGap = min(minGap, simd_distance(lab.snapshot[a].pos, lab.snapshot[c].pos)) }
