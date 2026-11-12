@@ -23,6 +23,7 @@ final class ParkSlideApproachTests: XCTestCase {
     }
 
     func parkLab(n: Int, seed: UInt64 = 5, quiet: Bool = true) -> SocialTests.Lab {
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook()          // (r8: no slide left taken by the previous run)
         RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: 440.0 / 956.0)
         let starts: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4), SIMD2(-1.2, 2.2), SIMD2(0.9, 2.4)]
         let lab = SocialTests.Lab(n: n, positions: Array(starts.prefix(n)), quiet: quiet, seed: seed)
@@ -58,6 +59,12 @@ final class ParkSlideApproachTests: XCTestCase {
         var minFriend: Float = .infinity          // (smallest centre distance to a parked friend while he walked)
         var finalDist: Float = .infinity          // (distance of his root from the slide's footprint when the run ends)
         var rode: Bool { (t4 ?? 99) <= 30 && saw5 && saw6 && endedOutside }
+        /// r8: what the ride itself needs. He really slid: stage 5 (the ride) ran to the end of the chute (`idleState.slideS` reached `BlobBrain.slideLength`, which is what moves the ride on to stage 6).
+        var maxSlideS: Float = 0, t6: Float?, offLandingAt: Float?, restAt: Float?
+        var slid: Bool { saw5 && maxSlideS >= BlobBrain.slideLength - 0.05 }
+        var rodeNew: Bool { (t4 ?? 99) <= 30 && saw6 && slid }
+        /// The walk-out kept honest: off the landing (beyond 0.6) within 3 s of landing and at rest (no behaviour, no script) within 8 s of landing.
+        var walkOutHonest: Bool { guard t6 != nil else { return true }; return (offLandingAt ?? 99) <= 3 && (restAt ?? 99) <= 8 }
     }
 
     func starts(_ sl: DecorFoot) -> [(String, SIMD2<Float>)] {
@@ -84,7 +91,8 @@ final class ParkSlideApproachTests: XCTestCase {
         out.started = b.decorStart(.decorSlide, r.sim, only: .slide, uid: nil)
         if !out.started { return out }
         let climb = climbSpot(sl), need = b.footprint * sl.spec.reach - 0.08
-        var t: Float = 0
+        let landing = b.slideLanding(sl)
+        var t: Float = 0, outsideChecked = false
         while t < 45 {
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
             if friendAt != nil, out.endT == nil { out.minFriend = min(out.minFriend, simd_distance(b.position, lab.rigs[1].brain.position)) }
@@ -100,11 +108,16 @@ final class ParkSlideApproachTests: XCTestCase {
                     out.hopInfo = "first hop from \(b.position): \(d) from the climb spot, \(behind(sl, b.position)) behind the back edge"
                 }
                 if st.slideStage == 4, out.t4 == nil { out.t4 = t }
-                if st.slideStage == 5 { out.saw5 = true }
-                if st.slideStage == 6 { out.saw6 = true }
+                if st.slideStage == 5 { out.saw5 = true; out.maxSlideS = max(out.maxSlideS, st.slideS) }
+                if st.slideStage == 6 { out.saw6 = true; if out.t6 == nil { out.t6 = t } }
             }
-            if st.kind == nil, out.endT == nil { out.endT = t }
-            if let e = out.endT, t >= e + 1.5 { out.endedOutside = sl.distance(b.position) >= b.footprint * sl.spec.reach - 0.05; break }
+            if st.kind == nil, out.endT == nil { out.endT = t; b.idleForced = false; b.autonomy = false }          // (r8: the run now goes on to 8 s after the landing: he must not start another behaviour and leave the slide taken for the next run)
+            if let t6 = out.t6 {
+                if out.offLandingAt == nil, simd_distance(b.position, landing) > 0.6 { out.offLandingAt = t - t6 }
+                if out.restAt == nil, st.kind == nil, case .none = b.script { out.restAt = t - t6 }
+            }
+            if let e = out.endT, !outsideChecked, t >= e + 1.5 { outsideChecked = true; out.endedOutside = sl.distance(b.position) >= b.footprint * sl.spec.reach - 0.05 }
+            if let e = out.endT, t >= e + 1.5, out.t6 == nil || t - out.t6! >= 8 { break }
         }
         out.finalDist = sl.distance(b.position)
         out.last = "kind \(String(describing: b.idleState.kind)) stage \(b.idleState.slideStage) retry \(b.idleState.decorRetry) go \(b.idleState.decorGo) at \(b.position) target \(b.idleState.target) script \(b.script) ignore \(String(describing: b.decorIgnore))"
@@ -172,7 +185,10 @@ final class ParkSlideApproachTests: XCTestCase {
         print("SLIDERIDES n1 \(rode1) of \(one.count), n3 \(rode3) of \(three.count) (refused at start \(refused), dropped on the way \(dropped)); platform times: \(times)")
         XCTAssertEqual(rode1, one.count, "alone he rides from every start")
         print("SLIDERIDES3 time to the platform per n3 run: " + three.map { String(format: "%@/s%d:%@", $0.label, Int($0.seed), $0.t4.map { String(format: "%.1f", $0) } ?? "-") }.joined(separator: " "))
-        XCTAssertGreaterThanOrEqual(rode3, 9, "with friends around he rides from at least 9 of \(three.count) starts (rode \(rode3))")
+        let rodeNew3 = three.filter { $0.rodeNew }.count, dishonest = three.filter { !$0.walkOutHonest }
+        print("SLIDERIDES-R8 n3 old counting (stage 5 and 6 and out of the zone 1.5 s after the ride) \(rode3) of \(three.count); new counting (really slid to the end of the chute, stage 6 reached) \(rodeNew3) of \(three.count); walk-out honest (off the landing > 0.6 within 3 s, at rest within 8 s): " + three.filter { $0.t6 != nil }.map { String(format: "%@/s%d:off %@ rest %@", $0.label, Int($0.seed), $0.offLandingAt.map { String(format: "%.1f", $0) } ?? "-", $0.restAt.map { String(format: "%.1f", $0) } ?? "-") }.joined(separator: " "))
+        XCTAssertGreaterThanOrEqual(rodeNew3, 9, "with friends around he really slides from at least 9 of \(three.count) starts (slid and reached stage 6: \(rodeNew3); old counting \(rode3))")
+        XCTAssertTrue(dishonest.isEmpty, "the walk-out after the ride is off the landing within 3 s and at rest within 8 s: " + dishonest.map { "\($0.label)/s\(Int($0.seed)) off \(String(describing: $0.offLandingAt)) rest \(String(describing: $0.restAt))" }.joined(separator: ", "))
     }
 
     /// A friend PARKED beside the way round (0.6 left of the leg, half way between the two left corners), rider from the front, 4 seeds: he still rides, never inside the footprint.
