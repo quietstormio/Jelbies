@@ -533,6 +533,7 @@ final class MelonRenderer {
     func setJersey(_ team: WearTeam?, body i: Int) { if i < slots.count { slots[i].jersey = team } }
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
     /// The leg weld off for one body (shoes on): it draws the egg inside the loops and the closed pieces instead of the band.
+    static let pandaRestPaint = UserDefaults.standard.object(forKey: "LegsWeldPandaRest") != nil ? UserDefaults.standard.integer(forKey: "LegsWeldPandaRest") != 0 : true
     func setWeldOff(_ off: Bool, body i: Int) { if i < slots.count { slots[i].weldOff = off } }
     /// The body's index ranges for a slot (limb = Panda's all-charcoal pass): with the weld, the band; with the weld off for this body, the old egg + closed pieces.
     func bodyRanges(_ slot: BodySlot) -> [(first: Int, count: Int, limb: Bool)] {
@@ -1264,8 +1265,14 @@ final class MelonRenderer {
                     // (the walking arm capsules, the foot beans, the ears + pom) is drawn again as the same shader's all-charcoal mode 52. Teddy's / every other body: one draw, as before.
                     let pandaBody = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
                     let isPanda = pandaBody > 50.5 && pandaBody < 51.5
-                    if let w = m.armCapsule?.weld { slot.setWeldPaint(isPanda ? 1 : (pandaBody > 39.5 && pandaBody < 50.5 ? 2 : 0), weld: w) }
-                    let ranges = bodyRanges(slot)
+                    // (the weld at rest only: Panda's band takes the rest body's own paint (the old foot mask over the old fillet) and the whole band is drawn with the egg)
+                    let pandaRest = isPanda && Skinner.weldRestOnly && Self.pandaRestPaint
+                    if let w = m.armCapsule?.weld { slot.setWeldPaint(isPanda && !pandaRest ? 1 : (pandaBody > 39.5 && pandaBody < 50.5 ? 2 : 0), weld: w) }
+                    var ranges = bodyRanges(slot)
+                    if pandaRest, !slot.weldOff, let cap = m.armCapsule, let w = cap.weld {
+                        let afterBand = cap.indexFirst + w.bandIndexCount, end = m.body.first + m.body.count
+                        ranges = [(m.body.first, afterBand - m.body.first, false), (afterBand, end - afterBand, true)]
+                    }
                     if isPanda, let cap = m.armCapsule, cap.indexFirst > m.body.first {
                         // (the leg weld's band: its upper rows + stitch are drawn with the egg (rest-space foot mask), its lower rows in the all-charcoal limb pass)
                         var ub = slot.uboBuf.contents().load(as: MelonUniforms.self)
