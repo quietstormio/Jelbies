@@ -36,12 +36,13 @@ enum ParkClearSpot {
     static func legCrossesSolid(_ a: SIMD2<Float>, _ b: SIMD2<Float>, radius: Float) -> Bool {
         guard inPark, legCheckEnabled else { return false }
         legChecks += 1
-        let n = max(1, Int(simd_distance(a, b) / 0.1))
-        // (solids only: the flat hopscotch court is walked over; `blocked` would also count it and rejected half of the roam picks)
+        // the solid decor pieces only (slide, seesaw: footprint x reach, the floor rule's own measure; the flat hopscotch court is walked over, the room's edge pieces are never crossed by a pick): cheap,
+        // the pick asks it for every candidate under a time budget
+        let solids = DecorField.shared.feet.filter { $0.spec.solid }
+        let n = max(1, Int(simd_distance(a, b) / 0.15))
         for i in 0...n {
             let p = a + (b - a) * (Float(i) / Float(n))
-            let q = RoomLayout.resolve(position: SIMD3(p.x, 0, p.y), radius: radius, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: nil)
-            if simd_distance(SIMD2(q.x, q.z), p) > 1e-4 { legRejects += 1; return true }
+            if solids.contains(where: { $0.distance(p) < radius * $0.spec.reach }) { legRejects += 1; return true }
         }
         return false
     }
