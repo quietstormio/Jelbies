@@ -403,4 +403,50 @@ final class ParkSlideCrowdTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(minBox, 0, "never inside the box. \(line)")
         }
     }
+
+    // MARK: r6 - a friend stands on the ex-rider's leg
+
+    /// r5_c: the ex-rider "walked" 6-19 s on the spot because a friend stood on his leg to the left of the landing (a requested walk waits up to 6 s per standing friend,
+    /// `BlobBrain.steerTarget`). Staging: friends on all three out spots, one more (E, busy: `reserved`) at (2.0,3.4) just left of the landing. He must leave.
+    func testExRiderWithAFriendOnHisLeg() {
+        for seed in UInt64(1)...3 {
+            let lab = parkLab(seed: seed, n: 5)
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!
+            let rigs = lab.rigs, a = rigs[0].brain
+            let landing = a.slideLanding(sl), peer = a.peerGap
+            let half = sl.quarter & 1 == 0 ? sl.spec.half : SIMD2(sl.spec.half.y, sl.spec.half.x)
+            for k in 0..<3 { place(rigs[1 + k], sl.centre + sl.turned(BlobBrain.slideOutSpots[k])) }
+            place(rigs[4], SIMD2(2.0, 3.4)); rigs[4].brain.reserved = true
+            place(rigs[0], a.fixed(SIMD2(sl.centre.x - half.x - 1.2, sl.centre.y)))
+            for _ in 0..<5 { lab.tick(watching: false) }
+            let fallbackBefore = BlobBrain.slideNoClearLeg
+            var t: Float = 0, started = false, t6: Float?
+            var leftAt: Float?, minBox = Float.infinity, spotRun: Float = 0, spotMax: Float = 0, lastPos = a.position, lastChk: Float = 0, minLeg: Float = 9
+            while t < 60 {
+                if t >= 1, !started { started = a.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner) }
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
+                let s = a.idleState
+                if s.kind == .decorSlide, s.slideStage == 6, t6 == nil { t6 = t }
+                guard let f6 = t6 else { continue }
+                if t - f6 >= 1.5 { minBox = min(minBox, sl.distance(a.position)) }
+                if leftAt == nil, simd_distance(a.position, landing) >= peer { leftAt = t - f6 }
+                if t - lastChk >= 0.5 {
+                    var walking = false; if case .walk = a.script { walking = true }
+                    if walking, simd_distance(a.position, lastPos) < 0.05 { spotRun += 0.5; spotMax = max(spotMax, spotRun) } else { spotRun = 0 }
+                    lastPos = a.position; lastChk = t
+                }
+                if Int(t * 60) % 30 == 0 { print(bState(a, sl, landing, t - f6)) }
+                if t - f6 > 12 { break }
+            }
+            func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
+            let line = "[legfriend] seed=\(seed) leftLandingAt=\(ft(leftAt))s after the floor walkOnSpotMax=\(String(format: "%.1f", spotMax))s minBox(after 1.5 s)=\(String(format: "%.2f", minBox)) bestClearanceFallbacks=\(BlobBrain.slideNoClearLeg - fallbackBefore) rode=\(t6 != nil)"
+            print(line)
+            _ = minLeg; minLeg = 0
+            XCTAssertNotNil(t6, line)
+            XCTAssertNotNil(leftAt, line)
+            if let l = leftAt { XCTAssertLessThanOrEqual(l, 6, "off the landing within 6 s. \(line)") }
+            XCTAssertLessThanOrEqual(spotMax, 3, "walking on the spot. \(line)")
+            XCTAssertGreaterThanOrEqual(minBox, 0, "never inside the box. \(line)")
+        }
+    }
 }
