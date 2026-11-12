@@ -28,6 +28,14 @@ enum ParkClearSpot {
         return courts.contains { $0.distance(p) < 0 }
     }
 
+    /// The straight leg a-b (sampled every 0.1 m) passes through a keep-out of the park. Always false outside the park. (Not called by the walk code: offered for the wander pick.)
+    static func legCrossesSolid(_ a: SIMD2<Float>, _ b: SIMD2<Float>, radius: Float) -> Bool {
+        guard inPark else { return false }
+        let n = max(1, Int(simd_distance(a, b) / 0.1))
+        for i in 0...n where blocked(a + (b - a) * (Float(i) / Float(n)), radius: radius) { return true }
+        return false
+    }
+
     /// `p` itself when it is clear (and always at home); else the nearest clear point on the roam floor (`GameCamera.constrain`: the solids pushed out of, then the roam floor; a court: the nearest ring point clear of it).
     static func clear(_ p: SIMD2<Float>, radius: Float) -> SIMD2<Float> {
         guard inPark, blocked(p, radius: radius) else { return p }

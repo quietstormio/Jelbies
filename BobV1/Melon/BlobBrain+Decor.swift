@@ -320,10 +320,14 @@ extension BlobBrain {
         var st = Self.slideBans[steerID] ?? (banned: [], fails: 0)
         if st.fails >= 2 {
             guard idleState.slideStage == -3 else { return }          // (the gate leg: a friend in the queue at the ladder is waited for, as before; only the corners drop the attempt)
-            Self.slideLog?("replan body \(steerID) fail \(st.fails + 1): drop the attempt at \(position) stage \(idleState.slideStage) target \(idleState.target)")
-            Self.slideBans[steerID] = nil
-            idleFinish(skinner)
-            return
+            // the third stall: dropped only while a standing friend is still within 1.6 m or on the next leg; else one more re-plan (four at most)
+            let standingFriend = steerPeers().contains { $0.id >= Int.max / 4 && (simd_distance($0.pos, position) < 1.6 || slideSegmentDistance($0.pos, position, idleState.target) < 0.8) }
+            if st.fails >= 4 || standingFriend {
+                Self.slideLog?("replan body \(steerID) fail \(st.fails + 1): drop the attempt at \(position) stage \(idleState.slideStage) target \(idleState.target) friend \(standingFriend)")
+                Self.slideBans[steerID] = nil
+                idleFinish(skinner)
+                return
+            }
         }
         st.banned.append(idleState.target)          // (kept only when a different leg is really taken: with none to take he waits as before)
         var chosen: (SIMD2<Float>, Int)?

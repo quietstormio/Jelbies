@@ -126,4 +126,18 @@ extension ParkSlideRoundTests {
             }
         }
     }
+
+    /// `ParkClearSpot.legCrossesSolid`: the P2 wander leg crosses the slide, a leg beside the box does not, and at home nothing does.
+    func testLegCrossesSolid() {
+        let lab = parkLab(n: 1, seed: 3, aspect: Self.portrait)
+        let fp = lab.rigs[0].brain.footprint
+        let p2 = ParkClearSpot.legCrossesSolid(SIMD2(1.30, 1.90), SIMD2(3.94, -2.77), radius: fp)
+        let beside = ParkClearSpot.legCrossesSolid(SIMD2(1.30, 1.90), SIMD2(1.30, -1.55), radius: fp)
+        print("PSR LEG P2 leg crosses \(p2); beside the box \(beside)")
+        XCTAssertTrue(p2, "the P2 leg crosses the slide")
+        XCTAssertFalse(beside, "a leg beside the box does not")
+        RoomLayout.apply(RoomCatalog.home); GameCamera.clearRoam(); GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: Self.portrait)
+        DecorField.shared.clear(); DecorField.shared.set([PlacedDecor(uid: 7, kind: .slide, x: 1.0, z: -0.2, turns: nil)])
+        XCTAssertFalse(ParkClearSpot.legCrossesSolid(SIMD2(-2, -1), SIMD2(3, 1), radius: 0.55), "false at home")
+    }
 }
