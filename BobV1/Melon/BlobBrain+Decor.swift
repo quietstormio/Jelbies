@@ -323,7 +323,7 @@ extension BlobBrain {
         if st.fails >= 2 {
             guard idleState.slideStage == -3 else { return }          // (the gate leg: a friend in the queue at the ladder is waited for, as before; only the corners drop the attempt)
             // the third stall: dropped only while a standing friend is still within 1.6 m or on the next leg; else one more re-plan (four at most)
-            let standingFriend = steerPeers().contains { $0.id >= Int.max / 4 && (simd_distance($0.pos, position) < 1.6 || slideSegmentDistance($0.pos, position, idleState.target) < 0.8) }
+            let standingFriend = steerPeers().contains { $0.id >= Int.max / 4 && (simd_distance($0.pos, position) < Self.slideStandingFriendDrop || slideSegmentDistance($0.pos, position, idleState.target) < 0.8) }
             if st.fails >= 4 || standingFriend {
                 Self.slideLog?("replan body \(steerID) fail \(st.fails + 1): drop the attempt at \(position) stage \(idleState.slideStage) target \(idleState.target) friend \(standingFriend)")
                 Self.slideBans[steerID] = nil
@@ -430,6 +430,7 @@ extension BlobBrain {
     }
 
     /// How far from his stand the walk to a seat may end and still count as arriving (a step's worth).
+    static let slideStandingFriendDrop: Float = 1.0       // r13: a standing friend nearer than this drops the slide attempt; farther gets the side-step re-plan (was 1.6)
     static let standTolerance: Float = 0.6
     /// How many times the walk to a seat is re-planned after a given-up leg before the sit is dropped.
     static let standRetries = 3
