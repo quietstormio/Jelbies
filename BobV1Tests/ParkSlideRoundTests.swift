@@ -148,7 +148,10 @@ final class ParkSlideRoundTests: XCTestCase {
         var notes: [String] = []
         for (aname, aspect) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
             for seed in UInt64(1)...6 {
+                if let only = ProcessInfo.processInfo.environment["T2_ONLY"], only != "\(aname):\(seed)" { continue }          // (debug: one run, e.g. portrait:6)
                 let lab = parkLab(n: 3, seed: seed, aspect: aspect, starts: [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, 2.4)], quiet: false)
+                var simT: Float = 0
+                if ProcessInfo.processInfo.environment["T2_ONLY"] != nil { BlobBrain.slideLog = { print("PSR REPLAN t\(String(format: "%.2f", simT)) \($0)") } }
                 let sl = DecorField.shared.foot(ParkToys.slideUID)!
                 let bx = box(sl)
                 var open = [Bool](repeating: false, count: 3), reached = [Bool](repeating: false, count: 3)
@@ -163,7 +166,7 @@ final class ParkSlideRoundTests: XCTestCase {
                             if r.brain.startCommandedDecor(.decorSlide, only: .slide, r.sim, r.skinner) { attempts += 1; open[k] = true; reached[k] = false }
                         }
                     }
-                    lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
+                    lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60; simT = t
                     for (k, r) in lab.rigs.enumerated() {
                         let b = r.brain, st = b.idleState
                         let using = st.kind == .decorSlide && st.decorUID == ParkToys.slideUID

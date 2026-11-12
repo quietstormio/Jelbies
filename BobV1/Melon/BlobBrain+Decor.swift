@@ -318,6 +318,7 @@ extension BlobBrain {
     private func slideStallReplan(_ f: DecorFoot, dt: Float, skinner: Skinner) {
         guard case .walk = script, steerStall > 0.9 || steerWait > 0.9 || walkStallT > 1.2, idleState.slideS < 8, Int(scriptT * 4) != Int((scriptT - dt) * 4) else { return }          // (asked four times a second at most)
         var st = Self.slideBans[steerID] ?? (banned: [], fails: 0)
+        Self.slideLog?("stall body \(steerID) stage \(idleState.slideStage) at \(position) target \(idleState.target) banned \(st.banned) fails \(st.fails) steerWait \(steerWait) steerStall \(steerStall) walkStallT \(walkStallT) slideS \(idleState.slideS)")
         if st.fails >= 2 {
             guard idleState.slideStage == -3 else { return }          // (the gate leg: a friend in the queue at the ladder is waited for, as before; only the corners drop the attempt)
             // the third stall: dropped only while a standing friend is still within 1.6 m or on the next leg; else one more re-plan (four at most)
