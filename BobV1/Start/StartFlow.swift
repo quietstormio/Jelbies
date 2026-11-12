@@ -129,9 +129,10 @@ final class StartFlow {
     /// Applied once per coins value (marker "first|coins"). Returns true when it applied.
     @discardableResult
     static func applyNewGameFirst(coins: Int, defaults d: UserDefaults = .standard, wipe: (() -> Void)? = nil) -> Bool {
-        let value = "first|\(coins)"
+        let value = "first|\(coins)|intro"
         guard d.string(forKey: newGameAppliedKey) != value else { return false }
         if let wipe { wipe() } else { wipeAll() }
+        d.removeObject(forKey: IntroGate.seenKey)          // a genuine first launch: the intro plays again (wipeAll keeps "seen" for the player's own Start over)
         d.set(max(coins, 0), forKey: firstCoinsKey)
         d.set(value, forKey: newGameAppliedKey)
         JellyRoster.names = JellyRoster.loadNames(d)          // wipeAll already reset the in-memory roster (names, species, [0]); with a custom wipe this keeps the same state
