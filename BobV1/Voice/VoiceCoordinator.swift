@@ -675,6 +675,7 @@ final class VoiceCoordinator {
         case .signatureFlourish: return .showOff
         case .proudStrut: return .strut
         case .sing: return .sing
+        case .hula: return .hula
         default: return nil
         }
     }
@@ -689,6 +690,7 @@ final class VoiceCoordinator {
         case .showOff: return .signatureFlourish
         case .strut: return .proudStrut
         case .sing: return .sing
+        case .hula: return .hula
         case .flip, .come: return nil
         }
     }

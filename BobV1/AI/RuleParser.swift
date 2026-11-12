@@ -53,6 +53,8 @@ enum RuleParser {
     private static let strutWords: Set<String> = ["strut", "struts", "strutting"]
     private static let singPhrases = ["sing a song", "sing me a song", "sing for me"]
     private static let singWords: Set<String> = ["sing", "sings", "singing"]
+    private static let hulaPhrases = ["do the hula", "hula dance", "dance the hula"]
+    private static let hulaWords: Set<String> = ["hula", "hulas"]
     private static let jacksPhrases = ["jumping jacks", "jumping jack", "jump up and down", "do some jumps", "star jumps"]
     private static let jacksWords: Set<String> = ["jump", "jumps", "jumping", "exercise", "workout"]
     private static let hopPhrases = ["hop hop", "do a hop", "hop up", "hop up and down", "bounce around"]
@@ -189,6 +191,8 @@ enum RuleParser {
         if hasWord(toks, strutWords) { return finish(.trick(.strut), words: strutWords) }
         if let p = has(toks, singPhrases) { return finish(.trick(.sing), strip: p, words: singWords) }
         if hasWord(toks, singWords) { return finish(.trick(.sing), words: singWords) }
+        if let p = has(toks, hulaPhrases) { return finish(.trick(.hula), strip: p, words: hulaWords) }
+        if hasWord(toks, hulaWords) { return finish(.trick(.hula), words: hulaWords) }
         if let p = has(toks, spinPhrases) { return finish(.trick(.spin), strip: p, words: spinWords) }
         if hasWord(toks, spinWords) { return finish(.trick(.spin), words: spinWords) }
         if let p = has(toks, jacksPhrases) { return finish(.trick(.jacks), strip: p, words: jacksWords) }

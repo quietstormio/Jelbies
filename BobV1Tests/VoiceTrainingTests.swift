@@ -97,6 +97,16 @@ final class VoiceTrainingTests: XCTestCase {
         for t in [VoiceTrick.showOff, .strut, .sing] { XCTAssertFalse(t.isStarter) }
     }
 
+    /// Stage 2: the new moves' words, and the old words they must not swallow ("spin" stays spin, "jump" stays jumping jacks).
+    func testStageTwoTrickWordsAndCollisions() {
+        let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
+        for (said, t) in [("hula", VoiceTrick.hula), ("hula dance", .hula), ("spin", .spin), ("jump", .jacks), ("hop", .hop)] {
+            XCTAssertEqual(v.decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(t), said)
+        }
+        XCTAssertFalse(VoiceTrick.hula.isStarter)
+        XCTAssertEqual(JellyAction(key: "hula"), .trick(.hula))
+    }
+
     func testAnOldTaughtWordKeepsWorkingWithItsOwnReliability() {
         let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
         legacy(v, "mochi", .sit, 0.6)
