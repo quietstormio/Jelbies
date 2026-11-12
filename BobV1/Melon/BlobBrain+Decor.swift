@@ -302,6 +302,12 @@ extension BlobBrain {
     private func slideSolidAgain(_ f: DecorFoot) {
         if decorIgnore == f.uid, f.distance(position) > 0 { decorIgnore = nil }
     }
+    /// Distance from `p` to the segment a-b.
+    private func slideSegmentDistance(_ p: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+        let ab = b - a, l2 = max(simd_dot(ab, ab), 1e-6)
+        let t = min(max(simd_dot(p - a, ab) / l2, 0), 1)
+        return simd_distance(p, a + ab * t)
+    }
     /// Capture / test aid: a line per re-plan decision of the way round (nil in the game).
     nonisolated(unsafe) static var slideLog: ((String) -> Void)?
     /// Per Jelbie (steerID), for the attempt in hand: the legs that stood still (never taken again) and how many times a leg stood still.
@@ -330,7 +336,7 @@ extension BlobBrain {
                 let a = Float(k) * .pi / 8
                 let c = fr.pos + SIMD2(sinf(a), cosf(a)) * 1.1
                 guard ParkClearSpot.clear(c, radius: footprint) == c, simd_distance(slideWallFixed(c), c) < 0.06, f.distance(c) >= footprint * f.spec.reach, slideLegFree(position, c),
-                      simd_distance(c, idleState.target) < tl - 0.3, !steerPeers().contains(where: { simd_distance($0.pos, c) < 0.9 }) else { continue }
+                      simd_distance(c, idleState.target) < tl - 0.3, slideSegmentDistance(fr.pos, position, c) >= 0.8, !steerPeers().contains(where: { simd_distance($0.pos, c) < 0.9 }) else { continue }
                 if best == nil || simd_distance(c, idleState.target) < simd_distance(best!, idleState.target) { best = c }
             }
             if let best { chosen = (best, 3) }
