@@ -43,6 +43,21 @@ extension GameCamera {
     /// (0.79 on a phone / tablet in portrait; 0.685 from a phone's landscape up (round 8 follow-up: at 0.73 the last three roam rows fell under the Go home + Play cut-out, whose top is at 72.3% of a phone's landscape height).)
     static func parkFrontFraction(aspect: Float) -> Float { 0.79 - 0.105 * poseBlend(aspect) }
 
+    /// The park's landscape pull-in (fraction of the distance to the target removed) and elevation drop (radians), blended by `poseBlend`: exactly (0, 0) for every aspect <= 1.0 (a phone / tablet in
+    /// portrait), full from 1.2 up. The phone's landscape floor (x +-4.05) filled a third of the width and the Jelbies were 0.8x their portrait size; this closes the lawn in on the short screen.
+    static let parkLandscapePull: Float = 0.35
+    static let parkLandscapeLower: Float = 12 * .pi / 180
+    static func parkLandscapeFrame(aspect: Float) -> (pull: Float, lower: Float) {
+        let w = poseBlend(aspect)
+        return (parkLandscapePull * w, parkLandscapeLower * w)
+    }
+    /// The eye moved toward `target` by `pull` of its distance and rotated down by `lower` radians about the target (same side, same target).
+    static func parkLandscapeEye(eye: SIMD3<Float>, target: SIMD3<Float>, pull: Float, lower: Float) -> SIMD3<Float> {
+        let v = eye - target, h = sqrtf(v.x * v.x + v.z * v.z), d = simd_length(v) * (1 - pull), e = atan2f(v.y, h) - lower
+        let hn = h > 1e-5 ? SIMD2<Float>(v.x, v.z) / h : SIMD2<Float>(0, 1)
+        return target + SIMD3<Float>(hn.x * cosf(e) * d, sinf(e) * d, hn.y * cosf(e) * d)
+    }
+
     /// The park pan: eye and target move together along the camera's own up vector (same elevation, same distance, so on-screen widths and the look do not change) by the amount that puts
     /// the front edge at `parkFrontFraction` of the screen height. Computed from the pose in use (`eye`, `target` after the portrait widening), so it is aspect-aware by construction.
     static func parkPan(aspect: Float) -> SIMD3<Float> {
