@@ -8,11 +8,18 @@ import simd
 import Foundation
 
 enum PhotoCam {
-    nonisolated(unsafe) static var active = false
-    nonisolated(unsafe) static var yaw: Float = 0
-    nonisolated(unsafe) static var pitch: Float = 0
-    nonisolated(unsafe) static var zoom: Float = 1          // eye distance multiplier
-    nonisolated(unsafe) static var pan = SIMD2<Float>(0, 0)  // target offset: right, up (world units)
+    /// Simulator capture aid (legs-weld-r1): `-WeldCam yaw,pitch,zoom,panX,panY` starts the room with this Photo-mode orbit (close-ups of the feet).
+    static let weldCam: [Float]? = {
+        #if targetEnvironment(simulator)
+        if let s = UserDefaults.standard.string(forKey: "WeldCam") { let v = s.split(separator: ",").compactMap { Float($0) }; if v.count == 5 { return v } }
+        #endif
+        return nil
+    }()
+    nonisolated(unsafe) static var active = weldCam != nil
+    nonisolated(unsafe) static var yaw: Float = weldCam?[0] ?? 0
+    nonisolated(unsafe) static var pitch: Float = weldCam?[1] ?? 0
+    nonisolated(unsafe) static var zoom: Float = weldCam?[2] ?? 1          // eye distance multiplier
+    nonisolated(unsafe) static var pan = SIMD2<Float>(weldCam?[3] ?? 0, weldCam?[4] ?? 0)  // target offset: right, up (world units)
     /// A tap on a Jelbie while Photo mode is up (the stage's single tap routes here).
     nonisolated(unsafe) static var onTapJelly: ((Int) -> Void)?
 
