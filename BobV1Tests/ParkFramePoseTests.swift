@@ -25,11 +25,14 @@ final class ParkFramePoseTests: XCTestCase {
         let q = park(393.0 / 852.0)          // another phone portrait: the same pull-free path
         XCTAssertEqual(GameCamera.parkLandscapeFrame(aspect: 393.0 / 852.0).pull, 0); XCTAssertEqual(GameCamera.parkLandscapeFrame(aspect: 393.0 / 852.0).lower, 0)
         XCTAssertEqual(q.eye.x, 0)
-        // the home room: one Jelbie keeps baseEye / baseTarget in both orientations
+        // the home room (2026-11-11): one Jelbie has the same wide view as three, in both orientations (the old close pose is `option: .current`)
         for a in [Float(440.0 / 956.0), 2.17] {
+            GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: a)          // (out of the park first: its pan is not part of the home view)
+            let wide = (GameCamera.eye, GameCamera.target)
             GameCamera.endPark(count: 1); GameCamera.configureRoom(count: 1)
             _ = GameCamera.camera(aspect: a)
-            XCTAssertEqual(GameCamera.eye, GameCamera.baseEye); XCTAssertEqual(GameCamera.target, GameCamera.baseTarget)
+            XCTAssertEqual(GameCamera.eye, wide.0); XCTAssertEqual(GameCamera.target, wide.1)
+            XCTAssertNotEqual(GameCamera.eye, GameCamera.baseEye)
         }
     }
 

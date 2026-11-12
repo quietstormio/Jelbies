@@ -154,6 +154,7 @@ extension GameCare {
 
         guard let a = g.actor, let b = a.brain else { return }
         g.phaseT += dt
+        guestRestoreArena()
         visitorLook(a, v, dt: dt, sleepLocked: false)
         guestFriends(actors, a, v, dt: dt)
         if g.party.active { guestPartyStep(actors, a, dt: dt) }          // (the welcome party after the hug)
@@ -192,8 +193,8 @@ extension GameCare {
         let now = Date().timeIntervalSince1970
         let rosterAsleep = actors.contains { $0.brain?.isSleeping == true }
         let sleepingIn = visit.kind == .sleepover && visit.arrived && !overdue && rosterAsleep && actors.first?.brain?.bedtimeHours == true
-        var spot: SIMD2<Float> = (overdue || sleepingIn) ? guestSpotNear(actors) : GuestTuning.door
-        if arrival { let t = guestSpotNear(actors); g.arrivalTarget = t; spot = guestArrivalEntry(toward: t) }
+        var spot: SIMD2<Float> = (overdue || sleepingIn) ? guestSpotNear(actors) : GuestEdge.offLeft(z: 0.5, aspect: GameCamera.aspect)          // (a walk-in after an outing: from the left edge of the screen too)
+        if arrival { let t = guestSpotNear(actors); g.arrivalTarget = t; spot = guestArrivalEntry(toward: t, offScreen: true) }          // (really off the left edge of the screen, whatever the window)
         guard let a = (parkBook.spawn?([v], [spot]) ?? []).first(where: { $0.id == actors.count }), let b = a.brain else { g.spawnFailT = 3; return }
         g.actor = a
         g.greeted = false; g.settleT = 0; g.stage = 0; g.phaseT = 0; g.bedT = 1.5; g.wakeT = 0; g.friendSession = [:]
@@ -205,6 +206,7 @@ extension GameCare {
             if !arrival { park.say(visit.kind == .sleepover ? "\(v.name) came over for a sleepover!" : "\(v.name) came over to play!") }
         }
         if arrival {
+            a.sim.arenaRadius = .infinity; g.arenaLifted = true          // (the round wall is lifted while he is out there; `guestRestoreArena`)
             b.autonomy = false
             g.phase = .walkingIn
             return
@@ -221,6 +223,7 @@ extension GameCare {
             return
         }
         g.phase = .walkingIn
+        a.sim.arenaRadius = .infinity; g.arenaLifted = true
         rehome(a, at: spot)
         b.requestNow(.come(to: VoiceCoordinator.comeSpot))          // the adopted Jelbie's walk to the front (and a wave to the camera at the end)
         AudioHub.shared.chirp(jelly: a.id, .babble)
@@ -324,6 +327,22 @@ extension GameCare {
 
     // MARK: the goodbye
 
+    /// Off the left edge of the screen, on a lane in front of the plant (the body's current depth, never behind z 0.5).
+    func guestExitPoint(_ a: JellyActor) -> SIMD2<Float> {
+        GuestEdge.offLeft(z: max(a.floor.y, 0.5), aspect: GameCamera.aspect)
+    }
+
+    /// The floor rules clamp a walk to the screen's sides: for the run-out they are open (the round wall lifted, the side clamp dropped), the furniture still counts.
+    private func guestOpenExit(_ a: JellyActor, _ b: BlobBrain) {
+        a.sim.arenaRadius = .infinity; guestBook.arenaLifted = false
+        b.resolve = { p, r in
+            var q = GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true)
+            if p.x < q.x { q.x = p.x }          // (the side wall's push is dropped: he runs past it)
+            return q
+        }
+        b.requestNow(.goTo(guestExitPoint(a)))
+    }
+
     private func guestBeginLeaving(_ actors: [JellyActor], _ a: JellyActor, _ v: ParkVisitor) {
         let g = guestBook
         guard g.phase != .leaving else { return }
@@ -352,13 +371,16 @@ extension GameCare {
         case 1:          // the wave to the camera is over: head for the door
             let waving = b.isWaving || b.pending != nil || b.interruptScript
             if (!waving && g.phaseT > 0.8) || g.phaseT > 6 {
-                b.hurry = true          // he RUNS out (the arrival's run gait, in reverse)
-                b.requestNow(.goTo(GuestTuning.door))
-                g.stage = 2; g.phaseT = 0
+                b.hurry = true          // he RUNS out (the arrival's run gait, in reverse) through the LEFT edge of the screen
+                guestOpenExit(a, b)
+                g.stage = 2; g.phaseT = 0; g.exitT = 0
             }
-        default:         // out of the door
-            let far = simd_distance(b.position, GuestTuning.door) < 0.8
-            if (far && g.phaseT > 0.6) || g.phaseT > 10 {
+        default:         // out through the left edge, removed only once he is fully off screen
+            let hw = GameCamera.visibleHalfWidthAtBody(z: a.floor.y, aspect: GameCamera.aspect)
+            let gone = a.floor.x < -(hw + 1.0)
+            g.exitT += dt
+            if !gone, b.scriptIsNone, g.exitT > 0.6 { g.exitT = 0; b.requestNow(.goTo(guestExitPoint(a))) }          // (a stall: set off again)
+            if (gone && g.phaseT > 0.2) || g.phaseT > 30 {
                 let name = v.name
                 guestRemove()
                 g.finish()

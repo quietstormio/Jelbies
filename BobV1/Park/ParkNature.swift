@@ -1,7 +1,7 @@
 //
 //  ParkNature.swift
 //  The park's plants, built once into the park's static room mesh (ParkScenery.build) in the living room's calm style: clumped leafy tree canopies (see ParkFoliage.swift:
-//  trunks, branches, conifers, flowering bushes, grass-and-flower patches) and the pond's lily pads.
+//  trunks, branches, conifers, flowering bushes, grass-and-flower patches).
 //  Static only: no per-frame cost, no extra draw calls.
 //
 
@@ -25,29 +25,6 @@ extension ParkScenery {
             let k = (1 - (1 - 0.66) * soft + (0.40 * soft) * max(-0.4, d) * (soft < 1 ? 0.8 : 1)) * lift
             let col = b.mesh.vertices[i].color
             b.mesh.vertices[i].color = SIMD4(col.x * k * (1 + 0.04 * max(0, d)), col.y * k * (1 + 0.10 * max(0, d)), col.z * k * 0.97, col.w)
-        }
-    }
-
-    /// Lily pads (notched discs) with a couple of blossoms, floating on the pond.
-    static func lilyPads(_ b: RoomMeshBuilder, centre c: SIMD2<Float>, rng r: inout ParkRandom) {
-        let spots: [(Float, Float, Float)] = [(-0.45, 0.35, 0.27), (0.3, -0.45, 0.23), (0.45, 0.35, 0.22), (-0.2, -0.2, 0.18)]
-        for (k, p) in spots.enumerated() {
-            let col = S.srgb(0.30, 0.52, 0.30) * (0.95 + 0.1 * r.unit())
-            let px = c.x + p.0, pz = c.y + p.1
-            // a disc with a wedge missing: a fan of triangles
-            let hub = b.vertex(V3(px, 0.045, pz), V3(0, 1, 0), color: col * 1.1)
-            let notch = r.unit() * 6.283
-            var ring: [UInt32] = []
-            let n = 20
-            for j in 0...n {
-                let a = notch + 0.35 + Float(j) / Float(n) * (6.283 - 0.7)
-                ring.append(b.vertex(V3(px + cosf(a) * p.2, 0.04, pz + sinf(a) * p.2), V3(0, 1, 0), color: col))
-            }
-            for j in 0..<n { b.triangle(hub, ring[j + 1], ring[j]) }
-            if k == 0 || k == 2 {
-                let f = V3(px + 0.03, 0.07, pz - 0.02)
-                S.ball(b, f + V3(0, 0.03, 0), 0.075, S.srgb(0.97, 0.97, 0.93), segments: 10, rings: 5)
-            }
         }
     }
 
@@ -144,47 +121,6 @@ extension ParkScenery {
             }
             z = z2; row += 1
         }
-    }
-
-    /// The pond: dark mud ring, irregular grey-brown rim stones, light sky-reflecting blue water (round 8), a little deeper toward the rim, reeds with cattails at the back, lily pads.
-    static func pond(_ b: RoomMeshBuilder, rng r: inout ParkRandom) {
-        let c = pondCentre
-        disc(b, cx: c.x, cz: c.y, radius: 1.55, y: 0.008, color: S.srgb(0.36, 0.31, 0.23))
-        // water: a radial gradient fan
-        let radii: [Float] = [0, 0.45, 0.85, 1.12, 1.27]
-        let cols = [S.srgb(0.68, 0.84, 0.95), S.srgb(0.62, 0.80, 0.93), S.srgb(0.56, 0.76, 0.90), S.srgb(0.50, 0.71, 0.86), S.srgb(0.45, 0.66, 0.82)]
-        let n = 40
-        var rings: [[UInt32]] = []
-        for (k, rad) in radii.enumerated() {
-            if k == 0 { rings.append([b.vertex(V3(c.x + 0.25, 0.03, c.y + 0.15), V3(0, 1, 0), color: cols[0])]); continue }
-            rings.append((0..<n).map { j in
-                let a = Float(j) / Float(n) * 2 * .pi
-                return b.vertex(V3(c.x + cosf(a) * rad + (k < 4 ? 0.25 * (1 - Float(k) / 4) : 0), 0.03, c.y + sinf(a) * rad + (k < 4 ? 0.15 * (1 - Float(k) / 4) : 0)), V3(0, 1, 0), color: cols[k])
-            })
-        }
-        for j in 0..<n { b.triangle(rings[0][0], rings[1][(j + 1) % n], rings[1][j]) }
-        for k in 1..<(radii.count - 1) { for j in 0..<n { b.quad(rings[k][j], rings[k][(j + 1) % n], rings[k + 1][(j + 1) % n], rings[k + 1][j]) } }
-        // rim stones
-        let stones = 22
-        for j in 0..<stones {
-            let a = (Float(j) + 0.5 * r.unit()) / Float(stones) * 2 * .pi
-            let rad = 1.36 + 0.08 * (r.unit() - 0.5)
-            let k = 0.78 + 0.4 * r.unit()
-            let col = S.srgb(0.47, 0.43, 0.38) * V3(k, k * 0.98, k * 0.96)
-            S.blob(b, V3(c.x + cosf(a) * rad, 0.07, c.y + sinf(a) * rad), rx: 0.19 + 0.12 * r.unit(), ry: 0.08 + 0.06 * r.unit(), rz: 0.17 + 0.10 * r.unit(), color: col, segments: 8, rings: 4, ao: 0.9)
-        }
-        // reeds and cattails on the far side
-        for j in 0..<16 {
-            let a = (205 + 130 * Float(j) / 15 + 8 * (r.unit() - 0.5)) * .pi / 180
-            let rad = 1.5 + 0.45 * r.unit()
-            let x = c.x + cosf(a) * rad, z = c.y + sinf(a) * rad
-            let h = 0.7 + 0.45 * r.unit()
-            let g = S.srgb(0.30, 0.44, 0.17) * (0.85 + 0.3 * r.unit())
-            S.stem(b, x: x, z: z, y0: 0, y1: h, r: 0.014, color: g, segments: 4)
-            S.stem(b, x: x + 0.05, z: z + 0.03, y0: 0, y1: h * 0.7, r: 0.010, color: g * 0.9, segments: 4)
-            if j % 2 == 0 { S.blob(b, V3(x, h - 0.07, z), rx: 0.03, ry: 0.10, rz: 0.03, color: S.srgb(0.30, 0.18, 0.10), segments: 6, rings: 4) }
-        }
-        lilyPads(b, centre: c, rng: &r)
     }
 
     /// A slatted timber bench on cast-iron frames (the exact footprint of the old one: x +-1.28, z -4.78 ... -4.22).

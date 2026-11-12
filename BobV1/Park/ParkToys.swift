@@ -21,8 +21,7 @@ nonisolated enum ParkToys {
     static var placed: [PlacedDecor] { layout }
 
     /// The player's own floor toys that come along (up to 3, GameCare+Park.swift): fixed spots in the back corners of the lawn, clear of the path (centre x = 0.7 sin(0.34 z), half width 0.62),
-    /// the hopscotch court (x -3.05...-1.15, z -0.75...4.55) and its queue (z about -1.1), the slide (x 2.1...3.7, z -0.4...2.4) and its climb spot (2.9, -1.17), the pond (3.5, -4.2) r 1.0,
-    /// the bench, the flower bed and the Go home pill's cut-out (bottom centre). The first is on the left lawn beside the court's far side (the seesaw stands in the back left corner).
+    /// the hopscotch court (x -3.05...-1.15, z -0.75...4.55) and its queue (z about -1.1), the slide (x 2.1...3.7, z -0.4...2.4) and its climb spot (2.9, -1.17), the bench and the Go home pill's cut-out (bottom centre). The first is on the left lawn beside the court's far side (the seesaw stands in the back left corner).
     static let ownSpots: [SIMD2<Float>] = [SIMD2(-3.7, 1.9), SIMD2(1.7, -2.8), SIMD2(2.95, -2.65)]
     static let ownUIDBase = 9101
     /// The pieces a Jelbie plays with by himself on the floor, small enough for a spot (a seat, a rolling ball, a booped or kicked toy; not the big ones, the slide or the park-only pieces).
