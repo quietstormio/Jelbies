@@ -17,7 +17,7 @@ final class ParkSlideRoundTests: XCTestCase {
         DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0
     }
     override func tearDown() {
-        DecorField.shared.clear(); ToyTuning.settle = 5
+        DecorField.shared.clear(); ToyTuning.settle = 5; ContactTuning.lookAhead = true
         GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: Self.portrait)
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
     }

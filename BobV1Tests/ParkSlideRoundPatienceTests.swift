@@ -23,6 +23,8 @@ extension ParkSlideRoundTests {
         var x: Float = -4
         while x <= 4 { wall.append((id: Int.max / 2 + wall.count, pos: SIMD2(x, 0.6))); x += 0.4 }
         r.brain.peers = { wall }
+        r.brain.planCool = 1e6          // (no route search: the planner found a way between two of the friends)
+        ContactTuning.lookAhead = false          // (no early curve round the friends: restored in tearDown)
         return (r, SIMD2(0, 2.5))
     }
 

@@ -41,7 +41,8 @@ extension ParkSlideRoundTests {
             XCTAssertEqual(offFloor, 0, "\(aname): every moved point is on the roam floor")
             XCTAssertGreaterThan(moved, 100, "\(aname): the pieces block some floor")
             let sl = DecorField.shared.foot(ParkToys.slideUID)!, ss = DecorField.shared.foot(ParkToys.seesawUID)!
-            let named: [(String, SIMD2<Float>)] = [("slide centre", sl.centre), ("slide (2.62,-0.50)", SIMD2(2.62, -0.50)), ("slide (2.71,0.40)", SIMD2(2.71, 0.40)), ("slide (3.86,-0.75)", SIMD2(3.86, -0.75)), ("seesaw centre", ss.centre), ("flower bed", SIMD2(-3.5, -4.35)), ("bench", SIMD2(0, -4.55)), ("pond", SIMD2(3.5, -4.2))]
+            let named: [(String, SIMD2<Float>)] = [("slide centre", sl.centre), ("slide (2.62,-0.50)", SIMD2(2.62, -0.50)), ("slide (2.71,0.40)", SIMD2(2.71, 0.40)), ("slide (3.86,-0.75)", SIMD2(3.86, -0.75)), ("seesaw centre", ss.centre), ("flower bed", SIMD2(-3.5, -4.35)), ("bench", SIMD2(0, -4.55))]
+            print("PSR T3 \(aname) pond (3.5,-4.2) -> \(ParkClearSpot.clear(SIMD2(3.5, -4.2), radius: fp)) (info: since park-room-r2 the helper no longer moves it: not a solid the floor rules know)")
             for (name, p) in named {
                 let q = ParkClearSpot.clear(p, radius: fp)
                 print("PSR T3 \(aname) \(name): raw \(p) -> used \(q) (moved \(simd_distance(p, q)))")
