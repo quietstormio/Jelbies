@@ -38,8 +38,14 @@ extension DecorModels {
     static func addHopscotchCourt(_ b: RoomMeshBuilder, at o: SIMD3<Float>) {
         let h = HopscotchCourt.slabHalf, half = HopscotchCourt.cell / 2
         // a dark, slightly warm asphalt patch with chalk on it (no pastel fills, no cream slab)
-        let asphalt = S.srgb(0.22, 0.23, 0.25), grainLo = S.srgb(0.17, 0.18, 0.20), grainHi = S.srgb(0.29, 0.30, 0.32), wornEdge = S.srgb(0.31, 0.31, 0.30)
-        let chalk = S.srgb(0.95, 0.94, 0.88), numChalk = S.srgb(0.96, 0.91, 0.66), dust = S.srgb(0.44, 0.44, 0.43)
+        var asphalt = S.srgb(0.22, 0.23, 0.25), grainLo = S.srgb(0.17, 0.18, 0.20), grainHi = S.srgb(0.29, 0.30, 0.32), wornEdge = S.srgb(0.31, 0.31, 0.30)
+        var chalk = S.srgb(0.95, 0.94, 0.88), numChalk = S.srgb(0.96, 0.91, 0.66), dust = S.srgb(0.44, 0.44, 0.43)
+        if let p = ParkPalette.current {          // park-palette-lab: asphalt -> asphalt role, chalk -> trim, numbers -> chalkNumber; flecks, worn rim and dust follow the asphalt (all linear here)
+            asphalt = OKLab.srgbToLinear(p.asphalt); chalk = OKLab.srgbToLinear(p.trim); numChalk = OKLab.srgbToLinear(p.chalkNumber)
+            grainLo = asphalt * 0.7; grainHi = asphalt * 1.5
+            wornEdge = asphalt + (OKLab.srgbToLinear(p.stone) - asphalt) * 0.45
+            dust = asphalt + (chalk - asphalt) * 0.35
+        }
         b.roundedBox(centre: o + SIMD3(0, 0.02, 0), half: SIMD3(h.x, 0.02, h.y), radius: 0.05, segments: 3, aoFloor: false, color: asphalt)
         let top: Float = 0.041
         // a soft worn edge: a faded, lighter rim where the blacktop meets the grass
