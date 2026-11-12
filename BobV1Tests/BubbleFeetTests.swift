@@ -59,6 +59,10 @@ final class BubbleFeetTests: XCTestCase {
             return SC(name: "bubble: stream", game: true, seconds: 24, setup: { r, _ in
                 n = 0; wand.resetForTests(); r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); wand.demo = { _ in 0.8 }; return true
             }, each: { r in n += 1; wand.tick(jellies: join(r), dt: r.sim.stepDt) })
+        case "chain":            // round 3: 60 s of a steady, thick blow: the hop chain runs (hops leave from the landings), every species, bare and with shoes; the frames are held to the same limits
+            return SC(name: "bubble: chain 60 s", game: true, seconds: 60, setup: { r, _ in
+                n = 0; wand.resetForTests(); BubbleTuning.chainEnabled = true; r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); wand.demo = { _ in 0.9 }; return true
+            }, each: { r in n += 1; wand.tick(jellies: join(r), dt: r.sim.stepDt) })
         default: fatalError(name)
         }
     }
@@ -115,6 +119,8 @@ final class BubbleFeetTests: XCTestCase {
     func testPopBounce() { bubbles("pop bounce") }
     func testPopFlap() { bubbles("pop flap") }          // (non-winged characters run it too: the wand falls back to the header when the flap cannot start)
     func testPopSkip() { bubbles("pop skip") }
+    /// Bar 4 of round 3: the join stays closed over 60 s of chained hops for every species (winged, tail, flower, ears), the chain's hops (`hopPlay` script) included in the held frames.
+    func testChain() { bubbles("chain") }
 
     // Fault A (round 2): testPopFlap failed with the round-1 tuning ("the join is open: 2.4 to 3.1 cm", a walk with the body still tilted, both feet off the floor). Found by switches: round 1's numbers
     // (`round1()`: this round's tuning but `goWaitsForHop` off, the walk order may abort a hop in the air) with ONE group of them put back to the BEFORE values each.

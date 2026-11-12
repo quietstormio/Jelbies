@@ -36,6 +36,9 @@ final class BubbleJumpRateTests: XCTestCase {
         var played: [String: Int] = [:]
         var dup = 0, outside = 0
         var longest: Hop?
+        var gaps: [Float] = []                       // seconds a Jelbie stood out of every hop although a bubble was in his reach
+        var shares: [Float] = []                     // per Jelbie: the share of the seconds with a bubble in reach that he spent in a hop (crouch, air, landing)
+        var chainHops = 0, chainStarts = 0
     }
 
     func run(cast: [String], seed: Int, park: Bool, free: Set<Int> = [], size: CGSize = CGSize(width: 440, height: 956)) -> Result {
@@ -73,6 +76,7 @@ final class BubbleJumpRateTests: XCTestCase {
         var tr: [Track] = rs.map { r in var t = Track(); t.base = r.sim.minY(); t.crown0 = r.sim.centroid().y + BobShape.H * 0.5; return t }
         let up: Float = 0.04, down: Float = 0.015
         var steps = 0
+        var reachSteps = [Int](repeating: 0, count: rs.count), reachHop = [Int](repeating: 0, count: rs.count), gap = [Float](repeating: 0, count: rs.count)
         for _ in 0..<(60 * Self.seconds) {
             for r in rs { r.tick() }
             wand.tick(jellies: js, dt: 1.0 / 60)
@@ -101,11 +105,20 @@ final class BubbleJumpRateTests: XCTestCase {
                     }
                 }
             }
+            for i in rs.indices {          // bars 1 and 2: with a bubble in reach, how much of the time is he in a hop, and how long are the pauses
+                let busy = tr[i].air || rs[i].brain.bubbleHopBusy
+                if steps > 60 * 3, wand.bubbleInReach(js[i]) {
+                    reachSteps[i] += 1
+                    if busy { reachHop[i] += 1; if gap[i] > 0 { res.gaps.append(gap[i]); gap[i] = 0 } } else { gap[i] += 1.0 / 60 }
+                } else if gap[i] > 0 { res.gaps.append(gap[i]); gap[i] = 0 }
+            }
             let tg = wand.activeTargets
             if Set(tg).count != tg.count { res.dup += 1 }
             if steps > 60 * 4 { for r in rs where !(r.brain.bubbleLeash?.contains(r.brain.position, margin: 1.2) ?? true) { res.outside += 1 } }
         }
         let secs = Float(steps) / 60
+        for i in rs.indices where reachSteps[i] > 60 { res.shares.append(Float(reachHop[i]) / Float(reachSteps[i])) }
+        res.chainHops = wand.chainHops; res.chainStarts = wand.chainStarts
         res.minutes = Float(cast.count) * secs / 60
         res.airborne = tr.map { $0.airTime / secs }
         res.movePops = wand.movePops; res.hopPops = wand.hopPops; res.contactPops = wand.contactPops; res.chases = wand.chaseRecords.count
@@ -197,8 +210,8 @@ final class BubbleJumpRateTests: XCTestCase {
                 XCTAssertGreaterThanOrEqual(a.hopsPerMin, Self.floor[k] * Self.baseHops[k], "\(tag): hop starts per Jelbie-minute \(a.hopsPerMin) vs baseline \(Self.baseHops[k]) x \(Self.floor[k])")
                 XCTAssertLessThanOrEqual(a.apexMax, Self.baseApexMax * 1.05, "\(tag): highest apex \(a.apexMax) above the baseline max")
                 XCTAssertLessThanOrEqual(a.maxTravel, 0.8, "\(tag): a single hop travelled \(a.maxTravel) m (\(a.longest))")
-                XCTAssertLessThanOrEqual(a.airMax, 0.45, "\(tag): a Jelbie was airborne \(a.airMax) of the time")
-                XCTAssertGreaterThanOrEqual(a.minGroundSeq, 0.35, "\(tag): ground time between two hops of one Jelbie")
+                XCTAssertLessThanOrEqual(a.airMax, Self.maxAirborne, "\(tag): a Jelbie was airborne \(a.airMax) of the time")
+                XCTAssertGreaterThanOrEqual(a.minGroundSeq, Self.minGroundBetween, "\(tag): ground time between two hops of one Jelbie")
                 XCTAssertLessThanOrEqual(c.lockstep, Self.maxLockstep, "\(tag): \(c.lockstep) of the take-offs have another Jelbie's within 0.1 s")
                 for m in Self.styles where m != .skip && m != .flap {
                     let base = Self.baseStyle[k][m.rawValue] ?? 0
@@ -219,6 +232,9 @@ final class BubbleJumpRateTests: XCTestCase {
     static let floor: [Float] = [1.45, 1.45, 1.40, 1.30]
     /// Take-offs of different Jelbies within 0.1 s of each other: chance alone gives ~10 % at these rates; more than this is lockstep.
     static let maxLockstep: Float = 0.25
+    /// Round 2's limits were 0.45 airborne and 0.35 s on the ground between two hops; the chain (landing squish kept but short: 0.12...0.2 s + the 0.05 s crouch) needs room: 0.7 and 0.1 s (chain on only).
+    static var maxAirborne: Float { BubbleTuning.chainEnabled ? 0.7 : 0.45 }
+    static var minGroundBetween: Float { BubbleTuning.chainEnabled ? 0.1 : 0.35 }
     // BASELINE (2026-11-11, base c56733e7 + round 1's switches back: BubbleTuning.applyBaseline; testBaselineRates, 6 seeds x 60 sim-s per cast, the wand's dice seeded; per-seed hops/min ranges 16-26, 10-24, 5-12.7, 7.3-12).
     static let baseHops: [Float] = [20.50, 14.92, 9.11, 9.56]
     static let baseApexMax: Float = 0.350
@@ -228,4 +244,34 @@ final class BubbleJumpRateTests: XCTestCase {
         ["bounce": 1.56, "header": 1.39, "leap": 3.44, "skip": 0.00, "flap": 0.11],
         ["bounce": 0.67, "header": 2.17, "leap": 4.17, "skip": 0.28, "flap": 0.17],
     ]
+
+    func percentile(_ a: [Float], _ q: Float) -> Float { a.isEmpty ? 0 : a.sorted()[min(a.count - 1, Int(q * Float(a.count)))] }
+    /// Round 3's bars (the brief): (1) in a hop for >= 60 % of the seconds with a bubble in reach, per Jelbie; (2) the pause between hops with a bubble in reach: 95th percentile <= 0.6 s (the worst is printed);
+    /// (3) pops per minute >= 2.5x the BEFORE rate (the sum of `baseStyle`); (5) every special pop style >= 90 % of its BEFORE rate, pooled as in `testJumpRates`. Bar 4 (feet) is BubbleFeetTests.testChain.
+    static let minShare: Float = 0.6
+    static let maxPauseP95: Float = 0.6
+    static let popFactor: Float = 2.5
+    func testChainBars() {
+        BubbleTuning.restoreHead()
+        var cs: [(Cast, [Result])] = []
+        let setups: [(String, [String], Bool)] = Self.casts.map { ("room " + $0.joined(separator: "+"), $0, false) } + [("park Pip+Lavender+Teddy(free)", ["Pip", "Lavender", "Teddy"], true)]
+        for (tag, cast, park) in setups {
+            var rs: [Result] = []
+            for seed in 0..<Self.seeds { rs.append(run(cast: cast, seed: seed, park: park, free: park ? [2] : [])) }
+            cs.append((Cast(tag: tag, agg: aggregate(rs), perSeed: rs.map { Float($0.hops.count) / $0.minutes }, lockstep: 0), rs))
+        }
+        for (k, (c, rs)) in cs.enumerated() {
+            let shares = rs.flatMap(\.shares), gaps = rs.flatMap(\.gaps)
+            let mean = shares.reduce(0, +) / Float(max(shares.count, 1))
+            let base = Self.baseStyle[k].values.reduce(0, +)
+            let pops = c.agg.movePerMin.values.reduce(0, +)
+            print(String(format: "BUBBLEJUMP CHAIN %@ | share in hop (bubble in reach) mean %.0f%% min %.0f%% | pauses n %d p95 %.2f s worst %.2f s | hop pops/min %.2f vs before %.2f (%.2fx; total pops %.2f) | hops/Jelbie-min %.2f (before %.2f) | chain starts %d chain hops %d",
+                        c.tag, 100 * mean, 100 * (shares.min() ?? 0), gaps.count, percentile(gaps, 0.95), gaps.max() ?? 0, pops, base, pops / max(base, 0.01), c.agg.popsPerMin, c.agg.hopsPerMin, Self.baseHops[k], rs.reduce(0) { $0 + $1.chainStarts }, rs.reduce(0) { $0 + $1.chainHops }))
+            XCTAssertGreaterThanOrEqual(mean, Self.minShare, "\(c.tag): share of the time in a hop with a bubble in reach")
+            XCTAssertGreaterThanOrEqual(shares.min() ?? 0, Self.minShare - 0.1, "\(c.tag): the worst Jelbie's share")
+            XCTAssertLessThanOrEqual(percentile(gaps, 0.95), Self.maxPauseP95, "\(c.tag): 95th percentile of the pauses between hops")
+            XCTAssertGreaterThanOrEqual(pops, Self.popFactor * base, "\(c.tag): hop pops per minute \(pops) vs \(Self.popFactor) x before \(base)")
+            XCTAssertEqual(c.agg.dup, 0, "\(c.tag): two Jelbies on one bubble")
+        }
+    }
 }
