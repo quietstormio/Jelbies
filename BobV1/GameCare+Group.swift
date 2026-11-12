@@ -122,12 +122,13 @@ extension GameCare {
     /// `-MealAwake <id>` (simulator only): once all are asleep, that one Jelbie is woken (the plain quick wake) so a meal can be asked with two asleep and one awake.
     private func traceWakeOne(_ actors: [JellyActor], dt: Float) {
         #if targetEnvironment(simulator)
-        if let k = MealTrace.awakeID, MealTrace.awakeDone, let b = actors.first(where: { $0.id == k })?.brain { b.idleBlocked = true; b.sleepEnabled = false }          // (he stays up)
+        if let k = MealTrace.awakeID, MealTrace.awakeDone, let b = actors.first(where: { $0.id == k })?.brain { b.idleBlocked = true; b.sleepEnabled = false; b.commandedGoodnight = false }          // (he stays up)
         guard let k = MealTrace.awakeID, !MealTrace.awakeDone, !actors.isEmpty, actors.allSatisfy({ $0.brain?.isNapping ?? false }) else { return }
         MealTrace.awakeT += dt
         guard MealTrace.awakeT > 4, let a = actors.first(where: { $0.id == k }), let b = a.brain else { return }
         MealTrace.awakeDone = true
         b.sleepEnabled = false          // (he stays up: the night's retry loop does not send him back to bed)
+        b.commandedGoodnight = false
         b.requestNow(.goTo(b.position))
         NSLog("[mealtrace] MealAwake: woke jelly %d", k)
         MealTrace.log("MealAwake: woke jelly \(k)")
