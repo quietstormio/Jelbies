@@ -13,6 +13,8 @@ import simd
 final class SeesawStepOffTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     let uid = ParkToys.seesawUID
+    /// "Inside the footprint" = the body's centre more than this (m) past its edge. A body walking along the piece grazes the edge by a few cm (the floor rules are soft there: -0.01 ... -0.05 seen); the 600 s run's fault was 0.39 deep for 15 s.
+    static let graze: Float = 0.10
 
     override func setUp() { DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0; SeesawRide.shared.reset() }
     override func tearDown() {
@@ -83,6 +85,7 @@ final class SeesawStepOffTests: XCTestCase {
         for r in lab.rigs[0..<2] { XCTAssertTrue(r.brain.decorStart(.decorSit, r.sim, only: .seesaw, uid: uid), "seed \(seed): a rider found a seat") }
         var leash = 0, step = 0, blocked = false, endStep = -1
         var spotsBlocked: [Bool] = [false, false], pins: [SIMD2<Float>] = []
+        var wasSit = [false, false], landedD: [Float?] = [nil, nil]          // (the footprint distance of each rider's centre the first step his seesaw use is over)
         while step < 60 * 120 {
             lab.tick(watching: false); field.tick(dt: 1.0 / 60)
             for (j, r) in lab.rigs.enumerated() { feats[j].tick(id: 0, brain: r.brain, sim: r.sim, feature: JellyRoster.feature(j), worn: [], hideAll: false, dt: 1.0 / 60) }
@@ -91,6 +94,11 @@ final class SeesawStepOffTests: XCTestCase {
                 if pull > 0.002 { leash += 1 }
             }
             step += 1
+            for (j, r) in lab.rigs[0..<2].enumerated() {
+                let sitting = r.brain.idleState.kind == .decorSit && r.brain.idleState.decorUID == uid
+                if wasSit[j], !sitting, landedD[j] == nil { let c = r.sim.centroid(); landedD[j] = f.distance(SIMD2(c.x, c.z)) }
+                wasSit[j] = sitting
+            }
             if !blocked, R.stage(uid, seat: 0) == .seated, R.stage(uid, seat: 1) == .seated {
                 // both are seated: a friend stands on the middle normal spot of each seat, so every normal spot (they are 0.2 apart, the gap is 0.9) is blocked
                 blocked = true
@@ -104,7 +112,7 @@ final class SeesawStepOffTests: XCTestCase {
                 }
             }
             // (the friends stay put until the riders are off: the social rooms nudge a body that stands close to another)
-            if blocked, endStep < 0 {
+            if blocked, endStep < 0, R.ringStepOffs < 2 {          // (released as soon as both riders have taken their hop: a pinned friend squeezing a landed rider against the piece is not what is measured)
                 for (k, p) in pins.enumerated() {
                     let fr = lab.rigs[2 + k]
                     fr.sim.teleport(toXZ: p); fr.brain.px = p.x; fr.brain.pz = p.y          // (the brain's own position is what the room's peer snapshot reads)
@@ -112,6 +120,9 @@ final class SeesawStepOffTests: XCTestCase {
             }
             if blocked, endStep < 0, (field.seatOccupant[uid]?.count ?? 0) == 0, R.mode(uid) == .idle { endStep = step }
             if endStep >= 0, step >= endStep + 300 { break }
+            if R.ringStepOffs >= 2, step % 20 == 0 {
+                print("[stepoff.after] seed \(seed) step \(step) " + lab.rigs.map { r in let c = r.sim.centroid(); return String(format: "(%.2f, %.2f) d%.2f %@/%@/soc %@", c.x, c.z, f.distance(SIMD2(c.x, c.z)), "\(String(describing: r.brain.idleState.kind))", "\(r.brain.activity)", r.brain.social == nil ? "-" : "yes") }.joined(separator: " | "))
+            }
             if blocked, endStep < 0, step % 60 == 0 {
                 let rb = lab.rigs[0].brain
                 print("[stepoff.diag] seed \(seed) step \(step) mode \(R.mode(uid)) stages \(String(describing: R.stage(uid, seat: 0))) \(String(describing: R.stage(uid, seat: 1))) friends at \(lab.rigs[2...].map { $0.sim.centroid() }.map { SIMD2($0.x, $0.z) }) riders at \(lab.rigs[0..<2].map { $0.sim.centroid() }.map { SIMD2($0.x, $0.z) }) bagStage/phase \(lab.rigs[0..<2].map { "\($0.brain.idleState.bagStage)/\($0.brain.idleState.phase)" }) steerPeers of rider 0 \(rb.steerPeers().map { "\($0.id)@\($0.pos)" })")
@@ -128,7 +139,8 @@ final class SeesawStepOffTests: XCTestCase {
         for (j, r) in lab.rigs[0..<2].enumerated() {
             let c = r.sim.centroid(), d = f.distance(SIMD2(c.x, c.z))
             report += String(format: "; rider %d at (%.2f, %.2f) footprint distance %.2f", j, c.x, c.z, d)
-            XCTAssertGreaterThan(d, 0, "seed \(seed): rider \(j) stands outside the footprint 5 s after the ride's end")
+            report += String(format: " (landed at footprint distance %.2f)", landedD[j] ?? -9)
+            XCTAssertGreaterThan(landedD[j] ?? -9, 0.2, "seed \(seed): rider \(j)'s step-off landed outside the footprint")
         }
         print("[stepoff] " + report)
         XCTAssertEqual(R.noStepOff, 0, "seed \(seed): every rider found a step-off spot")
@@ -158,7 +170,7 @@ final class SeesawStepOffTests: XCTestCase {
             for (j, r) in lab.rigs.enumerated() {
                 let c = r.sim.centroid(), d = f.distance(SIMD2(c.x, c.z))
                 let onIt = r.brain.idleState.decorUID == uid && (r.brain.isBagSit || r.brain.idleState.kind == .decorSit)
-                if d < 0, !onIt { run[j] += 1; if run[j] > worst[j] { worst[j] = run[j]; where_[j] = String(format: "t %.1f at (%.2f, %.2f) idle %@ act %@", Float(i) / 60, c.x, c.z, "\(String(describing: r.brain.idleState.kind))", "\(r.brain.activity)") } }
+                if d < -Self.graze, !onIt { run[j] += 1; if run[j] > worst[j] { worst[j] = run[j]; where_[j] = String(format: "t %.1f at (%.2f, %.2f) idle %@ act %@", Float(i) / 60, c.x, c.z, "\(String(describing: r.brain.idleState.kind))", "\(r.brain.activity)") } }
                 else { run[j] = 0 }
             }
         }
