@@ -13,7 +13,7 @@ nonisolated enum ParkToys {
     static let seesawUID = 9001, hopscotchUID = 9005, slideUID = 9006          // (9003, the park sandbox, was removed 2026-11-05: the slide stands in its place)
     nonisolated(unsafe) static var layout: [PlacedDecor] = [
         // the seesaw on the back left, moved from x -2.7 to -3.2 (2026-11-09: its right pad sat on the path's edge): its right end (footprint half x 1.47) is at -1.73, 0.62 clear of the path's left edge (-1.11 at z -2.3)
-        PlacedDecor(uid: seesawUID, kind: .seesaw, x: -3.2, z: -2.3, turns: nil),
+        PlacedDecor(uid: seesawUID, kind: .seesaw, x: -3.2, z: -3.2, turns: nil),
         // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide on the right where the sandbox used to be (the sandbox was removed from the park 2026-11-05, and so was the play tunnel)
         PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),
         PlacedDecor(uid: slideUID, kind: .slide, x: 2.9, z: 1.0, turns: nil)          // (STRAIGHT, on the right lawn where the sandbox was: the chute points down the screen toward the camera. Footprint x 2.1...3.7, z -0.4...2.4, whose back edge is 2.8 clear of the pond (pond (3.5, -4.2) r 1.0): the tall ladder posts at its back would overlap the pond on screen if it stood further back (at z -0.3 they did). The climb spot behind it is z -1.17; the rider lands at z 3.19 on open lawn, well off the path (its right edge is x 1.2 there), and a body there is above the Go home pill's roam cut-out in landscape (HUDLayout.parkHomeRect). The park floor's front edge is back at z 4.5)

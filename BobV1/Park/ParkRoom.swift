@@ -13,7 +13,7 @@ extension RoomCatalog {
     static let park = RoomDef(
         id: .park, title: "Park", blurb: "A lawn, a slide and a bench to play on.",
         theme: RoomTheme(tint: SIMD3(0.56, 0.74, 0.44), chromaScale: 0.7, lightnessShift: 0.02),
-        couch: .init(centre: SIMD3(0, 0.45, -4.55), halfExtents: SIMD3(1.35, 0.45, 0.35), radius: 0.15),
+        couch: .init(centre: SIMD3(ParkScenery.benchX, 0.45, -4.55), halfExtents: SIMD3(1.35, 0.45, 0.35), radius: 0.15),
         boxes: [], cylinders: [],          // (2026-11-11: the pond's cylinder and the flower bed's box are gone: the back lawn is walkable)
         lampTable: .init(centre: SIMD2(30, -40), radius: 1.0, height: 0.3), lamp: SIMD3(0, 1.5, -40),          // (no side table in the park: far off the floor like the Spa's and the beach's; `RoomLayout.table` is only read by the sleep spot check and the lamp default the renderer overrides with `lamp`)
         windows: RoomWindows(xs: [], halfW: 0, y0: 0, y1: 14, proceduralFrames: false),
@@ -155,7 +155,7 @@ enum ParkScenery {
 
         // ---- the bench (back centre): timber slats on cast-iron frames, and a park lamp post beside it ----
         bench(b)
-        lampPost(b, x: 1.72, z: -4.85)
+        lampPost(b, x: benchX + 1.72, z: -4.85)
         return b.mesh
     }
 
