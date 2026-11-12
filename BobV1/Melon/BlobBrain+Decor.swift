@@ -305,7 +305,7 @@ extension BlobBrain {
     /// A leg of the way round (stage -1 / -3) that stands still, waiting for a friend who stands on it: asks for another leg, the other way round (`avoid`), once the wait has lasted a moment.
     /// (The walk itself waits up to 6 s for a standing friend on a requested leg, and the plan was only asked again at the end of a leg.)
     private func slideStallReplan(_ f: DecorFoot, dt: Float) {
-        guard case .walk = script, steerStall > 1.5 || steerWait > 1.2 || walkStallT > 1.5, idleState.slideS < 8, Int(scriptT * 4) != Int((scriptT - dt) * 4) else { return }          // (asked four times a second at most)
+        guard case .walk = script, steerStall > 0.9 || steerWait > 0.9 || walkStallT > 1.2, idleState.slideS < 8, Int(scriptT * 4) != Int((scriptT - dt) * 4) else { return }          // (asked four times a second at most)
         guard let climb = decorStand(.decorSlide, f, from: position), let next = slideFirstLeg(f, climb: climb, from: position, avoid: idleState.target), simd_distance(next.0, idleState.target) > 0.3 else { return }
         idleState.slideS += 1
         idleState.slideStage = -next.1; idleState.target = next.0; idleState.decorRetry = 0
