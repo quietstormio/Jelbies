@@ -964,6 +964,8 @@ struct GameScreen: View {
     @MainActor static func runStoreDemo(model: MelonModel) async {
         guard DevArgs.enabled else { return }          // capture aids only (they grant Drops, the wardrobe, decor): never in an App Store archive
         let d = UserDefaults.standard
+        // capture aid: -GrantTrick <rawValue> buys that Shop trick for everyone (the Tricks row shows it unlocked, the rest locked)
+        if let g = d.string(forKey: "GrantTrick"), let t = VoiceTrick(rawValue: g) { model.care.store.grantTrickToEveryone(t) }
         // capture aid: -ShowSeedGoods 1 makes a cared-for Jelbie for the Jelly Show: fed to the day's theme, bathed, Sway half learned, the three trick pages
         // bought and every trick learned, the wardrobe owned and dressed to the theme
         if d.integer(forKey: "ShowSeedGoods") != 0 {
