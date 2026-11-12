@@ -466,10 +466,24 @@ final class ParkSlideCrowdTests: XCTestCase {
             XCTAssertNotNil(leftAt, line)
             if let l = leftAt { XCTAssertLessThanOrEqual(l, 6, "off the landing within 6 s. \(line)") }
             XCTAssertLessThanOrEqual(spotMax, 3, "walking on the spot. \(line)")
-            // (bodies inside the slide box are park-slide-r2's: minBox is printed, not asserted)
+            // (minBox is printed, not asserted: the clip is the planner's route round the friend through the box, not the target; see the r10 report)
         }
     }
 
     func testExRiderWithOneFriendOnHisLeg() { legFriendScene(boxedIn: false) }
     func testExRiderBoxedInDiagnostic() { legFriendScene(boxedIn: true) }
+
+    // MARK: r10 - distances to the seesaw's new footprint
+
+    /// Print-only: the smallest distance from the slide's three out spots and from the hopscotch queue spots (slots 0-3, in world) to the seesaw's footprint, and to the nearest solid.
+    func testOutSpotsAndQueueSpotsKeepClearOfTheSeesaw() {
+        _ = parkLab(seed: 5)
+        let sl = DecorField.shared.foot(ParkToys.slideUID)!, see = DecorField.shared.foot(ParkToys.seesawUID)!, court = DecorField.shared.foot(ParkToys.hopscotchUID)!
+        let outs = BlobBrain.slideOutSpots.map { sl.centre + sl.turned($0) }
+        let queue = (0..<4).map { court.centre + court.turned(HopscotchCourt.queueSpot(slot: $0)) }
+        let dOut = outs.map { see.distance($0) }, dQ = queue.map { see.distance($0) }
+        print("[seesaw] seesaw centre (\(see.centre.x),\(see.centre.y)); out spots to its footprint \(dOut.map { String(format: "%.2f", $0) }) smallest \(String(format: "%.2f", dOut.min() ?? 0)); hopscotch queue spots (slots 0-3) to its footprint \(dQ.map { String(format: "%.2f", $0) }) smallest \(String(format: "%.2f", dQ.min() ?? 0))")
+        XCTAssertGreaterThan(dOut.min() ?? 0, 0.5, "out spots clear of the seesaw")
+        XCTAssertGreaterThan(dQ.min() ?? 0, 0.5, "queue spots clear of the seesaw")
+    }
 }
