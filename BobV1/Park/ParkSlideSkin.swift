@@ -16,7 +16,11 @@ nonisolated enum ParkSlideSkin {
         func lum(_ c: SIMD3<Float>) -> Float { simd_dot(c, SIMD3(0.2126, 0.7152, 0.0722)) }
         // round 5: from the park camera the old skin read as a grey box. Now: a muted terracotta chute (round 8: was signal red), galvanised steel side walls and top bars, stained timber platform and step block,
         // dark forest-green posts and caps. Same geometry, same anchors.
-        let red = srgb(0.72, 0.41, 0.28), steel = srgb(0.60, 0.64, 0.67), timber = srgb(0.52, 0.35, 0.20), step = srgb(0.64, 0.46, 0.27), green = srgb(0.10, 0.27, 0.18)
+        // park-palette-lab: with `-ParkPalette <variant>` the five take their role colours (chute = seat, side walls = trim, timber = wood x 0.81 (today's timber / step), step = wood, posts = frame); `today` = the old literals
+        let pal = ParkPalette.current
+        let red = pal.map { OKLab.srgbToLinear($0.seat) } ?? srgb(0.72, 0.41, 0.28), steel = pal.map { OKLab.srgbToLinear($0.trim) } ?? srgb(0.60, 0.64, 0.67)
+        let timber = pal.map { OKLab.srgbToLinear($0.wood * 0.81) } ?? srgb(0.52, 0.35, 0.20), step = pal.map { OKLab.srgbToLinear($0.wood) } ?? srgb(0.64, 0.46, 0.27)
+        let green = pal.map { OKLab.srgbToLinear($0.frame) } ?? srgb(0.10, 0.27, 0.18)
         let refCream = lum(srgb(0.97, 0.94, 0.88)), refHoney = lum(srgb(0.97, 0.80, 0.35)), refMint = lum(srgb(0.62, 0.85, 0.69)), refCoral = lum(srgb(0.96, 0.55, 0.43)), refPink = lum(srgb(0.91, 0.54, 0.64))
         // centre and half width of the chute (the mint vertices facing up)
         var sx: Float = 0, n: Float = 0
