@@ -1173,6 +1173,7 @@ private func buildRenderMeshBob(weld weldOn: Bool) -> RenderMesh {
         for si in 0..<2 {
             for p in wp.bandPos[si] { weldInfo!.restDefault += [Float(p.x), Float(p.y), Float(p.z)] }
             for p in wp.bandPanda[si] { weldInfo!.restPanda += [Float(p.x), Float(p.y), Float(p.z)] }
+            for p in wp.bandTeddy[si] { weldInfo!.restTeddy += [Float(p.x), Float(p.y), Float(p.z)] }
         }
     }
     let vCount = pos.count / 3
