@@ -44,25 +44,31 @@ final class HopscotchLineTests: XCTestCase {
             let lab = parkLab(positions: [SIMD2(-2.1, -1.35), SIMD2(0.694, -1.541), SIMD2(-0.748, -0.395), SIMD2(-0.547, -1.721)], seed: seed)
             let line = HopscotchLine.shared
             for r in lab.rigs { r.brain.autonomy = true; r.brain.idleForced = true }
-            var started: [Bool] = []
-            for r in lab.rigs { started.append(r.brain.decorStart(.decorHopscotch, r.sim, only: nil, uid: uid)) }
+            // the leader starts it; the others come in the way the game does: the line posts its news, each free Jelbie rolls once (joinChance 1) and walks to his queue spot
+            // (a direct `decorStart` for all four is refused for good: the others stand within the park's 1.4 of every queue spot)
+            let started = [lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: uid)]
+            var trace = [String](repeating: "", count: 4), maxPlayers = 0
             var seqs = [[Int]](repeating: [], count: 4), entries = [Int](repeating: 0, count: 4), prevStage = [Int](repeating: -9, count: 4)
             var minGap = Float.infinity, finishedAt: Float = -1
             for i in 0..<(60 * 90) {
                 lab.tick(watching: false); DecorField.shared.tick(dt: dt)
+                maxPlayers = max(maxPlayers, line.players(uid).count)
                 for a in 0..<4 {
                     let s = line.square(uid, a)
                     if s >= 0, s < 8, seqs[a].last != s { seqs[a].append(s) }
                     let b = lab.rigs[a].brain
                     let stage = b.idleState.kind == .decorHopscotch ? b.idleState.slideStage : -9
                     if stage == 4, prevStage[a] != 4 { entries[a] += 1 }
+                    if stage != prevStage[a] { trace[a] += " \(stage)@\(Int(Float(i) / 60))r\(b.idleState.decorRetry)" }
+                    if s == HopscotchLine.done { b.autonomy = false; b.idleForced = false }          // (done: he stays off the court, no second lap)
                     prevStage[a] = stage
                     for c in (a + 1)..<4 where c < 4 { minGap = min(minGap, simd_distance(lab.snapshot[a].pos, lab.snapshot[c].pos)) }
                 }
                 if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { finishedAt = Float(i) / 60; break }
             }
-            print("[hopline] seed \(seed): started \(started) finished at \(finishedAt) s, min centre gap \(minGap), stage-4 entries \(entries), seqs \(seqs.map { $0.count })")
-            XCTAssertTrue(started.allSatisfy { $0 }, "seed \(seed): every joiner could start: \(started)")
+            print("[hopline] seed \(seed): started \(started) finished at \(finishedAt) s, min centre gap \(minGap), stage-4 entries \(entries), seqs \(seqs.map { $0.count }), most in the line \(maxPlayers)\n  traces (stage@sim-s r<retries>): \(trace)")
+            XCTAssertTrue(started.allSatisfy { $0 }, "seed \(seed): the leader started")
+            XCTAssertEqual(maxPlayers, 4, "seed \(seed): all four joined the line")
             XCTAssertGreaterThan(finishedAt, 0, "seed \(seed): the line is done within 90 sim-s; line \(line.players(uid).map { "\($0.id):slot \($0.slot) sq \($0.sq)" }) kinds \(lab.rigs.map { $0.brain.idleState.kind.map { "\($0)" } ?? "-" }) stages \(lab.rigs.map { $0.brain.idleState.slideStage })")
             for a in 0..<4 { XCTAssertEqual(seqs[a], Array(0..<8), "seed \(seed): Jelbie \(a) landed on squares 1...8 in order: \(seqs[a])") }
             XCTAssertFalse(line.active, "seed \(seed): the line is empty at the end")
