@@ -29,7 +29,7 @@ nonisolated enum MoonwalkTuning {
     /// The heading off the camera (rad): three-quarter on.
     nonisolated(unsafe) static var turnOff: Float = 1.1
     /// v2: the standing foot up on its toe (rad about the toe; 0 = v1, no hook). v1's in-place swing of the standing foot: its lift (u) and toe-down tilt (rad).
-    nonisolated(unsafe) static var heelUp: Float = 0
+    nonisolated(unsafe) static var heelUp: Float = 0.55
     nonisolated(unsafe) static var v1Lift: Float = 0.030, v1Tilt: Float = 0.45
     /// The foot's length (u, heel to toe of the boot): raising the heel by `footLen * sin(a)` while tilting the toe down by `a` turns the foot about its toe.
     static let footLen: Float = 0.11

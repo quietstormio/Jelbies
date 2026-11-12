@@ -2052,6 +2052,7 @@ final class BlobBrain {
             let fitted = sim.bodyPose(iterations: 3)
             for s in 0..<2 {
                 var (xz, fyaw, h, out, tilt, fwd) = feet.state(s)
+                if idleState.kind == .moonwalk, idleState.trick.heelUp[s] != 0 { let hu = idleState.trick.heelUp[s]; h += MoonwalkTuning.footLen * sinf(hu); tilt -= hu }          // (the moonwalk's foot up on its toe: raised by the heel and tipped toe-down = turned about the toe; BlobBrain+Moonwalk.swift, nothing else sets it)
                 var outV = SIMD2<Float>.zero
                 if out != 0 || fwd != 0 { outV = rotXZ(SIMD2((s == 1 ? 1 : -1) * out, fwd), fyaw) }
                 var waveLift: Float = 0
@@ -2092,7 +2093,7 @@ final class BlobBrain {
                 let ys: Float = 1
                 let wy = sim.floorY + c.y + h
                 var bv = beanScratch[s]
-                let mo = Self.beanMorph(clearance: h); beanMorphLast[s] = mo           // planted = the boot, lifted = a rounded ball (user 2026-10-17), smoothly in between
+                var mo = Self.beanMorph(clearance: h); if idleState.kind == .moonwalk, idleState.trick.heelUp[s] != 0 { mo = 0 }; beanMorphLast[s] = mo           // planted = the boot, lifted = a rounded ball (user 2026-10-17), smoothly in between
                 for i in 0..<FootBean.vertexCount {
                     let l = FootBean.morphed(i, mo)
                     let ly = l.y * ys, zr = l.z - hz           // tilt about the heel
