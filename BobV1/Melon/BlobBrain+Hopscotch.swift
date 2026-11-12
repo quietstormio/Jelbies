@@ -51,7 +51,8 @@ extension BlobBrain {
         case 3: idleFinish(skinner)
         default:
             // (stepped up (slot 0) but the walk stopped over 0.5 short of the start - a friend on it: a bounded number of tries, then he gives the game up)
-            if idleState.seat == 0, simd_distance(position, hopscotchWorld(f, HopscotchCourt.queueSpot(slot: 0))) > 0.5 {          // (the same start and 0.5 as stage 5 measures)
+            let short = idleState.seat == 0 ? simd_distance(position, hopscotchWorld(f, HopscotchCourt.queueSpot(slot: 0))) : 0          // (the same start and 0.5 as stage 5 measures)
+            if short > 0.5, short < HopscotchTuning.startBlockedWithin {          // (a walk that is still far from the start - round the slide, past the queue - is travelling, not blocked: only a stop near the start counts)
                 idleState.decorRetry += 1
                 if idleState.decorRetry > HopscotchTuning.startTries { idleFinish(skinner); return }
             }
@@ -59,10 +60,11 @@ extension BlobBrain {
         }
     }
 
-    /// Of the ones still queued (slot != 0) he is the first in the line's order: one steps up at a time, first come first served
-    /// (a nearest-to-the-start test cannot see friends who stand still: the roster hands those out under a placeholder id).
+    /// Of the ones still queued (slot != 0) he is at the lowest slot, the nearest to the start: one steps up at a time, and nobody walks past a waiting friend to get there
+    /// (a nearest-by-distance test cannot see friends who stand still: the roster hands those out under a placeholder id).
     private func hopscotchIsFront(_ uid: Int) -> Bool {
-        HopscotchLine.shared.players(uid).first { $0.slot != 0 }?.id == steerID
+        let queued = HopscotchLine.shared.players(uid).filter { $0.slot != 0 }
+        return queued.min { $0.slot < $1.slot }?.id == steerID
     }
     private func hopscotchStepUp(_ start: SIMD2<Float>) {
         let spot = fixed(start)

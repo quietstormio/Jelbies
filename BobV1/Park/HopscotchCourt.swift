@@ -27,6 +27,8 @@ nonisolated enum HopscotchTuning {
     static let queueGap: Float = 1.7
     /// Walks to the start a stepped-up Jelbie tries before he gives the game up (a blocked start must not loop).
     static let startTries = 3
+    /// A walk that stops further from the start than this is still travelling (it does not use up a try).
+    static let startBlockedWithin: Float = 2.5
 }
 
 nonisolated enum HopscotchCourt {
