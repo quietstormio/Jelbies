@@ -331,7 +331,10 @@ nonisolated final class Skinner {
     nonisolated(unsafe) static var joinRestRing = 10
     private var bandV: [Int32] = [], bandSide: [Int8] = [], bandDD: [Float] = [], bandJ: [Int32] = [], bandT: [Float] = []
     private var joinPrev = Set<Int32>()
-    private var joinOut: (v: [Int32], restW: [Float], restT: [SIMD3<Float>], matW: [Float], matT: [Float])? = nil
+    /// Every write the renderer has not taken yet, newest per vertex (a skin pass that runs twice before one take must not drop the restores of the first): (rest weight, rest target, mat weight, mat target).
+    private var joinPending: [Int32: (Float, SIMD3<Float>, Float, Float)] = [:]
+    static var joinLog = false
+    private var joinLogN = 0
     private var joinBeanW: [[Float]] = [[Float](repeating: 0, count: FootBean.vertexCount), [Float](repeating: 0, count: FootBean.vertexCount)]
     /// The bean's rest-stream coordinates per side (the fur texture of the piece), and the one shadow value both meshes meet at (the piece's own top-ring value).
     private static let beanRestTab: [[SIMD3<Float>]] = [-1.0, 1.0].map { FootBean.restStream(sigma: $0).map { SIMD3<Float>(Float($0.x), Float($0.y), Float($0.z)) } }
@@ -344,7 +347,12 @@ nonisolated final class Skinner {
     /// The fur / shadow writes the renderer must apply now (nil = nothing): per vertex the weight toward the target (skin: rest coordinate `restT`, `restW` < 0 = leave the rest coordinate alone; both: shadow `matT`).
     /// Vertices written last frame and left out now come back with weight 0 (the renderer restores the baked values).
     func takeJoinWrites() -> (v: [Int32], restW: [Float], restT: [SIMD3<Float>], matW: [Float], matT: [Float])? {
-        let o = joinOut; joinOut = nil; return o
+        if joinPending.isEmpty { return nil }
+        var v: [Int32] = [], rw: [Float] = [], rt: [SIMD3<Float>] = [], mw: [Float] = [], mt: [Float] = []
+        v.reserveCapacity(joinPending.count)
+        for (k, e) in joinPending { v.append(k); rw.append(e.0); rt.append(e.1); mw.append(e.2); mt.append(e.3) }
+        joinPending.removeAll(keepingCapacity: true)
+        return (v, rw, rt, mw, mt)
     }
 
     func ensureJoinTris() {
@@ -479,11 +487,13 @@ nonisolated final class Skinner {
     private func blendJoin(_ dyn: UnsafeMutablePointer<Float>) {
         var outV: [Int32] = [], outRW: [Float] = [], outRT: [SIMD3<Float>] = [], outMW: [Float] = [], outMT: [Float] = []
         defer {
-            // whatever was written last frame and is not now goes back to its baked value (weight 0)
+            // whatever was written last frame and is not now goes back to its baked value (weight 0); all of it waits in `joinPending` until the renderer takes it
             let cur = Set(outV)
-            for v in joinPrev where !cur.contains(v) { outV.append(v); outRW.append(v < Int32(beanFirst.min() ?? Int.max) ? 0 : -1); outRT.append(.zero); outMW.append(0); outMT.append(0) }
+            let beanStart = Int32(beanFirst.min() ?? Int.max)
+            for v in joinPrev where !cur.contains(v) { joinPending[v] = (v < beanStart ? 0 : -1, .zero, 0, 0) }
             joinPrev = cur
-            joinOut = outV.isEmpty ? nil : (outV, outRW, outRT, outMW, outMT)
+            for k in 0..<outV.count { joinPending[outV[k]] = (outRW[k], outRT[k], outMW[k], outMT[k]) }
+            if Skinner.joinLog { joinLogN += 1; if joinLogN % 60 == 1 { NSLog("[joinblend] band %d written %d pending %d pose %@ beans %@ blend %.2f", bandV.count, outV.count, joinPending.count, joinPose == nil ? "nil" : "ok", beansActive ? "on" : "off", beanBlend) } }
         }
         guard Skinner.joinBlend, beansActive, beanBlend > 0.05 else { return }
         let g = min(1, beanBlend), A = FootBean.around, T = Self.joinMatTarget
@@ -504,7 +514,7 @@ nonisolated final class Skinner {
             if Skinner.joinBlendRest {
                 let j = Int(bandJ[k]), j1 = (j + 1) % A, ring = Self.joinRestRing, tab = Self.beanRestTab[s]
                 rt = tab[1 + A * ring + j] + (tab[1 + A * ring + j1] - tab[1 + A * ring + j]) * bandT[k]
-                rw = w
+                rw = g * (dd <= 0 ? 1 : 1 - Self.smooth(dd / Self.joinBandRest))
             }
             outV.append(Int32(v)); outRW.append(rw); outRT.append(rt); outMW.append(Skinner.joinBlendMat ? w : 0); outMT.append(T)
         }
