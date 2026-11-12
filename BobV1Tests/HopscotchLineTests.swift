@@ -187,7 +187,7 @@ final class HopscotchLineTests: XCTestCase {
                 let need = brain.footprint + 0.3
                 print(String(format: "[qspot] %@ slot %d clearance: seesaw %.2f, slide %.2f (body radius %.2f + 0.3 = %.2f needed)%@", label, slot, dSee, dSlide, brain.footprint, need, slot == 0 ? " (the start: known, accepted)" : ""))
                 let dStand = seeStands.map { simd_distance(p, $0) }.min()!
-                let bench = DecorField.shared.feet.isEmpty ? Float.infinity : { () -> Float in let c = SIMD2<Float>(1.0, -4.55), h = SIMD2<Float>(1.35, 0.35); let d = simd_max(simd_abs(p - c) - h, .zero); return simd_length(d) }()
+                let bench = DecorField.shared.feet.isEmpty ? Float.infinity : { () -> Float in let c = SIMD2<Float>(ParkScenery.benchX, -4.55), h = SIMD2<Float>(1.35, 0.35); let d = simd_max(simd_abs(p - c) - h, .zero); return simd_length(d) }()
                 print(String(format: "[qspot] %@ slot %d: nearest seesaw stand spot %.2f, bench box %.2f", label, slot, dStand, bench))
                 XCTAssertGreaterThanOrEqual(dStand, 1.0, "\(label) slot \(slot) is \(dStand) from a seesaw stand spot")
                 XCTAssertGreaterThanOrEqual(bench, 1.0, "\(label) slot \(slot) is \(bench) from the bench")
