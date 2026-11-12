@@ -22,10 +22,10 @@ final class ParkSlideRoundTests: XCTestCase {
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
     }
 
-    func parkLab(n: Int, seed: UInt64, aspect: Float, starts: [SIMD2<Float>]? = nil) -> SocialTests.Lab {
+    func parkLab(n: Int, seed: UInt64, aspect: Float, starts: [SIMD2<Float>]? = nil, quiet: Bool = true) -> SocialTests.Lab {
         RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: aspect)
         let dflt: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4), SIMD2(-1.2, 2.2), SIMD2(0.9, 2.4)]
-        let lab = SocialTests.Lab(n: n, positions: Array((starts ?? dflt).prefix(n)), quiet: true, seed: seed)
+        let lab = SocialTests.Lab(n: n, positions: Array((starts ?? dflt).prefix(n)), quiet: quiet, seed: seed)
         for r in lab.rigs { r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius; r.brain.anticsEnabled = true; r.brain.idleMood = .happy; r.brain.outingPlay = true }
         DecorField.shared.set(ParkToys.placed)
         DecorField.shared.toys.news.removeAll()
@@ -136,7 +136,7 @@ final class ParkSlideRoundTests: XCTestCase {
         var notes: [String] = []
         for (aname, aspect) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
             for seed in UInt64(1)...6 {
-                let lab = parkLab(n: 3, seed: seed, aspect: aspect, starts: [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, 2.4)])
+                let lab = parkLab(n: 3, seed: seed, aspect: aspect, starts: [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, 2.4)], quiet: false)
                 let sl = DecorField.shared.foot(ParkToys.slideUID)!
                 let bx = box(sl)
                 var open = [Bool](repeating: false, count: 3), reached = [Bool](repeating: false, count: 3)
