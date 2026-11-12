@@ -153,6 +153,7 @@ extension BlobBrain {
         switch k {
         case .hula: return HulaTuning.total
         case .superSpring: return SpringTuning.total
+        case .corkscrew: return CorkscrewTuning.total
         default: return nil
         }
     }
@@ -176,8 +177,8 @@ extension BlobBrain {
     }
 
     /// The Show's flop, trick-made: the move ends in the dizzy wobble (like `dizzyFollowOn`, without its dice).
-    func trickDizzyFollow(_ sim: SoftBody) {
-        currentPose(sim)
+    func trickDizzyFollow(_ sim: SoftBody, reseed: Bool = true) {
+        if reseed { currentPose(sim) }
         idleBegin(.dizzyWobble)
         script = .idle; activity = .playing
         idleState.phase = 1; idleState.phaseT = 0; idleState.steps = 0; idleState.hop = 0; idleState.jackA = 0

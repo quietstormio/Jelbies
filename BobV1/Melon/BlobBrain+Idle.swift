@@ -99,6 +99,7 @@ enum IdleKind: String, CaseIterable, Sendable {
     case sing          // turns to the camera, a breath, a short tune (mouth on each note, head up, a sway), the last note held, a small bow
     // Stage 2 of the trick plan (BlobBrain+Tricks.swift, +TrickHops.swift): trick-only too
     case superSpring   // crouches very low (held, trembling), launches about twice a normal hop with the arms up, a big landing squash and jiggle, a small rebound
+    case corkscrew     // the flip's machinery with the turn about the vertical axis: a high jump with one full twist, a squishy landing, a held ta-da
     case hula          // the hips circle round and round with the feet planted, faster and faster; the head stays over the spot, the arms sway, a ta-da
 }
 
@@ -296,7 +297,7 @@ extension BlobBrain {
     var idleActivity: Activity {
         switch idleState.kind {
         case .run, .stumble, .zoomies, .decorKick, .soccerKick, .tossBump: return .walking
-        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader, .sing, .hula, .superSpring: return .playing
+        case .shake, .jacks, .slide, .scoot, .bounce, .tail, .flop, .skipHop, .hopscotch, .legSpin, .joy, .giggle, .startle, .flapHop, .tailThump, .hiccup, .dizzyWobble, .bellyDrum, .signatureFlourish, .tossHeader, .sing, .hula, .superSpring, .corkscrew: return .playing
         case .trot: return .walking
         default: return .lookingAround
         }
@@ -697,7 +698,7 @@ extension BlobBrain {
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn:
             return emote2Begin(kind, sim)
         case .sing: return singBegin(sim)
-        case .hula, .superSpring: return trickBegin(kind, sim)
+        case .hula, .superSpring, .corkscrew: return trickBegin(kind, sim)
         case .joy:
             idleBegin(.joy)
             idleState.target = here
@@ -772,6 +773,7 @@ extension BlobBrain {
         case .sing: runSing(sim, skinner, dt)
         case .hula: runHula(sim, skinner, dt)
         case .superSpring: runTrickHopTurn(sim, skinner, dt)
+        case .corkscrew: if idleState.phase == 0 { runTrickHopTurn(sim, skinner, dt) } else if idleState.phase == 2 { runCorkscrewTada(sim, skinner, dt) }
         case .decorKick: runDecorKick(sim, skinner, dt)
         case .decorSlide: runSlide(sim, skinner, dt)
         case .decorHopscotch: runHopscotch(sim, skinner, dt)

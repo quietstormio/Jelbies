@@ -4,6 +4,8 @@
 //  (voice, the Show, the Tricks button). Phase 0 turns to the camera (runIdle); phase 1 is the jump (the gait driver owns the body, ticked from `idleBodyMoveTick` like the
 //  jumping jacks); phase 2 (corkscrew only) is the ta-da back in pose mode.
 //
+//  CORKSCREW     the backflip's machinery (crouch, ballistic air, big landing squash and shake) with the turn about the VERTICAL axis (GaitDriver.flipTwist): one full twist in
+//                the air, landing on the heading he left, then a held ta-da. The Show's flop: 1.5 turns, he lands sideways and goes dizzy.
 //  SUPER SPRING  the squash goes very low (crouchDepth 0.30) and is HELD with a tremble, then a launch about twice the bounce's height (apex 0.24 u), arms thrown up, a long
 //                stretch, a big landing squash (landDepth 0.28) with a big jelly kick, a beat, and a small rebound hop. The Show's flop: the same crouch, a weak hop, a forward
 //                lurch on landing.
@@ -30,8 +32,21 @@ nonisolated enum SpringTuning {
     }
 }
 
+nonisolated enum CorkscrewTuning {
+    static let apex: Float = 0.32, apexCompact: Float = 0.22
+    static let crouchHold: Float = 0.14
+    static let twist: Float = 2 * .pi, failTwist: Float = 1.5 * .pi
+    static let kick: Float = 2.6
+    /// The held ta-da after the landing (seconds).
+    static let tada: Float = 0.45
+    static var total: Float {
+        let g = GaitDriver()
+        return g.flipCrouch + crouchHold + GaitDriver.flipAir(apex: apex) + g.flipSquashTime + g.flipSettle + tada
+    }
+}
+
 extension BlobBrain {
-    private func trickArms(_ tg: (el: Float, sa: Float, out: Float, tau: Float, w: Float), _ dt: Float) {
+    func trickArms(_ tg: (el: Float, sa: Float, out: Float, tau: Float, w: Float), _ dt: Float) {
         let k = 1 - expf(-dt / max(tg.tau, 1e-3))
         idleState.trick.el += (tg.el - idleState.trick.el) * k
         idleState.trick.sa += (tg.sa - idleState.trick.sa) * k
@@ -74,12 +89,17 @@ extension BlobBrain {
             gait.hopApex = apex; gait.hopDuration = GaitDriver.flipAir(apex: apex)
             gait.hop(sim, to: SIMD2(pose.centroid.x, pose.centroid.z), reduceMotion: amplitude < 0.7)
             face(.excited, hold: SpringTuning.crouchHold + 0.4)
+        } else {
+            gait.crouchHold = CorkscrewTuning.crouchHold
+            gait.flipTwist = fail ? CorkscrewTuning.failTwist : CorkscrewTuning.twist
+            gait.flip(sim, apex: flipCompact ? CorkscrewTuning.apexCompact : CorkscrewTuning.apex, reduceMotion: amplitude < 0.7, fail: false)          // (not the gait's faceplant: the flop is the short twist)
+            face(.excited, hold: 0.5)
         }
     }
 
     /// Ticked from `idleBodyMoveTick`: true = the jump owns this step.
     func trickBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
-        guard let kind = idleState.kind, kind == .superSpring, idleState.phase == 1, case .idle = script else { return false }
+        guard let kind = idleState.kind, kind == .superSpring || kind == .corkscrew, idleState.phase == 1, case .idle = script else { return false }
         activity = .playing
         mouthOpen = 0
         idleState.phaseT += dt
@@ -131,7 +151,14 @@ extension BlobBrain {
             if !gait.isBusy { trickJumpEnd(sim, skinner) }
             return true
         }
-        return false
+        // corkscrew: the flip's arms, the flip's beans (forced through isSpinMove), a kick on the landing
+        if landed { jellyKick = max(jellyKick, CorkscrewTuning.kick); face(fail ? .oh : .joyArc, hold: 1.0) }
+        if tookOff { AudioHub.shared.chirp(jelly: steerID, fail ? .uhoh : .wheee, x: px) }
+        trickArms(flipArmTarget(), dt)
+        driveBeansRigid(sim, skinner, dt, tuck: gait.tuck, force: gait.phase == .air || gait.phase == .land)
+        driveArms(sim, skinner, dt)
+        if !gait.isBusy { trickJumpEnd(sim, skinner) }
+        return true
     }
 
     /// The jump is over: root and heading back to where he took off (a short twist leaves him turned), the clean corkscrew goes on to its ta-da, the flop to the dizzy wobble.
@@ -142,8 +169,21 @@ extension BlobBrain {
         currentPose(sim)
         px = root.x; pz = root.y
         let fail = idleState.trick.fail
-        yaw = root.z
+        yaw = (kind == .corkscrew && fail) ? wrapAngle(root.z + idleState.trick.twist) : root.z          // (a short twist leaves him turned)
         armDirW = 0; armDirOut = 0; idleState.trick.armA = 0
+        if kind == .corkscrew, fail { trickDizzyFollow(sim, reseed: false); return }          // the flop: he lands sideways and goes dizzy
+        if kind == .corkscrew { idleState.phase = 2; idleState.phaseT = 0; return }          // the ta-da (pose mode: runCorkscrewTada)
         idleFinish(skinner)
+    }
+
+    /// Phase 2 of the corkscrew (from `runIdle`, pose mode): the held ta-da.
+    func runCorkscrewTada(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        let t = idleState.phaseT
+        armWalkWant = 0
+        let k = smooth01(t / 0.12) * (1 - smooth01((t - (CorkscrewTuning.tada - 0.15)) / 0.15))
+        squash *= 1 + 0.05 * k * amplitude
+        armDirW = k; armDirEl = [0.95, 0.95]; armDirSa = [0.2, -0.2]; armDirOut = 0.07
+        if t > 0.1, idleState.steps & 1 == 0 { idleState.steps |= 1; face(.joyArc, hold: 0.9); blushBump(hold: 1.4, peak: 0.4) }
+        if t > CorkscrewTuning.tada, !feet.active { armDirW = 0; armDirOut = 0; idleFinish(skinner) }
     }
 }

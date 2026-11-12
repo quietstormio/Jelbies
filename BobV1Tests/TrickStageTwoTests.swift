@@ -26,7 +26,7 @@ final class TrickStageTwoTests: XCTestCase {
 
     // MARK: the typed / spoken words (RuleParser)
 
-    private static let ruleWords: [(String, VoiceTrick)] = [("do the hula", .hula), ("hula", .hula), ("Bob hula dance", .hula), ("super spring", .superSpring), ("do a super spring", .superSpring), ("spin around", .spin), ("jump", .jacks)]
+    private static let ruleWords: [(String, VoiceTrick)] = [("do the hula", .hula), ("hula", .hula), ("Bob hula dance", .hula), ("super spring", .superSpring), ("do a super spring", .superSpring), ("corkscrew jump", .corkscrew), ("do a corkscrew", .corkscrew), ("spin around", .spin), ("jump", .jacks)]
     func testRuleParserFindsTheStageTwoWords() {
         let n = "TrickStageTwoTests.\(UUID().uuidString)"
         defer { UserDefaults.standard.removePersistentDomain(forName: n) }
@@ -122,5 +122,42 @@ final class TrickStageTwoTests: XCTestCase {
         XCTAssertTrue(ok)
         XCTAssertLessThan(maxY - rest, 0.5 * plainHopRise() + 0.08, "the flop barely leaves the floor")
         XCTAssertGreaterThan(pitchMax, 0.08, "the forward lurch")
+    }
+
+    // MARK: corkscrew
+
+    private func wrapDelta(_ d: Float) -> Float { var x = d; while x > .pi { x -= 2 * .pi }; while x < -.pi { x += 2 * .pi }; return x }
+
+    /// A high jump with ONE full twist about the vertical axis (the body's heading turns a whole turn in the air), a squishy landing on the heading he left, a held ta-da.
+    func testCorkscrewTwistsOnceAndLandsOnItsHeading() {
+        let rest = MotionRig(game: true).sim.restCentroid.y
+        var prev: Float?, first: Float = 0, turned: Float = 0, maxY: Float = -.infinity, sawTada = false, minSq: Float = 1, last: Float = 0, kicked: Float = 0
+        let r = run(.corkscrew, seconds: 8) { r in
+            guard r.brain.idleState.kind == .corkscrew, r.brain.idleState.phase >= 1 else { return }
+            if r.brain.idleState.phase == 2 { sawTada = true }
+            let y = r.sim.bodyPose(iterations: 4).yaw
+            if let p = prev { turned += self.wrapDelta(y - p) } else { first = y }
+            prev = y; last = y
+            maxY = max(maxY, r.sim.centroid().y); minSq = min(minSq, r.sim.attractor.squash); kicked = max(kicked, r.brain.jellyKick)
+        }
+        MotionLog.write(String(format: "CORKSCREW turned %.2f rad, rise %.3f, deepest squash %.2f, kick %.1f, ends %.2f rad off its heading", turned, maxY - rest, minSq, kicked, wrapDelta(last - first)))
+        XCTAssertGreaterThan(abs(turned), 2 * .pi * 0.92, "one full twist"); XCTAssertLessThan(abs(turned), 2 * .pi * 1.10)
+        XCTAssertGreaterThan(maxY - rest, 0.24, "a high jump")
+        XCTAssertLessThan(minSq, 0.80, "a squishy landing and crouch")
+        XCTAssertEqual(wrapDelta(last - first), 0, accuracy: 0.30, "lands on the heading he left")
+        XCTAssertTrue(sawTada, "the held ta-da"); XCTAssertGreaterThanOrEqual(kicked, 2.5)
+        XCTAssertNil(r.brain.idleState.kind); XCTAssertEqual(r.brain.gait.flipTwist, 0, "the twist knob is cleared for the next flip")
+    }
+
+    /// The Show's flop: 1.5 turns, he lands sideways, then the dizzy wobble.
+    func testCorkscrewFlopLandsSidewaysAndGoesDizzy() {
+        var kinds = Set<IdleKind>(), first: Float?, afterLand: Float = 0
+        _ = run(.corkscrew, seconds: 9, fail: true) { r in
+            if let k = r.brain.idleState.kind { kinds.insert(k) }
+            if r.brain.idleState.kind == .corkscrew, r.brain.idleState.phase >= 1, first == nil { first = r.sim.bodyPose(iterations: 4).yaw }
+            if r.brain.idleState.kind == .dizzyWobble, afterLand == 0, let f = first { afterLand = abs(self.wrapDelta(r.sim.bodyPose(iterations: 4).yaw - f)) }
+        }
+        XCTAssertTrue(kinds.contains(.corkscrew) && kinds.contains(.dizzyWobble), "ends in the dizzy wobble")
+        XCTAssertEqual(afterLand, 0.5 * .pi, accuracy: 0.5, "he lands about a quarter turn off")
     }
 }

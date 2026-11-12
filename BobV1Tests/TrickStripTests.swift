@@ -23,6 +23,7 @@ extension FeatureCaptureTests {
         let cases: [(String, IdleKind, Bool, [Float], Float)] = [
             ("hula", .hula, false, hula, 0), ("hula_fail", .hula, true, hulaFail, 0),
             ("superSpring", .superSpring, false, [0.05, 0.25, 0.42, 0.55, 0.68, 0.85, 1.05, 1.45], 0), ("superSpring_fail", .superSpring, true, [0.05, 0.25, 0.42, 0.52, 0.62, 0.78, 0.95, 1.3], 0),
+            ("corkscrew", .corkscrew, false, [0.03, 0.18, 0.30, 0.42, 0.52, 0.62, 0.78, 1.15], 0), ("corkscrew_fail", .corkscrew, true, [0.03, 0.18, 0.30, 0.42, 0.52, 0.62, 0.80, 1.4], 0),
         ]
         let chars = [0, 1, 3]
         for (name, kind, fail, times, az) in cases where only.isEmpty || only.contains(name) {

@@ -35,7 +35,7 @@ extension VoiceCoordinator {
                 b.flipCompact = focused
                 b.commandedFlipFail = rollFlipFail()
                 b.commandedFlip = true
-            case .superSpring: b.flipCompact = focused; b.commandedIdle = Self.idleKind(for: t)
+            case .superSpring, .corkscrew: b.flipCompact = focused; b.commandedIdle = Self.idleKind(for: t)
             default: b.commandedIdle = Self.idleKind(for: t)
             }
             return true

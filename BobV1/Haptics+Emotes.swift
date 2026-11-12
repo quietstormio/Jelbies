@@ -152,6 +152,7 @@ enum HapticCue: Hashable, Sendable {
         case .proudStrut: return CueSpec(i: 0.15, s: 0.14, n: 2, gap: 0.2, decay: 0.9)
         case .sing: return CueSpec(i: 0.08, s: 0.20, n: 3, gap: 0.38, decay: 0.8)          // (a soft tick per phrase: the voice carries it)
         case .superSpring: return CueSpec(i: 0.32, s: 0.20, n: 4, gap: 0.2, decay: 0.7)          // (the wind-up tremble, the launch, the big landing)
+        case .corkscrew: return CueSpec(i: 0.30, s: 0.18, n: 3, gap: 0.22, decay: 0.7)          // (the take-off, the landing, the settle)
         case .hula: return CueSpec(i: 0.10, s: 0.16, n: 8, gap: 0.22, decay: 0.95)          // (a soft roll round the hips, a tick per swing)
         case .floorNapFlop: return CueSpec(i: 0.10, s: 0.06, n: 2, gap: 0.25, decay: 0.7)
         case .tapTilt: return CueSpec(i: 0.075, s: 0.20)
