@@ -126,6 +126,11 @@ extension GameCare {
                 let nearest = others.map { simd_distance($0.floor, a.floor) }.min() ?? 99
                 NSLog("[crowd] slide t %.0f body=%d stage=%d phase=%d in_stage=%.0fs at (%.1f,%.1f) bodies_within_peerGap_of_landing=%d nearest=%.2f", now.truncatingRemainder(dividingBy: 10000), a.id, stg, b.idleState.phase, now - (CrowdState.stage[a.id]?.since ?? now), a.floor.x, a.floor.y, near, nearest)
             }
+            // `[crowd] foot` (park-crowd-r4): every body within peerGap + 0.5 of the landing, once a second
+            for a in bodies {
+                guard let b = a.brain, simd_distance(a.floor, landing) < b.peerGap + 0.5 else { continue }
+                NSLog("[crowd] foot id=%d pos=(%.2f,%.2f) script=%@ dLanding=%.2f dBox=%.2f asked=%@", a.id, a.floor.x, a.floor.y, b.scriptKindName, simd_distance(a.floor, landing), sf.distance(a.floor), BlobBrain.slideFootAsked[b.steerID].map { String(format: "%.1f", $0) } ?? "-")
+            }
         }
     }
     #endif
