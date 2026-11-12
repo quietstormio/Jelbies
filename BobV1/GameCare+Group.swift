@@ -57,9 +57,11 @@ extension GameCare {
 
     /// Once per fixed step (end of `tickOthers`, which sees every Jelly): starts the wanted group serving, then runs the group.
     func tickGroup(_ actors: [JellyActor], dt: Float) {
+        traceWakeOne(actors, dt: dt)
         if let c = groupWanted {
             if groupAge == 0 { MealTrace.begin(groupQueue.isEmpty ? "order food/drink tap (first tickGroup)" : "order2 second sitting") }
             groupAge += dt
+            if callRunning, Self.softMealWakeWatchdog(age: groupAge) { MealTrace.log("callRunning watchdog cleared (group)"); callRunning = false }
             let ready = actors.count == jellies.count && actors.allSatisfy { $0.brain != nil } && !callRunning && queued.isEmpty && (dining.phase == .absent || cafeBook.tableOut)
             if focus.isActive || bath.active || groupAge > Self.mealTimeout {
                 if groupAge > Self.mealTimeout { noticeAtBob = true; notice = "The table couldn't be set — try again"; noticeSerial += 1; noticeAge = 0 }          // (was silent)
@@ -115,6 +117,18 @@ extension GameCare {
             stepAsideGroup(id: a.id, brain: b, sim: a.sim, dt: dt)      // (a waiter, or a diner of the last sitting still on his place)
         }
         group.tick(dt: dt)
+    }
+
+    /// `-MealAwake <id>` (simulator only): once all are asleep, that one Jelbie is woken (the plain quick wake) so a meal can be asked with two asleep and one awake.
+    private func traceWakeOne(_ actors: [JellyActor], dt: Float) {
+        #if targetEnvironment(simulator)
+        guard let k = MealTrace.awakeID, !MealTrace.awakeDone, !actors.isEmpty, actors.allSatisfy({ $0.brain?.isNapping ?? false }) else { return }
+        MealTrace.awakeT += dt
+        guard MealTrace.awakeT > 4, let a = actors.first(where: { $0.id == k }), let b = a.brain else { return }
+        MealTrace.awakeDone = true
+        b.requestNow(.goTo(b.position))
+        MealTrace.log("MealAwake: woke jelly \(k)")
+        #endif
     }
 
     /// Trace aid: why the group start is still waiting (a line only when the reason changes).

@@ -11,6 +11,8 @@ import Foundation
 import simd
 
 extension GameCare {
+    /// `callRunning` (set by a Come call, cleared when it arrives) can never hold a meal for more than this many seconds of the meal's own clock; only with the soft wake on.
+    static func softMealWakeWatchdog(age: Float) -> Bool { BlobBrain.softMealWakeOn && age > 20 }
     /// Serves the last picked drink to Jelly `jelly` (same as `water(jelly:)`).
     func drink(jelly: Int? = nil) { drink(selectedDrinkID, jelly: jelly) }
     /// The Jelly the tray / meal is for (0 when none).
@@ -29,8 +31,9 @@ extension GameCare {
         }
         if id != mealJelly, wanted != nil || meal != nil { stepAside(id: id, brain: brain, sim: sim, dt: dt); return }
         guard id == mealJelly, wanted != nil || meal != nil else { return }
-        let act = brain.activity
+        let act: BlobActivity = brain.mealWaking ? .turning : brain.activity          // (a meal-waking sleeper is busy, not idle: the walk retries below never count his wake)
         let own = id == 0
+        traceSingle(id: id, brain: brain)
         if !own {
             if eaterBrain !== brain {
                 eaterBrain = brain; eaterFinished.removeAll()
@@ -46,6 +49,7 @@ extension GameCare {
             }
             eaterFinished.removeAll()
         }
+        if own, callRunning, Self.softMealWakeWatchdog(age: wanted != nil ? wantedAge : mealAge) { MealTrace.log("callRunning watchdog cleared (single)"); callRunning = false }
         let free = !own || (!callRunning && queued.isEmpty)
 
         // pop the tray in once he is at (or behind) his place; in front of it he walks there first
@@ -75,6 +79,18 @@ extension GameCare {
                 } else { idleT = 0 }
             }
         }
+    }
+
+    /// Simulator-only meal trace for the single flow (one line per change): the order, the tray out, the first piece, the end.
+    private func traceSingle(id: Int, brain: BlobBrain) {
+        #if targetEnvironment(simulator)
+        guard !groupActive, id == mealJelly else { return }
+        if wanted != nil, !MealTrace.singleActive { MealTrace.singleActive = true; MealTrace.begin("single order jelly=\(id) kind=\(wanted?.kind == .food ? "food" : "drink")") }
+        if meal != nil, dining.isPresent { MealTrace.logOnChange("single tray out") }
+        if meal != nil, piecesEaten > 0 { MealTrace.logOnChange("single first piece eaten (\(piecesEaten))") }
+        if wanted == nil, meal == nil, MealTrace.singleActive { MealTrace.log("single meal over paid=\(mealPaid)"); MealTrace.singleActive = false }
+        if MealTrace.singleActive, dining.phase == .absent, meal == nil, wanted == nil { MealTrace.log("single tray gone") }
+        #endif
     }
 
     /// A Jelly that is NOT eating but stands at the eater's place (or on the way to it) walks off to the side, so the eater is never boxed in

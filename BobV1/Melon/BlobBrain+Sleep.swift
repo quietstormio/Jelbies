@@ -79,6 +79,9 @@ struct SleepState {
     var lookT0: Float = -1
     /// Woken by the meal tray (`callToMeal`): soft wake whatever the call; shown as a non-idle activity so the tray's "stuck idle" retry never re-sends him.
     var mealWake = false
+    /// The tray's call that reached him during the stretch (stage 5): kept here (a pending request would abort the stretch) and started by `sleepFinish`.
+    var mealCall: BlobRequest?
+    var mealWakeT: Float = 0          // seconds since the meal woke him (the group's bounded fallback)
 }
 
 struct SleepFidget {
@@ -550,6 +553,7 @@ extension BlobBrain {
     /// The soft wake begins: `lag` s of just lying there, then a stir (an eye crack + a small slow wiggle, still lying, still `isNapping`), then `sleepStirTick` starts the slow roll.
     func sleepBeginStir(lag: Float, groggy: Bool) {
         sleep.softWake = true
+        if sleep.mealWake { MealTrace.log("wake BEGIN jelly=\(steerID) lag=\(lag)") }
         sleep.stirT = 0; sleep.stirLag = lag; sleep.stirStarted = false
         sleep.stirDur = rand(SleepTuning.stirTime.lowerBound, SleepTuning.stirTime.upperBound)
         sleep.rollDur = rand(SleepTuning.softRollTime.lowerBound, SleepTuning.softRollTime.upperBound)
@@ -569,6 +573,7 @@ extension BlobBrain {
         }
         sleep.stirEye = SleepTuning.stirEyeCrack * smooth01(s / sleep.stirDur)
         if s >= sleep.stirDur {
+            if sleep.mealWake { MealTrace.log("wake ROLL jelly=\(steerID)") }
             sleep.groggy = true; sleep.wakeAsked = true
             sleep.kStart = 1; sleep.stage = 4; sleep.t = 0; sleep.stageStart = true
         }
@@ -636,10 +641,22 @@ extension BlobBrain {
                     bagHop(sim, to: bedExitSpot(f), ground: 0, apex: 0.42)
                     return
                 }
-                idleFinish(skinner)
+                sleepFinish(sim, skinner)
             }
         default: break
         }
+    }
+
+    /// The end of the wake (`idleFinish`). A meal-woken sleeper (`callToMeal`) takes the tray's request in THIS tick, so `activity` goes from the shown `.turning` straight to `.walking`
+    /// (script `.none` would read `.idle` to the tray's stuck-idle check for a tick). `mealWake` is cleared here: it never outlives the wake. Any other wake: `idleFinish`, as before.
+    func sleepFinish(_ sim: SoftBody, _ skinner: Skinner) {
+        let meal = sleep.mealWake
+        let call = sleep.mealCall
+        idleFinish(skinner)
+        guard meal else { return }
+        MealTrace.log("wake END jelly=\(steerID) (\(sleep.mealWakeT) s since the call)")
+        sleep.mealWake = false; sleep.mealCall = nil
+        if let r = pending ?? call { pending = nil; start(request: r, sim) }
     }
 
     /// Stage 1 after the turn, a goodnight bedtime: a pause (heavy eyes), the yawn (x `yawnScale`), for about one in three a gap and a second smaller yawn, a pause, then the flop (unchanged).
@@ -696,6 +713,7 @@ extension BlobBrain {
         SleepOrder.advance(self, dt)          // (the shared "same moment" reading: every ticking brain's own clock)
         if bedHopTick(sim, skinner, dt) { return true }
         guard idleState.kind == .sleep, case .idle = script, sleep.stage >= 2, sleep.stage <= 4 else { return false }
+        if sleep.mealWake { sleep.mealWakeT += dt }
         activity = sleep.mealWake ? .turning : .lookingAround          // (a meal-woken sleeper is never "idle" to the tray's stuck-idle retry)
         mouthOpen = 0
         sleep.t += dt
@@ -988,7 +1006,7 @@ extension BlobBrain {
                 script = .idle; activity = .lookingAround
             } else {
                 sleep.bedHop = 0
-                idleFinish(skinner)
+                sleepFinish(sim, skinner)
             }
         }
         return true

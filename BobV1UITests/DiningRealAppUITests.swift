@@ -17,10 +17,10 @@ final class DiningRealAppUITests: XCTestCase {
         try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
         func mark(_ n: String, _ s: String = "") { try? s.write(toFile: "\(out)/\(n)", atomically: true, encoding: .utf8) }
         let app = XCUIApplication()
-        app.launchArguments += ["-Mute", "1", "-SetRoster", "pip,moss,lavender", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES", "-BlobDrops.v1", "300", "-StoreSeed", "2", "-ClockHour", "12", "-NeedsReset", "1"]
+        app.launchArguments += ["-Mute", "1", "-SetRoster", env["DINING_UI_ROSTER"] ?? "pip,moss,lavender", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES", "-BlobDrops.v1", "300", "-StoreSeed", "2", "-ClockHour", env["DINING_UI_HOUR"] ?? "12", "-NeedsReset", "1"]
         if let extra = env["DINING_UI_ARGS"], !extra.isEmpty { app.launchArguments += extra.split(separator: " ").map(String.init) }
         app.launch()
-        sleep(12)          // (they settle and roam)
+        sleep(UInt32(env["DINING_UI_WAIT"] ?? "12") ?? 12)          // (they settle and roam; at night: until they have gone to bed)
         let menu = app.buttons["care-menu"]
         XCTAssertTrue(menu.waitForExistence(timeout: 20), "care menu")
         if !app.buttons["care-feed"].exists { menu.tap(); sleep(1) }

@@ -61,17 +61,24 @@ extension BlobBrain {
         sleep.stage = 2; sleep.t = SleepTuning.lieTime; sleep.impacted = true; sleep.k = 1
     }
 
-    /// 2026-11-10: off. The tray's soft wake made feeding sleepers slow and failure-prone on the phone (the group meal cannot cope with a slow diner yet: DiningGroup `.approaching`).
-    /// Off = every meal call is `requestNow`, exactly as before the staggered-sleep change; on = a sleeper is woken softly (stir, roll up, stretch) and then walks to the tray.
-    nonisolated(unsafe) static var softMealWake = false
+    /// 2026-11-12: on again, with the fixes the first version lacked (the group meal and the single flow count a meal-waking sleeper as busy, `mealWaking`; the end of the wake starts the walk in the
+    /// same tick, `sleepFinish`; a call during the stretch is kept, not pending; the group's bounded fallback). Off (or `-MealOld 1` in the simulator) = every meal call is `requestNow`, exactly as
+    /// before the staggered-sleep change; on = a sleeper is woken softly (stir, roll up, stretch) and then walks to the tray.
+    nonisolated(unsafe) static var softMealWake = true
 
-    /// The meal tray's call (`DiningGroup.beginApproach`): a Jelbie lying asleep is NOT hard-aborted (`requestNow` would snap him up and walking). The request just waits (`request`), the gentle wake
-    /// (BlobBrain+Idle: yielding + `sleepWake(fast: true)`) sees `mealWake` and gives the soft, staggered wake: stir, roll up, stretch, then the walk to the tray. Everybody else: `requestNow`, as before. The soft path only runs when `softMealWake` is on.
+    /// True while the meal's soft wake is in hand: he is "busy" to every idle check of the tray (his `activity` can read idle for a tick between two wake stages).
+    var mealWaking: Bool { idleState.kind == .sleep && sleep.mealWake }
+    /// The soft path is on for this process (the flag, and not the simulator's `-MealOld 1` A/B switch).
+    static var softMealWakeOn: Bool { softMealWake && !MealTrace.oldFlow }
+
+    /// The meal tray's call (`DiningGroup.beginApproach`, `GameCare.serveWanted`): a Jelbie lying asleep is NOT hard-aborted (`requestNow` would snap him up and walking). The request just waits (`request`), the gentle wake
+    /// (BlobBrain+Idle: yielding + `sleepWake(fast: true)`) sees `mealWake` and gives the soft, staggered wake: stir, roll up, stretch, then the walk to the tray. During the stretch the call is kept in `sleep.mealCall`
+    /// (a pending request there would abort the stretch). Everybody else: `requestNow`, as before. The soft path only runs when `softMealWake` is on.
     func callToMeal(_ r: BlobRequest) {
-        if Self.softMealWake, idleState.kind == .sleep, sleep.stage >= 2, sleep.stage <= 4, !sleep.wakeAsked || sleep.stage == 4 {
-            sleep.mealWake = true
+        if Self.softMealWakeOn, idleState.kind == .sleep, sleep.stage >= 2, sleep.stage <= 5 {
+            if !sleep.mealWake { sleep.mealWake = true; sleep.mealWakeT = 0; MealTrace.log("meal call to sleeper jelly=\(steerID) stage=\(sleep.stage)") }
             activity = .turning
-            request(r)
+            if sleep.stage == 5 { sleep.mealCall = r } else { request(r) }
         } else { requestNow(r) }
     }
 }

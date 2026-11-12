@@ -31,8 +31,15 @@ nonisolated enum MealTrace {
         return pts.isEmpty ? nil : pts
     }()
     static let old: Bool = arg("-MealOld") == "1"
+    /// `-MealAwake <id>`: once every Jelbie is asleep, that one is woken 4 s later (case: two asleep, one awake).
+    static let awakeID: Int? = arg("-MealAwake").flatMap { Int($0) }
+    nonisolated(unsafe) static var awakeT: Float = 0
+    nonisolated(unsafe) static var awakeDone = false
     private static let path: String? = arg("-MealTraceFile")
     #endif
+
+    /// Single-flow trace state (GameCare+Dining.traceSingle).
+    nonisolated(unsafe) static var singleActive = false
 
     /// True when `-MealOld 1` asks for the old behaviour (simulator only).
     static var oldFlow: Bool {
