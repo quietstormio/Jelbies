@@ -87,7 +87,10 @@ extension GameCare {
         guard !groupActive, id == mealJelly else { return }
         if wanted != nil, !MealTrace.singleActive { MealTrace.singleActive = true; MealTrace.begin("single order jelly=\(id) kind=\(wanted?.kind == .food ? "food" : "drink")") }
         if meal != nil, dining.isPresent { MealTrace.logOnChange("single tray out") }
-        if meal != nil, piecesEaten > 0 { MealTrace.logOnChange("single first piece eaten (\(piecesEaten))") }
+        if let c = meal, dining.isPresent, !dining.bitesLeft.isEmpty {
+            let got = c.kind == .drink ? Int((dining.drunk[0] * Float(DiningTiming.gulpsPerDrink) + 0.001).rounded(.down)) : DiningTiming.bitesPerServing - dining.bitesLeft[0]
+            if got > 0 { MealTrace.logOnChange("single first piece eaten (\(got))") }
+        }
         if wanted == nil, meal == nil, MealTrace.singleActive { MealTrace.log("single meal over paid=\(mealPaid)"); MealTrace.singleActive = false }
         if MealTrace.singleActive, dining.phase == .absent, meal == nil, wanted == nil { MealTrace.log("single tray gone") }
         #endif
