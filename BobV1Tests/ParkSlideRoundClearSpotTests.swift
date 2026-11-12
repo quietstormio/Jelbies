@@ -47,12 +47,15 @@ extension ParkSlideRoundTests {
                 XCTAssertNotEqual(q, p, "\(aname) \(name) is inside a solid piece and moves")
                 XCTAssertFalse(ParkClearSpot.blocked(q, radius: fp), "\(aname) \(name): the used point is clear")
             }
-            // hopscotch is flat
-            DecorField.shared.set(ParkToys.placed + [PlacedDecor(uid: ParkToys.hopscotchUID, kind: .hopscotch, x: -1.0, z: -1.0, turns: nil)])
+            // the hopscotch court (flat, a keep-out for the helper); seesaw AND court are both there now
+            print("PSR T3 \(aname) keep-outs the helper sees: " + ParkClearSpot.keepOuts().joined(separator: "; "))
+            XCTAssertNotNil(DecorField.shared.foot(ParkToys.hopscotchUID), "the court stands in the park")
             if let hf = DecorField.shared.foot(ParkToys.hopscotchUID) {
-                print("PSR T3 \(aname) hopscotch solid \(hf.spec.solid)")
-                XCTAssertFalse(hf.spec.solid, "hopscotch is not solid")
-                XCTAssertEqual(ParkClearSpot.clear(hf.centre, radius: fp), hf.centre, "a point on the hopscotch court is returned unchanged")
+                let q = ParkClearSpot.clear(hf.centre, radius: fp)
+                print("PSR T3 \(aname) court centre \(hf.centre) -> \(q) (solid \(hf.spec.solid))")
+                XCTAssertNotEqual(q, hf.centre, "a point in the middle of the court moves out of it")
+                XCTAssertGreaterThanOrEqual(hf.distance(q), 0, "and ends outside the court")
+                XCTAssertFalse(ParkClearSpot.blocked(q, radius: fp))
             }
         }
         // home: every point unchanged
