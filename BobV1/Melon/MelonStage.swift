@@ -1861,6 +1861,15 @@ final class MelonController: NSObject, MTKViewDelegate {
                 if !tdDown { tdDown = true; pointerDown(id: A, point: atA(0, 0.62), size: size) }
                 else { pointerMove(id: A, point: atA(x, y), size: size) }
             } else if tdDown { pointerUp(id: A); tdDown = false }
+        case "holdflip":    // dev only: lift, turn him upside down (the grab's twist, past the finger's 1.3 rad cap), hold 4 s, then a plain drop with no flick (14 s loop)
+            let t = el.truncatingRemainder(dividingBy: 14)
+            let lift = 0.5 * sm((t - 0.9) / 0.8)
+            if t < 0.12 { if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) } }       // tap 1
+            else if t < 0.30 { if tdDown { pointerUp(id: A); tdDown = false } }
+            else if t < 6.5 {                                                                                       // tap 2, held, lifted, turned over at 1.5...2.5 s, held until 6.5 s (4 s upside down)
+                if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) }
+                else { pointerMove(id: A, point: at(0, 0.62 + lift), size: size); twist = Float.pi * sm((t - 1.5) / 1.0) }
+            } else if tdDown { pointerUp(id: A); tdDown = false }
         case "cheeks":      // two fingers on the cheeks pinch together, hold, let go (9 s loop)
             let t = el.truncatingRemainder(dividingBy: 9)
             if t < 4 {

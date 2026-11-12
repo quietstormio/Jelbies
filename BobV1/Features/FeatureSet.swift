@@ -11,8 +11,8 @@
 //             flutter plus a short periodic FLAP BURST (2...4 quick flaps at 6...8 Hz, 35...50 deg, every 4...9 s while awake; sooner when he is
 //             happy / excited or cheering; half size in a race / a lesson; never asleep, at a meal, in the wash or folded); shifted by dy and
 //             clamped to the flap / spread range the worn items allow; folded flat when nothing fits. The burst is a wing sub-mesh animation only.
-//  Hide rules: everything off in the wash (hideAll); spines and wings off while he lies on his back (sleep stages 2...4, the hat rule) and during
-//  flips / rolls (they would clip the floor); the daisy stays through sleep (it closes). A racer keeps his feature (rivals keep theirs too).
+//  Hide rules: everything off in the wash (hideAll); spines and wings off while he lies on his back (sleep stages 2...4, the hat rule); NEVER for body
+//  orientation (held, thrown, flipped: `WornSet.hidesWhileTipped` is false); the daisy stays through sleep (it closes). A racer keeps his feature (rivals keep theirs too).
 //
 
 import simd

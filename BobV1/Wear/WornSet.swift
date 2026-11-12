@@ -124,7 +124,7 @@ final class WornSet {
         let h = WearRules.hide(look)
         if h.contains(.asleep), sleepHides(b) { return true }
         if h.contains(.eating), eating(b) { return true }
-        if h.contains(.flip), flipping(b), hidesWhileTipped(look) { return true }          // (never true today: see `hidesWhileTipped`)
+        if flipping(b), hidesWhileTipped(look) { return true }          // (never true today: see `hidesWhileTipped`)
         return false
     }
 
