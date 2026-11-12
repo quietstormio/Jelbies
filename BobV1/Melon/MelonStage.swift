@@ -1213,9 +1213,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         let pmM = PerfMeter.begin()
         for a in actors.dropFirst() {
             if let w = a.skinner.takeMatWrites() { renderer.writeMat(w.vertices, values: w.values, body: a.id) }
+            if let j = a.skinner.takeJoinWrites() { renderer.writeJoin(j, body: a.id) }
         }
         for a in parkActors {
             if let w = a.skinner.takeMatWrites() { renderer.writeMat(w.vertices, values: w.values, body: a.id) }
+            if let j = a.skinner.takeJoinWrites() { renderer.writeJoin(j, body: a.id) }
         }
         if let w = skinner.takeMatWrites() {
             let t0 = CACurrentMediaTime()
@@ -1225,6 +1227,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             NSLog("%@", String(format: "[melon] wave arm mat writes: %.1f us per frame (%d frames)", matCost / Double(matN) * 1e6, matN))
             matCost = 0; matN = 0
         }
+        if let j = skinner.takeJoinWrites() { renderer.writeJoin(j) }
         PerfMeter.end(.feature, pmM)
         lapEnd(.mat, &wt)
         let c = sim.centroid()

@@ -548,6 +548,23 @@ final class MelonRenderer {
         slot.staticChanged()
     }
 
+    /// The one-surface join (Skinner.takeJoinWrites): per vertex, the baked rest coordinate / shadow moved `restW` / `matW` of the way to the target (weight 0 = the baked value back; `restW` < 0 = rest coordinate untouched).
+    func writeJoin(_ w: (v: [Int32], restW: [Float], restT: [SIMD3<Float>], matW: [Float], matT: [Float]), body: Int = 0) {
+        waitIfNeeded()
+        let slot = slots[body]
+        slot.staticMaster.withUnsafeMutableBufferPointer { p in
+            for (k, vi) in w.v.enumerated() {
+                let v = Int(vi)
+                if w.restW[k] >= 0 {
+                    let b = SIMD3<Float>(mesh.rest[3 * v], mesh.rest[3 * v + 1], mesh.rest[3 * v + 2]), t = b + (w.restT[k] - b) * w.restW[k]
+                    p[4 * v] = t.x; p[4 * v + 1] = t.y; p[4 * v + 2] = t.z
+                }
+                p[4 * v + 3] = mesh.mat[v] + (w.matT[k] - mesh.mat[v]) * w.matW[k]
+            }
+        }
+        slot.staticChanged()
+    }
+
     /// Blocks until the previous frame's GPU work finished, so `dynPointer`, uniforms and particles are safe to
     /// write. Call once per frame before writing `dynPointer`. setUniforms / uploadParticles / draw call it
     /// implicitly if you did not (the dynPointer writes then race with the GPU).

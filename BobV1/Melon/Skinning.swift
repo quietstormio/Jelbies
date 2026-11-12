@@ -319,6 +319,34 @@ nonisolated final class Skinner {
     private var collarAng = [Float](repeating: 0, count: 3 * FootBean.around), collarRad = [Float](repeating: 0, count: 3 * FootBean.around)
     private var joinDir = [SIMD3<Float>](repeating: .zero, count: FootBean.around)
 
+    // ── ONE SURFACE WHILE THE LEGS ARE OUT (2026-11-11, the user's third complaint: "the legs are separate ... not ready for production") ──
+    // While a foot piece is out it is its own closed mesh and the skin is reshaped around it, so nothing blended the two meshes' shading. In a band round the crossing line the skin and the
+    // piece's top rings are pulled toward ONE shared attribute set, with weight 1 at the crossing fading to 0 at the band's edges: (a) the shading normal (the fitted egg's outward normal),
+    // (b) the baked crease shadow (`mat`), (c) the fur-texture coordinate (the skin follows the piece's rest coordinate). Gated on the legs-out state only: at rest nothing here runs.
+    nonisolated(unsafe) static var joinBlend = true          // master switch (simulator launch argument -FootJoinBlend 0 = off, for before / after stills)
+    nonisolated(unsafe) static var joinBlendNormal = true, joinBlendMat = true, joinBlendRest = true
+    /// How far outside the piece's outline (m) the skin's weight falls to 0; how far below the crossing (m, in egg height) the piece's weight falls to 0; the egg height of the crossing.
+    nonisolated(unsafe) static var joinBandSkin: Float = 0.07, joinBandBean: Float = 0.07, joinCrossE: Float = 0.075
+    /// The bean ring whose rest coordinate the skin near the crossing follows.
+    nonisolated(unsafe) static var joinRestRing = 10
+    private var bandV: [Int32] = [], bandSide: [Int8] = [], bandDD: [Float] = [], bandJ: [Int32] = [], bandT: [Float] = []
+    private var joinPrev = Set<Int32>()
+    private var joinOut: (v: [Int32], restW: [Float], restT: [SIMD3<Float>], matW: [Float], matT: [Float])? = nil
+    private var joinBeanW: [[Float]] = [[Float](repeating: 0, count: FootBean.vertexCount), [Float](repeating: 0, count: FootBean.vertexCount)]
+    /// The bean's rest-stream coordinates per side (the fur texture of the piece), and the one shadow value both meshes meet at (the piece's own top-ring value).
+    private static let beanRestTab: [[SIMD3<Float>]] = [-1.0, 1.0].map { FootBean.restStream(sigma: $0).map { SIMD3<Float>(Float($0.x), Float($0.y), Float($0.z)) } }
+    static let joinMatTarget: Float = {
+        let m = FootBean.matValues(), A = FootBean.around, top = FootBean.rings - 1
+        var t: Float = 0
+        for j in 0..<A { t += m[1 + A * top + j] }
+        return t / Float(A)
+    }()
+    /// The fur / shadow writes the renderer must apply now (nil = nothing): per vertex the weight toward the target (skin: rest coordinate `restT`, `restW` < 0 = leave the rest coordinate alone; both: shadow `matT`).
+    /// Vertices written last frame and left out now come back with weight 0 (the renderer restores the baked values).
+    func takeJoinWrites() -> (v: [Int32], restW: [Float], restT: [SIMD3<Float>], matW: [Float], matT: [Float])? {
+        let o = joinOut; joinOut = nil; return o
+    }
+
     func ensureJoinTris() {
         guard joinBuiltFor != retractVertices.count else { return }
         retractK = [Int32](repeating: -1, count: vertexCount)
@@ -446,8 +474,60 @@ nonisolated final class Skinner {
         }
     }
 
+    @inline(__always) private static func smooth(_ x: Float) -> Float { let t = min(1, max(0, x)); return t * t * (3 - 2 * t) }
+    /// After the normal pass: the shared normal / shadow / fur coordinate across the skin-piece crossing (see the comment at `joinBlend`).
+    private func blendJoin(_ dyn: UnsafeMutablePointer<Float>) {
+        var outV: [Int32] = [], outRW: [Float] = [], outRT: [SIMD3<Float>] = [], outMW: [Float] = [], outMT: [Float] = []
+        defer {
+            // whatever was written last frame and is not now goes back to its baked value (weight 0)
+            let cur = Set(outV)
+            for v in joinPrev where !cur.contains(v) { outV.append(v); outRW.append(v < Int32(beanFirst.min() ?? Int.max) ? 0 : -1); outRT.append(.zero); outMW.append(0); outMT.append(0) }
+            joinPrev = cur
+            joinOut = outV.isEmpty ? nil : (outV, outRW, outRT, outMW, outMT)
+        }
+        guard Skinner.joinBlend, beansActive, beanBlend > 0.05 else { return }
+        let g = min(1, beanBlend), A = FootBean.around, T = Self.joinMatTarget
+        let pose = bodyFrame(dyn)
+        @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
+        func pull(_ v: Int, _ w: Float, _ target: SIMD3<Float>) {
+            let o = 6 * v + 3, cur = SIMD3(dyn[o], dyn[o + 1], dyn[o + 2])
+            let m = simd_normalize(cur + (target - cur) * w)
+            if m.x.isFinite { dyn[o] = m.x; dyn[o + 1] = m.y; dyn[o + 2] = m.z }
+        }
+        // the skin
+        for k in 0..<bandV.count {
+            let v = Int(bandV[k]), dd = bandDD[k], s = Int(bandSide[k])
+            let w = g * (dd <= 0 ? 1 : 1 - Self.smooth(dd / Self.joinBandSkin))
+            if w < 0.002 { continue }
+            if Skinner.joinBlendNormal, let pose { let (_, gr) = Self.fittedDepth(P(v), pose); pull(v, w, -gr) }
+            var rw: Float = 0, rt = SIMD3<Float>.zero
+            if Skinner.joinBlendRest {
+                let j = Int(bandJ[k]), j1 = (j + 1) % A, ring = Self.joinRestRing, tab = Self.beanRestTab[s]
+                rt = tab[1 + A * ring + j] + (tab[1 + A * ring + j1] - tab[1 + A * ring + j]) * bandT[k]
+                rw = w
+            }
+            outV.append(Int32(v)); outRW.append(rw); outRT.append(rt); outMW.append(Skinner.joinBlendMat ? w : 0); outMT.append(T)
+        }
+        // the piece's visible top rings: weight by the height above the fitted egg (1 up to the crossing, 0 `joinBandBean` below it)
+        guard let pose else { return }
+        for s in 0..<2 {
+            let f = beanFirst[s]
+            for r in 5..<FootBean.rings {
+                for j in 0..<A {
+                    let v = f + 1 + A * r + j
+                    let (d, gr) = Self.fittedDepth(P(v), pose)
+                    let w = g * (1 - Self.smooth((-d - Self.joinCrossE) / Self.joinBandBean))
+                    if w < 0.002 { continue }
+                    if Skinner.joinBlendNormal { pull(v, w, -gr) }
+                    if Skinner.joinBlendMat { outV.append(Int32(v)); outRW.append(-1); outRT.append(.zero); outMW.append(w); outMT.append(T) }
+                }
+            }
+        }
+    }
+
     private func applyBeanCollar(_ dyn: UnsafeMutablePointer<Float>) {
         joinDent = [0, 0]
+        bandV.removeAll(keepingCapacity: true); bandSide.removeAll(keepingCapacity: true); bandDD.removeAll(keepingCapacity: true); bandJ.removeAll(keepingCapacity: true); bandT.removeAll(keepingCapacity: true)
         guard guardReady, beansActive, beanBlend > 0.05 else { return }
         ensureJoinTris()
         @inline(__always) func P(_ v: Int) -> SIMD3<Float> { SIMD3(dyn[6 * v], dyn[6 * v + 1], dyn[6 * v + 2]) }
@@ -481,18 +561,21 @@ nonisolated final class Skinner {
                 let x = simd_dot(u, e1), y = simd_dot(u, e2)
                 let rr = (x * x + y * y).squareRoot()
                 let th = atan2f(y, x)
-                var R: Float = 0
+                var R: Float = 0, segJ: Int32 = 0, segT: Float = 0
                 for k in 0..<3 {
                     var Rk = collarRad[k * A]
                     for j in 0..<A {
                         let j1 = (j + 1) % A
                         let a0 = collarAng[k * A + j], da = wrap(collarAng[k * A + j1] - a0); if abs(da) < 1e-5 { continue }
                         let t = wrap(th - a0) / da
-                        if t >= 0 && t <= 1 { Rk = collarRad[k * A + j] + (collarRad[k * A + j1] - collarRad[k * A + j]) * t; break }
+                        if t >= 0 && t <= 1 { Rk = collarRad[k * A + j] + (collarRad[k * A + j1] - collarRad[k * A + j]) * t; if k == 2 { segJ = Int32(j); segT = t }; break }
                     }
                     R = max(R, Rk)
                 }
                 let dd = rr - R
+                if Skinner.joinBlend, dd < Self.joinBandSkin, dd > -0.06 {          // (the band round the crossing: the blend below reads it)
+                    bandV.append(vi); bandSide.append(Int8(s)); bandDD.append(dd); bandJ.append(segJ); bandT.append(segT)
+                }
                 var inward: Float = 0
                 let rk = Int(retractK[v])
                 if rk >= 0, retractSide[rk] < 0 { inward = Float(BlobBrain.retractSink) * retractWeight[rk] * beanBlend }
@@ -866,6 +949,7 @@ nonisolated final class Skinner {
         if eyeFixK[0] < 0.999 || eyeFixK[1] < 0.999 { smoothEyeNormals(dyn, index: index) }
         if normalSmoothing > 0.001 { smoothNormals(dyn, index: index) }
         blendTailNormals(dyn)
+        blendJoin(dyn)
     }
 
     /// Body skin = the egg's vertices (below the first arm / foot / tail block) without the eyes, glints and brows.
