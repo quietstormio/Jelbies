@@ -12,7 +12,7 @@ nonisolated enum ParkToys {
     /// Uids well clear of any saved piece. Positions are on the lawn's two flanks so the middle stays clear for the Jelbies.
     static let seesawUID = 9001, hopscotchUID = 9005, slideUID = 9006          // (9003, the park sandbox, was removed 2026-11-05: the slide stands in its place)
     nonisolated(unsafe) static var layout: [PlacedDecor] = [
-        // the seesaw on the back left, moved from x -2.7 to -3.2 (2026-11-09: its right pad sat on the path's edge): its right end (footprint half x 1.47) is at -1.73, 0.62 clear of the path's left edge (-1.11 at z -2.3)
+        // the seesaw on the back left: x -2.7 -> -3.2 (2026-11-09: its right pad sat on the path's edge), z -2.3 -> -3.2 (park-room-r2, room for the court), x -3.2 -> -2.85 (park-room-r3: at -3.2 the left seat's stand spots were at x -4.12 / -4.32, past the floor's side +-4.05, so a friend near the one usable spot left the rider no spot). Its right end (footprint half x 1.47) is at -1.38, the path's left edge there is about +0.4
         PlacedDecor(uid: seesawUID, kind: .seesaw, x: -2.85, z: -3.2, turns: nil),
         // hopscotch on the left lawn (square 1 at the back, home toward the camera), the room's slide on the right where the sandbox used to be (the sandbox was removed from the park 2026-11-05, and so was the play tunnel)
         PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),

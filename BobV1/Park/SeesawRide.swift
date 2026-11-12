@@ -251,9 +251,11 @@ final class SeesawRide {
     func noteBoarded(wait: Float) { waitsMax = max(waitsMax, wait); waitsSum += wait; waitsN += 1 }
     /// Hops the hard guard in `seesawHop` refused (a hop farther than `maxHop` from the body's centre); every test expects 0.
     var refusedHops = 0
+    /// Riders who found no step-off spot at all (the three normal ones and the ring both empty) and finished on the seat point, inside the footprint (park-room-r3); every test expects 0.
+    var noStepOff = 0, ringStepOffs = 0          // (ringStepOffs: riders who got off to the ring spot because the normal ones were blocked)
     /// Stage-0 re-walks to the rider's own spot, by seat, and how far from it he was (the walk-up should already end on the own spot: the tests print these, 0 expected).
     var rewalks: [Int: Int] = [:], rewalkDists: [Float] = []
-    func reset() { rides = [:]; inviteSerials = [:]; rolled = []; invitesPostedTotal = 0; noticedTotal = 0; refusedHops = 0; rewalks = [:]; rewalkDists = []; waitInfo = [:]; waitsMax = 0; waitsSum = 0; waitsN = 0; gaveUp = [] }
+    func reset() { rides = [:]; inviteSerials = [:]; rolled = []; invitesPostedTotal = 0; noticedTotal = 0; refusedHops = 0; noStepOff = 0; ringStepOffs = 0; rewalks = [:]; rewalkDists = []; waitInfo = [:]; waitsMax = 0; waitsSum = 0; waitsN = 0; gaveUp = [] }
     func theta(_ uid: Int) -> Float { rides[uid]?.theta ?? 0 }
     /// The angle the mesh is drawn with (the one the riders were placed with in the last brain step): the bumpers, the plank, the seats.
     func drawnTheta(_ uid: Int) -> Float { rides[uid]?.drawn ?? 0 }
@@ -471,6 +473,30 @@ extension BlobBrain {
         }
         return nil
     }
+    /// The backstop step-off spot (park-room-r3), used only when `seesawFreeSpot` has none: candidates on rings of 1.0 and 1.1 m round the seat point every 30 degrees (within `maxHop` of the body's
+    /// centre, so the hop is the same short one), at least 0.5 m outside the seesaw's footprint, off every other piece, on the floor as it stands (the floor rules move it under 5 cm). The nearest one at least a body
+    /// width (peerGap) from the others first; none of those: the one with the largest distance to the nearest other body. nil only when the ring is empty too.
+    func seesawStepOffRing(_ f: DecorFoot, seat: Int) -> SIMD2<Float>? {
+        let ignore = decorIgnore
+        defer { decorIgnore = ignore }
+        let sp = f.kind.sitPoints[min(seat, f.kind.sitPoints.count - 1)]
+        let seatXZ = f.centre + f.turned(SIMD2(sp.x, sp.z)), here = position
+        var cands: [(p: SIMD2<Float>, peer: Float)] = []
+        for r: Float in [1.0, 1.1] {
+            for k in 0..<12 {
+                let a = Float(k) * .pi / 6
+                let p = seatXZ + SIMD2(sinf(a), cosf(a)) * r          // (a = 0: straight toward the camera, the normal spot's side)
+                guard simd_distance(p, here) <= SeesawTuning.maxHop - 0.02, f.distance(p) >= 0.5, simd_distance(fixed(p), p) < 0.05 else { continue }
+                if DecorField.shared.feet.contains(where: { $0.uid != f.uid && $0.distance(p) < 0.1 }) { continue }
+                let peer = steerPeers().map { simd_distance($0.pos, p) }.min() ?? .infinity
+                cands.append((p, peer))
+            }
+        }
+        let byDistance = cands.sorted { simd_distance($0.p, here) < simd_distance($1.p, here) }
+        if let free = byDistance.first(where: { $0.peer >= peerGap }) { return free.p }
+        return cands.max { $0.peer < $1.peer }?.p
+    }
+
     /// The body's centre over the floor (what a hop is measured from).
     private func seesawCentreXZ(_ sim: SoftBody) -> SIMD2<Float> { let c = sim.centroid(); return SIMD2(c.x, c.z) }
 
@@ -597,7 +623,18 @@ extension BlobBrain {
                         R.report(uid, seat, .hopOff)
                         return
                     }
-                } else if phT > dur + SeesawTuning.noSpotWait { idleFinish(skinner); return }
+                } else if phT > dur + SeesawTuning.noSpotWait {
+                    // no normal spot for 3 s (a friend within a body's width of all three, or a spot off the floor): the ring spot instead (park-room-r3), never a finish on the seat point inside the footprint
+                    if let ring = seesawStepOffRing(f, seat: seat),
+                       seesawHop(sim, to: ring, ground: 0, apex: Self.bagApexDown + max(0, seesawNeutral(f).y - 0.45) * 0.3) {
+                        idleState.bagStage = 3; idleState.phaseT = 0
+                        R.ringStepOffs += 1
+                        R.report(uid, seat, .hopOff)
+                        return
+                    }
+                    R.noStepOff += 1
+                    idleFinish(skinner); return
+                }
             }
         }
         idleState.k = k
