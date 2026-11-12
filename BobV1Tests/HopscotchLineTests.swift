@@ -63,6 +63,7 @@ final class HopscotchLineTests: XCTestCase {
                     let b = lab.rigs[a].brain
                     let stage = b.idleState.kind == .decorHopscotch ? b.idleState.slideStage : -9
                     if stage == 4, prevStage[a] != 4 { entries[a] += 1 }
+                    if b.idleState.kind == nil, seqs[a].count == 8, allLanded < 0 { b.autonomy = true }          // (a finished one is a free Jelbie again: he walks off like a real one, not frozen on the court)
                     if stage != prevStage[a] { trace[a] += " \(stage)@\(Int(Float(i) / 60))r\(b.idleState.decorRetry)" }
                     if stage == 6, b.idleState.phaseT > 10, !stuckNote[a] {
                         stuckNote[a] = true
