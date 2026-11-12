@@ -475,7 +475,7 @@ extension BlobBrain {
     }
     /// The backstop step-off spot (park-room-r3), used only when `seesawFreeSpot` has none: candidates on rings of 1.0 and 1.1 m round the seat point every 30 degrees (within `maxHop` of the body's
     /// centre, so the hop is the same short one), at least 0.5 m outside the seesaw's footprint, off every other piece, on the floor as it stands (the floor rules move it under 5 cm). The nearest one at least a body
-    /// width (peerGap) from the others first; none of those: the one with the largest distance to the nearest other body. nil only when the ring is empty too.
+    /// width (peerGap) from the others first, the camera side before the back; none of those: the one with the largest distance to the nearest other body. nil only when the ring is empty too.
     func seesawStepOffRing(_ f: DecorFoot, seat: Int) -> SIMD2<Float>? {
         let ignore = decorIgnore
         defer { decorIgnore = ignore }
@@ -487,12 +487,17 @@ extension BlobBrain {
                 let a = Float(k) * .pi / 6
                 let p = seatXZ + SIMD2(sinf(a), cosf(a)) * r          // (a = 0: straight toward the camera, the normal spot's side)
                 guard simd_distance(p, here) <= SeesawTuning.maxHop - 0.02, f.distance(p) >= 0.5, simd_distance(fixed(p), p) < 0.05 else { continue }
+                if let rf = GameCamera.roamFloor, !rf.contains(p) { continue }          // (on the roam floor: not behind its back edge, not past its side)
                 if DecorField.shared.feet.contains(where: { $0.uid != f.uid && $0.distance(p) < 0.1 }) { continue }
                 let peer = steerPeers().map { simd_distance($0.pos, p) }.min() ?? .infinity
                 cands.append((p, peer))
             }
         }
-        let byDistance = cands.sorted { simd_distance($0.p, here) < simd_distance($1.p, here) }
+        // the camera side of the piece first (the open floor), then the nearest
+        let byDistance = cands.sorted { a, b in
+            let fa = a.p.y > seatXZ.y, fb = b.p.y > seatXZ.y
+            return fa != fb ? fa : simd_distance(a.p, here) < simd_distance(b.p, here)
+        }
         if let free = byDistance.first(where: { $0.peer >= peerGap }) { return free.p }
         return cands.max { $0.peer < $1.peer }?.p
     }
