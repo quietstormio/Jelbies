@@ -30,20 +30,44 @@ extension BlobBrain {
         return true
     }
 
-    /// Park slide only. Candidate order: (1) the three `slideOutSpots`, starting at this brain's own index (two who leave together do not pick the same spot); (2) if all are refused,
-    /// a ring round the landing at radius peerGap + 0.3 then peerGap + 0.9, every 30 degrees, only the half away from the slide (the front half-plane of the landing, the sides included),
-    /// nearest to him first. Every candidate must pass the same checks: on the roam floor (`GameCamera.constrain` moves it < 0.05), the straight leg clear of the slide's box,
-    /// no friend within 0.9, outside every solid piece's zone. nil = nothing is free (the caller asks again in a second).
+    /// How often `slideWalkOut` had no candidate with a clear leg and took the one with the largest clearance (tests / the soak report).
+    nonisolated(unsafe) static var slideNoClearLeg = 0
+
+    /// The least distance from any other body to the straight leg a -> b (9 = nobody about).
+    func legClearance(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+        var least: Float = 9
+        let d = b - a, len2 = max(simd_dot(d, d), 1e-6)
+        for p in steerPeers() {
+            let t = max(0, min(1, simd_dot(p.pos - a, d) / len2))
+            least = min(least, simd_distance(p.pos, a + d * t))
+        }
+        return least
+    }
+
+    /// Park slide only. Candidate order: (1) the three `slideOutSpots`, starting at this brain's own index (two who leave together do not pick the same spot); (2) the ex-rider only
+    /// (still in his slide behaviour): a ring round the landing at radius peerGap + 0.3 then peerGap + 0.9, every 30 degrees, only the half away from the slide (the front half-plane of
+    /// the landing, the sides included), nearest to him first. Every candidate must pass the same checks: on the roam floor (`GameCamera.constrain` moves it < 0.05), the straight leg clear of
+    /// the slide's box, no friend within 0.9 of the spot, outside every solid piece's zone, and NO FRIEND WITHIN 0.9 OF THE LEG (a friend on the leg is waited for up to 6 s by a requested walk,
+    /// `BlobBrain.steerTarget`). The first candidate in that order that passes everything wins. If none does, the ex-rider takes the one with the largest leg clearance (counted in
+    /// `slideNoClearLeg`): he must leave. A stander asked off the foot gets nil instead.
     func slideWalkOut(_ f: DecorFoot) -> SIMD2<Float>? {
         guard f.uid == ParkToys.slideUID else { return nil }
         let landing = slideLanding(f)
         let n = Self.slideOutSpots.count
+        let exRider = idleState.kind == .decorSlide
+        var best: (q: SIMD2<Float>, clear: Float)?
+        func consider(_ q: SIMD2<Float>) -> SIMD2<Float>? {
+            let c = legClearance(position, q)
+            if c >= 0.9 { return q }
+            if best == nil || c > best!.clear { best = (q, c) }
+            return nil
+        }
         for k in 0..<n {
             let q = f.centre + f.turned(Self.slideOutSpots[(steerID + k) % n])
             guard let out = decorFreeSpot(near: q), simd_distance(out, q) < 0.3, simd_distance(out, landing) >= peerGap + 0.3, slideLegClear(f, to: out) else { continue }
-            return out
+            if let ok = consider(out) { return ok }
         }
-        guard idleState.kind == .decorSlide else { return nil }          // (the ring is for the ex-rider, still in his slide behaviour; a stander asked off the foot only gets the lawn spots)
+        guard exRider else { return nil }
         let away = simd_normalize(landing - f.centre + SIMD2<Float>(1e-4, 0))
         var ring: [SIMD2<Float>] = []
         for r in [peerGap + 0.3, peerGap + 0.9] {
@@ -58,8 +82,9 @@ extension BlobBrain {
             guard simd_distance(SIMD2(c.x, c.z), q) < 0.05, slideLegClear(f, to: q) else { continue }
             guard !steerPeers().contains(where: { simd_distance($0.pos, q) < 0.9 }) else { continue }
             guard !DecorField.shared.feet.contains(where: { $0.spec.solid && $0.distance(q) < footprint * $0.spec.reach + 0.12 }) else { continue }
-            return q
+            if let ok = consider(q) { return ok }
         }
+        if let b = best { Self.slideNoClearLeg += 1; return b.q }
         return nil
     }
 
@@ -70,7 +95,7 @@ extension BlobBrain {
         guard let f = DecorField.shared.foot(ParkToys.slideUID), let rider = DecorField.shared.occupant[f.uid], rider != steerID else { return }
         guard simd_distance(position, slideLanding(f)) < peerGap + 0.1 else { return }
         if let t = Self.slideFootAsked[steerID], peerClock >= t, peerClock - t < Self.slideFootEvery { return }
-        guard let out = slideWalkOut(f) else { Self.slideFootAsked[steerID] = peerClock - Self.slideFootEvery + 1; return }          // (nothing free: ask again in a second, not every tick)
+        guard let out = slideWalkOut(f) else { return }
         Self.slideFootAsked[steerID] = peerClock
         if f.distance(position) < footprint * f.spec.reach + 0.05 { insideDecorT = -4; insideStuckT = 0; decorIgnore = f.uid }          // (inside the zone: the generic walk-out must not fire on top of this one)
         request(.goTo(out))          // (NOT requestNow: from script .none that aborts the walk on the next tick)
