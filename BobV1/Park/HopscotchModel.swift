@@ -38,8 +38,9 @@ extension DecorModels {
     static func addHopscotchCourt(_ b: RoomMeshBuilder, at o: SIMD3<Float>) {
         let h = HopscotchCourt.slabHalf, half = HopscotchCourt.cell / 2
         // a dark, slightly warm asphalt patch with chalk on it (no pastel fills, no cream slab)
-        let asphalt = S.srgb(0.22, 0.23, 0.25), grainLo = S.srgb(0.17, 0.18, 0.20), grainHi = S.srgb(0.29, 0.30, 0.32), wornEdge = S.srgb(0.31, 0.31, 0.30)
-        let chalk = S.srgb(0.95, 0.94, 0.88), numChalk = S.srgb(0.96, 0.91, 0.66), dust = S.srgb(0.44, 0.44, 0.43)
+        // (2026-11-12: the user's pick, "look B" of the park palette pictures: the living room's one-tint brown, five value steps from the room theme's swatches 0 to 4)
+        let asphalt = S.srgb(0.353, 0.240, 0.176), grainLo = S.srgb(0.297, 0.199, 0.144), grainHi = S.srgb(0.429, 0.294, 0.218), wornEdge = S.srgb(0.470, 0.337, 0.254)
+        let chalk = S.srgb(0.935, 0.854, 0.784), numChalk = S.srgb(0.829, 0.688, 0.579), dust = S.srgb(0.640, 0.562, 0.505)
         b.roundedBox(centre: o + SIMD3(0, 0.02, 0), half: SIMD3(h.x, 0.02, h.y), radius: 0.05, segments: 3, aoFloor: false, color: asphalt)
         let top: Float = 0.041
         // a soft worn edge: a faded, lighter rim where the blacktop meets the grass
