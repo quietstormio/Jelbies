@@ -22,16 +22,16 @@ final class TricksRowUITests: XCTestCase {
     @MainActor
     func testTricksRowPortraitAndLandscape() throws {
         let app = XCUIApplication()
-        app.launchArguments += ["-BlobCount", "1", "-BlobNoWander", "1", "-Mute", "1", "-GrantTrick", "strut"]
+        app.launchArguments += ["-SetRoster", "bob", "-MainMenu", "0", "-Intro", "0", "-Jelbies.started.v1", "YES", "-BlobDrops.v1", "300", "-BlobNoWander", "1", "-ClockHour", "12", "-Mute", "1", "-GrantTrick", "strut", "-HUDHighlight", "0"]
         app.launch()
-        sleep(6)
+        sleep(8)
+        save("0_launch")
         for (orient, key, name) in [(UIDeviceOrientation.portrait, "TRICKS_TAP_P", "portrait"), (.landscapeLeft, "TRICKS_TAP_L", "landscape")] {
             XCUIDevice.shared.orientation = orient
             sleep(5)
             let menu = app.buttons["care-menu"]
             XCTAssertTrue(menu.waitForExistence(timeout: 10), "the paw shows (\(name))")
-            app.coordinate(withNormalizedOffset: frac(key, CGVector(dx: 0.5, dy: 0.6))).tap()
-            sleep(3)
+            sleep(2)
             menu.tap()
             XCTAssertTrue(app.buttons["hud-tricks"].waitForExistence(timeout: 5), "the Tricks row is in his menu (\(name))")
             save("\(name)_1_menu")
