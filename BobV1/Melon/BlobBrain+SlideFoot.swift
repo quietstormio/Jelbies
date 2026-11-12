@@ -44,12 +44,12 @@ extension BlobBrain {
         return least
     }
 
-    /// Park slide only. Candidate order: (1) the three `slideOutSpots`, starting at this brain's own index (two who leave together do not pick the same spot); (2) the ex-rider only
-    /// (still in his slide behaviour): a ring round the landing at radius peerGap + 0.3 then peerGap + 0.9, every 30 degrees, only the half away from the slide (the front half-plane of
-    /// the landing, the sides included), nearest to him first. Every candidate must pass the same checks: on the roam floor (`GameCamera.constrain` moves it < 0.05), the straight leg clear of
-    /// the slide's box, no friend within 0.9 of the spot, outside every solid piece's zone, and NO FRIEND WITHIN 0.9 OF THE LEG (a friend on the leg is waited for up to 6 s by a requested walk,
-    /// `BlobBrain.steerTarget`). The first candidate in that order that passes everything wins. If none does, the ex-rider takes the one with the largest leg clearance (counted in
-    /// `slideNoClearLeg`): he must leave. A stander asked off the foot gets nil instead.
+    /// Park slide only. Candidates: the three `slideOutSpots` (this brain's own index first for a stander: two who leave together do not pick the same spot) and, for the ex-rider only (still in
+    /// his slide behaviour), a ring round the landing at radius peerGap + 0.5 then peerGap + 1.0, every 30 degrees, only the half away from the slide (the front half-plane of the landing,
+    /// the sides included). Every candidate is at least peerGap + 0.3 from the landing and must pass: on the roam floor (`GameCamera.constrain` moves it < 0.05), the straight leg clear of the
+    /// slide's box (so the walk never passes the box), no friend within 0.9 of the spot, outside every solid piece's zone, and NO FRIEND WITHIN 0.9 OF THE LEG (a friend on the leg is waited for up
+    /// to 6 s by a requested walk, `BlobBrain.steerTarget`). ORDER: a stander takes the spots in his own index order; the ex-rider takes spots and ring TOGETHER, nearest first (the legs are
+    /// straight and clear of the box, so the nearest is the shortest walk). The first candidate that passes everything wins.
     func slideWalkOut(_ f: DecorFoot) -> SIMD2<Float>? {
         guard f.uid == ParkToys.slideUID else { return nil }
         let landing = slideLanding(f)
@@ -62,28 +62,34 @@ extension BlobBrain {
             rest.append((q, c))
             return nil
         }
+        var spots: [SIMD2<Float>] = []
         for k in 0..<n {
             let q = f.centre + f.turned(Self.slideOutSpots[(steerID + k) % n])
             guard let out = decorFreeSpot(near: q), simd_distance(out, q) < 0.3, simd_distance(out, landing) >= peerGap + 0.3, slideLegClear(f, to: out) else { continue }
-            if let ok = consider(out) { return ok }
+            spots.append(out)
         }
-        guard exRider else { return nil }
+        guard exRider else {
+            for q in spots { if let ok = consider(q) { return ok } }
+            return nil
+        }
         let away = simd_normalize(landing - f.centre + SIMD2<Float>(1e-4, 0))
         var ring: [SIMD2<Float>] = []
-        for r in [peerGap + 0.3, peerGap + 0.9] {
+        for r in [peerGap + 0.5, peerGap + 1.0] {
             for k in 0..<12 {
                 let a = Float(k) * .pi / 6
                 let d = SIMD2<Float>(sinf(a), cosf(a))
                 if simd_dot(d, away) >= -0.01 { ring.append(landing + d * r) }
             }
         }
-        for q in ring.sorted(by: { simd_distance($0, position) < simd_distance($1, position) }) {
+        var all = spots
+        for q in ring {
             let c = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: footprint)
             guard simd_distance(SIMD2(c.x, c.z), q) < 0.05, slideLegClear(f, to: q) else { continue }
             guard !steerPeers().contains(where: { simd_distance($0.pos, q) < 0.9 }) else { continue }
             guard !DecorField.shared.feet.contains(where: { $0.spec.solid && $0.distance(q) < footprint * $0.spec.reach + 0.12 }) else { continue }
-            if let ok = consider(q) { return ok }
+            all.append(q)
         }
+        for q in all.sorted(by: { simd_distance($0, position) < simd_distance($1, position) }) { if let ok = consider(q) { return ok } }
         // none has a clear leg: the ex-rider must still leave. Only candidates at least peerGap from the landing, the one with the largest leg clearance; if none is that far, the farthest
         // from the landing whose leg clearance is at least 0.45.
         if let b = rest.filter({ simd_distance($0.q, landing) >= peerGap }).max(by: { $0.clear < $1.clear }) { Self.slideNoClearLeg += 1; return b.q }
