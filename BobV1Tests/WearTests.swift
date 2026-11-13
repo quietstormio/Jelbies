@@ -249,7 +249,7 @@ final class WearTests: XCTestCase {
         XCTAssertTrue(WornSet.eating(b))
         for _ in 0..<40 { w.tick(id: 0, brain: b, sim: a.sim, outfit: drinkFit, role: .none, hideAll: false, dt: 1.0 / 60) }
         XCTAssertEqual(w.shown(0, .face), .heartShades); XCTAssertEqual(w.shown(0, .head), .beaniePink)
-        XCTAssertTrue(WearRules.hide(.capeHero).contains(.flip))
+        for l in WearLook.allCases { XCTAssertFalse(WornSet.hidesWhileTipped(l), "\(l) stays on in flips (hold-wear-r1)") }
         for l in WearLook.allCases { XCTAssertTrue(WearRules.hide(l).contains(.wash), "\(l) hides in the wash") }
         for l in WearLook.looks(.head) + WearLook.looks(.face) { XCTAssertTrue(WearRules.hide(l).contains(.asleep), "\(l)") }
     }

@@ -63,8 +63,6 @@ nonisolated struct WearHide: OptionSet, Sendable {
     static let eating = WearHide(rawValue: 2)
     /// Off in the wash scene (like the shoes). EVERYTHING.
     static let wash = WearHide(rawValue: 4)
-    /// Off during flips and rolls where it would clip the floor or itself (tall hats, ears, cape, backpack).
-    static let flip = WearHide(rawValue: 8)
 }
 
 nonisolated enum WearRules {
@@ -89,10 +87,6 @@ nonisolated enum WearRules {
         var h: WearHide = [.wash]
         switch l.slot {
         case .head, .face: h.insert(.asleep)
-        default: break
-        }
-        switch l {
-        case .partyHat, .chefHat, .witchHat, .tophat, .propellerBeanie, .bunnyEars, .catEars, .frogEars, .crownGold, .capeHero, .backpackSky, .cowboyHat, .beeAntennae, .vikingHat: h.insert(.flip)
         default: break
         }
         return h

@@ -113,12 +113,18 @@ final class WornSet {
         if b.isFlipping { return true }
         return false
     }
+    /// THE rule for body orientation (held, thrown, flipped, upside down, headstand, back bounce): NO wearable and NO species feature hides because the body is not
+    /// upright. Every piece is carried by the body's FULL rotation (`Carry.rotation`, never a yaw-only or world-up frame) and the surface-bound parts ride the skinned
+    /// mesh, so they follow in every orientation. Only sleep, the wash and the scene hides (`hideAll`) take a piece off. A later trick that finds a piece that clips
+    /// the floor in a pose names it HERE (one place), with the reason, instead of hiding by script.
+    static func hidesWhileTipped(_ look: WearLook) -> Bool { false }
+    static func hidesWhileTipped(_ feature: JellyFeature) -> Bool { false }
     /// Does a hide rule hide `look` for this Jelly right now (the wash is handled by `hideAll`)?
     static func hidden(_ look: WearLook, _ b: BlobBrain) -> Bool {
         let h = WearRules.hide(look)
         if h.contains(.asleep), sleepHides(b) { return true }
         if h.contains(.eating), eating(b) { return true }
-        if h.contains(.flip), flipping(b) { return true }
+        if flipping(b), hidesWhileTipped(look) { return true }          // (never true today: see `hidesWhileTipped`)
         return false
     }
 
