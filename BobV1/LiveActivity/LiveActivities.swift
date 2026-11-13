@@ -192,10 +192,10 @@ final class LiveActivities {
     /// The tuck-in alone (the in-game Bedtime button): Siri and the widget now say "asleep", no card is raised while the app is on screen.
     func tuckedIn(now t: Date? = nil) { Bedtime.write(t ?? now(), to: directory) }
     /// They are up: the stamp goes; the card says good morning and goes away (`linger` false: at once, for a card that should never have been up).
-    func wake(names: [String], linger: Bool = true) {
+    func wake(names: [String], colors: [String] = [], linger: Bool = true) {
         Bedtime.write(nil, to: directory)
         guard let id = napID else { return }
-        driver.end(id: id, state: .awake(names), dismissAt: linger ? now().addingTimeInterval(Self.linger) : now())
+        driver.end(id: id, state: .awake(names, colors: colors), dismissAt: linger ? now().addingTimeInterval(Self.linger) : now())
         napID = nil
     }
 
@@ -206,10 +206,10 @@ final class LiveActivities {
     }
     /// The app is back: by day the nap is over; also ends a nap whose wake time has passed. `nobodyAsleep`: the room says nobody is asleep or about to be
     /// (they were woken in game): the stamp and the card go at once, even at night.
-    func returnedActive(names: [String], nobodyAsleep: Bool = false) {
+    func returnedActive(names: [String], colors: [String] = [], nobodyAsleep: Bool = false) {
         let tucked = Bedtime.read(from: directory, now: now())
-        if nobodyAsleep { wake(names: names, linger: false) }
-        else if !Bedtime.isSleeping(at: now(), tuckedIn: tucked, calendar: calendar) || !napOn { wake(names: names) }
+        if nobodyAsleep { wake(names: names, colors: colors, linger: false) }
+        else if !Bedtime.isSleeping(at: now(), tuckedIn: tucked, calendar: calendar) || !napOn { wake(names: names, colors: colors) }
     }
 
     // MARK: housekeeping
@@ -225,7 +225,7 @@ final class LiveActivities {
                 if raceID == a.id { raceID = nil; raceAttrs = nil; racePolicy.reset() }
             case .nap:
                 let over = !napOn || (a.state.untilDate.map { $0 <= t } ?? true)
-                if over { driver.end(id: a.id, state: .awake(a.state.sleepers), dismissAt: t); if napID == a.id { napID = nil } }
+                if over { driver.end(id: a.id, state: .awake(a.state.sleepers, colors: a.state.sleeperColors), dismissAt: t); if napID == a.id { napID = nil } }
                 else if napID == nil { napID = a.id }
             }
         }

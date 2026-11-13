@@ -37,6 +37,12 @@ nonisolated enum JellyPalette {
         default: return Color(.sRGB, red: 0.96, green: 0.70, blue: 0.66)
         }
     }
+    /// Pearl and panda are near-white: they vanish on the cream cards.
+    static func isPale(_ color: String) -> Bool { color == "pearl" || color == "panda" }
+    /// A tint that always reads on cream: the body colour, or its deep shade for the near-white species. For bars, chips, backings.
+    static func solid(_ color: String) -> Color { isPale(color) ? bodyDeep(color) : body(color) }
+    /// A soft disc / chip fill behind a face or a name that stays visible on cream for all seven colours.
+    static func backing(_ color: String, _ opacity: Double = 0.3) -> Color { isPale(color) ? bodyDeep(color).opacity(opacity * 0.85) : body(color).opacity(opacity) }
     static func bodyDeep(_ color: String) -> Color {
         switch color {
         case "blue": return Color(.sRGB, red: 0.33, green: 0.52, blue: 0.80)
@@ -82,35 +88,45 @@ struct JellyFaceGlyph: View {
             p.addQuadCurve(to: CGPoint(x: bodyRect.minX + s * 0.05, y: bodyRect.maxY), control: CGPoint(x: bodyRect.midX, y: bodyRect.maxY + s * 0.04))
             p.closeSubpath()
             let fill: Color = tinted ? ink : JellyPalette.body(color)
+            let panda = color == "panda" && !tinted
+            let nub: Color = panda ? JellyPalette.bodyDeep("panda") : fill          // a panda's nubs are dark ears
             // antennae: two little nubs
             for dx: CGFloat in [-0.17, 0.17] {
                 let r = s * 0.055
                 let c = CGPoint(x: bodyRect.midX + dx * s, y: bodyRect.minY + s * 0.02)
                 var stem = Path(); stem.move(to: CGPoint(x: c.x * 0.6 + bodyRect.midX * 0.4, y: bodyRect.minY + s * 0.10)); stem.addLine(to: c)
-                ctx.stroke(stem, with: .color(fill), style: StrokeStyle(lineWidth: max(1, s * 0.05), lineCap: .round))
-                ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)), with: .color(fill))
+                ctx.stroke(stem, with: .color(nub), style: StrokeStyle(lineWidth: max(1, s * 0.05), lineCap: .round))
+                let rr = panda ? r * 1.9 : r
+                ctx.fill(Path(ellipseIn: CGRect(x: c.x - rr, y: c.y - rr * (panda ? 0.9 : 1) + (panda ? rr * 0.25 : 0), width: 2 * rr, height: 2 * rr)), with: .color(nub))
             }
             ctx.fill(p, with: .color(fill))
+            if !tinted, JellyPalette.isPale(color) { ctx.stroke(p, with: .color(JellyPalette.bodyDeep(color).opacity(0.75)), style: StrokeStyle(lineWidth: max(0.8, s * 0.03), lineJoin: .round)) }
             if !tinted {
                 // a soft highlight
                 ctx.fill(Path(ellipseIn: CGRect(x: bodyRect.minX + s * 0.14, y: bodyRect.minY + s * 0.10, width: s * 0.16, height: s * 0.10)), with: .color(.white.opacity(0.45)))
             }
             // face
             let feature: Color = tinted ? JellyPalette.night : ink
+            let eyeC: Color = panda ? .white : feature
             let ey = bodyRect.minY + s * 0.40
             let er = s * 0.055
+            if panda {          // dark eye patches; the eyes go white on them
+                for dx: CGFloat in [-0.17, 0.17] {
+                    ctx.fill(Path(ellipseIn: CGRect(x: bodyRect.midX + dx * s - er * 1.9, y: ey - er * 2.2, width: er * 3.8, height: er * 4.6)), with: .color(JellyPalette.bodyDeep("panda")))
+                }
+            }
             for dx: CGFloat in [-0.17, 0.17] {
                 let cx = bodyRect.midX + dx * s
                 switch mood {
                 case .sleeping:
                     var e = Path(); e.move(to: CGPoint(x: cx - er * 1.4, y: ey)); e.addQuadCurve(to: CGPoint(x: cx + er * 1.4, y: ey), control: CGPoint(x: cx, y: ey + er * 1.6))
-                    ctx.stroke(e, with: .color(feature), style: StrokeStyle(lineWidth: max(1, s * 0.045), lineCap: .round))
+                    ctx.stroke(e, with: .color(eyeC), style: StrokeStyle(lineWidth: max(1, s * 0.045), lineCap: .round))
                 case .grumpy:
-                    ctx.fill(Path(ellipseIn: CGRect(x: cx - er, y: ey - er, width: 2 * er, height: 2 * er)), with: .color(feature))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - er, y: ey - er, width: 2 * er, height: 2 * er)), with: .color(eyeC))
                     var b = Path(); b.move(to: CGPoint(x: cx - er * 1.5, y: ey - er * 2.4 + (dx < 0 ? er : -er) * 0.6)); b.addLine(to: CGPoint(x: cx + er * 1.5, y: ey - er * 2.4 + (dx < 0 ? -er : er) * 0.6))
-                    ctx.stroke(b, with: .color(feature), style: StrokeStyle(lineWidth: max(1, s * 0.04), lineCap: .round))
+                    ctx.stroke(b, with: .color(eyeC), style: StrokeStyle(lineWidth: max(1, s * 0.04), lineCap: .round))
                 default:
-                    ctx.fill(Path(ellipseIn: CGRect(x: cx - er, y: ey - er, width: 2 * er, height: 2 * er)), with: .color(feature))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - er, y: ey - er, width: 2 * er, height: 2 * er)), with: .color(eyeC))
                     if !tinted { ctx.fill(Path(ellipseIn: CGRect(x: cx - er * 0.5, y: ey - er * 0.8, width: er * 0.6, height: er * 0.6)), with: .color(.white.opacity(0.8))) }
                 }
             }
@@ -198,7 +214,7 @@ struct JellyRectangularView: View {
                 if JellyStatus.needyCount(states) > 0 { Circle().frame(width: 5, height: 5).widgetAccentable() }
                 if !model.queued.isEmpty { Image(systemName: "drop.fill").font(.system(size: 8, weight: .bold)).opacity(0.8) }
             }
-            Text(JellyStatus.line(states, sleeping: model.sleeping))
+            Text(JellyStatus.rectangularLine(states, sleeping: model.sleeping))
                 .font(JellyPalette.font(14))
                 .lineLimit(2).minimumScaleFactor(0.75)
                 .widgetAccentable()
@@ -308,7 +324,7 @@ struct JellyStandByView: View {
 
     private func face(_ s: JellyState, size: CGFloat) -> some View {
         ZStack {
-            Circle().fill(JellyPalette.body(s.color).opacity(tinted ? 0.15 : 0.22)).frame(width: size, height: size)
+            Circle().fill(JellyPalette.backing(s.color, tinted ? 0.15 : 0.22)).frame(width: size, height: size)
             JellyFaceGlyph(color: s.color, mood: JellyFaceMood.of(s, sleeping: model.sleeping), tinted: tinted, ink: .white)
                 .frame(width: size * 0.78, height: size * 0.78)
         }

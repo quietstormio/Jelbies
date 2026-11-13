@@ -7,6 +7,7 @@
 
 import SwiftUI
 import WidgetKit
+import AppIntents
 import UIKit
 
 nonisolated enum WidgetTheme {
@@ -96,6 +97,8 @@ struct JellyPortraitTile: View {
     let state: JellyState
     let image: UIImage?
     var corner: CGFloat = 16
+    /// Tucked in: a little "zzz" badge in the corner of the tile.
+    var asleep = false
     var body: some View {
         GeometryReader { g in
             let side = min(g.size.width, g.size.height)
@@ -110,9 +113,46 @@ struct JellyPortraitTile: View {
             .frame(width: side, height: side)
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: corner, style: .continuous).strokeBorder(.white.opacity(0.55), lineWidth: 1))
+            .overlay(alignment: .topTrailing) {
+                if asleep {
+                    Image(systemName: "moon.zzz.fill").font(.system(size: max(11, side * 0.13), weight: .bold)).foregroundStyle(JellyPalette.moon)
+                        .padding(max(4, side * 0.05)).background(Circle().fill(JellyPalette.night.opacity(0.62))).padding(5)
+                }
+            }
             .frame(width: g.size.width, height: g.size.height)
         }
         .accessibilityHidden(true)          // decoration: the name and the words beside it are the content
+    }
+}
+
+/// The one quick action: Water for the thirstiest Jelbie (shown when someone is Thirsty / Parched and no drink is queued yet; "Water coming" after the tap).
+/// It only QUEUES a drink (WaterQuickIntent). A modest capsule inside a 44 pt tall hit area (the row it sits in costs only the capsule's height of layout).
+struct JellyWaterButton: View {
+    let states: [JellyState]
+    var queued: [JellyRoute] = []
+    var thirsty: JellyState? { states.filter { $0.tier(.water).rawValue >= NeedTier.hungry.rawValue }.min { $0.level(.water) < $1.level(.water) } }
+    var isShown: Bool { thirsty != nil }
+    /// Layout height the button asks for (the hit area is taller; it hangs over the row's own padding).
+    static let rowHeight: CGFloat = 28
+    var body: some View {
+        if let t = thirsty {
+            let waiting = queued.contains { $0 == .water(t.id) || $0 == .water(nil) }
+            Button(intent: WaterQuickIntent(jellyID: t.id)) {
+                HStack(spacing: 4) {
+                    Image(systemName: waiting ? "checkmark" : "drop.fill").font(.system(size: 11, weight: .bold))
+                    Text(waiting ? "Water coming" : "Water \(t.name)").font(WidgetTheme.font(12, .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .foregroundStyle(waiting ? WidgetTheme.inkSoft : WidgetTheme.ink)
+                .padding(.horizontal, 12).frame(height: 28)
+                .background(Capsule().fill(.white.opacity(0.78)))
+                .overlay(Capsule().strokeBorder(WidgetTheme.ink.opacity(0.10), lineWidth: 1))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(waiting)
+            .padding(.vertical, -(44 - Self.rowHeight) / 2)
+        }
     }
 }
 
@@ -120,6 +160,11 @@ struct JellyWidgetContent: View {
     let family: WidgetFamily
     let states: [JellyState]
     let portraits: [Int: UIImage]
+    /// Asleep (night, or tucked in): the home cards say "napping" and show the moon badge, like the Lock Screen accessories.
+    var sleeping = false
+    /// Show the Water quick action inside the layout (medium / large; never over a portrait or text).
+    var showsWater = false
+    var queued: [JellyRoute] = []
 
     var body: some View {
         switch family {
@@ -132,6 +177,16 @@ struct JellyWidgetContent: View {
     }
 
     private var neediest: JellyState? { JellyState.neediest(in: states) }
+    private func asleep(_ s: JellyState) -> Bool { sleeping && !s.needsAttention }
+    private var water: JellyWaterButton? {
+        guard showsWater else { return nil }
+        let w = JellyWaterButton(states: states, queued: queued)
+        return w.isShown ? w : nil
+    }
+    private func headline(_ s: JellyState) -> String {
+        let t = JellyStatus.headline(s, sleeping: sleeping)
+        return t.hasSuffix("is napping") ? t + "." : t          // "Lemon is napping." beside "Lemon is happy!": every home headline ends in a mark
+    }
 
     // MARK: Home Screen
 
@@ -139,8 +194,8 @@ struct JellyWidgetContent: View {
         Group {
             if let s = neediest {
                 VStack(spacing: 6) {
-                    JellyPortraitTile(state: s, image: portraits[s.id])
-                    Text(s.headline)
+                    JellyPortraitTile(state: s, image: portraits[s.id], asleep: asleep(s))
+                    Text(sleeping && states.count > 1 && states.allSatisfy({ asleep($0) }) ? "Everyone is napping." : headline(s))
                         .font(WidgetTheme.font(15)).foregroundStyle(WidgetTheme.ink)
                         .lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
@@ -153,25 +208,30 @@ struct JellyWidgetContent: View {
         Group {
             if states.count == 1, let s = states.first {
                 HStack(spacing: 12) {
-                    JellyPortraitTile(state: s, image: portraits[s.id])
+                    JellyPortraitTile(state: s, image: portraits[s.id], asleep: asleep(s))
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(s.headline).font(WidgetTheme.font(18)).foregroundStyle(WidgetTheme.ink).lineLimit(2).minimumScaleFactor(0.8)
+                        Text(headline(s)).font(WidgetTheme.font(18)).foregroundStyle(WidgetTheme.ink).lineLimit(2).minimumScaleFactor(0.8)
                         wordGrid(s)
+                        if let w = water { w.frame(maxWidth: .infinity, alignment: .leading) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else if states.isEmpty { empty } else {
-                HStack(alignment: .top, spacing: 10) {
-                    ForEach(states) { s in
-                        Link(destination: JellyLink.url(for: s.id)) {
-                            VStack(spacing: 4) {
-                                JellyPortraitTile(state: s, image: portraits[s.id], corner: 14)
-                                Text(s.name).font(WidgetTheme.font(13)).foregroundStyle(WidgetTheme.ink).lineLimit(1)
-                                CareRow(state: s, size: states.count > 2 ? 19 : 22, spacing: states.count > 2 ? 2 : 4)
+                let dense = states.count > 2 || water != nil
+                VStack(spacing: 4) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(states) { s in
+                            Link(destination: JellyLink.url(for: s.id)) {
+                                VStack(spacing: dense ? 2 : 4) {
+                                    JellyPortraitTile(state: s, image: portraits[s.id], corner: 14, asleep: asleep(s))
+                                    Text(s.name).font(WidgetTheme.font(dense ? 12 : 13)).foregroundStyle(WidgetTheme.ink).lineLimit(1).minimumScaleFactor(0.6)
+                                    CareRow(state: s, size: dense ? 18 : 22, spacing: states.count > 2 ? 2 : 4)
+                                }
+                                .frame(maxWidth: .infinity)
                             }
-                            .frame(maxWidth: .infinity)
                         }
                     }
+                    if let w = water { w.frame(maxWidth: .infinity) }
                 }
             }
         }
@@ -179,35 +239,62 @@ struct JellyWidgetContent: View {
 
     private var large: some View {
         Group {
-            if states.isEmpty { empty } else {
+            if states.isEmpty { empty }
+            else if states.count == 1, let s = states.first { largeOne(s) }
+            else {
                 VStack(spacing: 8) {
                     ForEach(states) { s in
                         Link(destination: JellyLink.url(for: s.id)) {
                             HStack(spacing: 12) {
-                                JellyPortraitTile(state: s, image: portraits[s.id], corner: 14).frame(width: 92)
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(s.headline).font(WidgetTheme.font(17)).foregroundStyle(WidgetTheme.ink).lineLimit(1).minimumScaleFactor(0.8)
-                                    wordGrid(s)
+                                JellyPortraitTile(state: s, image: portraits[s.id], corner: 14, asleep: asleep(s)).aspectRatio(1, contentMode: .fit)
+                                VStack(alignment: .leading, spacing: states.count > 2 ? 6 : 12) {
+                                    Text(headline(s)).font(WidgetTheme.font(states.count > 2 ? 17 : 20)).foregroundStyle(WidgetTheme.ink).lineLimit(1).minimumScaleFactor(0.7)
+                                    wordGrid(s, iconSize: states.count > 2 ? 20 : 24, text: states.count > 2 ? 11 : 12, rowSpacing: states.count > 2 ? 4 : 8)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .padding(8)
+                            .frame(maxHeight: .infinity)
                             .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(WidgetTheme.panel.opacity(0.7)))
                         }
                     }
+                    if let w = water { w.frame(maxWidth: .infinity) }
                 }
             }
         }
     }
 
+    /// One Jelbie on a large card: a big portrait on top, the headline, then the four care items as larger rows.
+    private func largeOne(_ s: JellyState) -> some View {
+        VStack(spacing: 10) {
+            JellyPortraitTile(state: s, image: portraits[s.id], corner: 22, asleep: asleep(s))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Text(headline(s)).font(WidgetTheme.font(24)).foregroundStyle(WidgetTheme.ink).lineLimit(1).minimumScaleFactor(0.7)
+            VStack(spacing: 5) {
+                ForEach(JellyCare.allCases, id: \.self) { c in
+                    HStack(spacing: 10) {
+                        CareIcon(care: c, tier: s.tier(c), size: 28)
+                        Text(Self.careName(c)).font(WidgetTheme.font(14, .semibold)).foregroundStyle(WidgetTheme.ink)
+                        Spacer(minLength: 0)
+                        Text(s.word(c)).font(WidgetTheme.font(14, .semibold)).foregroundStyle(s.tier(c).rawValue >= NeedTier.hungry.rawValue ? WidgetTheme.tint(s.tier(c)) : WidgetTheme.inkSoft)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(WidgetTheme.panel.opacity(0.7)))
+                }
+            }
+            if let w = water { w.frame(maxWidth: .infinity) }
+        }
+    }
+    static func careName(_ c: JellyCare) -> String { ["Food", "Water", "Love", "Clean"][c.rawValue] }
+
     /// Icon + word pairs, two per line.
-    private func wordGrid(_ s: JellyState) -> some View {
+    private func wordGrid(_ s: JellyState, iconSize: CGFloat = 20, text: CGFloat = 11, rowSpacing: CGFloat = 4) -> some View {
         let cols = [GridItem(.flexible(), spacing: 6, alignment: .leading), GridItem(.flexible(), spacing: 6, alignment: .leading)]
-        return LazyVGrid(columns: cols, alignment: .leading, spacing: 4) {
+        return LazyVGrid(columns: cols, alignment: .leading, spacing: rowSpacing) {
             ForEach(JellyCare.allCases, id: \.self) { c in
                 HStack(spacing: 4) {
-                    CareIcon(care: c, tier: s.tier(c), size: 20)
-                    Text(s.word(c)).font(WidgetTheme.font(11, .semibold)).foregroundStyle(WidgetTheme.inkSoft).lineLimit(1).minimumScaleFactor(0.7)
+                    CareIcon(care: c, tier: s.tier(c), size: iconSize)
+                    Text(s.word(c)).font(WidgetTheme.font(text, .semibold)).foregroundStyle(WidgetTheme.inkSoft).lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
         }

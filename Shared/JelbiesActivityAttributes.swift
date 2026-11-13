@@ -102,15 +102,43 @@ extension JelbiesActivityAttributes {
         }
     }
     /// The second line: "2nd of 4 · lap 2 of 3" / "Up at 6:00 AM".
-    nonisolated func detail(_ s: ContentState, timeStyle: DateFormatter.Style = .short) -> String {
+    /// `roundedWake`: the card a child reads says "Up around 7 AM" (the wake edge is about 07:07), not the exact minute.
+    nonisolated func detail(_ s: ContentState, timeStyle: DateFormatter.Style = .short, roundedWake: Bool = false) -> String {
         switch (kind, s.phase) {
         case (.race, .finished): return "\(s.laps) lap\(s.laps == 1 ? "" : "s") on the \(course ?? "Jelly Race")"
         case (.race, _): return "\(ContentState.ordinal(s.position)) of \(s.racers) · lap \(s.lap) of \(s.laps)"
         case (.nap, .awake): return "Good morning!"
         case (.nap, _):
             guard let w = s.untilDate else { return "Shh…" }
+            if roundedWake { return "Up around \(Self.hourText(nearestHour(w)))" }
             let f = DateFormatter(); f.timeStyle = timeStyle; f.dateStyle = .none
             return "Up at \(f.string(from: w))"
+        }
+    }
+}
+
+extension JelbiesActivityAttributes {
+    /// The date rounded to the nearest whole local hour.
+    nonisolated func nearestHour(_ d: Date, calendar cal: Calendar = .current) -> Date {
+        let c = cal.dateComponents([.minute, .second], from: d)
+        let back = TimeInterval((c.minute ?? 0) * 60 + (c.second ?? 0))
+        return back >= 1800 ? d.addingTimeInterval(3600 - back) : d.addingTimeInterval(-back)
+    }
+    /// "7 AM" (the locale's own hour style).
+    nonisolated static func hourText(_ d: Date) -> String {
+        let f = DateFormatter(); f.setLocalizedDateFormatFromTemplate("j")
+        return f.string(from: d)
+    }
+    /// The headline, longest first, then shorter ones for a narrow card (a long name or course): the course goes, then the "JellyCoins" word.
+    nonisolated func headlineCandidates(_ s: ContentState) -> [String] {
+        let full = headline(s)
+        switch (kind, s.phase) {
+        case (.race, .finished):
+            let p = s.place ?? s.position
+            let lead = p == 1 ? "\(ContentState.medal(1)) \(jellyName) won!" : "\(ContentState.medal(p)) \(jellyName) came \(ContentState.ordinal(p))!"
+            return s.drops > 0 ? [full, "\(lead) +\(s.drops) coins", "\(lead) +\(s.drops)", lead] : [full, full, full, full]
+        case (.race, _): return [full, "\(jellyName) is racing!", "\(jellyName) is racing!", "\(jellyName) is racing!"]
+        default: return [full, full, full, full]
         }
     }
 }
