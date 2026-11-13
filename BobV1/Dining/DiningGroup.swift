@@ -193,7 +193,7 @@ final class DiningGroup {
     /// a body, there is no way round its ends (GameCare.serveWanted). Past this many seconds it pops in anyway (a diner that cannot get there is handled by the retries).
     static let gatherCap: Float = 12
     /// The meal's soft wake takes at most about 8 s (lag 2.8 + stir 1.2 + roll 1 + stretch 1.8 + look 0.6 + a bed hop); past this a sleeper is called the hard way.
-    static let wakeCap: Float = 11
+    static var wakeCap: Float { BlobBrain.slowWakeOn ? SlowWakeTuning.mealCap : 11 }
     /// A bystander closer than this to the tray's rectangle holds the pop-in back (his belly + a margin), for at most 4 s past the cap.
     static let trayClearance: Float = 0.7
     /// Floor distance from `p` to the tray's rectangle (the tray as it will be drawn at its spot).
@@ -363,7 +363,7 @@ final class DiningGroup {
             for i in brains.indices where !started[i] && brains[i].mealWaking && brains[i].sleep.mealWakeT > Self.wakeCap {
                 MealTrace.log("wake FALLBACK diner=\(memberIDs[i]) after \(brains[i].sleep.mealWakeT) s")
                 brains[i].sleep.mealWake = false; brains[i].sleep.mealCall = nil
-                brains[i].requestNow(.goTo(approachPoint(blob: i)))
+                brains[i].requestHard(.goTo(approachPoint(blob: i)))
             }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
             for i in brains.indices where !started[i] && !ready(i) && isIdle(brains[i]) {

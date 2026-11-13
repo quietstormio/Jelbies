@@ -218,7 +218,7 @@ final class StormReactor {
         for j in jellies {
             if j.brain.isSleeping, available(j, care: care), !seenSleep.contains(j.id) {
                 seenSleep.insert(j.id)
-                j.brain.sleepWake(groggy: true, fast: true)
+                j.brain.sleepWake(groggy: true, fast: true, slow: true)
                 j.brain.face(.grumpy, hold: 2.2)
                 note("\(j.id) wakes grumpy")
             }

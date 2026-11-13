@@ -605,7 +605,8 @@ final class BlobBrain {
     func request(_ r: BlobRequest) { pending = r }
 
     /// Convenience: cancel whatever he is doing right now and serve `r` immediately (used by the care menu).
-    func requestNow(_ r: BlobRequest) { pending = r; interruptScript = true }
+    func requestNow(_ r: BlobRequest) { if slowWakeCall(r) { return }; pending = r; interruptScript = true }          // (slow wake: a sleeper is not hard-aborted, BlobBrain+SleepForce)
+    func requestHard(_ r: BlobRequest) { pending = r; interruptScript = true }          // (today's requestNow: really aborts; the meal's fallbacks)
     var interruptScript = false
 
     // MARK: rng
@@ -657,6 +658,7 @@ final class BlobBrain {
 
         HopDiag.lap(.tkCommands, &ht)
         if volley.active { volleyTick(sim, skinner, dt); return }          // Jelly Volleyball owns the body
+        slowWakeHoldCommands()          // (slow wake: a voice / trick command met a sleeper: it waits for the staged wake)
         if interruptScript { interruptScript = false; if case .none = script {} else { abortScript(sim, skinner) } }
         if blinkRequested { blinkRequested = false; skinner.blinkNow() }
         if let k = commandedIdle { commandedIdle = nil; startCommanded(k, sim, skinner) }

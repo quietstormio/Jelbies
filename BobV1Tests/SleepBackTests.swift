@@ -15,8 +15,9 @@ import simd
 @MainActor
 final class SleepBackTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
-    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }          // the room as the game runs it
-    override func tearDown() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
+    // (2026-11-12: this suite pins today's quick wake: `slowWakeEverywhere` OFF here; SlowWakeTests covers the staged wake with the switch on.)
+    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956); BlobBrain.slowWakeEverywhere = false }          // the room as the game runs it
+    override func tearDown() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); BlobBrain.slowWakeEverywhere = true }
 
     /// The face normal's height: +1 = face to the ceiling (on his back), 0 = upright, -1 = face down.
 

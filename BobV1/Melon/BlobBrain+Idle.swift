@@ -447,7 +447,7 @@ extension BlobBrain {
         if Self.decorKinds.contains(kind) { decorTick(sim, skinner, dt) }
         // a sleeper in the lying stages yields ONLY to a request meant for him (another Jelly's bath, meal or close-up never wakes him)
         if kind == .sleep, sleep.stage >= 2, sleep.stage <= 4 {
-            if pending != nil && !idleState.yielding { idleState.yielding = true; sleepWake(groggy: false, fast: true) }
+            if pending != nil && !idleState.yielding { idleState.yielding = true; sleepWake(groggy: false, fast: true, slow: true) }          // (a request meant for him: slow with `slowWakeEverywhere`, else today's quick wake)
         } else if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (held && !commanded)) && !idleState.yielding {
             switch kind {
             case .window where idleState.windowGo, .lieDown where idleState.windowGo, .flop where idleState.windowGo, .stargazing where idleState.windowGo: abortAll(sim, skinner); return          // (still walking there)
@@ -458,7 +458,7 @@ extension BlobBrain {
             case .decorSit where !idleState.decorGo, .decorBoop where !idleState.decorGo, .decorPeek where !idleState.decorGo: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .decorSlide where !idleState.decorGo && idleState.slideStage == 0: abortAll(sim, skinner); return          // (still turning on the floor: just stop)
             case .decorSlide where !idleState.decorGo, .soccerKick where !idleState.decorGo: idleState.yielding = true          // (they finish: the slide hurries its ride, the kick its stomp)
-            case .sleep where sleep.stage >= 2 && sleep.stage <= 4: idleState.yielding = true; sleepWake(groggy: false, fast: true)
+            case .sleep where sleep.stage >= 2 && sleep.stage <= 4: idleState.yielding = true; sleepWake(groggy: false, fast: true, slow: true)
             default: abortAll(sim, skinner); return
             }
         }
@@ -502,7 +502,7 @@ extension BlobBrain {
         bagFloorOn = false          // (the floor goes back to the room's at the next step, whatever cut the behaviour short)
         decorRelease()
         if let k = idleState.kind {
-            if k == .sleep { awakeMin = rand(SleepTuning.awakeMin.lowerBound, SleepTuning.awakeMin.upperBound) }          // he stays up a while after any wake (no sleep / wake / sleep loop)
+            if k == .sleep { awakeMin = rand(SleepTuning.awakeMin.lowerBound, SleepTuning.awakeMin.upperBound); if Self.slowWakeOn, let c = sleep.mealCall { if pending == nil { pending = c }; sleep.mealCall = nil } }          // (a wake cut short, e.g. by a pick-up: the call kept for it is handed back, not lost)          // he stays up a while after any wake (no sleep / wake / sleep loop)
             let treat = Self.emoteKinds.contains(k) && idleState.resume == nil && idleState.reaction == nil && social == nil          // (a solo emote from the treat slot: not his pick, no last / recent, no cooldown of its own - the old cycle goes on as if he had only paused)
             let flourish = (Self.flourishKinds.contains(k) && (idleState.resume != nil || idleState.reaction != nil)) || treat          // (a flourish inserted in a walk / a reaction is not his own pick of a special: no "last", no special cooldown; one the scheduler picked from standing is)
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)

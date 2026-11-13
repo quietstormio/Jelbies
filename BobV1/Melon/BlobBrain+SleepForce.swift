@@ -79,6 +79,65 @@ extension BlobBrain {
             if !sleep.mealWake { sleep.mealWake = true; sleep.mealWakeT = 0; MealTrace.log("meal call to sleeper jelly=\(steerID) stage=\(sleep.stage)") }
             activity = .turning
             if sleep.stage == 5 { sleep.mealCall = r } else { request(r) }
-        } else { requestNow(r) }
+        } else { requestHard(r) }          // (the meal's own fallback must really abort; `requestNow` would be softened again)
+    }
+}
+
+/// Slow wake everywhere (user 2026-11-12: "Whenever they wake up it should be slow with a yawn and stretch"): ONE tuning struct. The staged wake = lag + stir (`SleepTuning.stirTime`) + slow roll-up (`softRollTime`) + the YAWN
+/// (this struct) + the groggy stretch (`softStretch`) + the half-lid look; the call that woke him starts when it ends.
+enum SlowWakeTuning {
+    /// The yawn beat (seconds), between the roll-up and the stretch.
+    static let yawnTime: Float = 1.0
+    /// How far the slow lift of the body goes in the yawn (0...1 of the stretch's lift; the stretch carries on from here), and how long it takes.
+    static let yawnLift: Float = 0.5, yawnLiftTime: Float = 0.45
+    /// The mouth: wide and round (as the idle yawn's 0.95), opens from `yawnMouthAt` in `yawnMouthOpenTime`, closes from `yawnMouthCloseAt` in `yawnMouthCloseTime`.
+    static let yawnMouth: Float = 0.95, yawnMouthAt: Float = 0.2, yawnMouthOpenTime: Float = 0.3, yawnMouthCloseAt: Float = 0.62, yawnMouthCloseTime: Float = 0.36
+    /// Eyes squeezed shut through the yawn (the `sleepy` closing; the stretch opens them as today).
+    static let yawnEyes: Float = 0.95
+    /// A slow wake of the brain's own (not a meal's) that has not finished after this many seconds ends hard: lag <= 2.8 (+0.8 per extra sleeper) + stir 1.2 + roll 1.0 + yawn 1.0 + stretch 1.75 + look 0.55 + a bed hop.
+    static let cap: Float = 13
+    /// The meal group's cap with the yawn in it (was 11).
+    static let mealCap: Float = 12
+}
+
+extension BlobBrain {
+    /// 2026-11-12: every wake is the slow one (stir, roll up, yawn, stretch), then the action that woke him starts. Off = today's wakes exactly (a tap / a request / a natural wake roll up quickly, no yawn beat).
+    /// The immediate causes never change: the finger picking him up, the scene changes (`sleepWake(fast: true)`: race, volley, show, the newcomer's welcome; leaving for the park), app relaunch, every watchdog.
+    nonisolated(unsafe) static var slowWakeEverywhere = true
+    static var slowWakeOn: Bool { slowWakeEverywhere }
+
+    /// Snores (and the nap music) go on while he is `isNapping`; with the slow wake they stop the moment a wake is in hand (the lag, the stir), not at the roll.
+    var isSnoring: Bool { isNapping && !(Self.slowWakeOn && (sleep.slowWake || sleep.mealWake)) }
+
+    /// `requestNow` met a sleeper (BlobBrain.swift): a lying or stretching sleeper is not hard-aborted; the call waits for the staged wake (`request` for the lying stages: `idleGate` starts the wake; the stretch keeps it in
+    /// `sleep.mealCall`, a pending request there would abort the stretch). True = taken. An immediate wake in hand (`sleep.quick`), a sleeper not yet down (stages 0 and 1) and the switch off: today's hard path.
+    func slowWakeCall(_ r: BlobRequest) -> Bool {
+        guard Self.slowWakeOn, idleState.kind == .sleep, sleep.stage >= 2, sleep.stage <= 5, !sleep.quick else { return false }
+        if sleep.mealWake { callToMeal(r); return true }
+        if !sleep.slowWake { sleep.slowWake = true; sleep.mealWakeT = 0 }
+        activity = .turning
+        if sleep.stage == 5 { pending = nil; sleep.mealCall = r } else { request(r) }          // (a later call replaces an earlier one, as for an awake Jelbie)
+        return true
+    }
+
+    /// A voice / trick command (`commandedIdle`, flip, decor, name hop) came while he sleeps: it wakes him (the slow way) and is kept until the wake ends. Called every tick from `tick`, before the commands are read.
+    func slowWakeHoldCommands() {
+        guard Self.slowWakeOn, idleState.kind == .sleep, sleep.stage >= 2, sleep.stage <= 5, !sleep.quick,
+              commandedIdle != nil || commandedFlip || commandedDecor != nil || commandedNameHop else { return }
+        sleep.heldIdle = commandedIdle ?? sleep.heldIdle; sleep.heldFlip = sleep.heldFlip || commandedFlip; sleep.heldDecor = commandedDecor ?? sleep.heldDecor; sleep.heldNameHop = sleep.heldNameHop || commandedNameHop
+        commandedIdle = nil; commandedFlip = false; commandedDecor = nil; commandedNameHop = false
+        if !sleep.slowWake && !sleep.mealWake { sleep.slowWake = true; sleep.mealWakeT = 0 }
+        if sleep.stage <= 4, !sleep.wakeAsked, sleep.stirT < 0 { sleepWake(groggy: false, slow: true) }
+    }
+
+    /// The brain's own bound on a slow wake: past `SlowWakeTuning.cap` seconds the wake ends hard (the sleep is aborted), and the call that woke him is handed back as a plain pending request.
+    func slowWakeFallback(_ sim: SoftBody, _ skinner: Skinner) {
+        MealTrace.log("slow wake FALLBACK jelly=\(steerID) after \(sleep.mealWakeT) s stage \(sleep.stage)")
+        let call = pending ?? sleep.mealCall
+        let held = (sleep.heldIdle, sleep.heldFlip, sleep.heldDecor, sleep.heldNameHop)
+        sleep.slowWake = false; sleep.mealCall = nil; sleep.heldIdle = nil; sleep.heldFlip = false; sleep.heldDecor = nil; sleep.heldNameHop = false
+        abortAll(sim, skinner)
+        commandedIdle = held.0 ?? commandedIdle; commandedFlip = commandedFlip || held.1; commandedDecor = held.2 ?? commandedDecor; commandedNameHop = commandedNameHop || held.3
+        if let r = call { pending = r }
     }
 }

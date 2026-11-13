@@ -11,8 +11,9 @@ import simd
 
 @MainActor
 final class SleepStaggerTests: XCTestCase {
-    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956); SleepOrder.reset() }
-    override func tearDown() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); SleepOrder.reset() }
+    // (2026-11-12: this suite is the staggered-sleep-time baseline: a single wake is the quick one. It pins `slowWakeEverywhere` OFF, i.e. today's numbers; SlowWakeTests covers the switch on.)
+    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956); SleepOrder.reset(); BlobBrain.slowWakeEverywhere = false }
+    override func tearDown() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); SleepOrder.reset(); BlobBrain.slowWakeEverywhere = true }
 
     private let dt: Float = 1.0 / 60
 

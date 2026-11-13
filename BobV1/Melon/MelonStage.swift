@@ -722,7 +722,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if let s = b.social, ![.squabble, .look, .nuzzle, .sitTogether, .sneak, .bagSit, .cuddle].contains(s.kind) { playing = true }          // (chase / tag, dances, bumps ... start the play music)
         }
         if model.touch.thrown { playing = true }          // a toy thrown / bounced in the close-up
-        let napping = brains.map { $0?.isNapping ?? false }
+        let napping = brains.map { $0?.isSnoring ?? false }
         let moods = actors.indices.map { model.care.jelly($0)?.needs.mood ?? .okay }
         AudioHub.shared.raceCrowd(model.care.race.active && model.care.race.trackVisible)
         let raceScene = model.care.race.musicScene
@@ -737,7 +737,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         }
         AudioHub.shared.situation(napping: napping, playing: playing, xs: brains.map { $0?.px ?? 0 }, moods: moods, scene: raceScene != .none ? raceScene : model.care.show.musicScene,
                                   home: home, ambient: ambient, walking: actors.map(\.isWalking), night: Double(brains.compactMap { $0?.idleNight }.max() ?? 0),
-                                  guest: model.care.guestBook.actor.flatMap { a in a.brain.map { (slot: a.id, napping: $0.isNapping, x: $0.px) } })
+                                  guest: model.care.guestBook.actor.flatMap { a in a.brain.map { (slot: a.id, napping: $0.isSnoring, x: $0.px) } })
     }
 
     /// The other Jellies' brain, jelly follow-through and mouth (their needs, mood and greeting are GameCare.tickOthers).
