@@ -86,7 +86,7 @@ extension GameCare {
     private func releaseTuckIn(except ids: Set<Int>) {
         guard syncsAppGroup else { return }
         let others = raceBook.actors.contains { !ids.contains($0.id) && ($0.brain?.isSleeping ?? false) } || !nightRest.wanted.subtracting(ids).isEmpty || nightRest.arrivalAsleep
-        if !others { live?.wake(names: jellies.map(\.name), linger: false) }
+        if !others { live?.wake(names: jellies.map(\.name), colors: jellyColorKeys, linger: false) }
     }
 
     /// The book-keeping half of a bedtime (the voice path issues the order itself and logs it).

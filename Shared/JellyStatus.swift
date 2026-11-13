@@ -32,6 +32,32 @@ nonisolated enum JellyStatus {
             .joined(separator: " · ")
     }
 
+
+    /// The Home Screen headline: `JellyState.headline`, except a Jelbie that is asleep and wants nothing says "Lemon is napping." (a needy one still shows its need).
+    static func headline(_ s: JellyState, sleeping: Bool) -> String {
+        if sleeping, !s.needsAttention { return "\(s.name) is napping" }
+        return s.headline
+    }
+
+    /// The Lock Screen rectangular line. Three or more in the same state: the short group line ("All 3 are happy" / "Everyone is napping").
+    /// Otherwise the needy first, and each "Name word" pair keeps its words together (no-break spaces), so a wrap can only fall between pairs.
+    static func rectangularLine(_ states: [JellyState], sleeping: Bool) -> String {
+        guard states.count >= 3 else { return line(states, sleeping: sleeping) }
+        let words = Set(states.map { word($0, sleeping: sleeping) })
+        if words.count == 1, let w = words.first {
+            if w == "napping" { return "Everyone is napping" }
+            return "All \(states.count) are \(w)"
+        }
+        let nb = "\u{00A0}"
+        let ordered = states.sorted { a, b in
+            if a.needsAttention != b.needsAttention { return a.needsAttention }
+            return a.id < b.id
+        }
+        return ordered.enumerated().map { i, s in
+            i == 0 ? "\(s.name)\(nb)is\(nb)\(word(s, sleeping: sleeping))" : "\(s.name)\(nb)\(word(s, sleeping: sleeping))"
+        }.joined(separator: " · ")
+    }
+
     /// One short phrase for the inline Lock Screen slot: the neediest Jelbie, or "Everyone is napping" / "All N Jelbies are fine".
     static func inline(_ states: [JellyState], sleeping: Bool) -> String {
         guard !states.isEmpty else { return "Jelbies" }

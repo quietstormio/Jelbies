@@ -62,31 +62,11 @@ struct JelbiesWidgetView: View {
                     .widgetURL(link)
                     .containerBackground(for: .widget) { JellyPalette.night }
             } else {
-                JellyWidgetContent(family: family, states: entry.states, portraits: entry.portraits)
-                    .overlay(alignment: .topTrailing) { if family != .systemSmall { waterButton } }
+                JellyWidgetContent(family: family, states: entry.states, portraits: entry.portraits, sleeping: entry.sleeping,
+                                   showsWater: family != .systemSmall, queued: entry.queued)
                     .widgetURL(link)
                     .containerBackground(for: .widget) { WidgetTheme.card }
             }
-        }
-    }
-
-    /// The one quick action: Water for the thirstiest Jelbie (shown when someone is Thirsty / Parched and no drink is queued yet).
-    @ViewBuilder private var waterButton: some View {
-        let thirsty = entry.states.filter { $0.tier(.water).rawValue >= NeedTier.hungry.rawValue }.min { $0.level(.water) < $1.level(.water) }
-        if let t = thirsty {
-            let queued = entry.queued.contains { $0 == .water(t.id) || $0 == .water(nil) }
-            Button(intent: WaterQuickIntent(jellyID: t.id)) {
-                HStack(spacing: 4) {
-                    Image(systemName: queued ? "checkmark" : "drop.fill").font(.system(size: 11, weight: .bold))
-                    Text(queued ? "Water coming" : "Water \(t.name)").font(WidgetTheme.font(11, .semibold))
-                }
-                .foregroundStyle(queued ? WidgetTheme.inkSoft : WidgetTheme.ink)
-                .padding(.horizontal, 9).padding(.vertical, 5)
-                .background(Capsule().fill(.white.opacity(0.7)))
-            }
-            .buttonStyle(.plain)
-            .disabled(queued)
-            .offset(y: -6)
         }
     }
 }

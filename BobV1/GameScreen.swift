@@ -375,7 +375,7 @@ struct GameScreen: View {
         .onChange(of: scenePhase) { _, p in
             if p == .active {
                 guard wentBackground else {
-                    LiveActivities.shared.returnedActive(names: jellyNames, nobodyAsleep: !model.care.anySleepingOrWanted)          // an `.inactive` blip may have raised the nap card: end it if nobody sleeps
+                    LiveActivities.shared.returnedActive(names: jellyNames, colors: model.care.jellyColorKeys, nobodyAsleep: !model.care.anySleepingOrWanted)          // an `.inactive` blip may have raised the nap card: end it if nobody sleeps
                     return
                 }          // an `.inactive` blip (alert, Control Centre, app-switcher peek): nothing was torn down, nothing to rebuild
                 wentBackground = false
@@ -386,7 +386,7 @@ struct GameScreen: View {
                 AudioHub.shared.setForeground(true)
                 AudioHub.shared.setTownScene(currentMusicScene)          // re-derive from the truth on every return: a stale café scene can never keep the room's sounds muted
                 Ears.shared.setForeground(true)
-                LiveActivities.shared.returnedActive(names: jellyNames, nobodyAsleep: !model.care.anySleepingOrWanted)          // by day the nap card says good morning; woken in game: gone
+                LiveActivities.shared.returnedActive(names: jellyNames, colors: model.care.jellyColorKeys, nobodyAsleep: !model.care.anySleepingOrWanted)          // by day the nap card says good morning; woken in game: gone
                 router.drainQueued()                                                                   // the widget's Water button / an intent run while away
                 router.apply(care: model.care)
             } else if p == .background {          // (.inactive is the system's permission alert or a swipe: nothing is torn down, the listen is not cut)

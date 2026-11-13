@@ -42,7 +42,7 @@ struct JelbiesSnippetView: View {
         return HStack(spacing: 12) {
             ZStack(alignment: .topTrailing) {
                 ZStack {
-                    Circle().fill(JellyPalette.body(s.color).opacity(0.28)).frame(width: 46, height: 46)
+                    Circle().fill(JellyPalette.backing(s.color, 0.28)).frame(width: 46, height: 46)
                     JellyFaceGlyph(color: s.color, mood: mood).frame(width: 36, height: 36)
                 }
                 if mood == .sleeping { SleepZs(size: 9, color: JellyPalette.bodyDeep(s.color)).offset(x: 8, y: -6) }

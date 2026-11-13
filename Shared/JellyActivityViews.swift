@@ -20,7 +20,7 @@ struct RaceTrackBar: View {
             let x = min(max(CGFloat(state.progress), 0), 1) * (w - height) + height / 2
             ZStack(alignment: .leading) {
                 Capsule().fill(ink.opacity(0.12)).frame(height: height)
-                Capsule().fill(JellyPalette.body(attrs.jellyColor)).frame(width: max(height, x + height / 2), height: height)
+                Capsule().fill(JellyPalette.solid(attrs.jellyColor)).frame(width: max(height, x + height / 2), height: height)
                 // lap ticks
                 ForEach(1..<max(state.laps, 1), id: \.self) { i in
                     Rectangle().fill(ink.opacity(0.35)).frame(width: 2, height: height * 0.6)
@@ -51,21 +51,23 @@ struct JellyActivityLockView: View {
         HStack(spacing: 14) {
             leadingFace(size: 58)
             VStack(alignment: .leading, spacing: 4) {
-                Text(attrs.headline(state)).font(JellyPalette.font(18)).foregroundStyle(JellyPalette.ink).lineLimit(1).minimumScaleFactor(0.7)
+                FitHeadline(attrs: attrs, state: state, size: 18, color: JellyPalette.ink)
                 switch attrs.kind {
                 case .race:
-                    Text(attrs.detail(state)).font(JellyPalette.font(13, .semibold)).foregroundStyle(JellyPalette.inkSoft)
+                    Text(attrs.detail(state, roundedWake: true)).font(JellyPalette.font(13, .semibold)).foregroundStyle(JellyPalette.inkSoft).lineLimit(1)
                     RaceTrackBar(attrs: attrs, state: state).padding(.top, 2)
                 case .nap:
                     HStack(spacing: 6) {
                         Image(systemName: "moon.zzz.fill").font(.system(size: 12, weight: .bold)).foregroundStyle(JellyPalette.inkSoft)
-                        Text(attrs.detail(state)).font(JellyPalette.font(13, .semibold)).foregroundStyle(JellyPalette.inkSoft)
+                        Text(attrs.detail(state, roundedWake: true)).font(JellyPalette.font(13, .semibold)).foregroundStyle(JellyPalette.inkSoft).lineLimit(1)
                     }
                     if state.phase == .sleeping, state.sleepers.count > 1 {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 5) {
                             ForEach(Array(state.sleepers.enumerated()), id: \.offset) { i, n in
-                                Text(n).font(JellyPalette.font(11, .semibold)).foregroundStyle(JellyPalette.ink.opacity(0.8))
-                                    .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(JellyPalette.body(state.sleeperColor(i)).opacity(0.35)))
+                                Text(n).font(JellyPalette.font(11, .semibold)).foregroundStyle(JellyPalette.ink.opacity(0.85))
+                                    .lineLimit(1).minimumScaleFactor(0.6).truncationMode(.tail)
+                                    .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(JellyPalette.backing(state.sleeperColor(i), 0.4)))
+                                    .layoutPriority(Double(n.count))
                             }
                         }
                     }
@@ -80,11 +82,11 @@ struct JellyActivityLockView: View {
     @ViewBuilder private func leadingFace(size: CGFloat) -> some View {
         ZStack(alignment: .topTrailing) {
             ZStack {
-                Circle().fill(JellyPalette.body(attrs.jellyColor).opacity(0.28)).frame(width: size, height: size)
-                if attrs.kind == .nap, state.phase == .sleeping, state.sleepers.count > 1 {
+                Circle().fill(JellyPalette.backing(attrs.jellyColor, 0.28)).frame(width: size, height: size)
+                if attrs.kind == .nap, state.phase == .sleeping || state.phase == .awake, state.sleepers.count > 1 {
                     HStack(spacing: -size * 0.22) {
                         ForEach(Array(state.sleepers.prefix(3).enumerated()), id: \.offset) { i, _ in
-                            JellyFaceGlyph(color: state.sleeperColor(i), mood: .sleeping).frame(width: size * 0.5, height: size * 0.5)
+                            JellyFaceGlyph(color: state.sleeperColor(i), mood: state.phase == .sleeping ? .sleeping : .happy).frame(width: size * 0.5, height: size * 0.5)
                         }
                     }
                 } else {
@@ -173,8 +175,8 @@ struct JellyIslandExpanded: View {
                     if attrs.kind == .nap, state.phase == .sleeping { SleepZs(size: 10, color: JellyPalette.moon, phase: zPhase).offset(x: 8, y: -6) }
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(attrs.headline(state)).font(JellyPalette.font(17)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
-                    Text(attrs.detail(state)).font(JellyPalette.font(13, .semibold)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                    FitHeadline(attrs: attrs, state: state, size: 17, color: .white)
+                    Text(attrs.detail(state, roundedWake: true)).font(JellyPalette.font(13, .semibold)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 switch (attrs.kind, state.phase) {
@@ -191,4 +193,23 @@ struct JellyIslandExpanded: View {
         }
         .padding(.horizontal, 6).padding(.vertical, 4)
     }
+}
+
+/// The activity headline on one line: the longest wording that fits (full, then without the course / the "JellyCoins" word), then scaled down.
+struct FitHeadline: View {
+    let attrs: JelbiesActivityAttributes
+    let state: JelbiesActivityAttributes.ContentState
+    var size: CGFloat = 18
+    var color: Color = JellyPalette.ink
+    var body: some View {
+        let c = attrs.headlineCandidates(state)
+        ViewThatFits(in: .horizontal) {
+            line(c[0]).fixedSize(horizontal: true, vertical: false)
+            line(c[1]).fixedSize(horizontal: true, vertical: false)
+            line(c[2]).fixedSize(horizontal: true, vertical: false)
+            line(c[3]).minimumScaleFactor(0.6).truncationMode(.tail)
+        }
+        .accessibilityLabel(c[0])
+    }
+    private func line(_ t: String) -> some View { Text(t).font(JellyPalette.font(size)).foregroundStyle(color).lineLimit(1) }
 }
