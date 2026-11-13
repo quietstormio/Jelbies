@@ -210,6 +210,40 @@ final class HopscotchLineTests: XCTestCase {
         XCTAssertGreaterThan(slideMin, 0, "the sideways step stays outside the slide's box")
     }
 
+    // 6 (park-hopwalk-r1): the walk to the queue slot cannot go on (a body stands 1.5 m from the leg, the walker is held where he is): he gives the game up within 10 s, his slot is free, the leader's place is untouched
+    func testApproachGivesUpWhenTheWalkCannotProceed() {
+        HopscotchTuning.joinChance = 1
+        let lab = parkLab(positions: [SIMD2(-2.1, -1.35), SIMD2(0.8, -2.7), SIMD2(-0.7, -2.2)], seed: 7)
+        let line = HopscotchLine.shared
+        for r in lab.rigs { r.brain.autonomy = true; r.brain.idleForced = true }
+        XCTAssertTrue(lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: uid))
+        XCTAssertTrue(lab.rigs[1].brain.decorStart(.decorHopscotch, lab.rigs[1].sim, only: nil, uid: uid))
+        let b = lab.rigs[1].brain, friend = lab.rigs[2]
+        let court = DecorField.shared.foot(uid)!
+        let slotSpot = court.centre + court.turned(HopscotchCourt.queueSpot(slot: 1))
+        let heldAt = b.position
+        let along = simd_normalize(slotSpot - heldAt)
+        let friendAt = heldAt + along * 1.0          // (a standing body on his leg, right ahead of him: the walk cannot go on)
+        let slotBefore = line.players(uid).first { $0.id == 1 }?.slot ?? -9
+        var gaveUpAt: Float = -1, pinnedFor: Float = 0, gaveUpsBefore = BlobBrain.hopApproachGiveUps
+        gaveUpsBefore = BlobBrain.hopApproachGiveUps
+        for i in 0..<(60 * 25) {
+            lab.tick(watching: false); DecorField.shared.tick(dt: dt)
+            let t = Float(i) / 60
+            friend.brain.autonomy = false; friend.brain.px = friendAt.x; friend.brain.pz = friendAt.y; friend.sim.teleport(toXZ: friendAt)
+            if b.idleState.kind == .decorHopscotch, b.idleState.slideStage == 0 {
+                b.px = heldAt.x; b.pz = heldAt.y; lab.rigs[1].sim.teleport(toXZ: heldAt); pinnedFor = t          // (held where he is: the walk makes no progress)
+            }
+            if gaveUpAt < 0, b.idleState.kind == nil || !line.contains(uid, 1) { gaveUpAt = t; break }
+        }
+        print("[hopline] approach cap: slot before \(slotBefore), gave up at \(gaveUpAt) s (pinned until \(pinnedFor) s), give-ups \(BlobBrain.hopApproachGiveUps - gaveUpsBefore), still in the line \(line.contains(uid, 1)), leader in the line \(line.contains(uid, 0))")
+        XCTAssertGreaterThan(gaveUpAt, 0, "he gave the game up")
+        XCTAssertLessThanOrEqual(gaveUpAt, 10, "within 10 s (no stand over 10 s)")
+        XCTAssertFalse(line.contains(uid, 1), "his slot is free")
+        XCTAssertEqual(line.players(uid).first { $0.id == 0 }?.slot, 0, "the leader's place is untouched")
+        XCTAssertGreaterThanOrEqual(BlobBrain.hopApproachGiveUps - gaveUpsBefore, 1, "it was the approach cap")
+    }
+
     // 3
     func testQueueSpotsAreOnOpenFloor() {
         let lab = parkLab(positions: [SIMD2(0, 3)], seed: 1)

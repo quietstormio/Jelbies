@@ -36,6 +36,7 @@ extension BlobBrain {
     /// `decorStart` committed: he joins the line (the first one opens it and tells the others).
     func hopscotchCommit(_ f: DecorFoot) {
         let line = HopscotchLine.shared
+        Self.hopApproach[steerID] = nil
         let first = line.players(f.uid).isEmpty
         let slot = line.enroll(f.uid, steerID)
         idleState.seat = slot; idleState.slideStage = 0; idleState.slideStep = 0
@@ -166,6 +167,28 @@ extension BlobBrain {
         }
     }
 
+    /// r14 (park-hopwalk-r1): a patience cap on the way TO his slot / the start (stages 0 and 4, and stage 5 while he is still not there): when his distance to that goal has not shrunk by
+    /// `approachProgress` within `HopscotchTuning.approachPatience` s (a body on the leg and he cannot go on: 66 s in the real app, the walk ends, stage 5 sends him off again, and a walk that
+    /// ends far from the start uses no try), he gives the game up (`idleFinish` releases his slot, the others' order is untouched). The timer keeps running across those restarts, restarts on
+    /// progress, and is off once he is at his slot (waiting in the queue is not a stand) and while he hops.
+    struct HopApproach { var mark: Float; var t: Float }
+    nonisolated(unsafe) static var hopApproach: [Int: HopApproach] = [:]
+    nonisolated(unsafe) static var hopApproachGiveUps = 0
+    private func hopscotchApproachCheck(_ f: DecorFoot, _ dt: Float, _ skinner: Skinner) {
+        let stage = idleState.slideStage
+        guard stage == 0 || stage == 4 || stage == 5 else { Self.hopApproach[steerID] = nil; return }
+        let d = simd_distance(position, hopscotchWorld(f, HopscotchCourt.queueSpot(slot: idleState.seat)))
+        guard d > 1.0 else { Self.hopApproach[steerID] = nil; return }          // (at his slot - the room moves a queue spot by up to 0.64: waiting there is not a stand)
+        guard var a = Self.hopApproach[steerID] else { Self.hopApproach[steerID] = HopApproach(mark: d, t: 0); return }
+        if d < a.mark - HopscotchTuning.approachProgress { a.mark = d; a.t = 0 } else { a.t += dt }
+        if a.t >= HopscotchTuning.approachPatience {
+            Self.hopApproach[steerID] = nil; Self.hopApproachGiveUps += 1
+            idleFinish(skinner)
+            return
+        }
+        Self.hopApproach[steerID] = a
+    }
+
     private func hopscotchHop(_ sim: SoftBody, _ f: DecorFoot) {
         let t = idleState.slideStep
         let goal = hopscotchWorld(f, HopscotchCourt.squares[min(t, HopscotchCourt.count - 1)])
@@ -175,6 +198,7 @@ extension BlobBrain {
 
     /// The hops own the body (like the slide's steps): true = this step is handled.
     func hopscotchBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        if idleState.kind == .decorHopscotch, let f = DecorField.shared.foot(idleState.decorUID) { hopscotchApproachCheck(f, dt, skinner) }          // (every step, also while he walks: `runHopscotch` is not ticked then)
         guard idleState.kind == .decorHopscotch, idleState.slideStage == 1, case .idle = script, let f = DecorField.shared.foot(idleState.decorUID) else { return false }
         let line = HopscotchLine.shared, t = idleState.slideStep
         activity = .playing
