@@ -207,9 +207,7 @@ final class DuplicateJelbiesTests: XCTestCase {
         XCTAssertEqual(WidgetBridge.colorName(JellyRoster.species(100)), "yellow")
         XCTAssertEqual(JelbieRoster.colorName(JellyRoster.species(100)), "yellow")
         XCTAssertEqual(WidgetBridge.palette(100).flesh, PaletteKey.yellow.palette.flesh)
-        let entities = JelbieRoster.current(directory: nil, roster: [0, 100])
-        XCTAssertEqual(entities.map(\.color), ["blue", "yellow"], "the no-snapshot fallback resolves the species and the name")
-        XCTAssertEqual(entities.map(\.name), [JellyRoster.names[0], "Pip"])
+        XCTAssertTrue(JelbieRoster.current(directory: nil, roster: [0, 100]).isEmpty, "no snapshot: no Jelbies are offered (apple-fixes-r1 H)")
     }
 
     // MARK: voice
