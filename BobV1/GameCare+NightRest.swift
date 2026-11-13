@@ -60,14 +60,33 @@ extension GameCare {
 
     // MARK: going to bed
 
-    /// Everybody to bed (the group Bedtime button, Siri, a plain "goodnight").
-    func bedtimeAll() { bedtime(ids: presentActorIDs.isEmpty ? jellies.map(\.id) : presentActorIDs) }
+    /// Everybody to bed (the group Bedtime button, Siri, a plain "goodnight"). True when the order went out; false when the room refused (a race, the tray, a clean-up ...).
+    /// The App Group stamp (`Bedtime`, read by Siri and the widget) is written only then.
+    @discardableResult
+    func bedtimeAll() -> Bool {
+        guard bedtime(ids: presentActorIDs.isEmpty ? jellies.map(\.id) : presentActorIDs) else { return false }
+        if syncsAppGroup { live?.tuckedIn() }
+        return true
+    }
 
-    /// Bedtime for these Jelbies, issued now and retried until they lie down.
-    func bedtime(ids: [Int]) {
-        guard canBedtime else { return }
+    /// Bedtime for these Jelbies, issued now and retried until they lie down. False when `canBedtime` refused.
+    @discardableResult
+    func bedtime(ids: [Int]) -> Bool {
+        guard canBedtime else { return false }
         registerBedtime(ids)
         if let f = voice.onGoodnight { f(ids) } else { for id in ids { selectBrain(id)?.commandedGoodnight = true } }
+        return true
+    }
+
+    /// Somebody is asleep, has been asked to sleep, or is about to be put down on arrival (what Siri's "napping" may truthfully say).
+    var anySleepingOrWanted: Bool {
+        nightRest.arrivalAsleep || !nightRest.wanted.isEmpty || raceBook.actors.contains { $0.brain?.isSleeping ?? false }
+    }
+    /// Nobody (apart from `ids`, who are being woken) is left asleep: the Bedtime stamp and the nap card go.
+    private func releaseTuckIn(except ids: Set<Int>) {
+        guard syncsAppGroup else { return }
+        let others = raceBook.actors.contains { !ids.contains($0.id) && ($0.brain?.isSleeping ?? false) } || !nightRest.wanted.subtracting(ids).isEmpty || nightRest.arrivalAsleep
+        if !others { live?.wake(names: jellies.map(\.name), linger: false) }
     }
 
     /// The book-keeping half of a bedtime (the voice path issues the order itself and logs it).
@@ -89,6 +108,7 @@ extension GameCare {
         }
         nightRest.wanted.remove(id); nightRest.dayOnce.remove(id)          // a named command also cancels a pending bedtime for an awake one
         noteInteraction(jelly: id)
+        releaseTuckIn(except: [id])
     }
     /// A deliberate poke on a sleeper (W3 wires the gesture).
     func pokeSleeper(_ id: Int) { wakeSleeper(id, groggy: true) }
@@ -99,6 +119,7 @@ extension GameCare {
         for a in raceBook.actors { wakeSleeper(a.id) }
         if isBedtimeHours { nightRest.nightWoken.formUnion(presentActorIDs) }
         noteInteraction()
+        releaseTuckIn(except: Set(raceBook.actors.map(\.id)))
     }
 
     /// The player did something: the idle clocks restart (a wanted bedtime stays).

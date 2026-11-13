@@ -180,32 +180,36 @@ final class LiveActivities {
     func isNight(_ t: Date? = nil) -> Bool { SleepHours.isNight(at: t ?? now(), calendar: calendar) }
 
     /// The Jelbies go to bed: the nap card (when the setting is on). `tuckIn`: also stamp Bedtime in the App Group (Siri's "goodnight").
-    func bedtime(names: [String], now t: Date? = nil, tuckIn: Bool = true) {
+    func bedtime(names: [String], colors: [String] = [], now t: Date? = nil, tuckIn: Bool = true) {
         let t = t ?? now()
         if tuckIn { Bedtime.write(t, to: directory) }
         guard napOn, napID == nil, driver.enabled else { return }
         let wake = Bedtime.wakeDate(after: t, calendar: calendar)
-        let attrs = JelbiesActivityAttributes(kind: .nap, jellyID: 0, jellyName: names.first ?? "Jelbie", jellyColor: "blue", startedAt: t)
-        guard let id = try? driver.start(attrs, state: .sleeping(names, wakeAt: wake), staleDate: wake) else { return }
+        let attrs = JelbiesActivityAttributes(kind: .nap, jellyID: 0, jellyName: names.first ?? "Jelbie", jellyColor: colors.first ?? "blue", startedAt: t)
+        guard let id = try? driver.start(attrs, state: .sleeping(names, colors: colors, wakeAt: wake), staleDate: wake) else { return }
         napID = id
     }
-    /// They are up: the card says good morning and goes away.
-    func wake(names: [String]) {
+    /// The tuck-in alone (the in-game Bedtime button): Siri and the widget now say "asleep", no card is raised while the app is on screen.
+    func tuckedIn(now t: Date? = nil) { Bedtime.write(t ?? now(), to: directory) }
+    /// They are up: the stamp goes; the card says good morning and goes away (`linger` false: at once, for a card that should never have been up).
+    func wake(names: [String], linger: Bool = true) {
         Bedtime.write(nil, to: directory)
         guard let id = napID else { return }
-        driver.end(id: id, state: .awake(names), dismissAt: now().addingTimeInterval(Self.linger))
+        driver.end(id: id, state: .awake(names), dismissAt: linger ? now().addingTimeInterval(Self.linger) : now())
         napID = nil
     }
 
     /// The app left the foreground: at night (or tucked in) the Jelbies sleep.
-    func leftActive(names: [String]) {
+    func leftActive(names: [String], colors: [String] = []) {
         guard napOn else { return }
-        if isNight() || Bedtime.read(from: directory, now: now()) != nil { bedtime(names: names, tuckIn: false) }
+        if isNight() || Bedtime.read(from: directory, now: now()) != nil { bedtime(names: names, colors: colors, tuckIn: false) }
     }
-    /// The app is back: by day the nap is over; also ends a nap whose wake time has passed.
-    func returnedActive(names: [String]) {
+    /// The app is back: by day the nap is over; also ends a nap whose wake time has passed. `nobodyAsleep`: the room says nobody is asleep or about to be
+    /// (they were woken in game): the stamp and the card go at once, even at night.
+    func returnedActive(names: [String], nobodyAsleep: Bool = false) {
         let tucked = Bedtime.read(from: directory, now: now())
-        if !Bedtime.isSleeping(at: now(), tuckedIn: tucked, calendar: calendar) || !napOn { wake(names: names) }
+        if nobodyAsleep { wake(names: names, linger: false) }
+        else if !Bedtime.isSleeping(at: now(), tuckedIn: tucked, calendar: calendar) || !napOn { wake(names: names) }
     }
 
     // MARK: housekeeping

@@ -43,6 +43,9 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
         // nap
         /// Names of the Jelbies asleep.
         var sleepers: [String] = []
+        /// Each sleeper's colour key, in `sleepers` order ("blue", "yellow", "green", "lavender", "teddy", "pearl", "panda": the strings the widget snapshot uses).
+        /// Optional so a payload from before this field decodes (nil: the old position colours).
+        var sleeperColors: [String]? = nil
         /// Seconds since 1970 they are expected up (nap).
         var until: Double? = nil
 
@@ -56,10 +59,21 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
         static func finished(place: Int, racers: Int, drops: Int, laps: Int) -> ContentState {
             ContentState(phase: .finished, position: place, racers: racers, progress: 1, lap: laps, laps: laps, place: place, drops: drops)
         }
-        static func sleeping(_ names: [String], wakeAt: Date) -> ContentState {
-            ContentState(phase: .sleeping, sleepers: names, until: wakeAt.timeIntervalSince1970)
+        static func sleeping(_ names: [String], colors: [String]? = nil, wakeAt: Date) -> ContentState {
+            ContentState(phase: .sleeping, sleepers: names, sleeperColors: colors?.isEmpty == true ? nil : colors, until: wakeAt.timeIntervalSince1970)
         }
-        static func awake(_ names: [String]) -> ContentState { ContentState(phase: .awake, sleepers: names) }
+        static func awake(_ names: [String], colors: [String]? = nil) -> ContentState { ContentState(phase: .awake, sleepers: names, sleeperColors: colors?.isEmpty == true ? nil : colors) }
+
+        /// The colour key of sleeper `i`: its own when the payload has it, else the old by-position colours.
+        func sleeperColor(_ i: Int) -> String {
+            if let c = sleeperColors, c.indices.contains(i) { return c[i] }
+            return ["blue", "yellow", "green", "purple"][min(max(i, 0), 3)]
+        }
+        /// What the card draws: a nap card whose wake time has passed (`isStale`) says good morning instead of "sleeping".
+        func shown(stale: Bool) -> ContentState {
+            guard stale, phase == .sleeping else { return self }
+            return .awake(sleepers, colors: sleeperColors)
+        }
 
         /// "1st" / "2nd" / "3rd" / "4th".
         static func ordinal(_ n: Int) -> String {

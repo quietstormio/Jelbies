@@ -26,6 +26,10 @@ final class GameRouter {
 
     /// Routes waiting for the game screen (oldest first).
     private(set) var pending: [JellyRoute] = []
+    /// When each pending route was first (re-)requested; a route older than `maxPendingAge` is dropped, never performed late.
+    @ObservationIgnored private var requestedAt: [JellyRoute: Date] = [:]
+    /// A route that waited longer than this (a cold launch that never reached the room, a feed stuck behind a tray) is stale.
+    static let maxPendingAge: TimeInterval = 10 * 60
     /// Bumped on every request, so a view can `onChange` it.
     private(set) var serial = 0
     /// Everything applied so far (tests, the debug log).
@@ -34,6 +38,8 @@ final class GameRouter {
     /// Hooks other features plug into. Nil = the default fallback described above.
     @ObservationIgnored var onRace: ((Int) -> Void)?
     @ObservationIgnored var onBed: (() -> Void)?
+    /// Goodnight through the room's own flow: true when they were put to bed, false when the room refused (a meal, a race ...). Wins over `onBed`.
+    @ObservationIgnored var onGoodnight: (() -> Bool)?
     /// The food id to serve for a Siri / widget feed (the Bag's pick; default berries, a store food; nothing is served when the bag has none).
     @ObservationIgnored var foodFor: (Int?) -> String = { _ in Consumables.berries.id }
     /// A Siri / widget feed with NO food in the bag: the screen opens the Feed row (everything dimmed "none left") and says so.
@@ -60,8 +66,11 @@ final class GameRouter {
     func request(_ route: JellyRoute) {
         pending.removeAll { $0 == route }
         pending.append(route)
+        requestedAt[route] = now()
         serial += 1
     }
+    /// Forgets everything waiting (a new game starts: a Siri action asked for the old one must not land on it).
+    func clearPending() { pending = []; requestedAt = [:] }
     /// The App Group queue (the widget's Water button; an intent that ran while the app was not running). Call on `.active`.
     func drainQueued() {
         for r in PendingActions.drain(from: directory, now: now()) { request(r) }
@@ -72,11 +81,20 @@ final class GameRouter {
     /// Performs everything pending on `care`. A feed / water that cannot start yet (tray out, clean-up) stays pending for the next call.
     func apply(care: GameCare) {
         guard !pending.isEmpty else { return }
+        let t = now()
+        var fresh: [JellyRoute] = []          // stale routes are only dropped; a live one is performed exactly as before
+        for r in pending {
+            let at = requestedAt[r] ?? t
+            requestedAt[r] = at
+            if t.timeIntervalSince(at) <= Self.maxPendingAge { fresh.append(r) }
+        }
+        if fresh.count != pending.count { pending = fresh }
         var keep: [JellyRoute] = []
         for r in pending {
             if !perform(r, care: care) { keep.append(r) }
         }
         pending = keep
+        requestedAt = requestedAt.filter { keep.contains($0.key) }
     }
 
     /// True when the route was handled (or is meaningless now); false to try again later.
@@ -106,8 +124,9 @@ final class GameRouter {
             if care.focus.isActive { return true }               // already in a close-up
             care.comeHere(jelly: id)
         case .bed:
-            if let onBed { onBed() } else { Self.curtainsToNight() }
-            live?.bedtime(names: care.jellies.map(\.name), now: now())
+            let ran: Bool
+            if let onGoodnight { ran = onGoodnight() } else if let onBed { onBed(); ran = true } else { Self.curtainsToNight(); ran = true }
+            if ran { live?.bedtime(names: care.jellies.map(\.name), colors: care.jellyColorKeys, now: now()) }          // a refused goodnight stamps nothing and raises no card
         case .race(let id):
             if let onRace { onRace(id) } else { care.openJelly(id) }
         }

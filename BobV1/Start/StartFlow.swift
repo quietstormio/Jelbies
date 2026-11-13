@@ -266,6 +266,7 @@ final class StartFlow {
         JellyRoster.current = [0]
         DecorField.shared.set([])
         DayClock.shared.resetForNewGame()          // Day 1, 8:00
+        GameRouter.shared.clearPending()          // a Siri / widget route asked before "New Game" must not fire on the new game
         NotificationCenter.default.post(name: didWipe, object: nil)
     }
 
