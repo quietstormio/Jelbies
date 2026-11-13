@@ -21,6 +21,8 @@ nonisolated enum JelbiesSiriStatus {
         var states: [JellyState]
         var sleeping: Bool
         var spoken: String { JellyStatus.spoken(states, sleeping: sleeping) }
+        var asleepAnswer: String { JellyStatus.asleepAnswer(states, sleeping: sleeping) }
+        var hungryAnswer: String { JellyStatus.hungryAnswer(states, sleeping: sleeping) }
     }
     static func report(directory: URL? = JellyShare.containerURL, now: Date = .now, calendar: Calendar = .current) -> Report {
         let states = JellySnapshot.read(from: directory)?.projectNightAware(at: now, calendar: calendar) ?? []
@@ -36,12 +38,51 @@ struct CheckOnJelbiesIntent: AppIntent {
     static let description = IntentDescription("How your Jelbies are doing right now, without opening the game.")
     static let openAppWhenRun = false
 
+    /// Optional: "How is Lemon" answers for one Jelbie. An id that is not in the snapshot answers for everyone.
+    @Parameter(title: "Jelbie")
+    var jelbie: JelbieEntity?
+
+    nonisolated init() {}
+    init(jelbie: JelbieEntity?) { self.jelbie = jelbie }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+        var r = JelbiesSiriStatus.report()
+        if let id = jelbie?.id {
+            let one = r.states.filter { $0.id == id }
+            if !one.isEmpty { r.states = one }
+        }
+        return .result(dialog: IntentDialog(stringLiteral: r.spoken), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping))
+    }
+}
+
+// MARK: - Are they asleep? Are they hungry? (no app)
+
+struct AreJelbiesAsleepIntent: AppIntent {
+    static let title: LocalizedStringResource = "Are the Jelbies asleep?"
+    static let description = IntentDescription("Whether your Jelbies are asleep right now, without opening the game.")
+    static let openAppWhenRun = false
+
     nonisolated init() {}
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let r = JelbiesSiriStatus.report()
-        return .result(dialog: IntentDialog(stringLiteral: r.spoken), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping))
+        return .result(dialog: IntentDialog(stringLiteral: r.asleepAnswer), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping))
+    }
+}
+
+struct AreJelbiesHungryIntent: AppIntent {
+    static let title: LocalizedStringResource = "Are the Jelbies hungry?"
+    static let description = IntentDescription("Whether your Jelbies want food or water right now, without opening the game.")
+    static let openAppWhenRun = false
+
+    nonisolated init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+        let r = JelbiesSiriStatus.report()
+        return .result(dialog: IntentDialog(stringLiteral: r.hungryAnswer), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping))
     }
 }
 
@@ -136,9 +177,40 @@ nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
                 "How are my Jelbies in \(.applicationName)",
                 "How is everyone in \(.applicationName)",
                 "Check on \(.applicationName)",
+                "How are my \(.applicationName)",
+                "How are the \(.applicationName)",
+                "What's the status of my \(.applicationName)",
+                "\(.applicationName) status",
+                "Check on my \(.applicationName)",
+                "How is \(\.$jelbie) in \(.applicationName)",
+                "Check on \(\.$jelbie) in \(.applicationName)",
             ],
             shortTitle: "Check on the Jelbies",
             systemImageName: "heart.text.square.fill"
+        )
+        AppShortcut(
+            intent: AreJelbiesAsleepIntent(),
+            phrases: [
+                "Are my \(.applicationName) asleep",
+                "Are the \(.applicationName) asleep",
+                "Are my \(.applicationName) sleeping",
+                "Are \(.applicationName) asleep",
+                "Are my \(.applicationName) awake",
+            ],
+            shortTitle: "Are they asleep?",
+            systemImageName: "moon.zzz.fill"
+        )
+        AppShortcut(
+            intent: AreJelbiesHungryIntent(),
+            phrases: [
+                "Are my \(.applicationName) hungry",
+                "Are the \(.applicationName) hungry",
+                "Are \(.applicationName) hungry",
+                "Do my \(.applicationName) need food",
+                "Are my \(.applicationName) thirsty",
+            ],
+            shortTitle: "Are they hungry?",
+            systemImageName: "fork.knife"
         )
         AppShortcut(
             intent: FeedJelbieIntent(),
