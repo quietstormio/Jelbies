@@ -128,7 +128,7 @@ enum SleepTuning {
     /// Impact: the squash dips to about 0.82 (x lieSquash 0.94 * (1 - impactDip)), the jelly kick.
     static let impactDip: Float = 0.13, impactKick: Float = 2.2, wakeKick: Float = 1.2
     /// ONE night threshold for wanting bed, choosing a night nap length and for the morning wake (they used to be 0.3 / 0.4 / 0.4 and flip-flopped).
-    static let nightEdge: Float = 0.4
+    static let nightEdge: Float = SleepHours.nightEdge          // 0.4 (the widget / Siri rule in Shared/DayHours.swift reads the same number)
     /// Only a VERY loud bang wakes a sleeper (clap / whistle / bark only stir him).
     static let earsWakeLevel: Float = 0.92
     /// After any wake he stays up this long (outside deep night), and a failed / abandoned walk to the pile is not retried for this long.

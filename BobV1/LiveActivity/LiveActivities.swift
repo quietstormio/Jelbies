@@ -131,8 +131,6 @@ final class LiveActivities {
     @ObservationIgnored var now: () -> Date = Date.init
     @ObservationIgnored var calendar: Calendar = .current
     @ObservationIgnored var directory: URL? = JellyShare.containerURL
-    /// 0...23: the hour the room is "night" from and the one the Jelbies get up (DayPhase.night / .morning).
-    static let nightFrom = 21, wakeAt = Bedtime.wakeHour
     /// How long the finished race / morning card lingers before it is dismissed.
     static let linger: TimeInterval = 10 * 60
 
@@ -178,11 +176,8 @@ final class LiveActivities {
 
     // MARK: nap
 
-    /// Is it bedtime in the room right now (21:00-06:00)?
-    func isNight(_ t: Date? = nil) -> Bool {
-        let h = calendar.component(.hour, from: t ?? now())
-        return h >= Self.nightFrom || h < Self.wakeAt
-    }
+    /// Is it bedtime in the room right now (about 20:22-07:07: `SleepHours`, the room's own night)?
+    func isNight(_ t: Date? = nil) -> Bool { SleepHours.isNight(at: t ?? now(), calendar: calendar) }
 
     /// The Jelbies go to bed: the nap card (when the setting is on). `tuckIn`: also stamp Bedtime in the App Group (Siri's "goodnight").
     func bedtime(names: [String], now t: Date? = nil, tuckIn: Bool = true) {

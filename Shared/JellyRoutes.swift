@@ -129,7 +129,7 @@ nonisolated enum PendingActions {
 /// "Put my Jelbies to bed": the moment they were tucked in (nil: not tonight). Lives in the App Group so the widget and Siri see it.
 nonisolated enum Bedtime {
     static let file = "bedtime.json"
-    /// They wake at 06:00 (DayPhase.morning.startHour).
+    /// The earliest the room is awake again (the old fixed 06:00 wake; the real edge is `SleepHours`: the room's night ends about 07:07).
     static let wakeHour = 6
     /// A tuck-in older than this is over (the next day).
     static let maxAge: TimeInterval = 14 * 3600
@@ -150,17 +150,12 @@ nonisolated enum Bedtime {
         return (try? data.write(to: u, options: .atomic)) != nil
     }
 
-    /// The next 06:00 after `date` (today's if it is still ahead).
-    static func wakeDate(after date: Date, calendar cal: Calendar = .current) -> Date {
-        let start = cal.startOfDay(for: date)
-        if let six = cal.date(byAdding: .hour, value: wakeHour, to: start), six > date { return six }
-        return cal.date(byAdding: .hour, value: 24 + wakeHour, to: start) ?? date.addingTimeInterval(8 * 3600)
-    }
+    /// When the night they are in (or, by day, the next one) ends: the same rule as the room (`SleepHours`, about 07:07).
+    static func wakeDate(after date: Date, calendar cal: Calendar = .current) -> Date { SleepHours.wakeDate(after: date, calendar: cal) }
 
-    /// Asleep now: tucked in (and not yet 06:00), or the room's night (21:00-06:00).
+    /// Asleep now: tucked in (and the night not yet over), or the room's night (about 20:22-07:07: `SleepHours`, the same edge the game opens on sleepers by).
     static func isSleeping(at date: Date, tuckedIn: Date?, calendar cal: Calendar = .current) -> Bool {
         if let t = tuckedIn, date >= t, date < wakeDate(after: t, calendar: cal) { return true }
-        let h = cal.component(.hour, from: date)
-        return h >= 21 || h < wakeHour
+        return SleepHours.isNight(at: date, calendar: cal)
     }
 }
