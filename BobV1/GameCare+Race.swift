@@ -78,7 +78,9 @@ extension GameCare {
     var live: LiveActivities? { raceBook.live }
 
     /// Siri / the widget: "goodnight" goes through the voice goodnight flow (every Jelly to bed), with its guards.
-    func goodnight() {
+    /// True when the room put them to bed; false when it refused (the caller must not claim "napping").
+    @discardableResult
+    func goodnight() -> Bool {
         bedtimeAll()
     }
 

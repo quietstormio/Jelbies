@@ -10,21 +10,21 @@ import SwiftUI
 struct JelbiesLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: JelbiesActivityAttributes.self) { context in
-            JellyActivityLockView(attrs: context.attributes, state: context.state)
+            JellyActivityLockView(attrs: context.attributes, state: context.state.shown(stale: context.isStale))          // past the wake time: "Good morning!"
                 .activityBackgroundTint(JellyPalette.cream)
                 .activitySystemActionForegroundColor(JellyPalette.ink)
                 .widgetURL(JelbiesLiveActivity.link(context.attributes))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.center) {
-                    JellyIslandExpanded(attrs: context.attributes, state: context.state)
+                    JellyIslandExpanded(attrs: context.attributes, state: context.state.shown(stale: context.isStale))
                 }
             } compactLeading: {
-                JellyIslandCompactLeading(attrs: context.attributes, state: context.state)
+                JellyIslandCompactLeading(attrs: context.attributes, state: context.state.shown(stale: context.isStale))
             } compactTrailing: {
-                JellyIslandCompactTrailing(attrs: context.attributes, state: context.state)
+                JellyIslandCompactTrailing(attrs: context.attributes, state: context.state.shown(stale: context.isStale))
             } minimal: {
-                JellyIslandMinimal(attrs: context.attributes, state: context.state)
+                JellyIslandMinimal(attrs: context.attributes, state: context.state.shown(stale: context.isStale))
             }
             .widgetURL(JelbiesLiveActivity.link(context.attributes))
             .keylineTint(JellyPalette.body(context.attributes.jellyColor))

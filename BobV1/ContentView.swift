@@ -31,6 +31,7 @@ struct ContentView: View {
                 } else { phaseView }
                 if let w = flow.welcome, flow.phase == .game, JellyRoster.savedIDs().count < 2 { WelcomeBanner(name: w) { flow.welcome = nil } }          // (with others at home the arrival moment says it: GameCare+Newcomer.swift)
             }
+            .onOpenURL { url in _ = GameRouter.shared.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|pet. Here at the root (not on GameScreen) so a tap that COLD-launches into the menu is heard; the route waits in `pending` until the room is up
             .onAppear { OrientationForce.apply() }
             .overlay { if !introOn && !logoOn { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) } }          // no curtain over the intro clip
             .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)

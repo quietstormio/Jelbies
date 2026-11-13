@@ -215,6 +215,10 @@ final class GameCare {
     /// The coat word of a Jelly.
     /// The Home Screen / Lock Screen widget's data (Widget/WidgetBridge.swift): the snapshot + portraits in the App Group, written as needs / grime change.
     @ObservationIgnored let widget = WidgetBridge()
+    /// Writes the Bedtime stamp / drives the nap card in the App Group (Siri + widget agree with the room). Off for in-memory (test / preview) rooms.
+    @ObservationIgnored var syncsAppGroup = true
+    /// The colour key of each Jelbie at home, in `jellies` order (the same strings the widget snapshot uses).
+    var jellyColorKeys: [String] { jellies.map { WidgetBridge.colorName(JellyRoster.species($0.character)) } }
     /// What the widget shows: one input per Jelly in the room (`jellies`, each with its own needs / grime; colour by roster id).
     func widgetInputs() -> [WidgetBridge.Input] {
         jellies.map { j in
@@ -255,6 +259,7 @@ final class GameCare {
         // written to the save (needs, dirt, stats, perks, words, the store, the wallet, the saved room and decor), there is no time away, and he starts happy.
         let persistent = persistent && !preview
         isPreview = preview
+        syncsAppGroup = persistent
         var chars: [Int]
         if let roster { chars = JellyRoster.sanitised(roster, allowPreview: preview) }
         else {

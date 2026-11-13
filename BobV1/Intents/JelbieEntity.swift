@@ -1,7 +1,7 @@
 //
 //  JelbieEntity.swift
 //  The Jelbies as Siri / Shortcuts know them (AppEntity): id, name, colour, read from the roster the game last published to the App Group
-//  (JellySnapshot), with the built-in roster (Bob / Pip / Moss) before the game has ever run. Matching by name is loose ("bob", "Pip").
+//  (JellySnapshot), and none before the game has ever run. Matching by name is loose ("bob", "Pip").
 //  Never touches GameCare / Metal: intents may run with the app in the background.
 //
 
@@ -25,16 +25,15 @@ nonisolated struct JelbieEntity: AppEntity, Sendable {
     }
 }
 
-/// Where the entities come from: the snapshot (names the player sees), else the roster.
+/// Where the entities come from: the snapshot (names the player sees); none before the game has ever published one.
 nonisolated enum JelbieRoster {
-    /// The Jelbies in the room right now (from the shared snapshot) or the default roster.
-    /// `roster`: the characters by slot (the launch roster by default); `count` cuts it.
+    /// The Jelbies in the room right now (from the shared snapshot) or none.
+    /// `count` / `roster` are kept for source compatibility and no longer used.
     static func current(directory: URL? = JellyShare.containerURL, count: Int = JellyRoster.maxCount, roster: [Int] = JellyRoster.launchIDs()) -> [JelbieEntity] {
         if let snap = JellySnapshot.read(from: directory), !snap.jellies.isEmpty {
             return snap.jellies.sorted { $0.id < $1.id }.map { JelbieEntity(id: $0.id, name: $0.name, color: $0.color) }
         }
-        return JellyRoster.sanitised(roster).prefix(min(max(count, 1), JellyRoster.maxCount)).enumerated()
-            .map { JelbieEntity(id: $0.offset, name: JellyRoster.nameOf($0.element), color: JelbieRoster.colorName(JellyRoster.species($0.element))) }
+        return []          // no snapshot (fresh install, the game never run): no Jelbies yet, so the Shortcuts picker offers none (it used to offer Bob / Pip / Moss)
     }
     /// SPECIES id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender), the same as WidgetBridge.colorName (which is main-actor bound).
     static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda"][min(max(id, 0), 6)] }

@@ -51,6 +51,10 @@ final class WidgetBridge {
     private var lastReload: Date?, lastPublish: Date?, lastRender: Date?
     private var pendingReload = false
     private var stateKey = ""
+    /// The id + name of every Jelbie in the last publish; nil until the first one of the session.
+    private var lastNames: [String]?
+    /// Fired after a publish whose Jelbie names differ from the previous publish (a rename, an adoption): Siri learns the new names (`JelbiesShortcuts.updateAppShortcutParameters`).
+    var onNamesChanged: (() -> Void)?
     private var rendered: [Int: String] = [:]
     private var rendering = false
     private var renderer: JellyPortraitRenderer?
@@ -98,7 +102,7 @@ final class WidgetBridge {
     static func stateKey(_ inputs: [Input]) -> String {
         inputs.map { i in
             let s = JellyState(record: record(i, look: ""), awaySeconds: 0)
-            return "\(i.id)\(JellyCare.allCases.map { String(s.tier($0).rawValue) }.joined())\(s.mood.rawValue)"
+            return "\(i.id)\(i.name)|\(JellyCare.allCases.map { String(s.tier($0).rawValue) }.joined())\(s.mood.rawValue)"          // (the name: a rename republishes)
         }.joined(separator: ",")
     }
 
@@ -112,7 +116,11 @@ final class WidgetBridge {
         if Self.snapshot(inputs, at: t, looks: rendered).write(to: directory) { writes += 1 }
         lastPublish = t
         stateKey = Self.stateKey(inputs)
+        let names = inputs.map { "\($0.id):\($0.name)" }
+        let renamed = lastNames.map { $0 != names } ?? false
+        lastNames = names
         requestReload(force: force)
+        if renamed { onNamesChanged?() }
         if render { refreshPortraits(inputs) }
     }
 

@@ -319,7 +319,7 @@ struct GameScreen: View {
             }
             router.onRace = toTrack
             router.onNoFood = { A11yAnnounce.say(GameRouter.noFoodLine); withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }          // Siri feed with an empty bag: the Feed row, "none left", spoken
-            router.onBed = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
+            router.onGoodnight = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
             router.apply(care: model.care)                                                             // a Siri route that launched the app cold
             // Not needed for the first frame: after it (the Continue path built all of this inside onAppear).
             Task { @MainActor in
@@ -327,6 +327,8 @@ struct GameScreen: View {
                 Ears.shared.launch(care: model.care)
                 LiveActivities.shared.cleanUp(names: jellyNames)                                       // orphans from a killed run; adopt a live nap / Pep card
                 try? await Task.sleep(for: .milliseconds(900))
+                model.care.widget.publish(model.care.widgetInputs(), force: true, render: false)          // the snapshot (names) is on disk before Siri is asked to learn them: a just-adopted / renamed Jelbie is known at once
+                model.care.widget.onNamesChanged = { JelbiesShortcuts.updateAppShortcutParameters() }          // later renames / adoptions
                 JelbiesShortcuts.updateAppShortcutParameters()                                         // Siri learns the Jelbies' names for "Feed Pip in Jelbies"
             }
         }
@@ -369,11 +371,13 @@ struct GameScreen: View {
                 .padSheetSizing()
                 .presentationBackground(SK.cream)
         }
-        .onOpenURL { url in _ = router.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|train|pet
         .onChange(of: router.serial) { _, _ in router.apply(care: model.care) }                       // Siri in-process, a drained queue
         .onChange(of: scenePhase) { _, p in
             if p == .active {
-                guard wentBackground else { return }          // an `.inactive` blip (alert, Control Centre, app-switcher peek): nothing was torn down, nothing to rebuild
+                guard wentBackground else {
+                    LiveActivities.shared.returnedActive(names: jellyNames, nobodyAsleep: !model.care.anySleepingOrWanted)          // an `.inactive` blip may have raised the nap card: end it if nobody sleeps
+                    return
+                }          // an `.inactive` blip (alert, Control Centre, app-switcher peek): nothing was torn down, nothing to rebuild
                 wentBackground = false
                 model.care.skipNightCutscene(force: true)          // back mid "Sleep until morning": finish the skip now
                 DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the bedtime check and the director see the foreground
@@ -382,7 +386,7 @@ struct GameScreen: View {
                 AudioHub.shared.setForeground(true)
                 AudioHub.shared.setTownScene(currentMusicScene)          // re-derive from the truth on every return: a stale café scene can never keep the room's sounds muted
                 Ears.shared.setForeground(true)
-                LiveActivities.shared.returnedActive(names: jellyNames)                                // by day the nap card says good morning
+                LiveActivities.shared.returnedActive(names: jellyNames, nobodyAsleep: !model.care.anySleepingOrWanted)          // by day the nap card says good morning; woken in game: gone
                 router.drainQueued()                                                                   // the widget's Water button / an intent run while away
                 router.apply(care: model.care)
             } else if p == .background {          // (.inactive is the system's permission alert or a swipe: nothing is torn down, the listen is not cut)
@@ -391,7 +395,9 @@ struct GameScreen: View {
                 DayClock.shared.leaving()
                 AudioHub.shared.setForeground(false)
                 Ears.shared.setForeground(false)
-                LiveActivities.shared.leftActive(names: jellyNames)                                    // at night (or tucked in): the nap card
+                LiveActivities.shared.leftActive(names: jellyNames, colors: model.care.jellyColorKeys)          // (also raised on `.inactive` below)
+            } else if p == .inactive, model.care.anySleepingOrWanted {          // ActivityKit only starts an activity while the app is still in the foreground: ask for the nap card now, not from `.background`
+                LiveActivities.shared.leftActive(names: jellyNames, colors: model.care.jellyColorKeys)
             }
         }
         .onChange(of: model.care.voice.bookRequest) { _, _ in bookOpen = true }       // the mic cannot be used: the trick book opens instead

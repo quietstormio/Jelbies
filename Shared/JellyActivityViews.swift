@@ -65,7 +65,7 @@ struct JellyActivityLockView: View {
                         HStack(spacing: 6) {
                             ForEach(Array(state.sleepers.enumerated()), id: \.offset) { i, n in
                                 Text(n).font(JellyPalette.font(11, .semibold)).foregroundStyle(JellyPalette.ink.opacity(0.8))
-                                    .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(JellyPalette.body(Self.color(i)).opacity(0.35)))
+                                    .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(JellyPalette.body(state.sleeperColor(i)).opacity(0.35)))
                             }
                         }
                     }
@@ -77,8 +77,6 @@ struct JellyActivityLockView: View {
         .padding(16)
     }
 
-    static func color(_ i: Int) -> String { ["blue", "yellow", "green", "purple"][min(max(i, 0), 3)] }
-
     @ViewBuilder private func leadingFace(size: CGFloat) -> some View {
         ZStack(alignment: .topTrailing) {
             ZStack {
@@ -86,7 +84,7 @@ struct JellyActivityLockView: View {
                 if attrs.kind == .nap, state.phase == .sleeping, state.sleepers.count > 1 {
                     HStack(spacing: -size * 0.22) {
                         ForEach(Array(state.sleepers.prefix(3).enumerated()), id: \.offset) { i, _ in
-                            JellyFaceGlyph(color: Self.color(i), mood: .sleeping).frame(width: size * 0.5, height: size * 0.5)
+                            JellyFaceGlyph(color: state.sleeperColor(i), mood: .sleeping).frame(width: size * 0.5, height: size * 0.5)
                         }
                     }
                 } else {

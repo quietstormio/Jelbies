@@ -46,11 +46,12 @@ final class PhotoAlbum {
     /// keepsakes, so the folder stays in the device backup.
     @discardableResult
     func add(_ image: UIImage) -> URL? {
+        Self.lastAddOutOfSpace = false
         guard let data = Self.capped(image).jpegData(compressionQuality: 0.9) else { return nil }
         try? FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss-SSS"; f.locale = Locale(identifier: "en_US_POSIX")
         let url = Self.folder.appending(path: "Jelbies-\(f.string(from: Date())).jpg")
-        do { try data.write(to: url, options: .atomic) } catch { return nil }
+        do { try data.write(to: url, options: .atomic) } catch { Self.lastAddOutOfSpace = Self.isOutOfSpace(error); return nil }
         reload()
         return url
     }
@@ -58,7 +59,7 @@ final class PhotoAlbum {
     func delete(_ url: URL) { try? FileManager.default.removeItem(at: url); PhotoThumbs.cache.removeObject(forKey: url as NSURL); reload() }
 
     /// Add-only save to the system Photos library. True when it went in.
-    enum SaveResult { case saved, noAccess, failed }
+    enum SaveResult { case saved, noAccess, failed, noSpace }
     static func saveToPhotos(_ url: URL) async -> SaveResult {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else { return .noAccess }
@@ -66,12 +67,26 @@ final class PhotoAlbum {
         do {
             try await PHPhotoLibrary.shared().performChanges { PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil) }
             return .saved
-        } catch { return .failed }
+        } catch { return isOutOfSpace(error) ? .noSpace : .failed }
+    }
+
+    /// Only a real disk-full error (a Cocoa write error, an underlying POSIX ENOSPC) is called "out of space"; every other failure gets the generic line.
+    static func isOutOfSpace(_ error: Error) -> Bool {
+        let e = error as NSError
+        if e.domain == NSCocoaErrorDomain, e.code == NSFileWriteOutOfSpaceError { return true }
+        if e.domain == NSPOSIXErrorDomain, e.code == Int(ENOSPC) { return true }
+        if let under = e.userInfo[NSUnderlyingErrorKey] as? Error { return isOutOfSpace(under) }
+        return false
     }
 
     static let noSpaceMessage = "Not enough space to keep this photo. Free up some storage and try again."
+    /// Why the last `add` failed: true only for a real disk-full error.
+    nonisolated(unsafe) static var lastAddOutOfSpace = false
+    /// What to say when `add` returned nil.
+    static var addFailedMessage: String { lastAddOutOfSpace ? noSpaceMessage : failedMessage }
+    static let failedMessage = "Couldn't save the photo. Try again."
     static func message(for r: SaveResult) -> String? {
-        switch r { case .saved: return nil; case .noAccess: return "Allow Photos access in Settings to save."; case .failed: return noSpaceMessage }
+        switch r { case .saved: return nil; case .noAccess: return "Allow Photos access in Settings to save."; case .failed: return failedMessage; case .noSpace: return noSpaceMessage }
     }
 }
 
