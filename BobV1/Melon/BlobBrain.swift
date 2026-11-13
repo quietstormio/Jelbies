@@ -2013,7 +2013,7 @@ final class BlobBrain {
 
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         noticeTeleport(sim)
-        skinner.tailOn = feature == .spines && !(WornSet.sleepHides(self) || WornSet.flipping(self))
+        skinner.tailOn = feature == .spines && !WornSet.sleepHides(self)          // (hold-wear-r1: NOT hidden for the flip trick any more: the spikes stay drawn there, so the tail they ride must stay too)
         skinner.teddyOn = feature == .ears && TeddyEarsVariant.active.inBody          // (from the character alone: a scene that never ticks the feature layer still shows his ears; the scales default to 1)
         skinner.teddyEarScale = teddyEarScale; skinner.teddyPomScale = teddyPomScale; skinner.teddySway = teddySway
         skinner.tailHappy = expr.kind == .happy || expr.kind == .excited || expr.kind == .joyArc || idleState.reaction == .cheer

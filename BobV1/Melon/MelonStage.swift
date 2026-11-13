@@ -1834,7 +1834,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 let pt = at(0.4 * sinf(2 * .pi * 0.8 * ph) * k, 0.25 * sinf(2 * .pi * 0.4 * ph) * k)
                 if !tdDown { tdDown = true; pointerDown(id: A, point: pt, size: size) } else { pointerMove(id: A, point: pt, size: size) }
             } else if tdDown { pointerUp(id: A); tdDown = false }
-        case "pickup":      // double-tap and hold on the crown, lift, hang there wiggling, let go (14 s loop)
+        case "pickup", "holdpickup":      // double-tap and hold on the crown, lift, hang there wiggling, let go (14 s loop)
             let t = el.truncatingRemainder(dividingBy: 14)
             let lift = 0.45 * sm((t - 0.9) / 1.2)
             let crown = at(0, 0.62)
