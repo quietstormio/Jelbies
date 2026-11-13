@@ -162,11 +162,11 @@ final class SiriStatusTests: XCTestCase {
         let r = JelbiesSiriStatus.report(directory: dir, now: now)
         XCTAssertTrue(r.sleeping)
         XCTAssertEqual(r.asleepAnswer, "Yes, Lemon and Pip are asleep. Pip will wake up hungry.")
-        // tucked in at 20:00 counts as asleep before the night hours start
-        let evening = at(20).addingTimeInterval(1800)
+        // tucked in at 19:00 counts as asleep before the night hours start (the night edge is about 20:22)
+        let evening = at(19).addingTimeInterval(1800)
         write(dir, saved: evening, [rec(0, "Lemon")])
         XCTAssertFalse(JelbiesSiriStatus.report(directory: dir, now: evening).sleeping)
-        XCTAssertTrue(Bedtime.write(at(20), to: dir))
+        XCTAssertTrue(Bedtime.write(at(19), to: dir))
         XCTAssertTrue(JelbiesSiriStatus.report(directory: dir, now: evening).sleeping)
     }
 
