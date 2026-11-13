@@ -44,7 +44,7 @@ final class CallStuckTests: XCTestCase {
             r.tick()
             if r.care.focus.isFocused { ok = true; break }
         }
-        XCTAssertTrue(ok, "the line-up completes even with one Jelbie pinned (phase \(r.care.focus.phase))")
+        XCTAssertTrue(ok, "the line-up completes even with one Jelmiko pinned (phase \(r.care.focus.phase))")
     }
 
     func testCancelPillAppearsAtOnceAndCancelRestoresRoamingAndHUD() {

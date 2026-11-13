@@ -70,7 +70,7 @@ final class HUDMenuTests: XCTestCase {
         let c2 = care3()
         c2.tapJelly(1); tickSelect(c2, 2.5)
         XCTAssertFalse(HUDMenu.items(.individual(1)).contains(.callAll))
-        XCTAssertFalse(HUDMenu.visibleItems(.group, care: c2).contains(.callAll), "not while a Jelbie is highlighted")
+        XCTAssertFalse(HUDMenu.visibleItems(.group, care: c2).contains(.callAll), "not while a Jelmiko is highlighted")
     }
 
     func testSleepButtonReadsNaptimeByDayAndBedtimeInTheEvening() {
@@ -153,7 +153,7 @@ final class HUDMenuTests: XCTestCase {
         let b = r.actors[id].brain!
         b.idleForced = true; _ = b.idleStart(.sleep, r.actors[id].sim); b.sleep.hold = 500; b.sleep.holdForce = true
         r.run(40) { b.isSleeping }
-        XCTAssertTrue(b.isSleeping, "Jelbie \(id) fell asleep")
+        XCTAssertTrue(b.isSleeping, "Jelmiko \(id) fell asleep")
     }
 
     func testHighlightingASleeperDoesNotWakeHim() {
@@ -202,7 +202,7 @@ final class HUDMenuTests: XCTestCase {
         let items = HUDMenu.items(.individual(0))
         XCTAssertEqual(items.firstIndex(of: .tricks), items.firstIndex(of: .clean)! + 1)
         XCTAssertEqual(items.firstIndex(of: .compete), items.firstIndex(of: .tricks)! + 1)
-        XCTAssertFalse(HUDMenu.items(.group).contains(.tricks), "a Jelbie's row, not the group's")
+        XCTAssertFalse(HUDMenu.items(.group).contains(.tricks), "a Jelmiko's row, not the group's")
         XCTAssertEqual(HUDMenu.title(.tricks, .individual(0), care: care), "Tricks")
         XCTAssertEqual(HUDItem.tricks.rawValue, "hud-tricks")
         XCTAssertTrue(HUDMenu.enabled(.tricks, .individual(0), care: care))

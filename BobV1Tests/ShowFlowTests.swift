@@ -302,10 +302,10 @@ final class ShowFlowTests: XCTestCase {
         run(4) { care.show.onStage }
         XCTAssertTrue(care.show.onStage)
         let book = care.showBook
-        XCTAssertEqual(book.extra.count, 2, "3 rivals, 1 spare Jelbie: two borrowed bodies")
+        XCTAssertEqual(book.extra.count, 2, "3 rivals, 1 spare Jelmiko: two borrowed bodies")
         XCTAssertEqual(room.park.count, 2)
         XCTAssertEqual(book.rivalBody.count, 3); XCTAssertEqual(Set(book.rivalBody.values).count, 3, "every rival has her own body")
-        XCTAssertEqual(book.rivalBody[0], book.performers[1], "the spare Jelbie first")
+        XCTAssertEqual(book.rivalBody[0], book.performers[1], "the spare Jelmiko first")
         for a in book.extra { XCTAssertTrue(care.showHides(a.id), "hidden until the Trick round") }
         care.show.auto = true
         run(120) { care.show.trickStage == .rivals }

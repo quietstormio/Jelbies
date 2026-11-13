@@ -169,7 +169,7 @@ struct PhotoModeView: View {
     private var topBar: some View {
         HStack(alignment: .top) {
             if hint {
-                Text("Drag to look around, pinch to zoom, tap a Jelbie")
+                Text("Drag to look around, pinch to zoom, tap a Jelmiko")
                     .font(SK.font(14, .bold)).foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
                     .background(Capsule().fill(SK.cream.opacity(0.92))).transition(.opacity)
             }

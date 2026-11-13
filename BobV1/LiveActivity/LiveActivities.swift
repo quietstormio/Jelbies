@@ -185,7 +185,7 @@ final class LiveActivities {
         if tuckIn { Bedtime.write(t, to: directory) }
         guard napOn, napID == nil, driver.enabled else { return }
         let wake = Bedtime.wakeDate(after: t, calendar: calendar)
-        let attrs = JelbiesActivityAttributes(kind: .nap, jellyID: 0, jellyName: names.first ?? "Jelbie", jellyColor: colors.first ?? "blue", startedAt: t)
+        let attrs = JelbiesActivityAttributes(kind: .nap, jellyID: 0, jellyName: names.first ?? "Jelmiko", jellyColor: colors.first ?? "blue", startedAt: t)
         guard let id = try? driver.start(attrs, state: .sleeping(names, colors: colors, wakeAt: wake), staleDate: wake) else { return }
         napID = id
     }

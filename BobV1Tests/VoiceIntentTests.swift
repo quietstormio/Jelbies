@@ -131,7 +131,7 @@ final class VoiceIntentTests: XCTestCase {
             XCTAssertEqual(d.target, .jellies(want), said)
             XCTAssertEqual(d.reaction, .perform(.come), said)
         }
-        XCTAssertEqual(decide(v, "Pip and Pip come here").target, .jelly(1), "one name said twice is one Jelbie")
+        XCTAssertEqual(decide(v, "Pip and Pip come here").target, .jelly(1), "one name said twice is one Jelmiko")
         XCTAssertEqual(decide(v, "everyone, Pip and Moss come here").target, .everyone)
         XCTAssertEqual(decide(v, "Pip and Moss").reaction, .nameHeard)
         XCTAssertEqual(decide(v, "Pip and Moss").target, .jellies([1, 2]))

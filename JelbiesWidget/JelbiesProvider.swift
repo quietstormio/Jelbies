@@ -23,7 +23,7 @@ struct JelbiesProvider: TimelineProvider {
     private func load() -> JellySnapshot? { JellySnapshot.read() }
 
     static let sample = JellySnapshot(savedAt: .now, jellies: [
-        JellyRecord(id: 0, name: "Jelbie", color: "blue", levels: [0.45, 0.8, 0.7], dirt: 0.1, sparkle: 0, mood: "okay"),
+        JellyRecord(id: 0, name: "Jelmiko", color: "blue", levels: [0.45, 0.8, 0.7], dirt: 0.1, sparkle: 0, mood: "okay"),
         JellyRecord(id: 1, name: "Friend", color: "yellow", levels: [0.9, 0.9, 0.9], dirt: 0.1, sparkle: 0, mood: "happy"),
     ])
 

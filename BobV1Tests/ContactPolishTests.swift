@@ -689,7 +689,7 @@ final class ContactPolishTests: XCTestCase {
         let far = gap(3.0), mid = gap(1.4), close = gap(0.9)
         MotionLog.write("CONTACT metric: 3.0 apart gap \(far.0) closest \(far.1); 1.4 gap \(mid.0); 0.9 gap \(close.0)")
         let touch = 3.0 - far.0
-        XCTAssertGreaterThan(touch, 0.9); XCTAssertLessThan(touch, 1.5, "two plain standing Jelbies touch at a root distance of about a body width (\(touch))")
+        XCTAssertGreaterThan(touch, 0.9); XCTAssertLessThan(touch, 1.5, "two plain standing Jelmiko touch at a root distance of about a body width (\(touch))")
         XCTAssertGreaterThan(far.0, 1.2); XCTAssertEqual(mid.0, 1.4 - touch, accuracy: 0.06, "gap follows the root distance")
         XCTAssertLessThan(close.0, 0, "0.9 apart is an overlap")
         XCTAssertGreaterThanOrEqual(far.1, far.0 - 0.01, "closest vertex distance >= the gap while apart")

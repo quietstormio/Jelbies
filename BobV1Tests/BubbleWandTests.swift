@@ -37,7 +37,7 @@ final class BubbleWandTests: XCTestCase {
         let t = PlayToss()
         t.beginToy(title: "Bubble wand")
         XCTAssertTrue(t.active); XCTAssertEqual(t.phase, .toy)
-        XCTAssertFalse(t.ballGame, "the Jelbies are not held to a play line")
+        XCTAssertFalse(t.ballGame, "the Jelmiko are not held to a play line")
         t.end()
         XCTAssertFalse(t.active)
         // the real flow: the care's Play mode with the wand, Done (endPlay) puts the wand away and clears the bubbles
@@ -202,14 +202,14 @@ final class BubbleWandTests: XCTestCase {
         step(rs, seconds: 30)
         let jellyPops = wand.popsByJelly.values.reduce(0, +)
         let total = wand.field.popped
-        print("BUBBLES spawned \(wand.field.spawned) popped \(total) by Jelbies \(jellyPops) (contact \(wand.contactPops), hops \(wand.hopPops), nudged \(wand.nudges)) chases \(wand.chases) watches \(wand.watches) bumps \(wand.bumps) hearts \(wand.heartBursts) per jelly \(wand.popsByJelly)")
+        print("BUBBLES spawned \(wand.field.spawned) popped \(total) by Jelmiko \(jellyPops) (contact \(wand.contactPops), hops \(wand.hopPops), nudged \(wand.nudges)) chases \(wand.chases) watches \(wand.watches) bumps \(wand.bumps) hearts \(wand.heartBursts) per jelly \(wand.popsByJelly)")
         print("BUBBLES log:\n" + wand.log.prefix(60).joined(separator: "\n"))
         XCTAssertLessThanOrEqual(wand.field.bubbles.count, BubbleField.cap)
         XCTAssertGreaterThan(wand.chases, 0, "they chase")
         XCTAssertGreaterThan(jellyPops, 0, "they pop some")
         XCTAssertGreaterThan(wand.hopPops, 0, "at least one is popped by a hop")
         XCTAssertGreaterThan(wand.watches, 0, "some are only watched")
-        XCTAssertGreaterThan(total, jellyPops, "not every bubble is popped by a Jelbie: some float on until they pop alone")
+        XCTAssertGreaterThan(total, jellyPops, "not every bubble is popped by a Jelmiko: some float on until they pop alone")
     }
 
     func testPuttingTheWandAwayClearsEverything() {

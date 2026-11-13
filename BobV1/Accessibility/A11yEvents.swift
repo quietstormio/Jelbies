@@ -77,7 +77,7 @@ final class A11yEvents {
         if let prev = seenPhase, prev != phase {
             if phase == .focused, let id = care.focusGroup.ids.first {
                 let n = care.focusGroup.ids.count
-                Self.say(n > 1 ? "Close-up with everyone. Use the actions to pet" : "Close-up with \(care.jelly(id)?.name ?? "your Jelbie"). Use the actions to pet", .high)
+                Self.say(n > 1 ? "Close-up with everyone. Use the actions to pet" : "Close-up with \(care.jelly(id)?.name ?? "your Jelmiko"). Use the actions to pet", .high)
             } else if phase == .roaming, prev == .leaving { Self.say("Back in the room") }
         }
         seenPhase = phase

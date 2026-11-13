@@ -29,7 +29,7 @@ nonisolated enum CafeMenu {
         .init(id: .fizzmac, name: "Fizz macaron", price: 15, perk: .zoomies, blurb: "It pops! Zoomies at home, quicker next race.", condition: [.sporty: 0.08, .sparkle: 0.08]),
         .init(id: .pancakes, name: "Pancake stack", price: 16, perk: .fullBelly, blurb: "Fluffy and filling. Hungry much later.", condition: [.sporty: 0.08, .cute: 0.06]),
         .init(id: .sundae, name: "Mini sundae", price: 18, perk: .bouncy, blurb: "Cold and silly. Extra bouncy for a while.", condition: [.sweet: 0.12, .cool: 0.06]),
-        .init(id: .jellycup, name: "Jelly Cup", price: 8, perk: .cozy, blurb: "A tiny cup of whipped cream, just for Jelbies.", condition: [.sweet: 0.08, .cute: 0.08]),
+        .init(id: .jellycup, name: "Jelly Cup", price: 8, perk: .cozy, blurb: "A tiny cup of whipped cream, just for Jelmiko.", condition: [.sweet: 0.08, .cute: 0.08]),
         .init(id: .latte, name: "Baby latte", price: 12, perk: .zoomies, blurb: "Warm and foamy. Zoomies once you're home!", condition: [.sporty: 0.06, .cool: 0.08]),
         .init(id: .cocoa, name: "Warm cocoa", price: 11, perk: .cozy, blurb: "Marshmallows on top. Stays happy longer.", condition: [.sweet: 0.08, .cute: 0.06]),
         .init(id: .juice, name: "Berry juice", price: 10, perk: .bouncy, blurb: "Pink and fizzy. Extra bouncy for a while.", condition: [.sparkle: 0.10, .cute: 0.04])]

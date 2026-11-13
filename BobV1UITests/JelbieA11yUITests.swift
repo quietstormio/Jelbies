@@ -102,7 +102,7 @@ final class JelbieA11yUITests: XCTestCase {
         sleep(2)
         app.launch()
         let first = app.descendants(matching: .any).matching(identifier: "jelbie-0").firstMatch
-        XCTAssertTrue(first.waitForExistence(timeout: 120), "the Jelbies are accessibility elements")
+        XCTAssertTrue(first.waitForExistence(timeout: 120), "the Jelmiko are accessibility elements")
         sleep(2)
         let room = app.descendants(matching: .any).matching(identifier: "room").firstMatch
         XCTAssertTrue(room.exists); XCTAssertEqual(room.label, "Living room")

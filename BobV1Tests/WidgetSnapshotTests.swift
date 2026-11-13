@@ -41,7 +41,7 @@ final class WidgetSnapshotTests: XCTestCase {
         let json = #"{"version":1,"savedAt":10,"jellies":[{"id":2,"levels":[2,-1],"dirt":5}]}"#
         let s = try XCTUnwrap(JellySnapshot.decode(Data(json.utf8)))
         let r = try XCTUnwrap(s.jellies.first)
-        XCTAssertEqual(r.id, 2); XCTAssertEqual(r.name, "Jelbie"); XCTAssertEqual(r.color, "blue")
+        XCTAssertEqual(r.id, 2); XCTAssertEqual(r.name, "Jelmiko"); XCTAssertEqual(r.color, "blue")
         XCTAssertEqual(r.levels, [1, 0, 1], "short list padded with full, values clamped to 0...1")
         XCTAssertEqual(r.dirt, 1)
         XCTAssertNil(JellySnapshot.decode(Data("not json".utf8)))
@@ -49,7 +49,7 @@ final class WidgetSnapshotTests: XCTestCase {
 
     func testAtMostThreeJelliesAndFileRoundTrip() throws {
         let many = JellySnapshot(savedAt: t0, jellies: (0..<6).map { rec($0, "J\($0)") })
-        XCTAssertEqual(many.jellies.count, 3, "the roster cap is three Jelbies")
+        XCTAssertEqual(many.jellies.count, 3, "the roster cap is three Jelmiko")
         let dir = try tempDir()
         XCTAssertNil(JellySnapshot.read(from: dir), "nothing written yet")
         XCTAssertTrue(many.write(to: dir))

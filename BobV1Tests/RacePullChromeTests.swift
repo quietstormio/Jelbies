@@ -66,7 +66,7 @@ final class RacePullChromeTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(f.minY, RacePullGesture.topPillsBottom(safeTop: safe.top) + 4, "\(name): the label clears the title and hint pills")
             let box = land ? CGRect(x: 0.30 * size.width, y: 0, width: 0.40 * size.width, height: size.height)
                            : CGRect(x: 0, y: 0.40 * size.height, width: size.width, height: 0.27 * size.height)
-            XCTAssertFalse(f.intersects(box), "\(name): the demo \(f) is outside the Jelbie box \(box)")
+            XCTAssertFalse(f.intersects(box), "\(name): the demo \(f) is outside the Jelmiko box \(box)")
             // the demo's length is a pull the player could make from there (the room rule)
             let len = RacePullGesture.demoLength(size: size, anchor: a, safe: safe, k: k)
             XCTAssertLessThanOrEqual(a.y + len + 8, size.height - safe.bottom + 0.01, "\(name): room under the anchor")

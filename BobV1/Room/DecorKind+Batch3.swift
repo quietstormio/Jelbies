@@ -63,11 +63,11 @@ extension DecorKind {
     var batch3Use: String {
         switch self {
         case .roundtable: return "A little round table with a vase of flowers."
-        case .cushionpile: return "A squashy stack of cushions. A Jelbie hops on and stands on top."
-        case .aquarium: return "A fish tank. Jelbies lean in to watch, and the fish dart about."
-        case .plantstand: return "A fern on a stand. Jelbies boop it and the fronds sway."
-        case .easel: return "A painting on an easel. Jelbies step up to look."
-        case .mirror: return "A tall mirror. Jelbies lean in for a look at themselves."
+        case .cushionpile: return "A squashy stack of cushions. A Jelmiko hops on and stands on top."
+        case .aquarium: return "A fish tank. Jelmiko lean in to watch, and the fish dart about."
+        case .plantstand: return "A fern on a stand. Jelmiko boop it and the fronds sway."
+        case .easel: return "A painting on an easel. Jelmiko step up to look."
+        case .mirror: return "A tall mirror. Jelmiko lean in for a look at themselves."
         case .clock: return "A grandfather clock. Boop it and the pendulum swings."
         case .bubblemachine: return "Boop it and the fan whirrs, blowing a stream of bubbles."
         case .rockinghorse: return "Boop it and it rocks back and forth."

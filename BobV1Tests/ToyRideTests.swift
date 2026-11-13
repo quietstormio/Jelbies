@@ -209,7 +209,7 @@ final class ToyRideTests: XCTestCase {
             lines.append(line("scooter x3 seed \(seed)", m))
             XCTAssertGreaterThan(m.rides, 0, "seed \(seed): the scooter was ridden")
             XCTAssertEqual(m.simultaneous, 0, "seed \(seed): a single-user toy was used by two at once")
-            XCTAssertGreaterThanOrEqual(m.riderMin, MelonController.jellyGap * 0.97, "seed \(seed): a rider came within touching distance of another Jelbie")
+            XCTAssertGreaterThanOrEqual(m.riderMin, MelonController.jellyGap * 0.97, "seed \(seed): a rider came within touching distance of another Jelmiko")
             XCTAssertGreaterThanOrEqual(m.furnitureMin, 0.3, "seed \(seed): a rider came too close to furniture")
         }
         Self.write(lines.joined(separator: "\n"), "scooter-x3.txt")
@@ -247,7 +247,7 @@ final class ToyRideTests: XCTestCase {
             XCTAssertGreaterThan(m.sessions.reduce(0, +), 0, "\(k): somebody played with it")
             XCTAssertEqual(m.simultaneous, 0, "\(k): used by too many at once")
             XCTAssertGreaterThanOrEqual(m.toyMinGap, 0.85, "\(k): two bodies in toy play came too close")
-            if !(k.isBallLike || k.maxUsers > 1 || k.sitPoints.count > 1) { XCTAssertGreaterThanOrEqual(m.sessions.filter { $0 > 0 }.count, 2, "\(k): both Jelbies got a turn (one waited, then went)") }
+            if !(k.isBallLike || k.maxUsers > 1 || k.sitPoints.count > 1) { XCTAssertGreaterThanOrEqual(m.sessions.filter { $0 > 0 }.count, 2, "\(k): both Jelmiko got a turn (one waited, then went)") }
             if k.maxUsers > 1 { XCTAssertEqual(m.maxUsers, 2, "\(k): two used it together") }
         }
         Self.write(lines.joined(separator: "\n"), file)

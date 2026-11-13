@@ -250,7 +250,7 @@ final class ParkVisitPlanSimTests: XCTestCase {
         }
         let jelbieMinutes = Double(3 * minutes * 2)
         let rateAll = Double(all.starts) / jelbieMinutes, rateOff = Double(off.starts) / jelbieMinutes
-        print("[visitplan] idle starts per Jelbie-minute: all in play \(rateAll), seesaw off \(rateOff) (\(rateAll > 0 ? rateOff / rateAll : 0) of it); seesaw sits \(all.seesawSits) vs \(off.seesawSits); hopscotch \(all.hopscotch) vs \(off.hopscotch); slide \(all.slide) vs \(off.slide)")
+        print("[visitplan] idle starts per Jelmiko-minute: all in play \(rateAll), seesaw off \(rateOff) (\(rateAll > 0 ? rateOff / rateAll : 0) of it); seesaw sits \(all.seesawSits) vs \(off.seesawSits); hopscotch \(all.hopscotch) vs \(off.hopscotch); slide \(all.slide) vs \(off.slide)")
         XCTAssertGreaterThan(all.starts, 0)
         XCTAssertEqual(off.seesawSits, 0, "no autonomous seesaw sit on a visit without the seesaw")
         XCTAssertGreaterThan(off.hopscotch, 0, "the hopscotch is still used")

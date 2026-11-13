@@ -42,8 +42,8 @@ final class BubbleCaptureUITests: XCTestCase {
             XCTAssertFalse(v.contains("Hunger"), v)
             values.append(v)
         }
-        XCTAssertNotEqual(values[0], values[1], "each row names its own Jelbie")
-        XCTAssertNotEqual(values[1], values[2], "each row names its own Jelbie")
+        XCTAssertNotEqual(values[0], values[1], "each row names its own Jelmiko")
+        XCTAssertNotEqual(values[1], values[2], "each row names its own Jelmiko")
         sleep(1)
         save(app.screenshot(), label: "Roster: all 3 Jellies, own words", name: "roster-three")
     }

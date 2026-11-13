@@ -159,7 +159,7 @@ struct CafeOrderCard: View {
     private var free: Bool { editing ? cafe.stamps.isFull : cafe.wasFree }
     private var total: Int { editing ? (free ? 0 : order.total(jellies: ids, special: special)) : cafe.charged }
     private var complete: Bool { order.isComplete(jellies: ids) }
-    private var name: (Int) -> String { { care.jelly($0)?.name ?? "Jelbie" } }
+    private var name: (Int) -> String { { care.jelly($0)?.name ?? "Jelmiko" } }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -284,7 +284,7 @@ struct CafeOrderCard: View {
         .accessibilityIdentifier("cafe-who-\(id)")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(name(id)): \(t.map { "\(CafeMenu.treat($0).name), \(CafeMenu.price($0, special: special)) JellyCoins" } ?? "no treat yet")\(!editing ? (served ? ", served" : ", on the way") : "")")
-        .accessibilityHint(editing ? "Choose a treat for this Jelbie" : "")
+        .accessibilityHint(editing ? "Choose a treat for this Jelmiko" : "")
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
@@ -471,7 +471,7 @@ struct CafeOrderCard: View {
                 .background(Capsule().fill(SK.pinkStrong.opacity(complete ? 1 : 0.4)))
         }
         .buttonStyle(.plain).disabled(!complete).accessibilityIdentifier("cafe-order")
-        .accessibilityHint(complete ? "Places the order" : "Choose a treat for every Jelbie first")
+        .accessibilityHint(complete ? "Places the order" : "Choose a treat for every Jelmiko first")
     }
 }
 

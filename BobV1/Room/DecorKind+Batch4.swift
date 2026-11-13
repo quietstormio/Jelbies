@@ -61,11 +61,11 @@ extension DecorKind {
     }
     var batch4Use: String {
         switch self {
-        case .beachball: return "A big light beach ball. Jelbies kick it and it rolls, and friends pass it."
-        case .playtunnel: return "A crawl tunnel. Jelbies squeeze through it, one after another, and it ripples."
+        case .beachball: return "A big light beach ball. Jelmiko kick it and it rolls, and friends pass it."
+        case .playtunnel: return "A crawl tunnel. Jelmiko squeeze through it, one after another, and it ripples."
         case .ringstacker: return "Boop the rainbow rings and they wobble on their post."
-        case .toyrocket: return "A ride-on rocket. Jelbies climb on and rock with it, its flame flickering."
-        case .plushdino: return "A squishy plush dino. Jelbies hug it, one or two at a time, and it wobbles and swishes its tail."
+        case .toyrocket: return "A ride-on rocket. Jelmiko climb on and rock with it, its flame flickering."
+        case .plushdino: return "A squishy plush dino. Jelmiko hug it, one or two at a time, and it wobbles and swishes its tail."
         case .kickscooter: return "Boop it, the bell dings and the handlebars twist."
         default: return batch5Use
         }

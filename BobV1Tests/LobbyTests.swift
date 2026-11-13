@@ -25,7 +25,7 @@ final class LobbyTests: XCTestCase {
     func testTheChosenPartnerIsTheOneWhoPlays() {
         let c = care(3)
         c.volley.book.partner = c.jellies[2].character
-        XCTAssertEqual(c.volleyPartner(for: 0)?.id, 2, "the chosen one, not the first other Jelbie")
+        XCTAssertEqual(c.volleyPartner(for: 0)?.id, 2, "the chosen one, not the first other Jelmiko")
         c.startVolley(jelly: 0, mode: .match(.sandcastle), seed: 5)
         XCTAssertEqual(c.volleyWork.partnerID, 2, "the match is set up with the chosen partner")
     }
@@ -33,13 +33,13 @@ final class LobbyTests: XCTestCase {
     func testAChosenPartnerWhoIsThePlayerOrGoneFallsBack() {
         let c = care(3)
         c.volley.book.partner = c.jellies[0].character
-        XCTAssertEqual(c.volleyPartner(for: 0)?.id, 1, "he cannot partner himself: the first other Jelbie")
+        XCTAssertEqual(c.volleyPartner(for: 0)?.id, 1, "he cannot partner himself: the first other Jelmiko")
         c.volley.book.partner = 99
         XCTAssertEqual(c.volleyPartner(for: 0)?.id, 1, "a partner no longer in the room is ignored")
     }
 
     func testSwapNeedsABench() {
-        XCTAssertNil(care(2).volleyBench(for: 0), "two Jelbies: nobody on the bench, so the swap buttons are hidden")
+        XCTAssertNil(care(2).volleyBench(for: 0), "two Jelmiko: nobody on the bench, so the swap buttons are hidden")
         XCTAssertNil(care(1).volleyBench(for: 0))
         let c = care(3)
         XCTAssertEqual(c.volleyBench(for: 0)?.id, 2)
@@ -59,7 +59,7 @@ final class LobbyTests: XCTestCase {
         XCTAssertEqual(c.volleyParkFriend()?.id, 9, "the closest friend (highest level) fills in")
         XCTAssertEqual(c.closestParkFriends(2).map(\.id), [9, 7])
         XCTAssertNil(c.volleyPartnerBlocker(jelly: 0))
-        XCTAssertNil(care(2).volleyPartnerBlocker(jelly: 0), "two Jelbies are a team without a friend")
+        XCTAssertNil(care(2).volleyPartnerBlocker(jelly: 0), "two Jelmiko are a team without a friend")
     }
 
     func testThePartnerChoiceIsSaved() {

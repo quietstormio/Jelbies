@@ -468,7 +468,7 @@ final class RacePullTests: XCTestCase {
     func testABeginnerWinsOftenOnThePuddle() {
         let t = RacePullTuning()
         let f = Self.board(.firstTimer, Self.newJelbie, .puddle, t), rx = Self.board(.relaxed, Self.newJelbie, .puddle, t), st = Self.board(.steady, Self.newJelbie, .puddle, t)
-        print("[pullcal] Puddle, new Jelbie: firstTimer wins \(f.wins)/\(f.n), top two \(f.top2)/\(f.n) | relaxed wins \(rx.wins)/\(rx.n) | steady wins \(st.wins)/\(st.n)")
+        print("[pullcal] Puddle, new Jelmiko: firstTimer wins \(f.wins)/\(f.n), top two \(f.top2)/\(f.n) | relaxed wins \(rx.wins)/\(rx.n) | steady wins \(st.wins)/\(st.n)")
         XCTAssertGreaterThanOrEqual(Double(f.wins) / Double(f.n), 0.50, "a first-timer wins at least 50 % (the calibration rule is 55 %)")
         XCTAssertGreaterThanOrEqual(Double(f.top2) / Double(f.n), 0.80, "and is in the top two at least 80 % (the calibration rule is 85 %)")
         XCTAssertGreaterThanOrEqual(Double(rx.wins) / Double(rx.n), 0.80, "a relaxed player wins the Puddle at least 80 %")
@@ -485,7 +485,7 @@ final class RacePullTests: XCTestCase {
         for c in Self.allCourses {
             let b = Self.board(.relaxed, Self.newJelbie, c, RacePullTuning()), s = Self.board(.steady, Self.newJelbie, c, RacePullTuning())
             win[c.tier] = b.wins; top2[c.tier] = b.top2
-            print("[pullcal] relaxed, new Jelbie, \(c.tier): wins \(b.wins)/\(b.n) (\(Double(b.wins) / 2) %), top two \(b.top2)/\(b.n) | steady wins \(s.wins)/\(s.n), top two \(s.top2)/\(s.n)")
+            print("[pullcal] relaxed, new Jelmiko, \(c.tier): wins \(b.wins)/\(b.n) (\(Double(b.wins) / 2) %), top two \(b.top2)/\(b.n) | steady wins \(s.wins)/\(s.n), top two \(s.top2)/\(s.n)")
         }
         XCTAssertGreaterThanOrEqual(win[.ripple]!, 170, "Ripple win \(win[.ripple]!)/200 below 85 %")
         XCTAssertTrue((90...180).contains(win[.splash]!), "Splash win \(win[.splash]!)/200 not within 45...90 %")

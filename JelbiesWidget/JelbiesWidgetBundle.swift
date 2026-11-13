@@ -21,8 +21,8 @@ struct JelbiesNeedsWidget: Widget {
         StaticConfiguration(kind: Self.kind, provider: JelbiesProvider()) { entry in
             JelbiesWidgetView(entry: entry)
         }
-        .configurationDisplayName("Jelbies")
-        .description("See how your Jelbies are doing, and when they need you.")
+        .configurationDisplayName("Jelmiko")
+        .description("See how your Jelmiko are doing, and when they need you.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular, .accessoryCircular, .accessoryInline])
         .containerBackgroundRemovable(true)
     }

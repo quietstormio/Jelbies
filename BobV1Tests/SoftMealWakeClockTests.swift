@@ -135,7 +135,7 @@ final class SoftMealWakeClockTests: XCTestCase {
             MotionLog.write(line); print(line)
             if mix.reason == "awake-first" { early += 1 }
             // a sleeper in front of his line or near the tray's rectangle keeps today's timing (the tray waits for him): only the early pop promises the awake one's time
-            if mix.reason == "awake-first", let a = base.ate[0], let b = mix.ate[0] { XCTAssertLessThan(b - a, 1.0, "seed \(seed): the awake Jelbie eats on time (\(f(b)) vs \(f(a)))") }
+            if mix.reason == "awake-first", let a = base.ate[0], let b = mix.ate[0] { XCTAssertLessThan(b - a, 1.0, "seed \(seed): the awake Jelmiko eats on time (\(f(b)) vs \(f(a)))") }
             else if mix.reason == "awake-first" { XCTFail("seed \(seed): the awake one never ate") }
             XCTAssertFalse(mix.ate.contains { $0 == nil }, "seed \(seed): all eat \(mix.ate.map(f))")
             XCTAssertNotNil(mix.end, "seed \(seed): the meal ends")

@@ -39,13 +39,13 @@
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
 	<false/>
-	<!-- Siri: the display name is "Jelbies"; these alternates also name the app in App Shortcut phrases
-	     ("My Jelbies", and "Bob" so the old phrasing from before the rename still works). None may repeat the display name. -->
+	<!-- Siri: the display name is "Jelmiko"; these alternates also name the app in App Shortcut phrases
+	     ("My Jelmiko"; no "Bob" alternate is present). None may repeat the display name. -->
 	<key>INAlternativeAppNames</key>
 	<array>
 		<dict>
 			<key>INAlternativeAppName</key>
-			<string>My Jelbies</string>
+			<string>My Jelmiko</string>
 			<key>INAlternativeAppNamePronunciationHint</key>
 			<string>my jell bees</string>
 		</dict>

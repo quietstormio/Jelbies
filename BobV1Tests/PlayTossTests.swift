@@ -58,10 +58,10 @@ final class PlayTossTests: XCTestCase {
             let speed = (L / size.height) / reach
             let t = TossAim.throwFor(TossFlick(release: from, velocity: CGVector(dx: dx / L * speed * size.height, dy: dy / L * speed * size.height), size: size), bodies: bodies, radius: 0.27)!
             let r = fly(t, bodies: bodies)
-            guard let e = r.event else { XCTFail("Jelbie \(k): the ball met nothing"); continue }
+            guard let e = r.event else { XCTFail("Jelmiko \(k): the ball met nothing"); continue }
             switch e {
-            case .headHit(let id), .bodyHit(let id, _): XCTAssertEqual(id, k, "swiped at Jelbie \(k), the ball met \(id)")
-            default: XCTFail("Jelbie \(k): the ball hit the floor at \(r.at) (he is at \(b.pos)), not him")
+            case .headHit(let id), .bodyHit(let id, _): XCTAssertEqual(id, k, "swiped at Jelmiko \(k), the ball met \(id)")
+            default: XCTFail("Jelmiko \(k): the ball hit the floor at \(r.at) (he is at \(b.pos)), not him")
             }
         }
     }
@@ -92,7 +92,7 @@ final class PlayTossTests: XCTestCase {
         XCTAssertNotNil(up.assistedBody)
         // sideways at the floor: nobody
         let side = TossAim.throwFor(TossFlick(release: from, velocity: CGVector(dx: size.height * 1.6, dy: -size.height * 0.1), size: size), bodies: bodies, radius: 0.27)!
-        XCTAssertNil(side.assistedBody, "a swipe away from every Jelbie is free")
+        XCTAssertNil(side.assistedBody, "a swipe away from every Jelmiko is free")
         XCTAssertLessThanOrEqual(up.assist, TossAim.assistMax + 0.11)
     }
 
@@ -146,7 +146,7 @@ final class PlayTossTests: XCTestCase {
         XCTAssertEqual(p.phase, .flying)
         let t = run(r, p, seconds: 9) { p.phase == .catching || p.phase == .inHand }
         XCTAssertLessThan(t, 7, "a header returns the ball to the hand within 7 s (took \(t))")
-        XCTAssertTrue(events.contains { if case .header = $0 { return true }; return false }, "the Jelbie headed it: \(events)")
+        XCTAssertTrue(events.contains { if case .header = $0 { return true }; return false }, "the Jelmiko headed it: \(events)")
         XCTAssertTrue(events.contains { if case .caught = $0 { return true }; return false }, "and it was caught: \(events)")
         XCTAssertEqual(p.nudges, 0)
     }

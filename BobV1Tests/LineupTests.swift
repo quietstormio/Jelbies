@@ -113,7 +113,7 @@ final class LineupTests: XCTestCase {
         XCTAssertTrue(done, "\(name): the line-up completes")
         XCTAssertEqual(r.care.focusGroup.netAccepted, 0, "\(name): everybody ARRIVED on his own (the safety net accepted none)")
         XCTAssertLessThan(secs, 8.0, "\(name): in under 8 s")
-        XCTAssertLessThanOrEqual(crossings, 1, "\(name): at most one pair of assigned paths cross (a Jelbie stuck behind two standing ones)")
+        XCTAssertLessThanOrEqual(crossings, 1, "\(name): at most one pair of assigned paths cross (a Jelmiko stuck behind two standing ones)")
         XCTAssertGreaterThanOrEqual(tr.minDist, 0.78 * GameCamera.focusRowGap, "\(name): nobody passed through anybody")
     }
     func testRowFromTwoOuterOnesNearTheMiddleSlot() { rowCheck("nearMiddle", starts: [SIMD2(0, -1.2), SIMD2(-0.6, 0.8), SIMD2(0.6, 0.8)]) }

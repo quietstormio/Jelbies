@@ -131,7 +131,7 @@ struct GroomChrome: View {
                         Spacer(minLength: 0)
                         DropsPill(wallet: care.bath.wallet)
                     }
-                    Text("A fresh, shiny clean-up without the scrubbing. Price is per Jelbie.").font(SK.font(13, .bold)).foregroundStyle(SK.mutedStrong)
+                    Text("A fresh, shiny clean-up without the scrubbing. Price is per Jelmiko.").font(SK.font(13, .bold)).foregroundStyle(SK.mutedStrong)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     HStack(spacing: 8) {
                         ForEach(care.jellies, id: \.id) { j in
