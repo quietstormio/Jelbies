@@ -1798,6 +1798,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     private let touchDemoName = UserDefaults.standard.string(forKey: "TouchDemo")
     private var tdT0: CFTimeInterval = 0
     private var tdDown = false
+    private var tdCalled = false
+    private var tdStage = 0
     private var tdHeartT: CFTimeInterval = 0
     private var tdAnchor: SIMD3<Float>?
 
@@ -1808,6 +1810,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     private func touchDemo(now: CFTimeInterval) {
         guard game, let name = touchDemoName, haveCam, let stage = stageView else { return }
+        if name.hasPrefix("hold"), !tdCalled, !model.care.focus.isActive { tdCalled = true; model.care.call() }          // dev only (hold-wear-r1): the close-up for ONE Jelbie, as the call button does
         let A = ObjectIdentifier(self), B = ObjectIdentifier(stage)
         guard model.care.focus.isFocused else {
             if tdDown { pointerUp(id: A); pointerUp(id: B); tdDown = false }
@@ -1867,15 +1870,30 @@ final class MelonController: NSObject, MTKViewDelegate {
                 if !tdDown { tdDown = true; pointerDown(id: A, point: atA(0, 0.62), size: size) }
                 else { pointerMove(id: A, point: atA(x, y), size: size) }
             } else if tdDown { pointerUp(id: A); tdDown = false }
-        case "holdflip":    // dev only: lift, turn him upside down (the grab's twist, past the finger's 1.3 rad cap), hold 4 s, then a plain drop with no flick (14 s loop)
-            let t = el.truncatingRemainder(dividingBy: 14)
+        case "holdtrick":   // dev only: the flip trick, then a headstand, then a back bounce, each commanded once per 40 s loop (clothes must stay on through every one)
+            let t = el.truncatingRemainder(dividingBy: 40)
+            if let b = brain {
+                if t > 1.0 && t < 1.3 && b.commandedFlip == false && !b.isFlipping { b.flipCompact = false; b.commandedFlipFail = false; b.commandedFlip = true }
+                if t > 14.0 && t < 14.3 && b.commandedIdle == nil { b.commandedIdle = .headstand }
+                if t > 28.0 && t < 28.3 && b.commandedIdle == nil { b.commandedIdle = .backBounce }
+            }
+        case "holdflip":    // dev only: lift, turn him upside down (the grab's twist, past the finger's 1.3 rad cap), hold 4 s, then a plain drop with no flick (14 s loop; the taps are 0.35 s wide so a slow simulator frame rate still sees them)
+            let t = (el * 0.1).truncatingRemainder(dividingBy: 14)          // the demo clock runs at a tenth of the speed: the simulator build steps the soft body about 10x slower than real time, and the grab's turn follows it
             let lift = 0.5 * sm((t - 0.9) / 0.8)
-            if t < 0.12 { if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) } }       // tap 1
-            else if t < 0.30 { if tdDown { pointerUp(id: A); tdDown = false } }
-            else if t < 6.5 {                                                                                       // tap 2, held, lifted, turned over at 1.5...2.5 s, held until 6.5 s (4 s upside down)
-                if !tdDown { tdDown = true; pointerDown(id: A, point: at(0, 0.62), size: size) }
-                else { pointerMove(id: A, point: at(0, 0.62 + lift), size: size); twist = Float.pi * sm((t - 1.5) / 1.0) }
-            } else if tdDown { pointerUp(id: A); tdDown = false }
+            if t < 6.5 {                                                                                            // double tap (down, up, down in ONE frame: a slow simulator frame rate cannot miss the 0.3 s window), held, lifted, turned over at 1.5...2.5 s, held until 6.5 s (4 s upside down)
+                if !tdDown && tdStage == 0 { tdStage = 1; let p0 = at(0, 0.45); pointerDown(id: A, point: p0, size: size); pointerUp(id: A); pointerDown(id: A, point: p0, size: size); tdDown = true }
+                else if tdDown { pointerMove(id: A, point: at(0, 0.45 + lift), size: size); twist = Float.pi * sm((t - 1.5) / 1.0) }
+            } else { if tdDown { pointerUp(id: A); tdDown = false }; tdStage = 2 }
+            if t < 0.5, tdStage == 2 { tdStage = 0 }
+        case "holdthrow":   // dev only: double tap (one frame), lift, then a flick up and to the side and let go (28 s loop); a slow simulator frame rate cannot miss the taps
+            let t = el.truncatingRemainder(dividingBy: 28)
+            let lift = 0.4 * sm((t - 0.9) / 0.7)
+            if t < 2.15 {
+                if !tdDown && tdStage == 0 { tdStage = 1; let p0 = at(0, 0.45); pointerDown(id: A, point: p0, size: size); pointerUp(id: A); pointerDown(id: A, point: p0, size: size); tdDown = true }
+                else if tdDown && t < 1.9 { pointerMove(id: A, point: at(0, 0.45 + lift), size: size) }
+                else if tdDown { let k = Float(min(1, (t - 1.9) / 0.25)); pointerMove(id: A, point: at(1.1 * k, 0.45 + lift + 1.0 * k), size: size) }
+            } else { if tdDown { pointerUp(id: A); tdDown = false }; tdStage = 2 }
+            if t < 0.5, tdStage == 2 { tdStage = 0 }
         case "cheeks":      // two fingers on the cheeks pinch together, hold, let go (9 s loop)
             let t = el.truncatingRemainder(dividingBy: 9)
             if t < 4 {
