@@ -56,12 +56,12 @@ extension GameCare {
         if brain.mealWaking, brain.sleep.mealWakeT > DiningGroup.wakeCap {
             MealTrace.log("wake FALLBACK single jelly=\(id) after \(brain.sleep.mealWakeT) s")
             brain.sleep.mealWake = false; brain.sleep.mealCall = nil
-            if let c = meal { brain.requestNow(mealRequest(c)) }          // (his tier's pieces, as `startMeal` asked)
+            if let c = meal { brain.requestHard(mealRequest(c)) }          // (his tier's pieces, as `startMeal` asked)
             else if let c = wanted {
                 var stand = (wantedOrigin ?? DiningSpot.preferred) + DiningLayout.make(n: 1).places[0].rel
                 stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
                 standRequested = true; standIdle = 0
-                brain.requestNow(.goTo(SIMD2(stand.x, stand.y - Self.approachBack)))
+                brain.requestHard(.goTo(SIMD2(stand.x, stand.y - Self.approachBack)))
             }
         }
 

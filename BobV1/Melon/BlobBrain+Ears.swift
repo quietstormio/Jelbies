@@ -196,7 +196,7 @@ final class EarsReactor {
         case .bang(let level):
             for j in awake { start(.startle(level: level), j) }
             for j in asleep {
-                if level >= SleepTuning.earsWakeLevel { j.brain.sleepWake(groggy: true, fast: true); start(.startle(level: level), j); note("bang woke \(j.id)") }
+                if level >= SleepTuning.earsWakeLevel { j.brain.sleepWake(groggy: true, fast: true, slow: true); start(.startle(level: level), j); note("bang woke \(j.id)") }
                 else { start(.stir, j) }
             }
         case .heard(.speech), .heard(.music), .heard(.loudBang):
