@@ -15,14 +15,21 @@ nonisolated enum HopscotchTuning {
     static let joinRange: ClosedRange<Float> = 0.30...0.40
     /// Most Jelbies in one line.
     static let maxPlayers = 4
-    /// A follower may hop to square `s` only when the one ahead has landed on square `s + spacingAhead` or later (squares are ~0.85 apart: 2 = 1.7 u, a body is ~1.0 across).
-    static let spacingAhead = 2
+    /// A follower may hop to square `s` only when the one ahead has landed on square `s + spacingAhead` or later (squares are ~0.85 apart: 3 = 2.55 u, a body is ~1.0 across).
+    static let spacingAhead = 3
     /// ... and he may step up to the start only when the one ahead is on at least this square (0-based): "a couple of squares in".
     static let startAfter = 2
     /// Least distance (u) between a hopper's landing spot and any other Jelbie.
     static let landingClear: Float = 1.05
     /// Seconds a follower waits for its turn before it gives up and wanders off.
     static let patience: Float = 30
+    /// r13: a hopper settled on a square whose next landing is held by a body (not by the line's spacing) gives the game up after this (was `patience`, 30): the mutual-wait backstop. The
+    /// line's own waits (the queue, the leader's lead) keep `patience`: the fourth of four waits over 30 s for his turn.
+    static let blockedPatience: Float = 10
+    /// r13: the walk to the start keeps this far from the court's centre line (landingClear + 0.1 + a little) while squares are to be hopped; the step out of the lane goes to this distance.
+    static let laneClear: Float = landingClear + 0.1 + 0.15
+    /// The sideways step keeps this far from the bench's path strip (`ParkScenery.pathX`, half width 0.62 + a body's radius).
+    static let pathKeepOut: Float = 1.1
     /// Queue spots are this far apart (the park keeps bodies 1.4 apart; 1.0 was refused by `peerFree`).
     static let queueGap: Float = 1.7
     /// Walks to the start a stepped-up Jelbie tries before he gives the game up (a blocked start must not loop).

@@ -33,6 +33,31 @@ final class ParkRoomFloorTests: XCTestCase {
         }
     }
 
+    /// park-room-r3: every stand / step-off spot of both seesaw seats (`seesawStandSpots`: seat x + 0, +0.2, -0.2, standDz in front) is on the park floor as it stands (the floor rules move it by less than the 5 cm
+    /// `seesawFreeSpot` accepts) and outside the seesaw's footprint. With the seesaw at x -3.2 the left seat's spots were at x -4.12 / -4.32, past the floor's side (+-4.05): only one spot was usable, and a friend within 0.9 m of it
+    /// left the rider no spot, so after 3 s he finished in place on the seat, inside the footprint (the 600 s landscape park run: 15 s at (-2.28, -3.20)).
+    func testSeesawStandSpotsAreOnTheFloorAndOutsideTheFootprint() {
+        RoomLayout.apply(RoomCatalog.park)
+        DecorField.shared.set(ParkToys.placed)
+        defer { DecorField.shared.set([]) }
+        guard let sf = DecorField.shared.foot(ParkToys.seesawUID) else { return XCTFail("seesaw") }
+        for (label, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(852.0 / 393.0))] {
+            GameCamera.configurePark()
+            guard GameCamera.refreshRoam(aspect: aspect) != nil else { return XCTFail("\(label): no roam floor") }
+            for seat in 0..<2 {
+                let sp = DecorKind.seesaw.sitPoints[seat]
+                for dx: Float in [0, 0.2, -0.2] {
+                    let p = sf.centre + sf.turned(SIMD2(sp.x + dx, SeesawTuning.standDz))
+                    let q = GameCamera.constrain(SIMD3(p.x, 0, p.y), radius: 0.55)
+                    let moved = simd_distance(p, SIMD2(q.x, q.z))
+                    print("[parkroom] \(label) seat \(seat) dx \(dx) spot \(p) floor moves it \(moved) footprint distance \(sf.distance(p))")
+                    XCTAssertLessThan(moved, 0.05, "\(label): seat \(seat) stand spot \(p) is on the floor (it moves \(moved))")
+                    XCTAssertGreaterThan(sf.distance(p), 0.3, "\(label): seat \(seat) stand spot \(p) is outside the seesaw footprint")
+                }
+            }
+        }
+    }
+
     /// Seesaw <-> hopscotch room (2026-11-12): the seesaw's stand spots and footprint against the court's queue fan and slab; every spot on the roam floor and clear of the solids.
     func testSeesawHasRoomFromTheHopscotchCourt() {
         RoomLayout.apply(RoomCatalog.park)

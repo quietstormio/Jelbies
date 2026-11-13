@@ -151,11 +151,18 @@ final class ParkSharedPlayTests: XCTestCase {
 
     // 8: the real court, three Jelbies (HopscotchTests.testFollowersQueueKeepSpacingAndNeverOverlap): 0 home, 1 visitor, 2 neither
     func testRealHopscotchLine() {
+        for seed: UInt64 in [5, 6, 7, 8] { realHopscotchLine(seed: seed) }
+    }
+
+    private func realHopscotchLine(seed: UInt64) {
+        // (a clean park per seed: the court and toys as setUp leaves them, no player left in the line)
+        DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0
+        for (u, ps) in HopscotchLine.shared.lines { for pl in ps { HopscotchLine.shared.remove(u, pl.id) } }
         HopscotchTuning.joinChance = 1
         let huid = ParkToys.hopscotchUID
         RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: 440.0 / 956.0)
         let starts: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4)]
-        let lab = SocialTests.Lab(n: 3, positions: starts, quiet: true, seed: 5)
+        let lab = SocialTests.Lab(n: 3, positions: starts, quiet: true, seed: seed)
         for r in lab.rigs { r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius; r.brain.anticsEnabled = true; r.brain.idleMood = .happy }
         DecorField.shared.set(ParkToys.placed)
         DecorField.shared.toys.news.removeAll()
@@ -166,15 +173,23 @@ final class ParkSharedPlayTests: XCTestCase {
         var t = SharedPlayTracker()
         var awards: [SharedPlayAward] = []
         var maxPlayers = 0
+        var minPlayers = Float.infinity, minPlayersAt = "", minAll = Float.infinity, minAllAt = ""
         for i in 0..<(60 * 80) {
             lab.tick(watching: false); DecorField.shared.tick(dt: dt)
             maxPlayers = max(maxPlayers, line.players(huid).count)
+            for a in 0..<3 { for c in (a + 1)..<3 {
+                let g = simd_distance(lab.snapshot[a].pos, lab.snapshot[c].pos)
+                let w = "t=\(String(format: "%.1f", Float(i) / 60)) ids \(a),\(c) squares \(line.square(huid, a)),\(line.square(huid, c))"
+                if g < minAll { minAll = g; minAllAt = w }
+                if line.contains(huid, a), line.contains(huid, c), g < minPlayers { minPlayers = g; minPlayersAt = w }
+            } }
             let c = [SharedCourt(uid: huid, players: line.players(huid).map { (id: $0.id, sq: $0.sq) })]
             awards += t.step(dt: dt, seesaws: [], courts: c, isHome: { $0 == 0 }, isVisitor: { $0 == 1 })
             if i > 600, !line.active { break }
         }
+        print("[hopline] real seed=\(seed) minPlayers=\(minPlayers)@\(minPlayersAt) minAll=\(minAll)@\(minAllAt) players=\(maxPlayers) awards=\(awards.count)")
         XCTAssertEqual(maxPlayers, 3)
-        XCTAssertEqual(awards.count, 1, "exactly one award during the line: \(awards)")
+        XCTAssertEqual(awards.count, 1, "seed \(seed): exactly one award during the line: \(awards)")
         XCTAssertEqual(awards.first?.points, SharedPlayTuning.hopBonus)
     }
 }

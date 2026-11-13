@@ -179,6 +179,7 @@ final class HopscotchTests: XCTestCase {
             for k in 1..<max(ps.count, 1) where ps[k].sq >= 0 && ps[k - 1].sq >= 0 && ps[k - 1].sq < 8 { minSqGap = min(minSqGap, ps[k - 1].sq - ps[k].sq) }
             if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { allDone = true; break }
         }
+        print("[hopline] lab minGap=\(minGap) \(minWhere) minSqGap=\(minSqGap)")
         XCTAssertEqual(maxPlayers, 3, "the others joined the line: " + lab.rigs.enumerated().map { "#\($0.offset) noticed \($0.element.brain.toy.noticed) queued \($0.element.brain.toy.queued) took \($0.element.brain.toy.tookTurn) bored \($0.element.brain.toy.bored) kind \(String(describing: $0.element.brain.idleState.kind))" }.joined(separator: " | "))
         XCTAssertTrue(allDone, "the line breaks up at the end")
         for a in 0..<3 { XCTAssertEqual(seqs[a], Array(0..<8), "Jelbie \(a) landed on 1...8 in order: \(seqs[a])") }

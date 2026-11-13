@@ -120,6 +120,10 @@ struct SpeciesLook {
     let rowHi: Color                       // the signature move row
     let padTop: Color                      // pedestal top (a white tinted a little)
     let glow: Color                        // inner glow / contact shadow on the pedestal
+    var isDark = false                     // a dark page (Panda): text drawn straight on the background switches to cream
+    var rimOverride: (top: Color, bottom: Color)? = nil   // pedestal side, when it should not be the page colour deepened
+    /// Ink for text and icons drawn straight on the page background (cards and pills with their own light fill keep SK.ink).
+    var onPage: Color { isDark ? SK.cream : SK.ink }
 
     static func of(_ c: Int) -> SpeciesLook {
         switch c {
@@ -133,15 +137,16 @@ struct SpeciesLook {
                                    card: Color(hex: 0xFBF5EC), rowHi: Color(hex: 0xF6E3CB), padTop: Color(hex: 0xF2E8DC), glow: Color(hex: 0x9A6E44))
         case JellyRoster.pearlID: return SpeciesLook(top: Color(hex: 0xE4E8F5), bottom: Color(hex: 0xB9C3E0), dot: Color(hex: 0xC4CCE6), tabFill: Color(hex: 0xEEF1FA), tabLine: Color(hex: 0xC4CCE6),
                                    card: Color(hex: 0xFAF8F5), rowHi: Color(hex: 0xEEF1FA), padTop: Color(hex: 0xF1F2F7), glow: Color(hex: 0x7C88B4))
-        case JellyRoster.pandaID: return SpeciesLook(top: Color(hex: 0xBFE3C8), bottom: Color(hex: 0x8EC79C), dot: Color(hex: 0x4A4A4F), tabFill: Color(hex: 0xDCF0E1), tabLine: Color(hex: 0x9AD0A8),
-                                   card: Color(hex: 0xF9F8F0), rowHi: Color(hex: 0xDCF0E1), padTop: Color(hex: 0xEAF0EA), glow: Color(hex: 0x4F8A63))
+        case JellyRoster.pandaID: return SpeciesLook(top: Color(hex: 0x3A3A40), bottom: Color(hex: 0x24242A), dot: Color(hex: 0x4A4A4F), tabFill: Color(hex: 0xE6E6E8), tabLine: Color(hex: 0xB4B4BA),
+                                   card: Color(hex: 0xF9F8F0), rowHi: Color(hex: 0xE6E6E8), padTop: Color(hex: 0xF2F2F2), glow: Color(hex: 0x6A6A70),
+                                   isDark: true, rimOverride: (Color(hex: 0x8A8A90), Color(hex: 0x65656B)))
         default: return SpeciesLook(top: Color(hex: 0x9DD0F2), bottom: Color(hex: 0x6DADE0), dot: Color(hex: 0x79B7E6), tabFill: Color(hex: 0xD4EAFA), tabLine: Color(hex: 0x8DC1EA),
                                     card: Color(hex: 0xF8F6F1), rowHi: Color(hex: 0xD4EAFA), padTop: Color(hex: 0xEAF0F5), glow: Color(hex: 0x4F83B5))
         }
     }
     /// Pedestal side: lighter under the top edge, darker at the bottom (the page colour, deepened).
-    var rimTop: Color { Self.shade(bottom, 0.98) }
-    var rimBottom: Color { Self.shade(bottom, 0.76) }
+    var rimTop: Color { rimOverride?.top ?? Self.shade(bottom, 0.98) }
+    var rimBottom: Color { rimOverride?.bottom ?? Self.shade(bottom, 0.76) }
     static func shade(_ c: Color, _ k: Double) -> Color {
         let u = UIColor(c); var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         u.getRed(&r, green: &g, blue: &b, alpha: &a)

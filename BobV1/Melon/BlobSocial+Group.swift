@@ -108,7 +108,7 @@ extension BlobBrain {
             return [SIMD2(sinf(a), cosf(a)) * 0.5, SIMD2(sinf(a), cosf(a)) * 1.0]
         }
         for off in offs {
-            let c = cen + off
+            let c = ParkClearSpot.clear(cen + off, radius: footprint + r)          // (park only: the whole ring clear of a solid piece, see ParkClearSpot)
             var spots = [Int: SIMD2<Float>](), ok = true
             for m in members {
                 let a = ang[m.steerID]!

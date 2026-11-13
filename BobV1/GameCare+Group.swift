@@ -57,14 +57,20 @@ extension GameCare {
 
     /// Once per fixed step (end of `tickOthers`, which sees every Jelly): starts the wanted group serving, then runs the group.
     func tickGroup(_ actors: [JellyActor], dt: Float) {
+        traceWakeOne(actors, dt: dt)
         if let c = groupWanted {
+            if groupAge == 0 { MealTrace.begin(groupQueue.isEmpty ? "order food/drink tap (first tickGroup)" : "order2 second sitting") }
             groupAge += dt
+            if callRunning, Self.softMealWakeWatchdog(age: groupAge) { MealTrace.log("callRunning watchdog cleared (group)"); callRunning = false }
             let ready = actors.count == jellies.count && actors.allSatisfy { $0.brain != nil } && !callRunning && queued.isEmpty && (dining.phase == .absent || cafeBook.tableOut)
             if focus.isActive || bath.active || groupAge > Self.mealTimeout {
                 if groupAge > Self.mealTimeout { noticeAtBob = true; notice = "The table couldn't be set — try again"; noticeSerial += 1; noticeAge = 0 }          // (was silent)
                 groupWanted = nil; groupQueueClear(); return
             }
+            if !ready { traceWaiting(actors) }
             guard ready else { return }
+            MealTrace.log("group ready after \(groupAge) s")
+            placeForTrace(actors)
             let kind: NeedKind = c.kind == .food ? .hunger : .thirst
             // who sits now: the queued ids (a second sitting), else everybody; three at most, the rest wait for the next sitting
             let candidates = groupQueue.isEmpty ? actors.map(\.id) : groupQueue
@@ -111,6 +117,47 @@ extension GameCare {
             stepAsideGroup(id: a.id, brain: b, sim: a.sim, dt: dt)      // (a waiter, or a diner of the last sitting still on his place)
         }
         group.tick(dt: dt)
+    }
+
+    /// `-MealAwake <id>` (simulator only): once all are asleep, that one Jelbie is woken (the plain quick wake) so a meal can be asked with two asleep and one awake.
+    private func traceWakeOne(_ actors: [JellyActor], dt: Float) {
+        #if targetEnvironment(simulator)
+        if let k = MealTrace.awakeID, MealTrace.awakeDone, let b = actors.first(where: { $0.id == k })?.brain { b.idleBlocked = true; b.sleepEnabled = false; b.commandedGoodnight = false }          // (he stays up)
+        guard let k = MealTrace.awakeID, !MealTrace.awakeDone, !actors.isEmpty, actors.allSatisfy({ $0.brain?.isNapping ?? false }) else { return }
+        MealTrace.awakeT += dt
+        guard MealTrace.awakeT > 4, let a = actors.first(where: { $0.id == k }), let b = a.brain else { return }
+        MealTrace.awakeDone = true
+        b.sleepEnabled = false          // (he stays up: the night's retry loop does not send him back to bed)
+        b.commandedGoodnight = false
+        nightRest.wanted.remove(k); nightRest.dayOnce.remove(k); nightRest.nightWoken.insert(k)          // (the night's retry loop does not send him back to bed for 120 s)
+        b.requestNow(.goTo(b.position))
+        NSLog("[mealtrace] MealAwake: woke jelly %d", k)
+        MealTrace.log("MealAwake: woke jelly \(k)")
+        #endif
+    }
+
+    /// Trace aid: why the group start is still waiting (a line only when the reason changes).
+    private func traceWaiting(_ actors: [JellyActor]) {
+        #if targetEnvironment(simulator)
+        MealTrace.logOnChange("group waiting callRunning=\(callRunning) queued=\(queued.count) tray=\(dining.phase) actors=\(actors.count)/\(jellies.count)")
+        #endif
+    }
+
+    /// `-MealStart` (simulator only, once): puts the Jelbies, in id order, on the given floor points right before the group starts.
+    private func placeForTrace(_ actors: [JellyActor]) {
+        #if targetEnvironment(simulator)
+        guard let pts = MealTrace.takeStarts() else { return }
+        for (k, a) in actors.sorted(by: { $0.id < $1.id }).enumerated() where k < pts.count {
+            guard let brain = a.brain else { continue }
+            if let sk = brain.skinnerRef { brain.abortScript(a.sim, sk) } else { brain.pending = nil; brain.feet.reset(); brain.feetInit = false; brain.poseW = 0 }
+            brain.pending = nil
+            a.sim.teleport(toXZ: pts[k])
+            brain.currentPose(a.sim)
+            brain.runW = 0; brain.zoomW = 0
+            brain.skinnerRef?.jelly.reset()
+            MealTrace.log("MealStart: jelly \(a.id) placed at (\(pts[k].x),\(pts[k].y))")
+        }
+        #endif
     }
 
     /// A Jelly who is not at this sitting and stands on one of its places (or its approach point) moves off it: the single flow's `stepAside`,
