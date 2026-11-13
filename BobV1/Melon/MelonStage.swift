@@ -1877,12 +1877,12 @@ final class MelonController: NSObject, MTKViewDelegate {
                 if t > 14.0 && t < 14.3 && b.commandedIdle == nil { b.commandedIdle = .headstand }
                 if t > 28.0 && t < 28.3 && b.commandedIdle == nil { b.commandedIdle = .backBounce }
             }
-        case "holdflip":    // dev only: lift, turn him upside down (the grab's twist, past the finger's 1.3 rad cap), hold 4 s, then a plain drop with no flick (14 s loop; the taps are 0.35 s wide so a slow simulator frame rate still sees them)
+        case "holdflip", "holdreal":    // dev only (holdreal = the same lift and hold but the turn stops at the finger's real 1.3 rad cap, so it shows what a real finger hold can reach): lift, turn him upside down (the grab's twist, past the finger's 1.3 rad cap), hold 4 s, then a plain drop with no flick (14 s loop; the taps are 0.35 s wide so a slow simulator frame rate still sees them)
             let t = (el * 0.1).truncatingRemainder(dividingBy: 14)          // the demo clock runs at a tenth of the speed: the simulator build steps the soft body about 10x slower than real time, and the grab's turn follows it
             let lift = 0.5 * sm((t - 0.9) / 0.8)
             if t < 6.5 {                                                                                            // double tap (down, up, down in ONE frame: a slow simulator frame rate cannot miss the 0.3 s window), held, lifted, turned over at 1.5...2.5 s, held until 6.5 s (4 s upside down)
                 if !tdDown && tdStage == 0 { tdStage = 1; let p0 = at(0, 0.45); pointerDown(id: A, point: p0, size: size); pointerUp(id: A); pointerDown(id: A, point: p0, size: size); tdDown = true }
-                else if tdDown { pointerMove(id: A, point: at(0, 0.45 + lift), size: size); twist = Float.pi * sm((t - 1.5) / 1.0) }
+                else if tdDown { pointerMove(id: A, point: at(0, 0.45 + lift), size: size); twist = (name == "holdreal" ? 1.3 : Float.pi) * sm((t - 1.5) / 1.0) }
             } else { if tdDown { pointerUp(id: A); tdDown = false }; tdStage = 2 }
             if t < 0.5, tdStage == 2 { tdStage = 0 }
         case "holdthrow":   // dev only: double tap (one frame), lift, then a flick up and to the side and let go (28 s loop); a slow simulator frame rate cannot miss the taps
