@@ -51,12 +51,48 @@ extension BlobBrain {
     /// to 6 s by a requested walk, `BlobBrain.steerTarget`). ORDER: a stander takes the spots in his own index order; the ex-rider takes spots and ring TOGETHER, nearest first (the legs are
     /// straight and clear of the box, so the nearest is the shortest walk). The first candidate that passes everything wins.
     func slideWalkOut(_ f: DecorFoot) -> SIMD2<Float>? {
+        let pick = slideWalkOutPick(f, skipping: [])
+        if idleState.kind == .decorSlide, let pick { Self.slideOutWalk[steerID] = SlideOutWalk(targets: [pick]) }          // (the ex-rider's walk is watched: `slideOutWalkTick`)
+        return pick
+    }
+
+    /// r14: an ex-rider's out spot that a body walked onto while he is on his way (within peerGap of it for over `slideOutHeld` s) is dropped for the next candidate, skipping every spot
+    /// he has already been sent to; at most `slideOutRepicks` times, then (if he is already peerGap + 0.1 off the landing) he stops where he stands.
+    struct SlideOutWalk { var targets: [SIMD2<Float>]; var heldSince: Float? = nil }
+    nonisolated(unsafe) static var slideOutWalk: [Int: SlideOutWalk] = [:]
+    static let slideOutHeld: Float = 2.0, slideOutRepicks = 2
+    nonisolated(unsafe) static var slideOutRepickCount = 0, slideOutStopCount = 0
+    func slideOutWalkTick() {
+        guard var w = Self.slideOutWalk[steerID] else { return }
+        var walking = pending != nil
+        if case .walk = script { walking = true }
+        guard walking, !held, let f = DecorField.shared.foot(ParkToys.slideUID), let target = w.targets.last else { Self.slideOutWalk[steerID] = nil; return }
+        if insideDecorT > -1.0 { insideDecorT = -1.5; insideStuckT = 0 }          // (his walk-out is on: the generic one of `decorExitCheck` must not take over after its 1.2 s and send him to the nearest spot just off the zone)
+        guard steerPeers().contains(where: { simd_distance($0.pos, target) < peerGap }) else { w.heldSince = nil; Self.slideOutWalk[steerID] = w; return }
+        guard let since = w.heldSince else { w.heldSince = peerClock; Self.slideOutWalk[steerID] = w; return }
+        guard peerClock - since > Self.slideOutHeld else { return }
+        if w.targets.count - 1 < Self.slideOutRepicks, let q = slideWalkOutPick(f, skipping: w.targets) {
+            w.targets.append(q); w.heldSince = nil; Self.slideOutWalk[steerID] = w
+            Self.slideOutRepickCount += 1
+            // (the walk keeps going on the same legs: only its target changes, like the hopscotch side leg; `requestNow` would abort the stride)
+            if pending != nil { pending = .goTo(q) } else { script = .walk(target: fixed(q), then: .none) }
+            route = []; scriptT = 0; stuckT = 0; bestDist = .infinity; steerStall = 0
+            return
+        }
+        if simd_distance(position, slideLanding(f)) >= peerGap + 0.1 {
+            Self.slideOutWalk[steerID] = nil; Self.slideOutStopCount += 1
+            script = .none; pending = nil; activity = .lookingAround
+        } else { w.heldSince = nil; Self.slideOutWalk[steerID] = w }          // (still on the landing: keep trying)
+    }
+
+    func slideWalkOutPick(_ f: DecorFoot, skipping: [SIMD2<Float>]) -> SIMD2<Float>? {
         guard f.uid == ParkToys.slideUID else { return nil }
         let landing = slideLanding(f)
         let n = Self.slideOutSpots.count
         let exRider = idleState.kind == .decorSlide
         var rest: [(q: SIMD2<Float>, clear: Float)] = []          // (passed everything but the leg-friend check)
         func consider(_ q: SIMD2<Float>) -> SIMD2<Float>? {
+            if skipping.contains(where: { simd_distance($0, q) < 0.3 }) { return nil }
             let c = legClearance(position, q)
             if c >= 0.9 { return q }
             rest.append((q, c))
@@ -100,6 +136,7 @@ extension BlobBrain {
     /// Park slide only, called with no behaviour running (`decorExitCheck`): a free Jelbie who stands on the slide's foot while someone else has the slide walks off
     /// to the lawn, so the rider has a clear landing. No spot free = he stays.
     func slideFootCheck() {
+        slideOutWalkTick()
         guard !held, !decorLocked, pending == nil, social == nil, case .none = script else { return }
         guard let f = DecorField.shared.foot(ParkToys.slideUID), let rider = DecorField.shared.occupant[f.uid], rider != steerID else { return }
         guard simd_distance(position, slideLanding(f)) < peerGap + 0.1 else { return }

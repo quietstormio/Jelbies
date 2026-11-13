@@ -411,6 +411,48 @@ final class ParkSlideCrowdTests: XCTestCase {
         }
     }
 
+    // MARK: r14 - a friend walks onto the ex-rider's out spot while he is on his way
+
+    /// Staging: a lone ex-rider; the moment his walk-out starts, a friend is put on its target and stays there. After 2 s held he re-picks (skipping that spot); he leaves the landing within 3.5 s of the
+    /// walk's start and never stands over 6 s.
+    func testExRiderRepicksWhenAFriendStandsOnHisSpot() {
+        var repicks = 0
+        for seed in UInt64(1)...3 {
+            let lab = parkLab(seed: seed, n: 3)
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!
+            let rigs = lab.rigs, a = rigs[0].brain
+            let landing = a.slideLanding(sl), peer = a.peerGap
+            let half = sl.quarter & 1 == 0 ? sl.spec.half : SIMD2(sl.spec.half.y, sl.spec.half.x)
+            place(rigs[1], a.fixed(SIMD2(-2.4, -1.6))); place(rigs[2], a.fixed(SIMD2(-1.2, -1.9))); place(rigs[0], a.fixed(SIMD2(sl.centre.x - half.x - 1.2, sl.centre.y)))
+            for _ in 0..<5 { lab.tick(watching: false) }
+            let before = BlobBrain.slideOutRepickCount
+            var t: Float = 0, started = false, t6: Float?, walkAt: Float?, leftAt: Float?, placed: SIMD2<Float>?, still: Float = 0, worstStill: Float = 0, last = a.position
+            while t < 40 {
+                if t >= 1, !started { started = a.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner) }
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
+                if a.idleState.kind == .decorSlide, a.idleState.slideStage == 6, t6 == nil { t6 = t }
+                guard t6 != nil else { continue }
+                if walkAt == nil, a.idleState.kind == nil, case .walk(let tg, _) = a.script { walkAt = t; placed = tg; place(rigs[1], tg) }
+                guard let w = walkAt else { continue }
+                if let pin = placed, t - w < 12 { rigs[1].sim.teleport(toXZ: pin); rigs[1].brain.px = pin.x; rigs[1].brain.pz = pin.y }          // (the friend stands on the first spot, held there every tick: the lab's friends wander on their own)
+                if leftAt == nil, simd_distance(a.position, landing) >= peer { leftAt = t - w }
+                var walking = false; if case .walk = a.script { walking = true }          // (a stand = not moving while a walk is on: the rest after he has arrived is no stand)
+                still = walking && simd_distance(a.position, last) < 0.0005 ? still + 1.0 / 60 : 0; last = a.position
+                worstStill = max(worstStill, still)
+                if t - w > 20 { break }
+            }
+            let n = BlobBrain.slideOutRepickCount - before; repicks += n
+            func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
+            let line = "[repick] seed=\(seed) friend put on \(placed.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-"), re-picks \(n), stops \(BlobBrain.slideOutStopCount), left the landing \(ft(leftAt)) s after the walk started, worst stand \(String(format: "%.1f", worstStill)) s"
+            print(line)
+            XCTAssertNotNil(walkAt, line)
+            XCTAssertNotNil(leftAt, line)
+            if let l = leftAt { XCTAssertLessThanOrEqual(l, 3.5, "off the landing within 3 s of the held spot being noticed (2 s held + the walk: measured 3.0 / 3.2 / 3.2). \(line)") }
+            XCTAssertLessThan(worstStill, 6, "no stand over 6 s. \(line)")
+        }
+        XCTAssertGreaterThanOrEqual(repicks, 1, "the held spot was re-picked at least once over the seeds")
+    }
+
     // MARK: r6 - a friend stands on the ex-rider's leg
 
     /// r5_c: the ex-rider "walked" 6-19 s on the spot because a friend stood on his leg to the left of the landing (a requested walk waits up to 6 s per standing friend,
