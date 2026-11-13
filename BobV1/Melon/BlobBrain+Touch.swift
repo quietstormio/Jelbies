@@ -752,6 +752,7 @@ final class TouchPlay {
     /// A plain drop (a release that is not a throw) that has landed is owned by `getUpFrame` until it has put him back on his feet (hold-wear-r1: the brain's own
     /// recovery waited for a 0.5 s run of near-zero wobble energy, up to 6 s). Reset on every grab.
     private var dropHandled = false
+    private var touchdownMarked = false          // a set-down with no landing impact: the beat before the get-up has been started at the touchdown (reset on every grab)
     /// He was actually lifted (above 0.04 u) during the last grab: only then is the release a DROP. A grab that never left the floor (a tap-hold, a drag along the floor) never takes the brain hands-off (HoldWearTests: floor grab, then a hop).
     private var wasLifted = false
     /// How long after a release a landing still counts as that drop's (s).
@@ -773,11 +774,11 @@ final class TouchPlay {
             liftedT = liftHeight > 0.04 ? liftedT + dt : 0
             if liftHeight > 0.04 { wasLifted = true }
             heldT += dt
-            releasedT = 0; impactsAtRelease = impacts; dropHandled = false
+            releasedT = 0; impactsAtRelease = impacts; dropHandled = false; touchdownMarked = false
         } else { liftedT = 0; heldT = 0; releasedT += dt; if releasedT >= Self.dropWindow { wasLifted = false } }
         if grabbing { skinner.normalSmoothing = 0 }
         let happyHold = grabbing && (liftedT > 0.2 || heldT > 0.5)
-        let want = !annoyed && !thrown && (happyHold || (!grabbing && excitement > 0 && releasedT < 1.5 && impacts == impactsAtRelease))
+        let want = !annoyed && !thrown && (happyHold || (!grabbing && excitement > 0 && releasedT < 1.5 && impacts == impactsAtRelease && (Self.legacyDropGetUp || sim.minY() > 0.06)))          // (the happy dangle ends when he touches the floor: a set-down that never reached the impact speed used to keep the dangling feet going while he was righted)
         if grabbing && annoyed && liftHeight > 0.04 && liftedT <= dt + 0.0001 { hmph(now: now) }
         annoyUpdate(dt: dt, active: grabbing && liftHeight > 0.04, side: 0)
         if grabbing, annoyed, annoyK > 0.5 { train(dt: dt, hz: 3, now: now, intensity: 0.3, sharpness: 0.92) }
@@ -845,13 +846,19 @@ final class TouchPlay {
             if !Self.legacyDropGetUp, !thrown, wasLifted, !dropHandled, releasedT < 1.0, impacts == impactsAtRelease, sim.minY() > 0.08 { stillT = 0; return true }
             let pose = sim.bodyPose(iterations: 4)
             let lying = pose.tilt > 1.0
-            let dropped = !Self.legacyDropGetUp && !thrown && wasLifted && !dropHandled && releasedT < Self.dropWindow && impacts > impactsAtRelease          // a plain drop that has landed (cuddle / pet / cheeks never release a grab, so never match)
+            // a plain drop that has landed: a landing impact, or (a set-down a few cm above the floor never reaches the impact speed) the body is on the floor and let go for a moment (cuddle / pet / cheeks never release a grab, so never match)
+            let onFloor = releasedT > 0.05 && sim.minY() < 0.05
+            if onFloor, !Self.legacyDropGetUp, !thrown, wasLifted, !dropHandled, impacts == impactsAtRelease, !touchdownMarked { touchdownMarked = true; sinceImpact = 0 }          // the landing of a set-down with no impact: the short beat starts now
+            let dropped = !Self.legacyDropGetUp && !thrown && wasLifted && !dropHandled && releasedT < Self.dropWindow && (impacts > impactsAtRelease || onFloor)
             guard thrown || lying || dropped else { stillT = 0; return false }
             // on the floor (the apex of a bounce is not) and slow: the bouncing is over; a lying jelly keeps rocking a little, so the energy limit is loose
             sinceImpact += dt
             // not while a rebound is still due (the instant of landing is slow too): the last landing was too weak to bounce, all bounces are used, or it has been quiet
             let spent = floorBounces >= Self.bounceRestitution.count || (floorBounces >= 1 && lastImpactSpeed < Self.bounceMinSpeed) || sinceImpact > 0.35
-            let calm = spent && sim.kineticEnergy() / sim.totalMass < 1.0 && simd_length(sim.meanVelocity()) < 1.0 && sim.minY() < 0.12
+            // after a thrown / dropped landing the get-up does NOT wait for the jelly's wobble energy to die down (that took 1 ... 2 s after a hard landing): `spent` (0.35 s after the last impact, or the bounces used up) is the beat,
+            // then he rights himself while he is still wobbling. A body that is merely lying (the old rule) keeps the energy wait.
+            let waitsForWobble = Self.legacyDropGetUp || !(thrown || dropped)
+            let calm = spent && (!waitsForWobble || sim.kineticEnergy() / sim.totalMass < 1.0) && simd_length(sim.meanVelocity()) < 1.0 && sim.minY() < 0.12
             stillT = calm ? stillT + dt : max(0, stillT - 0.5 * dt)
             if stillT >= Self.stillBeforeGetUp, let brain {
                 if dropped && !lying && pose.tilt <= 0.5 {

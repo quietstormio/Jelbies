@@ -1901,7 +1901,14 @@ final class MelonController: NSObject, MTKViewDelegate {
                 if !tdDown { tdDown = true; pointerDown(id: A, point: at(-0.5, 0.16), size: size); pointerDown(id: B, point: at(0.5, 0.16), size: size) }
                 else { pointerMove(id: A, point: at(-g, 0.16), size: size); pointerMove(id: B, point: at(g, 0.16), size: size) }
             } else if tdDown { pointerUp(id: A); pointerUp(id: B); tdDown = false }
-        default: break
+        default:
+            if name.hasPrefix("holdtrick:"), let b = brain {          // dev only (hold-wear-r1): ONE trick per 30 s loop, e.g. -TouchDemo holdtrick:superSpring (an IdleKind name, or flip)
+                let t = el.truncatingRemainder(dividingBy: 30), what = String(name.dropFirst(10))
+                if t > 1.0 && t < 1.3 {
+                    if what == "flip" { if !b.commandedFlip && !b.isFlipping { b.flipCompact = false; b.commandedFlipFail = false; b.commandedFlip = true } }
+                    else if let k = IdleKind(rawValue: what), b.commandedIdle == nil { b.commandedIdle = k }
+                }
+            }
         }
     }
 
