@@ -92,6 +92,46 @@ extension GameCare {
             }
             if Self.traceLast[a.id] != s { Self.traceLast[a.id] = s; NSLog("[trace] %.1f body=%d %@ at (%.1f,%.1f)", CACurrentMediaTime().truncatingRemainder(dividingBy: 10000), a.id, s, a.floor.x, a.floor.y) }
         }
+        enum CrowdState { nonisolated(unsafe) static var last: Double = 0; nonisolated(unsafe) static var anchor: [Int: (t: Double, p: SIMD2<Float>)] = [:]; nonisolated(unsafe) static var stage: [Int: (stage: Int, since: Double)] = [:] }
+        // `[crowd]` (park-crowd-r1): at most once a second, one line per pair closer than 0.80 x jellyGap and one per walker that has not moved 0.25 m in 3 s
+        let now = CACurrentMediaTime()
+        guard now - CrowdState.last >= 1 else { return }
+        CrowdState.last = now
+        let gap = MelonController.jellyGap
+        for (i, a) in bodies.enumerated() {
+            guard let b = a.brain else { continue }
+            for c in bodies[(i + 1)...] {
+                guard let d = c.brain else { continue }
+                let dist = simd_distance(a.floor, c.floor)
+                guard dist < 0.8 * gap else { continue }
+                let soc = (b.social != nil && b.social === d.social) ? "\(b.social!.kind.rawValue)/\(b.social!.phase)" : "-"
+                NSLog("[crowd] t %.0f pair %d-%d d=%.2f social=%@ pass=%d idle=%@/%@", now.truncatingRemainder(dividingBy: 10000), a.id, c.id, dist, soc, (b.socialBook.passThrough || d.socialBook.passThrough) ? 1 : 0, String(describing: b.idleState.kind), String(describing: d.idleState.kind))
+            }
+            var walking = b.activity == .walking || b.activity == .coming
+            if case .walk = b.script { walking = true }
+            if let old = CrowdState.anchor[a.id], now - old.t >= 3 {
+                if walking, simd_distance(old.p, a.floor) < 0.25 { NSLog("[crowd] t %.0f stuck body=%d at (%.1f,%.1f) social=%@ idle=%@", now.truncatingRemainder(dividingBy: 10000), a.id, a.floor.x, a.floor.y, b.social.map { "\($0.kind.rawValue)/\($0.phase)" } ?? "-", String(describing: b.idleState.kind)) }
+                CrowdState.anchor[a.id] = (now, a.floor)
+            } else if CrowdState.anchor[a.id] == nil { CrowdState.anchor[a.id] = (now, a.floor) }
+        }
+        // `[crowd] slide` (park-crowd-r2): one line per second for every body on the slide: stage, phase, seconds in this stage, position, bodies within peerGap of the landing, nearest body
+        if let sf = DecorField.shared.foot(ParkToys.slideUID) {
+            let landing = sf.centre + sf.turned(SIMD2(0, BlobBrain.slideAt(BlobBrain.slideLength).z))
+            for a in bodies {
+                guard let b = a.brain, b.idleState.kind == .decorSlide else { CrowdState.stage[a.id] = nil; continue }
+                let stg = b.idleState.slideStage
+                if CrowdState.stage[a.id]?.stage != stg { CrowdState.stage[a.id] = (stg, now) }
+                let others = bodies.filter { $0.id != a.id }
+                let near = others.filter { simd_distance($0.floor, landing) < b.peerGap }.count
+                let nearest = others.map { simd_distance($0.floor, a.floor) }.min() ?? 99
+                NSLog("[crowd] slide t %.0f body=%d stage=%d phase=%d in_stage=%.0fs at (%.1f,%.1f) bodies_within_peerGap_of_landing=%d nearest=%.2f", now.truncatingRemainder(dividingBy: 10000), a.id, stg, b.idleState.phase, now - (CrowdState.stage[a.id]?.since ?? now), a.floor.x, a.floor.y, near, nearest)
+            }
+            // `[crowd] foot` (park-crowd-r4): every body within peerGap + 0.5 of the landing, once a second
+            for a in bodies {
+                guard let b = a.brain, simd_distance(a.floor, landing) < b.peerGap + 0.5 else { continue }
+                NSLog("[crowd] foot id=%d pos=(%.2f,%.2f) script=%@ dLanding=%.2f dBox=%.2f asked=%@", a.id, a.floor.x, a.floor.y, b.scriptKindName, simd_distance(a.floor, landing), sf.distance(a.floor), BlobBrain.slideFootAsked[b.steerID].map { String(format: "%.1f", $0) } ?? "-")
+            }
+        }
     }
     #endif
 

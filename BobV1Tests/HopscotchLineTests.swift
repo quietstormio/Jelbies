@@ -156,6 +156,60 @@ final class HopscotchLineTests: XCTestCase {
         for a in 0..<3 { XCTAssertEqual(seqs[a], Array(0..<8), "Jelbie \(a) landed on squares 1...8 in order") }
     }
 
+    // 5 (park-crowd-r13): a hopper mid-court and a friend who steps up to the start from the court's far end: he leaves the lane first, nobody stands over 6 s
+    func testReturnWalkLeavesTheLaneAndNobodyStands() {
+        HopscotchTuning.joinChance = 1
+        let lab = parkLab(positions: [SIMD2(-2.1, -1.35), SIMD2(-0.4, -1.0)], seed: 7)
+        let line = HopscotchLine.shared
+        for r in lab.rigs { r.brain.autonomy = true; r.brain.idleForced = true }
+        let court = DecorField.shared.foot(uid)!, slide = DecorField.shared.foot(ParkToys.slideUID)!
+        XCTAssertTrue(lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: uid))
+        XCTAssertTrue(lab.rigs[1].brain.decorStart(.decorHopscotch, lab.rigs[1].sim, only: nil, uid: uid))
+        let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        var moved = false, movedAt: Float = 0, minGap = Float.infinity, maxSide: Float = 0, worstStand: Float = 0
+        var firstLanding = [Float](repeating: -1, count: 2), doneAt: Float = -1, pathMin = Float.infinity, slideMin = Float.infinity, stage4 = 0
+        var still = [Float](repeating: 0, count: 2), last = [SIMD2<Float>](repeating: .zero, count: 2)
+        for i in 0..<(60 * 120) {
+            lab.tick(watching: false); DecorField.shared.tick(dt: dt)
+            let t = Float(i) / 60
+            if !moved, b.idleState.kind == .decorHopscotch, b.idleState.slideStage == 5, line.square(uid, 0) >= 1, line.square(uid, 0) < 8 {
+                moved = true; movedAt = t          // (the friend, waiting for the start, is now at the court's far end: his step up is the walk back down the lane)
+                let far = court.centre + court.turned(SIMD2(0.3, 2.35))
+                b.px = far.x; b.pz = far.y; lab.rigs[1].sim.teleport(toXZ: far); b.currentPose(lab.rigs[1].sim)
+            }
+            for k in 0..<2 {
+                let br = lab.rigs[k].brain
+                if firstLanding[k] < 0, line.square(uid, k) >= 0 { firstLanding[k] = t }
+                let moving = simd_distance(br.position, last[k]) > 0.002
+                last[k] = br.position
+                let busy = br.idleState.kind == .decorHopscotch && (br.idleState.slideStage == 4 || br.idleState.slideStage == 6 || br.idleState.slideStage == 3)
+                still[k] = (moving || !busy) ? 0 : still[k] + dt
+                if moved { worstStand = max(worstStand, still[k]) }
+            }
+            if moved {
+                minGap = min(minGap, simd_distance(a.position, b.position))
+                if b.idleState.kind == .decorHopscotch, b.idleState.slideStage == 4 {
+                    stage4 += 1
+                    let p = b.position
+                    maxSide = max(maxSide, abs(court.local(p - court.centre).x))
+                    pathMin = min(pathMin, abs(p.x - ParkScenery.pathX(p.y)))
+                    slideMin = min(slideMin, slide.distance(p))
+                }
+            }
+            if doneAt < 0, line.square(uid, 0) == HopscotchLine.done { doneAt = t }
+            if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { break }
+        }
+        print("[hopline] return walk: friend moved to the far end at \(movedAt) s, hopper done at \(doneAt) s, first landings \(firstLanding), worst stand \(worstStand) s, min gap \(minGap), widest sideways step \(maxSide), path strip min \(pathMin), slide box min \(slideMin), stage-4 ticks \(stage4)")
+        XCTAssertTrue(moved, "the friend reached the queue wait")
+        XCTAssertGreaterThan(doneAt, 0, "the hopper finished the court")
+        XCTAssertGreaterThan(firstLanding[1], firstLanding[0], "line order kept: the hopper first")
+        XCTAssertLessThan(worstStand, 6, "nobody stands over 6 s")
+        XCTAssertGreaterThanOrEqual(minGap, 0.85, "bodies never closer than 0.9 (0.05 is a hop's sway of the floor spot: the first run measured 0.899)")
+        XCTAssertGreaterThanOrEqual(maxSide, HopscotchTuning.landingClear + 0.1 - 0.15, "the return walk stepped out of the lane first (widest \(maxSide))")
+        XCTAssertGreaterThan(pathMin, 0.62, "the sideways step stays off the bench path strip")
+        XCTAssertGreaterThan(slideMin, 0, "the sideways step stays outside the slide's box")
+    }
+
     // 3
     func testQueueSpotsAreOnOpenFloor() {
         let lab = parkLab(positions: [SIMD2(0, 3)], seed: 1)

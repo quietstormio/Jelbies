@@ -1279,9 +1279,10 @@ final class BlobBrain {
         // Autonomous legs (a wander / run / social walk: no job, no voice command) do not wait for a Jelly that blocks them: after a beat they give the leg up
         // and pick another (`steerGiveUp`, read by the walk). A requested walk (come, the meal) keeps the long patience: the blocker is asked to step aside.
         let requested = job != nil || commanded || pending != nil
-        let patience: Float = requested ? (standing ? 6 : 0.7) : (standing ? 1.0 : 0.6)
+        let slideLeg = idleState.kind == .decorSlide && idleState.decorUID == ParkToys.slideUID && idleState.slideStage < 0          // (the way round the park slide: it gives a standing friend 2 s, then the leg is given up and planned the other way round, BlobBrain+Decor.swift)
+        let patience: Float = requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6)
         if steerWait < patience, peerOnLeg(root, target) { return nil }
-        if !requested, peerOnLeg(root, target) { steerGiveUp = true; return nil }
+        if !requested || (slideLeg && standing), peerOnLeg(root, target) { steerGiveUp = true; return nil }
         return target
     }
 
