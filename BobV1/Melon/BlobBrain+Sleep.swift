@@ -645,7 +645,7 @@ extension BlobBrain {
                 let W = SlowWakeTuning.self, yt = sleep.t
                 let lift = W.yawnLift * smooth01(yt / W.yawnLiftTime)
                 let m = smooth01((yt - W.yawnMouthAt) / W.yawnMouthOpenTime) * (1 - smooth01((yt - W.yawnMouthCloseAt) / W.yawnMouthCloseTime))
-                sleepYawnPose(skinner, k: lift, mouth: W.yawnMouth * m, shake: false, sleepy: W.yawnEyes * smooth01(yt / W.yawnLiftTime))
+                sleepYawnPose(skinner, k: lift, mouth: W.yawnMouth * m, shake: false, sleepy: W.yawnEyes)          // (eyes stay shut from the roll: no open-eyed beat before the squeeze)
                 gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
                 return
             }
@@ -654,7 +654,7 @@ extension BlobBrain {
             let k0: Float = yawning ? SlowWakeTuning.yawnLift : 0
             let k = (k0 + (1 - k0) * smooth01(t / 0.8)) * (1 - smooth01((t - 1.7) / 0.6))
             let m = smooth01((t - 0.7) / 0.4) * (1 - smooth01((t - 1.35) / 0.4))
-            let sleepy: Float = yawning ? SlowWakeTuning.yawnEyes * (1 - smooth01(st / (0.6 * SleepTuning.stretchTime / 2.7))) : max(0.95 * (1 - smooth01(st / (0.6 * SleepTuning.stretchTime / 2.7))), sleep.groggy ? 0.5 * (1 - smooth01((t - 1.6) / 1.2)) : 0)
+            let sleepy: Float = max(0.95 * (1 - smooth01(st / (0.6 * SleepTuning.stretchTime / 2.7))), sleep.groggy ? 0.5 * (1 - smooth01((t - 1.6) / 1.2)) : 0)
             sleepYawnPose(skinner, k: k, mouth: yawning ? 0 : (sleep.groggy ? 0.95 * m : 0), shake: false, sleepy: sleepy)
             gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
             if sleep.softWake, t > 2.7, !feet.active, sleep.bed < 0 || sleep.bedHop != 0 {

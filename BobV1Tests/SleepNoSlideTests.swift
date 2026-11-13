@@ -17,7 +17,8 @@ final class SleepNoSlideTests: XCTestCase {
         guard let d = (s + "\n").data(using: .utf8) else { return }
         if let h = FileHandle(forWritingAtPath: logPath) { h.seekToEndOfFile(); h.write(d); try? h.close() } else { try? d.write(to: URL(fileURLWithPath: logPath)) }
     }
-    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956) }
+    // (2026-11-12: `TEST_RUNNER_SLOWWAKE_OFF=1` runs this suite with `slowWakeEverywhere` off, to attribute a difference to the staged wake.)
+    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956); BlobBrain.slowWakeEverywhere = ProcessInfo.processInfo.environment["SLOWWAKE_OFF"] != "1" }
     override func tearDown() {
         SleepTuning.holdChance = 0.4; SleepTuning.cuddleChance = 0.3; SleepTuning.maxRoll = 0.75
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)

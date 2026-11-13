@@ -24,7 +24,12 @@ final class WakeSlowCaptureUITests: XCTestCase {
         if mode == "tap" {
             for _ in 0..<1200 where !FileManager.default.fileExists(atPath: "\(out)/go.mark") { usleep(100_000) }
             let xy = ((try? String(contentsOfFile: "\(out)/tap.xy", encoding: .utf8)) ?? "0.5 0.55").split(separator: " ").compactMap { Double($0) }
-            app.coordinate(withNormalizedOffset: CGVector(dx: xy.first ?? 0.5, dy: xy.count > 1 ? xy[1] : 0.55)).tap()
+            let c = app.coordinate(withNormalizedOffset: CGVector(dx: xy.first ?? 0.5, dy: xy.count > 1 ? xy[1] : 0.55))
+            switch env["WAKE_UI_GESTURE"] ?? "press" {          // press = a finger resting on him (wakes him gently); double = double-tap twice (highlight, then the poke); tap = a plain tap (his dream bubble)
+            case "double": c.doubleTap(); sleep(1); c.doubleTap()
+            case "tap": c.tap()
+            default: c.press(forDuration: Double(env["WAKE_UI_PRESS"] ?? "0.25") ?? 0.25)
+            }
             mark("tap.epoch", String(format: "%.3f", Date().timeIntervalSince1970))
         }
         Thread.sleep(forTimeInterval: secs)

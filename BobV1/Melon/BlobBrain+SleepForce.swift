@@ -92,8 +92,8 @@ enum SlowWakeTuning {
     static let yawnLift: Float = 0.5, yawnLiftTime: Float = 0.45
     /// The mouth: wide and round (as the idle yawn's 0.95), opens from `yawnMouthAt` in `yawnMouthOpenTime`, closes from `yawnMouthCloseAt` in `yawnMouthCloseTime`.
     static let yawnMouth: Float = 0.95, yawnMouthAt: Float = 0.2, yawnMouthOpenTime: Float = 0.3, yawnMouthCloseAt: Float = 0.62, yawnMouthCloseTime: Float = 0.36
-    /// Eyes squeezed (extra closing on top of the lift's own).
-    static let yawnEyes: Float = 0.45
+    /// Eyes squeezed shut through the yawn (the `sleepy` closing; the stretch opens them as today).
+    static let yawnEyes: Float = 0.95
     /// A slow wake of the brain's own (not a meal's) that has not finished after this many seconds ends hard: lag <= 2.8 (+0.8 per extra sleeper) + stir 1.2 + roll 1.0 + yawn 1.0 + stretch 1.75 + look 0.55 + a bed hop.
     static let cap: Float = 13
     /// The meal group's cap with the yawn in it (was 11).
