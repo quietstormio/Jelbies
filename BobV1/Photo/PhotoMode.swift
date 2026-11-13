@@ -107,7 +107,7 @@ final class PhotoMode {
         flash = true
         Task { @MainActor in try? await Task.sleep(nanoseconds: 60_000_000); withAnimation(.easeOut(duration: 0.4)) { flash = false } }
         guard let url = PhotoAlbum.shared.add(out) else {
-            showNotice(PhotoAlbum.noSpaceMessage)
+            showNotice(PhotoAlbum.addFailedMessage)
             return
         }
         panel = nil
