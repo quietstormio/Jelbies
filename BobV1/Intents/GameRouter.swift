@@ -86,7 +86,9 @@ final class GameRouter {
         for r in pending {
             let at = requestedAt[r] ?? t
             requestedAt[r] = at
-            if t.timeIntervalSince(at) <= Self.maxPendingAge { fresh.append(r) }
+            var meal = false                  // a feed / water waits as it always did (feeding behaviour is unchanged); only the other routes expire
+            switch r { case .feed, .water: meal = true; default: break }
+            if meal || t.timeIntervalSince(at) <= Self.maxPendingAge { fresh.append(r) }
         }
         if fresh.count != pending.count { pending = fresh }
         var keep: [JellyRoute] = []
