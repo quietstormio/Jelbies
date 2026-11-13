@@ -252,11 +252,11 @@ struct AdoptionCenter: View {
             PickerBackdrop(top: look.top, bottom: look.bottom, calm: reduce, rayOriginY: 0.42).ignoresSafeArea()
                 .contentShape(Rectangle()).onTapGesture { }
             VStack(spacing: 14) {
-                Text("THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.2).foregroundStyle(SK.ink.opacity(0.78))
-                Text("Jelly Spring").font(SK.font(56, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.5)
-                if reduce { ProgressView().tint(SK.ink.opacity(0.6)).controlSize(.large).frame(height: 40) }
+                Text("THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.2).foregroundStyle(look.onPage.opacity(0.78))
+                Text("Jelly Spring").font(SK.font(56, .black)).foregroundStyle(look.onPage).lineLimit(1).minimumScaleFactor(0.5)
+                if reduce { ProgressView().tint(look.onPage.opacity(0.6)).controlSize(.large).frame(height: 40) }
                 else { SpringLoaderDots(colors: order.map { SpeciesInfo.of($0).look.dot }).frame(height: 40) }
-                Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(SK.ink.opacity(0.72))
+                Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(look.onPage.opacity(0.72))
                     .lineLimit(3).minimumScaleFactor(0.8).multilineTextAlignment(.center).padding(.horizontal, 36)
             }
             .padding(.horizontal, 20)
@@ -391,9 +391,9 @@ struct AdoptionCenter: View {
 
     private var flowHeader: some View {
         VStack(spacing: 6) {
-            Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(SK.ink.opacity(0.78))
-            Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).minimumScaleFactor(0.5)
-            Text(epithetLine).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85))
+            Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.6).foregroundStyle(look.onPage.opacity(0.78))
+            Text(info.name).font(SK.font(52, .black)).foregroundStyle(look.onPage).minimumScaleFactor(0.5)
+            Text(epithetLine).font(SK.font(17.5, .semibold)).foregroundStyle(look.onPage.opacity(0.85))
             if mode == .more { roomLine }
             HStack(spacing: 4) {
                 ForEach(0..<order.count, id: \.self) { i in
@@ -596,12 +596,12 @@ struct AdoptionCenter: View {
     /// Overline, name, epithet and the four colour dots (design: overline y 18, name y 61, epithet y 104, dots y 134 in this 150-high block).
     private var headerBlock: some View {
         ZStack(alignment: .top) {
-            Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.2).foregroundStyle(SK.ink.opacity(0.78))
+            Text(mode == .first ? "THE SPRING'S WELCOME GIFT" : "THE JELLY SPRING").font(SK.font(13, .heavy)).tracking(2.2).foregroundStyle(look.onPage.opacity(0.78))
                 .frame(height: 20).position(x: 220, y: 18)
             // Only the name, epithet and Rare tag slide and fade with a swipe; the overline, dots and room line stay put.
             ZStack(alignment: .topLeading) {
-                Text(info.name).font(SK.font(52, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).frame(width: 330, height: 60).position(x: 220, y: 61)
-                Text(epithetLine).font(SK.font(17.5, .semibold)).foregroundStyle(SK.ink.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
+                Text(info.name).font(SK.font(52, .black)).foregroundStyle(look.onPage).lineLimit(1).minimumScaleFactor(0.6).frame(width: 330, height: 60).position(x: 220, y: 61)
+                Text(epithetLine).font(SK.font(17.5, .semibold)).foregroundStyle(look.onPage.opacity(0.85)).frame(height: 24).position(x: 220, y: 104)
             }
             .frame(width: 440, height: 150, alignment: .topLeading)
             .offset(x: slideX * 0.4).opacity(slideO)
