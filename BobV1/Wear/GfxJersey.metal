@@ -101,23 +101,67 @@ static float jFibre(float3 Q) {
     return lt - dk;
 }
 
+// LEGS-BLEND (the same maths as legBlendAt in Shaders.metal / GfxBodyFast.metal; race-limbs-r2: the jersey body shader used to ignore fragment buffer 6, so every racer and every
+// bib / sash wearer had the leg / belly join shaded without the smoothing). lb[0].x = 0: nothing below runs (pixel-identical).
+static float jLegBlendAt(float3 p, constant float4* lb, thread float3& nOut, thread float& wUp) {
+    float wBest = 0.0, uBest = 0.0;
+    float3 nb = float3(0.0, 1.0, 0.0);
+    float k = lb[0].z, ku = lb[0].w;
+    for (int s = 0; s < 2; s++) {
+        if (lb[5 + s].w < 0.5) { continue; }
+        float3 a = lb[7 + s].xyz, e1 = lb[9 + s].xyz, e2 = cross(a, e1);
+        float3 q = p - lb[5 + s].xyz;
+        float h = dot(q, a), x = dot(q, e1), y = dot(q, e2), rho = length(float2(x, y));
+        float f = fract(atan2(y, x) / 6.2831853 + 1.0) * 32.0;
+        int j0 = int(floor(f)) % 32, j1 = (j0 + 1) % 32;
+        float t = fract(f);
+        float4 p0 = lb[11 + 16 * s + j0 / 2], p1 = lb[11 + 16 * s + j1 / 2];
+        float2 x0 = (j0 % 2 == 0) ? p0.xy : p0.zw, x1 = (j1 % 2 == 0) ? p1.xy : p1.zw;
+        float2 X = mix(x0, x1, t);
+        float dh = h - X.y;
+        float w = 1.0 - smoothstep(0.0, k, length(float2(rho - X.x, dh)));
+        float u = (ku > 0.0 && dh > 0.0) ? (1.0 - smoothstep(0.0, ku, dh)) * (1.0 - smoothstep(X.x, X.x + ku, rho)) : 0.0;
+        if (max(w, u) > max(wBest, uBest)) {
+            float3 nj = normalize(mix(lb[43 + 32 * s + j0].xyz, lb[43 + 32 * s + j1].xyz, t));
+            float3 nu = ku > 0.0 ? normalize(mix(lb[107 + 32 * s + j0].xyz, lb[107 + 32 * s + j1].xyz, t)) : nj;
+            nb = normalize(mix(nj, nu, ku > 0.0 ? clamp(dh / (0.5 * ku), 0.0, 1.0) : 0.0));
+            wBest = w; uBest = u;
+        }
+    }
+    nOut = nb;
+    wUp = uBest;
+    return wBest;
+}
+
 fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
                                   bool ff [[front_facing]],
                                   constant JerseyUniforms& u [[buffer(0)]],
                                   constant JerseyParams& jp [[buffer(1)]],
+                                  constant float4* lb [[buffer(6)]],
                                   constant float4* jl [[buffer(7), function_constant(jellyB)]],
                                   constant float4* ab [[buffer(8)]]) {
     float3 N = normalize(i.n);
     if (!ff) { N = -N; }
-    float3 Q = i.rest;
+    float3 Q = i.rest;          // the paint / band coordinate (never blended)
+    float3 Qs = Q;              // the shading (crinkle / fibre) coordinate
+    float pandaInk = pandaInkOfMat(i.mat, u.shape.w);
+    float mtJ = pandaAOOfMat(i.mat, pandaInk);          // the crease AO (the Panda's ink rides in the same channel)
+    float3 Nj = ff ? normalize(i.n) : -normalize(i.n);          // the smooth normal the jelly finish reads (blended at a leg join, below)
+    if (lb[0].x > 0.5) {          // LEGS-BLEND (the same order as the plain body shader)
+        float3 nj;
+        float wu;
+        float wj = jLegBlendAt(i.wp, lb, nj, wu);
+        float wn = max(wj, 0.7 * wu), wq = max(wj, wu);
+        if (wq > 0.0) { N = normalize(mix(N, nj, wn)); Nj = normalize(mix(Nj, nj, wn)); Qs = mix(Q, (float4x4(lb[1], lb[2], lb[3], lb[4]) * float4(i.wp, 1.0)).xyz, wq); mtJ = mix(mtJ, lb[0].y, wj); }
+    }
     float e = 0.012;
-    float c0 = jCrinkle(Q);
-    float3 g = float3(jCrinkle(Q + float3(e, 0, 0)) - c0, jCrinkle(Q + float3(0, e, 0)) - c0, jCrinkle(Q + float3(0, 0, e)) - c0) / e;
+    float c0 = jCrinkle(Qs);
+    float3 g = float3(jCrinkle(Qs + float3(e, 0, 0)) - c0, jCrinkle(Qs + float3(0, e, 0)) - c0, jCrinkle(Qs + float3(0, 0, e)) - c0) / e;
     g -= N * dot(g, N);
     N = normalize(N - g * 0.0022);
-    float fb = jFibre(Q);
+    float fb = jFibre(Qs);
     float ef = 0.0018;
-    float3 gf = float3(jFibre(Q + float3(ef, 0, 0)) - fb, jFibre(Q + float3(0, ef, 0)) - fb, jFibre(Q + float3(0, 0, ef)) - fb) / ef;
+    float3 gf = float3(jFibre(Qs + float3(ef, 0, 0)) - fb, jFibre(Qs + float3(0, ef, 0)) - fb, jFibre(Qs + float3(0, 0, ef)) - fb) / ef;
     gf -= N * dot(gf, N);
     N = normalize(N - gf * 0.0003);
     float armW2 = 0.0;
@@ -125,8 +169,7 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
 
     float3 L = normalize(u.keyDir.xyz);
     float d = dot(N, L);
-    float pandaInk = pandaInkOfMat(i.mat, u.shape.w);
-    float occ = clamp(pandaAOOfMat(i.mat, pandaInk) / 0.4, 0.0, 1.0);
+    float occ = clamp(mtJ / 0.4, 0.0, 1.0);
     occ = mix(occ, armBlendOccB, armW2);
     float down = clamp(-N.y, 0.0, 1.0);
     float s = clamp(0.26 + 0.80 * d - 0.5 * max(-d - 0.04, 0.0) - 0.16 * down, 0.0, 1.0);
@@ -134,9 +177,9 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
     float3 t = pow(float3(s), float3(0.55, 1.0, 1.25));
     float3 col = mix(u.fleshDeep.rgb, u.flesh.rgb, t);
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
-    col *= 1.0 + (jCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
+    col *= 1.0 + (jCrinkle(Qs * 1.7 + 11.0) - 0.5) * 0.045;
     col *= 1.0 + 0.04 * fb;
-    if (jellyB) { col = jellyBase(col, s, occ, u.flesh.rgb, u.fleshDeep.rgb, ff ? normalize(i.n) : -normalize(i.n), L, i.wp, u.camPos.xyz, u.view, jl); }          // JELLY (JellyFinish.h)
+    if (jellyB) { col = jellyBase(col, s, occ, u.flesh.rgb, u.fleshDeep.rgb, Nj, L, i.wp, u.camPos.xyz, u.view, jl); }          // JELLY (JellyFinish.h)
     // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
     float bb = u.shape.w;
     float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
@@ -224,6 +267,6 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
         float lum = dot(col, float3(0.299, 0.587, 0.114));
         col = mix(col, float3(0.95, 0.40, 0.50) * (0.55 + lum), bk * 0.62);
     }
-    if (jellyB) { col = jellyTop(col, ff ? normalize(i.n) : -normalize(i.n), i.wp, u.camPos.xyz, u.view, Q, jl, jcov, 0.0); }          // JELLY (JellyFinish.h)
+    if (jellyB) { col = jellyTop(col, Nj, i.wp, u.camPos.xyz, u.view, Q, jl, jcov, 0.0); }          // JELLY (JellyFinish.h)
     return float4(col / max(u.misc.x, 1e-3), 0.0);
 }
