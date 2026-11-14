@@ -200,37 +200,30 @@ def cardigan(main=hx('#E6D8BC'), trim=hx('#C2AC84'), button=hx('#3B2A22'), pip=F
 
 # ============================ CROSSBODY BAG ====================================
 def bag_crossbody(main=hx('#F0D9B5'), strap=hx('#8B5A3C'), gold=GOLD, **k):
+    """A quilted bag resting on the right hip on a leather strap that is a CLOSED loop round the whole body like the racing sash: over the left shoulder above the arm root (y 0.70), across the chest
+    (0.46, below the mouth), down to the bag at the right hip and under the right arm, back up across the back (0.555: over Pip's tail root, under his next spike group). Built on wl.surface_ray."""
     reset()
-    # strap: from the left shoulder (ends tucked behind the arm root) down across the belly to the bag at the right hip
-    a = np.array([-0.42, 0.600]); b = np.array([0.300, 0.282])
-    d = (b - a) / np.linalg.norm(b - a); perp = np.array([-d[1], d[0]])
-    nL = 17; W_ = 0.052
-    rows = [(-1.0, 0.016), (-0.7, 0.026), (-0.3, 0.030), (0.3, 0.030), (0.7, 0.026), (1.0, 0.016)]
-    def pt(i, j):
-        t = i / (nL - 1); w, off = rows[j]
-        q = a + (b - a) * t + perp * W_ * w
-        p, n = body_pt(q[0], q[1], off); return p
-    grid_surface('strap', pt, nL, len(rows), strap, closed_u=False, hint=lambda p: full_n(p), gcol=lambda i, j: mix(deep(strap, 0.12), tint(strap, 0.14), 0.5 + 0.1 * (j - 2.5)))
-    for t in np.linspace(0.06, 0.94, 13):
-        q = a + (b - a) * t
-        p, n = body_pt(q[0] + perp[0] * W_ * 0.9, q[1] + perp[1] * W_ * 0.9, 0.032)
-    for s in (-1, 1):
-        pts = []
-        for t in np.linspace(0.0, 1.0, 14):
-            q = a + (b - a) * t + perp * W_ * 0.80 * s
-            pts.append(body_pt(q[0], q[1], 0.030)[0])
-        tube_curve('stitch%+d' % s, pts, 0.0035, 4, deep(strap, 0.3), cap=True)
-    # the bag: a puffy quilted pouch at the right hip, hung on the strap end
-    c, n = body_pt(0.290, 0.222, 0.0)
+    import items7 as I7
+    NA = 56; HW = 0.027; R_ = 0.52
+    rows = [(-1.0, 0.008), (-0.6, 0.018), (0.0, 0.022), (0.6, 0.018), (1.0, 0.008)]
+    def skin(phi, w, off):
+        d = 1e-3; y0 = I7.sash_y(phi); dy = (I7.sash_y(phi + d) - I7.sash_y(phi - d)) / (2 * d)
+        t = np.array([R_, dy]); t /= np.linalg.norm(t); perp = np.array([-t[1], t[0]])
+        return surface_at(y0 + perp[1] * w * HW, phi + perp[0] * w * HW / R_, off=off)
+    cols = [2 * math.pi * i / NA for i in range(NA)]
+    grid_surface('strap', lambda i, j: skin(cols[i], rows[j][0], rows[j][1])[0], NA, len(rows), None, closed_u=True, hint=lambda p: full_n(p),
+                 gcol=lambda i, j: (deep(strap, 0.34) if abs(rows[j][0]) > 0.9 else (tint(strap, 0.20) if abs(rows[j][0]) < 0.1 else mix(deep(strap, 0.10), tint(strap, 0.12), 0.5))))
+    # the bag: a puffy quilted pouch on the right hip (in front of the hanging arm bulb), hung on the strap
+    phb = 0.62
+    c, n = surface_at(0.275, phb, off=0.0)
     xx, yy, z = axes(n)
     ctr = c + z * 0.056
     Rm = np.stack([xx, yy, z], 1)
     nu, nv = 14, 12
-    hw, hh, dp = 0.150, 0.114, 0.062
+    hw, hh, dp = 0.140, 0.108, 0.058
     def bp(i, j):
         ph = 2 * math.pi * i / nu; th = -math.pi / 2 + math.pi * j / (nv - 1)
-        e = 0.42
-        ux = spow(math.cos(th) * math.cos(ph), 2 / (2 * e) * 1.0) if False else math.copysign(abs(math.cos(th) * math.cos(ph)) ** 0.45, math.cos(th) * math.cos(ph))
+        ux = math.copysign(abs(math.cos(th) * math.cos(ph)) ** 0.45, math.cos(th) * math.cos(ph))
         uy = math.copysign(abs(math.cos(th) * math.sin(ph)) ** 0.45, math.cos(th) * math.sin(ph))
         uz = math.copysign(abs(math.sin(th)) ** 0.5, math.sin(th))
         quilt = 1 + 0.07 * math.cos(2 * math.pi * ux * 2.0) * math.cos(2 * math.pi * uy * 2.0) * (abs(uz) > 0.2)
@@ -241,15 +234,12 @@ def bag_crossbody(main=hx('#F0D9B5'), strap=hx('#8B5A3C'), gold=GOLD, **k):
         v = 0.5 + 0.5 * math.cos(2 * math.pi * qx) * math.cos(2 * math.pi * qy)
         return mix(deep(main, 0.22), tint(main, 0.16), 0.30 + 0.70 * v)
     grid_surface('pouch', bp, nu, nv, bcol, hint=lambda p: np.array(p) - ctr)
-    # flap + gold clasp + hanging ring where the strap joins
-    fl = [ctr + Rm @ np.array([hw * 1.0 * math.cos(a_), hh * 0.30 + hh * 0.70 * math.sin(a_), dp * 0.96]) for a_ in np.linspace(math.pi * 1.05, math.pi * 1.95, 9)]
-    tube_curve('flap', [ctr + Rm @ np.array([x_, hh * 0.18 - 0.02 * (1 - (x_ / hw) ** 2), dp * 0.98]) for x_ in np.linspace(-hw * 0.96, hw * 0.96, 13)], 0.0085, 6, deep(main, 0.30), cap=True)
+    tube_curve('flap', [ctr + Rm @ np.array([x_, hh * 0.18 - 0.02 * (1 - (x_ / hw) ** 2), dp * 0.98]) for x_ in np.linspace(-hw * 0.78, hw * 0.78, 11)], 0.0085, 5, deep(main, 0.30), cap=True)
     p_cl = ctr + Rm @ np.array([0, hh * 0.18 - 0.02, dp * 1.06])
-    lathe_y('clasp', [(0.0, 0.0), (0.030, 0.0), (0.033, 0.008), (0.026, 0.016), (0.0, 0.019)], 16, lambda q, nq: mix(deep(gold, 0.15), tint(gold, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p_cl), rotm=np.stack([xx, z, -yy], 1).tolist(), sharp=55)
-    p_ring = ctr + Rm @ np.array([-hw * 0.78, hh * 0.80, dp * 0.35])
-    ico_part('ring', tuple(p_ring), (0.024, 0.024, 0.016), gold, sub=1)
-    return dict(anchor='chest', slot='body', tags=['cute', 'sweet', 'sparkly'], price=75, title='Quilted crossbody bag',
-                desc='A small quilted cream bag with a gold clasp, hung at the right hip on a brown strap that crosses the belly from the left shoulder (ends tucked behind the arm root). Strap top y 0.60 at the side, 0.45 at the centre line: below the mouth keep-out.')
+    lathe_y('clasp', [(0.0, 0.0), (0.030, 0.0), (0.033, 0.008), (0.026, 0.016), (0.0, 0.019)], 10, lambda q, nq: mix(deep(gold, 0.15), tint(gold, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p_cl), rotm=np.stack([xx, z, -yy], 1).tolist(), sharp=60)
+    ico_part('ring', tuple(ctr + Rm @ np.array([-hw * 0.78, hh * 0.80, dp * 0.35])), (0.022, 0.022, 0.015), gold, sub=1)
+    return dict(anchor='chest', slot='body', tags=['cute', 'sweet', 'sparkly'], price=75, title='Quilted crossbody bag', ao_flat=True, emit=0.10,
+                desc='A small quilted cream bag with a gold clasp resting on the right hip, on a brown leather strap that is a closed loop all the way round the body: over the left shoulder above the arm root (y 0.70), across the chest (0.46), to the bag, under the right arm and back across the back (0.555).')
 
 VARIANTS = [('vest_puffer_pip', vest_puffer, dict(pip=True), BIB_ANCHOR), ('cardigan_cable_pip', cardigan, dict(pip=True), BIB_ANCHOR)]
 REG = [
