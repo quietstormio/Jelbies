@@ -47,7 +47,7 @@
 			<key>INAlternativeAppName</key>
 			<string>My Jelmiko</string>
 			<key>INAlternativeAppNamePronunciationHint</key>
-			<string>my jell bees</string>
+			<string>my jell mee ko</string>
 		</dict>
 	</array>
 	<!-- The widget's deep link: jelbies://jelly/<id> opens the game and selects that Jelly. -->
