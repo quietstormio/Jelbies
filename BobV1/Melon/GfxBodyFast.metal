@@ -240,6 +240,15 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         float ckE = 1.0 + (jl[3].w - 1.0) * mix(1.0, 0.35, smoothstep(0.50, 0.72, cSat));
         float3 dcol = max((Y * dkE) * (1.0 + ckE * (col / Y - 1.0)), 0.0);
         dcol *= min(1.0, 0.96 / max(max(dcol.r, max(dcol.g, dcol.b)), 1e-3));
+        // NEON CAP (species-generic, off at soft = deep = 0): a colour that is both bright and saturated (yellow, green) is softened and deepened; w is 0 for
+        // everything at or below luminance y0 (Blue, Lavender, Teddy) and for low-chroma bodies (Pearl, Panda), so those do not change.
+        if (jl[6].x > 0.0 || jl[6].y > 0.0) {
+            float nY = dot(dcol, float3(0.2126, 0.7152, 0.0722));
+            float nM = max(dcol.r, max(dcol.g, dcol.b));
+            float nS = (nM - min(dcol.r, min(dcol.g, dcol.b))) / max(nM, 1e-3);
+            float nw = smoothstep(jl[6].z, jl[6].w, nY) * smoothstep(0.30, 0.60, nS);
+            dcol = (float3(nY) + (dcol - nY) * (1.0 - jl[6].x * nw)) * (1.0 - jl[6].y * nw);
+        }
         col = mix(col, dcol, jl[3].y);
         // R2.2: light collects inside, on the side away from the lamp, low on the body: a lighter patch of the same body colour
         float inner = pow(saturate(dot(Ns, normalize(-L + float3(0.0, -0.35, 0.0))) * 0.5 + 0.5), 3.0) * (1.0 - 0.7 * jThin);
