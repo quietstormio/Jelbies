@@ -138,7 +138,7 @@ nonisolated enum Bedtime {
         guard let d = directory, let data = try? Data(contentsOf: d.appendingPathComponent(file)),
               let t = try? JSONDecoder().decode(Double.self, from: data) else { return nil }
         let date = Date(timeIntervalSince1970: t)
-        guard now.timeIntervalSince(date) < maxAge, date <= now.addingTimeInterval(60) else { return nil }
+        guard now.timeIntervalSince(date) < maxAge, date.isAtOrBefore(now.addingTimeInterval(60)) else { return nil }
         return date
     }
     @discardableResult
@@ -155,7 +155,7 @@ nonisolated enum Bedtime {
 
     /// Asleep now: tucked in (and the night not yet over), or the room's night (about 20:22-07:07: `SleepHours`, the same edge the game opens on sleepers by).
     static func isSleeping(at date: Date, tuckedIn: Date?, calendar cal: Calendar = .current) -> Bool {
-        if let t = tuckedIn, date >= t, date < wakeDate(after: t, calendar: cal) { return true }
+        if let t = tuckedIn, date.isAtOrAfter(t), date < wakeDate(after: t, calendar: cal) { return true }
         return SleepHours.isNight(at: date, calendar: cal)
     }
 }

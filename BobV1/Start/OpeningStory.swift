@@ -590,7 +590,7 @@ struct OpeningStoryView: View {
             let hold = (st.quick ? OpeningScript.afterQuickPop : OpeningScript.afterLastPop) * (UIAccessibility.isVoiceOverRunning ? 1.7 : 1)
             st.beatEnd = min(st.beatEnd, l.addingTimeInterval(hold))
         }
-        if holdBeat == nil, now >= st.beatEnd { advance(tapped: st.quick) }
+        if holdBeat == nil, now.isAtOrAfter(st.beatEnd) { advance(tapped: st.quick) }
     }
 
     private func startPump() {
