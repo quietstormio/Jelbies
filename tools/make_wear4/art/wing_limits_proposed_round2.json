@@ -1,0 +1,117 @@
+{
+ "note": "PROPOSED Lavender wing tables for the round-2 art, from work/wingmeasure.py (a model of the wing meshes; calibrated on the OLD scarf_cosy against the shipped feature_compat.json table, tau 0.020, only approximate). NOT wired into feature_compat.json (owned by convert_char_art.py).",
+ "scarf_cosy": {
+  "-0.2": null,
+  "-0.16": null,
+  "-0.12": null,
+  "-0.08": null,
+  "-0.04": null,
+  "0.0": [
+   65,
+   70
+  ],
+  "0.04": [
+   -30,
+   30
+  ],
+  "0.08": [
+   -40,
+   40
+  ],
+  "0.12": [
+   -40,
+   55
+  ],
+  "0.16": [
+   -40,
+   65
+  ]
+ },
+ "scarf_sky": {
+  "-0.2": null,
+  "-0.16": null,
+  "-0.12": null,
+  "-0.08": null,
+  "-0.04": null,
+  "0.0": [
+   65,
+   70
+  ],
+  "0.04": [
+   -30,
+   30
+  ],
+  "0.08": [
+   -40,
+   40
+  ],
+  "0.12": [
+   -40,
+   55
+  ],
+  "0.16": [
+   -40,
+   65
+  ]
+ },
+ "scarf_plum": {
+  "-0.2": null,
+  "-0.16": null,
+  "-0.12": null,
+  "-0.08": null,
+  "-0.04": null,
+  "0.0": [
+   65,
+   70
+  ],
+  "0.04": [
+   -30,
+   30
+  ],
+  "0.08": [
+   -40,
+   40
+  ],
+  "0.12": [
+   -40,
+   55
+  ],
+  "0.16": [
+   -40,
+   65
+  ]
+ },
+ "backpack_sky": {
+  "-0.2": null,
+  "-0.16": null,
+  "-0.12": null,
+  "-0.08": [
+   45,
+   45
+  ],
+  "-0.04": [
+   45,
+   75
+  ],
+  "0.0": [
+   -35,
+   75
+  ],
+  "0.04": [
+   -40,
+   40
+  ],
+  "0.08": [
+   -40,
+   65
+  ],
+  "0.12": [
+   -40,
+   65
+  ],
+  "0.16": [
+   -40,
+   75
+  ]
+ }
+}
