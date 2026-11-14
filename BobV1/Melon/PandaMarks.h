@@ -86,13 +86,17 @@ static float pandaBelly(float3 Q) {
 }
 
 /// The whole Panda paint. `col` is the shaded white; bm 1 = the egg, 2 = a black piece. `patch` returns the eye-patch weight (blush stays off it).
-static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch) {
+/// `ink` (0...1) = the raised arm's own black (GfxBodyFast.metal decodes it from the mat channel while a Panda waves): the posed arm and the join collar that the
+/// arm pulls out of the egg are painted by where they ARE now (their displacement), not by the rest-space arm mask, whose crisp edge cut the stretched collar into torn teeth.
+static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch, float ink) {
     float3 blk = pandaBlack(col);
     patch = 0.0;
     if (bm > 1.5) { return blk; }
     patch = pandaEyePatch(Q);
     float m = max(max(max(patch, pandaBand(Q)), pandaLimbs(Q)), pandaBelly(Q));
+    m = max(m, smoothstep(0.35, 0.65, ink));
     return mix(col, blk, m);
 }
+static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch) { return pandaPaint(col, Q, bm, patch, 0.0); }
 
 #endif

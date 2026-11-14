@@ -150,6 +150,8 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     if (!ff) { N = -N; }
     float3 Q = i.rest;
     float mt = i.mat;
+    float pandaInk = 0.0;          // PANDA wave: BlobBrain adds 2 x (the vertex's displacement weight) to the mat channel (> 0.4 never happens otherwise): decode it, keep the crease AO
+    if (hasTeddy && u.shape.w > 50.5 && u.shape.w < 51.5 && mt > 0.45) { pandaInk = saturate((mt - 0.4) / 1.6); mt = clamp(mt - 2.0 * pandaInk, 0.0, 0.4); }
     if (lb[0].x > 0.5) {          // LEGS-BLEND (the same maths as fsSoftMatte)
         float3 nj;
         float wu;
@@ -277,7 +279,7 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     float pandaPatch = 0.0;
     float jCover = 0.0, jBlush = 0.0;
     if (hasBelly && hasTeddy && tn > 4.5) {              // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
-        col = pandaPaint(col, Q, bm, pandaPatch);
+        col = pandaPaint(col, Q, bm, pandaPatch, pandaInk);
     } else if (hasBelly && bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading

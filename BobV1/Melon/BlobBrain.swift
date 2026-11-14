@@ -427,6 +427,14 @@ final class BlobBrain {
     var armCostSum = 0.0, armCostN = 0
     var armDelta: [SIMD3<Float>] = []
     var armAO: [Float] = []
+    /// Panda only (set by the stage each tick): paint the waving arm's skin by its displacement (see `driveLimbs`, PandaMarks.h `ink`).
+    var pandaInk = false
+    /// What the waving Panda adds to a skin vertex's mat channel (0 = untouched ... 2 = fully the arm's black): 2 x a smoothstep of how far the arm moved it.
+    /// GfxBodyFast.metal decodes `ink = (mat - 0.4) / 1.6` (real AO is 0...0.4, so mat > 0.45 only ever means ink) and keeps `mat - 2 ink` as the AO.
+    static func pandaInkMat(displacement d: Float) -> Float {
+        let x = min(max((d - 0.0015) / 0.005, 0), 1)
+        return 2 * x * x * (3 - 2 * x)
+    }
     var armSide = 1
     var armActive = false
     var armPathName = ArmPath.wave.name      // the keyframe path the active arm override plays (wave, or the dining nubToMouth)
@@ -2038,6 +2046,13 @@ final class BlobBrain {
             skinner.overrideVertices = kf.side(armSide).vertices
             skinner.overrideDelta = armDelta
             skinner.overrideMat = armAO
+            if pandaInk {          // PANDA: the raised arm and its join collar are painted black by how far this frame moved them (GfxBodyFast.metal reads it from the mat channel)
+                var ink = armAO
+                for i in 0..<min(ink.count, kf.side(armSide).skinCount) {          // (skin vertices only: the capsule's own are drawn black anyway)
+                    ink[i] += Self.pandaInkMat(displacement: simd_length(armDelta[i]))
+                }
+                skinner.overrideMat = ink
+            }
             skinnerRef = skinner
         }
         if footOn {
