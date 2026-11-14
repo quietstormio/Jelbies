@@ -81,16 +81,16 @@ struct CoursePicker: View {
     private func card(_ t: CourseTier) -> some View {
         let open = progress.unlocked(t), picked = t == chosen
         let w = wins(t)
-        let sub = open ? (w > 0 ? "\(t.className) \u{00B7} \(w) win\(w == 1 ? "" : "s")" : t.className) : "Win at \(t.below?.title ?? "")"
+        let sub = open ? t.className : "Win at \(t.below?.title ?? "")"
         return Button {
             if open { if care.chooseCourse(t) { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap() } }
             else { hint.show(progress.requirement(t) ?? "Win at \(t.below?.title ?? "")") }
         } label: {
-            LobbyCarouselCard(name: t.title, sub: sub, selected: picked && open, locked: !open) { CourseArt(tier: t) }
+            LobbyCarouselCard(name: t.title, sub: sub, selected: picked && open, locked: !open, wins: open ? w : 0) { CourseArt(tier: t) }
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(open ? "\(t.title), \(sub.replacingOccurrences(of: " \u{00B7} ", with: ", "))" : "\(t.title), locked. Win at \(t.below?.title ?? "")")
+        .accessibilityLabel(open ? "\(t.title), \(sub)\(w > 0 ? ", won \(w) time\(w == 1 ? "" : "s")" : "")" : "\(t.title), locked. Win at \(t.below?.title ?? "")")
         .accessibilityHint(open ? t.blurb : (progress.requirement(t) ?? ""))
         .accessibilityValue(picked ? "picked" : "")
         .accessibilityAddTraits(picked ? .isSelected : [])

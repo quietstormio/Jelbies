@@ -470,7 +470,8 @@ struct TrackPanel: View {
     /// The shared picker row and stats card: pick the runner, then his Waddle and Focus.
     private func runnerCard(_ prof: JellyProfile?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            LobbyJelbiePicker(care: care, title: "Runner", selected: [who], selectCount: 1, id: "track-picker") { who = $0 }
+            LobbyJelbiePicker(care: care, title: "Runner", selected: [who], selectCount: 1, id: "track-picker",
+                              wonCount: { care.race.trophies.shelf(character: $0.character).raceRibbons(care.race.courseTier)[0] }) { who = $0 }
                 .padding(.bottom, 6)
             LobbyStatsCard(title: "Jelly Race stats", groups: [LobbyStatGroup(id: "track-stats", rows: [
                 LobbyStatRow(label: "Speed", value: prof?.stats.waddle ?? 0, color: SK.pink),
