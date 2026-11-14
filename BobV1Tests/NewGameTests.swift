@@ -15,6 +15,23 @@ final class NewGameTests: XCTestCase {
         return d
     }
 
+    func testColdLaunchResumesTheRoomOnlyWithASaveAndTheFlag() {
+        let d = suite("resume")
+        XCTAssertEqual(StartFlow.launchPhase(d), .menu)
+        d.set(true, forKey: StartFlow.lastInRoomKey)
+        XCTAssertEqual(StartFlow.launchPhase(d), .menu, "no save: the menu / opening")
+        d.set(true, forKey: StartFlow.startedKey)
+        XCTAssertEqual(StartFlow.launchPhase(d), .game)
+        StartFlow.rememberRoom(.adopt(.more), d)
+        XCTAssertEqual(StartFlow.launchPhase(d), .game, "other screens leave the flag alone")
+        StartFlow.rememberRoom(.menu, d)
+        XCTAssertEqual(StartFlow.launchPhase(d), .menu)
+        StartFlow.rememberRoom(.game, d)
+        XCTAssertEqual(StartFlow.launchPhase(d), .game)
+        StartFlow.rememberRoom(.wiping, d)
+        XCTAssertEqual(StartFlow.launchPhase(d), .menu)
+    }
+
     func testNewGameWritesRosterCoinsAndFlagsOnceOnly() {
         let d = suite("once")
         let saved = JellyRoster.current
