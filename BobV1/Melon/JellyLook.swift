@@ -17,7 +17,7 @@ nonisolated enum JellyLook {
     static let launchLevel = 0
     /// The ONE build switch: set to (level: 1, all: true) to make the jelly look the default for all species (per-species style / level / neon: `profile(forFlesh:)`),
     /// or (1, false) for the blue body only, without launch arguments. Stays nil in a commit; launch arguments still win where DevArgs.enabled.
-    static let phoneTest: (level: Int, all: Bool)? = nil
+    static let phoneTest: (level: Int, all: Bool)? = (1, true)
 
     /// Look style of a body: A = round 4 (the owner's locked Blue look: its colour maths, highlight shapes), B = round 5 (the species' own colour, softer highlight).
     /// Rides in the jelly parameter buffer ([0].x: 1 = B, 2 = A), so all three body shaders (plain, bath, jersey) pick it per draw without another pipeline.
