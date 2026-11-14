@@ -238,19 +238,20 @@ LOCAL=dict(origin='arm tip centre B (BobForm.armTip for the +x arm at rest; the 
         x='outward across the arm',y='toward the shoulder = unit(A - B)',z='body forward (+z)',
         rest_matrix_columns=[[round(float(v),4) for v in GLOVE_FRAME[:,i]] for i in range(3)],
         scale='multiply mesh by (arm tip radius / 0.15)')
-def wristbands(main=CREAM,stripe=SKY,stripe2=PINK,**k):
-    reset(); segs=28; sq=0.90
-    loop=[(0.124,0.016),(0.148,0.022),(0.156,0.036),(0.156,0.084),(0.148,0.098),(0.100,0.104),(0.098,0.060),(0.108,0.020)]
+def wristbands(main=SKY,stripe=CREAM,**k):
+    """Round 2: authored at the size it is DRAWN (WornSet.emitArms no longer slims it): inner radius 0.098 (the fit puts the inner surface 4 mm off the arm), wall 1.5 cm (outer 0.113), width 0.070
+    (local y 0.025..0.095, centred on bandMid 0.060). Sky blue with two cream stripes 1.4 cm wide (y 0.036-0.050 and 0.070-0.084), a faint terry texture."""
+    reset(); segs=36; sq=0.90
+    loop=[(0.098,0.033),(0.103,0.026),(0.110,0.028),(0.113,0.036),(0.113,0.084),(0.110,0.092),(0.103,0.094),(0.098,0.087)]
     def lf(phi): return [np.array([r*math.cos(phi),y,r*math.sin(phi)*sq]) for r,y in loop]
     def col(p,n):
         a=math.atan2(p[2]/sq,p[0]); y=p[1]
         c=main
-        if 0.040<y<0.054: c=stripe
-        if 0.066<y<0.080: c=stripe2
-        return mix(c,deep(c,0.12),0.28*(0.5-0.5*math.cos(36*a)))
+        if 0.036<y<0.050 or 0.070<y<0.084: c=stripe
+        return mix(c,deep(c,0.10),0.16*(0.5-0.5*math.cos(36*a)))
     torus('band',segs,lf,col,sharp=60)
     return dict(anchor='wrist',slot='hands',tags=['sporty','cute'],price=20,title='Wristbands',
-      desc='Terry wristband on the arm neck (local y 0.016..0.104, outer radius 0.156 = 1.04x the arm tip). Authored for the +x arm in arm-local frame; mirror x (flip winding) for the -x arm.',
+      desc='Terry wristband on the arm: inner radius 0.098, wall 1.5 cm, width 0.070 (local y 0.025..0.095), sky blue with two cream stripes. Authored for the +x arm in arm-local frame at the drawn size; mirror x (flip winding) for the -x arm.',
       anchor_rest=[float(v) for v in B_], authored_local=True,local_frame=LOCAL)
 
 def boxing_gloves(mitt=RED,cuff=CREAM,lace=SKY,**k):
@@ -290,6 +291,6 @@ REG=[
  ('cape_hero',cape,dict(),BACK_ANCHOR),
  ('backpack_sky',backpack,dict(),BACK_ANCHOR),
  ('hero_patch',hero_patch,dict(),BA),
- ('wristbands_sky',wristbands,dict(),WR),
+ ('wristbands_sky',wristbands,dict(main=SKY,stripe=CREAM),WR),
  ('boxing_mitts',boxing_gloves,dict(),WR),
 ]

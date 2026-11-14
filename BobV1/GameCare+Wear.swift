@@ -93,6 +93,7 @@ extension GameCare {
             }
             f.forward = R * SIMD3(0, 0, 1)
             f.right = R * SIMD3(1, 0, 0)
+            f.out = max(Float(g0.grow), bl)          // 0 = the rest nub, 1 = out (the keyframed arm's grow / the capsule's blend): the wristband's station follows it
             f.first = b.armFirstIdx.count == 2 ? b.armFirstIdx[side] : -1          // the arm's revolve in the skinned stream (ArmRings reads the drawn arm from it)
             f.inflate = bl > 0 ? 0.002 * f.flatten.squareRoot() * (1 - bl) : -Float(g0.capsuleInflate) * f.flatten.squareRoot()          // the revolve is hidden under the rest skin / grown by the wave / starts 2 mm under in the capsule swap
             out.append(f)

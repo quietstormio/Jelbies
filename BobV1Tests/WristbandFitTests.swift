@@ -1,7 +1,7 @@
 //
 //  WristbandFitTests.swift
 //  The wristband rides the DRAWN arm in every arm mode (rest nub, keyframed wave, held-up arms, walking / running / every scripted capsule move): a snug ring around the arm,
-//  perpendicular to its axis, 60-70 % of the way from the root to the tip, its inner surface 0 ... 1.2 cm outside the arm's skin. The truth is read from the SKINNED
+//  perpendicular to its axis, 0.70 (raised / extended / walking arms) ... 0.83 (the rest nub) of the way from the root to the tip, its inner surface 0 ... 1.2 cm outside the arm's skin. The truth is read from the SKINNED
 //  vertices of the arm (the revolve's tangent rings in the same skin buffer the renderer draws), not from the data the band is built from.
 //
 
@@ -148,8 +148,8 @@ final class WristbandFitTests: XCTestCase {
         XCTAssertLessThanOrEqual(w.angle, 6, "\(name): band axis along the arm's axis: \(w.whereAngle)", file: file, line: line)
         XCTAssertGreaterThanOrEqual(w.minGap, -0.006, "\(name): no band vertex under the arm's skin: \(w.whereGap)", file: file, line: line)
         XCTAssertLessThanOrEqual(w.maxInner, 0.012, "\(name): the inner surface hugs the arm (<= 1.2 cm outside the skin): \(w.whereInner)", file: file, line: line)
-        XCTAssertGreaterThanOrEqual(w.tLo, 0.52, "\(name): station on the arm: \(w.whereT)", file: file, line: line)
-        XCTAssertLessThanOrEqual(w.tHi, 0.78, "\(name): station on the arm: \(w.whereT)", file: file, line: line)
+        XCTAssertGreaterThanOrEqual(w.tLo, 0.60, "\(name): station on the arm: \(w.whereT)", file: file, line: line)
+        XCTAssertLessThanOrEqual(w.tHi, 0.88, "\(name): station on the arm: \(w.whereT)", file: file, line: line)
     }
 
     /// The expected capsule inflate (the revolve is hidden / grown by it) so the truth ring is read as the arm's drawn skin.

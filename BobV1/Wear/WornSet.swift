@@ -40,6 +40,8 @@ nonisolated struct ArmFrameWorld: Sendable {
     /// Where this arm's revolve starts in the skinned stream (-1 = unknown) and how far it is shrunk under / grown over the visible skin: the band is read from those vertices when the skin is there.
     var first = -1
     var inflate: Float = 0
+    /// How far the arm is OUT of the body: 0 = the rest nub (a short bulb half sunk in the body), 1 = a raised / extended / walking arm (the keyframed arm's `grow`, or the walking capsule's blend, whichever is larger: smooth in both). Sets where the wristband sits (`WornSet.wristStation`).
+    var out: Float = 1
 
     /// Silhouette radius of the arm's round cone (tip sphere r2 at B, root sphere r1 at A) at axial distance `s` from B toward A.
     func hullRadius(_ s: Float) -> Float {
@@ -545,10 +547,12 @@ final class WornSet {
         }
     }
 
-    /// Where on the drawn arm a worn band sits: this fraction of the way from the root to the tip.
-    static let wristStation: Float = 0.65
-    /// A band's wall (outside the inner surface) is drawn at this fraction of its authored thickness, and its inner surface this far outside the arm's skin.
-    static let wristWall: Float = 0.25, wristGap: Float = 0.004, wristWidth: Float = 0.8
+    /// Where on the drawn arm a worn band sits: this fraction of the way from the root to the tip. On the rest nub (a short bulb half sunk in the body) a ring at 0.65 sat where the bulb meets the body and read as a
+    /// shoulder cuff with its inner half hidden: it sits at 0.83 there (the whole ring outside the body, round the lower bulb) and slides to 0.70 on a raised / extended / walking arm, smoothly with the arm's `out`.
+    static let wristStationRest: Float = 0.83, wristStationOut: Float = 0.70
+    static func wristStation(out: Float) -> Float { let t = min(max(out, 0), 1), k = t * t * (3 - 2 * t); return wristStationRest + (wristStationOut - wristStationRest) * k }
+    /// A band's wall and width are drawn at the authored size now (the art has its final 1.5 cm wall and 7 cm width: the old code-side 0.25 wall / 0.8 width slimming is gone); its inner surface is this far outside the arm's skin.
+    static let wristWall: Float = 1, wristGap: Float = 0.004, wristWidth: Float = 1
     /// Under this skin radius at the station the arm is tucked away and the band is gone; it is whole again `tuckedFade` above it.
     static let tuckedRadius: Float = 0.035, tuckedFade: Float = 0.03
     /// The art's own ring: inner radius at the middle of its width (0.098..0.108 along it) and the middle of its axial extent.
@@ -556,7 +560,7 @@ final class WornSet {
 
     /// Mitts and wristbands on both arms, FITTED to the drawn arm (`ArmFrameWorld`: root A, tip B, radii, flatten) in code: the ring sits `wristStation` of the way from
     /// the root to the tip, perpendicular to the arm's axis, its inner surface `wristGap` outside the arm's own round-cone silhouette (so it hugs the arm's real radius there
-    /// and follows its taper), the wall slimmed to `wristWall`, the z flatten of the arm applied. The art is authored in arm-local axes (x outward across the arm, y toward the
+    /// and follows its taper), the wall at its authored thickness, the z flatten of the arm applied. The art is authored in arm-local axes (x outward across the arm, y toward the
     /// shoulder, z forward), mirrored for the -x arm; its mesh is not changed.
     static func emitArms(_ p: WearPrepared, into m: inout RoomMesh, slot s: Slot, skin: UnsafePointer<Float>? = nil, scale: Float) {
         for side in 0..<2 {
@@ -581,7 +585,7 @@ final class WornSet {
             Z0 = simd_normalize(Z0)
             let X = simd_normalize(simd_cross(Y, Z0))
             let Z = simd_cross(X, Y)
-            let sc = L * (1 - wristStation)                                      // axial distance from the tip centre B toward the shoulder
+            let sc = L * (1 - wristStation(out: f.out))                          // axial distance from the tip centre B toward the shoulder
             let centre = B + Y * sc
             let zS = 1 / max(f.flatten, 0.5)
             // An arm tucked into the body (a sit, a flop: its skin radius at the station collapses) has no wrist to wear it on: the band shrinks away to nothing with the arm (the vertex count stays fixed).
