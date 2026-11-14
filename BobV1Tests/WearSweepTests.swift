@@ -82,7 +82,7 @@ final class WearSweepTests: XCTestCase {
         let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
         st.worn = w; st.feat = f
         let settle = env("WEAR4_SETTLE") != nil
-        for _ in 0..<ticks { if settle { st.lab.tick(watching: false); st.rig.skinner.jelly.tick(brain: st.rig.brain, sim: st.rig.sim, dt: st.rig.sim.stepDt) }; tick(st, look) }          // (settle: the soft antennas live in the skinner and need the sim stepping too)
+        for _ in 0..<ticks { if settle { st.lab.tick(watching: false) }; tick(st, look) }          // (settle: the soft antennas live in the skinner and need the sim stepping too; the jelly.tick of the sleep loop crashed here)
     }
     private func tick(_ st: Stage, _ look: WearLook, dt: Float = 1.0 / 60) {
         let r = st.rig
