@@ -192,13 +192,16 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     def phis(n):
         return [p0 + (p1 - p0) * (i / (n - 1 if pip else n)) for i in range(n)]
     # the BASE band is open over the very back (+-22 deg, hidden under the tulle): on Pip his tail swings through that stretch (WearBandTests 'inside a limb' 0.1445 vs 0.14)
-    b0, b1 = (p0, p1) if pip else (1.5 * math.pi + 0.385, 3.5 * math.pi - 0.385)
-    def bphis(n): return [b0 + (b1 - b0) * i / (n - 1) for i in range(n)]
+    def bphis(n):
+        if pip: return [p0 + (p1 - p0) * i / (n - 1) for i in range(n)]
+        # base: the same columns as a closed ring (one at the hips, phi = 0), the three at the very back left out (a 51 degree gap under the tulle), starting after the gap
+        K = [2 * math.pi * i / n for i in range(n) if abs(((2 * math.pi * i / n) - 1.5 * math.pi + math.pi) % (2 * math.pi) - math.pi) > 0.5 * 2 * math.pi / n * 1.5]
+        K.sort(key=lambda a: (a - 1.5 * math.pi) % (2 * math.pi)); return K
     # --- waistband: a rounded ring hugging the egg
     hin = lambda phi: 0.010 + 0.016 * math.cos(phi) ** 2            # stand-off of the band's inner edge: 1 cm at the front / back (Pip's tail), 2.6 cm at the hips (the skin bulges there in a lean)
     def sec_at(phi):
         h0 = hin(phi); return [(h0, 0.020), (h0 + 0.022, 0.022), (h0 + 0.022, -0.022), (h0, -0.020)]
-    NB = 22 if pip else 26
+    NB = 22 if pip else 28
     dip = max(0.0, yb - 0.252)                                       # the band (top +0.026) dips to y 0.252 at the hips so it passes UNDER the hanging arm bulbs (bottom y~0.31) and their blend into the body
     bdip = max(0.0, yb - 0.245)                                       # ... and 0.245 at the back centre: lower on the back keeps the band off the root of Pip's tail (the tail swell tops out at y 0.54)
     yl = lambda phi: yb - dip * math.cos(phi) ** 2 - bdip * max(0.0, -math.sin(phi)) ** 2
@@ -213,9 +216,9 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
         for phi in cols:
             e = B.egg_point(yl(phi) + dy, phi); h = hdir(e)
             s = math.sqrt(math.sin(8 * phi + 0.5 * ph * math.pi) ** 2 + 0.06) / math.sqrt(1.06)      # ~0.2 at the cusps (hem lifts, blunt: no needle tips edge-on), 1 mid-scallop
-            L = reach * (1 - 0.09 * (1 - s))
+            L = reach * (1 - 0.06 * (1 - s))
             inner.append(e + h * (hin(phi) + 0.012))
-            hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.020 * (1 - s), 0]))
+            hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.017 * (1 - s), 0]))
         def cf(i, k, c=c):
             return deep(c, 0.18) if k == 0 else (tint(c, 0.14) if k == 1 else deep(c, 0.10))
         _fold_layer('layer%d' % li, inner, hem, cf, not pip)
