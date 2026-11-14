@@ -96,7 +96,7 @@ final class CuddleJiggleLevelTests: XCTestCase {
             r.rig.render()
             var probe = 0, best: Float = .infinity
             for v in 0..<lim { let d = simd_length(vec(r.rig.dyn, v) - centre); if d < best { best = d; probe = v } }
-            let base = r.rec.events.filter { $0.kind == .transient && abs($0.sharpness - 0.1) < 1e-6 }.count
+            let base = r.rec.events.filter { $0.kind == .transient && abs($0.sharpness - TouchHapticsTuning.sharpness(0.1)) < 1e-6 }.count
             var series: [Float] = [], ripplePeak: Float = 0, rippleLate: Float = 0, lastNonZero = 0, tapFrames = 0
             var rippleFar: Float = 0
             for k in 0..<120 {
@@ -114,7 +114,7 @@ final class CuddleJiggleLevelTests: XCTestCase {
             for k in 1..<(series.count - 1) where series[k] > series[k - 1] && series[k] >= series[k + 1] && series[k] > 0.004 { peaks.append(series[k]) }
             let hold = (CuddleJiggle.dentDepth + tn.extraDepth)
             let want = tn.overshoot * hold
-            let taps = r.rec.events.filter { $0.kind == .transient && abs($0.sharpness - 0.1) < 1e-6 }.count - base
+            let taps = r.rec.events.filter { $0.kind == .transient && abs($0.sharpness - TouchHapticsTuning.sharpness(0.1)) < 1e-6 }.count - base
             MotionLog.write(String(format: "CUDDLE level %d: let-go overshoot %.4f u (spring peak %.4f, target %.4f = %.0f %% of %.2f), %d visible wobbles %@, ripple %.4f u (target %.3f; still %.4f u at 0.7+ u out), ripple after 0.5 s: %.5f, offset zero after frame %d (%.2f s), soft taps %d (sink saw %d)",
                                  l, peaks.first ?? 0, c.peakOut, want, tn.overshoot * 100, hold, peaks.count, peaks.map { String(format: "%.4f", $0) }.description, ripplePeak, tn.ripple, rippleFar, rippleLate, lastNonZero, Float(lastNonZero + 1) / 60, tapFrames, taps))
             XCTAssertEqual(c.peakOut, want, accuracy: want * 0.20, "level \(l): the spring's first outward peak")

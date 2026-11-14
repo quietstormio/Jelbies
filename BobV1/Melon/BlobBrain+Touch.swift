@@ -445,7 +445,7 @@ final class TouchPlay {
         if contact && !wasContact && annoyed { hmph(now: now) }
         else if contact && !wasContact && zone == .cheek {
             boops += 1; boopT = 0.18
-            haptics.transient(now: now, intensity: 0.9, sharpness: 0.9)       // the crisp "boop"
+            haptics.touchTransient(now: now, intensity: 0.9, sharpness: 0.9)       // the crisp "boop"
         }
         boopT = max(0, boopT - dt)
         if wasContact && !contact && ramp > 0.6 && !annoyed { jellyLetGo(now: now) }          // the finger lets go: the dent springs back
@@ -463,7 +463,7 @@ final class TouchPlay {
         } else if sim.pressing && ramp <= 0 {
             sim.endPress(); lastHit = nil; easedCenter = nil
         }
-        if contact && !wasContact && zone != .cheek && !annoyed { haptics.transient(now: now, intensity: 0.30, sharpness: 0.20) }
+        if contact && !wasContact && zone != .cheek && !annoyed { haptics.touchTransient(now: now, intensity: 0.30, sharpness: 0.20) }
 
         // 4. happiness: eyes close after ~0.4 s of stroking, open a beat after it stops (belly and tickles are quicker)
         let quick = contact && (zone == .belly || zone == .underarm)
@@ -500,7 +500,7 @@ final class TouchPlay {
             let a = abs(rippleV)
             if a > Self.rippleOn, prevA <= Self.rippleOn, now - lastRipple > 0.09, !annoyed {
                 lastRipple = now
-                haptics.transient(now: now, intensity: min(0.65, 0.18 + 0.30 * a), sharpness: 0.25)
+                haptics.touchTransient(now: now, intensity: min(0.65, 0.18 + 0.30 * a), sharpness: 0.25)
                 ripples += 1
             }
             prevA = a
@@ -534,7 +534,7 @@ final class TouchPlay {
         if purrLevel > 0 {
             // the purr: a slow 2.6 Hz swell underneath whatever else is felt
             let pulse = 0.5 + 0.5 * sinf(2 * .pi * purrPhase)
-            pi = min(1, pi + purrLevel * (0.12 + 0.28 * pulse))
+            pi = min(1, pi + TouchHapticsTuning.purr(level: purrLevel, pulse: pulse))
             ps = min(ps, 0.12)
         }
         let sd = max(squishDepth, 0)
@@ -565,7 +565,7 @@ final class TouchPlay {
         if trainPhase >= 1 {
             trainPhase -= floorf(trainPhase)
             trainTicks += 1
-            haptics.transient(now: now, intensity: intensity, sharpness: sharpness)
+            haptics.touchTransient(now: now, intensity: intensity, sharpness: sharpness)
         }
     }
 
@@ -697,7 +697,7 @@ final class TouchPlay {
     /// The annoyed "hmph": a short, stiff haptic (high sharpness, one tick) and a quick squash puff.
     private func hmph(now: Double) {
         hmphT = Self.hmphTime; hmphs += 1
-        haptics.transient(now: now, intensity: 0.65, sharpness: 0.95)
+        haptics.touchTransient(now: now, intensity: 0.65, sharpness: 0.95)
     }
 
     /// Eases the annoyed pose: he leans away from the finger (`side` = which side of him it is on, -1...1; 0 = from the front, he ducks his head
@@ -723,21 +723,21 @@ final class TouchPlay {
         if annoyed { hmph(now: now); return }
         switch zone {
         case .head:     // pat-pat
-            haptics.transient(now: now, intensity: 0.45, sharpness: 0.55); tapQueue.append((now + 0.09, 0.38, 0.55)); happyKick = 0.7
+            haptics.touchTransient(now: now, intensity: 0.45, sharpness: 0.55); tapQueue.append((now + 0.09, 0.38, 0.55)); happyKick = 0.7
         case .belly:    // a poke: a soft thump and a giggle
-            haptics.transient(now: now, intensity: 0.55, sharpness: 0.2); haptics.wobble(now: now, peak: 0.3); happyKick = 0.9
+            haptics.touchTransient(now: now, intensity: 0.55, sharpness: 0.2); haptics.wobble(now: now, peak: 0.3); happyKick = 0.9
         case .underarm: // a tickle poke: a quick flutter
             for k in 0..<6 { tapQueue.append((now + Double(k) * 0.06, 0.4, 0.75)) }; happyKick = 0.9
         case .cheek:    // the boop already fired on touchdown
             happyKick = 0.5
         default:
-            haptics.transient(now: now, intensity: 0.35, sharpness: 0.3)
+            haptics.touchTransient(now: now, intensity: 0.35, sharpness: 0.3)
         }
     }
 
     private func flushTaps(now: Double) {
         guard !tapQueue.isEmpty else { return }
-        for t in tapQueue where t.t <= now { haptics.transient(now: now, intensity: t.i, sharpness: t.s) }
+        for t in tapQueue where t.t <= now { haptics.touchTransient(now: now, intensity: t.i, sharpness: t.s) }
         tapQueue.removeAll { $0.t <= now }
     }
 
@@ -1072,7 +1072,7 @@ final class TouchPlay {
             for k in 0..<2 where cheekSlots[k] { sim.endPress(slot: k); cheekSlots[k] = false }
             if annoyed { hmph(now: now) } else {
                 let b = HapticMap.bloop(pinch: pinch)
-                haptics.transient(now: now, intensity: b.intensity, sharpness: b.sharpness)
+                haptics.touchTransient(now: now, intensity: b.intensity, sharpness: b.sharpness)
                 jellyLetGo(now: now)               // the cheeks pop back: soft pulses on the real wobble
             }
         }
