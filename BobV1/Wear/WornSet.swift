@@ -30,11 +30,27 @@ nonisolated enum WearTuning {
     static let gloveRadiusLimit: Float = 1.15
 }
 
-/// Where the posed arm is: tip centre B, shoulder end A (world), tip radius, and the body's forward axis.
+/// Where the DRAWN arm is (world): tip centre B, shoulder end A, the two sphere radii, the z flatten, and the body's forward / right axes. One record per mode:
+/// the rest nub, the keyframed skin arm (wave / dining / held up) or the walking capsule, built by `GameCare.armFrames` from the same data the skin draws.
 nonisolated struct ArmFrameWorld: Sendable {
     var a = SIMD3<Float>.zero, b = SIMD3<Float>.zero
-    var r2: Float = 0.15
-    var forward = SIMD3<Float>(0, 0, 1)
+    var r1: Float = 0.058, r2: Float = 0.15
+    var flatten: Float = 1
+    var forward = SIMD3<Float>(0, 0, 1), right = SIMD3<Float>(1, 0, 0)
+    /// Where this arm's revolve starts in the skinned stream (-1 = unknown) and how far it is shrunk under / grown over the visible skin: the band is read from those vertices when the skin is there.
+    var first = -1
+    var inflate: Float = 0
+
+    /// Silhouette radius of the arm's round cone (tip sphere r2 at B, root sphere r1 at A) at axial distance `s` from B toward A.
+    func hullRadius(_ s: Float) -> Float {
+        let L = max(simd_length(a - b), 1e-5)
+        let sa = min(max((r2 - r1) / L, -0.95), 0.95), ca = (1 - sa * sa).squareRoot()
+        let s2 = r2 * sa, s1 = L + r1 * sa
+        if s <= s2 { return max(r2 * r2 - s * s, 0).squareRoot() }
+        if s <= s1 { return r2 * ca - (s - s2) * sa / ca }
+        let d = s - L
+        return max(r1 * r1 - d * d, 0).squareRoot()
+    }
 }
 
 /// The Circuit role of a Jelly while a race trip is on.
@@ -254,7 +270,7 @@ final class WornSet {
             }
             for (slot, it) in s.items where it.scale > 0.001 {
                 guard let look = it.look, let body, let p = WearMeshes.prepare(look, body: body, art: s.artOverride[look.art]) else { continue }
-                if slot == .hands { Self.emitArms(p, into: &op, slot: s, scale: it.scale) }
+                if slot == .hands { Self.emitArms(p, into: &op, slot: s, skin: sk, scale: it.scale) }
                 else { Self.emit(p, into: &op, slot: s, skin: sk, limbs: limbs, scale: it.scale, time: time) }
             }
             if let b = s.bib, let body, let p = WearMeshes.bib(team: b.team, number: b.number, body: body) {
@@ -529,25 +545,63 @@ final class WornSet {
         }
     }
 
-    /// Mitts and wristbands on both arms: the arm-local mesh in the posed capsule frame (origin B, +y toward the shoulder, +z body forward, +x outward),
-    /// scaled by r2 / 0.15, the axial extent clamped to the capsule's tip, mirrored for the -x arm.
-    static func emitArms(_ p: WearPrepared, into m: inout RoomMesh, slot s: Slot, scale: Float) {
+    /// Where on the drawn arm a worn band sits: this fraction of the way from the root to the tip.
+    static let wristStation: Float = 0.65
+    /// A band's wall (outside the inner surface) is drawn at this fraction of its authored thickness, and its inner surface this far outside the arm's skin.
+    static let wristWall: Float = 0.40, wristGap: Float = 0.004
+    /// Under this skin radius at the station the arm is tucked away and the band is gone; it is whole again `tuckedFade` above it.
+    static let tuckedRadius: Float = 0.035, tuckedFade: Float = 0.03
+    /// The art's own ring: inner radius at the middle of its width (0.098..0.108 along it) and the middle of its axial extent.
+    static let bandInner: Float = 0.098, bandMid: Float = 0.060, bandSquash: Float = 0.90
+
+    /// Mitts and wristbands on both arms, FITTED to the drawn arm (`ArmFrameWorld`: root A, tip B, radii, flatten) in code: the ring sits `wristStation` of the way from
+    /// the root to the tip, perpendicular to the arm's axis, its inner surface `wristGap` outside the arm's own round-cone silhouette (so it hugs the arm's real radius there
+    /// and follows its taper), the wall slimmed to `wristWall`, the z flatten of the arm applied. The art is authored in arm-local axes (x outward across the arm, y toward the
+    /// shoulder, z forward), mirrored for the -x arm; its mesh is not changed.
+    static func emitArms(_ p: WearPrepared, into m: inout RoomMesh, slot s: Slot, skin: UnsafePointer<Float>? = nil, scale: Float) {
         for side in 0..<2 {
             let f = s.arms[side]
             let sigma: Float = side == 1 ? 1 : -1
-            let Y = simd_normalize(f.a - f.b)
-            var Z0 = f.forward
-            Z0 -= Y * simd_dot(Z0, Y)
+            let rings = skin != nil && f.first >= 0 ? ArmRings.fit(skin: skin!, first: f.first, inflate: f.inflate, r1: f.r1, r2: f.r2, length: simd_length(f.a - f.b)) : nil          // the arm as the skin draws it, else the model of it
+            let L = rings?.L ?? simd_length(f.a - f.b)
+            guard rings != nil || L > 1e-5 else {          // no arm to speak of (the capsule is a point): the band is a point there (the vertex count stays fixed)
+                let base = UInt32(m.vertices.count)
+                for i in 0..<p.rest.count { m.vertices.append(RoomVertex(pos: SIMD4(f.b, 0), normal: SIMD4(0, 1, 0, p.ao[i]), color: SIMD4(p.col[i], 1))) }
+                for i in p.idx { m.indices.append(i + base) }
+                continue
+            }
+            let Y = rings?.U ?? (f.a - f.b) / L
+            let B = rings?.B ?? f.b
+            var Z0 = f.forward - Y * simd_dot(f.forward, Y)
+            if simd_length(Z0) < 0.25 {                                          // the arm points along the body's forward axis (a reach): turn the frame about the body's side axis instead
+                let side0 = f.right * sigma
+                Z0 = simd_cross(side0 - Y * simd_dot(side0, Y), Y)
+                if simd_dot(Z0, f.forward) < 0 { Z0 = -Z0 }
+            }
+            Z0 = simd_normalize(Z0)
             let X = simd_normalize(simd_cross(Y, Z0))
             let Z = simd_cross(X, Y)
-            let k = f.r2 / 0.15 * scale
+            let sc = L * (1 - wristStation)                                      // axial distance from the tip centre B toward the shoulder
+            let centre = B + Y * sc
+            let zS = 1 / max(f.flatten, 0.5)
+            // An arm tucked into the body (a sit, a flop: its skin radius at the station collapses) has no wrist to wear it on: the band shrinks away to nothing with the arm (the vertex count stays fixed).
+            let rStation = rings.map { 0.5 * ($0.radius(at: sc, theta: 0) + $0.radius(at: sc, theta: .pi / 2)) } ?? f.hullRadius(sc)
+            let vt = min(max((rStation - tuckedRadius) / tuckedFade, 0), 1)
+            let fit = vt * vt * (3 - 2 * vt)          // (0 = the band collapsed to a zero-width ring on the skin: it thins and narrows, it never sinks)
             let base = UInt32(m.vertices.count)
             for i in 0..<p.rest.count {
                 let v = p.rest[i]
-                let y = max(v.y, -0.15)                                  // never past the capsule's tip sphere
-                let q = f.b + (X * (sigma * v.x) + Y * y + Z * v.z) * k
-                let n = simd_normalize(X * (sigma * p.nrm[i].x) + Y * p.nrm[i].y + Z * p.nrm[i].z)
-                m.vertices.append(RoomVertex(pos: SIMD4(q, 0), normal: SIMD4(n, p.ao[i]), color: SIMD4(p.col[i], 1)))
+                let rho = (v.x * v.x + (v.z / bandSquash) * (v.z / bandSquash)).squareRoot()
+                let cs = rho > 1e-6 ? v.x / rho : 1, sn = rho > 1e-6 ? v.z / bandSquash / rho : 0
+                let axial = sc + (v.y - bandMid)                                  // (the wall's own axial span is already ~0.09: a band, not a sleeve)
+                let dir = X * (sigma * cs) + Z * sn
+                let skinR = rings.map { $0.radius(at: axial, theta: atan2(simd_dot(dir, $0.e2), simd_dot(dir, $0.e1))) } ?? f.hullRadius(axial) * simd_length(SIMD2(cs, sn * zS))
+                let R = skinR + (wristGap + max(rho - bandInner, 0) * wristWall) * fit
+                let q = centre + Y * ((axial - sc) * fit) + dir * R
+                let qs = scale == 1 ? q : centre + (q - centre) * scale
+                let nl = SIMD3<Float>(sigma * p.nrm[i].x, p.nrm[i].y, p.nrm[i].z)
+                let n = simd_normalize(X * nl.x + Y * nl.y + Z * nl.z)
+                m.vertices.append(RoomVertex(pos: SIMD4(qs, 0), normal: SIMD4(n, p.ao[i]), color: SIMD4(p.col[i], 1)))
             }
             if sigma > 0 { for i in p.idx { m.indices.append(i + base) } }
             else { var t = 0; while t + 2 < p.idx.count { m.indices.append(p.idx[t] + base); m.indices.append(p.idx[t + 2] + base); m.indices.append(p.idx[t + 1] + base); t += 3 } }
