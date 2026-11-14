@@ -26,6 +26,15 @@ import simd
 /// `-AudioLog` (AudioHub) is intentionally NOT gated: it is a silent, read-only diagnostic that grants nothing.
 /// Capture-aid blocks in GameScreen (runDebugScript, runStoreDemo, launchTown) are gated at their entry; Park/Volley/Groom Start* hooks are simulator-only.
 nonisolated enum DevArgs {
+    /// The owner's phone test builds only (Release with JELBIES_DEV_ARGS, on a device): a New game's first Jelmiko comes home to this balance.
+    /// nil in Debug, in the simulator and in the App Store archive (JELBIES_DEV_ARGS is stripped there), so tests and players get the normal start.
+    static var phoneNewGameCoins: Int? {
+        #if JELBIES_DEV_ARGS && !DEBUG && !targetEnvironment(simulator)
+        return 10_000
+        #else
+        return nil
+        #endif
+    }
     static var enabled: Bool {
         #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
         return true
