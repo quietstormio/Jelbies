@@ -57,7 +57,7 @@ def mk_obj(name, P, N, C, F, smooth=True):
     ob = bpy.data.objects.new(name, me); sc.collection.objects.link(ob); return ob
 
 # body
-ys = np.linspace(0.105, B.top - 0.003, 150); phs = np.linspace(0, 2 * math.pi, 160, endpoint=False)
+ys = np.linspace(0.02, B.top - 0.003, 170); phs = np.linspace(0, 2 * math.pi, 160, endpoint=False)
 Y, PH = np.meshgrid(ys, phs, indexing='ij')
 BP, BN = surface_ray(Y, PH, arms=True)
 nY, nP = Y.shape; P = BP.reshape(-1, 3); Nn = BN.reshape(-1, 3)

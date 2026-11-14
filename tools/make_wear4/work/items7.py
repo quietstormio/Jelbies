@@ -192,17 +192,17 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     def phis(n):
         return [p0 + (p1 - p0) * (i / (n - 1 if pip else n)) for i in range(n)]
     # --- waistband: a rounded ring hugging the egg
-    sec = [(0.004, 0.002), (0.016, 0.026), (0.036, 0.012), (0.036, -0.016), (0.014, -0.026)]
-    NB = 18 if pip else 20
+    sec = [(0.006, 0.020), (0.034, 0.022), (0.034, -0.022), (0.006, -0.020)]
+    NB = 22 if pip else 26
     dip = max(0.0, yb - 0.274)                                       # the band (top +0.026) dips to y 0.274 at the hips so it passes UNDER the hanging arm bulbs (bottom y~0.31)
     yl = lambda phi: yb - dip * math.cos(phi) ** 2
     rows = [[eloop(yl(ph), ph, h, v) for h, v in sec] for ph in phis(NB)]
     _ring_mesh('waistband', rows, not pip, lambda i, k, p: mix(deep(band, 0.10), tint(band, 0.28), 0.5 + 0.5 * (sec[k][1] / 0.026) * 0.7))
     # --- tulle layers: (colour, attach dy, angle below horizontal, reach, hem wave phase)
-    LAY = [(mix(tint(pink, 0.55), CREAM, 0.30), 0.004, 30.0, 0.140, 0.0), (tint(pink, 0.22), -0.008, 42.0, 0.168, 1.0), (mix(pink, lav, 0.38), -0.020, 54.0, 0.190, 2.0)]
+    LAY = [(mix(tint(pink, 0.55), CREAM, 0.30), 0.004, 28.0, 0.120, 0.0), (tint(pink, 0.22), -0.008, 38.0, 0.140, 1.0), (mix(pink, lav, 0.38), -0.020, 48.0, 0.150, 2.0)]
     NC = 62 if pip else 80
     # the lowest hem keeps >= 0.035 off the floor: scale the drop if the band is low
-    kdrop = min(1.0, max(0.2, (min(yb, 0.274) - 0.020 - 0.040) / (0.190 * math.tan(math.radians(54.0)))))
+    kdrop = min(1.0, max(0.2, (min(yb, 0.274) - 0.020 - 0.100) / (0.150 * math.tan(math.radians(48.0)))))
     for li, (c, dy, ang, reach, ph) in enumerate(LAY):
         inner = []; hem = []
         cols = phis(NC)
@@ -222,7 +222,7 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
         bead('bow%+d' % s_, p + xx * s_ * 0.044 + nn * 0.002, (0.050, 0.027, 0.018), lambda q, nq: mix(deep(pink, 0.26), tint(pink, 0.12), 0.5 + 0.5 * nq[2]), rot=Rm, segs=6)
     bead('bowknot', p + nn * 0.008, (0.021, 0.021, 0.017), deep(pink, 0.34), segs=6)
     return dict(anchor='waist', slot='body', tags=['cute', 'sweet', 'sparkly'], price=60, title='Ballet tutu',
-                desc='A fluffy ballet tutu: a snug waistband at y %.2f with three thin tulle layers flaring out and down (30 / 42 / 54 degrees below horizontal, reach 0.14 / 0.17 / 0.19), 16 staggered scalloped waves per hem, a small bow on the front. Pip\'s variant is open over his tail root.' % yb)
+                desc='A fluffy ballet tutu: a snug waistband at y %.2f with three thin tulle layers flaring out and down (28 / 38 / 48 degrees below horizontal, reach 0.12 / 0.14 / 0.15), 16 staggered scalloped waves per hem, a small bow on the front. Pip\'s variant is open over his tail root.' % yb)
 
 # ============================ CAPE =========================================
 def cape(main=None, lining=HONEY, trim=CREAM, pip=False, **k):
