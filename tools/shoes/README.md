@@ -1,4 +1,4 @@
-# Jelbie shoes: Blender models bound to the foot bean
+# Jelmiko shoes: Blender models bound to the foot bean
 
 The nine shoes are modelled in Blender (headless) and bound to the foot bean, so they follow it exactly in every move (see `BobV1/Wear/ShoeArt.swift`).
 

@@ -22,7 +22,7 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
     /// The race's course title ("Puddle", "Ripple", "Splash", "Wave"); nil = the plain Jelly Race wording.
     var course: String? = nil
 
-    init(kind: Kind, jellyID: Int = 0, jellyName: String = "Jelbie", jellyColor: String = "blue", startedAt: Date = .now, course: String? = nil) {
+    init(kind: Kind, jellyID: Int = 0, jellyName: String = "Jelmiko", jellyColor: String = "blue", startedAt: Date = .now, course: String? = nil) {
         self.kind = kind; self.jellyID = jellyID; self.jellyName = jellyName; self.jellyColor = jellyColor; self.startedAt = startedAt.timeIntervalSince1970; self.course = course
     }
 
@@ -97,8 +97,8 @@ extension JelbiesActivityAttributes {
             let drops = s.drops > 0 ? " +\(s.drops) JellyCoins" : ""
             return p == 1 ? "\(ContentState.medal(1)) \(jellyName) won!\(drops)" : "\(ContentState.medal(p)) \(jellyName) came \(ContentState.ordinal(p))!\(drops)"
         case (.race, _): return course.map { "\(jellyName) is racing on the \($0)!" } ?? "\(jellyName) is racing!"
-        case (.nap, .awake): return s.sleepers.count > 1 ? "The Jelbies are up!" : "\(s.sleepers.first ?? jellyName) is up!"
-        case (.nap, _): return s.sleepers.count > 1 ? "The Jelbies are sleeping" : "\(s.sleepers.first ?? jellyName) is sleeping"
+        case (.nap, .awake): return s.sleepers.count > 1 ? "The Jelmiko are up!" : "\(s.sleepers.first ?? jellyName) is up!"
+        case (.nap, _): return s.sleepers.count > 1 ? "The Jelmiko are sleeping" : "\(s.sleepers.first ?? jellyName) is sleeping"
         }
     }
     /// The second line: "2nd of 4 · lap 2 of 3" / "Up at 6:00 AM".

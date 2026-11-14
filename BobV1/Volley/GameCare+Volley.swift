@@ -99,16 +99,16 @@ extension GameCare {
 
     /// `match`: also the partner rule.
     func volleyBlocker(jelly id: Int, match: Bool = false) -> String? {
-        guard jelly(id) != nil else { return "No such Jelbie." }
+        guard jelly(id) != nil else { return "No such Jelmiko." }
         if volley.active || volleyWork.wait != nil { return "A match is already on." }
-        if race.active || raceWait != nil { return "\(jelly(id)?.name ?? "Your Jelbie") is at Jelly Race." }
-        if show.active { return "\(jelly(id)?.name ?? "Your Jelbie") is at the Jelly Show." }
-        if cafe.active || park.active { return "\(jelly(id)?.name ?? "Your Jelbie") is out already." }
-        if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelbie") finish first." }
+        if race.active || raceWait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at Jelly Race." }
+        if show.active { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the Jelly Show." }
+        if cafe.active || park.active { return "\(jelly(id)?.name ?? "Your Jelmiko") is out already." }
+        if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
         if bath.active { return "The clean-up is going on." }
-        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelbie") is in the close-up. Let go first." }
-        if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelbie") is listening to you." }
-        if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelbie") is not in the room." }
+        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelmiko") is in the close-up. Let go first." }
+        if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelmiko") is listening to you." }
+        if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelmiko") is not in the room." }
         if match, let m = volleyPartnerBlocker(jelly: id) { return m }
         return nil
     }

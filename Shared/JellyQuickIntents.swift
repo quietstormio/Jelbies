@@ -10,11 +10,11 @@ import AppIntents
 import WidgetKit
 
 struct WaterQuickIntent: AppIntent {
-    static let title: LocalizedStringResource = "Water a Jelbie"
+    static let title: LocalizedStringResource = "Water a Jelmiko"
     static let description = IntentDescription("Queues a drink of water; it is poured when the game opens.")
     static let isDiscoverable = false
 
-    @Parameter(title: "Jelbie")
+    @Parameter(title: "Jelmiko")
     var jellyID: Int
 
     nonisolated init() { jellyID = 0 }

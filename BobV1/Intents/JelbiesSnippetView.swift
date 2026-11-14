@@ -20,7 +20,7 @@ struct JelbiesSnippetView: View {
                 Spacer(minLength: 0)
             }
             if sorted.isEmpty {
-                Text("Open the game to meet your Jelbies.").font(JellyPalette.font(14, .semibold)).foregroundStyle(JellyPalette.inkSoft)
+                Text("Open the game to meet your Jelmiko.").font(JellyPalette.font(14, .semibold)).foregroundStyle(JellyPalette.inkSoft)
             } else {
                 ForEach(sorted) { s in row(s) }
             }
@@ -31,10 +31,10 @@ struct JelbiesSnippetView: View {
     }
 
     private func title(_ s: [JellyState]) -> String {
-        if s.isEmpty { return "Jelbies" }
+        if s.isEmpty { return "Jelmiko" }
         let needy = JellyStatus.needyCount(s)
         if needy == 0 { return sleeping ? "Everyone is napping" : (s.count == 1 ? "\(s[0].name) is doing well" : "Everyone is doing well") }
-        return needy == 1 ? "Someone needs you" : "\(needy) Jelbies need you"
+        return needy == 1 ? "Someone needs you" : "\(needy) Jelmiko need you"
     }
 
     private func row(_ s: JellyState) -> some View {

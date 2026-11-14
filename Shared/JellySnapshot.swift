@@ -52,7 +52,7 @@ nonisolated struct JellyRecord: Codable, Equatable, Identifiable, Sendable {
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = try c.decode(Int.self, forKey: .id)
-        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Jelbie"
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Jelmiko"
         color = try c.decodeIfPresent(String.self, forKey: .color) ?? "blue"
         var l = try c.decodeIfPresent([Float].self, forKey: .levels) ?? []
         while l.count < NeedKind.allCases.count { l.append(1) }

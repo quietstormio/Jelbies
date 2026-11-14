@@ -207,7 +207,7 @@ final class DuplicateJelbiesTests: XCTestCase {
         XCTAssertEqual(WidgetBridge.colorName(JellyRoster.species(100)), "yellow")
         XCTAssertEqual(JelbieRoster.colorName(JellyRoster.species(100)), "yellow")
         XCTAssertEqual(WidgetBridge.palette(100).flesh, PaletteKey.yellow.palette.flesh)
-        XCTAssertTrue(JelbieRoster.current(directory: nil, roster: [0, 100]).isEmpty, "no snapshot: no Jelbies are offered (apple-fixes-r1 H)")
+        XCTAssertTrue(JelbieRoster.current(directory: nil, roster: [0, 100]).isEmpty, "no snapshot: no Jelmiko are offered (apple-fixes-r1 H)")
     }
 
     // MARK: voice
@@ -284,6 +284,6 @@ final class DuplicateJelbiesTests: XCTestCase {
         d.set(Data([1]), forKey: JellyKeys.needs(100))
         StartFlow.resetCharacterState(scratch, d)
         XCTAssertNil(d.object(forKey: JellyKeys.needs(scratch)))
-        XCTAssertNotNil(d.object(forKey: JellyKeys.needs(100)), "another Jelbie's keys stay")
+        XCTAssertNotNil(d.object(forKey: JellyKeys.needs(100)), "another Jelmiko's keys stay")
     }
 }

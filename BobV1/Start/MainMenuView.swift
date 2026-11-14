@@ -126,7 +126,7 @@ struct MainMenuView: View {
         }
         .frame(width: width / 0.96)
         .aspectRatio(620.0 / 307.0, contentMode: .fit)
-        .accessibilityElement().accessibilityLabel("Jelbies").accessibilityAddTraits(.isHeader)
+        .accessibilityElement().accessibilityLabel("Jelmiko").accessibilityAddTraits(.isHeader)
     }
 
     private func buttons(k: CGFloat) -> some View {
@@ -150,7 +150,7 @@ struct MainMenuView: View {
             ScrollView {
             VStack(spacing: 12) {
                 Text("Start over?").font(CloudTheme.font(26, .bold)).foregroundStyle(CloudTheme.ink).accessibilityAddTraits(.isHeader)
-                Text("Your Jelbies, JellyCoins and items will be gone for good once you bring a new Jelbie home. Press and hold the red button to confirm.").font(CloudTheme.font(16, .medium)).foregroundStyle(CloudTheme.ink.opacity(0.8))
+                Text("Your Jelmiko, JellyCoins and items will be gone for good once you bring a new Jelmiko home. Press and hold the red button to confirm.").font(CloudTheme.font(16, .medium)).foregroundStyle(CloudTheme.ink.opacity(0.8))
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Button("Keep playing") { confirmNew = false }
                     .buttonStyle(JellyButtonStyle(.primary, size: 20, minHeight: 48)).accessibilityIdentifier("menu-keep")

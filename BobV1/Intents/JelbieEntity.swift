@@ -9,7 +9,7 @@ import AppIntents
 import Foundation
 
 nonisolated struct JelbieEntity: AppEntity, Sendable {
-    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Jelbie")
+    static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Jelmiko")
     static let defaultQuery = JelbieQuery()
 
     var id: Int
@@ -17,7 +17,7 @@ nonisolated struct JelbieEntity: AppEntity, Sendable {
     var color: String
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(name)", subtitle: "\(JelbieEntity.colorWord(color)) Jelbie")
+        DisplayRepresentation(title: "\(name)", subtitle: "\(JelbieEntity.colorWord(color)) Jelmiko")
     }
 
     static func colorWord(_ c: String) -> String {

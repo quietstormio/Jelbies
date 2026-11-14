@@ -185,8 +185,8 @@ final class StandCaptureTests: XCTestCase {
                 rows.append(("\(k.rawValue) \(pair.map { JellyRoster.baseNames[$0] }.joined(separator: "+"))", try run(k, chars: pair)))
             }
         }
-        try save(sheet(Array(rows.prefix(4)), title: "Two Jelbies [\(tag)] swing, seesaw"), "two1_\(tag).png")
-        try save(sheet(Array(rows.dropFirst(4)), title: "Two Jelbies [\(tag)] sandbox, cushion pile, dining"), "two2_\(tag).png")
+        try save(sheet(Array(rows.prefix(4)), title: "Two Jelmiko [\(tag)] swing, seesaw"), "two1_\(tag).png")
+        try save(sheet(Array(rows.dropFirst(4)), title: "Two Jelmiko [\(tag)] sandbox, cushion pile, dining"), "two2_\(tag).png")
     }
 
     /// Each character alone on the pieces where a tail / wings / daisy could meet the seat.

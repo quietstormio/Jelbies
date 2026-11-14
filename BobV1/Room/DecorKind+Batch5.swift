@@ -42,10 +42,10 @@ extension DecorKind {
     }
     var batch5Use: String {
         switch self {
-        case .footbag: return "A footbag. Jelbies kick it up, keep it going and pass it between them."
-        case .frisbee: return "A flying disc. Jelbies boot it across the room and toss it back to each other."
+        case .footbag: return "A footbag. Jelmiko kick it up, keep it going and pass it between them."
+        case .frisbee: return "A flying disc. Jelmiko boot it across the room and toss it back to each other."
         case .skateboard: return "A mini skateboard. Kick it and it rolls away on its wheels."
-        case .hoop: return "A free-standing hoop. Jelbies boop the backboard and the net swings."
+        case .hoop: return "A free-standing hoop. Jelmiko boop the backboard and the net swings."
         default: return parkUse
         }
     }

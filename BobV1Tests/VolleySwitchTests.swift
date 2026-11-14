@@ -33,7 +33,7 @@ final class VolleySwitchTests: XCTestCase {
         while !(c.care.volley.live && c.care.volley.sim?.phase == .serveWait) && guardTicks < 60 * 40 { c.step(); guardTicks += 1 }
         XCTAssertTrue(c.care.volley.live, "the match is on")
         XCTAssertEqual(c.care.volley.sim?.phase, .serveWait)
-        XCTAssertEqual(c.care.volleyWork.players.count, 4, "two Jelbies and two visitors")
+        XCTAssertEqual(c.care.volleyWork.players.count, 4, "two Jelmiko and two visitors")
         c.run(60)          // settle: the teammate has walked to his spot and stands
         let s = c.care.volley.sim!
         XCTAssertEqual(s.players[1].act, .stand)

@@ -17,7 +17,7 @@ extension VoiceCoordinator {
     }
 
     /// The Jelbie the voice is about now (the trick-book subject), for labels.
-    var subjectName: String { care?.jelly(subjectID)?.name ?? "your Jelbie" }
+    var subjectName: String { care?.jelly(subjectID)?.name ?? "your Jelmiko" }
 
     /// Tap-to-talk: starts a listen, or ends the one running. Returns true if it started one.
     @discardableResult

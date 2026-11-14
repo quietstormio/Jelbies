@@ -51,8 +51,8 @@ final class MelonStageView: MTKView, UIGestureRecognizerDelegate {
         isOpaque = true
         backgroundColor = UIColor(red: 0xE2 / 255, green: 0xDF / 255, blue: 0xDA / 255, alpha: 1)
         clearColor = MTLClearColor(red: 0.886, green: 0.875, blue: 0.855, alpha: 1)
-        accessibilityLabel = "Interactive 3D Jelbie. Drag it to squish, stretch and twist."
-        accessibilityHint = "Drag the Jelbie to stretch it, drag empty space to orbit, pinch to zoom, double tap to reset the view."
+        accessibilityLabel = "Interactive 3D Jelmiko. Drag it to squish, stretch and twist."
+        accessibilityHint = "Drag the Jelmiko to stretch it, drag empty space to orbit, pinch to zoom, double tap to reset the view."
         accessibilityIdentifier = "melon-stage"
 
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))

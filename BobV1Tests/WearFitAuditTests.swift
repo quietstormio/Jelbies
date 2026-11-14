@@ -439,7 +439,7 @@ final class WearFitAuditTests: XCTestCase {
             let w = stats[l]!
             worstAll.append(String(format: "%@ | %.3f | %.3f | %.0f%% | %.3f | %.3f | %@", l.rawValue, w.map(\.worstIn).max()!, w.map(\.worstNew).max()!, (w.map(\.bufFrac).max()!) * 100, w.map(\.worstFloat).max()!, w.map(\.rigidNew).max()!, w.max { $0.worstNew < $1.worstNew }!.whereNew + String(format: " | limb-only %.3f", w.map(\.worstLimb).max()!)))
         }
-        out += "\nBY MOTION (worst newly buried over the four Jelbies)\n"
+        out += "\nBY MOTION (worst newly buried over the four Jelmiko)\n"
         for l in list { out += "\(l.rawValue): " + byMotion[l]!.sorted { $0.value > $1.value }.map { String(format: "%@ %.3f", $0.key, $0.value) }.joined(separator: ", ") + "\n" }
         out += "\nSUMMARY piece | worst inside | worst newly buried | max buried fraction | worst float | rigid-part worst newly inside | where (newly buried)\n" + worstAll.joined(separator: "\n") + "\n"
         try out.write(toFile: "\(d)/numbers_\(tag).txt", atomically: true, encoding: .utf8)
@@ -517,7 +517,7 @@ final class WearFitAuditTests: XCTestCase {
             print(String(format: "LIMBCOST %@ (arms out): push off %.3f ms, on %.3f ms, extra %.3f ms", outfits[k].0, off, on, on - off))
             worstExtra = max(worstExtra, on - off)
         }
-        XCTAssertLessThan(worstExtra, 1.0, "the limb push must stay under a millisecond per Jelbie per frame")
+        XCTAssertLessThan(worstExtra, 1.0, "the limb push must stay under a millisecond per Jelmiko per frame")
     }
 
     // MARK: render

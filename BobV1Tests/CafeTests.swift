@@ -187,7 +187,7 @@ final class CafeTests: XCTestCase {
         XCTAssertEqual(RoomLayout.current.id, homeRoom)
         XCTAssertFalse(DecorField.shared.feet.isEmpty, "decor is back")
         XCTAssertEqual(c.store.currentRoom, homeRoom)
-        for (i, a) in r.actors.enumerated() { XCTAssertLessThan(simd_distance(a.floor, before[i]), 1.6, "Jelbie \(i) is back near his spot") }
+        for (i, a) in r.actors.enumerated() { XCTAssertLessThan(simd_distance(a.floor, before[i]), 1.6, "Jelmiko \(i) is back near his spot") }
         XCTAssertFalse(c.tripActive)
     }
 
@@ -204,7 +204,7 @@ final class CafeTests: XCTestCase {
         XCTAssertEqual(c.cafe.phase, .cheer, "ate and cheered")
         let want: [PerkKind] = [.cozy, .fullBelly, .bouncy]
         for i in 0..<3 {
-            XCTAssertEqual(c.cafeBook.ate[i], 3, "Jelbie \(i) ate the whole treat")
+            XCTAssertEqual(c.cafeBook.ate[i], 3, "Jelmiko \(i) ate the whole treat")
             let p = c.jelly(i)!.perks
             XCTAssertTrue(p.isActive(want[i]), "perk \(want[i]) for \(i)")
             XCTAssertGreaterThan(p.remaining(want[i]), want[i].duration + 1, "longer than the store's")
@@ -469,7 +469,7 @@ final class CafeTests: XCTestCase {
             XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .juice, 1: .cocoa, 2: .pancakes])), "visit \(visit)")
             step(r, 120) { c.cafe.phase == .cheer }
             XCTAssertFalse(c.group.gaveUp, "visit \(visit): the sitting was not given up (the table spot must be reachable: stands in front of the sofa collider)")
-            for i in 0..<3 { XCTAssertEqual(c.cafeBook.ate[i], 3, "visit \(visit): Jelbie \(i) ate his whole treat") }
+            for i in 0..<3 { XCTAssertEqual(c.cafeBook.ate[i], 3, "visit \(visit): Jelmiko \(i) ate his whole treat") }
         }
     }
 

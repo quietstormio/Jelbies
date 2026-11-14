@@ -86,7 +86,7 @@ final class ToyShareTests: XCTestCase {
             DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
         }
         if park { GameCamera.endPark(count: 3) }
-        let line = String(format: (park ? "PARK " : "HOME ") + "1 seed x %.0fs x 3 Jelbies: toy share %.1f%%, sessions %d, slide rides %d, back-to-back same toy %d, per kind %@\n", secs, 100 * Double(all.toy) / Double(max(1, all.frames)), all.sessions, all.rides, all.backToBack, all.perKind.map { "\($0.key.rawValue)=\($0.value)" }.sorted().joined(separator: ","))
+        let line = String(format: (park ? "PARK " : "HOME ") + "1 seed x %.0fs x 3 Jelmiko: toy share %.1f%%, sessions %d, slide rides %d, back-to-back same toy %d, per kind %@\n", secs, 100 * Double(all.toy) / Double(max(1, all.frames)), all.sessions, all.rides, all.backToBack, all.perKind.map { "\($0.key.rawValue)=\($0.value)" }.sorted().joined(separator: ","))
         try? line.write(toFile: Self.log + (park ? "toy-share-park.txt" : "toy-share-home.txt"), atomically: true, encoding: .utf8)
         print("TOYSHARE " + line)
     }

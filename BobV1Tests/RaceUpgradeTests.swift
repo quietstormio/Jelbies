@@ -33,7 +33,7 @@ final class RaceUpgradeTests: XCTestCase {
         XCTAssertFalse(b.buy(.speed, stats: s, character: 0), "no points: refused")
         XCTAssertEqual(s.waddle, 0.5, accuracy: 1e-6)
         b.add(5, .race, character: 0)
-        XCTAssertFalse(b.buy(.speed, stats: s, character: 1), "another Jelbie's balance is separate")
+        XCTAssertFalse(b.buy(.speed, stats: s, character: 1), "another Jelmiko's balance is separate")
         XCTAssertTrue(b.buy(.speed, stats: s, character: 0))          // level 2 -> 3 costs 3
         XCTAssertEqual(s.waddle, 0.6, accuracy: 1e-6)
         XCTAssertEqual(b.points(.race, character: 0), 2)

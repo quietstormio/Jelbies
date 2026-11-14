@@ -1598,7 +1598,7 @@ struct FocusHint: View {
     /// With VoiceOver on, or "Longer hints" set, the hint stays until the first interaction instead of fading at 3.5 s.
     private var sticky: Bool { A11ySettings.shared.longerHints || UIAccessibility.isVoiceOverRunning }
     private var text: String {
-        UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelbie to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
+        UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelmiko to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
     }
 
     var body: some View {

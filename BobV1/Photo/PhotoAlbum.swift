@@ -50,7 +50,7 @@ final class PhotoAlbum {
         guard let data = Self.capped(image).jpegData(compressionQuality: 0.9) else { return nil }
         try? FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss-SSS"; f.locale = Locale(identifier: "en_US_POSIX")
-        let url = Self.folder.appending(path: "Jelbies-\(f.string(from: Date())).jpg")
+        let url = Self.folder.appending(path: "Jelmiko-\(f.string(from: Date())).jpg")
         do { try data.write(to: url, options: .atomic) } catch { Self.lastAddOutOfSpace = Self.isOutOfSpace(error); return nil }
         reload()
         return url

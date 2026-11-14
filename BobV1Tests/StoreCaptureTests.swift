@@ -161,10 +161,10 @@ final class StoreCaptureTests: XCTestCase {
                 DiningModels.append(g.translucent, to: tb, transform: DiningModels.translation(SIMD3(0, 0, 0.9)))
                 room.setDining(DiningFrame(opaque: b.mesh, translucent: tb.mesh))
                 let cam = camera(eye: SIMD3(0.0, 1.35, 3.0), at: SIMD3(0, 0.5, 0.5), aspect: 720.0 / 640.0, fov: 32 * .pi / 180)
-                cells.append((shot(ren, target, rig: m.rig, showBody: false, cam: cam, w: 720, h: 640), "\(f.name), \(n) Jelbie\(n > 1 ? "s" : "")"))
+                cells.append((shot(ren, target, rig: m.rig, showBody: false, cam: cam, w: 720, h: 640), "\(f.name), \(n) Jelmiko"))
             }
         }
-        try save(sheet(cells, cols: 2, title: "Bought drinks, 1 and 2 Jelbies (stand-in bodies)"), dir, "drinks_two.png")
+        try save(sheet(cells, cols: 2, title: "Bought drinks, 1 and 2 Jelmiko (stand-in bodies)"), dir, "drinks_two.png")
 #else
         throw XCTSkip("previewGhosts is debug-only")
 #endif

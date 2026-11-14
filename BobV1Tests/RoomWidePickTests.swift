@@ -60,7 +60,7 @@ final class RoomWidePickTests: XCTestCase {
         _ = GameCamera.camera(aspect: 440.0 / 956.0)
         GameCamera.configureRoom(count: 1)
         let wide = GameCamera.roomPose(.A)
-        XCTAssertEqual(GameCamera.roomEye, wide.eye, "one Jelbie is no longer the base pose")
+        XCTAssertEqual(GameCamera.roomEye, wide.eye, "one Jelmiko is no longer the base pose")
         XCTAssertNotEqual(GameCamera.roomEye, GameCamera.baseEye)
         XCTAssertEqual(GameCamera.roomWideScale, GameCamera.wideScale(2))
     }

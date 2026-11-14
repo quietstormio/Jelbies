@@ -213,7 +213,7 @@ final class EmotesBatch2Tests: XCTestCase {
         XCTAssertNil(b1.kindCool[.tapTilt], "tap-tilt is eligible for the other one")
         care.tapJelly(1)
         for _ in 0..<150 { care.select.tick(dt: 1.0 / 60) }
-        XCTAssertEqual(care.select.highlighted, 1, "the Jelbie is highlighted")
+        XCTAssertEqual(care.select.highlighted, 1, "the Jelmiko is highlighted")
         // a tap that lands on a Jelbie's body (within 0.9 of his floor spot) never starts a tilt
         for _ in 0..<40 {
             XCTAssertFalse(BlobBrain.tapCue(at: b1.position + SIMD2(0.3, 0.2), brains: [b1]))

@@ -81,7 +81,7 @@ final class PetReleaseTests: XCTestCase {
         XCTAssertFalse(b.commanded)
         guard walks else { return }
         let walk = firstWalk(rig, ids: [id], seconds: 8)
-        XCTAssertNotNil(walk[id]!, "Jelbie \(id) walked off within 8 s of the let-go")
+        XCTAssertNotNil(walk[id]!, "Jelmiko \(id) walked off within 8 s of the let-go")
     }
 
     /// Everybody called and cuddled, then all let go: every one of them walks off.
@@ -98,8 +98,8 @@ final class PetReleaseTests: XCTestCase {
         rig.run(10) { rig.care.focus.phase == .roaming }
         XCTAssertEqual(rig.care.focus.phase, .roaming)
         rig.run(0.1)
-        for a in rig.r.actors { XCTAssertTrue(a.brain!.autonomy, "Jelbie \(a.id) wanders again"); XCTAssertFalse(a.brain!.held) }
+        for a in rig.r.actors { XCTAssertTrue(a.brain!.autonomy, "Jelmiko \(a.id) wanders again"); XCTAssertFalse(a.brain!.held) }
         let walk = firstWalk(rig, ids: [0, 1, 2], seconds: 8)
-        for id in 0..<3 { XCTAssertNotNil(walk[id]!, "Jelbie \(id) walked off within 8 s of the let-go") }
+        for id in 0..<3 { XCTAssertNotNil(walk[id]!, "Jelmiko \(id) walked off within 8 s of the let-go") }
     }
 }

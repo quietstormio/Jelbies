@@ -109,7 +109,7 @@ final class RaceThreeTests: XCTestCase {
         XCTAssertEqual(care.raceBook.racers.count, 3, "roster \(n): three bodies on the track")
         XCTAssertEqual(Set(care.raceBook.racers).count, 3, "roster \(n): three different bodies")
         XCTAssertEqual(Set(sim.racers.map(\.lane)).count, 3, "roster \(n): three lanes filled")
-        XCTAssertEqual(care.raceBook.racers.first, 0, "the player's own Jelbie is the player lane")
+        XCTAssertEqual(care.raceBook.racers.first, 0, "the player's own Jelmiko is the player lane")
         XCTAssertEqual(care.raceBook.extra.count, 3 - n, "roster \(n): temporary rivals = \(3 - n)")
         XCTAssertEqual(room.park.count, 3 - n)
         let all = room.actors + room.park

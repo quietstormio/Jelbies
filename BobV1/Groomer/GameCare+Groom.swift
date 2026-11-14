@@ -29,7 +29,7 @@ extension GameCare {
         if isBedtimeHours { return "The Jelly Spa is closed at night. Come back in the morning!" }
         if tripActive || raceBusy { return "Finish this trip first." }
         if let b = cafeBlocker(), b != .noDrops { return b.message }
-        if bath.wallet.count < GroomTier.cheapest { return "The Jelly Spa starts at \(GroomTier.cheapest) JellyCoins per Jelbie. Win a race first!" }
+        if bath.wallet.count < GroomTier.cheapest { return "The Jelly Spa starts at \(GroomTier.cheapest) JellyCoins per Jelmiko. Win a race first!" }
         return nil
     }
 

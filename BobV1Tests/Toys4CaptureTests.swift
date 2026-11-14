@@ -189,7 +189,7 @@ final class Toys4CaptureTests: XCTestCase {
             rig.brain.currentPose(rig.sim)
             let c = SIMD3<Float>(-0.2, 0, 0.4)
             let cam = camera(eye: c + SIMD3(1.0, 1.5, 4.2), at: c + SIMD3(0, 0.5, 0), aspect: Float(w) / Float(h), fov: 36 * .pi / 180)
-            cells.append((shot(ren, target, rig: rig, showBody: true, cam: cam, w: w, h: h), "\(k.title) next to a Jelbie (scale)"))
+            cells.append((shot(ren, target, rig: rig, showBody: true, cam: cam, w: w, h: h), "\(k.title) next to a Jelmiko (scale)"))
         }
         try save(sheet(cells, cols: 3, title: "Toys batch 4 (Blender art) in the room, real renderer, plus the polished rug and bouncy mat"), name)
     }
@@ -248,7 +248,7 @@ final class Toys4CaptureTests: XCTestCase {
             try frame(r, "\(name): the boop", focus: at, until: { r.brain.idleState.decorBooped }, extra: 5)
             try frame(r, "\(name): a moment later", focus: at, until: { r.brain.idleState.decorBooped }, extra: 14)
         }
-        try save(sheet(cells, cols: 4, title: "Toys batch 4: a Jelbie playing with each (mid-action frames; arms stay stubby, feet stay under him)"), "toys4_play.png")
+        try save(sheet(cells, cols: 4, title: "Toys batch 4: a Jelmiko playing with each (mid-action frames; arms stay stubby, feet stay under him)"), "toys4_play.png")
         try? report.joined(separator: "\n").write(toFile: Self.log + "toys4-play-frames.txt", atomically: true, encoding: .utf8)
     }
 }

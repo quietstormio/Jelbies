@@ -36,7 +36,7 @@ enum ShowUI {
 extension GameCare {
     /// The name to show for the Jelbie `who`: theirs, else the selected one's, else the first on the roster, else "Your Jelbie". (Never a made-up default.)
     func rosterName(_ who: Int) -> String {
-        jelly(who)?.name ?? jelly(targetJelly)?.name ?? jellies.first?.name ?? "Your Jelbie"
+        jelly(who)?.name ?? jelly(targetJelly)?.name ?? jellies.first?.name ?? "Your Jelmiko"
     }
 }
 
@@ -92,7 +92,7 @@ struct JelbiePortrait: View {
             else { ProgressView().tint(SK.muted) }
         }
         .frame(width: size, height: size)
-        .accessibilityLabel(friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelbie")")
+        .accessibilityLabel(friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelmiko")")
         .accessibilityIdentifier("jelbie-portrait")
         .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)") { await loadHead() }
     }
@@ -118,7 +118,7 @@ struct JelbiePortrait: View {
         .frame(width: size, height: size)
         .overlay { if let r = outerRing { Circle().stroke(border, lineWidth: r).padding(-r / 2) } else { Circle().strokeBorder(border, lineWidth: 4) } }
         .shadow(color: outerRing == nil ? .black.opacity(0.25) : SK.ink.opacity(0.18), radius: outerRing == nil ? 6 : 3, y: outerRing == nil ? 3 : 2)
-        .accessibilityLabel(rival.map { "\($0.name), \($0.persona.title)" } ?? friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelbie")")
+        .accessibilityLabel(rival.map { "\($0.name), \($0.persona.title)" } ?? friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelmiko")")
         .accessibilityIdentifier("jelbie-portrait")
         .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)-\(rival?.name ?? "")") {
             image = nil; tried = false
@@ -163,7 +163,7 @@ struct JelbieActionShot: View {
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: breathe)
         }
-        .accessibilityLabel("\(care.jelly(who)?.name ?? "Jelbie") on the stage")
+        .accessibilityLabel("\(care.jelly(who)?.name ?? "Jelmiko") on the stage")
         .accessibilityIdentifier("studio-action-shot")
         .task(id: "\(who)-\(care.store.revision)") { await load() }
         .task(id: reduceMotion) {
@@ -717,7 +717,7 @@ struct ConditionScreen: View {
             VStack(spacing: 2) {
                 Text("Strongest: \(strongest.title) \u{00B7} Weakest: \(weakest.title)").font(SK.font(15, .black)).foregroundStyle(SK.ink)
                 if let target { Text("Gold dashed line: \(target.rank.title) target").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
-                else { Text("Every rank is open. Keep your Jelbie fed and shiny!").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
+                else { Text("Every rank is open. Keep your Jelmiko fed and shiny!").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
             }
             .accessibilityIdentifier("condition-summary")
         }

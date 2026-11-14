@@ -73,12 +73,12 @@ nonisolated enum JelbieA11yText {
 
     /// "Living room. Day. 3 Jelbies: Pip on the left, Moss in the middle, Lavender on the right."
     static func room(phase: String, placed: [(name: String, x: Double)]) -> String {
-        guard !placed.isEmpty else { return "\(phase). No Jelbies in the room" }
+        guard !placed.isEmpty else { return "\(phase). No Jelmiko in the room" }
         let who = placed.sorted { $0.x < $1.x }.map { p -> String in
             let c = column(p.x).lowercased()
             return "\(p.name) \(c == "middle" ? "in the middle" : "on the \(c)")"
         }.joined(separator: ", ")
-        return "\(phase). \(placed.count) Jelbie\(placed.count == 1 ? "" : "s"): \(who)"
+        return "\(phase). \(placed.count) Jelmiko: \(who)"
     }
 }
 
@@ -193,7 +193,7 @@ final class JelbieA11yContainer {
     private func profile(_ id: Int) -> JellyProfile? { care?.jelly(id) }
 
     func label(_ id: Int) -> String {
-        guard let p = profile(id) else { return "Jelbie" }
+        guard let p = profile(id) else { return "Jelmiko" }
         return JelbieA11yText.label(name: p.name, character: p.character)
     }
 
@@ -324,7 +324,7 @@ final class JelbieA11yContainer {
     // MARK: rotors
 
     func rotors() -> [UIAccessibilityCustomRotor] {
-        [makeRotor("Jelbies") { _ in true }, makeRotor("Needs attention") { [weak self] id in !(self?.profile(id)?.needs.wantingCount == 0) }]
+        [makeRotor("Jelmiko") { _ in true }, makeRotor("Needs attention") { [weak self] id in !(self?.profile(id)?.needs.wantingCount == 0) }]
     }
 
     private func makeRotor(_ name: String, include: @escaping (Int) -> Bool) -> UIAccessibilityCustomRotor {

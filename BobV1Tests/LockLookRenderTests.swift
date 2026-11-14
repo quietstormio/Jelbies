@@ -190,7 +190,7 @@ final class LockLookRenderTests: XCTestCase {
         XCTAssertTrue(JellyStatus.rectangularLine(needy, sleeping: false).hasPrefix("Pearl\u{00A0}is\u{00A0}thirsty"), JellyStatus.rectangularLine(needy, sleeping: false))
         XCTAssertEqual(JellyStatus.line(fine, sleeping: false), "Eliza is happy · Pearl happy · Bao happy", "the existing line is unchanged")
         XCTAssertEqual(JellyStatus.headline(fine[0], sleeping: true), "Eliza is napping")
-        XCTAssertEqual(JellyStatus.headline(needy[1], sleeping: true), needy[1].headline, "a needy Jelbie still shows its need")
+        XCTAssertEqual(JellyStatus.headline(needy[1], sleeping: true), needy[1].headline, "a needy Jelmiko still shows its need")
         XCTAssertEqual(JellyStatus.headline(fine[0], sleeping: false), fine[0].headline)
     }
 

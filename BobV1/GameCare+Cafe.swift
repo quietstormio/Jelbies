@@ -281,7 +281,7 @@ extension GameCare {
         for id in ids {          // food is for the hungry: a full Jelbie can only have a drink (nothing is ever wasted)
             if let t = o.treat(for: id), !CafeRules.canOrder(t, tier: needs(for: id).tier(.hunger)) {
                 AudioHub.shared.play(.notEnough)
-                return "\(jelly(id)?.name ?? "Your Jelbie")'s full. Pick a drink!"
+                return "\(jelly(id)?.name ?? "Your Jelmiko")'s full. Pick a drink!"
             }
         }
         let free = cafe.stamps.isFull
