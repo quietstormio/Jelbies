@@ -72,8 +72,12 @@ nonisolated enum ArmDebug {
     /// Join fix (wave path only; -ArmBlend 0 = off = exactly the old keyframes): the fillet skin next to the capsule sinks `joinSink` deeper (over `capsuleLift`), reaching out to `joinReach`.
     /// Without it the skin lies within 1.5 mm of the capsule surface where the fillet is tangent to the arm, so skin and capsule trade places triangle by triangle: a saw-tooth along the join.
     static let joinOn: Bool = !(UserDefaults.standard.object(forKey: "ArmBlend") != nil && UserDefaults.standard.integer(forKey: "ArmBlend") == 0)
-    static let joinSink: Double = UserDefaults.standard.object(forKey: "ArmJoinSink") != nil ? UserDefaults.standard.double(forKey: "ArmJoinSink") : 0.012
-    static let joinReach: Double = UserDefaults.standard.object(forKey: "ArmJoinReach") != nil ? UserDefaults.standard.double(forKey: "ArmJoinReach") : 0.07
+    nonisolated(unsafe) static var joinSink: Double = UserDefaults.standard.object(forKey: "ArmJoinSink") != nil ? UserDefaults.standard.double(forKey: "ArmJoinSink") : 0.012
+    nonisolated(unsafe) static var joinReach: Double = UserDefaults.standard.object(forKey: "ArmJoinReach") != nil ? UserDefaults.standard.double(forKey: "ArmJoinReach") : 0.07
+    /// Join shape (tuning knobs, wave path, -ArmBlend 1 only): the sink profile is (1 - c / reach)^joinPow; the capsule root is raised `capRoot` m along its normal over the first `capRootLen` m of its length from the root.
+    nonisolated(unsafe) static var joinPow: Double = UserDefaults.standard.object(forKey: "ArmJoinPow") != nil ? UserDefaults.standard.double(forKey: "ArmJoinPow") : 1
+    nonisolated(unsafe) static var capRoot: Double = UserDefaults.standard.object(forKey: "ArmCapRoot") != nil ? UserDefaults.standard.double(forKey: "ArmCapRoot") : 0
+    nonisolated(unsafe) static var capRootLen: Double = UserDefaults.standard.object(forKey: "ArmCapRootLen") != nil ? UserDefaults.standard.double(forKey: "ArmCapRootLen") : 0.05
     static let sinkReach: Double = UserDefaults.standard.object(forKey: "ArmSinkReach") != nil ? UserDefaults.standard.double(forKey: "ArmSinkReach") : 0.04
 }
 
@@ -85,6 +89,12 @@ nonisolated enum ArmKeyframeBuilder {
         var out: [Int32] = []
         for v in 0..<capsuleFirst where mat[v] <= 0.4 && rest[3 * v] * sigma > skinRegionMinX { out.append(Int32(v)) }
         return out
+    }
+
+    /// 0...1 weight of the sink at cone distance `c` (1 at the capsule surface, 0 at the reach).
+    static func sinkProfile(_ c: Double, join: Bool) -> Double {
+        let t = min(max(1 - c / (join ? ArmDebug.joinReach : ArmDebug.sinkReach), 0), 1)
+        return join && ArmDebug.joinPow != 1 ? pow(t, ArmDebug.joinPow) : t
     }
 
     struct VertexResult { var p: SIMD3<Double>; var cls: UInt8; var ao: Double }
@@ -111,7 +121,7 @@ nonisolated enum ArmKeyframeBuilder {
         if near {
             var q = F.project(p)
             let c = F.cone(q)
-            let sink = (ArmGeom.capsuleLift + (join ? ArmDebug.joinSink : 0)) * g.grow * min(max(1 - c / (join ? ArmDebug.joinReach : ArmDebug.sinkReach), 0), 1)
+            let sink = (ArmGeom.capsuleLift + (join ? ArmDebug.joinSink : 0)) * g.grow * ArmKeyframeBuilder.sinkProfile(c, join: join)
             if sink > 0 { q -= F.normal(q) * sink }
             return (q, 2)
         }
@@ -196,7 +206,7 @@ nonisolated enum ArmKeyframeBuilder {
                                         for n in nbrs[i] { m += atS(n) }
                                         m /= Double(nbrs[i].count)
                                         var q = F.project(posK[i] * 0.4 + m * 0.6, steps: 6)
-                                        let sink = (ArmGeom.capsuleLift + (join ? ArmDebug.joinSink : 0)) * g.grow * min(max(1 - F.cone(q) / (join ? ArmDebug.joinReach : ArmDebug.sinkReach), 0), 1)
+                                        let sink = (ArmGeom.capsuleLift + (join ? ArmDebug.joinSink : 0)) * g.grow * sinkProfile(F.cone(q), join: join)
                                         if sink > 0 { q -= F.normal(q) * sink }
                                         nxt[i] = q
                                     }
@@ -245,6 +255,16 @@ nonisolated enum ArmKeyframeBuilder {
                                 }
                             }
                             var cap = ArmCapsule.points(g, inflate: g.capsuleInflate, sigma: sigma)
+                            if join && ArmDebug.capRoot > 0 {          // join tuning: raise the capsule near its root so it stays above the sunk skin there (tip untouched)
+                                let a = SIMD3(g.A.x, g.A.y, g.A.z * g.flatten), b = SIMD3(g.B.x, g.B.y, g.B.z * g.flatten)
+                                let u = simd_normalize(b - a)
+                                for i in 0..<nC {
+                                    let c = SIMD3(cap.pos[i].x * sigma, cap.pos[i].y, cap.pos[i].z * g.flatten)
+                                    let s = simd_dot(c - a, u)
+                                    let w = 1 - min(max(s / ArmDebug.capRootLen, 0), 1)
+                                    cap.pos[i] += cap.nrm[i] * (ArmDebug.capRoot * g.grow * w * w * (3 - 2 * w))
+                                }
+                            }
                             if ArmDebug.flare {
                                 // flared base: capsule vertices just outside the egg are pulled onto the fillet surface F_s (so the
                                 // base melts into the egg with matching normals). Vertices still inside the egg are hidden and stay on the cone.
@@ -329,7 +349,7 @@ nonisolated final class ArmKeyframeStore: @unchecked Sendable {
         func mix(_ v: UInt64) { h = (h ^ v) &* 1099511628211 }
         for p in paths { for u in p.name.utf8 { mix(UInt64(u)) } }
         mix(UInt64(rest.count)); mix(UInt64(index.count)); mix(scale.bitPattern)
-        mix(ArmDebug.joinOn ? ArmDebug.joinSink.bitPattern ^ ArmDebug.joinReach.bitPattern : 0)          // (-ArmBlend 0 and the join fix never share a cache file)
+        mix(ArmDebug.joinOn ? ArmDebug.joinSink.bitPattern ^ ArmDebug.joinReach.bitPattern ^ ArmDebug.joinPow.bitPattern ^ ArmDebug.capRoot.bitPattern ^ ArmDebug.capRootLen.bitPattern : 0)          // (-ArmBlend 0 and the join fix never share a cache file)
         for f in rest { mix(UInt64(f.bitPattern)) }
         for f in mat { mix(UInt64(f.bitPattern)) }
         if let u = Bundle.main.executableURL, let d = (try? FileManager.default.attributesOfItem(atPath: u.path))?[.modificationDate] as? Date { mix(d.timeIntervalSince1970.bitPattern) }

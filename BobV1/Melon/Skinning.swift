@@ -777,6 +777,7 @@ nonisolated final class Skinner {
                 dyn[o] += t.x; dyn[o + 1] += t.y; dyn[o + 2] += t.z
             }
         }
+        if waveFit != nil { finishWaveBlend(dyn) }
         if !extraVertices.isEmpty {                         // touch play: a smooth additive skin offset (cheek squeeze); empty = exactly the plain skin
             for (k, vi) in extraVertices.enumerated() {
                 let o = 6 * Int(vi), t = extraDelta[k]
@@ -891,7 +892,66 @@ nonisolated final class Skinner {
         waveBlend[0] = SIMD4(1, Float(side < 0 ? -1 : 1), Float(g.flatten), Float(g.grow))
         waveBlend[1] = SIMD4(Rt.columns.0, 0); waveBlend[2] = SIMD4(Rt.columns.1, 0); waveBlend[3] = SIMD4(Rt.columns.2, 0); waveBlend[4] = SIMD4(t, 1)
         waveBlend[5] = SIMD4(Float(g.A.x), Float(g.A.y), Float(g.A.z), Float(g.r1)); waveBlend[6] = SIMD4(Float(g.B.x), Float(g.B.y), Float(g.B.z), Float(g.r2))
+        waveFit = WaveFit(geom: g, sigma: side < 0 ? -1 : 1)
     }
+    /// What the rigid pose fit cannot know: the DRAWN capsule is the skinned (sim-embedded, so squashed / jiggled / landing-shifted) hidden capsule plus the rigid keyframe delta, so it sits off the rigid pose fit
+    /// by the body's own deformation (centimetres on the Jelly Spring's arrival hop, 1.5 cm at home). `finishWaveBlend` replaces the world -> body matrix by the least-squares AFFINE map from the drawn capsule
+    /// vertices (world) onto the exact posed capsule (body space): the cone is then evaluated in the space the drawn arm is in, deformation included. The cone itself stays the exact posed geometry; nothing
+    /// is derived from a pose that may be a tick stale. (The shaders already treat the matrix as general: normals go through its transpose.)
+    struct WaveFit { var geom: ArmGeom; var sigma: Float }
+    private var waveFit: WaveFit?
+    private(set) var waveResidual: (before: Double, after: Double) = (0, 0)          // (mm, max over the capsule's vertices; tests / -ArmBlendLog)
+    nonisolated(unsafe) static var waveAffineOn: Bool = !(UserDefaults.standard.object(forKey: "ArmBlendAffine") != nil && UserDefaults.standard.integer(forKey: "ArmBlendAffine") == 0)
+    func finishWaveBlend(_ dyn: UnsafeMutablePointer<Float>) {
+        guard let wf = waveFit else { return }
+        waveFit = nil
+        guard waveBlend[0].x > 0.5 else { return }
+        let g = wf.geom, n = ArmCapsule.vertexCount
+        guard overrideVertices.count >= n else { return }
+        let first = overrideVertices.count - n          // (the side's capsule vertices are the last n of the override list)
+        let pts = ArmCapsule.points(g, inflate: g.capsuleInflate, sigma: Double(wf.sigma)).pos          // (body space, mirrored for the -1 side)
+        func resid(_ m: simd_double3x3, _ t: SIMD3<Double>) -> Double {
+            let F = PosedArmField(g); var worst = 0.0
+            for k in 0..<n {
+                let o = 6 * Int(overrideVertices[first + k])
+                let q = m * SIMD3(Double(dyn[o]), Double(dyn[o + 1]), Double(dyn[o + 2])) + t
+                worst = max(worst, abs(F.cone(SIMD3(q.x * Double(wf.sigma), q.y, q.z)) - g.capsuleInflate))
+            }
+            return worst * 1000
+        }
+        let m0 = simd_double3x3(SIMD3(Double(waveBlend[1].x), Double(waveBlend[1].y), Double(waveBlend[1].z)), SIMD3(Double(waveBlend[2].x), Double(waveBlend[2].y), Double(waveBlend[2].z)), SIMD3(Double(waveBlend[3].x), Double(waveBlend[3].y), Double(waveBlend[3].z)))
+        let t0 = SIMD3(Double(waveBlend[4].x), Double(waveBlend[4].y), Double(waveBlend[4].z))
+        let log = Self.waveDriftLog
+        let before = log ? resid(m0, t0) : 0
+        guard Self.waveAffineOn else { return }
+        // normal equations of  body = N world + t  over every capsule vertex (centred on the rigid map's mean for conditioning)
+        var ata = simd_double4x4(0), atb = [SIMD4<Double>](repeating: .zero, count: 3)
+        var mean = SIMD3<Double>.zero
+        for k in 0..<n { let o = 6 * Int(overrideVertices[first + k]); mean += SIMD3(Double(dyn[o]), Double(dyn[o + 1]), Double(dyn[o + 2])) }
+        mean /= Double(n)
+        for k in 0..<n {
+            let o = 6 * Int(overrideVertices[first + k])
+            let w = SIMD3(Double(dyn[o]), Double(dyn[o + 1]), Double(dyn[o + 2])) - mean
+            let f = SIMD4(w, 1)
+            for i in 0..<4 { for j in 0..<4 { ata[i][j] += f[i] * f[j] } }
+            for c in 0..<3 { atb[c] += f * pts[k][c] }
+        }
+        for i in 0..<3 { ata[i][i] += 1e-9 * Double(n) }
+        let inv = ata.inverse
+        var sol = [SIMD4<Double>](repeating: .zero, count: 3)          // per body component c: coefficients on (wx, wy, wz, 1)
+        for c in 0..<3 { sol[c] = inv * atb[c] }
+        // body_c = sum_j sol[c][j] * (world - mean)_j + sol[c][3]  =>  column j of N = (sol[0][j], sol[1][j], sol[2][j]); t = sol[.][3] - N mean
+        let cols = (0..<3).map { j in SIMD3(sol[0][j], sol[1][j], sol[2][j]) }
+        let N = simd_double3x3(cols[0], cols[1], cols[2])
+        let t = SIMD3(sol[0][3], sol[1][3], sol[2][3]) - N * mean
+        let after = resid(N, t)
+        waveResidual = (before, after)
+        if log { fputs(String(format: "[armblend] capsule residual before %.1f mm after %.1f mm\n", before, after), stderr) }
+        guard after < before else { return }          // (never worse than the rigid fit)
+        for j in 0..<3 { waveBlend[1 + j] = SIMD4(Float(cols[j].x), Float(cols[j].y), Float(cols[j].z), 0) }
+        waveBlend[4] = SIMD4(Float(t.x), Float(t.y), Float(t.z), 1)
+    }
+    nonisolated(unsafe) static var waveDriftLog: Bool = UserDefaults.standard.integer(forKey: "ArmBlendLog") != 0
     var legBlendShoes = false
     /// Flat float4 array for the body shaders' fragment buffer 6 (layout in Shaders.metal at legBlendAt); all zeros = off.
     private(set) var legBlend = [SIMD4<Float>](repeating: .zero, count: Skinner.legBlendCount)

@@ -2057,7 +2057,7 @@ final class BlobBrain {
             skinner.overrideMat = armAO
             let blendNow = Self.armBlendOn && armBlendSpecies && armPathName == ArmPath.wave.name
             if blendNow { skinner.setWaveBlend(geom: ArmPath.wave.geom(at: Double(min(max(sKey, 0), 1)), scale: kf.scale), side: armSide, pose: pose, restCentroid: sim.restCentroid) }
-            if pandaInk && Self.pandaInkOn && !blendNow {          // PANDA: the raised arm and its join collar are painted black by how far this frame moved them (GfxBodyFast / Bath / Jersey read it from the mat channel)
+            if pandaInk && Self.pandaInkOn {          // PANDA: the raised arm and its join collar are painted black by how far this frame moved them (GfxBodyFast / Bath / Jersey read it from the mat channel)
                 var ink = armAO
                 let sd = kf.side(armSide)
                 for i in 0..<min(ink.count, sd.skinCount) {          // (skin vertices only: the capsule's own are drawn black anyway)

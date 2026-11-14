@@ -258,7 +258,7 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
-        if (ab[0].x > 0.5) { col = pandaPaintArm(col, Q, bm, pandaPatch, 1.0 - smoothstep(0.017, 0.023, armDc), ab[0].y); }          // ARM BLEND: the posed arm's own per-pixel mask
+        if (ab[0].x > 0.5) { col = pandaPaintArm(col, Q, bm, pandaPatch, 1.0 - smoothstep(0.017, 0.023, armDc), ab[0].y, pandaInk); }          // ARM BLEND: the posed arm's own per-pixel mask
         else { col = pandaPaint(col, Q, bm, pandaPatch, pandaInk); }
     } else if (bb > 0.5) {
         float bk;
@@ -532,7 +532,7 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
-        if (ab[0].x > 0.5) { col = pandaPaintArm(col, Q, bm, pandaPatch, 1.0 - smoothstep(0.017, 0.023, armDc), ab[0].y); }          // ARM BLEND: the posed arm's own per-pixel mask
+        if (ab[0].x > 0.5) { col = pandaPaintArm(col, Q, bm, pandaPatch, 1.0 - smoothstep(0.017, 0.023, armDc), ab[0].y, pandaInk); }          // ARM BLEND: the posed arm's own per-pixel mask
         else { col = pandaPaint(col, Q, bm, pandaPatch, pandaInk); }
     } else if (bb > 0.5) {
         float bk;

@@ -43,4 +43,23 @@ final class ArmBlendTests: XCTestCase {
         let dflt = ArmKeyframeBuilder.pose(vertex: p, field: F, restArm: -1)
         XCTAssertEqual(simd_length(dflt.p - off.p), 0)
     }
+
+    /// The cone the shaders use sits on the DRAWN capsule (the affine world -> body fit of Skinner.finishWaveBlend), not on the rigid pose fit: through a whole wave every capsule vertex
+    /// is within a few mm of the cone surface the fragments are measured against (the rigid fit alone was 5-18 mm off in the app, 49 mm at the Spring page's arrival hop).
+    func testConeFollowsTheDrawnCapsuleThroughDeformation() throws {
+        let r = MotionRig(game: true)
+        r.brain.armBlendSpecies = true
+        UserDefaults.standard.set(1, forKey: "BlobWaveSide")
+        defer { UserDefaults.standard.removeObject(forKey: "BlobWaveSide") }
+        r.brain.request(.wave)
+        var checked = 0, worst = 0.0
+        for _ in 0..<(60 * 6) {
+            r.tick()
+            r.render()
+            guard r.brain.activity == .waving, r.skinner.waveBlend[0].x > 0.5, r.skinner.waveBlend[0].w > 0.99 else { continue }
+            checked += 1; worst = max(worst, r.skinner.waveResidual.after)
+        }
+        XCTAssertGreaterThan(checked, 60, "the grown capsule is on for most of the wave")
+        XCTAssertLessThan(worst, 6.0, "max capsule-to-cone residual in mm over the wave (rigid fit alone: 5-18 mm in the app)")
+    }
 }

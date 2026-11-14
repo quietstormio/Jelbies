@@ -103,15 +103,18 @@ static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch, fl
     m = max(m, smoothstep(0.2, 0.6, ink));
     return mix(col, blk, m);
 }
-/// ARM BLEND paint: as pandaPaint, but on the waving side (`armSide` = +1 / -1, 0 = none) the black arm is `armMask` (the posed arm's per-pixel distance mask) and the rest-space arm is not painted.
-static float3 pandaPaintArm(float3 col, float3 Q, float bm, thread float &patch, float armMask, float armSide) {
+/// ARM BLEND paint (`ink` = the per-vertex ink of the mat channel): EXACTLY pandaPaint (rest-space marks + the displacement ink, the look that reads as one clean lobe) plus the posed arm's per-pixel
+/// distance mask `armMask`, which only counts where the vertex ink says the skin was moved by the arm (smoothstep 0...0.2 of the decoded ink): its smooth edge replaces the ink's per-triangle edge on the
+/// collar, but it can never paint skin the arm did not touch (the cone reaches 12 cm into the body: unguarded it painted a black leaf on the front skin over the buried root, with a white wedge to the arm).
+/// `armSide` is unused (kept for the call sites): the rest-space arm mask stays, as before the blend.
+static float3 pandaPaintArm(float3 col, float3 Q, float bm, thread float &patch, float armMask, float armSide, float ink) {
     float3 blk = pandaBlack(col);
     patch = 0.0;
     if (bm > 1.5) { return blk; }
     patch = pandaEyePatch(Q);
-    float limbs = (armSide != 0.0 && Q.x * armSide > 0.0) ? pandaFeetOnly(Q) : pandaLimbs(Q);
-    float m = max(max(max(patch, pandaBand(Q)), limbs), pandaBelly(Q));
-    m = max(m, armMask);
+    float m = max(max(max(patch, pandaBand(Q)), pandaLimbs(Q)), pandaBelly(Q));
+    m = max(m, smoothstep(0.2, 0.6, ink));
+    m = max(m, armMask * smoothstep(0.0, 0.2, ink));
     return mix(col, blk, m);
 }
 static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch) { return pandaPaint(col, Q, bm, patch, 0.0); }
