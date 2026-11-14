@@ -94,9 +94,15 @@ static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch, fl
     if (bm > 1.5) { return blk; }
     patch = pandaEyePatch(Q);
     float m = max(max(max(patch, pandaBand(Q)), pandaLimbs(Q)), pandaBelly(Q));
-    m = max(m, smoothstep(0.35, 0.65, ink));
+    m = max(m, smoothstep(0.2, 0.6, ink));
     return mix(col, blk, m);
 }
 static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch) { return pandaPaint(col, Q, bm, patch, 0.0); }
+
+/// The waving Panda's ink rides in the mat channel as a NEGATIVE value (BlobBrain.pandaInkMat: mat = ao - 4 ink for ink > 0.1; real AO is 0...0.4, Teddy's ear hollow is the only other negative
+/// and is never in a Panda's egg range; the inked area's own crease AO is dropped: it is black there anyway). Negative is on purpose: a body shader that does not decode it (the locked fsSoftMatte) reads occ = 0, never a fully occluded arm.
+/// `modeW` = the body mode (u.shape.w): only the Panda egg (51) is decoded.
+static float pandaInkOfMat(float mat, float modeW) { return (modeW > 50.5 && modeW < 51.5 && mat < 0.0) ? clamp(-mat * 0.25, 0.0, 1.0) : 0.0; }
+static float pandaAOOfMat(float mat, float ink) { return ink > 0.0 ? clamp(mat + 4.0 * ink, 0.0, 0.4) : mat; }
 
 #endif

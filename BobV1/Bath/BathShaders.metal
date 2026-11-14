@@ -237,7 +237,8 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
 
     float3 L = normalize(u.keyDir.xyz);
     float d = dot(N, L);
-    float occ = clamp(i.mat / 0.4, 0.0, 1.0);
+    float pandaInk = pandaInkOfMat(i.mat, u.shape.w);
+    float occ = clamp(pandaAOOfMat(i.mat, pandaInk) / 0.4, 0.0, 1.0);
     float down = clamp(-N.y, 0.0, 1.0);
     float s = clamp(0.26 + 0.80 * d - 0.5 * max(-d - 0.04, 0.0) - 0.16 * down, 0.0, 1.0);
     s *= 1.0 - 0.62 * occ;
@@ -253,7 +254,7 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
-        col = pandaPaint(col, Q, bm, pandaPatch);
+        col = pandaPaint(col, Q, bm, pandaPatch, pandaInk);
     } else if (bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
@@ -505,7 +506,8 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
 
     float3 L = normalize(u.keyDir.xyz);
     float d = dot(N, L);
-    float occ = clamp(i.mat / 0.4, 0.0, 1.0);
+    float pandaInk = pandaInkOfMat(i.mat, u.shape.w);
+    float occ = clamp(pandaAOOfMat(i.mat, pandaInk) / 0.4, 0.0, 1.0);
     float down = clamp(-N.y, 0.0, 1.0);
     float s = clamp(0.26 + 0.80 * d - 0.5 * max(-d - 0.04, 0.0) - 0.16 * down, 0.0, 1.0);
     s *= 1.0 - 0.62 * occ;
@@ -521,7 +523,7 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
-        col = pandaPaint(col, Q, bm, pandaPatch);
+        col = pandaPaint(col, Q, bm, pandaPatch, pandaInk);
     } else if (bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading

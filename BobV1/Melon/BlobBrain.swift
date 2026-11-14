@@ -429,12 +429,16 @@ final class BlobBrain {
     var armAO: [Float] = []
     /// Panda only (set by the stage each tick): paint the waving arm's skin by its displacement (see `driveLimbs`, PandaMarks.h `ink`).
     var pandaInk = false
-    /// What the waving Panda adds to a skin vertex's mat channel (0 = untouched ... 2 = fully the arm's black): 2 x a smoothstep of how far the arm moved it.
-    /// GfxBodyFast.metal decodes `ink = (mat - 0.4) / 1.6` (real AO is 0...0.4, so mat > 0.45 only ever means ink) and keeps `mat - 2 ink` as the AO.
-    static func pandaInkMat(displacement d: Float) -> Float {
-        let x = min(max((d - 0.0015) / 0.005, 0), 1)
-        return 2 * x * x * (3 - 2 * x)
+    /// How black the waving Panda paints a skin vertex that the arm moved by `d` (0 = not at all ... 1 = solid): a soft threshold wide enough for the whole fillet collar.
+    static func pandaInkWeight(displacement d: Float, covered: Bool) -> Float {
+        if covered { return 1 }
+        let x = min(max((d - 0.0008) / 0.012, 0), 1)
+        return x * x * (3 - 2 * x)
     }
+    /// The mat value for it: the vertex's crease AO, or (ink > 0.1) `ao - 4 ink`, a NEGATIVE number the Panda shaders decode (PandaMarks.h pandaInkOfMat: ink = -mat / 4).
+    /// Negative on purpose: the locked fsSoftMatte does not decode it and reads it as no occlusion (occ = clamp(mat / 0.4, 0, 1) = 0), never as a fully occluded arm.
+    static func pandaInkMat(ao: Float, ink: Float) -> Float { ink > 0.1 ? ao - 4 * ink : ao }
+    nonisolated(unsafe) static var pandaInkOn = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "PandaInk") != nil && UserDefaults.standard.integer(forKey: "PandaInk") == 0)          // capture aid: -PandaInk 0 = the arm painted as before
     var armSide = 1
     var armActive = false
     var armPathName = ArmPath.wave.name      // the keyframe path the active arm override plays (wave, or the dining nubToMouth)
@@ -2042,14 +2046,18 @@ final class BlobBrain {
             armT += dt
             let tt0 = CFAbsoluteTimeGetCurrent()
             defer { armCostSum += CFAbsoluteTimeGetCurrent() - tt0; armCostN += 1 }
-            kf.evaluate(side: armSide, s: armPathName == ArmPath.wave.name ? WaveScript.s(at: armT) : armS, rotation: pose.rotation, delta: &armDelta, ao: &armAO)
+            let sKey = armPathName == ArmPath.wave.name ? WaveScript.s(at: armT) : armS
+            kf.evaluate(side: armSide, s: sKey, rotation: pose.rotation, delta: &armDelta, ao: &armAO)
             skinner.overrideVertices = kf.side(armSide).vertices
             skinner.overrideDelta = armDelta
             skinner.overrideMat = armAO
-            if pandaInk {          // PANDA: the raised arm and its join collar are painted black by how far this frame moved them (GfxBodyFast.metal reads it from the mat channel)
+            if pandaInk && Self.pandaInkOn {          // PANDA: the raised arm and its join collar are painted black by how far this frame moved them (GfxBodyFast / Bath / Jersey read it from the mat channel)
                 var ink = armAO
-                for i in 0..<min(ink.count, kf.side(armSide).skinCount) {          // (skin vertices only: the capsule's own are drawn black anyway)
-                    ink[i] += Self.pandaInkMat(displacement: simd_length(armDelta[i]))
+                let sd = kf.side(armSide)
+                for i in 0..<min(ink.count, sd.skinCount) {          // (skin vertices only: the capsule's own are drawn black anyway)
+                    let f = min(max(sKey, 0), 1) * Float(kf.intervals)
+                    let k = min(Int(f + 0.5), kf.intervals)
+                    ink[i] = Self.pandaInkMat(ao: armAO[i], ink: Self.pandaInkWeight(displacement: simd_length(armDelta[i]), covered: sd.cls[k * sd.vertices.count + i] == 1))
                 }
                 skinner.overrideMat = ink
             }
