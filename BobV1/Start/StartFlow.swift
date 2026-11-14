@@ -112,7 +112,7 @@ final class StartFlow {
         JellyRoster.save(ids, to: d)
         d.set(max(coins, 0), forKey: DropsWallet.key)
         var store = StoreBook.Saved()
-        store.starterGiven = true; store.unlistedRefunded = true; store.gardenRefunded = true
+        store.starterGiven = true; store.unlistedRefunded = true; store.gardenRefunded = true; store.headbandsRefunded = true
         if let data = try? JSONEncoder().encode(store) { d.set(data, forKey: StoreBook.key) }
         d.set(true, forKey: startedKey)
         IntroGate.markSeen(d)
@@ -148,7 +148,7 @@ final class StartFlow {
         guard first, let pending else { return nil }
         d.set(pending, forKey: DropsWallet.key)
         var store = StoreBook.Saved()
-        store.starterGiven = true; store.unlistedRefunded = true; store.gardenRefunded = true
+        store.starterGiven = true; store.unlistedRefunded = true; store.gardenRefunded = true; store.headbandsRefunded = true
         if let data = try? JSONEncoder().encode(store) { d.set(data, forKey: StoreBook.key) }
         d.removeObject(forKey: firstCoinsKey)
         return pending

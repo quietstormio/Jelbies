@@ -289,11 +289,11 @@ final class FeatureTests: XCTestCase {
         XCTAssertEqual(beanie.wingDY, -0.12); XCTAssertEqual(beanie.flapMax, 30); XCTAssertEqual(beanie.spreadMax, 12)
         // Pip: the union of the hidden spines; Moss: the on-hat sprout and the hat variant; the ring / clip group leaves the sprout alone
         XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["cat_ears", "sweatband"]).hiddenParts.isEmpty, "spines are never hidden")
-        // Moss: the antennas are body vertices; the hat rule tucks them under an enclosing hat, the antennae / ear headbands, and leaves the hats alone (no hat variants, no on-hat sprout)
+        // Moss: the antennas are body vertices, never tucked: they poke through every hat (a tall hat only raises their roots); no hat variants, no on-hat sprout
         let moss = FeatureCompat.solve(.daisy, worn: ["beanie_honey", "bowtie_pink"])
-        XCTAssertTrue(moss.antennasHidden); XCTAssertFalse(moss.onHat); XCTAssertTrue(moss.hatVariant.isEmpty)
-        XCTAssertTrue(FeatureCompat.solve(.daisy, worn: ["bee_antennae"]).antennasHidden, "never four antennas")
-        XCTAssertFalse(FeatureCompat.solve(.daisy, worn: []).antennasHidden)
+        XCTAssertFalse(moss.onHat); XCTAssertTrue(moss.hatVariant.isEmpty); XCTAssertLessThan(moss.antennaLift, 0.06, "a beanie is poked through")
+        XCTAssertGreaterThan(FeatureCompat.solve(.daisy, worn: ["tophat"]).antennaLift, 0.05, "a top hat raises the roots onto its crown")
+        XCTAssertEqual(FeatureCompat.solve(.daisy, worn: []).antennaLift, 0)
         // the variant hats are only for Moss
         XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["beanie_honey"]).hatVariant.isEmpty)
         XCTAssertTrue(FeatureCompat.solve(.wings, worn: ["party_hat"]).hatVariant.isEmpty)

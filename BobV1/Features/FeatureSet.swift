@@ -185,7 +185,8 @@ final class FeatureSet {
         }
         // Teddy's ears + pom are body vertices (TeddyBean): hand the skinner what the pop / hat rule / follow-through say (nothing drawn by the feature pipeline then)
         brain.antennaBody = feature == .daisy          // (the green Jelmiko's antennas: body vertices, AntennaBean; the scale is the pop x the hat rule)
-        brain.antennaScale = s.scale * (s.partScale["antennas"] ?? 1)
+        brain.antennaScale = s.scale
+        brain.antennaLift = s.partScale["antennaLift"] ?? 0
         brain.teddyBody = feature == .ears && TeddyEarsVariant.active.inBody          // (BlobBrain.driveLimbs copies these onto the skinner every tick)
         brain.teddyEarScale = s.scale * (s.partScale["ear_r"] ?? 1)
         brain.teddyPomScale = s.scale * (s.partScale["pom"] ?? 1)
@@ -276,9 +277,9 @@ final class FeatureSet {
     /// The green Jelmiko's antennas only tuck / return with the hat rule (their soft motion lives in the skinner, AntennaBean).
     private func stepAntennas(_ s: inout Slot, dt: Float) {
         s.clock += dt
-        let want: Float = s.fit.antennasHidden ? 0 : 1
-        let cur = s.partScale["antennas"] ?? want
-        s.partScale["antennas"] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
+        let want = s.fit.antennaLift, cur = s.partScale["antennaLift"] ?? want
+        let step = AntennaBean.liftSpeed * dt          // (the roots glide up onto a tall hat / back down to the head, never a pop)
+        s.partScale["antennaLift"] = s.primed ? cur + max(-step, min(step, want - cur)) : want
     }
 
     // MARK: Teddy's ears + pom

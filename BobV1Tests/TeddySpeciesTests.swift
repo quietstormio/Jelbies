@@ -107,9 +107,9 @@ final class TeddySpeciesTests: XCTestCase {
             XCTAssertEqual(r.slide, 0)
         }
         // ear headbands are ears themselves
-        for hat in ["cat_ears", "frog_ears", "bunny_ears", "headphones"] { XCTAssertTrue(TeddyFit.solve(worn: [hat]).earsHidden, hat) }
+        for hat in ["cat_ears", "frog_ears", "headphones"] { XCTAssertTrue(TeddyFit.solve(worn: [hat]).earsHidden, hat) }
         // open / perching pieces leave the ears out (possibly nudged)
-        for hat in ["flower_clip", "sweatband", "visor_tennis", "hair_bow", "flower_crown", "crown_gold", "bee_antennae"] {
+        for hat in ["flower_clip", "sweatband", "visor_tennis", "hair_bow", "flower_crown", "crown_gold"] {
             let r = TeddyFit.solve(worn: [hat])
             XCTAssertFalse(r.earsHidden, "\(hat): the ears stay out")
             XCTAssertEqual(r.slide, 0, "no slide any more")

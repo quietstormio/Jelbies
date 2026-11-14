@@ -28,7 +28,7 @@ Signature features belong to a colour **species**, not to individual characters.
 |---|---|
 | Purple / lavender (incl. park plum) | Wings (fold under worn items, flap-hops, short flights) |
 | Yellow | Pointed body-mesh tail plus 7 rounded orange spikes down the back onto the tail, none on the head (Pip's approved "pro8"; hidden under enclosing hats). Enum case `JellyFeature.spines`. |
-| Green (incl. park mint, lime) | Two wobbly jelly antennas (body vertices, own soft motion); tucked under enclosing hats and under headbands that carry their own antennae or ears |
+| Green (incl. park mint, lime) | Two wobbly jelly antennas (body vertices, own soft motion); never tucked: they poke up through every hat (a tall hat such as the top hat or chef hat only raises their roots onto its crown) |
 | Blue and every other colour | None |
 
 ### Teddy (look phase 2026-10-31; now sold in the Jelly Spring, see the table above)
@@ -145,7 +145,7 @@ Not in v1. When built, a special edition should be a material/finish layered on 
 
 ## 1.0 updates (2026-10-25)
 - **Pip:** spikes are smaller by default (60% height). Enclosing hats go over them and cover them; perch items show them. Signature (approved, "pro8"): a pointed body-mesh tail plus 7 rounded orange spikes down the back flowing onto the tail, none on the head; enclosing hats cover the spikes. (Enum case `JellyFeature.spines`.)
-- **Moss:** the antennas tuck away under enclosing hats and under the bee-antennae / ear headbands (AntennaFit).
+- **Moss:** the antennas are never tucked: they poke through every hat; under a tall hat (top hat, chef, witch ...) the roots are raised onto the hat's surface (AntennaFit). The Honeybee antennae and Bunny-ear headbands were retired from the game on 2026-11-14 (old saves are refunded once).
 - **Lavender:** wings fold rather than vanish under worn items, with periodic flap bursts and short flights.
 - Features are never hidden outright by wearables.
 

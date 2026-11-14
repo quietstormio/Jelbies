@@ -90,22 +90,28 @@ extension FeatureCaptureTests {
         XCTAssertGreaterThan(maxRel - minRel, 0.03, "the tips wobble")
     }
 
+    /// OWNER'S RULE: never tucked. Low / open pieces poke through (lift 0); tall hats raise the roots; the drive eases the lift in and out and the scale stays 1 under every hat.
     func testAntennaHatRule() throws {
         AntennaFit.clearCache()
-        XCTAssertFalse(AntennaFit.tucked(worn: []), "bare: out")
-        XCTAssertTrue(AntennaFit.tucked(worn: ["beanie_honey"]), "an enclosing beanie tucks them")
-        XCTAssertTrue(AntennaFit.tucked(worn: ["bee_antennae"]), "the bee headband carries its own antennae: no four antennas")
-        XCTAssertTrue(AntennaFit.tucked(worn: ["bunny_ears"]), "ear headbands tuck them")
-        XCTAssertFalse(AntennaFit.tucked(worn: ["scarf_cosy"]), "a neck piece does not touch them")
-        // the drive follows the rule with the pop fade: beanie on -> scale falls to 0, off -> back to 1
+        XCTAssertEqual(AntennaFit.lift(worn: []), 0, "bare: poke straight up from the head")
+        for hat in ["beanie_honey", "beanie_pink", "bucket_hat", "cap_team_pink"] { XCTAssertLessThan(AntennaFit.lift(worn: [hat]), 0.06, "\(hat): low hat, the antennas poke through (root lift at most a few cm)") }
+        for hat in ["scarf_cosy", "hair_bow", "sunglasses_star", "bandana_coral"] { XCTAssertEqual(AntennaFit.lift(worn: [hat]), 0, "\(hat): not over the roots, nothing changes") }
+        var lifts: [String: Float] = [:]
+        for hat in ["tophat", "chef_hat", "witch_hat", "viking_hat", "party_hat", "cowboy_hat", "crown_gold", "propeller_beanie"] { lifts[hat] = AntennaFit.lift(worn: [hat]) }
+        print("[antennas] root lift per hat: \(lifts.sorted { $0.key < $1.key })")
+        for hat in ["tophat", "chef_hat", "party_hat"] { XCTAssertGreaterThan(lifts[hat] ?? 0, 0.1, "\(hat): tall, the roots are raised onto it") }
+        XCTAssertLessThan(lifts["witch_hat"] ?? 1, 0.06, "the witch hat's cone is narrow over the roots: poke-through")
+        // the drive: never tucked (scale 1 under a beanie and a top hat), the lift follows the rule with a glide
         DayClock.shared.forcedHour = 12
         let c = Char(id: 2)
         let lab = setUpLab([SIMD2(0.2, 0.6)], chars: [c], seed: 3)
         let d = dress(lab, [c]); let r = lab.rigs[0]
-        for _ in 0..<30 { lab.tick(watching: false); d.feats[0].tick(id: 0, brain: r.brain, sim: r.sim, feature: .daisy, worn: ["beanie_honey"], hideAll: false, dt: 1.0 / 60) }
-        XCTAssertEqual(r.brain.antennaScale, 0, accuracy: 1e-3)
-        for _ in 0..<60 { lab.tick(watching: false); d.feats[0].tick(id: 0, brain: r.brain, sim: r.sim, feature: .daisy, worn: [], hideAll: false, dt: 1.0 / 60) }
-        XCTAssertEqual(r.brain.antennaScale, 1, accuracy: 1e-3)
+        for _ in 0..<60 { lab.tick(watching: false); d.feats[0].tick(id: 0, brain: r.brain, sim: r.sim, feature: .daisy, worn: ["beanie_honey"], hideAll: false, dt: 1.0 / 60) }
+        XCTAssertEqual(r.brain.antennaScale, 1, accuracy: 1e-3); XCTAssertLessThan(r.brain.antennaLift, 0.06)
+        for _ in 0..<120 { lab.tick(watching: false); d.feats[0].tick(id: 0, brain: r.brain, sim: r.sim, feature: .daisy, worn: ["tophat"], hideAll: false, dt: 1.0 / 60) }
+        XCTAssertEqual(r.brain.antennaScale, 1, accuracy: 1e-3); XCTAssertEqual(r.brain.antennaLift, lifts["tophat"] ?? 0, accuracy: 1e-3)
+        for _ in 0..<120 { lab.tick(watching: false); d.feats[0].tick(id: 0, brain: r.brain, sim: r.sim, feature: .daisy, worn: [], hideAll: false, dt: 1.0 / 60) }
+        XCTAssertEqual(r.brain.antennaLift, 0, accuracy: 1e-3)
     }
 
     func testAntennaBlockBudget() {

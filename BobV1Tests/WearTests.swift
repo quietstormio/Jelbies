@@ -114,6 +114,33 @@ final class WearTests: XCTestCase {
         XCTAssertEqual(StoreBook.dropRetiredGloves(StoreBook.Saved()).refund, 0)
     }
 
+    /// The Honeybee antennae and Bunny-ear headbands are retired (2026-11-14): not sold, not in any pool, and an old save that owned / wore them loads, loses them and is refunded 40 + 45 exactly once.
+    func testRetiredHeadbandsAreRemovedAndRefundedOnce() throws {
+        XCTAssertNil(WearLook(rawValue: "beeAntennae")); XCTAssertNil(WearLook(rawValue: "bunnyEars"))
+        XCTAssertFalse(WearLook.allCases.contains { $0.row.art == "bee_antennae" || $0.row.art == "bunny_ears" })
+        XCTAssertFalse(StoreCatalog.items(.wear).contains { $0.id.contains("bee_antennae") || $0.id.contains("bunny_ears") }, "not in the shop")
+        XCTAssertFalse(ParkPool.wearables.contains { $0.row.art == "bunny_ears" || $0.row.art == "bee_antennae" })
+        let suite = "WearTests.headbands.\(UUID().uuidString)"
+        let d = try XCTUnwrap(UserDefaults(suiteName: suite)); defer { d.removePersistentDomain(forName: suite) }
+        var saved = StoreBook.Saved()
+        saved.wearables = ["beeAntennae", "bunnyEars", WearLook.beret.rawValue]
+        saved.worn = ["0": ["head": "beeAntennae"], "1": ["head": "bunnyEars"], "2": ["head": WearLook.beret.rawValue]]
+        d.set(try JSONEncoder().encode(saved), forKey: StoreBook.key)
+        let w = DropsWallet(persists: false)
+        let before = w.count
+        let b = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b)
+        XCTAssertEqual(w.count - before, 85, "40 + 45 JellyCoins, once")
+        XCTAssertEqual(b.saved.wearables, [WearLook.beret.rawValue], "not owned any more")
+        XCTAssertNil(b.saved.worn["0"]?["head"]); XCTAssertNil(b.saved.worn["1"]?["head"]); XCTAssertEqual(b.worn(2, .head), .beret, "other items are untouched")
+        XCTAssertEqual(b.saved.headbandsRefunded, true)
+        let b2 = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b2)
+        XCTAssertEqual(w.count - before, 85, "a second load never pays twice")
+        XCTAssertEqual(StoreBook.dropRetiredHeadbands(StoreBook.Saved()).refund, 0)
+        // an old save that owned only one of them gets only that one's price
+        var one = StoreBook.Saved(); one.wearables = ["bunnyEars"]
+        XCTAssertEqual(StoreBook.dropRetiredHeadbands(one).refund, 45)
+    }
+
     /// The hoodie / raincoat are unlisted: an owner has them taken off and gets the price back, exactly once.
     func testUnlistedCoatsAreRefundedOnce() throws {
         let suite = "WearTests.unlisted.\(UUID().uuidString)"

@@ -91,8 +91,8 @@ nonisolated final class Skinner {
     var teddySway = SIMD2<Float>.zero
     var teddyRig: TeddyBean.Rig? = nil
     // The green Jelmiko's two antennas (AntennaBean.swift): a block of body vertices after Teddy's. `antennaOn` (the character's feature) carries them on landmark frames with their own soft
-    // lean springs; `antennaScale` (0 = tucked under a hat / collapsed onto the base poles, 1 = out) comes from the hat rule and the pop.
-    var antennaFirst = -1, antennaOn = false, antennaScale: Float = 1
+    // lean springs; `antennaScale` (0 = collapsed onto the base poles, 1 = out) comes from the pop (never from a hat: the antennas poke through every hat); `antennaLift` raises the roots onto a tall hat (AntennaFit).
+    var antennaFirst = -1, antennaOn = false, antennaScale: Float = 1, antennaLift: Float = 0
     var antennaRig: AntennaBean.Rig? = nil
     var antennaMotion = AntennaMotion()
     private var tailLM: [Int] = [], tailLMRest: [SIMD3<Float>] = []

@@ -34,6 +34,8 @@ nonisolated enum AntennaBean {
     nonisolated(unsafe) static var hz: [Float] = [2.6, 3.0], zeta: Float = 0.16
     nonisolated(unsafe) static var accelGain: Float = 0.045, gravityGain: Float = 0.9, splayGain: Float = 0.012
     nonisolated(unsafe) static var idleAmp: Float = 0.07, idleHz: [Float] = [0.37, 0.43]
+    /// How fast the roots glide when a tall hat goes on / off (rest units per second).
+    nonisolated(unsafe) static var liftSpeed: Float = 2.0
     nonisolated(unsafe) static var outMax: Float = 0.95, inMax: Float = 0.50, fwdMax: Float = 0.50, backMax: Float = 0.80
 
     // MARK: parts
@@ -49,6 +51,8 @@ nonisolated enum AntennaBean {
         var first = 0, count = 0
         var ringFirst = 0, rings = 0                 // local index of ring 0 / ring count (vertices: ring r vertex j = ringFirst + r * around + j)
         var tipPole = 0
+        var rootIndex = 0                            // ring index of s = 0 (the head surface)
+        var liftDir = SIMD3<Double>(0, 1, 0)         // the antenna's own direction at its root (raising a root moves it along this)
     }
 
     /// Arc-length stations of the rings: buried, flare + stalk, then the ball by angle.
@@ -122,6 +126,9 @@ nonisolated enum AntennaBean {
             var part = Part(name: sgn > 0 ? "ant_r" : "ant_l", sgn: sgn, centre: centre, s: st, radius: rad, o: centre[0],
                             landmarkTargets: [f(root + SIMD3(0.16, 0, 0)), f(root - SIMD3(0.16, 0, 0)), f(root + SIMD3(0, 0, 0.16))])
             if sgn < 0 { part.landmarkTargets = [f(root - SIMD3(0.16, 0, 0)), f(root + SIMD3(0.16, 0, 0)), f(root + SIMD3(0, 0, 0.16))] }
+            part.rootIndex = st.firstIndex(where: { $0 >= 0 }) ?? 0
+            let ri = part.rootIndex
+            part.liftDir = simd_normalize(centre[min(ri + 2, centre.count - 1)] - centre[ri])
             parts.append(part)
         }
         return parts
@@ -327,6 +334,7 @@ extension Skinner {
             let B = SIMD3<Float>(dyn[o0], dyn[o0 + 1], dyn[o0 + 2])
             for i in 1..<part.count { let o = 6 * (f + part.first + i); dyn[o] = B.x; dyn[o + 1] = B.y; dyn[o + 2] = B.z }
         }
+        let lift = antennaLift
         guard let rig = antennaRig, antennaOn, antennaScale > 0.002 else { antennaMotion.primed = false; for part in parts { collapse(part) }; return }
         func frame(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>) -> simd_float3x3 {
             let x = simd_normalize(b - a), z = simd_normalize(simd_cross(x, c - a)), y = simd_cross(z, x)
@@ -367,6 +375,7 @@ extension Skinner {
             let O = SIMD3<Float>(Float(part.o.x), Float(part.o.y), Float(part.o.z))
             // the bend per ring: a rotation (rest frame) about the root, growing with the bend weight; the ring centres are chained so the length is kept
             let lean = m.lean[pi]
+            let liftVec = SIMD3<Float>(Float(part.liftDir.x), Float(part.liftDir.y), Float(part.liftDir.z)) * lift
             let sgn: Float = pi == 0 ? 1 : -1
             var ringC = [SIMD3<Float>](repeating: .zero, count: part.rings)
             var ringQ = [simd_quatf](repeating: simd_quatf(angle: 0, axis: SIMD3(0, 1, 0)), count: part.rings)
@@ -393,15 +402,15 @@ extension Skinner {
                     let c0 = SIMD3<Float>(Float(part.centre[r].x), Float(part.centre[r].y), Float(part.centre[r].z))
                     rel = ringC[r] + ringQ[r].act(L - c0) - O
                 }
-                let p = A + Rot * rel * scale
+                let p = A + Rot * (rel + liftVec) * scale
                 let o = 6 * (f + part.first + i); dyn[o] = p.x; dyn[o + 1] = p.y; dyn[o + 2] = p.z
             }
             let c = ringC[part.rings - 1]
-            m.lastTip[pi] = A + Rot * (c - O) * scale
+            m.lastTip[pi] = A + Rot * (c - O + liftVec) * scale
         }
         for pi in 0..<2 {
             for (v, w) in rig.bumps[pi] {
-                let o = 6 * v, d = rots[pi] * (w * scale)
+                let o = 6 * v, d = rots[pi] * (w * scale * max(0, 1 - lift / 0.06))          // (a raised root no longer grows from the head: its fillet fades)
                 dyn[o] += d.x; dyn[o + 1] += d.y; dyn[o + 2] += d.z
             }
         }

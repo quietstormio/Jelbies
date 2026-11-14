@@ -1618,7 +1618,7 @@ final class BlobBrain {
     /// The body this brain drives (set each tick): a lying neighbour's fitted egg for the snuggle (BlobBrain+LieClear).
     weak var simRef: SoftBody?
     /// Teddy's ears + pom as body vertices (TeddyBean): what the feature layer (hat rule, pop, follow-through) wants; driveLimbs hands it to the skinner.
-    var antennaBody = false, antennaScale: Float = 1          // the green Jelmiko's antennas (FeatureSet.tick feeds them, driveLimbs copies them onto the skinner)
+    var antennaBody = false, antennaScale: Float = 1, antennaLift: Float = 0          // the green Jelmiko's antennas (FeatureSet.tick feeds them, driveLimbs copies them onto the skinner)
     var teddyBody = false, teddyEarScale: Float = 1, teddyPomScale: Float = 1, teddySway = SIMD2<Float>.zero
 
     // MARK: foot beans
@@ -2018,7 +2018,7 @@ final class BlobBrain {
         noticeTeleport(sim)
         skinner.tailOn = feature == .spines && !WornSet.sleepHides(self)          // (hold-wear-r1: NOT hidden for the flip trick any more: the spikes stay drawn there, so the tail they ride must stay too)
         skinner.teddyOn = feature == .ears && TeddyEarsVariant.active.inBody          // (from the character alone: a scene that never ticks the feature layer still shows his ears; the scales default to 1)
-        skinner.antennaOn = feature == .daisy; skinner.antennaScale = antennaScale
+        skinner.antennaOn = feature == .daisy; skinner.antennaScale = antennaScale; skinner.antennaLift = antennaLift
         skinner.teddyEarScale = teddyEarScale; skinner.teddyPomScale = teddyPomScale; skinner.teddySway = teddySway
         skinner.tailHappy = expr.kind == .happy || expr.kind == .excited || expr.kind == .joyArc || idleState.reaction == .cheer
         tailPlayTick(skinner, dt)          // BlobBrain+TailPlay.swift: what the tail is to do this tick (Pip only)

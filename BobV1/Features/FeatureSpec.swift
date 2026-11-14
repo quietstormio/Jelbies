@@ -127,8 +127,8 @@ nonisolated struct FeatureFit: Equatable, Sendable {
     /// Teddy: how far the ears slide down the side of the head under a hat, whether they / the pom tuck away (TeddyFit).
     var earSlide: Float = 0
     var earsHidden = false, pomHidden = false
-    /// The green Jelmiko: the antennas tuck under what is worn (AntennaFit).
-    var antennasHidden = false
+    /// The green Jelmiko: how far (rest units, along the antennas' own direction) the antennas' roots are raised onto the surface of a tall hat so the whole antenna stands on it (AntennaFit); 0 = they poke up through the hat from the head.
+    var antennaLift: Float = 0
 }
 
 nonisolated enum FeatureCompat {
@@ -172,7 +172,7 @@ nonisolated enum FeatureCompat {
             }
             fit.hiddenParts = coveredSpikes(worn: worn, variants: fit.hatVariant, spec: spec, layout: fit.spineLayout, skipNeck: reflow)
         case .daisy:
-            fit.antennasHidden = AntennaFit.tucked(worn: worn)          // (the antennas are body vertices: no hat variants, no placement on the hat)
+            fit.antennaLift = AntennaFit.lift(worn: worn)          // (the antennas are body vertices, never tucked: they poke through every hat; a tall hat only raises their roots)
         case .wings:
             let relevant = worn.filter { spec.wingLimits[$0] != nil || (spec.pairs[$0]?.lav.rule ?? "ok") != "ok" }
             if relevant.isEmpty { break }

@@ -75,7 +75,7 @@ struct SpeciesInfo {
                     emotes: [.idle(.flapHop), .face(.hopeful), .idle(.flapHop), .blink, .idle(.sway)]),
         SpeciesInfo(character: 2, name: "Matcha", epithet: "The sleepy one",
                     about: "Calm and cosy. Loves a long sit, a big stretch and a look out the window. Never far from a nap.",
-                    signature: "Two wobbly antennas", signatureIcon: "camera.macro",
+                    signature: "Antennas", signatureIcon: "camera.macro",
                     lore: "Woke up under a tea bush in the shade. Two little sprouts grew on its head that very morning and have wobbled along ever since. Matchas say the antennas tell them when it's nap time. It is always nap time.",
                     bestAt: "Sweet", bestAtKey: .sweet, loves: "Onigiri", traits: [62, 82, 40, 50, 30],
                     moves: [SpeciesMoveInfo(title: "Big stretch", subtitle: "Signature move", icon: "figure.arms.open", move: .idle(.stretch)),
