@@ -474,6 +474,6 @@ final class LegsDrawnAuditTests: XCTestCase {
             }
             best[on] = min(best[on] ?? .infinity, bestBatch)
         }
-        MotionLog.write(String(format: "GUARDCOST 3 Jelbies: skin %.0f us/frame with the guard off, %.0f us/frame on (delta %.0f us); guard moved a bean on %d jelly-frames", best[false]!, best[true]!, best[true]! - best[false]!, guardMoved))
+        MotionLog.write(String(format: "GUARDCOST 3 Jelmiko: skin %.0f us/frame with the guard off, %.0f us/frame on (delta %.0f us); guard moved a bean on %d jelly-frames", best[false]!, best[true]!, best[true]! - best[false]!, guardMoved))
     }
 }

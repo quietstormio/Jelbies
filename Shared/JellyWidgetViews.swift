@@ -302,8 +302,8 @@ struct JellyWidgetContent: View {
 
     private var empty: some View {
         VStack(spacing: 6) {
-            Text("Jelbies").font(WidgetTheme.font(18)).foregroundStyle(WidgetTheme.ink)
-            Text("Open the game to meet your Jelbie").font(WidgetTheme.font(12, .medium)).foregroundStyle(WidgetTheme.inkSoft).multilineTextAlignment(.center)
+            Text("Jelmiko").font(WidgetTheme.font(18)).foregroundStyle(WidgetTheme.ink)
+            Text("Open the game to meet your Jelmiko").font(WidgetTheme.font(12, .medium)).foregroundStyle(WidgetTheme.inkSoft).multilineTextAlignment(.center)
         }
     }
 
@@ -328,7 +328,7 @@ struct JellyWidgetContent: View {
                     Text(s.needsAttention ? "Needs you" : "All good").font(.system(size: 11, weight: .medium, design: .rounded)).opacity(0.7)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            } else { Text("Open Jelbies").font(.system(size: 14, weight: .bold, design: .rounded)) }
+            } else { Text("Open Jelmiko").font(.system(size: 14, weight: .bold, design: .rounded)) }
         }
     }
 

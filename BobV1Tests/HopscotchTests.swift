@@ -182,7 +182,7 @@ final class HopscotchTests: XCTestCase {
         print("[hopline] lab minGap=\(minGap) \(minWhere) minSqGap=\(minSqGap)")
         XCTAssertEqual(maxPlayers, 3, "the others joined the line: " + lab.rigs.enumerated().map { "#\($0.offset) noticed \($0.element.brain.toy.noticed) queued \($0.element.brain.toy.queued) took \($0.element.brain.toy.tookTurn) bored \($0.element.brain.toy.bored) kind \(String(describing: $0.element.brain.idleState.kind))" }.joined(separator: " | "))
         XCTAssertTrue(allDone, "the line breaks up at the end")
-        for a in 0..<3 { XCTAssertEqual(seqs[a], Array(0..<8), "Jelbie \(a) landed on 1...8 in order: \(seqs[a])") }
+        for a in 0..<3 { XCTAssertEqual(seqs[a], Array(0..<8), "Jelmiko \(a) landed on 1...8 in order: \(seqs[a])") }
         XCTAssertGreaterThanOrEqual(minSqGap, HopscotchTuning.spacingAhead, "followers stay \(HopscotchTuning.spacingAhead) squares behind (landed index gap \(minSqGap))")
         XCTAssertGreaterThan(minGap, 0.75, "bodies never overlap: closest centres \(minGap) \(minWhere)")
         XCTAssertFalse(line.active)

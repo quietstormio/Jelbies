@@ -10,7 +10,7 @@ import Foundation
 nonisolated enum TrickScope: String, Codable, Sendable {
     case perJelbie, everyone
     /// The tag on the Shop card and the show's trick menu.
-    var tag: String { self == .everyone ? "For all your Jelbies" : "Only one Jelbie" }
+    var tag: String { self == .everyone ? "For all your Jelmiko" : "Only one Jelmiko" }
 }
 
 nonisolated enum TrickCatalog {

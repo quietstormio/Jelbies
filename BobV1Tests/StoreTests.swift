@@ -71,7 +71,7 @@ final class StoreTests: XCTestCase {
         let (b, w) = book(500)
         XCTAssertFalse(b.knows(.flip, character: 0))
         XCTAssertTrue(b.knows(.sit, character: 0), "defaults need no purchase")
-        XCTAssertEqual(b.buyTrick(.look, for: nil), .bought, "a for-everyone trick needs no Jelbie")
+        XCTAssertEqual(b.buyTrick(.look, for: nil), .bought, "a for-everyone trick needs no Jelmiko")
         XCTAssertTrue(b.knows(.look, character: 0))
         let after = w.count
         XCTAssertEqual(b.buyTrick(.look, for: nil), .alreadyOwned)

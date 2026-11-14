@@ -26,7 +26,7 @@ nonisolated enum JellyStatus {
 
     /// "Bob is hungry · Pip napping · Moss fine" (the first gets "is", the rest are terse), or "Open the game" with nobody.
     static func line(_ states: [JellyState], sleeping: Bool) -> String {
-        guard !states.isEmpty else { return "Open the game to meet your Jelbies" }
+        guard !states.isEmpty else { return "Open the game to meet your Jelmiko" }
         let sorted = states.sorted { $0.id < $1.id }
         return sorted.enumerated().map { i, s in i == 0 ? "\(s.name) is \(word(s, sleeping: sleeping))" : "\(s.name) \(word(s, sleeping: sleeping))" }
             .joined(separator: " · ")
@@ -60,12 +60,12 @@ nonisolated enum JellyStatus {
 
     /// One short phrase for the inline Lock Screen slot: the neediest Jelbie, or "Everyone is napping" / "All N Jelbies are fine".
     static func inline(_ states: [JellyState], sleeping: Bool) -> String {
-        guard !states.isEmpty else { return "Jelbies" }
+        guard !states.isEmpty else { return "Jelmiko" }
         if let n = JellyState.neediest(in: states), n.needsAttention { return "\(n.name) is \(word(n, sleeping: false))" }
         if sleeping { return states.count == 1 ? "\(states[0].name) is napping" : "Everyone is napping" }
         if states.count == 1 { return "\(states[0].name) is \(word(states[0], sleeping: false))" }
         let happy = states.filter { $0.mood == .happy }.count
-        return happy == states.count ? "All \(states.count) Jelbies are happy" : "All \(states.count) Jelbies are fine"
+        return happy == states.count ? "All \(states.count) Jelmiko are happy" : "All \(states.count) Jelmiko are fine"
     }
 
     /// The Siri answer: one sentence per Jelbie with its mood and every item that wants care, e.g.
@@ -84,7 +84,7 @@ nonisolated enum JellyStatus {
         return states.sorted { $0.id < $1.id }.map { sentence($0, sleeping: sleeping) }.joined(separator: " ")
     }
 
-    static let noneYet = "You have not met your Jelbies yet. Open the game to say hello."
+    static let noneYet = "You have not met your Jelmiko yet. Open the game to say hello."
 
     /// "A", "A and B", "A, B and C".
     static func joinNames(_ names: [String]) -> String {

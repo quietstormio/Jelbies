@@ -21,7 +21,7 @@ final class MainMenuLayoutUITests: XCTestCase {
             let win = app.windows.firstMatch.frame
             XCTAssertEqual(win.width > win.height, name == "landscape", "window is \(name): \(win)")
             let primary = save ? app.buttons["menu-continue"] : app.buttons["menu-start"]
-            let logo = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Jelbies' AND elementType != %d", XCUIElement.ElementType.button.rawValue)).firstMatch
+            let logo = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Jelmiko' AND elementType != %d", XCUIElement.ElementType.button.rawValue)).firstMatch
             XCTAssertTrue(primary.waitForExistence(timeout: 5))
             XCTAssertTrue(logo.exists, "the logo is an accessibility element")
             var frames = [("logo", logo.frame), ("primary", primary.frame)]

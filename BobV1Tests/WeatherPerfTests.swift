@@ -56,7 +56,7 @@ final class WeatherPerfTests: XCTestCase {
         let t0 = CACurrentMediaTime()
         for _ in 0..<n { let ev = book.tick(dt: 1.0 / 60); if !ev.isEmpty { reactor.handle(ev, plan: book.plan, jellies: js, care: nil) }; reactor.tick(jellies: js, care: nil, dt: 1.0 / 60); _ = book.look() }
         let cpu = (CACurrentMediaTime() - t0) / Double(n) * 1000
-        lines.append(String(format: "CPU weather + reactor step: %.4f ms (storm, 3 Jelbies)", cpu))
+        lines.append(String(format: "CPU weather + reactor step: %.4f ms (storm, 3 Jelmiko)", cpu))
         let out = lines.joined(separator: "\n")
         print("WEATHERPERF\n" + out)
         try? out.write(toFile: WeatherCaptureTests.dir + "/perf.txt", atomically: true, encoding: .utf8)

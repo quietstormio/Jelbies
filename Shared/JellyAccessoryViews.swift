@@ -210,7 +210,7 @@ struct JellyRectangularView: View {
         let states = model.states.sorted { $0.id < $1.id }
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
-                Text("Jelbies").font(JellyPalette.font(11, .heavy)).opacity(0.75)
+                Text("Jelmiko").font(JellyPalette.font(11, .heavy)).opacity(0.75)
                 if JellyStatus.needyCount(states) > 0 { Circle().frame(width: 5, height: 5).widgetAccentable() }
                 if !model.queued.isEmpty { Image(systemName: "drop.fill").font(.system(size: 8, weight: .bold)).opacity(0.8) }
             }
@@ -264,7 +264,7 @@ struct JellyStandByView: View {
             if states.isEmpty {
                 VStack(spacing: 8) {
                     JellyFaceGlyph(color: "blue", mood: .happy, tinted: tinted, ink: .white).frame(width: 64, height: 64)
-                    Text("Jelbies").font(JellyPalette.font(22)).foregroundStyle(.white)
+                    Text("Jelmiko").font(JellyPalette.font(22)).foregroundStyle(.white)
                 }
             } else if family == .systemSmall {
                 small(states)

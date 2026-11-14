@@ -16,7 +16,7 @@ final class VoiceNamesRosterTests: XCTestCase {
         let n = JellyNames(defaults: UserDefaults(suiteName: "VoiceNamesRosterTests.a")!, key: "nick", persists: false)
         JellyRoster.current = [1]
         XCTAssertEqual(n.roster, [1])
-        XCTAssertEqual(n.resolve(tokens: ["pip"]).first?.id, 0, "the only Jelbie in the room is slot 0")
+        XCTAssertEqual(n.resolve(tokens: ["pip"]).first?.id, 0, "the only Jelmiko in the room is slot 0")
         JellyRoster.current = [0, 1]
         XCTAssertEqual(n.resolve(tokens: ["pip"]).first?.id, 1)
     }

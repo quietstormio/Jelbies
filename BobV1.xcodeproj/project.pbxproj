@@ -501,10 +501,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "BobV1-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelbie photos to your Photos library.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies listen when you talk to them or turn on Ears. Sound is understood on your phone and is never recorded or sent anywhere.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your Jelbies turn what you say into words on your phone so they can learn their names and tricks. Nothing is sent anywhere.";
+				INFOPLIST_KEY_CFBundleDisplayName = Jelmiko;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelmiko photos to your Photos library.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelmiko listen when you talk to them or turn on Ears. Sound is understood on your phone and is never recorded or sent anywhere.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your Jelmiko turn what you say into words on your phone so they can learn their names and tricks. Nothing is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -540,10 +540,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "BobV1-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelbie photos to your Photos library.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelbies listen when you talk to them or turn on Ears. Sound is understood on your phone and is never recorded or sent anywhere.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your Jelbies turn what you say into words on your phone so they can learn their names and tricks. Nothing is sent anywhere.";
+				INFOPLIST_KEY_CFBundleDisplayName = Jelmiko;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save your Jelmiko photos to your Photos library.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Your Jelmiko listen when you talk to them or turn on Ears. Sound is understood on your phone and is never recorded or sent anywhere.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Your Jelmiko turn what you say into words on your phone so they can learn their names and tricks. Nothing is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -659,7 +659,7 @@
 				DEVELOPMENT_TEAM = 5VVYA96U3R;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "JelbiesWidget-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
+				INFOPLIST_KEY_CFBundleDisplayName = Jelmiko;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -690,7 +690,7 @@
 				DEVELOPMENT_TEAM = 5VVYA96U3R;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "JelbiesWidget-Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = Jelbies;
+				INFOPLIST_KEY_CFBundleDisplayName = Jelmiko;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				LD_RUNPATH_SEARCH_PATHS = (

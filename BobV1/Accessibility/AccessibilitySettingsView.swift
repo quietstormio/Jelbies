@@ -46,7 +46,7 @@ struct AccessibilitySettingsView: View {
                     .accessibilityIdentifier("a11y-system-settings")
                     .listRowBackground(SK.tile)
                 } footer: {
-                    Text("Jelbies also follows VoiceOver, Voice Control, Switch Control, Larger Text, Bold Text, Increase Contrast, Reduce Transparency and Reduce Motion.")
+                    Text("Jelmiko also follows VoiceOver, Voice Control, Switch Control, Larger Text, Bold Text, Increase Contrast, Reduce Transparency and Reduce Motion.")
                 }
             }
             .scrollContentBackground(.hidden)
@@ -70,7 +70,7 @@ struct AccessibilitySettingsView: View {
         case .off: return "Off: pull down and let go to hop."
         case .forgiving: return "Forgiving: a wider green zone."
         case .oneButton: return "One button: a single Hop button."
-        case .auto: return "Auto run: your Jelbie runs, you cheer."
+        case .auto: return "Auto run: your Jelmiko runs, you cheer."
         }
     }
 

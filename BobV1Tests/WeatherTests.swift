@@ -197,7 +197,7 @@ final class WeatherTests: XCTestCase {
         room.run(2)
         let gap = MelonController.jellyGap
         for g in room.gaps {
-            XCTAssertGreaterThanOrEqual(g, gap * 0.93, "huddled Jelbies keep the room's gap (\(room.gaps))")
+            XCTAssertGreaterThanOrEqual(g, gap * 0.93, "huddled Jelmiko keep the room's gap (\(room.gaps))")
             XCTAssertLessThanOrEqual(g, gap * 1.6, "...and are pressed close, not apart (\(room.gaps))")
         }
         XCTAssertGreaterThanOrEqual(room.lab.minPair, gap * MelonController.softFloor - 0.02, "nobody went through anybody on the way (min centre gap \(room.lab.minPair))")
@@ -293,7 +293,7 @@ final class WeatherTests: XCTestCase {
             for (i, r) in room.lab.rigs.enumerated() where r.brain.idleState.kind == .shake { shook.insert(i) }
         }
         XCTAssertEqual(shook, [0, 1, 2], "the group shakes it off")
-        XCTAssertEqual(ticks, 1, "one soft haptic tick for the relieved shake-off, not one per Jelbie")
+        XCTAssertEqual(ticks, 1, "one soft haptic tick for the relieved shake-off, not one per Jelmiko")
         XCTAssertTrue(room.reactor.members.isEmpty, "everyone is free: \(room.reactor.log)")
         XCTAssertTrue(room.lab.rigs.allSatisfy { $0.brain.storm.isNeutral && !$0.brain.hurry })
         XCTAssertGreaterThan(room.gaps.reduce(0, +) / 3, cluster + 0.2, "they scattered")
@@ -309,7 +309,7 @@ final class WeatherTests: XCTestCase {
         room.reactor.handle(ev, plan: room.book.plan, jellies: room.js, care: nil)
         room.reactor.handle([StormEvent(t: 16, kind: .notice)], plan: room.book.plan, jellies: room.js, care: nil)
         let kinds = room.lab.rigs.map { $0.brain.commandedIdle }
-        XCTAssertEqual(kinds.filter { $0 == .window }.count, 1, "exactly one Jelbie goes to the window")
+        XCTAssertEqual(kinds.filter { $0 == .window }.count, 1, "exactly one Jelmiko goes to the window")
         room.run(2)
         XCTAssertTrue(room.lab.rigs.contains { $0.brain.idleState.kind == .window })
     }

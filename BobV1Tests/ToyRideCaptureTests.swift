@@ -243,8 +243,8 @@ final class ToyRideCaptureTests: XCTestCase {
             let riding = a.scooterFoot != nil && a.idleState.slideStage == 11
             let gap = simd_distance(a.position, b.position)
             defer { lastGap = gap }
-            if riding, a.ride.s > 1.0, gap > lastGap, lastGap < minGap, lastGap < 2.6 { minGap = lastGap; nearShots += 1; return String(format: "riding past the other Jelbie: centres %.2f apart (a body is ~1.4 wide)", lastGap) }
-            if riding, a.ride.s > 0.5, i % 120 == 0 { return String(format: "ride, %.1f m along, other Jelbie %.2f away", a.ride.s, gap) }
+            if riding, a.ride.s > 1.0, gap > lastGap, lastGap < minGap, lastGap < 2.6 { minGap = lastGap; nearShots += 1; return String(format: "riding past the other Jelmiko: centres %.2f apart (a body is ~1.4 wide)", lastGap) }
+            if riding, a.ride.s > 0.5, i % 120 == 0 { return String(format: "ride, %.1f m along, other Jelmiko %.2f away", a.ride.s, gap) }
             return nil
         }, focus: { lab in
             let a = lab.rigs[0].brain.position, b = lab.rigs[1].brain.position
@@ -252,7 +252,7 @@ final class ToyRideCaptureTests: XCTestCase {
         })
         XCTAssertFalse(cells.isEmpty)
         if cells.count > 8 { cells = Array(cells.prefix(8)) }
-        try save(sheet(cells, cols: 4, title: "Kick scooter: the ride yields to another Jelbie (centre gaps shown)"), "toyride_scooter_pass.png")
+        try save(sheet(cells, cols: 4, title: "Kick scooter: the ride yields to another Jelmiko (centre gaps shown)"), "toyride_scooter_pass.png")
     }
 
     func testCaptureTunnelFollowTheLeader() throws {
@@ -333,6 +333,6 @@ final class ToyRideCaptureTests: XCTestCase {
             all += cells
         }
         XCTAssertFalse(all.isEmpty)
-        try save(sheet(all, cols: 3, title: "Two or three Jelbies on every new toy (turn-taking, cheering, sharing)"), "toyride_multi.png")
+        try save(sheet(all, cols: 3, title: "Two or three Jelmiko on every new toy (turn-taking, cheering, sharing)"), "toyride_multi.png")
     }
 }

@@ -62,8 +62,8 @@ final class JelbieA11yTests: XCTestCase {
 
     func testRoomValueListsThemLeftToRight() {
         let v = JelbieA11yText.room(phase: "Day", placed: [("Moss", 0.5), ("Pip", 0.1), ("Lavender", 0.9)])
-        XCTAssertEqual(v, "Day. 3 Jelbies: Pip on the left, Moss in the middle, Lavender on the right")
-        XCTAssertEqual(JelbieA11yText.room(phase: "Night", placed: []), "Night. No Jelbies in the room")
+        XCTAssertEqual(v, "Day. 3 Jelmiko: Pip on the left, Moss in the middle, Lavender on the right")
+        XCTAssertEqual(JelbieA11yText.room(phase: "Night", placed: []), "Night. No Jelmiko in the room")
     }
 
     func testActivityFromTheBrain() {

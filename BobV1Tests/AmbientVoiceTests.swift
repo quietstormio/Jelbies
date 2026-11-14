@@ -71,7 +71,7 @@ final class AmbientVoiceTests: XCTestCase {
                                   ambient: lab.rigs.map { $0.brain.ambientVoiceOK }, walking: lab.rigs.map { $0.brain.activity == .walking || $0.brain.activity == .coming }, night: night ? 1 : 0)
                 }
             }
-            if night { XCTAssertGreaterThan(sleepers, 0, "the night soak has sleepers (seed \(seed))"); XCTAssertEqual(violations, 0, "ambient chirp from a sleeping / held Jelbie (seed \(seed))") }
+            if night { XCTAssertGreaterThan(sleepers, 0, "the night soak has sleepers (seed \(seed))"); XCTAssertEqual(violations, 0, "ambient chirp from a sleeping / held Jelmiko (seed \(seed))") }
             simNow += 60          // (the gaps of the previous run are over)
         }
         res.minutes = Double(seeds.count) * 3
@@ -85,8 +85,8 @@ final class AmbientVoiceTests: XCTestCase {
         print("AMBIENT \(label): new-sound voices (giggle+curious+ooh+hum) per 9 sim-min x \(n): before \(before.newVoices) after \(after.newVoices) (x\(String(format: "%.2f", nA / max(nB, 1)))); min gap any voice \(after.minAnyGap)")
         XCTAssertGreaterThanOrEqual(nA, 1.3 * nB, "\(label): giggle+curious+ooh+hum \(nA) vs \(nB)")
         // (by the existing design a context voice waits 1.0 s after a chirp, but a chirp waits only 0.5 s after a context voice: the floor for ANY pair is 0.5 s; the filler itself speaks only after 20 s of silence)
-        XCTAssertGreaterThanOrEqual(after.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelbie closer than the 0.5 s context hush")
-        print("AMBIENT \(label): vocals/Jelbie/min before \(String(format: "%.2f", perB)) after \(String(format: "%.2f", perA)) (x\(String(format: "%.2f", perA / max(perB, 0.001)))); ambient requests \(after.ambientTags); min chirp gap \(after.minVoiceGap)")
+        XCTAssertGreaterThanOrEqual(after.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelmiko closer than the 0.5 s context hush")
+        print("AMBIENT \(label): vocals/Jelmiko/min before \(String(format: "%.2f", perB)) after \(String(format: "%.2f", perA)) (x\(String(format: "%.2f", perA / max(perB, 0.001)))); ambient requests \(after.ambientTags); min chirp gap \(after.minVoiceGap)")
         var others: [String] = []
         // (single rare kinds are chaotic run to run: wobble 20 vs 13 with the filler off in both; so the 90 % gate is on the sum of every non-voice sound and on the big kinds)
         let isV: (String) -> Bool = { n in n.hasPrefix("chirp_") || n.hasPrefix("babble_") || JellyVoice.allCases.contains { v in v.isContext && n.hasPrefix("\(v.rawValue)_jelly") } }
@@ -98,8 +98,8 @@ final class AmbientVoiceTests: XCTestCase {
         others.append("ALL non-voice \(sumB)->\(sumA)")
         XCTAssertGreaterThanOrEqual(Double(sumA), 0.9 * Double(sumB), "\(label): every other sound together \(sumA) vs \(sumB)")
         print("AMBIENT \(label) other sounds per 15 sim-min: " + others.joined(separator: ", "))
-        XCTAssertGreaterThanOrEqual(perA, 1.3 * perB, "\(label): vocals per Jelbie per minute \(perA) vs \(perB)")
-        XCTAssertGreaterThanOrEqual(after.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps / babbles of one Jelbie within 2.2 s")
+        XCTAssertGreaterThanOrEqual(perA, 1.3 * perB, "\(label): vocals per Jelmiko per minute \(perA) vs \(perB)")
+        XCTAssertGreaterThanOrEqual(after.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps / babbles of one Jelmiko within 2.2 s")
         XCTAssertEqual(before.ambientTags, 0)
     }
 
@@ -110,12 +110,12 @@ final class AmbientVoiceTests: XCTestCase {
         let totPrev = Double(prev.voices) / Double(n) / prev.minutes, totNow = Double(now.voices) / Double(n) / now.minutes
         let isV: (String) -> Bool = { n in n.hasPrefix("chirp_") || n.hasPrefix("babble_") || JellyVoice.allCases.contains { v in v.isContext && n.hasPrefix("\(v.rawValue)_jelly") } }
         let sumP = prev.played.filter { !isV($0.key) }.values.reduce(0, +), sumN = now.played.filter { !isV($0.key) }.values.reduce(0, +)
-        print("CTXFLOOR \(label): context voices (giggle+curious+hum+wheee+ooh) per Jelbie per min: 2230db85 \(String(format: "%.3f", perPrev)) (\(prev.newVoices)) -> now \(String(format: "%.3f", perNow)) (\(now.newVoices)) x\(String(format: "%.2f", perNow / max(perPrev, 0.001)))")
-        print("CTXFLOOR \(label): all vocals per Jelbie per min: \(String(format: "%.3f", totPrev)) -> \(String(format: "%.3f", totNow)); non-vocal sounds \(sumP) -> \(sumN); min any-voice gap off \(prev.minAnyGap) on \(now.minAnyGap), min chirp gap \(now.minVoiceGap)")
+        print("CTXFLOOR \(label): context voices (giggle+curious+hum+wheee+ooh) per Jelmiko per min: 2230db85 \(String(format: "%.3f", perPrev)) (\(prev.newVoices)) -> now \(String(format: "%.3f", perNow)) (\(now.newVoices)) x\(String(format: "%.2f", perNow / max(perPrev, 0.001)))")
+        print("CTXFLOOR \(label): all vocals per Jelmiko per min: \(String(format: "%.3f", totPrev)) -> \(String(format: "%.3f", totNow)); non-vocal sounds \(sumP) -> \(sumN); min any-voice gap off \(prev.minAnyGap) on \(now.minAnyGap), min chirp gap \(now.minVoiceGap)")
         let voices = ["happy", "babble", "giggle", "curious", "hum", "ooh", "yawn", "sad"]
         func cnt(_ r: Result, _ v: String) -> Int { r.played.filter { $0.key.hasPrefix(v == "happy" ? "chirp_" : "\(v)_") }.values.reduce(0, +) }
         func chirpKind(_ r: Result, _ v: String) -> Int { cnt(r, v) }
-        print("CTXFLOOR \(label) PLAYED per voice (off -> on, 3 seeds x 3 min, \(n) Jelbies): " + voices.map { "\($0) \(chirpKind(prev, $0))->\(chirpKind(now, $0))" }.joined(separator: ", "))
+        print("CTXFLOOR \(label) PLAYED per voice (off -> on, 3 seeds x 3 min, \(n) Jelmiko): " + voices.map { "\($0) \(chirpKind(prev, $0))->\(chirpKind(now, $0))" }.joined(separator: ", "))
         for (nm, r) in [("off", prev), ("on", now)] {
             let reasons = ["PLAYED", "hush lastVoice", "hush context", "hush emote", "chance"]
             var line: [String] = []
@@ -134,12 +134,12 @@ final class AmbientVoiceTests: XCTestCase {
         print("CTXFLOOR \(label) happy+babble PLAYED \(hbP)->\(hbN) = \(String(format: "%.3f", Double(hbN) / Double(max(hbP, 1))))")
         XCTAssertGreaterThanOrEqual(Double(hbN), 0.9 * Double(hbP), "\(label): happy+babble PLAYED \(hbN) vs \(hbP) (add, never displace)")
         let each = ["giggle", "curious", "hum", "ooh"].map { Double(cnt(now, $0)) / Double(n) / (now.minutes / 5) }
-        print("CTXFLOOR \(label) per Jelbie per 5 min on: giggle/curious/hum/ooh = " + each.map { String(format: "%.2f", $0) }.joined(separator: " / "))
-        XCTAssertGreaterThanOrEqual(perNow, 1.3 * perPrev, "\(label): context voices per Jelbie per minute \(perNow) vs \(perPrev)")
+        print("CTXFLOOR \(label) per Jelmiko per 5 min on: giggle/curious/hum/ooh = " + each.map { String(format: "%.2f", $0) }.joined(separator: " / "))
+        XCTAssertGreaterThanOrEqual(perNow, 1.3 * perPrev, "\(label): context voices per Jelmiko per minute \(perNow) vs \(perPrev)")
         XCTAssertGreaterThan(totNow, totPrev, "\(label): total vocals still rise")
         XCTAssertGreaterThanOrEqual(Double(sumN), 0.9 * Double(sumP), "\(label): non-vocal sounds \(sumN) vs \(sumP)")
-        XCTAssertGreaterThanOrEqual(now.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelbie too close")
-        XCTAssertGreaterThanOrEqual(now.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps of one Jelbie within 2.2 s")
+        XCTAssertGreaterThanOrEqual(now.minAnyGap, 0.5 - 1e-6, "\(label): two voices of one Jelmiko too close")
+        XCTAssertGreaterThanOrEqual(now.minVoiceGap, 2.2 - 1e-6, "\(label): two chirps of one Jelmiko within 2.2 s")
     }
     /// 2026-11-09, "10% more Jelbie noises as they're just walking around": RoamVoiceBoost off vs on (everything else on), same sim seeds (5 seeds x 3 min x 3 Jelbies). PLAYED counts.
     /// The hub's chance rolls are not seeded, so single families of 10-60 voices move +-30 % between two identical runs: the family gate is 0.8x on families with >= 20 PLAYED, and the
@@ -151,7 +151,7 @@ final class AmbientVoiceTests: XCTestCase {
         let ratio = perOn / max(perOff, 0.001)
         func cnt(_ r: Result, _ v: String) -> Int { r.played.filter { $0.key.hasPrefix(v == "happy" ? "chirp_" : "\(v)_") }.values.reduce(0, +) }
         let fams = ["happy", "babble", "giggle", "curious", "hum", "ooh", "yawn", "sad", "wheee", "lala", "pfft", "nyoo", "uhoh", "eep", "huh", "aww"]
-        print("ROAMBOOST total voices/Jelbie/min \(String(format: "%.3f", perOff)) -> \(String(format: "%.3f", perOn)) x\(String(format: "%.3f", ratio)) (\(off.voices) -> \(on.voices)); filler requests \(off.ambientTags) -> \(on.ambientTags)")
+        print("ROAMBOOST total voices/Jelmiko/min \(String(format: "%.3f", perOff)) -> \(String(format: "%.3f", perOn)) x\(String(format: "%.3f", ratio)) (\(off.voices) -> \(on.voices)); filler requests \(off.ambientTags) -> \(on.ambientTags)")
         print("ROAMBOOST PLAYED per family (off -> on): " + fams.map { "\($0) \(cnt(off, $0))->\(cnt(on, $0))" }.joined(separator: ", "))
         let sumOff = off.played.filter { !($0.key.hasPrefix("chirp_") || $0.key.hasPrefix("babble_")) }.values.reduce(0, +), sumOn = on.played.filter { !($0.key.hasPrefix("chirp_") || $0.key.hasPrefix("babble_")) }.values.reduce(0, +)
         print("ROAMBOOST all non-chirp/babble PLAYED \(sumOff) -> \(sumOn); min any-voice gap \(off.minAnyGap) -> \(on.minAnyGap); min chirp gap \(off.minVoiceGap) -> \(on.minVoiceGap)")
@@ -159,8 +159,8 @@ final class AmbientVoiceTests: XCTestCase {
         XCTAssertLessThanOrEqual(ratio, 1.20, "total voices ratio")
         for f in fams where cnt(off, f) >= 20 { XCTAssertGreaterThanOrEqual(Double(cnt(on, f)), 0.8 * Double(cnt(off, f)), "\(f) rarer with the boost on") }
         XCTAssertGreaterThanOrEqual(Double(sumOn), 0.97 * Double(sumOff), "non-voice + context sounds")
-        XCTAssertGreaterThanOrEqual(on.minAnyGap, 0.5 - 1e-6, "two voices of one Jelbie too close")
-        XCTAssertGreaterThanOrEqual(on.minVoiceGap, 2.2 - 1e-6, "two chirps of one Jelbie within 2.2 s")
+        XCTAssertGreaterThanOrEqual(on.minAnyGap, 0.5 - 1e-6, "two voices of one Jelmiko too close")
+        XCTAssertGreaterThanOrEqual(on.minVoiceGap, 2.2 - 1e-6, "two chirps of one Jelmiko within 2.2 s")
     }
     func testContextFloorDefaultRoster() { reportFloor("default3", n: 3, chars: nil) }
     func testContextFloorTeddyPanda() { reportFloor("teddy+panda", n: 2, chars: [JellyRoster.teddyID, JellyRoster.pandaID]) }

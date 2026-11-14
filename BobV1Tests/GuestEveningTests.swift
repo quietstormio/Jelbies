@@ -167,7 +167,7 @@ final class GuestEveningTests: XCTestCase {
             let pool = ParkPool.generate(seed: seed)
             let keys = pool.map { ParkNames.key($0.name) }
             XCTAssertEqual(Set(keys).count, pool.count, "unique names (seed \(seed))")
-            XCTAssertTrue(Set(keys).isDisjoint(with: reserved), "no Jelbie / personality / colour name (seed \(seed))")
+            XCTAssertTrue(Set(keys).isDisjoint(with: reserved), "no Jelmiko / personality / colour name (seed \(seed))")
         }
         // an extra reserved set is honoured too
         let pool = ParkPool.generate(reserved: Set(ParkWords.names.prefix(12).map(ParkNames.key)))

@@ -167,7 +167,7 @@ final class ThreeJellyTests: XCTestCase {
         XCTAssertNotEqual(fl[0], fl[1]); XCTAssertNotEqual(fl[1], fl[2]); XCTAssertNotEqual(fl[0], fl[2])
         XCTAssertTrue(JellyRoster.palette(2)!.matte)
         XCTAssertTrue(care.needs(for: 2) === care.jellies[2].needs)
-        XCTAssertEqual(JellyRoster.maxCount, 3, "at most three Jelbies live in the room")
+        XCTAssertEqual(JellyRoster.maxCount, 3, "at most three Jelmiko live in the room")
         XCTAssertEqual(JellyRoster.launchCount(suite("count")), 3, "default: the whole default roster (Bob, Pip, Moss)")
         XCTAssertEqual(JellyRoster.launchIDs(suite("count")), [0, 1, 2])
         let d = suite("count1"); d.set(1, forKey: "BlobCount")

@@ -121,12 +121,12 @@ final class A11yChromeTests: XCTestCase {
     }
 
     func testJFontTextIsTallerAtAX5() {
-        let t = Text("Hungry Jelbie needs a snack right now please").jFont(16, .semibold)
+        let t = Text("Hungry Jelmiko needs a snack right now please").jFont(16, .semibold)
         XCTAssertGreaterThan(height(t, .accessibility5), height(t, .large))
     }
 
     func testLineLimitModifierWrapsAtAccessibilitySizes() {
-        let t = Text("A long Jelbie name that would be truncated").font(.system(size: 15)).jLine(1, scale: 0.8)
+        let t = Text("A long Jelmiko name that would be truncated").font(.system(size: 15)).jLine(1, scale: 0.8)
         XCTAssertGreaterThan(height(t, .accessibility3), height(t, .large) * 1.5, "at accessibility sizes the text wraps instead of truncating")
     }
 

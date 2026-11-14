@@ -87,16 +87,16 @@ extension GameCare {
     /// Why a race cannot start for this Jelly right now, in words for the Track panel (nil = it can). A stage that has not ticked yet (the panel was opened
     /// straight at launch, or the game is paused behind it) simply has no bodies listed: that is not a reason, the bodies exist as soon as the room runs.
     func raceBlocker(jelly id: Int) -> String? {
-        guard jelly(id) != nil else { return "No such Jelbie." }
+        guard jelly(id) != nil else { return "No such Jelmiko." }
         if race.active { return "Jelly Race is already on." }
-        if show.active { return "\(jelly(id)?.name ?? "Your Jelbie") is at the Jelly Show." }
-        if volley.active || volleyWork.wait != nil { return "\(jelly(id)?.name ?? "Your Jelbie") is at the beach." }
-        if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelbie") finish first." }
+        if show.active { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the Jelly Show." }
+        if volley.active || volleyWork.wait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the beach." }
+        if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
         if bath.active { return "The clean-up is going on." }
-        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelbie") is in the close-up. Let go first." }
+        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelmiko") is in the close-up. Let go first." }
         if raceWait != nil { return "Waking everybody up." }
-        if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelbie") is listening to you." }
-        if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelbie") is not in the room." }
+        if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelmiko") is listening to you." }
+        if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelmiko") is not in the room." }
         return nil
     }
     /// The track meet is always three racers: the player and two rivals, whatever the size of the roster.

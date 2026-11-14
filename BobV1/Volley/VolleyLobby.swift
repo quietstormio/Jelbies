@@ -56,7 +56,7 @@ struct VolleyLobby: View {
                         LobbyHowSheet(rows: [
                             (.three, "Three touches a side", "Bump, set, then spike it over the net."),
                             (.ring, "Tap on the ring", "Tap as the ring closes for a Perfect hit."),
-                            (.tap, "Steer a Jelbie", "Double-tap a Jelbie to move them yourself."),
+                            (.tap, "Steer a Jelmiko", "Double-tap a Jelmiko to move them yourself."),
                             (.trophy, "First to \(VolleyTuning.pointsToWin) points", "Win a match to open the next court."),
                         ], close: { close() })
                     }
@@ -130,12 +130,12 @@ struct VolleyLobby: View {
                     LobbyOptionRow(icon: .turtle, title: "Slower ball", isOn: slowOn, id: "volley-slow", compact: true)
                 }
             } else {
-                LobbyOptionRow(icon: .autosw, title: "Auto-switch Jelbies", isOn: autoOn, id: "volley-autoswitch")
+                LobbyOptionRow(icon: .autosw, title: "Auto-switch Jelmiko", isOn: autoOn, id: "volley-autoswitch")
                 Rectangle().fill(SK.ink.opacity(0.08)).frame(height: 1)
                 LobbyOptionRow(icon: .turtle, title: "Slower ball", isOn: slowOn, id: "volley-slow")
             }
             if assist {
-                Text("Play assist is on (Settings > Accessibility): the Jelbie walks to the ball for you.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
+                Text("Play assist is on (Settings > Accessibility): the Jelmiko walks to the ball for you.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
                     .padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -188,10 +188,10 @@ struct VolleyTeamCard: View {
             return LobbyStatGroup(id: "volley-team-friend", custom: AnyView(
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) { Image(systemName: "lock.fill").font(.system(size: 18, weight: .heavy)).foregroundStyle(SK.muted); Text("No partner yet").font(SK.font(15.5, .black)).foregroundStyle(SK.ink) }
-                    Text("Make a friend at the Park, or adopt a second Jelbie.").font(SK.font(12.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                    Text("Make a friend at the Park, or adopt a second Jelmiko.").font(SK.font(12.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(minWidth: 0, idealWidth: 170, maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .ignore).accessibilityLabel("No partner yet. Make a friend at the Park, or adopt a second Jelbie.")))
+                .accessibilityElement(children: .ignore).accessibilityLabel("No partner yet. Make a friend at the Park, or adopt a second Jelmiko.")))
         }
         return LobbyStatGroup(id: "volley-team-friend", custom: AnyView(
             VStack(alignment: .leading, spacing: 8) {
@@ -200,11 +200,11 @@ struct VolleyTeamCard: View {
                     JelbiePortrait(care: care, who: care.jellies.first?.id ?? 0, size: 46, border: .white, outerRing: 3, head: true, friend: friend)
                     Text(friend.name).font(SK.font(15.5, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                 }
-                Text("Plays with you until you adopt a second Jelbie. Steady, and sets you up.").font(SK.font(12.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                Text("Plays with you until you adopt a second Jelmiko. Steady, and sets you up.").font(SK.font(12.5, .bold)).foregroundStyle(SK.muted).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
             }
             .frame(minWidth: 0, idealWidth: 170, maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Park friend. Plays with you until you adopt a second Jelbie. Steady, and sets you up.")
+            .accessibilityLabel("Park friend. Plays with you until you adopt a second Jelmiko. Steady, and sets you up.")
         ))
     }
 }

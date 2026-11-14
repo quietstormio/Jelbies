@@ -1,8 +1,8 @@
-# Jelbies 1.0 (first release)
+# Jelmiko 1.0 (first release)
 
 ## Feature lock
 
-**Jelbies 1.0 is the first release. Feature lock as of 2026-10-25: no new features; fixes and polish only. New ideas go in the Post-1.0 list below.**
+**Jelmiko 1.0 is the first release. Feature lock as of 2026-10-25: no new features; fixes and polish only. New ideas go in the Post-1.0 list below.**
 
 The one item still in flight (Pip's signature) is the only open feature work. The Groomer was the user's explicit "one last feature" after the lock and has landed. After Pip's signature lands, the only allowed work is bug fixes, polish, performance, accessibility and App Store prep. The lock is lifted only if the user says so explicitly. The game is offline-only and stays that way.
 
@@ -10,15 +10,15 @@ The one item still in flight (Pip's signature) is the only open feature work. Th
 
 ### Start
 - A short intro video with its own music, skippable with a tap.
-- The blue title screen ("E · Title screen" design): scrolling blue Jelbie pattern, sparkles, a peeking Jelbie, lip buttons and the swing logo loop. Its colour follows the theme colour setting (8 presets plus custom), which also colours the loading screen.
+- The blue title screen ("E · Title screen" design): scrolling blue Jelmiko pattern, sparkles, a peeking Jelmiko, lip buttons and the swing logo loop. Its colour follows the theme colour setting (8 presets plus custom), which also colours the loading screen.
 - New players start with Bob only. Adopt Pip, Moss and Lavender with JellyCoins at the Adoption Center (second 120 JellyCoins, third 180).
 
 ### Room life
 - Care: feed, clean (de-lint, soap, rinse, shine, sparkle), pet, squish and play with jelly haptics.
 - Feeding: food is tossed into the mouth at a free spot; shop foods carry perks.
-- Sleep: Jelbies sleep and fidget (shifts, side rolls, dream twitches, half-wakes, drifting toward sleeping friends).
-- Variety AI: less repetition with up to three Jelbies; each has a personality and they avoid acting in sync.
-- Toys and furniture (many modelled in Blender) that Jelbies use, with up to three at home.
+- Sleep: Jelmiko sleep and fidget (shifts, side rolls, dream twitches, half-wakes, drifting toward sleeping friends).
+- Variety AI: less repetition with up to three Jelmiko; each has a personality and they avoid acting in sync.
+- Toys and furniture (many modelled in Blender) that Jelmiko use, with up to three at home.
 - Decor placement anywhere on the floor, in portrait and landscape.
 
 ### Characters
@@ -28,29 +28,29 @@ The one item still in flight (Pip's signature) is the only open feature work. Th
 - Lavender: lavender, wings with periodic flaps and short flights.
 
 ### Social
-- Friends: six Jelbie-to-Jelbie social moves (chest bump, purr together, nuzzle, twirl, follow-the-leader, high-five).
+- Friends: six Jelmiko-to-Jelmiko social moves (chest bump, purr together, nuzzle, twirl, follow-the-leader, high-five).
 - Friendships grow faster in the Park.
 - Guests and sleepovers: invite one Park friend over for a play date or a sleepover.
-- Toy play: Jelbies react when a toy is placed, take turns, and share a two-seat cushion pile.
+- Toy play: Jelmiko react when a toy is placed, take turns, and share a two-seat cushion pile.
 
 ### Places
 - Town, Shop, Café (Jelly Cup, Baby latte), the Adoption Center and Jelly Volleyball.
-- Park: a clean redesign (one lawn, round trees, flowering bushes, simple pond), up to five Jelbies, visitor Jelbies to befriend, love rises faster than petting, and Park-only toys (seesaw, spring bunny, sandbox).
-- Groomer (Jelly Spa in Town): Quick Splash 20, Bubble Spa 40 and Royal Pamper 70 JellyCoins per Jelbie. A shop-front cut-scene with ElevenLabs sounds, then a shiny reveal at home.
+- Park: a clean redesign (one lawn, round trees, flowering bushes, simple pond), up to five Jelmiko, visitor Jelmiko to befriend, love rises faster than petting, and Park-only toys (seesaw, spring bunny, sandbox).
+- Groomer (Jelly Spa in Town): Quick Splash 20, Bubble Spa 40 and Royal Pamper 70 JellyCoins per Jelmiko. A shop-front cut-scene with ElevenLabs sounds, then a shiny reveal at home.
 
 ### Games
-- Jelly Race: pick a Jelbie and race other Jelbies with two foot buttons; curved courses, hurdles with a Jump button, tiers up to Tsunami.
+- Jelly Race: pick a Jelmiko and race other Jelmiko with two foot buttons; curved courses, hurdles with a Jump button, tiers up to Tsunami.
 - Jelly Show: Look, Dance and Trick rounds, ranks from Puddle to Ocean.
 - Jelly Volleyball: 2v2 beach volleyball with body-only hits (head bonk, belly-flop spike, belly dig). Reached from Jelly Volleyball in Town and a Compete chip. Tiers: Sandcastle, Shore, Reef and Tidal. Trainable Speed, Power, Hops and Timing through drills. JellyCoins, ribbons and trophies.
 
 ### Progression
 - JellyCoins are earn-only; there are no purchases. Races pay most, care pays steadily.
-- Ribbons and trophies per Jelbie, shown on a wall shelf and in a Trophies sheet.
+- Ribbons and trophies per Jelmiko, shown on a wall shelf and in a Trophies sheet.
 - Training improves speed and skills in the games.
 
 ### Other
 - Photo mode.
-- Voice: say a Jelbie's name or a trick word (on device).
+- Voice: say a Jelmiko's name or a trick word (on device).
 - Accessibility: VoiceOver labels, 44 pt targets, contrast fixes, auto-jump setting, shape cues on decor.
 - Settings: a full Settings screen from the gear (Appearance with theme colour and live preview, Sound, Accessibility, Voice, Game, About).
 - Offline only: no accounts, no networking, no data leaves the phone.
@@ -73,7 +73,7 @@ ElevenLabs key renewed 2026-10-25. New audio covers the groomer and volleyball (
 - Not coming back unless the user asks: the Garden (removed 2026-10-25), Bowling, a diary, online play.
 
 ## Known issues / unverified on device
-- Haptics and the perf of 3 Jelbies on device were never fully verified; a measured on-device perf pass was skipped at the user's request (minimal testing).
+- Haptics and the perf of 3 Jelmiko on device were never fully verified; a measured on-device perf pass was skipped at the user's request (minimal testing).
 - Unchecked on device: the volleyball spike direction and the toy interactions in the Park.
 - Visual nits to check: high-five arm sides, the twirl speed, the groomer line-up spacing.
 - Voice (listen mode, name, tricks) not verified on device.
@@ -81,7 +81,7 @@ ElevenLabs key renewed 2026-10-25. New audio covers the groomer and volleyball (
 - Landscape of the newer screens (menu, adoption, photo) unchecked.
 - Chirp voice is per slot (Pip in slot 0 sounds like Bob).
 - Walk speed +10% was not done (needs deeper foot crown work; the gait is locked).
-- In portrait, a front Jelbie can sit under the bottom HUD buttons.
+- In portrait, a front Jelmiko can sit under the bottom HUD buttons.
 - Pre-existing test failures (likely Xcode 27.1 simulator drift): AnticsLab seed-7 soak, BathSootSeedZero hash, JellyJiggle settle, MotionFootRender slab tets, DecorTests min gap, IdleBehaviour x3, StoreFood toss, BlobBrain soak stumble.
 - App icon: done. AppIcon and 7 alternate icons (Pink, Mint, Lavender, Yellow, Peach, Teal, Navy) are in the asset catalog.
 - Nothing is pushed to a remote.
@@ -112,4 +112,4 @@ ElevenLabs key renewed 2026-10-25. New audio covers the groomer and volleyball (
 ## Launch checks added 2026-11-09 (r2-tidy)
 - **Alternate app icons (checked, no mismatch).** `ThemePreset.alternateIconName` (UI/ThemeColor.swift) gives nil for Sky Blue (the primary `AppIcon`) and `"AppIcon-" + Capitalised raw value` for the other seven presets: Pink, Mint, Lavender, Yellow, Peach, Teal, Navy. The asset catalog has exactly those seven `AppIcon-*.appiconset` folders plus `AppIcon.appiconset`. project.pbxproj (both app configs) sets `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`, `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Pink AppIcon-Mint AppIcon-Lavender AppIcon-Yellow AppIcon-Peach AppIcon-Navy AppIcon-Teal"` and `ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES`. Names, catalog and build settings agree; nothing changed. Still worth one on-device tap through every preset after the archive build (setAlternateIconName errors are swallowed in `AppIconSwitcher.apply`).
 - **English-only 1.0.** project.pbxproj has `developmentRegion = en` and `knownRegions = (en, Base)`; there are no `*.lproj` folders. `CFBundleDevelopmentRegion` is not written in BobV1-Info.plist by hand; Xcode merges it from the project's development region (`$(DEVELOPMENT_LANGUAGE)` = en) because GENERATE_INFOPLIST_FILE is YES. Confirm it reads `en` in the built Info.plist, and set the App Store Connect primary language to English (U.S. or the chosen English variant). All player text is English only.
-- **Unverified under the hand-written scene manifest (UIApplicationSupportsMultipleScenes = false).** Test on a device or iPad before submitting: (1) Assistive Access launch (does the Assistive Access scene still come up?); (2) widget deep link `jelbies://jelly/<id>` (cold start and while running, opens the right Jelbie); (3) Live Activity tap (returns to the game, no second window).
+- **Unverified under the hand-written scene manifest (UIApplicationSupportsMultipleScenes = false).** Test on a device or iPad before submitting: (1) Assistive Access launch (does the Assistive Access scene still come up?); (2) widget deep link `jelbies://jelly/<id>` (cold start and while running, opens the right Jelmiko); (3) Live Activity tap (returns to the game, no second window).

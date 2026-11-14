@@ -69,15 +69,15 @@ extension GameCare {
 
     /// Why a show cannot start for this Jelbie right now, in words for the lobby (nil = it can).
     func showBlocker(jelly id: Int) -> String? {
-        guard jelly(id) != nil else { return "No such Jelbie." }
+        guard jelly(id) != nil else { return "No such Jelmiko." }
         if show.active { return "A show is already on." }
-        if race.active || raceWait != nil { return "\(jelly(id)?.name ?? "Your Jelbie") is at Jelly Race." }
-        if volley.active || volleyWork.wait != nil { return "\(jelly(id)?.name ?? "Your Jelbie") is at the beach." }
-        if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelbie") finish first." }
+        if race.active || raceWait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at Jelly Race." }
+        if volley.active || volleyWork.wait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the beach." }
+        if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
         if bath.active { return "The clean-up is going on." }
-        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelbie") is in the close-up. Let go first." }
-        if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelbie") is listening to you." }
-        if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelbie") is not in the room." }
+        if focus.isActive || focus.phase != .roaming { return "\(jelly(id)?.name ?? "Your Jelmiko") is in the close-up. Let go first." }
+        if voice.mode.phase != .idle || voice.voiceGoing || voice.comingNow { return "\(jelly(id)?.name ?? "Your Jelmiko") is listening to you." }
+        if !raceBook.actors.isEmpty, !(raceBook.actors.indices.contains(id) && raceBook.actors[id].brain != nil) { return "\(jelly(id)?.name ?? "Your Jelmiko") is not in the room." }
         return nil
     }
     func canShow(jelly id: Int) -> Bool { showBlocker(jelly: id) == nil }

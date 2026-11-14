@@ -322,7 +322,7 @@ struct ItemSheet: View {
                 LobbyJelbiePicker(care: care, title: "Who is it for?", selected: targetSlot.map { [$0] } ?? [], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 84, showNote: false, checked: knowers, pick: { forSlot = $0 })
                     .padding(.horizontal, vsc == .compact ? 0 : 16)
             } else if isTrick {
-                Label("For all your Jelbies", systemImage: "person.3.fill").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
+                Label("For all your Jelmiko", systemImage: "person.3.fill").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
                     .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(SK.mint.opacity(0.8))).accessibilityIdentifier("item-scope-everyone")
             }
             buyButton.padding(.horizontal, vsc == .compact ? 0 : 16)
@@ -388,7 +388,7 @@ struct ItemSheet: View {
         if item.kind == .trickPage {
             if ownedNow { return "Yours already" }
             if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
-            return "You'll have \(left) JellyCoins left \u{00B7} \(item.scope == .everyone ? "Every Jelbie knows it at once" : "Ready at once")"
+            return "You'll have \(left) JellyCoins left \u{00B7} \(item.scope == .everyone ? "Every Jelmiko knows it at once" : "Ready at once")"
         }
         if item.unique && book.owns(item) { return "In your Bag" }
         if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
@@ -430,12 +430,12 @@ struct ItemSheet: View {
     private var effectBlurb: String {
         if let p = item.perk { return p.blurb }
         if let w = item.wear { return w.isShoe ? "No effect on speed. Shows in the room and in the Jelly Race." : "No effect on anything but looks. Wear it from your Bag, one piece per spot." }
-        if item.kind == .room { return "Your Jelbies move in and the room keeps its own furniture." }
+        if item.kind == .room { return "Your Jelmiko move in and the room keeps its own furniture." }
         if item.kind == .decor { return "Your room has \(StoreTuning.roomCapacity) spots; \(book.roomUnitsUsed) used. Place it from your Bag, then drag it where you like." }
-        if item.kind == .toy { return "Pick it from Play and the Jelbies join in." }
+        if item.kind == .toy { return "Pick it from Play and the Jelmiko join in." }
         if item.food != nil { return item.description }
         if item.id == TrickCatalog.earsID { return "Dancing to your music and hearing claps, whistles and laughs. The microphone is on only while Ears is switched on (Sound panel)." }
-        if item.kind == .trickPage { return item.scope == .everyone ? "Bought once: every Jelbie knows it, adopted ones too. Say it in the room, or pick it in the Jelly Show." : "Only the Jelbie you pick learns it. Say it in the room, or pick it in the Jelly Show." }
+        if item.kind == .trickPage { return item.scope == .everyone ? "Bought once: every Jelmiko knows it, adopted ones too. Say it in the room, or pick it in the Jelly Show." : "Only the Jelmiko you pick learns it. Say it in the room, or pick it in the Jelly Show." }
         return item.description
     }
     private func durationText(_ p: PerkKind) -> String { SK.timeLeft(p.duration) }
@@ -472,7 +472,7 @@ struct ItemPicture: View {
                 if fitted != nil { ItemArt(item: item, size: size * 0.3).padding(8) }
                 VStack {
                     HStack {
-                        Text("On \(care.jelly(who)?.name ?? "your Jelbie")").font(SK.font(12, .heavy)).foregroundStyle(SK.ink)
+                        Text("On \(care.jelly(who)?.name ?? "your Jelmiko")").font(SK.font(12, .heavy)).foregroundStyle(SK.ink)
                             .padding(.horizontal, 10).padding(.vertical, 4).background(Capsule().fill(SK.cream.opacity(0.92)))
                         Spacer()
                     }

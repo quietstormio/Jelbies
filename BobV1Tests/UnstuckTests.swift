@@ -217,7 +217,7 @@ final class UnstuckTests: XCTestCase {
             }
             try img.pngData()!.write(to: URL(fileURLWithPath: dir + "/" + name))
         }
-        try shot("unstuck_1_before.png", "three Jelbies stand where the food usually lands")
+        try shot("unstuck_1_before.png", "three Jelmiko stand where the food usually lands")
         r.care.feed()
         r.run(0.3)
         try shot("unstuck_2_food_pops.png", "feed(): the plate pops in on free floor, not under anybody")

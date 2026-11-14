@@ -32,11 +32,11 @@ final class TrickStoreTests: XCTestCase {
     func testPerJelbieTrickIsOwnedByThatJelbieOnly() {
         let (b, w) = book(500)
         XCTAssertFalse(b.knows(.flip, character: 1))
-        XCTAssertEqual(b.buyTrick(.flip, for: nil), .unknown, "a per-Jelbie trick needs a Jelbie")
+        XCTAssertEqual(b.buyTrick(.flip, for: nil), .unknown, "a per-Jelmiko trick needs a Jelmiko")
         XCTAssertEqual(b.buyTrick(.flip, for: 1), .bought)
         XCTAssertEqual(w.count, 500 - TrickCatalog.def(.flip)!.price)
         XCTAssertTrue(b.knows(.flip, character: 1))
-        XCTAssertFalse(b.knows(.flip, character: 0), "only one Jelbie")
+        XCTAssertFalse(b.knows(.flip, character: 0), "only one Jelmiko")
         XCTAssertFalse(b.knows(.flip, character: 2))
         XCTAssertEqual(b.trickScope(.flip, character: 1), .perJelbie)
         let after = w.count
@@ -54,7 +54,7 @@ final class TrickStoreTests: XCTestCase {
         for (t, stars, scope, price) in want {
             let d = TrickCatalog.def(t)
             XCTAssertEqual(d?.stars, stars, "\(t) stars"); XCTAssertEqual(d?.scope, scope, "\(t) scope"); XCTAssertEqual(d?.price, price, "\(t) price")
-            XCTAssertEqual(d?.scope.tag, scope == .everyone ? "For all your Jelbies" : "Only one Jelbie")
+            XCTAssertEqual(d?.scope.tag, scope == .everyone ? "For all your Jelmiko" : "Only one Jelmiko")
             XCTAssertFalse(TrickCatalog.isDefault(t)); XCTAssertTrue(ShowTrickInfo.stageTricks.contains(t))
             XCTAssertNotNil(VoiceCoordinator.idleKind(for: t), "\(t) has a move"); XCTAssertEqual(VoiceCoordinator.trick(for: VoiceCoordinator.idleKind(for: t)), t)
             XCTAssertNotNil(StoreCatalog.item("trick-\(t.rawValue)"), "\(t) is in the Shop")
@@ -141,7 +141,7 @@ final class TrickStoreTests: XCTestCase {
         XCTAssertTrue(b.knows(.flip, character: 0)); XCTAssertEqual(b.trickScope(.flip, character: 0), .perJelbie)
         XCTAssertFalse(b.knows(.flip, character: 1), "flip was Bob's lesson only")
         XCTAssertTrue(b.knows(.look, character: 1)); XCTAssertFalse(b.knows(.look, character: 0))
-        XCTAssertEqual(b.trickScope(.spin, character: 0), .perJelbie, "an owned page is owned by every current Jelbie")
+        XCTAssertEqual(b.trickScope(.spin, character: 0), .perJelbie, "an owned page is owned by every current Jelmiko")
         XCTAssertEqual(b.trickScope(.hop, character: 1), .perJelbie)
         XCTAssertEqual(w.count, 77, "no coins lost or gained")
         XCTAssertEqual(b.saved.tricksMigrated, true)

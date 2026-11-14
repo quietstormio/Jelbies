@@ -35,7 +35,7 @@ final class VolleyUpgradeTests: XCTestCase {
         XCTAssertEqual(b.level(.power, stats: v.stats(character: 0)), 1)         // 0.35
         XCTAssertFalse(b.buy(.power, volley: v, character: 0), "no points: refused")
         b.add(5, .volley, character: 0)
-        XCTAssertFalse(b.buy(.power, volley: v, character: 1), "another Jelbie's balance is separate")
+        XCTAssertFalse(b.buy(.power, volley: v, character: 1), "another Jelmiko's balance is separate")
         XCTAssertTrue(b.buy(.power, volley: v, character: 0))          // level 1 -> 2 costs 2
         XCTAssertEqual(v.stats(character: 0).power, 0.4, accuracy: 1e-6)
         XCTAssertEqual(b.points(.volley, character: 0), 3)

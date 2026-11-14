@@ -66,14 +66,14 @@ struct PlayChrome: View {
                         })
                     .accessibilityElement()
                     .accessibilityLabel("The \(play.toyTitle.lowercased()), in your hand")
-                    .accessibilityHint("Swipe up to throw it to a Jelbie")
+                    .accessibilityHint("Swipe up to throw it to a Jelmiko")
                     .accessibilityAddTraits(.allowsDirectInteraction)
-                    .accessibilityAction(named: "Throw to a Jelbie") { throwToMiddle(size) }
+                    .accessibilityAction(named: "Throw to a Jelmiko") { throwToMiddle(size) }
                     .accessibilityIdentifier("play-surface")
                 VStack {
                     Spacer()
                     if play.phase == .inHand, !thrown, play.camBlend > 0.8 {
-                        Text("Flick the ball to a Jelbie").jFont(15, .semibold).foregroundStyle(FocusStyle.brown)
+                        Text("Flick the ball to a Jelmiko").jFont(15, .semibold).foregroundStyle(FocusStyle.brown)
                             .padding(.horizontal, 18).padding(.vertical, 10)
                             .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
                             .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))

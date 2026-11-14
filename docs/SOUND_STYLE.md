@@ -1,9 +1,9 @@
-# Jelbie sound style
+# Jelmiko sound style
 
 Written 2026-11-02 after the user said the rain sigh "is not good" and asked that sounds stay consistent for the species. The user likes the existing voice and cannot describe it, so the shipped files are the reference.
 
-## What a Jelbie sounds like (plain English)
-A Jelbie is a tiny, soft, round-sounding baby creature. Its voice is a smooth hummed note, a bit like a small flute or a soft "oo/ee" coo, with a gentle pitch slide: happy chirps glide up, sad ones droop down, babbles are a short run of two to four of these notes like a question. There is no breath, hiss, rasp or human-throat sound, no sharp squeal, and nothing loud. Snores are the same voice, an "hnn" in and a "puuu~" out, very quiet. Each character has its own pitch and softness (Moss deep and mellow, Pip bright and quick, Lavender airy), but they are clearly the same kind of creature.
+## What a Jelmiko sounds like (plain English)
+A Jelmiko is a tiny, soft, round-sounding baby creature. Its voice is a smooth hummed note, a bit like a small flute or a soft "oo/ee" coo, with a gentle pitch slide: happy chirps glide up, sad ones droop down, babbles are a short run of two to four of these notes like a question. There is no breath, hiss, rasp or human-throat sound, no sharp squeal, and nothing loud. Snores are the same voice, an "hnn" in and a "puuu~" out, very quiet. Each character has its own pitch and softness (Moss deep and mellow, Pip bright and quick, Lavender airy), but they are clearly the same kind of creature.
 
 The voice files were SYNTHESIZED IN CODE (numpy formant synth, `~/BobV1_sounds/2026-10-18/synth.py`, per-character timbre in `~/BobV1_sounds/2026-10-22/voices/voice_synth.py`), not ElevenLabs, so there is no original prompt. The prompt template below is derived from the measurements.
 
@@ -16,14 +16,14 @@ The voice files were SYNTHESIZED IN CODE (numpy formant synth, `~/BobV1_sounds/2
 | jelly4 Lavender | chirp 510-723 (393-824), babble 538 (490-747) | 0.32-0.46 s, babble 1.51 s | 660-1225 (babble 950) | babble 15% |
 | snores 1-4 | 320-650 Hz | 1.35 s | 430-890 | 0-5% |
 
-A new Jelbie vocal fits when ALL hold:
+A new Jelmiko vocal fits when ALL hold:
 - voiced f0 median 290-830 Hz (most sit 300-650), clean pitch track (pitch found in most frames);
 - spectral centroid 450-1300 Hz;
 - energy 2-5 kHz at most 15% of the total (target under 5%);
 - length 0.3-0.5 s for a one-note sound, 1.0-1.8 s for a babble/group sound.
 Measure with `python3 -I` + ffmpeg (see the script idea: autocorrelation f0, FFT centroid, ebur128 loudness). A human voice or breath fails this test (the old sigh: centroid 1600 Hz, 18% in 2-5 kHz, no pitch).
 
-## Prompt template for ANY Jelbie vocal (ElevenLabs sound effects)
+## Prompt template for ANY Jelmiko vocal (ElevenLabs sound effects)
 ```
 tiny cute baby creature voice, <the sound: e.g. one soft rounded "hic" coo / a soft relieved "phew" coo that sinks slightly in pitch>, soft rounded flute-like hum, warm low-mid pitch around <350-600> Hz, like a small plush toy cooing, no human voice, no breath, no air noise, no hiss, no squeal, no sharp click, clean and quiet
 ```

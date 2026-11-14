@@ -64,6 +64,6 @@ final class GroomExitTests: XCTestCase {
         print("GROOMEXIT minRootDist=\(minGap) jellyGap=\(MelonController.jellyGap) exitGaps=\(gaps) roaming=\(walked.sorted()) emotes=\(emotes)")
         XCTAssertTrue(gaps.allSatisfy { $0 >= 0.5 }, "spaced >= 0.5 s: \(gaps)")
         XCTAssertGreaterThanOrEqual(minGap, 0.9 * MelonController.jellyGap, "never overlap while coming out")
-        XCTAssertGreaterThanOrEqual(walked.count, 2, "roaming resumes within 4 s of the end (autonomy picks each one's moment: a Jelbie may wave first; GroomVarietyTests checks every exit emote hands them back)")
+        XCTAssertGreaterThanOrEqual(walked.count, 2, "roaming resumes within 4 s of the end (autonomy picks each one's moment: a Jelmiko may wave first; GroomVarietyTests checks every exit emote hands them back)")
     }
 }

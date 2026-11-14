@@ -18,8 +18,8 @@ enum OpeningScript {
         ["High above", "the clouds…"],
         ["…floats a little town", "called Wobble Isle.", "You've just moved in!"],
         ["In the middle of town", "is the Jelly Spring.", "Every morning, a few", "of its dewdrops wobble awake…"],
-        ["…as Jelbies!"],
-        ["Every Jelbie needs", "someone to take care", "of them."],
+        ["…as Jelmiko!"],
+        ["Every Jelmiko needs", "someone to take care", "of them."],
         ["Look after them,", "and they'll grow:", "learning tricks,", "making friends,", "and competing around town", "in races, shows and volleyball."],
         ["The Spring has a welcome gift", "for its newest neighbour.", "Which one will you take home?"],
     ]

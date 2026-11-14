@@ -83,7 +83,7 @@ final class GpuBodyCostTests: XCTestCase {
             func g(_ k: String) -> Double { r[k] ?? 0 }
             row(String(format: "%@ %dx%d frame %.2f ms | body draws %.2f | eyes %.2f | blended room pieces %.2f | rest-of-pass (room reshade, clears, resolve) %.2f | empty pass %.2f",
                        tag, W, H, g("full"), g("full") - g("noBody"), g("full") - g("noEyes"), g("full") - g("noBlended"), g("roomOnly"), g("nothing")))
-            row(String(format: "%@ per Jelbie body draw: Bob %.2f  Pearl %.2f  Teddy %.2f (bodyOnly %.2f)", tag,
+            row(String(format: "%@ per Jelmiko body draw: Bob %.2f  Pearl %.2f  Teddy %.2f (bodyOnly %.2f)", tag,
                        g("bodyOnly") - g("bodyOnly-hide0"), g("bodyOnly") - g("bodyOnly-hide1"), g("bodyOnly") - g("bodyOnly-hide2"), g("bodyOnly") - g("roomOnly")))
             // coverage: pixels the bodies change vs a frame without them
             probe([]); s.frame(advance: false); let withB = s.image()

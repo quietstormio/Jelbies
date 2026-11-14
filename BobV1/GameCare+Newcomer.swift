@@ -88,7 +88,7 @@ extension GameCare {
     private func beginNewcomerWelcome(_ actors: [JellyActor], _ na: JellyActor, _ nb: BlobBrain) {
         let others = actors.filter { $0.id != na.id }          // (a friend over counts for where he stands, not for the greetings)
         let target = guestSpotNear(others)
-        let w = NewcomerWelcome(id: na.id, name: jelly(na.id)?.name ?? "Your Jelbie", target: target)
+        let w = NewcomerWelcome(id: na.id, name: jelly(na.id)?.name ?? "Your Jelmiko", target: target)
         // (a plain "welcome back" greeting from a long time away would fight the welcome: it is dropped, the welcome is the greeting)
         greeting = false; greetPending = []; greetOthers = [:]; queued.removeAll { if case .come = $0 { return true }; return false }
         w.arena = na.sim.arenaRadius

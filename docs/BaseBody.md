@@ -1,4 +1,4 @@
-> **Feature lock (2026-10-25):** Jelbies 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
+> **Feature lock (2026-10-25):** Jelmiko 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
 
 # Base body (LOCKED)
 

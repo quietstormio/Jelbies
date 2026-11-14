@@ -163,7 +163,7 @@ final class PickThreeTests: XCTestCase {
         let plain = JellyStats(persists: false, key: key, now: { t })
         plain.setCondition(.cool, 0.2)
         t = t.addingTimeInterval(30 * 24 * 3600)
-        XCTAssertEqual(plain.condition(.cool), 0, accuracy: 1e-6, "a Jelbie with no record decays to zero as before")
+        XCTAssertEqual(plain.condition(.cool), 0, accuracy: 1e-6, "a Jelmiko with no record decays to zero as before")
     }
 
     func testAStaleCondKeyIsOverwrittenOnFirstSeed() {

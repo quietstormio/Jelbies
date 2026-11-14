@@ -158,7 +158,7 @@ struct SettingsScreen: View {
                 .accessibilityLabel("Skip song").accessibilityIdentifier("settings-skip")
             }
             slider("Sound effects", on: $hub.settings.sfxOn, volume: $hub.settings.sfxVolume, id: "sfx")
-            Text("Jelbie voices follow the sound effects volume.").font(CloudTheme.font(12, .regular)).foregroundStyle(ink.opacity(0.65))
+            Text("Jelmiko voices follow the sound effects volume.").font(CloudTheme.font(12, .regular)).foregroundStyle(ink.opacity(0.65))
             Toggle("Haptics", isOn: $hapticsOn)
                 .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-haptics-toggle")
@@ -240,7 +240,7 @@ struct SettingsScreen: View {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return card("About", "info.circle") {
-            Text("Jelbies").font(CloudTheme.font(18, .heavy)).foregroundStyle(ink)
+            Text("Jelmiko").font(CloudTheme.font(18, .heavy)).foregroundStyle(ink)
             Text("Version \(v) (\(b))").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75))
             if DayClock.shared.showsDay { Text("Day \(DayClock.shared.day)").font(CloudTheme.font(14, .medium)).foregroundStyle(ink.opacity(0.75)) }
             actionRow("Privacy", "hand.raised", id: "settings-privacy") { showPrivacy = true }
@@ -257,7 +257,7 @@ struct SettingsScreen: View {
             ScrollView {
             VStack(spacing: 12) {
                 Text("Reset your save?").font(CloudTheme.font(24, .bold)).foregroundStyle(ink).accessibilityAddTraits(.isHeader)
-                Text("Your Jelbies, JellyCoins and items will be gone for good. Press and hold the red button to confirm.")
+                Text("Your Jelmiko, JellyCoins and items will be gone for good. Press and hold the red button to confirm.")
                     .font(CloudTheme.font(15, .medium)).foregroundStyle(ink.opacity(0.85)).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 HoldToConfirm(title: "Hold to reset") { confirmReset = false; resetSave() }

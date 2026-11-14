@@ -88,10 +88,10 @@ final class HopscotchLineTests: XCTestCase {
             XCTAssertTrue(started.allSatisfy { $0 }, "seed \(seed): the leader started")
             XCTAssertEqual(maxPlayers, 4, "seed \(seed): all four joined the line")
             XCTAssertGreaterThan(finishedAt, 0, "seed \(seed): the line is done within 90 sim-s; line \(line.players(uid).map { "\($0.id):slot \($0.slot) sq \($0.sq)" }) kinds \(lab.rigs.map { $0.brain.idleState.kind.map { "\($0)" } ?? "-" }) stages \(lab.rigs.map { $0.brain.idleState.slideStage })")
-            for a in 0..<4 { XCTAssertEqual(seqs[a], Array(0..<8), "seed \(seed): Jelbie \(a) landed on squares 1...8 in order: \(seqs[a])") }
+            for a in 0..<4 { XCTAssertEqual(seqs[a], Array(0..<8), "seed \(seed): Jelmiko \(a) landed on squares 1...8 in order: \(seqs[a])") }
             XCTAssertFalse(line.active, "seed \(seed): the line is empty at the end")
             XCTAssertGreaterThan(minGap, 0.75, "seed \(seed): bodies never overlap (closest centres \(minGap))")
-            for a in 0..<4 { XCTAssertLessThanOrEqual(entries[a], startTries + 1, "seed \(seed): Jelbie \(a) stepped up \(entries[a]) times") }
+            for a in 0..<4 { XCTAssertLessThanOrEqual(entries[a], startTries + 1, "seed \(seed): Jelmiko \(a) stepped up \(entries[a]) times") }
         }
     }
 
@@ -153,7 +153,7 @@ final class HopscotchLineTests: XCTestCase {
             if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { break }
         }
         print("[hopline] three: seqs \(seqs.map { $0.count }) traces (stage@sim-s r<retries> s<seat>): \(trace)")
-        for a in 0..<3 { XCTAssertEqual(seqs[a], Array(0..<8), "Jelbie \(a) landed on squares 1...8 in order") }
+        for a in 0..<3 { XCTAssertEqual(seqs[a], Array(0..<8), "Jelmiko \(a) landed on squares 1...8 in order") }
     }
 
     // 5 (park-crowd-r13): a hopper mid-court and a friend who steps up to the start from the court's far end: he leaves the lane first, nobody stands over 6 s

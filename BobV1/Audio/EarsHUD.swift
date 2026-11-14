@@ -107,7 +107,7 @@ struct EarsSettingsRow: View {
     private let ink = Color(red: 0.42, green: 0.34, blue: 0.30)
     private var tint: Color { ThemeStore.shared.controlAccent }
 
-    static let privacyText = "Your Jelbies listen for claps, whistles, laughter and music while the app is open, and react. Sound is understood right on your phone. Nothing is recorded or sent anywhere."
+    static let privacyText = "Your Jelmiko listen for claps, whistles, laughter and music while the app is open, and react. Sound is understood right on your phone. Nothing is recorded or sent anywhere."
     static let lockedText = "Get it in the Shop. They dance to your music and react to claps, whistles and laughs. Uses the microphone while on."
     static let deniedText = "The microphone is turned off for this app. Allow it in Settings to use Ears."
 

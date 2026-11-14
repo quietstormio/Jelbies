@@ -154,9 +154,9 @@ final class BubblePlayTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(hpA, 2 * hpB, "hop-pops per minute must at least double: \(hpB) -> \(hpA)")
         let chases = sum(after) { $0.chases }, cp = sum(after) { $0.chasePops }
         XCTAssertGreaterThanOrEqual(Float(cp) / Float(max(chases, 1)), 0.6, "chases that end in a pop: \(cp)/\(chases)")
-        XCTAssertEqual(sum(after) { $0.dup }, 0, "two Jelbies on the same bubble")
-        XCTAssertEqual(sum(after) { $0.outside }, 0, "a Jelbie left the play area")
-        XCTAssertGreaterThan(sum(after) { $0.popped } - sum(after) { $0.pops }, 0, "some bubbles still pop without a Jelbie")
+        XCTAssertEqual(sum(after) { $0.dup }, 0, "two Jelmiko on the same bubble")
+        XCTAssertEqual(sum(after) { $0.outside }, 0, "a Jelmiko left the play area")
+        XCTAssertGreaterThan(sum(after) { $0.popped } - sum(after) { $0.pops }, 0, "some bubbles still pop without a Jelmiko")
         for m in BubblePopMove.allCases { XCTAssertGreaterThanOrEqual(moves[m] ?? 0, 1, "move \(m) was never used to pop") }
     }
 }

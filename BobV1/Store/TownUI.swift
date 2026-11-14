@@ -189,7 +189,7 @@ struct TownView: View {
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Jelly Volleyball", sub: "Bump and spike", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
-            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Home is full: \(JellyRoster.maxCount) Jelbies" : "\(atHome) at home \u{00B7} room for \(JellyRoster.maxCount - atHome) more", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
+            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Home is full: \(JellyRoster.maxCount) Jelmiko" : "\(atHome) at home \u{00B7} room for \(JellyRoster.maxCount - atHome) more", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
         ]
     }
 

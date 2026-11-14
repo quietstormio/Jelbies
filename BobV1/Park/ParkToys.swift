@@ -69,7 +69,7 @@ extension DecorKind {
     }
     var parkUse: String {
         switch self {
-        case .seesaw: return "A Park seesaw. Two Jelbies sit on it and ride up and down."
+        case .seesaw: return "A Park seesaw. Two Jelmiko sit on it and ride up and down."
         case .sandbox: return "A Park sandbox. Up to three stand in it and dig."
         case .hopscotch: return "A Park hopscotch court. Short legs, so they hop square to square, and friends line up behind."
         default: return ""

@@ -10,7 +10,7 @@ import UIKit
 enum VoiceNoticeText {
     static func title(_ n: VoiceNotice) -> String {
         switch n {
-        case .explainer: return "Talk to your Jelbies"
+        case .explainer: return "Talk to your Jelmiko"
         case .denied: return "The microphone is off"
         case .needsInternet: return "Voice needs the internet once to get ready"
         case .unavailable: return "Voice isn't ready"
@@ -19,9 +19,9 @@ enum VoiceNoticeText {
     static func body(_ n: VoiceNotice) -> String {
         switch n {
         case .explainer:
-            return "Jelbies can listen for their names and tricks when you hold the mic. Nothing leaves your phone. Your phone will ask to use the microphone next. Say yes so they can hear you."
+            return "Jelmiko can listen for their names and tricks when you hold the mic. Nothing leaves your phone. Your phone will ask to use the microphone next. Say yes so they can hear you."
         case .denied:
-            return "Jelbies can't hear you because the microphone is turned off for this app. You can turn it on in Settings, or type a command in the trick book."
+            return "Jelmiko can't hear you because the microphone is turned off for this app. You can turn it on in Settings, or type a command in the trick book."
         case .needsInternet:
             return "Connect to Wi-Fi or mobile data, then tap the mic again. After that, voice works without the internet."
         case .unavailable:

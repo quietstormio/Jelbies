@@ -15,7 +15,7 @@ final class SiriStatusTests: XCTestCase {
         let r = JellyRecord(id: id, name: name, color: "blue", levels: levels, dirt: dirt, sparkle: 0, mood: AwayMath.mood(of: levels).rawValue)
         return JellyState(record: r, awaySeconds: 0)
     }
-    private let none = "You have not met your Jelbies yet. Open the game to say hello."
+    private let none = "You have not met your Jelmiko yet. Open the game to say hello."
 
     // MARK: names
 
@@ -94,7 +94,7 @@ final class SiriStatusTests: XCTestCase {
     // MARK: collapsed spoken
 
     func testSpokenCollapsesWhenEveryoneIsFineAndAwake() {
-        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon")], sleeping: false), "Lemon is happy.", "one Jelbie keeps its sentence")
+        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon")], sleeping: false), "Lemon is happy.", "one Jelmiko keeps its sentence")
         XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon"), s(1, "Pip")], sleeping: false), "Lemon and Pip are both happy.")
         XCTAssertEqual(JellyStatus.spoken([s(0, "A"), s(1, "B"), s(2, "C")], sleeping: false), "All three are happy.")
         // okay mood (not happy): "doing fine"

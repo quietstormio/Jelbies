@@ -17,7 +17,7 @@ nonisolated enum ShowRound: Int, Codable, Sendable, Comparable {
 
 /// What the player's Jelbie brings to the show (read from his real state when the show starts).
 nonisolated struct ShowPlayerInput: Equatable, Sendable {
-    var name = "Jelbie"
+    var name = "Jelmiko"
     /// Condition in every stat (by WearTag).
     var condition: [WearTag: Float] = [:]
     var glow: Float = 0
@@ -288,7 +288,7 @@ nonisolated struct ShowSim: Sendable {
         case .dance:
             return "Dance was \(name)'s lowest at \(p.dancePts). Tap right on the beat: Perfects are worth most."
         default:
-            return "Trick was \(name)'s lowest at \(p.trickPts). Harder tricks (more stars) score more, a trick that matches \(theme.main.title) adds points, and a happy, clean Jelbie slips less."
+            return "Trick was \(name)'s lowest at \(p.trickPts). Harder tricks (more stars) score more, a trick that matches \(theme.main.title) adds points, and a happy, clean Jelmiko slips less."
         }
     }
 }

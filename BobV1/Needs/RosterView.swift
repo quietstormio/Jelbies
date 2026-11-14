@@ -37,10 +37,10 @@ struct RosterButton: View {
         .buttonStyle(.plain)
         .hudFrost(in: .circle)
         .accessibilityIdentifier("roster-button")
-        .accessibilityLabel(wanting > 0 ? "All Jelbies, \(wanting) need\(wanting == 1 ? "s" : "") you" : "All Jelbies")
+        .accessibilityLabel(wanting > 0 ? "All Jelmiko, \(wanting) need\(wanting == 1 ? "s" : "") you" : "All Jelmiko")
         .accessibilityValue(open ? "expanded" : "collapsed")
         .accessibilityAction(.escape) { withAnimation(CareMenu.spring) { open = false } }
-        .accessibilityShowsLargeContentViewer { Label("All Jelbies", systemImage: "person.2.fill") }
+        .accessibilityShowsLargeContentViewer { Label("All Jelmiko", systemImage: "person.2.fill") }
         .keyboardShortcut("r", modifiers: .command)
     }
 }
@@ -67,7 +67,7 @@ struct RosterPanel: View {
                         .transition(.opacity)
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Your Jelbies")
+                            Text("Your Jelmiko")
                                 .jFont(17, .bold)
                                 .foregroundStyle(FocusStyle.brown)
                             Spacer(minLength: 8)

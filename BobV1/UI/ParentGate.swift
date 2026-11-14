@@ -38,7 +38,7 @@ struct ParentGateView: View {
                     Text("Ask a grown-up")
                         .font(SK.font(HUDLayout.isPad ? 32 : 24, .heavy)).foregroundStyle(FocusStyle.brown)
                         .accessibilityAddTraits(.isHeader)
-                    Text("This goes outside Jelbies. A grown-up can press and hold the button for 2 seconds.")
+                    Text("This goes outside Jelmiko. A grown-up can press and hold the button for 2 seconds.")
                         .font(SK.font(HUDLayout.isPad ? 20 : 16, .medium)).foregroundStyle(FocusStyle.brown)
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                     HoldToConfirm(title: "Hold for a grown-up", id: "parent-gate-hold", tint: FocusStyle.brown,

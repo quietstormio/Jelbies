@@ -34,12 +34,12 @@ nonisolated enum JelbiesSiriStatus {
 // MARK: - Check on the Jelbies (no app)
 
 struct CheckOnJelbiesIntent: AppIntent {
-    static let title: LocalizedStringResource = "Check on the Jelbies"
-    static let description = IntentDescription("How your Jelbies are doing right now, without opening the game.")
+    static let title: LocalizedStringResource = "Check on the Jelmiko"
+    static let description = IntentDescription("How your Jelmiko are doing right now, without opening the game.")
     static let openAppWhenRun = false
 
     /// Optional: "How is Lemon" answers for one Jelbie. An id that is not in the snapshot answers for everyone.
-    @Parameter(title: "Jelbie")
+    @Parameter(title: "Jelmiko")
     var jelbie: JelbieEntity?
 
     nonisolated init() {}
@@ -59,8 +59,8 @@ struct CheckOnJelbiesIntent: AppIntent {
 // MARK: - Are they asleep? Are they hungry? (no app)
 
 struct AreJelbiesAsleepIntent: AppIntent {
-    static let title: LocalizedStringResource = "Are the Jelbies asleep?"
-    static let description = IntentDescription("Whether your Jelbies are asleep right now, without opening the game.")
+    static let title: LocalizedStringResource = "Are the Jelmiko asleep?"
+    static let description = IntentDescription("Whether your Jelmiko are asleep right now, without opening the game.")
     static let openAppWhenRun = false
 
     nonisolated init() {}
@@ -73,8 +73,8 @@ struct AreJelbiesAsleepIntent: AppIntent {
 }
 
 struct AreJelbiesHungryIntent: AppIntent {
-    static let title: LocalizedStringResource = "Are the Jelbies hungry?"
-    static let description = IntentDescription("Whether your Jelbies want food or water right now, without opening the game.")
+    static let title: LocalizedStringResource = "Are the Jelmiko hungry?"
+    static let description = IntentDescription("Whether your Jelmiko want food or water right now, without opening the game.")
     static let openAppWhenRun = false
 
     nonisolated init() {}
@@ -89,11 +89,11 @@ struct AreJelbiesHungryIntent: AppIntent {
 // MARK: - Open the game and do something
 
 struct FeedJelbieIntent: AppIntent {
-    static let title: LocalizedStringResource = "Feed a Jelbie"
-    static let description = IntentDescription("Opens the game and serves a snack (everyone when no Jelbie is named).")
+    static let title: LocalizedStringResource = "Feed a Jelmiko"
+    static let description = IntentDescription("Opens the game and serves a snack (everyone when no Jelmiko is named).")
     static let openAppWhenRun = true
 
-    @Parameter(title: "Jelbie")
+    @Parameter(title: "Jelmiko")
     var jelbie: JelbieEntity?
 
     nonisolated init() {}
@@ -109,11 +109,11 @@ struct FeedJelbieIntent: AppIntent {
 }
 
 struct GiveWaterIntent: AppIntent {
-    static let title: LocalizedStringResource = "Give a Jelbie water"
-    static let description = IntentDescription("Opens the game and pours a drink of water (everyone when no Jelbie is named).")
+    static let title: LocalizedStringResource = "Give a Jelmiko water"
+    static let description = IntentDescription("Opens the game and pours a drink of water (everyone when no Jelmiko is named).")
     static let openAppWhenRun = true
 
-    @Parameter(title: "Jelbie")
+    @Parameter(title: "Jelmiko")
     var jelbie: JelbieEntity?
 
     nonisolated init() {}
@@ -129,7 +129,7 @@ struct GiveWaterIntent: AppIntent {
 }
 
 struct GoodnightJelbiesIntent: AppIntent {
-    static let title: LocalizedStringResource = "Put the Jelbies to bed"
+    static let title: LocalizedStringResource = "Put the Jelmiko to bed"
     static let description = IntentDescription("Opens the game, draws the curtains to night and tucks everyone in (the nap card on the Lock Screen).")
     static let openAppWhenRun = true
 
@@ -144,10 +144,10 @@ struct GoodnightJelbiesIntent: AppIntent {
 
 struct StartRaceIntent: AppIntent {
     static let title: LocalizedStringResource = "Start Jelly Race"
-    static let description = IntentDescription("Opens the game on Jelly Race with that Jelbie picked.")
+    static let description = IntentDescription("Opens the game on Jelly Race with that Jelmiko picked.")
     static let openAppWhenRun = true
 
-    @Parameter(title: "Jelbie")
+    @Parameter(title: "Jelmiko")
     var jelbie: JelbieEntity
 
     nonisolated init() {}
@@ -164,17 +164,13 @@ struct StartRaceIntent: AppIntent {
 
 // MARK: - App Shortcuts
 
-/// The phrases Siri listens for without any set-up. `\(.applicationName)` is required by Apple in every phrase; with the display name "Jelbies" they
-/// read "Check on the Jelbies in Jelbies". INAlternativeAppNames (Info.plist) adds "My Jelbies" as a spoken name for the app.
+/// The phrases Siri listens for without any set-up. `\(.applicationName)` is required by Apple in every phrase; with the display name "Jelmiko" they
+/// read "Check on my Jelmiko". INAlternativeAppNames (Info.plist) adds "My Jelmiko" as a spoken name for the app.
 nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
             intent: CheckOnJelbiesIntent(),
             phrases: [
-                "Check on the Jelbies in \(.applicationName)",
-                "Check on my Jelbies in \(.applicationName)",
-                "How are the Jelbies in \(.applicationName)",
-                "How are my Jelbies in \(.applicationName)",
                 "How is everyone in \(.applicationName)",
                 "Check on \(.applicationName)",
                 "How are my \(.applicationName)",
@@ -185,7 +181,7 @@ nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
                 "How is \(\.$jelbie) in \(.applicationName)",
                 "Check on \(\.$jelbie) in \(.applicationName)",
             ],
-            shortTitle: "Check on the Jelbies",
+            shortTitle: "Check on the Jelmiko",
             systemImageName: "heart.text.square.fill"
         )
         AppShortcut(
@@ -215,8 +211,8 @@ nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: FeedJelbieIntent(),
             phrases: [
-                "Feed the Jelbies in \(.applicationName)",
-                "Feed my Jelbies in \(.applicationName)",
+                "Feed \(.applicationName)",
+                "Feed my \(.applicationName)",
                 "Feed \(\.$jelbie) in \(.applicationName)",
                 "Give \(\.$jelbie) a snack in \(.applicationName)",
             ],
@@ -226,8 +222,8 @@ nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: GiveWaterIntent(),
             phrases: [
-                "Give the Jelbies water in \(.applicationName)",
-                "Water my Jelbies in \(.applicationName)",
+                "Give my \(.applicationName) water",
+                "Water my \(.applicationName)",
                 "Give \(\.$jelbie) water in \(.applicationName)",
                 "Give \(\.$jelbie) a drink in \(.applicationName)",
             ],
@@ -237,9 +233,9 @@ nonisolated struct JelbiesShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: GoodnightJelbiesIntent(),
             phrases: [
-                "Put my Jelbies to bed in \(.applicationName)",
-                "Put the Jelbies to bed in \(.applicationName)",
-                "Goodnight Jelbies in \(.applicationName)",
+                "Put my \(.applicationName) to bed",
+                "Put the \(.applicationName) to bed",
+                "Goodnight \(.applicationName)",
                 "Say goodnight in \(.applicationName)",
             ],
             shortTitle: "Goodnight",

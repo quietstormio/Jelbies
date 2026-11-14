@@ -88,7 +88,7 @@ final class ShowModelTests: XCTestCase {
             return s
         }
         var lazy = sim(care: 0), happy = sim(care: 1)
-        XCTAssertFalse(lazy.perform(.flip, roll: 0.10)!.success, "10% < 15%: a flop for a neglected Jelbie")
+        XCTAssertFalse(lazy.perform(.flip, roll: 0.10)!.success, "10% < 15%: a flop for a neglected Jelmiko")
         XCTAssertTrue(happy.perform(.flip, roll: 0.10)!.success, "10% > 7.5%: lands for a well-cared-for one")
         XCTAssertEqual(lazy.turns[0].points, 8 + ShowTheme.starlightGala.trickBonus(ShowTrickInfo.tags(.flip)), "the flop scores the flop points")
     }
@@ -295,7 +295,7 @@ final class ShowModelTests: XCTestCase {
         }
         let rate = Double(wins) / Double(days.count)
         print("SHOW puddle cared-for: wins \(wins)/\(days.count) (\(rate)), podium \(podium), mean total \(totals.reduce(0, +) / Float(totals.count))")
-        XCTAssertGreaterThanOrEqual(rate, 0.6, "a cared-for Jelbie wins the Puddle at least 60% of the time")
+        XCTAssertGreaterThanOrEqual(rate, 0.6, "a cared-for Jelmiko wins the Puddle at least 60% of the time")
     }
 
     func testUntrainedJelbieRarelyWinsTheOcean() {
@@ -306,7 +306,7 @@ final class ShowModelTests: XCTestCase {
             if s.playerPlace == 1 { wins += 1 }
         }
         print("SHOW ocean untrained: wins \(wins)/\(days.count)")
-        XCTAssertLessThanOrEqual(Double(wins) / Double(days.count), 0.05, "an untrained Jelbie hardly ever wins the Ocean")
+        XCTAssertLessThanOrEqual(Double(wins) / Double(days.count), 0.05, "an untrained Jelmiko hardly ever wins the Ocean")
         // and the Ocean rivals really are the strongest, the Puddle's the softest
         var means: [Float] = []
         for r in ShowRank.allCases {
@@ -382,7 +382,7 @@ final class ShowModelTests: XCTestCase {
         XCTAssertEqual(q.chosen, .pond); XCTAssertEqual(q.unlockedRanks, [.puddle, .pond])
         XCTAssertEqual(q.trophies(character: 2).cup(.puddle), 1); XCTAssertEqual(q.trophies(character: 2).cup(.pond), 3)
         XCTAssertTrue(q.trophies(character: 2).hasRosette(.cute)); XCTAssertEqual(q.trophies(character: 2).stickers, ["firstShow", "glowBurst"])
-        XCTAssertEqual(q.trophies(character: 0), ShowProgress.Trophies(), "another Jelbie: no trophies")
+        XCTAssertEqual(q.trophies(character: 0), ShowProgress.Trophies(), "another Jelmiko: no trophies")
         // garbage under the key = nothing won (no crash)
         d.set(Data([1, 2, 3]), forKey: ShowProgress.key)
         XCTAssertEqual(ShowProgress(persists: true, defaults: d).unlockedRanks, [.puddle])

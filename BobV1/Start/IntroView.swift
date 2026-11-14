@@ -97,7 +97,7 @@ struct IntroView: View {
                 flow.reduceMotion = reduceMotionEnv || A11ySettings.shared.reduceMotion
                 IntroWarmup.begin()          // quiet start-up work runs while the clip plays
                 flow.start(landscape: geo.size.width > geo.size.height)
-                A11yAnnounce.say("Jelbies. Intro animation. Double tap to skip intro.", priority: .low)
+                A11yAnnounce.say("Jelmiko. Intro animation. Double tap to skip intro.", priority: .low)
             }
         }
         .background(IntroGate.background)
@@ -107,7 +107,7 @@ struct IntroView: View {
         .onChange(of: scenePhase) { _, ph in if ph == .active { flow.sceneActive() } }
         .onDisappear { flow.teardown() }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(flow.skipVisible ? "Skip intro" : "Jelbies. Intro animation: the Jelbies logo builds with stars and soft music.")
+        .accessibilityLabel(flow.skipVisible ? "Skip intro" : "Jelmiko. Intro animation: the Jelmiko logo builds with stars and soft music.")
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Jumps to the end of the intro")
         .accessibilityIdentifier("intro")
@@ -130,7 +130,7 @@ struct LogoMoment: View {
                 Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: w)
                     .shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * w / 364)
                     .position(x: geo.size.width / 2, y: geo.size.height / 2)
-                    .accessibilityLabel("Jelbies")
+                    .accessibilityLabel("Jelmiko")
             }
         }
         .ignoresSafeArea()

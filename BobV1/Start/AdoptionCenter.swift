@@ -256,7 +256,7 @@ struct AdoptionCenter: View {
                 Text("Jelly Spring").font(SK.font(56, .black)).foregroundStyle(look.onPage).lineLimit(1).minimumScaleFactor(0.5)
                 if reduce { ProgressView().tint(look.onPage.opacity(0.6)).controlSize(.large).frame(height: 40) }
                 else { SpringLoaderDots(colors: order.map { SpeciesInfo.of($0).look.dot }).frame(height: 40) }
-                Text("Every adoption helps the Spring care for the Jelbies still waiting.").font(SK.font(13, .semibold)).foregroundStyle(look.onPage.opacity(0.72))
+                Text("Every adoption helps the Spring care for the Jelmiko still waiting.").font(SK.font(13, .semibold)).foregroundStyle(look.onPage.opacity(0.72))
                     .lineLimit(3).minimumScaleFactor(0.8).multilineTextAlignment(.center).padding(.horizontal, 36)
             }
             .padding(.horizontal, 20)
@@ -364,9 +364,9 @@ struct AdoptionCenter: View {
                     if step == .pick { candidateRow }
                     if step == .species {
                         HStack {
-                            roundButton("chevron.left", label: "Previous Jelbie") { step(-1) }
+                            roundButton("chevron.left", label: "Previous Jelmiko") { step(-1) }
                             Spacer()
-                            roundButton("chevron.right", label: "Next Jelbie") { step(1) }
+                            roundButton("chevron.right", label: "Next Jelmiko") { step(1) }
                         }
                     }
                     flowCard
@@ -407,7 +407,7 @@ struct AdoptionCenter: View {
         .multilineTextAlignment(.center).frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(headerLabel)
-        .accessibilityHint(step == .species ? "Swipe up or down to change Jelbie" : "")
+        .accessibilityHint(step == .species ? "Swipe up or down to change Jelmiko" : "")
         .accessibilityAddTraits(.isHeader)
         .accessibilityAdjustableAction { dir in
             guard step == .species else { return }
@@ -628,7 +628,7 @@ struct AdoptionCenter: View {
         .frame(width: 440, height: 150, alignment: .topLeading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(headerLabel)
-        .accessibilityHint(step == .species ? "Swipe up or down to change Jelbie" : "")
+        .accessibilityHint(step == .species ? "Swipe up or down to change Jelmiko" : "")
         .accessibilityAddTraits(.isHeader)
         .accessibilityAdjustableAction { dir in
             guard step == .species else { return }
@@ -655,9 +655,9 @@ struct AdoptionCenter: View {
     /// The line under the big name: the species' epithet, or the pick page's question.
     private var epithetLine: String { step == .pick ? "Which one will it be?" : info.epithet }
     private var headerLabel: String {
-        let lead = mode == .more ? "The Jelly Spring. \(roomText). Every adoption helps the Spring care for the Jelbies still waiting. " : ""
+        let lead = mode == .more ? "The Jelly Spring. \(roomText). Every adoption helps the Spring care for the Jelmiko still waiting. " : ""
         switch step {
-        case .species: return "\(lead)\(info.name), \(info.epithet). Jelbie \(page + 1) of \(order.count)"
+        case .species: return "\(lead)\(info.name), \(info.epithet). Jelmiko \(page + 1) of \(order.count)"
         case .pick: return "\(lead)Pick one of three \(info.name)"
         case .naming: return "Naming your \(info.name)"
         }
@@ -733,8 +733,8 @@ struct AdoptionCenter: View {
             if step == .species {
                 Rectangle().fill(Color.clear).contentShape(Rectangle()).frame(width: 330, height: 260)
                     .gesture(orbit.simultaneously(with: pinch)).offset(x: 55, y: 215)
-                roundButton("chevron.left", label: "Previous Jelbie", u: u) { step(-1) }.offset(x: 14, y: 399 - 130 - 22)
-                roundButton("chevron.right", label: "Next Jelbie", u: u) { step(1) }.offset(x: 382, y: 399 - 130 - 22)
+                roundButton("chevron.left", label: "Previous Jelmiko", u: u) { step(-1) }.offset(x: 14, y: 399 - 130 - 22)
+                roundButton("chevron.right", label: "Next Jelmiko", u: u) { step(1) }.offset(x: 382, y: 399 - 130 - 22)
                 dragPill.offset(x: 220 - 60, y: 571 - 130 - 15)
             } else if row {
                 rowBands(proj, u: u, chips: chips)
@@ -1025,7 +1025,7 @@ struct AdoptionCenter: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("\(p.title). \(p.blurb) Favourite snack \(snack.name). Strongest in \(strongestJar(t)).")
             } else {
-                Text("Tap a Jelbie to meet them").font(SK.font(19, .black)).foregroundStyle(SK.ink).frame(width: 408, height: 252)
+                Text("Tap a Jelmiko to meet them").font(SK.font(19, .black)).foregroundStyle(SK.ink).frame(width: 408, height: 252)
             }
         }
         .animation(.easeOut(duration: 0.18), value: picked)
@@ -1167,7 +1167,7 @@ struct AdoptionCenter: View {
                     if mode == .first { Text("This one!") }
                     else if p > wallet.count { Text("Need \(p - wallet.count) more JellyCoins") }
                     else { HStack(spacing: 8) { Text("This one!"); JellyCoinIcon(size: 28); Text(p.coinText) } }
-                } else { Text("Your home is full: \(JellyRoster.maxCount) Jelbies") }
+                } else { Text("Your home is full: \(JellyRoster.maxCount) Jelmiko") }
             } else { Text("Pick one of the three") }
         }
     }

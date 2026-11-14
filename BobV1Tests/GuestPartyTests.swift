@@ -50,7 +50,7 @@ final class GuestPartyTests: XCTestCase {
 
     private func check(_ r: Run, n: Int, expect: SocialKind, line: String) {
         XCTAssertEqual(r.kind, expect, "\(line): the group emote")
-        XCTAssertEqual(r.crew, n, "\(line): every Jelbie and the guest are in it")
+        XCTAssertEqual(r.crew, n, "\(line): every Jelmiko and the guest are in it")
         XCTAssertEqual(r.sawKind.count, n, "\(line): every one of them really ran it (saw \(r.sawKind.sorted()))")
         XCTAssertEqual(r.hops.count, n)
         for (i, h) in r.hops.enumerated() { XCTAssertGreaterThanOrEqual(h, 2, "\(line): rig \(i) did >= 2 happy hops (\(h))") }

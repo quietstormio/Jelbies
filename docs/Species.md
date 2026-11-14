@@ -1,4 +1,4 @@
-> **Feature lock (2026-10-25):** Jelbies 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
+> **Feature lock (2026-10-25):** Jelmiko 1.0 is the first release; no new features, fixes and polish only. See [RELEASE-1.0.md](RELEASE-1.0.md).
 
 # Blob Species
 
@@ -8,16 +8,16 @@ Seven characters exist, all on Bob's locked base body. At most **three** live at
 
 | Character | Colour | Signature | How you get it |
 |---|---|---|---|
-| **Bob** | Blue | None | Free first Jelbie, or adopt |
-| **Pip** | Yellow | Pointed tail plus rounded orange spikes down the back | Free first Jelbie, or adopt (500 / 800 JellyCoins) |
-| **Moss** | Green | Head daisy | Free first Jelbie, or adopt (500 / 800 JellyCoins) |
-| **Lavender** | Purple | Wings | Free first Jelbie, or adopt (500 / 800 JellyCoins) |
+| **Bob** | Blue | None | Free first Jelmiko, or adopt |
+| **Pip** | Yellow | Pointed tail plus rounded orange spikes down the back | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
+| **Moss** | Green | Head daisy | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
+| **Lavender** | Purple | Wings | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
 | **Teddy** | Light brown, cream belly | Round bear ears + pom tail | Jelly Spring, 2,000 JellyCoins |
 | **Pearl** | White | Wings | Jelly Spring, 2,000 JellyCoins |
 | **Panda** | Black and white | Black ears, eye patches, limbs, saddle and pom tail | Jelly Spring, 2,000 JellyCoins |
 
 - Prices live in `AdoptionPrice` (`Start/StartFlow.swift`): second adoption 500, third 800, +300 for a rare daily colour (never on a special); specials (`AdoptionPrice.special`) cost 2,000 whichever slot they fill.
-- Teddy, Pearl and Panda are "adopt more only": the first Jelbie is always one of the four starters (the free welcome gift), and a special is offered only once one Jelbie is already home and the room is not full.
+- Teddy, Pearl and Panda are "adopt more only": the first Jelmiko is always one of the four starters (the free welcome gift), and a special is offered only once one Jelmiko is already home and the room is not full.
 - The older sections below were written while Teddy, Panda and Pearl were look-only; where they say "not yet offered" or "unlock TBD", this section is current.
 
 ## Species signature rule (user decision, 2026-10-26)
@@ -43,7 +43,7 @@ Code: starters in `JellyRoster.feature`; park visitors, guests and volleyball op
 
 ## Species names and lore (2026-10-26)
 
-World: Jelbies are baby jellies from Wobble Isle, the little floating island in the sky. Every morning, a few of the dewdrops that gather in the Jelly Spring at the middle of the island wobble awake as Jelbies. Every Jelbie needs someone to take care of it; look after them and they grow, learning tricks, making friends and competing around town. Each one takes after the first colour of sky it ever saw.
+World: Jelmiko are baby jellies from Wobble Isle, the little floating island in the sky. Every morning, a few of the dewdrops that gather in the Jelly Spring at the middle of the island wobble awake as Jelmiko. Every Jelmiko needs someone to take care of it; look after them and they grow, learning tricks, making friends and competing around town. Each one takes after the first colour of sky it ever saw.
 
 Shown in the species picker (`BobV1/Start/AdoptionCenter.swift`, content in `BobV1/Start/SpeciesInfo.swift`), in the order blue, yellow, purple, green. The default name is the character's name (Bob / Pip / Lavender / Moss); the player can change it when adopting. Signature features follow the rule above.
 
@@ -64,21 +64,21 @@ Shown in the species picker (`BobV1/Start/AdoptionCenter.swift`, content in `Bob
 This reframes why adopting costs money. Gameplay, prices, balances and save logic are unchanged; only the words, the opening's ending, the money's name and icon, and the adoption screen's wording changed.
 
 - **You live on Wobble Isle.** It is a little floating *town* (the "Where to?" island map, with Home in the middle). The player has **just moved in**.
-- **The Jelly Spring is in the middle of town.** Dewdrops gather there every morning, and a few of them wobble awake as Jelbies (no trigger needed). A **Spring Keeper** (never on screen, only mentioned in text) looks after newly woken Jelbies until they find a home.
-- **The first Jelbie is the Spring's welcome gift** for its newest neighbour. That is why the first pick is free.
-- **Adopting later costs an adoption fee in JellyCoins, like a rescue shelter:** the fee helps the Spring care for the Jelbies still waiting.
-- **JellyCoins are the money of Wobble Isle** (code name still `DropsWallet`, saved key `BlobDrops.v1`, so balances carry over; "Drops" no longer means money anywhere user-facing, and the dewdrops are only dewdrops). They are earned by winning races, the Jelly Show and volleyball, and by caring for your Jelbies, and spent at the shops, the café, the spa and the Spring (the adoption fee). The icon is a gold coin with a stamped "JC" (`BobV1/Store/JellyCoinIcon.swift`).
-- **Jelbies need someone to take care of them,** and they grow by being looked after: learning tricks, making friends and competing around town (Jelly Circuit, Jelly Show, Jelly Volleyball). "Grow" means skills, bond and stats (the trait jars fill up); Jelbies stay one size.
+- **The Jelly Spring is in the middle of town.** Dewdrops gather there every morning, and a few of them wobble awake as Jelmiko (no trigger needed). A **Spring Keeper** (never on screen, only mentioned in text) looks after newly woken Jelmiko until they find a home.
+- **The first Jelmiko is the Spring's welcome gift** for its newest neighbour. That is why the first pick is free.
+- **Adopting later costs an adoption fee in JellyCoins, like a rescue shelter:** the fee helps the Spring care for the Jelmiko still waiting.
+- **JellyCoins are the money of Wobble Isle** (code name still `DropsWallet`, saved key `BlobDrops.v1`, so balances carry over; "Drops" no longer means money anywhere user-facing, and the dewdrops are only dewdrops). They are earned by winning races, the Jelly Show and volleyball, and by caring for your Jelmiko, and spent at the shops, the café, the spa and the Spring (the adoption fee). The icon is a gold coin with a stamped "JC" (`BobV1/Store/JellyCoinIcon.swift`).
+- **Jelmiko need someone to take care of them,** and they grow by being looked after: learning tricks, making friends and competing around town (Jelly Circuit, Jelly Show, Jelly Volleyball). "Grow" means skills, bond and stats (the trait jars fill up); Jelmiko stay one size.
 
 Where it shows up:
-- The opening story (`BobV1/Start/OpeningStory.swift`, plays on a new game and from Settings > Watch the opening): "High above the clouds... floats a little town called Wobble Isle. You've just moved in! In the middle of town is the Jelly Spring. Every morning, a few of its dewdrops wobble awake... as Jelbies! Every Jelbie needs someone to take care of them. Look after them, and they'll grow: learning tricks, making friends, and competing around town in races, shows and volleyball. The Spring has a welcome gift for its newest neighbour. Which one will you take home?" (A race-flag, a star-ribbon and a volleyball badge pop in under the care caption.)
-- A "First day home" beat after the first Jelbie is chosen and named (`BobV1/Start/FirstDayHome.swift`): a cozy room with moving boxes, "Welcome home, <name>!" then "Take good care of them, earn JellyCoins around town, and one day you can adopt another friend from the Spring." Settings > Watch the opening shows it too, with the player's first Jelbie.
-- The adoption screen is now called the **Jelly Spring** (Town tile and the picker's overline "THE JELLY SPRING"). First pick: overline "THE SPRING'S WELCOME GIFT", button "Choose <Species>". Later: "Every adoption helps the Spring care for the Jelbies still waiting.", button "Adopt for [coin] <price>", disabled states "Already home" / "Need N more JellyCoins". Code names (`AdoptionCenter`, `StartFlow.openAdoption`) are unchanged.
+- The opening story (`BobV1/Start/OpeningStory.swift`, plays on a new game and from Settings > Watch the opening): "High above the clouds... floats a little town called Wobble Isle. You've just moved in! In the middle of town is the Jelly Spring. Every morning, a few of its dewdrops wobble awake... as Jelmiko! Every Jelmiko needs someone to take care of them. Look after them, and they'll grow: learning tricks, making friends, and competing around town in races, shows and volleyball. The Spring has a welcome gift for its newest neighbour. Which one will you take home?" (A race-flag, a star-ribbon and a volleyball badge pop in under the care caption.)
+- A "First day home" beat after the first Jelmiko is chosen and named (`BobV1/Start/FirstDayHome.swift`): a cozy room with moving boxes, "Welcome home, <name>!" then "Take good care of them, earn JellyCoins around town, and one day you can adopt another friend from the Spring." Settings > Watch the opening shows it too, with the player's first Jelmiko.
+- The adoption screen is now called the **Jelly Spring** (Town tile and the picker's overline "THE JELLY SPRING"). First pick: overline "THE SPRING'S WELCOME GIFT", button "Choose <Species>". Later: "Every adoption helps the Spring care for the Jelmiko still waiting.", button "Adopt for [coin] <price>", disabled states "Already home" / "Need N more JellyCoins". Code names (`AdoptionCenter`, `StartFlow.openAdoption`) are unchanged.
 - Every spend plays a bright register "ka-ching" (`purchase_1/2`, `SFX.purchase`, played from `DropsWallet.spend`) with a light haptic; earning plays the lighter coin clinks (`coin_1...3`).
 
-**Naming (2026-10-16, updated 2026-10-20):** the app is called **Jelbies**, and that is the species name: Jelbies are "baby jellies". There is one size and no growth stages. "Blob" in these docs and the code is the old working name.
+**Naming (2026-10-16, updated 2026-10-20):** the app is called **Jelmiko**, and that is the species name: Jelmiko are "baby jellies". There is one size and no growth stages. "Blob" in these docs and the code is the old working name.
 
-**2026-10-20: one size, called Jelbies; no growth stages.**
+**2026-10-20: one size, called Jelmiko; no growth stages.**
 
 Every species has one **signature silhouette feature**, so you can tell it apart even as a shadow. Each individual Blob in the kennel varies that feature (size, count, curl, etc.) along with shade, size, marking and personality.
 
@@ -86,9 +86,9 @@ Every species has one **signature silhouette feature**, so you can tell it apart
 
 **Colour note (2026-10-16):** the game's Bob is now **Baby blue** (existing palette) instead of blush pink, because pink read too close to Kirby. Starter colours are blue, yellow, green and purple; green and purple are still to be added as new pastel palettes. The species colours in the table below are the older kennel concept and are not what the game renders.
 
-## The Jelbies in the game (2026-10-21)
+## The Jelmiko in the game (2026-10-21)
 
-Four characters exist, all on Bob's locked body (`JellyRoster`): **Bob** (baby blue, no feature), **Pip** (yellow, gummy spines), **Moss** (green, head daisy), **Lavender** (pastel lavender, wings + flap-hop). At most **three** live in the room at once (`JellyRoster.maxCount = 3`). The room is a *roster*: an ordered list of characters saved under `BlobRoster.v1`; everything in the game indexes by slot (0...2) and asks the roster which character sits there. Saved needs / dirt / words / stats / perks stay with the character (Bob on the legacy keys, the others on `.jelly<id>` keys), so a Jelbie can leave and return without losing anything.
+Four characters exist, all on Bob's locked body (`JellyRoster`): **Bob** (baby blue, no feature), **Pip** (yellow, gummy spines), **Moss** (green, head daisy), **Lavender** (pastel lavender, wings + flap-hop). At most **three** live in the room at once (`JellyRoster.maxCount = 3`). The room is a *roster*: an ordered list of characters saved under `BlobRoster.v1`; everything in the game indexes by slot (0...2) and asks the roster which character sits there. Saved needs / dirt / words / stats / perks stay with the character (Bob on the legacy keys, the others on `.jelly<id>` keys), so a Jelmiko can leave and return without losing anything.
 
 - A fresh install starts with **Bob, Pip and Moss** (the roster before the characters round), with their features attached.
 - Developer launch argument `-SetRoster pip,moss,lavender` replaces the saved roster with exactly those (in that order), keeping each one's saved data and initialising a newcomer fresh; it persists and is idempotent, so it is safe to leave in or drop. `-BlobCount 1|2|3` still cuts the roster for captures.
@@ -100,8 +100,8 @@ How the roster is meant to fill once there is a start-of-game flow. Nothing of t
 - **Max 3 at a time.** The room, the dining places, the race lanes and the widget are all sized for three.
 - **New players start with only Bob (blue).** Pip, Moss and Lavender are met in the game (rivals on the Jelly Circuit, entrants in the Jelly Show) before they can be adopted.
 - **Earn Drops in competitions to adopt Pip, Moss and Lavender.** Drops are earn-only (no purchase). Adoption is bought like a trick page, from the store or an "Adopt" card on the roster.
-- **Prices: 500 / 800 JellyCoins** for the second and third adoption (+300 for a rare Jelly Spring colour, so at most 1,100; the first Jelbie is free). Rationale: a race pays 250–1500 for first place and the show pays the same, so 500 is about two Puddle wins, well above the dearest trick page (55) and the biggest decor piece (90), so a new Jelbie feels like the biggest thing you can earn without becoming a grind. Escalating prices let the roster fill over weeks rather than one evening and keep the third adoption as a long-term goal. The order is the player's choice; Lavender need not be last.
-- When the third Jelbie is adopted the room is full; swapping or re-homing is out of scope for now (one roster, no outings).
+- **Prices: 500 / 800 JellyCoins** for the second and third adoption (+300 for a rare Jelly Spring colour, so at most 1,100; the first Jelmiko is free). Rationale: a race pays 250–1500 for first place and the show pays the same, so 500 is about two Puddle wins, well above the dearest trick page (55) and the biggest decor piece (90), so a new Jelmiko feels like the biggest thing you can earn without becoming a grind. Escalating prices let the roster fill over weeks rather than one evening and keep the third adoption as a long-term goal. The order is the player's choice; Lavender need not be last.
+- When the third Jelmiko is adopted the room is full; swapping or re-homing is out of scope for now (one roster, no outings).
 
 ## Shipping in v1
 
@@ -151,7 +151,7 @@ Not in v1. When built, a special edition should be a material/finish layered on 
 
 ## Pick one of three (Adoption Center)
 
-Species page -> "Meet the three" -> three Jelbies of that species side by side -> name -> bring home (the free first gift and the Jelly Spring alike).
+Species page -> "Meet the three" -> three Jelmiko of that species side by side -> name -> bring home (the free first gift and the Jelly Spring alike).
 Code: `BobV1/Jelly/JellyTraits.swift`. The three are a pure function of (species, day, classic, owned): three distinct personalities, jars = species profile + personality tilt + seeded +-3 (15...98),
 a favourite snack (store food), and a slight colour shade (classic / Soft or Deep / today's Spring colour; specials and the first gift: classic for all three).
 
@@ -167,5 +167,5 @@ a favourite snack (store food), and a slight colour shade (classic / Soft or Dee
 | Cheeky | -4, -10, +8, +10, +4 | nuggets, fries, cakeslice |
 
 Starting stats follow the jars (`StatTuning.seed`): each condition stat = jar/100 x 0.25 (half of it is an innate floor it never decays below), waddle = 0.30 + 0.35 x (0.6 sporty + 0.25 cool + 0.15 sparkly)/100,
-focus = 0.35 + 0.35 x (0.5 cool + 0.3 sweet + 0.2 cute)/100. Seeded lazily the first time the Jelbie's stats are built, from the per-instance `JellyTraits.v1` record (survives `resetCharacterState`).
+focus = 0.35 + 0.35 x (0.5 cool + 0.3 sweet + 0.2 cute)/100. Seeded lazily the first time the Jelmiko's stats are built, from the per-instance `JellyTraits.v1` record (survives `resetCharacterState`).
 Preview scratch ids: `1000 + slot*10 + species`. Capture flags (simulator): `-PickerStep species|pick|name -PickerCandidate 0...2`.

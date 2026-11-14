@@ -99,13 +99,13 @@ nonisolated enum StoreCatalog {
     /// The tricks for sale (Store/TrickCatalog.swift): one card each, with its stars, price and scope.
     static let trickItems: [StoreItem] = TrickCatalog.forSale.map { d in
         StoreItem(id: d.id, name: d.name, kind: .trickPage, price: d.price, perk: nil,
-                  description: d.scope == .everyone ? "Every Jelbie learns \(d.name.lowercased()) at once, adopted ones too. Say it or pick it in the Jelly Show." : "One Jelbie learns \(d.name.lowercased()). Say it or pick it in the Jelly Show.",
+                  description: d.scope == .everyone ? "Every Jelmiko learns \(d.name.lowercased()) at once, adopted ones too. Say it or pick it in the Jelly Show." : "One Jelmiko learns \(d.name.lowercased()). Say it or pick it in the Jelly Show.",
                   symbol: d.icon, trick: d.trick, scope: d.scope)
     }
 
     /// Hand-held Play toys (Toys/PlayToy.swift lists them for the picker). The balls are the existing decor toys; the wand is its own item.
     static let playToyItems: [StoreItem] = [
-        StoreItem(id: "toy-bubbleWand", name: "Bubble wand", kind: .toy, price: 40, perk: nil, description: "Blow a stream of bubbles for the Jelbies to pop. Pick it from Play.", symbol: "wand.and.stars"),
+        StoreItem(id: "toy-bubbleWand", name: "Bubble wand", kind: .toy, price: 40, perk: nil, description: "Blow a stream of bubbles for the Jelmiko to pop. Pick it from Play.", symbol: "wand.and.stars"),
     ]
 
     /// The rooms for sale (home is never sold).
@@ -127,8 +127,8 @@ nonisolated enum StoreCatalog {
 
     private static let base: [StoreItem] = [
         // food (hand-held, tossed into his mouth). Berries and pizza are the everyday basics: cheap, no perk.
-        StoreItem(id: "berries", name: "Berries", kind: .food, price: 4, perk: nil, description: "Sweet and simple. Fills a Jelbie's tummy a little.", symbol: "circle.hexagongrid.fill", food: "berries"),
-        StoreItem(id: "pizza", name: "Pizza", kind: .food, price: 8, perk: nil, description: "A cheesy slice. Fills a Jelbie's tummy and cheers them up.", symbol: "triangle.fill", food: "pizza"),
+        StoreItem(id: "berries", name: "Berries", kind: .food, price: 4, perk: nil, description: "Sweet and simple. Fills a Jelmiko's tummy a little.", symbol: "circle.hexagongrid.fill", food: "berries"),
+        StoreItem(id: "pizza", name: "Pizza", kind: .food, price: 8, perk: nil, description: "A cheesy slice. Fills a Jelmiko's tummy and cheers them up.", symbol: "triangle.fill", food: "pizza"),
         StoreItem(id: "nuggets", name: "Chicken nuggets", kind: .food, price: 12, perk: .fullBelly, description: "Crispy and filling. Hunger falls slower for 4 hours.", symbol: "fork.knife", food: "nuggets"),
         StoreItem(id: "fries", name: "Fries", kind: .food, price: 10, perk: .bouncy, description: "Salty and fun. More bouncing for an hour.", symbol: "fork.knife", food: "fries"),
         StoreItem(id: "sushi", name: "Sushi roll", kind: .food, price: 18, perk: .cozy, description: "Calm and cozy. Stays happy longer for 4 hours.", symbol: "fork.knife", food: "sushi"),

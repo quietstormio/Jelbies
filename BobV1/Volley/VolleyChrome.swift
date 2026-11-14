@@ -104,7 +104,7 @@ struct VolleyChrome: View {
             .padding(.horizontal, 16).padding(.vertical, 8)
             .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Score. You \(u.score[0]), them \(u.score[1]). First to \(VolleyTuning.pointsToWin). Controlling \(volley.teamNames.indices.contains(u.controlled) ? volley.teamNames[u.controlled] : "your Jelbie").")
+            .accessibilityLabel("Score. You \(u.score[0]), them \(u.score[1]). First to \(VolleyTuning.pointsToWin). Controlling \(volley.teamNames.indices.contains(u.controlled) ? volley.teamNames[u.controlled] : "your Jelmiko").")
             .accessibilityIdentifier("volley-score")
         }
     }
@@ -211,7 +211,7 @@ struct VolleyChrome: View {
     private var controls: some View {
         HStack(alignment: .bottom, spacing: 12) {
             if assisted {
-                Text("The Jelbie walks for you").playFont(13, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 12).padding(.vertical, 6)
+                Text("The Jelmiko walks for you").playFont(13, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Capsule().fill(CareMenu.cream.opacity(0.9))).padding(.bottom, 8)
             } else if stickOrigin == nil {
                 Text("Hold the left side to move").playFont(12, .semibold).foregroundStyle(CareMenu.brown.opacity(0.85)).padding(.horizontal, 10).padding(.vertical, 5)
