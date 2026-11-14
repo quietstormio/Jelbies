@@ -77,6 +77,7 @@ final class WearSweepTests: XCTestCase {
 
     /// Fresh wardrobe + feature set wearing `look` (a few ticks so the carry settles).
     private func dress(_ st: Stage, _ look: WearLook, ticks: Int = 3) {
+        let ticks = env("WEAR4_SETTLE").flatMap { Int($0) } ?? ticks          // capture-only: more ticks so a feature that pops in on a fresh FeatureSet (Moss's antennas) has finished
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; Self.keep.append(w)
         let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
         st.worn = w; st.feat = f
