@@ -242,8 +242,9 @@ final class HoldWearTests: XCTestCase {
                         if WornSet.sleepHides(brain) { hiddenFrames += 1 }
                         let s = sc.sample("trick")
                         for d in s.drawn where !d { undrawn += 1 }
-                        if !s.featDrawn && sc.feature != .none && sc.feature != .ears { undrawn += 1 }          // (Teddy's ears + pom are part of the body mesh: checked through `teddyOn`)
+                        if !s.featDrawn && sc.feature != .none && sc.feature != .ears && sc.feature != .daisy { undrawn += 1 }          // (Teddy's ears + pom are part of the body mesh: checked through `teddyOn`)
                         if sc.feature == .ears && !sc.r.rig.skinner.teddyOn { undrawn += 1 }
+                        if sc.feature == .daisy && !sc.r.rig.skinner.antennaOn { undrawn += 1 }          // (the antennas are body vertices too)
                         mouth += s.mouth
                         for (i, o) in s.offset.enumerated() where s.drawn[i] { worstOff = max(worstOff, o) }
                         feetWorst = max(feetWorst, s.feetLeft); n += 1

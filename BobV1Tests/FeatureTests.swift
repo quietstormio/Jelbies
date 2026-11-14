@@ -123,12 +123,6 @@ final class FeatureTests: XCTestCase {
         }
         for flap in stride(from: Float(-40), through: 75, by: 23) { slots.append(("wings flap \(flap)", Self.restSlot(.wings, flap: flap, spread: min(40, 0.4 * max(flap, 0))))) }
         for dy: Float in [-0.2, 0.16] { var fit = FeatureFit(); fit.wingDY = dy; slots.append(("wings dy \(dy)", Self.restSlot(.wings, fit: fit, flap: 75, spread: 30))) }
-        slots.append(("daisy closed", Self.restSlot(.daisy, close: 1)))
-        for (w, p) in spec.pairs where p.moss.rule == "adjust" {
-            let fit = FeatureCompat.solve(.daisy, worn: [w])
-            slots.append(("daisy on \(w)", Self.restSlot(.daisy, fit: fit)))
-            slots.append(("daisy on \(w) closed", Self.restSlot(.daisy, fit: fit, close: 1)))
-        }
         for (name, s) in slots {
             guard let (m, _) = Self.mesh(s) else { XCTFail(name); continue }
             XCTAssertGreaterThan(m.vertices.count, 100, name)
@@ -227,7 +221,7 @@ final class FeatureTests: XCTestCase {
         let tol: Float = 0.02
         var rows: [String] = []
         for look in WearLook.pieces where !WearRules.isArm(look) {
-            for f in Self.features {
+            for f in Self.features where f != .daisy {          // (the green Jelmiko's antennas are body vertices now: AntennaBeanTests; the prop daisy is no longer drawn)
                 let fit = FeatureCompat.solve(f, worn: [look.art])
                 if fit.hidden { rows.append("\(look.art) + \(f): hidden"); continue }
                 guard let wp = WearMeshes.prepare(look, body: body, art: fit.hatVariant[look.art]) else { XCTFail("\(look)"); continue }
@@ -295,13 +289,11 @@ final class FeatureTests: XCTestCase {
         XCTAssertEqual(beanie.wingDY, -0.12); XCTAssertEqual(beanie.flapMax, 30); XCTAssertEqual(beanie.spreadMax, 12)
         // Pip: the union of the hidden spines; Moss: the on-hat sprout and the hat variant; the ring / clip group leaves the sprout alone
         XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["cat_ears", "sweatband"]).hiddenParts.isEmpty, "spines are never hidden")
+        // Moss: the antennas are body vertices; the hat rule tucks them under an enclosing hat, the antennae / ear headbands, and leaves the hats alone (no hat variants, no on-hat sprout)
         let moss = FeatureCompat.solve(.daisy, worn: ["beanie_honey", "bowtie_pink"])
-        XCTAssertTrue(moss.onHat); XCTAssertEqual(moss.hatVariant["beanie_honey"], "beanie_honey_nopom"); XCTAssertEqual(moss.anchor.y, 1.3698, accuracy: 1e-4)
-        let chef = FeatureCompat.solve(.daisy, worn: ["chef_hat"])
-        XCTAssertEqual(chef.tilt, 50); XCTAssertEqual(chef.sink, 0.1); XCTAssertNil(chef.hatVariant["chef_hat"])
-        XCTAssertFalse(FeatureCompat.solve(.daisy, worn: ["flower_crown"]).onHat)
-        let prop = FeatureCompat.solve(.daisy, worn: ["propeller_beanie"])
-        XCTAssertFalse(prop.hidden, "the daisy never vanishes under a hat: it is tucked on it"); XCTAssertTrue(prop.onHat); XCTAssertEqual(prop.tilt, 55); XCTAssertEqual(prop.sink, 0.05, accuracy: 1e-5)
+        XCTAssertTrue(moss.antennasHidden); XCTAssertFalse(moss.onHat); XCTAssertTrue(moss.hatVariant.isEmpty)
+        XCTAssertTrue(FeatureCompat.solve(.daisy, worn: ["bee_antennae"]).antennasHidden, "never four antennas")
+        XCTAssertFalse(FeatureCompat.solve(.daisy, worn: []).antennasHidden)
         // the variant hats are only for Moss
         XCTAssertTrue(FeatureCompat.solve(.spines, worn: ["beanie_honey"]).hatVariant.isEmpty)
         XCTAssertTrue(FeatureCompat.solve(.wings, worn: ["party_hat"]).hatVariant.isEmpty)
@@ -614,10 +606,10 @@ final class FeatureTests: XCTestCase {
         for id in 1...3 { XCTAssertEqual(f.shown(id), JellyRoster.feature(id)) }
         let m = [Float](repeating: 0, count: 1)
         let mesh = m.withUnsafeBufferPointer { _ in f.frame { _ in nil } }
-        XCTAssertGreaterThan(mesh.vertices.count, 1800, "three features drawn")
-        XCTAssertEqual(f.lastBounds.count, 3)
+        XCTAssertGreaterThan(mesh.vertices.count, 1000, "Pip's and Lavender's features drawn (Moss's antennas are body vertices)")
+        XCTAssertEqual(f.lastBounds.count, 2)
         for id in 1...3 { f.tick(id: id, brain: r.brain, sim: r.sim, feature: JellyRoster.feature(id), worn: [], hideAll: true, dt: 1.0 / 60) }
-        XCTAssertFalse(f.anyShown, "the wash hides everything")
+        XCTAssertNil(f.shown(1)); XCTAssertNil(f.shown(3)); XCTAssertEqual(f.slot(2)?.scale, 1, "the wash hides the prop features; Moss's antennas are part of his body (never taken, like Teddy's ears)")
         // lying on his back: spines and wings poof off, the daisy stays and closes
         r.brain.idleForced = true
         XCTAssertTrue(r.brain.idleStart(.sleep, r.sim)); r.brain.sleep.hold = 500
@@ -625,7 +617,6 @@ final class FeatureTests: XCTestCase {
         XCTAssertTrue(r.brain.isNapping)
         for _ in 0..<120 { for id in 1...3 { f.tick(id: id, brain: r.brain, sim: r.sim, feature: JellyRoster.feature(id), worn: [], hideAll: false, dt: 1.0 / 60) } }
         XCTAssertNil(f.shown(1)); XCTAssertNil(f.shown(3)); XCTAssertEqual(f.shown(2), .daisy)
-        XCTAssertGreaterThan(f.slot(2)?.close ?? 0, 0.9, "the daisy closed")
         // Pip's spines are never hidden by a hat any more (they grow through its crown); the fit names the hat instead
         f.tick(id: 1, brain: r.brain, sim: r.sim, feature: .spines, worn: ["party_hat"], hideAll: false, dt: 1.0 / 60)
         XCTAssertTrue(f.slot(1)?.fit.hiddenParts.isEmpty ?? false); XCTAssertEqual(f.slot(1)?.fit.spineHat, "party_hat")
