@@ -45,7 +45,7 @@ struct ContentView: View {
         case .opening:
             OpeningStoryView(replay: flow.replaying) { withAnimation(.easeInOut(duration: 1.0)) { flow.finishOpening() } }.transition(.opacity)
         case .adopt(let mode):
-            AdoptionCenter(mode: mode, done: { flow.bringHome(species: $0.species, name: $0.name, variant: $0.variant, traits: $0.traits) }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
+            AdoptionCenter(mode: mode, done: { c in withAnimation(.easeInOut(duration: 0.8)) { flow.bringHome(species: c.species, name: c.name, variant: c.variant, traits: c.traits) } }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
                 .transition(.opacity)
         case .firstDay(let c, let n, let replay):
             FirstDayHomeView(character: c, name: n, replay: replay) { withAnimation(.easeInOut(duration: 0.8)) { flow.finishFirstDay() } }.transition(.opacity)

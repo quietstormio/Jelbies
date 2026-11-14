@@ -389,7 +389,7 @@ final class GameCare {
         pk?.step(dt: dt)
         var drain = pk?.cache.drain ?? [1, 1, 1]
         if store.beanbagPlaced { drain[NeedKind.attention.rawValue] = min(drain[NeedKind.attention.rawValue], StoreTuning.beanbagAttentionDrain) }          // Cozy-lite: a beanbag in the room
-        needs.step(dt: dt, petting: petting, purring: purring, exerting: brain.isExerting, drainScale: brain.napDrainScale, perkDrain: drain)
+        needs.step(dt: Self.introHold ? 0 : dt, petting: petting, purring: purring, exerting: brain.isExerting, drainScale: brain.napDrainScale, perkDrain: drain)
         // where his head is (for the bubble) and his floor spot (for the highlight)
         var c = SIMD3<Float>(brain.position.x, BlobShape.H * 0.5, brain.position.y)
         if let sim { c = sim.centroid() }
@@ -399,7 +399,7 @@ final class GameCare {
         // a bubble is held back in focus mode and while a highlight is up; it stays while his meal for that need is on
         var pinned = false
         if let n = needs.wantedNeed, trayOut, mealJelly == 0, let k = servingKind { pinned = (k == .food && n == .hunger) || (k == .drink && n == .thirst) }
-        let suppressed = ((focus.isActive || select.isSelecting || bath.active || tripActive) && !pinned) || bubbleHub.owner != 0
+        let suppressed = ((focus.isActive || select.isSelecting || bath.active || tripActive) && !pinned) || bubbleHub.owner != 0 || Self.introHold          // (the first-day tour holds the needs and the bubbles: FirstDayTour.swift)
         // the one bubble slot: whoever is up keeps it; a Filthy coat takes it over from a need unless some need is Famished / Parched / Neglected
         let coat = bath.grime.coat
         let famished = NeedKind.allCases.contains { needs.tier($0) == .famished }

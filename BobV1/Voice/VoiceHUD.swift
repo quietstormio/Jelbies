@@ -102,7 +102,7 @@ struct VoiceTip: View {
     @State private var visible = true
 
     var body: some View {
-        if shown, voice.openCount == 0 {
+        if shown, voice.openCount == 0, !FirstDayTour.shared.holdsGame {          // (the first-day tour points at the mic itself)
             Text("Hold to talk")
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .foregroundStyle(FocusStyle.brown)
