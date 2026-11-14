@@ -90,11 +90,17 @@ nonisolated final class Skinner {
     var teddyFirst = -1, teddyOn = false, teddyEarScale: Float = 1, teddyPomScale: Float = 1
     var teddySway = SIMD2<Float>.zero
     var teddyRig: TeddyBean.Rig? = nil
+    // The green Jelmiko's two antennas (AntennaBean.swift): a block of body vertices after Teddy's. `antennaOn` (the character's feature) carries them on landmark frames with their own soft
+    // lean springs; `antennaScale` (0 = tucked under a hat / collapsed onto the base poles, 1 = out) comes from the hat rule and the pop.
+    var antennaFirst = -1, antennaOn = false, antennaScale: Float = 1
+    var antennaRig: AntennaBean.Rig? = nil
+    var antennaMotion = AntennaMotion()
     private var tailLM: [Int] = [], tailLMRest: [SIMD3<Float>] = []
     /// Where Pip's tail block is and which three egg vertices carry it (see TailBean.landmarks).
     func configureTail(_ rm: RenderMesh) {
         bodyVertexLimit = rm.armCapsule?.firstVertex.min() ?? -1
         configureTeddy(rm)
+        configureAntennas(rm)
         guard let cap = rm.armCapsule, cap.tailFirst >= 0 else { return }
         tailFirst = cap.tailFirst
         tailLM = TailBean.landmarks(rest: rm.rest, eggLimit: cap.firstVertex.min() ?? rm.vertexCount)
@@ -844,6 +850,7 @@ nonisolated final class Skinner {
         }
         applyTail(dyn)
         applyTeddy(dyn)
+        applyAntennas(dyn)
         eyeFixK[0] = 1; eyeFixK[1] = 1
         if hasEyes { applyEyes(x, dyn) }
         if !antennae.isEmpty { applyAntennae(x, dyn) }

@@ -153,6 +153,7 @@ nonisolated enum FeatureClip {
             if sk.armCapsulesActive { for s in 0..<2 { block(sk.armFirst[s], ArmCapsule.vertexCount) } }
             if sk.tailOn { block(sk.tailFirst, TailBean.vertexCount) }
             if sk.teddyOn { block(sk.teddyFirst, TeddyBean.vertexCount) }
+            if sk.antennaOn, sk.antennaScale > 0.002 { block(sk.antennaFirst, AntennaBean.vertexCount) }
         }
     }
 }

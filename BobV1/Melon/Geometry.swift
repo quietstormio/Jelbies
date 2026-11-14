@@ -1035,6 +1035,11 @@ private func buildRenderMeshBob() -> RenderMesh {
     TeddyBean.builtFirst = teddyFirst
     for i in 0..<TeddyBean.vertexCount { add(TeddyBean.built.block.pos[i], TeddyBean.built.block.nrm[i], TeddyBean.built.block.mat[i]) }
     idx += TeddyBean.triangles(firstVertex: teddyFirst)
+    // the green Jelmiko's two antennas (AntennaBean): after Teddy's block, still in the body index range, mat 0 (the body's own colour); collapsed for every Jelmiko but green (Skinner)
+    let antennaFirst = pos.count / 3
+    AntennaBean.builtFirst = antennaFirst
+    for i in 0..<AntennaBean.vertexCount { add(AntennaBean.built.block.pos[i], AntennaBean.built.block.nrm[i], 0) }
+    idx += AntennaBean.triangles(firstVertex: antennaFirst)
     let bodyIndexCount = idx.count
 
     // decals: footprints in the x-y plane, projected onto the front surface
@@ -1131,7 +1136,7 @@ private func buildRenderMeshBob() -> RenderMesh {
     return RenderMesh(
         rest: pos.map { Float($0) }, restNormal: nrm.map { Float($0) }, mat: mat, index: idx,
         body: (0, bodyIndexCount), seeds: (seedStart, seedCount), bubbles: (idx.count, 0), seedCount: 2, antennae: [],
-        armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst, tailFirst: tailFirst, teddyFirst: teddyFirst))
+        armCapsule: ArmCapsuleInfo(firstVertex: capFirst, indexFirst: capIndexFirst, indexCount: bodyIndexCount - capIndexFirst, tailFirst: tailFirst, teddyFirst: teddyFirst, antennaFirst: antennaFirst))
 }
 
 nonisolated private func buildEyeRigBob(render rm: RenderMesh, sim: SimMesh) -> EyeRig {

@@ -152,7 +152,7 @@ final class FeatureSet {
         stepDrive(&s, dt: dt)
         s.sigFlap = brain.sig.wingFlap; s.sigSpin = brain.sig.spin; s.sigCone = brain.sig.cone; s.sigEars = brain.sig.ears
         // Teddy's ears + pom are part of his body mesh: the wash (hideAll) and the other scene-wide hides never take them (one solid piece, always)
-        let solidEars = feature == .ears && TeddyEarsVariant.active.inBody
+        let solidEars = (feature == .ears && TeddyEarsVariant.active.inBody) || feature == .daisy          // (the green Jelmiko's antennas are body vertices too)
         let hideAll = hideAll && !solidEars
         let hide = hideAll || (!ignoreHide && (Self.hidden(feature, brain) || s.fit.hidden))
         let desired = feature != .none && !hide
@@ -178,12 +178,14 @@ final class FeatureSet {
         // the animation
         switch feature {
         case .spines: stepSpines(&s, spec: spec, dt: dt); stepTail(&s, brain: brain, dt: dt)
-        case .daisy: stepDaisy(&s, brain: brain, spec: spec, dt: dt)
+        case .daisy: stepAntennas(&s, dt: dt)
         case .wings: stepWings(&s, brain: brain, id: id, dt: dt)
         case .ears: stepEars(&s, dt: dt)
         case .none: break
         }
         // Teddy's ears + pom are body vertices (TeddyBean): hand the skinner what the pop / hat rule / follow-through say (nothing drawn by the feature pipeline then)
+        brain.antennaBody = feature == .daisy          // (the green Jelmiko's antennas: body vertices, AntennaBean; the scale is the pop x the hat rule)
+        brain.antennaScale = s.scale * (s.partScale["antennas"] ?? 1)
         brain.teddyBody = feature == .ears && TeddyEarsVariant.active.inBody          // (BlobBrain.driveLimbs copies these onto the skinner every tick)
         brain.teddyEarScale = s.scale * (s.partScale["ear_r"] ?? 1)
         brain.teddyPomScale = s.scale * (s.partScale["pom"] ?? 1)
@@ -271,23 +273,12 @@ final class FeatureSet {
         s.tailRingQ = brain.skinnerRef?.tailRingQ ?? []          // each ring's bend: the spikes lean with the bent tail (emit)
     }
 
-    private func stepDaisy(_ s: inout Slot, brain: BlobBrain, spec: FeatureSpec, dt: Float) {
-        let d = s.fit.onHat ? spec.daisyOnHat : spec.daisy
+    /// The green Jelmiko's antennas only tuck / return with the hat rule (their soft motion lives in the skinner, AntennaBean).
+    private func stepAntennas(_ s: inout Slot, dt: Float) {
         s.clock += dt
-        let Rinv = simd_float3x3(s.carry.rotation).transpose
-        let a = Rinv * accel(s, lag: 0.03, dt: dt)
-        // the flower lags: it tips away from the acceleration (nod about x from z accel, side about z from x accel)
-        let push = SIMD2<Float>(a.z, -a.x) * FeatureTuning.swayGain * 0.01
-        let w = 2 * .pi * FeatureTuning.swayHz, z = FeatureTuning.swayZeta
-        s.swayV += (-w * w * s.sway - 2 * z * w * s.swayV + push * w * w) * dt
-        s.sway += s.swayV * dt
-        let l = simd_length(s.sway)
-        if l > FeatureTuning.swayMax { s.sway *= FeatureTuning.swayMax / l }
-        if !l.isFinite { s.sway = .zero; s.swayV = .zero }
-        let lag = max(d.headLag, 1e-3)
-        s.headSway += (s.sway - s.headSway) * min(1, dt / lag)
-        let wantClose: Float = Self.closes(brain) ? 1 : 0
-        s.close = s.primed ? s.close + max(-dt / d.closeTime, min(dt / d.closeTime, wantClose - s.close)) : wantClose
+        let want: Float = s.fit.antennasHidden ? 0 : 1
+        let cur = s.partScale["antennas"] ?? want
+        s.partScale["antennas"] = s.primed ? cur + max(-dt / FeatureTuning.partFade, min(dt / FeatureTuning.partFade, want - cur)) : want
     }
 
     // MARK: Teddy's ears + pom
@@ -427,7 +418,7 @@ final class FeatureSet {
         lastBounds = []
         for i in slots.indices where slots[i].feature != .none { ContactField.clearFeature(id: i) }          // (re-filled below for the features drawn now)
         guard !hidden, let body else { return m }
-        for (id, s) in slots.enumerated() where s.scale > 0.001 && s.feature != .none && !(s.feature == .ears && TeddyEarsVariant.active.inBody) {
+        for (id, s) in slots.enumerated() where s.scale > 0.001 && s.feature != .none && s.feature != .daisy && !(s.feature == .ears && TeddyEarsVariant.active.inBody) {
             var pl = FeatureMeshes.Placement()
             if s.feature == .daisy { pl.onHat = s.fit.onHat; pl.anchor = s.fit.anchor; pl.tilt = s.fit.tilt; pl.sink = s.fit.sink }
             if s.feature == .wings { pl.dy = s.fit.wingDY }
