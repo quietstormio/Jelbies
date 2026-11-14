@@ -37,6 +37,7 @@ static float teddyPomMask(float3 Q) {
 }
 // TEDDYEAR-END
 #include "../Melon/PandaMarks.h"
+#include "../Melon/JellyFinish.h"
 
 struct JerseyUniforms {
     float4x4 viewProj; float4x4 view; float4x4 invViewProj; float4x4 lightVP; float4x4 topVP;
@@ -103,7 +104,8 @@ static float jFibre(float3 Q) {
 fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
                                   bool ff [[front_facing]],
                                   constant JerseyUniforms& u [[buffer(0)]],
-                                  constant JerseyParams& jp [[buffer(1)]]) {
+                                  constant JerseyParams& jp [[buffer(1)]],
+                                  constant float4* jl [[buffer(7), function_constant(jellyB)]]) {
     float3 N = normalize(i.n);
     if (!ff) { N = -N; }
     float3 Q = i.rest;
@@ -129,6 +131,7 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
     col *= 1.0 + (jCrinkle(Q * 1.7 + 11.0) - 0.5) * 0.045;
     col *= 1.0 + 0.04 * fb;
+    if (jellyB) { col = jellyBase(col, s, occ, u.flesh.rgb, u.fleshDeep.rgb, ff ? normalize(i.n) : -normalize(i.n), L, i.wp, u.camPos.xyz, u.view, jl); }          // JELLY (JellyFinish.h)
     // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
     float bb = u.shape.w;
     float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
@@ -164,9 +167,11 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
             float ll = dot(lt, float3(0.2126, 0.7152, 0.0722));
             lt = saturate(ll + (lt - ll) * 1.1);
         }
+        float jpk = 1.0;
+        if (jellyB) { jpk = tn > 2.5 ? 0.85 : jl[4].w; }          // JELLY: only a hint of the lighter belly paint
         float ek = tn > 3.5 ? teddyEarMask(Q) : 0.0;
         float pk = tn > 3.5 ? teddyPomMask(Q) : 0.0;
-        col = mix(col, lt * (1.0 - ek * 0.25 * (1.0 - s) - pk * (1.0 - s) * float3(0.12, 0.20, 0.32)), max(max(bk, ek), pk));          // (the pom / inner ear keep the light falloff: the pom shades toward warm brown, never grey)
+        col = mix(col, lt * (1.0 - ek * 0.25 * (1.0 - s) - pk * (1.0 - s) * float3(0.12, 0.20, 0.32)), max(max(bk, ek), pk) * jpk);          // (the pom / inner ear keep the light falloff: the pom shades toward warm brown, never grey)
     }
 
     // ---- the jersey band (egg only)
@@ -185,6 +190,7 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
     }
 
     // mouth: same block as the locked shader (the band never reaches it: its top is below the keep-out)
+    float jcov = 0.0;
     float mo = u.stripe.w;
     if (mo > 0.002 && Q.z > 0.15) {
         float o = clamp(mo, 0.0, 1.0);
@@ -196,6 +202,7 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
         float dd = length(q) - 1.0;
         float aa = max(fwidth(dd) * 1.2, 0.04);
         float cover = 1.0 - smoothstep(-aa, aa, dd);
+        if (jellyB) { jcov = cover; }
         float3 eyeC = float3(0.0423, 0.0194, 0.0144);
         float3 tongue = float3(0.13, 0.045, 0.040);
         float tg = smoothstep(-0.05, -0.75, q.y) * smoothstep(1.0, 0.35, abs(q.x)) * smoothstep(0.35, 0.8, o);
@@ -211,5 +218,6 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
         float lum = dot(col, float3(0.299, 0.587, 0.114));
         col = mix(col, float3(0.95, 0.40, 0.50) * (0.55 + lum), bk * 0.62);
     }
+    if (jellyB) { col = jellyTop(col, ff ? normalize(i.n) : -normalize(i.n), i.wp, u.camPos.xyz, u.view, Q, jl, jcov, 0.0); }          // JELLY (JellyFinish.h)
     return float4(col / max(u.misc.x, 1e-3), 0.0);
 }

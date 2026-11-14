@@ -248,8 +248,12 @@ final class MelonRenderer {
     private let meshVD: MTLVertexDescriptor
     /// fsSoftMatteFast pipelines by tier (GfxBodyFast.metal), built on first use.
     private var pMatteFast: [Int: MTLRenderPipelineState] = [:]
+    private var pJellyLook: [Int: MTLRenderPipelineState] = [:]          // JellyLook.swift: the lab look's pipelines (key = fastMattePipeline's key + 5000 blended)
+    private var pJellyDepth: MTLRenderPipelineState?
+    private var dsJellyLessEqual: MTLDepthStencilState?
     /// The jersey body pipeline (Wear/GfxJersey.metal) and its per-vertex egg flags; built on first use.
     private var pJersey: MTLRenderPipelineState?
+    private var pJerseyJelly: MTLRenderPipelineState?          // JellyLook: the jersey body shader with the jelly finish
     private var eggFlagBuf: MTLBuffer?
     private(set) var jerseyDraws = 0
     /// Whether the current MSAA / depth targets are memoryless (game pass, no PerfPasses, device supports it).
@@ -838,10 +842,18 @@ final class MelonRenderer {
 
     /// mask 15: the plain fsSoftMatteBath (the bit-exact reference BathSootSeedZeroTests hashes). Otherwise fsSoftMatteBathSpec with the
     /// soot (1) / foam (2) / wet (4) / sparkle (8) blocks compiled in per `mask` (a specialised build folds a few ulps differently).
-    nonisolated static func makeBathVariant(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, mask: Int) -> MTLRenderPipelineState? {
+    nonisolated static func makeBathVariant(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, mask: Int, jelly: Bool = false) -> MTLRenderPipelineState? {
         let fsOpt: MTLFunction?
-        if mask == 15 {
-            fsOpt = library.makeFunction(name: "fsSoftMatteBath")
+        if jelly {          // JellyLook: the same shader with function constant 5 (JellyFinish.h) compiled in
+            let cv = MTLFunctionConstantValues()
+            var on = true; cv.setConstantValue(&on, type: .bool, index: 5)
+            if mask == 15 { fsOpt = try? library.makeFunction(name: "fsSoftMatteBath", constantValues: cv) }
+            else {
+                for bit in 0..<4 { var b = (mask >> bit) & 1 == 1; cv.setConstantValue(&b, type: .bool, index: bit) }
+                fsOpt = try? library.makeFunction(name: "fsSoftMatteBathSpec", constantValues: cv)
+            }
+        } else if mask == 15 {
+            fsOpt = try? library.makeFunction(name: "fsSoftMatteBath", constantValues: MTLFunctionConstantValues())          // (function constant 5 = JellyFinish.h stays undefined: compiled out)
         } else {
             let cv = MTLFunctionConstantValues()
             for bit in 0..<4 { var on = (mask >> bit) & 1 == 1; cv.setConstantValue(&on, type: .bool, index: bit) }
@@ -861,9 +873,16 @@ final class MelonRenderer {
     }
 
     /// The bath body pipeline for this slot's look: specialised when `gfxOpt.bathVariants`, else the all-in-one shader.
-    private func bathPipeline(_ slot: BodySlot) -> MTLRenderPipelineState {
-        guard gfxOpt.bathVariants else { return pMatteBath }
+    private func bathPipeline(_ slot: BodySlot, jelly: Bool = false) -> MTLRenderPipelineState {
         let l = slot.bathLook
+        if jelly {          // JellyLook (round 5): the bath body shader with the jelly finish, keyed apart (100 + mask)
+            let m = gfxOpt.bathVariants ? ((slot.sootAny ? 1 : 0) | (slot.foamAny ? 2 : 0) | (l.wet > 0.001 ? 4 : 0) | (l.sparkle > 0.001 ? 8 : 0)) : 15
+            if let p = pMatteBathVariants[100 + m] { return p }
+            let p = Self.makeBathVariant(device: device, library: library, vd: meshVD, mask: m, jelly: true) ?? pMatteBath
+            pMatteBathVariants[100 + m] = p
+            return p
+        }
+        guard gfxOpt.bathVariants else { return pMatteBath }
         let mask = (slot.sootAny ? 1 : 0) | (slot.foamAny ? 2 : 0) | (l.wet > 0.001 ? 4 : 0) | (l.sparkle > 0.001 ? 8 : 0)
         if mask == 15 { return pMatteBath }
         if let p = pMatteBathVariants[mask] { return p }
@@ -906,14 +925,28 @@ final class MelonRenderer {
         return p
     }
 
+    private func jellyLookPipeline(tier: Int, belly: Bool, teddy: Bool, blended: Bool) -> MTLRenderPipelineState? {
+        let key = tier + (belly ? 10 : 0) + (teddy ? 20 : 0) + 100 * matteProbe + 1000 * gfxOpt.fibreMode + (blended ? 5000 : 0)
+        if let p = pJellyLook[key] { return p }
+        // the see-through variant uses dual-source blending (tint what is behind); if that pipeline cannot be made, the plain alpha blend is the fallback
+        guard let p = JellyLook.makePipeline(device: device, library: library, vd: meshVD, tier: tier, belly: belly, teddy: teddy, probe: matteProbe, fibre: gfxOpt.fibreMode, blended: blended)
+                ?? JellyLook.makePipeline(device: device, library: library, vd: meshVD, tier: tier, belly: belly, teddy: teddy, probe: matteProbe, fibre: gfxOpt.fibreMode, blended: blended, dualSource: false) else { return nil }
+        pJellyLook[key] = p
+        return p
+    }
+
     /// The 64^3 lattice texture behind -FibreLUT (MelonPipelines.fibreNoise: built during the launch warm-up; also bound, unused, by the exact pipelines).
     private func fibreNoiseTexture() -> MTLTexture? { MelonPipelines.fibreNoise(device) }
 
     // MARK: jersey (Wear/GfxJersey.metal)
 
-    private func jerseyPipeline() -> MTLRenderPipelineState? {
-        if let p = pJersey { return p }
-        guard let vs = library.makeFunction(name: "vsJellyJersey"), let fs = library.makeFunction(name: "fsSoftMatteJersey") else { print("MelonRenderer: jersey shader unavailable"); return nil }
+    private func jerseyPipeline(jelly: Bool = false) -> MTLRenderPipelineState? {
+        if jelly, let p = pJerseyJelly { return p }
+        if !jelly, let p = pJersey { return p }
+        var fsJ: MTLFunction?
+        if jelly { let cv = MTLFunctionConstantValues(); var on = true; cv.setConstantValue(&on, type: .bool, index: 5); fsJ = try? library.makeFunction(name: "fsSoftMatteJersey", constantValues: cv) }
+        else { fsJ = try? library.makeFunction(name: "fsSoftMatteJersey", constantValues: MTLFunctionConstantValues()) }
+        guard let vs = library.makeFunction(name: "vsJellyJersey"), let fs = fsJ else { print("MelonRenderer: jersey shader unavailable"); return nil }
         let d = MTLRenderPipelineDescriptor()
         d.label = "matte jersey"
         d.vertexFunction = vs; d.fragmentFunction = fs
@@ -922,7 +955,7 @@ final class MelonRenderer {
         d.depthAttachmentPixelFormat = Self.depthFormat
         d.rasterSampleCount = Self.msaa
         guard let p = try? device.makeRenderPipelineState(descriptor: d) else { print("MelonRenderer: jersey pipeline failed"); return nil }
-        pJersey = p
+        if jelly { pJerseyJelly = p } else { pJersey = p }
         return p
     }
     /// One byte per render vertex: 1 for the egg, 0 for the arm capsules and foot beans (they share the mesh; their rest y overlaps the band).
@@ -1200,16 +1233,28 @@ final class MelonRenderer {
             let shapeAt = MemoryLayout<MelonUniforms>.offset(of: \.shape) ?? 0
             lastBodyOrder = order
             let tierNow = gfxOpt.fastMatteTier
+            var jellyLater: [Int] = []          // JellyLook: see-through bodies are drawn after all the others (JellyLook.swift)
+            let fleshOff = MemoryLayout<MelonUniforms>.offset(of: \.flesh) ?? 0
+            func jellyKind(_ slot: BodySlot) -> Int {
+                guard JellyLook.level > 0 else { return 0 }
+                let flesh = slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self)
+                let bm = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
+                let k = JellyLook.kind(flesh: flesh, bellyMode: bm)
+                // bath (dirt / soot / suds / wet / sparkle) and jersey bodies get the opaque jelly finish inside their own shaders (see-through is not available there)
+                return k == 2 && (usesBathShader(slot) || slot.jersey != nil) ? 1 : k
+            }
             for bi in order {                            // each Jelly: its own vertex stream, colours / mouth and bath look
                 let slot = slots[bi]
+                let jk = jellyKind(slot)
+                if jk == 2 && !bodyProbe.contains(.skipBody) { jellyLater.append(bi); continue }
                 e.setVertexBuffer(slot.uboBuf, offset: 0, index: 0)
                 e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)
                 e.setVertexBuffer(slot.dynBuf, offset: 0, index: 1)
                 e.setVertexBuffer(slot.staticBuf, offset: 0, index: 2)
                 if usesBathShader(slot) {
-                    e.setRenderPipelineState(bathPipeline(slot))
+                    e.setRenderPipelineState(bathPipeline(slot, jelly: jk > 0))
                     e.setFragmentBuffer(slot.bathParamsBuf, offset: 0, index: 3)
-                } else if let team = slot.jersey, let jp = jerseyPipeline(), let flags = eggFlags() {
+                } else if let team = slot.jersey, let jp = jerseyPipeline(jelly: jk > 0), let flags = eggFlags() {
                     e.setRenderPipelineState(jp)
                     e.setVertexBuffer(flags, offset: 0, index: 3)
                     var par = Self.jerseyParams(team)
@@ -1218,11 +1263,13 @@ final class MelonRenderer {
                 } else {
                     // shape.w (BlueBelly.mode) says whether the belly / Teddy blocks can run at all for this body
                     let bellyMode = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
-                    let sp = (tierNow > 0 || matteSpec || gfxOpt.fibreMode > 0) ? fastMattePipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks) : nil
+                    var sp = (tierNow > 0 || matteSpec || gfxOpt.fibreMode > 0) ? fastMattePipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks) : nil
+                    if jk == 1, sp != nil, let jp = jellyLookPipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks, blended: false) { sp = jp }
                     if sp != nil { e.setFragmentTexture(fibreNoiseTexture(), index: 0) }
                     e.setRenderPipelineState(sp ?? pMatte)
                 }
                 slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }          // (the body shaders' fragment buffer 6: zeros = the join shaded as before)
+                JellyLook.params(level: jk > 0 ? JellyLook.level : 0).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (fragment buffer 7: the lab jelly look, zeros = off)
                 if !bodyProbe.contains(.skipBody) {
                     // Panda (BlueBelly mode 51): the egg is drawn as is (the shader paints the eye patches, band, arms, feet); everything after it in the body index range
                     // (the walking arm capsules, the foot beans, the ears + pom) is drawn again as the same shader's all-charcoal mode 52. Teddy's / every other body: one draw, as before.
@@ -1244,6 +1291,40 @@ final class MelonRenderer {
                 if m.seeds.count > 0 && !bodyProbe.contains(.skipEyes) {
                     e.setRenderPipelineState(pEyes)
                     e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)
+                }
+            }
+            if !jellyLater.isEmpty {          // JellyLook: see-through bodies, far to near: depth pre-pass, then the blended colour over what is behind, then the eyes
+                if pJellyDepth == nil { pJellyDepth = JellyLook.makeDepthOnly(device: device, library: library, vd: meshVD) }
+                if dsJellyLessEqual == nil { dsJellyLessEqual = JellyLook.makeLessEqualNoWrite(device: device) }
+                let far = jellyLater.sorted { a, b in
+                    let ba = bobBounds(a), bb = bobBounds(b)
+                    return simd_length((ba.lo + ba.hi) * 0.5 - camPos3) > simd_length((bb.lo + bb.hi) * 0.5 - camPos3)
+                }
+                for bi in far {
+                    let slot = slots[bi]
+                    e.setVertexBuffer(slot.uboBuf, offset: 0, index: 0)
+                    e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)
+                    e.setVertexBuffer(slot.dynBuf, offset: 0, index: 1)
+                    e.setVertexBuffer(slot.staticBuf, offset: 0, index: 2)
+                    let bellyMode = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
+                    if let dp = pJellyDepth, let jp = jellyLookPipeline(tier: tierNow, belly: bellyMode > 0.5 || matteForceAllBlocks, teddy: bellyMode >= 39.5 || matteForceAllBlocks, blended: true), let dsLE = dsJellyLessEqual {
+                        e.setDepthStencilState(dsLessWrite)
+                        e.setRenderPipelineState(dp)
+                        e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+                        e.setDepthStencilState(dsLE)
+                        e.setRenderPipelineState(jp)
+                        e.setFragmentTexture(fibreNoiseTexture(), index: 0)
+                        slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }
+                        JellyLook.params(level: JellyLook.level).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }
+                        e.setDepthBias(-8, slopeScale: -1, clamp: 0)          // pull the colour draw a hair toward the camera: it must pass against its own pre-pass depth (no speckle)
+                        e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
+                        e.setDepthBias(0, slopeScale: 0, clamp: 0)
+                        e.setDepthStencilState(dsLessWrite)
+                    }
+                    if m.seeds.count > 0 && !bodyProbe.contains(.skipEyes) {
+                        e.setRenderPipelineState(pEyes)
+                        e.drawIndexedPrimitives(type: tri, indexCount: m.seeds.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.seeds.first * 4)
+                    }
                 }
             }
             // translucent room pieces (dining puffs, contact shadows) blend over Bob; sets its own state (not part of the body path)
@@ -1334,6 +1415,7 @@ final class MelonRenderer {
             e.drawPrimitives(type: tri, vertexStart: 0, vertexCount: 3)
             e.setRenderPipelineState(useMatte ? pMatte : pJelly)
             slots[0].legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }
+            JellyLook.params(level: 0).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (studio path: the lab jelly look stays off)
             e.setDepthStencilState(dsLessWrite)
             e.setCullMode(.back)
             e.setVertexBuffer(dynBuf, offset: 0, index: 1)
