@@ -1224,6 +1224,12 @@ final class MelonRenderer {
             for bi in order {                            // each Jelly: its own vertex stream, colours / mouth and bath look
                 let slot = slots[bi]
                 let jk = jellyKind(slot)
+                JellyLook.dbgFrame &+= 1
+                if JellyLook.dbgFrame % 240 == 1 {
+                    let f = slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self)
+                    let bmD = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
+                    print("[jelly] slot \(bi) level \(JellyLook.level) kind \(jk) flesh \(f.x) \(f.y) \(f.z) belly \(bmD) bath \(usesBathShader(slot)) jersey \(slot.jersey != nil) cutout \(cutout) tier \(tierNow) matteSpec \(matteSpec) fibre \(gfxOpt.fibreMode) pipe1 \(jellyLookPipeline(tier: tierNow, belly: bmD > 0.5, teddy: bmD >= 39.5, blended: false) != nil) pipe2 \(jellyLookPipeline(tier: tierNow, belly: bmD > 0.5, teddy: bmD >= 39.5, blended: true) != nil)")
+                }
                 if jk == 2 && !bodyProbe.contains(.skipBody) { jellyLater.append(bi); continue }
                 e.setVertexBuffer(slot.uboBuf, offset: 0, index: 0)
                 e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)

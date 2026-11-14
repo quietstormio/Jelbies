@@ -15,6 +15,7 @@ import simd
 nonisolated enum JellyLook {
     /// The level a build ships with. Stays 0.
     static let launchLevel = 2
+    nonisolated(unsafe) static var dbgFrame = 0
 
     private static func argFloat(_ key: String) -> Float? {
         guard DevArgs.enabled, UserDefaults.standard.object(forKey: key) != nil else { return nil }
