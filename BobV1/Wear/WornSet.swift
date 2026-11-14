@@ -548,7 +548,7 @@ final class WornSet {
     /// Where on the drawn arm a worn band sits: this fraction of the way from the root to the tip.
     static let wristStation: Float = 0.65
     /// A band's wall (outside the inner surface) is drawn at this fraction of its authored thickness, and its inner surface this far outside the arm's skin.
-    static let wristWall: Float = 0.40, wristGap: Float = 0.004
+    static let wristWall: Float = 0.25, wristGap: Float = 0.004, wristWidth: Float = 0.8
     /// Under this skin radius at the station the arm is tucked away and the band is gone; it is whole again `tuckedFade` above it.
     static let tuckedRadius: Float = 0.035, tuckedFade: Float = 0.03
     /// The art's own ring: inner radius at the middle of its width (0.098..0.108 along it) and the middle of its axial extent.
@@ -593,7 +593,7 @@ final class WornSet {
                 let v = p.rest[i]
                 let rho = (v.x * v.x + (v.z / bandSquash) * (v.z / bandSquash)).squareRoot()
                 let cs = rho > 1e-6 ? v.x / rho : 1, sn = rho > 1e-6 ? v.z / bandSquash / rho : 0
-                let axial = sc + (v.y - bandMid)                                  // (the wall's own axial span is already ~0.09: a band, not a sleeve)
+                let axial = sc + (v.y - bandMid) * wristWidth                                  // (the wall's own axial span is already ~0.09: a band, not a sleeve)
                 let dir = X * (sigma * cs) + Z * sn
                 let skinR = rings.map { $0.radius(at: axial, theta: atan2(simd_dot(dir, $0.e2), simd_dot(dir, $0.e1))) } ?? f.hullRadius(axial) * simd_length(SIMD2(cs, sn * zS))
                 let R = skinR + (wristGap + max(rho - bandInner, 0) * wristWall) * fit
