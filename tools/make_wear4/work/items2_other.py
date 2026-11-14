@@ -242,12 +242,13 @@ def wristbands(main=hx('#2C7FD2'),stripe=CREAM,**k):
     """Round 2: authored at the size it is DRAWN (WornSet.emitArms no longer slims it): inner radius 0.098 (the fit puts the inner surface 4 mm off the arm), wall 1.5 cm (outer 0.113), width 0.070
     (local y 0.025..0.095, centred on bandMid 0.060). Sky blue (#2C7FD2: much deeper than SKY, which the room light washes out to teal-grey) with two cream stripes 1.6 cm wide (y 0.034-0.050 and 0.070-0.086) and a blue stripe 2 cm wide between, a faint terry texture."""
     reset(); segs=36; sq=0.90
-    loop=[(0.098,0.033),(0.103,0.026),(0.110,0.028),(0.113,0.036),(0.113,0.084),(0.110,0.092),(0.103,0.094),(0.098,0.087)]
+    # the outer face carries the stripes, so it needs vertices AT the stripe edges (vertex colours interpolate across a face): cream y 0.036..0.049 and 0.071..0.084, blue between and on the rims
+    loop=[(0.098,0.033),(0.103,0.026),(0.110,0.028),(0.113,0.036),(0.113,0.049),(0.113,0.052),(0.113,0.068),(0.113,0.071),(0.113,0.084),(0.110,0.092),(0.103,0.094),(0.098,0.087)]
     def lf(phi): return [np.array([r*math.cos(phi),y,r*math.sin(phi)*sq]) for r,y in loop]
     def col(p,n):
         a=math.atan2(p[2]/sq,p[0]); y=p[1]
         c=main
-        if 0.034<y<0.050 or 0.070<y<0.086: c=stripe
+        if (0.0345<y<0.0505 or 0.0695<y<0.0855) and math.hypot(p[0],p[2]/sq)>0.1085: c=stripe
         return mix(c,deep(c,0.10),0.16*(0.5-0.5*math.cos(36*a)))
     torus('band',segs,lf,col,sharp=60)
     return dict(anchor='wrist',slot='hands',tags=['sporty','cute'],price=20,title='Wristbands',

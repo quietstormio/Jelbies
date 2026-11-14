@@ -1654,8 +1654,8 @@
     "cute"
    ],
    "price": 20,
-   "tris": 576,
-   "verts": 360,
+   "tris": 864,
+   "verts": 504,
    "deform_class": "arm_frame (mirror for -x arm, scale by tip radius/0.15)",
    "files": [
     "wristbands_sky.obj",

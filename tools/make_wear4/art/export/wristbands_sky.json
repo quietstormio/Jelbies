@@ -1,12 +1,12 @@
 {
  "id": "wristbands_sky",
- "tris": 576,
- "verts": 360,
+ "tris": 864,
+ "verts": 504,
  "parts": [
   {
    "name": "band",
-   "tris": 576,
-   "verts": 360
+   "tris": 864,
+   "verts": 504
   }
  ],
  "anchor_rest": [
