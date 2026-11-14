@@ -1999,8 +1999,8 @@
     "sweet"
    ],
    "price": 55,
-   "tris": 624,
-   "verts": 466,
+   "tris": 904,
+   "verts": 622,
    "files": [
     "scarf_silk.obj",
     "scarf_silk.json"

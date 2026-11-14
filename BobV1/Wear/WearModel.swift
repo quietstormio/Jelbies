@@ -77,7 +77,6 @@ nonisolated enum WearRules {
         case .pearls, .chainGold, .diamondJ: up = 0.20
         // (the three cosy scarves are authored all the way round already: low on the chest, over the arm roots at the sides, high at the back - no lift on top)
         case .whistleCoach, .bandanaCoral, .bandanaMint, .bandanaSun: up = 0.19
-        case .scarfSilk: up = 0.22
         case .lei: up = 0.23
         default: return nil
         }

@@ -42,9 +42,13 @@ def chain_gold(gold=hx('#FFC41F'), **k):
     return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly'], price=70, title='Gold chain',
                 desc='A chunky Cuban-link gold chain: twenty-six real oval rings, alternately flat and on edge so each is threaded through its neighbours, high-polish gold, in one continuous loop round the body at the neck line, with a big coin pendant on a ring bail at the front (y~0.31). Its own budget (2800 vertices / 3000 triangles).')
 
-# ============================ SILK SCARF (full loop, knot, tails) ==============
+# ============================ SILK SCARF (thin draped band, small knot, two silk tails) ==============
 def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
+    """A silk neckerchief in the standard of the new cosy scarf (all-round surface sampler, low on the chest, over the arm roots, high at the back) but silk: a THIN band (0.084 tall, 1.9 cm off the skin
+    at its crown, 6 mm at the edges) with a soft drape wave, a small knot with two little ears, and two thin silk tails with wavy edges. Navy printed with gold medallions."""
     reset()
+    import items3 as I3
+    NA = 64; HH = 0.042; R_ = 0.52
     def pat(p, n):
         u = p[0] * 6.0 + p[1] * 2.0
         v = p[1] * 6.0 - p[0] * 2.0
@@ -55,29 +59,37 @@ def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
         if 0.26 < r < 0.38: c = ring
         elif r < 0.12: c = dot
         return mix(deep(c, 0.06), tint(c, 0.16), 0.5 + 0.5 * n[1] * 0.5)
-    FR = 0.462
-    def lf(phi):
-        y = neck_y(phi, FR, 0.47, 0.54)
-        return [eloop(y, phi, h, v) for h, v in ((0.014, 0.060), (0.052, 0.048), (0.076, 0.0), (0.052, -0.048), (0.014, -0.060))]
-    torus('wrap', 32, lf, pat, sharp=60)
-    kc, kn = body_pt(0.0, FR - 0.052, 0.112)
+    sy = lambda phi: I3.scarf_y(phi, front=0.500)
+    rows = [(-1.0, 0.006), (-0.5, 0.015), (0.0, 0.019), (0.5, 0.015), (1.0, 0.006)]
+    def skin(phi, w, off):
+        d = 1e-3; y0 = sy(phi); dy = (sy(phi + d) - sy(phi - d)) / (2 * d)
+        t = np.array([R_, dy]); t /= np.linalg.norm(t); perp = np.array([-t[1], t[0]])
+        drape = 0.004 * math.sin(7.0 * phi) * (1.0 - abs(w) * 0.5)
+        return surface_at(y0 + perp[1] * w * HH, phi + perp[0] * w * HH / R_, off=off + drape)
+    cols = [2 * math.pi * i / NA for i in range(NA)]
+    grid_surface('wrap', lambda i, j: skin(cols[i], rows[j][0], rows[j][1])[0], NA, len(rows), pat, closed_u=True, hint=lambda p: full_n(p))
+    # knot: small, just right of the chest centre
+    kph = math.pi / 2 - 0.20
+    kc, kn = skin(kph, 0.0, 0.030)
     xx, yy, nn = axes(kn)
-    bead('knot', kc, (0.120, 0.078, 0.088), lambda p, n: mix(deep(base, 0.10), tint(base, 0.2), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=8)
+    bead('knot', kc + nn * 0.004, (0.058, 0.044, 0.042), lambda p, n: mix(deep(base, 0.10), tint(base, 0.2), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=8)
     for s_ in (-1, 1):
-        bead('ear%+d' % s_, kc + xx * (s_ * 0.105) + yy * 0.018 + nn * 0.004, (0.062, 0.070, 0.058), lambda p, n: mix(deep(base, 0.14), tint(base, 0.18), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=6)
+        bead('ear%+d' % s_, kc + xx * (s_ * 0.064) + yy * 0.010 + nn * 0.002, (0.040, 0.044, 0.032), lambda p, n: mix(deep(base, 0.14), tint(base, 0.18), 0.5 + 0.5 * n[2]), rot=np.stack([xx, yy, nn], 1), segs=6)
+    kx = float(kc[0]); ky = float(kc[1])
     def tail(cx0, cx1, y0, y1, w, name, off, wav):
-        nu, nv = 4, 6
+        nu, nv = 5, 7
         def fn(i, j):
             v = j / (nv - 1); u = i / (nu - 1) - 0.5
-            cx = cx0 + (cx1 - cx0) * v + 0.016 * math.sin(4.0 * v + wav)
+            cx = cx0 + (cx1 - cx0) * v + 0.010 * math.sin(4.0 * v + wav)
             y = y0 + (y1 - y0) * v
-            ww = w * (1 + 0.65 * v)
-            return body_pt(cx + u * ww, y, off + 0.010 * math.sin(3.0 * v + wav) * v)
-        thick_sheet(name, fn, nu, nv, 0.012, lambda p, n: pat(p, n))
-    tail(-0.040, -0.150, 0.430, 0.150, 0.115, 'tail_a', 0.096, 0.0)
-    tail(0.040, 0.120, 0.430, 0.175, 0.105, 'tail_b', 0.100, 1.7)
+            ww = w * (1 + 0.75 * v)
+            edge = 0.008 * math.sin(9.0 * v + wav + 3.0 * i) * v            # wavy edges
+            return body_pt(cx + u * ww, y + edge * (1 if i % 2 else -1), off + 0.007 * math.sin(3.0 * v + wav) * v)
+        thick_sheet(name, fn, nu, nv, 0.006, lambda p, n: pat(p, n))
+    tail(kx - 0.020, kx - 0.075, ky - 0.020, 0.265, 0.068, 'tail_a', 0.038, 0.0)
+    tail(kx + 0.030, kx + 0.060, ky - 0.020, 0.300, 0.062, 'tail_b', 0.040, 1.7)
     return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly', 'sweet'], price=55, title='Silk scarf',
-                desc='A silk neckerchief in navy printed with gold medallions: a thick rolled wrap in one continuous loop round the belly (y~0.46, rising at the back), a fat knot with two folded ends at the front centre (top y 0.52) and two flowing tails of fuller fabric.')
+                desc='A silk neckerchief in navy printed with gold medallions: a thin draped band (0.084 tall, soft wave) all the way round the neck, low on the chest (top edge 0.542), rising over the arm roots and high at the back (0.65), with a small knot with two ears just right of centre and two thin silk tails with wavy edges (hems y 0.265 / 0.30).')
 
 # ============================ PEARLS (full loop) ===============================
 def pearls(pearl=hx('#FBF4EC'), clasp=HONEY, **k):
