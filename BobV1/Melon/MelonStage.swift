@@ -1190,7 +1190,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if parkOn, model.care.parkHides(a.id) { ContactField.invalidate(a.id); continue }          // the ones at home during a park visit are not drawn (nor worn): no skinning for them
             if bathHides, a.id != washedID { ContactField.invalidate(a.id); continue }          // the bath close-up shows the washed Jelly alone (renderer.setHidden for the rest): no skinning for them
             a.skinner.legBlendShoes = a.brain?.shoesWorn ?? false          // (legs blend: shoes-worn bodies stay exactly as they are)
-            a.brain?.armBlendSpecies = a.appearance?.jellySpecies == JellyRoster.pandaID || a.appearance?.jellySpecies == 0          // (arm blend spike: Panda + Blue)
+            a.brain?.armBlendSpecies = true          // (arm blend: every species; -ArmBlend 0 = off)
             a.brain?.pandaInk = a.appearance?.jellySpecies == JellyRoster.pandaID          // (the waving Panda's ink: set here, every frame, because the Jelly Spring's showcase stage never runs tickWear)
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor))
         }

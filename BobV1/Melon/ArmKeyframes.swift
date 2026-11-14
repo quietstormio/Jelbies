@@ -69,6 +69,11 @@ nonisolated enum ArmDebug {
     /// Flared capsule base (off by default: it produced a long sliver fin along the arm's inner side, see the report).
     static let flare = UserDefaults.standard.integer(forKey: "ArmFlare") != 0
     static let flareRange: Double = UserDefaults.standard.object(forKey: "ArmFlareRange") != nil ? UserDefaults.standard.double(forKey: "ArmFlareRange") : 0.08
+    /// Join fix (wave path only; -ArmBlend 0 = off = exactly the old keyframes): the fillet skin next to the capsule sinks `joinSink` deeper (over `capsuleLift`), reaching out to `joinReach`.
+    /// Without it the skin lies within 1.5 mm of the capsule surface where the fillet is tangent to the arm, so skin and capsule trade places triangle by triangle: a saw-tooth along the join.
+    static let joinOn: Bool = !(UserDefaults.standard.object(forKey: "ArmBlend") != nil && UserDefaults.standard.integer(forKey: "ArmBlend") == 0)
+    static let joinSink: Double = UserDefaults.standard.object(forKey: "ArmJoinSink") != nil ? UserDefaults.standard.double(forKey: "ArmJoinSink") : 0.012
+    static let joinReach: Double = UserDefaults.standard.object(forKey: "ArmJoinReach") != nil ? UserDefaults.standard.double(forKey: "ArmJoinReach") : 0.07
     static let sinkReach: Double = UserDefaults.standard.object(forKey: "ArmSinkReach") != nil ? UserDefaults.standard.double(forKey: "ArmSinkReach") : 0.04
 }
 
@@ -85,7 +90,7 @@ nonisolated enum ArmKeyframeBuilder {
     struct VertexResult { var p: SIMD3<Double>; var cls: UInt8; var ao: Double }
 
     /// Classify and pose one skin vertex (mirrored coordinates, arm on +x). Exposed for the tests.
-    static func pose(vertex p: SIMD3<Double>, field F: PosedArmField, restArm: Double) -> (p: SIMD3<Double>, cls: UInt8) {
+    static func pose(vertex p: SIMD3<Double>, field F: PosedArmField, restArm: Double, join: Bool = false) -> (p: SIMD3<Double>, cls: UInt8) {
         let g = F.g
         let infl = g.capsuleInflate
         let cone0 = F.cone(p)
@@ -106,7 +111,7 @@ nonisolated enum ArmKeyframeBuilder {
         if near {
             var q = F.project(p)
             let c = F.cone(q)
-            let sink = ArmGeom.capsuleLift * g.grow * min(max(1 - c / ArmDebug.sinkReach, 0), 1)
+            let sink = (ArmGeom.capsuleLift + (join ? ArmDebug.joinSink : 0)) * g.grow * min(max(1 - c / (join ? ArmDebug.joinReach : ArmDebug.sinkReach), 0), 1)
             if sink > 0 { q -= F.normal(q) * sink }
             return (q, 2)
         }
@@ -125,6 +130,7 @@ nonisolated enum ArmKeyframeBuilder {
     static func build(path: ArmPath, rest: [Float], mat: [Float], capsule: ArmCapsuleInfo, index: [UInt32], intervals K: Int = 32,
                       scale: Double = 1) -> ArmKeyframes {
         let t0 = CFAbsoluteTimeGetCurrent()
+        let join = ArmDebug.joinOn && path.name == ArmPath.wave.name          // (the nub paths keep their keyframes)
         let geoms = (0...K).map { path.geom(at: Double($0) / Double(K), scale: scale) }
         var out = ArmKeyframes(name: path.name, intervals: K, sides: [], scale: scale)
         let capFirst = min(capsule.firstVertex[0], capsule.firstVertex[1])
@@ -173,7 +179,7 @@ nonisolated enum ArmKeyframeBuilder {
                             var posK = [SIMD3<Double>](repeating: .zero, count: nS)
                             var clsK = [UInt8](repeating: 3, count: nS)
                             for i in 0..<nS {
-                                let r = pose(vertex: restP[i], field: F, restArm: restArm[i])
+                                let r = pose(vertex: restP[i], field: F, restArm: restArm[i], join: join)
                                 posK[i] = r.p; clsK[i] = r.cls
                             }
                             if ArmDebug.smoothPasses > 0 {
@@ -190,7 +196,7 @@ nonisolated enum ArmKeyframeBuilder {
                                         for n in nbrs[i] { m += atS(n) }
                                         m /= Double(nbrs[i].count)
                                         var q = F.project(posK[i] * 0.4 + m * 0.6, steps: 6)
-                                        let sink = ArmGeom.capsuleLift * g.grow * min(max(1 - F.cone(q) / ArmDebug.sinkReach, 0), 1)
+                                        let sink = (ArmGeom.capsuleLift + (join ? ArmDebug.joinSink : 0)) * g.grow * min(max(1 - F.cone(q) / (join ? ArmDebug.joinReach : ArmDebug.sinkReach), 0), 1)
                                         if sink > 0 { q -= F.normal(q) * sink }
                                         nxt[i] = q
                                     }
@@ -323,6 +329,7 @@ nonisolated final class ArmKeyframeStore: @unchecked Sendable {
         func mix(_ v: UInt64) { h = (h ^ v) &* 1099511628211 }
         for p in paths { for u in p.name.utf8 { mix(UInt64(u)) } }
         mix(UInt64(rest.count)); mix(UInt64(index.count)); mix(scale.bitPattern)
+        mix(ArmDebug.joinOn ? ArmDebug.joinSink.bitPattern ^ ArmDebug.joinReach.bitPattern : 0)          // (-ArmBlend 0 and the join fix never share a cache file)
         for f in rest { mix(UInt64(f.bitPattern)) }
         for f in mat { mix(UInt64(f.bitPattern)) }
         if let u = Bundle.main.executableURL, let d = (try? FileManager.default.attributesOfItem(atPath: u.path))?[.modificationDate] as? Date { mix(d.timeIntervalSince1970.bitPattern) }

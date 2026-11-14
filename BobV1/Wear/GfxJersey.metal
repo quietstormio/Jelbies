@@ -105,7 +105,8 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
                                   bool ff [[front_facing]],
                                   constant JerseyUniforms& u [[buffer(0)]],
                                   constant JerseyParams& jp [[buffer(1)]],
-                                  constant float4* jl [[buffer(7), function_constant(jellyB)]]) {
+                                  constant float4* jl [[buffer(7), function_constant(jellyB)]],
+                                  constant float4* ab [[buffer(8)]]) {
     float3 N = normalize(i.n);
     if (!ff) { N = -N; }
     float3 Q = i.rest;
@@ -119,11 +120,14 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
     float3 gf = float3(jFibre(Q + float3(ef, 0, 0)) - fb, jFibre(Q + float3(0, ef, 0)) - fb, jFibre(Q + float3(0, 0, ef)) - fb) / ef;
     gf -= N * dot(gf, N);
     N = normalize(N - gf * 0.0003);
+    float armW2 = 0.0;
+    float armDc = armBlendEase(ab, i.wp, N, armW2);          // ARM BLEND (PandaMarks.h): skin and the waving arm shade as one piece
 
     float3 L = normalize(u.keyDir.xyz);
     float d = dot(N, L);
     float pandaInk = pandaInkOfMat(i.mat, u.shape.w);
     float occ = clamp(pandaAOOfMat(i.mat, pandaInk) / 0.4, 0.0, 1.0);
+    occ = mix(occ, armBlendOccB, armW2);
     float down = clamp(-N.y, 0.0, 1.0);
     float s = clamp(0.26 + 0.80 * d - 0.5 * max(-d - 0.04, 0.0) - 0.16 * down, 0.0, 1.0);
     s *= 1.0 - 0.62 * occ;
@@ -139,7 +143,8 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
-        col = pandaPaint(col, Q, bm, pandaPatch, pandaInk);
+        if (ab[0].x > 0.5) { col = pandaPaintArm(col, Q, bm, pandaPatch, 1.0 - smoothstep(0.017, 0.023, armDc), ab[0].y); }
+        else { col = pandaPaint(col, Q, bm, pandaPatch, pandaInk); }
     } else if (bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading

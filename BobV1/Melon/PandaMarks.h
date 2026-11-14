@@ -123,3 +123,34 @@ static float pandaInkOfMat(float mat, float modeW) { return (modeW > 50.5 && mod
 static float pandaAOOfMat(float mat, float ink) { return ink > 0.0 ? clamp(mat + 4.0 * ink, 0.0, 0.4) : mat; }
 
 #endif
+
+// ARM BLEND for the bath and jersey body shaders (panda-wave-r1): the same posed-arm cone / normal ease as GfxBodyFast.metal (fragment buffer 8: 7 float4, layout in Skinner.setWaveBlend; zeros = off).
+// Returns the distance to the posed wave arm (1e3 = none) and eases `N` toward the arm's own normal within 3.5 cm; `w2` = the weight the crease AO takes toward the calm join value.
+static float armBlendConeB(float3 P, constant float4* ab) {
+    float sg = ab[0].y, fl = ab[0].z;
+    float3 a = ab[5].xyz, b = ab[6].xyz;
+    a.z *= fl; b.z *= fl;
+    return pandaRoundCone(float3(P.x * sg, P.y, P.z * fl), a, b, ab[5].w, ab[6].w) / sqrt(fl);
+}
+constant float armBlendReachB = 0.035;
+constant float armBlendOccB = 0.06 / 0.4;          // the calm AO of the join, as the shaders' occ (0...1)
+static float armBlendEase(constant float4* ab, float3 wp, thread float3& N, thread float& w2) {
+    w2 = 0.0;
+    float dc = 1.0e3;
+    if (ab[0].x > 0.5) {
+        float3x3 Mw = float3x3(ab[1].xyz, ab[2].xyz, ab[3].xyz);
+        float3 P = Mw * wp + ab[4].xyz;
+        dc = armBlendConeB(P, ab);
+        if (dc < armBlendReachB) {
+            const float e = 0.003;
+            float3 g = float3(armBlendConeB(P + float3(e, 0, 0), ab) - armBlendConeB(P - float3(e, 0, 0), ab), armBlendConeB(P + float3(0, e, 0), ab) - armBlendConeB(P - float3(0, e, 0), ab), armBlendConeB(P + float3(0, 0, e), ab) - armBlendConeB(P - float3(0, 0, e), ab));
+            if (length(g) > 1e-6) {
+                float3 gw = normalize(g * Mw);
+                float w = 1.0 - smoothstep(0.0, armBlendReachB, max(dc, 0.0));
+                if (dot(gw, N) > 0.0) { N = normalize(mix(N, gw, w)); }
+                w2 = w * w;
+            }
+        }
+    }
+    return dc;
+}
