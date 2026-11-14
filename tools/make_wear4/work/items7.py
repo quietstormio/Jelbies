@@ -12,48 +12,69 @@ def surf_frame(x, y, off):
     return p, xx, yy, z
 
 # ============================ SASH ==========================================
+def sash_y(phi):
+    """Centre-line height of the closed diagonal sash at azimuth phi (0 = +x right hip, pi/2 = front, pi = -x left shoulder, 3pi/2 = back), a 2-harmonic curve through four
+    heights: LOW over the right hip (0.265: under the hanging arm bulb, bottom y~0.31), HIGH over the left shoulder (0.70: above the arm root, top ~0.66), 0.46 on the chest
+    (top edge 0.50, under the mouth keep-out) and 0.555 at the back centre line (between Pip's tail-root swell, top 0.544, and his next spike group, 0.574+)."""
+    return 0.495 - 0.2175 * math.cos(phi) - 0.0475 * math.sin(phi) - 0.0125 * math.cos(2 * phi)
+
 def sash(field=SKY, trim=CREAM, star=PINK, **k):
-    reset(); nL = 11; W_ = 0.074
-    a = np.array([-0.42, 0.600]); b = np.array([0.33, 0.255])
-    d = (b - a) / np.linalg.norm(b - a); perp = np.array([-d[1], d[0]])
-    rows = [(-1.0, 0.012), (-0.90, 0.024), (-0.5, 0.036), (0.0, 0.042), (0.5, 0.036), (0.90, 0.024), (1.0, 0.012)]
+    """A full closed diagonal sash (bandolier) worn round the whole body: over the left shoulder above the arm root, across the chest, under the right arm and back
+    up across the back. Built on wl.surface_ray so it hugs the skin all the way round (the old one was front-only)."""
+    reset(); NA = 56; HW = 0.042
+    rows = [(-1.0, 0.010), (-0.86, 0.030), (0.0, 0.037), (0.86, 0.030), (1.0, 0.010)]
+    R_ = 0.52
+    def path(phi):
+        d = 1e-3
+        return sash_y(phi), (sash_y(phi + d) - sash_y(phi - d)) / (2 * d)       # (y, dy/dphi)
+    def skin(phi, w, off):
+        y0, dy = path(phi)
+        t = np.array([R_, dy]); t /= np.linalg.norm(t)                          # (arc length, height) direction of the path
+        perp = np.array([-t[1], t[0]])                                          # across the band: +w goes up-and-forward
+        ph = phi + perp[0] * w * HW / R_; y = y0 + perp[1] * w * HW
+        return surface_at(y, ph, off=off)
+    cols = [2 * math.pi * i / NA for i in range(NA)]
     def pt(i, j):
-        t = i / (nL - 1); w, off = rows[j]
-        taper = 1.0 - 0.55 * (abs(2 * t - 1) ** 6)
-        q = a + (b - a) * t + perp * W_ * w * taper
-        p, n = body_pt(q[0], q[1], off * (0.4 + 0.6 * taper)); return p
-    grid_surface('band', pt, nL, len(rows), None, closed_u=False, hint=lambda p: full_n(p),
-                 gcol=lambda i, j: mix(deep(trim, 0.1), trim, 0.5) if abs(rows[j][0]) >= 0.89 else mix(deep(field, 0.12), tint(field, 0.12), 0.35 + 0.65 * (1 - abs(rows[j][0]))))
-    # raised piping along both edges
-    for s in (-1, 1):
-        pts = []
-        for t in np.linspace(0.03, 0.97, 12):
-            taper = 1.0 - 0.55 * (abs(2 * t - 1) ** 6)
-            q = a + (b - a) * t + perp * W_ * 0.93 * s * taper
-            pts.append(body_pt(q[0], q[1], 0.040)[0])
-        tube_curve('pipe%+d' % s, pts, 0.0085, 4, lambda p, n: mix(deep(trim, 0.12), tint(trim, 0.2), 0.5 + 0.5 * n[1]), cap=True)
-    ang = math.atan2(d[1], d[0])
-    for k_, t in enumerate((0.22, 0.5, 0.78)):
-        q = a + (b - a) * t
-        p, xx, yy, nn = surf_frame(q[0], q[1], 0.046)
-        sp = star_poly(0.040, 0.019, 5, rad=0.007)
-        slab_part('star%d' % k_, sp, 0.014, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.3), 0.5 + 0.5 * nq[2]),
-                  lambda px, py, pz, p=p, xx=xx, yy=yy, nn=nn: tuple(p + xx * (px * math.cos(ang) - py * math.sin(ang)) + yy * (px * math.sin(ang) + py * math.cos(ang)) + nn * (pz - 0.004)), cuts=0, sharp=40)
-    # a ruffled rosette at the low end with two short ribbon tails
-    p, xx, yy, nn = surf_frame(0.305, 0.262, 0.052)
+        w, off = rows[j]; return skin(cols[i], w, off)[0]
+    # the band is a closed ring: columns wrap
+    P = []
+    for j in range(len(rows)):
+        for i in range(NA): P.append(pt(i, j))
+    def gcol(i, j):
+        w = rows[j][0]
+        return mix(deep(trim, 0.1), trim, 0.5) if abs(w) >= 0.85 else mix(deep(field, 0.12), tint(field, 0.12), 0.35 + 0.65 * (1 - abs(w)))
+    grid_surface('band', lambda i, j: pt(i, j), NA, len(rows), None, closed_u=True, hint=lambda p: full_n(p), gcol=gcol)
+    # stars: three on the chest, laid on the band
+    def frame_at(phi, off):
+        p, n = skin(phi, 0.0, off)
+        y0, dy = path(phi)
+        tdir = skin(phi + 0.02, 0.0, off)[0] - skin(phi - 0.02, 0.0, off)[0]
+        tdir = tdir - n * np.dot(tdir, n); tdir /= np.linalg.norm(tdir)
+        up = np.cross(n, tdir)
+        return p, tdir, up, n
+    for k_, ph in enumerate((math.radians(62), math.radians(90), math.radians(118))):
+        p, xx, yy, nn = frame_at(ph, 0.040)
+        if xx[0] < 0: xx, yy = -xx, -yy                                           # screen-right first
+        sp = lib.poly_pts_rounded([((0.040 if q % 2 == 0 else 0.019) * math.cos(math.pi / 2 + math.pi * q / 5), (0.040 if q % 2 == 0 else 0.019) * math.sin(math.pi / 2 + math.pi * q / 5)) for q in range(10)], 0.007, arc=1)
+        slab_part('star%d' % k_, sp, 0.012, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.3), 0.5 + 0.5 * nq[2]),
+                  lambda px, py, pz, p=p, xx=xx, yy=yy, nn=nn: tuple(p + xx * px + yy * py + nn * (pz - 0.002)), cuts=0, sharp=40)
+    # a ruffled rosette at the low end (right hip, front) with two short ribbon tails
+    phr = math.radians(22)
+    p, xx, yy, nn = frame_at(phr, 0.044)
     Rm = np.stack([xx, nn, -yy], 1).tolist()
-    prof = [(0.0, 0.0), (0.062, 0.0), (0.072, 0.010), (0.062, 0.022), (0.044, 0.028), (0.0, 0.030)]
-    lathe_y('rosette', prof, 12, lambda q, nq: mix(deep(star, 0.12), tint(star, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p), rotm=Rm, sharp=60)
-    lathe_y('rosette2', [(0.0, 0.0), (0.040, 0.0), (0.044, 0.010), (0.030, 0.018), (0.0, 0.020)], 10, lambda q, nq: mix(deep(field, 0.1), tint(field, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p + nn * 0.026), rotm=Rm, sharp=60)
-    bead('rbutton', p + nn * 0.052, (0.016, 0.016, 0.012), GOLD, segs=6)
-    for s_, dx in ((1, 0.020), (-1, -0.026)):
-        def fn(i, j, s_=s_, dx=dx):
-            v = j / 5.0; u = i / 2.0 - 0.5
-            q = np.array([0.305 + dx + u * 0.040 * (1 + 0.5 * v) + s_ * 0.012 * v, 0.248 - 0.100 * v])
-            pp, nq = body_pt(q[0], q[1], 0.050 - 0.006 * v); return pp, nq
-        thick_sheet('tail%+d' % s_, fn, 3, 6, 0.010, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.2), 0.5))
+    prof = [(0.0, 0.0), (0.056, 0.0), (0.064, 0.010), (0.054, 0.022), (0.038, 0.028), (0.0, 0.030)]
+    lathe_y('rosette', prof, 10, lambda q, nq: mix(deep(star, 0.12), tint(star, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p), rotm=Rm, sharp=60)
+    lathe_y('rosette2', [(0.0, 0.0), (0.034, 0.0), (0.038, 0.010), (0.026, 0.018), (0.0, 0.020)], 8, lambda q, nq: mix(deep(field, 0.1), tint(field, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p + nn * 0.026), rotm=Rm, sharp=60)
+    bead('rbutton', p + nn * 0.050, (0.014, 0.014, 0.011), GOLD, segs=6)
+    for s_, dphi in ((1, 0.00), (-1, 0.06)):
+        def fn(i, j, s_=s_, dphi=dphi):
+            v = j / 4.0; u = i / 2.0 - 0.5
+            y = sash_y(phr) - 0.015 - 0.095 * v
+            ph = phr + dphi - 0.05 * s_ * v + u * 0.07 * (1 + 0.5 * v)
+            pp, nq = surface_at(y, ph, off=0.050 - 0.006 * v); return pp, nq
+        thick_sheet('tail%+d' % s_, fn, 3, 5, 0.010, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.2), 0.5))
     return dict(anchor='chest', slot='body', tags=['sporty', 'sparkly'], price=50, title='Racing sash',
-                desc='A pillowed diagonal racing sash (0.15 wide, 0.04 tall) with cream piping, three puffy stars and a ruffled rosette with two ribbon tails at the low end. Ends stop at |x|=0.42; whole sash below the mouth keep-out.')
+                desc='A full closed diagonal racing sash (0.074 wide) worn round the whole body: over the left shoulder above the arm root (centre y 0.70), across the chest below the mouth (0.46), under the right arm (0.265), and back up across the back (0.50 at the centre line, between Pip\'s spikes). Cream piped edges, three stars on the chest and a ruffled rosette with two ribbon tails at the right hip.')
 
 # ============================ BIB ==========================================
 BIB_C = (0.0, 0.355)

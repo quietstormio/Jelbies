@@ -690,8 +690,8 @@
     "sparkly"
    ],
    "price": 50,
-   "tris": 1108,
-   "verts": 991,
+   "tris": 952,
+   "verts": 842,
    "deform_class": "surface_bound",
    "files": [
     "sash_pink.obj",
@@ -727,8 +727,8 @@
     "sparkly"
    ],
    "price": 50,
-   "tris": 1108,
-   "verts": 991,
+   "tris": 952,
+   "verts": 842,
    "deform_class": "surface_bound",
    "files": [
     "sash_sky.obj",
