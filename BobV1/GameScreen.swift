@@ -320,6 +320,7 @@ struct GameScreen: View {
             router.onRace = toTrack
             router.onNoFood = { A11yAnnounce.say(GameRouter.noFoodLine); withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }          // Siri feed with an empty bag: the Feed row, "none left", spoken
             router.onGoodnight = { care.goodnight() }                 // Siri "goodnight": the voice goodnight flow (every Jelbie to bed)
+            router.drainQueued()                                                                       // the widget's Water button pressed while the app was not running (a cold launch never sees `.active` after a background)
             router.apply(care: model.care)                                                             // a Siri route that launched the app cold
             // Not needed for the first frame: after it (the Continue path built all of this inside onAppear).
             Task { @MainActor in

@@ -83,6 +83,23 @@ final class AppleFixesTests: XCTestCase {
         XCTAssertEqual(r.applied.last, .jelly(2), "9 minutes: still kept and performed")
     }
 
+    /// The room-appear path (GameScreen.onAppear): drainQueued() then apply(). A widget Water pressed while the app was not running.
+    func testColdLaunchDrainsWidgetWaterOnceAndEmptiesTheQueue() throws {
+        let dir = try tempDir()
+        let care = GameCare(jellyCount: 3, persistent: false, defaults: suite()); Self.keep.append(care)
+        let r = GameRouter(directory: dir); Self.keep.append(r)
+        let clock = at(15); r.now = { clock }; r.live = nil
+        XCTAssertTrue(PendingActions.enqueue(.water(0), in: dir, now: clock))
+        XCTAssertEqual(PendingActions.queued(for: 0, from: dir, now: clock), [.water(0)])
+        r.drainQueued(); r.apply(care: care)
+        XCTAssertEqual(r.applied, [.water(0)], "the drink is routed once")
+        XCTAssertTrue(r.pending.isEmpty)
+        XCTAssertTrue(care.trayOut); XCTAssertEqual(care.servingKind, .drink)
+        XCTAssertTrue(PendingActions.read(from: dir, now: clock).isEmpty, "the file is emptied")
+        r.drainQueued(); r.apply(care: care)          // a second appear adds nothing
+        XCTAssertEqual(r.applied, [.water(0)]); XCTAssertTrue(r.pending.isEmpty)
+    }
+
     func testClearPendingForgetsEverything() {
         let r = GameRouter(directory: nil); Self.keep.append(r)
         r.request(.bed); r.request(.feed(1))
