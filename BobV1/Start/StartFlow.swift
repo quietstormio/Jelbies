@@ -53,7 +53,11 @@ final class StartFlow {
         #endif
         #if targetEnvironment(simulator)
         if d.string(forKey: "PickerMode") == "more" { phase = .adopt(.more) }          // capture aid: the adopt-more picker
-        if d.object(forKey: "FirstDayChar") != nil { let c = min(max(d.integer(forKey: "FirstDayChar"), 0), 3); phase = .firstDay(c, JellyRoster.baseNames[c], true) }          // capture aid: the first-day-home beat
+        if d.object(forKey: "FirstDayChar") != nil {          // capture aid: the first-day-home beat (the card with that species, or the room's tour over the saved / default room)
+            let c = min(max(d.integer(forKey: "FirstDayChar"), 0), 3)
+            if FirstDayStyle.current == .card { phase = .firstDay(c, JellyRoster.baseNames[c], true) }
+            else { phase = .game; FirstDayTour.shared.arm(name: JellyRoster.nameOf(JellyRoster.savedIDs().first ?? c), replay: true, reduceMotion: false); if d.object(forKey: "FirstDayStep") != nil { FirstDayTour.shared.jump(to: d.integer(forKey: "FirstDayStep")) } }
+        }
         if d.object(forKey: "OpeningBeat") != nil { phase = .opening }                  // capture aid: the opening story at a given beat
         #endif
     }
@@ -160,11 +164,12 @@ final class StartFlow {
     func continueGame() { LaunchTiming.mark("continue tapped"); enterGame() }
 
     /// Pause card: back to the main menu (the room is dropped; Continue brings it back from the save).
-    func returnToMenu() { if phase == .game { phase = .menu } }
+    func returnToMenu() { if phase == .game { FirstDayTour.shared.reset(); phase = .menu } }
 
     /// Menu: New game / Start (and Settings > Reset save). Clears the screen first (so the room stops writing), then the opening story, then the Adoption Center.
     /// Nothing is wiped here: the old save goes when the first Jelbie is brought home (`bringHome`), so backing out keeps it.
     func startOver() {
+        FirstDayTour.shared.reset()
         phase = .wiping
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
@@ -179,7 +184,12 @@ final class StartFlow {
         guard phase == .opening else { return }
         if replaying {
             replaying = false
-            if let c = JellyRoster.savedIDs().first { phase = .firstDay(c, JellyRoster.nameOf(c), true) } else { enterGame() }          // the replay shows the first-day beat with the player's own Jelbie
+            if let c = JellyRoster.savedIDs().first {          // the replay shows the first-day beat with the player's own Jelbie
+                if FirstDayStyle.current == .room {          // in the real room: the captions and the coach marks (nobody runs in, nothing is written to the save)
+                    FirstDayTour.shared.arm(name: JellyRoster.nameOf(c), replay: true, reduceMotion: A11ySettings.shared.reduceMotion || UIAccessibility.isReduceMotionEnabled)
+                    enterGame()
+                } else { phase = .firstDay(c, JellyRoster.nameOf(c), true) }
+            } else { enterGame() }
         } else { phase = .adopt(.first) }
     }
 
@@ -190,6 +200,7 @@ final class StartFlow {
     /// The first-adoption picker's back button: to the title menu.
     func backToMenu() {
         guard case .adopt = phase else { return }
+        FirstDayTour.shared.reset()
         if let s = oldSaveSnapshot { OpeningStoryView.restoreSnapshot(s); oldSaveSnapshot = nil }          // the previews' writes go; the old save is as it was
         phase = .menu
     }
@@ -219,7 +230,10 @@ final class StartFlow {
         JellyRoster.setName(id, name)
         UserDefaults.standard.set(true, forKey: Self.startedKey)
         if DevArgs.enabled { Self.applyPendingFirstCoins(pendingCoins ?? DevArgs.phoneNewGameCoins, first: first) }          // the room's wallet is created after this (it reads the key in init), so it shows the balance at once
-        GameCare.newcomerPending = true; GameCare.newcomerWithOthers = ids.count > 1          // (others at home: the curtain is held until he is off-screen)
+        // the first day at home in the REAL room (FirstDayTour.swift); .card = the old illustrated screen
+        let room = first && FirstDayStyle.current == .room && FirstDayTour.shared.arm(name: name, replay: false, reduceMotion: A11ySettings.shared.reduceMotion || UIAccessibility.isReduceMotionEnabled)
+        GameCare.newcomerPending = true; GameCare.newcomerWithOthers = ids.count > 1 || FirstDayTour.shared.armed          // (others at home, or the tour's run-in: the curtain is held until he is off-screen)
+        if room { welcome = nil; enterGame(); return }          // the tour says "Welcome home" itself
         if first { welcome = nil; phase = .firstDay(id, name, false); return }          // the first day at home says "Welcome home" itself
         welcome = JellyRoster.nameOf(id)
         enterGame()

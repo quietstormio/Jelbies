@@ -157,6 +157,7 @@ struct GameScreen: View {
                                     }
                                     .accessibilityValue(settingsOpen ? "expanded" : "collapsed")
                                     .accessibilityIdentifier("settings-button")
+                                    .firstDayTarget(.settings)
                                     HUDGlassIcon(systemName: soundOpen ? "speaker.wave.2.fill" : "speaker.wave.2", label: "Sound") {
                                         AudioHub.shared.uiTap()
                                         withAnimation(CareMenu.spring) { soundOpen.toggle(); if soundOpen { extrasOpen = false; settingsOpen = false } }
@@ -173,7 +174,7 @@ struct GameScreen: View {
                         if !focus.isActive, !cleaning, !racing {
                             GlassEffectContainer(spacing: 8) {
                                 HStack(spacing: 8) {
-                                    DropsPill(wallet: model.care.bath.wallet, glass: true)
+                                    DropsPill(wallet: model.care.bath.wallet, glass: true).firstDayTarget(.coins)
                                     RosterButton(care: model.care, open: $rosterOpen)
                                 }
                             }
@@ -201,12 +202,13 @@ struct GameScreen: View {
                             GlassEffectContainer(spacing: 8) {
                                 VStack(spacing: 0) {
                                     VoiceBookButton { bookOpen = true }
-                                    if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true } }
+                                    if !focus.isActive { BagButton(store: model.care.store) { bagTab = nil; bagWho = nil; bagOpen = true }.firstDayTarget(.bag) }
                                     if !focus.isActive {
-                                        GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }
+                                        GoOutButton { withAnimation(.easeInOut(duration: 0.25)) { town = .town } }.firstDayTarget(.goOut)
                                     }
                                     Capsule().fill(CareMenu.brown.opacity(0.22)).frame(width: 28, height: 1.5).padding(.vertical, 4)
                                     VoiceMicButton(voice: model.care.voice, openBook: { bookOpen = true })
+                                        .firstDayTarget(.mic)
                                         .overlay(alignment: .topLeading) {
                                             VoiceTip(voice: model.care.voice).fixedSize().offset(y: -86)
                                         }
@@ -307,6 +309,7 @@ struct GameScreen: View {
             setUpSelect(); model.care.touchPlay = model.touch
             DayClock.shared.snapToNow()          // the room is on the real clock before the first frame (no catch-up sweep), and before the bedtime check
             model.care.launched()
+            FirstDayTour.shared.roomReady()          // a new game's first day (or Watch the opening): the tour shows over this room (Start/FirstDayTour.swift)
             Self.devAdoptNow(model.care)
             model.care.store.grantStarterIfNeeded()          // first open: the starter Drops, once
             AudioHub.shared.start()
@@ -469,6 +472,7 @@ struct GameScreen: View {
         }
         .overlay { GuestArrivalOverlay(care: model.care) }
         .overlay { NightSkipVeil(care: model.care) }
+        .overlayPreferenceValue(FirstDayAnchorKey.self) { FirstDayTourOverlay(care: model.care, anchors: $0) }          // the first-day tour: coach marks over the real HUD
         .overlay { if BubbleWand.shared.active { BubbleLayerRepresentable().ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true) } }          // the bubble wand's bubbles (Toys/)
         .overlay(alignment: .trailing) {          // iPad: the Bag is a side card (the room stays visible beside it), not a bottom sheet
             if HUDLayout.isPad, bagOpen {
@@ -1518,6 +1522,7 @@ struct CareMenu: View {
             .buttonStyle(.plain)
             .hudGlassEffect(HUDGlass.pink, opaque: Color(red: 0.95, green: 0.38, blue: 0.56), in: .circle)
             .accessibilityIdentifier("care-menu")
+            .firstDayTarget(.care)
             .accessibilityLabel(who.map { open ? "Close \($0)'s menu" : "\($0)'s menu" } ?? (open ? "Close care menu" : "Care menu"))
             .accessibilityValue(open ? "expanded" : "collapsed")
             .accessibilityHint(who.map { "Shows care actions for \($0)" } ?? "Shows care actions for everyone")

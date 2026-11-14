@@ -4,6 +4,7 @@
 //  illustrated room in the opening's art style (moving boxes, one open with a blanket peeking out, a window onto Wobble Isle's dawn sky) where the
 //  chosen Jelbie (the real 3D one, ShowcaseStage cutout, with its species features) bounces in and does a happy hop. Captions: "Welcome home,
 //  <name>!" then how Drops work. ~6 s after the Jelbie is ready; a tap moves on, Skip leaves, then a cross-fade into the room.
+//  KEPT BEHIND `FirstDayStyle.card` (FirstDayTour.swift): a new game's first day now plays in the real room (`FirstDayStyle.room`, the default); one line switches back.
 //  Reduce Motion: no bounce-in, plain fades. VoiceOver reads the captions. Simulator-only capture flag: -FirstDayChar 0...3 shows it directly.
 //
 
