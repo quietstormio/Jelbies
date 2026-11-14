@@ -21,7 +21,7 @@ final class TouchSoundTests: XCTestCase {
             f(d)
             return rec.events
         }
-        let a = run { $0.transient(now: 1, intensity: 0.4, sharpness: 0.6) }
+        let a = run { $0.touchTransient(now: 1, intensity: 0.4, sharpness: 0.6) }          // (a let-go pulse is a touch haptic: same strength curve as the other touch transients)
         let b = run { $0.jellyPulse(now: 1, intensity: 0.4, sharpness: 0.6) }
         XCTAssertEqual(a.count, 1)
         XCTAssertEqual(a.map { "\($0.kind)\($0.intensity)\($0.sharpness)" }, b.map { "\($0.kind)\($0.intensity)\($0.sharpness)" })

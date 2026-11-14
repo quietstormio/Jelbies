@@ -2029,7 +2029,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             tSim.launch(velocity: v, spin: SIMD3<Float>(0, 0, v.x > 0 ? -2.5 : 2.5))
             throwHold = 1.0
             model.touch.thrown = true
-            model.touch.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.3)       // the release
+            model.touch.haptics.touchTransient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.3)       // the release
         } else { model.touch.jellyLetGo(now: CACurrentMediaTime()) }       // dropped: the jelly snaps back and settles, the haptic follows its wobble
         grabSamples = []; liftHeight = 0
     }
