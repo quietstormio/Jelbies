@@ -15,6 +15,9 @@ import simd
 nonisolated enum JellyLook {
     /// The level a build ships with. Stays 0.
     static let launchLevel = 0
+    /// Phone test build switch: set to e.g. (level: 1, all: true) to make that level the default for all species (or the blue body only with all: false)
+    /// without launch arguments. Leave nil when committing; launch arguments still win where DevArgs.enabled.
+    static let phoneTest: (level: Int, all: Bool)? = nil
 
     private static func argFloat(_ key: String) -> Float? {
         guard DevArgs.enabled, UserDefaults.standard.object(forKey: key) != nil else { return nil }
@@ -23,11 +26,11 @@ nonisolated enum JellyLook {
 
     /// The level actually used (settable so tests can switch it; read once from -JellyLook otherwise).
     nonisolated(unsafe) static var level: Int = {
-        guard DevArgs.enabled, UserDefaults.standard.object(forKey: "JellyLook") != nil else { return launchLevel }
+        guard DevArgs.enabled, UserDefaults.standard.object(forKey: "JellyLook") != nil else { return phoneTest.map { max(0, min(3, $0.level)) } ?? launchLevel }
         return max(0, min(3, UserDefaults.standard.integer(forKey: "JellyLook")))
     }()
     /// -JellyAll 1: every species gets the look (default: the blue body only).
-    nonisolated(unsafe) static var all: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "JellyAll") != 0
+    nonisolated(unsafe) static var all: Bool = (DevArgs.enabled && UserDefaults.standard.object(forKey: "JellyAll") != nil) ? UserDefaults.standard.integer(forKey: "JellyAll") != 0 : (phoneTest?.all ?? false)
 
     /// Optional tuning overrides: see, core, gloss, glow, rim, sat, smooth, bend.
     nonisolated(unsafe) static var overrides: [String: Float] = {
@@ -42,13 +45,13 @@ nonisolated enum JellyLook {
         // Round 4 presets (matched by measured numbers to the user's reference picture): L1 = the picture's look, opaque; L2 / L3 = the same, see-through.
         // `core` ([0].z) and `edge` ([2].y) are unused; `sat` is 0 (`deep` darkens and saturates instead); `rim` = the light band's strength.
         //                         see   core  gloss glow  rim   sat   smooth edge  tint warm  bub  deep  dk    ck
-        let p: [[Float]] = [[0.00, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7],
-                            [0.25, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7],
-                            [0.45, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7]]
+        let p: [[Float]] = [[0.00, 0.00, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0],
+                            [0.60, 0.00, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0],
+                            [0.70, 0.85, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0]]
         var v = p[min(level, 3) - 1]
         for (i, k) in ["See", "Core", "Gloss", "Glow", "Rim", "Sat", "Smooth", "Edge", "Tint", "Warm", "Bubbles", "Deep", "Dk", "Ck"].enumerated() { if let o = overrides[k] { v[i] = o } }
         return [SIMD4(1, v[0], v[1], v[2]), SIMD4(v[3], v[4], v[5], v[6]), SIMD4(overrides["Bend"] ?? 0, v[7], v[8], v[9]), SIMD4(v[10], v[11], v[12], v[13]),
-                SIMD4(overrides["HiX"] ?? 0, overrides["HiY"] ?? 0, overrides["Flat"] ?? 0.7, overrides["Belly"] ?? 0.2),
+                SIMD4(overrides["HiX"] ?? -0.03, overrides["HiY"] ?? 0.06, overrides["Flat"] ?? 0.7, overrides["Belly"] ?? 0.2),
                 SIMD4(overrides["BandLo"] ?? 0.12, overrides["BandHi"] ?? 0.70, overrides["Lift"] ?? 2.1, 0)]
     }
 

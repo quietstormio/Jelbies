@@ -233,8 +233,14 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         col = mix(col, satc, sat * (1.0 - jThin));          // (preset 0 since round 4: `deep` below does the saturating)
         // R4.1: a deeper, more saturated body colour (species-generic): darker, chroma pushed out
         float Y = max(dot(col, float3(0.2126, 0.7152, 0.0722)), 1e-4);
-        float3 dcol = (Y * jl[3].z) * (1.0 + jl[3].w * (col / Y - 1.0));
-        col = mix(col, max(dcol, 0.0), jl[3].y);
+        // R5: species-generic: pale bodies (Pearl) keep their lightness, already saturated ones (yellow, Teddy) get less chroma push, nothing clips
+        float cMax = max(col.r, max(col.g, col.b));
+        float cSat = (cMax - min(col.r, min(col.g, col.b))) / max(cMax, 1e-3);
+        float dkE = mix(jl[3].z, 1.0, smoothstep(0.55, 0.85, Y));
+        float ckE = 1.0 + (jl[3].w - 1.0) * mix(1.0, 0.35, smoothstep(0.50, 0.72, cSat));
+        float3 dcol = max((Y * dkE) * (1.0 + ckE * (col / Y - 1.0)), 0.0);
+        dcol *= min(1.0, 0.96 / max(max(dcol.r, max(dcol.g, dcol.b)), 1e-3));
+        col = mix(col, dcol, jl[3].y);
         // R2.2: light collects inside, on the side away from the lamp, low on the body: a lighter patch of the same body colour
         float inner = pow(saturate(dot(Ns, normalize(-L + float3(0.0, -0.35, 0.0))) * 0.5 + 0.5), 3.0) * (1.0 - 0.7 * jThin);
         col = mix(col, mix(col, float3(1.0), 0.25), saturate(0.55 * glow * inner));
@@ -287,7 +293,7 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         float ek = hasTeddy && tn > 3.5 ? teddyEarMask(Q) : 0.0;
         float pk = hasTeddy && tn > 3.5 ? teddyPomMask(Q) : 0.0;
         float pm = max(max(bk, ek), pk);
-        if (jellyC && jelly) { pm *= jl[4].w; }          // R4: the jelly body keeps only a hint of the lighter belly / forehead paint
+        if (jellyC && jelly) { pm *= (tn > 2.5 ? 0.85 : jl[4].w); }          // R4: the jelly body keeps only a hint of the lighter belly / forehead paint
         col = mix(col, lt * (1.0 - ek * 0.25 * (1.0 - s) - pk * (1.0 - s) * float3(0.12, 0.20, 0.32)), pm);          // (the pom / inner ear keep the light falloff: the pom shades toward warm brown, never grey)
     }
     // mouth: same block as the locked shader
@@ -339,9 +345,9 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         float2 nq = float2(dot(Ns, jCr), dot(Ns, jCu)) - jl[4].xy;
         float2 dd = nq - float2(-0.03, 0.15);
         const float2 hax = float2(0.819, 0.574);
-        float2 ee = float2(dot(dd, hax), dot(dd, float2(-hax.y, hax.x))) / float2(0.23, 0.09);
-        float big = 1.0 - smoothstep(0.80, 1.0, length(ee));
-        float dot2 = 1.0 - smoothstep(0.75, 1.0, length((nq - float2(0.06, 0.0)) / 0.045));
+        float2 ee = float2(dot(dd, hax), dot(dd, float2(-hax.y, hax.x))) / float2(0.22, 0.085);
+        float big = 1.0 - smoothstep(0.55, 1.0, length(ee));          // R5: softer edge
+        float dot2 = 1.0 - smoothstep(0.55, 1.0, length((nq - float2(0.06, 0.0)) / 0.045));
         float sheen = 1.0 - smoothstep(0.2, 1.0, length((nq - float2(-0.45, 0.55)) / float2(0.34, 0.26)));
         float front = step(0.05, dot(Ns, jV));
         col = mix(col, float3(1.0), 0.28 * gloss * sheen * front);
@@ -350,7 +356,9 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         float3 rimC = float3(0.0);
         float see = jl[0].y;
         if (see > 0.0) {
-            float a = 1.0 - see * pow(jNdv, 1.3) * (1.0 - jRim);          // opacity rises toward the edge (jl[0].z "core" is unused since round 2)
+            // R5: level 2 = see-through at the rim band only (core stays opaque); level 3 adds the core (jl[0].z = how much of the middle lets light through)
+            float edgeT = smoothstep(0.30, 0.95, 1.0 - jNdv);
+            float a = 1.0 - see * (edgeT + jl[0].z * (1.0 - edgeT) * pow(jNdv, 1.3));
             a = max(a, saturate(spec * 2.0));
             a = mix(a, 1.0, jCover);
             a = max(a, 0.9 * jBlush);
