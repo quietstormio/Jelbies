@@ -603,7 +603,7 @@ final class AudioHub {
     private func variants(_ sfx: SFX) -> Int {
         if let n = variantCount[sfx.rawValue] { return n }
         var n = 0
-        while url("\(sfx.rawValue)_\(n + 1)") != nil { n += 1 }
+        while url("\(sfx.rawValue)_\(sfx.firstTake + n)") != nil { n += 1 }          // takes firstTake ..< firstTake + n (squish: 2, 3)
         variantCount[sfx.rawValue] = n
         return n
     }
@@ -631,8 +631,8 @@ final class AudioHub {
         } } }
         for s in SFX.allCases where s != .snore {
             var n = 0
-            while find("\(s.rawValue)_\(n + 1)") != nil { n += 1 }
-            for v in 1...max(n, 1) {
+            while find("\(s.rawValue)_\(s.firstTake + n)") != nil { n += 1 }
+            for v in s.firstTake...(s.firstTake + max(n, 1) - 1) {
                 let name = "\(s.rawValue)_\(v)"
                 if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: s == .squeakPolish)) }
             }
@@ -771,7 +771,7 @@ final class AudioHub {
         let vol = min(1, sfx.gain * volume * level * AudioMix.sfxMaster * homeMul)
         diag("play:\(sfx.rawValue)", jelly, nil, v: vol)
         _playLog.append(sfx.rawValue); if _playLog.count > 64 { _playLog.removeFirst() }
-        let v = picker.pick(sfx.rawValue, count: n) + 1
+        let v = picker.pick(sfx.rawValue, count: n) + sfx.firstTake
         fire("\(sfx.rawValue)_\(v)", volume: vol, pan: panFor(x: x), rate: rate)
     }
 

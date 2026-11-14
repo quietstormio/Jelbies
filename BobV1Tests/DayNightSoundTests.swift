@@ -393,6 +393,23 @@ final class DayNightSoundTests: XCTestCase {
         XCTAssertEqual(p.pick("one", count: 1), 0)
     }
 
+    /// Squish take 1 was removed (owner's word): the hub scans takes from `firstTake` and picks `index + firstTake`; every pick must be a bundled file.
+    func testSquishResolvesOnlyToTakes2And3AndTheyExist() {
+        XCTAssertEqual(SFX.squish.firstTake, 2)
+        XCTAssertNil(Bundle.main.url(forResource: "squish_1", withExtension: "m4a"), "take 1 is gone from the bundle")
+        var n = 0
+        while Bundle.main.url(forResource: "squish_\(SFX.squish.firstTake + n)", withExtension: "m4a") != nil { n += 1 }
+        XCTAssertEqual(n, 2, "takes 2 and 3 are found by the scan")
+        var p = VariantPicker(); var seen = Set<Int>()
+        for _ in 0..<200 {
+            let take = p.pick(SFX.squish.rawValue, count: n) + SFX.squish.firstTake
+            seen.insert(take)
+            XCTAssertNotNil(Bundle.main.url(forResource: "squish_\(take)", withExtension: "m4a"), "squish_\(take) must exist")
+        }
+        XCTAssertEqual(seen, [2, 3])
+        for s in SFX.allCases where s != .squish { XCTAssertEqual(s.firstTake, 1) }
+    }
+
     func testFaderRamps() {
         var f = Fader(); f.ramp(to: 1, over: 2)
         f.update(dt: 1); XCTAssertEqual(f.level, 0.5, accuracy: 1e-6)
@@ -405,7 +422,7 @@ final class DayNightSoundTests: XCTestCase {
         let app = Bundle.main
         func has(_ n: String) -> Bool { app.url(forResource: n, withExtension: "m4a") != nil || b.url(forResource: n, withExtension: "m4a") != nil }
         for t in MusicTrack.allCases { XCTAssertTrue(has(t.rawValue), t.rawValue) }
-        for s in SFX.allCases where s != .snore { XCTAssertTrue(has("\(s.rawValue)_1"), "\(s.rawValue)_1") }      // (snores are per character, below)
+        for s in SFX.allCases where s != .snore { XCTAssertTrue(has("\(s.rawValue)_\(s.firstTake)"), "\(s.rawValue)_\(s.firstTake)") }      // (snores are per character, below)
         XCTAssertTrue(has("day_room")); XCTAssertTrue(has("evening_room"))
         for j in 1...JellyVoiceSet.count {
             XCTAssertTrue(has("babble_jelly\(j)"))
