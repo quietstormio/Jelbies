@@ -25,9 +25,9 @@ struct ContentView: View {
         Group {
             ZStack {
                 if introOn {          // the menu's room is not built until the intro is done (it would starve the video)
-                    IntroView { LaunchTiming.mark("intro done"); LaunchGate.shared.introCoveredLaunch(); withAnimation(.easeInOut(duration: IntroClip.fadeSeconds)) { introOn = false } }.transition(.opacity).zIndex(1)
+                    IntroView { LaunchTiming.mark("intro done"); LaunchGate.shared.introCoveredLaunch(); flow.curtainForResume(); withAnimation(.easeInOut(duration: IntroClip.fadeSeconds)) { introOn = false } }.transition(.opacity).zIndex(1)
                 } else if logoOn {
-                    LogoMoment { LaunchTiming.mark("logo moment done"); LaunchGate.shared.introCoveredLaunch(); withAnimation(.easeInOut(duration: 0.3)) { logoOn = false } }.transition(.opacity).zIndex(1)
+                    LogoMoment { LaunchTiming.mark("logo moment done"); LaunchGate.shared.introCoveredLaunch(); flow.curtainForResume(); withAnimation(.easeInOut(duration: 0.3)) { logoOn = false } }.transition(.opacity).zIndex(1)
                 } else { phaseView }
                 if let w = flow.welcome, flow.phase == .game, JellyRoster.savedIDs().count < 2 { WelcomeBanner(name: w) { flow.welcome = nil } }          // (with others at home the arrival moment says it: GameCare+Newcomer.swift)
             }
