@@ -73,6 +73,7 @@ final class BlobGrime {
         self.now = now
         rng = seed
         if persists { load() }
+        if persists, DevArgs.enabled, defaults.object(forKey: "GrimeDirt") != nil { dirt = Float(min(1, max(0, defaults.double(forKey: "GrimeDirt")))) }          // capture aid: -GrimeDirt 0...1
     }
     nonisolated deinit {}
 
