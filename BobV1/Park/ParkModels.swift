@@ -71,6 +71,11 @@ nonisolated enum ParkColour: String, Codable, CaseIterable, Sendable {
 extension JellyPalettes {
     /// A visitor's body colours: the same soft matte treatment as Moss's green and Lavender.
     static func park(_ c: ParkColour) -> Palette {
+        var p = parkUntagged(c)
+        p.jellySpecies = c == .blue ? 0 : c == .yellow ? 1 : c == .green ? 2 : 3          // the jelly look: the four classic colours are their species, every other visitor colour gets the default look
+        return p
+    }
+    private static func parkUntagged(_ c: ParkColour) -> Palette {
         switch c {
         case .blue: return PaletteKey.blue.palette
         case .yellow: return PaletteKey.yellow.palette

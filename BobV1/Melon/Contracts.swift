@@ -74,6 +74,8 @@ struct Palette {
     var bodyHeight: Float = 1.35
     /// Soft matte look (reference-matched colours held in `flesh` = lit tone, `fleshDeep` = shaded tone) instead of the glossy jelly.
     var matte = false
+    /// The Jelbie species this colour belongs to (JellyRoster species id), set where the roster hands out a palette; -1 = unknown (park visitors, race rivals, tests: the look then matches by colour). Only the jelly look reads it.
+    var jellySpecies = -1
 }
 
 /// Bob's three colours, in the order they alternate. Soft pastel gummy/mochi jellies (linear RGB).

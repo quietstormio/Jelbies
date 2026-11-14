@@ -1239,15 +1239,13 @@ final class MelonRenderer {
                 guard JellyLook.level > 0 else { return 0 }
                 let flesh = slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self)
                 let bm = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
-                let k = JellyLook.kind(flesh: flesh, bellyMode: bm)
+                let k = JellyLook.kind(flesh: flesh, bellyMode: bm, speciesID: slot.palette?.jellySpecies ?? -1)
                 // bath (dirt / soot / suds / wet / sparkle) and jersey bodies get the opaque jelly finish inside their own shaders (see-through is not available there)
                 return k == 2 && (usesBathShader(slot) || slot.jersey != nil) ? 1 : k
             }
             for bi in order {                            // each Jelly: its own vertex stream, colours / mouth and bath look
                 let slot = slots[bi]
                 let jk = jellyKind(slot)
-                JellyLook.dbgFrame &+= 1
-                if JellyLook.dbgFrame % 240 == 1 { print("[jelly] slot \(bi) level \(JellyLook.level) all \(JellyLook.all) kind \(jk) bath \(usesBathShader(slot)) jersey \(slot.jersey != nil) cutout \(cutout)") }
                 if jk == 2 && !bodyProbe.contains(.skipBody) { jellyLater.append(bi); continue }
                 e.setVertexBuffer(slot.uboBuf, offset: 0, index: 0)
                 e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)
@@ -1271,7 +1269,7 @@ final class MelonRenderer {
                     e.setRenderPipelineState(sp ?? pMatte)
                 }
                 slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }          // (the body shaders' fragment buffer 6: zeros = the join shaded as before)
-                JellyLook.params(level: jk > 0 ? JellyLook.level(forFlesh: slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self)) : 0).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (fragment buffer 7: the lab jelly look, zeros = off)
+                JellyLook.params(forFlesh: jk > 0 ? slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self) : nil, speciesID: slot.palette?.jellySpecies ?? -1).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (fragment buffer 7: the lab jelly look, zeros = off)
                 if !bodyProbe.contains(.skipBody) {
                     // Panda (BlueBelly mode 51): the egg is drawn as is (the shader paints the eye patches, band, arms, feet); everything after it in the body index range
                     // (the walking arm capsules, the foot beans, the ears + pom) is drawn again as the same shader's all-charcoal mode 52. Teddy's / every other body: one draw, as before.
@@ -1317,7 +1315,7 @@ final class MelonRenderer {
                         e.setRenderPipelineState(jp)
                         e.setFragmentTexture(fibreNoiseTexture(), index: 0)
                         slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }
-                        JellyLook.params(level: JellyLook.level(forFlesh: slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self))).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }
+                        JellyLook.params(forFlesh: slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self), speciesID: slot.palette?.jellySpecies ?? -1).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }
                         e.setDepthBias(-8, slopeScale: -1, clamp: 0)          // pull the colour draw a hair toward the camera: it must pass against its own pre-pass depth (no speckle)
                         e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
                         e.setDepthBias(0, slopeScale: 0, clamp: 0)
@@ -1417,7 +1415,7 @@ final class MelonRenderer {
             e.drawPrimitives(type: tri, vertexStart: 0, vertexCount: 3)
             e.setRenderPipelineState(useMatte ? pMatte : pJelly)
             slots[0].legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }
-            JellyLook.params(level: 0).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (studio path: the lab jelly look stays off)
+            JellyLook.params(forFlesh: nil).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (studio path: the lab jelly look stays off)
             e.setDepthStencilState(dsLessWrite)
             e.setCullMode(.back)
             e.setVertexBuffer(dynBuf, offset: 0, index: 1)

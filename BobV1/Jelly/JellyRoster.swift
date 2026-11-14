@@ -304,6 +304,11 @@ nonisolated enum JellyRoster {
 
     /// Body colours by CHARACTER: Bob is the model's palette (baby blue in the game; nil); Pip is the existing yellow; Moss a green and Lavender a pastel lavender made the same way.
     static func palette(_ instance: Int) -> Palette? {
+        var p = paletteUntagged(instance)
+        p?.jellySpecies = WhiteWing.hasLook(instance) ? pearlID : species(instance)          // the jelly look picks its style by species, not by colour (a saved colour can be anything)
+        return p
+    }
+    private static func paletteUntagged(_ instance: Int) -> Palette? {
         if WhiteWing.hasLook(instance) { return WhiteWing.palette }
         if let v = JellyVariants.active(instance) { return v.palette }    // an adopted / previewed Jelly Spring colour variant (belongs to the INSTANCE; species + feature unchanged)
         switch species(instance) {

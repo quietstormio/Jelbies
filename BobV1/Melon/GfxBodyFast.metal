@@ -194,8 +194,8 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     }
 
     float3 L = normalize(u.keyDir.xyz);
-    bool jelly = false;
-    if (jellyC) { jelly = jl[0].x > 0.5; if (jelly) { N = normalize(mix(N, Ns, jl[1].w)); } }          // JELLY: smooth, wet surface instead of felt
+    bool jelly = false, styleA = false;
+    if (jellyC) { jelly = jl[0].x > 0.5; styleA = jl[0].x > 1.5; if (jelly) { N = normalize(mix(N, Ns, jl[1].w)); } }          // JELLY: smooth, wet surface instead of felt
     float d = dot(N, L);
     float occ = clamp(mt / 0.4, 0.0, 1.0);
     float down = clamp(-N.y, 0.0, 1.0);
@@ -231,25 +231,32 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
         float3 satc = saturate(float3(lum) + (col - lum) * 1.6);
         col = mix(col, satc, sat * (1.0 - jThin));          // (preset 0 since round 4: `deep` below does the saturating)
-        // R4.1: a deeper, more saturated body colour (species-generic): darker, chroma pushed out
-        float Y = max(dot(col, float3(0.2126, 0.7152, 0.0722)), 1e-4);
-        // R5: species-generic: pale bodies (Pearl) keep their lightness, already saturated ones (yellow, Teddy) get less chroma push, nothing clips
-        float cMax = max(col.r, max(col.g, col.b));
-        float cSat = (cMax - min(col.r, min(col.g, col.b))) / max(cMax, 1e-3);
-        float dkE = mix(jl[3].z, 1.0, smoothstep(0.55, 0.85, Y));
-        float ckE = 1.0 + (jl[3].w - 1.0) * mix(1.0, 0.35, smoothstep(0.50, 0.72, cSat));
-        float3 dcol = max((Y * dkE) * (1.0 + ckE * (col / Y - 1.0)), 0.0);
-        dcol *= min(1.0, 0.96 / max(max(dcol.r, max(dcol.g, dcol.b)), 1e-3));
-        // NEON CAP (species-generic, off at soft = deep = 0): a colour that is both bright and saturated (yellow, green) is softened and deepened; w is 0 for
-        // everything at or below luminance y0 (Blue, Lavender, Teddy) and for low-chroma bodies (Pearl, Panda), so those do not change.
-        if (jl[6].x > 0.0 || jl[6].y > 0.0) {
-            float nY = dot(dcol, float3(0.2126, 0.7152, 0.0722));
-            float nM = max(dcol.r, max(dcol.g, dcol.b));
-            float nS = (nM - min(dcol.r, min(dcol.g, dcol.b))) / max(nM, 1e-3);
-            float nw = smoothstep(jl[6].z, jl[6].w, nY) * smoothstep(0.30, 0.60, nS);
-            dcol = (float3(nY) + (dcol - nY) * (1.0 - jl[6].x * nw)) * (1.0 - jl[6].y * nw);
+        // STYLE A = round 4 (the owner's locked Blue look, copied from c567855c), B = round 5; the same switch runs in JellyFinish.h for the bath and jersey shaders
+        if (styleA) {
+            float Y = max(dot(col, float3(0.2126, 0.7152, 0.0722)), 1e-4);
+            float3 dcol = (Y * jl[3].z) * (1.0 + jl[3].w * (col / Y - 1.0));
+            col = mix(col, max(dcol, 0.0), jl[3].y);
+        } else {
+            // R4.1: a deeper, more saturated body colour (species-generic): darker, chroma pushed out
+            float Y = max(dot(col, float3(0.2126, 0.7152, 0.0722)), 1e-4);
+            // R5: species-generic: pale bodies (Pearl) keep their lightness, already saturated ones (yellow, Teddy) get less chroma push, nothing clips
+            float cMax = max(col.r, max(col.g, col.b));
+            float cSat = (cMax - min(col.r, min(col.g, col.b))) / max(cMax, 1e-3);
+            float dkE = mix(jl[3].z, 1.0, smoothstep(0.55, 0.85, Y));
+            float ckE = 1.0 + (jl[3].w - 1.0) * mix(1.0, 0.35, smoothstep(0.50, 0.72, cSat));
+            float3 dcol = max((Y * dkE) * (1.0 + ckE * (col / Y - 1.0)), 0.0);
+            dcol *= min(1.0, 0.96 / max(max(dcol.r, max(dcol.g, dcol.b)), 1e-3));
+            // NEON CAP (species-generic, off at soft = deep = 0): a colour that is both bright and saturated (yellow, green) is softened and deepened; w is 0 for
+            // everything at or below luminance y0 (Blue, Lavender, Teddy) and for low-chroma bodies (Pearl, Panda), so those do not change.
+            if (jl[6].x > 0.0 || jl[6].y > 0.0) {
+                float nY = dot(dcol, float3(0.2126, 0.7152, 0.0722));
+                float nM = max(dcol.r, max(dcol.g, dcol.b));
+                float nS = (nM - min(dcol.r, min(dcol.g, dcol.b))) / max(nM, 1e-3);
+                float nw = smoothstep(jl[6].z, jl[6].w, nY) * smoothstep(0.30, 0.60, nS);
+                dcol = (float3(nY) + (dcol - nY) * (1.0 - jl[6].x * nw)) * (1.0 - jl[6].y * nw);
+            }
+            col = mix(col, dcol, jl[3].y);
         }
-        col = mix(col, dcol, jl[3].y);
         // R2.2: light collects inside, on the side away from the lamp, low on the body: a lighter patch of the same body colour
         float inner = pow(saturate(dot(Ns, normalize(-L + float3(0.0, -0.35, 0.0))) * 0.5 + 0.5), 3.0) * (1.0 - 0.7 * jThin);
         col = mix(col, mix(col, float3(1.0), 0.25), saturate(0.55 * glow * inner));
@@ -352,15 +359,16 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         }
         // R4.4: highlights on the face side, fixed to the camera (camera-space normal coordinates: x right, y up)
         float2 nq = float2(dot(Ns, jCr), dot(Ns, jCu)) - jl[4].xy;
-        float2 dd = nq - float2(-0.04, 0.19);
         const float2 hax = float2(0.819, 0.574);
-        float2 ee = float2(dot(dd, hax), dot(dd, float2(-hax.y, hax.x))) / float2(0.17, 0.066);
-        float big = 1.0 - smoothstep(0.55, 1.0, length(ee));          // R5: softer edge
-        float dot2 = 1.0 - smoothstep(0.55, 1.0, length((nq - float2(0.045, 0.06)) / 0.036));
+        float2 dd = nq - (styleA ? float2(-0.03, 0.15) : float2(-0.04, 0.19));
+        float2 ee = float2(dot(dd, hax), dot(dd, float2(-hax.y, hax.x))) / (styleA ? float2(0.23, 0.09) : float2(0.17, 0.066));
+        float big = 1.0 - (styleA ? smoothstep(0.80, 1.0, length(ee)) : smoothstep(0.55, 1.0, length(ee)));          // R5: softer edge
+        float2 dq = styleA ? (nq - float2(0.06, 0.0)) / 0.045 : (nq - float2(0.045, 0.06)) / 0.036;
+        float dot2 = 1.0 - (styleA ? smoothstep(0.75, 1.0, length(dq)) : smoothstep(0.55, 1.0, length(dq)));
         float sheen = 1.0 - smoothstep(0.2, 1.0, length((nq - float2(-0.45, 0.55)) / float2(0.34, 0.26)));
         float front = step(0.05, dot(Ns, jV));
         col = mix(col, float3(1.0), 0.28 * gloss * sheen * front);
-        float spec = max(big * 0.80, dot2 * 0.65) * gloss * front;
+        float spec = (styleA ? max(big * 0.92, dot2 * 0.95) : max(big * 0.80, dot2 * 0.65)) * gloss * front;
         spec *= 1.0 - jCover;
         float3 rimC = float3(0.0);
         float see = jl[0].y;
