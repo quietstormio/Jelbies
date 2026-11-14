@@ -32,6 +32,18 @@ nonisolated enum JellyLook {
         }
     }()
 
+    /// Per-species level (capture aid, dev args only): `-JellyLevelYG 2` draws the yellow and green species at that level while the others keep `level`. nil = off (today).
+    nonisolated(unsafe) static var levelYG: Int? = {
+        guard DevArgs.enabled, UserDefaults.standard.object(forKey: "JellyLevelYG") != nil else { return nil }
+        return max(0, min(3, UserDefaults.standard.integer(forKey: "JellyLevelYG")))
+    }()
+    /// The level a body with this flesh colour is drawn at.
+    static func level(forFlesh f: SIMD4<Float>) -> Int {
+        guard let l = levelYG, l > 0 else { return level }
+        func near(_ c: SIMD3<Float>) -> Bool { abs(f.x - c.x) < 0.01 && abs(f.y - c.y) < 0.01 && abs(f.z - c.z) < 0.01 }
+        return near(PaletteKey.yellow.palette.flesh) || near(JellyPalettes.green.flesh) ? l : level
+    }
+
     private static func argFloat(_ key: String) -> Float? {
         guard DevArgs.enabled, UserDefaults.standard.object(forKey: key) != nil else { return nil }
         return Float(UserDefaults.standard.double(forKey: key))
@@ -76,7 +88,7 @@ nonisolated enum JellyLook {
         // the blue species by its palette colour with a tolerance (an adopted Blue's uniform is not always bit-equal to the palette); `all` = every body, Panda included
         let b = BlueBelly.blueFlesh
         guard all || (abs(flesh.x - b.x) < 0.01 && abs(flesh.y - b.y) < 0.01 && abs(flesh.z - b.z) < 0.01) else { return 0 }
-        return params(level: level)[0].y > 0.001 ? 2 : 1
+        return params(level: level(forFlesh: flesh))[0].y > 0.001 ? 2 : 1
     }
 
     // MARK: pipelines

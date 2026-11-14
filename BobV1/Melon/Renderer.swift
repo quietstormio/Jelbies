@@ -1271,7 +1271,7 @@ final class MelonRenderer {
                     e.setRenderPipelineState(sp ?? pMatte)
                 }
                 slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }          // (the body shaders' fragment buffer 6: zeros = the join shaded as before)
-                JellyLook.params(level: jk > 0 ? JellyLook.level : 0).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (fragment buffer 7: the lab jelly look, zeros = off)
+                JellyLook.params(level: jk > 0 ? JellyLook.level(forFlesh: slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self)) : 0).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (fragment buffer 7: the lab jelly look, zeros = off)
                 if !bodyProbe.contains(.skipBody) {
                     // Panda (BlueBelly mode 51): the egg is drawn as is (the shader paints the eye patches, band, arms, feet); everything after it in the body index range
                     // (the walking arm capsules, the foot beans, the ears + pom) is drawn again as the same shader's all-charcoal mode 52. Teddy's / every other body: one draw, as before.
@@ -1317,7 +1317,7 @@ final class MelonRenderer {
                         e.setRenderPipelineState(jp)
                         e.setFragmentTexture(fibreNoiseTexture(), index: 0)
                         slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }
-                        JellyLook.params(level: JellyLook.level).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }
+                        JellyLook.params(level: JellyLook.level(forFlesh: slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self))).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }
                         e.setDepthBias(-8, slopeScale: -1, clamp: 0)          // pull the colour draw a hair toward the camera: it must pass against its own pre-pass depth (no speckle)
                         e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
                         e.setDepthBias(0, slopeScale: 0, clamp: 0)
