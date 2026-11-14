@@ -184,7 +184,7 @@ def _fold_layer(name, inner, hem, colfn, close_i):
 def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     """Ballet tutu: a snug waistband on the body at height yb and three thin tulle layers that leave it and flare OUT AND DOWN (28 / 38 / 48 degrees below horizontal),
     each with a scalloped hem (16 soft waves, staggered per layer), 80 columns, a slightly different pink per layer, and a small bow on the front.
-    Budget: <=1000 vertices / <=1300 triangles (WearMeshes), so the layers are single cones folded on a shared rim, not slabs.
+    Hems end at y ~0.13 on the chest (the shoes show under it) and ~0.06 at the hips / back. Budget: <=1000 vertices / <=1300 triangles (WearMeshes), so the layers are single cones folded on a shared rim, not slabs.
     pip=True: open over Pip's tail root (a slot +-40 deg round the back centre)."""
     reset()
     band = band or deep(pink, 0.22)
@@ -192,18 +192,18 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     def phis(n):
         return [p0 + (p1 - p0) * (i / (n - 1 if pip else n)) for i in range(n)]
     # --- waistband: a rounded ring hugging the egg
-    sec = [(0.014, 0.020), (0.036, 0.022), (0.036, -0.022), (0.014, -0.020)]
+    hin = lambda phi: 0.010 + 0.016 * math.cos(phi) ** 2            # stand-off of the band's inner edge: 1 cm at the front / back (Pip's tail), 2.6 cm at the hips (the skin bulges there in a lean)
+    def sec_at(phi):
+        h0 = hin(phi); return [(h0, 0.020), (h0 + 0.022, 0.022), (h0 + 0.022, -0.022), (h0, -0.020)]
     NB = 22 if pip else 26
     dip = max(0.0, yb - 0.252)                                       # the band (top +0.026) dips to y 0.252 at the hips so it passes UNDER the hanging arm bulbs (bottom y~0.31) and their blend into the body
     bdip = max(0.0, yb - 0.245)                                       # ... and 0.245 at the back centre: lower on the back keeps the band off the root of Pip's tail (the tail swell tops out at y 0.54)
     yl = lambda phi: yb - dip * math.cos(phi) ** 2 - bdip * max(0.0, -math.sin(phi)) ** 2
-    rows = [[eloop(yl(ph), ph, h, v) for h, v in sec] for ph in phis(NB)]
-    _ring_mesh('waistband', rows, not pip, lambda i, k, p: mix(deep(band, 0.10), tint(band, 0.28), 0.5 + 0.5 * (sec[k][1] / 0.026) * 0.7))
+    rows = [[eloop(yl(ph), ph, h, v) for h, v in sec_at(ph)] for ph in phis(NB)]
+    _ring_mesh('waistband', rows, not pip, lambda i, k, p: mix(deep(band, 0.10), tint(band, 0.28), 0.5 + 0.5 * (sec_at(0.0)[k][1] / 0.026) * 0.7))
     # --- tulle layers: (colour, attach dy, angle below horizontal, reach, hem wave phase)
     LAY = [(mix(tint(pink, 0.55), CREAM, 0.30), 0.004, 28.0, 0.120, 0.0), (tint(pink, 0.22), -0.008, 38.0, 0.140, 1.0), (mix(pink, lav, 0.38), -0.020, 48.0, 0.150, 2.0)]
     NC = 62 if pip else 80
-    # the lowest hem keeps >= 0.035 off the floor: scale the drop if the band is low
-    kdrop = min(1.0, max(0.2, (min(yb, 0.245) - 0.020 - 0.100) / (0.150 * math.tan(math.radians(48.0)))))
     for li, (c, dy, ang, reach, ph) in enumerate(LAY):
         inner = []; hem = []
         cols = phis(NC)
@@ -211,8 +211,8 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
             e = B.egg_point(yl(phi) + dy, phi); h = hdir(e)
             s = abs(math.sin(8 * phi + 0.5 * ph * math.pi))            # 0 at the cusps (hem lifts), 1 mid-scallop
             L = reach * (1 - 0.09 * (1 - s))
-            inner.append(e + h * 0.022)
-            hem.append(e + h * (0.022 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.020 * (1 - s), 0]))
+            inner.append(e + h * (hin(phi) + 0.012))
+            hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.020 * (1 - s), 0]))
         def cf(i, k, c=c):
             return deep(c, 0.20) if k == 0 else (tint(c, 0.14) if k == 1 else deep(c, 0.30))
         _fold_layer('layer%d' % li, inner, hem, cf, not pip)
