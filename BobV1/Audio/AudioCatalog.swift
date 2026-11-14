@@ -36,6 +36,10 @@ nonisolated enum SFX: String, CaseIterable, Sendable {
     case bubbleBloop = "bubblewand_bloop", bubblePop = "bubblewand_pop", bubbleChirp = "bubblewand_chirp"
     case whistle, tick, goodStep = "good_step", perfectStreak = "perfect_streak", statUp = "stat_up", tired, cheerSmall = "cheer_small"
 
+    /// Number of the first take that may play (files name_N; the pool scans N = firstTake, firstTake+1, ... until a gap).
+    /// squish_1 was removed on the owner's word (2026-11-13: "Squish take 1 sound is the one I hate"): only takes 2 and 3 exist and play.
+    var firstTake: Int { self == .squish ? 2 : 1 }
+
     /// Loudness of the clip in the mix (the files themselves are peak-normalised per category).
     var gain: Float {
         switch self {
