@@ -828,6 +828,10 @@ struct GameScreen: View {
                 for t in [CourseTier.puddle, .ripple] { care.race.progress.record(tier: t, place: 1); care.race.trophies.recordRace(character: c, tier: t, place: 1) }
                 _ = care.chooseCourse(.ripple)
             }
+            if m.contains("wins3") {          // the trophy badge: the first Jelmiko has 3 wins on Ripple (the picked course), the second 1
+                for _ in 0..<2 { care.race.progress.record(tier: .ripple, place: 1); care.race.trophies.recordRace(character: c, tier: .ripple, place: 1) }
+                if care.jellies.count > 1 { care.race.trophies.recordRace(character: care.jellies[1].character, tier: .ripple, place: 1) }
+            }
             if m.contains("blocked") { care.store.grant("berries"); care.feed("berries") }          // (foods are fed from the bag now: one berry in it)
         }
         // capture aid: -GroomAuto picker|visit (the Jelly Spa picker after 4 s; visit also picks the Royal Pamper for everybody and goes, with 300 Drops)
