@@ -223,6 +223,9 @@ def export(item_id, anchor_rest, meta, outdir=W+"/export", ao_body=True, mirror_
     # meta 'ao_flat' = no baked occlusion (a satin / thin piece lying on the skin); meta 'emit' = RoomShaders' emissive weight (ao > 1 adds albedo*(ao-1)*1.7 whatever the light direction: lifts the
     # side of a piece that faces away from the room's key light, where the shader leaves only ambient)
     if meta.get('emit'): ao=ao+float(meta['emit'])
+    # meta 'back_emit' = keep the distance-based occlusion on the FRONT half (the look the piece had before) and fade to ao 1.0 + back_emit round the back (z < 0): only the side facing away from the room's key light is lifted
+    if meta.get('back_emit'):
+        t=np.clip(-Pabs[:,2]/0.30,0,1); b=t*t*(3-2*t); ao=ao*(1-b)+(1.0+float(meta['back_emit']))*b
     # parts that have nothing to do with the body (gloves' far side etc.) just get mild ao; fine.
     os.makedirs(outdir,exist_ok=True)
     with open(f"{outdir}/{item_id}.obj","w") as fh:

@@ -73,7 +73,7 @@ def sash(field=SKY, trim=CREAM, star=PINK, **k):
             ph = phr + dphi - 0.05 * s_ * v + u * 0.07 * (1 + 0.5 * v)
             pp, nq = surface_at(y, ph, off=0.050 - 0.006 * v); return pp, nq
         thick_sheet('tail%+d' % s_, fn, 3, 5, 0.010, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.2), 0.5))
-    return dict(anchor='chest', slot='body', tags=['sporty', 'sparkly'], price=50, title='Racing sash', ao_flat=True, emit=0.14,
+    return dict(anchor='chest', slot='body', tags=['sporty', 'sparkly'], price=50, title='Racing sash', back_emit=0.18,
                 desc='A full closed diagonal racing sash (0.074 wide) worn round the whole body: over the left shoulder above the arm root (centre y 0.70), across the chest below the mouth (0.46), under the right arm (0.265), and back up across the back (0.50 at the centre line, between Pip\'s spikes). Cream piped edges, three stars on the chest and a ruffled rosette with two ribbon tails at the right hip.')
 
 # ============================ BIB ==========================================
