@@ -227,25 +227,32 @@ struct LobbyCarouselCard<Art: View>: View {
     let name: String, sub: String
     var selected = false, locked = false
     var artH: CGFloat = 94
+    /// 1st places on this card (the Jelly Race courses): a gold trophy on the thumbnail's top-trailing corner and a trophy glyph + number after `sub`. 0 = neither.
+    var wins = 0
     let art: Art
     @ScaledMetric(relativeTo: .body) private var scaledW: CGFloat = 150
-    init(name: String, sub: String, selected: Bool = false, locked: Bool = false, artH: CGFloat = 94, @ViewBuilder art: () -> Art) {
-        self.name = name; self.sub = sub; self.selected = selected; self.locked = locked; self.artH = artH; self.art = art()
+    init(name: String, sub: String, selected: Bool = false, locked: Bool = false, artH: CGFloat = 94, wins: Int = 0, @ViewBuilder art: () -> Art) {
+        self.name = name; self.sub = sub; self.selected = selected; self.locked = locked; self.artH = artH; self.wins = wins; self.art = art()
     }
     var body: some View {
         let w = min(scaledW, 230)
         VStack(alignment: .leading, spacing: 0) {
             ZStack {
                 art.saturation(locked ? 0.15 : 1).opacity(locked ? 0.5 : 1)
-                if selected {
-                    LobbyIcon(kind: .check, size: 22).frame(width: 22, height: 22).background(Circle().fill(SK.ink)).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing).padding(5)
+                if selected {          // (the check moves to the top-leading corner when a win badge takes the trailing one)
+                    LobbyIcon(kind: .check, size: 22).frame(width: 22, height: 22).background(Circle().fill(SK.ink)).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: wins > 0 ? .topLeading : .topTrailing).padding(5)
                 }
+                if wins > 0 { WonBadge(count: 1).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing).padding(5) }
                 if locked { LobbyIcon(kind: .lock, color: SK.ink.opacity(0.5), size: 32).frame(width: 32, height: 32).background(Circle().fill(Color.white.opacity(0.92))) }
             }
             .frame(height: (w - 16) * artH / 134)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             Text(name).font(SK.font(15.5, .black)).foregroundStyle(locked ? SK.muted : SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.top, 7).padding(.horizontal, 2)
-            Text(sub).font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(2).fixedSize(horizontal: false, vertical: true).padding(.top, 1).padding(.horizontal, 2)
+            Group {
+                if wins > 0 { Text("\(sub) \u{00B7} ") + Text(Image(systemName: "trophy.fill")).foregroundColor(WonBadge.gold) + Text(" \(wins)") }
+                else { Text(sub) }
+            }
+            .font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(2).fixedSize(horizontal: false, vertical: true).padding(.top, 1).padding(.horizontal, 2)
             Spacer(minLength: 0)
         }
         .padding(EdgeInsets(top: 8, leading: 8, bottom: 10, trailing: 8))

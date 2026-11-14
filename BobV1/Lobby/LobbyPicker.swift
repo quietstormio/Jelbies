@@ -83,6 +83,8 @@ struct LobbyJelbiePicker: View {
     var showNote = true
     /// Jelbies who already have the thing this picker is for (the Shop's per-Jelbie tricks): a check, and the tile cannot be picked.
     var checked: Set<Int> = []
+    /// 1st places this Jelmiko has on the screen's current course (the Jelly Race lobby); 0 = no badge. A gold trophy sits in the tile's top-trailing corner.
+    var wonCount: (JellyProfile) -> Int = { _ in 0 }
     var pick: (Int) -> Void
     @Environment(\.lobbyTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -152,6 +154,7 @@ struct LobbyJelbiePicker: View {
     private func segment(_ j: JellyProfile, portrait: CGFloat) -> some View {
         let done = checked.contains(j.id)
         let on = selected.contains(j.id) && !done
+        let won = done ? 0 : max(wonCount(j), 0)
         return Button { if !done { AudioHub.shared.uiTap(); pick(j.id) } } label: {
             VStack(spacing: 0) {
                 JelbiePortrait(care: care, who: j.id, size: portrait, head: true, frameless: true).accessibilityHidden(true).opacity(done ? 0.55 : 1)
@@ -162,12 +165,18 @@ struct LobbyJelbiePicker: View {
             .background(highlight(on))
             .overlay(alignment: .topTrailing) {
                 if done { Image(systemName: "checkmark.circle.fill").font(.system(size: 22, weight: .black)).foregroundStyle(SK.ink, SK.mint).padding(8) }
+                else if won > 0 { WonBadge(count: won).padding(.top, 6).padding(.trailing, 12) }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(done ? "\(j.name), already knows it" : j.name).accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityLabel(done ? "\(j.name), already knows it" : Self.label(j.name, won: won)).accessibilityAddTraits(on ? .isSelected : [])
         .accessibilityIdentifier(tileID(j))
+    }
+
+    /// The tile's spoken name: the Jelmiko's, plus whether they have won the course shown.
+    static func label(_ name: String, won: Int) -> String {
+        won <= 0 ? name : won == 1 ? "\(name), won this course" : "\(name), won this course \(won) times"
     }
 
     private func friendSegment(_ f: ParkVisitor, index: Int, portrait: CGFloat) -> some View {
@@ -222,6 +231,26 @@ struct LobbyJelbiePicker: View {
                 .frame(maxWidth: .infinity, minHeight: 100)
                 .accessibilityHidden(true)
         }
+    }
+}
+
+/// A small gold trophy on a cream disc with a thin brown outline ("x N" beside it from two wins): reads on the honey tile and on the white one.
+struct WonBadge: View {
+    let count: Int
+    static let gold = Color(red: 0.93, green: 0.69, blue: 0.10)
+    var body: some View {
+        Image(systemName: "trophy.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(Self.gold)
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(SK.cream))
+            .overlay(Circle().strokeBorder(SK.ink, lineWidth: 1.25))
+            .overlay(alignment: .bottomTrailing) {          // "x N": a small brown count bubble on the disc's lower corner, so the badge never gets wider
+                if count > 1 {
+                    Text("\u{00D7}\(count)").font(SK.font(10.5, .black)).foregroundStyle(SK.cream).lineLimit(1).fixedSize()
+                        .padding(.horizontal, 4).frame(minHeight: 15).background(Capsule().fill(SK.ink)).offset(x: 6, y: 7)
+                }
+            }
+            .accessibilityHidden(true)
+            .accessibilityIdentifier("won-badge")
     }
 }
 
