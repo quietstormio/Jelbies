@@ -168,7 +168,7 @@ def _fold_layer(name, inner, hem, colfn, close_i):
     N = len(inner); P = []; C = []
     for i in range(N): P.append(tuple(inner[i])); C.append(colfn(i, 0))
     for i in range(N): P.append(tuple(hem[i])); C.append(colfn(i, 1))
-    for i in range(N): P.append(tuple(np.array(inner[i]) - np.array([0, 0.0065, 0]))); C.append(colfn(i, 2))
+    for i in range(N): P.append(tuple(np.array(inner[i]) - np.array([0, 0.009, 0]))); C.append(colfn(i, 2))
     Ft = []; Fb = []
     for i in range(N if close_i else N - 1):
         i2 = (i + 1) % N
@@ -191,6 +191,9 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     p0, p1 = (math.radians(310.0), math.radians(590.0)) if pip else (0.0, 2 * math.pi)
     def phis(n):
         return [p0 + (p1 - p0) * (i / (n - 1 if pip else n)) for i in range(n)]
+    # the BASE band is open over the very back (+-22 deg, hidden under the tulle): on Pip his tail swings through that stretch (WearBandTests 'inside a limb' 0.1445 vs 0.14)
+    b0, b1 = (p0, p1) if pip else (1.5 * math.pi + 0.385, 3.5 * math.pi - 0.385)
+    def bphis(n): return [b0 + (b1 - b0) * i / (n - 1) for i in range(n)]
     # --- waistband: a rounded ring hugging the egg
     hin = lambda phi: 0.010 + 0.016 * math.cos(phi) ** 2            # stand-off of the band's inner edge: 1 cm at the front / back (Pip's tail), 2.6 cm at the hips (the skin bulges there in a lean)
     def sec_at(phi):
@@ -199,8 +202,8 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     dip = max(0.0, yb - 0.252)                                       # the band (top +0.026) dips to y 0.252 at the hips so it passes UNDER the hanging arm bulbs (bottom y~0.31) and their blend into the body
     bdip = max(0.0, yb - 0.245)                                       # ... and 0.245 at the back centre: lower on the back keeps the band off the root of Pip's tail (the tail swell tops out at y 0.54)
     yl = lambda phi: yb - dip * math.cos(phi) ** 2 - bdip * max(0.0, -math.sin(phi)) ** 2
-    rows = [[eloop(yl(ph), ph, h, v) for h, v in sec_at(ph)] for ph in phis(NB)]
-    _ring_mesh('waistband', rows, not pip, lambda i, k, p: mix(deep(band, 0.10), tint(band, 0.28), 0.5 + 0.5 * (sec_at(0.0)[k][1] / 0.026) * 0.7))
+    rows = [[eloop(yl(ph), ph, h, v) for h, v in sec_at(ph)] for ph in bphis(NB)]
+    _ring_mesh('waistband', rows, False, lambda i, k, p: mix(deep(band, 0.10), tint(band, 0.28), 0.5 + 0.5 * (sec_at(0.0)[k][1] / 0.026) * 0.7))
     # --- tulle layers: (colour, attach dy, angle below horizontal, reach, hem wave phase)
     LAY = [(mix(tint(pink, 0.55), CREAM, 0.30), 0.004, 28.0, 0.120, 0.0), (tint(pink, 0.22), -0.008, 38.0, 0.140, 1.0), (mix(pink, lav, 0.38), -0.020, 48.0, 0.150, 2.0)]
     NC = 62 if pip else 80
@@ -209,12 +212,12 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
         cols = phis(NC)
         for phi in cols:
             e = B.egg_point(yl(phi) + dy, phi); h = hdir(e)
-            s = abs(math.sin(8 * phi + 0.5 * ph * math.pi))            # 0 at the cusps (hem lifts), 1 mid-scallop
+            s = math.sqrt(math.sin(8 * phi + 0.5 * ph * math.pi) ** 2 + 0.06) / math.sqrt(1.06)      # ~0.2 at the cusps (hem lifts, blunt: no needle tips edge-on), 1 mid-scallop
             L = reach * (1 - 0.09 * (1 - s))
             inner.append(e + h * (hin(phi) + 0.012))
             hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.020 * (1 - s), 0]))
         def cf(i, k, c=c):
-            return deep(c, 0.20) if k == 0 else (tint(c, 0.14) if k == 1 else deep(c, 0.30))
+            return deep(c, 0.18) if k == 0 else (tint(c, 0.14) if k == 1 else deep(c, 0.10))
         _fold_layer('layer%d' % li, inner, hem, cf, not pip)
     # --- a small neat bow on the front of the band
     p, n = surface_at(yb + 0.034, math.pi / 2, off=0.044)

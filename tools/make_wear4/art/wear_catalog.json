@@ -1485,7 +1485,7 @@
    ],
    "price": 60,
    "tris": 1276,
-   "verts": 888,
+   "verts": 890,
    "deform_class": "surface_bound ring: bind every vertex to egg (y,phi)+horizontal offset; waistband rigid-on-surface, layers flare and may bob (jiggle the hem vertices, y<0.27, along y/out only)",
    "files": [
     "tutu_pink.obj",

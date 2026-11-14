@@ -1,12 +1,12 @@
 {
  "id": "tutu_pink",
  "tris": 1276,
- "verts": 888,
+ "verts": 890,
  "parts": [
   {
    "name": "waistband",
    "tris": 208,
-   "verts": 104
+   "verts": 106
   },
   {
    "name": "layer0",
@@ -46,7 +46,7 @@
  ],
  "bounds_local_min": [
   -0.6558,
-  -0.2197,
+  -0.2198,
   -0.556
  ],
  "bounds_local_max": [
@@ -56,7 +56,7 @@
  ],
  "size": [
   1.3116,
-  0.2993,
+  0.2994,
   1.1644
  ],
  "anchor": "waist",
