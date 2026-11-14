@@ -57,7 +57,7 @@ final class RacePullArmsTests: XCTestCase {
             }
         }
         for k in 0..<3 { for ph in worst[k].keys.sorted() { let w = worst[k][ph]!
-            MotionLog.write(String(format: "RACEPULLARMS %@ racer %d | %@ | frames %d | min pole depth %.2f cm | max anchor-to-fitted %.3f | %@", label, 0, k, ph, w.frames, w.depth * 100, w.gap, w.at)) } }
+            MotionLog.write(String(format: "RACEPULLARMS %@ racer %d | %@ | frames %d | min pole depth %.2f cm | max anchor-to-fitted %.3f | %@", label, k, ph, w.frames, w.depth * 100, w.gap, w.at)) } }
         return worst
     }
 
