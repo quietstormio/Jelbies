@@ -204,8 +204,8 @@ def bag_crossbody(main=hx('#F0D9B5'), strap=hx('#8B5A3C'), gold=GOLD, **k):
     (0.46, below the mouth), down to the bag at the right hip and under the right arm, back up across the back (0.555: over Pip's tail root, under his next spike group). Built on wl.surface_ray."""
     reset()
     import items7 as I7
-    NA = 56; HW = 0.027; R_ = 0.52
-    rows = [(-1.0, 0.016), (-0.6, 0.030), (0.0, 0.036), (0.6, 0.030), (1.0, 0.016)]      # (as thick as the racing sash: a strap standing 2 cm off the skin was swallowed 5.8 cm by the swinging left arm, guard 4 cm)
+    NA = 56; HW = 0.030; R_ = 0.52
+    rows = [(-1.0, 0.020), (-0.6, 0.036), (0.0, 0.044), (0.6, 0.036), (1.0, 0.020)]      # (as thick as the racing sash: a strap standing 2 cm off the skin was swallowed 5.8 cm by the swinging left arm, guard 4 cm)
     def skin(phi, w, off):
         d = 1e-3; y0 = I7.sash_y(phi); dy = (I7.sash_y(phi + d) - I7.sash_y(phi - d)) / (2 * d)
         t = np.array([R_, dy]); t /= np.linalg.norm(t); perp = np.array([-t[1], t[0]])
