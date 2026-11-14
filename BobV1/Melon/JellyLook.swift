@@ -14,7 +14,7 @@ import simd
 
 nonisolated enum JellyLook {
     /// The level a build ships with. Stays 0.
-    static let launchLevel = 2
+    static let launchLevel = 1
     nonisolated(unsafe) static var dbgFrame = 0
 
     private static func argFloat(_ key: String) -> Float? {
@@ -43,7 +43,7 @@ nonisolated enum JellyLook {
         // Round 4 presets (matched by measured numbers to the user's reference picture): L1 = the picture's look, opaque; L2 / L3 = the same, see-through.
         // `core` ([0].z) and `edge` ([2].y) are unused; `sat` is 0 (`deep` darkens and saturates instead); `rim` = the light band's strength.
         //                         see   core  gloss glow  rim   sat   smooth edge  tint warm  bub  deep  dk    ck
-        let p: [[Float]] = [[0.00, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7],
+        let p: [[Float]] = [[0.00, 0.35, 0.35, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7],
                             [0.25, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7],
                             [0.45, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7]]
         var v = p[min(level, 3) - 1]
