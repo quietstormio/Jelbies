@@ -485,14 +485,16 @@ final class FeatureSet {
             return simd_float3x3(q)
         case .daisy:
             let d = s.fit.onHat ? spec.daisyOnHat : spec.daisy
-            let idle = SIMD2<Float>(d.idleDeg.count > 1 ? d.idleDeg[1] : 0, d.idleDeg.first ?? 0) * SIMD2(sinf(2 * .pi * d.idleHz * s.clock + 0.7), sinf(2 * .pi * d.idleHz * s.clock))
+            // (the second flower of the pair sways on its own phase + a slightly different rate so the two never move as one piece)
+            let ph0: Float = part.copy == 0 ? 0 : 2.3, hzk: Float = part.copy == 0 ? 1 : 1.17
+            let idle = SIMD2<Float>(d.idleDeg.count > 1 ? d.idleDeg[1] : 0, d.idleDeg.first ?? 0) * SIMD2(sinf(2 * .pi * d.idleHz * hzk * s.clock + 0.7 + ph0), sinf(2 * .pi * d.idleHz * hzk * s.clock + ph0))
             if part.group == 1 {
                 // the flower head: only its own lag behind the stem (it is carried by the stem's rotation at emission)
                 let lag = (s.headSway - s.sway) * 0.7
                 let q = simd_quatf(angle: lag.x * .pi / 180, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: lag.y * .pi / 180, axis: SIMD3(0, 0, 1))
                 if s.sigSpin != 0 || s.sigCone != 0 {
                     // the species flourish: the head spins about its own axis and tips round a small cone as it turns
-                    let n = simd_normalize(d.flowerNormal.v3)
+                    let n = simd_normalize(part.normal)
                     var u = simd_cross(n, SIMD3<Float>(1, 0, 0)); if simd_length(u) < 0.1 { u = simd_cross(n, SIMD3<Float>(0, 0, 1)) }
                     u = simd_normalize(u)
                     let v = simd_cross(n, u), ph = s.sigSpin * .pi / 180
@@ -533,8 +535,7 @@ final class FeatureSet {
         m.vertices.reserveCapacity(m.vertices.count + p.rest.count)
         var keep = [Bool](repeating: true, count: p.parts.count)
         let d = s.fit.onHat ? spec.daisyOnHat : spec.daisy
-        let flowerC = p.parts.first { $0.group == 1 }?.pivot ?? .zero
-        for (pi, part) in p.parts.enumerated() {
+                for (pi, part) in p.parts.enumerated() {
             let tuck = s.partScale[part.name] ?? 1
             let ownScaled = s.feature == .spines || s.feature == .ears                          // these shrink onto their own bases
             let ps = (ownScaled ? 1 : tuck) * s.scale
@@ -555,7 +556,7 @@ final class FeatureSet {
             let rot = partRotation(p, part, slot: s, spec: spec)
             var stemRot = matrix_identity_float3x3
             var stemPivotW = pivotW
-            if s.feature == .daisy, part.group == 1, let stem = p.parts.first(where: { $0.name == "stem" }) {
+            if s.feature == .daisy, part.group == 1, let stem = p.parts.first(where: { $0.name == "stem" && $0.copy == part.copy }) {
                 stemRot = partRotation(p, stem, slot: s, spec: spec)
                 stemPivotW = c.world(stem.pivot)
                 if let skin, stem.bind.tri != .zero { stemPivotW = WearBody.world(stem.bind, skin: skin) }
@@ -577,7 +578,7 @@ final class FeatureSet {
                 if s.feature == .daisy, part.group == 1 {
                     // flower: head rotation about the flower centre, carried by the stem's rotation about the stem root
                     let headLocal = rot * o                                   // about the flower centre (rest frame)
-                    let fromStem = (flowerC - (p.parts.first { $0.name == "stem" }?.pivot ?? flowerC)) + headLocal
+                    let fromStem = (part.pivot - (p.parts.first { $0.name == "stem" && $0.copy == part.copy }?.pivot ?? part.pivot)) + headLocal
                     q = stemPivotW + M * (stemRot * fromStem)
                     n = R * (stemRot * (rot * n))
                 } else if let qr = ringTurn {

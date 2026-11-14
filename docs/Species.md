@@ -10,7 +10,7 @@ Seven characters exist, all on Bob's locked base body. At most **three** live at
 |---|---|---|---|
 | **Bob** | Blue | None | Free first Jelmiko, or adopt |
 | **Pip** | Yellow | Pointed tail plus rounded orange spikes down the back | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
-| **Moss** | Green | Head daisy | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
+| **Moss** | Green | Two head daisies | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
 | **Lavender** | Purple | Wings | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
 | **Teddy** | Light brown, cream belly | Round bear ears + pom tail | Jelly Spring, 2,000 JellyCoins |
 | **Pearl** | White | Wings | Jelly Spring, 2,000 JellyCoins |
@@ -28,7 +28,7 @@ Signature features belong to a colour **species**, not to individual characters.
 |---|---|
 | Purple / lavender (incl. park plum) | Wings (fold under worn items, flap-hops, short flights) |
 | Yellow | Pointed body-mesh tail plus 7 rounded orange spikes down the back onto the tail, none on the head (Pip's approved "pro8"; hidden under enclosing hats). Enum case `JellyFeature.spines`. |
-| Green (incl. park mint, lime) | Head daisy, sits on the hat band under hats |
+| Green (incl. park mint, lime) | Two head daisies (antenna-style pair), sit on the hat band under hats |
 | Blue and every other colour | None |
 
 ### Teddy (look phase 2026-10-31; now sold in the Jelly Spring, see the table above)
@@ -52,12 +52,12 @@ Shown in the species picker (`BobV1/Start/AdoptionCenter.swift`, content in `Bob
 | **Blueberry** | Blue (0, default name Bob) | The unbothered one | Side-eye (no body feature) | Cool | Sushi roll |
 | **Lemon Drop** | Yellow (1, Pip) | The sunny one | Tail wag (pointed tail + orange spikes) | Sporty | Donut |
 | **Taro** | Purple (3, Lavender) | The dreamy one | Little wings | Sparkly | Bedtime cookie |
-| **Matcha** | Green (2, Moss) | The sleepy one | Head daisy | Sweet | Onigiri |
+| **Matcha** | Green (2, Moss) | The sleepy one | Two head daisies | Sweet | Onigiri |
 
 - **Blueberry:** "Cool as a cucumber. Acts like they don't care, then follows you everywhere." Lore: Woke up in a rain puddle at dusk, under a blue-grey sky. Blueberries take life slow and steady. Nothing rattles them, but they always sit a little closer to their favourite person. Starting jars: Cute 50, Sweet 45, Sparkly 30, Cool 85, Sporty 55.
 - **Lemon Drop:** "Sunshine on legs. First one up, last one to nap, and it wags that spiky tail at everyone." Lore: Woke up inside a sunbeam. The little orange spikes down its back are sun-sparks that cooled off and went soft. Lemon Drops can't sit still: zooming, bouncing and chasing are their love language. Jars: Cute 58, Sweet 60, Sparkly 46, Cool 28, Sporty 85.
 - **Taro:** "Head in the clouds, and nearly the rest of it too. Flaps, floats, dances and nuzzles." Lore: Woke up in the very last drop of twilight, just as the first stars came out. That's why Taros can almost fly: their little wings lift them for a moment or two, and they always land smiling. Jars: Cute 70, Sweet 55, Sparkly 84, Cool 40, Sporty 45.
-- **Matcha:** "Calm and cosy. Loves a long sit, a big stretch and a look out the window. Never far from a nap." Lore: Woke up under a tea bush in the shade. A daisy seed landed on its head that very morning and simply never left. Matchas say the daisy tells them when it's nap time. It is always nap time. Jars: Cute 62, Sweet 82, Sparkly 40, Cool 50, Sporty 30.
+- **Matcha:** "Calm and cosy. Loves a long sit, a big stretch and a look out the window. Never far from a nap." Lore: Woke up under a tea bush in the shade. Two daisy seeds landed on its head that very morning and simply never left. Matchas say the daisy tells them when it's nap time. It is always nap time. Jars: Cute 62, Sweet 82, Sparkly 40, Cool 50, Sporty 30.
 
 ### Wobble Isle story (2026-10-27)
 

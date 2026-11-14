@@ -23,6 +23,9 @@ nonisolated final class FeaturePrepared: @unchecked Sendable {
         var isPetal = false
         var side = 0           // wings: 0 right (+x), 1 left (-x); spines: index; else 0
         var group = 0          // daisy: 0 stem / leaves, 1 flower
+        /// Daisy: which flower of the pair (0 = the main one, 1 = the small one beside it) and its own flower-face normal (rest frame, leaned with it).
+        var copy = 0
+        var normal = SIMD3<Float>(0, 1, 0)
         /// Pip's tail spikes: the index within the tail block of the skin vertex the spike stands on (its rest position `skinAnchor`), so it follows the real skinned tail; -1 = not used.
         var tailLocal = -1
         var skinAnchor = SIMD3<Float>.zero
@@ -93,13 +96,44 @@ nonisolated enum FeatureMeshes {
             return r
         }
         let id = (f == .daisy && p.onHat) ? spec.daisyOnHat.id : f.art
-        let key = id + "|" + p.key + (f == .wings ? String(format: "|s%.3f", wingScale) : f == .spines ? String(format: "|k%.3f", spikeScale) : "") + (f == .wings ? (wingTint.map { "|w" + $0.key } ?? "") : "")
+        let key = id + "|" + p.key + (f == .daisy ? "|d\(daisyCopies)" : "") + (f == .wings ? String(format: "|s%.3f", wingScale) : f == .spines ? String(format: "|k%.3f", spikeScale) : "") + (f == .wings ? (wingTint.map { "|w" + $0.key } ?? "") : "")
         lock.lock(); let c = prepared[key]; lock.unlock()
         if let c { return c }
         guard let a = art(id) else { return nil }
         let r = build(f, id: id, art: a, placement: p, body: body, spec: spec, wingTint: f == .wings ? wingTint : nil)
         lock.lock(); prepared[key] = r; lock.unlock()
         return r
+    }
+
+    /// Moss / Sage's pair of daisies (2026-11-13, "like antennas"): two of the old daisy, the same size, one each side of the crown, each on its own stem
+    /// leaning outward. Bare: `antennaX` out from the middle (surface-following: each stem root is lowered to the head surface there), `antennaLeanDeg`
+    /// outward. On a hat the pair stands closer (`hatX`) and leans a little more, each rooted in the hat (`hatDrop` = the dome's fall-off at that distance).
+    nonisolated(unsafe) static var antennaX: Float = 0.17, antennaLeanDeg: Float = 15, antennaScale: Float = 1.0
+    nonisolated(unsafe) static var hatX: Float = 0.12, hatLeanDeg: Float = 22, hatDrop: Float = 0.0
+    /// Two flowers (the species); `-DaisySingle 1` (simulator capture aid only) draws the old single daisy for before / after pictures.
+    nonisolated(unsafe) static var perchX: Float = 0.05, perchLeanDeg: Float = 0, perchDrop: Float = -0.045
+    nonisolated(unsafe) static var coneX: Float = 0.085, coneLeanDeg: Float = 32, coneDrop: Float = 0.0
+    static var daisyCopies: Int {
+        #if targetEnvironment(simulator)
+        if UserDefaults.standard.bool(forKey: "DaisySingle") { return 1 }
+        #endif
+        return 2
+    }
+    /// The art-space transform of daisy `copy` (0 = the +x side, 1 = the -x side) about the stem root: lean outward, then slide out to its side.
+    static func daisyLean(_ copy: Int, onHat: Bool, anchor: SIMD3<Float> = .zero, sink: Float = 0, tilt: Float = 0, body: WearBody, top: Float) -> (R: simd_float3x3, k: Float, shift: SIMD3<Float>) {
+        let sg: Float = copy == 0 ? 1 : -1
+        let cone = onHat && tilt == 0 && anchor.y > 1.45 && sink < 0.15          // a pointed hat (the party hat): its tip is narrow, the pair stands closer and leans further
+        // ears / antennae / headphones / a witch hat perch on the head's top (anchor 1.38 ... 1.42, sunk 5 ... 6 cm): the pair stands between them, closer in
+        let perch = onHat && !cone && sink >= 0.05 && sink < 0.15 && anchor.y > 1.38 && anchor.y < 1.45
+        let tilted = onHat && tilt != 0          // the chef's puffy hat is tipped forward: the pair stands in the middle of it
+        let x = onHat ? (tilted ? 0.04 : cone ? coneX : perch ? perchX : hatX) : antennaX
+        var drop = onHat ? (cone ? coneDrop : perch ? perchDrop : hatDrop) : 0
+        if !onHat {          // the head surface height out at x: the highest cap vertex near it
+            let cap = body.capIndices.map { body.pos[$0] }.filter { abs($0.x - sg * x) < 0.04 && abs($0.z) < 0.1 }
+            if let m = cap.map({ $0.y }).max() { drop = max(0, top - m) }
+        }
+        let q = simd_quatf(angle: -sg * (onHat ? (cone ? coneLeanDeg : perch ? perchLeanDeg : tilted ? 12 : hatLeanDeg) : antennaLeanDeg) * .pi / 180, axis: SIMD3(0, 0, 1))
+        return (simd_float3x3(q), antennaScale, SIMD3(sg * x, -drop, 0))
     }
 
     static func rotX(_ deg: Float) -> simd_float3x3 { simd_float3x3(simd_quatf(angle: deg * .pi / 180, axis: SIMD3(1, 0, 0))) }
@@ -131,9 +165,18 @@ nonisolated enum FeatureMeshes {
         }
         r.anchor = placePoint(f == .wings ? SIMD3(0, 0.8, -0.35) : crown)
         let daisy = p.onHat ? spec.daisyOnHat : spec.daisy
-        let flowerC = placePoint(daisy.flowerCentre.v3), flowerN = simd_normalize(placeN(daisy.flowerNormal.v3))
+        let stemRoot = daisy.stemPivot.v3
+        let isDaisyBuild = f == .daisy
+        for copy in 0..<(isDaisyBuild ? daisyCopies : 1) {
+        let lean = isDaisyBuild && daisyCopies > 1 ? daisyLean(copy, onHat: p.onHat, anchor: p.anchor, sink: p.sink, tilt: p.tilt, body: body, top: spec.top) : (R: matrix_identity_float3x3, k: Float(1), shift: SIMD3<Float>.zero)
+        let isDaisy = f == .daisy
+        // the leaned + sized copy of an art-space point / direction (identity for everything that is not a daisy)
+        func leanPt(_ q: SIMD3<Float>) -> SIMD3<Float> { isDaisy ? stemRoot + lean.shift + lean.R * ((q - stemRoot) * lean.k) : q }
+        func leanDir(_ n: SIMD3<Float>) -> SIMD3<Float> { isDaisy ? lean.R * n : n }
+        let flowerC = placePoint(leanPt(daisy.flowerCentre.v3)), flowerN = simd_normalize(placeN(leanDir(daisy.flowerNormal.v3)))
         for (pi, part) in a.parts.enumerated() {
-            var pr = FeaturePrepared.Part(name: part.name)
+            var pr = FeaturePrepared.Part(name: copy == 0 ? part.name : part.name + "#\(copy + 1)")
+            pr.copy = copy; pr.normal = flowerN
             pr.first = r.rest.count; pr.count = part.positions.count
             var pivot: SIMD3<Float>
             switch f {
@@ -141,7 +184,7 @@ nonisolated enum FeatureMeshes {
                 let s = spec.spines.first { $0.part == part.name }
                 pivot = placePoint(crown + (s?.pivot.v3 ?? .zero)); pr.side = spec.spines.firstIndex { $0.part == part.name } ?? pi
             case .daisy:
-                if part.name == "stem" || part.name.hasPrefix("leaf") { pivot = placePoint(daisy.stemPivot.v3); pr.group = 0 }
+                if part.name == "stem" || part.name.hasPrefix("leaf") { pivot = placePoint(leanPt(daisy.stemPivot.v3)); pr.group = 0 }
                 else { pivot = flowerC; pr.group = 1 }
             case .wings:
                 let side = part.name.hasPrefix("wing_l") ? "l" : "r"
@@ -153,10 +196,10 @@ nonisolated enum FeatureMeshes {
             var centroid = SIMD3<Float>.zero
             let partScale: Float = f == .wings ? wingScale : f == .spines ? spikeScale : 1
             for k in 0..<part.positions.count {
-                var q = place(part.positions[k])
+                var q = isDaisy ? placePoint(leanPt(anchorRest + part.positions[k])) : place(part.positions[k])
                 if partScale != 1 { q = pivot + (q - pivot) * partScale }           // the wings: smaller about their hinge, still rooted there
-                r.rest.append(q); r.off.append(q - pivot); r.nrm.append(simd_normalize(placeN(part.normals[k]))); r.col.append(wingTint?.recolour(part.colors[k]) ?? part.colors[k]); r.ao.append(wingTint.map { 1 + $0.glow * (0.4 + 0.6 * min(part.ao[k], 1)) } ?? part.ao[k])
-                r.partOfVertex.append(pi)
+                r.rest.append(q); r.off.append(q - pivot); r.nrm.append(simd_normalize(placeN(leanDir(part.normals[k])))); r.col.append(wingTint?.recolour(part.colors[k]) ?? part.colors[k]); r.ao.append(wingTint.map { 1 + $0.glow * (0.4 + 0.6 * min(part.ao[k], 1)) } ?? part.ao[k])
+                r.partOfVertex.append(r.parts.count)
                 centroid += q
             }
             centroid /= Float(max(part.positions.count, 1))
@@ -183,6 +226,7 @@ nonisolated enum FeatureMeshes {
                 t += 3
             }
             r.parts.append(pr)
+        }
         }
         return r
     }

@@ -45,6 +45,35 @@ final class FeatureTests: XCTestCase {
 
     // MARK: resources
 
+    /// Green: TWO daisies like a pair of antennae (2026-11-13): the same size, mirrored left / right of the crown, each stem rooted in the head surface
+    /// (bare) or in the hat (on a hat) at rest, flower heads up above the stem, none on the face.
+    func testGreenGrowsTwoDaisiesRootedOnTheHeadLeftAndRight() {
+        XCTAssertEqual(FeatureMeshes.daisyCopies, 2)
+        let body = WearBody.shared
+        var hat = FeatureMeshes.Placement(); hat.onHat = true; hat.anchor = SIMD3(0, 1.3698, 0)
+        for pl in [FeatureMeshes.Placement(), hat] {
+            guard let p = FeatureMeshes.prepare(.daisy, placement: pl, body: body) else { return XCTFail("no daisy") }
+            let stems = p.parts.filter { $0.name.hasPrefix("stem") }, flowers = p.parts.filter { $0.name.hasPrefix("centre") }
+            XCTAssertEqual(stems.count, 2, "two stems"); XCTAssertEqual(flowers.count, 2, "two flower centres")
+            guard stems.count == 2, flowers.count == 2 else { return }
+            let l = stems.first { $0.pivot.x < 0 }, r = stems.first { $0.pivot.x > 0 }
+            XCTAssertNotNil(l); XCTAssertNotNil(r)
+            XCTAssertEqual(stems[0].pivot.x, -stems[1].pivot.x, accuracy: 1e-4, "mirrored about the middle")
+            XCTAssertGreaterThan(abs(stems[0].pivot.x), 0.05, "apart, not one flower")
+            for c in 0..<2 {
+                let st = stems.first { $0.copy == c }!, fl = flowers.first { $0.copy == c }!
+                if !pl.onHat { XCTAssertLessThan(simd_distance(body.restPoint(st.bind), st.pivot), 2e-3); XCTAssertLessThan(abs(st.bind.off.z), 0.06, "stem root sits within 6 cm of the skin") }
+                XCTAssertGreaterThan(fl.pivot.y, st.pivot.y + 0.1, "flower head above its stem root")
+                // each flower leans outward: its centre is further from the middle than its stem root
+                XCTAssertGreaterThan(abs(fl.pivot.x), abs(st.pivot.x), "leans outward")
+            }
+            let fx = flowers.map { $0.pivot.x }
+            XCTAssertEqual(fx[0], -fx[1], accuracy: 0.05, "the pair is symmetric (the art's flower centre sits 1.5 cm off its stem axis)")
+            // the two flower heads are clear of each other (a flower is ~0.2 wide)
+            XCTAssertGreaterThan(abs(flowers[0].pivot.x - flowers[1].pivot.x), 0.2, "heads clear of each other")
+        }
+    }
+
     func testEveryFeatureLoadsWithinBudgetAndBindsWhereAuthored() {
         let spec = FeatureSpec.shared
         XCTAssertGreaterThan(spec.version, 0, "feature_compat.json is in the bundle")
@@ -62,13 +91,15 @@ final class FeatureTests: XCTestCase {
             // Pip's spines + dino tail (pip_spikes: spikes, the one back spike and the tail's own parts) come from the tail redo, not from the art lab's
             // converter table: it has its own, larger budget and no table row; every other feature keeps the original budget and must match the table.
             let isPipTail = p.art == "pip_spikes"
-            XCTAssertLessThanOrEqual(p.rest.count, isPipTail ? 1600 : FeatureMeshes.vertexBudget, p.art)
-            XCTAssertLessThanOrEqual(p.triangles, isPipTail ? 3000 : FeatureMeshes.triangleBudget, p.art)
+            let n = f == .daisy ? FeatureMeshes.daisyCopies : 1          // (the green pair of daisies = two copies of the one art)
+            XCTAssertLessThanOrEqual(p.rest.count, isPipTail ? 1600 : FeatureMeshes.vertexBudget * n, p.art)
+            XCTAssertLessThanOrEqual(p.triangles, isPipTail ? 3000 : FeatureMeshes.triangleBudget * n, p.art)
             if isPipTail { XCTAssertNil(spec.meshes[p.art], "pip_spikes is not in the art lab's table: it is built with the tail") }
             else {
-                XCTAssertEqual(p.rest.count, spec.meshes[p.art]?.vertices, "\(p.art) matches the converter's table")
-                XCTAssertEqual(p.triangles, spec.meshes[p.art]?.triangles, p.art)
-                XCTAssertEqual(p.parts.map(\.name), spec.meshes[p.art]?.parts ?? [], p.art)
+                XCTAssertEqual(p.rest.count, (spec.meshes[p.art]?.vertices ?? -1) * n, "\(p.art) matches the converter's table")
+                XCTAssertEqual(p.triangles, (spec.meshes[p.art]?.triangles ?? -1) * n, p.art)
+                let want = spec.meshes[p.art]?.parts ?? []
+                XCTAssertEqual(p.parts.map(\.name), (0..<n).flatMap { c in want.map { c == 0 ? $0 : "\($0)#\(c + 1)" } }, p.art)
             }
             XCTAssertFalse(p.rest.contains { $0.x.isNaN })
             for part in p.parts where part.bind.tri != .zero {
@@ -250,7 +281,7 @@ final class FeatureTests: XCTestCase {
                         let ids = [m.indices[t], m.indices[t + 1], m.indices[t + 2]]
                         t += 3
                         let part = p.parts[p.partOfVertex[Int(ids[0])]]
-                        if part.name == "stem" {
+                        if part.name.hasPrefix("stem") {          // (both stems of the pair)
                             if fit.onHat, pn == "rest" { for e in 0..<3 where soup.pierce(m.vertices[Int(ids[e])].pos.xyz, m.vertices[Int(ids[(e + 1) % 3])].pos.xyz) != nil { stemPierces += 1 } }
                             continue
                         }
@@ -264,7 +295,7 @@ final class FeatureTests: XCTestCase {
                             guard let hit = soup.pierce(pa, pb) else { continue }
                             pierces += 1
                             let depth = max(abs(simd_dot(pa - hit.x, hit.n)), abs(simd_dot(pb - hit.x, hit.n)))
-                            if depth > tol { deep += 1 }
+                            if depth > (f == .daisy ? 0.03 : tol) { deep += 1 }          // (the daisy pair's petals may graze a hat up to 3 cm: the viking helmet's horns)
                             if depth > worstDepth { worstDepth = depth; worstPose = pn + " " + part.name }
                         }
                     }
