@@ -55,19 +55,19 @@
   -0.5172
  ],
  "bounds_local_min": [
-  -0.5969,
-  -0.3143,
+  -0.5557,
+  -0.3141,
   -0.1763
  ],
  "bounds_local_max": [
-  0.5969,
+  0.5557,
   0.3569,
-  0.8256
+  0.3662
  ],
  "size": [
-  1.1939,
-  0.6712,
-  1.0019
+  1.1114,
+  0.671,
+  0.5425
  ],
  "anchor": "back",
  "slot": "body",
@@ -78,7 +78,7 @@
  "price": 50,
  "title": "Little backpack",
  "variant": null,
- "desc": "A backpack seated on the upper-middle back (0.46 rad wide, 0.50 tall, rim 4 mm off the skin, pillowed to ~10 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two thin shoulder straps that each loop an arm root snug to the skin: over the top (y 0.70), down just in front, under the arm bulb (y 0.26) and into the pack.",
+ "desc": "A backpack seated on the upper-middle back (0.46 rad wide, 0.50 tall, rim 4 mm off the skin, pillowed to ~10 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two thin shoulder straps that each loop an arm root snug to the skin: over the top (y 0.70), down behind the arm, under the arm bulb (y 0.26) and into the pack.",
  "colourway": "backpack_sky",
  "batch": 2
 }

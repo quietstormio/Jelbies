@@ -379,7 +379,7 @@ def _snap(p, off):
 
 def backpack(main=SKY, flap=CORAL, strap=None, pip=False, **k):
     """A backpack seated on the upper-middle back, rim 4 mm off the skin, pillowed 10 cm out (taller body, flap, front pocket, two side pockets, buckle, top handle), on two thin
-    shoulder straps that each loop an arm root and stay within ~1.3 cm of the skin all the way: over the top of the arm root (y 0.70), down just in front of it, under the arm bulb (y 0.26)
+    shoulder straps that each loop an arm root and stay within ~1.3 cm of the skin all the way: over the top of the arm root (y 0.70), down BEHIND it, under the arm bulb (y 0.26)
     and back into the pack. pip=True: the same pack at 0.78 scale high enough (centre y 0.74) to clear the root of Pip's tail (top 0.544); the spikes it covers hide by the existing rule."""
     reset(); strap = strap or deep(main, 0.28)
     BK = 1.5 * math.pi
@@ -397,7 +397,7 @@ def backpack(main=SKY, flap=CORAL, strap=None, pip=False, **k):
     tube_curve('handle', hpts, 0.014 * sc, 5, strap, cap=True)
     # straps: closed loop on the skin round each arm root (right arm: azimuth PC - PR .. PC + PR; the left strap is the mirror image)
     NS = 56; HW = 0.022; R_ = 0.52
-    PC, PR = -0.33, 0.93                 # back end -1.26 (inside the pack), front end +0.60 (z 0.29: just in front of the arm bulb)
+    PC, PR = -0.805, 0.465               # back end -1.27 (inside the pack), front end -0.34 (z -0.17: BEHIND the arm bulb, whose back edge is z -0.11): over the top of the arm root, down behind the arm, under it - no line crosses the front of the bulb
     YC, RU, RD = ((0.52, 0.18, 0.26) if pip else (0.495, 0.205, 0.235))
     rows = [(-1.0, 0.004), (0.0, 0.012), (1.0, 0.004)]
     def loop(th):
@@ -415,7 +415,7 @@ def backpack(main=SKY, flap=CORAL, strap=None, pip=False, **k):
         grid_surface('strap%+d' % s, spt, NS, len(rows), None, closed_u=True, hint=lambda p: full_n(p),
                      gcol=lambda i, j: deep(strap, 0.22) if abs(rows[j][0]) > 0.9 else mix(deep(strap, 0.08), tint(strap, 0.16), 0.6))
     return dict(anchor='back', slot='body', tags=['cute', 'sporty'], price=50, title='Little backpack', variant='backpack_sky_pip' if pip else None,
-                desc='A backpack seated on the upper-middle back (0.46 rad wide, 0.50 tall, rim 4 mm off the skin, pillowed to ~10 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two thin shoulder straps that each loop an arm root snug to the skin: over the top (y 0.70), down just in front, under the arm bulb (y 0.26) and into the pack.')
+                desc='A backpack seated on the upper-middle back (0.46 rad wide, 0.50 tall, rim 4 mm off the skin, pillowed to ~10 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two thin shoulder straps that each loop an arm root snug to the skin: over the top (y 0.70), down behind the arm, under the arm bulb (y 0.26) and into the pack.')
 
 REG = [
     ('sash_pink', sash, dict(field=PINK, star=SKY), BIB_ANCHOR),
