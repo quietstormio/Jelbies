@@ -238,16 +238,16 @@ LOCAL=dict(origin='arm tip centre B (BobForm.armTip for the +x arm at rest; the 
         x='outward across the arm',y='toward the shoulder = unit(A - B)',z='body forward (+z)',
         rest_matrix_columns=[[round(float(v),4) for v in GLOVE_FRAME[:,i]] for i in range(3)],
         scale='multiply mesh by (arm tip radius / 0.15)')
-def wristbands(main=SKY,stripe=CREAM,**k):
+def wristbands(main=hx('#58A8E0'),stripe=CREAM,**k):
     """Round 2: authored at the size it is DRAWN (WornSet.emitArms no longer slims it): inner radius 0.098 (the fit puts the inner surface 4 mm off the arm), wall 1.5 cm (outer 0.113), width 0.070
-    (local y 0.025..0.095, centred on bandMid 0.060). Sky blue with two cream stripes 1.4 cm wide (y 0.036-0.050 and 0.070-0.084), a faint terry texture."""
+    (local y 0.025..0.095, centred on bandMid 0.060). Sky blue (#58A8E0, a touch deeper than SKY so it still reads blue in the room light) with two cream stripes 1.6 cm wide (y 0.036-0.052 and 0.068-0.084) and a sky stripe between, a faint terry texture."""
     reset(); segs=36; sq=0.90
     loop=[(0.098,0.033),(0.103,0.026),(0.110,0.028),(0.113,0.036),(0.113,0.084),(0.110,0.092),(0.103,0.094),(0.098,0.087)]
     def lf(phi): return [np.array([r*math.cos(phi),y,r*math.sin(phi)*sq]) for r,y in loop]
     def col(p,n):
         a=math.atan2(p[2]/sq,p[0]); y=p[1]
         c=main
-        if 0.036<y<0.050 or 0.070<y<0.084: c=stripe
+        if 0.036<y<0.052 or 0.068<y<0.084: c=stripe
         return mix(c,deep(c,0.10),0.16*(0.5-0.5*math.cos(36*a)))
     torus('band',segs,lf,col,sharp=60)
     return dict(anchor='wrist',slot='hands',tags=['sporty','cute'],price=20,title='Wristbands',
@@ -291,6 +291,6 @@ REG=[
  ('cape_hero',cape,dict(),BACK_ANCHOR),
  ('backpack_sky',backpack,dict(),BACK_ANCHOR),
  ('hero_patch',hero_patch,dict(),BA),
- ('wristbands_sky',wristbands,dict(main=SKY,stripe=CREAM),WR),
+ ('wristbands_sky',wristbands,dict(),WR),
  ('boxing_mitts',boxing_gloves,dict(),WR),
 ]
