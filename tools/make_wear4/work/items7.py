@@ -216,9 +216,10 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
         for phi in cols:
             e = B.egg_point(yl(phi) + dy, phi); h = hdir(e)
             s = math.sqrt(math.sin(8 * phi + 0.5 * ph * math.pi) ** 2 + 0.06) / math.sqrt(1.06)      # ~0.2 at the cusps (hem lifts, blunt: no needle tips edge-on), 1 mid-scallop
-            L = reach * (1 - 0.06 * (1 - s))
+            side = math.cos(phi) ** 2                                      # 1 at the hips (seen edge-on in the front view), 0 on the chest / back
+            L = reach * (1 - 0.06 * (1 - s) * (1 - side)) * (1 - 0.30 * side)         # the skirt is shorter in reach at the hips and its cusps fade there: no needle tips at the silhouette ends
             inner.append(e + h * (hin(phi) + 0.012))
-            hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.017 * (1 - s), 0]))
+            hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.017 * (1 - s) * (1 - 0.8 * side), 0]))
         def cf(i, k, c=c):
             return deep(c, 0.18) if k == 0 else (tint(c, 0.14) if k == 1 else deep(c, 0.10))
         _fold_layer('layer%d' % li, inner, hem, cf, not pip)
