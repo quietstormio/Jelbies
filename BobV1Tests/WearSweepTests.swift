@@ -130,6 +130,7 @@ final class WearSweepTests: XCTestCase {
         let c = pose.centroid
         var (ly, dist) = framing(look.slot, full: full)
         if tight { ly = 0.05; dist = 2.0 }
+        if let fs = env("WEAR4_FOCUS")?.split(separator: ",").compactMap({ Float($0) }), fs.count == 2 { (ly, dist) = (fs[0], fs[1]) }          // capture-only: WEAR4_FOCUS=<look height above the centroid>,<distance> (the Moss hat sheet needs the antenna tips in frame)
         if let focus { (ly, dist) = focus }
         let cam = Self.lookCamera(target: SIMD3(c.x, c.y + ly, c.z) + SIMD3(dir.z, 0, -dir.x) * side, dir: dir, dist: dist + extra, lift: lift)
         ren.dayHourOverride = masks ? 15 : 12
