@@ -23,12 +23,12 @@ nonisolated enum JellyLook {
     /// Neon cap (species-generic rule in the jelly shader: bright AND saturated colours, i.e. yellow and green, are softened and deepened; Blue, Lavender, Teddy, Pearl, Panda are untouched).
     /// Presets for the owner's pick: classic = off (today), a = softer, b = softer + a bit deeper, c = clearly deeper. `-JellyNeon a|b|c` (dev args) or the single overrides -JellySoft -JellyDeepen -JellyNeonY0 -JellyNeonY1.
     static let neon: (soft: Float, deepen: Float, y0: Float, y1: Float) = {
-        guard DevArgs.enabled, let k = UserDefaults.standard.string(forKey: "JellyNeon") else { return (0, 0, 0.57, 0.72) }
+        guard DevArgs.enabled, let k = UserDefaults.standard.string(forKey: "JellyNeon") else { return (0, 0, 0.50, 0.68) }
         switch k.lowercased() {
-        case "a": return (0.30, 0.00, 0.57, 0.72)
-        case "b": return (0.35, 0.12, 0.57, 0.72)
-        case "c": return (0.40, 0.26, 0.57, 0.72)
-        default: return (0, 0, 0.57, 0.72)
+        case "a": return (0.30, 0.00, 0.50, 0.68)
+        case "b": return (0.18, 0.10, 0.50, 0.68)
+        case "c": return (0.15, 0.22, 0.50, 0.68)
+        default: return (0, 0, 0.50, 0.68)
         }
     }()
 
