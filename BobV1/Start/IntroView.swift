@@ -14,7 +14,7 @@ import QuartzCore
 
 enum IntroClip {
     /// The full-screen logo animation (stars, the word puffing up, the jelly on the "i", the stomp, the letters pop, the jelly falls away; the old intro sting),
-    /// about 6.2 s at 60 fps (the artifact's Play once mode: the full sequence once, the jelly falls away and it rests on clean paper; the stomp is at about 3.9 s and the sting's hit is aligned to it), Blue theme, ending on empty paper (#F0EFF0). Re-render with tools/render_intro/render_intro.py --mode end --tail-fade 0 --tail-hold 0 --audio <sting> --audio-offset 0.4. Two renders: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
+    /// 5.0 s at 60 fps (the artifact's Play once mode, Blue theme: stars, the word "Jelmiko" puffing up, the jelly on the "i", the stomp, the letters pop; it rests on the finished logo on paper #F0EFF0; the clip's own sound is muxed in with no offset). Rendered from the artifact's HTML at DPR 3 (402x874 and 874x402 viewports) with node + puppeteer-core + ffmpeg. Two renders: 1206x2622 for portrait, 2622x1206 for landscape (chosen when the intro opens).
     static func resource(landscape: Bool) -> String { landscape ? "jelbies_logo_intro_landscape" : "jelbies_logo_intro_portrait" }
     static let fileExtension = "mp4"
     /// The last frame is held (paused) this long, then the intro cross-fades into the menu over `fadeSeconds` (-IntroHold / -IntroFade scale them on the simulator for captures).
