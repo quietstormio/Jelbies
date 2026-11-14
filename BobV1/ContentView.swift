@@ -45,7 +45,11 @@ struct ContentView: View {
         case .opening:
             OpeningStoryView(replay: flow.replaying) { withAnimation(.easeInOut(duration: 1.0)) { flow.finishOpening() } }.transition(.opacity)
         case .adopt(let mode):
-            AdoptionCenter(mode: mode, done: { c in withAnimation(.easeInOut(duration: 0.8)) { flow.bringHome(species: c.species, name: c.name, variant: c.variant, traits: c.traits) } }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
+            AdoptionCenter(mode: mode, done: { c in
+                    if flow.phase == .adopt(.first), FirstDayStyle.current == .room {          // a new game's first Jelmiko: the picker cross-fades into the real room
+                        withAnimation(.easeInOut(duration: 0.8)) { flow.bringHome(species: c.species, name: c.name, variant: c.variant, traits: c.traits) }
+                    } else { flow.bringHome(species: c.species, name: c.name, variant: c.variant, traits: c.traits) }
+                }, cancel: { mode == .first ? flow.backToMenu() : flow.cancelAdoption() })
                 .transition(.opacity)
         case .firstDay(let c, let n, let replay):
             FirstDayHomeView(character: c, name: n, replay: replay) { withAnimation(.easeInOut(duration: 0.8)) { flow.finishFirstDay() } }.transition(.opacity)

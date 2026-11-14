@@ -26,14 +26,11 @@ final class FirstDayTourCaptureUITests: XCTestCase {
         app.launch()
         XCUIDevice.shared.orientation = land ? .landscapeLeft : .portrait
 
-        let up = app.buttons["Meet the three"].waitForExistence(timeout: 60)
-        if !up { try? app.debugDescription.write(toFile: dir + "_tree.txt", atomically: true, encoding: .utf8) }
-        XCTAssertTrue(up, "the picker")
+        XCTAssertTrue(app.buttons["Meet the three"].waitForExistence(timeout: 60), "the picker")
         sleep(3)
         shot(app, "00_picker", dir)
         app.buttons["Meet the three"].tap()
         sleep(3)
-        try? app.debugDescription.write(toFile: dir + "_tree2.txt", atomically: true, encoding: .utf8)
         let pick = app.buttons["This one!"]
         XCTAssertTrue(pick.waitForExistence(timeout: 10))
         pick.tap()
@@ -43,10 +40,14 @@ final class FirstDayTourCaptureUITests: XCTestCase {
         shot(app, "00_naming", dir)
         bring.tap()
 
+        if env["FIRSTDAY_CARD"] == "1" {          // -FirstDayStyle card: the old illustrated screen, then the room
+            sleep(4); shot(app, "card_a", dir)
+            sleep(10); shot(app, "card_b", dir)
+            sleep(6); shot(app, "card_room", dir)
+            return
+        }
         // the cross-fade into the real room, then the run-in (Skip is up from the first moment)
-        let skipUp = app.descendants(matching: .any)["first-day-skip"].waitForExistence(timeout: 20)
-        if !skipUp { shot(app, "99_noskip", dir); try? app.debugDescription.write(toFile: dir + "_tree3.txt", atomically: true, encoding: .utf8) }
-        XCTAssertTrue(skipUp, "the tour's Skip is up")
+        XCTAssertTrue(app.descendants(matching: .any)["first-day-skip"].waitForExistence(timeout: 30), "the tour's Skip is up")
         shot(app, "01_runin_a", dir)
         usleep(900_000); shot(app, "01_runin_b", dir)
         usleep(900_000); shot(app, "01_runin_c", dir)
@@ -67,5 +68,40 @@ final class FirstDayTourCaptureUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["first-day-skip"].exists, "the tour is over: free play")
         shot(app, "11_free", dir)
         sleep(4)
+    }
+
+    /// Settings > Watch the opening on a saved game: the opening story, then the tour over the player's own room (nothing runs in).
+    func testReplayFromSettings() {
+        let env = ProcessInfo.processInfo.environment
+        let dir = (env["FIRSTDAY_SHOTS"] ?? NSTemporaryDirectory() + "firstday") + "_replay"
+        let app = XCUIApplication()
+        app.launchArguments += ["-NewGame", "lavender,teddy", "-MainMenu", "0", "-SkipIntro", "1", "-ClockHour", "12"]
+        app.launch()
+        let gear = app.buttons["settings-button"]
+        XCTAssertTrue(gear.waitForExistence(timeout: 90), "the room")
+        sleep(4)
+        shot(app, "r00_room", dir)
+        gear.tap()
+        let row = app.descendants(matching: .any)["settings-watch-opening"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        let skip = app.descendants(matching: .any)["first-day-skip"]
+        for _ in 0..<80 where !skip.exists {
+            let s = app.buttons["Skip"]
+            if s.exists { s.tap() }
+            sleep(1)
+        }
+        XCTAssertTrue(skip.waitForExistence(timeout: 20), "the tour comes up after the opening")
+        sleep(2)
+        shot(app, "r01_welcome", dir)
+        var n = 2
+        let next = app.descendants(matching: .any)["first-day-next"]
+        while next.exists, n < 14 {
+            next.tap(); usleep(1_300_000)
+            shot(app, String(format: "r%02d_step", n), dir); n += 1
+        }
+        XCTAssertFalse(skip.exists, "the replay ended")
+        sleep(2)
+        shot(app, "r99_after", dir)
     }
 }

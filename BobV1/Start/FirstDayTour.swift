@@ -57,7 +57,7 @@ final class FirstDayTour {
         case .care: return "Tap the heart to feed, give water, play or nap."
         case .jelmiko: return "Tap your Jelmiko, then Come here for a cuddle."
         case .coins: return "These are your JellyCoins. Earn more around town."
-        case .bag: return "Your bag has clothes, toys and decor."
+        case .bag: return "Your bag has food, clothes, toys and decor."
         case .goOut: return "Go out to the shop, the races and the park."
         case .mic: return tapToTalk ? "Double tap the mic to talk to your Jelmiko." : "Hold the mic and say a word to your Jelmiko."
         case .settings: return "Settings and sound are up here."
@@ -109,6 +109,8 @@ final class FirstDayTour {
     func roomReady() {
         guard armed else { return }
         armed = false; active = true; index = 0; serial += 1
+        if let j = pendingJump, steps.indices.contains(j) { index = j }
+        pendingJump = nil
         sync()
     }
 
@@ -145,7 +147,8 @@ final class FirstDayTour {
     func reset() { active = false; armed = false; arrival = nil; steps = []; index = 0; sync() }
 
     /// Capture aid (`-FirstDayStep <i>`): start on that step.
-    func jump(to i: Int) { if steps.indices.contains(i) { index = i; serial += 1 } }
+    func jump(to i: Int) { pendingJump = i; if active, steps.indices.contains(i) { index = i; serial += 1 } }
+    private var pendingJump: Int?
 
     private func sync() { GameCare.introHold = holdsGame }
 }
@@ -177,8 +180,11 @@ struct FirstDayTourOverlay: View {
 
     var body: some View {
         if let step = tour.step {
-            GeometryReader { geo in
-                content(step, geo)
+            // He roams: while a step depends on where he stands (his cut-out, the side of a landscape caption) it is redrawn ten times a second
+            TimelineView(.animation(minimumInterval: 0.1, paused: !(step == .coach(.jelmiko) || step == .welcome || step == .jellyCoins))) { _ in
+                GeometryReader { geo in
+                    content(step, geo)
+                }
             }
             .ignoresSafeArea()
             .accessibilityAddTraits(.isModal)
@@ -252,11 +258,11 @@ struct FirstDayTourOverlay: View {
 
     private func coachCard(_ step: FirstDayStep, size: CGSize, hole: CGRect) -> some View {
         guard case .coach(let t) = step else { return AnyView(EmptyView()) }
-        let w = cardWidth(size)
+        var w = cardWidth(size)
         let cardH: CGFloat = 132, safeTop = Self.topInset + 58
         let roomAbove = hole.minY - 20 - safeTop, roomBelow = size.height - hole.maxY - 20 - 12
         // above or below the control when it fits (a pointer shows which one); else beside it (a Jelmiko in the middle of a short landscape screen)
-        let placement: Int = {          // 0 above, 1 below, 2 beside
+        var placement: Int = {          // 0 above, 1 below, 2 beside
             let preferAbove = hole.midY > size.height / 2
             if preferAbove, roomAbove >= cardH { return 0 }
             if !preferAbove, roomBelow >= cardH { return 1 }
@@ -264,18 +270,28 @@ struct FirstDayTourOverlay: View {
             if roomBelow >= cardH { return 1 }
             return 2
         }()
-        let above = placement == 0
-        var x = placement == 2 ? (hole.midX < size.width / 2 ? min(hole.maxX + 16, size.width - w - 16) : max(hole.minX - 16 - w, 16))
-                               : min(max(hole.midX - w / 2, 16), size.width - w - 16)
+        let w0 = w
+        /// Beside the control: the card takes the room left on that side (never over the control itself).
+        func besideX() -> CGFloat {
+            let leftSide = hole.midX < size.width / 2
+            w = max(min(w0, leftSide ? size.width - hole.maxX - 32 : hole.minX - 32), 180)
+            return leftSide ? hole.maxX + 16 : max(hole.minX - 16 - w, 16)
+        }
+        var x = placement == 2 ? besideX() : min(max(hole.midX - w / 2, 16), size.width - w - 16)
         // never over the Jelmiko (he wanders): if the card would sit on him, try the screen's left and right edges and the control's side
         if t != .jelmiko, placement != 2, let j = jelmikoPoint(size) {
-            let top = above ? hole.minY - 20 - cardH : hole.maxY + 20
+            let top = placement == 0 ? hole.minY - 20 - cardH : hole.maxY + 20
             func hitsHim(_ cx: CGFloat) -> Bool { CGRect(x: cx - 8, y: top - 8, width: w + 16, height: cardH + 16).insetBy(dx: -40, dy: -50).contains(j) }
             if hitsHim(x) {
                 let tries = [16, size.width - w - 16, hole.midX - w / 2].map { min(max($0, 16), size.width - w - 16) }
                 if let ok = tries.first(where: { !hitsHim($0) }) { x = ok }
+                else {          // no spot above / below clears him: beside the control instead
+                    placement = 2
+                    x = besideX()
+                }
             }
         }
+        let above = placement == 0
         let text = FirstDayTour.sentence(t, tapToTalk: VoiceCoordinator.tapMode)
         let card = VStack(alignment: .leading, spacing: 12) {
             Text(text)
@@ -312,7 +328,7 @@ struct FirstDayTourOverlay: View {
                     card.padding(.leading, x).padding(.top, hole.maxY + 20)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 default:
-                    card.padding(.leading, x).padding(.top, min(max(hole.midY - cardH / 2, safeTop), max(size.height - cardH - 12, safeTop)))
+                    card.padding(.leading, x).padding(.top, min(max(hole.midY - cardH / 2, safeTop), max(size.height - cardH - Self.bottomInset - 84, safeTop)))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
@@ -361,10 +377,10 @@ struct FirstDayTourOverlay: View {
         .accessibilityLabel(tour.isLast ? "Let's play" : "Next").accessibilityIdentifier("first-day-next")
     }
 
-    /// Skip: the old screen's pill, kept in view on every step. Top centre (the corners hold the gear, the coins and the roster the coach marks point at).
+    /// Skip: the old screen's pill, kept in view on every step.
     private func skipPill(size: CGSize) -> some View {
         Color.clear.allowsHitTesting(false).frame(maxWidth: .infinity, maxHeight: .infinity)
-            .overlay(alignment: .top) { skipButton.padding(.top, max(Self.topInset, 14) + 6) }
+            .overlay(alignment: .bottom) { skipButton.padding(.bottom, max(Self.bottomInset, 10) + 14) }
     }
 
     private var skipButton: some View {
@@ -386,6 +402,11 @@ struct FirstDayTourOverlay: View {
     private func focusSoon() {
         guard UIAccessibility.isVoiceOverRunning else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { textFocus = true }
+    }
+
+    /// Skip stands bottom centre: the top corners hold the gear, the coins and the roster (a 5-digit balance runs up against any pill in the middle), and the rails leave the middle free.
+    static var bottomInset: CGFloat {
+        (UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 0
     }
 
     static var topInset: CGFloat {
