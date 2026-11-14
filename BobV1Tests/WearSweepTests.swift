@@ -25,6 +25,8 @@ final class WearSweepTests: XCTestCase {
     static let names = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl", "Panda"]
     /// Species rendered: the four of the sweep, or all seven with WEAR4_ALL7 (capture-only).
     var nSp: Int { env("WEAR4_ALL7") != nil ? 7 : 4 }
+    /// Capture-only: WEAR4_SP=2 (comma list of species ids) renders only those Jelmiko; WEAR4_FLAP=80 forces the wing flap signal to that many degrees (clamped by the worn items' limits: the widest ALLOWED flap).
+    var spList: [Int] { env("WEAR4_SP")?.split(separator: ",").compactMap { Int($0) } ?? Array(0..<nSp) }
     /// The pieces added by this sweep (wear4_new_items.png).
     static let newPieces: [WearLook] = WearGenerated.rows.filter { $0.batch >= 4 }.map(\.look)
 
@@ -82,6 +84,7 @@ final class WearSweepTests: XCTestCase {
     }
     private func tick(_ st: Stage, _ look: WearLook, dt: Float = 1.0 / 60) {
         let r = st.rig
+        if let f = env("WEAR4_FLAP").flatMap({ Float($0) }) { r.brain.sig.wingFlap = f }
         st.worn.tick(id: 0, brain: r.brain, sim: r.sim, outfit: [look.slot: look], role: .none, hideAll: false, dt: dt)
         var art: [String] = []
         for s in WearSlot.allCases where s != .feet { if let l = st.worn.shown(0, s), !l.art.isEmpty { art.append(l.art) } }
@@ -193,7 +196,7 @@ final class WearSweepTests: XCTestCase {
         guard !list.isEmpty else { throw XCTSkip("nothing selected") }
         var cells: [WearLook: [Cells]] = [:]
         for l in list { cells[l] = Array(repeating: Cells(), count: nSp) }
-        for id in 0..<nSp {
+        for id in spList {
             DayClock.shared.forcedHour = 12
             let st = try makeStage(id)
             let tg: [SIMD2<Float>] = [SIMD2(1.6, 0.4), SIMD2(-1.2, 1.0)]
@@ -203,7 +206,7 @@ final class WearSweepTests: XCTestCase {
                 var c = cells[l]![id]
                 c.front = caption(shot(st, l, yaw: 0), "\(Self.names[id]) \(l.rawValue) front").pngData()
                 c.tq = caption(shot(st, l, yaw: 0.65), "\(Self.names[id]) \(l.title) 3/4").pngData()
-                if l.slot == .neck || l.slot == .body { c.side = caption(shot(st, l, yaw: 1.5), "\(Self.names[id]) side").pngData(); c.backq = caption(shot(st, l, yaw: 2.4), "\(Self.names[id]) 3/4 back").pngData() }
+                if l.slot == .neck || l.slot == .body || (env("WEAR4_TILES") != nil && l.slot == .head) { c.side = caption(shot(st, l, yaw: 1.5), "\(Self.names[id]) side").pngData(); c.backq = caption(shot(st, l, yaw: 2.4), "\(Self.names[id]) 3/4 back").pngData() }
                 if l.anchor == .back || l.slot == .body || l.slot == .neck { c.back = caption(shot(st, l, yaw: .pi), "\(Self.names[id]) back").pngData() }
                 if env("WEAR4_TILES") != nil {          // capture-only: the room camera looks down ~35 degrees (tan 0.7), the top view ~60 degrees (tan 1.7)
                     c.room = caption(shot(st, l, yaw: 0.35, lift: 0.7), "\(Self.names[id]) \(l.rawValue) room cam 35deg").pngData()
@@ -248,7 +251,7 @@ final class WearSweepTests: XCTestCase {
         }
         if let td = env("WEAR4_TILES") {                       // capture-only: every tile on its own, <look>_<species>_<view>.png
             try FileManager.default.createDirectory(atPath: td, withIntermediateDirectories: true)
-            for l in list { for id in 0..<nSp {
+            for l in list { for id in spList {
                 let c = cells[l]![id]
                 for (v, data) in [("front", c.front), ("q34", c.tq), ("side", c.side), ("q34b", c.backq), ("back", c.back), ("walk", c.walk), ("room", c.room), ("top", c.top)] {
                     if let data { try data.write(to: URL(fileURLWithPath: td + "/\(l.rawValue)_\(Self.names[id])_\(v).png")) }
