@@ -52,14 +52,16 @@ final class ArmBlendTests: XCTestCase {
         UserDefaults.standard.set(1, forKey: "BlobWaveSide")
         defer { UserDefaults.standard.removeObject(forKey: "BlobWaveSide") }
         r.brain.request(.wave)
-        var checked = 0, worst = 0.0
+        var checked = 0, worst = 0.0, better = 0
         for _ in 0..<(60 * 6) {
             r.tick()
             r.render()
             guard r.brain.activity == .waving, r.skinner.waveBlend[0].x > 0.5, r.skinner.waveBlend[0].w > 0.99 else { continue }
             checked += 1; worst = max(worst, r.skinner.waveResidual.after)
+            if r.skinner.waveResidual.after < r.skinner.waveResidual.before - 0.05 { better += 1 }
         }
         XCTAssertGreaterThan(checked, 60, "the grown capsule is on for most of the wave")
+        XCTAssertGreaterThan(better, 10, "the affine fit is actually applied (smaller residual than the rigid pose fit) on many frames")
         XCTAssertLessThan(worst, 6.0, "max capsule-to-cone residual in mm over the wave (rigid fit alone: 5-18 mm in the app)")
     }
 }

@@ -922,8 +922,8 @@ nonisolated final class Skinner {
         let m0 = simd_double3x3(SIMD3(Double(waveBlend[1].x), Double(waveBlend[1].y), Double(waveBlend[1].z)), SIMD3(Double(waveBlend[2].x), Double(waveBlend[2].y), Double(waveBlend[2].z)), SIMD3(Double(waveBlend[3].x), Double(waveBlend[3].y), Double(waveBlend[3].z)))
         let t0 = SIMD3(Double(waveBlend[4].x), Double(waveBlend[4].y), Double(waveBlend[4].z))
         let log = Self.waveDriftLog
-        let before = log ? resid(m0, t0) : 0
-        guard Self.waveAffineOn else { return }
+        let before = resid(m0, t0)
+        guard Self.waveAffineOn else { waveResidual = (before, before); return }
         // normal equations of  body = N world + t  over every capsule vertex (centred on the rigid map's mean for conditioning)
         var ata = simd_double4x4(0), atb = [SIMD4<Double>](repeating: .zero, count: 3)
         var mean = SIMD3<Double>.zero
@@ -945,7 +945,7 @@ nonisolated final class Skinner {
         let N = simd_double3x3(cols[0], cols[1], cols[2])
         let t = SIMD3(sol[0][3], sol[1][3], sol[2][3]) - N * mean
         let after = resid(N, t)
-        waveResidual = (before, after)
+        waveResidual = (before, min(before, after))          // (before = the rigid pose fit, after = the map that is actually applied)
         if log { fputs(String(format: "[armblend] capsule residual before %.1f mm after %.1f mm\n", before, after), stderr) }
         guard after < before else { return }          // (never worse than the rigid fit)
         for j in 0..<3 { waveBlend[1 + j] = SIMD4(Float(cols[j].x), Float(cols[j].y), Float(cols[j].z), 0) }
