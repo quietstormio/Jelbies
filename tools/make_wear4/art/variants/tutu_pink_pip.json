@@ -1,7 +1,7 @@
 {
  "id": "tutu_pink_pip",
  "tris": 1016,
- "verts": 712,
+ "verts": 898,
  "parts": [
   {
    "name": "waistband",
@@ -11,17 +11,17 @@
   {
    "name": "layer0",
    "tris": 244,
-   "verts": 186
+   "verts": 248
   },
   {
    "name": "layer1",
    "tris": 244,
-   "verts": 186
+   "verts": 248
   },
   {
    "name": "layer2",
    "tris": 244,
-   "verts": 186
+   "verts": 248
   },
   {
    "name": "bow-1",
@@ -46,18 +46,18 @@
  ],
  "bounds_local_min": [
   -0.6138,
-  -0.1926,
-  -0.4268
+  -0.2046,
+  -0.4272
  ],
  "bounds_local_max": [
   0.6138,
   0.0796,
-  0.6075
+  0.61
  ],
  "size": [
   1.2275,
-  0.2722,
-  1.0342
+  0.2842,
+  1.0372
  ],
  "anchor": "waist",
  "slot": "body",

@@ -163,18 +163,20 @@ def _ring_mesh(name, rows, close_i, colfn, close_k=True, cap_ends=True):
     return add_part(name, P, F, C, flip_auto=False)
 
 def _fold_layer(name, inner, hem, colfn, close_i):
-    """A thin double-sided tulle layer: a top surface and an underside (0.006 lower) that SHARE the hem vertices, so the edge is one rounded rim (no slab, no coplanar sheets).
+    """A thin double-sided tulle layer: a top surface and an underside kept 8 mm BELOW it everywhere, hem included. (Round 3: the hem used to be one shared vertex row where the two surfaces converged to a zero-thickness
+    wedge: top and underside then z-fought along the rim and the dark underside showed as a fringe of needle slivers in the close-up camera. Now there is no convergence: the open 8 mm slit at the rim is invisible at game scale.)
     inner / hem: per-column points of the top surface edges."""
-    N = len(inner); P = []; C = []
+    N = len(inner); P = []; C = []; DY = np.array([0, 0.008, 0])
     for i in range(N): P.append(tuple(inner[i])); C.append(colfn(i, 0))
     for i in range(N): P.append(tuple(hem[i])); C.append(colfn(i, 1))
-    for i in range(N): P.append(tuple(np.array(inner[i]) - np.array([0, 0.009, 0]))); C.append(colfn(i, 2))
+    for i in range(N): P.append(tuple(np.array(inner[i]) - DY)); C.append(colfn(i, 2))
+    for i in range(N): P.append(tuple(np.array(hem[i]) - DY)); C.append(colfn(i, 3))
     Ft = []; Fb = []
     for i in range(N if close_i else N - 1):
         i2 = (i + 1) % N
         a, b, c, d = i, i2, N + i2, N + i
         Ft += [(a, b, c), (a, c, d)]
-        a, b, c, d = 2 * N + i, 2 * N + i2, N + i2, N + i
+        a, b, c, d = 2 * N + i, 2 * N + i2, 3 * N + i2, 3 * N + i
         Fb += [(a, c, b), (a, d, c)]
     Pn = np.array(P)
     n0 = np.cross(Pn[Ft[0][1]] - Pn[Ft[0][0]], Pn[Ft[0][2]] - Pn[Ft[0][0]])
@@ -183,7 +185,7 @@ def _fold_layer(name, inner, hem, colfn, close_i):
 
 def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     """Ballet tutu: a snug waistband on the body at height yb and three thin tulle layers that leave it and flare OUT AND DOWN (28 / 38 / 48 degrees below horizontal),
-    each with a scalloped hem (16 soft waves, staggered per layer), 80 columns, a slightly different pink per layer, and a small bow on the front.
+    each with a scalloped hem (17 soft waves, staggered per layer), 80 columns, a slightly different pink per layer, and a small bow on the front.
     Hems end at y ~0.13 on the chest (the shoes show under it) and ~0.06 at the hips / back. Budget: <=1000 vertices / <=1300 triangles (WearMeshes), so the layers are single cones folded on a shared rim, not slabs.
     pip=True: open over Pip's tail root (a slot +-40 deg round the back centre)."""
     reset()
@@ -209,19 +211,19 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     _ring_mesh('waistband', rows, False, lambda i, k, p: mix(deep(band, 0.10), tint(band, 0.28), 0.5 + 0.5 * (sec_at(0.0)[k][1] / 0.026) * 0.7))
     # --- tulle layers: (colour, attach dy, angle below horizontal, reach, hem wave phase)
     LAY = [(mix(tint(pink, 0.55), CREAM, 0.30), 0.004, 28.0, 0.120, 0.0), (tint(pink, 0.22), -0.008, 38.0, 0.140, 1.0), (mix(pink, lav, 0.38), -0.020, 48.0, 0.150, 2.0)]
-    NC = 62 if pip else 80
+    NC = 62 if pip else 68
     for li, (c, dy, ang, reach, ph) in enumerate(LAY):
         inner = []; hem = []
         cols = phis(NC)
         for phi in cols:
             e = B.egg_point(yl(phi) + dy, phi); h = hdir(e)
-            s = math.sqrt(math.sin(8 * phi + 0.5 * ph * math.pi) ** 2 + 0.06) / math.sqrt(1.06)      # ~0.2 at the cusps (hem lifts, blunt: no needle tips edge-on), 1 mid-scallop
+            s = math.sqrt(math.sin(8.5 * phi + 0.5 * ph * math.pi) ** 2 + 0.06) / math.sqrt(1.06)      # ~0.2 at the cusps (hem lifts, blunt: no needle tips edge-on), 1 mid-scallop
             side = math.cos(phi) ** 2                                      # 1 at the hips (seen edge-on in the front view), 0 on the chest / back
             L = reach * (1 - 0.06 * (1 - s) * (1 - side)) * (1 - 0.30 * side)         # the skirt is shorter in reach at the hips and its cusps fade there: no needle tips at the silhouette ends
             inner.append(e + h * (hin(phi) + 0.012))
             hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.017 * (1 - s) * (1 - 0.8 * side), 0]))
         def cf(i, k, c=c):
-            return deep(c, 0.18) if k == 0 else (tint(c, 0.14) if k == 1 else deep(c, 0.10))
+            return deep(c, 0.18) if k == 0 else (tint(c, 0.14) if k == 1 else (deep(c, 0.10) if k == 2 else tint(c, 0.06)))
         _fold_layer('layer%d' % li, inner, hem, cf, not pip)
     # --- a small neat bow on the front of the band
     p, n = surface_at(yb + 0.034, math.pi / 2, off=0.044)
