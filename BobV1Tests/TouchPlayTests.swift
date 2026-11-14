@@ -199,7 +199,7 @@ final class TouchPlayTests: XCTestCase {
         XCTAssertTrue(r.rec.events(.transient).filter { $0.sharpness > 0.55 && $0.sharpness < 0.65 }.isEmpty, "no 11 Hz flutter")
         let pulse = r.rec.events(.continuous, channel: "pet").map { $0.intensity }
         XCTAssertGreaterThan(pulse.max() ?? 0, 0.15, "a warm swell is felt")
-        XCTAssertLessThan(pulse.max() ?? 0, TouchHapticsTuning.continuous(0.4), "soft (the held swell tops out at 0.27 before the touch-strength curve)")
+        XCTAssertLessThan(pulse.max() ?? 0, 0.4, "soft")
         XCTAssertLessThan(sk.eyeHeight.left, 0.15, "closed happy eyes")
         XCTAssertGreaterThan(sim.minY(), 0.05, "still lifted")
         // let go: it lasts until he lands, then everything goes back

@@ -125,44 +125,6 @@ enum HapticMap {
     static func bloop(pinch p: Float) -> (intensity: Float, sharpness: Float) { (0.45 + 0.4 * clamp01(p), 0.25) }
 }
 
-// MARK: - Touch strength (the one place to tune)
-
-/// How much stronger the touch / cuddle haptics are than the plain `HapticMap` numbers (owner, 11-13: "the haptics aren't as strong as I'd like").
-/// Applied ONLY at the sink boundary of the touch paths (`HapticDriver.update`, `touchTransient`, `softTap`, `jellyPulse`, `impact`, `wobble`); the sound pairing,
-/// the `HapticMap` numbers and the room / emote / race / volleyball / UI haptics are untouched. Set `strength` to 0 to get the old feel back exactly.
-enum TouchHapticsTuning {
-    /// 0 = old numbers, 1 = full new curve. (One knob.)
-    nonisolated(unsafe) static var strength: Float = 1
-    /// Exponent of the soft-knee curve `1 - (1 - x)^p` for the long channels (stroke, belly, squish, purr, held swell): x 0.3 -> 0.54 (+80 %), 0.5 -> 0.78 (+55 %), 0.9 -> 0.994.
-    static let continuousExponent: Float = 2.2
-    /// Same curve for transients / wobbles (press, poke, let-go, landing): x 0.3 -> 0.41 (+37 %), 0.5 -> 0.65 (+30 %), 0.9 -> 0.97.
-    static let transientExponent: Float = 1.5
-    /// Soft sounds (sharpness <= 0.3) are made 20 % rounder and deeper; fully ramped out by 0.5, so crisp ticks (boop, pat, grumpy hmph) stay crisp.
-    static let softSharpnessScale: Float = 0.8
-
-    /// Soft knee: 0 -> 0, 1 -> 1, never below the input, never above 1, monotonic. Quiet levels gain the most; near 1 nothing is left to clip.
-    static func curve(_ x: Float, exponent p: Float) -> Float {
-        let v = min(1, max(0, x))
-        return 1 - powf(1 - v, p)
-    }
-    static func continuous(_ x: Float) -> Float { blend(x, curve(x, exponent: continuousExponent)) }
-    static func transient(_ x: Float) -> Float { blend(x, curve(x, exponent: transientExponent)) }
-    private static func blend(_ x: Float, _ boosted: Float) -> Float {
-        let v = min(1, max(0, x)), k = min(1, max(0, strength))
-        return v + (boosted - v) * k
-    }
-
-    /// Lower sharpness for soft touches (deeper, rounder on the Taptic Engine); unchanged from 0.5 up.
-    static func sharpness(_ s: Float) -> Float {
-        let ramp = min(1, max(0, (0.5 - s) / 0.2))
-        return s * (1 - (1 - softSharpnessScale) * ramp * min(1, max(0, strength)))
-    }
-
-    /// The purr buzz added to the pet channel: a 2.6 Hz swell that never drops to zero while purring (floor 0.12, peak 0.40 before the curve; 0.24 ... 0.67 after).
-    static let purrFloor: Float = 0.12, purrSpan: Float = 0.28
-    static func purr(level: Float, pulse: Float) -> Float { level * (purrFloor + purrSpan * min(1, max(0, pulse))) }
-}
-
 // MARK: - Sink
 
 enum HapticChannel: String, Sendable { case pet, squish }
@@ -466,8 +428,8 @@ final class HapticDriver {
             if e != enabled { enabled = e; if warm { for s in sinks { e ? s.start() : s.stop() }; level.removeAll() } }
         }
         guard warm, enabled else { return }
-        send(.pet, now: now, i: TouchHapticsTuning.continuous(petIntensity), s: TouchHapticsTuning.sharpness(petSharpness))
-        send(.squish, now: now, i: TouchHapticsTuning.continuous(squishIntensity), s: TouchHapticsTuning.sharpness(squishSharpness))
+        send(.pet, now: now, i: petIntensity, s: petSharpness)
+        send(.squish, now: now, i: squishIntensity, s: squishSharpness)
         for s in sinks { s.poll(now: now) }
     }
 
@@ -489,22 +451,10 @@ final class HapticDriver {
         for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
     }
 
-    /// A touch / cuddle transient (press, poke, ripple, pat, cheeks, hmph, release): the same as `transient` (same sound pairing, same numbers to the sound), but the
-    /// haptic that reaches the sinks goes through `TouchHapticsTuning`. Other callers (race, volleyball, bath, newcomer) keep `transient`.
-    func touchTransient(now: Double, intensity: Float, sharpness: Float) {
-        guard warm else { return }
-        AudioHub.shared.touch(kind: "transient", intensity: intensity)
-        soundHook?("transient", intensity)
-        guard enabled else { return }
-        let i = TouchHapticsTuning.transient(intensity), s = TouchHapticsTuning.sharpness(sharpness)
-        for k in sinks { k.transient(intensity: i, sharpness: s) }
-    }
-
     /// A soft tap with NO sound (the cuddle let-go wobble, CuddleJiggle.swift): the same transient to the sinks, no AudioHub request, no LetGoRing reset.
     func softTap(now: Double, intensity: Float, sharpness: Float) {
         guard warm, enabled else { return }
-        let i = TouchHapticsTuning.transient(intensity), s = TouchHapticsTuning.sharpness(sharpness)
-        for k in sinks { k.transient(intensity: i, sharpness: s) }
+        for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
     }
 
     /// A squash peak of a let-go settle: the same haptic as `transient`; the sound is the soft let-go boing (one per ring).
@@ -513,8 +463,7 @@ final class HapticDriver {
         AudioHub.shared.touch(kind: "letgo", intensity: intensity)
         soundHook?("transient", intensity)
         guard enabled else { return }
-        let i = TouchHapticsTuning.transient(intensity), s = TouchHapticsTuning.sharpness(sharpness)
-        for k in sinks { k.transient(intensity: i, sharpness: s) }
+        for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
     }
 
     /// Bounce / landing thump scaled by the impact speed; rate limited.
@@ -525,8 +474,7 @@ final class HapticDriver {
         AudioHub.shared.touch(kind: "impact", intensity: i)
         soundHook?("impact", i)
         guard enabled else { return }
-        let gi = TouchHapticsTuning.transient(i), gs = TouchHapticsTuning.sharpness(s)
-        for k in sinks { k.transient(intensity: gi, sharpness: gs) }
+        for k in sinks { k.transient(intensity: i, sharpness: s) }
     }
 
     func wobble(now: Double, peak: Float) {
@@ -534,7 +482,7 @@ final class HapticDriver {
         AudioHub.shared.touch(kind: "wobble", intensity: peak)
         soundHook?("wobble", peak)
         guard enabled else { return }
-        for k in sinks { k.wobble(peak: TouchHapticsTuning.transient(peak), sharpness: TouchHapticsTuning.sharpness(0.2), tau: HapticMap.wobbleTau, duration: HapticMap.wobbleDuration) }
+        for k in sinks { k.wobble(peak: peak, sharpness: 0.2, tau: HapticMap.wobbleTau, duration: HapticMap.wobbleDuration) }
     }
 
     /// Ambient cues (the storm, Melon/Weather.swift): a very soft, low, long pulse and one soft tick. They pair NO sound (the storm has its own) and no-op when the
