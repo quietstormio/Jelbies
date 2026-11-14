@@ -79,6 +79,12 @@ static float pandaLimbs(float3 Q) {
     return max(arm, foot);
 }
 
+/// The feet only (pandaLimbs without the arm): the waving arm side swaps the rest-space arm mask for the per-pixel posed-arm mask (GfxBodyFast.metal armBlend).
+static float pandaFeetOnly(float3 Q) {
+    float3 q = float3(fabs(Q.x), Q.y, Q.z);
+    return 1.0 - smoothstep(0.004, 0.075, pandaFootD(q));
+}
+
 /// The belly oval: Teddy's B2 belly (Shaders.metal / GfxBodyFast.metal belly block, crisp mode 3) maths 1:1, painted charcoal instead of cream.
 static float pandaBelly(float3 Q) {
     float2 bp2 = float2(Q.x, Q.y - 0.335) / float2(0.335, 0.205);
@@ -86,13 +92,68 @@ static float pandaBelly(float3 Q) {
 }
 
 /// The whole Panda paint. `col` is the shaded white; bm 1 = the egg, 2 = a black piece. `patch` returns the eye-patch weight (blush stays off it).
-static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch) {
+/// `ink` (0...1) = the raised arm's own black (GfxBodyFast.metal decodes it from the mat channel while a Panda waves): the posed arm and the join collar that the
+/// arm pulls out of the egg are painted by where they ARE now (their displacement), not by the rest-space arm mask, whose crisp edge cut the stretched collar into torn teeth.
+static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch, float ink) {
     float3 blk = pandaBlack(col);
     patch = 0.0;
     if (bm > 1.5) { return blk; }
     patch = pandaEyePatch(Q);
     float m = max(max(max(patch, pandaBand(Q)), pandaLimbs(Q)), pandaBelly(Q));
+    m = max(m, smoothstep(0.2, 0.6, ink));
     return mix(col, blk, m);
 }
+/// ARM BLEND paint (`ink` = the per-vertex ink of the mat channel): EXACTLY pandaPaint (rest-space marks + the displacement ink, the look that reads as one clean lobe) plus the posed arm's per-pixel
+/// distance mask `armMask`, which only counts where the vertex ink says the skin was moved by the arm (smoothstep 0...0.2 of the decoded ink): its smooth edge replaces the ink's per-triangle edge on the
+/// collar, but it can never paint skin the arm did not touch (the cone reaches 12 cm into the body: unguarded it painted a black leaf on the front skin over the buried root, with a white wedge to the arm).
+/// `armSide` is unused (kept for the call sites): the rest-space arm mask stays, as before the blend.
+static float3 pandaPaintArm(float3 col, float3 Q, float bm, thread float &patch, float armMask, float armSide, float ink) {
+    float3 blk = pandaBlack(col);
+    patch = 0.0;
+    if (bm > 1.5) { return blk; }
+    patch = pandaEyePatch(Q);
+    float m = max(max(max(patch, pandaBand(Q)), pandaLimbs(Q)), pandaBelly(Q));
+    m = max(m, smoothstep(0.2, 0.6, ink));
+    m = max(m, armMask * smoothstep(0.0, 0.2, ink));
+    return mix(col, blk, m);
+}
+static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch) { return pandaPaint(col, Q, bm, patch, 0.0); }
+
+/// The waving Panda's ink rides in the mat channel as a NEGATIVE value (BlobBrain.pandaInkMat: mat = ao - 4 ink for ink > 0.1; real AO is 0...0.4, Teddy's ear hollow is the only other negative
+/// and is never in a Panda's egg range; the inked area's own crease AO is dropped: it is black there anyway). Negative is on purpose: a body shader that does not decode it (the locked fsSoftMatte) reads occ = 0, never a fully occluded arm.
+/// `modeW` = the body mode (u.shape.w): only the Panda egg (51) is decoded.
+static float pandaInkOfMat(float mat, float modeW) { return (modeW > 50.5 && modeW < 51.5 && mat < 0.0) ? clamp(-mat * 0.25, 0.0, 1.0) : 0.0; }
+static float pandaAOOfMat(float mat, float ink) { return ink > 0.0 ? clamp(mat + 4.0 * ink, 0.0, 0.4) : mat; }
 
 #endif
+
+// ARM BLEND for the bath and jersey body shaders (panda-wave-r1): the same posed-arm cone / normal ease as GfxBodyFast.metal (fragment buffer 8: 7 float4, layout in Skinner.setWaveBlend; zeros = off).
+// Returns the distance to the posed wave arm (1e3 = none) and eases `N` toward the arm's own normal within 3.5 cm; `w2` = the weight the crease AO takes toward the calm join value.
+static float armBlendConeB(float3 P, constant float4* ab) {
+    float sg = ab[0].y, fl = ab[0].z;
+    float3 a = ab[5].xyz, b = ab[6].xyz;
+    a.z *= fl; b.z *= fl;
+    return pandaRoundCone(float3(P.x * sg, P.y, P.z * fl), a, b, ab[5].w, ab[6].w) / sqrt(fl);
+}
+constant float armBlendReachB = 0.035;
+constant float armBlendOccB = 0.06 / 0.4;          // the calm AO of the join, as the shaders' occ (0...1)
+static float armBlendEase(constant float4* ab, float3 wp, thread float3& N, thread float& w2) {
+    w2 = 0.0;
+    float dc = 1.0e3;
+    if (ab[0].x > 0.5) {
+        float3x3 Mw = float3x3(ab[1].xyz, ab[2].xyz, ab[3].xyz);
+        float3 P = Mw * wp + ab[4].xyz;
+        dc = armBlendConeB(P, ab);
+        if (dc < armBlendReachB) {
+            const float e = 0.003;
+            float3 g = float3(armBlendConeB(P + float3(e, 0, 0), ab) - armBlendConeB(P - float3(e, 0, 0), ab), armBlendConeB(P + float3(0, e, 0), ab) - armBlendConeB(P - float3(0, e, 0), ab), armBlendConeB(P + float3(0, 0, e), ab) - armBlendConeB(P - float3(0, 0, e), ab));
+            if (length(g) > 1e-6) {
+                float3 gw = normalize(g * Mw);
+                float w = 1.0 - smoothstep(0.0, armBlendReachB, max(dc, 0.0));
+                if (dot(gw, N) > 0.0) { N = normalize(mix(N, gw, w)); }
+                w2 = w * w;
+            }
+        }
+    }
+    return dc;
+}

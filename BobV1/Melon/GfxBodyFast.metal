@@ -142,20 +142,53 @@ static float legBlendAt(float3 p, constant float4* lb, thread float3& nOut, thre
     return wBest;
 }
 
+// ARM-BLEND (panda-wave-r1 spike; fast body pipeline, Panda + Blue, the keyframed wave only; -ArmBlend 0 / zeros = off, pixel-identical).
+// The CPU hands over the posed wave arm in body space (Skinner.setArmBlend, fragment buffer 8, 7 float4): [0] (on, side sigma, z-flatten, grow), [1...3] world -> body linear
+// columns, [4] translation, [5] (root centre, r1), [6] (tip centre, r2). Per pixel, from the DRAWN world position (not the rest coordinate: the skin that the arm pulls out keeps its
+// rest coordinate), dc = distance to the posed arm's round cone (the same cone and z-flatten as pandaArmD). Two uses: (1) the Panda's black arm is dc < ~2 cm, a smooth curve hugging the arm,
+// instead of the per-vertex ink; (2) the normal and the crease AO of everything within armBlendReach of the arm ease toward the arm's own normal / a calm AO, so skin and arm shade as one piece.
+static float armBlendCone(float3 P, constant float4* ab) {
+    float sg = ab[0].y, fl = ab[0].z;
+    float3 a = ab[5].xyz, b = ab[6].xyz;
+    a.z *= fl; b.z *= fl;
+    return pandaRoundCone(float3(P.x * sg, P.y, P.z * fl), a, b, ab[5].w, ab[6].w) / sqrt(fl);
+}
+constant float armBlendReach = 0.035;          // metres from the arm surface over which the shading eases toward the arm
+constant float armBlendMat = 0.06;          // the calm AO the join takes (the legs blend uses 0.10)
+
 // The body of fsSoftMatteFast, shared with the see-through entry point fsSoftMatteFastSee (JellyLook.swift). `tint` = the dual-source blend factor
 // (what the body lets through of the colour behind it); only the see-through jelly path writes it.
-static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u, texture3d<float> lut, constant float4* lb, constant float4* jl, thread float4& tint) {
+static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u, texture3d<float> lut, constant float4* lb, constant float4* jl, constant float4* ab, thread float4& tint) {
     tint = float4(0.0);
     float3 N = normalize(i.n);
     if (!ff) { N = -N; }
     float3 Q = i.rest;
     float mt = i.mat;
+    float pandaInk = pandaInkOfMat(mt, hasTeddy ? u.shape.w : 0.0);          // PANDA wave: the raised arm's ink rides in the mat channel (PandaMarks.h); the crease AO is kept
+    mt = pandaAOOfMat(mt, pandaInk);
     if (lb[0].x > 0.5) {          // LEGS-BLEND (the same maths as fsSoftMatte)
         float3 nj;
         float wu;
         float wj = legBlendAt(i.wp, lb, nj, wu);
         float wn = max(wj, 0.7 * wu), wq = max(wj, wu);
         if (wq > 0.0) { N = normalize(mix(N, nj, wn)); Q = mix(Q, (float4x4(lb[1], lb[2], lb[3], lb[4]) * float4(i.wp, 1.0)).xyz, wq); mt = mix(mt, lb[0].y, wj); }
+    }
+    float armDc = 1.0e3;          // ARM BLEND: distance to the posed wave arm (1e3 = no arm)
+    if (ab[0].x > 0.5) {
+        float3x3 Mw = float3x3(ab[1].xyz, ab[2].xyz, ab[3].xyz);          // world -> body (a rotation: its transpose is the way back)
+        float3 P = Mw * i.wp + ab[4].xyz;
+        armDc = armBlendCone(P, ab);
+        if (armDc < armBlendReach) {
+            const float e = 0.003;
+            float3 g = float3(armBlendCone(P + float3(e, 0, 0), ab) - armBlendCone(P - float3(e, 0, 0), ab), armBlendCone(P + float3(0, e, 0), ab) - armBlendCone(P - float3(0, e, 0), ab), armBlendCone(P + float3(0, 0, e), ab) - armBlendCone(P - float3(0, 0, e), ab));
+            float gl = length(g);
+            if (gl > 1e-6) {
+                float3 gw = normalize(g * Mw);          // body -> world (row-vector product = transpose(Mw) * g)
+                float w = 1.0 - smoothstep(0.0, armBlendReach, max(armDc, 0.0));
+                if (dot(gw, N) > 0.0) { N = normalize(mix(N, gw, w)); }
+                mt = mix(mt, armBlendMat, w * w);
+            }
+        }
     }
     float3 Ns = N;          // JELLY: the smooth (blended) normal, before the micro bumps
     if (probeMode == 1) { return float4(0.5, 0.5, 0.5, 0.0); }
@@ -277,7 +310,8 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     float pandaPatch = 0.0;
     float jCover = 0.0, jBlush = 0.0;
     if (hasBelly && hasTeddy && tn > 4.5) {              // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
-        col = pandaPaint(col, Q, bm, pandaPatch);
+        if (ab[0].x > 0.5) { col = pandaPaintArm(col, Q, bm, pandaPatch, 1.0 - smoothstep(0.017, 0.023, armDc), ab[0].y, pandaInk); }          // ARM BLEND: the posed arm's own per-pixel mask
+        else { col = pandaPaint(col, Q, bm, pandaPatch, pandaInk); }
     } else if (hasBelly && bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading
@@ -393,11 +427,12 @@ fragment float4 fsSoftMatteFast(FastJellyIn i [[stage_in]],
                                 constant FastUniforms& u [[buffer(0)]],
                                 texture3d<float> lut [[texture(0)]],
                                 constant float4* lb [[buffer(6)]],
-                                constant float4* jl [[buffer(7), function_constant(jellyC)]]) {
+                                constant float4* jl [[buffer(7), function_constant(jellyC)]],
+                                constant float4* ab [[buffer(8)]]) {
     constant float4* jp = lb;
     if (jellyC) { jp = jl; }
     float4 tint;
-    return softMatteFastBody(i, ff, u, lut, lb, jp, tint);
+    return softMatteFastBody(i, ff, u, lut, lb, jp, ab, tint);
 }
 
 // The see-through jelly (dual-source blending: colour one + what is behind it times `tint`); built only with function constant 5 = true.
@@ -407,10 +442,11 @@ fragment SeeOut fsSoftMatteFastSee(FastJellyIn i [[stage_in]],
                                    constant FastUniforms& u [[buffer(0)]],
                                    texture3d<float> lut [[texture(0)]],
                                    constant float4* lb [[buffer(6)]],
-                                   constant float4* jl [[buffer(7)]]) {
+                                   constant float4* jl [[buffer(7)]],
+                                   constant float4* ab [[buffer(8)]]) {
     float4 tint;
     SeeOut o;
-    o.c0 = softMatteFastBody(i, ff, u, lut, lb, jl, tint);
+    o.c0 = softMatteFastBody(i, ff, u, lut, lb, jl, ab, tint);
     o.c1 = tint;
     return o;
 }
