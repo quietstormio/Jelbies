@@ -1,32 +1,32 @@
 {
  "id": "backpack_sky",
- "tris": 600,
- "verts": 392,
+ "tris": 1244,
+ "verts": 777,
  "parts": [
   {
    "name": "pack",
-   "tris": 140,
-   "verts": 72
+   "tris": 242,
+   "verts": 144
   },
   {
    "name": "flap",
-   "tris": 84,
-   "verts": 44
+   "tris": 110,
+   "verts": 72
   },
   {
    "name": "pocket",
-   "tris": 60,
-   "verts": 32
+   "tris": 90,
+   "verts": 60
   },
   {
    "name": "side-1",
-   "tris": 48,
-   "verts": 26
+   "tris": 50,
+   "verts": 36
   },
   {
    "name": "side+1",
-   "tris": 48,
-   "verts": 26
+   "tris": 50,
+   "verts": 36
   },
   {
    "name": "buckle",
@@ -35,18 +35,18 @@
   },
   {
    "name": "handle",
-   "tris": 48,
-   "verts": 26
+   "tris": 90,
+   "verts": 47
   },
   {
    "name": "strap+1",
-   "tris": 68,
-   "verts": 72
+   "tris": 288,
+   "verts": 180
   },
   {
    "name": "strap-1",
-   "tris": 68,
-   "verts": 72
+   "tris": 288,
+   "verts": 180
   }
  ],
  "anchor_rest": [
@@ -55,19 +55,19 @@
   -0.5172
  ],
  "bounds_local_min": [
-  -0.6377,
-  -0.255,
-  -0.2784
+  -0.6044,
+  -0.3301,
+  -0.1528
  ],
  "bounds_local_max": [
-  0.6377,
-  0.3424,
-  0.4574
+  0.6044,
+  0.2282,
+  0.9279
  ],
  "size": [
-  1.2754,
-  0.5974,
-  0.7358
+  1.2088,
+  0.5582,
+  1.0807
  ],
  "anchor": "back",
  "slot": "body",
@@ -77,8 +77,7 @@
  ],
  "price": 50,
  "title": "Little backpack",
- "variant": null,
- "desc": "A rounded backpack on the back (pack centre y 0.42, z -0.585) with a flap, a zipped front pocket, two side bottle pockets, a buckle and a top handle, on padded shoulder straps that end tucked behind the arm roots.",
+ "desc": "A little backpack lying snug on the back (1 cm off the skin at the rim, pillowed to ~9 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two padded shoulder straps that each loop round an arm root: over the top of the arm root (y 0.70), down the chest in front of the arm, back under the hanging arm bulb (y 0.26) and into the pack.",
  "colourway": "backpack_sky",
  "batch": 2
 }

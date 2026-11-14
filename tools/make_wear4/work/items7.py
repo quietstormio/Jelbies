@@ -347,8 +347,8 @@ def whistle(strap=SKY, metal=hx('#C9D3DC'), mouth=CORAL, **k):
     return dict(anchor='neck', slot='neck', tags=['sporty', 'cool'], price=30, title='Coach whistle',
                 desc='A coach whistle on a thick rounded sky lanyard in a V from the shoulders to a ring at (0,0.44); a big silver whistle with a coral mouthpiece hangs to y~0.31. All below the mouth keep-out.')
 
-# ============================ BACKPACK =====================================
-def backpack(main=SKY, flap=CORAL, strap=None, pip=False, **k):
+# ============================ BACKPACK (old; kept ONLY to regenerate the shipped Pip variant byte for byte) ====
+def backpack_pip_v1(main=SKY, flap=CORAL, strap=None, pip=False, **k):
     reset(); strap = strap or deep(main, 0.28)
     zc = -0.625
     F = 0.50 if pip else 1.0                      # the Pip variant: a smaller pack high between the shoulder blades, above his tail root
@@ -376,6 +376,57 @@ def backpack(main=SKY, flap=CORAL, strap=None, pip=False, **k):
     return dict(anchor='back', slot='body', tags=['cute', 'sporty'], price=50, title='Little backpack', variant='backpack_sky_pip' if pip else None,
                 desc='A rounded backpack on the back (pack centre y 0.42, z -0.585) with a flap, a zipped front pocket, two side bottle pockets, a buckle and a top handle, on padded shoulder straps that end tucked behind the arm roots.')
 
+# ============================ BACKPACK =====================================
+def pillow(name, phic, yc, hphi, hy, D, color, off0=0.010, nu=12, nv=12, colfn=None, rim=0.6):
+    """A rounded pillow lying ON the back (or any all-round skin patch): footprint hphi (rad of egg azimuth) by hy (m) round (phic, yc), standing off the skin by
+    off0 at its rim and off0 + D at the middle, with a steep rounded wall. One open, single-sided mesh (its underside is against the body, never seen)."""
+    def fn(i, j):
+        u = 2.0 * i / (nu - 1) - 1.0; v = 2.0 * j / (nv - 1) - 1.0
+        # square -> rounded square (rim) : blend the square with the disc map
+        uu = u * (1 - rim + rim * math.sqrt(max(0.0, 1 - v * v / 2))); vv = v * (1 - rim + rim * math.sqrt(max(0.0, 1 - u * u / 2)))
+        r2 = max(abs(u), abs(v))
+        d = D * math.sqrt(max(0.0, 1 - r2 ** 5)) if r2 < 1 else 0.0
+        return surface_at(yc + vv * hy, phic + uu * hphi, off=off0 + d)[0]
+    return grid_surface(name, fn, nu, nv, color, closed_u=False, hint=lambda p: full_n(p), gcol=colfn)
+
+def backpack(main=SKY, flap=CORAL, strap=None, **k):
+    """A little backpack lying snug on the back (1 cm off the skin at its rim, pillowed out up to 9-10 cm) with a flap, a front pocket, two side pockets, a buckle and a
+    handle, and two padded shoulder straps that are each a closed loop round an arm root: over the top of the arm root, down the chest in front of the arm, back under the
+    arm (below the hanging arm bulb) and into the pack. Everything rides the skin."""
+    reset(); strap = strap or deep(main, 0.28)
+    BK = 1.5 * math.pi                                         # the back centre line (phi)
+    shade = lambda c, w: (lambda i, j: mix(deep(c, 0.12), tint(c, 0.16), w))
+    pillow('pack', BK, 0.500, 0.42, 0.200, 0.085, None, colfn=lambda i, j: mix(deep(main, 0.14), tint(main, 0.18), 0.5 + 0.5 * math.sin(math.pi * j / 11)))
+    pillow('flap', BK, 0.6225, 0.43, 0.0925, 0.102, None, nu=12, nv=6, colfn=lambda i, j: mix(deep(flap, 0.12), tint(flap, 0.18), 0.4 + 0.6 * math.sin(math.pi * j / 5)))
+    pillow('pocket', BK, 0.395, 0.30, 0.075, 0.120, None, nu=10, nv=6, colfn=lambda i, j: mix(deep(flap, 0.20), tint(flap, 0.10), 0.5 + 0.5 * math.sin(math.pi * j / 5)))
+    for s in (-1, 1):
+        pillow('side%+d' % s, BK + s * 0.50, 0.430, 0.085, 0.085, 0.080, None, nu=6, nv=6, rim=0.8, colfn=lambda i, j: mix(deep(flap, 0.22), tint(flap, 0.08), 0.5))
+    pb, nb = surface_at(0.545, BK, off=0.140)
+    bead('buckle', pb, (0.040, 0.030, 0.016), GOLD, rot=np.stack(axes(nb), 1), segs=6)
+    hp = [surface_at(0.690 + 0.065 * math.sin(math.pi * t), BK + (t - 0.5) * 0.30, off=0.090 + 0.012 * math.sin(math.pi * t))[0] for t in np.linspace(0, 1, 9)]
+    tube_curve('handle', hp, 0.014, 5, strap, cap=True)
+    # shoulder straps: one closed ellipse-like loop on the skin round each arm root (right arm: azimuth -1.27 (under the pack) .. +0.85 (well in front of the arm bulb, on the chest); top y 0.70
+    # clears the arm root (top ~0.66), bottom y 0.26 passes under the arm bulb (bottom ~0.31)); the left strap is the mirror image
+    NS = 36; HW = 0.036; R_ = 0.52
+    PC, PR = -0.21, 1.06; YC, RU, RD = 0.495, 0.205, 0.235
+    rows = [(-1.0, 0.006), (-0.5, 0.016), (0.0, 0.021), (0.5, 0.016), (1.0, 0.006)]
+    def loop(th):
+        yy = YC + (RU if math.sin(th) > 0 else RD) * math.sin(th)
+        return PC + PR * math.cos(th), yy
+    for s in (1, -1):
+        def spt(i, j, s=s):
+            th = 2 * math.pi * i / NS; d = 1e-3
+            p0 = loop(th - d); p1 = loop(th + d)
+            t = np.array([R_ * (p1[0] - p0[0]), p1[1] - p0[1]]); t /= np.linalg.norm(t); perp = np.array([-t[1], t[0]])
+            ph, y = loop(th); w, off = rows[j]
+            phh = ph + perp[0] * w * HW / R_; yy = y + perp[1] * w * HW
+            phh = phh if s > 0 else math.pi - phh
+            return surface_at(yy, phh, off=off)[0]
+        grid_surface('strap%+d' % s, spt, NS, len(rows), None, closed_u=True, hint=lambda p: full_n(p),
+                     gcol=lambda i, j: deep(strap, 0.22) if abs(rows[j][0]) > 0.9 else mix(deep(strap, 0.08), tint(strap, 0.16), 0.5 + 0.5 * (1 - abs(rows[j][0]))))
+    return dict(anchor='back', slot='body', tags=['cute', 'sporty'], price=50, title='Little backpack',
+                desc='A little backpack lying snug on the back (1 cm off the skin at the rim, pillowed to ~9 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two padded shoulder straps that each loop round an arm root: over the top of the arm root (y 0.70), down the chest in front of the arm, back under the hanging arm bulb (y 0.26) and into the pack.')
+
 REG = [
     ('sash_pink', sash, dict(field=PINK, star=SKY), BIB_ANCHOR),
     ('sash_sky', sash, dict(), BIB_ANCHOR),
@@ -388,4 +439,4 @@ REG = [
     ('lei', lei, dict(), NECK_ANCHOR),
     ('backpack_sky', backpack, dict(), BACK_ANCHOR),
 ]
-VARIANTS = [('backpack_sky_pip', backpack, dict(pip=True), BACK_ANCHOR), ('cape_hero_pip', cape, dict(pip=True), BACK_ANCHOR), ('tutu_pink_pip', tutu, dict(pip=True), WAIST_ANCHOR)]
+VARIANTS = [('backpack_sky_pip', backpack_pip_v1, dict(pip=True), BACK_ANCHOR), ('cape_hero_pip', cape, dict(pip=True), BACK_ANCHOR), ('tutu_pink_pip', tutu, dict(pip=True), WAIST_ANCHOR)]

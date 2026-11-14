@@ -133,7 +133,8 @@ nonisolated enum WearRules {
         case .chainGold: return part == "coin" || part == "coinring" || part == "star" || part == "bail" ? PartRule(w0: 1, w1: 1, h0: 0.5, h1: 0.5) : surface
         case .capeHero: return part == "panel" ? PartRule(w0: 1, w1: 0.35, h0: 0, h1: 1) : surface
         case .monocleGold: return part == "chain" || part.hasPrefix("link") ? PartRule(w0: 1, w1: 0.4, h0: 0, h1: 1) : rigid
-        case .backpackSky: return part.hasPrefix("strap") ? surface : rigid
+        // (2026-11 pilot: the pack and its pockets lie 1 cm off the back and the straps loop the arm roots - everything rides the skin so the pack stays snug when the body squashes)
+        case .backpackSky: return surface
         case .gogglesAviator: return part == "strap" ? surface : rigid
         // batch 3 (2026-10-24): the hoodie's and raincoat's hoods rest rigid behind the shoulders; the rest hugs the belly, cords and the slicker's hem hang a little
         case .hoodie: return part == "hood" || part == "hoodrim" ? rigid : part.hasPrefix("cord") || part.hasPrefix("aglet") ? PartRule(w0: 1, w1: 0.5, h0: 0, h1: 1) : surface
