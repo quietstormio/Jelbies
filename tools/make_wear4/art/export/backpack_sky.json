@@ -1,12 +1,12 @@
 {
  "id": "backpack_sky",
- "tris": 1244,
- "verts": 777,
+ "tris": 1212,
+ "verts": 805,
  "parts": [
   {
    "name": "pack",
-   "tris": 242,
-   "verts": 144
+   "tris": 338,
+   "verts": 196
   },
   {
    "name": "flap",
@@ -40,13 +40,13 @@
   },
   {
    "name": "strap+1",
-   "tris": 288,
-   "verts": 180
+   "tris": 224,
+   "verts": 168
   },
   {
    "name": "strap-1",
-   "tris": 288,
-   "verts": 180
+   "tris": 224,
+   "verts": 168
   }
  ],
  "anchor_rest": [
@@ -55,19 +55,19 @@
   -0.5172
  ],
  "bounds_local_min": [
-  -0.6044,
-  -0.3301,
-  -0.1528
+  -0.5969,
+  -0.3143,
+  -0.1763
  ],
  "bounds_local_max": [
-  0.6044,
-  0.2282,
-  0.9279
+  0.5969,
+  0.3569,
+  0.8256
  ],
  "size": [
-  1.2088,
-  0.5582,
-  1.0807
+  1.1939,
+  0.6712,
+  1.0019
  ],
  "anchor": "back",
  "slot": "body",
@@ -77,7 +77,8 @@
  ],
  "price": 50,
  "title": "Little backpack",
- "desc": "A little backpack lying snug on the back (1 cm off the skin at the rim, pillowed to ~9 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two padded shoulder straps that each loop round an arm root: over the top of the arm root (y 0.70), down the chest in front of the arm, back under the hanging arm bulb (y 0.26) and into the pack.",
+ "variant": null,
+ "desc": "A backpack seated on the upper-middle back (0.46 rad wide, 0.50 tall, rim 4 mm off the skin, pillowed to ~10 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two thin shoulder straps that each loop an arm root snug to the skin: over the top (y 0.70), down just in front, under the arm bulb (y 0.26) and into the pack.",
  "colourway": "backpack_sky",
  "batch": 2
 }

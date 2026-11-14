@@ -1571,8 +1571,8 @@
     "sporty"
    ],
    "price": 50,
-   "tris": 1244,
-   "verts": 777,
+   "tris": 1212,
+   "verts": 805,
    "deform_class": "pack rigid on the back surface (carry like head_top); STRAPS surface_bound over the shoulder (follow the egg squash)",
    "files": [
     "backpack_sky.obj",
