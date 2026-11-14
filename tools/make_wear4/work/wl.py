@@ -170,13 +170,14 @@ def surface_ray(y, phi, arms=True, rmax=1.3, nstep=261):
     f = B.sdf if arms else B.bodySDF
     rs = np.linspace(rmax, 0.0, nstep)
     inside = np.stack([f(d[:, 0] * r, yf, d[:, 2] * r) < 0 for r in rs], 1)          # (n, nstep): first True from the outside
+    anyin = inside.any(axis=1)
     k = np.argmax(inside, axis=1)
     k = np.maximum(k, 1)
     hi = rs[k - 1].copy(); lo = rs[k].copy()                                            # hi outside, lo inside
     for _ in range(26):
         m = 0.5 * (hi + lo); neg = f(d[:, 0] * m, yf, d[:, 2] * m) < 0
         lo = np.where(neg, m, lo); hi = np.where(neg, hi, m)
-    r = 0.5 * (hi + lo)
+    r = np.where(anyin, 0.5 * (hi + lo), 0.0)                                           # (no crossing at this height: the axis point)
     P = np.stack([d[:, 0] * r, yf, d[:, 2] * r], -1)
     N = B.grad(P) if arms else B.egg_grad(P)
     return P.reshape(shp + (3,)), N.reshape(shp + (3,))
