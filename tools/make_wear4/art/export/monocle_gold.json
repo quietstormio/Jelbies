@@ -1,7 +1,7 @@
 {
  "id": "monocle_gold",
- "tris": 820,
- "verts": 430,
+ "tris": 880,
+ "verts": 446,
  "parts": [
   {
    "name": "ring",
@@ -14,44 +14,9 @@
    "verts": 20
   },
   {
-   "name": "link0_0",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link0_1",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link1_0",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link1_1",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link2_0",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link2_1",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link3_0",
-   "tris": 36,
-   "verts": 20
-  },
-  {
-   "name": "link3_1",
-   "tris": 36,
-   "verts": 20
+   "name": "chain",
+   "tris": 348,
+   "verts": 176
   },
   {
    "name": "clip",
@@ -67,17 +32,17 @@
  "bounds_local_min": [
   0.1286,
   -0.2835,
-  -0.1432
+  -0.159
  ],
  "bounds_local_max": [
-  0.4786,
+  0.4807,
   0.1094,
   0.0631
  ],
  "size": [
-  0.35,
+  0.3521,
   0.3929,
-  0.2063
+  0.2221
  ],
  "anchor": "face",
  "slot": "face",
@@ -87,7 +52,7 @@
  ],
  "price": 45,
  "title": "Monocle",
- "desc": "Gold monocle: a thick glossy ring round the +x eye bead with a hinge and a chunky oval-link chain hanging OUTWARD to a clip at (0.425,0.565).",
+ "desc": "Gold monocle: a thick glossy ring round the +x eye bead with a hinge and a one fine continuous chain (a single tube with alternating light / dark rings) hanging OUTWARD to a clip at (0.425,0.565).",
  "colourway": "monocle_gold",
  "batch": 2
 }

@@ -1281,8 +1281,8 @@
     "sweet"
    ],
    "price": 45,
-   "tris": 820,
-   "verts": 430,
+   "tris": 880,
+   "verts": 446,
    "deform_class": "ring rigid; chain surface_bound + free swing",
    "files": [
     "monocle_gold.obj",
