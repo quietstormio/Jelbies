@@ -1246,6 +1246,8 @@ final class MelonRenderer {
             for bi in order {                            // each Jelly: its own vertex stream, colours / mouth and bath look
                 let slot = slots[bi]
                 let jk = jellyKind(slot)
+                JellyLook.dbgFrame &+= 1
+                if JellyLook.dbgFrame % 240 == 1 { print("[jelly] slot \(bi) level \(JellyLook.level) all \(JellyLook.all) kind \(jk) bath \(usesBathShader(slot)) jersey \(slot.jersey != nil) cutout \(cutout)") }
                 if jk == 2 && !bodyProbe.contains(.skipBody) { jellyLater.append(bi); continue }
                 e.setVertexBuffer(slot.uboBuf, offset: 0, index: 0)
                 e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)

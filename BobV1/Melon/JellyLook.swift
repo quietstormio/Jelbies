@@ -17,7 +17,8 @@ nonisolated enum JellyLook {
     static let launchLevel = 0
     /// Phone test build switch: set to e.g. (level: 1, all: true) to make that level the default for all species (or the blue body only with all: false)
     /// without launch arguments. Leave nil when committing; launch arguments still win where DevArgs.enabled.
-    static let phoneTest: (level: Int, all: Bool)? = nil
+    static let phoneTest: (level: Int, all: Bool)? = (1, true)
+    nonisolated(unsafe) static var dbgFrame = 0
 
     private static func argFloat(_ key: String) -> Float? {
         guard DevArgs.enabled, UserDefaults.standard.object(forKey: key) != nil else { return nil }
