@@ -71,69 +71,72 @@ def strands_part(name,strands,r,colors,taper=0.7):
     return part
 
 # ======================= SCARF ====================================================
+def scarf_y(phi, front=0.5025, side=0.700, back=0.650):
+    """Centre-line height of the scarf band at azimuth phi (pi/2 = front): low on the chest (top edge 0.545 under the mouth keep-out), rising over the arm roots (arm top
+    ~0.66, so the band's lower edge clears it) between 0.44 and 1.48 rad off the front (the same window WearRules.neckLift used), then staying HIGH round the back where the
+    egg narrows (0.65: it wraps the back of the head, not the belly)."""
+    az = abs((phi - math.pi / 2 + math.pi) % (2 * math.pi) - math.pi)                    # 0 at the front, pi at the back
+    return front + (side - front) * _sstep(0.44, 1.48, az) + (back - side) * _sstep(1.48, math.pi, az)
+
 def scarf(a=CORAL,b=CREAM,**k):
+    """A knitted scarf wrapped round the neck just under the mouth: a flat ribbed band (0.085 tall, ~0.03 thick, ~1 cm off the skin) in two wraps (a groove between them),
+    a small knot slightly right of centre and two tails of different length lying on the chest with a connected fringe (part of the tail mesh, so it swings with the tail).
+    Shared by scarf_cosy / scarf_sky / scarf_plum. Everything is on the all-round surface sampler (wl.surface_at)."""
     reset()
-    K=12; NS=33; PH0=-62.0; PH1=298.0
-    TN=0.052; VH=0.060
-    def yfn(ph): return 0.466+0.046*math.cos(ph)**2+__import__('kit5').pip_rise(ph, 0.466)
-    def rr_k(kk): return 1.0 if kk%2==0 else 0.80
+    NA_=64; HH=0.0425; R_=0.52
+    # (across-band position w, stand-off from the skin): two rounded wraps with a groove between them
+    ROWS=[(-1.0,0.010),(-0.80,0.030),(-0.50,0.038),(0.0,0.026),(0.50,0.038),(0.80,0.030),(1.0,0.010)]
+    def skin(phi,w,off):
+        d=1e-3; y0=scarf_y(phi); dy=(scarf_y(phi+d)-scarf_y(phi-d))/(2*d)
+        t=np.array([R_,dy]); t/=np.linalg.norm(t); perp=np.array([-t[1],t[0]])
+        return surface_at(y0+perp[1]*w*HH, phi+perp[0]*w*HH/R_, off=off)
+    cols=[2*math.pi*i/NA_ for i in range(NA_)]
     def pt(i,j):
-        ph=math.radians(PH0+(PH1-PH0)*j/(NS-1)); u=j/(NS-1)
-        tap=1.0
-        th=2*math.pi*i/K; r=rr_k(i)*tap
-        base=B.egg_point(yfn(ph),ph); h=hdir(base)
-        return base+h*(0.012+TN*tap+TN*r*math.cos(th))+np.array([0,VH*r*math.sin(th),0])
+        w,off=ROWS[j]; return skin(cols[i],w,off)[0]
     def gc(i,j):
-        u=j/(NS-1); crest=(i%2==0)
-        st=False
-        c=b if st else a
-        c=tint(c,0.14) if crest else deep(c,0.20)
-        return c
-    grid_surface('wrap',pt,K,NS,None,closed_u=True,hint=lambda p:np.array([p[0],0,p[2]]),gcol=gc)
-    # knot at the side-front (phi ~ 62 deg, x ~ +0.27)
-    kph=math.radians(62); ky=yfn(kph); kb=B.egg_point(ky,kph); kh=hdir(kb)
-    kc=kb+kh*0.084+np.array([0,0.002,0])
-    tg=np.cross(UP,kh); tg/=np.linalg.norm(tg)
-    R3=np.stack([tg,UP,kh],1)
-    KR=(0.098,0.086,0.066); NK=12; NV=7
+        w=ROWS[j][0]; stripe=(i%16)<2
+        base=mix(a,b,0.55) if stripe and abs(w)<0.9 else a
+        if abs(w)>=0.95: return deep(base,0.24)
+        if abs(w)<0.2: return deep(base,0.30)
+        return tint(base,0.12) if abs(abs(w)-0.5)<0.15 else deep(base,0.08)
+    grid_surface('wrap',pt,NA_,len(ROWS),None,closed_u=True,hint=lambda p:full_n(p),gcol=gc)
+    # knot: slightly right of the chest centre, on the band
+    kph=math.pi/2-0.30; kc,kn=skin(kph,0.0,0.040)
+    kc=kc+kn*0.012
+    tg=np.cross(UP,kn); tg/=np.linalg.norm(tg); up2=np.cross(kn,tg)
+    R3=np.stack([tg,up2,kn],1)
+    KR=(0.058,0.048,0.040); NK=10; NV=6
     def kpt(i,j):
         th=2*math.pi*i/NK; v=-math.pi/2+math.pi*j/(NV-1)
-        rib=1+0.075*math.cos(6*th)
-        # axes: x along the tangent (wide), y up, z outward
+        rib=1+0.07*math.cos(5*th)
         q=np.array([KR[0]*math.cos(v)*math.cos(th)*rib,KR[1]*math.sin(v),KR[2]*math.cos(v)*math.sin(th)*rib])
         return kc+R3@q
     def kcg(i,j):
-        th=2*math.pi*i/NK; rib=math.cos(6*th)
-        c=mix(deep(a,0.18),tint(a,0.22),0.5+0.5*rib)
-        return c
+        th=2*math.pi*i/NK; rib=math.cos(5*th)
+        return mix(deep(a,0.18),tint(a,0.22),0.5+0.5*rib)
     grid_surface('knot',kpt,NK,NV,None,closed_u=True,hint=lambda p:p-kc,gcol=kcg)
-    kx=float(kc[0])
-    def tail(cx0,cx1,y0,y1,w0,name,off,nvv):
-        NU=5; vs=[j/(nvv-1) for j in range(nvv)]
+    kx=float(kc[0]); ky=float(kc[1])
+    def tail(cx0,cx1,y0,y1,w0,name,off,nvv=7,NU=7):
+        """nvv-1 rows down to the hem, then one row of fringe teeth (even columns long, odd short) that belongs to the SAME mesh (connected, one part)."""
+        rows=nvv-1; vs=[j/(rows-1) for j in range(rows)]
         def fn(i,j):
-            v=vs[j]; u=i/(NU-1)-0.5
-            cx=cx0+(cx1-cx0)*v+0.010*math.sin(3.0*v); y=y0+(y1-y0)*v
-            w=w0*(1+0.26*v)
-            p,n=body_pt(cx+u*w,y,off+0.020*v+(0.007 if i%2==1 else 0.0)); return p,n
-        def gc(i,j,side):
-            v=vs[j]; crest=(i%2==1)
-            c=b if ((0.50<v<0.62) or (0.74<v<0.86)) else a
+            u=i/(NU-1)-0.5
+            if j<rows: v=vs[j]; yy=y0+(y1-y0)*v
+            else:
+                v=1.0; yy=y1-(0.050 if i%2==0 else 0.014)
+            cx=cx0+(cx1-cx0)*v+0.010*math.sin(3.0*v); w=w0*(1+0.22*v)
+            return body_pt(cx+u*w,yy,off+0.018*v+(0.006 if (i%2==1 and j<rows) else 0.0))
+        def g(i,j,side):
+            v=vs[min(j,rows-1)]; crest=(i%2==1)
+            c=b if ((0.52<v<0.62) or (0.74<v<0.84)) else a
+            if j>=rows: c=deep(a,0.06) if i%2==0 else deep(b,0.05)
             if side==1: return deep(c,0.22)
-            return tint(c,0.14) if crest else deep(c,0.16)
-        thick_sheet2(name,fn,NU,nvv,0.016,gc)
-        # fringe along the hem
-        strands=[];cols=[]
-        vend=vs[-1]; nf=7
-        for q in range(nf):
-            u=q/(nf-1)-0.5; cx=cx0+(cx1-cx0)*vend+0.010*math.sin(3.0*vend); w=w0*(1+0.26*vend)
-            p,n=body_pt(cx+u*w*0.92,y1,off+0.020*vend-0.002)
-            sw=0.006*math.sin(q*1.7)
-            strands.append((p+np.array([0,0.006,0]),p+np.array([sw,-0.056,0.010]))); cols.append(deep(a,0.06) if q%2==0 else tint(b,0.0))
-        strands_part(name+'_fringe',strands,0.0085,cols)
-    tail(kx-0.010,kx+0.030,0.440,0.222,0.082,'tail_a',0.050,7)
-    tail(kx-0.085,kx-0.098,0.440,0.290,0.076,'tail_b',0.054,6)
+            return tint(c,0.14) if crest and j<rows else deep(c,0.14)
+        thick_sheet2(name,fn,NU,nvv,0.014,g)
+    tail(kx-0.004,kx+0.030,ky-0.030,0.240,0.068,'tail_a',0.046)
+    tail(kx-0.062,kx-0.074,ky-0.030,0.300,0.062,'tail_b',0.052)
     return dict(anchor='neck',slot='neck',tags=['sweet','cute','cool'],price=35,title='Cosy scarf',
-      desc='Soft knitted wrap: a ribbed (lengthwise ribs, geometry + vertex colour) ring around the belly at y~0.47..0.50 that curves round the sides and ends behind the arms, a chunky ribbed knot at the side-front (x~+0.27), and two ribbed tails (slight flare) with a fringe hanging to y~0.22 / 0.29. Top of the wrap at the centre is y<=0.54, below the mouth keep-out.')
+      desc='A knitted scarf wrapped round the neck: a flat ribbed band 0.085 tall in two wraps, ~1 cm off the skin all the way round, low on the chest (top edge 0.545, under the mouth keep-out), rising over the arm roots at the sides (centre 0.70) and staying high round the back (0.65), with a small knot just right of centre and two ribbed tails (hems y~0.24 / 0.30) with a connected fringe, lying on the chest.')
 
 # ======================= TUTU =====================================================
 WAIST_ANCHOR=(0.0,0.28,0.0)

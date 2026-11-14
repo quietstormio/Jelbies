@@ -75,7 +75,8 @@ nonisolated enum WearRules {
         let up: Float
         switch l {
         case .pearls, .chainGold, .diamondJ: up = 0.20
-        case .scarfCosy, .scarfSky, .scarfPlum, .whistleCoach, .bandanaCoral, .bandanaMint, .bandanaSun: up = 0.19
+        // (the three cosy scarves are authored all the way round already: low on the chest, over the arm roots at the sides, high at the back - no lift on top)
+        case .whistleCoach, .bandanaCoral, .bandanaMint, .bandanaSun: up = 0.19
         case .scarfSilk: up = 0.22
         case .lei: up = 0.23
         default: return nil
@@ -115,7 +116,7 @@ nonisolated enum WearRules {
         let surface = PartRule(w0: 1, w1: 1)
         let rigid = PartRule()
         switch l {
-        case .scarfCosy, .scarfSky:
+        case .scarfCosy, .scarfSky, .scarfPlum:
             if part.hasPrefix("tail") { return PartRule(w0: 1, w1: 0.3, h0: 0, h1: 1) }
             return part == "knot" ? rigid : surface
         case .medalGold: return part.hasPrefix("ribbon") ? surface : PartRule(w0: 0, w1: 0, h0: 1, h1: 1)

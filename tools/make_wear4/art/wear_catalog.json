@@ -1321,8 +1321,8 @@
     "cool"
    ],
    "price": 35,
-   "tris": 1238,
-   "verts": 750,
+   "tris": 1232,
+   "verts": 818,
    "deform_class": "wrap surface_bound (follows belly); knot rigid; tails surface_bound at the top and may swing (hang from the knot)",
    "files": [
     "scarf_cosy.obj",
@@ -1362,8 +1362,8 @@
     "cool"
    ],
    "price": 35,
-   "tris": 1238,
-   "verts": 750,
+   "tris": 1232,
+   "verts": 818,
    "deform_class": "wrap surface_bound (follows belly); knot rigid; tails surface_bound at the top and may swing (hang from the knot)",
    "files": [
     "scarf_sky.obj",
@@ -2249,8 +2249,8 @@
     "sweet"
    ],
    "price": 35,
-   "tris": 1238,
-   "verts": 750,
+   "tris": 1232,
+   "verts": 818,
    "files": [
     "scarf_plum.obj",
     "scarf_plum.json"
