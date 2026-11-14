@@ -107,6 +107,7 @@ final class BodySlot {
     var sootAny = false
     /// The leg / belly join's smooth-union shading data for this body (zeros = off; Skinner.computeLegBlend).
     var legBlend = [SIMD4<Float>](repeating: .zero, count: Skinner.legBlendCount)
+    var waveBlend = [SIMD4<Float>](repeating: .zero, count: Skinner.waveBlendCount)
     /// The Circuit jersey this body wears (Wear/GfxJersey.metal); nil = the locked body shader.
     var jersey: WearTeam?
 
@@ -518,6 +519,7 @@ final class MelonRenderer {
     func setJersey(_ team: WearTeam?, body i: Int) { if i < slots.count { slots[i].jersey = team } }
     func setHidden(_ hidden: Bool, body i: Int) { if i < slots.count { slots[i].hidden = hidden } }
     func setLegBlend(_ lb: [SIMD4<Float>], body i: Int) { if i < slots.count, lb.count == Skinner.legBlendCount { slots[i].legBlend = lb } }
+    func setWaveBlend(_ ab: [SIMD4<Float>], body i: Int) { if i < slots.count, ab.count == Skinner.waveBlendCount { slots[i].waveBlend = ab } }
     func setBathLook(_ look: BathLook, body i: Int) { if i < slots.count { slots[i].bathLook = look } }
     /// A clean, neutral body for one picture (lobby portraits): no dirt / soot / lint / shine, mouth shut, no blush. Returns what puts the live state back.
     func neutralBody(_ i: Int) -> () -> Void {
@@ -1269,6 +1271,7 @@ final class MelonRenderer {
                     e.setRenderPipelineState(sp ?? pMatte)
                 }
                 slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }          // (the body shaders' fragment buffer 6: zeros = the join shaded as before)
+                slot.waveBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 8) }          // (the fast body shader's arm blend: zeros = off)
                 JellyLook.params(forFlesh: jk > 0 ? slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self) : nil, speciesID: slot.palette?.jellySpecies ?? -1).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (fragment buffer 7: the lab jelly look, zeros = off)
                 if !bodyProbe.contains(.skipBody) {
                     // Panda (BlueBelly mode 51): the egg is drawn as is (the shader paints the eye patches, band, arms, feet); everything after it in the body index range
@@ -1315,6 +1318,7 @@ final class MelonRenderer {
                         e.setRenderPipelineState(jp)
                         e.setFragmentTexture(fibreNoiseTexture(), index: 0)
                         slot.legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }
+                        slot.waveBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 8) }
                         JellyLook.params(forFlesh: slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self), speciesID: slot.palette?.jellySpecies ?? -1).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }
                         e.setDepthBias(-8, slopeScale: -1, clamp: 0)          // pull the colour draw a hair toward the camera: it must pass against its own pre-pass depth (no speckle)
                         e.drawIndexedPrimitives(type: tri, indexCount: m.body.count, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
@@ -1415,6 +1419,7 @@ final class MelonRenderer {
             e.drawPrimitives(type: tri, vertexStart: 0, vertexCount: 3)
             e.setRenderPipelineState(useMatte ? pMatte : pJelly)
             slots[0].legBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 6) }
+            slots[0].waveBlend.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 8) }
             JellyLook.params(forFlesh: nil).withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: $0.count, index: 7) }          // (studio path: the lab jelly look stays off)
             e.setDepthStencilState(dsLessWrite)
             e.setCullMode(.back)

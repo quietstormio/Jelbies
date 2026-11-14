@@ -879,6 +879,19 @@ nonisolated final class Skinner {
     /// The calmer patch above a leg (fur coordinate + normal toward the fitted belly, fading out over this height above the join); 0 = off.
     nonisolated(unsafe) static var legsBlendUp: Float = UserDefaults.standard.object(forKey: "LegsBlendUp") != nil ? UserDefaults.standard.float(forKey: "LegsBlendUp") : 0.10
     static let legBlendCount = 171
+    // MARK: arm blend (panda-wave-r1 spike; fragment buffer 8 of the fast body shader, GfxBodyFast.metal waveBlend*)
+    static let waveBlendCount = 7
+    /// [0] (on, side sigma, z-flatten, grow), [1...3] world -> body linear columns, [4] its translation, [5] (root centre, r1), [6] (tip centre, r2); all zeros = off.
+    private(set) var waveBlend = [SIMD4<Float>](repeating: .zero, count: Skinner.waveBlendCount)
+    func clearWaveBlend() { if waveBlend[0].x != 0 { for k in 0..<waveBlend.count { waveBlend[k] = .zero } } }
+    /// The posed wave arm in body space (`geom`, +x arm convention, mirrored by `side`) and the body's pose fit (world = centroid + R (P - restCentroid), the same map the keyframe deltas ride).
+    func setWaveBlend(geom g: ArmGeom, side: Int, pose: BodyPose, restCentroid c0: SIMD3<Float>) {
+        let Rt = simd_float3x3(pose.rotation).transpose
+        let t = c0 - Rt * pose.centroid
+        waveBlend[0] = SIMD4(1, Float(side < 0 ? -1 : 1), Float(g.flatten), Float(g.grow))
+        waveBlend[1] = SIMD4(Rt.columns.0, 0); waveBlend[2] = SIMD4(Rt.columns.1, 0); waveBlend[3] = SIMD4(Rt.columns.2, 0); waveBlend[4] = SIMD4(t, 1)
+        waveBlend[5] = SIMD4(Float(g.A.x), Float(g.A.y), Float(g.A.z), Float(g.r1)); waveBlend[6] = SIMD4(Float(g.B.x), Float(g.B.y), Float(g.B.z), Float(g.r2))
+    }
     var legBlendShoes = false
     /// Flat float4 array for the body shaders' fragment buffer 6 (layout in Shaders.metal at legBlendAt); all zeros = off.
     private(set) var legBlend = [SIMD4<Float>](repeating: .zero, count: Skinner.legBlendCount)

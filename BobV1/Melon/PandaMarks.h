@@ -79,6 +79,12 @@ static float pandaLimbs(float3 Q) {
     return max(arm, foot);
 }
 
+/// The feet only (pandaLimbs without the arm): the waving arm side swaps the rest-space arm mask for the per-pixel posed-arm mask (GfxBodyFast.metal armBlend).
+static float pandaFeetOnly(float3 Q) {
+    float3 q = float3(fabs(Q.x), Q.y, Q.z);
+    return 1.0 - smoothstep(0.004, 0.075, pandaFootD(q));
+}
+
 /// The belly oval: Teddy's B2 belly (Shaders.metal / GfxBodyFast.metal belly block, crisp mode 3) maths 1:1, painted charcoal instead of cream.
 static float pandaBelly(float3 Q) {
     float2 bp2 = float2(Q.x, Q.y - 0.335) / float2(0.335, 0.205);
@@ -95,6 +101,17 @@ static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch, fl
     patch = pandaEyePatch(Q);
     float m = max(max(max(patch, pandaBand(Q)), pandaLimbs(Q)), pandaBelly(Q));
     m = max(m, smoothstep(0.2, 0.6, ink));
+    return mix(col, blk, m);
+}
+/// ARM BLEND paint: as pandaPaint, but on the waving side (`armSide` = +1 / -1, 0 = none) the black arm is `armMask` (the posed arm's per-pixel distance mask) and the rest-space arm is not painted.
+static float3 pandaPaintArm(float3 col, float3 Q, float bm, thread float &patch, float armMask, float armSide) {
+    float3 blk = pandaBlack(col);
+    patch = 0.0;
+    if (bm > 1.5) { return blk; }
+    patch = pandaEyePatch(Q);
+    float limbs = (armSide != 0.0 && Q.x * armSide > 0.0) ? pandaFeetOnly(Q) : pandaLimbs(Q);
+    float m = max(max(max(patch, pandaBand(Q)), limbs), pandaBelly(Q));
+    m = max(m, armMask);
     return mix(col, blk, m);
 }
 static float3 pandaPaint(float3 col, float3 Q, float bm, thread float &patch) { return pandaPaint(col, Q, bm, patch, 0.0); }

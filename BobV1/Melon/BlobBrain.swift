@@ -439,6 +439,9 @@ final class BlobBrain {
     /// Negative on purpose: the locked fsSoftMatte does not decode it and reads it as no occlusion (occ = clamp(mat / 0.4, 0, 1) = 0), never as a fully occluded arm.
     static func pandaInkMat(ao: Float, ink: Float) -> Float { ink > 0.1 ? ao - 4 * ink : ao }
     nonisolated(unsafe) static var pandaInkOn = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "PandaInk") != nil && UserDefaults.standard.integer(forKey: "PandaInk") == 0)          // capture aid: -PandaInk 0 = the arm painted as before
+    /// ARM BLEND (panda-wave-r1 spike; Panda + Blue only, set by the stage each tick): hand the fragment shader the posed arm so it can draw the black / join shading per pixel (GfxBodyFast.metal armBlend*).
+    var armBlendSpecies = false
+    nonisolated(unsafe) static var armBlendOn = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ArmBlend") != nil && UserDefaults.standard.integer(forKey: "ArmBlend") == 0)          // capture aid: -ArmBlend 0 = exactly the per-vertex paint / shading as before
     var armSide = 1
     var armActive = false
     var armPathName = ArmPath.wave.name      // the keyframe path the active arm override plays (wave, or the dining nubToMouth)
@@ -2027,6 +2030,7 @@ final class BlobBrain {
 
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         noticeTeleport(sim)
+        skinner.clearWaveBlend()          // (set again below only while the keyframed wave plays)
         skinner.tailOn = feature == .spines && !WornSet.sleepHides(self)          // (hold-wear-r1: NOT hidden for the flip trick any more: the spikes stay drawn there, so the tail they ride must stay too)
         skinner.teddyOn = feature == .ears && TeddyEarsVariant.active.inBody          // (from the character alone: a scene that never ticks the feature layer still shows his ears; the scales default to 1)
         skinner.teddyEarScale = teddyEarScale; skinner.teddyPomScale = teddyPomScale; skinner.teddySway = teddySway
@@ -2051,7 +2055,9 @@ final class BlobBrain {
             skinner.overrideVertices = kf.side(armSide).vertices
             skinner.overrideDelta = armDelta
             skinner.overrideMat = armAO
-            if pandaInk && Self.pandaInkOn {          // PANDA: the raised arm and its join collar are painted black by how far this frame moved them (GfxBodyFast / Bath / Jersey read it from the mat channel)
+            let blendNow = Self.armBlendOn && armBlendSpecies && armPathName == ArmPath.wave.name
+            if blendNow { skinner.setWaveBlend(geom: ArmPath.wave.geom(at: Double(min(max(sKey, 0), 1)), scale: kf.scale), side: armSide, pose: pose, restCentroid: sim.restCentroid) }
+            if pandaInk && Self.pandaInkOn && !blendNow {          // PANDA: the raised arm and its join collar are painted black by how far this frame moved them (GfxBodyFast / Bath / Jersey read it from the mat channel)
                 var ink = armAO
                 let sd = kf.side(armSide)
                 for i in 0..<min(ink.count, sd.skinCount) {          // (skin vertices only: the capsule's own are drawn black anyway)
