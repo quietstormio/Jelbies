@@ -1156,7 +1156,7 @@ struct CareMenu: View {
             if !isOpen { picker = nil; competeRow = false; trickRow = false }
             else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.visibleItems(mode, care: care).first } }      // focus moves into the opened rows
         }
-        .onChange(of: care.select.highlighted) { _, _ in withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false } }
+        .onChange(of: care.select.highlighted) { _, now in withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false; if now != nil { frozenMode = nil; open = true } } }          // a creature just got highlighted (or the highlight moved): the menu opens by itself, on that creature's rows
         .onChange(of: picker) { _, k in care.pickerShowing = k != nil }          // the need bubbles stay out of the way of an open Feed / Drink / Play row
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
