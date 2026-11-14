@@ -156,6 +156,37 @@ def shell_pt(y,phi,off,dy=0.0):
 def body_pt(x,y,off,mirror=False):
     """front surface of the WHOLE body (arms and fillets included) at (x,y) pushed `off` along its normal."""
     p=B.front_surface(x,y); n=full_n(p); return p+n*off, n
+def surface_ray(y, phi, arms=True, rmax=1.3, nstep=261):
+    """ALL-ROUND body surface sampler (works round the back, unlike body_pt / front_surface which only see the front).
+    A ray leaves the body axis (x=0, z=0) at height y in the direction of the egg point at azimuth phi (same convention as B.egg_point: phi 0 = +x,
+    pi/2 = front +z, pi = -x, 3pi/2 = back), and the OUTERMOST sign change of the body SDF along it is bisected. arms=True uses the whole body (arms, fillets,
+    feet: what the runtime skin is); arms=False the bare egg SDF. y and phi may be scalars or equal-length arrays. Returns (points, normals), each (...,3)."""
+    y = np.asarray(y, float); phi = np.asarray(phi, float); y, phi = np.broadcast_arrays(y, phi)
+    shp = y.shape; yf = y.ravel(); pf = phi.ravel()
+    t = (yf - B.lift) / B.bodyH
+    a = np.maximum(B.halfWidth(t), 1e-3); c = np.maximum(B.halfDepth(t), 1e-3)
+    d = np.stack([a * np.cos(pf), np.zeros_like(pf), c * np.sin(pf)], -1)
+    d /= np.linalg.norm(d, axis=-1, keepdims=True)
+    f = B.sdf if arms else B.bodySDF
+    rs = np.linspace(rmax, 0.0, nstep)
+    inside = np.stack([f(d[:, 0] * r, yf, d[:, 2] * r) < 0 for r in rs], 1)          # (n, nstep): first True from the outside
+    k = np.argmax(inside, axis=1)
+    k = np.maximum(k, 1)
+    hi = rs[k - 1].copy(); lo = rs[k].copy()                                            # hi outside, lo inside
+    for _ in range(26):
+        m = 0.5 * (hi + lo); neg = f(d[:, 0] * m, yf, d[:, 2] * m) < 0
+        lo = np.where(neg, m, lo); hi = np.where(neg, hi, m)
+    r = 0.5 * (hi + lo)
+    P = np.stack([d[:, 0] * r, yf, d[:, 2] * r], -1)
+    N = B.grad(P) if arms else B.egg_grad(P)
+    return P.reshape(shp + (3,)), N.reshape(shp + (3,))
+
+def surface_at(y, phi, off=0.0, arms=True):
+    """One point of surface_ray pushed `off` along the surface normal: returns (point, normal)."""
+    P, N = surface_ray(y, phi, arms=arms)
+    P = np.asarray(P).reshape(3); N = np.asarray(N).reshape(3)
+    return P + N * off, N
+
 def squash_face_hint(p): return egg_n(p)
 
 # ---------- scene transforms -------------------------------------------------
