@@ -218,7 +218,7 @@ final class StartFlow {
         JellyRoster.save(ids)
         JellyRoster.setName(id, name)
         UserDefaults.standard.set(true, forKey: Self.startedKey)
-        if DevArgs.enabled { Self.applyPendingFirstCoins(pendingCoins, first: first) }          // the room's wallet is created after this (it reads the key in init), so it shows the balance at once
+        if DevArgs.enabled { Self.applyPendingFirstCoins(pendingCoins ?? DevArgs.phoneNewGameCoins, first: first) }          // the room's wallet is created after this (it reads the key in init), so it shows the balance at once
         GameCare.newcomerPending = true; GameCare.newcomerWithOthers = ids.count > 1          // (others at home: the curtain is held until he is off-screen)
         if first { welcome = nil; phase = .firstDay(id, name, false); return }          // the first day at home says "Welcome home" itself
         welcome = JellyRoster.nameOf(id)
