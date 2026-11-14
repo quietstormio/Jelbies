@@ -38,6 +38,8 @@ extension GameCare {
     nonisolated(unsafe) static var newcomerPending = false
     /// Set with it when others are at home: the launch curtain stays up until he has been put off-screen (`LaunchGate.evaluate`), so he is never seen at his spawn spot.
     nonisolated(unsafe) static var newcomerWithOthers = false
+    /// The first-day tour (Start/FirstDayTour.swift) is armed or up: the needs and the need bubbles wait (GameCare.tickNeeds, tickBubbles). Set only by FirstDayTour.
+    nonisolated(unsafe) static var introHold = false
     static let newcomerEdge = SIMD2<Float>(1.1, -2.2)
 
     /// The autonomy a Jelbie gets back when a close-up, bath, race, outing or trip that snapshots it ends. A bought Jelbie still being welcomed (or healing) is held with
@@ -49,10 +51,15 @@ extension GameCare {
         if let w = newcomerWelcome { tickNewcomerWelcome(w, actors, dt: dt); return }
         if var n = newcomer {
             n.age += dt
-            guard actors.indices.contains(n.id), let b = actors[n.id].brain else { newcomer = nil; return }
+            guard actors.indices.contains(n.id), let b = actors[n.id].brain else { newcomer = nil; FirstDayTour.shared.arrived(); return }
+            if n.held { newcomer = tickFirstDayHold(n, actors[n.id], b); return }
             let calm = b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace
             n.calm = (calm && n.age > 0.8) ? n.calm + dt : 0
-            if n.calm > 0.3 || n.age > 14 || greetBlocked && n.age > 2 { newcomer = nil; raceWelcomeHome(n.id, won: false) } else { newcomer = n }
+            if n.calm > 0.3 || n.age > 14 || greetBlocked && n.age > 2 {
+                newcomer = nil
+                if n.first { endFirstDayRun(n, actors[n.id], b) }
+                raceWelcomeHome(n.id, won: false)
+            } else { newcomer = n }
             return
         }
         guard Self.newcomerPending else { newcomerPendingT = 0; return }
@@ -71,11 +78,64 @@ extension GameCare {
             beginNewcomerWelcome(actors, last, b)
             return
         }
+        // a new game's first Jelmiko with the first-day tour (FirstDayStyle.room): off-screen at once (behind the curtain), then he runs in
+        if rosterCount == 1, actors.count == 1, let arrival = FirstDayTour.shared.takeArrival() {
+            Self.newcomerPending = false; Self.newcomerWithOthers = false; newcomerPendingT = 0
+            select.cancel()
+            beginFirstDayRun(arrival, last, b)
+            return
+        }
         guard actors.count == 1, !LaunchGate.shared.visible else { return }
         Self.newcomerPending = false; Self.newcomerWithOthers = false; newcomerPendingT = 0
         rehome(last, at: Self.newcomerEdge)
         b.requestNow(.come(to: VoiceCoordinator.comeSpot))
         newcomer = NewcomerWalk(id: last.id)
+    }
+
+    // MARK: the first Jelmiko's run-in (the first-day tour)
+
+    /// `.run`: he is put off the left edge (behind the curtain: never seen at his spawn spot), held, and a beat after the curtain is gone he RUNS in to the middle (the bought Jelmiko's run,
+    /// `arrivalRunIn`); the walk ends like the old first walk did (the welcome-home hop, `raceWelcomeHome`) and the tour's welcome caption comes up. `.place` (Reduce Motion): he is simply there.
+    private func beginFirstDayRun(_ arrival: FirstDayTour.Arrival, _ na: JellyActor, _ nb: BlobBrain) {
+        let spot = VoiceCoordinator.comeSpot
+        guard arrival == .run else {
+            rehome(na, at: spot)
+            nb.autonomy = true; nb.hurry = false
+            FirstDayTour.shared.arrived()          // (not on the run step: nothing to wait for)
+            return
+        }
+        var w = NewcomerWalk(id: na.id)
+        w.held = true; w.first = true; w.arena = na.sim.arenaRadius
+        na.sim.arenaRadius = .infinity          // the round wall is lifted while he is out there (put back when he is in), as for a bought Jelmiko
+        rehome(na, at: guestArrivalEntry(toward: spot, offScreen: true))
+        nb.autonomy = false; nb.hurry = false
+        newcomer = w
+        NSLog("[firstday] hold id=%d", na.id)
+    }
+
+    private func tickFirstDayHold(_ n: NewcomerWalk, _ na: JellyActor, _ nb: BlobBrain) -> NewcomerWalk? {
+        var n = n
+        let spot = VoiceCoordinator.comeSpot
+        // still out of sight until the run starts, in whatever window (the aspect is only known once the stage has drawn)
+        if na.floor.x > -(GameCamera.visibleHalfWidthAtBody(z: spot.y, aspect: GameCamera.aspect) + 0.9) { rehome(na, at: guestArrivalEntry(toward: spot, offScreen: true)) }
+        guard !LaunchGate.shared.visible, n.age > FirstDayRun.beat else { return n }
+        AudioHub.shared.play(.perfectStreak)          // the "ta-da" chime, as for a bought Jelmiko
+        UIAccessibility.post(notification: .announcement, argument: "\(jelly(na.id)?.name ?? "Your Jelmiko") is home")
+        arrivalRunIn(na, to: spot, household: [], voice: true)
+        n.held = false; n.age = 0; n.calm = 0
+        NSLog("[firstday] run from (%.1f,%.1f) to (%.1f,%.1f)", na.floor.x, na.floor.y, spot.x, spot.y)
+        return n
+    }
+
+    /// He is in the middle and calm (or it took too long): the wall is back, he is a housemate again, and the tour goes on.
+    private func endFirstDayRun(_ n: NewcomerWalk, _ na: JellyActor, _ nb: BlobBrain) {
+        if let r = n.arena {
+            na.sim.arenaCenter = GameCamera.arenaCenter
+            na.sim.arenaRadius = r.isFinite ? GameCamera.arenaRadius : r
+        }
+        nb.hurry = false; nb.autonomy = true
+        FirstDayTour.shared.arrived()
+        NSLog("[firstday] arrived at (%.1f,%.1f)", na.floor.x, na.floor.y)
     }
 
     // MARK: the arrival and welcome
@@ -457,7 +517,15 @@ extension GameCare {
     }
 }
 
-struct NewcomerWalk { let id: Int; var age: Float = 0; var calm: Float = 0 }
+struct NewcomerWalk {
+    let id: Int; var age: Float = 0; var calm: Float = 0
+    /// The first-day tour's run-in (see `beginFirstDayRun`): waiting off-screen (`held`), and the arena radius to give back.
+    var held = false, first = false
+    var arena: Float?
+}
+
+/// The first Jelmiko's run-in: how long after the curtain is gone he starts running.
+nonisolated enum FirstDayRun { static let beat: Float = 0.7 }
 
 /// The cheer's schedule and the bedtime rule (pure: tested).
 nonisolated enum NewcomerCheer {
