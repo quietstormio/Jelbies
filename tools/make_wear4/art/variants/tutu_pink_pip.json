@@ -1,27 +1,27 @@
 {
  "id": "tutu_pink_pip",
- "tris": 890,
- "verts": 478,
+ "tris": 1020,
+ "verts": 714,
  "parts": [
   {
    "name": "waistband",
-   "tris": 170,
-   "verts": 90
+   "tris": 180,
+   "verts": 92
   },
   {
    "name": "layer0",
-   "tris": 204,
-   "verts": 108
+   "tris": 244,
+   "verts": 186
   },
   {
    "name": "layer1",
-   "tris": 204,
-   "verts": 108
+   "tris": 244,
+   "verts": 186
   },
   {
    "name": "layer2",
-   "tris": 204,
-   "verts": 108
+   "tris": 244,
+   "verts": 186
   },
   {
    "name": "bow-1",
@@ -45,19 +45,19 @@
   0.0
  ],
  "bounds_local_min": [
-  -0.7171,
-  -0.1368,
-  -0.5144
+  -0.6887,
+  -0.2852,
+  -0.495
  ],
  "bounds_local_max": [
-  0.7198,
-  0.037,
-  0.6465
+  0.6887,
+  0.0796,
+  0.6436
  ],
  "size": [
-  1.4369,
-  0.1738,
-  1.1609
+  1.3774,
+  0.3648,
+  1.1387
  ],
  "anchor": "waist",
  "slot": "body",
@@ -68,6 +68,6 @@
  ],
  "price": 60,
  "title": "Ballet tutu",
- "desc": "A fuller three-layer ruffled tulle tutu (thick edged layers with scalloped hems, perkier and shorter than before) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet. Pip's variant is open over his tail root.",
+ "desc": "A fluffy ballet tutu: a snug waistband at y 0.32 with three thin tulle layers flaring out and down (30 / 42 / 54 degrees below horizontal, reach 0.14 / 0.17 / 0.19), 16 staggered scalloped waves per hem, a small bow on the front. Pip's variant is open over his tail root.",
  "colourway": "tutu_pink_pip"
 }

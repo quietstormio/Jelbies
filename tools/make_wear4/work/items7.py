@@ -118,42 +118,90 @@ def bandana(main=CORAL, dots=CREAM, trim=CREAM, **k):
                 desc='A neckerchief: a plumped rolled band across the belly at y~0.505 (top <=0.54), big side knots, and a thick polka-dot triangle with rolled cream hems hanging to y 0.27. All below the mouth keep-out.')
 
 # ============================ TUTU =========================================
-def tutu(pink=PINK, lav=LAV, band=None, pip=False, **k):
-    """pip=True: open over Pip's tail root (a slot +-40 deg round the back centre): the layers are open sweeps instead of closed rings."""
-    reset(); yb = 0.255
+def _ring_mesh(name, rows, close_i, colfn, close_k=True, cap_ends=True):
+    """A tube-like grid: rows[i][k] = point k of cross-section i. close_i: sections wrap round (a ring); otherwise the two end sections are capped.
+    The cross-section is always closed. Faces point outward (signed volume check). colfn(i, k, p) -> rgb."""
+    NI = len(rows); NK = len(rows[0]); P = []; C = []
+    for i in range(NI):
+        for k in range(NK): P.append(tuple(rows[i][k])); C.append(colfn(i, k, np.array(rows[i][k])))
+    F = []
+    for i in range(NI if close_i else NI - 1):
+        i2 = (i + 1) % NI
+        for k in range(NK):
+            k2 = (k + 1) % NK
+            a, b, c, d = i * NK + k, i2 * NK + k, i2 * NK + k2, i * NK + k2
+            F += [(a, b, c), (a, c, d)]
+    if not close_i and cap_ends:
+        for ring, rev in ((0, True), (NI - 1, False)):
+            ctr = np.mean([rows[ring][k] for k in range(NK)], 0); ci = len(P); P.append(tuple(ctr)); C.append(colfn(ring, 0, ctr))
+            for k in range(NK):
+                k2 = (k + 1) % NK; a, b = ring * NK + k, ring * NK + k2
+                F.append((ci, b, a) if rev else (ci, a, b))
+    Pn = np.array(P); vol = sum(np.dot(Pn[a], np.cross(Pn[b], Pn[c])) for a, b, c in F)
+    if vol < 0: F = [(a, c, b) for a, b, c in F]
+    return add_part(name, P, F, C, flip_auto=False)
+
+def _fold_layer(name, inner, hem, colfn, close_i):
+    """A thin double-sided tulle layer: a top surface and an underside (0.006 lower) that SHARE the hem vertices, so the edge is one rounded rim (no slab, no coplanar sheets).
+    inner / hem: per-column points of the top surface edges."""
+    N = len(inner); P = []; C = []
+    for i in range(N): P.append(tuple(inner[i])); C.append(colfn(i, 0))
+    for i in range(N): P.append(tuple(hem[i])); C.append(colfn(i, 1))
+    for i in range(N): P.append(tuple(np.array(inner[i]) - np.array([0, 0.0065, 0]))); C.append(colfn(i, 2))
+    Ft = []; Fb = []
+    for i in range(N if close_i else N - 1):
+        i2 = (i + 1) % N
+        a, b, c, d = i, i2, N + i2, N + i
+        Ft += [(a, b, c), (a, c, d)]
+        a, b, c, d = 2 * N + i, 2 * N + i2, N + i2, N + i
+        Fb += [(a, c, b), (a, d, c)]
+    Pn = np.array(P)
+    n0 = np.cross(Pn[Ft[0][1]] - Pn[Ft[0][0]], Pn[Ft[0][2]] - Pn[Ft[0][0]])
+    if n0[1] < 0: Ft = [(a, c, b) for a, b, c in Ft]; Fb = [(a, c, b) for a, b, c in Fb]
+    return add_part(name, P, Ft + Fb, C, flip_auto=False)
+
+def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
+    """Ballet tutu: a snug waistband on the body at height yb and three thin tulle layers that leave it and flare OUT AND DOWN (28 / 38 / 48 degrees below horizontal),
+    each with a scalloped hem (16 soft waves, staggered per layer), 80 columns, a slightly different pink per layer, and a small bow on the front.
+    Budget: <=1000 vertices / <=1300 triangles (WearMeshes), so the layers are single cones folded on a shared rim, not slabs.
+    pip=True: open over Pip's tail root (a slot +-40 deg round the back centre)."""
+    reset()
     band = band or deep(pink, 0.22)
     p0, p1 = (math.radians(310.0), math.radians(590.0)) if pip else (0.0, 2 * math.pi)
-    NS = 18 if pip else 24
-    def sweep_ring(name, loopfn, colfn, K):
-        if not pip:
-            torus(name, NS, lambda phi: loopfn(phi), colfn, sharp=70); return
-        def pt(i, j):
-            return loopfn(p0 + (p1 - p0) * j / (NS - 1))[i]
-        grid_surface(name, pt, K, NS, None, closed_u=True, hint=lambda p: np.array([p[0], 0.2, p[2]]), gcol=lambda i, j: colfn(np.array([0, 0.2, 0]), np.array([0, 0.5, 0])))
-    sweep_ring('waistband', lambda phi: [eloop(yb, phi, h, v) for h, v in ((0.012, 0.030), (0.044, 0.026), (0.050, 0.0), (0.044, -0.026), (0.012, -0.030))], lambda p, n: mix(deep(band, 0.1), tint(band, 0.25), 0.5 + 0.5 * n[1] * 0.6), 5)
-    LAY = [(mix(tint(pink, 0.40), CREAM, 0.10), 0.125, 0.0, 0.0), (tint(lav, 0.22), 0.205, -0.045, 1.0), (tint(pink, 0.30), 0.285, -0.090, 2.0)]
-    for li, (c, hem, dy, ph) in enumerate(LAY):
-        def lf(phi, c=c, hem=hem, dy=dy, ph=ph):
-            rf = 1 + 0.07 * math.cos(8 * phi + ph)
-            sag = 0.026 * (0.5 + 0.5 * math.cos(8 * phi + ph + 1.0))
-            out = []
-            for t in (0.0, 0.5, 1.0):
-                h = 0.040 + (hem * rf - 0.040) * t
-                y = yb + 0.034 + dy * t + 0.040 * t - 0.056 * t * t - sag * t ** 3
-                out.append(eloop(y + 0.022, phi, h, 0.0))
-            for t in (1.0, 0.5, 0.0):
-                h = 0.040 + (hem * rf - 0.040) * t
-                y = yb + 0.034 + dy * t + 0.040 * t - 0.056 * t * t - sag * t ** 3
-                out.append(eloop(y - 0.014, phi, h, 0.0))
-            return out
-        sweep_ring('layer%d' % li, lf, lambda p, n, c=c: mix(deep(c, 0.14), tint(c, 0.18), min(1.0, max(0.0, (0.30 - p[1]) / 0.22) * 0.8 + 0.2 * (0.5 + 0.5 * n[1]))), 6)
-    p, xx, yy, nn = surf_frame(0.0, yb, 0.064)
-    Rm = np.stack([xx, yy, nn], 1)
+    def phis(n):
+        return [p0 + (p1 - p0) * (i / (n - 1 if pip else n)) for i in range(n)]
+    # --- waistband: a rounded ring hugging the egg
+    sec = [(0.004, 0.002), (0.016, 0.026), (0.036, 0.012), (0.036, -0.016), (0.014, -0.026)]
+    NB = 18 if pip else 20
+    dip = max(0.0, yb - 0.274)                                       # the band (top +0.026) dips to y 0.274 at the hips so it passes UNDER the hanging arm bulbs (bottom y~0.31)
+    yl = lambda phi: yb - dip * math.cos(phi) ** 2
+    rows = [[eloop(yl(ph), ph, h, v) for h, v in sec] for ph in phis(NB)]
+    _ring_mesh('waistband', rows, not pip, lambda i, k, p: mix(deep(band, 0.10), tint(band, 0.28), 0.5 + 0.5 * (sec[k][1] / 0.026) * 0.7))
+    # --- tulle layers: (colour, attach dy, angle below horizontal, reach, hem wave phase)
+    LAY = [(mix(tint(pink, 0.55), CREAM, 0.30), 0.004, 30.0, 0.140, 0.0), (tint(pink, 0.22), -0.008, 42.0, 0.168, 1.0), (mix(pink, lav, 0.38), -0.020, 54.0, 0.190, 2.0)]
+    NC = 62 if pip else 80
+    # the lowest hem keeps >= 0.035 off the floor: scale the drop if the band is low
+    kdrop = min(1.0, max(0.2, (min(yb, 0.274) - 0.020 - 0.040) / (0.190 * math.tan(math.radians(54.0)))))
+    for li, (c, dy, ang, reach, ph) in enumerate(LAY):
+        inner = []; hem = []
+        cols = phis(NC)
+        for phi in cols:
+            e = B.egg_point(yl(phi) + dy, phi); h = hdir(e)
+            s = abs(math.sin(8 * phi + 0.5 * ph * math.pi))            # 0 at the cusps (hem lifts), 1 mid-scallop
+            L = reach * (1 - 0.09 * (1 - s))
+            inner.append(e + h * 0.022)
+            hem.append(e + h * (0.022 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.020 * (1 - s), 0]))
+        def cf(i, k, c=c):
+            return deep(c, 0.20) if k == 0 else (tint(c, 0.14) if k == 1 else deep(c, 0.30))
+        _fold_layer('layer%d' % li, inner, hem, cf, not pip)
+    # --- a small neat bow on the front of the band
+    p, n = surface_at(yb + 0.034, math.pi / 2, off=0.044)
+    xx, yy, nn = axes(n); Rm = np.stack([xx, yy, nn], 1)
     for s_ in (-1, 1):
-        bead('bow%+d' % s_, p + xx * s_ * 0.050 + nn * 0.004, (0.058, 0.032, 0.022), lambda q, nq: mix(deep(pink, 0.28), tint(pink, 0.1), 0.5 + 0.5 * nq[2]), rot=Rm, segs=6)
-    bead('bowknot', p + nn * 0.012, (0.026, 0.026, 0.022), deep(pink, 0.32), segs=6)
+        bead('bow%+d' % s_, p + xx * s_ * 0.044 + nn * 0.002, (0.050, 0.027, 0.018), lambda q, nq: mix(deep(pink, 0.26), tint(pink, 0.12), 0.5 + 0.5 * nq[2]), rot=Rm, segs=6)
+    bead('bowknot', p + nn * 0.008, (0.021, 0.021, 0.017), deep(pink, 0.34), segs=6)
     return dict(anchor='waist', slot='body', tags=['cute', 'sweet', 'sparkly'], price=60, title='Ballet tutu',
-                desc='A fuller three-layer ruffled tulle tutu (thick edged layers with scalloped hems, perkier and shorter than before) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet. Pip\'s variant is open over his tail root.')
+                desc='A fluffy ballet tutu: a snug waistband at y %.2f with three thin tulle layers flaring out and down (30 / 42 / 54 degrees below horizontal, reach 0.14 / 0.17 / 0.19), 16 staggered scalloped waves per hem, a small bow on the front. Pip\'s variant is open over his tail root.' % yb)
 
 # ============================ CAPE =========================================
 def cape(main=None, lining=HONEY, trim=CREAM, pip=False, **k):
