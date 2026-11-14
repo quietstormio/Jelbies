@@ -1216,7 +1216,7 @@ final class MelonRenderer {
             var jellyLater: [Int] = []          // JellyLook: see-through bodies are drawn after all the others (JellyLook.swift)
             let fleshOff = MemoryLayout<MelonUniforms>.offset(of: \.flesh) ?? 0
             func jellyKind(_ slot: BodySlot) -> Int {
-                guard JellyLook.level > 0, !usesBathShader(slot), slot.jersey == nil, !cutout else { return 0 }
+                guard JellyLook.level > 0, !(forceBathShader || slot.bathLook.wet > 0.001 || slot.foamAny), slot.jersey == nil, !cutout else { return 0 }          // phone test: dirt / sparkle no longer switch the jelly look off (they are not drawn on a jelly body in this test)
                 let flesh = slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self)
                 let bm = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
                 return JellyLook.kind(flesh: flesh, bellyMode: bm)
@@ -1235,7 +1235,7 @@ final class MelonRenderer {
                 e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)
                 e.setVertexBuffer(slot.dynBuf, offset: 0, index: 1)
                 e.setVertexBuffer(slot.staticBuf, offset: 0, index: 2)
-                if usesBathShader(slot) {
+                if usesBathShader(slot) && jk == 0 {
                     e.setRenderPipelineState(bathPipeline(slot))
                     e.setFragmentBuffer(slot.bathParamsBuf, offset: 0, index: 3)
                 } else if let team = slot.jersey, let jp = jerseyPipeline(), let flags = eggFlags() {
