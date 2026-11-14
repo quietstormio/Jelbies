@@ -17,7 +17,7 @@ Haptics: ONE engine owner, `HapticDriver` (Haptics.swift); the room's per-move c
 - **Phone check.** Launch with `-FootLog 1`; the app writes a JSON line for every frame the leash / tether acts (pole_hip, pull, script, idle kind, tilt). After the new emote: play it, then look for `pull` lines in the log. None = fine.
 
 ## Touching without overlapping: the contact profile (2026-11-02/03, g-featclip; read before adding or changing any touching emote)
-The user's rule: "all touching emotes must look polished: touching, but never overlapping like a buggy game". One engine now answers "how far apart are two Jelbies' DRAWN skins": `Melon/ContactProfile.swift` (`ContactField`).
+The user's rule: "all touching emotes must look polished: touching, but never overlapping like a buggy game". One engine now answers "how far apart are two Jelmiko's DRAWN skins": `Melon/ContactProfile.swift` (`ContactField`).
 - **The profile** (per body, per skin pass, built inside `JellyParallel.skin`, parallel): the farthest skinned vertex of each of K = 128 direction bins around the body's ROOT (`JellyActor.floor`), horizontal, from the drawn skin (egg sampled every 3rd vertex, limb / ear / tail blocks every 2nd of the 24 195 vertices). Includes arms, feet, Teddy's ears + pom, Pip's tail; lying (1.27 x wider), leaning, squash, breathing come for free. Feature-only points (wings at their CURRENT fold, daisy, spikes) are filled by `FeatureSet.frame`. Cost 0.025 ms a body (parallel).
 - **THE metric**: `ContactField.gap(a, b)` = the distance the two bodies could still slide toward each other along their root axis before the drawn footprints touch (exact translation gap of the two polygons). + apart, - sunk in; 0 = touching. Agrees with the mesh ground truth (every projected triangle edge, 1 mm lateral sampling) to 0.2-1.3 mm for Bob / Teddy / Pearl pairs, 3-5 mm with Pip's tail; also `gap(a, at: pa, b, at: pb)` for a hypothetical position (3 us), `ext(id, dir)` (a 0.2 us radial lookup, a few mm off near arm / tail edges: use only to decide "is a pair near"), `featureExt`, `featurePoints`, `clearance(of:ownerRoot:against:)`.
 - **The wall** (`MelonStage.keepApart`): a max with the exact gap for a near pair: a root is never put where the skins overlap (the soft spring stays; the wall is a max of two continuous maps, no pop). `ContactField.enabled = false` brings back the old centre-distance rules; a rig that never skins (the lab) has no profiles and keeps them too.
@@ -31,23 +31,23 @@ The user's rule: "all touching emotes must look polished: touching, but never ov
 ## Play mode: toss the ball (2026-11-02, g-playtoss)
 
 - **Flow.** Heart menu -> Play -> a toy picker on the same sliding strip as Feed (`CareMenu.pickerRow`, `ConsumableKind.toy`): only toys the player OWNS (`PlayToyRegistry.offered`); none owned -> a button to the Shop's Toys tab (`ShopTab.pending`). A toy is ONE registry entry (`Toys/PlayToy.swift`: `PlayToy` protocol; `BallToy` for the bouncy / soccer / beach ball; the bubble wand is `BubbleWandStub` until g-bubbleblow's `BubbleWand` replaces it and registers in `registerBuiltIns`). The wand is sold as store item `toy-bubbleWand` (StoreKind `.toy`, 40 JellyCoins; the key is `StoreBook.toyKey("bubbleWand")`).
-- **Play mode.** `GameCare.beginPlay(ball:)` -> `PlayToss` (Play/PlayToss.swift): camera eases to `GameCamera.playPose` (`GameCamera.playBlend`, global), the Jelbies stand abreast, the ball sits in the hand at the bottom, Done (top-left) leaves. `PlayChrome` is the drag surface: the flick -> `TossAim.throwFor` (landing point on screen = release + direction x reach x speed; aim assist pulls toward the Jelbie nearest the swipe, <= 0.95).
-- **Return logic (never fetch).** Header: the Jelbie it is heading for steps under it (`requestNow(.goTo)`), hops (`IdleKind.tossHeader`, started `tossHeaderLead` s before the ball arrives), the ball meets his crown -> arc back toward the hand (good 64 %, short 26 %, weak 10 %); a good one lands in the bottom band = caught. Miss: `IdleKind.tossBump` = walk round behind the ball, soccer stomp, ball rolls toward the front (each nudge stronger; <= 5 nudges, safety-net rescue at 9.5 s). With 2-3 Jelbies a header / bump may be a pass to a friend.
+- **Play mode.** `GameCare.beginPlay(ball:)` -> `PlayToss` (Play/PlayToss.swift): camera eases to `GameCamera.playPose` (`GameCamera.playBlend`, global), the Jelmiko stand abreast, the ball sits in the hand at the bottom, Done (top-left) leaves. `PlayChrome` is the drag surface: the flick -> `TossAim.throwFor` (landing point on screen = release + direction x reach x speed; aim assist pulls toward the Jelmiko nearest the swipe, <= 0.95).
+- **Return logic (never fetch).** Header: the Jelmiko it is heading for steps under it (`requestNow(.goTo)`), hops (`IdleKind.tossHeader`, started `tossHeaderLead` s before the ball arrives), the ball meets his crown -> arc back toward the hand (good 64 %, short 26 %, weak 10 %); a good one lands in the bottom band = caught. Miss: `IdleKind.tossBump` = walk round behind the ball, soccer stomp, ball rolls toward the front (each nudge stronger; <= 5 nudges, safety-net rescue at 9.5 s). With 2-3 Jelmiko a header / bump may be a pass to a friend.
 - **Feet.** `idle tossHeader`, `idle tossBump`, `toss: header`, `toss: bump`, `toss: rally` are in OnePieceInvariantTests (auto-covered by EmoteFeetTests, 6 characters x bare / shoes). Run only these with `TEST_RUNNER_ONEPIECE_ONLY=toss`.
 - **Captures.** `-SkipIntro 1 -NewGame bob,pearl,teddy -NewGameCoins 10000 -MainMenu 0 -PlayDemo N` (1 auto-flick loop, 2 picker with toys, 3 empty picker, 4 play mode without auto-flick; `-PlayDemoBall soccer|beach`, `-PlayDemoQuality good|short|weak`, `-PlayDemoRounds n`, `-PlayDemoSpeed screens/s`). `[playtoss]` log lines show every event.
 
 ## Weather (2026-11-02)
 
-- A storm rolls in every 2-5 hours of play (`WeatherBook`, persisted: relaunch neither rerolls nor repeats), lasts 2-4 min: build-up (sky darkens, rain, far rumbles, one Jelbie peers out of a window), peak (gentle two-pulse lightning + soft thunder every 7-15 s; the huddle), clearing (shake-off, scatter). `-Storm 1` forces one 5 s after the room is up (`-Storm 2` at the peak, `-Storm 3` at the clearing, `-StormDelay s`).
+- A storm rolls in every 2-5 hours of play (`WeatherBook`, persisted: relaunch neither rerolls nor repeats), lasts 2-4 min: build-up (sky darkens, rain, far rumbles, one Jelmiko peers out of a window), peak (gentle two-pulse lightning + soft thunder every 7-15 s; the huddle), clearing (shake-off, scatter). `-Storm 1` forces one 5 s after the room is up (`-Storm 2` at the peak, `-Storm 3` at the clearing, `-StormDelay s`).
 - Window: rain, gloom and flash are applied per frame at the room-cache blit (the cache build marks the glass with alpha 2) and in the window shader; the room dims / lifts through the post exposure. No cache rebuild, no extra pass (`WeatherPerfTests`).
-- Jelbies: `StormReactor` (BlobBrain+Weather.swift) on the storm pose channel `BlobBrain.storm`; feet suite `StormFeetTests`. Sounds `storm_*.m4a` are real ElevenLabs sounds (2026-11-02); the sigh is a Jelbie-voice coo.
-- Sound style: see docs/SOUND_STYLE.md (the Jelbie voice band, the vocal prompt template, SFX rules, loudness targets, which voice each character uses; Teddy and Pearl share Lavender's).
+- Jelmiko: `StormReactor` (BlobBrain+Weather.swift) on the storm pose channel `BlobBrain.storm`; feet suite `StormFeetTests`. Sounds `storm_*.m4a` are real ElevenLabs sounds (2026-11-02); the sigh is a Jelmiko-voice coo.
+- Sound style: see docs/SOUND_STYLE.md (the Jelmiko voice band, the vocal prompt template, SFX rules, loudness targets, which voice each character uses; Teddy and Pearl share Lavender's).
 
 ## Disk hygiene
 
 Run `/cleanup` (`scripts/cleanup-safe.sh`, dry run first) before big multi-agent rounds. Every agent must build with `-derivedDataPath .claude/worktrees/dd_<name>` and delete its own simulators (`xcrun simctl delete <udid>`) when done.
 
-## START HERE (2026-10-25): Jelbies 1.0, feature lock
+## START HERE (2026-10-25): Jelmiko 1.0, feature lock
 
 - **Species signature rule (2026-10-26):** signatures belong to a colour species and never appear on another colour; see [Species.md](Species.md).
 - **Feature lock:** this is the first release (1.0). No new features; fixes, polish, performance, accessibility and App Store prep only. Only Pip's new signature (plush dino tail, redone after the user rejected the first render) is still in flight. Landed on g-int: toy play, Jelly Volleyball + training, blue title screen, theme colour, full Settings, Park redesign, Groomer (the user's explicit "one last feature"), friends/guests/sleepovers, hat crown fit. See [RELEASE-1.0.md](RELEASE-1.0.md) for what is in the game, the Post-1.0 list, known issues and the App Store checklist.
@@ -67,7 +67,7 @@ xcrun devicectl device process launch --device 00008150-000261C63ED8401C \
   - Useful launch args: `-Intro 1`, `-MainMenu 0`, `-BlobDrops.v1 N`.
   - Error 4016 means the phone is locked or away.
   - Back up signed apps under ~/BobV1_backups.
-- **Unverified / open:** volleyball spike direction and Park toys on device; high-five arm sides; twirl speed; groomer line-up spacing; measured perf pass skipped at the user's request; app icon missing (pick from the "Jelbies App Icons" artifact). ElevenLabs key renewed 2026-10-25 (groomer and volleyball audio done).
+- **Unverified / open:** volleyball spike direction and Park toys on device; high-five arm sides; twirl speed; groomer line-up spacing; measured perf pass skipped at the user's request; app icon missing (pick from the "Jelmiko App Icons" artifact). ElevenLabs key renewed 2026-10-25 (groomer and volleyball audio done).
 - **Rules:** game is offline-only; the Garden is removed; one fix at a time, confirmed on the phone.
 
 ---
@@ -76,7 +76,7 @@ xcrun devicectl device process launch --device 00008150-000261C63ED8401C \
 
 ---
 name: project-handoff-2026-10-20
-description: "State of the project after the 2026-10-21 integration: every WIP branch is merged on `integrate`, final touches (roster cap 3, -SetRoster, Jelbies rename) on `final-touches`. Read this first in the next session."
+description: "State of the project after the 2026-10-21 integration: every WIP branch is merged on `integrate`, final touches (roster cap 3, -SetRoster, Jelmiko rename) on `final-touches`. Read this first in the next session."
 metadata:
   node_type: memory
   type: project
@@ -89,7 +89,7 @@ metadata:
 **Everything is on branch `release` (pushed). That is the build for the phone.** `main` is still checkpoint 6; merge `release` into `main` when the user OKs it.
 
 `release` = final-touches + integrate + these, in merge order:
-1. **rename-app**: home-screen name "Jelbies" (INAlternativeAppNames "My Jelbies", "Bob"). The app still has NO icon (empty AppIcon set); offer to design one.
+1. **rename-app**: home-screen name "Jelmiko" (INAlternativeAppNames "My Jelmiko", "Bob"). The app still has NO icon (empty AppIcon set); offer to design one.
 2. **lavender-wings**: wings 15% smaller, periodic flap bursts every 4–9 s (quieter in race/training, off when asleep/eating/bathing).
 3. **roll-feet**: `startRoll` releases foot targets, so the feet no longer come off on a random roll. FeetAttachTests now measure the drawn foot.
 4. **jelly-show**: the Jelly Show (BobV1/Show/*): Studio, Condition jars, lobby, Look/Dance/Trick rounds, results, Puddle→Ocean ranks, Drops payouts.
@@ -104,7 +104,7 @@ The phone's roster is already saved as Pip/Moss/Lavender, so no `-SetRoster` is 
 
 ### Open items / known issues
 - **Walk speed +10% (user asked): NOT done.** Faster cadence pushed the FeetAttach gap past −0.020 and the run speed past its cap. Doing it needs a deeper hidden foot crown or tighter foot follow first. The gait itself is locked.
-- In portrait, a Jelbie at the very front can sit under the bottom-corner HUD buttons and the go-out pill (the HUD trim was removed so they use the full floor). Pull the front margin in if the user dislikes it.
+- In portrait, a Jelmiko at the very front can sit under the bottom-corner HUD buttons and the go-out pill (the HUD trim was removed so they use the full floor). Pull the front margin in if the user dislikes it.
 - Landscape sides are wall-limited (x ±5). Going wider needs a camera change, which has not been touched.
 - Pre-existing test failures (they also fail on base commits, likely Xcode 27.1 sim drift):
   - AnticsLab seed-7 soak
@@ -152,20 +152,20 @@ All seven work-in-progress branches are merged on **`integrate`** (1e8dea5), plu
 - **The room is a roster**, not a count: `JellyRoster.current` is an ordered list of characters by slot, saved under `BlobRoster.v1` (default Bob, Pip, Moss). Slots index everything that runs the room; `JellyProfile.character` carries the identity (keys, colour, feature, name). With the default roster slot == character, so the phone's saved data did not move.
 - **`-SetRoster pip,moss,lavender`** launch argument: replaces the saved roster with exactly those, keeps each character's saved data, initialises a newcomer fresh, persists, idempotent (SetRosterTests). The coordinator launches the app once with it on the user's phone.
 - **Fresh install** still starts with Bob, Pip, Moss. Adoption (Bob only to start, Drops to adopt) is documented in docs/Species.md, not built.
-- **"Jellies/Jelly" → "Jelbies/Jelbie"** in user-visible creature text (decor descriptions, hat description, widget empty-state, snapshot default name, race blocker, voice/AI fallback name, accessibility label/hint). "Jelly Circuit", "Jelly Show" and the material ("jelly jars", the studio's "Light through jelly") are kept. No type or identifier was renamed; `CFBundleDisplayName` untouched.
+- **"Jellies/Jelly" → "Jelmiko"** in user-visible creature text (decor descriptions, hat description, widget empty-state, snapshot default name, race blocker, voice/AI fallback name, accessibility label/hint). "Jelly Circuit", "Jelly Show" and the material ("jelly jars", the studio's "Light through jelly") are kept. No type or identifier was renamed; `CFBundleDisplayName` untouched.
 
 ### Needs on-device checks
 - `-SetRoster pip,moss,lavender` once, then a plain relaunch: Pip in slot 0 wears yellow + spines, Lavender flaps, the widget / Siri roster shows Pip, Moss, Lavender; Bob's data is still on his keys for when he returns (`-SetRoster bob,pip,moss`).
-- Performance with three Jelbies with features on (spines + daisy + wings) in Release; the sim should not go choppy.
+- Performance with three Jelmiko with features on (spines + daisy + wings) in Release; the sim should not go choppy.
 - Haptics (squish / let-go / jelly jiggle), Ears (mic permission string, reactions), Siri phrases (the display name is "Bob", so phrases read "in Bob"), widget snapshot + portraits, Live Activities for race / nap / pep.
 - Landscape: decor, food, UI, the course picker and the widgets' deep links.
 - Soccer: kick / dribble / shoot by hand; the worker was stopped mid-debug before the merge.
 
 ### Known caveats
 - Backpack + any neck item folds Lavender's wings (characters branch).
-- The 4-diner dining queue and the race "fourth Jelbie parks off the track" code are unreachable with the cap at 3; their two tests are skipped (`XCTSkip`), not deleted.
+- The 4-diner dining queue and the race "fourth Jelmiko parks off the track" code are unreachable with the cap at 3; their two tests are skipped (`XCTSkip`), not deleted.
 - Slot 0 drives the Bob-only paths (meals, Clean, voice, close-up). With a non-Bob character in slot 0 those paths drive that character; it is tested in SetRosterTests but not yet seen on a phone. The stage-level roster paths (sleep-mask palette, fitting-room palette, brain feature) read `JellyRoster.current`, which `GameCare(roster:)` does not set, so they are exercised only by the default roster in tests.
-- Still per SLOT, not per character: the chirp / babble voice files (`AudioHub`: `chirp_jelly<slot+1>`), so Pip in slot 0 sounds like Bob; and `BlobSelect`'s single-Jelbie fallback card is hard-coded "Bob" (reachable only with `-BlobCount 1`). Outfits (`StoreBook.worn`) ARE saved by character.
+- Still per SLOT, not per character: the chirp / babble voice files (`AudioHub`: `chirp_jelly<slot+1>`), so Pip in slot 0 sounds like Bob; and `BlobSelect`'s single-Jelmiko fallback card is hard-coded "Bob" (reachable only with `-BlobCount 1`). Outfits (`StoreBook.worn`) ARE saved by character.
 - The curvy-courses branch merged with three known failing tests listed in its commit report (puddle golden start-z, Wave camera halfWidth, seed-19 timeout).
 - AI prompts still say "jelly pets" to the model (not user-visible); "Jelly Soap" (Clean chrome) was kept as a product name.
 - Old stale worktrees (agent-a0bab…, a0ebcb…, a1811…, a52d4…, a5839…, a8881…, a89c1…, ab713…, ae999…) can be cleaned up only after the user OKs it.

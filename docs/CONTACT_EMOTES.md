@@ -3,12 +3,12 @@
 Branch `g-contactcat` (from `g-perfint` 5a3a7b1), 2026-11-02. READ-MOSTLY: no behaviour code changed. The contact engine (`ContactProfile` / `ContactSettle`, worker g-featclip) migrates the
 entries below; the harness that measures them is `BobV1Tests/ContactPolishTests.swift`, the ground truth it uses is `BobV1/Melon/ContactMetric.swift`.
 
-Goal (the user): every emote where Jelbies touch must READ as touching and never overlap ("not like a buggy game"); the touch sounds and haptics must keep firing.
+Goal (the user): every emote where Jelmiko touch must READ as touching and never overlap ("not like a buggy game"); the touch sounds and haptics must keep firing.
 
 ## 0. Units and the numbers every entry is built from
 
 - 1 u = 1 m. `MelonController.jellyGap = 1.4` (Melon/MelonStage.swift:393) = every brain's `peerGap` (MelonStage.swift:417; the Park's visitors get it too, same `wireRoster`).
-- A standing Jelbie is about 1.4 wide side by side (measured touch distance 1.405, section 5.2; `BobForm.halfW` 0.5836 x 2 = 1.167 is the fitted egg, not the drawn skin with its arm nubs), 1.08-1.29 front to back. The harness measures the touch distance per species pair and axis (`static_spacing.tsv`).
+- A standing Jelmiko is about 1.4 wide side by side (measured touch distance 1.405, section 5.2; `BobForm.halfW` 0.5836 x 2 = 1.167 is the fitted egg, not the drawn skin with its arm nubs), 1.08-1.29 front to back. The harness measures the touch distance per species pair and axis (`static_spacing.tsv`).
 - `skinGap(a, b)` = root distance minus touch distance (m): +0.01 = 1 cm apart, 0 = touching, negative = overlap.
 - Stance classes. TOUCHING: the pair should settle to skin gap 0 +- 0.5 cm (the bodies visibly meet; sound + haptic fire once per touch). PROXIMITY: skin gap >= 0 only (they stand close, never overlap).
 - Species features that matter: Pearl + Lavender = wings (sideways/back, flap), Pip = tail + spikes (back, low), Moss = daisy (head), Teddy = ears + pom (head, wide) + cream belly, Bob = none.
@@ -73,7 +73,7 @@ All distances are the ROOT distance the walker is sent to (`centre gap = factor 
 
 The "touching" classification above is by what the emote is for (the cheeks/bellies/sides visibly meet). Rows 7-10, 14, 17, 19-23, 27 are the ones the user will scrutinise first.
 
-## 2. Group socials (3-5 Jelbies; `socialStartGroup`, BlobSocial+Group.swift:128)
+## 2. Group socials (3-5 Jelmiko; `socialStartGroup`, BlobSocial+Group.swift:128)
 
 | Emote | Stance set at | Chord / spacing (root) | Class | Features that matter | Sound / haptic today |
 |---|---|---|---|---|---|
@@ -84,7 +84,7 @@ The "touching" classification above is by what the emote is for (the cheeks/bell
 | congaLine | BlobSocial+Emotes.swift:31 `congaGap 1.15` -> `gapBehind = peerGap*1.15` (:113), trimmed path :264 | 1.61 behind the one in front, along a curve | P (a line of waddlers; each follows ~1 gap behind) | tail, wings, spikes (the one behind sees them) | `conga_tick` 0.5 on the beat (Emotes.swift:279), kick 0.55 :278, haptics `congaLine.form` / `.scatter` (:255, :290-291) pulse (0.24, 0.15); chirps on scatter :297 |
 | ringDance | BlobSocial+Emotes.swift:34 `ringChord 1.25` -> chord = peerGap*1.25 (:180), r = chord/(2 sin(pi/n)) | 1.75 | P (a round dance with real steps) | wings, tail (the quarter-turn shuffle), ears | `ring_chime` 0.45 / 0.35 per hop with pitches `ringPitch` (Emotes.swift:341, :357), kick 1.1, haptics `ringDance.form` / `.scatter` (:327, :371) |
 
-## 3. Other places where two or more Jelbies stand within touching range
+## 3. Other places where two or more Jelmiko stand within touching range
 
 | Stance | Where set | Root distance | Class | Features | Sound / haptic today |
 |---|---|---|---|---|---|
@@ -98,7 +98,7 @@ The "touching" classification above is by what the emote is for (the cheeks/bell
 | Volleyball partners / opponents | Volley/VolleyModels.swift:58-61 (`bodyDiameter 1.1`, `minCentreGap = partnerGap = brainGap = 1.6`, `minGap 1.3`), separation VolleySim.swift:960-977 (`keepApart`), GameCare+Volley.swift:293 | 1.6 | P (never touching, never overlapping) | wings/ears when diving | game sounds only |
 | Park friends / visitors | same `SocialKind`s through `MelonController.socialBrains` (Park/MelonController+Park.swift:12), friend sessions Park/GameCare+Park.swift:158-168 | as the socials above | as above | all species incl. visitors | as above |
 | Walking past / pressing (not a social) | BlobBrain+Contact.swift (look-ahead + `contactTick`) and the `keepApart` spring | < 1.358 | soft meeting | all | `.squish` vol 0.25 + jellyKick; NO haptic |
-| Bath, race (Jelly Circuit), Jelly Show, soccer | solo or other-Jelbie-free for the bodies (the race/volley have their own separation) | n/a | n/a | n/a | n/a |
+| Bath, race (Jelly Circuit), Jelly Show, soccer | solo or other-Jelmiko-free for the bodies (the race/volley have their own separation) | n/a | n/a | n/a | n/a |
 
 ## 4. Sound and haptic inventory (what must keep firing)
 
@@ -131,8 +131,8 @@ Caveats: lieDown / flop rows start standing 1.2 apart (their worst frame is t = 
 | Pip+Teddy | 140.5 | 140.5 | 114.2 | 109.2 |
 | Moss+Pearl | 140.5 | 140.5 | 108.4 | 108.4 |
 
-Two standing Jelbies touch (arm nubs and belly) at a root distance of 1.405 u side by side and 1.08-1.29 u one behind the other (arms in or out makes no difference side by side: the nubs are part of the body mesh). The body is ~1.4 wide (as the code comments say), not the 1.167 of `BobForm.halfW`.
-So EVERY side-by-side stance below 1.40 overlaps by construction: closeGapFactor 1.036 = -37 cm, the keepApart floor 1.092 = -31 cm, the dining 3-row 1.11 = -29 cm, the focus row 1.0 / 1.05 / 1.15 = -40 / -35 / -25 cm. Skin gap in cm (+ apart / - overlap) of two idle STANDING Jelbies put at each catalogued centre distance (the lying / sleeping rows of the BEFORE table are flat bodies and differ):
+Two standing Jelmiko touch (arm nubs and belly) at a root distance of 1.405 u side by side and 1.08-1.29 u one behind the other (arms in or out makes no difference side by side: the nubs are part of the body mesh). The body is ~1.4 wide (as the code comments say), not the 1.167 of `BobForm.halfW`.
+So EVERY side-by-side stance below 1.40 overlaps by construction: closeGapFactor 1.036 = -37 cm, the keepApart floor 1.092 = -31 cm, the dining 3-row 1.11 = -29 cm, the focus row 1.0 / 1.05 / 1.15 = -40 / -35 / -25 cm. Skin gap in cm (+ apart / - overlap) of two idle STANDING Jelmiko put at each catalogued centre distance (the lying / sleeping rows of the BEFORE table are flat bodies and differ):
 
 | centre distance of the stance (u) | where | x (side by side), all pairs | z (one behind the other): Teddy+Pearl, Moss+Pearl | z: Bob+Teddy, Pip+Teddy | z: Lavender+Pip |
 |---|---|---|---|---|---|
@@ -289,7 +289,7 @@ Done and measured (Bob+Teddy, Lavender+Pip, groups; Release, CONTACT_ENFORCE=1):
 - Geometry from the touch distance: group ring chord (`ringChord`), ringDance chord, conga gap, spinHug radius, all pair spots (`standGap`, floor 1.445 m); tag / chase catch spots from the profile.
 - Pip's tail is now in the FEATURE bins (`ContactField.tailBuf` / `mergeTail`), `features: true` on every touching stance, and the keepApart wall asks `gap(..., features: true)`. Cost of the feature path (ContactSettleTests.testFeatureGapCost): 5.7 us body-only vs 9.3 us with features per wall query. bump (Lavender+Pip) went -26.6 -> -13.5, tag stayed the worst Pip case.
 - One touch gate: the harness counts `contactEvents` as the episodes; sounds per touch are now exactly 1 in every touching row (no zero-sound or double-sound episodes in the Bob+Teddy / Lavender+Pip runs); `.boop` / `.shove` events and the emote haptic (once per session) ride on the gate's touch in a profile-ful rig (drive-timer fallback only without profiles). Contact sounds outside a touch: ringAround 4, leapfrog 4 (spinHug 0, congaLine / ringDance 14 / 24 are the beat ticks, proximity).
-- Sleep pile -10.6 -> -2.5 (the sleeper keeps a standing neighbour off, two sleepers settle to touch); bagSit / cuddle are in the table (separation only; bagSit never touches by design: the second Jelbie sits 0.95 m from the piece).
+- Sleep pile -10.6 -> -2.5 (the sleeper keeps a standing neighbour off, two sleepers settle to touch); bagSit / cuddle are in the table (separation only; bagSit never touches by design: the second Jelmiko sits 0.95 m from the piece).
 - Harness: stance median over the table's active (hold) phases only; leapfrog uses a 3D clearance (soles above the other's top); the feet gate `SocialFeetTests` is merged and now asserts in-session planted-sole drift <= 10 mm.
 - `urgent` separation: A/B with the new geometry, OFF is worse in 53 rows (leapfrog -119, circleDance -57, squabble -29, spinHug -14, tag -18) -> kept (with translation). Under the three-channel rule (below) it only changes the size of the lean request.
 - ContactSettleTests converge test: passes at 9e62e8a, regressed 60 -> 61 frames at 4fb6182a because `contactNudge` also slid feet / step / sim for no-session nudges; fixed (the extras only inside a session).
@@ -332,7 +332,7 @@ Findings (traced, Release, Bob+Teddy first; numbers are minimum skin gap, cm):
 
 Not fixed (cause known): see the round report. Knobs for A/B in the harness: env `PEAK_OFF=1` (all), `PEAK_NOGUARD=1`, `PEAK_NOARM=1`, `PEAK_K`, `PEAK_GAIN`, `PEAK_OPEN`, `PEAK_ARM`, `PEAK_CAP`, `PEAK_LOG=1`.
 
-### 5.10 Adding an interactive emote (user rule 3, 2026-11-04: ONE formula for every emote where Jelbies meet, now and later)
+### 5.10 Adding an interactive emote (user rule 3, 2026-11-04: ONE formula for every emote where Jelmiko meet, now and later)
 
 The formula: the meeting spot is decided once at session start; one continuous walk whose last step lands there; a hold at skin contact (skin gap 0 +- 0.5 cm, never deeper than -1 cm, never a visible gap; the
 `hum Moss+Lavender` frame is the reference); tail, wings, spikes, daisy, ears and hands never inside the partner; exactly one touch sound per touch; a HAND ends ON the partner's skin (hand-tip-to-skin gap 0 +- 0.5 cm).
@@ -378,7 +378,7 @@ Traced with `CONTACT_TRACE_COLS=1` on nuzzle Bob+Teddy: the walk landed its last
 
 ### Park capture rows (r4-park-capture)
 
-`ContactDemo` also runs in the PARK: `-StartPark 1` (simulator hook, goes to the park with the NewGame Jelbie) + `-ContactDemoPark 1` waits until the trip is `.playing`, replaces the random visitors with `-ContactDemoVisitors N` chosen pool visitors (`-ContactDemoVisitorSpecies wings,daisy,none`, in order, by signature; the pool has NO yellow/tail visitor, the tail is covered by Pip in the cast), takes the cast off autonomy and forces the kind between the Jelbie and the visitor(s) (trios: Jelbie + 2 visitors) with the same tick log and SUMMARY. The visitors' species / colour / worn item are logged (`park visitor ...`). The perp/top tracking cameras work unchanged. Rows (`scripts/contact_scenes.tsv`, `*_park_*`): ringAround_park_teddy_v, ringAround_park_pip_v, circleDance_park_pearl_vv, groupHug_park_bob_vv, bump_park_bob_v, tag_park_pearl_v, chase_park_teddy_v, highFive_park_moss_v, spinHug_park_lavender_v.
+`ContactDemo` also runs in the PARK: `-StartPark 1` (simulator hook, goes to the park with the NewGame Jelmiko) + `-ContactDemoPark 1` waits until the trip is `.playing`, replaces the random visitors with `-ContactDemoVisitors N` chosen pool visitors (`-ContactDemoVisitorSpecies wings,daisy,none`, in order, by signature; the pool has NO yellow/tail visitor, the tail is covered by Pip in the cast), takes the cast off autonomy and forces the kind between the Jelmiko and the visitor(s) (trios: Jelmiko + 2 visitors) with the same tick log and SUMMARY. The visitors' species / colour / worn item are logged (`park visitor ...`). The perp/top tracking cameras work unchanged. Rows (`scripts/contact_scenes.tsv`, `*_park_*`): ringAround_park_teddy_v, ringAround_park_pip_v, circleDance_park_pearl_vv, groupHug_park_bob_vv, bump_park_bob_v, tag_park_pearl_v, chase_park_teddy_v, highFive_park_moss_v, spinHug_park_lavender_v.
 
 ### 5.11 Measure round 3 (r4-measure-r3, base 3d11e2fd): what the table now says that it did not
 ORDER INDEPENDENCE FIRST: a ContactPolishTests run used to inherit the previous run's profiles (keyed by steerID) and clip eggs from the statics, so a row depended on which emotes ran before it in the process (tag, Lavender+Pip: -0.9 cm alone, -25.2 cm after cheekSquish; cheekSquish -5.7 in a long sequence, -2.6 clean; nuzzle -4.4 -> -0.7 min gap). Every run now resets `ContactField` and `FeatureClip.eggs` first. All numbers in the round-2 tables and in the brief's 3d11e2fd table that came from a multi-emote process are suspect; re-measure before acting on them.

@@ -21,7 +21,7 @@ Acceptance bar (user): **a 20-minute session on an iPhone 17 Pro Max stays in th
 - A/B flags: `-NoMaterials 0|1`, `-GpuCal 1`, `-MetalFX 0|1`, `-FibreLUT 0..3`, `-PerfEncoders 1`, `-ImportSave 1`, `-NewGame …`.
 - `-PerfPasses 1` double-counts (command-buffer spans overlap); use `-PerfEncoders 1` or ablation.
 
-## Numbers (iPhone 17 Pro Max, 3 Jelbies in the room)
+## Numbers (iPhone 17 Pro Max, 3 Jelmiko in the room)
 
 | Build | interval mean | GPU mean | notes |
 |---|---|---|---|
