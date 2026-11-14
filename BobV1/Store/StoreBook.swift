@@ -67,6 +67,8 @@ final class StoreBook {
         var retiredDecorRefunded: Bool? = nil
         /// The retired gloves (Pink / Sky mittens, Boxing mitts) were removed and refunded (once; StoreBook+RetiredGloves.swift).
         var glovesRefunded: Bool? = nil
+        /// The retired Honeybee antennae / Bunny-ear headbands were removed and refunded (once; StoreBook+RetiredHeadbands.swift).
+        var headbandsRefunded: Bool? = nil
         /// Tricks owned by ONE Jelbie: character id -> VoiceTrick raw values (never renamed). Optional: older saves decode without it.
         var ownedTricks: [String: [String]]? = nil
         /// Tricks and skills bought for EVERYONE (VoiceTrick raw values, "ears"): every Jelbie has them, adopted ones too.
@@ -99,6 +101,8 @@ final class StoreBook {
             if noSeats.retiredDecorRefunded != saved.retiredDecorRefunded { saved = noSeats; if seatRefund > 0 { wallet.add(seatRefund, silent: true) }; save() }
             let (noGloves, gloveRefund) = Self.dropRetiredGloves(saved)
             if noGloves.glovesRefunded != saved.glovesRefunded { saved = noGloves; if gloveRefund > 0 { wallet.add(gloveRefund, silent: true) }; save() }
+            let (noBands, bandRefund) = Self.dropRetiredHeadbands(saved)
+            if noBands.headbandsRefunded != saved.headbandsRefunded { saved = noBands; if bandRefund > 0 { wallet.add(bandRefund, silent: true) }; save() }
             let (noChain, chainChanged) = Self.dropRetiredLooks(saved); if chainChanged { saved = noChain; save() }
             if saved.pages.contains("roll") { saved.pages.removeAll { $0 == "roll" }; wallet.add(55, silent: true); save() } }
         if migrateGarden() { save() }
@@ -468,7 +472,7 @@ extension StoreBook.Saved {
     /// Every key is optional on read: a save from an older build (or one missing a field) keeps what it has and never resets the player's goods.
     enum CodingKeys: String, CodingKey {
         case counts, pages, wearables, worn, starterGiven, newItems, placed, placedAt, nextDecorUID, awarded, unlistedRefunded, rooms, room, stash
-        case gardenRefunded, staplesGiven, retiredDecorRefunded, glovesRefunded, ownedTricks, everyone, tricksMigrated, earsChecked
+        case gardenRefunded, staplesGiven, retiredDecorRefunded, glovesRefunded, headbandsRefunded, ownedTricks, everyone, tricksMigrated, earsChecked
     }
     init(from decoder: Decoder) throws {
         self.init()
@@ -478,7 +482,7 @@ extension StoreBook.Saved {
         placedAt = c.value(.placedAt, placedAt); nextDecorUID = c.value(.nextDecorUID, nextDecorUID); awarded = c.value(.awarded, awarded)
         unlistedRefunded = c.value(.unlistedRefunded, unlistedRefunded); rooms = c.value(.rooms, rooms); room = c.value(.room, room); stash = c.value(.stash, stash)
         gardenRefunded = c.value(.gardenRefunded, gardenRefunded); staplesGiven = c.value(.staplesGiven, staplesGiven)
-        retiredDecorRefunded = c.value(.retiredDecorRefunded, retiredDecorRefunded); glovesRefunded = c.value(.glovesRefunded, glovesRefunded)
+        retiredDecorRefunded = c.value(.retiredDecorRefunded, retiredDecorRefunded); glovesRefunded = c.value(.glovesRefunded, glovesRefunded); headbandsRefunded = c.value(.headbandsRefunded, headbandsRefunded)
         ownedTricks = c.value(.ownedTricks, ownedTricks); everyone = c.value(.everyone, everyone); tricksMigrated = c.value(.tricksMigrated, tricksMigrated)
         earsChecked = c.value(.earsChecked, earsChecked)
     }

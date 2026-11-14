@@ -59,7 +59,7 @@ Raise up to three baby jellies. Feed them, play, dress them up, race and perform
 ```
 Meet your Jelmiko: baby jellies from Wobble Isle who need someone to look after them.
 
-You start with one Jelmiko, a welcome gift from the Jelly Spring, and you can bring home up to three. Bob is blue, Pip is yellow with gummy spikes, Moss is green with a little daisy, and Lavender is purple with tiny wings. Later you can adopt special Jelmiko in the Jelly Spring: Teddy, Pearl and Panda.
+You start with one Jelmiko, a welcome gift from the Jelly Spring, and you can bring home up to three. Bob is blue, Pip is yellow with gummy spikes, Moss is green with two wobbly antennas, and Lavender is purple with tiny wings. Later you can adopt special Jelmiko in the Jelly Spring: Teddy, Pearl and Panda.
 
 Look after them
 Feed them snacks, fill their drinks, tidy up with a bubbly clean, and give them a gentle squish and a cuddle. Jelmiko yawn, stretch, wander, nap, make friends and notice each other, so it is lovely just to sit and watch them.

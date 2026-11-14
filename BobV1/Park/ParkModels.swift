@@ -223,7 +223,7 @@ nonisolated struct ParkRandom: Sendable {
 
 nonisolated enum ParkPool {
     /// Items a visitor may wear (none covers the mouth).
-    static let wearables: [WearLook] = [.beanieHoney, .beaniePink, .bucketHat, .bucketHatPink, .partyHat, .catEars, .bunnyEars, .frogEars, .flowerClip,
+    static let wearables: [WearLook] = [.beanieHoney, .beaniePink, .bucketHat, .bucketHatPink, .partyHat, .catEars, .frogEars, .flowerClip,
                                         .sweatband, .bowtiePink, .bowtieSky, .bandanaCoral, .bandanaMint, .scarfSky, .glassesRound, .sunglassesStar, .bucketHatHoney, .beanieMint, .bandanaSun, .scarfPlum]
 
     /// A visitor's colour: normally its species' classic colour (blue / yellow / green / lavender, balanced round the pool), rarely (`ParkTuning.mutationRate`) the

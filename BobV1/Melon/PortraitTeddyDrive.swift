@@ -10,11 +10,13 @@ import Foundation
 
 struct TeddyDrive: Equatable {
     var body = false, ear: Float = 1, pom: Float = 1, sway = SIMD2<Float>.zero
+    /// The green Jelmiko's antennas (AntennaBean): drawn (the feature is `.daisy`) and their hat-rule scale.
+    var antenna = false, antennaScale: Float = 1, antennaLift: Float = 0
 
-    @MainActor init(_ b: BlobBrain) { body = b.teddyBody; ear = b.teddyEarScale; pom = b.teddyPomScale; sway = b.teddySway }
+    @MainActor init(_ b: BlobBrain) { body = b.teddyBody; ear = b.teddyEarScale; pom = b.teddyPomScale; sway = b.teddySway; antenna = b.antennaBody; antennaScale = b.antennaScale; antennaLift = b.antennaLift }
     init() {}
-    @MainActor func apply(to b: BlobBrain) { b.teddyBody = body; b.teddyEarScale = ear; b.teddyPomScale = pom; b.teddySway = sway }
-    @MainActor func apply(to s: Skinner) { s.teddyEarScale = ear; s.teddyPomScale = pom; s.teddySway = sway }
+    @MainActor func apply(to b: BlobBrain) { b.teddyBody = body; b.teddyEarScale = ear; b.teddyPomScale = pom; b.teddySway = sway; b.antennaBody = antenna; b.antennaScale = antennaScale; b.antennaLift = antennaLift }
+    @MainActor func apply(to s: Skinner) { s.teddyEarScale = ear; s.teddyPomScale = pom; s.teddySway = sway; s.antennaOn = antenna; s.antennaScale = antennaScale; s.antennaLift = antennaLift }
 
     /// Ticks the throwaway `fs` once for `worn` and returns the ear / pom drive it produced, leaving the brain's live drive as it was.
     @MainActor static func portrait(fs: FeatureSet, id: Int, brain: BlobBrain, sim: SoftBody, feature: JellyFeature, worn: [String]) -> TeddyDrive {

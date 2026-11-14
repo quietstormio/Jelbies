@@ -14,7 +14,7 @@
 //    2. an ear the hat would clip SLIDES down the side of the head, rim-side, until it pokes out below the hat's edge (the usual "ears out from under the
 //       beanie" look), if a clear spot within the sliding range exists
 //    3. otherwise it tucks away (shrinks onto its base, as Pip's covered spikes do) and comes back when the hat comes off
-//    4. the ear headbands (cat / frog / bunny ears) are ears themselves: the bear ears tuck
+//    4. the ear headbands (cat / frog ears) are ears themselves: the bear ears tuck
 //  The pom tucks under any worn piece that covers the lower back (cape, backpack, tutu, vest, cardigan ...), measured the same way.
 //
 //  Colours are linear RGB for the vertex stream; the tones are the three light-brown options shown to the user (TeddyLook).
@@ -224,7 +224,7 @@ nonisolated struct TeddyFitResult: Equatable, Sendable {
 
 nonisolated enum TeddyFit {
     /// Ear headbands: they ARE ears, so the bear ears tuck under them.
-    static let earBands: Set<String> = ["cat_ears", "frog_ears", "bunny_ears", "headphones"]          // (headphones: the band cuts through the ears)
+    static let earBands: Set<String> = ["cat_ears", "frog_ears", "headphones"]          // (headphones: the band cuts through the ears)
     /// How far an ear must stay from a hat's surface, and how far the hat may rise / widen at run time (CrownFit lifts it to the drawn skin).
     static let clearance: Float = 0.035
     /// Open pieces (bands, crowns, visors, bows) are carried rigidly while the skin wobbles under them (only enclosing hats are re-seated on the skin every frame): more room.

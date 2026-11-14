@@ -969,6 +969,7 @@ final class MelonRenderer {
             }
             if info.tailFirst >= 0 { for i in info.tailFirst..<min(info.tailFirst + TailBean.vertexCount, f.count) { f[i] = 0 } }
             if info.teddyFirst >= 0 { for i in info.teddyFirst..<min(info.teddyFirst + TeddyBean.vertexCount, f.count) { f[i] = 0 } }
+            if info.antennaFirst >= 0 { for i in info.antennaFirst..<min(info.antennaFirst + AntennaBean.vertexCount, f.count) { f[i] = 0 } }
         }
         eggFlagBuf = device.makeBuffer(bytes: f, length: max(f.count, 1), options: .storageModeShared)
         eggFlagBuf?.label = "jersey egg flags"

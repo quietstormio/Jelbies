@@ -10,7 +10,7 @@ Seven characters exist, all on Bob's locked base body. At most **three** live at
 |---|---|---|---|
 | **Bob** | Blue | None | Free first Jelmiko, or adopt |
 | **Pip** | Yellow | Pointed tail plus rounded orange spikes down the back | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
-| **Moss** | Green | Head daisy | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
+| **Moss** | Green | Two wobbly antennas | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
 | **Lavender** | Purple | Wings | Free first Jelmiko, or adopt (500 / 800 JellyCoins) |
 | **Teddy** | Light brown, cream belly | Round bear ears + pom tail | Jelly Spring, 2,000 JellyCoins |
 | **Pearl** | White | Wings | Jelly Spring, 2,000 JellyCoins |
@@ -28,7 +28,7 @@ Signature features belong to a colour **species**, not to individual characters.
 |---|---|
 | Purple / lavender (incl. park plum) | Wings (fold under worn items, flap-hops, short flights) |
 | Yellow | Pointed body-mesh tail plus 7 rounded orange spikes down the back onto the tail, none on the head (Pip's approved "pro8"; hidden under enclosing hats). Enum case `JellyFeature.spines`. |
-| Green (incl. park mint, lime) | Head daisy, sits on the hat band under hats |
+| Green (incl. park mint, lime) | Two wobbly jelly antennas (body vertices, own soft motion); never tucked: they poke up through every hat (a tall hat such as the top hat or chef hat only raises their roots onto its crown) |
 | Blue and every other colour | None |
 
 ### Teddy (look phase 2026-10-31; now sold in the Jelly Spring, see the table above)
@@ -52,12 +52,12 @@ Shown in the species picker (`BobV1/Start/AdoptionCenter.swift`, content in `Bob
 | **Blueberry** | Blue (0, default name Bob) | The unbothered one | Side-eye (no body feature) | Cool | Sushi roll |
 | **Lemon Drop** | Yellow (1, Pip) | The sunny one | Tail wag (pointed tail + orange spikes) | Sporty | Donut |
 | **Taro** | Purple (3, Lavender) | The dreamy one | Little wings | Sparkly | Bedtime cookie |
-| **Matcha** | Green (2, Moss) | The sleepy one | Head daisy | Sweet | Onigiri |
+| **Matcha** | Green (2, Moss) | The sleepy one | Two wobbly antennas | Sweet | Onigiri |
 
 - **Blueberry:** "Cool as a cucumber. Acts like they don't care, then follows you everywhere." Lore: Woke up in a rain puddle at dusk, under a blue-grey sky. Blueberries take life slow and steady. Nothing rattles them, but they always sit a little closer to their favourite person. Starting jars: Cute 50, Sweet 45, Sparkly 30, Cool 85, Sporty 55.
 - **Lemon Drop:** "Sunshine on legs. First one up, last one to nap, and it wags that spiky tail at everyone." Lore: Woke up inside a sunbeam. The little orange spikes down its back are sun-sparks that cooled off and went soft. Lemon Drops can't sit still: zooming, bouncing and chasing are their love language. Jars: Cute 58, Sweet 60, Sparkly 46, Cool 28, Sporty 85.
 - **Taro:** "Head in the clouds, and nearly the rest of it too. Flaps, floats, dances and nuzzles." Lore: Woke up in the very last drop of twilight, just as the first stars came out. That's why Taros can almost fly: their little wings lift them for a moment or two, and they always land smiling. Jars: Cute 70, Sweet 55, Sparkly 84, Cool 40, Sporty 45.
-- **Matcha:** "Calm and cosy. Loves a long sit, a big stretch and a look out the window. Never far from a nap." Lore: Woke up under a tea bush in the shade. A daisy seed landed on its head that very morning and simply never left. Matchas say the daisy tells them when it's nap time. It is always nap time. Jars: Cute 62, Sweet 82, Sparkly 40, Cool 50, Sporty 30.
+- **Matcha:** "Calm and cosy. Loves a long sit, a big stretch and a look out the window. Never far from a nap." Lore: Woke up under a tea bush in the shade. Two little sprouts grew on its head that very morning and have wobbled along ever since. Matchas say the antennas tell them when it's nap time. It is always nap time. Jars: Cute 62, Sweet 82, Sparkly 40, Cool 50, Sporty 30.
 
 ### Wobble Isle story (2026-10-27)
 
@@ -88,7 +88,7 @@ Every species has one **signature silhouette feature**, so you can tell it apart
 
 ## The Jelmiko in the game (2026-10-21)
 
-Four characters exist, all on Bob's locked body (`JellyRoster`): **Bob** (baby blue, no feature), **Pip** (yellow, gummy spines), **Moss** (green, head daisy), **Lavender** (pastel lavender, wings + flap-hop). At most **three** live in the room at once (`JellyRoster.maxCount = 3`). The room is a *roster*: an ordered list of characters saved under `BlobRoster.v1`; everything in the game indexes by slot (0...2) and asks the roster which character sits there. Saved needs / dirt / words / stats / perks stay with the character (Bob on the legacy keys, the others on `.jelly<id>` keys), so a Jelmiko can leave and return without losing anything.
+Four characters exist, all on Bob's locked body (`JellyRoster`): **Bob** (baby blue, no feature), **Pip** (yellow, gummy spines), **Moss** (green, two wobbly antennas), **Lavender** (pastel lavender, wings + flap-hop). At most **three** live in the room at once (`JellyRoster.maxCount = 3`). The room is a *roster*: an ordered list of characters saved under `BlobRoster.v1`; everything in the game indexes by slot (0...2) and asks the roster which character sits there. Saved needs / dirt / words / stats / perks stay with the character (Bob on the legacy keys, the others on `.jelly<id>` keys), so a Jelmiko can leave and return without losing anything.
 
 - A fresh install starts with **Bob, Pip and Moss** (the roster before the characters round), with their features attached.
 - Developer launch argument `-SetRoster pip,moss,lavender` replaces the saved roster with exactly those (in that order), keeping each one's saved data and initialising a newcomer fresh; it persists and is idempotent, so it is safe to leave in or drop. `-BlobCount 1|2|3` still cuts the roster for captures.
@@ -145,7 +145,7 @@ Not in v1. When built, a special edition should be a material/finish layered on 
 
 ## 1.0 updates (2026-10-25)
 - **Pip:** spikes are smaller by default (60% height). Enclosing hats go over them and cover them; perch items show them. Signature (approved, "pro8"): a pointed body-mesh tail plus 7 rounded orange spikes down the back flowing onto the tail, none on the head; enclosing hats cover the spikes. (Enum case `JellyFeature.spines`.)
-- **Moss:** the daisy sits on the hat band when a hat is worn.
+- **Moss:** the antennas are never tucked: they poke through every hat; under a tall hat (top hat, chef, witch ...) the roots are raised onto the hat's surface (AntennaFit). The Honeybee antennae and Bunny-ear headbands were retired from the game on 2026-11-14 (old saves are refunded once).
 - **Lavender:** wings fold rather than vanish under worn items, with periodic flap bursts and short flights.
 - Features are never hidden outright by wearables.
 

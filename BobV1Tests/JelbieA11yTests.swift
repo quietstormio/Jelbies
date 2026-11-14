@@ -54,7 +54,7 @@ final class JelbieA11yTests: XCTestCase {
 
     func testLabelNamesTheFeatureNotJustTheColour() {
         XCTAssertEqual(JelbieA11yText.label(name: "Pip", character: 1), "Pip, yellow with soft spines")
-        XCTAssertTrue(JelbieA11yText.label(name: "Moss", character: 2).contains("daisy"))
+        XCTAssertTrue(JelbieA11yText.label(name: "Moss", character: 2).contains("antennas"))
         XCTAssertTrue(JelbieA11yText.label(name: "Lavender", character: 3).contains("wings"))
         XCTAssertTrue(JelbieA11yText.label(name: "Bob", character: 0).contains("plain"))
         for c in 0..<4 { XCTAssertEqual(Set((0..<4).map { JelbieA11yText.description(character: $0) }).count, 4, "all four are told apart by words (\(c))") }

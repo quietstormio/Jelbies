@@ -1462,10 +1462,10 @@ final class MelonController: NSObject, MTKViewDelegate {
             var worn: [String] = []
             for sl in WearSlot.allCases where sl != .feet { if let l = w.shown(id, sl), !l.art.isEmpty { worn.append(l.art) } }
             let drive = TeddyDrive.portrait(fs: fs, id: id, brain: b, sim: a.sim, feature: feature, worn: worn)
-            let liveSkin = (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway)
+            let liveSkin = (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway), liveAntenna = (a.skinner.antennaOn, a.skinner.antennaScale, a.skinner.antennaLift)
             drive.apply(to: a.skinner)
             a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
-            (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway) = liveSkin
+            (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway) = liveSkin; (a.skinner.antennaOn, a.skinner.antennaScale, a.skinner.antennaLift) = liveAntenna
             if let fl = fs.slot(id) { w.setArtOverride(id, fl.fit.hatVariant) }
             fs.syncCarry(id, sim: a.sim)
             featureMesh = fs.frame { renderer.skinPointer(body: $0) }

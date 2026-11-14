@@ -565,6 +565,7 @@ extension Skinner {
         var r: [Range<Int>] = []
         if armCapsulesActive { for s in 0..<2 { r.append(armFirst[s]..<(armFirst[s] + ArmCapsule.vertexCount)) } }
         if teddyOn, teddyFirst >= 0 { r.append(teddyFirst..<(teddyFirst + TeddyBean.vertexCount)) }
+        if antennaOn, antennaScale > 0.002, antennaFirst >= 0 { r.append(antennaFirst..<(antennaFirst + AntennaBean.vertexCount)) }
         if beansActive { for s in 0..<2 { r.append(beanFirst[s]..<(beanFirst[s] + FootBean.vertexCount)) } }
         return r
     }

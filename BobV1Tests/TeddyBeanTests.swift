@@ -300,7 +300,7 @@ extension FeatureCaptureTests {
         let d = try earsDir(); DayClock.shared.forcedHour = 12
         variant(.cream)
         TeddyFit.clearCache()
-        let want = ["beanie_pink", "cap_team_sky", "tophat", "party_hat", "crown_gold", "flower_crown", "hair_bow", "visor_tennis", "bee_antennae", "headphones"]
+        let want = ["beanie_pink", "cap_team_sky", "tophat", "party_hat", "crown_gold", "flower_crown", "hair_bow", "visor_tennis", "headphones"]
         let hats = WearLook.looks(.head)
         let earEarSet = hats.filter { want.contains($0.art) } + hats.filter { !want.contains($0.art) }
         var front: [UIImage] = [], back: [UIImage] = [], notes = "hat | ears\n"
@@ -374,7 +374,7 @@ extension FeatureCaptureTests {
     func testEarsHatCloseups() throws {
         let d = try earsDir(); DayClock.shared.forcedHour = 12
         variant(.cream); TeddyFit.clearCache()
-        let arts = ["crown_gold", "flower_crown", "hair_bow", "visor_tennis", "bee_antennae", "sweatband", "flower_clip", "headphones"]
+        let arts = ["crown_gold", "flower_crown", "hair_bow", "visor_tennis", "sweatband", "flower_clip", "headphones"]
         let ear = TeddyBean.parts[0].o
         let tgt = SIMD3<Float>(Float(ear.x) * 0.8, Float(ear.y) + 0.12, Float(ear.z))
         var cells: [UIImage] = []

@@ -127,6 +127,8 @@ nonisolated struct FeatureFit: Equatable, Sendable {
     /// Teddy: how far the ears slide down the side of the head under a hat, whether they / the pom tuck away (TeddyFit).
     var earSlide: Float = 0
     var earsHidden = false, pomHidden = false
+    /// The green Jelmiko: how far (rest units, along the antennas' own direction) the antennas' roots are raised onto the surface of a tall hat so the whole antenna stands on it (AntennaFit); 0 = they poke up through the hat from the head.
+    var antennaLift: Float = 0
 }
 
 nonisolated enum FeatureCompat {
@@ -170,21 +172,7 @@ nonisolated enum FeatureCompat {
             }
             fit.hiddenParts = coveredSpikes(worn: worn, variants: fit.hatVariant, spec: spec, layout: fit.spineLayout, skipNeck: reflow)
         case .daisy:
-            // one head item at most; its rule places the sprout
-            for w in worn {
-                guard let p = spec.pairs[w], p.slot == "head" else { continue }
-                var rule = p.moss
-                // the daisy never vanishes under a hat: where the art lab said "hide", it is tucked on the hat instead (hatDaisy)
-                if rule.rule == "hide" { rule = hatDaisy[w] ?? FeatureSpec.MossRule(rule: "adjust", anchor: [0, spec.top + 0.03, 0], tilt: 0, sink: 0, variant: nil) }
-                switch rule.rule {
-                case "hide": fit.hidden = true
-                case "adjust":
-                    fit.onHat = true
-                    fit.anchor = rule.anchor?.v3 ?? SIMD3(0, spec.top, 0); fit.tilt = rule.tilt ?? 0; fit.sink = rule.sink ?? 0
-                    if let v = rule.variant { fit.hatVariant[w] = v }
-                default: break
-                }
-            }
+            fit.antennaLift = AntennaFit.lift(worn: worn)          // (the antennas are body vertices, never tucked: they poke through every hat; a tall hat only raises their roots)
         case .wings:
             let relevant = worn.filter { spec.wingLimits[$0] != nil || (spec.pairs[$0]?.lav.rule ?? "ok") != "ok" }
             if relevant.isEmpty { break }

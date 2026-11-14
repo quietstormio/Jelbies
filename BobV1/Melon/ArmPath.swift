@@ -525,6 +525,8 @@ nonisolated struct ArmCapsuleInfo: Sendable {
     var tailFirst: Int = -1
     /// First vertex of Teddy's ear / pom block (TeddyBean), after the tail block; -1 = none.
     var teddyFirst: Int = -1
+    /// First vertex of the green Jelmiko's antenna block (AntennaBean), after Teddy's block; -1 = none.
+    var antennaFirst: Int = -1
     func first(side: Int) -> Int { side < 0 ? firstVertex[0] : firstVertex[1] }
     /// First vertex of the foot bean of a side: it follows the arm capsule inside the same block.
     func beanFirst(side: Int) -> Int { first(side: side) + ArmCapsule.vertexCount }

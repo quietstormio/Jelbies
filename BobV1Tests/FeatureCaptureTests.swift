@@ -336,7 +336,7 @@ final class FeatureCaptureTests: XCTestCase {
         var rows: [UIImage] = []
         for (name, id) in [("Pip", 1), ("Moss", 2), ("Lavender", 3)] {
             var cells: [UIImage] = []
-            for (label, look) in [("headphones", WearLook.headphones), ("cowboy hat", .cowboyHat), ("beret", .beret), ("hair bow", .hairBow), ("bee antennae", .beeAntennae), ("lei", .lei)] {
+            for (label, look) in [("headphones", WearLook.headphones), ("cowboy hat", .cowboyHat), ("beret", .beret), ("hair bow", .hairBow), ("lei", .lei)] {
                 cells.append(try closeup(Char(id: id, outfit: [look.slot: look]), yaw: 0.6, label: "\(name) + \(label)"))
             }
             rows.append(hstack(cells))

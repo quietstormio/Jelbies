@@ -29,7 +29,7 @@ extension FeatureCaptureTests {
     func testTeddyMotionClearance() throws {
         let d = try teddyDir(); teddyTone()
         DayClock.shared.forcedHour = 12
-        let hats: [WearLook] = [.flowerCrown, .crownGold, .sweatband, .flowerClip, .hairBow, .beeAntennae, .visorTennis, .headphones]          // (the open pieces: party / top hats tuck the ears now)
+        let hats: [WearLook] = [.flowerCrown, .crownGold, .sweatband, .flowerClip, .hairBow, .visorTennis, .headphones]          // (the open pieces: party / top hats tuck the ears now)
         typealias Start = (MotionRig) -> Void
         let moves: [(String, Float, Start)] = [
             ("hop", 1.6, { r in r.brain.startHopPlay(sim: r.sim) }),
