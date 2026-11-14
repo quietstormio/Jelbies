@@ -343,15 +343,15 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         }
         // R4.4: highlights on the face side, fixed to the camera (camera-space normal coordinates: x right, y up)
         float2 nq = float2(dot(Ns, jCr), dot(Ns, jCu)) - jl[4].xy;
-        float2 dd = nq - float2(-0.03, 0.15);
+        float2 dd = nq - float2(-0.04, 0.19);
         const float2 hax = float2(0.819, 0.574);
-        float2 ee = float2(dot(dd, hax), dot(dd, float2(-hax.y, hax.x))) / float2(0.22, 0.085);
+        float2 ee = float2(dot(dd, hax), dot(dd, float2(-hax.y, hax.x))) / float2(0.17, 0.066);
         float big = 1.0 - smoothstep(0.55, 1.0, length(ee));          // R5: softer edge
-        float dot2 = 1.0 - smoothstep(0.55, 1.0, length((nq - float2(0.06, 0.0)) / 0.045));
+        float dot2 = 1.0 - smoothstep(0.55, 1.0, length((nq - float2(0.045, 0.06)) / 0.036));
         float sheen = 1.0 - smoothstep(0.2, 1.0, length((nq - float2(-0.45, 0.55)) / float2(0.34, 0.26)));
         float front = step(0.05, dot(Ns, jV));
         col = mix(col, float3(1.0), 0.28 * gloss * sheen * front);
-        float spec = max(big * 0.92, dot2 * 0.95) * gloss * front;
+        float spec = max(big * 0.80, dot2 * 0.65) * gloss * front;
         spec *= 1.0 - jCover;
         float3 rimC = float3(0.0);
         float see = jl[0].y;

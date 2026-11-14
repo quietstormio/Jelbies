@@ -45,9 +45,9 @@ nonisolated enum JellyLook {
         // Round 4 presets (matched by measured numbers to the user's reference picture): L1 = the picture's look, opaque; L2 / L3 = the same, see-through.
         // `core` ([0].z) and `edge` ([2].y) are unused; `sat` is 0 (`deep` darkens and saturates instead); `rim` = the light band's strength.
         //                         see   core  gloss glow  rim   sat   smooth edge  tint warm  bub  deep  dk    ck
-        let p: [[Float]] = [[0.00, 0.00, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0],
-                            [0.60, 0.00, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0],
-                            [0.70, 0.85, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0]]
+        let p: [[Float]] = [[0.00, 0.00, 0.40, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0],
+                            [0.60, 0.00, 0.40, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0],
+                            [0.70, 0.85, 0.40, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.80, 2.0]]
         var v = p[min(level, 3) - 1]
         for (i, k) in ["See", "Core", "Gloss", "Glow", "Rim", "Sat", "Smooth", "Edge", "Tint", "Warm", "Bubbles", "Deep", "Dk", "Ck"].enumerated() { if let o = overrides[k] { v[i] = o } }
         return [SIMD4(1, v[0], v[1], v[2]), SIMD4(v[3], v[4], v[5], v[6]), SIMD4(overrides["Bend"] ?? 0, v[7], v[8], v[9]), SIMD4(v[10], v[11], v[12], v[13]),
@@ -58,8 +58,10 @@ nonisolated enum JellyLook {
     /// 0 = not a jelly body (matte as before), 1 = jelly shading on the opaque pipeline, 2 = see-through (own pass, blended).
     /// Panda (BlueBelly mode 51) draws in two parts and stays matte; bath and jersey bodies are decided by the caller.
     static func kind(flesh: SIMD4<Float>, bellyMode: Float) -> Int {
-        guard level > 0, bellyMode < 50.5 || bellyMode > 51.5 else { return 0 }
-        guard all || BlueBelly.isBlueFlesh(flesh) else { return 0 }
+        guard level > 0 else { return 0 }
+        // the blue species by its palette colour with a tolerance (an adopted Blue's uniform is not always bit-equal to the palette); `all` = every body, Panda included
+        let b = BlueBelly.blueFlesh
+        guard all || (abs(flesh.x - b.x) < 0.01 && abs(flesh.y - b.y) < 0.01 && abs(flesh.z - b.z) < 0.01) else { return 0 }
         return params(level: level)[0].y > 0.001 ? 2 : 1
     }
 

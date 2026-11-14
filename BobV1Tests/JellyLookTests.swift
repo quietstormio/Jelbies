@@ -32,6 +32,22 @@ final class JellyLookTests: XCTestCase {
         try Data(shot(s).bgra).write(to: URL(fileURLWithPath: out))
     }
 
+    /// Fixed frames for the other body draw paths (JELLY_VARIANT = bath | bathfoam | jersey | jerseysoot): level 0 must stay bit-identical there too.
+    func testWriteFrameVariant() throws {
+        guard let out = ProcessInfo.processInfo.environment["JELLY_OUT"], !out.isEmpty, let v = ProcessInfo.processInfo.environment["JELLY_VARIANT"] else { throw XCTSkip("JELLY_OUT / JELLY_VARIANT not set") }
+        JellyLook.level = Int(ProcessInfo.processInfo.environment["JELLY_LEVEL"] ?? "0") ?? 0
+        defer { JellyLook.level = 0 }
+        let s = try makeScene()
+        var look = BathLook.dry
+        look.sparkle = 0.8; look.dirt = 0.7; look.sootStyle = 1
+        if v.contains("foam") { look.wet = 0.6; look.foam = (0..<(BathLook.rows * BathLook.cols)).map { $0 % 5 == 0 ? 0.9 : 0.0 } }
+        if v.hasPrefix("bath") { s.ren.setBathLook(look, body: 0); s.ren.setBathLook(look, body: 1) }
+        if v.hasPrefix("jersey") { s.ren.setJersey(.coral, body: 0); s.ren.setJersey(.mint, body: 1) }
+        if v == "jerseysoot" { s.ren.setBathLook(look, body: 0) }
+        for _ in 0..<3 { s.frame() }
+        try Data(shot(s).bgra).write(to: URL(fileURLWithPath: out))
+    }
+
     func differs(_ a: LockImage, _ b: LockImage, where mask: (Int) -> Bool = { _ in true }) -> Int {
         var n = 0
         for p in 0..<(a.w * a.h) where mask(p) {

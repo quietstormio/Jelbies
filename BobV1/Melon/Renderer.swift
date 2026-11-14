@@ -253,6 +253,7 @@ final class MelonRenderer {
     private var dsJellyLessEqual: MTLDepthStencilState?
     /// The jersey body pipeline (Wear/GfxJersey.metal) and its per-vertex egg flags; built on first use.
     private var pJersey: MTLRenderPipelineState?
+    private var pJerseyJelly: MTLRenderPipelineState?          // JellyLook: the jersey body shader with the jelly finish
     private var eggFlagBuf: MTLBuffer?
     private(set) var jerseyDraws = 0
     /// Whether the current MSAA / depth targets are memoryless (game pass, no PerfPasses, device supports it).
@@ -841,10 +842,18 @@ final class MelonRenderer {
 
     /// mask 15: the plain fsSoftMatteBath (the bit-exact reference BathSootSeedZeroTests hashes). Otherwise fsSoftMatteBathSpec with the
     /// soot (1) / foam (2) / wet (4) / sparkle (8) blocks compiled in per `mask` (a specialised build folds a few ulps differently).
-    nonisolated static func makeBathVariant(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, mask: Int) -> MTLRenderPipelineState? {
+    nonisolated static func makeBathVariant(device: MTLDevice, library: MTLLibrary, vd: MTLVertexDescriptor, mask: Int, jelly: Bool = false) -> MTLRenderPipelineState? {
         let fsOpt: MTLFunction?
-        if mask == 15 {
-            fsOpt = library.makeFunction(name: "fsSoftMatteBath")
+        if jelly {          // JellyLook: the same shader with function constant 5 (JellyFinish.h) compiled in
+            let cv = MTLFunctionConstantValues()
+            var on = true; cv.setConstantValue(&on, type: .bool, index: 5)
+            if mask == 15 { fsOpt = try? library.makeFunction(name: "fsSoftMatteBath", constantValues: cv) }
+            else {
+                for bit in 0..<4 { var b = (mask >> bit) & 1 == 1; cv.setConstantValue(&b, type: .bool, index: bit) }
+                fsOpt = try? library.makeFunction(name: "fsSoftMatteBathSpec", constantValues: cv)
+            }
+        } else if mask == 15 {
+            fsOpt = try? library.makeFunction(name: "fsSoftMatteBath", constantValues: MTLFunctionConstantValues())          // (function constant 5 = JellyFinish.h stays undefined: compiled out)
         } else {
             let cv = MTLFunctionConstantValues()
             for bit in 0..<4 { var on = (mask >> bit) & 1 == 1; cv.setConstantValue(&on, type: .bool, index: bit) }
@@ -864,9 +873,16 @@ final class MelonRenderer {
     }
 
     /// The bath body pipeline for this slot's look: specialised when `gfxOpt.bathVariants`, else the all-in-one shader.
-    private func bathPipeline(_ slot: BodySlot) -> MTLRenderPipelineState {
-        guard gfxOpt.bathVariants else { return pMatteBath }
+    private func bathPipeline(_ slot: BodySlot, jelly: Bool = false) -> MTLRenderPipelineState {
         let l = slot.bathLook
+        if jelly {          // JellyLook (round 5): the bath body shader with the jelly finish, keyed apart (100 + mask)
+            let m = gfxOpt.bathVariants ? ((slot.sootAny ? 1 : 0) | (slot.foamAny ? 2 : 0) | (l.wet > 0.001 ? 4 : 0) | (l.sparkle > 0.001 ? 8 : 0)) : 15
+            if let p = pMatteBathVariants[100 + m] { return p }
+            let p = Self.makeBathVariant(device: device, library: library, vd: meshVD, mask: m, jelly: true) ?? pMatteBath
+            pMatteBathVariants[100 + m] = p
+            return p
+        }
+        guard gfxOpt.bathVariants else { return pMatteBath }
         let mask = (slot.sootAny ? 1 : 0) | (slot.foamAny ? 2 : 0) | (l.wet > 0.001 ? 4 : 0) | (l.sparkle > 0.001 ? 8 : 0)
         if mask == 15 { return pMatteBath }
         if let p = pMatteBathVariants[mask] { return p }
@@ -924,9 +940,13 @@ final class MelonRenderer {
 
     // MARK: jersey (Wear/GfxJersey.metal)
 
-    private func jerseyPipeline() -> MTLRenderPipelineState? {
-        if let p = pJersey { return p }
-        guard let vs = library.makeFunction(name: "vsJellyJersey"), let fs = library.makeFunction(name: "fsSoftMatteJersey") else { print("MelonRenderer: jersey shader unavailable"); return nil }
+    private func jerseyPipeline(jelly: Bool = false) -> MTLRenderPipelineState? {
+        if jelly, let p = pJerseyJelly { return p }
+        if !jelly, let p = pJersey { return p }
+        var fsJ: MTLFunction?
+        if jelly { let cv = MTLFunctionConstantValues(); var on = true; cv.setConstantValue(&on, type: .bool, index: 5); fsJ = try? library.makeFunction(name: "fsSoftMatteJersey", constantValues: cv) }
+        else { fsJ = try? library.makeFunction(name: "fsSoftMatteJersey", constantValues: MTLFunctionConstantValues()) }
+        guard let vs = library.makeFunction(name: "vsJellyJersey"), let fs = fsJ else { print("MelonRenderer: jersey shader unavailable"); return nil }
         let d = MTLRenderPipelineDescriptor()
         d.label = "matte jersey"
         d.vertexFunction = vs; d.fragmentFunction = fs
@@ -935,7 +955,7 @@ final class MelonRenderer {
         d.depthAttachmentPixelFormat = Self.depthFormat
         d.rasterSampleCount = Self.msaa
         guard let p = try? device.makeRenderPipelineState(descriptor: d) else { print("MelonRenderer: jersey pipeline failed"); return nil }
-        pJersey = p
+        if jelly { pJerseyJelly = p } else { pJersey = p }
         return p
     }
     /// One byte per render vertex: 1 for the egg, 0 for the arm capsules and foot beans (they share the mesh; their rest y overlaps the band).
@@ -1216,10 +1236,12 @@ final class MelonRenderer {
             var jellyLater: [Int] = []          // JellyLook: see-through bodies are drawn after all the others (JellyLook.swift)
             let fleshOff = MemoryLayout<MelonUniforms>.offset(of: \.flesh) ?? 0
             func jellyKind(_ slot: BodySlot) -> Int {
-                guard JellyLook.level > 0, !usesBathShader(slot), slot.jersey == nil, !cutout else { return 0 }
+                guard JellyLook.level > 0 else { return 0 }
                 let flesh = slot.uboBuf.contents().load(fromByteOffset: fleshOff, as: SIMD4<Float>.self)
                 let bm = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
-                return JellyLook.kind(flesh: flesh, bellyMode: bm)
+                let k = JellyLook.kind(flesh: flesh, bellyMode: bm)
+                // bath (dirt / soot / suds / wet / sparkle) and jersey bodies get the opaque jelly finish inside their own shaders (see-through is not available there)
+                return k == 2 && (usesBathShader(slot) || slot.jersey != nil) ? 1 : k
             }
             for bi in order {                            // each Jelly: its own vertex stream, colours / mouth and bath look
                 let slot = slots[bi]
@@ -1230,9 +1252,9 @@ final class MelonRenderer {
                 e.setVertexBuffer(slot.dynBuf, offset: 0, index: 1)
                 e.setVertexBuffer(slot.staticBuf, offset: 0, index: 2)
                 if usesBathShader(slot) {
-                    e.setRenderPipelineState(bathPipeline(slot))
+                    e.setRenderPipelineState(bathPipeline(slot, jelly: jk > 0))
                     e.setFragmentBuffer(slot.bathParamsBuf, offset: 0, index: 3)
-                } else if let team = slot.jersey, let jp = jerseyPipeline(), let flags = eggFlags() {
+                } else if let team = slot.jersey, let jp = jerseyPipeline(jelly: jk > 0), let flags = eggFlags() {
                     e.setRenderPipelineState(jp)
                     e.setVertexBuffer(flags, offset: 0, index: 3)
                     var par = Self.jerseyParams(team)
