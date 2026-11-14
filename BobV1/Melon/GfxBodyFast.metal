@@ -206,6 +206,7 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, s) * (1.0 - smoothstep(0.2, 0.55, s));
     if (jellyC && jelly) {          // JELLY: light scatters inside: the unlit side is lifted and the terminator is soft (same colour ramp)
         float sj = mix(s, clamp(0.50 + 0.50 * dot(Ns, L), 0.0, 1.0) * (1.0 - 0.35 * occ), 0.55 * jl[1].x);
+        sj = mix(sj, 0.62, jl[4].z);          // R4: a flat body (the reference has no dark side and no lit middle)
         col = mix(u.fleshDeep.rgb, u.flesh.rgb, pow(float3(sj), float3(0.55, 1.0, 1.25)));
         col += float3(0.02, 0.0, -0.004) * smoothstep(0.0, 0.2, sj) * (1.0 - smoothstep(0.2, 0.55, sj));
     }
@@ -217,28 +218,34 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     if (probeMode != 4) { col *= 1.0 + (fCrinkle(Q * 1.7 + 11.0, lut) - 0.5) * 0.045; }
     col *= 1.0 + 0.04 * fb;
     }
-    float3 jV = float3(0.0, 0.0, 1.0);
-    float jThin = 0.0, jNdv = 1.0, jRim = 0.0;
+    float3 jV = float3(0.0, 0.0, 1.0), jCr = float3(1.0, 0.0, 0.0), jCu = float3(0.0, 1.0, 0.0);
+    float jThin = 0.0, jNdv = 1.0, jRim = 0.0, jCool = 0.0;
+    float3 jCoolC = float3(1.0);
     if (jellyC && jelly) {
-        // JELLY: light goes through the body (lifted unlit side, soft terminator), a thicker / deeper middle, a lighter and clearer edge
-        float glow = jl[1].x, sat = jl[1].z;
+        // JELLY (round 4, matched to the reference picture by measured numbers)
+        float glow = jl[1].x, sat = jl[1].z, rimK = jl[1].y, warmK = jl[2].w;
         jV = normalize(u.camPos.xyz - i.wp);
+        jCr = float3(u.view[0][0], u.view[1][0], u.view[2][0]); jCu = float3(u.view[0][1], u.view[1][1], u.view[2][1]);
         jNdv = saturate(dot(Ns, jV));
         jThin = pow(1.0 - jNdv, 2.0);          // 0 in the middle, 1 at the silhouette
         float lum = dot(col, float3(0.2126, 0.7152, 0.0722));
         float3 satc = saturate(float3(lum) + (col - lum) * 1.6);
-        col = mix(col, satc, sat * (1.0 - jThin));          // a deeper, more saturated middle
-        // R2: a DENSE edge (a solid jelly is deeper at the silhouette, not whiter)
-        float3 deepc = mix(u.flesh.rgb, u.fleshDeep.rgb, 0.65);
-        float ld = dot(deepc, float3(0.2126, 0.7152, 0.0722));
-        deepc = saturate(float3(ld) + (deepc - ld) * 1.3);
-        col = mix(col, deepc, jl[2].y * smoothstep(0.15, 0.9, jThin));
-        // R2: light collects inside, on the side away from the lamp, low on the body (a luminous patch, still clearly blue)
+        col = mix(col, satc, sat * (1.0 - jThin));          // (preset 0 since round 4: `deep` below does the saturating)
+        // R4.1: a deeper, more saturated body colour (species-generic): darker, chroma pushed out
+        float Y = max(dot(col, float3(0.2126, 0.7152, 0.0722)), 1e-4);
+        float3 dcol = (Y * jl[3].z) * (1.0 + jl[3].w * (col / Y - 1.0));
+        col = mix(col, max(dcol, 0.0), jl[3].y);
+        // R2.2: light collects inside, on the side away from the lamp, low on the body: a lighter patch of the same body colour
         float inner = pow(saturate(dot(Ns, normalize(-L + float3(0.0, -0.35, 0.0))) * 0.5 + 0.5), 3.0) * (1.0 - 0.7 * jThin);
-        col = mix(col, saturate(u.flesh.rgb * 1.28 + 0.03), saturate(0.55 * glow * inner));
-        // R3: a soft bright band just inside the whole silhouette (the edge glows as if lit from behind), brightest toward the lamp
-        jRim = pow(1.0 - jNdv, 2.2);
-        col = mix(col, saturate(mix(u.flesh.rgb * 1.25, float3(1.0), 0.45)), jl[1].y * jRim * (0.65 + 0.35 * saturate(dot(Ns, L) * 0.5 + 0.5)));
+        col = mix(col, mix(col, float3(1.0), 0.25), saturate(0.55 * glow * inner));
+        // R4.2 / R4.3: a light band inside the whole silhouette, blue-white on the camera-left, peach-white on the camera-right, a thin peach line at the edge
+        float band = 1.0 - smoothstep(jl[5].x, jl[5].y, jNdv);
+        float side = smoothstep(-0.1, 0.6, dot(Ns, normalize(jCr + 0.3 * jCu)));
+        jCoolC = saturate(col * jl[5].z + 0.03);          // lighter but keeps its chroma (the reference's band is #96B4DF, not white)
+        float3 bandC = mix(jCoolC, float3(1.0, 0.86, 0.74), saturate(warmK * side));
+        col = mix(col, bandC, rimK * band * (0.75 + 0.25 * saturate(dot(Ns, L) * 0.5 + 0.5)));
+        col = mix(col, float3(1.0, 0.78, 0.62), saturate(warmK * 0.8 * pow(1.0 - jNdv, 4.0) * side));
+        jRim = band;
     }
     Q = i.rest;          // LEGS-BLEND: the paint (belly / Teddy / Panda marks, mouth) keeps the unblended rest coordinate: no smear of the painted boundaries
     // Blue belly (rest space, follows the body): a lighter blue on the front of the blue Jelbie only; exists only while u.shape.w (mode: 1 = A front, 2 = B1 belly subtle, 3 = B2 belly clear) > 0.5.
@@ -279,7 +286,9 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         }
         float ek = hasTeddy && tn > 3.5 ? teddyEarMask(Q) : 0.0;
         float pk = hasTeddy && tn > 3.5 ? teddyPomMask(Q) : 0.0;
-        col = mix(col, lt * (1.0 - ek * 0.25 * (1.0 - s) - pk * (1.0 - s) * float3(0.12, 0.20, 0.32)), max(max(bk, ek), pk));          // (the pom / inner ear keep the light falloff: the pom shades toward warm brown, never grey)
+        float pm = max(max(bk, ek), pk);
+        if (jellyC && jelly) { pm *= jl[4].w; }          // R4: the jelly body keeps only a hint of the lighter belly / forehead paint
+        col = mix(col, lt * (1.0 - ek * 0.25 * (1.0 - s) - pk * (1.0 - s) * float3(0.12, 0.20, 0.32)), pm);          // (the pom / inner ear keep the light falloff: the pom shades toward warm brown, never grey)
     }
     // mouth: same block as the locked shader
     float mo = u.stripe.w;
@@ -311,35 +320,34 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
         if (jellyC) { jBlush = bk; }
     }
     if (jellyC && jelly) {
-        // JELLY: wet highlights on the smooth normal (white, on top of the paint, not on the open mouth), a soft sky-white rim, optional see-through
-        float gloss = jl[0].w, rim = jl[1].y;
-        // R3: tiny bubbles inside (rest space, front of the body, clear of the face)
+        // JELLY: highlights, bubbles, optional see-through
+        float gloss = jl[0].w;
+        // R4.5: tiny bubbles inside (rest space, front of the body, clear of the face): a ring, a faint fill and a white dot at the upper left
         if (jl[3].x > 0.0 && Q.z > 0.1) {
-            const float3 bubs[3] = { float3(-0.30, 0.42, 0.028), float3(-0.33, 0.33, 0.020), float3(0.12, 0.22, 0.024) };
-            float3 lt = saturate(mix(u.flesh.rgb * 1.25, float3(1.0), 0.45));
+            const float3 bubs[3] = { float3(-0.30, 0.42, 0.036), float3(-0.33, 0.32, 0.028), float3(-0.10, 0.22, 0.030) };
             for (int k = 0; k < 3; k++) {
                 float r = length(Q.xy - bubs[k].xy) / bubs[k].z;
-                float ring = smoothstep(0.75, 0.9, r) * (1.0 - smoothstep(0.95, 1.1, r));
+                float ring = smoothstep(0.70, 0.88, r) * (1.0 - smoothstep(0.95, 1.12, r));
                 float fill = 1.0 - smoothstep(0.9, 1.0, r);
-                float dotb = 1.0 - smoothstep(0.6, 1.0, length(Q.xy - (bubs[k].xy + float2(-0.35, 0.35) * bubs[k].z)) / (0.28 * bubs[k].z));
+                float dotb = 1.0 - smoothstep(0.55, 1.0, length(Q.xy - (bubs[k].xy + float2(-0.38, 0.38) * bubs[k].z)) / (0.24 * bubs[k].z));
                 float bub = jl[3].x * smoothstep(0.1, 0.15, Q.z) * (1.0 - jCover);
-                col = mix(col, lt, bub * (0.55 * ring + 0.12 * fill));
-                col += float3(0.7) * dotb * bub;
+                col = mix(col, mix(col, float3(1.0), 0.72), bub * (0.8 * ring + 0.15 * fill));
+                col += float3(0.8) * dotb * bub;
             }
         }
-        float3 cr = float3(u.view[0][0], u.view[1][0], u.view[2][0]), cu = float3(u.view[0][1], u.view[1][1], u.view[2][1]);
-        // R3: one big soft-edged tilted oval highlight up-left on the head and a small round dot below-right of it, fixed to the camera
-        float3 ax = normalize(cu + cr);
-        float3 Nq = normalize(Ns - ax * dot(Ns, ax) * 0.4);
-        float3 Hb = normalize(jV + cu * 0.75 - cr * 0.55);
-        float big = smoothstep(0.900, 0.945, dot(Nq, Hb));
-        float3 Hd = normalize(jV + cu * 0.38 - cr * 0.22);
-        float dot2 = smoothstep(0.9965, 0.9985, dot(Ns, Hd));
-        float spec = max(big * 0.80, dot2 * 0.95) * gloss;
+        // R4.4: highlights on the face side, fixed to the camera (camera-space normal coordinates: x right, y up)
+        float2 nq = float2(dot(Ns, jCr), dot(Ns, jCu)) - jl[4].xy;
+        float2 dd = nq - float2(-0.03, 0.15);
+        const float2 hax = float2(0.819, 0.574);
+        float2 ee = float2(dot(dd, hax), dot(dd, float2(-hax.y, hax.x))) / float2(0.23, 0.09);
+        float big = 1.0 - smoothstep(0.80, 1.0, length(ee));
+        float dot2 = 1.0 - smoothstep(0.75, 1.0, length((nq - float2(0.06, 0.0)) / 0.045));
+        float sheen = 1.0 - smoothstep(0.2, 1.0, length((nq - float2(-0.45, 0.55)) / float2(0.34, 0.26)));
+        float front = step(0.05, dot(Ns, jV));
+        col = mix(col, float3(1.0), 0.28 * gloss * sheen * front);
+        float spec = max(big * 0.92, dot2 * 0.95) * gloss * front;
         spec *= 1.0 - jCover;
-        // R3: a thin warm fringe at the very outside edge on the side away from the lamp
-        float warm = pow(1.0 - jNdv, 5.0) * saturate(-dot(Ns, L) * 0.5 + 0.5);
-        float3 rimC = jl[2].w * 0.35 * warm * float3(1.0, 0.62, 0.38);
+        float3 rimC = float3(0.0);
         float see = jl[0].y;
         if (see > 0.0) {
             float a = 1.0 - see * pow(jNdv, 1.3) * (1.0 - jRim);          // opacity rises toward the edge (jl[0].z "core" is unused since round 2)

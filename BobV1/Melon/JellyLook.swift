@@ -32,22 +32,24 @@ nonisolated enum JellyLook {
     /// Optional tuning overrides: see, core, gloss, glow, rim, sat, smooth, bend.
     nonisolated(unsafe) static var overrides: [String: Float] = {
         var o: [String: Float] = [:]
-        for k in ["See", "Core", "Gloss", "Glow", "Rim", "Sat", "Smooth", "Bend", "Edge", "Tint", "Warm", "Bubbles"] { if let v = argFloat("Jelly" + k) { o[k] = v } }
+        for k in ["See", "Core", "Gloss", "Glow", "Rim", "Sat", "Smooth", "Bend", "Edge", "Tint", "Warm", "Bubbles", "Deep", "Dk", "Ck", "HiX", "HiY", "Flat", "Belly", "BandLo", "BandHi", "Lift"] { if let v = argFloat("Jelly" + k) { o[k] = v } }
         return o
     }()
 
-    /// 4 x float4 for the fragment shader (buffer 7): [0] = (on, see, core, gloss), [1] = (glow, rim, sat, smooth), [2] = (bend, 0, 0, 0), [3] spare.
+    /// 6 x float4 for the fragment shader (buffer 7): [0] = (on, see, core, gloss), [1] = (glow, rim, sat, smooth), [2] = (bend, edge, tint, warm), [3] = (bubbles, deep, dk, ck), [4] = (highlight shift x, y, flat, belly paint scale), [5] = (band low, band high, band lift).
     static func params(level: Int) -> [SIMD4<Float>] {
-        guard level > 0 else { return [SIMD4<Float>](repeating: .zero, count: 4) }
-        // Round 3 presets (the user's reference picture): L1 = the picture's look, opaque; L2 slightly and L3 clearly see-through. `core` ([0].z) and `edge`
-        // ([2].y) are unused / zero (the dense edge of round 2 is replaced by the bright band inside the silhouette; `rim` is that band's strength).
-        //                         see   core  gloss glow  rim   sat   smooth edge  tint warm  bub
-        let p: [[Float]] = [[0.00, 0.35, 1.00, 0.70, 0.85, 0.35, 1.00, 0.0, 1.6, 0.6, 1.0],
-                            [0.18, 0.35, 1.00, 0.70, 0.85, 0.35, 1.00, 0.0, 1.6, 0.6, 1.0],
-                            [0.35, 0.35, 1.00, 0.70, 0.85, 0.35, 1.00, 0.0, 1.6, 0.6, 1.0]]
+        guard level > 0 else { return [SIMD4<Float>](repeating: .zero, count: 6) }
+        // Round 4 presets (matched by measured numbers to the user's reference picture): L1 = the picture's look, opaque; L2 / L3 = the same, see-through.
+        // `core` ([0].z) and `edge` ([2].y) are unused; `sat` is 0 (`deep` darkens and saturates instead); `rim` = the light band's strength.
+        //                         see   core  gloss glow  rim   sat   smooth edge  tint warm  bub  deep  dk    ck
+        let p: [[Float]] = [[0.00, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7],
+                            [0.25, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7],
+                            [0.45, 0.35, 1.00, 0.70, 1.00, 0.00, 1.00, 0.0, 1.6, 0.8, 1.0, 1.0, 0.50, 1.7]]
         var v = p[min(level, 3) - 1]
-        for (i, k) in ["See", "Core", "Gloss", "Glow", "Rim", "Sat", "Smooth", "Edge", "Tint", "Warm", "Bubbles"].enumerated() { if let o = overrides[k] { v[i] = o } }
-        return [SIMD4(1, v[0], v[1], v[2]), SIMD4(v[3], v[4], v[5], v[6]), SIMD4(overrides["Bend"] ?? 0, v[7], v[8], v[9]), SIMD4(v[10], 0, 0, 0)]
+        for (i, k) in ["See", "Core", "Gloss", "Glow", "Rim", "Sat", "Smooth", "Edge", "Tint", "Warm", "Bubbles", "Deep", "Dk", "Ck"].enumerated() { if let o = overrides[k] { v[i] = o } }
+        return [SIMD4(1, v[0], v[1], v[2]), SIMD4(v[3], v[4], v[5], v[6]), SIMD4(overrides["Bend"] ?? 0, v[7], v[8], v[9]), SIMD4(v[10], v[11], v[12], v[13]),
+                SIMD4(overrides["HiX"] ?? 0, overrides["HiY"] ?? 0, overrides["Flat"] ?? 0.7, overrides["Belly"] ?? 0.2),
+                SIMD4(overrides["BandLo"] ?? 0.12, overrides["BandHi"] ?? 0.70, overrides["Lift"] ?? 2.1, 0)]
     }
 
     /// 0 = not a jelly body (matte as before), 1 = jelly shading on the opaque pipeline, 2 = see-through (own pass, blended).
