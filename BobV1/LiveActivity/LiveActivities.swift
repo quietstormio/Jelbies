@@ -224,7 +224,7 @@ final class LiveActivities {
                 driver.end(id: a.id, state: .finished(place: max(a.state.position, 1), racers: a.state.racers, drops: 0, laps: a.state.laps), dismissAt: t)
                 if raceID == a.id { raceID = nil; raceAttrs = nil; racePolicy.reset() }
             case .nap:
-                let over = !napOn || (a.state.untilDate.map { $0 <= t } ?? true)
+                let over = !napOn || (a.state.untilDate.map { $0.isAtOrBefore(t) } ?? true)
                 if over { driver.end(id: a.id, state: .awake(a.state.sleepers, colors: a.state.sleeperColors), dismissAt: t); if napID == a.id { napID = nil } }
                 else if napID == nil { napID = a.id }
             }
