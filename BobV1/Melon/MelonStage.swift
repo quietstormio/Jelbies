@@ -289,10 +289,19 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard actors.count > 1 || !parkActors.isEmpty, abs(aspect - roamAspect) > 0.005, !(game && model.care.volley.inScene) else { return }
         roamAspect = aspect
         guard GameCamera.refreshRoam(aspect: aspect) != nil else { return }
-        for a in actors where a.sim.arenaRadius.isFinite && !(a.brain?.race.active ?? false) && !model.care.bath.fenceLifted {
+        Self.applyRoomArena(actors: actors, parkActors: parkActors, bathFenceLifted: model.care.bath.fenceLifted)
+    }
+    /// Capture aid: -VisitorArenaGuard 0 = the old unguarded visitor loop (before / after from one build).
+    nonisolated(unsafe) static var visitorArenaGuard = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "VisitorArenaGuard") != nil && UserDefaults.standard.integer(forKey: "VisitorArenaGuard") == 0)
+    /// The room's round wall goes back on every body that has one. A body whose wall is lifted (a racer, a show / café / guest-run body, the clean-up exit) keeps it lifted: for the
+    /// roster that is the finite-wall rule, and visitors (the park's bodies, also the temporary race rivals) follow the same rule.
+    static func applyRoomArena(actors: [JellyActor], parkActors: [JellyActor], bathFenceLifted: Bool) {
+        for a in actors where a.sim.arenaRadius.isFinite && !(a.brain?.race.active ?? false) && !bathFenceLifted {
             a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius
         }
-        for a in parkActors { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }
+        for a in parkActors where !visitorArenaGuard || (a.sim.arenaRadius.isFinite && !(a.brain?.race.active ?? false)) {
+            a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius
+        }
     }
     private var lastNudge: Int
     private var lastReset: Int
