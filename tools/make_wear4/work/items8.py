@@ -59,7 +59,11 @@ def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
         if 0.26 < r < 0.38: c = ring
         elif r < 0.12: c = dot
         return mix(deep(c, 0.06), tint(c, 0.16), 0.5 + 0.5 * n[1] * 0.5)
-    sy = lambda phi: I3.scarf_y(phi, front=0.500)
+    def sy(phi):
+        # as the cosy scarf over the arm roots, but the back run drops early (az 1.5..2.1 rad off the front) to 0.55: the back of the silk lies BELOW Lavender's wing roots (hinge y 0.80, x +-0.38) with >= 3 cm to spare
+        az = abs((phi - math.pi / 2 + math.pi) % (2 * math.pi) - math.pi)
+        t = min(max((az - 1.5) / 0.6, 0.0), 1.0); t = t * t * (3 - 2 * t)
+        return I3.scarf_y(phi, front=0.500, side=0.700, back=0.700) * (1 - t) + 0.55 * t
     rows = [(-1.0, 0.006), (-0.5, 0.015), (0.0, 0.019), (0.5, 0.015), (1.0, 0.006)]
     def skin(phi, w, off):
         d = 1e-3; y0 = sy(phi); dy = (sy(phi + d) - sy(phi - d)) / (2 * d)
@@ -89,7 +93,7 @@ def scarf_silk(base=hx('#2F3E6B'), ring=hx('#E8B84A'), dot=hx('#F4E9D6'), **k):
     tail(kx - 0.020, kx - 0.075, ky - 0.020, 0.265, 0.068, 'tail_a', 0.038, 0.0)
     tail(kx + 0.030, kx + 0.060, ky - 0.020, 0.300, 0.062, 'tail_b', 0.040, 1.7)
     return dict(anchor='neck', slot='neck', tags=['cool', 'sparkly', 'sweet'], price=55, title='Silk scarf',
-                desc='A silk neckerchief in navy printed with gold medallions: a thin draped band (0.084 tall, soft wave) all the way round the neck, low on the chest (top edge 0.542), rising over the arm roots and high at the back (0.65), with a small knot with two ears just right of centre and two thin silk tails with wavy edges (hems y 0.265 / 0.30).')
+                desc='A silk neckerchief in navy printed with gold medallions: a thin draped band (0.084 tall, soft wave) all the way round the neck, low on the chest (top edge 0.542), rising over the arm roots (0.70) and dropping behind them to 0.55 at the back (below the wing roots of Lavender), with a small knot with two ears just right of centre and two thin silk tails with wavy edges (hems y 0.265 / 0.30).')
 
 # ============================ PEARLS (full loop) ===============================
 def pearls(pearl=hx('#FBF4EC'), clasp=HONEY, **k):

@@ -42,7 +42,7 @@
  "bounds_local_min": [
   -0.6026,
   -0.2352,
-  -1.0483
+  -1.0457
  ],
  "bounds_local_max": [
   0.6026,
@@ -52,7 +52,7 @@
  "size": [
   1.2052,
   0.5075,
-  1.1175
+  1.1149
  ],
  "anchor": "neck",
  "slot": "neck",
@@ -63,7 +63,7 @@
  ],
  "price": 55,
  "title": "Silk scarf",
- "desc": "A silk neckerchief in navy printed with gold medallions: a thin draped band (0.084 tall, soft wave) all the way round the neck, low on the chest (top edge 0.542), rising over the arm roots and high at the back (0.65), with a small knot with two ears just right of centre and two thin silk tails with wavy edges (hems y 0.265 / 0.30).",
+ "desc": "A silk neckerchief in navy printed with gold medallions: a thin draped band (0.084 tall, soft wave) all the way round the neck, low on the chest (top edge 0.542), rising over the arm roots (0.70) and dropping behind them to 0.55 at the back (below the wing roots of Lavender), with a small knot with two ears just right of centre and two thin silk tails with wavy edges (hems y 0.265 / 0.30).",
  "colourway": "scarf_silk",
  "batch": 4
 }
