@@ -205,7 +205,7 @@ def bag_crossbody(main=hx('#F0D9B5'), strap=hx('#8B5A3C'), gold=GOLD, **k):
     reset()
     import items7 as I7
     NA = 56; HW = 0.027; R_ = 0.52
-    rows = [(-1.0, 0.008), (-0.6, 0.018), (0.0, 0.022), (0.6, 0.018), (1.0, 0.008)]
+    rows = [(-1.0, 0.016), (-0.6, 0.030), (0.0, 0.036), (0.6, 0.030), (1.0, 0.016)]      # (as thick as the racing sash: a strap standing 2 cm off the skin was swallowed 5.8 cm by the swinging left arm, guard 4 cm)
     def skin(phi, w, off):
         d = 1e-3; y0 = I7.sash_y(phi); dy = (I7.sash_y(phi + d) - I7.sash_y(phi - d)) / (2 * d)
         t = np.array([R_, dy]); t /= np.linalg.norm(t); perp = np.array([-t[1], t[0]])
