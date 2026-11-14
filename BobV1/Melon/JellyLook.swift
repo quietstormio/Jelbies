@@ -14,7 +14,7 @@ import simd
 
 nonisolated enum JellyLook {
     /// The level a build ships with. Stays 0.
-    static let launchLevel = 1
+    static let launchLevel = 2
 
     private static func argFloat(_ key: String) -> Float? {
         guard DevArgs.enabled, UserDefaults.standard.object(forKey: key) != nil else { return nil }
@@ -56,7 +56,7 @@ nonisolated enum JellyLook {
     /// Panda (BlueBelly mode 51) draws in two parts and stays matte; bath and jersey bodies are decided by the caller.
     static func kind(flesh: SIMD4<Float>, bellyMode: Float) -> Int {
         guard level > 0, bellyMode < 50.5 || bellyMode > 51.5 else { return 0 }
-        guard all || BlueBelly.isBlueFlesh(flesh) else { return 0 }
+        guard all || BlueBelly.isBlueFlesh(flesh) || (flesh.z > flesh.x + 0.12 && flesh.y > flesh.x) else { return 0 }          // phone test: any blue-family body (an adopted Blue has a slightly varied shade)
         return params(level: level)[0].y > 0.001 ? 2 : 1
     }
 
