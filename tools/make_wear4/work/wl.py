@@ -217,9 +217,12 @@ def export(item_id, anchor_rest, meta, outdir=W+"/export", ao_body=True, mirror_
         o=len(allP); P=np.array(p['P'])-sub; allP+=list(P); allN+=p['N']; allC+=p['C']
         allF+=[(a+o,b+o,c+o) for a,b,c in p['F']]; groups.append((p['name'],o,len(p['F']),len(p['P'])))
     Pabs=np.array(allP)+sub
-    if meta.get('authored_local') or meta.get('anchor')=='number': ao_body=False
+    if meta.get('authored_local') or meta.get('anchor')=='number' or meta.get('ao_flat'): ao_body=False
     sd=B.sdf_pts(Pabs) if ao_body else np.ones(len(Pabs))
     ao=0.6+0.4*np.clip(sd/0.09,0,1); ao=np.where(np.array([0]*len(ao))==1,1,ao)
+    # meta 'ao_flat' = no baked occlusion (a satin / thin piece lying on the skin); meta 'emit' = RoomShaders' emissive weight (ao > 1 adds albedo*(ao-1)*1.7 whatever the light direction: lifts the
+    # side of a piece that faces away from the room's key light, where the shader leaves only ambient)
+    if meta.get('emit'): ao=ao+float(meta['emit'])
     # parts that have nothing to do with the body (gloves' far side etc.) just get mild ao; fine.
     os.makedirs(outdir,exist_ok=True)
     with open(f"{outdir}/{item_id}.obj","w") as fh:
