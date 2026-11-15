@@ -638,12 +638,6 @@ final class BlobBrain {
 
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
-        if Self.springLog, armActive || !skinner.overrideVertices.isEmpty {
-            springLogN += 1
-            if springLogN % 3 == 0 {
-                NSLog("%@", String(format: "[springarm] TICK t=%.3f script=%@ act=%d armT=%.2f ovr=%d wb=%.0f gait=%@", CFAbsoluteTimeGetCurrent().truncatingRemainder(dividingBy: 1000), String(String(describing: script).prefix(14)), armActive ? 1 : 0, armT, skinner.overrideVertices.count, skinner.waveBlend[0].x, String(describing: gait.phase)))
-            }
-        }
         runDt = dt; simRef = sim
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
@@ -2037,18 +2031,7 @@ final class BlobBrain {
         feetInit = false; feet.reset(); beanCorr = [.zero, .zero]; beanFitUsed = nil
     }
 
-    nonisolated(unsafe) static var springLog = UserDefaults.standard.bool(forKey: "SpringArmLog")
-    private var springLogN = 0
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        defer {
-            if Self.springLog, armG > 0 || armActive || excitedOn || armLift != 0 || armWalkWant > 0 || nubOverride {
-                springLogN += 1
-                if springLogN % 3 == 0 {
-                    NSLog("%@", String(format: "[springarm] t=%.3f feat=%@ ready=%d bld=%d kf=%d act=%d path=%@ armT=%.2f g=%.3f blendNow=%.3f lift=%.3f walkWant=%.2f nubOv=%d exc=%d wb=%.0f blendSp=%d capF0=%.2f capF1=%.2f",
-                        CFAbsoluteTimeGetCurrent().truncatingRemainder(dividingBy: 1000), String(describing: feature), armReady ? 1 : 0, armBuilding ? 1 : 0, armKeyframes.count, armActive ? 1 : 0, armPathName, armT, armG, armBlendNow, armLift, armWalkWant, nubOverride ? 1 : 0, excitedOn ? 1 : 0, skinner.waveBlend[0].x, armBlendSpecies ? 1 : 0, armLastGeom[0].f, armLastGeom[1].f))
-                }
-            }
-        }
         noticeTeleport(sim)
         skinner.clearWaveBlend()          // (set again below only while the keyframed wave plays)
         skinner.tailOn = feature == .spines && !WornSet.sleepHides(self)          // (hold-wear-r1: NOT hidden for the flip trick any more: the spikes stay drawn there, so the tail they ride must stay too)

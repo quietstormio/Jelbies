@@ -1317,10 +1317,10 @@ struct AdoptionCenter: View {
         if case .wave = b.script { return true }
         return b.armActive
     }
-    /// Waits (at most 4 s) until the hello wave is over, so no hop / emote cuts into it. Nothing to wait for with `-SpringArmOld 1`.
+    /// Waits (at most 8 s: the phone's keyframe precompute defers the wave by about 3 s) until the hello wave is over, so no hop / emote cuts into it. Nothing to wait for with `-SpringArmOld 1`.
     private func waitForWave(_ m: MelonModel) async {
         guard !Self.springArmOld else { return }
-        for _ in 0..<80 where waveBusy(m) && !Task.isCancelled && stageModel === m { try? await Task.sleep(nanoseconds: 50_000_000) }
+        for _ in 0..<160 where waveBusy(m) && !Task.isCancelled && stageModel === m { try? await Task.sleep(nanoseconds: 50_000_000) }
     }
 
     /// The three say hello left to right, then each shows its personality now and then.
