@@ -643,7 +643,9 @@ final class BlobBrain {
     /// Ends a wave whose script was replaced (see `waveInterruptSafe`). Returns true when it did.
     @discardableResult
     func releaseInterruptedWave(_ sim: SoftBody, _ skinner: Skinner) -> Bool {
-        guard Self.waveInterruptSafe, armActive, armPathName == ArmPath.wave.name else { return false }
+        guard Self.waveInterruptSafe else { return false }
+        if !armActive { skinner.clearWaveBlend(); return false }          // (an abort ended the wave without zeroing the per-fragment blend; a hop then returns before `driveLimbs` clears it)
+        guard armPathName == ArmPath.wave.name else { return false }
         if case .wave = script { return false }
         skinner.setEyeOpenness(1)
         pivotSide = nil
