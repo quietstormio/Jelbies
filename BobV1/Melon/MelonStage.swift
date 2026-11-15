@@ -1273,6 +1273,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         renderer.perfFocus = game && model.care.focus.blend > 0.001      // PerfMeter ctx: GPU time in the close-up
         renderer.perfNote = !game ? "" : model.paused ? "paused" : model.care.select.isSelecting ? "select" : model.care.trayOut ? "tray" : ""
         if game { syncRoam(aspect: drawAspect) }          // the roaming floor follows the screen (a rotation changes how much floor is on screen)
+        if game, RoomRoamProbe.on { RoomRoamProbe.tick(actors: actors, parkActors: parkActors, model: model, aspect: drawAspect) }          // (dev only, log only: -RaceWallProbe 1; RoomRoam+Probe.swift)
         // Outlines (a projection of every skinned vertex + a hull, per Jelly) are only needed while a highlight is up; a double tap / touch-down
         // refreshes them on demand (`refreshOutlines`), so a roster of three no longer pays for them every frame.
         if game, model.care.select.isSelecting {
