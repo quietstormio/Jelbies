@@ -23,7 +23,12 @@
 //                 13:reach:photo-button                  a row of a scroll view that is off the screen: once a second, drags the page by 40 % of the screen's height
 //                                                         (slow drag down the left margin, no fling) until the centre of the element's frame is inside the middle 70 % of
 //                                                         the screen; at most 10 drags. No tap: follow it with `tap:`
-//               Every step is written to <RA_OUT>/<RA_NAME>.plan with the time it really happened; a step that never happened fails the test.
+//                 38:tree:tour                           writes the whole accessibility tree as XCUITest sees it at that moment (every element's type, frame, identifier,
+//                                                         label) to <RA_OUT>/<RA_NAME>.tree_<what>.txt (`what` is only the file's suffix: letters and digits)
+//                 40:tapat:0.50x0.919                    taps the screen point at these fractions of the app's frame (across, then down, an "x" between them): for a control
+//                                                         whose XCUITest hit point is not where it is drawn. No lookup: follow it with a `gone:` or `wait:` step that proves it landed
+//               Every step is written to <RA_OUT>/<RA_NAME>.plan with the time it really happened; a step that never happened fails the test. A `tap:` / `wait:`
+//               line ends with the element's accessibility frame (screen points) and element type number as XCUITest reports them (9 = button), a `tapat:` line with its screen point.
 //    RA_TAIL    with RA_PLAN: the capture ends this many seconds after the LAST step was done (and at RA_SECS at the latest); without it the capture runs RA_SECS
 //  Build Release + ENABLE_TESTABILITY=YES like the other app captures (a Debug build runs at about 1 frame/s in the simulator).
 //
@@ -63,6 +68,13 @@ final class RealAppCaptureUITests: XCTestCase {
             planText += line + "\n"
             try? planText.write(toFile: planPath, atomically: true, encoding: .utf8)
         }
+        // where XCUITest sees an element (its accessibility frame in screen points) and what it is (the element type's number); a snapshot that fails (the element
+        // has just gone) does not fail the test, unlike `e.frame`
+        func info(_ e: XCUIElement) -> String {
+            guard let s = try? e.snapshot() else { return " [no snapshot]" }
+            let f = s.frame
+            return String(format: " [frame %.1f,%.1f %.1fx%.1f type %d]", Double(f.minX), Double(f.minY), Double(f.width), Double(f.height), Int(s.elementType.rawValue))
+        }
         let landscape = env["RA_ORIENT"] == "landscape"
         XCUIDevice.shared.orientation = landscape ? .landscapeLeft : .portrait
         let app = XCUIApplication()
@@ -96,6 +108,7 @@ final class RealAppCaptureUITests: XCTestCase {
             if let i = plan.firstIndex(where: { !$0.done }), now >= plan[i].at {
                 let step = plan[i]
                 var byPoint = false
+                var extra = ""          // the end of this step's .plan line: where XCUITest sees the element / where the tap went
                 switch step.verb {
                 case "rotate":
                     XCUIDevice.shared.orientation = step.what == "left" ? .landscapeLeft : (step.what == "right" ? .landscapeRight : .portrait)
@@ -119,14 +132,30 @@ final class RealAppCaptureUITests: XCTestCase {
                             }
                         }
                     }
+                case "tree":
+                    // the whole accessibility tree as XCUITest sees it now (every element's type, frame, identifier and label): for a control that does not take its tap
+                    try? app.debugDescription.write(toFile: out + "/" + name + ".tree_" + step.what + ".txt", atomically: true, encoding: .utf8)
+                    plan[i].done = true
+                case "tapat":
+                    // a tap at a point of the screen given as fractions of the app's frame ("0.50x0.919" = the middle, 91.9 % of the way down); no element lookup
+                    let p = step.what.split(separator: "x").compactMap { Double(String($0)) }
+                    if p.count == 2, (0.0...1.0).contains(p[0]), (0.0...1.0).contains(p[1]) {
+                        let c = app.coordinate(withNormalizedOffset: CGVector(dx: p[0], dy: p[1]))
+                        let sp = c.screenPoint
+                        c.tap()
+                        extra = String(format: " [screen point %.1f,%.1f]", Double(sp.x), Double(sp.y))
+                    } else {
+                        extra = " [BAD point (want <across>x<down>, each 0...1): no tap]"
+                    }
+                    plan[i].done = true
                 case "tap", "wait", "gone":
                     if now - step.lastTry >= 1 {          // looked for once a second (a query costs frames)
                         plan[i].lastTry = now
                         let e = app.descendants(matching: .any)[step.what].firstMatch
                         if step.verb == "gone" { plan[i].done = !e.exists }
-                        else if step.verb == "wait" { plan[i].done = e.exists }
+                        else if step.verb == "wait" { plan[i].done = e.exists; if plan[i].done { extra = info(e) } }
                         else if e.exists {
-                            if e.isHittable { e.tap(); plan[i].done = true }
+                            if e.isHittable { extra = info(e); e.tap(); plan[i].done = true }
                             else {
                                 // the accessibility hit test answers a later full-screen container (VolleyChrome's) for every chrome under it, so XCUITest never calls
                                 // the button hittable although a finger reaches it: after 4 looks in a row, tap the screen point at the centre of its frame instead
@@ -134,6 +163,7 @@ final class RealAppCaptureUITests: XCTestCase {
                                 if plan[i].unhittable >= 4 {
                                     let f = e.frame
                                     if !f.isEmpty, app.frame.contains(CGPoint(x: f.midX, y: f.midY)) {
+                                        extra = info(e)
                                         e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
                                         plan[i].done = true; byPoint = true
                                     }
@@ -147,7 +177,7 @@ final class RealAppCaptureUITests: XCTestCase {
                 }
                 if plan[i].done {
                     lastDoneAt = Date().timeIntervalSince(t0)
-                    note(String(format: "%.1f %@ %@ done at %.2f", step.at, step.verb, step.what, lastDoneAt) + (byPoint ? " (by screen point: exists but not hittable for 4 looks)" : ""))
+                    note(String(format: "%.1f %@ %@ done at %.2f", step.at, step.verb, step.what, lastDoneAt) + (byPoint ? " (by screen point: exists but not hittable for 4 looks)" : "") + extra)
                 }
             }
             if every > 0, now - lastShot < every {
