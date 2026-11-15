@@ -1203,7 +1203,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             a.brain?.pandaInk = a.appearance?.jellySpecies == JellyRoster.pandaID          // (the waving Panda's ink: set here, every frame, because the Jelly Spring's showcase stage never runs tickWear)
             skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor))
         }
-        for a in parkActors { a.brain?.pandaInk = a.appearance?.jellySpecies == JellyRoster.pandaID; a.skinner.legBlendShoes = a.brain?.shoesWorn ?? false; skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
+        for a in parkActors { a.brain?.armBlendSpecies = true; a.brain?.pandaInk = a.appearance?.jellySpecies == JellyRoster.pandaID; a.skinner.legBlendShoes = a.brain?.shoesWorn ?? false; skinJobs.append(JellyParallel.SkinJob(skinner: a.skinner, sim: a.sim, dst: renderer.dynPointer(body: a.id), id: a.id, root: a.floor)) }
         let pmK = PerfMeter.begin()
         JellyParallel.skin(skinJobs, index: renderMesh.index)
         for j in skinJobs { renderer.setLegBlend(j.skinner.legBlend, body: j.id); renderer.setWaveBlend(j.skinner.waveBlend, body: j.id) }
