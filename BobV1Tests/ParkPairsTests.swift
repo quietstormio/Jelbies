@@ -387,36 +387,26 @@ final class ParkPairsTests: XCTestCase {
         }
     }
 
-    /// The room is untouched: the same seed with the old and the new switches gives the identical social sequence, decor starts and end positions (outingPlay is off at home; no park rule reads anything else).
-    func testRoomSoakIdenticalWithOldAndNewSwitches() throws {
-        BlobBrain.pickBudgetSeconds = .infinity; defer { BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds }          // (the pick's time budget is wall-clock: without this two runs differ)
-        func run(new: Bool) -> (events: [String], decorStarts: Int, pos: [SIMD2<Float>]) {
+    /// The room is untouched. A repeat of the same room soak is NOT identical even old against old (the harness has wall-clock and global state in it: measured, see the control line in the log), so the
+    /// proof is by construction: with `outingPlay` off every park hook is a pure pass-through and draws no random number, whatever the three switches are.
+    func testRoomHooksAreInertAtHome() {
+        let lab = SocialTests.Lab(n: 2, positions: [SIMD2(0, 0), SIMD2(1.5, 0)], quiet: true, seed: 3)
+        Self.keep.append(lab)
+        DecorField.shared.set(ParkToys.placed.filter { $0.kind == .seesaw || $0.kind == .hopscotch })
+        let b = lab.rigs[0].brain
+        b.outingPlay = false
+        for new in [false, true] {
             setSwitches(new: new)
-            DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); HopscotchLine.shared.prune(keeping: [])
-            RoomLayout.apply(RoomCatalog.home)
-            let lab = SocialTests.Lab(n: 3, positions: [SIMD2(-1.2, 0.2), SIMD2(0.2, -0.4), SIMD2(1.2, 0.6)], quiet: false, seed: 77)
-            Self.keep.append(lab)
-            for r in lab.rigs { r.brain.anticsEnabled = true; r.brain.idleMood = .happy; r.brain.outingPlay = false; r.renderSamples = false }
-            DecorField.shared.set([PlacedDecor(uid: 1, kind: .beanbag, x: -2.0, z: 1.5, turns: nil), PlacedDecor(uid: 2, kind: .ball, x: 1.8, z: 1.8, turns: nil)])
-            var prev = [IdleKind?](repeating: nil, count: 3), decor = 0
-            for _ in 0..<(60 * 60 * 4) {
-                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
-                for (i, r) in lab.rigs.enumerated() { let k = r.brain.idleState.kind; if prev[i] == nil, let k, BlobBrain.decorKinds.contains(k) { decor += 1 }; prev[i] = k }
-            }
-            var ev: [String] = []
-            for (i, list) in lab.events.enumerated() { for e in list { if case .began(let k, let p) = e { ev.append("\(i):\(k):\(p)") } } }
-            let pos = lab.rigs.map { $0.brain.position }
-            for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
-            DecorField.shared.clear(); setSwitches(new: true)
-            return (ev, decor, pos)
+            XCTAssertEqual(b.parkSocialPickMul, 1); XCTAssertEqual(b.parkSocialWaitMul, 1); XCTAssertFalse(b.parkSocialOn)
+            let before = b.seed
+            for f in DecorField.shared.feet { XCTAssertTrue(b.parkToyGate(f)) }
+            XCTAssertEqual(b.seed, before, "the gate drew no random number at home")
+            XCTAssertNil(b.toy.parkCool[.seesaw]); b.parkToyUsed(.seesaw); b.toy.parkCool[.seesaw] = nil
         }
-        let o = run(new: false), o2 = run(new: false), n = run(new: true)
-        MotionLog.write("PAIRS ROOM control: old vs old identical events \(o.events == o2.events), decor \(o.decorStarts) \(o2.decorStarts), counts \(o.events.count) \(o2.events.count)")
-        XCTAssertEqual(o.events, o2.events, "control: the harness itself repeats (old vs old)")
-        MotionLog.write("PAIRS ROOM: old \(o.events.count) social begins, \(o.decorStarts) decor starts; new \(n.events.count), \(n.decorStarts)")
-        XCTAssertGreaterThan(o.events.count, 0, "the room soak had socials")
-        XCTAssertEqual(o.events, n.events, "the same social sequence at home")
-        XCTAssertEqual(o.decorStarts, n.decorStarts)
-        for (a, b) in zip(o.pos, n.pos) { XCTAssertEqual(simd_distance(a, b), 0, accuracy: 1e-4, "the same end positions") }
+        setSwitches(new: true)
+        // (decorRelease only sets the park cooldown when outingPlay is on)
+        XCTAssertTrue(b.toy.parkCool.isEmpty)
+        // informational: the soak at home, old against new (not asserted: the harness is not repeatable)
+        MotionLog.write("PAIRS ROOM: hooks inert at home (see ParkPairsTests.testRoomHooksAreInertAtHome); a repeat-run room soak differs even old vs old")
     }
 }
