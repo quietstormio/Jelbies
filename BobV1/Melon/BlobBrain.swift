@@ -946,6 +946,7 @@ final class BlobBrain {
         guard maxL > lo else { return nil }
         let others = socialOthers().filter { $0 !== self }
         let live = RoomTraffic.goalAware && roomTraffic          // (the 11-15 room round, T6: RoomRoam+Traffic.swift; read once)
+        let loneBack = others.isEmpty && roomLoneBack          // (the 11-15 room round, T8: one alone picks fewer goals in the far back; RoomRoam+Traffic.swift; read once)
         let centreBias = min(1, centreDwell / IdleTuning.centreDwellFull)
         var best: (SIMD2<Float>, Float)?
         var valid = 0
@@ -953,6 +954,7 @@ final class BlobBrain {
             if pickOver { break }
             let raw = zone.map { rf.sampleZone($0, rand(), rand(), rand()) } ?? rf.sampleArea(rand(), rand(), rand())
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
+            if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
             guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), reachable(here, cand) else { continue }
             var nearest: Float = 5
