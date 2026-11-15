@@ -29,11 +29,11 @@ final class SpringArmUITests: XCTestCase {
         sleep(4)
         mark("start")
         let rounds = mode == "midwave" ? 0 : (Int(env["SPRING_ROUNDS"] ?? "1") ?? 1)
-        let dwell: UInt32 = mode == "fast" ? 400_000 : (mode == "settled" ? 2_500_000 : 2_000_000)
+        let dwell: UInt32 = mode == "fast" ? 400_000 : (mode == "settled" ? 2_500_000 : (mode == "long" ? 6_000_000 : 2_000_000))
         let start = Int(env["SPRING_PAGE"] ?? "0") ?? 0
         for _ in 0..<rounds {
             for i in 1...6 { next.tap(); mark("fwd \((start + i) % 7)"); usleep(dwell); if mode == "settled" { shot("settled_p\((start + i) % 7)") } }
-            for i in 1...6 { prev.tap(); mark("back \((start + 6 - i) % 7)"); usleep(dwell) }
+            if mode != "long" { for i in 1...6 { prev.tap(); mark("back \((start + 6 - i) % 7)"); usleep(dwell) } }
         }
         if mode == "midwave" {
             // switch away while the creature is mid-move: tap at 1.0 s after landing, then again at 0.9 s
