@@ -329,6 +329,43 @@ final class ShowFlowTests: XCTestCase {
         care.show.abort()
     }
 
+    // MARK: the dance song's clock
+
+    /// A show brought to the first frame of the dance (GO), with the audio stubs given.
+    private func danceFlow(clock: @escaping (SceneTrack) -> Double?, ready: @escaping (MusicScene) -> Bool) -> ShowFlow {
+        let f = ShowFlow(); f.cue = { _ in }; f.auto = true
+        f.songClock = clock; f.audioReady = ready; f.songClockWhy = { "test: \($0.rawValue) has no clock" }
+        f.begin(playerID: 1, name: "Bob", character: 1, input: input(), rank: .puddle, dayKey: 20261021, bodies: 3, seed: 3)
+        run(f, seconds: 2) { f.phase == .stage }
+        run(f, seconds: 6) { f.beat == .countdown }
+        run(f, seconds: 8) { f.beat == .dancing }
+        return f
+    }
+
+    /// The song's clock never comes (voice not playing): after 1.5 s of dancing the flow records ONE reason, and keeps it.
+    func testDanceRecordsWhyTheSongWasNotHeard() {
+        let f = danceFlow(clock: { _ in nil }, ready: { _ in true })
+        XCTAssertEqual(f.beat, .dancing); XCTAssertNil(f.danceFallback)
+        run(f, seconds: 1.3); XCTAssertNil(f.danceFallback, "not before 1.5 s")
+        run(f, seconds: 0.5)
+        let why = f.danceFallback
+        XCTAssertEqual(why, "test: \(f.danceTrack.rawValue) has no clock")
+        run(f, seconds: 3); XCTAssertEqual(f.danceFallback, why, "one record per dance")
+        // a voice that is not even ready: the same, once the 1.5 s wait is over
+        let g = danceFlow(clock: { _ in nil }, ready: { s in if case .danceSong = s { return false }; return true })
+        run(g, seconds: 1.3); XCTAssertNil(g.danceFallback)
+        run(g, seconds: 0.6)
+        XCTAssertEqual(g.danceFallback, "test: \(g.danceTrack.rawValue) has no clock; scene voice not playing")
+    }
+
+    /// A song clock that answers: no fallback record, however long the dance runs.
+    func testDanceRecordsNothingWhenTheSongIsHeard() {
+        var t = 0.0
+        let f = danceFlow(clock: { _ in t += 1 / 60; return t }, ready: { _ in true })
+        run(f, seconds: 5)
+        XCTAssertNil(f.danceFallback); XCTAssertGreaterThan(f.danceT, 4)
+    }
+
     // MARK: the stage camera
 
     private func ndc(_ cam: CameraState, _ p: SIMD3<Float>) -> SIMD3<Float>? {

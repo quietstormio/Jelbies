@@ -329,7 +329,10 @@ final class AudioHub {
         guard started, active else { return }
         perform(director.resumed(deckPlaying: deckPlaying, fade: 1.5))
         if let t = director.sceneTrack, !(scene?.isPlaying(t) ?? false) {
-            if scene?.current != t { perform([.sceneOn(t, fade: 1.5)]) }          // lost (or never started)
+            if scene?.current != t {          // lost (or never started)
+                if Self.audioLog { NSLog("[audio] ensureMusic: scene %@ lost, sending sceneOn again (current=%@)", t.rawValue, scene?.current?.rawValue ?? "nil") }
+                perform([.sceneOn(t, fade: 1.5)])
+            }
             else if delay { scene?.recoverIfStalled() }                             // decoded but its node stopped
         }
     }
@@ -501,6 +504,14 @@ final class AudioHub {
     func songTime(of t: SceneTrack) -> Double? {
         guard !muted, started, active else { return nil }
         return scene?.songTime(of: t)
+    }
+    /// Why `songTime(of:)` is nil now (the Jelly Show's dance log under `-AudioLog 1`).
+    func songClockWhy(of t: SceneTrack) -> String {
+        if muted { return "audio muted" }
+        if !started { return "audio hub not started" }
+        if !active { return "app not active" }
+        guard let scene else { return "no scene engine" }
+        return scene.songTimeWhy(of: t)
     }
     /// The route's output latency in ms (the Jelly Show's dance log; songTime already subtracts it).
     var outputLatencyMS: Double { AVAudioSession.sharedInstance().outputLatency * 1000 }
@@ -1171,7 +1182,10 @@ final class AudioHub {
             let roomHeard = deckPlaying
             let wantsScene = director.sceneTrack != nil && director.scene != .none && director.scene != .results
             let sceneHeard = director.sceneTrack.map { scene?.isPlaying($0) ?? false } ?? false
-            if watchdog.update(dt: dt, shouldPlay: wantsRoom || wantsScene, isPlaying: wantsRoom ? roomHeard : sceneHeard) { resumeAfterInterruption(verify: true, fadeIn: false) }
+            if watchdog.update(dt: dt, shouldPlay: wantsRoom || wantsScene, isPlaying: wantsRoom ? roomHeard : sceneHeard) {
+                if Self.audioLog { NSLog("[audio] watchdog: %@ silent, restarting", wantsRoom ? "room music" : "scene \(director.sceneTrack?.rawValue ?? "?")") }
+                resumeAfterInterruption(verify: true, fadeIn: false)
+            }
         } else { watchdog.reset() }
         mainSlew.update(mode: director.modeGain(playing: input.playing), duck: director.duckGain, dt: dt)
         for i in decks.indices { decks[i].fader.update(dt: dt) }
