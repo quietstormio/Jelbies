@@ -12,6 +12,7 @@
 import Foundation
 import Observation
 import simd
+import QuartzCore
 
 /// The show's sound cues (AudioHub.showCue maps them to files; tests count them).
 nonisolated enum ShowCue: Equatable, Sendable { case perfect, good, slip, countdown, go, ring, land, flop, burst, applause, jingle(win: Bool) }
@@ -75,6 +76,7 @@ final class ShowFlow {
     @ObservationIgnored private var danceHeard = false
     @ObservationIgnored private var danceAudioWait: Float = 0
     @ObservationIgnored private var goAge: Float = 0
+    @ObservationIgnored private var probePrompt = 0
     @ObservationIgnored private var dancedAge: Float = 0
     /// Seconds the Look card has been up.
     @ObservationIgnored private(set) var lookAge: Float = 0
@@ -211,7 +213,7 @@ final class ShowFlow {
 
     private func resetStage() {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; goAge = 0
-        danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
+        danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0; probePrompt = 0
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
         rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
@@ -287,6 +289,10 @@ final class ShowFlow {
             flashAge += dt; goAge += dt
             if flashAge > 0.7, flash != nil { flash = nil }
             now = danceClock(dt: dt)
+            if AudioHub.audioLog {          // PROBE: every prompt as the clock passes it
+                let raw = songClock(danceTrack)
+                if let ps = sim?.dance?.prompts { while probePrompt < ps.count, ps[probePrompt].time <= now { NSLog("[probe] prompt #%d foot=%d at %.3f passed t=%.3f clock=%@ host=%.4f renderPos=%lld", probePrompt, ps[probePrompt].foot, ps[probePrompt].time, now, raw.map { String(format: "%.3f", $0) } ?? "nil", CACurrentMediaTime(), SceneMusicEngine.renderPos); probePrompt += 1 } }
+            }
             if auto || ShowAssist.autoDance { autoPlay(now) }
             promptCues(now: now)
             guard var s = sim else { return }
@@ -527,7 +533,7 @@ final class ShowFlow {
             if auto, beat == .danced, dancedAge > 1.5 { finishDance() }
         case .trick: tickTrick(dt: dt)
         case .results:
-            if trickStage != .pick { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt }          // (the last turn's rivals still perform after the sim has its results)
+            if trickStage != .pick { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt; if auto, settled, cardAge > 3, UserDefaults.standard.integer(forKey: "ShowRepeat") > 0 { goHome() } }          // (the last turn's rivals still perform after the sim has its results)
         }
     }
 
