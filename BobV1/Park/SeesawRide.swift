@@ -672,7 +672,7 @@ extension BlobBrain {
         roll += SeesawTuning.leanShare * th * cosf(yaw) * k
         // how near is the friend on the other seat: the plank eases level when he is within comerNear of his stand spot (before that the solo rock goes on)
         if SeesawTuning.invitations, let o = socialOthers().first(where: { $0 !== self && $0.idleState.kind == .decorSit && $0.idleState.decorUID == uid && $0.idleState.seat != seat }), !(o.idleState.bagStage == 2 && !o.idleState.decorGo) {
-            R.setNear(uid, o.idleState.seat, simd_distance(o.position, o.idleState.target) < SeesawTuning.comerNear || !o.idleState.decorGo)
+            R.setNear(uid, o.idleState.seat, simd_distance(o.position, o.idleState.target) < (ParkPairTuning.pairSeesaw ? ParkPairTuning.readyDist + 0.4 : SeesawTuning.comerNear) || !o.idleState.decorGo)
         }
         // looks toward a comer (the other seat's rider on his way) a little
         var want: Float = 0, bearing = R.bearing(uid, seat)          // (held while the look eases out)

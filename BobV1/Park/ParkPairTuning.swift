@@ -33,8 +33,8 @@ nonisolated enum ParkPairTuning {
     /// A partner must be a free creature this near the seesaw (metres) and agrees with this chance.
     static let partnerRadius: Float = 6.5
     nonisolated(unsafe) static var partnerAgree: Float = 1.0          // (a var only so a test can make the partner certain)
-    /// The first one at the seesaw waits standing at his spot, not seated, until the partner is this near his own stand spot (or already there).
-    static let readyDist: Float = 1.2
+    /// The first one at the seesaw waits standing at his spot, not seated, until the partner is this near his own stand spot (or already there). Not smaller: a waiter standing in front of the plank blocks the partner's way along it to the far seat (measured: a partner stuck 2.6 m off gave up), so he hops up while the partner is still this far, and then counts as 'coming' out to this + 0.4 m.
+    static let readyDist: Float = 3.0
     /// A waiter gives up after this long standing at the seesaw (seconds, counted from his arrival at the spot); and after this long when the partner is gone altogether (left, never came).
     static let waitCap: Float = 8.0, partnerGoneGrace: Float = 1.0
     /// A commanded waiter looks for a free partner this often (seconds).
