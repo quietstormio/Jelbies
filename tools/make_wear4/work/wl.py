@@ -24,7 +24,7 @@ def _norm_from_faces(P,F):
         n=np.cross(P[b]-P[a],P[c]-P[a]); N[a]+=n;N[b]+=n;N[c]+=n
     L=np.linalg.norm(N,axis=1,keepdims=True); return N/np.maximum(L,1e-12)
 
-def add_part(name,P,F,color,N=None,hint=None,flip_auto=True):
+def add_part(name,P,F,color,N=None,hint=None,flip_auto=True,AO=None):
     """Open or closed mesh (rest space). color: rgb or fn(p,n)->rgb. hint: fn(p)->outward dir used to orient normals/winding."""
     P=[tuple(map(float,p)) for p in P]; F=[tuple(f) for f in F]
     Nn=_norm_from_faces(P,F)
@@ -34,6 +34,7 @@ def add_part(name,P,F,color,N=None,hint=None,flip_auto=True):
     if N is not None: Nn=np.asarray(N)
     C=list(color) if isinstance(color,list) else [(color(np.array(p),n) if callable(color) else color) for p,n in zip(P,Nn)]
     part=dict(name=name,P=P,N=[tuple(n) for n in Nn],C=[tuple(c) for c in C],F=F)
+    if AO is not None: part['AO']=list(AO)          # per-vertex baked ao override (None = the exporter's own); > 1 = emissive weight (RoomShaders)
     PARTS.append(part); return part
 
 def closed(bm,color,name,mods=(),sharp=50):
@@ -217,6 +218,8 @@ def export(item_id, anchor_rest, meta, outdir=W+"/export", ao_body=True, mirror_
         o=len(allP); P=np.array(p['P'])-sub; allP+=list(P); allN+=p['N']; allC+=p['C']
         allF+=[(a+o,b+o,c+o) for a,b,c in p['F']]; groups.append((p['name'],o,len(p['F']),len(p['P'])))
     Pabs=np.array(allP)+sub
+    OV=[]
+    for p in PARTS: OV+=list(p.get('AO') or [None]*len(p['P']))
     if meta.get('authored_local') or meta.get('anchor')=='number' or meta.get('ao_flat'): ao_body=False
     sd=B.sdf_pts(Pabs) if ao_body else np.ones(len(Pabs))
     ao=0.6+0.4*np.clip(sd/0.09,0,1); ao=np.where(np.array([0]*len(ao))==1,1,ao)
@@ -226,6 +229,7 @@ def export(item_id, anchor_rest, meta, outdir=W+"/export", ao_body=True, mirror_
     # meta 'back_emit' = keep the distance-based occlusion on the FRONT half (the look the piece had before) and fade to ao 1.0 + back_emit round the back (z < 0): only the side facing away from the room's key light is lifted
     if meta.get('back_emit'):
         t=np.clip(-Pabs[:,2]/0.30,0,1); b=t*t*(3-2*t); ao=ao*(1-b)+(1.0+float(meta['back_emit']))*b
+    OVa=np.array([np.nan if v is None else v for v in OV],float); ao=np.where(np.isnan(OVa),ao,OVa)
     # parts that have nothing to do with the body (gloves' far side etc.) just get mild ao; fine.
     os.makedirs(outdir,exist_ok=True)
     with open(f"{outdir}/{item_id}.obj","w") as fh:

@@ -163,14 +163,14 @@ def _ring_mesh(name, rows, close_i, colfn, close_k=True, cap_ends=True):
     return add_part(name, P, F, C, flip_auto=False)
 
 def _fold_layer(name, inner, hem, colfn, close_i):
-    """A thin double-sided tulle layer: a top surface and an underside kept 8 mm BELOW it everywhere, hem included. (Round 3: the hem used to be one shared vertex row where the two surfaces converged to a zero-thickness
-    wedge: top and underside then z-fought along the rim and the dark underside showed as a fringe of needle slivers in the close-up camera. Now there is no convergence: the open 8 mm slit at the rim is invisible at game scale.)
-    inner / hem: per-column points of the top surface edges."""
-    N = len(inner); P = []; C = []; DY = np.array([0, 0.008, 0])
-    for i in range(N): P.append(tuple(inner[i])); C.append(colfn(i, 0))
-    for i in range(N): P.append(tuple(hem[i])); C.append(colfn(i, 1))
-    for i in range(N): P.append(tuple(np.array(inner[i]) - DY)); C.append(colfn(i, 2))
-    for i in range(N): P.append(tuple(np.array(hem[i]) - DY)); C.append(colfn(i, 3))
+    """A thin double-sided tulle layer: a top surface and an underside kept 8 mm BELOW it everywhere, hem included (no shared rim: top and underside never converge, so they never z-fight).
+    The underside is the SAME mid pink as the tier (no darker than its darkest top colour) and carries a baked emissive weight (ao 1.25): a surface facing down only gets the room's ambient, which is
+    brown, and read as a maroon wedge at the ends of the skirt (round-3 review). inner / hem: per-column points of the top surface edges."""
+    N = len(inner); P = []; C = []; AO = []; DY = np.array([0, 0.008, 0])
+    for i in range(N): P.append(tuple(inner[i])); C.append(colfn(i, 0)); AO.append(None)
+    for i in range(N): P.append(tuple(hem[i])); C.append(colfn(i, 1)); AO.append(None)
+    for i in range(N): P.append(tuple(np.array(inner[i]) - DY)); C.append(colfn(i, 2)); AO.append(1.25)
+    for i in range(N): P.append(tuple(np.array(hem[i]) - DY)); C.append(colfn(i, 3)); AO.append(1.25)
     Ft = []; Fb = []
     for i in range(N if close_i else N - 1):
         i2 = (i + 1) % N
@@ -181,7 +181,7 @@ def _fold_layer(name, inner, hem, colfn, close_i):
     Pn = np.array(P)
     n0 = np.cross(Pn[Ft[0][1]] - Pn[Ft[0][0]], Pn[Ft[0][2]] - Pn[Ft[0][0]])
     if n0[1] < 0: Ft = [(a, c, b) for a, b, c in Ft]; Fb = [(a, c, b) for a, b, c in Fb]
-    return add_part(name, P, Ft + Fb, C, flip_auto=False)
+    return add_part(name, P, Ft + Fb, C, flip_auto=False, AO=AO)
 
 def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
     """Ballet tutu: a snug waistband on the body at height yb and three thin tulle layers that leave it and flare OUT AND DOWN (28 / 38 / 48 degrees below horizontal),
@@ -221,9 +221,9 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
             side = math.cos(phi) ** 2                                      # 1 at the hips (seen edge-on in the front view), 0 on the chest / back
             L = reach * (1 - 0.06 * (1 - s) * (1 - side)) * (1 - 0.30 * side)         # the skirt is shorter in reach at the hips and its cusps fade there: no needle tips at the silhouette ends
             inner.append(e + h * (hin(phi) + 0.012))
-            hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.017 * (1 - s) * (1 - 0.8 * side), 0]))
+            hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.017 * (1 - s) * (1 - side), 0]))
         def cf(i, k, c=c):
-            return deep(c, 0.18) if k == 0 else (tint(c, 0.14) if k == 1 else (deep(c, 0.10) if k == 2 else tint(c, 0.06)))
+            return deep(c, 0.10) if k == 0 else (tint(c, 0.14) if k == 1 else (deep(c, 0.10) if k == 2 else c))
         _fold_layer('layer%d' % li, inner, hem, cf, not pip)
     # --- a small neat bow on the front of the band
     p, n = surface_at(yb + 0.034, math.pi / 2, off=0.044)
