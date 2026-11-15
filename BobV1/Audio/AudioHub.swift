@@ -115,6 +115,7 @@ final class AudioHub {
         settings = AudioSettings(defaults: d)
         director = MusicDirector()
         director.length = { [unowned self] t in self.trackLength(t) }
+        director.keepSongAtBedtime = !(DevArgs.enabled && UserDefaults.standard.bool(forKey: "NightSongOld"))
         refreshNowPlaying()
     }
     nonisolated deinit {}
@@ -142,6 +143,29 @@ final class AudioHub {
         diagLastState = t
         let counts = diagCounts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "; ")
         NSLog("[audio] state muted=%d started=%d active=%d sfxLevel=%.2f duck=%.2f level=%.3f musicOn=%d deckPlaying=%d scene=%@ race=%@ counts{%@}", muted, started, active, settings.sfxLevel, duck.gain, settings.sfxLevel * duck.gain, settings.musicOn, deckPlaying, String(describing: director.scene), String(describing: raceScene), counts)
+    }
+    @ObservationIgnored private var diagLastMusic = -100.0
+    /// `-AudioLog 1`: every music play, every mode change (kept = the song ran on) and, once a second, the real deck position / volume.
+    private func musicDiag(_ ev: [MusicEvent], from old: MusicMode, bedtime: Bool, napping: Bool) {
+        guard Self.audioLog else { return }
+        var played = false
+        for e in ev {
+            if case .playTrack(let t, let fade) = e {
+                played = true
+                NSLog("[audio] music play %@ fade %.2f mode=%@", t.rawValue, fade, String(describing: director.mode))
+            }
+        }
+        if director.mode != old {
+            NSLog("[audio] music mode %@ -> %@ track=%@ pos=%.1f kept=%d bedtime=%d", String(describing: old), String(describing: director.mode),
+                  director.current?.rawValue ?? "gap", director.elapsed, played ? 0 : 1, bedtime ? 1 : 0)
+        }
+        let t = CACurrentMediaTime()
+        guard t - diagLastMusic >= 1 else { return }
+        diagLastMusic = t
+        let deck = director.current.flatMap { cur in decks.last(where: { $0.track == cur }) }
+        NSLog("[audio] music now mode=%@ track=%@ pos=%.1f vol=%.3f decks=%d gain=%.2f bedtime=%d napping=%d", String(describing: director.mode),
+              director.current?.rawValue ?? "gap", deck?.player.currentTime ?? director.elapsed, Double(deck?.player.volume ?? 0), decks.count,
+              mainSlew.gain, bedtime ? 1 : 0, napping ? 1 : 0)
     }
     /// The first of the shared gates that blocks an effect (muted / not started / background / level), or nil.
     private func gateWhy() -> String? {
@@ -327,6 +351,9 @@ final class AudioHub {
     var _homeAmbience: Float { homeAmbience }
     var _resumeFade: Float { resumeFade }
     func _tick(_ dt: Double) { _ = dt; tick() }
+    var _directorMode: MusicMode { director.mode }
+    var _directorCurrent: MusicTrack? { director.current }
+    func _setMinDwell(_ s: Double) { director.minDwell = s }
 
     /// Foreground / background (scenePhase).
     func setForeground(_ on: Bool) {
@@ -1130,9 +1157,13 @@ final class AudioHub {
         }
         var inp = input
         inp.phase = DayPhase.of(hour: DayClock.shared.hour)
+        inp.bedtime = SleepHours.isNight(hour: DayClock.shared.hour)
         // the crossfade into the next song is timed from the player that really plays the current one (a frame hitch must not outrun the file)
         if let cur = director.current, let d = decks.last(where: { $0.track == cur && $0.fader.target > 0 && $0.player.isPlaying }) { director.syncElapsed(d.player.currentTime) }
-        perform(director.update(dt: dt, input: inp))
+        let modeBefore = director.mode
+        let ev = director.update(dt: dt, input: inp)
+        musicDiag(ev, from: modeBefore, bedtime: inp.bedtime, napping: inp.allNapping)
+        perform(ev)
         resumeFade = min(1, resumeFade + Float(dt) / Self.resumeFadeSeconds)
         homeAmbience = HomeAmbience.slew(homeAmbience, scene: director.scene, dt: dt)
         if !micSession, musicLevelNow > 0.01 {

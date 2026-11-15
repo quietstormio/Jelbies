@@ -4,7 +4,8 @@
 //  the events it returns. Rules:
 //    - day / morning: the day playlist, shuffled, no repeat until the whole pool has played;
 //    - evening (17-21): an evening track first, then evening + day tracks at a lower volume; night (21-6): the lo-fi playlist;
-//    - every Jelly napping: lo-fi at any hour (quiet), back to the time-of-day music once one wakes;
+//    - every Jelly napping in the daytime: lo-fi (quiet), back to the time-of-day music once one wakes; at bedtime hours (`MusicInput.bedtime`)
+//      the song that plays simply runs on through falling asleep and waking (only the level eases; lo-fi follows when it ends): `keepSongAtBedtime`;
 //    - after every 1 or 2 tracks a 30...90 s gap where only the room ambience plays; tracks crossfade over `fade` seconds;
 //    - play layer (lofi_play): fades in ~1 s when the Jellies play / zoom, fades out 8...10 s after it calms; 2 min cooldown;
 //      never at night (night only lifts the music volume a little while they play).
@@ -78,6 +79,8 @@ nonisolated struct MusicInput: Equatable, Sendable {
     var playing = false
     /// What the screen in front wants (race / training / shop / town); `.none` = the room.
     var scene: MusicScene = .none
+    /// Sleeping hours (`SleepHours.isNight`, about 20:22-07:07): a sleep that starts now is the night's sleep, not a daytime nap.
+    var bedtime = false
 }
 
 nonisolated enum MusicEvent: Equatable, Sendable {
@@ -98,6 +101,10 @@ nonisolated struct MusicDirector {
     var rand: () -> Double
     /// Mode switches wait at least this long after the last one (a time-lapse or a Jelly waking and napping again must not flap the music).
     var minDwell = 5.0
+    /// The user (2026-11-14): "When they go to sleep at night don't change the song keep the song that was going when they went to sleep".
+    /// true = at bedtime hours the playing song runs on through the sleep moment and through a wake-up (only the level eases); false = the old
+    /// behaviour (a new song at every mode change). Dev switch for an A/B on one build: `-NightSongOld 1` (AudioHub.init).
+    var keepSongAtBedtime = true
     static let gapRange: ClosedRange<Double> = 30...90
     static let layerRelease: ClosedRange<Double> = 8...10
     static let layerCooldown = 120.0
@@ -162,7 +169,7 @@ nonisolated struct MusicDirector {
             lastPlayed = t
             return t
         }
-        let pool = mode.usesLofi ? MusicTrack.lofiPool : mode == .evening ? MusicTrack.eveningPool + MusicTrack.dayPool : MusicTrack.dayPool
+        let pool = Self.pool(mode)
         bag.removeAll { !pool.contains($0) }
         if bag.isEmpty {
             bag = shuffled(pool, avoiding: lastPlayed)
@@ -171,6 +178,20 @@ nonisolated struct MusicDirector {
         let t = bag.removeFirst()
         lastPlayed = t
         return t
+    }
+
+    private static func pool(_ m: MusicMode) -> [MusicTrack] {
+        m.usesLofi ? MusicTrack.lofiPool : m == .evening ? MusicTrack.eveningPool + MusicTrack.dayPool : MusicTrack.dayPool
+    }
+
+    /// Does the song that plays now (or the gap) simply run on across this mode change?
+    private func keepsSong(to want: MusicMode, bedtime: Bool, afterReturn: Bool) -> Bool {
+        guard keepSongAtBedtime else { return false }
+        if mode.usesLofi && want.usesLofi { return true }          // night <-> nap: the same quiet playlist either way
+        if afterReturn { return false }                           // back from away: the clock's music at once, as before
+        if want == .nap { return bedtime }                        // falling asleep at bedtime hours keeps the song; a daytime nap still gets lo-fi
+        if mode == .nap, let cur = current, Self.pool(want).contains(cur) { return true }   // waking while the kept song still plays and it fits the hour
+        return false
     }
 
     private func shuffled(_ pool: [MusicTrack], avoiding last: MusicTrack?) -> [MusicTrack] {
@@ -301,16 +322,24 @@ nonisolated struct MusicDirector {
         } else if snapPending {
             snapPending = false
             if want != mode {
+                if keepsSong(to: want, bedtime: input.bedtime, afterReturn: true) {
+                    mode = want; dwell = 0
+                } else {
+                    if want == .evening { eveningIntro = true }
+                    mode = want; dwell = 0
+                    tracksSincePause = 0
+                    startNext(&ev, fade: 0.4)
+                }
+            }
+        } else if want != mode, dwell >= minDwell {
+            if keepsSong(to: want, bedtime: input.bedtime, afterReturn: false) {
+                mode = want; dwell = 0          // the song (or the gap) runs on; only the level follows the mode (modeGain)
+            } else {
                 if want == .evening { eveningIntro = true }
                 mode = want; dwell = 0
                 tracksSincePause = 0
-                startNext(&ev, fade: 0.4)
+                startNext(&ev)               // crossfade straight into the new mood's music (also ends a gap)
             }
-        } else if want != mode, dwell >= minDwell {
-            if want == .evening { eveningIntro = true }
-            mode = want; dwell = 0
-            tracksSincePause = 0
-            startNext(&ev)               // crossfade straight into the new mood's music (also ends a gap)
         }
 
         // playlist
