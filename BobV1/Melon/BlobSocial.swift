@@ -332,6 +332,7 @@ extension BlobBrain {
         socialBook.hopStarted = false; o.socialBook.hopStarted = false
         onSocial?(.began(kind, partner: o.steerID)); o.onSocial?(.began(kind, partner: steerID))
         roomCue(.social(kind))
+        roomHelloVoice(kind, to: o)          // (the 11-15 room round, step 3: he calls over to a housemate who stands apart; RoomRoam+Voices.swift)
         return s
     }
 
@@ -633,6 +634,7 @@ extension BlobBrain {
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
         if s.kind == .squabble { wantHmph() }          // a huff after a squabble
         if s.end != .aborted, s.end != .stopped, s.kind != .squabble, rand() < 0.35 { wantJoy(); blushBump(hold: 2.2, peak: 0.5) }          // a social ended happily
+        roomCheerVoice(s)          // (the 11-15 room round, step 3: a cheer / an aww after something together that ended well)
         onSocial?(.ended(s.kind, partner: pid, s.end ?? .aborted))
     }
 

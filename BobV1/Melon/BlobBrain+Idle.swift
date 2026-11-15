@@ -566,6 +566,7 @@ extension BlobBrain {
     func idleBegin(_ kind: IdleKind) {
         varietyNote(kind)
         if !voiceMuted, let c = JellyVoiceSet.contextVoice(forIdle: kind, mood: idleMood) { AudioHub.shared.contextVoice(jelly: steerID, c.voice, chance: c.chance, x: px) }          // (the home room's context voices: add variety on top of the chirps)
+        roomIdleVoice(kind)          // (the 11-15 room round, step 3: in the home room one more voice that fits the move, on its own clock; RoomRoam+Voices.swift)
         if kind != .wander { roomCue(.idle(kind)) }          // (its own haptic: Haptics+Emotes.swift)
         idleState.kind = kind; walkBoostK = 1
         idleState.t = 0; idleState.phase = 0; idleState.phaseT = 0; idleState.k = 0; idleState.yielding = false; idleState.yieldT = 0
