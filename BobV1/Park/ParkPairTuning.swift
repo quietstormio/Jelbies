@@ -15,6 +15,8 @@ nonisolated enum ParkPairTuning {
         guard let v = UserDefaults.standard.string(forKey: key) else { return true }
         return !["0", "no", "false", "old", "off"].contains(v.lowercased())
     }
+    /// `-ParkTrace 1` (the park trace of GameCare+Park.swift): the recruit logs why a partner was or was not found.
+    static let traceOn = UserDefaults.standard.integer(forKey: "ParkTrace") != 0
     nonisolated(unsafe) static var pairSeesaw: Bool = flag("ParkPairSeesaw")
     nonisolated(unsafe) static var toyRateNew: Bool = flag("ParkToyRate")
     nonisolated(unsafe) static var socialNew: Bool = flag("ParkSocial")

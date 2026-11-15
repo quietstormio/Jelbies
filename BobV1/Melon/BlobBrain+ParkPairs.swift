@@ -65,6 +65,13 @@ extension BlobBrain {
             o.toyFree && o.socialFree && o.toy.waitUID < 0 && o.toy.noticeUID < 0 && o.outingPlay == outingPlay && simd_distance(o.position, at) < ParkPairTuning.partnerRadius
                 && !(cooled && (o.toy.parkCool[.seesaw] ?? 0) > clock)
         }.sorted { simd_distance($0.position, at) < simd_distance($1.position, at) }
+        if ParkPairTuning.traceOn {
+            let ps = toyPeers
+            NSLog("[pairs] %@ recruit for seesaw: peers %d, toyFree %d, +socialFree %d, +noQueue %d, sameOuting %d, near %d, cooled %d -> candidates %d",
+                  commanded ? "commanded" : "auto", ps.count, ps.filter { $0.toyFree }.count, ps.filter { $0.toyFree && $0.socialFree }.count, ps.filter { $0.toyFree && $0.socialFree && $0.toy.waitUID < 0 && $0.toy.noticeUID < 0 }.count,
+                  ps.filter { $0.outingPlay == outingPlay }.count, ps.filter { simd_distance($0.position, at) < ParkPairTuning.partnerRadius }.count, ps.filter { (($0.toy.parkCool[.seesaw]) ?? 0) > clock }.count, cands.count)
+            for o in ps where !o.toyFree { NSLog("[pairs]   peer %d not toyFree: antics %d decorLocked %d reactFree %d scriptNone %d kind %@ race %d mood %@ night %.2f", o.steerID, o.anticsEnabled ? 1 : 0, o.decorLocked ? 1 : 0, o.reactFree ? 1 : 0, o.scriptIsNone ? 1 : 0, "\(String(describing: o.idleState.kind))", o.race.active ? 1 : 0, "\(o.idleMood)", o.idleNight) }
+        }
         for o in cands {
             guard rand() < ParkPairTuning.partnerAgree else { continue }
             o.seesawPartnerStart = true
