@@ -1,8 +1,10 @@
 #!/bin/bash
 # Usage: pre-install-gate.sh <simulator udid> <derived data path> [<path to a built device BobV1.app>]
 # Arms / feet / clothing-prep gate to run BEFORE any phone install. Exit 0 = GATE PASS, non-zero = GATE FAIL.
-# Steps: (1) check-date-ops on the device app if given; (2) build-for-testing (Release, testability);
+# Steps: (1) check-date-ops and check-bundle on the device app if given; (2) build-for-testing (Release, testability);
 # (3) run each suite below serially with test-without-building; (4) print one table.
+# Why check-bundle (2026-11-15): an install went on without its sound files (a reused build folder lost its resources; Xcode still said BUILD SUCCEEDED).
+# Before a phone build, remove the product app first (rm -rf <derived data>/Build/Products/Release-iphoneos/BobV1.app) so every resource is copied again.
 # Env: GATE_SKIP_BUILD=1 reuse the existing build in <derived data>; GATE_SUITES="A B" override the list;
 #      GATE_SUITE_CAP=seconds per suite (default 1500); GATE_LOG_DIR=where the logs go (default <dd>/gate-logs);
 #      GATE_XB_MAX=N other xcodebuild processes tolerated while waiting (default 1; use 2 to allow two);
@@ -52,6 +54,7 @@ run_capped() { # run_capped <seconds> <logfile> cmd...  ; kills only its own chi
 
 if [ -n "$devapp" ]; then
   if "$here/check-date-ops.sh" "$devapp"; then rows+=("check-date-ops|-|0|ok"); else rows+=("check-date-ops|-|1|FAIL"); fail=1; fi
+  if "$here/check-bundle.sh" "$devapp"; then rows+=("check-bundle|-|0|ok"); else rows+=("check-bundle|-|1|FAIL"); fail=1; fi
 fi
 
 xb=(xcodebuild -project BobV1.xcodeproj -scheme BobV1 -configuration Release -destination "id=$udid" -derivedDataPath "$dd" ENABLE_TESTABILITY=YES)
