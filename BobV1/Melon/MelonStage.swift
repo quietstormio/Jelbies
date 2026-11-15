@@ -290,6 +290,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         roamAspect = aspect
         guard GameCamera.refreshRoam(aspect: aspect) != nil else { return }
         Self.applyRoomArena(actors: actors, parkActors: parkActors, bathFenceLifted: model.care.bath.fenceLifted)
+        BlobBrain.roomWalkIn(actors.map(\.brain) + parkActors.map(\.brain))          // (remedy D1, RoomRoam+Traffic.swift: a free home body the new floor leaves outside walks back in)
     }
     /// Capture aid: -VisitorArenaGuard 0 = the old unguarded visitor loop (before / after from one build).
     nonisolated(unsafe) static var visitorArenaGuard = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "VisitorArenaGuard") != nil && UserDefaults.standard.integer(forKey: "VisitorArenaGuard") == 0)
