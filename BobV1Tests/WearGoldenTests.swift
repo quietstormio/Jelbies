@@ -93,6 +93,7 @@ final class WearGoldenTests: XCTestCase {
                     if ta[0] == "I" { if ta != tb { bad += 1; if firstBad.isEmpty { firstBad = "\(a)  |  \(b)" } }; continue }
                     let tol: Float = ta[0] == "D" ? 1e-4 : 2e-4
                     for k in 3..<ta.count {
+                        if ta[k] == tb[k] { continue }          // (identical text, incl. the crown's -inf)
                         let d = abs((Float(ta[k]) ?? .nan) - (Float(tb[k]) ?? .nan))
                         if d > worst { worst = d; worstAt = "\(ta[1]) \(ta[2])" }
                         if !(d <= tol) { bad += 1; if firstBad.isEmpty { firstBad = "\(a)  |  \(b)" } }
@@ -108,5 +109,39 @@ final class WearGoldenTests: XCTestCase {
         print("WEARGOLDEN wrote \(wrote), compared \(compared)\n" + report)
         try? report.write(toFile: dir + "/compare_report.txt", atomically: true, encoding: .utf8)
         for m in failures { XCTFail(m) }
+    }
+
+    /// The direct radial-line intersection answers exactly what the 16-step bisection answered (same crossing, same surface point), and the stamped `bind` is bit-identical to the Set-based one.
+    func testFastQueriesMatchTheOriginals() throws {
+        WearBody.install(MotionRig.renderMesh)
+        let body = WearBody.shared
+        var rng = SystemRandomNumberGenerator()
+        var bad = 0, nils = 0, n = 0, worstFoot: Float = 0, worstRho: Float = 0, firstBad = ""
+        WearBody.radialFast = 0; WearBody.radialFallback = 0
+        for k in 0..<96 {
+            let az = Float(k) / 96 * 2 * .pi + 0.013
+            let dir = SIMD2(cos(az), sin(az))
+            var y: Float = -0.05
+            while y < 1.45 {
+                n += 1
+                let a = body.radialHit(dir: dir, y: y), b = body.radialHitBisect(dir: dir, y: y)
+                if (a == nil) != (b == nil) { bad += 1; if firstBad.isEmpty { firstBad = "nil mismatch at az \(az) y \(y): fast \(a != nil) old \(b != nil)" } }
+                else if let a, let b {
+                    let df = simd_distance(body.restFoot(a.bind), body.restFoot(b.bind)), dr = abs(a.rho - b.rho)
+                    worstFoot = max(worstFoot, df); worstRho = max(worstRho, dr)
+                    if df > 2e-4 || dr > 2e-4 { bad += 1; if firstBad.isEmpty { firstBad = "az \(az) y \(y): foot \(df) rho \(dr)" } }
+                } else { nils += 1 }
+                y += 0.0125
+            }
+        }
+        print("WEARRADIAL queries \(n) (nil in both \(nils)), fast path \(WearBody.radialFast), bisection fallback \(WearBody.radialFallback), worst foot diff \(worstFoot), worst rho diff \(worstRho)")
+        XCTAssertEqual(bad, 0, firstBad)
+        var badBind = 0
+        for _ in 0..<4000 {
+            let q = SIMD3<Float>(Float.random(in: -0.7...0.7, using: &rng), Float.random(in: -0.1...1.4, using: &rng), body.axisZ + Float.random(in: -0.7...0.7, using: &rng))
+            let a = body.bind(q), b = body.bindLegacy(q)
+            if a?.tri != b?.tri || a?.bary != b?.bary || a?.off != b?.off { badBind += 1 }
+        }
+        XCTAssertEqual(badBind, 0, "bind differs from bindLegacy")
     }
 }

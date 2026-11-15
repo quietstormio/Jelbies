@@ -87,10 +87,15 @@ nonisolated enum WearMeshes {
         lock.lock(); let c = prepared[l]; lock.unlock()
         if let c { return c }
         guard let a = art(l) else { return nil }
+        let t0 = CFAbsoluteTimeGetCurrent()
         let p = build(l, art: a, body: body, recolour: nil)
+        logPrep(l.rawValue, since: t0)
         lock.lock(); prepared[l] = p; lock.unlock()
         return p
     }
+
+    /// One line per cache MISS, so the device console shows what a first wear costs.
+    private static func logPrep(_ name: String, since t0: CFAbsoluteTime) { NSLog("[melon] wear prep %@ %.0f ms", name, (CFAbsoluteTimeGetCurrent() - t0) * 1000) }
 
     static func clearCache() { lock.lock(); prepared = [:]; bibs = [:]; variants = [:]; lock.unlock() }
 
@@ -102,7 +107,9 @@ nonisolated enum WearMeshes {
         lock.lock(); let c = variants[key]; lock.unlock()
         if let c { return c }
         guard let a = art(variant) else { return prepare(l, body: body) }
+        let t0 = CFAbsoluteTimeGetCurrent()
         let p = build(l, art: a, body: body, recolour: nil)
+        logPrep(key, since: t0)
         lock.lock(); variants[key] = p; lock.unlock()
         return p
     }
@@ -349,6 +356,7 @@ nonisolated enum WearMeshes {
         let src: WearLook = .bibSky
         guard let plate = art(src) else { return nil }
         let swap = [(from: WearTeam.sky.linear, to: team.linear), (from: WearTeam.pink.linear, to: team.linear)]
+        let t0 = CFAbsoluteTimeGetCurrent()
         let p = build(src, art: plate, body: body, recolour: swap)
         // the digits, placed on the plate face along the plate normal, tinted team colour 25 % toward ink
         let tint = team.linear * 0.75 + WearTeam.inkLinear * 0.25
@@ -392,6 +400,7 @@ nonisolated enum WearMeshes {
             x0 += (bh - bl) + gap
         }
         markLimbFree(p, body: body)
+        logPrep("bib-" + key, since: t0)
         lock.lock(); bibs[key] = p; lock.unlock()
         return p
     }
