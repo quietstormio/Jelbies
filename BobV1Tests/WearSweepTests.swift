@@ -22,7 +22,11 @@ final class WearSweepTests: XCTestCase {
     override func setUp() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 1) }
     override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); DayClock.shared.forcedHour = 12 }
 
-    static let names = ["Bob", "Pip", "Moss", "Lavender"]
+    static let names = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl", "Panda"]
+    /// Species rendered: the four of the sweep, or all seven with WEAR4_ALL7 (capture-only).
+    var nSp: Int { env("WEAR4_ALL7") != nil ? 7 : 4 }
+    /// Capture-only: WEAR4_SP=2 (comma list of species ids) renders only those Jelmiko; WEAR4_FLAP=80 forces the wing flap signal to that many degrees (clamped by the worn items' limits: the widest ALLOWED flap).
+    var spList: [Int] { env("WEAR4_SP")?.split(separator: ",").compactMap { Int($0) } ?? Array(0..<nSp) }
     /// The pieces added by this sweep (wear4_new_items.png).
     static let newPieces: [WearLook] = WearGenerated.rows.filter { $0.batch >= 4 }.map(\.look)
 
@@ -73,13 +77,16 @@ final class WearSweepTests: XCTestCase {
 
     /// Fresh wardrobe + feature set wearing `look` (a few ticks so the carry settles).
     private func dress(_ st: Stage, _ look: WearLook, ticks: Int = 3) {
+        let ticks = env("WEAR4_SETTLE").flatMap { Int($0) } ?? ticks          // capture-only: more ticks so a feature that pops in on a fresh FeatureSet (Moss's antennas) has finished
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; Self.keep.append(w)
         let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
         st.worn = w; st.feat = f
-        for _ in 0..<ticks { tick(st, look) }
+        let settle = env("WEAR4_SETTLE") != nil
+        for _ in 0..<ticks { if settle { st.lab.tick(watching: false) }; tick(st, look) }          // (settle: the soft antennas live in the skinner and need the sim stepping too; the jelly.tick of the sleep loop crashed here)
     }
     private func tick(_ st: Stage, _ look: WearLook, dt: Float = 1.0 / 60) {
         let r = st.rig
+        if let f = env("WEAR4_FLAP").flatMap({ Float($0) }) { r.brain.sig.wingFlap = f }
         st.worn.tick(id: 0, brain: r.brain, sim: r.sim, outfit: [look.slot: look], role: .none, hideAll: false, dt: dt)
         var art: [String] = []
         for s in WearSlot.allCases where s != .feet { if let l = st.worn.shown(0, s), !l.art.isEmpty { art.append(l.art) } }
@@ -116,7 +123,7 @@ final class WearSweepTests: XCTestCase {
     }
 
     /// A frame of the stage from `yaw` radians round his facing.
-    private func shot(_ st: Stage, _ look: WearLook, yaw: Float, full: Bool = false, masks: Bool = false, extra: Float = 0, time: Float = 0.4, tight: Bool = false, focus: (Float, Float)? = nil, side: Float = 0) -> UIImage {
+    private func shot(_ st: Stage, _ look: WearLook, yaw: Float, full: Bool = false, masks: Bool = false, extra: Float = 0, time: Float = 0.4, tight: Bool = false, focus: (Float, Float)? = nil, side: Float = 0, lift: Float = 0.1) -> UIImage {
         let r = st.rig, ren = st.ren
         let pose = r.sim.bodyPose(iterations: 3)
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
@@ -125,8 +132,9 @@ final class WearSweepTests: XCTestCase {
         let c = pose.centroid
         var (ly, dist) = framing(look.slot, full: full)
         if tight { ly = 0.05; dist = 2.0 }
+        if let fs = env("WEAR4_FOCUS")?.split(separator: ",").compactMap({ Float($0) }), fs.count == 2 { (ly, dist) = (fs[0], fs[1]) }          // capture-only: WEAR4_FOCUS=<look height above the centroid>,<distance> (the Moss hat sheet needs the antenna tips in frame)
         if let focus { (ly, dist) = focus }
-        let cam = Self.lookCamera(target: SIMD3(c.x, c.y + ly, c.z) + SIMD3(dir.z, 0, -dir.x) * side, dir: dir, dist: dist + extra)
+        let cam = Self.lookCamera(target: SIMD3(c.x, c.y + ly, c.z) + SIMD3(dir.z, 0, -dir.x) * side, dir: dir, dist: dist + extra, lift: lift)
         ren.dayHourOverride = masks ? 15 : 12
         let light = GameCamera.light(centroids: [r.sim.centroid()])
         ren.beginFrame()
@@ -182,7 +190,7 @@ final class WearSweepTests: XCTestCase {
     // MARK: the sweep
 
     /// Cells: [look][jelbie] -> (static: front, 3/4, back?), (walk: 1 frame), (sleep: 1 frame, head and face only)
-    struct Cells { var front: Data?, tq: Data?, side: Data?, backq: Data?, back: Data?, walk: Data?, sleep: Data? }
+    struct Cells { var front: Data?, tq: Data?, side: Data?, backq: Data?, back: Data?, walk: Data?, sleep: Data?, room: Data?, top: Data? }
 
     func testSweep() throws {
         let d = try dir()
@@ -190,8 +198,8 @@ final class WearSweepTests: XCTestCase {
         let list = looks()
         guard !list.isEmpty else { throw XCTSkip("nothing selected") }
         var cells: [WearLook: [Cells]] = [:]
-        for l in list { cells[l] = Array(repeating: Cells(), count: 4) }
-        for id in 0..<4 {
+        for l in list { cells[l] = Array(repeating: Cells(), count: nSp) }
+        for id in spList {
             DayClock.shared.forcedHour = 12
             let st = try makeStage(id)
             let tg: [SIMD2<Float>] = [SIMD2(1.6, 0.4), SIMD2(-1.2, 1.0)]
@@ -201,8 +209,12 @@ final class WearSweepTests: XCTestCase {
                 var c = cells[l]![id]
                 c.front = caption(shot(st, l, yaw: 0), "\(Self.names[id]) \(l.rawValue) front").pngData()
                 c.tq = caption(shot(st, l, yaw: 0.65), "\(Self.names[id]) \(l.title) 3/4").pngData()
-                if l.slot == .neck || l.slot == .body { c.side = caption(shot(st, l, yaw: 1.5), "\(Self.names[id]) side").pngData(); c.backq = caption(shot(st, l, yaw: 2.4), "\(Self.names[id]) 3/4 back").pngData() }
+                if l.slot == .neck || l.slot == .body || (env("WEAR4_TILES") != nil && l.slot == .head) { c.side = caption(shot(st, l, yaw: 1.5), "\(Self.names[id]) side").pngData(); c.backq = caption(shot(st, l, yaw: 2.4), "\(Self.names[id]) 3/4 back").pngData() }
                 if l.anchor == .back || l.slot == .body || l.slot == .neck { c.back = caption(shot(st, l, yaw: .pi), "\(Self.names[id]) back").pngData() }
+                if env("WEAR4_TILES") != nil {          // capture-only: the room camera looks down ~35 degrees (tan 0.7), the top view ~60 degrees (tan 1.7)
+                    c.room = caption(shot(st, l, yaw: 0.35, lift: 0.7), "\(Self.names[id]) \(l.rawValue) room cam 35deg").pngData()
+                    c.top = caption(shot(st, l, yaw: 0.35, lift: 1.7), "\(Self.names[id]) \(l.rawValue) from above 60deg").pngData()
+                }
                 cells[l]![id] = c
             }
             // 2. mid-walk
@@ -240,6 +252,15 @@ final class WearSweepTests: XCTestCase {
                 }
             }
         }
+        if let td = env("WEAR4_TILES") {                       // capture-only: every tile on its own, <look>_<species>_<view>.png
+            try FileManager.default.createDirectory(atPath: td, withIntermediateDirectories: true)
+            for l in list { for id in spList {
+                let c = cells[l]![id]
+                for (v, data) in [("front", c.front), ("q34", c.tq), ("side", c.side), ("q34b", c.backq), ("back", c.back), ("walk", c.walk), ("room", c.room), ("top", c.top)] {
+                    if let data { try data.write(to: URL(fileURLWithPath: td + "/\(l.rawValue)_\(Self.names[id])_\(v).png")) }
+                }
+            } }
+        }
         // sheets per slot
         for slot in [WearSlot.head, .face, .neck, .body, .hands] {
             let ls = list.filter { $0.slot == slot }
@@ -254,7 +275,7 @@ final class WearSweepTests: XCTestCase {
                 for l in chunk {
                     var row: [UIImage] = [], row2: [UIImage] = [], wrow: [UIImage] = []
                     let wide = slot == .body || slot == .neck
-                    for id in 0..<4 {
+                    for id in 0..<nSp {
                         let c = cells[l]![id]
                         var mine: [UIImage] = [c.front, c.tq].compactMap { $0.flatMap { UIImage(data: $0) } }
                         if wide { mine += [c.side, c.backq, c.back].compactMap { $0.flatMap { UIImage(data: $0) } } }
@@ -274,7 +295,7 @@ final class WearSweepTests: XCTestCase {
         let fresh = list.filter { Self.newPieces.contains($0) }
         if !fresh.isEmpty {
             var rows: [[UIImage]] = []
-            for l in fresh { rows.append((0..<4).compactMap { cells[l]![$0].tq.flatMap { UIImage(data: $0) } }) }
+            for l in fresh { rows.append((0..<nSp).compactMap { cells[l]![$0].tq.flatMap { UIImage(data: $0) } }) }
             try write(stack(rows, header: "NEW pieces on Bob, Pip, Moss, Lavender (3/4)"), d + "/wear4_new_items\(tag).png")
         }
     }

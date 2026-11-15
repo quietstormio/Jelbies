@@ -24,7 +24,7 @@ def _norm_from_faces(P,F):
         n=np.cross(P[b]-P[a],P[c]-P[a]); N[a]+=n;N[b]+=n;N[c]+=n
     L=np.linalg.norm(N,axis=1,keepdims=True); return N/np.maximum(L,1e-12)
 
-def add_part(name,P,F,color,N=None,hint=None,flip_auto=True):
+def add_part(name,P,F,color,N=None,hint=None,flip_auto=True,AO=None):
     """Open or closed mesh (rest space). color: rgb or fn(p,n)->rgb. hint: fn(p)->outward dir used to orient normals/winding."""
     P=[tuple(map(float,p)) for p in P]; F=[tuple(f) for f in F]
     Nn=_norm_from_faces(P,F)
@@ -34,6 +34,7 @@ def add_part(name,P,F,color,N=None,hint=None,flip_auto=True):
     if N is not None: Nn=np.asarray(N)
     C=list(color) if isinstance(color,list) else [(color(np.array(p),n) if callable(color) else color) for p,n in zip(P,Nn)]
     part=dict(name=name,P=P,N=[tuple(n) for n in Nn],C=[tuple(c) for c in C],F=F)
+    if AO is not None: part['AO']=list(AO)          # per-vertex baked ao override (None = the exporter's own); > 1 = emissive weight (RoomShaders)
     PARTS.append(part); return part
 
 def closed(bm,color,name,mods=(),sharp=50):
@@ -156,6 +157,38 @@ def shell_pt(y,phi,off,dy=0.0):
 def body_pt(x,y,off,mirror=False):
     """front surface of the WHOLE body (arms and fillets included) at (x,y) pushed `off` along its normal."""
     p=B.front_surface(x,y); n=full_n(p); return p+n*off, n
+def surface_ray(y, phi, arms=True, rmax=1.3, nstep=261):
+    """ALL-ROUND body surface sampler (works round the back, unlike body_pt / front_surface which only see the front).
+    A ray leaves the body axis (x=0, z=0) at height y in the direction of the egg point at azimuth phi (same convention as B.egg_point: phi 0 = +x,
+    pi/2 = front +z, pi = -x, 3pi/2 = back), and the OUTERMOST sign change of the body SDF along it is bisected. arms=True uses the whole body (arms, fillets,
+    feet: what the runtime skin is); arms=False the bare egg SDF. y and phi may be scalars or equal-length arrays. Returns (points, normals), each (...,3)."""
+    y = np.asarray(y, float); phi = np.asarray(phi, float); y, phi = np.broadcast_arrays(y, phi)
+    shp = y.shape; yf = y.ravel(); pf = phi.ravel()
+    t = (yf - B.lift) / B.bodyH
+    a = np.maximum(B.halfWidth(t), 1e-3); c = np.maximum(B.halfDepth(t), 1e-3)
+    d = np.stack([a * np.cos(pf), np.zeros_like(pf), c * np.sin(pf)], -1)
+    d /= np.linalg.norm(d, axis=-1, keepdims=True)
+    f = B.sdf if arms else B.bodySDF
+    rs = np.linspace(rmax, 0.0, nstep)
+    inside = np.stack([f(d[:, 0] * r, yf, d[:, 2] * r) < 0 for r in rs], 1)          # (n, nstep): first True from the outside
+    anyin = inside.any(axis=1)
+    k = np.argmax(inside, axis=1)
+    k = np.maximum(k, 1)
+    hi = rs[k - 1].copy(); lo = rs[k].copy()                                            # hi outside, lo inside
+    for _ in range(26):
+        m = 0.5 * (hi + lo); neg = f(d[:, 0] * m, yf, d[:, 2] * m) < 0
+        lo = np.where(neg, m, lo); hi = np.where(neg, hi, m)
+    r = np.where(anyin, 0.5 * (hi + lo), 0.0)                                           # (no crossing at this height: the axis point)
+    P = np.stack([d[:, 0] * r, yf, d[:, 2] * r], -1)
+    N = B.grad(P) if arms else B.egg_grad(P)
+    return P.reshape(shp + (3,)), N.reshape(shp + (3,))
+
+def surface_at(y, phi, off=0.0, arms=True):
+    """One point of surface_ray pushed `off` along the surface normal: returns (point, normal)."""
+    P, N = surface_ray(y, phi, arms=arms)
+    P = np.asarray(P).reshape(3); N = np.asarray(N).reshape(3)
+    return P + N * off, N
+
 def squash_face_hint(p): return egg_n(p)
 
 # ---------- scene transforms -------------------------------------------------
@@ -185,9 +218,18 @@ def export(item_id, anchor_rest, meta, outdir=W+"/export", ao_body=True, mirror_
         o=len(allP); P=np.array(p['P'])-sub; allP+=list(P); allN+=p['N']; allC+=p['C']
         allF+=[(a+o,b+o,c+o) for a,b,c in p['F']]; groups.append((p['name'],o,len(p['F']),len(p['P'])))
     Pabs=np.array(allP)+sub
-    if meta.get('authored_local') or meta.get('anchor')=='number': ao_body=False
+    OV=[]
+    for p in PARTS: OV+=list(p.get('AO') or [None]*len(p['P']))
+    if meta.get('authored_local') or meta.get('anchor')=='number' or meta.get('ao_flat'): ao_body=False
     sd=B.sdf_pts(Pabs) if ao_body else np.ones(len(Pabs))
     ao=0.6+0.4*np.clip(sd/0.09,0,1); ao=np.where(np.array([0]*len(ao))==1,1,ao)
+    # meta 'ao_flat' = no baked occlusion (a satin / thin piece lying on the skin); meta 'emit' = RoomShaders' emissive weight (ao > 1 adds albedo*(ao-1)*1.7 whatever the light direction: lifts the
+    # side of a piece that faces away from the room's key light, where the shader leaves only ambient)
+    if meta.get('emit'): ao=ao+float(meta['emit'])
+    # meta 'back_emit' = keep the distance-based occlusion on the FRONT half (the look the piece had before) and fade to ao 1.0 + back_emit round the back (z < 0): only the side facing away from the room's key light is lifted
+    if meta.get('back_emit'):
+        t=np.clip(-Pabs[:,2]/0.30,0,1); b=t*t*(3-2*t); ao=ao*(1-b)+(1.0+float(meta['back_emit']))*b
+    OVa=np.array([np.nan if v is None else v for v in OV],float); ao=np.where(np.isnan(OVa),ao,OVa)
     # parts that have nothing to do with the body (gloves' far side etc.) just get mild ao; fine.
     os.makedirs(outdir,exist_ok=True)
     with open(f"{outdir}/{item_id}.obj","w") as fh:

@@ -1,47 +1,37 @@
 {
  "id": "sash_sky",
- "tris": 1108,
- "verts": 991,
+ "tris": 952,
+ "verts": 842,
  "parts": [
   {
    "name": "band",
-   "tris": 120,
-   "verts": 77
-  },
-  {
-   "name": "pipe-1",
-   "tris": 96,
-   "verts": 50
-  },
-  {
-   "name": "pipe+1",
-   "tris": 96,
-   "verts": 50
+   "tris": 448,
+   "verts": 280
   },
   {
    "name": "star0",
-   "tris": 156,
-   "verts": 180
+   "tris": 76,
+   "verts": 108
   },
   {
    "name": "star1",
-   "tris": 156,
-   "verts": 180
+   "tris": 76,
+   "verts": 108
   },
   {
    "name": "star2",
-   "tris": 156,
-   "verts": 180
+   "tris": 76,
+   "verts": 108
   },
   {
    "name": "rosette",
-   "tris": 96,
-   "verts": 62
+   "tris": 80,
+   "verts": 52
   },
   {
    "name": "rosette2",
-   "tris": 60,
-   "verts": 52
+   "tris": 48,
+   "verts": 42
   },
   {
    "name": "rbutton",
@@ -50,13 +40,13 @@
   },
   {
    "name": "tail+1",
-   "tris": 68,
-   "verts": 68
+   "tris": 56,
+   "verts": 62
   },
   {
    "name": "tail-1",
-   "tris": 68,
-   "verts": 72
+   "tris": 56,
+   "verts": 62
   }
  ],
  "anchor_rest": [
@@ -65,19 +55,19 @@
   0.4683
  ],
  "bounds_local_min": [
-  -0.4471,
-  -0.2447,
-  -0.4696
+  -0.6206,
+  -0.2324,
+  -1.0228
  ],
  "bounds_local_max": [
-  0.3965,
-  0.2816,
-  0.0895
+  0.5426,
+  0.3939,
+  0.0901
  ],
  "size": [
-  0.8436,
-  0.5263,
-  0.5591
+  1.1632,
+  0.6263,
+  1.1129
  ],
  "anchor": "chest",
  "slot": "body",
@@ -87,7 +77,8 @@
  ],
  "price": 50,
  "title": "Sky racing sash",
- "desc": "A pillowed diagonal racing sash (0.15 wide, 0.04 tall) with cream piping, three puffy stars and a ruffled rosette with two ribbon tails at the low end. Ends stop at |x|=0.42; whole sash below the mouth keep-out.",
+ "back_emit": 0.18,
+ "desc": "A full closed diagonal racing sash (0.074 wide) worn round the whole body: over the left shoulder above the arm root (centre y 0.70), across the chest below the mouth (0.46), under the right arm (0.265), and back up across the back (0.50 at the centre line, between Pip's spikes). Cream piped edges, three stars on the chest and a ruffled rosette with two ribbon tails at the right hip.",
  "colourway": "sash_sky",
  "batch": 1
 }

@@ -192,22 +192,26 @@ def monocle(gold=HONEY, **k):
     a = math.radians(-35)
     start = c + (x * math.cos(a) + y * math.sin(a)) * (R + 0.012)
     bead('hinge', start, (0.021, 0.021, 0.021), deep(gold, 0.15), segs=6)
-    path = [start]
-    for (px, py, off) in ((0.31, 0.735, 0.040), (0.36, 0.690, 0.040), (0.405, 0.625, 0.040), (0.425, 0.565, 0.040)):
-        p, nn = body_pt(px, py, off)
-        path.append(p)
-    for i in range(len(path) - 1):
-        a_, b_ = path[i], path[i + 1]
-        for q in range(2):
-            m = a_ + (b_ - a_) * (q + 0.5) / 2
-            d = (b_ - a_) / np.linalg.norm(b_ - a_)
-            ref = np.array([0, 0, 1.0]) if q % 2 == 0 else np.array([1.0, 0, 0])
-            xx = np.cross(d, ref); xx /= np.linalg.norm(xx)
-            zz = np.cross(d, xx)
-            bead('link%d_%d' % (i, q), m, (0.011, 0.024, 0.0075) if q % 2 == 0 else (0.0075, 0.024, 0.011), tint(gold, 0.1), rot=np.stack([xx, d, zz], 1), segs=6)
+    # ONE continuous fine chain from the hinge to the clip (it used to be 8 separate link beads that read as floating dashes): a catmull-rom through the old waypoints, every sample re-seated on the skin
+    # (3.4 cm out), as a single 6-sided tube with alternating light / dark rings (two rings per link) so it still reads as a chain. Part name 'chain' (WearRules: bound at the top, swinging at the end).
+    way = [start] + [body_pt(px, py, 0.040)[0] for (px, py) in ((0.31, 0.735), (0.36, 0.690), (0.405, 0.625), (0.425, 0.565))]
+    def crom(P, n=7):
+        P = [P[0]] + list(P) + [P[-1]]; out = []
+        for i in range(1, len(P) - 2):
+            p0, p1, p2, p3 = P[i - 1], P[i], P[i + 1], P[i + 2]
+            for k in range(n):
+                t = k / n; out.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t ** 3))
+        out.append(P[-2]); return out
+    sm = crom(way)
+    path = [sm[0]] + [np.array(body_pt(float(q[0]), float(q[1]), 0.034)[0]) for q in sm[1:-1]] + [way[-1]]
+    arr = np.array(path)
+    def ccol(p, nn):
+        k = int(np.argmin(((arr - np.array(p)) ** 2).sum(1)))
+        return deep(gold, 0.30) if k % 2 == 0 else tint(gold, 0.30)
+    tube_curve('chain', path, 0.0058, 6, ccol, cap=True)
     bead('clip', path[-1], (0.026, 0.026, 0.020), gold, segs=8)
     return dict(anchor='face', slot='face', tags=['cool', 'sweet'], price=45, title='Monocle',
-                desc='Gold monocle: a thick glossy ring round the +x eye bead with a hinge and a chunky oval-link chain hanging OUTWARD to a clip at (0.425,0.565).')
+                desc='Gold monocle: a thick glossy ring round the +x eye bead with a hinge and a one fine continuous chain (a single tube with alternating light / dark rings) hanging OUTWARD to a clip at (0.425,0.565).')
 
 REG = [
     ('wayfarer_black', wayfarer, dict(kind='black'), FA),

@@ -12,48 +12,69 @@ def surf_frame(x, y, off):
     return p, xx, yy, z
 
 # ============================ SASH ==========================================
+def sash_y(phi):
+    """Centre-line height of the closed diagonal sash at azimuth phi (0 = +x right hip, pi/2 = front, pi = -x left shoulder, 3pi/2 = back), a 2-harmonic curve through four
+    heights: LOW over the right hip (0.265: under the hanging arm bulb, bottom y~0.31), HIGH over the left shoulder (0.70: above the arm root, top ~0.66), 0.46 on the chest
+    (top edge 0.50, under the mouth keep-out) and 0.555 at the back centre line (between Pip's tail-root swell, top 0.544, and his next spike group, 0.574+)."""
+    return 0.495 - 0.2175 * math.cos(phi) - 0.0475 * math.sin(phi) - 0.0125 * math.cos(2 * phi)
+
 def sash(field=SKY, trim=CREAM, star=PINK, **k):
-    reset(); nL = 11; W_ = 0.074
-    a = np.array([-0.42, 0.600]); b = np.array([0.33, 0.255])
-    d = (b - a) / np.linalg.norm(b - a); perp = np.array([-d[1], d[0]])
-    rows = [(-1.0, 0.012), (-0.90, 0.024), (-0.5, 0.036), (0.0, 0.042), (0.5, 0.036), (0.90, 0.024), (1.0, 0.012)]
+    """A full closed diagonal sash (bandolier) worn round the whole body: over the left shoulder above the arm root, across the chest, under the right arm and back
+    up across the back. Built on wl.surface_ray so it hugs the skin all the way round (the old one was front-only)."""
+    reset(); NA = 56; HW = 0.042
+    rows = [(-1.0, 0.010), (-0.86, 0.030), (0.0, 0.037), (0.86, 0.030), (1.0, 0.010)]
+    R_ = 0.52
+    def path(phi):
+        d = 1e-3
+        return sash_y(phi), (sash_y(phi + d) - sash_y(phi - d)) / (2 * d)       # (y, dy/dphi)
+    def skin(phi, w, off):
+        y0, dy = path(phi)
+        t = np.array([R_, dy]); t /= np.linalg.norm(t)                          # (arc length, height) direction of the path
+        perp = np.array([-t[1], t[0]])                                          # across the band: +w goes up-and-forward
+        ph = phi + perp[0] * w * HW / R_; y = y0 + perp[1] * w * HW
+        return surface_at(y, ph, off=off)
+    cols = [2 * math.pi * i / NA for i in range(NA)]
     def pt(i, j):
-        t = i / (nL - 1); w, off = rows[j]
-        taper = 1.0 - 0.55 * (abs(2 * t - 1) ** 6)
-        q = a + (b - a) * t + perp * W_ * w * taper
-        p, n = body_pt(q[0], q[1], off * (0.4 + 0.6 * taper)); return p
-    grid_surface('band', pt, nL, len(rows), None, closed_u=False, hint=lambda p: full_n(p),
-                 gcol=lambda i, j: mix(deep(trim, 0.1), trim, 0.5) if abs(rows[j][0]) >= 0.89 else mix(deep(field, 0.12), tint(field, 0.12), 0.35 + 0.65 * (1 - abs(rows[j][0]))))
-    # raised piping along both edges
-    for s in (-1, 1):
-        pts = []
-        for t in np.linspace(0.03, 0.97, 12):
-            taper = 1.0 - 0.55 * (abs(2 * t - 1) ** 6)
-            q = a + (b - a) * t + perp * W_ * 0.93 * s * taper
-            pts.append(body_pt(q[0], q[1], 0.040)[0])
-        tube_curve('pipe%+d' % s, pts, 0.0085, 4, lambda p, n: mix(deep(trim, 0.12), tint(trim, 0.2), 0.5 + 0.5 * n[1]), cap=True)
-    ang = math.atan2(d[1], d[0])
-    for k_, t in enumerate((0.22, 0.5, 0.78)):
-        q = a + (b - a) * t
-        p, xx, yy, nn = surf_frame(q[0], q[1], 0.046)
-        sp = star_poly(0.040, 0.019, 5, rad=0.007)
-        slab_part('star%d' % k_, sp, 0.014, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.3), 0.5 + 0.5 * nq[2]),
-                  lambda px, py, pz, p=p, xx=xx, yy=yy, nn=nn: tuple(p + xx * (px * math.cos(ang) - py * math.sin(ang)) + yy * (px * math.sin(ang) + py * math.cos(ang)) + nn * (pz - 0.004)), cuts=0, sharp=40)
-    # a ruffled rosette at the low end with two short ribbon tails
-    p, xx, yy, nn = surf_frame(0.305, 0.262, 0.052)
+        w, off = rows[j]; return skin(cols[i], w, off)[0]
+    # the band is a closed ring: columns wrap
+    P = []
+    for j in range(len(rows)):
+        for i in range(NA): P.append(pt(i, j))
+    def gcol(i, j):
+        w = rows[j][0]
+        return mix(deep(trim, 0.1), trim, 0.5) if abs(w) >= 0.85 else mix(deep(field, 0.12), tint(field, 0.12), 0.35 + 0.65 * (1 - abs(w)))
+    grid_surface('band', lambda i, j: pt(i, j), NA, len(rows), None, closed_u=True, hint=lambda p: full_n(p), gcol=gcol)
+    # stars: three on the chest, laid on the band
+    def frame_at(phi, off):
+        p, n = skin(phi, 0.0, off)
+        y0, dy = path(phi)
+        tdir = skin(phi + 0.02, 0.0, off)[0] - skin(phi - 0.02, 0.0, off)[0]
+        tdir = tdir - n * np.dot(tdir, n); tdir /= np.linalg.norm(tdir)
+        up = np.cross(n, tdir)
+        return p, tdir, up, n
+    for k_, ph in enumerate((math.radians(62), math.radians(90), math.radians(118))):
+        p, xx, yy, nn = frame_at(ph, 0.040)
+        if xx[0] < 0: xx, yy = -xx, -yy                                           # screen-right first
+        sp = lib.poly_pts_rounded([((0.040 if q % 2 == 0 else 0.019) * math.cos(math.pi / 2 + math.pi * q / 5), (0.040 if q % 2 == 0 else 0.019) * math.sin(math.pi / 2 + math.pi * q / 5)) for q in range(10)], 0.007, arc=1)
+        slab_part('star%d' % k_, sp, 0.012, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.3), 0.5 + 0.5 * nq[2]),
+                  lambda px, py, pz, p=p, xx=xx, yy=yy, nn=nn: tuple(p + xx * px + yy * py + nn * (pz - 0.002)), cuts=0, sharp=40)
+    # a ruffled rosette at the low end (right hip, front) with two short ribbon tails
+    phr = math.radians(22)
+    p, xx, yy, nn = frame_at(phr, 0.044)
     Rm = np.stack([xx, nn, -yy], 1).tolist()
-    prof = [(0.0, 0.0), (0.062, 0.0), (0.072, 0.010), (0.062, 0.022), (0.044, 0.028), (0.0, 0.030)]
-    lathe_y('rosette', prof, 12, lambda q, nq: mix(deep(star, 0.12), tint(star, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p), rotm=Rm, sharp=60)
-    lathe_y('rosette2', [(0.0, 0.0), (0.040, 0.0), (0.044, 0.010), (0.030, 0.018), (0.0, 0.020)], 10, lambda q, nq: mix(deep(field, 0.1), tint(field, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p + nn * 0.026), rotm=Rm, sharp=60)
-    bead('rbutton', p + nn * 0.052, (0.016, 0.016, 0.012), GOLD, segs=6)
-    for s_, dx in ((1, 0.020), (-1, -0.026)):
-        def fn(i, j, s_=s_, dx=dx):
-            v = j / 5.0; u = i / 2.0 - 0.5
-            q = np.array([0.305 + dx + u * 0.040 * (1 + 0.5 * v) + s_ * 0.012 * v, 0.248 - 0.100 * v])
-            pp, nq = body_pt(q[0], q[1], 0.050 - 0.006 * v); return pp, nq
-        thick_sheet('tail%+d' % s_, fn, 3, 6, 0.010, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.2), 0.5))
-    return dict(anchor='chest', slot='body', tags=['sporty', 'sparkly'], price=50, title='Racing sash',
-                desc='A pillowed diagonal racing sash (0.15 wide, 0.04 tall) with cream piping, three puffy stars and a ruffled rosette with two ribbon tails at the low end. Ends stop at |x|=0.42; whole sash below the mouth keep-out.')
+    prof = [(0.0, 0.0), (0.056, 0.0), (0.064, 0.010), (0.054, 0.022), (0.038, 0.028), (0.0, 0.030)]
+    lathe_y('rosette', prof, 10, lambda q, nq: mix(deep(star, 0.12), tint(star, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p), rotm=Rm, sharp=60)
+    lathe_y('rosette2', [(0.0, 0.0), (0.034, 0.0), (0.038, 0.010), (0.026, 0.018), (0.0, 0.020)], 8, lambda q, nq: mix(deep(field, 0.1), tint(field, 0.3), 0.5 + 0.5 * nq[1]), centre=tuple(p + nn * 0.026), rotm=Rm, sharp=60)
+    bead('rbutton', p + nn * 0.050, (0.014, 0.014, 0.011), GOLD, segs=6)
+    for s_, dphi in ((1, 0.00), (-1, 0.06)):
+        def fn(i, j, s_=s_, dphi=dphi):
+            v = j / 4.0; u = i / 2.0 - 0.5
+            y = sash_y(phr) - 0.015 - 0.095 * v
+            ph = phr + dphi - 0.05 * s_ * v + u * 0.07 * (1 + 0.5 * v)
+            pp, nq = surface_at(y, ph, off=0.050 - 0.006 * v); return pp, nq
+        thick_sheet('tail%+d' % s_, fn, 3, 5, 0.010, lambda pq, nq: mix(deep(star, 0.1), tint(star, 0.2), 0.5))
+    return dict(anchor='chest', slot='body', tags=['sporty', 'sparkly'], price=50, title='Racing sash', back_emit=0.18,
+                desc='A full closed diagonal racing sash (0.074 wide) worn round the whole body: over the left shoulder above the arm root (centre y 0.70), across the chest below the mouth (0.46), under the right arm (0.265), and back up across the back (0.50 at the centre line, between Pip\'s spikes). Cream piped edges, three stars on the chest and a ruffled rosette with two ribbon tails at the right hip.')
 
 # ============================ BIB ==========================================
 BIB_C = (0.0, 0.355)
@@ -118,42 +139,100 @@ def bandana(main=CORAL, dots=CREAM, trim=CREAM, **k):
                 desc='A neckerchief: a plumped rolled band across the belly at y~0.505 (top <=0.54), big side knots, and a thick polka-dot triangle with rolled cream hems hanging to y 0.27. All below the mouth keep-out.')
 
 # ============================ TUTU =========================================
-def tutu(pink=PINK, lav=LAV, band=None, pip=False, **k):
-    """pip=True: open over Pip's tail root (a slot +-40 deg round the back centre): the layers are open sweeps instead of closed rings."""
-    reset(); yb = 0.255
+def _ring_mesh(name, rows, close_i, colfn, close_k=True, cap_ends=True):
+    """A tube-like grid: rows[i][k] = point k of cross-section i. close_i: sections wrap round (a ring); otherwise the two end sections are capped.
+    The cross-section is always closed. Faces point outward (signed volume check). colfn(i, k, p) -> rgb."""
+    NI = len(rows); NK = len(rows[0]); P = []; C = []
+    for i in range(NI):
+        for k in range(NK): P.append(tuple(rows[i][k])); C.append(colfn(i, k, np.array(rows[i][k])))
+    F = []
+    for i in range(NI if close_i else NI - 1):
+        i2 = (i + 1) % NI
+        for k in range(NK):
+            k2 = (k + 1) % NK
+            a, b, c, d = i * NK + k, i2 * NK + k, i2 * NK + k2, i * NK + k2
+            F += [(a, b, c), (a, c, d)]
+    if not close_i and cap_ends:
+        for ring, rev in ((0, True), (NI - 1, False)):
+            ctr = np.mean([rows[ring][k] for k in range(NK)], 0); ci = len(P); P.append(tuple(ctr)); C.append(colfn(ring, 0, ctr))
+            for k in range(NK):
+                k2 = (k + 1) % NK; a, b = ring * NK + k, ring * NK + k2
+                F.append((ci, b, a) if rev else (ci, a, b))
+    Pn = np.array(P); vol = sum(np.dot(Pn[a], np.cross(Pn[b], Pn[c])) for a, b, c in F)
+    if vol < 0: F = [(a, c, b) for a, b, c in F]
+    return add_part(name, P, F, C, flip_auto=False)
+
+def _fold_layer(name, inner, hem, colfn, close_i):
+    """A thin double-sided tulle layer: a top surface and an underside kept 8 mm BELOW it everywhere, hem included (no shared rim: top and underside never converge, so they never z-fight).
+    The underside is the SAME mid pink as the tier (no darker than its darkest top colour) and carries a baked emissive weight (ao 1.25): a surface facing down only gets the room's ambient, which is
+    brown, and read as a maroon wedge at the ends of the skirt (round-3 review). inner / hem: per-column points of the top surface edges."""
+    N = len(inner); P = []; C = []; AO = []; DY = np.array([0, 0.008, 0])
+    for i in range(N): P.append(tuple(inner[i])); C.append(colfn(i, 0)); AO.append(None)
+    for i in range(N): P.append(tuple(hem[i])); C.append(colfn(i, 1)); AO.append(None)
+    for i in range(N): P.append(tuple(np.array(inner[i]) - DY)); C.append(colfn(i, 2)); AO.append(1.25)
+    for i in range(N): P.append(tuple(np.array(hem[i]) - DY)); C.append(colfn(i, 3)); AO.append(1.25)
+    Ft = []; Fb = []
+    for i in range(N if close_i else N - 1):
+        i2 = (i + 1) % N
+        a, b, c, d = i, i2, N + i2, N + i
+        Ft += [(a, b, c), (a, c, d)]
+        a, b, c, d = 2 * N + i, 2 * N + i2, 3 * N + i2, 3 * N + i
+        Fb += [(a, c, b), (a, d, c)]
+    Pn = np.array(P)
+    n0 = np.cross(Pn[Ft[0][1]] - Pn[Ft[0][0]], Pn[Ft[0][2]] - Pn[Ft[0][0]])
+    if n0[1] < 0: Ft = [(a, c, b) for a, b, c in Ft]; Fb = [(a, c, b) for a, b, c in Fb]
+    return add_part(name, P, Ft + Fb, C, flip_auto=False, AO=AO)
+
+def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
+    """Ballet tutu: a snug waistband on the body at height yb and three thin tulle layers that leave it and flare OUT AND DOWN (28 / 38 / 48 degrees below horizontal),
+    each with a scalloped hem (17 soft waves, staggered per layer), 80 columns, a slightly different pink per layer, and a small bow on the front.
+    Hems end at y ~0.13 on the chest (the shoes show under it) and ~0.06 at the hips / back. Budget: <=1000 vertices / <=1300 triangles (WearMeshes), so the layers are single cones folded on a shared rim, not slabs.
+    pip=True: open over Pip's tail root (a slot +-40 deg round the back centre)."""
+    reset()
     band = band or deep(pink, 0.22)
     p0, p1 = (math.radians(310.0), math.radians(590.0)) if pip else (0.0, 2 * math.pi)
-    NS = 18 if pip else 24
-    def sweep_ring(name, loopfn, colfn, K):
-        if not pip:
-            torus(name, NS, lambda phi: loopfn(phi), colfn, sharp=70); return
-        def pt(i, j):
-            return loopfn(p0 + (p1 - p0) * j / (NS - 1))[i]
-        grid_surface(name, pt, K, NS, None, closed_u=True, hint=lambda p: np.array([p[0], 0.2, p[2]]), gcol=lambda i, j: colfn(np.array([0, 0.2, 0]), np.array([0, 0.5, 0])))
-    sweep_ring('waistband', lambda phi: [eloop(yb, phi, h, v) for h, v in ((0.012, 0.030), (0.044, 0.026), (0.050, 0.0), (0.044, -0.026), (0.012, -0.030))], lambda p, n: mix(deep(band, 0.1), tint(band, 0.25), 0.5 + 0.5 * n[1] * 0.6), 5)
-    LAY = [(mix(tint(pink, 0.40), CREAM, 0.10), 0.125, 0.0, 0.0), (tint(lav, 0.22), 0.205, -0.045, 1.0), (tint(pink, 0.30), 0.285, -0.090, 2.0)]
-    for li, (c, hem, dy, ph) in enumerate(LAY):
-        def lf(phi, c=c, hem=hem, dy=dy, ph=ph):
-            rf = 1 + 0.07 * math.cos(8 * phi + ph)
-            sag = 0.026 * (0.5 + 0.5 * math.cos(8 * phi + ph + 1.0))
-            out = []
-            for t in (0.0, 0.5, 1.0):
-                h = 0.040 + (hem * rf - 0.040) * t
-                y = yb + 0.034 + dy * t + 0.040 * t - 0.056 * t * t - sag * t ** 3
-                out.append(eloop(y + 0.022, phi, h, 0.0))
-            for t in (1.0, 0.5, 0.0):
-                h = 0.040 + (hem * rf - 0.040) * t
-                y = yb + 0.034 + dy * t + 0.040 * t - 0.056 * t * t - sag * t ** 3
-                out.append(eloop(y - 0.014, phi, h, 0.0))
-            return out
-        sweep_ring('layer%d' % li, lf, lambda p, n, c=c: mix(deep(c, 0.14), tint(c, 0.18), min(1.0, max(0.0, (0.30 - p[1]) / 0.22) * 0.8 + 0.2 * (0.5 + 0.5 * n[1]))), 6)
-    p, xx, yy, nn = surf_frame(0.0, yb, 0.064)
-    Rm = np.stack([xx, yy, nn], 1)
+    def phis(n):
+        return [p0 + (p1 - p0) * (i / (n - 1 if pip else n)) for i in range(n)]
+    # the BASE band is open over the very back (+-22 deg, hidden under the tulle): on Pip his tail swings through that stretch (WearBandTests 'inside a limb' 0.1445 vs 0.14)
+    def bphis(n):
+        if pip: return [p0 + (p1 - p0) * i / (n - 1) for i in range(n)]
+        # base: the same columns as a closed ring (one at the hips, phi = 0), the three at the very back left out (a 51 degree gap under the tulle), starting after the gap
+        K = [2 * math.pi * i / n for i in range(n) if abs(((2 * math.pi * i / n) - 1.5 * math.pi + math.pi) % (2 * math.pi) - math.pi) > 0.5 * 2 * math.pi / n * 1.5]
+        K.sort(key=lambda a: (a - 1.5 * math.pi) % (2 * math.pi)); return K
+    # --- waistband: a rounded ring hugging the egg
+    hin = lambda phi: 0.010 + 0.016 * math.cos(phi) ** 2            # stand-off of the band's inner edge: 1 cm at the front / back (Pip's tail), 2.6 cm at the hips (the skin bulges there in a lean)
+    def sec_at(phi):
+        h0 = hin(phi); return [(h0, 0.020), (h0 + 0.022, 0.022), (h0 + 0.022, -0.022), (h0, -0.020)]
+    NB = 22 if pip else 28
+    dip = max(0.0, yb - 0.252)                                       # the band (top +0.026) dips to y 0.252 at the hips so it passes UNDER the hanging arm bulbs (bottom y~0.31) and their blend into the body
+    bdip = max(0.0, yb - 0.245)                                       # ... and 0.245 at the back centre: lower on the back keeps the band off the root of Pip's tail (the tail swell tops out at y 0.54)
+    yl = lambda phi: yb - dip * math.cos(phi) ** 2 - bdip * max(0.0, -math.sin(phi)) ** 2
+    rows = [[eloop(yl(ph), ph, h, v) for h, v in sec_at(ph)] for ph in bphis(NB)]
+    _ring_mesh('waistband', rows, False, lambda i, k, p: mix(deep(band, 0.10), tint(band, 0.28), 0.5 + 0.5 * (sec_at(0.0)[k][1] / 0.026) * 0.7))
+    # --- tulle layers: (colour, attach dy, angle below horizontal, reach, hem wave phase)
+    LAY = [(mix(tint(pink, 0.55), CREAM, 0.30), 0.004, 28.0, 0.120, 0.0), (tint(pink, 0.22), -0.008, 38.0, 0.140, 1.0), (mix(pink, lav, 0.38), -0.020, 48.0, 0.150, 2.0)]
+    NC = 62 if pip else 68
+    for li, (c, dy, ang, reach, ph) in enumerate(LAY):
+        inner = []; hem = []
+        cols = phis(NC)
+        for phi in cols:
+            e = B.egg_point(yl(phi) + dy, phi); h = hdir(e)
+            s = math.sqrt(math.sin(8.5 * phi + 0.5 * ph * math.pi) ** 2 + 0.06) / math.sqrt(1.06)      # ~0.2 at the cusps (hem lifts, blunt: no needle tips edge-on), 1 mid-scallop
+            side = math.cos(phi) ** 2                                      # 1 at the hips (seen edge-on in the front view), 0 on the chest / back
+            L = reach * (1 - 0.06 * (1 - s) * (1 - side)) * (1 - 0.30 * side)         # the skirt is shorter in reach at the hips and its cusps fade there: no needle tips at the silhouette ends
+            inner.append(e + h * (hin(phi) + 0.012))
+            hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.017 * (1 - s) * (1 - side), 0]))
+        def cf(i, k, c=c):
+            return deep(c, 0.10) if k == 0 else (tint(c, 0.14) if k == 1 else (deep(c, 0.10) if k == 2 else c))
+        _fold_layer('layer%d' % li, inner, hem, cf, not pip)
+    # --- a small neat bow on the front of the band
+    p, n = surface_at(yb + 0.034, math.pi / 2, off=0.044)
+    xx, yy, nn = axes(n); Rm = np.stack([xx, yy, nn], 1)
     for s_ in (-1, 1):
-        bead('bow%+d' % s_, p + xx * s_ * 0.050 + nn * 0.004, (0.058, 0.032, 0.022), lambda q, nq: mix(deep(pink, 0.28), tint(pink, 0.1), 0.5 + 0.5 * nq[2]), rot=Rm, segs=6)
-    bead('bowknot', p + nn * 0.012, (0.026, 0.026, 0.022), deep(pink, 0.32), segs=6)
+        bead('bow%+d' % s_, p + xx * s_ * 0.044 + nn * 0.002, (0.050, 0.027, 0.018), lambda q, nq: mix(deep(pink, 0.26), tint(pink, 0.12), 0.5 + 0.5 * nq[2]), rot=Rm, segs=6)
+    bead('bowknot', p + nn * 0.008, (0.021, 0.021, 0.017), deep(pink, 0.34), segs=6)
     return dict(anchor='waist', slot='body', tags=['cute', 'sweet', 'sparkly'], price=60, title='Ballet tutu',
-                desc='A fuller three-layer ruffled tulle tutu (thick edged layers with scalloped hems, perkier and shorter than before) on a puffy waistband with a satin bow at the front. Layers all y<=0.29; clear of arms and feet. Pip\'s variant is open over his tail root.')
+                desc='A fluffy ballet tutu: a snug waistband at y %.2f with three thin tulle layers flaring out and down (28 / 38 / 48 degrees below horizontal, reach 0.12 / 0.14 / 0.15), 16 staggered scalloped waves per hem, a small bow on the front. Pip\'s variant is open over his tail root.' % yb)
 
 # ============================ CAPE =========================================
 def cape(main=None, lining=HONEY, trim=CREAM, pip=False, **k):
@@ -279,33 +358,64 @@ def whistle(strap=SKY, metal=hx('#C9D3DC'), mouth=CORAL, **k):
                 desc='A coach whistle on a thick rounded sky lanyard in a V from the shoulders to a ring at (0,0.44); a big silver whistle with a coral mouthpiece hangs to y~0.31. All below the mouth keep-out.')
 
 # ============================ BACKPACK =====================================
+def pillow(name, phic, yc, hphi, hy, D, color, off0=0.010, nu=12, nv=12, colfn=None, rim=0.6):
+    """A rounded pillow lying ON the back (or any all-round skin patch): footprint hphi (rad of egg azimuth) by hy (m) round (phic, yc), standing off the skin by
+    off0 at its rim and off0 + D at the middle, with a steep rounded wall. One open, single-sided mesh (its underside is against the body, never seen)."""
+    def fn(i, j):
+        u = 2.0 * i / (nu - 1) - 1.0; v = 2.0 * j / (nv - 1) - 1.0
+        # square -> rounded square (rim) : blend the square with the disc map
+        uu = u * (1 - rim + rim * math.sqrt(max(0.0, 1 - v * v / 2))); vv = v * (1 - rim + rim * math.sqrt(max(0.0, 1 - u * u / 2)))
+        r2 = max(abs(u), abs(v))
+        d = D * math.sqrt(max(0.0, 1 - r2 ** 5)) if r2 < 1 else 0.0
+        return surface_at(yc + vv * hy, phic + uu * hphi, off=off0 + d)[0]
+    return grid_surface(name, fn, nu, nv, color, closed_u=False, hint=lambda p: full_n(p), gcol=colfn)
+
+def _snap(p, off):
+    """Project a point onto the whole-body skin and stand it `off` off it along the SDF gradient (3 Newton steps): keeps a strap on the skin across the groove between the chest and an arm."""
+    p = np.array(p, float)
+    for _ in range(4):
+        d = float(B.sdf_pts(p)); g = B.grad(p); p = p - g * (d - off)
+    return p
+
 def backpack(main=SKY, flap=CORAL, strap=None, pip=False, **k):
+    """A backpack seated on the upper-middle back, rim 4 mm off the skin, pillowed 10 cm out (taller body, flap, front pocket, two side pockets, buckle, top handle), on two thin
+    shoulder straps that each loop an arm root and stay within ~1.3 cm of the skin all the way: over the top of the arm root (y 0.70), down BEHIND it, under the arm bulb (y 0.26)
+    and back into the pack. pip=True: the same pack at 0.78 scale high enough (centre y 0.74) to clear the root of Pip's tail (top 0.544); the spikes it covers hide by the existing rule."""
     reset(); strap = strap or deep(main, 0.28)
-    zc = -0.625
-    F = 0.50 if pip else 1.0                      # the Pip variant: a smaller pack high between the shoulder blades, above his tail root
-    Y0 = 1.15 if pip else 0.55
-    if pip: zc = -(float(B.halfDepth((Y0 - B.lift) / B.bodyH)) + 0.10)
-    IO2.sellip('pack', (0, Y0, zc), (0.225 * F, 0.255 * F, 0.125 * F), 0.5, lambda p, n: mix(deep(main, 0.12), tint(main, 0.15), 0.5 + 0.5 * n[1] * 0.6), nu=14, nv=7)
-    IO2.sellip('flap', (0, Y0 + 0.125 * F, zc - 0.006 * F), (0.232 * F, 0.110 * F, 0.134 * F), 0.5, lambda p, n: mix(deep(flap, 0.12), tint(flap, 0.15), 0.5 + 0.5 * n[1] * 0.6), nu=14, nv=5)
-    IO2.sellip('pocket', (0, Y0 - 0.095 * F, zc - 0.116 * F), (0.150 * F, 0.088 * F, 0.056 * F), 0.5, lambda p, n: mix(deep(flap, 0.18), tint(flap, 0.1), 0.5 + 0.5 * n[1] * 0.5), nu=10, nv=5)
-    # side bottle pockets
-    for s in (-1, 1):
-        IO2.sellip('side%+d' % s, (s * 0.200 * F, Y0 - 0.080 * F, zc + 0.01 * F), (0.050 * F, 0.100 * F, 0.070 * F), 0.55, lambda p, n: mix(deep(flap, 0.2), tint(flap, 0.1), 0.5 + 0.5 * n[1] * 0.5), nu=8, nv=5)
-    bead('buckle', (0, Y0 + 0.035 * F, zc - 0.142 * F), (0.040 * F, 0.030 * F, 0.016 * F), GOLD, segs=6)
-    tube_curve('handle', [(-0.06 * F, Y0 + 0.27 * F, zc), (-0.06 * F, Y0 + 0.33 * F, zc), (0.06 * F, Y0 + 0.33 * F, zc), (0.06 * F, Y0 + 0.27 * F, zc)], 0.016 * F, 6, strap, cap=True)
+    BK = 1.5 * math.pi
+    sc = 0.78 if pip else 1.0
+    yc = 0.74 if pip else 0.56
+    hp, hy = 0.46 * sc, 0.25 * sc
+    pillow('pack', BK, yc, hp, hy, 0.105 * sc, None, off0=0.004, nu=14, nv=14, colfn=lambda i, j: mix(deep(main, 0.14), tint(main, 0.18), 0.5 + 0.5 * math.sin(math.pi * j / 13)))
+    pillow('flap', BK, yc + 0.145 * sc, hp * 1.02, 0.108 * sc, 0.122 * sc, None, off0=0.004, nu=12, nv=6, colfn=lambda i, j: mix(deep(flap, 0.12), tint(flap, 0.18), 0.4 + 0.6 * math.sin(math.pi * j / 5)))
+    pillow('pocket', BK, yc - 0.125 * sc, hp * 0.70, 0.088 * sc, 0.138 * sc, None, off0=0.004, nu=10, nv=6, colfn=lambda i, j: mix(deep(flap, 0.20), tint(flap, 0.10), 0.5 + 0.5 * math.sin(math.pi * j / 5)))
+    for s_ in (-1, 1):
+        pillow('side%+d' % s_, BK + s_ * hp * 1.12, yc - 0.10 * sc, 0.09 * sc, 0.10 * sc, 0.085 * sc, None, off0=0.004, nu=6, nv=6, rim=0.8, colfn=lambda i, j: mix(deep(flap, 0.22), tint(flap, 0.08), 0.5))
+    pb, nb = surface_at(yc + 0.035 * sc, BK, off=0.160 * sc)
+    bead('buckle', pb, (0.040 * sc, 0.030 * sc, 0.016), GOLD, rot=np.stack(axes(nb), 1), segs=6)
+    hpts = [surface_at(yc + hy - 0.01 + 0.07 * sc * math.sin(math.pi * t), BK + (t - 0.5) * 0.32 * sc, off=0.100 * sc + 0.012 * math.sin(math.pi * t))[0] for t in np.linspace(0, 1, 9)]
+    tube_curve('handle', hpts, 0.014 * sc, 5, strap, cap=True)
+    # straps: closed loop on the skin round each arm root (right arm: azimuth PC - PR .. PC + PR; the left strap is the mirror image)
+    NS = 56; HW = 0.022; R_ = 0.52
+    PC, PR = -0.805, 0.465               # back end -1.27 (inside the pack), front end -0.34 (z -0.17: BEHIND the arm bulb, whose back edge is z -0.11): over the top of the arm root, down behind the arm, under it - no line crosses the front of the bulb
+    YC, RU, RD = ((0.52, 0.18, 0.26) if pip else (0.495, 0.205, 0.235))
+    rows = [(-1.0, 0.004), (0.0, 0.012), (1.0, 0.004)]
+    def loop(th):
+        yy = YC + (RU if math.sin(th) > 0 else RD) * math.sin(th)
+        return PC + PR * math.cos(th), yy
     for s in (1, -1):
-        spec = [(0.58, 282, 0.040), (0.64, 298, 0.042), (0.690, 318, 0.046), (0.715, 336, 0.050), (0.712, 346, 0.054), (0.700, 353, 0.058)]
-        Pc = []
-        for y, ph, off in spec:
-            phi = math.radians(ph); phi = phi if s > 0 else math.pi - phi
-            p = B.egg_point(y, phi); Pc.append(p + hdir(p) * off)
-        tg = [(Pc[min(j + 1, len(Pc) - 1)] - Pc[max(j - 1, 0)]) for j in range(len(Pc))]
-        def fn(i, j, Pc=Pc, tg=tg):
-            u = i / 2 - 0.5; c = Pc[j]; t = tg[j] / np.linalg.norm(tg[j]); n = hdir(c)
-            ac = np.cross(n, t); ac /= np.linalg.norm(ac); return c + ac * u * 0.085, n
-        thick_sheet('strap%+d' % s, fn, 3, len(Pc), 0.030, lambda p, nn: mix(deep(strap, 0.05), tint(strap, 0.14), 0.5 + 0.5 * nn[1] * 0.5))
+        def spt(i, j, s=s):
+            th = 2 * math.pi * i / NS; d = 1e-3
+            p0 = loop(th - d); p1 = loop(th + d)
+            t = np.array([R_ * (p1[0] - p0[0]), p1[1] - p0[1]]); t /= np.linalg.norm(t); perp = np.array([-t[1], t[0]])
+            ph, y = loop(th); w, off = rows[j]
+            phh = ph + perp[0] * w * HW / R_; yy = y + perp[1] * w * HW
+            phh = phh if s > 0 else math.pi - phh
+            return _snap(surface_at(yy, phh, off=off)[0], off)
+        grid_surface('strap%+d' % s, spt, NS, len(rows), None, closed_u=True, hint=lambda p: full_n(p),
+                     gcol=lambda i, j: deep(strap, 0.22) if abs(rows[j][0]) > 0.9 else mix(deep(strap, 0.08), tint(strap, 0.16), 0.6))
     return dict(anchor='back', slot='body', tags=['cute', 'sporty'], price=50, title='Little backpack', variant='backpack_sky_pip' if pip else None,
-                desc='A rounded backpack on the back (pack centre y 0.42, z -0.585) with a flap, a zipped front pocket, two side bottle pockets, a buckle and a top handle, on padded shoulder straps that end tucked behind the arm roots.')
+                desc='A backpack seated on the upper-middle back (0.46 rad wide, 0.50 tall, rim 4 mm off the skin, pillowed to ~10 cm) with a flap, a front pocket, two side pockets, a buckle and a top handle, on two thin shoulder straps that each loop an arm root snug to the skin: over the top (y 0.70), down behind the arm, under the arm bulb (y 0.26) and into the pack.')
 
 REG = [
     ('sash_pink', sash, dict(field=PINK, star=SKY), BIB_ANCHOR),

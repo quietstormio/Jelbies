@@ -690,8 +690,8 @@
     "sparkly"
    ],
    "price": 50,
-   "tris": 1108,
-   "verts": 991,
+   "tris": 952,
+   "verts": 842,
    "deform_class": "surface_bound",
    "files": [
     "sash_pink.obj",
@@ -727,8 +727,8 @@
     "sparkly"
    ],
    "price": 50,
-   "tris": 1108,
-   "verts": 991,
+   "tris": 952,
+   "verts": 842,
    "deform_class": "surface_bound",
    "files": [
     "sash_sky.obj",
@@ -1281,8 +1281,8 @@
     "sweet"
    ],
    "price": 45,
-   "tris": 820,
-   "verts": 430,
+   "tris": 880,
+   "verts": 446,
    "deform_class": "ring rigid; chain surface_bound + free swing",
    "files": [
     "monocle_gold.obj",
@@ -1321,8 +1321,8 @@
     "cool"
    ],
    "price": 35,
-   "tris": 1238,
-   "verts": 750,
+   "tris": 1232,
+   "verts": 818,
    "deform_class": "wrap surface_bound (follows belly); knot rigid; tails surface_bound at the top and may swing (hang from the knot)",
    "files": [
     "scarf_cosy.obj",
@@ -1362,8 +1362,8 @@
     "cool"
    ],
    "price": 35,
-   "tris": 1238,
-   "verts": 750,
+   "tris": 1232,
+   "verts": 818,
    "deform_class": "wrap surface_bound (follows belly); knot rigid; tails surface_bound at the top and may swing (hang from the knot)",
    "files": [
     "scarf_sky.obj",
@@ -1484,8 +1484,8 @@
     "sparkly"
    ],
    "price": 60,
-   "tris": 1212,
-   "verts": 900,
+   "tris": 1140,
+   "verts": 990,
    "deform_class": "surface_bound ring: bind every vertex to egg (y,phi)+horizontal offset; waistband rigid-on-surface, layers flare and may bob (jiggle the hem vertices, y<0.27, along y/out only)",
    "files": [
     "tutu_pink.obj",
@@ -1571,8 +1571,8 @@
     "sporty"
    ],
    "price": 50,
-   "tris": 600,
-   "verts": 392,
+   "tris": 1212,
+   "verts": 805,
    "deform_class": "pack rigid on the back surface (carry like head_top); STRAPS surface_bound over the shoulder (follow the egg squash)",
    "files": [
     "backpack_sky.obj",
@@ -1654,8 +1654,8 @@
     "cute"
    ],
    "price": 20,
-   "tris": 448,
-   "verts": 280,
+   "tris": 864,
+   "verts": 504,
    "deform_class": "arm_frame (mirror for -x arm, scale by tip radius/0.15)",
    "files": [
     "wristbands_sky.obj",
@@ -1892,8 +1892,8 @@
     "sparkly"
    ],
    "price": 75,
-   "tris": 936,
-   "verts": 534,
+   "tris": 918,
+   "verts": 533,
    "files": [
     "bag_crossbody.obj",
     "bag_crossbody.json"
@@ -1999,8 +1999,8 @@
     "sweet"
    ],
    "price": 55,
-   "tris": 624,
-   "verts": 466,
+   "tris": 904,
+   "verts": 622,
    "files": [
     "scarf_silk.obj",
     "scarf_silk.json"
@@ -2249,8 +2249,8 @@
     "sweet"
    ],
    "price": 35,
-   "tris": 1238,
-   "verts": 750,
+   "tris": 1232,
+   "verts": 818,
    "files": [
     "scarf_plum.obj",
     "scarf_plum.json"

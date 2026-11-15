@@ -61,6 +61,11 @@ extension GameCare {
         guard let b = a.brain else { return [ArmFrameWorld(), ArmFrameWorld()] }
         return Self.armFrames(brain: b, sim: a.sim)
     }
+    /// THE drawn arm, per side (index 0 = -x, 1 = +x), in world space: what the skin shows, read from the data that draws it.
+    /// - the walking capsule (`armLastGeom`, rooted in the attractor pose like `driveArms` roots it, or the fitted pose in a volley) blended from the arm underneath by `armBlendNow`;
+    /// - else the keyframed skin arm (wave / dining path / held-up arms) at the path parameter it is evaluated at (`armSkinS` / `excitedS`, `ArmPath.geom` as the wave blend uses it), carried by the body's fitted pose;
+    /// - else the rest nub (`BobForm.armTop` / `armTip`).
+    /// Wear (`WornSet.emitArms`) fits its band to this record, so the band and the arm cannot be two different arms.
     static func armFrames(brain b: BlobBrain, sim: SoftBody) -> [ArmFrameWorld] {
         let pose = sim.bodyPose(iterations: 3)
         let R = simd_float3x3(pose.rotation)
@@ -68,25 +73,29 @@ extension GameCare {
         let M = R * simd_float3x3(diagonal: SIMD3(sxz, sq, sxz))
         func carry(_ p: SIMD3<Float>) -> SIMD3<Float> { pose.centroid + M * (p - sim.restCentroid) }
         let att = sim.attractor
-        let RA = simd_float3x3(att.rotation) * simd_float3x3(diagonal: SIMD3(sxz, sq, sxz))
-        func attractor(_ p: SIMD3<Float>) -> SIMD3<Float> { att.anchor + RA * (p - sim.restCentroid) }
+        let aRot = b.volleyFitted ? pose.rotation : att.rotation, aAnchor = b.volleyFitted ? pose.centroid : att.anchor          // (driveArms roots the capsules in the fitted pose in a volley)
+        let RA = simd_float3x3(aRot) * simd_float3x3(diagonal: SIMD3(sxz, sq, sxz))
+        func attractor(_ p: SIMD3<Float>) -> SIMD3<Float> { aAnchor + RA * (p - sim.restCentroid) }
         let bl = b.armG > 0.0001 ? b.armBlendNow : 0
-        let restA = SIMD3<Float>(Float(BobForm.armTop.x), Float(BobForm.armTop.y), Float(BobForm.armTop.z))
-        let restB = SIMD3<Float>(Float(BobForm.armTip.x), Float(BobForm.armTip.y), Float(BobForm.armTip.z))
-        let restR = Float(BobForm.armTipR)
         var out: [ArmFrameWorld] = []
         for side in 0..<2 {
             let sg: Float = side == 1 ? 1 : -1
             func mir(_ p: SIMD3<Float>) -> SIMD3<Float> { SIMD3(p.x * sg, p.y, p.z) }
+            let g0 = b.skinArmGeom(side: side) ?? ArmGeom.rest          // the arm under the capsule: the keyframed skin arm while one is out, else the rest nub
             var f = ArmFrameWorld()
-            f.a = carry(mir(restA)); f.b = carry(mir(restB)); f.r2 = restR
+            f.a = carry(mir(SIMD3<Float>(g0.A))); f.b = carry(mir(SIMD3<Float>(g0.B)))
+            f.r1 = Float(g0.r1); f.r2 = Float(g0.r2); f.flatten = Float(g0.flatten)
             if bl > 0 {
                 let g = b.armLastGeom[side]
                 f.a += (attractor(mir(g.a)) - f.a) * bl
                 f.b += (attractor(mir(g.b)) - f.b) * bl
-                f.r2 += (g.r2 - restR) * bl
+                f.r1 += (g.r1 - f.r1) * bl; f.r2 += (g.r2 - f.r2) * bl; f.flatten += (g.f - f.flatten) * bl
             }
             f.forward = R * SIMD3(0, 0, 1)
+            f.right = R * SIMD3(1, 0, 0)
+            f.out = max(Float(g0.grow), bl)          // 0 = the rest nub, 1 = out (the keyframed arm's grow / the capsule's blend): the wristband's station follows it
+            f.first = b.armFirstIdx.count == 2 ? b.armFirstIdx[side] : -1          // the arm's revolve in the skinned stream (ArmRings reads the drawn arm from it)
+            f.inflate = bl > 0 ? 0.002 * f.flatten.squareRoot() * (1 - bl) : -Float(g0.capsuleInflate) * f.flatten.squareRoot()          // the revolve is hidden under the rest skin / grown by the wave / starts 2 mm under in the capsule swap
             out.append(f)
         }
         return out

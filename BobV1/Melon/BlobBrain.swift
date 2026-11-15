@@ -2053,6 +2053,7 @@ final class BlobBrain {
             let tt0 = CFAbsoluteTimeGetCurrent()
             defer { armCostSum += CFAbsoluteTimeGetCurrent() - tt0; armCostN += 1 }
             let sKey = armPathName == ArmPath.wave.name ? WaveScript.s(at: armT) : armS
+            armSkinS[armSide > 0 ? 1 : 0] = sKey
             kf.evaluate(side: armSide, s: sKey, rotation: pose.rotation, delta: &armDelta, ao: &armAO)
             skinner.overrideVertices = kf.side(armSide).vertices
             skinner.overrideDelta = armDelta
@@ -2155,6 +2156,9 @@ final class BlobBrain {
     /// Body-frame capsule drawn last tick (after the cap), +x arm convention, and the tip it asked for before the cap (diagnostics / tests).
     var armLastGeom: [(a: SIMD3<Float>, b: SIMD3<Float>, r1: Float, r2: Float, f: Float)] = [(.zero, .zero, 0, 0, 1), (.zero, .zero, 0, 0, 1)]
     var armLastRawTip: [SIMD3<Float>] = [.zero, .zero]
+    /// Path parameter each keyframed skin arm (wave / dining path) is drawn at, per side (0 = -x, 1 = +x), written where `kf.evaluate` runs; `excitedS` the same for the held-up arms.
+    /// Wear (`drawnSkinArm`) reads them only while `armActive` / `excitedOn` say that arm is out, so the wristband rides the arm the skin shows.
+    var armSkinS: [Float] = [0, 0], excitedS: [Float] = [0, 0]
     private var armRawTip: SIMD3<Float> = .zero
     var armLastS: [Float] = [25, 25]                   // each arm's sweep (deg) frozen at the release
     var armScratch: [[SIMD3<Float>]] = [[], []], armStartScratch: [[SIMD3<Float>]] = [[], []]
@@ -2165,6 +2169,15 @@ final class BlobBrain {
     var armWasOut = false
     var armAOBaked: [Float] = [], armAOEgg: [Float] = []
     private(set) var armSwapCount = 0
+    /// The keyframed skin arm drawn on `side` right now (+x convention, body rest frame), or nil when the rest nub / the capsule is the arm: the wave, the dining path (the side it poses) and the held-up arms.
+    func skinArmGeom(side: Int) -> ArmGeom? {
+        if armActive, (armSide > 0 ? 1 : 0) == side, let kf = armKeyframes[armPathName] {
+            let path = armPathName == ArmPath.wave.name ? ArmPath.wave : ArmPath.nubToMouth
+            return path.geom(at: Double(min(max(armSkinS[side], 0), 1)), scale: kf.scale)
+        }
+        if excitedOn, let kf = armKeyframes[ArmPath.wave.name] { return ArmPath.wave.geom(at: Double(min(max(excitedS[side], 0), 1)), scale: kf.scale) }
+        return nil
+    }
     var armLiftNow: Float { armLift }
     var armCapsuleOut: Bool { armG > 0 }
     var armBlendNow: Float { let k = smooth01(armG); return k * k }
@@ -2756,6 +2769,7 @@ final class BlobBrain {
             for (i, side) in [-1, 1].enumerated() {
                 let s = L * (0.20 + 0.025 * sinf(ph + (i == 0 ? 0 : 0.6)))
                 kf.evaluate(side: side, s: s, rotation: pose.rotation, delta: &excitedScratch[i], ao: &excitedAO[i])
+                excitedS[i] = s
                 verts += kf.side(side).vertices; dl += excitedScratch[i]; mat += excitedAO[i]
             }
             skinner.overrideVertices = verts; skinner.overrideDelta = dl; skinner.overrideMat = mat

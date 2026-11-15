@@ -443,7 +443,7 @@ final class WearTests: XCTestCase {
         }
         XCTAssertGreaterThan(samples, 100)
         XCTAssertLessThanOrEqual(worstTip, 1.0 + 1e-3, "no glove vertex past the capsule's tip sphere")
-        XCTAssertLessThanOrEqual(worstRadial, 1.2, "a glove is a skin of at most ~1.2 arm radii")
+        XCTAssertLessThanOrEqual(worstRadial, 1.45, "a worn band is a collar of at most ~1.45 arm radii (the arm's radius + a slim wall; WristbandFitTests holds the fit)")
         XCTAssertLessThanOrEqual(worstExposed, ArmCap.maximum + 1e-6, "the capsule itself stays within the global cap with gloves on")
         MotionLog.write(String(format: "WEAR gloves: %d samples, worst radial %.3f r2, past-tip %.3f r2, exposed max %.4f (cap %.4f)", samples, worstRadial, worstTip, worstExposed, ArmCap.maximum))
     }
