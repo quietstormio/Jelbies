@@ -112,7 +112,7 @@ final class ParkPairsTests: XCTestCase {
     func testWaiterStandsUntilPartnerIsNearThenBothRide() {
         ParkPairTuning.toyRateNew = false
         let c0 = ParkToys.placed.first { $0.kind == .seesaw }!.at
-        let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(3.0, 2.8)], seed: 5)
+        let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(-2.6, 3.0)], seed: 5)
         let a = lab.rigs[0], b = lab.rigs[1], R = SeesawRide.shared, field = DecorField.shared
         XCTAssertTrue(a.brain.decorStart(.decorSit, a.sim, only: .seesaw, uid: uid), "A starts (the partner is recruited with him)")
         XCTAssertEqual(b.brain.idleState.kind, .decorSit, "B was started as the partner")
@@ -148,10 +148,10 @@ final class ParkPairsTests: XCTestCase {
     func testBlockedPartnerMakesTheWaiterGiveUp() {
         ParkPairTuning.toyRateNew = false
         let c0 = ParkToys.placed.first { $0.kind == .seesaw }!.at
-        let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(3.0, 2.8)], seed: 8)
+        let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(-2.6, 3.0)], seed: 8)
         let a = lab.rigs[0], b = lab.rigs[1], R = SeesawRide.shared, field = DecorField.shared
         XCTAssertTrue(a.brain.decorStart(.decorSit, a.sim, only: .seesaw, uid: uid))
-        let pin = SIMD2<Float>(c0.x + 3.0, c0.y + 2.8)          // (B is blocked: every step he is put back where he started, so he never gets near his spot)
+        let pin = SIMD2<Float>(c0.x - 2.6, c0.y + 3.0)          // (B is blocked: every step he is put back where he started, so he never gets near his spot)
         var arrived = -1, ended = -1, everSeated = false, maxAmp: Float = 0
         for i in 0..<(60 * 30) {
             lab.tick(watching: false); field.tick(dt: 1.0 / 60)
@@ -195,7 +195,7 @@ final class ParkPairsTests: XCTestCase {
     func testCommandedWaiterFindsAPartnerWhileWaiting() {
         ParkPairTuning.toyRateNew = false
         let c0 = ParkToys.placed.first { $0.kind == .seesaw }!.at
-        let lab = parkWorld([c0 + SIMD2(0.9, 2.2), c0 + SIMD2(2.5, 3.0)], seed: 11)
+        let lab = parkWorld([c0 + SIMD2(0.9, 2.2), c0 + SIMD2(-2.0, 2.5)], seed: 11)
         let a = lab.rigs[0], b = lab.rigs[1], R = SeesawRide.shared, field = DecorField.shared
         b.brain.anticsEnabled = false          // (not free for a toy yet)
         XCTAssertTrue(a.brain.startCommandedDecor(.decorSit, only: .seesaw, a.sim, a.skinner))
@@ -238,6 +238,21 @@ final class ParkPairsTests: XCTestCase {
         let partners = lab.rigs.dropFirst().filter { $0.brain.idleState.kind == .decorSit && $0.brain.idleState.decorUID == uid }
         XCTAssertEqual(partners.count, 1, "exactly one of the others was taken as the partner")
         for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
+    }
+
+    func testDiagPartnerSpots() {
+        let c0 = ParkToys.placed.first { $0.kind == .seesaw }!.at
+        let lab = parkWorld([c0 + SIMD2(0.9, 2.2), c0 + SIMD2(-2.0, 2.5), c0 + SIMD2(3.0, 2.8), c0 + SIMD2(2.5, 3.0)], seed: 6)
+        guard let f = DecorField.shared.foot(uid) else { return }
+        for (i, r) in lab.rigs.enumerated() {
+            let b = r.brain
+            for seat in 0..<2 {
+                b.decorIgnore = uid
+                let st = b.decorStand(.decorSit, f, from: b.position, seat: seat)
+                MotionLog.write("PAIRS diag rig \(i) at \(b.position) seat \(seat): stand \(String(describing: st)) reachable \(st.map { b.reachable(b.position, $0) } ?? false) toyFree \(b.toyFree) dist \(simd_distance(b.position, DecorField.shared.position(f)))")
+                b.decorIgnore = nil
+            }
+        }
     }
 
     // MARK: the rates (pure checks of the gate)
