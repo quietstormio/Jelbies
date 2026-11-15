@@ -301,12 +301,13 @@ final class ParkPairsTests: XCTestCase {
     struct Soak {
         var creatureMinutes: Float = 0
         var seesawRides = 0, soloRides = 0, pairRides = 0, soloMovingSteps = 0
+        var waits: [Float] = [], waitsGaveUp = 0, aloneStill: [Float] = []          // (stage-0 stands at the seesaw in seconds, how many ended without getting on; seated-alone-on-a-still-plank spans in seconds)
         var hopSessions = 0
         var socialBegins = 0, pairBegins = 0, groupBegins = 0
         var stepsSeesaw = 0, stepsHop = 0, stepsSocial = 0, stepsOther = 0
         var stats = ParkPairTuning.Stats()
         mutating func add(_ o: Soak) {
-            creatureMinutes += o.creatureMinutes; seesawRides += o.seesawRides; soloRides += o.soloRides; soloMovingSteps += o.soloMovingSteps; pairRides += o.pairRides; hopSessions += o.hopSessions
+            creatureMinutes += o.creatureMinutes; seesawRides += o.seesawRides; soloRides += o.soloRides; soloMovingSteps += o.soloMovingSteps; waits += o.waits; waitsGaveUp += o.waitsGaveUp; aloneStill += o.aloneStill; pairRides += o.pairRides; hopSessions += o.hopSessions
             socialBegins += o.socialBegins; pairBegins += o.pairBegins; groupBegins += o.groupBegins
             stepsSeesaw += o.stepsSeesaw; stepsHop += o.stepsHop; stepsSocial += o.stepsSocial; stepsOther += o.stepsOther
             stats.rollNo += o.stats.rollNo; stats.coolNo += o.stats.coolNo; stats.noPartner += o.stats.noPartner; stats.recruited += o.stats.recruited
@@ -314,6 +315,9 @@ final class ParkPairsTests: XCTestCase {
         var steps: Float { Float(max(1, stepsSeesaw + stepsHop + stepsSocial + stepsOther)) }
         func line(_ tag: String) -> String {
             let m = max(creatureMinutes, 0.001)
+            let w = waits.isEmpty ? "none" : String(format: "n %d (%d gave up), mean %.1f s, longest %.1f s", waits.count, waitsGaveUp, waits.reduce(0, +) / Float(waits.count), waits.max()!)
+            let a = aloneStill.isEmpty ? "none" : String(format: "n %d, mean %.1f s, longest %.1f s", aloneStill.count, aloneStill.reduce(0, +) / Float(aloneStill.count), aloneStill.max()!)
+            MotionLog.write("PAIRS SOAK \(tag) WAITS standing at the seesaw before getting on: \(w) | SEATED ALONE on a still plank: \(a)")
             return String(format: "PAIRS SOAK %@: creature-min %.1f | seesaw rides %.3f/cmin (lone-sit %d, pair %d, steps with ONE rider on a MOVING plank %d) | hopscotch sessions %.3f/cmin | social begins %.3f/cmin (pair %d, group member-begins %d) | time share seesaw %.1f%% hop %.1f%% social %.1f%% other %.1f%% | rejects: roll %d cooldown %d noPartner %d recruited %d",
                           tag, creatureMinutes, Float(seesawRides) / m, soloRides, pairRides, soloMovingSteps, Float(hopSessions) / m, Float(socialBegins) / m, pairBegins, groupBegins,
                           100 * Float(stepsSeesaw) / steps, 100 * Float(stepsHop) / steps, 100 * Float(stepsSocial) / steps, 100 * Float(stepsOther) / steps, stats.rollNo, stats.coolNo, stats.noPartner, stats.recruited)
@@ -349,6 +353,8 @@ final class ParkPairsTests: XCTestCase {
         var out = Soak()
         var prev = [IdleKind?](repeating: nil, count: n)
         var inRide = false, bothSeated = false, anySeated = false, emptyFor = 0
+        var standT = [Float](repeating: 0, count: n), standing = [Bool](repeating: false, count: n), boarded = [Bool](repeating: false, count: n)
+        var aloneT: Float = 0
         let steps = Int(minutes * 3600)
         for _ in 0..<steps {
             lab.tick(watching: false); field.tick(dt: 1.0 / 60)
@@ -361,9 +367,20 @@ final class ParkPairsTests: XCTestCase {
                 else if b.isSocial { out.stepsSocial += 1 }
                 else { out.stepsOther += 1 }
             }
+            for (i, r) in lab.rigs.enumerated() {
+                let st = r.brain.idleState
+                let atStage0 = st.kind == .decorSit && st.decorUID == uid && !st.decorGo && st.bagStage == 0
+                if atStage0 { standing[i] = true; standT[i] += 1.0 / 60; boarded[i] = false }
+                else if standing[i] {
+                    standing[i] = false
+                    if st.kind == .decorSit && st.decorUID == uid && st.bagStage >= 1 { out.waits.append(standT[i]) } else { out.waits.append(standT[i]); out.waitsGaveUp += 1 }
+                    standT[i] = 0
+                }
+            }
             let occ = field.seatOccupant[uid]?.count ?? 0
             let seatedNow = [0, 1].filter { R.stage(uid, seat: $0) == .seated }.count
             if seatedNow == 1, R.amp(uid) > 0.01 || abs(R.theta(uid)) > 0.01 { out.soloMovingSteps += 1 }
+            if seatedNow == 1, R.amp(uid) <= 0.01 { aloneT += 1.0 / 60 } else if aloneT > 0 { if seatedNow == 2 || true { out.aloneStill.append(aloneT) }; aloneT = 0 }
             if occ > 0 {
                 if !inRide { inRide = true; bothSeated = false; anySeated = false }
                 emptyFor = 0
