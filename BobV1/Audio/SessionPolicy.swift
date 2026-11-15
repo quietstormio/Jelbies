@@ -44,12 +44,16 @@ nonisolated enum HomeAmbience {
 /// Music that should be audible but is not for `grace` seconds triggers one recovery, then waits `retry` seconds before the next. Pure.
 nonisolated struct MusicWatchdog: Sendable {
     static let grace = 3.0, retry = 5.0
+    /// `-MusicWatchdog 0` (dev builds only, `DevArgs.enabled`): no recovery at all. For log runs on a simulator whose host has no audio device (the watchdog would restart the
+    /// music every `retry` seconds there and hide what the director does). Default and every App Store build: on.
+    static let on = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MusicWatchdog") != nil && UserDefaults.standard.integer(forKey: "MusicWatchdog") == 0)
     private(set) var silent = 0.0
     mutating func reset() { silent = 0 }
     /// A route change or similar: check sooner.
     mutating func nudge() { silent = max(silent, Self.grace - 1) }
     /// True when the caller should re-run the resume path now.
     mutating func update(dt: Double, shouldPlay: Bool, isPlaying: Bool) -> Bool {
+        guard Self.on else { silent = 0; return false }
         guard shouldPlay, !isPlaying else { silent = 0; return false }
         silent += dt
         guard silent >= Self.grace else { return false }
