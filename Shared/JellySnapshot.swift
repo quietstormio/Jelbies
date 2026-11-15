@@ -43,8 +43,12 @@ nonisolated struct JellyRecord: Codable, Equatable, Identifiable, Sendable {
     var look: String = ""
     /// His feature (JellyFeature raw value: "spines", "daisy", "wings"; "" / "none" = plain). Optional in the file: old snapshots have none.
     var feature: String = ""
+    /// Asleep (napping, tucked in or on the way to bed) when this snapshot was written: the away rates for food and water are then the slow asleep ones
+    /// (NeedsTuning.asleepAwayHours), exactly as the game applies them on return. Optional in the file: old snapshots mean awake.
+    var asleep: Bool = false
 
-    init(id: Int, name: String, color: String, levels: [Float], dirt: Float, sparkle: Float, mood: String, look: String = "", feature: String = "") {
+    init(id: Int, name: String, color: String, levels: [Float], dirt: Float, sparkle: Float, mood: String, look: String = "", feature: String = "", asleep: Bool = false) {
+        self.asleep = asleep
         self.id = id; self.name = name; self.color = color; self.levels = levels; self.dirt = dirt; self.sparkle = sparkle; self.mood = mood; self.look = look
         self.feature = feature
     }
@@ -62,6 +66,7 @@ nonisolated struct JellyRecord: Codable, Equatable, Identifiable, Sendable {
         mood = try c.decodeIfPresent(String.self, forKey: .mood) ?? BlobMood.okay.rawValue
         look = try c.decodeIfPresent(String.self, forKey: .look) ?? ""
         feature = try c.decodeIfPresent(String.self, forKey: .feature) ?? ""
+        asleep = try c.decodeIfPresent(Bool.self, forKey: .asleep) ?? false
     }
 }
 
@@ -106,7 +111,7 @@ nonisolated struct JellySnapshot: Codable, Equatable, Sendable {
         let away = TimeAway.clamp(date.timeIntervalSince1970 - savedAt)
         let from = date.addingTimeInterval(-away)
         let needSeconds = AwayMath.needSeconds(from: from, to: date, calendar: calendar)
-        return jellies.map { JellyState(record: $0, awaySeconds: away, needSeconds: needSeconds) }
+        return jellies.map { JellyState(record: $0, awaySeconds: away, needSeconds: needSeconds) }          // (an asleep record: whole-absence seconds for food / water, see init)
     }
 }
 
@@ -134,7 +139,8 @@ nonisolated struct JellyState: Identifiable, Equatable, Sendable {
     init(record r: JellyRecord, awaySeconds: TimeInterval, needSeconds: TimeInterval? = nil) {
         id = r.id; name = r.name; color = r.color
         let away = TimeAway.clamp(awaySeconds)
-        let lv = AwayMath.needLevels(r.levels, seconds: needSeconds ?? away)
+        // asleep: food and water count the whole absence at the asleep rates; attention keeps the night-weighted seconds (AwayMath.needLevels(from:to:))
+        let lv = AwayMath.needLevels(r.levels, seconds: r.asleep ? away : (needSeconds ?? away), attentionSeconds: needSeconds ?? away, asleep: r.asleep)
         let c = AwayMath.coat(dirt: r.dirt, sparkle: r.sparkle, awaySeconds: away)
         levels = lv; dirt = c.dirt; sparkle = c.sparkle
         mood = AwayMath.mood(of: lv)

@@ -307,8 +307,8 @@ final class NeedsTests: XCTestCase {
         let same = make(d, now: { t0 })
         XCTAssertEqual(same.level(.hunger), 0.8, accuracy: 1e-6); XCTAssertEqual(same.level(.thirst), 0.7, accuracy: 1e-6); XCTAssertEqual(same.level(.attention), 0.9, accuracy: 1e-6)
         let hourLater = make(d, now: { t0.addingTimeInterval(3600) })
-        XCTAssertEqual(hourLater.level(.hunger), 0.8 - 1.0 / 10, accuracy: 1e-4, "the offline hour decayed it on the away curve")
-        XCTAssertEqual(hourLater.level(.thirst), 0.7 - 1.0 / 8, accuracy: 1e-4)
+        XCTAssertEqual(hourLater.level(.hunger), 0.8 - 1.0 / 20, accuracy: 1e-4, "the offline hour decayed it on the away curve")
+        XCTAssertEqual(hourLater.level(.thirst), 0.7 - 1.0 / 16, accuracy: 1e-4)
         XCTAssertEqual(hourLater.level(.attention), 0.9 - 1.0 / 6, accuracy: 1e-4)
         // restores save at once
         hourLater.restore(.hunger)

@@ -82,6 +82,13 @@ extension GameCare {
     var anySleepingOrWanted: Bool {
         nightRest.arrivalAsleep || !nightRest.wanted.isEmpty || raceBook.actors.contains { $0.brain?.isSleeping ?? false }
     }
+    /// Is this Jelbie asleep for the time-away rules? The room's own predicate, per creature: in any part of the sleep (`brain.isSleeping`: walking to bed, lying,
+    /// settled) but not one being woken (`sleep.wakeAsked`), or told to go to bed / due to be put down on arrival (`nightRest.wanted`, `arrivalAsleep`: the seconds after
+    /// "goodnight", when players leave). Not `isNapping` (settled only: false for the first seconds of a bedtime). Feeds the needs and the widget snapshot.
+    func asleepForAway(_ id: Int) -> Bool {
+        if let b = selectBrain(id), b.isSleeping { return !b.sleep.wakeAsked }
+        return nightRest.wanted.contains(id) || (nightRest.arrivalAsleep && nightRest.arrivalIDs.contains(id))
+    }
     /// Nobody (apart from `ids`, who are being woken) is left asleep: the Bedtime stamp and the nap card go.
     private func releaseTuckIn(except ids: Set<Int>) {
         guard syncsAppGroup else { return }

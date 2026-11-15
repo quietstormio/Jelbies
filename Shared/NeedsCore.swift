@@ -54,9 +54,13 @@ nonisolated enum NeedsTuning {
         switch k { case .hunger: return 0.3; case .thirst: return 0.2; case .attention: return 4 }
     }
     /// Time AWAY has its own, gentler curve (the in-app rates above are unchanged): real hours for a full need to fall to empty, linearly
-    /// (the floor stops it first), so after 3 h away: hunger 0.70, thirst 0.625, attention 0.50. After 8 h (or overnight) all three sit on the floor.
-    static func awayHoursToEmpty(_ k: NeedKind) -> Double {
-        switch k { case .hunger: return 10; case .thirst: return 8; case .attention: return 6 }
+    /// (the floor stops it first). One-line changes: the six numbers below.
+    /// Awake at leave: after 3 h away hunger 0.85, thirst 0.8125, attention 0.50; after 8 h hunger 0.60, thirst 0.50, attention 0.25 (daytime).
+    static let awakeAwayHours: [Double] = [20, 16, 6]          // hunger, thirst, attention
+    /// Asleep when the player left (napping or tucked in): food and water run down three times slower again; attention is unchanged so they still greet happily.
+    static let asleepAwayHours: [Double] = [60, 48, 6]
+    static func awayHoursToEmpty(_ k: NeedKind, asleep: Bool = false) -> Double {
+        (asleep ? asleepAwayHours : awakeAwayHours)[k.rawValue]
     }
     /// Named tiers (Nintendogs style): at or above `fullFrom` Full, at or above `normalFrom` Normal, at or above `famishedBelow` Hungry, else Famished.
     static let fullFrom: Float = 0.85
@@ -122,11 +126,14 @@ nonisolated enum JellyCoatTier: Int, CaseIterable, Sendable {
 /// The away arithmetic, in one place. `BlobNeeds.applyAway` / `BlobGrime.applyAway` call these; the widget calls the same ones to project forward.
 nonisolated enum AwayMath {
     /// Each need falls linearly on the away curve, stops at the floor, and a need already below the floor is left alone.
-    static func needLevels(_ v: [Float], seconds: TimeInterval) -> [Float] {
+    /// `asleep`: the creature was asleep when the player left (hunger / thirst use the asleep rates). `attentionSeconds`: the seconds the attention
+    /// need feels when they differ from `seconds` (an asleep creature's food and water count the whole absence; its attention keeps the night rule).
+    static func needLevels(_ v: [Float], seconds: TimeInterval, attentionSeconds: TimeInterval? = nil, asleep: Bool = false) -> [Float] {
         var v = v
         for k in NeedKind.allCases where k.rawValue < v.count {
             let i = k.rawValue
-            let drop = Float(TimeAway.clamp(seconds) / (NeedsTuning.awayHoursToEmpty(k) * 3600))
+            let s = k == .attention ? (attentionSeconds ?? seconds) : seconds
+            let drop = Float(TimeAway.clamp(s) / (NeedsTuning.awayHoursToEmpty(k, asleep: asleep) * 3600))
             v[i] = max(min(max(v[i], 0), 1) - drop, min(v[i], NeedsTuning.awayFloor))
             v[i] = min(max(v[i], 0), 1)
         }
@@ -158,8 +165,12 @@ nonisolated enum AwayMath {
         let total = max(0, to.timeIntervalSince(from))
         return total - nightSeconds(from: from, to: to, calendar: calendar) * (1 - nightAwayFactor)
     }
-    static func needLevels(_ v: [Float], from: Date, to: Date, calendar: Calendar = .current) -> [Float] {
-        needLevels(v, seconds: needSeconds(from: from, to: to, calendar: calendar))
+    /// Levels after the absence [from, to]. Awake at leave: night hours (21:00-06:00) count half on every need. Asleep at leave: food and water use the
+    /// asleep rates over the WHOLE absence (no night discount on top); attention keeps today's night rule.
+    static func needLevels(_ v: [Float], from: Date, to: Date, calendar: Calendar = .current, asleep: Bool = false) -> [Float] {
+        let night = needSeconds(from: from, to: to, calendar: calendar)
+        if asleep { return needLevels(v, seconds: max(0, to.timeIntervalSince(from)), attentionSeconds: night, asleep: true) }
+        return needLevels(v, seconds: night)
     }
     /// Dirt gained from one absence: +0.05 per 2 h, at most +0.15.
     static func dirtGain(awaySeconds: TimeInterval) -> Float {
