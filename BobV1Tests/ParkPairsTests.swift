@@ -263,6 +263,7 @@ final class ParkPairsTests: XCTestCase {
         var both = false
         for i in 0..<(60 * 40) {
             lab.tick(watching: false); field.tick(dt: 1.0 / 60)
+            if i % 30 == 0, i < 60 * 9 { let a = lab.rigs[0].brain, b = lab.rigs[1].brain; MotionLog.write(String(format: "PAIRS hand pos t=%.1f A (%.2f,%.2f)->(%.2f,%.2f) seat %d | B (%.2f,%.2f)->(%.2f,%.2f) seat %d retry %d script %@ stall %d", Float(i) / 60, a.position.x, a.position.y, a.idleState.target.x, a.idleState.target.y, a.idleState.seat, b.position.x, b.position.y, b.idleState.target.x, b.idleState.target.y, b.idleState.seat, b.idleState.decorRetry, "\(b.script)", b.steerStall)) }
             if i % 120 == 0 { MotionLog.write(String(format: "PAIRS hand dbg t=%d | A %@ go %@ st %d d %.2f | B %@ go %@ st %d d %.2f | %@", i / 60, "\(String(describing: lab.rigs[0].brain.idleState.kind))", "\(lab.rigs[0].brain.idleState.decorGo)", stage(lab.rigs[0].brain), simd_distance(lab.rigs[0].brain.position, lab.rigs[0].brain.idleState.target), "\(String(describing: lab.rigs[1].brain.idleState.kind))", "\(lab.rigs[1].brain.idleState.decorGo)", stage(lab.rigs[1].brain), simd_distance(lab.rigs[1].brain.position, lab.rigs[1].brain.idleState.target), "\(R.waitInfo)")) }
             if R.stage(uid, seat: 0) == .seated, R.stage(uid, seat: 1) == .seated { both = true; break }
         }
