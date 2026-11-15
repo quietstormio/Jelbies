@@ -19,7 +19,7 @@ import simd
 ///   ROOMROAM_BODY      0 = skip the per-frame feet / arm sampling (faster), default 1
 ///   ROOMROAM_PICK      SocialTuning.pickChance, default 0.9 (the declared value; the suites lower it to 0.12)
 ///   ROOMROAM_ASPECT   the aspect of `GameCamera.camera(aspect:)` and `refreshRoam(aspect:)`, default 440 / 956 (landscape: 2.1727)
-///   ROOMROAM_FLOOR    stage (default) | on | off: build the roaming floor (`GameCamera.refreshRoam`) only when n > 1 (the stage's launch rule) | for every n (a lone one after a trip out) | never
+///   ROOMROAM_FLOOR    stage (default) | on | off: build the roaming floor (`GameCamera.refreshRoam`) by the stage's rule: two or three always, one alone when the traffic step's T7 is live | for every n | never
 ///   ROOMROAM_ARENA    1 (default) = every rig's sim gets `GameCamera.arenaCenter / arenaRadius` as the stage sets it; 0 = no arena
 ///   ROOMROAM_PATH     a file the per-second body positions (ROOMROAM-PATH lines) are appended to at the end, optional
 ///   ROOMROAM_BUMP / ROOMROAM_NEAR / ROOMROAM_REARM / ROOMROAM_REACH / ROOMROAM_SLOW   see `testMeasureRoom`
@@ -99,13 +99,13 @@ final class RoomRoamMeasureTests: XCTestCase {
                 (RoomRoam.traffic, RoomRoam.together, RoomRoam.voices) = a
                 RoomRoam.ran = [0, 0, 0]
                 GameCamera.configureRoom(count: n); _ = GameCamera.camera(aspect: aspect)          // (the game's own call for n at home: MelonStage.swift)
-                if floorMode == "on" || (floorMode == "stage" && n > 1) { GameCamera.refreshRoam(aspect: aspect) }          // (the stage: `syncRoam` builds the roaming floor for more than one body; a lone one gets it after a trip out)
+                if floorMode == "on" || (floorMode == "stage" && (n > 1 || RoomTraffic.loneFloorLive)) { GameCamera.refreshRoam(aspect: aspect) }          // (the stage: `syncRoam` builds the roaming floor for more than one body, and for one alone while the traffic step's T7 is live)
                 let rf = GameCamera.roamFloor
                 let f2: (Float?) -> String = { $0.map { String(format: "%.2f", $0) } ?? "-" }
                 let floorLine = "ROOMROAM-FLOOR arm=\(armName) n=\(n) mode=\(floorMode) floor=\(rf == nil ? "no" : "yes") aspect=\(String(format: "%.3f", aspect)) minZ=\(f2(rf?.minZ)) maxZ=\(f2(rf?.maxZ)) halfWidthMax=\(f2(rf?.hw.max())) arena=\(arena ? 1 : 0) arenaR=\(String(format: "%.2f", GameCamera.arenaRadius)) walkMaxZ=\(String(format: "%.2f", GameCamera.walkMaxZ))"
                 var s = Stats()
                 for seed in seeds {
-                    RoomTraffic.counts = [0, 0, 0, 0, 0]; RoomTogether.counts = [0, 0, 0, 0, 0]; RoomVoices.counts = [0, 0, 0, 0, 0, 0, 0, 0]          // (no soak inherits the step files' counters or side tables from the one before)
+                    RoomTraffic.counts = [0, 0, 0, 0, 0, 0]; RoomTogether.counts = [0, 0, 0, 0, 0]; RoomVoices.counts = [0, 0, 0, 0, 0, 0, 0, 0]          // (no soak inherits the step files' counters or side tables from the one before)
                     RoomTraffic.waitFor = [:]; RoomTraffic.waited = [:]; RoomVoices.lastHello = [:]
                     let lab = SocialTests.Lab(n: n, quiet: false, seed: seed)
                     if arena { for r in lab.rigs { r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius } }          // (as the stage's `applyRoomArena`)
