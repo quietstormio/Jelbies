@@ -220,7 +220,8 @@ extension GameCare {
                 guard let brain = a.brain else { continue }
                 brain.endRace()
                 brain.abortScript(a.sim, a.skinner)          // his pose root is the old spot until the script is gone (currentPose reads the body only when he is not driven)
-                a.sim.arenaRadius = book.arena[aid] ?? a.sim.arenaRadius
+                let wall = book.arena[aid] ?? a.sim.arenaRadius
+                if wall.isFinite, GameCamera.roamFloor != nil { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius } else { a.sim.arenaRadius = wall }          // (the room's wall as it is NOW: the floor may have been rebuilt while his wall was lifted (a rotation, the rivals' first floor); the saved radius alone left the old wall under the new floor)
                 var spot = aid == race.playerID ? c : (book.homes[aid] ?? Self.greetSpot(aid))
                 if aid != race.playerID, taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
                     spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot

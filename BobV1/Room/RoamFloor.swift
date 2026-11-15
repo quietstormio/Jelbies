@@ -154,16 +154,17 @@ extension GameCamera {
 
     /// Builds the polygon for `aspect` and applies it: `constrain`, the front wall and the arena follow (the stage re-reads the arena for its sims). Needs the
     /// room camera for 2-3 Jellies (`configureRoom(count:)`); one Jelly keeps the old floor.
+    /// Always read through the GAME's pose (`gamePose: true`): Photo mode's / the species picker's orbit and the contact capture pose never shape the floor.
     @discardableResult
     static func refreshRoam(aspect: Float) -> RoamFloor? {
         guard roomWideScale != 1 || roomEye != baseEye else { roamFloor = nil; return nil }          // the one-Jelly pose: the old floor
         _ = camera(aspect: aspect)
         let size = CGSize(width: CGFloat(1000 * aspect), height: 1000)
         let bottom = (1 - roamBottomMargin) * 1000
-        let zb = floorPoint(screen: CGPoint(x: size.width / 2, y: CGFloat(bottom)), size: size)?.y ?? walkMaxZ
+        let zb = floorPoint(screen: CGPoint(x: size.width / 2, y: CGFloat(bottom)), size: size, gamePose: true)?.y ?? walkMaxZ
         let maxZ = min(max(zb - roamBodyDepth, walkMaxZ), roamMaxZCap)
         let c = roamFurnitureClearance
-        let cam = camera(aspect: aspect)
+        let cam = camera(aspect: aspect, gamePose: true)
         let rails = (aspect < 1 ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
         let minZ = RoomLayout.minZ + c
         let wallX = RoomLayout.maxX - (roamLateralExtent + 0.05)          // (the body, wings and shadow stay off the side walls too)
