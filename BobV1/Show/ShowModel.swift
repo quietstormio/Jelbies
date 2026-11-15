@@ -342,9 +342,10 @@ nonisolated struct ShowBeat: Equatable, Sendable {
 }
 
 /// One of the four dance songs the Jelly Show plays once (show_dance_1...4.m4a). `grid` is the song's MEASURED beat grid in seconds of the file (the
-/// decoded audio, AAC priming removed, as AVAudioFile reads it): beat 0 is the first bar downbeat, the period is the measured one (these are NOT
-/// round BPMs: 119.7, 111.7, 119.7, 94.8). The prompts sit on beats `firstPromptBeat...lastBeat`, one per beat; `lastBeat` is the final downbeat.
-/// Re-measure with the scratchpad showdance/measure.py + sync_check.py if a song file changes.
+/// decoded audio, AAC priming removed, as AVAudioFile reads it): beat 0 is the first bar downbeat, the period is the measured one (120, 112, 120 and
+/// 95 BPM: the earlier grids were 0.2 % too slow and the prompts drifted 20 to 29 ms late by the last beat). The prompts sit on beats
+/// `firstPromptBeat...lastBeat`, one per beat; `lastBeat` is the final downbeat. If a song file changes, BobV1Tests/DanceSongGridTests.swift fails and
+/// its `measuredGrid` line prints the grid to use.
 nonisolated struct DanceSong: Equatable, Sendable {
     var song: Int
     var title: String
@@ -361,10 +362,10 @@ nonisolated struct DanceSong: Equatable, Sendable {
     var bpm: Double { 60 / grid.period }
 
     static let all: [DanceSong] = [
-        DanceSong(song: 1, title: "Bubble Pop Stage", grid: ShowBeat(firstBeat: 0.0158, period: 0.50120), lastBeat: 24),
-        DanceSong(song: 2, title: "Groove On The One", grid: ShowBeat(firstBeat: 0.0568, period: 0.53693), lastBeat: 24),
-        DanceSong(song: 3, title: "Pixel Party", grid: ShowBeat(firstBeat: 0.0163, period: 0.50134), lastBeat: 24),
-        DanceSong(song: 4, title: "Block Party", grid: ShowBeat(firstBeat: 0.0449, period: 0.63274), lastBeat: 16),
+        DanceSong(song: 1, title: "Bubble Pop Stage", grid: ShowBeat(firstBeat: 0.0202, period: 0.50002), lastBeat: 24),
+        DanceSong(song: 2, title: "Groove On The One", grid: ShowBeat(firstBeat: 0.0554, period: 0.53578), lastBeat: 24),
+        DanceSong(song: 3, title: "Pixel Party", grid: ShowBeat(firstBeat: 0.0188, period: 0.50005), lastBeat: 24),
+        DanceSong(song: 4, title: "Block Party", grid: ShowBeat(firstBeat: 0.0435, period: 0.63159), lastBeat: 16),
     ]
     static func song(_ n: Int) -> DanceSong { all.first { $0.song == n } ?? all[0] }
     /// The song for a show's seed (deterministic).
