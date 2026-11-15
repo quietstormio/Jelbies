@@ -12,7 +12,14 @@ import AVFoundation
 @testable import BobV1
 
 final class DanceSongGridTests: XCTestCase {
-    struct Envelope { var flux: [Double]; var times: [Double]; var duration: Double }
+    struct Envelope { var flux: [Double]; var times: [Double]; var duration: Double; var mono: [Float] = []; var sampleRate = 44100.0
+        /// Broadband level (dB) of the 50 ms from `t`.
+        func levelDB(from t: Double) -> Double {
+            let a = max(Int(t * sampleRate), 0), b = min(a + Int(0.05 * sampleRate), mono.count)
+            guard b > a else { return -120 }
+            var s = 0.0; for i in a..<b { s += Double(mono[i] * mono[i]) }
+            return 10 * log10(s / Double(b - a) + 1e-12)
+        } }
     struct Fit { var slopeMS: Double; var interceptMS: Double; var offsetsMS: [Double]
         func atBeat(_ b: Int) -> Double { interceptMS + slopeMS * Double(b) } }
 
@@ -46,7 +53,7 @@ final class DanceSongGridTests: XCTestCase {
             prev = sp; frames += 1; i += H
         }
         let times = (0..<flux.count).map { (Double($0 * H) + Double(N) / 2) / sr }
-        return Envelope(flux: flux, times: times, duration: Double(n) / sr)
+        return Envelope(flux: flux, times: times, duration: Double(n) / sr, mono: x, sampleRate: sr)
     }
 
     /// (onset - grid beat) per beat 0...lastBeat, ms, and the straight-line fit against the beat index.
