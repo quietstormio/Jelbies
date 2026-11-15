@@ -18,7 +18,9 @@ nonisolated enum ParkToys {
         PlacedDecor(uid: hopscotchUID, kind: .hopscotch, x: -2.1, z: 1.9, turns: nil),
         PlacedDecor(uid: slideUID, kind: .slide, x: 2.9, z: 1.0, turns: nil)          // (STRAIGHT, on the right lawn where the sandbox was: the chute points down the screen toward the camera. Footprint x 2.1...3.7, z -0.4...2.4, whose back edge is 2.8 clear of the pond (pond (3.5, -4.2) r 1.0): the tall ladder posts at its back would overlap the pond on screen if it stood further back (at z -0.3 they did). The climb spot behind it is z -1.17; the rider lands at z 3.19 on open lawn, well off the path (its right edge is x 1.2 there), and a body there is above the Go home pill's roam cut-out in landscape (HUDLayout.parkHomeRect). The park floor's front edge is back at z 4.5)
     ]
-    static var placed: [PlacedDecor] { layout }
+    /// 2026-11-15 (owner: "Remove the seesaw ... make them play and interact more"): the seesaw is no longer placed in the park. Its code, model and tests stay (dead in the shipped game); `-ParkSeesaw 1` brings it
+    /// back for a before / after, and every test run has it (the seesaw's own suites). `ParkPlayTuning.seesawInPark` is the one switch.
+    static var placed: [PlacedDecor] { ParkPlayTuning.seesawInPark ? layout : layout.filter { $0.kind != .seesaw } }
 
     /// The player's own floor toys that come along (up to 3, GameCare+Park.swift): fixed spots in the back corners of the lawn, clear of the path (centre x = 0.7 sin(0.34 z), half width 0.62),
     /// the hopscotch court (x -3.05...-1.15, z -0.75...4.55) and its queue (z about -1.1), the slide (x 2.1...3.7, z -0.4...2.4) and its climb spot (2.9, -1.17), the bench and the Go home pill's cut-out (bottom centre). The first is on the left lawn beside the court's far side (the seesaw stands in the back left corner).
