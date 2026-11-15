@@ -21,16 +21,18 @@ nonisolated enum ParkPairTuning {
 
     // MARK: B. rarer toys (autonomous picks only; per creature, per decision)
     /// The chance that an autonomous pick of the seesaw / of a NEW hopscotch line goes ahead (the rest is "not now": the decision falls through to another pick). Today it is 1.0 (nothing rolls it away).
-    static let seesawPickChance: Float = 0.65, hopscotchPickChance: Float = 0.5
+    static let seesawPickChance: Float = 1.0, hopscotchPickChance: Float = 0.3
+    /// A roll that said no is not asked again for this long (else the next decision, a few seconds later, rolls again and the chance means little).
+    static let rejectHold: ClosedRange<Float> = 25...40
     /// After a creature has used (or given up) a toy it does not pick that toy again for this long (seconds, drawn per use).
-    static let seesawCooldown: ClosedRange<Float> = 40...70, hopscotchCooldown: ClosedRange<Float> = 40...70
+    static let seesawCooldown: ClosedRange<Float> = 15...30, hopscotchCooldown: ClosedRange<Float> = 40...70
     /// The visitor who opens the first hopscotch turn of a visit does it this many seconds in (was 15...30): the court is still used every visit, but not at once.
     static let hopHostAfter: ClosedRange<Float> = 40...80
 
     // MARK: A. the pair-only seesaw
     /// A partner must be a free creature this near the seesaw (metres) and agrees with this chance.
     static let partnerRadius: Float = 6.5
-    nonisolated(unsafe) static var partnerAgree: Float = 0.85          // (a var only so a test can make the partner certain)
+    nonisolated(unsafe) static var partnerAgree: Float = 1.0          // (a var only so a test can make the partner certain)
     /// The first one at the seesaw waits standing at his spot, not seated, until the partner is this near his own stand spot (or already there).
     static let readyDist: Float = 1.2
     /// A waiter gives up after this long standing at the seesaw (seconds, counted from his arrival at the spot); and after this long when the partner is gone altogether (left, never came).

@@ -29,7 +29,7 @@ final class ParkPairsTests: XCTestCase {
         DecorField.shared.clear(); ToyTuning.settle = 5; HopscotchTuning.joinChance = 0.35
         HopscotchLine.shared.prune(keeping: [])
         SeesawRide.shared.reset()
-        ParkPairTuning.pairSeesaw = true; ParkPairTuning.toyRateNew = true; ParkPairTuning.socialNew = true; ParkPairTuning.partnerAgree = 0.85
+        ParkPairTuning.pairSeesaw = true; ParkPairTuning.toyRateNew = true; ParkPairTuning.socialNew = true; ParkPairTuning.partnerAgree = 1.0
         GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0)
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
     }
@@ -310,7 +310,7 @@ final class ParkPairsTests: XCTestCase {
     /// visit); else all are housemates (closeness 1). A seesaw ride = from the first body on the piece to the last one off; a pair ride = both were seated at once.
     private func parkSoak(n: Int, visitors: Bool, minutes: Float, seed: UInt64, new: Bool) -> Soak {
         setSwitches(new: new)
-        ParkPairTuning.partnerAgree = 0.85
+        ParkPairTuning.partnerAgree = 1.0
         ParkPairTuning.stats = .init()
         ParkVisitPlan.current = .all
         DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); HopscotchLine.shared.prune(keeping: []); SeesawRide.shared.reset()

@@ -24,8 +24,9 @@ extension BlobBrain {
         default: return true
         }
         if let until = toy.parkCool[f.kind], until > DecorField.shared.toys.clock { parkGateRejected = f.uid; ParkPairTuning.stats.coolNo += 1; return false }
-        if rand() < chance { return true }
+        if chance >= 1 || rand() < chance { return true }
         parkGateRejected = f.uid
+        toy.parkCool[f.kind] = DecorField.shared.toys.clock + rand(ParkPairTuning.rejectHold.lowerBound, ParkPairTuning.rejectHold.upperBound)
         ParkPairTuning.stats.rollNo += 1
         return false
     }
