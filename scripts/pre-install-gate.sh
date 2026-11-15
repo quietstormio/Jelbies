@@ -4,8 +4,13 @@
 # Steps: (1) check-date-ops on the device app if given; (2) build-for-testing (Release, testability);
 # (3) run each suite below serially with test-without-building; (4) print one table.
 # Env: GATE_SKIP_BUILD=1 reuse the existing build in <derived data>; GATE_SUITES="A B" override the list;
-#      GATE_SUITE_CAP=seconds per suite (default 1500); GATE_LOG_DIR=where the logs go (default <dd>/gate-logs).
-# Guards: waits (30 s sleeps, max 25 min) for 1-min load < 8 and <= 1 xcodebuild before each xcodebuild; never pkill/killall; only kills its own PID on a cap.
+#      GATE_SUITE_CAP=seconds per suite (default 1500); GATE_LOG_DIR=where the logs go (default <dd>/gate-logs);
+#      GATE_XB_MAX=N other xcodebuild processes tolerated while waiting (default 1; use 2 to allow two);
+#      GATE_SKIP_MUSTFAIL=1 skips the must-fail row (see below; the row also only runs when the suite list contains FootWallTurnTests).
+# Guards: waits (30 s sleeps, max 25 min) for 1-min load < 8 and <= $GATE_XB_MAX (default 1) other xcodebuild before each xcodebuild; never pkill/killall; only kills its own PID on a cap.
+# Why FootWallTurnTests + the must-fail row (2026-11-15): the gate passed on a build whose lone Jelmiko had a floating foot in the
+#   room's back corners; FootWallTurnTests fails on that build. The row "FootWallTurn lone-floor-off" re-runs
+#   FootWallTurnTests/testLoneBodyCornerTurnKeepsFeetOn with TEST_RUNNER_FOOTWALL_ROAM=0 (old lone room) and must FAIL, proving the gate still sees the defect.
 #
 # Deliberately EXCLUDED (red or not proven today):
 #   SocialFeetTests       red today (known failures, pre-existing).
@@ -20,7 +25,7 @@ dd="${2:?derived data path}"; devapp="${3:-}"
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"; cd "$root" || exit 2
 logs="${GATE_LOG_DIR:-$dd/gate-logs}"; mkdir -p "$logs"
 cap="${GATE_SUITE_CAP:-1500}"
-suites="${GATE_SUITES:-ArmCapTests ArmBlendTests RaceArmsTests RaceFeetTests RaceWallTests WristbandFitTests WaveInterruptTests WearPrepTimeTests FeatureCaptureTests/testBeanCollapsedForEveryOtherSpecies FeatureCaptureTests/testTeddyEarsAlwaysOnWithoutFeatureTickAndInTheWash FeatureCaptureTests/testBeanTuckedUnderBeanieIsBobsHeadExactly FeatureCaptureTests/testBeanNeverDetachesInMotion}"   # the last four = TeddyBeanTests (an extension of FeatureCaptureTests), ~30 s
+suites="${GATE_SUITES:-ArmCapTests ArmBlendTests RaceArmsTests RaceFeetTests RaceWallTests WristbandFitTests WaveInterruptTests WearPrepTimeTests FeatureCaptureTests/testBeanCollapsedForEveryOtherSpecies FeatureCaptureTests/testTeddyEarsAlwaysOnWithoutFeatureTickAndInTheWash FeatureCaptureTests/testBeanTuckedUnderBeanieIsBobsHeadExactly FeatureCaptureTests/testBeanNeverDetachesInMotion PlantedWaveTests FootWallTurnTests}"   # the last four = TeddyBeanTests (an extension of FeatureCaptureTests), ~30 s
 [ -z "${GATE_SUITES:-}" ] && [ -f BobV1Tests/RacePullArmsTests.swift ] && suites="$suites RacePullArmsTests"
 export TEST_RUNNER_WEARPREP_CEILING=1
 fail=0; rows=()
@@ -29,7 +34,7 @@ wait_quiet() { # bounded: 50 x 30 s = 25 min
   local i l n
   for i in $(seq 1 50); do
     l=$(sysctl -n vm.loadavg | awk '{print $2}'); n=$(pgrep -x xcodebuild | wc -l | tr -d ' ')
-    if awk "BEGIN{exit !($l < 8)}" && [ "$n" -le 1 ]; then return 0; fi
+    if awk "BEGIN{exit !($l < 8)}" && [ "$n" -le "${GATE_XB_MAX:-1}" ]; then return 0; fi
     echo "gate: waiting (load $l, xcodebuild $n)"; sleep 30
   done
   echo "GATE EXPIRED: machine never quiet for 25 min"; return 1
@@ -70,7 +75,21 @@ for s in $suites; do
   else rows+=("$s|$run|$f|ok${sk:+ ($sk skipped)}"); fi
 done
 
-echo; printf '%-24s %10s %9s  %s\n' SUITE TESTS-RUN FAILURES RESULT
-for r in "${rows[@]}"; do IFS='|' read -r a b c d <<<"$r"; printf '%-24s %10s %9s  %s\n' "$a" "$b" "$c" "$d"; done
+# MUST-FAIL row: with the lone floor forced back to the old room the floating-foot test has to FAIL, else the gate is blind to that defect.
+case " $suites " in *" FootWallTurnTests "*) [ "${GATE_SKIP_MUSTFAIL:-0}" != 1 ] && {
+  n=FootWallTurn_mustfail; rn="FootWallTurn lone-floor-off"
+  if wait_quiet; then
+    echo "gate: $rn (must fail) ..."
+    run_capped "$cap" "$logs/$n.log" env TEST_RUNNER_FOOTWALL_ROAM=0 "${xb[@]}" test-without-building -parallel-testing-enabled NO "-only-testing:BobV1Tests/FootWallTurnTests/testLoneBodyCornerTurnKeepsFeetOn"; rc=$?
+    line=$(grep -E "Executed [0-9]+ tests?, with .*[0-9]+ failures?" "$logs/$n.log" | tail -1)
+    run=$(echo "$line" | sed -E 's/.*Executed ([0-9]+) tests?.*/\1/'); f=$(echo "$line" | sed -E 's/.* ([0-9]+) failures?.*/\1/')
+    if [ -z "$line" ] || [ "$run" = 0 ]; then rows+=("$rn|0|-|NOT RUN (rc $rc)"); fail=1
+    elif [ "$f" -ge 1 ]; then rows+=("$rn|$run|$f|ok (fails as it must: $f failures)")
+    else rows+=("$rn|$run|$f|FAIL (did not fail: the gate cannot see the floating foot)"); fail=1; fi
+  else rows+=("$rn|0|-|NOT RUN (gate expired)"); fail=1; fi
+}; esac
+
+echo; printf '%-28s %10s %9s  %s\n' SUITE TESTS-RUN FAILURES RESULT
+for r in "${rows[@]}"; do IFS='|' read -r a b c d <<<"$r"; printf '%-28s %10s %9s  %s\n' "$a" "$b" "$c" "$d"; done
 if [ $fail = 0 ]; then echo "GATE PASS"; else echo "GATE FAIL (logs in $logs)"; fi
 exit $fail
