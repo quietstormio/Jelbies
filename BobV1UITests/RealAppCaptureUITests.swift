@@ -20,6 +20,9 @@
 //                                                         of its frame instead; the .plan line says so. Follow such a tap with a `gone:` or `wait:` step that proves it landed)
 //                 10:wait:race-card                      waits until the element exists (no tap)
 //                 10:gone:race-card                      waits until the element is gone
+//                 13:reach:photo-button                  a row of a scroll view that is off the screen: once a second, drags the page by 40 % of the screen's height
+//                                                         (slow drag down the left margin, no fling) until the centre of the element's frame is inside the middle 70 % of
+//                                                         the screen; at most 10 drags. No tap: follow it with `tap:`
 //               Every step is written to <RA_OUT>/<RA_NAME>.plan with the time it really happened; a step that never happened fails the test.
 //    RA_TAIL    with RA_PLAN: the capture ends this many seconds after the LAST step was done (and at RA_SECS at the latest); without it the capture runs RA_SECS
 //  Build Release + ENABLE_TESTABILITY=YES like the other app captures (a Debug build runs at about 1 frame/s in the simulator).
@@ -97,6 +100,25 @@ final class RealAppCaptureUITests: XCTestCase {
                 case "rotate":
                     XCUIDevice.shared.orientation = step.what == "left" ? .landscapeLeft : (step.what == "right" ? .landscapeRight : .portrait)
                     plan[i].done = true
+                case "reach":
+                    if now - step.lastTry >= 1 {          // looked for once a second, like the other lookups
+                        plan[i].lastTry = now
+                        let e = app.descendants(matching: .any)[step.what].firstMatch
+                        if e.exists {
+                            let f = e.frame, a = app.frame
+                            let mid = CGPoint(x: f.midX, y: f.midY)
+                            if !f.isEmpty, a.insetBy(dx: 0, dy: a.height * 0.15).contains(mid) {
+                                plan[i].done = true
+                            } else if plan[i].unhittable < 10 {          // (the tap verb's counter doubles as the number of drags of this verb)
+                                plan[i].unhittable += 1
+                                // a slow drag down the page's left margin (outside the cards, so no row and no slider is touched), held at the end: no fling, no overshoot
+                                let up = mid.y >= a.midY          // the row is below the middle: the page goes up
+                                let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: up ? 0.72 : 0.32))
+                                let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: up ? 0.32 : 0.72))
+                                from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .default, thenHoldForDuration: 0.2)
+                            }
+                        }
+                    }
                 case "tap", "wait", "gone":
                     if now - step.lastTry >= 1 {          // looked for once a second (a query costs frames)
                         plan[i].lastTry = now
