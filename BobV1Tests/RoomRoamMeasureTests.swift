@@ -18,6 +18,10 @@ import simd
 ///   ROOMROAM_WATCHING  0 = nobody watches the room (`brain.watching` false), default 1
 ///   ROOMROAM_BODY      0 = skip the per-frame feet / arm sampling (faster), default 1
 ///   ROOMROAM_PICK      SocialTuning.pickChance, default 0.9 (the declared value; the suites lower it to 0.12)
+///   ROOMROAM_ASPECT   the aspect of `GameCamera.camera(aspect:)` and `refreshRoam(aspect:)`, default 440 / 956 (landscape: 2.1727)
+///   ROOMROAM_FLOOR    stage (default) | on | off: build the roaming floor (`GameCamera.refreshRoam`) only when n > 1 (the stage's launch rule) | for every n (a lone one after a trip out) | never
+///   ROOMROAM_ARENA    1 (default) = every rig's sim gets `GameCamera.arenaCenter / arenaRadius` as the stage sets it; 0 = no arena
+///   ROOMROAM_PATH     a file the per-second body positions (ROOMROAM-PATH lines) are appended to at the end, optional
 ///   ROOMROAM_BUMP / ROOMROAM_NEAR / ROOMROAM_REARM / ROOMROAM_REACH / ROOMROAM_SLOW   see `testMeasureRoom`
 @MainActor
 final class RoomRoamMeasureTests: XCTestCase {
@@ -27,7 +31,7 @@ final class RoomRoamMeasureTests: XCTestCase {
         AudioHub.firedTap = nil; AudioHub.requestSrcTap = nil; AudioHub.requestTap = nil; AudioHub.dropTap = nil; AudioHub.dryRun = false; AudioHub.clock = { CACurrentMediaTime() }
         AudioHub.shared.atHome = false
         BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds; ContactField.reset()
-        RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
+        RoomLayout.dynamicBoxes = []; GameCamera.clearRoam(); GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
     static func env(_ name: String) -> String? { let v = ProcessInfo.processInfo.environment[name] ?? ""; return v.isEmpty ? nil : v }
@@ -71,6 +75,10 @@ final class RoomRoamMeasureTests: XCTestCase {
         // Centre distances (the bodies' wall is `MelonController.jellyGap` = 1.4): a pair that is not in a session together, with at least one of them walking, coming
         // from `rearm` or more apart: below `near` = a near miss, below `bump` = they ran into each other. `reach` = close enough to start something together.
         let bump = Float(Self.num("ROOMROAM_BUMP", 1.19)), near = Float(Self.num("ROOMROAM_NEAR", 1.36)), rearm = Float(Self.num("ROOMROAM_REARM", 1.4)), reach = Float(Self.num("ROOMROAM_REACH", 4.8))
+        let aspect = Float(Self.num("ROOMROAM_ASPECT", 440.0 / 956.0)), arena = Self.num("ROOMROAM_ARENA", 1) != 0, pathOut = Self.env("ROOMROAM_PATH")
+        let floorMode = Self.env("ROOMROAM_FLOOR") ?? "stage"
+        guard ["stage", "on", "off"].contains(floorMode) else { XCTFail("ROOMROAM_FLOOR must be stage, on or off, not \(floorMode)"); return }
+        var pathLines: [String] = []
         let slow = Float(Self.num("ROOMROAM_SLOW", 0.36))          // u/s: a walking body slower than this is held up (a room walk is about 1.44)
         let oldPick = SocialTuning.pickChance, oldSwitches = (RoomRoam.traffic, RoomRoam.together, RoomRoam.voices)
         SocialTuning.pickChance = Float(Self.num("ROOMROAM_PICK", 0.9))
@@ -90,12 +98,17 @@ final class RoomRoamMeasureTests: XCTestCase {
             for n in sizes {
                 (RoomRoam.traffic, RoomRoam.together, RoomRoam.voices) = a
                 RoomRoam.ran = [0, 0, 0]
-                GameCamera.configureRoom(count: n); _ = GameCamera.camera(aspect: 440.0 / 956.0)          // (the game's own call for n at home: MelonStage.swift)
+                GameCamera.configureRoom(count: n); _ = GameCamera.camera(aspect: aspect)          // (the game's own call for n at home: MelonStage.swift)
+                if floorMode == "on" || (floorMode == "stage" && n > 1) { GameCamera.refreshRoam(aspect: aspect) }          // (the stage: `syncRoam` builds the roaming floor for more than one body; a lone one gets it after a trip out)
+                let rf = GameCamera.roamFloor
+                let f2: (Float?) -> String = { $0.map { String(format: "%.2f", $0) } ?? "-" }
+                let floorLine = "ROOMROAM-FLOOR arm=\(armName) n=\(n) mode=\(floorMode) floor=\(rf == nil ? "no" : "yes") aspect=\(String(format: "%.3f", aspect)) minZ=\(f2(rf?.minZ)) maxZ=\(f2(rf?.maxZ)) halfWidthMax=\(f2(rf?.hw.max())) arena=\(arena ? 1 : 0) arenaR=\(String(format: "%.2f", GameCamera.arenaRadius)) walkMaxZ=\(String(format: "%.2f", GameCamera.walkMaxZ))"
                 var s = Stats()
                 for seed in seeds {
                     RoomTraffic.counts = [0, 0, 0, 0, 0]; RoomTogether.counts = [0, 0, 0, 0, 0]; RoomVoices.counts = [0, 0, 0, 0, 0, 0, 0, 0]          // (no soak inherits the step files' counters or side tables from the one before)
                     RoomTraffic.waitFor = [:]; RoomTraffic.waited = [:]; RoomVoices.lastHello = [:]
                     let lab = SocialTests.Lab(n: n, quiet: false, seed: seed)
+                    if arena { for r in lab.rigs { r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius } }          // (as the stage's `applyRoomArena`)
                     for (i, r) in lab.rigs.enumerated() {
                         r.brain.anticsEnabled = true; r.brain.sleepEnabled = true; r.brain.idleMood = .happy; r.brain.restTimer = 0.5 + Float(i)
                         r.brain.homeRoom = true; r.brain.watching = watching; r.brain.idleNight = night
@@ -141,6 +154,10 @@ final class RoomRoamMeasureTests: XCTestCase {
                             if y { s.yieldTicks += 1 }
                             let moved = simd_distance(pos[i], lastPos[i])
                             if social { s.socialTicks += 1 } else if k == .sleep { s.sleepTicks += 1 } else if walking { s.walkTicks += 1; s.walkDist += moved; if moved * 60 < slow { s.slowTicks += 1 } } else if k != nil { s.idleTicks += 1 } else { s.restTicks += 1 }
+                            if pathOut != nil, t % 60 == 0 {
+                                let a = social ? "s" : (k == .sleep ? "z" : (walking ? "w" : (k != nil ? "i" : "r")))
+                                pathLines.append("ROOMROAM-PATH arm=\(armName) n=\(n) seed=\(seed) t=\(t / 60) i=\(i) x=\(String(format: "%.2f", pos[i].x)) z=\(String(format: "%.2f", pos[i].y)) a=\(a)")
+                            }
                             let rp = b.stuckRepicks
                             if rp > lastRepick[i] { s.repicks += rp - lastRepick[i] }
                             lastRepick[i] = rp
@@ -222,6 +239,7 @@ final class RoomRoamMeasureTests: XCTestCase {
                 head += " closeAfterRoom=\(s.closeAfterRoom) minOldAfterRoom=\(String(format: "%.2f", s.minOldAfterRoom)) minRoomAfterOld=\(String(format: "%.2f", s.minRoomAfterOld)) minRoomRoom=\(String(format: "%.2f", s.minRoomRoom))"
                 head += " ran=\(RoomRoam.ran[0])/\(RoomRoam.ran[1])/\(RoomRoam.ran[2]) fp=\(String(s.fingerprint, radix: 16))"
                 lines.append(head)
+                lines.append(floorLine)
                 lines.append("ROOMROAM-IDLE \(tag) " + s.idles.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
                 lines.append("ROOMROAM-SOCIAL \(tag) " + s.socials.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " ") + " | ends " + s.ends.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
                 lines.append("ROOMROAM-VOICE \(tag) " + s.asked.sorted { $0.key < $1.key }.map { "\($0.key)=\(s.played[$0.key, default: 0])/\($0.value)" }.joined(separator: " "))
@@ -231,6 +249,10 @@ final class RoomRoamMeasureTests: XCTestCase {
         }
         let text = lines.joined(separator: "\n") + "\n"
         print(text)
+        if let p = pathOut, !pathLines.isEmpty {
+            let ptext = pathLines.joined(separator: "\n") + "\n"
+            if let h = FileHandle(forWritingAtPath: p) { h.seekToEndOfFile(); h.write(Data(ptext.utf8)); h.closeFile() } else { try ptext.write(toFile: p, atomically: true, encoding: .utf8) }
+        }
         if let h = FileHandle(forWritingAtPath: out) { h.seekToEndOfFile(); h.write(Data(text.utf8)); h.closeFile() } else { try text.write(toFile: out, atomically: true, encoding: .utf8) }
     }
 }
