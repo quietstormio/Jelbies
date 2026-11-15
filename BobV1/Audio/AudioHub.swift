@@ -1015,6 +1015,46 @@ final class AudioHub {
     }
     @ObservationIgnored private var lastVariant: [[String: Int]] = [[:], [:], [:]]
 
+    // MARK: room voices (the 11-15 home room round, step 3: RoomRoam+Voices.swift)
+    @ObservationIgnored private var lastRoomVoice: [Double] = [-100, -100, -100]
+    /// A room voice: ONE MORE short call that fits what the Jelmiko is doing in the home room, on top of the chirps, the context voices and the silence filler.
+    /// It has its own clock and never stamps `lastVoice` / `lastContextVoice` / `lastEmoteVoice`: the old voices and the filler do not wait for it, so their
+    /// rates stay what they were (add, never displace). It keeps out of their way instead: not within `afterOwn` s of his own chirp / context voice, not within
+    /// the emote hush, not within `ownGap` s of his last room voice, not within `roomGap` s of anybody's voice, and not when his silence filler would speak
+    /// within `fillerLead` s. `walking`: he walks right now (the filler waits a shorter silence then). True = the voice was fired.
+    @discardableResult
+    func roomVoice(jelly: Int, _ v: JellyVoice, x: Float = 0, walking: Bool = false, src: String = "room") -> Bool {
+        Self.requestTap?("room:\(v.rawValue)")
+        let what = "room:\(v.rawValue)@\(src)"
+        Self.requestSrcTap?(what, jelly)          // (tests: which slot asked, like `chirp`)
+        guard v.isContext, v != .mmhmm else { diag(what, jelly, "notContext"); return false }
+        if let w = gateWhy() { diag(what, jelly, w); return false }
+        guard atHome, director.scene == .none, raceScene == .none else { diag(what, jelly, "notHome"); return false }
+        let level = settings.sfxLevel * duck.gain
+        let i = min(max(jelly, 0), 2)
+        let now = Self.clock()
+        if now - max(lastVoice[i], lastContextVoice[i]) < RoomVoices.afterOwn { diag(what, jelly, "hush own"); return false }
+        if now - lastEmoteVoice[i] < Self.emoteVoiceHush { diag(what, jelly, "hush emote"); return false }
+        if now - lastRoomVoice[i] < RoomVoices.ownGap { diag(what, jelly, "hush roomOwn"); return false }
+        let anyLast = max(lastVoice.max() ?? -100, lastContextVoice.max() ?? -100, lastEmoteVoice.max() ?? -100, lastRoomVoice.max() ?? -100)
+        if now - anyLast < RoomVoices.roomGap { diag(what, jelly, "hush roomAny"); return false }
+        if AmbientVoiceTuning.enabled {          // (his silence filler speaks after `quiet` s of silence, x the walking scale, and not before `notBefore`: no room voice just before it)
+            let q = ambientSched.quiet[i] > 0 ? ambientSched.quiet[i] : AmbientVoiceTuning.quietFor.lowerBound
+            let scale = walking && RoamVoiceBoost.enabled ? RoamVoiceBoost.quietScaleWalking : 1
+            let fillerIn = max(ambientSched.notBefore[i] - now, q * scale - secondsSinceVoice(slot: i))
+            if fillerIn < RoomVoices.fillerLead, fillerIn > -RoomVoices.fillerLate { diag(what, jelly, "filler due"); return false }
+        }
+        diag(what, jelly, nil, v: 0.7 * level)
+        lastRoomVoice[i] = now
+        CaptionCenter.shared.post(SoundCaptions.voice(v, name: JellyRoster.name(slot: jelly)))
+        let c = JellyRoster.speciesOf(slot: jelly)
+        var variant = 1
+        if v.hasVariants { repeat { variant = Int.random(in: 1...3) } while variant == lastVariant[i][v.rawValue] ?? 0 }          // (a repeat of the same voice differs)
+        lastVariant[i][v.rawValue] = variant
+        fire(JellyVoiceSet.file(character: c, v, variant: variant), volume: 0.7 * level, pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, v))
+        return true
+    }
+
     @ObservationIgnored private var lastRegularVoice: Double = 0
     /// A café regular's voice (by species character, not roster slot): the same chirp / babble files.
     func chirp(character: Int, _ v: JellyVoice) {
