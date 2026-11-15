@@ -101,8 +101,10 @@ enum GameCamera {
     nonisolated(unsafe) static var aspect: Float = 440.0 / 956.0
 
     /// `focus` 0 = the normal low room camera; 1 = the focus-mode close-up on the front spot (see `focusPose`); in between the two poses are blended.
+    /// `gamePose` true = the pose the GAME shows: Photo mode's / the species picker's orbit (PhotoCam) and the contact capture pose (ContactDemo.pose) are left out.
+    /// The roaming floor is built with it (`refreshRoam`), so a rebuild while one of them is on still gives the floor of the room the player comes back to.
     static func camera(aspect: Float, focus: Float = 0, bath: Float = 0, race: Float = 0, drillAt: SIMD3<Float>? = nil, raceFollow: RaceFollowPose? = nil,
-                       show: Float = 0, showFrame: ShowFrame? = nil) -> CameraState {
+                       show: Float = 0, showFrame: ShowFrame? = nil, gamePose: Bool = false) -> CameraState {
         self.aspect = aspect
         if groomOn { let p = groomPose(aspect: aspect); eye = p.eye; target = p.target; roomEye = p.eye; roomTarget = p.target; roomWideScale = 1 }          // the Jelly Spa street (Groomer/GroomRoom.swift)
         if beachOn { let p = beachPose(aspect: aspect); eye = p.eye; target = p.target; roomEye = p.eye; roomTarget = p.target; roomWideScale = 1 }          // the volleyball beach (Volley/VolleyScene.swift)
@@ -147,8 +149,8 @@ enum GameCamera {
             e += (p.eye - e) * show
             t += (p.target - t) * show
         }
-        if PhotoCam.active { (e, t) = PhotoCam.apply(eye: e, target: t) }
-        if let p = ContactDemo.pose { e = p.eye; t = p.target }          // capture aid (-ContactCam perp|top): a pose tracked on the cast, Melon/ContactDemo.swift          // Photo mode: orbit / zoom / pan over the game pose
+        if PhotoCam.active, !gamePose { (e, t) = PhotoCam.apply(eye: e, target: t) }
+        if !gamePose, let p = ContactDemo.pose { e = p.eye; t = p.target }          // capture aid (-ContactCam perp|top): a pose tracked on the cast, Melon/ContactDemo.swift          // Photo mode: orbit / zoom / pan over the game pose
         var c = CameraState()
         c.view = M4.lookAt(eye: e, at: t, up: up)
         c.viewProj = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: race != 0 ? 260 : 60), c.view)      // the track's far hills and sky wall are ~100 u away
@@ -176,9 +178,10 @@ enum GameCamera {
     // MARK: Screen <-> floor (arrange mode, tests)
 
     /// The floor point (x, z) under a screen point of a view of `size` (the room camera), or nil when the ray misses the floor. The inverse of `screenPoint`.
-    static func floorPoint(screen: CGPoint, size: CGSize) -> SIMD2<Float>? {
+    /// `gamePose` true: read through the game's own pose (see `camera`), whatever Photo mode, the species picker or the contact capture pose are doing.
+    static func floorPoint(screen: CGPoint, size: CGSize, gamePose: Bool = false) -> SIMD2<Float>? {
         guard size.width > 1, size.height > 1 else { return nil }
-        let cam = camera(aspect: Float(size.width / size.height))
+        let cam = camera(aspect: Float(size.width / size.height), gamePose: gamePose)
         let ndc = SIMD2<Float>(Float(screen.x / size.width) * 2 - 1, 1 - Float(screen.y / size.height) * 2)
         let ray = unproject(ndc: ndc, invViewProj: cam.invViewProj)
         guard abs(ray.d.y) > 1e-4 else { return nil }
