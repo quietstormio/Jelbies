@@ -7,7 +7,8 @@ import simd
 /// switch settings ("arms") on the same seeds and appends report lines to a file. It runs only when `ROOMROAM_OUT` is set, so no suite run executes it; run it
 /// alone (it moves the shared hub's clock far ahead).
 /// This is the step-1 form on the install line: only the traffic step exists here (no step 2 / step 3 files), so the `room=` voice column and `ran=a/b/c` read 0 where nothing runs.
-/// Two lines are new: `ROOMROAM-SWITCHES` (per arm and n, the switch values read back from the statics right after the arm is applied) and, in `ROOMROAM-STEPS`, `fp=` (a
+/// `ROOMROAM-SEED` (after each STEPS line) carries the same counts as the head line, for that one seed alone.
+/// Two lines are new:`ROOMROAM-SWITCHES` (per arm and n, the switch values read back from the statics right after the arm is applied) and, in `ROOMROAM-STEPS`, `fp=` (a
 /// per-seed path fingerprint of every body's position once per simulated second plus the final positions; the head line's `fp=` is unchanged).
 /// Environment (pass each to xcodebuild as TEST_RUNNER_<NAME>):
 ///   ROOMROAM_OUT       the file the report is appended to (required)
@@ -133,6 +134,7 @@ final class RoomRoamMeasureTests: XCTestCase {
                 let floorLine = "ROOMROAM-FLOOR arm=\(armName) n=\(n) mode=\(floorMode) floor=\(rf == nil ? "no" : "yes") aspect=\(String(format: "%.3f", aspect)) minZ=\(f2(rf?.minZ)) maxZ=\(f2(rf?.maxZ)) halfWidthMax=\(f2(rf?.hw.max())) arena=\(arena ? 1 : 0) arenaR=\(String(format: "%.2f", GameCamera.arenaRadius)) walkMaxZ=\(String(format: "%.2f", GameCamera.walkMaxZ))"
                 var s = Stats()
                 for seed in seeds {
+                    let s0 = s; var seedMinApart: Float = .infinity
                     RoomTraffic.counts = [0, 0, 0, 0, 0, 0]          // (no soak inherits the traffic step's counters or side tables from the one before)
                     RoomTraffic.waitFor = [:]; RoomTraffic.waited = [:]
                     var seedFp: UInt64 = 5381
@@ -202,7 +204,7 @@ final class RoomRoamMeasureTests: XCTestCase {
                             if bi.social != nil, bi.social === bj.social { armed[p] = false; nearSeen[p] = false; continue }          // (together on purpose)
                             let moving = wasWalking[i] || wasWalking[j]
                             if d >= rearm { armed[p] = true; nearSeen[p] = false }
-                            if moving { s.minApart = min(s.minApart, d); if d < near { s.touchTicks += 1 } }
+                            if moving { s.minApart = min(s.minApart, d); seedMinApart = min(seedMinApart, d); if d < near { s.touchTicks += 1 } }
                             if armed[p], moving, d < near, !nearSeen[p] { s.nears += 1; nearSeen[p] = true }
                             if armed[p], moving, d < bump { s.bumps += 1; armed[p] = false }
                         } }
@@ -243,6 +245,12 @@ final class RoomRoamMeasureTests: XCTestCase {
                     foldSeed(lab.rigs.map { GameCare.floorPos($0.brain, $0.sim) })
                     s.simSeconds += Double(seconds)
                     lines.append("ROOMROAM-STEPS arm=\(armName) n=\(n) seed=\(seed) fp=\(String(seedFp, radix: 16)) \(RoomTraffic.report)")
+                    let sec: (Int) -> String = { String(format: "%.1f", Double($0) / 60) }
+                    var seedLine = "ROOMROAM-SEED arm=\(armName) n=\(n) seed=\(seed) legs=\(s.legs - s0.legs) dashes=\(s.dashes - s0.dashes) idles=\(s.idleStarts - s0.idleStarts) emotes=\(s.emotes - s0.emotes) began=\(s.began - s0.began)"
+                    seedLine += " bumps=\(s.bumps - s0.bumps) nears=\(s.nears - s0.nears) touchSec=\(sec(s.touchTicks - s0.touchTicks)) minApart=\(String(format: "%.3f", seedMinApart))"
+                    seedLine += " yields=\(s.yields - s0.yields) yieldSec=\(sec(s.yieldTicks - s0.yieldTicks)) slowSec=\(sec(s.slowTicks - s0.slowTicks)) repicks=\(s.repicks - s0.repicks)"
+                    seedLine += " walkSec=\(sec(s.walkTicks - s0.walkTicks)) idleSec=\(sec(s.idleTicks - s0.idleTicks)) socialSec=\(sec(s.socialTicks - s0.socialTicks)) sleepSec=\(sec(s.sleepTicks - s0.sleepTicks)) restSec=\(sec(s.restTicks - s0.restTicks)) walkDist=\(String(format: "%.1f", s.walkDist - s0.walkDist))"
+                    lines.append(seedLine)
                     simNow += 120          // (the gaps of the previous run are over)
                 }
                 // the report: counts are sums over the seeds and the bodies; /min = per body per simulated minute
