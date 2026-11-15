@@ -23,7 +23,7 @@ final class ShowFlowTests: XCTestCase {
     private func flow() -> (ShowFlow, [ShowCue]) {
         let f = ShowFlow()
         f.songClock = { _ in nil }
-        f.audioReady = { _ in true }
+        f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}
         return (f, [])
     }
     private func run(_ f: ShowFlow, seconds: Float, until: () -> Bool = { false }) {
@@ -32,7 +32,7 @@ final class ShowFlowTests: XCTestCase {
 
     func testAWholeShowFromFadeToResultsAndHome() {
         let f = ShowFlow()
-        f.songClock = { _ in nil }; f.audioReady = { _ in true }
+        f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}
         var cues: [ShowCue] = []; f.cue = { cues.append($0) }
         var swaps: [ShowFlow.Dest] = []; f.onSwap = { swaps.append($0) }
         var performs: [(VoiceTrick, Bool)] = []; f.onPerform = { performs.append(($0, $1)) }
@@ -83,7 +83,7 @@ final class ShowFlowTests: XCTestCase {
 
     /// Picking a trick performs it at once (no ring); a pick while he is performing is ignored; the dance with no taps scores 0.
     func testPickingATrickPerformsItAtOnce() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}; f.cue = { _ in }
         var performs: [(VoiceTrick, Bool)] = []; f.onPerform = { performs.append(($0, $1)) }
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .pond, dayKey: 20261022, bodies: 1, seed: 1)
         XCTAssertFalse(f.active, "the Pond is locked until a 1st at the Puddle")
@@ -117,7 +117,7 @@ final class ShowFlowTests: XCTestCase {
 
     /// The Look round is a judged walk-on: there is no wardrobe on the stage, it moves on after about 3 s, or at once on Next.
     func testLookWalkOnAdvancesByItselfOrOnNext() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}; f.cue = { _ in }
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 20261022, bodies: 1, seed: 1)
         run(f, seconds: 2) { f.phase == .stage }
         f.setOutfit([.head: [f.theme.main]])
@@ -126,7 +126,7 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertEqual(f.round, .look, "still judging after 2 s")
         run(f, seconds: 1.5) { f.round == .dance }
         XCTAssertEqual(f.round, .dance); XCTAssertEqual(f.sim!.lookScore, look, "the outfit he walked on in is the one scored")
-        let g = ShowFlow(); g.songClock = { _ in nil }; g.audioReady = { _ in true }; g.cue = { _ in }
+        let g = ShowFlow(); g.songClock = { _ in nil }; g.audioReady = { _ in true }; g.danceSongPrepared = { _ in true }; g.prepareDanceSong = { _ in }; g.releaseDanceSong = {}; g.cue = { _ in }
         g.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 20261022, bodies: 1, seed: 1)
         run(g, seconds: 2) { g.phase == .stage }
         g.finishLook()
@@ -135,7 +135,7 @@ final class ShowFlowTests: XCTestCase {
 
     /// A brand-new Jelbie (no tricks learned) can enter: the default tricks are on his menu, and the show reaches its results.
     func testNoTricksLearnedStillHasTheDefaultsAndFinishesTheShow() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }; f.auto = true
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}; f.cue = { _ in }; f.auto = true
         var p = ShowPlayerInput(name: "Bob"); p.tricks = [:]
         f.begin(playerID: 0, name: "Bob", character: 0, input: p, rank: .puddle, dayKey: 20261023, bodies: 1, seed: 2)
         XCTAssertEqual(Set(f.sim!.knownTricks), Set(ShowTrickInfo.defaults))
@@ -147,7 +147,7 @@ final class ShowFlowTests: XCTestCase {
     }
 
     func testAbortPutsEverythingBack() {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}; f.cue = { _ in }
         var swaps: [ShowFlow.Dest] = []; f.onSwap = { swaps.append($0) }
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: 1, bodies: 2, seed: 1)
         run(f, seconds: 2) { f.phase == .stage }
@@ -185,7 +185,7 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertGreaterThan(est.look, 30); XCTAssertGreaterThan(est.trick, 30); XCTAssertLessThanOrEqual(est.total, 300)
         // locks
         XCTAssertNil(care.showBlocker(jelly: 0)); XCTAssertNotNil(care.showBlocker(jelly: 7))
-        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }
+        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.danceSongPrepared = { _ in true }; care.show.prepareDanceSong = { _ in }; care.show.releaseDanceSong = {}
         care.startShow(jelly: 0, rank: .puddle, seed: 5)
         XCTAssertTrue(care.show.active); XCTAssertTrue(care.tripActive); XCTAssertTrue(care.raceBusy)
         XCTAssertNotNil(care.showBlocker(jelly: 1)); XCTAssertNotNil(care.raceBlocker(jelly: 1))
@@ -206,7 +206,7 @@ final class ShowFlowTests: XCTestCase {
     private final class Log { var a: [String] = [] }
     /// A show at the Trick round with nothing automatic; `log` hears every performance in order.
     private func showAtTrick(_ log: Log, day: Int = 20261021, seed: UInt64 = 3) -> ShowFlow {
-        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
+        let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}; f.cue = { _ in }
         f.onPerform = { t, _ in log.a.append("P:\(t.rawValue)") }
         f.onRival = { c in
             switch c {
@@ -291,7 +291,7 @@ final class ShowFlowTests: XCTestCase {
         let room = RaceThreeTests.Room(count: 2)
         RaceThreeTests.keep.append(room)
         let care = room.care
-        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.cue = { _ in }
+        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.danceSongPrepared = { _ in true }; care.show.prepareDanceSong = { _ in }; care.show.releaseDanceSong = {}; care.show.cue = { _ in }
         func step() {
             for a in room.actors + room.park { if let b = a.brain { b.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: false) } }
             care.tickRace(room.actors, dt: 1 / 60)
@@ -320,7 +320,7 @@ final class ShowFlowTests: XCTestCase {
 
     func testSameDayReplayMeetsTheSameRivals() {
         let care = GameCare(jellyCount: 1, persistent: false)
-        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }
+        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.danceSongPrepared = { _ in true }; care.show.prepareDanceSong = { _ in }; care.show.releaseDanceSong = {}
         care.startShow(jelly: 0, rank: .puddle, seed: 1)
         let a = care.show.sim!.rivals
         care.show.abort()
@@ -334,7 +334,7 @@ final class ShowFlowTests: XCTestCase {
     /// A show brought to the first frame of the dance (GO), with the audio stubs given.
     private func danceFlow(clock: @escaping (SceneTrack) -> Double?, ready: @escaping (MusicScene) -> Bool) -> ShowFlow {
         let f = ShowFlow(); f.cue = { _ in }; f.auto = true
-        f.songClock = clock; f.audioReady = ready; f.songClockWhy = { "test: \($0.rawValue) has no clock" }
+        f.songClock = clock; f.audioReady = ready; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}; f.songClockWhy = { "test: \($0.rawValue) has no clock" }
         f.begin(playerID: 1, name: "Bob", character: 1, input: input(), rank: .puddle, dayKey: 20261021, bodies: 3, seed: 3)
         run(f, seconds: 2) { f.phase == .stage }
         run(f, seconds: 6) { f.beat == .countdown }
@@ -364,6 +364,48 @@ final class ShowFlowTests: XCTestCase {
         let f = danceFlow(clock: { _ in t += 1 / 60; return t }, ready: { _ in true })
         run(f, seconds: 5)
         XCTAssertNil(f.danceFallback); XCTAssertGreaterThan(f.danceT, 4)
+    }
+
+    // MARK: the prepared dance song
+
+    private func countdownFlow(prepared: @escaping (SceneTrack) -> Bool) -> (ShowFlow, () -> [SceneTrack]) {
+        var asked: [SceneTrack] = []
+        let f = ShowFlow(); f.cue = { _ in }; f.auto = true
+        f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}; f.songClockWhy = { _ in "test" }
+        f.prepareDanceSong = { asked.append($0) }; f.danceSongPrepared = prepared; f.releaseDanceSong = {}
+        f.begin(playerID: 1, name: "Bob", character: 1, input: input(), rank: .puddle, dayKey: 20261021, bodies: 3, seed: 3)
+        run(f, seconds: 2) { f.phase == .stage }
+        run(f, seconds: 6) { f.beat == .countdown }
+        return (f, { asked })
+    }
+
+    /// The countdown asks for the dance song to be prepared, and does not count down while it is not (the stage loop is up).
+    func testCountdownWaitsForThePreparedDanceSong() {
+        var ready = false
+        let (f, asked) = countdownFlow(prepared: { _ in ready })
+        XCTAssertEqual(f.beat, .countdown); XCTAssertEqual(asked(), [f.danceTrack], "prepared once, at the start of the countdown")
+        run(f, seconds: 2)
+        XCTAssertEqual(f.beat, .countdown); XCTAssertEqual(f.countdown, 3, "no number counted while the song is not ready")
+        ready = true
+        run(f, seconds: 6) { f.beat == .dancing }
+        XCTAssertEqual(f.beat, .dancing, "GO comes once it is ready")
+        XCTAssertNil(f.danceFallback, "it was ready in time")
+    }
+
+    /// The song never gets ready: after the 3 s wait the countdown runs anyway and GO carries the reason.
+    func testCountdownGoesAnywayAfterThreeSecondsWithTheReasonSet() {
+        let (f, _) = countdownFlow(prepared: { _ in false })
+        run(f, seconds: 2.7); XCTAssertEqual(f.countdown, 3, "still waiting"); XCTAssertEqual(f.beat, .countdown); XCTAssertNil(f.danceFallback)
+        var ticks = 0
+        for _ in 0..<(12 * 60) where f.beat != .dancing { f.tick(dt: 1 / 60); ticks += 1 }
+        XCTAssertEqual(f.beat, .dancing, "GO comes anyway")
+        XCTAssertGreaterThan(Double(ticks) / 60, 2.5, "after the 3 s wait and the three counts")
+        XCTAssertEqual(f.danceFallback?.contains("dance song not prepared"), true, f.danceFallback ?? "nil")
+        XCTAssertEqual(f.danceFallback?.contains("then no song clock") ?? true, false, "the clock's own 1.5 s have not run yet")
+        run(f, seconds: 2)
+        XCTAssertEqual(f.danceFallback?.contains("dance song not prepared"), true, "the GO reason is kept")
+        XCTAssertEqual(f.danceFallback?.contains("then no song clock: test"), true, "and the clock's reason is added once: \(f.danceFallback ?? "nil")")
+        XCTAssertEqual(f.danceFallback?.components(separatedBy: "then no song clock").count, 2)
     }
 
     // MARK: the stage camera
