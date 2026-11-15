@@ -231,7 +231,7 @@ final class NightSongKeepTests: XCTestCase {
         hub.start()
         hub._setMinDwell(0)
         func playCount() -> Int { hub.eventLog.filter { if case .playTrack = $0 { return true }; return false }.count }
-        func lastPlay() -> MusicTrack? {
+        func lastPlay() -> Track? {
             for e in hub.eventLog.reversed() { if case .playTrack(let t, _) = e { return t } }
             return nil
         }
@@ -243,7 +243,7 @@ final class NightSongKeepTests: XCTestCase {
         XCTAssertEqual(playCount(), 1, "22:00 awake: the first song starts")
         let first = hub._directorCurrent
         XCTAssertNotNil(first)
-        XCTAssertTrue(MusicTrack.lofiPool.contains(first!))
+        XCTAssertTrue(Track.lofiPool.contains(first!))
 
         var n = playCount()
         step(asleep: true)
@@ -254,7 +254,7 @@ final class NightSongKeepTests: XCTestCase {
         clock.forcedHour = 20.7
         step(asleep: false)
         XCTAssertEqual(playCount(), n + 1, "20:42 awake: lo-fi no longer fits, the evening's own music starts")
-        XCTAssertTrue(MusicTrack.eveningPool.contains(lastPlay()!))
+        XCTAssertTrue(Track.eveningPool.contains(lastPlay()!))
         n = playCount()
         let eveningSong = hub._directorCurrent
         step(asleep: true)
@@ -268,10 +268,10 @@ final class NightSongKeepTests: XCTestCase {
 
         step(asleep: false)
         XCTAssertEqual(playCount(), n + 1, "15:00 awake: the day music")
-        XCTAssertTrue(MusicTrack.dayPool.contains(lastPlay()!))
+        XCTAssertTrue(Track.dayPool.contains(lastPlay()!))
         n = playCount()
         step(asleep: true)
         XCTAssertEqual(playCount(), n + 1, "15:00 a daytime nap: lo-fi as before")
-        XCTAssertTrue(MusicTrack.lofiPool.contains(lastPlay()!))
+        XCTAssertTrue(Track.lofiPool.contains(lastPlay()!))
     }
 }
