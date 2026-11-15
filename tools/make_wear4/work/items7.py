@@ -164,13 +164,13 @@ def _ring_mesh(name, rows, close_i, colfn, close_k=True, cap_ends=True):
 
 def _fold_layer(name, inner, hem, colfn, close_i):
     """A thin double-sided tulle layer: a top surface and an underside kept 8 mm BELOW it everywhere, hem included (no shared rim: top and underside never converge, so they never z-fight).
-    The underside is the SAME mid pink as the tier (no darker than its darkest top colour) and carries a baked emissive weight (ao 1.25): a surface facing down only gets the room's ambient, which is
+    The underside is the SAME mid pink as the tier (no darker than its darkest top colour) and carries a baked emissive weight (ao 1.45): a surface facing down only gets the room's ambient, which is
     brown, and read as a maroon wedge at the ends of the skirt (round-3 review). inner / hem: per-column points of the top surface edges."""
     N = len(inner); P = []; C = []; AO = []; DY = np.array([0, 0.008, 0])
     for i in range(N): P.append(tuple(inner[i])); C.append(colfn(i, 0)); AO.append(None)
     for i in range(N): P.append(tuple(hem[i])); C.append(colfn(i, 1)); AO.append(None)
-    for i in range(N): P.append(tuple(np.array(inner[i]) - DY)); C.append(colfn(i, 2)); AO.append(1.25)
-    for i in range(N): P.append(tuple(np.array(hem[i]) - DY)); C.append(colfn(i, 3)); AO.append(1.25)
+    for i in range(N): P.append(tuple(np.array(inner[i]) - DY)); C.append(colfn(i, 2)); AO.append(1.45)
+    for i in range(N): P.append(tuple(np.array(hem[i]) - DY)); C.append(colfn(i, 3)); AO.append(1.45)
     Ft = []; Fb = []
     for i in range(N if close_i else N - 1):
         i2 = (i + 1) % N
@@ -218,8 +218,8 @@ def tutu(pink=PINK, lav=LAV, band=None, pip=False, yb=0.32, **k):
         for phi in cols:
             e = B.egg_point(yl(phi) + dy, phi); h = hdir(e)
             s = math.sqrt(math.sin(8.5 * phi + 0.5 * ph * math.pi) ** 2 + 0.06) / math.sqrt(1.06)      # ~0.2 at the cusps (hem lifts, blunt: no needle tips edge-on), 1 mid-scallop
-            side = math.cos(phi) ** 2                                      # 1 at the hips (seen edge-on in the front view), 0 on the chest / back
-            L = reach * (1 - 0.06 * (1 - s) * (1 - side)) * (1 - 0.30 * side)         # the skirt is shorter in reach at the hips and its cusps fade there: no needle tips at the silhouette ends
+            c2 = math.cos(phi) ** 2; sm_ = min(max((c2 - 0.25) / 0.35, 0.0), 1.0); side = sm_ * sm_ * (3 - 2 * sm_) * (1 - 0) # 1 on the whole stretch of the hips seen edge-on in the front view (|phi| < ~40 deg), 0 on the chest / back
+            L = reach * (1 - 0.06 * (1 - s) * (1 - side)) * (1 - 0.30 * c2)         # the skirt is shorter in reach at the hips and its cusps fade there: no needle tips at the silhouette ends
             inner.append(e + h * (hin(phi) + 0.012))
             hem.append(e + h * (hin(phi) + 0.012 + L) + np.array([0, -L * math.tan(math.radians(ang)) + 0.017 * (1 - s) * (1 - side), 0]))
         def cf(i, k, c=c):
