@@ -1019,6 +1019,7 @@ final class BlobBrain {
         mouthOpen = 0
         route = []
         clearSkinOverride()
+        if Self.waveInterruptSafe { skinner.clearWaveBlend() }          // (the aborted wave's per-fragment blend goes with its override, in this very tick)
         sim.targets = []
         sim.restoreStiffness()
         gait.cancel(sim)
