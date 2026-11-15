@@ -264,7 +264,8 @@ final class BathFlow {
             if savedArena == nil { savedArena = sim.arenaRadius }
             sim.arenaRadius = .infinity
         } else if let r = savedArena {
-            sim.arenaRadius = r; savedArena = nil
+            if r.isFinite, GameCamera.roamFloor != nil { sim.arenaCenter = GameCamera.arenaCenter; sim.arenaRadius = GameCamera.arenaRadius } else { sim.arenaRadius = r }          // (the same rule as the race and the Show: GameCare+Race.swift)
+            savedArena = nil
         }
     }
 
