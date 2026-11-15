@@ -268,6 +268,7 @@ final class SceneMusicEngine {
 
     private func decode(_ v: Voice) {
         let t = v.track
+        decodeRequests += 1
         Task.detached(priority: .userInitiated) { [weak self] in
             let r = SceneRender.render(t)
             await self?.finishLoading(v, r)
@@ -287,6 +288,11 @@ final class SceneMusicEngine {
     }
     /// `t` is prepared (decoded and scheduled): `play` will start it at once.
     func isPrepared(_ t: SceneTrack) -> Bool { prepared.map { $0.track == t && $0.loaded && !$0.cancelled } ?? false }
+    /// A decode of `t` is really in flight (a failed, discarded or finished prepare is not): the countdown waits only for that.
+    func isPreparing(_ t: SceneTrack) -> Bool { prepared.map { $0.track == t && !$0.loaded && !$0.cancelled } ?? false }
+    /// Test aids: how many decodes were asked for, and a prepared voice marked loaded without audio.
+    private(set) var decodeRequests = 0
+    func _markPreparedLoaded() { prepared?.loaded = true }
     func discardPrepared() { if let p = prepared { prepared = nil; drop(p) } }
 
     /// `engine.start()`; on failure the audio session is applied again and the start retried once.
@@ -364,6 +370,7 @@ final class SceneMusicEngine {
         guard !voices.isEmpty else { return }
         if !engine.isRunning {
             do { try engine.start() } catch { restartAfterConfigChange(); return }
+            if let t = prepared?.track { discardPrepared(); prepare(t) }          // the engine was stopped under the prepared voice: rebuild it
         }
         for v in voices where v.ready { v.node.play() }
     }
@@ -375,11 +382,11 @@ final class SceneMusicEngine {
 
     /// Rebuilds the playing track on a fresh start of the engine (config change: route change, interruption end). Internal for tests.
     func restartAfterConfigChange() {
-        guard let t = current else { return }
+        let again = prepared?.track          // a prepared voice was built on the engine that just changed: rebuild it, whatever else is playing
+        discardPrepared()
+        guard let t = current else { if let again { prepare(again) }; return }
         alog("scene engine config change: replaying \(t.rawValue) from 0")
         let fade = 0.3
-        let again = prepared?.track
-        discardPrepared()
         for v in voices { v.cancelled = true; if v.node.engine != nil { v.node.stop(); engine.detach(v.node) } }
         voices.removeAll()
         play(t, fade: fade)

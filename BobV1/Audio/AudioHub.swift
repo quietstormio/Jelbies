@@ -519,7 +519,7 @@ final class AudioHub {
     private func sceneEngine() -> SceneMusicEngine {
         if let scene { return scene }
         let e = SceneMusicEngine()
-        e.onStartFailed = { [weak self] in self?.setUpSession() }
+        e.onStartFailed = { [weak self] in guard let self, self.active, !self.micSession, !self.earsSession else { return }; self.setUpSession() }
         scene = e
         return e
     }
@@ -531,7 +531,7 @@ final class AudioHub {
     /// The prepared track is ready to start at once. True when nothing can be prepared (muted, not started, no scene engine on a test host): nothing to wait for.
     func scenePrepared(_ t: SceneTrack) -> Bool {
         if muted || !started || _sceneEngineDisabled { return true }
-        return scene?.isPrepared(t) ?? false
+        return !(scene?.isPreparing(t) ?? false)          // waits only while a decode is really running
     }
     func discardPreparedScene() { scene?.discardPrepared() }
     /// The track of this scene is decoded and playing.

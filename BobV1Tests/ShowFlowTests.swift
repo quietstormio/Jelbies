@@ -368,10 +368,10 @@ final class ShowFlowTests: XCTestCase {
 
     // MARK: the prepared dance song
 
-    private func countdownFlow(prepared: @escaping (SceneTrack) -> Bool) -> (ShowFlow, () -> [SceneTrack]) {
+    private func countdownFlow(prepared: @escaping (SceneTrack) -> Bool, ready: @escaping (MusicScene) -> Bool = { _ in true }) -> (ShowFlow, () -> [SceneTrack]) {
         var asked: [SceneTrack] = []
         let f = ShowFlow(); f.cue = { _ in }; f.auto = true
-        f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.danceSongPrepared = { _ in true }; f.prepareDanceSong = { _ in }; f.releaseDanceSong = {}; f.songClockWhy = { _ in "test" }
+        f.songClock = { _ in nil }; f.audioReady = ready; f.songClockWhy = { _ in "test" }
         f.prepareDanceSong = { asked.append($0) }; f.danceSongPrepared = prepared; f.releaseDanceSong = {}
         f.begin(playerID: 1, name: "Bob", character: 1, input: input(), rank: .puddle, dayKey: 20261021, bodies: 3, seed: 3)
         run(f, seconds: 2) { f.phase == .stage }
@@ -390,6 +390,44 @@ final class ShowFlowTests: XCTestCase {
         run(f, seconds: 6) { f.beat == .dancing }
         XCTAssertEqual(f.beat, .dancing, "GO comes once it is ready")
         XCTAssertNil(f.danceFallback, "it was ready in time")
+    }
+
+    /// A slow start that became ready before GO records no reason: the stage loop is up and the song is prepared when the count ends, and the
+    /// dance track itself is (still) not playing, as on a device where the director's sceneOn comes a frame after GO.
+    func testSlowStartThatBecameReadyRecordsNoFalseReason() {
+        var prepared = false
+        let (f, _) = countdownFlow(prepared: { _ in prepared }, ready: { s in if case .danceSong = s { return false }; return true })
+        run(f, seconds: 3.3)          // the 3 s wait is spent: the count goes on
+        prepared = true
+        var guardTicks = 0
+        while f.beat != .dancing, guardTicks < 12 * 60 { f.tick(dt: 1 / 60); guardTicks += 1 }
+        XCTAssertEqual(f.beat, .dancing)
+        XCTAssertNil(f.danceFallback, "both were ready at GO: \(f.danceFallback ?? "")")
+    }
+
+    // MARK: the prepared voice in the scene engine (state only: no audio device here)
+
+    /// A prepare is "in flight" until it is loaded or discarded; a discarded one is not waited for.
+    func testPreparingIsOnlyWhileADecodeRuns() {
+        let e = SceneMusicEngine()
+        e.prepare(.dance1)
+        XCTAssertTrue(e.isPreparing(.dance1)); XCTAssertFalse(e.isPrepared(.dance1)); XCTAssertEqual(e.decodeRequests, 1)
+        e._markPreparedLoaded()
+        XCTAssertFalse(e.isPreparing(.dance1)); XCTAssertTrue(e.isPrepared(.dance1))
+        e.discardPrepared()
+        XCTAssertFalse(e.isPreparing(.dance1)); XCTAssertFalse(e.isPrepared(.dance1))
+        e.stopAll(fade: 0)
+    }
+
+    /// A config change rebuilds the prepared voice even with nothing else playing: it is discarded and a new decode asked for.
+    func testConfigChangeRebuildsThePreparedVoiceEvenWithNothingPlaying() {
+        let e = SceneMusicEngine()
+        e.prepare(.dance2); e._markPreparedLoaded()
+        XCTAssertTrue(e.isPrepared(.dance2)); XCTAssertNil(e.current)
+        e.restartAfterConfigChange()
+        XCTAssertFalse(e.isPrepared(.dance2), "the old voice is gone")
+        XCTAssertTrue(e.isPreparing(.dance2)); XCTAssertEqual(e.decodeRequests, 2, "a new decode was asked for")
+        e.stopAll(fade: 0)
     }
 
     /// The song never gets ready: after the 3 s wait the countdown runs anyway and GO carries the reason.

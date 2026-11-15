@@ -268,13 +268,14 @@ final class ShowFlow {
                 countdown -= 1
                 if countdown > 0 { countdownLeft = Self.countdownBeat; cueSerial += 1; cue(.countdown) }
                 else {
+                    let stageOK = audioReady(musicScene), songOK = danceSongPrepared(danceTrack)          // read while the beat is still .countdown (musicScene = the stage loop)
                     beat = .dancing; goAge = 0; cueSerial += 1; cue(.go)
                     if var s = sim {
                         // the dance song starts now (the scene switches on the next frame) and its prompts are on ITS beats: the clock is the song's own
                         // player time, held at 0 until the song is audible, so the start can never drift from the clock
                         danceT = 0; danceMusicOn = true; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0; danceNoClockNoted = false
-                        if audioWait >= 3, !audioReady(musicScene) || !danceSongPrepared(danceTrack) {          // the wait ran out: GO anyway, the song starts as it can
-                            let why = "GO after a \(Int(audioWait)) s wait: " + (audioReady(musicScene) ? "" : "stage music not playing; ") + (danceSongPrepared(danceTrack) ? "" : "dance song not prepared")
+                        if audioWait >= 3, !stageOK || !songOK {          // the wait ran out: GO anyway, the song starts as it can
+                            let why = "GO after a \(Int(audioWait)) s wait: " + (stageOK ? "" : "stage music not playing; ") + (songOK ? "" : "dance song not prepared")
                             danceFallback = why
                             if AudioHub.audioLog { NSLog("[melon] dance GO without the prepared song: %@", why) }
                         }
