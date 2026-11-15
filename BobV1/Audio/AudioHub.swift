@@ -43,6 +43,7 @@ final class AudioHub {
     @ObservationIgnored private var active = true                // foreground
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var lastTick = CACurrentMediaTime()
+    @ObservationIgnored private var probeClock = 0.0          // PROBE
     @ObservationIgnored private var micSession = false
     @ObservationIgnored private var verifyTask: Task<Void, Never>?
     /// 0...1 multiplier on all game music + ambience: 0 at a return from the background / an interruption, then rises over `resumeFadeSeconds` (no pop-in).
@@ -327,6 +328,7 @@ final class AudioHub {
     /// if its engine lost it. `delay`: the 0.5 s re-check (also rebuilds a scene whose engine is not running).
     func ensureMusic(delay: Bool) {
         guard started, active else { return }
+        if Self.audioLog { NSLog("[probe] ensureMusic delay=%d sceneTrack=%@ playing=%d current=%@", delay ? 1 : 0, director.sceneTrack?.rawValue ?? "nil", director.sceneTrack.map { scene?.isPlaying($0) ?? false } ?? false ? 1 : 0, scene?.current?.rawValue ?? "nil") }
         perform(director.resumed(deckPlaying: deckPlaying, fade: 1.5))
         if let t = director.sceneTrack, !(scene?.isPlaying(t) ?? false) {
             if scene?.current != t { perform([.sceneOn(t, fade: 1.5)]) }          // lost (or never started)
@@ -357,6 +359,7 @@ final class AudioHub {
 
     /// Foreground / background (scenePhase).
     func setForeground(_ on: Bool) {
+        if Self.audioLog { NSLog("[probe] setForeground %d (active=%d)", on ? 1 : 0, active ? 1 : 0) }
         guard started, on != active else { return }
         active = on
         if on {
@@ -1128,6 +1131,7 @@ final class AudioHub {
             case .layerOff(let fade):
                 layer?.fader.ramp(to: 0, over: fade)
             case .sceneOn(let t, let fade):
+                if Self.audioLog { NSLog("[probe] event sceneOn %@ fade %.2f disabled=%d", t.rawValue, fade, _sceneEngineDisabled ? 1 : 0) }
                 if _sceneEngineDisabled { break }
                 if scene == nil { scene = SceneMusicEngine() }
                 scene?.play(t, fade: fade)
@@ -1171,13 +1175,23 @@ final class AudioHub {
             let roomHeard = deckPlaying
             let wantsScene = director.sceneTrack != nil && director.scene != .none && director.scene != .results
             let sceneHeard = director.sceneTrack.map { scene?.isPlaying($0) ?? false } ?? false
-            if watchdog.update(dt: dt, shouldPlay: wantsRoom || wantsScene, isPlaying: wantsRoom ? roomHeard : sceneHeard) { resumeAfterInterruption(verify: true, fadeIn: false) }
+            if watchdog.update(dt: dt, shouldPlay: wantsRoom || wantsScene, isPlaying: wantsRoom ? roomHeard : sceneHeard) { if Self.audioLog { NSLog("[probe] WATCHDOG fires wantsRoom=%d wantsScene=%d sceneHeard=%d", wantsRoom ? 1 : 0, wantsScene ? 1 : 0, sceneHeard ? 1 : 0) }; resumeAfterInterruption(verify: true, fadeIn: false) }
         } else { watchdog.reset() }
         mainSlew.update(mode: director.modeGain(playing: input.playing), duck: director.duckGain, dt: dt)
         for i in decks.indices { decks[i].fader.update(dt: dt) }
         scene?.update(dt: dt)
         layer?.fader.update(dt: dt); ambDay?.fader.update(dt: dt); ambEve?.fader.update(dt: dt)
         tickCrowd(dt: dt)
+        if Self.audioLog, director.scene != .none || raceScene != .none {          // PROBE: the scene music's state, twice a second
+            probeClock += dt
+            if probeClock >= 0.5 {
+                probeClock = 0
+                let st = director.sceneTrack.flatMap { songTime(of: $0) }
+                NSLog("[probe] hub dir.scene=%@ in.scene=%@ race=%@ sceneTrack=%@ songTime=%@ nilWhy=%@ music{on=%d vol=%.3f other=%d} duck=%.2f mix=%.2f dance=%.2f storm=%.2f resume=%.2f mic=%d %@",
+                      String(describing: director.scene), String(describing: input.scene), String(describing: raceScene), director.sceneTrack?.rawValue ?? "nil", st.map { String(format: "%.3f", $0) } ?? "nil", scene?.lastNilWhy ?? "no engine",
+                      settings.musicOn ? 1 : 0, settings.musicVolume, otherAudioPlaying ? 1 : 0, duck.gain, AudioMix.music, danceGain, stormDuck, resumeFade, micSession ? 1 : 0, scene?.probeLine() ?? "no engine")
+            }
+        }
         decks.removeAll { d in
             if d.fader.level <= 0.0001 && d.fader.target == 0 { d.player.stop(); return true }
             return false

@@ -662,6 +662,16 @@ struct GameScreen: View {
             for _ in 0..<100 where !care.canShow(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
             care.startShow(jelly: who)
+            // PROBE: -ShowRepeat n plays n more shows in this session, seeds 2, 3, 5, ... (songs 2, 3, 4, 1, ...)
+            let seeds: [UInt64] = [2, 3, 5, 6, 7, 9, 10]
+            for i in 0..<min(d.integer(forKey: "ShowRepeat"), seeds.count) {
+                for _ in 0..<4000 where care.show.active { await sleep(0.1) }
+                for _ in 0..<300 where !care.canShow(jelly: who) { await sleep(0.1) }
+                if i == 2 { NSLog("[probe] BG WINDOW before show 4 (40 s)"); await sleep(40) }
+                await sleep(d.double(forKey: "ShowRepeatGap") > 0 ? d.double(forKey: "ShowRepeatGap") : 6)
+                NSLog("[probe] repeat show %d seed %llu", i + 1, seeds[i])
+                care.startShow(jelly: who, seed: seeds[i])
+            }
         }
         // capture aid: -BubbleDemo 1 takes the bubble wand out and plays a simulated blow (pulses); 2 blows without pause (Toys/BubbleWand.swift)
         if d.integer(forKey: "BubbleDemo") != 0 {

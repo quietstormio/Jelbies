@@ -209,6 +209,7 @@ final class SceneMusicEngine {
         var ready = false
         var started = false
         var cancelled = false
+        var asked = CACurrentMediaTime()          // PROBE
         init(track: SceneTrack) { self.track = track }
     }
 
@@ -217,8 +218,51 @@ final class SceneMusicEngine {
     private var level: Float = 1
     private var configObserver: NSObjectProtocol?
 
+    // PROBE (show-dance-probe-r1): logging + a mixer tap that writes what the engine renders
+    static var probe: Bool { UserDefaults.standard.bool(forKey: "AudioLog") }
+    private var tapOn = false
+    private var tapFile: AVAudioFile?
+    private var tapSec = 0.0
+    private var tapSum = 0.0
+    private var tapN = 0
+    func probeLine() -> String {
+        let vs = voices.map { v in String(format: "%@{rdy=%d stop=%d play=%d vol=%.3f fad=%.2f}", v.track.rawValue, v.ready ? 1 : 0, v.stopping ? 1 : 0, v.node.isPlaying ? 1 : 0, v.node.volume, v.fader.level) }.joined(separator: " ")
+        return String(format: "engine run=%d level=%.3f out=%.0fHz voices[%@]", engine.isRunning ? 1 : 0, level, engine.outputNode.outputFormat(forBus: 0).sampleRate, vs)
+    }
+    private func installTap() {
+        guard Self.probe, !tapOn else { return }
+        tapOn = true
+        let mixer = engine.mainMixerNode
+        let fmt = mixer.outputFormat(forBus: 0)
+        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let u = dir.appendingPathComponent(String(format: "scene_tap_%.0f.caf", Date().timeIntervalSince1970))
+            tapFile = try? AVAudioFile(forWriting: u, settings: fmt.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+            NSLog("[probe] tap file %@ fmt %.0f Hz ch %d", u.path, fmt.sampleRate, fmt.channelCount)
+        }
+        nonisolated(unsafe) let file = tapFile
+        let sr = fmt.sampleRate
+        mixer.installTap(onBus: 0, bufferSize: 4096, format: fmt) { [weak self] buf, when in
+            let n = Int(buf.frameLength)
+            var sum = 0.0
+            if let d = buf.floatChannelData { for i in 0..<n { let x = Double(d[0][i]); sum += x * x } }
+            let host = when.isHostTimeValid ? AVAudioTime.seconds(forHostTime: when.hostTime) : -1
+            let st = when.isSampleTimeValid ? when.sampleTime : -1
+            try? file?.write(from: buf)
+            Task { @MainActor in
+                guard let self else { return }
+                self.tapSum += sum; self.tapN += n
+                let t = Double(self.tapN) / sr
+                if t - self.tapSec >= 0.5 {
+                    NSLog("[probe] tap rms=%.4f frames=%d tapSample=%lld host=%.4f", (self.tapSum / Double(max(self.tapN - Int(self.tapSec * sr), 1))).squareRoot(), self.tapN, st, host)
+                    self.tapSec = t; self.tapSum = 0
+                }
+            }
+        }
+    }
+
     init() {
         configObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+            if SceneMusicEngine.probe { NSLog("[probe] engine CONFIG CHANGE") }
             Task { @MainActor in self?.restartAfterConfigChange() }
         }
     }
@@ -242,6 +286,7 @@ final class SceneMusicEngine {
         v.fader.snap(0); v.fader.ramp(to: 1, over: fade)
         voices.append(v)
         engine.attach(v.node)
+        if Self.probe { NSLog("[probe] scene play %@ fade %.2f voices=%d host=%.4f", t.rawValue, fade, voices.count, CACurrentMediaTime()) }
         Task.detached(priority: .userInitiated) { [weak self] in
             let r = SceneRender.render(t)
             await self?.finishLoading(v, r)
@@ -249,15 +294,18 @@ final class SceneMusicEngine {
     }
 
     private func finishLoading(_ v: Voice, _ r: SceneRender.Result?) {
+        if Self.probe { NSLog("[probe] scene decoded %@ ok=%d cancelled=%d inList=%d after %.0f ms frames=%d", v.track.rawValue, r != nil ? 1 : 0, v.cancelled ? 1 : 0, voices.contains(where: { $0 === v }) ? 1 : 0, (CACurrentMediaTime() - v.asked) * 1000, Int(r?.loop.frameLength ?? 0)) }
         guard let r, !v.cancelled, voices.contains(where: { $0 === v }) else { drop(v); return }
         engine.connect(v.node, to: engine.mainMixerNode, format: r.format)
-        if !engine.isRunning { engine.prepare(); do { try engine.start() } catch { drop(v); return } }
+        if !engine.isRunning { engine.prepare(); do { try engine.start() } catch { if Self.probe { NSLog("[probe] engine START FAILED %@", String(describing: error)) }; drop(v); return } }
+        installTap()
         if let i = r.intro { v.node.scheduleBuffer(i, completionHandler: nil) }
         v.node.scheduleBuffer(r.loop, at: nil, options: v.track.playsOnce ? [] : .loops, completionHandler: nil)
         if !v.stopping { v.fader.snap(0); v.fader.ramp(to: 1, over: v.fadeIn) }          // decoding can outlast the fade: fade in from the moment it really starts (never a pop-in)
         v.node.volume = v.stopping ? v.fader.level * level * v.track.gain : 0
         v.node.play()
         v.ready = true; v.started = true
+        if Self.probe { NSLog("[probe] scene started %@ stopping=%d vol=%.3f level=%.3f host=%.4f %@", v.track.rawValue, v.stopping ? 1 : 0, v.node.volume, level, CACurrentMediaTime(), probeLine()) }
     }
 
     func stopAll(fade: Double) {
@@ -276,10 +324,11 @@ final class SceneMusicEngine {
             v.node.volume = v.fader.level * level * v.track.gain
         }
         for v in voices where v.stopping && v.fader.level <= 0.0001 { drop(v) }
-        if voices.isEmpty, engine.isRunning { engine.stop() }
+        if voices.isEmpty, engine.isRunning { if Self.probe { NSLog("[probe] engine stop (no voices)") }; engine.stop() }
     }
 
     private func drop(_ v: Voice) {
+        if Self.probe { NSLog("[probe] scene drop %@ ready=%d stopping=%d", v.track.rawValue, v.ready ? 1 : 0, v.stopping ? 1 : 0) }
         v.cancelled = true
         if v.node.engine != nil { v.node.stop(); engine.detach(v.node) }
         voices.removeAll { $0 === v }
@@ -304,6 +353,7 @@ final class SceneMusicEngine {
 
     /// Rebuilds the playing track on a fresh start of the engine (config change: route change, interruption end). Internal for tests.
     func restartAfterConfigChange() {
+        if Self.probe { NSLog("[probe] restartAfterConfigChange current=%@", current?.rawValue ?? "nil") }
         guard let t = current else { return }
         let fade = 0.3
         for v in voices { v.cancelled = true; if v.node.engine != nil { v.node.stop(); engine.detach(v.node) } }
@@ -313,9 +363,13 @@ final class SceneMusicEngine {
 
     /// Seconds of SONG time of the newest playing track, as heard (output latency taken off): the file's own clock for a track that plays from its
     /// start. It keeps counting past the loop (the loop is a whole number of beats).
+    var lastNilWhy = ""
     func songTime(of t: SceneTrack) -> Double? {
-        guard let v = voices.last(where: { $0.track == t && !$0.stopping && $0.ready && $0.started }),
-              let nt = v.node.lastRenderTime, nt.isSampleTimeValid, let pt = v.node.playerTime(forNodeTime: nt) else { return nil }
+        guard let v = voices.last(where: { $0.track == t && !$0.stopping && $0.ready && $0.started }) else { lastNilWhy = "no ready voice"; return nil }
+        guard let nt = v.node.lastRenderTime else { lastNilWhy = "lastRenderTime nil"; return nil }
+        guard nt.isSampleTimeValid else { lastNilWhy = "sampleTime invalid"; return nil }
+        guard let pt = v.node.playerTime(forNodeTime: nt) else { lastNilWhy = "playerTime nil"; return nil }
+        lastNilWhy = ""
         // the player's own sample position at the last render, plus the time since that render (the reading is up to one IO buffer old; capped, never negative), minus the route's output latency (Bluetooth)
         var stale = 0.0
         if nt.isHostTimeValid { stale = min(max(AVAudioTime.seconds(forHostTime: mach_absolute_time()) - AVAudioTime.seconds(forHostTime: nt.hostTime), 0), 0.05) }
