@@ -12,6 +12,7 @@ args = sys.argv[sys.argv.index('--') + 1:]
 outdir, label, spec = args[0], args[1], args[2]
 flags = [a for a in args[3:] if a.startswith('--')]
 PIP = '--pip' in flags
+WINGS = '--wings' in flags
 VIEWS = ['front', 'q34', 'side', 'q34b', 'back', 'room', 'top']
 for f in flags:
     if f.startswith('--views='): VIEWS = f[8:].split(',')
@@ -19,7 +20,9 @@ RES = int([f for f in flags if f.startswith('--res=')][0][6:]) if any(f.startswi
 os.makedirs(outdir, exist_ok=True)
 
 def find(iid):
-    for name in ("items5", "items6", "items7", "items8", "items9"):
+    mods = ("items5", "items6", "items7", "items8", "items9", "items4", "items10")
+    if iid.startswith('new/'): iid = iid[4:]; mods = ("items10",)      # new/<id>: the items10 redesign only (same ids as today's pieces)
+    for name in mods:
         m = __import__(name)
         for rid, fn, kw, anchor in m.REG:
             if rid == iid: return fn, dict(kw), anchor
@@ -86,6 +89,16 @@ if PIP:
     for i in range(len(me2.vertices)): a.data[i].color = (*lin((0.90, 0.45, 0.12)), 1)
     sc.collection.objects.link(bpy.data.objects.new('tail', me2))
 
+if WINGS:
+    import struct
+    wb = open(os.path.join(HERE, '..', '..', '..', 'BobV1', 'Features', 'Resources', 'feature_lav_a_final.bin'), 'rb').read()
+    nv_, ni_, np_ = struct.unpack_from('<III', wb, 0); off = 12 + 40 * np_
+    vv = np.frombuffer(wb, '<f4', nv_ * 11, off).reshape(nv_, 11)
+    ii = np.frombuffer(wb, '<u2', ni_, off + nv_ * 44).reshape(-1, 3)
+    anc = np.array([0, 0.55, -0.5172])
+    wc = [lin((0.93, 0.93, 0.98))] * nv_
+    wob = mk_obj('wings', vv[:, :3] + anc, None, wc, [tuple(int(x) for x in f) for f in ii], smooth=True)
+
 # item (parts are already in rest space)
 Pm, Nm, Cm, Fm = lib.merged()
 mk_obj('item', Pm, Nm, [lin(c) if False else c for c in Cm], Fm)
@@ -118,7 +131,8 @@ FOC = [f for f in flags if f.startswith('--focus=')]
 BODYC = [f for f in flags if f.startswith('--body=')]
 for v in VIEWS:
     az, el, dist, ty = view(v)
-    if FOC: ty, dist = [float(x) for x in FOC[0][8:].split(',')]; az = math.radians(az); el = math.radians(el)
+    az = math.radians(az); el = math.radians(el)
+    if FOC: ty, dist = [float(x) for x in FOC[0][8:].split(',')]
     t = Vector((0, ty, 0))
     cam.location = t + Vector((math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el))) * dist
     zc_ = (cam.location - t).normalized(); xc_ = Vector((0, 1, 0)).cross(zc_).normalized(); yc_ = zc_.cross(xc_)
