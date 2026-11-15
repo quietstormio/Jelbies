@@ -28,7 +28,7 @@ final class SpringArmUITests: XCTestCase {
         func shot(_ n: String) { try? XCUIScreen.main.screenshot().image.pngData()?.write(to: URL(fileURLWithPath: "\(out)/\(n).png")) }
         sleep(4)
         mark("start")
-        let rounds = Int(env["SPRING_ROUNDS"] ?? "1") ?? 1
+        let rounds = mode == "midwave" ? 0 : (Int(env["SPRING_ROUNDS"] ?? "1") ?? 1)
         let dwell: UInt32 = mode == "fast" ? 400_000 : (mode == "settled" ? 2_500_000 : 2_000_000)
         let start = Int(env["SPRING_PAGE"] ?? "0") ?? 0
         for _ in 0..<rounds {
