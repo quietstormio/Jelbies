@@ -329,22 +329,25 @@ final class SceneMusicEngine {
 
     /// Seconds of SONG time of the newest playing track, as heard (output latency taken off): the file's own clock for a track that plays from its
     /// start. It keeps counting past the loop (the loop is a whole number of beats).
-    func songTime(of t: SceneTrack) -> Double? { reading(of: t).time }
-    /// Why `songTime(of:)` is nil right now (empty when it is not).
-    func songTimeWhy(of t: SceneTrack) -> String { reading(of: t).why }
-
-    private func reading(of t: SceneTrack) -> (time: Double?, why: String) {
-        guard let v = voices.last(where: { $0.track == t && !$0.stopping && $0.ready && $0.started }) else {
-            let any = voices.last(where: { $0.track == t })
-            return (nil, any == nil ? "no scene voice for \(t.rawValue)" : any!.stopping ? "voice stopping" : "voice not ready (decoding or start failed)")
-        }
-        guard let nt = v.node.lastRenderTime else { return (nil, "voice has not rendered yet (lastRenderTime nil\(engine.isRunning ? "" : ", engine not running")\(v.node.isPlaying ? "" : ", node not playing"))") }
-        guard nt.isSampleTimeValid else { return (nil, "render sample time invalid") }
-        guard let pt = v.node.playerTime(forNodeTime: nt) else { return (nil, "player time nil") }
+    func songTime(of t: SceneTrack) -> Double? {
+        guard let v = voices.last(where: { $0.track == t && !$0.stopping && $0.ready && $0.started }),
+              let nt = v.node.lastRenderTime, nt.isSampleTimeValid, let pt = v.node.playerTime(forNodeTime: nt) else { return nil }
         // the player's own sample position at the last render, plus the time since that render (the reading is up to one IO buffer old; capped, never negative), minus the route's output latency (Bluetooth)
         var stale = 0.0
         if nt.isHostTimeValid { stale = min(max(AVAudioTime.seconds(forHostTime: mach_absolute_time()) - AVAudioTime.seconds(forHostTime: nt.hostTime), 0), 0.05) }
         let played = Double(pt.sampleTime) / pt.sampleRate + stale - AVAudioSession.sharedInstance().outputLatency
-        return (played, "")
+        return played
+    }
+
+    /// Why `songTime(of:)` is nil right now (empty when it is not). Built only when asked for (the diagnostics), never on the per-frame read.
+    func songTimeWhy(of t: SceneTrack) -> String {
+        guard let v = voices.last(where: { $0.track == t && !$0.stopping && $0.ready && $0.started }) else {
+            let any = voices.last(where: { $0.track == t })
+            return any == nil ? "no scene voice for \(t.rawValue)" : any!.stopping ? "voice stopping" : "voice not ready (decoding or start failed)"
+        }
+        guard let nt = v.node.lastRenderTime else { return "voice has not rendered yet (lastRenderTime nil\(engine.isRunning ? "" : ", engine not running")\(v.node.isPlaying ? "" : ", node not playing"))" }
+        guard nt.isSampleTimeValid else { return "render sample time invalid" }
+        guard v.node.playerTime(forNodeTime: nt) != nil else { return "player time nil" }
+        return ""
     }
 }
