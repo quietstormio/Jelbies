@@ -311,6 +311,8 @@ final class WearFitAuditTests: XCTestCase {
         var rigidNew: Float = 0, whereRigid = ""
         /// worst newly-buried depth that an arm, foot or tail (not the egg) is responsible for
         var worstLimb: Float = 0, whereLimb = ""
+        /// capture-only split by limb: newly buried by an arm (any / not exempt by WearLevel), a foot, the tail
+        var armAny: Float = 0, armNE: Float = 0, foot: Float = 0, tail: Float = 0
     }
 
     /// Measures one posed frame of one piece: updates `st`.
@@ -347,6 +349,9 @@ final class WearFitAuditTests: XCTestCase {
             if inside > st.worstIn { st.worstIn = inside; st.whereIn = "\(tag) \(part) v\(i) by \(owner)" }
             if newly > st.worstNew { st.worstNew = newly; st.whereNew = "\(tag) \(part) v\(i) by \(owner)" }
             let sinkEx = WearLevel.record && i < WearLevel.recRaw.count && WearLevel.recRaw[i] >= WearLevel.bulgeFull, floatEx = WearLevel.record && i < WearLevel.recBulge.count && WearLevel.recBulge[i] > 0.0005
+            if owner.hasPrefix("arm") { st.armAny = max(st.armAny, newly); if !sinkEx { st.armNE = max(st.armNE, newly) } }
+            if !sinkEx, owner.hasPrefix("foot") { st.foot = max(st.foot, newly) }
+            if !sinkEx, owner.hasPrefix("tail") { st.tail = max(st.tail, newly) }
             if newly > st.worstLimb, !sinkEx, owner.hasPrefix("arm") || owner.hasPrefix("foot") || owner.hasPrefix("tail") { st.worstLimb = newly; st.whereLimb = "\(tag) \(part) v\(i) by \(owner)" }
             if newly > 0.01 { buried += 1 }
             // float: how much further OUT of the drawn body than it was authored to stand (its offset above the skin it is bound to). A small part (a pearl, a gem) counts as a whole:
@@ -392,6 +397,8 @@ final class WearFitAuditTests: XCTestCase {
         for l in list { byMotion[l] = [:] }
         for l in list { stats[l] = Array(repeating: Stat(), count: 4) }
         let outfits = list.map { [$0.slot: $0] as Outfit }
+        var tsv = "piece\tspecies\tmotion\tarm_notexempt_cm\tarm_any_cm\tfoot_cm\ttail_cm\tfloat_cm\n"
+        var cell: [String: Stat] = [:]
         var onlyMotions = env("WEARFIT_MOTIONS")?.split(separator: ",").map(String.init)
         if onlyMotions?.isEmpty == true { onlyMotions = nil }
         for id in 0..<4 {
@@ -416,6 +423,8 @@ final class WearFitAuditTests: XCTestCase {
                         var one = Stat()
                         measure(l, verts: v, field: field, rest: rest[l]!, tag: "\(Self.charNames[id]) \(m.name) t=\(String(format: "%.2f", t))", st: &one)
                         if one.worstNew > byMotion[l]![m.name, default: 0] { byMotion[l]![m.name] = one.worstNew }
+                        do { let key = "\(l.rawValue)\t\(Self.charNames[id])\t\(m.name)"; var c = cell[key] ?? Stat()
+                            c.armAny = max(c.armAny, one.armAny); c.armNE = max(c.armNE, one.armNE); c.foot = max(c.foot, one.foot); c.tail = max(c.tail, one.tail); c.worstFloat = max(c.worstFloat, one.worstFloat); cell[key] = c }
                         var acc = stats[l]![id]
                         if one.worstIn > acc.worstIn { acc.worstIn = one.worstIn; acc.whereIn = one.whereIn }
                         if one.worstNew > acc.worstNew { acc.worstNew = one.worstNew; acc.whereNew = one.whereNew }
@@ -443,6 +452,8 @@ final class WearFitAuditTests: XCTestCase {
         for l in list { out += "\(l.rawValue): " + byMotion[l]!.sorted { $0.value > $1.value }.map { String(format: "%@ %.3f", $0.key, $0.value) }.joined(separator: ", ") + "\n" }
         out += "\nSUMMARY piece | worst inside | worst newly buried | max buried fraction | worst float | rigid-part worst newly inside | where (newly buried)\n" + worstAll.joined(separator: "\n") + "\n"
         try out.write(toFile: "\(d)/numbers_\(tag).txt", atomically: true, encoding: .utf8)
+        for (k, c) in cell.sorted(by: { $0.key < $1.key }) { tsv += String(format: "%@\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", k, c.armNE * 100, c.armAny * 100, c.foot * 100, c.tail * 100, c.worstFloat * 100) }
+        try tsv.write(toFile: "\(d)/bymotion_\(tag).tsv", atomically: true, encoding: .utf8)
         print(out)
         // shipped bound (with the limb push on): no arm, foot or tail swallows a bound piece by more than 4 cm. (What is left is the egg's own pinch under loosely carried hems and tails.)
         if WearLimbs.enabled { for l in list { for id in 0..<4 { let s = stats[l]![id]; XCTAssertLessThan(s.worstLimb, 0.04, "\(l) \(Self.charNames[id]) is \(s.worstLimb) inside a limb: \(s.whereLimb)") } } }
