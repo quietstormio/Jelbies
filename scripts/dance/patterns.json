@@ -1,0 +1,1222 @@
+{
+ "1": {
+  "title": "Bubble Pop Stage",
+  "grid": {
+   "first_beat_s": 0.0202,
+   "period_s": 0.50002,
+   "last_beat": 24
+  },
+  "notes": [
+   "no bass/clap split (kick, hat and upbeat stab identical on every beat): feet alternate in prompt order; rests [5, 9, 11, 13, 16, 21] = the 6 lowest-ranked beats by mean(low,mid,high) onset (spread only 0.77..1.02, every beat is a full-strength hit) = DESIGN CHOICE, not a gap in the music. Rest set changes with analysis window / without the mid band (sens.py): treat as arbitrary."
+  ],
+  "old": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.0203,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 2.5203,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.0203,
+     "foot": "L"
+    },
+    {
+     "slot": 14,
+     "time_s": 3.5203,
+     "foot": "R"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.0204,
+     "foot": "L"
+    },
+    {
+     "slot": 18,
+     "time_s": 4.5204,
+     "foot": "R"
+    },
+    {
+     "slot": 20,
+     "time_s": 5.0204,
+     "foot": "L"
+    },
+    {
+     "slot": 22,
+     "time_s": 5.5204,
+     "foot": "R"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.0204,
+     "foot": "L"
+    },
+    {
+     "slot": 26,
+     "time_s": 6.5205,
+     "foot": "R"
+    },
+    {
+     "slot": 28,
+     "time_s": 7.0205,
+     "foot": "L"
+    },
+    {
+     "slot": 30,
+     "time_s": 7.5205,
+     "foot": "R"
+    },
+    {
+     "slot": 32,
+     "time_s": 8.0205,
+     "foot": "L"
+    },
+    {
+     "slot": 34,
+     "time_s": 8.5205,
+     "foot": "R"
+    },
+    {
+     "slot": 36,
+     "time_s": 9.0206,
+     "foot": "L"
+    },
+    {
+     "slot": 38,
+     "time_s": 9.5206,
+     "foot": "R"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.0206,
+     "foot": "L"
+    },
+    {
+     "slot": 42,
+     "time_s": 10.5206,
+     "foot": "R"
+    },
+    {
+     "slot": 44,
+     "time_s": 11.0206,
+     "foot": "L"
+    },
+    {
+     "slot": 46,
+     "time_s": 11.5207,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.0207,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 21,
+    "lefts": 11,
+    "rights": 10,
+    "rests": 0,
+    "longest_rest": 0,
+    "shortest_gap_s": 0.5
+   },
+   "line": "L R L R | L R L R | L R L R | L R L R | L R L R | L"
+  },
+  "calm": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.0203,
+     "foot": "L"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.0203,
+     "foot": "R"
+    },
+    {
+     "slot": 14,
+     "time_s": 3.5203,
+     "foot": "L"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.0204,
+     "foot": "R"
+    },
+    {
+     "slot": 20,
+     "time_s": 5.0204,
+     "foot": "L"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.0204,
+     "foot": "R"
+    },
+    {
+     "slot": 28,
+     "time_s": 7.0205,
+     "foot": "L"
+    },
+    {
+     "slot": 30,
+     "time_s": 7.5205,
+     "foot": "R"
+    },
+    {
+     "slot": 34,
+     "time_s": 8.5205,
+     "foot": "L"
+    },
+    {
+     "slot": 36,
+     "time_s": 9.0206,
+     "foot": "R"
+    },
+    {
+     "slot": 38,
+     "time_s": 9.5206,
+     "foot": "L"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.0206,
+     "foot": "R"
+    },
+    {
+     "slot": 44,
+     "time_s": 11.0206,
+     "foot": "L"
+    },
+    {
+     "slot": 46,
+     "time_s": 11.5207,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.0207,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 15,
+    "lefts": 8,
+    "rights": 7,
+    "rests": 6,
+    "longest_rest": 1,
+    "shortest_gap_s": 0.5
+   },
+   "line": "L . R L | R . L . | R . L R | . L R L | R . L R | L"
+  },
+  "lively": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.0203,
+     "foot": "L"
+    },
+    {
+     "slot": 11,
+     "time_s": 2.7703,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.0203,
+     "foot": "L"
+    },
+    {
+     "slot": 14,
+     "time_s": 3.5203,
+     "foot": "R"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.0204,
+     "foot": "L"
+    },
+    {
+     "slot": 20,
+     "time_s": 5.0204,
+     "foot": "R"
+    },
+    {
+     "slot": 23,
+     "time_s": 5.7704,
+     "foot": "L"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.0204,
+     "foot": "R"
+    },
+    {
+     "slot": 27,
+     "time_s": 6.7705,
+     "foot": "L"
+    },
+    {
+     "slot": 28,
+     "time_s": 7.0205,
+     "foot": "R"
+    },
+    {
+     "slot": 30,
+     "time_s": 7.5205,
+     "foot": "L"
+    },
+    {
+     "slot": 34,
+     "time_s": 8.5205,
+     "foot": "R"
+    },
+    {
+     "slot": 36,
+     "time_s": 9.0206,
+     "foot": "L"
+    },
+    {
+     "slot": 38,
+     "time_s": 9.5206,
+     "foot": "R"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.0206,
+     "foot": "L"
+    },
+    {
+     "slot": 43,
+     "time_s": 10.7706,
+     "foot": "R"
+    },
+    {
+     "slot": 44,
+     "time_s": 11.0206,
+     "foot": "L"
+    },
+    {
+     "slot": 46,
+     "time_s": 11.5207,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.0207,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 19,
+    "lefts": 10,
+    "rights": 9,
+    "rests": 6,
+    "longest_rest": 1,
+    "shortest_gap_s": 0.25
+   },
+   "line": "L . r L R | L . R . l | R . l R L | . R L R | L . r L R | L"
+  }
+ },
+ "2": {
+  "title": "Groove On The One",
+  "grid": {
+   "first_beat_s": 0.0554,
+   "period_s": 0.53578,
+   "last_beat": 24
+  },
+  "notes": [
+   "song 2: the 5 rests (beats 6,10,14,18,22) are real gaps in the music (broadband level -18 to -20 dB vs -10 to -13 elsewhere, no onset). Strong bass pickups also fall a sixteenth before beats 2,6,10,14,18,22 (x.75 positions: 1.75, 5.75, 9.75, 13.75, 17.75, 21.75) i.e. between slots: they get no arrow."
+  ],
+  "old": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.1985,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 2.7343,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.2701,
+     "foot": "L"
+    },
+    {
+     "slot": 14,
+     "time_s": 3.8059,
+     "foot": "R"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.3416,
+     "foot": "L"
+    },
+    {
+     "slot": 18,
+     "time_s": 4.8774,
+     "foot": "R"
+    },
+    {
+     "slot": 20,
+     "time_s": 5.4132,
+     "foot": "L"
+    },
+    {
+     "slot": 22,
+     "time_s": 5.949,
+     "foot": "R"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.4848,
+     "foot": "L"
+    },
+    {
+     "slot": 26,
+     "time_s": 7.0205,
+     "foot": "R"
+    },
+    {
+     "slot": 28,
+     "time_s": 7.5563,
+     "foot": "L"
+    },
+    {
+     "slot": 30,
+     "time_s": 8.0921,
+     "foot": "R"
+    },
+    {
+     "slot": 32,
+     "time_s": 8.6279,
+     "foot": "L"
+    },
+    {
+     "slot": 34,
+     "time_s": 9.1637,
+     "foot": "R"
+    },
+    {
+     "slot": 36,
+     "time_s": 9.6994,
+     "foot": "L"
+    },
+    {
+     "slot": 38,
+     "time_s": 10.2352,
+     "foot": "R"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.771,
+     "foot": "L"
+    },
+    {
+     "slot": 42,
+     "time_s": 11.3068,
+     "foot": "R"
+    },
+    {
+     "slot": 44,
+     "time_s": 11.8426,
+     "foot": "L"
+    },
+    {
+     "slot": 46,
+     "time_s": 12.3783,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.9141,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 21,
+    "lefts": 11,
+    "rights": 10,
+    "rests": 0,
+    "longest_rest": 0,
+    "shortest_gap_s": 0.5358
+   },
+   "line": "L R L R | L R L R | L R L R | L R L R | L R L R | L"
+  },
+  "calm": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.1985,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 2.7343,
+     "foot": "R"
+    },
+    {
+     "slot": 14,
+     "time_s": 3.8059,
+     "foot": "R"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.3416,
+     "foot": "L"
+    },
+    {
+     "slot": 18,
+     "time_s": 4.8774,
+     "foot": "R"
+    },
+    {
+     "slot": 22,
+     "time_s": 5.949,
+     "foot": "R"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.4848,
+     "foot": "L"
+    },
+    {
+     "slot": 26,
+     "time_s": 7.0205,
+     "foot": "R"
+    },
+    {
+     "slot": 30,
+     "time_s": 8.0921,
+     "foot": "R"
+    },
+    {
+     "slot": 32,
+     "time_s": 8.6279,
+     "foot": "L"
+    },
+    {
+     "slot": 34,
+     "time_s": 9.1637,
+     "foot": "R"
+    },
+    {
+     "slot": 38,
+     "time_s": 10.2352,
+     "foot": "R"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.771,
+     "foot": "L"
+    },
+    {
+     "slot": 42,
+     "time_s": 11.3068,
+     "foot": "R"
+    },
+    {
+     "slot": 46,
+     "time_s": 12.3783,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.9141,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 16,
+    "lefts": 6,
+    "rights": 10,
+    "rests": 5,
+    "longest_rest": 1,
+    "shortest_gap_s": 0.5358
+   },
+   "line": "L R . R | L R . R | L R . R | L R . R | L R . R | L"
+  },
+  "lively": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.1985,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 2.7343,
+     "foot": "R"
+    },
+    {
+     "slot": 13,
+     "time_s": 3.538,
+     "foot": "L"
+    },
+    {
+     "slot": 14,
+     "time_s": 3.8059,
+     "foot": "R"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.3416,
+     "foot": "L"
+    },
+    {
+     "slot": 18,
+     "time_s": 4.8774,
+     "foot": "R"
+    },
+    {
+     "slot": 21,
+     "time_s": 5.6811,
+     "foot": "L"
+    },
+    {
+     "slot": 22,
+     "time_s": 5.949,
+     "foot": "R"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.4848,
+     "foot": "L"
+    },
+    {
+     "slot": 26,
+     "time_s": 7.0205,
+     "foot": "R"
+    },
+    {
+     "slot": 29,
+     "time_s": 7.8242,
+     "foot": "L"
+    },
+    {
+     "slot": 30,
+     "time_s": 8.0921,
+     "foot": "R"
+    },
+    {
+     "slot": 32,
+     "time_s": 8.6279,
+     "foot": "L"
+    },
+    {
+     "slot": 34,
+     "time_s": 9.1637,
+     "foot": "R"
+    },
+    {
+     "slot": 37,
+     "time_s": 9.9673,
+     "foot": "L"
+    },
+    {
+     "slot": 38,
+     "time_s": 10.2352,
+     "foot": "R"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.771,
+     "foot": "L"
+    },
+    {
+     "slot": 42,
+     "time_s": 11.3068,
+     "foot": "R"
+    },
+    {
+     "slot": 45,
+     "time_s": 12.1105,
+     "foot": "L"
+    },
+    {
+     "slot": 46,
+     "time_s": 12.3783,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.9141,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 21,
+    "lefts": 11,
+    "rights": 10,
+    "rests": 5,
+    "longest_rest": 1,
+    "shortest_gap_s": 0.2679
+   },
+   "line": "L R . l R | L R . l R | L R . l R | L R . l R | L R . l R | L"
+  }
+ },
+ "3": {
+  "title": "Pixel Party",
+  "grid": {
+   "first_beat_s": 0.0188,
+   "period_s": 0.50005,
+   "last_beat": 24
+  },
+  "notes": [
+   "no bass/clap split (kick, hat and upbeat stab identical on every beat): feet alternate in prompt order; rests [7, 9, 11, 13, 15, 21] = the 6 lowest-ranked beats by mean(low,mid,high) onset (spread only 0.73..1.03, every beat is a full-strength hit) = DESIGN CHOICE, not a gap in the music. Rest set is identical for 30/40/50 ms windows with and without mid band (odd beats 7-15 + 21 are consistently a little weaker), but the difference is small."
+  ],
+  "old": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.019,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 2.5191,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.0191,
+     "foot": "L"
+    },
+    {
+     "slot": 14,
+     "time_s": 3.5192,
+     "foot": "R"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.0192,
+     "foot": "L"
+    },
+    {
+     "slot": 18,
+     "time_s": 4.5192,
+     "foot": "R"
+    },
+    {
+     "slot": 20,
+     "time_s": 5.0193,
+     "foot": "L"
+    },
+    {
+     "slot": 22,
+     "time_s": 5.5193,
+     "foot": "R"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.0194,
+     "foot": "L"
+    },
+    {
+     "slot": 26,
+     "time_s": 6.5194,
+     "foot": "R"
+    },
+    {
+     "slot": 28,
+     "time_s": 7.0195,
+     "foot": "L"
+    },
+    {
+     "slot": 30,
+     "time_s": 7.5195,
+     "foot": "R"
+    },
+    {
+     "slot": 32,
+     "time_s": 8.0196,
+     "foot": "L"
+    },
+    {
+     "slot": 34,
+     "time_s": 8.5197,
+     "foot": "R"
+    },
+    {
+     "slot": 36,
+     "time_s": 9.0197,
+     "foot": "L"
+    },
+    {
+     "slot": 38,
+     "time_s": 9.5198,
+     "foot": "R"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.0198,
+     "foot": "L"
+    },
+    {
+     "slot": 42,
+     "time_s": 10.5198,
+     "foot": "R"
+    },
+    {
+     "slot": 44,
+     "time_s": 11.0199,
+     "foot": "L"
+    },
+    {
+     "slot": 46,
+     "time_s": 11.5199,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.02,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 21,
+    "lefts": 11,
+    "rights": 10,
+    "rests": 0,
+    "longest_rest": 0,
+    "shortest_gap_s": 0.5
+   },
+   "line": "L R L R | L R L R | L R L R | L R L R | L R L R | L"
+  },
+  "calm": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.019,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 2.5191,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.0191,
+     "foot": "L"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.0192,
+     "foot": "R"
+    },
+    {
+     "slot": 20,
+     "time_s": 5.0193,
+     "foot": "L"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.0194,
+     "foot": "R"
+    },
+    {
+     "slot": 28,
+     "time_s": 7.0195,
+     "foot": "L"
+    },
+    {
+     "slot": 32,
+     "time_s": 8.0196,
+     "foot": "R"
+    },
+    {
+     "slot": 34,
+     "time_s": 8.5197,
+     "foot": "L"
+    },
+    {
+     "slot": 36,
+     "time_s": 9.0197,
+     "foot": "R"
+    },
+    {
+     "slot": 38,
+     "time_s": 9.5198,
+     "foot": "L"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.0198,
+     "foot": "R"
+    },
+    {
+     "slot": 44,
+     "time_s": 11.0199,
+     "foot": "L"
+    },
+    {
+     "slot": 46,
+     "time_s": 11.5199,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.02,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 15,
+    "lefts": 8,
+    "rights": 7,
+    "rests": 6,
+    "longest_rest": 1,
+    "shortest_gap_s": 0.5
+   },
+   "line": "L R L . | R . L . | R . L . | R L R L | R . L R | L"
+  },
+  "lively": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.019,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 2.5191,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.0191,
+     "foot": "L"
+    },
+    {
+     "slot": 15,
+     "time_s": 3.7692,
+     "foot": "R"
+    },
+    {
+     "slot": 16,
+     "time_s": 4.0192,
+     "foot": "L"
+    },
+    {
+     "slot": 20,
+     "time_s": 5.0193,
+     "foot": "R"
+    },
+    {
+     "slot": 23,
+     "time_s": 5.7694,
+     "foot": "L"
+    },
+    {
+     "slot": 24,
+     "time_s": 6.0194,
+     "foot": "R"
+    },
+    {
+     "slot": 27,
+     "time_s": 6.7695,
+     "foot": "L"
+    },
+    {
+     "slot": 28,
+     "time_s": 7.0195,
+     "foot": "R"
+    },
+    {
+     "slot": 32,
+     "time_s": 8.0196,
+     "foot": "L"
+    },
+    {
+     "slot": 34,
+     "time_s": 8.5197,
+     "foot": "R"
+    },
+    {
+     "slot": 36,
+     "time_s": 9.0197,
+     "foot": "L"
+    },
+    {
+     "slot": 38,
+     "time_s": 9.5198,
+     "foot": "R"
+    },
+    {
+     "slot": 40,
+     "time_s": 10.0198,
+     "foot": "L"
+    },
+    {
+     "slot": 43,
+     "time_s": 10.7699,
+     "foot": "R"
+    },
+    {
+     "slot": 44,
+     "time_s": 11.0199,
+     "foot": "L"
+    },
+    {
+     "slot": 46,
+     "time_s": 11.5199,
+     "foot": "R"
+    },
+    {
+     "slot": 48,
+     "time_s": 12.02,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 19,
+    "lefts": 10,
+    "rights": 9,
+    "rests": 6,
+    "longest_rest": 1,
+    "shortest_gap_s": 0.25
+   },
+   "line": "L R L . r | L . R . l | R . l R . | L R L R | L . r L R | L"
+  }
+ },
+ "4": {
+  "title": "Block Party",
+  "grid": {
+   "first_beat_s": 0.0435,
+   "period_s": 0.63159,
+   "last_beat": 16
+  },
+  "notes": [
+   "song 4: every whole beat 4..16 has a measured hit; all 13 clap/kick values are ~equal (clap 0.96-1.11, kick 0.78-0.97); the 3 rests are a DESIGN CHOICE: the 4th beat of each bar (7, 11, 15) -> exception to 'rests only on weak slots'"
+  ],
+  "old": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.5699,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 3.2014,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.833,
+     "foot": "L"
+    },
+    {
+     "slot": 14,
+     "time_s": 4.4646,
+     "foot": "R"
+    },
+    {
+     "slot": 16,
+     "time_s": 5.0962,
+     "foot": "L"
+    },
+    {
+     "slot": 18,
+     "time_s": 5.7278,
+     "foot": "R"
+    },
+    {
+     "slot": 20,
+     "time_s": 6.3594,
+     "foot": "L"
+    },
+    {
+     "slot": 22,
+     "time_s": 6.991,
+     "foot": "R"
+    },
+    {
+     "slot": 24,
+     "time_s": 7.6226,
+     "foot": "L"
+    },
+    {
+     "slot": 26,
+     "time_s": 8.2542,
+     "foot": "R"
+    },
+    {
+     "slot": 28,
+     "time_s": 8.8858,
+     "foot": "L"
+    },
+    {
+     "slot": 30,
+     "time_s": 9.5174,
+     "foot": "R"
+    },
+    {
+     "slot": 32,
+     "time_s": 10.1489,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 13,
+    "lefts": 7,
+    "rights": 6,
+    "rests": 0,
+    "longest_rest": 0,
+    "shortest_gap_s": 0.6316
+   },
+   "line": "L R L R | L R L R | L R L R | L"
+  },
+  "calm": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.5699,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 3.2014,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.833,
+     "foot": "L"
+    },
+    {
+     "slot": 16,
+     "time_s": 5.0962,
+     "foot": "L"
+    },
+    {
+     "slot": 18,
+     "time_s": 5.7278,
+     "foot": "R"
+    },
+    {
+     "slot": 20,
+     "time_s": 6.3594,
+     "foot": "L"
+    },
+    {
+     "slot": 24,
+     "time_s": 7.6226,
+     "foot": "L"
+    },
+    {
+     "slot": 26,
+     "time_s": 8.2542,
+     "foot": "R"
+    },
+    {
+     "slot": 28,
+     "time_s": 8.8858,
+     "foot": "L"
+    },
+    {
+     "slot": 32,
+     "time_s": 10.1489,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 10,
+    "lefts": 7,
+    "rights": 3,
+    "rests": 3,
+    "longest_rest": 1,
+    "shortest_gap_s": 0.6316
+   },
+   "line": "L R L . | L R L . | L R L . | L"
+  },
+  "lively": {
+   "prompts": [
+    {
+     "slot": 8,
+     "time_s": 2.5699,
+     "foot": "L"
+    },
+    {
+     "slot": 9,
+     "time_s": 2.8857,
+     "foot": "L"
+    },
+    {
+     "slot": 10,
+     "time_s": 3.2014,
+     "foot": "R"
+    },
+    {
+     "slot": 12,
+     "time_s": 3.833,
+     "foot": "L"
+    },
+    {
+     "slot": 16,
+     "time_s": 5.0962,
+     "foot": "L"
+    },
+    {
+     "slot": 17,
+     "time_s": 5.412,
+     "foot": "L"
+    },
+    {
+     "slot": 18,
+     "time_s": 5.7278,
+     "foot": "R"
+    },
+    {
+     "slot": 20,
+     "time_s": 6.3594,
+     "foot": "L"
+    },
+    {
+     "slot": 24,
+     "time_s": 7.6226,
+     "foot": "L"
+    },
+    {
+     "slot": 25,
+     "time_s": 7.9384,
+     "foot": "L"
+    },
+    {
+     "slot": 26,
+     "time_s": 8.2542,
+     "foot": "R"
+    },
+    {
+     "slot": 28,
+     "time_s": 8.8858,
+     "foot": "L"
+    },
+    {
+     "slot": 32,
+     "time_s": 10.1489,
+     "foot": "L"
+    }
+   ],
+   "counts": {
+    "prompts": 13,
+    "lefts": 10,
+    "rights": 3,
+    "rests": 3,
+    "longest_rest": 1,
+    "shortest_gap_s": 0.3158
+   },
+   "line": "L l R L . | L l R L . | L l R L . | L"
+  }
+ }
+}
