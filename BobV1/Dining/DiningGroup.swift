@@ -57,6 +57,20 @@ final class DiningGroup {
     private var replanClock: Float = 0
     /// How many times a place changed hands after the first plan (tests / diagnostics).
     private(set) var replans = 0
+    /// Slice 1 of the meal line-up fix (switch `-DiningOrdered 0` = the old smart line-up, simulator / dev builds): the places of a FOOD sitting at the home tray are given once, at the start, in the order of the diners'
+    /// x on the floor (left diner -> left place), and never re-planned, so nobody has to pass between or through the others to reach his place and a late arrival is never sent into a middle place
+    /// between two standing diners. Drinks and the café keep the smart line-up (`replan`) exactly as before.
+    nonisolated(unsafe) static var orderedPlaces: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DiningOrdered") != nil && UserDefaults.standard.integer(forKey: "DiningOrdered") == 0)
+    /// This sitting uses the x-ordered places (decided in `start`).
+    private var ordered = false
+    /// Slot of each walker when the walkers are sorted by x and the slots are sorted by x (the pairing that never crosses for walks to a line). Ties go to the lower index.
+    static func orderedSlots(floors: [SIMD2<Float>], slots: [SIMD2<Float>]) -> [Int] {
+        let by = floors.indices.sorted { floors[$0].x != floors[$1].x ? floors[$0].x < floors[$1].x : $0 < $1 }
+        let sl = slots.indices.sorted { slots[$0].x != slots[$1].x ? slots[$0].x < slots[$1].x : $0 < $1 }
+        var out = [Int](repeating: -1, count: floors.count)
+        for (k, b) in by.enumerated() where k < sl.count { out[b] = sl[k] }
+        return out
+    }
     /// The roster id of diner i (`start(... ids:)`; by default 0..<n).
     private(set) var memberIDs: [Int] = []
     private var finished: [Bool] = []
@@ -120,6 +134,7 @@ final class DiningGroup {
     /// across another, none through a standing diner). A diner within 1 u of his approach point is settled for good.
     private func replan(dt: Float) {
         replanClock += dt
+        guard !ordered else { return }          // (x-ordered places are final: see `orderedPlaces`)
         guard replanClock >= Lineup.period, n > 1 else { return }
         replanClock = 0
         for i in brains.indices where !committed[i] && (started[i] || (released.indices.contains(i) && released[i]) || simd_distance(floor(i), approachPoint(blob: i)) < Lineup.commitDistance) { committed[i] = true }
@@ -149,6 +164,8 @@ final class DiningGroup {
         }
         committed = [Bool](repeating: false, count: n); replanClock = 0; replans = 0
         placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
+        ordered = Self.orderedPlaces && n > 1 && c.kind == .food && forcedOrigin == nil
+        if ordered { placeOf = Self.orderedSlots(floors: brains.indices.map { f($0) }, slots: spots) }
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
@@ -178,7 +195,7 @@ final class DiningGroup {
         for b in brains { b.reserved = true; b.waitFocus = origin }          // everybody waits where he stands (look / step / bounce) until the meal is over
         beginApproach()
         traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; inBoxTicks = 0; popReason = "gathered"
-        MealTrace.log("group start n=\(n) kind=\(serving.kind == .food ? "food" : "drink") origin=(\(origin.x),\(origin.y)) inFront=\(frontCount())")
+        MealTrace.log("group start n=\(n) kind=\(serving.kind == .food ? "food" : "drink") origin=(\(origin.x),\(origin.y)) inFront=\(frontCount()) orderedPlaces=\(ordered)")
         for i in brains.indices {
             let st = stands[placeOf[i]], ap = approachPoint(blob: i), f = floor(i)
             MealTrace.log("  diner id=\(memberIDs[i]) floor=(\(f.x),\(f.y)) place=\(placeOf[i]) stand=(\(st.x),\(st.y)) trayDist(stand)=\(trayDistance(st)) trayDist(approach)=\(trayDistance(ap))")
