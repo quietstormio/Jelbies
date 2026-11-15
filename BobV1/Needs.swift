@@ -41,6 +41,11 @@ final class BlobNeeds {
     /// Set when the app leaves the foreground, cleared when away time is applied. While set, `save()` keeps writing THIS as the timestamp, so the
     /// 15 s periodic save (or anything else that saves in the background) can never stamp over time that has not been applied yet.
     @ObservationIgnored private var awaySince: Date?
+    /// Asleep (napping / tucked in) as of NOW, fed by the room every step (`setAsleep`). The periodic save writes it, so a cold launch after the app was killed
+    /// reads the state as of the last save. Old saves have none: awake.
+    @ObservationIgnored private(set) var asleepNow = false
+    /// Asleep at the moment the app left the foreground; frozen together with `awaySince` (the first leave wins), cleared when the away time is applied.
+    @ObservationIgnored private var awayAsleep = false
     /// The away time (seconds, clamped) the last load / return applied. GameCare reads it for the greeting.
     @ObservationIgnored private(set) var lastAway: TimeInterval = 0
     @ObservationIgnored private var lastWantedSet: Set<NeedKind> = []
@@ -97,6 +102,9 @@ final class BlobNeeds {
         }
     }
 
+    /// The room tells the needs whether this creature is asleep (cheap; called every step and at leave).
+    func setAsleep(_ a: Bool) { asleepNow = a }
+
     /// A meal restores hunger to 1, a drink thirst.
     func restore(_ k: NeedKind) {
         raw[k.rawValue] = 1
@@ -138,12 +146,15 @@ final class BlobNeeds {
     func save() {
         guard persists else { return }
         let stamp = awaySince ?? now()                    // never advance the stamp past unapplied away time
-        defaults.set(["levels": raw.map { Double($0) }, "time": stamp.timeIntervalSince1970] as [String: Any], forKey: key)
+        let asleep = awaySince != nil ? awayAsleep : asleepNow          // while away the flag frozen at leave; in the room the live one (a crash / kill in the room)
+        defaults.set(["levels": raw.map { Double($0) }, "time": stamp.timeIntervalSince1970, "asleep": asleep] as [String: Any], forKey: key)
     }
 
     /// The app left the foreground: stamp the time (it is what the next return or cold launch measures from) and save.
-    func leaveActive(at t: Date? = nil) {
-        if awaySince == nil { awaySince = t ?? now() }
+    /// `asleep`: whether the creature is asleep right now (nil: the last value the room fed in). The first leave wins (inactive, then background).
+    func leaveActive(at t: Date? = nil, asleep: Bool? = nil) {
+        if let asleep { asleepNow = asleep }
+        if awaySince == nil { awaySince = t ?? now(); awayAsleep = asleepNow }
         save()
     }
 
@@ -152,9 +163,11 @@ final class BlobNeeds {
     func returnActive(at t: Date? = nil) -> TimeInterval {
         guard let since = awaySince else { return 0 }
         awaySince = nil
+        let wasAsleep = awayAsleep
+        awayAsleep = false
         let end = t ?? now()
         let away = TimeAway.clamp(end.timeIntervalSince(since))
-        applyAway(seconds: away, endingAt: end)
+        applyAway(seconds: away, endingAt: end, asleep: wasAsleep)
         sinceSave = 0
         if persists { save() }
         return away
@@ -163,25 +176,35 @@ final class BlobNeeds {
     /// THE time-away path (cold launch and foreground resume both end here). Pure arithmetic on `raw`: each need falls linearly on the away curve,
     /// stops at the floor, and a need already below the floor is left alone.
     /// `endingAt`: when the absence ended; the hours of it that fell at night (21-6) count half on the needs (he slept through them).
-    func applyAway(seconds: TimeInterval, endingAt end: Date? = nil) {
+    /// `asleep`: he was asleep when the player left, so food and water run on the slow asleep rates for the whole absence (no night half on top; attention keeps it).
+    func applyAway(seconds: TimeInterval, endingAt end: Date? = nil, asleep: Bool = false) {
         let away = TimeAway.clamp(seconds)
         lastAway = away
         if let end {
             let from = end.addingTimeInterval(-away)
             let ex = perkKey.map { PerkStore.load(defaults: defaults, key: $0) } ?? [:]
-            if ex.isEmpty { raw = AwayMath.needLevels(raw, from: from, to: end) }
+            if ex.isEmpty { raw = AwayMath.needLevels(raw, from: from, to: end, asleep: asleep) }
             else {
                 // a perk that slows a need shortens the time that counts for it (the strongest perk wins; they do not multiply)
                 var out = raw
                 for k in NeedKind.allCases {
                     let eff = max(0, away - PerkStore.needCredit(ex, need: k.rawValue, from: from, to: end))
-                    out[k.rawValue] = AwayMath.needLevels(raw, from: end.addingTimeInterval(-eff), to: end)[k.rawValue]
+                    out[k.rawValue] = AwayMath.needLevels(raw, from: end.addingTimeInterval(-eff), to: end, asleep: asleep)[k.rawValue]
                 }
                 raw = out
             }
         }
-        else { raw = Self.awayLevels(raw, seconds: away) }
+        else { raw = AwayMath.needLevels(raw, seconds: away, asleep: asleep) }
         lastWantedSet = wantedSet            // no "fixed" events for what the time away did
+        publish(force: true)
+    }
+
+    /// Time that passes inside the app (trip clock, skipped night): the old in-app away rates (`NeedsTuning.inAppAwayHours`), the same floor, no night half, no asleep rates.
+    func applyInAppTime(seconds: TimeInterval) {
+        let away = TimeAway.clamp(seconds)
+        lastAway = away
+        raw = AwayMath.needLevels(raw, seconds: away, inApp: true)
+        lastWantedSet = wantedSet
         publish(force: true)
     }
 
@@ -197,8 +220,9 @@ final class BlobNeeds {
             return
         }
         raw = l.map { min(max(Float($0), 0), 1) }
-        awaySince = nil
-        applyAway(seconds: now().timeIntervalSince1970 - t, endingAt: now())
+        awaySince = nil; awayAsleep = false
+        let wasAsleep = (d["asleep"] as? Bool) ?? false          // a save from before this flag: awake
+        applyAway(seconds: now().timeIntervalSince1970 - t, endingAt: now(), asleep: wasAsleep)
         sinceSave = 0
         if persists { save() }
         publish(force: true)

@@ -724,7 +724,7 @@ struct AdoptionCenter: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: showPlaceholder)
-            ShowcaseStage(roster: stageRoster, focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen] m in stageReady(m, gen: gen) }, silent: row)
+            ShowcaseStage(roster: stageRoster, focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen] m in stageReady(m, gen: gen) }, silent: row, plantedWave: Self.springPlantedWave)
                 .id(stageID).frame(width: 420, height: 420)
                 .offset(x: 10, y: 46)
                 .opacity(ready ? slideO : 0).offset(x: slideX)
@@ -1302,9 +1302,29 @@ struct AdoptionCenter: View {
     private func landed(_ m: MelonModel) {
         Task { @MainActor in           // landing: a happy hop (or the flutter hop for wings)
             try? await Task.sleep(nanoseconds: 450_000_000)
+            await waitForWave(m)          // (the hello wave finishes first: a hop in the middle of it froze the raised arm on the jumping body)
+            guard stageModel === m, !m.paused else { return }
             perform(pick == 3 || pick == JellyRoster.pearlID ? .idle(.flapHop) : .hop)
         }
         startEmotes(for: pick)
+    }
+
+    /// `-SpringArmOld 1` = the old behaviour (a hop may start while the arrival wave is still playing).
+    static var springArmOld: Bool { UserDefaults.standard.bool(forKey: "SpringArmOld") }
+    /// `-SpringWaveFoot 1` = the old behaviour (the hello wave lifts the foot on the Jelly Spring too).
+    static var springWaveFoot: Bool { UserDefaults.standard.bool(forKey: "SpringWaveFoot") }
+    /// What the Jelly Spring's stages are built with: the wave keeps both feet planted (unless `-SpringWaveFoot 1`).
+    static var springPlantedWave: Bool { !springWaveFoot }
+    /// True while the stage's Jelbie (slot) is in its hello wave: the wave script runs or the keyframed arm is out.
+    private func waveBusy(_ m: MelonModel, slot: Int = 0) -> Bool {
+        guard let b = m.care.brainFor(slot) else { return false }
+        if case .wave = b.script { return true }
+        return b.armActive
+    }
+    /// Waits (at most 8 s: the phone's keyframe precompute defers the wave by about 3 s) until the hello wave is over, so no hop / emote cuts into it. Nothing to wait for with `-SpringArmOld 1`.
+    private func waitForWave(_ m: MelonModel) async {
+        guard !Self.springArmOld else { return }
+        for _ in 0..<160 where waveBusy(m) && !Task.isCancelled && stageModel === m { try? await Task.sleep(nanoseconds: 50_000_000) }
     }
 
     /// The three say hello left to right, then each shows its personality now and then.
@@ -1385,6 +1405,7 @@ struct AdoptionCenter: View {
     /// Asks the stage's Jelbie in `slot` for a move (when it is free to take one). `calm`: Reduce Motion, only blinks and faces.
     private func perform(_ move: StageMove, slot: Int = 0, calm: Bool = false) {
         guard let m = stageModel, !m.paused, let b = m.care.brainFor(slot) else { return }
+        if !Self.springArmOld, step == .species, waveBusy(m, slot: slot) { if case .blink = move {} else { return } }          // (nothing but a blink cuts into the hello wave)
         var move = move
         // pick and naming steps: front-facing moves only (a turning idle would show his back or tail); the species page keeps its own emotes
         if step != .species, case .idle(let k) = move, Self.turningIdles.contains(k) { move = .hop }

@@ -307,8 +307,8 @@ final class NeedsTests: XCTestCase {
         let same = make(d, now: { t0 })
         XCTAssertEqual(same.level(.hunger), 0.8, accuracy: 1e-6); XCTAssertEqual(same.level(.thirst), 0.7, accuracy: 1e-6); XCTAssertEqual(same.level(.attention), 0.9, accuracy: 1e-6)
         let hourLater = make(d, now: { t0.addingTimeInterval(3600) })
-        XCTAssertEqual(hourLater.level(.hunger), 0.8 - 1.0 / 10, accuracy: 1e-4, "the offline hour decayed it on the away curve")
-        XCTAssertEqual(hourLater.level(.thirst), 0.7 - 1.0 / 8, accuracy: 1e-4)
+        XCTAssertEqual(hourLater.level(.hunger), 0.8 - 1.0 / 20, accuracy: 1e-4, "the offline hour decayed it on the away curve")
+        XCTAssertEqual(hourLater.level(.thirst), 0.7 - 1.0 / 16, accuracy: 1e-4)
         XCTAssertEqual(hourLater.level(.attention), 0.9 - 1.0 / 6, accuracy: 1e-4)
         // restores save at once
         hourLater.restore(.hunger)
@@ -342,8 +342,8 @@ extension NeedsTests {
     @MainActor func testTripReturnStepIsOnTheAwayPathAndParkAddsThirst() {
         let n = BlobNeeds(defaults: UserDefaults(suiteName: "NeedsTests.trip.\(UUID().uuidString)")!, persists: false)
         for k in NeedKind.allCases { n.set(k, 1) }
-        n.applyAway(seconds: TripClockTuning.outAway)
-        XCTAssertEqual(n.level(.hunger), 1 - Float(TripClockTuning.outAway / (NeedsTuning.awayHoursToEmpty(.hunger) * 3600)), accuracy: 1e-5)
+        n.applyInAppTime(seconds: TripClockTuning.outAway)
+        XCTAssertEqual(n.level(.hunger), 1 - Float(TripClockTuning.outAway / (NeedsTuning.awayHoursToEmpty(.hunger, inApp: true) * 3600)), accuracy: 1e-5)
         XCTAssertGreaterThan(n.level(.hunger), 0.9, "a small step, never a starve")
         n.gain(.thirst, -TripClockTuning.parkThirst)
         XCTAssertLessThan(n.level(.thirst), n.level(.hunger))

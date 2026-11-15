@@ -202,6 +202,8 @@ final class GameCare {
     @ObservationIgnored private(set) var isPreview = false
     /// The opening story mounts its Jelbies long before they pop: no arrival chirp until the story says so.
     @ObservationIgnored var silentArrival = false
+    /// The Jelly Spring's stages (set by `ShowcaseStage(plantedWave:)` before any Jelbie ticks): every Jelbie's hello wave keeps both feet planted (`BlobBrain.plantedWave`).
+    @ObservationIgnored var plantedWave = false
     /// The characters in the room, by slot (JellyRoster).
     var roster: [Int] { jellies.map(\.character) }
     /// Phase A: the care menu (Feed / Drink / Come here / Clean) always acts on Bob, so it stays visible with several Jellies instead of waiting for a selection.
@@ -223,7 +225,7 @@ final class GameCare {
     func widgetInputs() -> [WidgetBridge.Input] {
         jellies.map { j in
             WidgetBridge.Input(id: j.id, name: j.name, color: WidgetBridge.colorName(JellyRoster.species(j.character)), levels: NeedKind.allCases.map { j.needs.level($0) },
-                               dirt: j.grime.dirt, sparkle: j.grime.sparkle, character: j.character)
+                               dirt: j.grime.dirt, sparkle: j.grime.sparkle, character: j.character, asleep: asleepForAway(j.id))
         }
     }
     /// The select hook for the widget's deep link (`jelbies://jelly/<id>`): the game is already open, so this plays that Jelly's roster highlight.
@@ -389,6 +391,7 @@ final class GameCare {
         pk?.step(dt: dt)
         var drain = pk?.cache.drain ?? [1, 1, 1]
         if store.beanbagPlaced { drain[NeedKind.attention.rawValue] = min(drain[NeedKind.attention.rawValue], StoreTuning.beanbagAttentionDrain) }          // Cozy-lite: a beanbag in the room
+        needs.setAsleep(asleepForAway(0))
         needs.step(dt: Self.introHold ? 0 : dt, petting: petting, purring: purring, exerting: brain.isExerting, drainScale: brain.napDrainScale, perkDrain: drain)
         // where his head is (for the bubble) and his floor spot (for the highlight)
         var c = SIMD3<Float>(brain.position.x, BlobShape.H * 0.5, brain.position.y)
@@ -440,7 +443,7 @@ final class GameCare {
 
     /// The app left the foreground: stamp and save needs AND grime (the stamp is what the next return / launch measures from).
     func leftActive(at t: Date? = nil) {
-        for j in jellies { j.leftActive(at: t) }          // every Jelly: needs AND grime
+        for j in jellies { j.leftActive(at: t, asleep: asleepForAway(j.id)) }          // every Jelly: needs AND grime (+ whether he is asleep: the away rates)
         widget.leftActive(widgetInputs())
     }
     /// The app is back in the foreground: apply the time away once (needs curve, dirt, sparkle), then greet after a long absence.
@@ -786,11 +789,12 @@ final class GameCare {
         for a in actors where a.id > 0 {
             guard let brain = a.brain, let profile = jelly(a.id) else { continue }
             let here = Self.floorPos(brain, a.sim)
-            if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting, drainScale: brain.napDrainScale) }
+            if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting, drainScale: brain.napDrainScale, asleep: asleepForAway(a.id)) }
             brain.idleMood = profile.needs.mood
             syncPerks(id: a.id, brain: brain)
             brain.idleBlocked = (bath.active || play.ballGame || isPreview) && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
             brain.focusPaused = false
+            brain.plantedWave = plantedWave
             driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
             tickDining(id: a.id, brain: brain, sim: a.sim, dt: dt)           // his meal, when the tray is for him (GameCare+Dining.swift)
             if select.hopRequest == a.id, !focus.isActive, select.takeHopRequest() != nil, !brain.isSleeping { brain.startHopPlay(sim: a.sim, distance: 0.0001) }          // (a highlighted sleeper does not hop)
@@ -838,6 +842,7 @@ final class GameCare {
             wireWorld(brain, isBob: true)
         }
         lastBrain = brain; lastSim = sim
+        brain.plantedWave = plantedWave
         lineupDemoTick(dt: dt)
         syncPerks(id: 0, brain: brain)
         let act = brain.activity

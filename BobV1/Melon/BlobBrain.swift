@@ -457,6 +457,19 @@ final class BlobBrain {
     var armT: Float = 0
     /// The wave's arm-side foot lift is off while a social holds the arm up (the high five).
     var waveFootOff = false
+    /// A STAGE setting (never reset by a script): the hello wave keeps both feet planted (no lift, no swing, no tilt, no foot piece asked for by the wave). The arm and the body's lean are
+    /// unchanged. Set by `GameCare.plantedWave` on the Jelly Spring's showcase stages (very large view: a lifted foot piece reads as a separate lump); false everywhere else.
+    var plantedWave = false
+    /// The wave's lean (`waveRoll`) is scaled by this on a planted wave only (1 = the room's lean): with both feet held on the floor the leaning body would drag the near foot away from its own foot and pull the foot piece out.
+    /// 0.12 (a 3 degree nod) chosen by a sweep on a standing body: 0.15 keeps the near foot 1.04 cm from its own foot (just under the 1.2 cm bean request), 0.2 and up pull the bean out; 0.12 leaves a margin for the species.
+    var plantedWaveRollScale: Float = 0.12
+    /// Diagnostics / tests: the wave's foot lift as applied in the last `driveLimbs` pass (0 outside a wave), and the wave's own bean request.
+    private(set) var waveLiftApplied: Float = 0
+    private(set) var waveAskedBeans = false
+    /// Diagnostics / tests: the real bean request of the last `driveLimbs` pass (every reason), and the wave's arm-side foot: wanted-spot distance from the body's own foot (`offFull`, xz, world u) and the sim foot shift (`footShift`).
+    private(set) var wantLast = false
+    private(set) var waveNearOff: Float = 0
+    private(set) var waveNearShift: SIMD3<Float> = .zero
     var armBlend: Float = 0
     var rng: UInt64 = 0xA24BAED4963EE407
 
@@ -571,6 +584,7 @@ final class BlobBrain {
         UserDefaults.standard.object(forKey: "WaveArmScale") != nil ? UserDefaults.standard.double(forKey: "WaveArmScale") : 1
     }
 
+    nonisolated static var armPrecomputeDelay: Double? { UserDefaults.standard.object(forKey: "ArmPrecomputeDelay") != nil ? UserDefaults.standard.double(forKey: "ArmPrecomputeDelay") : nil }
     /// Give the brain the render mesh so the arm paths can be precomputed (off the main thread unless `synchronous`).
     /// A wave is deferred until its keyframes are ready.
     var hasRenderMesh: Bool { attached }
@@ -595,6 +609,7 @@ final class BlobBrain {
         // loads it from the Caches folder on later launches.
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let result = ArmKeyframeStore.shared.keyframes(paths: paths, rest: rest, mat: mat, capsule: cap, index: index, scale: scale)
+            if let d = Self.armPrecomputeDelay { Thread.sleep(forTimeInterval: d) }          // (test only: -ArmPrecomputeDelay <s> makes the phone's slow precompute visible on the simulator)
             Task { @MainActor in
                 guard let self else { return }
                 for kf in result { self.armKeyframes[kf.name] = kf }
@@ -642,8 +657,27 @@ final class BlobBrain {
 
     // MARK: tick
 
+    /// A script that takes the body over from a playing hello wave (a hop, a spin, a turn, a flip ... set from outside, the stage or a test) used to leave the wave's arm override, its
+    /// `waveBlend` and its foot targets frozen in WORLD space on a body that then moved (the arm hung in the air / sheared, `armT` stood still, and a ghost wave ran on with no script after the
+    /// hop: the Jelly Spring's pointed-fin arm). With this on the wave is ended cleanly the tick it is no longer the script. `-WaveInterruptOld 1` = the old behaviour.
+    nonisolated(unsafe) static var waveInterruptSafe: Bool = !(UserDefaults.standard.object(forKey: "WaveInterruptOld") != nil && UserDefaults.standard.bool(forKey: "WaveInterruptOld"))
+    /// Ends a wave whose script was replaced (see `waveInterruptSafe`). Returns true when it did.
+    @discardableResult
+    func releaseInterruptedWave(_ sim: SoftBody, _ skinner: Skinner) -> Bool {
+        guard Self.waveInterruptSafe else { return false }
+        if !armActive { skinner.clearWaveBlend(); return false }          // (an abort ended the wave without zeroing the per-fragment blend; a hop then returns before `driveLimbs` clears it)
+        guard armPathName == ArmPath.wave.name else { return false }
+        if case .wave = script { return false }
+        skinner.setEyeOpenness(1)
+        pivotSide = nil
+        endWave(sim)          // (armActive off, foot targets and stiffness restored, the skin override released)
+        skinner.clearWaveBlend()
+        return true
+    }
+
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
+        releaseInterruptedWave(sim, skinner)
         runDt = dt; simRef = sim
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
@@ -1006,6 +1040,7 @@ final class BlobBrain {
         mouthOpen = 0
         route = []
         clearSkinOverride()
+        if Self.waveInterruptSafe { skinner.clearWaveBlend() }          // (the aborted wave's per-fragment blend goes with its override, in this very tick)
         sim.targets = []
         sim.restoreStiffness()
         gait.cancel(sim)
@@ -1516,7 +1551,7 @@ final class BlobBrain {
             script = .wave(t: t + dt, side: side, then: then)
             // lean away from the arm, pivoting on the far foot (it stays planted); the arm-side foot lifts in `driveLimbs`
             pivotSide = side > 0 ? 0 : 1
-            roll = Float(side) * waveRoll * amplitude * WaveScript.lean(at: t)
+            roll = Float(side) * waveRoll * (plantedWave ? plantedWaveRollScale : 1) * amplitude * WaveScript.lean(at: t)
             skinner.setEyeOpenness(WaveScript.eyesShut(at: t) ? 0 : 1)
             if t >= WaveScript.duration {
                 skinner.setEyeOpenness(1)
@@ -2092,6 +2127,7 @@ final class BlobBrain {
             prepareBeans(sim, skinner)
             if beanScratch[0].count != FootBean.vertexCount { beanScratch = [[SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount), [SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount)] }
             var want = false
+            waveLiftApplied = 0; waveAskedBeans = false; wantLast = false; waveNearOff = 0; waveNearShift = .zero
             let fitted = sim.bodyPose(iterations: 3)
             for s in 0..<2 {
                 var (xz, fyaw, h, out, tilt, fwd) = feet.state(s)
@@ -2100,11 +2136,12 @@ final class BlobBrain {
                 if out != 0 || fwd != 0 { outV = rotXZ(SIMD2((s == 1 ? 1 : -1) * out, fwd), fyaw) }
                 var waveLift: Float = 0
                 if waving && s == (armSide > 0 ? 1 : 0) {
-                    let e = waveFootOff ? 0 : WaveScript.footLift(at: armT)          // (the high five holds the arm up with the foot planted: BlobSocial+Friends nubPin)
+                    let e = (waveFootOff || plantedWave) ? 0 : WaveScript.footLift(at: armT)          // (the high five holds the arm up with the foot planted: BlobSocial+Friends nubPin)
                     outV += rotXZ(SIMD2(Float(armSide) * waveFootOut, waveFootFwd), yaw) * (e * amplitude)
                     h += waveFootLift * e * amplitude
                     tilt = waveFootTilt * e
                     waveLift = e
+                    waveLiftApplied = e
                 }
                 let c = geom.contact[s]
                 // SIM: the sole follows the BODY's rigid pose plus a few centimetres toward the wanted spot (a bigger xz shear or any lift
@@ -2132,6 +2169,8 @@ final class BlobBrain {
                 // BEAN: a foot that is stepping, displaced from the body's own foot, lifted or waving needs the bean; both feet still at their rest
                 // spots for beanHoldTime lets the beans go (one swap per action, never per step)
                 if (feet.active || simd_length(offFull) > 0.012 || h > 0.006 || waveLift > 0.02) { want = true }
+                if waveLift > 0.02 { waveAskedBeans = true }
+                if waving && s == (armSide > 0 ? 1 : 0) { waveNearOff = simd_length(offFull); waveNearShift = footShift[s] }
                 let ct = cosf(tilt), st = sinf(tilt), hz = geom.heelZ[s] - c.z
                 let ys: Float = 1
                 let wy = sim.floorY + c.y + h
@@ -2149,6 +2188,7 @@ final class BlobBrain {
                 beanScratch[s] = bv
             }
             beanForceLast = false
+            wantLast = want
             commitBeans(sim, skinner, dt, want: want)
         } else if beanLive { driveBeansRigid(sim, skinner, dt) } else if skinner.beanBlend > 0 { skinner.clearBeans() }
         driveArms(sim, skinner, dt)

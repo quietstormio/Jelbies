@@ -77,7 +77,7 @@ final class WidgetSnapshotTests: XCTestCase {
 
     func testProjectionFloorsAtPointTwoAndNeverRaises() {
         let s = JellySnapshot(savedAt: t0, jellies: [rec(0, "Bob", levels: [1, 1, 1]), rec(1, "Pip", levels: [0.1, 0.05, 0.15])])
-        for h: Double in [8.0, 24, 336, 9600] {
+        for h: Double in [24.0, 336, 9600] {          // (8 h is no longer on the floor: hunger 16 h, thirst 12.8 h)
             let p = s.project(at: t0.addingTimeInterval(h * hour))
             for l in p[0].levels { XCTAssertEqual(l, NeedsTuning.awayFloor, accuracy: 1e-6, "+\(h) h sits on the floor") }
             XCTAssertEqual(p[1].levels, [0.1, 0.05, 0.15], "already below the floor: left alone")
@@ -100,13 +100,13 @@ final class WidgetSnapshotTests: XCTestCase {
         }
     }
 
-    func testHungerCrossesIntoHungryAboutFiveHoursAway() {
+    func testHungerCrossesIntoHungryAboutTenHoursAway() {
         let s = JellySnapshot(savedAt: t0, jellies: [rec(0, "Bob")])
-        XCTAssertEqual(s.project(at: t0.addingTimeInterval(4 * hour))[0].tier(.food), .normal)
-        let p5 = s.project(at: t0.addingTimeInterval(5.2 * hour))[0]
+        XCTAssertEqual(s.project(at: t0.addingTimeInterval(9.5 * hour))[0].tier(.food), .normal)          // (was 4 h / 5.2 h on the 10 h awake rate; now 20 h to empty: 0.5 is at 10 h)
+        let p5 = s.project(at: t0.addingTimeInterval(10.4 * hour))[0]
         XCTAssertEqual(p5.tier(.food), .hungry)
         XCTAssertEqual(p5.tier(.heart), .hungry, "attention is lonely by then")
-        XCTAssertEqual(p5.headline, "Bob is lonely!", "attention (lowest) is the neediest at 5.2 h")
+        XCTAssertEqual(p5.headline, "Bob is lonely!", "attention (lowest) is the neediest at 10.4 h")
         XCTAssertNotEqual(p5.tier(.food), .famished, "away never makes him Famished")
     }
 

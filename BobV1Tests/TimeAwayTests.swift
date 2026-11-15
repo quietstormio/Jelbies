@@ -40,15 +40,15 @@ final class TimeAwayTests: XCTestCase {
         n.leaveActive(at: t0)
         let applied = n.returnActive(at: t0.addingTimeInterval(3 * hour))
         XCTAssertEqual(applied, 3 * hour, accuracy: 1e-6)
-        XCTAssertEqual(n.level(.hunger), 0.70, accuracy: 0.01)
-        XCTAssertEqual(n.level(.thirst), 0.625, accuracy: 0.01)
+        XCTAssertEqual(n.level(.hunger), 0.85, accuracy: 0.01)
+        XCTAssertEqual(n.level(.thirst), 0.8125, accuracy: 0.01)
         XCTAssertEqual(n.level(.attention), 0.50, accuracy: 0.01)
         XCTAssertEqual(n.mood, .okay)
         XCTAssertNil(n.wantedNeed, "not wanting yet after 3 h")
     }
 
     func testOvernightLandsOnTheFloorNotAtZero() {
-        for (name, secs) in [("8 h", 8 * hour), ("24 h", 24 * hour), ("14 days", 14 * 24 * hour), ("30 days", 30 * 24 * hour), ("a year", 365 * 24 * hour)] {
+        for (name, secs) in [("24 h", 24 * hour), ("14 days", 14 * 24 * hour), ("30 days", 30 * 24 * hour), ("a year", 365 * 24 * hour)] {
             let n = needs(suite(), now: t0)
             full(n)
             n.leaveActive(at: t0)
@@ -97,11 +97,11 @@ final class TimeAwayTests: XCTestCase {
         n.save()
         let applied = n.returnActive(at: clock)
         XCTAssertEqual(applied, 5 * hour, accuracy: 1, "the background save did not advance the stamp")
-        XCTAssertEqual(n.level(.hunger), 0.5, accuracy: 0.01)
+        XCTAssertEqual(n.level(.hunger), 0.75 - 17.0 / 1080, accuracy: 0.01, "(1 - 5/20, less the 17 s of in-room drain stepped above)")
         XCTAssertEqual(n.level(.attention), NeedsTuning.awayFloor, accuracy: 0.02, "5 h of the 6 h curve is already near the floor")
         // and a process that is killed in the background still measures from the time it left
         let n2 = needs(d, now: t0.addingTimeInterval(5 * hour))
-        XCTAssertEqual(n2.level(.hunger), 0.5, accuracy: 0.02)
+        XCTAssertEqual(n2.level(.hunger), 0.75 - 17.0 / 1080, accuracy: 0.02)
     }
 
     func testAForegroundReturnAppliesOnceAndTwoActivesDoNotDoubleCount() {
@@ -131,7 +131,7 @@ final class TimeAwayTests: XCTestCase {
 
     func testInAppRatesAreUnchanged() {
         XCTAssertEqual(NeedsTuning.hoursToEmpty(.hunger), 0.3); XCTAssertEqual(NeedsTuning.hoursToEmpty(.thirst), 0.2); XCTAssertEqual(NeedsTuning.hoursToEmpty(.attention), 4)
-        XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.hunger), 10); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.thirst), 8); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention), 6)
+        XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.hunger), 20); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.thirst), 16); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention), 6)
     }
 
     // MARK: dirt away
@@ -237,7 +237,7 @@ final class TimeAwayTests: XCTestCase {
 
     func testTheAwayFloorIsTheFamishedBoundaryAndAwayNeverFamishes() {
         XCTAssertEqual(NeedsTuning.awayFloor, NeedsTuning.famishedBelow)
-        for secs in [8 * hour, 24 * hour, 400 * 24 * hour] {
+        for secs in [24 * hour, 48 * hour, 400 * 24 * hour] {
             let n = needs(suite(), now: t0)
             full(n); n.leaveActive(at: t0); n.returnActive(at: t0.addingTimeInterval(secs))
             for k in NeedKind.allCases { XCTAssertEqual(n.tier(k), .hungry, "\(k) after \(secs / hour) h away is Hungry, not Famished") }

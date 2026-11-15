@@ -36,19 +36,39 @@ final class MusicFadeTests: XCTestCase {
         var now = 0.0
         var all = run(&d, 20, MusicInput(phase: .day), at: &now)
         let route: [(DayPhase, Bool)] = [(.evening, false), (.night, false), (.night, true), (.night, false), (.morning, false), (.evening, false), (.day, false)]
-        for (phase, nap) in route {
-            let before = plays(all).count
+        // night <-> nap is lo-fi both ways: the song that plays runs on (2026-11-14: "keep the song that was going when they went to sleep"), so the two
+        // night steps give no play; with `keepSongAtBedtime` off every step plays one song, as before
+        let expectedKept = [1, 1, 0, 0, 1, 1, 1]
+        for (i, (phase, nap)) in route.enumerated() {
+            let songBefore = d.current
             let ev = run(&d, 12, MusicInput(phase: phase, allNapping: nap), at: &now)
             let p = plays(ev)
-            XCTAssertEqual(p.count, 1, "\(phase) nap=\(nap): exactly one new song (no double-play)")
-            XCTAssertGreaterThanOrEqual(p.first?.fade ?? 0, 1.5, "the old song fades out and the new one in over >= 1.5 s")
+            XCTAssertEqual(p.count, expectedKept[i], "\(phase) nap=\(nap): \(expectedKept[i] == 0 ? "the playing song runs on" : "exactly one new song (no double-play)")")
+            if expectedKept[i] == 1 {
+                XCTAssertGreaterThanOrEqual(p.first?.fade ?? 0, 1.5, "the old song fades out and the new one in over >= 1.5 s")
+            } else {
+                XCTAssertEqual(d.current, songBefore, "a kept step leaves the song alone")
+                XCTAssertFalse(ev.contains { if case .fadeOutMain = $0.e { return true }; return false }, "a kept step does not fade the song")
+            }
             XCTAssertFalse(ev.contains { if case .fadeOutMain = $0.e { return true }; return false }, "no fade-out without a song coming in")
             XCTAssertFalse(ev.contains { if case .sceneOn = $0.e { return true }; return false })
             all += ev
-            _ = before
         }
         // the mood of each song's pool follows the mode
         XCTAssertTrue(Track.lofiPool.contains(d.current!) || Track.dayPool.contains(d.current!) || Track.eveningPool.contains(d.current!))
+
+        // the old behaviour (the dev switch `-NightSongOld 1`): one new song at every step
+        var old = MusicDirector(length: { _ in 150 }, rand: { 0.9 })
+        old.keepSongAtBedtime = false
+        var t2 = 0.0
+        _ = run(&old, 20, MusicInput(phase: .day), at: &t2)
+        for (phase, nap) in route {
+            let ev = run(&old, 12, MusicInput(phase: phase, allNapping: nap), at: &t2)
+            let p = plays(ev)
+            XCTAssertEqual(p.count, 1, "old behaviour, \(phase) nap=\(nap): exactly one new song")
+            XCTAssertGreaterThanOrEqual(p.first?.fade ?? 0, 1.5)
+            XCTAssertFalse(ev.contains { if case .fadeOutMain = $0.e { return true }; return false })
+        }
     }
 
     func testModeFollowsTheClockAndKeepsMinimumDwell() {

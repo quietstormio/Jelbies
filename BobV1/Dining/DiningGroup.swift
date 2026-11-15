@@ -57,6 +57,34 @@ final class DiningGroup {
     private var replanClock: Float = 0
     /// How many times a place changed hands after the first plan (tests / diagnostics).
     private(set) var replans = 0
+    /// Slice 1 of the meal line-up fix (switch `-DiningOrdered 0` = the old smart line-up, simulator / dev builds): the places of a FOOD sitting at the home tray are given once, at the start, in the order of the diners'
+    /// x on the floor (left diner -> left place), and never re-planned, so nobody has to pass between or through the others to reach his place and a late arrival is never sent into a middle place
+    /// between two standing diners. Drinks and the café keep the smart line-up (`replan`) exactly as before.
+    nonisolated(unsafe) static var orderedPlaces: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DiningOrdered") != nil && UserDefaults.standard.integer(forKey: "DiningOrdered") == 0)
+    /// This sitting uses the x-ordered places (decided in `start`).
+    private var ordered = false
+    /// Slot of each walker when the walkers are sorted by x and the slots are sorted by x (the pairing that never crosses for walks to a line). Ties go to the lower index.
+    static func orderedSlots(floors: [SIMD2<Float>], slots: [SIMD2<Float>]) -> [Int] {
+        let by = floors.indices.sorted { floors[$0].x != floors[$1].x ? floors[$0].x < floors[$1].x : $0 < $1 }
+        let sl = slots.indices.sorted { slots[$0].x != slots[$1].x ? slots[$0].x < slots[$1].x : $0 < $1 }
+        var out = [Int](repeating: -1, count: floors.count)
+        for (k, b) in by.enumerated() where k < sl.count { out[b] = sl[k] }
+        return out
+    }
+    /// Slice 2 of the meal line-up fix (switch `-DiningQuiet 0` = the old rule, simulator / dev builds): two diners of this sitting who are both at, or within `Lineup.commitDistance` of, their own place do not push each other
+    /// (MelonStage.keepApart: the 0.7 gap and the skin wall are skipped for that pair), so the row at the tray is allowed to overlap a little but nobody is shoved back and forth. Latched per diner from the moment
+    /// he is that near (or has started to eat) until he is released or the sitting ends, so it cannot flicker at the radius. Walking diners still avoid everybody else exactly as before.
+    nonisolated(unsafe) static var quietPlaces: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DiningQuiet") != nil && UserDefaults.standard.integer(forKey: "DiningQuiet") == 0)
+    private var quietLatch: Set<Int> = []
+    /// The roster ids whose pair with `id` MelonStage.keepApart skips: the other quiet diners, when `id` is a quiet diner himself (empty otherwise: no allocation).
+    func quietPeers(of id: Int) -> Set<Int> { Self.quietPlaces && isActive && serving.kind == .food && forcedOrigin == nil && quietLatch.contains(id) ? quietLatch : [] }
+    private func updateQuiet() {
+        for i in brains.indices {
+            let id = memberIDs[i]
+            if released[i] { quietLatch.remove(id); continue }
+            if !quietLatch.contains(id), started[i] || simd_distance(floor(i), approachPoint(blob: i)) < Lineup.commitDistance { quietLatch.insert(id) }
+        }
+    }
     /// The roster id of diner i (`start(... ids:)`; by default 0..<n).
     private(set) var memberIDs: [Int] = []
     private var finished: [Bool] = []
@@ -120,6 +148,7 @@ final class DiningGroup {
     /// across another, none through a standing diner). A diner within 1 u of his approach point is settled for good.
     private func replan(dt: Float) {
         replanClock += dt
+        guard !ordered else { return }          // (x-ordered places are final: see `orderedPlaces`)
         guard replanClock >= Lineup.period, n > 1 else { return }
         replanClock = 0
         for i in brains.indices where !committed[i] && (started[i] || (released.indices.contains(i) && released[i]) || simd_distance(floor(i), approachPoint(blob: i)) < Lineup.commitDistance) { committed[i] = true }
@@ -147,8 +176,10 @@ final class DiningGroup {
             s.y += c.eatStyle == .sip ? GameCare.sipCloser : GameCare.eatCloser
             return SIMD2(s.x, s.y - GameCare.approachBack)
         }
-        committed = [Bool](repeating: false, count: n); replanClock = 0; replans = 0
+        committed = [Bool](repeating: false, count: n); replanClock = 0; replans = 0; quietLatch = []
         placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
+        ordered = Self.orderedPlaces && n > 1 && c.kind == .food && forcedOrigin == nil
+        if ordered { placeOf = Self.orderedSlots(floors: brains.indices.map { f($0) }, slots: spots) }
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
@@ -178,7 +209,7 @@ final class DiningGroup {
         for b in brains { b.reserved = true; b.waitFocus = origin }          // everybody waits where he stands (look / step / bounce) until the meal is over
         beginApproach()
         traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; inBoxTicks = 0; popReason = "gathered"
-        MealTrace.log("group start n=\(n) kind=\(serving.kind == .food ? "food" : "drink") origin=(\(origin.x),\(origin.y)) inFront=\(frontCount())")
+        MealTrace.log("group start n=\(n) kind=\(serving.kind == .food ? "food" : "drink") origin=(\(origin.x),\(origin.y)) inFront=\(frontCount()) orderedPlaces=\(ordered) quietPlaces=\(Self.quietPlaces)")
         for i in brains.indices {
             let st = stands[placeOf[i]], ap = approachPoint(blob: i), f = floor(i)
             MealTrace.log("  diner id=\(memberIDs[i]) floor=(\(f.x),\(f.y)) place=\(placeOf[i]) stand=(\(st.x),\(st.y)) trayDist(stand)=\(trayDistance(st)) trayDist(approach)=\(trayDistance(ap))")
@@ -261,6 +292,7 @@ final class DiningGroup {
             b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; if i < savedPeers.count { b.peers = savedPeers[i] }
         }
         savedFinished = []; savedGap = []; savedPeers = []
+        quietLatch = []
     }
     /// The meal is dropped (Come here, grabbed, timeout): the tray poofs, what was eaten stays paid.
     func cancel() { guard state != .idle else { return }; end() }
@@ -320,8 +352,14 @@ final class DiningGroup {
     private func frontCount() -> Int {
         brains.indices.filter { !(released.indices.contains($0) && released[$0]) && !(started.indices.contains($0) && started[$0]) && floor($0).y > stands[placeOf[$0]].y + GameCare.popTolerance }.count
     }
+    private var tracePosTick = -1
     private func traceTick() {
         #if targetEnvironment(simulator)
+        // (simulator only, 10 Hz) where every diner of the sitting stands: the meal-lineup captures measure path / reversals / overlap from these
+        if Int(age * 10) != tracePosTick {
+            tracePosTick = Int(age * 10)
+            MealTrace.log("pos " + brains.indices.map { i in let f = floor(i); return "\(memberIDs[i])@p\(placeOf[i])=(\(String(format: "%.3f,%.3f", f.x, f.y)))\(started[i] ? "s" : "")\(released.indices.contains(i) && released[i] ? "r" : "")" }.joined(separator: " ") + " tray=\(trayOut ? 1 : 0)")
+        }
         let box = dining.drawnBox(scale: max(dining.scale, 0.001))
         for i in brains.indices where !(released.indices.contains(i) && released[i]) {
             let id = memberIDs[i], f = floor(i)
@@ -345,6 +383,7 @@ final class DiningGroup {
         age += dt
         if age > GameCare.mealTimeout { MealTrace.log("giveup reason=timeout"); end(); gaveUp = true; return }
         traceTick()
+        if Self.quietPlaces { updateQuiet() }
         switch state {
         case .approaching:
             if !trayOut, dining.phase == .absent || forcedOrigin != nil {
@@ -372,7 +411,7 @@ final class DiningGroup {
                 idle[i] += dt
                 if idle[i] > 0.5 {
                     idle[i] = 0
-                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { MealTrace.log("giveup reason=walkRetries diner=\(memberIDs[i])"); end(); gaveUp = true; return }
+                    if walkRetries[i] < 3 { walkRetries[i] += 1; MealTrace.log("walk re-send diner=\(memberIDs[i]) retry=\(walkRetries[i])"); brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { MealTrace.log("giveup reason=walkRetries diner=\(memberIDs[i])"); end(); gaveUp = true; return }
                 }
             }
         case .serving:

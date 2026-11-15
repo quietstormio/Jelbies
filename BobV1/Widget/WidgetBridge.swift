@@ -30,6 +30,8 @@ final class WidgetBridge {
         var sparkle: Float
         /// The Jelbie's INSTANCE id (a duplicate Bob has his own adopted colour); nil = the species of `color` (the old behaviour).
         var character: Int? = nil
+        /// Asleep (napping, tucked in, on the way to bed) right now: the snapshot carries it so the widget / Siri project the slow asleep away rates.
+        var asleep: Bool = false
     }
 
     static let reloadEvery: TimeInterval = 60
@@ -86,7 +88,7 @@ final class WidgetBridge {
     static func record(_ i: Input, look: String) -> JellyRecord {
         let lv = (0..<NeedKind.allCases.count).map { $0 < i.levels.count ? min(max(i.levels[$0], 0), 1) : 1 }
         return JellyRecord(id: i.id, name: i.name, color: i.color, levels: lv, dirt: min(max(i.dirt, 0), 1), sparkle: min(max(i.sparkle, 0), 1),
-                           mood: AwayMath.mood(of: lv).rawValue, look: look, feature: JellyRoster.feature(character(ofColor: i.color)).rawValue)
+                           mood: AwayMath.mood(of: lv).rawValue, look: look, feature: JellyRoster.feature(character(ofColor: i.color)).rawValue, asleep: i.asleep)
     }
     static func snapshot(_ inputs: [Input], at date: Date, looks: [Int: String] = [:]) -> JellySnapshot {
         JellySnapshot(savedAt: date, jellies: inputs.prefix(JellyShare.maxJellies).map { record($0, look: looks[$0.id] ?? "") })
@@ -102,7 +104,7 @@ final class WidgetBridge {
     static func stateKey(_ inputs: [Input]) -> String {
         inputs.map { i in
             let s = JellyState(record: record(i, look: ""), awaySeconds: 0)
-            return "\(i.id)\(i.name)|\(JellyCare.allCases.map { String(s.tier($0).rawValue) }.joined())\(s.mood.rawValue)"          // (the name: a rename republishes)
+            return "\(i.id)\(i.name)|\(JellyCare.allCases.map { String(s.tier($0).rawValue) }.joined())\(s.mood.rawValue)\(i.asleep ? "z" : "")"          // (the name: a rename republishes)
         }.joined(separator: ",")
     }
 

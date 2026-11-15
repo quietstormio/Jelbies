@@ -20,6 +20,8 @@ struct ShowcaseStage: View {
     var onReady: ((MelonModel) -> Void)?
     /// The opening story's Jelbies stay quiet (no arrival chirp) until their drop pops.
     var silent = false
+    /// The Jelly Spring's stages: the hello wave keeps both feet planted (`BlobBrain.plantedWave`); every other showcase keeps the wave's foot lift.
+    var plantedWave = false
     @State private var model: MelonModel?
     @State private var readyTask: Task<Void, Never>?
     @State private var readyFired = false
@@ -54,6 +56,7 @@ struct ShowcaseStage: View {
         let m = GameScreen.makeGameModel(jellyCount: roster.count, preview: true)
         m.care.touchPlay = m.touch
         m.care.silentArrival = silent
+        m.care.plantedWave = plantedWave
         m.hideJellies = empty
         m.cutout = cutout
         model = m

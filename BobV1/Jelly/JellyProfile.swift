@@ -67,7 +67,8 @@ final class JellyProfile: Identifiable {
     var feature: JellyFeature { JellyRoster.feature(character) }
 
     /// One fixed sim step: needs drain, dirt builds with the floor he covered, the look follows the dirt.
-    func step(dt: Float, position: SIMD2<Float>, exerting: Bool, drainScale: Float = 1) {
+    func step(dt: Float, position: SIMD2<Float>, exerting: Bool, drainScale: Float = 1, asleep: Bool = false) {
+        needs.setAsleep(asleep)
         let travelled = lastPos.map { simd_distance($0, position) } ?? 0
         lastPos = position
         perks.step(dt: dt)
@@ -87,7 +88,7 @@ final class JellyProfile: Identifiable {
 
     // MARK: time away (every Jelly, one path)
 
-    func leftActive(at t: Date? = nil) { needs.leaveActive(at: t); grime.leaveActive(at: t) }
+    func leftActive(at t: Date? = nil, asleep: Bool? = nil) { needs.leaveActive(at: t, asleep: asleep); grime.leaveActive(at: t) }
     /// Applies the time away to needs and dirt; returns the seconds applied.
     @discardableResult
     func returnedActive(at t: Date? = nil) -> TimeInterval {
