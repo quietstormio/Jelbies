@@ -53,7 +53,7 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertEqual(dances.first?.0, .sway); XCTAssertEqual(dances.first?.1, true)
         run(f, seconds: 5) { f.beat == .dancing }
         XCTAssertTrue(f.buttonsLive); XCTAssertNotNil(f.sim?.dance)
-        XCTAssertEqual(f.sim!.dance!.total, f.danceSong.promptCount, "one prompt per beat of the picked song")
+        XCTAssertEqual(f.sim!.dance!.total, f.danceSong.promptCount(f.dancePattern), "one prompt per slot of the picked song's pattern")
         run(f, seconds: 30) { f.beat == .danced }
         XCTAssertTrue(f.sim!.danceDone); XCTAssertGreaterThan(f.sim!.danceScore!, 60, "the auto player dances well")
         XCTAssertGreaterThan(cues.filter { $0 == .perfect }.count, 8)
@@ -97,7 +97,7 @@ final class ShowFlowTests: XCTestCase {
         run(f, seconds: 5) { f.beat == .dancing }
         // (no taps: every prompt slips, no failing)
         run(f, seconds: 25) { f.beat == .danced }
-        XCTAssertEqual(f.sim!.dance!.misses, f.danceSong.promptCount); XCTAssertEqual(f.sim!.danceScore!, 0, accuracy: 1e-3, "all slips: 0 (the score is 100% accuracy)")
+        XCTAssertEqual(f.sim!.dance!.misses, f.danceSong.promptCount(f.dancePattern)); XCTAssertEqual(f.sim!.danceScore!, 0, accuracy: 1e-3, "all slips: 0 (the score is 100% accuracy)")
         f.finishDance()
         XCTAssertFalse(f.sim!.burstReady, "no cheer: no Burst")
         f.pick(.sit)
@@ -332,13 +332,14 @@ final class ShowFlowTests: XCTestCase {
     // MARK: the dance song's clock
 
     /// A show brought to the first frame of the dance (GO), with the audio stubs given.
-    private func danceFlow(clock: @escaping (SceneTrack) -> Double?, ready: @escaping (MusicScene) -> Bool) -> ShowFlow {
+    private func danceFlow(clock: @escaping (SceneTrack) -> Double?, ready: @escaping (MusicScene) -> Bool, rank: ShowRank = .puddle, stopAt: ShowFlow.Beat = .dancing) -> ShowFlow {
         let f = ShowFlow(); f.cue = { _ in }; f.auto = true
         f.songClock = clock; f.audioReady = ready; f.songClockWhy = { "test: \($0.rawValue) has no clock" }
-        f.begin(playerID: 1, name: "Bob", character: 1, input: input(), rank: .puddle, dayKey: 20261021, bodies: 3, seed: 3)
+        for r in ShowRank.allCases where r.index < rank.index { f.progress.record(rank: r, place: 1, theme: .beachGames, character: 0, burst: false, perfectDance: false, hatTrick: false) }          // (opens the rank)
+        f.begin(playerID: 1, name: "Bob", character: 1, input: input(), rank: rank, dayKey: 20261021, bodies: 3, seed: 3)
         run(f, seconds: 2) { f.phase == .stage }
         run(f, seconds: 6) { f.beat == .countdown }
-        run(f, seconds: 8) { f.beat == .dancing }
+        if stopAt == .dancing { run(f, seconds: 8) { f.beat == .dancing } }
         return f
     }
 
@@ -364,6 +365,28 @@ final class ShowFlowTests: XCTestCase {
         let f = danceFlow(clock: { _ in t += 1 / 60; return t }, ready: { _ in true })
         run(f, seconds: 5)
         XCTAssertNil(f.danceFallback); XCTAssertGreaterThan(f.danceT, 4)
+    }
+
+    /// The "Beat x / y" count is the pattern's (calm for Puddle, lively for Lagoon), before the dance starts and during it, not the rank's fixed 20.
+    func testChipCountBeforeAndDuringTheDanceIsThePatternsNotTheRanks() {
+        for (rank, pattern) in [(ShowRank.puddle, DancePattern.calm), (.lagoon, .lively)] {
+            let f = danceFlow(clock: { _ in nil }, ready: { _ in true }, rank: rank, stopAt: .countdown)
+            XCTAssertEqual(f.dancePattern, pattern)
+            XCTAssertEqual(f.dancePromptTotal, f.danceSong.promptCount(pattern), "before the dance: the pattern's count")
+            XCTAssertNotEqual(f.dancePromptTotal, ShowRank.puddle.promptCount)
+            run(f, seconds: 8) { f.beat == .dancing }
+            XCTAssertEqual(f.sim?.dance?.total, f.dancePromptTotal)
+        }
+    }
+
+    /// An auto-played lively dance (quick doubles) is judged without a stumble.
+    func testLivelyDanceIsPlayedThrough() {
+        let f = danceFlow(clock: { _ in nil }, ready: { _ in true }, rank: .ocean)
+        run(f, seconds: 40) { f.beat == .danced }
+        XCTAssertEqual(f.beat, .danced)
+        let d = f.sim!.dance!
+        XCTAssertTrue(d.hasQuickDoubles); XCTAssertEqual(d.judged, d.total)
+        XCTAssertGreaterThan(d.perfects, d.total / 2, "the auto player hits most prompts on time, doubles included")
     }
 
     // MARK: the stage camera
