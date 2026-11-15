@@ -10,19 +10,26 @@ import simd
 ///  T7  one alone at home roams the whole visible floor from launch (before: the old box until his first trip out); the stage's `syncRoam` reads `loneFloorLive`;
 ///  T8  one alone picks fewer wander goals in the far back (the pockets beside the sofa, where he reads tiny): a candidate behind `loneBackFrom` is dropped with a
 ///      chance that grows to `loneBackChance` at `loneBackFull`.
-/// Each part has a dev switch (`-RoomTrafficSpeed 0`, `-RoomTrafficOrder 0`, `-RoomTrafficWait 0`, `-RoomTrafficGoals 0`, `-RoomTrafficLone 0`, `-RoomTrafficLoneBack 0`); in a headless run the environment
-/// `ROOMTRAFFIC_OFF=speed,order,wait,goals,lone,loneback` turns parts off. The numbers have environment seams for the measuring test only.
+/// T7 and T8 (one alone) are ON by default; `-RoomTrafficLone 0` / `-RoomTrafficLoneBack 0` (dev builds) or the environment `ROOMTRAFFIC_OFF=lone,loneback` turn them off.
+/// T1, T2, T5 and T6 (two or more bodies) are OPT-IN, OFF by default, until their own proof with three bodies: with them off, two or more bodies steer and pick goals
+/// exactly as before the round. `-RoomTrafficSpeed 1`, `-RoomTrafficOrder 1`, `-RoomTrafficWait 1`, `-RoomTrafficGoals 1` (dev builds) or, in a headless run, the
+/// environment `ROOMTRAFFIC_ON=speed,order,wait,goals` turn parts on; `ROOMTRAFFIC_OFF` wins over both. The numbers have environment seams for the measuring test only.
 nonisolated enum RoomTraffic {
     private static func devOn(_ key: String) -> Bool {
         !(DevArgs.enabled && UserDefaults.standard.object(forKey: key) != nil && UserDefaults.standard.integer(forKey: key) == 0)
     }
+    /// An opt-in part: on only when a dev argument asks for it (`-<key> 1`; `DevArgs.enabled` builds only).
+    private static func devAsked(_ key: String) -> Bool {
+        DevArgs.enabled && UserDefaults.standard.integer(forKey: key) == 1
+    }
     private static let envOff = Set((ProcessInfo.processInfo.environment["ROOMTRAFFIC_OFF"] ?? "").split(separator: ",").map { String($0) })
+    private static let envOn = Set((ProcessInfo.processInfo.environment["ROOMTRAFFIC_ON"] ?? "").split(separator: ",").map { String($0) })
     private static func env(_ name: String, _ fallback: Float) -> Float { Float(ProcessInfo.processInfo.environment[name] ?? "") ?? fallback }
 
-    nonisolated(unsafe) static var realSpeed = devOn("RoomTrafficSpeed") && !envOff.contains("speed")
-    nonisolated(unsafe) static var arrivalOrder = devOn("RoomTrafficOrder") && !envOff.contains("order")
-    nonisolated(unsafe) static var waypointWait = devOn("RoomTrafficWait") && !envOff.contains("wait")
-    nonisolated(unsafe) static var goalAware = devOn("RoomTrafficGoals") && !envOff.contains("goals")
+    nonisolated(unsafe) static var realSpeed = (devAsked("RoomTrafficSpeed") || envOn.contains("speed")) && !envOff.contains("speed")          // (T1, opt-in: off by default)
+    nonisolated(unsafe) static var arrivalOrder = (devAsked("RoomTrafficOrder") || envOn.contains("order")) && !envOff.contains("order")          // (T2, opt-in)
+    nonisolated(unsafe) static var waypointWait = (devAsked("RoomTrafficWait") || envOn.contains("wait")) && !envOff.contains("wait")          // (T5, opt-in)
+    nonisolated(unsafe) static var goalAware = (devAsked("RoomTrafficGoals") || envOn.contains("goals")) && !envOff.contains("goals")          // (T6, opt-in)
     nonisolated(unsafe) static var loneFloor = devOn("RoomTrafficLone") && !envOff.contains("lone")
     nonisolated(unsafe) static var loneBack = devOn("RoomTrafficLoneBack") && !envOff.contains("loneback")
     /// T7, read by the stage every frame: one alone at home gets the roaming floor too.
