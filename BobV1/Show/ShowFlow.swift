@@ -278,7 +278,7 @@ final class ShowFlow {
                 probeAge += dt
                 let raw = songClock(danceTrack)
                 if probeAge >= 0.5 { probeAge = 0; NSLog("[probe] dance t=%.3f clock=%@ heard=%d ready=%d wait=%.2f host=%.4f", now, raw.map { String(format: "%.3f", $0) } ?? "nil", danceHeard ? 1 : 0, audioReady(.danceSong(danceSong.song - 1)) ? 1 : 0, danceAudioWait, CACurrentMediaTime()) }
-                if let ps = sim?.dance?.prompts { while probePrompt < ps.count, ps[probePrompt].time <= now { NSLog("[probe] prompt #%d foot=%d at %.3f passed t=%.3f clock=%@ host=%.4f", probePrompt, ps[probePrompt].foot, ps[probePrompt].time, now, raw.map { String(format: "%.3f", $0) } ?? "nil", CACurrentMediaTime()); probePrompt += 1 } }
+                if let ps = sim?.dance?.prompts { while probePrompt < ps.count, ps[probePrompt].time <= now { NSLog("[probe] prompt #%d foot=%d at %.3f passed t=%.3f clock=%@ host=%.4f renderPos=%lld", probePrompt, ps[probePrompt].foot, ps[probePrompt].time, now, raw.map { String(format: "%.3f", $0) } ?? "nil", CACurrentMediaTime(), SceneMusicEngine.renderPos); probePrompt += 1 } }
             }
             if auto || ShowAssist.autoDance { autoPlay(now) }
             promptCues(now: now)

@@ -229,8 +229,45 @@ final class SceneMusicEngine {
         let vs = voices.map { v in String(format: "%@{rdy=%d stop=%d play=%d vol=%.3f fad=%.2f}", v.track.rawValue, v.ready ? 1 : 0, v.stopping ? 1 : 0, v.node.isPlaying ? 1 : 0, v.node.volume, v.fader.level) }.joined(separator: " ")
         return String(format: "engine run=%d level=%.3f out=%.0fHz voices[%@]", engine.isRunning ? 1 : 0, level, engine.outputNode.outputFormat(forBus: 0).sampleRate, vs)
     }
+    // PROBE: -SceneOffline 1 = the engine runs in OFFLINE manual rendering mode (no output device; the simulator here has none): update(dt:) pulls
+    // dt worth of frames, writes them to Documents/scene_offline_*.caf and logs RMS twice a second, all on the rendered SAMPLE clock (renderPos).
+    static let offline = UserDefaults.standard.bool(forKey: "SceneOffline")
+    static var renderPos: Int64 = 0
+    private var offFile: AVAudioFile?
+    private var offBuf: AVAudioPCMBuffer?
+    private var offOwed = 0.0
+    private var offSum = 0.0, offN = 0
+    private func renderOffline(dt: Double) {
+        guard Self.offline, engine.isInManualRenderingMode, engine.isRunning else { return }
+        let fmt = engine.manualRenderingFormat
+        if offBuf == nil { offBuf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: engine.manualRenderingMaximumFrameCount) }
+        if offFile == nil, let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let u = dir.appendingPathComponent(String(format: "scene_offline_%.0f.caf", Date().timeIntervalSince1970))
+            offFile = try? AVAudioFile(forWriting: u, settings: fmt.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+            NSLog("[probe] offline file %@ at renderPos %lld", u.path, Self.renderPos)
+        }
+        guard let buf = offBuf else { return }
+        offOwed += min(dt, 0.25) * fmt.sampleRate
+        while offOwed >= 1 {
+            let n = AVAudioFrameCount(min(Double(buf.frameCapacity), offOwed.rounded(.down)))
+            guard n > 0 else { break }
+            let st: AVAudioEngineManualRenderingStatus
+            do { st = try engine.renderOffline(n, to: buf) } catch { NSLog("[probe] renderOffline threw %@", String(describing: error)); return }
+            guard st == .success else { NSLog("[probe] renderOffline status %ld", st.rawValue); return }
+            try? offFile?.write(from: buf)
+            if let d = buf.floatChannelData { for i in 0..<Int(buf.frameLength) { let x = Double(d[0][i]); offSum += x * x } }
+            offN += Int(buf.frameLength)
+            Self.renderPos += Int64(buf.frameLength)
+            offOwed -= Double(buf.frameLength)
+            if offN >= Int(fmt.sampleRate / 2) {
+                NSLog("[probe] offline rms=%.4f renderPos=%lld %@", (offSum / Double(offN)).squareRoot(), Self.renderPos, probeLine())
+                offSum = 0; offN = 0
+            }
+        }
+    }
+
     private func installTap() {
-        guard Self.probe, !tapOn else { return }
+        guard Self.probe, !tapOn, !Self.offline else { return }
         tapOn = true
         let mixer = engine.mainMixerNode
         let fmt = mixer.outputFormat(forBus: 0)
@@ -261,6 +298,10 @@ final class SceneMusicEngine {
     }
 
     init() {
+        if Self.offline, let f = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2) {
+            do { try engine.enableManualRenderingMode(.offline, format: f, maximumFrameCount: 4096); NSLog("[probe] OFFLINE manual rendering on (44.1 kHz)") }
+            catch { NSLog("[probe] OFFLINE manual rendering FAILED %@", String(describing: error)) }
+        }
         configObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
             if SceneMusicEngine.probe { NSLog("[probe] engine CONFIG CHANGE") }
             Task { @MainActor in self?.restartAfterConfigChange() }
@@ -305,7 +346,7 @@ final class SceneMusicEngine {
         v.node.volume = v.stopping ? v.fader.level * level * v.track.gain : 0
         v.node.play()
         v.ready = true; v.started = true
-        if Self.probe { NSLog("[probe] scene started %@ stopping=%d vol=%.3f level=%.3f host=%.4f %@", v.track.rawValue, v.stopping ? 1 : 0, v.node.volume, level, CACurrentMediaTime(), probeLine()) }
+        if Self.probe { NSLog("[probe] scene started %@ stopping=%d vol=%.3f level=%.3f host=%.4f renderPos=%lld %@", v.track.rawValue, v.stopping ? 1 : 0, v.node.volume, level, CACurrentMediaTime(), Self.renderPos, probeLine()) }
     }
 
     func stopAll(fade: Double) {
@@ -319,6 +360,7 @@ final class SceneMusicEngine {
     }
 
     func update(dt: Double) {
+        renderOffline(dt: dt)
         for v in voices {
             v.fader.update(dt: dt)
             v.node.volume = v.fader.level * level * v.track.gain
@@ -373,7 +415,7 @@ final class SceneMusicEngine {
         // the player's own sample position at the last render, plus the time since that render (the reading is up to one IO buffer old; capped, never negative), minus the route's output latency (Bluetooth)
         var stale = 0.0
         if nt.isHostTimeValid { stale = min(max(AVAudioTime.seconds(forHostTime: mach_absolute_time()) - AVAudioTime.seconds(forHostTime: nt.hostTime), 0), 0.05) }
-        let played = Double(pt.sampleTime) / pt.sampleRate + stale - AVAudioSession.sharedInstance().outputLatency
+        let played = Double(pt.sampleTime) / pt.sampleRate + stale - (Self.offline ? 0 : AVAudioSession.sharedInstance().outputLatency)          // (PROBE: offline has no output route)
         return played
     }
 }
