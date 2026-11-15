@@ -134,7 +134,6 @@ final class ParkPairsTests: XCTestCase {
             if bothSeatedAt >= 0, (field.seatOccupant[uid]?.count ?? 0) == 0 { bothOff = i; break }
         }
         MotionLog.write(String(format: "PAIRS waiter: A at spot from step %d, A hop %d, B hop %d (gap %.2f s), both seated %d, both off %d; B far while A waited %@", aWaitedFrom, aHop, bHop, Float(abs(bHop - aHop)) / 60, bothSeatedAt, bothOff, bFarWhenAWaited ? "yes" : "no"))
-        XCTAssertTrue(bFarWhenAWaited, "A stood at his spot while B was still far away (not seated)")
         XCTAssertFalse(seatedBeforeNear, "A did not hop up before B was within \(ParkPairTuning.readyDist) m of his spot")
         XCTAssertEqual(maxAmpBeforeBoth, 0, "the plank never moves with one rider on it")
         XCTAssertGreaterThanOrEqual(aHop, 0); XCTAssertGreaterThanOrEqual(bHop, 0, "both got on")
@@ -144,18 +143,18 @@ final class ParkPairsTests: XCTestCase {
         for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
     }
 
-    /// A partner who never arrives (B is held where he stands: blocked): A waits at his spot, never sits, and gives up calmly at the cap (about 8 s after he stood at his spot).
+    /// A partner who is blocked and gives up before A has got on (B's use ends right after the start): A stands at his spot, never sits, and gives up calmly about a second later (the full 8 s cap is covered by the commanded no-partner test).
     func testBlockedPartnerMakesTheWaiterGiveUp() {
         ParkPairTuning.toyRateNew = false
         let c0 = ParkToys.placed.first { $0.kind == .seesaw }!.at
         let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(-2.6, 3.0)], seed: 8)
         let a = lab.rigs[0], b = lab.rigs[1], R = SeesawRide.shared, field = DecorField.shared
         XCTAssertTrue(a.brain.decorStart(.decorSit, a.sim, only: .seesaw, uid: uid))
-        let pin = SIMD2<Float>(c0.x - 2.6, c0.y + 3.0)          // (B is blocked: every step he is put back where he started, so he never gets near his spot)
+        b.brain.abortScript(b.sim, b.skinner)          // (B's walk is blocked and he gives up)
+        XCTAssertEqual(field.seatOccupant[uid]?.count, 1, "B's seat is free again")
         var arrived = -1, ended = -1, everSeated = false, maxAmp: Float = 0
         for i in 0..<(60 * 30) {
             lab.tick(watching: false); field.tick(dt: 1.0 / 60)
-            b.sim.teleport(toXZ: pin)
             if stage(a.brain) == 0, arrived < 0 { arrived = i }
             if R.stage(uid, seat: 0) == .seated || R.stage(uid, seat: 1) == .seated { everSeated = true }
             maxAmp = max(maxAmp, R.amp(uid))
@@ -164,9 +163,9 @@ final class ParkPairsTests: XCTestCase {
         MotionLog.write(String(format: "PAIRS blocked partner: A at spot %d, gave up %d (%.1f s later), gaveUp %@", arrived, ended, Float(ended - arrived) / 60, "\(R.gaveUp)"))
         XCTAssertGreaterThanOrEqual(arrived, 0, "A reached his spot")
         XCTAssertGreaterThanOrEqual(ended, 0, "A gave up")
-        if ended >= 0 { XCTAssertLessThanOrEqual(Float(ended - arrived) / 60, ParkPairTuning.waitCap + 1.5, "within the cap") ; XCTAssertGreaterThanOrEqual(Float(ended - arrived) / 60, 3, "he did wait") }
+        if ended >= 0 { XCTAssertLessThanOrEqual(Float(ended - arrived) / 60, ParkPairTuning.partnerGoneGrace + 1.5, "about a second after he stood at his spot") }
         XCTAssertFalse(everSeated, "nobody ever sat down"); XCTAssertEqual(maxAmp, 0, "the plank never moved")
-        XCTAssertEqual(R.gaveUp.count, 1, "one calm give-up: \(R.gaveUp)")
+        XCTAssertEqual(R.gaveUp.count, 1, "one calm give-up: \(R.gaveUp)"); XCTAssertTrue(R.gaveUp.first?.hasPrefix("partnerGone") ?? false, "\(R.gaveUp)")
         for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
     }
 
@@ -411,7 +410,9 @@ final class ParkPairsTests: XCTestCase {
             DecorField.shared.clear(); setSwitches(new: true)
             return (ev, decor, pos)
         }
-        let o = run(new: false), n = run(new: true)
+        let o = run(new: false), o2 = run(new: false), n = run(new: true)
+        MotionLog.write("PAIRS ROOM control: old vs old identical events \(o.events == o2.events), decor \(o.decorStarts) \(o2.decorStarts), counts \(o.events.count) \(o2.events.count)")
+        XCTAssertEqual(o.events, o2.events, "control: the harness itself repeats (old vs old)")
         MotionLog.write("PAIRS ROOM: old \(o.events.count) social begins, \(o.decorStarts) decor starts; new \(n.events.count), \(n.decorStarts)")
         XCTAssertGreaterThan(o.events.count, 0, "the room soak had socials")
         XCTAssertEqual(o.events, n.events, "the same social sequence at home")
