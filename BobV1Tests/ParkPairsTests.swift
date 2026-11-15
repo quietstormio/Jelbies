@@ -22,8 +22,10 @@ final class ParkPairsTests: XCTestCase {
         ParkPairTuning.pairSeesaw = true; ParkPairTuning.toyRateNew = true; ParkPairTuning.socialNew = true
         ParkPairTuning.partnerAgree = 1          // (the partner is certain in these tests; the soak uses the stock 0.85)
         ParkPairTuning.stats = .init()
+        BlobBrain.pickBudgetSeconds = .infinity
     }
     override func tearDown() {
+        BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds
         DecorField.shared.clear(); ToyTuning.settle = 5; HopscotchTuning.joinChance = 0.35
         HopscotchLine.shared.prune(keeping: [])
         SeesawRide.shared.reset()
