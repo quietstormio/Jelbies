@@ -669,7 +669,7 @@ struct GameScreen: View {
                     await sleep(2)
                 }
             }
-            await probeStart(nil)
+            await probeStart(6)
             // PROBE: -ShowRepeat n plays n more shows in this session, seeds 2, 3, 5, ... (songs 2, 3, 4, 1, ...)
             let seeds: [UInt64] = [2, 3, 5, 6, 7, 9, 10]
             for i in 0..<min(d.integer(forKey: "ShowRepeat"), seeds.count) {
