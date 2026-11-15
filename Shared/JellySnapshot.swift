@@ -10,7 +10,7 @@
 //  Snapshot format (version 1):
 //    { "version": 1, "savedAt": <seconds since 1970>, "jellies": [ { "id": 0, "name": "Bob", "color": "blue",
 //        "levels": [hunger, thirst, attention] (0...1), "dirt": 0...1, "sparkle": 0...1, "mood": "happy|okay|grumpy",
-//        "look": "<portrait look key>" } ] }       (1...3 Jellies; ids 0 / 1 / 2 = Bob / Pip / Moss)
+//        "look": "<portrait look key>", "asleep": true|false (optional: missing = awake) } ] }       (1...3 Jellies; ids 0 / 1 / 2 = Bob / Pip / Moss)
 //
 
 import Foundation
@@ -43,8 +43,12 @@ nonisolated struct JellyRecord: Codable, Equatable, Identifiable, Sendable {
     var look: String = ""
     /// His feature (JellyFeature raw value: "spines", "daisy", "wings"; "" / "none" = plain). Optional in the file: old snapshots have none.
     var feature: String = ""
+    /// Asleep (napping, tucked in or on the way to bed) when this snapshot was written: the away rates for food and water are then the slow asleep ones
+    /// (NeedsTuning.asleepAwayHours), exactly as the game applies them on return. Optional in the file: old snapshots mean awake.
+    var asleep: Bool = false
 
-    init(id: Int, name: String, color: String, levels: [Float], dirt: Float, sparkle: Float, mood: String, look: String = "", feature: String = "") {
+    init(id: Int, name: String, color: String, levels: [Float], dirt: Float, sparkle: Float, mood: String, look: String = "", feature: String = "", asleep: Bool = false) {
+        self.asleep = asleep
         self.id = id; self.name = name; self.color = color; self.levels = levels; self.dirt = dirt; self.sparkle = sparkle; self.mood = mood; self.look = look
         self.feature = feature
     }
@@ -62,6 +66,7 @@ nonisolated struct JellyRecord: Codable, Equatable, Identifiable, Sendable {
         mood = try c.decodeIfPresent(String.self, forKey: .mood) ?? BlobMood.okay.rawValue
         look = try c.decodeIfPresent(String.self, forKey: .look) ?? ""
         feature = try c.decodeIfPresent(String.self, forKey: .feature) ?? ""
+        asleep = try c.decodeIfPresent(Bool.self, forKey: .asleep) ?? false
     }
 }
 
@@ -100,13 +105,15 @@ nonisolated struct JellySnapshot: Codable, Equatable, Sendable {
         return jellies.map { JellyState(record: $0, awaySeconds: away) }
     }
 
-    /// Like `project(at:)` but with the night hours (21:00-06:00) at half weight on the needs, exactly as `BlobNeeds.applyAway(endingAt:)` does
-    /// when the player comes back: the Lock Screen / StandBy entries then match what the game will show on open, hours ahead.
+    /// Like `project(at:)` but with the away rules the game applies on return (`BlobNeeds.applyAway(endingAt:asleep:)`): a record that was awake at leave counts the night
+    /// hours (21:00-06:00) at half weight on every need; an asleep record counts food and water over the whole absence at the slow asleep rates (no night half on top)
+    /// and keeps the night half on attention. Time that passes inside the app (trip clock, skipped night) never goes through here.
+    /// The Lock Screen / StandBy entries then match what the game will show on open, hours ahead.
     func projectNightAware(at date: Date, calendar: Calendar = .current) -> [JellyState] {
         let away = TimeAway.clamp(date.timeIntervalSince1970 - savedAt)
         let from = date.addingTimeInterval(-away)
         let needSeconds = AwayMath.needSeconds(from: from, to: date, calendar: calendar)
-        return jellies.map { JellyState(record: $0, awaySeconds: away, needSeconds: needSeconds) }
+        return jellies.map { JellyState(record: $0, awaySeconds: away, needSeconds: needSeconds) }          // (an asleep record: whole-absence seconds for food / water, see init)
     }
 }
 
@@ -134,7 +141,8 @@ nonisolated struct JellyState: Identifiable, Equatable, Sendable {
     init(record r: JellyRecord, awaySeconds: TimeInterval, needSeconds: TimeInterval? = nil) {
         id = r.id; name = r.name; color = r.color
         let away = TimeAway.clamp(awaySeconds)
-        let lv = AwayMath.needLevels(r.levels, seconds: needSeconds ?? away)
+        // asleep: food and water count the whole absence at the asleep rates; attention keeps the night-weighted seconds (AwayMath.needLevels(from:to:))
+        let lv = AwayMath.needLevels(r.levels, seconds: r.asleep ? away : (needSeconds ?? away), attentionSeconds: needSeconds ?? away, asleep: r.asleep)
         let c = AwayMath.coat(dirt: r.dirt, sparkle: r.sparkle, awaySeconds: away)
         levels = lv; dirt = c.dirt; sparkle = c.sparkle
         mood = AwayMath.mood(of: lv)
