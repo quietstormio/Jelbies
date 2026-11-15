@@ -638,6 +638,12 @@ final class BlobBrain {
 
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
+        if Self.springLog, armActive || !skinner.overrideVertices.isEmpty {
+            springLogN += 1
+            if springLogN % 3 == 0 {
+                NSLog("%@", String(format: "[springarm] TICK t=%.3f script=%@ act=%d armT=%.2f ovr=%d wb=%.0f gait=%@", CFAbsoluteTimeGetCurrent().truncatingRemainder(dividingBy: 1000), String(String(describing: script).prefix(14)), armActive ? 1 : 0, armT, skinner.overrideVertices.count, skinner.waveBlend[0].x, String(describing: gait.phase)))
+            }
+        }
         runDt = dt; simRef = sim
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)

@@ -20,7 +20,7 @@ final class SpringArmUITests: XCTestCase {
         if let f = env["SPRING_FLAG"], !f.isEmpty { app.launchArguments += f.split(separator: " ").map(String.init) }
         app.launch()
         let skip = app.buttons["Skip"]
-        if skip.waitForExistence(timeout: 20) { skip.tap() }
+        if skip.waitForExistence(timeout: 2) { skip.tap() }
         let next = app.buttons["Next Jelmiko"], prev = app.buttons["Previous Jelmiko"]
         XCTAssertTrue(next.waitForExistence(timeout: 60))
         var marks = ""
