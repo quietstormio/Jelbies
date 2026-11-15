@@ -27,7 +27,34 @@ final class JellyFinalTests: XCTestCase {
         XCTAssertEqual(JellyLook.params(profile: g)[6].y, 0.22); XCTAssertEqual(JellyLook.params(profile: y)[6].y, 0)
         XCTAssertGreaterThan(JellyLook.params(profile: y)[0].y, 0.001)          // yellow: see-through level 2
         XCTAssertEqual(JellyLook.params(profile: o)[0].y, 0)
-        XCTAssertEqual(JellyLook.phoneTest == nil, true, "the switch is off in a commit")
+        XCTAssertEqual(JellyLook.launchLevel, 1, "the approved look is the shipped default")
+        XCTAssertEqual(JellyLook.launchAll, true)
+    }
+
+    /// The look every species gets in a launch with no arguments, with the dev switch forced off (the store build) and on (the phone test build): the same table both ways.
+    func testShippedLookEqualsTableWithAndWithoutDevSwitch() throws {
+        let suite = "JellyFinalTests.empty.\(UUID().uuidString)"
+        let empty = try XCTUnwrap(UserDefaults(suiteName: suite)); defer { empty.removePersistentDomain(forName: suite) }
+        let savedLevel = JellyLook.level, savedAll = JellyLook.all; defer { JellyLook.level = savedLevel; JellyLook.all = savedAll }
+        // species id -> (style rawValue in [0].x, level, neon soft, neon deepen, kind: 1 opaque / 2 see-through)
+        let want: [Int: (Float, Int, Float, Float, Int)] = [0: (2, 1, 0, 0, 1), 1: (1, 2, 0, 0, 2), 2: (1, 1, 0.15, 0.22, 1)]
+        for dev in [false, true] {
+            JellyLook.level = JellyLook.resolveLevel(devArgs: dev, defaults: empty)
+            JellyLook.all = JellyLook.resolveAll(devArgs: dev, defaults: empty)
+            XCTAssertEqual(JellyLook.level, 1, "dev \(dev)"); XCTAssertEqual(JellyLook.all, true, "dev \(dev)")
+            for id in 0..<JellyRoster.knownCount {
+                let f = SIMD4<Float>((JellyRoster.palette(id) ?? PaletteKey.blue.palette).flesh, 1)          // (Bob's palette is nil: the model's own)
+                let w = want[id] ?? (1, 1, 0, 0, 1)
+                let pr = JellyLook.profile(forFlesh: f, speciesID: id), v = JellyLook.params(profile: pr)
+                XCTAssertEqual([v[0].x, Float(pr.level), v[6].x, v[6].y], [w.0, Float(w.1), w.2, w.3], "species \(id) dev \(dev)")
+                XCTAssertEqual(JellyLook.kind(flesh: f, bellyMode: 0, speciesID: id), w.4, "species \(id) dev \(dev)")
+                XCTAssertEqual(JellyLook.level(forFlesh: f, speciesID: id), w.1, "species \(id) dev \(dev)")
+            }
+        }
+        // a dev argument still wins where the switch is on, and is ignored where it is off
+        empty.set(0, forKey: "JellyLook"); empty.set(0, forKey: "JellyAll")
+        XCTAssertEqual(JellyLook.resolveLevel(devArgs: true, defaults: empty), 0); XCTAssertEqual(JellyLook.resolveAll(devArgs: true, defaults: empty), false)
+        XCTAssertEqual(JellyLook.resolveLevel(devArgs: false, defaults: empty), 1); XCTAssertEqual(JellyLook.resolveAll(devArgs: false, defaults: empty), true)
     }
 
     /// The roster's species tag decides, whatever the saved colour is.
