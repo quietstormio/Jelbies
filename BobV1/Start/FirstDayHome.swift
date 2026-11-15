@@ -74,7 +74,7 @@ struct FirstDayHomeView: View {
         let age = st.readyAt.map { now.timeIntervalSince($0) } ?? -1
         return ZStack {
             Canvas { ctx, sz in FirstDayArt.room(ctx, sz, t: motion ? t : 0, feet: feet, unit: portrait ? Double(sz.width) / 400 : Double(sz.height) / 460) }
-            ShowcaseStage(roster: [character], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(m) })
+            ShowcaseStage(roster: [character], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(m) }, plantedWave: AdoptionCenter.springPlantedWave)
                 .frame(width: f, height: f)
                 .scaleEffect(jelbieScale(age), anchor: .init(x: 0.5, y: 0.73))
                 .position(x: feet.x, y: feet.y - 0.23 * f + jelbieDrop(age, f: f))

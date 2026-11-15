@@ -14,22 +14,25 @@ import simd
 
 @MainActor
 final class PlantedWaveTests: XCTestCase {
-    struct Frame: Equatable { var armT: Float; var lift: Float; var asked: Bool; var s0: Float; var s1: Float }
+    struct Frame: Equatable { var armT: Float; var lift: Float; var asked: Bool; var s0: Float; var s1: Float
+        var want: Bool; var beanG: Float; var beansOut: Bool; var nearOff: Float; var shift: SIMD3<Float> }
     struct Run { var frames: [Frame] = []; var endFrame = -1; var armSide = 0 }
 
-    func waveRun(planted: Bool) -> Run {
+    func waveRun(planted: Bool, rollScale: Float? = nil) -> Run {
         UserDefaults.standard.set(1, forKey: "BlobWaveSide")
         defer { UserDefaults.standard.removeObject(forKey: "BlobWaveSide") }
         let r = WaveInterruptTests.rig(.none)
         let b = r.brain
         b.plantedWave = planted
+        if let rollScale { b.plantedWaveRollScale = rollScale }
         b.request(.wave)
         var run = Run(), started = false
         for n in 0..<(60 * 8) {
             r.tick(); r.render()
             if b.armActive { started = true; run.armSide = b.armSide }
             if started, b.armActive || WaveInterruptTests.isWave(b) {
-                run.frames.append(Frame(armT: b.armT, lift: b.waveLiftApplied, asked: b.waveAskedBeans, s0: b.armSkinS[0], s1: b.armSkinS[1]))
+                run.frames.append(Frame(armT: b.armT, lift: b.waveLiftApplied, asked: b.waveAskedBeans, s0: b.armSkinS[0], s1: b.armSkinS[1],
+                                       want: b.wantLast, beanG: b.beanG, beansOut: r.skinner.beansActive, nearOff: b.waveNearOff, shift: b.waveNearShift))
             }
             if started, !b.armActive, !WaveInterruptTests.isWave(b) { run.endFrame = n; break }
         }
@@ -49,11 +52,27 @@ final class PlantedWaveTests: XCTestCase {
         XCTAssertEqual(planted.frames.map(\.s0), old.frames.map(\.s0))
         XCTAssertEqual(planted.frames.map(\.s1), old.frames.map(\.s1))
         XCTAssertEqual(planted.endFrame, old.endFrame)
+        // what the player sees: on a standing body the real bean request and the drawn beans are off on EVERY frame of a planted wave
+        for (i, f) in planted.frames.enumerated() {
+            XCTAssertFalse(f.want, "frame \(i) armT \(f.armT): a foot piece was requested (offFull \(f.nearOff), shift \(f.shift))")
+            XCTAssertEqual(f.beanG, 0, "frame \(i): beans growing")
+            XCTAssertFalse(f.beansOut, "frame \(i): beans drawn")
+        }
+        // the lean plateau (wave time 0.9 ... 1.25 s): the near foot's distance from the body's own foot, in u and cm (1 u = 100 cm, the repo's convention)
+        let plateau = planted.frames.filter { $0.armT >= 0.9 && $0.armT <= 1.25 }
+        let offMax = plateau.map(\.nearOff).max() ?? -1
+        let vMax = plateau.map { abs($0.shift.y) }.max() ?? -1
+        let sMax = plateau.map { simd_length(SIMD2($0.shift.x, $0.shift.z)) }.max() ?? -1
+        print(String(format: "PLANTEDWAVE plateau frames %d: near offFull max %.4f u (%.2f cm), foot shift vertical max %.4f u (%.2f cm), sideways max %.4f u (%.2f cm)", plateau.count, offMax, offMax * 100, vMax, vMax * 100, sMax, sMax * 100))
+        XCTAssertGreaterThan(plateau.count, 10)
+        XCTAssertLessThanOrEqual(vMax * 100, 1.5, "near sole stretched vertically from the body's own foot")
+        XCTAssertLessThanOrEqual(sMax * 100, 1.5, "near sole stretched sideways from the body's own foot")
         XCTAssertGreaterThan(old.frames.map(\.lift).max() ?? 0, 0.95, "sanity: the unplanted wave does lift")
         XCTAssertTrue(old.frames.contains { $0.asked }, "sanity: the unplanted wave asks for the foot piece")
     }
 
     // 2
+
     func testUnplantedWaveIsTodaysWaveFrameForFrame() {
         let a = waveRun(planted: false), b = waveRun(planted: false)
         XCTAssertEqual(a.frames, b.frames, "seeded runs agree on every number")

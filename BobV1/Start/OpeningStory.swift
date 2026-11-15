@@ -207,7 +207,7 @@ struct OpeningStoryView: View {
             ForEach(0..<4, id: \.self) { k in
                 if st.mounted[k] {
                     let st = pose(k, now: now, pr: pr, bob: bob, f: f)
-                    ShowcaseStage(roster: [OpeningScript.characters[k]], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(k, m) }, silent: true)
+                    ShowcaseStage(roster: [OpeningScript.characters[k]], focusFirst: true, fullScreen: false, cutout: true, onReady: { m in ready(k, m) }, silent: true, plantedWave: AdoptionCenter.springPlantedWave)
                         .frame(width: f, height: f)
                         .scaleEffect(st.scale, anchor: .init(x: 0.5, y: 0.73))
                         .position(x: st.feet.x, y: st.feet.y - 0.23 * f)
