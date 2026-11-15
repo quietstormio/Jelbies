@@ -320,8 +320,14 @@ final class DiningGroup {
     private func frontCount() -> Int {
         brains.indices.filter { !(released.indices.contains($0) && released[$0]) && !(started.indices.contains($0) && started[$0]) && floor($0).y > stands[placeOf[$0]].y + GameCare.popTolerance }.count
     }
+    private var tracePosTick = -1
     private func traceTick() {
         #if targetEnvironment(simulator)
+        // (simulator only, 10 Hz) where every diner of the sitting stands: the meal-lineup captures measure path / reversals / overlap from these
+        if Int(age * 10) != tracePosTick {
+            tracePosTick = Int(age * 10)
+            MealTrace.log("pos " + brains.indices.map { i in let f = floor(i); return "\(memberIDs[i])@p\(placeOf[i])=(\(String(format: "%.3f,%.3f", f.x, f.y)))\(started[i] ? "s" : "")\(released.indices.contains(i) && released[i] ? "r" : "")" }.joined(separator: " ") + " tray=\(trayOut ? 1 : 0)")
+        }
         let box = dining.drawnBox(scale: max(dining.scale, 0.001))
         for i in brains.indices where !(released.indices.contains(i) && released[i]) {
             let id = memberIDs[i], f = floor(i)
@@ -372,7 +378,7 @@ final class DiningGroup {
                 idle[i] += dt
                 if idle[i] > 0.5 {
                     idle[i] = 0
-                    if walkRetries[i] < 3 { walkRetries[i] += 1; brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { MealTrace.log("giveup reason=walkRetries diner=\(memberIDs[i])"); end(); gaveUp = true; return }
+                    if walkRetries[i] < 3 { walkRetries[i] += 1; MealTrace.log("walk re-send diner=\(memberIDs[i]) retry=\(walkRetries[i])"); brains[i].callToMeal(.goTo(approachPoint(blob: i))) } else { MealTrace.log("giveup reason=walkRetries diner=\(memberIDs[i])"); end(); gaveUp = true; return }
                 }
             }
         case .serving:
