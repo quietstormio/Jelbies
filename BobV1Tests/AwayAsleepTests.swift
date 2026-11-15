@@ -182,4 +182,22 @@ final class AwayAsleepTests: XCTestCase {
         XCTAssertTrue(WidgetBridge.record(i, look: "").asleep)
         XCTAssertNotEqual(WidgetBridge.stateKey([i]), WidgetBridge.stateKey([WidgetBridge.Input(id: 0, name: "Bob", color: "blue", levels: [1, 1, 1], dirt: 0, sparkle: 0)]), "a nap starting republishes")
     }
+
+    // MARK: time that passes INSIDE the app keeps the old numbers
+
+    func testTripClockAndSkippedNightKeepTheOldInAppRates() {
+        XCTAssertEqual(NeedsTuning.inAppAwayHours, [10, 8, 6], "the pre-change away curve, as on d7e30c42")
+        // the skipped night (6 h): hunger 1 - 6/10, thirst 1 - 6/8, attention 1 - 6/6 -> the floor
+        let n = BlobNeeds(persists: false); Self.keep.append(n)
+        for k in NeedKind.allCases { n.set(k, 1) }
+        n.applyInAppTime(seconds: GameClockTuning.skippedNightAway)
+        eq(lv(n), [0.4, 0.25, 0.2], "skipped night")
+        // the trip clock (2700 s) through GameCare.tripReturned: hunger 1 - 0.75/10, thirst 1 - 0.75/8, attention 1 - 0.75/6
+        let care = GameCare(jellyCount: 1, persistent: false)
+        for k in NeedKind.allCases { care.jellies[0].needs.set(k, 1) }
+        care.tripReturned([0])
+        eq(lv(care.jellies[0].needs), [0.925, 0.90625, 0.875], "trip clock")
+        // and it never depends on the leave rates
+        XCTAssertNotEqual(NeedsTuning.inAppAwayHours, NeedsTuning.awakeAwayHours)
+    }
 }

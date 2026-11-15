@@ -59,8 +59,11 @@ nonisolated enum NeedsTuning {
     static let awakeAwayHours: [Double] = [20, 16, 6]          // hunger, thirst, attention
     /// Asleep when the player left (napping or tucked in): food and water run down three times slower again; attention is unchanged so they still greet happily.
     static let asleepAwayHours: [Double] = [60, 48, 6]
-    static func awayHoursToEmpty(_ k: NeedKind, asleep: Bool = false) -> Double {
-        (asleep ? asleepAwayHours : awakeAwayHours)[k.rawValue]
+    /// The rates for time that passes INSIDE the app (the trip clock, the skipped night): the old away curve, unchanged. Only a player leaving the game uses the
+    /// awake / asleep numbers above. Named apart so the two cannot drift together.
+    static let inAppAwayHours: [Double] = [10, 8, 6]
+    static func awayHoursToEmpty(_ k: NeedKind, asleep: Bool = false, inApp: Bool = false) -> Double {
+        (inApp ? inAppAwayHours : asleep ? asleepAwayHours : awakeAwayHours)[k.rawValue]
     }
     /// Named tiers (Nintendogs style): at or above `fullFrom` Full, at or above `normalFrom` Normal, at or above `famishedBelow` Hungry, else Famished.
     static let fullFrom: Float = 0.85
@@ -128,12 +131,12 @@ nonisolated enum AwayMath {
     /// Each need falls linearly on the away curve, stops at the floor, and a need already below the floor is left alone.
     /// `asleep`: the creature was asleep when the player left (hunger / thirst use the asleep rates). `attentionSeconds`: the seconds the attention
     /// need feels when they differ from `seconds` (an asleep creature's food and water count the whole absence; its attention keeps the night rule).
-    static func needLevels(_ v: [Float], seconds: TimeInterval, attentionSeconds: TimeInterval? = nil, asleep: Bool = false) -> [Float] {
+    static func needLevels(_ v: [Float], seconds: TimeInterval, attentionSeconds: TimeInterval? = nil, asleep: Bool = false, inApp: Bool = false) -> [Float] {
         var v = v
         for k in NeedKind.allCases where k.rawValue < v.count {
             let i = k.rawValue
             let s = k == .attention ? (attentionSeconds ?? seconds) : seconds
-            let drop = Float(TimeAway.clamp(s) / (NeedsTuning.awayHoursToEmpty(k, asleep: asleep) * 3600))
+            let drop = Float(TimeAway.clamp(s) / (NeedsTuning.awayHoursToEmpty(k, asleep: asleep, inApp: inApp) * 3600))
             v[i] = max(min(max(v[i], 0), 1) - drop, min(v[i], NeedsTuning.awayFloor))
             v[i] = min(max(v[i], 0), 1)
         }

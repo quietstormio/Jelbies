@@ -10,7 +10,7 @@
 //  Snapshot format (version 1):
 //    { "version": 1, "savedAt": <seconds since 1970>, "jellies": [ { "id": 0, "name": "Bob", "color": "blue",
 //        "levels": [hunger, thirst, attention] (0...1), "dirt": 0...1, "sparkle": 0...1, "mood": "happy|okay|grumpy",
-//        "look": "<portrait look key>" } ] }       (1...3 Jellies; ids 0 / 1 / 2 = Bob / Pip / Moss)
+//        "look": "<portrait look key>", "asleep": true|false (optional: missing = awake) } ] }       (1...3 Jellies; ids 0 / 1 / 2 = Bob / Pip / Moss)
 //
 
 import Foundation
@@ -105,8 +105,10 @@ nonisolated struct JellySnapshot: Codable, Equatable, Sendable {
         return jellies.map { JellyState(record: $0, awaySeconds: away) }
     }
 
-    /// Like `project(at:)` but with the night hours (21:00-06:00) at half weight on the needs, exactly as `BlobNeeds.applyAway(endingAt:)` does
-    /// when the player comes back: the Lock Screen / StandBy entries then match what the game will show on open, hours ahead.
+    /// Like `project(at:)` but with the away rules the game applies on return (`BlobNeeds.applyAway(endingAt:asleep:)`): a record that was awake at leave counts the night
+    /// hours (21:00-06:00) at half weight on every need; an asleep record counts food and water over the whole absence at the slow asleep rates (no night half on top)
+    /// and keeps the night half on attention. Time that passes inside the app (trip clock, skipped night) never goes through here.
+    /// The Lock Screen / StandBy entries then match what the game will show on open, hours ahead.
     func projectNightAware(at date: Date, calendar: Calendar = .current) -> [JellyState] {
         let away = TimeAway.clamp(date.timeIntervalSince1970 - savedAt)
         let from = date.addingTimeInterval(-away)

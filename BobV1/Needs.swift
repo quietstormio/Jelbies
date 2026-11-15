@@ -199,6 +199,15 @@ final class BlobNeeds {
         publish(force: true)
     }
 
+    /// Time that passes inside the app (trip clock, skipped night): the old in-app away rates (`NeedsTuning.inAppAwayHours`), the same floor, no night half, no asleep rates.
+    func applyInAppTime(seconds: TimeInterval) {
+        let away = TimeAway.clamp(seconds)
+        lastAway = away
+        raw = AwayMath.needLevels(raw, seconds: away, inApp: true)
+        lastWantedSet = wantedSet
+        publish(force: true)
+    }
+
     static func awayLevels(_ v: [Float], seconds: TimeInterval) -> [Float] { AwayMath.needLevels(v, seconds: seconds) }
 
     /// Reads the stored levels and applies the time since the stored stamp through `applyAway`; seeds a first launch.
