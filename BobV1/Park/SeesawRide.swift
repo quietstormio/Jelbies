@@ -394,6 +394,10 @@ final class SeesawRide {
                         want(1, SeesawTuning.rideRamp)
                     }
                     if r.mode == .pairRide, r.swingsDone >= r.swingsTarget { go(.ending); want(0, SeesawTuning.endRamp) }
+                } else if seated.count == 1 && comers.isEmpty && leavers.isEmpty && ParkPairTuning.pairSeesaw {
+                    // pair-only (ParkPairTuning.pairSeesaw): nobody rocks alone. A lone seated rider (his partner left, or never came) has the plank level and gets off.
+                    r.endPending = false
+                    if r.mode != .ending { go(.ending); want(0, SeesawTuning.endRamp) }
                 } else if seated.count == 1 && comers.isEmpty && leavers.isEmpty {
                     if r.mode != .solo {
                         if r.endPending { r.endPending = false; go(.ending); want(0, SeesawTuning.endRamp) } else { go(.solo); r.soloHold = r.rnd(SeesawTuning.soloHold); r.swingsDone = 0 }
@@ -584,6 +588,8 @@ extension BlobBrain {
                 if R.wait(uid, seat, "range", dt: dt, info: String(format: "root=(%.2f,%.2f) seat=(%.2f,%.2f)", px, pz, g.xz.x, g.xz.y)) > 2.5 { giveUp("range") }
                 return
             }
+            // the pair-only seesaw (Park/ParkPairTuning.swift, Melon/BlobBrain+ParkPairs.swift): he stands here, not seated, until the creature on the other seat is at his spot; no partner: he gives up
+            guard seesawPartnerGate(sim, f, dt: dt, giveUp: giveUp) else { return }
             _ = R.wait(uid, seat, "go", dt: dt, info: String(format: "root=%.3f m from the seat, centre=%.3f m", simd_distance(position, g.xz), simd_distance(seesawCentreXZ(sim), g.xz)))
             let waited = idleState.phaseT
             if seesawHop(sim, to: g.xz, ground: g.y, apex: Self.bagApexUp, facing: seesawFacing(f)) {

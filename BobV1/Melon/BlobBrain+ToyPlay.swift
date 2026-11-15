@@ -36,6 +36,8 @@ struct ToyBrain {
     var lastUID = -1
     /// Variety clock of his last direct toy start.
     var lastDirect: Float = -999
+    /// Park only (ParkPairTuning): the toy clock before which he does not pick this big toy again by himself (the seesaw, the hopscotch court).
+    var parkCool: [DecorKind: Float] = [:]
     var burstHandled = 0
     var chaseSpot: SIMD2<Float>?
     var chaseUntil: Float = 0
@@ -160,7 +162,9 @@ extension BlobBrain {
         let id = foot.uid
         if f.available(foot) {
             if foot.kind.isBallLike, toyTryPass(sim) { return }
+            parkGateRejected = -1
             if decorStart(mv, sim, only: nil, uid: id) { idleState.cooldown = max(idleState.cooldown, 3); return }
+            if parkGateRejected == id { return }          // (the park's pick roll said "not now": he does not queue at it)
             toyQueue(foot, sim)          // (no way in right now - the one before him is still stepping off, a friend stands in the way: wait nearby, he tries again; the deadline ends it)
             return
         }

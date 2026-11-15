@@ -20,7 +20,7 @@ extension BlobBrain {
     /// A beanbag / cushion nobody is using.
     func freeSeat() -> DecorFoot? {
         let f = DecorField.shared
-        return f.feet.first { $0.kind.activeInteraction == .decorSit && f.occupant[$0.uid] == nil && $0.uid != f.held }
+        return f.feet.first { $0.kind.activeInteraction == .decorSit && f.occupant[$0.uid] == nil && $0.uid != f.held && !($0.kind == .seesaw && ParkPairTuning.pairSeesaw) }
     }
 
     func socialStartPass(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
@@ -39,7 +39,7 @@ extension BlobBrain {
             return true
         }
         // bagSit: A heads for the piece now (the ordinary decor sit), B follows a beat later
-        guard idleState.kind == nil, decorStart(.decorSit, sim) else { return false }
+        guard idleState.kind == nil, decorStartSeat(sim) else { return false }
         let s = newSession(.bagSit, with: o, duration: 60)
         s.uid = idleState.decorUID
         o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
@@ -123,7 +123,7 @@ extension BlobBrain {
             if scriptIsNone, idleState.kind == nil {
                 socialBook.hold = false; socialBook.faceYaw = nil
                 socialBook.hopStarted = true
-                if decorStart(.decorSit, sim) { socialBook.sheepishStarted = true; return }
+                if decorStartSeat(sim) { socialBook.sheepishStarted = true; return }
                 if let f = DecorField.shared.foot(s.uid) {
                     let c = DecorField.shared.position(f)
                     let dir: Float = position.x >= c.x ? 1 : -1
