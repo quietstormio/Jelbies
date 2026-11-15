@@ -10,7 +10,9 @@
 # Deliberately EXCLUDED (red or not proven today):
 #   SocialFeetTests       red today (known failures, pre-existing).
 #   GroupEmoteFeetTests   red today (known failures, pre-existing).
-#   OnePieceInvariantTests never seen to finish (runs cut off); Phase 2 of the install-gate round decides.
+#   OnePieceInvariantTests 6 tests, ~84 min in Release on the simulator (far over the 10 min bar); 1 failure on the candidate (pad moved 0.10008 against 0.1). Run it by hand before a big feet change.
+#   EmoteFeetTests        27 tests, testEveryEmoteKeepsItsFeet alone ran > 100 min (hit a 2 h cap): far over 10 min; run by hand.
+#   FeetAttachTests       ~6.5 min but red on the candidate (zoomies: a foot lifted too high, 0.1277 vs 0.12): see the install-gate report for old-or-new.
 #   WearBandTests         red today.
 #   JellyFinalTests.testTable fails because a switch is on for phone test builds (JellyLook/JellyFinal are compared by hand vs the base commit instead).
 udid="${1:?usage: pre-install-gate.sh <simulator udid> <derived data path> [device BobV1.app]}"
@@ -18,7 +20,7 @@ dd="${2:?derived data path}"; devapp="${3:-}"
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"; cd "$root" || exit 2
 logs="${GATE_LOG_DIR:-$dd/gate-logs}"; mkdir -p "$logs"
 cap="${GATE_SUITE_CAP:-1500}"
-suites="${GATE_SUITES:-ArmCapTests ArmBlendTests RaceArmsTests RaceFeetTests RaceWallTests WristbandFitTests WaveInterruptTests WearPrepTimeTests}"
+suites="${GATE_SUITES:-ArmCapTests ArmBlendTests RaceArmsTests RaceFeetTests RaceWallTests WristbandFitTests WaveInterruptTests WearPrepTimeTests FeatureCaptureTests/testBeanCollapsedForEveryOtherSpecies FeatureCaptureTests/testTeddyEarsAlwaysOnWithoutFeatureTickAndInTheWash FeatureCaptureTests/testBeanTuckedUnderBeanieIsBobsHeadExactly FeatureCaptureTests/testBeanNeverDetachesInMotion}"   # the last four = TeddyBeanTests (an extension of FeatureCaptureTests), ~30 s
 [ -z "${GATE_SUITES:-}" ] && [ -f BobV1Tests/RacePullArmsTests.swift ] && suites="$suites RacePullArmsTests"
 export TEST_RUNNER_WEARPREP_CEILING=1
 fail=0; rows=()
@@ -57,12 +59,13 @@ if [ "${GATE_SKIP_BUILD:-0}" != 1 ]; then
 fi
 
 for s in $suites; do
+  sl="${s//\//_}"   # log file name (a suite item may be Class/testMethod)
   wait_quiet || { rows+=("$s|0|-|NOT RUN (gate expired)"); fail=1; continue; }
   echo "gate: $s ..."
-  run_capped "$cap" "$logs/$s.log" "${xb[@]}" test-without-building -parallel-testing-enabled NO "-only-testing:BobV1Tests/$s"; rc=$?
-  line=$(grep -E "Executed [0-9]+ tests?, with .*[0-9]+ failures?" "$logs/$s.log" | tail -1)
+  run_capped "$cap" "$logs/$sl.log" "${xb[@]}" test-without-building -parallel-testing-enabled NO "-only-testing:BobV1Tests/$s"; rc=$?
+  line=$(grep -E "Executed [0-9]+ tests?, with .*[0-9]+ failures?" "$logs/$sl.log" | tail -1)
   run=$(echo "$line" | sed -E 's/.*Executed ([0-9]+) tests?.*/\1/'); f=$(echo "$line" | sed -E 's/.* ([0-9]+) failures?.*/\1/'); sk=$(echo "$line" | sed -nE 's/.* ([0-9]+) tests? skipped.*/\1/p')
-  if [ -z "$line" ] || [ "$run" = 0 ]; then rows+=("$s|0|-|NOT RUN (rc $rc)"); fail=1
+  if [ -z "$line" ] || [ "$run" = 0 ] || { [ -n "$sk" ] && [ "$sk" -ge "$run" ]; }; then rows+=("$s|0|-|NOT RUN (rc $rc)"); fail=1
   elif [ "$f" != 0 ] || [ "$rc" != 0 ]; then rows+=("$s|$run|$f|FAIL"); fail=1
   else rows+=("$s|$run|$f|ok${sk:+ ($sk skipped)}"); fi
 done
