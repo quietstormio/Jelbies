@@ -15,7 +15,7 @@ final class WearBandTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     typealias Outfit = [WearSlot: WearLook]
 
-    override func setUp() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
+    override func setUp() { WearBody.useBisection = ProcessInfo.processInfo.environment["BAND_RADIAL_OLD"] == "1"; WearMeshes.clearCache(); GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     struct Loop { var look: WearLook; var part: String; var verts: [Int]; var y0: [Float]; var edges: [(Int, Int, Float)]; var coverage: Float
