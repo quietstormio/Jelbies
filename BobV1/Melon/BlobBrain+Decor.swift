@@ -391,7 +391,7 @@ extension BlobBrain {
             if f.kind == .seesaw, ParkPairTuning.pairSeesaw, outingPlay || commanded, !seesawPartnerStart, (field.seatOccupant[f.uid]?.isEmpty ?? true) {
                 field.take(f.uid, seat: seat, by: steerID)
                 if seesawRecruit(f, sim) == nil {
-                    if commanded { commandedAlone = true } else { field.leave(f.uid, by: steerID); decorIgnore = exiting; continue }
+                    if commanded { commandedAlone = true } else { ParkPairTuning.stats.noPartner += 1; field.leave(f.uid, by: steerID); decorIgnore = exiting; continue }
                 }
             }
             seesawRecruiting = commandedAlone

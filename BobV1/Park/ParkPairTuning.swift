@@ -46,4 +46,8 @@ nonisolated enum ParkPairTuning {
     /// (the player called it too frequent in November) by `boopMul`.
     static let calmKindMul: Float = 1.35, boopMul: Float = 0.8
     static let calmKinds: Set<SocialKind> = [.sitTogether, .backToBack, .swayHug, .highFive, .cuddleLean, .line, .follow, .spinHug, .whisperGiggle]
+
+    /// Counters for the soak test (why a pick did not go ahead): the roll said no, the cooldown, nobody free to ride with.
+    struct Stats { var rollNo = 0, coolNo = 0, noPartner = 0, recruited = 0 }
+    nonisolated(unsafe) static var stats = Stats()
 }

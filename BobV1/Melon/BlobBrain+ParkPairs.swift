@@ -23,9 +23,10 @@ extension BlobBrain {
             chance = ParkPairTuning.hopscotchPickChance
         default: return true
         }
-        if let until = toy.parkCool[f.kind], until > DecorField.shared.toys.clock { parkGateRejected = f.uid; return false }
+        if let until = toy.parkCool[f.kind], until > DecorField.shared.toys.clock { parkGateRejected = f.uid; ParkPairTuning.stats.coolNo += 1; return false }
         if rand() < chance { return true }
         parkGateRejected = f.uid
+        ParkPairTuning.stats.rollNo += 1
         return false
     }
 
@@ -71,6 +72,7 @@ extension BlobBrain {
             if ok {
                 o.toy.lastDirect = o.variety.now
                 o.idleState.cooldown = max(o.idleState.cooldown, 3)
+                ParkPairTuning.stats.recruited += 1
                 return o
             }
         }

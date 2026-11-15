@@ -22,7 +22,7 @@ final class SeesawRideTests: XCTestCase {
     }
     override func tearDown() {
         DecorField.shared.clear(); ToyTuning.settle = 5
-        SeesawRide.shared.reset()
+        SeesawRide.shared.reset(); ParkPairTuning.pairSeesaw = true
         GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0)
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
     }
@@ -103,6 +103,7 @@ final class SeesawRideTests: XCTestCase {
     /// Two riders seated by hand: beat, ride 5...8 swings, the end, the beat, the leaving order; the angle and its rate stay continuous at every step through the ramps; then a
     /// call-away from full tilt eases level within 0.6 s.
     func testControllerSequenceAndContinuity() {
+        ParkPairTuning.pairSeesaw = false; defer { ParkPairTuning.pairSeesaw = true }          // (park-pairs-r1: this test is about the old solo ride, kept behind the switch)
         let f = DecorField.shared, R = SeesawRide.shared
         f.set([PlacedDecor(uid: uid, kind: .seesaw, x: 0, z: 0, turns: nil)])
         f.take(uid, seat: 0, by: 1)
@@ -786,6 +787,7 @@ final class SeesawRideTests: XCTestCase {
 
     /// B (the GREEN species, Moss's body) takes the free LEFT seat while A's solo ride is in `mode` (.ending / .endBeat / .leaving): B must get on, within 4 s of standing at his spot, and never give up.
     func testFriendArrivesAsTheRideEnds() {
+        ParkPairTuning.pairSeesaw = false; defer { ParkPairTuning.pairSeesaw = true }          // (park-pairs-r1: this test is about the old solo ride, kept behind the switch)
         SeesawTuning.invitations = false          // (this scenario sends B by hand: an invited free Jelbie would take the seat first)
         defer { SeesawTuning.invitations = true }
         for seed: UInt64 in [3, 8] {
@@ -841,6 +843,7 @@ final class SeesawRideTests: XCTestCase {
 
     /// The six bodies on both seats, walking up from two sides: the hop starts within 1.5 s of arriving at the spot, from a spot where the guard and the centre have room.
     func testEverySpeciesBoardsBothSeats() {
+        ParkPairTuning.pairSeesaw = false; defer { ParkPairTuning.pairSeesaw = true }          // (park-pairs-r1: this test is about the old solo ride, kept behind the switch)
         var worstWait: Float = 0, worstCentre: Float = 0, gaveUp = 0, n = 0, sumWait: Float = 0
         for species in 0..<6 {
             for seat in 0..<2 {
@@ -952,6 +955,7 @@ final class SeesawRideTests: XCTestCase {
 
     /// Run on its own: TEST_RUNNER_SEESAW_SOAK=1 (about 12 sim-minutes for 3 and for 5 Jelbies, before and after the invitation); =after3 / =after5: only the run with the invitation for that many.
     func testSeesawShareSoak() throws {
+        ParkPairTuning.pairSeesaw = false; ParkPairTuning.toyRateNew = false; defer { ParkPairTuning.pairSeesaw = true; ParkPairTuning.toyRateNew = true }          // (park-pairs-r1: the old soak measures the old invitation; old switches)
         guard let mode = ProcessInfo.processInfo.environment["SEESAW_SOAK"] else { throw XCTSkip("set TEST_RUNNER_SEESAW_SOAK=1 to run the soak") }
         let only = mode.hasPrefix("after") ? Int(mode.dropFirst(5)) : nil
         for n in [3, 5] where only == nil || only == n {
@@ -1009,7 +1013,10 @@ final class SeesawRideTests: XCTestCase {
 
     func testBobAndPip() { for seed: UInt64 in [3, 8] { check(runSequence(chars: [0, 1], seed: seed, callAway: false, label: "Bob+Pip s\(seed)"), pair: true, callAway: false) } }
     func testTeddyAndLavender() { for seed: UInt64 in [3, 8] { check(runSequence(chars: [4, 3], seed: seed, callAway: false, label: "Teddy+Lavender s\(seed)"), pair: true, callAway: false) } }
-    func testAlone() { for seed: UInt64 in [3, 8] { check(runSequence(chars: [2], seed: seed, callAway: false, label: "Moss alone s\(seed)"), pair: false, callAway: false) } }
+    func testAlone() {
+        ParkPairTuning.pairSeesaw = false; defer { ParkPairTuning.pairSeesaw = true }          // (park-pairs-r1: the old solo ride, behind the switch; the pair-only rule is in ParkPairsTests)
+        for seed: UInt64 in [3, 8] { check(runSequence(chars: [2], seed: seed, callAway: false, label: "Moss alone s\(seed)"), pair: false, callAway: false) }
+    }
     func testCallAwayMidRide() {
         check(runSequence(chars: [0, 1], seed: 3, callAway: true, label: "Bob+Pip call-away"), pair: true, callAway: true)
         check(runSequence(chars: [4, 3], seed: 8, callAway: true, label: "Teddy+Lavender call-away"), pair: true, callAway: true)
