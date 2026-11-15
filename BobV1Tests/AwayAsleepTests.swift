@@ -48,7 +48,7 @@ final class AwayAsleepTests: XCTestCase {
         // 14:00 -> 17:00 (3 h) and 14:00 -> 22:00 is not daytime, so 8 h daytime is 08:00 -> 16:00
         eq(away([1, 1, 1], at(0, 14), at(0, 17), asleep: false), [0.85, 0.8125, 0.5], "3 h from full")
         eq(away([1, 1, 1], at(0, 8), at(0, 16), asleep: false), [0.6, 0.5, 0.2], "8 h from full (attention on the floor)")
-        eq(away([0.5, 0.5, 0.5], at(0, 14), at(0, 17), asleep: false), [0.65, 0.3125, 0.2], "3 h from 0.5 (thirst 0.5 - 3/16 = 0.3125)")
+        eq(away([0.5, 0.5, 0.5], at(0, 14), at(0, 17), asleep: false), [0.35, 0.3125, 0.2], "3 h from 0.5 (hunger 0.5 - 3/20, thirst 0.5 - 3/16)")
         eq(away([0.5, 0.5, 0.5], at(0, 8), at(0, 16), asleep: false), [0.2, 0.2, 0.2], "8 h from 0.5: hunger 0.1 and thirst 0.0 sit on the floor")
         eq(away([1, 1, 1], at(0, 12), at(0, 13), asleep: false), [0.95, 0.9375, 1 - 1.0 / 6], "1 h from full")
     }
@@ -98,6 +98,7 @@ final class AwayAsleepTests: XCTestCase {
             // foreground: leave -> return
             let d1 = suite()
             let a = make(d1, now: leave)
+            for k in NeedKind.allCases { a.set(k, 1) }
             a.leaveActive(at: leave, asleep: asleep)
             a.leaveActive(at: leave.addingTimeInterval(60), asleep: !asleep)           // inactive, then background: the first leave wins, flag included
             a.returnActive(at: back)
@@ -105,6 +106,7 @@ final class AwayAsleepTests: XCTestCase {
             // cold launch: the app was killed while away; a fresh model reads the save
             let d2 = suite()
             let b = make(d2, now: leave)
+            for k in NeedKind.allCases { b.set(k, 1) }
             b.leaveActive(at: leave, asleep: asleep)
             b.save()                                                                   // (a save while away keeps the frozen flag and the stamp)
             let c = make(d2, now: back)
@@ -114,6 +116,7 @@ final class AwayAsleepTests: XCTestCase {
         // a creature that falls asleep in the room: the periodic save carries the flag as of that save (app killed in the room)
         let d = suite(), t = at(0, 23)
         let r = make(d, now: t); r.setAsleep(true)
+        for k in NeedKind.allCases { r.set(k, 1) }
         r.step(dt: NeedsTuning.saveEvery + 1)
         let k = make(d, now: at(1, 7))
         let inRoom = Float(NeedsTuning.saveEvery + 1) / Float(0.3 * 3600)          // the in-room drain of the 16 s before the save
