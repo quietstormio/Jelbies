@@ -636,8 +636,25 @@ final class BlobBrain {
 
     // MARK: tick
 
+    /// A script that takes the body over from a playing hello wave (a hop, a spin, a turn, a flip ... set from outside, the stage or a test) used to leave the wave's arm override, its
+    /// `waveBlend` and its foot targets frozen in WORLD space on a body that then moved (the arm hung in the air / sheared, `armT` stood still, and a ghost wave ran on with no script after the
+    /// hop: the Jelly Spring's pointed-fin arm). With this on the wave is ended cleanly the tick it is no longer the script. `-WaveInterruptOld 1` = the old behaviour.
+    nonisolated(unsafe) static var waveInterruptSafe: Bool = !(UserDefaults.standard.object(forKey: "WaveInterruptOld") != nil && UserDefaults.standard.bool(forKey: "WaveInterruptOld"))
+    /// Ends a wave whose script was replaced (see `waveInterruptSafe`). Returns true when it did.
+    @discardableResult
+    func releaseInterruptedWave(_ sim: SoftBody, _ skinner: Skinner) -> Bool {
+        guard Self.waveInterruptSafe, armActive, armPathName == ArmPath.wave.name else { return false }
+        if case .wave = script { return false }
+        skinner.setEyeOpenness(1)
+        pivotSide = nil
+        endWave(sim)          // (armActive off, foot targets and stiffness restored, the skin override released)
+        skinner.clearWaveBlend()
+        return true
+    }
+
     func tick(sim: SoftBody, skinner: Skinner, dt: Float, touched touchedIn: Bool) {
         guard enabled else { return }
+        releaseInterruptedWave(sim, skinner)
         runDt = dt; simRef = sim
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
