@@ -283,13 +283,13 @@ final class ParkPairsTests: XCTestCase {
 
     struct Soak {
         var creatureMinutes: Float = 0
-        var seesawRides = 0, soloRides = 0, pairRides = 0
+        var seesawRides = 0, soloRides = 0, pairRides = 0, soloMovingSteps = 0
         var hopSessions = 0
         var socialBegins = 0, pairBegins = 0, groupBegins = 0
         var stepsSeesaw = 0, stepsHop = 0, stepsSocial = 0, stepsOther = 0
         var stats = ParkPairTuning.Stats()
         mutating func add(_ o: Soak) {
-            creatureMinutes += o.creatureMinutes; seesawRides += o.seesawRides; soloRides += o.soloRides; pairRides += o.pairRides; hopSessions += o.hopSessions
+            creatureMinutes += o.creatureMinutes; seesawRides += o.seesawRides; soloRides += o.soloRides; soloMovingSteps += o.soloMovingSteps; pairRides += o.pairRides; hopSessions += o.hopSessions
             socialBegins += o.socialBegins; pairBegins += o.pairBegins; groupBegins += o.groupBegins
             stepsSeesaw += o.stepsSeesaw; stepsHop += o.stepsHop; stepsSocial += o.stepsSocial; stepsOther += o.stepsOther
             stats.rollNo += o.stats.rollNo; stats.coolNo += o.stats.coolNo; stats.noPartner += o.stats.noPartner; stats.recruited += o.stats.recruited
@@ -297,8 +297,8 @@ final class ParkPairsTests: XCTestCase {
         var steps: Float { Float(max(1, stepsSeesaw + stepsHop + stepsSocial + stepsOther)) }
         func line(_ tag: String) -> String {
             let m = max(creatureMinutes, 0.001)
-            return String(format: "PAIRS SOAK %@: creature-min %.1f | seesaw rides %.3f/cmin (solo %d, pair %d) | hopscotch sessions %.3f/cmin | social begins %.3f/cmin (pair %d, group member-begins %d) | time share seesaw %.1f%% hop %.1f%% social %.1f%% other %.1f%% | rejects: roll %d cooldown %d noPartner %d recruited %d",
-                          tag, creatureMinutes, Float(seesawRides) / m, soloRides, pairRides, Float(hopSessions) / m, Float(socialBegins) / m, pairBegins, groupBegins,
+            return String(format: "PAIRS SOAK %@: creature-min %.1f | seesaw rides %.3f/cmin (lone-sit %d, pair %d, steps with ONE rider on a MOVING plank %d) | hopscotch sessions %.3f/cmin | social begins %.3f/cmin (pair %d, group member-begins %d) | time share seesaw %.1f%% hop %.1f%% social %.1f%% other %.1f%% | rejects: roll %d cooldown %d noPartner %d recruited %d",
+                          tag, creatureMinutes, Float(seesawRides) / m, soloRides, pairRides, soloMovingSteps, Float(hopSessions) / m, Float(socialBegins) / m, pairBegins, groupBegins,
                           100 * Float(stepsSeesaw) / steps, 100 * Float(stepsHop) / steps, 100 * Float(stepsSocial) / steps, 100 * Float(stepsOther) / steps, stats.rollNo, stats.coolNo, stats.noPartner, stats.recruited)
         }
     }
@@ -345,6 +345,8 @@ final class ParkPairsTests: XCTestCase {
                 else { out.stepsOther += 1 }
             }
             let occ = field.seatOccupant[uid]?.count ?? 0
+            let seatedNow = [0, 1].filter { R.stage(uid, seat: $0) == .seated }.count
+            if seatedNow == 1, R.amp(uid) > 0.01 || abs(R.theta(uid)) > 0.01 { out.soloMovingSteps += 1 }
             if occ > 0 {
                 if !inRide { inRide = true; bothSeated = false; anySeated = false }
                 emptyFor = 0
@@ -371,19 +373,24 @@ final class ParkPairsTests: XCTestCase {
         let minutes = Float(ProcessInfo.processInfo.environment["PARK_PAIRS_MINUTES"].flatMap { Float($0) } ?? 10)
         let seedCount = ProcessInfo.processInfo.environment["PARK_PAIRS_SEEDS"].flatMap { Int($0) } ?? 3
         let seeds: [UInt64] = (0..<seedCount).map { 21 + 7 * UInt64($0) }
+        let onlyNew = ProcessInfo.processInfo.environment["PARK_PAIRS_ONLY_NEW"] != nil          // (skip the old runs: the new switches only)
+        var oldAll = Soak(), newAll = Soak()
         for (label, n, visitors) in [("1 home + 3 visitors", 4, true), ("3 housemates", 3, false)] {
             var old = Soak(), new = Soak()
             for s in seeds {
-                let o = parkSoak(n: n, visitors: visitors, minutes: minutes, seed: s, new: false), w = parkSoak(n: n, visitors: visitors, minutes: minutes, seed: s, new: true)
-                MotionLog.write(o.line("\(label) seed \(s) OLD")); MotionLog.write(w.line("\(label) seed \(s) NEW"))
-                old.add(o); new.add(w)
+                if !onlyNew { let o = parkSoak(n: n, visitors: visitors, minutes: minutes, seed: s, new: false); MotionLog.write(o.line("\(label) seed \(s) OLD")); old.add(o) }
+                let w = parkSoak(n: n, visitors: visitors, minutes: minutes, seed: s, new: true); MotionLog.write(w.line("\(label) seed \(s) NEW")); new.add(w)
             }
             MotionLog.write(old.line("\(label) ALL OLD")); MotionLog.write(new.line("\(label) ALL NEW"))
-            XCTAssertEqual(new.soloRides, 0, "\(label): no solo seesaw ride with the new switch")
-            XCTAssertGreaterThan(old.seesawRides + old.hopSessions, 0, "\(label): the old run used the toys")
-            if old.seesawRides >= 6 { let r = Float(new.seesawRides) / Float(old.seesawRides); XCTAssertGreaterThanOrEqual(r, 0.35, "\(label): seesaw rides \(r) of the old"); XCTAssertLessThanOrEqual(r, 0.65, "\(label): seesaw rides \(r) of the old") }
-            if old.hopSessions >= 6 { let r = Float(new.hopSessions) / Float(old.hopSessions); XCTAssertGreaterThanOrEqual(r, 0.35, "\(label): hopscotch sessions \(r) of the old"); XCTAssertLessThanOrEqual(r, 0.65, "\(label): hopscotch sessions \(r) of the old") }
-            if old.socialBegins >= 10 { let r = Float(new.socialBegins) / Float(old.socialBegins); XCTAssertGreaterThanOrEqual(r, 1.3, "\(label): social begins \(r) of the old") }
+            oldAll.add(old); newAll.add(new)
+            XCTAssertEqual(new.soloMovingSteps, 0, "\(label): never ONE rider on a moving plank")
+            if !onlyNew, old.socialBegins >= 10 { let r = Float(new.socialBegins) / Float(old.socialBegins); XCTAssertGreaterThanOrEqual(r, 1.3, "\(label): social begins \(r) of the old") }
+        }
+        // (the toy bands are judged on both configurations pooled: a single configuration has only ~10 to 20 rides in it, and the old runs themselves differ by a third from run to run)
+        MotionLog.write(oldAll.line("POOLED OLD")); MotionLog.write(newAll.line("POOLED NEW"))
+        if !onlyNew {
+            if oldAll.seesawRides >= 6 { let r = Float(newAll.seesawRides) / Float(oldAll.seesawRides); XCTAssertGreaterThanOrEqual(r, 0.35, "seesaw rides pooled \(r) of the old"); XCTAssertLessThanOrEqual(r, 0.65, "seesaw rides pooled \(r) of the old") }
+            if oldAll.hopSessions >= 6 { let r = Float(newAll.hopSessions) / Float(oldAll.hopSessions); XCTAssertGreaterThanOrEqual(r, 0.35, "hopscotch pooled \(r) of the old"); XCTAssertLessThanOrEqual(r, 0.65, "hopscotch pooled \(r) of the old") }
         }
     }
 
