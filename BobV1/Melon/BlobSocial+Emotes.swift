@@ -78,6 +78,7 @@ extension BlobBrain {
         if !fresh.isEmpty { kinds = fresh }
         let kind = kinds[min(kinds.count - 1, Int(rand() * Float(kinds.count)))]
         socialBook.treatLimit = rand(EmoteTuning.treatWait.0, EmoteTuning.treatWait.1)
+        roomTreatWaitSooner()          // (the 11-15 room round, step 2: in the home room a shorter wait with company)
         socialBook.treatIdle = 0
         if !socialStartGroup(kind, with: crew, sim) { socialBook.treatIdle = socialBook.treatLimit * 0.7 }          // (no room right now: soon again)
     }

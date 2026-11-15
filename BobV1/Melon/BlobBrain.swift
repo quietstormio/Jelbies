@@ -925,6 +925,7 @@ final class BlobBrain {
         guard maxL > lo else { return nil }
         let others = socialOthers().filter { $0 !== self }
         let centreBias = min(1, centreDwell / IdleTuning.centreDwellFull)
+        let visit = roomVisit(others)          // (the 11-15 room round, step 2: this pick goes to see a housemate; RoomRoam+Together.swift; decided once)
         var best: (SIMD2<Float>, Float)?
         var valid = 0
         for _ in 0..<48 {
@@ -938,6 +939,7 @@ final class BlobBrain {
                 nearest = min(nearest, simd_distance(o.position, cand))
                 if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
             }
+            if visit { nearest = roomVisitNearest(cand, others, nearest) }          // (a visit: near a housemate is good, far from everybody is not)
             let central = max(0, 1 - simd_distance(cand, RoomLayout.rugCentre) / (IdleTuning.centreRadius * 1.6))
             // not right in front of another Jelly (nearer the camera, within a body's width of it) or on the spot one is heading for: he would hide it
             var hides: Float = 0
