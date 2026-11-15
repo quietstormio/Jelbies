@@ -515,6 +515,25 @@ final class AudioHub {
     }
     /// The route's output latency in ms (the Jelly Show's dance log; songTime already subtracts it).
     var outputLatencyMS: Double { AVAudioSession.sharedInstance().outputLatency * 1000 }
+    /// The scene engine (made on first use); when its engine fails to start the audio session is applied again before its one retry.
+    private func sceneEngine() -> SceneMusicEngine {
+        if let scene { return scene }
+        let e = SceneMusicEngine()
+        e.onStartFailed = { [weak self] in self?.setUpSession() }
+        scene = e
+        return e
+    }
+    /// Decodes and connects a scene track ahead of its start without playing it (the Jelly Show's countdown prepares the dance song).
+    func prepareScene(_ t: SceneTrack) {
+        guard !muted, started, !_sceneEngineDisabled else { return }
+        sceneEngine().prepare(t)
+    }
+    /// The prepared track is ready to start at once. True when nothing can be prepared (muted, not started, no scene engine on a test host): nothing to wait for.
+    func scenePrepared(_ t: SceneTrack) -> Bool {
+        if muted || !started || _sceneEngineDisabled { return true }
+        return scene?.isPrepared(t) ?? false
+    }
+    func discardPreparedScene() { scene?.discardPrepared() }
     /// The track of this scene is decoded and playing.
     func scenePlaying(_ s: MusicScene) -> Bool { (director.scene == s ? director.sceneTrack : s.track).map { scene?.isPlaying($0) ?? false } ?? false }
 
@@ -1140,8 +1159,7 @@ final class AudioHub {
                 layer?.fader.ramp(to: 0, over: fade)
             case .sceneOn(let t, let fade):
                 if _sceneEngineDisabled { break }
-                if scene == nil { scene = SceneMusicEngine() }
-                scene?.play(t, fade: fade)
+                sceneEngine().play(t, fade: fade)
             case .sceneOff(let fade):
                 scene?.stopAll(fade: fade)
             }

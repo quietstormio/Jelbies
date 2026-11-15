@@ -209,6 +209,8 @@ final class SceneMusicEngine {
         var ready = false
         var started = false
         var cancelled = false
+        /// Decoded, connected and scheduled (a PREPARED voice waits here, not playing, for `play`).
+        var loaded = false
         let born = CACurrentMediaTime()
         init(track: SceneTrack) { self.track = track }
     }
@@ -217,6 +219,12 @@ final class SceneMusicEngine {
     private var voices: [Voice] = []
     private var level: Float = 1
     private var configObserver: NSObjectProtocol?
+    /// A voice decoded, connected and scheduled ahead of its `play` (the Jelly Show's dance song, during the countdown). Not in `voices`: it is not the
+    /// scene's current track until `play` takes it.
+    private var prepared: Voice?
+    private var preparedAge = 0.0
+    /// Called when `engine.start()` fails, before the one retry: the hub re-applies the audio session.
+    var onStartFailed: (() -> Void)?
 
     /// `-AudioLog 1`: why a scene voice did not start, how long it took, and what dropped / replayed it (the Jelly Show's dance song fails silently otherwise).
     private func alog(_ s: @autoclosure () -> String) { if AudioHub.audioLog { NSLog("[audio] %@", s()) } }
@@ -241,32 +249,77 @@ final class SceneMusicEngine {
         // newest fading voice plus the new one, free the older ones now.
         let fading = voices.filter { $0.stopping }
         if fading.count > 1 { for v in fading.dropLast() { drop(v) } }
+        if let p = prepared, p.track == t, !p.cancelled {          // decoded ahead: start that node at once (or, still decoding, when it is)
+            prepared = nil
+            p.fadeIn = fade
+            p.fader.snap(0); p.fader.ramp(to: 1, over: fade)
+            voices.append(p)
+            alog("scene play \(t.rawValue) from the prepared voice (loaded=\(p.loaded ? 1 : 0))")
+            if p.loaded { begin(p) }
+            return
+        }
         let v = Voice(track: t)
         v.fadeIn = fade
         v.fader.snap(0); v.fader.ramp(to: 1, over: fade)
         voices.append(v)
         engine.attach(v.node)
+        decode(v)
+    }
+
+    private func decode(_ v: Voice) {
+        let t = v.track
         Task.detached(priority: .userInitiated) { [weak self] in
             let r = SceneRender.render(t)
             await self?.finishLoading(v, r)
         }
     }
 
+    /// Decodes, connects and schedules `t` without playing it; a later `play(t, ...)` then starts it at once. One prepared voice at a time.
+    func prepare(_ t: SceneTrack) {
+        if let p = prepared, p.track == t, !p.cancelled { return }
+        discardPrepared()
+        guard !voices.contains(where: { $0.track == t && !$0.stopping }) else { return }          // already the playing track
+        let v = Voice(track: t)
+        prepared = v; preparedAge = 0
+        engine.attach(v.node)
+        alog("scene prepare \(t.rawValue)")
+        decode(v)
+    }
+    /// `t` is prepared (decoded and scheduled): `play` will start it at once.
+    func isPrepared(_ t: SceneTrack) -> Bool { prepared.map { $0.track == t && $0.loaded && !$0.cancelled } ?? false }
+    func discardPrepared() { if let p = prepared { prepared = nil; drop(p) } }
+
+    /// `engine.start()`; on failure the audio session is applied again and the start retried once.
+    private func startEngine(for v: Voice) -> Bool {
+        engine.prepare()
+        do { try engine.start(); return true } catch {
+            alog("scene voice \(v.track.rawValue): engine start failed \(error); re-applying the audio session, retrying once")
+            onStartFailed?()
+            engine.prepare()
+            do { try engine.start(); alog("scene voice \(v.track.rawValue): engine start ok on the retry"); return true } catch {
+                alog("scene voice \(v.track.rawValue) NOT started: engine start failed (retry too) \(error)")
+                return false
+            }
+        }
+    }
+
     private func finishLoading(_ v: Voice, _ r: SceneRender.Result?) {
-        guard let r, !v.cancelled, voices.contains(where: { $0 === v }) else {
+        guard let r, !v.cancelled, voices.contains(where: { $0 === v }) || prepared === v else {
             alog("scene voice \(v.track.rawValue) NOT started: \(r == nil ? "decode failed" : "cancelled") (after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms)")
             drop(v); return
         }
         engine.connect(v.node, to: engine.mainMixerNode, format: r.format)
-        if !engine.isRunning {
-            engine.prepare()
-            do { try engine.start() } catch {
-                alog("scene voice \(v.track.rawValue) NOT started: engine start failed \(error)")
-                drop(v); return
-            }
-        }
+        if !engine.isRunning, !startEngine(for: v) { drop(v); return }
         if let i = r.intro { v.node.scheduleBuffer(i, completionHandler: nil) }
         v.node.scheduleBuffer(r.loop, at: nil, options: v.track.playsOnce ? [] : .loops, completionHandler: nil)
+        v.loaded = true
+        if prepared === v { alog("scene voice \(v.track.rawValue) prepared after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms"); return }          // waits for `play`
+        begin(v)
+    }
+
+    /// A loaded voice goes on the air.
+    private func begin(_ v: Voice) {
+        if !engine.isRunning, !startEngine(for: v) { drop(v); return }
         if !v.stopping { v.fader.snap(0); v.fader.ramp(to: 1, over: v.fadeIn) }          // decoding can outlast the fade: fade in from the moment it really starts (never a pop-in)
         v.node.volume = v.stopping ? v.fader.level * level * v.track.gain : 0
         v.node.play()
@@ -275,6 +328,7 @@ final class SceneMusicEngine {
     }
 
     func stopAll(fade: Double) {
+        discardPrepared()
         for v in voices where !v.stopping { v.stopping = true; v.fader.ramp(to: 0, over: fade) }
     }
 
@@ -290,10 +344,12 @@ final class SceneMusicEngine {
             v.node.volume = v.fader.level * level * v.track.gain
         }
         for v in voices where v.stopping && v.fader.level <= 0.0001 { drop(v) }
-        if voices.isEmpty, engine.isRunning { engine.stop() }
+        if prepared != nil { preparedAge += dt; if preparedAge > 30 { discardPrepared() } }          // never held for a show that did not come
+        if voices.isEmpty, prepared == nil, engine.isRunning { engine.stop() }
     }
 
     private func drop(_ v: Voice) {
+        if prepared === v { prepared = nil }
         alog("scene drop \(v.track.rawValue) ready=\(v.ready ? 1 : 0) stopping=\(v.stopping ? 1 : 0)")
         v.cancelled = true
         if v.node.engine != nil { v.node.stop(); engine.detach(v.node) }
@@ -301,7 +357,7 @@ final class SceneMusicEngine {
     }
 
     /// Memory warning: free every voice that is already fading out (the playing track stays).
-    func trim() { for v in voices where v.stopping { drop(v) } }
+    func trim() { for v in voices where v.stopping { drop(v) }; discardPrepared() }
 
     func pause() { for v in voices where v.ready { v.node.pause() }; if engine.isRunning { engine.pause() } }
     func resume() {
@@ -322,9 +378,12 @@ final class SceneMusicEngine {
         guard let t = current else { return }
         alog("scene engine config change: replaying \(t.rawValue) from 0")
         let fade = 0.3
+        let again = prepared?.track
+        discardPrepared()
         for v in voices { v.cancelled = true; if v.node.engine != nil { v.node.stop(); engine.detach(v.node) } }
         voices.removeAll()
         play(t, fade: fade)
+        if let again { prepare(again) }
     }
 
     /// Seconds of SONG time of the newest playing track, as heard (output latency taken off): the file's own clock for a track that plays from its

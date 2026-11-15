@@ -366,6 +366,43 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertNil(f.danceFallback); XCTAssertGreaterThan(f.danceT, 4)
     }
 
+    // MARK: the prepared dance song
+
+    private func countdownFlow(prepared: @escaping (SceneTrack) -> Bool) -> (ShowFlow, () -> [SceneTrack]) {
+        var asked: [SceneTrack] = []
+        let f = ShowFlow(); f.cue = { _ in }; f.auto = true
+        f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.songClockWhy = { _ in "test" }
+        f.prepareDanceSong = { asked.append($0) }; f.danceSongPrepared = prepared; f.releaseDanceSong = {}
+        f.begin(playerID: 1, name: "Bob", character: 1, input: input(), rank: .puddle, dayKey: 20261021, bodies: 3, seed: 3)
+        run(f, seconds: 2) { f.phase == .stage }
+        run(f, seconds: 6) { f.beat == .countdown }
+        return (f, { asked })
+    }
+
+    /// The countdown asks for the dance song to be prepared, and does not count down while it is not (the stage loop is up).
+    func testCountdownWaitsForThePreparedDanceSong() {
+        var ready = false
+        let (f, asked) = countdownFlow(prepared: { _ in ready })
+        XCTAssertEqual(f.beat, .countdown); XCTAssertEqual(asked(), [f.danceTrack], "prepared once, at the start of the countdown")
+        run(f, seconds: 2)
+        XCTAssertEqual(f.beat, .countdown); XCTAssertEqual(f.countdown, 3, "no number counted while the song is not ready")
+        ready = true
+        run(f, seconds: 6) { f.beat == .dancing }
+        XCTAssertEqual(f.beat, .dancing, "GO comes once it is ready")
+        XCTAssertNil(f.danceFallback, "it was ready in time")
+    }
+
+    /// The song never gets ready: after the 3 s wait the countdown runs anyway and GO carries the reason.
+    func testCountdownGoesAnywayAfterThreeSecondsWithTheReasonSet() {
+        let (f, _) = countdownFlow(prepared: { _ in false })
+        run(f, seconds: 2.7); XCTAssertEqual(f.countdown, 3, "still waiting"); XCTAssertEqual(f.beat, .countdown); XCTAssertNil(f.danceFallback)
+        var ticks = 0
+        for _ in 0..<(12 * 60) where f.beat != .dancing { f.tick(dt: 1 / 60); ticks += 1 }
+        XCTAssertEqual(f.beat, .dancing, "GO comes anyway")
+        XCTAssertGreaterThan(Double(ticks) / 60, 2.5, "after the 3 s wait and the three counts")
+        XCTAssertEqual(f.danceFallback?.contains("dance song not prepared"), true, f.danceFallback ?? "nil")
+    }
+
     // MARK: the stage camera
 
     private func ndc(_ cam: CameraState, _ p: SIMD3<Float>) -> SIMD3<Float>? {

@@ -128,6 +128,10 @@ final class ShowFlow {
     @ObservationIgnored var songClock: (SceneTrack) -> Double? = { AudioHub.shared.songTime(of: $0) }
     /// Why `songClock` is nil for a track (the log line and `danceFallback`).
     @ObservationIgnored var songClockWhy: (SceneTrack) -> String = { AudioHub.shared.songClockWhy(of: $0) }
+    /// The dance song is decoded and connected ahead of GO (prepared during the countdown); true when there is nothing to wait for.
+    @ObservationIgnored var prepareDanceSong: (SceneTrack) -> Void = { AudioHub.shared.prepareScene($0) }
+    @ObservationIgnored var danceSongPrepared: (SceneTrack) -> Bool = { AudioHub.shared.scenePrepared($0) }
+    @ObservationIgnored var releaseDanceSong: () -> Void = { AudioHub.shared.discardPreparedScene() }
     /// The music is up (muted = nothing to wait for).
     @ObservationIgnored var audioReady: (MusicScene) -> Bool = { AudioHub.shared.muted || AudioHub.shared.scenePlaying($0) }
     /// Test / capture aid: the dance is tapped for him (a few late, one missed) and the tricks are picked for him.
@@ -218,6 +222,7 @@ final class ShowFlow {
     /// "Done" / "Show again" on the results (or the X on a drill): back to the room.
     func goHome(again: Bool = false) {
         guard phase == .stage, !leaving else { return }
+        releaseDanceSong()
         leaving = true; againWanted = again
         onDance(nil, false)
         phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
@@ -237,6 +242,7 @@ final class ShowFlow {
         s.finishLook(); sim = s
         A11yEvents.say("Round 2: Dance", .normal)
         beat = .countdown; countdown = 3; countdownLeft = Self.countdownBeat; audioWait = 0; cueSerial += 1; cue(.countdown)
+        prepareDanceSong(danceTrack)          // decode + connect the dance song now: GO then only starts it
         onDance(s.player.dance, true)
         revision += 1
     }
@@ -255,7 +261,7 @@ final class ShowFlow {
             if beat == .danced { dancedAge += dt }
             return
         case .countdown:
-            if !audioReady(musicScene), audioWait < 3 { audioWait += dt; return }
+            if !audioReady(musicScene) || !danceSongPrepared(danceTrack), audioWait < 3 { audioWait += dt; return }          // the stage loop AND the prepared dance song (3 s at most)
             countdownLeft -= dt
             if countdownLeft <= 0 {
                 countdown -= 1
@@ -266,6 +272,11 @@ final class ShowFlow {
                         // the dance song starts now (the scene switches on the next frame) and its prompts are on ITS beats: the clock is the song's own
                         // player time, held at 0 until the song is audible, so the start can never drift from the clock
                         danceT = 0; danceMusicOn = true; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
+                        if audioWait >= 3, !audioReady(musicScene) || !danceSongPrepared(danceTrack) {          // the wait ran out: GO anyway, the song starts as it can
+                            let why = "GO after a \(Int(audioWait)) s wait: " + (audioReady(musicScene) ? "" : "stage music not playing; ") + (danceSongPrepared(danceTrack) ? "" : "dance song not prepared")
+                            danceFallback = why
+                            if AudioHub.audioLog { NSLog("[melon] dance GO without the prepared song: %@", why) }
+                        }
                         s.beginDance(song: danceSong, songTime: 0); sim = s
                         if AudioHub.audioLog { NSLog("[melon] dance start song=%d \"%@\" bpm=%.2f firstBeat=%.4f prompts=%d %.3f..%.3f s", danceSong.song, danceSong.title, danceSong.bpm, danceSong.grid.firstBeat, danceSong.promptCount, danceSong.grid.time(ofBeat: DanceSong.firstPromptBeat), danceSong.grid.time(ofBeat: danceSong.lastBeat)) }
                     }
@@ -556,6 +567,7 @@ final class ShowFlow {
     /// Hard stop (tests, the app leaving): everything back to the room at once.
     func abort() {
         guard phase != .off else { return }
+        releaseDanceSong()
         if cameraBlend > 0 || (swapped && fadeDest == .stage) { onSwap(.room) }
         cameraBlend = 0; wipe = 0; phase = .off; sim = nil; leaving = false
         trickStage = .pick; rivalTurn = nil; rivalQueue = []
