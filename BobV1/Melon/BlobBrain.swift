@@ -171,6 +171,9 @@ final class BlobBrain {
     var sleepEnabled = false
     /// The app is in front and no menu / close-up is open: the room life keeps something happening (see `idleLively`, SocialTuning.lively).
     var watching = false
+    /// The stage says this body lives in the HOME room right now and no meal, drink or bath is on (not on a trip, not at the park). It gates the 11-15 room round
+    /// (RoomRoam.swift). Only the stage sets it, so the headless suites and every outing stay on the old paths.
+    var homeRoom = false
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
     /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
