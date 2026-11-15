@@ -93,6 +93,8 @@ final class RoomRoamMeasureTests: XCTestCase {
                 GameCamera.configureRoom(count: n); _ = GameCamera.camera(aspect: 440.0 / 956.0)          // (the game's own call for n at home: MelonStage.swift)
                 var s = Stats()
                 for seed in seeds {
+                    RoomTraffic.counts = [0, 0, 0, 0, 0]; RoomTogether.counts = [0, 0, 0, 0, 0]; RoomVoices.counts = [0, 0, 0, 0, 0, 0, 0, 0]          // (no soak inherits the step files' counters or side tables from the one before)
+                    RoomTraffic.waitFor = [:]; RoomTraffic.waited = [:]; RoomVoices.lastHello = [:]
                     let lab = SocialTests.Lab(n: n, quiet: false, seed: seed)
                     for (i, r) in lab.rigs.enumerated() {
                         r.brain.anticsEnabled = true; r.brain.sleepEnabled = true; r.brain.idleMood = .happy; r.brain.restTimer = 0.5 + Float(i)
@@ -191,6 +193,7 @@ final class RoomRoamMeasureTests: XCTestCase {
                     } }
                     for r in lab.rigs { let q = GameCare.floorPos(r.brain, r.sim); for v in [q.x, q.y] { s.fingerprint = (s.fingerprint &* 33) ^ UInt64(bitPattern: Int64((v * 100).rounded())) } }
                     s.simSeconds += Double(seconds)
+                    lines.append("ROOMROAM-STEPS arm=\(armName) n=\(n) seed=\(seed) \(RoomTraffic.report) | \(RoomTogether.report) | \(RoomVoices.report)")
                     simNow += 120          // (the gaps of the previous run are over)
                 }
                 // the report: counts are sums over the seeds and the bodies; /min = per body per simulated minute
