@@ -35,7 +35,7 @@ final class WearBandTests: XCTestCase {
         let zc = axisZ()
         var out: [Loop] = []
         var base = 0
-        for part in a.parts {
+        for part in a.parts where !WearRules.drops(l, part: part.name) {          // (a part the rules drop - a bow tie's band - is not drawn: it takes no vertices)
             defer { base += part.positions.count }
             let rule = WearRules.rule(l, part: part.name)
             guard rule.w0 > 0.99, rule.w1 > 0.99, rule.h0 == 0, rule.h1 == 0, part.positions.count >= 8 else { continue }
@@ -80,7 +80,7 @@ final class WearBandTests: XCTestCase {
         guard l.slot != .hands, l.slot != .feet, let a = WearMeshes.art(l) else { return [] }
         var out: [(Int, Int, Float)] = []
         var base = 0
-        for part in a.parts {
+        for part in a.parts where !WearRules.drops(l, part: part.name) {          // (a part the rules drop - a bow tie's band - is not drawn: it takes no vertices)
             defer { base += part.positions.count }
             let r = WearRules.rule(l, part: part.name)
             guard r.w0 > 0.99, r.w1 > 0.99, r.h0 == 0, r.h1 == 0, part.positions.count >= 8 else { continue }

@@ -187,6 +187,10 @@ nonisolated final class WearBody: @unchecked Sendable {
     private let lo: SIMD3<Float>
     private let dim: SIMD3<Int>
     private var grid: [[Int32]]
+    /// `bind` marks the triangles it has already tested with a generation stamp (no Set per call); the lock keeps it safe for any caller.
+    private let bindLock = NSLock()
+    private var stamp: [UInt32]
+    private var stampGen: UInt32 = 0
 
     init(_ rm: RenderMesh) {
         var p: [SIMD3<Float>] = [], n: [SIMD3<Float>] = []
@@ -201,6 +205,7 @@ nonisolated final class WearBody: @unchecked Sendable {
         var i = rm.body.first
         while i + 2 < end { t.append(SIMD3(rm.index[i], rm.index[i + 1], rm.index[i + 2])); i += 3 }
         tris = t
+        stamp = [UInt32](repeating: 0, count: t.count)
         eggVertexLimit = rm.armCapsule?.firstVertex.min() ?? rm.vertexCount
         limbBlocks = WearLimbs.blocks(rm)
         restLimbs = WearLimbs.restArms()
@@ -268,6 +273,45 @@ nonisolated final class WearBody: @unchecked Sendable {
         guard !tris.isEmpty else { return nil }
         let c0 = cellIndex(p)
         var best = Float.infinity, bestT = -1, bestW = SIMD3<Float>.zero
+        bindLock.lock(); defer { bindLock.unlock() }
+        stampGen &+= 1
+        if stampGen == 0 { for i in stamp.indices { stamp[i] = 0 }; stampGen = 1 }
+        let gen = stampGen
+        var r = 0
+        while r <= 14 {
+            for z in max(c0.z - r, 0)...min(c0.z + r, dim.z - 1) {
+                for y in max(c0.y - r, 0)...min(c0.y + r, dim.y - 1) {
+                    for x in max(c0.x - r, 0)...min(c0.x + r, dim.x - 1) {
+                        if r > 0, abs(x - c0.x) != r, abs(y - c0.y) != r, abs(z - c0.z) != r { continue }       // the shell of cells only
+                        for ti in grid[(z * dim.y + y) * dim.x + x] where stamp[Int(ti)] != gen {
+                            stamp[Int(ti)] = gen
+                            let tr = tris[Int(ti)]
+                            let a = pos[Int(tr.x)], b = pos[Int(tr.y)], c = pos[Int(tr.z)]
+                            let w = Self.closest(p, a, b, c)
+                            let q = a * w.x + b * w.y + c * w.z
+                            let d = simd_distance_squared(p, q)
+                            if d < best { best = d; bestT = Int(ti); bestW = w }
+                        }
+                    }
+                }
+            }
+            if bestT >= 0, best.squareRoot() <= Float(r) * cell { break }
+            r += 1
+        }
+        guard bestT >= 0 else { return nil }
+        let tr = tris[bestT]
+        let a = pos[Int(tr.x)], b = pos[Int(tr.y)], c = pos[Int(tr.z)]
+        let q = a * bestW.x + b * bestW.y + c * bestW.z
+        let f = Self.frame(a, b, nrm[Int(tr.x)], nrm[Int(tr.y)], nrm[Int(tr.z)], bestW)
+        let d = p - q
+        return SurfaceBind(tri: tr, bary: bestW, off: SIMD3(simd_dot(d, f.t), simd_dot(d, f.b), simd_dot(d, f.n)))
+    }
+
+    /// The original `bind` (a fresh Set per call): kept for the bit-identical comparison test.
+    func bindLegacy(_ p: SIMD3<Float>) -> SurfaceBind? {
+        guard !tris.isEmpty else { return nil }
+        let c0 = cellIndex(p)
+        var best = Float.infinity, bestT = -1, bestW = SIMD3<Float>.zero
         var seen = Set<Int32>()
         var r = 0
         while r <= 14 {
@@ -327,7 +371,23 @@ nonisolated final class WearBody: @unchecked Sendable {
         return (q + f.t * s.off.x + f.b * s.off.y + f.n * s.off.z, f.n)
     }
     /// Where the radial line at height `y` and azimuth direction `dir` (x, z about the body axis) meets the REST egg: the bind of that surface point and its radius. nil if the line misses the egg.
+    /// FAST: the line is intersected directly with the egg's triangles (bucketed by azimuth and height, built on first use); when it crosses the egg exactly once between the old bracket
+    /// (0.02 ... 1.2) that crossing is the answer. Anything else (a miss, a line that grazes or crosses more than once, a degenerate hit) takes the old bisection (`radialHitBisect`).
     func radialHit(dir: SIMD2<Float>, y: Float) -> (bind: SurfaceBind, rho: Float)? {
+        if !Self.useBisection, let t = singleCrossing(dir: dir, y: y), var out = bind(SIMD3(dir.x * t, y, axisZ + dir.y * t)) {
+            out.off = .zero
+            Self.radialFast += 1
+            return (out, t)
+        }
+        Self.radialFallback += 1
+        return radialHitBisect(dir: dir, y: y)
+    }
+    /// Counters (tests / the report): how many queries took the direct path and how many fell back to the bisection.
+    nonisolated(unsafe) static var radialFast = 0, radialFallback = 0
+    /// Test / before-after aid: `-WearRadialOld 1` (or setting this) switches the direct intersection off, so every query takes the old bisection.
+    nonisolated(unsafe) static var useBisection = UserDefaults.standard.object(forKey: "WearRadialOld") != nil
+    /// The original: brackets [0.02, 1.2] along the line and bisects 16 times on the sign of the surface offset (19 nearest-triangle searches).
+    func radialHitBisect(dir: SIMD2<Float>, y: Float) -> (bind: SurfaceBind, rho: Float)? {
         func at(_ r: Float) -> SurfaceBind? { bind(SIMD3(dir.x * r, y, axisZ + dir.y * r)) }
         var lo: Float = 0.02, hi: Float = 1.2
         guard let a = at(lo), a.off.z < 0, let b = at(hi), b.off.z > 0 else { return nil }
@@ -336,6 +396,92 @@ nonisolated final class WearBody: @unchecked Sendable {
         guard var out = at(r) else { return nil }
         out.off = .zero
         return (out, r)
+    }
+
+    // MARK: ray buckets
+
+    /// The egg's triangles bucketed by azimuth (about the body axis) and height, for the radial-line queries.
+    private struct RayBuckets {
+        static let azBins = 90, yBins = 120
+        var y0: Float = 0, dy: Float = 1
+        var cells: [[Int32]] = []
+        var a: [SIMD3<Float>] = [], e1: [SIMD3<Float>] = [], e2: [SIMD3<Float>] = []
+    }
+    private let rayLock = NSLock()
+    private var rayBuckets: RayBuckets?
+
+    private func buckets() -> RayBuckets {
+        rayLock.lock(); defer { rayLock.unlock() }
+        if let r = rayBuckets { return r }
+        var rb = RayBuckets()
+        let nA = RayBuckets.azBins, nY = RayBuckets.yBins
+        var ylo = Float.infinity, yhi = -Float.infinity
+        for t in tris { for k in 0..<3 { let q = pos[Int(t[k])]; ylo = min(ylo, q.y); yhi = max(yhi, q.y) } }
+        rb.y0 = ylo - 0.001; rb.dy = max((yhi - ylo + 0.002) / Float(nY), 1e-6)
+        rb.cells = [[Int32]](repeating: [], count: nA * nY)
+        rb.a.reserveCapacity(tris.count); rb.e1.reserveCapacity(tris.count); rb.e2.reserveCapacity(tris.count)
+        let twoPi = 2 * Float.pi
+        for (ti, t) in tris.enumerated() {
+            let p0 = pos[Int(t.x)], p1 = pos[Int(t.y)], p2 = pos[Int(t.z)]
+            rb.a.append(p0); rb.e1.append(p1 - p0); rb.e2.append(p2 - p0)
+            // height range
+            let b0 = max(Int(((min(p0.y, p1.y, p2.y) - rb.y0) / rb.dy).rounded(.down)) - 0, 0), b1 = min(Int(((max(p0.y, p1.y, p2.y) - rb.y0) / rb.dy).rounded(.down)) + 0, nY - 1)
+            // azimuth range of the triangle's projection on the horizontal plane; all of it when the projection holds (or nearly holds) the axis
+            let q0 = SIMD2(p0.x, p0.z - axisZ), q1 = SIMD2(p1.x, p1.z - axisZ), q2 = SIMD2(p2.x, p2.z - axisZ)
+            func cross2(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { a.x * b.y - a.y * b.x }
+            let s0 = cross2(q1 - q0, -q0), s1 = cross2(q2 - q1, -q1), s2 = cross2(q0 - q2, -q2)
+            let eps: Float = 1e-4
+            let holdsAxis = (s0 >= -eps && s1 >= -eps && s2 >= -eps) || (s0 <= eps && s1 <= eps && s2 <= eps)
+            let near = min(simd_length(q0), simd_length(q1), simd_length(q2)) < 1e-3
+            var bins: [Int] = []
+            if holdsAxis || near { bins = Array(0..<nA) } else {
+                let a0 = atan2(q0.y, q0.x)
+                func wrap(_ d: Float) -> Float { var x = d; while x > .pi { x -= twoPi }; while x < -.pi { x += twoPi }; return x }
+                let d1 = wrap(atan2(q1.y, q1.x) - a0), d2 = wrap(atan2(q2.y, q2.x) - a0)
+                let lo = a0 + min(0, d1, d2) - 0.002, hi = a0 + max(0, d1, d2) + 0.002
+                let first = Int(((lo / twoPi) * Float(nA)).rounded(.down)), last = Int(((hi / twoPi) * Float(nA)).rounded(.down))
+                for k in first...max(first, last) { bins.append(((k % nA) + nA) % nA) }
+            }
+            for b in Set(bins) { for yb in b0...max(b0, b1) { rb.cells[b * nY + yb].append(Int32(ti)) } }
+        }
+        rayBuckets = rb
+        return rb
+    }
+
+    /// The one crossing of the radial line (origin on the body axis at height `y`, direction `dir`) with the rest egg between t = 0.02 and t = 1.2, or nil when the line crosses it
+    /// any other number of times (or touches an edge ambiguously): the caller then takes the bisection.
+    private func singleCrossing(dir: SIMD2<Float>, y: Float) -> Float? {
+        guard !tris.isEmpty else { return nil }
+        let rb = buckets()
+        let nA = RayBuckets.azBins, nY = RayBuckets.yBins
+        let yb = Int(((y - rb.y0) / rb.dy).rounded(.down))
+        guard yb >= 0, yb < nY else { return nil }
+        var u = atan2(dir.y, dir.x) / (2 * Float.pi); u -= u.rounded(.down)
+        let ab = min(Int(u * Float(nA)), nA - 1)
+        let D = SIMD3<Float>(dir.x, 0, dir.y), O = SIMD3<Float>(0, y, axisZ)
+        var ts: [Float] = []
+        for ti in rb.cells[ab * nY + yb] {
+            let i = Int(ti)
+            // Moller-Trumbore, two-sided, edges inclusive
+            let e1 = rb.e1[i], e2 = rb.e2[i]
+            let pv = simd_cross(D, e2)
+            let det = simd_dot(e1, pv)
+            guard abs(det) > 1e-12 else { continue }
+            let inv = 1 / det
+            let tv = O - rb.a[i]
+            let uu = simd_dot(tv, pv) * inv
+            guard uu >= -1e-5, uu <= 1 + 1e-5 else { continue }
+            let qv = simd_cross(tv, e1)
+            let vv = simd_dot(D, qv) * inv
+            guard vv >= -1e-5, uu + vv <= 1 + 1e-5 else { continue }
+            let t = simd_dot(e2, qv) * inv
+            if t > 1e-4 { ts.append(t) }
+        }
+        ts.sort()
+        var merged: [Float] = []                                          // (a line through a shared edge or vertex meets two triangles at one point)
+        for t in ts { if let l = merged.last, t - l < 2e-4 { continue }; merged.append(t) }
+        guard merged.count == 1, merged[0] > 0.02, merged[0] < 1.2 else { return nil }
+        return merged[0]
     }
     /// The foot point of a bind on the REST egg (the surface point under a bound vertex, without its offset).
     func restFoot(_ s: SurfaceBind) -> SIMD3<Float> { pos[Int(s.tri.x)] * s.bary.x + pos[Int(s.tri.y)] * s.bary.y + pos[Int(s.tri.z)] * s.bary.z }
