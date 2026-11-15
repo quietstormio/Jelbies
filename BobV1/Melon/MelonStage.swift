@@ -286,7 +286,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// The aspect the roaming polygon was built for (GameCamera.refreshRoam); rebuilt when it changes, and every sim's safety arena follows it.
     private var roamAspect: Float = 0
     private func syncRoam(aspect: Float) {
-        guard actors.count > 1 || !parkActors.isEmpty, abs(aspect - roamAspect) > 0.005, !(game && model.care.volley.inScene) else { return }
+        guard actors.count > 1 || !parkActors.isEmpty || (RoomTraffic.loneFloorLive && !model.preview && !model.care.tripActive && !model.care.raceBusy), abs(aspect - roamAspect) > 0.005, !(game && model.care.volley.inScene) else { return }          // (the 11-15 room round, T7: one alone at home gets the whole floor too; never a showcase stage, never while he is out; RoomRoam+Traffic.swift)
         roamAspect = aspect
         guard GameCamera.refreshRoam(aspect: aspect) != nil else { return }
         Self.applyRoomArena(actors: actors, parkActors: parkActors, bathFenceLifted: model.care.bath.fenceLifted)
