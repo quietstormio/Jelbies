@@ -383,12 +383,14 @@ extension BlobBrain {
         if x >= total {
             let started = treat2Pick(sim)
             idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
+            if started { roomSoloSooner() }          // (the 11-15 room round, step 2: in the home room the next solo emote comes sooner; RoomRoam+Together.swift)
             return started
         }
         var kind = w.last!.kind
         for e in w { if x < e.weight { kind = e.kind; break }; x -= e.weight }
         let started = idleStart(kind, sim)
         idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
+        if started { roomSoloSooner() }          // (the 11-15 room round, step 2: in the home room the next solo emote comes sooner; RoomRoam+Together.swift)
         if started { kindCooldownStart(kind) }
         return started
     }

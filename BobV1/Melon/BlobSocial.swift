@@ -626,6 +626,7 @@ extension BlobBrain {
                 for id in s.crewIDs where id != steerID { socialBook.pair[id] = socialBook.pair[pid] }
                 socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1); socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
                 if s.kind.isTreat { socialBook.treatCool = rand(EmoteTuning.treatCooldown.0, EmoteTuning.treatCooldown.1); socialBook.treatIdle = 0; socialBook.treatBusy = 0; socialBook.lastTreat = s.kind }
+                if s.kind.isTreat { roomTreatCoolSooner() }          // (the 11-15 room round, step 2: in the home room the next conga line / ring dance comes sooner)
             }
             if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
         }
