@@ -734,6 +734,7 @@ extension BlobBrain {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRunGoal", probe) }
         let deadline = CACurrentMediaTime() + Self.pickBudgetSeconds * 2          // (out of time = "no room" this step; the caller tries again later)
         pickCount += 1
+        let live = RoomTraffic.goalAware && roomTraffic, roomOthers = live ? socialOthers().filter({ $0 !== self }) : []          // (the 11-15 room round, T6)
         for k in 0..<160 {
             if k & 7 == 7, CACurrentMediaTime() > deadline { pickTimeoutCount += 1; break }
             var cand: SIMD2<Float>
@@ -746,6 +747,7 @@ extension BlobBrain {
             let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint)
             let c2 = SIMD2(rv.x, rv.z)
             let d = simd_length(c2 - here)
+            if live, k < RoomTraffic.dashTries, d >= minD, d <= maxD, roomLegConflict(from: here, to: c2, speed: roomNominalWalk * RoomTraffic.dashMul, others: roomOthers, dash: true) > 0 { continue }          // (T6: not a dash that would meet a walker; after `dashTries` tries any free spot is taken as before)
             if d >= minD && d <= maxD && simd_length(c2 - cand) < 0.05 && peerFree(c2) && legClear(here, c2, margin: steerMargin) { return c2 }
         }
         return nil

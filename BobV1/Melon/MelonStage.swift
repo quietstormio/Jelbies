@@ -759,6 +759,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         brain.idleNight = pv ? 0 : DayClock.shared.nightFactor; brain.idleMorning = pv ? 0 : DayClock.shared.morningFactor; brain.idleDeepNight = pv ? 0 : DayClock.shared.deepNightFactor
         let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(a.id)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
         brain.sleepEnabled = roomLife && !pv; brain.anticsEnabled = roomLife && !pv; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
+        brain.homeRoom = roomLife && !pv && !model.care.tripActive && !model.care.trayOut && !model.care.bath.active          // (the 11-15 room round, RoomRoam.swift: the home room only, and never while a meal, a drink or the bath is on)
         if let o = Self.idleMoodOverride { brain.idleMood = o }
         var ht = CACurrentMediaTime()
         brain.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: touchHolds(a.id))
@@ -779,6 +780,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             brain.idleNight = pv ? 0 : DayClock.shared.nightFactor; brain.idleMorning = pv ? 0 : DayClock.shared.morningFactor; brain.idleDeepNight = pv ? 0 : DayClock.shared.deepNightFactor
             let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(0)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
             brain.sleepEnabled = roomLife && !pv; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
+            brain.homeRoom = roomLife && !pv && !model.care.tripActive && !model.care.trayOut && !model.care.bath.active          // (the 11-15 room round, RoomRoam.swift: the home room only, and never while a meal, a drink or the bath is on)
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
                 brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active || model.care.play.ballGame) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)

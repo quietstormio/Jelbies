@@ -171,6 +171,9 @@ final class BlobBrain {
     var sleepEnabled = false
     /// The app is in front and no menu / close-up is open: the room life keeps something happening (see `idleLively`, SocialTuning.lively).
     var watching = false
+    /// The stage says this body lives in the HOME room right now and no meal, drink or bath is on (not on a trip, not at the park). It gates the 11-15 room round
+    /// (RoomRoam.swift). Only the stage sets it, so the headless suites and every outing stay on the old paths.
+    var homeRoom = false
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
     /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
@@ -942,6 +945,7 @@ final class BlobBrain {
         let lo: Float = zone != nil ? 2.5 : 1.5
         guard maxL > lo else { return nil }
         let others = socialOthers().filter { $0 !== self }
+        let live = RoomTraffic.goalAware && roomTraffic          // (the 11-15 room round, T6: RoomRoam+Traffic.swift; read once)
         let centreBias = min(1, centreDwell / IdleTuning.centreDwellFull)
         var best: (SIMD2<Float>, Float)?
         var valid = 0
@@ -964,7 +968,8 @@ final class BlobBrain {
                 if case .walk(let t, _) = o.script { spots.append(t) }
                 for s in spots where cand.y > s.y + 0.3 && abs(cand.x - s.x) < 1.3 && cand.y - s.y < 3.0 { hides = 1 }
             }
-            let score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
+            var score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
+            if live { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= 6 { break }
@@ -1292,6 +1297,7 @@ final class BlobBrain {
         let root = SIMD2(px, pz)
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
+            else if roomWaypointWait(root, w) { return nil }          // (the 11-15 room round, T5: nothing looked ahead on a waypoint leg; the one who gets there second stands a beat)
             else if legClear(root, w, margin: steerMargin) { return w }
             else { route = [] }
         }
