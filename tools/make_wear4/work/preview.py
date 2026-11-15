@@ -126,7 +126,7 @@ TARGET = Vector((0, 0.50, 0))
 def view(name):
     # (azimuth deg from +z toward +x, elevation deg, distance, target y)
     return dict(front=(0, 4, 4.4, 0.50), q34=(38, 6, 4.4, 0.50), side=(90, 4, 4.4, 0.50), q34b=(142, 6, 4.4, 0.50), back=(180, 4, 4.4, 0.50),
-                room=(12, 35, 4.8, 0.55), top=(15, 66, 4.6, 0.45), low=(0, -8, 4.4, 0.50))[name]
+                room=(12, 35, 4.8, 0.55), roomb=(192, 35, 4.8, 0.55), top=(15, 66, 4.6, 0.45), low=(0, -8, 4.4, 0.50))[name]
 FOC = [f for f in flags if f.startswith('--focus=')]
 BODYC = [f for f in flags if f.startswith('--body=')]
 for v in VIEWS:

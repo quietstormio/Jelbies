@@ -178,7 +178,7 @@ def vest_puffer(main=hx('#2E7C85'), trim=hx('#1F5760'), zip_=GOLD, pip=False, **
         return abs(math.sin(math.pi * s)) ** 0.7
     def cw(phi):                                         # stand-collar weight: sides + back, none on the front V
         c, s = math.cos(phi), math.sin(phi)
-        return smooth01(0.45, 0.8, abs(c)) if s >= 0 else 1.0
+        return 0.0 if s >= 0 else smooth01(0.0, 0.7, -s)
     def off(phi, y):
         if y < 0.25: return 0.022
         o = 0.014 + 0.022 * puff(y)
@@ -241,7 +241,7 @@ def raincoat(main=hx('#F4C13E'), trim=CREAM, toggle=hx('#7A4A2B'), pip=False, **
     levels = [0.18, 0.205, 0.235, 0.265, 0.30, 0.34, 0.38, 0.42, 0.46, 0.50, 0.54, 0.58, 0.62, 0.66, 0.70, 0.735]
     def cw(phi):
         c, s = math.cos(phi), math.sin(phi)
-        return smooth01(0.50, 0.85, abs(c)) if s >= 0 else 1.0
+        return 0.0 if s >= 0 else smooth01(0.0, 0.7, -s)
     def off(phi, y):
         o = 0.016 + 0.028 * (1 - smooth01(0.18, 0.52, y)) ** 1.3          # gentle A-line: 4.4 cm at the hem, 1.6 cm from the waist up
         if y > 0.64: o += 0.026 * cw(phi) * smooth01(0.64, 0.73, y)        # small collar
@@ -314,7 +314,7 @@ def cape(main=None, lining=HONEY, trim=CREAM, pip=False, **k):
         u = a / (NU - 1); v = b / (NV - 1)
         xs = side_lo + (side_hi - side_lo) * u
         ytop = ycl(1.5 * math.pi + math.asin(max(-0.97, min(0.97, 0.40 * xs / 0.57)))) - 0.012
-        yhem = HEM + 0.026 * math.sin(2 * math.pi * (xs * 1.75) + 0.6)
+        yhem = HEM + 0.024 * math.sin(2 * math.pi * (xs * 1.0) + 0.6)
         y = ytop + (yhem - ytop) * v
         X = (0.40 + 0.05 * v ** 1.4) * xs
         aw = float(B.halfWidth((y - B.lift) / B.bodyH))

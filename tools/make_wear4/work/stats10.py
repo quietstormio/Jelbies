@@ -23,13 +23,13 @@ for spec in [(i, False) for i in ids] + [(i, True) for i in ids if i in ('hoodie
     P = np.array([q for p in PARTS for q in p['P']]); T = sum(len(p['F']) for p in PARTS)
     CL = ('body', 'coat', 'panel', 'collar+1', 'collar-1')
     Pc = np.array([q for p in PARTS if p['name'] in CL for q in p['P']])
-    sd = B.sdf_pts(Pc); ad = arm_d(P)
+    sd = B.sdf_pts(Pc); ad = arm_d(P); sda = B.sdf_pts(P)
     z = P[:, 2] > 0.1
     ell = np.hypot(P[z, 0] / 0.15, (P[z, 1] - 0.651) / 0.10).min() if z.any() else 9
     fr = z & (np.abs(P[:, 0]) < 0.3); top = P[fr, 1].max() if fr.any() else 0
     parts = {}
     for p in PARTS: parts[p['name']] = parts.get(p['name'], 0) + len(p['P'])
-    print("%-20s %s verts %4d tris %4d | keepout ellipse min %.3f (>=1 ok), front top y %.3f (<=0.575 ok) | cloth skin offset min %.3f max %.3f (cloth verts %d) | arm min %.3f | wing min %.3f | pip spike min %.3f, tail min %.3f" % (
-        iid, 'PIP' if pip else '   ', len(P), T, ell, top, sd.min(), sd.max(), len(Pc), ad.min(), mind(P, WV), mind(P, SP),
-        min(float((np.linalg.norm(P - np.array(s[:3]), axis=1) - s[3]).min()) for s in TS)))
+    print("%-20s %s verts %4d tris %4d | keepout ellipse min %.3f (>=1 ok), front top y %.3f (<=0.575 ok) | cloth skin offset min %.3f max %.3f (cloth verts %d) | arm min %.3f | all-parts skin offset min %.3f max %.3f | wing min %.3f%s" % (
+        iid, 'PIP' if pip else '   ', len(P), T, ell, top, sd.min(), sd.max(), len(Pc), ad.min(), sda.min(), sda.max(), mind(P, WV),
+        (" | pip spike min %.3f, tail min %.3f" % (mind(P, SP), min(float((np.linalg.norm(P - np.array(s[:3]), axis=1) - s[3]).min()) for s in TS))) if pip else ""))
     print("     parts:", parts)
