@@ -110,7 +110,7 @@ final class ParkPairsTests: XCTestCase {
     func testWaiterStandsUntilPartnerIsNearThenBothRide() {
         ParkPairTuning.toyRateNew = false
         let c0 = ParkToys.placed.first { $0.kind == .seesaw }!.at
-        let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(4.2, 3.2)], seed: 5)
+        let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(3.0, 2.8)], seed: 5)
         let a = lab.rigs[0], b = lab.rigs[1], R = SeesawRide.shared, field = DecorField.shared
         XCTAssertTrue(a.brain.decorStart(.decorSit, a.sim, only: .seesaw, uid: uid), "A starts (the partner is recruited with him)")
         XCTAssertEqual(b.brain.idleState.kind, .decorSit, "B was started as the partner")
@@ -146,10 +146,10 @@ final class ParkPairsTests: XCTestCase {
     func testBlockedPartnerMakesTheWaiterGiveUp() {
         ParkPairTuning.toyRateNew = false
         let c0 = ParkToys.placed.first { $0.kind == .seesaw }!.at
-        let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(4.0, 3.0)], seed: 8)
+        let lab = parkWorld([c0 + SIMD2(0.9, 1.9), c0 + SIMD2(3.0, 2.8)], seed: 8)
         let a = lab.rigs[0], b = lab.rigs[1], R = SeesawRide.shared, field = DecorField.shared
         XCTAssertTrue(a.brain.decorStart(.decorSit, a.sim, only: .seesaw, uid: uid))
-        let pin = SIMD2<Float>(c0.x + 4.0, c0.y + 3.0)          // (B is blocked: every step he is put back where he started, so he never gets near his spot)
+        let pin = SIMD2<Float>(c0.x + 3.0, c0.y + 2.8)          // (B is blocked: every step he is put back where he started, so he never gets near his spot)
         var arrived = -1, ended = -1, everSeated = false, maxAmp: Float = 0
         for i in 0..<(60 * 30) {
             lab.tick(watching: false); field.tick(dt: 1.0 / 60)
@@ -202,6 +202,7 @@ final class ParkPairsTests: XCTestCase {
         for i in 0..<(60 * 50) {
             lab.tick(watching: false); field.tick(dt: 1.0 / 60)
             if i == 60 * 3 { b.brain.anticsEnabled = true }
+            if i % 60 == 0, i >= 60 * 3, i < 60 * 14 { MotionLog.write(String(format: "PAIRS dbg t=%d A kind %@ go %@ stage %d | B kind %@ go %@ stage %d dist %.2f | wait %@", i / 60, "\(String(describing: a.brain.idleState.kind))", "\(a.brain.idleState.decorGo)", stage(a.brain), "\(String(describing: b.brain.idleState.kind))", "\(b.brain.idleState.decorGo)", stage(b.brain), simd_distance(b.brain.position, b.brain.idleState.target), "\(R.waitInfo)")) }
             if R.stage(uid, seat: 0) == .seated, R.stage(uid, seat: 1) == .seated { bothSeated = true }
             if bothSeated, (field.seatOccupant[uid]?.count ?? 0) == 0 { ended = true; break }
         }
@@ -372,6 +373,7 @@ final class ParkPairsTests: XCTestCase {
 
     /// The room is untouched: the same seed with the old and the new switches gives the identical social sequence, decor starts and end positions (outingPlay is off at home; no park rule reads anything else).
     func testRoomSoakIdenticalWithOldAndNewSwitches() throws {
+        BlobBrain.pickBudgetSeconds = .infinity; defer { BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds }          // (the pick's time budget is wall-clock: without this two runs differ)
         func run(new: Bool) -> (events: [String], decorStarts: Int, pos: [SIMD2<Float>]) {
             setSwitches(new: new)
             DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); HopscotchLine.shared.prune(keeping: [])
