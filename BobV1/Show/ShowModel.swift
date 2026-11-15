@@ -341,6 +341,30 @@ nonisolated struct ShowBeat: Equatable, Sendable {
     func beat(atOrAfter t: Double) -> Int { Int(((t - firstBeat) / period).rounded(.up)) }
 }
 
+/// How a song's prompts are laid out: `old` = one on every beat, left / right alternating (the comparison and the way back), `calm` = rests, `lively` = rests and quick doubles
+/// half a beat apart. Puddle and Pond play calm, Lagoon and Ocean lively; `-DancePattern old|calm|lively` forces one (dev builds only).
+nonisolated enum DancePattern: String, CaseIterable, Sendable {
+    case old, calm, lively
+    static func forRank(_ r: ShowRank) -> DancePattern { r == .puddle || r == .pond ? .calm : .lively }
+    /// The pattern a show of `rank` plays: the dev argument when given (and allowed), else by rank.
+    static func resolve(rank: ShowRank, override: String? = DevArgs.enabled ? UserDefaults.standard.string(forKey: "DancePattern") : nil) -> DancePattern {
+        override.flatMap(DancePattern.init(rawValue:)) ?? forRank(rank)
+    }
+}
+
+/// One prompt of a pattern: `slot` counts half beats on the song's grid (even = on a beat), `foot` 0 = left (bass), 1 = right (clap).
+nonisolated struct DancePrompt: Equatable, Sendable {
+    var slot: Int
+    var foot: Int
+    /// "8L 10R 11L": `<slot><L|R>` words.
+    static func parse(_ words: String) -> [DancePrompt] {
+        words.split(separator: " ").compactMap { w in
+            guard let f = w.last, f == "L" || f == "R", let s = Int(w.dropLast()) else { return nil }
+            return DancePrompt(slot: s, foot: f == "L" ? 0 : 1)
+        }
+    }
+}
+
 /// One of the four dance songs the Jelly Show plays once (show_dance_1...4.m4a). `grid` is the song's MEASURED beat grid in seconds of the file (the
 /// decoded audio, AAC priming removed, as AVAudioFile reads it): beat 0 is the first bar downbeat, the period is the measured one (120, 112, 120 and
 /// 95 BPM: the earlier grids were 0.2 % too slow and the prompts drifted 20 to 29 ms late by the last beat). The prompts sit on beats
@@ -358,7 +382,11 @@ nonisolated struct DanceSong: Equatable, Sendable {
     static let ringOut = 0.6
 
     var track: SceneTrack { SceneTrack.danceSongs[min(max(song, 1), SceneTrack.danceSongs.count) - 1] }
-    var promptCount: Int { max(lastBeat - Self.firstPromptBeat + 1, 0) }
+    /// The prompts of `pattern` on this song: slot (half beats on the grid) and foot, from `DancePatternData` (generated from scripts/dance/patterns.json).
+    func prompts(_ pattern: DancePattern) -> [DancePrompt] { DancePrompt.parse(DancePatternData.words[song]?[pattern.rawValue] ?? "") }
+    func promptCount(_ pattern: DancePattern) -> Int { prompts(pattern).count }
+    /// The song time of a prompt slot (half beats): `grid.firstBeat + slot * period / 2`.
+    func time(ofSlot slot: Int) -> Double { grid.firstBeat + Double(slot) * grid.period / 2 }
     var bpm: Double { 60 / grid.period }
 
     static let all: [DanceSong] = [
@@ -380,6 +408,8 @@ nonisolated struct ShowDanceSim: Sendable {
         var foot: Int
         var beat: Int
         var time: Double
+        /// Half beats on the song's grid (0 for the old fixed grid dance).
+        var slot: Int = 0
         var grade: DrillGrade?
     }
     nonisolated enum Event: Equatable, Sendable { case hit(index: Int, foot: Int, grade: DrillGrade), slip(index: Int, foot: Int), stray, finished }
@@ -420,16 +450,16 @@ nonisolated struct ShowDanceSim: Sendable {
         }
     }
 
-    /// A song's dance: one prompt on each beat `firstPromptBeat...lastBeat` of the song's measured grid (song time 0 = the file's first sample), feet alternating from a seeded start.
-    init(song: DanceSong, timing: ShowTiming, seed: UInt64, songTime: Double) {
+    /// A song's dance: the prompts of `pattern` on the song's measured grid (song time 0 = the file's first sample): a prompt's time is `firstBeat + slot * period / 2`, its foot
+    /// is the pattern's (no mirroring: left is the bass in songs 2 and 4). `seed` is not used any more (the pattern is the song's).
+    init(song: DanceSong, pattern: DancePattern, timing: ShowTiming, seed: UInt64, songTime: Double) {
         self.grid = song.grid; self.timing = timing.scaled(ShowAssist.windowScale); self.songTime = songTime; self.endHold = DanceSong.ringOut
-        var rng = RaceRNG(seed: seed &* 0x9E3779B97F4A7C15 &+ 0xD17)
-        var foot = Int(rng.next() * 2) % 2
-        for (i, beat) in (DanceSong.firstPromptBeat...max(song.lastBeat, DanceSong.firstPromptBeat)).enumerated() {
-            prompts.append(Prompt(index: i, foot: foot, beat: beat, time: song.grid.time(ofBeat: beat)))
-            foot = 1 - foot
+        for (i, p) in song.prompts(pattern).enumerated() {
+            prompts.append(Prompt(index: i, foot: p.foot, beat: p.slot / 2, time: song.time(ofSlot: p.slot), slot: p.slot))
         }
     }
+    /// A quick double (two prompts about half a beat apart) is in this dance.
+    var hasQuickDoubles: Bool { zip(prompts, prompts.dropFirst()).contains { $1.time - $0.time < grid.period * 0.75 } }
 
     /// The prompt nearest to song time `t` (a tap's judged time), graded or not: (index, time).
     func nearestPrompt(to t: Double) -> (index: Int, time: Double)? {
