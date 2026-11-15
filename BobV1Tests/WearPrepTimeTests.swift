@@ -112,6 +112,9 @@ final class WearPrepTimeTests: XCTestCase {
             }
         }
         for _ in 0..<60 { step() }
+        // one untimed frame first: WornSet.frame prepares each look's mesh the first time it draws it (that cold cost is the prepare table's, not a per-frame cost)
+        _ = skins[0].withUnsafeBufferPointer { a in skins[1].withUnsafeBufferPointer { b in skins[2].withUnsafeBufferPointer { c in
+            set.frame(theme: RoomTheme(), time: 0.4) { [a.baseAddress, b.baseAddress, c.baseAddress][$0] } } } }
         var total = 0.0, verts = 0
         let frames = 600
         for _ in 0..<frames {
