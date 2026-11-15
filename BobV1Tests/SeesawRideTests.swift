@@ -999,6 +999,7 @@ final class SeesawRideTests: XCTestCase {
 
     /// The slower hop must be the gentler one: the same quantity (the step vector's change between steps in the air of a hop) measured with the stock hop (hopSlow 1.0) and with ours.
     func testSlowerHopIsGentler() {
+        ParkPairTuning.pairSeesaw = false; defer { ParkPairTuning.pairSeesaw = true }          // (park-pairs-r1: single-rider runs, the old solo ride behind the switch)
         let ours = SeesawTuning.hopSlow
         defer { SeesawTuning.hopSlow = ours }
         SeesawTuning.hopSlow = 1.0

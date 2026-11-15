@@ -254,6 +254,22 @@ final class ParkPairsTests: XCTestCase {
         }
     }
 
+    /// The hand-started pair of the old seesaw tests (both riders started by decorStart, outingPlay off): both must get on.
+    func testHandStartedPairBothGetOn() {
+        let lab = parkWorld([SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4)], seed: 3, outing: false)
+        for r in lab.rigs { r.brain.idleForced = true }
+        let R = SeesawRide.shared, field = DecorField.shared
+        for r in lab.rigs { XCTAssertTrue(r.brain.decorStart(.decorSit, r.sim, only: .seesaw, uid: uid)) }
+        var both = false
+        for i in 0..<(60 * 40) {
+            lab.tick(watching: false); field.tick(dt: 1.0 / 60)
+            if i % 120 == 0 { MotionLog.write(String(format: "PAIRS hand dbg t=%d | A %@ go %@ st %d d %.2f | B %@ go %@ st %d d %.2f | %@", i / 60, "\(String(describing: lab.rigs[0].brain.idleState.kind))", "\(lab.rigs[0].brain.idleState.decorGo)", stage(lab.rigs[0].brain), simd_distance(lab.rigs[0].brain.position, lab.rigs[0].brain.idleState.target), "\(String(describing: lab.rigs[1].brain.idleState.kind))", "\(lab.rigs[1].brain.idleState.decorGo)", stage(lab.rigs[1].brain), simd_distance(lab.rigs[1].brain.position, lab.rigs[1].brain.idleState.target), "\(R.waitInfo)")) }
+            if R.stage(uid, seat: 0) == .seated, R.stage(uid, seat: 1) == .seated { both = true; break }
+        }
+        XCTAssertTrue(both, "both got on: gaveUp \(R.gaveUp)")
+        for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner) }
+    }
+
     // MARK: the rates (pure checks of the gate)
 
     func testGateIsOpenAtHomeAndForCommandedAndPartnerStarts() {
