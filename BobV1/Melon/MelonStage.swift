@@ -286,7 +286,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// The aspect the roaming polygon was built for (GameCamera.refreshRoam); rebuilt when it changes, and every sim's safety arena follows it.
     private var roamAspect: Float = 0
     private func syncRoam(aspect: Float) {
-        guard actors.count > 1 || !parkActors.isEmpty, abs(aspect - roamAspect) > 0.005, !(game && model.care.volley.inScene) else { return }
+        guard actors.count > 1 || !parkActors.isEmpty || (RoomTraffic.loneFloorLive && !model.preview && !model.care.tripActive && !model.care.raceBusy), abs(aspect - roamAspect) > 0.005, !(game && model.care.volley.inScene) else { return }          // (the 11-15 room round, T7: one alone at home gets the whole floor too; never a showcase stage, never while he is out; RoomRoam+Traffic.swift)
         roamAspect = aspect
         guard GameCamera.refreshRoam(aspect: aspect) != nil else { return }
         Self.applyRoomArena(actors: actors, parkActors: parkActors, bathFenceLifted: model.care.bath.fenceLifted)
@@ -759,6 +759,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         brain.idleNight = pv ? 0 : DayClock.shared.nightFactor; brain.idleMorning = pv ? 0 : DayClock.shared.morningFactor; brain.idleDeepNight = pv ? 0 : DayClock.shared.deepNightFactor
         let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(a.id)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
         brain.sleepEnabled = roomLife && !pv; brain.anticsEnabled = roomLife && !pv; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
+        brain.homeRoom = roomLife && !pv && !model.care.tripActive && !model.care.trayOut && !model.care.bath.active          // (the 11-15 room round, RoomRoam.swift: the home room only, and never while a meal, a drink or the bath is on)
         if let o = Self.idleMoodOverride { brain.idleMood = o }
         var ht = CACurrentMediaTime()
         brain.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: touchHolds(a.id))
@@ -779,6 +780,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             brain.idleNight = pv ? 0 : DayClock.shared.nightFactor; brain.idleMorning = pv ? 0 : DayClock.shared.morningFactor; brain.idleDeepNight = pv ? 0 : DayClock.shared.deepNightFactor
             let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(0)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
             brain.sleepEnabled = roomLife && !pv; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
+            brain.homeRoom = roomLife && !pv && !model.care.tripActive && !model.care.trayOut && !model.care.bath.active          // (the 11-15 room round, RoomRoam.swift: the home room only, and never while a meal, a drink or the bath is on)
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
                 brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active || model.care.play.ballGame) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)
@@ -1271,6 +1273,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         renderer.perfFocus = game && model.care.focus.blend > 0.001      // PerfMeter ctx: GPU time in the close-up
         renderer.perfNote = !game ? "" : model.paused ? "paused" : model.care.select.isSelecting ? "select" : model.care.trayOut ? "tray" : ""
         if game { syncRoam(aspect: drawAspect) }          // the roaming floor follows the screen (a rotation changes how much floor is on screen)
+        if game, RoomRoamProbe.on { RoomRoamProbe.tick(actors: actors, parkActors: parkActors, model: model, aspect: drawAspect) }          // (dev only, log only: -RaceWallProbe 1; RoomRoam+Probe.swift)
         // Outlines (a projection of every skinned vertex + a hull, per Jelly) are only needed while a highlight is up; a double tap / touch-down
         // refreshes them on demand (`refreshOutlines`), so a roster of three no longer pays for them every frame.
         if game, model.care.select.isSelecting {
