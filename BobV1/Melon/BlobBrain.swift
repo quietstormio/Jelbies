@@ -563,6 +563,7 @@ final class BlobBrain {
         UserDefaults.standard.object(forKey: "WaveArmScale") != nil ? UserDefaults.standard.double(forKey: "WaveArmScale") : 1
     }
 
+    nonisolated static var armPrecomputeDelay: Double? { UserDefaults.standard.object(forKey: "ArmPrecomputeDelay") != nil ? UserDefaults.standard.double(forKey: "ArmPrecomputeDelay") : nil }
     /// Give the brain the render mesh so the arm paths can be precomputed (off the main thread unless `synchronous`).
     /// A wave is deferred until its keyframes are ready.
     var hasRenderMesh: Bool { attached }
@@ -587,6 +588,7 @@ final class BlobBrain {
         // loads it from the Caches folder on later launches.
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let result = ArmKeyframeStore.shared.keyframes(paths: paths, rest: rest, mat: mat, capsule: cap, index: index, scale: scale)
+            if let d = Self.armPrecomputeDelay { Thread.sleep(forTimeInterval: d) }          // (test only: -ArmPrecomputeDelay <s> makes the phone's slow precompute visible on the simulator)
             Task { @MainActor in
                 guard let self else { return }
                 for kf in result { self.armKeyframes[kf.name] = kf }
@@ -2029,7 +2031,18 @@ final class BlobBrain {
         feetInit = false; feet.reset(); beanCorr = [.zero, .zero]; beanFitUsed = nil
     }
 
+    nonisolated(unsafe) static var springLog = UserDefaults.standard.bool(forKey: "SpringArmLog")
+    private var springLogN = 0
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        defer {
+            if Self.springLog, armG > 0 || armActive || excitedOn || armLift != 0 || armWalkWant > 0 || nubOverride {
+                springLogN += 1
+                if springLogN % 3 == 0 {
+                    NSLog("%@", String(format: "[springarm] t=%.3f feat=%@ ready=%d bld=%d kf=%d act=%d path=%@ armT=%.2f g=%.3f blendNow=%.3f lift=%.3f walkWant=%.2f nubOv=%d exc=%d wb=%.0f blendSp=%d capF0=%.2f capF1=%.2f",
+                        CFAbsoluteTimeGetCurrent().truncatingRemainder(dividingBy: 1000), String(describing: feature), armReady ? 1 : 0, armBuilding ? 1 : 0, armKeyframes.count, armActive ? 1 : 0, armPathName, armT, armG, armBlendNow, armLift, armWalkWant, nubOverride ? 1 : 0, excitedOn ? 1 : 0, skinner.waveBlend[0].x, armBlendSpecies ? 1 : 0, armLastGeom[0].f, armLastGeom[1].f))
+                }
+            }
+        }
         noticeTeleport(sim)
         skinner.clearWaveBlend()          // (set again below only while the keyframed wave plays)
         skinner.tailOn = feature == .spines && !WornSet.sleepHides(self)          // (hold-wear-r1: NOT hidden for the flip trick any more: the spikes stay drawn there, so the tail they ride must stay too)
