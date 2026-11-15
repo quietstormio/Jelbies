@@ -15,7 +15,7 @@ final class WearBandTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     typealias Outfit = [WearSlot: WearLook]
 
-    override func setUp() { GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
+    override func setUp() { WearBody.useBisection = ProcessInfo.processInfo.environment["BAND_RADIAL_OLD"] == "1"; WearMeshes.clearCache(); GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 603.0 / 1311.0); DayClock.shared.forcedHour = 12 }
     override func tearDown() { GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
 
     struct Loop { var look: WearLook; var part: String; var verts: [Int]; var y0: [Float]; var edges: [(Int, Int, Float)]; var coverage: Float
@@ -35,7 +35,7 @@ final class WearBandTests: XCTestCase {
         let zc = axisZ()
         var out: [Loop] = []
         var base = 0
-        for part in a.parts {
+        for part in a.parts where !WearRules.drops(l, part: part.name) {          // (a part the rules drop - a bow tie's band - is not drawn: it takes no vertices)
             defer { base += part.positions.count }
             let rule = WearRules.rule(l, part: part.name)
             guard rule.w0 > 0.99, rule.w1 > 0.99, rule.h0 == 0, rule.h1 == 0, part.positions.count >= 8 else { continue }
@@ -80,7 +80,7 @@ final class WearBandTests: XCTestCase {
         guard l.slot != .hands, l.slot != .feet, let a = WearMeshes.art(l) else { return [] }
         var out: [(Int, Int, Float)] = []
         var base = 0
-        for part in a.parts {
+        for part in a.parts where !WearRules.drops(l, part: part.name) {          // (a part the rules drop - a bow tie's band - is not drawn: it takes no vertices)
             defer { base += part.positions.count }
             let r = WearRules.rule(l, part: part.name)
             guard r.w0 > 0.99, r.w1 > 0.99, r.h0 == 0, r.h1 == 0, part.positions.count >= 8 else { continue }
