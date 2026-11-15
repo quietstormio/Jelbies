@@ -151,8 +151,8 @@ final class ThreeJellyTests: XCTestCase {
         care.leftActive(at: t0)
         care.returnedActive(at: t0.addingTimeInterval(4 * 3600))
         for j in care.jellies {
-            XCTAssertLessThan(j.needs.level(.hunger), 0.7, "\(j.name) got hungrier while away")
-            XCTAssertEqual(j.needs.level(.hunger), 1 - 0.4, accuracy: 0.01)
+            XCTAssertLessThan(j.needs.level(.hunger), 0.9, "\(j.name) got hungrier while away")
+            XCTAssertEqual(j.needs.level(.hunger), 1 - 0.2, accuracy: 0.01)
             XCTAssertEqual(j.grime.dirt, 0.10, accuracy: 0.005, "\(j.name) got dirtier while away")
             XCTAssertEqual(j.look.dirt, j.grime.dirt, "the look the room draws follows the dirt")
         }

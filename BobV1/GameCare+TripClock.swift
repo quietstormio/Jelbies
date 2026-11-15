@@ -19,7 +19,7 @@ extension GameCare {
     func tripReturned(_ ids: [Int], extraThirst thirst: Float = 0) {
         for id in ids {
             guard let j = jelly(id) else { continue }
-            j.needs.applyAway(seconds: TripClockTuning.outAway)
+            j.needs.applyInAppTime(seconds: TripClockTuning.outAway)
             if thirst > 0 { j.needs.gain(.thirst, -thirst) }
             j.needs.save()
         }

@@ -109,7 +109,7 @@ extension GameCare {
         putEveryoneDown()
         DayClock.shared.skipToMorning(duration: NightSkipTuning.lapse, sweep: sweep)
         for j in jellies {
-            j.needs.applyAway(seconds: GameClockTuning.skippedNightAway); j.needs.save()
+            j.needs.applyInAppTime(seconds: GameClockTuning.skippedNightAway); j.needs.save()
             j.grime.applyAway(seconds: GameClockTuning.skippedNightAway); j.grime.save()
             j.refreshLook(force: false)
         }
