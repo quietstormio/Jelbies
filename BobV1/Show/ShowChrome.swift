@@ -292,7 +292,7 @@ struct DanceRound: View {
     private var stats: some View {
         let d = show.sim?.dance
         return HStack(spacing: 8) {
-            chip("Beat \(min((d?.judged ?? 0) + 1, d?.total ?? show.rank.promptCount)) / \(d?.total ?? show.rank.promptCount)", bg: SK.cream, fg: SK.ink)
+            chip("Beat \(min((d?.judged ?? 0) + 1, show.dancePromptTotal)) / \(show.dancePromptTotal)", bg: SK.cream, fg: SK.ink)
             chip("Perfect \(d?.perfects ?? 0)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26))
             chip("Good \(d?.goods ?? 0)", bg: Color(hex: 0xFFE7A8), fg: ShowUI.brownGold)
             chip("Slip \(d?.misses ?? 0)", bg: Color(hex: 0xF2ECE6), fg: SK.muted)
@@ -356,6 +356,8 @@ struct PromptLane: View {
         TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let song = show.danceNow()
             let items = show.sim?.dance?.visible(at: song) ?? []
+            // points per beat: 62 as always, but with quick doubles (two prompts half a beat apart) half a beat must hold two chips (54 + 46 wide, centres >= 50 apart): 104
+            let pitch: CGFloat = (show.sim?.dance?.hasQuickDoubles ?? false) ? 104 : 62
             ZStack(alignment: .leading) {
                 Capsule().fill(Color(red: 0.08, green: 0.05, blue: 0.13).opacity(0.6))
                 Circle().strokeBorder(Color(hex: 0xFFF6EC), lineWidth: 4).frame(width: 60, height: 60).padding(.leading, 14)
@@ -365,7 +367,7 @@ struct PromptLane: View {
                         .frame(width: near ? 54 : 46, height: near ? 54 : 46)
                         .background(Circle().fill(it.prompt.foot == 0 ? SK.sky : SK.pink))
                         .opacity(max(0.4, 1 - 0.13 * max(it.ahead, 0)))
-                        .offset(x: 14 + 30 - (near ? 27 : 23) + CGFloat(max(it.ahead, -0.3)) * 62)
+                        .offset(x: 14 + 30 - (near ? 27 : 23) + CGFloat(max(it.ahead, -0.3)) * pitch)
                 }
             }
             .frame(height: 84)

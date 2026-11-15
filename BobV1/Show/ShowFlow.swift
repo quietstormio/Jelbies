@@ -174,6 +174,10 @@ final class ShowFlow {
     /// The dance song's track (plays once under the dance) and its measured beat grid.
     var danceTrack: SceneTrack { danceSong.track }
     var grid: ShowBeat { danceSong.grid }
+    /// The prompt pattern of this show's dance (by rank; `-DancePattern` forces one in dev builds).
+    var dancePattern: DancePattern { DancePattern.resolve(rank: rank) }
+    /// How many prompts the dance has (the chip's "y"): the running dance's count, else the count this show's pattern will have.
+    var dancePromptTotal: Int { sim?.dance?.total ?? danceSong.promptCount(dancePattern) }
     /// The dance song is playing under the dance.
     var danceSongOn: Bool { beat == .dancing && danceMusicOn }
 
@@ -280,7 +284,7 @@ final class ShowFlow {
                             if AudioHub.audioLog { NSLog("[melon] dance GO without the prepared song: %@", why) }
                         }
                         s.beginDance(song: danceSong, songTime: 0); sim = s
-                        if AudioHub.audioLog { NSLog("[melon] dance start song=%d \"%@\" bpm=%.2f firstBeat=%.4f prompts=%d %.3f..%.3f s", danceSong.song, danceSong.title, danceSong.bpm, danceSong.grid.firstBeat, danceSong.promptCount, danceSong.grid.time(ofBeat: DanceSong.firstPromptBeat), danceSong.grid.time(ofBeat: danceSong.lastBeat)) }
+                        if AudioHub.audioLog, let d = s.dance { NSLog("[melon] dance start song=%d \"%@\" pattern=%@ bpm=%.2f firstBeat=%.4f prompts=%d %.3f..%.3f s", danceSong.song, danceSong.title, dancePattern.rawValue, danceSong.bpm, danceSong.grid.firstBeat, d.total, d.prompts.first?.time ?? 0, d.prompts.last?.time ?? 0) }
                     }
                     revision += 1
                 }
