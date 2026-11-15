@@ -58,6 +58,7 @@ extension BlobBrain {
     ///  - a standing Jelbie in the way: curve round him early, to the side away from him (his right if he is dead ahead);
     ///  - a walker coming head on: both curve to their own right, the lower id (who gives way) by more;
     ///  - a walker crossing my path: the lower id waits a beat (at most `yieldMax` s, then goes round), the higher id walks on - unless it is about to touch;
+    ///    (home room, 2026-11-15: the one who gets there SECOND gives way and passes behind the other: RoomRoam+Traffic.swift)
     ///  - a faster walker coming up behind a slower one: goes round.
     /// This is steering only: the bodies are never pushed apart (`MelonStage.keepApart` stays the last-resort spring).
     func lookAhead(_ root: SIMD2<Float>, _ target: SIMD2<Float>) -> LookAhead {
@@ -67,7 +68,8 @@ extension BlobBrain {
         guard L > 0.8 else { return .clear }
         let dir = d / L, right = SIMD2(dir.y, -dir.x)
         let clear = peerGap * 0.97
-        let vSelf = ContactTuning.walkerSpeed
+        let live = roomTraffic          // (the 11-15 room round, step 1: RoomRoam+Traffic.swift; read once)
+        let vSelf = live && RoomTraffic.realSpeed ? roomWalkSpeed : ContactTuning.walkerSpeed          // (T1: the speed he really walks at)
         let horizon = min(L / vSelf, ContactTuning.lookTime)
         struct Hit { var tc: Float; var pos: SIMD2<Float>; var vel: SIMD2<Float>; var id: Int; var walking: Bool; var dmin: Float }
         var hit: Hit?
@@ -91,9 +93,11 @@ extension BlobBrain {
         guard let h = hit else { yieldT = max(0, yieldT - runDt); return .clear }
         let speed = simd_length(h.vel)
         var share: Float = 1.0          // how much of the gap I swing out by
+        var behind: Float?          // (T2: the side that takes me behind a crossing walker I give way to)
         if h.walking {
             let cosA = simd_dot(dir, h.vel / speed)
-            let iYield = steerID < h.id
+            var iYield = steerID < h.id
+            if live { (iYield, behind) = roomCross(idYield: iYield, cosA: cosA, his: h.id, at: h.pos, vel: h.vel, root: root, dir: dir, right: right, vSelf: vSelf) }          // (T2: at a crossing the one who gets there second gives way)
             if abs(cosA) < 0.6 {          // crossing: the lower id swings out well, the other only when it is about to touch
                 if !iYield { if h.tc < 1.2 && h.dmin < clear * 0.75 { share = 0.6 } else { return .clear } }
             } else if cosA < 0 { share = iYield ? 0.85 : 0.55 }          // head on
@@ -102,7 +106,7 @@ extension BlobBrain {
         let q = h.pos + h.vel * h.tc          // where he is when we are closest
         let m = root + dir * (vSelf * h.tc)
         let side = simd_dot(q - m, right)
-        let first: Float = side > 0.12 ? -1 : (side < -0.12 ? 1 : 1)          // away from him; dead ahead: my right
+        let first: Float = behind ?? (side > 0.12 ? -1 : (side < -0.12 ? 1 : 1))          // away from him; dead ahead: my right (T2: behind a crossing walker I give way to)
         // the floor is narrow (a phone in portrait): a waypoint past the wall is pulled back onto the floor, and the swing may shrink, as long as it still clears him by most of the gap
         // (a narrow floor: when no waypoint clears him by the whole gap, one that clears him by 0.8 of it - the steering floor of `keepApart` - is taken)
         let gap0 = peerGap
