@@ -1,5 +1,6 @@
 #!/bin/bash
 # Usage: pre-install-gate.sh <simulator udid> <derived data path> [<path to a built device BobV1.app>]
+# To put a build on the phone after this gate has passed, use scripts/phone-install.sh (the only way: it builds, runs both checks, installs).
 # Arms / feet / clothing-prep gate to run BEFORE any phone install. Exit 0 = GATE PASS, non-zero = GATE FAIL.
 # Steps: (1) check-date-ops and check-bundle on the device app if given; (2) build-for-testing (Release, testability);
 # (3) run each suite below serially with test-without-building; (4) print one table.
