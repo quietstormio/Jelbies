@@ -65,7 +65,9 @@ nonisolated final class PerfMeter: @unchecked Sendable {
     // MARK: enable
 
     /// Call once at launch. `-PerfLog 1` / `-PerfLog 0` arrive through the argument domain; the value is persisted so a later plain launch keeps logging.
-    static func configure(defaults: UserDefaults = .standard) {
+    /// Only honoured where dev arguments are on (a saved flag does nothing in the store build; the saved value is left alone there).
+    static func configure(defaults: UserDefaults = .standard, devArgs: Bool = DevArgs.enabled) {
+        guard devArgs else { on = false; return }
         let v = defaults.object(forKey: "PerfLog") != nil && defaults.bool(forKey: "PerfLog")
         defaults.set(v, forKey: "PerfLog")
         if v { shared.enable() } else { on = false }
