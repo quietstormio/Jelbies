@@ -1,5 +1,6 @@
 #!/bin/bash
 # Usage: check-date-ops.sh <path to .app>. Fails if any Mach-O inside imports Foundation's back-deployed Date.<= / Date.>= (null on an older iOS 27.2 beta).
+# Before a phone build, remove the product app first (rm -rf <derived data>/Build/Products/Release-iphoneos/BobV1.app) so every resource is copied again.
 app="${1:?usage: check-date-ops.sh path/to/App.app}"; bad=0
 while IFS= read -r f; do
   file "$f" | grep -q 'Mach-O' || continue
