@@ -248,7 +248,7 @@ After archiving, use Xcode's "Generate Privacy Report" and "Validate App" to con
 3. **Apple Intelligence.** Apple's on-device model; not off-device.
 4. **App Group and Live Activity.** Local sharing only.
 5. **Mic permission strings are in the build.** Permission prompts are not collection, but a reviewer will see them, so the review notes explain them (section 7).
-6. **Launch arguments (DEV ARGS).** `-NewGame`, `-ImportSave` and `-ClearGuest` are not behind the DEV ARGS gate (Start/StartFlow.swift comments say device Release builds can use them). They only run if someone launches the app from a computer with arguments, so they are not reachable by a player. They do not collect or send anything.
+6. **Launch arguments (DEV ARGS).** In the store build (the project's default Release settings, `JELBIES_DEV_ARGS_COND` empty, not the simulator, not Debug) the code behind the `JELBIES_DEV_ARGS` condition is compiled out: `-NewGame`, `-NewGameCoins`, `-ImportSave`, `-ClearGuest` (Start/StartFlow.swift), the 10,000-coin start balance, the Jelly variant switches and the "(test)" pickers in Settings do not exist. Everything else that reads a launch argument is gated by `DevArgs.enabled` (`-PerfLog` and `-FootLog` saved flags, `-ShowAuto`, `-ShowRank`, `-ParkToys`, `-JellyLook` and the other `-Jelly*` tuning), and in addition the app clears the launch-argument domain at start when dev arguments are off (`DevArgs.stripLaunchArguments`, called first in `BobV1Main.main`). `-AudioLog` is read by Audio/AudioHub.swift without the gate, but it is inert in the store build because the launch arguments are cleared before it is read. None of these collect or send anything, and a player cannot pass launch arguments anyway.
 7. **Release notes wording.** The plist comment about "Live Activities (race / nap / Pep refill)" is out of date: the code defines only `race` and `nap` (Shared/JelbiesActivityAttributes.swift). Not a privacy issue, but do not mention a Pep refill activity in any listing text.
 
 If any of these changes before submission (for example a crash reporter or analytics SDK is added), the label must be changed to match.
@@ -348,8 +348,8 @@ These are not in the code and were not invented here.
 6. **Availability.** Choose countries and regions, plus the release option (manual, automatic, or phased). Remember Korea gets a regional rating because of the category.
 7. **App icon.** Confirm the final icon is in the asset catalog (RELEASE-1.0.md earlier said "still missing"; the 2026-11-09 launch checks list `AppIcon` plus seven alternate icons as present). The App Store marketing icon is the 1024 x 1024 `AppIcon` image.
 8. **Archiving with DEV ARGS off** (RELEASE-1.0.md, App Store checklist):
-   - The Release configuration turns the `JELBIES_DEV_ARGS` compilation condition on by default so device diagnostics keep working (`JELBIES_DEV_ARGS_COND = JELBIES_DEV_ARGS` in project.pbxproj).
-   - **The archive must clear it:** pass `JELBIES_DEV_ARGS_COND=` on every archive, for example `xcodebuild archive ... JELBIES_DEV_ARGS_COND=`, or set `JELBIES_DEV_ARGS_COND` to empty in the archive build settings.
+   - The Release configuration leaves `JELBIES_DEV_ARGS_COND` empty (`JELBIES_DEV_ARGS_COND = ""` in project.pbxproj), so a plain archive has dev arguments OFF. Only `scripts/phone-install.sh` turns them on (it passes `JELBIES_DEV_ARGS_COND=JELBIES_DEV_ARGS`) for the owner's phone test builds.
+   - Do not pass `JELBIES_DEV_ARGS_COND` on the archive; the default is what ships. (An older archive recipe said to pass `JELBIES_DEV_ARGS_COND=`: still harmless, no longer needed.)
    - Confirm the archive scheme has no launch arguments, and check the launch log does not contain the line "DEV ARGS ENABLED".
    - Bump `CURRENT_PROJECT_VERSION` (currently 1 everywhere) before each upload: `agvtool new-version -all <n>`; App Store Connect rejects a repeated build number for the same version.
    - After archiving, run Generate Privacy Report and Validate App.
@@ -359,3 +359,7 @@ These are not in the code and were not invented here.
 12. **TestFlight pass on a clean install** (permission prompts, the three scene-manifest items in RELEASE-1.0.md, a tap through every alternate icon).
 13. **Primary language:** English (U.S. or the chosen English variant).
 14. **App accessibility information** (the new Accessibility Nutrition Labels in App Store Connect) is optional but available; only tick what you have verified on a device (the code has VoiceOver labels, 44 pt targets and shape cues per RELEASE-1.0.md).
+
+## How to cut the release
+
+Cut from the `phone-jelly-final` line (not `launch-next` or `main`: they do not have the jelly look, so an archive from them would ship the old matte body). Archive with the default Release settings (Product > Archive, no extra build settings): dev arguments are off, the approved jelly look is the built-in default, and the launch log has no "DEV ARGS ENABLED" line. Raise the build number first (section 9 item 8). Phone test builds for the owner are made only through `scripts/phone-install.sh`, which asks for dev arguments explicitly.
