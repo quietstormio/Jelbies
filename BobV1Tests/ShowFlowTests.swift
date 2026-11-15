@@ -302,16 +302,18 @@ final class ShowFlowTests: XCTestCase {
         run(4) { care.show.onStage }
         XCTAssertTrue(care.show.onStage)
         let book = care.showBook
-        XCTAssertEqual(book.extra.count, 2, "3 rivals, 1 spare Jelmiko: two borrowed bodies")
-        XCTAssertEqual(room.park.count, 2)
+        XCTAssertEqual(book.extra.count, 3, "3 rivals: every one a borrowed visitor body, whatever is at home")
+        XCTAssertEqual(room.park.count, 3)
+        XCTAssertEqual(book.performers, [0], "only the contestant is on the stage"); XCTAssertEqual(book.parked, [1], "the other Jelmiko waits off stage")
         XCTAssertEqual(book.rivalBody.count, 3); XCTAssertEqual(Set(book.rivalBody.values).count, 3, "every rival has her own body")
-        XCTAssertEqual(book.rivalBody[0], book.performers[1], "the spare Jelmiko first")
+        XCTAssertEqual(Set(book.rivalBody.values), Set(book.extra.map(\.id)), "every rival is a borrowed body")
         for a in book.extra { XCTAssertTrue(care.showHides(a.id), "hidden until the Trick round") }
+        XCTAssertTrue(care.showHides(1), "the parked Jelmiko is never drawn")
         care.show.auto = true
         run(120) { care.show.trickStage == .rivals }
         XCTAssertEqual(care.show.trickStage, .rivals)
         for a in book.extra { XCTAssertFalse(care.showHides(a.id), "on stage for the rivals' turn") }
-        XCTAssertFalse(care.showHides(book.rivalBody[0]!))
+        XCTAssertFalse(care.showHides(book.rivalBody[0]!)); XCTAssertTrue(care.showHides(1))
         care.show.abort()
         XCTAssertTrue(book.extra.isEmpty, "borrowed bodies released"); XCTAssertTrue(room.park.isEmpty)
         XCTAssertTrue(book.rivalBody.isEmpty)

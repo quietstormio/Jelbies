@@ -120,8 +120,9 @@ nonisolated enum ShowStage {
         let fixed = [SIMD2<Float>(-2.5, 2.0), SIMD2(-1.3, 0.6), SIMD2(1.3, 0.6)]
         return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
     }
-    /// A parked Jelly (a body the show does not need) waits far off to the side, out of every camera.
-    static func parkSpot(_ id: Int) -> SIMD2<Float> { SIMD2(40 + Float(id) * 4, 2) }
+    /// A parked Jelly (a home Jelmiko the show does not need) waits far off to the LEFT, out of every camera: the borrowed rival bodies wait far to the right
+    /// (`GameCare.showFarSpot`, x 40...; the visitor spawn row is x 40..., z 0), so no two bodies ever share a spot (z stays inside the room floor's depth range).
+    static func parkSpot(_ id: Int) -> SIMD2<Float> { SIMD2(-40 - Float(id) * 4, 2) }
 }
 
 /// How the stage camera frames the show this frame (the glue sets it per round; the stage reads it with the show's camera blend).

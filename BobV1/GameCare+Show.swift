@@ -35,7 +35,7 @@ final class ShowBook {
     /// Borrowed rival bodies (the park's visitor bodies, ids after the roster's) for the rivals the roster has no spare Jelbie for; gone when the trip is over.
     var extra: [JellyActor] = []
     var extraSpecs: [ParkVisitor] = []
-    /// Rival index -> the actor id that plays her on the stage (the player's spare Jelbies first, then the borrowed bodies). A rival without an entry is a silhouette card.
+    /// Rival index -> the actor id that plays her on the stage (always a borrowed visitor body; the player's other Jelmiko stay off stage). A rival without an entry is a silhouette card.
     var rivalBody: [Int: Int] = [:]
     /// Seconds since a rival's flop began, by actor id (the wobble lands a beat later).
     var flops: [Int: Float] = [:]
@@ -147,7 +147,7 @@ extension GameCare {
         queued.removeAll(); callRunning = false
         voice.cancel()
         if outingGate([id], again: { [weak self] in self?.startShow(jelly: id, rank: rank, seed: seed) }) { return }          // he runs out of the room first
-        let bodies = max(1, min(raceBook.actors.count, 4))
+        let bodies = 1          // the stage has ONE roster body (the contestant); every rival is a borrowed visitor body, every other home Jelmiko waits off stage (showSwap)
         show.begin(playerID: id, name: prof.name, character: prof.character, input: showPlayerInput(jelly: id), rank: r, dayKey: Self.showDay, bodies: bodies, seed: seed ?? Self.showSeed)
         show.setOutfit(showOutfitTags(jelly: id))
     }
@@ -164,19 +164,23 @@ extension GameCare {
     /// The rival index of a stage body (nil = the player or nobody).
     func showRival(ofActor id: Int) -> Int? { showBook.performers.firstIndex(of: id).flatMap { $0 > 0 ? $0 - 1 : nil } }
     /// Rival indices that have a body on the stage (the rest are silhouette cards).
-    var showRivalsWithBodies: Set<Int> { Set(showBook.performers.indices.dropFirst().map { $0 - 1 }) }
+    var showRivalsWithBodies: Set<Int> { Set(showBook.rivalBody.keys) }
     /// How the camera frames the stage this frame (nil = not on stage).
     var showFrame: ShowFrame? { show.onStage ? show.frame : nil }
     /// A stage body: the player's or a rival's (the wardrobe hides on the rivals and the parked).
     func showHidesWear(_ id: Int) -> Bool { show.active && (id != show.playerID) }
-    /// The rival bodies are out of the picture in the solo rounds (Look, Trick): they come on for the Dance and the results.
+    /// The Trick round shows the rivals' bodies only while the camera is on the wide shot: not while the player picks (the camera holds the contestant alone, big).
+    var showRivalsVisible: Bool {
+        (show.round == .trick || (show.round == .results && show.trickStage != .pick)) && show.trickStage != .pick          // (the last turn's rivals play on after the sim has its results)
+    }
+    /// Only the contestant is ever drawn, plus the borrowed rival bodies while the wide Trick shot is on. The other Jelmiko at home wait off stage the whole Show.
     func showHides(_ id: Int) -> Bool {
         guard show.onStage, id != show.playerID else { return false }
-        let inTrick = show.round == .trick || (show.round == .results && show.trickStage != .pick)          // (the last turn's rivals play on after the sim has its results)
-        if showBook.extra.contains(where: { $0.id == id }) { return !inTrick }          // the borrowed bodies are on only for the Trick round
-        guard showBook.performers.contains(id) else { return false }
-        return !(show.round == .dance || inTrick || show.round == .results)
+        if showBook.extra.contains(where: { $0.id == id }) { return !showRivalsVisible }
+        return true          // (a home Jelmiko that is not the contestant: parked, never drawn)
     }
+    /// Is this roster body one of the home Jelmiko waiting off stage (for the light's box and the tests)?
+    func showParked(_ id: Int) -> Bool { show.onStage && showBook.parked.contains(id) }
 
     // MARK: world swaps (under the white)
 
@@ -185,10 +189,8 @@ extension GameCare {
         switch dest {
         case .stage:
             let player = show.playerID
-            let others = book.actors.indices.filter { $0 != player }
-            let want = min(book.actors.count, 4)
-            book.performers = Array(([player] + others).prefix(want))
-            book.parked = book.actors.indices.filter { !book.performers.contains($0) }
+            book.performers = book.actors.indices.contains(player) ? [player] : []          // the one roster body on the stage: the contestant
+            book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko waits off stage (state saved, restored under the white on the way home)
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.dancing = [:]; book.danceRestart = [:]; book.flopT = nil; book.turned = []
             book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false
             let spots = ShowStage.spots(bodies: book.performers.count)
@@ -446,6 +448,10 @@ extension GameCare {
         show.tick(dt: dt)
         guard show.active, show.onStage else { return }
         let book = showBook
+        for aid in book.parked where actors.indices.contains(aid) {          // the home Jelmiko off stage: held still (no autonomy, no room life), asleep never
+            guard let b = actors[aid].brain else { continue }
+            b.idleBlocked = true; b.autonomy = false
+        }
         for (a, v) in zip(book.extra, book.extraSpecs) {          // the borrowed rival bodies: held like the others, their species art on
             guard let b = a.brain else { continue }
             b.idleBlocked = true; b.autonomy = false
