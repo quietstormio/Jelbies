@@ -68,6 +68,9 @@ final class ShowFlow {
     @ObservationIgnored private(set) var danceSong: DanceSong = DanceSong.all[0]
     /// The dance clock: seconds of the dance song as heard (0 = its first sample). Held at 0 until the song is audible, then the audio engine's own player time.
     @ObservationIgnored private(set) var danceT: Double = 0
+    /// Set once, the moment a dance has run 1.5 s without the song's clock and so counts frames: the reason (diagnostics; also logged under `-AudioLog 1`).
+    @ObservationIgnored private(set) var danceFallback: String?
+    @ObservationIgnored private var danceNoClock: Double = 0
     @ObservationIgnored private var danceMusicOn = false
     @ObservationIgnored private var danceHeard = false
     @ObservationIgnored private var danceAudioWait: Float = 0
@@ -123,6 +126,8 @@ final class ShowFlow {
     @ObservationIgnored var cue: (ShowCue) -> Void = { AudioHub.shared.showCue($0) }
     /// The audio clock of the stage / studio music (song seconds), nil = not playing (muted, still decoding): the dance then counts frames.
     @ObservationIgnored var songClock: (SceneTrack) -> Double? = { AudioHub.shared.songTime(of: $0) }
+    /// Why `songClock` is nil for a track (the log line and `danceFallback`).
+    @ObservationIgnored var songClockWhy: (SceneTrack) -> String = { AudioHub.shared.songClockWhy(of: $0) }
     /// The music is up (muted = nothing to wait for).
     @ObservationIgnored var audioReady: (MusicScene) -> Bool = { AudioHub.shared.muted || AudioHub.shared.scenePlaying($0) }
     /// Test / capture aid: the dance is tapped for him (a few late, one missed) and the tricks are picked for him.
@@ -202,7 +207,7 @@ final class ShowFlow {
 
     private func resetStage() {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; goAge = 0
-        danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0
+        danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
         rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
@@ -260,7 +265,7 @@ final class ShowFlow {
                     if var s = sim {
                         // the dance song starts now (the scene switches on the next frame) and its prompts are on ITS beats: the clock is the song's own
                         // player time, held at 0 until the song is audible, so the start can never drift from the clock
-                        danceT = 0; danceMusicOn = true; danceHeard = false; danceAudioWait = 0
+                        danceT = 0; danceMusicOn = true; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
                         s.beginDance(song: danceSong, songTime: 0); sim = s
                         if AudioHub.audioLog { NSLog("[melon] dance start song=%d \"%@\" bpm=%.2f firstBeat=%.4f prompts=%d %.3f..%.3f s", danceSong.song, danceSong.title, danceSong.bpm, danceSong.grid.firstBeat, danceSong.promptCount, danceSong.grid.time(ofBeat: DanceSong.firstPromptBeat), danceSong.grid.time(ofBeat: danceSong.lastBeat)) }
                     }
@@ -288,7 +293,15 @@ final class ShowFlow {
             if !danceHeard, AudioHub.audioLog { NSLog("[melon] dance song heard: clock %.3f s (output latency %.0f ms)", a, AudioHub.shared.outputLatencyMS) }
             danceHeard = true; danceT = max(danceT, a); return danceT
         }
-        if !danceHeard, !audioReady(.danceSong(danceSong.song - 1)), danceAudioWait < 1.5 { danceAudioWait += dt; return danceT }          // decoding: the prompts wait
+        if !danceHeard, !audioReady(.danceSong(danceSong.song - 1)), danceAudioWait < 1.5 { danceAudioWait += dt; danceNoClock += Double(dt); return danceT }          // decoding: the prompts wait
+        if !danceHeard {
+            danceNoClock += Double(dt)
+            if danceNoClock >= 1.5, danceFallback == nil {          // the song's clock never came: say so (the phone build used to go quiet here)
+                let why = songClockWhy(danceTrack) + (audioReady(.danceSong(danceSong.song - 1)) ? "" : "; scene voice not playing")
+                danceFallback = why
+                if AudioHub.audioLog { NSLog("[melon] dance song NOT heard after %.2f s: %@", danceNoClock, why) }
+            }
+        }
         danceT += Double(dt)
         return danceT
     }

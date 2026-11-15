@@ -209,6 +209,7 @@ final class SceneMusicEngine {
         var ready = false
         var started = false
         var cancelled = false
+        let born = CACurrentMediaTime()
         init(track: SceneTrack) { self.track = track }
     }
 
@@ -216,6 +217,9 @@ final class SceneMusicEngine {
     private var voices: [Voice] = []
     private var level: Float = 1
     private var configObserver: NSObjectProtocol?
+
+    /// `-AudioLog 1`: why a scene voice did not start, how long it took, and what dropped / replayed it (the Jelly Show's dance song fails silently otherwise).
+    private func alog(_ s: @autoclosure () -> String) { if AudioHub.audioLog { NSLog("[audio] %@", s()) } }
 
     init() {
         configObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
@@ -249,15 +253,25 @@ final class SceneMusicEngine {
     }
 
     private func finishLoading(_ v: Voice, _ r: SceneRender.Result?) {
-        guard let r, !v.cancelled, voices.contains(where: { $0 === v }) else { drop(v); return }
+        guard let r, !v.cancelled, voices.contains(where: { $0 === v }) else {
+            alog("scene voice \(v.track.rawValue) NOT started: \(r == nil ? "decode failed" : "cancelled") (after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms)")
+            drop(v); return
+        }
         engine.connect(v.node, to: engine.mainMixerNode, format: r.format)
-        if !engine.isRunning { engine.prepare(); do { try engine.start() } catch { drop(v); return } }
+        if !engine.isRunning {
+            engine.prepare()
+            do { try engine.start() } catch {
+                alog("scene voice \(v.track.rawValue) NOT started: engine start failed \(error)")
+                drop(v); return
+            }
+        }
         if let i = r.intro { v.node.scheduleBuffer(i, completionHandler: nil) }
         v.node.scheduleBuffer(r.loop, at: nil, options: v.track.playsOnce ? [] : .loops, completionHandler: nil)
         if !v.stopping { v.fader.snap(0); v.fader.ramp(to: 1, over: v.fadeIn) }          // decoding can outlast the fade: fade in from the moment it really starts (never a pop-in)
         v.node.volume = v.stopping ? v.fader.level * level * v.track.gain : 0
         v.node.play()
         v.ready = true; v.started = true
+        alog("scene voice \(v.track.rawValue) started after \(Int((CACurrentMediaTime() - v.born) * 1000)) ms")
     }
 
     func stopAll(fade: Double) {
@@ -280,6 +294,7 @@ final class SceneMusicEngine {
     }
 
     private func drop(_ v: Voice) {
+        alog("scene drop \(v.track.rawValue) ready=\(v.ready ? 1 : 0) stopping=\(v.stopping ? 1 : 0)")
         v.cancelled = true
         if v.node.engine != nil { v.node.stop(); engine.detach(v.node) }
         voices.removeAll { $0 === v }
@@ -305,6 +320,7 @@ final class SceneMusicEngine {
     /// Rebuilds the playing track on a fresh start of the engine (config change: route change, interruption end). Internal for tests.
     func restartAfterConfigChange() {
         guard let t = current else { return }
+        alog("scene engine config change: replaying \(t.rawValue) from 0")
         let fade = 0.3
         for v in voices { v.cancelled = true; if v.node.engine != nil { v.node.stop(); engine.detach(v.node) } }
         voices.removeAll()
@@ -313,13 +329,22 @@ final class SceneMusicEngine {
 
     /// Seconds of SONG time of the newest playing track, as heard (output latency taken off): the file's own clock for a track that plays from its
     /// start. It keeps counting past the loop (the loop is a whole number of beats).
-    func songTime(of t: SceneTrack) -> Double? {
-        guard let v = voices.last(where: { $0.track == t && !$0.stopping && $0.ready && $0.started }),
-              let nt = v.node.lastRenderTime, nt.isSampleTimeValid, let pt = v.node.playerTime(forNodeTime: nt) else { return nil }
+    func songTime(of t: SceneTrack) -> Double? { reading(of: t).time }
+    /// Why `songTime(of:)` is nil right now (empty when it is not).
+    func songTimeWhy(of t: SceneTrack) -> String { reading(of: t).why }
+
+    private func reading(of t: SceneTrack) -> (time: Double?, why: String) {
+        guard let v = voices.last(where: { $0.track == t && !$0.stopping && $0.ready && $0.started }) else {
+            let any = voices.last(where: { $0.track == t })
+            return (nil, any == nil ? "no scene voice for \(t.rawValue)" : any!.stopping ? "voice stopping" : "voice not ready (decoding or start failed)")
+        }
+        guard let nt = v.node.lastRenderTime else { return (nil, "voice has not rendered yet (lastRenderTime nil\(engine.isRunning ? "" : ", engine not running")\(v.node.isPlaying ? "" : ", node not playing"))") }
+        guard nt.isSampleTimeValid else { return (nil, "render sample time invalid") }
+        guard let pt = v.node.playerTime(forNodeTime: nt) else { return (nil, "player time nil") }
         // the player's own sample position at the last render, plus the time since that render (the reading is up to one IO buffer old; capped, never negative), minus the route's output latency (Bluetooth)
         var stale = 0.0
         if nt.isHostTimeValid { stale = min(max(AVAudioTime.seconds(forHostTime: mach_absolute_time()) - AVAudioTime.seconds(forHostTime: nt.hostTime), 0), 0.05) }
         let played = Double(pt.sampleTime) / pt.sampleRate + stale - AVAudioSession.sharedInstance().outputLatency
-        return played
+        return (played, "")
     }
 }
