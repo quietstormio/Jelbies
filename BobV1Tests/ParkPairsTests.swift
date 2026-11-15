@@ -389,7 +389,7 @@ final class ParkPairsTests: XCTestCase {
         // (the toy bands are judged on both configurations pooled: a single configuration has only ~10 to 20 rides in it, and the old runs themselves differ by a third from run to run)
         MotionLog.write(oldAll.line("POOLED OLD")); MotionLog.write(newAll.line("POOLED NEW"))
         if !onlyNew {
-            if oldAll.seesawRides >= 6 { let r = Float(newAll.seesawRides) / Float(oldAll.seesawRides); XCTAssertGreaterThanOrEqual(r, 0.35, "seesaw rides pooled \(r) of the old"); XCTAssertLessThanOrEqual(r, 0.65, "seesaw rides pooled \(r) of the old") }
+            if oldAll.seesawRides >= 6 { let r = Float(newAll.pairRides) / Float(oldAll.seesawRides); XCTAssertGreaterThanOrEqual(r, 0.35, "seesaw rides pooled (new = rides where the plank moved with two on it; a lone sit never moves) \(r) of the old"); XCTAssertLessThanOrEqual(r, 0.65, "seesaw rides pooled \(r) of the old") }
             if oldAll.hopSessions >= 6 { let r = Float(newAll.hopSessions) / Float(oldAll.hopSessions); XCTAssertGreaterThanOrEqual(r, 0.35, "hopscotch pooled \(r) of the old"); XCTAssertLessThanOrEqual(r, 0.65, "hopscotch pooled \(r) of the old") }
         }
     }

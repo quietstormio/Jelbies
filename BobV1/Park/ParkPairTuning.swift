@@ -21,7 +21,7 @@ nonisolated enum ParkPairTuning {
 
     // MARK: B. rarer toys (autonomous picks only; per creature, per decision)
     /// The chance that an autonomous pick of the seesaw / of a NEW hopscotch line goes ahead (the rest is "not now": the decision falls through to another pick). Today it is 1.0 (nothing rolls it away).
-    static let seesawPickChance: Float = 1.0, hopscotchPickChance: Float = 0.3
+    static let seesawPickChance: Float = 1.0, hopscotchPickChance: Float = 0.4
     /// A roll that said no is not asked again for this long (else the next decision, a few seconds later, rolls again and the chance means little).
     static let rejectHold: ClosedRange<Float> = 25...40
     /// After a creature has used (or given up) a toy it does not pick that toy again for this long (seconds, drawn per use).
