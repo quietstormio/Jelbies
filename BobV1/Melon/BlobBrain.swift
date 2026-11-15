@@ -449,6 +449,12 @@ final class BlobBrain {
     var armT: Float = 0
     /// The wave's arm-side foot lift is off while a social holds the arm up (the high five).
     var waveFootOff = false
+    /// A STAGE setting (never reset by a script): the hello wave keeps both feet planted (no lift, no swing, no tilt, no foot piece asked for by the wave). The arm and the body's lean are
+    /// unchanged. Set by `GameCare.plantedWave` on the Jelly Spring's showcase stages (very large view: a lifted foot piece reads as a separate lump); false everywhere else.
+    var plantedWave = false
+    /// Diagnostics / tests: the wave's foot lift as applied in the last `driveLimbs` pass (0 outside a wave), and the wave's own bean request.
+    private(set) var waveLiftApplied: Float = 0
+    private(set) var waveAskedBeans = false
     var armBlend: Float = 0
     var rng: UInt64 = 0xA24BAED4963EE407
 
@@ -2106,6 +2112,7 @@ final class BlobBrain {
             prepareBeans(sim, skinner)
             if beanScratch[0].count != FootBean.vertexCount { beanScratch = [[SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount), [SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount)] }
             var want = false
+            waveLiftApplied = 0; waveAskedBeans = false
             let fitted = sim.bodyPose(iterations: 3)
             for s in 0..<2 {
                 var (xz, fyaw, h, out, tilt, fwd) = feet.state(s)
@@ -2114,11 +2121,12 @@ final class BlobBrain {
                 if out != 0 || fwd != 0 { outV = rotXZ(SIMD2((s == 1 ? 1 : -1) * out, fwd), fyaw) }
                 var waveLift: Float = 0
                 if waving && s == (armSide > 0 ? 1 : 0) {
-                    let e = waveFootOff ? 0 : WaveScript.footLift(at: armT)          // (the high five holds the arm up with the foot planted: BlobSocial+Friends nubPin)
+                    let e = (waveFootOff || plantedWave) ? 0 : WaveScript.footLift(at: armT)          // (the high five holds the arm up with the foot planted: BlobSocial+Friends nubPin)
                     outV += rotXZ(SIMD2(Float(armSide) * waveFootOut, waveFootFwd), yaw) * (e * amplitude)
                     h += waveFootLift * e * amplitude
                     tilt = waveFootTilt * e
                     waveLift = e
+                    waveLiftApplied = e
                 }
                 let c = geom.contact[s]
                 // SIM: the sole follows the BODY's rigid pose plus a few centimetres toward the wanted spot (a bigger xz shear or any lift
@@ -2146,6 +2154,7 @@ final class BlobBrain {
                 // BEAN: a foot that is stepping, displaced from the body's own foot, lifted or waving needs the bean; both feet still at their rest
                 // spots for beanHoldTime lets the beans go (one swap per action, never per step)
                 if (feet.active || simd_length(offFull) > 0.012 || h > 0.006 || waveLift > 0.02) { want = true }
+                if waveLift > 0.02 { waveAskedBeans = true }
                 let ct = cosf(tilt), st = sinf(tilt), hz = geom.heelZ[s] - c.z
                 let ys: Float = 1
                 let wy = sim.floorY + c.y + h

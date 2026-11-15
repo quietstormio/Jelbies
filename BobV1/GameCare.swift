@@ -202,6 +202,8 @@ final class GameCare {
     @ObservationIgnored private(set) var isPreview = false
     /// The opening story mounts its Jelbies long before they pop: no arrival chirp until the story says so.
     @ObservationIgnored var silentArrival = false
+    /// The Jelly Spring's stages (set by `ShowcaseStage(plantedWave:)` before any Jelbie ticks): every Jelbie's hello wave keeps both feet planted (`BlobBrain.plantedWave`).
+    @ObservationIgnored var plantedWave = false
     /// The characters in the room, by slot (JellyRoster).
     var roster: [Int] { jellies.map(\.character) }
     /// Phase A: the care menu (Feed / Drink / Come here / Clean) always acts on Bob, so it stays visible with several Jellies instead of waiting for a selection.
@@ -792,6 +794,7 @@ final class GameCare {
             syncPerks(id: a.id, brain: brain)
             brain.idleBlocked = (bath.active || play.ballGame || isPreview) && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
             brain.focusPaused = false
+            brain.plantedWave = plantedWave
             driveFocus(id: a.id, brain: brain, sim: a.sim, dt: dt)
             tickDining(id: a.id, brain: brain, sim: a.sim, dt: dt)           // his meal, when the tray is for him (GameCare+Dining.swift)
             if select.hopRequest == a.id, !focus.isActive, select.takeHopRequest() != nil, !brain.isSleeping { brain.startHopPlay(sim: a.sim, distance: 0.0001) }          // (a highlighted sleeper does not hop)
@@ -839,6 +842,7 @@ final class GameCare {
             wireWorld(brain, isBob: true)
         }
         lastBrain = brain; lastSim = sim
+        brain.plantedWave = plantedWave
         lineupDemoTick(dt: dt)
         syncPerks(id: 0, brain: brain)
         let act = brain.activity

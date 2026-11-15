@@ -724,7 +724,7 @@ struct AdoptionCenter: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: showPlaceholder)
-            ShowcaseStage(roster: stageRoster, focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen] m in stageReady(m, gen: gen) }, silent: row)
+            ShowcaseStage(roster: stageRoster, focusFirst: true, fullScreen: false, cutout: true, onReady: { [gen = pageGen] m in stageReady(m, gen: gen) }, silent: row, plantedWave: Self.springPlantedWave)
                 .id(stageID).frame(width: 420, height: 420)
                 .offset(x: 10, y: 46)
                 .opacity(ready ? slideO : 0).offset(x: slideX)
@@ -1311,6 +1311,10 @@ struct AdoptionCenter: View {
 
     /// `-SpringArmOld 1` = the old behaviour (a hop may start while the arrival wave is still playing).
     static var springArmOld: Bool { UserDefaults.standard.bool(forKey: "SpringArmOld") }
+    /// `-SpringWaveFoot 1` = the old behaviour (the hello wave lifts the foot on the Jelly Spring too).
+    static var springWaveFoot: Bool { UserDefaults.standard.bool(forKey: "SpringWaveFoot") }
+    /// What the Jelly Spring's stages are built with: the wave keeps both feet planted (unless `-SpringWaveFoot 1`).
+    static var springPlantedWave: Bool { !springWaveFoot }
     /// True while the stage's Jelbie (slot) is in its hello wave: the wave script runs or the keyframed arm is out.
     private func waveBusy(_ m: MelonModel, slot: Int = 0) -> Bool {
         guard let b = m.care.brainFor(slot) else { return false }
