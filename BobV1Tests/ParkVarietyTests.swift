@@ -23,34 +23,34 @@ final class ParkVarietyTests: XCTestCase {
         let d = freshDefaults()
         d.set(try JSONEncoder().encode(old), forKey: ParkBook.key)
         let book = ParkBook(defaults: d)
-        XCTAssertEqual(book.visitors.count, 48)
+        XCTAssertEqual(book.visitors.count, 54)          // (park-play-r1: 16 stock + 32 extras + 6 special-species visitors; was 48)
         for i in 0..<16 {
             XCTAssertEqual(book.visitors[i].id, old[i].id)
             XCTAssertEqual(book.visitors[i].name, old[i].name)
             XCTAssertEqual(book.visitors[i].colour, old[i].colour)
             XCTAssertEqual(book.visitors[i].friendship, old[i].friendship)
         }
-        XCTAssertEqual(book.visitors.map(\.id), Array(0..<48))
+        XCTAssertEqual(book.visitors.map(\.id), Array(0..<54))
         // saved at once, and a second load keeps it
         let again = ParkBook(defaults: d)
         XCTAssertEqual(again.visitors, book.visitors)
         // the extras follow the signature rule
-        for v in book.visitors { XCTAssertEqual(v.signature, v.colour.speciesFeature); XCTAssertTrue(JellyVariantBook.parkEligible(v.colour)) }
-        // a new player gets the same 48
+        for v in book.visitors { XCTAssertEqual(v.signature, v.species.map { JellyRoster.feature($0) } ?? v.colour.speciesFeature); XCTAssertTrue(JellyVariantBook.parkEligible(v.colour)) }
+        // a new player gets the same pool
         XCTAssertEqual(ParkBook(defaults: freshDefaults()).visitors.map(\.name), book.visitors.map(\.name))
     }
 
     func testAllFortyEightNamesAreUniqueAndNotCompetitionNames() {
         let pool = ParkPool.all(reserved: ParkBook.reservedNames())
-        XCTAssertEqual(pool.count, 48)
+        XCTAssertEqual(pool.count, 54)          // (was 48)
         let keys = pool.map { ParkNames.key($0.name) }
-        XCTAssertEqual(Set(keys).count, 48, "every park name is unique")
+        XCTAssertEqual(Set(keys).count, 54, "every park name is unique")
         XCTAssertTrue(Set(keys).isDisjoint(with: Set(RivalNames.all.map(ParkNames.key))), "no park visitor shares a name with a competition rival")
         XCTAssertEqual(Set(RivalNames.all.map(ParkNames.key)).count, RivalNames.all.count)
         XCTAssertGreaterThanOrEqual(RivalNames.all.count, 48)
         XCTAssertEqual(Set(ParkWords.extraNames.map(ParkNames.key)).count, ParkTuning.extraCount)
-        XCTAssertEqual(Set(keys.suffix(32)), Set(ParkWords.extraNames.map(ParkNames.key)), "the extras kept their own names")
-        for v in pool.suffix(32) { XCTAssertTrue(ParkTextSafety.isSafe(v.name, isName: true), v.name) }
+        XCTAssertEqual(Set(keys[16..<48]), Set(ParkWords.extraNames.map(ParkNames.key)), "the extras kept their own names")
+        for v in pool[16...] { XCTAssertTrue(ParkTextSafety.isSafe(v.name, isName: true), v.name) }
         for n in RivalNames.all { XCTAssertTrue(ParkTextSafety.isSafe(n, isName: true), n) }
     }
 

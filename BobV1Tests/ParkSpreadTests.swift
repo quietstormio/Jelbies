@@ -53,4 +53,32 @@ final class ParkSpreadTests: XCTestCase {
         MotionLog.write(String(format: "SPREAD friend: in %.2f of the visits before, %.2f after", before.friendShare, after.friendShare))
         XCTAssertGreaterThanOrEqual(after.friendShare, before.friendShare * 0.95, "the friend comes back at least about as often")
     }
+
+    /// The special species: six visitors after the extras, each with the species' own feature; an old save of 48 grows to 54 and keeps its friends; classic visitors have no species.
+    func testSpecialSpeciesVisitors() throws {
+        let pool = ParkPool.all(reserved: ParkBook.reservedNames())
+        let sp = pool.filter { $0.species != nil }
+        XCTAssertEqual(sp.count, ParkTuning.speciesVisitorCount)
+        XCTAssertEqual(sp.map(\.id), Array(48..<54))
+        XCTAssertEqual(Set(sp.compactMap(\.species)), [JellyRoster.teddyID, JellyRoster.pearlID, JellyRoster.pandaID])
+        for v in sp { XCTAssertEqual(v.signature, JellyRoster.feature(v.species!), "\(v.name): the species' own feature"); XCTAssertNil(v.wear); XCTAssertEqual(v.kind, v.species) }
+        XCTAssertTrue(pool.filter { $0.species == nil }.allSatisfy { [0, 1, 2, 3].contains($0.kind) })
+        XCTAssertEqual(Set(pool.map(\.kind)), [0, 1, 2, 3, 4, 5, 6], "all seven kinds")
+        // an old save keeps its friends and gains the six
+        var old = Array(pool[0..<48]); old[5].friendship["2"] = 60
+        let d = UserDefaults(suiteName: "parkspread.\(UUID().uuidString)")!
+        d.set(try JSONEncoder().encode(old), forKey: ParkBook.key)
+        let book = ParkBook(defaults: d)
+        XCTAssertEqual(book.visitors.count, 54); XCTAssertEqual(book.visitors[5].friendship["2"], 60)
+        XCTAssertEqual(book.visitors.filter { $0.species != nil }.count, 6)
+        // with seven kinds the household's share falls further (a visit of four)
+        ParkPlayTuning.spreadNew = true
+        var own = 0, total = 0
+        for seed in 0..<200 {
+            var rng = SplitMix(s: UInt64(seed) &* 0x1234_5679 &+ 11)
+            for v in ParkPool.pickCast(from: pool, count: 4, characters: [2, 102], now: 1_000_000, household: [2], using: &rng) { total += 1; if v.kind == 2 { own += 1 } }
+        }
+        MotionLog.write(String(format: "SPREAD seven kinds, two greens at home: the household's kind is %.2f of the visitors (4 per visit)", Double(own) / Double(total)))
+        XCTAssertLessThan(Double(own) / Double(total), 0.15)
+    }
 }
