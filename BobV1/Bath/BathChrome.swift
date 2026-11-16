@@ -37,6 +37,7 @@ struct BathChrome: View {
     var body: some View {
         ZStack {
             Color.clear.onGeometryChange(for: CGSize.self) { $0.size } action: { viewSize = $0 }.allowsHitTesting(false)
+            if bath.phase == .soap { TipAnchor("clean", delay: 1.0) }          // the first-time tip: once the tub is still, before the first scrub
             if bath.showsChrome {
                 VStack(spacing: 0) {
                     HStack {

@@ -633,6 +633,7 @@ struct LobbyHowSheet: View {
             }
         }
         .accessibilityIdentifier("lobby-how")
+        .tipHold("lobby-how")
     }
 }
 

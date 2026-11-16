@@ -88,6 +88,7 @@ struct CampChrome: View {
                         .padding(.top, 60).padding(.leading, 12)
                 }
                 if park.phase == .playing {
+                    TipAnchor("camp", ready: !ui.members.isEmpty, delay: 0.8)          // the first-time tip: once somebody is at Camp
                     if ui.members.isEmpty, ui.sheet == .none { emptyCard }
                     if let c = selectedCreature, ui.sheet == .none, !ui.moving {
                         if wide { HStack { Spacer(); card(c).frame(width: min(320, g.size.width * 0.37)).padding(.top, 70).padding(.bottom, 90).padding(.trailing, 8) } }

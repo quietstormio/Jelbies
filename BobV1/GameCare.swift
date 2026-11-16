@@ -18,6 +18,8 @@ import simd
 final class GameCare {
     /// A tray is out (or about to be): Feed and Drink are disabled until it has poofed away.
     private(set) var trayOut = false
+    /// The meal on the tray gives a power-up (the first-time tip "Power-up!" comes when the tray is gone).
+    @ObservationIgnored private var mealHasPerk = false
     /// A group action (call everyone / come here walking to its spots, a group serving, a group bedtime walk) is on: the Cancel pill shows from its start.
     var cancelPill = false
     /// A voice command asked for a Town screen ("let's race" / "time to train" open the Track for the selected Jelly): GameScreen watches `townRequest`.
@@ -518,12 +520,12 @@ final class GameCare {
         if let why = orderBlocker(c) { tapRefused(why); return }          // (said out loud: GameCare+MealFeedback.swift)
         if jelly == nil, jellies.count > 1, let full = fullLine(c, jelly: jelly) { tapRefused(full) }          // a group serving has no label of its own: the tray still comes out and they shake their heads, the line says why (a single Jelbie shows "Not hungry" over his head)
         if jelly == nil, jellies.count > 1 {         // the group serving: started by `tickGroup` (it has every brain)
-            mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0
+            mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0; mealHasPerk = mealHasPerk || c.perk != nil
             return
         }
         let jelly = jelly ?? 0
         mealJelly = jellies.indices.contains(jelly) ? jelly : 0
-        wanted = c; servingKind = c.kind; trayOut = true
+        wanted = c; servingKind = c.kind; trayOut = true; mealHasPerk = mealHasPerk || c.perk != nil
         retries = 0                                  // a fresh tap: the re-serve budget (`Self.maxReserves`) starts over
         resetStandWalk(); orderAge = 0
     }
@@ -905,7 +907,7 @@ final class GameCare {
         dining.update(dt: dt)
         if let room = renderer?.room { pushDiningFrames(room) }
         let out = wanted != nil || meal != nil || dining.isPresent || groupActive
-        if out != trayOut { trayOut = out }
+        if out != trayOut { trayOut = out; if !out, mealHasPerk { mealHasPerk = false; TipBook.shared.request("powerup") } }          // (home again after a power-up meal: the tip waits for the tray to be gone and everyone roaming)
         let cp = focus.phase == .approaching || groupActive || bedtimeWalking
         if cp != cancelPill { cancelPill = cp }
         if !out, servingKind != nil { servingKind = nil }

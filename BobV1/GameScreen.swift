@@ -255,6 +255,7 @@ struct GameScreen: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
+            if town == nil { TipAnchor("powerup", ready: false) }          // the room is up: the power-up tip (asked for by GameCare when the meal is over) may show
             PlayChrome(care: model.care)          // Play mode: the flick surface, Done, hearts (Play/PlayChrome.swift)
 
             BathChrome(care: model.care)
@@ -503,6 +504,29 @@ struct GameScreen: View {
             if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
         }
         .onAppear { model.care.select.gateDraw = true }
+        .task {          // capture aid (dev arguments only): `-TipShow <id>` opens that card's screen from the room (the rest open from -StoreOpen / -LobbyAuto / -GameAction clean / -StartPark / -StartCamp)
+            guard DevArgs.enabled, let id = TipBook.launchOverrides().show else { return }
+            for _ in 0..<300 where LaunchGate.shared.visible { try? await Task.sleep(nanoseconds: 100_000_000) }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            withAnimation(CareMenu.spring) {
+                switch id {
+                case "feed": menuOpen = true; openPicker = .food
+                case "play": menuOpen = true; openPicker = .toy
+                case "dress": bagTab = .wear; bagWho = 0; bagOpen = true
+                case "decor": bagTab = .toys; bagWho = 0; bagOpen = true
+                case "spring": StartFlow.shared.openAdoption()
+                case "clean": model.care.bath.grime.dirt = 0.5; model.care.clean()
+                default: break
+                }
+            }
+            TipBook.shared.request(id)
+        }
+        .onAppear {          // first-time tips: the game's state for the suppression, the heads for the keep-off check, the dev launch arguments (TipsReset / TipShow)
+            let care = model.care
+            TipWindowHost.care = care
+            TipBook.shared.context = { [weak care] in care.map { TipContext.live($0) } ?? TipContext() }
+            TipBook.shared.applyLaunchOverrides()
+        }
         .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen, goOut: $town) }   // on the root: the HUD's pieces come and go with focus mode
         #if DEBUG
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {
@@ -1182,6 +1206,13 @@ struct CareMenu: View {
         .onChange(of: care.select.highlightActs) { _, _ in openForHighlight() }          // the same creature highlighted again (nothing else changed): the menu opens again
         .onAppear { if care.highlightedJelly != nil, !care.focus.isActive, !care.bath.active, !care.tripActive, !care.arranging { openForHighlight() } }          // a highlight already present when the screen appears (back from a store / Show / park screen): the menu is open on it
         .onChange(of: picker) { _, k in care.pickerShowing = k != nil }          // the need bubbles stay out of the way of an open Feed / Drink / Play row
+        .task {          // capture aid (dev arguments only): `-TipShow tricks` taps the first Jelmiko and opens his trick chips
+            guard DevArgs.enabled, TipBook.launchOverrides().show == "tricks" else { return }
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            care.tapJelly(0)
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation(Self.spring) { open = true; trickRow = true }
+        }
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
             openPicker = nil
@@ -1323,11 +1354,11 @@ struct CareMenu: View {
 
     /// The unfolded picker / chip row under a row (Feed, Drink, Play, Tricks, Compete).
     @ViewBuilder private func unfolded(under item: HUDItem) -> some View {
-        if picker == .food, item == .feed { pickerRow(kind: .food) }
+        if picker == .food, item == .feed { pickerRow(kind: .food).background { TipAnchor("feed") } }
         if picker == .drink, item == .drink { pickerRow(kind: .drink) }
-        if picker == .toy, item == .play { pickerRow(kind: .toy) }
+        if picker == .toy, item == .play { pickerRow(kind: .toy).background { TipAnchor("play") } }
         if competeRow, item == .compete { competeChips }
-        if trickRow, item == .tricks { trickChips }
+        if trickRow, item == .tricks { trickChips.background { TipAnchor("tricks") } }
     }
 
     /// Tricks unfolds into ONE row of chips that scrolls sideways: the tricks this Jelbie knows (tap = he does it now), then the locked ones
