@@ -91,6 +91,7 @@ final class TipBook {
     @ObservationIgnored var now: () -> Date = { Date() }
     @ObservationIgnored var context: () -> TipContext = { TipContext() }
     @ObservationIgnored private var lastEnd: Date?
+    @ObservationIgnored private var lastLog = ""
     /// `-TipShow <id>` (dev only): that card ignores its flag and the gap (never the suppression).
     @ObservationIgnored private(set) var forced: String?
     @ObservationIgnored private var pump: Task<Void, Never>?
@@ -143,6 +144,7 @@ final class TipBook {
             if ctx.blocked || !holds.isEmpty || !open.contains(c) { hide() }
             return
         }
+        if DevArgs.enabled, !queue.isEmpty { let line = "queue=\(queue) open=\(open.sorted()) ctx=\(ctx) holds=\(holds.sorted())"; if line != lastLog { lastLog = line; NSLog("[tips] %@", line) } }
         guard !queue.isEmpty, !ctx.blocked, holds.isEmpty else { return }
         if let last = lastEnd, now().timeIntervalSince(last) < Self.gap, !(queue.first == forced && forced != nil) { return }
         guard let i = queue.firstIndex(where: { open.contains($0) }) else { return }
