@@ -84,6 +84,7 @@ final class StartFlow {
 
     /// Runs before anything reads a save: `-ResetForAdoption 1` (simulator builds only).
     static func applyLaunchArguments() {
+        JellyCamp.resumeRelease()          // a "Say goodbye" a kill interrupted is finished before anything reads the save
         #if DEBUG || targetEnvironment(simulator)
         if UserDefaults.standard.integer(forKey: "ResetForAdoption") != 0 { wipeAll() }
         #endif
@@ -285,6 +286,8 @@ final class StartFlow {
     @discardableResult func campBringHome(_ id: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.bringHome(id), now: now, d); if ok { afterCampMove() }; return ok }
     @discardableResult func campSendToCamp(_ id: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.sendToCamp(id), now: now, d); if ok { afterCampMove() }; return ok }
     @discardableResult func campSwap(in inID: Int, out outID: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.swap(in: inID, out: outID), now: now, d); if ok { afterCampMove() }; return ok }
+    /// "Say goodbye": the creature at Camp is let go for good (JellyCamp.letGo: marker, 100 coins once, purge). The yard shows the confirmation (press and hold) first.
+    @MainActor @discardableResult func campSayGoodbye(_ id: Int, defaults d: UserDefaults = .standard) -> Bool { let ok = JellyCamp.letGo(id, d); if ok { afterCampMove() }; return ok }
     /// Whether a purchase would really have a place right now (home or Camp), read from the save: the Jelly Spring asks BEFORE it takes any coins.
     static func canPlaceNew(_ d: UserDefaults = .standard) -> Bool {
         let l = JellyCamp.savedLists(d)
