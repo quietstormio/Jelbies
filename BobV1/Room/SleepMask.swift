@@ -62,8 +62,8 @@ nonisolated enum EyeMaskModel {
         var pivot = SIMD3<Float>.zero
     }
 
-    /// One mask palette per CHARACTER (JellyRoster.characterCount: Bob, Pip, Moss, Lavender, Teddy, Pearl, Panda); SleepMaskSet maps a slot to its character.
-    static let paletteCount = 7
+    /// One mask palette per CHARACTER (JellyRoster.characterCount: Bob, Pip, Moss, Lavender, Teddy, Pearl, Panda, Tiger, Berry); SleepMaskSet maps a slot to its character.
+    static let paletteCount = 9
     /// Band and piping colours (linear) by Jelly id: contrast with the body (blue, yellow, green, lavender).
     static func palette(_ id: Int) -> (band: SIMD3<Float>, piping: SIMD3<Float>) {
         let c = Consumables.self
@@ -74,7 +74,9 @@ nonisolated enum EyeMaskModel {
         case 3:  return (c.srgb(0.86, 0.62, 0.22), c.srgb(0.99, 0.88, 0.62))        // honey on lavender Lavender
         case 4:  return (c.srgb(0.22, 0.38, 0.62), c.srgb(0.62, 0.78, 0.95))        // denim on light-brown Teddy
         case 5:  return (c.srgb(0.55, 0.45, 0.80), c.srgb(0.88, 0.82, 0.98))        // soft violet on white Pearl
-        default: return (c.srgb(0.90, 0.45, 0.55), c.srgb(0.99, 0.82, 0.86))        // rose on black-and-white Panda
+        case 6:  return (c.srgb(0.90, 0.45, 0.55), c.srgb(0.99, 0.82, 0.86))        // rose on black-and-white Panda
+        case 7:  return (c.srgb(0.16, 0.50, 0.52), c.srgb(0.66, 0.90, 0.88))        // teal on orange Tiger
+        default: return (c.srgb(0.30, 0.62, 0.42), c.srgb(0.80, 0.95, 0.84))        // leaf green on pink Berry
         }
     }
 

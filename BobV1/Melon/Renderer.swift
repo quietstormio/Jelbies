@@ -1278,13 +1278,16 @@ final class MelonRenderer {
                     // Panda (BlueBelly mode 51): the egg is drawn as is (the shader paints the eye patches, band, arms, feet); everything after it in the body index range
                     // (the walking arm capsules, the foot beans, the ears + pom) is drawn again as the same shader's all-charcoal mode 52. Teddy's / every other body: one draw, as before.
                     let pandaBody = slot.uboBuf.contents().load(fromByteOffset: shapeAt, as: SIMD4<Float>.self).w
-                    let isPanda = pandaBody > 50.5 && pandaBody < 51.5
-                    if isPanda, let cap = m.armCapsule, cap.indexFirst > m.body.first {
+                    // Tiger (BlueBelly mode 61) and Berry (mode 71) are split the same way: the egg carries the painted marks (TigerMarks.h / BerryMarks.h) and the pieces after it
+                    // are drawn again as mode 62 / 72 = the plain body colour, so no stripe or seed lands on a walking arm or a foot. Panda's two draws are the numbers they were (51, 52).
+                    var eggMode: Float? = nil
+                    if pandaBody > 50.5 && pandaBody < 51.5 { eggMode = 51 } else if pandaBody > 60.5 && pandaBody < 61.5 { eggMode = 61 } else if pandaBody > 70.5 && pandaBody < 71.5 { eggMode = 71 }
+                    if let egg = eggMode, let cap = m.armCapsule, cap.indexFirst > m.body.first {
                         var ub = slot.uboBuf.contents().load(as: MelonUniforms.self)
-                        ub.shape.w = 51
+                        ub.shape.w = egg
                         e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
                         e.drawIndexedPrimitives(type: tri, indexCount: cap.indexFirst - m.body.first, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: m.body.first * 4)
-                        ub.shape.w = 52
+                        ub.shape.w = egg + 1
                         e.setFragmentBytes(&ub, length: MemoryLayout<MelonUniforms>.size, index: 0)
                         e.drawIndexedPrimitives(type: tri, indexCount: m.body.first + m.body.count - cap.indexFirst, indexType: .uint32, indexBuffer: indexBuf, indexBufferOffset: cap.indexFirst * 4)
                         e.setFragmentBuffer(slot.uboBuf, offset: 0, index: 0)

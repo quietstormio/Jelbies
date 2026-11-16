@@ -51,6 +51,8 @@ nonisolated enum JelbieA11yText {
         let character = JellyRoster.species(instance)          // a duplicate (instance id >= 100) looks like his species
         if character == JellyRoster.pearlID { return "white with pearly little wings" }
         if character == JellyRoster.pandaID { return "white with black patches round the eyes, round black bear ears, black arms and feet and a puffy black tail" }
+        if character == JellyRoster.tigerID { return "orange with rust stripes on the crown, the cheeks and across the back" }
+        if character == JellyRoster.berryID { return "pink with cream seeds and a leafy green top" }
         switch JellyRoster.feature(character) {
         case .none: return "blue and plain"
         case .spines: return "yellow with soft spines"
