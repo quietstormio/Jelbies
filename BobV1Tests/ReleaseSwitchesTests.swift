@@ -40,4 +40,12 @@ final class ReleaseSwitchesTests: XCTestCase {
         XCTAssertTrue(ParkVisitPlan.allInPlayAlways(devArgs: true, defaults: d, environment: [:]))
         XCTAssertTrue(ParkVisitPlan.allInPlayAlways(devArgs: false, defaults: d, environment: ["XCTestConfigurationFilePath": "x"]))
     }
+
+    func testFoodCaptureArgumentsNeedTheDevSwitch() {
+        let (d, done) = suite(); defer { done() }
+        d.set(1, forKey: "FoodSeed")
+        XCTAssertFalse(FoodCaptureArgs.foodSeed(devArgs: false, defaults: d)); XCTAssertTrue(FoodCaptureArgs.foodSeed(devArgs: true, defaults: d))
+        XCTAssertNil(FoodCaptureArgs.feedID("feed:sushi", devArgs: false)); XCTAssertEqual(FoodCaptureArgs.feedID("feed:sushi", devArgs: true), "sushi")
+        XCTAssertNil(FoodCaptureArgs.feedID("clean", devArgs: true))
+    }
 }

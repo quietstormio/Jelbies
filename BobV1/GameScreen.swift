@@ -862,7 +862,7 @@ struct GameScreen: View {
             case "feed:pizza": care.feed("pizza")
             case "drink:soda": care.drink("soda")
             case "feed:berries": care.feed("berries")
-            case _ where a.hasPrefix("feed:"): care.feed(String(a.dropFirst(5)))          // -GameAction feed:<food id> (capture aid; the bag needs one for a store food: -FoodSeed 1)
+            case _ where FoodCaptureArgs.feedID(a) != nil: care.feed(FoodCaptureArgs.feedID(a) ?? "")          // -GameAction feed:<food id> (capture aid; the bag needs one for a store food: -FoodSeed 1)
             case "drink:water": care.drink("water")
             case "call": care.call()
             case "callall": care.comeHereEveryone()
@@ -1016,7 +1016,7 @@ struct GameScreen: View {
             for n in list.split(separator: ",") { if let l = WearLook(rawValue: String(n)) { _ = care.store.wear(l, on: who) } }
         }
         // capture aid: -FoodSeed 1 puts three of each power-up food in the bag (no perks, no coins): for recording meals
-        if d.integer(forKey: "FoodSeed") != 0 {
+        if FoodCaptureArgs.foodSeed(defaults: d) {
             for id in ["sushi", "popsicle", "taco", "donut", "nuggets", "onigiri", "cookie", "fries"] where model.care.store.count(id) < 3 { model.care.store.grant(id, 3 - model.care.store.count(id)) }
         }
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
