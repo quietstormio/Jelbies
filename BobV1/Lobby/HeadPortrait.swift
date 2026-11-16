@@ -28,6 +28,29 @@ struct HeadPortraitKey: Hashable, Sendable {
     static let actionFloorFraction: CGFloat = 0.885
     /// The action shot's camera pitch above level (rad): high enough that a tutu reads as a skirt, low enough that the shoes show.
     static let actionPitch: Float = 0.36
+    // MARK: the lobby head portrait (2026-11-16, the owner: "should include their whole face, doesn't need to have the clothes")
+    /// The picture shows the WHOLE face: from just below the mouth (rest y 0.665; the picture's bottom is rest y 0.50 when the crown is at 1.35) up past the brows (0.945) and the crown, with
+    /// room above for a species feature (Moss's antennas, Teddy's ears, Pip's spikes). Its height is `faceSpan` (also the width: the picture is square), its centre `faceCentreBelowTop` under the crown.
+    static let faceSpan: Float = 1.10
+    static let faceCentreBelowTop: Float = 0.30
+    /// The face's points in rest coordinates (body y up from the soles; x across): where the eyes, brows and mouth are. (Contracts.swift BobForm; the mouth is drawn at y 0.665 in Shaders.metal.)
+    static let eyeY: Float = Float(BobForm.eyeY), eyeX: Float = Float(BobForm.eyeX), browY: Float = Float(BobForm.browY), browHalfLen: Float = Float(BobForm.browHalfLen), mouthY: Float = 0.665
+    /// The picture's vertical range for a body whose crown is at `topY`: (bottom, top) in world y.
+    static func faceRange(topY: Float) -> (bottom: Float, top: Float) { let c = topY - faceCentreBelowTop; return (c - faceSpan / 2, c + faceSpan / 2) }
+    /// What a head portrait draws of the outfit: NOTHING (no hat, glasses, scarf, jersey, band or shoes: the face is the picture). The action shot (`pose`) keeps the outfit.
+    static func outfitDrawn(_ o: [WearSlot: WearLook], pose: Int?) -> [WearSlot: WearLook] { pose == nil ? [:] : o }
+    /// The camera of a head portrait / action shot: `target` looked at from `dist` away along the facing `dir` raised by `pitch` (nil: a hair above level), the picture `span` tall at the target.
+    static func eye(target: SIMD3<Float>, dir: SIMD3<Float>, span: Float, aspect: Float, pitch: Float?) -> SIMD3<Float> {
+        let th = tanf(GameCamera.fovY / 2)
+        let dist = (span / 2) / min(th, th * aspect)
+        guard let pitch else { return target + dir * dist + SIMD3(0, dist * 0.12, 0) }
+        return target + (dir * cosf(pitch) + SIMD3<Float>(0, sinf(pitch), 0)) * dist
+    }
+    /// The pitch a head portrait looks down at (like the room camera, where the face was approved).
+    static var portraitPitch: Float {
+        let down = GameCamera.baseEye - GameCamera.baseTarget
+        return asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
+    }
     static var span: Float { UserDefaults.standard.object(forKey: "HeadSpan") != nil ? UserDefaults.standard.float(forKey: "HeadSpan") : 1.5 }
 }
 

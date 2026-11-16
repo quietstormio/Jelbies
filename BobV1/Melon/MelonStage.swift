@@ -1464,7 +1464,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
-            w.tick(id: id, brain: b, sim: a.sim, outfit: hp?.borrowed == true ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), role: .none, hideAll: false, dt: 1.0 / 60)
+            w.tick(id: id, brain: b, sim: a.sim, outfit: HeadPortraitKey.outfitDrawn(hp?.borrowed == true ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), pose: hp == nil ? 0 : hp?.pose), role: .none, hideAll: false, dt: 1.0 / 60)          // (a head portrait wears nothing)
             if w.shown(id, .hands) != nil { w.setArms(id, care.armFrames(a)) }
         }
         renderer.setJersey(w.jersey(id), body: id)
@@ -1498,7 +1498,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             f.opaque.indices += featureMesh.indices.map { $0 + base }
         }
         room.setWear(opaque: f.opaque, translucent: f.translucent, bounds: [])
-        room.setShoes(care.shoeFrame([a], time: 0.4).mesh)
+        room.setShoes(hp != nil && hp?.pose == nil ? RoomMesh() : care.shoeFrame([a], time: 0.4).mesh)          // (no shoes in a head portrait)
         // a close camera in front of him (his own facing, turned a quarter toward the side)
         let pose = a.sim.bodyPose(iterations: 3)
         let c = pose.centroid
@@ -1523,6 +1523,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if let stood { topY = stood.topY }          // (off its feet: the crown of the stood body)
             span = HeadPortraitKey.span
             focusY = topY.isFinite ? topY - span * HeadPortraitKey.topFraction : a.sim.restCentroid.y + HeadPortraitKey.focusUp
+            if hp?.pose == nil, topY.isFinite { span = HeadPortraitKey.faceSpan; focusY = topY - HeadPortraitKey.faceCentreBelowTop }          // the whole face, from below the mouth up past the crown and the feature
             if hp?.pose != nil, topY.isFinite {          // the Studio's action shot: the whole body from the floor to the crown (and a hat), centred, with a margin all round
                 let floorY = stood?.floorY ?? a.sim.floorY          // (off its feet: the soles of the stood body)
                 span = max((topY - floorY) * 1.42, 1.3)          // room above the hat
@@ -1533,16 +1534,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             }
         }          // the head, hats and a little body fill the circle
         let aspect = Float(W) / Float(H)
-        let th = tanf(GameCamera.fovY / 2)
-        let dist = (span / 2) / min(th, th * aspect)
         let target = SIMD3<Float>(c.x, focusY, c.z)
-        var eye = target + dir * dist + SIMD3(0, dist * 0.12, 0)
-        if hp != nil {          // looking down like the room camera (where the face was approved), so the latitude-curved brows read flat, not slanted
-            let down = GameCamera.baseEye - GameCamera.baseTarget          // the base pose, not the aspect-widened one: the portrait frames the same in either orientation
-            var pitch = asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
-            if hp?.pose != nil { pitch = HeadPortraitKey.actionPitch }          // the action shot: a little above level, so the tutu reads as a skirt and the shoes still show
-            eye = target + (dir * cosf(pitch) + SIMD3<Float>(0, sinf(pitch), 0)) * dist
-        }
+        // (hp != nil: looking down like the room camera, where the face was approved, so the latitude-curved brows read flat, not slanted; the action shot: a little above level, so the tutu reads as a skirt)
+        let eye = HeadPortraitKey.eye(target: target, dir: dir, span: span, aspect: aspect, pitch: hp == nil ? nil : (hp?.pose != nil ? HeadPortraitKey.actionPitch : HeadPortraitKey.portraitPitch))
         var cam = CameraState()
         // a lobby avatar: the camera's up is the BODY's up (a head rolled by a lean, a walk shear or an idle tilt still shows level eyes)
         var camUp = SIMD3<Float>(0, 1, 0)

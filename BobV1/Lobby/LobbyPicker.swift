@@ -169,7 +169,7 @@ struct LobbyJelbiePicker: View {
                 if done { Image(systemName: "checkmark.circle.fill").font(.system(size: 22, weight: .black)).foregroundStyle(SK.ink, SK.mint).padding(8) }
                 else if won > 0 { WonBadge(count: won).padding(.top, 6).padding(.trailing, 12) }
             }
-            .overlay(alignment: .bottom) { if !done, grandChampion(j) { GrandChampionPill().padding(.bottom, 27) } }
+            .overlay(alignment: .topLeading) { if !done, grandChampion(j) { GrandChampionBadge().padding(.top, 6).padding(.leading, 12) } }          // the crown, top-left, as the trophy is top-right: nothing over the face
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -254,6 +254,17 @@ struct WonBadge: View {
             }
             .accessibilityHidden(true)
             .accessibilityIdentifier("won-badge")
+    }
+}
+
+/// The tile's Grand Champion mark: a gold crown on a cream disc with a thin brown outline, the same size and style as the trophy `WonBadge` (top-left, opposite it).
+struct GrandChampionBadge: View {
+    var body: some View {
+        Image(systemName: "crown.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(WonBadge.gold)
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(SK.cream))
+            .overlay(Circle().strokeBorder(SK.ink, lineWidth: 1.25))
+            .accessibilityElement().accessibilityLabel("Grand Champion").accessibilityIdentifier("grand-champion-badge")
     }
 }
 

@@ -204,8 +204,8 @@ final class HeadPortraitFrameTests: XCTestCase {
         var k = 1
         while k < x.count { topY = max(topY, x[k]); k += 3 }
         if let stood { topY = stood.topY }
-        var span = HeadPortraitKey.span
-        var focusY = topY - span * HeadPortraitKey.topFraction
+        var span = HeadPortraitKey.faceSpan
+        var focusY = topY - HeadPortraitKey.faceCentreBelowTop          // (the whole-face framing, as the stage uses for a head portrait)
         let down = GameCamera.baseEye - GameCamera.baseTarget
         var pitch = asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
         if action {
@@ -272,6 +272,67 @@ final class HeadPortraitFrameTests: XCTestCase {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: the whole face, no clothes (2026-11-16)
+
+    /// NDC (x, y) of a rest-pose point of a standing body whose crown is at `topY`, through the head portrait's camera (front view, the stage's pitch).
+    private func ndc(_ p: SIMD3<Float>, topY: Float, aspect: Float = 1) -> SIMD2<Float> {
+        let h = BlobShape.H
+        let r = HeadPortraitKey.faceRange(topY: topY)
+        let target = SIMD3<Float>(0, (r.bottom + r.top) / 2, 0)
+        let eye = HeadPortraitKey.eye(target: target, dir: SIMD3<Float>(0, 0, 1), span: HeadPortraitKey.faceSpan, aspect: aspect, pitch: HeadPortraitKey.portraitPitch)
+        let vp = M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: aspect, near: 0.2, far: 60), M4.lookAt(eye: eye, at: target, up: SIMD3<Float>(0, 1, 0)))
+        let w = SIMD3<Float>(p.x, p.y - h + topY, p.z)          // rest y counts from the soles: the crown is at `h`
+        let c = vp * SIMD4<Float>(w, 1)
+        return SIMD2<Float>(c.x / c.w, c.y / c.w)
+    }
+    /// The face's points on the front of the body: both eyes (top and bottom), both brows (both ends and the middle), the mouth (and the bit under it).
+    private func facePoints() -> [(String, SIMD3<Float>)] {
+        func front(_ x: Float, _ y: Float) -> SIMD3<Float> { let r = BlobShape.radius(atHeight: y); return SIMD3<Float>(x, y, (max(r * r - x * x, 0)).squareRoot()) }          // the front of the body at that height
+        var pts: [(String, SIMD3<Float>)] = []
+        let ex = HeadPortraitKey.eyeX, ey = HeadPortraitKey.eyeY, bl = HeadPortraitKey.browHalfLen
+        for sx in [Float(-1), 1] {
+            pts.append(("eye top \(sx)", front(sx * ex, ey + Float(BobForm.eyeHalfH)))); pts.append(("eye bottom \(sx)", front(sx * ex, ey - Float(BobForm.eyeHalfH))))
+            pts.append(("eye outer \(sx)", front(sx * (ex + Float(BobForm.eyeHalfW)), ey)))
+            pts.append(("brow outer \(sx)", front(sx * (ex + bl), HeadPortraitKey.browY))); pts.append(("brow inner \(sx)", front(sx * (ex - bl), HeadPortraitKey.browY + 0.03)))
+        }
+        pts.append(("mouth", front(0, HeadPortraitKey.mouthY))); pts.append(("under the mouth", front(0, HeadPortraitKey.mouthY - 0.08)))
+        pts.append(("cheek left", front(-0.34, HeadPortraitKey.mouthY + 0.05))); pts.append(("cheek right", front(0.34, HeadPortraitKey.mouthY + 0.05)))
+        return pts
+    }
+
+    /// Every species (the face is the same body; the feature differs, and a feature may rise above the picture but never cuts the face), a body squashed, rested and stretched:
+    /// brows, both eyes, the cheeks and the mouth all lie inside the picture with a margin, and the picture is centred on the face.
+    func testTheWholeFaceIsInsideThePictureForEverySpecies() {
+        let margin: Float = 0.05          // of the picture's half size, from every edge
+        for species in 0..<JellyRoster.knownCount {
+            for topY in [Float(1.20), BlobShape.H, 1.45] {
+                for (what, p) in facePoints() {
+                    let q = ndc(p, topY: topY)
+                    XCTAssertLessThan(abs(q.x), 1 - margin, "species \(species) crown \(topY): \(what) x \(q.x)")
+                    XCTAssertLessThan(abs(q.y), 1 - margin, "species \(species) crown \(topY): \(what) y \(q.y)")
+                }
+            }
+        }
+        // a little picture under the mouth, and room above the crown for a feature
+        let mouth = ndc(SIMD3<Float>(0, HeadPortraitKey.mouthY, 0.5), topY: BlobShape.H), crown = ndc(SIMD3<Float>(0, BlobShape.H, 0), topY: BlobShape.H)
+        XCTAssertLessThan(mouth.y, 0, "the mouth is in the lower half: the face sits in the middle of the picture")
+        XCTAssertGreaterThan(mouth.y, -0.75, "with a margin below it")
+        XCTAssertLessThan(crown.y, 0.85, "the crown is inside with room above it for ears, antennas and spikes")
+    }
+
+    /// Bare and dressed: a head portrait draws no wearable (hat, glasses, scarf, jersey, band, shoes: nothing); the action shot keeps the outfit.
+    func testNoWearableIsDrawnInAHeadPortrait() {
+        for species in 0..<JellyRoster.knownCount {
+            _ = species          // (the outfit is per Jelmiko; what a head portrait draws of it does not depend on the species)
+            var dressed: [WearSlot: WearLook] = [:]
+            for slot in WearSlot.allCases { if let l = WearLook.allCases.first(where: { $0.slot == slot }) { dressed[slot] = l } }
+            XCTAssertFalse(dressed.isEmpty)
+            XCTAssertTrue(HeadPortraitKey.outfitDrawn([:], pose: nil).isEmpty, "bare")
+            XCTAssertTrue(HeadPortraitKey.outfitDrawn(dressed, pose: nil).isEmpty, "dressed: nothing is drawn")
+            XCTAssertEqual(HeadPortraitKey.outfitDrawn(dressed, pose: 0).count, dressed.count, "the Studio's action shot keeps the outfit")
         }
     }
 }
