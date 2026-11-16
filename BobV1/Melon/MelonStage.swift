@@ -1501,8 +1501,14 @@ final class MelonController: NSObject, MTKViewDelegate {
         // a close camera in front of him (his own facing, turned a quarter toward the side)
         let pose = a.sim.bodyPose(iterations: 3)
         let c = pose.centroid
+        // 2026-11-15 (the user's Jelly Race lobby picture: "Why is it showing top view weird random bug"): an avatar is drawn from the body as it is in the
+        // paused room. Caught lying, flopped, flung or mid-flip, it was photographed from its crown or its feet (this camera stands in front of the FLATTENED
+        // facing and frames by world heights). `stood` is that body stood up about its own centre (HeadPortraitFrame; nil while it is upright enough): the
+        // camera and the light below are worked out for the stood body, then carried over to the body as it lies. Nothing of the body moves.
+        let stood = hp != nil ? HeadPortraitFrame(rotation: pose.rotation, centroid: c, particles: a.sim.x) : nil
         var fwd = pose.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0
         fwd = simd_length(fwd) > 1e-3 ? simd_normalize(fwd) : SIMD3(0, 0, 1)
+        if let stood { fwd = stood.forward }          // (off its feet: the heading of the stood body, not the flattened facing of the lying one)
         let yaw: Float = hp?.pose.map { SnapshotArmPose.pose($0).yaw } ?? (hp != nil ? 0.0 : (look == nil ? 0.3 : 0.5))
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let head = look.map { $0.slot == .head || $0.slot == .face || $0.slot == .neck } ?? false
@@ -1513,10 +1519,11 @@ final class MelonController: NSObject, MTKViewDelegate {
             var topY = -Float.infinity
             var k = 1
             while k < a.sim.x.count { topY = max(topY, a.sim.x[k]); k += 3 }
+            if let stood { topY = stood.topY }          // (off its feet: the crown of the stood body)
             span = HeadPortraitKey.span
             focusY = topY.isFinite ? topY - span * HeadPortraitKey.topFraction : a.sim.restCentroid.y + HeadPortraitKey.focusUp
             if hp?.pose != nil, topY.isFinite {          // the Studio's action shot: the whole body from the floor to the crown (and a hat), centred, with a margin all round
-                let floorY = a.sim.floorY
+                let floorY = stood?.floorY ?? a.sim.floorY          // (off its feet: the soles of the stood body)
                 span = max((topY - floorY) * 1.42, 1.3)          // room above the hat
                 // the camera aims so the floor under him lands at `actionFloorFraction` of the picture's height (solved for the pitch and the aspect: the same in either orientation)
                 let thA = tanf(GameCamera.fovY / 2), m = min(thA, thA * Float(W) / Float(H)), pt = HeadPortraitKey.actionPitch
@@ -1539,11 +1546,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         // a lobby avatar: the camera's up is the BODY's up (a head rolled by a lean, a walk shear or an idle tilt still shows level eyes)
         var camUp = SIMD3<Float>(0, 1, 0)
         if hp != nil { let u = pose.rotation.act(SIMD3<Float>(0, 1, 0)); if simd_length(u) > 1e-3, u.y > 0.5 { camUp = simd_normalize(u) } }
+        if stood != nil { camUp = SIMD3<Float>(0, 1, 0) }          // (off its feet: the stood body's up is the world's)
         cam.view = M4.lookAt(eye: eye, at: target, up: camUp)
         cam.viewProj = M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: aspect, near: 0.2, far: 60), cam.view)
         cam.invViewProj = M4.invert(cam.viewProj)
         cam.pos = eye; cam.fwd = simd_normalize(target - eye)
-        let light = GameCamera.light(centroid: c)
+        var light = GameCamera.light(centroid: c)
+        if let stood { stood.carry(camera: &cam, light: &light) }          // (off its feet: the same pixels, shadow and key light as the stood body)
         var fp = FrameParams()
         fp.time = simTime
         fp.shape = SIMD4<Float>(Shape.T, Shape.Ro, Shape.skin, Shape.pale)
