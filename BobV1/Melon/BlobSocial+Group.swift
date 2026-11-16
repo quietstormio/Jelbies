@@ -80,7 +80,7 @@ extension BlobBrain {
         var x = rand() * w.reduce(0) { $0 + $1.1 }
         var kind = w[0].0
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
-        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1)
+        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul
         socialBook.groupIdle = 0; socialBook.groupBusy = 0
         if !socialStartGroup(kind, with: crew, sim) { socialBook.groupIdle = socialBook.groupLimit * 0.7 }          // (no room right now: try again soon)
     }
@@ -166,7 +166,7 @@ extension BlobBrain {
             m.social = s
             m.socialBook.started[kind, default: 0] += 1
             m.socialBook.drought = 0; m.socialBook.invite = nil
-            m.socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1)
+            m.socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1) * m.parkSocialWaitMul
             m.socialBook.wakeGreet = -1
             m.socialBook.glanceDone = false; m.socialBook.apartStarted = false; m.socialBook.sheepishStarted = false; m.socialBook.hopStarted = false; m.socialBook.hopStarted2 = false
             m.socialBook.roundSeen = -1

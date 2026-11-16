@@ -34,7 +34,7 @@ extension MelonController {
             let a = JellyActor(id: base + k, name: v.name, simMesh: simMesh, renderMesh: renderMesh, embedding: embedding, appearance: model.appearance,
                                firmness: Float(model.firmness), damping: Float(model.damping), spawn: k < spots.count ? spots[k] : .zero)
             a.care = model.care
-            let palette = JellyPalettes.park(v.colour)
+            let palette = v.species.flatMap { JellyRoster.palette($0) } ?? JellyPalettes.park(v.colour)          // (a special-species visitor wears its species' own palette: Teddy's belly, Pearl's white, Panda's ink)
             a.appearance = palette
             a.sim.substeps = ParkTuning.visitorSubsteps
             a.sim.arenaCenter = GameCamera.arenaCenter
@@ -49,6 +49,7 @@ extension MelonController {
             if actors.count == 1, !book.soloWired, let own = actors[0].brain { wireRoster(own, id: 0); book.soloWired = true }
             wireRoster(b, id: a.id)
             b.feature = v.signature
+            JellyRoster.visitorSpecies[a.id] = v.species ?? v.kind          // (the voice of a visitor's body: AudioHub.voiceFile)
             b.personalityOverride = v.style.variety
             b.currentPose(a.sim)
             a.reset(drop: 0, shift: true)
@@ -65,6 +66,7 @@ extension MelonController {
             renderer?.setHidden(true, body: a.id)
             renderer?.setMouth(0, body: a.id)
             a.brain?.abortAll(a.sim, a.skinner)
+            JellyRoster.visitorSpecies[a.id] = nil
         }
         parkActors.removeAll()
         if actors.count == 1 { peerSnapshot.removeAll() }

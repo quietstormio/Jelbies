@@ -254,6 +254,7 @@ extension GameCare {
         if let w = v.wear { outfit[w.slot] = w }
         wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: outfit, role: role, hideAll: false, dt: dt)
         features.setSpikeTint(a.id, nil)          // visitors, guests, rivals and regulars are always classic
+        features.setWingTint(a.id, v.species == JellyRoster.pearlID ? WhiteWing.wingTint : nil)
         features.tick(id: a.id, brain: b, sim: a.sim, feature: v.signature, worn: wornArt(a.id), hideAll: false, dt: dt)
         if let s = features.slot(a.id) {
             b.wingsFolded = v.signature == .wings && s.fit.folded
@@ -431,7 +432,7 @@ extension GameCare {
             }
             HopscotchTuning.joinChance = ParkPlayTuning.hopscotchJoin
             work.ownToys = ParkToys.ownToys(from: store.placedDecor)
-            let plan = ParkVisitPlan.begin(); work.hopHost = plan.hopscotch ? Float.random(in: ParkPlayTuning.hopHostAfter) : nil
+            let plan = ParkVisitPlan.begin(); work.hopHost = plan.hopscotch ? Float.random(in: ParkPlayTuning.toyRateNew ? ParkPlayTuning.hopHostAfterNew : ParkPlayTuning.hopHostAfter) : nil
             RoomLayout.apply(RoomCatalog.park)
             GameCamera.configurePark()
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {
@@ -443,7 +444,11 @@ extension GameCare {
             var countRNG = SystemRandomNumberGenerator()
             let n = ParkVisit.visitorCount(playerCount: comers.count, using: &countRNG)
             let characters = comers.compactMap { jelly($0)?.character }
-            let cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970)
+            var cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970, household: Set((comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { ParkVisitor.kindOfSpecies(JellyRoster.species($0)) }))
+            #if targetEnvironment(simulator)
+            // capture aid: `-ParkCast 48,49,50` brings those pool visitors (ids) instead of the draw
+            if let c = UserDefaults.standard.string(forKey: "ParkCast") { let ids = c.split(separator: ",").compactMap { Int($0) }; let chosen = ids.compactMap { book.visitor($0) }; if !chosen.isEmpty { cast = chosen } }
+            #endif
             let spots = ParkLayout.spots(count: comers.count + cast.count)
             book.cast = cast.map(\.id)
             book.actors = book.spawn?(cast, Array(spots.dropFirst(comers.count))) ?? []

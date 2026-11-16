@@ -11,7 +11,9 @@ import Foundation
 nonisolated extension ParkTuning {
     /// Visitors added after the stock pool (ids poolSize ..< fullPoolSize).
     static let extraCount = 32
-    static var fullPoolSize: Int { poolSize + extraCount }
+    /// Park-play-r1: six more visitors after the extras, two each of Teddy, Pearl and Panda (ids `poolSize + extraCount` ... `fullPoolSize - 1`).
+    static let speciesVisitorCount = 6
+    static var fullPoolSize: Int { poolSize + extraCount + speciesVisitorCount }
     static let extraSeed: UInt64 = 0x4E7D_2B91_A6C5
     /// The extras dress up more than the stock pool's 45 %, and are a variant colour more often than `mutationRate`.
     static let extraWearChance: Float = 0.70
@@ -50,10 +52,26 @@ nonisolated extension ParkPool {
         return out
     }
 
-    /// The whole pool the Park draws from: the stock 16 (exactly as `generate` makes them) then the 32 extras, names reconciled against `reserved`
+    /// The six visitors of the special species (ids 48...53), the same on every device: their body, features and voice are their species' own (JellyRoster 4 / 5 / 6), the colour is only the swatch on the friends page.
+    /// Names from the hand-written spare list; no wear (a hat would sit on the species' own ears / wings).
+    static func speciesVisitors() -> [ParkVisitor] {
+        var r = ParkRandom(0x5BEC_1E5)
+        let plan: [(species: Int, name: String, colour: ParkColour)] = [
+            (JellyRoster.teddyID, "Toffee", .cocoa), (JellyRoster.pearlID, "Opal", .cream), (JellyRoster.pandaID, "Tofu", .grey),
+            (JellyRoster.teddyID, "Nutmeg", .peach), (JellyRoster.pearlID, "Velvet", .cream), (JellyRoster.pandaID, "Peanut", .grey)]
+        return plan.enumerated().map { k, p in
+            let style = ParkStyle.allCases[Int(r.next() % UInt64(ParkStyle.allCases.count))]
+            var v = ParkVisitor(id: ParkTuning.poolSize + ParkTuning.extraCount + k, name: p.name, colour: p.colour, signature: JellyRoster.feature(p.species), wear: nil, style: style,
+                                blurb: ParkWords.blurb(style, &r), greeting: ParkWords.greeting(p.name, style, &r))
+            v.species = p.species
+            return v
+        }
+    }
+
+    /// The whole pool the Park draws from: the stock 16 (exactly as `generate` makes them), the 32 extras, then the six special-species visitors, names reconciled against `reserved`
     /// (a player Jelbie's name, a personality word, a colour) and against each other.
     static func all(reserved: Set<String> = []) -> [ParkVisitor] {
-        var out = generate(reserved: reserved) + extras()
+        var out = generate(reserved: reserved) + extras() + speciesVisitors()
         ParkNames.reconcile(&out, reserved: reserved.union(ParkNames.reserved(rosterNames: [])))
         return out
     }

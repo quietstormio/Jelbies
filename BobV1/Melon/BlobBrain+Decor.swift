@@ -33,6 +33,7 @@ extension BlobBrain {
             DecorField.shared.leave(uid, by: steerID)
             DecorField.shared.toyPlayed(uid)          // (his turn is over: the piece's pull starts to recover)
             toy.lastUID = uid
+            if outingPlay, ParkPlayTuning.toyRateNew, let sf = DecorField.shared.foot(uid) { parkToyUsed(sf.kind) }          // (the park's per-creature cooldown on the slide / hopscotch)
             idleState.decorUID = -1
         }
         // he may still be standing in the beanbag he sat in: it stays soft for him until he has walked out of it
@@ -365,7 +366,7 @@ extension BlobBrain {
         let here = SIMD2(px, pz)
         let field = DecorField.shared
         let exiting = decorIgnore          // (still standing in the bag he sat in: that stays soft for him)
-        let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (commanded || ParkVisitPlan.allows($0.kind, outing: outingPlay)) && (only == nil || $0.kind == only) && (onlyUID == nil || $0.uid == onlyUID) }
+        let wanted = field.feet.filter { $0.kind.offers(kind) && field.available($0) && (commanded || ParkVisitPlan.allows($0.kind, outing: outingPlay)) && (only == nil || $0.kind == only) && (onlyUID == nil || $0.uid == onlyUID) && parkToyGate($0) }
         guard !wanted.isEmpty else { return false }
         // nearest first, with a little luck in it, then the first one he can walk to
         let ranked = wanted.map { f -> (DecorFoot, Float) in (f, simd_distance(here, field.position(f)) + rand(0, 1.6) - (anticsEnabled ? 2.5 * field.toyPull(f.uid) : 0) + (f.uid == toy.lastUID ? 6 : 0)) }.sorted { $0.1 < $1.1 }          // (the fresher / less played toy wins over a nearer stale one)

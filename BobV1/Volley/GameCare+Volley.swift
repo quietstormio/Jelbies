@@ -84,7 +84,7 @@ extension GameCare {
             let pts = chars.map { v.points(with: $0) }.max() ?? 0
             return (ParkFriendLevel.of(pts), pts)
         }
-        let friends = parkBook.visitors.filter { $0.mergedInto == nil && best($0).0 >= .pal }
+        let friends = parkBook.visitors.filter { $0.mergedInto == nil && $0.species == nil && best($0).0 >= .pal }
         return Array(friends.sorted { let a = best($0), b = best($1); return a.0 != b.0 ? a.0 > b.0 : a.1 != b.1 ? a.1 > b.1 : $0.id < $1.id }.prefix(n))
     }
 
@@ -223,7 +223,7 @@ extension GameCare {
             if case .match = volley.mode {
                 var rng = ParkRandom(w.pendingSeed &+ 77)
                 let friend = volleyParkFriend()
-                var pool = ParkPool.all(reserved: ParkBook.reservedNames()).filter { $0.id != friend?.id }
+                var pool = ParkPool.all(reserved: ParkBook.reservedNames()).filter { $0.id != friend?.id && $0.species == nil }
                 for i in stride(from: pool.count - 1, to: 0, by: -1) { pool.swapAt(i, Int(rng.next() % UInt64(i + 1))) }
                 let specs = (w.partnerID == nil ? friend.map { [$0] } ?? [] : []) + Array(pool.prefix(2))
                 let vis = parkBook.spawn?(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) }) ?? []

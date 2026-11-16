@@ -247,6 +247,8 @@ final class BlobBrain {
     var sleepLocked = false
     /// The park outing is playing: decor, toys, hopscotch and bubbles stay open to this Jelbie although `sleepLocked` holds sleep off (GameCare+Park.swift sets it every step).
     var outingPlay = false
+    /// The park's pick roll said no to this piece on the last start attempt (so a notice does not queue him at it).
+    var parkGateRejected = -1
     var decorLocked: Bool { sleepLocked && !outingPlay }
     /// Character features (Features/, BlobBrain+FlapHop.swift): what grows on him, whether his wings are folded under a back item (then the flap-hop is
     /// a plain hop), the largest flap the worn items allow (deg), and the running flap-hop. The stage / GameCare set the first three.

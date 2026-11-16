@@ -41,7 +41,7 @@ final class ParkBook {
         let full = ParkPool.all(reserved: reserved)
         if let v = SaveRecovery.decode([ParkVisitor].self, key: Self.key, defaults: defaults), !v.isEmpty, v.count <= full.count {
             // Colour-only migration: names, ids, friendship, wear and text stay; the colour (and so the signature) follows the species-consistent generator.
-            var vs = v.map { var x = $0; if full.indices.contains(x.id) { x.colour = full[x.id].colour }; x.signature = x.colour.speciesFeature; return x }
+            var vs = v.map { var x = $0; if full.indices.contains(x.id) { x.colour = full[x.id].colour; x.species = full[x.id].species }; x.signature = x.species.map { JellyRoster.feature($0) } ?? x.colour.speciesFeature; return x }
             // Pool growth (2026-11-07): an old save of the stock 16 gets the extra visitors appended; everything it already holds stays.
             let grew = vs.count < full.count
             if grew { vs += full[vs.count...] }
@@ -132,9 +132,9 @@ final class ParkBook {
 
     // MARK: who comes
 
-    func chooseCast(count: Int, characters: [Int], now: Double) -> [ParkVisitor] {
+    func chooseCast(count: Int, characters: [Int], now: Double, household: Set<Int> = []) -> [ParkVisitor] {
         var rng = SystemRandomNumberGenerator()
-        return ParkPool.pickCast(from: visitors.filter { $0.mergedInto == nil }, count: count, characters: characters, now: now, using: &rng)
+        return ParkPool.pickCast(from: visitors.filter { $0.mergedInto == nil }, count: count, characters: characters, now: now, household: household, using: &rng)
     }
 
     // MARK: the on-device writer (optional)

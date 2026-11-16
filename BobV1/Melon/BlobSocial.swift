@@ -263,6 +263,10 @@ extension BlobBrain {
         if s.phase < 2 { s.setPhase(2); s.bumpT = -1 }
         return true
     }
+    /// Park only (Park/ParkPlayTuning.swift): more play together. False at home and with `-ParkSocial old`, so the room's numbers stay exactly as they were.
+    var parkSocialOn: Bool { outingPlay && ParkPlayTuning.socialNew }
+    var parkSocialPickMul: Float { parkSocialOn ? ParkPlayTuning.socialPickMul : 1 }
+    var parkSocialWaitMul: Float { parkSocialOn ? ParkPlayTuning.socialWaitMul : 1 }
     /// Voice "stop": whatever social is on ends at once (handled on the next tick).
     func stop() { socialBook.stopAll = true }
 
@@ -323,7 +327,7 @@ extension BlobBrain {
         if let c = third { s.c = c; s.idC = c.steerID; c.social = s; c.socialBook.glanceDone = false }
         socialBook.started[kind, default: 0] += 1
         socialBook.drought = 0; o.socialBook.drought = 0; socialBook.invite = nil; o.socialBook.invite = nil
-        socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1); o.socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1)
+        socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1) * parkSocialWaitMul; o.socialBook.droughtLimit = rand(SocialTuning.droughtRange.0, SocialTuning.droughtRange.1) * o.parkSocialWaitMul
         socialBook.wakeGreet = -1; o.socialBook.wakeGreet = -1
         s.fastMoves = 0
         socialBook.glanceDone = false; o.socialBook.glanceDone = false
@@ -416,12 +420,13 @@ extension BlobBrain {
             if d > peerGap * 0.8 && d < 4.8 { cands.append((o, d)) }
         }
         if cands.isEmpty { return false }
-        guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) else { return false }
+        guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) * parkSocialPickMul else { return false }
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         // 2026-11-06: boop 3 -> 1.5. The user: "they do the hand holding emote a little too much ... not as often" (the standing side-by-side hand-on-arm boop): halved, not replaced.
         var w: [(SocialKind, Float)] = [(.boop, 0.6), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
         if anticsEnabled { w = socialPlayWeights(base: w, partner: o, others: cands.map { $0.0 }, grumpy: grumpy) }
+        if parkSocialOn { for i in w.indices { if ParkPlayTuning.calmKinds.contains(w[i].0) { w[i].1 *= ParkPlayTuning.calmKindMul } else if w[i].0 == .boop { w[i].1 *= ParkPlayTuning.boopMul } } }          // (park only: the calm pair kinds likelier, the hand-holding boop less)
         do {          // pair no-repeat: drop the last 3 kinds this pair did; if fewer than 4 would be left, drop only the most recent
             let recent = Set((socialBook.recentWith[o.steerID] ?? []) + (o.socialBook.recentWith[steerID] ?? []))
             let kept = w.filter { !recent.contains($0.0) }
@@ -618,13 +623,13 @@ extension BlobBrain {
         if let st = ContactStance.entry(s.kind), st.cls != .none { for id in (s.kind.isGroup ? s.crewIDs : [pid]) where id != steerID { socialBook.glow[id] = 1.5 } }
         if s.kind == .look { socialBook.lookPair[pid] = SocialTuning.lookCooldown; socialBook.cooldown = max(socialBook.cooldown, 4) }
         else {
-            let wait = (watching ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1)
+            let wait = (watching ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1) * parkSocialWaitMul
             socialBook.cooldown = rand(SocialTuning.brainCooldown.0, SocialTuning.brainCooldown.1) * wait
             socialBook.pair[pid] = rand(SocialTuning.pairCooldown.0, SocialTuning.pairCooldown.1) * (s.kind == .squabble ? 1.4 : 1) * wait
             if s.idC >= 0, s.idC != steerID, let c = socialBrain(s.idC) { _ = c; socialBook.pair[s.idC] = socialBook.pair[pid] }
             if s.kind.isGroup {
                 for id in s.crewIDs where id != steerID { socialBook.pair[id] = socialBook.pair[pid] }
-                socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1); socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
+                socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1) * parkSocialWaitMul; socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
                 if s.kind.isTreat { socialBook.treatCool = rand(EmoteTuning.treatCooldown.0, EmoteTuning.treatCooldown.1); socialBook.treatIdle = 0; socialBook.treatBusy = 0; socialBook.lastTreat = s.kind }
             }
             if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
