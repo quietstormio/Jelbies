@@ -161,4 +161,30 @@ final class ShopTidyTests: XCTestCase {
         try? lines.joined(separator: "\n").write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/49d32754-b08a-4bfd-999b-3f9f0cada45f/scratchpad/shoptidy/toy-sweep.txt", atomically: true, encoding: .utf8)
         XCTAssertTrue(fails.isEmpty, fails.joined(separator: "\n"))
     }
+
+    /// The owner's case exactly: one of each of the four toys owned, one placed in the room, one placed in a stashed room, the save already flagged by the
+    /// older retirement pass; furniture (placed and stashed) stays. Paid exactly 50 + 55 + 35 + 60 = 200 once.
+    func testOneOfEachWithOnePlacedAndOneStashedIsRefundedExactlyOnceAndFurnitureStays() {
+        let suite = "ShopTidyTests.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: suite)!
+        defer { d.removePersistentDomain(forName: suite) }
+        let old = #"""
+        {"counts":{"decor-toycar":1,"decor-kickscooter":1,"decor-frisbee":1,"decor-bubblemachine":1,"decor-loveseat":2,"decor-plant":1},
+         "pages":[],"wearables":[],"worn":{},"starterGiven":true,"newItems":0,"placed":[],
+         "placedAt":[{"uid":1,"kind":"toycar","x":1.0,"z":0.5},{"uid":2,"kind":"loveseat","x":-2.0,"z":1.0}],
+         "stash":{"loft":[{"uid":4,"kind":"kickscooter","x":1.0,"z":0.5},{"uid":5,"kind":"loveseat","x":-1.0,"z":0.5}]},"rooms":["loft"],"nextDecorUID":6,"retiredDecorRefunded":true}
+        """#
+        d.set(Data(old.utf8), forKey: "k")
+        let (a, w) = book(d)
+        XCTAssertEqual(w.count, 50 + 55 + 35 + 60, "each of the four paid once at its Shop price")
+        for k in StoreBook.retiredToys { XCTAssertEqual(a.count(k.storeID), 0, "\(k) is not owned") }
+        XCTAssertEqual(a.placedDecor.map(\.kind), [.loveseat], "nothing retired in the room; the loveseat stays")
+        XCTAssertEqual(a.saved.stash?["loft"]?.map(\.kind), [.loveseat], "nothing retired in the stashed room; its loveseat stays")
+        XCTAssertEqual(a.count("decor-loveseat"), 2); XCTAssertEqual(a.count("decor-plant"), 1)
+        let (b, w2) = book(d)
+        XCTAssertEqual(w2.count, 0, "loading again pays nothing")
+        XCTAssertEqual(b.placedDecor.map(\.kind), [.loveseat]); XCTAssertEqual(b.saved.stash?["loft"]?.map(\.kind), [.loveseat])
+        for k in StoreBook.retiredToys { XCTAssertEqual(b.count(k.storeID), 0) }
+        let (_, w3) = book(d); XCTAssertEqual(w3.count, 0, "and a third time")
+    }
 }
