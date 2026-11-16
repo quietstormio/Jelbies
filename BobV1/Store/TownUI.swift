@@ -102,11 +102,12 @@ struct TownFlow: View {
     func chooseCafe() { goHome(); cafe() }
     func choosePark() { goHome(); park() }
     func chooseGroom() { goHome(); groom() }
+    func chooseCamp() { goHome(); care.requestCamp() }
 
     var body: some View {
         ZStack {
             switch screen ?? .town {
-            case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, groom: chooseGroom, adopt: adopt, home: goHome)
+            case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, groom: chooseGroom, adopt: adopt, camp: chooseCamp, home: goHome)
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome)
             case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, shop: { screen = .shop }, race: { goHome(); care.startRace(jelly: who) })
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) })
@@ -155,6 +156,7 @@ struct TownView: View {
     var park: () -> Void = {}
     var groom: () -> Void = {}
     var adopt: () -> Void = {}
+    var camp: () -> Void = {}
     var home: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -190,6 +192,7 @@ struct TownView: View {
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Jelly Volleyball", sub: "Bump and spike", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
+            Place(id: "town-camp", title: "Jelmiko Camp", sub: CampUI.townSub(count: campCount), symbol: "tent.fill", color: SK.mint, cats: [.friends]) { camp() },
             Place(id: "town-adopt", title: "Jelly Spring", sub: SpringStates.townSub(home: atHome, camp: campCount), symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: open) { if !open { AudioHub.shared.play(.notEnough) } else { adopt() } },
         ]
     }

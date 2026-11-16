@@ -25,7 +25,7 @@ struct ParkChrome: View {
         GeometryReader { g in
             ZStack {
                 if park.picking { picker }
-                if park.inScene, !care.play.active {          // (Play mode has its own Done pill in the corner: the park's bar steps aside, like the home HUD)
+                if park.inScene, park.place == .park, !care.play.active {          // (Play mode has its own Done pill in the corner: the park's bar steps aside, like the home HUD)
                     let wide = g.size.width > g.size.height          // landscape: the visitor chips join the top row (they scroll sideways inside it) so they never cover the lawn
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top) {
@@ -46,7 +46,7 @@ struct ParkChrome: View {
                     }
                     .padding(.horizontal, 16).padding(.top, 8)
                 }
-                if soundOpen, park.inScene, !care.play.active {
+                if soundOpen, park.inScene, park.place == .park, !care.play.active {
                     VStack {
                         HStack { SoundSettingsPanel(hub: AudioHub.shared) { withAnimation(CareMenu.spring) { soundOpen = false } }; Spacer() }
                         Spacer()
@@ -54,7 +54,8 @@ struct ParkChrome: View {
                     .padding(.top, 60).padding(.leading, 12)
                     .transition(.scale(scale: 0.9, anchor: .topLeading).combined(with: .opacity))
                 }
-                if park.phase == .playing, !care.play.active {
+                if park.place == .camp { CampChrome(care: care) }          // (the Camp yard's furniture: Park/CampChrome.swift)
+                if park.phase == .playing, park.place == .park, !care.play.active {
                     if let vid = park.card, let v = book.visitor(vid) {
                         if vsc == .compact {
                             HStack { Spacer(); VisitorCard(care: care, visitor: v).frame(width: min(320, g.size.width * 0.38)).padding(.top, 112).padding(.bottom, 80).padding(.trailing, 8) }
@@ -97,7 +98,7 @@ struct ParkChrome: View {
                                 .accessibilityIdentifier("park-toast")
                             Spacer(minLength: 20)
                         }
-                        .padding(.leading, 16).padding(.bottom, park.phase == .playing ? 92 : 24)
+                        .padding(.leading, 16).padding(.bottom, park.phase == .playing ? (park.place == .camp ? 200 : 92) : 24)
                     }
                     .allowsHitTesting(false).transition(.opacity)
                 }
