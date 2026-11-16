@@ -95,9 +95,10 @@ nonisolated enum NeedsTuning {
 
 /// Every tunable of the grime in one place.
 nonisolated enum GrimeTuning {
-    /// Dirt gained per 5 minutes of NORMAL roaming, and the world units that is (measured average roaming speed 0.198 u/s x 300 s, see TimeAwayTests; was 0.149 / 45 before the 2026-10-21 room-movement round, so the dirt per MINUTE is unchanged; 11-05: 0.02 -> 0.014 so they stay clean about 40% longer).
+    /// Dirt gained per 5 minutes of NORMAL roaming, and the world units that is (measured average roaming speed 0.198 u/s x 300 s, see TimeAwayTests; was 0.149 / 45 before the 2026-10-21 room-movement round, so the dirt per MINUTE is unchanged; 11-05: 0.02 -> 0.014 so they stay clean about 40% longer;
+    /// 2026-11-15: 0.014 -> 0.0119, the user's "They get dirty too fast make it 15% slower": the first smudge (dirt 0.05) comes after about 21 minutes of normal roaming, was about 18. Time away is not touched).
     /// Exertion (run / zoomies / slide / scoot) is `exertionMul` times faster per unit walked.
-    static let dirtPer5Min: Float = 0.014
+    static let dirtPer5Min: Float = 0.0119
     static let roamUnitsPer5Min: Float = 60
     static let dirtPerUnit: Float = dirtPer5Min / roamUnitsPer5Min
     static let exertionMul: Float = 3
