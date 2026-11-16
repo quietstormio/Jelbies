@@ -29,7 +29,7 @@ extension GameCare {
             case .focus: return CafeBlock.focus.message
             case .meal: return CafeBlock.meal.message
             case .arranging: return CafeBlock.arranging.message
-            case .sleeping: return CafeBlock.sleeping.message          // (a RACE rival asleep: not a home creature)
+            case .sleeping: break          // (`raceBook.actors` is the home roster: a sleeping home creature must NOT block Camp; it just stays asleep, hidden. The last check of the list, so nothing behind it is skipped)
             default: return CafeBlock.busy.message
             }
         }

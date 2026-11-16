@@ -137,6 +137,8 @@ final class CampTripTests: XCTestCase {
         GameCare.campSource = { [CampCreature.make(instance: 4, worn: [:])] }
         CampBook.shared.spawn = { list, _ in self.bodies(list.count, firstID: 3) }
         care.parkBook.clear = {}
+        care.tickRace(home, dt: 1.0 / 60)          // (the room's per-step tick hands the home roster to `raceBook.actors`, which `roomActivityBlocker` reads for sleepers)
+        XCTAssertNil(care.campBlocker(), "a sleeping home creature does not close Camp (the park's rule is overruled)")
         care.park.beginCamp()
         var n = 0
         while care.park.phase != .playing, n < 3000 { care.tickPark(home, dt: 1.0 / 60); n += 1 }
