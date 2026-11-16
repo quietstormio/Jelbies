@@ -171,6 +171,20 @@ final class ShowFlow {
     var grid: ShowBeat { danceSong.grid }
     /// The prompt pattern of this show's dance (by rank; `-DancePattern` forces one in dev builds).
     var dancePattern: DancePattern { DancePattern.resolve(rank: rank) }
+    /// Capture aid (dev builds): `-ShowDoneHold <s>` keeps the auto player on the score card that long (default 1.5 s).
+    static var autoDoneHold: Float { DevArgs.enabled ? max(1.5, Float(UserDefaults.standard.double(forKey: "ShowDoneHold"))) : 1.5 }
+    /// The cheer word of the score card after the song.
+    static func danceCheerWord(score: Float) -> String { score >= 80 ? "Great dancing!" : score >= 50 ? "Nice moves!" : "Good try!" }
+    /// Seconds in the dance song's file (44.1 kHz), else the last prompt plus the ring-out.
+    @ObservationIgnored private var lengthCache: [Int: Double] = [:]
+    var danceLength: Double {
+        if let c = lengthCache[danceSong.song] { return c }
+        let v = SceneRender.fileLength(danceTrack).map { Double($0) / 44100 } ?? (danceSong.time(ofSlot: 2 * danceSong.lastBeat) + DanceSong.ringOut)
+        lengthCache[danceSong.song] = v
+        return v
+    }
+    /// 0...1: how far into the dance song (the thin progress line under the lane).
+    var danceProgress: Double { beat == .danced ? 1 : (beat == .dancing ? min(max(danceNow() / max(danceLength, 1), 0), 1) : 0) }
     /// How many prompts the dance has (the chip's "y"): the running dance's count, else the count this show's pattern will have.
     var dancePromptTotal: Int { sim?.dance?.total ?? danceSong.promptCount(dancePattern) }
     /// The dance song is playing under the dance.
@@ -517,7 +531,7 @@ final class ShowFlow {
             if lookAge >= Self.lookSeconds { finishLook() }          // the judges have looked: on to the dance (or the Next button)
         case .dance:
             tickDance(dt: dt)
-            if auto, beat == .danced, dancedAge > 1.5 { finishDance() }
+            if auto, beat == .danced, dancedAge > Self.autoDoneHold { finishDance() }
         case .trick: tickTrick(dt: dt)
         case .results:
             if trickStage != .pick { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt }          // (the last turn's rivals still perform after the sim has its results)

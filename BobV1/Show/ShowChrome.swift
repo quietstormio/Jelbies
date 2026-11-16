@@ -205,120 +205,275 @@ struct DanceRound: View {
     private var compact: Bool { vsc == .compact }
     private var show: ShowFlow { care.show }
     private let light = UIImpactFeedbackGenerator(style: .light)
+    private var done: Bool { show.beat == .danced }
 
+    // The trimmed Dance screen (boards dance_count / dance_mid / dance_done / land_dance): one dancer, one thin Cheer strip, the flash in its own slot, the lane with the
+    // count inside it, a song-progress line, the two foot buttons; after the song one card (score, cheer word, Perfect / Good / Slip once) and "Next: Trick".
     var body: some View {
-        ZStack {
-            VStack(spacing: 8) {
-                RoundHeader(care: care, round: 2, title: "Dance", quits: false)
-                HStack { Spacer(); RivalPodium(care: care); Spacer() }
-                Spacer(minLength: 0)
-                if compact {
-                    HStack(alignment: .bottom, spacing: 12) {
-                        AssistFoot(side: 0, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
-                        VStack(spacing: 8) {
-                            cheer
-                            ZStack { flash.padding(.bottom, 58); lane.padding(.top, 26) }.frame(height: 110)
-                            stats
-                            if show.beat == .danced { next }
-                        }
-                        AssistFoot(side: 1, prefix: "show", live: show.buttonsLive, press: press).frame(width: 170, height: 140)
-                    }
-                } else {
-                    cheer
-                    ZStack { flash; lane.padding(.top, 34) }.frame(height: 120)
-                    stats
-                    Text(show.rank.kindTiming ? "\(show.rank.title) timing is kind: Perfect within 80 ms." : "Perfect within 60 ms: tap right on the beat.").font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale)
-                    if show.beat == .danced { next } else {
-                        AssistFeetRow(prefix: "show", live: show.buttonsLive, press: press)
-                            .frame(height: 150)
-                    }
-                }
-            }
-            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
-            if !PadLayout.isPad {
-                if show.showsCountdown { numeral("\(show.countdown)") }
-                if show.showsGo { numeral("GO!") }
-            }
-        }
-        .overlay {
-            // iPad: the count sits at a third of the screen height (the cheer bar and lane are in the lower half, in either orientation), never over them
-            if PadLayout.isPad {
-                GeometryReader { g in
-                    ZStack {
-                        if show.showsCountdown { numeral("\(show.countdown)") }
-                        if show.showsGo { numeral("GO!") }
-                    }
-                    .position(x: g.size.width / 2, y: g.size.height * 0.3)
-                }
-            }
+        Group {
+            if compact { landscape } else { portrait }
         }
         .animation(CareMenu.spring, value: show.beat)
     }
 
+    /// Portrait (and iPad): header, then from the bottom up the buttons, the progress line, the lane, the flash slot and the Cheer strip.
+    private var portrait: some View {
+        VStack(spacing: 0) {
+            RoundHeader(care: care, round: 2, title: "Dance", kicker: kicker, quits: false)
+            Spacer(minLength: 0)
+            cheer.padding(.bottom, done ? 12 : 6)
+            if done {
+                doneCard.padding(.bottom, 16)
+                next
+            } else {
+                Group {          // (these leave at once when the song ends: the score card never shares the screen with them)
+                    flash.frame(height: 46).padding(.bottom, 6)
+                    laneWithCount
+                    progress.padding(.top, 10)
+                    DanceFeet(live: show.buttonsLive, side: nil, press: press).frame(height: 148).padding(.top, 12)
+                }
+                .transition(.identity)
+            }
+        }
+        .padding(.horizontal, 16).padding(.bottom, PadLayout.isPad ? 14 : 0)
+    }
+
+    /// Landscape: the dancer stays clear. Cheer strip top right with the flash under it; the lane and progress line between two foot buttons in the bottom corners;
+    /// after the song the card and "Next: Trick" take that band.
+    private var landscape: some View {
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                RoundHeader(care: care, round: 2, title: "Dance", kicker: kicker, quits: false).padding(.top, 14)
+                HStack {
+                    Spacer(minLength: 0)
+                    VStack(spacing: 6) {
+                        cheer
+                        if !done { flash.frame(height: 46) }
+                    }
+                    .frame(width: 312)
+                }
+                .padding(.top, 4)
+                Spacer(minLength: 0)
+                if done {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        doneCard
+                        next.frame(width: 250)
+                    }
+                    .padding(.bottom, 4)
+                } else {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        DanceFeet(live: show.buttonsLive, side: 0, press: press).frame(width: 152, height: 146)
+                        VStack(spacing: 6) { progress; laneWithCount }
+                        DanceFeet(live: show.buttonsLive, side: 1, press: press).frame(width: 152, height: 146)
+                    }
+                    .transition(.identity)
+                }
+            }
+            .padding(.horizontal, 0).padding(.bottom, 0)
+        }
+    }
+
+    private var kicker: String { "ROUND 2 OF 3" }
+
     private func press(_ foot: Int) { light.impactOccurred(intensity: 0.5); show.tap(foot: foot) }
+
+    // MARK: Cheer, flash, lane, progress
 
     private var cheer: some View {
         let c = show.sim?.cheer ?? 0
-        return ShowCard(padding: 10) {
-            VStack(spacing: 6) {
-                HStack(alignment: .firstTextBaseline) { Text("Your Cheer").font(SK.font(16, .black)).foregroundStyle(SK.ink); Spacer(); Text("\(Int((c * 100).rounded()))%").font(SK.font(20, .black)).foregroundStyle(SK.ink).monospacedDigit() }
-                CheerMeter(value: c, tick: ShowScoring.burstCheer, color: SK.pink, label: "75% unlocks Glow Burst")
-            }
-        }
-        .accessibilityElement(children: .combine).accessibilityLabel("Cheer \(Int((c * 100).rounded())) percent").accessibilityIdentifier("dance-cheer")
+        return CheerStrip(value: c, tick: ShowScoring.burstCheer)
+            .accessibilityElement(children: .combine).accessibilityLabel("Cheer \(Int((c * 100).rounded())) percent").accessibilityIdentifier("dance-cheer")
     }
 
+    /// "Perfect!" / "Good" / "Slip": its own slot above the lane; the old word goes at once, the new one scales in.
     private var flash: some View {
-        VStack {
-            Group {
-                switch show.flash {
-                case .perfect?: Text("Perfect!").foregroundStyle(ShowUI.gold)
-                case .good?: Text("Good").foregroundStyle(.white)
-                case .miss?: Text("Slip").foregroundStyle(ShowUI.mist)
-                case nil: Text(" ")
-                }
+        Group {
+            switch show.flash {
+            case .perfect?: Text("Perfect!").foregroundStyle(ShowUI.gold)
+            case .good?: Text("Good").foregroundStyle(.white)
+            case .miss?: Text("Slip").foregroundStyle(ShowUI.mist)
+            case nil: Text(" ")
             }
-            .font(SK.font(28, .black)).shadow(color: .black.opacity(0.4), radius: 4, y: 2)
-            .id(show.flashSerial).transition(.scale(scale: 1.4).combined(with: .opacity))
-            .accessibilityIdentifier("dance-flash")
-            Spacer()
         }
+        .font(SK.font(30, .black)).shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+        .id(show.flashSerial).transition(.asymmetric(insertion: .scale(scale: 1.4).combined(with: .opacity), removal: .identity))
+        .frame(maxWidth: .infinity).frame(height: 46)
         .animation(.easeOut(duration: 0.12), value: show.flashSerial)
         .allowsHitTesting(false)
+        .accessibilityIdentifier("dance-flash")
     }
 
-    private var lane: some View { PromptLane(care: care).accessibilityIdentifier("dance-prompts") }
+    /// The lane; the 3-2-1 and GO! sit inside it (it is empty until the first step comes).
+    private var laneWithCount: some View {
+        PromptLane(care: care).accessibilityIdentifier("dance-prompts")
+            .overlay {
+                if show.showsCountdown { count("\(show.countdown)") }
+                else if show.showsGo { count("GO!") }
+            }
+    }
+    private func count(_ s: String) -> some View {
+        Text(s).font(.system(size: 84, weight: .heavy, design: .rounded)).foregroundStyle(.white).minimumScaleFactor(0.5).lineLimit(1)
+            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+            .id(show.cueSerial).transition(.asymmetric(insertion: .scale(scale: 1.6).combined(with: .opacity), removal: .identity)).allowsHitTesting(false)          // (the old number goes at once: never two words in the lane)
+            .accessibilityIdentifier("show-count")
+    }
 
-    private var stats: some View {
+    /// A thin line under the lane: how far into the song (no count of steps, so it is right for any pattern); VoiceOver gets the steps as its value.
+    private var progress: some View {
         let d = show.sim?.dance
-        return HStack(spacing: 8) {
-            chip("Beat \(min((d?.judged ?? 0) + 1, show.dancePromptTotal)) / \(show.dancePromptTotal)", bg: SK.cream, fg: SK.ink)
-            chip("Perfect \(d?.perfects ?? 0)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26))
-            chip("Good \(d?.goods ?? 0)", bg: Color(hex: 0xFFE7A8), fg: ShowUI.brownGold)
-            chip("Slip \(d?.misses ?? 0)", bg: Color(hex: 0xF2ECE6), fg: SK.muted)
-            Spacer(minLength: 0)
+        return TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+            let f = CGFloat(show.danceProgress)
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(ShowUI.platform)
+                    Capsule().fill(ShowUI.gold).frame(width: g.size.width * f)
+                }
+            }
+            .frame(height: 6)
+        }
+        .padding(.horizontal, PadLayout.isPad ? 0 : (compact ? 0 : 24))
+        .accessibilityElement().accessibilityLabel("Song progress").accessibilityValue("\(min((d?.judged ?? 0) + 1, show.dancePromptTotal)) of \(show.dancePromptTotal)")
+        .accessibilityIdentifier("dance-progress")
+    }
+
+    // MARK: after the song
+
+    private var doneCard: some View {
+        let s = show.sim?.danceScore ?? 0
+        let d = show.sim?.dance
+        let circle = VStack(spacing: 0) {
+            Text("\(Int(s.rounded()))").font(SK.font(compact ? 28 : 40, .black)).foregroundStyle(SK.ink).monospacedDigit()
+            Text("Dance").font(SK.font(compact ? 10 : 13, .black)).foregroundStyle(ShowUI.brownGold)
+        }
+        .frame(width: compact ? 64 : 95, height: compact ? 64 : 95).background(Circle().fill(ShowUI.gold)).overlay(Circle().strokeBorder(ShowUI.goldDeep, lineWidth: 4))
+        .accessibilityIdentifier("dance-score")
+        let word = Text(ShowFlow.danceCheerWord(score: s)).font(SK.font(compact ? 22 : 30, .black)).foregroundStyle(SK.ink).jLine(2, scale: 0.7)
+        let tallies = HStack(spacing: 8) {
+            tally("Perfect \(d?.perfects ?? 0)", bg: Color(hex: 0xE3F4DD), fg: Color(hex: 0x2E6B26))
+            tally("Good \(d?.goods ?? 0)", bg: Color(hex: 0xFFE7A8), fg: ShowUI.brownGold)
+            tally("Slip \(d?.misses ?? 0)", bg: Color(hex: 0xF2ECE6), fg: SK.muted)
         }
         .accessibilityElement(children: .combine).accessibilityIdentifier("dance-stats")
-    }
-    private func chip(_ s: String, bg: Color, fg: Color) -> some View {
-        Text(s).font(SK.font(13, .black)).foregroundStyle(fg).monospacedDigit().padding(.horizontal, 10).padding(.vertical, 6).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(bg))
-    }
-
-    private var next: some View {
-        let d = show.sim?.danceScore ?? 0
-        return VStack(spacing: 6) {
-            Text("Dance \(Int(d.rounded())) / 100").font(SK.font(18, .black)).foregroundStyle(ShowUI.gold).accessibilityIdentifier("dance-score")
-            ShowCTA(title: "Finish dance, on to Trick", id: "dance-next", height: 52) { show.finishDance() }.frame(maxWidth: 360)
+        return ShowCard(padding: compact ? 8 : 16) {
+            if compact {
+                // landscape: one low row (the band under the dancer's feet, between where the foot buttons were)
+                HStack(spacing: 14) { circle; VStack(alignment: .leading, spacing: 6) { word; tallies } }
+            } else {
+                VStack(spacing: 14) { HStack(spacing: 18) { circle; word }; tallies }
+            }
         }
         .transition(.scale(scale: 0.9).combined(with: .opacity))
     }
+    private func tally(_ s: String, bg: Color, fg: Color) -> some View {
+        Text(s).font(SK.font(compact ? 13 : 16, .black)).foregroundStyle(fg).monospacedDigit().padding(.horizontal, 12).padding(.vertical, 6).background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(bg))
+    }
 
-    private func numeral(_ s: String) -> some View {
-        Text(s).font(.system(size: s == "GO!" ? 96 : 120, weight: .heavy, design: .rounded)).foregroundStyle(.white)
-            .shadow(color: SK.pink.opacity(0.9), radius: 0, x: 0, y: 3).shadow(color: .black.opacity(0.35), radius: 6, y: 3)
-            .id(show.cueSerial).transition(.scale(scale: 1.6).combined(with: .opacity)).allowsHitTesting(false)
-            .offset(y: PadLayout.isPad ? 0 : (compact ? 20 : 40))
-            .accessibilityIdentifier("show-count")
+    private var next: some View {
+        ShowCTA(title: "Next: Trick", id: "dance-next", height: compact ? 52 : 60) { show.finishDance() }
+            .transition(.scale(scale: 0.9).combined(with: .opacity))
+    }
+}
+
+/// The one thin Cheer strip: the word, a bar with the Glow Burst mark (an ink tick and a small sparkle) at 75%; the bar turns gold once the mark is passed. No number, no sentence.
+struct CheerStrip: View {
+    var value: Float
+    var tick: Float
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("Cheer").font(SK.font(16, .black)).foregroundStyle(SK.ink)
+            GeometryReader { g in
+                let w = g.size.width, h = g.size.height
+                ZStack(alignment: .leading) {
+                    Capsule().fill(ShowUI.bar)
+                    Capsule().fill(value >= tick ? ShowUI.gold : SK.pink).frame(width: max(0, w * CGFloat(min(max(value, 0), 1))))
+                    RoundedRectangle(cornerRadius: 2).fill(SK.ink).frame(width: 3, height: 24).offset(x: w * CGFloat(tick) - 1.5, y: 0)
+                    CheerSparkle().fill(SK.cream).overlay(CheerSparkle().stroke(SK.ink, lineWidth: 1.4)).frame(width: 22, height: 22)
+                        .offset(x: w * CGFloat(tick) + 12, y: -(h / 2) - 4)
+                }
+                .frame(height: h)
+            }
+            .frame(height: 14)
+            .animation(.easeOut(duration: 0.25), value: value)
+        }
+        .padding(.horizontal, 16).frame(height: 46).frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 23, style: .continuous).fill(SK.cream.opacity(0.96)).shadow(color: .black.opacity(0.18), radius: 6, y: 3))
+    }
+}
+
+/// The four-point sparkle of the boards (24 x 24 viewBox).
+struct CheerSparkle: SwiftUI.Shape {
+    func path(in r: CGRect) -> Path {
+        let k = r.width / 24
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + x * k, y: r.minY + y * k) }
+        var s = Path()
+        s.move(to: p(12, 1.5))
+        s.addCurve(to: p(22.5, 12), control1: p(12.8, 7.1), control2: p(16.9, 11.2 + 0))
+        s.addCurve(to: p(12, 22.5), control1: p(16.9, 12.8), control2: p(12.8, 16.9))
+        s.addCurve(to: p(1.5, 12), control1: p(11.2, 16.9), control2: p(7.1, 12.8))
+        s.addCurve(to: p(12, 1.5), control1: p(7.1, 11.2), control2: p(11.2, 7.1))
+        s.closeSubpath()
+        return s
+    }
+}
+
+/// Left / Right with the feet in the steps' colours (sky = L, pink = R). `side` nil = both in a row (portrait); 0 / 1 = one corner button (landscape). The one-button and
+/// auto assists keep their own buttons.
+struct DanceFeet: View {
+    let live: Bool
+    let side: Int?
+    let press: (Int) -> Void
+    var body: some View {
+        switch A11ySettings.shared.raceAssist {
+        case .oneButton, .auto:
+            if let side { AssistFoot(side: side, prefix: "show", live: live, press: press) } else { AssistFeetRow(prefix: "show", live: live, press: press) }
+        default:
+            if let side { DanceFootButton(foot: side, live: live, press: press) }
+            else { HStack(spacing: 14) { DanceFootButton(foot: 0, live: live, press: press); DanceFootButton(foot: 1, live: live, press: press) } }
+        }
+    }
+}
+
+struct DanceFootButton: View {
+    let foot: Int
+    let live: Bool
+    let press: (Int) -> Void
+    @State private var down = false
+    private var color: Color { foot == 0 ? SK.sky : SK.pink }
+    private var plate: some View {
+        let fill: Color = down ? FocusStyle.pink.opacity(0.55) : SK.cream
+        let shadow: Color = Color.black.opacity(down ? 0.12 : 0.28)
+        return RoundedRectangle(cornerRadius: 36, style: .continuous).fill(fill).shadow(color: shadow, radius: down ? 4 : 6, y: down ? 1 : 3)
+    }
+    var body: some View {
+        VStack(spacing: 4) {
+            Footprints().fill(color).frame(width: 58, height: 50)
+            Text(foot == 0 ? "Left" : "Right").font(SK.font(26, .black)).foregroundStyle(SK.ink)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(plate)
+        .overlay(RoundedRectangle(cornerRadius: 36, style: .continuous).strokeBorder(Color.white.opacity(0.55), lineWidth: 1.5))
+        .scaleEffect(down ? 0.96 : 1).opacity(live ? 1 : 0.55)
+        .animation(.easeOut(duration: 0.08), value: down)
+        .contentShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
+        .gesture(DragGesture(minimumDistance: 0).onChanged { _ in if !down { down = true; press(foot) } }.onEnded { _ in down = false })      // fires on touch DOWN
+        .background { Button("") { press(foot) }.keyboardShortcut(foot == 0 ? .leftArrow : .rightArrow, modifiers: []).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true) }
+        .accessibilityElement().accessibilityLabel("\(foot == 0 ? "Left" : "Right") foot").accessibilityValue(live ? "" : "waiting")
+        .accessibilityIdentifier(foot == 0 ? "show-left" : "show-right").accessibilityAddTraits(.isButton).accessibilityAction { press(foot) }
+    }
+}
+
+/// The footprint of the boards: heel and toe pads of two feet in a 58 x 50 box.
+struct Footprints: SwiftUI.Shape {
+    func path(in r: CGRect) -> Path {
+        let kx = r.width / 58, ky = r.height / 50
+        var p = Path()
+        func e(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat, rot: Double = 0) {
+            var q = Path(ellipseIn: CGRect(x: -rx, y: -ry, width: 2 * rx, height: 2 * ry))
+            q = q.applying(CGAffineTransform(rotationAngle: CGFloat(rot * .pi / 180)).concatenating(CGAffineTransform(translationX: cx, y: cy)))
+            p.addPath(q.applying(CGAffineTransform(scaleX: kx, y: ky)).applying(CGAffineTransform(translationX: r.minX, y: r.minY)))
+        }
+        e(17, 16, 10, 14); e(17, 38, 7, 6); e(41, 20, 10, 14, rot: 8); e(42, 42, 7, 6)
+        return p
     }
 }
 
@@ -348,26 +503,28 @@ struct CheerMeter: View {
     }
 }
 
-/// The L / R prompts scrolling toward the ring, on the music's clock (the drill's lane, on the show's grid).
+/// The L / R prompts scrolling toward the ring, on the music's clock. 96 pt per beat, chips 40 pt and only the NEXT step grows to 52 pt (a half-beat double is 48 pt
+/// apart against 46 pt of radii, so two chips never touch, also at the ring); a rest is simply a gap.
 struct PromptLane: View {
     let care: GameCare
+    static let pointsPerBeat: CGFloat = 96
     var body: some View {
         let show = care.show
         TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
             let song = show.danceNow()
             let items = show.sim?.dance?.visible(at: song) ?? []
-            // points per beat: 62 as always, but with quick doubles (two prompts half a beat apart) half a beat must hold two chips (54 + 46 wide, centres >= 50 apart): 104
-            let pitch: CGFloat = (show.sim?.dance?.hasQuickDoubles ?? false) ? 104 : 62
+            let next = items.map(\.prompt.index).min()
             ZStack(alignment: .leading) {
                 Capsule().fill(Color(red: 0.08, green: 0.05, blue: 0.13).opacity(0.6))
                 Circle().strokeBorder(Color(hex: 0xFFF6EC), lineWidth: 4).frame(width: 60, height: 60).padding(.leading, 14)
                 ForEach(items, id: \.prompt.index) { it in
-                    let near = it.ahead < 0.5
-                    Text(it.prompt.foot == 0 ? "L" : "R").font(SK.font(near ? 22 : 18, .black)).foregroundStyle(.white)
-                        .frame(width: near ? 54 : 46, height: near ? 54 : 46)
+                    let big = it.prompt.index == next
+                    let size: CGFloat = big ? 52 : 40
+                    Text(it.prompt.foot == 0 ? "L" : "R").font(SK.font(big ? 22 : 17, .black)).foregroundStyle(.white)
+                        .frame(width: size, height: size)
                         .background(Circle().fill(it.prompt.foot == 0 ? SK.sky : SK.pink))
                         .opacity(max(0.4, 1 - 0.13 * max(it.ahead, 0)))
-                        .offset(x: 14 + 30 - (near ? 27 : 23) + CGFloat(max(it.ahead, -0.3)) * pitch)
+                        .offset(x: 14 + 30 - size / 2 + CGFloat(max(it.ahead, -0.3)) * Self.pointsPerBeat)
                 }
             }
             .frame(height: 84)

@@ -136,6 +136,8 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     var landScreenY: Float = 0.5
     var landFill: Float = 0.8
     var landLeft = true
+    /// With `landLeft`: how far (share of the visible width) the camera target moves off the body, i.e. the body sits at 0.5 - landShift of the width.
+    var landShift: Float = 0.22
     static let look = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.30, fill: 0.46)
     /// The Trick round: the middle, the player's aside spot and the rivals' rest spots all in view (the rivals walk up to the middle in turn).
     static let trick = ShowFrame(spots: [ShowStage.playerSpot, ShowStage.playerAside, ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)],
@@ -145,7 +147,12 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     static let trickPad = ShowFrame(spots: trick.spots, screenY: 0.39, fill: 0.80, landScreenY: 0.52, landFill: 1.24, landLeft: true)
     static func trick(pad: Bool) -> ShowFrame { pad ? trickPad : trick }
     /// `pad` (iPad idiom only): the row of four fills less of a tablet portrait's width, so the end Jelbies (nearer the camera) are not cropped; false = the phone's numbers.
-    static func dance(bodies n: Int, pad: Bool = false) -> ShowFrame { ShowFrame(spots: ShowStage.spots(bodies: n), screenY: pad ? 0.38 : 0.30, fill: n > 1 ? (pad ? 0.66 : 0.84) : 0.46, landScreenY: 0.28, landFill: n > 1 ? 1.15 : 0.6, landLeft: false) }
+    /// One dancer (the trimmed Dance screen): the phone portrait fills 0.55 of the width with the body's middle at 0.34 (was 0.46 / 0.30); on its side the body sits left of the
+    /// middle (x 0.41) at screenY 0.42 with nothing over it (the cheer strip is top right, the lane between the foot buttons).
+    static func dance(bodies n: Int, pad: Bool = false) -> ShowFrame {
+        if n <= 1 && !pad { return ShowFrame(spots: ShowStage.spots(bodies: 1), screenY: 0.34, fill: 0.55, landScreenY: 0.38, landFill: 0.9, landLeft: true, landShift: 0.09) }
+        return ShowFrame(spots: ShowStage.spots(bodies: n), screenY: pad ? 0.38 : 0.30, fill: n > 1 ? (pad ? 0.66 : 0.84) : 0.46, landScreenY: 0.28, landFill: n > 1 ? 1.15 : 0.6, landLeft: false)
+    }
     static let results = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.27, fill: 0.44, landScreenY: 0.22, landFill: 0.5, landLeft: false)
     static let practice = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.34, fill: 0.5, landScreenY: 0.3, landFill: 0.6, landLeft: false)
 }
