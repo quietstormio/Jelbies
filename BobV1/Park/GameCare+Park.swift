@@ -40,6 +40,7 @@ final class ParkWork {
 extension GameCare {
     func wirePark() {
         park.onSwap = { [weak self] dest in self?.parkSwap(dest) }
+        park.onRefresh = { [weak self] in self?.campRefresh() }          // (Camp: Park/GameCare+Camp.swift)
     }
 
     /// The bodies of the Jelbies that did not come along are away while the park is on.
@@ -197,7 +198,7 @@ extension GameCare {
             if book.comers.contains(k) { b.idleMood = .happy }
             else { b.autonomy = false; b.idleBlocked = true }
         }
-        guard park.phase == .playing || park.phase == .arriveIn else { return }
+        guard park.phase == .playing || park.phase == .arriveIn || (park.place == .camp && park.phase == .refreshIn) else { return }
         if park.place == .camp { tickCamp(dt: dt); return }          // (Camp: Park/GameCare+Camp.swift; no friendships, gifts, toys, save or bedtime call)
         tickVisitors(dt: dt)
         tickFriends(actors, dt: dt)
@@ -406,7 +407,7 @@ extension GameCare {
     /// A tap in the park: a visitor's card (a body id), or nothing (closes it).
     func parkTapped(_ bodyID: Int?) {
         guard park.phase == .playing else { return }
-        if park.place == .camp { campTapped(bodyID); return }          // (Camp: a smile; the card comes with the yard's chrome)
+        if park.place == .camp { campTapped(bodyID); return }          // (Camp: select a creature; Park/CampChrome.swift)
         let book = parkBook
         guard let id = bodyID, let k = book.actors.firstIndex(where: { $0.id == id }), book.cast.indices.contains(k) else { park.card = nil; return }
         let vid = book.cast[k]

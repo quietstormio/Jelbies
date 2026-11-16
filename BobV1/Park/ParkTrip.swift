@@ -10,7 +10,7 @@ import Observation
 @MainActor
 @Observable
 final class ParkTrip {
-    enum Phase { case off, pick, goOut, arriveHold, arriveIn, playing, leaveOut, leaveHold, leaveIn }
+    enum Phase { case off, pick, goOut, arriveHold, arriveIn, playing, leaveOut, leaveHold, leaveIn, refreshOut, refreshHold, refreshIn }
     enum Dest { case park, home }
     /// Where the trip goes: the park, or the Jelmiko Camp yard (Park/GameCare+Camp.swift: the same wipe, camera and visitor bodies, but nobody comes along and nothing of the visit is saved).
     enum Place { case park, camp }
@@ -35,6 +35,8 @@ final class ParkTrip {
     @ObservationIgnored var toastT: Float = 0
     /// Called once with the white opaque: the world swap.
     @ObservationIgnored var onSwap: (Dest) -> Void = { _ in }
+    /// Camp only: called once with the white opaque, to rebuild the yard's bodies after a move (`beginRefresh`).
+    @ObservationIgnored var onRefresh: () -> Void = {}
 
     nonisolated deinit {}
 
@@ -42,7 +44,7 @@ final class ParkTrip {
     var picking: Bool { phase == .pick }
     /// The park is the world (music, chrome, the decor hidden, the other Jelbies away).
     var inScene: Bool {
-        switch phase { case .arriveHold, .arriveIn, .playing, .leaveOut: return true; default: return false }          // (not leaveHold: the home swap sees the park already gone)
+        switch phase { case .arriveHold, .arriveIn, .playing, .leaveOut, .refreshOut, .refreshHold, .refreshIn: return true; default: return false }          // (not leaveHold: the home swap sees the park already gone)
     }
     var hidesDecor: Bool { inScene }
     var canGoHome: Bool { phase == .playing }
@@ -64,6 +66,11 @@ final class ParkTrip {
     }
     /// The picker closes while the Jelbies run out of the room, then the trip begins with the same company (GameCare+Outing.swift).
     func resume(picked p: [Int]) { guard phase == .off, !p.isEmpty else { return }; picked = p; phase = .pick; begin() }
+    /// Camp only: a white wipe over the yard (nobody leaves): `onRefresh` runs with it opaque, then the yard comes back and plays again.
+    func beginRefresh() {
+        guard phase == .playing, place == .camp else { return }
+        card = nil; phase = .refreshOut
+    }
     func goHome() {
         guard canGoHome else { return }
         card = nil; phase = .leaveOut
@@ -95,6 +102,15 @@ final class ParkTrip {
         case .leaveIn:
             wipe = max(wipe - dt / ParkTuning.fadeIn, 0)
             if wipe <= 0 { finish() }
+        case .refreshOut:
+            wipe = min(wipe + dt / ParkTuning.fadeOut, 1)
+            if wipe >= 1 { phase = .refreshHold; holdFrames = 0; onRefresh() }
+        case .refreshHold:
+            holdFrames += 1
+            if holdFrames >= ParkTuning.holdSteps { phase = .refreshIn }
+        case .refreshIn:
+            wipe = max(wipe - dt / ParkTuning.fadeIn, 0)
+            if wipe <= 0 { phase = .playing }
         }
     }
 

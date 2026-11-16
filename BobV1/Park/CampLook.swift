@@ -57,8 +57,11 @@ enum CampLayout {
 
 extension GameCare {
     /// Who is at Camp, as looks to copy. The seam of the visit (tests replace it): the save's Camp list, or, in a simulator capture with `-CampSeed n` and nobody at Camp, n made-up creatures of mixed species.
-    @MainActor static var campSource: () -> [CampCreature] = {
-        let real = JellyCamp.members().map { CampCreature.make(instance: $0.id, name: $0.name, palette: .some($0.palette), worn: $0.worn) }
+    @MainActor static var campSource: () -> [CampCreature] = { campCreatures() }
+
+    /// The Camp creatures of the save in `d`, as looks to copy (in the simulator, dressed by `-CampLooks`).
+    @MainActor static func campCreatures(_ d: UserDefaults = .standard) -> [CampCreature] {
+        let real = JellyCamp.members(d).map { CampCreature.make(instance: $0.id, name: $0.name, palette: .some($0.palette), worn: $0.worn) }
         #if targetEnvironment(simulator)
         return campLooksApplied(real)
         #else
