@@ -158,7 +158,7 @@ extension GameCare {
         park.resume(picked: who)
     }
 
-    private var parkFadeBlocked: Bool {
+    var parkFadeBlocked: Bool {
         race.active || show.active || volley.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active
             || (park.place == .park && parkBook.roster.contains { $0.brain?.isSleeping == true })          // (Camp: a sleeping home Jelmiko just stays asleep, hidden)
     }

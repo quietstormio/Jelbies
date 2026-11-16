@@ -71,7 +71,7 @@ struct CampChrome: View {
                 if park.phase == .playing {
                     if ui.members.isEmpty, ui.sheet == .none { emptyCard }
                     if let c = selectedCreature, ui.sheet == .none, !ui.moving {
-                        if wide { HStack { Spacer(); card(c).frame(width: min(300, g.size.width * 0.36)).padding(.top, 70).padding(.bottom, 90).padding(.trailing, 8) } }
+                        if wide { HStack { Spacer(); card(c).frame(width: min(320, g.size.width * 0.37)).padding(.top, 70).padding(.bottom, 90).padding(.trailing, 8) } }
                         else { VStack { Spacer(); card(c).padding(.horizontal, 10).padding(.bottom, 14) } }
                     }
                     if ui.selected == nil, ui.sheet == .none, !ui.moving { bottomBar }
@@ -153,8 +153,8 @@ struct CampChrome: View {
             }
             HStack(spacing: 10) {
                 Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap(); care.campBringHomeTapped(c.id) } label: {
-                    HStack(spacing: 8) { Image(systemName: "house.fill"); Text("Bring home").lineLimit(1).minimumScaleFactor(0.7) }
-                        .font(SK.font(20, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 56)
+                    HStack(spacing: 6) { Image(systemName: "house.fill"); Text("Bring home").lineLimit(1).minimumScaleFactor(0.5) }
+                        .font(SK.font(19, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 56)
                         .background(Capsule().fill(SK.honey))
                 }
                 .buttonStyle(.plain).accessibilityIdentifier("camp-bring-home")

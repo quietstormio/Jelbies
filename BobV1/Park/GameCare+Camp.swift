@@ -55,10 +55,14 @@ extension GameCare {
     nonisolated(unsafe) static var startCampFrames = 0
     /// Capture aid: `-StartCamp 1` opens the Camp yard once the room is up (retried like `-StartPark 1`; simulator only).
     func tickCampStart() {
+        if park.place == .camp, park.phase == .goOut, parkFadeBlocked {
+            let why = ["race": race.active, "show": show.active, "volley": volley.active, "raceWait": raceWait != nil, "bath": bath.active, "focus": focus.isActive, "trayOut": trayOut, "dining": dining.phase != .absent, "groupActive": groupActive, "arranging": arranging, "cafe": cafe.active].filter(\.value).keys.sorted()
+            NSLog("[startcamp] the fade out is blocked by %@", why.joined(separator: ","))
+        }
         guard Self.startCampPending else { return }
         if park.phase != .off { Self.startCampPending = false; return }
         Self.startCampFrames += 1
-        if Self.startCampFrames > 90, Self.startCampFrames % 45 == 0, !outing.running, !park.picking {
+        if Self.startCampFrames > 90, Self.startCampFrames % 45 == 0, !park.picking {          // (Camp sends nobody out, so an outing in progress does not hold it back)
             if let why = campBlocker() { NSLog("[startcamp] blocked at frame %d: %@", Self.startCampFrames, why) }
             else { Self.startCampPending = false; requestCamp() }
         }
