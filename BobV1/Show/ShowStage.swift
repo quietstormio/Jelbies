@@ -156,7 +156,7 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     static func trickPick(pad: Bool) -> ShowFrame { pad ? trickPickPad : trickPick }
     /// The Trick round: the middle, the player's aside spot and the rivals' rest spots all in view (the rivals walk up to the middle in turn).
     static let trick = ShowFrame(spots: [ShowStage.playerSpot, ShowStage.playerAside, ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)],
-                                 screenY: 0.39, fill: 0.88, landScreenY: 0.52, landFill: 0.62)
+                                 screenY: 0.39, fill: 0.88, landScreenY: 0.52, landFill: 1.55, landLeft: true, landShift: 0.235)          // landscape: the four bodies fill the stage area left of the Trick column (tuned in the real camera)
     /// The Trick round on an iPad (idiom only): the bodies sit lower (the trick menu is bigger there, so the stage keeps the middle of the screen instead of
     /// a band of backdrop above the menu), and in landscape they stay centred and a little bigger (no phone-style left third; the iPad's chrome is the portrait stack).
     static let trickPad = ShowFrame(spots: trick.spots, screenY: 0.39, fill: 0.80, landScreenY: 0.52, landFill: 1.24, landLeft: true)

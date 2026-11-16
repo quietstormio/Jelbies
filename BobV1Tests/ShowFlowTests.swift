@@ -422,9 +422,9 @@ final class ShowFlowTests: XCTestCase {
 
     /// Every stage frame keeps every body on it (floor to the top of the head, a body's width either side) inside the screen, portrait and landscape.
     func testStageFramesKeepTheBodiesInViewBothWays() {
-        let frames: [(String, ShowFrame)] = [("look", .look), ("trick", .trick), ("dance1", .dance(bodies: 1)), ("dance3", .dance(bodies: 3)), ("results", .results), ("practice", .practice)]
         for (name, size) in LandscapeTests.sizes {
             let aspect = Float(size.width / size.height)
+            let frames: [(String, ShowFrame)] = [("look", .look), ("trick", .trick(pad: name.hasPrefix("ipad"))), ("dance1", .dance(bodies: 1)), ("dance3", .dance(bodies: 3)), ("results", .results), ("practice", .practice)]
             for (fname, frame) in frames {
                 let cam = GameCamera.camera(aspect: aspect, show: 1, showFrame: frame)
                 for s in frame.spots {
