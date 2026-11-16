@@ -45,6 +45,13 @@ nonisolated enum ParkPlayTuning {
     static let socialPickMul: Float = 2.0, socialWaitMul: Float = 0.5
     static let calmKindMul: Float = 1.35, boopMul: Float = 0.8
     static let calmKinds: Set<SocialKind> = [.sitTogether, .backToBack, .swayHug, .highFive, .cuddleLean, .line, .follow, .spinHug, .whisperGiggle]
+    // MARK: a mixed park (`-ParkSpread old` = off)
+    nonisolated(unsafe) static var spreadNew: Bool = flag("ParkSpread")
+    /// A stranger whose body kind is already in this visit (while another kind is still available) is not picked; a friend of such a kind keeps this share of his weight. A stranger of one of the household's own kinds keeps this
+    /// share (friends are not touched, so they still come back and friendship grows).
+    static let spreadSeenFriendMul: Double = 0.3, spreadHouseholdMul: Double = 0.2
+    /// A visit has at least this many different kinds when that many exist (the fourth visitor is free: with four kinds in the pool, forcing all four would put the household's own kinds in every full visit).
+    static let spreadKinds = 3
     /// Counters for the soak (why a pick did not go ahead).
     struct Stats { var rollNo = 0, coolNo = 0 }
     nonisolated(unsafe) static var stats = Stats()

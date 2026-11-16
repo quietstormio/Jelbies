@@ -132,9 +132,9 @@ final class ParkBook {
 
     // MARK: who comes
 
-    func chooseCast(count: Int, characters: [Int], now: Double) -> [ParkVisitor] {
+    func chooseCast(count: Int, characters: [Int], now: Double, household: Set<Int> = []) -> [ParkVisitor] {
         var rng = SystemRandomNumberGenerator()
-        return ParkPool.pickCast(from: visitors.filter { $0.mergedInto == nil }, count: count, characters: characters, now: now, using: &rng)
+        return ParkPool.pickCast(from: visitors.filter { $0.mergedInto == nil }, count: count, characters: characters, now: now, household: household, using: &rng)
     }
 
     // MARK: the on-device writer (optional)

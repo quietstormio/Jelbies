@@ -443,7 +443,7 @@ extension GameCare {
             var countRNG = SystemRandomNumberGenerator()
             let n = ParkVisit.visitorCount(playerCount: comers.count, using: &countRNG)
             let characters = comers.compactMap { jelly($0)?.character }
-            let cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970)
+            let cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970, household: Set((comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { ParkVisitor.kindOfSpecies(JellyRoster.species($0)) }))
             let spots = ParkLayout.spots(count: comers.count + cast.count)
             book.cast = cast.map(\.id)
             book.actors = book.spawn?(cast, Array(spots.dropFirst(comers.count))) ?? []
