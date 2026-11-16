@@ -56,15 +56,20 @@ final class TipCardUITests: XCTestCase {
         shot("tap_through")
     }
 
-    func testLandscapeHomeAndWhereTo() {
-        XCUIDevice.shared.orientation = .landscapeLeft
-        let app = launch(["-TipShow", "powerup"])
-        XCTAssertTrue(app.otherElements["tip-powerup"].waitForExistence(timeout: 120))
-        sleep(2); shot("powerup_l")
-        app.terminate()
-        let app2 = launch(["-TipShow", "town", "-StoreOpen", "town"])
-        XCTAssertTrue(app2.otherElements["tip-town"].waitForExistence(timeout: 120))
-        sleep(2); shot("town_l")
+    /// On an iPhone no card shows in landscape (nothing written, it waits); turned back to portrait the card shows in its normal place.
+    func testLandscapeShowsNoCardAndPortraitThenShowsIt() {
+        let cases: [(id: String, args: [String])] = [("shop", ["-StoreOpen", "shop"]), ("spring", []), ("town", ["-StoreOpen", "town"]), ("dress", []), ("decor", []), ("powerup", [])]
+        for c in cases {
+            XCUIDevice.shared.orientation = .landscapeLeft
+            let app = launch(["-TipShow", c.id] + c.args)
+            sleep(75)          // (a starved simulator: the screen and the pump need time; a card would show well inside this)
+            XCTAssertFalse(app.otherElements["tip-\(c.id)"].exists, "\(c.id): no card in landscape")
+            shot("\(c.id)_l")
+            XCUIDevice.shared.orientation = .portrait
+            XCTAssertTrue(app.otherElements["tip-\(c.id)"].waitForExistence(timeout: 120), "\(c.id): the card shows once back in portrait")
+            sleep(2); shot("\(c.id)_p_after")
+            app.terminate()
+        }
     }
 
     func testSettingsShowTipsAgain() {
