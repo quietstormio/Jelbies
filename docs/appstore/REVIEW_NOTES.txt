@@ -1,0 +1,50 @@
+JELMIKO 1.0 - NOTES FOR APP REVIEW AND EXPORT COMPLIANCE
+Prepared 2026-11-15 from branch phone-jelly-final. Paths and button names are from the code; owner: tap through each path on the final build before pasting and delete any sentence that fails (verify in App Store Connect and on a clean install).
+
+======================================================================
+A. APP REVIEW INFORMATION FIELDS
+======================================================================
+Sign-in required: No (leave the demo account fields empty; there are no accounts).
+Contact first name / last name / phone / email: the owner's own. Email: dione@mgsllc.io (the only address used anywhere).
+Attachment: none needed.
+
+----- paste into the "Notes" box (start) -----
+Jelmiko is a pet game for iPhone and iPad. It works offline: there is no login, no account, no ads, no in-app purchases (the in-game currency, JellyCoins, is only earned by playing), no analytics and no tracking. Nothing needs to be set up before testing.
+
+FIRST LAUNCH
+A short intro plays once (tap to skip), then the title screen. Tap New Game, watch or skip the short opening story, choose one of the four free first Jelmiko, give it a name, and you are in the home room. A new game starts with a small amount of JellyCoins (40).
+
+QUICK TOUR
+- Care: the buttons at the bottom of the room feed, give a drink, clean, play, and put the Jelmiko to bed. Tap a Jelmiko to dress it or to pick a competition.
+- Go out: the round button on the left opens the town map (Shop, Jelly Race, Jelly Show, Cafe, Park, Jelly Spa, Friends, Jelly Volleyball, Jelly Spring). The Jelly Spring is where more Jelmiko are adopted with earned JellyCoins; you can browse it without enough coins.
+- Games: Jelly Race, Jelly Show and Jelly Volleyball are played against computer-controlled characters. Nothing is online.
+- Photo mode: gear icon (top left) > Settings > Game > Photo mode.
+- Settings also has Music and Sound effects, Accessibility, Voice and listening, Appearance (theme colour and matching alternate app icons), Privacy, Help & Support and Reset save.
+
+GROWN-UP GATE
+Everything that leaves the game is behind a grown-up check: the Share button on a photo, opening the device's Settings or Shortcuts, and the "Write to us" email button. The check is a button that must be pressed and held for 2 seconds. With VoiceOver on, activating the button asks "Are you a grown-up?" first. Cancel closes it.
+
+MICROPHONE AND SPEECH RECOGNITION
+The microphone is used only while the player holds the mic button (to say a Jelmiko's name or a trick word), or while the optional "Ears" setting is on (off by default). Speech is turned into text on the device by Apple's on-device speech framework (DictationTranscriber and SpeechAnalyzer). The audio is not recorded to a file and is not sent anywhere. The first use may make iOS download Apple's speech language pack once; the game itself makes no network request. If permission is denied the game keeps working. Ears hands each audio buffer to Apple's on-device sound classifier and then discards it.
+PHOTOS: permission is add-only, used only by the "Save to Photos" button. The game never reads the photo library. There is no camera access.
+
+WIDGET AND LIVE ACTIVITIES
+The widget (small, medium, large and Lock Screen sizes) shows how the player's Jelmiko are doing and reads data that the game saved on the device through an App Group. Live Activities (a race, and an optional bedtime card) are started locally by the game with no push notifications. You will only see one when a race starts or when the Jelmiko go to bed at night.
+
+OTHER
+- English only. Light appearance only. iPhone and iPad.
+- Not in the Kids Category.
+- Support and privacy pages: see the URLs in the listing. Support: dione@mgsllc.io
+----- paste into the "Notes" box (end) -----
+
+Owner check before pasting (known items to verify on a real clean install, from RELEASE-1.0.md and the audit): the widget deep link on a cold start, a Live Activity tap returning to the game, Assistive Access launch. If one of them fails, delete its sentence.
+
+======================================================================
+B. EXPORT COMPLIANCE (the encryption questions)
+======================================================================
+Finding: BobV1-Info.plist contains ITSAppUsesNonExemptEncryption = false (with an explanatory comment). The source (BobV1/, Shared/, JelbiesWidget/, LiveActivity/) has no CryptoKit, CommonCrypto, Security-framework key code or networking code; only the test target mentions anything crypto-like by name (grep 2026-11-15). There is no third-party package. The key is in the app target's Info.plist; the widget extension has its own Info.plist (JelbiesWidget-Info.plist) which is a separate bundle (App Store Connect asks per app build; verify that the question does not appear after upload).
+What to do:
+- With the key set, App Store Connect should not ask the export-compliance questions on each build. If it asks anyway ("Does your app use encryption?"), the honest answer is: it uses only the encryption built into iOS (or none), which is exempt: choose "None of the algorithms mentioned above" / the exempt option. Verify the exact option names in App Store Connect.
+- France: if you distribute in France, Apple may ask for a document only for non-exempt encryption; with exempt use none is needed (verify).
+- Unrelated to encryption: Content Rights ("Does your app contain, show or access third-party content?") -> No (all art, models and music are the project's own or generated for it; see OPEN_QUESTIONS.txt about the generated-audio licence before you answer finally).
+- Advertising Identifier (IDFA) question on upload: No (no ad code).

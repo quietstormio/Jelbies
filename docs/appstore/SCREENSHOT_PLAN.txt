@@ -1,0 +1,48 @@
+JELMIKO 1.0 - SCREENSHOT PLAN (nothing has been captured; this is a plan)
+Prepared 2026-11-15. Sizes are from my memory of Apple's specification page: verify in App Store Connect (the "Screenshot specifications" help page) before exporting.
+
+======================================================================
+1. SIZES (verify)
+======================================================================
+- 1 to 10 screenshots per device size; .jpeg, .jpg or .png; NO alpha channel / transparency; RGB.
+- iPhone: required group is the largest iPhone size you provide. Use the 6.9-inch set: 1320 x 2868 px portrait (landscape 2868 x 1320). Also accepted: 1290 x 2796, 1260 x 2736. App Store Connect scales the smaller iPhone sizes down from the 6.9-inch set when the layout is the same. If it will not accept it for the required slot, add the 6.3-inch size: 1206 x 2622 (landscape 2622 x 1206).
+- iPad (required, because the app runs on iPad): 13-inch set: 2064 x 2752 px portrait (landscape 2752 x 2064), or 2048 x 2732 (landscape 2732 x 2048). The 11-inch iPad sizes are optional and scaled from the 13-inch set.
+- Check each file for alpha: for example, in Terminal, "sips -g hasAlpha file.png" must say "no". To flatten: open in Preview > File > Export, untick Alpha.
+- Optional: an app preview video (up to 3 per size). Not planned: the intro video is a logo sting and is not gameplay.
+
+======================================================================
+2. HOW TO CAPTURE (for whoever does it; do not use a build with dev arguments)
+======================================================================
+- Use a normal build from phone-jelly-final with the owner's approved jelly look, in the Simulator at the sizes above (iPhone 17 Pro Max class, iPad Pro 13-inch class) or on a real device and crop.
+- Save: three Jelmiko at home (for example Bob blue, Pip yellow, Lavender purple), some trophies and a comfortable JellyCoins balance; daytime in the room.
+- Use portrait for all iPhone shots. For iPad use portrait for 2 shots (1 and 8) and landscape for the rest, or all portrait; keep one orientation per set so the gallery looks tidy.
+- Older candidates exist in scratchpad/appstore/{ipad13,iphone69,iphone61} from 2026-11-09. They PREDATE the rename to Jelmiko and the jelly look: do not use them; they show the old name and old body look.
+- Shots must show real game screens only. Captions (optional) are added in a design tool afterwards, 4 words or fewer.
+- Keep the bottom buttons clear: in portrait a front Jelmiko can sit under the bottom buttons (a known item in RELEASE-1.0.md). Re-pose and re-take any shot where a Jelmiko is covered.
+
+======================================================================
+3. SHOT LIST (8 shots, same story for iPhone and 13-inch iPad, in this order)
+======================================================================
+1. Screen: the home room, three Jelmiko doing something lively (one waving, one walking, one sitting). Creatures: Bob, Pip, Lavender. Moment: daytime, no menu open. Caption: "Meet your Jelmiko" (3 words).
+2. Screen: feeding. Creatures: one Jelmiko with a snack tossed toward its mouth. Moment: the snack mid-air or just caught. Caption: "Snack time together" (3).
+3. Screen: the bubbly clean. Creatures: Moss (green, antennas) covered in soap bubbles with sparkles. Moment: bubbles on, a sparkle burst. Caption: "Bubbles and sparkles" (3).
+4. Screen: dress up (a hat and glasses on a Jelmiko). Creatures: Lavender with wings visible plus a hat, or Pip with a hat. Moment: the Jelmiko wearing the look, not the shop list. Caption: "Dress them up" (3).
+5. Screen: the town map "Where to?" with the places. Moment: the map as it first opens. Caption: "Explore Wobble Isle" (3).
+6. Screen: Jelly Race in progress: a curved course with the player's Jelmiko and the other racers mid-run. Moment: a hurdle jump if possible. Caption: "Race for JellyCoins" (3).
+7. Screen: Jelly Volleyball on the beach. Creatures: two on each side, ball in the air. Moment: a belly-flop spike or a head bonk. Caption: "Bump, dig, spike" (3).
+8. Screen: the Jelly Spring (adoption) with the choice of friends on the stage. Creatures: the species shown on the stage. Moment: one Jelmiko hopped forward. Caption: "Adopt new friends" (3).
+Spare (use instead of 2 or 3 if a shot comes out poorly): a sleepy night room with a Jelmiko napping ("Cosy bedtime"); Photo mode viewfinder ("Snap a photo"); the widget on a Home Screen ("Jelmiko on your Home Screen").
+
+AVOID in screenshots (being changed now, or not yet checked):
+- The Jelly Show screens and its contestant line-up (the contestants are being changed).
+- The Park: a toy (seesaw) is being removed and the visitors are being changed. A plain room, town, race, beach and Spring are safer.
+- The Shop screens (the decor / furniture and toy tabs are being changed; the Shop has no furniture section and no RC car, scooter, frisbee or bubble machine to show).
+- Any Settings, Privacy or debug screen; any "(test)" picker; any screen that shows 10,000 coins (a store build starts at 40; use a believable balance).
+- Landscape of the menu, adoption and photo screens until they have been checked on the iPad landscape simulator (RELEASE-1.0.md lists them as unchecked).
+
+======================================================================
+4. PER-DEVICE NOTES
+======================================================================
+iPhone 6.9-inch: portrait, HUD buttons not overlapping a creature.
+iPad 13-inch: the layout is built from the available size; the iPad layout was verified only in the Simulator (the owner has no iPad), so look at each iPad shot at full size for stretched or crowded layout before you choose it.
+Make the iPhone and iPad sets show the same 8 moments in the same order.

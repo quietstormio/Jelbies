@@ -1,0 +1,28 @@
+JELMIKO 1.0 - OPEN QUESTIONS (not settled from the repo and the notes)
+Prepared 2026-11-15. Each item: what is known, and who can settle it.
+
+1. PRICE. Not decided. docs/RELEASE-1.0.md: "pricing (TBD by the user)". A 2026-10-19 note considered "pay-once unlock + optional add-on packs", but the app has no purchase code at all (no StoreKit), and the 11-09 store pack says one fixed price or Free. No listing text names a price. Settle: the owner. If paid, the Paid Apps agreement and bank / tax details are needed (OWNER_TODO step 2).
+
+2. ELEVENLABS LICENCE FOR GENERATED MUSIC AND SOUNDS. Not confirmed. Known from the project notes (2026-11-08): the owner is on the "basic" paid plan (Starter). Starter is individual-use and the developer is MGS LLC, so the plan may have to be Scale or higher; music is fine for an indie game under about US$500k game revenue (and under US$1M publisher game revenue), above that a move to Enterprise Music within 60 days; sound effects are fine inside a game but never as standalone files; anything made on a free plan in another account stays under free terms, so files made on the earlier key need checking. The key was renewed 2026-10-25 (RELEASE-1.0.md). The Jelmiko creature voices were made by code (numpy synth), not ElevenLabs (docs/SOUND_STYLE.md), but the groomer, volleyball tracks, storm sounds and other effects were. Not done: reading the current ElevenLabs terms for the plan in use and listing which audio files came from which account. I did not look anything up (no web lookups were allowed). Settle: the owner (plan and terms) with help from someone who can list the audio files and their dates.
+
+3. TRADEMARK AND NAME SEARCH FOR "JELMIKO" (and "Wobble Isle"). Not run, on purpose: the notes (project-ip-check-2026-11-11) say a search would send the project name to an outside service and needs the owner's yes first. The name was changed on 2026-11-13 "for legal reason" (no more detail in the notes). The name must also be free on App Store Connect (App Store Connect tells you when you create the record). Also parked: an asset licence audit (fonts, models, textures) and one short consult with a games IP attorney. Settle: the owner.
+
+4. WHETHER THE ACCOUNT IS AN ORGANIZATION ACCOUNT. The privacy text and copyright say MGS LLC. An organisation account is needed for MGS LLC to appear as the seller; I do not know what the account is. Settle: the owner, at developer.apple.com > Membership.
+
+5. COPYRIGHT LINE. Suggested "2026 MGS LLC". The widget's NSHumanReadableCopyright is empty and the app sets none; the App Store Connect field is separate. Settle: the owner.
+
+6. SUPPORT AND PRIVACY URLS. Placeholders only; the pages are ready (privacy.html, support.html) but nothing has been hosted. The owner has to choose a host.
+
+7. SOME CLAIMS TO RE-CHECK ON A REAL CLEAN INSTALL (from RELEASE-1.0.md and the 11-15 audit; I could not test them): voice (listen mode, name, tricks) was never verified on a real device; haptics and the speed of three Jelmiko were not fully measured; the widget deep link on a cold start and Assistive Access launch; first launch after an install can take a while (the audit warns about work near 10 seconds). If the speech pack does not download or voice fails on the review device, the review notes already say the game keeps working.
+
+8. THE SPEECH NOTE IN THE IN-APP PRIVACY PAGE. Settings > Privacy has the effective date 2026-11-09 and says nothing about the saved name / trick word (a small note kept on the device) or the Park text; the hosted privacy.html covers both and is dated 2026-11-15. Not a blocker; update PrivacyText in a later build if you want them identical.
+
+9. NOT AUDITED: every debug log in the project. The voice log helper writes only to the console behind a developer flag. I did not check every other NSLog / file log (the audit mentions PerfLog / FootLog files that a saved flag could turn on without the dev switch: item S1 there). They write on the device only and never send anything, so the privacy answer is unaffected, but they should be gated before release.
+
+10. AGE RATING WORDING. The Apple form changes; each answer in AGE_RATING.txt is marked verify. The two judgement calls: the storm (None) and Contests (None). Both still give 4+ if you choose the cautious answer.
+
+11. KIDS WORDING. The app is not in the Kids Category, but it is a gentle game that children can play. The listing text avoids "for kids" on purpose; privacy.html has a short "Children" paragraph. If a review question comes back about children's data, the answer is that none is collected (APP_PRIVACY.txt). Verify against the current Review Guidelines (1.3 and 5.1.4).
+
+12. THINGS BEING CHANGED NOW, so no text promises them: the Show's contestants (now "entrants"), the park's seesaw (removed), the Shop's furniture section and the RC car / scooter / frisbee / bubble machine. The description mentions "Pick a toy and play together", "hats, glasses, shoes", and "the Shop" generally. If those changes remove toys or shop items you need, reread the PLAY AND DRESS UP and GO OUT IN TOWN paragraphs before pasting.
+
+13. SIRI. The game has Siri phrases ("Feed Pip in Jelmiko"; alternative name "My Jelmiko"), not mentioned in any listing text because I did not verify them in the running app.
