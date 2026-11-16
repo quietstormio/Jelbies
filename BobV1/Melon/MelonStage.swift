@@ -1286,7 +1286,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             model.care.select.publishRing(id: h, floor: actors[h].floor, viewProj: cam.viewProj, size: pts)          // the persistent pick's floor ring
         }
         let camIn = game && model.care.focus.blend > 0.25
-        var light = game ? GameCamera.light(centroids: model.care.litActors(actors, camIn: camIn).filter { !model.care.parkHides($0.id) }.map { $0.sim.centroid() } + parkActors.map { $0.sim.centroid() }) : rig.light(centroid: c)
+        var light = game ? GameCamera.light(centroids: model.care.litActors(actors, camIn: camIn).filter { !model.care.parkHides($0.id) && !model.care.showParked($0.id) }.map { $0.sim.centroid() } + parkActors.filter { !model.care.show.onStage || !model.care.showHides($0.id) }.map { $0.sim.centroid() }) : rig.light(centroid: c)          // (the show: the home Jelmiko off stage and the hidden rival bodies are far away: they must not stretch the light's box)
         if game { light.intensity *= DayLight.at(hour: model.preview ? 12 : DayClock.shared.displayHour).jellyMul }          // night: the Jellies' key light is dialled down (never dark)
         if game, !model.preview { updateTuck(renderer, dt: 1.0 / 60) }
 

@@ -120,8 +120,16 @@ nonisolated enum ShowStage {
         let fixed = [SIMD2<Float>(-2.5, 2.0), SIMD2(-1.3, 0.6), SIMD2(1.3, 0.6)]
         return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
     }
-    /// A parked Jelly (a body the show does not need) waits far off to the side, out of every camera.
-    static func parkSpot(_ id: Int) -> SIMD2<Float> { SIMD2(40 + Float(id) * 4, 2) }
+    /// Where entrant k waits in the wing before she walks on to her rest spot (just outside the wide shot: left, left, right; a phone on its side: all from the left).
+    static func wingSpot(_ k: Int, sideways: Bool, wide: Bool = false) -> SIMD2<Float> {
+        if sideways { return [SIMD2<Float>(-6.5, 2.0), SIMD2(-7.2, 0.4), SIMD2(-6.0, -1.2)][min(k, 2)] }
+        var p = [SIMD2<Float>(-4.7, 2.0), SIMD2(-5.4, 0.5), SIMD2(4.9, 0.6)][min(k, 2)]
+        if wide { p.x += p.x < 0 ? -0.7 : 0.7 }          // (iPad portrait: the wide shot is wider, 0.80 fill instead of 0.88)
+        return p
+    }
+    /// A parked Jelly (a home Jelmiko the show does not need) waits far off to the LEFT, out of every camera: the borrowed rival bodies wait far to the right
+    /// (`GameCare.showFarSpot`, x 40...; the visitor spawn row is x 40..., z 0), so no two bodies ever share a spot (z stays inside the room floor's depth range).
+    static func parkSpot(_ id: Int) -> SIMD2<Float> { SIMD2(-40 - Float(id) * 4, 2) }
 }
 
 /// How the stage camera frames the show this frame (the glue sets it per round; the stage reads it with the show's camera blend).
@@ -136,16 +144,33 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     var landScreenY: Float = 0.5
     var landFill: Float = 0.8
     var landLeft = true
-    static let look = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.30, fill: 0.46)
+    /// With `landLeft`: how far (share of the visible width) the camera target moves off the body, i.e. the body sits at 0.5 - landShift of the width.
+    var landShift: Float = 0.22
+    /// The Look round (trimmed screen: the creature 1.45x bigger and centred in the space the judge line left); `lookPad` keeps the tablet's old numbers.
+    static let look = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.39, fill: 0.67)
+    static let lookPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.30, fill: 0.46)
+    static func look(pad: Bool) -> ShowFrame { pad ? lookPad : look }
+    /// The Trick round while he picks a trick: the camera holds the contestant alone, big (the entrants' bodies are hidden then); the wide `trick` shot comes back for his trick.
+    static let trickPick = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.34, fill: 0.44)
+    static let trickPickPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.39, fill: 0.46, landScreenY: 0.52, landFill: 0.6, landLeft: true)
+    static func trickPick(pad: Bool) -> ShowFrame { pad ? trickPickPad : trickPick }
     /// The Trick round: the middle, the player's aside spot and the rivals' rest spots all in view (the rivals walk up to the middle in turn).
     static let trick = ShowFrame(spots: [ShowStage.playerSpot, ShowStage.playerAside, ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)],
-                                 screenY: 0.33, fill: 0.80, landScreenY: 0.52, landFill: 0.62)
+                                 screenY: 0.39, fill: 0.88, landScreenY: 0.52, landFill: 1.55, landLeft: true, landShift: 0.235)          // landscape: the four bodies fill the stage area left of the Trick column (tuned in the real camera)
     /// The Trick round on an iPad (idiom only): the bodies sit lower (the trick menu is bigger there, so the stage keeps the middle of the screen instead of
     /// a band of backdrop above the menu), and in landscape they stay centred and a little bigger (no phone-style left third; the iPad's chrome is the portrait stack).
     static let trickPad = ShowFrame(spots: trick.spots, screenY: 0.39, fill: 0.80, landScreenY: 0.52, landFill: 1.24, landLeft: true)
     static func trick(pad: Bool) -> ShowFrame { pad ? trickPad : trick }
     /// `pad` (iPad idiom only): the row of four fills less of a tablet portrait's width, so the end Jelbies (nearer the camera) are not cropped; false = the phone's numbers.
-    static func dance(bodies n: Int, pad: Bool = false) -> ShowFrame { ShowFrame(spots: ShowStage.spots(bodies: n), screenY: pad ? 0.38 : 0.30, fill: n > 1 ? (pad ? 0.66 : 0.84) : 0.46, landScreenY: 0.28, landFill: n > 1 ? 1.15 : 0.6, landLeft: false) }
-    static let results = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.27, fill: 0.44, landScreenY: 0.22, landFill: 0.5, landLeft: false)
+    /// One dancer (the trimmed Dance screen): the phone portrait fills 0.55 of the width with the body's middle at 0.34 (was 0.46 / 0.30); on its side the body sits left of the
+    /// middle (x 0.41) at screenY 0.42 with nothing over it (the cheer strip is top right, the lane between the foot buttons).
+    static func dance(bodies n: Int, pad: Bool = false) -> ShowFrame {
+        if n <= 1 && !pad { return ShowFrame(spots: ShowStage.spots(bodies: 1), screenY: 0.34, fill: 0.55, landScreenY: 0.38, landFill: 0.9, landLeft: true, landShift: 0.09) }
+        return ShowFrame(spots: ShowStage.spots(bodies: n), screenY: pad ? 0.38 : 0.30, fill: n > 1 ? (pad ? 0.66 : 0.84) : 0.46, landScreenY: 0.28, landFill: n > 1 ? 1.15 : 0.6, landLeft: false)
+    }
+    /// Results: she stands above every card (portrait) / in the left half with the cards in a right column (a phone on its side).
+    static let results = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.25, fill: 0.42, landScreenY: 0.42, landFill: 0.55, landLeft: true)
+    static let resultsPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.27, fill: 0.44, landScreenY: 0.22, landFill: 0.5, landLeft: false)
+    static func results(pad: Bool) -> ShowFrame { pad ? resultsPad : results }
     static let practice = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.34, fill: 0.5, landScreenY: 0.3, landFill: 0.6, landLeft: false)
 }

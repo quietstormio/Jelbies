@@ -9,8 +9,8 @@ import XCTest
 
 @MainActor
 final class ToyInteractionTests: XCTestCase {
-    /// Toys that have no interaction of their own: the goal is shot at through the soccer ball's behaviour (DecorKind.interaction).
-    private static let viaBall: Set<DecorKind> = [.minigoal]
+    /// Toys with no interaction of their own: none (2026-11-15: the mini goal alone is booped; with a soccer ball it is shot at through the ball).
+    private static let viaBall: Set<DecorKind> = []
 
     func testEverySoldToyHasAnInteraction() {
         let toys = StoreCatalog.decorItems(.toys).compactMap(\.decor)
@@ -25,7 +25,7 @@ final class ToyInteractionTests: XCTestCase {
 
     func testTheBabyishToysAreRetiredAndTheSportToysAreSold() {
         for k in [DecorKind.duck, .ringstacker, .jackinbox, .toypiano] { XCTAssertTrue(k.isRetired); XCTAssertNil(StoreCatalog.item(k.storeID)) }
-        for k in DecorKind.batch5Toys {
+        for k in DecorKind.batch5Toys where !k.isRetired {          // (the frisbee was retired on 2026-11-15)
             XCTAssertNotNil(StoreCatalog.item(k.storeID), "\(k) is sold")
             XCTAssertEqual(k.category, .toys)
             XCTAssertNotNil(DecorMeshes.loaded[k], "\(k) art is bundled")
@@ -39,8 +39,8 @@ final class ToyInteractionTests: XCTestCase {
         XCTAssertEqual(DecorKind.skateboard.interaction, .decorKick); XCTAssertTrue(DecorKind.skateboard.rolls); XCTAssertFalse(DecorKind.skateboard.isBallLike)
         XCTAssertEqual(DecorKind.hoop.interaction, .decorBoop); XCTAssertTrue(DecorKind.hoop.spec.solid)
         // the balls the Play picker flicks include the new ones
-        XCTAssertTrue(BallToy.kinds.contains(.footbag) && BallToy.kinds.contains(.frisbee))
-        for k in DecorKind.batch5Toys { XCTAssertTrue((25...120).contains(StoreCatalog.item(k.storeID)?.price ?? 0), "\(k) price") }
+        XCTAssertTrue(BallToy.kinds.contains(.footbag) && !BallToy.kinds.contains(.frisbee), "the frisbee was retired on 2026-11-15")
+        for k in DecorKind.batch5Toys where !k.isRetired { XCTAssertTrue((25...120).contains(StoreCatalog.item(k.storeID)?.price ?? 0), "\(k) price") }
     }
 
     func testTheArtHasTheSubMeshesThePoseUses() {

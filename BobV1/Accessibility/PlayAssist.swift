@@ -159,13 +159,17 @@ enum ArrangeAssist {
 }
 
 extension ShowFlow {
+    /// How long before its prompt a cue plays: half a beat, but never more than half the gap to the previous prompt.
+    static func cueLead(period: Double, gap: Double) -> Double { min(period * 0.5, gap * 0.5) }
     /// The left / right audio cue half a beat before each dance prompt (under relaxed timing or VoiceOver), before the beat.
     func promptCues(now: Double) {
         guard A11ySettings.shared.relaxedTiming || UIAccessibility.isVoiceOverRunning || A11yEvents.forceActive else { return }
         let prompts = sim?.dance?.prompts ?? []
-        let lead = grid.period * 0.5
         while danceCued < prompts.count {
             let p = prompts[danceCued]
+            // half a beat early, but never later than the middle of the gap to the previous prompt (a quick double's cue sits between the two, not on the first)
+            let gap = danceCued > 0 ? p.time - prompts[danceCued - 1].time : .infinity
+            let lead = Self.cueLead(period: grid.period, gap: gap)
             if p.time - lead > now - ShowDanceSim.latencyOffset { break }
             danceCued += 1
             if p.grade == nil {

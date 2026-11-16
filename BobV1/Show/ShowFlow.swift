@@ -30,7 +30,7 @@ final class ShowFlow {
     /// What one rival is doing now (and, last, the player's Jelbie walking back to the centre).
     enum RivalStep: Equatable { case walkIn, perform, walkOut, playerBack }
     /// What the bodies are asked to do (GameCare+Show.swift): the player steps aside / back, rival `i` walks up / performs / steps back, everybody snaps home (Skip).
-    enum RivalCue: Equatable { case playerAside(Bool), walkIn(Int), perform(Int, VoiceTrick, Bool), walkOut(Int), snap }
+    enum RivalCue: Equatable { case playerAside(Bool), walkIn(Int), perform(Int, VoiceTrick, Bool), walkOut(Int), snap, enter }
 
     private(set) var phase: Phase = .off
     /// 0...1 white overlay opacity (the view draws it).
@@ -68,6 +68,9 @@ final class ShowFlow {
     @ObservationIgnored private(set) var danceSong: DanceSong = DanceSong.all[0]
     /// The dance clock: seconds of the dance song as heard (0 = its first sample). Held at 0 until the song is audible, then the audio engine's own player time.
     @ObservationIgnored private(set) var danceT: Double = 0
+    /// Set once, the moment a dance has run 1.5 s without the song's clock and so counts frames: the reason (diagnostics; also logged under `-AudioLog 1`).
+    @ObservationIgnored private(set) var danceFallback: String?
+    @ObservationIgnored private var danceNoClock: Double = 0
     @ObservationIgnored private var danceMusicOn = false
     @ObservationIgnored private var danceHeard = false
     @ObservationIgnored private var danceAudioWait: Float = 0
@@ -85,6 +88,17 @@ final class ShowFlow {
     private(set) var rivalStep: RivalStep = .walkIn
     private(set) var rivalRound = 0
     @ObservationIgnored private var rivalQueue: [Int] = []
+    /// HOW MANY OTHER ENTRANTS PERFORM ON STAGE AFTER EACH OF THE PLAYER'S TRICKS: the one place to change it (1 = one entrant per turn, in a fixed order: entrant k on turn k;
+    /// 3 = all three every turn, as before). Every entrant's three tricks are rolled and scored whatever this is (ShowSim.rollRivalTurns), so the Results totals do not depend on it.
+    static let entrantsPerTurn = 1
+    /// The Trick round opens with the entrants walking on from the wing (the wide shot); `entranceDone` ends it and the camera moves in on the contestant for "pick a trick".
+    @ObservationIgnored private var entranceStarted = false
+    @ObservationIgnored private var entranceDone = false
+    @ObservationIgnored private var entranceT: Float = 0
+    @ObservationIgnored private var entranceTapT: Float = 0
+    @ObservationIgnored private var entrancePick: VoiceTrick?
+    /// The entrants are walking on (the wide camera shot, the contestant's menu already usable).
+    var trickEntering: Bool { sim?.round == .trick && phase == .stage && !entranceDone }
     @ObservationIgnored private var rivalT: Float = 0
     @ObservationIgnored private var performLeft: Float = 0
     /// The Glow Burst fired on the last turn (the view throws confetti).
@@ -123,10 +137,14 @@ final class ShowFlow {
     @ObservationIgnored var cue: (ShowCue) -> Void = { AudioHub.shared.showCue($0) }
     /// The audio clock of the stage / studio music (song seconds), nil = not playing (muted, still decoding): the dance then counts frames.
     @ObservationIgnored var songClock: (SceneTrack) -> Double? = { AudioHub.shared.songTime(of: $0) }
+    /// Why `songClock` is nil for a track (the log line and `danceFallback`).
+    @ObservationIgnored var songClockWhy: (SceneTrack) -> String = { AudioHub.shared.songClockWhy(of: $0) }
     /// The music is up (muted = nothing to wait for).
     @ObservationIgnored var audioReady: (MusicScene) -> Bool = { AudioHub.shared.muted || AudioHub.shared.scenePlaying($0) }
     /// Test / capture aid: the dance is tapped for him (a few late, one missed) and the tricks are picked for him.
     @ObservationIgnored var auto = false
+    /// Capture aid (`-ShowHomeAfter s`, with `-ShowAuto`): the auto player presses Done this many seconds after the Results card is up (nil = never).
+    @ObservationIgnored var autoHomeAfter: Float?
     @ObservationIgnored private var autoDone = 0
     /// Dance prompts whose left / right audio cue has played (accessibility; PlayAssist.swift).
     @ObservationIgnored var danceCued = 0
@@ -148,7 +166,10 @@ final class ShowFlow {
     var onStage: Bool { cameraBlend > 0 }
     var round: ShowRound { sim?.round ?? .look }
     var showsCountdown: Bool { phase == .stage && beat == .countdown && countdown > 0 }
-    var showsGo: Bool { phase == .stage && beat == .dancing && goAge < 0.6 }
+    /// "GO!" in the lane: while the DANCE CLOCK (the song's own time, the one the chips run on) is under `goWordSeconds`, never longer than 2 s on the wall clock. Tied to the song clock
+    /// so a slow frame can never leave the word up while the first step arrives (the first prompt is at beat 4; the chip reaches the word's area at about 0.66 s on the fastest song in landscape).
+    var showsGo: Bool { phase == .stage && beat == .dancing && danceT < Self.goWordSeconds && goAge < 2.0 }
+    static let goWordSeconds: Double = 0.5
     /// The foot buttons are live.
     var buttonsLive: Bool { phase == .stage && beat == .dancing && wipe == 0 && !(sim?.danceDone ?? false) }
     var hasResults: Bool { sim?.round == .results && trickStage == .pick }
@@ -164,6 +185,24 @@ final class ShowFlow {
     /// The dance song's track (plays once under the dance) and its measured beat grid.
     var danceTrack: SceneTrack { danceSong.track }
     var grid: ShowBeat { danceSong.grid }
+    /// The prompt pattern of this show's dance (by rank; `-DancePattern` forces one in dev builds).
+    var dancePattern: DancePattern { DancePattern.resolve(rank: rank) }
+    /// Capture aid (dev builds): `-ShowDoneHold <s>` keeps the auto player on the score card that long (default 1.5 s).
+    static var autoDoneHold: Float { DevArgs.enabled ? max(1.5, Float(UserDefaults.standard.double(forKey: "ShowDoneHold"))) : 1.5 }
+    /// The cheer word of the score card after the song.
+    static func danceCheerWord(score: Float) -> String { score >= 80 ? "Great dancing!" : score >= 50 ? "Nice moves!" : "Good try!" }
+    /// Seconds in the dance song's file (44.1 kHz), else the last prompt plus the ring-out.
+    @ObservationIgnored private var lengthCache: [Int: Double] = [:]
+    var danceLength: Double {
+        if let c = lengthCache[danceSong.song] { return c }
+        let v = SceneRender.fileLength(danceTrack).map { Double($0) / 44100 } ?? (danceSong.time(ofSlot: 2 * danceSong.lastBeat) + DanceSong.ringOut)
+        lengthCache[danceSong.song] = v
+        return v
+    }
+    /// 0...1: how far into the dance song (the thin progress line under the lane).
+    var danceProgress: Double { beat == .danced ? 1 : (beat == .dancing ? min(max(danceNow() / max(danceLength, 1), 0), 1) : 0) }
+    /// How many prompts the dance has (the chip's "y"): the running dance's count, else the count this show's pattern will have.
+    var dancePromptTotal: Int { sim?.dance?.total ?? danceSong.promptCount(dancePattern) }
     /// The dance song is playing under the dance.
     var danceSongOn: Bool { beat == .dancing && danceMusicOn }
 
@@ -177,10 +216,10 @@ final class ShowFlow {
     /// How the camera frames the stage this moment (GameCamera.showPose).
     var frame: ShowFrame {
         switch round {
-        case .look: return .look
+        case .look: return .look(pad: PadLayout.isPad)
         case .dance: return .dance(bodies: bodies, pad: PadLayout.isPad)
-        case .trick: return .trick(pad: PadLayout.isPad)
-        case .results: return trickStage == .pick ? .results : .trick(pad: PadLayout.isPad)          // (the rivals' last turn still plays on the trick frame)
+        case .trick: return trickStage == .pick && !trickEntering ? .trickPick(pad: PadLayout.isPad) : .trick(pad: PadLayout.isPad)          // (while he picks: only him, big; the wide shot for his trick and the entrants' turns)
+        case .results: return trickStage == .pick ? .results(pad: PadLayout.isPad) : .trick(pad: PadLayout.isPad)          // (the rivals' last turn still plays on the trick frame)
         }
     }
 
@@ -202,8 +241,9 @@ final class ShowFlow {
 
     private func resetStage() {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; goAge = 0
-        danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0
+        danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
+        entranceStarted = false; entranceDone = false; entranceT = 0; entranceTapT = 0; entrancePick = nil
         rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
         autoDone = 0; autoTrickWait = 0; danceCued = 0
@@ -260,9 +300,9 @@ final class ShowFlow {
                     if var s = sim {
                         // the dance song starts now (the scene switches on the next frame) and its prompts are on ITS beats: the clock is the song's own
                         // player time, held at 0 until the song is audible, so the start can never drift from the clock
-                        danceT = 0; danceMusicOn = true; danceHeard = false; danceAudioWait = 0
+                        danceT = 0; danceMusicOn = true; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
                         s.beginDance(song: danceSong, songTime: 0); sim = s
-                        if AudioHub.audioLog { NSLog("[melon] dance start song=%d \"%@\" bpm=%.2f firstBeat=%.4f prompts=%d %.3f..%.3f s", danceSong.song, danceSong.title, danceSong.bpm, danceSong.grid.firstBeat, danceSong.promptCount, danceSong.grid.time(ofBeat: DanceSong.firstPromptBeat), danceSong.grid.time(ofBeat: danceSong.lastBeat)) }
+                        if AudioHub.audioLog, let d = s.dance { NSLog("[melon] dance start song=%d \"%@\" pattern=%@ bpm=%.2f firstBeat=%.4f prompts=%d %.3f..%.3f s", danceSong.song, danceSong.title, dancePattern.rawValue, danceSong.bpm, danceSong.grid.firstBeat, d.total, d.prompts.first?.time ?? 0, d.prompts.last?.time ?? 0) }
                     }
                     revision += 1
                 }
@@ -288,7 +328,15 @@ final class ShowFlow {
             if !danceHeard, AudioHub.audioLog { NSLog("[melon] dance song heard: clock %.3f s (output latency %.0f ms)", a, AudioHub.shared.outputLatencyMS) }
             danceHeard = true; danceT = max(danceT, a); return danceT
         }
-        if !danceHeard, !audioReady(.danceSong(danceSong.song - 1)), danceAudioWait < 1.5 { danceAudioWait += dt; return danceT }          // decoding: the prompts wait
+        if !danceHeard, !audioReady(.danceSong(danceSong.song - 1)), danceAudioWait < 1.5 { danceAudioWait += dt; danceNoClock += Double(dt); return danceT }          // decoding: the prompts wait
+        if !danceHeard {
+            danceNoClock += Double(dt)
+            if danceNoClock >= 1.5, danceFallback == nil {          // the song's clock never came: say so (the phone build used to go quiet here)
+                let why = songClockWhy(danceTrack) + (audioReady(.danceSong(danceSong.song - 1)) ? "" : "; scene voice not playing")
+                danceFallback = why
+                if AudioHub.audioLog { NSLog("[melon] dance song NOT heard after %.2f s: %@", danceNoClock, why) }
+            }
+        }
         danceT += Double(dt)
         return danceT
     }
@@ -354,6 +402,7 @@ final class ShowFlow {
     /// A menu row is tapped: he performs it at once (a slip is the cute flop).
     func pick(_ t: VoiceTrick) {
         guard var s = sim, s.round == .trick, trickStage == .pick, phase == .stage, !s.tricksDone else { return }
+        if trickEntering { entrancePick = t; return }          // (a tap during the walk-on: the walk-on ends within a second, then he performs it)
         guard let turn = s.perform(t) else { return }
         sim = s
         land(turn)
@@ -374,6 +423,7 @@ final class ShowFlow {
     }
     private func tickTrick(dt: Float) {
         clock += Double(dt)
+        if trickEntering { tickEntrance(dt: dt); return }
         switch trickStage {
         case .pick:
             if auto, let s = sim, !s.tricksDone {
@@ -395,13 +445,33 @@ final class ShowFlow {
         }
     }
 
+    // MARK: the entrants' walk-on
+
+    /// The Trick round's first seconds: the camera shows the whole stage, the entrants walk on from the wing to their rest spots (the walk they use to come to the middle),
+    /// about two seconds; then the camera moves in on the contestant. A trick tapped meanwhile ends it within a second (a walker still on the way is put at its spot).
+    private func tickEntrance(dt: Float) {
+        guard let s = sim else { return }
+        if !entranceStarted { entranceStarted = true; entranceT = 0; entranceTapT = 0; onRival(.enter); revision += 1; return }
+        entranceT += dt
+        if entrancePick != nil { entranceTapT += dt }
+        let arrived = s.rivals.indices.allSatisfy { rivalReady($0, false) }
+        if entranceT >= Self.entranceMin && arrived || entranceT > Self.entranceMax || (entrancePick != nil && entranceTapT >= 1.0) {
+            if !arrived { onRival(.snap) }
+            entranceDone = true
+            revision += 1
+            if let t = entrancePick { entrancePick = nil; pick(t) }
+        }
+    }
+    static let entranceMin: Float = 1.2, entranceMax: Float = 4.5
+
     // MARK: the rivals' turns
 
     /// The player's trick is over: each rival in turn walks up to the middle, shows the trick she rolled for this turn and steps back (his Jelbie waits aside).
     private func startRivals() {
         guard let s = sim else { return }
         rivalRound = max(s.turns.count - 1, 0)
-        rivalQueue = Array(s.rivals.indices)
+        let n = s.rivals.count, per = min(max(Self.entrantsPerTurn, 1), n)
+        rivalQueue = per >= n ? Array(s.rivals.indices) : (0..<per).map { (rivalRound * per + $0) % n }          // (one per turn: entrant k on turn k)
         trickStage = .rivals
         onRival(.playerAside(true))
         nextRival()
@@ -458,7 +528,7 @@ final class ShowFlow {
     func skipRivals() {
         guard trickStage == .rivals else { return }
         onRival(.snap)
-        A11yEvents.say("Skipped the rivals' tricks", .normal)
+        A11yEvents.say("Skipped", .normal)
         endRivals()
     }
     /// A tap on the banner: only the rival under the lights is skipped (she steps back at once).
@@ -500,10 +570,10 @@ final class ShowFlow {
             if lookAge >= Self.lookSeconds { finishLook() }          // the judges have looked: on to the dance (or the Next button)
         case .dance:
             tickDance(dt: dt)
-            if auto, beat == .danced, dancedAge > 1.5 { finishDance() }
+            if auto, beat == .danced, dancedAge > Self.autoDoneHold { finishDance() }
         case .trick: tickTrick(dt: dt)
         case .results:
-            if trickStage != .pick { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt }          // (the last turn's rivals still perform after the sim has its results)
+            if trickStage != .pick { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt; if auto, let h = autoHomeAfter, cardAge >= h { goHome() } }          // (the last turn's rivals still perform after the sim has its results)
         }
     }
 
