@@ -1114,6 +1114,12 @@ struct CareMenu: View {
     private var mode: HUDMode { frozenMode ?? HUDMenu.mode(care) }
     /// The mode a tapped row ran in, held while the menu closes: Come here / Clean clear the highlight, and the rows must not flip to the group labels mid-fade.
     @State private var frozenMode: HUDMode?
+    /// The menu was opened by a highlight: its rows arrive together on a short ease (the paw's own unfold keeps the spring and the stagger).
+    @State private var quickOpen = false
+    private func openForHighlight() {
+        quickOpen = true; frozenMode = nil; picker = nil; competeRow = false; trickRow = false
+        if !open { withAnimation(.easeOut(duration: 0.12)) { open = true } }
+    }
 
     /// The rows' natural size (they scroll when the screen is too short).
     @State private var careNatural: CGSize?
@@ -1153,12 +1159,12 @@ struct CareMenu: View {
             mainButton
         }
         .onChange(of: open) { _, isOpen in
-            if !isOpen { picker = nil; competeRow = false; trickRow = false }
+            if !isOpen { picker = nil; competeRow = false; trickRow = false; quickOpen = false }
             else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.visibleItems(mode, care: care).first } }      // focus moves into the opened rows
         }
-        .onChange(of: care.select.highlighted) { _, now in withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false; if now != nil { frozenMode = nil; open = true } } }          // a creature just got highlighted (or the highlight moved): the menu opens by itself, on that creature's rows
-        .onChange(of: care.select.highlightActs) { _, _ in if !open { withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false; frozenMode = nil; open = true } } }          // the same creature highlighted again (the highlight itself did not change): the menu opens again
-        .onAppear { if care.select.highlighted != nil, !care.focus.isActive, !care.bath.active, !care.tripActive, !care.arranging { frozenMode = nil; open = true } }          // a highlight already present when the screen appears (back from a store / Show / park screen): the menu is open on it
+        .onChange(of: care.highlightedJelly) { _, now in if now == nil { withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false } } else { openForHighlight() } }          // a creature was just picked (the outline starts drawing, the menu does not wait for the glow) or the pick moved: the menu is up at once on that creature's rows; cleared: nothing opens
+        .onChange(of: care.select.highlightActs) { _, _ in openForHighlight() }          // the same creature highlighted again (nothing else changed): the menu opens again
+        .onAppear { if care.highlightedJelly != nil, !care.focus.isActive, !care.bath.active, !care.tripActive, !care.arranging { openForHighlight() } }          // a highlight already present when the screen appears (back from a store / Show / park screen): the menu is open on it
         .onChange(of: picker) { _, k in care.pickerShowing = k != nil }          // the need bubbles stay out of the way of an open Feed / Drink / Play row
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
@@ -1460,7 +1466,8 @@ struct CareMenu: View {
         .accessibilityHint(reason ?? "")
         .accessibilityFocused($focusedRow, equals: item)
         .transition(calm ? .asymmetric(insertion: .opacity, removal: .opacity.animation(Self.fadeOut)) : .asymmetric(
-            insertion: .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
+            insertion: quickOpen ? .opacity.animation(.easeOut(duration: 0.12))          // opened by a pick: all rows together, no travel
+                : .scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity)
                 .combined(with: .offset(y: 24 + CGFloat(fromBottom) * 10))
                 .animation(Self.spring.delay(Double(fromBottom) * 0.05)),
             // closing is calm: each row fades out where it is (a slight shrink toward its icon edge and a few points of drift), no travel, no overlap
@@ -1502,6 +1509,7 @@ struct CareMenu: View {
             nameCapsule
             Button {
                 UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+                quickOpen = false
                 withAnimation(Self.spring) { open.toggle() }
             } label: {
                 ZStack {
