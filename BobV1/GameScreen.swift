@@ -1023,8 +1023,8 @@ struct GameScreen: View {
             DiningSpot.pickOpen = { open in open.min { simd_distance($0, want) < simd_distance($1, want) } }
         }
         if DevArgs.enabled, let t = d.string(forKey: "ToyAt")?.split(separator: ",").compactMap({ Float($0) }), t.count == 2 {
-            care.store.grant(DecorKind.ball.storeID)
-            if let p = care.store.place(DecorKind.ball.storeID) { _ = care.store.move(p.uid, to: SIMD2(t[0], t[1])) }
+            model.care.store.grant(DecorKind.ball.storeID)
+            if let p = model.care.store.place(DecorKind.ball.storeID) { _ = model.care.store.move(p.uid, to: SIMD2(t[0], t[1])) }
         }
         // capture aid: -FoodSeed 1 puts three of each power-up food in the bag (no perks, no coins): for recording meals
         if FoodCaptureArgs.foodSeed(defaults: d) {
