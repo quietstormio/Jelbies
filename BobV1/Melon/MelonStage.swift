@@ -1519,15 +1519,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         var span: Float = look == nil ? 2.3 : (look?.slot == .feet ? 1.5 : (head ? 1.9 : 2.0))
         if hp != nil {
             // framed on the body's own top (the particles' highest point), so a squat or a tall body, in either orientation, shows the whole head with the same margin above it
-            var topY = -Float.infinity, botY = Float.infinity
+            var topY = -Float.infinity
             var k = 1
-            while k < a.sim.x.count { topY = max(topY, a.sim.x[k]); botY = min(botY, a.sim.x[k]); k += 3 }
+            while k < a.sim.x.count { topY = max(topY, a.sim.x[k]); k += 3 }
             if let stood { topY = stood.topY }          // (off its feet: the crown of the stood body)
             span = HeadPortraitKey.span
             focusY = topY.isFinite ? topY - span * HeadPortraitKey.topFraction : a.sim.restCentroid.y + HeadPortraitKey.focusUp
             if hp?.pose == nil, topY.isFinite {
-                faceScale = min(max((topY - botY) / BlobShape.H, 0.8), 1.6)          // the body's own size against the rest shape the face constants are written for
-                NSLog("[portrait] face frame id %d top %.3f bottom %.3f scale %.3f", id, topY, botY, faceScale)
                 span = HeadPortraitKey.faceSpan * faceScale; focusY = topY - HeadPortraitKey.faceCentreBelowTop * faceScale; faceAim = true
             }          // the whole face, from below the mouth up past the crown and the feature
             if hp?.pose != nil, topY.isFinite {          // the Studio's action shot: the whole body from the floor to the crown (and a hat), centred, with a margin all round

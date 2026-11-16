@@ -33,7 +33,7 @@ struct HeadPortraitKey: Hashable, Sendable {
     /// The picture shows the WHOLE face: from below the mouth (rest y 0.665) up past the brows (0.945) to the crown, with some room above it for a species feature. The camera looks down at the body like the room
     /// camera (26 degrees), so the front of the face is nearer and lower on the picture than the body's middle: the camera therefore aims at the FRONT of the face, `faceTargetForward` ahead of the body's centre,
     /// at `faceCentreBelowTop` under the crown, and the (square) picture is `faceSpan` tall. Worked out against the face's points (HeadPortraitFrameTests): mouth about -0.7, eyes -0.3, crown +0.75 of the picture's half height.
-    static let faceSpan: Float = 1.10
+    static let faceSpan: Float = 1.40
     static let faceCentreBelowTop: Float = 0.26
     static let faceTargetForward: Float = 0.60
     /// The face's points in rest coordinates (body y up from the soles; x across): where the eyes, brows and mouth are. (Contracts.swift BobForm; the mouth is drawn at y 0.665 in Shaders.metal.)
