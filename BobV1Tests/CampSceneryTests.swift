@@ -97,7 +97,7 @@ final class CampSceneryTests: XCTestCase {
                     XCTAssertTrue(s.x > 0.015 && s.x < 0.985 && s.y > 0.02 && s.y < 0.995, "aspect \(a): post \(p) y \(y) at \(s)")
                 }
             }
-            if a < 1 {          // portrait: the Home pill (iPad's is a different size; landscape is judged on the real screens): the front fence's feet stay above it
+            if a < 1 || a > 2 {          // the phone's Home pill (iPad's is a different size): no fence post's foot is under it, portrait or landscape
                 let pill = HUDLayout.parkHomeRect(aspect: a)
                 for p in l.posts where p.y > 5.8 {
                     let s = project(SIMD3(p.x, 0, p.y), cam)
@@ -114,13 +114,13 @@ final class CampSceneryTests: XCTestCase {
 
     func testRoamFloorStaysInsideTheFence() {
         RoomLayout.apply(RoomCatalog.camp); GameCamera.configureCamp()
-        XCTAssertEqual(GameCamera.roamRect.max.x, 3.2); XCTAssertEqual(GameCamera.roamRectWide.min.x, -3.2); XCTAssertEqual(GameCamera.parkRoamMaxZ, 4.5)
+        XCTAssertEqual(GameCamera.roamRect.max.x, 2.9); XCTAssertEqual(GameCamera.roamRectWide.min.x, -2.9); XCTAssertEqual(GameCamera.parkRoamMaxZ, 4.5)
         for a in aspects {
             let f = try! XCTUnwrap(GameCamera.refreshRoam(aspect: a))
             XCTAssertGreaterThan(f.zs.count, 4, "aspect \(a)")
-            for (z, h) in zip(f.zs, f.hw) { XCTAssertLessThan(h + 0.8, 4.2 - 0.1, "aspect \(a) row z \(z): half width \(h)") }
+            for (z, h) in zip(f.zs, f.hw) { XCTAssertLessThan(h + 0.8 + 0.3, 4.2 - 0.1, "aspect \(a) row z \(z): half width \(h)") }
             XCTAssertGreaterThan(f.minZ - 0.8, -5.1 + 0.1, "aspect \(a): back row \(f.minZ)")
-            XCTAssertLessThanOrEqual(f.minZ, -3.0 + 1e-3); XCTAssertGreaterThanOrEqual(f.minZ, -3.8 - 1e-3)
+            XCTAssertLessThanOrEqual(f.minZ, -3.0 + 1e-3); XCTAssertGreaterThanOrEqual(f.minZ, -3.5 - 1e-3)
             XCTAssertLessThan(f.maxZ + 0.8, 5.9 - 0.1, "aspect \(a): front row \(f.maxZ)")
         }
     }

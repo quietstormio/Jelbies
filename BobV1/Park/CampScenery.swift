@@ -133,8 +133,8 @@ extension GameCamera {
     /// rectangles narrowed to the fence: >= 1 m between a body centre and the fence everywhere (1.5 m at the back). The caps make the roam floor itself no wider than the fence.
     static func configureCamp() {
         configurePark()
-        roamRect = (SIMD2(-3.2, -3.6), SIMD2(3.2, 4.5)); roamRectWide = roamRect
-        campCap = (3.2, -3.8)
+        roamRect = (SIMD2(-2.9, -3.5), SIMD2(2.9, 4.5)); roamRectWide = roamRect
+        campCap = (2.9, -3.5)
     }
 }
 

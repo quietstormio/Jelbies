@@ -125,6 +125,33 @@ final class CampTripTests: XCTestCase {
         }
     }
 
+    /// A home creature that is asleep when the visit starts stays asleep and untouched through it; and the visit's `sleepLocked` is cleared by the room's own per-step reset (tickRace), as after the park.
+    func testSleepingHomeCreatureStaysAsleepAndSleepLockClears() {
+        let d = UserDefaults(suiteName: "CampTripZ.\(UUID().uuidString)")!
+        let care = GameCare(jellyCount: 3, persistent: false, defaults: d); Self.keep.append(care)
+        let home = bodies(3, firstID: 0); care.parkBook.roster = home
+        let sleeper = home[1].brain!
+        sleeper.idleState.kind = .sleep
+        let spot = home[1].floor, mask = sleeper.sleepLocked
+        XCTAssertFalse(mask)
+        GameCare.campSource = { [CampCreature.make(instance: 4, worn: [:])] }
+        CampBook.shared.spawn = { list, _ in self.bodies(list.count, firstID: 3) }
+        care.parkBook.clear = {}
+        care.park.beginCamp()
+        var n = 0
+        while care.park.phase != .playing, n < 3000 { care.tickPark(home, dt: 1.0 / 60); n += 1 }
+        for _ in 0..<600 { care.tickRace(home, dt: 1.0 / 60); care.tickPark(home, dt: 1.0 / 60) }
+        XCTAssertTrue(sleeper.sleepLocked, "locked while the yard is up (as in the park)")
+        XCTAssertTrue(sleeper.isSleeping, "still asleep inside the yard")
+        care.park.goHome(); n = 0
+        while care.park.phase != .off, n < 3000 { care.tickRace(home, dt: 1.0 / 60); care.tickPark(home, dt: 1.0 / 60); n += 1 }
+        care.tickRace(home, dt: 1.0 / 60)
+        XCTAssertFalse(sleeper.sleepLocked, "the room's per-step reset clears the lock after the visit")
+        XCTAssertTrue(sleeper.isSleeping, "asleep exactly as before"); XCTAssertEqual(home[1].floor, spot, "not moved")
+        XCTAssertFalse(sleeper.idleBlocked)
+        XCTAssertFalse(home[0].brain!.sleepLocked); XCTAssertFalse(home[2].brain!.sleepLocked)
+    }
+
     func testEmptyYardIsFine() {
         let care = GameCare(jellyCount: 1, persistent: false, defaults: UserDefaults(suiteName: "CampTrip0.\(UUID().uuidString)")!); Self.keep.append(care)
         let home = bodies(1, firstID: 0); care.parkBook.roster = home
