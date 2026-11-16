@@ -89,7 +89,7 @@ struct TipCardView: View {
             .frame(width: 40, height: 40).background(Circle().fill(SK.honey)).accessibilityHidden(true)
     }
     private var title: some View {
-        Text(card.title).font(SK.font(18, .black)).foregroundStyle(SK.ink)
+        Text(card.title).font(SK.font(17, .black)).foregroundStyle(SK.ink)
             .accessibilityAddTraits(.isHeader).accessibilityFocused($titleFocus)
     }
     private var gotIt: some View {
@@ -139,7 +139,7 @@ private struct TipCardLayout: View {
             } else {
                 HStack(spacing: 12) { disc; title.lineLimit(2) }.frame(minHeight: 44)
             }
-            Text(body_).font(SK.font(16, .semibold)).foregroundStyle(SK.muted).lineSpacing(2)
+            Text(body_).font(JFont.scaled(16, .semibold, design: .default)).foregroundStyle(SK.muted).lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true).padding(.leading, 52)
             if !beside { HStack { Spacer(minLength: 0); gotIt } }
         }

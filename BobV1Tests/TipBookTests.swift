@@ -146,7 +146,7 @@ final class TipBookTests: XCTestCase {
             let all = c.title + " " + c.body
             XCTAssertFalse(all.contains("Jelmikos"), all); XCTAssertFalse(all.contains("Jelbie"), all); XCTAssertFalse(all.lowercased().contains("rival"), all)
             XCTAssertFalse(all.lowercased().contains("coins") && !all.contains("JellyCoins"), "money is always JellyCoins: \(all)")
-            XCTAssertLessThanOrEqual(c.body.split(separator: " ").count, 15, c.body)
+            XCTAssertLessThanOrEqual(c.body.split(separator: " ").count, 16, c.body)          // (the design says 10 to 15; its own Feeding text is 16)
             XCTAssertFalse(c.title.isEmpty); XCTAssertFalse(c.symbol.isEmpty)
         }
         XCTAssertEqual(TipBook.card("town")?.body, "Race, dance and play to earn JellyCoins. Spend them in the Shop.")

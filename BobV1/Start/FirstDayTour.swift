@@ -428,7 +428,7 @@ struct TourCapsuleButton: View {
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            Text(title).font(SK.font(17, .heavy)).foregroundStyle(.white)
+            Text(title).font(SK.font(17, .heavy)).foregroundStyle(.white).lineLimit(1).fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 22).frame(minHeight: 44)
                 .background(Capsule().fill(SK.pinkStrong))
                 .contentShape(Capsule())
