@@ -82,6 +82,10 @@ nonisolated enum JellyVariantBook {
         return nil
     }
 
+    /// Is a rare mutation on offer at the Jelly Spring on `dayKey`, for any of the four species? THE one answer: the pick page's third slot comes from `offer` (through `shades`) and this asks `offer`
+    /// for every species, so the "Mutation Available" tag on the Where-to card and the "Rare" tag on the pick page can never disagree.
+    static func rareOnOffer(dayKey: Int) -> Bool { (0...3).contains { offer(species: $0, dayKey: dayKey) != nil } }
+
     /// `v` moved `t` of the way toward white (t > 0) or black (t < 0).
     private static func tone(_ v: SIMD3<Float>, _ t: Float) -> SIMD3<Float> {
         let target: Float = t >= 0 ? 1 : 0

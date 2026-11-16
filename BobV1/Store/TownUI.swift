@@ -169,6 +169,7 @@ struct TownView: View {
         let id: String, title: String, sub: String, symbol: String, color: Color
         let cats: Set<TownCategory>
         var enabled = true
+        var tag: String? = nil          // a small pill above the title (the Spring's "Mutation Available")
         let action: () -> Void
     }
 
@@ -189,7 +190,8 @@ struct TownView: View {
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Jelly Volleyball", sub: "Bump and spike", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
-            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Home is full: \(JellyRoster.maxCount) Jelmiko" : "\(atHome)/\(JellyRoster.maxCount) at home", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
+            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Home is full: \(JellyRoster.maxCount) Jelmiko" : "\(atHome)/\(JellyRoster.maxCount) at home", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full,
+                  tag: TownTag.mutationAvailable(day: JellyVariantBook.dayKey(), homeFull: full) ? "Mutation Available" : nil) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
         ]
     }
 
@@ -300,6 +302,7 @@ struct TownView: View {
                             Image(systemName: p.symbol).font(.system(size: 22, weight: .heavy)).foregroundStyle(SK.ink)
                                 .frame(width: 46, height: 46).background(Circle().fill(p.color.opacity(0.9)))
                             Spacer(minLength: 4)
+                            if let tag = p.tag { MutationPill(text: tag).padding(.bottom, 5).accessibilityIdentifier("town-mutation-tag") }
                             Text(p.title).font(SK.font(compact ? 16 : 20, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
                             Text(p.sub).font(SK.font(compact ? 11 : 13, .bold)).foregroundStyle(SK.ink.opacity(0.85)).lineLimit(2).minimumScaleFactor(0.8)
                                 .multilineTextAlignment(.leading)
@@ -315,6 +318,26 @@ struct TownView: View {
         .accessibilityElement(children: .ignore).accessibilityLabel("\(p.title), \(p.sub)").accessibilityAddTraits(.isButton).accessibilityHint(p.enabled ? "" : "Closed for now")
         .opacity(p.enabled ? 1 : 0.55)
         .accessibilityIdentifier(p.id)
+    }
+}
+
+/// When the Jelly Spring's Where-to card carries the "Mutation Available" pill: a rare colour is on offer today (`JellyVariantBook.rareOnOffer`, the same answer the pick page's "Rare" tag comes from) and the Spring can sell.
+nonisolated enum TownTag {
+    static func mutationAvailable(day: Int, homeFull: Bool) -> Bool { !homeFull && JellyVariantBook.rareOnOffer(dayKey: day) }
+}
+
+/// "✦ Mutation Available": a honey pill, 26 pt high, white 1.5 pt border (the owner's design A).
+private struct MutationPill: View {
+    let text: String
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("\u{2726}").font(SK.font(13, .black))
+            Text(text).font(SK.font(14, .black)).lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .foregroundStyle(Color(hex: 0x4D331F))
+        .padding(.horizontal, 11).frame(height: 26)
+        .background(Capsule().fill(Color(hex: 0xFFD65C)))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
     }
 }
 
