@@ -25,8 +25,11 @@ struct BubbleJelly {
 }
 
 nonisolated enum BubbleTuning {
-    /// Heart (attention) gained per bubble a Jelbie pops: a slight lift (~30 pops fill a whole empty heart).
-    static let attentionPerPop: Float = 0.03
+    /// Heart (attention) gained per bubble a Jelbie pops (0.03 before 2026-11-16: ~30 pops filled a heart and the player never saw the love move; now ~17 pops; at 20-30 pops a minute that is 1.2 to 1.8 a
+    /// minute, under petting's 0.05 / s = 3 a minute). A var so a test can compare.
+    nonisolated(unsafe) static var attentionPerPop: Float = 0.06
+    /// Hops in one bounce (3 before 2026-11-16 "they need to be constantly hopping"; round 2 of the bubble-jump work ended at 6). A var so the rate test can compare.
+    nonisolated(unsafe) static var bounceReps = 6
     static let spawnPerSecond: ClosedRange<Float> = 1.5...6.5
     static let holdStrength: Float = 0.6
     static let contactRadius: Float = 0.62          // a body touching a drifting bubble
