@@ -72,6 +72,8 @@ struct AdoptionCenter: View {
     @State private var celebrating = false
     @State private var wallet = DropsWallet()
     @State private var home: [Int]
+    /// Who is at Jelmiko Camp (JellyCamp): counts for names and for the twin check, and for the price once home is full.
+    @State private var camp: [Int]
     @State private var ready = false
     @State private var slideX: CGFloat = 0
     @State private var slideO: Double = 1
@@ -107,6 +109,8 @@ struct AdoptionCenter: View {
         dayKey = day
         let h = mode == .first ? [] : JellyRoster.savedIDs()
         _home = State(initialValue: h)
+        let c = mode == .first ? [] : JellyCamp.load(home: h)
+        _camp = State(initialValue: c)
         _coverUp = State(initialValue: mode == .more)
         let homeSpecies = h.map(JellyRoster.species)          // `h` holds INSTANCE ids; the pages are species
         var start = mode == .first ? 0 : (SpeciesInfo.pages(includingSpecial: mode == .more).firstIndex { !homeSpecies.contains($0) } ?? 0)
@@ -124,7 +128,7 @@ struct AdoptionCenter: View {
         #endif
         _page = State(initialValue: start); _tab = State(initialValue: t)
         let species = SpeciesInfo.pages(includingSpecial: mode == .more)[start]
-        let cands = step0 == .species ? [] : Self.makeCandidates(mode: mode, species: species, dayKey: day, home: h)
+        let cands = step0 == .species ? [] : Self.makeCandidates(mode: mode, species: species, dayKey: day, home: h, camp: c)
         _step = State(initialValue: step0)
         _candidates = State(initialValue: cands)
         _picked = State(initialValue: step0 == .species ? nil : (pick0 ?? 1))
@@ -136,8 +140,8 @@ struct AdoptionCenter: View {
     }
 
     /// The three Jelbies of `species` for this screen: classic colours for the free first gift and the special species.
-    static func makeCandidates(mode: StartFlow.AdoptMode, species: Int, dayKey: Int, home: [Int]) -> [JellyCandidate] {
-        let owned = home.filter { JellyRoster.species($0) == species }.count
+    static func makeCandidates(mode: StartFlow.AdoptMode, species: Int, dayKey: Int, home: [Int], camp: [Int] = []) -> [JellyCandidate] {
+        let owned = (home + camp).filter { JellyRoster.species($0) == species }.count
         return JellyCandidates.make(species: species, dayKey: dayKey, classic: mode == .first || SpeciesInfo.of(species).isSpecial, owned: owned)
     }
     /// The scratch ids the stage draws are recoloured before the stage body is built (read when its actors are made): a preview never recolours an owned Jelbie.
@@ -159,13 +163,15 @@ struct AdoptionCenter: View {
     /// The picked candidate of the pick / naming step.
     private var pickedCand: JellyCandidate? { picked.flatMap { candidates.indices.contains($0) ? candidates[$0] : nil } }
     /// What this candidate costs (nil = the room is full): the rare colour (the Spring's rare mutation on a lucky day) is the only one that costs more.
-    private func price(for c: JellyCandidate) -> Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, rare: c.variant?.rare == true, special: info.isSpecial) }
+    private func price(for c: JellyCandidate) -> Int? { mode == .first ? 0 : AdoptionPrice.next(home: home.count, camp: camp.count, rare: c.variant?.rare == true, special: info.isSpecial) }
     private var price: Int? { pickedCand.flatMap { price(for: $0) } }
     /// Affordable and room for one more (the price is nil when the room is full). Owning the species already is fine: duplicates are allowed.
     private func canAdopt(_ c: JellyCandidate) -> Bool { price(for: c).map { $0 <= wallet.count } ?? false }
     private var canAdopt: Bool { pickedCand.map { canAdopt($0) } ?? false }
     /// The name he is given when the field is left empty: the species name, or "Teddy 2" when a Teddy is already home.
-    private var suggested: String { JellyRoster.suggestedName(species: pick, taken: home.map(JellyRoster.nameOf)) }
+    /// Every name already in use: home and Camp.
+    private var taken: [String] { (home + camp).map(JellyRoster.nameOf) }
+    private var suggested: String { JellyRoster.suggestedName(species: pick, taken: taken) }
 
     var body: some View {
         GeometryReader { geo in
@@ -1109,7 +1115,7 @@ struct AdoptionCenter: View {
     }
 
     /// Three name ideas for the chosen Jelbie (the first is the name he gets when the field is left empty); a tap fills the name field.
-    private var nameIdeas: [String] { NameIdeas.ideas(species: pick, index: picked ?? 1, taken: home.map(JellyRoster.nameOf)) }
+    private var nameIdeas: [String] { NameIdeas.ideas(species: pick, index: picked ?? 1, taken: taken) }
 
     private func ideasRow(_ u: CGFloat) -> some View {
         let h = min(max(36, hitMin(u)), 52)
@@ -1136,7 +1142,7 @@ struct AdoptionCenter: View {
     private var finalName: String {
         let t = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty { return suggested }
-        return JellyRoster.uniqueName(t, taken: home.map(JellyRoster.nameOf))          // a typed name equal to one at home becomes "Rex 2"
+        return JellyRoster.uniqueName(t, taken: taken)          // a typed name equal to one at home becomes "Rex 2"
     }
 
     private var ctaID: String { step == .species ? "adopt-meet" : "adopt-pick" }
@@ -1244,7 +1250,7 @@ struct AdoptionCenter: View {
     /// "Meet the three": the day's three Jelbies of this species stand side by side.
     private func toPick() {
         guard step == .species, !paging else { return }
-        candidates = Self.makeCandidates(mode: mode, species: pick, dayKey: dayKey, home: home)
+        candidates = Self.makeCandidates(mode: mode, species: pick, dayKey: dayKey, home: home, camp: camp)
         Self.setRowPreviews(candidates)
         picked = 1; tapped = false
         resetStage()
@@ -1441,6 +1447,8 @@ struct AdoptionCenter: View {
 
     private func bringHome() {
         guard !celebrating, let c = pickedCand, canAdopt(c), let p = price(for: c) else { return }
+        // nothing is paid unless the creature really has a place (home, or Camp when home is full): re-read the saved lists, the screen's copies may be old
+        if mode != .first, !StartFlow.canPlaceNew() { return }
         name = finalName
         if p > 0, !wallet.spend(p) { return }
         nameFocused = false
