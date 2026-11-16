@@ -12,7 +12,7 @@ final class PandaSpeciesTests: XCTestCase {
     func testIdentity() {
         XCTAssertEqual(JellyRoster.pandaID, 6)
         XCTAssertEqual(JellyRoster.baseNames[6], "Panda")
-        XCTAssertEqual(JellyRoster.knownCount, 7)
+        XCTAssertEqual(JellyRoster.knownCount, 9)
         XCTAssertEqual(JellyRoster.baseNames.count, JellyRoster.knownCount)
         XCTAssertEqual(JellyRoster.feature(JellyRoster.pandaID), .ears, "Teddy's in-body ears path")
         XCTAssertNotNil(JellyRoster.palette(JellyRoster.pandaID))

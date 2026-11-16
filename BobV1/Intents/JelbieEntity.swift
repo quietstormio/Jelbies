@@ -21,7 +21,7 @@ nonisolated struct JelbieEntity: AppEntity, Sendable {
     }
 
     static func colorWord(_ c: String) -> String {
-        switch c { case "blue": return "Blue"; case "yellow": return "Yellow"; case "green": return "Green"; case "purple", "lavender": return "Lavender"; case "teddy": return "Brown"; case "pearl": return "White"; case "panda": return "Black and white"; default: return c.capitalized }
+        switch c { case "blue": return "Blue"; case "yellow": return "Yellow"; case "green": return "Green"; case "purple", "lavender": return "Lavender"; case "teddy": return "Brown"; case "pearl": return "White"; case "panda": return "Black and white"; case "tiger": return "Orange"; case "berry": return "Pink"; default: return c.capitalized }
     }
 }
 
@@ -36,7 +36,7 @@ nonisolated enum JelbieRoster {
         return []          // no snapshot (fresh install, the game never run): no Jelbies yet, so the Shortcuts picker offers none (it used to offer Bob / Pip / Moss)
     }
     /// SPECIES id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender), the same as WidgetBridge.colorName (which is main-actor bound).
-    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda"][min(max(id, 0), 6)] }
+    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda", "tiger", "berry"][min(max(id, 0), 8)] }
     /// A loose name match: case-insensitive, prefix or contained ("bob", "Bobby" -> Bob).
     static func match(_ text: String, in list: [JelbieEntity]) -> [JelbieEntity] {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
