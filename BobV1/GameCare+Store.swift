@@ -29,7 +29,8 @@ extension GameCare {
         if !c.condition.isEmpty { prof.stats.nudge(c.condition.mapValues { $0 * share }, food: c.name) }
         if let perk = c.perk {
             let fresh = !prof.perks.isActive(perk)
-            prof.perks.grant(perk)
+            // his favourite food (the snack on his card): its power-up lasts twice as long; no serving cuts a longer time short (Store/FavouriteFood.swift)
+            prof.perks.grant(perk, duration: FavouriteFood.grantSeconds(perk, favourite: prof.traits?.snack == c.id, left: prof.perks.remaining(perk)))
             if fresh { AudioHub.shared.play(.perkSparkle, volume: 0.9) }
             if perk == .zoomies { zoomiesDue.insert(jelly) }
         }
