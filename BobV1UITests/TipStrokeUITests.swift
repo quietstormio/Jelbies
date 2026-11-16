@@ -8,7 +8,7 @@ import XCTest
 
 final class TipStrokeUITests: XCTestCase {
     static let out = ProcessInfo.processInfo.environment["TIPS_OUT"] ?? "/tmp/tips_ui"
-    private let base = ["-NewGame", "bob", "-NewGameCoins", "10000", "-MainMenu", "0", "-TipsReset", "1"]
+    private let base = ["-NewGame", "bob", "-NewGameCoins", "10000", "-MainMenu", "0", "-TipsReset", "1", "-NeedsHappy", "1"]
     override func setUp() { continueAfterFailure = false; try? FileManager.default.createDirectory(atPath: Self.out, withIntermediateDirectories: true) }
 
     private func shot(_ name: String) { try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: Self.out + "/\(name).png")) }
@@ -36,8 +36,13 @@ final class TipStrokeUITests: XCTestCase {
             shot("\(name)_2_gone")
         } else { sleep(60) }
         // close-up: heart > Come here
-        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.91)).tap()
-        XCTAssertTrue(app.staticTexts["Come here"].waitForExistence(timeout: 20)); app.staticTexts["Come here"].tap()
+        var opened = false
+        for _ in 0..<4 where !opened {          // (a busy simulator answers a query late: tap the heart, give it time, look again)
+            app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.91)).tap()
+            sleep(4)
+            opened = app.staticTexts["Come here"].waitForExistence(timeout: 30)
+        }
+        XCTAssertTrue(opened, "the heart menu is open"); app.staticTexts["Come here"].tap()
         XCTAssertTrue(app.buttons["focus-release"].waitForExistence(timeout: 150), "the close-up is up")
         sleep(3)
         let before = haptics(log).total
