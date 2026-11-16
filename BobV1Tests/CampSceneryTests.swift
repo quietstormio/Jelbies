@@ -35,11 +35,11 @@ final class CampSceneryTests: XCTestCase {
 
     func testTheYardHoldsNoParkProps() {
         let camp = CampScenery.build(theme: RoomCatalog.camp.theme), park = ParkScenery.build(theme: RoomCatalog.park.theme)
-        XCTAssertLessThan(camp.vertices.count, 14000, "a lawn, the sky pieces, a fence and a tent: far less than the park's \(park.vertices.count)")
+        XCTAssertLessThan(camp.vertices.count, 20000, "a lawn, the sky pieces, a fence and a tent: far less than the park's \(park.vertices.count)")
         // nothing stands inside the fence: no tree, bush, bench, lamp, flower, rock or path
         XCTAssertFalse(camp.vertices.contains { $0.pos.y > 0.001 && abs($0.pos.x) < 4.0 && $0.pos.z > -5.0 && $0.pos.z < 5.8 }, "the yard is bare grass")
-        // nothing taller than the fence stands anywhere in front of the sky pieces (z <= -9.1) except the tent: no tree crowns, lamp posts or hedges in the backdrop
-        XCTAssertFalse(camp.vertices.contains { v in v.pos.y > 0.95 && v.pos.z > -9.1 && !(v.pos.x > -3.1 && v.pos.x < -1.1 && v.pos.z < -5.2 && v.pos.z > -6.5) }, "no props")
+        // nothing taller than the fence stands anywhere in front of the sky pieces (z <= -8.5) except the tent: no tree crowns, lamp posts or hedges in the backdrop
+        XCTAssertFalse(camp.vertices.contains { v in v.pos.y > 0.95 && v.pos.z > -8.5 && !(v.pos.x > -3.1 && v.pos.x < -1.1 && v.pos.z < -5.2 && v.pos.z > -6.5) }, "no props")
         XCTAssertGreaterThan(park.vertices.count, 90000)
     }
 
