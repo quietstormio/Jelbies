@@ -56,7 +56,8 @@ final class TigerBerrySpeciesTests: XCTestCase {
         XCTAssertEqual(BlueBelly.mode(for: JellyRoster.palette(JellyRoster.pandaID)!), 51, "Panda is untouched")
         XCTAssertEqual(BlueBelly.mode(for: WhiteWing.palette), 0, "Pearl is untouched")
         XCTAssertEqual(BlueBelly.mode(for: JellyRoster.palette(JellyRoster.teddyID)!), TeddyEarsVariant.active == .cream ? 43 : 33, "Teddy is untouched")
-        for c in ParkColour.allCases { XCTAssertEqual(BlueBelly.mode(for: JellyPalettes.park(c)), 0, "park visitor \(c.rawValue) must not look like a Tiger or a Berry") }
+        // a park visitor keeps whatever mode it had (the blue one keeps its own belly mode, not 0): it is never given a Tiger or a Berry mode
+        for c in ParkColour.allCases { XCTAssertFalse([61, 62, 71, 72].contains(BlueBelly.mode(for: JellyPalettes.park(c))), "park visitor \(c.rawValue) must not look like a Tiger or a Berry") }
         for id in 0..<4 { if let p = JellyRoster.palette(id) { XCTAssertEqual(BlueBelly.mode(for: p) >= 50, false) } }
     }
 

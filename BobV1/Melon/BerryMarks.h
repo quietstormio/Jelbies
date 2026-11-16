@@ -1,11 +1,13 @@
 //
 //  BerryMarks.h
 //  The Berry's marks (character 8, BerryLook.swift) for the matte, bath and jersey body shaders: cream seeds dotted over the body (none on the face, none on the arm lobes)
-//  and a leafy green top (six lobes hanging from the crown).
+//  and a leafy green top (a cap of six lobes hanging from the crown).
 //  Body mode 71 = the egg (pink, painted where the masks below say); mode 72 = a piece in the plain body colour (the walking arm capsules and foot beans:
 //  MelonRenderer draws them again with the shape.w mode set to 72, so no seed is ever painted on a limb piece). Everything is in the body's REST space (Q), so the marks ride the body.
 //  Include it AFTER PandaMarks.h: a seed next to the rest arm lobe is left out (pandaArmD).
-//  The numbers are fitted to the "Jelmiko Lineup" picture of the Berry (2026-11-15). The tiny stem nub is NOT here: it is a 3D piece for a later round.
+//  The numbers are fitted to the "Jelmiko Lineup" picture of the Berry (2026-11-15); the leaf refitted 2026-11-16 through the real capture camera AND the body's standing lean
+//  (the rest egg leans back ~15.5 degrees in every capture, so the cap that looks level in the picture is lower at the face than at the back in rest space).
+//  The tiny stem nub is NOT here: it is a 3D piece for a later round.
 //
 #ifndef BERRY_MARKS_H
 #define BERRY_MARKS_H
@@ -37,17 +39,22 @@ static float berrySeeds(float3 Q) {
     return 1.0 - smoothstep(0.80, 1.0, d);
 }
 
-/// The leaf mask: the leafy top. Six lobes hang from the crown, one every 60 degrees (lobe k points down at 30 + 60 k degrees round from the face); the lobe tips reach
-/// down to 1.100 / 1.145 / 1.150 (by lobe index mod 3), and between two lobes the edge climbs to the notch at 1.258. Crisp ~6 mm edge.
+/// The leaf mask: the leafy top. Its lower edge is a broken line round the body through seven knots in `at` = |atan2(x, z)| (degrees round from the face, 0..180):
+/// a notch under the stem at the face centre (y 1.235), the two front lobe tips at 26.25 degrees (1.085: the one on the +x side hangs 0.028 lower, the other 0.028 higher,
+/// as drawn), a notch at 50 (1.2675), the side lobe tips at 77.38 (1.205), a notch at 89.88 (1.3213), the back lobe tips at 134.75 (1.2775) and the notch at the back centre (1.330).
+/// Above y 1.335 it is all leaf (the crown under the stem); below 1.05 there is none. Crisp ~6 mm edge.
 static float berryLeaf(float3 Q) {
-    if (Q.y > 1.27) { return 1.0; }
-    if (Q.y < 1.08) { return 0.0; }
-    float cell = atan2(Q.x, Q.z) / 1.0471976;            // pi / 3: one lobe
-    float k = floor(cell);
-    float f = fabs(cell - k - 0.5) * 2.0;                // 0 on the lobe's centre line, 1 in the notch
-    float kk = k - 3.0 * floor(k / 3.0);
-    float tip = kk < 0.5 ? 1.100 : (kk < 1.5 ? 1.145 : 1.150);
-    float edge = tip + (1.258 - tip) * f;
+    if (Q.y < 1.05) { return 0.0; }
+    if (Q.y > 1.335) { return 1.0; }
+    float at = fabs(atan2(Q.x, Q.z)) * 57.29578;
+    float tip = Q.x > 0.0 ? 1.057 : 1.113;               // the two front lobe tips (1.085 -/+ 0.028)
+    float edge;
+    if (at < 26.25) { edge = mix(1.235, tip, at / 26.25); }
+    else if (at < 50.0) { edge = mix(tip, 1.2675, (at - 26.25) / 23.75); }
+    else if (at < 77.38) { edge = mix(1.2675, 1.205, (at - 50.0) / 27.38); }
+    else if (at < 89.88) { edge = mix(1.205, 1.3213, (at - 77.38) / 12.5); }
+    else if (at < 134.75) { edge = mix(1.3213, 1.2775, (at - 89.88) / 44.87); }
+    else { edge = mix(1.2775, 1.330, (at - 134.75) / 45.25); }
     return smoothstep(edge - 0.003, edge + 0.003, Q.y);
 }
 
