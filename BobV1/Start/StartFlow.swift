@@ -97,9 +97,28 @@ final class StartFlow {
         // Not simulator-gated (but dev-args-gated): a device dev-args Release build can restart the game with `-NewGame lavender,pearl,teddy [-NewGameCoins 10000]` (once per value).
         applyNewGame(text: UserDefaults.standard.string(forKey: newGameKey),
                      coins: UserDefaults.standard.object(forKey: newGameCoinsKey) != nil ? UserDefaults.standard.integer(forKey: newGameCoinsKey) : 10_000)
+        applyFavouriteFood(text: UserDefaults.standard.string(forKey: favouriteFoodKey))
         // Not simulator-gated: `-ImportSave 1` merges Documents/import_save.plist (an old save's room) into this game, once (`-ImportSave 0` re-arms). Runs before StoreBook is created.
         ImportSave.apply(arg: UserDefaults.standard.object(forKey: ImportSave.argKey) != nil ? UserDefaults.standard.integer(forKey: ImportSave.argKey) : nil)
         #endif
+    }
+
+    static let favouriteFoodKey = "FavouriteFood"
+
+    /// `-FavouriteFood bob:sushi,pip:taco` (development argument, dev-args-gated like `-NewGame`): gives the Jelmiko at home a favourite food by writing the same traits record the Jelly Spring's
+    /// `bringHome` writes (a `-NewGame` / `-SetRoster` roster has none, so nothing is a favourite there). Names or ids, food ids as in the store ("sushi", "taco" ...). Idempotent: writing the same
+    /// value again changes nothing. Returns how many were written.
+    @discardableResult
+    static func applyFavouriteFood(text: String?, defaults d: UserDefaults = .standard) -> Int {
+        guard let text else { return 0 }
+        var n = 0
+        for part in text.split(separator: ",") {
+            let bits = part.split(separator: ":").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard bits.count == 2, let c = JellyRoster.characterID(named: bits[0]), JellyRoster.savedIDs(d).contains(c), Consumables.with(id: bits[1]) != nil else { continue }
+            JellyTraitsBook.adopt(c, JellyTraits(personality: .cuddly, jars: [60, 60, 60, 60, 60], snack: bits[1]), d)
+            n += 1
+        }
+        return n
     }
 
     static let clearGuestKey = "ClearGuest", clearGuestAppliedKey = "ClearGuest.applied"

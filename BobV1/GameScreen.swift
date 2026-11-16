@@ -14,7 +14,7 @@ struct GameScreen: View {
     @State private var showStudio = false          // the developer studio cover: debug builds only (its model is built inside StudioHost, only when shown)
     #endif
     @State private var menuOpen = UserDefaults.standard.integer(forKey: "GameMenuOpen") != 0
-    @State private var rosterOpen = false
+    @State private var rosterOpen = DevArgs.enabled && UserDefaults.standard.integer(forKey: "RosterOpen") != 0          // (-RosterOpen 1: capture aid, dev-args only)
     @State private var bookOpen = false                       // Voice v1 trick book
     @State private var soundOpen = UserDefaults.standard.integer(forKey: "SoundPanelOpen") != 0      // sound settings panel (-SoundPanelOpen 1: captures)
     @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
@@ -862,6 +862,7 @@ struct GameScreen: View {
             case "feed:pizza": care.feed("pizza")
             case "drink:soda": care.drink("soda")
             case "feed:berries": care.feed("berries")
+            case _ where a.hasPrefix("feed:"): care.feed(String(a.dropFirst(5)))          // -GameAction feed:<food id> (capture aid; the bag needs one for a store food: -FoodSeed 1)
             case "drink:water": care.drink("water")
             case "call": care.call()
             case "callall": care.comeHereEveryone()
@@ -1013,6 +1014,10 @@ struct GameScreen: View {
             let who = d.integer(forKey: "WearWho")
             for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
             for n in list.split(separator: ",") { if let l = WearLook(rawValue: String(n)) { _ = care.store.wear(l, on: who) } }
+        }
+        // capture aid: -FoodSeed 1 puts three of each power-up food in the bag (no perks, no coins): for recording meals
+        if d.integer(forKey: "FoodSeed") != 0 {
+            for id in ["sushi", "popsicle", "taco", "donut", "nuggets", "onigiri", "cookie", "fries"] where model.care.store.count(id) < 3 { model.care.store.grant(id, 3 - model.care.store.count(id)) }
         }
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
         let care = model.care
