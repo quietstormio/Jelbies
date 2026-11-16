@@ -57,6 +57,10 @@ final class BubbleFeetTests: XCTestCase {
             return SC(name: "bubble: stream", game: true, seconds: 24, setup: { r, _ in
                 n = 0; wand.resetForTests(); r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); wand.demo = { _ in 0.8 }; return true
             }, each: { r in n += 1; wand.tick(jellies: join(r), dt: r.sim.stepDt) })
+        case "stream 60":        // 2026-11-16: the same stream for 60 s (the 24 s run never saw a failure that appears after 30 s with longer play)
+            return SC(name: "bubble: stream 60 s", game: true, seconds: 60, setup: { r, _ in
+                n = 0; wand.resetForTests(); r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); wand.demo = { _ in 0.9 }; return true
+            }, each: { r in n += 1; wand.tick(jellies: join(r), dt: r.sim.stepDt) })
         default: fatalError(name)
         }
     }
@@ -104,6 +108,7 @@ final class BubbleFeetTests: XCTestCase {
     func testLookUp() { bubbles("look up") }
     func testWalkUnderAndHopPop() { bubbles("hop pop") }
     func testStream() { bubbles("stream") }
+    func testStream60() { bubbles("stream 60") }
     func testPopHeader() { bubbles("pop header") }
     func testPopLeap() { bubbles("pop leap") }
     func testPopBounce() { bubbles("pop bounce") }
