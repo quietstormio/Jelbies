@@ -39,8 +39,8 @@ struct HeadPortraitKey: Hashable, Sendable {
     /// The face's points in rest coordinates (body y up from the soles; x across): where the eyes, brows and mouth are. (Contracts.swift BobForm; the mouth is drawn at y 0.665 in Shaders.metal.)
     static let eyeY: Float = Float(BobForm.eyeY), eyeX: Float = Float(BobForm.eyeX), browY: Float = Float(BobForm.browY), browHalfLen: Float = Float(BobForm.browHalfLen), mouthY: Float = 0.665
     /// The point the portrait's camera looks at, for a body at `centre` (xz) facing `dir` whose crown is at `topY`.
-    static func faceTarget(centre c: SIMD3<Float>, facing dir: SIMD3<Float>, topY: Float) -> SIMD3<Float> {
-        SIMD3<Float>(c.x + dir.x * faceTargetForward, topY - faceCentreBelowTop, c.z + dir.z * faceTargetForward)
+    static func faceTarget(centre c: SIMD3<Float>, facing dir: SIMD3<Float>, topY: Float, scale: Float = 1) -> SIMD3<Float> {
+        SIMD3<Float>(c.x + dir.x * faceTargetForward * scale, topY - faceCentreBelowTop * scale, c.z + dir.z * faceTargetForward * scale)
     }
     /// What a head portrait draws of the outfit: NOTHING (no hat, glasses, scarf, jersey, band or shoes: the face is the picture). The action shot (`pose`) keeps the outfit.
     static func outfitDrawn(_ o: [WearSlot: WearLook], pose: Int?) -> [WearSlot: WearLook] { pose == nil ? [:] : o }
