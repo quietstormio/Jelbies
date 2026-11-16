@@ -63,6 +63,9 @@ final class BlobSelect {
     private(set) var phase: Phase = .none
     /// The Blob the action button currently acts on (set by the check).
     private(set) var confirmed: Int?
+    /// Goes up on every highlight ACTION that settles on a Blob (a pick that confirms, an instant sleeper pick, a tap on the one already highlighted), also when `highlighted` does not change.
+    /// The care menu observes it next to `highlighted`, so the same Blob highlighted again still opens the menu.
+    private(set) var highlightActs = 0
 
     /// Seconds since the current highlight started.
     @ObservationIgnored private(set) var clock: Float = 0
@@ -206,6 +209,7 @@ final class BlobSelect {
         guard blobs.contains(where: { $0.id == id }) else { return }
         if instant {
             phase = .none; confirmed = id; rosterPick = false; waiting = false; hopRequest = nil
+            highlightActs += 1
             return
         }
         if selectedID == id, rosterPick { return }
@@ -229,7 +233,10 @@ final class BlobSelect {
         rosterPick = false; waiting = false
         confirmed = id
         phase = .none
+        highlightActs += 1
     }
+    /// A highlight action on the Blob that is already highlighted (a double tap on him again): nothing changes but the menu opens again.
+    func rehighlight() { if highlighted != nil { highlightActs += 1 } }
 
     /// Stops a draw in progress.
     func cancel() {

@@ -1157,6 +1157,8 @@ struct CareMenu: View {
             else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.visibleItems(mode, care: care).first } }      // focus moves into the opened rows
         }
         .onChange(of: care.select.highlighted) { _, now in withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false; if now != nil { frozenMode = nil; open = true } } }          // a creature just got highlighted (or the highlight moved): the menu opens by itself, on that creature's rows
+        .onChange(of: care.select.highlightActs) { _, _ in if !open { withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false; frozenMode = nil; open = true } } }          // the same creature highlighted again (the highlight itself did not change): the menu opens again
+        .onAppear { if care.select.highlighted != nil, !care.focus.isActive, !care.bath.active, !care.tripActive, !care.arranging { frozenMode = nil; open = true } }          // a highlight already present when the screen appears (back from a store / Show / park screen): the menu is open on it
         .onChange(of: picker) { _, k in care.pickerShowing = k != nil }          // the need bubbles stay out of the way of an open Feed / Drink / Play row
         .onChange(of: openPicker) { _, k in
             guard let k else { return }
