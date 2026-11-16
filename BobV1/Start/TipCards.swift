@@ -140,7 +140,7 @@ private struct TipCardLayout: View {
             } else {
                 HStack(spacing: 12) { disc; title.lineLimit(2) }.frame(minHeight: 44)
             }
-            Text(body_).font(JFont.scaled(15, .semibold, design: .default)).foregroundStyle(SK.muted).lineSpacing(3)
+            Text(body_).font(JFont.scaled(14.5, .semibold, design: .default)).foregroundStyle(SK.muted).lineSpacing(3.5)
                 .fixedSize(horizontal: false, vertical: true).padding(.leading, 52)
             if !beside { HStack { Spacer(minLength: 0); gotIt } }
         }
