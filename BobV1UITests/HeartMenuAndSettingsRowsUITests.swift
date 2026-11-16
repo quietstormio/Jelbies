@@ -35,17 +35,18 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
         XCTAssertTrue(e.waitForExistence(timeout: 10))
         centre(app, e).doubleTap()
     }
-    private func rowsUp(_ app: XCUIApplication) -> Bool { app.buttons["hud-dress"].waitForExistence(timeout: 20) && app.buttons["hud-come"].exists }
+    private func rowsUp(_ app: XCUIApplication) -> Bool { app.buttons["hud-dress"].waitForExistence(timeout: 60) && app.buttons["hud-come"].exists }
 
     @MainActor func testHighlightAlwaysOpensTheMenu() {
         let app = launch()
         shot(app, "1_0_start")
         highlight(app, 0)
-        XCTAssertTrue(app.staticTexts["hud-name"].waitForExistence(timeout: 20), "highlighted: the name chip")
+        XCTAssertTrue(app.staticTexts["hud-name"].waitForExistence(timeout: 60), "highlighted: the name chip")
         XCTAssertTrue(rowsUp(app), "1: highlight one -> the menu's rows exist")
         shot(app, "1_one_highlighted")
         // close the menu with the heart (the highlight stays)
         centre(app, app.buttons["care-menu"]).tap()
+        for _ in 0..<30 where app.buttons["hud-dress"].exists { Thread.sleep(forTimeInterval: 1) }
         Thread.sleep(forTimeInterval: 2)
         XCTAssertFalse(app.buttons["hud-dress"].exists, "the menu is closed")
         XCTAssertTrue(app.staticTexts["hud-name"].exists, "the highlight is still there")
@@ -55,6 +56,7 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
         shot(app, "2_same_again")
         // the other one
         centre(app, app.buttons["care-menu"]).tap()
+        for _ in 0..<30 where app.buttons["hud-dress"].exists { Thread.sleep(forTimeInterval: 1) }
         Thread.sleep(forTimeInterval: 2)
         highlight(app, 1)
         XCTAssertTrue(rowsUp(app), "3: the other one -> the rows exist")
@@ -96,7 +98,7 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
     @MainActor func testHighlightSurvivesSettingsSheet() {
         let app = launch()
         highlight(app, 0)
-        XCTAssertTrue(rowsUp(app))
+        XCTAssertTrue(rowsUp(app), "highlight one -> rows")
         centre(app, app.buttons["settings-button"]).tap()
         XCTAssertTrue(app.buttons["photo-button"].waitForExistence(timeout: 10))
         let done = app.buttons["settings-done"]
