@@ -84,7 +84,7 @@ final class ParkTrip {
         switch phase {
         case .off, .pick, .playing: break
         case .goOut:
-            if blocked { finish(); return }
+            if blocked { finish(); say("Not right now. Try again in a moment!"); return }          // (something started under the fade: it used to cancel in silence)
             wipe = min(wipe + dt / ParkTuning.fadeOut, 1)
             if wipe >= 1 { phase = .arriveHold; holdFrames = 0; onSwap(.park) }
         case .arriveHold:
