@@ -14,6 +14,8 @@ import simd
 /// T1, T2, T5 and T6 (two or more bodies) are OPT-IN, OFF by default, until their own proof with three bodies: with them off, two or more bodies steer and pick goals
 /// exactly as before the round. `-RoomTrafficSpeed 1`, `-RoomTrafficOrder 1`, `-RoomTrafficWait 1`, `-RoomTrafficGoals 1` (dev builds) or, in a headless run, the
 /// environment `ROOMTRAFFIC_ON=speed,order,wait,goals` turn parts on; `ROOMTRAFFIC_OFF` wins over both. The numbers have environment seams for the measuring test only.
+/// Remedy D1 (ON by default): after a floor change (a rotation) the stage's `syncRoam` sends every free home body that stands outside the new floor on a walk to the
+/// nearest floor spot (`BlobBrain.roomWalkIn`, at the end of this file). `-RoomTrafficWalkIn 0` (dev builds) or `ROOMTRAFFIC_OFF=walkin` turn it off.
 nonisolated enum RoomTraffic {
     private static func devOn(_ key: String) -> Bool {
         !(DevArgs.enabled && UserDefaults.standard.object(forKey: key) != nil && UserDefaults.standard.integer(forKey: key) == 0)
@@ -32,6 +34,7 @@ nonisolated enum RoomTraffic {
     nonisolated(unsafe) static var goalAware = (devAsked("RoomTrafficGoals") || envOn.contains("goals")) && !envOff.contains("goals")          // (T6, opt-in)
     nonisolated(unsafe) static var loneFloor = devOn("RoomTrafficLone") && !envOff.contains("lone")
     nonisolated(unsafe) static var loneBack = devOn("RoomTrafficLoneBack") && !envOff.contains("loneback")
+    nonisolated(unsafe) static var walkIn = devOn("RoomTrafficWalkIn") && !envOff.contains("walkin")          // (remedy D1: on by default)
     /// T7, read by the stage every frame: one alone at home gets the roaming floor too.
     static var loneFloorLive: Bool { RoomRoam.traffic && loneFloor }
 
@@ -48,12 +51,16 @@ nonisolated enum RoomTraffic {
     nonisolated(unsafe) static var loneBackChance = env("ROOMTRAFFIC_LONE_BACK", 0.85)          // the drop chance at `loneBackFull` and behind it
     nonisolated(unsafe) static var loneBackFrom = env("ROOMTRAFFIC_LONE_BACK_FROM", -2.6)          // z: nothing is dropped in front of this
     nonisolated(unsafe) static var loneBackFull = env("ROOMTRAFFIC_LONE_BACK_FULL", -3.4)          // z: the whole chance from here back
+    nonisolated(unsafe) static var walkInMin = env("ROOMTRAFFIC_WALKIN_MIN", 0.3)          // D1: a body nearer than this to the floor's outline is left alone
+    nonisolated(unsafe) static var walkInInset = env("ROOMTRAFFIC_WALKIN_INSET", 0.2)          // D1: the spot he is sent to lies this far inside the floor's edge
 
     /// T5's wait budget by `steerID`: the waypoint it belongs to, and the seconds already stood for it.
     nonisolated(unsafe) static var waitFor: [Int: SIMD2<Float>] = [:]
     nonisolated(unsafe) static var waited: [Int: Float] = [:]
     /// What ran: 0 crossing ticks where I gave way, 1 where I walked on, 2 ticks stood on a waypoint leg, 3 wander candidates marked down, 4 dash candidates skipped, 5 wander candidates of one alone dropped in the far back.
     nonisolated(unsafe) static var counts = [0, 0, 0, 0, 0, 0]
+    /// D1: the walks sent since launch.
+    nonisolated(unsafe) static var walkIns = 0
     /// T8: true = drop this wander candidate of one alone (`u` = one number 0..<1 from the brain's own generator).
     static func loneBackDrop(_ z: Float, _ u: Float) -> Bool {
         guard z < loneBackFrom else { return false }
@@ -147,5 +154,80 @@ extension BlobBrain {
         guard closest < far else { return 0 }
         RoomTraffic.counts[dash ? 4 : 3] += 1
         return RoomTraffic.goalPenalty * min(1, (far - closest) / max(far - near, 0.01))
+    }
+}
+
+// MARK: Remedy D1 (2026-11-15): a free home body the new floor leaves outside walks back in
+
+extension GameCamera.RoamFloor {
+    /// A floor point near `p`: z brought into the rows, then x into that row, `inset` inside every edge. Rows only (the OUTLINE): the furniture is the brain's
+    /// `fixed` business. A point that is already that far inside comes back unchanged.
+    func nearestSpot(to p: SIMD2<Float>, inset: Float = 0) -> SIMD2<Float> {
+        guard !zs.isEmpty, p.x.isFinite, p.y.isFinite else { return p }
+        let lo = minZ + inset, hi = maxZ - inset
+        let z = lo <= hi ? min(max(p.y, lo), hi) : (minZ + maxZ) / 2
+        let h = max(halfWidth(at: z) - inset, 0)
+        return SIMD2(min(max(p.x, -h), h), z)
+    }
+}
+
+extension BlobBrain {
+    /// D1: how far this body stands outside the floor's outline (0 = on it).
+    func roomOutside(_ floor: GameCamera.RoamFloor) -> Float { simd_distance(position, floor.nearestSpot(to: position)) }
+
+    /// D1: this body may be sent back onto the floor right now. Nothing owns it (`roomFree`), it is at home, it is not in a social session, an idle, a race, a
+    /// volleyball game or a toy / bubble game, it is standing (resting, looking around or stepping in place) and it is more than `walkInMin` outside the floor.
+    func roomWalkInWanted(_ floor: GameCamera.RoamFloor) -> Bool {
+        guard enabled, homeRoom, roomFree, social == nil, idleState.kind == nil, !race.active, !volley.active,
+              bubbleLeash == nil, toy.waitUID < 0, toy.chaseSpot == nil else { return false }
+        switch script { case .none, .look, .stepInPlace: break; default: return false }
+        guard activity == .idle || activity == .lookingAround || activity == .steppingInPlace else { return false }
+        return roomOutside(floor) > RoomTraffic.walkInMin
+    }
+
+    /// D1: where this body goes. The floor point nearest to it, `walkInInset` inside the edge; when another body stands on that point, walks to it or was just
+    /// given it (`taken`, within a body's width), the free point nearest to this body on a ring around it.
+    func roomWalkInSpot(_ floor: GameCamera.RoamFloor, taken: [SIMD2<Float>]) -> SIMD2<Float> {
+        let plain = fixed(floor.nearestSpot(to: position, inset: RoomTraffic.walkInInset))
+        let gap = peerGap * 1.05
+        func clear(_ c: SIMD2<Float>) -> Bool { !taken.contains(where: { simd_distance($0, c) < gap }) }
+        if clear(plain) { return plain }
+        for ring in [peerGap * 1.15, peerGap * 1.45] {
+            var best: SIMD2<Float>?
+            for k in 0..<12 {
+                let a = Float(k) * Float.pi / 6
+                let c = plain + SIMD2<Float>(sinf(a), cosf(a)) * ring
+                guard floor.contains(c), simd_distance(fixed(c), c) < 0.05, clear(c) else { continue }
+                if best.map({ simd_distance($0, position) <= simd_distance(c, position) }) != true { best = c }
+            }
+            if let best { return best }
+        }
+        return plain
+    }
+
+    /// D1 (the stage's `syncRoam`, right after the wall step of a floor change): every body that `roomWalkInWanted` gets a walk to its `roomWalkInSpot`, the one
+    /// nearest to the floor first, so no two are sent to one spot. One shot per floor change: a body that is busy at that moment comes in with its own next walk.
+    /// Returns how many were sent.
+    @discardableResult
+    static func roomWalkIn(_ brains: [BlobBrain?]) -> Int {
+        guard RoomTraffic.walkIn, RoomRoam.traffic, let floor = GameCamera.roamFloor else { return 0 }
+        let all = brains.compactMap { $0 }.filter { $0.enabled }
+        let todo = all.filter { $0.roomWalkInWanted(floor) }.sorted { l, r in
+            let dl = l.roomOutside(floor), dr = r.roomOutside(floor)
+            return dl != dr ? dl < dr : l.steerID < r.steerID
+        }
+        var given: [SIMD2<Float>] = []
+        for b in todo {
+            var taken = given
+            for o in all where o !== b {
+                taken.append(o.position)
+                if case .walk(let goal, _) = o.script { taken.append(goal) }
+            }
+            let to = b.roomWalkInSpot(floor, taken: taken)
+            b.requestNow(.goTo(to))
+            RoomTraffic.walkIns += 1
+            given.append(to)
+        }
+        return todo.count
     }
 }
