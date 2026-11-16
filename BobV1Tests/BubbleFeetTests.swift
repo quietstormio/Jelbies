@@ -111,11 +111,25 @@ final class BubbleFeetTests: XCTestCase {
     func testWalkUnderAndHopPop() { bubbles("hop pop") }
     func testStream() { bubbles("stream") }
     func testStream60() { bubbles("stream 60") }
-    /// 2026-11-16 (the wand's bean hand-over, BlobBrain+BubblePop): a 60 s stream meets the stale fitted bean pose after hops (hand-overs > 0) and the join stays closed in every cast.
-    func testStream60HandOverPinned() {
-        let c0 = BlobBrain.bubbleHandOverCount
-        bubbles("stream 60")
-        XCTAssertGreaterThan(BlobBrain.bubbleHandOverCount - c0, 0, "the stream never handed a hop's fitted bean pose over to world-placed feet: the hand-over is not exercised")
+    /// 2026-11-16 (the wand's bean hand-over, BlobBrain+BubblePop): with the wand out, world-placed feet clear a hop's stale fitted bean pose (deterministic: the stream's dice are
+    /// unseeded on this line, so a stream run meets the stale pose in some runs only: 2 of 14 casts in one run, 0 in the next); without the wand, or with the switch off, nothing is cleared.
+    func testHandOverClearsStaleFit() {
+        let b = BlobBrain()
+        let stale = BodyPose(centroid: SIMD3(0, 0.6, 0), rotation: simd_quatf(angle: 0.3, axis: SIMD3(1, 0, 0)))
+        let seen0 = BlobBrain.bubbleStaleFitSeen, c0 = BlobBrain.bubbleHandOverCount
+        b.beanFitUsed = stale; b.beanFitHold = 5
+        b.bubbleWorldBeansHandOver()
+        XCTAssertNotNil(b.beanFitUsed, "no wand out: the fitted pose is not this hand-over's"); XCTAssertEqual(BlobBrain.bubbleHandOverCount, c0)
+        b.bubbleLeash = BubbleLeash(lo: SIMD2(-2, -2), hi: SIMD2(2, 2), slot: .zero, look: .zero)
+        BlobBrain.bubbleHandOverOn = false
+        b.bubbleWorldBeansHandOver()
+        XCTAssertNotNil(b.beanFitUsed, "switch off: left alone"); XCTAssertEqual(BlobBrain.bubbleStaleFitSeen, seen0 + 1)
+        BlobBrain.bubbleHandOverOn = true
+        b.bubbleWorldBeansHandOver()
+        XCTAssertNil(b.beanFitUsed, "wand out, world-placed feet: the stale fitted pose is cleared"); XCTAssertEqual(b.beanFitHold, 0)
+        XCTAssertEqual(BlobBrain.bubbleHandOverCount, c0 + 1)
+        b.bubbleWorldBeansHandOver()
+        XCTAssertEqual(BlobBrain.bubbleHandOverCount, c0 + 1, "nothing stale: nothing counted")
     }
     /// Before / after: the same with the hand-over off; and off with the bounce of the phone build before bubble-love-r1 (3 hops).
     func testStream60HandOverOff() { BlobBrain.bubbleHandOverOn = false; defer { BlobBrain.bubbleHandOverOn = true }; bubbles("stream 60") }
