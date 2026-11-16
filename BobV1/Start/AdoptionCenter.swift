@@ -638,8 +638,8 @@ struct AdoptionCenter: View {
 
     /// The still home-room status line (Jelly Spring only): how many Jelbies are home and how many more fit.
     private var roomText: String {
-        let cap = JellyRoster.maxCount, n = min(home.count, cap), free = cap - n
-        return free > 0 ? "\(n) of \(cap) at home · room for \(free) more" : "Your home is full · \(n) of \(cap)"
+        let cap = JellyRoster.maxCount, n = min(home.count, cap)
+        return "\(n)/\(cap) at home"          // (full or not: the count, one short line)
     }
     private var roomLine: some View {
         HStack(spacing: 5) {
