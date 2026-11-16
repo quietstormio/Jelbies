@@ -255,6 +255,7 @@ struct GameScreen: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
+            if town == nil { TipAnchor("powerup", ready: false) }          // the room is up: the power-up tip (asked for by GameCare when the meal is over) may show
             PlayChrome(care: model.care)          // Play mode: the flick surface, Done, hearts (Play/PlayChrome.swift)
 
             BathChrome(care: model.care)
@@ -503,6 +504,12 @@ struct GameScreen: View {
             if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
         }
         .onAppear { model.care.select.gateDraw = true }
+        .onAppear {          // first-time tips: the game's state for the suppression, the heads for the keep-off check, the dev launch arguments (TipsReset / TipShow)
+            let care = model.care
+            TipWindowHost.care = care
+            TipBook.shared.context = { [weak care] in care.map { TipContext.live($0) } ?? TipContext() }
+            TipBook.shared.applyLaunchOverrides()
+        }
         .task { await GameScreen.runDebugScript(model: model, open: $menuOpen, roster: $rosterOpen, picker: $openPicker, book: $bookOpen, goOut: $town) }   // on the root: the HUD's pieces come and go with focus mode
         #if DEBUG
         .fullScreenCover(isPresented: $showStudio, onDismiss: { model.paused = false }) {
@@ -1323,11 +1330,11 @@ struct CareMenu: View {
 
     /// The unfolded picker / chip row under a row (Feed, Drink, Play, Tricks, Compete).
     @ViewBuilder private func unfolded(under item: HUDItem) -> some View {
-        if picker == .food, item == .feed { pickerRow(kind: .food) }
+        if picker == .food, item == .feed { pickerRow(kind: .food).background { TipAnchor("feed") } }
         if picker == .drink, item == .drink { pickerRow(kind: .drink) }
-        if picker == .toy, item == .play { pickerRow(kind: .toy) }
+        if picker == .toy, item == .play { pickerRow(kind: .toy).background { TipAnchor("play") } }
         if competeRow, item == .compete { competeChips }
-        if trickRow, item == .tricks { trickChips }
+        if trickRow, item == .tricks { trickChips.background { TipAnchor("tricks") } }
     }
 
     /// Tricks unfolds into ONE row of chips that scrolls sideways: the tricks this Jelbie knows (tap = he does it now), then the locked ones

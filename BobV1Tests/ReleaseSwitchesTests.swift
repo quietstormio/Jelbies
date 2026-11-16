@@ -48,4 +48,11 @@ final class ReleaseSwitchesTests: XCTestCase {
         XCTAssertNil(FoodCaptureArgs.feedID("feed:sushi", devArgs: false)); XCTAssertEqual(FoodCaptureArgs.feedID("feed:sushi", devArgs: true), "sushi")
         XCTAssertNil(FoodCaptureArgs.feedID("clean", devArgs: true))
     }
+
+    func testTipLaunchArgumentsNeedTheDevSwitch() {
+        let (d, done) = suite(); defer { done() }
+        d.set(1, forKey: "TipsReset"); d.set("town", forKey: "TipShow")
+        XCTAssertFalse(TipBook.launchOverrides(devArgs: false, defaults: d).reset); XCTAssertNil(TipBook.launchOverrides(devArgs: false, defaults: d).show)
+        XCTAssertTrue(TipBook.launchOverrides(devArgs: true, defaults: d).reset); XCTAssertEqual(TipBook.launchOverrides(devArgs: true, defaults: d).show, "town")
+    }
 }

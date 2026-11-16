@@ -367,14 +367,7 @@ struct FirstDayTourOverlay: View {
     }
 
     private var nextButton: some View {
-        Button { tour.next() } label: {
-            Text(tour.isLast ? "Let's play!" : "Next").font(SK.font(17, .heavy)).foregroundStyle(.white)
-                .padding(.horizontal, 22).frame(minHeight: 44)
-                .background(Capsule().fill(SK.pinkStrong))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(tour.isLast ? "Let's play" : "Next").accessibilityIdentifier("first-day-next")
+        TourCapsuleButton(title: tour.isLast ? "Let's play!" : "Next", label: tour.isLast ? "Let's play" : "Next", id: "first-day-next") { tour.next() }
     }
 
     /// Skip: the old screen's pill, kept in view on every step.
@@ -415,7 +408,7 @@ struct FirstDayTourOverlay: View {
 }
 
 /// A small pointer: the tip points up (`up`) or down.
-private struct Triangle: SwiftUI.Shape {
+struct Triangle: SwiftUI.Shape {
     let up: Bool
     func path(in r: CGRect) -> Path {
         var p = Path()
@@ -423,5 +416,24 @@ private struct Triangle: SwiftUI.Shape {
         else { p.move(to: CGPoint(x: r.minX, y: r.minY)); p.addLine(to: CGPoint(x: r.midX, y: r.maxY)); p.addLine(to: CGPoint(x: r.maxX, y: r.minY)) }
         p.closeSubpath()
         return p
+    }
+}
+
+/// The tour's button (pink capsule, white text): the tour's Next / Let's play and the tip cards' Got it are this one view.
+struct TourCapsuleButton: View {
+    let title: String
+    var label: String? = nil
+    var hint: String? = nil
+    let id: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(title).font(SK.font(17, .heavy)).foregroundStyle(.white)
+                .padding(.horizontal, 22).frame(minHeight: 44)
+                .background(Capsule().fill(SK.pinkStrong))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label ?? title).accessibilityHint(hint ?? "").accessibilityIdentifier(id)
     }
 }

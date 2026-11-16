@@ -23,6 +23,7 @@ struct SettingsScreen: View {
     @State private var showA11y = false
     @State private var matchIcon = AppIconSwitcher.enabled
     @State private var confirmReset = false
+    @State private var tipsAgainLine = false
     @State private var showPrivacy = false
     @State private var showSupport = DevArgs.enabled && UserDefaults.standard.integer(forKey: "SupportOpen") != 0          // (-SettingsOpen 1 -SupportOpen 1: capture aid, dev-args only)
     @State private var followReal = DayClock.shared.followReal
@@ -63,6 +64,7 @@ struct SettingsScreen: View {
         }
         .animation(.easeInOut(duration: 0.4), value: theme.selection)
         .animation(.easeInOut(duration: 0.2), value: confirmReset)
+        .tipHold("settings")          // no tip card over Settings
         .sheet(isPresented: $showA11y) {
             AccessibilitySettingsView { showA11y = false }.presentationBackground(SK.cream)
         }
@@ -195,6 +197,10 @@ struct SettingsScreen: View {
             actionRow("Photo mode", "camera", id: "photo-button", action: openPhoto)
             actionRow("Main menu", "house", id: "settings-main-menu", action: mainMenu)
             actionRow("Watch the opening", "sparkles", id: "settings-watch-opening", action: watchOpening)
+            actionRow("Show tips again", "lightbulb", id: "settings-tips-again") { TipBook.shared.resetFlags(); tipsAgainLine = true; DispatchQueue.main.asyncAfter(deadline: .now() + 3) { tipsAgainLine = false } }
+            if tipsAgainLine {
+                Text("Tips will show again.").font(CloudTheme.font(13, .medium)).foregroundStyle(ink.opacity(0.75)).accessibilityIdentifier("settings-tips-again-line")
+            }
             #if DEBUG
             if let openStudio { actionRow("Studio", "slider.horizontal.3", id: "settings-studio", action: openStudio) }
             #endif

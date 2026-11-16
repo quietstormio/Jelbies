@@ -24,6 +24,7 @@ struct ParkChrome: View {
         let _ = book.revision          // (the visitors' levels and text: read through `revision`)
         GeometryReader { g in
             ZStack {
+                if park.phase == .playing, park.place == .park { TipAnchor("park", delay: 0.8) }          // the first-time tip: the walk-in is over
                 if park.picking { picker }
                 if park.inScene, park.place == .park, !care.play.active {          // (Play mode has its own Done pill in the corner: the park's bar steps aside, like the home HUD)
                     let wide = g.size.width > g.size.height          // landscape: the visitor chips join the top row (they scroll sideways inside it) so they never cover the lawn

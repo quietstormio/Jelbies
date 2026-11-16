@@ -186,6 +186,7 @@ struct AdoptionCenter: View {
                     }
                 }
                 .accessibilityHidden(coverUp)
+                if mode == .more, step == .species, !coverUp, !celebrating { TipAnchor("spring", delay: 0.5) }          // the first-time tip (the Jelly Spring, never the new game's first pick)
                 if coverUp { springCover(geo.size, landscape: landscape, insets: geo.safeAreaInsets).transition(.opacity).zIndex(5) }
                 if celebrating { Celebration(name: name, toCamp: mode != .first && SpringStates.goesToCamp(home: home.count, camp: camp.count)).transition(.opacity) }
             }

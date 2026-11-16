@@ -107,12 +107,12 @@ struct TownFlow: View {
     var body: some View {
         ZStack {
             switch screen ?? .town {
-            case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, groom: chooseGroom, adopt: adopt, camp: chooseCamp, home: goHome)
-            case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome)
-            case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, shop: { screen = .shop }, race: { goHome(); care.startRace(jelly: who) })
-            case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) })
-            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.clean(jelly: who) })
-            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, shop: { screen = .shop }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) })
+            case .town: TownView(care: care, go: { screen = $0 }, cafe: chooseCafe, park: choosePark, groom: chooseGroom, adopt: adopt, camp: chooseCamp, home: goHome).tipScreen("town")
+            case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome).tipScreen("shop")
+            case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, shop: { screen = .shop }, race: { goHome(); care.startRace(jelly: who) }).tipScreen("race")
+            case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) }).tipScreen("show")
+            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.clean(jelly: who) }).tipScreen("trophies")
+            case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, shop: { screen = .shop }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }).tipScreen("volley")
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
         }
@@ -546,7 +546,7 @@ struct BagSheet: View {
 
     /// `tab`: the tab to open on (Dress / Play / Decor from the HUD); nil = the `-StoreTab` capture arg, else Food.
     init(care: GameCare, who: Int, tab: BagTab? = nil, close: @escaping () -> Void) {
-        self.care = care; self._who = State(initialValue: who); self.close = close
+        self.care = care; self._who = State(initialValue: who); self.close = close; self.fromHUD = tab != nil
         let asked: BagTab = tab ?? BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .food          // (-StoreTab decor: capture aid)
         // 2026-11-15 (the user's ask: "Remove Furniture section"): the Shop sells no furniture, so the Furniture tab exists only while the player owns a piece.
         // A Bag asked to open on it (the HUD's Decor button) opens on Toys when there is none.
@@ -574,6 +574,8 @@ struct BagSheet: View {
     @State private var roomRefusal: String?
     private func count(_ t: BagTab) -> Int { t == .rooms ? ownedRooms.count : t == .wear ? StoreCatalog.items.filter { $0.isWearable && book.owns($0) }.count : entries(t).reduce(0) { $0 + book.count($1.id) } }
 
+    /// Opened by the HUD's Dress / Decor rows (a tab was asked for): the first-time tip for that tab.
+    private let fromHUD: Bool
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -585,6 +587,7 @@ struct BagSheet: View {
                         Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
+                .background { if fromHUD, tab == .wear { TipAnchor("dress", delay: 0.4) } else if fromHUD, tab.isDecor { TipAnchor("decor", delay: 0.4) } }
                 LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 140, showNote: false, pick: { who = $0 })
                 if HUDLayout.isPad, typeSize < .xxxLarge {          // iPad (larger type falls back to the scrolling row below so labels never truncate): all six tabs share the card's width (no clipped "Ro" at the edge); the label shrinks a touch if it must
                     HStack(spacing: 6) {
