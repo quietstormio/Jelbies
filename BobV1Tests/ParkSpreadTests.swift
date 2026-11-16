@@ -32,7 +32,7 @@ final class ParkSpreadTests: XCTestCase {
 
     func testHouseholdKindsAreRarerAndVisitsAreMixed() {
         let pool = ParkPool.all()
-        XCTAssertEqual(Set(pool.map(\.kind)), [0, 1, 2, 3], "the pool has all four kinds")
+        XCTAssertEqual(Set(pool.map(\.kind)), [0, 1, 2, 3, 4, 5, 6], "the pool has all seven kinds (the four classic ones + Teddy, Pearl, Panda)")
         for (label, household, chars) in [("two greens", Set([2]), [2, 102]), ("a green and a lavender", Set([2, 3]), [2, 3])] {
             let before = run(household: household, characters: chars, count: 4, friendID: nil, new: false)
             let after = run(household: household, characters: chars, count: 4, friendID: nil, new: true)
