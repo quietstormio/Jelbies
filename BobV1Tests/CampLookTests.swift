@@ -89,4 +89,19 @@ final class CampLookTests: XCTestCase {
         XCTAssertEqual(AudioHub.voiceFile(slot: 5, .happy), JellyVoiceSet.file(character: 4, .happy), "a Camp body speaks with its own species' voice")
         JellyRoster.visitBodies = [:]
     }
+
+    /// The voice rule: only creatures AT HOME are spoken names. A Camp creature's own name (an instance id past the roster) is not in the voice vocabulary; it speaks with its species' voice via `visitBodies` only.
+    func testACampCreaturesNameIsNotASpokenName() {
+        let keepRoster = JellyRoster.current, keepNames = JellyRoster.extraNames, keepMap = JellyRoster.speciesMap
+        defer { JellyRoster.current = keepRoster; JellyRoster.extraNames = keepNames; JellyRoster.speciesMap = keepMap; JellyRoster.visitBodies = [:] }
+        JellyRoster.speciesMap = [100: 3]; JellyRoster.extraNames = [100: "Maple"]
+        let n = JellyNames(defaults: UserDefaults(suiteName: "CampLook.voice.\(UUID().uuidString)")!, key: "nick", persists: false)
+        JellyRoster.current = [0, 1, 2]
+        JellyRoster.visitBodies = [3: 100]          // a Camp body of instance 100 is on the yard stage
+        XCTAssertFalse(n.priorityWords.contains("maple"), "the name of one at Camp is not a spoken word")
+        XCTAssertEqual(n.roster, [0, 1, 2], "the yard's bodies never join the room's roster")
+        XCTAssertEqual(JellyRoster.speciesOf(slot: 3), 3, "but its body speaks with its species' voice")
+        JellyRoster.current = [0, 1, 100]          // brought home: now it is a spoken name
+        XCTAssertTrue(n.priorityWords.contains("maple"))
+    }
 }
