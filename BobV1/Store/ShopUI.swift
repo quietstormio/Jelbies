@@ -326,7 +326,7 @@ struct ItemSheet: View {
                 }
             }
             if isPerJelbieTrick {
-                LobbyJelbiePicker(care: care, title: "Who is it for?", selected: targetSlot.map { [$0] } ?? [], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 58 : 84, showNote: false, checked: knowers, pick: { forSlot = $0 })
+                LobbyJelbiePicker(care: care, title: "Who is it for?", selected: targetSlot.map { [$0] } ?? [], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 84 : 84, sideBySide: vsc == .compact, showNote: false, checked: knowers, pick: { forSlot = $0 })
                     .padding(.horizontal, vsc == .compact ? 0 : 16)
             } else if isTrick {
                 Label("For all your Jelmiko", systemImage: "person.3.fill").font(SK.font(14, .heavy)).foregroundStyle(SK.ink)

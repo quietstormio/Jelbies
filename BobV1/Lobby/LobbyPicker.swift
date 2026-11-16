@@ -79,6 +79,8 @@ struct LobbyJelbiePicker: View {
     var emptyLabel: String? = nil
     /// The largest head, in points (the lobbies keep 140; the Bag in landscape passes a small one).
     var portraitCap: CGFloat = 140
+    /// Compact height (iPhone landscape: the Bag, the Shop): each tile is the head on the left at the tile's full height with the name to its right, so the picture fills the tile instead of sitting small above the name.
+    var sideBySide = false
     /// false (the Bag): no fixed footnote strip under the row. The lobbies keep it.
     var showNote = true
     /// Jelbies who already have the thing this picker is for (the Shop's per-Jelbie tricks): a check, and the tile cannot be picked.
@@ -99,7 +101,7 @@ struct LobbyJelbiePicker: View {
     var body: some View {
         let roster: [JellyProfile] = care.jellies.prefix(Self.slots).map { $0 }
         let segW = max((rowW - 2) / 3, 90)
-        let portrait = min(segW * 0.74, portraitCap)
+        let portrait = min(segW * (sideBySide ? 0.5 : 0.74), portraitCap)
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center) {          // the same height on every lobby
@@ -142,7 +144,7 @@ struct LobbyJelbiePicker: View {
         .accessibilityElement(children: .contain).accessibilityIdentifier(id)
     }
 
-    private func height(_ portrait: CGFloat) -> CGFloat { portrait + (typeSize.isAccessibilitySize ? 48 : 26) }
+    private func height(_ portrait: CGFloat) -> CGFloat { sideBySide ? portrait + 8 : portrait + (typeSize.isAccessibilitySize ? 48 : 26) }
 
     private func highlight(_ on: Bool) -> some View {
         ZStack {
@@ -153,16 +155,24 @@ struct LobbyJelbiePicker: View {
         }
     }
 
+    /// Picture over name (the default), or, at compact height, picture left at the tile's full height and name right.
+    @ViewBuilder private func tileContent<C: View>(portrait: CGFloat, spacing: CGFloat, @ViewBuilder _ content: () -> C) -> some View {
+        if sideBySide {
+            HStack(spacing: 2) { content() }.padding(.vertical, 4).padding(.horizontal, 4)
+        } else {
+            VStack(spacing: spacing) { content() }.padding(.top, 6).padding(.bottom, 8)
+        }
+    }
+
     private func segment(_ j: JellyProfile, portrait: CGFloat) -> some View {
         let done = checked.contains(j.id)
         let on = selected.contains(j.id) && !done
         let won = done ? 0 : max(wonCount(j), 0)
         return Button { if !done { AudioHub.shared.uiTap(); pick(j.id) } } label: {
-            VStack(spacing: 0) {
+            tileContent(portrait: portrait, spacing: 0) {
                 JelbiePortrait(care: care, who: j.id, size: portrait, head: true, frameless: true).accessibilityHidden(true).opacity(done ? 0.55 : 1)
                 Text(j.name).font(SK.font(15.5, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 6)
             }
-            .padding(.top, 6).padding(.bottom, 8)
             .frame(maxWidth: .infinity, minHeight: height(portrait))
             .background(highlight(on))
             .overlay(alignment: .topTrailing) {
@@ -183,11 +193,10 @@ struct LobbyJelbiePicker: View {
     }
 
     private func friendSegment(_ f: ParkVisitor, index: Int, portrait: CGFloat) -> some View {
-        VStack(spacing: 0) {
+        tileContent(portrait: portrait, spacing: 0) {
             JelbiePortrait(care: care, who: care.jellies.first?.id ?? 0, size: portrait, head: true, friend: f, frameless: true).accessibilityHidden(true)
             Text(f.name).font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 6)
         }
-        .padding(.top, 6).padding(.bottom, 8)
         .frame(maxWidth: .infinity, minHeight: height(portrait))
         .background(highlight(true))
         .overlay(alignment: .topTrailing) {
