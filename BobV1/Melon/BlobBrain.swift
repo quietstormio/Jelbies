@@ -2127,6 +2127,7 @@ final class BlobBrain {
                 footSkin = FootSkin(renderRest: renderRest, skinner: skinner, footParticles: geom.particles)
             }
             prepareBeans(sim, skinner)
+            bubbleWorldBeansHandOver()          // (the wand's hops: their fitted bean pose must not ride into these world-placed feet; BlobBrain+BubblePop)
             if beanScratch[0].count != FootBean.vertexCount { beanScratch = [[SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount), [SIMD3<Float>](repeating: .zero, count: FootBean.vertexCount)] }
             var want = false
             waveLiftApplied = 0; waveAskedBeans = false; wantLast = false; waveNearOff = 0; waveNearShift = .zero
