@@ -189,7 +189,7 @@ struct TownView: View {
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Jelly Volleyball", sub: "Bump and spike", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
-            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Home is full: \(JellyRoster.maxCount) Jelmiko" : "\(atHome) at home \u{00B7} room for \(JellyRoster.maxCount - atHome) more", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
+            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Home is full: \(JellyRoster.maxCount) Jelmiko" : "\(atHome)/\(JellyRoster.maxCount) at home", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
         ]
     }
 
@@ -503,13 +503,18 @@ struct BagSheet: View {
     /// `tab`: the tab to open on (Dress / Play / Decor from the HUD); nil = the `-StoreTab` capture arg, else Food.
     init(care: GameCare, who: Int, tab: BagTab? = nil, close: @escaping () -> Void) {
         self.care = care; self._who = State(initialValue: who); self.close = close
-        self._tab = State(initialValue: tab ?? BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .food)          // (-StoreTab decor: capture aid)
+        let asked: BagTab = tab ?? BagTab(rawValue: { let n = (UserDefaults.standard.string(forKey: "StoreTab") ?? "").capitalized; return n == "Decor" ? "Furniture" : n }()) ?? .food          // (-StoreTab decor: capture aid)
+        // 2026-11-15 (the user's ask: "Remove Furniture section"): the Shop sells no furniture, so the Furniture tab exists only while the player owns a piece.
+        // A Bag asked to open on it (the HUD's Decor button) opens on Toys when there is none.
+        let ownsFurniture = StoreCatalog.decorItems(.furniture).contains { care.store.count($0.id) > 0 }
+        self._tab = State(initialValue: asked == .furniture && !ownsFurniture ? .toys : asked)
     }
 
     enum BagTab: String, CaseIterable, Identifiable { case food = "Food", wear = "Wear", furniture = "Furniture", toys = "Toys", care = "Care", rooms = "Rooms"; var id: String { rawValue }; var isDecor: Bool { self == .furniture || self == .toys } }
     private var book: StoreBook { care.store }
 
-    private var tabs: [BagTab] { BagTab.allCases }
+    /// The tabs listed: Furniture only while the player owns a piece (the Shop no longer sells any, 2026-11-15).
+    private var tabs: [BagTab] { BagTab.allCases.filter { $0 != .furniture || !entries(.furniture).isEmpty } }
     private func entries(_ t: BagTab) -> [StoreItem] {
         switch t {
         case .food: return StoreCatalog.items.filter { $0.food != nil && book.count($0.id) > 0 }
@@ -565,7 +570,7 @@ struct BagSheet: View {
                     }.buttonStyle(.plain).accessibilityIdentifier("bag-arrange")
                 }
                 if list.isEmpty, tab != .rooms {
-                    Text(tab == .food ? "No food yet. The Shop has plenty." : tab == .furniture ? "No furniture yet. Beanbags, sofas and more are in the Shop." : tab == .toys ? "No toys yet. Balls, ducks and more are in the Shop." : "Nothing here yet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted)
+                    Text(tab == .food ? "No food yet. The Shop has plenty." : tab == .furniture ? "No furniture here." : tab == .toys ? "No toys yet. Balls, drums and more are in the Shop." : "Nothing here yet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted)
                         .frame(maxWidth: .infinity, minHeight: 80)
                 }
                 if tab == .rooms { roomsList } else {

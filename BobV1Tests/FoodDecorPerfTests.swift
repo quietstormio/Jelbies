@@ -151,7 +151,7 @@ final class FoodDecorPerfTests: XCTestCase {
         let book = StoreBook(wallet: DropsWallet(persists: false), persists: false)
         for k in DecorTuning.heaviestRoom { book.grant(k.storeID); XCTAssertNotNil(book.place(k.storeID), "\(k) fits") }
         let rocker = try XCTUnwrap(book.placedDecor.first { $0.kind == .aquarium }?.uid)
-        let car = try XCTUnwrap(book.placedDecor.first { $0.kind == .toycar }?.uid)
+        let car = try XCTUnwrap(book.placedDecor.first { $0.kind == .yarnball }?.uid)          // (the rolling piece: the yarn ball since 2026-11-15, the toy car is retired)
         let tris = book.placedDecor.reduce(0) { $0 + (DecorMeshes.loaded[$1.kind]?.triangles ?? 0) }
         var extraMs = 0.0, decorTris = 0
         func work(loaded: Bool, count: Bool = false) {
@@ -184,7 +184,7 @@ final class FoodDecorPerfTests: XCTestCase {
             loadT += r.total; loadExtra += r.extra
         }
         emptyT /= Double(blocks); loadT /= Double(blocks); loadExtra /= Double(blocks)
-        let line = String(format: "3 Jellies, 1100x2390, back-to-back frames: empty room %.2f ms/frame | 10 spots of the heaviest new furniture (%d pieces, %d art tris, %d drawn, rocking chair rocking, toy car rolling, decor rebuilt EVERY frame) %.2f ms/frame (+%.2f ms) | extra mesh build CPU %.2f ms/frame",
+        let line = String(format: "3 Jellies, 1100x2390, back-to-back frames: empty room %.2f ms/frame | 10 spots of the heaviest new furniture (%d pieces, %d art tris, %d drawn, rocking chair rocking, yarn ball rolling, decor rebuilt EVERY frame) %.2f ms/frame (+%.2f ms) | extra mesh build CPU %.2f ms/frame",
                           emptyT, book.placedDecor.count, tris, decorTris, loadT, loadT - emptyT, loadExtra)
         print("FURNPERF " + line); NSLog("FURNPERF %@", line)
         XCTAssertLessThan(loadT, 200, "sanity bound the other perf tests use")

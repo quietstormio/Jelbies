@@ -61,10 +61,10 @@ extension GameCare {
         show.onRival = { [weak self] cue in self?.showRivalCue(cue) }
         show.rivalReady = { [weak self] who, centre in self?.showArrived(who, atCentre: centre) ?? true }
         let d = UserDefaults.standard
-        if d.object(forKey: "ShowAuto") != nil { show.auto = true }
+        if ShowCaptureArgs.auto(defaults: d) { show.auto = true }
         if DevArgs.enabled, d.object(forKey: "ShowHomeAfter") != nil { show.autoHomeAfter = Float(d.double(forKey: "ShowHomeAfter")) }
-        // capture aid: -ShowRank puddle|pond|lagoon|ocean opens every rank up to it and picks it
-        if let r = d.string(forKey: "ShowRank"), let t = ShowRank(rawValue: r.lowercased()) {
+        // capture aid: -ShowRank puddle|pond|lagoon|ocean opens every rank up to it and picks it (dev arguments only: it writes Show progress)
+        if let t = ShowCaptureArgs.rank(defaults: d) {
             for b in ShowRank.allCases where b.index < t.index { show.progress.record(rank: b, place: 1, theme: .bunnyPicnic, character: 0, burst: false, perfectDance: false, hatTrick: false) }
             show.progress.chosen = t
         }
@@ -222,7 +222,8 @@ extension GameCare {
                 guard let brain = a.brain else { continue }
                 brain.abortAll(a.sim, a.skinner)
                 brain.commandedIdle = nil
-                a.sim.arenaRadius = book.arena[aid] ?? a.sim.arenaRadius
+                let wall = book.arena[aid] ?? a.sim.arenaRadius
+                if wall.isFinite, GameCamera.roamFloor != nil { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius } else { a.sim.arenaRadius = wall }          // (the room's wall as it is NOW: the floor may have been rebuilt while his wall was lifted (a rotation, the rivals' first floor); the saved radius alone left the old wall under the new floor)
                 var spot = aid == show.playerID ? c : (book.homes[aid] ?? Self.greetSpot(aid))
                 if aid != show.playerID, taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
                     spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot
@@ -514,5 +515,14 @@ extension GameCare {
         bubbleHub.greetClock = 0; bubbleHub.greetHearts = [:]
         if id != 0 { greeting = true; greetHop = false; queued = [.come(to: greetSpotNow(0))] }
         if again { requestTown(.studio) }
+    }
+}
+
+/// The Show capture arguments (-ShowAuto, -ShowRank): read only where dev arguments are on.
+nonisolated enum ShowCaptureArgs {
+    static func auto(devArgs: Bool = DevArgs.enabled, defaults: UserDefaults = .standard) -> Bool { devArgs && defaults.object(forKey: "ShowAuto") != nil }
+    static func rank(devArgs: Bool = DevArgs.enabled, defaults: UserDefaults = .standard) -> ShowRank? {
+        guard devArgs, let r = defaults.string(forKey: "ShowRank") else { return nil }
+        return ShowRank(rawValue: r.lowercased())
     }
 }

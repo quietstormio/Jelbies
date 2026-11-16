@@ -178,7 +178,7 @@ struct SettingsScreen: View {
         card("Accessibility", "accessibility") {
             Button { AudioHub.shared.uiTap(); showA11y = true } label: {
                 HStack { Text("Accessibility settings"); Spacer(); Image(systemName: "chevron.right") }
-                    .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).frame(minHeight: 44)
+                    .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain).accessibilityIdentifier("settings-accessibility")
         }
@@ -223,6 +223,7 @@ struct SettingsScreen: View {
                 Label("Reset save", systemImage: "trash").font(CloudTheme.font(16, .bold)).foregroundStyle(Color(hex: 0xB3261E))
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Capsule().strokeBorder(Color(hex: 0xB3261E), lineWidth: 2))
+                    .contentShape(Capsule())
             }
             .buttonStyle(.plain).accessibilityIdentifier("settings-reset")
         }
@@ -231,7 +232,7 @@ struct SettingsScreen: View {
     private func actionRow(_ title: String, _ symbol: String, id: String, action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             HStack { Image(systemName: symbol); Text(title); Spacer(); Image(systemName: "chevron.right") }
-                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).frame(minHeight: 44)
+                .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).frame(minHeight: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain).accessibilityIdentifier(id)
     }

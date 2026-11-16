@@ -10,7 +10,7 @@ extension GameCare {
     func tapJelly(_ id: Int) {
         guard jelly(id) != nil, !focus.isActive, !bath.active, !tripActive, !arranging else { return }
         let asleep = selectBrain(id)?.isSleeping ?? (id == 0 ? (lastBrain?.isSleeping ?? false) : false)
-        if select.highlighted == id && !asleep { return }
+        if select.highlighted == id && !asleep { select.rehighlight(); return }
         select.pick(id, quietHop: asleep, instant: asleep)
     }
     /// A tap on empty floor.
