@@ -65,7 +65,35 @@ extension GameCare {
 
     /// Once per fixed step while the yard is up (after the wipe-in has started).
     func tickCamp(dt: Float) {
-        for a in parkBook.actors { a.brain?.idleMood = .happy; a.brain?.sleepLocked = true }
+        for a in parkBook.actors { if let c = CampBook.shared.bodies[a.id] { campLook(a, c, dt: dt) } }
+    }
+
+    /// One Camp body's look for this step, from the COPY taken when it appeared (never from the save): the twin of `tickWear` + `tickFeature` + `visitorLook`.
+    func campLook(_ a: JellyActor, _ c: CampCreature, dt: Float) {
+        guard let b = a.brain else { return }
+        b.idleMood = .happy
+        b.sleepLocked = true
+        b.feature = c.feature
+        b.pandaInk = c.panda
+        wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: c.worn, role: .none, hideAll: false, dt: dt)
+        features.setWingTint(a.id, c.whiteWing ? WhiteWing.wingTint : nil)
+        features.setSpikeTint(a.id, c.spikeTint)
+        features.tick(id: a.id, brain: b, sim: a.sim, feature: c.feature, worn: wornArt(a.id), hideAll: false, dt: dt)
+        if let s = features.slot(a.id) {
+            b.wingsFolded = c.feature == .wings && s.fit.folded
+            b.wingFlapLimit = c.feature == .wings ? s.fit.flapMax : 75
+            wardrobe.setArtOverride(a.id, s.fit.hatVariant)
+        }
+    }
+
+    /// The Camp bodies the stage wears / shoes / fits (none outside the yard).
+    func campBodies(_ parkActors: [JellyActor]) -> [JellyActor] { park.place == .camp && park.inScene ? parkActors : [] }
+
+    /// A tap on a Camp body: a smile (the card and its buttons are the yard chrome's, a later step).
+    func campTapped(_ bodyID: Int?) {
+        guard let id = bodyID, let a = parkBook.actors.first(where: { $0.id == id }) else { return }
+        AudioHub.shared.uiTap()
+        a.brain?.face(.happy, hold: 1.5)
     }
 
     // MARK: the world swaps (under the white)
@@ -91,10 +119,16 @@ extension GameCare {
                 for a in roster where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }
             }
             syncDecor()
-            book.actors = []
+            // the Camp creatures, copied once, now, while the white is opaque; the yard shows only them
+            let list = Array(Self.campSource().prefix(JellyCamp.cap))          // (never more than six)
+            let bodies = CampBook.shared.spawn?(list, CampLayout.spots(count: list.count)) ?? []
+            book.actors = Array(bodies.prefix(list.count))
+            for (a, c) in zip(book.actors, list) { CampBook.shared.bodies[a.id] = c; JellyRoster.visitBodies[a.id] = c.id; a.brain?.face(.excited, hold: 1.5) }
             if select.phase != .none { select.cancel() }
             park.card = nil
         case .home:
+            for a in book.actors { visitorPutAway(a); features.setWingTint(a.id, nil); features.setSpikeTint(a.id, nil) }
+            CampBook.shared.bodies = [:]; JellyRoster.visitBodies = [:]
             book.clear?()
             book.actors = []; book.cast = []
             RoomLayout.apply(RoomCatalog.def(store.currentRoom))

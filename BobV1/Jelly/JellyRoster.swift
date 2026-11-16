@@ -285,8 +285,10 @@ nonisolated enum JellyRoster {
     @MainActor static var current: [Int] = launchIDs()
     /// The character in `slot` (a slot past the roster falls back to the same-numbered character, as before the roster existed).
     @MainActor static func character(_ slot: Int) -> Int {
-        current.indices.contains(slot) ? current[slot] : min(max(slot, 0), characterCount - 1)
+        current.indices.contains(slot) ? current[slot] : (visitBodies[slot] ?? min(max(slot, 0), characterCount - 1))
     }
+    /// The Camp yard's bodies: body id (past the roster) -> the instance it shows, for the length of a visit (Park/CampLook.swift). Empty everywhere else, so a slot past the roster resolves as before.
+    @MainActor static var visitBodies: [Int: Int] = [:]
     /// The slot a character is in; nil when he is not in the room.
     @MainActor static func slot(ofCharacter c: Int) -> Int? { current.firstIndex(of: c) }
     /// The species (look / voice) of the Jelbie in `slot`.

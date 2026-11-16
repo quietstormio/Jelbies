@@ -406,6 +406,7 @@ extension GameCare {
     /// A tap in the park: a visitor's card (a body id), or nothing (closes it).
     func parkTapped(_ bodyID: Int?) {
         guard park.phase == .playing else { return }
+        if park.place == .camp { campTapped(bodyID); return }          // (Camp: a smile; the card comes with the yard's chrome)
         let book = parkBook
         guard let id = bodyID, let k = book.actors.firstIndex(where: { $0.id == id }), book.cast.indices.contains(k) else { park.card = nil; return }
         let vid = book.cast[k]

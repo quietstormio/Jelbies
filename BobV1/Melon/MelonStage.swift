@@ -953,6 +953,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             model.care.headProvider = { [weak self] key in self?.headSnapshot(key) }
             model.care.parkBook.spawn = { [weak self] specs, spots in self?.parkSpawn(specs, spots: spots) ?? [] }          // the park's visitor bodies (Park/MelonController+Park.swift)
             model.care.parkBook.clear = { [weak self] in self?.parkClear() }
+            CampBook.shared.spawn = { [weak self] list, spots in self?.campSpawn(list, spots: spots) ?? [] }          // the Camp yard's bodies (Park/MelonController+Park.swift)
         }
         for a in actors { if let p = a.appearance { r.setPalette(p, body: a.id) } }          // slot 0 too: a non-Bob character there wears his own colours
         view.delegate = self
@@ -1222,9 +1223,9 @@ final class MelonController: NSObject, MTKViewDelegate {
         lap[Lap.skin.rawValue] += CACurrentMediaTime() - sk0
         let pmW2 = PerfMeter.begin()
         var wt = CACurrentMediaTime()
-        if game, steppedThisFrame { model.care.refreshShoes(actors, renderer: renderer, time: Float(CACurrentMediaTime())) }
+        if game, steppedThisFrame { model.care.refreshShoes(actors + model.care.campBodies(parkActors), renderer: renderer, time: Float(CACurrentMediaTime())) }
         lapEnd(.shoes, &wt)          // after the skin: the shoes are built from the bean vertices as DRAWN (the drawn-space bean guard included)
-        if game { model.care.refreshWear(actors, extra: parkActors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
+        if game { model.care.refreshWear(actors + model.care.campBodies(parkActors), extra: parkActors, renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // after the skin: surface-bound pieces read this frame's skin
         lapEnd(.wear, &wt)
         PerfMeter.end(.wear, pmW2)
         let pmM = PerfMeter.begin()

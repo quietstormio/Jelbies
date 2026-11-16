@@ -101,3 +101,42 @@ extension MelonController {
         return best?.id
     }
 }
+
+// MARK: the Camp yard (Park/CampLook.swift, GameCare+Camp.swift)
+
+extension MelonController {
+    /// The Camp creatures' bodies: park-style visitor bodies (ids continue after the roster, 6 substeps, a game brain wired to the roster) wearing the creature's copied palette. Only under the opaque white wipe.
+    func campSpawn(_ list: [CampCreature], spots: [SIMD2<Float>]) -> [JellyActor] {
+        guard let renderer, !actors.isEmpty else { return [] }
+        parkClear()
+        let base = actors.count
+        guard renderer.ensureBodies(base + list.count) else { return [] }
+        let book = model.care.parkBook
+        for (k, c) in list.enumerated() {
+            let a = JellyActor(id: base + k, name: c.name, simMesh: simMesh, renderMesh: renderMesh, embedding: embedding, appearance: model.appearance,
+                               firmness: Float(model.firmness), damping: Float(model.damping), spawn: k < spots.count ? spots[k] : .zero)
+            a.care = model.care
+            let palette = c.palette ?? JellyPalettes.park(.blue)
+            a.appearance = palette
+            a.sim.substeps = ParkTuning.visitorSubsteps
+            a.sim.arenaCenter = GameCamera.arenaCenter
+            a.sim.arenaRadius = GameCamera.arenaRadius
+            let b = BlobBrain.forGame(randomized: true)
+            b.demo = nil; b.runMoveDemo = nil
+            b.autonomy = true
+            model.care.wireWorld(b, isBob: false)
+            a.brain = b
+            parkActors.append(a)
+            if actors.count == 1, !book.soloWired, let own = actors[0].brain { wireRoster(own, id: 0); book.soloWired = true }
+            wireRoster(b, id: a.id)
+            b.feature = c.feature
+            b.pandaInk = c.panda
+            b.personalityOverride = ParkStyle.balanced.variety
+            b.currentPose(a.sim)
+            a.reset(drop: 0, shift: true)
+            renderer.setPalette(palette, body: a.id)
+            renderer.setHidden(false, body: a.id)
+        }
+        return parkActors
+    }
+}
