@@ -1478,13 +1478,15 @@ struct CareMenu: View {
 
     /// The Jelbie's name capsule (individual mode), left of the paw. The cross lets go of the highlight.
     @ViewBuilder private var nameCapsule: some View {
-        if case .individual(let id) = mode, let name = care.jelly(id)?.name {
+        if case .individual(let id) = HUDMenu.mode(care), let name = care.jelly(id)?.name {          // (the live mode: a row's 0.7 s freeze must not keep the name up after the X)
             HStack(spacing: 6) {
                 Text(name).jFont(15, .bold).foregroundStyle(Self.brown)
                     .accessibilityIdentifier("hud-name")
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
-                    withAnimation(Self.spring) { care.clearHighlight() }
+                    frozenMode = mode          // the rows fade out still labelled for him, not as the group's Feed / Drink / Play ...
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { frozenMode = nil }
+                    withAnimation(Self.spring) { care.clearHighlight(); picker = nil; competeRow = false; trickRow = false; open = false }          // the X lets go AND closes: no menu of any kind is left
                 } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(Self.brown.opacity(0.6))
                         .frame(width: 44, height: 44).contentShape(Rectangle())
