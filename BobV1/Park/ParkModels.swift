@@ -132,6 +132,10 @@ nonisolated struct ParkVisitor: Codable, Identifiable, Equatable, Sendable {
     /// The same numbering for a roster species (0 Bob, 1 Pip, 2 Moss, 3 Lavender; Teddy / Pearl / Panda are their own kinds 4 / 5 / 6).
     static func kindOfSpecies(_ species: Int) -> Int { species }
 
+    /// park-cast-r2: about one in ten classic-coloured visitors, chosen by id (so a friend always looks the same), wears its kind's RARE jewel tone (the Spring's Sapphire / Amber / Emerald / Amethyst); name and personality unchanged.
+    var rareLook: Bool { species == nil && colour.isClassic && ParkPool.isRareLook(id: id) }
+    var rareVariant: JellyVariant? { rareLook ? JellyVariantBook.exclusives[kind] : nil }
+
     func points(with character: Int) -> Float { friendship[String(character)] ?? 0 }
     func level(with character: Int) -> ParkFriendLevel { .of(points(with: character)) }
     /// The best friendship over some characters (to weigh who comes back).
@@ -276,12 +280,21 @@ nonisolated enum ParkPool {
         return from[Int(r.next() % UInt64(max(from.count, 1)))]
     }
 
+    /// Does visitor `id` wear its kind's rare colour? Seeded by the id alone: the same on every device and every visit.
+    static func isRareLook(id: Int) -> Bool { var r = ParkRandom(UInt64(id) &* 0x9E37_79B9 &+ 0x4A7E_11); _ = r.next(); return Double(r.unit()) < ParkPlayTuning.rareLookShare }
+
     /// Who comes this time: `count` visitors drawn without repeats, weighted towards friends of the Jelbies that are coming and towards ones not seen for a while.
     /// `household`: the body kinds (`ParkVisitor.kind`) of the Jelbies that come and that live at home; with `ParkPlayTuning.spreadNew` a visitor of one of those kinds has a clearly lower weight (not zero: a friend still comes back),
     /// and within one visit a kind that is already present has a much lower weight while another kind is still available, so a visit looks mixed.
-    static func pickCast(from pool: [ParkVisitor], count: Int, characters: [Int], now: Double, household: Set<Int> = [], using rng: inout some RandomNumberGenerator) -> [ParkVisitor] {
-        var left = pool.filter { $0.mergedInto == nil }
+    static func pickCast(from pool: [ParkVisitor], count: Int, characters: [Int], now: Double, household: Set<Int> = [], unlocked: Set<Int> = [], using rng: inout some RandomNumberGenerator) -> [ParkVisitor] {
+        // park-cast-r2 (owner: "no special Jelmikos at park, just the original four and mutations ... or very rarely after the user has unlocked the special ones"): the normal cast is the four classic kinds only. A special-species
+        // visitor (Teddy, Pearl, Panda: every visitor with a `species`) can come only if the player has UNLOCKED that species, in about 1 visit in `ParkPlayTuning.specialVisitChance`, at most one per visit, drawn uniformly (no friend boost).
+        var special: ParkVisitor?
+        let specials = pool.filter { $0.mergedInto == nil && $0.species != nil && unlocked.contains($0.species!) }
+        if !specials.isEmpty, count >= 1, Double.random(in: 0..<1, using: &rng) < ParkPlayTuning.specialVisitChance { special = specials[Int(rng.next() % UInt64(specials.count))] }
+        var left = pool.filter { $0.mergedInto == nil && $0.species == nil }
         var out: [ParkVisitor] = []
+        let count = special == nil ? count : count - 1
         while out.count < count, !left.isEmpty {
             var weights = left.map { weight($0, characters: characters, now: now) }
             if ParkPlayTuning.spreadNew {
@@ -298,6 +311,7 @@ nonisolated enum ParkPool {
             for (i, w) in weights.enumerated() { if x < w { k = i; break }; x -= w }
             out.append(left.remove(at: k))
         }
+        if let sp = special { out.insert(sp, at: Int(rng.next() % UInt64(out.count + 1))) }
         return out
     }
     static func weight(_ v: ParkVisitor, characters: [Int], now: Double) -> Double {

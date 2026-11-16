@@ -80,6 +80,14 @@ extension GameCare {
     /// Capture aid (`-ParkTrace 1`): logs every change of what a Jelbie / visitor does with a piece (kind, piece, hopscotch square / slide stage), for the proof sequences.
     nonisolated(unsafe) static var traceLast: [Int: String] = [:]
     nonisolated(unsafe) static var traceOn = UserDefaults.standard.integer(forKey: "ParkTrace") != 0
+    /// The special species (anything but the four starters) the player has UNLOCKED, as far as the park can tell: one is owned right now, or was owned on an earlier park visit (remembered in the defaults). Only these may come, rarely (`pickCast`).
+    static func parkUnlockedSpecials(owned: [Int], defaults: UserDefaults = .standard) -> Set<Int> {
+        var s = Set((defaults.array(forKey: "ParkSpecialsUnlocked") as? [Int] ?? []).filter { $0 >= JellyRoster.characterCount && $0 < JellyRoster.knownCount })
+        s.formUnion(owned.filter { $0 >= JellyRoster.characterCount && $0 < JellyRoster.knownCount })
+        defaults.set(Array(s).sorted(), forKey: "ParkSpecialsUnlocked")
+        return s
+    }
+
     func parkTrace(_ bodies: [JellyActor]) {
         for a in bodies {
             guard let b = a.brain else { continue }
@@ -253,7 +261,7 @@ extension GameCare {
         var outfit: [WearSlot: WearLook] = [:]
         if let w = v.wear { outfit[w.slot] = w }
         wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: outfit, role: role, hideAll: false, dt: dt)
-        features.setSpikeTint(a.id, nil)          // visitors, guests, rivals and regulars are always classic
+        features.setSpikeTint(a.id, JellyVariantBook.spikeTint(for: v.rareVariant))          // (classic, except a rare Amber Pip visitor: the Spring's russet spikes)
         features.setWingTint(a.id, v.species == JellyRoster.pearlID ? WhiteWing.wingTint : nil)
         features.tick(id: a.id, brain: b, sim: a.sim, feature: v.signature, worn: wornArt(a.id), hideAll: false, dt: dt)
         if let s = features.slot(a.id) {
@@ -444,7 +452,7 @@ extension GameCare {
             var countRNG = SystemRandomNumberGenerator()
             let n = ParkVisit.visitorCount(playerCount: comers.count, using: &countRNG)
             let characters = comers.compactMap { jelly($0)?.character }
-            var cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970, household: Set((comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { ParkVisitor.kindOfSpecies(JellyRoster.species($0)) }))
+            var cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970, household: Set((comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { ParkVisitor.kindOfSpecies(JellyRoster.species($0)) }), unlocked: Self.parkUnlockedSpecials(owned: (comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { JellyRoster.species($0) }))
             #if targetEnvironment(simulator)
             // capture aid: `-ParkCast 48,49,50` brings those pool visitors (ids) instead of the draw
             if let c = UserDefaults.standard.string(forKey: "ParkCast") { let ids = c.split(separator: ",").compactMap { Int($0) }; let chosen = ids.compactMap { book.visitor($0) }; if !chosen.isEmpty { cast = chosen } }

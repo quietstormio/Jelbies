@@ -34,7 +34,8 @@ extension MelonController {
             let a = JellyActor(id: base + k, name: v.name, simMesh: simMesh, renderMesh: renderMesh, embedding: embedding, appearance: model.appearance,
                                firmness: Float(model.firmness), damping: Float(model.damping), spawn: k < spots.count ? spots[k] : .zero)
             a.care = model.care
-            let palette = v.species.flatMap { JellyRoster.palette($0) } ?? JellyPalettes.park(v.colour)          // (a special-species visitor wears its species' own palette: Teddy's belly, Pearl's white, Panda's ink)
+            var palette = v.species.flatMap { JellyRoster.palette($0) } ?? JellyPalettes.park(v.colour)
+            if let rv = v.rareVariant { palette = rv.palette; palette.jellySpecies = v.kind }          // (the rare jewel tone of its kind, tagged with its species as the Spring does)          // (a special-species visitor wears its species' own palette: Teddy's belly, Pearl's white, Panda's ink)
             a.appearance = palette
             a.sim.substeps = ParkTuning.visitorSubsteps
             a.sim.arenaCenter = GameCamera.arenaCenter

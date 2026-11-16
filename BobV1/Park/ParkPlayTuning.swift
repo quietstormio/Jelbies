@@ -52,6 +52,9 @@ nonisolated enum ParkPlayTuning {
     static let spreadSeenFriendMul: Double = 0.3, spreadHouseholdMul: Double = 0.2
     /// A visit has at least this many different kinds when that many exist (the fourth visitor is free: with four kinds in the pool, forcing all four would put the household's own kinds in every full visit).
     static let spreadKinds = 3
+    // MARK: park-cast-r2
+    /// A special-species visitor comes in about this share of visits (and only once the species is unlocked); this share of the classic visitors wear their kind's rare colour.
+    static let specialVisitChance: Double = 0.10, rareLookShare: Double = 0.10
     /// Counters for the soak (why a pick did not go ahead).
     struct Stats { var rollNo = 0, coolNo = 0 }
     nonisolated(unsafe) static var stats = Stats()
