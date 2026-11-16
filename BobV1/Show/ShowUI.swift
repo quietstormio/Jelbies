@@ -548,7 +548,7 @@ struct StudioScreen: View {
             LobbyStatRow(label: "Look", value: min(1, sum / Float(rank.slots)), color: SK.pink, note: "\(match) of \(rank.slots) match theme"),
             LobbyStatRow(label: "Shine", value: glow, color: SK.sky, note: glow > 0.8 ? "Bathed recently" : glow > 0.3 ? "Glow \(ShowUI.glowOf5(glow)) of 5" : "A Clean would help"),
             LobbyStatRow(label: "Diet", value: 0.7 * main + 0.3 * friend, color: SK.mint, note: "\(theme.main.title) \(ShowUI.pts(main)) \u{00B7} \(theme.friend.title) \(ShowUI.pts(friend))"),
-            LobbyStatRow(label: "Score", value: Float(fc.total) / 300, color: SK.pinkStrong, note: "about \(fc.total) of 300\nrivals about \(fc.rivals)"),
+            LobbyStatRow(label: "Score", value: Float(fc.total) / 300, color: SK.pinkStrong, note: "about \(fc.total) of 300\nentrants about \(fc.rivals)"),
         ])], id: "studio-ready", trailing: {
             Button { AudioHub.shared.uiTap(); card() } label: { Text("\(care.rosterName(who))'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44) }
                 .buttonStyle(.plain).padding(.vertical, -10).accessibilityIdentifier("studio-card")

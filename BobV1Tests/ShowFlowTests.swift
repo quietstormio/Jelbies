@@ -99,6 +99,9 @@ final class ShowFlowTests: XCTestCase {
         run(f, seconds: 25) { f.beat == .danced }
         XCTAssertEqual(f.sim!.dance!.misses, f.danceSong.promptCount); XCTAssertEqual(f.sim!.danceScore!, 0, accuracy: 1e-3, "all slips: 0 (the score is 100% accuracy)")
         f.finishDance()
+        XCTAssertTrue(f.trickEntering, "the Trick round opens with the entrants' walk-on")
+        run(f, seconds: 6) { !f.trickEntering }
+        XCTAssertFalse(f.trickEntering)
         XCTAssertFalse(f.sim!.burstReady, "no cheer: no Burst")
         f.pick(.sit)
         XCTAssertEqual(f.trickStage, .performing); XCTAssertEqual(performs.count, 1)
@@ -106,7 +109,7 @@ final class ShowFlowTests: XCTestCase {
         f.pick(.jacks)                    // not yet: he is still performing
         XCTAssertEqual(f.sim!.turns.count, 1)
         run(f, seconds: ShowFlow.performSeconds + 0.1)
-        XCTAssertEqual(f.trickStage, .rivals, "the rivals take their turn before his next one")
+        XCTAssertEqual(f.trickStage, .rivals, "an entrant takes her turn before his next one")
         f.pick(.jacks)                    // not yet: it is the rivals' turn
         XCTAssertEqual(f.sim!.turns.count, 1)
         f.skipRivals()
@@ -205,7 +208,7 @@ final class ShowFlowTests: XCTestCase {
 
     private final class Log { var a: [String] = [] }
     /// A show at the Trick round with nothing automatic; `log` hears every performance in order.
-    private func showAtTrick(_ log: Log, day: Int = 20261021, seed: UInt64 = 3) -> ShowFlow {
+    private func showAtTrick(_ log: Log, day: Int = 20261021, seed: UInt64 = 3, waitWalkOn: Bool = true) -> ShowFlow {
         let f = ShowFlow(); f.songClock = { _ in nil }; f.audioReady = { _ in true }; f.cue = { _ in }
         f.onPerform = { t, _ in log.a.append("P:\(t.rawValue)") }
         f.onRival = { c in
@@ -215,6 +218,7 @@ final class ShowFlowTests: XCTestCase {
             case .perform(let i, let t, _): log.a.append("R\(i):\(t.rawValue)")
             case .walkOut(let i): log.a.append("out:\(i)")
             case .snap: log.a.append("snap")
+            case .enter: log.a.append("enter")
             }
         }
         f.begin(playerID: 0, name: "Bob", character: 0, input: input(), rank: .puddle, dayKey: day, bodies: 1, seed: seed)
@@ -223,10 +227,11 @@ final class ShowFlowTests: XCTestCase {
         run(f, seconds: 6) { f.beat == .dancing }
         run(f, seconds: 30) { f.beat == .danced }
         f.finishDance()
+        if waitWalkOn { run(f, seconds: 6) { !f.trickEntering } }          // (the entrants' walk-on)
         return f
     }
 
-    /// Three turns, each: his trick, then every rival walks up, performs and steps back, in order; then his again.
+    /// Three turns, each: his trick, then `ShowFlow.entrantsPerTurn` entrants walk up, perform and step back (one: entrant k on turn k); then his again. All three entrants' tricks are rolled every turn.
     func testTurnsAlternateThePlayerAndEachRivalThreeTimes() {
         let log = Log()
         let f = showAtTrick(log)
@@ -241,7 +246,8 @@ final class ShowFlowTests: XCTestCase {
             run(f, seconds: 60) { f.trickStage == .pick }
             XCTAssertEqual(f.trickStage, .pick)
             var want = ["P:\(t.rawValue)", "aside:true"]
-            for i in 0..<n { want += ["in:\(i)", "R\(i):\(f.sim!.rivalTurns[i][turn].trick.rawValue)", "out:\(i)"] }
+            let per = min(ShowFlow.entrantsPerTurn, n)
+            for i in (0..<per).map({ (turn * per + $0) % n }) { want += ["in:\(i)", "R\(i):\(f.sim!.rivalTurns[i][turn].trick.rawValue)", "out:\(i)"] }
             want.append("aside:false")
             XCTAssertEqual(log.a, want, "turn \(turn + 1)")
             XCTAssertEqual(f.sim!.turns.count, turn + 1)
@@ -249,6 +255,18 @@ final class ShowFlowTests: XCTestCase {
         }
         XCTAssertEqual(f.sim!.round, .results); XCTAssertTrue(f.hasResults); XCTAssertTrue(f.settled)
         XCTAssertEqual(f.sim!.entrants.count, n + 1)
+    }
+
+    /// A trick tapped during the entrants' walk-on is not lost: it runs within about a second, the walk-on is over then.
+    func testATapDuringTheWalkOnRunsTheTrickWithinASecond() {
+        let log = Log()
+        let f = showAtTrick(log, waitWalkOn: false)
+        XCTAssertTrue(f.trickEntering)
+        f.pick(.sit)
+        XCTAssertEqual(f.sim!.turns.count, 0, "queued, not performed yet"); XCTAssertEqual(f.trickStage, .pick)
+        run(f, seconds: 1.3) { f.trickStage == .performing }
+        XCTAssertEqual(f.trickStage, .performing); XCTAssertEqual(f.sim!.turns.count, 1); XCTAssertFalse(f.trickEntering)
+        XCTAssertEqual(log.a.filter { $0 == "snap" }.count, 0, "nobody was waiting on a walk, so nobody was snapped")
     }
 
     /// Skip settles the rest of the rivals (their points count), snaps the bodies and opens his next turn; a tap on the banner skips only the rival under the lights.
@@ -261,13 +279,16 @@ final class ShowFlowTests: XCTestCase {
         XCTAssertEqual(f.rivalTurn, 0); XCTAssertNotNil(f.rivalNow)
         f.skipCurrentRival()
         XCTAssertEqual(f.rivalStep, .walkOut); XCTAssertEqual(log.a.last, "out:0")
-        run(f, seconds: 5) { f.rivalTurn == 1 }
-        XCTAssertEqual(f.rivalTurn, 1, "the next rival walks up")
-        let before = f.sim!.rivalTurns
-        f.skipRivals()
-        XCTAssertEqual(f.trickStage, .pick); XCTAssertEqual(log.a.last, "snap"); XCTAssertNil(f.rivalTurn)
-        XCTAssertEqual(f.sim!.rivalTurns, before, "their points were already counted")
-        for r in f.sim!.rivalTurns { XCTAssertEqual(r.count, 1) }
+        if ShowFlow.entrantsPerTurn == 1 {
+            run(f, seconds: 5) { f.trickStage == .pick }
+            XCTAssertEqual(f.trickStage, .pick, "one entrant per turn: skipping her ends the turn")
+        } else {
+            run(f, seconds: 5) { f.rivalTurn == 1 }
+            XCTAssertEqual(f.rivalTurn, 1, "the next entrant walks up")
+            f.skipRivals()
+            XCTAssertEqual(f.trickStage, .pick); XCTAssertEqual(log.a.last, "snap"); XCTAssertNil(f.rivalTurn)
+        }
+        for r in f.sim!.rivalTurns { XCTAssertEqual(r.count, 1, "every entrant's trick of this turn is already counted") }
         XCTAssertEqual(f.sim!.turns.count, 1)
         f.pick(.jacks)
         XCTAssertEqual(f.sim!.turns.count, 2, "his next turn is open at once")

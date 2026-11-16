@@ -120,6 +120,13 @@ nonisolated enum ShowStage {
         let fixed = [SIMD2<Float>(-2.5, 2.0), SIMD2(-1.3, 0.6), SIMD2(1.3, 0.6)]
         return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
     }
+    /// Where entrant k waits in the wing before she walks on to her rest spot (just outside the wide shot: left, left, right; a phone on its side: all from the left).
+    static func wingSpot(_ k: Int, sideways: Bool, wide: Bool = false) -> SIMD2<Float> {
+        if sideways { return [SIMD2<Float>(-6.5, 2.0), SIMD2(-7.2, 0.4), SIMD2(-6.0, -1.2)][min(k, 2)] }
+        var p = [SIMD2<Float>(-4.7, 2.0), SIMD2(-5.4, 0.5), SIMD2(4.9, 0.6)][min(k, 2)]
+        if wide { p.x += p.x < 0 ? -0.7 : 0.7 }          // (iPad portrait: the wide shot is wider, 0.80 fill instead of 0.88)
+        return p
+    }
     /// A parked Jelly (a home Jelmiko the show does not need) waits far off to the LEFT, out of every camera: the borrowed rival bodies wait far to the right
     /// (`GameCare.showFarSpot`, x 40...; the visitor spawn row is x 40..., z 0), so no two bodies ever share a spot (z stays inside the room floor's depth range).
     static func parkSpot(_ id: Int) -> SIMD2<Float> { SIMD2(-40 - Float(id) * 4, 2) }

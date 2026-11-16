@@ -43,6 +43,8 @@ final class ShowBook {
     var goals: [Int: SIMD2<Float>] = [:]
     /// The Trick round's stage is set (rivals at their rest spots).
     var trickSet = false
+    /// Seconds until the entrants set off from the wing (they stand a moment after being placed there, so the feet are settled when the walk starts).
+    var enterDelay: Float?
     nonisolated deinit {}
 }
 
@@ -172,7 +174,7 @@ extension GameCare {
     func showHidesWear(_ id: Int) -> Bool { show.active && (id != show.playerID) }
     /// The Trick round shows the rivals' bodies only while the camera is on the wide shot: not while the player picks (the camera holds the contestant alone, big).
     var showRivalsVisible: Bool {
-        (show.round == .trick || (show.round == .results && show.trickStage != .pick)) && show.trickStage != .pick          // (the walk-on is on the wide shot; the last turn's entrants play on after the sim has its results)
+        (show.round == .trick && (show.trickEntering || show.trickStage != .pick)) || (show.round == .results && show.trickStage != .pick)          // (the walk-on is on the wide shot; the last turn's entrants play on after the sim has its results)
     }
     /// Only the contestant is ever drawn, plus the borrowed rival bodies while the wide Trick shot is on. The other Jelmiko at home wait off stage the whole Show.
     func showHides(_ id: Int) -> Bool {
@@ -193,7 +195,7 @@ extension GameCare {
             book.performers = book.actors.indices.contains(player) ? [player] : []          // the one roster body on the stage: the contestant
             book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko waits off stage (state saved, restored under the white on the way home)
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.dancing = [:]; book.danceRestart = [:]; book.flopT = nil; book.turned = []
-            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false
+            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.enterDelay = nil
             let spots = ShowStage.spots(bodies: book.performers.count)
             for (k, aid) in (book.performers + book.parked).enumerated() where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
@@ -236,7 +238,7 @@ extension GameCare {
             }
             book.performers = []; book.parked = []; book.palettes = [:]; book.dancing = [:]
             showRemoveExtras()
-            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false
+            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.enterDelay = nil
         }
     }
 
@@ -316,12 +318,12 @@ extension GameCare {
         let row = ShowStage.spots(bodies: book.performers.count)
         for k in s.rivals.indices {
             guard let a = rivalActor(k) else { continue }
-            if on { showSnap(a, to: ShowStage.rivalRest(k)) }
+            if on { continue }          // (the entrants walk on from the wing: the flow's `.enter` cue places them)
             else if let idx = book.performers.firstIndex(of: a.id) { showSnap(a, to: row[idx]) }
             else if let j = book.extra.firstIndex(where: { $0.id == a.id }) { showSnap(a, to: Self.showFarSpot(j)) }
         }
         if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
-        book.goals = [:]; book.flops = [:]
+        if !on { book.goals = [:]; book.flops = [:]; book.enterDelay = nil }
     }
     /// The flow asks for the rivals' turn on the bodies.
     private func showRivalCue(_ cue: ShowFlow.RivalCue) {
@@ -341,8 +343,14 @@ extension GameCare {
         case .walkOut(let i):
             guard let a = rivalActor(i) else { return }
             showWalk(a, to: ShowStage.rivalRest(i))
+        case .enter:
+            guard let s = show.sim else { return }
+            let side = GameCamera.aspect > 1          // (a phone on its side: the view is shifted, all three come from the left)
+            for k in s.rivals.indices { if let a = rivalActor(k) { showSnap(a, to: ShowStage.wingSpot(k, sideways: side, wide: PadLayout.isPad)) } }
+            book.enterDelay = 0.25
         case .snap:
             guard let s = show.sim else { return }
+            book.enterDelay = nil
             for k in s.rivals.indices { if let a = rivalActor(k) { showSnap(a, to: ShowStage.rivalRest(k)) } }
             if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
             book.goals = [:]; book.flops = [:]
@@ -461,6 +469,12 @@ extension GameCare {
         // the Trick round's stage: the rivals to their rest spots when it begins, back to the row when it is over
         let inTrick = show.round == .trick || (show.round == .results && show.trickStage != .pick)
         if inTrick != book.trickSet, show.wipe == 0 { showSetTrick(inTrick) }
+        if let d = book.enterDelay {          // the walk-on: the entrants set off from the wing a moment after they were placed there
+            if d - dt <= 0 {
+                book.enterDelay = nil
+                if let s = show.sim { for k in s.rivals.indices { if let a = rivalActor(k) { showWalk(a, to: ShowStage.rivalRest(k)) } } }
+            } else { book.enterDelay = d - dt }
+        }
         for (aid, f0) in book.flops {          // a rival's cute flop: the move is cut short after a beat and she wobbles
             guard let a = showBody(aid), let b = a.brain else { book.flops[aid] = nil; continue }
             let f = f0 + dt

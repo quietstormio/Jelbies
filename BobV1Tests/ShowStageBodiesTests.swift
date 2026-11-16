@@ -28,6 +28,16 @@ final class ShowStageBodiesTests: XCTestCase {
         for k in 0..<3 { spots.append(("rest\(k)", ShowStage.rivalRest(k))) }
         for j in 0..<3 { spots.append(("far\(j)", GameCare.showFarSpot(j))); spots.append(("spawn\(j)", SIMD2(40 + Float(j) * 3, 0))) }
         for id in 0..<6 { spots.append(("park\(id)", ShowStage.parkSpot(id))) }
+        for side in [false, true] {
+            let w = (0..<3).map { ShowStage.wingSpot($0, sideways: side) }
+            for i in 0..<3 { for j in (i + 1)..<3 where j < 3 { XCTAssertGreaterThan(simd_distance(w[i], w[j]), 1.5, "wing spots \(i), \(j) overlap (sideways \(side))") } }
+            for i in 0..<3 { XCTAssertGreaterThan(abs(w[i].x), 4.4, "wing spot \(i) is outside the wide shot's width") }
+        }
+        for i in 0..<3 { XCTAssertGreaterThan(abs(ShowStage.wingSpot(i, sideways: false, wide: true).x), 5.2, "iPad wing spot \(i) is outside the wider shot") }
+        for i in spots.indices { for j in spots.indices where j > i {
+            let (a, b) = (spots[i], spots[j])
+            XCTAssertGreaterThan(simd_distance(a.1, b.1), 1.5, "\(a.0) and \(b.0) overlap")
+        } }
         for id in 0..<6 { XCTAssertTrue(ShowStage.parkSpot(id).y >= GameCamera.walkMinZ && ShowStage.parkSpot(id).y <= GameCamera.walkMaxZ, "park spot inside the floor's depth range") }
     }
 

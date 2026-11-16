@@ -30,7 +30,7 @@ final class ShowFlow {
     /// What one rival is doing now (and, last, the player's Jelbie walking back to the centre).
     enum RivalStep: Equatable { case walkIn, perform, walkOut, playerBack }
     /// What the bodies are asked to do (GameCare+Show.swift): the player steps aside / back, rival `i` walks up / performs / steps back, everybody snaps home (Skip).
-    enum RivalCue: Equatable { case playerAside(Bool), walkIn(Int), perform(Int, VoiceTrick, Bool), walkOut(Int), snap }
+    enum RivalCue: Equatable { case playerAside(Bool), walkIn(Int), perform(Int, VoiceTrick, Bool), walkOut(Int), snap, enter }
 
     private(set) var phase: Phase = .off
     /// 0...1 white overlay opacity (the view draws it).
@@ -88,6 +88,17 @@ final class ShowFlow {
     private(set) var rivalStep: RivalStep = .walkIn
     private(set) var rivalRound = 0
     @ObservationIgnored private var rivalQueue: [Int] = []
+    /// HOW MANY OTHER ENTRANTS PERFORM ON STAGE AFTER EACH OF THE PLAYER'S TRICKS: the one place to change it (1 = one entrant per turn, in a fixed order: entrant k on turn k;
+    /// 3 = all three every turn, as before). Every entrant's three tricks are rolled and scored whatever this is (ShowSim.rollRivalTurns), so the Results totals do not depend on it.
+    static let entrantsPerTurn = 1
+    /// The Trick round opens with the entrants walking on from the wing (the wide shot); `entranceDone` ends it and the camera moves in on the contestant for "pick a trick".
+    @ObservationIgnored private var entranceStarted = false
+    @ObservationIgnored private var entranceDone = false
+    @ObservationIgnored private var entranceT: Float = 0
+    @ObservationIgnored private var entranceTapT: Float = 0
+    @ObservationIgnored private var entrancePick: VoiceTrick?
+    /// The entrants are walking on (the wide camera shot, the contestant's menu already usable).
+    var trickEntering: Bool { sim?.round == .trick && phase == .stage && !entranceDone }
     @ObservationIgnored private var rivalT: Float = 0
     @ObservationIgnored private var performLeft: Float = 0
     /// The Glow Burst fired on the last turn (the view throws confetti).
@@ -186,7 +197,7 @@ final class ShowFlow {
         switch round {
         case .look: return .look(pad: PadLayout.isPad)
         case .dance: return .dance(bodies: bodies, pad: PadLayout.isPad)
-        case .trick: return trickStage == .pick ? .trickPick(pad: PadLayout.isPad) : .trick(pad: PadLayout.isPad)          // (while he picks: only him, big; the wide shot for his trick and the entrants' turns)
+        case .trick: return trickStage == .pick && !trickEntering ? .trickPick(pad: PadLayout.isPad) : .trick(pad: PadLayout.isPad)          // (while he picks: only him, big; the wide shot for his trick and the entrants' turns)
         case .results: return trickStage == .pick ? .results(pad: PadLayout.isPad) : .trick(pad: PadLayout.isPad)          // (the rivals' last turn still plays on the trick frame)
         }
     }
@@ -211,6 +222,7 @@ final class ShowFlow {
         beat = .idle; countdown = 0; countdownLeft = 0; audioWait = 0; song = 0; flash = nil; flashAge = 0; dancedAge = 0; lookAge = 0; goAge = 0
         danceT = 0; danceMusicOn = false; danceHeard = false; danceAudioWait = 0; danceFallback = nil; danceNoClock = 0
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
+        entranceStarted = false; entranceDone = false; entranceT = 0; entranceTapT = 0; entrancePick = nil
         rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0
         earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
         autoDone = 0; autoTrickWait = 0; danceCued = 0
@@ -369,6 +381,7 @@ final class ShowFlow {
     /// A menu row is tapped: he performs it at once (a slip is the cute flop).
     func pick(_ t: VoiceTrick) {
         guard var s = sim, s.round == .trick, trickStage == .pick, phase == .stage, !s.tricksDone else { return }
+        if trickEntering { entrancePick = t; return }          // (a tap during the walk-on: the walk-on ends within a second, then he performs it)
         guard let turn = s.perform(t) else { return }
         sim = s
         land(turn)
@@ -389,6 +402,7 @@ final class ShowFlow {
     }
     private func tickTrick(dt: Float) {
         clock += Double(dt)
+        if trickEntering { tickEntrance(dt: dt); return }
         switch trickStage {
         case .pick:
             if auto, let s = sim, !s.tricksDone {
@@ -410,13 +424,33 @@ final class ShowFlow {
         }
     }
 
+    // MARK: the entrants' walk-on
+
+    /// The Trick round's first seconds: the camera shows the whole stage, the entrants walk on from the wing to their rest spots (the walk they use to come to the middle),
+    /// about two seconds; then the camera moves in on the contestant. A trick tapped meanwhile ends it within a second (a walker still on the way is put at its spot).
+    private func tickEntrance(dt: Float) {
+        guard let s = sim else { return }
+        if !entranceStarted { entranceStarted = true; entranceT = 0; entranceTapT = 0; onRival(.enter); revision += 1; return }
+        entranceT += dt
+        if entrancePick != nil { entranceTapT += dt }
+        let arrived = s.rivals.indices.allSatisfy { rivalReady($0, false) }
+        if entranceT >= Self.entranceMin && arrived || entranceT > Self.entranceMax || (entrancePick != nil && entranceTapT >= 1.0) {
+            if !arrived { onRival(.snap) }
+            entranceDone = true
+            revision += 1
+            if let t = entrancePick { entrancePick = nil; pick(t) }
+        }
+    }
+    static let entranceMin: Float = 1.2, entranceMax: Float = 4.5
+
     // MARK: the rivals' turns
 
     /// The player's trick is over: each rival in turn walks up to the middle, shows the trick she rolled for this turn and steps back (his Jelbie waits aside).
     private func startRivals() {
         guard let s = sim else { return }
         rivalRound = max(s.turns.count - 1, 0)
-        rivalQueue = Array(s.rivals.indices)
+        let n = s.rivals.count, per = min(max(Self.entrantsPerTurn, 1), n)
+        rivalQueue = per >= n ? Array(s.rivals.indices) : (0..<per).map { (rivalRound * per + $0) % n }          // (one per turn: entrant k on turn k)
         trickStage = .rivals
         onRival(.playerAside(true))
         nextRival()
@@ -473,7 +507,7 @@ final class ShowFlow {
     func skipRivals() {
         guard trickStage == .rivals else { return }
         onRival(.snap)
-        A11yEvents.say("Skipped the rivals' tricks", .normal)
+        A11yEvents.say("Skipped", .normal)
         endRivals()
     }
     /// A tap on the banner: only the rival under the lights is skipped (she steps back at once).
