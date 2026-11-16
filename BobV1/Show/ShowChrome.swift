@@ -300,8 +300,13 @@ struct DanceRound: View {
     private var laneWithCount: some View {
         PromptLane(care: care).accessibilityIdentifier("dance-prompts")
             .overlay {
-                if show.showsCountdown { count("\(show.countdown)") }
-                else if show.showsGo { count("GO!") }
+                // a TimelineView: `showsGo` depends on the dance clock, which the observation system does not track, so the word is re-evaluated every frame (else it stays until some other state changes)
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+                    ZStack {
+                        if show.showsCountdown { count("\(show.countdown)") }
+                        else if show.showsGo { count("GO!") }
+                    }
+                }
             }
     }
     private func count(_ s: String) -> some View {
