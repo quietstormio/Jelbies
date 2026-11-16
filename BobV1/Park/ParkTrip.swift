@@ -12,6 +12,9 @@ import Observation
 final class ParkTrip {
     enum Phase { case off, pick, goOut, arriveHold, arriveIn, playing, leaveOut, leaveHold, leaveIn }
     enum Dest { case park, home }
+    /// Where the trip goes: the park, or the Jelmiko Camp yard (Park/GameCare+Camp.swift: the same wipe, camera and visitor bodies, but nobody comes along and nothing of the visit is saved).
+    enum Place { case park, camp }
+    private(set) var place: Place = .park
 
     private(set) var phase: Phase = .off { didSet { if phase != oldValue { print("[park] phase \(phase)") } } }
     /// 0...1: how white the veil is.
@@ -49,6 +52,12 @@ final class ParkTrip {
         picked = all; phase = .pick; card = nil
     }
     func cancelPicker() { if phase == .pick { phase = .off } }
+    /// The Camp yard: no picker, nobody comes along; the white wipe starts at once.
+    func beginCamp() {
+        guard phase == .off else { return }
+        place = .camp; picked = []; card = nil
+        phase = .goOut; wipe = 0; holdFrames = 0; serial += 1
+    }
     func begin() {
         guard phase == .pick, !picked.isEmpty else { return }
         phase = .goOut; wipe = 0; holdFrames = 0; serial += 1
@@ -59,7 +68,7 @@ final class ParkTrip {
         guard canGoHome else { return }
         card = nil; phase = .leaveOut
     }
-    func finish() { gift = nil; phase = .off; wipe = 0; holdFrames = 0; card = nil }
+    func finish() { gift = nil; phase = .off; wipe = 0; holdFrames = 0; card = nil; place = .park }
 
     /// Once per fixed step. `blocked`: something started under the fade (checked while fading out to the park).
     func step(dt: Float, blocked: Bool = false) {

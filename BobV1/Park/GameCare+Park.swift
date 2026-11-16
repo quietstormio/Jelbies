@@ -159,7 +159,7 @@ extension GameCare {
 
     private var parkFadeBlocked: Bool {
         race.active || show.active || volley.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active
-            || parkBook.roster.contains { $0.brain?.isSleeping == true }
+            || (park.place == .park && parkBook.roster.contains { $0.brain?.isSleeping == true })          // (Camp: a sleeping home Jelmiko just stays asleep, hidden)
     }
 
     // MARK: per fixed step
@@ -169,6 +169,7 @@ extension GameCare {
         parkBook.roster = actors
         tickGuest(actors, dt: dt)          // a friend over at home (GameCare+Guest.swift)
         #if targetEnvironment(simulator)
+        tickCampStart()          // capture aid `-StartCamp 1` (Park/GameCare+Camp.swift)
         // capture aid: `-StartPark 1` goes straight to the park once the room is up. It RETRIES (every ~0.75 s, not while an outing is walking) until the park opens: a single shot at frame 90 failed
         // whenever parkBlocker() said no at that moment (a Jelbie mid-meal / asleep / the room moving / voice listening). The real gate rules are untouched; this only repeats the request.
         if Self.startParkPending {
@@ -197,6 +198,7 @@ extension GameCare {
             else { b.autonomy = false; b.idleBlocked = true }
         }
         guard park.phase == .playing || park.phase == .arriveIn else { return }
+        if park.place == .camp { tickCamp(dt: dt); return }          // (Camp: Park/GameCare+Camp.swift; no friendships, gifts, toys, save or bedtime call)
         tickVisitors(dt: dt)
         tickFriends(actors, dt: dt)
         tickSharedPlay(actors, dt: dt)
@@ -416,6 +418,7 @@ extension GameCare {
     // MARK: the world swaps (under the white)
 
     private func parkSwap(_ dest: ParkTrip.Dest) {
+        if park.place == .camp { campSwap(dest); return }          // (Camp: Park/GameCare+Camp.swift)
         let book = parkBook, work = book.work
         let roster = book.roster
         switch dest {

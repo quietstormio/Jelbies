@@ -166,14 +166,14 @@ extension GameCamera {
         let c = roamFurnitureClearance
         let cam = camera(aspect: aspect, gamePose: true)
         let rails = (aspect < 1 ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
-        let minZ = RoomLayout.minZ + c
+        let minZ = max(RoomLayout.minZ + c, campCap?.minZ ?? -.infinity)          // (the Camp yard: the first row is no further back than the cap, Park/CampScenery.swift)
         let wallX = RoomLayout.maxX - (roamLateralExtent + 0.05)          // (the body, wings and shadow stay off the side walls too)
         var zs = [Float](), hw = [Float](), free = [[ClosedRange<Float>]]()
         var z = minZ
         while z <= maxZ + 1e-4 {
             // (the body's nearest surface, 0.25 u nearer than `visibleHalfWidthAtBody`'s depth, sets the width the screen allows)
             let wide = visibleHalfWidthAtBody(z: z + 0.25, aspect: aspect) * (1 - 2 * roamSideMargin) - roamLateralExtent
-            let h = max(min(wide, wallX), 0.6)
+            let h = max(min(wide, wallX, campCap?.halfWidth ?? .infinity), 0.6)          // (the Camp yard: never wider than the fence, whatever the screen shows)
             // the free spans of the row: what the sofa, plant and table leave (sampled every 5 cm)
             var spans = [ClosedRange<Float>](), start: Float?
             var x = -h

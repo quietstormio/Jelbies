@@ -30,13 +30,13 @@ struct ParkChrome: View {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top) {
                             HStack(spacing: 7) {
-                                Image(systemName: "tree.fill").font(.system(size: 15, weight: .heavy))
-                                Text("Park").font(SK.font(17, .black))
+                                Image(systemName: park.place == .camp ? "tent.fill" : "tree.fill").font(.system(size: 15, weight: .heavy))
+                                Text(park.place == .camp ? "Jelmiko Camp" : "Park").font(SK.font(17, .black))
                             }
                             .foregroundStyle(SK.ink).padding(.horizontal, 14).frame(minHeight: 44)
                             .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
                             .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
-                            .accessibilityElement(children: .ignore).accessibilityLabel("Park").accessibilityIdentifier("park-chip")
+                            .accessibilityElement(children: .ignore).accessibilityLabel(park.place == .camp ? "Jelmiko Camp" : "Park").accessibilityIdentifier("park-chip")
                             musicButton
                             if wide { friends.frame(maxWidth: .infinity) } else { Spacer() }
                             DropsPill(wallet: care.bath.wallet)
@@ -74,7 +74,7 @@ struct ParkChrome: View {
                                 .background(Capsule().fill(SK.honey).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
                         }
                         .buttonStyle(.plain).accessibilityIdentifier("park-home")
-                        .overlay(alignment: .leading) { playButton.offset(x: -(HUDLayout.parkPlaySize + HUDLayout.parkPlayGap)) }          // (round, left of the pill, centred on it; HUDLayout.parkHomeRect keeps the roam floor clear of both)
+                        .overlay(alignment: .leading) { if park.place == .park { playButton.offset(x: -(HUDLayout.parkPlaySize + HUDLayout.parkPlayGap)) } }          // (round, left of the pill, centred on it; HUDLayout.parkHomeRect keeps the roam floor clear of both)
                     }
                     .padding(.bottom, 24)
                     .transition(.opacity)

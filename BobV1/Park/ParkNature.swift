@@ -57,7 +57,7 @@ extension ParkScenery {
 
     /// The lawn's colour at (x, z): real grass with broad soft mowing bands, sunlit yellower patches, cool shadow pools under trees and shrubs (thrown away from the sun) and
     /// worn earth where the path meets the grass and at the slide's landing.
-    static func lawnColor(_ x: Float, _ z: Float, shadows: [ParkShadow]) -> V3 {
+    static func lawnColor(_ x: Float, _ z: Float, shadows: [ParkShadow], camp: Bool = false) -> V3 {
         var c = S.srgb(0.30, 0.50, 0.25)
         c *= 1 - 0.14 * sstep(1.5, 7.5, z)          // a little darker toward the near edge
         c = simd_mix(c, S.srgb(0.34, 0.56, 0.28), V3(repeating: 0.45 * sstep(0.62, 0.9, vnoise(x * 0.09, z * 0.11, 21))))          // broad sunlit patches
@@ -74,18 +74,20 @@ extension ParkScenery {
             let a = 1 - sstep(0.25, 1.0, d)
             c = simd_mix(c, c * V3(0.74, 0.80, 0.84), V3(repeating: 0.8 * a))
         }
-        if z < 13.5, z > -3.9 {
+        if z < 13.5, z > (camp ? campPathFrom : -3.9) {          // (the Camp yard: the path is kept only from the gate down)
             let dx = fabsf(x - pathX(z)) - 0.62
             let a = (1 - sstep(0.0, 0.13, dx)) * (0.30 + 0.4 * vnoise(x * 0.9, z * 0.9, 5))
             c = simd_mix(c, S.srgb(0.40, 0.34, 0.22), V3(repeating: min(0.55, a)))
         }
-        let ld = hypotf((x - 2.9) / 0.62, (z - 3.25) / 0.42)
-        c = simd_mix(c, S.srgb(0.40, 0.34, 0.22), V3(repeating: 0.42 * (1 - sstep(0.4, 1.0, ld))))
+        if !camp {          // (the slide's worn landing: no slide in the Camp yard)
+            let ld = hypotf((x - 2.9) / 0.62, (z - 3.25) / 0.42)
+            c = simd_mix(c, S.srgb(0.40, 0.34, 0.22), V3(repeating: 0.42 * (1 - sstep(0.4, 1.0, ld))))
+        }
         return c
     }
 
     /// One tessellated lawn quad grid: ~0.4 m cells over the visible area, coarse beyond.
-    static func lawn(_ b: RoomMeshBuilder, shadows: [ParkShadow]) {
+    static func lawn(_ b: RoomMeshBuilder, shadows: [ParkShadow], camp: Bool = false) {
         func axis(_ pre: [Float], _ lo: Float, _ hi: Float, _ step: Float, _ post: [Float]) -> [Float] {
             var out = pre; var v = lo
             while v < hi - 0.001 { out.append(v); v += step }
@@ -95,7 +97,7 @@ extension ParkScenery {
         let zs = axis([-9.5], -9.0, 8.4, 0.4, [12, 20, 45])
         var ids: [[UInt32]] = []
         for z in zs {
-            ids.append(xs.map { x in b.vertex(V3(x, 0, z), V3(0, 1, 0), color: lawnColor(x, z, shadows: shadows)) })
+            ids.append(xs.map { x in b.vertex(V3(x, 0, z), V3(0, 1, 0), color: lawnColor(x, z, shadows: shadows, camp: camp)) })
         }
         for j in 0..<(zs.count - 1) { for i in 0..<(xs.count - 1) {
             // (the far row of cells runs from the back edge toward the camera, +z)
@@ -104,7 +106,7 @@ extension ParkScenery {
     }
 
     /// The gravel path (exact centreline x = 0.7 sin(0.34 z), half-width 0.62, z 13 ... -3.7): speckled compacted sand with a narrow stone edging.
-    static func gravelPath(_ b: RoomMeshBuilder, rng r: inout ParkRandom) {
+    static func gravelPath(_ b: RoomMeshBuilder, rng r: inout ParkRandom, camp: Bool = false) {
         let w: Float = 0.62, e: Float = 0.09
         let us: [Float] = [-w + e, -0.3, 0, 0.3, w - e]
         func gravel(_ x: Float, _ z: Float) -> V3 {
@@ -113,8 +115,9 @@ extension ParkScenery {
         }
         var z: Float = 13
         var row = 0
-        while z > -3.7 {
-            let z2 = max(-3.7, z - 0.3)
+        let stop: Float = camp ? campPathFrom : -3.7          // (the Camp yard keeps the path from the gate down)
+        while z > stop {
+            let z2 = max(stop, z - 0.3)
             func vtx(_ zz: Float) -> [UInt32] { us.map { u in b.vertex(V3(pathX(zz) + u, 0.012, zz), V3(0, 1, 0), color: gravel(pathX(zz) + u, zz)) } }
             let a = vtx(z), c = vtx(z2)
             for i in 0..<(us.count - 1) { b.quad(a[i], c[i], c[i + 1], a[i + 1]) }
@@ -213,8 +216,11 @@ extension ParkScenery {
     /// The park's entrance border (below the roam floor's front edge, z 4.5): low clipped hedge runs either side of the path with the opening where the path comes through, two stone piers,
     /// flower drifts, a few rocks and larger shrubs in the two bottom corners. Nothing here is taller than the rule 1.44 x height < distance in front of z 4.5 allows (hedges 0.5 from z 5.7,
     /// piers 0.7 from z 5.7); the bottom centre (the path, where the Go home pill sits) stays open.
-    static func entrance(_ b: RoomMeshBuilder, rng r: inout ParkRandom) {
+    static func entrance(_ b: RoomMeshBuilder, rng r: inout ParkRandom, camp: Bool = false) {
         let zh: Float = 5.95, px = pathX(zh)
+        if camp {          // (the Camp yard: no hedge runs and no piers, the fence stands here; the hedges' random draws (5 each, 11 hedges) are drawn and dropped so the border keeps its look)
+            for _ in 0..<55 { _ = r.unit() }
+        } else {
         for (i, x) in ([-1.25, -2.9, -4.55, -6.2, -7.85, -9.5] as [Float]).enumerated() { hedge(b, x: px + x - 0.6 + 0.0 * Float(i), z: zh + (r.unit() - 0.5) * 0.1, scale: 0.85, yaw: (r.unit() - 0.5) * 0.06, low: true, rng: &r) }
         for x in ([2.55, 4.2, 5.85, 7.5, 9.15] as [Float]) { hedge(b, x: px + x - 0.6, z: zh + (r.unit() - 0.5) * 0.1, scale: 0.85, yaw: (r.unit() - 0.5) * 0.06, low: true, rng: &r) }
         // two plain stone gate piers at the opening
@@ -222,6 +228,7 @@ extension ParkScenery {
         for sx: Float in [-1.02, 1.02] {
             b.roundedBox(centre: V3(px + sx, 0.30, zh), half: V3(0.16, 0.30, 0.16), radius: 0.03, segments: 2, aoFloor: false, color: stone)
             b.roundedBox(centre: V3(px + sx, 0.63, zh), half: V3(0.21, 0.04, 0.21), radius: 0.02, segments: 2, aoFloor: false, color: stone * 1.12)
+        }
         }
         // flower drifts (natural garden colours) well in front of the hedge, off the path
         let cream = S.srgb(0.95, 0.92, 0.82), butter = S.srgb(0.93, 0.86, 0.58), lavender = S.srgb(0.74, 0.68, 0.84)

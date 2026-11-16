@@ -27,7 +27,7 @@ extension ParkScenery {
     private static let leafRef = S.srgb(0.24, 0.45, 0.17)
 
     /// Stamps one asset at `o`: yawed, scaled (`k` = across, `ky` = up) and tinted per part name (parts without an entry keep their baked colour).
-    private static func stamp(_ b: RoomMeshBuilder, _ art: DecorMeshes.Art, at o: V3, yaw: Float, k: Float, ky: Float, tint: [String: V3], desat: Float = 0, hue: V3 = V3(repeating: 1)) {
+    static func stamp(_ b: RoomMeshBuilder, _ art: DecorMeshes.Art, at o: V3, yaw: Float, k: Float, ky: Float, tint: [String: V3], desat: Float = 0, hue: V3 = V3(repeating: 1)) {
         let c = cosf(yaw), s = sinf(yaw)
         func rot(_ v: V3) -> V3 { V3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c) }
         for part in art.parts {
