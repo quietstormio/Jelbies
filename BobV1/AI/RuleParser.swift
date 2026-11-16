@@ -126,6 +126,10 @@ enum RuleParser {
                 if let h = pair.first, h.width == 2 { hit = h; width = 2 }
             }
             if hit == nil, let h = names.match(token: t), h.score >= 0.6 { hit = h }
+            // a name that is also a catalog word ("Berry" / "berry"): once someone has been named in the sentence, the word is the catalog word ("give Bob a berry"); with nobody named yet it is the name
+            if hit != nil, width == 1, !targets.isEmpty || partner != nil, catalog.match([t]) != nil { hit = nil }
+            // ... and a name that starts a longer catalog phrase ("berry smoothie": the pair finds a more specific item than the word alone) is the phrase
+            if hit != nil, width == 1, i + 1 < toks.count, catalog.items.contains(where: { VoiceMatcher.normalise($0.name) == t + " " + toks[i + 1] }) { hit = nil }
             if let h = hit {
                 let afterWith = kept.last == "with" || (kept.count >= 2 && kept[kept.count - 2] == "with" && ["your", "the", "his", "her"].contains(kept.last ?? ""))
                 if afterWith, partner == nil { partner = h.id; if kept.last == "with" { kept.removeLast() } }
