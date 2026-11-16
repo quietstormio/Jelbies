@@ -111,6 +111,11 @@ final class BubbleWand: PlayToy {
     /// Totals (tests, report).
     @ObservationIgnored private(set) var popsByJelly: [Int: Int] = [:]
     @ObservationIgnored private(set) var chases = 0
+    /// Dev log (`-BubbleLog 1`, dev arguments only): per Jelmiko, chases started and hops, once a second. No behaviour.
+    @ObservationIgnored private var chasesByJelly: [Int: Int] = [:]
+    @ObservationIgnored private var hopsByJelly: [Int: Int] = [:]
+    @ObservationIgnored private var logAt: Float = -9
+    static let logOn: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "BubbleLog")
     @ObservationIgnored private(set) var watches = 0
     @ObservationIgnored private(set) var bumps = 0
     @ObservationIgnored private(set) var nudges = 0
@@ -191,7 +196,7 @@ final class BubbleWand: PlayToy {
     func resetForTests() {
         BubbleTuning.contactPopChance = 0.12
         deactivate(); active = false; clock = 0; demo = nil; burstUntil = -1; states.removeAll(); cheers = [:]; lastHopStart = -9; field = BubbleField()
-        popsByJelly = [:]; diag = [:]; chaseRecords = []; claimToPop = []; movePops = [:]; moveStarts = [:]; extraPops = 0; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
+        popsByJelly = [:]; chasesByJelly = [:]; hopsByJelly = [:]; logAt = -9; diag = [:]; chaseRecords = []; claimToPop = []; movePops = [:]; moveStarts = [:]; extraPops = 0; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
     }
     /// Test seam: a bubble right there.
     @discardableResult func insertBubble(at p: SIMD3<Float>, radius: Float = 0.2) -> Int? { field.insert(at: p, radius: radius) }
@@ -232,6 +237,11 @@ final class BubbleWand: PlayToy {
     func tick(jellies: [BubbleJelly], dt: Float, haptics: HapticDriver? = nil) {
         guard active else { return }
         clock += dt; dtNow = dt
+        if Self.logOn, clock - logAt >= 1 {
+            logAt = clock
+            let per = jellies.map { j in "\(j.id):\(j.brain.idleMood.rawValue) chases=\(chasesByJelly[j.id] ?? 0) hops=\(hopsByJelly[j.id] ?? 0) pops=\(popsByJelly[j.id] ?? 0) free=\(j.brain.bubbleFree ? 1 : 0)" }.joined(separator: " | ")
+            NSLog("[bubble] t %.1f %@", clock, per)
+        }
         // 1. how hard is he blowing?
         var s: Float = 0
         if let d = demo { s = d(clock - demoStart) }
@@ -303,7 +313,7 @@ final class BubbleWand: PlayToy {
             if roll < BubbleTuning.classicChaseRoll, chasing < BubbleTuning.maxChasers, let target = classicPick(for: j) {
                 st.mode = .chase; st.bubble = target.id; st.until = clock + 6.5; st.retargetAt = 0; st.chaseStart = clock; st.tries = 0; st.claimAt = clock; st.walkTime = 0; st.done = false; st.move = .header
                 field.claim(target.id, by: j.id)
-                chasing += 1; chases += 1
+                chasing += 1; chases += 1; chasesByJelly[j.id, default: 0] += 1
             } else if roll < 0.92, let t = nearest(to: b.position) {
                 watches += 1
                 _ = b.bubbleWatch(t, hold: Float.random(in: 1.0...2.2), excited: Float.random(in: 0..<1) < 0.7)
@@ -339,7 +349,7 @@ final class BubbleWand: PlayToy {
                 if clock >= st.retargetAt { st.retargetAt = clock + 0.4; b.bubbleGo(clampToArea(pxz)) }          // (a small step to stand right under it)
             } else if abs(pp.y - apexY) <= band + 0.08, pp.y >= BubbleTuning.hopMinY, clock - lastHopStart >= BubbleTuning.classicPopGap {
                 if b.bubbleHeaderHop(j.sim) {
-                    st.mode = .hop; st.hopStart = clock; lastHopStart = clock
+                    st.mode = .hop; st.hopStart = clock; lastHopStart = clock; hopsByJelly[j.id, default: 0] += 1
                     trace("jelly \(j.id) hops at bubble \(bub.id) y=\(String(format: "%.2f", bub.pos.y)) apex \(String(format: "%.2f", apexY))")
                 }
             }          // (else: it is still above / below the reach of a hop: he waits under it, looking up)
@@ -437,7 +447,7 @@ final class BubbleWand: PlayToy {
             let roll = Float.random(in: 0..<1)
             if roll < BubbleTuning.chaseRoll, chasing < BubbleTuning.maxChasers, let target = pickTarget(for: j, among: js) {
                 startPlayChase(j, &st, target)
-                chasing += 1; chases += 1
+                chasing += 1; chases += 1; chasesByJelly[j.id, default: 0] += 1
             } else if roll < 0.97, let t = nearest(to: b.position) {
                 watches += 1
                 _ = b.bubbleWatch(t, hold: Float.random(in: 1.0...2.2), excited: Float.random(in: 0..<1) < 0.7)
@@ -515,7 +525,7 @@ final class BubbleWand: PlayToy {
             if !ok, m != .header, dh <= BubbleTuning.hopReach, fits(.header) { ok = b.bubbleHeaderHop(j.sim); used = .header }
             if ok {
                 st.move = used
-                st.mode = .hop; st.hopStart = clock; lastHopStart = clock; st.done = false; st.extra = 0
+                st.mode = .hop; st.hopStart = clock; lastHopStart = clock; hopsByJelly[j.id, default: 0] += 1; st.done = false; st.extra = 0
                 moveStarts[used, default: 0] += 1
                 trace("jelly \(j.id) \(used) at bubble \(bub.id) y=\(String(format: "%.2f", bub.pos.y)) crown \(String(format: "%.2f", crown)) dh \(String(format: "%.2f", dh))")
             } else {
