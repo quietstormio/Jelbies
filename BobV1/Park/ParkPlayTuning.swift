@@ -21,11 +21,11 @@ nonisolated enum ParkPlayTuning {
 
     // MARK: park-play-r1 (owner 2026-11-15: "remove the seesaw and make them play and interact more ... play but not as often but interact and make friends more")
     private static func flag(_ key: String) -> Bool {
-        guard let v = UserDefaults.standard.string(forKey: key) else { return true }
+        guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: key) else { return true }          // the old-behaviour switches act only where dev arguments are on
         return !["0", "no", "false", "old", "off"].contains(v.lowercased())
     }
     /// The seesaw is not placed in the park (ParkToys.placed). `-ParkSeesaw 1` puts it back for a before / after; under XCTest it is there for the seesaw's own suites (`ParkPlayTuning.seesawInPark = false` in a test checks the removal).
-    nonisolated(unsafe) static var seesawInPark: Bool = (UserDefaults.standard.integer(forKey: "ParkSeesaw") != 0) || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    nonisolated(unsafe) static var seesawInPark: Bool = (DevArgs.enabled && UserDefaults.standard.integer(forKey: "ParkSeesaw") != 0) || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     /// `-ParkToyRate old`: the slide and the hopscotch are picked as before. `-ParkSocial old`: the social rates as before. (Park only; the room never reads them.)
     nonisolated(unsafe) static var toyRateNew: Bool = flag("ParkToyRate")
     nonisolated(unsafe) static var socialNew: Bool = flag("ParkSocial")
