@@ -22,11 +22,11 @@ extension GameCare {
     func cafeRegularCast(count: Int) -> [ParkVisitor] {
         let characters = jellies.map(\.character)
         var cast = parkBook.visitors
-            .filter { $0.mergedInto == nil && $0.bestLevel(among: characters) > .stranger }
+            .filter { $0.mergedInto == nil && $0.species == nil && $0.bestLevel(among: characters) > .stranger }          // (the special-species visitors are park-only)
             .sorted { $0.bestLevel(among: characters) != $1.bestLevel(among: characters) ? $0.bestLevel(among: characters) > $1.bestLevel(among: characters) : $0.id < $1.id }
         cast = Array(cast.prefix(count))
         if cast.count < count {
-            let more = parkBook.chooseCast(count: count, characters: characters, now: Date().timeIntervalSince1970).filter { v in !cast.contains { $0.id == v.id } }
+            let more = parkBook.chooseCast(count: count, characters: characters, now: Date().timeIntervalSince1970).filter { v in v.species == nil && !cast.contains { $0.id == v.id } }
             cast += more.prefix(count - cast.count)
         }
         return cast

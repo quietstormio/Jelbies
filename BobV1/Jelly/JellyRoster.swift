@@ -292,7 +292,9 @@ nonisolated enum JellyRoster {
     /// The slot a character is in; nil when he is not in the room.
     @MainActor static func slot(ofCharacter c: Int) -> Int? { current.firstIndex(of: c) }
     /// The species (look / voice) of the Jelbie in `slot`.
-    @MainActor static func speciesOf(slot: Int) -> Int { species(character(slot)) }
+    /// Park visitors' bodies (ids after the roster's) -> the species whose voice they have; empty outside the park.
+    @MainActor static var visitorSpecies: [Int: Int] = [:]
+    @MainActor static func speciesOf(slot: Int) -> Int { visitorSpecies[slot] ?? species(character(slot)) }
     /// The slots holding a Jelbie of `species` (a duplicate means more than one).
     @MainActor static func slots(ofSpecies s: Int) -> [Int] { current.indices.filter { species(current[$0]) == s } }
     @MainActor static func name(slot: Int) -> String { nameOf(character(slot)) }

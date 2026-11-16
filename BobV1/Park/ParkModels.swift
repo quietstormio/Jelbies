@@ -124,6 +124,13 @@ nonisolated struct ParkVisitor: Codable, Identifiable, Equatable, Sendable {
     var introduced = false
     /// A true twin (same name AND colour) folded into another record by the 2026-11-05 migration (ParkNames.reconcile): the id of the survivor. nil = a live visitor.
     var mergedInto: Int? = nil
+    /// Park-play-r1 ("all types of species at the park"): a visitor that is one of the special species (JellyRoster 4 Teddy, 5 Pearl, 6 Panda) has its own body, features and voice; nil = one of the four classic kinds by colour. Optional, so old saves decode.
+    var species: Int? = nil
+
+    /// The body kind (0 Bob, 1 Pip, 2 Moss, 3 Lavender: the species whose body and signature it has).
+    var kind: Int { if let s = species { return s }; switch signature { case .spines: return 1; case .daisy: return 2; case .wings: return 3; default: return 0 } }
+    /// The same numbering for a roster species (0 Bob, 1 Pip, 2 Moss, 3 Lavender; Teddy / Pearl / Panda are their own kinds 4 / 5 / 6).
+    static func kindOfSpecies(_ species: Int) -> Int { species }
 
     func points(with character: Int) -> Float { friendship[String(character)] ?? 0 }
     func level(with character: Int) -> ParkFriendLevel { .of(points(with: character)) }
@@ -270,11 +277,21 @@ nonisolated enum ParkPool {
     }
 
     /// Who comes this time: `count` visitors drawn without repeats, weighted towards friends of the Jelbies that are coming and towards ones not seen for a while.
-    static func pickCast(from pool: [ParkVisitor], count: Int, characters: [Int], now: Double, using rng: inout some RandomNumberGenerator) -> [ParkVisitor] {
+    /// `household`: the body kinds (`ParkVisitor.kind`) of the Jelbies that come and that live at home; with `ParkPlayTuning.spreadNew` a visitor of one of those kinds has a clearly lower weight (not zero: a friend still comes back),
+    /// and within one visit a kind that is already present has a much lower weight while another kind is still available, so a visit looks mixed.
+    static func pickCast(from pool: [ParkVisitor], count: Int, characters: [Int], now: Double, household: Set<Int> = [], using rng: inout some RandomNumberGenerator) -> [ParkVisitor] {
         var left = pool.filter { $0.mergedInto == nil }
         var out: [ParkVisitor] = []
         while out.count < count, !left.isEmpty {
-            let weights = left.map { weight($0, characters: characters, now: now) }
+            var weights = left.map { weight($0, characters: characters, now: now) }
+            if ParkPlayTuning.spreadNew {
+                let present = Set(out.map(\.kind)), fresh = present.count < ParkPlayTuning.spreadKinds && left.contains { !present.contains($0.kind) }          // (the no-repeat rule holds until `spreadKinds` different kinds are here; after that the household weight decides)
+                for (i, v) in left.enumerated() {
+                    let friend = v.bestLevel(among: characters) != .stranger          // (a friend is never pushed out: only a stranger of the household's own kind is, and a friend of a kind already here only a little)
+                    if fresh, present.contains(v.kind) { weights[i] *= friend ? ParkPlayTuning.spreadSeenFriendMul : 0 }
+                    if !friend, household.contains(v.kind) { weights[i] *= ParkPlayTuning.spreadHouseholdMul }
+                }
+            }
             let total = weights.reduce(0, +)
             var x = Double.random(in: 0..<max(total, 0.0001), using: &rng)
             var k = left.count - 1
