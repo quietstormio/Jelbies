@@ -12,6 +12,8 @@ enum SupportText {
         InfoSection(heading: "How to play", paragraphs: [
             "Feed: tap the food button and pick a snack.",
             "Drink: tap the drink button to fill a thirsty Jelmiko.",
+            "Power-ups: some foods give a boost for a while. The Shop shows which.",
+            "Favourite food: every Jelmiko loves one food. Its power-up lasts twice as long.",
             "Clean: tap Clean to scrub, rinse and make them sparkle.",
             "Play: tap Play and pick a toy.",
             "Call by name: hold the mic button and say your Jelmiko's name.",

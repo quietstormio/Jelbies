@@ -65,6 +65,12 @@ struct ShopScreen: View {
                 SlotChips(slot: $wearSlot, slots: WearSlot.allCases.filter { s in ShopTab.wear.items.contains { $0.wear?.slot == s } }, idPrefix: "shop-slot-")
                     .padding(.horizontal, 16).padding(.top, 8)
             }
+            if tab == .food {          // what a power-up is and the favourite food rule, in one line (Store/FavouriteFood.swift)
+                Text(FavouriteFood.shopLine).font(SK.font(13 * sc, .semibold)).foregroundStyle(SK.muted)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.top, 8)
+                    .accessibilityIdentifier("shop-food-power-line")
+            }
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount), spacing: 12) {
                     ForEach(shown) { item in card(item) }
