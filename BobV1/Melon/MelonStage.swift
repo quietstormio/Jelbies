@@ -1633,7 +1633,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let size = stageView?.bounds.size ?? touchSize
         let under = model.care.select.hit(p) ?? (size.width > 1 ? pickJelly(p, size)?.id : nil)
         if let id = under {          // a Jelly under the finger: highlight him; double-tapping an already highlighted sleeper pokes him awake (interim gesture)
-            if model.care.select.highlighted == id, model.care.selectBrain(id)?.isSleeping == true { model.care.pokeSleeper(id); return }
+            if model.care.select.highlighted == id, model.care.selectBrain(id)?.isSleeping == true { model.care.select.rehighlight(); model.care.pokeSleeper(id); return }          // (the poke is also a highlight action: the menu opens)
             model.care.tapJelly(id); return
         }
         if let uid = decorUnderFinger(p) { model.care.pickUpDecor(uid) }          // a placed piece (and no Jelly in front of it): pick it up to move it

@@ -63,6 +63,9 @@ final class BlobSelect {
     private(set) var phase: Phase = .none
     /// The Blob the action button currently acts on (set by the check).
     private(set) var confirmed: Int?
+    /// Goes up on every highlight ACTION on a Blob, at the moment of the action (a pick that starts, an instant sleeper pick, a tap on the one already highlighted), also when `highlighted` does not change.
+    /// The care menu observes it next to `highlighted`, so the same Blob highlighted again still opens the menu.
+    private(set) var highlightActs = 0
 
     /// Seconds since the current highlight started.
     @ObservationIgnored private(set) var clock: Float = 0
@@ -204,6 +207,7 @@ final class BlobSelect {
     /// `instant`: a sleeper. No draw, no hop, no `selectedID`: the pick settles at once and he stays asleep.
     func pick(_ id: Int, quietHop: Bool = false, instant: Bool = false) {
         guard blobs.contains(where: { $0.id == id }) else { return }
+        highlightActs += 1          // every pick is an action, counted when it is asked (also the same draw asked again): the menu opens now, not when the glow ends
         if instant {
             phase = .none; confirmed = id; rosterPick = false; waiting = false; hopRequest = nil
             return
@@ -230,6 +234,8 @@ final class BlobSelect {
         confirmed = id
         phase = .none
     }
+    /// A highlight action on the Blob that is already highlighted (a double tap on him again): nothing changes but the menu opens again.
+    func rehighlight() { if highlighted != nil { highlightActs += 1 } }
 
     /// Stops a draw in progress.
     func cancel() {
