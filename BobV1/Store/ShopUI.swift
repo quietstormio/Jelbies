@@ -1,6 +1,6 @@
 //
 //  ShopUI.swift
-//  The Shop: a full screen with a pink wavy header, tabs (Food / Care / Wear / Tricks / Furniture / Toys), two-column item cards
+//  The Shop: a full screen with a pink wavy header, tabs (Food / Care / Wear / Tricks / Toys; Furniture is not shown since 2026-11-15), two-column item cards
 //  (picture, perk chip, price, owned count) and a bottom sheet per item (what it does, condition chips, quantity, Buy).
 //  Drops are earned only; there is no purchase of Drops anywhere.
 //
@@ -24,10 +24,11 @@ enum ShopTab: String, CaseIterable, Identifiable {
     }
     /// A tab the next Shop opening starts on (the Play picker's "no toys yet" button sets it; the Shop takes it once).
     nonisolated(unsafe) static var pending: ShopTab?
-    /// The tab named by the `-StoreTab` capture aid ("decor" = furniture).
-    static func named(_ s: String?) -> ShopTab? { let n = (s ?? "").capitalized; return ShopTab(rawValue: n == "Decor" ? "Furniture" : n) }
-    /// Tabs with goods in them.
-    static var shown: [ShopTab] { allCases.filter { !$0.items.isEmpty } }
+    /// The tab named by the `-StoreTab` capture aid ("decor" = furniture); nil for a tab the Shop does not show.
+    static func named(_ s: String?) -> ShopTab? { let n = (s ?? "").capitalized; guard let t = ShopTab(rawValue: n == "Decor" ? "Furniture" : n), shown.contains(t) else { return nil }; return t }
+    /// Tabs with goods in them. 2026-11-15 (the user's ask: "Remove Furniture section"): Furniture is never shown, so no furniture can be bought; the
+    /// furniture a player already owns stays in the Bag and in the rooms.
+    static var shown: [ShopTab] { allCases.filter { $0 != .furniture && !$0.items.isEmpty } }
 }
 
 struct ShopScreen: View {
