@@ -24,8 +24,10 @@ nonisolated enum ParkVisitPlan {
     nonisolated(unsafe) static var current = Plan.all
 
     /// A test run or the `-ParkToys` capture aid: every toy is in play and the standard defaults are left alone.
-    static var allInPlayAlways: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil || UserDefaults.standard.string(forKey: "ParkToys") != nil
+    static var allInPlayAlways: Bool { allInPlayAlways(devArgs: DevArgs.enabled, defaults: .standard) }
+    /// (`-ParkToys` counts only where dev arguments are on.)
+    static func allInPlayAlways(devArgs: Bool, defaults: UserDefaults, environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        environment["XCTestConfigurationFilePath"] != nil || (devArgs && defaults.string(forKey: "ParkToys") != nil)
     }
 
     // MARK: the draw (pure)

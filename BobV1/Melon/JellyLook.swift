@@ -1,6 +1,6 @@
 //
 //  JellyLook.swift
-//  Lab: a "made of jelly" look for the blue body (glossy, soft light through the body, optionally see-through). Developer switch, OFF by default.
+//  Lab: a "made of jelly" look for the blue body (glossy, soft light through the body, optionally see-through). The approved look is the shipped default (launchLevel 1); dev arguments only tune it.
 //  Only the colour of a body changes: shape, motion, physics, face, feet and wear are not touched. The shader side is fsSoftMatteFast in GfxBodyFast.metal
 //  (function constant 5 compiles the jelly maths in; the stock pipelines never set it, so they stay as they were).
 //
@@ -13,11 +13,10 @@ import Metal
 import simd
 
 nonisolated enum JellyLook {
-    /// The level a build ships with. Stays 0.
-    static let launchLevel = 0
-    /// The ONE build switch: set to (level: 1, all: true) to make the jelly look the default for all species (per-species style / level / neon: `profile(forFlesh:)`),
-    /// or (1, false) for the blue body only, without launch arguments. Stays nil in a commit; launch arguments still win where DevArgs.enabled.
-    static let phoneTest: (level: Int, all: Bool)? = (1, true)
+    /// The level a build ships with: the approved jelly look (level 1). Per-species style / level / neon: `profile(species:)`.
+    static let launchLevel = 1
+    /// Whether the shipped look covers every species (true) or the blue body only (false).
+    static let launchAll = true
 
     /// Look style of a body: A = round 4 (the owner's locked Blue look: its colour maths, highlight shapes), B = round 5 (the species' own colour, softer highlight).
     /// Rides in the jelly parameter buffer ([0].x: 1 = B, 2 = A), so all three body shaders (plain, bath, jersey) pick it per draw without another pipeline.
@@ -85,13 +84,20 @@ nonisolated enum JellyLook {
         return Float(UserDefaults.standard.double(forKey: key))
     }
 
+    /// The level a launch resolves to: `-JellyLook` only where dev arguments are on, otherwise the shipped level. (Pure, so a test can run it with the switch forced either way.)
+    static func resolveLevel(devArgs: Bool, defaults: UserDefaults = .standard) -> Int {
+        guard devArgs, defaults.object(forKey: "JellyLook") != nil else { return launchLevel }
+        return max(0, min(3, defaults.integer(forKey: "JellyLook")))
+    }
+    /// `-JellyAll` only where dev arguments are on, otherwise the shipped default (every species).
+    static func resolveAll(devArgs: Bool, defaults: UserDefaults = .standard) -> Bool {
+        guard devArgs, defaults.object(forKey: "JellyAll") != nil else { return launchAll }
+        return defaults.integer(forKey: "JellyAll") != 0
+    }
     /// The level actually used (settable so tests can switch it; read once from -JellyLook otherwise).
-    nonisolated(unsafe) static var level: Int = {
-        guard DevArgs.enabled, UserDefaults.standard.object(forKey: "JellyLook") != nil else { return phoneTest.map { max(0, min(3, $0.level)) } ?? launchLevel }
-        return max(0, min(3, UserDefaults.standard.integer(forKey: "JellyLook")))
-    }()
-    /// -JellyAll 1: every species gets the look (default: the blue body only).
-    nonisolated(unsafe) static var all: Bool = (DevArgs.enabled && UserDefaults.standard.object(forKey: "JellyAll") != nil) ? UserDefaults.standard.integer(forKey: "JellyAll") != 0 : (phoneTest?.all ?? false)
+    nonisolated(unsafe) static var level: Int = resolveLevel(devArgs: DevArgs.enabled)
+    /// -JellyAll 1: every species gets the look (the shipped default); -JellyAll 0 (dev) = the blue body only.
+    nonisolated(unsafe) static var all: Bool = resolveAll(devArgs: DevArgs.enabled)
 
     /// Optional tuning overrides: see, core, gloss, glow, rim, sat, smooth, bend.
     nonisolated(unsafe) static var overrides: [String: Float] = {

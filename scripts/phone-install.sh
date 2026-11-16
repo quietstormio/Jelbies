@@ -32,7 +32,7 @@ if [ -e "$dd" ] && [ ! -d "$dd/Build" ] && [ ! -e "$dd/info.plist" ]; then
 fi
 app="$dd/Build/Products/Release-iphoneos/BobV1.app"
 logdir="${PHONE_INSTALL_LOG_DIR:-$dd/phone-install-logs}"
-build=(caffeinate -i nice xcodebuild -project BobV1.xcodeproj -scheme BobV1 -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$dd" -allowProvisioningUpdates -jobs "${PHONE_INSTALL_JOBS:-8}" build)
+build=(caffeinate -i nice xcodebuild -project BobV1.xcodeproj -scheme BobV1 -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$dd" -allowProvisioningUpdates JELBIES_DEV_ARGS_COND=JELBIES_DEV_ARGS -jobs "${PHONE_INSTALL_JOBS:-8}" build)
 inst=(xcrun devicectl device install app --device "$udid" "$app")
 
 if [ "$skipbuild" = 1 ]; then

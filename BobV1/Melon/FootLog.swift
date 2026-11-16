@@ -22,7 +22,9 @@ final class FootLog {
     private var handle: FileHandle?, handleURL: URL?
     var url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("foot_log.jsonl")
 
-    static func configure(defaults: UserDefaults = .standard) {
+    /// Only honoured where dev arguments are on (a saved flag does nothing in the store build; the saved value is left alone there).
+    static func configure(defaults: UserDefaults = .standard, devArgs: Bool = DevArgs.enabled) {
+        guard devArgs else { on = false; return }
         let v = defaults.object(forKey: "FootLog") != nil && defaults.bool(forKey: "FootLog")
         defaults.set(v, forKey: "FootLog")
         on = v
