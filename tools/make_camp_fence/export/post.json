@@ -1,0 +1,32 @@
+{
+ "id": "post",
+ "tris": 228,
+ "verts": 123,
+ "sub_meshes": [
+  {
+   "name": "post",
+   "pivot": [
+    0,
+    0,
+    0
+   ],
+   "material": "plain",
+   "tris": 228
+  }
+ ],
+ "bounds_min": [
+  -0.1,
+  0.0,
+  -0.1
+ ],
+ "bounds_max": [
+  0.1,
+  0.608,
+  0.1
+ ],
+ "anchor_rest": [
+  0,
+  0,
+  0
+ ]
+}

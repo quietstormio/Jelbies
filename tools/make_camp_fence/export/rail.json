@@ -1,0 +1,32 @@
+{
+ "id": "rail",
+ "tris": 224,
+ "verts": 172,
+ "sub_meshes": [
+  {
+   "name": "rail",
+   "pivot": [
+    0,
+    0,
+    0
+   ],
+   "material": "plain",
+   "tris": 224
+  }
+ ],
+ "bounds_min": [
+  -0.625,
+  0.1325,
+  -0.0275
+ ],
+ "bounds_max": [
+  0.625,
+  0.3875,
+  0.0275
+ ],
+ "anchor_rest": [
+  0,
+  0,
+  0
+ ]
+}

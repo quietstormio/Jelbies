@@ -1,0 +1,32 @@
+{
+ "id": "tent",
+ "tris": 764,
+ "verts": 570,
+ "sub_meshes": [
+  {
+   "name": "tent",
+   "pivot": [
+    0,
+    0,
+    0
+   ],
+   "material": "plain",
+   "tris": 764
+  }
+ ],
+ "bounds_min": [
+  -0.8134,
+  -0.0,
+  -0.575
+ ],
+ "bounds_max": [
+  0.8134,
+  1.541,
+  0.591
+ ],
+ "anchor_rest": [
+  0,
+  0,
+  0
+ ]
+}
