@@ -166,7 +166,10 @@ final class ShowFlow {
     var onStage: Bool { cameraBlend > 0 }
     var round: ShowRound { sim?.round ?? .look }
     var showsCountdown: Bool { phase == .stage && beat == .countdown && countdown > 0 }
-    var showsGo: Bool { phase == .stage && beat == .dancing && goAge < 0.6 }
+    /// "GO!" in the lane: while the DANCE CLOCK (the song's own time, the one the chips run on) is under `goWordSeconds`, never longer than 2 s on the wall clock. Tied to the song clock
+    /// so a slow frame can never leave the word up while the first step arrives (the first prompt is at beat 4; the chip reaches the word's area at about 0.66 s on the fastest song in landscape).
+    var showsGo: Bool { phase == .stage && beat == .dancing && danceT < Self.goWordSeconds && goAge < 2.0 }
+    static let goWordSeconds: Double = 0.5
     /// The foot buttons are live.
     var buttonsLive: Bool { phase == .stage && beat == .dancing && wipe == 0 && !(sim?.danceDone ?? false) }
     var hasResults: Bool { sim?.round == .results && trickStage == .pick }

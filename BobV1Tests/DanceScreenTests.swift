@@ -39,3 +39,36 @@ final class DanceScreenTests: XCTestCase {
         XCTAssertEqual(f.beat, .danced); XCTAssertEqual(f.danceProgress, 1)
     }
 }
+
+extension DanceScreenTests {
+    /// "GO!" is gone (song clock) before the first step's chip reaches the word's area, for every song and pattern, in the narrowest lane (a phone on its side: about 422 pt) and the
+    /// portrait phone lane (370 pt). The word is about 130 pt wide, centred; the NEXT chip is 52 pt and sits at `18 + ahead * pointsPerBeat` from the lane's left edge.
+    func testGoWordIsGoneBeforeTheFirstChipArrives() {
+        var fastest = Double.infinity
+        for s in DanceSong.all {
+            for p in DancePattern.allCases {
+                guard let first = s.prompts(p).first else { XCTFail("empty pattern"); continue }
+                let beatsAhead = Double(first.slot) / 2          // the first prompt's beat at GO (song time 0)
+                for laneW in [370.0, 422.0] {
+                    let wordRight = laneW / 2 + 65
+                    let aheadAtWord = (wordRight - 18) / Double(PromptLane.pointsPerBeat)
+                    let secondsToWord = (beatsAhead - aheadAtWord) * s.grid.period
+                    fastest = min(fastest, secondsToWord)
+                    XCTAssertGreaterThan(secondsToWord, ShowFlow.goWordSeconds + 0.1, "song \(s.song) \(p) lane \(laneW): chip reaches the word at \(secondsToWord) s")
+                }
+            }
+        }
+        print("[gotest] fastest chip arrival at the GO word's area: \(Int(fastest * 1000)) ms after GO; the word is shown \(Int(ShowFlow.goWordSeconds * 1000)) ms of song time")
+    }
+    func testGoWordFollowsTheDanceClock() {
+        let f = ShowFlow(); f.cue = { _ in }; f.songClock = { _ in nil }; f.audioReady = { _ in true }
+        f.auto = true
+        f.begin(playerID: 1, name: "Bob", character: 1, input: ShowPlayerInput(name: "Bob"), rank: .puddle, dayKey: 20261021, bodies: 1, seed: 3)
+        for _ in 0..<(40 * 60) where f.beat != .dancing { f.tick(dt: 1 / 60) }
+        XCTAssertEqual(f.beat, .dancing)
+        var shown = 0.0
+        for _ in 0..<(60 * 3) { f.tick(dt: 1 / 60); if f.showsGo { shown += 1 / 60 } }
+        XCTAssertLessThanOrEqual(shown, 2.0 + 0.05, "never longer than 2 s")
+        XCTAssertFalse(f.showsGo, "gone after the first seconds")
+    }
+}
