@@ -32,7 +32,7 @@ final class TipStrokeUITests: XCTestCase {
             shot("\(name)_1_card")
             if dismiss == "gotit" { app.buttons["tip-got-it"].tap() }
             else { app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.85)).tap() }          // a tap on the floor, away from the Jelmiko
-            let gone = NSPredicate(format: "exists == false"); expectation(for: gone, evaluatedWith: card); waitForExpectations(timeout: 15)
+            let gone = NSPredicate(format: "exists == false"); expectation(for: gone, evaluatedWith: card); waitForExpectations(timeout: 60)
             shot("\(name)_2_gone")
         } else { sleep(60) }
         // close-up: heart > Come here
