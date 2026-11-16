@@ -36,13 +36,14 @@ extension BlobBrain {
             return
         }
         let r = rand()
-        if r < 0.32 {
+        let cuts = BubbleTuning.idleCuts          // (0.32 / 0.72 / 0.86 before 2026-11-16 "jump a lot more": the stand-and-look share went to the hops)
+        if r < cuts.hop {
             face(.excited, hold: 1.2)
             startHop(sim, distance: 0.0001)          // (a happy hop on the spot)
-        } else if r < 0.72 {
+        } else if r < cuts.look {
             trackPoint = lz.look
             waitPose(sim)          // (look up at the wand; or step in place / a bounce and a blink)
-        } else if r < 0.86 {
+        } else if r < cuts.step {
             script = .stepInPlace(t: 0, dur: rand(0.8, 1.6)); activity = .steppingInPlace
         } else {
             walk(lz.slot + SIMD2(rand(-0.6, 0.6), rand(-0.45, 0.45)))

@@ -13,8 +13,8 @@ import simd
 @MainActor
 final class BubbleHopRateTests: XCTestCase {
     var wand: BubbleWand { BubbleWand.shared }
-    override func setUp() { super.setUp(); wand.resetForTests(); EmoteFeetTests.reset(); BubbleTuning.bounceReps = 6 }
-    override func tearDown() { BubbleTuning.bounceReps = 6; wand.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
+    override func setUp() { super.setUp(); wand.resetForTests(); EmoteFeetTests.reset(); BubbleTuning.bounceReps = 6; BubbleTuning.idleCuts = (0.62, 0.80, 0.90) }
+    override func tearDown() { BubbleTuning.bounceReps = 6; BubbleTuning.idleCuts = (0.62, 0.80, 0.90); wand.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
     static let seconds = 60
     static let seeds = 8
@@ -75,13 +75,13 @@ final class BubbleHopRateTests: XCTestCase {
         for cast in Self.casts {
             var before = Out(), after = Out()
             for seed in 0..<Self.seeds {
-                BubbleTuning.bounceReps = 3; let b = run(cast: cast, seed: seed)
-                BubbleTuning.bounceReps = 6; let a = run(cast: cast, seed: seed)
+                BubbleTuning.bounceReps = 3; BubbleTuning.idleCuts = (0.32, 0.72, 0.86); let b = run(cast: cast, seed: seed)
+                BubbleTuning.bounceReps = 6; BubbleTuning.idleCuts = (0.62, 0.80, 0.90); let a = run(cast: cast, seed: seed)
                 before.hops += b.hops; before.minutes += b.minutes; before.apex += b.apex; before.bounce += b.bounce; before.pops += b.pops
                 after.hops += a.hops; after.minutes += a.minutes; after.apex += a.apex; after.bounce += a.bounce; after.pops += a.pops
             }
             let rb = Float(before.hops) / before.minutes, ra = Float(after.hops) / after.minutes
-            print(String(format: "BUBBLEHOPRATE %@ | BEFORE (bounce 3) %.2f hops/Jelbie-min, apex median %.3f max %.3f, pops/Jelbie-min %.1f, bounce pops %.2f | AFTER (bounce %d) %.2f, apex median %.3f max %.3f, pops/Jelbie-min %.1f, bounce pops %.2f | ratio %.2fx",
+            print(String(format: "BUBBLEHOPRATE %@ | BEFORE (bounce 3, hop cut .32) %.2f hops/Jelbie-min, apex median %.3f max %.3f, pops/Jelbie-min %.1f, bounce pops %.2f | AFTER (bounce %d, hop cut .62) %.2f, apex median %.3f max %.3f, pops/Jelbie-min %.1f, bounce pops %.2f | ratio %.2fx",
                          cast.joined(separator: "+"), rb, median(before.apex), before.apex.max() ?? 0, Float(before.pops) / before.minutes, Float(before.bounce) / before.minutes,
                          6, ra, median(after.apex), after.apex.max() ?? 0, Float(after.pops) / after.minutes, Float(after.bounce) / after.minutes, ra / max(rb, 0.01)))
             XCTAssertLessThanOrEqual(after.apex.max() ?? 0, max(before.apex.max() ?? 0, 0.36) * 1.05, "\(cast): the hops got higher")

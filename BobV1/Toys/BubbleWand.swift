@@ -30,6 +30,9 @@ nonisolated enum BubbleTuning {
     nonisolated(unsafe) static var attentionPerPop: Float = 0.06
     /// Hops in one bounce (3 before 2026-11-16 "they need to be constantly hopping"; round 2 of the bubble-jump work ended at 6). A var so the rate test can compare.
     nonisolated(unsafe) static var bounceReps = 6
+    /// The wand's small moves when nothing is in reach, as cumulative cut points of one dice roll: hop on the spot below `hop`, look up at the wand below `look`, step in place below `step`, else a short shuffle.
+    /// (0.32 / 0.72 / 0.86 before 2026-11-16: 32 % hops; now 62 % hops, 18 % looks, 10 % steps, 10 % shuffles.)
+    nonisolated(unsafe) static var idleCuts: (hop: Float, look: Float, step: Float) = (0.62, 0.80, 0.90)
     static let spawnPerSecond: ClosedRange<Float> = 1.5...6.5
     static let holdStrength: Float = 0.6
     static let contactRadius: Float = 0.62          // a body touching a drifting bubble
