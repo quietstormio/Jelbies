@@ -16,7 +16,7 @@ final class BubbleFeetTests: XCTestCase {
     override func setUp() { super.setUp(); EmoteFeetTests.reset(); BubbleWand.shared.resetForTests() }
     override func tearDown() { BubbleTuning.forceMove = nil; BubbleTuning.classic = false; BubbleWand.shared.resetForTests(); EmoteFeetTests.reset(); super.tearDown() }
 
-    static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/9cd2e159-911b-4a04-879f-e5e34721a64a/scratchpad/bubbles/"
+    static let out = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/49d32754-b08a-4bfd-999b-3f9f0cada45f/scratchpad/handover3/tables/"
     typealias SC = LegsDrawnAuditTests.Scenario
 
     /// The moves the wand uses: walking / standing, the turn-and-watch, the two hops.
@@ -75,6 +75,7 @@ final class BubbleFeetTests: XCTestCase {
             for shoes in [false, true] {
                 var air = 0, badFrame = -1, badInfo = "", tiltMax: Float = 0, tiltInfo = "", leashFrame = -1
                 var worst: (ratio: Float, join: Float, collar: Float) = (.infinity, .infinity, 0)
+                let seen0 = BlobBrain.bubbleStaleFitSeen, cleared0 = BlobBrain.bubbleHandOverCount
                 let a = OnePieceInvariantTests.run(Self.scenario(name), char: c, shoes: shoes, pacing: .hz60, seed: 3) { frame, r, f in
                     // the stream scenario runs the Jelbie's other autonomous idles too (a belly slide tips him 0.7 rad by design): only the wand's own moves (walk, look, hop) are held to the pose limits
                     guard Self.isWandMove(r.brain) else { return }
@@ -86,6 +87,7 @@ final class BubbleFeetTests: XCTestCase {
                     worst = (min(worst.ratio, s.ratio), min(worst.join, s.join), max(worst.collar, s.collar))
                 }
                 let who = "bubble \(name), \(OnePieceInvariantTests.characters[c].0) \(shoes ? "with shoes" : "bare")"
+                print(String(format: "HANDOVERCAST %@ %@ %@ | worst join %.1f cm | stale-fit frames seen %d | hand-overs %d | switch %@ | bounceReps %d | %@", name, OnePieceInvariantTests.characters[c].0, shoes ? "shoes" : "bare", worst.join == .infinity ? 99 : worst.join * 100, BlobBrain.bubbleStaleFitSeen - seen0, BlobBrain.bubbleHandOverCount - cleared0, BlobBrain.bubbleHandOverOn ? "on" : "off", BubbleTuning.bounceReps, worst.join < OnePieceInvariantTests.minNeck ? "JOIN OPEN first bad frame \(badFrame): \(badInfo)" : "ok"))
                 guard a.started else { XCTFail("\(who): did not start", file: file, line: line); continue }
                 let pops = BubbleWand.shared.popsByJelly.values.reduce(0, +)
                 report += String(format: "%@ %@ | %d | %d | %d | %.2f | %.1f | %.1f | %.3f | %d\n", OnePieceInvariantTests.characters[c].0, shoes ? "shoes" : "bare", a.frames, a.leashed, air, worst.ratio, worst.join * 100, worst.collar * 100, tiltMax, pops)
@@ -109,6 +111,15 @@ final class BubbleFeetTests: XCTestCase {
     func testWalkUnderAndHopPop() { bubbles("hop pop") }
     func testStream() { bubbles("stream") }
     func testStream60() { bubbles("stream 60") }
+    /// 2026-11-16 (the wand's bean hand-over, BlobBrain+BubblePop): a 60 s stream meets the stale fitted bean pose after hops (hand-overs > 0) and the join stays closed in every cast.
+    func testStream60HandOverPinned() {
+        let c0 = BlobBrain.bubbleHandOverCount
+        bubbles("stream 60")
+        XCTAssertGreaterThan(BlobBrain.bubbleHandOverCount - c0, 0, "the stream never handed a hop's fitted bean pose over to world-placed feet: the hand-over is not exercised")
+    }
+    /// Before / after: the same with the hand-over off; and off with the bounce of the phone build before bubble-love-r1 (3 hops).
+    func testStream60HandOverOff() { BlobBrain.bubbleHandOverOn = false; defer { BlobBrain.bubbleHandOverOn = true }; bubbles("stream 60") }
+    func testStream60Bounce3HandOverOff() { let b = BubbleTuning.bounceReps; BubbleTuning.bounceReps = 3; BlobBrain.bubbleHandOverOn = false; defer { BlobBrain.bubbleHandOverOn = true; BubbleTuning.bounceReps = b }; bubbles("stream 60") }
     func testPopHeader() { bubbles("pop header") }
     func testPopLeap() { bubbles("pop leap") }
     func testPopBounce() { bubbles("pop bounce") }

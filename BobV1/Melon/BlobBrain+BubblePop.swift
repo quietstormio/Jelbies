@@ -70,3 +70,23 @@ extension BlobBrain {
     /// The yaw from here to a floor point (for the facing check before a travelling move).
     func bubbleYawError(to p: SIMD2<Float>) -> Float { abs(wrapAngle(yawTo(p) - yaw)) }
 }
+
+// MARK: the wand's bean hand-over (2026-11-16)
+
+extension BlobBrain {
+    /// While the wand is out, beans placed on the WORLD foot paths (`driveLimbs`' planted / stepping feet: stand, look, walk) are world-placed, so the post-step refit must not carry them
+    /// as body-rigid. A hop's last frames place the beans on the FITTED body pose (`beanFitUsed`, written only by `fillBeansRigid` via `driveBeansRigid`), and the world-placed path never
+    /// cleared it: `refitBeans` then carried the planted walk feet rigidly with the body after the hop, the stance foot rode up with the walk's bob (3 cm off the floor) and the neck
+    /// opened 2.5 to 3.4 cm (BubbleFeetTests: "clearance 0.031 ... script walk"). The same hand-over the slide's walk-out does (BlobBrain+DecorPlay). Called by `driveLimbs` when it places world beans.
+    func bubbleWorldBeansHandOver() {
+        guard bubbleLeash != nil, beanFitUsed != nil || beanFitHold > 0 else { return }
+        Self.bubbleStaleFitSeen += 1          // (counted with the switch on or off: how often the stale pose meets world-placed feet)
+        guard Self.bubbleHandOverOn else { return }
+        beanFitUsed = nil; beanFitHold = 0
+        Self.bubbleHandOverCount += 1
+    }
+    /// Frames in which a stale fitted bean pose met world-placed feet while the wand was out (switch on or off), and how many of them the hand-over cleared (tests / diagnosis).
+    nonisolated(unsafe) static var bubbleStaleFitSeen = 0
+    nonisolated(unsafe) static var bubbleHandOverCount = 0
+    nonisolated(unsafe) static var bubbleHandOverOn = true          // (false = before the hand-over: before / after runs)
+}
