@@ -1,0 +1,32 @@
+{
+ "id": "gate_post",
+ "tris": 384,
+ "verts": 196,
+ "sub_meshes": [
+  {
+   "name": "gate_post",
+   "pivot": [
+    0,
+    0,
+    0
+   ],
+   "material": "plain",
+   "tris": 384
+  }
+ ],
+ "bounds_min": [
+  -0.1,
+  0.0,
+  -0.1
+ ],
+ "bounds_max": [
+  0.1,
+  0.92,
+  0.1
+ ],
+ "anchor_rest": [
+  0,
+  0,
+  0
+ ]
+}
