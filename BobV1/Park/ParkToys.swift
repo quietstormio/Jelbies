@@ -34,7 +34,7 @@ nonisolated enum ParkToys {
         var room = room0
         #if targetEnvironment(simulator)
         // capture aid: `-ParkToys kindA,kindB,kindC` brings those toys instead of the save's (any raw value; `list` logs the kinds that travel)
-        if let s = UserDefaults.standard.string(forKey: "ParkToys") {
+        if DevArgs.enabled, let s = UserDefaults.standard.string(forKey: "ParkToys") {
             NSLog("[parktoys] carryable: %@", DecorKind.allCases.filter { isCarryable($0) }.map(\.rawValue).joined(separator: ","))
             room = s.split(separator: ",").enumerated().compactMap { i, n in DecorKind(rawValue: String(n)).map { PlacedDecor(uid: 100 + i, kind: $0, x: 0, z: 0, turns: nil) } }
             return room.prefix(ownSpots.count).enumerated().map { PlacedDecor(uid: ownUIDBase + $0.offset, kind: $0.element.kind, x: ownSpots[$0.offset].x, z: ownSpots[$0.offset].y, turns: nil) }

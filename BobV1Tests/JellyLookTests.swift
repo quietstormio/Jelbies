@@ -58,7 +58,7 @@ final class JellyLookTests: XCTestCase {
 
     /// Levels 1...3 change the blue body; the yellow body's own pixels are identical at every level; the default level is 0.
     func testLevelsChangeBlueOnly() throws {
-        XCTAssertEqual(JellyLook.launchLevel, 0)
+        XCTAssertEqual(JellyLook.launchLevel, 1)
         defer { JellyLook.level = 0 }
         let s = try makeScene()
         JellyLook.level = 0

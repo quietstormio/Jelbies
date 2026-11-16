@@ -21,8 +21,8 @@ import simd
 
 /// Gate for every developer launch argument (`-UpgradePoints`, `-SleepNow`, `-ClockHour`, `-SetRoster`, `-ForceSpecies`, `-BlobCount`, ...).
 /// True in Debug, on the simulator, and in Release builds made with the JELBIES_DEV_ARGS compilation condition (the project's Release
-/// configuration sets it through the JELBIES_DEV_ARGS_COND build setting so local device installs keep diagnostics). The App Store archive
-/// must clear it: `JELBIES_DEV_ARGS_COND=` on the archive command (see docs/RELEASE-1.0.md).
+/// configuration leaves the JELBIES_DEV_ARGS_COND build setting EMPTY, so a plain archive has dev arguments off; the owner's phone test
+/// builds ask for them with `JELBIES_DEV_ARGS_COND=JELBIES_DEV_ARGS`, which scripts/phone-install.sh passes).
 /// `-AudioLog` (AudioHub) is intentionally NOT gated: it is a silent, read-only diagnostic that grants nothing.
 /// Capture-aid blocks in GameScreen (runDebugScript, runStoreDemo, launchTown) are gated at their entry; Park/Volley/Groom Start* hooks are simulator-only.
 nonisolated enum DevArgs {
