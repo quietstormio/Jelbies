@@ -169,7 +169,7 @@ struct LobbyJelbiePicker: View {
                 if done { Image(systemName: "checkmark.circle.fill").font(.system(size: 22, weight: .black)).foregroundStyle(SK.ink, SK.mint).padding(8) }
                 else if won > 0 { WonBadge(count: won).padding(.top, 6).padding(.trailing, 12) }
             }
-            .overlay(alignment: .bottom) { if !done, grandChampion(j) { GrandChampionPill().padding(.bottom, 22) } }
+            .overlay(alignment: .bottom) { if !done, grandChampion(j) { GrandChampionPill().padding(.bottom, 27) } }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
