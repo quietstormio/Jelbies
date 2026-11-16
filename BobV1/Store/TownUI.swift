@@ -229,6 +229,15 @@ struct TownView: View {
         return w?.safeAreaInsets.top ?? 0
     }
 
+    /// Capture aid (simulator, dev arguments only): `-TownScroll bottom` scrolls the Town to its last row so the lower tiles can be photographed.
+    private func devScrollBottom(_ proxy: ScrollViewProxy) async {
+        #if targetEnvironment(simulator)
+        guard DevArgs.enabled, UserDefaults.standard.string(forKey: "TownScroll") == "bottom" else { return }
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        proxy.scrollTo("town-bottom", anchor: .bottom)
+        #endif
+    }
+
     private var content: some View {
         let compact = vsc == .compact
         return VStack(spacing: compact ? 6 : 10) {
@@ -247,6 +256,7 @@ struct TownView: View {
                 DropsPill(wallet: care.bath.wallet)
             }
             chips
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 12) {
                     AroundTownIsland(active: { island($0) != nil }, go: { island($0)?.action() }, home: home)
@@ -254,10 +264,13 @@ struct TownView: View {
                     LazyVGrid(columns: gridColumns(compact: compact), spacing: 12) {
                         ForEach(shown) { p in tile(p, compact: compact) }
                     }
+                    Color.clear.frame(height: 1).id("town-bottom")
                 }
                 .padding(.bottom, 16)
             }
             .scrollBounceBehavior(.basedOnSize)
+            .task { await devScrollBottom(proxy) }
+            }
         }
     }
 

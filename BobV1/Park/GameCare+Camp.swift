@@ -74,6 +74,8 @@ extension GameCare {
     /// Once per fixed step while the yard is up (after the wipe-in has started).
     func tickCamp(dt: Float) {
         for a in parkBook.actors { if let c = CampBook.shared.bodies[a.id] { campLook(a, c, dt: dt) } }
+        for a in parkBook.actors { let c = a.sim.centroid(); bubbleHub.heads[a.id] = SIMD3(c.x, c.y + BlobShape.H * 0.5, c.z) }          // (where a heart over a Camp body is drawn)
+        tickCampStroke(dt: dt)
         tickCampLeaving(dt: dt)
         let want: Float = (CampUI.shared.selected != nil && CampUI.shared.sheet == .none && !CampUI.shared.moving) ? 1 : 0          // the yard moves aside for an open card
         GameCamera.campCardLift += (want - GameCamera.campCardLift) * min(1, dt * 6)
@@ -117,10 +119,11 @@ extension GameCare {
     #if targetEnvironment(simulator)
     /// `-CampDemo select|bringhome|swap|dropoff|goodbye|goodbyego` (simulator captures; a command line cannot tap): ~6 s into the yard, does that thing to the first Camp creature once.
     nonisolated(unsafe) static var demoState = UserDefaults.standard.string(forKey: "CampDemo")
-    nonisolated(unsafe) static var demoFrames = 0, demoMoved = false
+    nonisolated(unsafe) static var demoFrames = 0, demoMoved = false, demoStrokeBody = -1, demoStrokeUntil = 0
     func campDemoTick() {
         guard let m = Self.demoState, park.phase == .playing, let first = CampUI.shared.members.first ?? (m == "home" ? CampCreature.make(instance: 0, worn: [:]) : nil) else { return }
         Self.demoFrames += 1
+        if Self.demoStrokeBody >= 0 { if Self.demoFrames < Self.demoStrokeUntil { CampUI.shared.strokeMoved(body: Self.demoStrokeBody, now: CACurrentMediaTime()) } else { Self.demoStrokeBody = -1 } }
         if m == "home", Self.demoFrames == 1200 { park.goHome(); return }
         if m == "movehome", Self.demoMoved, Self.demoFrames > 361 + 300 { Self.demoMoved = false; park.goHome(); return }
         guard Self.demoFrames == 360 else { return }
@@ -131,6 +134,8 @@ extension GameCare {
         case "swap": ui.select(first.id); campBringHomeTapped(first.id)
         case "dropoff": campDropOffTapped()
         case "goodbye": ui.select(first.id); ui.sheet = .goodbye(first.id)
+        case let x where x.hasPrefix("stroke:"):          // `-CampDemo stroke:Maple`: strokes that creature for 6 s
+            if let c = CampUI.shared.members.first(where: { $0.name.lowercased() == x.dropFirst(7).lowercased() }), let a = parkBook.actors.first(where: { CampBook.shared.bodies[$0.id]?.id == c.id }) { Self.demoStrokeBody = a.id; Self.demoStrokeUntil = Self.demoFrames + 360 }
         case "goodbyego": ui.select(first.id); campGoodbyeConfirmed(first.id)
         case "movehome":          // a net change, then leave: bring home (or swap with the last at home when home is full)
             ui.select(first.id); Self.demoMoved = true
@@ -212,6 +217,32 @@ extension GameCare {
             if StartFlow.homeChanged(since: CampUI.shared.entryHome, Self.campDefaults) { leftActive(); voice.training.save(); voice.cancel() }
             Self.campLeave(Self.campDefaults)
             CampUI.shared.reset(arrival: nil)
+        }
+    }
+
+    // MARK: stroking a Camp creature (Y7)
+
+    /// A drag of 30 pt or more that began on a Camp body strokes it: the home cuddle's pieces on a visitor body (no TouchPlay: that machinery is the room's focus mode). Eyes closed in a joyful arc, a blush,
+    /// a heart every 0.6 s over its head with a soft haptic tick, its own happy chirp (its species' voice, through the voice gate, so never more often than the gate lets it), wandering paused.
+    static let strokeHeartEvery = 0.6
+    func tickCampStroke(dt: Float, now: Double = CACurrentMediaTime()) {
+        let ui = CampUI.shared
+        guard let s = ui.stroke else { return }
+        guard let a = parkBook.actors.first(where: { $0.id == s.body }), let b = a.brain, now - s.lastMove < 0.3, park.phase == .playing else {
+            if let a = parkBook.actors.first(where: { $0.id == s.body }), let b = a.brain, let was = ui.strokeWasAutonomous.removeValue(forKey: s.body) { b.autonomy = was }
+            ui.stroke = nil
+            return
+        }
+        if ui.strokeWasAutonomous[s.body] == nil { ui.strokeWasAutonomous[s.body] = b.autonomy; AudioHub.shared.chirp(jelly: s.body, .happy, src: "camp"); ui.strokeStats.chirps += 1 }
+        b.autonomy = false
+        b.socialBook.cooldown = max(b.socialBook.cooldown, 3)
+        b.face(.joyArc, hold: 0.5)
+        b.blushBump(hold: 0.5, peak: 0.45)
+        if now - s.lastHeart >= Self.strokeHeartEvery {
+            ui.stroke?.lastHeart = now
+            bubbleHub.spawnHeart(for: s.body, now: now); ui.strokeStats.hearts += 1
+            touchPlay?.haptics.transient(now: now, intensity: 0.35, sharpness: 0.25); ui.strokeStats.haptics += 1
+            if Int(now - s.began) % 3 == 2, now - s.began > 1 { AudioHub.shared.chirp(jelly: s.body, .happy, src: "camp"); ui.strokeStats.chirps += 1 }          // (a purr-like murmur every few seconds of a long stroke)
         }
     }
 

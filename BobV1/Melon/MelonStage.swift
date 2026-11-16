@@ -2062,7 +2062,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerDown(id: ObjectIdentifier, point p: CGPoint, size: CGSize, time: Double? = nil) {
         guard haveCam, size.width > 0, size.height > 0 else { return }
-        if game, model.care.park.inScene { parkTap(p, size); return }          // the park: a tap on a visitor opens his card (Park/MelonController+Park.swift)
+        if game, model.care.park.inScene { if model.care.park.place == .camp { CampUI.shared.beginDrag(id: id, at: p, body: parkHit(p, size)) }; parkTap(p, size); return }          // the park: a tap on a visitor opens his card (Park/MelonController+Park.swift)
         if game, !parkActors.isEmpty, !model.paused, mode == .none, !model.care.focus.isActive, !model.care.bath.active, pickBody(p, size) == nil, guestTap(p, size) { return }          // a friend over: a tap on him opens his card
         if game, model.care.tripActive { return }          // on the track (or the show's stage) the screen is the buttons: no touch play, no selection, no voice
         if game, model.care.bath.acceptsTouch {
@@ -2113,6 +2113,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerMove(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam else { return }
+        if game, model.care.park.place == .camp, CampUI.shared.dragMoved(id: id, to: p, now: CACurrentMediaTime()) { return }          // (the Camp yard: a drag on a body strokes it)
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) { cheekFingers[k].p = p; touchSize = size; return }
         if game, id == dragID, model.care.bath.acceptsTouch, mode == .pet { petPoint = p; touchSize = size; last = p; return }
         if game, id == dragID {
@@ -2148,6 +2149,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     }
 
     func pointerUp(id: ObjectIdentifier, time: Double? = nil) {
+        if CampUI.shared.endDrag(id: id) { return }
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) {
             cheekFingers.remove(at: k)
             if cheekFingers.count < 2, mode == .cheeks { mode = .none; dragID = nil; gesture.cancel() }

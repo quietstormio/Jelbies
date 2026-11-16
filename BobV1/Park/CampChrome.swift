@@ -26,12 +26,31 @@ final class CampUI {
     var pendingToast: String?
     @ObservationIgnored var leaving: Leaving? { didSet { moving = leaving != nil || moving } }
     @ObservationIgnored var entryHome: [Int]?
+    /// The drag that began on a Camp body (stage touch): a stroke starts after 30 pt of movement.
+    @ObservationIgnored var drag: (id: ObjectIdentifier, start: CGPoint, body: Int?)?
+    /// The stroke in progress: the body id, when the finger last moved, the last heart.
+    @ObservationIgnored var stroke: (body: Int, lastMove: Double, lastHeart: Double, began: Double)?
+    @ObservationIgnored var strokeWasAutonomous: [Int: Bool] = [:]
+    /// What the strokes asked for (the test counts these; the sounds are counted by `AudioHub.diagCounts`).
+    @ObservationIgnored var strokeStats = (hearts: 0, haptics: 0, chirps: 0)
     nonisolated deinit {}
+
+    func beginDrag(id: ObjectIdentifier, at p: CGPoint, body: Int?) { drag = (id, p, body) }
+    /// A finger moved: true when this drag is a Camp drag (the stage does nothing else with it).
+    func dragMoved(id: ObjectIdentifier, to p: CGPoint, now: Double) -> Bool {
+        guard let d = drag, d.id == id else { return false }
+        if let b = d.body, hypot(p.x - d.start.x, p.y - d.start.y) >= 30 { strokeMoved(body: b, now: now) }
+        return true
+    }
+    func strokeMoved(body: Int, now: Double) {
+        if stroke?.body != body { stroke = (body, now, now - 0.3, now) } else { stroke?.lastMove = now }
+    }
+    func endDrag(id: ObjectIdentifier) -> Bool { guard let d = drag, d.id == id else { return false }; drag = nil; return true }
 
     /// The Town square's sub-line.
     static func townSub(count: Int) -> String { count == 0 ? "Nobody here yet" : "\(count) at Camp" }
     func select(_ id: Int) { selected = id; if arrival == id { arrival = nil } }
-    func reset(arrival: Int?) { selected = nil; sheet = .none; members = []; self.arrival = arrival; moving = false; leaving = nil; pendingToast = nil; entryHome = nil }
+    func reset(arrival: Int?) { drag = nil; stroke = nil; strokeWasAutonomous = [:]; selected = nil; sheet = .none; members = []; self.arrival = arrival; moving = false; leaving = nil; pendingToast = nil; entryHome = nil }
     /// A move is committed: the sheet closes, the card waits for the wipe.
     func finishMove() { sheet = .none; selected = nil; moving = true }
 }
