@@ -94,6 +94,7 @@ struct TipCardView: View {
     }
     private var gotIt: some View {
         TourCapsuleButton(title: "Got it", hint: "Hides this tip", id: "tip-got-it") { AudioHub.shared.uiTap(); onGotIt() }
+            .background(GeometryReader { g in Color.clear.preference(key: TipGotItKey.self, value: g.frame(in: .global)) })
     }
 
     var body: some View { realBody }
@@ -152,7 +153,8 @@ private struct TipCardLayout: View {
 /// A clear window that only the card answers to.
 final class TipWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard TipBook.shared.current != nil, TipBook.shared.cardFrame.insetBy(dx: -4, dy: -4).contains(point) else { return nil }          // only the card answers; everything else falls through to the game
+        let b = TipBook.shared
+        guard b.current != nil, (b.passThrough ? b.gotItFrame : b.cardFrame).insetBy(dx: -4, dy: -4).contains(point) else { return nil }          // only the card answers; everything else falls through to the game
         return super.hitTest(point, with: event)
     }
 }
@@ -191,6 +193,8 @@ struct TipOverlay: View {
             let view = TipCardView(card: card, width: w, pointerX: landscape ? nil : place.pointerX) { TipBook.shared.dismiss() }
                 .background(GeometryReader { g in Color.clear.preference(key: TipFrameKey.self, value: g.frame(in: .global)) })
                 .onPreferenceChange(TipFrameKey.self) { TipBook.shared.cardFrame = $0 }
+                .onPreferenceChange(TipGotItKey.self) { TipBook.shared.gotItFrame = $0 }
+                .onAppear { TipBook.shared.passThrough = landscape && card.id == "town" }
             Group {
                 if place.kind == .bottom {          // stands on its bar: the bottom edge is fixed, the card grows upward
                     view.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -203,6 +207,11 @@ struct TipOverlay: View {
             .animation(.easeOut(duration: 0.2), value: origin.x)
         }
     }
+}
+
+private struct TipGotItKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 private struct TipFrameKey: PreferenceKey {
@@ -256,7 +265,8 @@ final class TipTapRecognizerTarget: NSObject, UIGestureRecognizerDelegate {
     @MainActor @objc func tapped(_ g: UITapGestureRecognizer) {
         guard g.state == .ended, TipBook.shared.current != nil else { return }
         let p = g.location(in: nil)
-        if TipBook.shared.cardFrame.insetBy(dx: -2, dy: -2).contains(p) { return }
+        let b = TipBook.shared
+        if (b.passThrough ? b.gotItFrame : b.cardFrame).insetBy(dx: -2, dy: -2).contains(p) { return }
         TipBook.shared.dismiss()
     }
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }

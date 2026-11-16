@@ -80,6 +80,9 @@ final class TipBook {
     private(set) var open: Set<String> = []
     /// The card's frame in window points while it is drawn (the tap-outside check reads it).
     @ObservationIgnored var cardFrame: CGRect = .zero
+    /// Landscape "Where to?": the island fills the screen, so the card covers map buttons whatever its place; there only "Got it" takes touches and the rest of the card lets them through to the map.
+    @ObservationIgnored var passThrough = false
+    @ObservationIgnored var gotItFrame: CGRect = .zero
     /// Screens that hold every card while they are up (Settings, a "?" sheet, Photo mode): `hold("settings", true)`.
     private(set) var holds: Set<String> = []
     func hold(_ k: String, _ on: Bool) { if on { holds.insert(k) } else { holds.remove(k) } }
