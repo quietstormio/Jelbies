@@ -187,7 +187,7 @@ struct AdoptionCenter: View {
                 }
                 .accessibilityHidden(coverUp)
                 if coverUp { springCover(geo.size, landscape: landscape, insets: geo.safeAreaInsets).transition(.opacity).zIndex(5) }
-                if celebrating { Celebration(name: name).transition(.opacity) }
+                if celebrating { Celebration(name: name, toCamp: mode != .first && SpringStates.goesToCamp(home: home.count, camp: camp.count)).transition(.opacity) }
             }
             .contentShape(Rectangle())
             .gesture(swipe)
@@ -526,7 +526,7 @@ struct AdoptionCenter: View {
 
     private var flowCTA: some View {
         Group {
-            if naming { flowCtaButton(Text("Bring \(finalName) home"), enabled: true, id: "adopt-bring-home") { bringHome() } }
+            if naming { flowCtaButton(Text(namingText), enabled: true, id: "adopt-bring-home") { bringHome() } }
             else { flowCtaButton(ctaLabel, enabled: ctaEnabled, id: ctaID) { ctaAction() } }
         }
     }
@@ -644,8 +644,7 @@ struct AdoptionCenter: View {
 
     /// The still home-room status line (Jelly Spring only): how many Jelbies are home and how many more fit.
     private var roomText: String {
-        let cap = JellyRoster.maxCount, n = min(home.count, cap)
-        return "\(n)/\(cap) at home"          // (full or not: the count, one short line)
+        SpringStates.roomText(home: home.count, camp: camp.count)          // "n/3 at home", "... · new one goes to Camp", "Home and Camp are full"
     }
     private var roomLine: some View {
         HStack(spacing: 5) {
@@ -1158,7 +1157,7 @@ struct AdoptionCenter: View {
 
     private var cta: some View {
         Group {
-            if naming { ctaButton(Text("Bring \(finalName) home"), enabled: true, id: "adopt-bring-home") { bringHome() } }
+            if naming { ctaButton(Text(namingText), enabled: true, id: "adopt-bring-home") { bringHome() } }
             else { ctaButton(ctaLabel, enabled: ctaEnabled, id: ctaID) { ctaAction() } }
         }
     }
@@ -1166,17 +1165,20 @@ struct AdoptionCenter: View {
     @ViewBuilder private var ctaLabel: some View {
         switch step {
         case .species: Text("Meet the three")
-        case .naming: Text("Bring \(finalName) home")
+        case .naming: Text(namingText)
         case .pick:
-            if let c = pickedCand {
-                if let p = price(for: c) {
-                    if mode == .first { Text("This one!") }
-                    else if p > wallet.count { Text("Need \(p - wallet.count) more JellyCoins") }
-                    else { HStack(spacing: 8) { Text("This one!"); JellyCoinIcon(size: 28); Text(p.coinText) } }
-                } else { Text("Your home is full: \(JellyRoster.maxCount) Jelmiko") }
-            } else { Text("Pick one of the three") }
+            switch pickState {
+            case .price(let p): HStack(spacing: 8) { Text("This one!"); JellyCoinIcon(size: 28); Text(p.coinText) }
+            default: Text(SpringStates.pickText(pickState))
+            }
         }
     }
+    /// The pick page's button state (SpringStates has the table).
+    private var pickState: SpringStates.Pick {
+        SpringStates.pick(first: mode == .first, hasPick: pickedCand != nil, home: home.count, camp: camp.count, wallet: wallet.count, price: price)
+    }
+    /// "Bring <name> home", or "Send <name> to Camp" when home is full.
+    private var namingText: String { mode == .first ? "Bring \(finalName) home" : SpringStates.namingText(name: finalName, home: home.count, camp: camp.count) }
 
     /// The big dark-brown pill with a darker bottom lip.
     private func ctaButton<T: View>(_ title: T, enabled: Bool, id: String, _ action: @escaping () -> Void) -> some View {
@@ -1445,12 +1447,18 @@ struct AdoptionCenter: View {
 
     // MARK: bring home
 
+    /// Takes the price: nothing is paid unless the creature really has a place (home, or Camp when home is full; the saved lists are re-read, the screen's copies may be old),
+    /// and only once. False = nothing was spent.
+    @discardableResult
+    static func pay(_ p: Int, wallet: DropsWallet, defaults d: UserDefaults = .standard) -> Bool {
+        guard StartFlow.canPlaceNew(d) else { return false }
+        return p <= 0 || wallet.spend(p)
+    }
+
     private func bringHome() {
         guard !celebrating, let c = pickedCand, canAdopt(c), let p = price(for: c) else { return }
-        // nothing is paid unless the creature really has a place (home, or Camp when home is full): re-read the saved lists, the screen's copies may be old
-        if mode != .first, !StartFlow.canPlaceNew() { return }
         name = finalName
-        if p > 0, !wallet.spend(p) { return }
+        if mode != .first, !Self.pay(p, wallet: wallet) { return }          // the coins go once, and only when the creature really has a place
         nameFocused = false
         emoteTask?.cancel()
         withAnimation(.easeIn(duration: 0.2)) { celebrating = true }
@@ -1517,6 +1525,7 @@ private struct JarHighlight: SwiftUI.Shape {
 /// The small "bring home" moment: sparkles and hearts float up over the Jelbie.
 private struct Celebration: View {
     let name: String
+    var toCamp = false
     @State private var go = false
     var body: some View {
         ZStack {
@@ -1530,7 +1539,7 @@ private struct Celebration: View {
                     .opacity(go ? 0 : 1).scaleEffect(go ? 1.2 : 0.4)
                     .animation(.easeOut(duration: 1.5).delay(Double(i % 4) * 0.06), value: go)
             }
-            Text("\(name) is coming home!").font(SK.font(28, .black)).foregroundStyle(SK.cream)
+            Text(SpringStates.celebrationText(name: name, toCamp: toCamp)).font(SK.font(28, .black)).foregroundStyle(SK.cream)
                 .shadow(color: SK.ink.opacity(0.7), radius: 4, y: 2).multilineTextAlignment(.center).padding(.horizontal, 24)
                 .scaleEffect(go ? 1 : 0.6).animation(.spring(response: 0.5, dampingFraction: 0.6), value: go)
         }
