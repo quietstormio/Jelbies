@@ -52,6 +52,10 @@ nonisolated enum JellyNameRoster {
         return JellyName(id: i, base: base, nearMisses: generatedNearMisses(base))
     }
     static func name(_ id: Int) -> JellyName? { all.first { $0.id == id } }
+    /// The species that exist today (Bob ... Panda, ids below this) are ALWAYS callable by name, at home or not: a name said for one who is not at home gets the confused
+    /// "not here" look (pinned by SetRosterTests). A species added later (Tiger, Berry ...) is a spoken name ONLY while one is at home, so its name can never take a word
+    /// that is also in the catalog ("berry" the food) away from a player who does not own it. Tests lower this to stand in for a new species.
+    nonisolated(unsafe) static var alwaysNamed = 7
 
     /// Common mishearings built from the spelling: one swapped voiced/unvoiced consonant (b/p, d/t, g/k), and the vowel family swapped (a/o/e/i/u).
     static func generatedNearMisses(_ base: String) -> [String] {
@@ -150,6 +154,8 @@ final class JellyNames {
         if id >= JellyRoster.maxCount, JellyRoster.isValid(id - JellyRoster.maxCount), !roster.contains(id - JellyRoster.maxCount) { return id - JellyRoster.maxCount }
         return min(max(id, 0), JellyRoster.knownCount - 1)
     }
+    /// Whether a species' base name is a spoken name right now (see `JellyNameRoster.alwaysNamed`; only the three at home count as present).
+    func speaks(_ n: JellyName) -> Bool { n.id < JellyNameRoster.alwaysNamed || roster.contains { JellyRoster.species($0) == n.id } }
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let key: String
     @ObservationIgnored private let persists: Bool
@@ -187,7 +193,7 @@ final class JellyNames {
     }
     /// Adoption-renamed characters: (character, normalised custom name) where it differs from the species name (which still matches as before).
     private var customNames: [(Int, String)] {
-        (Array(0..<JellyRoster.knownCount) + JellyRoster.extraNames.keys.sorted()).compactMap { c in          // every instance: the seven first ones + the duplicates (ids >= 100)
+        (Array(0..<JellyRoster.knownCount) + JellyRoster.extraNames.keys.sorted()).filter { roster.contains($0) }.compactMap { c in          // every instance AT HOME (a name of one at Camp or not owned is not a spoken name: it could take a catalog word like "berry")
             let n = VoiceMatcher.normalise(JellyRoster.nameOf(c))
             return n.isEmpty || n == JellyRoster.baseNames[JellyRoster.species(c)].lowercased() ? nil : (c, n)
         }
@@ -197,12 +203,12 @@ final class JellyNames {
     /// so the 100-string cap in SpeechInput can never cut a name.
     var priorityWords: [String] {
         var seen = Set<String>(), out: [String] = []
-        for w in JellyNameRoster.all.map(\.base) + customNames.map(\.1) + nicknames.values.flatMap({ $0 }) where seen.insert(w).inserted { out.append(w) }
+        for w in JellyNameRoster.all.filter(speaks).map(\.base) + customNames.map(\.1) + nicknames.values.flatMap({ $0 }) where seen.insert(w).inserted { out.append(w) }
         return out
     }
     /// The words to hand the recogniser: the priority names first, then pet forms.
     var contextualWords: [String] {
-        priorityWords + JellyNameRoster.all.flatMap { Array($0.variants.sorted().prefix(6)) }
+        priorityWords + JellyNameRoster.all.filter(speaks).flatMap { Array($0.variants.sorted().prefix(6)) }
     }
 
     /// Adds a nickname for `id`. False = rejected (empty, too long, already a name of any Jelly, or the cap was reached).
@@ -250,14 +256,14 @@ final class JellyNames {
         func offer(_ id: Int, _ s: Float, _ w: Int = 1) { if s > (best?.score ?? 0) { best = NameHit(id: id, score: s, width: w) } }
         let key = JellyNameRoster.phoneticKey(t)
         let stop = JellyNameRoster.stoplist.contains(t)
-        for n in JellyNameRoster.all {
+        for n in JellyNameRoster.all where speaks(n) {
             let id = self.id(ofSpecies: n.id)
             if t == n.base { offer(id, 1); continue }
             if n.variants.contains(t) { offer(id, 0.9); continue }
             if n.nearMisses.contains(t) { offer(id, 0.8); continue }
             if !stop, t.count >= 3, abs(t.count - n.base.count) <= 1, key == JellyNameRoster.phoneticKey(n.base) { offer(id, 0.65) }
         }
-        var books = nicknames
+        var books = nicknames.filter { roster.contains($0.key) }          // nicknames of the creatures at home
         for (c, n) in customNames { books[c, default: []].append(n) }
         for (c, list) in books {
             let id = self.id(ofCharacter: c)
@@ -274,14 +280,14 @@ final class JellyNames {
     /// Two-word nicknames ("mister bob") against a token pair, and a long name the recogniser split in two ("pan da", "band a", "pear l").
     private func matchPair(_ a: String, _ b: String) -> NameHit? {
         let pair = a + " " + b
-        var books = nicknames
+        var books = nicknames.filter { roster.contains($0.key) }
         for (c, n) in customNames { books[c, default: []].append(n) }
         for (c, list) in books { for nick in list where nick.contains(" ") {
             if pair == nick || VoiceMatcher.levenshtein(pair, nick) <= (nick.count >= 8 ? 1 : 0) { return NameHit(id: id(ofCharacter: c), score: pair == nick ? 1 : 0.85, width: 2) }
         } }
         let joined = a + b
         if joined.count >= 5, a.count >= 2, !JellyNameRoster.stoplist.contains(joined) {
-            for n in JellyNameRoster.all where n.base.count >= 5 && (joined == n.base || n.nearMisses.contains(joined)) {
+            for n in JellyNameRoster.all where speaks(n) && n.base.count >= 5 && (joined == n.base || n.nearMisses.contains(joined)) {
                 return NameHit(id: id(ofSpecies: n.id), score: 0.8, width: 2)
             }
         }

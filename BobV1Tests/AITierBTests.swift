@@ -16,7 +16,9 @@ final class AITierBTests: XCTestCase {
         names.roster = [0, 1, 2, 3]          // slot == character, whatever roster the host app launched with
         return names
     }
-    override func tearDown() { for n in suites { UserDefaults.standard.removePersistentDomain(forName: n) }; suites = [] }
+    private var keepMap: [Int: Int] = [:], keepNames: [Int: String] = [:]
+    override func setUp() { keepMap = JellyRoster.speciesMap; keepNames = JellyRoster.extraNames }
+    override func tearDown() { JellyRoster.speciesMap = keepMap; JellyRoster.extraNames = keepNames; JellyNameRoster.alwaysNamed = 7; for n in suites { UserDefaults.standard.removePersistentDomain(forName: n) }; suites = [] }
 
     /// Foods and drinks from the game plus a beanbag, a ball and a pirate hat (the kinds other features will register).
     nonisolated static let catalog: AICatalog = {
@@ -149,5 +151,52 @@ final class AITierBTests: XCTestCase {
         XCTAssertEqual(parse("everyone come eat").command.summary(names: n), "Everyone: eat")
         XCTAssertEqual(parse("Pip eat some pizza").command.summary(names: n), "Pip: eat pizza")
         XCTAssertEqual(parse("Pip, play soccer with Moss", catalog: Self.bare).command.summary(names: n), "Pip: play soccer with Moss")
+    }
+
+    // MARK: a name that is also a catalog word ("Berry") and a species name that is only a name when one is at home
+
+    /// Home: Pip (slot 0), Moss (slot 1) and a second Bob called "Berry" (slot 2, instance 100). The catalog has the berries food and a "Berry smoothie" drink.
+    private func berryRoom(berryHome: Bool) -> (JellyNames, AICatalog) {
+        JellyRoster.speciesMap[100] = 0; JellyRoster.extraNames[100] = "Berry"
+        let n = JellyNames(defaults: UserDefaults(suiteName: "AITierBTests.berry.\(UUID().uuidString)")!, key: "nick", persists: false)
+        n.roster = berryHome ? [1, 2, 100] : [1, 2, 3]
+        var c = AICatalogRegistry.catalog(jellies: [(0, "Pip"), (1, "Moss"), (2, berryHome ? "Berry" : "Lavender")])
+        c.items.append(CatalogItem(id: "smoothie", name: "Berry smoothie", kind: .drink))
+        return (n, c)
+    }
+    func testACreatureNamedBerryAtHomeIsTheNameFirstAndTheFoodAfterSomeoneIsNamed() {
+        let (n, c) = berryRoom(berryHome: true)
+        func p(_ s: String) -> JellyCommand { RuleParser.parse(s, names: n, catalog: c).command }
+        XCTAssertEqual(p("give Pip a berry").who, .jellies([0])); XCTAssertEqual(p("give Pip a berry").object, "berries"); XCTAssertEqual(p("give Pip a berry").action, .feed)
+        XCTAssertEqual(p("Berry sit").who, .jellies([2]), "nobody named yet: the name")
+        XCTAssertEqual(p("give Berry a berry").who, .jellies([2])); XCTAssertEqual(p("give Berry a berry").object, "berries"); XCTAssertEqual(p("give Berry a berry").action, .feed)
+        XCTAssertEqual(p("Pip, give Moss some berries").who, .jellies([0, 1])); XCTAssertEqual(p("Pip, give Moss some berries").object, "berries")
+        let smoothie = p("Pip drink a berry smoothie"); XCTAssertEqual(smoothie.who, .jellies([0])); XCTAssertEqual(smoothie.object, "smoothie"); XCTAssertEqual(smoothie.action, .drink)
+        XCTAssertEqual(p("berry smoothie").who, .selected, "an item's whole name wins over the creature's name")
+        XCTAssertEqual(p("berries").who, .selected, "'berries' is not her name"); XCTAssertEqual(p("berries").object, "berries")
+    }
+    func testWithNoBerryAtHomeTheWordIsAlwaysTheFood() {
+        let (n, c) = berryRoom(berryHome: false)
+        func p(_ s: String) -> JellyCommand { RuleParser.parse(s, names: n, catalog: c).command }
+        XCTAssertEqual(p("give Pip a berry").who, .jellies([0])); XCTAssertEqual(p("give Pip a berry").object, "berries")
+        XCTAssertEqual(p("a berry please").object, "berries")
+        XCTAssertEqual(p("berries").object, "berries"); XCTAssertEqual(p("drink a berry smoothie").object, "smoothie")
+        for s in ["berries", "berry smoothie", "a berry"] { XCTAssertEqual(p(s).who, .selected, s) }
+    }
+    func testAGrownUpBaseNameIsOnlyANameWhileOneIsHomeButTodaysSevenAlwaysAre() {
+        let n = JellyNames(defaults: UserDefaults(suiteName: "AITierBTests.base.\(UUID().uuidString)")!, key: "nick", persists: false)
+        n.roster = [0, 1, 2]
+        XCTAssertEqual(n.match(token: "teddy")?.id, JellyNames.absentID(4), "today's species: a name said for one who is not here is still heard (the confused look)")
+        JellyNameRoster.alwaysNamed = 4          // Teddy, Pearl and Panda stand in for species added later
+        XCTAssertNil(n.match(token: "teddy"), "not at home: not a name"); XCTAssertNil(n.match(token: "pearl")); XCTAssertNil(n.match(token: "pan da")); XCTAssertNil(n.match(token: "pandy"))
+        XCTAssertEqual(n.match(token: "bob")?.id, 0, "the seven that exist today are unchanged")
+        XCTAssertFalse(n.priorityWords.contains("teddy")); XCTAssertFalse(n.contextualWords.contains("teddy"))
+        XCTAssertNil(n.resolve(tokens: ["pan", "da"]).first)
+        n.roster = [0, 1, 4]
+        XCTAssertEqual(n.match(token: "teddy")?.id, 2, "at home: the name"); XCTAssertEqual(n.match(token: "teddie")?.id, 2)
+        XCTAssertTrue(n.priorityWords.contains("teddy"))
+        n.roster = [0, 1, 6]
+        XCTAssertEqual(n.resolve(tokens: ["pan", "da"]).first?.id, 2, "the split-in-two form works while Panda is at home")
+        XCTAssertNil(n.match(token: "teddy"), "Teddy at Camp or not owned: not a name")
     }
 }
