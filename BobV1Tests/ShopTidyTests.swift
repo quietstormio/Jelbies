@@ -111,8 +111,8 @@ final class ShopTidyTests: XCTestCase {
     func testEveryToyStillSoldHasSomethingAJelmikoDoesWithIt() {
         let toys = Set(StoreCatalog.decorItems(.toys).compactMap(\.decor))
         XCTAssertEqual(toys, Self.soldToys, "the sixteen toys left in the Shop")
-        // the goal has no behaviour of its own: it is shot at through the soccer ball, which is sold with it
-        for k in toys where k != .minigoal { XCTAssertNotNil(k.activeInteraction, "\(k) is a toy nobody plays with") }
+        // the goal alone is booped; with a soccer ball it is shot at through the ball
+        for k in toys { XCTAssertNotNil(k.activeInteraction, "\(k) is a toy nobody plays with") }
         XCTAssertEqual(DecorKind.soccerball.activeInteraction, .soccerKick)
         XCTAssertTrue(DecorKind.minigoal.use.contains("soccer ball"), "the Shop tells the player the goal needs a soccer ball")
         for k in toys { XCTAssertFalse(k.isRetired, "\(k)"); XCTAssertNotNil(StoreCatalog.item(k.storeID), "\(k) is sold") }
@@ -120,5 +120,45 @@ final class ShopTidyTests: XCTestCase {
         for k in BallToy.kinds { XCTAssertTrue(toys.contains(k), "\(k) is thrown in Play but not sold") }
         XCTAssertNotNil(StoreCatalog.item("toy-bubbleWand"))
         XCTAssertTrue(ShopTab.toys.items.contains { $0.id == "toy-bubbleWand" })
+    }
+
+    // MARK: the mini goal alone is booped; with a soccer ball it is exactly as before
+
+    func testTheMiniGoalAloneIsBoopedAndWithASoccerBallItIsNotOffered() {
+        let f = DecorField.shared
+        XCTAssertEqual(DecorKind.minigoal.activeInteraction, .decorBoop)
+        f.set([PlacedDecor(uid: 8, kind: .minigoal, x: 1.5, z: 0.5)])
+        let goal = f.foot(8)!
+        XCTAssertTrue(f.available(goal), "alone the goal is a free piece")
+        XCTAssertTrue(BlobBrain.decorOffers().contains(.decorBoop), "the room offers the boop")
+        f.set([PlacedDecor(uid: 8, kind: .minigoal, x: 1.5, z: 0.5), PlacedDecor(uid: 9, kind: .soccerball, x: -1.5, z: 1.0)])
+        XCTAssertFalse(f.available(f.foot(8)!), "with a ball the goal is only shot at")
+        XCTAssertFalse(BlobBrain.decorOffers().contains(.decorBoop), "the goal adds no boop to the room while the ball is there")
+        XCTAssertTrue(BlobBrain.decorOffers().contains(.soccerKick))
+    }
+
+    /// Per toy sold: a free, happy Jelmiko alone in the room starts using it by itself (the real toy loop: notice, walk, decorStart). Writes the table to the scratchpad.
+    func testEveryToyStillSoldIsStartedByAFreeJelmikoByItself() {
+        ToyTuning.settle = 0; defer { ToyTuning.settle = 5 }
+        var lines: [String] = [], fails: [String] = []
+        for kind in Self.soldToys.sorted(by: { $0.rawValue < $1.rawValue }) {
+            DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
+            let lab = SocialTests.Lab(n: 1, positions: [SIMD2(-1.8, 1.4)], quiet: true, seed: 5)
+            Self.keep.append(lab)
+            for r in lab.rigs { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true; r.brain.idleMood = .happy }
+            let at = SIMD2<Float>(1.6, 0.4)
+            DecorField.shared.set([PlacedDecor(uid: 7, kind: kind, x: min(at.x, DecorPlacement.xLimit(kind, z: at.y)), z: at.y)])
+            DecorField.shared.toyPostNews(7, at)
+            var first: Float?, mv: IdleKind?
+            for k in 0..<(45 * 60) {
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+                let b = lab.rigs[0].brain
+                if b.idleState.decorUID == 7 { first = Float(k) / 60; mv = b.idleState.kind; break }
+            }
+            lines.append("\(kind.rawValue): interaction=\(String(describing: kind.activeInteraction)) started=\(first != nil ? "yes" : "NO") after=\(first.map { String(format: "%.1f", $0) } ?? "-")s kind=\(String(describing: mv))")
+            if first == nil { fails.append("\(kind) was never started within 45 s") }
+        }
+        try? lines.joined(separator: "\n").write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/49d32754-b08a-4bfd-999b-3f9f0cada45f/scratchpad/shoptidy/toy-sweep.txt", atomically: true, encoding: .utf8)
+        XCTAssertTrue(fails.isEmpty, fails.joined(separator: "\n"))
     }
 }

@@ -166,7 +166,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .yarnball: return "A ball of yarn. It rolls and trails its strand."
         case .drum: return "A drum. Boop it for a thump."
         case .soccerball: return "A soccer ball. Jelmiko kick it with their stubby legs, dribble it and pass it."
-        case .minigoal: return "A little goal with a net. Add a soccer ball and Jelmiko line up and shoot."          // (2026-11-15: alone it does nothing, so the Shop says what it needs)
+        case .minigoal: return "A little goal with a net. Jelmiko boop it; add a soccer ball and they line up and shoot."
         default: return batch3Use
         }
     }
@@ -240,7 +240,8 @@ extension DecorKind {
         case .soccerball: return .soccerKick
         case .seesaw, .sandbox: return .decorSit
         case .hopscotch: return .decorHopscotch
-        case .petbed, .rug, .nightlight, .divider, .floorlamp, .minigoal: return nil          // (the goal is shot at through the soccer ball's own behaviour)
+        case .minigoal: return .decorBoop          // (alone it is walked up to and booped; with a soccer ball in the room it is shot at through the ball's own behaviour and is not offered, see `DecorField.available`)
+        case .petbed, .rug, .nightlight, .divider, .floorlamp: return nil
         default: return batch3Interaction
         }
     }
@@ -579,6 +580,7 @@ final class DecorField {
     /// A Jelly may start using it: a single-seat piece nobody uses, or a multi-seat one with a seat free.
     func available(_ f: DecorFoot) -> Bool {
         guard f.uid != held else { return false }
+        if f.kind == .minigoal, feet.contains(where: { $0.kind == .soccerball }) { return false }          // (with a ball the goal is shot at through the ball, never booped)
         if f.kind.sitPoints.count > 1 { return (seatOccupant[f.uid]?.count ?? 0) < f.kind.sitPoints.count }
         if f.kind.maxUsers > 1 {
             let n = coUsers[f.uid]?.count ?? 0

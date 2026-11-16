@@ -9,8 +9,8 @@ import XCTest
 
 @MainActor
 final class ToyInteractionTests: XCTestCase {
-    /// Toys that have no interaction of their own: the goal is shot at through the soccer ball's behaviour (DecorKind.interaction).
-    private static let viaBall: Set<DecorKind> = [.minigoal]
+    /// Toys with no interaction of their own: none (2026-11-15: the mini goal alone is booped; with a soccer ball it is shot at through the ball).
+    private static let viaBall: Set<DecorKind> = []
 
     func testEverySoldToyHasAnInteraction() {
         let toys = StoreCatalog.decorItems(.toys).compactMap(\.decor)
