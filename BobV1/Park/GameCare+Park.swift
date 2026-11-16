@@ -55,6 +55,14 @@ extension GameCare {
         return b == .night ? "The park is closed at night. Come back in the morning!" : b.message
     }
 
+    /// The special species (anything but the four starters) the player has UNLOCKED, as far as the park can tell: one is owned right now, or was owned on an earlier park visit (remembered in the defaults). Only these may come, rarely (`pickCast`).
+    static func parkUnlockedSpecials(owned: [Int], defaults: UserDefaults = .standard) -> Set<Int> {
+        var s = Set((defaults.array(forKey: "ParkSpecialsUnlocked") as? [Int] ?? []).filter { $0 >= JellyRoster.characterCount && $0 < JellyRoster.knownCount })
+        s.formUnion(owned.filter { $0 >= JellyRoster.characterCount && $0 < JellyRoster.knownCount })
+        defaults.set(Array(s).sorted(), forKey: "ParkSpecialsUnlocked")
+        return s
+    }
+
     #if targetEnvironment(simulator)
     nonisolated(unsafe) static var startParkPending = UserDefaults.standard.integer(forKey: "StartPark") != 0
     nonisolated(unsafe) static var startParkFrames = 0
@@ -81,14 +89,6 @@ extension GameCare {
     /// Capture aid (`-ParkTrace 1`): logs every change of what a Jelbie / visitor does with a piece (kind, piece, hopscotch square / slide stage), for the proof sequences.
     nonisolated(unsafe) static var traceLast: [Int: String] = [:]
     nonisolated(unsafe) static var traceOn = UserDefaults.standard.integer(forKey: "ParkTrace") != 0
-    /// The special species (anything but the four starters) the player has UNLOCKED, as far as the park can tell: one is owned right now, or was owned on an earlier park visit (remembered in the defaults). Only these may come, rarely (`pickCast`).
-    static func parkUnlockedSpecials(owned: [Int], defaults: UserDefaults = .standard) -> Set<Int> {
-        var s = Set((defaults.array(forKey: "ParkSpecialsUnlocked") as? [Int] ?? []).filter { $0 >= JellyRoster.characterCount && $0 < JellyRoster.knownCount })
-        s.formUnion(owned.filter { $0 >= JellyRoster.characterCount && $0 < JellyRoster.knownCount })
-        defaults.set(Array(s).sorted(), forKey: "ParkSpecialsUnlocked")
-        return s
-    }
-
     func parkTrace(_ bodies: [JellyActor]) {
         for a in bodies {
             guard let b = a.brain else { continue }
