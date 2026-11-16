@@ -30,14 +30,18 @@ struct HeadPortraitKey: Hashable, Sendable {
     /// The action shot's camera pitch above level (rad): high enough that a tutu reads as a skirt, low enough that the shoes show.
     static let actionPitch: Float = 0.36
     // MARK: the lobby head portrait (2026-11-16, the owner: "should include their whole face, doesn't need to have the clothes")
-    /// The picture shows the WHOLE face: from just below the mouth (rest y 0.665; the picture's bottom is rest y 0.50 when the crown is at 1.35) up past the brows (0.945) and the crown, with
-    /// room above for a species feature (Moss's antennas, Teddy's ears, Pip's spikes). Its height is `faceSpan` (also the width: the picture is square), its centre `faceCentreBelowTop` under the crown.
+    /// The picture shows the WHOLE face: from below the mouth (rest y 0.665) up past the brows (0.945) to the crown, with some room above it for a species feature. The camera looks down at the body like the room
+    /// camera (26 degrees), so the front of the face is nearer and lower on the picture than the body's middle: the camera therefore aims at the FRONT of the face, `faceTargetForward` ahead of the body's centre,
+    /// at `faceCentreBelowTop` under the crown, and the (square) picture is `faceSpan` tall. Worked out against the face's points (HeadPortraitFrameTests): mouth about -0.7, eyes -0.3, crown +0.75 of the picture's half height.
     static let faceSpan: Float = 1.10
-    static let faceCentreBelowTop: Float = 0.30
+    static let faceCentreBelowTop: Float = 0.26
+    static let faceTargetForward: Float = 0.60
     /// The face's points in rest coordinates (body y up from the soles; x across): where the eyes, brows and mouth are. (Contracts.swift BobForm; the mouth is drawn at y 0.665 in Shaders.metal.)
     static let eyeY: Float = Float(BobForm.eyeY), eyeX: Float = Float(BobForm.eyeX), browY: Float = Float(BobForm.browY), browHalfLen: Float = Float(BobForm.browHalfLen), mouthY: Float = 0.665
-    /// The picture's vertical range for a body whose crown is at `topY`: (bottom, top) in world y.
-    static func faceRange(topY: Float) -> (bottom: Float, top: Float) { let c = topY - faceCentreBelowTop; return (c - faceSpan / 2, c + faceSpan / 2) }
+    /// The point the portrait's camera looks at, for a body at `centre` (xz) facing `dir` whose crown is at `topY`.
+    static func faceTarget(centre c: SIMD3<Float>, facing dir: SIMD3<Float>, topY: Float) -> SIMD3<Float> {
+        SIMD3<Float>(c.x + dir.x * faceTargetForward, topY - faceCentreBelowTop, c.z + dir.z * faceTargetForward)
+    }
     /// What a head portrait draws of the outfit: NOTHING (no hat, glasses, scarf, jersey, band or shoes: the face is the picture). The action shot (`pose`) keeps the outfit.
     static func outfitDrawn(_ o: [WearSlot: WearLook], pose: Int?) -> [WearSlot: WearLook] { pose == nil ? [:] : o }
     /// The camera of a head portrait / action shot: `target` looked at from `dist` away along the facing `dir` raised by `pitch` (nil: a hair above level), the picture `span` tall at the target.

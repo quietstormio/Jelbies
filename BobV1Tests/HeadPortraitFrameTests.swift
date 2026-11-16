@@ -280,8 +280,7 @@ final class HeadPortraitFrameTests: XCTestCase {
     /// NDC (x, y) of a rest-pose point of a standing body whose crown is at `topY`, through the head portrait's camera (front view, the stage's pitch).
     private func ndc(_ p: SIMD3<Float>, topY: Float, aspect: Float = 1) -> SIMD2<Float> {
         let h = BlobShape.H
-        let r = HeadPortraitKey.faceRange(topY: topY)
-        let target = SIMD3<Float>(0, (r.bottom + r.top) / 2, 0)
+        let target = HeadPortraitKey.faceTarget(centre: .zero, facing: SIMD3<Float>(0, 0, 1), topY: topY)
         let eye = HeadPortraitKey.eye(target: target, dir: SIMD3<Float>(0, 0, 1), span: HeadPortraitKey.faceSpan, aspect: aspect, pitch: HeadPortraitKey.portraitPitch)
         let vp = M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: aspect, near: 0.2, far: 60), M4.lookAt(eye: eye, at: target, up: SIMD3<Float>(0, 1, 0)))
         let w = SIMD3<Float>(p.x, p.y - h + topY, p.z)          // rest y counts from the soles: the crown is at `h`

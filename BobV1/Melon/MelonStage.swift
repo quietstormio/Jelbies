@@ -1513,6 +1513,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         let yaw: Float = hp?.pose.map { SnapshotArmPose.pose($0).yaw } ?? (hp != nil ? 0.0 : (look == nil ? 0.3 : 0.5))
         let dir = SIMD3<Float>(fwd.x * cosf(yaw) + fwd.z * sinf(yaw), 0, -fwd.x * sinf(yaw) + fwd.z * cosf(yaw))
         let head = look.map { $0.slot == .head || $0.slot == .face || $0.slot == .neck } ?? false
+        var faceAim = false          // a head portrait aims at the front of the face (HeadPortraitKey.faceTarget)
         var focusY: Float = head ? c.y + (look?.slot == .head ? 0.5 : 0.3) : c.y + (look == nil ? 0.2 : 0.1)
         var span: Float = look == nil ? 2.3 : (look?.slot == .feet ? 1.5 : (head ? 1.9 : 2.0))
         if hp != nil {
@@ -1523,7 +1524,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if let stood { topY = stood.topY }          // (off its feet: the crown of the stood body)
             span = HeadPortraitKey.span
             focusY = topY.isFinite ? topY - span * HeadPortraitKey.topFraction : a.sim.restCentroid.y + HeadPortraitKey.focusUp
-            if hp?.pose == nil, topY.isFinite { span = HeadPortraitKey.faceSpan; focusY = topY - HeadPortraitKey.faceCentreBelowTop }          // the whole face, from below the mouth up past the crown and the feature
+            if hp?.pose == nil, topY.isFinite { span = HeadPortraitKey.faceSpan; focusY = topY - HeadPortraitKey.faceCentreBelowTop; faceAim = true }          // the whole face, from below the mouth up past the crown and the feature
             if hp?.pose != nil, topY.isFinite {          // the Studio's action shot: the whole body from the floor to the crown (and a hat), centred, with a margin all round
                 let floorY = stood?.floorY ?? a.sim.floorY          // (off its feet: the soles of the stood body)
                 span = max((topY - floorY) * 1.42, 1.3)          // room above the hat
@@ -1534,7 +1535,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             }
         }          // the head, hats and a little body fill the circle
         let aspect = Float(W) / Float(H)
-        let target = SIMD3<Float>(c.x, focusY, c.z)
+        let target = faceAim ? HeadPortraitKey.faceTarget(centre: c, facing: dir, topY: focusY + HeadPortraitKey.faceCentreBelowTop) : SIMD3<Float>(c.x, focusY, c.z)
         // (hp != nil: looking down like the room camera, where the face was approved, so the latitude-curved brows read flat, not slanted; the action shot: a little above level, so the tutu reads as a skirt)
         let eye = HeadPortraitKey.eye(target: target, dir: dir, span: span, aspect: aspect, pitch: hp == nil ? nil : (hp?.pose != nil ? HeadPortraitKey.actionPitch : HeadPortraitKey.portraitPitch))
         var cam = CameraState()
