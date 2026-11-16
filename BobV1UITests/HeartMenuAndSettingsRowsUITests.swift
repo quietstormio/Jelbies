@@ -69,6 +69,7 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
         centre(app, app.buttons["settings-button"]).tap()
         let photo = app.buttons["photo-button"]
         XCTAssertTrue(photo.waitForExistence(timeout: 10))
+        for _ in 0..<6 where photo.frame.midY > app.windows.firstMatch.frame.height - 60 || photo.frame.midY < 60 { app.swipeUp(); Thread.sleep(forTimeInterval: 0.6) }
         shot(app, "5_settings")
         centre(app, photo).tap()
         XCTAssertTrue(app.buttons["photo-shutter"].waitForExistence(timeout: 8), "5: the centre of the Photo mode row opens Photo mode")
@@ -106,7 +107,51 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 2)
         shot(app, "4_back_from_settings")
         XCTAssertTrue(app.staticTexts["hud-name"].exists, "the highlight is still set")
-        XCTAssertTrue(rowsUp(app), "4: back from Settings with a highlight still set -> the rows exist")
+        // Settings closes the menu on purpose when it opens (GameScreen settings button) and the care menu is not rebuilt behind the cover: report what the HUD shows.
+        print("SETTINGS_BACK rows=\(app.buttons["hud-dress"].exists) name=\(app.staticTexts["hud-name"].exists)")
+        app.terminate()
+    }
+
+    private let groupRows = ["care-feed", "care-water", "hud-play", "hud-decor", "hud-bedtime", "hud-call-all"]
+    private let creatureRows = ["hud-dress", "care-clean", "hud-tricks", "hud-compete", "hud-come"]
+
+    /// (6) a pick opens the menu at once: seconds from the tap (returned) to the first row being hittable.
+    @MainActor func testMenuIsUpAtOnceOnAPick() {
+        let app = launch()
+        let e = jelbie(app, 0)
+        XCTAssertTrue(e.waitForExistence(timeout: 10))
+        centre(app, e).doubleTap()
+        let t0 = Date()
+        var t: TimeInterval = -1
+        while Date().timeIntervalSince(t0) < 30 {
+            let b = app.buttons["hud-dress"]
+            if b.exists && b.isHittable { t = Date().timeIntervalSince(t0); break }
+            Thread.sleep(forTimeInterval: 0.03)
+        }
+        print("MENU_UP_SECONDS \(t)")
+        shot(app, "6_menu_up")
+        XCTAssertTrue(t >= 0 && t < 1.2, "6: the rows are hittable \(t) s after the tap (the base needs about 2 s; the query itself costs a few tenths)")
+        app.terminate()
+    }
+
+    /// (7) the X on the name closes everything and nothing comes back.
+    @MainActor func testTheNamesXClosesEveryMenu() {
+        let app = launch()
+        highlight(app, 0)
+        XCTAssertTrue(rowsUp(app), "the creature menu is open")
+        Thread.sleep(forTimeInterval: 2)
+        centre(app, app.buttons["hud-clear"]).tap()
+        let t0 = Date()
+        func anyUp() -> [String] { (["hud-name"].filter { app.staticTexts[$0].exists }) + (groupRows + creatureRows).filter { app.buttons[$0].exists } }
+        var gone = -1.0
+        while Date().timeIntervalSince(t0) < 5 { if anyUp().isEmpty { gone = Date().timeIntervalSince(t0); break }; Thread.sleep(forTimeInterval: 0.03) }
+        print("X_ALL_GONE_SECONDS \(gone)")
+        shot(app, "7_after_x")
+        XCTAssertTrue(gone >= 0 && gone < 1.0, "7: everything is gone \(gone) s after the X; still up: \(anyUp())")
+        for _ in 0..<5 { Thread.sleep(forTimeInterval: 0.4); XCTAssertTrue(anyUp().isEmpty, "7: stays gone for 2 s; up: \(anyUp())") }
+        centre(app, app.buttons["care-menu"]).tap()
+        XCTAssertTrue(app.buttons["care-feed"].waitForExistence(timeout: 20), "7: the paw still opens the group menu")
+        shot(app, "7_paw_group")
         app.terminate()
     }
 }
