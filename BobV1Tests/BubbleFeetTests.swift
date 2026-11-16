@@ -61,6 +61,10 @@ final class BubbleFeetTests: XCTestCase {
             return SC(name: "bubble: stream 60 s", game: true, seconds: 60, setup: { r, _ in
                 n = 0; wand.resetForTests(); r.brain.autonomy = true; r.brain.anticsEnabled = true; wand.activate(care: nil); wand.demo = { _ in 0.9 }; return true
             }, each: { r in n += 1; wand.tick(jellies: join(r), dt: r.sim.stepDt) })
+        case "stream 60 grumpy": // 2026-11-16 wand-mood: the same stream, the mood forced grumpy on every frame (the wand no longer asks for a good mood)
+            return SC(name: "bubble: stream 60 s grumpy", game: true, seconds: 60, setup: { r, _ in
+                n = 0; wand.resetForTests(); r.brain.autonomy = true; r.brain.anticsEnabled = true; r.brain.idleMood = .grumpy; wand.activate(care: nil); wand.demo = { _ in 0.9 }; return true
+            }, each: { r in n += 1; r.brain.idleMood = .grumpy; wand.tick(jellies: join(r), dt: r.sim.stepDt) })
         default: fatalError(name)
         }
     }
@@ -111,6 +115,7 @@ final class BubbleFeetTests: XCTestCase {
     func testWalkUnderAndHopPop() { bubbles("hop pop") }
     func testStream() { bubbles("stream") }
     func testStream60() { bubbles("stream 60") }
+    func testStream60Grumpy() { bubbles("stream 60 grumpy") }
     /// 2026-11-16 (the wand's bean hand-over, BlobBrain+BubblePop): with the wand out, world-placed feet clear a hop's stale fitted bean pose (deterministic: the stream's dice are
     /// unseeded on this line, so a stream run meets the stale pose in some runs only: 2 of 14 casts in one run, 0 in the next); without the wand, or with the switch off, nothing is cleared.
     func testHandOverClearsStaleFit() {

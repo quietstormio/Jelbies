@@ -49,10 +49,10 @@ extension BlobBrain {
         }
     }
 
-    /// Nothing owns him: he may start something of his own.
+    /// Nothing owns him: he may start something of his own. (Mood is NOT a condition: pops pay attention, so a lonely grumpy Jelmiko must still be able to play with the wand.)
     var bubbleFree: Bool {
         anticsEnabled && autonomy && !held && !decorLocked && reactFree && scriptIsNone && pending == nil && idleState.kind == nil
-            && !race.active && social == nil && !commanded && idleMood != .grumpy && idleNight < 0.6
+            && !race.active && social == nil && !commanded && idleNight < 0.6
     }
     /// He is on his own errand (a walk) and nobody has taken him over since: keep going.
     var bubbleStillMine: Bool { attached && !held && !decorLocked && social == nil && !commanded && !race.active }

@@ -195,6 +195,22 @@ final class BubbleWandTests: XCTestCase {
         XCTAssertGreaterThan(wand.field.spawned, n)
     }
 
+    /// Wand mood pin (2026-11-16): a grumpy Jelmiko that is otherwise free may play with the wand (pops pay attention); night still keeps him out.
+    func testGrumpyIsStillFreeForTheWand() {
+        let rs = rigs([SIMD2(0, 0.5)])
+        let b = rs[0].brain
+        b.idleNight = 0
+        for m in [BlobMood.happy, .okay, .grumpy] {
+            b.idleMood = m
+            XCTAssertTrue(b.bubbleFree, "mood \(m) must not block the wand (idle \(String(describing: b.idleState.kind)), script none \(b.scriptIsNone))")
+        }
+        b.idleMood = .grumpy
+        b.idleNight = 0.6
+        XCTAssertFalse(b.bubbleFree, "night still blocks it, grumpy or not")
+        b.idleNight = 0.59
+        XCTAssertTrue(b.bubbleFree)
+    }
+
     func testJelbiesChaseSomeButNotAll() {
         let rs = rigs([SIMD2(-1.6, 0.2), SIMD2(0, 1.4), SIMD2(1.6, 0.2)])
         wand.activate(care: nil)
