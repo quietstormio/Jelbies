@@ -233,28 +233,106 @@ final class StartFlow {
     /// Back out of adoption (or the cancel button): into the room as it was.
     func cancelAdoption() { enterGame() }
 
+    // MARK: Jelmiko Camp (JellyCamp.swift has the rules and the save)
+
+    /// The creature just bought into Camp (home was full): the room it returns to may offer "waiting at Jelmiko Camp" for it. Read-and-clear by the one who shows it.
+    var campArrival: Int?
+
+    /// Jelmiko Camp is a 3D yard visited from the room (a mode of the park trip); there is NO Camp phase. The room's model still exists during a visit, so the moves below only
+    /// write the save (kill-safe, JellyCamp.commit). What the visit changed at home is told by ONE pair of calls:
+    ///   `campVisitBegan(d)` when the yard is entered (remembers the saved home list), `campVisitEnded(d)` when it is left: true when the home list changed (a bring home, a drop off, a
+    ///   swap), and then the room has been rebuilt exactly once (`rebuildRoom`, the way adoption rebuilds it); false = nothing changed and nothing was rebuilt.
+    @ObservationIgnored private var campEntryHome: [Int]?
+    func campVisitBegan(_ d: UserDefaults = .standard) { campEntryHome = JellyRoster.savedIDs(d) }
+    /// Pure part of the hook: did the saved home list change since `entry`? (Order counts: a swap keeps the set of three but changes a slot.)
+    static func homeChanged(since entry: [Int]?, _ d: UserDefaults = .standard) -> Bool { entry.map { $0 != JellyRoster.savedIDs(d) } ?? false }
+    @discardableResult
+    func campVisitEnded(_ d: UserDefaults = .standard) -> Bool {
+        let changed = Self.homeChanged(since: campEntryHome, d)
+        campEntryHome = nil
+        if changed { rebuildRoom() }
+        return changed
+    }
+    /// The room is rebuilt from the saved lists (enterGame, callable): the caller has done `care.leftActive(); voice.training.save(); voice.cancel()`.
+    func rebuildRoom() { enterGame() }
+
+    enum CampMove: Equatable { case bringHome(Int), sendToCamp(Int), swap(in: Int, out: Int) }
+    /// One move between home and Camp, against the lists saved in `d`: the rule (refused = false, nothing written), the frozen clocks of the one coming home reset to `now`,
+    /// and the crash-safe write. Pure of the room: the live flow's `campBringHome` / `campSendToCamp` / `campSwap` call it, tests call it with a suite.
+    @discardableResult
+    static func campMove(_ move: CampMove, now: Date = Date(), _ d: UserDefaults = .standard) -> Bool {
+        let old = JellyCamp.savedLists(d)
+        let result: JellyCamp.Lists?
+        let coming: Int, going: Int
+        switch move {
+        case .bringHome(let id): result = JellyCamp.bringHome(id, home: old.home, camp: old.camp); coming = id; going = -1
+        case .sendToCamp(let id): result = JellyCamp.sendToCamp(id, home: old.home, camp: old.camp); coming = -1; going = id
+        case .swap(let inID, let out): result = JellyCamp.swap(in: inID, out: out, home: old.home, camp: old.camp); coming = inID; going = out
+        }
+        guard let new = result, JellyCamp.isConsistent(new) else { return false }
+        if going >= 0 { JellyCamp.settleCondition(going, now: now, d) }          // the one leaving: its condition decay so far is written in before its clocks stop
+        if coming >= 0 { JellyCamp.restamp(coming, now: now, d) }          // the one arriving: its clocks start again from now
+        return JellyCamp.commit(from: old, to: new, d)
+    }
+    /// After a live move: no hot-swap of bodies (the room is rebuilt on Home), a dev `-SetRoster` must not put the old list back, slot-numbered Siri / widget routes are stale,
+    /// and nobody "arrives" (the newcomer flags stay off: the arrival would welcome the last slot).
+    func afterCampMove() {
+        JellyRoster.setRosterSuspended = true
+        GameRouter.shared.clearPending()
+        GameCare.newcomerPending = false; GameCare.newcomerWithOthers = false
+        welcome = nil
+    }
+    @discardableResult func campBringHome(_ id: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.bringHome(id), now: now, d); if ok { afterCampMove() }; return ok }
+    @discardableResult func campSendToCamp(_ id: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.sendToCamp(id), now: now, d); if ok { afterCampMove() }; return ok }
+    @discardableResult func campSwap(in inID: Int, out outID: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.swap(in: inID, out: outID), now: now, d); if ok { afterCampMove() }; return ok }
+    /// Whether a purchase would really have a place right now (home or Camp), read from the save: the Jelly Spring asks BEFORE it takes any coins.
+    static func canPlaceNew(_ d: UserDefaults = .standard) -> Bool {
+        let l = JellyCamp.savedLists(d)
+        return JellyCamp.destination(home: l.home.count, camp: l.camp.count) != .full
+    }
+
     /// A Jelbie of `species` is chosen, named and paid for (`variant` = the Spring colour taken with him, nil = classic): he gets his INSTANCE id (the species id when he is
     /// the first of his kind at home, else a fresh id from the counter: a second Bob is allowed), a fresh start for his state, his colour and name, and joins the roster; then the room.
     /// The species map is written by `allocateInstance` before the roster is saved, so the new id is valid when the roster is read back.
-    func bringHome(species s: Int, name: String, variant: JellyVariant? = nil, traits: JellyTraits? = nil) {
+    /// Where a bought creature ended up (`placeNew`).
+    struct Placement: Equatable { let id: Int; let destination: JellyCamp.Destination }
+
+    /// The list side of a purchase, against `d`: the creature gets its instance id (allocated against home AND Camp, so a Camp Bob's id is never reused), a fresh start for its
+    /// state, colour, traits and name, and joins home (fewer than 3 there) or Camp. nil, and nothing written, when home and Camp are both full.
+    static func placeNew(species s: Int, name: String, variant: JellyVariant?, traits: JellyTraits?, first: Bool, _ d: UserDefaults = .standard) -> Placement? {
+        var ids = first ? [] : JellyRoster.savedIDs(d)
+        let camp = first ? [] : JellyCamp.load(home: ids, d)
+        let dest = JellyCamp.destination(home: ids.count, camp: camp.count)
+        guard dest != .full else { return nil }
+        let id = JellyRoster.allocateInstance(species: s, roster: JellyCamp.owned(home: ids, camp: camp), d)
+        resetCharacterState(id, d)          // always: a preview (or an old, released slot) may have left something under his keys
+        JellyVariants.adopt(id, variant, d)
+        JellyTraitsBook.adopt(id, traits, d)          // his personality, jars and favourite snack (his starting stats seed from it when his profile is first built)
+        if dest == .home { ids.append(id); JellyRoster.save(ids, to: d) } else { JellyCamp.addNew(id, camp: camp, d) }
+        JellyRoster.setName(id, name, d)
+        d.set(true, forKey: startedKey)
+        return Placement(id: id, destination: dest)
+    }
+
+    func bringHome(species s: Int, name: String, variant: JellyVariant? = nil, traits: JellyTraits? = nil, defaults d: UserDefaults = .standard) {
         let first = phase == .adopt(.first)
-        let pendingCoins = DevArgs.enabled ? UserDefaults.standard.object(forKey: Self.firstCoinsKey) as? Int : nil          // `-NewGame first`: read before the wipe below
-        if first { oldSaveSnapshot = nil; if Self.hasSave() { Self.wipeAll() } }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
-        var ids = first ? [] : JellyRoster.savedIDs()
-        guard ids.count < JellyRoster.maxCount else { enterGame(); return }          // the room is full (the picker does not let it get here)
-        let id = JellyRoster.allocateInstance(species: s, roster: ids)
-        Self.resetCharacterState(id)          // always: a preview (or an old, released slot) may have left something under his keys
-        JellyVariants.adopt(id, variant)
-        JellyTraitsBook.adopt(id, traits)          // his personality, jars and favourite snack (his starting stats seed from it when his profile is first built)
-        ids.append(id)
+        let pendingCoins = DevArgs.enabled ? d.object(forKey: Self.firstCoinsKey) as? Int : nil          // `-NewGame first`: read before the wipe below
+        if first { oldSaveSnapshot = nil; if Self.hasSave(d) { Self.wipeAll() } }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
         JellyRoster.setRosterSuspended = true          // a developer `-SetRoster` must never put the old list back over the roster that now holds him
-        JellyRoster.save(ids)
-        JellyRoster.setName(id, name)
-        UserDefaults.standard.set(true, forKey: Self.startedKey)
-        if DevArgs.enabled { Self.applyPendingFirstCoins(pendingCoins ?? DevArgs.phoneNewGameCoins, first: first) }          // the room's wallet is created after this (it reads the key in init), so it shows the balance at once
+        guard let placed = Self.placeNew(species: s, name: name, variant: variant, traits: traits, first: first, d) else { enterGame(); return }          // home and Camp are full (the picker does not let it get here)
+        let id = placed.id
+        if placed.destination == .camp {          // home is full: he stays at Camp. No arrival (the newcomer flags stay off), no stale slot route
+            GameRouter.shared.clearPending()
+            GameCare.newcomerPending = false; GameCare.newcomerWithOthers = false
+            welcome = nil
+            campArrival = id
+            enterGame()          // back to the room as adoption always does (the home list is unchanged; nobody arrives)
+            return
+        }
+        if DevArgs.enabled { Self.applyPendingFirstCoins(pendingCoins ?? DevArgs.phoneNewGameCoins, first: first, defaults: d) }          // the room's wallet is created after this (it reads the key in init), so it shows the balance at once
         // the first day at home in the REAL room (FirstDayTour.swift); .card = the old illustrated screen
         let room = first && FirstDayStyle.current == .room && FirstDayTour.shared.arm(name: name, replay: false, reduceMotion: A11ySettings.shared.reduceMotion || UIAccessibility.isReduceMotionEnabled)
-        GameCare.newcomerPending = true; GameCare.newcomerWithOthers = ids.count > 1 || FirstDayTour.shared.armed          // (others at home, or the tour's run-in: the curtain is held until he is off-screen)
+        GameCare.newcomerPending = true; GameCare.newcomerWithOthers = JellyRoster.savedIDs(d).count > 1 || FirstDayTour.shared.armed          // (others at home, or the tour's run-in: the curtain is held until he is off-screen)
         if room { welcome = nil; enterGame(); return }          // the tour says "Welcome home" itself
         if first { welcome = nil; phase = .firstDay(id, name, false); return }          // the first day at home says "Welcome home" itself
         welcome = JellyRoster.nameOf(id)
@@ -328,6 +406,13 @@ enum AdoptionPrice {
     /// Teddy, Pearl and Panda (Jelly Spring specials): 2,000 JellyCoins each, whichever slot they fill. That is 2.5x the dearest ordinary adoption (800) and 1.8x
     /// the dearest rare colour (1,100): a long saving goal (about 2 Splash wins), so they feel earned. A special never carries a rare colour or the rare surcharge.
     /// Cost of the next Jelbie when `home` are in the room (nil = the room is full); `rare` = the offered colour is a rare mutation (+300; never on the free first gift).
+    /// With Jelmiko Camp: the same prices while fewer than 3 are home; with home full a new one goes to Camp for what a third costs (800, rare 1,100, special 2,000) until Camp holds
+    /// `JellyCamp.cap`; nil when both are full (nothing is bought, nothing is paid).
+    static func next(home: Int, camp: Int, rare: Bool = false, special: Bool = false) -> Int? {
+        if home < JellyRoster.maxCount { return next(home: home, rare: rare, special: special) }
+        guard camp < JellyCamp.cap else { return nil }
+        return special ? Self.special : third + (rare ? rareSurcharge : 0)
+    }
     static func next(home: Int, rare: Bool = false, special: Bool = false) -> Int? {
         if special { return home < 1 ? 0 : (home < JellyRoster.maxCount ? Self.special : nil) }
         switch home { case ..<1: return 0; case 1: return second + (rare ? rareSurcharge : 0); case 2: return third + (rare ? rareSurcharge : 0); default: return nil }
