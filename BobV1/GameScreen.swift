@@ -1016,6 +1016,16 @@ struct GameScreen: View {
             for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
             for n in list.split(separator: ",") { if let l = WearLook(rawValue: String(n)) { _ = care.store.wear(l, on: who) } }
         }
+        // capture aids for the tray spot (dev arguments only): `-TrayAt x,z` makes the next meal's tray land on the open spot nearest that point (a fixed spot, so a before / after meal can be compared);
+        // `-ToyAt x,z` lays a ball there (the tray must then land elsewhere)
+        if DevArgs.enabled, let t = d.string(forKey: "TrayAt")?.split(separator: ",").compactMap({ Float($0) }), t.count == 2 {
+            let want = SIMD2<Float>(t[0], t[1])
+            DiningSpot.pickOpen = { open in open.min { simd_distance($0, want) < simd_distance($1, want) } }
+        }
+        if DevArgs.enabled, let t = d.string(forKey: "ToyAt")?.split(separator: ",").compactMap({ Float($0) }), t.count == 2 {
+            care.store.grant(DecorKind.ball.storeID)
+            if let p = care.store.place(DecorKind.ball.storeID) { _ = care.store.move(p.uid, to: SIMD2(t[0], t[1])) }
+        }
         // capture aid: -FoodSeed 1 puts three of each power-up food in the bag (no perks, no coins): for recording meals
         if FoodCaptureArgs.foodSeed(defaults: d) {
             for id in ["sushi", "popsicle", "taco", "donut", "nuggets", "onigiri", "cookie", "fries"] where model.care.store.count(id) < 3 { model.care.store.grant(id, 3 - model.care.store.count(id)) }
@@ -1041,16 +1051,6 @@ struct GameScreen: View {
                 let o: [[WearLook]] = [[.capTeamPink, .bibPink, .sneakerCoral], [.flowerCrown, .bowtieSky, .glitterShoes], [.crownGold, .pearls, .tutuPink, .balletPink]]
                 for (i, ls) in o.enumerated() { for l in ls { care.store.wear(l, on: i) } }
             }
-        }
-        // capture aids for the tray spot (dev arguments only): `-TrayAt x,z` makes the next meal's tray land on the open spot nearest that point (a fixed spot, so a before / after meal can be compared);
-        // `-ToyAt x,z` lays a ball there (the tray must then land elsewhere)
-        if DevArgs.enabled, let t = d.string(forKey: "TrayAt")?.split(separator: ",").compactMap({ Float($0) }), t.count == 2 {
-            let want = SIMD2<Float>(t[0], t[1])
-            DiningSpot.pickOpen = { open in open.min { simd_distance($0, want) < simd_distance($1, want) } }
-        }
-        if DevArgs.enabled, let t = d.string(forKey: "ToyAt")?.split(separator: ",").compactMap({ Float($0) }), t.count == 2 {
-            care.store.grant(DecorKind.ball.storeID)
-            if let p = care.store.place(DecorKind.ball.storeID) { _ = care.store.move(p.uid, to: SIMD2(t[0], t[1])) }
         }
         // capture aid: -StoreDecor 1 owns one of every decor piece (a second plant) and puts the first few in the room; -StoreDecor 2 fills the room (10 spots)
         if d.integer(forKey: "StoreDecor") != 0 {
