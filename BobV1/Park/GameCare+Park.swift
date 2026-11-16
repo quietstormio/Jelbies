@@ -444,7 +444,11 @@ extension GameCare {
             var countRNG = SystemRandomNumberGenerator()
             let n = ParkVisit.visitorCount(playerCount: comers.count, using: &countRNG)
             let characters = comers.compactMap { jelly($0)?.character }
-            let cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970, household: Set((comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { ParkVisitor.kindOfSpecies(JellyRoster.species($0)) }))
+            var cast = book.chooseCast(count: n, characters: characters, now: Date().timeIntervalSince1970, household: Set((comers.compactMap { jelly($0)?.character } + roster.compactMap { $0.profile?.character }).map { ParkVisitor.kindOfSpecies(JellyRoster.species($0)) }))
+            #if targetEnvironment(simulator)
+            // capture aid: `-ParkCast 48,49,50` brings those pool visitors (ids) instead of the draw
+            if let c = UserDefaults.standard.string(forKey: "ParkCast") { let ids = c.split(separator: ",").compactMap { Int($0) }; let chosen = ids.compactMap { book.visitor($0) }; if !chosen.isEmpty { cast = chosen } }
+            #endif
             let spots = ParkLayout.spots(count: comers.count + cast.count)
             book.cast = cast.map(\.id)
             book.actors = book.spawn?(cast, Array(spots.dropFirst(comers.count))) ?? []
