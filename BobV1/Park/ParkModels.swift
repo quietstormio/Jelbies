@@ -124,9 +124,11 @@ nonisolated struct ParkVisitor: Codable, Identifiable, Equatable, Sendable {
     var introduced = false
     /// A true twin (same name AND colour) folded into another record by the 2026-11-05 migration (ParkNames.reconcile): the id of the survivor. nil = a live visitor.
     var mergedInto: Int? = nil
+    /// Park-play-r1 ("all types of species at the park"): a visitor that is one of the special species (JellyRoster 4 Teddy, 5 Pearl, 6 Panda) has its own body, features and voice; nil = one of the four classic kinds by colour. Optional, so old saves decode.
+    var species: Int? = nil
 
     /// The body kind (0 Bob, 1 Pip, 2 Moss, 3 Lavender: the species whose body and signature it has).
-    var kind: Int { switch signature { case .spines: return 1; case .daisy: return 2; case .wings: return 3; default: return 0 } }
+    var kind: Int { if let s = species { return s }; switch signature { case .spines: return 1; case .daisy: return 2; case .wings: return 3; default: return 0 } }
     /// The same numbering for a roster species (0 Bob, 1 Pip, 2 Moss, 3 Lavender; Teddy / Pearl / Panda are their own kinds 4 / 5 / 6).
     static func kindOfSpecies(_ species: Int) -> Int { species }
 

@@ -25,7 +25,7 @@ extension GameCare {
     func friendsToInvite() -> [ParkVisitor] {
         let chars = jellies.map(\.character)
         return parkBook.visitors
-            .filter { $0.mergedInto == nil && $0.introduced && $0.bestLevel(among: chars) >= .friend }
+            .filter { $0.mergedInto == nil && $0.species == nil && $0.introduced && $0.bestLevel(among: chars) >= .friend }
             .sorted { a, b in
                 let la = a.bestLevel(among: chars), lb = b.bestLevel(among: chars)
                 if la != lb { return la > lb }

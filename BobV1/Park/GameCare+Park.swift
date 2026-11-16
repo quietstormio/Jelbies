@@ -254,6 +254,7 @@ extension GameCare {
         if let w = v.wear { outfit[w.slot] = w }
         wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: outfit, role: role, hideAll: false, dt: dt)
         features.setSpikeTint(a.id, nil)          // visitors, guests, rivals and regulars are always classic
+        features.setWingTint(a.id, v.species == JellyRoster.pearlID ? WhiteWing.wingTint : nil)
         features.tick(id: a.id, brain: b, sim: a.sim, feature: v.signature, worn: wornArt(a.id), hideAll: false, dt: dt)
         if let s = features.slot(a.id) {
             b.wingsFolded = v.signature == .wings && s.fit.folded
