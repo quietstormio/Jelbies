@@ -494,13 +494,17 @@ struct TrackPanel: View {
     private func runnerCard(_ prof: JellyProfile?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             LobbyJelbiePicker(care: care, title: "Runner", selected: [who], selectCount: 1, id: "track-picker",
-                              wonCount: { care.race.trophies.shelf(character: $0.character).raceRibbons(care.race.courseTier)[0] }) { who = $0 }
+                              wonCount: { care.race.trophies.shelf(character: $0.character).raceRibbons(care.race.courseTier)[0] },
+                              grandChampion: { care.race.trophies.shelf(character: $0.character).wonEveryCourse }) { who = $0 }
                 .padding(.bottom, 6)
             LobbyStatsCard(title: "Jelly Race stats", groups: [LobbyStatGroup(id: "track-stats", rows: [
                 LobbyStatRow(label: "Speed", value: prof?.stats.waddle ?? 0, color: SK.pink),
                 LobbyStatRow(label: "Focus", value: prof?.stats.focus ?? 0, color: SK.sky),
             ])], id: "track-runner", trailing: {
-                Text(prof?.name ?? "").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1)
+                HStack(spacing: 6) {
+                    if let p = prof, care.race.trophies.shelf(character: p.character).wonEveryCourse { GrandChampionPill() }
+                    Text(prof?.name ?? "").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1)
+                }
             }, footer: {
                 if let p = prof, !p.perks.raceBoost.isNone {
                     FlowLayout(spacing: 6) {

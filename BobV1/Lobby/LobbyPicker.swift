@@ -85,6 +85,8 @@ struct LobbyJelbiePicker: View {
     var checked: Set<Int> = []
     /// 1st places this Jelmiko has on the screen's current course (the Jelly Race lobby); 0 = no badge. A gold trophy sits in the tile's top-trailing corner.
     var wonCount: (JellyProfile) -> Int = { _ in 0 }
+    /// The Jelly Race lobby: this Jelmiko has won every course; a "Grand Champion" pill sits low on the tile, above the name.
+    var grandChampion: (JellyProfile) -> Bool = { _ in false }
     var pick: (Int) -> Void
     @Environment(\.lobbyTheme) private var theme
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -167,10 +169,11 @@ struct LobbyJelbiePicker: View {
                 if done { Image(systemName: "checkmark.circle.fill").font(.system(size: 22, weight: .black)).foregroundStyle(SK.ink, SK.mint).padding(8) }
                 else if won > 0 { WonBadge(count: won).padding(.top, 6).padding(.trailing, 12) }
             }
+            .overlay(alignment: .bottom) { if !done, grandChampion(j) { GrandChampionPill().padding(.bottom, 22) } }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(done ? "\(j.name), already knows it" : Self.label(j.name, won: won)).accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityLabel(done ? "\(j.name), already knows it" : Self.label(j.name, won: won) + (grandChampion(j) ? ", Grand Champion" : "")).accessibilityAddTraits(on ? .isSelected : [])
         .accessibilityIdentifier(tileID(j))
     }
 
@@ -251,6 +254,19 @@ struct WonBadge: View {
             }
             .accessibilityHidden(true)
             .accessibilityIdentifier("won-badge")
+    }
+}
+
+/// "Grand Champion": a small honey pill with a crown (the screen's pill style: ink text on honey, a thin cream edge).
+struct GrandChampionPill: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "crown.fill").font(.system(size: 9, weight: .black))
+            Text("Grand Champion").font(SK.font(10, .black)).lineLimit(1).minimumScaleFactor(0.6)
+        }
+        .foregroundStyle(SK.ink).padding(.horizontal, 7).frame(height: 20)
+        .background(Capsule().fill(SK.honey)).overlay(Capsule().strokeBorder(SK.cream, lineWidth: 1.5))
+        .accessibilityHidden(true).accessibilityIdentifier("grand-champion")
     }
 }
 

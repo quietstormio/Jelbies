@@ -76,6 +76,8 @@ final class RaceFlow {
     @ObservationIgnored var onSwap: (Dest) -> Void = { _ in }
     /// The trip is over and the room is back (`won`: the player placed first): the welcome home.
     @ObservationIgnored var onReturned: (_ playerID: Int, _ won: Bool) -> Void = { _, _ in }
+    /// The finish that wins the LAST unwon course (TrophyAwards.completesSet): the room throws confetti over the results.
+    @ObservationIgnored var onSetComplete: () -> Void = {}
     /// Money and stats: set by the care glue (the wallet and the player's JellyStats).
     @ObservationIgnored var wallet: DropsWallet?
     @ObservationIgnored var stats: JellyStats?
@@ -331,6 +333,7 @@ final class RaceFlow {
             awards = trophies.recordRace(character: playerCharacter, tier: s.course.tier, place: place)
             unlockedNow = progress.unlockedTiers.first { !open.contains($0) }
             jingle(place <= 2 || !awards.trophies.isEmpty)
+            if awards.completesSet { onSetComplete() }
         }
         announceRaceResult()
         if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
