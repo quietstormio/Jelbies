@@ -7,6 +7,7 @@
 import Foundation
 import UIKit
 import ObjectiveC
+import simd
 
 struct HeadPortraitKey: Hashable, Sendable {
     var jelly: Int
