@@ -132,6 +132,8 @@ final class ShowFlow {
     @ObservationIgnored var audioReady: (MusicScene) -> Bool = { AudioHub.shared.muted || AudioHub.shared.scenePlaying($0) }
     /// Test / capture aid: the dance is tapped for him (a few late, one missed) and the tricks are picked for him.
     @ObservationIgnored var auto = false
+    /// Capture aid (`-ShowHomeAfter s`, with `-ShowAuto`): the auto player presses Done this many seconds after the Results card is up (nil = never).
+    @ObservationIgnored var autoHomeAfter: Float?
     @ObservationIgnored private var autoDone = 0
     /// Dance prompts whose left / right audio cue has played (accessibility; PlayAssist.swift).
     @ObservationIgnored var danceCued = 0
@@ -182,10 +184,10 @@ final class ShowFlow {
     /// How the camera frames the stage this moment (GameCamera.showPose).
     var frame: ShowFrame {
         switch round {
-        case .look: return .look
+        case .look: return .look(pad: PadLayout.isPad)
         case .dance: return .dance(bodies: bodies, pad: PadLayout.isPad)
-        case .trick: return .trick(pad: PadLayout.isPad)
-        case .results: return trickStage == .pick ? .results : .trick(pad: PadLayout.isPad)          // (the rivals' last turn still plays on the trick frame)
+        case .trick: return trickStage == .pick ? .trickPick(pad: PadLayout.isPad) : .trick(pad: PadLayout.isPad)          // (while he picks: only him, big; the wide shot for his trick and the entrants' turns)
+        case .results: return trickStage == .pick ? .results(pad: PadLayout.isPad) : .trick(pad: PadLayout.isPad)          // (the rivals' last turn still plays on the trick frame)
         }
     }
 
@@ -516,7 +518,7 @@ final class ShowFlow {
             if auto, beat == .danced, dancedAge > 1.5 { finishDance() }
         case .trick: tickTrick(dt: dt)
         case .results:
-            if trickStage != .pick { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt }          // (the last turn's rivals still perform after the sim has its results)
+            if trickStage != .pick { tickTrick(dt: dt) } else { if !settled { settle() }; cardAge += dt; if auto, let h = autoHomeAfter, cardAge >= h { goHome() } }          // (the last turn's rivals still perform after the sim has its results)
         }
     }
 

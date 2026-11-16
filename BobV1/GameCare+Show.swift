@@ -60,6 +60,7 @@ extension GameCare {
         show.rivalReady = { [weak self] who, centre in self?.showArrived(who, atCentre: centre) ?? true }
         let d = UserDefaults.standard
         if d.object(forKey: "ShowAuto") != nil { show.auto = true }
+        if DevArgs.enabled, d.object(forKey: "ShowHomeAfter") != nil { show.autoHomeAfter = Float(d.double(forKey: "ShowHomeAfter")) }
         // capture aid: -ShowRank puddle|pond|lagoon|ocean opens every rank up to it and picks it
         if let r = d.string(forKey: "ShowRank"), let t = ShowRank(rawValue: r.lowercased()) {
             for b in ShowRank.allCases where b.index < t.index { show.progress.record(rank: b, place: 1, theme: .bunnyPicnic, character: 0, burst: false, perfectDance: false, hatTrick: false) }
@@ -171,7 +172,7 @@ extension GameCare {
     func showHidesWear(_ id: Int) -> Bool { show.active && (id != show.playerID) }
     /// The Trick round shows the rivals' bodies only while the camera is on the wide shot: not while the player picks (the camera holds the contestant alone, big).
     var showRivalsVisible: Bool {
-        (show.round == .trick || (show.round == .results && show.trickStage != .pick)) && show.trickStage != .pick          // (the last turn's rivals play on after the sim has its results)
+        (show.round == .trick || (show.round == .results && show.trickStage != .pick)) && show.trickStage != .pick          // (the walk-on is on the wide shot; the last turn's entrants play on after the sim has its results)
     }
     /// Only the contestant is ever drawn, plus the borrowed rival bodies while the wide Trick shot is on. The other Jelmiko at home wait off stage the whole Show.
     func showHides(_ id: Int) -> Bool {
@@ -455,7 +456,7 @@ extension GameCare {
         for (a, v) in zip(book.extra, book.extraSpecs) {          // the borrowed rival bodies: held like the others, their species art on
             guard let b = a.brain else { continue }
             b.idleBlocked = true; b.autonomy = false
-            visitorLook(a, v, dt: dt)
+            if showHides(a.id) { visitorPutAway(a) } else { visitorLook(a, v, dt: dt) }          // (a hidden entrant's wings / tail / spikes are hidden with her body)
         }
         // the Trick round's stage: the rivals to their rest spots when it begins, back to the row when it is over
         let inTrick = show.round == .trick || (show.round == .results && show.trickStage != .pick)

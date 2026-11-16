@@ -137,16 +137,26 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     var landScreenY: Float = 0.5
     var landFill: Float = 0.8
     var landLeft = true
-    static let look = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.30, fill: 0.46)
+    /// The Look round (trimmed screen: the creature 1.45x bigger and centred in the space the judge line left); `lookPad` keeps the tablet's old numbers.
+    static let look = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.39, fill: 0.67)
+    static let lookPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.30, fill: 0.46)
+    static func look(pad: Bool) -> ShowFrame { pad ? lookPad : look }
+    /// The Trick round while he picks a trick: the camera holds the contestant alone, big (the entrants' bodies are hidden then); the wide `trick` shot comes back for his trick.
+    static let trickPick = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.34, fill: 0.44)
+    static let trickPickPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.39, fill: 0.46, landScreenY: 0.52, landFill: 0.6, landLeft: true)
+    static func trickPick(pad: Bool) -> ShowFrame { pad ? trickPickPad : trickPick }
     /// The Trick round: the middle, the player's aside spot and the rivals' rest spots all in view (the rivals walk up to the middle in turn).
     static let trick = ShowFrame(spots: [ShowStage.playerSpot, ShowStage.playerAside, ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)],
-                                 screenY: 0.33, fill: 0.80, landScreenY: 0.52, landFill: 0.62)
+                                 screenY: 0.39, fill: 0.88, landScreenY: 0.52, landFill: 0.62)
     /// The Trick round on an iPad (idiom only): the bodies sit lower (the trick menu is bigger there, so the stage keeps the middle of the screen instead of
     /// a band of backdrop above the menu), and in landscape they stay centred and a little bigger (no phone-style left third; the iPad's chrome is the portrait stack).
     static let trickPad = ShowFrame(spots: trick.spots, screenY: 0.39, fill: 0.80, landScreenY: 0.52, landFill: 1.24, landLeft: true)
     static func trick(pad: Bool) -> ShowFrame { pad ? trickPad : trick }
     /// `pad` (iPad idiom only): the row of four fills less of a tablet portrait's width, so the end Jelbies (nearer the camera) are not cropped; false = the phone's numbers.
     static func dance(bodies n: Int, pad: Bool = false) -> ShowFrame { ShowFrame(spots: ShowStage.spots(bodies: n), screenY: pad ? 0.38 : 0.30, fill: n > 1 ? (pad ? 0.66 : 0.84) : 0.46, landScreenY: 0.28, landFill: n > 1 ? 1.15 : 0.6, landLeft: false) }
-    static let results = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.27, fill: 0.44, landScreenY: 0.22, landFill: 0.5, landLeft: false)
+    /// Results: she stands above every card (portrait) / in the left half with the cards in a right column (a phone on its side).
+    static let results = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.25, fill: 0.42, landScreenY: 0.42, landFill: 0.55, landLeft: true)
+    static let resultsPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.27, fill: 0.44, landScreenY: 0.22, landFill: 0.5, landLeft: false)
+    static func results(pad: Bool) -> ShowFrame { pad ? resultsPad : results }
     static let practice = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.34, fill: 0.5, landScreenY: 0.3, landFill: 0.6, landLeft: false)
 }

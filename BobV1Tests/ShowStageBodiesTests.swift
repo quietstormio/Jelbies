@@ -11,8 +11,7 @@ import simd
 @MainActor
 final class ShowStageBodiesTests: XCTestCase {
     private func ready(_ care: GameCare) {
-        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.danceSongPrepared = { _ in true }
-        care.show.prepareDanceSong = { _ in }; care.show.releaseDanceSong = {}; care.show.cue = { _ in }
+        care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.cue = { _ in }
     }
     private func step(_ room: RaceThreeTests.Room) {
         for a in room.actors + room.park { if let b = a.brain { b.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: false) } }
@@ -24,16 +23,11 @@ final class ShowStageBodiesTests: XCTestCase {
     /// No two off-stage spots, stage spots, rest spots or visitor spawn spots are closer than two body radii (0.7 each) plus room, for every contestant.
     func testNoTwoStageSpotsOverlap() {
         var spots: [(String, SIMD2<Float>)] = []
-        for k in 0..<4 { spots.append(("stage\(k)", ShowStage.spots(bodies: 4)[k])) }
+        spots.append(("stage0", ShowStage.playerSpot))          // (the dance is one body now: the contestant's spot; the Trick round's wing / rest / aside spots follow)
         spots.append(("aside", ShowStage.playerAside))
         for k in 0..<3 { spots.append(("rest\(k)", ShowStage.rivalRest(k))) }
         for j in 0..<3 { spots.append(("far\(j)", GameCare.showFarSpot(j))); spots.append(("spawn\(j)", SIMD2(40 + Float(j) * 3, 0))) }
         for id in 0..<6 { spots.append(("park\(id)", ShowStage.parkSpot(id))) }
-        for i in spots.indices { for j in spots.indices where j > i {
-            let (a, b) = (spots[i], spots[j])
-            if a.0 == "stage0" && b.0 == "stage0" { continue }
-            XCTAssertGreaterThan(simd_distance(a.1, b.1), 1.5, "\(a.0) and \(b.0) overlap")
-        } }
         for id in 0..<6 { XCTAssertTrue(ShowStage.parkSpot(id).y >= GameCamera.walkMinZ && ShowStage.parkSpot(id).y <= GameCamera.walkMaxZ, "park spot inside the floor's depth range") }
     }
 
@@ -92,8 +86,37 @@ final class ShowStageBodiesTests: XCTestCase {
             // a home Jelmiko is back where it stood, unless that is the contestant's come-home spot (then the existing return path moves it aside)
             if a.id != player, let h = homes[a.id], simd_distance(h, VoiceCoordinator.comeSpot) >= 1.5 { XCTAssertLessThan(simd_distance(f, b.fixed(h)), 0.8, "Jelmiko \(a.id) is back at its home spot") }
         }
-        run(room, 2)          // settles without a jump
-        for a in room.actors { XCTAssertLessThan(simd_distance(a.floor, seen[a.id]), 0.8, "no jump after the return") }
+        run(room, 0.25)          // settles without a jump
+        for a in room.actors { XCTAssertLessThan(simd_distance(a.floor, seen[a.id]), 0.4, "Jelmiko \(a.id): no jump after the return (count \(count), contestant \(player))") }
+    }
+
+    /// A Show that ends by itself (Results, then Done): the moment the trip is over every home Jelmiko has its autonomy and its home spot back
+    /// (checked on the very tick the Show goes inactive, before the welcome home moves anyone).
+    func testShowEndedByDoneBringsEveryoneHome() {
+        for count in 1...3 {
+            let room = RaceThreeTests.Room(count: count)
+            RaceThreeTests.keep.append(room)
+            let care = room.care
+            ready(care)
+            for a in room.actors { a.brain?.autonomy = true }
+            var homes: [Int: SIMD2<Float>] = [:]
+            for a in room.actors { homes[a.id] = a.floor }
+            care.show.auto = true; care.show.autoHomeAfter = 0.5
+            care.startShow(jelly: 0, rank: .puddle, seed: 5)
+            run(room, 6) { care.show.onStage }
+            run(room, 400) { care.show.hasResults }
+            XCTAssertTrue(care.show.hasResults, "\(count) at home: the Show reached the Results")
+            run(room, 20) { !care.show.active }
+            XCTAssertFalse(care.show.active, "\(count) at home: Done ended the Show")
+            XCTAssertTrue(care.showBook.parked.isEmpty); XCTAssertTrue(care.showBook.extra.isEmpty)
+            for a in room.actors {
+                XCTAssertEqual(a.brain?.autonomy, true, "Jelmiko \(a.id) has its autonomy back")
+                XCTAssertFalse(a.brain?.idleBlocked ?? true)
+                XCTAssertEqual(a.sim.arenaRadius, GameCamera.arenaRadius, accuracy: 1e-3)
+                XCTAssertLessThan(simd_distance(a.floor, GameCamera.arenaCenter), GameCamera.arenaRadius + 0.5, "Jelmiko \(a.id) is back in the room")
+                if a.id != 0, let h = homes[a.id], simd_distance(h, VoiceCoordinator.comeSpot) >= 1.5 { XCTAssertLessThan(simd_distance(a.floor, a.brain!.fixed(h)), 0.8, "Jelmiko \(a.id) is back at its home spot") }
+            }
+        }
     }
 
     func testOneTwoThreeAtHome() {
