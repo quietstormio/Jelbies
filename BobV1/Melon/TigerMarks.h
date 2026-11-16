@@ -7,6 +7,8 @@
 //  The numbers are fitted to the "Jelmiko Lineup" picture of the Tiger (2026-11-15), refitted 2026-11-16 through the real capture camera AND the body's standing lean:
 //  in every capture the rest egg leans back ~15.5 degrees, so a stripe that looks level in the picture lies lower toward its face end (the cheeks) or its tips (the back bands)
 //  in rest space. That is why the cheek stripes slope and the band tips drop. No ears, no tail.
+//  Second pass (2026-11-16): each cheek stripe fitted on its own to the drawing's thickness, gap, length and levelness in the front, side and back views
+//  (an overlap score had let one thick stripe cover both drawn stripes, so they nearly touched); the middle and bottom bands wrap a little less far round the sides.
 //
 #ifndef TIGER_MARKS_H
 #define TIGER_MARKS_H
@@ -39,13 +41,13 @@ static float3 tigerPaint(float3 col, float3 Q, float bm) {
     float ax = fabs(Q.x);
     // the cheeks: two stripes on each side (a wedge at the edge of the front view, a level spindle in the side view)
     float a = atan2(Q.z, ax + 1.0e-5);
-    float m = tigerCheek(a, Q.y, 0.9312, 0.075, 6.125 * rad, 30.5 * rad, 24.5 * rad, -0.145);
-    m = max(m, tigerCheek(a, Q.y, 0.7575, 0.075, 11.75 * rad, 26.0 * rad, 23.0 * rad, -0.24));
+    float m = tigerCheek(a, Q.y, 0.944, 0.0544, 9.0 * rad, 25.25 * rad, 23.0 * rad, -0.17);
+    m = max(m, tigerCheek(a, Q.y, 0.746, 0.0572, 10.5 * rad, 22.0 * rad, 26.5 * rad, -0.18));
     // the back: three bands (the top one on the back of the crown)
     float b = atan2(ax + 1.0e-5, -Q.z);
     m = max(m, tigerBand(b, Q.y, 1.289, -0.0345, 0.0247, 71.0 * rad));
-    m = max(m, tigerBand(b, Q.y, 1.165, -0.075, 0.038, 70.5 * rad));
-    m = max(m, tigerBand(b, Q.y, 0.9842, -0.0885, 0.0465, 59.0 * rad));
+    m = max(m, tigerBand(b, Q.y, 1.165, -0.075, 0.038, 66.0 * rad));
+    m = max(m, tigerBand(b, Q.y, 0.9842, -0.0885, 0.0465, 55.0 * rad));
     // the crown: one upright stripe on the middle of the forehead and one leaning in from each side (45 degrees, toward the top middle); on the front only
     float tc = (Q.y - 1.1735) / 0.09;
     float crown = tigerLens(Q.x, 1.0 - tc * tc, 0.061);
