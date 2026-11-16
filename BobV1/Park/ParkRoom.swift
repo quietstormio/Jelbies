@@ -79,8 +79,7 @@ extension GameCamera {
 /// so the dusk / night sky and the stars come for free.
 enum ParkScenery {
     typealias PP = RoomMeshBuilder.ProfilePoint
-    /// `camp`: the Jelmiko Camp yard (Park/CampScenery.swift): the park's scenery minus the path inside the fence, the entrance hedges and piers, plus the fence ring and the tent. `camp: false` is the park, byte for byte.
-    static func build(theme: RoomTheme, camp: Bool = false) -> RoomMesh {
+    static func build(theme: RoomTheme) -> RoomMesh {
         let b = RoomMeshBuilder()
         var r = ParkRandom(0x7A11)
         typealias S = ParkShapes
@@ -145,19 +144,18 @@ enum ParkScenery {
         flowerPatch(b, x: -7.0, z: 3.6, scale: 0.8, bloom: violet, rng: &r)
 
         // ---- the ground: a tessellated lawn that carries mowing bands, sun patches, soft tree shadows and worn earth; the gravel path ----
-        lawn(b, shadows: shadows, camp: camp)
-        gravelPath(b, rng: &r, camp: camp)
+        lawn(b, shadows: shadows)
+        gravelPath(b, rng: &r)
 
         // (the pond was here: it drew 204 random values (22 rim stones x 6, 16 reeds x 4, 4 lily pads x 2); they are drawn and dropped so the entrance border keeps its look)
         for _ in 0..<204 { _ = r.unit() }
 
         // ---- the entrance border below the roam floor's front edge ----
-        entrance(b, rng: &r, camp: camp)
+        entrance(b, rng: &r)
 
         // ---- the bench (back centre): timber slats on cast-iron frames, and a park lamp post beside it ----
         bench(b)
         lampPost(b, x: benchX + 1.72, z: -4.85)
-        if camp { CampScenery.stamp(b) }
         return b.mesh
     }
 

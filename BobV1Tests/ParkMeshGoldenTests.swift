@@ -25,7 +25,5 @@ final class ParkMeshGoldenTests: XCTestCase {
         XCTAssertEqual(m.vertices.count, Self.pinVertices)
         XCTAssertEqual(m.indices.count, Self.pinIndices)
         XCTAssertEqual(h, Self.pinHash)
-        let again = ParkScenery.build(theme: RoomCatalog.park.theme, camp: false)
-        XCTAssertEqual(Self.fnv(again), Self.pinHash, "build(camp: false) must be the park")
     }
 }

@@ -1,9 +1,9 @@
 //
 //  CampScenery.swift
-//  The Jelmiko Camp yard's scenery and camera (camp-yard-r1, step Y2). The yard is the park's scenery (ParkScenery.build(theme:camp: true): the same sky, hills, trees, back hedges, bench, lamp,
-//  bushes and lawn) minus what a yard does not have (the gravel path inside the fence, the entrance hedges and stone piers, every toy) plus a fence ring (Blender posts and rails, an open gate at the
-//  front with two taller gate posts) and a striped tent behind the back fence. The fence is VISUAL ONLY: the roam floor keeps the bodies inside (GameCamera.campCap), no collider is added.
-//  The park's own mesh is untouched: every Camp branch is `if camp` / a defaulted parameter (ParkMeshGoldenTests pins the park's bytes).
+//  The Jelmiko Camp yard's scenery and camera (camp-yard-r1, step Y2; reworked 2026-11-16 on the owner's word "a fenced in yard of just grass, different from the park"). The yard is its OWN tiny scene,
+//  not the park's: a grass ground in its own fresher tone, the sky pane and the soft clouds and far hills (the park's reusable backdrop pieces; no tree, bush, hedge, bench, lamp, path, flower or toy), the fence
+//  ring (Blender posts and rails, an open gate at the front with two taller gate posts) and a small striped tent in the back left. The fence is VISUAL ONLY: the roam floor keeps the bodies inside
+//  (GameCamera.campCap), no collider is added. The park's scenery code is untouched (ParkMeshGoldenTests pins the park's bytes).
 //
 
 import simd
@@ -61,26 +61,66 @@ enum CampScenery {
     /// True when the four pieces loaded from the bundle.
     static var artLoaded: Bool { Art.post != nil && Art.rail != nil && Art.gate != nil && Art.tent != nil }
 
-    /// Stamps the fence ring and the tent into the park mesh being built (static: no per-frame cost, no extra draw call).
+    /// One Blender piece stamped at `o`, yawed and scaled (`k` across, `ky` up); the baked vertex colours are kept.
+    private static func put(_ b: RoomMeshBuilder, _ art: DecorMeshes.Art, at o: SIMD3<Float>, yaw: Float, k: Float) {
+        let c = cosf(yaw), s = sinf(yaw)
+        func rot(_ v: SIMD3<Float>) -> SIMD3<Float> { SIMD3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c) }
+        for part in art.parts {
+            let base = UInt32(b.mesh.vertices.count), mat = part.material.rawValue
+            for i in 0..<part.positions.count {
+                let p = part.positions[i], n = part.normals[i]
+                b.mesh.vertices.append(RoomVertex(pos: SIMD4(o + rot(SIMD3(p.x * k, p.y, p.z * k)), mat), normal: SIMD4(rot(n), part.ao[i]), color: SIMD4(part.colors[i], 1)))
+            }
+            for i in stride(from: 0, to: part.indices.count, by: 3) { b.triangle(base + part.indices[i], base + part.indices[i + 1], base + part.indices[i + 2]) }
+        }
+    }
+
+    /// The yard's grass: fresher and a little warmer than the park's lawn (0.30, 0.50, 0.25 in sRGB): a bright spring green, with a very soft wide patchiness so it is not a flat sheet.
+    static let grass = ParkShapes.srgb(0.40, 0.60, 0.22)
+
+    /// The whole yard mesh: sky, soft clouds and far hills, the grass, the fence ring and the tent. Nothing else.
+    static func build(theme: RoomTheme) -> RoomMesh {
+        let b = RoomMeshBuilder()
+        typealias S = ParkShapes
+        typealias V3 = SIMD3<Float>
+        // sky: the park's glow pane (its colours become the dawn / dusk / night sky through the room's daylight)
+        b.material = .glow
+        let lo = S.srgb(0.74, 0.87, 0.96) / 1.25, hi = S.srgb(0.30, 0.56, 0.90) / 1.875
+        b.flatQuad(V3(-70, 0, -9.6), V3(70, 0, -9.6), V3(70, 14, -9.6), V3(-70, 14, -9.6), normal: V3(0, 0, 1), colors: [lo, lo, hi, hi])
+        b.flatQuad(V3(-70, 14, -9.6), V3(70, 14, -9.6), V3(70, 30, -9.6), V3(-70, 30, -9.6), normal: V3(0, 0, 1), colors: [hi, hi, hi, hi])
+        b.material = .plain
+        ParkScenery.hills(b)
+        ParkScenery.clouds(b)
+        // the ground: one lawn grid, 1.5 m cells over the yard and its surroundings, coarse beyond
+        let xs: [Float] = [-70, -30, -14] + stride(from: Float(-10.5), through: 10.5, by: 1.5).map { $0 } + [14, 30, 70]
+        let zs: [Float] = [-9.5, -8, -6.5] + stride(from: Float(-5), through: 9, by: 1.5).map { $0 } + [12, 20, 45]
+        var ids: [[UInt32]] = []
+        for z in zs {
+            ids.append(xs.map { x in
+                let v = 1 + 0.045 * (2 * ParkScenery.vnoise(x * 0.11, z * 0.13, 5) - 1)
+                return b.vertex(V3(x, 0, z), V3(0, 1, 0), color: grass * v)
+            })
+        }
+        for j in 0..<(zs.count - 1) { for i in 0..<(xs.count - 1) { b.quad(ids[j][i], ids[j + 1][i], ids[j + 1][i + 1], ids[j][i + 1]) } }
+        stamp(b)
+        return b.mesh
+    }
+
+    /// Stamps the fence ring and the tent into the yard mesh being built (static: no per-frame cost, no extra draw call).
     static func stamp(_ b: RoomMeshBuilder) {
         let l = layout()
         typealias V3 = SIMD3<Float>
-        if let post = Art.post { for p in l.posts { ParkScenery.stamp(b, post, at: V3(p.x, 0, p.y), yaw: 0, k: 1, ky: 1, tint: [:]) } }
-        if let gate = Art.gate { for p in l.gatePosts { ParkScenery.stamp(b, gate, at: V3(p.x, 0, p.y), yaw: 0, k: 1, ky: 1, tint: [:]) } }
+        if let post = Art.post { for p in l.posts { put(b, post, at: V3(p.x, 0, p.y), yaw: 0, k: 1) } }
+        if let gate = Art.gate { for p in l.gatePosts { put(b, gate, at: V3(p.x, 0, p.y), yaw: 0, k: 1) } }
         if let rail = Art.rail {
             for r in l.rails {
                 let mid = (r.from + r.to) / 2, dir = r.to - r.from
                 // the rail's own x runs along the bay; `stamp` scales x and z by k (the bar's depth varies by 2%, invisible), yaw turns local x onto the bay
-                ParkScenery.stamp(b, rail, at: V3(mid.x, 0, mid.y), yaw: atan2f(-dir.y, dir.x), k: railScale(from: r.from, to: r.to), ky: 1, tint: [:])
+                put(b, rail, at: V3(mid.x, 0, mid.y), yaw: atan2f(-dir.y, dir.x), k: railScale(from: r.from, to: r.to))
             }
         }
-        if let t = Art.tent { ParkScenery.stamp(b, t, at: tent, yaw: 0, k: 1, ky: 1, tint: [:]) }
+        if let t = Art.tent { put(b, t, at: tent, yaw: 0, k: 1) }
     }
-}
-
-extension ParkScenery {
-    /// The gravel path of the Camp yard starts here (z, going down the screen): only the bit from the gate down is kept.
-    static let campPathFrom: Float = CampScenery.frontZ
 }
 
 extension GameCamera {
@@ -103,6 +143,7 @@ extension RoomCatalog {
     /// WITHOUT moving in (nothing is saved), and it is not in `RoomCatalog.all`.
     static let camp: RoomDef = {
         var d = RoomCatalog.park
+        d.couch = .init(centre: SIMD3(0, 0.45, -40), halfExtents: SIMD3(1.35, 0.45, 0.35), radius: 0.15)          // (no bench in the yard: the one collider every room has stands far away)
         d.id = .camp; d.title = "Jelmiko Camp"; d.blurb = "A fenced yard where the Jelmiko who wait for a home play."
         return d
     }()
