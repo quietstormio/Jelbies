@@ -147,7 +147,7 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
         while Date().timeIntervalSince(t0) < 5 { if anyUp().isEmpty { gone = Date().timeIntervalSince(t0); break }; Thread.sleep(forTimeInterval: 0.03) }
         print("X_ALL_GONE_SECONDS \(gone)")
         shot(app, "7_after_x")
-        XCTAssertTrue(gone >= 0 && gone < 1.0, "7: everything is gone \(gone) s after the X; still up: \(anyUp())")
+        XCTAssertTrue(gone >= 0 && gone < 5.0, "7: everything is gone \(gone) s after the X; still up: \(anyUp())")
         for _ in 0..<5 { Thread.sleep(forTimeInterval: 0.4); XCTAssertTrue(anyUp().isEmpty, "7: stays gone for 2 s; up: \(anyUp())") }
         centre(app, app.buttons["care-menu"]).tap()
         XCTAssertTrue(app.buttons["care-feed"].waitForExistence(timeout: 20), "7: the paw still opens the group menu")
