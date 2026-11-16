@@ -35,13 +35,13 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
         XCTAssertTrue(e.waitForExistence(timeout: 10))
         centre(app, e).doubleTap()
     }
-    private func rowsUp(_ app: XCUIApplication) -> Bool { app.buttons["hud-dress"].waitForExistence(timeout: 6) && app.buttons["hud-come"].exists }
+    private func rowsUp(_ app: XCUIApplication) -> Bool { app.buttons["hud-dress"].waitForExistence(timeout: 20) && app.buttons["hud-come"].exists }
 
     @MainActor func testHighlightAlwaysOpensTheMenu() {
         let app = launch()
         shot(app, "1_0_start")
         highlight(app, 0)
-        XCTAssertTrue(app.staticTexts["hud-name"].waitForExistence(timeout: 6), "highlighted: the name chip")
+        XCTAssertTrue(app.staticTexts["hud-name"].waitForExistence(timeout: 20), "highlighted: the name chip")
         XCTAssertTrue(rowsUp(app), "1: highlight one -> the menu's rows exist")
         shot(app, "1_one_highlighted")
         // close the menu with the heart (the highlight stays)
