@@ -23,7 +23,7 @@ final class RosterSlotsTextUITests: XCTestCase {
         XCTAssertTrue(adopt.waitForExistence(timeout: 30), "the Jelly Spring card")
         for _ in 0..<4 where !adopt.isHittable { app.swipeUp(); Thread.sleep(forTimeInterval: 0.5) }
         shot(app, "slots_town_\(n)")
-        let text = "\(n)/3 at home"
+        let text = n < 3 ? "\(n)/3 at home" : "Home is full: 3 Jelmiko"          // (full: the short line that was already there)
         let hit = app.staticTexts[text].exists || adopt.label.contains(text)
         XCTAssertTrue(hit, "town card says \(text); label: \(adopt.label)")
         XCTAssertFalse(adopt.label.lowercased().contains("room for"))

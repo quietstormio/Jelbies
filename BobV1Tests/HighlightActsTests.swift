@@ -18,17 +18,18 @@ final class HighlightActsTests: XCTestCase {
     }
     private func run(_ s: BlobSelect, _ sec: Float) { for _ in 0..<Int(sec * 60) { s.tick(dt: 1.0 / 60) } }
 
-    func testAPickCountsAtOnceAndOnlyOnce() {
+    func testAPickCountsAtOnceAndNotAgainWhenTheGlowEnds() {
         let s = two()
         XCTAssertEqual(s.highlightActs, 0)
         s.pick(0)
         XCTAssertEqual(s.highlightActs, 1, "counted when the pick starts: the menu does not wait for the glow")
         XCTAssertEqual(s.selectedID, 0); XCTAssertNil(s.highlighted)
         s.pick(0)
-        XCTAssertEqual(s.highlightActs, 1, "the same draw asked again is not a new action")
+        XCTAssertEqual(s.highlightActs, 2, "the same draw asked again (a second tap, the menu may have been closed meanwhile) is an action too")
+        XCTAssertEqual(s.selectedID, 0)
         run(s, 4)
         XCTAssertEqual(s.highlighted, 0)
-        XCTAssertEqual(s.highlightActs, 1, "the glow ending settles the pick: no second count, so a menu the player closed meanwhile stays shut")
+        XCTAssertEqual(s.highlightActs, 2, "the glow ending settles the pick: no second count, so a menu the player closed meanwhile stays shut")
     }
     func testThePickedOneIsTheHighlightedJellyFromTheFirstFrame() {
         let s = two()

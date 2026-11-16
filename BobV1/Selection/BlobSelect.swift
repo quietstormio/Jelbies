@@ -207,14 +207,13 @@ final class BlobSelect {
     /// `instant`: a sleeper. No draw, no hop, no `selectedID`: the pick settles at once and he stays asleep.
     func pick(_ id: Int, quietHop: Bool = false, instant: Bool = false) {
         guard blobs.contains(where: { $0.id == id }) else { return }
+        highlightActs += 1          // every pick is an action, counted when it is asked (also the same draw asked again): the menu opens now, not when the glow ends
         if instant {
             phase = .none; confirmed = id; rosterPick = false; waiting = false; hopRequest = nil
-            highlightActs += 1
             return
         }
         if selectedID == id, rosterPick { return }
         quiet = quietHop
-        highlightActs += 1          // the pick starts here: the menu opens now, not when the glow ends
         phase = .drawing(id: id)
         confirmed = nil; rosterPick = true
         clock = 0; tickFired = false; metFired = false; hopRequest = nil
