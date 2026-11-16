@@ -102,7 +102,7 @@ final class PickThreeTests: XCTestCase {
             }
             XCTAssertEqual(JellyRoster.previewID(s), JellyRoster.previewID(species: s, slot: 0), "slot 0 is the single page's id")
         }
-        XCTAssertFalse(JellyRoster.isValid(1007))
+        XCTAssertFalse(JellyRoster.isValid(1009))
         XCTAssertFalse(JellyRoster.isValid(1000 + 3 * 10))
     }
 
