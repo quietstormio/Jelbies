@@ -24,7 +24,7 @@ struct SettingsScreen: View {
     @State private var matchIcon = AppIconSwitcher.enabled
     @State private var confirmReset = false
     @State private var showPrivacy = false
-    @State private var showSupport = false
+    @State private var showSupport = DevArgs.enabled && UserDefaults.standard.integer(forKey: "SupportOpen") != 0          // (-SettingsOpen 1 -SupportOpen 1: capture aid, dev-args only)
     @State private var followReal = DayClock.shared.followReal
     @AppStorage(HapticSettings.key) private var hapticsOn = true
     #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
