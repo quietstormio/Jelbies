@@ -21,6 +21,7 @@ final class CampSpreadTests: XCTestCase {
         RoomLayout.apply(RoomCatalog.camp); GameCamera.configureCamp()
         XCTAssertNotNil(GameCamera.refreshRoam(aspect: aspect))
         let lab = SocialTests.Lab(n: 6, positions: CampLayout.spots(count: 6), quiet: false, seed: seed)
+        for r in lab.rigs { r.brain.watching = true }          // (the stage's yard: the player is always watching)
         var nn: [Float] = [], seen = Set<Int>(), close = 0, front = 0, bodySamples = 0
         var window: [Set<Int>] = []          // the cells seen in each of the last 60 one-second samples
         let cx0: Float = -3, cx1: Float = 3, cz0: Float = -3.5, cz1: Float = 4.5

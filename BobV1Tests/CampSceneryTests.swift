@@ -138,6 +138,23 @@ final class CampSceneryTests: XCTestCase {
         XCTAssertEqual(GameCamera.roamRect.max.x, 3.5)
     }
 
+    func testOpenCardMovesTheYardAsideAndEndParkResetsIt() {
+        RoomLayout.apply(RoomCatalog.camp); GameCamera.configureCamp()
+        for a: Float in [0.46, 2.17] {
+            GameCamera.campCardLift = 0; _ = GameCamera.refreshRoam(aspect: a)
+            let c0 = GameCamera.camera(aspect: a, gamePose: true)
+            let p0 = project(SIMD3(0, 0, 0), c0)
+            GameCamera.campCardLift = 1
+            let c1 = GameCamera.camera(aspect: a, gamePose: true)
+            let p1 = project(SIMD3(0, 0, 0), c1)
+            if a < 1 { XCTAssertLessThan(p1.y, p0.y - 0.1, "portrait: the yard moves up for the bottom card") }
+            else { XCTAssertLessThan(p1.x, p0.x - 0.1, "landscape: the yard moves left of the trailing card") }
+            GameCamera.campCardLift = 0
+        }
+        GameCamera.campCardLift = 1; GameCamera.endPark(count: 3)
+        XCTAssertEqual(GameCamera.campCardLift, 0)
+    }
+
     // MARK: the room id
 
     func testCampRoomIsNeverOwnedNorSaved() {

@@ -40,7 +40,7 @@ extension GameCamera {
 
     /// Where the roam floor's front edge (x 0, z `parkRoamMaxZ`) sits on the screen, as a fraction of the screen height from the top, in every aspect (2026-11-09: the front third was bare lawn).
     /// (0.79 on a phone / tablet in portrait; 0.685 from a phone's landscape up (round 8 follow-up: at 0.73 the last three roam rows fell under the Go home + Play cut-out, whose top is at 72.3% of a phone's landscape height).)
-    static func parkFrontFraction(aspect: Float) -> Float { 0.79 - (campCap == nil ? 0.105 : 0.18) * poseBlend(aspect) }          // (Camp: the landscape lift is larger, so the whole yard stands higher and the front fence clears the Home pill)
+    static func parkFrontFraction(aspect: Float) -> Float { 0.79 - (campCap == nil ? 0.105 : 0.215) * poseBlend(aspect) }          // (Camp: the landscape lift is larger, so the whole yard stands higher and the front fence clears the Home pill)
 
     /// The park's landscape pull-in (fraction of the distance to the target removed) and elevation drop (radians), blended by `poseBlend`: exactly (0, 0) for every aspect <= 1.0 (a phone / tablet in
     /// portrait), full from 1.2 up. The phone's landscape floor (x +-4.05) filled a third of the width and the Jelbies were 0.8x their portrait size; this closes the lawn in on the short screen.
@@ -70,7 +70,7 @@ extension GameCamera {
 
     /// Back to the room's camera and floor for `count` Jelbies (what the stage set up at launch).
     static func endPark(count: Int) {
-        parkRoamMaxZ = nil; campCap = nil
+        parkRoamMaxZ = nil; campCap = nil; campCardLift = 0
         configureRoom(count: count)
     }
 }

@@ -54,13 +54,12 @@ struct CampChrome: View {
             ZStack {
                 if park.inScene {
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .top) {
+                        HStack(alignment: .top, spacing: 8) {
                             header
-                            soundButton
-                            if wide { chips.frame(maxWidth: .infinity) } else { Spacer() }
-                            DropsPill(wallet: care.bath.wallet).layoutPriority(2)
+                            if wide { soundButton; countChip; chips.frame(maxWidth: .infinity) } else { Spacer(minLength: 0) }
+                            DropsPill(wallet: care.bath.wallet).fixedSize().layoutPriority(3)
                         }
-                        if !wide { chips }
+                        if !wide { HStack(spacing: 8) { soundButton; countChip; chips } }
                         Spacer()
                     }
                     .padding(.horizontal, 16).padding(.top, 8)
@@ -72,7 +71,7 @@ struct CampChrome: View {
                 if park.phase == .playing {
                     if ui.members.isEmpty, ui.sheet == .none { emptyCard }
                     if let c = selectedCreature, ui.sheet == .none, !ui.moving {
-                        if wide { HStack { Spacer(); card(c).frame(width: min(330, g.size.width * 0.4)).padding(.top, 70).padding(.bottom, 90).padding(.trailing, 8) } }
+                        if wide { HStack { Spacer(); card(c).frame(width: min(300, g.size.width * 0.36)).padding(.top, 70).padding(.bottom, 90).padding(.trailing, 8) } }
                         else { VStack { Spacer(); card(c).padding(.horizontal, 10).padding(.bottom, 14) } }
                     }
                     if ui.selected == nil, ui.sheet == .none, !ui.moving { bottomBar }
@@ -91,13 +90,18 @@ struct CampChrome: View {
     private var header: some View {
         HStack(spacing: 7) {
             Image(systemName: "tent.fill").font(.system(size: 15, weight: .heavy))
-            Text("Jelmiko Camp").font(SK.font(17, .black)).lineLimit(1).minimumScaleFactor(0.75)
-            Text("\(ui.members.count)/\(JellyCamp.cap)").font(SK.font(14, .heavy)).foregroundStyle(SK.muted)
+            Text("Jelmiko Camp").font(SK.font(17, .black)).lineLimit(1).fixedSize()
         }
         .foregroundStyle(SK.ink).padding(.horizontal, 12).frame(minHeight: 44).layoutPriority(1)
         .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
         .overlay(Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
-        .accessibilityElement(children: .ignore).accessibilityLabel("Jelmiko Camp, \(ui.members.count) of \(JellyCamp.cap)").accessibilityIdentifier("camp-header")
+        .accessibilityElement(children: .ignore).accessibilityLabel("Jelmiko Camp").accessibilityIdentifier("camp-header")
+    }
+
+    private var countChip: some View {
+        Text("\(ui.members.count)/\(JellyCamp.cap)").font(SK.font(15, .black)).foregroundStyle(SK.ink).padding(.horizontal, 12).frame(minHeight: 44)
+            .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.2), radius: 5, y: 2))
+            .accessibilityLabel("\(ui.members.count) of \(JellyCamp.cap) at Camp").accessibilityIdentifier("camp-count")
     }
 
     private var soundButton: some View {

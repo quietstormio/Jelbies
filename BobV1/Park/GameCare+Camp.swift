@@ -71,6 +71,8 @@ extension GameCare {
     func tickCamp(dt: Float) {
         for a in parkBook.actors { if let c = CampBook.shared.bodies[a.id] { campLook(a, c, dt: dt) } }
         tickCampLeaving(dt: dt)
+        let want: Float = (CampUI.shared.selected != nil && CampUI.shared.sheet == .none && !CampUI.shared.moving) ? 1 : 0          // the yard moves aside for an open card
+        GameCamera.campCardLift += (want - GameCamera.campCardLift) * min(1, dt * 6)
         #if targetEnvironment(simulator)
         if Self.spreadLogOn, park.phase == .playing { campSpreadSample(dt: dt) }
         campDemoTick()
@@ -111,10 +113,12 @@ extension GameCare {
     #if targetEnvironment(simulator)
     /// `-CampDemo select|bringhome|swap|dropoff|goodbye|goodbyego` (simulator captures; a command line cannot tap): ~6 s into the yard, does that thing to the first Camp creature once.
     nonisolated(unsafe) static var demoState = UserDefaults.standard.string(forKey: "CampDemo")
-    nonisolated(unsafe) static var demoFrames = 0
+    nonisolated(unsafe) static var demoFrames = 0, demoMoved = false
     func campDemoTick() {
-        guard let m = Self.demoState, park.phase == .playing, let first = CampUI.shared.members.first else { return }
+        guard let m = Self.demoState, park.phase == .playing, let first = CampUI.shared.members.first ?? (m == "home" ? CampCreature.make(instance: 0, worn: [:]) : nil) else { return }
         Self.demoFrames += 1
+        if m == "home", Self.demoFrames == 1200 { park.goHome(); return }
+        if m == "movehome", Self.demoMoved, Self.demoFrames > 361 + 300 { Self.demoMoved = false; park.goHome(); return }
         guard Self.demoFrames == 360 else { return }
         let ui = CampUI.shared
         switch m {
@@ -124,6 +128,9 @@ extension GameCare {
         case "dropoff": campDropOffTapped()
         case "goodbye": ui.select(first.id); ui.sheet = .goodbye(first.id)
         case "goodbyego": ui.select(first.id); campGoodbyeConfirmed(first.id)
+        case "movehome":          // a net change, then leave: bring home (or swap with the last at home when home is full)
+            ui.select(first.id); Self.demoMoved = true
+            if let out = JellyRoster.savedIDs().last, JellyRoster.savedIDs().count >= JellyRoster.maxCount { campSwapConfirmed(incoming: first.id, out: out) } else { campBringHomeTapped(first.id) }
         default: break
         }
     }

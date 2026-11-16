@@ -127,10 +127,19 @@ extension GameCamera {
     /// The Camp yard's roam caps (nil = not in Camp): every roam row at most `halfWidth` wide and no row further back than `minZ`, whatever the screen shows (RoamFloor.refreshRoam).
     nonisolated(unsafe) static var campCap: (halfWidth: Float, minZ: Float)?
     /// The yard's landscape pull-in (the park's is 0.35): a little less, so the fence ring with its posts has a margin on an iPad's 4:3 landscape.
-    static let campLandscapePull: Float = 0.32
+    static let campLandscapePull: Float = 0.22
 
     /// The yard's camera: the park's pose as is (portrait widening, landscape pull-in, the pan that puts the floor's front edge at 79% / 68.5% of the screen height), with the roam
     /// rectangles narrowed to the fence: >= 1 m between a body centre and the fence everywhere (1.5 m at the back). The caps make the roam floor itself no wider than the fence.
+    /// 0...1: how far the yard has moved aside for an open card (smoothed by `GameCare.tickCamp`): up in portrait (the card sits at the bottom), to the left in landscape (the card is a trailing panel).
+    nonisolated(unsafe) static var campCardLift: Float = 0
+    static func campCardPan(aspect: Float) -> SIMD3<Float> {
+        guard campCap != nil, campCardLift > 0.0001 else { return .zero }
+        let fw = simd_normalize(target - eye), rt = simd_normalize(simd_cross(fw, SIMD3<Float>(0, 1, 0))), up = simd_cross(rt, fw)
+        let h = 2 * simd_distance(eye, target) * tanf(fovY / 2)
+        return aspect < 1 ? up * (-campCardLift * 0.14 * h) : rt * (campCardLift * 0.13 * h * aspect)
+    }
+
     static func configureCamp() {
         configurePark()
         roamRect = (SIMD2(-2.9, -3.5), SIMD2(2.9, 4.5)); roamRectWide = roamRect

@@ -116,7 +116,7 @@ enum GameCamera {
         if parkRoamMaxZ != nil {
             let (pull, lower) = parkLandscapeFrame(aspect: aspect)          // the park on a phone's side: closer and a little lower (Park/ParkRoom.swift); (0, 0) in portrait, so that pose is untouched
             if pull != 0 || lower != 0 { eye = parkLandscapeEye(eye: eye, target: target, pull: pull, lower: lower) }
-            let d = parkPan(aspect: aspect); eye += d; target += d
+            let d = parkPan(aspect: aspect) + campCardPan(aspect: aspect); eye += d; target += d
         }          // the park only: pan so the roam floor's front edge sits low on the screen (Park/ParkRoom.swift)
         var e = eye, t = target, up = SIMD3<Float>(0, 1, 0)
         if focus != 0 {
