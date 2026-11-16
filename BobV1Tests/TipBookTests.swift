@@ -188,4 +188,35 @@ final class TipBookTests: XCTestCase {
         XCTAssertEqual(TipPlacement.origin(TipPlace.of("race"), size: size, safe: safe, heads: [], h: 122)?.y, 764 - 122, "race: bottom 764")
         XCTAssertEqual(TipPlacement.origin(TipPlace.of("park"), size: size, safe: safe, heads: [], h: 122)?.y, 176)
     }
+
+    func testLandscapeIPhoneHoldsTheQueueAndPortraitThenShowsTheCard() {
+        let (b, d, done) = make(); defer { done() }
+        var land = true; b.landscapePhone = { land }
+        b.screenOpened("shop"); b.request("shop"); b.tick()
+        XCTAssertNil(b.current, "landscape: no card")
+        XCTAssertFalse(d.bool(forKey: TipBook.key("shop")), "landscape: no flag written")
+        XCTAssertEqual(b.queue, ["shop"], "it waits in the queue")
+        land = false; t0 += 5; b.tick()
+        XCTAssertEqual(b.current, "shop", "back in portrait with its screen still open: it shows")
+        XCTAssertTrue(d.bool(forKey: TipBook.key("shop")))
+    }
+
+    func testPortraitCardStillObeysTheGapAfterALandscapeHold() {
+        let (b, _, done) = make(); defer { done() }
+        var land = false; b.landscapePhone = { land }
+        b.screenOpened("town"); b.screenOpened("shop"); b.request("town"); b.request("shop")
+        b.tick(); b.dismiss(); land = true; t0 += 2; b.tick(); XCTAssertNil(b.current)
+        land = false; b.tick(); XCTAssertEqual(b.current, "shop", "the gap had passed while held; one at a time still holds")
+    }
+
+    func testRotatingToLandscapeWithACardUpDismissesItAndKeepsItsFlag() {
+        let (b, d, done) = make(); defer { done() }
+        var land = false; b.landscapePhone = { land }
+        b.screenOpened("spring"); b.request("spring"); b.tick(); XCTAssertEqual(b.current, "spring")
+        land = true; b.tick()
+        XCTAssertNil(b.current, "dismissed")
+        XCTAssertTrue(d.bool(forKey: TipBook.key("spring")), "its flag stays: it counts as seen")
+        land = false; t0 += 5; b.tick(); XCTAssertNil(b.current, "it does not come back")
+        XCTAssertTrue(b.queue.isEmpty)
+    }
 }

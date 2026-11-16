@@ -90,6 +90,14 @@ final class TipBook {
     @ObservationIgnored var defaults: UserDefaults
     @ObservationIgnored var now: () -> Date = { Date() }
     @ObservationIgnored var context: () -> TipContext = { TipContext() }
+    /// True on an iPhone turned to landscape: no card shows there (the map, the Bag's faces and the buttons leave no clear spot). Held cards wait in the queue; iPad is unchanged. Tests set this.
+    @ObservationIgnored var landscapePhone: () -> Bool = { TipBook.deviceIsLandscapePhone }
+    @MainActor static var deviceIsLandscapePhone: Bool {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return false }
+        let w = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow && !($0 is TipWindow) }
+        guard let b = w?.bounds else { return false }
+        return b.width > b.height
+    }
     @ObservationIgnored private var lastEnd: Date?
     @ObservationIgnored private var lastLog = ""
     /// `-TipShow <id>` (dev only): that card ignores its flag and the gap (never the suppression).
@@ -141,11 +149,11 @@ final class TipBook {
     func tick() {
         let ctx = context()
         if let c = current {
-            if ctx.blocked || !holds.isEmpty || !open.contains(c) { hide() }
+            if ctx.blocked || !holds.isEmpty || !open.contains(c) || landscapePhone() { hide() }          // (turned to landscape on an iPhone: gone, as if tapped outside; its flag was written on appear)
             return
         }
         if DevArgs.enabled, !queue.isEmpty { let line = "queue=\(queue) open=\(open.sorted()) ctx=\(ctx) holds=\(holds.sorted())"; if line != lastLog { lastLog = line; NSLog("[tips] %@", line) } }
-        guard !queue.isEmpty, !ctx.blocked, holds.isEmpty else { return }
+        guard !queue.isEmpty, !ctx.blocked, holds.isEmpty, !landscapePhone() else { return }          // landscape iPhone: the queue holds, no flag is written
         if let last = lastEnd, now().timeIntervalSince(last) < Self.gap, !(queue.first == forced && forced != nil) { return }
         guard let i = queue.firstIndex(where: { open.contains($0) }) else { return }
         let id = queue.remove(at: i)
