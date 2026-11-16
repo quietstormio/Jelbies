@@ -109,8 +109,23 @@ nonisolated enum DiningSpot {
         return true
     }
 
+    /// Margin (floor units) kept round a loose toy, a ball or another tray when the tray's rectangle is tested against it.
+    static let looseClear: Float = 0.1
+    /// Something that could obviously be in the way sits where the tray would stand: a play toy lying on the floor (any decor piece of the toys category, solid or flat, and any ball),
+    /// or another tray / table. (Solid furniture is already rejected by `isClear` and `FreeFloor`.)
+    static func blockedByLooseThings(origin o: SIMD2<Float>, layout L: TrayLayout) -> Bool {
+        for f in RoomLayout.decorFeet where f.kind.category == .toys {
+            if distance(from: DecorField.shared.position(f), origin: o, layout: L) < f.radius + looseClear { return true }
+        }
+        for b in RoomLayout.ballSpheres where distance(from: b.c, origin: o, layout: L) < b.r + looseClear { return true }
+        let others = RoomLayout.dynamicBoxes + Array(RoomLayout.tableBoxes.values)
+        for b in others where abs(b.centre.x - o.x) < L.half.x + b.half.x + looseClear && abs(b.centre.y - o.y) < L.half.y + b.half.y + looseClear { return true }
+        return false
+    }
+
     static func isClear(origin o: SIMD2<Float>, layout L: TrayLayout, of bob: SIMD2<Float>, aspect: Float) -> Bool {
         guard distance(from: bob, origin: o, layout: L) >= bobClearance else { return false }
+        guard !blockedByLooseThings(origin: o, layout: L) else { return false }
         guard onScreen(origin: o, layout: L, aspect: aspect) else { return false }
         let b = L.bounds
         for x in [o.x + b.minX, o.x + b.maxX] where RoomLayout.sofaDistanceXZ(SIMD2(x, o.y + b.minZ)) < 0.05 { return false }
@@ -183,7 +198,7 @@ nonisolated enum DiningSpot {
                 let o = SIMD2<Float>(x, z)
                 if onScreen(origin: o, layout: L, aspect: aspect) {
                     let d = distance(from: bob, origin: o, layout: L)
-                    if d >= bobClearance {
+                    if d >= bobClearance, !blockedByLooseThings(origin: o, layout: L) {
                         let cost = abs(x - preferred.x) + 1.4 * abs(z - preferred.y)
                         if cost < bestCost - 1e-5 { bestCost = cost; best = o }
                     }

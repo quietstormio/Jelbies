@@ -1,0 +1,33 @@
+JELMIKO 1.0 - APP PRIVACY ("nutrition label") ANSWERS
+Prepared 2026-11-15 from branch phone-jelly-final. Question wording is from my memory of App Store Connect: verify in App Store Connect.
+
+THE ANSWER TO PICK
+App Store Connect > your app > App Privacy > Get Started:
+  "Do you or your third-party partners collect data from this app?"  ->  No, we do not collect data from this app.
+  (The label then reads "Data Not Collected".)
+  Then click Publish. There are no follow-up questions after "No".
+Also on that page, "Privacy Policy URL" -> the address where you host privacy.html (required).
+"Privacy Choices URL" (optional) -> leave empty.
+Tracking: the form asks about tracking only if you collect data. Answer for your own record: no tracking (NSPrivacyTracking = false in both privacy manifests).
+
+WHY "NO" IS TRUE (checked in the code of phone-jelly-final, 2026-11-15)
+1. No network code. The source (BobV1/, Shared/, JelbiesWidget/, LiveActivity/) has no URLSession, URLRequest, NWConnection, web view, Safari view, CloudKit, GameKit, StoreKit, MetricKit or ad / tracking framework. The project has no Swift package dependencies (no XCRemoteSwiftPackageReference in project.pbxproj), so there is no third-party SDK that could collect anything. Both privacy manifests declare NSPrivacyTracking = false, no tracking domains and an empty NSPrivacyCollectedDataTypes.
+2. Microphone and speech (the one place a reviewer will look):
+   - Voice commands: Voice/SpeechInput.swift uses Apple's on-device DictationTranscriber with SpeechAnalyzer. A microphone tap feeds buffers (AudioPipe) straight into the analyzer; there is no AVAudioRecorder and no audio file written. The result is a short text string that the game matches to a Jelmiko name or a trick word.
+   - What IS saved: for each Jelmiko, the game keeps a small "lesson book" (Voice/VoiceTraining.swift, VoiceLesson): the word the player used for the name or a trick, a repetition count and a reliability number, in the app's own UserDefaults on the device. That is game progress, never audio, and it is never sent anywhere. (So the honest wording is "audio is never recorded or sent; what a Jelmiko has learned stays on the device".) The in-app Privacy page does not mention the saved word; privacy.html does.
+   - "Ears" (optional, off by default): Audio/EarsListener.swift passes each audio buffer to Apple's on-device SoundAnalysis classifier and a few bytes of signal measurement (loudness, beat), then drops it. Header comment: "NOTHING IS RECORDED OR SENT".
+   - Debug logging: the voice log helper (VoiceTranscriptLog in SpeechInput.swift) writes only to the system console and only when a developer flag (VoiceLog) is set. I did not audit every other debug log in the project: see OPEN_QUESTIONS.txt.
+   - The speech language pack: the first time voice is used iOS may download Apple's speech model (AssetInventory.assetInstallationRequest in SpeechInput.swift; in-app text: "Connect to Wi-Fi or mobile data, then tap the mic again. After that, voice works without the internet."). iOS does this, not the game; no game data goes with it. This is why the listing says "works offline once installed", not "never online".
+3. Photos: Photo mode keeps pictures in the app's own Documents/Photos folder. "Save to Photos" uses PHPhotoLibrary.requestAuthorization(for: .addOnly) (add-only; the app cannot read the library). Share opens the system share sheet after the hold gate; what the player sends is their choice. No camera is used (no AVCaptureSession, no camera usage string): Photo mode draws the 3D game scene.
+4. Apple Intelligence (FoundationModels) may write park visitors' names and one-liners and help read voice commands, on the device only, with written fallbacks (Park/ParkText.swift, Voice/VoiceIntent.swift, AI/TierA.swift). Nothing leaves the device.
+5. Widget and Live Activities share data through the App Group group.io.mgsllc.BobV1 on the device only; Live Activities start with no push token (pushType nil).
+6. Names the player types and the save (Application Support/BobSave.json, UserDefaults, widget files, photo album) stay on the device. They are part of the device's normal backup if the player has iCloud / computer backups switched on; that backup is Apple's system feature, not collection by us (verify wording if you want to mention it).
+
+WHAT EACH DATA-TYPE QUESTION WOULD BE (only shown if you had answered Yes; for your records)
+Contact info, health & fitness, financial info, location, sensitive info, contacts, user content (photos, audio, gameplay content), browsing history, search history, identifiers (user ID, device ID), purchases, usage data, diagnostics, other data -> none collected.
+Apple's definition of "collect" is to transmit data off the device in a way that lets you and/or your partners access it for longer than needed to service the request in real time. Nothing in this app is transmitted to us.
+
+THINGS TO RE-CHECK BEFORE SUBMITTING
+- After archiving: Xcode > Organizer > the archive > Generate Privacy Report, and Validate App. Both manifests (BobV1/PrivacyInfo.xcprivacy, JelbiesWidget/PrivacyInfo.xcprivacy) must appear. Required-reason APIs declared: UserDefaults CA92.1, system boot time 35F9.1, file timestamp C617.1 (app); UserDefaults 1C8F.1 (widget).
+- If anyone adds a crash reporter, analytics tool or any network call before the build, this answer must change.
+- The in-app Privacy page (Settings > Privacy) shows "Effective 2026-11-09"; the hosted privacy.html is dated 2026-11-15. The wording matches; only the date differs (and privacy.html adds the saved-word line and the speech-pack download). If you want them identical, update PrivacyText.effective and add the same lines in a later build; this is not a blocker.

@@ -1,0 +1,126 @@
+JELMIKO 1.0 - APP STORE LISTING TEXTS (copy and paste)
+Prepared 2026-11-15 from branch phone-jelly-final (the branch the release must be cut from) and docs/APPSTORE.md on it.
+Builds on the earlier pack in git branch appstore-pack (11-09). Changes from it: the name is Jelmiko; Moss has antennas (not a daisy);
+no 'kids' wording in name / subtitle / keywords (the app is NOT in the Kids Category); no 'rivals', no seesaw, no furniture, no named toys.
+Every character count below was measured by a script. Limits are as Apple states them today: verify in App Store Connect.
+
+======================================================================
+1. APP NAME  (limit 30)
+======================================================================
+Jelmiko
+[7 characters]
+Matches the Home Screen name (INFOPLIST_KEY_CFBundleDisplayName = Jelmiko). If App Store Connect says the name is taken,
+fallback with the word 'Jelmiko' first, e.g. 'Jelmiko: Baby Jelly Pets' (24 chars; then drop 'baby' and 'jelly' / 'pet' from the subtitle and keywords).
+Do not search the web for this name with project details; the trademark search is an open question (see OPEN_QUESTIONS.txt).
+
+======================================================================
+2. SUBTITLE  (limit 30; three candidates, pick one)
+======================================================================
+A (recommended): Raise cuddly baby jellies
+   [25 characters]
+B: Care, play and race jellies
+   [27 characters]
+C: A cosy jelly pet game
+   [21 characters]
+Keywords in section 5 were written for candidate A. If you pick B or C, swap any keyword that now repeats a subtitle word
+(B uses care, play, race, jellies; C uses cosy, jelly, pet, game). Apple indexes name + subtitle + keywords together.
+Wording is deliberately not aimed at children (not in the Kids Category). Verify against App Store Review Guideline 1.3 / the category rules in App Store Connect.
+
+======================================================================
+3. PROMOTIONAL TEXT  (limit 170; can be changed any time without a new build)
+======================================================================
+Raise up to three baby jellies on Wobble Isle. Feed them, play, dress them up, race, dance and go to the beach. Works offline: no accounts, no ads.
+[147 characters]
+
+======================================================================
+4. DESCRIPTION  (limit 4000)
+======================================================================
+----- start of text (copy everything between the lines) -----
+Meet your Jelmiko: baby jellies from Wobble Isle who need someone to look after them.
+
+You have just moved to Wobble Isle, a little floating town in the sky. In the middle of town is the Jelly Spring, where a few dewdrops wobble awake as Jelmiko every morning. The Spring has a welcome gift for its newest neighbour: your first Jelmiko, free. Choose Bob (blue), Pip (yellow, with a pointed tail and orange spikes), Moss (green, with two wobbly antennas) or Lavender (purple, with little wings). Later, with JellyCoins you have earned, you can adopt more friends from the Spring, including Teddy, Pearl and Panda. Up to three Jelmiko can live at home with you.
+
+LOOK AFTER THEM
+Feed them snacks, fill their drinks, give them a bubbly clean until they sparkle, and enjoy a gentle squish and a cuddle. Jelmiko yawn, stretch, wander, nap, make friends and notice each other, so it is lovely just to sit and watch them. Each one has its own personality and its own little voice.
+
+PLAY AND DRESS UP
+Pick a toy and play together. Dress your Jelmiko in hats, glasses, shoes and more, and take pictures in Photo mode. Choose a theme colour for the game, with a matching app icon if you like.
+
+GO OUT IN TOWN
+Visit the Shop and the Café, relax at the Jelly Spa, and make friends in the Park. Invite a friend over for a play date or a sleepover.
+
+COMPETE AND EARN JELLYCOINS
+Jelly Race: run curved courses with two foot buttons and jump the hurdles.
+Jelly Show: show off your Jelmiko's look, dance and tricks.
+Jelly Volleyball: a 2 v 2 game on the beach where Jelmiko bump, dig and spike with their bodies.
+Train up, win ribbons and trophies for your shelf, and spend your JellyCoins in town. JellyCoins are earned by playing. They cannot be bought.
+
+TALK TO THEM
+Hold the mic button and say your Jelmiko's name or a trick word. Your voice is turned into words on your device and is never recorded or sent anywhere. The mic is optional: everything else in the game works without it.
+
+CALM AND PRIVATE
+- Works offline once installed. No account or sign-in.
+- No ads, no tracking and no in-app purchases.
+- Anything that leaves the game (sharing a photo, opening the system Settings, or emailing support) is behind a grown-up hold button.
+
+ON YOUR HOME SCREEN
+A widget shows how your Jelmiko are doing, and Live Activities can follow a race or bedtime.
+
+Questions? dione@mgsllc.io
+----- end of text -----
+[2367 characters]
+
+Fact sources for the description (all on phone-jelly-final):
+- Wobble Isle story, welcome gift, Jelly Spring: docs/Species.md (Wobble Isle story section), BobV1/Start/OpeningStory.swift.
+- Four starters and what makes each look: docs/Species.md table (Pip tail + orange spikes, Moss antennas, Lavender wings). Teddy, Pearl, Panda sold in the Jelly Spring.
+- Up to three at home: JellyRoster.maxCount / GameStore.maxBlobs = 3.
+- Town places: BobV1/Store/TownUI.swift 'places' (Shop, Jelly Race, Jelly Show, Café, Park, Jelly Spa, Friends, Jelly Volleyball, Jelly Spring).
+- Wear slots (hats, faces, shoes, necks, hands, bodies): StoreCatalog.swift WearSlot. Photo mode: Settings > Game > Photo mode.
+- Theme colour + 'Match app icon to theme': Settings > Appearance (SettingsScreen.swift).
+- JellyCoins earn-only, no real-money path: StoreCatalog.swift header comment; no StoreKit anywhere in the source.
+- Voice on device: Voice/SpeechInput.swift (DictationTranscriber + SpeechAnalyzer); mic permission text in project.pbxproj.
+- Gate: UI/ParentGate.swift (share sheet, Settings, Shortcuts, support email). Widget + Live Activities (race, nap): JelbiesWidget/, LiveActivity/.
+Deliberately NOT promised (in flight or unverified): the Show's contestants, Park toys, anything about the Shop's furniture or named toys, Apple Intelligence,
+Siri phrases, ratings or ages, awards.
+'Works offline once installed' is used instead of 'never online' because iOS may download Apple's speech pack once when the mic is first used (done by the system, not by the game).
+The description names no price. Price is undecided (see OPEN_QUESTIONS.txt).
+
+======================================================================
+5. KEYWORDS  (limit 100 characters, commas, no spaces after commas)
+======================================================================
+pet,virtual,cute,cozy,care,race,volleyball,offline,dress,photo,friends,creature,cafe,spa,adopt
+[94 characters]
+No words from the name or subtitle A. No other product or brand names. No 'kids' / 'children' on purpose. Do not add the word 'game' (the category already says it).
+
+======================================================================
+6. WHAT'S NEW IN THIS VERSION (1.0)  (limit 4000)
+======================================================================
+Welcome to Jelmiko! Meet your first baby jelly, then care for them, play, dress them up, make friends, race, perform in the Jelly Show and play beach volleyball. Everything works offline, with no accounts and no ads.
+[216 characters]
+
+======================================================================
+7. URLS AND COPYRIGHT
+======================================================================
+Support URL (required):   <paste the address where you uploaded support.html>
+Privacy Policy URL (required): <paste the address where you uploaded privacy.html>
+Marketing URL (optional): leave empty
+Copyright: 2026 MGS LLC
+[12 characters]  Apple adds the copyright sign itself; type only the year and the owner. The company name MGS LLC comes from docs/PRIVACY.md; the owner decides the exact wording.
+Contact address used everywhere: dione@mgsllc.io
+
+======================================================================
+8. CATEGORIES
+======================================================================
+Primary: Games. Reason: it is a game, and BobV1-Info.plist already declares LSApplicationCategoryType = public.app-category.simulation-games.
+Secondary: Entertainment. Reason: much of the game is watching and cuddling the Jelmiko. (Alternative: none of the Education / Lifestyle categories fit, because the app makes no learning claims.)
+If Games is primary, App Store Connect asks for up to two game subgenres: Simulation, then Casual (verify the names offered).
+NOT the Kids Category (owner decision 2026-11-08). Do not tick Kids anywhere; see AGE_RATING.txt. Verify in App Store Connect.
+
+======================================================================
+9. OTHER FIELDS YOU WILL SEE
+======================================================================
+Primary language: English (U.S.) (the app is English only: knownRegions = en, Base).
+Bundle ID: io.mgsllc.BobV1 (identifier; the visible name is Jelmiko).
+SKU: any private text you like, for example jelmiko-001 (never shown to the public).
+Version: 1.0 (MARKETING_VERSION). Build number: must be raised for every upload after the first (see OWNER_TODO.txt).
+Price: not decided in the project notes. Do not copy a price from this file; see OWNER_TODO.txt step 'Price'.

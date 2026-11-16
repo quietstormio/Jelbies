@@ -55,6 +55,8 @@ nonisolated struct JelbieTrophies: Codable, Equatable, Sendable {
     /// The best place won on a tier (1...3), nil when none.
     func bestRace(_ t: CourseTier) -> Int? { raceRibbons(t).firstIndex { $0 > 0 }.map { $0 + 1 } }
     var raceRibbonCount: Int { race.values.reduce(0) { $0 + $1.reduce(0, +) } }
+    /// 1st place on every course tier: the "Grand Champion" (the same rule that earns the Champion trophy).
+    var wonEveryCourse: Bool { CourseTier.allCases.allSatisfy { raceRibbons($0)[0] > 0 } }
 }
 
 /// What one result earned: the ribbon (new, or one more of a kind he already has) and any trophies, for the results card.
@@ -63,6 +65,8 @@ nonisolated struct TrophyAwards: Equatable, Sendable {
     var newRibbon = false
     var trophies: [Trophy] = []
     var isEmpty: Bool { !newRibbon && trophies.isEmpty }
+    /// This win was the one that completed the set (the Champion trophy was earned by it): the final race, the one that gets the confetti.
+    var completesSet: Bool { trophies.contains(.champion) }
 }
 
 /// What the wall shelf shows (summed over every Jelbie): the best medal per course tier, the milestone trophies, the best contest ribbon.

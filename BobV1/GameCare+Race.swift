@@ -65,12 +65,29 @@ extension GameCare {
         race.upgrades = upgrades
         race.onSwap = { [weak self] dest in self?.raceSwap(dest) }
         race.onReturned = { [weak self] id, won in self?.raceWelcomeHome(id, won: won) }
+        race.onSetComplete = { [weak self] in self?.fireGrandChampionConfetti() }
+        // capture aid (dev arguments only): `-RaceAllWon all` marks every course won for the Jelmiko at home; `-RaceAllWon <tier>` marks every course except that one (puddle|ripple|splash|wave|ocean ...)
+        if DevArgs.enabled, let a = UserDefaults.standard.string(forKey: "RaceAllWon") {
+            let skip = CourseTier(rawValue: a.lowercased())
+            for j in jellies { for t in CourseTier.allCases where t != skip { race.trophies.recordRace(character: j.character, tier: t, place: 1) } }
+        }
         let d = UserDefaults.standard
         if d.object(forKey: "RaceAuto") != nil { race.autoRate = Float(d.double(forKey: "RaceAuto")) > 0 ? Float(d.double(forKey: "RaceAuto")) : 4; race.autoReturnAfter = 7 }
         // capture aid: -RaceCourse puddle|ripple|splash|wave picks the course for the next race, with every course below it won (open); the ones above stay locked
         if let c = d.string(forKey: "RaceCourse"), let t = CourseTier(rawValue: c.lowercased()) {
             for b in CourseTier.allCases where b.index < t.index { race.progress.records[b] = CourseProgress.Record(races: 1, wins: 1, topTwo: 1) }
             race.courseTier = t
+        }
+    }
+
+    /// The game's own confetti (the new-Jelmiko arrival's falling burst, drawn by GuestArrivalOverlay) over the race results, for the finish that completes the set. Reduce Motion: none.
+    func fireGrandChampionConfetti() {
+        guard !A11ySettings.shared.reduceMotion else { return }
+        let g = guestBook, t = CACurrentMediaTime()
+        g.confettiRain = t
+        Task { @MainActor [weak g] in          // the arrival code clears it only inside a welcome: clear it here when the burst is over
+            try? await Task.sleep(nanoseconds: UInt64((ArrivalConfettiTuning.rainLife + 0.3) * 1_000_000_000))
+            if let g, g.confettiRain == t { g.confettiRain = 0 }
         }
     }
 

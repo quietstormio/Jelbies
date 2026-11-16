@@ -1,0 +1,72 @@
+JELMIKO 1.0 - AGE RATING ANSWERS
+Prepared 2026-11-15 from branch phone-jelly-final. Question names follow Apple's age-rating page as I know it (the 2025 revision: ratings 4+, 9+, 13+, 16+, 18+, with new questions on in-app controls, capabilities, medical or wellness, and chance-based activities).
+EVERY ITEM BELOW: verify in App Store Connect. The form changes; read each option's own description as you click, and if the wording differs from mine, answer by the meaning in the "reason" column.
+
+EXPECTED RESULT: 4+.
+(App Store Connect calculates the rating from your answers; you do not choose it. Check the preview of the rating it shows at the end.)
+
+----------------------------------------------------------------------
+IN-APP CONTROLS
+----------------------------------------------------------------------
+Parental Controls            -> No.   Reason: the grown-up hold button (UI/ParentGate.swift) only blocks a child from leaving the app (share sheet, system Settings, Shortcuts, the support email button). It does not limit or filter anything for a child. If the form's wording makes you want to say Yes, that does not change the rating.
+Age Assurance                -> No.   Reason: no age checks, no accounts, no Declared Age Range use anywhere in the source.
+
+----------------------------------------------------------------------
+CAPABILITIES
+----------------------------------------------------------------------
+Unrestricted Web Access      -> No.   Reason: no web view and no browser anywhere in the code (checked: no WKWebView, no SFSafariViewController). The only things the app opens outside itself are the system Settings, the Shortcuts app and a mail link, all behind the hold button.
+User-Generated Content       -> No.   Reason: the player types names for their own Jelmiko; they stay on the device and are never shown to anyone else through the app.
+Messaging and Chat           -> No.   Reason: no player-to-player communication of any kind. Park friends are computer-controlled visitors.
+Social Media / sharing feed  -> No.   Reason: none. A photo can leave only through the system share sheet, behind the hold button.
+Advertising                  -> No.   Reason: no ad code; the app never connects to a server.
+
+----------------------------------------------------------------------
+MATURE THEMES
+----------------------------------------------------------------------
+Profanity or Crude Humor                         -> None.   Reason: Jelmiko speak in chirps and babble. Park visitor text is checked by Park/ParkTextSafety.swift.
+Horror / Fear Themes                             -> None.   Reason: pets, food, toys, a beach game. There is a gentle thunderstorm weather effect in which the Jelmiko huddle and are comforted. I judged this None. If you decide a storm counts, the next answer ("Infrequent") would raise the rating to 9+ (verify).
+Alcohol, Tobacco or Drug Use or References       -> None.   Reason: the Cafe sells pretend treats (a Jelly Cup, a Baby latte) for the Jelmiko. Nothing refers to people drinking alcohol or using tobacco or drugs.
+
+----------------------------------------------------------------------
+MEDICAL OR WELLNESS
+----------------------------------------------------------------------
+Medical or Treatment Information   -> None.   Reason: none.
+Health or Wellness Topics          -> None.   Reason: feeding, cleaning and sleeping are pet-care play; no diet, calorie or exercise advice for the player.
+
+----------------------------------------------------------------------
+SEXUALITY OR NUDITY
+----------------------------------------------------------------------
+Mature or Suggestive Themes        -> None.   Reason: Jelmiko hug, nuzzle and cuddle. A nose-touch emote that could read as a kiss was removed on purpose (project rule: no face-to-face face-touch emotes).
+Sexual Content or Nudity           -> None.   Reason: none.
+Graphic Sexual Content and Nudity  -> None.   Reason: none.
+
+----------------------------------------------------------------------
+VIOLENCE
+----------------------------------------------------------------------
+Cartoon or Fantasy Violence                       -> None.   Reason: beach volleyball hits are bodies on a ball (head bonk, belly-flop spike, belly dig). Races and shows have no fighting.
+Realistic Violence                                -> None.   Reason: none.
+Prolonged Graphic or Sadistic Realistic Violence  -> None.   Reason: none.
+Guns or Other Weapons                             -> None.   Reason: none.
+
+----------------------------------------------------------------------
+CHANCE-BASED ACTIVITIES
+----------------------------------------------------------------------
+Gambling                  -> None.   Reason: no real money anywhere in the app (no StoreKit, no purchases at all).
+Simulated Gambling        -> None.   Reason: JellyCoins cannot be wagered; prizes are fixed by placing.
+Contests                  -> None.   Reason: Apple's wording is about contests between real users (verify). Jelly Race, Jelly Show and Jelly Volleyball are played against computer-controlled competitors; there is no ranking against real people. Answering "Infrequent" would still give 4+ if you prefer the cautious answer.
+Loot Boxes                -> None.   Reason: nothing is bought with real money, so nothing can be a paid random reward. Free random elements: park visitors can appear in a rare colour; the Jelly Spring's daily colour is shown openly at a fixed price in JellyCoins.
+
+----------------------------------------------------------------------
+MADE FOR KIDS / KIDS CATEGORY
+----------------------------------------------------------------------
+Answer: No.  The owner decided on 2026-11-08 that the app is NOT in the Kids Category (it would limit what the app may do and the hold gate was added instead).
+What choosing No means here (verify in App Store Connect and App Review Guidelines):
+- You are not subject to the extra Kids Category rules (no third-party analytics or ads, a parental gate before links or purchases, etc.). This app already has no analytics, ads, links or purchases, and has the hold gate in front of everything that leaves the app.
+- The app is not listed in the Kids section of the store, and the store's "made for kids" badge is not shown.
+- The listing must not say the app is in the Kids Category or "made for kids" (the text in LISTING.txt does not).
+- A children's app that is not in the Kids Category still has to follow Apple's rules on data from children (Guideline 5.1.4) and the law (for example COPPA, GDPR-K). The app collects no data, so there is nothing to put at risk; this is also why privacy.html says in plain words that nothing is collected.
+- The rating (4+) is separate from the category. You can have a 4+ app that is not in the Kids Category.
+Other items you may be asked:
+- Regional ratings (for example Korea, because Games is the primary category; Australia): they follow from the answers above. Verify what the form shows.
+- "Does your app have an Age Rating override or a higher minimum age?" Leave at the calculated rating.
+- Declared Age Range (Apple API): not used by the app; no answer needed.
