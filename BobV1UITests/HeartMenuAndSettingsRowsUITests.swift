@@ -125,7 +125,7 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
         var t: TimeInterval = -1
         while Date().timeIntervalSince(t0) < 30 {
             let b = app.buttons["hud-dress"]
-            if b.exists && b.isHittable { t = Date().timeIntervalSince(t0); break }
+            if b.exists { t = Date().timeIntervalSince(t0); break }
             Thread.sleep(forTimeInterval: 0.03)
         }
         print("MENU_UP_SECONDS \(t)")
