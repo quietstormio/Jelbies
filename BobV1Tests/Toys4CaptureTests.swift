@@ -28,7 +28,7 @@ final class Toys4CaptureTests: XCTestCase {
             XCTAssertEqual(k.category, .toys, "\(k)")
             XCTAssertNotNil(k.activeInteraction, "\(k) has a behaviour")
             XCTAssertNotNil(DecorMeshes.loaded[k], "\(k) art loads")
-            XCTAssertTrue(StoreCatalog.items.contains { $0.id == k.storeID && $0.price >= 25 && $0.price <= 90 }, "\(k) is in the shop at 25...90")
+            if !k.isRetired { XCTAssertTrue(StoreCatalog.items.contains { $0.id == k.storeID && $0.price >= 25 && $0.price <= 90 }, "\(k) is in the shop at 25...90") }          // (a retired toy is not sold)
             XCTAssertEqual(DecorKind(storeID: k.storeID), k)
             XCTAssertFalse(k.title.isEmpty); XCTAssertFalse(k.use.contains("Drops"), "JellyCoins wording")
         }

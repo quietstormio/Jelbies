@@ -166,7 +166,7 @@ nonisolated enum DecorKind: String, CaseIterable, Codable, Sendable {
         case .yarnball: return "A ball of yarn. It rolls and trails its strand."
         case .drum: return "A drum. Boop it for a thump."
         case .soccerball: return "A soccer ball. Jelmiko kick it with their stubby legs, dribble it and pass it."
-        case .minigoal: return "A little goal with a net. Jelmiko line up and shoot; a goal puffs the net."
+        case .minigoal: return "A little goal with a net. Add a soccer ball and Jelmiko line up and shoot."          // (2026-11-15: alone it does nothing, so the Shop says what it needs)
         default: return batch3Use
         }
     }
@@ -308,8 +308,9 @@ enum DecorTuning {
     static let furnitureRoom: [DecorKind] = [.slide, .aquarium, .bookshelf, .wardrobe, .divider, .monstera, .floorlamp]
     /// The pet bed, the dining set and small pieces (10 spots).
     static let bedRoom: [DecorKind] = [.petbed, .aquarium, .bookshelf, .roundtable, .easel]
-    /// The heaviest new meshes (triangles), 10 spots: the perf test's room.
-    static let heaviestRoom: [DecorKind] = [.slide, .aquarium, .minigoal, .bookshelf, .toycar]
+    /// The heaviest new meshes (triangles), 10 spots: the perf test's room. (2026-11-15: the yarn ball rolls where the toy car did; the toy car is retired,
+    /// and a retired piece can be neither granted nor placed.)
+    static let heaviestRoom: [DecorKind] = [.slide, .aquarium, .minigoal, .bookshelf, .yarnball]
 }
 
 // MARK: - where things may go

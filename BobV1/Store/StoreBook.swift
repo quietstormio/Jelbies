@@ -99,6 +99,10 @@ final class StoreBook {
             // 2026-11-01: the Roll trick is gone from the game; a bought Roll page is dropped silently and its 55 JellyCoins go back to the wallet
             let (noSeats, seatRefund) = Self.dropRetiredDecor(saved)
             if noSeats.retiredDecorRefunded != saved.retiredDecorRefunded { saved = noSeats; if seatRefund > 0 { wallet.add(seatRefund, silent: true) }; save() }
+            // 2026-11-15: the toy car, kick scooter, frisbee and bubble machine are retired too. The pass above runs once per save, so this one has no flag:
+            // it pays from the counts it removes (StoreBook+RetiredToys.swift), and the next load finds nothing
+            let (noToys, toyRefund, toysChanged) = Self.dropRetiredToys(saved)
+            if toysChanged { saved = noToys; if toyRefund > 0 { wallet.add(toyRefund, silent: true) }; save() }
             let (noGloves, gloveRefund) = Self.dropRetiredGloves(saved)
             if noGloves.glovesRefunded != saved.glovesRefunded { saved = noGloves; if gloveRefund > 0 { wallet.add(gloveRefund, silent: true) }; save() }
             let (noBands, bandRefund) = Self.dropRetiredHeadbands(saved)
