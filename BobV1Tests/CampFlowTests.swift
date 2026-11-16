@@ -128,6 +128,42 @@ final class CampFlowTests: XCTestCase {
         Self.keep += profiles.map { $0 as AnyObject }
     }
 
+    /// From the Jelly Spring's own entry points (AdoptionCenter.pay + StartFlow.bringHome) down to the save, home full.
+    func testSpringPurchaseIntoCampSpendsOnceAndLeavesHomeAlone() {
+        let d = suite()
+        seed(d, home: [0, 1, 2], camp: [4])
+        let wallet = DropsWallet(persists: false); wallet.add(10_000, silent: true)
+        let price = AdoptionPrice.next(home: 3, camp: 1)
+        XCTAssertEqual(price, 800)
+        XCTAssertTrue(SpringStates.townEnabled(home: 3, camp: 1), "the Town card is open")
+        XCTAssertTrue(AdoptionCenter.pay(price!, wallet: wallet, defaults: d))
+        XCTAssertEqual(wallet.count, 10_000 - 800, "coins spent once")
+        let flow = StartFlow(); flow.phase = .adopt(.more)
+        flow.bringHome(species: 0, name: "Spring Bob", traits: traits(0), defaults: d)
+        XCTAssertEqual(JellyRoster.savedIDs(d), [0, 1, 2], "home untouched")
+        XCTAssertEqual(JellyCamp.saved(d), [4, 100], "at Camp with a fresh id (Bob is at home, so 100)")
+        XCTAssertEqual(wallet.count, 9_200, "bringHome takes no coins")
+        XCTAssertEqual(flow.campNote, "Spring Bob is at Jelmiko Camp"); XCTAssertEqual(flow.campArrival, 100)
+        XCTAssertFalse(GameCare.newcomerPending)
+    }
+    func testSpringPurchaseWithHomeAndCampFullSpendsNothing() {
+        let d = suite()
+        let ids = (0..<7).map { $0 } + [JellyRoster.allocateInstance(species: 0, roster: [0], d), JellyRoster.allocateInstance(species: 1, roster: [1], d)]
+        seed(d, home: Array(ids.prefix(3)), camp: Array(ids.dropFirst(3).prefix(JellyCamp.cap)))
+        let wallet = DropsWallet(persists: false); wallet.add(10_000, silent: true)
+        XCTAssertNil(AdoptionPrice.next(home: 3, camp: JellyCamp.cap))
+        XCTAssertFalse(SpringStates.townEnabled(home: 3, camp: JellyCamp.cap))
+        XCTAssertFalse(AdoptionCenter.pay(800, wallet: wallet, defaults: d), "even a stale caller cannot take coins")
+        XCTAssertEqual(wallet.count, 10_000)
+    }
+    func testSpringPurchaseWithRoomAtHomeIsTodaysFlow() {
+        let d = suite(); seed(d, home: [0, 1], camp: [])
+        let wallet = DropsWallet(persists: false); wallet.add(1000, silent: true)
+        XCTAssertTrue(AdoptionCenter.pay(AdoptionPrice.next(home: 2, camp: 0)!, wallet: wallet, defaults: d))
+        XCTAssertEqual(wallet.count, 200)
+        XCTAssertEqual(StartFlow.placeNew(species: 2, name: "Moss", variant: nil, traits: nil, first: false, d)?.destination, .home)
+    }
+
     func testBuyingWhenBothAreFullChangesNothing() {
         let d = suite()
         let ids = (0..<7).map { $0 } + [JellyRoster.allocateInstance(species: 0, roster: [0], d), JellyRoster.allocateInstance(species: 1, roster: [1], d)]

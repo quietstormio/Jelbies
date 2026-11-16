@@ -29,6 +29,7 @@ struct ContentView: View {
                 } else if logoOn {
                     LogoMoment { LaunchTiming.mark("logo moment done"); LaunchGate.shared.introCoveredLaunch(); flow.curtainForResume(); withAnimation(.easeInOut(duration: 0.3)) { logoOn = false } }.transition(.opacity).zIndex(1)
                 } else { phaseView }
+                if let n = flow.campNote, flow.phase == .game { CampNoteBanner(text: n) { flow.campNote = nil } }
                 if let w = flow.welcome, flow.phase == .game, JellyRoster.savedIDs().count < 2 { WelcomeBanner(name: w) { flow.welcome = nil } }          // (with others at home the arrival moment says it: GameCare+Newcomer.swift)
             }
             .onOpenURL { url in _ = GameRouter.shared.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|pet. Here at the root (not on GameScreen) so a tap that COLD-launches into the menu is heard; the route waits in `pending` until the room is up

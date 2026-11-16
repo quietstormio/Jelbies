@@ -98,10 +98,27 @@ final class StartFlow {
         // Not simulator-gated (but dev-args-gated): a device dev-args Release build can restart the game with `-NewGame lavender,pearl,teddy [-NewGameCoins 10000]` (once per value).
         applyNewGame(text: UserDefaults.standard.string(forKey: newGameKey),
                      coins: UserDefaults.standard.object(forKey: newGameCoinsKey) != nil ? UserDefaults.standard.integer(forKey: newGameCoinsKey) : 10_000)
+        #if targetEnvironment(simulator)
+        applyCampSeed()
+        #endif
         // Not simulator-gated: `-ImportSave 1` merges Documents/import_save.plist (an old save's room) into this game, once (`-ImportSave 0` re-arms). Runs before StoreBook is created.
         ImportSave.apply(arg: UserDefaults.standard.object(forKey: ImportSave.argKey) != nil ? UserDefaults.standard.integer(forKey: ImportSave.argKey) : nil)
         #endif
     }
+
+    #if targetEnvironment(simulator)
+    /// `-CampSeed <n>` (simulator only, once per value and NewGame): puts n creatures at Camp through the real purchase path (`placeNew`), so a capture can show the Jelly Spring
+    /// and the Town square with Camp partly or fully stocked. Needs a full home (`-NewGame bob,pip,moss`).
+    static func applyCampSeed(_ d: UserDefaults = .standard) {
+        guard d.object(forKey: "CampSeed") != nil else { return }
+        let n = min(max(d.integer(forKey: "CampSeed"), 0), JellyCamp.cap)
+        let marker = "\(n)|\(d.string(forKey: newGameAppliedKey) ?? "")"
+        guard d.string(forKey: "CampSeed.applied") != marker else { return }
+        let species = [3, 4, 5, 6, 0, 1], names = ["Maple", "Biscuit", "Pearl Jr", "Dot", "Rex", "Sunny"]
+        for i in 0..<n { _ = placeNew(species: species[i % 6], name: names[i % 6], variant: nil, traits: nil, first: false, d) }
+        d.set(marker, forKey: "CampSeed.applied")
+    }
+    #endif
 
     static let clearGuestKey = "ClearGuest", clearGuestAppliedKey = "ClearGuest.applied"
 
@@ -238,6 +255,8 @@ final class StartFlow {
 
     /// The creature just bought into Camp (home was full): the room it returns to may offer "waiting at Jelmiko Camp" for it. Read-and-clear by the one who shows it.
     var campArrival: Int?
+    /// "<name> is at Jelmiko Camp": the one short line the room shows once after a Camp-bound purchase (ContentView draws it; it clears itself).
+    var campNote: String?
 
     /// Jelmiko Camp is a 3D yard visited from the room (a mode of the park trip); there is NO Camp phase. The room's model still exists during a visit, so the moves below only
     /// write the save (kill-safe, JellyCamp.commit). What the visit changed at home is told by ONE pair of calls:
@@ -329,6 +348,7 @@ final class StartFlow {
             GameCare.newcomerPending = false; GameCare.newcomerWithOthers = false
             welcome = nil
             campArrival = id
+            campNote = SpringStates.roomNote(name: JellyRoster.nameOf(id))
             enterGame()          // back to the room as adoption always does (the home list is unchanged; nobody arrives)
             return
         }
@@ -419,6 +439,20 @@ enum AdoptionPrice {
     static func next(home: Int, rare: Bool = false, special: Bool = false) -> Int? {
         if special { return home < 1 ? 0 : (home < JellyRoster.maxCount ? Self.special : nil) }
         switch home { case ..<1: return 0; case 1: return second + (rare ? rareSurcharge : 0); case 2: return third + (rare ? rareSurcharge : 0); default: return nil }
+    }
+}
+
+/// "<name> is at Jelmiko Camp": a calm line in the room for a few seconds (no hearts, no arrival).
+struct CampNoteBanner: View {
+    let text: String
+    var gone: () -> Void
+    var body: some View {
+        Text(text).font(SK.font(20, .black)).foregroundStyle(SK.ink)
+            .padding(.horizontal, 20).frame(minHeight: 46).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
+            .offset(y: -140).allowsHitTesting(false)
+            .onAppear { Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
+            .accessibilityLabel(text).accessibilityIdentifier("camp-note")
+            .transition(.opacity)
     }
 }
 

@@ -177,7 +177,8 @@ struct TownView: View {
     private var places: [Place] {
         let visit = care.guestStatusText() ?? "Ask a friend over"
         let atHome = JellyRoster.savedIDs().count
-        let full = atHome >= JellyRoster.maxCount
+        let campCount = JellyCamp.saved().count
+        let open = SpringStates.townEnabled(home: atHome, camp: campCount)          // closed only when home AND Jelmiko Camp are full
         return [
             Place(id: "town-shop", title: "Shop", sub: "Food, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
             Place(id: "town-track", title: "Jelly Race", sub: "Race for JellyCoins", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
@@ -189,7 +190,7 @@ struct TownView: View {
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Jelly Volleyball", sub: "Bump and spike", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
-            Place(id: "town-adopt", title: "Jelly Spring", sub: full ? "Home is full: \(JellyRoster.maxCount) Jelmiko" : "\(atHome)/\(JellyRoster.maxCount) at home", symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: !full) { if full { AudioHub.shared.play(.notEnough) } else { adopt() } },
+            Place(id: "town-adopt", title: "Jelly Spring", sub: SpringStates.townSub(home: atHome, camp: campCount), symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: open) { if !open { AudioHub.shared.play(.notEnough) } else { adopt() } },
         ]
     }
 
