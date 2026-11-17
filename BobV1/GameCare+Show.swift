@@ -456,7 +456,7 @@ extension GameCare {
     func tickShow(_ actors: [JellyActor], dt: Float) {
         showBook.actors = actors
         if show.active { for a in actors { a.brain?.sleepLocked = true } }
-        show.tick(dt: dt)
+        if !(forfeitAsk && show.canPause) { show.tick(dt: dt) }          // (the "Go home?" card holds the stage still, except the dance: the song's own clock runs on)
         guard show.active, show.onStage else { return }
         let book = showBook
         for aid in book.parked where actors.indices.contains(aid) {          // the home Jelmiko off stage: held still (no autonomy, no room life), asleep never

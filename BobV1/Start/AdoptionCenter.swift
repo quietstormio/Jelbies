@@ -6,7 +6,7 @@
 //  The layout follows the design boards (440 x 956 pt): everything is placed in that space and scaled to the screen. Landscape: the stage on the
 //  left, the header + card + button on the right (the same blocks, scaled).
 //  Content: SpeciesInfo.swift. Backdrop / pedestal: PickerBackdrop.swift. Camera orbit: PickerCamera.swift.
-//  Species page -> "Meet the three" -> PICK page (three Jelbies of the species side by side, each with its own personality, stats, favourite snack and a slight colour
+//  Species page -> "Pick your <species>" -> PICK page (three Jelbies of the species side by side, each with its own personality, stats, favourite snack and a slight colour
 //  shade: JellyTraits.swift) -> naming -> bring home. The same flow serves the free first gift and the Jelly Spring.
 //  Simulator-only capture flags: -PickerPage 0...6 (picker order; 4...6 = Teddy, Pearl, Panda with -PickerMode more), -PickerTab 0...2, -PickerMode more,
 //  -PickerStep species|pick|name, -PickerCandidate 0...2, -PickerEmote <n> (the species' n-th emote, every 4 s, instead of the random loop; species/naming steps).
@@ -535,7 +535,7 @@ struct AdoptionCenter: View {
     /// The big dark-brown pill, growing with the text instead of clipping it.
     private func flowCtaButton<T: View>(_ title: T, enabled: Bool, id: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
-            title.font(SK.font(21, .black)).foregroundStyle(SK.cream).multilineTextAlignment(.center)
+            title.font(SK.font(21, .black)).foregroundStyle(SK.cream).multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.7)
                 .padding(.horizontal, 16).padding(.vertical, 14).frame(maxWidth: .infinity, minHeight: 63)
                 .background(Capsule().fill(SK.ink))
                 .background(Capsule().fill(Color(hex: 0x2E1E12)).offset(y: 5))
@@ -1165,7 +1165,7 @@ struct AdoptionCenter: View {
 
     @ViewBuilder private var ctaLabel: some View {
         switch step {
-        case .species: Text("Meet the three")
+        case .species: Text("Pick your \(info.name)")
         case .naming: Text(namingText)
         case .pick:
             switch pickState {
@@ -1250,7 +1250,7 @@ struct AdoptionCenter: View {
     /// A step change swaps the stage (the old Jelbie(s) go, the placeholder covers the build); the generation makes a stale stage's ready callback harmless.
     private func resetStage() { ready = false; stageModel = nil; pageGen += 1; emoteTask?.cancel() }
 
-    /// "Meet the three": the day's three Jelbies of this species stand side by side.
+    /// "Pick your <species>": the day's three Jelbies of this species stand side by side.
     private func toPick() {
         guard step == .species, !paging else { return }
         candidates = Self.makeCandidates(mode: mode, species: pick, dayKey: dayKey, home: home, camp: camp)

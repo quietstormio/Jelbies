@@ -218,7 +218,7 @@ final class BubbleWandTests: XCTestCase {
         step(rs, seconds: 30)
         let jellyPops = wand.popsByJelly.values.reduce(0, +)
         let total = wand.field.popped
-        print("BUBBLES spawned \(wand.field.spawned) popped \(total) by Jelmiko \(jellyPops) (contact \(wand.contactPops), hops \(wand.hopPops), nudged \(wand.nudges)) chases \(wand.chases) watches \(wand.watches) bumps \(wand.bumps) hearts \(wand.heartBursts) per jelly \(wand.popsByJelly)")
+        print("BUBBLES spawned \(wand.field.spawned) popped \(total) by Jelmiko \(jellyPops) (contact \(wand.contactPops), hops \(wand.hopPops), nudged \(wand.nudges)) chases \(wand.chases) watches \(wand.watches) bumps \(wand.bumps) hearts \(wand.heartBursts) shown \(wand.heartsShown) per jelly \(wand.popsByJelly)")
         print("BUBBLES log:\n" + wand.log.prefix(60).joined(separator: "\n"))
         XCTAssertLessThanOrEqual(wand.field.bubbles.count, BubbleField.cap)
         XCTAssertGreaterThan(wand.chases, 0, "they chase")

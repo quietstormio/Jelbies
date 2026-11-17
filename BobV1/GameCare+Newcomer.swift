@@ -166,6 +166,8 @@ extension GameCare {
     private var newcomerInterrupted: Bool {
         greetBlocked || tripActive || raceBusy || select.isSelecting || select.sheetOpen || arranging || greeting || roomSwitch.dest != nil || dining.phase != .absent
     }
+    /// A housemate the player has taken (picked up, tray / close-up reservation) while the greetings, the hug or the party run: it ends at once (nobody is left in a script).
+    private func housemateTaken(_ actors: [JellyActor]) -> Bool { actors.contains { $0.brain?.reserved == true || $0.brain?.commanded == true } }
 
     func tickNewcomerWelcome(_ w: NewcomerWelcome, _ all: [JellyActor], dt: Float) {
         let rosterCount = max(jellies.count, 1)
@@ -197,7 +199,7 @@ extension GameCare {
         if g.confettiRain > 0, clock - g.confettiRain > ArrivalConfettiTuning.rainLife { g.confettiRain = 0 }
         // interruptions (not while the curtain is up: nothing can be tapped there)
         if w.stage != .holding {
-            w.blockedT = newcomerInterrupted ? w.blockedT + dt : 0
+            w.blockedT = (newcomerInterrupted || ((w.stage == .greet || w.stage == .group || w.stage == .party) && housemateTaken(actors))) ? w.blockedT + dt : 0
             if w.blockedT > 0.4 {
                 NSLog("[newcomer] interrupted by greetBlocked=%d trip=%d race=%d selecting=%d sheet=%d arranging=%d greeting=%d room=%d dining=%d stage=%@", greetBlocked ? 1 : 0, tripActive ? 1 : 0, raceBusy ? 1 : 0,
                       select.isSelecting ? 1 : 0, select.sheetOpen ? 1 : 0, arranging ? 1 : 0, greeting ? 1 : 0, roomSwitch.dest != nil ? 1 : 0, dining.phase != .absent ? 1 : 0, "\(w.stage)")
@@ -339,8 +341,9 @@ extension GameCare {
     // MARK: greeting (love pairs, one at a time)
 
     /// The pair emotes that suit a first meeting, in the order tried, varied per Jelbie (the first fitting one that can start is used). Round 2 = a house of two's "everyone" moment.
-    static func newcomerKinds(place i: Int, round2: Bool) -> [SocialKind] {
-        if round2 { return [.hopAlong, .twirl, .danceOff] }
+    static func newcomerKinds(place i: Int, round2: Bool, avoiding used: SocialKind? = nil) -> [SocialKind] {
+        // round 2 (a house of two: its "everyone" moment) is the body hug, whichever of the two round 1 did not use; the old second emotes stay as the fallbacks
+        if round2 { return ([.swayHug, .spinHug].filter { $0 != used } + [.swayHug, .spinHug].filter { $0 == used } + [.hopAlong, .twirl, .danceOff]).prefix(5).map { $0 } }
         switch i % 3 {
         case 0: return [.shyWave, .swayHug, .cuddleLean, .cheekSquish]          // (the shy wave from afar then the run to each other, when the two stand far enough apart)
         case 1: return [.spinHug, .highFive, .cheekSquish, .swayHug]
@@ -371,10 +374,10 @@ extension GameCare {
             w.attemptT -= dt
             if w.attemptT <= 0 {
                 w.attemptT = 0.2
-                let kinds = Self.newcomerKinds(place: w.greetIndex, round2: w.round2)
+                let kinds = Self.newcomerKinds(place: w.greetIndex, round2: w.round2, avoiding: w.lastKind)
                 let k = kinds[w.attempt % kinds.count]; w.attempt += 1
                 if gb.socialFree, nb.socialFree, gb.socialStart(k, with: nb, actors[gid].sim) {
-                    w.greetPhase = .running; w.phaseT = 0
+                    w.greetPhase = .running; w.phaseT = 0; if !w.round2 { w.lastKind = k }
                     NSLog("[newcomer] greet %d -> %@", gid, k.rawValue)
                     return
                 }
@@ -415,12 +418,12 @@ extension GameCare {
             w.attemptT = 0.3
             // he is the one the ring forms round: the starter, the housemates join
             if nb.socialFree, nb.socialStartGroup(.groupHug, with: awake.map(\.1).filter { $0 !== nb }, na.sim) {
-                w.party.begin()          // the hug is on: the party carries on from it (the dance, the hops)
+                w.party.begin(cheer: true)          // the hug is on: the party carries on from it (the dance, the hops)
                 NSLog("[newcomer] group hug")
                 w.go(.party); return
             }
         }
-        if w.phaseT > 4 { w.party.begin(at: .dance); announceWelcoming(w); w.go(.party) }          // no hug fits: the dance is tried, then the hops
+        if w.phaseT > 4 { w.party.begin(at: .cheer, cheer: true); announceWelcoming(w); w.go(.party) }          // no hug fits: the dance is tried, then the hops
     }
 
     private func tickNewcomerParty(_ w: NewcomerWelcome, _ actors: [JellyActor], _ na: JellyActor, _ nb: BlobBrain, dt: Float) {
@@ -438,8 +441,9 @@ extension GameCare {
         if w.t > Self.newcomerBudget { w.party.skipToFinale() }          // about 25-35 s in all: the dance is dropped when the hellos ran long
         if !w.party.active { endNewcomerWelcome(w, actors, interrupted: false, finished: true) }
     }
-    /// Seconds into the welcome after which the ring dance is skipped.
-    static let newcomerBudget: Float = 22
+    /// Seconds into the welcome (it starts at the hold, so the run-in, cheer and hellos are in it) after which the party's cheer / ring dance are skipped. (Was 22 with the dance alone;
+    /// the cheer + the dance follow the hug, so the clock must not drop them: a runaway welcome is still cut here.)
+    static let newcomerBudget: Float = 60
     /// Past this many seconds into the welcome the next housemate gets the quick hop + heart; a pair emote is wound down after `newcomerPairCap` s.
     static let newcomerHelloBudget: Float = 14
     static let newcomerPairCap: Float = 10
@@ -571,6 +575,8 @@ final class NewcomerWelcome {
     var party = GuestParty()
     var greeters: [Int] = [], greetIndex = 0, greetPhase: GreetPhase = .gap, attempt = 0, attemptT: Float = 0
     var round2 = false, peaked = false, announced = false
+    /// The pair emote the first hello ran (round 2's hug is the other one).
+    var lastKind: SocialKind?
     var healT: Float = 0
     var hearts: [(at: Float, id: Int)] = []
     /// The housemates that were asleep when the hold ended (woken for him; sent back to bed after).

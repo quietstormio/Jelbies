@@ -234,6 +234,8 @@ final class MusicFadeTests: XCTestCase {
         for n in 10...12 { XCTAssertTrue(Track.dayPool.contains(Track(rawValue: "day_\(n)")!)) }
         for n in 4...6 { XCTAssertTrue(Track.eveningPool.contains(Track(rawValue: "evening_\(n)")!)) }
         for n in 6...8 { XCTAssertTrue(Track.lofiPool.contains(Track(rawValue: "night_\(n)")!)) }
-        XCTAssertEqual([Track.dayPool.count, Track.eveningPool.count, Track.lofiPool.count], [12, 6, 8])
+        // 2026-11-16: the lofi R&B picks (day_13 Sun Nap, evening_7 Porch Light, night_9 Moon Pillow)
+        XCTAssertTrue(Track.dayPool.contains(.day13)); XCTAssertTrue(Track.eveningPool.contains(.evening7)); XCTAssertTrue(Track.lofiPool.contains(.night9))
+        XCTAssertEqual([Track.dayPool.count, Track.eveningPool.count, Track.lofiPool.count], [13, 7, 9])
     }
 }

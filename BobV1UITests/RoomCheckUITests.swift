@@ -61,8 +61,8 @@ final class RoomCheckUITests: XCTestCase {
         for (tag, roster) in [("three", "pip,moss,lavender"), ("bob", "bob")] {
             var app = launch(roster: roster, hour: 12, extra: ["-LobbyAuto", "volley"])
             XCTAssertTrue(el(app, "volley-play").waitForExistence(timeout: 40)); sleep(10)
-            el(app, "volley-play").tap(); save("\(tag)_match_0"); XCTAssertTrue(el(app, "volley-leave").waitForExistence(timeout: 120), "the match starts"); sleep(25); save("\(tag)_match")
-            el(app, "volley-leave").tap(); sleep(30); save("\(tag)_after_match"); app.terminate()
+            el(app, "volley-play").tap(); save("\(tag)_match_0"); XCTAssertTrue(el(app, "forfeit-home").waitForExistence(timeout: 120), "the match starts"); sleep(25); save("\(tag)_match")
+            el(app, "forfeit-home").tap(); el(app, "forfeit-go").tap(); sleep(30); save("\(tag)_after_match"); app.terminate()
             app = launch(roster: roster, hour: 12, extra: ["-LobbyAuto", "track"])
             XCTAssertTrue(el(app, "track-race").waitForExistence(timeout: 40)); sleep(10)
             el(app, "track-race").tap(); save("\(tag)_race_0"); for k in 1...4 { sleep(30); save("\(tag)_race_\(k)") }

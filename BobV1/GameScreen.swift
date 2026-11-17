@@ -1039,6 +1039,11 @@ struct GameScreen: View {
             let who = d.integer(forKey: "WearWho")
             for l in WearLook.allCases { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }
             for n in list.split(separator: ",") { if let l = WearLook(rawValue: String(n)) { _ = care.store.wear(l, on: who) } }
+            // capture aid: -WearAlso <slot> buys a second copy of each of those looks and dresses that Jelbie in them too (matching outfits)
+            if d.object(forKey: "WearAlso") != nil {
+                let also = d.integer(forKey: "WearAlso")
+                for n in list.split(separator: ",") { if let l = WearLook(rawValue: String(n)) { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "", 2); _ = care.store.wear(l, on: also) } }
+            }
         }
         // capture aids for the tray spot (dev arguments only): `-TrayAt x,z` makes the next meal's tray land on the open spot nearest that point (a fixed spot, so a before / after meal can be compared);
         // `-ToyAt x,z` lays a stack of blocks there (a toy that stays put) (the tray must then land elsewhere)

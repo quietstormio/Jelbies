@@ -26,10 +26,10 @@ final class FirstDayTourCaptureUITests: XCTestCase {
         app.launch()
         XCUIDevice.shared.orientation = land ? .landscapeLeft : .portrait
 
-        XCTAssertTrue(app.buttons["Meet the three"].waitForExistence(timeout: 60), "the picker")
+        XCTAssertTrue(app.buttons["adopt-meet"].waitForExistence(timeout: 60), "the picker")
         sleep(3)
         shot(app, "00_picker", dir)
-        app.buttons["Meet the three"].tap()
+        app.buttons["adopt-meet"].tap()
         sleep(3)
         let pick = app.buttons["This one!"]
         XCTAssertTrue(pick.waitForExistence(timeout: 10))

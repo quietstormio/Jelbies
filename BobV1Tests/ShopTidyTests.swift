@@ -3,6 +3,7 @@
 //  2026-11-15 (the user's ask: "Remove Furniture section. Remove rc car, scooter, frisbee, and bubble machine. Ensure remaining toys all work and have
 //  interactions."): the Shop has no Furniture tab (owned furniture stays in the bag and in the rooms), the toy car, kick scooter, frisbee and bubble machine
 //  are retired (not sold; a save that owns one has it removed and refunded exactly once), and every toy still sold has something a Jelmiko does with it.
+//  2026-11-16 (the user's ask: "The tunnel too small remove this toy"): the play tunnel is retired the same way.
 //
 
 import XCTest
@@ -12,9 +13,9 @@ import XCTest
 final class ShopTidyTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
 
-    /// The sixteen toys the Shop still sells.
+    /// The fifteen toys the Shop still sells (the play tunnel was retired on 2026-11-16).
     private static let soldToys: Set<DecorKind> = [.ball, .bouncymat, .blocks, .spintop, .yarnball, .drum, .soccerball, .minigoal, .plushbear, .pinwheel,
-                                                   .beachball, .playtunnel, .plushdino, .footbag, .skateboard, .hoop]
+                                                   .beachball, .plushdino, .footbag, .skateboard, .hoop]
 
     // the game's room and camera (the placement rules read them), as DecorTests sets them
     override func setUp() { DecorField.shared.clear(); GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440.0 / 956.0) }
@@ -28,8 +29,8 @@ final class ShopTidyTests: XCTestCase {
     }
 
     func testTheFourToysAreRetiredAtTheirShopPrices() {
-        XCTAssertEqual(StoreBook.retiredToys, [.toycar, .kickscooter, .frisbee, .bubblemachine])
-        let prices: [DecorKind: Int] = [.toycar: 50, .kickscooter: 55, .frisbee: 35, .bubblemachine: 60]
+        XCTAssertEqual(StoreBook.retiredToys, [.toycar, .kickscooter, .frisbee, .bubblemachine, .playtunnel])
+        let prices: [DecorKind: Int] = [.toycar: 50, .kickscooter: 55, .frisbee: 35, .bubblemachine: 60, .playtunnel: 70]
         for (k, price) in prices {
             XCTAssertTrue(k.isRetired, "\(k) is retired")
             XCTAssertNil(StoreCatalog.item(k.storeID), "\(k) is no longer sold")
@@ -110,7 +111,7 @@ final class ShopTidyTests: XCTestCase {
 
     func testEveryToyStillSoldHasSomethingAJelmikoDoesWithIt() {
         let toys = Set(StoreCatalog.decorItems(.toys).compactMap(\.decor))
-        XCTAssertEqual(toys, Self.soldToys, "the sixteen toys left in the Shop")
+        XCTAssertEqual(toys, Self.soldToys, "the fifteen toys left in the Shop")
         // the goal alone is booped; with a soccer ball it is shot at through the ball
         for k in toys { XCTAssertNotNil(k.activeInteraction, "\(k) is a toy nobody plays with") }
         XCTAssertEqual(DecorKind.soccerball.activeInteraction, .soccerKick)
@@ -186,5 +187,30 @@ final class ShopTidyTests: XCTestCase {
         XCTAssertEqual(b.placedDecor.map(\.kind), [.loveseat]); XCTAssertEqual(b.saved.stash?["loft"]?.map(\.kind), [.loveseat])
         for k in StoreBook.retiredToys { XCTAssertEqual(b.count(k.storeID), 0) }
         let (_, w3) = book(d); XCTAssertEqual(w3.count, 0, "and a third time")
+    }
+
+    /// 2026-11-16 (the user's ask: "The tunnel too small remove this toy"): the owner's case, one play tunnel bought and placed in the room, the save already through the
+    /// older passes. It leaves the bag and the room, its 70 JellyCoins come back once, and the Shop no longer sells it.
+    func testThePlayTunnelIsRetiredTakenOutOfTheRoomAndRefundedOnce() {
+        XCTAssertTrue(DecorKind.playtunnel.isRetired)
+        XCTAssertNil(StoreCatalog.item(DecorKind.playtunnel.storeID), "the Shop no longer sells the tunnel")
+        XCTAssertFalse(ShopTab.toys.items.contains { $0.decor == .playtunnel })
+        let suite = "ShopTidyTests.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: suite)!
+        defer { d.removePersistentDomain(forName: suite) }
+        let old = #"""
+        {"counts":{"decor-playtunnel":1,"decor-plant":1,"decor-ball":1},"pages":[],"wearables":[],"worn":{},"starterGiven":true,"newItems":0,"placed":[],
+         "placedAt":[{"uid":1,"kind":"playtunnel","x":1.0,"z":0.5},{"uid":2,"kind":"plant","x":-2.0,"z":1.0}],"nextDecorUID":3,"retiredDecorRefunded":true}
+        """#
+        d.set(Data(old.utf8), forKey: "k")
+        let (a, w) = book(d)
+        XCTAssertEqual(w.count, 70, "the tunnel's Shop price, paid once")
+        XCTAssertEqual(a.count("decor-playtunnel"), 0, "the tunnel left the bag")
+        XCTAssertEqual(a.placedDecor.map(\.kind), [.plant], "the tunnel left the room; the plant stays where it was")
+        XCTAssertEqual(a.count("decor-plant"), 1); XCTAssertEqual(a.count("decor-ball"), 1, "other goods are untouched")
+        let (b, w2) = book(d)
+        XCTAssertEqual(w2.count, 0, "loading again pays nothing")
+        XCTAssertEqual(b.placedDecor.map(\.kind), [.plant])
+        XCTAssertEqual(b.count("decor-playtunnel"), 0)
     }
 }

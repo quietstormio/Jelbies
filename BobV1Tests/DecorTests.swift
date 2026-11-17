@@ -61,7 +61,7 @@ final class DecorTests: XCTestCase {
         }
         XCTAssertEqual(Set(items.compactMap { $0.decor }), Set(DecorKind.allCases).subtracting(DecorKind.parkOnly).subtracting(DecorKind.retired), "every kind but the park-only toys and the retired sit-on furniture is sold")
         XCTAssertEqual(items.filter { $0.roomUnits == 2 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, Set(DecorKind.allCases).subtracting(DecorKind.retired).filter { $0.spec.units == 2 && !DecorKind.parkOnly.contains($0) }.sorted { $0.rawValue < $1.rawValue })
-        XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .playtunnel, .slide], "the 1.25x slide, play tunnel and pet bed count 3 spots")
+        XCTAssertEqual(items.filter { $0.roomUnits == 3 }.map { $0.decor! }.sorted { $0.rawValue < $1.rawValue }, [.petbed, .slide], "the 1.25x slide and pet bed count 3 spots (the 3-spot play tunnel was retired on 2026-11-16)")
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "decor shows")
         XCTAssertTrue(!ShopTab.shown.contains(.furniture) && ShopTab.shown.contains(.toys), "2026-11-15: the Shop shows no Furniture tab")
         // prices and spots come from the Blender exports' JSON
