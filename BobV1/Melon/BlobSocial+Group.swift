@@ -36,7 +36,7 @@ enum GroupTuning {
 }
 
 extension SocialKind {
-    var isGroup: Bool { self == .groupHug || self == .groupCheer || self == .conga || self == .circleDance || isTreat }
+    var isGroup: Bool { self == .groupHug || self == .groupCheer || self == .conga || self == .circleDance || isTreat || isCalmGroup }
     /// The rare treats (congaLine, ringDance): own cooldowns, see EmoteTuning.
     var isTreat: Bool { self == .congaLine || self == .ringDance }
 }
@@ -76,6 +76,7 @@ extension BlobBrain {
             let base = k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)
             w.append((k, repeated ? base * 0.6 : base))          // (a hug may follow a hug, less often: it is the favourite)
         }
+        calmAppend(&w, crew: crew)          // (BlobSocial+GroupCalm.swift: the calm kinds, scaled to a share of the table whatever its weights are)
         if w.isEmpty { w = [(.groupHug, 1)] }
         var x = rand() * w.reduce(0) { $0 + $1.1 }
         var kind = w[0].0
@@ -132,7 +133,8 @@ extension BlobBrain {
         let cap = kind.isTreat ? EmoteTuning.treatCrew : GroupTuning.maxCrew          // (the treats are for the three housemates: a visitor beyond them watches)
         for o in groupCandidates() where crew.count < cap && !crew.contains(where: { $0 === o }) { crew.append(o) }
         crew = Array(crew.prefix(cap))
-        guard crew.count >= (kind == .congaLine ? 2 : 3), crew.count <= cap else { return false }
+        guard crew.count >= kind.groupMin, crew.count <= cap else { return false }
+        if kind.isCalmGroup, !CalmGroup.mayStart(kind, crew) { return false }
         if kind.isFast, fastOthers(except: crew) > 0 { return false }
         currentPose(sim)
         for m in crew where !m.socialFree { guard m.socialBeckonStop() else { return false } }          // (out on a wander leg: it ends a few steps on, then he joins)
@@ -149,6 +151,9 @@ extension BlobBrain {
             s.leaderWait = 0.2; s.home0 = position
         case .congaLine, .ringDance:
             guard let st = emoteSetup(kind, crew: crew) else { return false }
+            s = st
+        case .rowWave, .singAlong, .storyTime, .lookAtThat, .sitCircle, .stargazeTogether, .yawnChain:
+            guard let st = calmStart(kind, crew: crew) else { return false }
             s = st
         default: return false
         }
@@ -187,6 +192,7 @@ extension BlobBrain {
         case .circleDance: driveCircle(s, mem, isA, sim)
         case .congaLine: driveCongaLine(s, mem, isA, sim, dt)
         case .ringDance: driveRingDance(s, mem, isA, sim, dt)
+        case .rowWave, .singAlong, .storyTime, .lookAtThat, .sitCircle, .stargazeTogether, .yawnChain: driveCalm(s, mem, isA, sim)
         default: break
         }
     }

@@ -64,3 +64,10 @@ shyWave_pearl_teddy	pearl,teddy	shyWave	perp,top	-	90
 groupCheer_bob_teddy_pearl	bob,teddy,pearl	groupCheer	perp,top	-	90
 conga_pip_lavender_teddy	pip,lavender,teddy	conga	perp,top	-	90
 congaLine_pip_pearl_moss	pip,pearl,moss	congaLine	perp,top	-	90
+rowWave_bob_pip_moss	bob,pip,moss	rowWave	perp,top	-	90
+singAlong_lavender_teddy_pearl	lavender,teddy,pearl	singAlong	perp,top	-	90
+storyTime_pip_panda_moss	pip,panda,moss	storyTime	perp,top	-	90
+lookAtThat_bob_lavender_pip	bob,lavender,pip	lookAtThat	perp,top	-	90
+sitCircle_teddy_moss_pearl	teddy,moss,pearl	sitCircle	perp,top	-	90
+stargazeTogether_bob_pip_lavender	bob,pip,lavender	stargazeTogether	perp,top	-ClockHour 21	90
+yawnChain_moss_teddy_panda	moss,teddy,panda	yawnChain	perp,top	-ClockHour 21	90

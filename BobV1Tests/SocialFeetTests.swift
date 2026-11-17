@@ -57,6 +57,7 @@ final class SocialFeetTests: XCTestCase {
         var name = "", cast = "", started = false, completed = false, frames = 0, seconds: Float = 0
         var leash = 0, leashFirst = -1, leashPull: Float = 0
         var airSess = 0, joinSess: Float = .infinity, collarSess: Float = 0, joinWalk: Float = .infinity, collarWalk: Float = 0, badSess = ""
+        var joinAny: Float = .infinity, joinAnyFrames = 0
         var air = 0, ratio: Float = .infinity, join: Float = .infinity, collar: Float = 0, bad = ""
         var skate = Skate()          // (in-session planted phases only)
         var skateWalk: Float = 0          // (worst drift of the planted phases outside the session: the walk-up and the walk away)
@@ -85,7 +86,7 @@ final class SocialFeetTests: XCTestCase {
 
     /// Runs one stance for one cast to its end, every frame measured on every rig. Returns the result; asserts the existing thresholds.
     @discardableResult
-    func run(_ name: String, _ sc: Scenario, cast: [Int], castName: String, maxSec: Float = 70, props: Prop = .none, file: StaticString = #filePath, line: UInt = #line) -> Result {
+    func run(_ name: String, _ sc: Scenario, cast: [Int], castName: String, maxSec: Float = 70, props: Prop = .none, prepare: ((Duo) -> Void)? = nil, file: StaticString = #filePath, line: UInt = #line) -> Result {
         _ = OnePieceInvariantTests.configured
         setProps(props)
         let n = cast.count
@@ -93,6 +94,7 @@ final class SocialFeetTests: XCTestCase {
         var positions = Array(ContactPolishTests.farStarts.prefix(n))
         if case .lie = sc { positions = [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)] }
         let d = makeDuo(cast: cast, positions: positions)
+        prepare?(d)          // (the calm groups: shoes, the evening)
         Self.keep.append(d)
         let rigs = d.lab.rigs
         let a = rigs[0], b = rigs[1]
@@ -154,6 +156,7 @@ final class SocialFeetTests: XCTestCase {
                 // sole skating
                 let sk = r.skinner
                 if !(sk.beansActive && sk.beanBlend > 0.05) { r.render() }          // (the Watch's footFrame rendered r.dyn already while the beans are out)
+                if let j = GroupCalmTests.joinAny(r) { res.joinAny = min(res.joinAny, j); res.joinAnyFrames += 1 }          // (the neck join on EVERY frame with the feet blended in, planted ones too: the air-only metric above is blind to a sit / a wave)
                 for s in 0..<2 {
                     var isPlanted = false
                     var xz = SIMD2<Float>.zero

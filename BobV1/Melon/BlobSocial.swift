@@ -56,6 +56,8 @@ enum SocialKind: String, CaseIterable, Sendable {
     case congaLine, ringDance
     /// Batch 2 (2026-11-02, BlobSocial+Emotes2.swift): a pair presses cheeks and slowly turns once round their shared centre with real steps, then parts with hearts
     case spinHug
+    /// Calm group emotes (2026-11-16, BlobSocial+GroupCalm.swift): built only from the stand / sit / lie / wave / yawn / look moves, no hops
+    case rowWave, singAlong, storyTime, lookAtThat, sitCircle, stargazeTogether, yawnChain
 }
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
@@ -188,6 +190,8 @@ final class SocialSession {
     var fightT: Float = 0
     var contactTouches = 0          // the gate's touches in this session (ContactStance.swift)
     var leaderWait: Float = 0
+    /// Calm groups (BlobSocial+GroupCalm.swift): per member (steerID) the next cue index it has not done yet.
+    var calmCue: [Int: Int] = [:]
     var closeOK: Bool { kind == .boop || kind == .squabble || kind == .sneak || kind == .nuzzle || kind == .sitTogether || kind == .bagSit || kind == .cuddle || kind == .chestBump || kind == .highFive || kind == .cheekSquish || kind == .bellyBounce || kind == .backToBack || kind == .cuddleLean || kind == .mirrorDance || kind == .ringAround || kind == .swayHug || kind == .shyWave || kind == .danceOff || kind == .whisperGiggle || kind == .groupHug || kind == .circleDance || kind == .congaLine || kind == .ringDance || kind == .leapfrog || kind == .tag || kind == .littleRace || kind == .peekaboo || kind == .spinHug }
     var round = 0, roles = 0, fastMoves = 0
     /// Group treats: the leader's planned path (waypoints), whether the crew are choreographed (they do not steer round each other), the time the line started moving.
@@ -390,7 +394,7 @@ extension BlobBrain {
             return socialStartFriends3(kind, with: o, sim)
         case .spinHug:
             return socialStartSpinHug(with: o, sim)
-        case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance:
+        case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .rowWave, .singAlong, .storyTime, .lookAtThat, .sitCircle, .stargazeTogether, .yawnChain:
             return socialStartGroup(kind, with: [o], sim)          // (the others near by join; a pair is not enough)
         case .zoomies:
             guard d < 6 else { return false }
@@ -730,7 +734,7 @@ extension BlobBrain {
         case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround: driveMore(s, o, isA, sim, dt)
         case .swayHug, .danceOff, .whisperGiggle, .shyWave: driveFriends3(s, o, isA, sim, dt)
         case .spinHug: driveSpinHug(s, o, isA, sim, dt)
-        case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance: break          // (handled above)
+        case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .rowWave, .singAlong, .storyTime, .lookAtThat, .sitCircle, .stargazeTogether, .yawnChain: break          // (handled above)
         }
         if let e = s.end, isA { _ = e }
     }

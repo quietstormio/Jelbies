@@ -149,6 +149,8 @@ final class ContactPolishTests: XCTestCase {
     static let curatedGroupEntries: [ContactEntry] = [
         e("groupHug", .groupHug, .touching), e("groupCheer", .groupCheer, .proximity), e("conga", .conga, .proximity), e("circleDance", .circleDance, .touching),
         e("congaLine", .congaLine, .proximity), e("ringDance", .ringDance, .proximity),
+        e("rowWave", .rowWave, .proximity), e("singAlong", .singAlong, .proximity), e("storyTime", .storyTime, .proximity), e("lookAtThat", .lookAtThat, .proximity),
+        e("sitCircle", .sitCircle, .proximity), e("stargazeTogether", .stargazeTogether, .proximity), e("yawnChain", .yawnChain, .proximity),
     ]
 
     /// USER RULE 3 (2026-11-04): every interactive emote follows the same formula, and a new one is measured WITHOUT anybody remembering to add it: every SocialKind that no curated entry covers gets an

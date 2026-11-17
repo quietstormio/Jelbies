@@ -8,6 +8,7 @@
 //                                                     top = the same tracking from nearly straight above
 //    -ContactDemoDelay <s>                            wait before it starts (default 4)
 //    -ContactDemoPark 1 (+ -StartPark 1, -ContactDemoVisitors N, -ContactDemoVisitorSpecies wings,daisy,none)   the same in the PARK: cast = the NewGame Jelbie(s) + N chosen visitors
+//    -GroupForce <SocialKind raw value>               = -ContactDemo for a group kind (rowWave, singAlong, storyTime, lookAtThat, sitCircle, stargazeTogether, yawnChain, groupHug ...); DevArgs-gated. The night kinds need `-ClockHour 21`
 //  The cast is taken off autonomy so nothing else interrupts the scene. Used by BobV1UITests/ContactCaptureUITests.swift.
 //
 
@@ -203,7 +204,7 @@ enum ContactDemo {
         let d = UserDefaults.standard
         if d.object(forKey: "LegsCam") != nil { await legsScene(care: care); return }
         applyCamera()
-        guard let name = d.string(forKey: "ContactDemo"), !name.isEmpty else { return }
+        guard let name = d.string(forKey: "ContactDemo") ?? (DevArgs.enabled ? d.string(forKey: "GroupForce") : nil), !name.isEmpty else { return }          // (-GroupForce <kind>: the same scene for a group kind, dev arguments only)
         try? await Task.sleep(nanoseconds: UInt64((d.double(forKey: "ContactDemoDelay") > 0 ? d.double(forKey: "ContactDemoDelay") : 4) * 1e9))
         let park = d.integer(forKey: "ContactDemoPark") != 0
         let cast: [JellyActor]

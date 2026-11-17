@@ -109,6 +109,7 @@ struct ContactStance: Sendable {
         .twirl: .proximity(from: 1), .hopAlong: .proximity(from: 1), .littleRace: .proximity(), .leapfrog: .proximity(features: true),
         .peekaboo: .proximity(features: true), .mirrorDance: .proximity(from: 1), .danceOff: .proximity(from: 1), .shyWave: .proximity(from: 3),
         .groupCheer: .proximity(from: 1), .conga: .proximity(), .congaLine: .proximity(features: true), .ringDance: .proximity(features: true),
+        .rowWave: .proximity(from: 2), .singAlong: .proximity(from: 2), .storyTime: .proximity(from: 2), .lookAtThat: .proximity(from: 2), .sitCircle: .proximity(from: 2), .stargazeTogether: .proximity(from: 2), .yawnChain: .proximity(from: 2),          // (calm groups: nobody touches; the apart-gap only)
         .follow: .proximity(), .line: .proximity(), .dance: .proximity(from: 1), .greet: .proximity(), .keepAway: .proximity(),
         // (explicit rows for the rest: a new interactive SocialKind with no row fails ContactTableTests.testEveryKindHasAnExplicitRowAndIsMeasured)
         // (explicit since 2026-11-04, user rule 3: EVERY kind has a row - a new emote without one fails ContactSettleTests.testEveryInteractiveKindHasAStanceRow)
