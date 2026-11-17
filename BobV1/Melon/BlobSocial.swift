@@ -82,7 +82,7 @@ enum SocialTuning {
     /// An invited (wandering) partner has this long to finish his leg.
     static let inviteWait: Float = 3.5
     /// Chance that a nearby free Jelly joins a zoomies, and how far he may be (the zoomies used to be solo most of the time).
-    static let zoomJoin: Float = 0.8, zoomJoinRadius: Float = 6
+    static let zoomJoin: Float = 0.5, zoomJoinRadius: Float = 6
     static let livelyChance: Float = 4.0, livelyWait: Float = 0.25
     static let lookCooldown: Float = 12
     /// The closer gap of the boop / squabble pair only (everybody else keeps `peerGap`).
@@ -427,6 +427,11 @@ extension BlobBrain {
         var w: [(SocialKind, Float)] = [(.boop, 0.6), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
         if anticsEnabled { w = socialPlayWeights(base: w, partner: o, others: cands.map { $0.0 }, grumpy: grumpy) }
         if parkSocialOn { for i in w.indices { if ParkPlayTuning.calmKinds.contains(w[i].0) { w[i].1 *= ParkPlayTuning.calmKindMul } else if w[i].0 == .boop { w[i].1 *= ParkPlayTuning.boopMul } } }          // (park only: the calm pair kinds likelier, the hand-holding boop less)
+        if anticsEnabled, !grumpy {          // (rare kinds: a floor share of the table, the extra from the top entries: BlobBrain+Variety `raiseFloors`)
+            var ws = w.map { $0.1 }
+            Self.raiseFloors(&ws, floor: { VarietyTuning.pairFloor[w[$0].0] ?? 0 })
+            for i in w.indices { w[i].1 = ws[i] }
+        }
         do {          // pair no-repeat: drop the last 3 kinds this pair did; if fewer than 4 would be left, drop only the most recent
             let recent = Set((socialBook.recentWith[o.steerID] ?? []) + (o.socialBook.recentWith[steerID] ?? []))
             let kept = w.filter { !recent.contains($0.0) }

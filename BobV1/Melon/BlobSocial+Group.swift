@@ -28,7 +28,7 @@ enum GroupTuning {
     static let walkMax: Float = 6.5
     static let maxCrew = 5
     /// Pick weights (the hug is the favourite).
-    static let weights: [(SocialKind, Float)] = [(.groupHug, 14.0), (.groupCheer, 3.0), (.conga, 2.7), (.circleDance, 3.0)]
+    static let weights: [(SocialKind, Float)] = [(.groupHug, 5.0), (.groupCheer, 3.5), (.conga, 3.5), (.circleDance, 3.5)]
     /// Neighbouring bodies in a huddle / ring touch at this fraction of `peerGap`; a loose circle keeps this fraction.
     static let touch: Float = 0.78, loose: Float = 1.15
     static let steps = 8, stepAngle: Float = .pi / 4.5
@@ -74,7 +74,7 @@ extension BlobBrain {
             if repeated, k != .groupHug { continue }
             if k.isFast, fastOthers(except: crew) > 0 { continue }
             let base = k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)
-            w.append((k, repeated ? base * 0.6 : base))          // (a hug may follow a hug, less often: it is the favourite)
+            w.append((k, (repeated ? base * 0.3 : base) * varietyClusterMul(k, with: crew)))          // (a hug may follow a hug, much less often)
         }
         if w.isEmpty { w = [(.groupHug, 1)] }
         var x = rand() * w.reduce(0) { $0 + $1.1 }
@@ -153,7 +153,7 @@ extension BlobBrain {
         default: return false
         }
         for m in crew { m.socialBook.passThrough = (kind == .groupHug || kind == .circleDance); m.socialBook.hold = true; m.socialBook.faceYaw = m.yawTo(s.home0) }
-        for m in crew { m.varietyNoteSocial(kind, with: nil) }
+        for m in crew { m.varietyNoteSocial(kind, with: nil, crew: crew.map { $0.steerID }) }
         return true
     }
 

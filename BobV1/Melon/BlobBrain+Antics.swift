@@ -66,7 +66,7 @@ extension BlobBrain {
             s.insert(k)
         }
         // what a friend began a moment ago (the echo window), with its family
-        for o in socialOthers() where o !== self { for k in o.idleState.echo.keys where k != .wander && k != .look && k != .sleep { s.formUnion(Self.family(k)) } }
+        for o in socialOthers() where o !== self { for k in o.idleState.echo.keys where k != .wander && k != .look && k != .sleep { s.formUnion(Self.family(k)); if let c = EmoteCluster.of(k) { s.formUnion(EmoteCluster.idleKinds[c] ?? []) } } }          // (the whole look-alike cluster, not only the dash / hop families)
         return s
     }
 
