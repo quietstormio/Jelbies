@@ -114,7 +114,8 @@ extension GameCare {
         if MealTrace.poseOn, MealTrace.singleActive {
             // (every fixed step) the single eater's brain root, floor point, yaw and activity: the meal smoothness survey
             let f = Self.floorPos(brain, sim)
-            MealTrace.log(String(format: "pose a=%.4f", MealTrace.singleAge) + " \(id)@p0=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", brain.position.x, brain.position.y, f.x, f.y, brain.yaw) + ",\(brain.activity),-" + (dining.isPresent ? " tray=1" : " tray=0"))
+            let c = sim.map { (s: SoftBody) -> SIMD2<Float> in let v = s.centroid(); return SIMD2(v.x, v.z) } ?? f          // (the body centroid: what the eye follows)
+            MealTrace.log(String(format: "pose a=%.4f", MealTrace.singleAge) + " \(id)@p0=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", brain.position.x, brain.position.y, f.x, f.y, brain.yaw) + ",\(brain.activity),-" + String(format: ",%.4f,%.4f", c.x, c.y) + (dining.isPresent ? " tray=1" : " tray=0"))
         }
         #endif
     }

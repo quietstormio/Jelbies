@@ -220,6 +220,8 @@ final class DiningGroup {
 
     /// Floor spots of the Jelbies who are NOT at this sitting (GameCare sets it every tick): the tray pops in only where none of them stands.
     var bystanders: () -> [SIMD2<Float>] = { [] }
+    /// Simulator-only trace aid (GameCare+Group sets it): diner i's soft-body centroid on the floor, for the `pose` line (the body as drawn, not the brain's root).
+    var traceBody: ((Int) -> SIMD2<Float>)?
     /// The tray is drawn only once every diner stands at his place (his approach point), so no body ever walks across it on the way: the floor beside it is no wider than
     /// a body, there is no way round its ends (GameCare.serveWanted). Past this many seconds it pops in anyway (a diner that cannot get there is handled by the retries).
     static let gatherCap: Float = 12
@@ -371,6 +373,7 @@ final class DiningGroup {
                 let b = brains[i], f = floor(i)
                 let flags = (started[i] ? "s" : "-") + (released.indices.contains(i) && released[i] ? "r" : "")
                 line += " \(memberIDs[i])@p\(placeOf[i])=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", b.position.x, b.position.y, f.x, f.y, b.yaw) + ",\(b.activity),\(flags)"
+                if let tb = traceBody { let c = tb(i); line += String(format: ",%.4f,%.4f", c.x, c.y) }          // (the body centroid: what the eye follows)
             }
             line += trayOut ? " tray=1" : " tray=0"
             MealTrace.log(line)

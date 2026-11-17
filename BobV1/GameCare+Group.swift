@@ -91,6 +91,10 @@ extension GameCare {
                 group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
             }
             group.avoid = jellyFloors
+            #if targetEnvironment(simulator)
+            let bodies: [() -> SIMD2<Float>] = sorted.map { a in { [weak s = a.sim] in s.map { (b: SoftBody) -> SIMD2<Float> in let v = b.centroid(); return SIMD2(v.x, v.z) } ?? .zero } }
+            group.traceBody = { bodies[$0]() }          // (meal trace only: the pose line's body centroid)
+            #endif
             group.start(c, brains: brains, floor: { floors[$0]() }, ids: sorted.map(\.id))
             if let cafeHooks = cafeBook.hooks, group.isActive { cafeHooks.seated(group.memberIDs, group.placeOf) }
             groupWanted = nil
