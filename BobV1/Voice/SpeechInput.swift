@@ -179,17 +179,7 @@ nonisolated struct TranscriptAccumulator {
     private(set) var volatile = ""
     mutating func add(text: String, isFinal: Bool) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if isFinal {
-            // "Violet spin" was heard as volatile text, then the recogniser finalised only "Violet": the unfinished tail ("spin") is kept as the volatile text
-            // until the next result replaces it (a final that never comes for it must not cost the command its verb)
-            var tail = ""
-            if !t.isEmpty {
-                finals.append(t)
-                let (v, f) = (volatile.lowercased(), t.lowercased())
-                if v.count > f.count, v.hasPrefix(f) { tail = String(volatile.dropFirst(f.count)).trimmingCharacters(in: .whitespacesAndNewlines) }
-            }
-            volatile = tail
-        } else { volatile = t }
+        if isFinal { if !t.isEmpty { finals.append(t) }; volatile = "" } else { volatile = t }
     }
     var result: String {
         (finals + (volatile.isEmpty ? [] : [volatile])).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)

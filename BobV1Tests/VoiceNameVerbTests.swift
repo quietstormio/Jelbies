@@ -74,6 +74,34 @@ final class VoiceNameVerbTests: XCTestCase {
         XCTAssertEqual(obeyed(r, .sit) + obeyed(r, .hop) + obeyed(r, .spin), 3, "6: \(r.care.voice.feedbackLog)")
     }
 
+    /// A trick Pip was never given: the HUD says so (not a silent highlight), and Pip does no trick.
+    func testUnknownTrickSaysSoOnTheHUD() {
+        let r = make()
+        r.care.jelly(1)?.training.unlocked = { $0 != .sing }
+        say(r, "Pip sing")
+        XCTAssertEqual(r.care.targetJelly, 1, "the name still highlights")
+        XCTAssertEqual(obeyed(r, .sing), 0)
+        XCTAssertEqual(r.care.voice.understood?.ok, false)
+        XCTAssertTrue(r.care.voice.understood?.text.contains("doesn't know Sing yet") == true, "\(String(describing: r.care.voice.understood))")
+    }
+
+    /// "Alien" / "Violet" as REAL renames (the Adoption rename path), not nicknames.
+    func testRealRenamesWork() {
+        let saved = JellyRoster.names
+        defer { JellyRoster.names = saved }
+        JellyRoster.names[1] = "Alien"; JellyRoster.names[2] = "Violet"
+        let r = make()
+        for i in 0..<3 { r.care.jelly(i)?.training.unlocked = { _ in true } }          // moonwalk is a Shop trick: give them all of it
+        say(r, "Alien do moonwalk")
+        XCTAssertEqual(obeyed(r, .moonwalk), 1)
+        XCTAssertEqual(r.care.targetJelly, 1)
+        say(r, "Violet spin")
+        XCTAssertEqual(obeyed(r, .spin), 1)
+        XCTAssertEqual(r.care.targetJelly, 2)
+        say(r, "Alien, sing!"); say(r, "moonwalk Violet")
+        XCTAssertEqual(obeyed(r, .sing), 1); XCTAssertEqual(obeyed(r, .moonwalk), 2)
+    }
+
     /// With nothing highlighted, a verb with no name is the room command: every Jelmiko who knows it does it (the existing behaviour).
     func testVerbWithNoNameAndNothingHighlighted() {
         let r = make()

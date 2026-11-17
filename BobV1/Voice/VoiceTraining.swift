@@ -42,10 +42,10 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         switch self {
         case .sit: return ["sit"]; case .jacks: return ["jump", "jacks", "jumping jacks"]; case .run: return ["run"]
         case .flip: return ["flip"]; case .look: return ["look"]; case .come: return []
-        case .spin: return ["spin", "spinning", "twirl", "twirling", "spin around", "spin round", "twirl around", "tail spin"]; case .hop: return ["hop", "hopping"]
-        case .showOff: return ["show off", "showoff", "show it off"]; case .strut: return ["strut"]; case .sing: return ["sing", "sing a song", "sing song", "singing"]
+        case .spin: return ["spin", "twirl", "spin around", "spin round", "twirl around", "tail spin"]; case .hop: return ["hop"]
+        case .showOff: return ["show off", "showoff", "show it off"]; case .strut: return ["strut"]; case .sing: return ["sing", "sing a song", "sing song"]
         case .hula: return ["hula", "hula dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]; case .oneLegSpin: return ["one leg spin", "pirouette", "tiptoe spin"]
-        case .moonwalk: return ["moonwalk", "moon walk", "moonwalking"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
+        case .moonwalk: return ["moonwalk", "moon walk"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
         }
     }
     /// A word to suggest, in the tip text only.

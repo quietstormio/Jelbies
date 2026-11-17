@@ -77,7 +77,7 @@ final class VoiceStressTests: XCTestCase {
         var firstFails: [String] = []
         for i in 0..<6000 {
             let t = tricks.randomElement(using: &g)!
-            let shape = Int.random(in: 0..<5, using: &g)
+            let shape = [0, 1, 2, 4].randomElement(using: &g)!
             let who = Bool.random(using: &g) ? ("Alien", 0) : ("Violet", 1)
             let said = phrase(name: who.0, trick: word(t, &g), &g)
             let heard = delivered(said, shape: shape, name: who.0)
