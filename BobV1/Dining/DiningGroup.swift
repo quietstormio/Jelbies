@@ -34,10 +34,12 @@ final class DiningGroup {
     nonisolated(unsafe) static var homeSeats: Int = DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealSeats") == 3 ? 3 : 2
     /// C6: how far a waiter for the next sitting keeps from every eater's stand and approach point (a body with its arms ~1.4 wide, ~1.6 through the catch, + margin).
     static let waiterClear: Float = 1.75
-    /// C7 (round E; switch `-MealRolling 0` = round D's next sitting, simulator / dev builds): a waiter for the next sitting takes the first FREED place of the
+    /// C7 (round E; OFF by default since the round E re-survey: `-MealRolling 1` turns it on, simulator / dev builds): a waiter for the next sitting takes the first FREED place of the
     /// running sitting: the tray stays, that place is set again (DiningSet.restock(place:)), and he walks to its approach point once its leaver is off it
     /// (`joinClear` from the stand, or `joinWaitMax` s after the release). The sitting is kept while a waiter is pending (`waitersPending`).
-    nonisolated(unsafe) static var rolling: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealRolling") != nil && UserDefaults.standard.integer(forKey: "MealRolling") == 0)
+    /// Off: round E measured 22 tray crossings on the join walk (the tray is already out; with no route found the walk goes straight at its target) and one
+    /// 46 s stall, against none in round D. Off = round D's next sitting (the tray goes, the third walks in, a new tray pops).
+    nonisolated(unsafe) static var rolling: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealRolling") == 1
     static let joinClear: Float = 1.2
     static let joinWaitMax: Float = 2.0
     /// GameCare+Group: true while a waiter for the next sitting is still waiting (C7 keeps the sitting, and its tray, for him).

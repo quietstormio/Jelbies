@@ -11,7 +11,7 @@ import simd
 @MainActor
 final class MealTwoSeatsTests: XCTestCase {
     override func setUp() { DiningGroup.homeSeats = 2 }
-    override func tearDown() { DiningGroup.homeSeats = 2; DiningGroup.rolling = true }
+    override func tearDown() { DiningGroup.homeSeats = 2; DiningGroup.rolling = false }          // (F0: C7 is off by default)
 
     private func room() -> DiningJellyTests.Room {
         let r = DiningJellyTests.Room(count: 3)
@@ -94,6 +94,7 @@ final class MealTwoSeatsTests: XCTestCase {
 
     /// Guards C7: the third takes the freed place at the SAME tray; the tray is never poofed in between.
     func testTheThirdTakesTheFreedPlaceAtTheSameTray() {
+        DiningGroup.rolling = true          // (F0: C7 is off by default; this test is C7's own)
         let r = room()
         hungry(r)
         r.care.feed()
@@ -120,7 +121,6 @@ final class MealTwoSeatsTests: XCTestCase {
     /// Guards C7: with rolling off, the old second sitting still feeds the third.
     func testTheOldSecondSittingWhenRollingIsOff() {
         DiningGroup.rolling = false
-        defer { DiningGroup.rolling = true }
         let r = room()
         hungry(r)
         r.care.feed()
