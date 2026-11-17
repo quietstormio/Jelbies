@@ -1,6 +1,6 @@
 //
 //  StoreCatalog+Food4.swift
-//  2026-11-16: the three bowl / cup foods (Ramen bowl, Mac & cheese, Fruit cup) became hand-held ones (Cinnamon roll, Soft pretzel, Fruit skewer; same perk and price;
+//  2026-11-16: the three bowl / cup foods (Ramen bowl, Mac & cheese, Fruit cup): the Ramen bowl and Fruit cup became hand-held ones (Cinnamon roll, Fruit skewer; same perk and price) and Mac & cheese was dropped (its owners get the existing Donut;
 //  StoreBook+RetiredFoods.swift moves saves over).
 //  Store sweep 4 (2026-10-27): eight new foods and treats and the new Drinks tab (boba milk tea, berry smoothie, pink lemonade, hot cocoa).
 //  Prices follow the JellyCoins economy (a race pays 250 / 140 / 75): foods 13-18, treats 11-14, drinks 11-14. Every perk is an existing PerkKind.
@@ -14,7 +14,6 @@ extension StoreCatalog {
         // food
         StoreItem(id: "cheeseburger", name: "Cheeseburger", kind: .food, price: 16, perk: .fullBelly, description: "Big and hearty. Hunger falls slower for 4 hours.", symbol: "fork.knife", food: "cheeseburger"),
         StoreItem(id: "cinnamonroll", name: "Cinnamon roll", kind: .food, price: 18, perk: .cozy, description: "Warm and gooey. Stays happy longer for 4 hours.", symbol: "fork.knife", food: "cinnamonroll"),
-        StoreItem(id: "softpretzel", name: "Soft pretzel", kind: .food, price: 13, perk: .social, description: "Twisty and salty, made to share. Plays with the others more for an hour.", symbol: "fork.knife", food: "softpretzel"),
         StoreItem(id: "dumplings", name: "Dumplings", kind: .food, price: 15, perk: .focus, description: "Lucky little bites. Fewer stumbles in the next race.", symbol: "fork.knife", food: "dumplings"),
         StoreItem(id: "pancakestack", name: "Pancake stack", kind: .food, price: 14, perk: .zoomies, description: "Syrupy! Zoomies now and a quicker next race.", symbol: "fork.knife", food: "pancakestack"),
         // treats

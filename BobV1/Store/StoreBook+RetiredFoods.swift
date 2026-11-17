@@ -11,7 +11,7 @@ import Foundation
 /// The retired foods and what replaced them. Nonisolated: the Consumable lookup and the saved favourites (JellyTraitsBook) read it off the main actor.
 nonisolated enum RetiredFoods {
     /// Retired food id -> the hand-held food that replaces it.
-    static let map: [String: String] = ["ramen": "cinnamonroll", "macncheese": "softpretzel", "fruitcup": "fruitskewer"]
+    static let map: [String: String] = ["ramen": "cinnamonroll", "macncheese": "donut", "fruitcup": "fruitskewer"]
     /// The replacement for `id` when it is a retired food, else `id` itself.
     static func current(_ id: String) -> String { map[id] ?? id }
 }

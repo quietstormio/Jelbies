@@ -1,7 +1,7 @@
 //
 //  FoodHandheldTests.swift
 //  2026-11-16 (the user's ask: "Remove foods in bowls it looks weird because they eat with hands"): the Ramen bowl, Mac & cheese and Fruit cup are gone, replaced by a
-//  Cinnamon roll, a Soft pretzel and a Fruit skewer (same perk, same price); the café's Mini sundae is an Ice cream cone and its Jelly Cup a Jelly puff. Saves, favourites
+//  Cinnamon roll and a Fruit skewer (same perk, same price; Mac & cheese's owners get the existing Donut); the café's Mini sundae is an Ice cream cone and its Jelly Cup a Jelly puff. Saves, favourites
 //  and old ids keep working (Store/StoreBook+RetiredFoods.swift). Fast: no rooms, no dining runs (DiningFlowTests / StoreFoodTests toss every food).
 //
 
@@ -14,7 +14,6 @@ final class FoodHandheldTests: XCTestCase {
     /// removed id -> (replacement id, name, price, perk): the owner's pairs; perk and price are the old food's own.
     private let pairs: [(old: String, new: String, name: String, price: Int, perk: PerkKind)] = [
         ("ramen", "cinnamonroll", "Cinnamon roll", 18, .cozy),
-        ("macncheese", "softpretzel", "Soft pretzel", 13, .social),
         ("fruitcup", "fruitskewer", "Fruit skewer", 11, .shine)]
 
     private func suite(_ n: String) -> UserDefaults {
@@ -65,15 +64,15 @@ final class FoodHandheldTests: XCTestCase {
     func testOwnedCountsConvertOnceAndKeepAnyReplacementAlreadyOwned() throws {
         let d = suite("counts")
         var s = StoreBook.Saved()
-        s.counts = ["ramen": 2, "macncheese": 1, "fruitcup": 3, "cinnamonroll": 1, "taco": 4]
+        s.counts = ["ramen": 2, "macncheese": 1, "fruitcup": 3, "cinnamonroll": 1, "taco": 4, "donut": 2]
         d.set(try JSONEncoder().encode(s), forKey: "book")
         let first = StoreBook(wallet: DropsWallet(persists: false), persists: true, defaults: d, key: "book")
-        XCTAssertEqual(first.count("cinnamonroll"), 3, "2 + the 1 already owned"); XCTAssertEqual(first.count("softpretzel"), 1); XCTAssertEqual(first.count("fruitskewer"), 3)
+        XCTAssertEqual(first.count("cinnamonroll"), 3, "2 + the 1 already owned"); XCTAssertEqual(first.count("donut"), 3, "1 Mac & cheese + the 2 Donuts already owned"); XCTAssertEqual(first.count("fruitskewer"), 3)
         for old in retired { XCTAssertEqual(first.count(old), 0); XCTAssertNil(first.saved.counts[old], "\(old) is gone from the save") }
         XCTAssertEqual(first.count("taco"), 4, "other foods untouched")
         // it ran and was saved: a second load changes nothing (no doubling)
         let second = StoreBook(wallet: DropsWallet(persists: false), persists: true, defaults: d, key: "book")
-        XCTAssertEqual(second.count("cinnamonroll"), 3); XCTAssertEqual(second.count("softpretzel"), 1); XCTAssertEqual(second.count("fruitskewer"), 3)
+        XCTAssertEqual(second.count("cinnamonroll"), 3); XCTAssertEqual(second.count("donut"), 3); XCTAssertEqual(second.count("fruitskewer"), 3)
         // the pass on its own: pure, and a save with none of them comes back untouched
         let (_, changed) = StoreBook.convertRetiredFoods(second.saved)
         XCTAssertFalse(changed)
@@ -91,7 +90,7 @@ final class FoodHandheldTests: XCTestCase {
                                          "4": JellyTraits(personality: .bouncy, jars: [50, 50, 50, 50, 50], snack: "taco")]
         d.set(try JSONEncoder().encode(raw), forKey: JellyTraitsBook.key)
         let loaded = JellyTraitsBook.load(d)
-        XCTAssertEqual(loaded[1]?.snack, "cinnamonroll"); XCTAssertEqual(loaded[2]?.snack, "softpretzel"); XCTAssertEqual(loaded[3]?.snack, "fruitskewer"); XCTAssertEqual(loaded[4]?.snack, "taco")
+        XCTAssertEqual(loaded[1]?.snack, "cinnamonroll"); XCTAssertEqual(loaded[2]?.snack, "donut"); XCTAssertEqual(loaded[3]?.snack, "fruitskewer"); XCTAssertEqual(loaded[4]?.snack, "taco")
         // rewritten once: the stored record already holds the new ids
         let stored = try JSONDecoder().decode([String: JellyTraits].self, from: try XCTUnwrap(d.data(forKey: JellyTraitsBook.key)))
         XCTAssertEqual(stored["1"]?.snack, "cinnamonroll"); XCTAssertEqual(stored["3"]?.snack, "fruitskewer")
@@ -101,12 +100,12 @@ final class FoodHandheldTests: XCTestCase {
             for f in p.snacks { XCTAssertNotNil(StoreCatalog.item(f), "\(p) likes \(f), which is not sold"); XCTAssertFalse(retired.contains(f)) }
         }
         // and a favourite food is still a food with a power-up to double (FavouriteFoodTests covers the doubling itself)
-        for p in [JellyPersonality.cuddly, .brave, .gentle] { XCTAssertTrue(p.snacks.contains { id in pairs.contains { $0.new == id } }) }
+        for p in [JellyPersonality.brave, .gentle] { XCTAssertTrue(p.snacks.contains { id in pairs.contains { $0.new == id } }) }
     }
 
     func testOldIdsNeverCrashAndTheDiaryKeepsItsNames() throws {
         // a stale tray / dev argument / old record naming a retired food finds its replacement
-        XCTAssertEqual(Consumables.with(id: "ramen")?.id, "cinnamonroll"); XCTAssertEqual(Consumables.with(id: "macncheese")?.id, "softpretzel"); XCTAssertEqual(Consumables.with(id: "fruitcup")?.id, "fruitskewer")
+        XCTAssertEqual(Consumables.with(id: "ramen")?.id, "cinnamonroll"); XCTAssertEqual(Consumables.with(id: "macncheese")?.id, "donut"); XCTAssertEqual(Consumables.with(id: "fruitcup")?.id, "fruitskewer")
         XCTAssertNil(Consumables.with(id: "nonsense"))
         XCTAssertEqual(JellyTraits(personality: .brave, jars: [50, 50, 50, 50, 50], snack: "ramen").snackName, "Cinnamon roll")
         // the food diary stores the meal's NAME as text: an old "Ramen bowl" line still decodes and reads as it did
@@ -122,14 +121,15 @@ final class FoodHandheldTests: XCTestCase {
 
     func testSellBackWorksWithTheMovedCounts() throws {
         let d = suite("sell")
-        var s = StoreBook.Saved(); s.counts = ["ramen": 2, "fruitcup": 1]
+        var s = StoreBook.Saved(); s.counts = ["ramen": 2, "fruitcup": 1, "macncheese": 1, "donut": 1]
         d.set(try JSONEncoder().encode(s), forKey: "sellbook")
         let w = DropsWallet(persists: false)
         let b = StoreBook(wallet: w, persists: true, defaults: d, key: "sellbook")
         XCTAssertNil(b.sell("ramen"), "a retired id cannot be sold")
-        XCTAssertNil(b.sell("fruitcup"))
+        XCTAssertNil(b.sell("fruitcup")); XCTAssertNil(b.sell("macncheese"))
+        XCTAssertEqual(b.count("donut"), 2, "Mac & cheese moved into the Donuts"); XCTAssertEqual(b.sell("donut"), 7, "and sells as a Donut at half of 14")
         XCTAssertEqual(b.sell("cinnamonroll"), 9, "moved counts sell as the new food at half its price")
         XCTAssertEqual(b.count("cinnamonroll"), 1); XCTAssertEqual(b.sell("fruitskewer"), 5)
-        XCTAssertEqual(w.count, 14)
+        XCTAssertEqual(w.count, 21)
     }
 }

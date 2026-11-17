@@ -1,8 +1,8 @@
 """Hand-held replacements (2026-11-16, the owner: "Remove foods in bowls it looks weird because they eat with hands").
-Cinnamon roll (was the Ramen bowl), Soft pretzel (was Mac & cheese), Fruit skewer (was the Fruit cup), plus the café's Ice cream cone (replaces the
+Cinnamon roll (was the Ramen bowl), Fruit skewer (was the Fruit cup; Mac & cheese went to the existing Donut), plus the café's Ice cream cone (replaces the
 sundae's cup, same id `sundae`) and Jelly puff (replaces the Jelly Cup, id `jellycup`). One piece per mesh, same conventions as foods4.py:
 Blender units (x10 = game units), z up, bottom sits on z = 0, piece fits inside +-0.8 across and about 1.5 high like the cupcake and the donut.
-Register in foods.BUILD; run.py exports them:  FOOD4_OUT=<dir> blender -b -P run.py -- cinnamonroll softpretzel fruitskewer sundae jellycup"""
+Register in foods.BUILD; run.py exports them:  FOOD4_OUT=<dir> blender -b -P run.py -- cinnamonroll fruitskewer sundae jellycup"""
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -90,69 +90,6 @@ def cinnamonroll(v=0):
         commit(sweep(path, 0.04, 6), (1.0, 0.98, 0.94), sharp=80)
     scale_all(1.05)
 BUILD['cinnamonroll'] = cinnamonroll
-
-# ================================================================ FROSTED DONUT (was: Mac & cheese, through the Soft pretzel)
-def frosteddonut(v=0):
-    """A plump golden ring, strawberry-pink icing with a wavy edge, rainbow sprinkles and a white drizzle. Dough torus 0.50 round, 0.28 tube radius."""
-    R = 0.50; rt = 0.29; sq = 0.92                                         # major radius, tube radius, vertical squash
-    segs = 56; ring = 22
-    def torus(rt_, sq_, zc, wob=0.0, top_only=False, out=0):
-        bm = bmesh.new(); grid = []
-        for i in range(segs):
-            a = 2*math.pi*i/segs; row = []
-            for k in range(ring):
-                b = 2*math.pi*k/ring
-                rr = rt_ + (wob*math.sin(a*7 + 1.0) + wob*0.6*math.sin(a*11) if wob else 0.0)*(0.5 + 0.5*math.cos(b - math.pi/2*0))
-                R_ = R + rr*math.cos(b)
-                row.append(bm.verts.new((R_*math.cos(a), R_*math.sin(a), zc + rr*sq_*math.sin(b))))
-            grid.append(row)
-        for i in range(segs):
-            j = (i+1) % segs
-            for k in range(ring):
-                q = (k+1) % ring
-                bm.faces.new([grid[i][k], grid[j][k], grid[j][q], grid[i][q]])
-        return bm
-    zc = rt*sq
-    def dc(p, n):
-        side = sstep(0.1, 0.9, 1 - abs(n.z))
-        c = mix((0.96, 0.74, 0.40), (0.88, 0.58, 0.26), side)
-        c = mix(c, (0.74, 0.44, 0.18), sstep(0.1, -0.8, n.z))
-        return mix(c, (1.0, 0.86, 0.58), sstep(0.35, 1.0, nz(p, 7.0, 3))*0.25)
-    commit(torus(rt, sq, zc), dc, sharp=70)
-    # the icing: a pink cap over the upper part of the ring (a closed thick shell), its inner and outer edges wavy so the golden dough shows round it
-    ic = bmesh.new(); K = 14; grid = []
-    for i in range(segs):
-        a = 2*math.pi*i/segs
-        wav_o = 0.10*math.sin(a*6.0 + 0.5) + 0.05*math.sin(a*13.0 + 2.0)
-        wav_i = 0.09*math.sin(a*5.0 + 1.3) + 0.04*math.sin(a*11.0)
-        loop = []
-        for outer in (True, False):
-            ks = range(K) if outer else range(K-1, -1, -1)
-            for k in ks:
-                t = k/(K-1)
-                b = math.radians(14.0 + wav_o*57.3*0.5) + t*(math.radians(166.0) - math.radians(14.0 + wav_o*57.3*0.5) - math.radians(wav_i*57.3*0.5))
-                rr = rt*(1.085 if outer else 1.0)
-                R_ = R + rr*math.cos(b)
-                loop.append(ic.verts.new((R_*math.cos(a), R_*math.sin(a), zc + rr*sq*math.sin(b))))
-        grid.append(loop)
-    L = len(grid[0])
-    for i in range(segs):
-        j = (i+1) % segs
-        for k in range(L):
-            q = (k+1) % L
-            ic.faces.new([grid[i][k], grid[j][k], grid[j][q], grid[i][q]])
-    commit(ic, lambda p, n: mix((1.0, 0.50, 0.66), (1.0, 0.74, 0.84), sstep(0.3, 1.0, n.z)*0.8), sharp=70)
-    # rainbow sprinkles on the icing
-    r = random.Random(7)
-    cols = [(0.30, 0.65, 1.0), (1.0, 0.92, 0.25), (1.0, 1.0, 1.0), (0.50, 0.90, 0.40), (0.75, 0.45, 0.95), (1.0, 0.55, 0.20)]
-    for k in range(34):
-        a = r.uniform(0, 2*math.pi); b = math.radians(r.uniform(32, 148))
-        rr = rt*1.085 + 0.006
-        R_ = R + rr*math.cos(b)
-        pos = (R_*math.cos(a), R_*math.sin(a), zc + rr*sq*math.sin(b) + 0.012)
-        commit(blob(0.075, 0.024, 0.024, 1), cols[k % 6], sharp=80, xf=xf_rt(pos, rotz=a + r.uniform(-1.3, 1.3) + math.pi/2))
-    scale_all(0.98)
-BUILD['frosteddonut'] = frosteddonut
 
 # ================================================================ FRUIT SKEWER (was: Fruit cup)
 def fruitskewer(v=0):

@@ -158,7 +158,7 @@ a favourite snack (store food), and a slight colour shade (classic / Soft or Dee
 | Personality | Jar tilt (Cute, Sweet, Sparkly, Cool, Sporty) | Snacks |
 |---|---|---|
 | Bouncy | 0, -4, 0, -8, +14 | donut, fries, taco |
-| Cuddly | +10, +8, 0, -8, -8 | cookie, cupcake, softpretzel |
+| Cuddly | +10, +8, 0, -8, -8 | cookie, cupcake, donut |
 | Curious | 0, -4, +10, +6, -8 | dumplings, sushi, sandwich |
 | Sleepy | +2, +12, -4, +2, -14 | cookie, popsicle, onigiri |
 | Giggly | +8, +2, +10, -10, 0 | cupcake, pancakestack, minipizza |

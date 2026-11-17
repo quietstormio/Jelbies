@@ -57,7 +57,7 @@ nonisolated enum JellyPersonality: String, CaseIterable, Codable, Sendable {
     var snacks: [String] {
         switch self {
         case .bouncy: return ["donut", "fries", "taco"]
-        case .cuddly: return ["cookie", "cupcake", "softpretzel"]
+        case .cuddly: return ["cookie", "cupcake", "donut"]
         case .curious: return ["dumplings", "sushi", "sandwich"]
         case .sleepy: return ["cookie", "popsicle", "onigiri"]
         case .giggly: return ["cupcake", "pancakestack", "minipizza"]
