@@ -242,4 +242,39 @@ extension GameCare {
         if next >= 15 { sums("late"); P.arriveT = nil; P.arriveLastRoot = [:]; P.arriveLastStep = [:] } else { t = next; P.arriveT = t }
     }
 }
+extension ParkSlideProbe {
+    /// park-arrive-r2: which trip's arrival is watched (`park`, `race`, `show`, `cafe`, `groom`) and, for the trips other than the park, the bodies that ran out to it (the outing's runners).
+    nonisolated(unsafe) static var arriveTrip = "park", arriveIDs: Set<Int> = []
+    /// `-StartTrip race|show|cafe` (capture aid, park-arrive-r2): that trip for Jelly 0 once the room is up, asked again every ~0.75 s until it runs (as `-StartPark`).
+    nonisolated(unsafe) static var startTrip = UserDefaults.standard.string(forKey: "StartTrip"), startTripFrames = 0
+}
+
+extension GameCare {
+    /// park-arrive-r2: the park's arrival probe at another trip's swap. Every body of the trip is watched (the runners' ids are listed: `outingHome` is theirs).
+    func tripArriveStart(_ name: String) {
+        typealias P = ParkSlideProbe
+        guard P.on else { return }
+        P.arriveT = 0; P.arriveSteps = 0; P.arriveWorst = [:]; P.arriveLastRoot = [:]; P.arriveLastStep = [:]
+        P.arriveTrip = name; P.arriveIDs = Set(outing.runners.keys)
+        NSLog("[arrive] trip=%@ runners=%@", name, P.arriveIDs.sorted().map { String($0) }.joined(separator: ","))
+    }
+    func tripArriveTick(_ name: String, _ bodies: [JellyActor], dt: Float) {
+        guard ParkSlideProbe.on, ParkSlideProbe.arriveT != nil, ParkSlideProbe.arriveTrip == name else { return }
+        parkArriveProbe(bodies, dt: dt)
+    }
+    /// `-StartTrip` (see `ParkSlideProbe.startTrip`).
+    func tickStartTrip() {
+        typealias P = ParkSlideProbe
+        guard let k = P.startTrip else { return }
+        if tripActive { P.startTrip = nil; return }
+        P.startTripFrames += 1
+        guard P.startTripFrames > 90, P.startTripFrames % 45 == 0, !outing.running else { return }
+        switch k {
+        case "race": startRace(jelly: 0)
+        case "show": startShow(jelly: 0)
+        case "cafe": requestCafe()
+        default: P.startTrip = nil
+        }
+    }
+}
 #endif

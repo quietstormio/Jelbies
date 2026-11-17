@@ -191,6 +191,9 @@ extension GameCare {
         let book = showBook
         switch dest {
         case .stage:
+            #if targetEnvironment(simulator)
+            tripArriveStart("show")
+            #endif
             let player = show.playerID
             book.performers = book.actors.indices.contains(player) ? [player] : []          // the one roster body on the stage: the contestant
             book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko waits off stage (state saved, restored under the white on the way home)
@@ -454,6 +457,9 @@ extension GameCare {
 
     func tickShow(_ actors: [JellyActor], dt: Float) {
         showBook.actors = actors
+        #if targetEnvironment(simulator)
+        tripArriveTick("show", actors + showBook.extra, dt: dt)          // (park-arrive-r2 capture aid: Park/ParkSlideProbe.swift)
+        #endif
         if show.active { for a in actors { a.brain?.sleepLocked = true } }
         if !(forfeitAsk && show.canPause) { show.tick(dt: dt) }          // (the "Go home?" card holds the stage still, except the dance: the song's own clock runs on)
         guard show.active, show.onStage else { return }

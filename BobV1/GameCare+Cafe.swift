@@ -138,6 +138,9 @@ extension GameCare {
     /// Once per fixed step (the stage calls it with every Jelbie, after the others).
     func tickCafe(_ actors: [JellyActor], dt: Float) {
         cafeBook.actors = actors
+        #if targetEnvironment(simulator)
+        tripArriveTick("cafe", actors, dt: dt)          // (park-arrive-r2 capture aid: Park/ParkSlideProbe.swift)
+        #endif
         if cafe.active { for a in actors { a.brain?.sleepLocked = true } }
         cafe.step(dt: dt, blocked: cafe.phase == .goOut && cafeFadeBlocked)
         guard cafe.active else { return }
@@ -181,6 +184,9 @@ extension GameCare {
         let actors = book.actors
         switch dest {
         case .cafe:
+            #if targetEnvironment(simulator)
+            tripArriveStart("cafe")
+            #endif
             book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.ate = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; book.zoomed = []; book.charged = 0
             for a in actors {
                 guard let brain = a.brain else { continue }

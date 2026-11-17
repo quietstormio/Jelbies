@@ -78,6 +78,7 @@ extension GameCare {
 
     func tickGroom(_ actors: [JellyActor], dt simDt: Float) {
         #if targetEnvironment(simulator)
+        tripArriveTick("groom", actors, dt: simDt)          // (park-arrive-r2 capture aid: Park/ParkSlideProbe.swift)
         if Self.startGroomFrames > 0, !groom.active {          // capture aid: `-StartGroom N` takes the first N Jelbies to the Jelly Spa (Quick Splash, coins topped up) once the room is up
             Self.startGroomFrames += 1
             if Self.startGroomFrames > 120 { Self.startGroomFrames = 0; if bath.wallet.count < 20 { bath.wallet.add(40, silent: true) }; groom.openPicker(all: Array(0..<max(1, min(UserDefaults.standard.integer(forKey: "StartGroom"), jellies.count)))); startGroom(.quick) }
@@ -183,6 +184,9 @@ extension GameCare {
         }
         RoomLayout.apply(RoomCatalog.groom)
         GameCamera.configureGroom()
+        #if targetEnvironment(simulator)
+        tripArriveStart("groom")
+        #endif
         for a in book.actors where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }          // (the room's small arena would pin the door step at z = -2.6: he could never leave the door)
         // everybody is inside the shop (not drawn): wait off to the right, so the room's spots do not become bodies in the street that block the door's walk-out (the peer steering sees them)
         for (i, a) in book.actors.enumerated() { if let b = a.brain { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.doorStep.y - 0.1 + 1.4 * Float(i % 4)))) } }
