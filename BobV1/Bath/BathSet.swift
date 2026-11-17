@@ -115,7 +115,7 @@ nonisolated final class BathOverlay {
     // MARK: the Care items' models (Blender, Store/CareMeshes.swift)
 
     /// Where each prop sits on the tub: bottles and the lavender bar on the rim (right side, then left), the duck afloat in the water in front of him.
-    static let rimSpots: [SIMD3<Float>] = [SIMD3(1.0, 0.37, 0.55), SIMD3(0.92, 0.37, 1.25), SIMD3(-1.0, 0.37, 0.55), SIMD3(-0.92, 0.37, 1.25)]
+    static let rimSpots: [SIMD3<Float>] = [SIMD3(1.0, 0.37, 0.4), SIMD3(0.95, 0.37, 1.55), SIMD3(-1.0, 0.37, 0.4), SIMD3(-0.95, 0.37, 1.55)]
     static let rimItems = [CareItems.bubblebath, CareItems.gentle, CareItems.deluxe, CareItems.lavender, CareItems.lintguard, CareItems.brush]
     static let propScale: Float = 1.25
 
