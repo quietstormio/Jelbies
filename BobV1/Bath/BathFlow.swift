@@ -76,6 +76,8 @@ final class BathFlow {
     @ObservationIgnored var demo = false
     /// The Care items picked for this wash (GameCare sets it from `armedSupplies`; the picker in BathChrome changes it during the soap stage). Cleared when the bath is over.
     var kit = BathKit.none
+    /// Capture aid (`-BathSpeed 12`): scrub / rinse / polish gains x this, so a slow simulator finishes a bath in a film's time. 1 in play.
+    @ObservationIgnored var demoSpeed: Float = 1
     @ObservationIgnored private var brushLeft: Float = 0
     @ObservationIgnored private var heartAcc: Float = 0
     @ObservationIgnored private var ambientT: Float = 0
@@ -494,13 +496,13 @@ final class BathFlow {
         look.toolAt = w
         switch phase {
         case .soap:
-            look.paint(local: l, radius: BathTuning.brushRadius, amount: BathTuning.soapGain * kit.scrubMul * v * dt)
+            look.paint(local: l, radius: BathTuning.brushRadius, amount: BathTuning.soapGain * kit.scrubMul * demoSpeed * v * dt)
             if v > 0.3 { spawnBubbles(at: w, dt: dt) }
             AudioHub.shared.scrubLoop(v > 0.3)
         case .rinse:
             AudioHub.shared.scrubLoop(false)
             look.spray = w + BathLook.sprayOffset
-            look.rinse(local: l, radius: BathTuning.rinseRadius, amount: (BathTuning.rinsePassive + BathTuning.rinseGain * kit.scrubMul * v) * dt)
+            look.rinse(local: l, radius: BathTuning.rinseRadius, amount: (BathTuning.rinsePassive + BathTuning.rinseGain * kit.scrubMul * demoSpeed * v) * dt)
             look.wet = min(1, look.wet + BathTuning.wetRise * dt)
             if v > 0.3, splashGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.splash, volume: BathSFX.splashVolume) }
         case .shine:
@@ -509,7 +511,7 @@ final class BathFlow {
                 AudioHub.shared.play(.squeakPolish, volume: BathSFX.squeakVolume, rate: 1 + (rand() * 2 - 1) * BathSFX.squeakRateSpread)
             }
             let before = polish
-            polish = min(1, polish + BathTuning.polishGain * kit.scrubMul * v * dt)
+            polish = min(1, polish + BathTuning.polishGain * kit.scrubMul * demoSpeed * v * dt)
             look.wet = wetStart * (1 - polish)
             grime.sparkle = polish
             look.sparkle = polish
