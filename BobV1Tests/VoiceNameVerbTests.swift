@@ -102,6 +102,15 @@ final class VoiceNameVerbTests: XCTestCase {
         XCTAssertEqual(obeyed(r, .sing), 1); XCTAssertEqual(obeyed(r, .moonwalk), 2)
     }
 
+    /// Wave: the existing wave script runs on the named Jelmiko, and a lone "hello" does not.
+    func testWaveRunsTheWaveScript() {
+        let r = make()
+        say(r, "Bob wave hi")          // (slot 0 here: the other slots' brains are driven by MelonStage's onRemote, which the test rig does not wire)
+        XCTAssertEqual(r.care.targetJelly, 0)
+        XCTAssertTrue(r.care.voice.feedbackLog.contains(.social(.wave)), "\(r.care.voice.feedbackLog)")
+        XCTAssertTrue(r.run(4) { r.care.brainFor(0)?.isWaving == true }, "Bob waves")
+    }
+
     /// With nothing highlighted, a verb with no name is the room command: every Jelmiko who knows it does it (the existing behaviour).
     func testVerbWithNoNameAndNothingHighlighted() {
         let r = make()

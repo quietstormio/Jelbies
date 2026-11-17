@@ -983,6 +983,8 @@ final class VoiceCoordinator {
         case .play:
             care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
             if !focused { pendingHop = true; hopWait = 0; walkAfterHop = false }
+        case .wave:
+            if !trickRunning { brain.requestNow(.wave) }             // the existing wave: turn to the camera, wave
         case .goodnight, .wakeUp:
             break                                                    // (handled before: a group command)
         }

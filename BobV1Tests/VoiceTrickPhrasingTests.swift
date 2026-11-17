@@ -69,6 +69,20 @@ final class VoiceTrickPhrasingTests: XCTestCase {
         XCTAssertTrue(eaten.isEmpty, eaten.joined(separator: ", "))
     }
 
+    func testDanceIsHulaAndWaveIsAlwaysKnown() {
+        for said in ["Alien dance", "Alien do a dance", "Alien, dance for me!", "dance Alien", "Alien can you please dance"] {
+            XCTAssertEqual(alien().decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(.hula), said)
+            XCTAssertEqual(alien(knows: { $0 != .hula }).decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .dontKnow(.hula), said)
+        }
+        for said in ["Alien wave", "Alien wave hi", "Alien, wave hello!", "wave Alien", "Alien say hi", "say hi Alien", "Alien do a wave", "Alien, please wave for me"] {
+            for knows in [true, false] {
+                XCTAssertEqual(alien(knows: { _ in knows }).decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .social(.wave), said)
+            }
+            XCTAssertEqual(alien().decide(transcript: said, runningMove: nil, mood: .grumpy, session: 1), .grumpyIgnore, said)
+        }
+        XCTAssertNotEqual(alien().decide(transcript: "Alien hello", runningMove: nil, mood: .happy, session: 1), .social(.wave), "a lone hello is not a wave")
+    }
+
     func testSingSaidTheWaysPeopleSayIt() {
         for said in ["Alien sing", "Alien sing a song", "Alien, sing for me!", "sing me a song Alien", "Alien do sing", "Alien can you sing"] {
             XCTAssertEqual(alien().decide(transcript: said, runningMove: nil, mood: .happy, session: 1), .perform(.sing), said)

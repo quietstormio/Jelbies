@@ -255,6 +255,7 @@ enum RuleParser {
             case .play: return finish(.play)
             case .goodnight: return finish(.sleep)
             case .wakeUp: return finish(.wake)
+            case .wave: break          // (a plain voice command, decided before the router: no natural-command action for it)
             }
         }
         // a wearable / toy named alone

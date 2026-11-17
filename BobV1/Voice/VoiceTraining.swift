@@ -44,7 +44,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .flip: return ["flip"]; case .look: return ["look"]; case .come: return []
         case .spin: return ["spin", "twirl", "spin around", "spin round", "twirl around", "tail spin"]; case .hop: return ["hop"]
         case .showOff: return ["show off", "showoff", "show it off"]; case .strut: return ["strut"]; case .sing: return ["sing", "sing a song", "sing song"]
-        case .hula: return ["hula", "hula dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]; case .oneLegSpin: return ["one leg spin", "pirouette", "tiptoe spin"]
+        case .hula: return ["hula", "hula dance", "dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]; case .oneLegSpin: return ["one leg spin", "pirouette", "tiptoe spin"]
         case .moonwalk: return ["moonwalk", "moon walk"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
         }
     }
@@ -380,7 +380,7 @@ final class VoiceTraining {
 
         // Built-in social commands: known from the start (reserved words, never taught as tricks)
         if let s = VoicePhrases.social(rest) {
-            if mood == .grumpy, s == .play { return out(.grumpyIgnore) }
+            if mood == .grumpy, s == .play || s == .wave { return out(.grumpyIgnore) }
             return out(.social(s))
         }
 
@@ -400,7 +400,7 @@ final class VoiceTraining {
             guard unlocked(t) else { return VoiceDecision(reaction: .dontKnow(t), target: target) }
             return VoiceDecision(reaction: command(t, mood: mood), target: target)
         case .social(let s):
-            if mood == .grumpy, s == .play { return VoiceDecision(reaction: .grumpyIgnore, target: target) }
+            if mood == .grumpy, s == .play || s == .wave { return VoiceDecision(reaction: .grumpyIgnore, target: target) }
             return VoiceDecision(reaction: .social(s), target: target)
         }
     }
