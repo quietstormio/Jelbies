@@ -459,10 +459,19 @@ final class GameCare {
         return away
     }
     /// Cold launch: the away time was applied when the models loaded; greet if it was long. Once.
-    func launched() {
+    /// `away` overrides the loaded time away (tests only).
+    func launched(away: TimeInterval? = nil) {
         guard !launchGreeted else { return }
         launchGreeted = true
-        greetIfAway(jellies.map(\.lastAway).max() ?? 0, launching: true)
+        // A cold launch (2026-11-16, user: "launching the app after like closing it ... they should wake up"): the game clock is never touched, the back-at-night arrival does not put anyone to bed
+        // (`awayBedtime(launching:)`), whoever is still asleep at launch for another reason gets the slow wake (`tickNightRest`), and at night the bedtime logic keeps off for `NightRestTuning.coldLaunchGrace`
+        // (Goodnight / Naptime still work). Never on a return from the background.
+        nightRest.coldWakeT = 0; nightRest.coldWakePending = true
+        nightRest.coldWakeIDs = Set(raceBook.actors.filter { $0.brain?.isSleeping == true }.map(\.id))
+        nightRest.coldGraceLeft = isBedtimeHours ? NightRestTuning.coldLaunchGrace : 0
+        let away = away ?? jellies.map(\.lastAway).max() ?? 0
+        greetIfAway(away, launching: true)
+        if DevArgs.enabled, UserDefaults.standard.bool(forKey: "WakeLog") { NSLog("[wakelog] launched: away %.0f s, hour %.2f, asleep at launch %d, grace %.0f s", away, DayClock.shared.hour, nightRest.coldWakeIDs.count, nightRest.coldGraceLeft) }
     }
     /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
     var greetBlocked: Bool {
