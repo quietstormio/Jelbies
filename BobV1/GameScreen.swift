@@ -877,10 +877,15 @@ struct GameScreen: View {
             await sleep(3)
             care.bath.grime.dirt = 0.5
             care.bath.demo = true
-            if let st = d.string(forKey: "BathStage") { care.bath.demoStartAt = st == "shine" ? .shine : st == "rinse" ? .rinse : .soap }
             if d.double(forKey: "BathSpeed") > 1 { care.bath.demoSpeed = Float(d.double(forKey: "BathSpeed")) }
+            if let k = d.string(forKey: "SoapKit") { let ids = k.split(separator: ",").map(String.init); for id in ids where care.store.count(id) < 1 { care.store.grant(id) }; care.armedSupplies[0] = ids }
             care.bath.demoHold = d.integer(forKey: "BathHold") != 0          // -BathHold 1: stop at every complete stage (captures)
-            if DevArgs.enabled, let k = d.string(forKey: "CareKit") { let ids = k.split(separator: ",").map(String.init); for id in ids where care.store.count(id) < 1 { care.store.grant(id) }; care.armedSupplies[0] = ids }
+            care.clean()
+        }
+        if d.string(forKey: "BlobGameDemo") == "soapcard" {          // capture aid: the "Pick a soap" card (all five soaps owned)
+            for _ in 0..<600 where LaunchGate.shared.visible || care.lastBrain == nil { await sleep(0.1) }
+            await sleep(3)
+            for id in Soap.boughtIDs where care.store.count(id) < 1 { care.store.grant(id) }
             care.clean()
         }
         if let a = d.string(forKey: "GameAction") {
@@ -1063,9 +1068,9 @@ struct GameScreen: View {
         if FoodCaptureArgs.foodSeed(defaults: d) {
             for id in ["sushi", "popsicle", "taco", "donut", "nuggets", "onigiri", "cookie", "fries"] where model.care.store.count(id) < 3 { model.care.store.grant(id, 3 - model.care.store.count(id)) }
         }
-        // capture aid: -CareSeed 1 owns two of each Care item (and 200 Drops); -CareKit shampoo,duck,... (with -BlobGameDemo gclean) picks those for the bath
+        // capture aid: -CareSeed 1 owns two bars of every soap (and 200 Drops); -SoapKit mintsoap (with -BlobGameDemo gclean) picks that soap for the bath; -BlobGameDemo soapcard opens the pick card
         if d.integer(forKey: "CareSeed") != 0 {
-            for id in CareItems.all where model.care.store.count(id) < 2 { model.care.store.grant(id, 2 - model.care.store.count(id)) }
+            for id in Soap.boughtIDs where model.care.store.count(id) < 2 { model.care.store.grant(id, 2 - model.care.store.count(id)) }
             model.care.bath.wallet.add(max(0, 200 - model.care.bath.wallet.count), silent: true)
         }
         guard d.integer(forKey: "StoreSeed") != 0 else { return }

@@ -442,6 +442,8 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
             float crev = mix(0.84, 1.0, smoothstep(0.0, 0.5, bestH));    // dark crevice between bubbles
             float3 tint = mix(float3(0.97, 0.985, 1.0), float3(1.0, 0.96, 0.99), bestId);
             tint = mix(tint, u.flesh.rgb, 0.05);
+            int soapScent = int(foamOn + 0.5) - 1;          // the picked soap's colour (BathLook.soap): 1 lavender, 2 mint, 3 berry, 4 honey, 5 chamomile
+            if (soapScent > 0) tint = mix(tint, soapScent == 1 ? float3(0.90, 0.82, 1.0) : (soapScent == 2 ? float3(0.78, 1.0, 0.88) : (soapScent == 3 ? float3(1.0, 0.76, 0.86) : (soapScent == 4 ? float3(1.0, 0.86, 0.50) : float3(1.0, 0.97, 0.84)))), 0.85);
             tint = mix(tint, float3(0.62, 0.625, 0.64), clamp(sootHere * 0.55, 0.0, 0.55));           // suds over soot go grey
             float3 foamC = tint * lit * crev;
             float3 Hh = normalize(L + V);
@@ -716,6 +718,8 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
             float crev = mix(0.84, 1.0, smoothstep(0.0, 0.5, bestH));    // dark crevice between bubbles
             float3 tint = mix(float3(0.97, 0.985, 1.0), float3(1.0, 0.96, 0.99), bestId);
             tint = mix(tint, u.flesh.rgb, 0.05);
+            int soapScent = int(foamOn + 0.5) - 1;          // the picked soap's colour (BathLook.soap): 1 lavender, 2 mint, 3 berry, 4 honey, 5 chamomile
+            if (soapScent > 0) tint = mix(tint, soapScent == 1 ? float3(0.90, 0.82, 1.0) : (soapScent == 2 ? float3(0.78, 1.0, 0.88) : (soapScent == 3 ? float3(1.0, 0.76, 0.86) : (soapScent == 4 ? float3(1.0, 0.86, 0.50) : float3(1.0, 0.97, 0.84)))), 0.85);
             tint = mix(tint, float3(0.62, 0.625, 0.64), clamp(sootHere * 0.55, 0.0, 0.55));           // suds over soot go grey
             float3 foamC = tint * lit * crev;
             float3 Hh = normalize(L + V);

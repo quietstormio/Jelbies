@@ -47,6 +47,7 @@ struct BathChrome: View {
                 .animation(.easeInOut(duration: 0.2), value: bath.stageComplete)
                 .transition(.opacity)
             }
+            if care.soapPrompt != nil { SoapPickCard(care: care, ps: ps, landscape: HUDLayout.isLandscape(vsc: vsc, size: viewSize)).transition(.opacity) }
             Color.white.opacity(Double(bath.wipe))          // the fade to white; the world swaps only while this is fully opaque
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
@@ -93,7 +94,7 @@ struct BathChrome: View {
         .accessibilityIdentifier("bath-done")
     }
 
-    /// Portrait: everything at the bottom (as before; the Care row sits above the tool bar).
+    /// Portrait: everything at the bottom, as always.
     private var portraitChrome: some View {
         VStack(spacing: 0) {
             HStack { Spacer(); cancelButton }
@@ -103,7 +104,6 @@ struct BathChrome: View {
                 if bath.phase == .finish {
                     doneButton
                 } else {
-                    careRow(vertical: false)
                     toolBar
                     helpButton
                     ProgressBar(value: bath.progress)
@@ -118,12 +118,11 @@ struct BathChrome: View {
         .padding(.horizontal, 16).padding(.vertical, 8)
     }
 
-    /// Landscape: three clear zones around the tub: the Care items down the LEFT edge, the step row / hint / Help / Next / Done in a RIGHT column, the progress bar
-    /// along the bottom between them. The tub and the whole Jelmiko (face, arms, feet) stay free of every control.
+    /// Landscape: the step prompt / row / Help / Next / Done in a RIGHT column and the progress bar along the bottom below the tub, so the tub and the whole Jelmiko
+    /// (face, arms, feet) stay free of every control.
     private var landscapeChrome: some View {
         ZStack {
             VStack { HStack { Spacer(); cancelButton }; Spacer() }
-            HStack { careRow(vertical: true); Spacer() }
             HStack {
                 Spacer()
                 VStack(spacing: 8 * ps) {
@@ -147,57 +146,6 @@ struct BathChrome: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-    }
-
-    /// The Care picker: the owned Care items (shampoo, brush, sponge, duck, ...) as round-cornered 3D tiles, shown in the soap step only. Tap to use / not use; what is
-    /// picked is used up when the bath is finished. Nothing shows when the player owns none. Portrait: one row, every tile fits across the screen. Landscape: two columns
-    /// down the left edge (up to four rows), clear of the tub.
-    @ViewBuilder
-    private func careRow(vertical: Bool) -> some View {
-        let items = care.bathCareItems
-        if bath.phase == .soap, !items.isEmpty {
-            let tile: CGFloat = vertical ? 60 * ps : min(64 * ps, max(40, (viewSize.width - 40) / CGFloat(items.count)))
-            let art = tile * 46 / 64
-            Group {
-                if vertical {
-                    VStack(spacing: 6 * ps) {
-                        ForEach(Array(stride(from: 0, to: items.count, by: 2)), id: \.self) { i in
-                            HStack(spacing: 4 * ps) { ForEach(items[i..<min(i + 2, items.count)], id: \.id) { careTile($0, tile: tile, art: art) } }
-                        }
-                    }
-                } else {
-                    HStack(spacing: 0) { ForEach(items, id: \.id) { careTile($0, tile: tile, art: art) } }
-                }
-            }
-            .frame(maxWidth: vertical ? nil : .infinity)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("bath-care-picker")
-        }
-    }
-
-    private func careTile(_ item: StoreItem, tile: CGFloat, art: CGFloat) -> some View {
-        let on = bath.kit.has(item.id)
-        return Button { care.toggleSupply(item.id) } label: {
-            VStack(spacing: 2 * ps) {
-                ItemArt(item: item, size: art)
-                    .overlay(RoundedRectangle(cornerRadius: art * 0.22, style: .continuous).strokeBorder(on ? Color(red: 0.36, green: 0.62, blue: 0.95) : Color.white.opacity(0.5), lineWidth: on ? 3 : 1))
-                    .overlay(alignment: .topTrailing) {
-                        if on { Image(systemName: "checkmark.circle.fill").font(.system(size: 16 * ps)).foregroundStyle(.white, Color(red: 0.36, green: 0.78, blue: 0.5)).offset(x: 4, y: -4) }
-                    }
-                Text(CareItems.shortName(item.id)).playFont(10 * ps, .semibold, relativeTo: .caption2).lineLimit(1).minimumScaleFactor(0.6)
-                    .padding(.horizontal, 4).padding(.vertical, 1).background(Capsule().fill(CareMenu.cream))
-            }
-            .frame(width: tile)
-            .foregroundStyle(CareMenu.brown)
-            .opacity(on ? 1 : 0.85)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(item.name)
-        .accessibilityValue(on ? "Using" : "Not using")
-        .accessibilityHint(item.perk?.blurb ?? "")
-        .accessibilityAddTraits(on ? .isSelected : [])
-        .accessibilityIdentifier("bath-care-\(item.id)")
     }
 
     /// "Help me scrub": the scripted scrub for this stage, for a player who cannot rub the screen (VoiceOver, Switch Control, a motor difficulty).

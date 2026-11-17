@@ -133,7 +133,7 @@ enum StoreThumb {
         }
         if let w = item.wear { return w.isShoe ? shoeMesh(w) : (wornMesh(w) ?? WearMeshes.restMesh(w)) }
         if let d = item.decor { return DecorModels.thumbnail(d) }
-        if item.kind == .supply { return CareMeshes.roomMesh(item.id) }          // the Care items: Blender models (tools/make_care1)
+        if item.kind == .supply { return CareMeshes.roomMesh(item.id) }          // the soaps: Blender bars (tools/make_care1); the Lint-guard spray keeps its icon card
         return nil
     }
 
@@ -247,6 +247,11 @@ enum StoreThumb {
         if item.id == "pizza" { return (0.3, 0.8) }          // a flat slice: from higher up so it fills the card
         return (0.55, 0.42)
     }
+    /// A soap bar's picture (the pick card).
+    static func soapImage(_ soap: Soap) -> UIImage? {
+        guard let m = CareMeshes.roomMesh(soap: soap) else { return nil }
+        return image("soap-\(soap.rawValue)", mesh: m, yaw: 0.55, pitch: 0.42, tight: true)
+    }
     /// A free-standing food or drink's thumbnail (water, soda): the same render as a store item's.
     static func image(for c: Consumable) -> UIImage? {
         let a = (yaw: Float(0.55), pitch: Float(0.42))
@@ -258,7 +263,7 @@ enum StoreThumb {
         let a = angles(for: item)
         if let w = item.wear, !w.isShoe { return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch, focus: wornFocus(w)) }
         let glass = item.food.flatMap { Consumables.with(id: $0) }.flatMap { glassMesh($0) }
-        return image(item.id, mesh: m, glass: glass, yaw: a.yaw, pitch: a.pitch, tight: item.id == "berries" || item.id == "pizza" || item.kind == .supply)
+        return image(item.id, mesh: m, glass: glass, yaw: a.yaw, pitch: a.pitch, tight: item.id == "berries" || item.id == "pizza" || (item.kind == .supply && CareMeshes.mesh(item.id) != nil))
     }
 }
 

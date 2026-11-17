@@ -58,39 +58,56 @@ extension GameCare {
 
     // MARK: supplies (soaps and sprays used with Clean)
 
-    /// Arms the supply for the next Clean of `jelly` and starts it. Nothing is used up unless the clean-up finishes.
+    /// Arms the supply for the next Clean of `jelly` and starts it (a soap skips the pick card: it is the pick). Nothing is used up unless the clean-up finishes.
     @discardableResult
     func useSupply(_ itemID: String, on jelly: Int) -> Bool {
         guard let item = StoreCatalog.item(itemID), item.kind == .supply, store.count(itemID) > 0, canClean(jelly: jelly) else { return false }
-        armedSupplies[jelly] = BathKit(ids: armedSupplies[jelly] ?? []).adding(itemID).ids          // (the two shampoos are alternatives)
+        var ids = armedSupplies[jelly] ?? []
+        if Soap.of(storeID: itemID) != nil { ids.removeAll { Soap.of(storeID: $0) != nil } }          // one soap per bath
+        if !ids.contains(itemID) { ids.append(itemID) }
+        armedSupplies[jelly] = ids
         clean(jelly: jelly)
         return true
     }
 
-    /// The Care row in the bath: pick / unpick an owned Care item during the soap step. The bath reads `bath.kit` at once (props, scrub speed, bubbles).
-    func toggleSupply(_ itemID: String) {
-        guard bath.phase == .soap, let item = StoreCatalog.item(itemID), item.kind == .supply else { return }
-        let t = bath.targetID
-        let cur = BathKit(ids: armedSupplies[t] ?? [])
-        guard cur.has(itemID) || store.count(itemID) > 0 else { return }
-        let next = cur.toggled(itemID)
-        armedSupplies[t] = next.ids
-        bath.kit = next
-        AudioHub.shared.uiTap()
-    }
-    /// The Care items the bath can pick from: owned supplies, in catalog order.
-    var bathCareItems: [StoreItem] { StoreCatalog.items(.supply).filter { store.count($0.id) > 0 } }
+    // MARK: the soap pick (before a bath)
 
-    /// The clean-up finished: the picked supplies for that Jelly are used up and give their perks, and the bubble bath / duck add a little love.
+    /// The bought soaps the player has at least one bar of, in the soaps' order.
+    var ownedSoaps: [Soap] { Soap.allCases.filter { s in s.storeID.map { store.count($0) > 0 } ?? false } }
+    /// The tiles of the pick card: the free Jelly soap first, then the owned ones (up to six).
+    var soapChoices: [Soap] { [.jelly] + ownedSoaps }
+    static let lastSoapKey = "BathLastSoap"
+    /// The soap used last time, if it is still owned (else the Jelly soap): preselected on the card.
+    var preselectedSoap: Soap {
+        guard let id = UserDefaults.standard.string(forKey: Self.lastSoapKey), let s = Soap.of(storeID: id), ownedSoaps.contains(s) else { return .jelly }
+        return s
+    }
+    /// A tile of the pick card was tapped: the bath starts with that soap (the Jelly soap is free and uses nothing).
+    func chooseSoap(_ soap: Soap) {
+        guard let who = soapPrompt else { return }
+        soapPrompt = nil
+        var ids = (armedSupplies[who] ?? []).filter { Soap.of(storeID: $0) == nil }
+        if let sid = soap.storeID { ids.append(sid) }
+        armedSupplies[who] = ids
+        soapChosen = true
+        AudioHub.shared.uiTap()
+        clean(jelly: who)
+    }
+    func dismissSoapCard() { soapPrompt = nil }
+
+    /// The clean-up finished: the armed supplies for that Jelly are used up and give their perks (a soap: its power-up and, for Berry, a little love; the Spray: Tidy).
     func soapFinished() {
         let id = bath.targetID
-        let list = armedSupplies[id] ?? []
+        UserDefaults.standard.set(bath.soap.storeID ?? "", forKey: Self.lastSoapKey)
+        guard let list = armedSupplies[id], let prof = jelly(id) else { armedSupplies[id] = nil; return }
         armedSupplies[id] = nil
-        guard !list.isEmpty, let prof = jelly(id) else { return }
-        var used = BathKit()
-        for sid in list where StoreCatalog.item(sid)?.kind == .supply && store.use(sid) { used = used.adding(sid) }
-        for perk in used.grants { prof.perks.grant(perk) }
-        if used.love > 0 { needs(for: id).gain(.attention, used.love) }
+        for sid in list {
+            guard let item = StoreCatalog.item(sid), store.use(sid) else { continue }
+            if let soap = Soap.of(storeID: sid) {
+                for p in soap.grants { prof.perks.grant(p) }
+                if soap.love > 0 { needs(for: id).gain(.attention, soap.love) }
+            } else if let perk = item.perk { prof.perks.grant(perk) }
+        }
     }
 
     // MARK: the room's numbers (UI)

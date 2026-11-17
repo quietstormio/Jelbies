@@ -153,13 +153,7 @@ final class BlobGrime {
             let from = end.addingTimeInterval(-away)
             let ex = PerkStore.load(defaults: defaults, key: pk)
             if let e = ex[.shine] { fadeAway = PerkStore.effective(away: away, covered: PerkStore.overlap(expiry: e, from: from, to: end), mul: Double(PerkTuning.shineFade)) }
-            var best = 1.0, cover: TimeInterval = 0          // the strongest slowing lint perk wins (tidy x0.5, brushed x0.8)
-            for (k, m) in [(PerkKind.tidy, Double(PerkTuning.tidyDirt)), (.brushed, Double(PerkTuning.brushedDirt))] {
-                guard let e = ex[k] else { continue }
-                let c = PerkStore.overlap(expiry: e, from: from, to: end)
-                if m < best || (m == best && c > cover) { best = m; cover = c }
-            }
-            if best < 1 { dirtAway = PerkStore.effective(away: away, covered: cover, mul: best) }
+            if let e = ex[.tidy] { dirtAway = PerkStore.effective(away: away, covered: PerkStore.overlap(expiry: e, from: from, to: end), mul: Double(PerkTuning.tidyDirt)) }
         }
         fadeAway /= Double(washMul); dirtAway /= Double(washMul)          // a good wash: the Glow and the lint go at 1 / washMul while he was away too
         sparkle = AwayMath.sparkle(sparkle, awaySeconds: fadeAway)

@@ -141,15 +141,13 @@ nonisolated enum StoreCatalog {
         StoreItem(id: "onigiri", name: "Onigiri", kind: .treat, price: 12, perk: .fullBelly, description: "A rice ball. Hunger falls slower for 4 hours.", symbol: "birthday.cake.fill", food: "onigiri"),
         StoreItem(id: "cookie", name: "Bedtime cookie", kind: .treat, price: 10, perk: .bedtime, description: "Naps last longer and needs drop slower while asleep. Lasts 8 hours.", symbol: "moon.zzz.fill", food: "cookie"),
         // care supplies (used from Clean)
-        StoreItem(id: "lavender", name: "Lavender soap", kind: .supply, price: 20, perk: .shine, description: "The shine after a Clean lasts much longer (12 hours).", symbol: "sparkles"),
+        StoreItem(id: "lavender", name: "Lavender soap", kind: .supply, price: 20, perk: .shine, description: "Lavender scent, purple foam. The shine after a bath lasts much longer (12 hours).", symbol: "sparkles"),
         StoreItem(id: "lintguard", name: "Lint-guard spray", kind: .supply, price: 18, perk: .tidy, description: "Lint comes back half as fast for 6 hours.", symbol: "wind"),
-        // bath time (2026-11-16): the wash tier is in Bath/WashQuality.swift; each is used up by a finished bath; Bath picks them from the Care row
-        StoreItem(id: "bubblebath", name: "Bubble bath", kind: .supply, price: 16, perk: .bubbly, description: "Extra bubbles and a little love during the bath.", symbol: "bubbles.and.sparkles.fill"),
-        StoreItem(id: "gentleshampoo", name: "Gentle shampoo", kind: .supply, price: 18, perk: .gentle, description: "A shampoo bath: stays clean about 25% longer.", symbol: "leaf.fill"),
-        StoreItem(id: "deluxeshampoo", name: "Deluxe shampoo", kind: .supply, price: 32, perk: .deluxe, description: "A deluxe bath: stays clean about 50% longer, with a shiny glow (12 hours).", symbol: "star.circle.fill"),
-        StoreItem(id: "softbrush", name: "Soft brush", kind: .supply, price: 22, perk: .brushed, description: "A quick brush in the bath. Lint comes back 20% slower for 6 hours.", symbol: "comb.fill"),
-        StoreItem(id: "seasponge", name: "Sea sponge", kind: .supply, price: 14, perk: .quick, description: "Scrubs faster, so the bath is quicker.", symbol: "hare.fill"),
-        StoreItem(id: "rubberduck", name: "Rubber duck", kind: .supply, price: 12, perk: .duck, description: "A happy bath: a duck bobs in the tub and brings a little love.", symbol: "face.smiling.fill"),
+        // soaps (2026-11-17): picked before a bath (Bath/Soaps.swift); one bar is used up by a finished bath. The Jelly soap is free and always there.
+        StoreItem(id: "mintsoap", name: "Mint soap", kind: .supply, price: 25, perk: .fresh, description: "Mint scent, green foam. Stays clean about 50% longer after the bath.", symbol: "leaf.fill"),
+        StoreItem(id: "berrysoap", name: "Berry soap", kind: .supply, price: 18, perk: .bubbly, description: "Berry scent, pink foam. Extra bubbles, a few hearts and a little love in the bath.", symbol: "bubbles.and.sparkles.fill"),
+        StoreItem(id: "honeysoap", name: "Honey soap", kind: .supply, price: 22, perk: .snuggly, description: "Honey scent, golden foam. Love goes down half as fast for 6 hours after the bath, so less cuddling is needed.", symbol: "heart.circle.fill"),
+        StoreItem(id: "chamomilesoap", name: "Chamomile soap", kind: .supply, price: 22, perk: .cozy, description: "Chamomile scent, cream foam. Cozy for 4 hours: love goes down half as fast and hunger and thirst a little slower.", symbol: "moon.zzz.fill"),
         // decor (placed in the room; Jellies play with it; a big piece takes 2 of the 10 spots)
         StoreItem(id: "decor-cushion", name: "Floor cushion", kind: .decor, price: 25, perk: nil, description: DecorKind.cushion.use, symbol: "square.fill", roomUnits: 1),
         StoreItem(id: "decor-ball", name: "Bouncy ball", kind: .decor, price: 30, perk: nil, description: DecorKind.ball.use, symbol: "circle.fill", roomUnits: 1),

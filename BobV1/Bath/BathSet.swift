@@ -65,8 +65,7 @@ nonisolated final class BathOverlay {
     func compose(look: BathLook, time: Float, camRight: SIMD3<Float> = SIMD3(1, 0, 0), camUp: SIMD3<Float> = SIMD3(0, 1, 0),
                  sparkleAt: ((Int) -> (p: SIMD3<Float>, n: SIMD3<Float>)?)? = nil) {
         soup.clear()
-        if look.visible, !look.kit.isEmpty { addCareProps(look.kit, time: time, look: look) }
-        if look.tool != .none, look.tool != .rinse, let at = look.toolAt { addTool(look.tool, at: at, time: time, kit: look.kit) }
+        if look.tool != .none, look.tool != .rinse, let at = look.toolAt { addTool(look.tool, at: at, time: time, soap: look.soap) }
         if let nz = look.spray { addSpray(from: nz, time: time) }
         for b in look.bubbles.prefix(Self.maxBubbles) where b.w > 0.003 {
             soup.sphere(SIMD3(b.x, b.y, b.z), b.w, color: .zero, mat: .bubble, alpha: 1, rings: 4, segs: 8)
@@ -112,44 +111,19 @@ nonisolated final class BathOverlay {
 
     // MARK: tools
 
-    // MARK: the Care items' models (Blender, Store/CareMeshes.swift)
-
-    /// Where each prop sits on the tub: bottles and the lavender bar on the rim (right side, then left), the duck afloat in the water in front of him.
-    static let rimSpots: [SIMD3<Float>] = [SIMD3(1.0, 0.37, 0.4), SIMD3(0.95, 0.37, 1.55), SIMD3(-1.0, 0.37, 0.4), SIMD3(-0.95, 0.37, 1.55)]
-    static let rimItems = [CareItems.bubblebath, CareItems.gentle, CareItems.deluxe, CareItems.lavender, CareItems.lintguard, CareItems.brush]
-    static let propScale: Float = 1.25
-
-    /// Appends the mesh of Care item `id`, base centre at `at`, turned by `yaw`, scaled by `s`.
-    func addCare(_ id: String, at: SIMD3<Float>, yaw: Float, scale s: Float, mat: BathMat = .glossy, tilt: Float = 0) {
-        guard let m = CareMeshes.mesh(id) else { return }
-        let cy = cosf(yaw), sy = sinf(yaw), ct = cosf(tilt), st = sinf(tilt)
-        func rot(_ v: SIMD3<Float>) -> SIMD3<Float> {
-            let a = SIMD3(v.x * ct - v.y * st, v.x * st + v.y * ct, v.z)          // a roll about z (the duck rocks)
-            return SIMD3(a.x * cy + a.z * sy, a.y, -a.x * sy + a.z * cy)
-        }
+    /// Appends the soap bar's Blender model, base centre at `at`, scaled by `s`.
+    private func addBar(_ soap: Soap, at: SIMD3<Float>, yaw: Float, scale s: Float) {
+        guard let m = CareMeshes.mesh(soap: soap) else { return }
+        let cy = cosf(yaw), sy = sinf(yaw)
+        func rot(_ v: SIMD3<Float>) -> SIMD3<Float> { SIMD3(v.x * cy + v.z * sy, v.y, -v.x * sy + v.z * cy) }
         let base = UInt32(soup.v.count)
-        for k in 0..<m.positions.count { soup.vert(rot(m.positions[k]) * s + at, rot(m.normals[k]), m.colors[k], mat: mat, ao: m.ao[k]) }
+        for k in 0..<m.positions.count { soup.vert(rot(m.positions[k]) * s + at, rot(m.normals[k]), m.colors[k], mat: .glossy, ao: m.ao[k]) }
         for k in stride(from: 0, to: m.indices.count, by: 3) { soup.tri(base + UInt32(m.indices[k]), base + UInt32(m.indices[k + 1]), base + UInt32(m.indices[k + 2])) }
     }
 
-    private func addCareProps(_ kit: BathKit, time: Float, look: BathLook) {
-        var spot = 0
-        for id in Self.rimItems where kit.has(id) && spot < Self.rimSpots.count {          // (the brush rests on the rim until it is in his hand, in the shine step)
-            let right = Self.rimSpots[spot].x > 0
-            if id == CareItems.brush && look.tool == .shine { continue }
-            addCare(id, at: Self.rimSpots[spot], yaw: right ? -0.5 : 0.5, scale: Self.propScale, mat: id == CareItems.brush ? .matte : .glossy)
-            spot += 1
-        }
-        if kit.hasDuck {          // afloat: bobs with the ripples and turns a little
-            let bob = 0.018 * sinf(time * 2.3), p = SIMD3<Float>(-0.5, BathModels.waterY - 0.03 + bob, 1.62)
-            addCare(CareItems.duck, at: p, yaw: 0.35 + 0.2 * sinf(time * 0.9), scale: 1.7, tilt: 0.06 * sinf(time * 1.7))
-        }
-    }
-
-    private func addTool(_ tool: BathTool, at t: SIMD3<Float>, time: Float, kit: BathKit = .none) {
-        // a held Care tool: the sea sponge scrubs in the soap step, the soft brush polishes in the shine step (the same motion as the bar and the cloth)
-        if tool == .soap, kit.has(CareItems.sponge) { addCare(CareItems.sponge, at: t + SIMD3(0, -0.02, 0.06), yaw: 0.4, scale: 1.0, mat: .matte); return }
-        if tool == .shine, kit.brushes { addCare(CareItems.brush, at: t + SIMD3(0.15, 0.0, 0.08), yaw: 0.2, scale: 0.9, mat: .matte); return }
+    private func addTool(_ tool: BathTool, at t: SIMD3<Float>, time: Float, soap: Int = 0) {
+        // a bought soap: its own bar (the Blender model in its scent's colour) in his hand; the free Jelly soap keeps the translucent bar
+        if tool == .soap, soap > 0, let sp = Soap(rawValue: soap) { addBar(sp, at: t + SIMD3(0, -0.04, 0.06), yaw: 0.4, scale: 1.45); return }
         switch tool {
         case .soap:
             // translucent pastel jelly bar with a tiny bubble riding on it
