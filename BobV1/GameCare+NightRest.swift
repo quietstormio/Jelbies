@@ -224,6 +224,7 @@ extension GameCare {
             if book.coldWakeT >= 1.0, !LaunchGate.shared.visible || book.coldWakeT >= 6 {          // (after the curtain lifts, so the wake is seen)
                 book.coldWakePending = false
                 nightRest = book
+                if DevArgs.enabled, UserDefaults.standard.bool(forKey: "WakeLog") { NSLog("[wakelog] cold-launch wake: %d asleep, clock %.2f", actors.filter { $0.brain?.isSleeping == true }.count, DayClock.shared.hour) }
                 for a in actors.sorted(by: { $0.id < $1.id }) where a.brain?.isSleeping == true { wakeSleeper(a.id, groggy: true) }          // one call each, in one moment: `SleepOrder` staggers them
                 book = nightRest
             }

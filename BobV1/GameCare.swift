@@ -464,9 +464,13 @@ final class GameCare {
         guard !launchGreeted else { return }
         launchGreeted = true
         // A cold launch wakes whoever is asleep (the slow, staggered wake, `tickNightRest`); at night the clock first moves to the morning so they stay up. Never on a return from the background.
-        DayClock.shared.coldLaunchToMorning()
+        // (The back-at-night "already asleep" check reads the hour the player really came back to, so it runs first; the clock moves right after, before the first frame.)
+        let hourBefore = DayClock.shared.hour
         nightRest.coldWakeT = 0; nightRest.coldWakePending = true
-        greetIfAway(away ?? jellies.map(\.lastAway).max() ?? 0, launching: true)
+        let away = away ?? jellies.map(\.lastAway).max() ?? 0
+        greetIfAway(away, launching: true)
+        let moved = DayClock.shared.coldLaunchToMorning()
+        if DevArgs.enabled, UserDefaults.standard.bool(forKey: "WakeLog") { NSLog("[wakelog] launched: away %.0f s, hour %.2f -> %.2f (moved %@), arrivalAsleep %@", away, hourBefore, DayClock.shared.hour, moved ? "yes" : "no", nightRest.arrivalAsleep ? "yes" : "no") }
     }
     /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
     var greetBlocked: Bool {
