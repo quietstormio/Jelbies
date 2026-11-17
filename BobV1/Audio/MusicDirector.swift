@@ -23,11 +23,12 @@ nonisolated enum MusicTrack: String, CaseIterable, Sendable {
     case evening4 = "evening_4", evening5 = "evening_5", evening6 = "evening_6"  // new 2026-11-01
     case night1 = "night_1", night2 = "night_2", night3 = "night_3", night4 = "night_4", night5 = "night_5"
     case night6 = "night_6", night7 = "night_7", night8 = "night_8"              // new 2026-11-01
+    case day13 = "day_13", evening7 = "evening_7", night9 = "night_9"           // new 2026-11-16: lofi R&B, the user's picks on the music page ("Day b and evening b are ok add them along with the night song")
     case lofiPlay = "lofi_play"
 
-    static let dayPool: [MusicTrack] = [.day1, .day2, .day3, .day4, .day5, .day6, .day7, .day8, .day9, .day10, .day11, .day12]
-    static let eveningPool: [MusicTrack] = [.evening1, .evening2, .evening3, .evening4, .evening5, .evening6]
-    static let lofiPool: [MusicTrack] = [.night1, .night2, .night3, .night4, .night5, .night6, .night7, .night8]
+    static let dayPool: [MusicTrack] = [.day1, .day2, .day3, .day4, .day5, .day6, .day7, .day8, .day9, .day10, .day11, .day12, .day13]
+    static let eveningPool: [MusicTrack] = [.evening1, .evening2, .evening3, .evening4, .evening5, .evening6, .evening7]
+    static let lofiPool: [MusicTrack] = [.night1, .night2, .night3, .night4, .night5, .night6, .night7, .night8, .night9]
 
     /// Display name (the sound panel's now-playing row).
     var title: String {
@@ -44,12 +45,14 @@ nonisolated enum MusicTrack: String, CaseIterable, Sendable {
         case .day10: return "Sunbeam Keys"
         case .day11: return "Harp Hammock"
         case .day12: return "Skippy Strings"
+        case .day13: return "Sun Nap"
         case .evening1: return "Golden Hour"
         case .evening2: return "Lamp Glow"
         case .evening3: return "Dusk Steps"
         case .evening4: return "Lamp Lighters"
         case .evening5: return "Violet Sky"
         case .evening6: return "Supper Glow"
+        case .evening7: return "Porch Light"
         case .night1: return "Moon Nap"
         case .night2: return "Rainy Glass"
         case .night3: return "Sleepy Lamp"
@@ -58,13 +61,14 @@ nonisolated enum MusicTrack: String, CaseIterable, Sendable {
         case .night6: return "Lullaby Lantern"
         case .night7: return "Moonlit Hush"
         case .night8: return "Blanket Fort"
+        case .night9: return "Moon Pillow"
         case .lofiPlay: return "Zoomies"
         }
     }
     /// Added 2026-10-23 (the user can veto any: remove the case, its pool entry and the m4a).
     var isNew: Bool {
         switch self { case .day6, .day7, .day8, .day9, .day10, .day11, .day12, .evening2, .evening3, .evening4, .evening5, .evening6,
-             .night4, .night5, .night6, .night7, .night8: return true; default: return false }
+             .night4, .night5, .night6, .night7, .night8, .day13, .evening7, .night9: return true; default: return false }
     }
 }
 
