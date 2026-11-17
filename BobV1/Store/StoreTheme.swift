@@ -54,8 +54,9 @@ struct DropsPill: View {
     var body: some View {
         HStack(spacing: lobby ? 7 : 6) {
             JellyCoinIcon(size: lobby ? 22 : 21)
-            Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text("\(wallet.count)").font(SK.font(17, .black)).foregroundStyle(dark ? SK.cream : SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).contentTransition(.numericText(value: Double(wallet.count)))
         }
+        .animation(.snappy, value: wallet.count)
         .padding(.leading, lobby ? 10 : 14).padding(.trailing, 14).frame(minHeight: 44)
         .modifier(DropsPillBack(dark: dark, glass: glass, lobby: lobby))
         .accessibilityElement(children: .ignore)

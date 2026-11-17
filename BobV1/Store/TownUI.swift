@@ -545,6 +545,8 @@ struct BagSheet: View {
     @State private var tab: BagTab
     /// What the last Wear did when it had to move a copy from another Jelmiko.
     @State private var wearNote: String?
+    /// The item the Sell card is asking about (nil = no card).
+    @State private var sellAsk: StoreItem?
 
     /// `tab`: the tab to open on (Dress / Play / Decor from the HUD); nil = the `-StoreTab` capture arg, else Food.
     init(care: GameCare, who: Int, tab: BagTab? = nil, close: @escaping () -> Void) {
@@ -638,6 +640,7 @@ struct BagSheet: View {
         .scrollBounceBehavior(.basedOnSize)
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("bag-sheet")
+        .overlay { sellCard }
         .onAppear { book.markSeen() }
     }
 
@@ -706,7 +709,10 @@ struct BagSheet: View {
                 }
             }
             Spacer(minLength: 0)
-            actionButton(item)
+            VStack(spacing: 6) {
+                actionButton(item)
+                sellButton(item)
+            }
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
@@ -752,6 +758,74 @@ struct BagSheet: View {
         default:
             EmptyView()
         }
+    }
+
+    /// The Sell button under the row's main action ("Sell +9"), or a disabled "Worn" / "In the room".
+    @ViewBuilder
+    private func sellButton(_ item: StoreItem) -> some View {
+        switch book.sellState(item) {
+        case .sellable(let pay):
+            Button { AudioHub.shared.uiTap(); sellAsk = item } label: {
+                Text("Sell +\(pay)").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
+                    .padding(.horizontal, 14).frame(minWidth: 84, minHeight: 44).background(Capsule().fill(Color.white.opacity(0.9)))
+            }.buttonStyle(.plain).accessibilityLabel("Sell \(item.name) for \(pay) JellyCoins").accessibilityIdentifier("bag-sell-\(item.id)")
+        case .worn:
+            disabledSell("Worn", item)
+        case .inRoom:
+            disabledSell("In the room", item)
+        case .no:
+            EmptyView()
+        }
+    }
+    private func disabledSell(_ text: String, _ item: StoreItem) -> some View {
+        Text(text).font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).fixedSize()
+            .padding(.horizontal, 14).frame(minWidth: 84, minHeight: 44).background(Capsule().fill(SK.muted.opacity(0.15)))
+            .accessibilityLabel(text == "Worn" ? "\(item.name) is worn, so it cannot be sold" : "\(item.name) is in the room, so it cannot be sold").accessibilityAddTraits(.isStaticText)
+            .accessibilityIdentifier("bag-sell-blocked-\(item.id)")
+    }
+
+    /// "Sell Sushi roll?" over a dimmed Bag; a tap outside is Keep.
+    @ViewBuilder
+    private var sellCard: some View {
+        if let item = sellAsk {
+            let pay = StoreBook.sellPrice(item)
+            ZStack {
+                Color.black.opacity(0.35).ignoresSafeArea().contentShape(Rectangle())
+                    .onTapGesture { AudioHub.shared.uiTap(); sellAsk = nil }.accessibilityHidden(true)
+                VStack(spacing: 14) {
+                    Text("Sell \(item.name)?").font(SK.font(22, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
+                    Text("You get \(pay) JellyCoin\(pay == 1 ? "" : "s").").font(SK.font(16, .semibold)).foregroundStyle(SK.ink.opacity(0.8)).multilineTextAlignment(.center)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { keepButton; sellConfirm(item) }
+                        VStack(spacing: 10) { sellConfirm(item); keepButton }
+                    }
+                }
+                .padding(20).frame(maxWidth: 340)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color(hex: 0xFFFDF8))
+                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color(hex: 0x4D331F).opacity(0.10), lineWidth: 1))
+                        .shadow(color: Color(hex: 0x5A3A2A).opacity(0.3), radius: 10, y: 4)
+                )
+                .padding(24)
+                .accessibilityElement(children: .contain).accessibilityIdentifier("sell-card")
+            }
+            .transition(.opacity)
+        }
+    }
+    private var keepButton: some View {
+        Button { AudioHub.shared.uiTap(); sellAsk = nil } label: {
+            Text("Keep").font(SK.font(17, .heavy)).foregroundStyle(SK.ink).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 22).frame(minWidth: 96, minHeight: 44).background(Capsule().fill(SK.honey)).contentShape(Capsule())
+        }.buttonStyle(.plain).accessibilityIdentifier("sell-keep")
+    }
+    private func sellConfirm(_ item: StoreItem) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            withAnimation(.snappy) { _ = book.sell(item.id); sellAsk = nil }
+        } label: {
+            Text("Sell").font(SK.font(17, .black)).foregroundStyle(.white).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 22).frame(minWidth: 96, minHeight: 44).background(Capsule().fill(SK.pinkStrong)).contentShape(Capsule())
+        }.buttonStyle(.plain).accessibilityLabel("Sell \(item.name)").accessibilityIdentifier("sell-confirm")
     }
 
     private func pink(_ title: String, _ item: StoreItem? = nil, enabled: Bool, _ action: @escaping () -> Void) -> some View {
