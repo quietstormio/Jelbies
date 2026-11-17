@@ -77,7 +77,8 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(b.buyTrick(.look, for: nil), .alreadyOwned)
         XCTAssertEqual(w.count, after, "no second charge")
         XCTAssertEqual(b.buy("shoe-mint"), .bought)
-        XCTAssertEqual(b.buy("shoe-mint"), .alreadyOwned)
+        XCTAssertEqual(b.buy("shoe-mint"), .bought, "2026-11-16: shoes can be bought again (a second copy, for matching)")
+        XCTAssertEqual(b.copies(.sneakerMint), 2)
         XCTAssertTrue(b.ownsLook(.sneakerMint))
     }
 
