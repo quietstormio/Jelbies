@@ -56,7 +56,7 @@ final class BathCareFlowTests: XCTestCase {
             r.run(1.2, scrubbing: false, autoNext: false)
             return (r.bath.progress - before, r.bath.look.kit.brushes)
         }
-        let plain = progressWithNoFinger([]), soft = progressWithNoFinger([CareItems.softbrushID])
+        let plain = progressWithNoFinger([]), soft = progressWithNoFinger([CareItems.brush])
         XCTAssertEqual(plain.0, 0, accuracy: 0.001, "without a brush nothing happens until he is rubbed")
         XCTAssertGreaterThan(soft.0, 0.1, "the brush sweeps by itself for a moment (the scripted scrub)")
         XCTAssertTrue(soft.1)
@@ -100,4 +100,3 @@ final class BathCareFlowTests: XCTestCase {
     }
 }
 
-extension CareItems { static let softbrushID = brush }
