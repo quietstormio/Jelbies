@@ -42,7 +42,7 @@ final class TimeAwayTests: XCTestCase {
         XCTAssertEqual(applied, 3 * hour, accuracy: 1e-6)
         XCTAssertEqual(n.level(.hunger), 0.85, accuracy: 0.01)
         XCTAssertEqual(n.level(.thirst), 0.8125, accuracy: 0.01)
-        XCTAssertEqual(n.level(.attention), 0.50, accuracy: 0.01)
+        XCTAssertEqual(n.level(.attention), 0.75, accuracy: 0.01)
         XCTAssertEqual(n.mood, .okay)
         XCTAssertNil(n.wantedNeed, "not wanting yet after 3 h")
     }
@@ -53,8 +53,8 @@ final class TimeAwayTests: XCTestCase {
             full(n)
             n.leaveActive(at: t0)
             n.returnActive(at: t0.addingTimeInterval(secs))
-            for k in NeedKind.allCases { XCTAssertEqual(n.level(k), NeedsTuning.awayFloor, accuracy: 0.01, "\(name): \(k) at the floor") ; XCTAssertGreaterThan(n.level(k), 0.19) }
-            XCTAssertEqual(n.wantingCount, 3, "\(name): he wants things")
+            for k in NeedKind.allCases { XCTAssertEqual(n.level(k), NeedsTuning.awayFloor(for: k), accuracy: 0.01, "\(name): \(k) at the floor") ; XCTAssertGreaterThan(n.level(k), 0.19) }
+            XCTAssertEqual(n.wantingCount, 2, "\(name): love alone never wants (0.35 > 0.3);" +  "\(name): he wants things")
         }
     }
 

@@ -34,4 +34,11 @@ extension GameCare {
             }
         }
     }
+
+    /// A social session (pair or group emote) ended well for the player's own Jelmiko `id` (MelonStage's `onSocial` `.ended`, once per participant):
+    /// +0.03 love, filling only up to 0.8. Park / Camp visitors have no profile here and get nothing. Squabbles and plain glances do not count.
+    func socialSessionCompleted(id: Int, kind: SocialKind, end: SocialEnd) {
+        guard end == .done, kind != .squabble, kind != .look, let j = jelly(id) else { return }
+        j.needs.gain(.attention, NeedsTuning.socialLoveGain, upTo: NeedsTuning.socialLoveCap)
+    }
 }

@@ -37,26 +37,26 @@ final class AwayAsleepTests: XCTestCase {
     // MARK: the numbers
 
     func testTheRatesAreNamedConstants() {
-        XCTAssertEqual(NeedsTuning.awakeAwayHours, [20, 16, 6]); XCTAssertEqual(NeedsTuning.asleepAwayHours, [60, 48, 6])
-        XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.hunger), 20); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.thirst), 16); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention), 6)
+        XCTAssertEqual(NeedsTuning.awakeAwayHours, [20, 16, 12]); XCTAssertEqual(NeedsTuning.asleepAwayHours, [60, 48, 12])
+        XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.hunger), 20); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.thirst), 16); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention), 12)
         XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.hunger, asleep: true), 60); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.thirst, asleep: true), 48)
-        XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention, asleep: true), 6, "attention is unchanged by sleep")
-        XCTAssertEqual(NeedsTuning.awayFloor, 0.2)
+        XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention, asleep: true), 12, "attention is unchanged by sleep")
+        XCTAssertEqual(NeedsTuning.awayFloor, 0.2); XCTAssertEqual(NeedsTuning.awayFloor(for: .attention), 0.35); XCTAssertEqual(NeedsTuning.awayFloor(for: .hunger), 0.2)
     }
 
     func testAwakeDaytime() {
         // 14:00 -> 17:00 (3 h) and 14:00 -> 22:00 is not daytime, so 8 h daytime is 08:00 -> 16:00
-        eq(away([1, 1, 1], at(0, 14), at(0, 17), asleep: false), [0.85, 0.8125, 0.5], "3 h from full")
-        eq(away([1, 1, 1], at(0, 8), at(0, 16), asleep: false), [0.6, 0.5, 0.2], "8 h from full (attention on the floor)")
-        eq(away([0.5, 0.5, 0.5], at(0, 14), at(0, 17), asleep: false), [0.35, 0.3125, 0.2], "3 h from 0.5 (hunger 0.5 - 3/20, thirst 0.5 - 3/16)")
-        eq(away([0.5, 0.5, 0.5], at(0, 8), at(0, 16), asleep: false), [0.2, 0.2, 0.2], "8 h from 0.5: hunger 0.1 and thirst 0.0 sit on the floor")
-        eq(away([1, 1, 1], at(0, 12), at(0, 13), asleep: false), [0.95, 0.9375, 1 - 1.0 / 6], "1 h from full")
+        eq(away([1, 1, 1], at(0, 14), at(0, 17), asleep: false), [0.85, 0.8125, 0.75], "3 h from full")
+        eq(away([1, 1, 1], at(0, 8), at(0, 16), asleep: false), [0.6, 0.5, 0.35], "8 h from full (attention 0.333 stops at its floor 0.35)")
+        eq(away([0.5, 0.5, 0.5], at(0, 14), at(0, 17), asleep: false), [0.35, 0.3125, 0.35], "3 h from 0.5 (hunger 0.5 - 3/20, thirst 0.5 - 3/16)")
+        eq(away([0.5, 0.5, 0.5], at(0, 8), at(0, 16), asleep: false), [0.2, 0.2, 0.35], "8 h from 0.5: hunger 0.1 and thirst 0.0 sit on the floor")
+        eq(away([1, 1, 1], at(0, 12), at(0, 13), asleep: false), [0.95, 0.9375, 1 - 1.0 / 12], "1 h from full")
     }
 
     func testAwakeAcrossANight() {
         // 23:00 -> 07:00: 7 night hours at half weight + 1 day hour = 4.5 h on the needs
-        eq(away([1, 1, 1], at(0, 23), at(1, 7), asleep: false), [1 - 4.5 / 20, 1 - 4.5 / 16, 1 - 4.5 / 6], "awake overnight from full")
-        eq(away([0.5, 0.5, 0.5], at(0, 23), at(1, 7), asleep: false), [0.5 - 4.5 / 20, 0.5 - 4.5 / 16, 0.2], "awake overnight from 0.5")
+        eq(away([1, 1, 1], at(0, 23), at(1, 7), asleep: false), [1 - 4.5 / 20, 1 - 4.5 / 16, 1 - 4.5 / 12], "awake overnight from full")
+        eq(away([0.5, 0.5, 0.5], at(0, 23), at(1, 7), asleep: false), [0.5 - 4.5 / 20, 0.5 - 4.5 / 16, 0.35], "awake overnight from 0.5")
     }
 
     func testAsleepAtLeaveOvernightAndByDayCostTheSamePerHour() {
@@ -64,29 +64,29 @@ final class AwayAsleepTests: XCTestCase {
         let day = away([1, 1, 1], at(0, 14), at(0, 22), asleep: true)       // 8 h, one of them (21-22) at night
         eq([night[0], night[1]], [1 - 8.0 / 60, 1 - 8.0 / 48], "asleep overnight, food + water: 8 h on the asleep rates, no night discount on top")
         eq([day[0], day[1]], [night[0], night[1]], "the same food + water per hour by day")
-        // attention is unchanged by sleep: it keeps today's night-weighted seconds (4.5 h overnight; 7.5 h for 14:00-22:00, which is on the floor)
-        XCTAssertEqual(night[2], 1 - 4.5 / 6, accuracy: 1e-5)
-        XCTAssertEqual(day[2], 0.2, accuracy: 1e-5)
+        // attention is unchanged by sleep: it keeps today's night-weighted seconds (4.5 h overnight; 7.5 h for 14:00-22:00 = 0.375)
+        XCTAssertEqual(night[2], 1 - 4.5 / 12, accuracy: 1e-5)
+        XCTAssertEqual(day[2], 1 - 7.5 / 12, accuracy: 1e-5)
         let h = away([0.5, 0.5, 0.5], at(0, 23), at(1, 7), asleep: true)
-        eq(h, [0.5 - 8.0 / 60, 0.5 - 8.0 / 48, 0.2], "asleep overnight from 0.5")
+        eq(h, [0.5 - 8.0 / 60, 0.5 - 8.0 / 48, 0.35], "asleep overnight from 0.5")
         let h2 = away([0.5, 0.5, 0.5], at(0, 14), at(0, 22), asleep: true)
         eq([h2[0], h2[1]], [h[0], h[1]], "same from 0.5 by day")
         // 3 h asleep by day
-        eq(away([1, 1, 1], at(0, 14), at(0, 17), asleep: true), [1 - 3.0 / 60, 1 - 3.0 / 48, 0.5], "3 h asleep")
+        eq(away([1, 1, 1], at(0, 14), at(0, 17), asleep: true), [1 - 3.0 / 60, 1 - 3.0 / 48, 0.75], "3 h asleep")
     }
 
     func testTheFloorHolds() {
         for asleep in [false, true] {
             for days in [3, 14, 400] {
                 let out = away([1, 1, 1], at(0, 9), at(days, 9), asleep: asleep)
-                for v in out { XCTAssertGreaterThanOrEqual(v, 0.2 - 1e-6); XCTAssertLessThan(v, 0.2 + 1e-6, "a long absence lands on the floor (asleep \(asleep), \(days) d)") }
+                for (i, v) in out.enumerated() { let f: Float = i == 2 ? 0.35 : 0.2; XCTAssertGreaterThanOrEqual(v, f - 1e-6); XCTAssertLessThan(v, f + 1e-6, "a long absence lands on the floor (asleep \(asleep), \(days) d)") }
             }
             // already under the floor: left alone, not lifted
             eq(away([0.05, 0.1, 0.0], at(0, 9), at(0, 17), asleep: asleep), [0.05, 0.1, 0.0], "under the floor stays")
         }
         // asleep: 60 h of food from full reaches the floor only after 0.8 x 60 = 48 h; water after 0.8 x 48 = 38.4 h
-        eq(away([1, 1, 1], at(0, 9), at(2, 9), asleep: true), [0.2, 0.2, 0.2], "48 h asleep: both on the floor")
-        eq(away([1, 1, 1], at(0, 9), at(1, 9), asleep: true), [1 - 24.0 / 60, 0.5, 0.2], "24 h asleep")
+        eq(away([1, 1, 1], at(0, 9), at(2, 9), asleep: true), [0.2, 0.2, 0.35], "48 h asleep: both on the floor")
+        eq(away([1, 1, 1], at(0, 9), at(1, 9), asleep: true), [1 - 24.0 / 60, 0.5, 0.35], "24 h asleep")
     }
 
     // MARK: the app: foreground return, cold launch, old saves
@@ -189,17 +189,17 @@ final class AwayAsleepTests: XCTestCase {
     // MARK: time that passes INSIDE the app keeps the old numbers
 
     func testTripClockAndSkippedNightKeepTheOldInAppRates() {
-        XCTAssertEqual(NeedsTuning.inAppAwayHours, [10, 8, 6], "the pre-change away curve, as on d7e30c42")
-        // the skipped night (6 h): hunger 1 - 6/10, thirst 1 - 6/8, attention 1 - 6/6 -> the floor
+        XCTAssertEqual(NeedsTuning.inAppAwayHours, [10, 8, 12], "the pre-change away curve, as on d7e30c42")
+        // the skipped night (6 h): hunger 1 - 6/10, thirst 1 - 6/8, attention 1 - 6/12 = 0.5
         let n = BlobNeeds(persists: false); Self.keep.append(n)
         for k in NeedKind.allCases { n.set(k, 1) }
         n.applyInAppTime(seconds: GameClockTuning.skippedNightAway)
-        eq(lv(n), [0.4, 0.25, 0.2], "skipped night")
-        // the trip clock (2700 s) through GameCare.tripReturned: hunger 1 - 0.75/10, thirst 1 - 0.75/8, attention 1 - 0.75/6
+        eq(lv(n), [0.4, 0.25, 0.5], "skipped night")
+        // the trip clock (2700 s) through GameCare.tripReturned: hunger 1 - 0.75/10, thirst 1 - 0.75/8, attention 1 - 0.75/12
         let care = GameCare(jellyCount: 1, persistent: false)
         for k in NeedKind.allCases { care.jellies[0].needs.set(k, 1) }
         care.tripReturned([0])
-        eq(lv(care.jellies[0].needs), [0.925, 0.90625, 0.875], "trip clock")
+        eq(lv(care.jellies[0].needs), [0.925, 0.90625, 0.9375], "trip clock")
         // and it never depends on the leave rates
         XCTAssertNotEqual(NeedsTuning.inAppAwayHours, NeedsTuning.awakeAwayHours)
     }

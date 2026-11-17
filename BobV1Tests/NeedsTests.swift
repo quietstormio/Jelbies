@@ -50,7 +50,7 @@ final class NeedsTests: XCTestCase {
         run(n, seconds: 360, dt: 1)                                     // six minutes
         XCTAssertEqual(n.level(.hunger), 1 - 0.1 / 0.3, accuracy: 0.002, "hunger empties in about 18 min (wanting twice per 24-min game day)")
         XCTAssertEqual(n.level(.thirst), 1 - 0.1 / 0.2, accuracy: 0.002, "thirst in about 12 min")
-        XCTAssertEqual(n.level(.attention), 1 - 0.1 / 4, accuracy: 0.002, "attention in about 4 h")
+        XCTAssertEqual(n.level(.attention), 1 - 0.1 / 8, accuracy: 0.002, "attention in about 8 h (half the old rate)")
         run(n, seconds: 720, dt: 1)
         XCTAssertLessThan(n.level(.thirst), 0.001)
         XCTAssertTrue(n.isWanting(.hunger))
@@ -309,7 +309,7 @@ final class NeedsTests: XCTestCase {
         let hourLater = make(d, now: { t0.addingTimeInterval(3600) })
         XCTAssertEqual(hourLater.level(.hunger), 0.8 - 1.0 / 20, accuracy: 1e-4, "the offline hour decayed it on the away curve")
         XCTAssertEqual(hourLater.level(.thirst), 0.7 - 1.0 / 16, accuracy: 1e-4)
-        XCTAssertEqual(hourLater.level(.attention), 0.9 - 1.0 / 6, accuracy: 1e-4)
+        XCTAssertEqual(hourLater.level(.attention), 0.9 - 1.0 / 12, accuracy: 1e-4)
         // restores save at once
         hourLater.restore(.hunger)
         let again = make(d, now: { t0.addingTimeInterval(3600) })
