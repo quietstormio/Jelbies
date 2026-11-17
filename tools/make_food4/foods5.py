@@ -85,17 +85,30 @@ def cinnamonroll(v=0):
     commit(ribbon(strip, gw, 0.070, 0.030), CREAM, mods=BEV(0.014, 2), sharp=60)
     # three short, soft drips of uneven length hanging on the outer wall (rounded ends)
     for frac, L, wd in ((0.885, 0.20, 0.060), (0.79, 0.11, 0.052), (0.70, 0.16, 0.056)):
-        i = int(N*frac); q = dough[i]; aa = math.atan2(q.y, q.x); ro = math.hypot(q.x, q.y) + dw(i)*0.5 - 0.018
+        i = int(N*frac); q = dough[i]; aa = math.atan2(q.y, q.x); ro = math.hypot(q.x, q.y) + dw(i)*0.5 - 0.004
         zr = dh(i)
         cx = ro*math.cos(aa); cy = ro*math.sin(aa)
-        commit(blob(wd*1.5, wd*1.1, wd*1.0, 2), (1.0, 0.985, 0.95), sharp=80, xf=xf_rt((cx, cy, zr - 0.035), rotz=aa))
-        commit(blob(wd*0.95, wd*0.80, L*0.62, 2), (1.0, 0.985, 0.95), sharp=80, xf=xf_rt((cx + 0.010*math.cos(aa), cy + 0.010*math.sin(aa), zr - 0.03 - L*0.55), rotz=aa))
-        commit(blob(wd*1.02, wd*0.88, wd*1.0, 2), (1.0, 0.985, 0.95), sharp=80, xf=xf_rt((cx + 0.012*math.cos(aa), cy + 0.012*math.sin(aa), zr - 0.03 - L*0.95), rotz=aa))
-    # cinnamon specks on the glaze
-    r = random.Random(3)
-    for k in range(16):
-        aa = r.uniform(0, 2*math.pi); rr = r.uniform(0.03, 0.2)
-        commit(blob(0.024, 0.019, 0.011, 1), (0.36, 0.17, 0.07), sharp=80, xf=xf_rt((rr*math.cos(aa), rr*math.sin(aa), hgt(rr) - 0.065 + 0.07*(1 - (rr/0.27)**2) + 0.03), rotz=aa))
+        # one smooth teardrop: wide where it leaves the glaze, tapering to a rounded tip
+        rt = wd*0.86
+        prof = [(0.0, -L - rt)]
+        for k in range(1, 6):
+            ph = math.radians(90 - 18*k)                                # rounded bulb at the tip
+            prof.append((rt*math.cos(ph), -L - rt*math.sin(ph)*1.0))
+        for k in range(1, 10):
+            t = 1.0 - k/9.0                                             # body: wide at the top, tapering to the bulb
+            prof.append((rt + (wd*1.12 - rt)*(1.0 - t)**0.9, -L*t))
+        cap = wd*1.12
+        for k in range(1, 6):
+            ph = math.radians(18*k)
+            prof.append((cap*math.cos(ph), cap*0.8*math.sin(ph)))          # a rounded top that melts into the glaze
+        drip = lathe(prof, 14)
+        commit(drip, (1.0, 0.985, 0.95), sharp=80, xf=xf_rt((cx, cy, zr - 0.055), rotz=aa, scale=(0.75, 1.0, 1.0)))
+    # a few small cinnamon specks, scattered unevenly on the glaze strip and the dough (none on the pool, none side by side)
+    r = random.Random(5)
+    for frac, jit in ((0.29, 0.010), (0.37, -0.012), (0.49, 0.006), (0.58, -0.008), (0.69, 0.012), (0.80, -0.006), (0.84, 0.010)):
+        i = int(N*frac); q = dough[i]
+        commit(blob(0.017, 0.013, 0.008, 1), (0.34, 0.16, 0.06), sharp=80,
+               xf=xf_rt((q.x*(1 + jit), q.y*(1 + jit), dh(i) + 0.018), rotz=r.uniform(0, 3.1)))
     scale_all(0.97)
 BUILD['cinnamonroll'] = cinnamonroll
 
