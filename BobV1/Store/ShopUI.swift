@@ -175,7 +175,7 @@ struct ShopScreen: View {
                     .background(Capsule().fill(Color.white.opacity(0.85)))
                     Spacer(minLength: 0)
                     if owned > 0 {
-                        Text(item.unique ? "Owned" : "owned x\(owned)").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.muted)
+                        Text(item.unique && !item.isWearable ? "Owned" : "owned x\(owned)").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.muted)
                     }
                 }
             }
@@ -230,7 +230,7 @@ struct ItemSheet: View {
         return care.jellies.first { !knowers.contains($0.id) }?.id
     }
     private var targetCharacter: Int? { targetSlot.flatMap { care.jelly($0)?.character } }
-    private var ownedNow: Bool { isPerJelbieTrick ? targetSlot == nil : item.unique && book.owns(item) }
+    private var ownedNow: Bool { isPerJelbieTrick ? targetSlot == nil : item.unique && !item.isWearable && book.owns(item) }
     private var total: Int { item.price * (item.unique ? 1 : qty) }
     private var left: Int { wallet.count - total }
 
@@ -377,7 +377,7 @@ struct ItemSheet: View {
                 if owned { Text("You have it").font(SK.font(18, .black)) }
                 else if left < 0 { Text("Need \(-left) more JellyCoins").font(SK.font(18, .black)) }
                 else {
-                    Text("Buy for").font(SK.font(18, .black))
+                    Text(book.owned(item) > 0 && item.isWearable ? "Buy another for" : "Buy for").font(SK.font(18, .black))
                     JellyCoinIcon(size: 22)
                     Text("\(total)").font(SK.font(18, .black))
                 }
@@ -386,7 +386,7 @@ struct ItemSheet: View {
             .background(Capsule().fill(can ? SK.ink : SK.muted.opacity(0.55)))
         }
         .buttonStyle(.plain).disabled(!can)
-        .accessibilityLabel(owned ? "\(item.name), you have it" : left < 0 ? "Buy \(item.name), need \(-left) more JellyCoins" : "Buy \(item.unique ? "" : "\(qty) ")\(item.name) for \(total) JellyCoins")
+        .accessibilityLabel(owned ? "\(item.name), you have it" : left < 0 ? "Buy \(item.name), need \(-left) more JellyCoins" : "Buy \(book.owned(item) > 0 && item.isWearable ? "another " : item.unique ? "" : "\(qty) ")\(item.name) for \(total) JellyCoins")
         .accessibilityIdentifier("item-buy")
     }
 
@@ -397,6 +397,7 @@ struct ItemSheet: View {
             if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
             return "You'll have \(left) JellyCoins left \u{00B7} \(item.scope == .everyone ? "Every Jelmiko knows it at once" : "Ready at once")"
         }
+        if item.isWearable && book.owns(item) { return "You have \(book.owned(item)) \u{00B7} buy another so two Jelmiko can match" }
         if item.unique && book.owns(item) { return "In your Bag" }
         if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
         let dest = item.kind == .room ? "Live there from Rooms" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
