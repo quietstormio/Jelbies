@@ -59,8 +59,9 @@ final class DiningGroup {
     private(set) var replans = 0
     /// Slice 1 of the meal line-up fix (switch `-DiningOrdered 0` = the old smart line-up, simulator / dev builds): the places of a FOOD sitting at the home tray are given once, at the start, in the order of the diners'
     /// x on the floor (left diner -> left place), and never re-planned, so nobody has to pass between or through the others to reach his place and a late arrival is never sent into a middle place
-    /// between two standing diners. Since 2026-11-17 a DRINK sitting at the home tray does the same (the feeding survey: drinks, still re-planned, had the most stop-and-go and
-    /// swings of every case); only the café keeps the smart line-up (`replan`) exactly as before.
+    /// between two standing diners. Since 2026-11-17 a DRINK sitting at the home tray is never re-planned either (the feeding survey: drinks, still re-planned, had the most
+    /// stop-and-go and swings of every case), but it keeps the smart FIRST plan (`Lineup.best`): x-order breaks near-ties by index, and three on one side at the same x
+    /// then crossed and waited on each other (LineupTests oneSide 10.8 s vs 5.9 s). Only the café keeps the smart line-up with `replan` exactly as before.
     nonisolated(unsafe) static var orderedPlaces: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DiningOrdered") != nil && UserDefaults.standard.integer(forKey: "DiningOrdered") == 0)
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
@@ -202,7 +203,7 @@ final class DiningGroup {
         committed = [Bool](repeating: false, count: n); replanClock = 0; replans = 0; quietLatch = []
         placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
         ordered = Self.orderedPlaces && n > 1 && forcedOrigin == nil          // (food and drinks at the home tray; the café keeps `replan`)
-        if ordered { placeOf = Self.orderedSlots(floors: brains.indices.map { f($0) }, slots: spots) }
+        if ordered && c.kind == .food { placeOf = Self.orderedSlots(floors: brains.indices.map { f($0) }, slots: spots) }          // (a drink keeps the smart first plan above: given once, never re-planned)
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0

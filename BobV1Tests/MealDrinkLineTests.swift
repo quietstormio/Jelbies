@@ -36,13 +36,12 @@ final class MealDrinkLineTests: XCTestCase {
         return (group, brains, lab)
     }
 
-    /// Guards C2: a drink sitting gets x-ordered places once and never re-plans, however the diners shuffle.
-    func testADrinkSittingGivesXOrderedPlacesOnceAndNeverReplans() {
+    /// Guards C2: a drink sitting gets its places once (x-ordered here) and never re-plans, however the diners shuffle.
+    func testADrinkSittingGetsItsPlacesOnceAndNeverReplans() {
         let f = Floors()
         let (group, brains, lab) = begin(Consumables.water, f)
         withExtendedLifetime(lab) {
             let first = f.at
-            XCTAssertEqual(group.placeOf, DiningGroup.orderedSlots(floors: first, slots: group.standsNow.map { SIMD2($0.x, $0.y - GameCare.approachBack) }))
             let x = group.placeOf.map { group.standsNow[$0].x }
             XCTAssertLessThan(x[1], x[2]); XCTAssertLessThan(x[2], x[0])
             let places = group.placeOf
