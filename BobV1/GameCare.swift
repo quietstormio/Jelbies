@@ -37,6 +37,8 @@ final class GameCare {
     @ObservationIgnored var queued: [BlobRequest] = []      // one-shot brain requests (wave / come)
     @ObservationIgnored private var hooked = false
     @ObservationIgnored var callRunning = false
+    /// The "Go home?" card of a competition is up (Race/ForfeitHome.swift); the race / show / match waits behind it.
+    var forfeitAsk = false
     @ObservationIgnored private var finished: [BlobRequest] = []
     @ObservationIgnored var wanted: Consumable?             // picked, the tray not out yet
     @ObservationIgnored var meal: Consumable?               // the tray is out and he is working on it

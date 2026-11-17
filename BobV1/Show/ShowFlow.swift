@@ -108,6 +108,8 @@ final class ShowFlow {
     private(set) var earned = 0
     private(set) var awards: ShowProgress.Awards?
     @ObservationIgnored private(set) var settled = false
+    /// The player went home in the middle (Race/ForfeitHome.swift): nothing is settled and the trip is not a win.
+    @ObservationIgnored private(set) var forfeited = false
     var cardAge: Float = 0
     /// "Show again" was tapped: the lobby reopens once the room is back.
     @ObservationIgnored private(set) var againWanted = false
@@ -245,9 +247,22 @@ final class ShowFlow {
         trickStage = .pick; clock = 0; lastTurn = nil; performLeft = 0; burstFlash = 0
         entranceStarted = false; entranceDone = false; entranceT = 0; entranceTapT = 0; entrancePick = nil
         rivalTurn = nil; rivalStep = .walkIn; rivalRound = 0; rivalQueue = []; rivalT = 0
-        earned = 0; awards = nil; settled = false; cardAge = 0; againWanted = false
+        earned = 0; awards = nil; settled = false; forfeited = false; cardAge = 0; againWanted = false
         autoDone = 0; autoTrickWait = 0; danceCued = 0
         ShowAssist.refresh()
+    }
+
+    /// A forfeit can be asked: the stage is up and live, before the results.
+    var canForfeit: Bool { phase == .stage && wipe == 0 && cameraBlend > 0 && round != .results && !leaving && !forfeited }
+    /// The sim clock can stand still behind the card (everything but the dance, which follows the song's own audio clock).
+    var canPause: Bool { !(round == .dance && beat == .dancing) }
+
+    /// "Go home" in the middle of the show: the usual fade home with no settlement (no Drops, ribbon, trophy or stats) and no win.
+    func forfeit() {
+        guard canForfeit else { return }
+        forfeited = true; settled = true; leaving = true; againWanted = false
+        onDance(nil, false)
+        phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
     }
 
     /// "Done" / "Show again" on the results (or the X on a drill): back to the room.
@@ -602,7 +617,7 @@ final class ShowFlow {
     }
 
     private func finishTrip() {
-        let won = sim?.playerWon ?? false
+        let won = !forfeited && (sim?.playerWon ?? false)
         let id = playerID, again = againWanted
         phase = .off; leaving = false
         sim = nil

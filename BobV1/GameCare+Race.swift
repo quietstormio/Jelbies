@@ -322,6 +322,7 @@ extension GameCare {
             } else { raceWait = w }
         }
         tickNewcomer(actors, dt: dt)
+        forfeitTick()
         raceHome(actors, dt: dt)
         if !race.active, let l = live, l.raceLive { l.raceFinished(place: 0, drops: 0) }          // a trip that ended without results (abort): the card goes quietly
         guard race.active else { return }
@@ -336,7 +337,7 @@ extension GameCare {
                 do { race.setMeasured(i, dist: b.raceProgress(sim: a.sim)) }          // his arc length along his lane (pz - startZ on the straight)
             }
         }
-        let events = race.tick(dt: dt, bodyFree: { body($0)?.brain?.raceStepFree ?? true }, bodyReady: { body($0)?.brain?.raceBodyReady ?? true },
+        let events = forfeitAsk ? [] : race.tick(dt: dt, bodyFree: { body($0)?.brain?.raceStepFree ?? true }, bodyReady: { body($0)?.brain?.raceBodyReady ?? true },
                                bodyBetween: { body($0)?.brain?.raceBetweenSteps ?? true })
         for e in events {
             if let i = e.racer, let a = body(i), let b = a.brain { b.raceApply(e, sim: a.sim) }
