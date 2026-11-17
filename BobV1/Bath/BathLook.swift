@@ -38,6 +38,8 @@ struct BathLook: Equatable {
     var sootStyle: Float = 0
     static func sootSeed(jelly: Int) -> Float { Float(jelly + 1) }
     var tool: BathTool = .none
+    /// The soap in use (Soap.rawValue: 0 Jelly, 1 Lavender, 2 Mint, 3 Berry): the bar in his hand and the foam take its colour (rides in `MelonBathParams.a.z`).
+    var soap: Int = 0
     var toolAt: SIMD3<Float>? = nil           // world point where the held tool mesh is drawn (soap bar / cloth); rinse still uses `spray`
     static let dry = BathLook()
     static let maxBubbles = 48

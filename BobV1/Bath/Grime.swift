@@ -63,6 +63,10 @@ final class BlobGrime {
     @ObservationIgnored private var awaySince: Date?
     @ObservationIgnored private(set) var lastAway: TimeInterval = 0
     @ObservationIgnored var dirtPerUnit = GrimeTuning.dirtPerUnit
+    /// How well he was last washed (WashQuality.swift): dirt builds and the Glow fades at 1 / washMul until he is dirty again, then it is 1 (persisted).
+    @ObservationIgnored private(set) var washMul: Float = 1
+    /// A finished wash stamps its tier (the Spa and the home bath); the latest wash replaces the earlier one.
+    func stampWash(_ t: WashTier) { washMul = max(1, t.cleanMul); save() }
     /// The perks of this Jelly (shine: the sparkle fades slower; tidy: lint comes back slower). Set by his profile.
     @ObservationIgnored var perks: JellyPerks?
 
@@ -82,8 +86,8 @@ final class BlobGrime {
     /// Walking / running adds dirt (`dirtPerUnit` per floor unit moved; `exerting` = run / zoomies / slide / scoot makes it 3x). `travelled` is the
     /// floor distance moved this step (0 when idle).
     func step(dt: Float, travelled: Float, exerting: Bool = false) {
-        if sparkle > 0 { sparkle = max(0, sparkle - dt * (perks?.cache.fade ?? 1) / GrimeTuning.sparkleFade) }
-        if travelled > 0 { addDirt(travelled * dirtPerUnit * (exerting ? GrimeTuning.exertionMul : 1) * (perks?.cache.dirt ?? 1)) }
+        if sparkle > 0 { sparkle = max(0, sparkle - dt * (perks?.cache.fade ?? 1) / washMul / GrimeTuning.sparkleFade) }
+        if travelled > 0 { addDirt(travelled * dirtPerUnit * (exerting ? GrimeTuning.exertionMul : 1) * (perks?.cache.dirt ?? 1) / washMul) }
         saveT += dt
         if saveT > GrimeTuning.saveEvery { saveT = 0; save() }
     }
@@ -91,31 +95,31 @@ final class BlobGrime {
     /// More dirt (clamped to 1). The sparkle ends the moment he is no longer clean.
     func addDirt(_ x: Float) {
         dirt = min(1, max(0, dirt + x))
-        if dirt >= GrimeTuning.cleanBelow { sparkle = 0 }
+        if dirt >= GrimeTuning.cleanBelow { sparkle = 0; washMul = 1 }          // dirty again: the wash's bonus is spent
     }
 
     // MARK: persistence
 
     private struct Saved: Codable {
         struct Bit: Codable { var k: UInt8; var d: [Float]; var s: Float; var z: Float }
-        var bits: [Bit]?; var sparkle: Float; var distance: Float; var made: Int?; var at: Double; var dirt: Float?
-        init(bits: [Bit]?, sparkle: Float, distance: Float, made: Int?, at: Double, dirt: Float?) {
-            self.bits = bits; self.sparkle = sparkle; self.distance = distance; self.made = made; self.at = at; self.dirt = dirt
+        var bits: [Bit]?; var sparkle: Float; var distance: Float; var made: Int?; var at: Double; var dirt: Float?; var wash: Float?
+        init(bits: [Bit]?, sparkle: Float, distance: Float, made: Int?, at: Double, dirt: Float?, wash: Float? = nil) {
+            self.bits = bits; self.sparkle = sparkle; self.distance = distance; self.made = made; self.at = at; self.dirt = dirt; self.wash = wash
         }
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             bits = c.value(.bits, nil); sparkle = c.value(.sparkle, 0); distance = c.value(.distance, 0); made = c.value(.made, nil)
-            at = c.value(.at, Date().timeIntervalSince1970); dirt = c.value(.dirt, nil)
+            at = c.value(.at, Date().timeIntervalSince1970); dirt = c.value(.dirt, nil); wash = c.value(.wash, nil)
         }
     }
     func save() {
         guard persists else { return }
-        let s = Saved(bits: nil, sparkle: sparkle, distance: distance, made: nil, at: (awaySince ?? now()).timeIntervalSince1970, dirt: dirt)
+        let s = Saved(bits: nil, sparkle: sparkle, distance: distance, made: nil, at: (awaySince ?? now()).timeIntervalSince1970, dirt: dirt, wash: washMul > 1 ? washMul : nil)
         if let data = try? JSONEncoder().encode(s) { defaults.set(data, forKey: key) }
     }
     private func load() {
         guard let s = SaveRecovery.decode(Saved.self, key: key, defaults: defaults) else { return }
-        distance = s.distance; dirt = min(1, max(0, s.dirt ?? 0))
+        distance = s.distance; dirt = min(1, max(0, s.dirt ?? 0)); washMul = dirt < GrimeTuning.cleanBelow ? min(4, max(1, s.wash ?? 1)) : 1
         sparkle = s.sparkle
         applyAway(seconds: now().timeIntervalSince1970 - s.at, endingAt: now())
         save()
@@ -151,6 +155,7 @@ final class BlobGrime {
             if let e = ex[.shine] { fadeAway = PerkStore.effective(away: away, covered: PerkStore.overlap(expiry: e, from: from, to: end), mul: Double(PerkTuning.shineFade)) }
             if let e = ex[.tidy] { dirtAway = PerkStore.effective(away: away, covered: PerkStore.overlap(expiry: e, from: from, to: end), mul: Double(PerkTuning.tidyDirt)) }
         }
+        fadeAway /= Double(washMul); dirtAway /= Double(washMul)          // a good wash: the Glow and the lint go at 1 / washMul while he was away too
         sparkle = AwayMath.sparkle(sparkle, awaySeconds: fadeAway)
         addDirt(AwayMath.dirtGain(awaySeconds: dirtAway))
     }

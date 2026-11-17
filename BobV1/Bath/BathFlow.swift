@@ -74,6 +74,12 @@ final class BathFlow {
     @ObservationIgnored var success: () -> Void = {}
     /// Capture aid: scripted fake scrubs (`-BlobGameDemo gclean`).
     @ObservationIgnored var demo = false
+    /// The soap picked for this wash (GameCare sets it before `start`; the Jelly soap = the plain wash). Back to the Jelly soap when the bath is over.
+    var soap = Soap.jelly
+    /// Capture aid (`-BathSpeed 12`): scrub / rinse / polish gains x this, so a slow simulator finishes a bath in a film's time. 1 in play.
+    @ObservationIgnored var demoSpeed: Float = 1
+    @ObservationIgnored private var heartAcc: Float = 0
+    @ObservationIgnored private var ambientT: Float = 0
     /// Accessibility "Help me scrub": the scripted scrub runs for the current stage WITHOUT the demo's auto Next / Done (the player still taps Next). Reset on every stage.
     var assistScrub = false
     /// Capture aid (`-BathHold 1`): the demo stops at every complete stage (no auto Next / Done) so each can be filmed.
@@ -242,7 +248,7 @@ final class BathFlow {
         look.bubbles = []; bubbleAge = []; look.spray = nil; look.toolAt = nil; look.tool = .none
         touching = false; prompt = nil
         sootSeededFor = -1                       // the room re-seeds its soot from his dirt (a half-washed spot does not stay)
-        if phase != .fade { phase = .off; releaseTarget() }
+        if phase != .fade { phase = .off; soap = .jelly; releaseTarget() }
         lastPos = nil
     }
 
@@ -337,10 +343,29 @@ final class BathFlow {
             if heartsLeft > 0 { heartT -= dt; if heartT <= 0 { heartT = 0.45; heartsLeft -= 1; play?.spawnHeart(now: CACurrentMediaTime()) } }
         }
         if demo, !demoHold { demoAdvance(dt: dt, brain: brain, sim: sim) }
+        soapMoments(dt: dt, play: play)
         if !acceptsTouch { touching = false; if phase != .exit { look.toolAt = nil; look.spray = nil } }
         look.sparkle = grime.sparkle
         look.dirt = grime.dirt
+        look.soap = soap.rawValue
         happyHop(brain: brain, sim: sim)
+    }
+
+    /// The Berry soap: a heart floats up every few seconds while he is washed and the tub stays foamy (the 48-bubble cap holds).
+    private func soapMoments(dt: Float, play: TouchPlay?) {
+        guard phase == .soap || phase == .rinse || phase == .shine, soap.heartEvery > 0 else { heartAcc = 0; return }
+        heartAcc += dt
+        if heartAcc >= soap.heartEvery { heartAcc = 0; play?.spawnHeart(now: CACurrentMediaTime()) }
+        if phase != .shine, look.bubbles.count < 20 {
+            ambientT -= dt
+            if ambientT <= 0 {
+                ambientT = 0.35
+                let a = rand() * 2 * .pi, r = 0.55 + 0.3 * rand()
+                let p = SIMD3<Float>(Self.standPoint.x + r * cosf(a), Self.standPoint.y + 0.25 + 0.5 * rand(), Self.standPoint.z + 0.25 * r * sinf(a) + 0.2)
+                look.bubbles.append(SIMD4(p.x, p.y, p.z, 0.03 + 0.05 * rand()))
+                bubbleAge.append(BathTuning.bubbleLife.lowerBound + (BathTuning.bubbleLife.upperBound - BathTuning.bubbleLife.lowerBound) * rand())
+            }
+        }
     }
 
     private func rounded(_ v: Float) -> Float { (v * 100).rounded() / 100 }
@@ -363,7 +388,7 @@ final class BathFlow {
             wipe = max(0, wipe - dt / BathTuning.fadeIn)
             if wipe <= 0 {
                 if fadeDest == .bath { swapped = false; enterAfterFade() }
-                else { phase = .off; prompt = nil; releaseTarget() }
+                else { phase = .off; prompt = nil; soap = .jelly; releaseTarget() }
             }
         }
     }
@@ -392,9 +417,9 @@ final class BathFlow {
             polish = 0; wetStart = look.wet; progress = 0
             look.foam = Array(repeating: 0, count: look.foam.count)
         case .finish:
-            polish = 1; look.wet = 0; look.sparkle = 1; grime.sparkle = 1; grime.dirt = 0; grime.save()
+            polish = 1; look.wet = 0; look.sparkle = 1; grime.sparkle = 1; grime.dirt = 0; grime.stampWash(soap.tier)          // a dirty one ends fully clean; how well decides how long it lasts
             look.soot = BathLook.sootSeed(dirt: 0); sootSeededFor = 0
-            finishT = 0; heartsLeft = 3; heartT = 0
+            finishT = 0; heartsLeft = soap.heartEvery > 0 ? 6 : 3; heartT = 0
             prompt = Self.workPrompt(.finish)
             AudioHub.shared.play(.shineFinish)       // sparkle + squeak in one clip (replaces the plain sparkle)
             success()
@@ -466,13 +491,13 @@ final class BathFlow {
         look.toolAt = w
         switch phase {
         case .soap:
-            look.paint(local: l, radius: BathTuning.brushRadius, amount: BathTuning.soapGain * v * dt)
+            look.paint(local: l, radius: BathTuning.brushRadius, amount: BathTuning.soapGain * demoSpeed * v * dt)
             if v > 0.3 { spawnBubbles(at: w, dt: dt) }
             AudioHub.shared.scrubLoop(v > 0.3)
         case .rinse:
             AudioHub.shared.scrubLoop(false)
             look.spray = w + BathLook.sprayOffset
-            look.rinse(local: l, radius: BathTuning.rinseRadius, amount: (BathTuning.rinsePassive + BathTuning.rinseGain * v) * dt)
+            look.rinse(local: l, radius: BathTuning.rinseRadius, amount: (BathTuning.rinsePassive + BathTuning.rinseGain * demoSpeed * v) * dt)
             look.wet = min(1, look.wet + BathTuning.wetRise * dt)
             if v > 0.3, splashGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.splash, volume: BathSFX.splashVolume) }
         case .shine:
@@ -481,7 +506,7 @@ final class BathFlow {
                 AudioHub.shared.play(.squeakPolish, volume: BathSFX.squeakVolume, rate: 1 + (rand() * 2 - 1) * BathSFX.squeakRateSpread)
             }
             let before = polish
-            polish = min(1, polish + BathTuning.polishGain * v * dt)
+            polish = min(1, polish + BathTuning.polishGain * demoSpeed * v * dt)
             look.wet = wetStart * (1 - polish)
             grime.sparkle = polish
             look.sparkle = polish
@@ -494,7 +519,7 @@ final class BathFlow {
     private func spawnBubbles(at w: SIMD3<Float>, dt: Float) {
         bubbleT -= dt
         guard bubbleT <= 0 else { return }
-        bubbleT = 0.09
+        bubbleT = 0.09 / soap.bubbleRate
         if soapGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.soapbubbles, volume: BathSFX.soapVolume) }
         let p = w + SIMD3(rand() - 0.5, rand() * 0.3, rand() * 0.3) * 0.3
         look.bubbles.append(SIMD4(p.x, p.y, p.z, 0.03 + 0.05 * rand()))

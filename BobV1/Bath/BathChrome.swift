@@ -39,72 +39,113 @@ struct BathChrome: View {
             Color.clear.onGeometryChange(for: CGSize.self) { $0.size } action: { viewSize = $0 }.allowsHitTesting(false)
             if bath.phase == .soap { TipAnchor("clean", delay: 1.0) }          // the first-time tip: once the tub is still, before the first scrub
             if bath.showsChrome {
-                VStack(spacing: 0) {
-                    HStack {
-                        Spacer()
-                        Button { care.cancelClean() } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(CareMenu.brown)
-                                .frame(width: 44, height: 44)
-                                .background(Circle().fill(CareMenu.cream).opacity(0.92))
-                                .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("bath-cancel")
-                        .accessibilityLabel("Stop cleaning")
-                    }
-                    Spacer()
-                    VStack(spacing: 10) {
-                        if let p = bath.prompt {
-                            Text(p)
-                                .playFont(16, .semibold)
-                                .foregroundStyle(CareMenu.brown)
-                                .padding(.horizontal, 14).padding(.vertical, 6)
-                                .accessibilityIdentifier("bath-prompt")
-                                .background(Capsule().fill(CareMenu.cream).shadow(color: .black.opacity(0.15), radius: 5, y: 2))
-                                .transition(.scale.combined(with: .opacity))
-                        }
-                        if bath.phase == .finish {
-                            Button { care.finishClean() } label: {
-                                Text("Done")
-                                    .playFont(18, .bold)
-                                    .foregroundStyle(CareMenu.brown)
-                                    .padding(.horizontal, 28).padding(.vertical, 10).frame(minHeight: 44)
-                                    .background(Capsule().fill(CareMenu.cream).shadow(color: .black.opacity(0.18), radius: 6, y: 2))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("bath-done")
-                        } else if HUDLayout.isLandscape(vsc: vsc, size: viewSize) {
-                            toolBar
-                            helpButton
-                            HStack(spacing: 12) {
-                                ProgressBar(value: bath.progress).frame(height: 6).accessibilityIdentifier("bath-progress")
-                                if bath.stageComplete { nextButton }
-                            }
-                            .padding(.horizontal, 24)
-                        } else {
-                            toolBar
-                            helpButton
-                            ProgressBar(value: bath.progress)
-                                .frame(height: 6)
-                                .padding(.horizontal, 24)
-                                .accessibilityIdentifier("bath-progress")
-                            if bath.stageComplete { nextButton }
-                        }
-                    }
-                    .padding(.bottom, 14)
+                Group {
+                    if HUDLayout.isLandscape(vsc: vsc, size: viewSize) { landscapeChrome } else { portraitChrome }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 8)
                 .animation(.easeInOut(duration: 0.2), value: bath.phase)
                 .animation(.easeInOut(duration: 0.2), value: bath.prompt)
                 .animation(.easeInOut(duration: 0.2), value: bath.stageComplete)
                 .transition(.opacity)
             }
+            if care.soapPrompt != nil { SoapPickCard(care: care, ps: ps, landscape: HUDLayout.isLandscape(vsc: vsc, size: viewSize)).transition(.opacity) }
             Color.white.opacity(Double(bath.wipe))          // the fade to white; the world swaps only while this is fully opaque
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         }
+    }
+
+    private var cancelButton: some View {
+        Button { care.cancelClean() } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(CareMenu.brown)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(CareMenu.cream).opacity(0.92))
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.06), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("bath-cancel")
+        .accessibilityLabel("Stop cleaning")
+    }
+
+    @ViewBuilder
+    private var promptPill: some View {
+        if let p = bath.prompt {
+            Text(p)
+                .playFont(16, .semibold)
+                .foregroundStyle(CareMenu.brown)
+                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+                .padding(.horizontal, 14).padding(.vertical, 6)
+                .accessibilityIdentifier("bath-prompt")
+                .background(Capsule().fill(CareMenu.cream).shadow(color: .black.opacity(0.15), radius: 5, y: 2))
+                .transition(.scale.combined(with: .opacity))
+        }
+    }
+
+    private var doneButton: some View {
+        Button { care.finishClean() } label: {
+            Text("Done")
+                .playFont(18, .bold)
+                .foregroundStyle(CareMenu.brown)
+                .padding(.horizontal, 28).padding(.vertical, 10).frame(minHeight: 44)
+                .background(Capsule().fill(CareMenu.cream).shadow(color: .black.opacity(0.18), radius: 6, y: 2))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("bath-done")
+    }
+
+    /// Portrait: everything at the bottom, as always.
+    private var portraitChrome: some View {
+        VStack(spacing: 0) {
+            HStack { Spacer(); cancelButton }
+            Spacer()
+            VStack(spacing: 10) {
+                promptPill
+                if bath.phase == .finish {
+                    doneButton
+                } else {
+                    toolBar
+                    helpButton
+                    ProgressBar(value: bath.progress)
+                        .frame(height: 6)
+                        .padding(.horizontal, 24)
+                        .accessibilityIdentifier("bath-progress")
+                    if bath.stageComplete { nextButton }
+                }
+            }
+            .padding(.bottom, 14)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    /// Landscape: the step prompt / row / Help / Next / Done in a RIGHT column and the progress bar along the bottom below the tub, so the tub and the whole Jelmiko
+    /// (face, arms, feet) stay free of every control.
+    private var landscapeChrome: some View {
+        ZStack {
+            VStack { HStack { Spacer(); cancelButton }; Spacer() }
+            HStack {
+                Spacer()
+                VStack(spacing: 8 * ps) {
+                    promptPill
+                    if bath.phase == .finish { doneButton } else {
+                        toolBar
+                        helpButton
+                        if bath.stageComplete { nextButton }
+                    }
+                }
+                .frame(width: 200 * ps)
+            }
+            if bath.phase != .finish {
+                VStack {
+                    Spacer()
+                    ProgressBar(value: bath.progress)
+                        .frame(width: max(120, viewSize.width * 0.30), height: 6)
+                        .accessibilityIdentifier("bath-progress")
+                        .padding(.bottom, 12)
+                }
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     /// "Help me scrub": the scripted scrub for this stage, for a player who cannot rub the screen (VoiceOver, Switch Control, a motor difficulty).
@@ -147,7 +188,7 @@ struct BathChrome: View {
                                     .offset(x: 4, y: -4).transition(.scale)
                             }
                         }
-                    Text(t.1)
+                    Text(HUDLayout.isLandscape(vsc: vsc, size: viewSize) && t.1 == "Jelly Soap" ? "Soap" : t.1)          // (landscape: the right column is narrow)
                         .playFont(11 * ps, .semibold, relativeTo: .caption)
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(Capsule().fill(CareMenu.cream))

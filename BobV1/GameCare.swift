@@ -143,6 +143,9 @@ final class GameCare {
     @ObservationIgnored var servingCharged = false
     @ObservationIgnored var zoomiesDue: Set<Int> = []
     @ObservationIgnored var armedSupplies: [Int: [String]] = [:]
+    /// The Jelly whose bath is waiting for a soap pick (the card shows; nil = no card). `soapChosen`: the pick was made (or the soap came from the Bag), so `clean` goes on.
+    var soapPrompt: Int?
+    @ObservationIgnored var soapChosen = false
     /// Jelly Circuit "Waddle Sprint" (Race/RaceFlow.swift, GameCare+Race.swift): the trip to the track and back, and the race on it.
     let race = RaceFlow()
     @ObservationIgnored let raceBook = RaceBook()
@@ -496,6 +499,13 @@ final class GameCare {
     var canClean: Bool { canClean(jelly: 0) }
     /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow).
     func clean(jelly: Int = 0) {
+        if !bath.active, canClean(jelly: jelly) {
+            let armed = armedSupplies[jelly] ?? []
+            let picked = soapChosen || !armed.isEmpty          // (a soap or the Spray from the Bag is already the pick)
+            if !picked, !ownedSoaps.isEmpty { soapPrompt = jelly; return }          // owns bought soaps: "Pick a soap" first (no soaps: straight in, as always)
+            soapChosen = false
+            bath.soap = armed.compactMap { Soap.of(storeID: $0) }.first { s in s.storeID.map { store.count($0) > 0 } ?? false } ?? .jelly
+        }
         guard jelly == 0 else { startCleanOther(jelly: jelly); return }        // another Jelly: GameCare+Bath.swift
         guard canClean, let brain = lastBrain else { return }
         select.cancel()

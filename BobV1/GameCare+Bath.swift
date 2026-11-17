@@ -50,6 +50,7 @@ extension GameCare {
     /// The ✕ button (the Jelly being washed; `jelly` is accepted for symmetry with `clean(jelly:)`).
     func cancelClean(jelly id: Int? = nil) {
         guard let (brain, sim) = washer(id) else { return }
+        if bath.phase != .finish { armedSupplies[bath.targetID] = nil }          // stopped before the end: nothing was used up, nothing stays armed
         bath.cancel(brain: brain, sim: sim)
     }
     func finishClean(jelly id: Int? = nil) {

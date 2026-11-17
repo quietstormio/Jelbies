@@ -446,7 +446,7 @@ struct ItemSheet: View {
         if item.kind == .trickPage { return item.scope == .everyone ? "Bought once: every Jelmiko knows it, adopted ones too. Say it in the room, or pick it in the Jelly Show." : "Only the Jelmiko you pick learns it. Say it in the room, or pick it in the Jelly Show." }
         return item.description
     }
-    private func durationText(_ p: PerkKind) -> String { SK.timeLeft(p.duration) }
+    private func durationText(_ p: PerkKind) -> String { p.bathOnly ? "in the bath" : SK.timeLeft(p.duration) }
 }
 
 

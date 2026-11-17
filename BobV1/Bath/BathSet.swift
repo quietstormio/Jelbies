@@ -65,7 +65,7 @@ nonisolated final class BathOverlay {
     func compose(look: BathLook, time: Float, camRight: SIMD3<Float> = SIMD3(1, 0, 0), camUp: SIMD3<Float> = SIMD3(0, 1, 0),
                  sparkleAt: ((Int) -> (p: SIMD3<Float>, n: SIMD3<Float>)?)? = nil) {
         soup.clear()
-        if look.tool != .none, look.tool != .rinse, let at = look.toolAt { addTool(look.tool, at: at, time: time) }
+        if look.tool != .none, look.tool != .rinse, let at = look.toolAt { addTool(look.tool, at: at, time: time, soap: look.soap) }
         if let nz = look.spray { addSpray(from: nz, time: time) }
         for b in look.bubbles.prefix(Self.maxBubbles) where b.w > 0.003 {
             soup.sphere(SIMD3(b.x, b.y, b.z), b.w, color: .zero, mat: .bubble, alpha: 1, rings: 4, segs: 8)
@@ -111,7 +111,19 @@ nonisolated final class BathOverlay {
 
     // MARK: tools
 
-    private func addTool(_ tool: BathTool, at t: SIMD3<Float>, time: Float) {
+    /// Appends the soap bar's Blender model, base centre at `at`, scaled by `s`.
+    private func addBar(_ soap: Soap, at: SIMD3<Float>, yaw: Float, scale s: Float) {
+        guard let m = CareMeshes.mesh(soap: soap) else { return }
+        let cy = cosf(yaw), sy = sinf(yaw)
+        func rot(_ v: SIMD3<Float>) -> SIMD3<Float> { SIMD3(v.x * cy + v.z * sy, v.y, -v.x * sy + v.z * cy) }
+        let base = UInt32(soup.v.count)
+        for k in 0..<m.positions.count { soup.vert(rot(m.positions[k]) * s + at, rot(m.normals[k]), m.colors[k], mat: .glossy, ao: m.ao[k]) }
+        for k in stride(from: 0, to: m.indices.count, by: 3) { soup.tri(base + UInt32(m.indices[k]), base + UInt32(m.indices[k + 1]), base + UInt32(m.indices[k + 2])) }
+    }
+
+    private func addTool(_ tool: BathTool, at t: SIMD3<Float>, time: Float, soap: Int = 0) {
+        // a bought soap: its own bar (the Blender model in its scent's colour) in his hand; the free Jelly soap keeps the translucent bar
+        if tool == .soap, soap > 0, let sp = Soap(rawValue: soap) { addBar(sp, at: t + SIMD3(0, -0.04, 0.06), yaw: 0.4, scale: 1.45); return }
         switch tool {
         case .soap:
             // translucent pastel jelly bar with a tiny bubble riding on it

@@ -580,7 +580,7 @@ final class MelonRenderer {
     /// Writes the bath body-shader parameters (only when something changed; the frame is owned, so the GPU is not reading the buffer).
     private func uploadBathParams(_ slot: BodySlot) {
         let look = slot.bathLook
-        let a = SIMD4<Float>(look.wet, look.sparkle, slot.foamAny ? 1 : 0, look.dirt)
+        let a = SIMD4<Float>(look.wet, look.sparkle, slot.foamAny ? 1 + Float(look.soap) : 0, look.dirt)          // .z: 0 no foam, else 1 + the soap (0 Jelly, 1 Lavender, 2 Mint, 3 Berry: the foam's colour)
         let p = slot.bathParamsBuf.contents()                 // this frame's copy (ring): written whole, ~2.3 KB
         p.storeBytes(of: a, toByteOffset: 0, as: SIMD4<Float>.self)
         p.storeBytes(of: SIMD4<Float>(BathSet.bodyCentre, look.sootStyle), toByteOffset: 16, as: SIMD4<Float>.self)      // .w = this Jelly's soot placement (Jelbie id + 1)
