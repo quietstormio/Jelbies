@@ -14,12 +14,27 @@ nonisolated enum SocialMore {
     }
     nonisolated(unsafe) static var on: Bool = flag("SocialMore")
     /// Group (hug, cheer, conga, circle) wait for a crowd + cooldown after one, scaled by this. The rare treats (congaLine / ringDance, EmoteTuning) keep their own minutes-long cooldown (GroupEmoteTests.testTreatsAreRareAndRespectBusy pins >= 170 s).
-    static let homeGroupWait: Float = 0.2, parkGroupWait: Float = 0.2
+    static let homeGroupWait: Float = 0.33, parkGroupWait: Float = 0.15
     /// Pair sessions: the brain-wide and the pair cooldown after one (SocialTuning.brainCooldown / pairCooldown) scaled by this.
-    static let homePairWait: Float = 0.2, parkPairWait: Float = 0.25
+    static let homePairWait: Float = 0.45, parkPairWait: Float = 0.5
+    /// Extra pair rolls: a standing, free Jelmiko rolls the ordinary pair pick (SocialTuning.pickChance, cooldowns and partner rules all unchanged) this often (seconds, drawn each time) besides the scheduler's own picks.
+    /// The scheduler's pick cadence, not the waits, limited the pair rate: a group takes the three of them for ~25 s. Only how often the existing pair emotes are asked for.
+    static let homePairRoll: (Float, Float) = (7, 14), parkPairRoll: (Float, Float) = (5, 10)
 }
 
 extension BlobBrain {
     var moreGroupWaitMul: Float { SocialMore.on ? (outingPlay ? SocialMore.parkGroupWait : SocialMore.homeGroupWait) : 1 }
     var morePairWaitMul: Float { SocialMore.on ? (outingPlay ? SocialMore.parkPairWait : SocialMore.homePairWait) : 1 }
+}
+
+extension BlobBrain {
+    /// Per tick while no session is on him (BlobSocial.swift socialTick): the extra pair roll above.
+    func socialPairWatch(_ sim: SoftBody, _ dt: Float) {
+        guard SocialMore.on, anticsEnabled, socialFree, !reserved, toy.waitUID < 0, toy.chaseSpot == nil, idleDeepNight < 0.5 else { return }
+        socialBook.pairRoll += dt
+        guard socialBook.pairRoll >= socialBook.pairRollLimit else { return }
+        let r = outingPlay ? SocialMore.parkPairRoll : SocialMore.homePairRoll
+        socialBook.pairRoll = 0; socialBook.pairRollLimit = rand(r.0, r.1)
+        _ = socialMaybeStart(sim)
+    }
 }

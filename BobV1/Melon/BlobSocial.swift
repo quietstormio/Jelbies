@@ -130,6 +130,7 @@ struct SocialBook {
     /// Seconds since this Jelly's last social (counts only while he is awake and free to join): the floor asks for one past `droughtLimit`.
     var drought: Float = 0
     var droughtLimit: Float = 43
+    var pairRoll: Float = 0, pairRollLimit: Float = 10          // (SocialMoreTuning.swift: the extra pair roll)
     /// A wandering partner was asked to stop; the social starts when his leg is over (or is dropped after `inviteWait`).
     var invite: (kind: SocialKind, id: Int, t: Float)?
     /// Wake-up greeting: a Jelly in the room woke (`greetWho`); after `wakeGreet` seconds this one looks at him and hops (`greetHop`).
@@ -582,6 +583,7 @@ extension BlobBrain {
             if social == nil { socialWatch(sim, dt) }
             if social == nil { socialGroupWatch(sim, dt) }
             if social == nil { socialTreatWatch(sim, dt) }
+            if social == nil { socialPairWatch(sim, dt) }
         }
         socialHandsTick(sim, dt)
         // ease the overlays (exactly neutral when nothing asks for them)
