@@ -741,7 +741,10 @@ final class GameCare {
         stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
         wantedAge += dt
         if wantedAge > Self.mealTimeout { wanted = nil; retries = 0; resetStandWalk(); return }
-        if Self.trayFirst || here.y <= stand.y + Self.popTolerance {
+        let approach = SIMD2(stand.x, stand.y - Self.approachBack)
+        // (C5c, round E: with the calm wait he first walks to his approach point, as a group diner does, so the step-in is straight; after 2 tries the old rule)
+        let atApproach = !DiningGroup.calmWait || simd_distance(here, approach) < 0.3 || standRetries >= 2
+        if Self.trayFirst || (here.y <= stand.y + Self.popTolerance && atApproach) {
             let busy = jellyFloors.enumerated().contains { $0.offset != mealJelly && DiningSpot.distance(from: $0.element, origin: origin, layout: layout) < DiningGroup.trayClearance }
             if busy, wantedAge < DiningGroup.gatherCap / 2 { return }          // (somebody stands where it lands: `stepAside` moves him off first)
             // he walked here because he was in front: let him come to rest first (the soft body overshoots toward the tray while it stops)
@@ -759,8 +762,7 @@ final class GameCare {
             }
             return
         }
-        // in front of his place: walk there first (the tray is not out yet, so nothing is in the way)
-        let approach = SIMD2(stand.x, stand.y - Self.approachBack)
+        // in front of his place, or (calm wait) not yet at his approach point: walk there first (the tray is not out yet, so nothing is in the way)
         if !standRequested {
             standRequested = true; standIdle = 0
             brain.callToMeal(.goTo(approach))

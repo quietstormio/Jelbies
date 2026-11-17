@@ -367,6 +367,21 @@ final class DiningSet {
         return true
     }
 
+    /// C7 (round E, 2026-11-17): ONE place is set again for a diner who takes over a freed place of a running sitting: his pieces back on the plate (his
+    /// share of the drink), a soft clink and a puff there; the other places are left as they are. False when no tray stands or `p` is no place.
+    @discardableResult
+    func restock(place p: Int) -> Bool {
+        guard phase == .popping || phase == .present, bitesLeft.indices.contains(p) else { return false }
+        bitesLeft[p] = DiningTiming.bitesPerServing
+        pieceInHand[p] = nil; piecePose[p] = nil; drunk[p] = 0
+        forkBite[p] = false; biteFlight[p] = nil; biteFlying[p] = false
+        groupKey = ""; worldKey = ""; dirty = true
+        AudioHub.shared.play(.setdown)
+        let m = places[p].mouth
+        puffs.spawn(at: SIMD3(m.x, 0.55, m.z - 0.05), radius: 0.18)
+        return true
+    }
+
     /// Poofs the tray away (shrinks inside a puff, then it is gone).
     func despawn() {
         guard phase == .popping || phase == .present else { return }

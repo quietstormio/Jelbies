@@ -88,6 +88,8 @@ extension GameCare {
             let seats = Self.seating(candidates, level: { [weak self] id in self?.needs(for: id).level(kind) ?? 1 }, seats: home ? DiningGroup.homeSeats : DiningGroup.maxDiners,
                                      distance: { id in simd_distance(floorOf[id] ?? DiningSpot.preferred, DiningSpot.preferred) })
             groupQueue = seats.later; groupNext = seats.later.isEmpty ? nil : c
+            // (round E: where the SLEEPING waiters lie: they are never moved, so this sitting's places keep clear of them)
+            group.keepClearOf = seats.later.compactMap { id in actors.first { $0.id == id }.flatMap { a in a.brain.flatMap { $0.isSleeping ? Self.floorPos($0, a.sim) : nil } } }
             let sorted = actors.filter { seats.now.contains($0.id) }.sorted { $0.id < $1.id }
             let brains = sorted.compactMap(\.brain)
             let floors: [() -> SIMD2<Float>] = sorted.map { a in { [weak b = a.brain, weak s = a.sim] in b.map { Self.floorPos($0, s) } ?? .zero } }
@@ -127,6 +129,22 @@ extension GameCare {
             return
         }
         group.bystanders = { actors.filter { !self.group.memberIDs.contains($0.id) && $0.brain != nil }.map { Self.floorPos($0.brain!, $0.sim) } }
+        group.waitersPending = { [weak self] in !(self?.groupQueue.isEmpty ?? true) }
+        // C7 (round E): the first waiter takes the first freed place of this sitting (the tray stays); `-MealRolling 0` = the next sitting as in round D
+        if DiningGroup.rolling, let w = groupQueue.first, let slot = group.freeSlot(), let a = actors.first(where: { $0.id == w }), let b = a.brain {
+            groupQueue.removeFirst(); groupWaitSaved[w] = nil
+            if groupQueue.isEmpty { groupNext = nil }
+            let floor: () -> SIMD2<Float> = { [weak b, weak s = a.sim] in b.map { Self.floorPos($0, s) } ?? .zero }
+            #if targetEnvironment(simulator)
+            let body: () -> SIMD2<Float> = { [weak s = a.sim] in s.map { (q: SoftBody) -> SIMD2<Float> in let v = q.centroid(); return SIMD2(v.x, v.z) } ?? .zero }
+            let mouth: () -> SIMD3<Float>? = { [weak b, weak s = a.sim] in
+                guard let b, let s, b.dineIsSipping, b.dinePhaseName == "chew" else { return nil }
+                return b.mouthWorld(sim: s) }
+            group.join(slot: slot, brain: b, id: w, floor: floor, body: body, mouth: mouth)
+            #else
+            group.join(slot: slot, brain: b, id: w, floor: floor)
+            #endif
+        }
         for a in actors {
             guard let b = a.brain else { continue }
             if group.memberIDs.contains(a.id) { if group.isHolding(a.id) { b.idleBlocked = true; continue } }          // (a diner who is done is released on his own: he is a free Jelly again)
@@ -200,7 +218,10 @@ extension GameCare {
         guard near(here) < reach || group.trayDistance(here) < DiningGroup.trayClearance else { return }          // (or on the rectangle the tray is about to be drawn on)
         let centre = stands.reduce(SIMD2<Float>.zero, +) / Float(stands.count)
         var rel: [SIMD2<Float>] = [SIMD2(2.1, 0.3), SIMD2(-2.1, 0.3), SIMD2(1.5, -1.0), SIMD2(-1.5, -1.0), SIMD2(0, -2.0)]
-        if waiter { rel += [SIMD2(2.6, 0), SIMD2(-2.6, 0), SIMD2(1.7, 2.0), SIMD2(-1.7, 2.0), SIMD2(0, -2.6)] }          // (beside the row, the tray's front corners, far behind)
+        if waiter {          // (beside the row, the tray's front corners, far behind; round E: a ring of 12 at 2.2 and 3.0 too, for walls that push the near ones in)
+            rel += [SIMD2(2.6, 0), SIMD2(-2.6, 0), SIMD2(1.7, 2.0), SIMD2(-1.7, 2.0), SIMD2(0, -2.6)]
+            for k in 0..<12 { let a = Float(k) * .pi / 6; for r in [Float(2.2), 3.0] { rel.append(SIMD2(sinf(a), cosf(a)) * r) } }
+        }
         let spots = rel.map { centre + $0 }
         var best: (d: Float, p: SIMD2<Float>)?
         for c in spots {
@@ -210,7 +231,10 @@ extension GameCare {
             if waiter, near(p) >= reach, group.trayDistance(p) >= DiningGroup.trayClearance { d = 100 - simd_distance(p, here) }          // (any clear spot beats every unclear one; the nearest clear one wins)
             if best == nil || d > best!.d { best = (d, p) }
         }
-        if let best { brain.requestNow(.goTo(best.p)) }
+        if let best {
+            brain.requestNow(.goTo(best.p))
+            if waiter { MealTrace.log("waiter \(id) steps aside to " + String(format: "(%.2f,%.2f) near=%.2f tray=%.2f", best.p.x, best.p.y, near(best.p), group.trayDistance(best.p)) + " clear=\(best.d >= 50)") }
+        }
         clearCool[id] = 2
     }
 }

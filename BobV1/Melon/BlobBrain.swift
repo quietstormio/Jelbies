@@ -843,7 +843,7 @@ final class BlobBrain {
             else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking }
         case .sip(let place, let gulps):
             dine = DineState(place: place, bitesLeft: gulps, mode: .sip)
-            if shortDineStep(place) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: as above)
+            if shortDineStep(place, limit: Self.sipStepMin) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: as above; a sip only below `sipStepMin`)
             else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking }
         }
     }
@@ -852,7 +852,9 @@ final class BlobBrain {
     /// `dineStepMin` of his stand is not walked there: a walk that short starts by turning to face its target, a point a few cm to his side, and the square-up
     /// then turns him back (round C: +10 -> -82 -> 0 deg on the spot). He squares up where he stands instead; the dine reach takes the few cm.
     static let dineStepMin: Float = 0.15
-    func shortDineStep(_ place: DiningPlace) -> Bool { reserved && simd_distance(SIMD2(px, pz), fixed(place.stand)) < Self.dineStepMin }
+    /// A sip is skipped only below this (round E: a square-up 0.06-0.15 off the stand left the mouth 0.055-0.069 from the straw tip; the straw does not move).
+    static let sipStepMin: Float = 0.06
+    func shortDineStep(_ place: DiningPlace, limit: Float = BlobBrain.dineStepMin) -> Bool { reserved && simd_distance(SIMD2(px, pz), fixed(place.stand)) < limit }
 
     func fixed(_ p: SIMD2<Float>) -> SIMD2<Float> {
         let r = resolve(SIMD3(p.x, 0, p.y), footprint)
