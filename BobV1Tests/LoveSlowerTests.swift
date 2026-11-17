@@ -74,4 +74,18 @@ final class LoveSlowerTests: XCTestCase {
         care.socialSessionCompleted(id: 7, kind: .spinHug, end: .done)          // a visitor's id is beyond the player's own
         XCTAssertEqual(care.needs(for: 0).level(.attention), 0.5, accuracy: 1e-6)
     }
+
+    func testAWarmSessionsStartPlusEndGainNeverTakesLoveAboveEightTenthsFromSocialAlone() {
+        let care = GameCare(jellyCount: 1, persistent: false)
+        let n = care.needs(for: 0)
+        n.set(.attention, 0.77)
+        // start gain (tickSocialLove) then end gain (socialSessionCompleted), repeated
+        for _ in 0..<5 {
+            n.gain(.attention, SocialLoveTuning.gain, upTo: NeedsTuning.socialLoveCap)
+            care.socialSessionCompleted(id: 0, kind: .cuddle, end: .done)
+        }
+        XCTAssertEqual(n.level(.attention), 0.8, accuracy: 1e-6)
+        n.gain(.attention, 0.1)
+        XCTAssertEqual(n.level(.attention), 0.9, accuracy: 1e-6, "the player's own play still fills past 0.8")
+    }
 }

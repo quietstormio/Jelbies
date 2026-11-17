@@ -25,7 +25,7 @@ extension GameCare {
             if warm && !was {
                 socialLoveActive.insert(a.id)
                 guard let j = jelly(a.id), !parkHides(a.id) else { continue }
-                j.needs.gain(.attention, SocialLoveTuning.gain)
+                j.needs.gain(.attention, SocialLoveTuning.gain, upTo: NeedsTuning.socialLoveCap)          // (all social love together fills only to 0.8)
                 if Float.random(in: 0..<1) < SocialLoveTuning.heartChance, !focus.isActive, !a.selected, !race.active, !volley.active, !bath.active {
                     bubbleHub.spawnHeart(for: a.id, now: CACurrentMediaTime())
                 }
