@@ -29,6 +29,7 @@ extension GameCare {
             let reserving = id == mealJelly && (wanted != nil || meal != nil)
             brain.reserved = reserving
             brain.waitFocus = reserving ? (dining.isPresent ? dining.places.first?.stand : (wantedOrigin ?? DiningSpot.preferred)) : nil
+            brain.mealFaceYaw = reserving && DiningGroup.calmWait ? DiningLayout.make(n: 1).places[0].yaw : nil          // (C3: the calm wait faces his place)
         }
         if id != mealJelly, wanted != nil || meal != nil { stepAside(id: id, brain: brain, sim: sim, dt: dt); return }
         guard id == mealJelly, wanted != nil || meal != nil else { return }

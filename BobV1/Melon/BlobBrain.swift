@@ -214,6 +214,9 @@ final class BlobBrain {
     var reserved = false
     /// Where the waiting Jelly looks first (the tray); nil = at the nearest neighbour or just stays.
     var waitFocus: SIMD2<Float>?
+    /// The meal's calm wait (2026-11-17, the owner: "I don't want them turning, extra steps"): while he waits at his place for the tray, his place's facing; he squares up
+    /// to it once and stands still (breathing and blinks only). nil = the usual wait. Read only while `reserved` (a stale value is inert); DiningGroup / GameCare set and clear it.
+    var mealFaceYaw: Float?
     /// Play mode: the floor point a waiting Jelly keeps turning to (the ball); nil = none. And the controller's hook for the moment a bump's foot lands (BlobBrain+PlayToss.swift).
     var trackPoint: SIMD2<Float>?
     var tossFire: ((BlobBrain) -> Void)?
@@ -935,6 +938,10 @@ final class BlobBrain {
     /// The wait pose of a reserved Jelly (meal coming): never a leg. Looks at the tray or a neighbour, steps in place, or a small bounce and a blink.
     func waitPose(_ sim: SoftBody) {
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+        if let m = mealFaceYaw {          // (the meal's calm wait: square up once, then only a blink)
+            if abs(wrapAngle(m - yaw)) > 0.13 { script = .turn(to: m, then: .none); activity = .turning } else { blinkRequested = true; restTimer = rand(1.2, 2.0) }
+            return
+        }
         let r = rand()
         var aim: Float?
         if let tp = trackPoint, r < 0.8 { aim = yawTo(tp) }
@@ -1049,6 +1056,7 @@ final class BlobBrain {
         skinner.setEyeOpenness(1)
         skinner.browCounterOn = false
         dineAbort()
+        mealFaceYaw = nil          // (the meal's calm wait never outlives an abort: picked up, a command, a cancel; the meal sets it again while he is still its diner)
         socialAbort(skinner)
         idleReset(skinner)
         armActive = false; armBlend = 0; armPathName = ArmPath.wave.name; waveFootOff = false
@@ -1463,7 +1471,8 @@ final class BlobBrain {
         case .none:
             if facePlayerWhenIdle || socialBook.hold {
                 poseOn = true; ensureFeet(sim)
-                _ = turnSteps(goal: socialBook.hold ? (socialBook.faceYaw ?? yaw) : faceCameraYaw(), tol: socialBook.hold ? 0.06 : 0.12)
+                let calm = reserved ? mealFaceYaw : nil          // (the meal's calm wait faces his own place, not the camera)
+                _ = turnSteps(goal: socialBook.hold ? (socialBook.faceYaw ?? yaw) : (calm ?? faceCameraYaw()), tol: socialBook.hold ? 0.06 : (calm != nil ? 0.05 : 0.12))
                 gaitPose(sway: 0.6 * waddleRoll, bob: 0.03, rock: 0.5)
             }
 
