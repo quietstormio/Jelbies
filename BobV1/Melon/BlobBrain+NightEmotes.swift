@@ -22,22 +22,28 @@ enum NightEmoteTuning {
     static let kindSet = Set(kinds)
     /// How the night share is divided between them (sums to 1).
     static let mix: [IdleKind: Float] = [.moonGaze: 0.24, .sleepySway: 0.22, .lullabyHum: 0.20, .nodOff: 0.18, .starCount: 0.16]
-    /// The share of the NON-wander weight they take at full night (taken from the other kinds, so the total is unchanged).
-    nonisolated(unsafe) static var share: Float = 0.40
+    /// The share of the WANDER weight they take at full night.
+    nonisolated(unsafe) static var share: Float = 0.60
+    /// The table may grow by this fraction (x the ramp) on top of what the wander weight pays.
+    static let extra: Float = 0.08
     /// `idleNight` at which the full share is reached (a good share in the evening already).
     static let fullAtNight: Float = 0.4
     static func shareAt(night: Float) -> Float { night <= 0 ? 0 : share * min(1, night / fullAtNight) }
 }
 
 extension BlobBrain {
-    /// The idle table's night hook: moves `share(night)` of the non-wander weight over to the five night solos. Calm moods only (not grumpy).
+    /// The idle table's night hook ("add, never displace"): the night solos are paid for by the WANDER weight first (up to `share` of it at full night), and the
+    /// table may grow by at most `extra` (8 %) on top, so every existing kind keeps >= 1 / 1.08 = 92.6 % of its picks at night and the Jelmiko is a bit busier.
+    /// The existing kinds' own weights are not touched. Calm moods only (not grumpy).
     static func nightEmoteMix(_ w: inout [(kind: IdleKind, weight: Float)], _ m: IdleMood, night: Float) {
         let s = NightEmoteTuning.shareAt(night: night)
-        guard s > 0, m != .grumpy else { return }
-        let total = w.reduce(0) { $0 + ($1.kind == .wander ? 0 : $1.weight) }
-        guard total > 0 else { return }
-        for i in w.indices where w[i].kind != .wander { w[i].weight *= 1 - s }
-        for k in NightEmoteTuning.kinds { w.append((k, total * s * (NightEmoteTuning.mix[k] ?? 0))) }
+        guard s > 0, m != .grumpy, let wi = w.firstIndex(where: { $0.kind == .wander }) else { return }
+        let all = w.reduce(0) { $0 + $1.weight }
+        let r = s / max(NightEmoteTuning.share, 1e-6)
+        let taken = w[wi].weight * s
+        w[wi].weight -= taken
+        let mineTotal = taken + NightEmoteTuning.extra * all * r
+        for k in NightEmoteTuning.kinds { w.append((k, mineTotal * (NightEmoteTuning.mix[k] ?? 0))) }
     }
 
     /// `-NightForce <kind>` (DevArgs-gated): the scheduler picks that night kind every time.

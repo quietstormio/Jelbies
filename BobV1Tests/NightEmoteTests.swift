@@ -33,11 +33,13 @@ final class NightEmoteTests: XCTestCase {
                 report += String(format: "%@ %.3f | %@ | %.3f | %.3f\n", "\(m)", night, mine.map { String(format: "%.3f", $0) }.joined(separator: " "), nw, wander)
                 if night == 0 { XCTAssertTrue(mine.allSatisfy { $0 == 0 }, "\(m): a night kind is in the day table") }
                 else { XCTAssertTrue(mine.allSatisfy { $0 > 0 }, "\(m) night \(night): every night kind has weight") }
-                // the table without the hook (share = 0) has the same non-wander total and the same wander weight
+                // "add, never displace": the table without the hook (share = 0) has the same weights for every existing kind; the table grows by <= 8 %
                 let saved = NightEmoteTuning.share; NightEmoteTuning.share = 0
                 let base = w(m, night: night); NightEmoteTuning.share = saved
-                XCTAssertEqual(base.filter { $0.kind != .wander }.reduce(0) { $0 + $1.weight }, nw, accuracy: 1e-4, "\(m) \(night): the non-wander total changed")
-                XCTAssertEqual(base.first { $0.kind == .wander }?.weight ?? 0, wander, accuracy: 1e-6, "\(m) \(night): wander weight changed")
+                for e in base where e.kind != .wander { XCTAssertEqual(t.first { $0.kind == e.kind }?.weight ?? -1, e.weight, accuracy: 1e-6, "\(m) \(night): \(e.kind) weight changed") }
+                let tb = base.reduce(0) { $0 + $1.weight }, tt = t.reduce(0) { $0 + $1.weight }
+                XCTAssertLessThanOrEqual(tt, tb * 1.0801, "\(m) \(night): the table grew by more than 8 %")
+                report += String(format: "   existing kinds keep %.1f %% of their picks (table %.3f -> %.3f)\n", 100 * tb / tt, tb, tt)
             }
         }
         // grumpy never gets them
