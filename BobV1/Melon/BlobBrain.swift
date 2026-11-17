@@ -501,6 +501,7 @@ final class BlobBrain {
         if d.integer(forKey: "BlobNoWander") != 0 { b.autonomy = false }
         // capture aid: -BlobGameDemo gwalk|gturn|ghop|gcome|gwave|gstep runs a scripted loop in the game without the care menu
         if let n = d.string(forKey: "RunMove"), let k = IdleKind(rawValue: n), [.zoomies, .slide, .scoot].contains(k) { b.runMoveDemo = k; b.idleState.cooldown = 2 }
+        Self.nightForceApply(b, d)          // (night-emotes-r1: dev only, -NightForce <kind>)
         if let name = d.string(forKey: "BlobGameDemo") { b.demo = name; b.autonomy = false; b.restTimer = 2.0 }
         return b
     }

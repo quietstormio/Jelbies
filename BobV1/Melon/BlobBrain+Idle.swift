@@ -106,6 +106,7 @@ enum IdleKind: String, CaseIterable, Sendable {
     case moonwalk      // three-quarter on: glides smoothly BACKWARD while the feet alternate as if stepping forward (one heel up, the other sliding back flat), a point, a walk back
     case backBounce    // side on: sits back, tips onto his back, bounces on it like a ball with the feet kicking, springs back onto his feet
     case headstand     // side on: tips forward onto his head, the feet kick in the air, a held beat, pops over upright
+    case moonGaze, sleepySway, nodOff, lullabyHum, starCount          // (night-emotes-r1: calm evening / night solos, BlobBrain+NightEmotes.swift)
 }
 
 /// Mood -> which behaviours he picks from. `.wander` = no special this time (the existing wander table, slow and small when grumpy).
@@ -132,6 +133,7 @@ enum IdleTable {
         add(.sit, (sleep ? 1.5 : 4) * night)
         add(.yawn, 2.5 * night + 3 * morning)
         if antics { add(.stretch, 1.5 * morning) }
+        if antics { BlobBrain.nightEmoteMix(&w, m, night: night) }          // (night-emotes-r1: a share of the non-wander picks becomes calm night solos; the total stays)
         return w
     }
     /// The extra solo antics on top of a mood's table (the room life; the headless suites that predate them do not ask for them). The wander share shrinks
@@ -451,6 +453,8 @@ extension BlobBrain {
         } else if (pending != nil || (!autonomy && demo == nil && !idleForced && !commanded) || (held && !commanded)) && !idleState.yielding {
             switch kind {
             case .window where idleState.windowGo, .lieDown where idleState.windowGo, .flop where idleState.windowGo, .stargazing where idleState.windowGo: abortAll(sim, skinner); return          // (still walking there)
+            case .moonGaze where idleState.windowGo: abortAll(sim, skinner); return          // (night-emotes-r1: still walking there)
+            case .moonGaze, .sleepySway, .nodOff, .lullabyHum, .starCount: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .sit, .slump, .look, .yawn, .stretch, .window, .sway, .stopLook, .lieDown: idleState.yielding = true; idleState.yieldT = 0; feet.reset(); stepLive = false
             case .decorSit where isBagSit && !idleState.decorGo:
                 // on the bag he hops off (the hold ends now); a turn on the floor just stops; a hop in progress is finished first
@@ -705,6 +709,7 @@ extension BlobBrain {
         case .stargazing, .proudStrut, .floorNapFlop, .tapTilt, .welcomeWiggle, .checkIn:
             return emote2Begin(kind, sim)
         case .sing: return singBegin(sim)
+        case .moonGaze, .sleepySway, .nodOff, .lullabyHum, .starCount: return nightEmoteBegin(kind, sim)          // (BlobBrain+NightEmotes.swift)
         case .hula, .superSpring, .corkscrew, .oneLegSpin, .moonwalk, .backBounce, .headstand: return trickBegin(kind, sim)
         case .joy:
             idleBegin(.joy)
@@ -770,6 +775,8 @@ extension BlobBrain {
         case .stumble: runStumble(sim, skinner, dt)
         case .zoomies: runZoomStop(sim, skinner, dt)
         case .decorSit where isBagSit: runBagSit(sim, skinner, dt)
+        case .nodOff, .lullabyHum: runSit(sim, skinner, dt, slump: false)          // (night-emotes-r1: the sit / look machinery, BlobBrain+NightEmotes.swift)
+        case .moonGaze, .sleepySway, .starCount: runLook(sim, skinner, dt)
         case .sit, .slump, .sway, .decorSit: runSit(sim, skinner, dt, slump: kind == .slump)
         case .look, .window, .decorBoop, .decorPeek, .stopLook: runLook(sim, skinner, dt)
         case .giggle: runGiggle(sim, skinner, dt)
@@ -939,6 +946,7 @@ extension BlobBrain {
         }
         skinner.setEyeOpenness(1 - (slump ? 0.62 : (napping ? 0.93 : 0.5)) * k)
         if idleState.kind == .decorSit { decorPose(skinner, k: k) }
+        nightSitPose(skinner, k)          // (night-emotes-r1)
     }
 
     // MARK: look
@@ -974,6 +982,7 @@ extension BlobBrain {
         if idleState.kind == .window { roll += 0.03 * k * sinf(2 * .pi * t / 2.4) }
         if idleState.kind == .window, idleState.reps == 1, idleState.phase == 1, idleState.phaseT > idleState.hold * 0.5 { idleState.reps = 0; AudioHub.shared.chirp(jelly: steerID, .happy, x: px, src: "window") }
         if idleState.kind == .decorBoop || idleState.kind == .decorPeek { decorPose(skinner, k: k) }
+        nightLookPose(skinner, k)          // (night-emotes-r1)
     }
 
     // MARK: yawn / stretch

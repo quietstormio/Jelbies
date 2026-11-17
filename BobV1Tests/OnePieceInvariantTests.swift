@@ -90,7 +90,8 @@ final class OnePieceInvariantTests: XCTestCase {
         .stargazing: Entry(seconds: 16), .proudStrut: Entry(seconds: 9), .floorNapFlop: Entry(seconds: 11), .tapTilt: Entry(seconds: 5), .welcomeWiggle: Entry(seconds: 4), .checkIn: Entry(seconds: 5),
         .sing: Entry(seconds: 4),          // (trick-only: BlobBrain+Tricks.swift)
         .hula: Entry(seconds: 6), .superSpring: Entry(seconds: 6), .corkscrew: Entry(seconds: 6), .oneLegSpin: Entry(seconds: 6),
-        .moonwalk: Entry(seconds: 10), .backBounce: Entry(seconds: 5), .headstand: Entry(seconds: 6),          // (stage 3 prototypes: TrickAcro.swift, BlobBrain+Moonwalk.swift)
+        .moonwalk: Entry(seconds: 10), .backBounce: Entry(seconds: 5), .headstand: Entry(seconds: 6),
+        .moonGaze: Entry(seconds: 12), .sleepySway: Entry(seconds: 12), .nodOff: Entry(seconds: 15), .lullabyHum: Entry(seconds: 15), .starCount: Entry(seconds: 11),          // (night-emotes-r1)          // (stage 3 prototypes: TrickAcro.swift, BlobBrain+Moonwalk.swift)
     ]
 
     /// Gait / volley / touch moves that are not an IdleKind. Script cases covered here or by the idle table (`.idle`): see testEveryMoveIsListed.
