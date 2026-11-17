@@ -463,14 +463,15 @@ final class GameCare {
     func launched(away: TimeInterval? = nil) {
         guard !launchGreeted else { return }
         launchGreeted = true
-        // A cold launch wakes whoever is asleep (the slow, staggered wake, `tickNightRest`); at night the clock first moves to the morning so they stay up. Never on a return from the background.
-        // (The back-at-night "already asleep" check reads the hour the player really came back to, so it runs first; the clock moves right after, before the first frame.)
-        let hourBefore = DayClock.shared.hour
+        // A cold launch (2026-11-16, user: "launching the app after like closing it ... they should wake up"): the game clock is never touched, the back-at-night arrival does not put anyone to bed
+        // (`awayBedtime(launching:)`), whoever is still asleep at launch for another reason gets the slow wake (`tickNightRest`), and at night the bedtime logic keeps off for `NightRestTuning.coldLaunchGrace`
+        // (Goodnight / Naptime still work). Never on a return from the background.
         nightRest.coldWakeT = 0; nightRest.coldWakePending = true
+        nightRest.coldWakeIDs = Set(raceBook.actors.filter { $0.brain?.isSleeping == true }.map(\.id))
+        nightRest.coldGraceLeft = isBedtimeHours ? NightRestTuning.coldLaunchGrace : 0
         let away = away ?? jellies.map(\.lastAway).max() ?? 0
         greetIfAway(away, launching: true)
-        let moved = DayClock.shared.coldLaunchToMorning()
-        if DevArgs.enabled, UserDefaults.standard.bool(forKey: "WakeLog") { NSLog("[wakelog] launched: away %.0f s, hour %.2f -> %.2f (moved %@), arrivalAsleep %@", away, hourBefore, DayClock.shared.hour, moved ? "yes" : "no", nightRest.arrivalAsleep ? "yes" : "no") }
+        if DevArgs.enabled, UserDefaults.standard.bool(forKey: "WakeLog") { NSLog("[wakelog] launched: away %.0f s, hour %.2f, asleep at launch %d, grace %.0f s", away, DayClock.shared.hour, nightRest.coldWakeIDs.count, nightRest.coldGraceLeft) }
     }
     /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
     var greetBlocked: Bool {

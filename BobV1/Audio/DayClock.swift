@@ -227,21 +227,6 @@ final class DayClock {
         jump(by: delta, duration: duration, sweep: sweep)
     }
 
-    /// Cold launch only (2026-11-16, user: "launching the app after like closing it ... they should wake up"): when the clock sits in the night window (17:00 to 7:00 and the night blend) it moves to the
-    /// morning, `wakeHour`, with no time-lapse, so a Jelmiko woken at launch does not fall asleep again. The needs / dirt keep what the real time away gave them (no extra catch-up: the real absence is already applied).
-    /// Before 7:00 it is the same morning, from 17:00 on it is the next day. `-ClockHour` moves its frozen hour; the real-clock mode shifts its offset. True = moved.
-    @discardableResult
-    func coldLaunchToMorning() -> Bool {
-        let here = hour
-        guard here >= 17 || here < GameClockTuning.wakeHour, SleepHours.isNight(hour: here) else { return false }
-        var delta = GameClockTuning.wakeHour - here
-        if delta <= 0.001 { delta += 24 }
-        if forcedHour != nil { forcedHour = DayMath.wrap(here + delta) }          // (`-ClockHour` / tests: the frozen hour moves, no offset is saved)
-        else { jump(by: delta, duration: 0, sweep: false) }
-        refresh()
-        return true
-    }
-
     /// The room, the music and the Jellies are on the clock at once: no sweep, ever (the player must never watch the day catch up on open).
     /// Called before the first frame on launch and on every return to the foreground. In game mode, away >= 6 real hours starts a fresh morning (7:00, next Day);
     /// less than that resumes where it left off (the game clock does not run while the app is away).

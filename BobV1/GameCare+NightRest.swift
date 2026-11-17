@@ -18,7 +18,9 @@ enum NightRestTuning {
     static let backToBed: Float = 120
     /// Seconds between re-issued bedtimes to a Jelbie who is still up.
     static let retry: Float = 3
-    /// Back at night after at least this long away -> already asleep.
+    /// After a COLD launch at night the idle bedtime rule and the back-to-bed rule keep off for this many seconds (about 3 minutes); the player's Goodnight / Naptime work at any time.
+    nonisolated(unsafe) static var coldLaunchGrace: Float = 180
+    /// Back at night after at least this long away -> already asleep (a return from the background; a cold launch arrives awake).
     static let awayAsleepAfter: TimeInterval = 300
     /// DayBlend night above this (about 20:35 to 07:10) counts as bedtime hours, as does deep night.
     static let nightEdge: Float = SleepTuning.nightEdge
@@ -47,6 +49,8 @@ struct NightRestBook {
     var sleepNowDone = false                   // -SleepNow 1 fired
     var coldWakePending = false                // cold launch: whoever is asleep gets the slow wake once the room is up (`GameCare.launched`)
     var coldWakeT: Float = 0
+    var coldGraceLeft: Float = 0               // seconds of the cold-launch night grace still to run
+    var coldWakeIDs: Set<Int> = []             // the ones asleep at launch (and only they are woken by it)
 }
 
 extension GameCare {
@@ -148,6 +152,7 @@ extension GameCare {
         #else
         let demo = false
         #endif
+        guard !launching else { return false }          // a cold launch: they arrive awake (the night grace, `tickNightRest`)
         guard demo || (away >= NightRestTuning.awayAsleepAfter && isBedtimeHours), canBedtime else { return false }
         nightRest.arrivalAsleep = true
         LaunchGate.shared.hold(launching ? .launch : .resume)
@@ -182,6 +187,7 @@ extension GameCare {
         var book = nightRest
         defer { nightRest = book }
         book.roomIdle += dt
+        if book.coldGraceLeft > 0 { book.coldGraceLeft = max(0, book.coldGraceLeft - dt) }
         for id in ids { book.personal[id, default: 0] += dt }
         // busy states restart the clocks: the player is playing with them
         if focus.isActive || focus.phase != .roaming || trayOut || meal != nil || wanted != nil || groupActive || bath.active || tripActive
@@ -223,9 +229,10 @@ extension GameCare {
             book.coldWakeT += dt
             if book.coldWakeT >= 1.0, !LaunchGate.shared.visible || book.coldWakeT >= 6 {          // (after the curtain lifts, so the wake is seen)
                 book.coldWakePending = false
+                let coldIDs = book.coldWakeIDs; book.coldWakeIDs = []          // (only those asleep AT launch)
                 nightRest = book
-                if DevArgs.enabled, UserDefaults.standard.bool(forKey: "WakeLog") { NSLog("[wakelog] cold-launch wake: %d asleep, clock %.2f", actors.filter { $0.brain?.isSleeping == true }.count, DayClock.shared.hour) }
-                for a in actors.sorted(by: { $0.id < $1.id }) where a.brain?.isSleeping == true { wakeSleeper(a.id, groggy: true) }          // one call each, in one moment: `SleepOrder` staggers them
+                if DevArgs.enabled, UserDefaults.standard.bool(forKey: "WakeLog") { NSLog("[wakelog] cold-launch wake: %d asleep, clock %.2f", actors.filter { coldIDs.contains($0.id) && $0.brain?.isSleeping == true }.count, DayClock.shared.hour) }
+                for a in actors.sorted(by: { $0.id < $1.id }) where coldIDs.contains(a.id) && a.brain?.isSleeping == true { wakeSleeper(a.id, groggy: true) }          // one call each, in one moment: `SleepOrder` staggers them
                 book = nightRest
             }
         }
@@ -235,13 +242,13 @@ extension GameCare {
             book.nightWoken = []; book.autoFired = false
             for id in book.dayOnce where selectBrain(id)?.isNapping ?? false { book.dayOnce.remove(id); book.wanted.remove(id) }
         } else {
-            if book.roomIdle >= NightRestTuning.idleBedtime, !book.autoFired {
+            if book.roomIdle >= NightRestTuning.idleBedtime, !book.autoFired, book.coldGraceLeft <= 0 {
                 book.autoFired = true
                 let go = ids.filter { !book.nightWoken.contains($0) }
                 book.wanted.formUnion(go)
                 for id in go { book.retryT[id] = 0 }
             }
-            for id in book.nightWoken where (book.personal[id] ?? 0) >= NightRestTuning.backToBed {
+            for id in book.nightWoken where (book.personal[id] ?? 0) >= NightRestTuning.backToBed && book.coldGraceLeft <= 0 {
                 book.nightWoken.remove(id); book.wanted.insert(id); book.retryT[id] = 0
             }
         }

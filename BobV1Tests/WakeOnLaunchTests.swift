@@ -1,7 +1,7 @@
 //
 //  WakeOnLaunchTests.swift
-//  A COLD launch wakes whoever is asleep (the slow, staggered wake); at night the clock first moves to the morning. A return from the background changes nothing.
-//  Built on the real GameCare + three bodies (RaceTripTests.Room), as NightRestTests.
+//  A COLD launch: the game clock is never touched, the back-at-night arrival does not put anyone to bed, whoever is asleep AT launch gets the slow staggered wake, and at night the bedtime
+//  logic keeps off for `NightRestTuning.coldLaunchGrace` (Goodnight still works). A return from the background behaves as before. Built on the real GameCare + three bodies (RaceTripTests.Room).
 //
 
 import XCTest
@@ -19,7 +19,7 @@ final class WakeOnLaunchTests: XCTestCase {
     }
     override func tearDown() {
         DayClock.shared.forcedHour = 12
-        NightRestTuning.idleBedtime = 180
+        NightRestTuning.idleBedtime = 180; NightRestTuning.coldLaunchGrace = 180
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
     private func make(hour: Double) {
@@ -36,8 +36,14 @@ final class WakeOnLaunchTests: XCTestCase {
         for b in brains { b.idleNight = DayClock.shared.nightFactor; b.idleMorning = DayClock.shared.morningFactor; b.idleDeepNight = DayClock.shared.deepNightFactor }
         room.step()
     }
-    private func go(_ s: Float, until: (() -> Bool)? = nil) { for _ in 0..<Int(s * 60) { step(); if until?() == true { return } } }
-    /// Runs a cold launch and records, per Jelmiko, the first sim second the slow roll-up (stage 4 of a soft wake, after the lag and stir) began.
+    @discardableResult
+    private func go(_ s: Float, until: (() -> Bool)? = nil) -> Bool { for _ in 0..<Int(s * 60) { step(); if until?() == true { return true } }; return until?() ?? false }
+    private func putToBed() {
+        NightRestTuning.sendToBed(brains)
+        go(60, until: { self.brains.allSatisfy { $0.isNapping } })
+        go(1)
+    }
+    /// Per Jelmiko, the first sim second the slow roll-up (stage 4 of a soft wake, after the lag and stir) began.
     private func coldRun(seconds: Float) -> [Float?] {
         var first = [Float?](repeating: nil, count: brains.count)
         for i in 0..<Int(seconds * 60) {
@@ -46,65 +52,95 @@ final class WakeOnLaunchTests: XCTestCase {
         }
         return first
     }
-    private func putToBed() {
-        NightRestTuning.sendToBed(brains)
-        go(60, until: { self.brains.allSatisfy { $0.isNapping } })
-        go(1)
+    private var anyAsleep: Bool { brains.contains { $0.isSleeping } }
+
+    /// Cold launch at 23:00 after 10 min away: the clock stays, nobody arrives asleep, no curtain hold.
+    func testColdLaunchAtNightKeepsTheClockAndNobodyArrivesAsleep() {
+        make(hour: 23)
+        care.launched(away: 600)
+        XCTAssertFalse(care.nightRest.arrivalAsleep)
+        XCTAssertEqual(DayClock.shared.realHour, 23, accuracy: 0.001)
+        go(12)
+        XCTAssertEqual(DayClock.shared.realHour, 23, accuracy: 0.001)
+        XCTAssertFalse(anyAsleep, "they arrive awake: \(brains.map { $0.sleep.stage })")
+        XCTAssertGreaterThan(care.nightRest.coldGraceLeft, 0, "the night grace runs")
     }
 
-    func testColdLaunchAtNightGivesMorningClockAndStaggeredSlowWake() {
+    /// Somebody asleep at launch for another reason: the slow, staggered wake, one after another; the clock stays.
+    func testASleeperAtLaunchGetsTheSlowStaggeredWake() {
         make(hour: 23)
         putToBed()
-        XCTAssertTrue(brains.allSatisfy { $0.isNapping }, "control: all asleep \(brains.map { $0.sleep.stage })")
-        care.launched(away: 0)
-        XCTAssertEqual(DayClock.shared.realHour, GameClockTuning.wakeHour, accuracy: 0.01, "the clock moved to the morning")
+        XCTAssertTrue(brains.allSatisfy { $0.isNapping }, "control: asleep")
+        care.launched(away: 600)
+        XCTAssertEqual(DayClock.shared.realHour, 23, accuracy: 0.001)
         let first = coldRun(seconds: 14)
         XCTAssertTrue(first.allSatisfy { $0 != nil }, "everybody got the slow wake: \(first)")
-        let times = first.compactMap { $0 }.sorted()
-        XCTAssertGreaterThan(times.last! - times.first!, 0.3, "staggered, not on one frame: \(times)")
+        let t = first.compactMap { $0 }.sorted()
+        XCTAssertGreaterThan(t.last! - t.first!, 0.3, "staggered: \(t)")
         go(14)
-        XCTAssertTrue(brains.allSatisfy { !$0.isSleeping }, "all up and nobody back in bed: \(brains.map { $0.sleep.stage })")
+        XCTAssertFalse(anyAsleep, "all up: \(brains.map { $0.sleep.stage })")
+        XCTAssertEqual(DayClock.shared.realHour, 23, accuracy: 0.001)
     }
 
-    func testColdLaunchByDayWakesTheSleeperAndLeavesTheClock() {
+    /// No bedtime during the grace (the idle rule would otherwise fire at 5 s), then the normal bedtime.
+    func testNoBedtimeDuringTheGraceThenANormalBedtime() {
+        NightRestTuning.idleBedtime = 5; NightRestTuning.coldLaunchGrace = 40
+        make(hour: 23)
+        care.launched(away: 600)
+        go(35)
+        XCTAssertFalse(anyAsleep, "inside the grace nobody goes to bed")
+        XCTAssertTrue(go(60, until: { self.brains.allSatisfy { $0.isNapping } }), "after it the normal bedtime puts all three down: \(brains.map { $0.sleep.stage })")
+    }
+
+    /// Goodnight during the grace works at once.
+    func testGoodnightDuringTheGraceWorks() {
+        NightRestTuning.idleBedtime = 5; NightRestTuning.coldLaunchGrace = 1000
+        make(hour: 23)
+        care.launched(away: 600)
+        go(3)
+        XCTAssertTrue(care.bedtimeAll())
+        XCTAssertTrue(go(60, until: { self.brains.allSatisfy { $0.isNapping } }), "asleep: \(brains.map { $0.sleep.stage })")
+        go(15)
+        XCTAssertTrue(brains.allSatisfy { $0.isSleeping && !$0.sleep.wakeAsked && $0.sleep.stirT < 0 }, "and the cold wake did not touch them")
+    }
+
+    /// Put to bed after launch (before the cold wake has run): never woken by it.
+    func testBedAfterLaunchIsNotWokenByTheColdWake() {
+        make(hour: 13)
+        care.launched(away: 0)
+        XCTAssertTrue(care.nightRest.coldWakeIDs.isEmpty)
+        NightRestTuning.sendToBed(brains)
+        go(20)
+        XCTAssertFalse(care.nightRest.coldWakePending)
+        XCTAssertTrue(brains.allSatisfy { $0.isSleeping && !$0.sleep.wakeAsked && $0.sleep.stirT < 0 }, "still asleep: \(brains.map { $0.sleep.stage })")
+    }
+
+    /// A return from the background at night after 10 min: arrives asleep, as before; no cold wake, no grace.
+    func testBackgroundReturnAtNightStillArrivesAsleep() {
+        make(hour: 23)
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        care.leftActive(at: t0)
+        care.returnedActive(at: t0.addingTimeInterval(600))
+        XCTAssertTrue(care.nightRest.arrivalAsleep)
+        XCTAssertFalse(care.nightRest.coldWakePending)
+        XCTAssertEqual(care.nightRest.coldGraceLeft, 0)
+        go(4)
+        XCTAssertTrue(brains.allSatisfy { $0.isNapping }, "asleep within 4 s: \(brains.map { $0.sleep.stage })")
+        go(20)
+        XCTAssertTrue(brains.allSatisfy { $0.isNapping }, "and they stay down")
+        XCTAssertEqual(DayClock.shared.realHour, 23, accuracy: 0.001)
+    }
+
+    /// Day cold launch: no grace, clock unchanged; a sleeper gets the slow wake.
+    func testDayColdLaunchOnlyWakesTheSleeper() {
         make(hour: 13)
         putToBed()
-        XCTAssertTrue(brains.allSatisfy { $0.isNapping }, "control: asleep by day")
-        care.launched(away: 0)
-        XCTAssertEqual(DayClock.shared.realHour, 13, accuracy: 0.001, "daytime: clock unchanged")
+        care.launched(away: 600)
+        XCTAssertEqual(care.nightRest.coldGraceLeft, 0)
+        XCTAssertEqual(DayClock.shared.realHour, 13, accuracy: 0.001)
         let first = coldRun(seconds: 14)
         XCTAssertTrue(first.allSatisfy { $0 != nil }, "slow wake for each: \(first)")
         go(14)
-        XCTAssertTrue(brains.allSatisfy { !$0.isSleeping }, "all up")
-    }
-
-    func testBackgroundReturnChangesNothing() {
-        make(hour: 23)
-        putToBed()
-        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
-        care.leftActive(at: t0)
-        care.returnedActive(at: t0.addingTimeInterval(2 * 3600))
-        XCTAssertFalse(care.nightRest.coldWakePending, "a return is not a launch")
-        XCTAssertEqual(DayClock.shared.realHour, 23, accuracy: 0.001)
-        go(20)
-        XCTAssertTrue(brains.allSatisfy { $0.isNapping }, "still asleep: \(brains.map { $0.sleep.stage })")
-    }
-
-    func testTheClockRuleOnItsOwn() {
-        let d = UserDefaults(suiteName: "wakelaunch.\(UUID().uuidString)")!
-        let c = DayClock(defaults: d, now: { Date(timeIntervalSince1970: 1_800_000_000) }, uptime: { 0 })
-        c.forcedHour = nil
-        for (h, moves) in [(23.0, true), (3.0, true), (21.0, true), (18.0, false), (7.05, false), (9.0, false), (13.0, false)] {
-            let t = (c.gameTime / 24).rounded(.down) * 24 + h
-            c.forcedHour = h
-            XCTAssertEqual(c.coldLaunchToMorning(), moves, "hour \(h)")
-            if moves { XCTAssertEqual(c.realHour, GameClockTuning.wakeHour, accuracy: 0.001); _ = t }
-            else { XCTAssertEqual(c.realHour, h, accuracy: 0.001) }
-        }
-        // the real game clock (no forced hour): 23:00 -> next day 07:00, no lapse; 03:00 -> the same day's 07:00; daytime untouched
-        c.forcedHour = nil
-        let e = DayClock(defaults: UserDefaults(suiteName: "wakelaunch.\(UUID().uuidString)")!, now: { Date(timeIntervalSince1970: 1_800_000_000) }, uptime: { 0 })
-        e.resetForNewGame()                                   // Day 1, 08:00
-        XCTAssertFalse(e.coldLaunchToMorning()); XCTAssertEqual(e.gameTime, 8, accuracy: 0.001)
+        XCTAssertFalse(anyAsleep)
     }
 }
