@@ -127,6 +127,51 @@ extension BlobBrain {
         return simd_distance(p, slideLanding(f)) < peerGap + 0.1
     }
 
+    /// park-slide-r4 (owner: "smooth motion no glitchy movement"). A walk on the slide's foot that a friend standing on its leg holds (`steerTarget`: a requested walk waits up to 6 s,
+    /// in the walking pose with no step: the walk "on the spot" after a ride) is not held there. After a quarter second the walk ends and he stands and waits, idle, feet still; his own
+    /// pick (`slideFootRetry`, every quarter second) walks that walk, or a new walk off the foot (`slideWalkOut`: the friend has moved), as soon as `steerTarget` would not hold it
+    /// (`slideLegHeld`: its own tests, dry). After `slideFootWaitMax` of waiting he takes the walk as before r4. The walks: a walk off the foot (the ex-rider's, a stander's: `slideFootWalkTo`), a step-aside asked of him there (`stepAside`), a wander leg (that one
+    /// just ends: his own pick walks him off the foot).
+    static let slideFootWaitMax: Float = 6
+    var slideFootHoldStands: Bool {
+        guard Self.slideFixLevel >= 2, !commanded, social == nil, idleState.kind == nil, onSlideFoot else { return false }
+        guard let j = job else { return true }
+        if let w = slideFootWalkTo, case .goTo(let p) = j, p == w { return true }
+        return false
+    }
+    func slideFootStand(_ sim: SoftBody) {
+        var resume: SIMD2<Float>?
+        if let w = slideFootWalkTo, case .goTo(let p)? = job, p == w { resume = p }
+        step(after: .none, sim, giveUp: true)          // (the hold comes between two steps: the walk ends, he stands, feet still)
+        slideFootWalkTo = nil; heldByPeer = false
+        if let resume { slideFootResume = resume; slideFootWaitSince = slideFootWaitSince ?? peerClock }
+        restTimer = 0.25
+    }
+    /// His own pick while he waits on the slide's foot. True: the pick is made (he walks, or waits on).
+    func slideFootRetry() -> Bool {
+        guard let r = slideFootResume else { return false }
+        guard Self.slideFixLevel >= 2, onSlideFoot else { slideFootResume = nil; slideFootWaitSince = nil; return false }          // (moved off the foot meanwhile: done)
+        if peerClock - (slideFootWaitSince ?? peerClock) >= Self.slideFootWaitMax { slideFootResume = nil; slideFootWaitSince = nil; request(.goTo(r)); restTimer = 0.3; return true }          // (as before r4)
+        var next: SIMD2<Float>? = slideLegHeld(position, r) ? nil : r
+        if next == nil, let f = DecorField.shared.foot(ParkToys.slideUID), let q = slideWalkOut(f, ring: true), simd_distance(q, r) > 0.3, !slideLegHeld(position, q) { next = q }
+        guard let q = next else { restTimer = 0.25; return true }
+        slideFootResume = nil; slideFootWaitSince = nil; slideFootWalkTo = q; request(.goTo(q)); restTimer = 0.3
+        return true
+    }
+    /// Would `steerTarget` hold a walk from `a` to `b` for a friend on its leg right now? Its own tests in its order, with no side effects on the walk (the route, the patience).
+    func slideLegHeld(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+        guard peerOnLeg(a, b) else { return false }
+        if legClear(a, b, margin: steerMargin) || softLegClear(a, b, r: peerGap * 0.8) { return false }
+        return planRoute(a, b, depth: 2) == nil
+    }
+    /// He stands on the slide's foot waiting for his leg to clear: nobody asks him to step aside (`MelonStage.makeRoom`), `decorExitCheck` does not walk him out of the slide's zone.
+    var slideFootWaiting: Bool { slideFootResume != nil && onSlideFoot }
+    /// A step-aside (`MelonStage.makeRoom`, `clearWay`). On the slide's foot it is a slide-foot walk: held there, he stands and waits.
+    func stepAside(to spot: SIMD2<Float>) {
+        requestNow(.goTo(spot))
+        if Self.slideFixLevel >= 2, onSlideFoot { slideFootWalkTo = spot }
+    }
+
     /// Park slide only, called with no behaviour running (`decorExitCheck`): a free Jelbie who stands on the slide's foot while someone else has the slide walks off
     /// to the lawn, so the rider has a clear landing. No spot free = he stays.
     func slideFootCheck() {
@@ -136,6 +181,7 @@ extension BlobBrain {
         if let t = Self.slideFootAsked[steerID], peerClock >= t, peerClock - t < Self.slideFootEvery { return }
         guard let out = slideWalkOut(f) else { return }
         Self.slideFootAsked[steerID] = peerClock
+        if Self.slideFixLevel >= 2 { slideFootWalkTo = out }          // (r4: held, he stands and waits)
         if f.distance(position) < footprint * f.spec.reach + 0.05 { insideDecorT = -4; insideStuckT = 0; if walkOutSoftens(f) { decorIgnore = f.uid } }          // (inside the zone: the generic walk-out must not fire on top of this one; r4: soft only from inside the box)
         request(.goTo(out))          // (NOT requestNow: from script .none that aborts the walk on the next tick)
     }

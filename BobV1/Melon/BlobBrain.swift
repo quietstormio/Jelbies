@@ -875,9 +875,10 @@ final class BlobBrain {
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         var pt = CACurrentMediaTime()
+        if slideFootRetry() { return }          // (park-slide-r4: he stands on the slide's foot waiting for his leg to clear)
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
         if footKeep { Self.slideFootTurnAways += 1 }
-        if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { request(.goTo(out)); restTimer = 0.3; return }
+        if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { slideFootWalkTo = out; request(.goTo(out)); restTimer = 0.3; return }
         if !footKeep, socialMaybeStart(sim) { return }
         HopDiag.lap(.tkPickSocial, &pt)
         if !footKeep, idleMaybeStart(sim) { return }
@@ -1316,6 +1317,7 @@ final class BlobBrain {
     func steerTarget(to target: SIMD2<Float>) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("steerTarget", probe) }
         let root = SIMD2(px, pz)
+        heldByPeer = false
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
             else if roomWaypointWait(root, w) { return nil }          // (the 11-15 room round, T5: nothing looked ahead on a waypoint leg; the one who gets there second stands a beat)
@@ -1347,12 +1349,18 @@ final class BlobBrain {
         let requested = job != nil || commanded || pending != nil
         let slideLeg = idleState.kind == .decorSlide && idleState.decorUID == ParkToys.slideUID && idleState.slideStage < 0          // (the way round the park slide: it gives a standing friend 2 s, then the leg is given up and planned the other way round, BlobBrain+Decor.swift)
         let patience: Float = requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6)
-        if steerWait < patience, peerOnLeg(root, target) { return nil }
-        if !requested || (slideLeg && standing), peerOnLeg(root, target) { steerGiveUp = true; return nil }
+        if steerWait < patience, peerOnLeg(root, target) { heldByPeer = true; return nil }
+        if !requested || (slideLeg && standing), peerOnLeg(root, target) { heldByPeer = true; steerGiveUp = true; return nil }
         return target
     }
 
     var steerWait: Float = 0
+    /// park-slide-r4 (BlobBrain+SlideFoot.swift): the slide-foot walk he is on (its spot: a walk off the slide's foot, or a step-aside asked of him there), the spot he stands waiting
+    /// to walk to (that walk was held by a friend on its leg) and since when (his `peerClock`). `heldByPeer`: this step's `steerTarget` held the walk for a friend on the leg.
+    var slideFootWalkTo: SIMD2<Float>?
+    var slideFootResume: SIMD2<Float>?
+    var slideFootWaitSince: Float?
+    var heldByPeer = false
     /// Seconds this walker has given way to a crossing walker (reset when nobody is in the way); at `ContactTuning.yieldMax` he goes round instead.
     var yieldT: Float = 0
     /// An autonomous walk found its way blocked for good (see `steerTarget`): the walk ends and a new goal is picked.
@@ -1492,6 +1500,7 @@ final class BlobBrain {
                 guard let eff = effOpt else {
                     steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
                     if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; step(after: .none, sim, giveUp: true); restTimer = 0.25 }
+                    else if steerWait > 0.25, heldByPeer, slideFootHoldStands { steerWait = 0; slideFootStand(sim) }          // (park-slide-r4: held on the slide's foot, he stands and waits: no walk on the spot)
                     return
                 }
                 steerWait = max(0, steerWait - dt)

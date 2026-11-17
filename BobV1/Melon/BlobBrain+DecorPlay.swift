@@ -165,6 +165,7 @@ extension BlobBrain {
                 if let out {
                     insideDecorT = -1.5; insideStuckT = 0
                     if walkOutSoftens(f) { decorIgnore = f.uid }          // (r4: the landing is outside the park slide's box: the walk-out keeps it solid and goes round it)
+                    if f.uid == ParkToys.slideUID, Self.slideFixLevel >= 2 { slideFootWalkTo = out }          // (r4: held by a friend on the leg, he stands and waits: no walk on the spot)
                     requestNow(.goTo(out))
                 }
             }

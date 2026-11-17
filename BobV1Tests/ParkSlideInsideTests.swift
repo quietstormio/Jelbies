@@ -141,14 +141,14 @@ extension ParkSlideRoundTests {
 
     /// Both arms on the same seeds, seed by seed: `fix` false (main's rule) then true (park-slide-r3/r4). The after arm: no centre inside the box; the socials (the park's "more play
     /// together") at 0.9x of the before arm or more, as the MEAN of the per-seed ratios (one seed alone diverges: the two arms' runs part ways at the first different step).
-    func insideBothArms(_ name: String, seeds: [UInt64], seconds: Float, mode: InsideMode, level: Int = 2) -> (before: InsideRun, after: InsideRun) {
+    func insideBothArms(_ name: String, seeds: [UInt64], seconds: Float, mode: InsideMode, level: Int = 2, meanCheck: Bool = true) -> (before: InsideRun, after: InsideRun, ratios: [UInt64: Float]) {
         var b = InsideRun(), a = InsideRun()
-        var ratios: [Float] = []
+        var ratios: [Float] = [], bySeed: [UInt64: Float] = [:]
         let t0 = Date()
         for seed in seeds {
             let bs = insideRun(seeds: [seed], seconds: seconds, mode: mode, level: 0), as1 = insideRun(seeds: [seed], seconds: seconds, mode: mode, level: level)
             let sb = bs.socials.values.reduce(0, +), sa = as1.socials.values.reduce(0, +)
-            if sb >= 5 { ratios.append(Float(sa) / Float(sb)) }
+            if sb >= 5 { ratios.append(Float(sa) / Float(sb)); bySeed[seed] = Float(sa) / Float(sb) }
             print("PSI \(name) seed \(seed): before deep \(bs.deep) overlap \(bs.overlap) close \(bs.closePairs) landingClose \(bs.landingClose) rides \(bs.rides) hopscotch \(bs.hops) socials \(sb) | after(level \(level)) deep \(as1.deep) overlap \(as1.overlap) close \(as1.closePairs) landingClose \(as1.landingClose) rides \(as1.rides) hopscotch \(as1.hops) socials \(sa) footTurnAways \(as1.turnAways)")
             b.merge(bs); a.merge(as1)
         }
@@ -158,8 +158,8 @@ extension ParkSlideRoundTests {
         let sb = b.socials.values.reduce(0, +), sa = a.socials.values.reduce(0, +)
         let mean = ratios.isEmpty ? 1 : ratios.reduce(0, +) / Float(ratios.count)
         print("PSI \(name) rates before/after: rides \(b.rides)/\(a.rides) hopscotch \(b.hops)/\(a.hops) socials \(sb)/\(sa) per-seed social ratios \(ratios.map { String(format: "%.2f", $0) }) mean \(String(format: "%.2f", mean)) closePairs \(b.closePairs)/\(a.closePairs) landingClose \(b.landingClose)/\(a.landingClose)")
-        if !ratios.isEmpty { XCTAssertGreaterThanOrEqual(mean, 0.9, "\(name): socials stay at 0.9x or more (mean of the per-seed ratios)") }
-        return (b, a)
+        if meanCheck, !ratios.isEmpty { XCTAssertGreaterThanOrEqual(mean, 0.9, "\(name): socials stay at 0.9x or more (mean of the per-seed ratios)") }
+        return (b, a, bySeed)
     }
     /// As the game plays: five bodies, two seeds x 180 sim-s per arm.
     func testParkNobodyInsideTheSlide() { _ = insideBothArms("plain", seeds: [1, 2], seconds: 180, mode: .plain) }
@@ -170,8 +170,24 @@ extension ParkSlideRoundTests {
         XCTAssertGreaterThan(r.after.rides, 5, "the slide is ridden")
         XCTAssertLessThanOrEqual(r.after.landingClose, max(10, r.before.landingClose * 2), "dense: bodies bunch at the chute's end")
     }
-    /// SOCIAL: the social cooldowns forced short every second (the park with more socials). Seeds 4, 5, 6 x 180 sim-s per arm.
-    func testParkNobodyInsideTheSlideSocial() { _ = insideBothArms("social", seeds: [4, 5, 6], seconds: 180, mode: .social) }
+    /// SOCIAL: the social cooldowns forced short every second (the park with more socials). Seeds 4, 5, 6 x 180 sim-s per arm, ONE TEST PER SEED (r4: the three in one test took 668 s,
+    /// over the gate's budget; one seed is ~225 s). Each asserts deep 0 for its seed and records its social ratio (after / before); the last of the three to run in the process asserts
+    /// the 3-seed mean >= 0.9, as the one test did (the three are in one class, so they share a process even with parallel testing on).
+    nonisolated(unsafe) static var socialSeedRatios: [UInt64: Float] = [:]
+    func socialSeed(_ seed: UInt64) {
+        let r = insideBothArms("social-s\(seed)", seeds: [seed], seconds: 180, mode: .social, meanCheck: false)
+        Self.socialSeedRatios[seed] = r.ratios[seed] ?? -1          // (-1: fewer than 5 socials before, left out of the mean as before)
+        let all: [UInt64] = [4, 5, 6]
+        let have = all.compactMap { Self.socialSeedRatios[$0] }
+        guard have.count == all.count else { print("PSI social: \(have.count)/3 seeds so far; the 3-seed mean is asserted by the last of the three to run"); return }
+        let used = have.filter { $0 >= 0 }
+        let mean = used.isEmpty ? 1 : used.reduce(0, +) / Float(used.count)
+        print("PSI social 3-seed social ratios \(all.map { String(format: "%.2f", Self.socialSeedRatios[$0] ?? -1) }) mean \(String(format: "%.2f", mean))")
+        if !used.isEmpty { XCTAssertGreaterThanOrEqual(mean, 0.9, "social: socials stay at 0.9x or more (mean of the seeds 4, 5, 6 ratios)") }
+    }
+    func testParkNobodyInsideTheSlideSocial4() { socialSeed(4) }
+    func testParkNobodyInsideTheSlideSocial5() { socialSeed(5) }
+    func testParkNobodyInsideTheSlideSocial6() { socialSeed(6) }
     /// Exploration (`TEST_RUNNER_PSI_MODE` plain / dense / social, `TEST_RUNNER_PSI_SEEDS` "4,5,6"): the same report for any seeds; skipped without the variables.
     func testParkInsideSeeds() throws {
         let env = ProcessInfo.processInfo.environment
