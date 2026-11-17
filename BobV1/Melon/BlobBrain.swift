@@ -1469,7 +1469,7 @@ final class BlobBrain {
             break
 
         case .none:
-            if facePlayerWhenIdle || socialBook.hold {
+            if facePlayerWhenIdle || socialBook.hold || (reserved && mealFaceYaw != nil) {          // (the meal's calm wait squares him up whatever the face-the-player setting)
                 poseOn = true; ensureFeet(sim)
                 let calm = reserved ? mealFaceYaw : nil          // (the meal's calm wait faces his own place, not the camera)
                 _ = turnSteps(goal: socialBook.hold ? (socialBook.faceYaw ?? yaw) : (calm ?? faceCameraYaw()), tol: socialBook.hold ? 0.06 : (calm != nil ? 0.05 : 0.12))
