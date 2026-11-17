@@ -73,7 +73,7 @@ enum VarietyTuning {
     static let clusterMul: Float = 0.35
     static let roomWindow: Float = 25, roomKindMul: Float = 0.3, roomClusterMul: Float = 0.6
     /// Rare pair kinds are raised to this share of the pair table (squabble stays rarer: a kids' game); the extra comes from the top entries.
-    static let pairFloor: [SocialKind: Float] = [.boop: 0.025, .cheekSquish: 0.025, .whisperGiggle: 0.025, .squabble: 0.015]
+    static let pairFloor: [SocialKind: Float] = [.whisperGiggle: 0.025, .squabble: 0.015]
     static let treatFloor: Float = 0.025
 
     /// Personality per CHARACTER (the roster's feature: none = Bob, spines = Pip, daisy = Moss, wings = Lavender). Edit here.

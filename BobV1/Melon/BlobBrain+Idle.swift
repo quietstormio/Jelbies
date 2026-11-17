@@ -387,12 +387,12 @@ extension BlobBrain {
 
     /// The solo emote slot: when its own clock is due (and it is a quiet moment), one emote by the mood's treat table. It leaves the cooldown cycle alone (see `idleEnd`).
     /// emote-variety-r1: his own last three treat picks (and his last three solo picks) stay out while anything else is free, the cluster / room memory apply, the rare kinds
-    /// have a floor share, and at night (>= 0.6, awake) the night-only batch-2 kinds (stargazing, the floor nap) can be drawn: the old `idleNight < 0.6` guard made stargazing unreachable.
+    /// have a floor share, and at night (>= 0.6, awake) the night-only batch-2 kind (stargazing) can be drawn: the old `idleNight < 0.6` guard made stargazing unreachable.
     func treatMaybeStart(_ sim: SoftBody) -> Bool {
         let cooling = kindCooling
         if idleNight >= 0.6 {
             guard anticsEnabled, idleDeepNight < 0.5, treat2Free else { idleState.treat = rand(8, 15); return false }
-            let pool = treat2Pool.filter { $0.idle == .stargazing || $0.idle == .floorNapFlop }
+            let pool = treat2Pool.filter { $0.idle == .stargazing }          // (the night-only kind; the floor nap goes straight to bed at bedtime hours, that stays the night rule's business)
             guard !pool.isEmpty else { idleState.treat = rand(8, 15); return false }
             let ws = pool.map { $0.weight * ($0.idle.map { varietyNewScale($0) } ?? 1) }
             var x = rand() * ws.reduce(0, +)

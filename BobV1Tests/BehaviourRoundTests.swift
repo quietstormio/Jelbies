@@ -292,8 +292,8 @@ final class BehaviourRoundTests: XCTestCase {
             }
         }
         MotionLog.write("BEHAV okay mood 10 min: solo runs+zoomies per Jelly \(perBrain), all counts \(lab.rigs.map { $0.brain.idleState.counts.map { "\($0.key.rawValue)=\($0.value)" }.sorted() })")
-        XCTAssertGreaterThanOrEqual(perBrain.reduce(0, +), 25, "at least 25 runs or zoomies in 10 sim minutes (W2 2026-10-22 \"they still don't run or do zoomies enough\": the urge is 30...55 s, the tables heavier)")
-        XCTAssertGreaterThanOrEqual(perBrain.min() ?? 0, 6, "everybody gets plenty of energy")
+        XCTAssertGreaterThanOrEqual(perBrain.reduce(0, +), 12, "at least 12 runs or zoomies in 10 sim minutes (was 25 with the 30...55 s urge; emote-variety-r1 slows the urge to 70...110 s, mean 90 vs 42.5 s: 25 x 42.5 / 90 = 12)")
+        XCTAssertGreaterThanOrEqual(perBrain.min() ?? 0, 3, "everybody gets some energy (was 6 with the faster urge)")
         XCTAssertLessThanOrEqual(perBrain.max() ?? 0, 40, "but it is not constant (at most about four a minute)")
     }
 
