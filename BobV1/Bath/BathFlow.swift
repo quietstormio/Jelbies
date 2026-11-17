@@ -407,10 +407,10 @@ final class BathFlow {
         phase = p
         AudioHub.shared.scrubLoop(false)
         stageComplete = false; demoWait = 0; assistScrub = false
-        if let t = Self.workPrompt(p) { A11yEvents.say(t, .normal) }
+        if let t = Self.workPrompt(p, soap: soap) { A11yEvents.say(t, .normal) }
         if p != .soap && p != .rinse { look.bubbles = []; bubbleAge = [] }      // sud bubbles live only in the soap / rinse phases
         switch p {
-        case .soap: progress = 0; prompt = Self.workPrompt(.soap); AudioHub.shared.play(.splash)
+        case .soap: progress = 0; prompt = Self.workPrompt(.soap, soap: soap); AudioHub.shared.play(.splash)
         case .rinse: prompt = Self.workPrompt(.rinse); progress = 0; rinseStartCoverage = max(look.coverage, BathTuning.rinseDone + 0.01)
         case .shine:
             prompt = Self.workPrompt(.shine)
@@ -430,8 +430,8 @@ final class BathFlow {
     // MARK: stages the player completes
 
     /// What the prompt says while a stage is being worked, and once its goal is met.
-    static func workPrompt(_ p: BathPhase) -> String? {
-        switch p { case .soap: return "Scrub on the jelly soap"; case .rinse: return "Rinse all the suds off"; case .shine: return "Rub to make it shine"; case .finish: return "Sparkling clean!"; default: return nil }
+    static func workPrompt(_ p: BathPhase, soap: Soap = .jelly) -> String? {
+        switch p { case .soap: return "Scrub on the \(soap == .jelly ? "jelly" : soap.scent.lowercased()) soap"; case .rinse: return "Rinse all the suds off"; case .shine: return "Rub to make it shine"; case .finish: return "Sparkling clean!"; default: return nil }
     }
     static func completePrompt(_ p: BathPhase) -> String? {
         switch p { case .soap: return "All soapy! Tap Next"; case .rinse: return "Squeaky clean! Tap Next"; case .shine: return "So shiny! Tap Next"; default: return nil }
@@ -441,7 +441,7 @@ final class BathFlow {
         switch p { case .soap: return "Soap done. Tap Next"; case .rinse: return "Rinse done. Tap Next"; case .shine: return "Shine done. Tap Next"; default: return "Done" }
     }
     /// The prompt for the current stage (persistent: it never times out).
-    var stagePrompt: String? { stageComplete ? Self.completePrompt(phase) : Self.workPrompt(phase) }
+    var stagePrompt: String? { stageComplete ? Self.completePrompt(phase) : Self.workPrompt(phase, soap: soap) }
 
     private func markComplete() {
         stageComplete = true; progress = 1
