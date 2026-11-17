@@ -54,6 +54,8 @@ final class VolleyFlow {
     private(set) var unlockedNow: VolleyTier?
     private(set) var gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0)
     private(set) var settled = false
+    /// The player went home in the middle (Race/ForfeitHome.swift): nothing is settled.
+    private(set) var forfeited = false
     /// Volleyball Upgrade points this match gave (3 / 2 / 1), and his balance after; 0 until settled.
     private(set) var pointsEarned = 0
     private(set) var pointsAfter = 0
@@ -92,12 +94,22 @@ final class VolleyFlow {
         guard phase == .off else { return }
         mode = m; playerID = id; playerCharacter = character; playerName = name
         sim = s; ui = VolleyUI()
-        earned = 0; awards = TrophyAwards(); unlockedNow = nil; gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0); settled = false; pointsEarned = 0; pointsAfter = 0; pointsGiven = false; cueSerial = 0
+        earned = 0; awards = TrophyAwards(); unlockedNow = nil; gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0); settled = false; forfeited = false; pointsEarned = 0; pointsAfter = 0; pointsGiven = false; cueSerial = 0
         phase = .goOut; wipe = 0; holdFrames = 0; started += 1
     }
 
     func goHome() {
         guard phase == .playing else { return }
+        phase = .leaveOut
+    }
+
+    /// A forfeit can be asked: the match is on and not over.
+    var canForfeit: Bool { phase == .playing && sim != nil && !hasResults && !forfeited }
+
+    /// "Go home" in the middle of the match: the usual way home with no settlement (no Drops, ribbon, trophy, stats or court unlock).
+    func forfeit() {
+        guard canForfeit else { return }
+        forfeited = true; settled = true
         phase = .leaveOut
     }
 
@@ -158,7 +170,7 @@ final class VolleyFlow {
 
     /// The match is over: Drops, unlocks, ribbons and gains, once.
     func settle() {
-        guard !settled, let s = sim, s.phase == .over else { return }
+        guard !settled, !forfeited, let s = sim, s.phase == .over else { return }
         settled = true
         switch mode {
         case .match(let t):

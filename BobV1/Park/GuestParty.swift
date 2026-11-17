@@ -23,6 +23,9 @@ nonisolated enum PartyTuning {
     static let hugMax: Float = 16
     /// The group emote start is retried this long, then the party goes straight to the finale.
     static let danceStartMax: Float = 4
+    /// The newcomer's group cheer (between the hug and the dance): its start is retried this long, then the dance follows; it never runs longer than `cheerMax`.
+    static let cheerStartMax: Float = 4
+    static let cheerMax: Float = 14
     static let danceMax: Float = 24
     /// The finale: each Jelbie does this many happy hops in place, the first after `0.2...0.5 s` x its place (staggered), the next `hopGap` later.
     static let finaleHops = 2
@@ -36,7 +39,7 @@ nonisolated enum PartyTuning {
 
 @MainActor
 struct GuestParty {
-    enum Stage { case off, hug, dance, finale, done }
+    enum Stage { case off, hug, cheer, dance, finale, done }
     private(set) var stage: Stage = .off
     /// Seconds since the party began / since this stage began.
     private(set) var t: Float = 0, stageT: Float = 0
@@ -45,6 +48,8 @@ struct GuestParty {
     private(set) var crew: [Int] = []
     private(set) var hugSeen = false
     private(set) var danceStarted = false
+    /// The newcomer's welcome only (`begin(cheer: true)`): a group cheer between the hug and the dance. Off for the friend's party (it is unchanged).
+    private(set) var cheerFirst = false, cheerStarted = false, cheerDone = false
     /// Per member (by place): hops started in the finale, the next hop's time, voices made.
     private(set) var hops: [Int] = []
     private var nextHop: [Float] = []
@@ -53,12 +58,13 @@ struct GuestParty {
     var active: Bool { stage != .off && stage != .done }
 
     /// `at`: the stage to begin in (a guest's party starts at the hug; the newcomer's welcome has had its hug started by hand and can begin at the dance or the finale).
-    mutating func begin(at start: Stage = .hug) {
+    mutating func begin(at start: Stage = .hug, cheer: Bool = false) {
         self = GuestParty()
         stage = start
+        cheerFirst = cheer
     }
     /// Over budget: the dance is skipped (only before it started) and the finale plays.
-    mutating func skipToFinale() { if (stage == .hug || stage == .dance) && !danceStarted { go(.finale) } }
+    mutating func skipToFinale() { if (stage == .hug || stage == .cheer || stage == .dance) && !danceStarted && !(stage == .cheer && cheerStarted) { go(.finale) } }
     mutating func cancel() { stage = .off }
 
     /// Where a member's hop starts in the finale: each place `stagger` (0.2...0.5 s, a fixed non-uniform pattern) after the one before.
@@ -87,9 +93,21 @@ struct GuestParty {
         switch stage {
         case .hug:
             if brains.contains(where: { $0.social?.kind == .groupHug }) { hugSeen = true }
-            if hugSeen, !anySocial, stageT > PartyTuning.startDelay { go(.dance) }
-            else if !hugSeen, stageT > PartyTuning.noHugWait, !anySocial { go(.dance) }
-            else if stageT > PartyTuning.hugMax { go(.dance) }
+            let next: Stage = cheerFirst ? .cheer : .dance
+            if hugSeen, !anySocial, stageT > PartyTuning.startDelay { go(next) }
+            else if !hugSeen, stageT > PartyTuning.noHugWait, !anySocial { go(next) }
+            else if stageT > PartyTuning.hugMax { go(next) }
+        case .cheer:
+            // the group cheer (three synced hops + a last hearty one), everybody in it; then the dance. Fewer than three awake (or no room): straight to the dance.
+            if !cheerStarted {
+                let awake = brains.indices.filter { !brains[$0].isSleeping }
+                if awake.count >= 3, let s = awake.first(where: { brains[$0].socialFree }) {
+                    let others = awake.filter { $0 != s }.map { brains[$0] }
+                    if brains[s].socialStartGroup(.groupCheer, with: others, sims[s]) { cheerStarted = true }
+                }
+                if !cheerStarted, stageT > PartyTuning.cheerStartMax { go(.dance) }
+            } else if !anySocial, stageT > 0.5 { cheerDone = true; go(.dance) }
+            else if stageT > PartyTuning.cheerMax { go(.dance) }
         case .dance:
             if !danceStarted {
                 let awake = brains.indices.filter { !brains[$0].isSleeping }

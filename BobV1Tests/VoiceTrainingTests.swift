@@ -150,8 +150,10 @@ final class VoiceTrainingTests: XCTestCase {
     func testWrongTrickNeedsAnotherKnownTrick() {
         let only = VoiceTraining(defaults: suite(), persists: false, random: { 0.99 })       // always a miss, always the "ignore" half
         only.unlocked = { $0 == .sit }
+        only.debugLearn(.sit, word: "sit", reliability: 0.6)          // a word taught the old way keeps its own reliability (a bought / default trick always obeys, knownReliability 1.0)
         XCTAssertEqual(only.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 9), .ignore)
         let w = VoiceTraining(defaults: suite(), persists: false, random: sequence([0.99, 0.1, 0.0]))   // miss, wrong half, first other
+        w.debugLearn(.sit, word: "sit", reliability: 0.6)
         XCTAssertEqual(w.decide(transcript: "sit", runningMove: nil, mood: .happy, session: 9), .wrongTrick(said: .sit, did: .jacks))
     }
 

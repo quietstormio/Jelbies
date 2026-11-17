@@ -38,6 +38,7 @@ final class StoreBook {
     struct Saved: Codable {
         var counts: [String: Int] = [:]
         var pages: [String] = []
+        /// Owned wearables, ONE ENTRY PER COPY (2026-11-16: a piece can be bought again; each copy is worn by one Jelmiko at a time). A save from before holds each look once = 1 copy.
         var wearables: [String] = []
         /// Jelly id -> slot -> look.
         var worn: [String: [String: String]] = [:]
@@ -69,6 +70,10 @@ final class StoreBook {
         var glovesRefunded: Bool? = nil
         /// The retired Honeybee antennae / Bunny-ear headbands were removed and refunded (once; StoreBook+RetiredHeadbands.swift).
         var headbandsRefunded: Bool? = nil
+        /// The retired Puffer vest / Cable cardigan were taken off and refunded per copy (once; StoreBook+RetiredBodies.swift).
+        var bodiesRefunded: Bool? = nil
+        /// When each worn piece went on ("<character>|<slot>" -> seconds): the copy worn longest is the one a Wear moves when every copy is taken.
+        var wornAt: [String: Double]? = nil
         /// Tricks owned by ONE Jelbie: character id -> VoiceTrick raw values (never renamed). Optional: older saves decode without it.
         var ownedTricks: [String: [String]]? = nil
         /// Tricks and skills bought for EVERYONE (VoiceTrick raw values, "ears"): every Jelbie has them, adopted ones too.
@@ -80,7 +85,7 @@ final class StoreBook {
     }
     static let key = "StoreBook.v1"
 
-    private(set) var saved = Saved()
+    var saved = Saved()
     let wallet: DropsWallet
     /// Bumped on every change (views and the shoe set read it).
     private(set) var revision = 0
@@ -93,7 +98,7 @@ final class StoreBook {
 
     init(wallet: DropsWallet, persists: Bool = true, defaults: UserDefaults = .standard, key: String = StoreBook.key) {
         self.wallet = wallet; self.persists = persists; self.defaults = defaults; storeKey = key
-        if persists, let s = SaveRecovery.decode(Saved.self, key: key, defaults: defaults) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn)
+        if persists, let s = SaveRecovery.decode(Saved.self, key: key, defaults: defaults) { saved = Self.migrateSoccer(s); saved.worn = Self.dedupeWorn(saved.worn, copies: Dictionary(saved.wearables.map { ($0, 1) }, uniquingKeysWith: +))
             let (kept, refund) = Self.dropUnlisted(saved)
             if kept.unlistedRefunded != saved.unlistedRefunded { saved = kept; if refund > 0 { wallet.add(refund, silent: true) }; save() }
             // 2026-11-01: the Roll trick is gone from the game; a bought Roll page is dropped silently and its 55 JellyCoins go back to the wallet
@@ -107,6 +112,8 @@ final class StoreBook {
             if noGloves.glovesRefunded != saved.glovesRefunded { saved = noGloves; if gloveRefund > 0 { wallet.add(gloveRefund, silent: true) }; save() }
             let (noBands, bandRefund) = Self.dropRetiredHeadbands(saved)
             if noBands.headbandsRefunded != saved.headbandsRefunded { saved = noBands; if bandRefund > 0 { wallet.add(bandRefund, silent: true) }; save() }
+            let (noBodies, bodiesRefund) = Self.dropRetiredBodies(saved)
+            if noBodies.bodiesRefunded != saved.bodiesRefunded { saved = noBodies; if bodiesRefund > 0 { wallet.add(bodiesRefund, silent: true) }; save() }
             let (noChain, chainChanged) = Self.dropRetiredLooks(saved); if chainChanged { saved = noChain; save() }
             if saved.pages.contains("roll") { saved.pages.removeAll { $0 == "roll" }; wallet.add(55, silent: true); save() } }
         if migrateGarden() { save() }
@@ -135,18 +142,18 @@ final class StoreBook {
         return changed
     }
 
-    /// Old saves: a look worn by several characters stays only on the first (sorted key order).
-    static func dedupeWorn(_ worn: [String: [String: String]]) -> [String: [String: String]] {
-        var out = worn, seen = Set<String>()
+    /// A look worn by more characters than there are copies of it stays only on the first ones (sorted key order). A look with no copy listed keeps one.
+    static func dedupeWorn(_ worn: [String: [String: String]], copies: [String: Int]) -> [String: [String: String]] {
+        var out = worn, seen: [String: Int] = [:]
         for k in worn.keys.sorted() {
-            for (slot, look) in worn[k] ?? [:] {
-                if seen.contains(look) { out[k]?[slot] = nil } else { seen.insert(look) }
+            for (slot, look) in (worn[k] ?? [:]).sorted(by: { $0.key < $1.key }) {
+                if seen[look, default: 0] >= max(copies[look] ?? 1, 1) { out[k]?[slot] = nil } else { seen[look, default: 0] += 1 }
             }
         }
         return out
     }
 
-    private func save() {
+    func save() {
         revision += 1
         guard persists, let d = try? JSONEncoder().encode(saved) else { return }
         defaults.set(d, forKey: storeKey)
@@ -178,14 +185,14 @@ final class StoreBook {
             if TrickCatalog.def(t)?.scope == .everyone { return (saved.everyone ?? []).contains(t.rawValue) }
             let r = rosterCharacters()
             return !r.isEmpty && r.allSatisfy { knows(t, character: $0) }
-        case .shoes, .wear: return item.wear.map { saved.wearables.contains($0.rawValue) } ?? false
+        case .shoes, .wear: return item.wear.map { copies($0) > 0 } ?? false
         case .room: return item.room.map { ownsRoom($0) } ?? false
         case .toy: return ownsToy(item.id.hasPrefix("toy-") ? String(item.id.dropFirst(4)) : item.id)          // (the same "toy-<id>" count the Play picker reads)
         default: return count(item.id) > 0
         }
     }
     /// How many the player has ("owned xN"); 1 for a unique thing they own.
-    func owned(_ item: StoreItem) -> Int { item.unique ? (owns(item) ? 1 : 0) : count(item.id) }
+    func owned(_ item: StoreItem) -> Int { item.isWearable ? (item.wear.map { copies($0) } ?? 0) : item.unique ? (owns(item) ? 1 : 0) : count(item.id) }
     func hasPage(_ t: VoiceTrick) -> Bool { t.isStarter || saved.pages.contains(t.rawValue) }          // (legacy page ownership; the migration reads it)
 
     // MARK: tricks (Store/TrickCatalog.swift)
@@ -254,7 +261,9 @@ final class StoreBook {
         saved.tricksMigrated = true
         save()
     }
-    func ownsLook(_ l: WearLook) -> Bool { saved.wearables.contains(l.rawValue) }
+    func ownsLook(_ l: WearLook) -> Bool { copies(l) > 0 }
+    /// How many copies of a wearable the player owns.
+    func copies(_ l: WearLook) -> Int { saved.wearables.reduce(0) { $0 + ($1 == l.rawValue ? 1 : 0) } }
     /// Foods the player can feed now (count > 0), in catalogue order.
     var snacks: [(item: StoreItem, count: Int)] {
         StoreCatalog.items.compactMap { i in i.food != nil && i.kind != .drink && count(i.id) > 0 ? (i, count(i.id)) : nil }          // (drinks are offered in the Drink picker)
@@ -274,7 +283,7 @@ final class StoreBook {
             grantEveryone(item.id); saved.newItems += 1; save()
             return .bought
         }
-        if item.unique, owns(item) { return .alreadyOwned }
+        if item.unique, !item.isWearable, owns(item) { return .alreadyOwned }          // (a wearable can be bought again: one more copy)
         guard wallet.spend(item.price) else { return .notEnough }
         switch item.kind {
         case .trickPage: break
@@ -301,7 +310,7 @@ final class StoreBook {
         guard let item = StoreCatalog.item(id) else { return }
         switch item.kind {
         case .trickPage: if item.trick == nil { grantEveryone(item.id) } else if let t = item.trick { if TrickCatalog.def(t)?.scope == .perJelbie { for c in rosterCharacters() { grantTrick(t, to: c) } } else { grantTrickToEveryone(t) } }
-        case .shoes, .wear: if let w = item.wear, !saved.wearables.contains(w.rawValue) { saved.wearables.append(w.rawValue) }
+        case .shoes, .wear: if let w = item.wear { while copies(w) < max(n, 1) { saved.wearables.append(w.rawValue) } }          // (at least n copies)
         case .room: if let r = item.room, !ownsRoom(r) { saved.rooms = (saved.rooms ?? []) + [r.rawValue] }
         default: saved.counts[id, default: 0] += n
         }
@@ -340,18 +349,43 @@ final class StoreBook {
         return saved.worn[wornKey(jelly)]?[slot.rawValue].flatMap(WearLook.init(rawValue:))
     }
     /// The room slot whose SAVED outfit has this look on (not the fitting try-on), if any.
-    func wearer(_ look: WearLook, among count: Int = 3) -> Int? {
-        (0..<count).first { saved.worn[wornKey($0)]?[look.slot.rawValue] == look.rawValue }
+    func wearer(_ look: WearLook, among count: Int = 3) -> Int? { wearers(look, among: count).first }
+    /// Every room slot whose SAVED outfit has this look on, the one who has worn it longest first.
+    func wearers(_ look: WearLook, among count: Int = 3) -> [Int] {
+        let keys = wearerKeys(look)
+        return (0..<count).filter { keys.contains(wornKey($0)) }.sorted { (keys.firstIndex(of: wornKey($0)) ?? 0) < (keys.firstIndex(of: wornKey($1)) ?? 0) }
     }
-    /// Puts a look on a Jelly (must be owned). Replaces whatever he wore in that slot.
+    /// The CHARACTERS (JellyRoster ids) wearing this look, longest-worn first. Includes a Jelmiko away at the Camp, who keeps what he left home in.
+    func wearerCharacters(_ look: WearLook) -> [Int] { wearerKeys(look).compactMap { Int($0) } }
+    /// The characters (saved outfits) wearing this look, longest-worn first.
+    private func wearerKeys(_ look: WearLook) -> [String] {
+        let slot = look.slot.rawValue
+        return saved.worn.compactMap { k, o in o[slot] == look.rawValue ? k : nil }
+            .sorted { (saved.wornAt?["\($0)|\(slot)"] ?? 0, $0) < (saved.wornAt?["\($1)|\(slot)"] ?? 0, $1) }
+    }
+    /// Copies nobody is wearing.
+    func freeCopies(_ look: WearLook) -> Int { max(copies(look) - wearerKeys(look).count, 0) }
+    /// The CHARACTER (JellyRoster id) who would lose `look` if it went on `jelly` now: nil when `jelly` already wears it or a copy is free.
+    func wearVictim(_ look: WearLook, for jelly: Int) -> Int? {
+        guard ownsLook(look), saved.worn[wornKey(jelly)]?[look.slot.rawValue] != look.rawValue, freeCopies(look) == 0 else { return nil }
+        return wearerKeys(look).first { $0 != wornKey(jelly) }.flatMap { Int($0) }
+    }
+    /// Puts a look on a Jelly (must be owned). Replaces whatever he wore in that slot. Each copy is worn by one Jelly: with none free, the copy worn longest
+    /// by someone else moves to this one (ask `wearVictim` first to say so).
     @discardableResult
     func wear(_ look: WearLook, on jelly: Int) -> Bool {
         guard ownsLook(look) else { return false }
-        // One owner per look: taking it off whoever else had it.
-        for k in Array(saved.worn.keys) where k != wornKey(jelly) {
-            for (slot, v) in saved.worn[k] ?? [:] where v == look.rawValue { saved.worn[k]?[slot] = nil }
+        let me = wornKey(jelly), slot = look.slot.rawValue
+        if saved.worn[me]?[slot] == look.rawValue { return true }
+        var others = wearerKeys(look).filter { $0 != me }
+        while others.count >= copies(look), !others.isEmpty {
+            let k = others.removeFirst()
+            saved.worn[k]?[slot] = nil; saved.wornAt?["\(k)|\(slot)"] = nil
         }
-        saved.worn[wornKey(jelly), default: [:]][look.slot.rawValue] = look.rawValue
+        saved.worn[me, default: [:]][slot] = look.rawValue
+        var at = saved.wornAt ?? [:]
+        at["\(me)|\(slot)"] = max(Date().timeIntervalSince1970, (at.values.max() ?? 0) + 0.001)
+        saved.wornAt = at
         save()
         return true
     }
@@ -363,6 +397,7 @@ final class StoreBook {
     }
     func takeOff(_ slot: WearSlot, from jelly: Int) {
         saved.worn[wornKey(jelly)]?[slot.rawValue] = nil
+        saved.wornAt?["\(wornKey(jelly))|\(slot.rawValue)"] = nil
         save()
     }
 
@@ -476,7 +511,7 @@ extension StoreBook.Saved {
     /// Every key is optional on read: a save from an older build (or one missing a field) keeps what it has and never resets the player's goods.
     enum CodingKeys: String, CodingKey {
         case counts, pages, wearables, worn, starterGiven, newItems, placed, placedAt, nextDecorUID, awarded, unlistedRefunded, rooms, room, stash
-        case gardenRefunded, staplesGiven, retiredDecorRefunded, glovesRefunded, headbandsRefunded, ownedTricks, everyone, tricksMigrated, earsChecked
+        case gardenRefunded, staplesGiven, retiredDecorRefunded, glovesRefunded, headbandsRefunded, bodiesRefunded, wornAt, ownedTricks, everyone, tricksMigrated, earsChecked
     }
     init(from decoder: Decoder) throws {
         self.init()
@@ -487,6 +522,7 @@ extension StoreBook.Saved {
         unlistedRefunded = c.value(.unlistedRefunded, unlistedRefunded); rooms = c.value(.rooms, rooms); room = c.value(.room, room); stash = c.value(.stash, stash)
         gardenRefunded = c.value(.gardenRefunded, gardenRefunded); staplesGiven = c.value(.staplesGiven, staplesGiven)
         retiredDecorRefunded = c.value(.retiredDecorRefunded, retiredDecorRefunded); glovesRefunded = c.value(.glovesRefunded, glovesRefunded); headbandsRefunded = c.value(.headbandsRefunded, headbandsRefunded)
+        bodiesRefunded = c.value(.bodiesRefunded, bodiesRefunded); wornAt = c.value(.wornAt, wornAt)
         ownedTricks = c.value(.ownedTricks, ownedTricks); everyone = c.value(.everyone, everyone); tricksMigrated = c.value(.tricksMigrated, tricksMigrated)
         earsChecked = c.value(.earsChecked, earsChecked)
     }

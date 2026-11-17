@@ -55,6 +55,10 @@ private struct RaceChromeLayout: View {
                 .animation(CareMenu.spring, value: race.showsCard)
                 if race.showsCountdown { numeral(race.ui.countdown == 0 ? "" : "\(race.ui.countdown)") }
                 if race.showsGo { numeral("GO!") }
+                if race.canForfeit {          // the Home pill sits outside the top bar and above the pull surface (the pull surface owns every touch under it)
+                    ForfeitHomePill(care: care).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(.leading, 14).padding(.top, 8)          // (the same corner as the hidden copy in the top bar)
+                }
+                ForfeitHomeCard(care: care)
             }
             Color.white.opacity(Double(race.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
@@ -73,12 +77,20 @@ private struct RaceChromeLayout: View {
     private var hasAssistButtons: Bool { !race.ui.pull || race.assist == .oneButton || race.assist == .auto }
 
     private var topBar: some View {
-        VStack(spacing: 8) {
-            Text(race.ui.course == .puddle ? "Jelly Race" : "Jelly Race · \(race.ui.course.title)")
-                .playFont(17, .bold)
-                .foregroundStyle(CareMenu.brown)
-                .padding(.horizontal, 16).padding(.vertical, 7)
-                .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
+        VStack(spacing: 10) {
+            // the header row, like the Show's round header: the Home pill (drawn above the pull surface, in the overlay; a hidden copy keeps its place here) then the title, centred on the pill
+            HStack(spacing: 12) {
+                ForfeitHomePill(care: care).hidden()
+                Text(race.ui.course == .puddle ? "Jelly Race" : "Jelly Race · \(race.ui.course.title)")
+                    .playFont(17, .bold)
+                    .foregroundStyle(CareMenu.brown)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .padding(.horizontal, 16).padding(.vertical, 7)
+                    .background(Capsule().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
+                Spacer(minLength: 0)
+            }
+            // the hint has its own row, centred under the header
+            Group {
             if race.ui.pull {
                 RacePullTopRow(race: race)
             } else if race.ui.stumbling, race.ui.tripped {
@@ -94,6 +106,8 @@ private struct RaceChromeLayout: View {
             } else if race.ui.phase == .countdown {
                 hint("Tap left, right, left, right")
             }
+            }
+            .frame(maxWidth: .infinity)
         }
         .padding(.top, 8)
         .animation(.easeOut(duration: 0.15), value: race.ui.stumbling)
@@ -118,7 +132,7 @@ private struct RaceChromeLayout: View {
             .transition(A11ySettings.shared.reduceMotion ? .opacity : .scale(scale: 1.6).combined(with: .opacity))
             .allowsHitTesting(false)
             .accessibilityIdentifier("race-count")
-            .offset(y: -60)
+            .offset(y: compact ? 16 : -60)          // (landscape: the big numeral sits below the header and the hint, never on them)
     }
 
     private var footButtons: some View {

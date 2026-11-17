@@ -119,6 +119,14 @@ final class BlobNeeds {
         if persists { save() }
     }
 
+    /// Adds `amount` but only while the level is below `cap`: from below the cap it can reach it, never go past it; at or above the cap nothing changes.
+    func gain(_ k: NeedKind, _ amount: Float, upTo cap: Float) {
+        guard raw[k.rawValue] < cap else { return }
+        raw[k.rawValue] = min(raw[k.rawValue] + amount, cap)
+        settle()
+        if persists { save() }
+    }
+
     func set(_ k: NeedKind, _ v: Float) { raw[k.rawValue] = min(max(v, 0), 1); settle() }
 
     private func settle() {
