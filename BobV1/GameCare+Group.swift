@@ -94,6 +94,10 @@ extension GameCare {
             #if targetEnvironment(simulator)
             let bodies: [() -> SIMD2<Float>] = sorted.map { a in { [weak s = a.sim] in s.map { (b: SoftBody) -> SIMD2<Float> in let v = b.centroid(); return SIMD2(v.x, v.z) } ?? .zero } }
             group.traceBody = { bodies[$0]() }          // (meal trace only: the pose line's body centroid)
+            let mouths: [() -> SIMD3<Float>?] = sorted.map { a in { [weak b = a.brain, weak s = a.sim] in
+                guard let b, let s, b.dineIsSipping, b.dinePhaseName == "chew" else { return nil }
+                return b.mouthWorld(sim: s) } }
+            group.traceMouth = { mouths[$0]() }          // (meal trace only: his mouth while he sips a gulp)
             #endif
             group.start(c, brains: brains, floor: { floors[$0]() }, ids: sorted.map(\.id))
             if let cafeHooks = cafeBook.hooks, group.isActive { cafeHooks.seated(group.memberIDs, group.placeOf) }

@@ -222,6 +222,8 @@ final class DiningGroup {
     var bystanders: () -> [SIMD2<Float>] = { [] }
     /// Simulator-only trace aid (GameCare+Group sets it): diner i's soft-body centroid on the floor, for the `pose` line (the body as drawn, not the brain's root).
     var traceBody: ((Int) -> SIMD2<Float>)?
+    /// Simulator-only trace aid (GameCare+Group sets it): diner i's mouth (world) while he sips a gulp (`dineIsSipping`, the chew phase), nil otherwise.
+    var traceMouth: ((Int) -> SIMD3<Float>?)?
     /// The tray is drawn only once every diner stands at his place (his approach point), so no body ever walks across it on the way: the floor beside it is no wider than
     /// a body, there is no way round its ends (GameCare.serveWanted). Past this many seconds it pops in anyway (a diner that cannot get there is handled by the retries).
     static let gatherCap: Float = 12
@@ -373,7 +375,17 @@ final class DiningGroup {
                 let b = brains[i], f = floor(i)
                 let flags = (started[i] ? "s" : "-") + (released.indices.contains(i) && released[i] ? "r" : "")
                 line += " \(memberIDs[i])@p\(placeOf[i])=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", b.position.x, b.position.y, f.x, f.y, b.yaw) + ",\(b.activity),\(flags)"
-                if let tb = traceBody { let c = tb(i); line += String(format: ",%.4f,%.4f", c.x, c.y) }          // (the body centroid: what the eye follows)
+                if let tb = traceBody {
+                    let c = tb(i); line += String(format: ",%.4f,%.4f", c.x, c.y)          // (the body centroid: what the eye follows)
+                    if let tm = traceMouth {          // (his mouth to his own straw tip while he sips: the drink "mouth at the rim" check)
+                        if let m = tm(i), let tip = dining.strawTip(place: placeOf[i]) { line += String(format: ",%.4f", simd_distance(m, tip)) } else { line += ",nan" }
+                    }
+                }
+            }
+            if brains.count > 1 {          // (every pair of diners: the drawn footprints' gap, + apart, - sunk into each other; nan = no profile)
+                var gaps: [String] = []
+                for i in brains.indices { for j in brains.indices where j > i { gaps.append("\(memberIDs[i])-\(memberIDs[j]):" + (ContactField.gap(memberIDs[i], memberIDs[j]).map { String(format: "%.4f", $0) } ?? "nan")) } }
+                line += " gaps=" + gaps.joined(separator: ",")
             }
             line += trayOut ? " tray=1" : " tray=0"
             MealTrace.log(line)

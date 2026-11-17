@@ -115,7 +115,9 @@ extension GameCare {
             // (every fixed step) the single eater's brain root, floor point, yaw and activity: the meal smoothness survey
             let f = Self.floorPos(brain, sim)
             let c = sim.map { (s: SoftBody) -> SIMD2<Float> in let v = s.centroid(); return SIMD2(v.x, v.z) } ?? f          // (the body centroid: what the eye follows)
-            MealTrace.log(String(format: "pose a=%.4f", MealTrace.singleAge) + " \(id)@p0=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", brain.position.x, brain.position.y, f.x, f.y, brain.yaw) + ",\(brain.activity),-" + String(format: ",%.4f,%.4f", c.x, c.y) + (dining.isPresent ? " tray=1" : " tray=0"))
+            var ms = ",nan"          // (his mouth to his straw tip while he sips a gulp: the drink "mouth at the rim" check)
+            if let s = sim, brain.dineIsSipping, brain.dinePhaseName == "chew", let tip = dining.strawTip(place: 0) { ms = String(format: ",%.4f", simd_distance(brain.mouthWorld(sim: s), tip)) }
+            MealTrace.log(String(format: "pose a=%.4f", MealTrace.singleAge) + " \(id)@p0=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", brain.position.x, brain.position.y, f.x, f.y, brain.yaw) + ",\(brain.activity),-" + String(format: ",%.4f,%.4f", c.x, c.y) + ms + (dining.isPresent ? " tray=1" : " tray=0"))
         }
         #endif
     }
