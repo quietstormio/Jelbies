@@ -103,6 +103,9 @@ final class StoreBook {
             // it pays from the counts it removes (StoreBook+RetiredToys.swift), and the next load finds nothing
             let (noToys, toyRefund, toysChanged) = Self.dropRetiredToys(saved)
             if toysChanged { saved = noToys; if toyRefund > 0 { wallet.add(toyRefund, silent: true) }; save() }
+            // 2026-11-16: the Ramen bowl, Mac & cheese and Fruit cup became hand-held foods: owned counts move to the replacement (StoreBook+RetiredFoods.swift; no flag, it moves the counts)
+            let (newFoods, foodsChanged) = Self.convertRetiredFoods(saved)
+            if foodsChanged { saved = newFoods; save() }
             let (noGloves, gloveRefund) = Self.dropRetiredGloves(saved)
             if noGloves.glovesRefunded != saved.glovesRefunded { saved = noGloves; if gloveRefund > 0 { wallet.add(gloveRefund, silent: true) }; save() }
             let (noBands, bandRefund) = Self.dropRetiredHeadbands(saved)

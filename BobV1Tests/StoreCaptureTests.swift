@@ -127,12 +127,12 @@ final class StoreCaptureTests: XCTestCase {
         return out
     }
 
-    /// Eating moments of the foods / drinks named in FOOD_MEAL_IDS (comma separated; default "ramen,boba"), written to meals_<ids>.png in STORE_CAP_DIR:
+    /// Eating moments of the foods / drinks named in FOOD_MEAL_IDS (comma separated; default "cinnamonroll,boba"), written to meals_<ids>.png in STORE_CAP_DIR:
     /// a food mid-toss and landing in his mouth, a drink while he sips it. Run a few ids per invocation (each is a full simulated meal).
     func testCaptureMeals() throws {
         guard let dir = ProcessInfo.processInfo.environment["STORE_CAP_DIR"], !dir.isEmpty else { throw XCTSkip("STORE_CAP_DIR not set") }
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
-        let ids = (ProcessInfo.processInfo.environment["FOOD_MEAL_IDS"] ?? "ramen,boba").split(separator: ",").map(String.init)
+        let ids = (ProcessInfo.processInfo.environment["FOOD_MEAL_IDS"] ?? "cinnamonroll,boba").split(separator: ",").map(String.init)
         var cells: [(LockImage, String)] = []
         for id in ids { cells += try mealShots(device, id: id, w: 1320, h: 2868, size: 640) }
         XCTAssertFalse(cells.isEmpty)

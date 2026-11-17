@@ -410,7 +410,9 @@ final class DiningFlowTests: XCTestCase {
         checkToss(m, id)
         if !rush { checkReturnsToRest(m, before: before, id) }
     }
-    func testRamenToss() { checkStoreFoodToss("ramen") }
+    func testCinnamonRollToss() { checkStoreFoodToss("cinnamonroll") }
+    func testSoftPretzelToss() { checkStoreFoodToss("softpretzel") }
+    func testFruitSkewerToss() { checkStoreFoodToss("fruitskewer") }
     func testCheeseburgerToss() { checkStoreFoodToss("cheeseburger") }
     func testPancakesToss() { checkStoreFoodToss("pancakestack") }
     func testSodaSip() { checkSip("soda") }

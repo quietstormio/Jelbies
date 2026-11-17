@@ -55,8 +55,9 @@ nonisolated enum ImportSave {
 
         // Ownership: max per catalogue id (consumables are never summed), unknown ids dropped.
         var counts = 0
-        for (k, v) in (oj["counts"] as? [String: Any]) ?? [:] {
+        for (k0, v) in (oj["counts"] as? [String: Any]) ?? [:] {
             guard let n = (v as? NSNumber)?.intValue else { continue }
+            let k = RetiredFoods.current(k0)          // an older backup's Ramen bowl / Mac & cheese / Fruit cup arrive as their hand-held replacements (StoreBook+RetiredFoods.swift)
             guard StoreCatalog.item(k) != nil else { r.dropped.append("item:\(k)"); continue }
             if n > (s.counts[k] ?? 0) { s.counts[k] = n; counts += 1 }
         }

@@ -158,12 +158,12 @@ a favourite snack (store food), and a slight colour shade (classic / Soft or Dee
 | Personality | Jar tilt (Cute, Sweet, Sparkly, Cool, Sporty) | Snacks |
 |---|---|---|
 | Bouncy | 0, -4, 0, -8, +14 | donut, fries, taco |
-| Cuddly | +10, +8, 0, -8, -8 | cookie, cupcake, macncheese |
+| Cuddly | +10, +8, 0, -8, -8 | cookie, cupcake, softpretzel |
 | Curious | 0, -4, +10, +6, -8 | dumplings, sushi, sandwich |
 | Sleepy | +2, +12, -4, +2, -14 | cookie, popsicle, onigiri |
 | Giggly | +8, +2, +10, -10, 0 | cupcake, pancakestack, minipizza |
-| Brave | -8, -8, -2, +12, +12 | cheeseburger, taco, ramen |
-| Gentle | +4, +12, +2, -2, -14 | onigiri, fruitcup, popsicle |
+| Brave | -8, -8, -2, +12, +12 | cheeseburger, taco, cinnamonroll |
+| Gentle | +4, +12, +2, -2, -14 | onigiri, fruitskewer, popsicle |
 | Cheeky | -4, -10, +8, +10, +4 | nuggets, fries, cakeslice |
 
 Starting stats follow the jars (`StatTuning.seed`): each condition stat = jar/100 x 0.25 (half of it is an innate floor it never decays below), waddle = 0.30 + 0.35 x (0.6 sporty + 0.25 cool + 0.15 sparkly)/100,

@@ -57,12 +57,12 @@ nonisolated enum JellyPersonality: String, CaseIterable, Codable, Sendable {
     var snacks: [String] {
         switch self {
         case .bouncy: return ["donut", "fries", "taco"]
-        case .cuddly: return ["cookie", "cupcake", "macncheese"]
+        case .cuddly: return ["cookie", "cupcake", "softpretzel"]
         case .curious: return ["dumplings", "sushi", "sandwich"]
         case .sleepy: return ["cookie", "popsicle", "onigiri"]
         case .giggly: return ["cupcake", "pancakestack", "minipizza"]
-        case .brave: return ["cheeseburger", "taco", "ramen"]
-        case .gentle: return ["onigiri", "fruitcup", "popsicle"]
+        case .brave: return ["cheeseburger", "taco", "cinnamonroll"]
+        case .gentle: return ["onigiri", "fruitskewer", "popsicle"]
         case .cheeky: return ["nuggets", "fries", "cakeslice"]
         }
     }
@@ -164,7 +164,19 @@ nonisolated enum JellyTraitsBook {
     static func load(_ d: UserDefaults = .standard) -> [Int: JellyTraits] {
         guard let raw = SaveRecovery.decode([String: JellyTraits].self, key: key, defaults: d) else { return [:] }
         var out: [Int: JellyTraits] = [:]
-        for (k, v) in raw where v.jars.count == 5 { if let i = Int(k), i >= 0, !JellyRoster.isPreview(i) { out[i] = v } }
+        var remapped = false
+        for (k, var v) in raw where v.jars.count == 5 {
+            if let i = Int(k), i >= 0, !JellyRoster.isPreview(i) {
+                // a favourite that was a retired bowl / cup food becomes its hand-held replacement (StoreBook+RetiredFoods.swift), and the save is rewritten once
+                if let now = RetiredFoods.map[v.snack] { v.snack = now; remapped = true }
+                out[i] = v
+            }
+        }
+        if remapped {
+            var back: [String: JellyTraits] = [:]
+            for (k, v) in out { back[String(k)] = v }
+            if let data = try? JSONEncoder().encode(back) { d.set(data, forKey: key) }
+        }
         return out
     }
     /// Re-reads the save (after a wipe, or in tests).

@@ -171,7 +171,7 @@ Expected result: **4+**.
 |---|---|---|
 | Profanity or Crude Humor | None | Jelmiko speak in chirps and babble. Park visitor text is checked by Park/ParkTextSafety.swift and is written to be kid-friendly. |
 | Horror/Fear Themes | None (see note) | Pets, food, toys, beach volleyball. There is a thunderstorm weather effect and a "scaredy huddle" reaction (Melon/Weather.swift, Melon/BlobBrain+Weather.swift). It is a cosy cartoon storm and the Jelmiko are comforted, so None is the honest answer. If you decide a storm counts, "Infrequent" moves the rating to 9+. |
-| Alcohol, Tobacco, or Drug Use or References | None | None. The Café sells a Jelly Cup and a Baby latte (RELEASE-1.0.md), which are pretend treats for the Jelmiko, not references to a drink for people. |
+| Alcohol, Tobacco, or Drug Use or References | None | None. The Café sells a Jelly puff and a Baby latte (RELEASE-1.0.md), which are pretend treats for the Jelmiko, not references to a drink for people. |
 
 ### Medical or Wellness
 
