@@ -59,7 +59,7 @@ final class TipBook {
         TipCard(id: "play", symbol: HUDMenu.symbol(.play), title: "Play", body: "Pick a toy and flick it. Your Jelmiko bumps it back."),
         TipCard(id: "shop", symbol: "bag.fill", title: "The Shop", body: "Spend JellyCoins on food, clothes and tricks. It all goes to your Bag."),
         TipCard(id: "town", symbol: "door.left.hand.open", title: "Where to?", body: "Race, dance and play to earn JellyCoins. Spend them in the Shop."),
-        TipCard(id: "spring", symbol: "drop.fill", title: "The Jelly Spring", body: "Tap Meet the three to pick one. Up to three live at home."),
+        TipCard(id: "spring", symbol: "drop.fill", title: "The Jelly Spring", body: "Find a kind you love, then tap Pick. Up to three live at home."),
         TipCard(id: "park", symbol: "tree.fill", title: "The Park", body: "Tap a visitor to say hi. Play together to make new friends."),
         TipCard(id: "trophies", symbol: "trophy.fill", title: "Trophies", body: "Win races, shows and volleyball. Every trophy is kept here."),
         TipCard(id: "race", symbol: "flag.checkered", title: "Jelly Race", body: "Tap the two foot buttons in turn to run. Tap ? to learn more."),
