@@ -37,12 +37,12 @@ extension ParkSlideRoundTests {
 
     func insideRun(seeds: [UInt64], seconds: Float, mode: InsideMode = .plain, level: Int = 2) -> InsideRun {
         var out = InsideRun()
-        let seesaw = ParkPlayTuning.seesawInPark, budget = BlobBrain.pickBudgetSeconds
+        let seesaw = ParkPlayTuning.seesawInPark, budget = BlobBrain.pickBudgetSeconds, level0 = BlobBrain.slideFixLevel
         ParkPlayTuning.seesawInPark = false          // (the owner's park: no seesaw since park-play-r1; XCTest places it for the seesaw's own suites)
         BlobBrain.pickBudgetSeconds = .infinity          // (repeatable picks: the wall-clock budget would time out at random on a loaded host)
         BlobBrain.slideFixLevel = level          // (0 = main's rules: the before arm; 1 = park-slide-r3; 2 = park-slide-r4)
         let turn0 = BlobBrain.slideFootTurnAways
-        defer { ParkPlayTuning.seesawInPark = seesaw; BlobBrain.pickBudgetSeconds = budget; BlobBrain.slideFixLevel = 2 }
+        defer { ParkPlayTuning.seesawInPark = seesaw; BlobBrain.pickBudgetSeconds = budget; BlobBrain.slideFixLevel = level0 }          // (park-arrive-r1: back to the level it had, the game's is 3)
         for seed in seeds {
             let lab = parkLab(n: 5, seed: seed, aspect: Self.portrait, starts: Self.insideStarts, quiet: false)
             // the owner's park: Lavender (wings), Moss (daisy), Panda (ears), the visitors Bubbles (yellow: spines) and Freckles (lavender: wings); set as ParkPlayTests' soak sets them

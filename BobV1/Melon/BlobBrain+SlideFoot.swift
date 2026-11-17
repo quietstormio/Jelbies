@@ -101,13 +101,14 @@ extension BlobBrain {
     /// The park slide fixes, by level (owner 2026-11-16, "They're still walking in slide"). 0 = main's rules before them. 1 = park-slide-r3: `decorExitCheck` keeps the park slide solid
     /// for a body whose centre is only over its edge (BlobBrain+Decor.swift), and the run-out's lifted floor rules end at the park swap (`GameCare.outingLanded`). 2 = park-slide-r4 (the
     /// game's level): also no walk-out softens it from outside its box (`walkOutSoftens`), nobody settles on its foot (`onSlideFoot`) and no wander leg ends there (`slideFootPoint`).
-    /// Dev builds only: `-ParkSlideFix old` = 0, `-ParkSlideFix r3` = 1, for real-app before / after in one build; the headless soak's arms.
+    /// 3 = park-arrive-r1 (the game's level): a Jelbie who came stands where his body is from the park swap on (`GameCare.outingLanded` lets go of `outingHome`).
+    /// Dev builds only: `-ParkSlideFix old` = 0, `r3` = 1, `r4` = 2, for real-app before / after in one build; the headless soak's arms.
     nonisolated(unsafe) static var slideFixLevel: Int = {
-        guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "ParkSlideFix") else { return 2 }
-        return v == "old" ? 0 : (v == "r3" ? 1 : 2)
+        guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "ParkSlideFix") else { return 3 }
+        return v == "old" ? 0 : (v == "r3" ? 1 : (v == "r4" ? 2 : 3))
     }()
-    /// r3's two changes are on (level 1 or more). Set: true = every level (2), false = main's rules (0).
-    static var slideSoftEndEnabled: Bool { get { slideFixLevel >= 1 } set { slideFixLevel = newValue ? 2 : 0 } }
+    /// r3's two changes are on (level 1 or more). Set: true = every level (3, the game's), false = main's rules (0).
+    static var slideSoftEndEnabled: Bool { get { slideFixLevel >= 1 } set { slideFixLevel = newValue ? 3 : 0 } }
     /// How many autonomous picks the foot rule turned into a walk off the foot (r4; the soak prints it against the social rates).
     nonisolated(unsafe) static var slideFootTurnAways = 0
     /// park-slide-r4: may a walk-out from piece `f` make it soft for him? Not the park slide while his centre is outside its box: from there every walk can leave it with the slide solid

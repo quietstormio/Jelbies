@@ -200,6 +200,9 @@ extension GameCare {
         park.step(dt: dt, blocked: park.phase == .goOut && parkFadeBlocked)
         guard park.active else { return }
         guard park.inScene else { return }
+        #if targetEnvironment(simulator)
+        if ParkSlideProbe.on, ParkSlideProbe.arriveT != nil { parkArriveProbe(actors.enumerated().filter { parkBook.comers.contains($0.offset) }.map(\.element) + parkBook.actors, dt: dt) }          // (park-arrive-r1 capture aid)
+        #endif
         let book = parkBook, work = book.work
         for (k, a) in actors.enumerated() {
             guard let b = a.brain else { continue }
@@ -486,6 +489,17 @@ extension GameCare {
                 brain.face(.excited, hold: 1.5)
             }
             for a in book.actors { a.brain?.face(.excited, hold: 1.5) }
+            #if targetEnvironment(simulator)
+            if ParkSlideProbe.on {          // (park-arrive-r1: watch the first 5 s; where each body stands against the walk's own floor rules right now)
+                ParkSlideProbe.arriveT = 0; ParkSlideProbe.arriveSteps = 0; ParkSlideProbe.arriveWorst = [:]; ParkSlideProbe.arriveLastRoot = [:]; ParkSlideProbe.arriveLastStep = [:]
+                for (k, a) in roster.enumerated() where book.comers.contains(k) {
+                    guard let b = a.brain else { continue }
+                    let p = b.position, f = b.fixed(p), c = GameCamera.constrain(SIMD3(p.x, 0, p.y), radius: 0.8)
+                    NSLog("[arrive] spot body=%d at=(%.2f,%.2f) walkRules=(%.2f,%.2f) moved=%.2f constrain08=(%.2f,%.2f) lifted=%d", a.id, p.x, p.y, f.x, f.y, simd_distance(p, f), c.x, c.z, outing.lifted.contains(a.id) ? 1 : 0)
+                }
+                for a in book.actors { guard let b = a.brain else { continue }; let p = b.position, f = b.fixed(p); NSLog("[arrive] spot body=%d (visitor) at=(%.2f,%.2f) walkRules=(%.2f,%.2f) moved=%.2f", a.id, p.x, p.y, f.x, f.y, simd_distance(p, f)) }
+            }
+            #endif
             if select.phase != .none { select.cancel() }
             park.card = nil
         case .home:
