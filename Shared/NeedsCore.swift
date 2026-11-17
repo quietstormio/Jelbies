@@ -51,17 +51,17 @@ nonisolated enum NeedsTuning {
     /// Real hours for a full need to run empty. A game day is 24 real minutes (GameClockTuning), and he should be hungry about TWICE a day: he WANTS food
     /// (level < 0.3, i.e. 0.7 of the way down) every ~12 real minutes = 12 game hours, so hunger empties in 0.3 h (was 3 h) and thirst, kept at 2/3 of it, in 0.2 h (was 2 h).
     static func hoursToEmpty(_ k: NeedKind) -> Double {
-        switch k { case .hunger: return 0.3; case .thirst: return 0.2; case .attention: return 4 }
+        switch k { case .hunger: return 0.3; case .thirst: return 0.2; case .attention: return 8 }          // attention (love) 4 -> 8 h: half as fast (2026-11-16)
     }
     /// Time AWAY has its own, gentler curve (the in-app rates above are unchanged): real hours for a full need to fall to empty, linearly
     /// (the floor stops it first). One-line changes: the six numbers below.
-    /// Awake at leave: after 3 h away hunger 0.85, thirst 0.8125, attention 0.50; after 8 h hunger 0.60, thirst 0.50, attention 0.25 (daytime).
-    static let awakeAwayHours: [Double] = [20, 16, 6]          // hunger, thirst, attention
+    /// Awake at leave: after 3 h away hunger 0.85, thirst 0.8125, attention 0.75; after 8 h hunger 0.60, thirst 0.50, attention 0.35 (its own floor) (daytime).
+    static let awakeAwayHours: [Double] = [20, 16, 12]          // hunger, thirst, attention
     /// Asleep when the player left (napping or tucked in): food and water run down three times slower again; attention is unchanged so they still greet happily.
-    static let asleepAwayHours: [Double] = [60, 48, 6]
+    static let asleepAwayHours: [Double] = [60, 48, 12]
     /// The rates for time that passes INSIDE the app (the trip clock, the skipped night): the old away curve, unchanged. Only a player leaving the game uses the
     /// awake / asleep numbers above. Named apart so the two cannot drift together.
-    static let inAppAwayHours: [Double] = [10, 8, 6]
+    static let inAppAwayHours: [Double] = [10, 8, 12]
     static func awayHoursToEmpty(_ k: NeedKind, asleep: Bool = false, inApp: Bool = false) -> Double {
         (inApp ? inAppAwayHours : asleep ? asleepAwayHours : awakeAwayHours)[k.rawValue]
     }
@@ -73,6 +73,12 @@ nonisolated enum NeedsTuning {
     static let famishedBelow: Float = 0.2
     /// Away decay never takes a need below this (and never raises one that was already lower).
     static let awayFloor: Float = famishedBelow
+    /// Love's own away floor (2026-11-16): just above `wanting`, so time away alone never leaves them lonely-grumpy. In-app decay can still take it lower.
+    static let attentionAwayFloor: Float = 0.35
+    static func awayFloor(for k: NeedKind) -> Float { k == .attention ? attentionAwayFloor : awayFloor }
+    /// Their own social sessions (a pair or group emote that ends well) give each of the player's own Jelmiko this much love, but only up to `socialLoveCap`.
+    static let socialLoveGain: Float = 0.03
+    static let socialLoveCap: Float = 0.8
     /// Hunger and thirst drain this many times faster while he hurries / runs / does zoomies, slide or scoot (a stand-in for walks and contests).
     static let exertionDrain: Double = 3
     /// Hunger and thirst drain this many times slower while he naps at night.
@@ -138,7 +144,7 @@ nonisolated enum AwayMath {
             let i = k.rawValue
             let s = k == .attention ? (attentionSeconds ?? seconds) : seconds
             let drop = Float(TimeAway.clamp(s) / (NeedsTuning.awayHoursToEmpty(k, asleep: asleep, inApp: inApp) * 3600))
-            v[i] = max(min(max(v[i], 0), 1) - drop, min(v[i], NeedsTuning.awayFloor))
+            v[i] = max(min(max(v[i], 0), 1) - drop, min(v[i], NeedsTuning.awayFloor(for: k)))
             v[i] = min(max(v[i], 0), 1)
         }
         return v
