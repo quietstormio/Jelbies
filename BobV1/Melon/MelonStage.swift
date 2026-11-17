@@ -521,7 +521,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for i in cooldown.indices { cooldown[i] = max(0, cooldown[i] - dt) }
         // a Jelly held still only by another Jelly's close-up (`focusPaused`) is free to step aside too: frozen in the called one's path he blocked it (2026-10-21)
         let freeBrain: (Int) -> Bool = { i in
-            guard let b = brains[i], b.enabled, b.autonomy || b.focusPaused, !b.commanded, !b.held || (b.focusPaused && !b.reserved), b.pending == nil, !b.isSocial, b.idleState.kind == nil, !b.race.active else { return false }
+            guard let b = brains[i], b.enabled, b.autonomy || b.focusPaused, !b.commanded, !b.held || (b.focusPaused && !b.reserved), b.pending == nil, !b.isSocial, b.idleState.kind == nil, !b.race.active, !b.slideFootWaiting else { return false }          // (park-slide-r4: one waiting on the slide's foot for his leg is walked by his own pick)
             switch b.script { case .none, .look, .stepInPlace: break; default: return false }
             return b.activity == .idle || b.activity == .lookingAround || b.activity == .steppingInPlace
         }
@@ -547,7 +547,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                         if best == nil || cost < best!.cost { best = (cost, q) }
                     }
                 }
-                if let spot = best?.p { b.requestNow(.goTo(spot)); cooldown[mover] = stepAsideCooldown }
+                if let spot = best?.p { b.stepAside(to: spot); cooldown[mover] = stepAsideCooldown }
             }
         }
     }
@@ -597,7 +597,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                         if best == nil || cost < best!.cost { best = (cost, q) }
                     }
                 }
-                if let spot = best?.p { b.requestNow(.goTo(spot)); cooldown[j] = stepAsideCooldown }
+                if let spot = best?.p { b.stepAside(to: spot); cooldown[j] = stepAsideCooldown }
             }
         }
     }

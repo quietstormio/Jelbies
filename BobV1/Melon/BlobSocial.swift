@@ -278,12 +278,12 @@ extension BlobBrain {
     var socialFree: Bool {
         social == nil && socialBook.enabled && attached && (autonomy || idleForced) && !held && !commanded && pending == nil && job == nil && bubbleLeash == nil
             && commandedIdle == nil && !commandedFlip && !commandedNameHop && !interruptScript && !hurry
-            && activity != .touched && activity != .recovering && scriptIsNone && idleState.kind == nil
+            && activity != .touched && activity != .recovering && scriptIsNone && idleState.kind == nil && !onSlideFoot          // (park-slide-r4: not on the slide's foot)
     }
     /// Out on an ordinary wander leg: autonomous, nothing owns him, no behaviour running. He can be invited to a social (his leg is ended at the next stretch of the walk).
     var socialWandering: Bool {
         guard social == nil, bubbleLeash == nil, socialBook.enabled, attached, autonomy || idleForced, !held, !commanded, pending == nil, job == nil, commandedIdle == nil,
-              !commandedFlip, !commandedNameHop, !interruptScript, !hurry, !race.active, idleState.kind == nil, activity == .walking else { return false }
+              !commandedFlip, !commandedNameHop, !interruptScript, !hurry, !race.active, idleState.kind == nil, activity == .walking, !onSlideFoot else { return false }
         if case .walk = script { return true }
         return false
     }

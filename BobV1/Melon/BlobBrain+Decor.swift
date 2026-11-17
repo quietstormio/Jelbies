@@ -52,11 +52,12 @@ extension BlobBrain {
             // slide's front corner at 0.25 from the box)
             let rimOnly = f.uid == ParkToys.slideUID && Self.slideSoftEndEnabled && f.distance(position) > 0
             if decorIgnore == nil, !rimOnly { decorIgnore = f.uid }
+            let footOwned = rimOnly && slideFootWaiting          // (r4: he waits on the slide's foot for his leg to clear, his own pick walks him: no straight ease-out, no walk-out that is held)
             insideDecorT += dt
             if let s = walkOutFrom, simd_distance(position, s) > 0.05 { insideStuckT = 0; walkOutFrom = nil }
             insideStuckT += dt
             // the walk-out below finds no route from inside a piece (the planner steers round solids, and he is in one): after 3 s he is eased out in a straight line, feet with him
-            if insideStuckT > 3, !held, !decorLocked, case .none = script, let out = decorFreeSpot(near: position) {
+            if insideStuckT > 3, !footOwned, !held, !decorLocked, case .none = script, let out = decorFreeSpot(near: position) {
                 let d = out - position, len = simd_length(d)
                 let m = len > 0.02 ? d / len * min(len, 1.3 * dt) : SIMD2<Float>.zero
                 if len > 0.02, !steerPeers().contains(where: { simd_distance($0.pos, position + m) < peerGap }) {          // (never into a friend)
@@ -64,10 +65,10 @@ extension BlobBrain {
                     yaw = atan2f(d.x, d.y)
                 }
             }
-            if insideDecorT > 1.2, !held, !decorLocked, pending == nil, let out = decorFreeSpot(near: position) {
+            if insideDecorT > 1.2, !footOwned, !held, !decorLocked, pending == nil, let out = decorFreeSpot(near: position) {
                 insideDecorT = -1.5
                 walkOutFrom = position          // (the ease-out waits for a fresh 3 s once this walk has really moved him)
-                decorIgnore = f.uid
+                if walkOutSoftens(f) { decorIgnore = f.uid }          // (r4: a centre outside the slide's box walks out with it solid)
                 requestNow(.goTo(out))
             }
             return

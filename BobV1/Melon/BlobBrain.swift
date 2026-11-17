@@ -877,9 +877,13 @@ final class BlobBrain {
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         var pt = CACurrentMediaTime()
-        if socialMaybeStart(sim) { return }
+        if slideFootRetry() { return }          // (park-slide-r4: he stands on the slide's foot waiting for his leg to clear)
+        let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
+        if footKeep { Self.slideFootTurnAways += 1 }
+        if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { slideFootWalkTo = out; request(.goTo(out)); restTimer = 0.3; return }
+        if !footKeep, socialMaybeStart(sim) { return }
         HopDiag.lap(.tkPickSocial, &pt)
-        if idleMaybeStart(sim) { return }
+        if !footKeep, idleMaybeStart(sim) { return }
         HopDiag.lap(.tkPickIdle, &pt)
         defer { HopDiag.lap(.tkPickWander, &pt) }
         var w: [(Int, Float)] = [(0, 7.5), (1, 1.2), (2, 0.8)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
@@ -891,6 +895,7 @@ final class BlobBrain {
         var r = rand() * total
         var choice = w[0].0
         for (k, wt) in w { if r < wt { choice = k; break }; r -= wt }
+        if footKeep { choice = 0 }
         lastPick = choice
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         switch choice {
@@ -973,7 +978,7 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
-            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), reachable(here, cand) else { continue }
+            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
@@ -1314,6 +1319,7 @@ final class BlobBrain {
     func steerTarget(to target: SIMD2<Float>) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("steerTarget", probe) }
         let root = SIMD2(px, pz)
+        heldByPeer = false
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
             else if roomWaypointWait(root, w) { return nil }          // (the 11-15 room round, T5: nothing looked ahead on a waypoint leg; the one who gets there second stands a beat)
@@ -1344,13 +1350,22 @@ final class BlobBrain {
         // and pick another (`steerGiveUp`, read by the walk). A requested walk (come, the meal) keeps the long patience: the blocker is asked to step aside.
         let requested = job != nil || commanded || pending != nil
         let slideLeg = idleState.kind == .decorSlide && idleState.decorUID == ParkToys.slideUID && idleState.slideStage < 0          // (the way round the park slide: it gives a standing friend 2 s, then the leg is given up and planned the other way round, BlobBrain+Decor.swift)
-        let patience: Float = requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6)
-        if steerWait < patience, peerOnLeg(root, target) { return nil }
-        if !requested || (slideLeg && standing), peerOnLeg(root, target) { steerGiveUp = true; return nil }
+        var forced = false; if let w = slideFootForceTo, case .goTo(let p)? = job, p == w { forced = true }          // (park-slide-r4: off the slide's foot after his longest wait: on past the friend, as a requested walk did after its 6 s)
+        let patience: Float = forced ? 0 : (requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6))
+        if steerWait < patience, peerOnLeg(root, target) { heldByPeer = true; return nil }
+        if !requested || (slideLeg && standing), peerOnLeg(root, target) { heldByPeer = true; steerGiveUp = true; return nil }
         return target
     }
 
     var steerWait: Float = 0
+    /// park-slide-r4 (BlobBrain+SlideFoot.swift): the slide-foot walk he is on (its spot: a walk off the slide's foot, or a step-aside asked of him there), the spot he stands waiting
+    /// to walk to (that walk was held by a friend on its leg) and since when (his `peerClock`). `heldByPeer`: this step's `steerTarget` held the walk for a friend on the leg.
+    var slideFootWalkTo: SIMD2<Float>?
+    var slideFootResume: SIMD2<Float>?
+    var slideFootWaitSince: Float?
+    var heldByPeer = false
+    /// park-slide-r4: the walk off the slide's foot he takes after waiting his longest (`slideFootRetry`): `steerTarget` does not hold it for a friend on the leg.
+    var slideFootForceTo: SIMD2<Float>?
     /// Seconds this walker has given way to a crossing walker (reset when nobody is in the way); at `ContactTuning.yieldMax` he goes round instead.
     var yieldT: Float = 0
     /// An autonomous walk found its way blocked for good (see `steerTarget`): the walk ends and a new goal is picked.
@@ -1490,6 +1505,7 @@ final class BlobBrain {
                 guard let eff = effOpt else {
                     steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
                     if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; step(after: .none, sim, giveUp: true); restTimer = 0.25 }
+                    else if steerWait > 0.25, heldByPeer, slideFootHoldStands { steerWait = 0; slideFootStand(sim) }          // (park-slide-r4: held on the slide's foot, he stands and waits: no walk on the spot)
                     return
                 }
                 steerWait = max(0, steerWait - dt)

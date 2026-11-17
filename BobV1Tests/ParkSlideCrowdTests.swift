@@ -201,7 +201,7 @@ final class ParkSlideCrowdTests: XCTestCase {
         }
     }
 
-    struct FootRide { var started = false, ph2: Float = 0, hold: Float = 0, pushed = false, t6: Float?, exit: SIMD2<Float>?, min5: Float = .infinity }
+    struct FootRide { var started = false, ph2: Float = 0, hold: Float = 0, pushed = false, t6: Float?, exit: SIMD2<Float>?, min5: Float = .infinity, held: Float = 0, heldRun: Float = 0, prevWait: Float = 0 }
 
     /// T2: A rides, then B is commanded to the slide; the standers are free. The foot must be clear for B.
     func foot(seed: UInt64) -> String {
@@ -246,16 +246,19 @@ final class ParkSlideCrowdTests: XCTestCase {
                     if s.slideStage == 6, R[i].t6 == nil { R[i].t6 = t }
                 }
                 if i == 0, seed == 2, let s6 = R[0].t6, t - s6 <= 6, Int(t * 60) % 15 == 0 { print(bState(rigs[0].brain, sl, landing, t - s6).replacingOccurrences(of: "[stepoff-t]", with: "[foot-A]")) }
-                if let s6 = R[i].t6, t - s6 <= 5 {
-                    R[i].min5 = min(R[i].min5, others.map { simd_distance(rigs[i].root, rigs[$0].root) }.min()!)
-                    if t - s6 > 4.98 { R[i].exit = rigs[i].root }
+                if let s6 = R[i].t6, t - s6 <= 5 { R[i].min5 = min(R[i].min5, others.map { simd_distance(rigs[i].root, rigs[$0].root) }.min()!) }
+                if let s6 = R[i].t6, R[i].exit == nil, t - s6 >= 7 { R[i].exit = rigs[i].root }          // (r4: at 7 s, was 5: he waits for a stander on his leg instead of cutting the slide's corner)
+                if let s6 = R[i].t6, t - s6 <= 7 {          // (r4: the longest stretch of a walk held in place on the foot: steerWait growing, no step; the owner's "glitchy movement")
+                    let b = rigs[i].brain; var w = false; if case .walk = b.script { w = true }
+                    if w, b.steerWait > R[i].prevWait, simd_distance(b.position, landing) < peer + 0.1 { R[i].heldRun += 1.0 / 60; R[i].held = max(R[i].held, R[i].heldRun) } else { R[i].heldRun = 0 }
                 }
+                R[i].prevWait = rigs[i].brain.steerWait
             }
             if leftB == nil, simd_distance(rigs[1].root, landing) > peer { leftB = t }
             if leftC == nil, simd_distance(rigs[2].root, landing) > peer { leftC = t }
             for a in 0..<3 { for c in (a + 1)..<3 { let d = simd_distance(rigs[a].root, rigs[c].root); if d < minPair { minPair = d; minPairAt = "t=\(String(format: "%.1f", t)) ids \(a),\(c)" } } }
             if !aDone, R[0].t6 != nil, rigs[0].brain.idleState.kind == nil, DecorField.shared.occupant[ParkToys.slideUID] == nil { aDone = true }
-            if R[1].t6 != nil, rigs[1].brain.idleState.kind == nil, endAt == nil { endAt = t + 5 }
+            if R[1].t6 != nil, rigs[1].brain.idleState.kind == nil, endAt == nil { endAt = t + 7 }          // (r4: B's exit is read at 7 s too)
             if let e = endAt, t >= e { break }
         }
         let A = R[0], B = R[1]
@@ -265,7 +268,7 @@ final class ParkSlideCrowdTests: XCTestCase {
         func p(_ v: SIMD2<Float>?) -> String { v.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-" }
         func d(_ v: SIMD2<Float>?) -> String { v.map { String(format: "%.2f", simd_distance($0, landing)) } ?? "-" }
         func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
-        let line = "[foot] seed=\(seed) | A: platformPh2=\(String(format: "%.1f", A.ph2))s (hold \(String(format: "%.1f", A.hold))) pushedWithBody=\(A.pushed ? "yes" : "no") exit=\(p(A.exit)) exitToLanding=\(d(A.exit)) minD5sAfterFloor=\(String(format: "%.2f", A.min5)) | standers: B leftFootAt=\(ft(leftB))s C leftFootAt=\(ft(leftC))s endB=\(p(standing[1])) endC=\(p(standing[2])) | B: started=\(B.started ? "yes" : "no") (tries \(tries)) platformPh2=\(String(format: "%.1f", B.ph2))s (hold \(String(format: "%.1f", B.hold))) pushedWithBody=\(B.pushed ? "yes" : "no") exit=\(p(B.exit)) exitToLanding=\(d(B.exit)) minD5sAfterFloor=\(String(format: "%.2f", B.min5)) | minPairDistanceWholeRun=\(String(format: "%.2f", minPair))@\(minPairAt) | nearestSquareOfAnyStandingBodyAtEnd=\(String(format: "%.2f", sqEnd)) | end t=\(String(format: "%.1f", t))"
+        let line = "[foot] seed=\(seed) | A: platformPh2=\(String(format: "%.1f", A.ph2))s (hold \(String(format: "%.1f", A.hold))) pushedWithBody=\(A.pushed ? "yes" : "no") exit=\(p(A.exit)) exitToLanding=\(d(A.exit)) minD5sAfterFloor=\(String(format: "%.2f", A.min5)) heldOnFootMax=\(String(format: "%.2f", A.held))s | standers: B leftFootAt=\(ft(leftB))s C leftFootAt=\(ft(leftC))s endB=\(p(standing[1])) endC=\(p(standing[2])) | B: started=\(B.started ? "yes" : "no") (tries \(tries)) platformPh2=\(String(format: "%.1f", B.ph2))s (hold \(String(format: "%.1f", B.hold))) pushedWithBody=\(B.pushed ? "yes" : "no") exit=\(p(B.exit)) exitToLanding=\(d(B.exit)) minD5sAfterFloor=\(String(format: "%.2f", B.min5)) heldOnFootMax=\(String(format: "%.2f", B.held))s | minPairDistanceWholeRun=\(String(format: "%.2f", minPair))@\(minPairAt) | nearestSquareOfAnyStandingBodyAtEnd=\(String(format: "%.2f", sqEnd)) | end t=\(String(format: "%.1f", t))"
         print(line)
         XCTAssertTrue(A.started && B.started, "seed \(seed): both rode. \(line)")
         for (n, r) in [("A", A), ("B", B)] {
@@ -273,6 +276,7 @@ final class ParkSlideCrowdTests: XCTestCase {
             XCTAssertFalse(r.pushed, "seed \(seed) \(n) pushed with a body inside peerGap. \(line)")
             if let e = r.exit { XCTAssertGreaterThanOrEqual(simd_distance(e, landing), peer + 0.2, "seed \(seed) \(n) exit. \(line)") }
             XCTAssertGreaterThanOrEqual(r.min5, 0.98, "seed \(seed) \(n) minD5sAfterFloor. \(line)")
+            XCTAssertLessThanOrEqual(r.held, 0.4, "seed \(seed) \(n): a walk held in place on the slide's foot (he must stand and wait). \(line)")
         }
         XCTAssertGreaterThanOrEqual(minPair, 0.90, "seed \(seed) whole-run minimum pair distance. \(line)")
         return line
@@ -287,7 +291,7 @@ final class ParkSlideCrowdTests: XCTestCase {
     // MARK: r4 - a stander inside the slide's zone steps off
 
     func bState(_ b: BlobBrain, _ f: DecorFoot, _ landing: SIMD2<Float>, _ t: Float) -> String {
-        "[stepoff-t] t=\(String(format: "%.2f", t)) script=\(b.scriptKindName) act=\(b.activity) pending=\(String(describing: b.pending)) interrupt=\(b.interruptScript) pos=(\(String(format: "%.2f,%.2f", b.position.x, b.position.y))) yaw=\(String(format: "%.2f", b.yaw)) feetActive=\(b.feet.active) steerWait=\(String(format: "%.2f", b.steerWait)) walkStallT=\(String(format: "%.2f", b.walkStallT)) scriptT=\(String(format: "%.2f", b.scriptT)) decorIgnore=\(String(describing: b.decorIgnore)) insideDecorT=\(String(format: "%.2f", b.insideDecorT)) insideStuckT=\(String(format: "%.2f", b.insideStuckT)) dLanding=\(String(format: "%.2f", simd_distance(b.position, landing))) dBox=\(String(format: "%.2f", f.distance(b.position))) walkOutFrom=\(String(describing: b.walkOutFrom))"
+        "[stepoff-t] t=\(String(format: "%.2f", t)) script=\(b.scriptKindName) act=\(b.activity) pending=\(String(describing: b.pending)) interrupt=\(b.interruptScript) pos=(\(String(format: "%.2f,%.2f", b.position.x, b.position.y))) yaw=\(String(format: "%.2f", b.yaw)) feetActive=\(b.feet.active) steerWait=\(String(format: "%.2f", b.steerWait)) walkStallT=\(String(format: "%.2f", b.walkStallT)) scriptT=\(String(format: "%.2f", b.scriptT)) decorIgnore=\(String(describing: b.decorIgnore)) insideDecorT=\(String(format: "%.2f", b.insideDecorT)) insideStuckT=\(String(format: "%.2f", b.insideStuckT)) dLanding=\(String(format: "%.2f", simd_distance(b.position, landing))) dBox=\(String(format: "%.2f", f.distance(b.position))) walkOutFrom=\(String(describing: b.walkOutFrom)) footWait=\(b.slideFootWaitSince.map { String(format: "%.1fs", b.peerClock - $0) } ?? "-") walkOff=\(b.slideFootWalkTo.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-") resume=\(b.slideFootResume.map { String(format: "(%.2f,%.2f)", $0.x, $0.y) } ?? "-") heldByPeer=\(b.heldByPeer)"
     }
 
     func stepoff(variant: String, seed: UInt64, spotB: SIMD2<Float>, spotC: SIMD2<Float>) -> String {
@@ -416,6 +420,9 @@ final class ParkSlideCrowdTests: XCTestCase {
     /// r5_c: the ex-rider "walked" 6-19 s on the spot because a friend stood on his leg to the left of the landing (a requested walk waits up to 6 s per standing friend,
     /// `BlobBrain.steerTarget`). Staging: friends on all three out spots, one more (E, busy: `reserved`) at (2.0,3.4) just left of the landing. He must leave.
     /// `boxedIn`: friends on all three out spots plus a fourth beside the landing (the real app did not show that): print only. Otherwise ONE friend at (2.0,3.4), the others far: asserts.
+    /// park-slide-r4: that friend stands 0.72 from the slide's box, so with the slide solid (no walk-out goes through it) the only way out is past him: he is released 3 s after the
+    /// landing (busy -> free: the foot rule walks him off) and the ex-rider must leave within 6 s of that, never come nearer the box than 0.25 (main and r3 went 0.56 INSIDE it), and
+    /// wait standing: no walk held on the spot (owner: "smooth motion no glitchy movement").
     func legFriendScene(boxedIn: Bool) {
         for seed in UInt64(1)...3 {
             let lab = parkLab(seed: seed, n: boxedIn ? 5 : 3)
@@ -436,6 +443,7 @@ final class ParkSlideCrowdTests: XCTestCase {
             var t: Float = 0, started = false, t6: Float?
             var leftAt: Float?, minBox = Float.infinity, spotRun: Float = 0, spotMax: Float = 0, lastPos = a.position, lastChk: Float = 0, minLeg: Float = 9
             var chosen = "?", probeInc = 0
+            var released = false, heldRun: Float = 0, heldMax: Float = 0, prevWait: Float = 0, standT: Float = 0, standFeet: Float = 0
             while t < 60 {
                 if t >= 1, !started { started = a.startCommandedDecor(.decorSlide, only: .slide, rigs[0].sim, rigs[0].skinner) }
                 lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
@@ -447,8 +455,15 @@ final class ParkSlideCrowdTests: XCTestCase {
                     probeInc = BlobBrain.slideNoClearLeg - c0
                 }
                 guard let f6 = t6 else { continue }
+                if !boxedIn, !released, t - f6 >= 3 { released = true; rigs[1].brain.reserved = false; rigs[1].brain.restTimer = 0 }          // (r4: the busy friend is free again)
                 if t - f6 >= 1.5 { minBox = min(minBox, sl.distance(a.position)) }
                 if leftAt == nil, simd_distance(a.position, landing) >= peer { leftAt = t - f6 }
+                if simd_distance(a.position, landing) < peer + 0.1 {          // (on the foot: a walk held in place, steerWait growing with no step, is the glitch; standing is the wait)
+                    var walking = false; if case .walk = a.script { walking = true }
+                    if walking, a.steerWait > prevWait { heldRun += 1.0 / 60; heldMax = max(heldMax, heldRun) } else { heldRun = 0 }
+                    if t - f6 >= 1.5, case .none = a.script { standT += 1.0 / 60; if a.feet.active { standFeet += 1.0 / 60 } }
+                }
+                prevWait = a.steerWait
                 if t - lastChk >= 0.5 {
                     var walking = false; if case .walk = a.script { walking = true }
                     if walking, simd_distance(a.position, lastPos) < 0.05 { spotRun += 0.5; spotMax = max(spotMax, spotRun) } else { spotRun = 0 }
@@ -458,15 +473,16 @@ final class ParkSlideCrowdTests: XCTestCase {
                 if t - f6 > 12 { break }
             }
             func ft(_ x: Float?) -> String { x.map { String(format: "%.1f", $0) } ?? "-" }
-            let line = "[legfriend\(boxedIn ? "-boxed" : "")] seed=\(seed) leftLandingAt=\(ft(leftAt))s after the floor walkOnSpotMax=\(String(format: "%.1f", spotMax))s minBox(after 1.5 s)=\(String(format: "%.2f", minBox)) bestClearanceFallbacks=\(BlobBrain.slideNoClearLeg - fallbackBefore - probeInc) chosen=\(chosen) endsAt=(\(String(format: "%.2f,%.2f", a.position.x, a.position.y))) toLanding \(String(format: "%.2f", simd_distance(a.position, landing))) rode=\(t6 != nil)"
+            let line = "[legfriend\(boxedIn ? "-boxed" : "")] seed=\(seed) leftLandingAt=\(ft(leftAt))s after the floor walkOnSpotMax=\(String(format: "%.1f", spotMax))s heldOnFootMax=\(String(format: "%.2f", heldMax))s stoodOnFoot=\(String(format: "%.1f", standT))s (feet stepping \(String(format: "%.2f", standFeet))s) minBox(after 1.5 s)=\(String(format: "%.2f", minBox)) bestClearanceFallbacks=\(BlobBrain.slideNoClearLeg - fallbackBefore - probeInc) chosen=\(chosen) endsAt=(\(String(format: "%.2f,%.2f", a.position.x, a.position.y))) toLanding \(String(format: "%.2f", simd_distance(a.position, landing))) rode=\(t6 != nil)"
             print(line)
             _ = minLeg; minLeg = 0
             if boxedIn { continue }
             XCTAssertNotNil(t6, line)
             XCTAssertNotNil(leftAt, line)
-            if let l = leftAt { XCTAssertLessThanOrEqual(l, 6, "off the landing within 6 s. \(line)") }
-            XCTAssertLessThanOrEqual(spotMax, 3, "walking on the spot. \(line)")
-            // (minBox is printed, not asserted: the clip is the planner's route round the friend through the box, not the target; see the r10 report)
+            if let l = leftAt { XCTAssertLessThanOrEqual(l, 3 + 6, "off the landing within 6 s of the friend's release (3 s after the floor). \(line)") }
+            XCTAssertLessThanOrEqual(spotMax, 1.0, "walking on the spot (0.5 s windows). \(line)")
+            XCTAssertLessThanOrEqual(heldMax, 0.4, "a walk held in place on the slide's foot while he waits (he must stand and wait). \(line)")
+            XCTAssertGreaterThanOrEqual(minBox, 0.25, "never nearer the slide's box than 0.25 (r4: no walk-out through the slide). \(line)")
         }
     }
 
