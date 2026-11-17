@@ -16,7 +16,7 @@ final class MealPartingTests: XCTestCase {
     func testReservedDinerGetsNoPartingRetreatButFreeOneDoes() {
         let lab = SocialTests.Lab(n: 2, positions: [SIMD2(-0.3, 1.0), SIMD2(0.2, 1.0)])
         let a = lab.rigs[0].brain, b = lab.rigs[1].brain
-        XCTAssertLessThan(simd_distance(a.position, b.position), 0.8, "setup: close neighbours")
+        a.peerGap = 2.5          // (no contact profiles here: the skin gap falls back to root distance - peerGap * 0.74, so the pair counts as touching)
         a.startParting(from: b)
         a.reserved = true
         XCTAssertNil(a.partingRetreat(dyaw: 1.0), "a reserved (meal) brain takes a plain turn")
