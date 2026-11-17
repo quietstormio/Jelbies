@@ -143,7 +143,7 @@ final class LineupTests: XCTestCase {
         for i in 0..<3 { r.care.needs(for: i).set(food ? .hunger : .thirst, 0.1) }
         r.run(0.5)
         var tr = Track(count: 3)
-        if food { r.care.feed() } else { r.care.drink() }
+        if food { r.care.store.grant("berries", 3); r.care.feed() } else { r.care.drink() }          // (berries are a store food: Feed needs one in the bag)
         var secs: Float = 0
         let done = run(r, 14, track: &tr) { secs += 1 / 60; return r.care.group.state == .serving }
         print("LINEUP meal \(name) done=\(done) time=\(secs) minDist=\(tr.minDist) places=\(r.care.group.placeOf)")
