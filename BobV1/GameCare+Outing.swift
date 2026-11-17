@@ -126,6 +126,23 @@ extension GameCare {
         done?()
     }
 
+    /// park-slide-r3 (owner 2026-11-16, "They're still walking in slide"): the trip's swap has just put this runner in the park, so his run-out ends HERE: the floor rules and his
+    /// arena wall come back, he stops hurrying, and the fade's keep-running loop leaves him alone. Before, all of it lasted until `outingTidy` (1.8 s after the fade began, about
+    /// 1.4 s into the park), and his first wander leg (restTimer 1.2 s) was picked and walked with NO floor rules: its goal could lie inside the slide and its leg cross it (the
+    /// real-app probe: the Panda over the slide's chute in the visit's first second, the owner's screenshot). `outingHome` stays until the tidy (the trip has already read it).
+    func outingLanded(_ a: JellyActor) {
+        let o = outing
+        guard var r = o.runners[a.id] else { return }
+        #if targetEnvironment(simulator)
+        if ParkSlideProbe.on { NSLog("[slide3] landed body=%d lifted=%d hurry=%d fix=%d", a.id, o.lifted.contains(a.id) ? 1 : 0, (a.brain?.hurry ?? false) ? 1 : 0, BlobBrain.slideSoftEndEnabled ? 1 : 0) }
+        #endif
+        guard BlobBrain.slideSoftEndEnabled else { return }          // (`-ParkSlideFix old`: main's rule, the lifted floor rules last until the tidy)
+        o.lifted.remove(a.id)
+        a.sim.arenaSuspended = false
+        r.swapped = true; o.runners[a.id] = r
+        a.brain?.hurry = false; a.brain?.outingPace = 1
+    }
+
     /// Everything back to normal; a runner still out in the street (the trip never took him) walks in from home.
     func outingTidy() {
         let o = outing

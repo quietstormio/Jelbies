@@ -225,6 +225,7 @@ extension GameCare {
         #endif
         #if targetEnvironment(simulator)
         if Self.traceOn, park.phase == .playing { parkTrace(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors) }
+        if ParkSlideProbe.on, park.phase == .playing || park.phase == .arriveIn { parkSlideProbe(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors, dt: dt) }          // (park-slide-r3 capture aid: Park/ParkSlideProbe.swift)
         if let m = Self.demoPlay, park.phase == .playing {
             Self.demoPlayFrames += 1
             if m != "wand", play.active, play.phase == .inHand, play.camBlend > 0.95, Self.demoPlayFrames > 420, Self.demoPlayFrames % 240 == 0 {          // (a flick at the middle every 4 s: the ball flies, a Jelbie heads / kicks it back)
@@ -477,6 +478,7 @@ extension GameCare {
                 if Self.demoSpots.indices.contains(k) { at = Self.demoSpots[k] }
                 #endif
                 rehome(a, at: at)
+                outingLanded(a)          // (park-slide-r3: the run-out's lifted floor rules and hurry end at the swap, not 1.4 s into the park: GameCare+Outing.swift)
                 guard let brain = a.brain else { continue }
                 brain.autonomy = UserDefaults.standard.integer(forKey: "BlobNoWander") == 0; brain.idleBlocked = false; brain.restTimer = 1.2
                 brain.startTurn(to: 0, sim: a.sim)

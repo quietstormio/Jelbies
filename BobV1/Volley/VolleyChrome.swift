@@ -50,6 +50,7 @@ struct VolleyChrome: View {
                         withAnimation(.easeOut(duration: 1.0)) { fxY = -40; fxOpacity = 0 }
                     }
             }
+            ForfeitHomeCard(care: care)
             Color.white.opacity(Double(volley.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { padH = $0 }
@@ -61,16 +62,10 @@ struct VolleyChrome: View {
     // MARK: top
 
     private var topBar: some View {
-        VStack(spacing: 6) {
-            HStack(alignment: .top) {
-                Button { AudioHub.shared.uiTap(); volley.goHome() } label: {
-                    Image(systemName: "xmark").font(.system(size: 16, weight: .black)).foregroundStyle(CareMenu.brown)
-                        .frame(width: 44, height: 44).background(Circle().fill(CareMenu.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
-                }.buttonStyle(.plain).accessibilityLabel("Leave Jelly Volleyball").accessibilityIdentifier("volley-leave")
-                Spacer()
-                scoreBoard
-                Spacer()
-                Color.clear.frame(width: 44, height: 44)
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                if volley.canForfeit { ForfeitHomePill(care: care) } else { ForfeitHomePill(care: care).hidden() }          // (only a live match shows it; the same width otherwise)
+                scoreBoard.frame(maxWidth: .infinity)          // (the score is centred in the room the pill leaves: 12 pt apart, never under it)
             }
             if volley.live, !volley.ui.touchDots.isEmpty { touchDots }
             if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity) }

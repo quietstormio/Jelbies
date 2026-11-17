@@ -42,8 +42,8 @@ final class TimeAwayTests: XCTestCase {
         XCTAssertEqual(applied, 3 * hour, accuracy: 1e-6)
         XCTAssertEqual(n.level(.hunger), 0.85, accuracy: 0.01)
         XCTAssertEqual(n.level(.thirst), 0.8125, accuracy: 0.01)
-        XCTAssertEqual(n.level(.attention), 0.50, accuracy: 0.01)
-        XCTAssertEqual(n.mood, .okay)
+        XCTAssertEqual(n.level(.attention), 0.75, accuracy: 0.01)
+        XCTAssertEqual(n.mood, .happy, "love at 0.75 keeps every need over 0.6")
         XCTAssertNil(n.wantedNeed, "not wanting yet after 3 h")
     }
 
@@ -53,8 +53,8 @@ final class TimeAwayTests: XCTestCase {
             full(n)
             n.leaveActive(at: t0)
             n.returnActive(at: t0.addingTimeInterval(secs))
-            for k in NeedKind.allCases { XCTAssertEqual(n.level(k), NeedsTuning.awayFloor, accuracy: 0.01, "\(name): \(k) at the floor") ; XCTAssertGreaterThan(n.level(k), 0.19) }
-            XCTAssertEqual(n.wantingCount, 3, "\(name): he wants things")
+            for k in NeedKind.allCases { XCTAssertEqual(n.level(k), NeedsTuning.awayFloor(for: k), accuracy: 0.01, "\(name): \(k) at the floor") ; XCTAssertGreaterThan(n.level(k), 0.19) }
+            XCTAssertEqual(n.wantingCount, 2, "\(name): love alone never wants (0.35 > 0.3);" +  "\(name): he wants things")
         }
     }
 
@@ -98,7 +98,7 @@ final class TimeAwayTests: XCTestCase {
         let applied = n.returnActive(at: clock)
         XCTAssertEqual(applied, 5 * hour, accuracy: 1, "the background save did not advance the stamp")
         XCTAssertEqual(n.level(.hunger), 0.75 - 17.0 / 1080, accuracy: 0.01, "(1 - 5/20, less the 17 s of in-room drain stepped above)")
-        XCTAssertEqual(n.level(.attention), NeedsTuning.awayFloor, accuracy: 0.02, "5 h of the 6 h curve is already near the floor")
+        XCTAssertEqual(n.level(.attention), 1 - 5.0 / 12, accuracy: 0.02, "5 h of the 12 h curve")
         // and a process that is killed in the background still measures from the time it left
         let n2 = needs(d, now: t0.addingTimeInterval(5 * hour))
         XCTAssertEqual(n2.level(.hunger), 0.75 - 17.0 / 1080, accuracy: 0.02)
@@ -130,8 +130,8 @@ final class TimeAwayTests: XCTestCase {
     }
 
     func testInAppRatesAreUnchanged() {
-        XCTAssertEqual(NeedsTuning.hoursToEmpty(.hunger), 0.3); XCTAssertEqual(NeedsTuning.hoursToEmpty(.thirst), 0.2); XCTAssertEqual(NeedsTuning.hoursToEmpty(.attention), 4)
-        XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.hunger), 20); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.thirst), 16); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention), 6)
+        XCTAssertEqual(NeedsTuning.hoursToEmpty(.hunger), 0.3); XCTAssertEqual(NeedsTuning.hoursToEmpty(.thirst), 0.2); XCTAssertEqual(NeedsTuning.hoursToEmpty(.attention), 8)
+        XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.hunger), 20); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.thirst), 16); XCTAssertEqual(NeedsTuning.awayHoursToEmpty(.attention), 12)
     }
 
     // MARK: dirt away

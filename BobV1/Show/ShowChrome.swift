@@ -26,6 +26,7 @@ struct ShowChrome: View {
                 case .results: if show.trickStage != .pick { TrickRound(care: care) } else { ResultsScreen(care: care) }          // (the last turn's rivals still perform)
                 }
             }
+            ForfeitHomeCard(care: care)
             Color.white.opacity(Double(show.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
         .allowsHitTesting(show.active)
@@ -57,16 +58,10 @@ struct RoundHeader: View {
     var round: Int
     var title: String
     var kicker: String? = nil
-    var quits = true
     var body: some View {
         let show = care.show
         HStack(spacing: 10) {
-            if quits {
-                Button { AudioHub.shared.uiTap(); show.goHome() } label: {
-                    Image(systemName: "xmark").font(.system(size: 17, weight: .black)).foregroundStyle(SK.ink)
-                        .frame(width: 44, height: 44).background(Circle().fill(SK.cream))
-                }.buttonStyle(.plain).accessibilityLabel("Leave the Jelly Show").accessibilityIdentifier("show-quit")
-            }
+            if show.canForfeit { ForfeitHomePill(care: care) }          // (every round: the Home pill, then the "Go home?" card)
             VStack(alignment: .leading, spacing: 0) {
                 Text(kicker ?? "ROUND \(round) OF 3 \u{00B7} \(show.rank.title.uppercased())").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
                 Text(title).font(SK.font(24, .black)).foregroundStyle(SK.cream)
@@ -212,7 +207,7 @@ struct DanceRound: View {
     /// Portrait (and iPad): header, then from the bottom up the buttons, the progress line, the lane, the flash slot and the Cheer strip.
     private var portrait: some View {
         VStack(spacing: 0) {
-            RoundHeader(care: care, round: 2, title: "Dance", kicker: kicker, quits: false)
+            RoundHeader(care: care, round: 2, title: "Dance", kicker: kicker)
             Spacer(minLength: 0)
             cheer.padding(.bottom, done ? 12 : 6)
             if done {
@@ -236,7 +231,7 @@ struct DanceRound: View {
     private var landscape: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
-                RoundHeader(care: care, round: 2, title: "Dance", kicker: kicker, quits: false).padding(.top, 14)
+                RoundHeader(care: care, round: 2, title: "Dance", kicker: kicker).padding(.top, 14)
                 HStack {
                     Spacer(minLength: 0)
                     VStack(spacing: 6) {
@@ -570,7 +565,7 @@ struct TrickRound: View {
                 } else if PadLayout.isPad && size.width > size.height {
                     // iPad landscape: the stage fills the left ~55% (the camera frame puts the Jelbies there); chips, hint and the menu / entrant card are a clear right column
                     VStack(spacing: 8) {
-                        RoundHeader(care: care, round: 3, title: "Trick", kicker: "ROUND 3 OF 3", quits: false)
+                        RoundHeader(care: care, round: 3, title: "Trick", kicker: "ROUND 3 OF 3")
                         HStack(alignment: .top, spacing: 24) {
                             Color.clear.frame(width: size.width * 0.55 - 16)
                             VStack(spacing: 10) {
@@ -588,7 +583,7 @@ struct TrickRound: View {
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24 + g.safeAreaInsets.bottom)
                 } else {
                     VStack(spacing: 14) {
-                        RoundHeader(care: care, round: 3, title: "Trick", kicker: "ROUND 3 OF 3", quits: false)
+                        RoundHeader(care: care, round: 3, title: "Trick", kicker: "ROUND 3 OF 3")
                         turns.padReadable(760)
                         if let h = hint { StagePill(text: h, scale: sc) }
                         if rivalsOn {
