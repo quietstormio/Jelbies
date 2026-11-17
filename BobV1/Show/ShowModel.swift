@@ -192,6 +192,9 @@ nonisolated enum ShowTrickInfo {
         case .moonwalk: return [.cool, .sparkly]
         case .backBounce: return [.sporty, .cute]
         case .headstand: return [.sporty, .cool]
+        case .bow: return [.sweet, .cute]
+        case .bellyDrum: return [.cute, .sporty]
+        case .dizzySpin: return [.cute, .sparkly]
         }
     }
     /// The tricks a Jelbie can show on stage: everything learned but the come and the run (walks, not stage tricks: he would leave the spotlight).
@@ -205,8 +208,8 @@ nonisolated enum ShowTrickInfo {
     /// Difficulty in stars, 1...3: harder tricks score more and slip more often.
     static func difficulty(_ t: VoiceTrick) -> Int {
         switch t {
-        case .sit, .hop, .look, .come, .run, .strut, .sing, .hula: return 1
-        case .jacks, .spin, .superSpring, .corkscrew, .oneLegSpin, .backBounce: return 2
+        case .sit, .hop, .look, .come, .run, .strut, .sing, .hula, .bow: return 1
+        case .jacks, .spin, .superSpring, .corkscrew, .oneLegSpin, .backBounce, .bellyDrum, .dizzySpin: return 2
         case .flip, .showOff, .moonwalk, .headstand: return 3
         }
     }
@@ -219,6 +222,7 @@ nonisolated enum ShowTrickInfo {
         case .come: return "figure.walk"; case .run: return "figure.run"
         case .showOff: return "crown.fill"; case .strut: return "figure.walk.motion"; case .sing: return "music.note"; case .hula: return "figure.dance"; case .superSpring: return "arrow.up.to.line.circle.fill"; case .corkscrew: return "tornado"; case .oneLegSpin: return "figure.skating"
         case .moonwalk: return "moon.stars.fill"; case .backBounce: return "figure.fall"; case .headstand: return "figure.yoga"
+        case .bow: return "person.fill.turn.down"; case .bellyDrum: return "circle.circle.fill"; case .dizzySpin: return "sparkles"
         }
     }
     /// How long the stage gives a trick to play out (seconds). The move runs to its own end; the old fixed 2.6 s cut the longer ones short.
@@ -233,6 +237,9 @@ nonisolated enum ShowTrickInfo {
         case .moonwalk: return 7.0
         case .backBounce: return 3.0
         case .headstand: return 3.6
+        case .bow: return 3.4
+        case .bellyDrum: return 3.6
+        case .dizzySpin: return 6.0
         default: return 2.6
         }
     }

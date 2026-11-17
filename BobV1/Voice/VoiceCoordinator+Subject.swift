@@ -38,6 +38,7 @@ extension VoiceCoordinator {
             case .superSpring, .corkscrew, .moonwalk: b.flipCompact = focused; b.commandedIdle = Self.idleKind(for: t)
             default: b.commandedIdle = Self.idleKind(for: t)
             }
+            b.commandedDizzyEnd = t == .dizzySpin
             return true
         case .nicknameStep, .acknowledged:
             emitFeedback(r, override: kind)

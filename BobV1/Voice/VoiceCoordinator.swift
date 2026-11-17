@@ -686,6 +686,9 @@ final class VoiceCoordinator {
         case .moonwalk: return .moonwalk
         case .backBounce: return .backBounce
         case .headstand: return .headstand
+        case .politeBow: return .bow
+        case .bellyDrum: return .bellyDrum
+        case .dizzyWobble: return .dizzySpin
         default: return nil
         }
     }
@@ -707,6 +710,9 @@ final class VoiceCoordinator {
         case .moonwalk: return .moonwalk
         case .backBounce: return .backBounce
         case .headstand: return .headstand
+        case .bow: return .politeBow
+        case .bellyDrum: return .bellyDrum
+        case .dizzySpin: return .tail          // (the spin; `commandedDizzyEnd` makes it end in the dizzy wobble)
         case .flip, .come: return nil
         }
     }
@@ -1010,5 +1016,6 @@ final class VoiceCoordinator {
         default:
             brain.commandedIdle = Self.idleKind(for: t)
         }
+        brain.commandedDizzyEnd = t == .dizzySpin
     }
 }

@@ -168,6 +168,10 @@ final class EmoteFeetTests: XCTestCase {
     func testHeadstand() throws { try emote("headstand", "idle headstand") }          // (the Headstand: on his head, the feet kicking in the air, forced beans)
     func testHula() throws { try emote("hula", "idle hula") }          // (the Hula trick: standing, the base circles over planted feet)
     func testSing() throws { try emote("sing", "idle sing") }          // (the Sing trick: standing, feet planted)
+    func testPoliteBow() throws { try emote("politeBow", "idle politeBow") }          // (the Take a bow trick)
+    func testBellyDrum() throws { try emote("bellyDrum", "idle bellyDrum") }          // (the Belly drum trick)
+    func testDizzyWobble() throws { try emote("dizzyWobble", "idle dizzyWobble") }
+    func testDizzySpinTrick() throws { try emote("dizzySpin", "trick dizzySpin") }          // (the Dizzy spin trick: a spin, then the dizzy wobble)
     func testSignatureFlourish() throws { try emote("signatureFlourish", "idle signatureFlourish") }
     func testRunning() throws { try emote("run", "idle run") }          // (not testRun: XCTestCase has a property of that name)
     func testZoomies() throws { try emote("zoomies", "idle zoomies") }
