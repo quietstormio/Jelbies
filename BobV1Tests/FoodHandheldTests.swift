@@ -119,4 +119,17 @@ final class FoodHandheldTests: XCTestCase {
         XCTAssertEqual(s.counts["cinnamonroll"], 2); XCTAssertEqual(s.counts["fruitskewer"], 1); XCTAssertNil(s.counts["ramen"])
         XCTAssertFalse(rep.dropped.contains("item:ramen"))
     }
+
+    func testSellBackWorksWithTheMovedCounts() throws {
+        let d = suite("sell")
+        var s = StoreBook.Saved(); s.counts = ["ramen": 2, "fruitcup": 1]
+        d.set(try JSONEncoder().encode(s), forKey: "sellbook")
+        let w = DropsWallet(persists: false)
+        let b = StoreBook(wallet: w, persists: true, defaults: d, key: "sellbook")
+        XCTAssertNil(b.sell("ramen"), "a retired id cannot be sold")
+        XCTAssertNil(b.sell("fruitcup"))
+        XCTAssertEqual(b.sell("cinnamonroll"), 9, "moved counts sell as the new food at half its price")
+        XCTAssertEqual(b.count("cinnamonroll"), 1); XCTAssertEqual(b.sell("fruitskewer"), 5)
+        XCTAssertEqual(w.count, 14)
+    }
 }
