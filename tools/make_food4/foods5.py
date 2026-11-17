@@ -109,14 +109,16 @@ def softpretzel(v=0):
         p = cl[i]; zt = rad(i/(n-1))
         a = r.uniform(0, 6.28)
         commit(blob(0.045, 0.032, 0.026, 1), (1.0, 0.99, 0.96), sharp=80, xf=xf_rt((p.x + 0.02*math.cos(a), p.y + 0.02*math.sin(a), p.z + zt*0.92), rotz=r.uniform(0, 3.14)))
+    scale_all(0.9)
 BUILD['softpretzel'] = softpretzel
 
 # ================================================================ FRUIT SKEWER (was: Fruit cup)
 def fruitskewer(v=0):
     zc = 0.30                                                          # height of the skewer's axis
     # the bamboo stick, a round knob at the left end and a point at the right
-    tube((-0.84, 0, zc), (0.86, 0, zc), 0.032, 8, (0.88, 0.70, 0.42))
+    tube((-0.84, 0, zc), (0.56, 0, zc), 0.032, 8, (0.88, 0.70, 0.42))
     commit(blob(0.07, 0.06, 0.06, 2), (0.80, 0.60, 0.34), sharp=80, xf=xf_rt((-0.85, 0, zc)))
+    # (kept short on purpose: three of these lie end to end on the plate, so one must be shorter than the spacing)
     # 1. a strawberry, point to the right, green leaves at the left
     bm = ico(4)
     def sb(p):
@@ -161,13 +163,7 @@ def fruitskewer(v=0):
         a = 2*math.pi*k/12
         commit(blob(0.020, 0.012, 0.010, 1), (0.08, 0.07, 0.05), sharp=80, xf=xf_rt((kx - 0.073, 0.115*math.cos(a), zc + 0.115*math.sin(a)), rotx=a))
         commit(blob(0.020, 0.012, 0.010, 1), (0.08, 0.07, 0.05), sharp=80, xf=xf_rt((kx + 0.073, 0.115*math.cos(a), zc + 0.115*math.sin(a)), rotx=a))
-    # 4. two blueberries and a green grape
-    for (x, rad_, col) in [(0.42, 0.20, 'b'), (0.66, 0.17, 'g')]:
-        bm = ico(3, rad_)
-        if col == 'b': c1 = lambda p, n: mix((0.22, 0.26, 0.62), (0.45, 0.50, 0.82), sstep(0.4, 1.0, nz(p, 6.0, 2))*0.5)
-        else: c1 = lambda p, n: mix((0.56, 0.82, 0.30), (0.80, 0.94, 0.52), sstep(0.2, 1.0, n.z)*0.6)
-        commit(bm, c1, sharp=80, xf=xf_rt((x, 0, zc)))
-    commit(blob(0.07, 0.07, 0.025, 2), (0.15, 0.16, 0.38), sharp=80, xf=xf_rt((0.42, 0, zc + 0.19)))          # the blueberry's crown
+    scale_all(0.95)
 BUILD['fruitskewer'] = fruitskewer
 
 # ================================================================ ICE CREAM CONE (the café's sundae slot)
