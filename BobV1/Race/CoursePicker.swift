@@ -65,7 +65,7 @@ struct CoursePicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            LobbyLabelRow(title: "Course", trailing: "\(progress.unlockedTiers.count) of \(CourseTier.allCases.count) open")
+            LobbyLabelRow(title: "Course", trailing: "\(CourseTier.allCases.filter { isOpen($0) }.count) of \(CourseTier.allCases.count) open")
             LobbyCarousel(bleed: bleed, scrollTo: chosen.index >= 2 ? "course-card-\(chosen.rawValue)" : nil) {
                 ForEach(CourseTier.allCases, id: \.rawValue) { t in card(t).id("course-card-\(t.rawValue)") }
             }
@@ -74,12 +74,16 @@ struct CoursePicker: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("course-picker")
+        .onAppear { progress.bind(runner: runner, trophies: care.race.trophies) }          // (2026-11-16: the courses open per runner; the pick, the hint and GameCare.chooseCourse follow the Jelmiko shown)
+        .onChange(of: runner) { _, r in progress.bind(runner: r, trophies: care.race.trophies) }
     }
 
     private func wins(_ t: CourseTier) -> Int { care.race.trophies.shelf(character: runner).raceRibbons(t).first ?? 0 }
+    /// Open for the Jelmiko shown: his own win on the course below (2026-11-16, CourseProgress in RaceCourse.swift).
+    private func isOpen(_ t: CourseTier) -> Bool { progress.unlocked(t, runner: runner, trophies: care.race.trophies) }
 
     private func card(_ t: CourseTier) -> some View {
-        let open = progress.unlocked(t), picked = t == chosen
+        let open = isOpen(t), picked = t == chosen
         let w = wins(t)
         let sub = open ? t.className : "Win at \(t.below?.title ?? "")"
         return Button {
