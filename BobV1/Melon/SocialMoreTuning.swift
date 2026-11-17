@@ -14,12 +14,12 @@ nonisolated enum SocialMore {
     }
     nonisolated(unsafe) static var on: Bool = flag("SocialMore") && ProcessInfo.processInfo.environment["SOCIAL_MORE_OFF"] == nil          // (SOCIAL_MORE_OFF=1 in the test environment: the previous rates, to tell which red test is red without this round)
     /// Group (hug, cheer, conga, circle) wait for a crowd + cooldown after one, scaled by this. The rare treats (congaLine / ringDance, EmoteTuning) keep their own minutes-long cooldown (GroupEmoteTests.testTreatsAreRareAndRespectBusy pins >= 170 s).
-    static let homeGroupWait: Float = 0.3, parkGroupWait: Float = 0.13
+    static let homeGroupWait: Float = 0.3, parkGroupWait: Float = 0.1
     /// Pair sessions: the brain-wide and the pair cooldown after one (SocialTuning.brainCooldown / pairCooldown) scaled by this.
-    static let homePairWait: Float = 0.45, parkPairWait: Float = 0.5
+    static let homePairWait: Float = 0.45, parkPairWait: Float = 0.8
     /// Extra pair rolls: a standing, free Jelmiko rolls the ordinary pair pick (SocialTuning.pickChance, cooldowns and partner rules all unchanged) this often (seconds, drawn each time) besides the scheduler's own picks.
     /// The scheduler's pick cadence, not the waits, limited the pair rate: a group takes the three of them for ~25 s. Only how often the existing pair emotes are asked for.
-    static let homePairRoll: (Float, Float) = (4, 8), parkPairRoll: (Float, Float) = (4, 8)
+    static let homePairRoll: (Float, Float) = (4, 8), parkPairRoll: (Float, Float) = (9, 18)
 }
 
 extension BlobBrain {

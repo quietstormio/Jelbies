@@ -625,7 +625,7 @@ extension BlobBrain {
         if let st = ContactStance.entry(s.kind), st.cls != .none { for id in (s.kind.isGroup ? s.crewIDs : [pid]) where id != steerID { socialBook.glow[id] = 1.5 } }
         if s.kind == .look { socialBook.lookPair[pid] = SocialTuning.lookCooldown; socialBook.cooldown = max(socialBook.cooldown, 4) }
         else {
-            let wait = (watching ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1) * parkSocialWaitMul * (s.kind.isGroup ? 1 : morePairWaitMul)          // (social-more-r1: pair waits shorter, SocialMoreTuning.swift)
+            let wait = (watching ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1) * parkSocialWaitMul * morePairWaitMul          // (social-more-r1: the wait after a group is the short pair wait too, so a group adds on top of pairs; SocialMoreTuning.swift)
             socialBook.cooldown = rand(SocialTuning.brainCooldown.0, SocialTuning.brainCooldown.1) * wait
             socialBook.pair[pid] = rand(SocialTuning.pairCooldown.0, SocialTuning.pairCooldown.1) * (s.kind == .squabble ? 1.4 : 1) * wait
             if s.idC >= 0, s.idC != steerID, let c = socialBrain(s.idC) { _ = c; socialBook.pair[s.idC] = socialBook.pair[pid] }
