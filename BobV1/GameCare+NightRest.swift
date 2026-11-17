@@ -45,6 +45,8 @@ struct NightRestBook {
     var autoFired = false                      // the idle rule fired for this stretch (re-arms on interaction)
     var debugRead = false
     var sleepNowDone = false                   // -SleepNow 1 fired
+    var coldWakePending = false                // cold launch: whoever is asleep gets the slow wake once the room is up (`GameCare.launched`)
+    var coldWakeT: Float = 0
 }
 
 extension GameCare {
@@ -216,6 +218,15 @@ extension GameCare {
             for id in ids { book.nightWoken.remove(id); book.retryT[id] = NightRestTuning.retry }
             NightRestTuning.sendToBed(actors.compactMap(\.brain))
             NSLog("[nightrest] SleepNow: sent %d to bed", actors.count)
+        }
+        if book.coldWakePending, !actors.isEmpty, !book.arrivalAsleep, book.arrivalIDs.isEmpty {
+            book.coldWakeT += dt
+            if book.coldWakeT >= 1.0, !LaunchGate.shared.visible || book.coldWakeT >= 6 {          // (after the curtain lifts, so the wake is seen)
+                book.coldWakePending = false
+                nightRest = book
+                for a in actors.sorted(by: { $0.id < $1.id }) where a.brain?.isSleeping == true { wakeSleeper(a.id, groggy: true) }          // one call each, in one moment: `SleepOrder` staggers them
+                book = nightRest
+            }
         }
         let night = isBedtimeHours
         if !night {

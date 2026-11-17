@@ -459,10 +459,14 @@ final class GameCare {
         return away
     }
     /// Cold launch: the away time was applied when the models loaded; greet if it was long. Once.
-    func launched() {
+    /// `away` overrides the loaded time away (tests only).
+    func launched(away: TimeInterval? = nil) {
         guard !launchGreeted else { return }
         launchGreeted = true
-        greetIfAway(jellies.map(\.lastAway).max() ?? 0, launching: true)
+        // A cold launch wakes whoever is asleep (the slow, staggered wake, `tickNightRest`); at night the clock first moves to the morning so they stay up. Never on a return from the background.
+        DayClock.shared.coldLaunchToMorning()
+        nightRest.coldWakeT = 0; nightRest.coldWakePending = true
+        greetIfAway(away ?? jellies.map(\.lastAway).max() ?? 0, launching: true)
     }
     /// True when a meal, a clean-up, a voice action or the close-up is going on (no greeting then).
     var greetBlocked: Bool {
