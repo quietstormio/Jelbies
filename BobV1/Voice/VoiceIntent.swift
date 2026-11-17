@@ -43,6 +43,8 @@ nonisolated enum VoiceSocial: String, CaseIterable, Equatable, Sendable {
     case goodnight
     /// "Wake up" / "good morning" / "rise and shine": the sleepers wake (one by name, or everyone).
     case wakeUp
+    /// "Wave" / "wave hi" / "say hi": the existing wave (turn to the camera, wave an arm). Always known, like the social commands.
+    case wave
 }
 
 /// One action the player asked for.
@@ -73,6 +75,8 @@ nonisolated enum VoicePhrases {
     private static let goodnightWords: Set<String> = ["goodnight", "bedtime", "nightnight"]
     /// Wake commands are tested FIRST ("good morning" starts with the praise word "good").
     private static let wakePhrases = ["wake up", "rise and shine", "good morning", "time to get up", "get up", "wakey wakey", "up you get", "morning everyone"]
+    private static let waveWords: Set<String> = ["wave", "waves", "waving"]
+    private static let wavePhrases = ["say hi", "say hello", "say hey", "give a wave", "give me a wave"]
     private static let wakeWords: Set<String> = ["wake", "wakey", "awake"]
     static func isWake(_ t: [String]) -> Bool {
         let padded = " " + t.joined(separator: " ") + " "
@@ -88,6 +92,7 @@ nonisolated enum VoicePhrases {
         let padded = " " + t.joined(separator: " ") + " "
         let set = Set(t)
         if isWake(t) { return .wakeUp }
+        if !set.isDisjoint(with: waveWords) || has(padded, wavePhrases) { return .wave }
         if has(padded, goodnightPhrases) || !set.isDisjoint(with: goodnightWords) { return .goodnight }
         if has(padded, stopFighting) { return .stopFighting }
         if !set.isDisjoint(with: stopWords) || has(padded, stopPhrases) { return .stop }

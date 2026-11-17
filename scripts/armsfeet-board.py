@@ -24,7 +24,7 @@ def blue_fraction(path):
     return float(((a[..., 2] - a[..., 0] > 40) & (a[..., 2] > 140)).mean())
 
 def t0_index(fs):
-    """t0 = the first frame after the blue 'Waking up your Jelmiko' loading screen (a mostly blue frame) in the first 40 s; if there is none, the first frame that
+    """t0 = the first frame after the blue loading screen (a mostly blue frame) in the first 40 s; if there is none, the first frame that
     differs from the pre-launch frame. A slow start (a busy machine) therefore does not move the tiles."""
     last = -1
     for i in range(0, min(len(fs), 40 * FPS), 3):

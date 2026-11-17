@@ -306,7 +306,7 @@ struct WardrobeStrip: View {
                 HStack(spacing: 8) {
                     ForEach(list, id: \.rawValue) { look in
                         let worn = care.store.worn(who, look.slot) == look
-                        let other = worn ? nil : care.store.wearer(look, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }
+                        let other = worn || care.store.freeCopies(look) > 0 ? nil : care.store.wearer(look, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }
                         let m = theme.match(look.tags)
                         Button {
                             AudioHub.shared.play(.shoeOn)

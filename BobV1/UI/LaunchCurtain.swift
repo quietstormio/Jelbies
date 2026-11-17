@@ -114,7 +114,7 @@ struct LaunchCurtainArt: View {
                 VStack(spacing: 18 * u) {
                     logo(width: logoW)
                     HStack(spacing: 12 * u) { ForEach(0..<3, id: \.self) { dot($0, u) } }.padding(.top, 4 * u)
-                    Text("Waking up your Jelmiko").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
+                    Text("Loading your Jelly Pet").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
                         .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white))
                 }
                 .position(x: geo.size.width / 2, y: geo.size.height / 2)
@@ -154,7 +154,7 @@ struct WelcomeCoverArt: View {
                     Image("JelbiesLogo").resizable().scaledToFit().themedLogo().frame(width: min(geo.size.width * 0.8, 360 * max(u, 0.8), HUDLayout.isPad ? 560 : .infinity))
                         .shadow(color: theme.palette.shadow, radius: 0, x: 0, y: 7 * min(geo.size.width * 0.8, 360 * max(u, 0.8), HUDLayout.isPad ? 560 : .infinity) / 364)
                     ThemedSpinner(palette: theme.palette).padding(.vertical, 8 * u)
-                    Text("Waking up your Jelmiko").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
+                    Text("Loading your Jelly Pet").font(CloudTheme.font(max(13, 14 * u), .medium)).foregroundStyle(theme.palette.continueText)
                         .padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(Color.white))
                 }
                 .position(x: geo.size.width / 2, y: geo.size.height / 2)

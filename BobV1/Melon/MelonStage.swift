@@ -433,7 +433,9 @@ final class MelonController: NSObject, MTKViewDelegate {
                 self.socialHeart(id, now: now)
                 if selected, self.model.care.focus.isActive { self.model.touch.haptics.transient(now: now, intensity: 0.3, sharpness: 0.25) }
             case .makeUp: self.socialHeart(id, now: now)
-            case .ended(let kind, _, let how): if how == .done, kind.isWarm { self.socialHeart(id, now: now) }          // (every warm session ends with a heart for each of them, even one that had no bump)
+            case .ended(let kind, _, let how):
+                self.model.care.socialSessionCompleted(id: id, kind: kind, end: how)          // (+0.03 love for each of the player's own, up to 0.8: GameCare+SocialLove.swift)
+                if how == .done, kind.isWarm { self.socialHeart(id, now: now) }          // (every warm session ends with a heart for each of them, even one that had no bump)
             case .shove: if selected, self.model.care.focus.isActive { self.model.touch.haptics.transient(now: now, intensity: 0.22, sharpness: 0.3) }
             default: break
             }
@@ -469,6 +471,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                     b.commandedNameHop = true
                 case .scold: b.commandedIdle = .slump
                 case .goodnight: if !self.model.care.raceBusy { b.commandedGoodnight = true }
+                case .wave: b.requestNow(.wave)
                 case .wakeUp: break          // (GameCare wakes them: care.wakeAll / wakeSleeper)
                 }
             }

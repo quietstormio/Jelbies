@@ -57,9 +57,28 @@ nonisolated enum BubbleTuning {
     static let maxChasers = 3          // (2026-11-07: all of them want in)
     static let thinkEvery: ClosedRange<Float> = 0.3...0.7
     static let streakWindow: Float = 8
-    static let streakForHearts = 2
+    static let streakForHearts = 2   // (unused since the every-pop hearts of 2026-11-16; see HeartGate)
+    static let heartGap: Float = 0.8           // at most one heart per Jelmiko this often
+    static let heartStreakWindow: Float = 4    // 3 pops by one Jelmiko inside this: a burst
+    static let heartStreakPops = 3
+    static let heartBurstCount = 3
     static let fxLife: Float = 0.36
     static let price = 40
+}
+
+/// Hearts for a Jelmiko's pops (2026-11-16, "more hearts when playing with bubbles"): every pop shows a heart, at most one per `heartGap`; 3 pops inside `heartStreakWindow`
+/// give a burst of `heartBurstCount` instead (then the count starts over). A pop the gap swallows still counts toward the streak.
+struct HeartGate {
+    private var pops: [Float] = []
+    private var lastHeart: Float = -99
+    /// Hearts to show for a pop at time `t` (0, 1 or the burst count).
+    mutating func pop(at t: Float) -> Int {
+        pops.append(t); pops.removeAll { t - $0 > BubbleTuning.heartStreakWindow }
+        guard t - lastHeart >= BubbleTuning.heartGap else { return 0 }
+        lastHeart = t
+        if pops.count >= BubbleTuning.heartStreakPops { pops.removeAll(); return BubbleTuning.heartBurstCount }
+        return 1
+    }
 }
 
 @MainActor
@@ -104,7 +123,7 @@ final class BubbleWand: PlayToy {
     @ObservationIgnored private var slotKey: [Int] = []
     @ObservationIgnored private var slotSize = CGSize.zero
     /// The happy reaction after a pop, once he has landed: when, and whether it also gives hearts.
-    @ObservationIgnored private var cheers: [Int: (at: Float, hearts: Bool)] = [:]
+    @ObservationIgnored private var cheers: [Int: (at: Float, hearts: Int)] = [:]
     @ObservationIgnored private var lastHopStart: Float = -9
     @ObservationIgnored private var leashed: [BlobBrain] = []
     @ObservationIgnored private var superviseAt: Float = 0
@@ -121,7 +140,9 @@ final class BubbleWand: PlayToy {
     @ObservationIgnored private(set) var nudges = 0
     @ObservationIgnored private(set) var hopPops = 0
     @ObservationIgnored private(set) var contactPops = 0
-    @ObservationIgnored private(set) var heartBursts = 0
+    @ObservationIgnored private(set) var heartBursts = 0      // heart events (one heart or one burst)
+    @ObservationIgnored private(set) var heartsShown = 0      // hearts drawn
+    @ObservationIgnored private var heartGates: [Int: HeartGate] = [:]
     /// Per-chase records and per-move counts (tests, report): the outcome, claim -> end seconds, seconds of it spent walking.
     struct ChaseRecord { var popped: Bool; var seconds: Float; var walking: Float; var move: BubblePopMove }
     @ObservationIgnored private(set) var chaseRecords: [ChaseRecord] = []
@@ -196,7 +217,7 @@ final class BubbleWand: PlayToy {
     func resetForTests() {
         BubbleTuning.contactPopChance = 0.12
         deactivate(); active = false; clock = 0; demo = nil; burstUntil = -1; states.removeAll(); cheers = [:]; lastHopStart = -9; field = BubbleField()
-        popsByJelly = [:]; chasesByJelly = [:]; hopsByJelly = [:]; logAt = -9; diag = [:]; chaseRecords = []; claimToPop = []; movePops = [:]; moveStarts = [:]; extraPops = 0; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; lastQuietPop = -9
+        popsByJelly = [:]; chasesByJelly = [:]; hopsByJelly = [:]; logAt = -9; diag = [:]; chaseRecords = []; claimToPop = []; movePops = [:]; moveStarts = [:]; extraPops = 0; nudges = 0; hopPops = 0; chases = 0; watches = 0; bumps = 0; contactPops = 0; heartBursts = 0; heartsShown = 0; heartGates = [:]; lastQuietPop = -9
     }
     /// Test seam: a bubble right there.
     @discardableResult func insertBubble(at p: SIMD3<Float>, radius: Float = 0.2) -> Int? { field.insert(at: p, radius: radius) }
@@ -240,7 +261,7 @@ final class BubbleWand: PlayToy {
         if Self.logOn, clock - logAt >= 1 {
             logAt = clock
             let per = jellies.map { j in "\(j.id):\(j.brain.idleMood.rawValue) chases=\(chasesByJelly[j.id] ?? 0) hops=\(hopsByJelly[j.id] ?? 0) pops=\(popsByJelly[j.id] ?? 0) free=\(j.brain.bubbleFree ? 1 : 0)" }.joined(separator: " | ")
-            NSLog("[bubble] t %.1f %@", clock, per)
+            NSLog("[bubble] t %.1f hearts=%d/%d %@", clock, heartBursts, heartsShown, per)
         }
         // 1. how hard is he blowing?
         var s: Float = 0
@@ -738,8 +759,8 @@ final class BubbleWand: PlayToy {
         j.brain.face(.excited, hold: 1.6)
         AudioHub.shared.play(.bubblePop, jelly: j.id, x: j.brain.px, volume: 1)
         if hopped || b.pos.z > 0.8, let h = haptics { h.transient(now: CACurrentMediaTime(), intensity: light ? BubbleTuning.lightBeat : 0.25, sharpness: 0.5) }
-        var hearts = false
-        if st.streak >= BubbleTuning.streakForHearts { st.streak = 0; heartBursts += 1; hearts = true }
+        let hearts = heartGates[j.id, default: HeartGate()].pop(at: clock)
+        if hearts > 0 { heartBursts += 1; heartsShown += hearts }
         cheers[j.id] = (clock + (hopped ? 0.4 : 0.15), hearts)          // (the hop's landing is ~0.25 s after its top)
         states[j.id] = st
     }
@@ -753,9 +774,9 @@ final class BubbleWand: PlayToy {
             let a = AudioHub.shared
             let r = Float.random(in: 0..<1)
             if r < 0.6 { a.chirp(jelly: id, .happy, x: j.brain.px) } else { a.play(.bubbleChirp, jelly: id, x: j.brain.px, volume: 1) }
-            if c.hearts, let care {
+            if c.hearts > 0, let care {
                 let now = CACurrentMediaTime()
-                if id == 0 { care.touchPlay?.spawnHeart(now: now) } else { care.bubbleHub.spawnHeart(for: id, now: now) }
+                for _ in 0..<c.hearts { if id == 0 { care.touchPlay?.spawnHeart(now: now) } else { care.bubbleHub.spawnHeart(for: id, now: now) } }
             }
         }
     }

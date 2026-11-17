@@ -569,6 +569,7 @@ extension BlobBrain {
         sleep.softWake = true
         if Self.slowWakeOn, !sleep.mealWake, !sleep.quick { sleep.slowWake = true; sleep.mealWakeT = 0 }          // (his own clock + cap; snores stop: `isSnoring`)
         if sleep.mealWake { MealTrace.log("wake BEGIN jelly=\(steerID) lag=\(lag)") }
+        if DevArgs.enabled, UserDefaults.standard.bool(forKey: "WakeLog") { NSLog("[wakelog] stir begin jelly=%d lag=%.2f", steerID, lag) }          // (dev arguments only: `-WakeLog 1`)
         sleep.stirT = 0; sleep.stirLag = lag; sleep.stirStarted = false
         sleep.stirDur = rand(SleepTuning.stirTime.lowerBound, SleepTuning.stirTime.upperBound)
         sleep.rollDur = rand(SleepTuning.softRollTime.lowerBound, SleepTuning.softRollTime.upperBound)

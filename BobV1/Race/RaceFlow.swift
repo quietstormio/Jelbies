@@ -68,6 +68,8 @@ final class RaceFlow {
     @ObservationIgnored var holdT: Float = 0
     @ObservationIgnored var swapped = false
     @ObservationIgnored var settled = false
+    /// The player went home in the middle (Race/ForfeitHome.swift): nothing is settled and the trip is not a win.
+    @ObservationIgnored private(set) var forfeited = false
     @ObservationIgnored private(set) var swapLog: [(wipe: Float, dest: Dest)] = []
     @ObservationIgnored var leaving = false
     @ObservationIgnored var introT: Float = 0
@@ -152,11 +154,11 @@ final class RaceFlow {
     // MARK: start
 
     /// "Race": player `id` goes to the track with `rivals` (made by the rival source) on `course` (the chosen one by default; a locked one falls back
-    /// to the Puddle). Ignored while a trip is running.
+    /// to the highest open course: the runner's own since 2026-11-16, see CourseProgress). Ignored while a trip is running.
     func begin(playerID id: Int, name: String, player: RacerStats, playerTint: SIMD3<Float>, rivalCount: Int, seed: UInt64, boost: RaceBoost = .none, course tier: CourseTier? = nil) {
         guard phase == .off else { return }
         var t = tier ?? courseTier
-        if !progress.unlocked(t) { t = .puddle }
+        if !progress.unlocked(t) { t = progress.highestOpen }          // (the lobby's CoursePicker has bound the runner: one he has not opened falls back to his highest open course)
         // a short memory of the last rivals met: the stock source skips them, and this race's rivals join the list (other sources are used as they are)
         var source = rivalSource
         if var local = source as? LocalRivalSource, let d = recentRivals { local.recent = RivalMemory.load(d); source = local }
@@ -166,7 +168,7 @@ final class RaceFlow {
         sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t), control: control)
         ui = RaceUI()
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
-        settled = false; earned = 0; pointsEarned = 0; pointsAfter = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
+        settled = false; forfeited = false; earned = 0; pointsEarned = 0; pointsAfter = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
         applyAssistAtStart()
         sim?.autoJumpPlayer = assist == .auto || A11ySettings.shared.autoJump          // (the hands-free run clears the hurdles for him)
         hopCount = 0; bonkCount = 0; lastHopGrade = nil; pullDemoThisRace = false
@@ -188,6 +190,16 @@ final class RaceFlow {
     func goHome() {
         guard phase == .racing, hasResults, !leaving else { return }
         leaving = true
+        phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
+    }
+
+    /// A forfeit can be asked: the race is live (the track is up, no white, no results yet, not already on the way home).
+    var canForfeit: Bool { phase == .racing && wipe == 0 && cameraBlend > 0 && !hasResults && !leaving && !forfeited }
+
+    /// "Go home" in the middle of the race: the usual fade home with no settlement (no Drops, trophy, points or stats) and no win.
+    func forfeit() {
+        guard canForfeit else { return }
+        forfeited = true; settled = true; leaving = true
         phase = .fade; fadeDest = .room; fadeStage = .out; holdT = 0; swapped = false
     }
 
@@ -369,7 +381,7 @@ final class RaceFlow {
     }
 
     private func finishTrip() {
-        let won = sim?.playerWon ?? false
+        let won = !forfeited && (sim?.playerWon ?? false)
         let id = playerID
         phase = .off; leaving = false
         sim = nil

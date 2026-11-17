@@ -63,3 +63,31 @@ final class BubbleLoveTests: XCTestCase {
         XCTAssertGreaterThan(perMin, 0.3, "a real gain")
     }
 }
+
+/// "More hearts when playing with bubbles" (2026-11-16): the heart gate per Jelmiko.
+final class BubbleHeartGateTests: XCTestCase {
+    func testOneHeartPerPopWithRateLimit() {
+        var g = HeartGate()
+        XCTAssertEqual(g.pop(at: 0), 1)
+        XCTAssertEqual(g.pop(at: 0.5), 0)            // inside 0.8 s: no heart
+        XCTAssertEqual(g.pop(at: 5.0), 1)            // old pops expired: a single heart
+        XCTAssertEqual(g.pop(at: 6.0), 1)
+    }
+    func testStreakOfThreeWithinFourSecondsBursts() {
+        var g = HeartGate()
+        XCTAssertEqual(g.pop(at: 0), 1)
+        XCTAssertEqual(g.pop(at: 1.0), 1)
+        XCTAssertEqual(g.pop(at: 2.0), BubbleTuning.heartBurstCount)
+        XCTAssertEqual(g.pop(at: 3.0), 1)            // the count starts over
+    }
+    func testSlowPopsNeverBurst() {
+        var g = HeartGate()
+        for i in 0..<6 { XCTAssertEqual(g.pop(at: Float(i) * 2.5), 1) }
+    }
+    func testGatedPopStillCountsTowardStreak() {
+        var g = HeartGate()
+        XCTAssertEqual(g.pop(at: 0), 1)
+        XCTAssertEqual(g.pop(at: 0.4), 0)
+        XCTAssertEqual(g.pop(at: 1.0), BubbleTuning.heartBurstCount)
+    }
+}

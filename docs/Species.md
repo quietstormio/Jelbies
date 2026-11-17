@@ -151,7 +151,7 @@ Not in v1. When built, a special edition should be a material/finish layered on 
 
 ## Pick one of three (Adoption Center)
 
-Species page -> "Meet the three" -> three Jelmiko of that species side by side -> name -> bring home (the free first gift and the Jelly Spring alike).
+Species page -> "Pick your <species>" -> three Jelmiko of that species side by side -> name -> bring home (the free first gift and the Jelly Spring alike).
 Code: `BobV1/Jelly/JellyTraits.swift`. The three are a pure function of (species, day, classic, owned): three distinct personalities, jars = species profile + personality tilt + seeded +-3 (15...98),
 a favourite snack (store food), and a slight colour shade (classic / Soft or Deep / today's Spring colour; specials and the first gift: classic for all three).
 

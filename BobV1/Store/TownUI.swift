@@ -447,7 +447,7 @@ struct TrackPanel: View {
                     (.bend, "Ease off in the bends", "Too fast round a corner and they can trip."),
                     (.flag, "Jump the bars", "On hurdle courses, tap Jump just before each bar."),
                     (.run, "Speed and Focus", "Speed: longer steps, quicker feet. Focus: fewer look-arounds. Spend race points in Upgrade."),
-                    (.trophy, "Win to open the next course", "Or finish in the top two \(Self.words(CourseProgress.topTwoToUnlock)) times."),
+                    (.trophy, "Win to open the next course", "Win the course below to open the next."),
                 ], close: { setHow(false) })
                 .zIndex(1)
             }
@@ -543,6 +543,10 @@ struct BagSheet: View {
     var close: () -> Void
     @Environment(\.verticalSizeClass) private var vsc
     @State private var tab: BagTab
+    /// What the last Wear did when it had to move a copy from another Jelmiko.
+    @State private var wearNote: String?
+    /// The item the Sell card is asking about (nil = no card).
+    @State private var sellAsk: StoreItem?
 
     /// `tab`: the tab to open on (Dress / Play / Decor from the HUD); nil = the `-StoreTab` capture arg, else Food.
     init(care: GameCare, who: Int, tab: BagTab? = nil, close: @escaping () -> Void) {
@@ -610,6 +614,10 @@ struct BagSheet: View {
                 }
                 let list = entries(tab)
                 if tab == .wear { SlotChips(slot: $wearSlot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && book.owns($0) } }, idPrefix: "bag-slot-") }
+                if tab == .wear, let note = wearNote {
+                    Text(note).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(SK.honey.opacity(0.9))).accessibilityIdentifier("bag-wear-note")
+                }
                 if tab.isDecor, !book.placedDecor.isEmpty {
                     Button { AudioHub.shared.uiTap(); close(); care.beginArrange() } label: {
                         HStack(spacing: 8) { Image(systemName: "arrow.up.and.down.and.arrow.left.and.right").font(.system(size: 15, weight: .heavy)); Text("Arrange the room").font(SK.font(15, .black)) }
@@ -632,6 +640,7 @@ struct BagSheet: View {
         .scrollBounceBehavior(.basedOnSize)
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("bag-sheet")
+        .overlay { sellCard }
         .onAppear { book.markSeen() }
     }
 
@@ -669,12 +678,21 @@ struct BagSheet: View {
         }
     }
 
+    /// The Wear row's second line: wearing it, a free copy ("Owned", with "x2" when there are several), or who has every copy.
+    private func wearStatus(_ w: WearLook) -> String {
+        let n = book.copies(w), x = n > 1 ? " \u{00B7} x\(n)" : ""
+        if book.worn(who, w.slot) == w { return "Wearing" + x }
+        if book.freeCopies(w) > 0 { return "Owned" + x }
+        let names = book.wearerCharacters(w).map { c in care.jellies.first { $0.character == c }?.name ?? JellyRoster.nameOf(c) }
+        return names.isEmpty ? "Owned" + x : "Worn by \(names.joined(separator: " and "))" + x + " \u{00B7} Wear moves it"
+    }
+
     private func row(_ item: StoreItem) -> some View {
         HStack(spacing: 12) {
             ItemArt(item: item, size: 64)
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
-                if let w = item.wear { Text(book.worn(who, w.slot) == w ? "Wearing" : book.wearer(w, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }.map { "Worn by \($0)" } ?? "Owned").font(SK.font(12, .bold)).foregroundStyle(SK.muted) }
+                if let w = item.wear { Text(wearStatus(w)).font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("bag-wear-status-\(item.id)") }
                 else if item.kind == .decor {
                     let placed = book.placedCount(item.id)
                     Text("x\(book.count(item.id))" + (placed > 0 ? " \u{00B7} \(placed) in the room" : "") + " \u{00B7} \(item.roomUnits) spot\(item.roomUnits == 1 ? "" : "s")").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
@@ -691,7 +709,10 @@ struct BagSheet: View {
                 }
             }
             Spacer(minLength: 0)
-            actionButton(item)
+            VStack(spacing: 6) {
+                actionButton(item)
+                sellButton(item)
+            }
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
@@ -709,8 +730,15 @@ struct BagSheet: View {
             let slot = item.wear?.slot ?? .feet
             let wearing = book.worn(who, slot) == item.wear
             pink(wearing ? "Take off" : "Wear", item, enabled: true) {
-                if wearing { book.takeOff(slot, from: who) }
-                else if let w = item.wear, book.wear(w, on: who) { AudioHub.shared.play(.shoeOn); care.jelly(who)?.stats.nudge([.cool: 0.02]) }
+                if wearing { book.takeOff(slot, from: who); wearNote = nil }
+                else if let w = item.wear {
+                    // every copy is on someone: the copy worn longest moves here, and the note says so
+                    let from = book.wearVictim(w, for: who).map { c in care.jellies.first { $0.character == c }?.name ?? JellyRoster.nameOf(c) }
+                    if book.wear(w, on: who) {
+                        wearNote = from.map { "\(book.copies(w) > 1 ? "All \(book.copies(w)) \(item.name) were" : "The \(item.name) was") worn, so \($0)'s moved to \(care.jelly(who)?.name ?? "this Jelmiko"). Buy another in the Shop for both." }
+                        AudioHub.shared.play(.shoeOn); care.jelly(who)?.stats.nudge([.cool: 0.02])
+                    }
+                }
             }
         case .supply:
             pink("Use", item, enabled: care.canClean(jelly: who)) { close(); care.useSupply(item.id, on: who) }
@@ -730,6 +758,74 @@ struct BagSheet: View {
         default:
             EmptyView()
         }
+    }
+
+    /// The Sell button under the row's main action ("Sell +9"), or a disabled "Worn" / "In the room".
+    @ViewBuilder
+    private func sellButton(_ item: StoreItem) -> some View {
+        switch book.sellState(item) {
+        case .sellable(let pay):
+            Button { AudioHub.shared.uiTap(); sellAsk = item } label: {
+                Text("Sell +\(pay)").font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).fixedSize()
+                    .padding(.horizontal, 14).frame(minWidth: 84, minHeight: 44).background(Capsule().fill(Color.white.opacity(0.9)))
+            }.buttonStyle(.plain).accessibilityLabel("Sell \(item.name) for \(pay) JellyCoins").accessibilityIdentifier("bag-sell-\(item.id)")
+        case .worn:
+            disabledSell("Worn", item)
+        case .inRoom:
+            disabledSell("In the room", item)
+        case .no:
+            EmptyView()
+        }
+    }
+    private func disabledSell(_ text: String, _ item: StoreItem) -> some View {
+        Text(text).font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).fixedSize()
+            .padding(.horizontal, 14).frame(minWidth: 84, minHeight: 44).background(Capsule().fill(SK.muted.opacity(0.15)))
+            .accessibilityLabel(text == "Worn" ? "\(item.name) is worn, so it cannot be sold" : "\(item.name) is in the room, so it cannot be sold").accessibilityAddTraits(.isStaticText)
+            .accessibilityIdentifier("bag-sell-blocked-\(item.id)")
+    }
+
+    /// "Sell Sushi roll?" over a dimmed Bag; a tap outside is Keep.
+    @ViewBuilder
+    private var sellCard: some View {
+        if let item = sellAsk {
+            let pay = StoreBook.sellPrice(item)
+            ZStack {
+                Color.black.opacity(0.35).ignoresSafeArea().contentShape(Rectangle())
+                    .onTapGesture { AudioHub.shared.uiTap(); sellAsk = nil }.accessibilityHidden(true)
+                VStack(spacing: 14) {
+                    Text("Sell \(item.name)?").font(SK.font(22, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center).accessibilityAddTraits(.isHeader)
+                    Text("You get \(pay) JellyCoin\(pay == 1 ? "" : "s").").font(SK.font(16, .semibold)).foregroundStyle(SK.ink.opacity(0.8)).multilineTextAlignment(.center)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { keepButton; sellConfirm(item) }
+                        VStack(spacing: 10) { sellConfirm(item); keepButton }
+                    }
+                }
+                .padding(20).frame(maxWidth: 340)
+                .background(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color(hex: 0xFFFDF8))
+                        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Color(hex: 0x4D331F).opacity(0.10), lineWidth: 1))
+                        .shadow(color: Color(hex: 0x5A3A2A).opacity(0.3), radius: 10, y: 4)
+                )
+                .padding(24)
+                .accessibilityElement(children: .contain).accessibilityIdentifier("sell-card")
+            }
+            .transition(.opacity)
+        }
+    }
+    private var keepButton: some View {
+        Button { AudioHub.shared.uiTap(); sellAsk = nil } label: {
+            Text("Keep").font(SK.font(17, .heavy)).foregroundStyle(SK.ink).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 22).frame(minWidth: 96, minHeight: 44).background(Capsule().fill(SK.honey)).contentShape(Capsule())
+        }.buttonStyle(.plain).accessibilityIdentifier("sell-keep")
+    }
+    private func sellConfirm(_ item: StoreItem) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            withAnimation(.snappy) { _ = book.sell(item.id); sellAsk = nil }
+        } label: {
+            Text("Sell").font(SK.font(17, .black)).foregroundStyle(.white).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 22).frame(minWidth: 96, minHeight: 44).background(Capsule().fill(SK.pinkStrong)).contentShape(Capsule())
+        }.buttonStyle(.plain).accessibilityLabel("Sell \(item.name)").accessibilityIdentifier("sell-confirm")
     }
 
     private func pink(_ title: String, _ item: StoreItem? = nil, enabled: Bool, _ action: @escaping () -> Void) -> some View {

@@ -348,20 +348,22 @@ final class CourseProgressionTests: XCTestCase {
         XCTAssertEqual(CourseTier.wave.below, .splash); XCTAssertNil(CourseTier.puddle.below); XCTAssertEqual(CourseTier.wave.above, .tsunami); XCTAssertNil(CourseTier.tsunami.above)
     }
 
-    func testUnlocksByAWinOrThreeTopTwos() {
+    /// 2026-11-16 (the user: "Races need to be locked until you beat the previous one they need to progress"): only a win opens the next course; top-two finishes open nothing.
+    func testUnlocksOnlyByAWin() {
         let p = CourseProgress()
         XCTAssertEqual(p.unlockedTiers, [.puddle])
         XCTAssertNotNil(p.requirement(.ripple)); XCTAssertNil(p.requirement(.puddle))
         p.record(tier: .puddle, place: 3)
         XCTAssertEqual(p.unlockedTiers, [.puddle], "a 3rd opens nothing")
-        p.record(tier: .puddle, place: 2); p.record(tier: .puddle, place: 2)
-        XCTAssertEqual(p.unlockedTiers, [.puddle]); XCTAssertTrue(p.requirement(.ripple)!.contains("1 more time"))
-        p.record(tier: .puddle, place: 2)
-        XCTAssertEqual(p.unlockedTiers, [.puddle, .ripple], "three top-two finishes open the next course")
+        for _ in 0..<5 { p.record(tier: .puddle, place: 2) }
+        XCTAssertEqual(p.unlockedTiers, [.puddle], "top-two finishes open nothing, however many")
+        XCTAssertEqual(p.requirement(.ripple), "Win on Puddle to open it")
+        p.record(tier: .puddle, place: 1)
+        XCTAssertEqual(p.unlockedTiers, [.puddle, .ripple], "a win opens the next course")
         XCTAssertFalse(p.unlocked(.splash), "only the next one")
         p.record(tier: .ripple, place: 1)
         XCTAssertEqual(p.unlockedTiers, [.puddle, .ripple, .splash], "a win opens the next course at once")
-        XCTAssertEqual(p.record(.ripple).wins, 1); XCTAssertEqual(p.record(.ripple).topTwo, 1); XCTAssertEqual(p.record(.puddle).races, 4)
+        XCTAssertEqual(p.record(.ripple).wins, 1); XCTAssertEqual(p.record(.ripple).topTwo, 1); XCTAssertEqual(p.record(.puddle).races, 7)
         p.record(tier: .splash, place: 1)
         XCTAssertEqual(p.unlockedTiers, [.puddle, .ripple, .splash, .wave], "a win on the Splash opens the Wave")
         p.record(tier: .wave, place: 1)

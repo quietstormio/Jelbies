@@ -49,8 +49,9 @@ nonisolated extension WearLook {
     /// Pulled from the shop for now (2026-10-25: the hoodie and raincoat read as a bucket / diaper): not sold, taken off and refunded once. The art stays.
     /// (2026-10-28: the cardigan, vest, silk scarf, gold chain and the Diamond J chain were released after their art was reworked; hoodie and raincoat stay out.)
     static let unlisted: Set<WearLook> = [.hoodie, .raincoat]
+    /// 2026-11-16 (the owner: "remove the puffer vest and cardigan"): the Puffer vest and Cable cardigan leave too, with a refund per copy (StoreBook+RetiredBodies.swift) before the silent unequip. Their art stays (the Pip variants and the fit tests read it).
     /// SHIP 2026-11-06: removed from the game (not sold, not in the Bag / Wear picker, not carried by a saved outfit). The enum case, row and art stay so old saves decode; StoreBook.dropRetiredLooks unequips and unowns it silently on load.
-    static let retired: Set<WearLook> = [.chainGold]
+    static let retired: Set<WearLook> = [.chainGold, .vestPuffer, .cardiganCable]
     static let pieces: [WearLook] = WearGenerated.rows.filter { $0.slot != .feet && !retired.contains($0.look) }.map(\.look)
 }
 

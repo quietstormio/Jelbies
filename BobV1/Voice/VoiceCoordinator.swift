@@ -607,6 +607,10 @@ final class VoiceCoordinator {
         var ids = ids(for: d.target)
         if case .jelly(let id) = d.target, !presentIDs.contains(id) { r = .puzzled; ids = [] }        // a name for a Jelly that is not here
         if case .jellies(let named) = d.target, !named.allSatisfy(presentIDs.contains) { r = .puzzled; ids = [] }
+        // a trick this Jelmiko was never taught / bought: say so on the HUD line (the "?" bubble alone read as "it only highlighted")
+        if case .dontKnow(let t) = r, let id = ids.first ?? d.target.firstNamed {
+            showUnderstood("\(care.jelly(id)?.name ?? "Your Jelmiko") doesn't know \(t.title) yet", ok: false)
+        }
         var kind: VoiceFeedback.Kind?
         switch r {
         case .ignore:
@@ -979,6 +983,8 @@ final class VoiceCoordinator {
         case .play:
             care.touchPlay?.spawnHeart(now: CACurrentMediaTime())
             if !focused { pendingHop = true; hopWait = 0; walkAfterHop = false }
+        case .wave:
+            if !trickRunning { brain.requestNow(.wave) }             // the existing wave: turn to the camera, wave
         case .goodnight, .wakeUp:
             break                                                    // (handled before: a group command)
         }
