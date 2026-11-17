@@ -78,6 +78,8 @@ final class BathFlow {
     var kit = BathKit.none
     /// Capture aid (`-BathSpeed 12`): scrub / rinse / polish gains x this, so a slow simulator finishes a bath in a film's time. 1 in play.
     @ObservationIgnored var demoSpeed: Float = 1
+    /// Capture aid (`-BathStage shine`): the tub opens on this step (soap by default).
+    @ObservationIgnored var demoStartAt: BathPhase = .soap
     @ObservationIgnored private var brushLeft: Float = 0
     @ObservationIgnored private var heartAcc: Float = 0
     @ObservationIgnored private var ambientT: Float = 0
@@ -405,7 +407,7 @@ final class BathFlow {
         look.soot = BathLook.sootSeed(dirt: 0); sootSeededFor = 0
     }
 
-    private func enterAfterFade() { enter(.soap) }
+    private func enterAfterFade() { enter(demoStartAt == .shine || demoStartAt == .rinse ? demoStartAt : .soap) }
 
     private func enter(_ p: BathPhase) {
         phase = p

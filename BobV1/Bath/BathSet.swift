@@ -65,7 +65,7 @@ nonisolated final class BathOverlay {
     func compose(look: BathLook, time: Float, camRight: SIMD3<Float> = SIMD3(1, 0, 0), camUp: SIMD3<Float> = SIMD3(0, 1, 0),
                  sparkleAt: ((Int) -> (p: SIMD3<Float>, n: SIMD3<Float>)?)? = nil) {
         soup.clear()
-        if look.visible, !look.kit.isEmpty { addCareProps(look.kit, time: time) }
+        if look.visible, !look.kit.isEmpty { addCareProps(look.kit, time: time, look: look) }
         if look.tool != .none, look.tool != .rinse, let at = look.toolAt { addTool(look.tool, at: at, time: time, kit: look.kit) }
         if let nz = look.spray { addSpray(from: nz, time: time) }
         for b in look.bubbles.prefix(Self.maxBubbles) where b.w > 0.003 {
@@ -116,7 +116,7 @@ nonisolated final class BathOverlay {
 
     /// Where each prop sits on the tub: bottles and the lavender bar on the rim (right side, then left), the duck afloat in the water in front of him.
     static let rimSpots: [SIMD3<Float>] = [SIMD3(1.0, 0.37, 0.55), SIMD3(0.92, 0.37, 1.25), SIMD3(-1.0, 0.37, 0.55), SIMD3(-0.92, 0.37, 1.25)]
-    static let rimItems = [CareItems.bubblebath, CareItems.gentle, CareItems.deluxe, CareItems.lavender, CareItems.lintguard]
+    static let rimItems = [CareItems.bubblebath, CareItems.gentle, CareItems.deluxe, CareItems.lavender, CareItems.lintguard, CareItems.brush]
     static let propScale: Float = 1.25
 
     /// Appends the mesh of Care item `id`, base centre at `at`, turned by `yaw`, scaled by `s`.
@@ -132,16 +132,17 @@ nonisolated final class BathOverlay {
         for k in stride(from: 0, to: m.indices.count, by: 3) { soup.tri(base + UInt32(m.indices[k]), base + UInt32(m.indices[k + 1]), base + UInt32(m.indices[k + 2])) }
     }
 
-    private func addCareProps(_ kit: BathKit, time: Float) {
+    private func addCareProps(_ kit: BathKit, time: Float, look: BathLook) {
         var spot = 0
-        for id in Self.rimItems where kit.has(id) && spot < Self.rimSpots.count {
+        for id in Self.rimItems where kit.has(id) && spot < Self.rimSpots.count {          // (the brush rests on the rim until it is in his hand, in the shine step)
             let right = Self.rimSpots[spot].x > 0
-            addCare(id, at: Self.rimSpots[spot], yaw: right ? -0.5 : 0.5, scale: Self.propScale)
+            if id == CareItems.brush && look.tool == .shine { continue }
+            addCare(id, at: Self.rimSpots[spot], yaw: right ? -0.5 : 0.5, scale: Self.propScale, mat: id == CareItems.brush ? .matte : .glossy)
             spot += 1
         }
         if kit.hasDuck {          // afloat: bobs with the ripples and turns a little
-            let bob = 0.018 * sinf(time * 2.3), p = SIMD3<Float>(-0.62, BathModels.waterY - 0.03 + bob, 1.55)
-            addCare(CareItems.duck, at: p, yaw: 0.35 + 0.2 * sinf(time * 0.9), scale: 1.05, tilt: 0.06 * sinf(time * 1.7))
+            let bob = 0.018 * sinf(time * 2.3), p = SIMD3<Float>(-0.5, BathModels.waterY - 0.03 + bob, 1.62)
+            addCare(CareItems.duck, at: p, yaw: 0.35 + 0.2 * sinf(time * 0.9), scale: 1.7, tilt: 0.06 * sinf(time * 1.7))
         }
     }
 

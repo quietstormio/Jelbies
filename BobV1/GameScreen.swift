@@ -877,6 +877,7 @@ struct GameScreen: View {
             await sleep(3)
             care.bath.grime.dirt = 0.5
             care.bath.demo = true
+            if let st = d.string(forKey: "BathStage") { care.bath.demoStartAt = st == "shine" ? .shine : st == "rinse" ? .rinse : .soap }
             if d.double(forKey: "BathSpeed") > 1 { care.bath.demoSpeed = Float(d.double(forKey: "BathSpeed")) }
             care.bath.demoHold = d.integer(forKey: "BathHold") != 0          // -BathHold 1: stop at every complete stage (captures)
             if DevArgs.enabled, let k = d.string(forKey: "CareKit") { let ids = k.split(separator: ",").map(String.init); for id in ids where care.store.count(id) < 1 { care.store.grant(id) }; care.armedSupplies[0] = ids }
