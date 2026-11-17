@@ -27,6 +27,8 @@ enum GroupTuning {
     /// The farthest a member may have to walk to his place.
     static let walkMax: Float = 6.5
     static let maxCrew = 5
+    /// Others close by (not counting the asker) before a group roll may start. 1 = two Jelmiko present, but only for kinds marked `isTwoBody` (none yet: the calm 2-body group kinds come in a later round); the 3-body kinds still need two others.
+    static let minCompany = 1
     /// Pick weights (the hug is the favourite).
     static let weights: [(SocialKind, Float)] = [(.groupHug, 14.0), (.groupCheer, 3.0), (.conga, 2.7), (.circleDance, 3.0)]
     /// Neighbouring bodies in a huddle / ring touch at this fraction of `peerGap`; a loose circle keeps this fraction.
@@ -38,6 +40,8 @@ enum GroupTuning {
 extension SocialKind {
     var isGroup: Bool { self == .groupHug || self == .groupCheer || self == .conga || self == .circleDance || isTreat }
     /// The rare treats (congaLine, ringDance): own cooldowns, see EmoteTuning.
+    /// A group kind that plays with just two Jelmiko (none yet).
+    var isTwoBody: Bool { false }
     var isTreat: Bool { self == .congaLine || self == .ringDance }
 }
 
@@ -56,7 +60,7 @@ extension BlobBrain {
         guard socialBook.groupCool <= 0 else { return }
         // the wait runs while there is company close by (awake, not held); the start needs them free (or just walking) at the moment it is time
         let company = socialOthers().filter { $0 !== self && !$0.held && $0.idleState.kind != .sleep && simd_distance($0.position, position) < GroupTuning.radius }
-        guard company.count >= 2 else { socialBook.groupIdle = max(0, socialBook.groupIdle - 0.5 * dt); return }
+        guard company.count >= GroupTuning.minCompany else { socialBook.groupIdle = max(0, socialBook.groupIdle - 0.5 * dt); return }
         socialBook.groupIdle += dt * (watching ? 1.5 : 1) * (perkFlags.social ? 1.25 : 1)
         guard socialBook.groupIdle >= socialBook.groupLimit else { return }
         guard socialFree else { return }
@@ -65,7 +69,7 @@ extension BlobBrain {
         let momentarily = company.filter { c in !near.contains { $0 === c } && c.social == nil && !c.socialTaken && c.autonomy && c.attached && c.idleDeepNight < 0.5 && c.idleMood != .grumpy }
         if !momentarily.isEmpty, socialBook.groupBusy < GroupTuning.busyWait { socialBook.groupBusy += dt; return }
         if momentarily.isEmpty { socialBook.groupBusy = 0 }
-        guard near.count >= 2 else { return }          // (somebody is busy: it is tried again every tick until the crowd is free)
+        guard near.count >= GroupTuning.minCompany else { return }          // (somebody is busy: it is tried again every tick until the crowd is free; with one other only the 2-body kinds below may start)
         let crew = Array(near.prefix(GroupTuning.maxCrew - 1))
         let night = max(idleNight, crew.map { $0.idleNight }.max() ?? 0)
         var w: [(SocialKind, Float)] = []
@@ -73,14 +77,15 @@ extension BlobBrain {
             let repeated = k == socialBook.lastGroup || crew.contains(where: { $0.socialBook.lastGroup == k })
             if repeated, k != .groupHug { continue }
             if k.isFast, fastOthers(except: crew) > 0 { continue }
+            if near.count < 2, !k.isTwoBody { continue }          // (the 3-body kinds keep their rule: two others)
             let base = k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)
             w.append((k, repeated ? base * 0.6 : base))          // (a hug may follow a hug, less often: it is the favourite)
         }
-        if w.isEmpty { w = [(.groupHug, 1)] }
+        if w.isEmpty { if near.count < 2 { socialBook.groupIdle = socialBook.groupLimit * 0.7; return }; w = [(.groupHug, 1)] }
         var x = rand() * w.reduce(0) { $0 + $1.1 }
         var kind = w[0].0
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
-        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul
+        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul * moreGroupWaitMul
         socialBook.groupIdle = 0; socialBook.groupBusy = 0
         if !socialStartGroup(kind, with: crew, sim) { socialBook.groupIdle = socialBook.groupLimit * 0.7 }          // (no room right now: try again soon)
     }
