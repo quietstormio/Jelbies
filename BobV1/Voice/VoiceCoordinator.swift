@@ -441,6 +441,17 @@ final class VoiceCoordinator {
         A11yEvents.say(ok ? text : "Could not: \(text)", .normal)
     }
 
+    /// "<name> is too hungry for tricks": why a grumpy Jelmiko refuses (the need his bubble shows; `grumpyIgnore` itself is unchanged).
+    func grumpyLine(for id: Int, care: GameCare) -> String {
+        let name = care.jelly(id)?.name ?? "Your Jelmiko"
+        switch care.needs(for: id).wantedNeed {
+        case .hunger?: return "\(name) is too hungry for tricks"
+        case .thirst?: return "\(name) is too thirsty for tricks"
+        case .attention?: return "\(name) wants a cuddle before tricks"
+        default: return "\(name) is too grumpy for tricks"
+        }
+    }
+
     /// The Jelly ids in the room.
     var presentIDs: [Int] { jellyIDs?() ?? care?.jellies.map(\.id) ?? [0] }
     /// The selected Jelly (Bob by default).
@@ -608,6 +619,8 @@ final class VoiceCoordinator {
         if case .jelly(let id) = d.target, !presentIDs.contains(id) { r = .puzzled; ids = [] }        // a name for a Jelly that is not here
         if case .jellies(let named) = d.target, !named.allSatisfy(presentIDs.contains) { r = .puzzled; ids = [] }
         // a trick this Jelmiko was never taught / bought: say so on the HUD line (the "?" bubble alone read as "it only highlighted")
+        // a grumpy Jelmiko refuses a trick: say why, naming the need his bubble shows ("Alien is too hungry for tricks")
+        if r == .grumpyIgnore, let id = ids.first ?? d.target.firstNamed { showUnderstood(grumpyLine(for: id, care: care), ok: false) }
         if case .dontKnow(let t) = r, let id = ids.first ?? d.target.firstNamed {
             showUnderstood("\(care.jelly(id)?.name ?? "Your Jelmiko") doesn't know \(t.title) yet", ok: false)
         }

@@ -36,6 +36,7 @@ extension VoiceCoordinator {
                 if d.reaction == .ignore, let m = bk.lastMiss { kind = .missed(m, pct: Int((bk.reliability(m) * 100).rounded())) }
                 care.wakeSleeper(id)
                 care.noteInteraction(jelly: id)
+                if d.reaction == .grumpyIgnore { showUnderstood(grumpyLine(for: id, care: care), ok: false) }
                 enqueue(d.reaction, kind, ids: [id], target: .jelly(id))
             } else if all {
                 enqueue(.dontKnow(.sit), VoiceFeedback.Kind.unknown, ids: [id], target: .jelly(id))
