@@ -42,10 +42,10 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         switch self {
         case .sit: return ["sit"]; case .jacks: return ["jump", "jacks", "jumping jacks"]; case .run: return ["run"]
         case .flip: return ["flip"]; case .look: return ["look"]; case .come: return []
-        case .spin: return ["spin"]; case .hop: return ["hop"]
-        case .showOff: return ["show off", "showoff", "show it off"]; case .strut: return ["strut"]; case .sing: return ["sing", "sing a song"]
+        case .spin: return ["spin", "spinning", "twirl", "twirling", "spin around", "spin round", "twirl around", "tail spin"]; case .hop: return ["hop", "hopping"]
+        case .showOff: return ["show off", "showoff", "show it off"]; case .strut: return ["strut"]; case .sing: return ["sing", "sing a song", "sing song", "singing"]
         case .hula: return ["hula", "hula dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]; case .oneLegSpin: return ["one leg spin", "pirouette", "tiptoe spin"]
-        case .moonwalk: return ["moonwalk", "moon walk"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
+        case .moonwalk: return ["moonwalk", "moon walk", "moonwalking"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
         }
     }
     /// A word to suggest, in the tip text only.
@@ -119,8 +119,8 @@ nonisolated enum VoiceTuning {
     /// Loose spoken variants of the come command (exact phrases; the stored "come here" also takes the usual fuzzy match). The name is stripped
     /// first, so "come here bob" is "come here".
     static let comeAliases = ["come", "come on", "here boy", "come here boy", "come here now", "come to me"]
-    /// A bought (or default) trick that was never taught a word obeys at this reliability; a taught one keeps its own.
-    static let knownReliability: Float = 0.95
+    /// A bought (or default) trick that was never taught a word ALWAYS obeys (1.0: a valid command that sometimes did nothing read as "voice tricks do not work"); a taught one keeps its own.
+    static let knownReliability: Float = 1.0
     /// A short command is a trick only without these ("sit on the couch" is a place, "hop in the bath" a bath).
     static let placeWords: Set<String> = ["on", "in", "into", "onto", "to", "at", "under", "by", "for", "with", "off"]
 }
@@ -254,18 +254,56 @@ final class VoiceTraining {
 
     /// The known trick a short command names by its plain word, if any (a taught word is matched separately).
     private func plainTrick(in rest: [String], known: Bool) -> VoiceTrick? {
-        guard rest.count <= 3 else { return nil }
-        let cands = Set(VoiceMatcher.candidates(rest))
-        // longest matched command word wins ("show off" over a shorter word); ties keep declaration order. A place word ("hop ON the couch") spoils a match
-        // unless it is part of the command word itself ("show OFF").
+        guard let hit = plainTrickAny(in: rest), hit.known == known else { return nil }
+        return hit.trick
+    }
+
+    /// The trick a short command names by its plain word, known to this Jelmiko or not. The LONGEST command word wins across both, so
+    /// "one leg spin" is the one-leg spin he does not know (not the plain spin he does), and "super spring" is not "spring".
+    /// Said as is first ("sing a song", "show off"), then with the polite filler dropped ("do the moonwalk", "can you please do a hula").
+    private func plainTrickAny(in rest: [String]) -> (trick: VoiceTrick, known: Bool)? {
+        if let t = plainTrickExact(in: rest) { return t }
+        let lean = Self.withoutFiller(rest)
+        guard lean != rest, !lean.isEmpty else { return nil }
+        return plainTrickExact(in: lean)
+    }
+
+    /// Words around a trick that are not part of it ("Alien, can you please do the moonwalk now"). Place words are NOT here: "sit on the couch" stays a place.
+    static let fillerWords: Set<String> = ["do", "does", "the", "a", "an", "can", "could", "would", "will", "you", "please", "now", "me", "my", "your", "go", "lets", "let", "s", "ok", "okay", "hey", "just", "again", "and", "some", "little", "trick", "move"]
+
+    /// `toks` without filler words. "for me" is dropped as a pair ("sing for me"); a lone "for" is a place word and stays.
+    static func withoutFiller(_ toks: [String]) -> [String] {
+        var out: [String] = []
+        var i = 0
+        while i < toks.count {
+            if toks[i] == "for", i + 1 < toks.count, toks[i + 1] == "me" || toks[i + 1] == "us" { i += 2; continue }
+            if !fillerWords.contains(toks[i]) { out.append(toks[i]) }
+            i += 1
+        }
+        return out
+    }
+
+    private func plainTrickExact(in rest: [String]) -> (trick: VoiceTrick, known: Bool)? {
+        guard !rest.isEmpty, rest.count <= 6 else { return nil }
         var best: (t: VoiceTrick, len: Int)?
-        for t in VoiceTrick.allCases where t != .come && knows(t) == known {
-            for w in t.commandWords where cands.contains(w) {
-                guard Set(rest).subtracting(w.split(separator: " ").map(String.init)).isDisjoint(with: VoiceTuning.placeWords) else { continue }
-                if w.count > (best?.len ?? 0) { best = (t, w.count) }
+        for t in VoiceTrick.allCases where t != .come {
+            for w in t.commandWords {
+                let wt = w.split(separator: " ").map(String.init), compact = wt.joined(), wtLean = Self.withoutFiller(wt)          // ("bounce on your back" is also said "bounce on back" once the filler is dropped)
+                // the command word is a run of neighbouring tokens, spelt apart or together ("moon walk", "moonwalk", "moon-walk" is "moon walk"); at most 2 other words
+                var run = 0
+                for len in 1...min(rest.count, 5) where run == 0 {
+                    for i in 0...(rest.count - len) {
+                        let win = Array(rest[i..<(i + len)])
+                        guard win == wt || win.joined() == compact || (!wtLean.isEmpty && win == wtLean), rest.count - len <= 2 else { continue }
+                        // a place word ("hop ON the couch") spoils a match unless it is part of the command word itself ("show OFF")
+                        guard Set(rest.enumerated().filter { !(i..<(i + len)).contains($0.offset) }.map(\.element)).isDisjoint(with: VoiceTuning.placeWords) else { continue }
+                        run = len; break
+                    }
+                }
+                if run > 0, w.count > (best?.len ?? 0) { best = (t, w.count) }
             }
         }
-        return best?.t
+        return best.map { ($0.t, knows($0.t)) }
     }
 
     /// The highest listen-session id this book has handed out (the coordinator keeps ids unique ACROSS books).

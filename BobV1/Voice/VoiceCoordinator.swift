@@ -607,6 +607,10 @@ final class VoiceCoordinator {
         var ids = ids(for: d.target)
         if case .jelly(let id) = d.target, !presentIDs.contains(id) { r = .puzzled; ids = [] }        // a name for a Jelly that is not here
         if case .jellies(let named) = d.target, !named.allSatisfy(presentIDs.contains) { r = .puzzled; ids = [] }
+        // a trick this Jelmiko was never taught / bought: say so on the HUD line (the "?" bubble alone read as "it only highlighted")
+        if case .dontKnow(let t) = r, let id = ids.first ?? d.target.firstNamed {
+            showUnderstood("\(care.jelly(id)?.name ?? "Your Jelmiko") doesn't know \(t.title) yet", ok: false)
+        }
         var kind: VoiceFeedback.Kind?
         switch r {
         case .ignore:
