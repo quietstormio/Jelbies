@@ -225,6 +225,7 @@ extension GameCare {
         #endif
         #if targetEnvironment(simulator)
         if Self.traceOn, park.phase == .playing { parkTrace(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors) }
+        if ParkSlideProbe.on, park.phase == .playing || park.phase == .arriveIn { parkSlideProbe(actors.enumerated().filter { book.comers.contains($0.offset) }.map(\.element) + book.actors, dt: dt) }          // (park-slide-r3 capture aid: Park/ParkSlideProbe.swift)
         if let m = Self.demoPlay, park.phase == .playing {
             Self.demoPlayFrames += 1
             if m != "wand", play.active, play.phase == .inHand, play.camBlend > 0.95, Self.demoPlayFrames > 420, Self.demoPlayFrames % 240 == 0 {          // (a flick at the middle every 4 s: the ball flies, a Jelbie heads / kicks it back)
