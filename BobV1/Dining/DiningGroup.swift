@@ -73,6 +73,18 @@ final class DiningGroup {
         for (k, b) in by.enumerated() where k < sl.count { out[b] = sl[k] }
         return out
     }
+    /// Diners whose floor x lie within this of a neighbour's (in x order) are a near-tie (2026-11-17, LineupTests: three on one side at the same x).
+    static let tieX: Float = 0.5
+    /// `orderedSlots`, but the diners of a near-tie in x share their x-ordered slots by the smart plan (`Lineup.best`: shortest walks, no crossings) instead of
+    /// by index; everybody else keeps his x-ordered slot. Without a near-tie it is exactly `orderedSlots` (the 11-15 line-up the owner approved).
+    static func orderedSlotsTied(floors: [SIMD2<Float>], slots: [SIMD2<Float>], centre: Int?) -> [Int] {
+        let plan = orderedSlots(floors: floors, slots: slots)
+        let by = floors.indices.sorted { floors[$0].x != floors[$1].x ? floors[$0].x < floors[$1].x : $0 < $1 }
+        var tied = Set<Int>()
+        for k in by.indices.dropFirst() where floors[by[k]].x - floors[by[k - 1]].x < tieX { tied.insert(by[k]); tied.insert(by[k - 1]) }
+        guard !tied.isEmpty, !plan.contains(-1) else { return plan }
+        return Lineup.best(from: floors, slots: slots, locked: floors.indices.map { tied.contains($0) ? nil : plan[$0] }, centre: centre)
+    }
     /// Slice 2 of the meal line-up fix (switch `-DiningQuiet 0` = the old rule, simulator / dev builds): two diners of this sitting who are both at, or within `Lineup.commitDistance` of, their own place do not push each other
     /// (MelonStage.keepApart: the 0.7 gap and the skin wall are skipped for that pair), so the row at the tray is allowed to overlap a little but nobody is shoved back and forth. Latched per diner from the moment
     /// he is that near (or has started to eat) until he is released or the sitting ends, so it cannot flicker at the radius. Walking diners still avoid everybody else exactly as before.
@@ -203,7 +215,7 @@ final class DiningGroup {
         committed = [Bool](repeating: false, count: n); replanClock = 0; replans = 0; quietLatch = []
         placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
         ordered = Self.orderedPlaces && n > 1 && forcedOrigin == nil          // (food and drinks at the home tray; the café keeps `replan`)
-        if ordered && c.kind == .food { placeOf = Self.orderedSlots(floors: brains.indices.map { f($0) }, slots: spots) }          // (a drink keeps the smart first plan above: given once, never re-planned)
+        if ordered && c.kind == .food { placeOf = Self.orderedSlotsTied(floors: brains.indices.map { f($0) }, slots: spots, centre: n == 3 ? 0 : nil) }          // (a drink keeps the smart first plan above: given once, never re-planned)
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
