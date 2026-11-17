@@ -304,6 +304,10 @@ nonisolated enum CourseTuning {
 
 /// What the player has won on each course, and which courses are open. Saved as JSON under one key; a missing or unreadable save means nothing
 /// won yet (only the Puddle open), so older installs decode fine.
+/// 2026-11-16 (the user: "Races need to be locked until you beat the previous one they need to progress"): the courses open PER RUNNER. A course opens for a Jelmiko once THAT Jelmiko has won (1st) on the
+/// course below; the Puddle is always open; top-two finishes open nothing. His wins are his 1st-place ribbons in the TrophyBook (kept per character, so nothing
+/// to migrate). `bind` names the runner: the lobby's CoursePicker binds the Jelmiko it shows, and the race started from it is his (RaceFlow.begin falls back to his
+/// highest open course). Unbound (before the lobby was shown, a capture aid, a bare CourseProgress in the tests): this book's own records, wins only.
 @MainActor
 @Observable
 final class CourseProgress {
@@ -318,10 +322,13 @@ final class CourseProgress {
     var records: [CourseTier: Record] = [:]
     /// The course the player picked last (kept if it is open).
     var chosen: CourseTier = .puddle { didSet { save() } }
+    /// The runner the unlocks are for (a character id; nil = nobody bound yet) and the TrophyBook his wins are read from (`bind`).
+    private(set) var runner: Int?
+    @ObservationIgnored private weak var book: TrophyBook?
     @ObservationIgnored private let persists: Bool
     @ObservationIgnored private let defaults: UserDefaults
     static let key = "Circuit.progress.v1", chosenKey = "Circuit.course.v1"
-    /// Top-two finishes that open the next course without a win.
+    /// Opens nothing since 2026-11-16 (only a win does); kept because the Help sheet's line still quotes it (Store/TownUI.swift).
     static let topTwoToUnlock = 3
     nonisolated deinit {}
 
@@ -346,18 +353,35 @@ final class CourseProgress {
         save()
     }
 
-    /// Open: the Puddle always; each other course once the one below has a win, or three top-two finishes.
+    /// Open: the Puddle always; each other course once the bound runner has won (1st) on the one below. Top-two finishes open nothing.
     func unlocked(_ tier: CourseTier) -> Bool {
         guard let below = tier.below else { return true }
-        let r = record(below)
-        return r.wins >= 1 || r.topTwo >= Self.topTwoToUnlock
+        return wins(on: below) >= 1
+    }
+    /// Open for runner `c` (a character id) whose 1st places live in `trophies`, whoever is bound: the lobby asks this for the Jelmiko it shows.
+    func unlocked(_ tier: CourseTier, runner c: Int, trophies: TrophyBook) -> Bool {
+        guard let below = tier.below else { return true }
+        return trophies.shelf(character: c).raceRibbons(below)[0] >= 1
     }
     var unlockedTiers: [CourseTier] { CourseTier.allCases.filter { unlocked($0) } }
+    /// The bound runner's highest open course (the Puddle at least): where a pick he has not opened falls back to.
+    var highestOpen: CourseTier { unlockedTiers.last ?? .puddle }
+    /// The bound runner's 1st places on `tier` (his TrophyBook ribbons); unbound, this book's own wins.
+    func wins(on tier: CourseTier) -> Int {
+        if let c = runner, let b = book { return b.shelf(character: c).raceRibbons(tier)[0] }
+        return record(tier).wins
+    }
+    /// The lobby shows / the race starts with runner `c` (a character id) whose 1st places live in `trophies`: from now on the unlocks are his, and a
+    /// picked course he has not opened falls back to his highest open one.
+    func bind(runner c: Int, trophies: TrophyBook) {
+        if runner != c { runner = c }
+        book = trophies
+        if !unlocked(chosen) { chosen = highestOpen }
+    }
     /// In words, what opens `tier` (nil when it is open).
     func requirement(_ tier: CourseTier) -> String? {
         guard !unlocked(tier), let below = tier.below else { return nil }
-        let r = record(below)
-        return "Win on \(below.title), or finish top two \(Self.topTwoToUnlock - r.topTwo) more time\(Self.topTwoToUnlock - r.topTwo == 1 ? "" : "s")"
+        return "Win on \(below.title) to open it"
     }
 
     private func save() {

@@ -152,11 +152,11 @@ final class RaceFlow {
     // MARK: start
 
     /// "Race": player `id` goes to the track with `rivals` (made by the rival source) on `course` (the chosen one by default; a locked one falls back
-    /// to the Puddle). Ignored while a trip is running.
+    /// to the highest open course: the runner's own since 2026-11-16, see CourseProgress). Ignored while a trip is running.
     func begin(playerID id: Int, name: String, player: RacerStats, playerTint: SIMD3<Float>, rivalCount: Int, seed: UInt64, boost: RaceBoost = .none, course tier: CourseTier? = nil) {
         guard phase == .off else { return }
         var t = tier ?? courseTier
-        if !progress.unlocked(t) { t = .puddle }
+        if !progress.unlocked(t) { t = progress.highestOpen }          // (the lobby's CoursePicker has bound the runner: one he has not opened falls back to his highest open course)
         // a short memory of the last rivals met: the stock source skips them, and this race's rivals join the list (other sources are used as they are)
         var source = rivalSource
         if var local = source as? LocalRivalSource, let d = recentRivals { local.recent = RivalMemory.load(d); source = local }
