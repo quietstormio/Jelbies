@@ -25,7 +25,7 @@ def catmull(pts, per=10, closed=False):
     if not closed: out.append(P[-1])
     return out
 
-def ribbon(path, w, h, corner=0.05):
+def ribbon(path, w, h, corner=0.05, bulge=0.0):
     """A band standing on its edge along an xy path (z = base height of the band): rounded rectangle cross-section w wide (radial) and h tall.
     w and h may be functions of the sample index i (a band that thins out or shrinks toward its end)."""
     n = len(path)
@@ -37,7 +37,7 @@ def ribbon(path, w, h, corner=0.05):
         m = len(sec)
         d = (path[min(i+1, n-1)] - path[max(i-1, 0)]); d.z = 0; d.normalize()
         u = V((d.y, -d.x, 0))
-        rings.append([bm.verts.new(V((p.x, p.y, p.z)) + u*cx + V((0, 0, cz))) for (cx, cz) in sec])
+        rings.append([bm.verts.new(V((p.x, p.y, p.z)) + u*(cx*(1.0 + bulge*math.sin(math.pi*min(max(cz/hi, 0.0), 1.0)))) + V((0, 0, cz))) for (cx, cz) in sec])
     for i in range(n-1):
         for k in range(m):
             j = (k+1) % m
@@ -45,50 +45,65 @@ def ribbon(path, w, h, corner=0.05):
     bm.faces.new(rings[0][::-1]); bm.faces.new(rings[-1])
     return bm
 
-# ================================================================ CINNAMON ROLL (was: Ramen bowl)
+# ================================================================ CINNAMON ROLL v3 (was: Ramen bowl)
 def cinnamonroll(v=0):
-    """A rolled coil seen from above: a fat pillowy dough strip wound round a tiny core, dark cinnamon lines in the valleys between the layers, a slightly
-    wobbly hand-rolled edge, a domed middle, and white icing drizzled over the spiral (never a flat cap)."""
-    pitch = 0.20; r0 = 0.10; turns = 3.2
+    """A soft bakery roll: a fat pillowy dough strip coiled 3.5 turns round a small core (tall and puffy, deeper valleys), a dark cinnamon-sugar line in each valley,
+    caramelised shoulders, a little tail where the strip ends on the outer edge, and a thick cream glaze that pools in the middle and on the top turns and drips
+    over the rim, leaving part of the spiral showing."""
+    pitch = 0.178; r0 = 0.10; turns = 3.5
     th_end = turns*2*math.pi
-    def rad(th): return r0 + pitch*th/(2*math.pi) + 0.022*math.sin(th*2.0 + 0.7) + 0.014*math.sin(th*5.0)      # a hand-rolled, slightly irregular coil
+    def rad(th): return r0 + pitch*th/(2*math.pi) + 0.020*math.sin(th*1.9 + 0.7) + 0.012*math.sin(th*4.6)       # slightly irregular, hand-rolled
     def pt(th, off=0.0): return V(((rad(th) + off)*math.cos(th), (rad(th) + off)*math.sin(th), 0.0))
-    def hgt(r): return 0.50 - 0.20*min(1.0, (r/0.80)**1.6)                                                         # tall in the middle, lower at the rim
-    N = 110
+    def hgt(r): return 0.78 - 0.30*min(1.0, (r/0.80)**1.6)                                                        # tall in the middle, lower at the rim
+    N = 92
     ths = [th_end*i/N for i in range(N+1)]
     dough = [pt(t) for t in ths]
-    def dh(i): return hgt(rad(ths[i])) * (1.0 - 0.45*sstep(0.90, 1.0, i/N)) + 0.03*math.sin(ths[i]*3.0)         # the loose end sinks a little
-    def dw(i): return 0.158 * (1.0 - 0.55*sstep(0.93, 1.0, i/N))
+    def puff(t): return 1.0 + 0.07*math.sin(t*1.0 + 0.4) + 0.04*math.sin(t*2.7)                                    # a little different puff on each turn
+    def tail(i): return sstep(0.88, 0.975, i/N)                                                                       # the last stretch of the strip
+    def dh(i): return hgt(rad(ths[i]))*puff(ths[i])*(1.0 - 0.55*tail(i))
+    def dw(i): return 0.100*(1.0 + 0.10*math.sin(ths[i]*1.3)) * (1.0 + 0.30*tail(i))
     def dc(p, n):
         r = math.hypot(p.x, p.y)
-        top = mix((0.88, 0.58, 0.26), (0.96, 0.72, 0.38), sstep(0.2, 1.0, nz(p, 5.0, 1))*0.7 + sstep(0.3, 0.9, n.z)*0.3)
-        top = mix(top, (0.74, 0.42, 0.16), sstep(0.62, 0.86, r)*0.55)                                              # baked darker toward the edge
-        if n.z > 0.45: return top
-        return mix((0.66, 0.36, 0.13), (0.88, 0.58, 0.26), sstep(0.02, 0.35, p.z))
-    commit(ribbon(dough, dw, dh, 0.07), dc, mods=BEV(0.02, 2), sharp=60)
-    # the cinnamon-sugar line: a darker, thinner band in every valley, one layer down, nearly as high as the dough so it shows as a dark line from above
-    fth = [(th_end - 2*math.pi - 0.4)*i/80 for i in range(81)]
+        golden = mix((0.93, 0.68, 0.34), (0.99, 0.80, 0.46), sstep(0.2, 1.0, nz(p, 5.0, 1))*0.6)
+        if n.z > 0.72: return mix(golden, (0.99, 0.82, 0.50), sstep(0.6, 1.0, n.z)*0.5)                           # soft sheen on the crown of each turn
+        if n.z > 0.25: return mix((0.60, 0.30, 0.09), (0.78, 0.44, 0.15), sstep(0.25, 0.72, n.z))                 # caramelised shoulders
+        wall = mix((0.80, 0.50, 0.20), (0.97, 0.72, 0.38), sstep(0.05, 0.50, p.z))
+        return mix(mix((0.97, 0.82, 0.54), (0.90, 0.64, 0.30), sstep(0.05, 0.55, p.z)), wall, sstep(0.55, 0.70, r))        # paler inside the valleys, golden on the outer wall
+    commit(ribbon(dough, dw, dh, 0.07, bulge=0.5), dc, mods=BEV(0.02, 2), sharp=60)
+    # the cinnamon-sugar line: a dark, thin band deep in every valley
+    fth = [(th_end - 2*math.pi - 0.5)*i/60 for i in range(61)]
     fill = [pt(t, pitch*0.5) for t in fth]
-    def fh(i): return max(0.12, hgt(rad(fth[i]) + pitch*0.5) - 0.08)
-    commit(ribbon(fill, 0.085, fh, 0.03), lambda p, n: mix((0.36, 0.17, 0.07), (0.55, 0.30, 0.13), sstep(0.3, 1.0, nz(p, 12.0, 2))*0.7), sharp=60)
-    core = lathe([(0, 0), (0.10, 0), (0.11, 0.04), (0.11, 0.46), (0.08, 0.52), (0, 0.54)], 18)
-    commit(core, lambda p, n: (0.92, 0.66, 0.34) if n.z > 0.5 else (0.78, 0.48, 0.20), sharp=60)
-    # white icing drizzled over the spiral: soft zigzag strands lying on the dome, a little pool in the middle and two drips at the rim
-    for k in (-1, 0, 1):
-        y0 = k*0.34
-        half = math.sqrt(max(0.0, 0.70**2 - y0*y0))
-        if half < 0.2: continue
-        path = []
-        for i in range(41):
-            x = -half + 2*half*i/40; y = y0 + 0.085*math.sin(i*0.62 + k*1.9)
-            path.append(V((x, y, hgt(math.hypot(x, y)) + 0.028)))
-        commit(sweep(path, 0.040, 6), lambda p, n: mix((1.0, 0.99, 0.96), (0.95, 0.91, 0.85), sstep(0.0, -0.8, n.z)), sharp=80)
-    commit(blob(0.20, 0.17, 0.05, 2), (1.0, 0.99, 0.96), sharp=80, xf=xf_rt((0.02, 0.0, 0.50), rotz=0.5))
-    for (x, y) in [(0.50, 0.40), (-0.42, -0.45)]:
-        a = math.atan2(y, x); rr = math.hypot(x, y)
-        path = [V(((rr + 0.015*i)*math.cos(a), (rr + 0.015*i)*math.sin(a), hgt(rr) + 0.02 - 0.075*i)) for i in range(5)]
-        commit(sweep(path, 0.04, 6), (1.0, 0.98, 0.94), sharp=80)
-    scale_all(1.05)
+    def fh(i): return max(0.12, hgt(rad(fth[i]) + pitch*0.5)*puff(fth[i]) - 0.20)
+    commit(ribbon(fill, 0.074, fh, 0.03), lambda p, n: mix((0.34, 0.16, 0.06), (0.52, 0.28, 0.12), sstep(0.3, 1.0, nz(p, 12.0, 2))*0.7), sharp=60)
+    core = lathe([(0, 0), (0.09, 0), (0.10, 0.04), (0.10, 0.74), (0.07, 0.80), (0, 0.82)], 16)
+    commit(core, lambda p, n: (0.96, 0.74, 0.40) if n.z > 0.5 else (0.84, 0.54, 0.24), sharp=60)
+    commit(blob(0.075, 0.072, 0.07, 2), (0.96, 0.74, 0.40), sharp=80, xf=xf_rt((dough[-1].x, dough[-1].y, dh(N)*0.5), rotz=th_end))
+    # outer radius of the dough at an angle (the last full winding there), for the glaze and its drips
+    def outer(thx):
+        t = thx % (2*math.pi); t += 2*math.pi*math.floor((th_end - t)/(2*math.pi))
+        return rad(t)
+    # the glaze: a thick cream pool in the middle, and a thick glossy cream strip laid along the crown of the coil (wobbly, thinning in places) so the icing
+    # follows the swirl and the golden dough shows beside it; a few melted drips run over the rim
+    CREAM = lambda p, n: mix((0.97, 0.93, 0.86), (1.0, 0.995, 0.97), sstep(0.2, 1.0, n.z))
+    commit(blob(0.30, 0.28, 0.085, 3), CREAM, sharp=80, xf=xf_rt((0.0, 0.0, hgt(0.0) - 0.07)))
+    i0 = int(N*0.20); i1 = int(N*0.91)
+    strip = [V((dough[i].x, dough[i].y, dh(i) - 0.035)) for i in range(i0, i1)]
+    def gw(j): return 0.030 + 0.072*(0.5 + 0.5*math.sin(j*0.21 + 1.0))*(0.6 + 0.4*math.sin(j*0.07)) + 0.018
+    commit(ribbon(strip, gw, 0.085, 0.034), CREAM, mods=BEV(0.012, 2), sharp=60)
+    for frac, L in ((0.905, 0.17), (0.855, 0.10), (0.79, 0.14), (0.735, 0.09), (0.69, 0.15)):
+        i = int(N*frac); q = dough[i]; aa = math.atan2(q.y, q.x); ro = math.hypot(q.x, q.y) + dw(i)*0.5
+        zr = dh(i) - 0.02
+        path = [V((q.x, q.y, zr + 0.02)), V((ro*math.cos(aa), ro*math.sin(aa), zr - 0.03)),
+                V(((ro + 0.04)*math.cos(aa), (ro + 0.04)*math.sin(aa), zr - L*0.6)), V(((ro + 0.04)*math.cos(aa), (ro + 0.04)*math.sin(aa), zr - L))]
+        cp = catmull(path, 5)
+        commit(sweep(cp, lambda t: 0.056 - 0.012*t, 7), (1.0, 0.985, 0.95), sharp=80)
+        commit(blob(0.068, 0.068, 0.078, 2), (1.0, 0.985, 0.95), sharp=80, xf=xf_rt(((ro + 0.04)*math.cos(aa), (ro + 0.04)*math.sin(aa), zr - L)))
+    # a few cinnamon specks sprinkled on the glaze
+    r = random.Random(3)
+    for k in range(18):
+        aa = r.uniform(0, 2*math.pi); rr = r.uniform(0.03, 0.2)
+        commit(blob(0.026, 0.020, 0.012, 1), (0.50, 0.26, 0.10), sharp=80, xf=xf_rt((rr*math.cos(aa), rr*math.sin(aa), hgt(rr) + 0.04 + 0.05*(1 - rr/0.25)), rotz=aa))
+    scale_all(0.98)
 BUILD['cinnamonroll'] = cinnamonroll
 
 # ================================================================ FRUIT SKEWER (was: Fruit cup)
