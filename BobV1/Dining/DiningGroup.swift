@@ -244,7 +244,14 @@ final class DiningGroup {
         }
         return awake
     }
-    private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } }
+    /// The tray's rectangle is not free to pop into: a bystander stands on (or right next to) it, or a diner who is still on his way does (2026-11-17 feeding
+    /// survey, night: a meal-woken sleeper from the front was crossing the tray's floor when the 12 s cap popped it, so the tray came out under him and he
+    /// walked out through it). A diner at his place (ready), sent to eat (started) or already done (released) never holds it back.
+    private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } || brains.indices.contains { dinerOnTrayFloor($0) } }
+    func dinerOnTrayFloor(_ i: Int) -> Bool {
+        guard brains.indices.contains(i), !(released.indices.contains(i) && released[i]), !(started.indices.contains(i) && started[i]), !ready(i) else { return false }
+        return trayDistance(floor(i)) < Self.trayClearance
+    }
 
     private func beginApproach() {
         state = .approaching; requested = false; settle = 0; earlyPop = false
