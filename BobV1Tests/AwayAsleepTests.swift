@@ -127,7 +127,7 @@ final class AwayAsleepTests: XCTestCase {
         let d = suite(), leave = at(0, 14), back = at(0, 17)
         d.set(["levels": [1.0, 1.0, 1.0], "time": leave.timeIntervalSince1970] as [String: Any], forKey: NeedsTuning.defaultsKey)          // the old format
         let n = make(d, now: back)
-        eq(lv(n), [0.85, 0.8125, 0.5], "old save = awake, new awake rates")
+        eq(lv(n), [0.85, 0.8125, 0.75], "old save = awake, new awake rates")
         // and the flag is written from then on
         let saved = d.dictionary(forKey: NeedsTuning.defaultsKey)
         XCTAssertEqual(saved?["asleep"] as? Bool, false)
@@ -152,8 +152,8 @@ final class AwayAsleepTests: XCTestCase {
             let plain = run(cozy: false), cozy = run(cozy: true)
             let hungerH = asleep ? 60.0 : 20.0, thirstH = asleep ? 48.0 : 16.0
             // cozy drains hunger / thirst at 0.8 and attention at 0.5 over the covered 3 h: 3 h x (1 - mul) is credited
-            eq(plain, [Float(1 - 3 / hungerH), Float(1 - 3 / thirstH), 0.5], "plain, asleep \(asleep)")
-            eq(cozy, [Float(1 - 2.4 / hungerH), Float(1 - 2.4 / thirstH), Float(1 - 1.5 / 6)], "cozy, asleep \(asleep)")
+            eq(plain, [Float(1 - 3 / hungerH), Float(1 - 3 / thirstH), 0.75], "plain, asleep \(asleep)")
+            eq(cozy, [Float(1 - 2.4 / hungerH), Float(1 - 2.4 / thirstH), Float(1 - 1.5 / 12)], "cozy, asleep \(asleep)")
         }
     }
 

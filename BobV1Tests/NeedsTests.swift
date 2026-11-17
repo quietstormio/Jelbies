@@ -55,7 +55,7 @@ final class NeedsTests: XCTestCase {
         XCTAssertLessThan(n.level(.thirst), 0.001)
         XCTAssertTrue(n.isWanting(.hunger))
         XCTAssertTrue(n.isWanting(.thirst))
-        run(n, seconds: 5 * 3600, dt: 30)
+        run(n, seconds: 9 * 3600, dt: 30)          // (attention takes 8 h)
         for k in NeedKind.allCases { XCTAssertEqual(n.level(k), 0, accuracy: 1e-6, "clamped at 0") }
     }
 
@@ -77,7 +77,7 @@ final class NeedsTests: XCTestCase {
             first.save()
             let later = make(d, now: { t0.addingTimeInterval(hours * 3600) })
             for k in NeedKind.allCases {
-                let want = max(0.8 - Float(hours / NeedsTuning.awayHoursToEmpty(k)), NeedsTuning.awayFloor)
+                let want = max(0.8 - Float(hours / NeedsTuning.awayHoursToEmpty(k)), NeedsTuning.awayFloor(for: k))
                 XCTAssertEqual(later.level(k), want, accuracy: 1e-4, "\(hours) h away: \(k) on the away curve, never under the floor")
             }
         }
