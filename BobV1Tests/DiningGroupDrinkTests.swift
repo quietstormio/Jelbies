@@ -12,6 +12,8 @@ import UIKit
 
 @MainActor
 final class DiningGroupDrinkTests: XCTestCase {
+    override func setUp() { DiningGroup.homeSeats = 3 }          // (these tests are about three at one tray; the home default is two)
+    override func tearDown() { DiningGroup.homeSeats = 2 }
     private func room(count: Int = 3) -> DiningJellyTests.Room {
         let r = DiningJellyTests.Room(count: count)
         DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
