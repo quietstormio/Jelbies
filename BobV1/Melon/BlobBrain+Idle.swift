@@ -566,8 +566,10 @@ extension BlobBrain {
 
     // MARK: starting
 
+    nonisolated static let idleLog = UserDefaults.standard.bool(forKey: "VoiceLog")
     func idleBegin(_ kind: IdleKind) {
         varietyNote(kind)
+        if Self.idleLog { NSLog("[melon] idle begin %@ (commanded %@, dizzyEnd %@)", kind.rawValue, commanded ? "yes" : "no", idleState.dizzyEnd ? "yes" : "no") }          // capture aid: -VoiceLog 1
         if !voiceMuted, let c = JellyVoiceSet.contextVoice(forIdle: kind, mood: idleMood) { AudioHub.shared.contextVoice(jelly: steerID, c.voice, chance: c.chance, x: px) }          // (the home room's context voices: add variety on top of the chirps)
         if kind != .wander { roomCue(.idle(kind)) }          // (its own haptic: Haptics+Emotes.swift)
         idleState.kind = kind; walkBoostK = 1
