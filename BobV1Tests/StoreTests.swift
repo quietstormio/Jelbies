@@ -129,7 +129,7 @@ final class StoreTests: XCTestCase {
             if i.kind == .shoes { XCTAssertNotNil(i.wear) }
             if i.kind == .supply { XCTAssertNotNil(i.perk) }
         }
-        XCTAssertEqual(Consumables.storeFoods.count, 18)
+        XCTAssertEqual(Consumables.storeFoods.count, 17)          // (18 before the Soft pretzel was dropped)
         XCTAssertEqual(Consumables.storeDrinks.count, 4)
         XCTAssertTrue(StoreCatalog.tabs.contains(.decor), "the Decor tab shows now that part B has items")
         let decor = StoreCatalog.items(.decor)          // counted from the catalog (batches 3 and 4 keep adding): every one is a placeable piece with spots
