@@ -11,7 +11,7 @@ import simd
 @MainActor
 final class MealTwoSeatsTests: XCTestCase {
     override func setUp() { DiningGroup.homeSeats = 2 }
-    override func tearDown() { DiningGroup.homeSeats = 2 }
+    override func tearDown() { DiningGroup.homeSeats = 2; DiningGroup.rolling = true }
 
     private func room() -> DiningJellyTests.Room {
         let r = DiningJellyTests.Room(count: 3)
@@ -90,5 +90,41 @@ final class MealTwoSeatsTests: XCTestCase {
         while d > .pi { d -= 2 * .pi }
         while d < -.pi { d += 2 * .pi }
         XCTAssertLessThan(abs(d), 0.25, "the waiter faces the tray: yaw \(b.yaw) vs \(want)")
+    }
+
+    /// Guards C7: the third takes the freed place at the SAME tray; the tray is never poofed in between.
+    func testTheThirdTakesTheFreedPlaceAtTheSameTray() {
+        let r = room()
+        hungry(r)
+        r.care.feed()
+        var third: Int?, started = false, wentAbsent = false, joined = false, thirdEating = false
+        r.run(60) {
+            if third == nil, r.care.group.isActive, let w = r.care.groupQueue.first { third = w }
+            if r.care.dining.phase == .present { started = true }
+            if started, !thirdEating, r.care.dining.phase == .absent { wentAbsent = true }
+            if let w = third {
+                if r.care.group.memberIDs.contains(w) { joined = true }
+                if r.actors[w].brain?.activity == .eating { thirdEating = true }
+            }
+            return thirdEating && r.sawEating.allSatisfy { $0 }
+        }
+        XCTAssertNotNil(third, "a third Jelmiko was queued")
+        XCTAssertTrue(started, "the tray came out")
+        XCTAssertFalse(wentAbsent, "the tray never went away before the third ate")
+        XCTAssertTrue(joined, "the third joined the group")
+        XCTAssertTrue(thirdEating, "the third ate")
+        XCTAssertTrue(r.care.groupQueue.isEmpty, "the queue is empty: \(r.care.groupQueue)")
+        XCTAssertTrue(r.sawEating.allSatisfy { $0 }, "all three ate \(r.sawEating) (t=\(r.t))")
+    }
+
+    /// Guards C7: with rolling off, the old second sitting still feeds the third.
+    func testTheOldSecondSittingWhenRollingIsOff() {
+        DiningGroup.rolling = false
+        defer { DiningGroup.rolling = true }
+        let r = room()
+        hungry(r)
+        r.care.feed()
+        r.run(70) { r.sawEating.allSatisfy { $0 } }
+        XCTAssertTrue(r.sawEating.allSatisfy { $0 }, "all three ate \(r.sawEating) (t=\(r.t))")
     }
 }
