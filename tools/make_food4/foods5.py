@@ -26,15 +26,18 @@ def catmull(pts, per=10, closed=False):
     return out
 
 def ribbon(path, w, h, corner=0.05):
-    """A band standing on its edge along an xy path (z = base height of the band): rounded rectangle cross-section w wide (radial) and h tall."""
-    sec = poly_pts_rounded([(-w/2, 0), (w/2, 0), (w/2, h), (-w/2, h)], corner, 3)
-    bm = bmesh.new(); rings = []
+    """A band standing on its edge along an xy path (z = base height of the band): rounded rectangle cross-section w wide (radial) and h tall.
+    w and h may be functions of the sample index i (a band that thins out or shrinks toward its end)."""
     n = len(path)
+    bm = bmesh.new(); rings = []
+    m = None
     for i, p in enumerate(path):
+        wi = w(i) if callable(w) else w; hi = h(i) if callable(h) else h
+        sec = poly_pts_rounded([(-wi/2, 0), (wi/2, 0), (wi/2, hi), (-wi/2, hi)], min(corner, hi*0.45, wi*0.45), 3)
+        m = len(sec)
         d = (path[min(i+1, n-1)] - path[max(i-1, 0)]); d.z = 0; d.normalize()
         u = V((d.y, -d.x, 0))
         rings.append([bm.verts.new(V((p.x, p.y, p.z)) + u*cx + V((0, 0, cz))) for (cx, cz) in sec])
-    m = len(sec)
     for i in range(n-1):
         for k in range(m):
             j = (k+1) % m
@@ -44,73 +47,112 @@ def ribbon(path, w, h, corner=0.05):
 
 # ================================================================ CINNAMON ROLL (was: Ramen bowl)
 def cinnamonroll(v=0):
-    H = 0.62; pitch = 0.165; r0 = 0.17; turns = 3.0
-    spiral = lambda th, off=0.0: V(((r0 + pitch*th/(2*math.pi) + off)*math.cos(th), (r0 + pitch*th/(2*math.pi) + off)*math.sin(th), 0.0))
+    """A rolled coil seen from above: a fat pillowy dough strip wound round a tiny core, dark cinnamon lines in the valleys between the layers, a slightly
+    wobbly hand-rolled edge, a domed middle, and white icing drizzled over the spiral (never a flat cap)."""
+    pitch = 0.20; r0 = 0.10; turns = 3.2
     th_end = turns*2*math.pi
-    # the dough: a fat band wound round a small core (the tail ends flat on the outside)
-    dough = [spiral(th_end*i/84) for i in range(85)]
+    def rad(th): return r0 + pitch*th/(2*math.pi) + 0.022*math.sin(th*2.0 + 0.7) + 0.014*math.sin(th*5.0)      # a hand-rolled, slightly irregular coil
+    def pt(th, off=0.0): return V(((rad(th) + off)*math.cos(th), (rad(th) + off)*math.sin(th), 0.0))
+    def hgt(r): return 0.50 - 0.20*min(1.0, (r/0.80)**1.6)                                                         # tall in the middle, lower at the rim
+    N = 110
+    ths = [th_end*i/N for i in range(N+1)]
+    dough = [pt(t) for t in ths]
+    def dh(i): return hgt(rad(ths[i])) * (1.0 - 0.45*sstep(0.90, 1.0, i/N)) + 0.03*math.sin(ths[i]*3.0)         # the loose end sinks a little
+    def dw(i): return 0.158 * (1.0 - 0.55*sstep(0.93, 1.0, i/N))
     def dc(p, n):
         r = math.hypot(p.x, p.y)
-        top = mix((0.94, 0.72, 0.40), (0.99, 0.80, 0.50), sstep(0.2, 1.0, nz(p, 5.0, 1))*0.8)
-        if n.z > 0.55: return top
-        return mix((0.80, 0.52, 0.24), (0.93, 0.68, 0.36), sstep(0.04, 0.50, p.z))        # sides go golden toward the top, a toasted base
-    commit(ribbon(dough, 0.115, H, 0.04), dc, mods=BEV(0.02, 2), sharp=55)
-    # the core of the roll
-    core = lathe([(0, 0), (0.12, 0), (0.14, 0.04), (0.14, H-0.04), (0.11, H), (0, H)], 20)
-    commit(core, lambda p, n: (0.96, 0.76, 0.44) if n.z > 0.5 else (0.86, 0.58, 0.28), sharp=60)
-    # the cinnamon-sugar line between the turns: a thinner, lower band wound half a pitch out, dark brown with a glint of sugar
-    fill = [spiral((th_end - 2*math.pi - 0.3)*i/64, pitch*0.5) for i in range(65)]
-    fill = [V((p.x, p.y, 0.05)) for p in fill]
-    commit(ribbon(fill, 0.05, H-0.12, 0.02), lambda p, n: mix((0.50, 0.26, 0.12), (0.72, 0.42, 0.20), sstep(0.3, 1.0, n.z)*0.7 + sstep(0.2, 0.9, nz(p, 14.0, 2))*0.3), sharp=60)
-    # icing: wavy white lines running across the top, thick and soft, and a few drips over the edge
-    for k in range(-2, 3):
-        y = k*0.27
-        half = math.sqrt(max(0.0, 0.64**2 - y*y))
-        path = [V((-half + 0.05 + (2*half-0.10)*i/30, y + 0.045*math.sin(i*1.1 + k), H + 0.015)) for i in range(31)]
-        commit(sweep(path, 0.040, 5), lambda p, n: mix((1.0, 0.99, 0.95), (0.97, 0.93, 0.86), sstep(0.0, -0.8, n.z)), sharp=80)
-    for (x, y) in [(0.52, 0.30), (-0.50, -0.34), (0.12, -0.62)]:
-        a = math.atan2(y, x)
-        path = [V((x*(0.95 + 0.06*i/6), y*(0.95 + 0.06*i/6), H - 0.02 - 0.09*i)) for i in range(5)]
-        commit(sweep(path, 0.05, 6), (1.0, 0.98, 0.93), sharp=80)
-    scale_all(1.12)
+        top = mix((0.88, 0.58, 0.26), (0.96, 0.72, 0.38), sstep(0.2, 1.0, nz(p, 5.0, 1))*0.7 + sstep(0.3, 0.9, n.z)*0.3)
+        top = mix(top, (0.74, 0.42, 0.16), sstep(0.62, 0.86, r)*0.55)                                              # baked darker toward the edge
+        if n.z > 0.45: return top
+        return mix((0.66, 0.36, 0.13), (0.88, 0.58, 0.26), sstep(0.02, 0.35, p.z))
+    commit(ribbon(dough, dw, dh, 0.07), dc, mods=BEV(0.02, 2), sharp=60)
+    # the cinnamon-sugar line: a darker, thinner band in every valley, one layer down, nearly as high as the dough so it shows as a dark line from above
+    fth = [(th_end - 2*math.pi - 0.4)*i/80 for i in range(81)]
+    fill = [pt(t, pitch*0.5) for t in fth]
+    def fh(i): return max(0.12, hgt(rad(fth[i]) + pitch*0.5) - 0.08)
+    commit(ribbon(fill, 0.085, fh, 0.03), lambda p, n: mix((0.36, 0.17, 0.07), (0.55, 0.30, 0.13), sstep(0.3, 1.0, nz(p, 12.0, 2))*0.7), sharp=60)
+    core = lathe([(0, 0), (0.10, 0), (0.11, 0.04), (0.11, 0.46), (0.08, 0.52), (0, 0.54)], 18)
+    commit(core, lambda p, n: (0.92, 0.66, 0.34) if n.z > 0.5 else (0.78, 0.48, 0.20), sharp=60)
+    # white icing drizzled over the spiral: soft zigzag strands lying on the dome, a little pool in the middle and two drips at the rim
+    for k in (-1, 0, 1):
+        y0 = k*0.34
+        half = math.sqrt(max(0.0, 0.70**2 - y0*y0))
+        if half < 0.2: continue
+        path = []
+        for i in range(41):
+            x = -half + 2*half*i/40; y = y0 + 0.085*math.sin(i*0.62 + k*1.9)
+            path.append(V((x, y, hgt(math.hypot(x, y)) + 0.028)))
+        commit(sweep(path, 0.040, 6), lambda p, n: mix((1.0, 0.99, 0.96), (0.95, 0.91, 0.85), sstep(0.0, -0.8, n.z)), sharp=80)
+    commit(blob(0.20, 0.17, 0.05, 2), (1.0, 0.99, 0.96), sharp=80, xf=xf_rt((0.02, 0.0, 0.50), rotz=0.5))
+    for (x, y) in [(0.50, 0.40), (-0.42, -0.45)]:
+        a = math.atan2(y, x); rr = math.hypot(x, y)
+        path = [V(((rr + 0.015*i)*math.cos(a), (rr + 0.015*i)*math.sin(a), hgt(rr) + 0.02 - 0.075*i)) for i in range(5)]
+        commit(sweep(path, 0.04, 6), (1.0, 0.98, 0.94), sharp=80)
+    scale_all(1.05)
 BUILD['cinnamonroll'] = cinnamonroll
 
-# ================================================================ SOFT PRETZEL (was: Mac & cheese)
-def softpretzel(v=0):
-    R = 0.135                                                         # rope radius
-    z0 = R
-    zo = R + 0.21                                                     # a strand lying over another
-    ring = [(-0.55, -0.42, z0), (-0.30, -0.66, z0), (0.0, -0.72, z0), (0.30, -0.66, z0), (0.55, -0.42, z0), (0.66, -0.05, z0), (0.60, 0.33, z0), (0.36, 0.56, z0),
-            (0.10, 0.50, z0), (-0.04, 0.30, zo*0.9), (-0.22, 0.06, zo), (-0.40, -0.16, zo)]
-    # one rope: right end -> up over the middle to the left lobe -> down the left side -> round the bowl -> up the right side -> back across to the left end
-    path_pts = [(0.40, -0.30, zo + 0.02),                              # right tip lies over the bowl
-                (0.22, -0.02, zo), (0.0, 0.26, zo), (-0.20, 0.50, z0),
-                (-0.44, 0.58, z0), (-0.64, 0.36, z0), (-0.68, 0.0, z0),
-                (-0.58, -0.40, z0), (-0.30, -0.66, z0), (0.0, -0.73, z0), (0.30, -0.66, z0), (0.58, -0.40, z0),
-                (0.68, 0.0, z0), (0.64, 0.36, z0), (0.44, 0.58, z0), (0.20, 0.50, z0),
-                (0.0, 0.26, z0), (-0.22, -0.02, z0*1.0), (-0.40, -0.30, zo + 0.02)]
-    # the two crossing strands: the first goes over at (0,0.26): raise the second one's z there is already lower
-    cl = catmull(path_pts, 9)
-    n = len(cl)
-    # a rope that is plumper in the middle of each strand and tapers to a soft tip at both ends
-    rad = lambda t: R*(0.50 + 0.50*min(1.0, min(t, 1-t)*9.0)**0.6)
-    bm = sweep(cl, rad, 12)
-    def pc(p, n_):
-        belly = sstep(0.1, 1.0, n_.z)
-        c = mix((0.62, 0.32, 0.12), (0.80, 0.48, 0.18), sstep(0.0, 0.6, p.z*2))                # deep brown underneath
-        c = mix(c, (0.90, 0.62, 0.28), belly*0.9)                                                # golden crust on top
-        c = mix(c, (0.96, 0.78, 0.46), sstep(0.35, 1.0, nz(p, 9.0, 3))*0.35*belly)              # pale baked mottling
-        return c
-    commit(bm, pc, sharp=70)
-    # coarse salt on top of the rope
-    r = random.Random(11)
+# ================================================================ FROSTED DONUT (was: Mac & cheese, through the Soft pretzel)
+def frosteddonut(v=0):
+    """A plump golden ring, strawberry-pink icing with a wavy edge, rainbow sprinkles and a white drizzle. Dough torus 0.50 round, 0.28 tube radius."""
+    R = 0.50; rt = 0.29; sq = 0.92                                         # major radius, tube radius, vertical squash
+    segs = 56; ring = 22
+    def torus(rt_, sq_, zc, wob=0.0, top_only=False, out=0):
+        bm = bmesh.new(); grid = []
+        for i in range(segs):
+            a = 2*math.pi*i/segs; row = []
+            for k in range(ring):
+                b = 2*math.pi*k/ring
+                rr = rt_ + (wob*math.sin(a*7 + 1.0) + wob*0.6*math.sin(a*11) if wob else 0.0)*(0.5 + 0.5*math.cos(b - math.pi/2*0))
+                R_ = R + rr*math.cos(b)
+                row.append(bm.verts.new((R_*math.cos(a), R_*math.sin(a), zc + rr*sq_*math.sin(b))))
+            grid.append(row)
+        for i in range(segs):
+            j = (i+1) % segs
+            for k in range(ring):
+                q = (k+1) % ring
+                bm.faces.new([grid[i][k], grid[j][k], grid[j][q], grid[i][q]])
+        return bm
+    zc = rt*sq
+    def dc(p, n):
+        side = sstep(0.1, 0.9, 1 - abs(n.z))
+        c = mix((0.96, 0.74, 0.40), (0.88, 0.58, 0.26), side)
+        c = mix(c, (0.74, 0.44, 0.18), sstep(0.1, -0.8, n.z))
+        return mix(c, (1.0, 0.86, 0.58), sstep(0.35, 1.0, nz(p, 7.0, 3))*0.25)
+    commit(torus(rt, sq, zc), dc, sharp=70)
+    # the icing: a pink cap over the upper part of the ring (a closed thick shell), its inner and outer edges wavy so the golden dough shows round it
+    ic = bmesh.new(); K = 14; grid = []
+    for i in range(segs):
+        a = 2*math.pi*i/segs
+        wav_o = 0.10*math.sin(a*6.0 + 0.5) + 0.05*math.sin(a*13.0 + 2.0)
+        wav_i = 0.09*math.sin(a*5.0 + 1.3) + 0.04*math.sin(a*11.0)
+        loop = []
+        for outer in (True, False):
+            ks = range(K) if outer else range(K-1, -1, -1)
+            for k in ks:
+                t = k/(K-1)
+                b = math.radians(14.0 + wav_o*57.3*0.5) + t*(math.radians(166.0) - math.radians(14.0 + wav_o*57.3*0.5) - math.radians(wav_i*57.3*0.5))
+                rr = rt*(1.085 if outer else 1.0)
+                R_ = R + rr*math.cos(b)
+                loop.append(ic.verts.new((R_*math.cos(a), R_*math.sin(a), zc + rr*sq*math.sin(b))))
+        grid.append(loop)
+    L = len(grid[0])
+    for i in range(segs):
+        j = (i+1) % segs
+        for k in range(L):
+            q = (k+1) % L
+            ic.faces.new([grid[i][k], grid[j][k], grid[j][q], grid[i][q]])
+    commit(ic, lambda p, n: mix((1.0, 0.50, 0.66), (1.0, 0.74, 0.84), sstep(0.3, 1.0, n.z)*0.8), sharp=70)
+    # rainbow sprinkles on the icing
+    r = random.Random(7)
+    cols = [(0.30, 0.65, 1.0), (1.0, 0.92, 0.25), (1.0, 1.0, 1.0), (0.50, 0.90, 0.40), (0.75, 0.45, 0.95), (1.0, 0.55, 0.20)]
     for k in range(34):
-        i = r.randrange(6, n-6)
-        p = cl[i]; zt = rad(i/(n-1))
-        a = r.uniform(0, 6.28)
-        commit(blob(0.045, 0.032, 0.026, 1), (1.0, 0.99, 0.96), sharp=80, xf=xf_rt((p.x + 0.02*math.cos(a), p.y + 0.02*math.sin(a), p.z + zt*0.92), rotz=r.uniform(0, 3.14)))
-    scale_all(0.9)
-BUILD['softpretzel'] = softpretzel
+        a = r.uniform(0, 2*math.pi); b = math.radians(r.uniform(32, 148))
+        rr = rt*1.085 + 0.006
+        R_ = R + rr*math.cos(b)
+        pos = (R_*math.cos(a), R_*math.sin(a), zc + rr*sq*math.sin(b) + 0.012)
+        commit(blob(0.075, 0.024, 0.024, 1), cols[k % 6], sharp=80, xf=xf_rt(pos, rotz=a + r.uniform(-1.3, 1.3) + math.pi/2))
+    scale_all(0.98)
+BUILD['frosteddonut'] = frosteddonut
 
 # ================================================================ FRUIT SKEWER (was: Fruit cup)
 def fruitskewer(v=0):
