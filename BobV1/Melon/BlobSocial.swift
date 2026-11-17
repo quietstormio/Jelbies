@@ -130,6 +130,7 @@ struct SocialBook {
     /// Seconds since this Jelly's last social (counts only while he is awake and free to join): the floor asks for one past `droughtLimit`.
     var drought: Float = 0
     var droughtLimit: Float = 43
+    var pairRoll: Float = 0, pairRollLimit: Float = 10          // (SocialMoreTuning.swift: the extra pair roll)
     /// A wandering partner was asked to stop; the social starts when his leg is over (or is dropped after `inviteWait`).
     var invite: (kind: SocialKind, id: Int, t: Float)?
     /// Wake-up greeting: a Jelly in the room woke (`greetWho`); after `wakeGreet` seconds this one looks at him and hops (`greetHop`).
@@ -582,6 +583,7 @@ extension BlobBrain {
             if social == nil { socialWatch(sim, dt) }
             if social == nil { socialGroupWatch(sim, dt) }
             if social == nil { socialTreatWatch(sim, dt) }
+            if social == nil { socialPairWatch(sim, dt) }
         }
         socialHandsTick(sim, dt)
         // ease the overlays (exactly neutral when nothing asks for them)
@@ -623,13 +625,13 @@ extension BlobBrain {
         if let st = ContactStance.entry(s.kind), st.cls != .none { for id in (s.kind.isGroup ? s.crewIDs : [pid]) where id != steerID { socialBook.glow[id] = 1.5 } }
         if s.kind == .look { socialBook.lookPair[pid] = SocialTuning.lookCooldown; socialBook.cooldown = max(socialBook.cooldown, 4) }
         else {
-            let wait = (watching ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1) * parkSocialWaitMul
+            let wait = (watching ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1) * parkSocialWaitMul * morePairWaitMul          // (social-more-r1: the wait after a group is the short pair wait too, so a group adds on top of pairs; SocialMoreTuning.swift)
             socialBook.cooldown = rand(SocialTuning.brainCooldown.0, SocialTuning.brainCooldown.1) * wait
             socialBook.pair[pid] = rand(SocialTuning.pairCooldown.0, SocialTuning.pairCooldown.1) * (s.kind == .squabble ? 1.4 : 1) * wait
             if s.idC >= 0, s.idC != steerID, let c = socialBrain(s.idC) { _ = c; socialBook.pair[s.idC] = socialBook.pair[pid] }
             if s.kind.isGroup {
                 for id in s.crewIDs where id != steerID { socialBook.pair[id] = socialBook.pair[pid] }
-                socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1) * parkSocialWaitMul; socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
+                socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1) * parkSocialWaitMul * moreGroupWaitMul; socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
                 if s.kind.isTreat { socialBook.treatCool = rand(EmoteTuning.treatCooldown.0, EmoteTuning.treatCooldown.1); socialBook.treatIdle = 0; socialBook.treatBusy = 0; socialBook.lastTreat = s.kind }
             }
             if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
