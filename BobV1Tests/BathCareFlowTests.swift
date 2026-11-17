@@ -65,6 +65,7 @@ final class BathCareFlowTests: XCTestCase {
     func testAFinishedBathUsesUpThePickedSuppliesAndGivesTheirPerks() {
         let r = run(kit: [CareItems.deluxe, CareItems.brush, CareItems.lintguard, CareItems.duck, CareItems.bubblebath])
         let n0 = r.care.jelly(0)!.needs.level(.attention)
+        defer { for k in PerkKind.allCases { r.care.jelly(0)?.perks.clear(k) } }          // (the perks persist in the test host's defaults: leave none behind for the other suites)
         r.care.needs(for: 0).set(.attention, 0.5)
         r.care.soapFinished()
         let p = r.care.jelly(0)!.perks
@@ -77,12 +78,13 @@ final class BathCareFlowTests: XCTestCase {
 
     func testAStoppedBathKeepsEverything() {
         let r = run(kit: [CareItems.deluxe, CareItems.duck])
+        let had = r.care.jelly(0)!.perks.active
         r.run(3, autoNext: false)
         r.care.cancelClean()
         r.run(8, scrubbing: false, autoNext: false)
         XCTAssertEqual(r.care.store.count(CareItems.deluxe), 1); XCTAssertEqual(r.care.store.count(CareItems.duck), 1)
         XCTAssertNil(r.care.armedSupplies[0]); XCTAssertTrue(r.bath.kit.isEmpty)
-        XCTAssertFalse(r.care.jelly(0)!.perks.isActive(.shine))
+        XCTAssertEqual(r.care.jelly(0)!.perks.active, had, "no perk was granted by a stopped bath")
     }
 
     func testThePickerChangesTheKitDuringTheSoapStepOnly() {

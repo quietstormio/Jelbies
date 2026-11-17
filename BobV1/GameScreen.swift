@@ -873,11 +873,12 @@ struct GameScreen: View {
         }
         // capture aid: -BlobGameDemo gclean runs Clean with scripted fake scrubs (starting from some dirt)
         if d.string(forKey: "BlobGameDemo") == "gclean" {
-            await sleep(4)
+            for _ in 0..<600 where LaunchGate.shared.visible || care.lastBrain == nil { await sleep(0.1) }          // (a slow load: wait for the room and his brain)
+            await sleep(3)
             care.bath.grime.dirt = 0.5
             care.bath.demo = true
             care.bath.demoHold = d.integer(forKey: "BathHold") != 0          // -BathHold 1: stop at every complete stage (captures)
-            if DevArgs.enabled, let k = d.string(forKey: "CareKit") { care.armedSupplies[0] = k.split(separator: ",").map(String.init) }
+            if DevArgs.enabled, let k = d.string(forKey: "CareKit") { let ids = k.split(separator: ",").map(String.init); for id in ids where care.store.count(id) < 1 { care.store.grant(id) }; care.armedSupplies[0] = ids }
             care.clean()
         }
         if let a = d.string(forKey: "GameAction") {
