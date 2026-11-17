@@ -41,6 +41,7 @@ enum ParkSlideProbe {
         s.append("act:\(b.activity)")
         s.append("ign:\(b.decorIgnore == ParkToys.slideUID ? "slide" : b.decorIgnore.map { String($0) } ?? "-")")
         if b.pending != nil { s.append("pending") }
+        if b.hurry { s.append("hurry") }          // (the run-out's hurry: it came along into the park until the outing's tidy, see GameCare.outingLanded)
         if b.poseW > 0 { s.append("pose") }
         return s.joined(separator: " ")
     }
@@ -73,7 +74,7 @@ extension GameCare {
                 P.hist[a.id] = h
             }
             if b.decorIgnore == ParkToys.slideUID { if P.ignoreSince[a.id] == nil { P.ignoreSince[a.id] = (P.t, st) } } else { P.ignoreSince[a.id] = nil }
-            let fl = a.floor
+            let cen = a.sim.centroid(), fl = SIMD2<Float>(cen.x, cen.z)          // (the DRAWN body: `a.floor` is the home spot (`outingHome`) until the run-out's tidy, and the root lags while a pose holds)
             let d = min(sf.distance(fl), sf.distance(b.position))
             let riding = b.idleState.kind == .decorSlide && b.idleState.decorUID == ParkToys.slideUID && b.idleState.slideStage >= 1
             let isIn = d < b.footprint * sf.spec.reach - 0.05
@@ -106,12 +107,14 @@ extension GameCare {
         }
         // pairs: drawn skins sunk into each other by more than 2 cm (and the crude centre-distance measure beside it)
         let crudeAt = Float(2 * BobForm.halfW) - 0.02
+        let drawn = Dictionary(bodies.map { ($0.id, { (c: SIMD3<Float>) in SIMD2<Float>(c.x, c.z) }($0.sim.centroid())) }, uniquingKeysWith: { x, _ in x })
         for (i, a) in bodies.enumerated() {
             guard let ba = a.brain else { continue }
             for c in bodies[(i + 1)...] {
                 guard let bc = c.brain else { continue }
                 let key = min(a.id, c.id) * 64 + max(a.id, c.id)
-                let dist = simd_distance(a.floor, c.floor)
+                let pa = drawn[a.id] ?? a.floor, pc = drawn[c.id] ?? c.floor
+                let dist = simd_distance(pa, pc)
                 var sunk = false
                 var g: Float = 9, gf: Float = 9
                 if dist < 1.4 {
@@ -125,14 +128,14 @@ extension GameCare {
                 guard dist < crudeAt || sunk || P.pairNow[key] == true else { continue }
                 let same = ba.social != nil && ba.social === bc.social
                 let tag = same ? "SAME \(ba.social!.kind.rawValue)/p\(ba.social!.phase)" : [P.doing(ba), P.doing(bc)].sorted().joined(separator: " x ")
-                let nearCourt = court.map { $0.distance(a.floor) < 0.8 || $0.distance(c.floor) < 0.8 } ?? false
+                let nearCourt = court.map { $0.distance(pa) < 0.8 || $0.distance(pc) < 0.8 } ?? false
                 if dist < crudeAt { P.crude[tag, default: 0] += 1; if nearCourt { P.crudeCourt[tag, default: 0] += 1 } }
                 if sunk {
                     P.pairs[tag, default: 0] += 1
                     if nearCourt { P.pairsCourt[tag, default: 0] += 1 }
                     if P.pairNow[key] != true {
                         P.pairNow[key] = true; P.pairEpisodes += 1
-                        NSLog("[slide3] pair #%d t=%.1f bodies %d-%d dist=%.2f gap=%.3f gapFeat=%.3f court=%d A[%@]@(%.2f,%.2f) B[%@]@(%.2f,%.2f) histA %@ histB %@", P.pairEpisodes, P.t, a.id, c.id, dist, g, gf, nearCourt ? 1 : 0, P.doing(ba), a.floor.x, a.floor.y, P.doing(bc), c.floor.x, c.floor.y, (P.hist[a.id] ?? []).suffix(4).joined(separator: " > "), (P.hist[c.id] ?? []).suffix(4).joined(separator: " > "))
+                        NSLog("[slide3] pair #%d t=%.1f bodies %d-%d dist=%.2f gap=%.3f gapFeat=%.3f court=%d A[%@]@(%.2f,%.2f) B[%@]@(%.2f,%.2f) histA %@ histB %@", P.pairEpisodes, P.t, a.id, c.id, dist, g, gf, nearCourt ? 1 : 0, P.doing(ba), pa.x, pa.y, P.doing(bc), pc.x, pc.y, (P.hist[a.id] ?? []).suffix(4).joined(separator: " > "), (P.hist[c.id] ?? []).suffix(4).joined(separator: " > "))
                     }
                 } else if P.pairNow[key] == true {
                     P.pairNow[key] = false

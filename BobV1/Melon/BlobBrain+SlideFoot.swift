@@ -97,6 +97,11 @@ extension BlobBrain {
         return nil
     }
 
+    /// park-slide-r3 (owner 2026-11-16, "They're still walking in slide") switch for its two changes: `decorExitCheck` keeps the park slide solid for a body whose centre is only over its
+    /// edge (BlobBrain+Decor.swift), and the run-out's lifted floor rules end at the park swap (`GameCare.outingLanded`). false = main's rules: `-ParkSlideFix old` (dev builds only) for a
+    /// real-app before / after in one build, and the headless soak's before arm.
+    nonisolated(unsafe) static var slideSoftEndEnabled = !(DevArgs.enabled && UserDefaults.standard.string(forKey: "ParkSlideFix") == "old")
+
     /// Park slide only, called with no behaviour running (`decorExitCheck`): a free Jelbie who stands on the slide's foot while someone else has the slide walks off
     /// to the lawn, so the rider has a clear landing. No spot free = he stays.
     func slideFootCheck() {

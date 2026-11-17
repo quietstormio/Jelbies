@@ -478,6 +478,7 @@ extension GameCare {
                 if Self.demoSpots.indices.contains(k) { at = Self.demoSpots[k] }
                 #endif
                 rehome(a, at: at)
+                outingLanded(a)          // (park-slide-r3: the run-out's lifted floor rules and hurry end at the swap, not 1.4 s into the park: GameCare+Outing.swift)
                 guard let brain = a.brain else { continue }
                 brain.autonomy = UserDefaults.standard.integer(forKey: "BlobNoWander") == 0; brain.idleBlocked = false; brain.restTimer = 1.2
                 brain.startTurn(to: 0, sim: a.sim)

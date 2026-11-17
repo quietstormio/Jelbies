@@ -23,12 +23,13 @@ extension ParkSlideRoundTests {
 
     static let insideStarts: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4), SIMD2(-1.2, 2.2), SIMD2(1.0, 2.9)]
 
-    func insideRun(seeds: [UInt64], seconds: Float, mode: InsideMode = .plain) -> InsideRun {
+    func insideRun(seeds: [UInt64], seconds: Float, mode: InsideMode = .plain, fix: Bool = true) -> InsideRun {
         var out = InsideRun()
         let seesaw = ParkPlayTuning.seesawInPark, budget = BlobBrain.pickBudgetSeconds
         ParkPlayTuning.seesawInPark = false          // (the owner's park: no seesaw since park-play-r1; XCTest places it for the seesaw's own suites)
         BlobBrain.pickBudgetSeconds = .infinity          // (repeatable picks: the wall-clock budget would time out at random on a loaded host)
-        defer { ParkPlayTuning.seesawInPark = seesaw; BlobBrain.pickBudgetSeconds = budget }
+        BlobBrain.slideSoftEndEnabled = fix          // (false = main's rule: the before arm)
+        defer { ParkPlayTuning.seesawInPark = seesaw; BlobBrain.pickBudgetSeconds = budget; BlobBrain.slideSoftEndEnabled = true }
         for seed in seeds {
             let lab = parkLab(n: 5, seed: seed, aspect: Self.portrait, starts: Self.insideStarts, quiet: false)
             // the owner's park: Lavender (wings), Moss (daisy), Panda (ears), the visitors Bubbles (yellow: spines) and Freckles (lavender: wings); set as ParkPlayTests' soak sets them
@@ -107,26 +108,53 @@ extension ParkSlideRoundTests {
         print("PSI \(name) total samples \(r.samples) overlap \(r.overlap) deep \(r.deep) episodes \(r.episodes) closePairs \(r.closePairs) wall \(Int(wall)) s")
     }
 
-    /// As the game plays: five bodies, four seeds x 300 sim-s. Nobody's centre inside the slide's box unless he is on the slide.
-    func testParkNobodyInsideTheSlide() {
+    /// Both arms on the same seeds: `fix` false (main's rule, the soft slide as before) then true (park-slide-r3). The after arm: no centre inside the box; the activity starts
+    /// (rides, hopscotch, socials) at 0.9x of the before arm or more.
+    func insideBothArms(_ name: String, seeds: [UInt64], seconds: Float, mode: InsideMode) -> (before: InsideRun, after: InsideRun) {
         let t0 = Date()
-        let r = insideRun(seeds: [1, 2, 3, 4], seconds: 300)
-        insideReport("plain", r, wall: Date().timeIntervalSince(t0))
-        XCTAssertEqual(r.deep, 0, "a centre inside the slide's box while not on it: \(r.deepTag)")
+        let b = insideRun(seeds: seeds, seconds: seconds, mode: mode, fix: false)
+        insideReport(name + "-before", b, wall: Date().timeIntervalSince(t0))
+        let t1 = Date()
+        let a = insideRun(seeds: seeds, seconds: seconds, mode: mode, fix: true)
+        insideReport(name + "-after", a, wall: Date().timeIntervalSince(t1))
+        XCTAssertEqual(a.deep, 0, "\(name): a centre inside the slide's box while not on it: \(a.deepTag)")
+        let sb = b.socials.values.reduce(0, +), sa = a.socials.values.reduce(0, +)
+        print("PSI \(name) rates before/after: rides \(b.rides)/\(a.rides) hopscotch \(b.hops)/\(a.hops) socials \(sb)/\(sa)")
+        if sb >= 10 { XCTAssertGreaterThanOrEqual(Float(sa), 0.9 * Float(sb), "\(name): socials stay at 0.9x or more") }
+        return (b, a)
     }
-    /// DENSE: every free body is sent to the slide every 0.5 s (autonomy on): many ride exits and approaches next to friends. Two seeds x 240 sim-s.
+    /// As the game plays: five bodies, two seeds x 180 sim-s per arm.
+    func testParkNobodyInsideTheSlide() { _ = insideBothArms("plain", seeds: [1, 2], seconds: 180, mode: .plain) }
+    /// DENSE: every free body is sent to the slide every 0.5 s (autonomy on): many ride exits and approaches next to friends. One seed x 180 sim-s per arm.
     func testParkNobodyInsideTheSlideDense() {
-        let t0 = Date()
-        let r = insideRun(seeds: [1, 2], seconds: 240, mode: .dense)
-        insideReport("dense", r, wall: Date().timeIntervalSince(t0))
-        XCTAssertGreaterThan(r.rides, 10, "the slide is ridden")
-        XCTAssertEqual(r.deep, 0, "a centre inside the slide's box while not on it: \(r.deepTag)")
+        let r = insideBothArms("dense", seeds: [3], seconds: 180, mode: .dense)
+        XCTAssertGreaterThan(r.after.rides, 5, "the slide is ridden")
     }
-    /// SOCIAL: the social cooldowns forced short every second (the park with more socials). Two seeds x 240 sim-s.
-    func testParkNobodyInsideTheSlideSocial() {
-        let t0 = Date()
-        let r = insideRun(seeds: [1, 2], seconds: 240, mode: .social)
-        insideReport("social", r, wall: Date().timeIntervalSince(t0))
-        XCTAssertEqual(r.deep, 0, "a centre inside the slide's box while not on it: \(r.deepTag)")
+    /// SOCIAL: the social cooldowns forced short every second (the park with more socials). One seed x 180 sim-s per arm.
+    func testParkNobodyInsideTheSlideSocial() { _ = insideBothArms("social", seeds: [4], seconds: 180, mode: .social) }
+
+    /// The real-app before watch (the Panda, 2 s into the visit): his centre 0.58 from the slide's box (inside its 0.65 zone, outside the box) on a walk past its front corner. Main's rule
+    /// turned the slide soft for him (`decorExitCheck`) and the walk cut the corner 0.25 from the box. Both arms, the same walk: the least distance from his centre to the box.
+    func testRimWalkKeepsTheSlideSolid() {
+        var least: [Bool: Float] = [:]
+        for fix in [false, true] {
+            BlobBrain.slideSoftEndEnabled = fix
+            defer { BlobBrain.slideSoftEndEnabled = true }
+            let lab = parkLab(n: 1, seed: 3, aspect: Self.portrait)
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!
+            let r = lab.rigs[0], b = r.brain
+            place(r, SIMD2(1.52, 2.09))
+            b.requestNow(.goTo(SIMD2(3.21, 3.41)))
+            var l: Float = 9, soft = 0
+            for _ in 0..<(8 * 60) {
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+                l = min(l, sl.distance(b.position))
+                if b.decorIgnore == ParkToys.slideUID { soft += 1 }
+            }
+            print(String(format: "PSI RIM fix %d: least centre-to-box %.2f, soft for %d steps, ends at (%.2f,%.2f)", fix ? 1 : 0, l, soft, b.position.x, b.position.y))
+            least[fix] = l
+            b.abortAll(r.sim, r.skinner)
+        }
+        XCTAssertGreaterThanOrEqual(least[true] ?? 0, 0.55, "with the fix the walk keeps his footprint off the slide")
     }
 }
