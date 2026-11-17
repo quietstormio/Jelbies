@@ -188,7 +188,7 @@ struct BathChrome: View {
                                     .offset(x: 4, y: -4).transition(.scale)
                             }
                         }
-                    Text(HUDLayout.isLandscape(vsc: vsc, size: viewSize) && t.1 == "Jelly Soap" ? "Soap" : t.1)          // (landscape: the right column is narrow)
+                    Text(t.0 == .soap ? (HUDLayout.isLandscape(vsc: vsc, size: viewSize) ? "Soap" : "\(bath.soap == .jelly ? "Jelly" : bath.soap.scent) Soap") : t.1)          // (the picked soap's name; landscape: the right column is narrow)
                         .playFont(11 * ps, .semibold, relativeTo: .caption)
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(Capsule().fill(CareMenu.cream))
