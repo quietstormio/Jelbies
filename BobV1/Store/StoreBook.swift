@@ -85,7 +85,7 @@ final class StoreBook {
     }
     static let key = "StoreBook.v1"
 
-    private(set) var saved = Saved()
+    var saved = Saved()
     let wallet: DropsWallet
     /// Bumped on every change (views and the shoe set read it).
     private(set) var revision = 0
@@ -153,7 +153,7 @@ final class StoreBook {
         return out
     }
 
-    private func save() {
+    func save() {
         revision += 1
         guard persists, let d = try? JSONEncoder().encode(saved) else { return }
         defaults.set(d, forKey: storeKey)
