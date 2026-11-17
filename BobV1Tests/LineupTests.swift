@@ -137,13 +137,13 @@ final class LineupTests: XCTestCase {
         XCTAssertTrue(DiningSpot.placeReachable(SIMD2(-1.11, 0.76)))
     }
 
-    private func mealCheck(_ name: String, starts: [SIMD2<Float>]) {
+    private func mealCheck(_ name: String, starts: [SIMD2<Float>], food: Bool = false) {
         let r = rig(clearTray: false)
         for (i, s) in starts.enumerated() { r.place(i, at: s) }
-        for i in 0..<3 { r.care.needs(for: i).set(.thirst, 0.1) }
+        for i in 0..<3 { r.care.needs(for: i).set(food ? .hunger : .thirst, 0.1) }
         r.run(0.5)
         var tr = Track(count: 3)
-        r.care.drink()
+        if food { r.care.feed() } else { r.care.drink() }
         var secs: Float = 0
         let done = run(r, 14, track: &tr) { secs += 1 / 60; return r.care.group.state == .serving }
         print("LINEUP meal \(name) done=\(done) time=\(secs) minDist=\(tr.minDist) places=\(r.care.group.placeOf)")
@@ -154,4 +154,6 @@ final class LineupTests: XCTestCase {
     func testMealFromTwoOuterOnesNearTheMiddle() { mealCheck("nearMiddle", starts: [SIMD2(0, -1.8), SIMD2(-0.7, 0.2), SIMD2(0.7, 0.2)]) }
     func testMealFromOneFarBehind() { mealCheck("farBehind", starts: [SIMD2(0, -2.0), SIMD2(-1.0, 0.6), SIMD2(1.0, 0.6)]) }
     func testMealFromAllOnOneSide() { mealCheck("oneSide", starts: [SIMD2(-1.0, 0.0), SIMD2(-1.0, 1.6), SIMD2(-1.0, -1.6)]) }
+    /// The same with FOOD (2026-11-17: a food sitting takes the x-ordered places of 11-15, and three on one side at the same x are a near-tie in x).
+    func testFoodMealFromAllOnOneSide() { mealCheck("oneSideFood", starts: [SIMD2(-1.0, 0.0), SIMD2(-1.0, 1.6), SIMD2(-1.0, -1.6)], food: true) }
 }
