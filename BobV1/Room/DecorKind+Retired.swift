@@ -17,6 +17,8 @@ extension DecorKind {
         // 2026-11-15 (the user's ask: "Remove rc car, scooter, frisbee, and bubble machine"). StoreBook+RetiredDecor.swift's pass runs once per save, so it
         // cannot see a kind retired after it ran: a save that owns one of these is cleared and refunded by StoreBook+RetiredToys.swift
         .toycar: 50, .kickscooter: 55, .frisbee: 35, .bubblemachine: 60,
+        // 2026-11-16 (the user's ask: "The tunnel too small remove this toy"): cleared and refunded by the same pass (StoreBook+RetiredToys.swift)
+        .playtunnel: 70,
     ]
     static let retired: Set<DecorKind> = Set(retiredPrices.keys)
     var isRetired: Bool { Self.retired.contains(self) }
