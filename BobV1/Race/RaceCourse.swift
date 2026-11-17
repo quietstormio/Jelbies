@@ -328,8 +328,6 @@ final class CourseProgress {
     @ObservationIgnored private let persists: Bool
     @ObservationIgnored private let defaults: UserDefaults
     static let key = "Circuit.progress.v1", chosenKey = "Circuit.course.v1"
-    /// Opens nothing since 2026-11-16 (only a win does); kept because the Help sheet's line still quotes it (Store/TownUI.swift).
-    static let topTwoToUnlock = 3
     nonisolated deinit {}
 
     init(persists: Bool = false, defaults: UserDefaults = .standard) {
