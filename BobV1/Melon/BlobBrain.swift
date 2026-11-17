@@ -839,12 +839,20 @@ final class BlobBrain {
             script = .walk(target: fixed(p), then: .faceCamera); activity = .coming
         case .dine(let place, let bites):
             dine = DineState(place: place, bitesLeft: bites, mode: dineHooks?.fork == true ? .fork : .finger)
-            script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking
+            if shortDineStep(place) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: already on his stand: no walk that turns toward a point cm away)
+            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking }
         case .sip(let place, let gulps):
             dine = DineState(place: place, bitesLeft: gulps, mode: .sip)
-            script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking
+            if shortDineStep(place) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: as above)
+            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking }
         }
     }
+
+    /// C5 (2026-11-17, the owner: "I don't want them turning, extra steps"; Main's OK, meal dine walks only): a meal diner (`reserved`) who already stands within
+    /// `dineStepMin` of his stand is not walked there: a walk that short starts by turning to face its target, a point a few cm to his side, and the square-up
+    /// then turns him back (round C: +10 -> -82 -> 0 deg on the spot). He squares up where he stands instead; the dine reach takes the few cm.
+    static let dineStepMin: Float = 0.15
+    func shortDineStep(_ place: DiningPlace) -> Bool { reserved && simd_distance(SIMD2(px, pz), fixed(place.stand)) < Self.dineStepMin }
 
     func fixed(_ p: SIMD2<Float>) -> SIMD2<Float> {
         let r = resolve(SIMD3(p.x, 0, p.y), footprint)

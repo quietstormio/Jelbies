@@ -50,6 +50,8 @@ final class GameCare {
     @ObservationIgnored var standRequested = false
     @ObservationIgnored var standIdle: Float = 0
     @ObservationIgnored var standSettle: Float = 0
+    /// C5: seconds the single eater has stood ready at his place without facing it (the calm wait's facing gate gives up at `DiningGroup.calmFacingWait`).
+    @ObservationIgnored var singleFacingT: Float = 0
     @ObservationIgnored var standRetries = 0
     @ObservationIgnored var wantedAge: Float = 0
     /// Seconds since this single order (tray wanted or out): ticks every step in `tickDining`, also while a Come call holds `serveWanted` back (`wantedAge` does not), so the `callRunning` watchdog always fires.
@@ -542,7 +544,7 @@ final class GameCare {
     }
     /// The café's serving (GameCare+Cafe.swift): a group serving that skips the trip guard; `tickGroup` takes the café's hooks (cafeBook.hooks).
     func beginCafeServing(_ c: Consumable) { mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0 }
-    func resetStandWalk() { standRequested = false; standIdle = 0; standSettle = 0; standRetries = 0; wantedAge = 0; wantedOrigin = nil }
+    func resetStandWalk() { standRequested = false; standIdle = 0; standSettle = 0; standRetries = 0; wantedAge = 0; wantedOrigin = nil; singleFacingT = 0 }
 
     /// Floor obstacle for the brain's resolver: pushes a point out of the tray.
     /// Sipping stands `sipCloser` nearer the tray (his mouth only reaches a straw tip that close); his belly may overlap the tray's rim by that much.
@@ -747,6 +749,8 @@ final class GameCare {
                 if act == .idle || act == .lookingAround || act == .steppingInPlace { standSettle += dt } else { standSettle = 0 }
                 guard standSettle >= Self.popSettle else { return }
             }
+            // C5: the calm wait squares him up to his place first (BlobBrain.mealFaceYaw turns him), as the group does; never longer than the fallback
+            if DiningGroup.calmWait, abs(wrapAngle(brain.yaw - layout.places[0].yaw)) >= DiningGroup.calmFacing, singleFacingT < DiningGroup.calmFacingWait { singleFacingT += dt; return }
             if dining.phase == .absent, dining.spawn(serving: c, n: 1, bobAt: SIMD2(99, 99), forcedOrigin: origin) {
                 wanted = nil; meal = c; mealAge = 0; idleT = 0; resetStandWalk()
                 let kind: NeedKind = c.kind == .food ? .hunger : .thirst
