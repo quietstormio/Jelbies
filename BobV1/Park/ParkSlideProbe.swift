@@ -7,6 +7,9 @@
 //    [slide3] pair  two bodies whose drawn skins are sunk into each other by more than 2 cm (`ContactField.gap`, the keepApart wall's own measure), with both bodies' doing, near the
 //                   hopscotch court or not. One line when it starts, sample counts per tag in the summary.
 //    [slide3] sum   every 60 probe seconds: the counts (samples at the fixed step, 60 a second), the probe clock against the wall clock.
+//    [arrive]       park-arrive-r1, the first 5 s after the swap into the park, every body: his root (the brain's position) against his drawn body (the pose centroid the brain
+//                   reads), the drawn centre's distance to the slide's box, the floor rules' pieces at his spot, and every root step over 8 cm with the feet and the step;
+//                   `[arrive] sum` per body at 5 s. `[arrive] spot` at the swap: each arrival spot against the walk's own rules.
 //
 
 #if targetEnvironment(simulator)
@@ -165,6 +168,78 @@ extension GameCare {
             NSLog("[slide3] sum crudeCourtTags %@", fmt(P.crudeCourt))
             NSLog("[slide3] sum rideByStage %@", P.rideStage.sorted { $0.key < $1.key }.map { String(format: "st%d n=%d maxX=%.2f dwell=%.1f", $0.key, $0.value.n, $0.value.maxX, $0.value.dwell) }.joined(separator: " ; "))
         }
+    }
+}
+extension ParkSlideProbe {
+    /// park-arrive-r1: seconds since the swap into the park (nil: no arrival being watched). Two windows: the arrival (0-5 s) and a control later in the same visit (10-15 s).
+    nonisolated(unsafe) static var arriveT: Double?
+    nonisolated(unsafe) static var arriveSteps = 0
+    nonisolated(unsafe) static var arriveLastRoot: [Int: SIMD2<Float>] = [:], arriveLastStep: [Int: SIMD2<Float>] = [:]
+    struct ArriveWorst { var misPosed: Float = 0, misPosedAt: Double = 0, box: Float = 99, boxAt: Double = 0, rootStep: Float = 0, rootStepAt: Double = 0, stride: Float = 0, strideAt: Double = 0, inBox = 0 }
+    nonisolated(unsafe) static var arriveWorst: [Int: ArriveWorst] = [:]
+    static func arriveWindow(_ t: Double) -> String? { t < 5 ? "early" : (t >= 10 && t < 15 ? "late" : nil) }
+}
+
+extension GameCare {
+    /// park-arrive-r1 capture aid (`-SlideProbe 1`): from the swap (`parkSwap(.park)` sets `arriveT` = 0), every step, every body: his root (the brain's position) against his drawn
+    /// body (the pose centroid the brain reads), the drawn centre's distance to the slide's box, every walk step's length and every root move in one fixed step. Per body and window
+    /// (`early` 0-5 s, `late` 10-15 s, the control) one `[arrive] sum` line. Detail lines (every 0.1 s, on a mismatch over 0.2 m, on a root step over 8 cm) in the early window.
+    func parkArriveProbe(_ bodies: [JellyActor], dt: Float) {
+        typealias P = ParkSlideProbe
+        guard var t = P.arriveT else { return }
+        let sf = DecorField.shared.foot(ParkToys.slideUID)
+        P.arriveSteps += 1
+        let win = P.arriveWindow(t), early = win == "early"
+        if early, P.arriveSteps % 6 == 1 { NSLog("[arrive] care t=%.2f phase=%@ dining=%@ wanted=%d trayOut=%d meal=%d", t, "\(park.phase)", "\(dining.phase)", wanted != nil ? 1 : 0, trayOut ? 1 : 0, meal != nil ? 1 : 0) }
+        for a in bodies {
+            guard let b = a.brain else { continue }
+            let c = a.sim.bodyPose(iterations: 4).centroid, drawn = SIMD2<Float>(c.x, c.z), root = b.position          // (the drawn body as the brain reads it: `currentPose` sets the root from this centroid)
+            let mis = simd_distance(root, drawn)
+            let riding = b.idleState.kind == .decorSlide && b.idleState.decorUID == ParkToys.slideUID
+            let dBox = sf.map { $0.distance(drawn) } ?? 99, dBoxRoot = sf.map { $0.distance(root) } ?? 99
+            let last = P.arriveLastRoot[a.id] ?? root
+            let jump = simd_distance(root, last)
+            P.arriveLastRoot[a.id] = root
+            var stride: Float = 0
+            if b.stepLive, P.arriveLastStep[a.id] != b.stepRoot0 { P.arriveLastStep[a.id] = b.stepRoot0; stride = simd_length(b.stepRootD) }          // (a new walk step: its root move)
+            if win != nil {
+                var w = P.arriveWorst[a.id] ?? P.ArriveWorst()
+                if b.poseW > 0, mis > w.misPosed { w.misPosed = mis; w.misPosedAt = t }
+                if !riding, dBox < w.box { w.box = dBox; w.boxAt = t }
+                if !riding, dBox <= 0 { w.inBox += 1 }
+                if jump > w.rootStep { w.rootStep = jump; w.rootStepAt = t }
+                if stride > w.stride { w.stride = stride; w.strideAt = t }
+                P.arriveWorst[a.id] = w
+            }
+            if win != nil, jump > 0.08 || stride > 0.6 {
+                let f = b.fixed(root), fl = b.fixed(last)
+                NSLog("[arrive] jump %@ t=%.2f body=%d from=(%.2f,%.2f) to=(%.2f,%.2f) stride=%.2f walkRulesAtFrom=(%.2f,%.2f) movedFrom=%.2f walkRulesAtTo=(%.2f,%.2f) movedTo=%.2f poseW=%.2f feetInit=%d stepRoot0=(%.2f,%.2f) stepRootD=(%.2f,%.2f) doing [%@]", win ?? "-", t, a.id, last.x, last.y, root.x, root.y, stride, fl.x, fl.y, simd_distance(fl, last), f.x, f.y, simd_distance(f, root), b.poseW, b.feetInit ? 1 : 0, b.stepRoot0.x, b.stepRoot0.y, b.stepRootD.x, b.stepRootD.y, P.doing(b))
+            }
+            guard early else { continue }
+            var tgt = "-"
+            if case .walk(let target, _) = b.script { tgt = String(format: "(%.2f,%.2f)", target.x, target.y) }
+            if P.arriveSteps % 30 == 1 {
+                let q3 = SIMD3(root.x, 0, root.y)
+                let cam = GameCamera.constrain(q3, radius: b.footprint, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b.decorIgnore)
+                let lay = RoomLayout.resolve(position: q3, radius: b.footprint, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b.decorIgnore)
+                let tray = trayObstacle(q3, radius: b.footprint, id: a.id), f = b.fixed(root)
+                NSLog("[arrive] rules t=%.2f body=%d at=(%.2f,%.2f) camera=(%.2f,%.2f) layout=(%.2f,%.2f) tray=(%.2f,%.2f) walkRules=(%.2f,%.2f) roamZ=%.2f..%.2f keepOut=%d rowOpen=%d ign=%d", t, a.id, root.x, root.y, cam.x, cam.z, lay.x, lay.z, tray.x, tray.z, f.x, f.y, GameCamera.roamMinZ, GameCamera.roamMaxZ, focusKeepOutFor(a.id) != nil ? 1 : 0, focusGroup.rowOpen ? 1 : 0, b.decorIgnore ?? -1)
+            }
+            if P.arriveSteps % 6 == 1 || mis > 0.2 || jump > 0.08 {
+                NSLog("[arrive] t=%.2f phase=%@ body=%d root=(%.2f,%.2f) drawn=(%.2f,%.2f) mis=%.2f jump=%.3f dBox=%.2f dBoxRoot=%.2f poseW=%.2f stepLive=%d feet=%d lifted=%d arena=(%.2f,%.2f r%.2f%@) floor=(%.2f,%.2f) target=%@ doing [%@]",
+                      t, "\(park.phase)", a.id, root.x, root.y, drawn.x, drawn.y, mis, jump, dBox, dBoxRoot, b.poseW, b.stepLive ? 1 : 0, b.feet.active ? 1 : 0, outing.lifted.contains(a.id) ? 1 : 0,
+                      a.sim.arenaCenter.x, a.sim.arenaCenter.y, a.sim.arenaRadius, a.sim.arenaSuspended ? " SUSP" : "", a.floor.x, a.floor.y, tgt, P.doing(b))
+            }
+        }
+        let next = t + Double(dt)
+        func sums(_ name: String) {
+            for (id, w) in P.arriveWorst.sorted(by: { $0.key < $1.key }) {
+                NSLog("[arrive] sum %@ body=%d maxMismatchPosed=%.2f@%.2f minBoxDrawn=%.2f@%.2f boxSamples=%d maxStride=%.2f@%.2f maxRootStep=%.3f@%.2f", name, id, w.misPosed, w.misPosedAt, w.box, w.boxAt, w.inBox, w.stride, w.strideAt, w.rootStep, w.rootStepAt)
+            }
+            P.arriveWorst = [:]
+        }
+        if t < 5, next >= 5 { sums("early") }
+        if next >= 15 { sums("late"); P.arriveT = nil; P.arriveLastRoot = [:]; P.arriveLastStep = [:] } else { t = next; P.arriveT = t }
     }
 }
 #endif

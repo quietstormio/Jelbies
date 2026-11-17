@@ -129,7 +129,12 @@ extension GameCare {
     /// park-slide-r3 (owner 2026-11-16, "They're still walking in slide"): the trip's swap has just put this runner in the park, so his run-out ends HERE: the floor rules and his
     /// arena wall come back, he stops hurrying, and the fade's keep-running loop leaves him alone. Before, all of it lasted until `outingTidy` (1.8 s after the fade began, about
     /// 1.4 s into the park), and his first wander leg (restTimer 1.2 s) was picked and walked with NO floor rules: its goal could lie inside the slide and its leg cross it (the
-    /// real-app probe: the Panda over the slide's chute in the visit's first second, the owner's screenshot). `outingHome` stays until the tidy (the trip has already read it).
+    /// real-app probe: the Panda over the slide's chute in the visit's first second, the owner's screenshot).
+    /// park-arrive-r1: `outingHome` goes here too (level 3; the trip read the home spots before the swap). Until the tidy, `JellyActor.floor` gave the HOME spot for a body standing in
+    /// the park, and the stage built his skin's contact profile around that spot (`root: a.floor`, MelonStage's skinning): its radii grew by the way from home to his park spot
+    /// (0.9-4.2 m for the owner's three), so the steering's wall (`MelonController.keepApart`, ContactField) threw the walk steps and hops of the ones who came metres at a time (single
+    /// steps of 1.8-4.2 m and a 1.5 m hop in the first 1.4 s in the arrival probe, the drawn body dragged after them; the floor rules alone left those spots where they were). The peers' snapshot
+    /// had him at home too.
     func outingLanded(_ a: JellyActor) {
         let o = outing
         guard var r = o.runners[a.id] else { return }
@@ -141,6 +146,7 @@ extension GameCare {
         a.sim.arenaSuspended = false
         r.swapped = true; o.runners[a.id] = r
         a.brain?.hurry = false; a.brain?.outingPace = 1
+        if BlobBrain.slideFixLevel >= 3 { a.outingHome = nil }
     }
 
     /// Everything back to normal; a runner still out in the street (the trip never took him) walks in from home.
