@@ -875,9 +875,12 @@ final class BlobBrain {
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         var pt = CACurrentMediaTime()
-        if socialMaybeStart(sim) { return }
+        let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
+        if footKeep { Self.slideFootTurnAways += 1 }
+        if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { request(.goTo(out)); restTimer = 0.3; return }
+        if !footKeep, socialMaybeStart(sim) { return }
         HopDiag.lap(.tkPickSocial, &pt)
-        if idleMaybeStart(sim) { return }
+        if !footKeep, idleMaybeStart(sim) { return }
         HopDiag.lap(.tkPickIdle, &pt)
         defer { HopDiag.lap(.tkPickWander, &pt) }
         var w: [(Int, Float)] = [(0, 7.5), (1, 1.2), (2, 0.8)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
@@ -889,6 +892,7 @@ final class BlobBrain {
         var r = rand() * total
         var choice = w[0].0
         for (k, wt) in w { if r < wt { choice = k; break }; r -= wt }
+        if footKeep { choice = 0 }
         lastPick = choice
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         switch choice {
@@ -971,7 +975,7 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
-            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), reachable(here, cand) else { continue }
+            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))

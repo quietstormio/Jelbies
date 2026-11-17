@@ -18,18 +18,31 @@ extension ParkSlideRoundTests {
         var byTag: [String: Int] = [:], deepTag: [String: Int] = [:], notes: [String] = []
         var rides = 0, hops = 0, socials: [String: Int] = [:], idles: [String: Int] = [:]
         var closePairs = 0, closeTags: [String: Int] = [:]
+        var deepNotes: [String] = [], closeNotes: [String] = []
+        /// Pairs closer than 0.9 with one of the two near the slide's landing (within peerGap + 0.5): the bunching at the chute's end. The foot rule's turn-aways (r4).
+        var landingClose = 0, turnAways = 0
+        mutating func merge(_ o: InsideRun) {
+            samples += o.samples; overlap += o.overlap; deep += o.deep; episodes += o.episodes; rides += o.rides; hops += o.hops; closePairs += o.closePairs
+            landingClose += o.landingClose; turnAways += o.turnAways
+            for (k, v) in o.byTag { byTag[k, default: 0] += v }; for (k, v) in o.deepTag { deepTag[k, default: 0] += v }
+            for (k, v) in o.socials { socials[k, default: 0] += v }; for (k, v) in o.idles { idles[k, default: 0] += v }; for (k, v) in o.closeTags { closeTags[k, default: 0] += v }
+            notes += o.notes; deepNotes += o.deepNotes; closeNotes += o.closeNotes
+        }
     }
+    /// The walk's target (or "-") for the notes.
+    static func walkTarget(_ b: BlobBrain) -> String { if case .walk(let t, _) = b.script { return String(format: "(%.2f,%.2f)", t.x, t.y) }; return "-" }
     enum InsideMode { case plain, dense, social }
 
     static let insideStarts: [SIMD2<Float>] = [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4), SIMD2(-1.2, 2.2), SIMD2(1.0, 2.9)]
 
-    func insideRun(seeds: [UInt64], seconds: Float, mode: InsideMode = .plain, fix: Bool = true) -> InsideRun {
+    func insideRun(seeds: [UInt64], seconds: Float, mode: InsideMode = .plain, level: Int = 2) -> InsideRun {
         var out = InsideRun()
         let seesaw = ParkPlayTuning.seesawInPark, budget = BlobBrain.pickBudgetSeconds
         ParkPlayTuning.seesawInPark = false          // (the owner's park: no seesaw since park-play-r1; XCTest places it for the seesaw's own suites)
         BlobBrain.pickBudgetSeconds = .infinity          // (repeatable picks: the wall-clock budget would time out at random on a loaded host)
-        BlobBrain.slideSoftEndEnabled = fix          // (false = main's rule: the before arm)
-        defer { ParkPlayTuning.seesawInPark = seesaw; BlobBrain.pickBudgetSeconds = budget; BlobBrain.slideSoftEndEnabled = true }
+        BlobBrain.slideFixLevel = level          // (0 = main's rules: the before arm; 1 = park-slide-r3; 2 = park-slide-r4)
+        let turn0 = BlobBrain.slideFootTurnAways
+        defer { ParkPlayTuning.seesawInPark = seesaw; BlobBrain.pickBudgetSeconds = budget; BlobBrain.slideFixLevel = 2 }
         for seed in seeds {
             let lab = parkLab(n: 5, seed: seed, aspect: Self.portrait, starts: Self.insideStarts, quiet: false)
             // the owner's park: Lavender (wings), Moss (daisy), Panda (ears), the visitors Bubbles (yellow: spines) and Freckles (lavender: wings); set as ParkPlayTests' soak sets them
@@ -38,10 +51,11 @@ extension ParkSlideRoundTests {
                 r.skinner.autoBlink = false; r.skinner.configureTail(MotionRig.renderMesh); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
             }
             let sf = DecorField.shared.foot(ParkToys.slideUID)!
+            let landing = lab.rigs[0].brain.slideLanding(sf)
             let n = lab.rigs.count
             var inNow = [Bool](repeating: false, count: n), hist = [[String]](repeating: [], count: n), last = [String](repeating: "", count: n)
             var lastSocial = [ObjectIdentifier?](repeating: nil, count: n), lastIdle = [IdleKind?](repeating: nil, count: n), lastStage = [Int](repeating: 0, count: n)
-            var closeNow = Set<Int>()
+            var closeNow = Set<Int>(), deepNow = [Bool](repeating: false, count: n)
             var t: Float = 0
             for i in 0..<Int(seconds * 60) {
                 if mode == .dense, i % 30 == 5 {
@@ -73,12 +87,18 @@ extension ParkSlideRoundTests {
                     if d < b.footprint * sf.spec.reach - 0.05, !riding {
                         out.overlap += 1
                         out.byTag[st, default: 0] += 1
-                        if d < 0 { out.deep += 1; out.deepTag[st, default: 0] += 1 }
+                        if d < 0 {
+                            out.deep += 1; out.deepTag[st, default: 0] += 1
+                            if !deepNow[k] {
+                                deepNow[k] = true
+                                if out.deepNotes.count < 24 { out.deepNotes.append(String(format: "seed %d t%.1f body %d d %.2f at (%.2f,%.2f) target %@ insideT %.2f [%@] hist %@", Int(seed), t, k, d, fl.x, fl.y, Self.walkTarget(b), b.insideDecorT, st, hist[k].joined(separator: " > "))) }
+                            }
+                        } else { deepNow[k] = false }
                         if !inNow[k] {
                             inNow[k] = true; out.episodes += 1
                             if out.notes.count < 40 { out.notes.append(String(format: "seed %d t%.1f body %d d %.2f at (%.2f,%.2f) [%@] hist %@", Int(seed), t, k, d, fl.x, fl.y, st, hist[k].joined(separator: " > "))) }
                         }
-                    } else { inNow[k] = false }
+                    } else { inNow[k] = false; deepNow[k] = false }
                 }
                 // two bodies' roots closer than 0.9 (the circle spring holds 1.09; a touching emote's skins meet at ~0.95), not in one session together
                 for i in 0..<n { for j in (i + 1)..<n {
@@ -88,50 +108,78 @@ extension ParkSlideRoundTests {
                     let key = i * 8 + j
                     if dist < 0.9, !same {
                         out.closePairs += 1
+                        let pi0 = GameCare.floorPos(bi, lab.rigs[i].sim), pj0 = GameCare.floorPos(bj, lab.rigs[j].sim)
+                        if min(simd_distance(pi0, landing), simd_distance(pj0, landing)) < MelonController.jellyGap + 0.5 { out.landingClose += 1 }
                         let tag = [ParkSlideProbe.doing(bi), ParkSlideProbe.doing(bj)].sorted().joined(separator: " x ")
                         out.closeTags[tag, default: 0] += 1
-                        if !closeNow.contains(key) { closeNow.insert(key); if out.notes.count < 60 { out.notes.append(String(format: "close seed %d t%.1f %d-%d dist %.2f [%@]", Int(seed), t, i, j, dist, tag)) } }
+                        if !closeNow.contains(key) {
+                            closeNow.insert(key)
+                            if out.closeNotes.count < 24 {
+                                let pi = GameCare.floorPos(bi, lab.rigs[i].sim), pj = GameCare.floorPos(bj, lab.rigs[j].sim)
+                                out.closeNotes.append(String(format: "seed %d t%.1f %d-%d dist %.2f at (%.2f,%.2f)/(%.2f,%.2f) box %.2f/%.2f targets %@/%@ [%@] histI %@ histJ %@", Int(seed), t, i, j, dist, pi.x, pi.y, pj.x, pj.y, sf.distance(pi), sf.distance(pj), Self.walkTarget(bi), Self.walkTarget(bj), tag, hist[i].suffix(3).joined(separator: " > "), hist[j].suffix(3).joined(separator: " > ")))
+                            }
+                        }
                     } else { closeNow.remove(key) }
                 } }
             }
             for r in lab.rigs { r.brain.abortAll(r.sim, r.skinner) }
         }
+        out.turnAways = BlobBrain.slideFootTurnAways - turn0
         return out
     }
 
     func insideReport(_ name: String, _ r: InsideRun, wall: TimeInterval) {
         for nt in r.notes { print("PSI \(name) note \(nt)") }
+        for nt in r.deepNotes { print("PSI \(name) DEEP \(nt)") }
+        for nt in r.closeNotes { print("PSI \(name) CLOSE \(nt)") }
         for (k, v) in r.byTag.sorted(by: { $0.value > $1.value }) { print("PSI \(name) overlap \(v) deep \(r.deepTag[k] ?? 0) samples [\(k)]") }
         for (k, v) in r.closeTags.sorted(by: { $0.value > $1.value }).prefix(12) { print("PSI \(name) close \(v) samples [\(k)]") }
         print("PSI \(name) rates rides \(r.rides) hopscotch \(r.hops) socials \(r.socials.values.reduce(0, +)) [\(r.socials.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))]")
         print("PSI \(name) idles [\(r.idles.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))]")
-        print("PSI \(name) total samples \(r.samples) overlap \(r.overlap) deep \(r.deep) episodes \(r.episodes) closePairs \(r.closePairs) wall \(Int(wall)) s")
+        print("PSI \(name) total samples \(r.samples) overlap \(r.overlap) deep \(r.deep) episodes \(r.episodes) closePairs \(r.closePairs) landingClose \(r.landingClose) footTurnAways \(r.turnAways) wall \(Int(wall)) s")
     }
 
-    /// Both arms on the same seeds: `fix` false (main's rule, the soft slide as before) then true (park-slide-r3). The after arm: no centre inside the box; the activity starts
-    /// (rides, hopscotch, socials) at 0.9x of the before arm or more.
-    func insideBothArms(_ name: String, seeds: [UInt64], seconds: Float, mode: InsideMode) -> (before: InsideRun, after: InsideRun) {
+    /// Both arms on the same seeds, seed by seed: `fix` false (main's rule) then true (park-slide-r3/r4). The after arm: no centre inside the box; the socials (the park's "more play
+    /// together") at 0.9x of the before arm or more, as the MEAN of the per-seed ratios (one seed alone diverges: the two arms' runs part ways at the first different step).
+    func insideBothArms(_ name: String, seeds: [UInt64], seconds: Float, mode: InsideMode, level: Int = 2) -> (before: InsideRun, after: InsideRun) {
+        var b = InsideRun(), a = InsideRun()
+        var ratios: [Float] = []
         let t0 = Date()
-        let b = insideRun(seeds: seeds, seconds: seconds, mode: mode, fix: false)
+        for seed in seeds {
+            let bs = insideRun(seeds: [seed], seconds: seconds, mode: mode, level: 0), as1 = insideRun(seeds: [seed], seconds: seconds, mode: mode, level: level)
+            let sb = bs.socials.values.reduce(0, +), sa = as1.socials.values.reduce(0, +)
+            if sb >= 5 { ratios.append(Float(sa) / Float(sb)) }
+            print("PSI \(name) seed \(seed): before deep \(bs.deep) overlap \(bs.overlap) close \(bs.closePairs) landingClose \(bs.landingClose) rides \(bs.rides) hopscotch \(bs.hops) socials \(sb) | after(level \(level)) deep \(as1.deep) overlap \(as1.overlap) close \(as1.closePairs) landingClose \(as1.landingClose) rides \(as1.rides) hopscotch \(as1.hops) socials \(sa) footTurnAways \(as1.turnAways)")
+            b.merge(bs); a.merge(as1)
+        }
         insideReport(name + "-before", b, wall: Date().timeIntervalSince(t0))
-        let t1 = Date()
-        let a = insideRun(seeds: seeds, seconds: seconds, mode: mode, fix: true)
-        insideReport(name + "-after", a, wall: Date().timeIntervalSince(t1))
+        insideReport(name + "-after", a, wall: Date().timeIntervalSince(t0))
         XCTAssertEqual(a.deep, 0, "\(name): a centre inside the slide's box while not on it: \(a.deepTag)")
         let sb = b.socials.values.reduce(0, +), sa = a.socials.values.reduce(0, +)
-        print("PSI \(name) rates before/after: rides \(b.rides)/\(a.rides) hopscotch \(b.hops)/\(a.hops) socials \(sb)/\(sa)")
-        if sb >= 10 { XCTAssertGreaterThanOrEqual(Float(sa), 0.9 * Float(sb), "\(name): socials stay at 0.9x or more") }
+        let mean = ratios.isEmpty ? 1 : ratios.reduce(0, +) / Float(ratios.count)
+        print("PSI \(name) rates before/after: rides \(b.rides)/\(a.rides) hopscotch \(b.hops)/\(a.hops) socials \(sb)/\(sa) per-seed social ratios \(ratios.map { String(format: "%.2f", $0) }) mean \(String(format: "%.2f", mean)) closePairs \(b.closePairs)/\(a.closePairs) landingClose \(b.landingClose)/\(a.landingClose)")
+        if !ratios.isEmpty { XCTAssertGreaterThanOrEqual(mean, 0.9, "\(name): socials stay at 0.9x or more (mean of the per-seed ratios)") }
         return (b, a)
     }
     /// As the game plays: five bodies, two seeds x 180 sim-s per arm.
     func testParkNobodyInsideTheSlide() { _ = insideBothArms("plain", seeds: [1, 2], seconds: 180, mode: .plain) }
-    /// DENSE: every free body is sent to the slide every 0.5 s (autonomy on): many ride exits and approaches next to friends. One seed x 180 sim-s per arm.
+    /// DENSE: every free body is sent to the slide every 0.5 s (autonomy on): many ride exits and approaches next to friends. One seed x 180 sim-s per arm. The bodies do not bunch at the
+    /// chute's end: the pairs closer than 0.9 stay near the before arm.
     func testParkNobodyInsideTheSlideDense() {
         let r = insideBothArms("dense", seeds: [3], seconds: 180, mode: .dense)
         XCTAssertGreaterThan(r.after.rides, 5, "the slide is ridden")
+        XCTAssertLessThanOrEqual(r.after.landingClose, max(10, r.before.landingClose * 2), "dense: bodies bunch at the chute's end")
     }
-    /// SOCIAL: the social cooldowns forced short every second (the park with more socials). One seed x 180 sim-s per arm.
-    func testParkNobodyInsideTheSlideSocial() { _ = insideBothArms("social", seeds: [4], seconds: 180, mode: .social) }
+    /// SOCIAL: the social cooldowns forced short every second (the park with more socials). Seeds 4, 5, 6 x 180 sim-s per arm.
+    func testParkNobodyInsideTheSlideSocial() { _ = insideBothArms("social", seeds: [4, 5, 6], seconds: 180, mode: .social) }
+    /// Exploration (`TEST_RUNNER_PSI_MODE` plain / dense / social, `TEST_RUNNER_PSI_SEEDS` "4,5,6"): the same report for any seeds; skipped without the variables.
+    func testParkInsideSeeds() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let s = env["PSI_SEEDS"] else { throw XCTSkip("set TEST_RUNNER_PSI_SEEDS") }
+        let seeds = s.split(separator: ",").compactMap { UInt64($0) }
+        let mode: InsideMode = env["PSI_MODE"] == "dense" ? .dense : env["PSI_MODE"] == "social" ? .social : .plain
+        _ = insideBothArms("seeds-\(env["PSI_MODE"] ?? "plain")", seeds: seeds, seconds: Float(env["PSI_SECS"].flatMap { Float($0) } ?? 180), mode: mode, level: Int(env["PSI_LEVEL"] ?? "") ?? 2)
+    }
 
     /// The real-app before watch (the Panda, 2 s into the visit): his centre 0.58 from the slide's box (inside its 0.65 zone, outside the box) on a walk past its front corner. Main's rule
     /// turned the slide soft for him (`decorExitCheck`) and the walk cut the corner 0.25 from the box. Both arms, the same walk: the least distance from his centre to the box.

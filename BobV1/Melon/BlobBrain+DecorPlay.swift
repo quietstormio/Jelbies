@@ -163,7 +163,8 @@ extension BlobBrain {
                 // paths and the post-step refit would keep carrying them rigidly with the body: the planted foot rode up with the walk's stretch (stance foot 3 cm off the floor, the neck open).
                 beanFitUsed = nil; beanFitHold = 0
                 if let out {
-                    insideDecorT = -1.5; insideStuckT = 0; decorIgnore = f.uid
+                    insideDecorT = -1.5; insideStuckT = 0
+                    if walkOutSoftens(f) { decorIgnore = f.uid }          // (r4: the landing is outside the park slide's box: the walk-out keeps it solid and goes round it)
                     requestNow(.goTo(out))
                 }
             }

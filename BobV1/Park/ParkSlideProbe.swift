@@ -16,6 +16,9 @@ import simd
 
 enum ParkSlideProbe {
     nonisolated(unsafe) static var on = UserDefaults.standard.integer(forKey: "SlideProbe") != 0
+    /// `-SlideBusy 1` (capture aid, park-slide-r4): every 0.5 s each free body in the park (the ones who came and the visitors) is sent to the slide, as the headless soak's DENSE mode does.
+    nonisolated(unsafe) static var busy = UserDefaults.standard.integer(forKey: "SlideBusy") != 0
+    nonisolated(unsafe) static var busySteps = 0
     nonisolated(unsafe) static var t: Double = 0, wall0: Double = 0, lastSum: Double = 0, steps = 0
     nonisolated(unsafe) static var deep: [String: Int] = [:], overlap: [String: Int] = [:], ride: [String: Int] = [:], pairs: [String: Int] = [:], pairsCourt: [String: Int] = [:]
     nonisolated(unsafe) static var inNow: [Int: Bool] = [:], pairNow: [Int: Bool] = [:]
@@ -48,6 +51,12 @@ enum ParkSlideProbe {
 }
 
 extension GameCare {
+    /// `-SlideBusy 1`: the DENSE soak in the real app (every free body to the slide, every 0.5 s).
+    func parkSlideBusy(_ bodies: [JellyActor]) {
+        ParkSlideProbe.busySteps += 1
+        guard ParkSlideProbe.busySteps % 30 == 5 else { return }
+        for a in bodies { if let b = a.brain, b.idleState.kind == nil, !b.isSocial, b.pending == nil { _ = b.startCommandedDecor(.decorSlide, only: .slide, a.sim, a.skinner) } }
+    }
     func parkSlideProbe(_ bodies: [JellyActor], dt: Float) {
         typealias P = ParkSlideProbe
         guard let sf = DecorField.shared.foot(ParkToys.slideUID) else { return }

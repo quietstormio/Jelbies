@@ -67,7 +67,7 @@ extension BlobBrain {
             if insideDecorT > 1.2, !held, !decorLocked, pending == nil, let out = decorFreeSpot(near: position) {
                 insideDecorT = -1.5
                 walkOutFrom = position          // (the ease-out waits for a fresh 3 s once this walk has really moved him)
-                decorIgnore = f.uid
+                if walkOutSoftens(f) { decorIgnore = f.uid }          // (r4: a centre outside the slide's box walks out with it solid)
                 requestNow(.goTo(out))
             }
             return
