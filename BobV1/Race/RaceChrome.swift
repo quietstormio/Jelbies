@@ -55,6 +55,10 @@ private struct RaceChromeLayout: View {
                 .animation(CareMenu.spring, value: race.showsCard)
                 if race.showsCountdown { numeral(race.ui.countdown == 0 ? "" : "\(race.ui.countdown)") }
                 if race.showsGo { numeral("GO!") }
+                if race.canForfeit {          // the Home pill sits outside the top bar and above the pull surface (the pull surface owns every touch under it)
+                    ForfeitHomePill(care: care).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(.leading, 14).padding(.top, 8)
+                }
+                ForfeitHomeCard(care: care)
             }
             Color.white.opacity(Double(race.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }

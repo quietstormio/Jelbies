@@ -305,6 +305,7 @@ extension GameCare {
             for (i, a) in w.players.enumerated() where i < s.players.count { a.brain?.volleyWant(x: s.players[i].x, z: s.players[i].z, speed: s.players[i].stats.speed) }
             return
         }
+        if forfeitAsk { return }          // the "Go home?" card holds the match still (ball, score, clocks)
         // where the soft bodies are
         for (i, a) in w.players.enumerated() where i < s.players.count {
             guard let b = a.brain else { continue }
