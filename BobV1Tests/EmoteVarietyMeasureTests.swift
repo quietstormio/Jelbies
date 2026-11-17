@@ -148,7 +148,8 @@ final class EmoteVarietyMeasureTests: XCTestCase {
         let secs = Int(ProcessInfo.processInfo.environment["VARIETY_SECONDS"] ?? "1800") ?? 1800
         var raw = "", summary = ""
         var all: [Metrics] = []
-        for seed in [101, 202, 303] as [UInt64] {
+        let seedList = (ProcessInfo.processInfo.environment["VARIETY_SEEDS"] ?? "101,202,303").split(separator: ",").compactMap { UInt64($0) }
+        for seed in seedList {
             let ev = Self.run(seed: seed, seconds: secs)
             for e in ev { raw += "\(seed)\t\(String(format: "%.2f", e.t))\t\(e.rig)\t\(e.label)\n" }
             let m = Self.metrics(ev, seconds: secs)

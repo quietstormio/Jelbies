@@ -150,7 +150,8 @@ extension BlobBrain {
     }
     /// The household's list and his own last two clusters.
     func varietyRecord(_ e: RoomStart, pick: Bool) {
-        variety.roomLog.removeAll { variety.now - $0.t > VarietyTuning.roomWindow }
+        let now = variety.now          // (read first: the closure must not touch `variety` while it is being mutated: an exclusivity trap in Release)
+        variety.roomLog.removeAll { now - $0.t > VarietyTuning.roomWindow }
         variety.roomLog.append(e)
         if pick { variety.lastPicks.append(e.cluster); if variety.lastPicks.count > 2 { variety.lastPicks.removeFirst() } }
     }
