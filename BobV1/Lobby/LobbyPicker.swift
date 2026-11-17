@@ -101,7 +101,8 @@ struct LobbyJelbiePicker: View {
     var body: some View {
         let roster: [JellyProfile] = care.jellies.prefix(Self.slots).map { $0 }
         let segW = max((rowW - 2) / 3, 90)
-        let portrait = min(segW * (sideBySide ? 0.5 : 0.74), portraitCap)
+        let longName = sideBySide && ((roster.map { $0.name.count } + friends.map { $0.name.count }).max() ?? 0) > 9
+        let portrait = min(segW * (sideBySide ? 0.5 : 0.74), portraitCap, longName ? 72 : .infinity)          // a long name gets more width: the head shrinks a little (still well over the old 58 pt)
         let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center) {          // the same height on every lobby
@@ -144,7 +145,7 @@ struct LobbyJelbiePicker: View {
         .accessibilityElement(children: .contain).accessibilityIdentifier(id)
     }
 
-    private func height(_ portrait: CGFloat) -> CGFloat { sideBySide ? portrait + 8 : portrait + (typeSize.isAccessibilitySize ? 48 : 26) }
+    private func height(_ portrait: CGFloat) -> CGFloat { sideBySide ? portraitCap + 8 : portrait + (typeSize.isAccessibilitySize ? 48 : 26) }
 
     private func highlight(_ on: Bool) -> some View {
         ZStack {
@@ -170,8 +171,8 @@ struct LobbyJelbiePicker: View {
         let won = done ? 0 : max(wonCount(j), 0)
         return Button { if !done { AudioHub.shared.uiTap(); pick(j.id) } } label: {
             tileContent(portrait: portrait, spacing: 0) {
-                JelbiePortrait(care: care, who: j.id, size: portrait, head: true, frameless: true).accessibilityHidden(true).opacity(done ? 0.55 : 1)
-                Text(j.name).font(SK.font(15.5, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 6)
+                JelbiePortrait(care: care, who: j.id, size: portrait, head: true, frameless: true, centreVisible: sideBySide).accessibilityHidden(true).opacity(done ? 0.55 : 1)
+                Text(j.name).font(SK.font(15.5, .heavy)).foregroundStyle(SK.ink).lineLimit(sideBySide ? 2 : 1).minimumScaleFactor(sideBySide ? 0.7 : 0.6).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: sideBySide).padding(.horizontal, 6)
             }
             .frame(maxWidth: .infinity, minHeight: height(portrait))
             .background(highlight(on))
@@ -194,7 +195,7 @@ struct LobbyJelbiePicker: View {
 
     private func friendSegment(_ f: ParkVisitor, index: Int, portrait: CGFloat) -> some View {
         tileContent(portrait: portrait, spacing: 0) {
-            JelbiePortrait(care: care, who: care.jellies.first?.id ?? 0, size: portrait, head: true, friend: f, frameless: true).accessibilityHidden(true)
+            JelbiePortrait(care: care, who: care.jellies.first?.id ?? 0, size: portrait, head: true, friend: f, frameless: true, centreVisible: sideBySide).accessibilityHidden(true)
             Text(f.name).font(SK.font(14, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 6)
         }
         .frame(maxWidth: .infinity, minHeight: height(portrait))

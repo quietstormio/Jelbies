@@ -78,6 +78,8 @@ struct JelbiePortrait: View {
     var rival: ShowRival? = nil
     /// The lobby picker's picture: just the head (the render has a clear background), no circle, ring or shadow, so nothing crops it.
     var frameless = false
+    /// The Bag / Shop picker at compact height: nudge the picture so its visible (non-transparent) box is centred in the square, whatever the head's ears, antennas or feet add above or below.
+    var centreVisible = false
     @State private var image: UIImage?
     @State private var tried = false
     private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear, rivalTint: rival?.tint, rivalName: rival?.name) }
@@ -87,7 +89,7 @@ struct JelbiePortrait: View {
     private var framelessBody: some View {
         let t = JellyRoster.tint(care.jelly(who)?.character ?? who)
         return ZStack {
-            if let shown = image ?? HeadPortraitCache.shared.cached(key, care: care) { Image(uiImage: shown).resizable().scaledToFit() }
+            if let shown = image ?? HeadPortraitCache.shared.cached(key, care: care) { Image(uiImage: shown).resizable().scaledToFit().offset(y: centreVisible ? Self.centreOffset(shown, in: size) : 0) }
             else if tried { Circle().fill(Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))).padding(size * 0.2) }
             else { ProgressView().tint(SK.muted) }
         }
@@ -95,6 +97,33 @@ struct JelbiePortrait: View {
         .accessibilityLabel(friend.map { "\($0.name), a Park friend" } ?? "\(care.jelly(who)?.name ?? "Jelmiko")")
         .accessibilityIdentifier("jelbie-portrait")
         .task(id: "\(who)-\(care.store.revision)-\(friend?.id ?? -1)") { await loadHead() }
+    }
+    private static let visibleCache = NSCache<UIImage, NSValue>()
+    /// Vertical offset (pt) that centres the image's body box (head and feet; antennas and other thin top features do not count) in a `size` square it is scaled to fit. The alpha scan runs once per image (cached).
+    static func centreOffset(_ img: UIImage, in size: CGFloat) -> CGFloat {
+        guard let cg = img.cgImage, cg.width > 0, cg.height > 0 else { return 0 }
+        let rows: (Int, Int)
+        if let hit = visibleCache.object(forKey: img) { let r = hit.cgPointValue; rows = (Int(r.x), Int(r.y)) }
+        else {
+            let w = cg.width, h = cg.height
+            var a = [UInt8](repeating: 0, count: w * h)
+            let ok = a.withUnsafeMutableBytes { buf -> Bool in
+                guard let ctx = CGContext(data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue) else { return false }
+                ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h)); return true
+            }
+            var counts = [Int](repeating: 0, count: h)
+            if ok { for y in 0..<h { counts[y] = a[(y * w)..<((y + 1) * w)].reduce(0) { $0 + ($1 > 12 ? 1 : 0) } } }
+            // the BODY box: from the first row at least 30% as wide as the widest row (so thin antennas, ear tips and spikes are left out) down to the last opaque row (the feet)
+            let widest = counts.max() ?? 0
+            var top = h, bottom = -1
+            if widest > 0 { for y in 0..<h where counts[y] > 0 { if top == h, counts[y] * 10 >= widest * 3 { top = y }; bottom = y } }
+            if bottom < top { return 0 }
+            visibleCache.setObject(NSValue(cgPoint: CGPoint(x: top, y: bottom)), forKey: img)
+            rows = (top, bottom)
+        }
+        let scale = size / CGFloat(max(cg.width, cg.height))
+        let mid = (CGFloat(rows.0) + CGFloat(rows.1 + 1)) / 2
+        return (CGFloat(cg.height) / 2 - mid) * scale
     }
     private func loadHead() async {
         let t0 = CACurrentMediaTime()
