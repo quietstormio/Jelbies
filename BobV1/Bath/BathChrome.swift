@@ -76,7 +76,6 @@ struct BathChrome: View {
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("bath-done")
                         } else if HUDLayout.isLandscape(vsc: vsc, size: viewSize) {
-                            careRow
                             toolBar
                             helpButton
                             HStack(spacing: 12) {
@@ -85,7 +84,7 @@ struct BathChrome: View {
                             }
                             .padding(.horizontal, 24)
                         } else {
-                            careRow
+                            careRow(vertical: false)
                             toolBar
                             helpButton
                             ProgressBar(value: bath.progress)
@@ -98,6 +97,7 @@ struct BathChrome: View {
                     .padding(.bottom, 14)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 8)
+                .overlay(alignment: .leading) { if HUDLayout.isLandscape(vsc: vsc, size: viewSize) { careRow(vertical: true) } }          // landscape: a column down the left edge, clear of him
                 .animation(.easeInOut(duration: 0.2), value: bath.phase)
                 .animation(.easeInOut(duration: 0.2), value: bath.prompt)
                 .animation(.easeInOut(duration: 0.2), value: bath.stageComplete)
@@ -112,11 +112,12 @@ struct BathChrome: View {
     /// The Care row: the owned Care items (shampoo, brush, sponge, duck, ...) as the same round buttons as the tool bar, shown in the soap step only. Tap to use / not use;
     /// what is picked is used up when the bath is finished. Nothing shows when the player owns none.
     @ViewBuilder
-    private var careRow: some View {
+    private func careRow(vertical: Bool) -> some View {
         let items = care.bathCareItems
         if bath.phase == .soap, !items.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10 * ps) {
+            ScrollView(vertical ? .vertical : .horizontal, showsIndicators: false) {
+                let layout = vertical ? AnyLayout(VStackLayout(spacing: 8 * ps)) : AnyLayout(HStackLayout(spacing: 10 * ps))
+                layout {
                     ForEach(items, id: \.id) { item in
                         let on = bath.kit.has(item.id)
                         Button { care.toggleSupply(item.id) } label: {
@@ -145,7 +146,7 @@ struct BathChrome: View {
                 .padding(.horizontal, 8).padding(.vertical, 6)
             }
             .scrollClipDisabled()
-            .frame(maxWidth: 440 * ps)
+            .frame(maxWidth: vertical ? 84 * ps : 440 * ps, maxHeight: vertical ? 230 * ps : nil)
             .accessibilityIdentifier("bath-care-picker")
         }
     }
