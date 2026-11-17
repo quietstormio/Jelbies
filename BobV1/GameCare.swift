@@ -52,6 +52,8 @@ final class GameCare {
     @ObservationIgnored var standSettle: Float = 0
     /// C5: seconds the single eater has stood ready at his place without facing it (the calm wait's facing gate gives up at `DiningGroup.calmFacingWait`).
     @ObservationIgnored var singleFacingT: Float = 0
+    /// C5d: the single eater's tray is out and he is still walking to his approach point / squaring up; his dine request waits (GameCare+Dining `tickDining`).
+    @ObservationIgnored var mealApproach = false
     @ObservationIgnored var standRetries = 0
     @ObservationIgnored var wantedAge: Float = 0
     /// Seconds since this single order (tray wanted or out): ticks every step in `tickDining`, also while a Come call holds `serveWanted` back (`wantedAge` does not), so the `callRunning` watchdog always fires.
@@ -544,7 +546,7 @@ final class GameCare {
     }
     /// The café's serving (GameCare+Cafe.swift): a group serving that skips the trip guard; `tickGroup` takes the café's hooks (cafeBook.hooks).
     func beginCafeServing(_ c: Consumable) { mealJelly = 0; groupWanted = c; groupAge = 0; servingKind = c.kind; trayOut = true; retries = 0 }
-    func resetStandWalk() { standRequested = false; standIdle = 0; standSettle = 0; standRetries = 0; wantedAge = 0; wantedOrigin = nil; singleFacingT = 0 }
+    func resetStandWalk() { standRequested = false; standIdle = 0; standSettle = 0; standRetries = 0; wantedAge = 0; wantedOrigin = nil; singleFacingT = 0; mealApproach = false }
 
     /// Floor obstacle for the brain's resolver: pushes a point out of the tray.
     /// Sipping stands `sipCloser` nearer the tray (his mouth only reaches a straw tip that close); his belly may overlap the tray's rim by that much.
@@ -742,9 +744,8 @@ final class GameCare {
         wantedAge += dt
         if wantedAge > Self.mealTimeout { wanted = nil; retries = 0; resetStandWalk(); return }
         let approach = SIMD2(stand.x, stand.y - Self.approachBack)
-        // (C5c, round E: with the calm wait he first walks to his approach point, as a group diner does, so the step-in is straight; after 2 tries the old rule)
-        let atApproach = !DiningGroup.calmWait || simd_distance(here, approach) < 0.3 || standRetries >= 2
-        if Self.trayFirst || (here.y <= stand.y + Self.popTolerance && atApproach) {
+        // (the 11-10 spec, "tray out at once": once he is at or behind his place's line the tray pops now; C5d then walks him to his approach point first)
+        if Self.trayFirst || here.y <= stand.y + Self.popTolerance {
             let busy = jellyFloors.enumerated().contains { $0.offset != mealJelly && DiningSpot.distance(from: $0.element, origin: origin, layout: layout) < DiningGroup.trayClearance }
             if busy, wantedAge < DiningGroup.gatherCap / 2 { return }          // (somebody stands where it lands: `stepAside` moves him off first)
             // he walked here because he was in front: let him come to rest first (the soft body overshoots toward the tray while it stops)
@@ -752,17 +753,19 @@ final class GameCare {
                 if act == .idle || act == .lookingAround || act == .steppingInPlace { standSettle += dt } else { standSettle = 0 }
                 guard standSettle >= Self.popSettle else { return }
             }
-            // C5: the calm wait squares him up to his place first (BlobBrain.mealFaceYaw turns him), as the group does; never longer than the fallback
-            if DiningGroup.calmWait, abs(Self.wrapAngle(brain.yaw - layout.places[0].yaw)) >= DiningGroup.calmFacing, singleFacingT < DiningGroup.calmFacingWait { singleFacingT += dt; return }
             if dining.phase == .absent, dining.spawn(serving: c, n: 1, bobAt: SIMD2(99, 99), forcedOrigin: origin) {
                 wanted = nil; meal = c; mealAge = 0; idleT = 0; resetStandWalk()
                 let kind: NeedKind = c.kind == .food ? .hunger : .thirst
                 mealTier = needs(for: mealJelly).tier(kind); mealPieces = MealAppetite.pieces(mealTier); mealPaid = 0; noticeDone = false
-                startMeal(c, brain: brain); mealRequested = true
+                if DiningGroup.calmWait, simd_distance(here, approach) >= 0.3 || abs(Self.wrapAngle(brain.yaw - layout.places[0].yaw)) >= DiningGroup.calmFacing {
+                    // C5d: the tray is out at once; he walks to his approach point and squares up first, then steps in straight (`tickDining`)
+                    mealApproach = true
+                    if simd_distance(here, approach) >= 0.3 { brain.callToMeal(.goTo(approach)) }
+                } else { startMeal(c, brain: brain); mealRequested = true; MealTrace.log("single sent to eat") }
             }
             return
         }
-        // in front of his place, or (calm wait) not yet at his approach point: walk there first (the tray is not out yet, so nothing is in the way)
+        // in front of his place: walk there first (the tray is not out yet, so nothing is in the way)
         if !standRequested {
             standRequested = true; standIdle = 0
             brain.callToMeal(.goTo(approach))

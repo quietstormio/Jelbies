@@ -77,6 +77,27 @@ extension GameCare {
             }
             mealAge += dt
             if mealAge > Self.mealTimeout { let ate = mealPaid > 0; endMeal(); retries = 0; if !ate, mealPieces > 0 { tapRefused("Couldn't get the food to the table — try again") } }
+            else if free, mealApproach {
+                // C5d: the tray is out; he walks to his approach point and squares up (the calm wait turns him), then the dine request: a straight step-in.
+                // Bounded: 2 walk re-sends, the facing fallback, else the dine request as before.
+                var stand = dining.places.first?.stand ?? DiningSpot.preferred
+                stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
+                let approach = SIMD2(stand.x, stand.y - Self.approachBack), here = Self.floorPos(brain, sim)
+                let idleNow = act == .idle || act == .lookingAround || act == .steppingInPlace
+                let there = simd_distance(here, approach) < 0.3
+                if there, idleNow { singleFacingT += dt }
+                let facingNow = abs(Self.wrapAngle(brain.yaw - (dining.places.first?.yaw ?? 0))) < DiningGroup.calmFacing
+                if there, idleNow, facingNow || singleFacingT >= DiningGroup.calmFacingWait {
+                    mealApproach = false; startMeal(c, brain: brain); mealRequested = true; MealTrace.log("single sent to eat")
+                } else if !there, idleNow {
+                    standIdle += dt
+                    if standIdle > 0.8 {
+                        standIdle = 0
+                        if standRetries < 2 { standRetries += 1; brain.callToMeal(.goTo(approach)) }
+                        else { mealApproach = false; startMeal(c, brain: brain); mealRequested = true; MealTrace.log("single sent to eat (fallback)") }
+                    }
+                } else { standIdle = 0 }
+            }
             else if free, mealRequested {
                 // the request was cancelled (for example he was grabbed): ask again a couple of times, then give up
                 if act == .idle || act == .lookingAround || act == .steppingInPlace {
