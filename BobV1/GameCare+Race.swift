@@ -214,6 +214,9 @@ extension GameCare {
             }
             let course = sim.course
             book.follow = nil
+            #if targetEnvironment(simulator)
+            tripArriveStart("race")
+            #endif
             for (k, aid) in book.racers.enumerated() where all.indices.contains(aid) {
                 let a = all[aid]
                 guard let brain = a.brain else { continue }
@@ -310,6 +313,9 @@ extension GameCare {
 
     func tickRace(_ actors: [JellyActor], dt: Float) {
         raceBook.actors = actors
+        #if targetEnvironment(simulator)
+        tripArriveTick("race", actors + raceBook.extra, dt: dt)          // (park-arrive-r2 capture aid: Park/ParkSlideProbe.swift)
+        #endif
         for a in actors { a.brain?.sleepLocked = raceBusy }
         if var w = raceWait {
             w.age += dt

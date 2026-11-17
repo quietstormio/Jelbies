@@ -179,6 +179,7 @@ extension GameCare {
         tickGuest(actors, dt: dt)          // a friend over at home (GameCare+Guest.swift)
         #if targetEnvironment(simulator)
         tickCampStart()          // capture aid `-StartCamp 1` (Park/GameCare+Camp.swift)
+        tickStartTrip()          // capture aid `-StartTrip race|show|cafe` (Park/ParkSlideProbe.swift)
         // capture aid: `-StartPark 1` goes straight to the park once the room is up. It RETRIES (every ~0.75 s, not while an outing is walking) until the park opens: a single shot at frame 90 failed
         // whenever parkBlocker() said no at that moment (a Jelbie mid-meal / asleep / the room moving / voice listening). The real gate rules are untouched; this only repeats the request.
         if Self.startParkPending {
@@ -201,7 +202,7 @@ extension GameCare {
         guard park.active else { return }
         guard park.inScene else { return }
         #if targetEnvironment(simulator)
-        if ParkSlideProbe.on, ParkSlideProbe.arriveT != nil { parkArriveProbe(actors.enumerated().filter { parkBook.comers.contains($0.offset) }.map(\.element) + parkBook.actors, dt: dt) }          // (park-arrive-r1 capture aid)
+        if ParkSlideProbe.on, ParkSlideProbe.arriveT != nil, ParkSlideProbe.arriveTrip == "park" { parkArriveProbe(actors.enumerated().filter { parkBook.comers.contains($0.offset) }.map(\.element) + parkBook.actors, dt: dt) }          // (park-arrive-r1 capture aid)
         #endif
         let book = parkBook, work = book.work
         for (k, a) in actors.enumerated() {
@@ -491,7 +492,7 @@ extension GameCare {
             for a in book.actors { a.brain?.face(.excited, hold: 1.5) }
             #if targetEnvironment(simulator)
             if ParkSlideProbe.on {          // (park-arrive-r1: watch the first 5 s; where each body stands against the walk's own floor rules right now)
-                ParkSlideProbe.arriveT = 0; ParkSlideProbe.arriveSteps = 0; ParkSlideProbe.arriveWorst = [:]; ParkSlideProbe.arriveLastRoot = [:]; ParkSlideProbe.arriveLastStep = [:]
+                ParkSlideProbe.arriveT = 0; ParkSlideProbe.arriveSteps = 0; ParkSlideProbe.arriveWorst = [:]; ParkSlideProbe.arriveLastRoot = [:]; ParkSlideProbe.arriveLastStep = [:]; ParkSlideProbe.arriveTrip = "park"
                 for (k, a) in roster.enumerated() where book.comers.contains(k) {
                     guard let b = a.brain else { continue }
                     let p = b.position, f = b.fixed(p), c = GameCamera.constrain(SIMD3(p.x, 0, p.y), radius: 0.8)
@@ -542,15 +543,31 @@ extension GameCare {
 /// Where everybody starts in the park: spread over the play zone (the roaming floor of the park's camera), the Jelbies who came in front.
 enum ParkLayout {
     /// (x as a share of the half width, z as a share of the depth) for up to five.
-    static let slots: [(Float, Float)] = [(-0.35, 0.62), (0.40, 0.72), (0.0, 0.46), (-0.60, 0.26), (0.62, 0.30)]
+    /// park-arrive-r2: slot 1 was (0.40, 0.72), 0.80 off the slide's box in portrait: Moss turning on that spot in his first second swayed his centre to 0.53 from it. 0.30 puts him
+    /// ~1.1 off it in portrait, between the path and the slide, clear of slot 0 by the hopscotch court and of the bench at the back.
+    static let slots: [(Float, Float)] = [(-0.35, 0.62), (0.30, 0.72), (0.0, 0.46), (-0.60, 0.26), (0.62, 0.30)]
+    /// park-arrive-r2: no arrival spot starts nearer the slide's box than this (a wider screen spreads the shares: the spot is moved straight out from the box).
+    static let slideClear: Float = 1.0
 
     static func spots(count: Int) -> [SIMD2<Float>] {
         (0..<max(count, 0)).map { k in
             let s = slots[k % slots.count]
             guard let f = GameCamera.roamFloor else { return SIMD2(s.0 * 3, -2 + s.1 * 5) }
             let z = f.minZ + s.1 * (f.maxZ - f.minZ)
-            let q = GameCamera.constrain(SIMD3(s.0 * f.halfWidth(at: z), 0, z), radius: 0.8)
+            var q = GameCamera.constrain(SIMD3(s.0 * f.halfWidth(at: z), 0, z), radius: 0.8)
+            if let sl = DecorField.shared.foot(ParkToys.slideUID) { q = clearOfSlide(q, sl) }
             return SIMD2(q.x, q.z)
         }
+    }
+
+    /// `p` moved straight out from the slide's box to `slideClear` (unchanged if it is that far already), then kept on the floor.
+    static func clearOfSlide(_ p: SIMD3<Float>, _ sl: DecorFoot) -> SIMD3<Float> {
+        let q = SIMD2(p.x, p.z), d = sl.distance(q)
+        guard d < slideClear else { return p }
+        let e: Float = 1e-3
+        var g = SIMD2(sl.distance(q + SIMD2(e, 0)) - sl.distance(q - SIMD2(e, 0)), sl.distance(q + SIMD2(0, e)) - sl.distance(q - SIMD2(0, e)))
+        g = simd_length(g) > 1e-6 ? simd_normalize(g) : SIMD2(-1, 0)
+        let out = q + g * (slideClear - d + 0.02)
+        return GameCamera.constrain(SIMD3(out.x, 0, out.y), radius: 0.8)
     }
 }

@@ -44,6 +44,29 @@ final class ParkArrivalTests: XCTestCase {
         XCTAssertFalse(a.sim.arenaSuspended)
     }
 
+    /// park-arrive-r2: the arrival spots (the ones who came, then the visitors) in the owner's park, portrait and landscape: none starts nearer the slide's box than
+    /// `ParkLayout.slideClear` (slot 1 was 0.80 off it in portrait), they keep the steering gap from each other, and the floor rules leave them where they are.
+    func testArrivalSpotsKeepClearOfTheSlide() {
+        let seesaw = ParkPlayTuning.seesawInPark
+        defer { ParkPlayTuning.seesawInPark = seesaw; GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home); DecorField.shared.clear() }
+        ParkPlayTuning.seesawInPark = false
+        for (name, aspect) in [("portrait", Float(440.0 / 956.0)), ("landscape", Float(956.0 / 440.0))] {
+            DecorField.shared.clear(); DecorField.shared.toys = ToyBook()
+            RoomLayout.apply(RoomCatalog.park); GameCamera.configurePark(); _ = GameCamera.refreshRoam(aspect: aspect)
+            DecorField.shared.set(ParkToys.placed)
+            let sl = DecorField.shared.foot(ParkToys.slideUID)!, court = DecorField.shared.foot(ParkToys.hopscotchUID)!
+            let spots = ParkLayout.spots(count: 5)
+            let line = spots.enumerated().map { String(format: "%d (%.2f,%.2f) slide %.2f court %.2f", $0.offset, $0.element.x, $0.element.y, sl.distance($0.element), court.distance($0.element)) }.joined(separator: " | ")
+            print("[spots] \(name): \(line)")
+            for (k, p) in spots.enumerated() {
+                XCTAssertGreaterThanOrEqual(sl.distance(p), ParkLayout.slideClear - 0.03, "\(name) slot \(k) starts \(sl.distance(p)) off the slide's box. \(line)")
+                let c = GameCamera.constrain(SIMD3(p.x, 0, p.y), radius: 0.8)
+                XCTAssertLessThan(simd_distance(SIMD2(c.x, c.z), p), 0.02, "\(name) slot \(k) is on the floor. \(line)")
+                for j in (k + 1)..<spots.count { XCTAssertGreaterThanOrEqual(simd_distance(p, spots[j]), MelonController.jellyGap, "\(name) slots \(k), \(j) apart. \(line)") }
+            }
+        }
+    }
+
     /// `-ParkSlideFix r4` (level 2) keeps the old order, for the real-app before / after: the home spot stays until the tidy.
     func testLevelTwoKeepsTheHomeSpotUntilTheTidy() {
         let (care, a, home) = runner(level: 2)
