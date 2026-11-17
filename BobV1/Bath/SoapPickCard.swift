@@ -45,7 +45,7 @@ struct SoapPickCard: View {
         Button { care.chooseSoap(soap) } label: {
             VStack(spacing: 4) {
                 SoapBarArt(soap: soap, size: width * 0.52)
-                Text(soap.name).playFont(13 * ps, .bold).foregroundStyle(CareMenu.brown).lineLimit(1).minimumScaleFactor(0.7)
+                Text(soap.name).playFont(12 * ps, .bold).foregroundStyle(CareMenu.brown).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 4)
                 chip(soap)
             }
             .frame(width: width).padding(.vertical, 8)
