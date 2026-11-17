@@ -5,6 +5,7 @@
 //
 
 import XCTest
+import UIKit
 @testable import BobV1
 
 @MainActor
@@ -34,8 +35,8 @@ final class TrickThreeTests: XCTestCase {
             XCTAssertNotNil(VoiceCoordinator.idleKind(for: t), "\(t) has a move")
             let item = StoreCatalog.item("trick-\(t.rawValue)")
             XCTAssertNotNil(item, "\(t) is in the Shop's Tricks tab"); XCTAssertFalse(item?.description.isEmpty ?? true)
-            XCTAssertFalse(ShowTrickInfo.menu(learned: []).contains(t), "\(t) is not on the menu until it is owned")
-            XCTAssertTrue(ShowTrickInfo.menu(learned: [t]).contains(t), "\(t) is listed once owned")
+            XCTAssertFalse(ShowTrickInfo.menu(learned: Set<VoiceTrick>()).contains(t), "\(t) is not on the menu until it is owned")
+            XCTAssertTrue(ShowTrickInfo.menu(learned: [t] as Set<VoiceTrick>).contains(t), "\(t) is listed once owned")
             XCTAssertNotNil(UIImage(systemName: ShowTrickInfo.symbol(t)), "\(t) icon exists")
         }
         XCTAssertEqual(VoiceCoordinator.idleKind(for: .bow), .politeBow)
