@@ -62,19 +62,35 @@ extension GameCare {
     @discardableResult
     func useSupply(_ itemID: String, on jelly: Int) -> Bool {
         guard let item = StoreCatalog.item(itemID), item.kind == .supply, store.count(itemID) > 0, canClean(jelly: jelly) else { return false }
-        if !(armedSupplies[jelly] ?? []).contains(itemID) { armedSupplies[jelly, default: []].append(itemID) }
+        armedSupplies[jelly] = BathKit(ids: armedSupplies[jelly] ?? []).adding(itemID).ids          // (the two shampoos are alternatives)
         clean(jelly: jelly)
         return true
     }
-    /// The clean-up finished: the armed supplies for that Jelly are used up and give their perk.
+
+    /// The Care row in the bath: pick / unpick an owned Care item during the soap step. The bath reads `bath.kit` at once (props, scrub speed, bubbles).
+    func toggleSupply(_ itemID: String) {
+        guard bath.phase == .soap, let item = StoreCatalog.item(itemID), item.kind == .supply else { return }
+        let t = bath.targetID
+        let cur = BathKit(ids: armedSupplies[t] ?? [])
+        guard cur.has(itemID) || store.count(itemID) > 0 else { return }
+        let next = cur.toggled(itemID)
+        armedSupplies[t] = next.ids
+        bath.kit = next
+        AudioHub.shared.uiTap()
+    }
+    /// The Care items the bath can pick from: owned supplies, in catalog order.
+    var bathCareItems: [StoreItem] { StoreCatalog.items(.supply).filter { store.count($0.id) > 0 } }
+
+    /// The clean-up finished: the picked supplies for that Jelly are used up and give their perks, and the bubble bath / duck add a little love.
     func soapFinished() {
         let id = bath.targetID
-        guard let list = armedSupplies[id], let prof = jelly(id) else { armedSupplies[id] = nil; return }
+        let list = armedSupplies[id] ?? []
         armedSupplies[id] = nil
-        for sid in list {
-            guard let item = StoreCatalog.item(sid), let perk = item.perk, store.use(sid) else { continue }
-            prof.perks.grant(perk)
-        }
+        guard !list.isEmpty, let prof = jelly(id) else { return }
+        var used = BathKit()
+        for sid in list where StoreCatalog.item(sid)?.kind == .supply && store.use(sid) { used = used.adding(sid) }
+        for perk in used.grants { prof.perks.grant(perk) }
+        if used.love > 0 { needs(for: id).gain(.attention, used.love) }
     }
 
     // MARK: the room's numbers (UI)

@@ -485,6 +485,7 @@ final class GameCare {
     var canClean: Bool { canClean(jelly: 0) }
     /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow).
     func clean(jelly: Int = 0) {
+        if !bath.active { bath.kit = BathKit(ids: (armedSupplies[jelly] ?? []).filter { store.count($0) > 0 }) }          // the Care items picked in the Bag (the bath's own row can change them)
         guard jelly == 0 else { startCleanOther(jelly: jelly); return }        // another Jelly: GameCare+Bath.swift
         guard canClean, let brain = lastBrain else { return }
         select.cancel()

@@ -76,6 +76,7 @@ struct BathChrome: View {
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("bath-done")
                         } else if HUDLayout.isLandscape(vsc: vsc, size: viewSize) {
+                            careRow
                             toolBar
                             helpButton
                             HStack(spacing: 12) {
@@ -84,6 +85,7 @@ struct BathChrome: View {
                             }
                             .padding(.horizontal, 24)
                         } else {
+                            careRow
                             toolBar
                             helpButton
                             ProgressBar(value: bath.progress)
@@ -104,6 +106,47 @@ struct BathChrome: View {
             Color.white.opacity(Double(bath.wipe))          // the fade to white; the world swaps only while this is fully opaque
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+        }
+    }
+
+    /// The Care row: the owned Care items (shampoo, brush, sponge, duck, ...) as the same round buttons as the tool bar, shown in the soap step only. Tap to use / not use;
+    /// what is picked is used up when the bath is finished. Nothing shows when the player owns none.
+    @ViewBuilder
+    private var careRow: some View {
+        let items = care.bathCareItems
+        if bath.phase == .soap, !items.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10 * ps) {
+                    ForEach(items, id: \.id) { item in
+                        let on = bath.kit.has(item.id)
+                        Button { care.toggleSupply(item.id) } label: {
+                            VStack(spacing: 2 * ps) {
+                                ItemArt(item: item, size: 46 * ps)
+                                    .overlay(RoundedRectangle(cornerRadius: 46 * ps * 0.22, style: .continuous).strokeBorder(on ? Color(red: 0.36, green: 0.62, blue: 0.95) : Color.white.opacity(0.5), lineWidth: on ? 3 : 1))
+                                    .overlay(alignment: .topTrailing) {
+                                        if on { Image(systemName: "checkmark.circle.fill").font(.system(size: 16 * ps)).foregroundStyle(.white, Color(red: 0.36, green: 0.78, blue: 0.5)).offset(x: 4, y: -4) }
+                                    }
+                                Text(item.name).playFont(10 * ps, .semibold, relativeTo: .caption2).lineLimit(1).minimumScaleFactor(0.7)
+                                    .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(CareMenu.cream))
+                            }
+                            .frame(width: 64 * ps)
+                            .foregroundStyle(CareMenu.brown)
+                            .opacity(on ? 1 : 0.85)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(item.name)
+                        .accessibilityValue(on ? "Using" : "Not using")
+                        .accessibilityHint(item.perk?.blurb ?? "")
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                        .accessibilityIdentifier("bath-care-\(item.id)")
+                    }
+                }
+                .padding(.horizontal, 8).padding(.vertical, 6)
+            }
+            .scrollClipDisabled()
+            .frame(maxWidth: 440 * ps)
+            .accessibilityIdentifier("bath-care-picker")
         }
     }
 

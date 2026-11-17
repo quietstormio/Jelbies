@@ -143,6 +143,13 @@ nonisolated enum StoreCatalog {
         // care supplies (used from Clean)
         StoreItem(id: "lavender", name: "Lavender soap", kind: .supply, price: 20, perk: .shine, description: "The shine after a Clean lasts much longer (12 hours).", symbol: "sparkles"),
         StoreItem(id: "lintguard", name: "Lint-guard spray", kind: .supply, price: 18, perk: .tidy, description: "Lint comes back half as fast for 6 hours.", symbol: "wind"),
+        // bath time (2026-11-16): the wash tier is in Bath/WashQuality.swift; each is used up by a finished bath; Bath picks them from the Care row
+        StoreItem(id: "bubblebath", name: "Bubble bath", kind: .supply, price: 16, perk: .bubbly, description: "Extra bubbles and a little love during the bath.", symbol: "bubbles.and.sparkles.fill"),
+        StoreItem(id: "gentleshampoo", name: "Gentle shampoo", kind: .supply, price: 18, perk: .gentle, description: "A shampoo bath: stays clean about 25% longer.", symbol: "leaf.fill"),
+        StoreItem(id: "deluxeshampoo", name: "Deluxe shampoo", kind: .supply, price: 32, perk: .deluxe, description: "A deluxe bath: stays clean about 50% longer, with a shiny glow (12 hours).", symbol: "star.circle.fill"),
+        StoreItem(id: "softbrush", name: "Soft brush", kind: .supply, price: 22, perk: .brushed, description: "A quick brush in the bath. Lint comes back 20% slower for 6 hours.", symbol: "comb.fill"),
+        StoreItem(id: "seasponge", name: "Sea sponge", kind: .supply, price: 14, perk: .quick, description: "Scrubs faster, so the bath is quicker.", symbol: "hare.fill"),
+        StoreItem(id: "rubberduck", name: "Rubber duck", kind: .supply, price: 12, perk: .duck, description: "A happy bath: a duck bobs in the tub and brings a little love.", symbol: "face.smiling.fill"),
         // decor (placed in the room; Jellies play with it; a big piece takes 2 of the 10 spots)
         StoreItem(id: "decor-cushion", name: "Floor cushion", kind: .decor, price: 25, perk: nil, description: DecorKind.cushion.use, symbol: "square.fill", roomUnits: 1),
         StoreItem(id: "decor-ball", name: "Bouncy ball", kind: .decor, price: 30, perk: nil, description: DecorKind.ball.use, symbol: "circle.fill", roomUnits: 1),

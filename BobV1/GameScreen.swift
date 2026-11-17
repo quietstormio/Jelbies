@@ -877,6 +877,7 @@ struct GameScreen: View {
             care.bath.grime.dirt = 0.5
             care.bath.demo = true
             care.bath.demoHold = d.integer(forKey: "BathHold") != 0          // -BathHold 1: stop at every complete stage (captures)
+            if DevArgs.enabled, let k = d.string(forKey: "CareKit") { care.armedSupplies[0] = k.split(separator: ",").map(String.init) }
             care.clean()
         }
         if let a = d.string(forKey: "GameAction") {
@@ -1053,6 +1054,11 @@ struct GameScreen: View {
         // capture aid: -FoodSeed 1 puts three of each power-up food in the bag (no perks, no coins): for recording meals
         if FoodCaptureArgs.foodSeed(defaults: d) {
             for id in ["sushi", "popsicle", "taco", "donut", "nuggets", "onigiri", "cookie", "fries"] where model.care.store.count(id) < 3 { model.care.store.grant(id, 3 - model.care.store.count(id)) }
+        }
+        // capture aid: -CareSeed 1 owns two of each Care item (and 200 Drops); -CareKit shampoo,duck,... (with -BlobGameDemo gclean) picks those for the bath
+        if d.integer(forKey: "CareSeed") != 0 {
+            for id in CareItems.all where model.care.store.count(id) < 2 { model.care.store.grant(id, 2 - model.care.store.count(id)) }
+            model.care.bath.wallet.add(max(0, 200 - model.care.bath.wallet.count), silent: true)
         }
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
         let care = model.care

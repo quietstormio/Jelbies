@@ -167,7 +167,7 @@ extension GameCare {
         CaptionCenter.shared.post("Splashing and scrubbing")
         for id in ids {
             guard let prof = jelly(id) else { continue }
-            prof.grime.dirt = 0; prof.grime.sparkle = 1; prof.grime.save()          // the end state of a finished Clean
+            prof.grime.dirt = 0; prof.grime.sparkle = 1; prof.grime.stampWash(WashQuality.tier(tier))          // the end state of a finished Clean, and how well he was washed (the Spa is the best: WashQuality.swift)
             prof.refreshLook(force: true)
             if id == 0 { bath.groomed() }
             bathPlug.wet[id] = nil

@@ -132,6 +132,7 @@ enum StoreThumb {
         }
         if let w = item.wear { return w.isShoe ? shoeMesh(w) : (wornMesh(w) ?? WearMeshes.restMesh(w)) }
         if let d = item.decor { return DecorModels.thumbnail(d) }
+        if item.kind == .supply { return CareMeshes.roomMesh(item.id) }          // the Care items: Blender models (tools/make_care1)
         return nil
     }
 
@@ -256,7 +257,7 @@ enum StoreThumb {
         let a = angles(for: item)
         if let w = item.wear, !w.isShoe { return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch, focus: wornFocus(w)) }
         let glass = item.food.flatMap { Consumables.with(id: $0) }.flatMap { glassMesh($0) }
-        return image(item.id, mesh: m, glass: glass, yaw: a.yaw, pitch: a.pitch, tight: item.id == "berries" || item.id == "pizza")
+        return image(item.id, mesh: m, glass: glass, yaw: a.yaw, pitch: a.pitch, tight: item.id == "berries" || item.id == "pizza" || item.kind == .supply)
     }
 }
 

@@ -12,6 +12,9 @@
 //    bedtime    longer naps (x1.35) and slower need drain while napping (0.35 instead of 0.5) - the "bedtime cookie"
 //    bouncy     more antics while you watch
 //    social     plays with the others more
+//    brushed    (Soft brush) dirt builds x0.8 for 6 hours after a brush; with tidy the strongest wins (they do not multiply)
+//    bubbly / gentle / deluxe / quick / duck   BATH-ONLY care items (Bath/WashQuality.swift): they act inside the wash and never become a timed perk;
+//               the kind exists so the Shop card shows the same perk chip as Shiny / Tidy
 //
 
 import Foundation
@@ -19,11 +22,13 @@ import Observation
 
 nonisolated enum PerkKind: String, CaseIterable, Codable, Sendable {
     case cozy, zoomies, focus, fullBelly, shine, tidy, bedtime, bouncy, social
+    case brushed, bubbly, gentle, deluxe, quick, duck
 
     var title: String {
         switch self {
         case .cozy: return "Cozy"; case .zoomies: return "Sugar rush"; case .focus: return "Focused"; case .fullBelly: return "Full belly"
         case .shine: return "Shiny"; case .tidy: return "Tidy"; case .bedtime: return "Deep sleep"; case .bouncy: return "Bouncy"; case .social: return "Social"
+        case .brushed: return "Brushed"; case .bubbly: return "Bubbly"; case .gentle: return "Fresh +25%"; case .deluxe: return "Fresh +50%"; case .quick: return "Quick scrub"; case .duck: return "Happy bath"
         }
     }
     var blurb: String {
@@ -37,6 +42,12 @@ nonisolated enum PerkKind: String, CaseIterable, Codable, Sendable {
         case .bedtime: return "Naps last longer, and needs drop slower while asleep."
         case .bouncy: return "Bounces and plays more."
         case .social: return "Plays with the others more."
+        case .brushed: return "Lint comes back 20% slower for 6 hours, and a quick brush in the bath."
+        case .bubbly: return "Extra bubbles and a little love during the bath."
+        case .gentle: return "A shampoo bath: stays clean about 25% longer."
+        case .deluxe: return "A deluxe bath: stays clean about 50% longer, and shiny too."
+        case .quick: return "Scrubs faster, so the bath is quicker."
+        case .duck: return "A happy bath: a duck bobs in the tub and brings love."
         }
     }
     var symbol: String {
@@ -44,6 +55,8 @@ nonisolated enum PerkKind: String, CaseIterable, Codable, Sendable {
         case .cozy: return "heart.fill"; case .zoomies: return "bolt.fill"; case .focus: return "scope"; case .fullBelly: return "fork.knife"
         case .shine: return "sparkles"; case .tidy: return "wind"; case .bedtime: return "moon.zzz.fill"; case .bouncy: return "arrow.up.circle.fill"
         case .social: return "person.2.fill"
+        case .brushed: return "comb.fill"; case .bubbly: return "bubbles.and.sparkles.fill"; case .gentle: return "leaf.fill"; case .deluxe: return "star.circle.fill"
+        case .quick: return "hare.fill"; case .duck: return "face.smiling.fill"
         }
     }
     /// Seconds a fresh serving lasts.
@@ -51,8 +64,12 @@ nonisolated enum PerkKind: String, CaseIterable, Codable, Sendable {
         switch self {
         case .cozy: return 4 * 3600; case .zoomies: return 30 * 60; case .focus: return 30 * 60; case .fullBelly: return 4 * 3600
         case .shine: return 12 * 3600; case .tidy: return 6 * 3600; case .bedtime: return 8 * 3600; case .bouncy: return 3600; case .social: return 3600
+        case .brushed: return PerkTuning.brushedSeconds
+        case .bubbly, .gentle, .deluxe, .quick, .duck: return 3600          // (never granted: bath-only)
         }
     }
+    /// Acts inside the bath only (WashQuality.swift); the Shop chip says "in the bath" instead of a time.
+    var bathOnly: Bool { self == .bubbly || self == .gentle || self == .deluxe || self == .quick || self == .duck }
     /// Used up by the next race.
     var raceOnly: Bool { self == .zoomies || self == .focus }
 }
@@ -64,6 +81,9 @@ nonisolated enum PerkTuning {
     static let fullBellyHunger = 0.5
     static let shineFade: Float = 0.4
     static let tidyDirt: Float = 0.5
+    /// Soft brush: dirt builds at x0.8 (20% slower) for this long after a brush.
+    static let brushedDirt: Float = 0.8
+    static let brushedSeconds: TimeInterval = 6 * 3600
     /// Race boost: modest, and never above what a fully trained Jelly has (the clamp is in RaceBoost).
     static let raceStride: Float = 0.04
     static let raceRate: Float = 0.06
@@ -162,7 +182,7 @@ final class JellyPerks {
         return m
     }
     var sparkleFadeMul: Float { isActive(.shine) ? PerkTuning.shineFade : 1 }
-    var dirtMul: Float { isActive(.tidy) ? PerkTuning.tidyDirt : 1 }
+    var dirtMul: Float { min(isActive(.tidy) ? PerkTuning.tidyDirt : 1, isActive(.brushed) ? PerkTuning.brushedDirt : 1) }          // the strongest slowing perk wins; they do not multiply
     var napDrain: Float { isActive(.bedtime) ? PerkTuning.bedtimeNapDrain : NeedsTuning.napDrain }
 
     /// The same values, cached for the per-step callers (refreshed on every change and about once a second).
