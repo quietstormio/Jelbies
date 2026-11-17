@@ -27,6 +27,15 @@ final class DiningGroup {
     static let diningGap: Float = 0.7
     /// The tray has three places at most (DiningLayout): with four Jellies GameCare+Group seats three and the fourth eats at the next sitting.
     static let maxDiners = 3
+    /// C6 (2026-11-17, the owner: "I don't want them ... syncing into each other"): the HOME tray seats TWO per sitting. Three in the row behind it cannot keep apart
+    /// in portrait: the 3-place stands are 1.11 apart, a body with its arms is ~1.4 wide (~1.6 through the catch lean), and the portrait floor holds side stands only
+    /// to about +-1.2. The two-place row is clear (+0.5 u). The third waits calmly, clear of both, and eats at the next sitting (GameCare+Group); the café keeps
+    /// `maxDiners`. Switch `-MealSeats 3` (simulator / dev builds; tests set it) = the old three at once.
+    nonisolated(unsafe) static var homeSeats: Int = DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealSeats") == 3 ? 3 : 2
+    /// C6: how far a waiter for the next sitting keeps from every eater's stand and approach point (a body with its arms ~1.4 wide, ~1.6 through the catch, + margin).
+    static let waiterClear: Float = 1.75
+    /// The tray's centre while a sitting runs (the waiters for the next sitting face it).
+    var originNow: SIMD2<Float>? { isActive ? origin : nil }
     /// Per Jelly (by his ROSTER id, `memberIDs`): his tier now (nil = everybody takes the whole serving, no plan), and a callback for each piece he has eaten (jelly, count).
     var tierOf: ((Int) -> NeedTier)?
     var pay: ((Int, Int) -> Void)?
@@ -261,6 +270,8 @@ final class DiningGroup {
     var traceBody: ((Int) -> SIMD2<Float>)?
     /// Simulator-only trace aid (GameCare+Group sets it): diner i's mouth (world) while he sips a gulp (`dineIsSipping`, the chew phase), nil otherwise.
     var traceMouth: ((Int) -> SIMD3<Float>?)?
+    /// Simulator-only trace aid (GameCare+Group sets it): the roster ids waiting for the next sitting (C6), for the ` wgaps=` part of the pose line.
+    var traceWaiters: (() -> [Int])?
     /// The tray is drawn only once every diner stands at his place (his approach point), so no body ever walks across it on the way: the floor beside it is no wider than
     /// a body, there is no way round its ends (GameCare.serveWanted). Past this many seconds it pops in anyway (a diner that cannot get there is handled by the retries).
     static let gatherCap: Float = 12
@@ -431,6 +442,11 @@ final class DiningGroup {
                 var gaps: [String] = []
                 for i in brains.indices { for j in brains.indices where j > i { gaps.append("\(memberIDs[i])-\(memberIDs[j]):" + (ContactField.gap(memberIDs[i], memberIDs[j]).map { String(format: "%.4f", $0) } ?? "nan")) } }
                 line += " gaps=" + gaps.joined(separator: ",")
+            }
+            if let ws = traceWaiters?(), !ws.isEmpty {          // (C6: every diner and every waiter for the next sitting: the waiter must stay clear of them, gap >= 0)
+                var wg: [String] = []
+                for i in brains.indices { for w in ws where w != memberIDs[i] { wg.append("\(memberIDs[i])-\(w):" + (ContactField.gap(memberIDs[i], w).map { String(format: "%.4f", $0) } ?? "nan")) } }
+                line += " wgaps=" + wg.joined(separator: ",")
             }
             line += trayOut ? " tray=1" : " tray=0"
             MealTrace.log(line)
