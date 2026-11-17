@@ -471,6 +471,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                     b.commandedNameHop = true
                 case .scold: b.commandedIdle = .slump
                 case .goodnight: if !self.model.care.raceBusy { b.commandedGoodnight = true }
+                case .wave: b.requestNow(.wave)
                 case .wakeUp: break          // (GameCare wakes them: care.wakeAll / wakeSleeper)
                 }
             }
