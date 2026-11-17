@@ -133,7 +133,7 @@ extension BlobBrain {
         let cap = kind.isTreat ? EmoteTuning.treatCrew : GroupTuning.maxCrew          // (the treats are for the three housemates: a visitor beyond them watches)
         for o in groupCandidates() where crew.count < cap && !crew.contains(where: { $0 === o }) { crew.append(o) }
         crew = Array(crew.prefix(cap))
-        guard crew.count >= kind.groupMin, crew.count <= cap else { return false }
+        guard crew.count >= kind.minBodies, crew.count <= cap else { return false }
         if kind.isCalmGroup, !CalmGroup.mayStart(kind, crew) { return false }
         if kind.isFast, fastOthers(except: crew) > 0 { return false }
         currentPose(sim)

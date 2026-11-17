@@ -41,15 +41,15 @@ enum CalmGroup {
     }
 
     /// Spacing (x peerGap) tried in turn for the planned places: a row, the arc / ring chord, the lying row.
-    static let rowSpacing: [Float] = [1.3, 1.15], ringChord: [Float] = [1.6, 1.4], lieSpacing: [Float] = [1.95, 1.7]
+    static let rowSpacing: [Float] = [1.3, 1.15, 1.0], ringChord: [Float] = [1.6, 1.4], lieSpacing: [Float] = [1.95, 1.7]
 }
 
 extension SocialKind {
     var isCalmGroup: Bool {
         switch self { case .rowWave, .singAlong, .storyTime, .lookAtThat, .sitCircle, .stargazeTogether, .yawnChain: return true; default: return false }
     }
-    /// The fewest bodies (the initiator and the others) a group kind needs.
-    var groupMin: Int {
+    /// The fewest bodies (the initiator and the others) a group kind needs: 2 or 3. The roll in BlobSocial+Group.swift still wants 3 present; Main wires 2-body rolls from this at merge.
+    var minBodies: Int {
         switch self { case .congaLine, .singAlong, .lookAtThat, .stargazeTogether, .yawnChain: return 2; default: return 3 }
     }
 }
@@ -65,7 +65,7 @@ extension BlobBrain {
         let all = [self] + crew
         let night = max(idleNight, crew.map { $0.idleNight }.max() ?? 0)
         var cal: [(SocialKind, Float)] = []
-        for (k, x) in CalmGroup.weights where all.count >= k.groupMin && CalmGroup.mayStart(k, all) {
+        for (k, x) in CalmGroup.weights where all.count >= k.minBodies && CalmGroup.mayStart(k, all) {
             if k == socialBook.lastGroup || crew.contains(where: { $0.socialBook.lastGroup == k }) { continue }          // (no repeat of the last kind)
             cal.append((k, k == .yawnChain ? x * night : x))
         }
