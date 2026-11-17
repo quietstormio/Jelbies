@@ -813,18 +813,22 @@ struct GameScreen: View {
             }
         }
         // capture aid: -MealAuto <store food id> (e.g. taco, donut) after 5 s: the bag gets 3, hunger is set to 0.7 / 0.1 / 0.3 (so the pieces eaten differ) and a group meal is fed
+        // (2026-11-17 feeding survey: `water` / `soda` are free drinks, not store items: they go through the Drink picker's own path; a drink sets THIRST 0.7 / 0.1 / 0.3 instead)
         if let f = d.string(forKey: "MealAuto") {
             await sleep(5)
-            care.store.grant(f, 3)
-            for (i, h) in [Float(0.7), 0.1, 0.3].enumerated() where care.jellies.indices.contains(i) { care.needs(for: i).set(.hunger, h) }
-            care.feedSnack(f, jelly: d.object(forKey: "MealJelly") != nil ? d.integer(forKey: "MealJelly") : nil)          // (-MealJelly n: a single-Jelbie meal; the others roam)
+            let free = StoreCatalog.item(f) == nil, sip = Consumables.with(id: f)?.kind == .drink
+            let need: NeedKind = sip ? .thirst : .hunger
+            let who: Int? = d.object(forKey: "MealJelly") != nil ? d.integer(forKey: "MealJelly") : nil          // (-MealJelly n: a single-Jelbie meal; the others roam)
+            if !free { care.store.grant(f, 3) }
+            for (i, h) in [Float(0.7), 0.1, 0.3].enumerated() where care.jellies.indices.contains(i) { care.needs(for: i).set(need, h) }
+            if !free { care.feedSnack(f, jelly: who) } else if sip { care.drink(f, jelly: who) } else { care.feed(f, jelly: who) }
             // -MealRepeat s: serve the same meal again every s seconds (a capture aid for watching the tray over a long take)
             let again = d.double(forKey: "MealRepeat")
             while again > 0 {
                 await sleep(again)
-                care.store.grant(f, 3)
-                for (i, h) in [Float(0.7), 0.1, 0.3].enumerated() where care.jellies.indices.contains(i) { care.needs(for: i).set(.hunger, h) }
-                care.feedSnack(f, jelly: d.object(forKey: "MealJelly") != nil ? d.integer(forKey: "MealJelly") : nil)
+                if !free { care.store.grant(f, 3) }
+                for (i, h) in [Float(0.7), 0.1, 0.3].enumerated() where care.jellies.indices.contains(i) { care.needs(for: i).set(need, h) }
+                if !free { care.feedSnack(f, jelly: who) } else if sip { care.drink(f, jelly: who) } else { care.feed(f, jelly: who) }
             }
         }
         // capture aid: -LobbyTier sandcastle|shore|reef|tidal and -LobbyCourse puddle|ripple|splash|wave|tsunami pick that court / course (locked or not) to see its blurb
