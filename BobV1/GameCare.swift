@@ -750,7 +750,7 @@ final class GameCare {
                 guard standSettle >= Self.popSettle else { return }
             }
             // C5: the calm wait squares him up to his place first (BlobBrain.mealFaceYaw turns him), as the group does; never longer than the fallback
-            if DiningGroup.calmWait, abs(wrapAngle(brain.yaw - layout.places[0].yaw)) >= DiningGroup.calmFacing, singleFacingT < DiningGroup.calmFacingWait { singleFacingT += dt; return }
+            if DiningGroup.calmWait, abs(Self.wrapAngle(brain.yaw - layout.places[0].yaw)) >= DiningGroup.calmFacing, singleFacingT < DiningGroup.calmFacingWait { singleFacingT += dt; return }
             if dining.phase == .absent, dining.spawn(serving: c, n: 1, bobAt: SIMD2(99, 99), forcedOrigin: origin) {
                 wanted = nil; meal = c; mealAge = 0; idleT = 0; resetStandWalk()
                 let kind: NeedKind = c.kind == .food ? .hunger : .thirst
