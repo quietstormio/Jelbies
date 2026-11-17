@@ -62,13 +62,10 @@ struct VolleyChrome: View {
     // MARK: top
 
     private var topBar: some View {
-        VStack(spacing: 6) {
-            HStack(alignment: .top) {
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
                 if volley.canForfeit { ForfeitHomePill(care: care) } else { ForfeitHomePill(care: care).hidden() }          // (only a live match shows it; the same width otherwise)
-                Spacer()
-                scoreBoard
-                Spacer()
-                ForfeitHomePill(care: care).hidden().accessibilityHidden(true)          // (the same width on the right keeps the score centred)
+                scoreBoard.frame(maxWidth: .infinity)          // (the score is centred in the room the pill leaves: 12 pt apart, never under it)
             }
             if volley.live, !volley.ui.touchDots.isEmpty { touchDots }
             if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity) }
