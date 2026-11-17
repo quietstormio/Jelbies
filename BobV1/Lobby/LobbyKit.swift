@@ -301,6 +301,16 @@ struct LobbyPill: View {
 }
 
 /// The line under a carousel: the blurb (or an unlock rule for a few seconds) and, to its right (or below at big text sizes), the pills.
+/// The blurb's line rules. `steady` (the pills-below lobbies, default text size): always two lines of space, longer text scales to 0.8,
+/// so the prizes under it never move when the pick changes. Otherwise: one line when it fits, else wrap.
+private struct BlurbLines: ViewModifier {
+    let steady: Bool, oneLine: Bool, squeeze: Bool
+    func body(content: Content) -> some View {
+        if steady { content.lineLimit(2, reservesSpace: true).minimumScaleFactor(0.8).fixedSize(horizontal: false, vertical: true) }
+        else { content.lineSpacing(2).lineLimit(oneLine || squeeze ? 1 : nil).minimumScaleFactor(squeeze ? 0.7 : (oneLine ? 0.9 : 1)).fixedSize(horizontal: false, vertical: true) }
+    }
+}
+
 struct LobbyInfoLine<Pills: View>: View {
     let text: String
     var textID: String?
@@ -320,8 +330,8 @@ struct LobbyInfoLine<Pills: View>: View {
         return (text as NSString).size(withAttributes: [.font: font]).width * 0.9 <= availW
     }
     private var blurb: some View {
-        Text(text).font(SK.font(13, .bold)).foregroundStyle(theme.subheading).lineSpacing(2)
-            .lineLimit(oneLine || squeeze ? 1 : nil).minimumScaleFactor(squeeze ? 0.7 : (oneLine ? 0.9 : 1)).fixedSize(horizontal: false, vertical: true)
+        Text(text).font(SK.font(13, .bold)).foregroundStyle(theme.subheading)
+            .modifier(BlurbLines(steady: pillsBelow && !squeeze && !typeSize.isAccessibilitySize, oneLine: oneLine, squeeze: squeeze))
             .frame(maxWidth: .infinity, alignment: .leading).accessibilityIdentifier(textID ?? "lobby-info")
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availW = $0 }
     }
