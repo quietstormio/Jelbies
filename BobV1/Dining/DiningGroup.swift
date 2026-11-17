@@ -301,6 +301,8 @@ final class DiningGroup {
     var traceMouth: ((Int) -> SIMD3<Float>?)?
     /// Simulator-only trace aid (GameCare+Group sets it): the roster ids waiting for the next sitting (C6), for the ` wgaps=` part of the pose line.
     var traceWaiters: (() -> [Int])?
+    /// Simulator-only trace aid (GameCare+Group sets it every tick): a waiter's floor point and activity, for the ` wpos=` part of the pose line (T9).
+    var traceWaiterFloor: ((Int) -> (SIMD2<Float>, String)?)?
     /// The tray is drawn only once every diner stands at his place (his approach point), so no body ever walks across it on the way: the floor beside it is no wider than
     /// a body, there is no way round its ends (GameCare.serveWanted). Past this many seconds it pops in anyway (a diner that cannot get there is handled by the retries).
     static let gatherCap: Float = 12
@@ -476,6 +478,10 @@ final class DiningGroup {
                 var wg: [String] = []
                 for i in brains.indices { for w in ws where w != memberIDs[i] { wg.append("\(memberIDs[i])-\(w):" + (ContactField.gap(memberIDs[i], w).map { String(format: "%.4f", $0) } ?? "nan")) } }
                 line += " wgaps=" + wg.joined(separator: ",")
+                if let wf = traceWaiterFloor {          // (T9: where each waiter stands and what he does: a negative wgap is real only at a short centre distance)
+                    let wp = ws.compactMap { w in wf(w).map { "\(w):" + String(format: "%.4f,%.4f", $0.0.x, $0.0.y) + ",\($0.1)" } }
+                    if !wp.isEmpty { line += " wpos=" + wp.joined(separator: ";") }
+                }
             }
             line += trayOut ? " tray=1" : " tray=0"
             MealTrace.log(line)

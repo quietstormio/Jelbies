@@ -130,6 +130,12 @@ extension GameCare {
         }
         group.bystanders = { actors.filter { !self.group.memberIDs.contains($0.id) && $0.brain != nil }.map { Self.floorPos($0.brain!, $0.sim) } }
         group.waitersPending = { [weak self] in !(self?.groupQueue.isEmpty ?? true) }
+        #if targetEnvironment(simulator)
+        group.traceWaiterFloor = { id in          // (meal trace only, T9: the pose line's ` wpos=`)
+            guard let a = actors.first(where: { $0.id == id }), let b = a.brain else { return nil }
+            return (Self.floorPos(b, a.sim), "\(b.activity)")
+        }
+        #endif
         // C7 (round E): the first waiter takes the first freed place of this sitting (the tray stays); `-MealRolling 0` = the next sitting as in round D
         if DiningGroup.rolling, let w = groupQueue.first, let slot = group.freeSlot(), let a = actors.first(where: { $0.id == w }), let b = a.brain {
             groupQueue.removeFirst(); groupWaitSaved[w] = nil
