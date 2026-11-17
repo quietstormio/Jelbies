@@ -51,6 +51,14 @@ nonisolated enum CareItems {
         default: return nil
         }
     }
+    /// The short name on a bath tile (the Shop keeps the full names).
+    static func shortName(_ id: String) -> String {
+        switch id {
+        case lavender: return "Lavender"; case lintguard: return "Lint-guard"; case bubblebath: return "Bubbles"; case gentle: return "Gentle"
+        case deluxe: return "Deluxe"; case brush: return "Brush"; case sponge: return "Sponge"; case duck: return "Duck"
+        default: return StoreCatalog.item(id)?.name ?? id
+        }
+    }
     /// Timed perks granted when the wash finishes (the bath-only ones are not: they act inside the wash).
     static func grants(_ id: String) -> [PerkKind] {
         switch id {
