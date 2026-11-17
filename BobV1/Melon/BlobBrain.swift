@@ -1348,7 +1348,8 @@ final class BlobBrain {
         // and pick another (`steerGiveUp`, read by the walk). A requested walk (come, the meal) keeps the long patience: the blocker is asked to step aside.
         let requested = job != nil || commanded || pending != nil
         let slideLeg = idleState.kind == .decorSlide && idleState.decorUID == ParkToys.slideUID && idleState.slideStage < 0          // (the way round the park slide: it gives a standing friend 2 s, then the leg is given up and planned the other way round, BlobBrain+Decor.swift)
-        let patience: Float = requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6)
+        var forced = false; if let w = slideFootForceTo, case .goTo(let p)? = job, p == w { forced = true }          // (park-slide-r4: off the slide's foot after his longest wait: on past the friend, as a requested walk did after its 6 s)
+        let patience: Float = forced ? 0 : (requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6))
         if steerWait < patience, peerOnLeg(root, target) { heldByPeer = true; return nil }
         if !requested || (slideLeg && standing), peerOnLeg(root, target) { heldByPeer = true; steerGiveUp = true; return nil }
         return target
@@ -1361,6 +1362,8 @@ final class BlobBrain {
     var slideFootResume: SIMD2<Float>?
     var slideFootWaitSince: Float?
     var heldByPeer = false
+    /// park-slide-r4: the walk off the slide's foot he takes after waiting his longest (`slideFootRetry`): `steerTarget` does not hold it for a friend on the leg.
+    var slideFootForceTo: SIMD2<Float>?
     /// Seconds this walker has given way to a crossing walker (reset when nobody is in the way); at `ContactTuning.yieldMax` he goes round instead.
     var yieldT: Float = 0
     /// An autonomous walk found its way blocked for good (see `steerTarget`): the walk ends and a new goal is picked.
