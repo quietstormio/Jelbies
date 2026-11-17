@@ -235,6 +235,8 @@ final class BlobBrain {
     var commanded = false
     /// Voice v1: a trick to start on the next tick (the brain owns the skinner, so GameCare only queues it; see `startCommanded`).
     var commandedIdle: IdleKind?
+    /// The dizzy spin trick: the commanded spin (`.tail`) ends in the dizzy wobble every time (BlobBrain+Antics.swift `tailNext`), instead of the usual 35 %.
+    var commandedDizzyEnd = false
     /// Voice v1: the backflip trick, queued for the next tick. `flipCompact` = focus mode (lower apex so he stays in frame).
     var commandedFlip = false
     var flipCompact = false

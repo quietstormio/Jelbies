@@ -66,6 +66,7 @@ extension GameCare {
         } else if let k = VoiceCoordinator.idleKind(for: t) {
             if t == .superSpring || t == .corkscrew || t == .moonwalk { b.flipCompact = focus.isActive }
             b.commandedIdle = k
+            b.commandedDizzyEnd = t == .dizzySpin
         } else { return false }
         b.face(.excited, hold: 1.2)
         AudioHub.shared.uiConfirm()

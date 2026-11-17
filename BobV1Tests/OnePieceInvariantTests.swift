@@ -147,6 +147,13 @@ final class OnePieceInvariantTests: XCTestCase {
             if let sc { out.append(Job(name: "idle \(k.rawValue)", sc: sc, chars: e.chars ?? Array(0..<characters.count))) }
         }
         for g in gaitNames { if let sc = gaitScenario(g) { out.append(Job(name: g, sc: sc, chars: Array(0..<characters.count))) } }
+        // the dizzy spin trick: the spin (.tail) that always ends in the dizzy wobble (BlobBrain+Antics.swift tailNext)
+        out.append(Job(name: "trick dizzySpin", sc: SC(name: "trick: dizzySpin", game: true, seconds: 11, setup: { r, _ in
+            r.brain.idleForced = true
+            let ok = r.brain.idleStart(.tail, r.sim)
+            r.brain.idleState.dizzyEnd = true; r.brain.idleState.reps = max(r.brain.idleState.reps, 1)
+            return ok
+        }), chars: Array(0..<characters.count)))
         let only = (ProcessInfo.processInfo.environment["ONEPIECE_ONLY"] ?? "").split(separator: ",").map(String.init)
         return only.isEmpty ? out : out.filter { j in only.contains { j.name.contains($0) } }
     }

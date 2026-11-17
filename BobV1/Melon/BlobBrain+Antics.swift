@@ -103,7 +103,10 @@ extension BlobBrain {
             jellyKick = max(jellyKick, 2.6)
             if feature == .spines { tailPlay.dizzy = 1 }          // the tail wobbles dizzily after the chase (BlobBrain+TailPlay)
             AudioHub.shared.play(.wobble, jelly: steerID, x: px, volume: 0.6)
-            if dizzyFollowOn(sim) { return }          // (sometimes the chase ends in a woozy wobble: BlobBrain+Emotes.swift)
+            if idleState.dizzyEnd {
+                idleState.dizzyEnd = false
+                if !A11ySettings.shared.reduceMotion { trickDizzyFollow(sim); return }          // (the dizzy spin trick: the wobble always follows; Reduce Motion keeps the plain spin)
+            } else if dizzyFollowOn(sim) { return }          // (sometimes the chase ends in a woozy wobble: BlobBrain+Emotes.swift)
             idleFinish(skinner)
         }
     }

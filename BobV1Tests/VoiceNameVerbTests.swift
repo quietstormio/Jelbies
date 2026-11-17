@@ -74,6 +74,28 @@ final class VoiceNameVerbTests: XCTestCase {
         XCTAssertEqual(obeyed(r, .sit) + obeyed(r, .hop) + obeyed(r, .spin), 3, "6: \(r.care.voice.feedbackLog)")
     }
 
+    /// A grumpy Jelmiko refuses a voice trick (the game's rule, unchanged) but says why: the need his bubble shows.
+    func testGrumpyRefusalSaysWhy() {
+        let cases: [(NeedKind, String)] = [(.hunger, "is too hungry for tricks"), (.thirst, "is too thirsty for tricks"), (.attention, "wants a cuddle before tricks")]
+        for (need, text) in cases {
+            let r = make()
+            for k in NeedKind.allCases { r.care.needs(for: 1).set(k, k == need ? 0 : 1) }
+            r.run(0.3)
+            XCTAssertEqual(r.care.needs(for: 1).mood, .grumpy, "\(need)")
+            say(r, "Pip spin")
+            XCTAssertEqual(obeyed(r, .spin), 0, "a grumpy Jelmiko still refuses: \(need)")
+            XCTAssertTrue(r.care.voice.feedbackLog.contains(.grumpy), "\(r.care.voice.feedbackLog)")
+            XCTAssertEqual(r.care.voice.understood?.text, "\(r.care.jelly(1)?.name ?? "") \(text)", "\(need)")
+            XCTAssertEqual(r.care.voice.understood?.ok, false)
+        }
+        // the unnamed room command says it too
+        let r = make()
+        for k in NeedKind.allCases { r.care.needs(for: 0).set(k, k == .hunger ? 0 : 1) }
+        r.run(0.3)
+        say(r, "spin")
+        XCTAssertTrue(r.care.voice.understood?.text.contains("too hungry for tricks") == true, "\(String(describing: r.care.voice.understood))")
+    }
+
     /// A trick Pip was never given: the HUD says so (not a silent highlight), and Pip does no trick.
     func testUnknownTrickSaysSoOnTheHUD() {
         let r = make()

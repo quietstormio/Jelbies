@@ -391,6 +391,7 @@ extension GameCare {
             if ShowTrickInfo.ownsFlop.contains(t) { b.idleState.trickFailNext = !success; b.commandedIdle = k }          // (a move with its own fail variant: no cut-short wobble on top of it)
             else if success { b.commandedIdle = k } else { b.commandedIdle = k; if player { showBook.flopT = 0 } else { showBook.flops[a.id] = 0 } }
         }
+        b.commandedDizzyEnd = t == .dizzySpin && success          // (a spin that ends in the dizzy wobble; a flop is the usual cut-short wobble)
         if success { b.face(.excited, hold: 1.2) } else { b.face(.worried, hold: 1.4) }
         var watchers: [JellyActor] = showBook.performers.compactMap { showBody($0) }
         watchers += showBook.extra

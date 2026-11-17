@@ -180,6 +180,7 @@ enum IdleTable {
 }
 
 struct IdleState {
+    var dizzyEnd = false                        // the dizzy spin trick: the spin (.tail) must end in the dizzy wobble (reset by `idleBegin`)
     var kind: IdleKind?                         // the running behaviour (nil = none)
     var last: IdleKind?
     var cooldown: Float = 9                     // seconds until the next special may start
@@ -542,7 +543,11 @@ extension BlobBrain {
         if busy { abortAll(sim, skinner) }
         pending = nil
         commanded = true
-        if idleStart(kind, sim) { restTimer = max(restTimer, 1) } else { commanded = false }
+        if idleStart(kind, sim) {
+            restTimer = max(restTimer, 1)
+            if kind == .tail, commandedDizzyEnd { idleState.dizzyEnd = true; idleState.reps = max(idleState.reps, 1) }          // (the dizzy spin trick: two or three turns, then the wobble)
+        } else { commanded = false }
+        commandedDizzyEnd = false
     }
 
     /// Voice: a decor interaction with a named kind of piece ("go sit on the beanbag"), like a commanded trick: aborts what he was doing, runs
@@ -561,8 +566,10 @@ extension BlobBrain {
 
     // MARK: starting
 
+    nonisolated static let idleLog = UserDefaults.standard.bool(forKey: "VoiceLog")
     func idleBegin(_ kind: IdleKind) {
         varietyNote(kind)
+        if Self.idleLog { NSLog("[melon] idle begin %@ (commanded %@, dizzyEnd %@)", kind.rawValue, commanded ? "yes" : "no", idleState.dizzyEnd ? "yes" : "no") }          // capture aid: -VoiceLog 1
         if !voiceMuted, let c = JellyVoiceSet.contextVoice(forIdle: kind, mood: idleMood) { AudioHub.shared.contextVoice(jelly: steerID, c.voice, chance: c.chance, x: px) }          // (the home room's context voices: add variety on top of the chirps)
         if kind != .wander { roomCue(.idle(kind)) }          // (its own haptic: Haptics+Emotes.swift)
         idleState.kind = kind; walkBoostK = 1
@@ -570,6 +577,7 @@ extension BlobBrain {
         idleState.steps = 0; idleState.stumbleAt = 0; flopKicks = 0; idleState.resume = nil; idleState.reaction = nil
         idleState.sign = rand() < 0.5 ? -1 : 1
         idleState.windowGo = false
+        idleState.dizzyEnd = false
         idleState.echo[kind] = IdleTuning.echoWindow
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
     }
