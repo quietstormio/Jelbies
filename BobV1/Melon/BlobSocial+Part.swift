@@ -28,6 +28,7 @@ extension BlobBrain {
     /// The root displacement a turn step of `dyaw` radians takes while parting; nil = a plain turn.
     func partingRetreat(dyaw: Float) -> SIMD2<Float>? {
         guard abs(dyaw) > PartTuning.minTurn else { return nil }
+        guard !reserved else { return nil }          // (a meal / sitting queue / toss wait holds him: the 6 s flag left by a close session the call ended must not slide diners about during their look / arrival / step-in turns)
         var other: BlobBrain?
         if socialBook.partFrom >= 0 {
             if peerClock < socialBook.partUntil { other = socialBrain(socialBook.partFrom) } else { socialBook.partFrom = -1 }
