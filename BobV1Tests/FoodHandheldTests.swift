@@ -132,4 +132,13 @@ final class FoodHandheldTests: XCTestCase {
         XCTAssertEqual(b.count("cinnamonroll"), 1); XCTAssertEqual(b.sell("fruitskewer"), 5)
         XCTAssertEqual(w.count, 21)
     }
+
+    func testCafeTreatsCanBeServedStraightInTheSimulator() {
+        #if targetEnvironment(simulator)
+        XCTAssertEqual(Consumables.with(id: "cafe-sundae")?.name, "Ice cream cone"); XCTAssertEqual(Consumables.with(id: "cafe-jellycup")?.name, "Jelly puff")
+        XCTAssertEqual(Consumables.with(id: "cafe-sundae")?.kind, .food); XCTAssertEqual(Consumables.with(id: "cafe-sundae")?.stored, false)
+        #endif
+        XCTAssertNil(Consumables.with(id: "cafe-nonsense"))
+        XCTAssertNil(Consumables.all.first { $0.id.hasPrefix("cafe-") }, "café treats are not in the Shop's list")
+    }
 }
