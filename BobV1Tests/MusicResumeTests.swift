@@ -62,6 +62,7 @@ final class MusicResumeTests: XCTestCase {
         let before = trackEvents(hub)
         hub.setForeground(false)
         hub.setForeground(true)
+        await hub._settleResume()
         XCTAssertFalse(hub._inGap, "the gap must end on return")
         XCTAssertEqual(trackEvents(hub), before + 1, "a track starts on return")
         guard case .playTrack(_, let fade)? = hub.eventLog.last else { return XCTFail("no track event: \(String(describing: hub.eventLog.last))") }
@@ -107,6 +108,7 @@ final class MusicResumeTests: XCTestCase {
         func sceneOns() -> Int { hub.eventLog.filter { $0 == .sceneOn(.shop, fade: 1.2) || $0 == .sceneOn(.shop, fade: 1.5) }.count }
         XCTAssertEqual(sceneOns(), 1)
         hub.setForeground(false); hub.setForeground(true)          // no engine on this test host (nothing plays the scene): it is asked for again
+        await hub._settleResume()
         XCTAssertGreaterThanOrEqual(sceneOns(), 2, "the shop track is requested again on return")
         XCTAssertEqual(hub.eventLog.last, .sceneOn(.shop, fade: 1.5))
         hub.setTownScene(.none)
@@ -128,5 +130,25 @@ final class MusicResumeTests: XCTestCase {
         for _ in 0..<60 { if e.isPlaying(.town) { ok = true; break }; try await Task.sleep(for: .milliseconds(100)) }
         XCTAssertTrue(ok, "the scene track plays again after the engine restart")
         e.stopAll(fade: 0); e.update(dt: 1)
+    }
+
+    /// A resume while a session retry is in flight queues behind it (no second retry); the watchdog path skips while one is in flight.
+    func testResumeDuringSessionRetryDoesNotStartASecondRetry() async {
+        let hub = makeHub()
+        await hub._settleResume()
+        let blocker = Task<Void, Never> { try? await Task.sleep(for: .seconds(30)) }
+        hub._setSessionRetryForTest(blocker)
+        hub._resumeForTest(verify: true)
+        XCTAssertTrue(hub._pendingResume, "the resume waits for the retry in flight")
+        hub._resumeForTest(verify: true, fadeIn: false)           // what the watchdog would do
+        XCTAssertFalse(blocker.isCancelled, "no second session setup replaced the retry in flight")
+        XCTAssertTrue(hub._sessionRetryInFlight)
+        hub._forceGap(60)
+        for _ in 0..<400 { hub._tick(0.05) }                      // 20 s of ticks: the 5 s watchdog must not resume while the retry is in flight
+        XCTAssertFalse(blocker.isCancelled)
+        blocker.cancel()
+        hub._setSessionRetryForTest(nil)
+        hub.setForeground(false); hub.setForeground(true)
+        await hub._settleResume()
     }
 }

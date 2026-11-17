@@ -244,7 +244,7 @@ final class AudioHub {
                     }
                 }
                 guard let self, !Task.isCancelled else { return }
-                if ok { self.sessionRetry = nil; return }
+                if ok { self.sessionRetry = nil; self.finishPendingResume(); return }
                 await self.sessionRetryLoop()
             }
             return
@@ -270,14 +270,48 @@ final class AudioHub {
     private func sessionRetryLoop() async {
         for _ in 0..<8 {
             try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled, started, active, !micSession, !earsSession else { return }
+            guard !Task.isCancelled else { return }          // replaced / cancelled: whoever replaced it owns `sessionRetry` and the pending resume
+            guard started, active, !micSession, !earsSession else { sessionRetry = nil; pendingResume = false; return }
             let s = AVAudioSession.sharedInstance()
             let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
             try? s.setCategory(plan.category, mode: .default, options: plan.options)
-            if (try? s.setActive(true)) != nil { for d in decks { d.player.play() }; layer?.player.play(); ambDay?.player.play(); ambEve?.player.play(); resumeLoops(); scene?.resume(); sessionRetry = nil; return }
+            if (try? s.setActive(true)) != nil { playAll(); scene?.resume(); sessionRetry = nil; finishPendingResume(played: true); return }
         }
+        // out of retries: the players are still started (best effort, as before) so a later watchdog pass can judge them
         sessionRetry = nil
+        playAll(); scene?.resume(); finishPendingResume(played: true)
     }
+
+    private func playAll() {
+        for d in decks { d.player.play() }
+        layer?.player.play(); ambDay?.player.play(); ambEve?.player.play()
+        resumeLoops()
+    }
+
+    /// A resume that is waiting for the off-main session setup: the ensure-music pass (and the 0.5 s re-check when asked) runs once the players have been started.
+    @ObservationIgnored private var pendingResume = false
+    @ObservationIgnored private var pendingVerify = false
+    private func finishPendingResume(played: Bool = false) {
+        guard pendingResume else { return }
+        pendingResume = false
+        let verify = pendingVerify; pendingVerify = false
+        guard started, active else { return }
+        if !played { playAll(); scene?.resume() }
+        finishResume(verify: verify)
+    }
+    private func finishResume(verify: Bool) {
+        ensureMusic(delay: false)
+        if verify { verifyTask?.cancel(); verifyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            if !Task.isCancelled { self?.ensureMusic(delay: true) }
+        } }
+    }
+    /// Test hook: waits for an in-flight session setup / retry (and the resume behind it).
+    func _settleResume() async { await sessionRetry?.value }
+    var _sessionRetryInFlight: Bool { sessionRetry != nil }
+    func _setSessionRetryForTest(_ t: Task<Void, Never>?) { sessionRetry = t }
+    func _resumeForTest(verify: Bool = false, fadeIn: Bool = true) { resumeAfterInterruption(verify: verify, fadeIn: fadeIn) }
+    var _pendingResume: Bool { pendingResume }
     /// Welcome-back cover: effects stay silent until it begins to fade (`holdEffects`). `resumeReady`: the session is active again, no reactivation retry is pending and the music fade-in has started.
     @ObservationIgnored private var effectsHeld = false
     func holdEffects(_ on: Bool) { effectsHeld = on }
@@ -302,16 +336,14 @@ final class AudioHub {
     private func resumeAfterInterruption(verify: Bool = false, fadeIn: Bool = true) {
         guard started, active else { return }
         if fadeIn { resumeFade = 0; applyLevels() }          // everything comes back silent, then rises (resume-from-background fades in)
-        if !micSession { setUpSession() }
-        for d in decks { d.player.play() }
-        layer?.player.play(); ambDay?.player.play(); ambEve?.player.play()
-        resumeLoops()
-        scene?.resume()
-        ensureMusic(delay: false)
-        if verify { verifyTask?.cancel(); verifyTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(500))
-            if !Task.isCancelled { self?.ensureMusic(delay: true) }
-        } }
+        if micSession || earsSession {                       // no session switch to wait for: resume at once, as before
+            playAll(); scene?.resume(); finishResume(verify: verify)
+            return
+        }
+        // The category switch + reactivation are blocking IPC: they run on `AudioSessionQueue`, and the players / scene engine start on the main actor
+        // when that succeeds (or the retry loop gets through). A retry already in flight owns the session: just queue this resume behind it.
+        pendingResume = true; pendingVerify = pendingVerify || verify
+        if sessionRetry == nil { setUpSession(offMain: true) }
     }
 
     /// The beach and crowd loops come back after a background / interruption when their scene still wants them (they were paused with the session).
@@ -381,7 +413,7 @@ final class AudioHub {
                 self.resumeFade = 1; self.refreshOtherAudio(); self.applyLevels()
             }
         } else {
-            verifyTask?.cancel(); settleTask?.cancel(); sessionRetry?.cancel()
+            verifyTask?.cancel(); settleTask?.cancel(); sessionRetry?.cancel(); sessionRetry = nil; pendingResume = false; pendingVerify = false
             resumeFade = 0
             micSession = false          // the mic engine died with the background; a stale flag would skip setUpSession on return
             for d in decks { d.player.pause() }
@@ -1184,7 +1216,7 @@ final class AudioHub {
             let sceneHeard = director.sceneTrack.map { scene?.isPlaying($0) ?? false } ?? false
             if watchdog.update(dt: dt, shouldPlay: wantsRoom || wantsScene, isPlaying: wantsRoom ? roomHeard : sceneHeard) {
                 if Self.audioLog { NSLog("[audio] watchdog: %@ silent, restarting", wantsRoom ? "room music" : "scene \(director.sceneTrack?.rawValue ?? "?")") }
-                resumeAfterInterruption(verify: true, fadeIn: false)
+                if sessionRetry == nil { resumeAfterInterruption(verify: true, fadeIn: false) }          // a session retry in flight resumes by itself: don't hammer it every 5 s
             }
         } else { watchdog.reset() }
         mainSlew.update(mode: director.modeGain(playing: input.playing), duck: director.duckGain, dt: dt)
