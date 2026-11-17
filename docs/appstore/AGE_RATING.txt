@@ -25,7 +25,7 @@ MATURE THEMES
 ----------------------------------------------------------------------
 Profanity or Crude Humor                         -> None.   Reason: Jelmiko speak in chirps and babble. Park visitor text is checked by Park/ParkTextSafety.swift.
 Horror / Fear Themes                             -> None.   Reason: pets, food, toys, a beach game. There is a gentle thunderstorm weather effect in which the Jelmiko huddle and are comforted. I judged this None. If you decide a storm counts, the next answer ("Infrequent") would raise the rating to 9+ (verify).
-Alcohol, Tobacco or Drug Use or References       -> None.   Reason: the Cafe sells pretend treats (a Jelly Cup, a Baby latte) for the Jelmiko. Nothing refers to people drinking alcohol or using tobacco or drugs.
+Alcohol, Tobacco or Drug Use or References       -> None.   Reason: the Cafe sells pretend treats (a Jelly puff, a Baby latte) for the Jelmiko. Nothing refers to people drinking alcohol or using tobacco or drugs.
 
 ----------------------------------------------------------------------
 MEDICAL OR WELLNESS

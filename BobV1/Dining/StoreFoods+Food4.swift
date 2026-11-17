@@ -1,6 +1,6 @@
 //
 //  StoreFoods+Food4.swift
-//  Store sweep 4: eight more hand-held foods and treats (cheeseburger, ramen bowl, mac & cheese, dumplings, pancake stack, fruit cup, strawberry cake slice,
+//  Store sweep 4: eight more hand-held foods and treats (cheeseburger, cinnamon roll, dumplings, pancake stack, fruit skewer, strawberry cake slice,
 //  frosted cupcake). Each is a Blender mesh (tools/make_food4/foods4.py -> food_<id>.bin), one piece on the plate (three per Jelly), tossed into his mouth by
 //  the finger-food flow like every other store food. `fallbackPiece` only draws if a bundled mesh is missing.
 //
@@ -22,22 +22,21 @@ extension Consumables {
 
     static let cheeseburger = food4("cheeseburger", "Cheeseburger", pal((0.96, 0.70, 0.36), (0.52, 0.80, 0.34), (0.90, 0.22, 0.20), (1.0, 0.80, 0.18)),
                                     perk: .fullBelly, cond: [.sporty: 0.10, .cool: 0.06])
-    static let ramen = food4("ramen", "Ramen bowl", pal((0.97, 0.94, 0.88), (1.0, 0.86, 0.45), (0.80, 0.16, 0.18), (0.48, 0.78, 0.30)),
-                             perk: .cozy, cond: [.cool: 0.08, .cute: 0.08])
-    static let macncheese = food4("macncheese", "Mac & cheese", pal((0.62, 0.80, 0.94), (1.0, 0.76, 0.22), (1.0, 0.70, 0.14), (0.45, 0.72, 0.30)),
-                                  perk: .social, cond: [.sweet: 0.08, .cute: 0.08])
+    // 2026-11-16: the bowl / cup foods are hand-held now (same perks, same conditions): Ramen bowl -> Cinnamon roll, Fruit cup -> Fruit skewer; Mac & cheese was dropped for the existing Donut
+    static let cinnamonroll = food4("cinnamonroll", "Cinnamon roll", pal((0.94, 0.72, 0.40), (0.52, 0.28, 0.14), (1.0, 0.98, 0.93), (0.99, 0.80, 0.50)),
+                                    perk: .cozy, cond: [.cool: 0.08, .cute: 0.08])
     static let dumplings = food4("dumplings", "Dumplings", pal((0.88, 0.70, 0.42), (1.0, 0.96, 0.88), (0.62, 0.84, 0.42), (0.14, 0.12, 0.10)),
                                  perk: .focus, cond: [.cool: 0.08, .sparkle: 0.06])
     static let pancakestack = food4("pancakestack", "Pancake stack", pal((0.94, 0.72, 0.38), (0.82, 0.38, 0.09), (1.0, 0.92, 0.55), (0.92, 0.14, 0.22)),
                                     perk: .zoomies, cond: [.sweet: 0.12, .sporty: 0.06])
-    static let fruitcup = food4("fruitcup", "Fruit cup", symbol: "birthday.cake.fill", pal((0.62, 0.84, 0.96), (1.0, 0.62, 0.14), (0.92, 0.14, 0.22), (0.30, 0.34, 0.74)),
+    static let fruitskewer = food4("fruitskewer", "Fruit skewer", symbol: "birthday.cake.fill", pal((0.92, 0.14, 0.22), (1.0, 0.86, 0.30), (0.52, 0.80, 0.22), (0.30, 0.34, 0.74)),
                                 perk: .shine, cond: [.sparkle: 0.10, .sweet: 0.06])
     static let cakeslice = food4("cakeslice", "Strawberry cake", symbol: "birthday.cake.fill", pal((1.0, 0.62, 0.72), (0.98, 0.84, 0.62), (0.92, 0.14, 0.22), (1.0, 0.97, 0.92)),
                                  perk: .cozy, cond: [.sweet: 0.14, .cute: 0.06])
     static let cupcake = food4("cupcake", "Frosted cupcake", symbol: "birthday.cake.fill", pal((1.0, 0.70, 0.80), (0.96, 0.58, 0.70), (0.85, 0.08, 0.16), (1.0, 0.9, 0.3)),
                                perk: .bouncy, cond: [.cute: 0.10, .sweet: 0.08])
 
-    static let storeFoods4: [Consumable] = [cheeseburger, ramen, macncheese, dumplings, pancakestack, fruitcup, cakeslice, cupcake]
+    static let storeFoods4: [Consumable] = [cheeseburger, cinnamonroll, dumplings, pancakestack, fruitskewer, cakeslice, cupcake]
 }
 
 // MARK: - Shop thumbnails for the new foods and the drinks

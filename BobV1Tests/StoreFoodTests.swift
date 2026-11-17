@@ -100,14 +100,14 @@ final class StoreFoodTests: XCTestCase {
     func testEveryFoodLoadsFromTheBundledResourceWithinBudget() {
         for id in FoodMeshes.resourceIDs {
             guard let m = FoodMeshes.loaded[id] else { XCTFail("\(id): food_\(id).bin did not load"); continue }
-            XCTAssertLessThanOrEqual(m.triangles, 1600, "\(id): triangle budget")
+            XCTAssertLessThanOrEqual(m.triangles, 14000, "\(id): triangle budget")          // (1600 was the budget of the first procedural-era meshes; the Blender foods run 2.5k-13k)
             XCTAssertGreaterThan(m.triangles, 300, "\(id): a real mesh")
             XCTAssertTrue(m.indices.allSatisfy { Int($0) < m.positions.count })
         }
         for f in Consumables.storeFoods {
             let b = RoomMeshBuilder(); b.material = .plain
             XCTAssertTrue(FoodMeshes.append(b, id: f.id, centre: .zero, variant: 0, scale: 1), "\(f.id): meshed, not the procedural fallback")
-            XCTAssertLessThanOrEqual(b.mesh.indices.count / 3, 1600, f.id)
+            XCTAssertLessThanOrEqual(b.mesh.indices.count / 3, 14000, f.id)
         }
     }
 
@@ -117,7 +117,8 @@ final class StoreFoodTests: XCTestCase {
                                            "popsicle": StoreFoodModels.popsicle, "onigiri": StoreFoodModels.onigiri, "cookie": StoreFoodModels.cookie]
         for f in Consumables.storeFoods {
             let ob = RoomMeshBuilder(); ob.material = .plain
-            old[f.id]!(ob, .zero, 0, 1, f.palette)
+            guard let oldBuilder = old[f.id] else { continue }          // (the Blender-only foods of store sweep 4 and later have no procedural original to compare with)
+            oldBuilder(ob, .zero, 0, 1, f.palette)
             let o = extent(ob.mesh), n = extent(DiningModels.heldPiece(f, index: 0, scale: 1))
             let os = o.hi - o.lo, ns = n.hi - n.lo
             XCTAssertLessThan(max(ns.x, ns.z), max(os.x, os.z) * 1.6 + 0.02, "\(f.id): footprint not much bigger than before")

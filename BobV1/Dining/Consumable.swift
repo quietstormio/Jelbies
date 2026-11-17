@@ -164,5 +164,15 @@ nonisolated enum Consumables {
     static var foods: [Consumable] { [berries, pizza] }
     /// The FREE drinks (water, soda). The store's drinks (`storeDrinks`) are offered from the bag: `GameCare.drinkChoices`.
     static var drinks: [Consumable] { all.filter { $0.kind == .drink && !$0.stored } }
-    static func with(id: String) -> Consumable? { all.first { $0.id == id } }
+    /// A retired id (an old bowl / cup food in a stale save, tray or dev argument) finds its hand-held replacement (RetiredFoods).
+    static func with(id: String) -> Consumable? {
+        let id = RetiredFoods.current(id)
+        if let c = all.first(where: { $0.id == id }) { return c }
+        #if targetEnvironment(simulator)
+        // Capture aid, simulator only (`-GameAction feed:cafe-sundae` / `feed:cafe-jellycup`, dev arguments): a café treat is served straight to the Jelmiko at home, no outing.
+        // Café treats are not in `all` and not in the bag, so the normal lookup never finds them and a player build (device or archive) never compiles this in.
+        if id.hasPrefix("cafe-"), let t = CafeTreatID(rawValue: String(id.dropFirst(5))) { return cafeFood(t) }
+        #endif
+        return nil
+    }
 }

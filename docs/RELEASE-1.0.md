@@ -34,7 +34,7 @@ The one item still in flight (Pip's signature) is the only open feature work. Th
 - Toy play: Jelmiko react when a toy is placed, take turns, and share a two-seat cushion pile.
 
 ### Places
-- Town, Shop, Café (Jelly Cup, Baby latte), the Adoption Center and Jelly Volleyball.
+- Town, Shop, Café (Jelly puff, Baby latte), the Adoption Center and Jelly Volleyball.
 - Park: a clean redesign (one lawn, round trees, flowering bushes, simple pond), up to five Jelmiko, visitor Jelmiko to befriend, love rises faster than petting, and Park-only toys (seesaw, spring bunny, sandbox).
 - Groomer (Jelly Spa in Town): Quick Splash 20, Bubble Spa 40 and Royal Pamper 70 JellyCoins per Jelmiko. A shop-front cut-scene with ElevenLabs sounds, then a shiny reveal at home.
 
@@ -65,7 +65,7 @@ Toy play, Jelly Volleyball with training, the blue title screen, the theme colou
 ElevenLabs key renewed 2026-10-25. New audio covers the groomer and volleyball (two beach tracks plus hit sounds).
 
 ## Post-1.0 ideas (not building now)
-- Blender versions of the Jelly Cup and latte.
+- Blender versions of the Jelly puff and latte.
 - Hurdle practice in training.
 - More race layouts and scenery.
 - Share-a-snack social.

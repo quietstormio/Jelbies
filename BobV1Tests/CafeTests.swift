@@ -522,7 +522,7 @@ final class CafeTests: XCTestCase {
         var stray = 0
         for part in art.parts { for p in part.positions where p.y < 1.2 && !covered(p) { stray += 1 } }
         XCTAssertEqual(stray, 0, "floor-level art outside the colliders")
-        for id in ["swirl", "pancakes", "sundae", "fizzmac"] { if let m = FoodMeshes.loaded[id] { XCTAssertLessThanOrEqual(m.triangles, 1500, id) } }
+        for id in ["swirl", "pancakes", "sundae", "fizzmac"] { if let m = FoodMeshes.loaded[id] { XCTAssertLessThanOrEqual(m.triangles, 5000, id) } }          // (the sundae is the Blender ice cream cone now, 4.3k like the other Blender foods)
         for n in 1...3 {
             guard let m = FoodMeshes.loaded["cafetable_\(n)"] else { continue }
             XCTAssertLessThanOrEqual(m.triangles, 900)
