@@ -58,6 +58,8 @@ struct RoundHeader: View {
     var round: Int
     var title: String
     var kicker: String? = nil
+    /// The Trick round counts TURNS, not rounds: how many are used and which one is up (nil = the pips count rounds).
+    var turns: TurnPips? = nil
     var body: some View {
         let show = care.show
         HStack(spacing: 10) {
@@ -69,9 +71,28 @@ struct RoundHeader: View {
             .accessibilityElement(children: .combine).accessibilityIdentifier("show-round")
             Spacer()
             HStack(spacing: 6) {
-                ForEach(1...3, id: \.self) { k in Capsule().fill(k <= round ? ShowUI.gold : ShowUI.platform).frame(width: 26, height: 8) }
+                if let t = turns { TurnPipRow(pips: t) }
+                else { ForEach(1...3, id: \.self) { k in Capsule().fill(k <= round ? ShowUI.gold : ShowUI.platform).frame(width: 26, height: 8) } }
             }
-            .accessibilityLabel("Round \(round) of 3")
+            .accessibilityLabel(turns.map { "Round \(round) of 3, turn \(min($0.current, 2) + 1) of 3" } ?? "Round \(round) of 3")
+        }
+    }
+}
+
+/// The Trick round's pips: `used` turns are over (gold), `current` is the one up now (outlined), the rest are still to come.
+struct TurnPips: Equatable {
+    var used: Int
+    var current: Int
+    var kicker: String { "ROUND 3 OF 3 \u{00B7} TURN \(min(current, 2) + 1) OF 3" }
+}
+struct TurnPipRow: View {
+    var pips: TurnPips
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3, id: \.self) { k in
+                Capsule().fill(k < pips.used ? ShowUI.gold : ShowUI.platform).frame(width: 26, height: 8)
+                    .overlay(Capsule().strokeBorder(ShowUI.gold, lineWidth: 2).opacity(k == pips.current && k >= pips.used ? 1 : 0))
+            }
         }
     }
 }
@@ -549,7 +570,7 @@ struct TrickRound: View {
                     // a phone on its side: the contestant has the left half; turn chips, Glow Burst and the menu (or the entrant's card) are the right column
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 8) {
-                            SideHeader(round: 3, title: "Trick", kicker: "ROUND 3 OF 3")
+                            SideHeader(round: 3, title: "Trick", kicker: turnPips.kicker, turns: turnPips)
                             if let h = hint { StagePill(text: h) }
                             Spacer(minLength: 0)
                         }
@@ -565,7 +586,7 @@ struct TrickRound: View {
                 } else if PadLayout.isPad && size.width > size.height {
                     // iPad landscape: the stage fills the left ~55% (the camera frame puts the Jelbies there); chips, hint and the menu / entrant card are a clear right column
                     VStack(spacing: 8) {
-                        RoundHeader(care: care, round: 3, title: "Trick", kicker: "ROUND 3 OF 3")
+                        RoundHeader(care: care, round: 3, title: "Trick", kicker: turnPips.kicker, turns: turnPips)
                         HStack(alignment: .top, spacing: 24) {
                             Color.clear.frame(width: size.width * 0.55 - 16)
                             VStack(spacing: 10) {
@@ -583,7 +604,7 @@ struct TrickRound: View {
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24 + g.safeAreaInsets.bottom)
                 } else {
                     VStack(spacing: 14) {
-                        RoundHeader(care: care, round: 3, title: "Trick", kicker: "ROUND 3 OF 3")
+                        RoundHeader(care: care, round: 3, title: "Trick", kicker: turnPips.kicker, turns: turnPips)
                         turns.padReadable(760)
                         if let h = hint { StagePill(text: h, scale: sc) }
                         if rivalsOn {
@@ -676,6 +697,11 @@ struct TrickRound: View {
     }
 
     /// One row of three: only ONE capsule is gold, the one that is happening now (his go, his trick landing, or the entrant on stage with her name).
+    /// The turn pips of the header: turns used so far, and the one up now.
+    private var turnPips: TurnPips {
+        let done = show.sim?.turns.count ?? 0
+        return TurnPips(used: done, current: show.trickStage == .performing ? max(done - 1, 0) : done)
+    }
     private var turns: some View {
         let s = show.sim
         let done = s?.turns.count ?? 0
