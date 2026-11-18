@@ -1443,10 +1443,12 @@ final class BlobBrain {
         // A stance walk that ends in a posture other than 'facing the partner' (side by side, facing the camera) turns into it during the last steps - an arc into the pose - so nobody squares up in place at contact
         // (the turn on the spot at touching range sweeps the wide axis through the partner, and the wall / the parting retreat pushes the pair apart again).
         var errF: Float = 0, finalTurn = false
-        if let fy = (exact ? ContactTouchMemory.finalYaw[steerID] : nil) ?? (intermediate ? nil : mealFinalYaw) {          // (a stance walk, or a meal's straight walk to his stand: the turn into the place's yaw is made on the way)
+        if let fy = (exact ? ContactTouchMemory.finalYaw[steerID] : nil) ?? mealFinalYaw {          // (a stance walk, or a meal's walk to his stand: the turn into the place's yaw is made on the way; a routed walk counts the rest of its route, so its LAST legs blend the yaw too)
             errF = wrapAngle(fy - yaw)
             let n = (abs(errF) / max(m, 0.1)).rounded(.up)
-            finalTurn = D <= (n + ContactTuning.finalTurnExtra) * stride * runStrideMul * amplitude.clamped(0.6, 1)
+            var rest = D
+            if intermediate, exact == false, case .walk(let tgt, _) = script { var prev = target; for w in route.dropFirst() { rest += simd_distance(prev, w); prev = w }; rest += simd_distance(prev, tgt) }
+            finalTurn = rest <= (n + ContactTuning.finalTurnExtra) * stride * runStrideMul * amplitude.clamped(0.6, 1)
         }
         let arc = (abs(err) <= 1.2 && D > 0.4 && !intermediate) || finalTurn         // turn while moving: a short arc into the new direction
         if abs(err) > 0.5 && !arc {                        // not facing the target yet: turn on the spot first

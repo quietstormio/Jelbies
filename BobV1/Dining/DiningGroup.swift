@@ -124,8 +124,8 @@ final class DiningGroup {
     private var lineup: Bool { !Self.trayAtOrder && Self.straightWalk && forcedOrigin == nil }
     private var arrivedAt: [Float?] = []
     private func atStand(_ i: Int) -> Bool { simd_distance(floor(i), stands[placeOf[i]]) < 0.3 }
-    /// `-CafeEnds 1` (dev builds): the café table's three places use the ENDS layout too (the table mesh is the old row's: see the report). Off by default until the table is remodelled.
-    nonisolated(unsafe) static var cafeEnds: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "CafeEnds") == 1
+    /// The café's three places use the ENDS layout and its ends table (`cafetable_ends`, tools/make_cafetable_ends); `-CafeEnds 0` (dev builds) = the old row and the old table.
+    nonisolated(unsafe) static var cafeEnds: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "CafeEnds") != nil && UserDefaults.standard.integer(forKey: "CafeEnds") == 0)
     private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
@@ -354,7 +354,7 @@ final class DiningGroup {
         }
         hooked = true
         for b in brains { b.reserved = true; b.waitFocus = origin }          // everybody waits where he stands (look / step / bounce) until the meal is over
-        for i in brains.indices { brains[i].mealFaceYaw = (calm || lineup) ? placeYaw(placeOf[i]) : nil }          // (C3: the calm wait faces his own place)
+        for i in brains.indices { brains[i].mealFaceYaw = (calm || lineup || (forcedOrigin != nil && DiningLayout.ends)) ? placeYaw(placeOf[i]) : nil }          // (C3: the calm wait faces his own place)
         for i in brains.indices { brains[i].mealYawHint = placeYaw(placeOf[i]) }
         beginApproach()
         traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; inBoxTicks = 0; popReason = "gathered"

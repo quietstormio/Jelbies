@@ -204,7 +204,7 @@ extension GameCare {
             book.thought = nil; book.thoughtT = 3; book.chatT = 1.5; book.lastSpeaker = nil; book.replyIn = [:]; book.lounged = false; book.loungeIdle = [:]; book.servingOpen = false
             cafe.special = cafeSpecial
             dining.reset()
-            dining.tableSkin = { n in FoodMeshes.mesh(id: "cafetable_\(n)") }
+            dining.tableSkin = { n in FoodMeshes.mesh(id: n == 3 && DiningLayout.ends ? "cafetable_ends" : "cafetable_\(n)") }          // (the ends table for the ends layout: tools/make_cafetable_ends)
             let diners = actors.filter { $0.brain != nil }.prefix(DiningGroup.maxDiners)
             let n = max(diners.count, 1)
             if n == 3, DiningGroup.cafeEnds { DiningLayout.ends = true; DiningLayout.sideX = 1.3 }          // (the ENDS layout at the café too: `-CafeEnds 1`, see DiningGroup.cafeEnds)
@@ -226,6 +226,7 @@ extension GameCare {
                 guard let brain = a.brain else { continue }
                 brain.autonomy = false; brain.idleBlocked = true; brain.restTimer = 0.4
                 brain.startTurn(to: pl.yaw, sim: a.sim)
+                if DiningLayout.ends { brain.reserved = true; brain.mealFaceYaw = pl.yaw }          // (the ends layout: he keeps his three-quarter place yaw while he waits, instead of turning to the camera)
                 brain.face(.excited, hold: 1.5)
                 book.hopIn[a.id] = 0.35 + Float(k) * CafeTuning.arriveHopStagger
             }
@@ -254,6 +255,7 @@ extension GameCare {
             for a in actors {
                 guard let brain = a.brain else { continue }
                 brain.abortAll(a.sim, a.skinner)
+                brain.reserved = false; brain.mealFaceYaw = nil; brain.mealYawHint = nil
                 brain.commandedIdle = nil
                 var spot = book.homes[a.id] ?? Self.greetSpot(a.id)
                 if taken.contains(where: { simd_distance($0, spot) < 1.5 }) {

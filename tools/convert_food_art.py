@@ -9,7 +9,7 @@ GAIN tweaks colours after the fact (per food, linear multipliers) so the in-game
 """
 import json, struct, sys, os
 
-IDS = "nuggets nuggets_1 nuggets_2 fries sushi sandwich minipizza taco donut popsicle onigiri cookie swirl pancakes sundae fizzmac cafetable_1 cafetable_2 cafetable_3 minipizza_whole cheeseburger pancakestack cakeslice cupcake cinnamonroll fruitskewer jellycup dumplings drink_boba_shell drink_boba_deco drink_boba_ice drink_smoothie_shell drink_smoothie_deco drink_smoothie_float drink_lemonade_shell drink_lemonade_deco drink_lemonade_ice drink_cocoa_deco drink_cocoa_float".split()
+IDS = "nuggets nuggets_1 nuggets_2 fries sushi sandwich minipizza taco donut popsicle onigiri cookie swirl pancakes sundae fizzmac cafetable_1 cafetable_2 cafetable_3 cafetable_ends minipizza_whole cheeseburger pancakestack cakeslice cupcake cinnamonroll fruitskewer jellycup dumplings drink_boba_shell drink_boba_deco drink_boba_ice drink_smoothie_shell drink_smoothie_deco drink_smoothie_float drink_lemonade_shell drink_lemonade_deco drink_lemonade_ice drink_cocoa_deco drink_cocoa_float".split()
 GAIN = {}  # id -> (r, g, b) linear multiplier, filled in after looking at the in-game captures
 
 def convert(src, dst):
