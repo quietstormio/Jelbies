@@ -207,6 +207,7 @@ extension GameCare {
             dining.tableSkin = { n in FoodMeshes.mesh(id: "cafetable_\(n)") }
             let diners = actors.filter { $0.brain != nil }.prefix(DiningGroup.maxDiners)
             let n = max(diners.count, 1)
+            if n == 3, DiningGroup.cafeEnds { DiningLayout.ends = true; DiningLayout.sideX = 1.3 }          // (the ENDS layout at the café too: `-CafeEnds 1`, see DiningGroup.cafeEnds)
             let layout = DiningLayout.make(n: n)
             // the table sits well back (portrait) or to the left (landscape) so the order card never covers the Jelbies
             let aspect = GameCamera.aspect
@@ -241,6 +242,7 @@ extension GameCare {
             }
             groupWanted = nil
             dining.reset()
+            DiningLayout.ends = false; DiningLayout.sideX = 1.11
             book.tableOut = false; book.stands = [:]; book.thought = nil; book.replyIn = [:]; book.lounged = false; book.loungeIdle = [:]
             RoomLayout.apply(RoomCatalog.def(store.currentRoom))
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {

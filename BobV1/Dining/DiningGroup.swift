@@ -124,6 +124,8 @@ final class DiningGroup {
     private var lineup: Bool { !Self.trayAtOrder && Self.straightWalk && forcedOrigin == nil }
     private var arrivedAt: [Float?] = []
     private func atStand(_ i: Int) -> Bool { simd_distance(floor(i), stands[placeOf[i]]) < 0.3 }
+    /// `-CafeEnds 1` (dev builds): the café table's three places use the ENDS layout too (the table mesh is the old row's: see the report). Off by default until the table is remodelled.
+    nonisolated(unsafe) static var cafeEnds: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "CafeEnds") == 1
     private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
