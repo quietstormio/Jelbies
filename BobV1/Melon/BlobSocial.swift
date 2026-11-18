@@ -82,7 +82,7 @@ enum SocialTuning {
     /// An invited (wandering) partner has this long to finish his leg.
     static let inviteWait: Float = 3.5
     /// Chance that a nearby free Jelly joins a zoomies, and how far he may be (the zoomies used to be solo most of the time).
-    static let zoomJoin: Float = 0.8, zoomJoinRadius: Float = 6
+    static let zoomJoin: Float = 0.5, zoomJoinRadius: Float = 6
     static let livelyChance: Float = 4.0, livelyWait: Float = 0.25
     static let lookCooldown: Float = 12
     /// The closer gap of the boop / squabble pair only (everybody else keeps `peerGap`).
