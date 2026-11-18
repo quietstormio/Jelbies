@@ -65,7 +65,7 @@ struct RoundHeader: View {
         HStack(spacing: 10) {
             if show.canForfeit { ForfeitHomePill(care: care) }          // (every round: the Home pill, then the "Go home?" card)
             VStack(alignment: .leading, spacing: 0) {
-                Text(kicker ?? "ROUND \(round) OF 3 \u{00B7} \(show.rank.title.uppercased())").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
+                Text(kicker ?? "ROUND \(round) OF 3 \u{00B7} \(show.rank.title.uppercased())").font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5).lineLimit(1).minimumScaleFactor(0.7)
                 Text(title).font(SK.font(24, .black)).foregroundStyle(SK.cream)
             }
             .accessibilityElement(children: .combine).accessibilityIdentifier("show-round")
