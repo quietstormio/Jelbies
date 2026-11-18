@@ -1,7 +1,6 @@
 //
 //  OpalSpeciesTests.swift
-//  Opal (character 12): its real look (the iridescent wave, body mode 86), its Spring content (page, jars, loved food), its own sleep mask. NOT offered anywhere
-//  until the Jelly Spring wiring. (Its voice is a separate commit.) Modelled on LineupLooksSpeciesTests / TigerBerrySpeciesTests.
+//  Opal (character 12): its real look (the iridescent wave, body mode 86), its Spring content (page, jars, loved food), its own sleep mask. a Jelly Spring special (OpalSpringTests). (Its voice is a separate commit.) Modelled on LineupLooksSpeciesTests / TigerBerrySpeciesTests.
 //
 
 import XCTest
@@ -32,12 +31,12 @@ final class OpalSpeciesTests: XCTestCase {
         }
     }
 
-    func testNotOfferedAnywhere() {
-        XCTAssertFalse(SpeciesInfo.special.contains(opal))
+    func testSpringSpecialButNeverAStarter() {
+        XCTAssertTrue(SpeciesInfo.special.contains(opal))
         XCTAssertFalse(SpeciesInfo.order.contains(opal))
-        XCTAssertFalse(SpeciesInfo.pages(includingSpecial: true).contains(opal))
+        XCTAssertTrue(SpeciesInfo.pages(includingSpecial: true).contains(opal))
         XCTAssertFalse(SpeciesInfo.pages(includingSpecial: false).contains(opal))
-        XCTAssertFalse(SpeciesInfo.of(opal).isSpecial)
+        XCTAssertTrue(SpeciesInfo.of(opal).isSpecial)
         XCTAssertFalse(JellyRoster.defaultIDs.contains(opal))
         for n in 1...3 { XCTAssertFalse(JellyRoster.sanitised(Array(0..<n)).contains(opal)) }
         XCTAssertFalse(JellyVariants.takesVariant(opal))
