@@ -1502,7 +1502,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             f.opaque.indices += featureMesh.indices.map { $0 + base }
         }
         room.setWear(opaque: f.opaque, translucent: f.translucent, bounds: [])
-        room.setShoes(hp != nil && hp?.pose == nil ? RoomMesh() : care.shoeFrame([a], time: 0.4).mesh)          // (no shoes in a head portrait)
+        room.setShoes(hp != nil && hp?.pose == nil ? RoomMesh() : care.shoeFrame([a], time: 0.4, drawn: { [weak renderer] o in renderer?.skinPointer(body: o.id) }).mesh)          // (no shoes in a head portrait)
         // a close camera in front of him (his own facing, turned a quarter toward the side)
         let pose = a.sim.bodyPose(iterations: 3)
         let c = pose.centroid
