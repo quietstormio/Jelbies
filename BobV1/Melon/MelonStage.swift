@@ -1852,9 +1852,13 @@ final class MelonController: NSObject, MTKViewDelegate {
             let id = UserDefaults.standard.integer(forKey: "TouchDemoJelly")
             if actors.indices.contains(id) { c = actors[id].sim.centroid() }
         }
-        let side = DevArgs.enabled && name == "pet" ? Float(UserDefaults.standard.double(forKey: "TouchDemoSide")) : 0
+        var side = DevArgs.enabled && name == "pet" ? Float(UserDefaults.standard.double(forKey: "TouchDemoSide")) : 0
         let right = SIMD3<Float>(lastCam.view.columns.0.x, lastCam.view.columns.1.x, lastCam.view.columns.2.x)
         let up = SIMD3<Float>(lastCam.view.columns.0.y, lastCam.view.columns.1.y, lastCam.view.columns.2.y)
+        if side != 0 {          // (the stroke goes on his OUTER side, away from his nearest row neighbour: a finger between two of them picks the neighbour)
+            let near = actors.map { $0.sim.centroid() }.filter { simd_distance($0, c) > 0.2 }.min { simd_distance($0, c) < simd_distance($1, c) }
+            if let n = near { side = simd_dot(n - c, right) > 0 ? -abs(side) : abs(side) }
+        }
         func at(_ x: Float, _ y: Float) -> CGPoint { screenPoint(c + right * x + up * y, size) }
         func sm(_ v: Double) -> Float { let k = Float(min(1, max(0, v))); return k * k * (3 - 2 * k) }
         let el = now - tdT0 - 1.5
