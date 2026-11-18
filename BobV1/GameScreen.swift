@@ -931,7 +931,8 @@ struct GameScreen: View {
         }
         if let words = d.string(forKey: "VoiceSay") {
             await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2)
-            await care.voice.simulate(words)
+            if d.integer(forKey: "VoiceTyped") != 0 { care.voice.typed(words) }          // -VoiceTyped 1: the typed path (no mic needed: the simulator has none), the same decision a heard phrase takes
+            else { await care.voice.simulate(words) }
         }
         #if DEBUG || SELECT_PREVIEW
         // capture aid: -BlobSelectPreview 3 -BlobSelectScript 1 double-taps Pip, switches to Moss, switches mid-draw back to Pip, then confirms
