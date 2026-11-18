@@ -25,6 +25,7 @@ final class ShowDanceStepsTests: XCTestCase {
         var phrases: [ShowDanceMove] = []          // PLAN
         var song = 0, rank = ShowRank.puddle
         var stomp = false
+        var maxLift: Float = 0
     }
 
     private func ready(_ care: GameCare) { care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.cue = { _ in } }
@@ -65,6 +66,7 @@ final class ShowDanceStepsTests: XCTestCase {
                 }
                 swinging = b.feet.swinging
                 r.drift = max(r.drift, simd_distance(b.position, start))
+                r.maxLift = max(r.maxLift, b.feet.state(b.feet.side).h)
                 if [IdleKind.sit, .sway, .slump, .decorSit].contains(b.idleState.kind) { r.sat = true }
                 onHit?(care, frames)
                 if let ph = care.showBook.danceRun?.phrases { r.phrases = ph }          // PLAN
@@ -102,6 +104,8 @@ final class ShowDanceStepsTests: XCTestCase {
             XCTAssertLessThanOrEqual(run, 2, "\(name): the same foot stepped \(run) times running at plant \(i)")
         }
         XCTAssertFalse(r.sat, "\(name): he sat down")
+        XCTAssertGreaterThan(r.drift, 0.12, "\(name): the step-touch should travel clearly (drift \(r.drift) u)")
+        XCTAssertGreaterThan(r.maxLift, 0.07, "\(name): the feet barely leave the floor (\(r.maxLift) u)")
         XCTAssertLessThan(r.drift, 0.3, "\(name): he drifted \(r.drift) u off his mark")
         XCTAssertLessThan(r.yawEnd, 0.25, "\(name): he does not end facing front (\(r.yawEnd) rad)")
     }

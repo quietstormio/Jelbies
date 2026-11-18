@@ -423,7 +423,7 @@ extension GameCare {
     /// His stepping script ends once the step in the air has landed (the normal end of a step-in-place: feet together, heading where it was).
     private func showDanceStop(_ b: BlobBrain) {
         guard b.danceDrive != nil else { return }
-        b.danceDrive = nil
+        b.danceDrive = nil; b.armDirW = 0; b.armWalkWant = 0
         if case .stepInPlace = b.script { b.script = .stepInPlace(t: 1, dur: 0) }
     }
     /// Per fixed step while the dance round runs: start the next beat's step so that its foot plants on the beat (the song's own clock, `show.danceNow()`).

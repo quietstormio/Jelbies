@@ -40,6 +40,7 @@ nonisolated struct DanceStepSpec: Sendable {
     var inPlace = true
     var sway: Float = 0.08, bob: Float = 0.03, rock: Float = 0.3
     var twist: Float = 0, pitch: Float = 0
+    var lean: Float = 0                                               // lean into the direction of travel (rad)
 }
 
 nonisolated enum ShowDancePlan {
@@ -79,8 +80,8 @@ nonisolated enum ShowDancePlan {
             // L R R L (mirrored every other bar): out with the lead foot, the other closes, then back
             let d: Float = bar % 2 == 0 ? 1 : -1
             let lead = d > 0 ? 1 : 0
-            let a: Float = lively ? 0.05 : 0.04
-            s.inPlace = false; s.peak = 0.065; s.sway = 0.14; s.bob = 0.04; s.rock = 0.3
+            let a: Float = lively ? 0.10 : 0.09          // (each way 2a = 0.18 / 0.20 u, back to the centre every bar)
+            s.inPlace = false; s.peak = 0.085; s.sway = 0.12; s.bob = 0.07; s.rock = 0.3; s.lean = 0.12
             switch j {
             case 0: s.side = lead; s.rootD = SIMD2(d * a, 0); s.reach = SIMD2(d * a, 0)
             case 1: s.side = 1 - lead; s.rootD = SIMD2(d * a, 0)
@@ -88,15 +89,15 @@ nonisolated enum ShowDancePlan {
             default: s.side = lead; s.rootD = SIMD2(-d * a, 0)
             }
         case .march:
-            s.side = alt; s.peak = 0.10; s.sway = 0.05; s.bob = 0.06; s.rock = 0.3; s.pitch = -0.08
+            s.side = alt; s.peak = 0.095; s.sway = 0.06; s.bob = 0.09; s.rock = 0.3; s.pitch = -0.08          // (the proud strut's lift, which passes the feet tests)
         case .twist:
-            s.side = alt; s.peak = 0.06; s.sway = 0.12; s.bob = 0.04; s.rock = 0.2; s.twist = 0.26
+            s.side = alt; s.peak = 0.075; s.sway = 0.12; s.bob = 0.07; s.rock = 0.2; s.twist = 0.15
         case .twirl:
-            s.side = alt; s.inPlace = false; s.dyaw = .pi / 2; s.peak = 0.06; s.sway = 0.03; s.bob = 0.04; s.rock = 0.1
+            s.side = alt; s.inPlace = false; s.dyaw = .pi / 2; s.peak = 0.075; s.sway = 0.03; s.bob = 0.06; s.rock = 0.1
         case .kickOut:
-            s.side = alt; s.peak = 0.11; s.out = 3; s.sway = 0.16; s.bob = 0.05; s.rock = 0.2
+            s.side = alt; s.peak = 0.095; s.out = 2; s.sway = 0.16; s.bob = 0.08; s.rock = 0.2
         case .hopStep:
-            s.side = alt; s.peak = 0.13; s.sway = 0.08; s.bob = 0.09; s.rock = 0.4
+            s.side = alt; s.peak = 0.095; s.sway = 0.08; s.bob = 0.12; s.rock = 0.4
         }
         return s
     }
@@ -135,7 +136,8 @@ extension BlobBrain {
         guard danceDrive != nil, !feet.active, feetInit else { return false }
         nextSwing = s.side
         let a = amplitude
-        startStep(rootD: rotXZ(s.rootD, yaw), dyaw: s.dyaw, reach: rotXZ(s.reach, yaw), peak: s.peak * a * (accent ? 1.9 : 1),
+        // (the stomp lifts the foot higher, capped at 0.13: more than the strut's 0.095 by a third is as high as the join has been shown clean)
+        startStep(rootD: rotXZ(s.rootD, yaw), dyaw: s.dyaw, reach: rotXZ(s.reach, yaw), peak: min(s.peak * (accent ? 1.6 : 1), 0.13) * a,
                   rate: rate, swingFrac: ShowDancePlan.swingFrac, inPlace: s.inPlace, outScale: s.out)
         danceDrive?.cur = s; danceDrive?.accent = accent; danceDrive?.accentDone = !accent
         return true
@@ -164,10 +166,17 @@ extension BlobBrain {
         guard let d = danceDrive else { return }
         let a = amplitude
         gaitPose(sway: d.cur.sway, bob: d.cur.bob, rock: d.cur.rock)
-        guard feet.active else { return }
+        armWalkWant = 1          // the arm nubs swing against the feet (the walk's counter-swing, driven by the stepping)
+        guard feet.active else { armDirW = max(0, armDirW - runDt / 0.2); return }
         let side: Float = feet.side == 1 ? 1 : -1
         let env = sinf(.pi * feet.stepU)
         pitch += d.cur.pitch * a * env
+        if d.cur.lean != 0 { roll = roll * 0.4 - (d.cur.rootD.x > 0 ? 1 : -1) * d.cur.lean * a * env }          // (into the step: toward the way he is going)
+        if d.accent {          // the stomp: both arms pumped up with it
+            armDirW = env
+            for s in 0..<2 { armDirEl[s] = 0.5; armDirSa[s] = s == 0 ? 0.9 : -0.9 }
+            armDirOut = 0
+        } else if armDirW > 0 { armDirW = max(0, armDirW - runDt / 0.15) }
         if d.cur.twist != 0 { twist = d.cur.twist * side * env * a }
         if d.accent, !d.accentDone, !feet.swinging {          // the stomp: the plant lands with a jiggle and a little squash
             danceDrive?.accentDone = true
