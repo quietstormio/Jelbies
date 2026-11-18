@@ -515,7 +515,7 @@ struct GameScreen: View {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             for part in raw.split(separator: "|") {
                 let t = part.trimmingCharacters(in: .whitespaces)
-                GameMessageCenter.shared.post(t.hasPrefix("!") ? String(t.dropFirst()) : t, priority: t.hasPrefix("!") ? .important : .normal, identifier: "dev-message")
+                GameMessageCenter.shared.post(t.hasPrefix("!") ? String(t.dropFirst()) : t, priority: t.hasPrefix("!") ? .important : .normal, identifier: "dev-message", sticky: true)          // (sticky: stays up for the screenshot)
             }
         }
         .task {          // capture aid (dev arguments only): `-TipShow <id>` opens that card's screen from the room (the rest open from -StoreOpen / -LobbyAuto / -GameAction clean / -StartPark / -StartCamp)

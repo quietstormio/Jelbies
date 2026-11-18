@@ -54,7 +54,7 @@ final class GameMessageTests: XCTestCase {
         let c = make()
         c.post("a", now: t0)
         c.post("b", priority: .chatty, now: t0); c.post("c", priority: .important, now: t0 + 0.1)
-        XCTAssertEqual(c.current?.text, "a"); XCTAssertEqual(c.queue.map(\.text).first, "b", "an important line replaces only a chatty current one")
+        XCTAssertEqual(c.current?.text, "a"); XCTAssertEqual(c.queue.map(\.text).first, "c", "an important line waits at the front of the queue behind a normal current one")
         for i in 0..<8 { c.post("line \(i)", now: t0 + 0.2) }
         XCTAssertLessThanOrEqual(c.queue.count, GameMessageCenter.queueCap)
     }
@@ -119,7 +119,7 @@ final class GameMessageTests: XCTestCase {
         let c = make()
         c.post("A line said at the park", scope: .outing, now: t0)
         c.post("Next", scope: .none, now: t0 + 0.1)
-        c.dismiss(scope: .outing)
+        c.dismiss(scope: .outing, now: t0 + 0.2)
         XCTAssertEqual(c.current?.text, "Next", "the park line is not shown back at home")
     }
 

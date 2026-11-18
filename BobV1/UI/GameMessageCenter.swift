@@ -133,15 +133,15 @@ final class GameMessageCenter {
     }
 
     /// Drop everything said under `scope` (the outing ended).
-    func dismiss(scope: Scope) {
+    func dismiss(scope: Scope, now: Date = Date()) {
         guard scope != .none else { return }
         queue.removeAll { $0.scope == scope }
-        if current?.scope == scope { current = nil; tick() }
+        if current?.scope == scope { current = nil; tick(now: now) }
     }
     /// The player acted: a sticky hint (or any line) with this identifier goes now.
-    func dismiss(identifier: String) {
+    func dismiss(identifier: String, now: Date = Date()) {
         queue.removeAll { $0.identifier == identifier }
-        if current?.identifier == identifier { current = nil; tick() }
+        if current?.identifier == identifier { current = nil; tick(now: now) }
     }
     func clear() { current = nil; caption = nil; queue = []; lastShown = nil; timer?.cancel() }
 
