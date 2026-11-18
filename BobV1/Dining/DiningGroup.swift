@@ -143,7 +143,7 @@ final class DiningGroup {
     private func rollVariance() {
         var s: UInt64
         if let f = Self.varianceSeed { s = f } else { Self.mealCounter += 1; s = DevArgs.enabled ? Self.mealCounter &* 0x2545F4914F6CDD1D : UInt64.random(in: 1...UInt64.max) }
-        var offsets: [Float] = [0, 0.35 + 0.10 * VarianceRNG.unit(&s), 0.80 + 0.15 * VarianceRNG.unit(&s)].prefix(n).map { $0 }
+        var offsets: [Float] = [0, 0.30 + 0.04 * VarianceRNG.unit(&s), 0.62 + 0.06 * VarianceRNG.unit(&s)].prefix(n).map { $0 }
         for k in stride(from: offsets.count - 1, to: 0, by: -1) { offsets.swapAt(k, Int(VarianceRNG.next(&s) % UInt64(k + 1))) }          // (a seeded shuffle: not always the same place first)
         varDelay = offsets
         // personalities (a seeded shuffle of 0 eager / 1 savouring / 2 chatty): the eager one paces up and goes first, the savouring one slows down and goes last
