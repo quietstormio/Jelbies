@@ -1100,17 +1100,17 @@ final class AudioHub {
     /// Haptics' touch transients -> squish / boop / wobble (the pairing HapticDriver.soundHook promised).
     private var letGoRing = LetGoRing()
 
-    func touch(kind: String, intensity: Float) {
+    func touch(kind: String, intensity: Float, gain: Float = 1) {
         guard !muted, started else { return }
         switch kind {
-        case "wobble": play(.wobble, volume: 0.5 + 0.5 * min(1, intensity * 1.5))
-        case "impact": play(.squish, volume: 0.6 + 0.4 * min(1, intensity))
+        case "wobble": play(.wobble, volume: (0.5 + 0.5 * min(1, intensity * 1.5)) * gain)
+        case "impact": play(.squish, volume: (0.6 + 0.4 * min(1, intensity)) * gain)
         case "letgo":
             guard letGoRing.shouldSound(now: CACurrentMediaTime()) else { return }
-            play(.letgo, volume: min(1, TouchSound.letGoBase + TouchSound.letGoSlope * intensity))
+            play(.letgo, volume: min(1, TouchSound.letGoBase + TouchSound.letGoSlope * intensity) * gain)
         default:
-            if intensity >= 0.85 { play(.boop, volume: 0.9) }
-            else if intensity >= 0.28 { play(.squish, volume: 0.55 + 0.5 * intensity) }
+            if intensity >= 0.85 { play(.boop, volume: 0.9 * gain) }
+            else if intensity >= 0.28 { play(.squish, volume: (0.55 + 0.5 * intensity) * gain) }
         }
     }
 

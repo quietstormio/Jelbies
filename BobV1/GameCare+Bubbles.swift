@@ -51,6 +51,8 @@ final class BubbleHub {
     var coat: [Int: CoatBubbleSchedule] = [:]
     /// Head points (world) of Jellies 1...; Jelly 0's is GameCare.headWorld.
     var heads: [Int: SIMD3<Float>] = [:]
+    /// Heads of the Jelmiko a second finger is petting in the close-up (Melon/PetLanes.swift): Bob's included, whose own head is the primary touch's anchor then.
+    var laneHeads: [Int: SIMD3<Float>] = [:]
     var busyBefore = false
     var hold: Float = 0
     /// Greeting: seconds since it began, hearts still to come per Jelly, and the hearts alive (Jelly id, heart).
@@ -77,7 +79,7 @@ final class BubbleHub {
 
 extension GameCare {
     /// Head point for the bubble of Jelly `id` (world).
-    func bubbleHead(_ id: Int) -> SIMD3<Float> { id == 0 ? headWorld : (bubbleHub.heads[id] ?? headWorld) }
+    func bubbleHead(_ id: Int) -> SIMD3<Float> { if let h = bubbleHub.laneHeads[id] { return h }; return id == 0 ? headWorld : (bubbleHub.heads[id] ?? headWorld) }
     /// Whose bubble is up (or would be next).
     var bubbleJelly: Int { bubbleHub.owner }
     var bubbleJellyName: String { jelly(bubbleHub.owner)?.name ?? "Jelmiko" }
