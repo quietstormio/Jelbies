@@ -46,7 +46,7 @@ final class OnePieceInvariantTests: XCTestCase {
 
     // MARK: the characters and pacings
 
-    static let characters: [(String, JellyFeature)] = [("Bob", .none), ("Pip", .spines), ("Moss", .daisy), ("Lavender", .wings), ("Teddy", .ears), ("Pearl", .wings), ("Panda", .ears)]
+    static let characters: [(String, JellyFeature)] = [("Bob", .none), ("Pip", .spines), ("Moss", .daisy), ("Lavender", .wings), ("Teddy", .ears), ("Pearl", .wings), ("Panda", .ears), ("Tiger", .none), ("Berry", .none)]
 
     enum Pacing: Int, CaseIterable {
         case hz60, hz120, alt12, burst30, hitch, hitchSmall

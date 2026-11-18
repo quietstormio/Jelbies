@@ -63,7 +63,7 @@ final class JellyFinalTests: XCTestCase {
         XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: 0).species, .blue)
         XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: 1).species, .yellow)
         XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: 2).species, .green)
-        for sp in [3, 4, 5, 6] { XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: sp).species, .other) }
+        for sp in [3, 4, 5, 6, 7, 8] { XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: sp).species, .other) }
         for sp in 0..<JellyRoster.knownCount {          // the palette the roster gives out carries the tag
             if let p = JellyRoster.palette(sp) { XCTAssertEqual(p.jellySpecies, sp) }
         }
@@ -82,6 +82,8 @@ final class JellyFinalTests: XCTestCase {
         check("Lavender", JellyPalettes.lavender, .other)
         check("Pearl", WhiteWing.palette, .other)
         check("Panda", PandaLook.palette, .other)
+        check("Tiger", TigerLook.palette, .other)
+        check("Berry", BerryLook.palette, .other)
         for t in TeddyLook.tones { check("Teddy " + t.name, t.palette, .other) }
         let want: [S] = [.blue, .yellow, .green, .other]
         for (i, v) in JellyVariantBook.exclusives.enumerated() { check(v.title, v.palette, want[i]) }

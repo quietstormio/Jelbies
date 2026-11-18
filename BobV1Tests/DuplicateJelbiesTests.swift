@@ -71,7 +71,7 @@ final class DuplicateJelbiesTests: XCTestCase {
         XCTAssertEqual(JellyRoster.previewID(4), 1004)
         XCTAssertEqual(JellyRoster.species(1004), 4)
         XCTAssertTrue(JellyRoster.isValid(1004))
-        XCTAssertFalse(JellyRoster.isValid(1007))
+        XCTAssertFalse(JellyRoster.isValid(1009))
         XCTAssertFalse(JellyRoster.isValid(100), "not in the map")
         JellyRoster.speciesMap = [100: 3]
         XCTAssertTrue(JellyRoster.isValid(100))

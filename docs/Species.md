@@ -4,7 +4,7 @@
 
 ## Current species (1.0, 2026-11-09)
 
-Seven characters exist, all on Bob's locked base body. At most **three** live at home at once (`JellyRoster.maxCount`).
+Seven characters are in the game, all on Bob's locked base body (two more, Tiger and Berry, exist in code only and are offered nowhere yet: see "Tiger and Berry" below). At most **three** live at home at once (`JellyRoster.maxCount`).
 
 | Character | Colour | Signature | How you get it |
 |---|---|---|---|
@@ -38,6 +38,19 @@ Character 4, light brown with a lighter cream belly, signature = two round bear 
 ### Panda (look phase 2026-11-03; now sold in the Jelly Spring, see the table above)
 
 Character 6 (`JellyRoster.pandaID`), a soft warm-white body with black markings. Signature = black round bear ears + black eye patches + black arms and feet + a black shoulder saddle (over the shoulders and across the back into the arms; the chest and tummy stay white) + a black puffy pom tail. Same in-body ears and pom as Teddy (`JellyFeature.ears`, `Melon/TeddyBean.swift`; the ear shape is unchanged). Like Teddy and Pearl it is NOT in the intro, the Jelly Spring picker, the starter roster, park visitors or any generator (no park colour matches its palette); it only spawns through `-NewGame bob,panda`, `-SetRoster panda` or `-ForceSpecies panda`. Unlock: Jelly Spring, 2,000 JellyCoins. The markings are shader masks on the body plus a second charcoal draw of the ears / pom / walking limb pieces (`Melon/PandaMarks.h`, body modes 51 / 52, in the matte, bath and jersey shaders; look in `Features/PandaLook.swift`). Voice: shares Lavender's (see SOUND_STYLE.md); the widget / Siri intents show it as Lavender, like Teddy and Pearl (`WidgetBridge.colorName` clamps to 4 colours).
+
+### Tiger and Berry (look phase 2026-11-16; NOT offered anywhere yet)
+
+Characters 7 and 8 (`JellyRoster.tigerID`, `JellyRoster.berryID`), from the user's "Jelmiko Lineup" board. Both are the plain body (`JellyFeature.none`): no ears, no tail, no wings, no change to the body mesh.
+
+- **Tiger**: orange with rust stripes: three on the crown, two on each cheek and three bands across the back. The board: "No ears, no tail."
+- **Berry**: soft pink with cream seeds dotted over the body (none on the face) and a leafy green top. The board's tiny stem nub is a 3D piece for a later round: this phase paints the leaf only.
+
+Neither is in the intro, the Jelly Spring picker, the starter roster, park visitors or any generator (no park colour matches either palette); they only spawn through `-NewGame bob,tiger`, `-SetRoster berry` or `-ForceSpecies tiger` (each flag takes either name). The marks are shader paint on the egg in the body's rest space (`Melon/TigerMarks.h`, `Melon/BerryMarks.h`; body modes 61 / 62 and 71 / 72; dispatched on the tone number in `Shaders.metal`, `GfxBodyFast.metal`, `BathShaders.metal` and `GfxJersey.metal`; looks in `Features/TigerLook.swift`, `Features/BerryLook.swift`). The mode is keyed on the palette's exact flesh value (`BlueBelly.mode`), so a colour variant of either would lose its marks (no variant exists for them). In the room the renderer draws the walking arm capsules and the foot beans again as mode 62 / 72 (the plain body colour), so no stripe or seed lands on a limb piece.
+
+Mark numbers (rest space, body units; refitted 2026-11-16 through the real capture camera and the body's standing lean of ~15.5 degrees, so a mark that looks level in a picture slopes in rest space). Tiger: the crown is one upright lens (centre y 1.1735, half length 0.09, half width 0.061) and two lenses leaning in at 45 degrees (centres x +/-0.17, y 1.2085, half length 0.0845, half width 0.0345), on the front only; cheek stripes at y 0.944 and y 0.746 (half thickness 0.0544 and 0.0572, sloping -0.17 and -0.18 per radian toward the face; second pass the same day: each stripe fitted on its own to the drawn thickness and gap); back bands at y 1.289, 1.165 and 0.9842 on the spine (half thickness 0.0247, 0.038, 0.0465; the tips 0.0345, 0.075, 0.0885 lower; reaching 71, 66 and 55 degrees round from the spine); the rust is the shaded body colour times (0.607, 0.253, 0.108); the stripes stop at the rest arm's crease. Berry: five rows of fifteen seeds at y 0.970, 0.813, 0.656, 0.514 and 0.397 (some rows shifted by half a seed), each seed an upright oval 0.030 wide and 0.038 tall, cream (0.973, 0.831, 0.521); a seed is drawn whole or not at all, none on the face (the front, |x| < 0.43, the three upper rows) and none on or next to the arm lobes; the leaf is a cap, solid above y 1.335, hanging in six lobes, lower at the face than at the back (a notch under the stem at y 1.235, front tips at 26.25 degrees from the face at y 1.057 on the +x side and 1.113 on the other, side tips at 77.38 degrees at y 1.205, back tips at 134.75 degrees at y 1.2775, notches at y 1.2675, 1.3213 and 1.330 at the back centre), green (0.296, 0.737, 0.212): it ends well above the eyes (y 0.82) and never reaches the face or the mouth. Under a hat the leaf is covered like any other body colour (it is paint on the crown, not a piece).
+
+Sleep masks: teal on the Tiger, leaf green on the Berry (`EyeMaskModel.palette`). Widget / Shortcuts colour keys: "tiger" (Orange), "berry" (Pink). Still to do before either is offered (the adoption round): its own voice set, favourite food and jar profile (`JellyTraits`), name ideas, the species card, the widget face, and the spoken word "berry", which the voice commands already use for food.
 
 Code: starters in `JellyRoster.feature`; park visitors, guests and volleyball opponents derive it from colour via `ParkColour.speciesFeature` (Park/ParkModels.swift).
 

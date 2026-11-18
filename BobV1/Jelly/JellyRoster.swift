@@ -67,18 +67,24 @@ nonisolated enum JellyFeature: String, Codable, CaseIterable, Sendable {
 nonisolated enum JellyRoster {
     /// Jelbies in the room at once (the roster cap).
     static let maxCount = 3
-    /// The four starter characters (Bob, Pip, Moss, Lavender); Teddy, Pearl and Panda are the specials (`knownCount`).
+    /// The four starter characters (Bob, Pip, Moss, Lavender); Teddy, Pearl and Panda are the specials; Tiger and Berry exist but are offered nowhere yet (`knownCount`).
     static let characterCount = 4
     /// The species' own names (what the Adoption Center offers as the default).
-    static let baseNames = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl", "Panda"]
+    static let baseNames = ["Bob", "Pip", "Moss", "Lavender", "Teddy", "Pearl", "Panda", "Tiger", "Berry"]
     /// Teddy (character 4): a special species bought in the Jelly Spring with JellyCoins (AdoptionPrice.special); NOT in the intro, the free first gift or the
     /// starter roster, and never padded into a short roster or any default. Existing saves that hold him keep him; `-ForceSpecies teddy` / `-SetRoster teddy` still work.
     static let teddyID = 4
     /// Panda (character 6): Teddy's round bear ears + pom on a white body with black eye patches, ears, arms, feet, shoulder band and pom (PandaLook.swift).
     /// Like Teddy and Pearl it is a special species bought in the Jelly Spring (not in the intro, the starter roster or any generator).
     static let pandaID = 6
-    /// Every character id that exists (the four on offer + Teddy, Pearl, Panda).
-    static let knownCount = 7
+    /// Tiger (character 7): the plain body (no ears, no tail) in orange with rust stripes painted by the body shaders: three on the crown, two on each cheek and three
+    /// bands across the back (TigerLook.swift, Melon/TigerMarks.h). Berry (character 8): the plain body in soft pink with cream seeds (none on the face) and a painted
+    /// leafy green top (BerryLook.swift, Melon/BerryMarks.h). LOOK PHASE: both exist and render, and are offered NOWHERE (not in the intro, the Jelly Spring, the starter
+    /// roster, the park or any generator); they only spawn through `-NewGame bob,tiger`, `-SetRoster berry` or `-ForceSpecies tiger`.
+    static let tigerID = 7
+    static let berryID = 8
+    /// Every character id that exists (the four on offer + Teddy, Pearl, Panda + Tiger, Berry, which are not offered yet).
+    static let knownCount = 9
     /// Pearl (character 5): the white winged Jelbie (WhiteWing.swift): Lavender's wings re-tinted pearl, a soft white body. Like Teddy it is a special species
     /// bought in the Jelly Spring (not in the intro, the starter roster or any generator); a roster also gets him by `-SetRoster` / `-NewGame` / a save.
     static let pearlID = 5
@@ -86,7 +92,7 @@ nonisolated enum JellyRoster {
 
     // MARK: instances (duplicates)
     //
-    // An INSTANCE id names one Jelbie (the roster holds instance ids; every save key, name, stat and book is keyed by it). A SPECIES id (0...6) says what it
+    // An INSTANCE id names one Jelbie (the roster holds instance ids; every save key, name, stat and book is keyed by it). A SPECIES id (0...8) says what it
     // looks like and sounds like. The first Jelbie of a species has instance id == species id (so every v1 save is already valid); a second Bob (or Pip...)
     // gets a fresh id from the saved counter (>= firstInstanceID, never reused) whose species is recorded in `speciesKey` BEFORE the roster is saved.
     // Picker previews use scratch ids previewBase + species so a preview never touches an owned Jelbie's keys.
@@ -97,7 +103,7 @@ nonisolated enum JellyRoster {
     static let extraNamesKey = "JellyNamesExtra.v1"
     /// instance id (>= firstInstanceID) -> species id. Loaded lazily from the save, so it is ready before `current = launchIDs()` runs (sanitised reads it).
     nonisolated(unsafe) static var speciesMap: [Int: Int] = loadSpeciesMap()
-    /// Names of instances >= firstInstanceID (ids 0...6 keep using the v1 `names` array).
+    /// Names of instances >= firstInstanceID (ids 0...8 keep using the v1 `names` array).
     nonisolated(unsafe) static var extraNames: [Int: String] = loadExtraNames()
     static func loadSpeciesMap(_ d: UserDefaults = .standard) -> [Int: Int] {
         var out: [Int: Int] = [:]
@@ -172,7 +178,7 @@ nonisolated enum JellyRoster {
         while used.contains("\(t) \(n)".lowercased()) { n += 1 }
         return "\(t) \(n)"
     }
-    /// The name of Jelbie `id` (instance id): the v1 names array below 7, the extra names from 100, a preview scratch id its species' base name.
+    /// The name of Jelbie `id` (instance id): the v1 names array below 9, the extra names from 100, a preview scratch id its species' base name.
     static func nameOf(_ id: Int) -> String {
         if names.indices.contains(id) { return names[id] }
         if let n = extraNames[id], !n.isEmpty { return n }
@@ -180,7 +186,7 @@ nonisolated enum JellyRoster {
     }
 
     /// Names by CHARACTER: the base name, or the one the player typed when adopting (saved under `namesKey`; Start/StartFlow.swift).
-    /// Only ids 0...6: anything that may hold an instance id >= 100 goes through `nameOf`.
+    /// Only ids 0...8: anything that may hold an instance id >= 100 goes through `nameOf`.
     nonisolated(unsafe) static var names: [String] = loadNames()
     static func loadNames(_ d: UserDefaults = .standard) -> [String] {
         let saved = d.stringArray(forKey: namesKey) ?? []
@@ -330,6 +336,8 @@ nonisolated enum JellyRoster {
         case 3: return JellyPalettes.lavender
         case teddyID: return TeddyLook.current.palette
         case pandaID: return PandaLook.palette
+        case tigerID: return TigerLook.palette
+        case berryID: return BerryLook.palette
         default: return nil
         }
     }
@@ -344,6 +352,8 @@ nonisolated enum JellyRoster {
         case 3: return SIMD3(0.80, 0.72, 0.93)
         case teddyID: return TeddyLook.current.flesh
         case pandaID: return PandaLook.swatch
+        case tigerID: return TigerLook.swatch
+        case berryID: return BerryLook.swatch
         default: return SIMD3(0.70, 0.83, 0.945)
         }
     }
