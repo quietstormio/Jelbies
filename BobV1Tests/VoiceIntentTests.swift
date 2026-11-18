@@ -57,7 +57,7 @@ final class VoiceIntentTests: XCTestCase {
     func testRegistryIsPerJellyIdNotBobOnly() {
         let n = names()
         XCTAssertEqual(JellyNameRoster.all.map(\.id), Array(0..<JellyRoster.baseNames.count))
-        XCTAssertEqual(JellyNameRoster.all.map(\.display), JellyRoster.baseNames)          // Lavender joined with the characters round
+        XCTAssertEqual(JellyNameRoster.all.map(\.base), JellyRoster.baseNames.map { VoiceMatcher.normalise($0).replacingOccurrences(of: " ", with: "") })          // Lavender joined with the characters round; a two-word name (Cotton Candy, Lemon-Lime) is matched on its joined base, and the HUD shows JellyRoster.nameOf, not JellyName.display
         XCTAssertEqual(n.displayName(3), "Lavender")
         XCTAssertEqual(n.resolve(tokens: ["lavender", "come", "here"]).rest, ["come", "here"])
         XCTAssertEqual(n.displayName(1), "Pip")
