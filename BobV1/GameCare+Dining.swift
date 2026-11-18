@@ -29,6 +29,7 @@ extension GameCare {
             let reserving = id == mealJelly && (wanted != nil || meal != nil)
             brain.reserved = reserving
             brain.waitFocus = reserving ? (dining.isPresent ? dining.places.first?.stand : (wantedOrigin ?? DiningSpot.preferred)) : nil
+            brain.mealFaceYaw = reserving && DiningGroup.calmWait ? DiningLayout.make(n: 1).places[0].yaw : nil          // (C3: the calm wait faces his place)
         }
         if id != mealJelly, wanted != nil || meal != nil { stepAside(id: id, brain: brain, sim: sim, dt: dt); return }
         guard id == mealJelly, wanted != nil || meal != nil else { return }
@@ -76,6 +77,27 @@ extension GameCare {
             }
             mealAge += dt
             if mealAge > Self.mealTimeout { let ate = mealPaid > 0; endMeal(); retries = 0; if !ate, mealPieces > 0 { tapRefused("Couldn't get the food to the table — try again") } }
+            else if free, mealApproach {
+                // C5d: the tray is out; he walks to his approach point and squares up (the calm wait turns him), then the dine request: a straight step-in.
+                // Bounded: 2 walk re-sends, the facing fallback, else the dine request as before.
+                var stand = dining.places.first?.stand ?? DiningSpot.preferred
+                stand.y += c.eatStyle == .sip ? Self.sipCloser : Self.eatCloser
+                let approach = SIMD2(stand.x, stand.y - Self.approachBack), here = Self.floorPos(brain, sim)
+                let idleNow = act == .idle || act == .lookingAround || act == .steppingInPlace
+                let there = simd_distance(here, approach) < 0.3
+                if there, idleNow { singleFacingT += dt }
+                let facingNow = abs(Self.wrapAngle(brain.yaw - (dining.places.first?.yaw ?? 0))) < DiningGroup.calmFacing
+                if there, idleNow, facingNow || singleFacingT >= DiningGroup.calmFacingWait {
+                    mealApproach = false; startMeal(c, brain: brain); mealRequested = true; MealTrace.log("single sent to eat")
+                } else if !there, idleNow {
+                    standIdle += dt
+                    if standIdle > 0.8 {
+                        standIdle = 0
+                        if standRetries < 2 { standRetries += 1; brain.callToMeal(.goTo(approach)) }
+                        else { mealApproach = false; startMeal(c, brain: brain); mealRequested = true; MealTrace.log("single sent to eat (fallback)") }
+                    }
+                } else { standIdle = 0 }
+            }
             else if free, mealRequested {
                 // the request was cancelled (for example he was grabbed): ask again a couple of times, then give up
                 if act == .idle || act == .lookingAround || act == .steppingInPlace {
@@ -114,7 +136,10 @@ extension GameCare {
         if MealTrace.poseOn, MealTrace.singleActive {
             // (every fixed step) the single eater's brain root, floor point, yaw and activity: the meal smoothness survey
             let f = Self.floorPos(brain, sim)
-            MealTrace.log(String(format: "pose a=%.4f", MealTrace.singleAge) + " \(id)@p0=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", brain.position.x, brain.position.y, f.x, f.y, brain.yaw) + ",\(brain.activity),-" + (dining.isPresent ? " tray=1" : " tray=0"))
+            let c = sim.map { (s: SoftBody) -> SIMD2<Float> in let v = s.centroid(); return SIMD2(v.x, v.z) } ?? f          // (the body centroid: what the eye follows)
+            var ms = ",nan"          // (his mouth to his straw tip while he sips a gulp: the drink "mouth at the rim" check)
+            if let s = sim, brain.dineIsSipping, brain.dinePhaseName == "chew", let tip = dining.strawTip(place: 0) { ms = String(format: ",%.4f", simd_distance(brain.mouthWorld(sim: s), tip)) }
+            MealTrace.log(String(format: "pose a=%.4f", MealTrace.singleAge) + " \(id)@p0=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", brain.position.x, brain.position.y, f.x, f.y, brain.yaw) + ",\(brain.activity),-" + String(format: ",%.4f,%.4f", c.x, c.y) + ms + (dining.isPresent ? " tray=1" : " tray=0"))
         }
         #endif
     }

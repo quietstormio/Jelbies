@@ -5,8 +5,9 @@
 //  little, Thirsty more, Parched the most), is paid per gulp, and leaves when he is done; the drink goes when all are done.
 //  One Jelly in the room, or one singled out (a name picked, a single close-up), keeps the single-Jelly flow of GameCare+Dining.swift.
 //  Food and drink share this path (`serving.kind`): Full / Quenched shake their head, Normal takes 1 piece, Hungry 2, Famished 3 (faster).
-//  The tray seats three (DiningGroup.maxDiners): with four Jellies the three who need it most sit first and the fourth waits where he stands
-//  (reserved, like a diner) and eats at a second sitting of the same serving once the first tray has gone.
+//  The home tray seats two (DiningGroup.homeSeats, C6 2026-11-17; the café three, DiningGroup.maxDiners): the two who need it most sit first (the closer one on a tie)
+//  and the others wait (reserved, like a diner) and eat at a second sitting of the same serving once the first tray has gone. A waiter waits calmly (he faces the
+//  tray: no look-arounds, no steps) at a spot clear of every eater (`stepAsideGroup`, DiningGroup.waiterClear).
 //
 
 import Foundation
@@ -44,15 +45,22 @@ extension GameCare {
     /// The waiting Jellies are let go (the queue is dropped).
     func groupQueueClear() {
         groupQueue = []; groupNext = nil
-        for w in groupWaitSaved.values { if let b = w.brain { b.reserved = w.was; b.waitFocus = nil; b.idleBlocked = false } }
+        for w in groupWaitSaved.values { if let b = w.brain { b.reserved = w.was; b.waitFocus = nil; b.idleBlocked = false; b.mealFaceYaw = nil } }
         groupWaitSaved = [:]
     }
 
-    /// The ids of a sitting: at most `DiningGroup.maxDiners`, the ones who need it most first (lowest level, then the lower id); the rest wait.
-    static func seating(_ ids: [Int], level: (Int) -> Float) -> (now: [Int], later: [Int]) {
-        guard ids.count > DiningGroup.maxDiners else { return (ids.sorted(), []) }
-        let order = ids.sorted { let a = level($0), b = level($1); return a != b ? a < b : $0 < $1 }
-        return (Array(order.prefix(DiningGroup.maxDiners)).sorted(), Array(order.dropFirst(DiningGroup.maxDiners)).sorted())
+    /// The ids of a sitting: at most `seats`, the ones who need it most first (lowest level; levels within `seatTie` are a tie, then the nearer by `distance`,
+    /// then the lower id); the rest wait.
+    static let seatTie: Float = 0.1
+    static func seating(_ ids: [Int], level: (Int) -> Float, seats: Int = DiningGroup.maxDiners, distance: ((Int) -> Float)? = nil) -> (now: [Int], later: [Int]) {
+        guard ids.count > seats else { return (ids.sorted(), []) }
+        let order = ids.sorted {
+            let a = level($0), b = level($1)
+            if abs(a - b) >= seatTie { return a < b }
+            if let distance { let da = distance($0), db = distance($1); if da != db { return da < db } }
+            return a != b ? a < b : $0 < $1
+        }
+        return (Array(order.prefix(seats)).sorted(), Array(order.dropFirst(seats)).sorted())
     }
 
     /// Once per fixed step (end of `tickOthers`, which sees every Jelly): starts the wanted group serving, then runs the group.
@@ -74,8 +82,14 @@ extension GameCare {
             let kind: NeedKind = c.kind == .food ? .hunger : .thirst
             // who sits now: the queued ids (a second sitting), else everybody; three at most, the rest wait for the next sitting
             let candidates = groupQueue.isEmpty ? actors.map(\.id) : groupQueue
-            let seats = Self.seating(candidates, level: { [weak self] id in self?.needs(for: id).level(kind) ?? 1 })
+            let home = cafeBook.hooks == nil          // (C6: the home tray seats two per sitting; the café keeps its three)
+            var floorOf: [Int: SIMD2<Float>] = [:]
+            for a in actors { if let b = a.brain { floorOf[a.id] = Self.floorPos(b, a.sim) } }
+            let seats = Self.seating(candidates, level: { [weak self] id in self?.needs(for: id).level(kind) ?? 1 }, seats: home ? DiningGroup.homeSeats : DiningGroup.maxDiners,
+                                     distance: { id in simd_distance(floorOf[id] ?? DiningSpot.preferred, DiningSpot.preferred) })
             groupQueue = seats.later; groupNext = seats.later.isEmpty ? nil : c
+            // (round E: where the SLEEPING waiters lie: they are never moved, so this sitting's places keep clear of them)
+            group.keepClearOf = seats.later.compactMap { id in actors.first { $0.id == id }.flatMap { a in a.brain.flatMap { $0.isSleeping ? Self.floorPos($0, a.sim) : nil } } }
             let sorted = actors.filter { seats.now.contains($0.id) }.sorted { $0.id < $1.id }
             let brains = sorted.compactMap(\.brain)
             let floors: [() -> SIMD2<Float>] = sorted.map { a in { [weak b = a.brain, weak s = a.sim] in b.map { Self.floorPos($0, s) } ?? .zero } }
@@ -91,6 +105,15 @@ extension GameCare {
                 group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
             }
             group.avoid = jellyFloors
+            #if targetEnvironment(simulator)
+            let bodies: [() -> SIMD2<Float>] = sorted.map { a in { [weak s = a.sim] in s.map { (b: SoftBody) -> SIMD2<Float> in let v = b.centroid(); return SIMD2(v.x, v.z) } ?? .zero } }
+            group.traceBody = { bodies[$0]() }          // (meal trace only: the pose line's body centroid)
+            let mouths: [() -> SIMD3<Float>?] = sorted.map { a in { [weak b = a.brain, weak s = a.sim] in
+                guard let b, let s, b.dineIsSipping, b.dinePhaseName == "chew" else { return nil }
+                return b.mouthWorld(sim: s) } }
+            group.traceMouth = { mouths[$0]() }          // (meal trace only: his mouth while he sips a gulp)
+            group.traceWaiters = { [weak self] in self?.groupQueue ?? [] }          // (meal trace only: the waiters for the next sitting, C6)
+            #endif
             group.start(c, brains: brains, floor: { floors[$0]() }, ids: sorted.map(\.id))
             if let cafeHooks = cafeBook.hooks, group.isActive { cafeHooks.seated(group.memberIDs, group.placeOf) }
             groupWanted = nil
@@ -106,13 +129,36 @@ extension GameCare {
             return
         }
         group.bystanders = { actors.filter { !self.group.memberIDs.contains($0.id) && $0.brain != nil }.map { Self.floorPos($0.brain!, $0.sim) } }
+        group.waitersPending = { [weak self] in !(self?.groupQueue.isEmpty ?? true) }
+        #if targetEnvironment(simulator)
+        group.traceWaiterFloor = { id in          // (meal trace only, T9: the pose line's ` wpos=`)
+            guard let a = actors.first(where: { $0.id == id }), let b = a.brain else { return nil }
+            return (Self.floorPos(b, a.sim), "\(b.activity)")
+        }
+        #endif
+        // C7 (round E): the first waiter takes the first freed place of this sitting (the tray stays); `-MealRolling 0` = the next sitting as in round D
+        if DiningGroup.rolling, let w = groupQueue.first, let slot = group.freeSlot(), let a = actors.first(where: { $0.id == w }), let b = a.brain {
+            groupQueue.removeFirst(); groupWaitSaved[w] = nil
+            if groupQueue.isEmpty { groupNext = nil }
+            let floor: () -> SIMD2<Float> = { [weak b, weak s = a.sim] in b.map { Self.floorPos($0, s) } ?? .zero }
+            #if targetEnvironment(simulator)
+            let body: () -> SIMD2<Float> = { [weak s = a.sim] in s.map { (q: SoftBody) -> SIMD2<Float> in let v = q.centroid(); return SIMD2(v.x, v.z) } ?? .zero }
+            let mouth: () -> SIMD3<Float>? = { [weak b, weak s = a.sim] in
+                guard let b, let s, b.dineIsSipping, b.dinePhaseName == "chew" else { return nil }
+                return b.mouthWorld(sim: s) }
+            group.join(slot: slot, brain: b, id: w, floor: floor, body: body, mouth: mouth)
+            #else
+            group.join(slot: slot, brain: b, id: w, floor: floor)
+            #endif
+        }
         for a in actors {
             guard let b = a.brain else { continue }
             if group.memberIDs.contains(a.id) { if group.isHolding(a.id) { b.idleBlocked = true; continue } }          // (a diner who is done is released on his own: he is a free Jelly again)
             if groupQueue.contains(a.id) {
                 // he waits where he stands (look / step / bounce), like a diner, so he never walks into the tray corridor
                 if groupWaitSaved[a.id] == nil { groupWaitSaved[a.id] = GroupWaiter(brain: b, was: b.reserved) }
-                b.reserved = true; b.idleBlocked = true; b.waitFocus = DiningSpot.preferred
+                b.reserved = true; b.idleBlocked = true; b.waitFocus = group.originNow ?? DiningSpot.preferred
+                if DiningGroup.calmWait, let o = group.originNow { let p = Self.floorPos(b, a.sim); b.mealFaceYaw = atan2f(o.x - p.x, o.y - p.y) }          // (C6: he waits calmly, facing the tray)
             }
             stepAsideGroup(id: a.id, brain: b, sim: a.sim, dt: dt)      // (a waiter, or a diner of the last sitting still on his place)
         }
@@ -170,19 +216,31 @@ extension GameCare {
         let stands = group.standsNow
         guard !stands.isEmpty else { return }
         let here = Self.floorPos(brain, sim)
-        let reach = MelonController.jellyGap + 0.1
+        // (C6: a waiter for the next sitting keeps `waiterClear` from every eater, their catch lean included; anybody else the old body-and-margin)
+        let waiter = groupQueue.contains(id)
+        if waiter, brain.isSleeping { return }          // (a sleeper waiting for the next sitting is never woken just to step aside: he is woken for his own sitting)
+        let reach = waiter ? DiningGroup.waiterClear : MelonController.jellyGap + 0.1
         func near(_ p: SIMD2<Float>) -> Float { stands.map { min(simd_distance(p, $0), simd_distance(p, SIMD2($0.x, $0.y - Self.approachBack))) }.min() ?? 9 }
         guard near(here) < reach || group.trayDistance(here) < DiningGroup.trayClearance else { return }          // (or on the rectangle the tray is about to be drawn on)
         let centre = stands.reduce(SIMD2<Float>.zero, +) / Float(stands.count)
-        let spots: [SIMD2<Float>] = [SIMD2(2.1, 0.3), SIMD2(-2.1, 0.3), SIMD2(1.5, -1.0), SIMD2(-1.5, -1.0), SIMD2(0, -2.0)].map { centre + $0 }
+        var rel: [SIMD2<Float>] = [SIMD2(2.1, 0.3), SIMD2(-2.1, 0.3), SIMD2(1.5, -1.0), SIMD2(-1.5, -1.0), SIMD2(0, -2.0)]
+        if waiter {          // (beside the row, the tray's front corners, far behind; round E: a ring of 12 at 2.2 and 3.0 too, for walls that push the near ones in)
+            rel += [SIMD2(2.6, 0), SIMD2(-2.6, 0), SIMD2(1.7, 2.0), SIMD2(-1.7, 2.0), SIMD2(0, -2.6)]
+            for k in 0..<12 { let a = Float(k) * .pi / 6; for r in [Float(2.2), 3.0] { rel.append(SIMD2(sinf(a), cosf(a)) * r) } }
+        }
+        let spots = rel.map { centre + $0 }
         var best: (d: Float, p: SIMD2<Float>)?
         for c in spots {
             let q = brain.resolve(SIMD3(c.x, 0, c.y), 0.6)
             let p = SIMD2(q.x, q.z)
-            let d = min(near(p), group.trayDistance(p) + 0.5) - 0.2 * simd_distance(p, here)
+            var d = min(near(p), group.trayDistance(p) + 0.5) - 0.2 * simd_distance(p, here)
+            if waiter, near(p) >= reach, group.trayDistance(p) >= DiningGroup.trayClearance { d = 100 - simd_distance(p, here) }          // (any clear spot beats every unclear one; the nearest clear one wins)
             if best == nil || d > best!.d { best = (d, p) }
         }
-        if let best { brain.requestNow(.goTo(best.p)) }
+        if let best {
+            brain.requestNow(.goTo(best.p))
+            if waiter { MealTrace.log("waiter \(id) steps aside to " + String(format: "(%.2f,%.2f) near=%.2f tray=%.2f", best.p.x, best.p.y, near(best.p), group.trayDistance(best.p)) + " clear=\(best.d >= 50)") }
+        }
         clearCool[id] = 2
     }
 }
