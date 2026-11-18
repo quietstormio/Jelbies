@@ -11,10 +11,13 @@ import simd
 
 @MainActor
 final class SleepSnuggleTests: XCTestCase {
+    // (these suites test the pile itself: a joiner walks to a sleeper and lies beside him; `SleepTuning.anywhere = false` = the old rule, the one `-SleepAnywhere 0` brings back. The new rule is covered by SleepAnywhereTests.)
     override func setUp() {
+        SleepTuning.anywhere = false
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
     }
     override func tearDown() {
+        SleepTuning.anywhere = true
         SleepTuning.holdChance = 0.4; SleepTuning.cuddleChance = 0.3
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
