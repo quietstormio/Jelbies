@@ -886,11 +886,12 @@ struct GameScreen: View {
             care.bath.demoHold = d.integer(forKey: "BathHold") != 0          // -BathHold 1: stop at every complete stage (captures)
             care.clean()
         }
-        if d.string(forKey: "BlobGameDemo") == "soapcard" {          // capture aid: the "Pick a soap" card (all five soaps owned)
+        if d.string(forKey: "BlobGameDemo") == "soapcard" {          // capture aid: the "Pick a soap" card (the soaps in -SoapOwned are owned)
             for _ in 0..<600 where LaunchGate.shared.visible || care.lastBrain == nil { await sleep(0.1) }
             await sleep(3)
-            for id in Soap.boughtIDs where care.store.count(id) < 1 { care.store.grant(id) }
-            care.clean()
+            let owned = (d.string(forKey: "SoapOwned") ?? "mintsoap,honeysoap").split(separator: ",").map(String.init).filter { !$0.isEmpty }          // -SoapOwned mintsoap,honeysoap (none: -SoapOwned "")
+            for id in owned where care.store.count(id) < 1 { care.store.grant(id) }
+            care.requestClean()
         }
         if let a = d.string(forKey: "GameAction") {
             await sleep(d.double(forKey: "GameActionDelay") > 0 ? d.double(forKey: "GameActionDelay") : 4)
