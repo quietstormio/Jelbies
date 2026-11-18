@@ -1059,7 +1059,7 @@ final class AudioHub {
     /// The bath's creature voice (Bath/BathVoices.swift): one of the existing voice clips (`v`, its variant) or, with `v` nil, the shared sneeze, in the voice set of the Jelly in
     /// `jelly`'s slot. Past the shared gates (muted / background / level) and its own 0.9 s gap per Jelly; stamps `lastVoice` / `lastContextVoice` so no ambient voice lands on it.
     /// Returns whether it was fired (the bath's plan only remembers a vocal that played). `soft` = the quiet idle one. Logged `bath:<voice>`.
-    static let bathVoiceGain: Float = 0.7, bathVoiceSoftGain: Float = 0.5, bathSneezeGain: Float = 0.6, bathVoiceGap: Double = 0.9
+    static let bathVoiceGain: Float = 0.7, bathVoiceSoftGain: Float = 0.5, bathSneezeGain: Float = 1.0, bathVoiceGap: Double = 0.9
     @ObservationIgnored private var lastBathVoice: [Double] = [-100, -100, -100]
     @discardableResult
     func bathVoice(jelly: Int, _ v: JellyVoice?, variant: Int = 1, soft: Bool = false, x: Float = 0) -> Bool {

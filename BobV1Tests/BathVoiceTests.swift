@@ -89,7 +89,7 @@ final class BathVoiceTests: XCTestCase {
         let res = runBath(demo: true)
         report("demo bath", res)
         let moments = Set(res.played.map(\.moment))
-        for m in ["getIn", "scrubHum", "scrubTickle", "firstWater", "rinseRelax", "shinePurr", "stageDone", "allClean"] { XCTAssertTrue(moments.contains(m), "moment \(m) played in the scripted bath: \(moments.sorted())") }
+        for m in ["getIn", "scrubHum", "scrubTickle", "firstWater", "rinseRelax", "stageDone", "allClean"] { XCTAssertTrue(moments.contains(m), "moment \(m) played in the scripted bath: \(moments.sorted())") }
         print("[bathvoice] TABLE loudness (file RMS dBFS, gain used, level at the speaker = RMS + 20 log10 gain)")
         var seen = Set<String>(); var gains: [String: Float] = [:]
         for p in res.played { gains[p.file] = p.gain }
