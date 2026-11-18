@@ -2613,7 +2613,7 @@ final class BlobBrain {
     }
 
     /// meal-reach-r1: the food reach with a radial freedom. The body-led solve reaches a shell of fixed radius about the planted pivot, so a piece nearer or farther than that shell was missed by up to 18 cm
-    /// (the nub tip hung in the air and the piece slid to it). Per bite the nub swing `s` (a point on the same stub path: the arm is never longer) and the crouch (0.75 ... 1.0, as near the drawn
+    /// (the nub tip hung in the air and the piece slid to it). Per bite the nub swing `s` (a point on the same stub path: the arm is never longer) and the crouch (0.7 ... 1.0, as near the drawn
     /// variance depth as it can) are chosen so the tip meets the piece; the lean, twist, pitch and roll are solved as ever.
     /// How much higher (m per unit of lost height) the real body's centroid sits than the model's pinned pivot (measured in `MealReachTests`: 0.066 / 0.105 / 0.079 at crouch 0.85 / 0.75 / 0.80).
     nonisolated static let dineRise: Float = 0.42
@@ -2658,7 +2658,7 @@ final class BlobBrain {
         bestC = cost(first.r.miss, std, pref)
         if first.r.miss > 0.006 {
             for sg: Float in [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45] {
-                for cr: Float in [pref, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0] {
+                for cr: Float in [pref, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0] {
                     let r = solve(sg, cr, fast: true)
                     let c = cost(r.r.miss, sg, cr)
                     if c < bestC { bestC = c; bs = sg; bc = cr; first = r }
@@ -2737,8 +2737,8 @@ final class BlobBrain {
             pose = lerpPose(dine.from, dine.reach, u)
             armTarget = dine.grabS * min(1, dine.t / Self.tLean * 1.2)
             if dine.t >= Self.tLean {
-                // (meal-reach: the lean waits, at most 0.15 s, for the tip to be within 1 cm of the piece)
-                if GameCare.mealReach, dine.mode == .finger, tipErr > 0.010, dine.extra < 0.15 { dine.extra += dt; dine.t = Self.tLean }
+                // (meal-reach: the lean waits, at most 0.25 s, for the tip to be within 0.6 cm of the piece)
+                if GameCare.mealReach, dine.mode == .finger, tipErr > 0.006, dine.extra < 0.25 { dine.extra += dt; dine.t = Self.tLean }
                 else { dine.phase = .grab; dine.t = 0; dine.entered = false }
             }
         case .grab:

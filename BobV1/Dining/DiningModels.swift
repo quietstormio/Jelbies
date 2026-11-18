@@ -110,7 +110,7 @@ nonisolated enum DiningLayout {
     static let endsZ: Float = -0.05, endsYaw: Float = .pi / 4
     /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): the end places of the ENDS layout stand at most this far from the tray centre
     /// (the sitting used 1.5 / 1.4 / 1.3 / 1.2 as the floor allowed: the nub, a stub, hung 0.8 m from the pieces). `-MealReach 0` = as before.
-    nonisolated(unsafe) static var reachSideX: Float = 1.12
+    nonisolated(unsafe) static var reachSideX: Float = 1.2
     static var sideYaw: Float { sideX > 1.12 ? 0 : 0.25 }
     static func make(n n0: Int) -> TrayLayout {
         let n = min(max(n0, 1), 3), s = DiningTiming.servingScale(n: n)

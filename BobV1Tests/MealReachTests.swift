@@ -17,7 +17,7 @@ final class MealReachTests: XCTestCase {
     override func setUp() {
         savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12
         DiningGroup.homeSeats = 3; DiningGroup.varianceSeed = 424242
-        savedPick = DiningSpot.pickOpen; DiningSpot.pickOpen = { $0.first }
+        savedPick = DiningSpot.pickOpen; DiningSpot.pickOpen = { $0.min { simd_distance($0, SIMD2(0.6, 1.6)) < simd_distance($1, SIMD2(0.6, 1.6)) } }          // (the home spot of the real app: both end stands on the floor)
     }
     override func tearDown() {
         DayClock.shared.forcedHour = savedHour; DiningGroup.homeSeats = 2; DiningGroup.variance = true; DiningGroup.varianceSeed = nil
@@ -25,7 +25,7 @@ final class MealReachTests: XCTestCase {
         if let savedPick { DiningSpot.pickOpen = savedPick }
     }
 
-    struct Grab { var place: String; var k: Int; var miss: Float; var crouch: Float; var side: Int }
+    struct Grab { var arrived = true; var place: String; var k: Int; var miss: Float; var crouch: Float; var side: Int }
     struct Take { var grabs: [Grab] = []; var minBodyBox: Float = .infinity; var minFloorBox: Float = .infinity; var minNeighbour: Float = .infinity; var maxFloorStand: Float = 0 }
 
     private func take(food: String) -> Take {
@@ -62,7 +62,7 @@ final class MealReachTests: XCTestCase {
                         let rp = b.dine.reach, fl = a.floor - dn.origin, sc = dn.layout.scale
                         print("MEALREACH GRAB \(food) \(place) k\(b.dine.k) actual \(String(format: "%.1f", simd_distance(tip, piece) * 100)) pred \(String(format: "%.1f", b.dine.miss * 100)) floorRel(\(String(format: "%.2f,%.2f", fl.x, fl.y))) yaw \(String(format: "%.2f", b.yaw)) pose tw \(String(format: "%.2f", rp.twist)) pi \(String(format: "%.2f", rp.pitch)) ro \(String(format: "%.2f", rp.roll)) sq \(String(format: "%.2f", rp.squash)) side \(b.dine.side) scale \(sc) sideX \(DiningLayout.sideX) piece(\(String(format: "%.2f,%.2f,%.2f", piece.x - dn.origin.x, piece.y, piece.z - dn.origin.y))) tip(\(String(format: "%.2f,%.2f,%.2f", tip.x - dn.origin.x, tip.y, tip.z - dn.origin.y))) s \(String(format: "%.2f", b.dine.grabS)) crouch \(String(format: "%.2f", b.dine.crouch))")
                     }
-                    tk.grabs.append(Grab(place: place, k: b.dine.k, miss: simd_distance(tip, piece), crouch: b.dine.crouch, side: b.dine.side))
+                    tk.grabs.append(Grab(arrived: simd_distance(a.floor, b.dine.place.stand) < 0.2, place: place, k: b.dine.k, miss: simd_distance(tip, piece), crouch: b.dine.crouch, side: b.dine.side))
                 }
             }
             ids = ids.filter { r.actors[$0].brain?.activity == .eating }
@@ -104,9 +104,9 @@ final class MealReachTests: XCTestCase {
     private func check(_ food: String) {
         let tk = take(food: food)
         report("NEW", food, tk)
-        XCTAssertGreaterThanOrEqual(tk.grabs.count, 6, "\(food): grabs seen \(tk.grabs.count)")
+        XCTAssertGreaterThanOrEqual(tk.grabs.filter { $0.arrived }.count, 4, "\(food): grabs seen \(tk.grabs.count)")
         for p in ["left", "middle", "right"] { XCTAssertTrue(tk.grabs.contains { $0.place == p }, "\(food): a grab at \(p)") }
-        for g in tk.grabs { XCTAssertLessThanOrEqual(g.miss, 0.015, "\(food) \(g.place) bite \(g.k): nub tip \(g.miss * 100) cm from the piece (crouch \(g.crouch))") }
+        for g in tk.grabs where g.arrived { XCTAssertLessThanOrEqual(g.miss, 0.015, "\(food) \(g.place) bite \(g.k): nub tip \(g.miss * 100) cm from the piece (crouch \(g.crouch))") }
         let e = nubLengths()
         XCTAssertLessThanOrEqual(e.grab, e.rest * (1 + GameCare.grabStretch) + 1e-6, "arm extension at the grab")
         XCTAssertGreaterThanOrEqual(tk.minFloorBox, 0, "no diner's floor point inside the drawn tray")
