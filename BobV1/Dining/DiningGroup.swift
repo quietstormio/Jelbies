@@ -162,6 +162,7 @@ final class DiningGroup {
     static let stuckGain: Float = 0.15, stuckWindow: Float = 2.5, hurryGap: Float = 1.5, hurryPace: Float = 1.25, walkSpeed: Float = 1.15
     private var wpSent: Set<Int> = []
     private var progRef: [(t: Float, d: Float)] = [], stuckAt: [Float?] = []
+    private var firstStartAge: Float?
     private var popAge: Float = 0, varBaseCache: Float?, hurryCheckT: Float = 0
     private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
@@ -461,7 +462,7 @@ final class DiningGroup {
     }
 
     private func beginApproach() {
-        state = .approaching; requested = false; settle = 0; earlyPop = false; held = []; heldFor = [:]; heldFront = false; wpSent = []
+        state = .approaching; requested = false; settle = 0; earlyPop = false; held = []; heldFor = [:]; heldFront = false; wpSent = []; firstStartAge = nil
         readyT = [Float](repeating: 0, count: n)
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
@@ -579,7 +580,8 @@ final class DiningGroup {
                 // the first chomp / gulp lands at popAge + base + his offset (the lean is scheduled back from it by his own lead at his own pace), not his lean start
                 let sip = serving.eatStyle == .sip
                 if varBaseCache == nil { varBaseCache = brains.indices.map { j in BlobBrain.dineLead(sip: sip, pace: (eager ? MealAppetite.pace(tiers[j]) : 1) * varPace[j]) }.max() ?? 1 }
-                brains[i].dinePlan.leanAt = popAge + (varBaseCache ?? 1) + varDelay[i] - BlobBrain.dineLead(sip: sip, pace: brains[i].dinePlan.pace)
+                if firstStartAge == nil { firstStartAge = age }          // (the café's table is out already: the sitting's clock starts when the first diner is sent to eat)
+                brains[i].dinePlan.leanAt = max(popAge, firstStartAge ?? 0) + (varBaseCache ?? 1) + varDelay[i] - BlobBrain.dineLead(sip: sip, pace: brains[i].dinePlan.pace)
                 brains[i].dinePlan.motion = true; brains[i].dinePlan.style = varStyle[i]; brains[i].dinePlan.variantSeed = varSeedShared; brains[i].dinePlan.board = varBoard
                 brains[i].dinePlan.glanceDir = glanceSide(i)
                 MealTrace.log("variance diner \(memberIDs[i]) delay=\(varDelay[i]) pace=\(brains[i].dinePlan.pace)")
