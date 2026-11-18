@@ -761,6 +761,7 @@ final class GameCare {
                     // C5d: the tray is out at once; he walks to his approach point and squares up first, then steps in straight (`tickDining`)
                     mealApproach = true
                     if simd_distance(here, approach) >= 0.3 { brain.callToMeal(.goTo(approach)) }
+                    else if !(act == .idle || act == .lookingAround || act == .steppingInPlace) { brain.callToMeal(.goTo(brain.position)) }          // (C5e: near his approach point but still on a walk of his own: he stops here, then squares up)
                 } else { startMeal(c, brain: brain); mealRequested = true; MealTrace.log("single sent to eat") }
             }
             return
