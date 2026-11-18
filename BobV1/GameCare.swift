@@ -567,6 +567,7 @@ final class GameCare {
     static let sipCloser: Float = 0.08
     /// Eating stands a little FARTHER back than the layout's stand (negative = away from the tray): measured, the berries are reached with less miss.
     static let eatCloser: Float = -0.03
+    nonisolated static var mealReachX: Float { DiningLayout.reachSideX }
     /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): food diners stand `reachCloser` nearer the tray (along the place yaw) so the nub
     /// tip touches the piece at the grab. `-MealReach 0` (dev builds) = the old stand and reach.
     nonisolated(unsafe) static var mealReach: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReach") != nil && UserDefaults.standard.integer(forKey: "MealReach") == 0)

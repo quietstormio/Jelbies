@@ -162,6 +162,38 @@ final class MealReachTests: XCTestCase {
         XCTAssertLessThan(res.filter { $0.0 }.map { $0.2 }.min() ?? 0, 4000 + (res.filter { !$0.0 }.map { $0.2 }.min() ?? 0), "the new reach adds < 4 ms to the worst tick")
     }
 
+    /// The model (the solver the lean uses) for each of the three Jellies at the LEFT and the RIGHT end place of the food ends layout, every piece, the three crouch draws, and a stand 4 cm too near / on it / 6 cm too far
+    /// (a diner stops up to ~6 cm off his stand): every bite within 2.5 cm. Both ends must do as well (the left end diner used to miss by 5-7 cm in the app: an asymmetric roll grid).
+    func testLeftAndRightEndEverySpecies() {
+        let savedEnds = DiningLayout.ends, savedSide = DiningLayout.sideX, savedFood = DiningLayout.reachFood
+        DiningLayout.ends = true; DiningLayout.sideX = GameCare.mealReachX; DiningLayout.reachFood = true
+        defer { DiningLayout.ends = savedEnds; DiningLayout.sideX = savedSide; DiningLayout.reachFood = savedFood }
+        let L = DiningLayout.make(n: 3)
+        let r = DiningJellyTests.Room(count: 3)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        var worstBy: [String: Float] = [:]
+        for a in r.actors {
+            guard let b = a.brain else { continue }
+            for place in [0, 1, 2] {
+                let tp = L.places[place], dirOut: SIMD2<Float> = place == 0 ? SIMD2(0, -1) : (tp.rel.x < 0 ? SIMD2(-1, 0) : SIMD2(1, 0))
+                for off: Float in [-0.04, 0, 0.06] {
+                    let stand = tp.rel + SIMD2(sinf(tp.yaw), cosf(tp.yaw)) * GameCare.eatCloser + dirOut * off
+                    b.px = stand.x; b.pz = stand.y; b.yaw = tp.yaw
+                    for k in 0..<3 {
+                        let a3 = DiningModels.berryAnchor(layout: L, place: place, index: k)
+                        for c: Float in [0.8, 0.9, 1.0] {
+                            b.solveDineReachRadial(a.sim, target: a3, crouch: c)
+                            let key = "\(JellyRoster.names[a.id]) \(place == 0 ? "middle" : place == 1 ? "left" : "right")"
+                            worstBy[key] = max(worstBy[key] ?? 0, b.dine.miss)
+                            XCTAssertLessThanOrEqual(b.dine.miss, 0.025, "\(key) piece \(k) crouch \(c) stand off \(off): model miss \(b.dine.miss * 100) cm")
+                        }
+                    }
+                }
+            }
+        }
+        print("MEALREACH ENDS worst model miss (cm) " + worstBy.sorted { $0.key < $1.key }.map { "\($0.key) \(String(format: "%.2f", $0.value * 100))" }.joined(separator: " | "))
+    }
+
     func testOldReachNumbers() {
         GameCare.mealReach = false
         for f in ["sushi", "cookie"] { report("OLD", f, take(food: f)) }
