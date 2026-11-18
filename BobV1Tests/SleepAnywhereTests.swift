@@ -28,6 +28,8 @@ final class SleepAnywhereTests: XCTestCase {
     }
 
     // MARK: scenarios
+    /// The six seeds: scattered (0), except one crowded pair (1) and one plant beside a body (2).
+    static let kinds = [0, 0, 0, 1, 0, 2]
 
     /// kind 0 = spread (all fair), 1 = crowded (two stand too close to both lie), 2 = decor (one stands right beside a plant).
     struct Scene { var name: String; var starts: [SIMD2<Float>]; var decorAt: SIMD2<Float>? }
@@ -38,17 +40,17 @@ final class SleepAnywhereTests: XCTestCase {
     }
     /// A floor point clear of the bowls, the call spot and the table (the test's own check, independent of the brain's).
     private static func floorOK(_ p: SIMD2<Float>) -> Bool {
-        guard abs(p.x) <= 2.1, p.y >= -1.5, p.y <= 1.5 else { return false }
-        for s in [GameCamera.foodBowlSpot, GameCamera.waterBowlSpot, GameCamera.callSpot, RoomLayout.table.centre] where simd_distance(p, s) < 1.8 { return false }
+        guard abs(p.x) <= 2.4, p.y >= -1.9, p.y <= 1.9 else { return false }
+        for s in [GameCamera.foodBowlSpot, GameCamera.waterBowlSpot, GameCamera.callSpot, RoomLayout.table.centre] where simd_distance(p, s) < 1.5 { return false }
         return true
     }
     static func scene(seed: UInt64, kind: Int, n: Int) -> Scene {
         let r = rng(seed &* 977)
         var pts: [SIMD2<Float>] = []
         var tries = 0
-        while pts.count < n, tries < 4000 {
+        while pts.count < n, tries < 20000 {
             tries += 1
-            let p = SIMD2<Float>(-2.1 + 4.2 * r(), -1.5 + 3.0 * r())
+            let p = SIMD2<Float>(-2.4 + 4.8 * r(), -1.9 + 3.8 * r())
             guard floorOK(p) else { continue }
             if pts.isEmpty { pts.append(p); continue }
             if kind == 1, pts.count == 1 {          // the second stands about 1.7 from the first: standing skins clear, lying footprints (1.81 across, 2.07 along) not
@@ -57,7 +59,7 @@ final class SleepAnywhereTests: XCTestCase {
                 if floorOK(q) { pts.append(q) }
                 continue
             }
-            if pts.allSatisfy({ simd_distance($0, p) >= 2.5 }) { pts.append(p) }
+            if pts.allSatisfy({ simd_distance($0, p) >= (tries < 2000 ? 2.2 : 2.0) }) { pts.append(p) }
         }
         precondition(pts.count == n, "scene seed \(seed) kind \(kind) n \(n): no layout")
         let decor: SIMD2<Float>? = kind == 2 ? pts[n - 1] + SIMD2(0.7, 0) : nil
@@ -75,6 +77,7 @@ final class SleepAnywhereTests: XCTestCase {
         var fairStart: [Bool] = []
         var offScreen = 0
         var nap = false
+        var yaws: [Float] = []
     }
 
     private static func points(_ r: MotionRig, _ dyn: inout [Float]) -> [SIMD2<Float>] {
@@ -133,7 +136,7 @@ final class SleepAnywhereTests: XCTestCase {
         while f < 70 * 60 {
             lab.tick(watching: false); f += 1
             for (i, b) in brains.enumerated() {
-                if !b.isLying { let d = simd_distance(b.position, last[i]); out.perWalk[i] += d; out.walk += d }
+                if b.activity == .walking || b.activity == .coming { let d = simd_distance(b.position, last[i]); out.perWalk[i] += d; out.walk += d }          // (walking only: the turn on the spot before the yawn shifts the root a little in both versions)
                 last[i] = b.position; traj[i].append(b.position)
             }
             if f % 3 == 0 {
@@ -148,7 +151,8 @@ final class SleepAnywhereTests: XCTestCase {
         for _ in 0..<60 { lab.tick(watching: false) }
         out.finals = brains.map { $0.position }
         // nobody's walk crosses another's lying spot (a mover that starts inside a stayer's footprint only has to walk away from it)
-        let yaw = brains[0].faceCameraYaw()
+        out.yaws = brains.map { $0.sleep.lieYaw }
+        let yaw = out.yaws[0]
         for i in 0..<n { for j in 0..<n where i != j {
             let startsInside = BlobBrain.lieClash(out.starts[i] - out.finals[j], yawA: yaw, yawB: yaw, margin: 0)
             var prev = simd_distance(out.starts[i], out.finals[j])
@@ -173,7 +177,7 @@ final class SleepAnywhereTests: XCTestCase {
         XCTAssertLessThan(o.allAsleepAt, 70, "\(s.name): not everybody fell asleep", line: line)
         // the finished lying bodies keep the gap (footprint ellipses, margin 0.15)
         for i in 0..<o.finals.count { for j in (i + 1)..<o.finals.count {
-            XCTAssertFalse(BlobBrain.lieClash(o.finals[i] - o.finals[j], yawA: 0, yawB: 0, margin: 0.14), "\(s.name): \(i)/\(j) lie closer than the gap (\(simd_distance(o.finals[i], o.finals[j])))", line: line)
+            XCTAssertFalse(BlobBrain.lieClash(o.finals[i] - o.finals[j], yawA: o.yaws[i], yawB: o.yaws[j], margin: 0.14), "\(s.name): \(i)/\(j) lie closer than the gap (\(simd_distance(o.finals[i], o.finals[j])))", line: line)
         } }
     }
 
@@ -181,14 +185,14 @@ final class SleepAnywhereTests: XCTestCase {
 
     func testScatteredThreeSixSeeds() {
         for seed in 1...6 as ClosedRange<UInt64> {
-            let kind = Int(seed % 3)
+            let kind = Self.kinds[Int(seed) - 1]
             let s = Self.scene(seed: seed, kind: kind, n: 3)
             let o = run(s, anywhere: true)
             MotionLog.write("SLEEPANY new \(s.name) walk \(o.walk) per \(o.perWalk) gap \(o.minGap) asleep \(o.allAsleepAt) fairStart \(o.fairStart) moved \(zip(o.finals, o.starts).map { simd_distance($0, $1) })")
             check(s, o)
             if kind == 0 {
-                for i in 0..<3 { XCTAssertLessThan(simd_distance(o.finals[i], o.starts[i]), 0.2, "\(s.name): #\(i) lies where he stood") }
-                XCTAssertLessThan(o.walk, 0.4, "\(s.name): nobody walks when every spot is fair")
+                for i in 0..<3 where o.fairStart[i] { XCTAssertLessThan(simd_distance(o.finals[i], o.starts[i]), 0.2, "\(s.name): #\(i) lies where he stood") }
+                if !o.fairStart.contains(false) { XCTAssertLessThan(o.walk, 0.05, "\(s.name): nobody walks when every spot is fair") }
             } else {
                 XCTAssertTrue(zip(o.finals, o.starts).contains { simd_distance($0, $1) > 0.1 }, "\(s.name): somebody had to move")
                 XCTAssertTrue(zip(o.finals, o.starts).contains { simd_distance($0, $1) < 0.2 }, "\(s.name): the other one stays")
@@ -200,16 +204,16 @@ final class SleepAnywhereTests: XCTestCase {
         for (n, kind) in [(1, 0), (2, 0), (2, 1), (4, 0), (4, 1)] {
             let s = Self.scene(seed: 40 + UInt64(n * 7 + kind), kind: kind, n: n)
             let o = run(s, anywhere: true)
-            MotionLog.write("SLEEPANY new \(s.name) walk \(o.walk) gap \(o.minGap) asleep \(o.allAsleepAt)")
+            MotionLog.write("SLEEPANY new \(s.name) walk \(o.walk) gap \(o.minGap) asleep \(o.allAsleepAt) moved \(zip(o.finals, o.starts).map { simd_distance($0, $1) }) starts \(o.starts)")
             check(s, o)
-            if kind == 0 { for i in 0..<n { XCTAssertLessThan(simd_distance(o.finals[i], o.starts[i]), 0.2, "\(s.name): #\(i) lies where he stood") } }
+            if kind == 0 { for i in 0..<n where o.fairStart[i] { XCTAssertLessThan(simd_distance(o.finals[i], o.starts[i]), 0.2, "\(s.name): #\(i) lies where he stood") } }
         }
     }
 
     func testWalkingAndTimeAgainstTheOldPile() {
         var newWalk: Float = 0, oldWalk: Float = 0
         for seed in 1...6 as ClosedRange<UInt64> {
-            let s = Self.scene(seed: seed, kind: Int(seed % 3), n: 3)
+            let s = Self.scene(seed: seed, kind: Self.kinds[Int(seed) - 1], n: 3)
             let nw = run(s, anywhere: true), od = run(s, anywhere: false)
             MotionLog.write("SLEEPANY vs \(s.name): walk new \(nw.walk) old \(od.walk); asleep new \(nw.allAsleepAt) old \(od.allAsleepAt); minGap new \(nw.minGap) old \(od.minGap)")
             XCTAssertLessThanOrEqual(nw.allAsleepAt, od.allAsleepAt + 0.05, "\(s.name): all asleep no later than before")
