@@ -826,10 +826,13 @@ final class BlobBrain {
 
     /// OLD-FLOW FOLLOW-UP: the yaw the meal's straight walk to his stand should end in (the arc into it, `planWalkStep`); nil otherwise. Set by `.dine` / `.sip`, cleared by every new request and at the dine turn.
     var mealFinalYaw: Float?
+    /// The yaw of the place the meal group is sending him to (set by `DiningGroup`, nil otherwise): a `.goTo` while he is reserved ends in it.
+    var mealYawHint: Float?
     func start(request r: BlobRequest, _ sim: SoftBody) {
         currentPose(sim)
         job = r
         mealFinalYaw = nil
+        if case .goTo = r, reserved, DiningGroup.straightWalk { mealFinalYaw = mealYawHint }          // (the meal's approach walk also ends in his place's yaw: the turn is made on the way)
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0
         switch r {
         case .wave:

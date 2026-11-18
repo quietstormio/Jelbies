@@ -184,6 +184,8 @@ final class DiningGroup {
     /// Diner i is done and has been handed back to his own life (released ahead of the others; `releaseFinished`).
     private var released: [Bool] = []
     /// Is this roster id a diner who is still held by the sitting (not yet released)?
+    /// Has this roster id's diner been sent to eat (he is on his straight walk to his stand, or eating)?
+    func hasStarted(_ id: Int) -> Bool { isActive && memberIDs.firstIndex(of: id).map { started.indices.contains($0) && started[$0] } ?? false }
     func isHolding(_ id: Int) -> Bool { isActive && memberIDs.firstIndex(of: id).map { !(released.indices.contains($0) && released[$0]) } ?? false }
     /// Blob i has been sent to eat (he arrived at his place).
     private var started: [Bool] = []
@@ -339,6 +341,7 @@ final class DiningGroup {
         hooked = true
         for b in brains { b.reserved = true; b.waitFocus = origin }          // everybody waits where he stands (look / step / bounce) until the meal is over
         for i in brains.indices { brains[i].mealFaceYaw = calm ? placeYaw(placeOf[i]) : nil }          // (C3: the calm wait faces his own place)
+        for i in brains.indices { brains[i].mealYawHint = placeYaw(placeOf[i]) }
         beginApproach()
         traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; inBoxTicks = 0; popReason = "gathered"
         MealTrace.log("group start n=\(n) kind=\(serving.kind == .food ? "food" : "drink") origin=(\(origin.x),\(origin.y)) inFront=\(frontCount()) orderedPlaces=\(ordered) quietPlaces=\(Self.quietPlaces) calmWait=\(calm)")
@@ -460,7 +463,7 @@ final class DiningGroup {
         for (i, b) in brains.enumerated() where i < savedFinished.count {
             b.peerGap = savedGap[i]
             if i < released.count, released[i] { continue }          // (already handed back: his hooks, reserve and idle block are his own again)
-            b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; if i < savedPeers.count { b.peers = savedPeers[i] }
+            b.mealYawHint = nil; b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; if i < savedPeers.count { b.peers = savedPeers[i] }
         }
         savedFinished = []; savedGap = []; savedPeers = []
         quietLatch = []
@@ -508,7 +511,7 @@ final class DiningGroup {
             if let pay { let k = min(eaten(i), piecesFor[i]); if k > paid[i] { pay(memberIDs[i], k - paid[i]); paid[i] = k } }
             released[i] = true; if releasedT.indices.contains(i) { releasedT[i] = 0 }
             MealTrace.log("diner \(memberIDs[i]) released eaten=\(eaten(i)) state=\(state)")
-            b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; b.peers = savedPeers[i]
+            b.mealYawHint = nil; b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; b.peers = savedPeers[i]
         }
     }
 
