@@ -144,7 +144,7 @@ final class VolleyFlow {
         guard let s = sim else { if ui != VolleyUI() { ui = VolleyUI() }; return }
         var u = VolleyUI()
         u.phase = s.phase; u.score = s.score; u.serveTeam = s.server
-        u.waitingToServe = s.waitingToServe; u.humanServes = s.waitingToServe && s.servingPlayer == 0
+        u.waitingToServe = s.waitingToServe; u.humanServes = s.waitingToServe && s.servingPlayer == s.controlled
         u.rally = s.rallyHits
         u.airborne = s.players.indices.contains(s.controlled) ? !s.players[s.controlled].grounded : false
         u.controlled = s.controlled
