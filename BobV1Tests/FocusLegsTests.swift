@@ -86,14 +86,15 @@ struct LegProbe {
 final class FocusLegsTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     private var savedHour: Double?
-    private var savedLean = true
+    private var savedLean = true, savedReplant = true
     /// TEST_RUNNER_FOCUSLEGS_BASE=1: run every test with the fix switched off (the behaviour before focus-legs-r1: the red run).
     override func setUp() {
         savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12
-        savedLean = BlobBrain.leanFeetFollow
-        if ProcessInfo.processInfo.environment["FOCUSLEGS_BASE"] == "1" { BlobBrain.leanFeetFollow = false }
+        savedLean = BlobBrain.leanFeetFollow; savedReplant = BlobBrain.replantOn
+        let base = ProcessInfo.processInfo.environment["FOCUSLEGS_BASE"] == "1"
+        BlobBrain.leanFeetFollow = !base; BlobBrain.replantOn = !base          // (the candidate is off in the game until its render is fixed: the tests measure it switched on)
     }
-    override func tearDown() { DayClock.shared.forcedHour = savedHour; BlobBrain.leanFeetFollow = savedLean }
+    override func tearDown() { DayClock.shared.forcedHour = savedHour; BlobBrain.leanFeetFollow = savedLean; BlobBrain.replantOn = savedReplant }
 
     /// The bug itself, kept as a pinned "before": with the fix off, a Panda petted long on one side stretches the high side's leg past the limit.
     func testBeforeTheFixThePettedLegStretched() {

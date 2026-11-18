@@ -1158,7 +1158,7 @@ final class BlobBrain {
 
     /// focus-legs-r1: a standing body whose root was carried off a planted foot (a neighbour's press, a settle, the end of an arrival) re-plants that foot with one small
     /// ordinary step square under him, the worse foot first, once it is `replantAt` off; never in a meal's calm wait or a social hold (their own stance code owns the feet).
-    nonisolated(unsafe) static var replantOn = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "LeanFeet") != nil && UserDefaults.standard.integer(forKey: "LeanFeet") == 0)
+    nonisolated(unsafe) static var replantOn = DevArgs.enabled && UserDefaults.standard.integer(forKey: "LeanFeet") == 1          // (off by default with the lean lift: not yet seen in the real app)
     static let replantAt: Float = 0.045
     func replantDrifted() {
         guard Self.replantOn, feetInit, geom.valid, !feet.active, !reserved, !socialBook.hold, social == nil else { return }
@@ -2089,7 +2089,8 @@ final class BlobBrain {
     nonisolated(unsafe) static var onePieceVolley = true          // (false = pads in the volley's airborne / tipped phases: the e4062d6 behaviour, for before / after captures)
     nonisolated(unsafe) static var forceLegsFix = true          // (false = the behaviour before 2026-10-28: tests / before-after captures)
     /// focus-legs-r1: the high side's planted foot rides up with its hip while a standing body leans about the middle of its soles (driveLimbs). false = before (captures: `-LeanFeet 0`).
-    nonisolated(unsafe) static var leanFeetFollow = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "LeanFeet") != nil && UserDefaults.standard.integer(forKey: "LeanFeet") == 0)
+    /// OFF by default (2026-11-18): the real-app render of the lifted foot tears (a jagged black sliver + collar fragments at the join, Panda close-up); `-LeanFeet 1` turns the candidate on for captures.
+    nonisolated(unsafe) static var leanFeetFollow = DevArgs.enabled && UserDefaults.standard.integer(forKey: "LeanFeet") == 1
     /// Hip rise (m) under which the foot stays planted as it is (the breathing / jiggle noise of a body standing square).
     static let leanFeetFrom: Float = 0.002
     /// The lift the lean gave each foot this tick (m, 0 = none): the post-step refit adds what the body's further roll in the step lifted that hip by.
