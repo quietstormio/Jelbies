@@ -14,7 +14,7 @@ enum SupportText {
             "Drink: tap the heart, then Drink.",
             "Power-ups: some foods give a boost for a while. The Shop shows which.",
             "Favourite food: every Jelmiko loves one food. Its power-up lasts twice as long.",
-            "Clean: tap your Jelmiko, then Clean, to scrub, rinse and shine.",
+            "Clean: tap your Jelmiko, then Clean, to scrub, rinse and shine. Need a hand? Turn on Bath helper in Accessibility.",
             "Play: tap Play and pick a toy.",
             "Call by name: hold the mic button and say your Jelmiko's name.",
             "Jelly Race, Jelly Show and Jelly Volleyball: go out to compete and earn JellyCoins."]),
