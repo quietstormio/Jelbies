@@ -140,9 +140,8 @@ nonisolated enum StoreCatalog {
         StoreItem(id: "popsicle", name: "Ice pop", kind: .treat, price: 12, perk: .cozy, description: "Cool and calm. Stays happy longer for 4 hours.", symbol: "birthday.cake.fill", food: "popsicle"),
         StoreItem(id: "onigiri", name: "Onigiri", kind: .treat, price: 12, perk: .fullBelly, description: "A rice ball. Hunger falls slower for 4 hours.", symbol: "birthday.cake.fill", food: "onigiri"),
         StoreItem(id: "cookie", name: "Bedtime cookie", kind: .treat, price: 10, perk: .bedtime, description: "Naps last longer and needs drop slower while asleep. Lasts 8 hours.", symbol: "moon.zzz.fill", food: "cookie"),
-        // care supplies (used from Clean)
+        // care supplies: the five soaps (the Lint-guard spray was retired 2026-11-17: owned sprays became Mint soap bars, StoreBook+RetiredSupplies.swift)
         StoreItem(id: "lavender", name: "Lavender soap", kind: .supply, price: 20, perk: .shine, description: "Lavender scent, purple foam. The shine after a bath lasts much longer (12 hours).", symbol: "sparkles"),
-        StoreItem(id: "lintguard", name: "Lint-guard spray", kind: .supply, price: 18, perk: .tidy, description: "Lint comes back half as fast for 6 hours.", symbol: "wind"),
         // soaps (2026-11-17): picked before a bath (Bath/Soaps.swift); one bar is used up by a finished bath. The Jelly soap is free and always there.
         StoreItem(id: "mintsoap", name: "Mint soap", kind: .supply, price: 25, perk: .fresh, description: "Mint scent, green foam. Stays clean about 50% longer after the bath.", symbol: "leaf.fill"),
         StoreItem(id: "berrysoap", name: "Berry soap", kind: .supply, price: 18, perk: .bubbly, description: "Berry scent, pink foam. Extra bubbles, a few hearts and a little love in the bath.", symbol: "bubbles.and.sparkles.fill"),

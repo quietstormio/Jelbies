@@ -74,10 +74,14 @@ extension GameCare {
 
     /// The bought soaps the player has at least one bar of, in the soaps' order.
     var ownedSoaps: [Soap] { Soap.allCases.filter { s in s.storeID.map { store.count($0) > 0 } ?? false } }
-    /// The tiles of the pick card: the free Jelly soap first, then the owned ones (up to six).
+    /// Any bought soap in the Bag (a cheap check: no soap art or model is touched until the card shows).
+    var hasBoughtSoap: Bool { Soap.boughtIDs.contains { store.count($0) > 0 } }
+    /// The tiles of the pick card: the free Jelly soap first, then the owned soaps (up to six).
     var soapChoices: [Soap] { [.jelly] + ownedSoaps }
+    /// Bars of `soap` in the Bag (the free Jelly soap: nil).
+    func soapCount(_ soap: Soap) -> Int? { soap.storeID.map { store.count($0) } }
     static let lastSoapKey = "BathLastSoap"
-    /// The soap used last time, if it is still owned (else the Jelly soap): preselected on the card.
+    /// The soap used last time, if it is still owned (else the Jelly soap): ringed on the card.
     var preselectedSoap: Soap {
         guard let id = UserDefaults.standard.string(forKey: Self.lastSoapKey), let s = Soap.of(storeID: id), ownedSoaps.contains(s) else { return .jelly }
         return s
@@ -85,13 +89,20 @@ extension GameCare {
     /// A tile of the pick card was tapped: the bath starts with that soap (the Jelly soap is free and uses nothing).
     func chooseSoap(_ soap: Soap) {
         guard let who = soapPrompt else { return }
+        if let sid = soap.storeID, store.count(sid) == 0 { return }
         soapPrompt = nil
         var ids = (armedSupplies[who] ?? []).filter { Soap.of(storeID: $0) == nil }
         if let sid = soap.storeID { ids.append(sid) }
         armedSupplies[who] = ids
-        soapChosen = true
         AudioHub.shared.uiTap()
         clean(jelly: who)
+        if !bath.active { armedSupplies[who] = (armedSupplies[who] ?? []).filter { Soap.of(storeID: $0) == nil } }          // the bath could not start (the moment was gone): the pick does not stay armed, so the next Clean shows the card again
+    }
+    /// The card closes by itself when the moment is gone (a meal, a call, sleep, a trip, another bath).
+    func soapCardTick() {
+        guard let who = soapPrompt else { return }
+        let asleep = brainFor(who)?.isSleeping ?? false
+        if !canClean(jelly: who) || asleep || callRunning || meal != nil || wanted != nil || groupActive || bath.active || !hasBoughtSoap { soapPrompt = nil }
     }
     func dismissSoapCard() { soapPrompt = nil }
 

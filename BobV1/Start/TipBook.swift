@@ -52,7 +52,7 @@ final class TipBook {
     /// The cards, word for word from the design (the Play card wording is the spec's spare line, "bump" made "bumps").
     static let cards: [TipCard] = [
         TipCard(id: "feed", symbol: "fork.knife", title: "Feeding", body: "Tap a food to put it on the tray. No food? Get some in the Shop."),
-        TipCard(id: "clean", symbol: CareMenu.cleanSymbol, title: "Bath time", body: "Scrub, rinse, then rub to shine. Clean ones glow in the Jelly Show."),
+        TipCard(id: "clean", symbol: CareMenu.cleanSymbol, title: "Bath time", body: "Scrub, rinse, then rub to shine. Need a hand? Turn on Bath helper in Accessibility."),
         TipCard(id: "tricks", symbol: HUDMenu.symbol(.tricks), title: "Tricks", body: "Tap a trick and your Jelmiko does it. Locked ones are in the Shop."),
         TipCard(id: "dress", symbol: HUDMenu.symbol(.dress), title: "Dress up", body: "Tap Wear to put clothes on. Get more clothes in the Shop."),
         TipCard(id: "decor", symbol: HUDMenu.symbol(.decor), title: "Decor", body: "Tap Place to put it in your room. Get toys in the Shop."),

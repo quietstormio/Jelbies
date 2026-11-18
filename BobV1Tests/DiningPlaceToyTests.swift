@@ -12,12 +12,14 @@ import simd
 
 @MainActor
 final class DiningPlaceToyTests: XCTestCase {
+    private var savedHour: Double?          // (the day clock as this class found it: put back in tearDown)
     private var feet: [DecorFoot] = [], balls: [BallSphere] = [], boxes: [RoomLayout.FlatBox] = [], tables: [Int: RoomLayout.FlatBox] = [:]
     override func setUp() {
+        savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12          // (2026-11-17: the night rest follows the real clock; dining tests run at noon)
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)          // (LineupTests' set-up: the walkable width and the on-screen test must not depend on a suite that ran before)
         feet = RoomLayout.decorFeet; balls = RoomLayout.ballSpheres; boxes = RoomLayout.dynamicBoxes; tables = RoomLayout.tableBoxes
         RoomLayout.decorFeet = []; RoomLayout.ballSpheres = []; RoomLayout.dynamicBoxes = []; RoomLayout.tableBoxes = [:] }
-    override func tearDown() { RoomLayout.decorFeet = feet; RoomLayout.ballSpheres = balls; RoomLayout.dynamicBoxes = boxes; RoomLayout.tableBoxes = tables }
+    override func tearDown() { DayClock.shared.forcedHour = savedHour; RoomLayout.decorFeet = feet; RoomLayout.ballSpheres = balls; RoomLayout.dynamicBoxes = boxes; RoomLayout.tableBoxes = tables }
 
     private let surveyToy = SIMD2<Float>(0.4, 1.1), surveySpot = SIMD2<Float>(1.6, 2.2)
 

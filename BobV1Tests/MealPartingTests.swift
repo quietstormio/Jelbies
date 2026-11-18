@@ -10,8 +10,9 @@ import simd
 
 @MainActor
 final class MealPartingTests: XCTestCase {
-    override func setUp() { RoomLayout.dynamicBoxes = [] }
-    override func tearDown() { RoomLayout.dynamicBoxes = [] }
+    private var savedHour: Double?          // (the day clock as this class found it: put back in tearDown)
+    override func setUp() { savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12; RoomLayout.dynamicBoxes = [] }
+    override func tearDown() { DayClock.shared.forcedHour = savedHour; RoomLayout.dynamicBoxes = [] }
 
     func testReservedDinerGetsNoPartingRetreatButFreeOneDoes() {
         let lab = SocialTests.Lab(n: 2, positions: [SIMD2(-0.3, 1.0), SIMD2(0.2, 1.0)])

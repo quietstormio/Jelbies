@@ -47,7 +47,7 @@ struct BathChrome: View {
                 .animation(.easeInOut(duration: 0.2), value: bath.stageComplete)
                 .transition(.opacity)
             }
-            if care.soapPrompt != nil { SoapPickCard(care: care, ps: ps, landscape: HUDLayout.isLandscape(vsc: vsc, size: viewSize)).transition(.opacity) }
+            if care.soapPrompt != nil { SoapPickCard(care: care, ps: ps, landscape: HUDLayout.isLandscape(vsc: vsc, size: viewSize), width: viewSize.width).transition(.opacity) }
             Color.white.opacity(Double(bath.wipe))          // the fade to white; the world swaps only while this is fully opaque
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
@@ -152,7 +152,7 @@ struct BathChrome: View {
     /// It never presses Next for them.
     @ViewBuilder
     private var helpButton: some View {
-        if !bath.stageComplete {
+        if !bath.stageComplete, A11ySettings.shared.showsBathHelper {
             Button { bath.assistScrub.toggle(); AudioHub.shared.uiTap() } label: {
                 HStack(spacing: 8) {
                     Image(systemName: bath.assistScrub ? "hand.raised.slash.fill" : "hand.point.up.left.fill")

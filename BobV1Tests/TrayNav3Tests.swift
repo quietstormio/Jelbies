@@ -13,8 +13,9 @@ import simd
 
 @MainActor
 final class TrayNav3Tests: XCTestCase {
-    override func setUp() { RoomLayout.dynamicBoxes = [] }
-    override func tearDown() { RoomLayout.dynamicBoxes = [] }
+    private var savedHour: Double?          // (the day clock as this class found it: put back in tearDown)
+    override func setUp() { savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12; RoomLayout.dynamicBoxes = [] }
+    override func tearDown() { DayClock.shared.forcedHour = savedHour; RoomLayout.dynamicBoxes = [] }
 
     static let front = SIMD2<Float>(0, 2.3), spot = SIMD2<Float>(0, 1.3), left = SIMD2<Float>(-0.9, 1.3), right = SIMD2<Float>(0.9, 1.3)
     static let frontL = SIMD2<Float>(-0.9, 2.2), frontR = SIMD2<Float>(0.9, 2.2), behind = SIMD2<Float>(0, -0.3)

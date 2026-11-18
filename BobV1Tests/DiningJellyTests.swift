@@ -12,6 +12,9 @@ import UIKit
 
 @MainActor
 final class DiningJellyTests: XCTestCase {
+    private var savedHour: Double?          // (the day clock as this class found it: put back in tearDown)
+    override func setUp() { super.setUp(); savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12 }          // (2026-11-17: the night rest follows the real clock; dining tests run at noon)
+    override func tearDown() { DayClock.shared.forcedHour = savedHour; super.tearDown() }
     nonisolated(unsafe) static var keep: [AnyObject] = []
 
     /// Three Jellies on the stage's per-step order: every brain, Bob's care tick, the others' tick, the bodies, the held-piece refresh.

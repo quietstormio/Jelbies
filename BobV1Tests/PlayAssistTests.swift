@@ -132,6 +132,18 @@ final class PlayAssistTests: XCTestCase {
         XCTAssertFalse(bath.assistScrub)
     }
 
+    func testTheBathHelperButtonIsOffUnlessTheSettingVoiceOverOrSwitchControlIsOn() {
+        let d = UserDefaults(suiteName: "PlayAssistTests.helper")!; d.removePersistentDomain(forName: "PlayAssistTests.helper")
+        let a = A11ySettings(defaults: d)
+        XCTAssertFalse(a.bathHelper, "off by default")
+        XCTAssertFalse(A11ySettings.bathHelperShown(setting: a.bathHelper, voiceOver: false, switchControl: false), "no button on the bath screen")
+        a.bathHelper = true
+        XCTAssertTrue(A11ySettings.bathHelperShown(setting: a.bathHelper, voiceOver: false, switchControl: false), "the setting shows it")
+        XCTAssertTrue(A11ySettings(defaults: d).bathHelper, "and it is saved")
+        XCTAssertTrue(A11ySettings.bathHelperShown(setting: false, voiceOver: true, switchControl: false), "VoiceOver shows it without the setting")
+        XCTAssertTrue(A11ySettings.bathHelperShown(setting: false, voiceOver: false, switchControl: true), "Switch Control too")
+    }
+
     func testWithoutTheAssistNothingScrubs() {
         guard let (bath, brain) = bathAtSoap() else { return XCTFail("soap") }
         for _ in 0..<(60 * 10) { bath.tick(brain: brain, sim: nil, play: nil, dt: 1 / 60) }
