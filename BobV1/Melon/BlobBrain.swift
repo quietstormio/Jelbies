@@ -2223,6 +2223,7 @@ final class BlobBrain {
                 }
                 if runAir > 0.003 { h += runAir }       // the run's flight: both feet leave the floor (the bean tucks up under him)
                 var wanted = xz + outV
+                var leanFree: Float = 0
                 let bc = bodyPos(c)
                 // LEAN FEET (focus-legs-r1, the owner: "Look at pandas leg bro"): a standing body leaning about the middle of its soles (the pet lean, the phone tilt, the
                 // grumpy lean-away, a lean into a partner) lifts the hip of the foot on its high side by ~0.2 sin(roll). The planted foot used to stay on the floor under
@@ -2237,32 +2238,37 @@ final class BlobBrain {
                     let fo = fitted.centroid + fitted.rotation.act(geom.contact[1 - s] - c0)
                     let e = fc.y - fo.y
                     if e > Self.leanFeetFrom {
-                        let k = smooth01((e - Self.leanFeetFrom) / 0.02)
-                        wanted += (SIMD2(fc.x, fc.z) - wanted) * k
-                        h += e - Self.leanFeetFrom
+                        // 2026-11-18 (install 8): NO foot piece for a lean. The first candidate drew the lifted foot as a bean, rounded toward the ball and pulled up into the
+                        // belly, and the real-app close-up showed a torn black sliver at the join. Now the high side's foot is let go by the sim (its particles' world target
+                        // fades out), so the body's own embedded boot rides up with the body, attached as at rest; the lean asks for no bean. A bean that is already out
+                        // (a step just before) follows the hip up, keeping its boot shape.
+                        leanFree = smooth01((e - Self.leanFeetFrom) / 0.01)
+                        wanted += (SIMD2(fc.x, fc.z) - wanted) * leanFree
                         leanLift[s] = e - Self.leanFeetFrom
+                        h += leanLift[s]
                     }
                 }
-                let offFull = wanted - SIMD2(bc.x, bc.z)
+                let offFull = wanted - SIMD2(bc.x, bc.z), offPlanted = offFull * (1 - leanFree)
                 var simD = offFull; let sl = simd_length(simD)
                 if sl > simFootCap { simD *= simFootCap / sl }
-                let hs = min(h, simFootCap)
+                let hs = min(h - leanLift[s], simFootCap)
                 footShift[s] = SIMD3(simD.x, hs, simD.y)
+                let kS = k * (1 - leanFree)
                 for (i, p) in geom.particles[s].enumerated() {
                     let r = geom.rest[s][i]
                     let bp = bodyPos(r)
-                    list.append(ParticleTarget(index: p, pos: SIMD3(bp.x + simD.x, sim.floorY + r.y + hs, bp.z + simD.y), stiffness: k))
+                    list.append(ParticleTarget(index: p, pos: SIMD3(bp.x + simD.x, sim.floorY + r.y + hs, bp.z + simD.y), stiffness: kS))
                 }
                 // BEAN: a foot that is stepping, displaced from the body's own foot, lifted or waving needs the bean; both feet still at their rest
-                // spots for beanHoldTime lets the beans go (one swap per action, never per step)
-                if (feet.active || simd_length(offFull) > 0.012 || h > 0.006 || waveLift > 0.02) { want = true }
+                // spots for beanHoldTime lets the beans go (one swap per action, never per step). A lean's lift is not a reason (above).
+                if (feet.active || simd_length(offPlanted) > 0.012 || h - leanLift[s] > 0.006 || waveLift > 0.02) { want = true }
                 if waveLift > 0.02 { waveAskedBeans = true }
                 if waving && s == (armSide > 0 ? 1 : 0) { waveNearOff = simd_length(offFull); waveNearShift = footShift[s] }
                 let ct = cosf(tilt), st = sinf(tilt), hz = geom.heelZ[s] - c.z
                 let ys: Float = 1
                 let wy = sim.floorY + c.y + h
                 var bv = beanScratch[s]
-                var mo = Self.beanMorph(clearance: h); if idleState.kind == .moonwalk, idleState.trick.heelUp[s] != 0 { mo = 0 }; beanMorphLast[s] = mo           // planted = the boot, lifted = a rounded ball (user 2026-10-17), smoothly in between
+                var mo = Self.beanMorph(clearance: h - leanLift[s]); if idleState.kind == .moonwalk, idleState.trick.heelUp[s] != 0 { mo = 0 }; beanMorphLast[s] = mo           // planted = the boot, lifted = a rounded ball (user 2026-10-17), smoothly in between
                 for i in 0..<FootBean.vertexCount {
                     let l = FootBean.morphed(i, mo)
                     let ly = l.y * ys, zr = l.z - hz           // tilt about the heel
