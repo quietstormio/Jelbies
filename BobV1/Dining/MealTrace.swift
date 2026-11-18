@@ -5,6 +5,7 @@
 //  `-DiningSpot x,z`         forces the tray origin of the next group meal (once).
 //  `-MealStart "x,z;x,z;.."` puts the Jelbies (in id order) on these floor points at the Feed order, right before the group starts (once).
 //  `-MealOld 1`              turns the new meal-flow flags off (A/B captures).
+//  `-MealPose 1`             also writes a `pose` line every fixed step for every diner (brain root, floor point, yaw, activity): the meal smoothness survey (2026-11-16).
 //
 
 import Foundation
@@ -36,6 +37,8 @@ nonisolated enum MealTrace {
     nonisolated(unsafe) static var awakeT: Float = 0
     nonisolated(unsafe) static var awakeDone = false
     private static let path: String? = arg("-MealTraceFile")
+    /// `-MealPose 1`: a `pose` line every fixed step (see `poseOn`).
+    private static let pose: Bool = arg("-MealPose") == "1"
     #endif
 
     /// Single-flow trace state (GameCare+Dining.traceSingle).
@@ -50,6 +53,17 @@ nonisolated enum MealTrace {
         return false
         #endif
     }
+
+    /// True when `-MealPose 1` asks for a pose line every fixed step (simulator only, and only with a trace file).
+    static var poseOn: Bool {
+        #if targetEnvironment(simulator)
+        return pose && path != nil
+        #else
+        return false
+        #endif
+    }
+    /// Sim seconds since the single flow's order (its pose lines).
+    nonisolated(unsafe) static var singleAge: Float = 0
 
     /// The Feed order was just seen: the clock for every later line starts here.
     static func begin(_ what: @autoclosure () -> String) {

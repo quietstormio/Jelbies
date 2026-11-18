@@ -267,6 +267,10 @@ final class DiningGroup {
         }
         guard dining.phase == .absent, dining.spawn(serving: serving, n: n, bobAt: SIMD2(99, 99), forcedOrigin: origin) else { return }
         MealTrace.log("tray pop reason=\(popReason) inFront=\(frontCount()) age=\(age)")
+        #if targetEnvironment(simulator)
+        let box = dining.drawnBox(scale: 1)
+        MealTrace.log("tray box c=(\(box.centre.x),\(box.centre.y)) half=(\(box.half.x),\(box.half.y)) stands=" + dining.places.map { "(\($0.stand.x),\($0.stand.y))" }.joined(separator: ";"))
+        #endif
         for i in brains.indices {
             paid[i] = 0
             if let tierOf { tiers[i] = tierOf(memberIDs[i]); piecesFor[i] = MealAppetite.pieces(tiers[i]) }
@@ -359,6 +363,17 @@ final class DiningGroup {
         if Int(age * 10) != tracePosTick {
             tracePosTick = Int(age * 10)
             MealTrace.log("pos " + brains.indices.map { i in let f = floor(i); return "\(memberIDs[i])@p\(placeOf[i])=(\(String(format: "%.3f,%.3f", f.x, f.y)))\(started[i] ? "s" : "")\(released.indices.contains(i) && released[i] ? "r" : "")" }.joined(separator: " ") + " tray=\(trayOut ? 1 : 0)")
+        }
+        if MealTrace.poseOn {
+            // (every fixed step) each diner's brain root, floor point, yaw and activity: the meal smoothness survey reads stalls, reversals, yaw snaps and shoves from these
+            var line = String(format: "pose a=%.4f", age)
+            for i in brains.indices {
+                let b = brains[i], f = floor(i)
+                let flags = (started[i] ? "s" : "-") + (released.indices.contains(i) && released[i] ? "r" : "")
+                line += " \(memberIDs[i])@p\(placeOf[i])=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", b.position.x, b.position.y, f.x, f.y, b.yaw) + ",\(b.activity),\(flags)"
+            }
+            line += trayOut ? " tray=1" : " tray=0"
+            MealTrace.log(line)
         }
         let box = dining.drawnBox(scale: max(dining.scale, 0.001))
         for i in brains.indices where !(released.indices.contains(i) && released[i]) {

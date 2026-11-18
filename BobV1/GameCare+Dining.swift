@@ -24,7 +24,7 @@ extension GameCare {
     /// paid as eaten, the refusal label, the re-serve loop. Jelly 0 keeps the Call / queued-request gating it always had.
     func tickDining(id: Int, brain: BlobBrain, sim: SoftBody?, dt: Float) {
         if id == 0, notice != nil { noticeAge += dt; if noticeAge > 1.9 { notice = nil } }
-        traceSingle(id: id, brain: brain)
+        traceSingle(id: id, brain: brain, sim: sim, dt: dt)
         if !groupActive {             // single serving: the Jelly the tray is for waits where he stands (reserved), everybody else is free (a group's waiter stays reserved between its sittings)
             let reserving = id == mealJelly && (wanted != nil || meal != nil)
             brain.reserved = reserving
@@ -95,17 +95,27 @@ extension GameCare {
     }
 
     /// Simulator-only meal trace for the single flow (one line per change): the order, the tray out, the first piece, the end.
-    private func traceSingle(id: Int, brain: BlobBrain) {
+    private func traceSingle(id: Int, brain: BlobBrain, sim: SoftBody?, dt: Float) {
         #if targetEnvironment(simulator)
         guard !groupActive, id == mealJelly else { return }
         if wanted != nil, !MealTrace.singleActive { MealTrace.singleActive = true; MealTrace.singleTray = false; MealTrace.singleBite = false; MealTrace.singleGone = false; MealTrace.singleOver = false; MealTrace.begin("single order jelly=\(id) kind=\(wanted?.kind == .food ? "food" : "drink")") }
-        if meal != nil, dining.isPresent, !MealTrace.singleTray { MealTrace.singleTray = true; MealTrace.log("single tray out") }
+        if meal != nil, dining.isPresent, !MealTrace.singleTray {
+            MealTrace.singleTray = true; MealTrace.log("single tray out")
+            let box = dining.drawnBox(scale: 1)
+            MealTrace.log("tray box c=(\(box.centre.x),\(box.centre.y)) half=(\(box.half.x),\(box.half.y)) stands=" + dining.places.map { "(\($0.stand.x),\($0.stand.y))" }.joined(separator: ";"))
+        }
         if let c = meal, dining.isPresent, !dining.bitesLeft.isEmpty {
             let got = c.kind == .drink ? Int((dining.drunk[0] * Float(DiningTiming.gulpsPerDrink) + 0.001).rounded(.down)) : DiningTiming.bitesPerServing - dining.bitesLeft[0]
             if got > 0, !MealTrace.singleBite { MealTrace.singleBite = true; MealTrace.log("single first piece eaten (\(got))") }
         }
         if wanted == nil, meal == nil, MealTrace.singleActive, !MealTrace.singleOver { MealTrace.singleOver = true; MealTrace.log("single meal over paid=\(mealPaid)") }
         if MealTrace.singleActive, dining.phase == .absent, meal == nil, wanted == nil, !MealTrace.singleGone { MealTrace.singleGone = true; MealTrace.singleActive = false; MealTrace.log("single tray gone") }
+        if MealTrace.singleActive { MealTrace.singleAge += dt } else { MealTrace.singleAge = 0 }
+        if MealTrace.poseOn, MealTrace.singleActive {
+            // (every fixed step) the single eater's brain root, floor point, yaw and activity: the meal smoothness survey
+            let f = Self.floorPos(brain, sim)
+            MealTrace.log(String(format: "pose a=%.4f", MealTrace.singleAge) + " \(id)@p0=" + String(format: "%.4f,%.4f,%.4f,%.4f,%.4f", brain.position.x, brain.position.y, f.x, f.y, brain.yaw) + ",\(brain.activity),-" + (dining.isPresent ? " tray=1" : " tray=0"))
+        }
         #endif
     }
 

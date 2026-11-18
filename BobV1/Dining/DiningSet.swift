@@ -123,6 +123,25 @@ nonisolated enum DiningSpot {
         return false
     }
 
+    /// A diner's PLACE must be clear of loose things too, not only the tray: his stand and his approach point (`placeApproachBack` behind it, where he waits for the tray)
+    /// keep a loose toy / ball this far beyond its own radius (his body, 0.35, and a margin). `blockedByLooseThings` tests the tray rectangle only, so a stand could land on
+    /// a toy (2026-11-16 feeding survey, blocks at (0.4, 1.1), tray at (1.6, 2.2): place 1's stand 0.09 from the blocks; its diner froze mid-walk, was re-sent twice and
+    /// the tray popped by the 12 s cap with him out of his place).
+    static let placeLooseClear: Float = 0.4
+    /// The meal's approach point lies this far behind each stand (= GameCare.approachBack; DiningPlaceToyTests checks they match).
+    static let placeApproachBack: Float = 0.25
+    static func placeBlockedByLooseThings(_ stand: SIMD2<Float>) -> Bool {
+        let pts = [stand, SIMD2(stand.x, stand.y - placeApproachBack)]
+        for f in RoomLayout.decorFeet where f.kind.category == .toys {
+            let c = DecorField.shared.position(f)
+            for p in pts where simd_distance(p, c) < f.radius + placeLooseClear { return true }
+        }
+        for b in RoomLayout.ballSpheres {
+            for p in pts where simd_distance(p, b.c) < b.r + placeLooseClear { return true }
+        }
+        return false
+    }
+
     static func isClear(origin o: SIMD2<Float>, layout L: TrayLayout, of bob: SIMD2<Float>, aspect: Float) -> Bool {
         guard distance(from: bob, origin: o, layout: L) >= bobClearance else { return false }
         guard !blockedByLooseThings(origin: o, layout: L) else { return false }
@@ -165,7 +184,7 @@ nonisolated enum DiningSpot {
             while cz <= maxZ + 1e-4 {
                 let o = SIMD2<Float>(cx, cz)
                 if isClear(origin: o, layout: L, of: bob, aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear, FreeFloor.isFree(o, radius: 0.9),
-                   L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) }) { open.append(o) }
+                   L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) && !placeBlockedByLooseThings(o + $0.rel) }) { open.append(o) }
                 cz += 0.2
             }
             cx += 0.2
