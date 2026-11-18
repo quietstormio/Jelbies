@@ -100,6 +100,10 @@ final class DiningGroup {
     nonisolated(unsafe) static var wideRow: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealWideRow") != nil && UserDefaults.standard.integer(forKey: "MealWideRow") == 0)
     /// `endsLayout` (`-MealEnds 0`): the three-place home sitting seats two diners at the tray's two ENDS (45 deg toward tray and camera) and one in the middle behind it (DiningLayout.ends); it wins over `wideRow`.
     nonisolated(unsafe) static var endsLayout: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealEnds") != nil && UserDefaults.standard.integer(forKey: "MealEnds") == 0)
+    /// ENDS layout: when a diner starts in FRONT of his place's line he has to come round the tray, and once both end places are taken there is no way past (tray + two bodies fill the floor):
+    /// the others, who could walk straight to their stands, wait where they are until he is behind his line (or `holdMax` s have passed), then walk straight.
+    private var held: Set<Int> = []
+    static let holdMax: Float = 7
     private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
@@ -376,7 +380,7 @@ final class DiningGroup {
     }
 
     private func beginApproach() {
-        state = .approaching; requested = false; settle = 0; earlyPop = false
+        state = .approaching; requested = false; settle = 0; earlyPop = false; held = []
         readyT = [Float](repeating: 0, count: n)
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
@@ -386,6 +390,7 @@ final class DiningGroup {
         for i in brains.indices where !released[i] {
             // a diner who starts at or behind his stand line walks straight to his stand (`startSitting`: the dine request walks, squares up on the way and eats); only one who has to come round uses the approach point
             if Self.straightWalk, forcedOrigin == nil, trayOut, floor(i).y <= stands[placeOf[i]].y + GameCare.popTolerance {
+                if DiningLayout.ends, sideSet, frontCount() > 0 { held.insert(i); MealTrace.log("diner \(memberIDs[i]) held for the diner coming round"); continue }
                 started[i] = true; MealTrace.log("diner \(memberIDs[i]) straight start place=\(placeOf[i]) from=(\(floor(i).x),\(floor(i).y))"); startSitting(i)
             } else { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken at once, not softly: BlobBrain+SleepForce)
         }
@@ -569,6 +574,10 @@ final class DiningGroup {
                     spawnTray()
                 }
             }
+            if !held.isEmpty, frontCount() == 0 || age > Self.holdMax {
+                for i in held.sorted() where !started[i] { started[i] = true; MealTrace.log("diner \(memberIDs[i]) straight start (released from hold) place=\(placeOf[i])"); startSitting(i) }
+                held = []
+            }
             if earlyPop { releaseFinished() }          // (an awake diner who has eaten his share does not stand held until the last sleeper has come)
             replan(dt: dt)
             for i in brains.indices {          // (C3: how long each has stood ready; the calm wait faces his place again after anything that cleared it, e.g. picked up and put down)
@@ -584,7 +593,7 @@ final class DiningGroup {
                 brains[i].requestHard(.goTo(approachPoint(blob: i)))
             }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
-            for i in brains.indices where !started[i] && !ready(i) && isIdle(brains[i]) {
+            for i in brains.indices where !started[i] && !held.contains(i) && !ready(i) && isIdle(brains[i]) {
                 // (while another Jelly is still walking in he may brush past and nudge a waiting one off his spot: nobody is given up on, or sent again, until the room has settled)
                 guard !started[i] else { continue }
                 idle[i] += dt
