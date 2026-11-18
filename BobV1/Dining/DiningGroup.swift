@@ -143,7 +143,7 @@ final class DiningGroup {
     private func rollVariance() {
         var s: UInt64
         if let f = Self.varianceSeed { s = f } else { Self.mealCounter += 1; s = DevArgs.enabled ? Self.mealCounter &* 0x2545F4914F6CDD1D : UInt64.random(in: 1...UInt64.max) }
-        var offsets: [Float] = [0, 0.30 + 0.04 * VarianceRNG.unit(&s), 0.62 + 0.06 * VarianceRNG.unit(&s)].prefix(n).map { $0 }
+        var offsets: [Float] = [0, 0.40 + 0.04 * VarianceRNG.unit(&s), 0.82 + 0.06 * VarianceRNG.unit(&s)].prefix(n).map { $0 }
         for k in stride(from: offsets.count - 1, to: 0, by: -1) { offsets.swapAt(k, Int(VarianceRNG.next(&s) % UInt64(k + 1))) }          // (a seeded shuffle: not always the same place first)
         varDelay = offsets
         // personalities (a seeded shuffle of 0 eager / 1 savouring / 2 chatty): the eager one paces up and goes first, the savouring one slows down and goes last
@@ -572,7 +572,7 @@ final class DiningGroup {
             brains[i].dinePlan = GameCare.plan(for: serving, tier: tiers[i], tray: dining, place: placeOf[i])
             if !eager { brains[i].dinePlan.pace = 1 }
             if Self.variance, varDelay.indices.contains(i) {
-                brains[i].dinePlan.pace *= varPace[i]; brains[i].dinePlan.startDelay = 0; brains[i].dinePlan.pauseMax = 0.3; brains[i].dinePlan.rngSeed = varSeeds[i]
+                brains[i].dinePlan.pace *= varPace[i]; brains[i].dinePlan.startDelay = 0; brains[i].dinePlan.pauseMax = 0.2; brains[i].dinePlan.rngSeed = varSeeds[i]
                 // the first chomp / gulp lands at popAge + base + his offset (the lean is scheduled back from it by his own lead at his own pace), not his lean start
                 let sip = serving.eatStyle == .sip
                 if varBaseCache == nil { varBaseCache = brains.indices.map { j in BlobBrain.dineLead(sip: sip, pace: (eager ? MealAppetite.pace(tiers[j]) : 1) * varPace[j]) }.max() ?? 1 }
