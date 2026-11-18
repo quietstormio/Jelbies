@@ -176,6 +176,22 @@ nonisolated enum DiningSpot {
         MealTrace.log("choose branch=\(r.branch) spot=(\(r.spot.x),\(r.spot.y)) n=\(L.places.count) jellies=\(jellies.count)")
         return r.spot
     }
+    /// The open spots (every clearance) for this layout; empty = none (the wide row asks, to fall back to the old spacing).
+    static func openSpots(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float = GameCamera.aspect, jellies: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        var open: [SIMD2<Float>] = []
+        var cx: Float = -1.6
+        while cx <= 1.6001 {
+            var cz: Float = 0.6
+            while cz <= maxZ + 1e-4 {
+                let o = SIMD2<Float>(cx, cz)
+                if isClear(origin: o, layout: L, of: bob, aspect: aspect), minJellyDistance(o, layout: L, jellies: jellies) >= jellyClear, FreeFloor.isFree(o, radius: 0.9),
+                   L.places.allSatisfy({ FreeFloor.isFree(o + $0.rel, radius: 0.7) && placeReachable(o + $0.rel) && !placeBlockedByLooseThings(o + $0.rel) }) { open.append(o) }
+                cz += 0.2
+            }
+            cx += 0.2
+        }
+        return open
+    }
     private static func chooseTraced(bob: SIMD2<Float>, layout L: TrayLayout, aspect: Float, jellies: [SIMD2<Float>]) -> (spot: SIMD2<Float>, branch: String) {
         var open: [SIMD2<Float>] = []
         var cx: Float = -1.6

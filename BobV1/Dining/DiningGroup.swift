@@ -88,7 +88,17 @@ final class DiningGroup {
     /// between two standing diners. Since 2026-11-17 a DRINK sitting at the home tray is never re-planned either (the feeding survey: drinks, still re-planned, had the most
     /// stop-and-go and swings of every case), but it keeps the smart FIRST plan (`Lineup.best`): x-order breaks near-ties by index, and three on one side at the same x
     /// then crossed and waited on each other (LineupTests oneSide 10.8 s vs 5.9 s). Only the café keeps the smart line-up with `replan` exactly as before.
-    nonisolated(unsafe) static var orderedPlaces: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "DiningOrdered") == 1
+    nonisolated(unsafe) static var orderedPlaces: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DiningOrdered") != nil && UserDefaults.standard.integer(forKey: "DiningOrdered") == 0)          // (feeding-old-r1 follow-up: ON again, `-DiningOrdered 0` = the smart line-up)
+    /// feeding-old-r1 follow-up (2026-11-18), each `-X 0` = the 6f246ad3 behaviour (simulator / dev builds):
+    /// `orderedDrinks` (`-MealOrderedDrink 0`): a DRINK sitting is seated left-to-right by the diners' floor x too (the leftmost takes the left place), not by the smart plan.
+    /// `trayToThem` (`-MealTrayToThem 0`): the home tray's spot is the open spot where the fewest diners start in front of their stand line, then the least total walking (not random).
+    /// `straightWalk` (`-MealStraight 0`): a diner who starts behind his stand line walks STRAIGHT to his stand (no stop at the approach point, no second step in), ending the walk in the place's yaw.
+    /// `wideRow` (`-MealWideRow 0`): the three-place row's side places stand 1.45 (or as wide as the floor allows) from the middle one, side diners straight forward (DiningLayout.sideX).
+    nonisolated(unsafe) static var orderedDrinks: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealOrderedDrink") != nil && UserDefaults.standard.integer(forKey: "MealOrderedDrink") == 0)
+    nonisolated(unsafe) static var trayToThem: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealTrayToThem") != nil && UserDefaults.standard.integer(forKey: "MealTrayToThem") == 0)
+    nonisolated(unsafe) static var straightWalk: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealStraight") != nil && UserDefaults.standard.integer(forKey: "MealStraight") == 0)
+    nonisolated(unsafe) static var wideRow: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealWideRow") != nil && UserDefaults.standard.integer(forKey: "MealWideRow") == 0)
+    private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
     /// Slot of each walker when the walkers are sorted by x and the slots are sorted by x (the pairing that never crosses for walks to a line). Ties go to the lower index.
@@ -235,15 +245,43 @@ final class DiningGroup {
         if let fo = forcedOrigin { origin = fo }
         else if let s = MealTrace.takeSpot() { origin = s; MealTrace.log("choose branch=forced spot=(\(s.x),\(s.y)) (-DiningSpot)") }
         else {
-            let L = DiningLayout.make(n: n), keep = keepClearOf, was = DiningSpot.pickOpen
-            if !keep.isEmpty {          // (round E: a SLEEPING waiter is never moved: this sitting's places and approach points keep `waiterClear` from where he lies)
+            if Self.wideRow, n == 3 {          // (the widest side spacing the floor holds: 1.45, then 1.3, then the old 1.11)
+                let js = avoid + brains.indices.map { f($0) }
+                for sx: Float in [1.45, 1.3, 1.11] {
+                    DiningLayout.sideX = sx
+                    if sx == 1.11 || !DiningSpot.openSpots(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: js).isEmpty { break }
+                }
+                sideSet = true
+            }
+            let L = DiningLayout.make(n: n), keep = keepClearOf, original = DiningSpot.pickOpen
+            var was = original
+            if Self.trayToThem {          // (the tray goes to them: fewest diners in front of their stand line, then the least total walking)
+                let floors = brains.indices.map { f($0) }, closer = c.eatStyle == .sip ? GameCare.sipCloser : GameCare.eatCloser
+                was = { offered in
+                    var best: (front: Int, total: Float, o: SIMD2<Float>)?
+                    for o in offered {
+                        let stands = L.places.map { SIMD2(o.x + $0.rel.x, o.y + $0.rel.y + closer) }
+                        let slot = Self.orderedSlots(floors: floors, slots: stands)
+                        var front = 0, total: Float = 0
+                        for i in floors.indices where slot[i] >= 0 {
+                            let st = stands[slot[i]]
+                            if floors[i].y > st.y + GameCare.popTolerance { front += 1 }
+                            total += simd_distance(floors[i], st)
+                        }
+                        if best == nil || front < best!.front || (front == best!.front && total < best!.total - 1e-4) { best = (front, total, o) }
+                    }
+                    if let b = best { MealTrace.log("choose: tray to them front=\(b.front) walk=\(b.total)") }
+                    return best?.o
+                }
+            }
+            if Self.trayToThem || !keep.isEmpty {          // (round E: a SLEEPING waiter is never moved: this sitting's places and approach points keep `waiterClear` from where he lies)
                 DiningSpot.pickOpen = { offered in
                     let ok = offered.filter { o in L.places.allSatisfy { p in let s = o + p.rel; return keep.allSatisfy { simd_distance($0, s) >= Self.waiterClear && simd_distance($0, s - SIMD2(0, GameCare.approachBack)) >= Self.waiterClear } } }
                     if ok.isEmpty { MealTrace.log("choose: no spot clear of the sleeping waiter(s); the usual pick") }
                     return was(ok.isEmpty ? offered : ok)
                 }
-            }
-            defer { DiningSpot.pickOpen = was }
+            } else { DiningSpot.pickOpen = was }
+            defer { DiningSpot.pickOpen = original }
             origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: L, jellies: avoid + brains.indices.map { f($0) })
         }
         // nearest free spot for everybody (first claim wins by distance)
@@ -253,7 +291,7 @@ final class DiningGroup {
         joining = []; releasedT = [Float](repeating: 0, count: n); heldForWaiter = 0
         placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
         ordered = Self.orderedPlaces && n > 1 && forcedOrigin == nil          // (food and drinks at the home tray; the café keeps `replan`)
-        if ordered && c.kind == .food { placeOf = Self.orderedSlotsTied(floors: brains.indices.map { f($0) }, slots: spots, centre: n == 3 ? 0 : nil) }          // (a drink keeps the smart first plan above: given once, never re-planned)
+        if ordered && (c.kind == .food || Self.orderedDrinks) { placeOf = Self.orderedSlotsTied(floors: brains.indices.map { f($0) }, slots: spots, centre: n == 3 ? 0 : nil) }          // (a drink keeps the smart first plan above: given once, never re-planned)
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
@@ -342,7 +380,12 @@ final class DiningGroup {
         spawnTray()          // (OLD FLOW, feeding-old-r1: the tray is out at once for everybody; the café's table is out already: the food lands on it at once; a fresh tray waits for the gathering, see `tick`)
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
         awakeAtStart = brains.map { !$0.isSleeping }
-        for i in brains.indices where !released[i] { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken softly, not hard-aborted: BlobBrain+SleepForce)
+        for i in brains.indices where !released[i] {
+            // a diner who starts at or behind his stand line walks straight to his stand (`startSitting`: the dine request walks, squares up on the way and eats); only one who has to come round uses the approach point
+            if Self.straightWalk, forcedOrigin == nil, trayOut, floor(i).y <= stands[placeOf[i]].y + GameCare.popTolerance {
+                started[i] = true; MealTrace.log("diner \(memberIDs[i]) straight start place=\(placeOf[i]) from=(\(floor(i).x),\(floor(i).y))"); startSitting(i)
+            } else { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken at once, not softly: BlobBrain+SleepForce)
+        }
         requested = true
     }
 
@@ -388,6 +431,7 @@ final class DiningGroup {
         }
         savedFinished = []; savedGap = []; savedPeers = []
         quietLatch = []
+        if sideSet { DiningLayout.sideX = 1.11; sideSet = false }
     }
     /// The meal is dropped (Come here, grabbed, timeout): the tray poofs, what was eaten stays paid.
     func cancel() { guard state != .idle else { return }; end() }
@@ -412,7 +456,8 @@ final class DiningGroup {
         if tierOf != nil {
             brains[i].dinePlan = GameCare.plan(for: serving, tier: tiers[i], tray: dining, place: placeOf[i])
             if !eager { brains[i].dinePlan.pace = 1 }
-            brains[i].requestNow(GameCare.mealRequest(serving, tray: dining, place: placeOf[i], pieces: piecesFor[i]))
+            let r = GameCare.mealRequest(serving, tray: dining, place: placeOf[i], pieces: piecesFor[i])
+            if brains[i].isSleeping || brains[i].mealWaking { brains[i].callToMeal(r) } else { brains[i].requestNow(r) }
         } else { brains[i].requestNow(GameCare.mealRequest(serving, tray: dining, place: placeOf[i])) }
     }
 

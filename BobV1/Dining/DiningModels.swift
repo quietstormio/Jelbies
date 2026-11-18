@@ -97,6 +97,11 @@ nonisolated struct TrayLayout {
 }
 
 nonisolated enum DiningLayout {
+    /// OLD-FLOW FOLLOW-UP (feeding-old-r1, 2026-11-18, the owner: "so no one squeezes in the middle"): the side places of the three-place row stand `sideX` from the middle one
+    /// (1.11 = the old spacing, which the café keeps) and the home sitting sets it wider (`DiningGroup.start`, back to 1.11 at the end) so the bodies do not touch at rest.
+    /// The wide row's side diners face straight forward (yaw 0: no turn at the place, no sideways catch lean). `-MealWideRow 0` = 1.11 / 0.25 as before.
+    nonisolated(unsafe) static var sideX: Float = 1.11
+    static var sideYaw: Float { sideX > 1.12 ? 0 : 0.25 }
     static func make(n n0: Int) -> TrayLayout {
         let n = min(max(n0, 1), 3), s = DiningTiming.servingScale(n: n)
         switch n {
@@ -114,9 +119,9 @@ nonisolated enum DiningLayout {
         default:
             // 17.6 % wider than before (0.85 -> 1.00). All three Blobs now stand in a row on the far side of the wide tray (the portrait
             // screen cannot hold stands beside it), 1.11 apart, so no belly hangs over a corner: each clears the near rim by his real skin.
-            return TrayLayout(n: 3, scale: s, half: SIMD2(1.0, 0.6),
-                              places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-1.11, -1.07), yaw: 0.25),
-                                       TrayPlace(rel: SIMD2(1.11, -1.07), yaw: -0.25)],
+            return TrayLayout(n: 3, scale: s, half: SIMD2(1.0 + (sideX - 1.11), 0.6),
+                              places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-sideX, -1.07), yaw: sideYaw),
+                                       TrayPlace(rel: SIMD2(sideX, -1.07), yaw: -sideYaw)],
                               colliderHalf: SIMD2(0.55, 0.3), berryAngles: [-.pi / 2, 150 * .pi / 180, 30 * .pi / 180])
         }
     }
@@ -235,8 +240,8 @@ nonisolated enum DiningModels {
         case (2, 0): return (SIMD3(-0.64, y, -0.02), 0)
         case (2, _): return (SIMD3(0.64, y, -0.02), 0)
         case (_, 0): return (SIMD3(0, y, -0.46), .pi / 2)
-        case (_, 1): return (SIMD3(-0.6, y, 0.0), 0)
-        default: return (SIMD3(0.6, y, 0.0), 0)
+        case (_, 1): return (SIMD3(-0.6 - (DiningLayout.sideX - 1.11) * 0.5, y, 0.0), 0)
+        default: return (SIMD3(0.6 + (DiningLayout.sideX - 1.11) * 0.5, y, 0.0), 0)
         }
     }
 
