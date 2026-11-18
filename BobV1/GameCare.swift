@@ -580,7 +580,7 @@ final class GameCare {
     /// the diner is left to the thin collider (see `DiningSet.drawnBox`).
     func trayObstacle(_ p: SIMD3<Float>, radius r: Float, id: Int) -> SIMD3<Float> {
         // (a diner not yet sent to eat is still on his way round the tray: he keeps off the whole drawn tray like a passer-by; once sent he is left to the thin collider)
-        guard isDiner(id), group.hasStarted(id) || !DiningGroup.straightWalk else { return dining.obstacleDrawn(dining.obstacle(p, radius: r * RoomLayout.lowPropRadiusScale), radius: r * Self.trayPasserScale) }
+        guard isDiner(id), !group.keepsOffTray(id) else { return dining.obstacleDrawn(dining.obstacle(p, radius: r * RoomLayout.lowPropRadiusScale), radius: r * Self.trayPasserScale) }
         return obstacle(p, radius: footprint(r))          // a diner: the thin collider, half his footprint (the sip allowance for a drink), as ever
     }
     /// The footprint the brain's resolver uses while a drink is out is a little smaller (the room's own tray collider is in `base`).

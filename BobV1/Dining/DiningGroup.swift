@@ -186,6 +186,9 @@ final class DiningGroup {
     /// Is this roster id a diner who is still held by the sitting (not yet released)?
     /// Has this roster id's diner been sent to eat (he is on his straight walk to his stand, or eating)?
     func hasStarted(_ id: Int) -> Bool { isActive && memberIDs.firstIndex(of: id).map { started.indices.contains($0) && started[$0] } ?? false }
+    /// A diner not yet sent to eat keeps off the whole drawn tray as a passer-by does, for the first `passerMax` s of the sitting (a floor with no way round must not shut him out: after that he is left to the thin collider, as before).
+    static let passerMax: Float = 3.5
+    func keepsOffTray(_ id: Int) -> Bool { Self.straightWalk && isActive && age < Self.passerMax && !hasStarted(id) }
     func isHolding(_ id: Int) -> Bool { isActive && memberIDs.firstIndex(of: id).map { !(released.indices.contains($0) && released[$0]) } ?? false }
     /// Blob i has been sent to eat (he arrived at his place).
     private var started: [Bool] = []
