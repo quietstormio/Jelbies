@@ -83,7 +83,7 @@ nonisolated enum DineGeometry {
     /// Body-led reach: finds turn / pitch / roll (crouch fixed) so `hold` (the piece point on the nub, rest coordinates) meets `target`
     /// (world), pivoting on `m` (rest) pinned at `w` (world). Coarse grid + shrinking coordinate descent; returns the pose and the miss (u).
     static func solveReach(hold: SIMD3<Float>, target: SIMD3<Float>, m: SIMD3<Float>, w: SIMD3<Float>, c0: SIMD3<Float>,
-                           yaw: Float, pitchBase: Float, crouch: Float, side: Int, fast: Bool = false, start: ReachPose? = nil) -> (pose: ReachPose, miss: Float) {
+                           yaw: Float, pitchBase: Float, crouch: Float, side: Int, fast: Bool = false, start: ReachPose? = nil, pitchMax: Float = 0.5, rollMax: Float = 0.6) -> (pose: ReachPose, miss: Float) {
         func tip(_ p: ReachPose) -> SIMD3<Float> {
             let q = yawQuat(yaw + p.twist) * simd_quatf(angle: p.pitch + pitchBase, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: p.roll, axis: SIMD3(0, 0, 1))
             return world(hold, q: q, sy: p.squash, m: m, w: w, c0: c0)
@@ -98,9 +98,9 @@ nonisolated enum DineGeometry {
         let gT: Float = fast ? 0.2 : 0.1, gP: Float = fast ? 0.2 : 0.1, gR: Float = fast ? 0.3 : 0.1
         while tw <= 1.6 {
             var pt: Float = -0.3
-            while pt <= 0.5 {
-                var rl: Float = -0.6
-                while rl <= 0.6 {
+            while pt <= pitchMax {
+                var rl: Float = -rollMax
+                while rl <= rollMax {
                     let p = ReachPose(twist: tw, pitch: pt, roll: rl, squash: crouch)
                     let c = cost(p)
                     if c < bc { bc = c; best = p }
@@ -110,13 +110,14 @@ nonisolated enum DineGeometry {
             }
             tw += gT
         }
+        let pCap: Float = pitchMax == 0.5 ? 0.6 : pitchMax, rCap: Float = rollMax == 0.6 ? 0.65 : rollMax          // (the defaults keep the old limits exactly)
         var step: Float = start != nil ? 0.03 : 0.05
         for _ in 0..<(start != nil ? 8 : 14) {
             var improved = false
             for k in 0..<3 {
                 for dir in [Float(-1), 1] {
                     var p = best
-                    switch k { case 0: p.twist += dir * step; case 1: p.pitch = min(0.6, max(-0.35, p.pitch + dir * step)); default: p.roll = min(0.65, max(-0.65, p.roll + dir * step)) }
+                    switch k { case 0: p.twist += dir * step; case 1: p.pitch = min(pCap, max(-0.35, p.pitch + dir * step)); default: p.roll = min(rCap, max(-rCap, p.roll + dir * step)) }
                     let c = cost(p)
                     if c < bc { bc = c; best = p; improved = true }
                 }

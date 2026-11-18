@@ -2613,7 +2613,7 @@ final class BlobBrain {
     }
 
     /// meal-reach-r1: the food reach with a radial freedom. The body-led solve reaches a shell of fixed radius about the planted pivot, so a piece nearer or farther than that shell was missed by up to 18 cm
-    /// (the nub tip hung in the air and the piece slid to it). Per bite the nub swing `s` (a point on the same stub path: the arm is never longer) and the crouch (0.7 ... 1.0, as near the drawn
+    /// (the nub tip hung in the air and the piece slid to it). Per bite the nub swing `s` (a point on the same stub path: the arm is never longer) and the crouch (0.8 ... 1.0, as near the drawn
     /// variance depth as it can) are chosen so the tip meets the piece; the lean, twist, pitch and roll are solved as ever.
     /// How much higher (m per unit of lost height) the real body's centroid sits than the model's pinned pivot (measured in `MealReachTests`: 0.066 / 0.105 / 0.079 at crouch 0.85 / 0.75 / 0.80).
     nonisolated static let dineRise: Float = 0.42
@@ -2634,9 +2634,12 @@ final class BlobBrain {
         let raw = actual - model
         dine.bias = dine.refined == 0 ? raw : dine.bias + (raw - dine.bias) * 0.4
         dine.refined += 1
-        let r = DineGeometry.solveReach(hold: hold, target: piece - dine.bias, m: m, w: w, c0: sim.restCentroid, yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side, start: dine.reach)
-        dine.reach = r.pose
-        return simd_distance(actual, piece)
+        let err = simd_distance(actual, piece)
+        if err > 0.004 {          // (a tip already within 0.4 cm keeps its pose: no re-solve, so the lean and the brows are not disturbed)
+            let r = DineGeometry.solveReach(hold: hold, target: piece - dine.bias, m: m, w: w, c0: sim.restCentroid, yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side, start: dine.reach, pitchMax: 0.5, rollMax: 0.18)
+            dine.reach = r.pose
+        }
+        return err
     }
 
     func solveDineReachRadial(_ sim: SoftBody, target: SIMD3<Float>, crouch pref: Float) {
@@ -2647,22 +2650,22 @@ final class BlobBrain {
             var best: (side: Int, r: (pose: ReachPose, miss: Float))?
             for side in [-1, 1] {
                 let r = DineGeometry.solveReach(hold: DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: Double(sg)), side: side), target: target, m: m, w: w, c0: sim.restCentroid,
-                                                yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side, fast: fast)
+                                                yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side, fast: fast, pitchMax: 0.5, rollMax: 0.18)
                 if best == nil || r.miss < best!.r.miss { best = (side, r) }
             }
             return best!
         }
         func cost(_ miss: Float, _ sg: Float, _ cr: Float) -> Float { miss + 0.05 * abs(cr - pref) + 0.03 * abs(sg - std) }
-        var bestC = Float.infinity, bs = std, bc = pref
-        var first = solve(std, pref, fast: true)
-        bestC = cost(first.r.miss, std, pref)
-        if first.r.miss > 0.006 {
-            for sg: Float in [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45] {
-                for cr: Float in [pref, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0] {
-                    let r = solve(sg, cr, fast: true)
-                    let c = cost(r.r.miss, sg, cr)
-                    if c < bestC { bestC = c; bs = sg; bc = cr; first = r }
-                }
+        var bs = std, bc = pref
+        var bestM = solve(std, pref, fast: true).r.miss, bestC = cost(bestM, std, pref)
+        if bestM > 0.006 {
+            // two cheap stages instead of the whole grid: the swing first (at the drawn crouch), then the crouch (at that swing), then the swing's neighbours
+            for sg: Float in [0.15, 0.45] { let m = solve(sg, pref, fast: true).r.miss; if cost(m, sg, pref) < bestC { bestC = cost(m, sg, pref); bs = sg; bestM = m } }
+            if bestM > 0.006 {
+                for cr: Float in [0.8, 0.9, 1.0] where cr != pref { let m = solve(bs, cr, fast: true).r.miss; if cost(m, bs, cr) < bestC { bestC = cost(m, bs, cr); bc = cr; bestM = m } }
+            }
+            if bestM > 0.006 {
+                for sg in [bs - 0.075, bs + 0.075] where sg >= 0.1 && sg <= 0.45 { let m = solve(sg, bc, fast: true).r.miss; if cost(m, sg, bc) < bestC { bestC = cost(m, sg, bc); bs = sg; bestM = m } }
             }
         }
         let fin = solve(bs, bc, fast: false)
