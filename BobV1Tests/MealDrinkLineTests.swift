@@ -9,12 +9,15 @@ import simd
 
 @MainActor
 final class MealDrinkLineTests: XCTestCase {
+    private var savedHour: Double?          // (the day clock as this class found it: put back in tearDown)
     private var feet: [DecorFoot] = [], balls: [BallSphere] = [], boxes: [RoomLayout.FlatBox] = [], tables: [Int: RoomLayout.FlatBox] = [:]
     override func setUp() {
+        savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12          // (2026-11-17: the night rest follows the real clock; dining tests run at noon)
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
         feet = RoomLayout.decorFeet; balls = RoomLayout.ballSpheres; boxes = RoomLayout.dynamicBoxes; tables = RoomLayout.tableBoxes
         RoomLayout.decorFeet = []; RoomLayout.ballSpheres = []; RoomLayout.dynamicBoxes = []; RoomLayout.tableBoxes = [:] }
     override func tearDown() {
+        DayClock.shared.forcedHour = savedHour
         MealTrace.spotOnce = nil
         RoomLayout.decorFeet = feet; RoomLayout.ballSpheres = balls; RoomLayout.dynamicBoxes = boxes; RoomLayout.tableBoxes = tables }
 
