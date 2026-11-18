@@ -27,7 +27,7 @@ nonisolated enum GradientLook {
     ]
     /// Opal 12 (body mode 86): not a height gradient but ONE cyclic plane wave of colour through the rest body (fitted to the lineup drawing; the same 3D wave from every side).
     /// THE NUMBERS BELOW ARE MIRRORED IN GradientMarks.h (the bm 6 branch): the two must match.
-    /// phase = opalWaveScale * dot(Q, opalWaveDir) + opalWavePhase; u = fract(phase) * 5; the stops blend with smoothstep, the fifth back into the first.
+    /// phase = waveScale * dot(Q, waveDir) + wavePhase; u = fract(phase) * 5; the stops blend with smoothstep, the fifth back into the first.
     enum Opal {
         static let mode: Float = 86
         static let stops: [SIMD3<Float>] = [SIMD3(0.976, 0.761, 0.824), SIMD3(0.969, 0.839, 0.753), SIMD3(0.784, 0.902, 0.839), SIMD3(0.769, 0.855, 0.965), SIMD3(0.839, 0.796, 0.957)]   // pink, peach, mint, sky, lilac

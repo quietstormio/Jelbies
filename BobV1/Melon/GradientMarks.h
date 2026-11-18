@@ -20,7 +20,7 @@ static float3 gradientPaint(float3 col, float3 Q, float bm) {
         const float3 stops[5] = { float3(0.976, 0.761, 0.824), float3(0.969, 0.839, 0.753), float3(0.784, 0.902, 0.839), float3(0.769, 0.855, 0.965), float3(0.839, 0.796, 0.957) };
         float phase = 1.40 * dot(Q, float3(0.640, 0.583, 0.502)) + 0.025;
         float u = fract(phase) * 5.0;
-        int i = int(floor(u));
+        int i = min(int(floor(u)), 4);
         float f = u - float(i); f = f * f * (3.0 - 2.0 * f);
         float3 c = mix(stops[i], stops[(i + 1) % 5], f);
         return col * (c / opalFlesh);
