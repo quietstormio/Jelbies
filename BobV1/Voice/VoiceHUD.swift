@@ -107,8 +107,13 @@ struct VoiceTip: View {
             .task(id: shown && voice.openCount == 0 && !FirstDayTour.shared.holdsGame) {
                 guard shown, voice.openCount == 0, !FirstDayTour.shared.holdsGame else { return }
                 try? await Task.sleep(nanoseconds: 600_000_000)
-                GameMessageCenter.shared.post("Hold the mic to talk", priority: .chatty, identifier: "voice-tip")
+                GameMessageCenter.shared.post("Hold the mic to talk", priority: .chatty, identifier: "voice-tip", sticky: GameMessageCenter.hintsSticky)
                 UserDefaults.standard.set(1, forKey: VoiceTip.key)
+                if GameMessageCenter.hintsSticky {          // stays until the mic is used
+                    var waited = 0.0
+                    while !Task.isCancelled, waited < 60, voice.openCount == 0, voice.mode.phase == .idle { try? await Task.sleep(nanoseconds: 250_000_000); waited += 0.25 }
+                    GameMessageCenter.shared.dismiss(identifier: "voice-tip")
+                }
             }
     }
 }

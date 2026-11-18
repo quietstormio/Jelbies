@@ -38,14 +38,28 @@ extension GameCare {
         }
         return Self.cuddleGroupLine(blocked).map { [$0] } ?? []
     }
+
+    /// How many annoyed "hmph" touches the Jelmiko have answered so far (a stroke on one who refuses); the poster reads it to say the reason again.
+    var annoyedStrokeCount: Int { raceBook.actors.reduce(0) { $0 + ($1.brain?.hmphs ?? 0) } }
 }
 
-/// Posts the close-up's cuddle line to the one message bar whenever it appears or changes (a zero-size view; the pills that used to stack under "Let them go" are gone).
+/// Posts the close-up's cuddle line to the one message bar: when it appears, and again each time the player strokes a Jelmiko who refuses (not more than once every 6 s),
+/// so the reason is there when they try. (A zero-size view; the pills that used to stack under "Let them go" are gone.)
 struct CuddleNoticePoster: View {
     let care: GameCare
+    static let repeatEvery: TimeInterval = 6
+    @State private var lastPosted = Date.distantPast
     var body: some View {
         let line = care.cuddleNotices.first
+        let strokes = care.annoyedStrokeCount
         Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
-            .onChange(of: line, initial: true) { _, l in if let l { GameMessageCenter.shared.post(l, identifier: "cuddle-notice") } }
+            .onChange(of: line, initial: true) { _, l in
+                guard let l else { return }
+                lastPosted = Date(); GameMessageCenter.shared.post(l, identifier: "cuddle-notice")
+            }
+            .onChange(of: strokes) { _, _ in
+                guard let l = care.cuddleNotices.first, Date().timeIntervalSince(lastPosted) >= Self.repeatEvery else { return }
+                lastPosted = Date(); GameMessageCenter.shared.post(l, identifier: "cuddle-notice")
+            }
     }
 }

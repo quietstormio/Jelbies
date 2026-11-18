@@ -1715,7 +1715,13 @@ struct FocusHint: View {
             .onAppear {
                 guard shown else { return }
                 UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
-                GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint")
+                GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky)
+            }
+            .task {          // sticky (VoiceOver / "Longer hints"): it stays until the first touch or mic use, then goes
+                guard shown, GameMessageCenter.hintsSticky else { return }
+                var waited = 0.0
+                while !Task.isCancelled, waited < 60, !interacted() { try? await Task.sleep(nanoseconds: 250_000_000); waited += 0.25 }
+                GameMessageCenter.shared.dismiss(identifier: "focus-hint")
             }
     }
 }

@@ -72,7 +72,8 @@ struct PlayChrome: View {
                     .accessibilityIdentifier("play-surface")
                 Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
                     .onChange(of: play.phase == .inHand && !thrown && play.camBlend > 0.8, initial: true) { _, on in          // (the hint is a line on the one message bar)
-                        if on { GameMessageCenter.shared.post("Flick the ball to a Jelmiko", priority: .chatty, identifier: "play-hint") }
+                        if on { GameMessageCenter.shared.post("Flick the ball to a Jelmiko", priority: .chatty, identifier: "play-hint", sticky: GameMessageCenter.hintsSticky) }
+                        else { GameMessageCenter.shared.dismiss(identifier: "play-hint") }          // (thrown, or the toy is away: the hint has done its job)
                     }
                 // hearts from the hand, and the rally mark
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { tl in

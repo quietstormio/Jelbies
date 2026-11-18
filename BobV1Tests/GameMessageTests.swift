@@ -70,12 +70,29 @@ final class GameMessageTests: XCTestCase {
         c.tick(now: t0 + 4.1); XCTAssertNil(c.current)
     }
 
-    func testCaptionsNeverQueueAndYieldToLines() {
+    func testCaptionIsASecondPillNeverDroppedNorBlockingAMessage() {
         let c = make()
         c.post("Squish", priority: .caption, announce: false, now: t0); c.post("Chirp", priority: .caption, announce: false, now: t0 + 0.3)
-        XCTAssertEqual(c.current?.text, "Chirp"); XCTAssertTrue(c.queue.isEmpty)
-        c.post("A real line", now: t0 + 0.5); XCTAssertEqual(c.current?.text, "A real line")
-        c.post("Pop", priority: .caption, announce: false, now: t0 + 0.6); XCTAssertEqual(c.current?.text, "A real line"); XCTAssertTrue(c.queue.isEmpty)
+        XCTAssertNil(c.current, "a caption alone takes the bar's place (the view draws it first), it is not a message"); XCTAssertEqual(c.caption?.text, "Chirp"); XCTAssertTrue(c.queue.isEmpty)
+        c.post("A real line", now: t0 + 0.5)
+        XCTAssertEqual(c.current?.text, "A real line"); XCTAssertEqual(c.caption?.text, "Chirp", "both show, the caption under the message")
+        c.post("Pop", priority: .caption, announce: false, now: t0 + 0.6)
+        XCTAssertEqual(c.current?.text, "A real line"); XCTAssertEqual(c.caption?.text, "Pop", "a newer caption replaces the older caption only")
+        c.tick(now: t0 + 3.2); XCTAssertNil(c.caption)
+        let tipUp = GameMessageCenter(); tipUp.autoSchedule = false; tipUp.tipShowing = { true }
+        tipUp.post("Splash", priority: .caption, announce: false, now: t0); XCTAssertEqual(tipUp.caption?.text, "Splash", "not dropped while a tip is up")
+    }
+
+    func testStickyHintStaysUntilDismissedAndAnImportantLineReplacesIt() {
+        let c = make()
+        c.post("Rub to pet", priority: .chatty, identifier: "focus-hint", sticky: true, now: t0)
+        c.tick(now: t0 + 30); XCTAssertEqual(c.current?.text, "Rub to pet", "stays past the normal duration")
+        c.dismiss(identifier: "focus-hint"); XCTAssertNil(c.current)
+        c.post("Hold the mic to talk", priority: .chatty, identifier: "voice-tip", sticky: true, now: t0 + 40)
+        c.post("Alien is too hungry for tricks", priority: .important, now: t0 + 41)
+        XCTAssertEqual(c.current?.text, "Alien is too hungry for tricks")
+        c.post("Another", priority: .chatty, identifier: "x", sticky: true, now: t0 + 50)
+        c.tick(now: t0 + 111); XCTAssertNil(c.current, "never longer than a minute")
     }
 
     func testTheMessageWaitsForATipCard() {
