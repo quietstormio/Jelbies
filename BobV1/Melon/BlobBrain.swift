@@ -2068,6 +2068,10 @@ final class BlobBrain {
     static let splayHip = SIMD3<Float>(0, FootBean.localF[FootBean.vertexCount - 1].y, 0)
     nonisolated(unsafe) static var onePieceVolley = true          // (false = pads in the volley's airborne / tipped phases: the e4062d6 behaviour, for before / after captures)
     nonisolated(unsafe) static var forceLegsFix = true          // (false = the behaviour before 2026-10-28: tests / before-after captures)
+    /// focus-legs-r1: the high side's planted foot rides up with its hip while a standing body leans about the middle of its soles (driveLimbs). false = before (captures: `-LeanFeet 0`).
+    nonisolated(unsafe) static var leanFeetFollow = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "LeanFeet") != nil && UserDefaults.standard.integer(forKey: "LeanFeet") == 0)
+    /// Hip rise (m) under which the foot stays planted as it is (the breathing / jiggle noise of a body standing square).
+    static let leanFeetFrom: Float = 0.002
     /// Moves the whole bean up so that none of it is below the floor (its shape is kept).
     static func liftOntoFloor(_ v: inout [SIMD3<Float>], floorY: Float) {
         var lo = Float.infinity
@@ -2194,8 +2198,21 @@ final class BlobBrain {
                     return att.anchor + RA * SIMD3(o.x * sxza, o.y * sya, o.z * sxza)
                 }
                 if runAir > 0.003 { h += runAir }       // the run's flight: both feet leave the floor (the bean tucks up under him)
-                let wanted = xz + outV
+                var wanted = xz + outV
                 let bc = bodyPos(c)
+                // LEAN FEET (focus-legs-r1, the owner: "Look at pandas leg bro"): a standing body leaning about the middle of its soles (the pet lean, the phone tilt, the
+                // grumpy lean-away, a lean into a partner) lifts the hip of the foot on its high side by ~0.2 sin(roll). The planted foot used to stay on the floor under
+                // it, so that leg was drawn stretched down and out from under the body (1.3-1.6 x its rest length). The foot of the high side now rides up with its hip
+                // (the body-carried spot, a small lifted foot); the low side's foot stays planted. Only for the mid-sole lean: the walk, the turn steps and the wave
+                // pivot on one foot (`pivotSide`) and keep their own feet; a foot in its swing keeps its step.
+                if Self.leanFeetFollow, pivotSide == nil, !(feet.swinging && s == feet.side) {
+                    let e = bc.y - lift - (sim.floorY + c.y)          // (the hip's rise from the lean alone: a bob's `lift` is not a lean)
+                    if e > Self.leanFeetFrom {
+                        let k = smooth01((e - Self.leanFeetFrom) / 0.02)
+                        wanted += (SIMD2(bc.x, bc.z) - wanted) * k
+                        h += e - Self.leanFeetFrom
+                    }
+                }
                 let offFull = wanted - SIMD2(bc.x, bc.z)
                 var simD = offFull; let sl = simd_length(simD)
                 if sl > simFootCap { simD *= simFootCap / sl }

@@ -1846,7 +1846,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         if tdT0 == 0 { tdT0 = now }
         guard now - tdT0 > 1.5 else { return }
         let size = stage.bounds.size
-        let c = tSim.centroid()
+        var c = tSim.centroid()
+        // focus-legs-r1 capture aid: -TouchDemoJelly <id> pets that Jelbie of the close-up row (the finger picks him), -TouchDemoSide <x> strokes x off his middle (+ = the viewer's right)
+        if DevArgs.enabled, name == "pet", UserDefaults.standard.object(forKey: "TouchDemoJelly") != nil {
+            let id = UserDefaults.standard.integer(forKey: "TouchDemoJelly")
+            if actors.indices.contains(id) { c = actors[id].sim.centroid() }
+        }
+        let side = DevArgs.enabled && name == "pet" ? Float(UserDefaults.standard.double(forKey: "TouchDemoSide")) : 0
         let right = SIMD3<Float>(lastCam.view.columns.0.x, lastCam.view.columns.1.x, lastCam.view.columns.2.x)
         let up = SIMD3<Float>(lastCam.view.columns.0.y, lastCam.view.columns.1.y, lastCam.view.columns.2.y)
         func at(_ x: Float, _ y: Float) -> CGPoint { screenPoint(c + right * x + up * y, size) }
@@ -1858,7 +1864,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if t < 9, now - tdHeartT > 0.8 { tdHeartT = now; model.touch.spawnHeart(now: now) }       // capture aid: hearts show even before he is happy enough
             if t < 9 {
                 let k = Float(min(1, t / 0.6)), ph = Float(t)
-                let pt = at(0.4 * sinf(2 * .pi * 0.8 * ph) * k, 0.25 * sinf(2 * .pi * 0.4 * ph) * k)
+                let pt = side != 0 ? at(side + 0.12 * sinf(2 * .pi * 1.2 * ph) * k, 0.05 * sinf(2 * .pi * 0.4 * ph) * k) : at(0.4 * sinf(2 * .pi * 0.8 * ph) * k, 0.25 * sinf(2 * .pi * 0.4 * ph) * k)
                 if !tdDown { tdDown = true; pointerDown(id: A, point: pt, size: size) } else { pointerMove(id: A, point: pt, size: size) }
             } else if tdDown { pointerUp(id: A); tdDown = false }
         case "pickup", "holdpickup":      // double-tap and hold on the crown, lift, hang there wiggling, let go (14 s loop)
