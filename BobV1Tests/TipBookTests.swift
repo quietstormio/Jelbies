@@ -146,10 +146,10 @@ final class TipBookTests: XCTestCase {
             let all = c.title + " " + c.body
             XCTAssertFalse(all.contains("Jelmikos"), all); XCTAssertFalse(all.contains("Jelbie"), all); XCTAssertFalse(all.lowercased().contains("rival"), all)
             XCTAssertFalse(all.lowercased().contains("coins") && !all.contains("JellyCoins"), "money is always JellyCoins: \(all)")
-            XCTAssertLessThanOrEqual(c.body.split(separator: " ").count, c.id == "clean" ? 22 : 16, c.body)          // (the design says 10 to 15; its own Feeding text is 16; the Bath card carries the Bath helper pointer)
+            XCTAssertLessThanOrEqual(c.body.split(separator: " ").count, 16, c.body)          // (the design says 10 to 15; its own Feeding text is 16)
             XCTAssertFalse(c.title.isEmpty); XCTAssertFalse(c.symbol.isEmpty)
         }
-        XCTAssertEqual(TipBook.card("clean")?.body, "Scrub, rinse, then rub to shine. Clean ones glow in the Jelly Show. Need a hand? Turn on Bath helper in Accessibility.")
+        XCTAssertEqual(TipBook.card("clean")?.body, "Scrub, rinse, then rub to shine. Need a hand? Turn on Bath helper in Accessibility.")
         XCTAssertTrue(TipBook.card("clean")?.body.contains("Bath helper") ?? false)
         XCTAssertEqual(TipBook.card("town")?.body, "Race, dance and play to earn JellyCoins. Spend them in the Shop.")
         XCTAssertEqual(TipBook.card("camp")?.body, "When home is full, the others wait here. Tap one to bring them home.")
