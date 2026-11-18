@@ -365,7 +365,7 @@ final class TouchPlay {
 
     /// A heart in a little thought bubble that pops out above his head (the overlay projects his head every frame, so only the birth time, a
     /// sideways drift and a start offset are kept; both in -1...1). Pruned after `heartLife`.
-    struct Heart { var born: Double; var drift: Float; var start: Float; var side: Float }
+    struct Heart { var born: Double; var drift: Float; var start: Float; var side: Float; var fixed: SIMD3<Float>? = nil }          // `fixed`: draw over this standing centroid, not his live head (the favourite-food hearts)
     private(set) var hearts: [Heart] = []
     static let heartLife: Double = 1.2
     private var lastHeartNow: Double = -1
