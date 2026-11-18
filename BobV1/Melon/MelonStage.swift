@@ -1486,7 +1486,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         var featureMesh = RoomMesh()
         if hp != nil, let b = a.brain {
             let fs = FeatureSet(); fs.body = WearBody.shared; fs.ignoreHide = true
-            let feature: JellyFeature = hp?.borrowed == true ? .none : (a.profile?.feature ?? JellyRoster.feature(slot: id))
+            let feature: JellyFeature = hp?.borrowed == true ? (hp?.feature ?? .none) : (a.profile?.feature ?? JellyRoster.feature(slot: id))          // (a Park friend keeps his own signature: spikes, wings, daisy; a rival has none)
             // the player's own adopted Amber Pip keeps his russet spikes in a lobby picture; a rival / Park visitor drawn on this body never gets them
             fs.setSpikeTint(id, feature == .spines && hp?.colour == nil && hp?.rivalTint == nil ? JellyVariantBook.spikeTint(for: JellyVariants.active(a.profile?.character ?? JellyRoster.character(id))) : nil)
             var worn: [String] = []

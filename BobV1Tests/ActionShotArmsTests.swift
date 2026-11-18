@@ -166,6 +166,17 @@ final class ActionShotArmsTests: XCTestCase {
         }
     }
 
+    /// A Park friend drawn on a borrowed body keeps his species signature (the key carries it, so a yellow friend's spikes and a lavender friend's wings are drawn and cached apart from a plain one).
+    func testBorrowedPictureKeyCarriesTheSignature() {
+        let plain = HeadPortraitKey(jelly: 0, colour: .yellow, wear: nil)
+        let spiky = HeadPortraitKey(jelly: 0, colour: .yellow, wear: nil, feature: .spines)
+        let winged = HeadPortraitKey(jelly: 0, colour: .lavender, wear: nil, feature: .wings)
+        XCTAssertNotEqual(plain, spiky)
+        XCTAssertNotEqual(spiky, winged)
+        XCTAssertTrue(spiky.borrowed)
+        XCTAssertEqual(spiky.feature, .spines)
+    }
+
     func testRestHandFramesIgnoreTheLiveArm() {
         let r = leaking(.armUp, species: 1)
         let rest = GameCare.armFrames(brain: r.brain, sim: r.sim, rest: true)

@@ -82,7 +82,7 @@ struct JelbiePortrait: View {
     var centreVisible = false
     @State private var image: UIImage?
     @State private var tried = false
-    private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear, rivalTint: rival?.tint, rivalName: rival?.name) }
+    private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear, rivalTint: rival?.tint, rivalName: rival?.name, feature: friend?.signature) }
     var body: some View {
         if frameless { framelessBody } else { framedBody }
     }
