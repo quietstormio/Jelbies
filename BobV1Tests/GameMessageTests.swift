@@ -133,6 +133,28 @@ final class GameMessageTests: XCTestCase {
         XCTAssertNil(GameCare.cuddleGroupLine([]))
     }
 
+    /// At the three portrait widths the bar's frame clears the park's chips row (the real measured frame), the top-left controls and the moon pill.
+    func testBarClearsTheChipsRowTheTopLeftControlsAndTheMoonPillAtThreeWidths() {
+        defer { GameMessageLayout.parkRowMaxY = nil; GameMessageLayout.hudBottom = GameMessageLayout.defaultHudBottom }
+        for width in [375.0, 402.0, 440.0] {
+            let size = CGSize(width: width, height: width * 2.16), safeTop: CGFloat = width == 375 ? 20 : 62
+            let w = GameMessageLayout.width(size)
+            XCTAssertLessThanOrEqual(w, width - 32, "never wider than the screen less the margins")
+            XCTAssertEqual(GameMessageLayout.left(safeLeft: 0), 16)
+            // the park: the chips row ends at 52 + 8 + 44 below the top (row 1 is 44 tall at safe+8; the chips follow 8 pt under it)
+            let rowMax = safeTop + 8 + 44 + 8 + 44 + 2
+            GameMessageLayout.parkRowMaxY = rowMax
+            let barPark = CGRect(x: 16, y: GameMessageLayout.top(safeTop: safeTop), width: w, height: 36)
+            XCTAssertGreaterThanOrEqual(barPark.minY, rowMax, "\(width): the bar is under the chips row")
+            XCTAssertGreaterThan(barPark.minY, safeTop + 8 + 44, "\(width): and under the top-left controls")
+            // home at night: the moon pill (row 1 + 8 + 44 tall) is up
+            GameMessageLayout.parkRowMaxY = nil
+            GameMessageLayout.hudBottom = 8 + 44 + 8 + 44 + 8
+            let barHome = CGRect(x: 16, y: GameMessageLayout.top(safeTop: safeTop), width: w, height: 36)
+            XCTAssertGreaterThanOrEqual(barHome.minY, safeTop + 8 + 44 + 8 + 44, "\(width): the bar is under the moon pill")
+        }
+    }
+
     func testBarIsTopLeftUnderTheHudRow() {
         let size = CGSize(width: 402, height: 874)
         XCTAssertEqual(GameMessageLayout.left(safeLeft: 0), 16)

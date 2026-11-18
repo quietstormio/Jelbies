@@ -42,7 +42,9 @@ struct ParkChrome: View {
                             if wide { friends.frame(maxWidth: .infinity) } else { Spacer() }
                             DropsPill(wallet: care.bath.wallet)
                         }
-                        if !wide { friends }
+                        if !wide {
+                            friends.background(GeometryReader { r in Color.clear.preference(key: ParkFriendsRowKey.self, value: r.frame(in: .global).maxY) })          // (the message bar stands under it)
+                        }
                         Spacer()
                     }
                     .padding(.horizontal, 16).padding(.top, 8)
@@ -88,6 +90,7 @@ struct ParkChrome: View {
                 Color.white.opacity(Double(park.wipe)).ignoresSafeArea().allowsHitTesting(park.wipe > 0).accessibilityHidden(true)
             }
             .frame(width: g.size.width, height: g.size.height)
+            .onPreferenceChange(ParkFriendsRowKey.self) { GameMessageLayout.parkRowMaxY = $0 }
             .animation(.easeInOut(duration: 0.25), value: park.card)
             .animation(.easeInOut(duration: 0.25), value: park.phase == .playing)
             .animation(.easeInOut(duration: 0.2), value: toysOpen)
@@ -304,4 +307,10 @@ struct VisitorCard: View {
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
         .accessibilityElement(children: .contain).accessibilityIdentifier("park-card")
     }
+}
+
+/// The bottom edge of the park's friends-chip row in window points (nil while the row is not drawn): where the message bar stands.
+private struct ParkFriendsRowKey: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
 }
