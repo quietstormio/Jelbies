@@ -713,6 +713,7 @@ final class DiningGroup {
                 for i in brains.indices where arrivedAt[i] == nil && !started[i] && ready(i) && isIdle(brains[i]) { arrivedAt[i] = age }
                 let arrivedTimes = arrivedAt.compactMap { $0 }.sorted()
                 // progress of the diners still on their way (a diner held for lanes, or a sleeper still waking, is not "stuck")
+                for i in brains.indices where held.contains(i) || brains[i].mealWaking { progRef[i] = (age, simd_distance(floor(i), stands[placeOf[i]])) }          // (the 2.5 s window starts when he is let go: a hold is not a stall)
                 for i in brains.indices where !started[i] && arrivedAt[i] == nil && !held.contains(i) && !brains[i].mealWaking && age - progRef[i].t >= Self.stuckWindow {
                     let d = simd_distance(floor(i), stands[placeOf[i]])
                     if progRef[i].d - d < Self.stuckGain { stuckAt[i] = age }
