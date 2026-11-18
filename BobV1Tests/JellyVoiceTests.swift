@@ -9,7 +9,7 @@ final class JellyVoiceTests: XCTestCase {
         for c in 0...3 { for v in [JellyVoice.happy, .sad, .babble] { names.insert(JellyVoiceSet.file(character: c, v)) } }
         XCTAssertEqual(names.count, 12)
         XCTAssertEqual(JellyVoiceSet.file(character: -1, .happy), JellyVoiceSet.file(character: 0, .happy))
-        XCTAssertEqual(JellyVoiceSet.file(character: 9, .sad), "chirp_jelly4_sad")
+        XCTAssertEqual(JellyVoiceSet.file(character: 9, .sad), "chirp_jelly7_sad", "9 (Marble, a lineup character) borrows Panda's set (voiceSets 7); Opal 12 has her own")
     }
 
     func testSlotMapsThroughTheRoster() {

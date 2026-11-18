@@ -41,7 +41,7 @@ final class SetRosterTests: XCTestCase {
         XCTAssertNil(JellyRoster.parseRoster("nobody"))
         XCTAssertNil(JellyRoster.parseRoster(""))
         XCTAssertEqual(JellyRoster.sanitised([]), [0, 1, 2])
-        XCTAssertEqual(JellyRoster.sanitised([2, 2, 9, 1]), [2, 1])
+        XCTAssertEqual(JellyRoster.sanitised([2, 2, 27, 1]), [2, 1])
     }
 
     func testSetRosterArgumentReplacesTheSavedRosterOnceAndIsIdempotent() {

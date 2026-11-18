@@ -105,6 +105,15 @@ struct SpeciesInfo {
                     moves: [SpeciesMoveInfo(title: "Stretch", subtitle: "Signature move", icon: "figure.arms.open", move: .idle(.stretch)),
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.stretch), .blink, .hop, .face(.excited), .idle(.sway)]),
+        // Opal (12): complete content, but NOT offered (not in `special`, `order` or `pages`) until the Jelly Spring wiring.
+        SpeciesInfo(character: JellyRoster.opalID, name: "Opal", epithet: "The rainbow one",
+                    about: "Pastel rainbow from head to toe. Every turn shows a new colour, and it loves to show them off.",
+                    signature: "Rainbow glow", signatureIcon: "rainbow",
+                    lore: "Woke up inside a soap bubble at sunrise, just as the light turned every colour at once. Opals keep a little of that rainbow wherever they go.",
+                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Ice pop", traits: [72, 68, 90, 50, 38],
+                    moves: [SpeciesMoveInfo(title: "Twirl", subtitle: "Signature move", icon: "rainbow", move: .idle(.tail)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
     ]
 
     /// The mockup's palette for the picker screen (saturated page colours sampled from the design boards; purple follows the same family).
@@ -140,6 +149,8 @@ struct SpeciesLook {
         case JellyRoster.pandaID: return SpeciesLook(top: Color(hex: 0x3A3A40), bottom: Color(hex: 0x24242A), dot: Color(hex: 0x4A4A4F), tabFill: Color(hex: 0xE6E6E8), tabLine: Color(hex: 0xB4B4BA),
                                    card: Color(hex: 0xF9F8F0), rowHi: Color(hex: 0xE6E6E8), padTop: Color(hex: 0xF2F2F2), glow: Color(hex: 0x6A6A70),
                                    isDark: true, rimOverride: (Color(hex: 0x8A8A90), Color(hex: 0x65656B)))
+        case JellyRoster.opalID: return SpeciesLook(top: Color(hex: 0xF6D9EE), bottom: Color(hex: 0xCBD8F6), dot: Color(hex: 0xE6C8F0), tabFill: Color(hex: 0xF3E8FA), tabLine: Color(hex: 0xD9C4F0),
+                                   card: Color(hex: 0xFBF8F6), rowHi: Color(hex: 0xF3E8FA), padTop: Color(hex: 0xF4F1F8), glow: Color(hex: 0x9A8CC4))
         default: return SpeciesLook(top: Color(hex: 0x9DD0F2), bottom: Color(hex: 0x6DADE0), dot: Color(hex: 0x79B7E6), tabFill: Color(hex: 0xD4EAFA), tabLine: Color(hex: 0x8DC1EA),
                                     card: Color(hex: 0xF8F6F1), rowHi: Color(hex: 0xD4EAFA), padTop: Color(hex: 0xEAF0F5), glow: Color(hex: 0x4F83B5))
         }

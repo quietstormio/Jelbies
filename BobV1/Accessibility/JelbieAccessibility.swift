@@ -51,6 +51,29 @@ nonisolated enum JelbieA11yText {
         let character = JellyRoster.species(instance)          // a duplicate (instance id >= 100) looks like his species
         if character == JellyRoster.pearlID { return "white with pearly little wings" }
         if character == JellyRoster.pandaID { return "white with black patches round the eyes, round black bear ears, black arms and feet and a puffy black tail" }
+        if character == JellyRoster.tigerID { return "orange with rust stripes on the crown, the cheeks and across the back" }
+        if character == JellyRoster.berryID { return "pink with cream seeds and a leafy green top" }
+        switch character {          // the lineup characters (look phase, 2026-11-18; ids 9...26)
+        case JellyRoster.marbleID: return "aqua with milky white ribbons swirled through the body and across the face"
+        case JellyRoster.goldID: return "polished liquid gold with bright highlights and a few sparkles"
+        case JellyRoster.silverID: return "polished chrome silver with bright highlights"
+        case JellyRoster.opalID: return "pearly pastel that slides from pink through peach, mint and sky to lilac"
+        case JellyRoster.mooID: return "white with black patches"
+        case JellyRoster.cocoaID: return "cream with chocolate-brown patches"
+        case JellyRoster.blushID: return "pale pink with deeper rose patches"
+        case JellyRoster.sunsetID: return "red on top, melting through orange to golden yellow at the feet"
+        case JellyRoster.rubyID: return "deep jewel red with a polished shine and a few sparkles"
+        case JellyRoster.midnightID: return "glossy black with pale lilac eyes"
+        case JellyRoster.cottonCandyID: return "pink on top, lilac in the middle and baby blue at the feet"
+        case JellyRoster.oceanID: return "sea-foam green on top, sinking through blue to navy at the feet"
+        case JellyRoster.lemonLimeID: return "lemon yellow on top, fading to lime green at the feet"
+        case JellyRoster.lagoonID: return "teal on top, violet in the middle and pink at the feet"
+        case JellyRoster.emeraldID: return "deep green with a polished shine and a few sparkles"
+        case JellyRoster.sapphireID: return "royal blue with a polished shine and a few sparkles"
+        case JellyRoster.amethystID: return "purple with a polished shine and a few sparkles"
+        case JellyRoster.bronzeID: return "polished bronze with warm highlights"
+        default: break
+        }
         switch JellyRoster.feature(character) {
         case .none: return "blue and plain"
         case .spines: return "yellow with soft spines"

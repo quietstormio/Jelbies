@@ -37,6 +37,9 @@ static float teddyPomMask(float3 Q) {
 }
 // TEDDYEAR-END
 #include "PandaMarks.h"
+#include "TigerMarks.h"
+#include "BerryMarks.h"
+#include "GradientMarks.h"
 
 struct Uniforms {
     float4x4 viewProj;
@@ -551,8 +554,11 @@ fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
     float tn = floor(bb / 10.0 + 0.05);                  // tone: 0 = pale (k .44 toward white), 1 = D1, 2 = D2 (a lighter but still saturated sky blue)
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
-    if (tn > 4.5) {                                      // Panda (modes 51 / 52): the black markings, no belly (PandaMarks.h)
-        col = pandaPaint(col, Q, bm, pandaPatch);
+    if (tn > 4.5) {                                      // Panda (modes 51 / 52), Tiger (61 / 62), Berry (71 / 72): the painted markings, no belly (PandaMarks.h, TigerMarks.h, BerryMarks.h)
+        if (tn > 7.5) { col = gradientPaint(col, Q, bm); }          // gradient family (modes 81...85): the colour by height (GradientMarks.h)
+        else if (tn > 6.5) { col = berryPaint(col, Q, bm); }
+        else if (tn > 5.5) { col = tigerPaint(col, Q, bm); }
+        else { col = pandaPaint(col, Q, bm, pandaPatch); }
     } else if (bb > 0.5) {
         float bk;
         float lk = 0.40;                                           // ~40 % toward white, applied to the shaded colour so the light blue keeps the body's shading

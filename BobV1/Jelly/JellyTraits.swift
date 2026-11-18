@@ -141,6 +141,7 @@ nonisolated enum JellyCandidates {
         case JellyRoster.teddyID: return [88, 75, 40, 35, 40]
         case JellyRoster.pearlID: return [65, 60, 90, 45, 35]
         case JellyRoster.pandaID: return [70, 80, 35, 40, 55]
+        case JellyRoster.opalID: return [72, 68, 90, 50, 38]
         default: return [50, 50, 50, 50, 50]
         }
     }
@@ -151,6 +152,7 @@ nonisolated enum JellyCandidates {
         case 1, JellyRoster.pandaID: return "donut"
         case 3, JellyRoster.teddyID: return "cookie"
         case 2, JellyRoster.pearlID: return "onigiri"
+        case JellyRoster.opalID: return "popsicle"          // the store's Ice pop
         default: return nil
         }
     }
