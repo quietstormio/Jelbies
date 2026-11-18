@@ -354,7 +354,7 @@ final class DiningGroup {
         }
         hooked = true
         for b in brains { b.reserved = true; b.waitFocus = origin }          // everybody waits where he stands (look / step / bounce) until the meal is over
-        for i in brains.indices { brains[i].mealFaceYaw = (calm || lineup) ? placeYaw(placeOf[i]) : nil }          // (C3: the calm wait faces his own place)
+        for i in brains.indices { brains[i].mealFaceYaw = (calm || lineup || (forcedOrigin != nil && DiningLayout.ends)) ? placeYaw(placeOf[i]) : nil }          // (C3: the calm wait faces his own place)
         for i in brains.indices { brains[i].mealYawHint = placeYaw(placeOf[i]) }
         beginApproach()
         traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; inBoxTicks = 0; popReason = "gathered"

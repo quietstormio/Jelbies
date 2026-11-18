@@ -226,6 +226,7 @@ extension GameCare {
                 guard let brain = a.brain else { continue }
                 brain.autonomy = false; brain.idleBlocked = true; brain.restTimer = 0.4
                 brain.startTurn(to: pl.yaw, sim: a.sim)
+                if DiningLayout.ends { brain.reserved = true; brain.mealFaceYaw = pl.yaw }          // (the ends layout: he keeps his three-quarter place yaw while he waits, instead of turning to the camera)
                 brain.face(.excited, hold: 1.5)
                 book.hopIn[a.id] = 0.35 + Float(k) * CafeTuning.arriveHopStagger
             }
@@ -254,6 +255,7 @@ extension GameCare {
             for a in actors {
                 guard let brain = a.brain else { continue }
                 brain.abortAll(a.sim, a.skinner)
+                brain.reserved = false; brain.mealFaceYaw = nil; brain.mealYawHint = nil
                 brain.commandedIdle = nil
                 var spot = book.homes[a.id] ?? Self.greetSpot(a.id)
                 if taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
