@@ -25,9 +25,8 @@ final class ShowBook {
     var arena: [Int: Float] = [:]
     /// Rival body colours while they perform, by actor id.
     var palettes: [Int: Palette] = [:]
-    /// The dance each stage body loops (nil = stand).
-    var dancing: [Int: IdleKind] = [:]
-    var danceRestart: [Int: Float] = [:]
+    /// The Dance round's step plan and its clock state (the player's body; Show/ShowDanceSteps.swift). nil = no dance round.
+    var danceRun: ShowDanceRun?
     /// Seconds since the player's trick was asked for (the flop's wobble lands a beat later).
     var flopT: Float?
     /// Bodies that have turned to the crowd.
@@ -403,27 +402,47 @@ extension GameCare {
             rb.face(success ? .happy : .oh, hold: 1.2)
         }
     }
-    /// Everybody on the stage dances (`on`) with the player's dance (the rivals copy him) or stands.
+    /// The Dance round begins (`on`) or is over: he STEPS to the song's beats (Show/ShowDanceSteps.swift: a step on every beat, the step-touch between other phrases), standing the whole round.
+    /// `d` (the dance he learned: Sway, Bop, Twirl) is no longer used by the show: Sway sat down, and the steps are the same for every contestant (`bestDance` stays in the save).
     private func showDance(_ d: DanceID?, on: Bool) {
         let book = showBook
-        for (k, aid) in book.performers.enumerated() where book.actors.indices.contains(aid) {
-            guard let b = book.actors[aid].brain else { continue }
-            if on {
-                let move = (d ?? .sway).move
-                book.dancing[aid] = move
-                book.danceRestart[aid] = Float(k) * 0.35          // a little stagger so the row is not in lockstep
-                b.face(.happy, hold: 3)
-            } else {
-                book.dancing[aid] = nil
+        if on {
+            let song = show.danceSong
+            book.danceRun = ShowDanceRun(phrases: ShowDancePlan.phrases(rank: show.rank, lastBeat: song.lastBeat, seed: show.seed), lively: ShowDancePlan.lively(show.rank),
+                                         period: song.grid.period, firstBeat: song.grid.firstBeat)
+            for aid in book.performers where book.actors.indices.contains(aid) { book.actors[aid].brain?.face(.happy, hold: 3) }
+        } else {
+            book.danceRun = nil
+            for aid in book.performers where book.actors.indices.contains(aid) {
+                guard let b = book.actors[aid].brain else { continue }
+                showDanceStop(b)
                 if b.idleState.kind != nil, !b.idleState.yielding { b.idleState.yielding = true; b.idleState.yieldT = 0 }
             }
         }
+    }
+    /// His stepping script ends once the step in the air has landed (the normal end of a step-in-place: feet together, heading where it was).
+    private func showDanceStop(_ b: BlobBrain) {
+        guard b.danceDrive != nil else { return }
+        b.danceDrive = nil
+        if case .stepInPlace = b.script { b.script = .stepInPlace(t: 1, dur: 0) }
+    }
+    /// Per fixed step while the dance round runs: start the next beat's step so that its foot plants on the beat (the song's own clock, `show.danceNow()`).
+    private func showDanceStep(_ a: JellyActor, _ b: BlobBrain) {
+        let book = showBook
+        guard var run = book.danceRun, !run.finished else { return }
+        defer { book.danceRun = run }
+        if show.beat == .danced || show.round != .dance { run.finished = true; showDanceStop(b); return }
+        guard show.beat == .dancing else { return }
+        if b.danceDrive == nil { b.danceDrive = DanceStepDrive() }
+        if case .none = b.script, b.idleState.kind == nil { b.startStepping(seconds: 1e9, sim: a.sim) }          // (after the turn to the crowd, or a reaction that took the body for a moment)
+        guard case .stepInPlace = b.script else { return }
+        b.danceStep(&run, now: show.danceNow())
     }
     /// A Perfect / Good / Slip: the player's face and blush follow the beat.
     private func showHit(_ g: DrillGrade) {
         guard let a = stageActor(0), let b = a.brain else { return }
         switch g {
-        case .perfect: b.blushBump(hold: 0.8, peak: 0.6); b.face(.joyArc, hold: 0.5)
+        case .perfect: b.blushBump(hold: 0.8, peak: 0.6); b.face(.joyArc, hold: 0.5); showBook.danceRun?.accentPending = true          // (a stomp on the next step)
         case .good: b.face(.happy, hold: 0.4)
         case .miss: b.face(.oh, hold: 0.5); b.jellyKick = max(b.jellyKick, 1.2)
         }
@@ -499,11 +518,7 @@ extension GameCare {
                 if abs(b.yaw) > 0.25 { b.startTurn(to: 0, sim: a.sim) }
                 if k == 0, show.round == .look { b.face(.happy, hold: 2.5) }          // the walk-on: a pleased pose for the judges
             }
-            // the dance loops: when the move ends, start it again (after the stagger)
-            if let move = book.dancing[aid], b.idleState.kind == nil, b.commandedIdle == nil, case .none = b.script {
-                let wait = book.danceRestart[aid] ?? 0
-                if wait <= 0 { b.commandedIdle = move; book.danceRestart[aid] = 0.25 } else { book.danceRestart[aid] = wait - dt }
-            }
+            if k == 0 { showDanceStep(a, b) }          // the Dance round: a step on every beat
             if k == 0, var f = book.flopT {               // the cute flop: the move is cut short after a beat and he wobbles
                 f += dt
                 if f > 0.9 { book.flopT = nil; b.abortAll(a.sim, a.skinner); b.jellyKick = max(b.jellyKick, 2.4); b.face(.worried, hold: 1) } else { book.flopT = f }
