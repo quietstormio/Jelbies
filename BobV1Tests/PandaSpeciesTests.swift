@@ -47,6 +47,6 @@ final class PandaSpeciesTests: XCTestCase {
 
     func testAccessibilityAndMasks() {
         XCTAssertTrue(JelbieA11yText.description(character: 6).contains("black"))
-        XCTAssertEqual(EyeMaskModel.paletteCount, 9, "the sleep masks cover ids 0...8; the lineup characters (9...26) wrap onto them until phase B")
+        XCTAssertEqual(EyeMaskModel.paletteCount, 10, "the sleep masks cover ids 0...8 (the other lineup characters, 9...26, wrap onto them until phase B) + palette 9 = Opal (12)")
     }
 }

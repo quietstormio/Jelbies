@@ -4,6 +4,7 @@
 //  the body colour changes with its height, bottom colour at the feet through the middle stop (the palette's flesh) to the top colour at the crown.
 //  Body modes 81...85 (tone 8, shape mode 1...5): the whole body is one draw (the colour follows the height of whatever piece is drawn, so a foot or limb piece takes the
 //  colour of its own height). Everything is in the body's REST space (Q), so the colours ride the body.
+//  Body mode 86 (shape mode 6) is Opal 12: not a height gradient but one plane wave of colour (see the bm 6 branch).
 //  THE STOPS BELOW ARE MIRRORED IN GradientLook.swift (sRGB 0...1): the two must match.
 //
 #ifndef GRADIENT_MARKS_H
@@ -13,6 +14,17 @@
 // the paint keeps that light: col * (stop colour / middle stop). Rest space (Q): the colour rides the body. Feet and limb pieces take the colour of their own height.
 static float3 gradientPaint(float3 col, float3 Q, float bm) {
     const float lift = 0.1039, height = 1.2419;                  // the rest egg (bottom, height): t = 0 at the feet, 1 at the crown
+    if (bm > 5.5) {          // Opal (mode 86): ONE cyclic plane wave of colour through the rest body (the same 3D wave from the front, back and side: no seam)
+        // phase = 1.40 * dot(Q, n) + 0.025, n = (0.640, 0.583, 0.502); five stops pink, peach, mint, sky, lilac, the fifth blending back into the first
+        const float3 opalFlesh = float3(0.871, 0.829, 0.869);   // the palette's flesh (GradientLook.swift)
+        const float3 stops[5] = { float3(0.976, 0.761, 0.824), float3(0.969, 0.839, 0.753), float3(0.784, 0.902, 0.839), float3(0.769, 0.855, 0.965), float3(0.839, 0.796, 0.957) };
+        float phase = 1.40 * dot(Q, float3(0.640, 0.583, 0.502)) + 0.025;
+        float u = fract(phase) * 5.0;
+        int i = int(floor(u));
+        float f = u - float(i); f = f * f * (3.0 - 2.0 * f);
+        float3 c = mix(stops[i], stops[(i + 1) % 5], f);
+        return col * (c / opalFlesh);
+    }
     float t = clamp((Q.y - lift) / height, 0.0, 1.0);
     float3 lo, mid, hi; float tLo, tMid, tHi;
     if (bm < 1.5) {          // Sunset

@@ -1,6 +1,6 @@
 //
 //  LineupLook.swift
-//  The 13 plain placeholders of the "Jelmiko Lineup" characters (look phase, 2026-11-18): Marble 9, Gold 10, Silver 11, Opal 12, Moo 13, Cocoa 14, Blush 15, Ruby 17,
+//  The 12 plain placeholders of the "Jelmiko Lineup" characters (look phase, 2026-11-18; Opal 12 now has its real look in GradientLook.swift): Marble 9, Gold 10, Silver 11, Moo 13, Cocoa 14, Blush 15, Ruby 17,
 //  Midnight 18, Emerald 23, Sapphire 24, Amethyst 25 and Bronze 26 (JellyRoster.marbleID ... bronzeID). PLACEHOLDERS ONLY: the plain body (feature `.none`) in the drawing's
 //  base colour, no marks. Each family replaces its entries with its real look in a later commit (the gradient family already has it: GradientLook.swift).
 //  Not offered anywhere (not in the intro, the Jelly Spring picker, the starter roster, the park or any generator): reachable through `-NewGame` / `-SetRoster` / `-ForceSpecies` only.
@@ -16,7 +16,6 @@ nonisolated enum LineupLook {
         JellyRoster.marbleID: SIMD3(0.525, 0.863, 0.812),
         JellyRoster.goldID: SIMD3(0.941, 0.761, 0.235),
         JellyRoster.silverID: SIMD3(0.788, 0.808, 0.839),
-        JellyRoster.opalID: SIMD3(0.969, 0.851, 0.690),
         JellyRoster.mooID: SIMD3(0.957, 0.945, 0.925),
         JellyRoster.cocoaID: SIMD3(0.953, 0.902, 0.812),
         JellyRoster.blushID: SIMD3(0.976, 0.890, 0.910),

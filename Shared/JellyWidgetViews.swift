@@ -44,7 +44,7 @@ nonisolated enum WidgetTheme {
         case "marble": return Color(.sRGB, red: 0.504, green: 0.828, blue: 0.780)
         case "gold": return Color(.sRGB, red: 0.903, green: 0.731, blue: 0.226)
         case "silver": return Color(.sRGB, red: 0.756, green: 0.776, blue: 0.805)
-        case "opal": return Color(.sRGB, red: 0.930, green: 0.817, blue: 0.662)
+        case "opal": return Color(.sRGB, red: 0.900, green: 0.787, blue: 0.866)
         case "moo": return Color(.sRGB, red: 0.919, green: 0.907, blue: 0.888)
         case "cocoa": return Color(.sRGB, red: 0.915, green: 0.866, blue: 0.780)
         case "blush": return Color(.sRGB, red: 0.937, green: 0.854, blue: 0.874)

@@ -1,7 +1,7 @@
 //
 //  LineupLooksSpeciesTests.swift
 //  The 18 "Jelmiko Lineup" characters (ids 9...26, look phase 2026-11-18): they exist, are reachable through the test hooks, are offered nowhere, and the five gradient
-//  characters (Sunset, Cotton Candy, Ocean, Lemon-Lime, Lagoon) get their own shader modes 81...85; the 13 placeholders keep mode 0.
+//  characters (Sunset, Cotton Candy, Ocean, Lemon-Lime, Lagoon) get their own shader modes 81...85; Opal 12 has mode 86 (its real look); the 12 placeholders keep mode 0.
 //  Modelled on TigerBerrySpeciesTests.
 //
 
@@ -76,7 +76,7 @@ final class LineupLooksSpeciesTests: XCTestCase {
     func testBodyModes() {
         for id in Self.ids {
             let mode = BlueBelly.mode(for: JellyRoster.palette(id)!)
-            XCTAssertEqual(mode, Self.gradients[id] ?? 0, "species \(id) (\(Self.names[id - 9]))")
+            XCTAssertEqual(mode, Self.gradients[id] ?? (id == JellyRoster.opalID ? 86 : 0), "species \(id) (\(Self.names[id - 9]))")          // (Opal 12 is no placeholder any more: mode 86, OpalSpeciesTests)
         }
         // every earlier species keeps the mode it had
         XCTAssertEqual(BlueBelly.mode(for: JellyRoster.palette(JellyRoster.pandaID)!), 51)
@@ -84,8 +84,8 @@ final class LineupLooksSpeciesTests: XCTestCase {
         XCTAssertEqual(BlueBelly.mode(for: JellyRoster.palette(JellyRoster.berryID)!), 71)
         XCTAssertEqual(BlueBelly.mode(for: WhiteWing.palette), 0)
         XCTAssertEqual(BlueBelly.mode(for: JellyRoster.palette(JellyRoster.teddyID)!), TeddyEarsVariant.active == .cream ? 43 : 33)
-        for id in 1...3 { XCTAssertFalse([81, 82, 83, 84, 85].contains(BlueBelly.mode(for: JellyRoster.palette(id)!))) }
-        for c in ParkColour.allCases { XCTAssertFalse((81...85).contains(Int(BlueBelly.mode(for: JellyPalettes.park(c)))), "park visitor \(c.rawValue) must not look like a gradient character") }
+        for id in 1...3 { XCTAssertFalse([81, 82, 83, 84, 85, 86].contains(BlueBelly.mode(for: JellyRoster.palette(id)!))) }
+        for c in ParkColour.allCases { XCTAssertFalse((81...86).contains(Int(BlueBelly.mode(for: JellyPalettes.park(c)))), "park visitor \(c.rawValue) must not look like a gradient character") }
         // the middle stop is the flesh and the swatch
         for (id, _) in Self.gradients {
             let s = GradientLook.stops[id]!

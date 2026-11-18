@@ -75,7 +75,7 @@ final class TigerBerrySpeciesTests: XCTestCase {
         XCTAssertTrue(JelbieA11yText.description(character: 7).contains("stripes"))
         XCTAssertTrue(JelbieA11yText.description(character: 8).contains("seeds"))
         XCTAssertEqual(JelbieA11yText.description(character: 0), "blue and plain", "Bob's text is untouched")
-        XCTAssertEqual(EyeMaskModel.paletteCount, 9, "the sleep masks cover ids 0...8; the lineup characters (9...26) wrap onto them until phase B")
+        XCTAssertEqual(EyeMaskModel.paletteCount, 10, "the sleep masks cover ids 0...8 (the other lineup characters, 9...26, wrap onto them until phase B) + palette 9 = Opal (12)")
         XCTAssertEqual(EyeMaskModel.rests.count, EyeMaskModel.paletteCount)
         XCTAssertEqual(EyeMaskModel.palette(JellyRoster.pandaID).band, Consumables.srgb(0.90, 0.45, 0.55), "Panda's sleep mask keeps its rose")
         XCTAssertEqual(EyeMaskModel.palette(0).band, Consumables.srgb(0.15, 0.19, 0.46), "Bob's sleep mask keeps its navy")

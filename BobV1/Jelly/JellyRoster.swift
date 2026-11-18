@@ -133,17 +133,17 @@ nonisolated enum JellyRoster {
     static let previewSlots = 3
     /// The scratch instance id the Adoption Center's preview stage uses for `species` (slot 0).
     static func previewID(_ species: Int) -> Int { previewID(species: species, slot: 0) }
-    /// Scratch id of preview `slot` (0...2) of `species`: 1000 + slot * 10 + species. Slot 0 is the single-Jelbie page's id.
-    static func previewID(species: Int, slot: Int) -> Int { previewBase + min(max(slot, 0), previewSlots - 1) * 10 + min(max(species, 0), knownCount - 1) }
+    /// Scratch id of preview `slot` (0...2) of `species`: 1000 + slot * 100 + species (the species takes TWO decimal digits: ids 10...26 have previews too). Slot 0 is the single-Jelbie page's id.
+    static func previewID(species: Int, slot: Int) -> Int { previewBase + min(max(slot, 0), previewSlots - 1) * 100 + min(max(species, 0), knownCount - 1) }
     /// Whether `id` is a picker scratch id (never saved anywhere).
     static func isPreview(_ id: Int) -> Bool { id >= previewBase }
     /// The slot (0...2) a preview scratch id stands for.
-    static func previewSlot(_ id: Int) -> Int { max(id - previewBase, 0) / 10 }
+    static func previewSlot(_ id: Int) -> Int { max(id - previewBase, 0) / 100 }
     /// The species (look, voice, feature) of instance `id`: identity below 100, the saved map from 100, a preview scratch id resolves to its species.
     /// An instance id (100..<1000) with no recorded species (never allocated) is species 0; ids below 100 outside the known species keep the clamp.
     static func species(_ id: Int) -> Int {
         if (0..<knownCount).contains(id) { return id }
-        if id >= previewBase { return min((id - previewBase) % 10, knownCount - 1) }
+        if id >= previewBase { return min((id - previewBase) % 100, knownCount - 1) }
         if let s = speciesMap[id] { return s }
         if id >= firstInstanceID { return 0 }
         return min(max(id, 0), knownCount - 1)
@@ -151,7 +151,7 @@ nonisolated enum JellyRoster {
     /// Whether `id` is a Jelbie that can exist: a species-id instance, a recorded duplicate, or a picker preview scratch id.
     static func isValid(_ id: Int) -> Bool {
         if (0..<knownCount).contains(id) { return true }
-        if id >= previewBase { return (id - previewBase) / 10 < previewSlots && (id - previewBase) % 10 < knownCount }
+        if id >= previewBase { return (id - previewBase) / 100 < previewSlots && (id - previewBase) % 100 < knownCount }
         return speciesMap[id] != nil
     }
     /// A new Jelbie of `species` joining `roster` (instance ids): the species id itself when nobody of that species is in the room, else a fresh instance id
@@ -349,7 +349,7 @@ nonisolated enum JellyRoster {
         case pandaID: return PandaLook.palette
         case tigerID: return TigerLook.palette
         case berryID: return BerryLook.palette
-        case sunsetID, cottonCandyID, oceanID, lemonLimeID, lagoonID: return GradientLook.palette(species(instance))
+        case opalID, sunsetID, cottonCandyID, oceanID, lemonLimeID, lagoonID: return GradientLook.palette(species(instance))
         case marbleID...bronzeID: return LineupLook.palette(species(instance))
         default: return nil
         }
@@ -367,7 +367,7 @@ nonisolated enum JellyRoster {
         case pandaID: return PandaLook.swatch
         case tigerID: return TigerLook.swatch
         case berryID: return BerryLook.swatch
-        case sunsetID, cottonCandyID, oceanID, lemonLimeID, lagoonID: return GradientLook.swatch(species(instance))
+        case opalID, sunsetID, cottonCandyID, oceanID, lemonLimeID, lagoonID: return GradientLook.swatch(species(instance))
         case marbleID...bronzeID: return LineupLook.swatch(species(instance))
         default: return SIMD3(0.70, 0.83, 0.945)
         }
