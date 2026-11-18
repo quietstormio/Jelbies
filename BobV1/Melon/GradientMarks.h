@@ -17,7 +17,7 @@ static float3 gradientPaint(float3 col, float3 Q, float bm) {
     if (bm > 5.5) {          // Opal (mode 86): ONE cyclic plane wave of colour through the rest body (the same 3D wave from the front, back and side: no seam)
         // phase = 1.40 * dot(Q, n) + 0.025, n = (0.640, 0.583, 0.502); five stops pink, peach, mint, sky, lilac, the fifth blending back into the first
         const float3 opalFlesh = float3(0.871, 0.829, 0.869);   // the palette's flesh (GradientLook.swift)
-        const float3 stops[5] = { float3(0.976, 0.761, 0.824), float3(0.969, 0.839, 0.753), float3(0.784, 0.902, 0.839), float3(0.769, 0.855, 0.965), float3(0.839, 0.796, 0.957) };
+        const float3 stops[5] = { float3(1.065, 0.703, 0.786), float3(1.052, 0.847, 0.654), float3(0.710, 0.964, 0.813), float3(0.682, 0.877, 1.047), float3(0.812, 0.768, 1.032) };   // (2026-11-18: 1.85x further from the flesh, so the jelly shading leaves the drawing's colour)
         float phase = 1.40 * dot(Q, float3(0.640, 0.583, 0.502)) + 0.025;
         float u = fract(phase) * 5.0;
         int i = min(int(floor(u)), 4);

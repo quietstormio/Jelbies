@@ -30,7 +30,7 @@ nonisolated enum GradientLook {
     /// phase = waveScale * dot(Q, waveDir) + wavePhase; u = fract(phase) * 5; the stops blend with smoothstep, the fifth back into the first.
     enum Opal {
         static let mode: Float = 86
-        static let stops: [SIMD3<Float>] = [SIMD3(0.976, 0.761, 0.824), SIMD3(0.969, 0.839, 0.753), SIMD3(0.784, 0.902, 0.839), SIMD3(0.769, 0.855, 0.965), SIMD3(0.839, 0.796, 0.957)]   // pink, peach, mint, sky, lilac
+        static let stops: [SIMD3<Float>] = [SIMD3(1.065, 0.703, 0.786), SIMD3(1.052, 0.847, 0.654), SIMD3(0.710, 0.964, 0.813), SIMD3(0.682, 0.877, 1.047), SIMD3(0.812, 0.768, 1.032)]   // pink, peach, mint, sky, lilac (2026-11-18: 1.85x further from the flesh, so the jelly shading leaves the drawing's colour)
         static let waveDir = SIMD3<Float>(0.640, 0.583, 0.502)
         static let waveScale: Float = 1.40, wavePhase: Float = 0.025
         static let flesh = SIMD3<Float>(0.871, 0.829, 0.869)
