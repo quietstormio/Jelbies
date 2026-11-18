@@ -2,7 +2,7 @@
 //  SpeciesInfo.swift
 //  The words and numbers behind the species picker (Adoption Center): species names, epithets, about lines, the starting trait jars and the
 //  moves each species shows off. Content as decided 2026-10-26 (docs/Species.md). Characters: 0 Bob (blue), 1 Pip (yellow), 2 Moss (green),
-//  3 Lavender (purple); the picker order is blue, yellow, purple, green, then the specials Teddy (4), Pearl (5), Panda (6) when adopting more.
+//  3 Lavender (purple); the picker order is blue, yellow, purple, green, then the specials Teddy (4), Pearl (5), Panda (6), Opal (12) when adopting more.
 //
 
 import SwiftUI
@@ -36,9 +36,9 @@ struct SpeciesInfo {
 
     /// Picker order (blue, yellow, purple, green), as character ids.
     static let order = [0, 1, 3, 2]
-    /// The special species sold in the Jelly Spring for JellyCoins (never the free first gift): Teddy, Pearl, Panda (AdoptionPrice.special).
-    static let special = [JellyRoster.teddyID, JellyRoster.pearlID, JellyRoster.pandaID]
-    /// The picker pages: the four starters, then (when adopting more, not the free first gift) the three specials.
+    /// The special species sold in the Jelly Spring for JellyCoins (never the free first gift): Teddy, Pearl, Panda, Opal (AdoptionPrice.special).
+    static let special = [JellyRoster.teddyID, JellyRoster.pearlID, JellyRoster.pandaID, JellyRoster.opalID]
+    /// The picker pages: the four starters, then (when adopting more, not the free first gift) the four specials.
     static func pages(includingSpecial: Bool) -> [Int] { includingSpecial ? order + special : order }
     var isSpecial: Bool { Self.special.contains(character) }
     static func of(_ character: Int) -> SpeciesInfo { all.first { $0.character == character } ?? all[0] }
@@ -105,7 +105,7 @@ struct SpeciesInfo {
                     moves: [SpeciesMoveInfo(title: "Stretch", subtitle: "Signature move", icon: "figure.arms.open", move: .idle(.stretch)),
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.stretch), .blink, .hop, .face(.excited), .idle(.sway)]),
-        // Opal (12): complete content, but NOT offered (not in `special`, `order` or `pages`) until the Jelly Spring wiring.
+        // Opal (12): a special, sold in the Jelly Spring like Teddy / Pearl / Panda (`special`, so `pages`); never a starter.
         SpeciesInfo(character: JellyRoster.opalID, name: "Opal", epithet: "The rainbow one",
                     about: "Pastel rainbow from head to toe. Every turn shows a new colour, and it loves to show them off.",
                     signature: "Rainbow glow", signatureIcon: "rainbow",

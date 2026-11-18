@@ -8,7 +8,7 @@
 //  Content: SpeciesInfo.swift. Backdrop / pedestal: PickerBackdrop.swift. Camera orbit: PickerCamera.swift.
 //  Species page -> "Pick your <species>" -> PICK page (three Jelbies of the species side by side, each with its own personality, stats, favourite snack and a slight colour
 //  shade: JellyTraits.swift) -> naming -> bring home. The same flow serves the free first gift and the Jelly Spring.
-//  Simulator-only capture flags: -PickerPage 0...6 (picker order; 4...6 = Teddy, Pearl, Panda with -PickerMode more), -PickerTab 0...2, -PickerMode more,
+//  Simulator-only capture flags: -PickerPage 0...7 (picker order; 4...7 = Teddy, Pearl, Panda, Opal with -PickerMode more), -PickerTab 0...2, -PickerMode more,
 //  -PickerStep species|pick|name, -PickerCandidate 0...2, -PickerEmote <n> (the species' n-th emote, every 4 s, instead of the random loop; species/naming steps).
 //
 
@@ -155,7 +155,7 @@ struct AdoptionCenter: View {
     }
 
     private var reduce: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
-    /// The species pages of this screen: the four starters, plus Teddy, Pearl and Panda when adopting more (not the free first gift).
+    /// The species pages of this screen: the four starters, plus Teddy, Pearl, Panda and Opal when adopting more (not the free first gift).
     private var order: [Int] { SpeciesInfo.pages(includingSpecial: mode == .more) }
     private var info: SpeciesInfo { SpeciesInfo.of(order[page]) }
     private var look: SpeciesLook { info.look }
