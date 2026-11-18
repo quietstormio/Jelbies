@@ -162,6 +162,8 @@ extension GameCare {
     private func applyArrivalAsleep() {
         let ids = raceBook.actors.sorted { $0.id < $1.id }
         nightRest.arrivalIDs = []
+        for a in ids { if let b = a.brain, b.sleepEnabled, !isNewcomerHeld(a.id) { b.sleepBound = true } }          // (all go down in this loop: each lies where he stands, a later one yields to an earlier one's spot)
+        defer { for a in ids { a.brain?.sleepBound = false } }
         for a in ids {
             guard let b = a.brain, b.sleepEnabled, !isNewcomerHeld(a.id) else { continue }          // (a bought Jelbie still being welcomed is not put to bed: GameCare+Newcomer.swift wakes the house for him)
             b.abortAll(a.sim, a.skinner)

@@ -203,6 +203,15 @@ enum SleepTuning {
     static let decorClear: Float = 0.85, decorFlatClear: Float = 0.3          // solid pieces / flat pieces (rug, mat, ball)
     /// The relaxed clearances (a full room with nowhere else): he may lie closer to a piece and nearer the edge of the rug, never inside a piece's footprint.
     static let decorClearRelaxed: Float = 0.5, decorFlatClearRelaxed: Float = 0.1
+
+    /// SLEEP ANYWHERE (owner 2026-11-17: "they don't have to lineup, they can sleep where ever ... they get buggy and run into each other when trying to line up"):
+    /// at bedtime (any path) a Jelmiko lies down where he stands; only when that spot is not fair does he walk, to the nearest fair one. false (dev: `-SleepAnywhere 0`) = the old row / rug pile.
+    nonisolated(unsafe) static var anywhere: Bool = {
+        guard DevArgs.enabled, UserDefaults.standard.object(forKey: "SleepAnywhere") != nil else { return true }
+        return UserDefaults.standard.integer(forKey: "SleepAnywhere") != 0
+    }()
+    /// The clear gap kept between two lying skins (the footprint's own sway is inside the ellipse), the nearest-spot search range, and how far a mover may be sent before the old chooser takes over.
+    static let anywhereGap: Float = 0.15, anywhereReach: Float = 1.2, anywhereFarReach: Float = 2.2
 }
 
 extension BlobBrain {
@@ -247,8 +256,8 @@ extension BlobBrain {
 
     /// Do two lying footprints (ellipses, `footHalfLen` along the heading, `footHalfWid` across, + `footMargin`) whose centres are `d` apart intersect?
     /// Judged in each body's own heading frame (the pile shares one heading, so the two agree there); either frame saying "inside" is a clash.
-    static func lieClash(_ d: SIMD2<Float>, yawA: Float, yawB: Float, hold: Bool = false) -> Bool {
-        let hw = hold ? SleepTuning.holdHalfWid : SleepTuning.footHalfWid, k = hold ? 2 : 2 + SleepTuning.footMargin / SleepTuning.footHalfWid
+    static func lieClash(_ d: SIMD2<Float>, yawA: Float, yawB: Float, hold: Bool = false, margin: Float? = nil) -> Bool {
+        let hw = hold ? SleepTuning.holdHalfWid : SleepTuning.footHalfWid, k = hold ? 2 : 2 + (margin ?? SleepTuning.footMargin) / SleepTuning.footHalfWid
         for y in [yawA, yawB] {
             let l = SIMD2(simd_dot(d, SIMD2(cosf(y), -sinf(y))) / hw, simd_dot(d, SIMD2(sinf(y), cosf(y))) / SleepTuning.footHalfLen)
             if simd_length(l) < k { return true }
@@ -283,6 +292,7 @@ extension BlobBrain {
     /// Where he lies down: beside the pile if there is one, else here when this is a good spot, else the nearest good spot on the rug.
     /// `hold`: a row spot beside ONE sleeper at the hand-holding spacing (nil partner = no such spot, the usual choice).
     func chooseSleepSpot() -> (spot: SIMD2<Float>, yaw: Float, joined: Bool, partner: BlobBrain?) {
+        if SleepTuning.anywhere, let c = chooseSleepSpotAnywhere() { return c }          // (nil only in a room with no fair spot near him at all: the old search below is the last resort)
         let mates = sleepMates
         let here = position
         if let lead = mates.min(by: { $0.steerID < $1.steerID }) {
@@ -401,9 +411,11 @@ extension BlobBrain {
         // a free pet bed is the preferred spot for a Jelly who sleeps alone: he hops over its rim and curls up on the mattress
         var bed: (foot: DecorFoot, stand: SIMD2<Float>)?
         if sleepMates.isEmpty { bed = freeBed() }
+        if SleepTuning.anywhere, let b = bed, simd_distance(position, b.stand) > 0.8 { bed = nil }          // (sleep anywhere: no walk to the pet bed unless he already stands at it)
         var c = bed.map { b in (spot: b.foot.centre + b.foot.turned(SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z)), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot()
-        if force, bed == nil, !c.joined, !sleepFloorOK(c.spot, relaxed: true) || sleepOverlapsOthers(c.spot, yaw: c.yaw) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
-        guard force || bed != nil || c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
+        let fairAny = SleepTuning.anywhere && bed == nil && sleepFairAnywhere(c.spot)
+        if force, bed == nil, !c.joined, !fairAny, !sleepFloorOK(c.spot, relaxed: true) || sleepOverlapsOthers(c.spot, yaw: c.yaw) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
+        guard force || bed != nil || c.joined || fairAny || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
         idleBegin(.sleep)
         sleep = SleepState()
         sleep.force = force
@@ -451,8 +463,9 @@ extension BlobBrain {
     private func sleepLingerEnd(_ skinner: Skinner) {
         sleep.lingering = false; sleep.t = 0
         skinner.setEyeOpenness(1)
-        if let tgt = sleep.lingerTarget {
+        if var tgt = sleep.lingerTarget {
             sleep.lingerTarget = nil
+            if SleepTuning.anywhere, sleep.bed < 0, !sleepFairAnywhere(tgt), let c = chooseSleepSpotAnywhere() { tgt = c.spot; sleep.spot = c.spot }          // (the spot he chose a moment ago was taken by somebody else since: a fresh nearest one)
             scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
             script = .walk(target: tgt, then: .none); activity = .walking
         } else {
@@ -484,7 +497,8 @@ extension BlobBrain {
                 return
             }
         }
-        if sleep.force, !sleepFloorOK(position, relaxed: true), !sleep.forceRetried, let f = forceSpot() {
+        let fairHere = SleepTuning.anywhere && sleepFairAnywhere(position)
+        if sleep.force, !fairHere, !sleepFloorOK(position, relaxed: true), !sleep.forceRetried, let f = forceSpot() {
             sleep.forceRetried = true
             sleep.spot = f
             if simd_distance(position, f) > 0.25 {
@@ -505,7 +519,7 @@ extension BlobBrain {
                 return
             }
         }
-        guard sleep.force || sleepFloorOK(position, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); idleFinish(skinner); return }          // no way to a good spot: not here (in front of the table, on the call spot): try again later
+        guard sleep.force || fairHere || sleepFloorOK(position, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); idleFinish(skinner); return }          // no way to a good spot: not here (in front of the table, on the call spot): try again later
         sleep.spot = position
         sleep.stage = 1; sleep.t = 0; sleep.stageStart = true
         idleState.phaseT = 0
