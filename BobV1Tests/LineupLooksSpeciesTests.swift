@@ -63,7 +63,7 @@ final class LineupLooksSpeciesTests: XCTestCase {
             XCTAssertFalse(SpeciesInfo.pages(includingSpecial: false).contains(id))
             XCTAssertFalse(JellyRoster.defaultIDs.contains(id))
             for n in 1...3 { XCTAssertFalse(JellyRoster.sanitised(Array(0..<n)).contains(id)) }
-            XCTAssertFalse(JellyVariantBook.takesVariant(id), "no rare / mutation variant for a lineup character")
+            XCTAssertFalse(JellyVariants.takesVariant(id), "no rare / mutation variant for a lineup character")
         }
         // no rare / mutation is ever offered for any species that can take one, and none of those is a lineup character
         for sp in 0...3 { for day in [1, 100, 20000] { _ = JellyVariantBook.offer(species: sp, dayKey: day) } }

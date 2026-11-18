@@ -40,7 +40,7 @@ final class OpalSpeciesTests: XCTestCase {
         XCTAssertFalse(SpeciesInfo.of(opal).isSpecial)
         XCTAssertFalse(JellyRoster.defaultIDs.contains(opal))
         for n in 1...3 { XCTAssertFalse(JellyRoster.sanitised(Array(0..<n)).contains(opal)) }
-        XCTAssertFalse(JellyVariantBook.takesVariant(opal))
+        XCTAssertFalse(JellyVariants.takesVariant(opal))
         XCTAssertEqual(JellyRoster.characterCount, 4)
         let d = UserDefaults(suiteName: "OpalSpeciesTests.launch")!
         d.removePersistentDomain(forName: "OpalSpeciesTests.launch")
@@ -52,17 +52,17 @@ final class OpalSpeciesTests: XCTestCase {
         let info = SpeciesInfo.of(opal)
         XCTAssertEqual(info.character, opal)
         XCTAssertEqual(info.name, "Opal")
-        XCTAssertEqual(info.traits, JellyTraits.baseJars(opal))
-        XCTAssertEqual(JellyTraits.baseJars(opal), [72, 68, 90, 50, 38])
-        XCTAssertEqual(JellyTraits.lovedSnack(opal), "popsicle")
+        XCTAssertEqual(info.traits, JellyCandidates.baseJars(opal))
+        XCTAssertEqual(JellyCandidates.baseJars(opal), [72, 68, 90, 50, 38])
+        XCTAssertEqual(JellyCandidates.lovedSnack(opal), "popsicle")
         XCTAssertNotNil(Consumables.with(id: "popsicle"), "the loved snack is a store food (Ice pop)")
         XCTAssertEqual(Consumables.with(id: "popsicle")?.name, "Ice pop")
         XCTAssertEqual(info.loves, "Ice pop")
         XCTAssertEqual(info.emotes.count, 5)
         // earlier species keep their jars / snacks
-        XCTAssertEqual(JellyTraits.baseJars(JellyRoster.pandaID), [70, 80, 35, 40, 55])
-        XCTAssertEqual(JellyTraits.lovedSnack(JellyRoster.pearlID), "onigiri")
-        XCTAssertNil(JellyTraits.lovedSnack(JellyRoster.mooID))
+        XCTAssertEqual(JellyCandidates.baseJars(JellyRoster.pandaID), [70, 80, 35, 40, 55])
+        XCTAssertEqual(JellyCandidates.lovedSnack(JellyRoster.pearlID), "onigiri")
+        XCTAssertNil(JellyCandidates.lovedSnack(JellyRoster.mooID))
     }
 
     func testSleepMask() {
