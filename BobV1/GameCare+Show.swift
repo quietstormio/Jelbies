@@ -196,7 +196,7 @@ extension GameCare {
             let player = show.playerID
             book.performers = book.actors.indices.contains(player) ? [player] : []          // the one roster body on the stage: the contestant
             book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko waits off stage (state saved, restored under the white on the way home)
-            book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.dancing = [:]; book.danceRestart = [:]; book.flopT = nil; book.turned = []
+            book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.danceRun = nil; book.flopT = nil; book.turned = []
             book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.enterDelay = nil
             let spots = ShowStage.spots(bodies: book.performers.count)
             for (k, aid) in (book.performers + book.parked).enumerated() where book.actors.indices.contains(aid) {
@@ -239,7 +239,7 @@ extension GameCare {
                 brain.idleBlocked = false
                 brain.restTimer = 2
             }
-            book.performers = []; book.parked = []; book.palettes = [:]; book.dancing = [:]
+            book.performers = []; book.parked = []; book.palettes = [:]; book.danceRun = nil
             showRemoveExtras()
             book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.enterDelay = nil
         }
@@ -408,7 +408,7 @@ extension GameCare {
         let book = showBook
         if on {
             let song = show.danceSong
-            book.danceRun = ShowDanceRun(phrases: ShowDancePlan.phrases(rank: show.rank, lastBeat: song.lastBeat, seed: show.seed), lively: ShowDancePlan.lively(show.rank),
+            book.danceRun = ShowDanceRun(phrases: ShowDancePlan.phrases(rank: show.rank, lastBeat: song.lastBeat, seed: show.sim?.seed ?? 0), lively: ShowDancePlan.lively(show.rank),
                                          period: song.grid.period, firstBeat: song.grid.firstBeat)
             for aid in book.performers where book.actors.indices.contains(aid) { book.actors[aid].brain?.face(.happy, hold: 3) }
         } else {
