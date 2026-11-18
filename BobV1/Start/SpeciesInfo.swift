@@ -108,7 +108,7 @@ struct SpeciesInfo {
         // Opal (12): complete content, but NOT offered (not in `special`, `order` or `pages`) until the Jelly Spring wiring.
         SpeciesInfo(character: JellyRoster.opalID, name: "Opal", epithet: "The rainbow one",
                     about: "Pastel rainbow from head to toe. Every turn shows a new colour, and it loves to show them off.",
-                    signature: "Rainbow shimmer", signatureIcon: "rainbow",
+                    signature: "Rainbow glow", signatureIcon: "rainbow",
                     lore: "Woke up inside a soap bubble at sunrise, just as the light turned every colour at once. Opals keep a little of that rainbow wherever they go.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Ice pop", traits: [72, 68, 90, 50, 38],
                     moves: [SpeciesMoveInfo(title: "Twirl", subtitle: "Signature move", icon: "rainbow", move: .idle(.tail)),
