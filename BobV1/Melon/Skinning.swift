@@ -1610,7 +1610,7 @@ nonisolated final class Skinner {
                     let view = simd_normalize(GameCamera.target - GameCamera.eye)
                     for sd in 0..<2 {
                         // a thick, steeply slanted brow is measured by its extreme screen points, so turn it in two passes (the second removes what is left)
-                        for _ in 0..<2 {
+                        for _ in 0..<4 {          // (4 passes: a heavily turned head (the ends layout, the café) needs more than 2 to come within ~0.1 rad)
                             var c = SIMD3<Float>(0, 0, 0)
                             var lo = SIMD2<Float>(.infinity, 0), hi = SIMD2<Float>(-.infinity, 0)
                             for vi in browIdx[sd] {

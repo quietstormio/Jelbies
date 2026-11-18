@@ -107,7 +107,13 @@ extension GameCare {
             group.avoid = jellyFloors
             #if targetEnvironment(simulator)
             let bodies: [() -> SIMD2<Float>] = sorted.map { a in { [weak s = a.sim] in s.map { (b: SoftBody) -> SIMD2<Float> in let v = b.centroid(); return SIMD2(v.x, v.z) } ?? .zero } }
-            group.traceBody = { bodies[$0]() }          // (meal trace only: the pose line's body centroid)
+            group.traceBody = { bodies[$0]() }
+            let skins: [SoftBody] = sorted.map { $0.sim }
+            group.traceSkin = { i, box in
+                let b = skins[i]; var m = Float.infinity
+                for k in 0..<b.n where b.x[3 * k + 1] < b.floorY + box.height { m = min(m, RoomLayout.boxDistanceXZ(SIMD2(b.x[3 * k], b.x[3 * k + 2]), box)) }
+                return m
+            }          // (meal trace only: the pose line's body centroid)
             let mouths: [() -> SIMD3<Float>?] = sorted.map { a in { [weak b = a.brain, weak s = a.sim] in
                 guard let b, let s, b.dineIsSipping, b.dinePhaseName == "chew" else { return nil }
                 return b.mouthWorld(sim: s) } }

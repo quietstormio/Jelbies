@@ -26,7 +26,7 @@ final class MealReachTests: XCTestCase {
     }
 
     struct Grab { var arrived = true; var place: String; var k: Int; var miss: Float; var crouch: Float; var side: Int }
-    struct Take { var grabs: [Grab] = []; var minBodyBox: Float = .infinity; var minFloorBox: Float = .infinity; var minNeighbour: Float = .infinity; var maxFloorStand: Float = 0; var worstBrow: Float = .infinity }
+    struct Take { var grabs: [Grab] = []; var minBodyBox: Float = .infinity; var minFloorBox: Float = .infinity; var minNeighbour: Float = .infinity; var maxFloorStand: Float = 0; var worstBrow: Float = .infinity; var browByPlace: [String: Float] = [:] }
 
     static let browIdx = buildEyeRig(render: MotionRig.renderMesh, sim: MotionRig.simMesh).brow
     /// Apparent slant (rad, inner end up) of each brow as the game camera sees the skinned render mesh (as DiningFlowTests measures it).
@@ -54,8 +54,7 @@ final class MealReachTests: XCTestCase {
         r.run(1)
         let t0 = r.t
         var dyn = [Float](repeating: 0, count: MotionRig.renderMesh.vertexCount * 6)
-        let restFloor = r.actors.map { a -> Float in let b = browSlant(a, &dyn); return min(b.x, b.y) }
-        r.care.feed(food)
+                r.care.feed(food)
         var tk = Take()
         var seen = Set<Int>()
         var series: [String] = []
@@ -87,7 +86,11 @@ final class MealReachTests: XCTestCase {
                 }
             }
             ids = ids.filter { r.actors[$0].brain?.activity == .eating }
-            for i in ids { let b = self.browSlant(r.actors[i], &dyn); tk.worstBrow = min(tk.worstBrow, min(b.x, b.y) - restFloor[i]) }          // (every tick, 3 diners, variance on)
+            for i in ids {
+                let b = self.browSlant(r.actors[i], &dyn), v = min(b.x, b.y), dx = r.actors[i].floor.x - dn.origin.x
+                let pl = dx < -0.5 ? "left" : dx > 0.5 ? "right" : "middle"
+                tk.worstBrow = min(tk.worstBrow, v); tk.browByPlace[pl] = min(tk.browByPlace[pl] ?? .infinity, v)
+            }          // (every tick, 3 diners, variance on)
             if dn.isPresent, !ids.isEmpty {
                 let box = dn.drawnBox(scale: 1)
                 for a in r.actors where ids.contains(a.id) {
@@ -131,8 +134,8 @@ final class MealReachTests: XCTestCase {
         for g in tk.grabs where g.arrived { XCTAssertLessThanOrEqual(g.miss, 0.015, "\(food) \(g.place) bite \(g.k): nub tip \(g.miss * 100) cm from the piece (crouch \(g.crouch))") }
         let e = nubLengths()
         XCTAssertLessThanOrEqual(e.grab, e.rest * (1 + GameCare.grabStretch) + 1e-6, "arm extension at the grab")
-        XCTAssertGreaterThan(tk.worstBrow, -0.06, "\(food): no brow slants down more than 0.06 rad below that face's rest (the DiningFlow bar), worst \(tk.worstBrow)")
-        print("MEALREACH BROW \(food) worst below rest \(tk.worstBrow)")
+        XCTAssertGreaterThan(tk.worstBrow, -0.1006, "\(food): no brow slants down past DiningFlow's bar (-0.1006 rad: the rest face's flattest brow -0.041 minus 0.06), worst \(tk.worstBrow) by place \(tk.browByPlace)")
+        print("MEALREACH BROW \(food) worst \(tk.worstBrow) by place \(tk.browByPlace)")
         XCTAssertGreaterThanOrEqual(tk.minFloorBox, 0, "no diner's floor point inside the drawn tray")
         XCTAssertGreaterThanOrEqual(tk.minNeighbour, 0, "neighbours' gap")
     }

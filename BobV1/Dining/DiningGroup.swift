@@ -326,6 +326,7 @@ final class DiningGroup {
             if (Self.wideRow || Self.endsLayout), n == 3 {          // (the widest side spacing the floor holds: wide row 1.45 / 1.3 / 1.11; ends layout 1.3 / 1.2 / 1.12)
                 let js = avoid + brains.indices.map { f($0) }
                 DiningLayout.ends = Self.endsLayout
+                DiningLayout.reachFood = c.eatStyle != .sip
                 for sx: Float in (Self.endsLayout ? [1.5, 1.4, 1.3, 1.2, 1.12] : [1.45, 1.3, 1.11]) {
                     DiningLayout.sideX = sx
                     if sx == 1.11 || sx == 1.12 || !DiningSpot.openSpots(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: js).isEmpty { break }
@@ -418,6 +419,7 @@ final class DiningGroup {
     /// Floor spots of the Jelbies who are NOT at this sitting (GameCare sets it every tick): the tray pops in only where none of them stands.
     var bystanders: () -> [SIMD2<Float>] = { [] }
     /// Simulator-only trace aid (GameCare+Group sets it): diner i's soft-body centroid on the floor, for the `pose` line (the body as drawn, not the brain's root).
+    var traceSkin: ((Int, RoomLayout.FlatBox) -> Float)?          // (meal trace only: the diner's drawn skin to the drawn tray, plan distance, + clear, - sunk in)
     var traceBody: ((Int) -> SIMD2<Float>)?
     /// Simulator-only trace aid (GameCare+Group sets it): diner i's mouth (world) while he sips a gulp (`dineIsSipping`, the chew phase), nil otherwise.
     var traceMouth: ((Int) -> SIMD3<Float>?)?
@@ -559,7 +561,7 @@ final class DiningGroup {
         #if targetEnvironment(simulator)
         if MealTrace.poseOn { traceTailT = 3.5; released = [Bool](repeating: true, count: n) }          // (the walk-off window of the trace: everybody counts as released)
         #endif
-        if sideSet { DiningLayout.sideX = 1.11; DiningLayout.ends = false; sideSet = false }
+        if sideSet { DiningLayout.sideX = 1.11; DiningLayout.ends = false; DiningLayout.reachFood = false; sideSet = false }
     }
     /// The meal is dropped (Come here, grabbed, timeout): the tray poofs, what was eaten stays paid.
     func cancel() { guard state != .idle else { return }; end() }
@@ -671,6 +673,7 @@ final class DiningGroup {
                     if !wp.isEmpty { line += " wpos=" + wp.joined(separator: ";") }
                 }
             }
+            if let ts = traceSkin, trayOut { let bx = dining.drawnBox(scale: max(dining.scale, 0.001)); line += " sk=" + brains.indices.map { "\(memberIDs[$0]):" + String(format: "%.4f", ts($0, bx)) }.joined(separator: ",") }
             line += trayOut ? " tray=1" : " tray=0"
             MealTrace.log(line)
         }

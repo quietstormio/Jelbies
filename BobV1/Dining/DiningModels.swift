@@ -110,7 +110,9 @@ nonisolated enum DiningLayout {
     static let endsZ: Float = -0.05, endsYaw: Float = .pi / 4
     /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): the end places of the ENDS layout stand at most this far from the tray centre
     /// (the sitting used 1.5 / 1.4 / 1.3 / 1.2 as the floor allowed: the nub, a stub, hung 0.8 m from the pieces). `-MealReach 0` = as before.
-    nonisolated(unsafe) static var reachSideX: Float = 1.2
+    nonisolated(unsafe) static var reachSideX: Float = (DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReachX") != nil) ? Float(UserDefaults.standard.double(forKey: "MealReachX")) : 1.2
+    /// True while a FOOD sitting is set up (home: `DiningGroup.start`; café: its ends table): only food is reached with the nub, so only food sits at `reachSideX`; drinks keep the old end distance (straws reach the mouth).
+    nonisolated(unsafe) static var reachFood = false
     static var sideYaw: Float { sideX > 1.12 ? 0 : 0.25 }
     static func make(n n0: Int) -> TrayLayout {
         let n = min(max(n0, 1), 3), s = DiningTiming.servingScale(n: n)
@@ -130,7 +132,7 @@ nonisolated enum DiningLayout {
             // 17.6 % wider than before (0.85 -> 1.00). All three Blobs now stand in a row on the far side of the wide tray (the portrait
             // screen cannot hold stands beside it), 1.11 apart, so no belly hangs over a corner: each clears the near rim by his real skin.
             if ends {
-                let sx = GameCare.mealReach ? min(sideX, reachSideX) : sideX
+                let sx = (GameCare.mealReach && reachFood) ? min(sideX, reachSideX) : sideX
                 return TrayLayout(n: 3, scale: s, half: SIMD2(0.55, 0.6),
                                   places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-sx, endsZ), yaw: endsYaw),
                                            TrayPlace(rel: SIMD2(sx, endsZ), yaw: -endsYaw)],
