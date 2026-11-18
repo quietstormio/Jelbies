@@ -610,6 +610,8 @@ final class DiningGroup {
     // MARK: meal trace (simulator-only output, see MealTrace)
     private var traceCount: [Int] = [0, 0, 0]
     private var traceTailT: Float = 0
+    /// `-MealWalkoffGap 0` = the released diner keeps the diners' small peer gap until the sitting ends (the A/B of the walk-off contact).
+    nonisolated(unsafe) static var walkoffGap: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealWalkoffGap") != nil && UserDefaults.standard.integer(forKey: "MealWalkoffGap") == 0)
     private var traceReadyIDs: Set<Int> = [], traceBiteIDs: Set<Int> = [], traceShareIDs: Set<Int> = []
     private(set) var popReason = "gathered"
     /// The tray came out for the awake diner(s) while sleepers were still waking (`awakeFirst`).
@@ -687,7 +689,7 @@ final class DiningGroup {
         if tierOf != nil { for (i, b) in brains.enumerated() where !(released.indices.contains(i) && released[i]) { b.idleBlocked = true } }          // no idle trick mid-sitting (Bob's walk to the tray is never cut for a flip)
         age += dt
         // a released diner walking off: once he is clear of the row (1 u from his stand) he keeps the room's normal peer gap again, not the diners' small one (two walk-offs pressed into each other)
-        for i in brains.indices where released.indices.contains(i) && released[i] && i < savedGap.count && placeOf.indices.contains(i) && brains[i].peerGap < savedGap[i] && simd_distance(floor(i), stands[placeOf[i]]) > 1.0 { brains[i].peerGap = savedGap[i] }
+        for i in brains.indices where Self.walkoffGap && released.indices.contains(i) && released[i] && i < savedGap.count && placeOf.indices.contains(i) && brains[i].peerGap < savedGap[i] && simd_distance(floor(i), stands[placeOf[i]]) > 1.0 { brains[i].peerGap = savedGap[i] }
         varBoard.clock = age
         if age > GameCare.mealTimeout { MealTrace.log("giveup reason=timeout"); end(); gaveUp = true; return }
         traceTick()
