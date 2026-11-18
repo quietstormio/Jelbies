@@ -412,7 +412,7 @@ struct StudioScreen: View {
         }
     }
     private var enterBar: some View {
-        LobbyBottomBar(playID: "studio-show", playTitle: "Enter Jelly Show", playIcon: .star, blocked: blocker != nil, play: { show() })
+        LobbyBottomBar(playID: "studio-show", playTitle: "Enter Jelly Show", playIcon: .star, blocked: blocker != nil, why: blocker, play: { show() })
     }
 
     /// iPad landscape only: the stage, ranks and prizes on the left, the contestant picker and the Show-ready card on the right, the Enter bar right under them

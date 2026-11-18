@@ -44,20 +44,15 @@ enum TipPlacement {
         func covers(_ r: CGRect) -> Bool { heads.contains { r.insetBy(dx: -40, dy: -50).contains($0) } || avoidMap.contains { $0.intersects(r) } }
         switch (place.kind, landscape) {
         case (.top, false):
-            let y = safe.top + place.offset
-            var xs: [CGFloat] = [(size.width - w) / 2, 16, size.width - w - 16]
+            let y = GameMessageLayout.top(safeTop: safe.top, portrait: true)          // the message bar's band: top left, under the top-left control (UI/GameMessageCenter.swift)
+            var xs: [CGFloat] = [GameMessageLayout.margin, (size.width - w) / 2, size.width - w - 16]
             xs = xs.map { max($0, 8) }
             if !place.faces { return CGPoint(x: xs[0], y: y) }
             return xs.first { !covers(CGRect(x: $0, y: y, width: w, height: h)) }.map { CGPoint(x: $0, y: y) }
         case (.top, true):
-            let y = safe.top + 59
-            let right = size.width - max(safe.right, 40) - 20, left = max(safe.left, 0) + 110
-            let sides = [right - w, left]
-            let order: [CGFloat] = {          // away from the Jelmiko: the half he is not in
-                guard place.faces, !heads.isEmpty else { return sides }
-                let hx = heads.map(\.x).reduce(0, +) / CGFloat(heads.count)
-                return hx < size.width / 2 ? sides : sides.reversed()
-            }()
+            let y = GameMessageLayout.top(safeTop: safe.top, portrait: false)
+            let left = GameMessageLayout.left(safeLeft: safe.left), right = size.width - max(safe.right, 40) - 20 - w
+            let order: [CGFloat] = [left, right]          // the message bar's corner first; the far side only when a head is under it
             if !place.faces { return CGPoint(x: order[0], y: y) }
             return order.first { !covers(CGRect(x: $0, y: y, width: w, height: h)) }.map { CGPoint(x: $0, y: y) }
         case (.bottom, false):

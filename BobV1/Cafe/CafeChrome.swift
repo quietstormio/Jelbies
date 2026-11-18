@@ -84,29 +84,14 @@ struct CafeChrome: View {
                     .padding(.top, 60).padding(.trailing, 12)
                     .transition(.scale(scale: 0.9, anchor: .topTrailing).combined(with: .opacity))
                 }
-                if let r = cafe.refusal {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Text(r).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
-                                .padding(.horizontal, 16).padding(.vertical, 10)
-                                .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                                .accessibilityIdentifier("cafe-toast")
-                            Spacer(minLength: 70)
-                        }
-                        .padding(.leading, 76).padding(.bottom, 24)
-                    }
-                    .allowsHitTesting(false).transition(.opacity)
-                }
                 Color.white.opacity(Double(cafe.wipe)).ignoresSafeArea().allowsHitTesting(cafe.wipe > 0).accessibilityHidden(true)
             }
             .frame(width: g.size.width, height: g.size.height)
             .animation(.easeInOut(duration: 0.25), value: cafe.listOpen)
             .animation(.easeInOut(duration: 0.25), value: cafe.canGoHome)
             .animation(.easeInOut(duration: 0.25), value: cafe.phase == .done)
-            .animation(.easeInOut(duration: 0.2), value: cafe.refusal)
         }
-        .allowsHitTesting(cafe.active || cafe.refusal != nil)
+        .allowsHitTesting(cafe.active)
     }
 
     /// Top-left, from the moment the café fades in until the end: leaves the café (mid-meal too: GameCare cleans up under the white).

@@ -186,16 +186,16 @@ struct TownView: View {
             Place(id: "town-shop", title: "Shop", sub: "Food, shoes, tricks", symbol: "bag.fill", color: SK.pink, cats: [.shops]) { go(.shop) },
             Place(id: "town-track", title: "Jelly Race", sub: "Race for JellyCoins", symbol: "flag.checkered", color: SK.sky, cats: [.play]) { go(.track) },
             Place(id: "town-studio", title: "Jelly Show", sub: "Dress up and dance", symbol: "sparkles", color: SK.honey, cats: [.play]) { go(.studio) },
-            Place(id: "town-cafe", title: "Café", sub: care.cafeNobodyHungry ? "Nobody's hungry \u{00B7} drinks only" : "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
-            Place(id: "town-park", title: "Park", sub: "Play with visitors", symbol: "tree.fill", color: SK.sky, cats: [.play, .friends]) { park() },
-            Place(id: "town-groom", title: "Jelly Spa", sub: care.groomGuestBlocker ?? "Bubbles and clean-up", symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops], enabled: care.groomGuestBlocker == nil) {
-                if care.groomGuestBlocker != nil { AudioHub.shared.play(.notEnough) } else { groom() }          // a friend is coming or here: the Jelly Wash stays closed (the tile says why)
+            Place(id: "town-cafe", title: "Café", sub: care.isBedtimeHours ? TownRefusals.closedSub : care.cafeNobodyHungry ? "Nobody's hungry \u{00B7} drinks only" : "Treats with the gang", symbol: "cup.and.saucer.fill", color: SK.mint, cats: [.shops]) { cafe() },
+            Place(id: "town-park", title: "Park", sub: care.isBedtimeHours ? TownRefusals.closedSub : "Play with visitors", symbol: "tree.fill", color: SK.sky, cats: [.play, .friends]) { park() },
+            Place(id: "town-groom", title: "Jelly Spa", sub: care.groomGuestBlocker ?? (care.isBedtimeHours ? TownRefusals.closedSub : "Bubbles and clean-up"), symbol: "bubbles.and.sparkles.fill", color: SK.pink, cats: [.shops], enabled: care.groomGuestBlocker == nil) {
+                if let why = care.groomGuestBlocker { AudioHub.shared.play(.notEnough); GameMessageCenter.shared.refuse(why) } else { groom() }          // a friend is coming or here: the Jelly Wash stays closed (the tile says why)
             },
             Place(id: "town-friends", title: "Friends", sub: visit, symbol: "person.2.fill", color: SK.mint, cats: [.friends]) { go(.friends) },
             Place(id: "town-beach", title: "Jelly Volleyball", sub: "Bump and spike", symbol: UIImage(systemName: "figure.volleyball") != nil ? "figure.volleyball" : "sportscourt.fill", color: SK.honey, cats: [.play]) { go(.volley) },
             Place(id: "town-camp", title: "Jelmiko Camp", sub: CampUI.townSub(count: campCount), symbol: "tent.fill", color: SK.mint, cats: [.friends]) { camp() },
             Place(id: "town-adopt", title: "Jelly Spring", sub: SpringStates.townSub(home: atHome, camp: campCount), symbol: "drop.fill", color: SK.sky, cats: [.friends], enabled: open,
-                  tag: TownTag.mutationAvailable(day: JellyVariantBook.dayKey(), home: atHome, camp: campCount) ? "Mutation Available" : nil) { if !open { AudioHub.shared.play(.notEnough) } else { adopt() } },
+                  tag: TownTag.mutationAvailable(day: JellyVariantBook.dayKey(), home: atHome, camp: campCount) ? "Mutation Available" : nil) { if !open { AudioHub.shared.play(.notEnough); GameMessageCenter.shared.refuse(TownRefusals.springFull) } else { adopt() } },
         ]
     }
 
@@ -339,6 +339,13 @@ struct TownView: View {
 }
 
 /// When the Jelly Spring's Where-to card carries the "Mutation Available" pill: a rare colour is on offer today (`JellyVariantBook.rareOnOffer`, the same answer the pick page's "Rare" tag comes from) and the Spring can sell (home OR Jelmiko Camp has room: `SpringStates.townEnabled`).
+/// The Town's closed-door lines (the tile says it before the tap; the tap says why on the message bar).
+enum TownRefusals {
+    /// The small line under a place's name while the game already knows it is closed (the Spa, the Café and the Park close at night).
+    static let closedSub = "Closed until morning"
+    static let springFull = "The Jelly Spring has no room right now. Home and Camp are full."
+}
+
 nonisolated enum TownTag {
     static func mutationAvailable(day: Int, home: Int, camp: Int) -> Bool { SpringStates.townEnabled(home: home, camp: camp) && JellyVariantBook.rareOnOffer(dayKey: day) }
 }
@@ -431,7 +438,7 @@ struct TrackPanel: View {
             } right: {
                 runnerCard(prof).padding(.top, compact ? 0 : 12)
             } bar: {
-                LobbyBottomBar(playID: "track-race", playTitle: "Go race", playIcon: .flag, blocked: blocker != nil, upgradeID: "track-upgrade",
+                LobbyBottomBar(playID: "track-race", playTitle: "Go race", playIcon: .flag, blocked: blocker != nil, why: blocker, upgradeID: "track-upgrade",
                                upgradePoints: prof.map { care.upgrades.points(.race, character: $0.character) } ?? 0, upgrade: { setUpgrade(true) }, play: race)
             }
             .accessibilityHidden(howOpen || upgradeOpen)

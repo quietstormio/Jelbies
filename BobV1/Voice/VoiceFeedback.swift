@@ -66,7 +66,7 @@ nonisolated struct VoiceFeedback: Equatable, Sendable {
     let born: Double
 }
 
-/// The overlay: heard pill + prompt / toast above the mic, the bubble beside his head.
+/// The overlay: the bubble beside his head. (What was heard / understood is a line on the one message bar: VoiceCoordinator posts it to GameMessageCenter.)
 struct VoiceFeedbackView: View {
     let voice: VoiceCoordinator
     let care: GameCare
@@ -89,20 +89,6 @@ struct VoiceFeedbackView: View {
                             .accessibilityValue(f.kind.name)
                     }
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Spacer()
-                    if let t = voice.toast, now - t.born < 2.8 {
-                        pill(t.text, id: "voice-toast", fade: now - t.born, life: 2.8, accent: true)
-                    }
-                    if let u = voice.understood, now - u.born < Self.understoodLife {
-                        understoodPill(u, fade: now - u.born)
-                    }
-                    if let h = voice.heard, now - h.born < Self.heardLife {
-                        pill(h.text, id: "voice-heard", fade: now - h.born, life: Self.heardLife, accent: false)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 16 + HUDTuning.railWidth + 10).padding(.trailing, 16 + 68).padding(.bottom, 74)          // beside the left rail (never under it), clear of the paw; long lines wrap inside
             }
         }
         .allowsHitTesting(false)
@@ -113,44 +99,6 @@ struct VoiceFeedbackView: View {
         let mid = care.headWorld - SIMD3(0, H * 0.5, 0)
         let w = SIMD3<Float>(mid.x + 1.0, mid.y - 0.64 + 0.8 * H, mid.z)           // beside the crown, like the touch hearts
         return ThoughtBubbleView.project(w, size: size, focus: care.focus.blend)
-    }
-
-    /// The understood command: a small check (or a question mark) and the line, in the cream pill.
-    private func understoodPill(_ u: VoiceUnderstood, fade: Double) -> some View {
-        let out = max(0, min(1, (Self.understoodLife - fade) / 0.4))
-        return HStack(spacing: 7) {
-            Image(systemName: u.ok ? "checkmark.circle.fill" : "questionmark.circle.fill")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(u.ok ? Color(red: 0.36, green: 0.68, blue: 0.45) : FocusStyle.pink)
-            Text(u.text)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(FocusStyle.brown)
-                .lineLimit(2).multilineTextAlignment(.leading)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-        .opacity(out)
-        .accessibilityElement(children: .ignore)
-        .accessibilityIdentifier("voice-understood")
-        .accessibilityLabel(u.text)
-        .accessibilityValue(u.ok ? "understood" : "cannot")
-    }
-
-    private func pill(_ text: String, id: String, fade: Double, life: Double, accent: Bool) -> some View {
-        let out = max(0, min(1, (life - fade) / 0.4))
-        return Text(text)
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .foregroundStyle(accent ? Color.white : FocusStyle.brown)
-            .lineLimit(3).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(Capsule().fill(accent ? SK.pinkStrong : FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 5, y: 2))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-            .opacity(out)
-            .accessibilityElement(children: .ignore)
-            .accessibilityIdentifier(id)
-            .accessibilityLabel(text)
-            .accessibilityValue(text)
     }
 }
 

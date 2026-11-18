@@ -461,17 +461,16 @@ enum AdoptionPrice {
     }
 }
 
-/// "<name> is at Jelmiko Camp": a calm line in the room for a few seconds (no hearts, no arrival).
+/// "<name> is at Jelmiko Camp": a calm line on the one message bar (UI/GameMessageCenter.swift), then the flow's note is cleared.
 struct CampNoteBanner: View {
     let text: String
     var gone: () -> Void
     var body: some View {
-        Text(text).font(SK.font(20, .black)).foregroundStyle(SK.ink)
-            .padding(.horizontal, 20).frame(minHeight: 46).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
-            .offset(y: -140).allowsHitTesting(false)
-            .onAppear { Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
-            .accessibilityLabel(text).accessibilityIdentifier("camp-note")
-            .transition(.opacity)
+        Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
+            .onAppear {
+                GameMessageCenter.shared.post(text, identifier: "camp-note")
+                Task { try? await Task.sleep(nanoseconds: 200_000_000); gone() }
+            }
     }
 }
 
@@ -487,12 +486,9 @@ struct WelcomeBanner: View {
                     .offset(x: CGFloat(i - 3) * 38, y: up ? -170 - CGFloat(i % 3) * 30 : 20).opacity(up ? 0 : 0.95)
                     .animation(.easeOut(duration: 2.2).delay(Double(i) * 0.1), value: up)
             }
-            Text("Welcome home, \(name)!").font(SK.font(22, .black)).foregroundStyle(SK.ink)
-                .padding(.horizontal, 20).frame(minHeight: 50).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
-                .offset(y: -140)
         }
         .allowsHitTesting(false)
-        .onAppear { up = true; Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
+        .onAppear { up = true; GameMessageCenter.shared.post("Welcome home, \(name)!", identifier: "welcome-home"); Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Welcome home, \(name)")
         .transition(.opacity)

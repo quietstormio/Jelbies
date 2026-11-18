@@ -155,6 +155,7 @@ final class TipBook {
         if DevArgs.enabled, !queue.isEmpty { let line = "queue=\(queue) open=\(open.sorted()) ctx=\(ctx) holds=\(holds.sorted())"; if line != lastLog { lastLog = line; NSLog("[tips] %@", line) } }
         guard !queue.isEmpty, !ctx.blocked, holds.isEmpty, !landscapePhone() else { return }          // landscape iPhone: the queue holds, no flag is written
         if let last = lastEnd, now().timeIntervalSince(last) < Self.gap, !(queue.first == forced && forced != nil) { return }
+        if GameMessageCenter.shared.current != nil { return }          // one place: a tip card waits for the message on the bar (the bar waits for a tip too)
         guard let i = queue.firstIndex(where: { open.contains($0) }) else { return }
         let id = queue.remove(at: i)
         defaults.set(true, forKey: Self.key(id))          // written when the card APPEARS

@@ -133,7 +133,7 @@ extension GameCare {
 
     /// Takes Jelly `id` to the track.
     func startRace(jelly id: Int, seed: UInt64? = nil) {
-        guard canRace(jelly: id) else { return }
+        if let why = raceBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
         // A Jelly that is asleep (or going to bed) rolls back up first; the trip starts once everybody is on their feet.
         let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }
         if !sleepers.isEmpty {

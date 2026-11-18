@@ -70,19 +70,11 @@ struct PlayChrome: View {
                     .accessibilityAddTraits(.allowsDirectInteraction)
                     .accessibilityAction(named: "Throw to a Jelmiko") { throwToMiddle(size) }
                     .accessibilityIdentifier("play-surface")
-                VStack {
-                    Spacer()
-                    if play.phase == .inHand, !thrown, play.camBlend > 0.8 {
-                        Text("Flick the ball to a Jelmiko").jFont(15, .semibold).foregroundStyle(FocusStyle.brown)
-                            .padding(.horizontal, 18).padding(.vertical, 10)
-                            .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-                            .padding(.bottom, size.height * (HUDLayout.isLandscape(vsc: vsc, size: size) ? 0.19 : 0.20))
-                            .transition(.opacity).allowsHitTesting(false)
-                            .accessibilityHidden(true)
+                Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
+                    .onChange(of: play.phase == .inHand && !thrown && play.camBlend > 0.8, initial: true) { _, on in          // (the hint is a line on the one message bar)
+                        if on { GameMessageCenter.shared.post("Flick the ball to a Jelmiko", priority: .chatty, identifier: "play-hint", sticky: GameMessageCenter.hintsSticky) }
+                        else { GameMessageCenter.shared.dismiss(identifier: "play-hint") }          // (thrown, or the toy is away: the hint has done its job)
                     }
-                }
-                .frame(width: g.size.width, height: g.size.height)
                 // hearts from the hand, and the rally mark
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { tl in
                     Canvas { ctx, sz in
