@@ -1453,6 +1453,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             care.wearDrawn = true; care.shoesDrawn = false; care.shoeSig = []
             renderer.invalidateRoomCache()
         }
+        room.shoesInCutout = hp?.pose != nil          // (the action shot shows his shoes; the head portrait and the picker draw none)
+        defer { room.shoesInCutout = false }
         renderer.beginFrame()
         for o in actors { renderer.setHidden(o.id != id, body: o.id) }
         renderer.raceVisible = false
