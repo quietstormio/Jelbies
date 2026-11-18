@@ -26,7 +26,7 @@ final class MealReachTests: XCTestCase {
     }
 
     struct Grab { var arrived = true; var place: String; var k: Int; var miss: Float; var crouch: Float; var side: Int }
-    struct Take { var grabs: [Grab] = []; var minBodyBox: Float = .infinity; var minFloorBox: Float = .infinity; var minNeighbour: Float = .infinity; var maxFloorStand: Float = 0 }
+    struct Take { var grabs: [Grab] = []; var minBodyBox: Float = .infinity; var minFloorBox: Float = .infinity; var minNeighbour: Float = .infinity; var maxFloorStand: Float = 0; var worstBrow: Float = .infinity }
 
     static let browIdx = buildEyeRig(render: MotionRig.renderMesh, sim: MotionRig.simMesh).brow
     /// Apparent slant (rad, inner end up) of each brow as the game camera sees the skinned render mesh (as DiningFlowTests measures it).
