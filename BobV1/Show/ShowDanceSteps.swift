@@ -65,8 +65,9 @@ nonisolated enum ShowDancePlan {
     static func lively(_ rank: ShowRank) -> Bool { rank.index >= ShowRank.lagoon.index }
     /// Bars in the round: the song's last prompt beat in whole bars (24 beats -> 6, 16 -> 4).
     static func bars(lastBeat: Int) -> Int { max(4, lastBeat / beatsPerBar) }
-    /// Which of his feet a prompt's L / R is: the Left button is the foot drawn on the screen's left (foot index 0 on the stage camera, checked in the real app), Right the one on the right.
-    static func side(forFoot foot: Int) -> Int { foot }
+    /// Which of his feet a prompt's L / R is: HIS OWN left / right foot (the owner: "when I hit L his left foot raises"). He faces the camera, so his left foot is the one drawn on the
+    /// screen's right: foot index 1 on the stage camera (checked in the real app); his right foot is index 0, drawn on the screen's left.
+    static func side(forFoot foot: Int) -> Int { 1 - foot }
 
     /// The phrase of every bar: the step-touch at the start, at the end and in the middle, a different move in between (never twice running, as many different ones as the pool allows).
     static func phrases(rank: ShowRank, lastBeat: Int, seed: UInt64) -> [ShowDanceMove] {

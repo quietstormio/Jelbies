@@ -116,6 +116,10 @@ final class ShowDanceStepsTests: XCTestCase {
     }
 
     /// Every L / R press makes his foot on that side step (lift and land) within a third of a second, whether it was on time or not (auto play presses a little late, skips some).
+    func testLPlantsHisOwnLeftFoot() {
+        XCTAssertEqual(ShowDancePlan.side(forFoot: 0), 1, "L (0) is his own left foot: foot index 1, drawn on the screen's right as he faces the camera")
+        XCTAssertEqual(ShowDancePlan.side(forFoot: 1), 0, "R (1) is his own right foot: foot index 0, drawn on the screen's left")
+    }
     func testEveryPressStepsThatFoot() {
         for (rank, song) in [(ShowRank.puddle, 1), (.ocean, 2), (.puddle, 4)] {
             let r = dance(rank: rank, song: song, auto: true)
