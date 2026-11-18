@@ -751,6 +751,22 @@ nonisolated final class SoftBody {
         return floorY - lo
     }
 
+    /// The pose fit's warm start (a lobby picture sets the identity so the fit of its rest-stand body is exactly the rest pose, whatever the live fit was, then puts it back).
+    var poseWarmStart: SIMD4<Float> { get { fitQ } set { fitQ = newValue } }
+
+    /// The particles of the body standing at rest (its undeformed shape, upright, turned `yaw` about y, centred over `xz`, the soles exactly on the floor), as `x` lays them out.
+    /// A lobby picture skins from this, never from the live particles (which may be lying, leaning, mid-step or held).
+    func restStandPositions(xz: SIMD2<Float>, yaw: Float = 0) -> [Float] {
+        let q = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0)), R = simd_float3x3(q)
+        let anchor = SIMD3<Float>(xz.x, groundedAnchorY(rotation: q), xz.y)
+        var out = [Float](repeating: 0, count: 3 * n)
+        for i in 0..<n {
+            let p = anchor + R * SIMD3<Float>(restOff[3 * i], restOff[3 * i + 1], restOff[3 * i + 2])
+            out[3 * i] = p.x; out[3 * i + 1] = p.y; out[3 * i + 2] = p.z
+        }
+        return out
+    }
+
     /// Anchor for a pose (rotation q, squash sy) that keeps the rest-frame point `m` (e.g. a foot's sole) exactly at world point `world`.
     /// Rolling / pitching / yawing the target about that point makes him pivot on his feet instead of his centre.
     func pivotAnchor(rotation q: simd_quatf, squash sy: Float = 1, pivot m: SIMD3<Float>, world: SIMD3<Float>) -> SIMD3<Float> {

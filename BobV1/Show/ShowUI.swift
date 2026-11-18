@@ -82,7 +82,7 @@ struct JelbiePortrait: View {
     var centreVisible = false
     @State private var image: UIImage?
     @State private var tried = false
-    private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear, rivalTint: rival?.tint, rivalName: rival?.name) }
+    private var key: HeadPortraitKey { HeadPortraitKey(jelly: who, colour: friend?.colour, wear: friend?.wear, rivalTint: rival?.tint, rivalName: rival?.name, feature: friend?.signature) }
     var body: some View {
         if frameless { framelessBody } else { framedBody }
     }
@@ -206,7 +206,14 @@ struct JelbieActionShot: View {
         frames = [HeadPortraitCache.shared.cached(key(0), care: care), nil, nil]
         for pose in [0] {
             if frames[pose] != nil { continue }
-            guard let img = await HeadPortraitCache.shared.image(key(pose), care: care) else { return }
+            // a render that finds no stage / drawable yet (nil) is asked again, a few times, so the picture never stays on its spinner
+            var got: UIImage?
+            for attempt in 0..<4 where got == nil {
+                if Task.isCancelled { return }
+                if attempt > 0 { try? await Task.sleep(nanoseconds: 400_000_000) }
+                got = await HeadPortraitCache.shared.image(key(pose), care: care)
+            }
+            guard let img = got else { return }
             frames[pose] = img
             if pose == 0 { NSLog("[portrait] action shot %d drawn after %.0f ms", who, (CACurrentMediaTime() - t0) * 1000) }
         }
@@ -494,7 +501,7 @@ struct StudioScreen: View {
             }
             .padding(.horizontal, 16)
             VStack {
-                HStack(spacing: 5) { themeChip(theme.main, ""); themeChip(theme.friend, "+ ") }.padding(.top, 6)
+                HStack(spacing: 0) { themeChip(theme.main, ""); Spacer(minLength: 0); themeChip(theme.friend, "+ ") }.padding(.horizontal, 10).padding(.top, 4)          // (a chip in each top corner: nothing over his head, antennae, ears or a tall hat)
                 Spacer()
                 HStack(alignment: .bottom) {
                     if dressed {

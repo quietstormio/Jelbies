@@ -57,16 +57,16 @@ extension GameCare {
     }
 
     /// The posed arm frames of a Jelly (world): the capsule's A, B and r2 while the arm is out, blended from the resting nub by the capsule's own blend.
-    func armFrames(_ a: JellyActor) -> [ArmFrameWorld] {
+    func armFrames(_ a: JellyActor, rest: Bool = false) -> [ArmFrameWorld] {
         guard let b = a.brain else { return [ArmFrameWorld(), ArmFrameWorld()] }
-        return Self.armFrames(brain: b, sim: a.sim)
+        return Self.armFrames(brain: b, sim: a.sim, rest: rest)
     }
     /// THE drawn arm, per side (index 0 = -x, 1 = +x), in world space: what the skin shows, read from the data that draws it.
     /// - the walking capsule (`armLastGeom`, rooted in the attractor pose like `driveArms` roots it, or the fitted pose in a volley) blended from the arm underneath by `armBlendNow`;
     /// - else the keyframed skin arm (wave / dining path / held-up arms) at the path parameter it is evaluated at (`armSkinS` / `excitedS`, `ArmPath.geom` as the wave blend uses it), carried by the body's fitted pose;
     /// - else the rest nub (`BobForm.armTop` / `armTip`).
     /// Wear (`WornSet.emitArms`) fits its band to this record, so the band and the arm cannot be two different arms.
-    static func armFrames(brain b: BlobBrain, sim: SoftBody) -> [ArmFrameWorld] {
+    static func armFrames(brain b: BlobBrain, sim: SoftBody, rest: Bool = false) -> [ArmFrameWorld] {
         let pose = sim.bodyPose(iterations: 3)
         let R = simd_float3x3(pose.rotation)
         let sq = sim.attractor.squash, sxz = 1 / sq.squareRoot()
@@ -76,12 +76,12 @@ extension GameCare {
         let aRot = b.volleyFitted ? pose.rotation : att.rotation, aAnchor = b.volleyFitted ? pose.centroid : att.anchor          // (driveArms roots the capsules in the fitted pose in a volley)
         let RA = simd_float3x3(aRot) * simd_float3x3(diagonal: SIMD3(sxz, sq, sxz))
         func attractor(_ p: SIMD3<Float>) -> SIMD3<Float> { aAnchor + RA * (p - sim.restCentroid) }
-        let bl = b.armG > 0.0001 ? b.armBlendNow : 0
+        let bl = !rest && b.armG > 0.0001 ? b.armBlendNow : 0          // (`rest`: a lobby picture, the arms at the rest nubs)
         var out: [ArmFrameWorld] = []
         for side in 0..<2 {
             let sg: Float = side == 1 ? 1 : -1
             func mir(_ p: SIMD3<Float>) -> SIMD3<Float> { SIMD3(p.x * sg, p.y, p.z) }
-            let g0 = b.skinArmGeom(side: side) ?? ArmGeom.rest          // the arm under the capsule: the keyframed skin arm while one is out, else the rest nub
+            let g0 = (rest ? nil : b.skinArmGeom(side: side)) ?? ArmGeom.rest          // the arm under the capsule: the keyframed skin arm while one is out, else the rest nub
             var f = ArmFrameWorld()
             f.a = carry(mir(SIMD3<Float>(g0.A))); f.b = carry(mir(SIMD3<Float>(g0.B)))
             f.r1 = Float(g0.r1); f.r2 = Float(g0.r2); f.flatten = Float(g0.flatten)
