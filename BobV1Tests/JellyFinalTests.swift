@@ -63,7 +63,7 @@ final class JellyFinalTests: XCTestCase {
         XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: 0).species, .blue)
         XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: 1).species, .yellow)
         XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: 2).species, .green)
-        for sp in [3, 4, 5, 6, 7, 8] { XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: sp).species, .other) }
+        for sp in [3, 4, 5, 6, 7, 8] + Array(9..<27) { XCTAssertEqual(JellyLook.profile(forFlesh: odd, speciesID: sp).species, .other) }
         for sp in 0..<JellyRoster.knownCount {          // the palette the roster gives out carries the tag
             if let p = JellyRoster.palette(sp) { XCTAssertEqual(p.jellySpecies, sp) }
         }

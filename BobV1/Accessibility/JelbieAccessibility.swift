@@ -53,6 +53,27 @@ nonisolated enum JelbieA11yText {
         if character == JellyRoster.pandaID { return "white with black patches round the eyes, round black bear ears, black arms and feet and a puffy black tail" }
         if character == JellyRoster.tigerID { return "orange with rust stripes on the crown, the cheeks and across the back" }
         if character == JellyRoster.berryID { return "pink with cream seeds and a leafy green top" }
+        switch character {          // the lineup characters (look phase, 2026-11-18; ids 9...26)
+        case JellyRoster.marbleID: return "mint green and plain"
+        case JellyRoster.goldID: return "golden yellow and plain"
+        case JellyRoster.silverID: return "silver grey and plain"
+        case JellyRoster.opalID: return "pale peach and plain"
+        case JellyRoster.mooID: return "white and plain"
+        case JellyRoster.cocoaID: return "cream and plain"
+        case JellyRoster.blushID: return "pale pink and plain"
+        case JellyRoster.sunsetID: return "red on top, melting through orange to golden yellow at the feet"
+        case JellyRoster.rubyID: return "deep ruby red and plain"
+        case JellyRoster.midnightID: return "near black and plain"
+        case JellyRoster.cottonCandyID: return "pink on top, melting through lilac to sky blue at the feet"
+        case JellyRoster.oceanID: return "seafoam green on top, melting through sky blue to deep navy at the feet"
+        case JellyRoster.lemonLimeID: return "lemon yellow on top, melting through lime to green at the feet"
+        case JellyRoster.lagoonID: return "turquoise on top, melting through violet to hot pink at the feet"
+        case JellyRoster.emeraldID: return "emerald green and plain"
+        case JellyRoster.sapphireID: return "sapphire blue and plain"
+        case JellyRoster.amethystID: return "amethyst purple and plain"
+        case JellyRoster.bronzeID: return "bronze brown and plain"
+        default: break
+        }
         switch JellyRoster.feature(character) {
         case .none: return "blue and plain"
         case .spines: return "yellow with soft spines"

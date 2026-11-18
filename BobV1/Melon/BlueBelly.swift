@@ -74,6 +74,8 @@ nonisolated enum BlueBelly: Int, CaseIterable {
         // Tiger (orange; rust stripes) and Berry (pink; cream seeds, a leafy top): painted on the egg by the shader (61 / 71); the limb pieces are drawn plain by the renderer (62 / 72) (TigerMarks.h, BerryMarks.h)
         if palette.flesh == TigerLook.flesh { return 61 }
         if palette.flesh == BerryLook.flesh { return 71 }
+        // The gradient family (Sunset 81, Cotton Candy 82, Ocean 83, Lemon-Lime 84, Lagoon 85): painted by height in one draw (GradientMarks.h, GradientLook.swift)
+        if let m = GradientLook.mode(forFlesh: palette.flesh) { return m }
         if palette.flesh == TeddyLook.current.flesh { return TeddyEarsVariant.active == .cream ? 43 : 33 }        // 43 = the same plus the cream inner ear + pom (tone 4, shaders teddyEarMask / teddyPomMask)
         let c = current
         return c == .off || palette.flesh != blueFlesh ? 0 : Float(c.rawValue)

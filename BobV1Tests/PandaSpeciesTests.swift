@@ -12,7 +12,7 @@ final class PandaSpeciesTests: XCTestCase {
     func testIdentity() {
         XCTAssertEqual(JellyRoster.pandaID, 6)
         XCTAssertEqual(JellyRoster.baseNames[6], "Panda")
-        XCTAssertEqual(JellyRoster.knownCount, 9)
+        XCTAssertEqual(JellyRoster.knownCount, 27)
         XCTAssertEqual(JellyRoster.baseNames.count, JellyRoster.knownCount)
         XCTAssertEqual(JellyRoster.feature(JellyRoster.pandaID), .ears, "Teddy's in-body ears path")
         XCTAssertNotNil(JellyRoster.palette(JellyRoster.pandaID))
@@ -47,6 +47,6 @@ final class PandaSpeciesTests: XCTestCase {
 
     func testAccessibilityAndMasks() {
         XCTAssertTrue(JelbieA11yText.description(character: 6).contains("black"))
-        XCTAssertEqual(EyeMaskModel.paletteCount, JellyRoster.knownCount)
+        XCTAssertEqual(EyeMaskModel.paletteCount, 9, "the sleep masks cover ids 0...8; the lineup characters (9...26) wrap onto them until phase B")
     }
 }

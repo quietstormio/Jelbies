@@ -52,6 +52,15 @@ Mark numbers (rest space, body units; refitted 2026-11-16 through the real captu
 
 Sleep masks: teal on the Tiger, leaf green on the Berry (`EyeMaskModel.palette`). Widget / Shortcuts colour keys: "tiger" (Orange), "berry" (Pink). Still to do before either is offered (the adoption round): its own voice set, favourite food and jar profile (`JellyTraits`), name ideas, the species card, the widget face, and the spoken word "berry", which the voice commands already use for food.
 
+### Lineup characters (look phase, 2026-11-18; NOT offered anywhere)
+
+Characters 9...26 from the "Jelmiko Lineup" board (`JellyRoster.knownCount` = 27): 9 Marble, 10 Gold, 11 Silver, 12 Opal, 13 Moo, 14 Cocoa, 15 Blush, 16 Sunset, 17 Ruby, 18 Midnight, 19 Cotton Candy, 20 Ocean, 21 Lemon-Lime, 22 Lagoon, 23 Emerald, 24 Sapphire, 25 Amethyst, 26 Bronze (`JellyRoster.marbleID` ... `bronzeID`). All are the plain body (`JellyFeature.none`).
+
+- **Gradient family (real look)**: Sunset 16, Cotton Candy 19, Ocean 20, Lemon-Lime 21, Lagoon 22. The body colour changes with its height in three stops (bottom colour below `tLo`, the middle stop = the palette's flesh at `tMid`, top colour above `tHi`; t = 0 at the feet, 1 at the crown, in the body's rest space). Body modes 81...85, painted by `gradientPaint` in `Melon/GradientMarks.h` (matte, bath and jersey body shaders); the stops live in `Features/GradientLook.swift` and are mirrored in the header (the two must match). One draw: a foot or limb piece takes the colour of its own height (the renders will show whether that holds).
+- **Placeholders**: the other 13 are plain bodies in the drawing's base colour, no marks (`Features/LineupLook.swift`, body mode 0); each family replaces its entries with its real look in a later commit.
+- **Offered nowhere**: not in the intro, the Jelly Spring, the starter roster, the park, rares / mutations or any generator; they spawn only through `-NewGame bob,sunset`, `-SetRoster ocean` or `-ForceSpecies lagoon` (a name with a space, "cotton candy", works in `-SetRoster` too).
+- **Phase B (before any is offered)**: `JellyRoster.previewID(species:slot:)` and `species()` encode the species in ONE decimal digit (`% 10`), so species >= 10 cannot have picker previews. The sleep masks (`EyeMaskModel.paletteCount` = 9) wrap, so ids 9...26 wear the mask of id % 9. Also still to do: voices, favourite food and jar profile, name ideas, species cards, widget faces.
+
 Code: starters in `JellyRoster.feature`; park visitors, guests and volleyball opponents derive it from colour via `ParkColour.speciesFeature` (Park/ParkModels.swift).
 
 ## Species names and lore (2026-10-26)

@@ -36,6 +36,7 @@ static float teddyPomMask(float3 Q) {
 #include "../Melon/PandaMarks.h"
 #include "../Melon/TigerMarks.h"
 #include "../Melon/BerryMarks.h"
+#include "../Melon/GradientMarks.h"
 #include "../Melon/JellyFinish.h"
 
 constant float BATH_PI = 3.14159265;
@@ -260,7 +261,8 @@ fragment float4 fsSoftMatteBath(BathJellyIn i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52), Tiger (61 / 62), Berry (71 / 72): the painted markings, no belly (PandaMarks.h, TigerMarks.h, BerryMarks.h)
-        if (tn > 6.5) { col = berryPaint(col, Q, bm); }
+        if (tn > 7.5) { col = gradientPaint(col, Q, bm); }          // gradient family (modes 81...85): the colour by height (GradientMarks.h)
+        else if (tn > 6.5) { col = berryPaint(col, Q, bm); }
         else if (tn > 5.5) { col = tigerPaint(col, Q, bm); }
         else if (ab[0].x > 0.5) { col = pandaPaintArm(col, Q, bm, pandaPatch, 1.0 - smoothstep(0.017, 0.023, armDc), ab[0].y, pandaInk); }          // ARM BLEND: the posed arm's own per-pixel mask
         else { col = pandaPaint(col, Q, bm, pandaPatch, pandaInk); }
@@ -538,7 +540,8 @@ fragment float4 fsSoftMatteBathSpec(BathJellyIn i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52), Tiger (61 / 62), Berry (71 / 72): the painted markings, no belly (PandaMarks.h, TigerMarks.h, BerryMarks.h)
-        if (tn > 6.5) { col = berryPaint(col, Q, bm); }
+        if (tn > 7.5) { col = gradientPaint(col, Q, bm); }          // gradient family (modes 81...85): the colour by height (GradientMarks.h)
+        else if (tn > 6.5) { col = berryPaint(col, Q, bm); }
         else if (tn > 5.5) { col = tigerPaint(col, Q, bm); }
         else if (ab[0].x > 0.5) { col = pandaPaintArm(col, Q, bm, pandaPatch, 1.0 - smoothstep(0.017, 0.023, armDc), ab[0].y, pandaInk); }          // ARM BLEND: the posed arm's own per-pixel mask
         else { col = pandaPaint(col, Q, bm, pandaPatch, pandaInk); }
