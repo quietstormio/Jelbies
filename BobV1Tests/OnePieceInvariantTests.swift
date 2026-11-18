@@ -154,6 +154,21 @@ final class OnePieceInvariantTests: XCTestCase {
             r.brain.idleState.dizzyEnd = true; r.brain.idleState.reps = max(r.brain.idleState.reps, 1)
             return ok
         }), chars: Array(0..<characters.count)))
+        // the Jelly Show's dance steps (Show/ShowDanceSteps.swift): every move of the plan, four bars of it at 0.5 s a beat, bare and with shoes; "stomp" = the Perfect's accent on every step
+        for m in ShowDanceMove.allCases + [ShowDanceMove.hopStep] {
+            let stomp = out.contains { $0.name == "dance step \(m.rawValue)" }
+            var run = ShowDanceRun(phrases: [m, m, m, m], lively: true, period: 0.5, firstBeat: 0)
+            var clock: Double = 0
+            out.append(Job(name: stomp ? "dance step stomp \(m.rawValue)" : "dance step \(m.rawValue)", sc: SC(name: "dance step: \(m.rawValue)\(stomp ? " (stomp)" : "")", game: true, seconds: 9, setup: { r, _ in
+                run = ShowDanceRun(phrases: [m, m, m, m], lively: true, period: 0.5, firstBeat: 0); clock = 0
+                r.brain.danceDrive = DanceStepDrive(); r.brain.startStepping(seconds: 1e9, sim: r.sim)
+                return true
+            }, each: { r in
+                clock += Double(r.sim.stepDt)
+                if stomp { run.accentPending = true }
+                r.brain.danceStep(&run, now: clock)
+            }), chars: Array(0..<characters.count)))
+        }
         let only = (ProcessInfo.processInfo.environment["ONEPIECE_ONLY"] ?? "").split(separator: ",").map(String.init)
         return only.isEmpty ? out : out.filter { j in only.contains { j.name.contains($0) } }
     }

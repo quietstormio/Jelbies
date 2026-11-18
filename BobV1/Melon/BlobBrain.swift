@@ -373,6 +373,7 @@ final class BlobBrain {
     var feetInit = false             // feet.pos holds valid planted positions
     var feetDrive = true             // the feet follow world targets this tick (false while spinning)
     var nextSwing = 0                // index of the foot that swings next (0 = -x foot)
+    var danceDrive: DanceStepDrive?  // the Show's dance round: set while the stage times the steps to the song's beats (Show/ShowDanceSteps.swift)
     var stepLive = false             // a step's root / heading interpolation is running
     var stepRoot0 = SIMD2<Float>(0, 0), stepRootD = SIMD2<Float>(0, 0)
     var stepYaw0: Float = 0, stepYawD: Float = 0
@@ -1570,6 +1571,7 @@ final class BlobBrain {
 
         case .stepInPlace(let t, let dur):
             poseOn = true; ensureFeet(sim)
+            if danceDrive != nil { danceTick(); script = .stepInPlace(t: t + dt, dur: dur); return }          // (the dance round: the stage starts every step on its beat)
             if t < dur && !feet.active {
                 startStep(peak: (t < 0.01 ? 0.05 : 0.04) * amplitude, rate: 2.0, swingFrac: 0.8, inPlace: true)
             }

@@ -95,11 +95,15 @@ struct SideHeader: View {
     var round: Int
     var title: String
     var kicker: String
+    var turns: TurnPips? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(kicker).font(SK.font(12, .black)).foregroundStyle(ShowUI.gold).tracking(0.5)
             Text(title).font(SK.font(24, .black)).foregroundStyle(SK.cream)
-            HStack(spacing: 6) { ForEach(1...3, id: \.self) { k in Capsule().fill(k <= round ? ShowUI.gold : ShowUI.platform).frame(width: 26, height: 8) } }.padding(.top, 8)
+            Group {
+                if let t = turns { TurnPipRow(pips: t) }
+                else { HStack(spacing: 6) { ForEach(1...3, id: \.self) { k in Capsule().fill(k <= round ? ShowUI.gold : ShowUI.platform).frame(width: 26, height: 8) } } }
+            }.padding(.top, 8)
         }
         .accessibilityElement(children: .combine).accessibilityLabel("Round \(round) of 3, \(title)").accessibilityIdentifier("show-round")
     }

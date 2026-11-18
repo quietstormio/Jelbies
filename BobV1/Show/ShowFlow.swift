@@ -129,6 +129,8 @@ final class ShowFlow {
     @ObservationIgnored var onPerform: (VoiceTrick, Bool) -> Void = { _, _ in }
     @ObservationIgnored var onDance: (DanceID?, Bool) -> Void = { _, _ in }
     @ObservationIgnored var onHit: (DrillGrade) -> Void = { _ in }
+    /// A press of the L (0) / R (1) button during the dance, before it is judged: his foot on that side steps.
+    @ObservationIgnored var onTap: (Int) -> Void = { _ in }
     @ObservationIgnored var onResults: (Int) -> Void = { _ in }
     @ObservationIgnored var onBurst: () -> Void = {}
     /// The rivals' turn on the stage (bodies) and whether a body has got where it was sent (`who` nil = the player's Jelbie; `atCentre`: at the middle, else at his rest / aside spot).
@@ -367,6 +369,7 @@ final class ShowFlow {
         let now = danceNow()
         danceT = max(danceT, now)
         guard var s = sim else { return }
+        onTap(foot)
         let nearest = s.dance?.nearestPrompt(to: ShowDanceSim.judgedTime(now))
         let ev = s.tapDance(foot: foot, at: now)
         sim = s
@@ -397,6 +400,7 @@ final class ShowFlow {
             autoDone += 1
             if autoDone % 11 == 6, !ShowAssist.autoDance { continue }
             song = max(song, at)
+            onTap(p.foot)
             if var s = sim { handle(s.tapDance(foot: p.foot, at: at)); sim = s }
         }
     }
