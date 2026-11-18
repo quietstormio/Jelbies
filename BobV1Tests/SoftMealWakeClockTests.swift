@@ -10,8 +10,9 @@ import simd
 
 @MainActor
 final class SoftMealWakeClockTests: XCTestCase {
-    override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956); SleepOrder.reset(); BlobBrain.softMealWake = true }
-    override func tearDown() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); SleepOrder.reset() }
+    private var savedHour: Double?          // (the day clock as this class found it: put back in tearDown)
+    override func setUp() { savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956); SleepOrder.reset(); BlobBrain.softMealWake = true }
+    override func tearDown() { DayClock.shared.forcedHour = savedHour; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); SleepOrder.reset() }
     private let dt: Float = 1.0 / 60
 
     private func night(n: Int, seed: UInt64) -> SocialTests.Lab {

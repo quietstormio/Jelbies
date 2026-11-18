@@ -10,6 +10,7 @@ import simd
 
 @MainActor
 final class LineupTests: XCTestCase {
+    private var savedHour: Double?          // (the day clock as this class found it: put back in tearDown)
     nonisolated(unsafe) static var keep: [AnyObject] = []
     nonisolated(unsafe) static var debug = false
 
@@ -17,11 +18,13 @@ final class LineupTests: XCTestCase {
     /// The meal's tray spot is a system-random pick among the free spots (DiningSpot.choose), which made the meal tests flake: the test takes the free spot nearest the
     /// preferred front spot instead.
     override func setUp() {
+        savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12          // (2026-11-17: the night rest follows the real clock; dining tests run at noon)
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)          // (the walkable width must not depend on a suite that ran before)
         BlobBrain.pickBudgetSeconds = .infinity
         DiningSpot.pickOpen = { $0.min { simd_distance($0, DiningSpot.preferred) < simd_distance($1, DiningSpot.preferred) } }
     }
     override func tearDown() {
+        DayClock.shared.forcedHour = savedHour
         BlobBrain.pickBudgetSeconds = BlobBrain.defaultPickBudgetSeconds
         DiningSpot.pickOpen = { $0.randomElement() }
     }

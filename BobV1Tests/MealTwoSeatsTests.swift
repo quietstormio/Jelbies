@@ -10,8 +10,9 @@ import simd
 
 @MainActor
 final class MealTwoSeatsTests: XCTestCase {
-    override func setUp() { DiningGroup.homeSeats = 2 }
-    override func tearDown() { DiningGroup.homeSeats = 2; DiningGroup.rolling = false }          // (F0: C7 is off by default)
+    private var savedHour: Double?          // (the day clock as this class found it: put back in tearDown)
+    override func setUp() { savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12; DiningGroup.homeSeats = 2 }
+    override func tearDown() { DayClock.shared.forcedHour = savedHour; DiningGroup.homeSeats = 2; DiningGroup.rolling = false }          // (F0: C7 is off by default)
 
     private func room() -> DiningJellyTests.Room {
         let r = DiningJellyTests.Room(count: 3)
