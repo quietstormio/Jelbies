@@ -24,12 +24,14 @@ final class PetTwoTests: XCTestCase {
         let play: TouchPlay
         let surface = RestSurface(mesh: MotionRig.renderMesh)
         var born = Set<Double>()
+        var now = 100.0
         init() {
             rig = MotionRig(game: true, settle: 2)
             driver = HapticDriver(sinks: [rec])
             play = TouchPlay(haptics: driver)
             driver.enabled = true
             driver.setWarm(true)
+            rec.clock = { [unowned self] in self.now }
             rec.clear()
             driver.setWarm(false); driver.setWarm(true)
         }
@@ -39,6 +41,7 @@ final class PetTwoTests: XCTestCase {
             return (PetTwoTests.eye, simd_normalize(p - PetTwoTests.eye))
         }
         func frame(clock: Double, ray r: (o: SIMD3<Float>, d: SIMD3<Float>)?) {
+            now = clock
             play.petFrame(dt: 1.0 / 60, now: clock, ray: r, screen: r == nil ? nil : SIMD2(0.5, 0.5), sim: rig.sim, brain: rig.brain, skinner: rig.skinner, surface: surface)
             for h in play.hearts { born.insert(h.born) }
             rig.tick()
@@ -76,8 +79,15 @@ final class PetTwoTests: XCTestCase {
     func testSingleStrokeBaseline() {
         let n = Self.singleStroke()
         print("PETTWO baseline: \(n)")
-        XCTAssertGreaterThan(n.hearts, 0)
-        XCTAssertGreaterThan(n.petEvents, 0)
+        // recorded on the base commit 24c0eb8f, before any production edit (identical on pet-two-r1)
+        XCTAssertEqual(n.hearts, 4)
+        XCTAssertEqual(n.petEvents, 143)
+        XCTAssertEqual(n.transients, 7)
+        XCTAssertEqual(n.loveAt3s, 1.0)
+        XCTAssertEqual(n.purrAt3s, 1.0)
+        XCTAssertEqual(n.maxPetIntensity, 0.5870892, accuracy: 1e-6)
+        XCTAssertEqual(n.firstHeartT, 0.6, accuracy: 1e-6)
+        XCTAssertEqual(n.firstPurrT, 2.05, accuracy: 1e-6)
     }
 
     // MARK: routing table (pure)
@@ -142,6 +152,7 @@ final class PetTwoTests: XCTestCase {
         }
         /// One frame: lanes first (as the stage does), then the primary on A, then every body's sim.
         func frame(primaryRay: (o: SIMD3<Float>, d: SIMD3<Float>)?) {
+            a.now = clock
             laneFrame()
             a.play.petFrame(dt: 1.0 / 60, now: clock, ray: primaryRay, screen: primaryRay == nil ? nil : SIMD2(0.5, 0.5), sim: a.rig.sim, brain: a.rig.brain, skinner: a.rig.skinner, surface: a.surface)
             for h in a.play.hearts { a.born.insert(h.born) }
