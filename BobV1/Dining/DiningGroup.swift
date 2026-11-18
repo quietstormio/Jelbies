@@ -395,7 +395,7 @@ final class DiningGroup {
         for i in brains.indices { brains[i].mealFaceYaw = (calm || lineup || (forcedOrigin != nil && DiningLayout.ends)) ? placeYaw(placeOf[i]) : nil }          // (C3: the calm wait faces his own place)
         for i in brains.indices { brains[i].mealYawHint = placeYaw(placeOf[i]) }
         beginApproach()
-        traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; inBoxTicks = 0; popReason = "gathered"
+        traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; traceCount = [0, 0, 0]; inBoxTicks = 0; popReason = "gathered"
         MealTrace.log("group start n=\(n) kind=\(serving.kind == .food ? "food" : "drink") origin=(\(origin.x),\(origin.y)) inFront=\(frontCount()) orderedPlaces=\(ordered) quietPlaces=\(Self.quietPlaces) calmWait=\(calm)")
         for i in brains.indices {
             let st = stands[placeOf[i]], ap = approachPoint(blob: i), f = floor(i)
@@ -605,6 +605,7 @@ final class DiningGroup {
     }
 
     // MARK: meal trace (simulator-only output, see MealTrace)
+    private var traceCount: [Int] = [0, 0, 0]
     private var traceReadyIDs: Set<Int> = [], traceBiteIDs: Set<Int> = [], traceShareIDs: Set<Int> = []
     private(set) var popReason = "gathered"
     /// The tray came out for the awake diner(s) while sleepers were still waking (`awakeFirst`).
@@ -662,6 +663,7 @@ final class DiningGroup {
             if !traceReadyIDs.contains(i), ready(i), isIdle(brains[i]) { traceReadyIDs.insert(i); MealTrace.log("diner \(id) ready floor=(\(f.x),\(f.y)) place=\(placeOf[i])") }
             if started[i], trayOut {
                 if !traceBiteIDs.contains(i), eaten(i) > 0 { traceBiteIDs.insert(i); MealTrace.log("diner \(id) first bite") }
+                if traceCount.indices.contains(i), eaten(i) > traceCount[i] { traceCount[i] = eaten(i); MealTrace.log("diner \(id) piece \(eaten(i))") }          // (every bite / gulp: the variance spread)
                 if !traceShareIDs.contains(i), eaten(i) >= piecesFor[i] { traceShareIDs.insert(i); MealTrace.log("diner \(id) ate its share (\(eaten(i)) of \(piecesFor[i]))") }
             }
             if trayOut, abs(f.x - box.centre.x) < box.half.x, abs(f.y - box.centre.y) < box.half.y {
