@@ -15,13 +15,15 @@ import Observation
 /// Where the bar (and a tip card) stands: top LEFT, under the top-left control.
 enum GameMessageLayout {
     /// Points below the top safe edge where the HUD's last top row ends (GameScreen measures it: the settings / coin row, plus the "Sleep until morning" pill when it is there).
-    static var hudBottom: CGFloat = 60
+    static var hudBottom: CGFloat = 60 { didSet { if oldValue != hudBottom { pokeBar() } } }
     static let defaultHudBottom: CGFloat = 60
     /// The park / camp (portrait) has a second row (the friends chips): its own value while it is up.
     static var hudBottomOverride: CGFloat?
     /// The bottom edge (window points) of the park's friends-chip row while it is on screen, measured by ParkChrome (a preference on the row itself), nil otherwise.
     /// The bar then stands 8 pt under it, whatever the width, however many chips, however the row lays out.
-    nonisolated(unsafe) static var parkRowMaxY: CGFloat?
+    nonisolated(unsafe) static var parkRowMaxY: CGFloat? { didSet { if oldValue != parkRowMaxY { pokeBar() } } }
+    /// The bar re-reads its anchor when it changes (the park scene or the sleep pill can arrive after the message is up).
+    static func pokeBar() { Task { @MainActor in GameMessageCenter.shared.layoutTick &+= 1 } }
     static func top(safeTop: CGFloat, portrait: Bool = true) -> CGFloat {
         if portrait, let y = parkRowMaxY { return y + 8 }
         return safeTop + (hudBottomOverride ?? hudBottom)
@@ -81,6 +83,8 @@ final class GameMessageCenter {
         return minDuration + (maxDuration - minDuration) * f
     }
 
+    /// Bumped when the bar's anchor moves (GameMessageLayout); the bar reads it so it re-places itself.
+    var layoutTick = 0
     private(set) var current: Message?
     /// The sound caption: its own small pill under the message (or alone in the bar's place). At most one; a newer caption replaces it, it never replaces or waits for a message.
     private(set) var caption: Message?
@@ -184,6 +188,7 @@ struct GameMessageBar: View {
     var body: some View {
         GeometryReader { geo in
             let safe = GameMessageHost.safeInsets
+            let _ = center.layoutTick
             let w = GameMessageLayout.width(geo.size, safeLeft: safe.left)
             // a caption sits under the message, or under a top tip card (a caption is never dropped for a tip); alone it takes the bar's place
             let tipBottom: CGFloat? = book.current != nil && book.cardFrame.minY < geo.size.height / 2 && book.cardFrame != .zero ? book.cardFrame.maxY + 6 : nil
