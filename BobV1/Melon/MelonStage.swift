@@ -1440,7 +1440,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         // every picture of him (lobby avatar, action shot, wardrobe / Bag preview) is a clean front-facing stand of the body's rest shape, over where he is: never the live particles
         // (eating and leaning, mid-step, lying asleep, held, on a toy). The live body, skin state and pose cache are put back after (RestStand.swift).
         let c0 = a.sim.bodyPose(iterations: 3).centroid
-        let liveStand = RestStand.enter(sim: a.sim, skinner: a.skinner, xz: SIMD2(c0.x, c0.z))
+        let liveStand = RestStand.enter(sim: a.sim, skinner: a.skinner, brain: a.brain, xz: SIMD2(c0.x, c0.z))
         defer { liveStand() }
         care.store.fitting = look.map { (id, $0) }
         let visitorPalette: Palette? = hp?.colour.map { JellyPalettes.park($0) } ?? hp?.rivalTint.map { LocalRivalSource.palette(for: $0, name: hp?.rivalName ?? "Rival") }
