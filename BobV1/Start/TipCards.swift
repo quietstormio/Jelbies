@@ -44,13 +44,13 @@ enum TipPlacement {
         func covers(_ r: CGRect) -> Bool { heads.contains { r.insetBy(dx: -40, dy: -50).contains($0) } || avoidMap.contains { $0.intersects(r) } }
         switch (place.kind, landscape) {
         case (.top, false):
-            let y = GameMessageLayout.top(safeTop: safe.top)          // the message bar's band: top left, under the top-left control (UI/GameMessageCenter.swift)
+            let y = GameMessageLayout.top(safeTop: safe.top, portrait: true)          // the message bar's band: top left, under the top-left control (UI/GameMessageCenter.swift)
             var xs: [CGFloat] = [GameMessageLayout.margin, (size.width - w) / 2, size.width - w - 16]
             xs = xs.map { max($0, 8) }
             if !place.faces { return CGPoint(x: xs[0], y: y) }
             return xs.first { !covers(CGRect(x: $0, y: y, width: w, height: h)) }.map { CGPoint(x: $0, y: y) }
         case (.top, true):
-            let y = GameMessageLayout.top(safeTop: safe.top)
+            let y = GameMessageLayout.top(safeTop: safe.top, portrait: false)
             let left = GameMessageLayout.left(safeLeft: safe.left), right = size.width - max(safe.right, 40) - 20 - w
             let order: [CGFloat] = [left, right]          // the message bar's corner first; the far side only when a head is under it
             if !place.faces { return CGPoint(x: order[0], y: y) }

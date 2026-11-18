@@ -19,7 +19,13 @@ enum GameMessageLayout {
     static let defaultHudBottom: CGFloat = 60
     /// The park / camp (portrait) has a second row (the friends chips): its own value while it is up.
     static var hudBottomOverride: CGFloat?
-    static func top(safeTop: CGFloat) -> CGFloat { safeTop + (hudBottomOverride ?? hudBottom) }
+    /// True while the park / camp scene is up (GameScreen sets it): in portrait its second row (the friends chips) pushes the bar down to `parkRowBottom`.
+    nonisolated(unsafe) static var parkRowActive: () -> Bool = { false }
+    static let parkRowBottom: CGFloat = 116
+    static func top(safeTop: CGFloat, portrait: Bool = true) -> CGFloat {
+        if portrait, parkRowActive() { return safeTop + parkRowBottom }
+        return safeTop + (hudBottomOverride ?? hudBottom)
+    }
     /// The HUD's left margin (GameScreen pads its rows 16 pt).
     static let margin: CGFloat = 16
     /// The bar's width: the screen less the margins (and the left safe inset), at most 520; on a phone on its side at most 55% so it stays clear of the right-hand corner.
@@ -180,7 +186,7 @@ struct GameMessageBar: View {
             let w = GameMessageLayout.width(geo.size, safeLeft: safe.left)
             // a caption sits under the message, or under a top tip card (a caption is never dropped for a tip); alone it takes the bar's place
             let tipBottom: CGFloat? = book.current != nil && book.cardFrame.minY < geo.size.height / 2 && book.cardFrame != .zero ? book.cardFrame.maxY + 6 : nil
-            let top = GameMessageLayout.top(safeTop: safe.top)
+            let top = GameMessageLayout.top(safeTop: safe.top, portrait: geo.size.height > geo.size.width)
             ZStack(alignment: .topLeading) {
                 Color.clear
                 VStack(alignment: .leading, spacing: 6) {

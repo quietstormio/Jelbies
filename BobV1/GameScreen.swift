@@ -541,6 +541,7 @@ struct GameScreen: View {
         .onAppear {          // first-time tips: the game's state for the suppression, the heads for the keep-off check, the dev launch arguments (TipsReset / TipShow)
             let care = model.care
             TipWindowHost.care = care
+            GameMessageLayout.parkRowActive = { [weak care = model.care] in care?.park.inScene ?? false }
             GameMessageHost.install()          // the one message bar's window (top left, under the top-left control)
             TipBook.shared.context = { [weak care] in care.map { TipContext.live($0) } ?? TipContext() }
             TipBook.shared.applyLaunchOverrides()
