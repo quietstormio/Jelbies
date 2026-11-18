@@ -63,8 +63,6 @@ struct GameScreen: View {
     private func updateMessageTop() {
         let info: CGFloat = (focus.isActive || cleaning || racing) ? 0 : hudInfoH
         GameMessageLayout.hudBottom = max(GameMessageLayout.defaultHudBottom, 8 + hudTopH + 8 + (info > 0 ? info + 8 : 0))
-        let sz = HUDLayout.measuredSize
-        GameMessageLayout.hudBottomOverride = model.care.park.inScene && sz.height > sz.width ? 116 : nil          // (the park / camp has a second row, the friends chips, in portrait: the bar stands under it)
     }
 
     private func setUpSelect() {
@@ -506,7 +504,6 @@ struct GameScreen: View {
         }
         .task { await GameScreen.runStoreDemo(model: model) }
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
-        .onChange(of: model.care.park.inScene) { _, _ in updateMessageTop() }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
         .onChange(of: model.care.townRequest) { _, _ in                 // voice: "let's race" / "time to train" open the Track for the picked Jelly
             if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
@@ -541,7 +538,6 @@ struct GameScreen: View {
         .onAppear {          // first-time tips: the game's state for the suppression, the heads for the keep-off check, the dev launch arguments (TipsReset / TipShow)
             let care = model.care
             TipWindowHost.care = care
-            GameMessageLayout.parkRowActive = { [weak care = model.care] in care?.park.inScene ?? false }
             GameMessageHost.install()          // the one message bar's window (top left, under the top-left control)
             TipBook.shared.context = { [weak care] in care.map { TipContext.live($0) } ?? TipContext() }
             TipBook.shared.applyLaunchOverrides()

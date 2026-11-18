@@ -19,13 +19,14 @@ enum GameMessageLayout {
     static let defaultHudBottom: CGFloat = 60
     /// The park / camp (portrait) has a second row (the friends chips): its own value while it is up.
     static var hudBottomOverride: CGFloat?
-    /// True while the park / camp scene is up (GameScreen sets it): in portrait its second row (the friends chips) pushes the bar down to `parkRowBottom`.
-    nonisolated(unsafe) static var parkRowActive: () -> Bool = { false }
-    static let parkRowBottom: CGFloat = 116
+    /// The bottom edge (window points) of the park's friends-chip row while it is on screen, measured by ParkChrome (a preference on the row itself), nil otherwise.
+    /// The bar then stands 8 pt under it, whatever the width, however many chips, however the row lays out.
+    nonisolated(unsafe) static var parkRowMaxY: CGFloat?
     static func top(safeTop: CGFloat, portrait: Bool = true) -> CGFloat {
-        if portrait, parkRowActive() { return safeTop + parkRowBottom }
+        if portrait, let y = parkRowMaxY { return y + 8 }
         return safeTop + (hudBottomOverride ?? hudBottom)
     }
+
     /// The HUD's left margin (GameScreen pads its rows 16 pt).
     static let margin: CGFloat = 16
     /// The bar's width: the screen less the margins (and the left safe inset), at most 520; on a phone on its side at most 55% so it stays clear of the right-hand corner.
