@@ -93,7 +93,6 @@ struct ParkChrome: View {
             .animation(.easeInOut(duration: 0.2), value: toysOpen)
             .onChange(of: care.play.active) { _, on in if on { toysOpen = false } }
             .animation(.easeInOut(duration: 0.25), value: park.gift?.itemID)
-            .onChange(of: park.inScene, initial: true) { _, on in GameMessageLayout.hudBottomOverride = on && g.size.height > g.size.width ? 116 : nil }          // (the park's friends row is a second row in portrait: the message bar stands under it)
         }
         .allowsHitTesting(park.active || park.gift != nil)
     }
