@@ -144,7 +144,7 @@ enum HUDMenu {
         case .decor: return .bag(.furniture, who: id)
         case .dress: return .bag(.wear, who: id)
         case .bedtime: care.bedtimeAll(); care.clearHighlight(); return .none
-        case .clean: care.clean(jelly: id); return .none
+        case .clean: care.requestClean(jelly: id); return .none
         case .come: care.comeHere(jelly: id); return .none
         case .compete: return .competeChips
         case .tricks: return .trickChips

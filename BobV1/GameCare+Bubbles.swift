@@ -92,7 +92,7 @@ extension GameCare {
             _ = bubbleHub.coat[id]?.dismiss(); bubbleClean = false
             bubbleEnd = BubbleEnd(serial: bubbleEnd.serial + 1, clean: true)
             selectForBubble(id)
-            if canClean { clean(jelly: id) }
+            if canClean { requestClean(jelly: id) }
             return .clean
         }
         guard let n = bubbleNeed else { return nil }

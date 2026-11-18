@@ -5,6 +5,7 @@
 //
 
 import XCTest
+import QuartzCore
 import simd
 @testable import BobV1
 
@@ -17,7 +18,7 @@ final class BathCareFlowTests: XCTestCase {
         Self.keep.append(r)
         UserDefaults.standard.removeObject(forKey: GameCare.lastSoapKey)
         for s in soaps { if let id = s.storeID { r.care.store.grant(id) } }
-        if let pick { r.care.armedSupplies[0] = pick.storeID.map { [$0] } ?? [] ; r.care.soapChosen = true }
+        if let pick { r.care.armedSupplies[0] = pick.storeID.map { [$0] } ?? [] }
         r.care.clean()
         return r
     }
@@ -46,25 +47,109 @@ final class BathCareFlowTests: XCTestCase {
         XCTAssertEqual(r.bath.look.soap, Soap.mint.rawValue)
     }
 
-    func testTheCardShowsOnlyWithBoughtSoapsAndThePickStartsTheBath() {
+    /// With NO bought soap there is no card and no pause: `requestClean` runs the very `clean` the build before this feature ran, in the same call (phase .exit at once).
+    func testNoBoughtSoapMeansNoCardAndTheRunOutStartsInTheSameCall() {
         UserDefaults.standard.removeObject(forKey: GameCare.lastSoapKey)
-        let none = CleanRun(dirt: 0.4); Self.keep.append(none)
-        none.care.clean()
-        XCTAssertNil(none.care.soapPrompt, "no bought soaps: no card, straight in"); XCTAssertTrue(none.bath.active); XCTAssertEqual(none.bath.soap, .jelly)
+        let r = CleanRun(dirt: 0.4); Self.keep.append(r)
+        XCTAssertFalse(r.care.hasBoughtSoap)
+        let t0 = CACurrentMediaTime()
+        r.care.requestClean()
+        let ms = (CACurrentMediaTime() - t0) * 1000
+        print("[bathcare] tap -> run-out start (requestClean, no soaps): \(String(format: "%.3f", ms)) ms, phase \(r.bath.phase)")
+        XCTAssertNil(r.care.soapPrompt, "no card"); XCTAssertEqual(r.bath.phase, .exit, "the run-out started in the same call"); XCTAssertEqual(r.bath.soap, .jelly)
+        XCTAssertLessThan(ms, 50, "nothing slow ran: no soap art, no model")
+    }
 
+    func testTheCardShowsOnlyWithBoughtSoapsAndAPickStartsTheBath() {
+        UserDefaults.standard.removeObject(forKey: GameCare.lastSoapKey)
         let r = CleanRun(dirt: 0.4); Self.keep.append(r)
         for s in [Soap.honey, .mint] { r.care.store.grant(s.storeID!) }
-        r.care.clean()
+        r.care.requestClean()
         XCTAssertEqual(r.care.soapPrompt, 0, "owns soaps: the card shows first"); XCTAssertFalse(r.bath.active)
         XCTAssertEqual(r.care.soapChoices, [.jelly, .mint, .honey], "Jelly soap first, then the owned ones in order")
-        XCTAssertEqual(r.care.preselectedSoap, .jelly)
+        XCTAssertEqual(r.care.soapCount(.mint), 1); XCTAssertEqual(r.care.preselectedSoap, .jelly)
+        r.care.requestClean(); XCTAssertEqual(r.care.soapPrompt, 0, "a second tap with the card up changes nothing")
         r.care.chooseSoap(.mint)
-        XCTAssertNil(r.care.soapPrompt); XCTAssertTrue(r.bath.active); XCTAssertEqual(r.bath.soap, .mint, "the bath starts with the tapped soap")
+        XCTAssertNil(r.care.soapPrompt); XCTAssertTrue(r.bath.active); XCTAssertEqual(r.bath.soap, .mint)
         XCTAssertEqual(r.care.store.count("mintsoap"), 1, "nothing is used up until the bath is finished")
-        // all five bought: six tiles at most
-        let all = CleanRun(dirt: 0); Self.keep.append(all)
-        for id in Soap.boughtIDs { all.care.store.grant(id) }
-        XCTAssertEqual(all.care.soapChoices.count, 6)
+        r.care.chooseSoap(.honey); XCTAssertEqual(r.bath.soap, .mint, "a late tap on a closed card does nothing")
+        // a soap armed from the Bag is the pick: no card
+        let bag = CleanRun(dirt: 0.4); Self.keep.append(bag)
+        bag.care.store.grant("berrysoap")
+        XCTAssertTrue(bag.care.useSupply("berrysoap", on: 0)); XCTAssertNil(bag.care.soapPrompt); XCTAssertEqual(bag.bath.soap, .berry)
+        // a soap that is not owned cannot be chosen
+        let nope = CleanRun(dirt: 0); Self.keep.append(nope)
+        nope.care.store.grant("honeysoap"); nope.care.requestClean(); nope.care.chooseSoap(.mint)
+        XCTAssertNotNil(nope.care.soapPrompt); XCTAssertFalse(nope.bath.active)
+    }
+
+    func testTheLastBarUsedMeansTheNextBathHasNoCardAndStartsCleanly() {
+        let r = CleanRun(dirt: 0.4); Self.keep.append(r)
+        defer { for k in PerkKind.allCases { r.care.jelly(0)?.perks.clear(k) } }
+        r.care.store.grant("mintsoap")
+        r.care.requestClean(); r.care.chooseSoap(.mint)
+        r.care.soapFinished()          // the bath finished: the one bar is used up
+        XCTAssertEqual(r.care.store.count("mintsoap"), 0)
+        r.care.cancelClean(); r.run(8, scrubbing: false, autoNext: false)
+        XCTAssertFalse(r.bath.active)
+        r.care.requestClean()
+        XCTAssertNil(r.care.soapPrompt, "no soap left: no card"); XCTAssertEqual(r.bath.phase, .exit); XCTAssertEqual(r.bath.soap, .jelly)
+    }
+
+    func testXClosesTheCardAndNothingIsStuck() {
+        let r = CleanRun(dirt: 0); Self.keep.append(r)
+        r.care.store.grant("lavender")
+        r.care.requestClean(); XCTAssertEqual(r.care.soapPrompt, 0)
+        r.care.dismissSoapCard()
+        XCTAssertNil(r.care.soapPrompt); XCTAssertFalse(r.bath.active); XCTAssertTrue(r.care.canClean, "the menu works")
+        XCTAssertEqual(r.care.armedSupplies[0] ?? [], [], "nothing armed")
+        r.care.requestClean(); XCTAssertEqual(r.care.soapPrompt, 0, "the card opens again")
+        r.care.chooseSoap(.jelly); XCTAssertTrue(r.bath.active)
+    }
+
+    func testTheCardClosesByItselfWhenTheMomentIsGone() {
+        let r = CleanRun(dirt: 0); Self.keep.append(r)
+        r.care.store.grant("lavender")
+        r.care.requestClean(); XCTAssertEqual(r.care.soapPrompt, 0)
+        r.care.callRunning = true; r.care.soapCardTick(); XCTAssertNil(r.care.soapPrompt, "a call closes it"); r.care.callRunning = false
+        r.care.requestClean(); XCTAssertEqual(r.care.soapPrompt, 0)
+        r.care.focus.force(.focused); r.care.soapCardTick(); XCTAssertNil(r.care.soapPrompt, "the come-here close-up closes it")
+        let s = CleanRun(dirt: 0); Self.keep.append(s)
+        s.care.store.grant("lavender"); s.care.requestClean(); XCTAssertEqual(s.care.soapPrompt, 0)
+        s.care.store.use("lavender"); s.care.soapCardTick(); XCTAssertNil(s.care.soapPrompt, "no soap left: nothing to pick")
+        // and it is the tick that does it
+        let t = CleanRun(dirt: 0); Self.keep.append(t)
+        t.care.store.grant("mintsoap"); t.care.requestClean(); t.care.callRunning = true
+        for _ in 0..<3 { t.tick() }
+        XCTAssertNil(t.care.soapPrompt, "the game step closes it")
+    }
+
+    func testAPickThatCannotStartABathLeavesNothingArmedSoTheNextCleanShowsTheCard() {
+        let r = CleanRun(dirt: 0); Self.keep.append(r)
+        r.care.store.grant("mintsoap")
+        r.care.requestClean(); XCTAssertEqual(r.care.soapPrompt, 0)
+        r.care.focus.force(.focused)          // the moment is gone before the tap lands
+        r.care.chooseSoap(.mint)
+        XCTAssertFalse(r.bath.active); XCTAssertNil(r.care.soapPrompt)
+        XCTAssertEqual(r.care.armedSupplies[0] ?? [], [], "the soap is not left armed")
+        XCTAssertEqual(r.care.store.count("mintsoap"), 1, "nothing used")
+        r.care.focus.force(.roaming)
+        r.care.requestClean()
+        XCTAssertEqual(r.care.soapPrompt, 0, "the next Clean shows the card again")
+    }
+
+    func testCleanTappedTwiceFastIsOneBath() {
+        let r = CleanRun(dirt: 0.3); Self.keep.append(r)
+        r.care.requestClean(); r.care.requestClean(); r.care.clean()
+        XCTAssertEqual(r.bath.phase, .exit); XCTAssertNil(r.care.soapPrompt)
+        r.run(60, until: { r.bath.phase == .soap })
+        XCTAssertEqual(r.bath.phase, .soap, "one bath, running normally")
+        XCTAssertEqual(r.bath.swapLog.count, 1, "one world swap: a second bath never started")
+        // with a soap too: two fast taps = one card
+        let c = CleanRun(dirt: 0.3); Self.keep.append(c)
+        c.care.store.grant("mintsoap"); c.care.requestClean(); c.care.requestClean()
+        XCTAssertEqual(c.care.soapPrompt, 0); c.care.chooseSoap(.mint); c.care.chooseSoap(.mint)
+        XCTAssertEqual(c.bath.phase, .exit)
     }
 
     func testAFinishedBathUsesOneBarAndGivesThePowerUp() {

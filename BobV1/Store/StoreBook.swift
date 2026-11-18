@@ -111,6 +111,9 @@ final class StoreBook {
             // 2026-11-16: the Ramen bowl, Mac & cheese and Fruit cup became hand-held foods: owned counts move to the replacement (StoreBook+RetiredFoods.swift; no flag, it moves the counts)
             let (newFoods, foodsChanged) = Self.convertRetiredFoods(saved)
             if foodsChanged { saved = newFoods; save() }
+            // 2026-11-17: the Lint-guard spray is retired: each owned spray becomes a Mint soap bar (StoreBook+RetiredSupplies.swift; no flag, it moves the counts)
+            let (newSupplies, suppliesChanged) = Self.convertRetiredSupplies(saved)
+            if suppliesChanged { saved = newSupplies; save() }
             let (noGloves, gloveRefund) = Self.dropRetiredGloves(saved)
             if noGloves.glovesRefunded != saved.glovesRefunded { saved = noGloves; if gloveRefund > 0 { wallet.add(gloveRefund, silent: true) }; save() }
             let (noBands, bandRefund) = Self.dropRetiredHeadbands(saved)

@@ -20,7 +20,7 @@ struct SettingsScreen: View {
 
     @Bindable private var hub = AudioHub.shared
     private var theme = ThemeStore.shared
-    @State private var showA11y = false
+    @State private var showA11y = DevArgs.enabled && UserDefaults.standard.integer(forKey: "A11yOpen") != 0          // (-SettingsOpen 1 -A11yOpen 1: capture aid, dev-args only)
     @State private var matchIcon = AppIconSwitcher.enabled
     @State private var confirmReset = false
     @State private var tipsAgainLine = false

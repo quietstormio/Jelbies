@@ -134,12 +134,26 @@ final class BathCareTests: XCTestCase {
             XCTAssertEqual(item?.perk, Soap.of(storeID: id)?.chip)
         }
         XCTAssertNotNil(CareMeshes.mesh(soap: .jelly)); XCTAssertEqual(CareMeshes.loadedCount, 6)
-        let spray = StoreCatalog.item("lintguard")
-        XCTAssertEqual(spray?.price, 18); XCTAssertEqual(spray?.perk, .tidy); XCTAssertNil(CareMeshes.mesh("lintguard"), "the Lint-guard spray is as it was: an icon card, not part of the bath")
-        XCTAssertEqual(StoreCatalog.items(.supply).map(\.id).sorted(), (ids + ["lintguard"]).sorted(), "the Care tab: the five soaps and the Spray")
+        XCTAssertNil(StoreCatalog.item("lintguard"), "the Lint-guard spray is retired: not sold, not in the Care tab")
+        XCTAssertEqual(StoreCatalog.items(.supply).map(\.id).sorted(), ids.sorted(), "the Care tab is just the five soaps")
         XCTAssertEqual(Set(StoreCatalog.items.map(\.id)).count, StoreCatalog.items.count)
         XCTAssertTrue(PerkKind.allCases.allSatisfy { !$0.title.isEmpty && !$0.blurb.isEmpty && !$0.symbol.isEmpty && $0.duration > 0 })
         XCTAssertEqual(PerkKind.allCases.filter(\.bathOnly), [.fresh, .bubbly])
+    }
+
+    func testAnOwnedLintGuardSprayBecomesAMintSoapBarOneForOneAndTheNextLoadFindsNothing() {
+        var saved = StoreBook.Saved()
+        saved.counts["lintguard"] = 3; saved.counts["mintsoap"] = 1; saved.counts["berrysoap"] = 2
+        let (out, changed) = StoreBook.convertRetiredSupplies(saved)
+        XCTAssertTrue(changed); XCTAssertEqual(out.counts["mintsoap"], 4, "3 sprays + the 1 Mint soap already owned"); XCTAssertNil(out.counts["lintguard"]); XCTAssertEqual(out.counts["berrysoap"], 2)
+        let again = StoreBook.convertRetiredSupplies(out)
+        XCTAssertFalse(again.changed, "no flag: loading again moves nothing"); XCTAssertEqual(again.saved.counts["mintsoap"], 4)
+        XCTAssertFalse(StoreBook.convertRetiredSupplies(StoreBook.Saved()).changed)
+        // a zero count just disappears
+        var z = StoreBook.Saved(); z.counts["lintguard"] = 0
+        XCTAssertNil(StoreBook.convertRetiredSupplies(z).saved.counts["lintguard"]); XCTAssertNil(StoreBook.convertRetiredSupplies(z).saved.counts["mintsoap"])
+        XCTAssertGreaterThan(PerkKind.tidy.duration, 0, "the Tidy perk stays (the Royal Pamper grants it)")
+        XCTAssertTrue(GroomTier.royal.perks.contains { $0.0 == .tidy })
     }
 
     func testThePropDrawsTheSoapBarInHandOnlyForABoughtSoap() {

@@ -45,7 +45,7 @@ extension VoiceCoordinator {
             let id = ids[0]
             guard care.canClean(jelly: id) else { confused(ids: ids, reason: nil); return }
             understand(c.summary(names: names), kind: .command(.clean), ids: ids)
-            care.clean(jelly: id)
+            care.requestClean(jelly: id)
         case .goTo, .playWith:
             // the piece's own interaction (sit / boop / kick / bounce / peek / slide / throw) with the nearest free piece of that kind; a partner joins in
             guard !locked, !held, !care.raceBusy, !care.focus.isActive, let obj = c.object, let kind = DecorKind(storeID: obj) else { confused(ids: ids, reason: nil); return }

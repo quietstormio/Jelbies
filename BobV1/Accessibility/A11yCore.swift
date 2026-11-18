@@ -40,8 +40,14 @@ final class A11ySettings {
     var tapToTalk: Bool { didSet { save("a11y.tapToTalk", tapToTalk) } }
     /// Hints and transient bubbles stay until dismissed / handled.
     var longerHints: Bool { didSet { save("a11y.longerHints", longerHints) } }
+    /// The bath's "Help me scrub" button (scrubs for you): off by default; it also shows while VoiceOver or Switch Control runs.
+    var bathHelper: Bool { didSet { save("a11y.bathHelper", bathHelper) } }
     /// Announce game events with VoiceOver (on by default; only matters while VoiceOver runs).
     var announcements: Bool { didSet { save("a11y.announce", announcements) } }
+
+    /// The bath shows "Help me scrub": the setting is on, or VoiceOver / Switch Control is running (the players it was made for do not have to hunt for it).
+    static func bathHelperShown(setting: Bool, voiceOver: Bool, switchControl: Bool) -> Bool { setting || voiceOver || switchControl }
+    var showsBathHelper: Bool { Self.bathHelperShown(setting: bathHelper, voiceOver: UIAccessibility.isVoiceOverRunning, switchControl: UIAccessibility.isSwitchControlRunning) }
 
     var reduceMotion: Bool { systemReduceMotion || reduceMotionInApp }
     /// Window scale for rhythm judging.
@@ -62,6 +68,7 @@ final class A11ySettings {
         tapToTalk = b("a11y.tapToTalk", "A11yTapToTalk", false)
         longerHints = b("a11y.longerHints", "A11yLongerHints", false)
         announcements = b("a11y.announce", "A11yAnnounce", true)
+        bathHelper = b("a11y.bathHelper", "A11yBathHelper", false)
         raceAssist = RaceAssist(rawValue: defaults.string(forKey: "A11yRaceAssist") ?? defaults.string(forKey: "a11y.raceAssist") ?? "") ?? .off
     }
     nonisolated deinit {}
