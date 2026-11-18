@@ -41,7 +41,7 @@ final class PandaSpeciesTests: XCTestCase {
         XCTAssertEqual(BlueBelly.mode(for: WhiteWing.palette), 0, "Pearl is untouched")
         XCTAssertEqual(BlueBelly.mode(for: JellyRoster.palette(JellyRoster.teddyID)!), TeddyEarsVariant.active == .cream ? 43 : 33, "Teddy is untouched")
         XCTAssertNotEqual(panda.flesh, WhiteWing.palette.flesh)
-        for c in ParkColour.allCases { XCTAssertEqual(BlueBelly.mode(for: JellyPalettes.park(c)), 0, "park visitor \(c.rawValue) must not look like a Panda") }
+        for c in ParkColour.allCases { let m = BlueBelly.mode(for: JellyPalettes.park(c)); XCTAssertNotEqual(m, 51, "park visitor \(c.rawValue) must not look like a Panda"); XCTAssertEqual(m, c == .blue ? BlueBelly.mode(for: PaletteKey.blue.palette) : 0, "park visitor \(c.rawValue): a blue one is Bob's own palette and front, every other colour has none") }
         for id in 0..<4 { if let p = JellyRoster.palette(id) { XCTAssertEqual(BlueBelly.mode(for: p) >= 50, false) } }
     }
 
