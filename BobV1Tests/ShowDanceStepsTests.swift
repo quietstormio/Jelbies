@@ -3,7 +3,7 @@
 //  The Jelly Show's Dance round is danced ON HIS FEET: a step on every beat of the song's grid (the owner: "he didn't make steps during the dance section").
 //  Run in the test lab with the real stage rig (Room + the Show), a calm song (Puddle) and a lively song (Ocean), on songs of 24 and of 16 beats:
 //    steps       at least one foot plant per two beats on average, both feet used (the step-touch is L R R L: no foot more than twice running);
-//    timing      the plants are within 80 ms of a beat for at least 80 % of the steps (the song's own clock);
+//    timing      the plants are within 80 ms of a (half) beat for at least 80 % of the steps (the song's own clock);
 //    stage       never sitting, the root stays within 0.3 u of where the dance began, he ends facing front;
 //    plan        at least 3 different moves in a round, never the same one twice running, the lively songs add moves the calm ones do not have;
 //    miss        a Slip never stops the stepping (no taps at all); a Perfect is a stomp on the next step.
@@ -26,6 +26,8 @@ final class ShowDanceStepsTests: XCTestCase {
         var song = 0, rank = ShowRank.puddle
         var stomp = false
         var maxLift: Float = 0
+        var span: Float = 0
+        var presses: [(t: Double, foot: Int)] = []
     }
 
     private func ready(_ care: GameCare) { care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.cue = { _ in } }
@@ -52,7 +54,9 @@ final class ShowDanceStepsTests: XCTestCase {
         let b = room.actors[0].brain!
         for _ in 0..<(60 * 40) { step(room); if care.show.onStage { break } }
         XCTAssertTrue(care.show.onStage)
-        var started = false, start = SIMD2<Float>.zero, swinging = false, frames = 0
+        var started = false, start = SIMD2<Float>.zero, swinging = false, frames = 0, minX: Float = .infinity, maxX = -Float.infinity
+        let origTap = care.show.onTap
+        care.show.onTap = { foot in if care.show.beat == .dancing { r.presses.append((care.show.danceNow(), foot)) }; origTap(foot) }
         let g = care.show.danceSong.grid
         for _ in 0..<(60 * 60) {
             step(room)
@@ -61,12 +65,13 @@ final class ShowDanceStepsTests: XCTestCase {
                 frames += 1
                 let now = care.show.danceNow()
                 if swinging, !b.feet.swinging {
-                    let k = ((now - g.firstBeat) / g.period).rounded()
-                    r.plants.append((now, b.feet.side, now - (g.firstBeat + k * g.period)))
+                    let k = ((now - g.firstBeat) / (g.period / 2)).rounded()
+                    r.plants.append((now, b.feet.side, now - (g.firstBeat + k * g.period / 2)))
                 }
                 swinging = b.feet.swinging
                 r.drift = max(r.drift, simd_distance(b.position, start))
                 r.maxLift = max(r.maxLift, b.feet.state(b.feet.side).h)
+                minX = min(minX, b.position.x); maxX = max(maxX, b.position.x); r.span = maxX - minX
                 if [IdleKind.sit, .sway, .slump, .decorSit].contains(b.idleState.kind) { r.sat = true }
                 onHit?(care, frames)
                 if let ph = care.showBook.danceRun?.phrases { r.phrases = ph }          // PLAN
@@ -95,7 +100,7 @@ final class ShowDanceStepsTests: XCTestCase {
         _ = report(name, r)
         XCTAssertGreaterThanOrEqual(Double(r.plants.count), Double(r.beats) / 2, "\(name): fewer than one foot plant per two beats (\(r.plants.count) plants in \(r.beats) beats)")
         let within = r.plants.filter { abs($0.err) <= 0.08 }.count
-        XCTAssertGreaterThanOrEqual(Double(within), 0.8 * Double(max(r.plants.count, 1)), "\(name): only \(within) of \(r.plants.count) plants are within 80 ms of a beat")
+        XCTAssertGreaterThanOrEqual(Double(within), 0.8 * Double(max(r.plants.count, 1)), "\(name): only \(within) of \(r.plants.count) plants are within 80 ms of a (half) beat")
         XCTAssertGreaterThan(r.plants.count, 0, "\(name): no steps at all")
         XCTAssertEqual(Set(r.plants.map(\.side)).count, 2, "\(name): both feet step")
         var run = 1
@@ -104,12 +109,23 @@ final class ShowDanceStepsTests: XCTestCase {
             XCTAssertLessThanOrEqual(run, 2, "\(name): the same foot stepped \(run) times running at plant \(i)")
         }
         XCTAssertFalse(r.sat, "\(name): he sat down")
-        XCTAssertGreaterThan(r.drift, 0.12, "\(name): the step-touch should travel clearly (drift \(r.drift) u)")
+        XCTAssertGreaterThan(r.span, 0.12, "\(name): the step-touch should sway clearly side to side (span \(r.span) u)")
         XCTAssertGreaterThan(r.maxLift, 0.07, "\(name): the feet barely leave the floor (\(r.maxLift) u)")
         XCTAssertLessThan(r.drift, 0.3, "\(name): he drifted \(r.drift) u off his mark")
         XCTAssertLessThan(r.yawEnd, 0.25, "\(name): he does not end facing front (\(r.yawEnd) rad)")
     }
 
+    /// Every L / R press makes his foot on that side step (lift and land) within a third of a second, whether it was on time or not (auto play presses a little late, skips some).
+    func testEveryPressStepsThatFoot() {
+        for (rank, song) in [(ShowRank.puddle, 1), (.ocean, 2), (.puddle, 4)] {
+            let r = dance(rank: rank, song: song, auto: true)
+            XCTAssertGreaterThanOrEqual(r.presses.count, 8, "at least 8 presses")
+            for p in r.presses {
+                let want = ShowDancePlan.side(forFoot: p.foot)
+                XCTAssertTrue(r.plants.contains { $0.side == want && $0.t > p.t - 0.35 && $0.t < p.t + 0.4 }, "\(rank) song \(song): the press of foot \(p.foot) at \(p.t) was not answered by a step of side \(want)")
+            }
+        }
+    }
     func testCalmSong24Beats() { check("calm / Puddle", dance(rank: .puddle, song: 1, auto: true)) }
     func testCalmSong16Beats() { check("calm / Puddle", dance(rank: .puddle, song: 4, auto: true)) }
     func testLivelySong24Beats() { check("lively / Ocean", dance(rank: .ocean, song: 2, auto: true)) }

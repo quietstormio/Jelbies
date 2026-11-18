@@ -55,6 +55,7 @@ extension GameCare {
         show.onPerform = { [weak self] t, ok in self?.showPerform(t, success: ok) }
         show.onDance = { [weak self] d, on in self?.showDance(d, on: on) }
         show.onHit = { [weak self] g in self?.showHit(g) }
+        show.onTap = { [weak self] foot in self?.showDanceTap(foot) }
         show.onResults = { [weak self] place in self?.showCelebrate(place: place) }
         show.onBurst = { [weak self] in self?.showBurst() }
         show.onRival = { [weak self] cue in self?.showRivalCue(cue) }
@@ -409,7 +410,8 @@ extension GameCare {
         if on {
             let song = show.danceSong
             book.danceRun = ShowDanceRun(phrases: ShowDancePlan.phrases(rank: show.rank, lastBeat: song.lastBeat, seed: show.sim?.seed ?? 0), lively: ShowDancePlan.lively(show.rank),
-                                         period: song.grid.period, firstBeat: song.grid.firstBeat)
+                                         period: song.grid.period, firstBeat: song.grid.firstBeat,
+                                         prompts: song.prompts(show.dancePattern).map { (time: song.time(ofSlot: $0.slot), side: ShowDancePlan.side(forFoot: $0.foot)) })
             for aid in book.performers where book.actors.indices.contains(aid) { book.actors[aid].brain?.face(.happy, hold: 3) }
         } else {
             book.danceRun = nil
@@ -437,6 +439,11 @@ extension GameCare {
         if case .none = b.script, b.idleState.kind == nil { b.startStepping(seconds: 1e9, sim: a.sim) }          // (after the turn to the crowd, or a reaction that took the body for a moment)
         guard case .stepInPlace = b.script else { return }
         b.danceStep(&run, now: show.danceNow())
+    }
+    /// An L / R press during the dance: his foot on that side steps (the scheduled step of the prompt answers it, else a quick step at once).
+    private func showDanceTap(_ foot: Int) {
+        guard showBook.danceRun != nil else { return }
+        showBook.danceRun?.press = (ShowDancePlan.side(forFoot: foot), show.danceNow())
     }
     /// A Perfect / Good / Slip: the player's face and blush follow the beat.
     private func showHit(_ g: DrillGrade) {
