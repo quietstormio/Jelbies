@@ -1437,6 +1437,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         let W = lastRW, H = lastRH
         guard W > 8, H > 8, firstFrameDone else { return nil }
         let care = model.care, a = actors[id]
+        // every picture of him (lobby avatar, action shot, wardrobe / Bag preview) is a clean front-facing stand of the body's rest shape, over where he is: never the live particles
+        // (eating and leaning, mid-step, lying asleep, held, on a toy). The live body, skin state and pose cache are put back after (RestStand.swift).
+        let c0 = a.sim.bodyPose(iterations: 3).centroid
+        let liveStand = RestStand.enter(sim: a.sim, skinner: a.skinner, xz: SIMD2(c0.x, c0.z))
+        defer { liveStand() }
         care.store.fitting = look.map { (id, $0) }
         let visitorPalette: Palette? = hp?.colour.map { JellyPalettes.park($0) } ?? hp?.rivalTint.map { LocalRivalSource.palette(for: $0, name: hp?.rivalName ?? "Rival") }
         if let p = visitorPalette { renderer.setPalette(p, body: id) }
@@ -1444,9 +1449,11 @@ final class MelonController: NSObject, MTKViewDelegate {
         let liveHour = renderer.dayHourOverride, liveTuck = renderer.tuckAmount
         var restoreBody: () -> Void = {}
         var restoreArms: () -> Void = {}          // the action shot's posed arms, put back
-        if hp != nil { renderer.cutout = true; renderer.dayHourOverride = 12; renderer.tuckAmount = 0; restoreBody = renderer.neutralBody(id) }
+        restoreBody = renderer.neutralBody(id)          // (every picture: a clean body, no live wave fillet / bath wet / open mouth; a lobby avatar also noon light, no tuck, the cutout)
+        if hp != nil { renderer.cutout = true; renderer.dayHourOverride = 12; renderer.tuckAmount = 0 }
         defer {
-            if hp != nil { renderer.cutout = model.cutout; renderer.dayHourOverride = liveHour; renderer.tuckAmount = liveTuck; restoreBody(); restoreArms() }
+            if hp != nil { renderer.cutout = model.cutout; renderer.dayHourOverride = liveHour; renderer.tuckAmount = liveTuck; restoreArms() }
+            restoreBody()
             if visitorPalette != nil { renderer.setRacePalette(care.racePalette(for: id), own: a.appearance, body: id) }
             care.store.fitting = nil
             room.setWear(opaque: RoomMesh(), translucent: RoomMesh(), bounds: []); room.setShoes(RoomMesh())
@@ -1466,13 +1473,13 @@ final class MelonController: NSObject, MTKViewDelegate {
         let skinLater = hp != nil && a.brain != nil
         if skinLater {}
         else if hp != nil { a.skinner.withRestArms { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } } }
-        else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
+        else { a.skinner.withRestArms { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
             w.tick(id: id, brain: b, sim: a.sim, outfit: HeadPortraitKey.outfitDrawn(hp?.borrowed == true ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), pose: hp == nil ? 0 : hp?.pose), role: .none, hideAll: false, dt: 1.0 / 60)          // (a head portrait wears nothing)
-            if w.shown(id, .hands) != nil { w.setArms(id, care.armFrames(a, rest: hp != nil)) }
+            if w.shown(id, .hands) != nil { w.setArms(id, care.armFrames(a, rest: true)) }
         }
-        if hp != nil { renderer.setLegBlend(a.skinner.legBlend, body: id) }          // (the leg join's shading follows the skin drawn here, not the live frame's)
+        renderer.setLegBlend(a.skinner.legBlend, body: id)          // (the leg join's shading follows the skin drawn here, not the live frame's)
         renderer.setJersey(w.jersey(id), body: id)
         // a lobby avatar also grows its species feature (Moss's daisy, on the hat band when he wears a hat; Lavender's wings; Pip's tail): a throwaway FeatureSet, ticked once on this
         // body, so the live one (the room's) is never touched. A Park friend has none (a visitor with a signature is never picked for the lobby).

@@ -100,6 +100,72 @@ final class ActionShotArmsTests: XCTestCase {
         XCTAssertNil(store.worn(1, .feet))
     }
 
+    // MARK: the whole body: a clean front-facing stand whatever the live sim is doing
+
+    private enum Live: CaseIterable { case lyingAsleep, leaningEating, midStep, held }
+
+    /// A rig whose body is in a non-neutral state: tipped onto its back (asleep), leaning and turned (eating), walking (a foot up, feet beans out), or lifted and tilted (held).
+    private func liveBody(_ kind: Live) -> MotionRig {
+        let r = MotionRig(game: true)
+        r.brain.armBlendSpecies = true
+        func turn(_ q: simd_quatf, lift: Float) {
+            let c = r.sim.bodyPose(iterations: 3).centroid
+            for i in 0..<r.sim.n {
+                let p = SIMD3<Float>(r.sim.x[3 * i], r.sim.x[3 * i + 1], r.sim.x[3 * i + 2])
+                let o = c + q.act(p - c) + SIMD3<Float>(0, lift, 0)
+                r.sim.x[3 * i] = o.x; r.sim.x[3 * i + 1] = o.y; r.sim.x[3 * i + 2] = o.z
+            }
+            r.sim.invalidatePose()
+        }
+        switch kind {
+        case .lyingAsleep: turn(simd_quatf(angle: -Float.pi / 2, axis: SIMD3(1, 0, 0)), lift: 0)
+        case .leaningEating: turn(simd_quatf(angle: 0.5, axis: simd_normalize(SIMD3<Float>(0.3, 0, 1))) * simd_quatf(angle: 1.1, axis: SIMD3(0, 1, 0)), lift: 0)
+        case .midStep:
+            let p = r.sim.bodyPose(iterations: 3).centroid
+            r.brain.script = .walk(target: SIMD2(p.x - 2, p.z + 0.4), then: .none); r.brain.activity = .walking; r.brain.scriptT = 0
+            r.run(0.9)
+        case .held: turn(simd_quatf(angle: 0.35, axis: SIMD3(0, 0, 1)), lift: 0.5)
+        }
+        r.render()
+        return r
+    }
+
+    private func bodyExtent(_ d: [Float], upTo n: Int) -> (SIMD3<Float>, SIMD3<Float>) {
+        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for v in 0..<n { let p = SIMD3(d[6 * v], d[6 * v + 1], d[6 * v + 2]); lo = simd_min(lo, p); hi = simd_max(hi, p) }
+        return (lo, hi)
+    }
+
+    /// The picture's skin, from the rest stand the stage builds (RestStand + withRestArms + withNeutralFace), equals the skin of a body that never moved: arms, feet and the body's extent.
+    func testThePictureIsACleanStandWhateverTheLiveBodyDoes() {
+        for kind in Live.allCases {
+            for id in Self.species {
+                let r = liveBody(kind)
+                let n = MotionRig(game: true)
+                n.run(0.2)
+                let c0 = r.sim.bodyPose(iterations: 3).centroid
+                let xz = SIMD2<Float>(c0.x, c0.z)
+                let liveX = r.sim.x
+                let restore = RestStand.enter(sim: r.sim, skinner: r.skinner, xz: xz)
+                var pic = [Float](repeating: 0, count: r.dyn.count)
+                r.skinner.withRestArms { r.skinner.withNeutralFace { r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: &pic) } }
+                // the same pose through the same scope on a body that never moved (the reference stand)
+                let restoreN = RestStand.enter(sim: n.sim, skinner: n.skinner, xz: xz)
+                var ref = [Float](repeating: 0, count: n.dyn.count)
+                n.skinner.withRestArms { n.skinner.withNeutralFace { n.skinner.update(x: n.sim.x, index: MotionRig.renderMesh.index, into: &ref) } }
+                restoreN()
+                var ids = armVertices(r)
+                for f in r.brain.beanFirstIdx { ids += Array(f..<(f + FootBean.vertexCount)) }
+                let off = maxDist(pic, ref, ids)
+                XCTAssertLessThan(off, 0.003, "species \(id) \(kind): the arms and feet of the picture are the neutral ones (off by \(off))")
+                let a = bodyExtent(pic, upTo: r.brain.armFirstIdx[0]), b = bodyExtent(ref, upTo: n.brain.armFirstIdx[0])
+                XCTAssertLessThan(simd_length(a.0 - b.0) + simd_length(a.1 - b.1), 0.006, "species \(id) \(kind): the body stands where and how the rest stand does")
+                restore()
+                XCTAssertEqual(r.sim.x, liveX, "species \(id) \(kind): the live particles come back exactly")
+            }
+        }
+    }
+
     func testRestHandFramesIgnoreTheLiveArm() {
         let r = leaking(.armUp, species: 1)
         let rest = GameCare.armFrames(brain: r.brain, sim: r.sim, rest: true)

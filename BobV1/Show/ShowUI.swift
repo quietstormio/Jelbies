@@ -501,7 +501,7 @@ struct StudioScreen: View {
             }
             .padding(.horizontal, 16)
             VStack {
-                HStack(spacing: 5) { themeChip(theme.main, ""); themeChip(theme.friend, "+ ") }.padding(.top, 6)
+                HStack(spacing: 0) { themeChip(theme.main, ""); Spacer(minLength: 0); themeChip(theme.friend, "+ ") }.padding(.horizontal, 10).padding(.top, 4)          // (a chip in each top corner: nothing over his head, antennae, ears or a tall hat)
                 Spacer()
                 HStack(alignment: .bottom) {
                     if dressed {
