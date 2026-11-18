@@ -107,7 +107,7 @@ nonisolated enum DiningLayout {
     /// toward the tray and the camera, and the third in the middle behind it facing the camera. `sideX` is then the end places' distance from the tray centre (set per sitting by `DiningGroup.start`,
     /// 1.3 / 1.2 / 1.12 as the floor allows); the middle one stays at z -1.07 (clears the rim by his real belly), the ends stand beside the tray, a little behind its centre line.
     nonisolated(unsafe) static var ends = false
-    static let endsZ: Float = -0.25, endsYaw: Float = .pi / 4
+    static let endsZ: Float = -0.05, endsYaw: Float = .pi / 4
     static var sideYaw: Float { sideX > 1.12 ? 0 : 0.25 }
     static func make(n n0: Int) -> TrayLayout {
         let n = min(max(n0, 1), 3), s = DiningTiming.servingScale(n: n)
