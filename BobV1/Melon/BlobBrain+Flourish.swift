@@ -71,7 +71,8 @@ extension BlobBrain {
         // the kind is chosen now, from what this leg is long enough for and what is off cooldown (variety: what he has done least first)
         var w = FlourishTuning.weights.filter { kindCool[$0.0] == nil && leg.total - 0.3 >= FlourishTuning.need($0.0) }
         if idleMood == .grumpy { w.removeAll { $0.0 == .hopscotch || $0.0 == .skipHop || $0.0 == .chirp } }
-        let cooling = kindCooling; let wf = w.filter { !cooling.contains($0.0) }; if !wf.isEmpty { w = wf }
+        let cooling = kindCoolingSet(clusters: false); let wf = w.filter { !cooling.contains($0.0) }; if !wf.isEmpty { w = wf }
+        if let lastK = variety.last.filter({ e in w.contains(where: { f in f.0 == e.key }) && variety.now - e.value < 30 }).max(by: { $0.value < $1.value })?.key, w.count > 1 { w.removeAll { $0.0 == lastK } }          // (never his own last flourish again: emote-variety-r1)
         for i in w.indices { w[i].1 /= 1 + 0.7 * Float(idleState.counts[w[i].0] ?? 0) }
         guard !w.isEmpty else { return }
         let total = w.reduce(0) { $0 + $1.1 }
@@ -90,7 +91,7 @@ extension BlobBrain {
         let remaining = simd_distance(position, target)
         if remaining <= FlourishTuning.minRemaining { leg.rolled = true; return false }
         guard simd_distance(position, leg.from) >= leg.trigger else { return false }
-        if let k = leg.kind, othersDoing(k) || kindCooling.contains(k) { if !leg.waiting { leg.waiting = true; leg.blocked += 1 }; return false }          // (a friend is doing just that: try again at the next step, once he is done)
+        if let k = leg.kind, othersDoing(k) || kindCoolingSet(clusters: false).contains(k) { if !leg.waiting { leg.waiting = true; leg.blocked += 1 }; return false }          // (a friend is doing just that: try again at the next step, once he is done)
         leg.rolled = true
         guard let kind = leg.kind, kindCool[kind] == nil, !(Self.fastKinds.contains(kind) && fastOthers() >= 2), remaining >= FlourishTuning.need(kind) - 0.2 else { leg.blocked += 1; return false }
         if flourishStart(kind, resume: target, sim, skinner) { leg.fired += 1; return true }
