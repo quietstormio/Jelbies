@@ -125,6 +125,13 @@ final class GameMessageCenter {
         if current != nil || caption != nil || !queue.isEmpty { arm(now: now) }
     }
 
+    /// THE RULE: a refused start never returns silently. Every place that says "not now" (a blocker, a closed door, a greyed button) calls this with the reason, so the player always hears why and what to do.
+    /// An empty reason still says something kind (`fallback`).
+    static let fallback = "Not right now. Try again in a moment."
+    func refuse(_ why: String?, now: Date = Date()) {
+        post((why?.isEmpty == false ? why! : Self.fallback), priority: .important, identifier: "refusal", now: now)
+    }
+
     /// Drop everything said under `scope` (the outing ended).
     func dismiss(scope: Scope) {
         guard scope != .none else { return }

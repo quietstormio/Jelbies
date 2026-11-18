@@ -142,7 +142,8 @@ extension GameCare {
 
     /// Takes Jelbie `id` to the stage for a show at `rank` (the chosen rank by default).
     func startShow(jelly id: Int, rank: ShowRank? = nil, seed: UInt64? = nil) {
-        guard canShow(jelly: id), let prof = jelly(id) else { return }
+        if let why = showBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
+        guard let prof = jelly(id) else { return }
         let r = rank.flatMap { show.progress.unlocked($0) ? $0 : nil } ?? show.progress.chosen
         for a in raceBook.actors { if let b = a.brain, b.isSleeping { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) } }
         select.cancel()

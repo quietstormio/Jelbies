@@ -120,8 +120,8 @@ extension GameCare {
     #endif
 
     func startVolley(jelly id: Int, mode: VolleyMode, seed: UInt64? = nil) {
-        guard canVolley(jelly: id) else { return }
-        if case .match = mode, volleyPartnerBlocker(jelly: id) != nil { return }          // no teammate (no other Jelbie, no Park friend): no match
+        if let why = volleyBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
+        if case .match = mode, let why = volleyPartnerBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // no teammate (no other Jelbie, no Park friend): no match
         select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }

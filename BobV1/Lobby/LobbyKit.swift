@@ -471,14 +471,22 @@ struct LobbyBottomBar: View {
     let playID: String
     let playTitle: String, playIcon: LobbyIcon.Kind
     let blocked: Bool
+    /// The reason while `blocked`: a tap on the muted button says it on the message bar (never a dead button).
+    var why: String? = nil
     var upgradeID: String = "lobby-upgrade"
     var upgradePoints = 0
     var upgrade: (() -> Void)? = nil
     var play: () -> Void
     @Environment(\.lobbyTheme) private var theme
 
+    /// The main button's tap: a blocked start says why (and nothing starts); an open one goes.
+    @MainActor static func tap(blocked: Bool, why: String?, play: () -> Void) {
+        if blocked { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.play(.notEnough); GameMessageCenter.shared.refuse(why); return }
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); play()
+    }
+
     private var playButton: some View {
-        Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); play() } label: {
+        Button { Self.tap(blocked: blocked, why: why, play: play) } label: {
             HStack(spacing: 9) {
                 LobbyIcon(kind: playIcon, color: theme.primaryText)
                 Text(playTitle).font(SK.font(19, .black)).lineLimit(1).minimumScaleFactor(0.6)
@@ -487,7 +495,7 @@ struct LobbyBottomBar: View {
             .foregroundStyle(theme.primaryText).frame(maxWidth: .infinity, minHeight: 58)
             .background(Capsule().fill(blocked ? SK.muted.opacity(0.5) : theme.primary))
         }
-        .buttonStyle(.plain).disabled(blocked).accessibilityIdentifier(playID)
+        .buttonStyle(.plain).accessibilityAddTraits(blocked ? .isButton : []).accessibilityHint(blocked ? (why ?? "") : "").accessibilityIdentifier(playID)
     }
 
     private func upgradeContent(icon: Bool) -> some View {
