@@ -132,6 +132,8 @@ final class DiningGroup {
     nonisolated(unsafe) static var variance: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealVariance") != nil && UserDefaults.standard.integer(forKey: "MealVariance") == 0)
     nonisolated(unsafe) static var varianceSeed: UInt64?
     nonisolated(unsafe) private static var mealCounter: UInt64 = 0
+    /// The fixed (counter) seed only when `-FoodSeed` (non-zero) or `-MealSeed` is passed in a dev-args build; `DevArgs.enabled` alone is not enough (the owner's phone build has it).
+    private static var fixedSeedArgs: Bool { DevArgs.enabled && (UserDefaults.standard.integer(forKey: "FoodSeed") != 0 || UserDefaults.standard.object(forKey: "MealSeed") != nil) }
     private var varDelay: [Float] = [], varPace: [Float] = [], varSeeds: [UInt64] = [], varStyle: [Int] = [], varGlance: [Float] = [], varSeedShared: UInt64 = 0
     private let varBoard = DineVariantBoard()
     /// +1 / -1: the side (floor x) of diner i\'s nearest neighbour (the middle one looks right on a tie).
@@ -142,7 +144,9 @@ final class DiningGroup {
     }
     private func rollVariance() {
         var s: UInt64
-        if let f = Self.varianceSeed { s = f } else { Self.mealCounter += 1; s = DevArgs.enabled ? Self.mealCounter &* 0x2545F4914F6CDD1D : UInt64.random(in: 1...UInt64.max) }
+        if let f = Self.varianceSeed { s = f }
+        else if Self.fixedSeedArgs { Self.mealCounter += 1; s = (UInt64(UserDefaults.standard.integer(forKey: "MealSeed")) &+ Self.mealCounter) &* 0x2545F4914F6CDD1D }          // (a capture asked for repeatable takes: `-FoodSeed 1` or `-MealSeed N`, dev builds only)
+        else { s = UInt64.random(in: 1...UInt64.max) }          // (every other launch, on the phone too: each meal plays differently)
         var offsets: [Float] = [0, 0.40 + 0.04 * VarianceRNG.unit(&s), 0.82 + 0.06 * VarianceRNG.unit(&s)].prefix(n).map { $0 }
         for k in stride(from: offsets.count - 1, to: 0, by: -1) { offsets.swapAt(k, Int(VarianceRNG.next(&s) % UInt64(k + 1))) }          // (a seeded shuffle: not always the same place first)
         varDelay = offsets
@@ -709,6 +713,7 @@ final class DiningGroup {
                 for i in brains.indices where arrivedAt[i] == nil && !started[i] && ready(i) && isIdle(brains[i]) { arrivedAt[i] = age }
                 let arrivedTimes = arrivedAt.compactMap { $0 }.sorted()
                 // progress of the diners still on their way (a diner held for lanes, or a sleeper still waking, is not "stuck")
+                for i in brains.indices where held.contains(i) || brains[i].mealWaking { progRef[i] = (age, simd_distance(floor(i), stands[placeOf[i]])) }          // (the 2.5 s window starts when he is let go: a hold is not a stall)
                 for i in brains.indices where !started[i] && arrivedAt[i] == nil && !held.contains(i) && !brains[i].mealWaking && age - progRef[i].t >= Self.stuckWindow {
                     let d = simd_distance(floor(i), stands[placeOf[i]])
                     if progRef[i].d - d < Self.stuckGain { stuckAt[i] = age }
