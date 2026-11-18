@@ -405,9 +405,15 @@ final class DiningGroup {
         var lanes: [Int: [Int]] = [:]
         if Self.straightWalk, Self.laneHold, forcedOrigin == nil, trayOut {
             let eligible = brains.indices.filter { !released[$0] && floor($0).y <= stands[placeOf[$0]].y + GameCare.popTolerance }
+            // (who waits: if one lane passes the OTHER's stand, the other would have to be walked round once he stands there, so the one whose lane passes it goes first and the other waits;
+            //  with both or neither, the longer walk waits)
+            func passes(_ i: Int, _ j: Int) -> Bool { Self.segmentGap(floor(i), stands[placeOf[i]], stands[placeOf[j]], stands[placeOf[j]]) < Self.laneClear }
             for i in eligible { for j in eligible where j != i {
+                guard Self.segmentGap(floor(i), stands[placeOf[i]], floor(j), stands[placeOf[j]]) < Self.laneClear else { continue }
                 let li = simd_distance(floor(i), stands[placeOf[i]]), lj = simd_distance(floor(j), stands[placeOf[j]])
-                if (li > lj || (li == lj && i > j)), Self.segmentGap(floor(i), stands[placeOf[i]], floor(j), stands[placeOf[j]]) < Self.laneClear { lanes[i, default: []].append(j) }
+                let iPassesJ = passes(i, j), jPassesI = passes(j, i)
+                let iWaits = iPassesJ == jPassesI ? (li > lj || (li == lj && i > j)) : jPassesI
+                if iWaits { lanes[i, default: []].append(j) }
             } }
         }
         heldFront = DiningLayout.ends && sideSet && frontCount() > 0
