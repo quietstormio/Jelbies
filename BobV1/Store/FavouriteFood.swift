@@ -14,6 +14,12 @@ nonisolated enum FavouriteFood {
     /// The Shop's line under the Food tab. It states `perkTimeMul` in words: keep it, the Help page (Settings/SupportPage.swift) and docs/SUPPORT.md in step.
     static let shopLine = "Some foods give a power-up. A favourite food makes it last twice as long."
 
+    /// The love (attention need, the heart bar) a Jelmiko gains, once per serving, on his own first bite of his favourite food (capped at 1).
+    static let loveGain: Float = 0.15
+    /// After the first heart, this many more float up, `heartGap` seconds apart.
+    static let extraHearts = 2
+    static let heartGap: Float = 0.45
+
     /// Seconds one serving of a food with `perk` gives.
     static func perkDuration(_ perk: PerkKind, favourite: Bool) -> TimeInterval { perk.duration * (favourite ? perkTimeMul : 1) }
 

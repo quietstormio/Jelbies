@@ -144,7 +144,9 @@ final class GameCare {
     /// "Sleep until morning": the cut-scene's state (GameCare+SkipNight.swift).
     var nightSkip = NightSkipState()
     /// Store food bookkeeping (GameCare+Store.swift): the serving already paid from the inventory, Jellies owed their sugar-rush zoomies, soaps armed for the next Clean.
-    @ObservationIgnored var servingCharged = false
+    @ObservationIgnored var servingCharged = false { didSet { if !servingCharged { favouriteCheered = [] } } }          // (a new serving: every diner may be cheered for his favourite again)
+    @ObservationIgnored var favouriteCheered: Set<Int> = []
+    @ObservationIgnored var favouriteHearts: [Int: (left: Int, t: Float)] = [:]
     @ObservationIgnored var zoomiesDue: Set<Int> = []
     @ObservationIgnored var armedSupplies: [Int: [String]] = [:]
     /// The Jelly whose bath is waiting for a soap pick (the card shows; nil = no card). 
@@ -310,6 +312,13 @@ final class GameCare {
         wirePark()
         wireGroom()
         wireVolley()
+        // dev builds only: `-FavSnacks sushi,donut,-` makes the favourite food of slot 0, 1, 2 ... that store food ("-" = leave as is), to try the favourite-food moment in the real app
+        if DevArgs.enabled, !preview, persistent, let list = UserDefaults.standard.string(forKey: "FavSnacks") {
+            for (slot, id) in list.split(separator: ",").enumerated() where slot < jellies.count && id != "-" {
+                let c = jellies[slot].character, old = JellyTraitsBook.record(c)
+                JellyTraitsBook.adopt(c, JellyTraits(personality: old?.personality ?? .brave, jars: old?.jars ?? [50, 50, 50, 50, 50], snack: String(id)))
+            }
+        }
         if preview {
             for j in jellies { for k in NeedKind.allCases { j.needs.set(k, 1) } }          // happy and rested: he comes when asked and never wants anything while he is on show
         } else {
@@ -893,6 +902,7 @@ final class GameCare {
             greetHop = false
             if let sim, !greetBlocked { brain.startHopPlay(sim: sim, distance: 0.0001); greetHearts = 3; greetT = 0; AudioHub.shared.chirp(jelly: 0, .happy, src: "greet") }       // the existing in-place hop (arm / feet caps hold)
         }
+        tickFavouriteHearts(dt: dt)
         if greetHearts > 0 { greetT -= dt; if greetT <= 0 { greetT = 0.45; greetHearts -= 1; touchPlay?.spawnHeart(now: CACurrentMediaTime()) } }
 
         // finished jobs

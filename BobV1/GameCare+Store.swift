@@ -22,9 +22,10 @@ extension GameCare {
         guard pieces > 0, c.stored, let prof = self.jelly(jelly) else { return }
         if !servingCharged, let id = c.storeID {
             servingCharged = true; store.use(id)
-            // his picked favourite snack (JellyTraits): one extra heart and an excited face on the first bite (no stat or coin bonus)
-            if !isPreview, prof.traits?.snack == c.id { bubbleHub.spawnHeart(for: jelly, now: CACurrentMediaTime()); brainFor(jelly)?.face(.excited, hold: 1.4) }
         }
+        // his picked favourite snack (JellyTraits): once per serving, on HIS first bite (not the serving's first bite: at a group meal each diner who loves it
+        // gets his own): a heart over his head, a burst of floating hearts and an excited face, and love (attention) goes up (FavouriteFood.loveGain)
+        if !isPreview, prof.traits?.snack == c.id, favouriteCheered.insert(jelly).inserted { favouriteCheer(jelly) }
         let share = Float(pieces) / Float(DiningTiming.bitesPerServing)
         if !c.condition.isEmpty { prof.stats.nudge(c.condition.mapValues { $0 * share }, food: c.name) }
         if let perk = c.perk {
@@ -33,6 +34,29 @@ extension GameCare {
             prof.perks.grant(perk, duration: FavouriteFood.grantSeconds(perk, favourite: !isPreview && prof.traits?.snack == c.id, left: prof.perks.remaining(perk)))
             if fresh { AudioHub.shared.play(.perkSparkle, volume: 0.9) }
             if perk == .zoomies { zoomiesDue.insert(jelly) }
+        }
+    }
+
+    /// The favourite-food moment for Jelly `id`: the heart now, two more a little later (`tickFavouriteHearts`), an excited face and a step of love.
+    func favouriteCheer(_ id: Int) {
+        favouriteHeart(id)
+        favouriteHearts[id] = (FavouriteFood.extraHearts, FavouriteFood.heartGap)
+        brainFor(id)?.face(.excited, hold: 1.4)
+        let before = needs(for: id).level(.attention)
+        needs(for: id).gain(.attention, FavouriteFood.loveGain)
+        if DevArgs.enabled { NSLog("[favlove] jelly %d love %.3f -> %.3f", id, before, needs(for: id).level(.attention)) }
+    }
+    private func favouriteHeart(_ id: Int) {
+        let now = CACurrentMediaTime()
+        bubbleHub.spawnHeart(for: id, now: now)          // (the bubble hearts, over his head for every Jelmiko, Bob's slot too: GreetHeartsView)
+    }
+    /// The later hearts of the favourite burst (once per step).
+    func tickFavouriteHearts(dt: Float) {
+        guard !favouriteHearts.isEmpty else { return }
+        for (id, var g) in favouriteHearts {
+            g.t -= dt
+            if g.t <= 0 { g.t = FavouriteFood.heartGap; g.left -= 1; favouriteHeart(id) }
+            favouriteHearts[id] = g.left > 0 ? g : nil
         }
     }
 
