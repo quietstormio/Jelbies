@@ -98,16 +98,23 @@ nonisolated enum ShowDancePlan {
             if !raw.contains(where: { $0.prompt && abs($0.t - t) < 0.2 }) { raw.append((t, nil, false)) }
         }
         raw.sort { $0.t < $1.t }
+        // the sides of the fill steps: the foot opposite the step AFTER them (so a fill never makes three of a foot with a double prompt), the last ones opposite the step before
+        var sides: [Int] = Array(repeating: 0, count: raw.count)
+        for i in raw.indices.reversed() {
+            if let s = raw[i].side { sides[i] = s }
+            else if i + 1 < raw.count { sides[i] = 1 - sides[i + 1] }
+            else { sides[i] = i > 0 ? 1 - sides[i - 1] : 0 }
+        }
         var out: [ScheduledDanceStep] = []
-        var prevSide = 1, prevSt: Float = 0, prevT: Double = -1
-        for r in raw {
-            let side = r.side ?? (1 - prevSide)
+        var prevSt: Float = 0, prevT: Double = -1
+        for (ri, r) in raw.enumerated() {
+            let side = sides[ri]
             var st = Float(period) / rateFactor
             if prevT >= 0 { st = min(st, (Float(r.t - prevT) - 0.2 * prevSt) / swingFrac) }
             if st < minStep { continue }
             let bar = min(max(Int(((r.t - firstBeat) / period - 0.001) / Double(beatsPerBar)), 0), bars - 1)
             out.append(ScheduledDanceStep(plant: r.t, side: side, bar: bar, st: st, prompt: r.prompt))
-            prevSide = side; prevSt = st; prevT = r.t
+            prevSt = st; prevT = r.t
         }
         // the place of each step in its bar
         var i = 0
