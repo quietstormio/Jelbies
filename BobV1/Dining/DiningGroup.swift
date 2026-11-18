@@ -143,7 +143,7 @@ final class DiningGroup {
     private func rollVariance() {
         var s: UInt64
         if let f = Self.varianceSeed { s = f } else { Self.mealCounter += 1; s = DevArgs.enabled ? Self.mealCounter &* 0x2545F4914F6CDD1D : UInt64.random(in: 1...UInt64.max) }
-        var offsets: [Float] = [0, 0.30 + 0.10 * VarianceRNG.unit(&s), 0.60 + 0.15 * VarianceRNG.unit(&s)].prefix(n).map { $0 }
+        var offsets: [Float] = [0, 0.35 + 0.10 * VarianceRNG.unit(&s), 0.80 + 0.15 * VarianceRNG.unit(&s)].prefix(n).map { $0 }
         for k in stride(from: offsets.count - 1, to: 0, by: -1) { offsets.swapAt(k, Int(VarianceRNG.next(&s) % UInt64(k + 1))) }          // (a seeded shuffle: not always the same place first)
         varDelay = offsets
         // personalities (a seeded shuffle of 0 eager / 1 savouring / 2 chatty): the eager one paces up and goes first, the savouring one slows down and goes last
@@ -156,6 +156,13 @@ final class DiningGroup {
         varSeedShared = VarianceRNG.next(&s)
         varSeeds = (0..<n).map { _ in VarianceRNG.next(&s) | 1 }
     }
+    /// PATIENT LINE-UP (the owner: "line up, THEN the tray"; `-MealLineupPatient 0` = the 3 s late grace of ceaacfb8): the tray does not pop while the last diner is making progress toward his stand. It pops early only if he has
+    /// gained less than `stuckGain` m in `stuckWindow` s (truly stuck) once two stand at their places, or at the hard cap `gatherCap` s from the order. A diner whose ETA is more than `hurryGap` s behind the others hurries (BlobBrain.hurry).
+    nonisolated(unsafe) static var lineupPatient: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealLineupPatient") != nil && UserDefaults.standard.integer(forKey: "MealLineupPatient") == 0)
+    static let stuckGain: Float = 0.15, stuckWindow: Float = 2.5, hurryGap: Float = 1.5, hurryPace: Float = 1.25, walkSpeed: Float = 1.15
+    private var wpSent: Set<Int> = []
+    private var progRef: [(t: Float, d: Float)] = [], stuckAt: [Float?] = []
+    private var popAge: Float = 0, varBaseCache: Float?, hurryCheckT: Float = 0
     private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
@@ -439,12 +446,27 @@ final class DiningGroup {
         return trayDistance(floor(i)) < Self.trayClearance
     }
 
+    /// A diner whose ETA to his stand is more than `hurryGap` s behind the others hurries (the outing run-out pace) so the wait for the tray stays short; he stops hurrying when he arrives.
+    private func hurryLate() {
+        guard age - hurryCheckT >= 0.5 else { return }
+        hurryCheckT = age
+        let eta: [Float?] = brains.indices.map { i in started[i] || released[i] ? nil : simd_distance(floor(i), stands[placeOf[i]]) / Self.walkSpeed }
+        for i in brains.indices {
+            guard let e = eta[i] else { continue }
+            let others = eta.indices.compactMap { $0 == i ? nil : (started[$0] || released[$0] ? Float(0) : eta[$0]) }
+            let slow = (others.min() ?? e) + Self.hurryGap < e
+            if ready(i) { if brains[i].hurry, brains[i].outingPace > 1 { brains[i].hurry = false; brains[i].outingPace = 1 } }
+            else if slow, !brains[i].hurry { brains[i].hurry = true; brains[i].outingPace = Self.hurryPace; MealTrace.log("diner \(memberIDs[i]) hurries (eta \(e) s)") }
+        }
+    }
+
     private func beginApproach() {
-        state = .approaching; requested = false; settle = 0; earlyPop = false; held = []; heldFor = [:]; heldFront = false
+        state = .approaching; requested = false; settle = 0; earlyPop = false; held = []; heldFor = [:]; heldFront = false; wpSent = []
         readyT = [Float](repeating: 0, count: n)
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
         arrivedAt = [Float?](repeating: nil, count: n)
+        progRef = brains.indices.map { (0, simd_distance(floor($0), stands[placeOf[$0]])) }; stuckAt = [Float?](repeating: nil, count: n); hurryCheckT = 0; varBaseCache = nil
         if !lineup { spawnTray() }          // (tray at the order, as in 3f941ded; the café's table is out already: the food lands on it at once. Line up first: the tray waits for the gathering, see `tick`)
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
         awakeAtStart = brains.map { !$0.isSleeping }
@@ -491,6 +513,7 @@ final class DiningGroup {
             return
         }
         guard dining.phase == .absent, dining.spawn(serving: serving, n: n, bobAt: SIMD2(99, 99), forcedOrigin: origin) else { return }
+        popAge = age
         MealTrace.log("tray pop reason=\(popReason) inFront=\(frontCount()) age=\(age)")
         #if targetEnvironment(simulator)
         let box = dining.drawnBox(scale: 1)
@@ -519,7 +542,7 @@ final class DiningGroup {
         for (i, b) in brains.enumerated() where i < savedFinished.count {
             b.peerGap = savedGap[i]
             if i < released.count, released[i] { continue }          // (already handed back: his hooks, reserve and idle block are his own again)
-            b.mealYawHint = nil; b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; if i < savedPeers.count { b.peers = savedPeers[i] }
+            b.mealYawHint = nil; b.hurry = false; b.outingPace = 1; b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; if i < savedPeers.count { b.peers = savedPeers[i] }
         }
         savedFinished = []; savedGap = []; savedPeers = []
         quietLatch = []
@@ -549,7 +572,11 @@ final class DiningGroup {
             brains[i].dinePlan = GameCare.plan(for: serving, tier: tiers[i], tray: dining, place: placeOf[i])
             if !eager { brains[i].dinePlan.pace = 1 }
             if Self.variance, varDelay.indices.contains(i) {
-                brains[i].dinePlan.pace *= varPace[i]; brains[i].dinePlan.startDelay = varDelay[i]; brains[i].dinePlan.pauseMax = 0.3; brains[i].dinePlan.rngSeed = varSeeds[i]
+                brains[i].dinePlan.pace *= varPace[i]; brains[i].dinePlan.startDelay = 0; brains[i].dinePlan.pauseMax = 0.3; brains[i].dinePlan.rngSeed = varSeeds[i]
+                // the first chomp / gulp lands at popAge + base + his offset (the lean is scheduled back from it by his own lead at his own pace), not his lean start
+                let sip = serving.eatStyle == .sip
+                if varBaseCache == nil { varBaseCache = brains.indices.map { j in BlobBrain.dineLead(sip: sip, pace: (eager ? MealAppetite.pace(tiers[j]) : 1) * varPace[j]) }.max() ?? 1 }
+                brains[i].dinePlan.leanAt = popAge + (varBaseCache ?? 1) + varDelay[i] - BlobBrain.dineLead(sip: sip, pace: brains[i].dinePlan.pace)
                 brains[i].dinePlan.motion = true; brains[i].dinePlan.style = varStyle[i]; brains[i].dinePlan.variantSeed = varSeedShared; brains[i].dinePlan.board = varBoard
                 brains[i].dinePlan.glanceDir = glanceSide(i)
                 MealTrace.log("variance diner \(memberIDs[i]) delay=\(varDelay[i]) pace=\(brains[i].dinePlan.pace)")
@@ -573,7 +600,7 @@ final class DiningGroup {
             if let pay { let k = min(eaten(i), piecesFor[i]); if k > paid[i] { pay(memberIDs[i], k - paid[i]); paid[i] = k } }
             released[i] = true; if releasedT.indices.contains(i) { releasedT[i] = 0 }
             MealTrace.log("diner \(memberIDs[i]) released eaten=\(eaten(i)) state=\(state)")
-            b.mealYawHint = nil; b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; b.peers = savedPeers[i]
+            b.mealYawHint = nil; b.hurry = false; b.outingPace = 1; b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; b.peers = savedPeers[i]
         }
     }
 
@@ -650,6 +677,7 @@ final class DiningGroup {
         guard state != .idle else { return }
         if tierOf != nil { for (i, b) in brains.enumerated() where !(released.indices.contains(i) && released[i]) { b.idleBlocked = true } }          // no idle trick mid-sitting (Bob's walk to the tray is never cut for a flip)
         age += dt
+        varBoard.clock = age
         if age > GameCare.mealTimeout { MealTrace.log("giveup reason=timeout"); end(); gaveUp = true; return }
         traceTick()
         if Self.quietPlaces { updateQuiet() }
@@ -660,8 +688,15 @@ final class DiningGroup {
                 let early = false
                 for i in brains.indices where arrivedAt[i] == nil && !started[i] && ready(i) && isIdle(brains[i]) { arrivedAt[i] = age }
                 let arrivedTimes = arrivedAt.compactMap { $0 }.sorted()
-                let late = lineup && arrivedTimes.count >= 2 && age - arrivedTimes[1] >= Self.lateGrace          // (the third is late: 3 s after the second arrived)
-                if !lineup || (gathered || late) && !trayBusy || age > Self.gatherCap + (trayBusy ? 4 : 0) {
+                // progress of the diners still on their way (a diner held for lanes, or a sleeper still waking, is not "stuck")
+                for i in brains.indices where !started[i] && arrivedAt[i] == nil && !held.contains(i) && !brains[i].mealWaking && age - progRef[i].t >= Self.stuckWindow {
+                    let d = simd_distance(floor(i), stands[placeOf[i]])
+                    if progRef[i].d - d < Self.stuckGain { stuckAt[i] = age }
+                    progRef[i] = (age, d)
+                }
+                let late = lineup && arrivedTimes.count >= 2 && (Self.lineupPatient ? stuckAt.contains { $0.map { age - $0 < 0.1 } ?? false } : age - arrivedTimes[1] >= Self.lateGrace)          // (the last diner has not moved 0.15 m in 2.5 s: truly stuck)
+                if lineup, Self.lineupPatient { hurryLate() }
+                if !lineup || (gathered || late) && !trayBusy || age > Self.gatherCap + (Self.lineupPatient && lineup ? 0 : (trayBusy ? 4 : 0)) {
                     popReason = forcedOrigin != nil ? "cafe" : (!lineup ? "tray-first" : (gathered && !trayBusy ? "gathered" : (late && !trayBusy ? "late-grace" : "cap")))
                     earlyPop = popReason == "awake-first"
                     spawnTray()
@@ -691,6 +726,18 @@ final class DiningGroup {
                 MealTrace.log("wake FALLBACK diner=\(memberIDs[i]) after \(brains[i].sleep.mealWakeT) s")
                 brains[i].sleep.mealWake = false; brains[i].sleep.mealCall = nil
                 brains[i].requestHard(.goTo(approachPoint(blob: i)))
+            }
+            // STUCK FALLBACK (the tray is out and a diner still has to come round to a place behind it): once, he goes round the tray's short end, OUTSIDE the end diner's stand, by a waypoint; he never presses along the front edge.
+            if trayOut, lineup, Self.lineupPatient, age - popAge > 2.5 {
+                for i in brains.indices where !started[i] && !released[i] && !ready(i) && !wpSent.contains(i) && floor(i).y > stands[placeOf[i]].y + 0.3 {
+                    let ends = stands.indices.filter { abs(stands[$0].x - origin.x) > 0.8 }
+                    guard let e = ends.min(by: { simd_distance(floor(i), stands[$0]) < simd_distance(floor(i), stands[$1]) }) else { continue }
+                    let out: Float = stands[e].x >= origin.x ? 1 : -1
+                    let want = SIMD2(stands[e].x + out * 1.0, stands[e].y + 0.2), got = brains[i].fixed(want)
+                    wpSent.insert(i)
+                    if simd_distance(got, want) < 0.4 { MealTrace.log("diner \(memberIDs[i]) goes round the tray end by a waypoint (\(got.x),\(got.y))"); brains[i].callToMeal(.goTo(got)) }
+                    else { MealTrace.log("diner \(memberIDs[i]) no clear way round the tray end") }
+                }
             }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
             for i in brains.indices where !started[i] && !held.contains(i) && !ready(i) && isIdle(brains[i]) {
