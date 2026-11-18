@@ -1156,6 +1156,19 @@ final class BlobBrain {
         }
     }
 
+    /// focus-legs-r1: a standing body whose root was carried off a planted foot (a neighbour's press, a settle, the end of an arrival) re-plants that foot with one small
+    /// ordinary step square under him, the worse foot first, once it is `replantAt` off; never in a meal's calm wait or a social hold (their own stance code owns the feet).
+    nonisolated(unsafe) static var replantOn = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "LeanFeet") != nil && UserDefaults.standard.integer(forKey: "LeanFeet") == 0)
+    static let replantAt: Float = 0.045
+    func replantDrifted() {
+        guard Self.replantOn, feetInit, geom.valid, !feet.active, !reserved, !socialBook.hold, social == nil else { return }
+        let d = (0..<2).map { simd_distance(feet.pos[$0], SIMD2(px, pz) + rotXZ(geom.off[$0], yaw)) }
+        let w = d[0] >= d[1] ? 0 : 1
+        guard d[w] > Self.replantAt else { return }
+        nextSwing = w
+        startStep(peak: turnLift * amplitude, rate: stepRate * runRateMul * locoRateMul)
+    }
+
     /// Turn on the spot toward `goal` with steps (one swing per step, up to turnRate * stepTime of heading each). Returns true while turning.
     func turnSteps(goal: Float, tol: Float) -> Bool {
         if feet.active { return true }
@@ -1500,6 +1513,7 @@ final class BlobBrain {
                 poseOn = true; ensureFeet(sim)
                 let calm = reserved ? mealFaceYaw : nil          // (the meal's calm wait faces his own place, not the camera)
                 _ = turnSteps(goal: socialBook.hold ? (socialBook.faceYaw ?? yaw) : (calm ?? faceCameraYaw()), tol: socialBook.hold ? 0.06 : (calm != nil ? 0.05 : 0.12))
+                replantDrifted()
                 gaitPose(sway: 0.6 * waddleRoll, bob: 0.03, rock: 0.5)
             }
 
@@ -1891,6 +1905,12 @@ final class BlobBrain {
             // world-placed: the full correction D (a translation of the whole bean: the clamp slides it toward the belly, and if that cannot bury a planted foot the last
             // millimetres lift it) is EASED IN over ~3 frames instead of snapping (a 2 cm step in one frame at each foot plant was visible against the locked walk), except
             // that the bean is never left shallower than `refitFloorDepth` (the hard floor, 0.005 inside the -0.02 limit): just enough of D is applied at once for that.
+            if leanLift[s] > 0, geom.valid {          // (focus-legs-r1: the body kept rolling in the step: the lifted foot rises with its hip by the rest of the way, never lowered here)
+                let c0 = sim.restCentroid
+                let eNow = (now.centroid + now.rotation.act(geom.contact[s] - c0)).y - (now.centroid + now.rotation.act(geom.contact[1 - s] - c0)).y - Self.leanFeetFrom
+                let dy = min(eNow - leanLift[s], 0.05)
+                if dy > 0 { for i in 0..<FootBean.vertexCount { skinner.beanPos[s][i].y += dy } }
+            }
             let orig = skinner.beanPos[s]
             var v = orig
             attachBean(sim, now, lifted: now.tilt > 0.3 || (v.map(\.y).min() ?? 0) - sim.floorY > 0.02, &v)
@@ -2072,6 +2092,8 @@ final class BlobBrain {
     nonisolated(unsafe) static var leanFeetFollow = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "LeanFeet") != nil && UserDefaults.standard.integer(forKey: "LeanFeet") == 0)
     /// Hip rise (m) under which the foot stays planted as it is (the breathing / jiggle noise of a body standing square).
     static let leanFeetFrom: Float = 0.002
+    /// The lift the lean gave each foot this tick (m, 0 = none): the post-step refit adds what the body's further roll in the step lifted that hip by.
+    var leanLift: [Float] = [0, 0]
     /// Moves the whole bean up so that none of it is below the floor (its shape is kept).
     static func liftOntoFloor(_ v: inout [SIMD3<Float>], floorY: Float) {
         var lo = Float.infinity
@@ -2117,6 +2139,7 @@ final class BlobBrain {
 
     func driveLimbs(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         noticeTeleport(sim)
+        leanLift = [0, 0]
         skinner.clearWaveBlend()          // (set again below only while the keyframed wave plays)
         skinner.tailOn = feature == .spines && !WornSet.sleepHides(self)          // (hold-wear-r1: NOT hidden for the flip trick any more: the spikes stay drawn there, so the tail they ride must stay too)
         skinner.teddyOn = feature == .ears && TeddyEarsVariant.active.inBody          // (from the character alone: a scene that never ticks the feature layer still shows his ears; the scales default to 1)
@@ -2216,6 +2239,7 @@ final class BlobBrain {
                         let k = smooth01((e - Self.leanFeetFrom) / 0.02)
                         wanted += (SIMD2(fc.x, fc.z) - wanted) * k
                         h += e - Self.leanFeetFrom
+                        leanLift[s] = e - Self.leanFeetFrom
                     }
                 }
                 let offFull = wanted - SIMD2(bc.x, bc.z)
