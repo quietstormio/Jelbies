@@ -2253,11 +2253,15 @@ final class BlobBrain {
                 if sl > simFootCap { simD *= simFootCap / sl }
                 let hs = min(h - leanLift[s], simFootCap)
                 footShift[s] = SIMD3(simD.x, hs, simD.y)
-                let kS = k * (1 - leanFree)
                 for (i, p) in geom.particles[s].enumerated() {
                     let r = geom.rest[s][i]
                     let bp = bodyPos(r)
-                    list.append(ParticleTarget(index: p, pos: SIMD3(bp.x + simD.x, sim.floorY + r.y + hs, bp.z + simD.y), stiffness: kS))
+                    var tp = SIMD3(bp.x + simD.x, sim.floorY + r.y + hs, bp.z + simD.y)
+                    if leanFree > 0 {          // (the lean's high side: the boot is carried rigidly by the body as it is, so it rides up attached; released it lagged on the floor, 1.21 x)
+                        let fr = fitted.centroid + fitted.rotation.act(r - c0)
+                        tp += (SIMD3(fr.x, max(fr.y, sim.floorY + r.y), fr.z) - tp) * leanFree
+                    }
+                    list.append(ParticleTarget(index: p, pos: tp, stiffness: k))
                 }
                 // BEAN: a foot that is stepping, displaced from the body's own foot, lifted or waving needs the bean; both feet still at their rest
                 // spots for beanHoldTime lets the beans go (one swap per action, never per step). A lean's lift is not a reason (above).
