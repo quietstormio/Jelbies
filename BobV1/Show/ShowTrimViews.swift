@@ -44,8 +44,9 @@ struct TurnChip: View {
     var now: Bool
     var scale: CGFloat = 1
     var height: CGFloat = 46
+    var font: CGFloat = 17
     var body: some View {
-        Text(text).font(SK.font(17 * scale, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 8)
+        Text(text).font(JFont.scaled(font * scale, .black, cap: 1.3)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 8)
             .frame(maxWidth: .infinity, minHeight: height * scale)
             .background(Capsule().fill(now ? ShowUI.gold : SK.cream.opacity(0.95)))
             .overlay(Capsule().strokeBorder(now ? ShowUI.goldDeep : .clear, lineWidth: 3))
