@@ -2206,10 +2206,15 @@ final class BlobBrain {
                 // (the body-carried spot, a small lifted foot); the low side's foot stays planted. Only for the mid-sole lean: the walk, the turn steps and the wave
                 // pivot on one foot (`pivotSide`) and keep their own feet; a foot in its swing keeps its step.
                 if Self.leanFeetFollow, pivotSide == nil, !(feet.swinging && s == feet.side) {
-                    let e = bc.y - lift - (sim.floorY + c.y)          // (the hip's rise from the lean alone: a bob's `lift` is not a lean)
+                    // measured on the body as it IS (the fitted pose): the soft body pressed onto its low side tips about that side, so its high hip rises ~1.6 x what the
+                    // commanded mid-sole pivot alone would give (measured: the attractor's rise left the leg at 1.25 x its rest length). The rise is taken against the OTHER foot's
+                    // hip, so a body standing square (or bobbing / squashing as a whole) gives 0 and only a lean lifts a foot.
+                    let fc = fitted.centroid + fitted.rotation.act(c - c0)
+                    let fo = fitted.centroid + fitted.rotation.act(geom.contact[1 - s] - c0)
+                    let e = fc.y - fo.y
                     if e > Self.leanFeetFrom {
                         let k = smooth01((e - Self.leanFeetFrom) / 0.02)
-                        wanted += (SIMD2(bc.x, bc.z) - wanted) * k
+                        wanted += (SIMD2(fc.x, fc.z) - wanted) * k
                         h += e - Self.leanFeetFrom
                     }
                 }

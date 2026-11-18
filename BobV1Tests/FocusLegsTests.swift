@@ -23,7 +23,7 @@ struct LegProbe {
     var worstLeg: Float = 0, worstOff: Float = 0, worstCross: Float = 9, worstDepth: Float = 9
     var worstLegAt = "", worstOffAt = "", worstCrossAt = "", worstDepthAt = ""
     var byState: [String: (leg: Float, off: Float)] = [:]
-    var frames = 0
+    var frames = 0, exempt = 0
     var dyn: [Float] = []
 
     /// One measurement of one body. `tag` names the state; `extra` is logged with the worst frame (the cause numbers).
@@ -31,8 +31,11 @@ struct LegProbe {
         if dyn.count != rm.vertexCount * 6 { dyn = [Float](repeating: 0, count: rm.vertexCount * 6) }
         skinner.update(x: sim.x, index: rm.index, into: &dyn)
         guard brain.geom.valid else { return }
+        // exempt by design (the locked gait and the approved wave): a walk leg (the come walk, the let-go walk), a step on the spot / turn step, the arrival wave
+        if brain.isWalkScript || brain.feet.active || brain.isWaving || brain.activity == .playing { exempt += 1; return }          // (+ the leave hop of "Let them go")
         frames += 1
         let pose = sim.bodyPose(iterations: 3), c0 = sim.restCentroid, inv = pose.rotation.inverse
+        let sy = sim.attractor.squash, sxz = 1 / sy.squareRoot()          // (the body's squash, as BlobBrain.bodyPointWorld carries a rest point: a body stretched taller is not a longer leg)
         let beans = skinner.beansActive && skinner.beanFirst.count == 2
         var sole: [SIMD3<Float>] = [.zero, .zero]
         for s in 0..<2 {
@@ -41,7 +44,8 @@ struct LegProbe {
             for v in ids { lo = min(lo, dyn[6 * Int(v) + 1]) }
             var a = SIMD3<Float>.zero, n: Float = 0
             for v in ids { let o = 6 * Int(v); if dyn[o + 1] < lo + 0.015 { a += SIMD3(dyn[o], dyn[o + 1], dyn[o + 2]); n += 1 } }
-            sole[s] = c0 + inv.act(a / max(n, 1) - pose.centroid)          // (rest frame)
+            let o = inv.act(a / max(n, 1) - pose.centroid)
+            sole[s] = c0 + SIMD3(o.x / sxz, o.y / sy, o.z / sxz)          // (rest frame)
         }
         let swingSide: Int? = brain.feet.swinging ? brain.feet.side : nil
         var line = ""
@@ -66,7 +70,7 @@ struct LegProbe {
     }
 
     var summary: String {
-        String(format: "leg %.2f (%@) | off %.3f (%@) | cross %.3f (%@) | depth %.3f (%@)", worstLeg, worstLegAt, worstOff, worstOffAt, worstCross, worstCrossAt, worstDepth, worstDepthAt)
+        String(format: "frames %d exempt %d | leg %.2f (%@)", frames, exempt, worstLeg, worstLegAt) + String(format: " | off %.3f (%@) | cross %.3f (%@) | depth %.3f (%@)", worstOff, worstOffAt, worstCross, worstCrossAt, worstDepth, worstDepthAt)
     }
     var states: String { byState.keys.sorted().map { String(format: "%@ leg %.2f off %.3f", $0, byState[$0]!.leg, byState[$0]!.off) }.joined(separator: "; ") }
 
@@ -189,7 +193,7 @@ final class FocusLegsTests: XCTestCase {
         var probes: [LegProbe]
         var cores: [[[Int32]]] = []
         var state = ""
-        var minGap: Float = 9, minGapAt = ""
+        var minGap: Float = 9, minGapAt = "", tickN = 0
         init(species: [(name: String, feature: JellyFeature, panda: Bool)]) {
             probes = [LegProbe](repeating: LegProbe(), count: r.actors.count)
             r.care.touchPlay = play
@@ -223,17 +227,16 @@ final class FocusLegsTests: XCTestCase {
                 let b = x.brain!, s = x.sim
                 probes[i].measure(state, sim: x.sim, skinner: x.skinner, brain: b, rm: r.rm, core: cores[i]) { FocusLegsTests.cause(b, s) }
             }
-            // the neighbours' drawn skins along the row (x): the gap between the right edge of one and the left edge of the next, in the body band
-            let xs = r.actors.map { x -> (lo: Float, hi: Float, cx: Float) in
-                let c = x.sim.centroid()
-                var lo = Float.infinity, hi = -Float.infinity
-                for i in 0..<x.sim.n { let y = x.sim.x[3 * i + 1]; if y > x.sim.floorY + 0.1 { lo = min(lo, x.sim.x[3 * i]); hi = max(hi, x.sim.x[3 * i]) } }
-                return (lo, hi, c.x)
-            }.sorted { $0.cx < $1.cx }
-            for k in 0..<(xs.count - 1) {
-                let g = xs[k + 1].lo - xs[k].hi
-                if g < minGap { minGap = g; minGapAt = state }
-            }
+            guard care.focus.isFocused, state != "arriving", state != "let them go" else { return }
+            // the closest approach of two bodies of the row (sim particles, every 6th step; reported, the soft bodies themselves do not collide)
+            tickN += 1
+            guard tickN % 6 == 0 else { return }
+            for i in 0..<r.actors.count { for j in (i + 1)..<r.actors.count {
+                let A = r.actors[i].sim, B = r.actors[j].sim
+                var best = Float.infinity
+                for p in 0..<A.n { let pa = SIMD3(A.x[3 * p], A.x[3 * p + 1], A.x[3 * p + 2]); for q in 0..<B.n { best = min(best, simd_distance_squared(pa, SIMD3(B.x[3 * q], B.x[3 * q + 1], B.x[3 * q + 2]))) } }
+                if best.squareRoot() < minGap { minGap = best.squareRoot(); minGapAt = state + " (\(i)-\(j))" }
+            } }
         }
         func run(_ s: Float, measure: Bool = true, until: (() -> Bool)? = nil) { for _ in 0..<Int(s * 60) { tick(measure: measure); if until?() == true { return } } }
     }
@@ -268,7 +271,7 @@ final class FocusLegsTests: XCTestCase {
                 MotionLog.write("FOCUSLEGS row [\(names)] \(sp[i].name): \(row.probes[i].summary)\n   states: \(row.probes[i].states)")
                 row.probes[i].check("row [\(names)] \(sp[i].name)")
             }
-            MotionLog.write(String(format: "FOCUSLEGS row [\(names)] min sim skin gap along the row %.3f m at %@", row.minGap, row.minGapAt))
+            MotionLog.write(String(format: "FOCUSLEGS row [\(names)] closest sim particles of two row bodies %.3f m at %@", row.minGap, row.minGapAt))
         }
     }
 }
