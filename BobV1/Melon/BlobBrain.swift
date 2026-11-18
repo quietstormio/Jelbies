@@ -2607,6 +2607,24 @@ final class BlobBrain {
         dine.miss = bestMiss
     }
 
+    /// TEMP probe (meal-reach-r1): best miss per crouch and nub parameter for a target.
+    func dineReachProbe(_ sim: SoftBody, target: SIMD3<Float>) -> String {
+        let m = geom.mid, w = SIMD2(px, pz) + rotXZ(geom.midOff, yaw)
+        var out = ""
+        for sg: Double in [0.15, 0.30, 0.45] {
+            out += " s\(sg):"
+            for cr: Float in [0.7, 0.8, 0.9, 1.0] {
+                var best: Float = .infinity
+                for side in [-1, 1] {
+                    let r = DineGeometry.solveReach(hold: DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: sg), side: side), target: target, m: m, w: SIMD3(w.x, sim.floorY + m.y, w.y), c0: sim.restCentroid, yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side)
+                    best = min(best, r.miss)
+                }
+                out += String(format: " %.1f", best * 100)
+            }
+        }
+        return out
+    }
+
     func applyDine(_ sim: SoftBody, _ skinner: Skinner, pose: ReachPose, mouth: Float, eyes: Float, pulse: Float) {
         dine.cur = pose
         twist = pose.twist * amplitude
