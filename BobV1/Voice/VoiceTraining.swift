@@ -48,8 +48,8 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .spin: return ["spin", "twirl", "spin around", "spin round", "twirl around", "tail spin"]; case .hop: return ["hop"]
         case .showOff: return ["show off", "showoff", "show it off"]; case .strut: return ["strut"]; case .sing: return ["sing", "sing a song", "sing song"]
         case .hula: return ["hula", "hula dance", "dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]; case .oneLegSpin: return ["one leg spin", "pirouette", "tiptoe spin"]
-        case .moonwalk: return ["moonwalk", "moon walk"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
-        case .bow: return ["bow", "take a bow", "take bow"]; case .bellyDrum: return ["drum", "belly drum", "drum your belly", "drum belly", "drum on your belly"]; case .dizzySpin: return ["dizzy", "dizzy spin", "dizzy spinning"]
+        case .moonwalk: return ["moonwalk", "moon walk", "moan walk", "moonwalking", "moon walking", "moon walks"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
+        case .bow: return ["bow", "take a bow", "take bow", "take your bow", "bow down", "take a bough"]; case .bellyDrum: return ["drum", "belly drum", "drum your belly", "drum belly", "drum on your belly", "belly drumming", "belly drums"]; case .dizzySpin: return ["dizzy", "dizzy spin", "dizzy spinning", "dizzy spins", "dizzy twirl"]
         }
     }
     /// A word to suggest, in the tip text only.
@@ -97,6 +97,8 @@ nonisolated struct VoiceDecision: Equatable, Sendable {
     var target: VoiceTarget = .selected
     /// No name, word, alias, social phrase or teaching rep matched: the text is free phrasing.
     var noMatch = false
+    /// The utterance was a name (or names) and nothing else: the only decision that opens the care menu. A name WITH a trick or command never does.
+    var nameOnly = false
 }
 
 nonisolated enum VoiceTuning {
@@ -276,6 +278,9 @@ final class VoiceTraining {
     /// Words around a trick that are not part of it ("Alien, can you please do the moonwalk now"). Place words are NOT here: "sit on the couch" stays a place.
     static let fillerWords: Set<String> = ["do", "does", "the", "a", "an", "can", "could", "would", "will", "you", "please", "now", "me", "my", "your", "go", "lets", "let", "s", "ok", "okay", "hey", "just", "again", "and", "some", "little", "trick", "move"]
 
+    /// Words that only ADDRESS him ("hey Alien", "oh Alien please"): a name with just these is still the name by itself (the menu opens).
+    static let addressWords: Set<String> = ["hey", "hi", "hello", "yo", "oh", "um", "uh", "hmm", "ok", "okay", "please"]
+
     /// `toks` without filler words. "for me" is dropped as a pair ("sing for me"); a lone "for" is a place word and stays.
     static func withoutFiller(_ toks: [String]) -> [String] {
         var out: [String] = []
@@ -372,7 +377,7 @@ final class VoiceTraining {
         let target: VoiceTarget = all ? .everyone : (resolved.first.map { _ in named } ?? .selected)
         func out(_ r: VoiceReaction) -> VoiceDecision { VoiceDecision(reaction: r, target: target) }
         // a name (or "everyone") alone: attention
-        if rest.isEmpty { return target == .selected ? VoiceDecision(reaction: .puzzled, noMatch: true) : out(mood == .grumpy ? .grumpyIgnore : .nameHeard) }
+        if rest.isEmpty || (target != .selected && rest.allSatisfy({ Self.addressWords.contains($0) })) { return target == .selected ? VoiceDecision(reaction: .puzzled, noMatch: true) : { var d = out(mood == .grumpy ? .grumpyIgnore : .nameHeard); d.nameOnly = true; return d }() }
 
         // Does it match a word he has been taught?
         let bound = VoiceTrick.allCases.filter { unlocked($0) && lesson($0).learned }
