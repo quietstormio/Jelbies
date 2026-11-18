@@ -1,9 +1,8 @@
 //
 //  SoapPickCard.swift
-//  "Pick a soap": the small card that shows EVERY time the player taps Clean (unless a soap was armed from the Bag). Always six tiles, three across, never scrolling: the free
-//  Jelly soap first, then Lavender, Mint, Berry, Honey and Chamomile, each with its Blender bar, name and power-up chip. An owned soap shows its count ("x2"); a soap the player
-//  does not own shows a price pill ("Buy 25"): tapping it buys one bar through the Shop's own path and starts the bath with it; with too few coins the tile is dimmed and
-//  does nothing. The last soap used is ringed. X = not now. A cancelled bath uses nothing.
+//  "Pick a soap": the small card that shows when the player taps Clean and owns any bought soap (no bought soap: no card, he runs out at once). Up to six tiles, three across,
+//  never scrolling: the free Jelly soap first, then the owned soaps, each with its Blender bar, name, power-up chip and count ("x2"). Tapping one starts the bath with it.
+//  The last soap used is ringed. X = not now. A cancelled bath uses nothing.
 //
 
 import SwiftUI
@@ -45,25 +44,21 @@ struct SoapPickCard: View {
     }
 
     private func soapTile(_ soap: Soap, width: CGFloat, picked: Bool) -> some View {
-        let owned = (care.soapCount(soap) ?? 1) > 0
-        let affordable = owned || care.canBuySoap(soap)
-        return Button { care.chooseSoap(soap) } label: {
+        Button { care.chooseSoap(soap) } label: {
             VStack(spacing: landscape ? 2 : 4) {
                 SoapBarArt(soap: soap, size: width * (landscape ? 0.44 : 0.5))
                 Text(soap.name).playFont(12 * ps, .bold).foregroundStyle(CareMenu.brown).lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 4)
                 chip(soap)
-                status(soap, owned: owned)
+                status(soap)
             }
             .frame(width: width).padding(.vertical, landscape ? 5 : 8)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.7)))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(picked ? Color(red: 0.36, green: 0.62, blue: 0.95) : Color.black.opacity(0.06), lineWidth: picked ? 3 : 1))
-            .opacity(affordable ? 1 : 0.45)
         }
         .buttonStyle(.plain)
-        .disabled(!affordable)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(soap.name)
-        .accessibilityValue(owned ? (soap.storeID == nil ? "Free" : "You have \(care.soapCount(soap) ?? 0)") : (affordable ? "Costs \(care.soapPrice(soap) ?? 0) coins. Tap to buy" : "Costs \(care.soapPrice(soap) ?? 0) coins. Not enough coins"))
+        .accessibilityValue(soap.storeID == nil ? "Free" : "You have \(care.soapCount(soap) ?? 0)")
         .accessibilityHint(soap.blurb)
         .accessibilityIdentifier("soap-\(soap.storeID ?? "jelly")")
     }
@@ -77,20 +72,11 @@ struct SoapPickCard: View {
         }
     }
 
-    /// The bottom line of a tile: "Free" (Jelly soap), "x2" (owned) or a coin price pill ("Buy 25").
+    /// The bottom line of a tile: "Free" (Jelly soap) or the count of bars ("x2").
     @ViewBuilder
-    private func status(_ soap: Soap, owned: Bool) -> some View {
-        if soap.storeID == nil {
-            Text("Free").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
-        } else if owned {
-            Text("x\(care.soapCount(soap) ?? 0)").font(SK.font(13, .black)).foregroundStyle(SK.ink)
-        } else {
-            HStack(spacing: 4) {
-                JellyCoinIcon(size: 15)
-                Text("Buy \(care.soapPrice(soap) ?? 0)").font(SK.font(12, .black)).foregroundStyle(SK.ink)
-            }
-            .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(SK.honey))
-        }
+    private func status(_ soap: Soap) -> some View {
+        if soap.storeID == nil { Text("Free").font(SK.font(12, .heavy)).foregroundStyle(SK.muted) }
+        else { Text("x\(care.soapCount(soap) ?? 0)").font(SK.font(13, .black)).foregroundStyle(SK.ink) }
     }
 }
 

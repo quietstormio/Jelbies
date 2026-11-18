@@ -74,31 +74,34 @@ extension GameCare {
 
     /// The bought soaps the player has at least one bar of, in the soaps' order.
     var ownedSoaps: [Soap] { Soap.allCases.filter { s in s.storeID.map { store.count($0) > 0 } ?? false } }
-    /// The tiles of the pick card: ALWAYS all six, the free Jelly soap first.
-    var soapChoices: [Soap] { Soap.allCases }
+    /// Any bought soap in the Bag (a cheap check: no soap art or model is touched until the card shows).
+    var hasBoughtSoap: Bool { Soap.boughtIDs.contains { store.count($0) > 0 } }
+    /// The tiles of the pick card: the free Jelly soap first, then the owned soaps (up to six).
+    var soapChoices: [Soap] { [.jelly] + ownedSoaps }
     /// Bars of `soap` in the Bag (the free Jelly soap: nil).
     func soapCount(_ soap: Soap) -> Int? { soap.storeID.map { store.count($0) } }
-    /// Shop price of a soap (nil for the Jelly soap).
-    func soapPrice(_ soap: Soap) -> Int? { soap.storeID.flatMap { StoreCatalog.item($0)?.price } }
-    /// An unowned soap the player can pay for now.
-    func canBuySoap(_ soap: Soap) -> Bool { (soapPrice(soap) ?? Int.max) <= store.wallet.count }
     static let lastSoapKey = "BathLastSoap"
     /// The soap used last time, if it is still owned (else the Jelly soap): ringed on the card.
     var preselectedSoap: Soap {
         guard let id = UserDefaults.standard.string(forKey: Self.lastSoapKey), let s = Soap.of(storeID: id), ownedSoaps.contains(s) else { return .jelly }
         return s
     }
-    /// A tile of the pick card was tapped: the bath starts with that soap. An unowned soap is bought first through the Shop's own path (StoreBook.buy: wallet, count,
-    /// save); not enough coins = nothing happens. The Jelly soap is free and uses nothing.
+    /// A tile of the pick card was tapped: the bath starts with that soap (the Jelly soap is free and uses nothing).
     func chooseSoap(_ soap: Soap) {
         guard let who = soapPrompt else { return }
-        if let sid = soap.storeID, store.count(sid) == 0 { guard store.buy(sid) == .bought else { return } }
+        if let sid = soap.storeID, store.count(sid) == 0 { return }
         soapPrompt = nil
         var ids = (armedSupplies[who] ?? []).filter { Soap.of(storeID: $0) == nil }
         if let sid = soap.storeID { ids.append(sid) }
         armedSupplies[who] = ids
         AudioHub.shared.uiTap()
         clean(jelly: who)
+    }
+    /// The card closes by itself when the moment is gone (a meal, a call, sleep, a trip, another bath).
+    func soapCardTick() {
+        guard let who = soapPrompt else { return }
+        let asleep = brainFor(who)?.isSleeping ?? false
+        if !canClean(jelly: who) || asleep || callRunning || meal != nil || wanted != nil || groupActive || bath.active || !hasBoughtSoap { soapPrompt = nil }
     }
     func dismissSoapCard() { soapPrompt = nil }
 

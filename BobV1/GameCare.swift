@@ -500,11 +500,12 @@ final class GameCare {
     func wave(jelly: Int = 0) { AudioHub.shared.chirp(jelly: jelly, .babble, src: "wave"); if meal == nil, wanted == nil, !groupActive, !focus.isActive, !bath.active, !tripActive { queued = [.wave] } }
     /// Menu row "Clean" is available: no tray, no meal, no clean-up running, not in the come-here close-up.
     var canClean: Bool { canClean(jelly: 0) }
-    /// What the player taps (the menu row, the Condition screen's Bath, a thought bubble, the voice): the "Pick a soap" card EVERY time (GameCare+Store.swift), unless a soap or
-    /// the Spray was armed from the Bag (that is the pick) or a capture aid runs the bath. The card starts the bath with `clean`.
+    /// What the player taps (the menu row, the Condition screen's Bath, a thought bubble, the voice). With NO bought soap this is exactly `clean`: he runs out at once (no card,
+    /// nothing loaded). With a bought soap the "Pick a soap" card shows first (GameCare+Store.swift), unless a soap was armed from the Bag (that is the pick) or a capture aid runs the bath.
     func requestClean(jelly: Int = 0) {
-        guard canClean(jelly: jelly), !bath.active else { return }
-        if bath.demo || !(armedSupplies[jelly] ?? []).isEmpty { clean(jelly: jelly); return }
+        guard soapPrompt == nil else { return }          // the card is already up: a second tap does nothing
+        guard !bath.active, canClean(jelly: jelly) else { return }
+        if bath.demo || !(armedSupplies[jelly] ?? []).isEmpty || !hasBoughtSoap { clean(jelly: jelly); return }
         soapPrompt = jelly
     }
     /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow). No card: `requestClean` is the player's way in.
@@ -854,6 +855,7 @@ final class GameCare {
     }
 
     func tick(brain: BlobBrain, renderer: MelonRenderer?, dt: Float, sim: SoftBody? = nil) {
+        if soapPrompt != nil { soapCardTick() }          // (one nil check per step when no card is up)
         var ht = CACurrentMediaTime()
         driveFocus(id: 0, brain: brain, sim: sim, dt: dt)
         tickFocus(brain: brain, sim: sim, dt: dt)
