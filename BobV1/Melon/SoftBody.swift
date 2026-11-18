@@ -751,6 +751,9 @@ nonisolated final class SoftBody {
         return floorY - lo
     }
 
+    /// The pose fit's warm start (a lobby picture sets the identity so the fit of its rest-stand body is exactly the rest pose, whatever the live fit was, then puts it back).
+    var poseWarmStart: SIMD4<Float> { get { fitQ } set { fitQ = newValue } }
+
     /// The particles of the body standing at rest (its undeformed shape, upright, turned `yaw` about y, centred over `xz`, the soles exactly on the floor), as `x` lays them out.
     /// A lobby picture skins from this, never from the live particles (which may be lying, leaning, mid-step or held).
     func restStandPositions(xz: SIMD2<Float>, yaw: Float = 0) -> [Float] {

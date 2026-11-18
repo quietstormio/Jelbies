@@ -147,6 +147,7 @@ final class ActionShotArmsTests: XCTestCase {
                 let xz = SIMD2<Float>(c0.x, c0.z)
                 let liveX = r.sim.x
                 let restore = RestStand.enter(sim: r.sim, skinner: r.skinner, xz: xz)
+                XCTAssertLessThan(r.sim.bodyPose(iterations: 3).rotation.angle, 0.01, "species \(id) \(kind): the pose fit of the rest stand is the identity (the live fit's warm start does not leak)")
                 var pic = [Float](repeating: 0, count: r.dyn.count)
                 r.skinner.withRestArms { r.skinner.withNeutralFace { r.skinner.update(x: r.sim.x, index: MotionRig.renderMesh.index, into: &pic) } }
                 // the same pose through the same scope on a body that never moved (the reference stand)

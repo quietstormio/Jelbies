@@ -11,14 +11,15 @@ enum RestStand {
     /// Puts `sim` at its rest stand over `xz` and `skinner` at its rest arms and feet. Returns what puts the live state back (call it once, after the picture).
     @discardableResult
     static func enter(sim: SoftBody, skinner sk: Skinner, xz: SIMD2<Float>) -> () -> Void {
-        let liveX = sim.x, liveAtt = sim.attractor
+        let liveX = sim.x, liveAtt = sim.attractor, liveFit = sim.poseWarmStart
         let live = (sk.beanBlend, sk.shearVec, sk.lobeD)
         sim.x = sim.restStandPositions(xz: xz)
         sim.attractor = Attractor()          // (the brain's live target pose is where he WAS: the feet / shoes are placed on the body's own rest pose)
+        sim.poseWarmStart = SIMD4<Float>(0, 0, 0, 1)
         sim.invalidatePose()
         sk.beanBlend = 0; sk.shearVec = .zero; sk.lobeD = [.zero, .zero]
         return {
-            sim.x = liveX; sim.attractor = liveAtt
+            sim.x = liveX; sim.attractor = liveAtt; sim.poseWarmStart = liveFit
             sim.invalidatePose()
             sk.beanBlend = live.0; sk.shearVec = live.1; sk.lobeD = live.2
         }
