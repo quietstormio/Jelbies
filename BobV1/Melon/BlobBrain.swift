@@ -850,12 +850,12 @@ final class BlobBrain {
             dine = DineState(place: place, bitesLeft: bites, mode: dineHooks?.fork == true ? .fork : .finger)
             dine.wait = dinePlan.startDelay; dine.rng = dinePlan.rngSeed
             if shortDineStep(place) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: already on his stand: no walk that turns toward a point cm away)
-            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk { mealFinalYaw = place.yaw } }
+            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk, mealYawHint != nil { mealFinalYaw = place.yaw } }
         case .sip(let place, let gulps):
             dine = DineState(place: place, bitesLeft: gulps, mode: .sip)
             dine.wait = dinePlan.startDelay; dine.rng = dinePlan.rngSeed
             if shortDineStep(place, limit: Self.sipStepMin) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: as above; a sip only below `sipStepMin`)
-            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk { mealFinalYaw = place.yaw } }
+            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk, mealYawHint != nil { mealFinalYaw = place.yaw } }
         }
     }
 
@@ -2485,6 +2485,7 @@ final class BlobBrain {
         var startDelay: Float = 0; var pauseMax: Float = 0; var rngSeed: UInt64 = 0
         /// Motion variance (same switch): `motion` on = each bite / gulp plays a variant (chew, after-bite, finish) picked from `variantSeed`; `style` 0 eager / 1 savouring / 2 chatty; `glanceDir` = +1 / -1: the side of his nearest neighbour (a glance is a twist toward it);
         /// `board` hands out variants so two neighbours never play the same one at the same moment.
+        var leanAt: Float = 0          // the group-clock moment his first lean may start (so his first chomp / gulp lands at the group's planned moment, not his lean)
         var motion = false; var style = 0; var variantSeed: UInt64 = 0; var glanceDir: Float = 1; var board: DineVariantBoard? = nil }
     var dinePlan = DinePlan()
     /// True while he shakes his head at a tray (the refusal): GameCare shows the "Not hungry" label for it.
@@ -2634,8 +2635,9 @@ final class BlobBrain {
         if armBuilding || armKeyframes[ArmPath.nubToMouth.name] == nil { return }          // path still precomputing: stand and wait
         guard let h = dineHooks else { return }
         if !armActive { armActive = true; armPathName = ArmPath.nubToMouth.name; armT = 0; armBlend = 0 }
-        let waiting = dine.wait > 0 && dine.phase == .lean          // (meal variance: he stands at his place, breathing, until his turn to lean)
-        if waiting { dine.wait -= dt } else { dine.t += dt * dinePlan.pace }
+        let clockWait = dine.k == 0 && dine.phase == .lean && !dine.entered && (dinePlan.board.map { $0.clock < dinePlan.leanAt } ?? false)
+        let waiting = clockWait || (dine.wait > 0 && dine.phase == .lean)          // (meal variance: he stands at his place, breathing, until his turn to lean)
+        if waiting { if !clockWait { dine.wait -= dt } } else { dine.t += dt * dinePlan.pace }
         let grabS = Float(ArmPath.nubGrabS)
         var pose = ReachPose()
         var armTarget: Float = 0, mouth: Float = 0, eyes: Float = 1, pulse: Float = 0
@@ -2781,6 +2783,10 @@ final class BlobBrain {
 
     /// The sip: he tips his whole body until his mouth meets the tip of his own straw (hands-free), three gulps, a closed-eyes "ahh".
     /// A random pause (0 ... `dinePlan.pauseMax` s) before the next bite / gulp, from the plan's seed (deterministic per meal). 0 with the variance off.
+    /// Seconds from the start of the first lean to the first chomp (a bite) / first gulp, at this pace: the group schedules the lean so the CHOMP lands where it planned.
+    nonisolated static func dineLead(sip: Bool, pace: Float) -> Float {
+        (sip ? tSipLean + 0.15 * dineBeat : tLean + tGrab + tStraighten + tossLand) / max(pace, 0.1)
+    }
     func dineNextPause() -> Float {
         guard dinePlan.pauseMax > 0 else { return 0 }
         return dinePlan.pauseMax * VarianceRNG.unit(&dine.rng)
@@ -2820,8 +2826,9 @@ final class BlobBrain {
 
     func runSip(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let h = dineHooks else { return }
-        let waiting = dine.wait > 0 && (dine.phase == .lean || dine.phase == .grab || dine.phase == .chew)          // (meal variance: before the first lean, and between gulps)
-        if waiting { dine.wait -= dt } else { dine.t += dt * dinePlan.pace }
+        let clockWait = dine.k == 0 && dine.phase == .lean && !dine.entered && (dinePlan.board.map { $0.clock < dinePlan.leanAt } ?? false)
+        let waiting = clockWait || (dine.wait > 0 && (dine.phase == .lean || dine.phase == .grab || dine.phase == .chew))          // (meal variance: before the first lean, and between gulps)
+        if waiting { if !clockWait { dine.wait -= dt } } else { dine.t += dt * dinePlan.pace }
         var pose = ReachPose()
         var mouth: Float = 0, eyes: Float = 1, pulse: Float = 0
         dine.window = false
@@ -3024,6 +3031,8 @@ nonisolated enum VarianceRNG {
 @MainActor
 final class DineVariantBoard {
     private(set) var chew: [Int: Int] = [:], after: [Int: Int] = [:]
+    /// The sitting's clock (DiningGroup sets it every tick, seconds): the plans' `leanAt` is read against it.
+    var clock: Float = 0
     nonisolated init() {}
     private func pick(_ d: inout [Int: Int], id: Int, want: Int, last: Int, n: Int, k: Int) -> Int {
         let others = Set(d.filter { $0.key != id }.values)
