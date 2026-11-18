@@ -80,7 +80,8 @@ nonisolated enum ShowDancePlan {
             // L R R L (mirrored every other bar): out with the lead foot, the other closes, then back
             let d: Float = bar % 2 == 0 ? 1 : -1
             let lead = d > 0 ? 1 : 0
-            let a: Float = lively ? 0.10 : 0.09          // (each way 2a = 0.18 / 0.20 u, back to the centre every bar)
+            // (each way 2a = 0.15 / 0.16 u, back to the centre every bar; the first bar has no beat-0 step, so the whole dance spans 3a = 0.225 / 0.24 u from his mark, inside the 0.3 limit)
+            let a: Float = lively ? 0.08 : 0.075
             s.inPlace = false; s.peak = 0.085; s.sway = 0.12; s.bob = 0.07; s.rock = 0.3; s.lean = 0.12
             switch j {
             case 0: s.side = lead; s.rootD = SIMD2(d * a, 0); s.reach = SIMD2(d * a, 0)
