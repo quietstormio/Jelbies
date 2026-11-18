@@ -28,7 +28,7 @@ extension VoiceCoordinator {
         let names: (Int) -> String = { [weak care] in care?.jelly($0)?.name ?? "Jelmiko" }
         if VoiceCoordinator.logging { NSLog("AILOG execute %@ ids=%@ object=%@", c.action.key, ids.description, c.object ?? "-") }
         guard !ids.isEmpty else { confused(ids: [], reason: nil); return }                 // a name for a Jelly that is not here
-        if case .jellies = c.who, !care.focus.isActive, ids.count == 1 { (onSelect ?? { care.rosterPick($0, quietHop: true) })(ids[0]) }
+        if case .jellies = c.who, !care.focus.isActive, ids.count == 1 { (onSelect ?? { care.rosterPick($0, quietHop: true, opensMenu: false) })(ids[0]) }          // a command that names him highlights him; only his name alone opens the menu
         if c.who == .everyone { onEveryone?(ids) }
         if c.action.needsObject, c.object == nil { confused(ids: ids, reason: Self.missingLine(c)); return }         // "go to the beanbag": none placed
         let locked = care.trayOut || care.bath.active || (care.focus.isActive && care.focus.phase == .approaching)

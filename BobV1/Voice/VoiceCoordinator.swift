@@ -639,7 +639,7 @@ final class VoiceCoordinator {
         if ids.isEmpty { care.noteInteraction() } else { for id in ids { care.noteInteraction(jelly: id) } }
         // naming a Jelly selects it (the outline a tap gives); come already zooms onto him, and the close-up needs no highlight
         if case .jelly(let id) = d.target, presentIDs.contains(id), !care.focus.isActive, r != .perform(.come) {
-            if let f = onSelect { f(id) } else { care.rosterPick(id, quietHop: true) }
+            if let f = onSelect { f(id) } else { care.rosterPick(id, quietHop: true, opensMenu: d.nameOnly || d.reaction == .nameHeard) }          // only the name by itself opens the menu; a name with a trick / command only highlights him
         }
         if d.target == .everyone { onEveryone?(ids) }
         if r == .ignore, (lastBook ?? training).lastMiss == .flip, flipRoll() < 0.5 {            // he knew it but missed: sometimes it is a faceplant
