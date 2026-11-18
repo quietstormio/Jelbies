@@ -147,9 +147,8 @@ final class GameCare {
     @ObservationIgnored var servingCharged = false
     @ObservationIgnored var zoomiesDue: Set<Int> = []
     @ObservationIgnored var armedSupplies: [Int: [String]] = [:]
-    /// The Jelly whose bath is waiting for a soap pick (the card shows; nil = no card). `soapChosen`: the pick was made (or the soap came from the Bag), so `clean` goes on.
+    /// The Jelly whose bath is waiting for a soap pick (the card shows; nil = no card). 
     var soapPrompt: Int?
-    @ObservationIgnored var soapChosen = false
     /// Jelly Circuit "Waddle Sprint" (Race/RaceFlow.swift, GameCare+Race.swift): the trip to the track and back, and the race on it.
     let race = RaceFlow()
     @ObservationIgnored let raceBook = RaceBook()
@@ -501,13 +500,17 @@ final class GameCare {
     func wave(jelly: Int = 0) { AudioHub.shared.chirp(jelly: jelly, .babble, src: "wave"); if meal == nil, wanted == nil, !groupActive, !focus.isActive, !bath.active, !tripActive { queued = [.wave] } }
     /// Menu row "Clean" is available: no tray, no meal, no clean-up running, not in the come-here close-up.
     var canClean: Bool { canClean(jelly: 0) }
-    /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow).
+    /// What the player taps (the menu row, the Condition screen's Bath, a thought bubble, the voice): the "Pick a soap" card EVERY time (GameCare+Store.swift), unless a soap or
+    /// the Spray was armed from the Bag (that is the pick) or a capture aid runs the bath. The card starts the bath with `clean`.
+    func requestClean(jelly: Int = 0) {
+        guard canClean(jelly: jelly), !bath.active else { return }
+        if bath.demo || !(armedSupplies[jelly] ?? []).isEmpty { clean(jelly: jelly); return }
+        soapPrompt = jelly
+    }
+    /// "Clean": he runs out toward the camera, then the clean-up scene (see BathFlow). No card: `requestClean` is the player's way in.
     func clean(jelly: Int = 0) {
-        if !bath.active, canClean(jelly: jelly) {
+        if !bath.active, canClean(jelly: jelly) {          // the soap of this bath: the one armed (picked on the card or taken from the Bag), else the free Jelly soap
             let armed = armedSupplies[jelly] ?? []
-            let picked = soapChosen || !armed.isEmpty          // (a soap or the Spray from the Bag is already the pick)
-            if !picked, !ownedSoaps.isEmpty { soapPrompt = jelly; return }          // owns bought soaps: "Pick a soap" first (no soaps: straight in, as always)
-            soapChosen = false
             bath.soap = armed.compactMap { Soap.of(storeID: $0) }.first { s in s.storeID.map { store.count($0) > 0 } ?? false } ?? .jelly
         }
         guard jelly == 0 else { startCleanOther(jelly: jelly); return }        // another Jelly: GameCare+Bath.swift

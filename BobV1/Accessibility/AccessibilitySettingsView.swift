@@ -36,6 +36,11 @@ struct AccessibilitySettingsView: View {
                 } header: { Text("Playing") } footer: {
                     Text(Self.raceFootnote(settings.raceAssist) + " Relaxed timing widens the windows in drills, the Show dance and the trick ring.")
                 } }
+                Section {
+                    toggle("Bath helper", $settings.bathHelper, "a11y-bath-helper")
+                } header: { Text("Bathing") } footer: {
+                    Text("Shows a button that scrubs for you.")
+                }
                 if Self.partBLanded { Section {
                     toggle("Tap to talk (instead of hold)", $settings.tapToTalk, "a11y-tap-to-talk")
                 } header: { Text("Talking") } footer: {
