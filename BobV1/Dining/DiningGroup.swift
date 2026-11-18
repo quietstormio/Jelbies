@@ -31,7 +31,7 @@ final class DiningGroup {
     /// in portrait: the 3-place stands are 1.11 apart, a body with its arms is ~1.4 wide (~1.6 through the catch lean), and the portrait floor holds side stands only
     /// to about +-1.2. The two-place row is clear (+0.5 u). The third waits calmly, clear of both, and eats at the next sitting (GameCare+Group); the café keeps
     /// `maxDiners`. Switch `-MealSeats 3` (simulator / dev builds; tests set it) = the old three at once.
-    nonisolated(unsafe) static var homeSeats: Int = DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealSeats") == 3 ? 3 : 2
+    nonisolated(unsafe) static var homeSeats: Int = DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealSeats") == 2 ? 2 : 3
     /// C6: how far a waiter for the next sitting keeps from every eater's stand and approach point (a body with its arms ~1.4 wide, ~1.6 through the catch, + margin).
     static let waiterClear: Float = 1.75
     /// C7 (round E; OFF by default since the round E re-survey: `-MealRolling 1` turns it on, simulator / dev builds): a waiter for the next sitting takes the first FREED place of the
@@ -88,7 +88,45 @@ final class DiningGroup {
     /// between two standing diners. Since 2026-11-17 a DRINK sitting at the home tray is never re-planned either (the feeding survey: drinks, still re-planned, had the most
     /// stop-and-go and swings of every case), but it keeps the smart FIRST plan (`Lineup.best`): x-order breaks near-ties by index, and three on one side at the same x
     /// then crossed and waited on each other (LineupTests oneSide 10.8 s vs 5.9 s). Only the café keeps the smart line-up with `replan` exactly as before.
-    nonisolated(unsafe) static var orderedPlaces: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DiningOrdered") != nil && UserDefaults.standard.integer(forKey: "DiningOrdered") == 0)
+    nonisolated(unsafe) static var orderedPlaces: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DiningOrdered") != nil && UserDefaults.standard.integer(forKey: "DiningOrdered") == 0)          // (feeding-old-r1 follow-up: ON again, `-DiningOrdered 0` = the smart line-up)
+    /// feeding-old-r1 follow-up (2026-11-18), each `-X 0` = the 6f246ad3 behaviour (simulator / dev builds):
+    /// `orderedDrinks` (`-MealOrderedDrink 0`): a DRINK sitting is seated left-to-right by the diners' floor x too (the leftmost takes the left place), not by the smart plan.
+    /// `trayToThem` (`-MealTrayToThem 0`): the home tray's spot is the open spot where the fewest diners start in front of their stand line, then the least total walking (not random).
+    /// `straightWalk` (`-MealStraight 0`): a diner who starts behind his stand line walks STRAIGHT to his stand (no stop at the approach point, no second step in), ending the walk in the place's yaw.
+    /// `wideRow` (`-MealWideRow 0`): the three-place row's side places stand 1.45 (or as wide as the floor allows) from the middle one, side diners straight forward (DiningLayout.sideX).
+    nonisolated(unsafe) static var orderedDrinks: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealOrderedDrink") != nil && UserDefaults.standard.integer(forKey: "MealOrderedDrink") == 0)
+    nonisolated(unsafe) static var trayToThem: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealTrayToThem") != nil && UserDefaults.standard.integer(forKey: "MealTrayToThem") == 0)
+    nonisolated(unsafe) static var straightWalk: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealStraight") != nil && UserDefaults.standard.integer(forKey: "MealStraight") == 0)
+    nonisolated(unsafe) static var wideRow: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealWideRow") != nil && UserDefaults.standard.integer(forKey: "MealWideRow") == 0)
+    /// `endsLayout` (`-MealEnds 0`): the three-place home sitting seats two diners at the tray's two ENDS (45 deg toward tray and camera) and one in the middle behind it (DiningLayout.ends); it wins over `wideRow`.
+    nonisolated(unsafe) static var endsLayout: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealEnds") != nil && UserDefaults.standard.integer(forKey: "MealEnds") == 0)
+    /// ENDS layout: when a diner starts in FRONT of his place's line he has to come round the tray, and once both end places are taken there is no way past (tray + two bodies fill the floor):
+    /// the others, who could walk straight to their stands, wait where they are until he is behind his line (or `holdMax` s have passed), then walk straight.
+    private var held: Set<Int> = []
+    /// Lanes that would pass closer than a body width (`laneClear`): the diner with the LONGER straight walk waits (where he stands) until the one he would brush past is at his stand; nobody dodges or stops mid-walk.
+    private var heldFor: [Int: [Int]] = [:]
+    private var heldFront = false
+    static let laneClear: Float = 1.45
+    /// `-MealLanes 0` = no lane hold (6f246ad3 behaviour).
+    nonisolated(unsafe) static var laneHold: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealLanes") != nil && UserDefaults.standard.integer(forKey: "MealLanes") == 0)
+    /// Closest distance between the segments a-b and c-d (sampled).
+    static func segmentGap(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ c: SIMD2<Float>, _ d: SIMD2<Float>) -> Float {
+        var m = Float.infinity
+        for i in 0...16 { let p = a + (b - a) * (Float(i) / 16); for j in 0...16 { m = min(m, simd_distance(p, c + (d - c) * (Float(j) / 16))) } }
+        return m
+    }
+    static let holdMax: Float = 7
+    /// feeding-old-r1 (the owner 2026-11-18: "if it\'s better for them to line up then the tray"): LINE UP FIRST. With no tray on the floor the three walk straight to their places (left to right,
+    /// ending in the place\'s yaw, with the lane rules); the tray pops once all stand there (or 3 s after the second one if the third is late, `lateGrace`), and each eats at once and leaves when done.
+    /// `-MealTrayFirst 1` = the tray at the order, as in 3f941ded. The café (forcedOrigin) never lines up first: its table is out already.
+    nonisolated(unsafe) static var trayAtOrder: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealTrayFirst") == 1
+    static let lateGrace: Float = 3
+    private var lineup: Bool { !Self.trayAtOrder && Self.straightWalk && forcedOrigin == nil }
+    private var arrivedAt: [Float?] = []
+    private func atStand(_ i: Int) -> Bool { simd_distance(floor(i), stands[placeOf[i]]) < 0.3 }
+    /// `-CafeEnds 1` (dev builds): the café table's three places use the ENDS layout too (the table mesh is the old row's: see the report). Off by default until the table is remodelled.
+    nonisolated(unsafe) static var cafeEnds: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "CafeEnds") == 1
+    private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
     /// Slot of each walker when the walkers are sorted by x and the slots are sorted by x (the pairing that never crosses for walks to a line). Ties go to the lower index.
@@ -114,7 +152,7 @@ final class DiningGroup {
     /// Slice 2 of the meal line-up fix (switch `-DiningQuiet 0` = the old rule, simulator / dev builds): two diners of this sitting who are both at, or within `Lineup.commitDistance` of, their own place do not push each other
     /// (MelonStage.keepApart: the 0.7 gap and the skin wall are skipped for that pair), so the row at the tray is allowed to overlap a little but nobody is shoved back and forth. Latched per diner from the moment
     /// he is that near (or has started to eat) until he is released or the sitting ends, so it cannot flicker at the radius. Walking diners still avoid everybody else exactly as before.
-    nonisolated(unsafe) static var quietPlaces: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "DiningQuiet") != nil && UserDefaults.standard.integer(forKey: "DiningQuiet") == 0)
+    nonisolated(unsafe) static var quietPlaces: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "DiningQuiet") == 1
     private var quietLatch: Set<Int> = []
     /// The roster ids whose pair with `id` MelonStage.keepApart skips: the other quiet diners, when `id` is a quiet diner himself (empty otherwise: no allocation).
     func quietPeers(of id: Int) -> Set<Int> { Self.quietPlaces && isActive && forcedOrigin == nil && quietLatch.contains(id) ? quietLatch : [] }          // (food and drinks at the home tray; never the café)
@@ -129,7 +167,7 @@ final class DiningGroup {
     /// `-MealCalmWait 0` = the old wait, simulator / dev builds). Each diner's approach point lies behind his place ALONG his place's own facing, so the step-in is straight and
     /// he arrives squared up (no turn at the place); while he waits there he faces his place (BlobBrain.mealFaceYaw: one turn on arrival, then still: no look-around, no step in
     /// place, no face-the-camera turn); and he is sent to eat only once he faces it, or after `calmFacingWait` s ready (a diner who cannot square up is never held for good).
-    nonisolated(unsafe) static var calmWait: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealCalmWait") != nil && UserDefaults.standard.integer(forKey: "MealCalmWait") == 0)
+    nonisolated(unsafe) static var calmWait: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealCalmWait") == 1
     /// The calm wait is the HOME tray's (like the ordered line-up): the café keeps its own wait.
     private var calm: Bool { Self.calmWait && forcedOrigin == nil }
     static let calmFacing: Float = 0.2
@@ -141,6 +179,7 @@ final class DiningGroup {
     func placeYaw(_ p: Int) -> Float { placeYaws.indices.contains(p) ? placeYaws[p] : 0 }
     /// The approach point of the stand `s` of place `p`: `GameCare.approachBack` behind it, along the place's facing (calm wait) or straight back (the old rule).
     private func approach(stand s: SIMD2<Float>, place p: Int) -> SIMD2<Float> {
+        if lineup { return s }          // (line up first: he walks straight to his stand)
         guard calm else { return SIMD2(s.x, s.y - GameCare.approachBack) }
         let y = placeYaw(p)
         return s - GameCare.approachBack * SIMD2(sinf(y), cosf(y))
@@ -156,6 +195,11 @@ final class DiningGroup {
     /// Diner i is done and has been handed back to his own life (released ahead of the others; `releaseFinished`).
     private var released: [Bool] = []
     /// Is this roster id a diner who is still held by the sitting (not yet released)?
+    /// Has this roster id's diner been sent to eat (he is on his straight walk to his stand, or eating)?
+    func hasStarted(_ id: Int) -> Bool { isActive && memberIDs.firstIndex(of: id).map { started.indices.contains($0) && started[$0] } ?? false }
+    /// A diner not yet sent to eat keeps off the whole drawn tray as a passer-by does, for the first `passerMax` s of the sitting (a floor with no way round must not shut him out: after that he is left to the thin collider, as before).
+    static let passerMax: Float = 3.5
+    func keepsOffTray(_ id: Int) -> Bool { Self.straightWalk && isActive && !hasStarted(id) && (lineup ? trayOut : age < Self.passerMax) }
     func isHolding(_ id: Int) -> Bool { isActive && memberIDs.firstIndex(of: id).map { !(released.indices.contains($0) && released[$0]) } ?? false }
     /// Blob i has been sent to eat (he arrived at his place).
     private var started: [Bool] = []
@@ -235,15 +279,44 @@ final class DiningGroup {
         if let fo = forcedOrigin { origin = fo }
         else if let s = MealTrace.takeSpot() { origin = s; MealTrace.log("choose branch=forced spot=(\(s.x),\(s.y)) (-DiningSpot)") }
         else {
-            let L = DiningLayout.make(n: n), keep = keepClearOf, was = DiningSpot.pickOpen
-            if !keep.isEmpty {          // (round E: a SLEEPING waiter is never moved: this sitting's places and approach points keep `waiterClear` from where he lies)
+            if (Self.wideRow || Self.endsLayout), n == 3 {          // (the widest side spacing the floor holds: wide row 1.45 / 1.3 / 1.11; ends layout 1.3 / 1.2 / 1.12)
+                let js = avoid + brains.indices.map { f($0) }
+                DiningLayout.ends = Self.endsLayout
+                for sx: Float in (Self.endsLayout ? [1.5, 1.4, 1.3, 1.2, 1.12] : [1.45, 1.3, 1.11]) {
+                    DiningLayout.sideX = sx
+                    if sx == 1.11 || sx == 1.12 || !DiningSpot.openSpots(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: js).isEmpty { break }
+                }
+                sideSet = true
+            }
+            let L = DiningLayout.make(n: n), keep = keepClearOf, original = DiningSpot.pickOpen
+            var was = original
+            if Self.trayToThem {          // (the tray goes to them: fewest diners in front of their stand line, then the least total walking)
+                let floors = brains.indices.map { f($0) }, closer = c.eatStyle == .sip ? GameCare.sipCloser : GameCare.eatCloser
+                was = { offered in
+                    var best: (front: Int, total: Float, o: SIMD2<Float>)?
+                    for o in offered {
+                        let stands = L.places.map { SIMD2(o.x + $0.rel.x, o.y + $0.rel.y + closer) }
+                        let slot = Self.orderedSlots(floors: floors, slots: stands)
+                        var front = 0, total: Float = 0
+                        for i in floors.indices where slot[i] >= 0 {
+                            let st = stands[slot[i]]
+                            if floors[i].y > st.y + GameCare.popTolerance { front += 1 }
+                            total += simd_distance(floors[i], st)
+                        }
+                        if best == nil || front < best!.front || (front == best!.front && total < best!.total - 1e-4) { best = (front, total, o) }
+                    }
+                    if let b = best { MealTrace.log("choose: tray to them front=\(b.front) walk=\(b.total)") }
+                    return best?.o
+                }
+            }
+            if Self.trayToThem || !keep.isEmpty {          // (round E: a SLEEPING waiter is never moved: this sitting's places and approach points keep `waiterClear` from where he lies)
                 DiningSpot.pickOpen = { offered in
                     let ok = offered.filter { o in L.places.allSatisfy { p in let s = o + p.rel; return keep.allSatisfy { simd_distance($0, s) >= Self.waiterClear && simd_distance($0, s - SIMD2(0, GameCare.approachBack)) >= Self.waiterClear } } }
                     if ok.isEmpty { MealTrace.log("choose: no spot clear of the sleeping waiter(s); the usual pick") }
                     return was(ok.isEmpty ? offered : ok)
                 }
-            }
-            defer { DiningSpot.pickOpen = was }
+            } else { DiningSpot.pickOpen = was }
+            defer { DiningSpot.pickOpen = original }
             origin = DiningSpot.choose(bob: SIMD2(99, 99), layout: L, jellies: avoid + brains.indices.map { f($0) })
         }
         // nearest free spot for everybody (first claim wins by distance)
@@ -253,7 +326,7 @@ final class DiningGroup {
         joining = []; releasedT = [Float](repeating: 0, count: n); heldForWaiter = 0
         placeOf = Lineup.best(from: brains.indices.map { f($0) }, slots: spots, locked: [Int?](repeating: nil, count: n), centre: n == 3 ? 0 : nil)
         ordered = Self.orderedPlaces && n > 1 && forcedOrigin == nil          // (food and drinks at the home tray; the café keeps `replan`)
-        if ordered && c.kind == .food { placeOf = Self.orderedSlotsTied(floors: brains.indices.map { f($0) }, slots: spots, centre: n == 3 ? 0 : nil) }          // (a drink keeps the smart first plan above: given once, never re-planned)
+        if ordered && (c.kind == .food || Self.orderedDrinks) { placeOf = Self.orderedSlotsTied(floors: brains.indices.map { f($0) }, slots: spots, centre: n == 3 ? 0 : nil) }          // (a drink keeps the smart first plan above: given once, never re-planned)
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
@@ -281,7 +354,8 @@ final class DiningGroup {
         }
         hooked = true
         for b in brains { b.reserved = true; b.waitFocus = origin }          // everybody waits where he stands (look / step / bounce) until the meal is over
-        for i in brains.indices { brains[i].mealFaceYaw = calm ? placeYaw(placeOf[i]) : nil }          // (C3: the calm wait faces his own place)
+        for i in brains.indices { brains[i].mealFaceYaw = (calm || lineup) ? placeYaw(placeOf[i]) : nil }          // (C3: the calm wait faces his own place)
+        for i in brains.indices { brains[i].mealYawHint = placeYaw(placeOf[i]) }
         beginApproach()
         traceReadyIDs = []; traceBiteIDs = []; traceShareIDs = []; inBoxTicks = 0; popReason = "gathered"
         MealTrace.log("group start n=\(n) kind=\(serving.kind == .food ? "food" : "drink") origin=(\(origin.x),\(origin.y)) inFront=\(frontCount()) orderedPlaces=\(ordered) quietPlaces=\(Self.quietPlaces) calmWait=\(calm)")
@@ -330,19 +404,48 @@ final class DiningGroup {
     /// walked out through it). A diner at his place (ready), sent to eat (started) or already done (released) never holds it back.
     private var trayBusy: Bool { bystanders().contains { trayDistance($0) < Self.trayClearance } || brains.indices.contains { dinerOnTrayFloor($0) } }
     func dinerOnTrayFloor(_ i: Int) -> Bool {
-        guard brains.indices.contains(i), !(released.indices.contains(i) && released[i]), !(started.indices.contains(i) && started[i]), !ready(i) else { return false }
+        guard brains.indices.contains(i), !(released.indices.contains(i) && released[i]), !(started.indices.contains(i) && started[i]), !ready(i), !(lineup && atStand(i)) else { return false }
         return trayDistance(floor(i)) < Self.trayClearance
     }
 
     private func beginApproach() {
-        state = .approaching; requested = false; settle = 0; earlyPop = false
+        state = .approaching; requested = false; settle = 0; earlyPop = false; held = []; heldFor = [:]; heldFront = false
         readyT = [Float](repeating: 0, count: n)
         // the food comes first, at its chosen spot; each Jelly then walks over and starts eating the moment he is there (nobody waits for the others)
         started = (0..<n).map { released.indices.contains($0) && released[$0] }          // (the ones already released are not called back)
-        if forcedOrigin != nil { spawnTray() }          // (the café's table is out already: the food lands on it at once; a fresh tray waits for the gathering, see `tick`)
+        arrivedAt = [Float?](repeating: nil, count: n)
+        if !lineup { spawnTray() }          // (tray at the order, as in 3f941ded; the café's table is out already: the food lands on it at once. Line up first: the tray waits for the gathering, see `tick`)
         for i in brains.indices { idle[i] = 0; walkRetries[i] = 0 }
         awakeAtStart = brains.map { !$0.isSleeping }
-        for i in brains.indices where !released[i] { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken softly, not hard-aborted: BlobBrain+SleepForce)
+        var lanes: [Int: [Int]] = [:]
+        if Self.straightWalk, Self.laneHold, forcedOrigin == nil, trayOut || lineup {
+            let eligible = brains.indices.filter { !released[$0] && (lineup || floor($0).y <= stands[placeOf[$0]].y + GameCare.popTolerance) }
+            // (who waits: if one lane passes the OTHER's stand, the other would have to be walked round once he stands there, so the one whose lane passes it goes first and the other waits;
+            //  with both or neither, the longer walk waits)
+            func passes(_ i: Int, _ j: Int) -> Bool { Self.segmentGap(floor(i), stands[placeOf[i]], stands[placeOf[j]], stands[placeOf[j]]) < Self.laneClear }
+            for i in eligible { for j in eligible where j != i {
+                guard Self.segmentGap(floor(i), stands[placeOf[i]], floor(j), stands[placeOf[j]]) < Self.laneClear else { continue }
+                let li = simd_distance(floor(i), stands[placeOf[i]]), lj = simd_distance(floor(j), stands[placeOf[j]])
+                let iPassesJ = passes(i, j), jPassesI = passes(j, i)
+                let iWaits = iPassesJ == jPassesI ? (li > lj || (li == lj && i > j)) : jPassesI
+                if iWaits { lanes[i, default: []].append(j) }
+            } }
+        }
+        heldFront = !lineup && DiningLayout.ends && sideSet && frontCount() > 0
+        for i in brains.indices where !released[i] {
+            // a diner who starts at or behind his stand line walks straight to his stand (`startSitting`: the dine request walks, squares up on the way and eats); only one who has to come round uses the approach point
+            if lineup {
+                if lanes[i] != nil { held.insert(i); heldFor[i] = lanes[i] ?? []; brains[i].mealFaceYaw = nil; MealTrace.log("diner \(memberIDs[i]) held for lanes of " + (lanes[i] ?? []).map { "\(memberIDs[$0])" }.joined(separator: ",")); continue }
+                MealTrace.log("diner \(memberIDs[i]) lines up place=\(placeOf[i]) from=(\(floor(i).x),\(floor(i).y))"); brains[i].callToMeal(.goTo(approachPoint(blob: i)))
+            } else if Self.straightWalk, forcedOrigin == nil, trayOut, floor(i).y <= stands[placeOf[i]].y + GameCare.popTolerance {
+                if heldFront || lanes[i] != nil {
+                    held.insert(i); heldFor[i] = lanes[i] ?? []
+                    MealTrace.log("diner \(memberIDs[i]) held " + (heldFront ? "for the diner coming round " : "") + (lanes[i].map { "for lanes of " + $0.map { "\(memberIDs[$0])" }.joined(separator: ",") } ?? ""))
+                    continue
+                }
+                started[i] = true; MealTrace.log("diner \(memberIDs[i]) straight start place=\(placeOf[i]) from=(\(floor(i).x),\(floor(i).y))"); startSitting(i)
+            } else { brains[i].callToMeal(.goTo(approachPoint(blob: i))) }          // (a sleeper is woken at once, not softly: BlobBrain+SleepForce)
+        }
         requested = true
     }
 
@@ -373,6 +476,7 @@ final class DiningGroup {
     /// He is at (or behind) his place's line and close to his approach point.
     private func ready(_ i: Int) -> Bool {
         let a = approachPoint(blob: i), f = floor(i)
+        if lineup { return simd_distance(f, a) < 0.3 }
         return f.y <= stands[placeOf[i]].y + GameCare.popTolerance && simd_distance(f, a) < 0.5
     }
 
@@ -384,10 +488,11 @@ final class DiningGroup {
         for (i, b) in brains.enumerated() where i < savedFinished.count {
             b.peerGap = savedGap[i]
             if i < released.count, released[i] { continue }          // (already handed back: his hooks, reserve and idle block are his own again)
-            b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; if i < savedPeers.count { b.peers = savedPeers[i] }
+            b.mealYawHint = nil; b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; if i < savedPeers.count { b.peers = savedPeers[i] }
         }
         savedFinished = []; savedGap = []; savedPeers = []
         quietLatch = []
+        if sideSet { DiningLayout.sideX = 1.11; DiningLayout.ends = false; sideSet = false }
     }
     /// The meal is dropped (Come here, grabbed, timeout): the tray poofs, what was eaten stays paid.
     func cancel() { guard state != .idle else { return }; end() }
@@ -412,7 +517,8 @@ final class DiningGroup {
         if tierOf != nil {
             brains[i].dinePlan = GameCare.plan(for: serving, tier: tiers[i], tray: dining, place: placeOf[i])
             if !eager { brains[i].dinePlan.pace = 1 }
-            brains[i].requestNow(GameCare.mealRequest(serving, tray: dining, place: placeOf[i], pieces: piecesFor[i]))
+            let r = GameCare.mealRequest(serving, tray: dining, place: placeOf[i], pieces: piecesFor[i])
+            if brains[i].isSleeping || brains[i].mealWaking { brains[i].callToMeal(r) } else { brains[i].requestNow(r) }
         } else { brains[i].requestNow(GameCare.mealRequest(serving, tray: dining, place: placeOf[i])) }
     }
 
@@ -430,7 +536,7 @@ final class DiningGroup {
             if let pay { let k = min(eaten(i), piecesFor[i]); if k > paid[i] { pay(memberIDs[i], k - paid[i]); paid[i] = k } }
             released[i] = true; if releasedT.indices.contains(i) { releasedT[i] = 0 }
             MealTrace.log("diner \(memberIDs[i]) released eaten=\(eaten(i)) state=\(state)")
-            b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; b.peers = savedPeers[i]
+            b.mealYawHint = nil; b.onFinished = savedFinished[i]; b.idleBlocked = false; b.reserved = false; b.waitFocus = nil; b.mealFaceYaw = nil; b.peers = savedPeers[i]
         }
     }
 
@@ -514,11 +620,25 @@ final class DiningGroup {
         switch state {
         case .approaching:
             if !trayOut, dining.phase == .absent || forcedOrigin != nil {
-                let early = !gathered && awakeFirst
-                if forcedOrigin != nil || ((gathered || early) && !trayBusy) || age > Self.gatherCap + (trayBusy ? 4 : 0) {
-                    popReason = forcedOrigin != nil ? "cafe" : (gathered && !trayBusy ? "gathered" : (early && !trayBusy ? "awake-first" : "cap"))
+                let early = false
+                for i in brains.indices where arrivedAt[i] == nil && !started[i] && ready(i) && isIdle(brains[i]) { arrivedAt[i] = age }
+                let arrivedTimes = arrivedAt.compactMap { $0 }.sorted()
+                let late = lineup && arrivedTimes.count >= 2 && age - arrivedTimes[1] >= Self.lateGrace          // (the third is late: 3 s after the second arrived)
+                if !lineup || (gathered || late) && !trayBusy || age > Self.gatherCap + (trayBusy ? 4 : 0) {
+                    popReason = forcedOrigin != nil ? "cafe" : (!lineup ? "tray-first" : (gathered && !trayBusy ? "gathered" : (late && !trayBusy ? "late-grace" : "cap")))
                     earlyPop = popReason == "awake-first"
                     spawnTray()
+                }
+            }
+            if !held.isEmpty {
+                for i in held.sorted() where !started[i] {
+                    func arrived(_ j: Int) -> Bool { released[j] || ((started[j] || lineup) && simd_distance(floor(j), stands[placeOf[j]]) < 0.4) }
+                    let free = age > Self.holdMax || ((!heldFront || frontCount() == 0) && (heldFor[i] ?? []).allSatisfy(arrived))
+                    if free {
+                        held.remove(i)
+                        if lineup { brains[i].mealFaceYaw = placeYaw(placeOf[i]); MealTrace.log("diner \(memberIDs[i]) lines up (released from hold) place=\(placeOf[i])"); brains[i].callToMeal(.goTo(approachPoint(blob: i))) }
+                        else { started[i] = true; MealTrace.log("diner \(memberIDs[i]) straight start (released from hold) place=\(placeOf[i])"); startSitting(i) }
+                    }
                 }
             }
             if earlyPop { releaseFinished() }          // (an awake diner who has eaten his share does not stand held until the last sleeper has come)
@@ -536,7 +656,7 @@ final class DiningGroup {
                 brains[i].requestHard(.goTo(approachPoint(blob: i)))
             }
             // anybody stuck idle away from his approach point is sent again, a few times; then the meal is given up
-            for i in brains.indices where !started[i] && !ready(i) && isIdle(brains[i]) {
+            for i in brains.indices where !started[i] && !held.contains(i) && !ready(i) && isIdle(brains[i]) {
                 // (while another Jelly is still walking in he may brush past and nudge a waiting one off his spot: nobody is given up on, or sent again, until the room has settled)
                 guard !started[i] else { continue }
                 idle[i] += dt

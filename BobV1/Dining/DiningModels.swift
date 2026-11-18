@@ -71,6 +71,8 @@ nonisolated struct TrayLayout {
     /// The tray mesh is shifted this far along z (one Blob: the tray is shorter on his side, so his belly clears it) and has no rim on his side.
     var trayCentreZ: Float = 0
     var openFront: Bool = false
+    /// The berry ring's radius round the tray centre (nil = the usual `0.125 + 0.065 (n - 1)`); the three-place ENDS layout sets it so the food lies toward each end.
+    var ringRadius: Float? = nil
 
     func mouthRel(_ i: Int) -> SIMD3<Float> {
         let p = places[i]
@@ -97,6 +99,16 @@ nonisolated struct TrayLayout {
 }
 
 nonisolated enum DiningLayout {
+    /// OLD-FLOW FOLLOW-UP (feeding-old-r1, 2026-11-18, the owner: "so no one squeezes in the middle"): the side places of the three-place row stand `sideX` from the middle one
+    /// (1.11 = the old spacing, which the café keeps) and the home sitting sets it wider (`DiningGroup.start`, back to 1.11 at the end) so the bodies do not touch at rest.
+    /// The wide row's side diners face straight forward (yaw 0: no turn at the place, no sideways catch lean). `-MealWideRow 0` = 1.11 / 0.25 as before.
+    nonisolated(unsafe) static var sideX: Float = 1.11
+    /// feeding-old-r1, the owner 2026-11-18: ENDS layout (`-MealEnds 0` = the wide row / the old row): two diners eat at the two short ENDS of a shorter tray, a three-quarter turn (45 deg)
+    /// toward the tray and the camera, and the third in the middle behind it facing the camera. `sideX` is then the end places' distance from the tray centre (set per sitting by `DiningGroup.start`,
+    /// 1.3 / 1.2 / 1.12 as the floor allows); the middle one stays at z -1.07 (clears the rim by his real belly), the ends stand beside the tray, a little behind its centre line.
+    nonisolated(unsafe) static var ends = false
+    static let endsZ: Float = -0.05, endsYaw: Float = .pi / 4
+    static var sideYaw: Float { sideX > 1.12 ? 0 : 0.25 }
     static func make(n n0: Int) -> TrayLayout {
         let n = min(max(n0, 1), 3), s = DiningTiming.servingScale(n: n)
         switch n {
@@ -114,9 +126,15 @@ nonisolated enum DiningLayout {
         default:
             // 17.6 % wider than before (0.85 -> 1.00). All three Blobs now stand in a row on the far side of the wide tray (the portrait
             // screen cannot hold stands beside it), 1.11 apart, so no belly hangs over a corner: each clears the near rim by his real skin.
-            return TrayLayout(n: 3, scale: s, half: SIMD2(1.0, 0.6),
-                              places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-1.11, -1.07), yaw: 0.25),
-                                       TrayPlace(rel: SIMD2(1.11, -1.07), yaw: -0.25)],
+            if ends {
+                return TrayLayout(n: 3, scale: s, half: SIMD2(0.55, 0.6),
+                                  places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-sideX, endsZ), yaw: endsYaw),
+                                           TrayPlace(rel: SIMD2(sideX, endsZ), yaw: -endsYaw)],
+                                  colliderHalf: SIMD2(0.45, 0.3), berryAngles: [-.pi / 2, .pi, 0], ringRadius: 0.4)
+            }
+            return TrayLayout(n: 3, scale: s, half: SIMD2(1.0 + (sideX - 1.11), 0.6),
+                              places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-sideX, -1.07), yaw: sideYaw),
+                                       TrayPlace(rel: SIMD2(sideX, -1.07), yaw: -sideYaw)],
                               colliderHalf: SIMD2(0.55, 0.3), berryAngles: [-.pi / 2, 150 * .pi / 180, 30 * .pi / 180])
         }
     }
@@ -220,7 +238,7 @@ nonisolated enum DiningModels {
             let p = L.places[i], a = p.yaw + Float(j - 1) * DiningDims.berrySpacing * s / R
             return SIMD3(p.rel.x + sinf(a) * R, DiningDims.plateFloorY + lift * s, p.rel.y + cosf(a) * R)
         }
-        let ring = (0.125 + 0.065 * Float(L.n - 1))
+        let ring = L.ringRadius ?? (0.125 + 0.065 * Float(L.n - 1))
         let step = 2 * Float.pi / Float(3 * L.n)
         let a = L.berryAngles[i] + Float(j - 1) * step
         return SIMD3(cosf(a) * ring, DiningDims.plateFloorY + lift * s, sinf(a) * ring)
@@ -235,8 +253,8 @@ nonisolated enum DiningModels {
         case (2, 0): return (SIMD3(-0.64, y, -0.02), 0)
         case (2, _): return (SIMD3(0.64, y, -0.02), 0)
         case (_, 0): return (SIMD3(0, y, -0.46), .pi / 2)
-        case (_, 1): return (SIMD3(-0.6, y, 0.0), 0)
-        default: return (SIMD3(0.6, y, 0.0), 0)
+        case (_, 1): return (SIMD3(-0.6 - (DiningLayout.sideX - 1.11) * 0.5, y, 0.0), 0)
+        default: return (SIMD3(0.6 + (DiningLayout.sideX - 1.11) * 0.5, y, 0.0), 0)
         }
     }
 

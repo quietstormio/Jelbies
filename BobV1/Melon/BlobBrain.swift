@@ -824,9 +824,15 @@ final class BlobBrain {
         return atan2f(cameraPosXZ.x - px, cameraPosXZ.y - pz) + off
     }
 
+    /// OLD-FLOW FOLLOW-UP: the yaw the meal's straight walk to his stand should end in (the arc into it, `planWalkStep`); nil otherwise. Set by `.dine` / `.sip`, cleared by every new request and at the dine turn.
+    var mealFinalYaw: Float?
+    /// The yaw of the place the meal group is sending him to (set by `DiningGroup`, nil otherwise): a `.goTo` while he is reserved ends in it.
+    var mealYawHint: Float?
     func start(request r: BlobRequest, _ sim: SoftBody) {
         currentPose(sim)
         job = r
+        mealFinalYaw = nil
+        if case .goTo = r, reserved, DiningGroup.straightWalk { mealFinalYaw = mealYawHint }          // (the meal's approach walk also ends in his place's yaw: the turn is made on the way)
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0
         switch r {
         case .wave:
@@ -842,11 +848,11 @@ final class BlobBrain {
         case .dine(let place, let bites):
             dine = DineState(place: place, bitesLeft: bites, mode: dineHooks?.fork == true ? .fork : .finger)
             if shortDineStep(place) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: already on his stand: no walk that turns toward a point cm away)
-            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking }
+            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk { mealFinalYaw = place.yaw } }
         case .sip(let place, let gulps):
             dine = DineState(place: place, bitesLeft: gulps, mode: .sip)
             if shortDineStep(place, limit: Self.sipStepMin) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: as above; a sip only below `sipStepMin`)
-            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking }
+            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk { mealFinalYaw = place.yaw } }
         }
     }
 
@@ -1436,7 +1442,7 @@ final class BlobBrain {
         // A stance walk that ends in a posture other than 'facing the partner' (side by side, facing the camera) turns into it during the last steps - an arc into the pose - so nobody squares up in place at contact
         // (the turn on the spot at touching range sweeps the wide axis through the partner, and the wall / the parting retreat pushes the pair apart again).
         var errF: Float = 0, finalTurn = false
-        if exact, let fy = ContactTouchMemory.finalYaw[steerID] {
+        if let fy = (exact ? ContactTouchMemory.finalYaw[steerID] : nil) ?? (intermediate ? nil : mealFinalYaw) {          // (a stance walk, or a meal's straight walk to his stand: the turn into the place's yaw is made on the way)
             errF = wrapAngle(fy - yaw)
             let n = (abs(errF) / max(m, 0.1)).rounded(.up)
             finalTurn = D <= (n + ContactTuning.finalTurnExtra) * stride * runStrideMul * amplitude.clamped(0.6, 1)
@@ -1649,6 +1655,7 @@ final class BlobBrain {
         case .doEat(let bowl, let drink):
             script = .eat(t: 0, bowl: bowl, dur: drink ? 3.2 : 3.0, drink: drink)
         case .dineTurn(let place):
+            mealFinalYaw = nil
             script = .turn(to: place.yaw, then: .dineGo)
         case .dineGo:
             dine.phase = .lean; dine.t = 0; dine.k = 0; dine.armS = 0; dine.entered = false
