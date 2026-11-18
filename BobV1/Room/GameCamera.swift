@@ -349,7 +349,7 @@ enum GameCamera {
         let ty = 0.5 * BobShape.H - (0.5 - screenY) * visH
         let tx = mid.x + (frame.landLeft ? frame.landShift * visH * aspect * lw : 0)
         let t = SIMD3<Float>(tx, ty, hi.y)
-        let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
+        let e = t + SIMD3<Float>(0, sinf(frame.elevation), cosf(frame.elevation)) * dist
         return (e, t)
     }
 
