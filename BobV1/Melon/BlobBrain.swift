@@ -2660,12 +2660,12 @@ final class BlobBrain {
         var bestM = solve(std, pref, fast: true).r.miss, bestC = cost(bestM, std, pref)
         if bestM > 0.006 {
             // two cheap stages instead of the whole grid: the swing first (at the drawn crouch), then the crouch (at that swing), then the swing's neighbours
-            for sg: Float in [0.15, 0.45] { let m = solve(sg, pref, fast: true).r.miss; if cost(m, sg, pref) < bestC { bestC = cost(m, sg, pref); bs = sg; bestM = m } }
+            for sg: Float in [0.15, 0.45, 0.55] { let m = solve(sg, pref, fast: true).r.miss; if cost(m, sg, pref) < bestC { bestC = cost(m, sg, pref); bs = sg; bestM = m } }
             if bestM > 0.006 {
                 for cr: Float in [0.8, 0.9, 1.0] where cr != pref { let m = solve(bs, cr, fast: true).r.miss; if cost(m, bs, cr) < bestC { bestC = cost(m, bs, cr); bc = cr; bestM = m } }
             }
             if bestM > 0.006 {
-                for sg in [bs - 0.075, bs + 0.075] where sg >= 0.1 && sg <= 0.45 { let m = solve(sg, bc, fast: true).r.miss; if cost(m, sg, bc) < bestC { bestC = cost(m, sg, bc); bs = sg; bestM = m } }
+                for sg in [bs - 0.075, bs + 0.075] where sg >= 0.1 && sg <= 0.55 { let m = solve(sg, bc, fast: true).r.miss; if cost(m, sg, bc) < bestC { bestC = cost(m, sg, bc); bs = sg; bestM = m } }
             }
         }
         let fin = solve(bs, bc, fast: false)

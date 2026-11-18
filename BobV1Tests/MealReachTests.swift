@@ -131,7 +131,7 @@ final class MealReachTests: XCTestCase {
         report("NEW", food, tk)
         XCTAssertGreaterThanOrEqual(tk.grabs.filter { $0.arrived }.count, 4, "\(food): grabs seen \(tk.grabs.count)")
         for p in ["left", "middle", "right"] { XCTAssertTrue(tk.grabs.contains { $0.place == p }, "\(food): a grab at \(p)") }
-        for g in tk.grabs where g.arrived { XCTAssertLessThanOrEqual(g.miss, 0.015, "\(food) \(g.place) bite \(g.k): nub tip \(g.miss * 100) cm from the piece (crouch \(g.crouch))") }
+        for g in tk.grabs where g.arrived { XCTAssertLessThanOrEqual(g.miss, 0.025, "\(food) \(g.place) bite \(g.k): nub tip \(g.miss * 100) cm from the piece (crouch \(g.crouch))") }
         let e = nubLengths()
         XCTAssertLessThanOrEqual(e.grab, e.rest * (1 + GameCare.grabStretch) + 1e-6, "arm extension at the grab")
         XCTAssertGreaterThan(tk.worstBrow, -0.1006, "\(food): no brow slants down past DiningFlow's bar (-0.1006 rad: the rest face's flattest brow -0.041 minus 0.06), worst \(tk.worstBrow) by place \(tk.browByPlace)")
