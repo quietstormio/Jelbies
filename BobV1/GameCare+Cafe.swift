@@ -204,7 +204,7 @@ extension GameCare {
             book.thought = nil; book.thoughtT = 3; book.chatT = 1.5; book.lastSpeaker = nil; book.replyIn = [:]; book.lounged = false; book.loungeIdle = [:]; book.servingOpen = false
             cafe.special = cafeSpecial
             dining.reset()
-            dining.tableSkin = { n in FoodMeshes.mesh(id: "cafetable_\(n)") }
+            dining.tableSkin = { n in FoodMeshes.mesh(id: n == 3 && DiningLayout.ends ? "cafetable_ends" : "cafetable_\(n)") }          // (the ends table for the ends layout: tools/make_cafetable_ends)
             let diners = actors.filter { $0.brain != nil }.prefix(DiningGroup.maxDiners)
             let n = max(diners.count, 1)
             if n == 3, DiningGroup.cafeEnds { DiningLayout.ends = true; DiningLayout.sideX = 1.3 }          // (the ENDS layout at the café too: `-CafeEnds 1`, see DiningGroup.cafeEnds)

@@ -29,7 +29,7 @@ nonisolated enum FoodMeshes {
         return out
     }()
     static let resourceIDs = ["nuggets", "fries", "sushi", "sandwich", "minipizza", "taco", "donut", "popsicle", "onigiri", "cookie",
-                                         "swirl", "pancakes", "sundae", "fizzmac", "cafetable_1", "cafetable_2", "cafetable_3",
+                                         "swirl", "pancakes", "sundae", "fizzmac", "cafetable_1", "cafetable_2", "cafetable_3", "cafetable_ends",
                                          // store sweep 4: the whole mini pizza (thumbnail), the new foods and the drinks' parts (cup, garnish, ice, riders)
                                          "minipizza_whole", "cheeseburger", "cinnamonroll", "dumplings", "pancakestack", "fruitskewer", "cakeslice", "cupcake", "jellycup",
                                          "drink_boba_shell", "drink_boba_deco", "drink_boba_ice", "drink_smoothie_shell", "drink_smoothie_deco", "drink_smoothie_float",
