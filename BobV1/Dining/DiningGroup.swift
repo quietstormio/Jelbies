@@ -126,6 +126,36 @@ final class DiningGroup {
     private func atStand(_ i: Int) -> Bool { simd_distance(floor(i), stands[placeOf[i]]) < 0.3 }
     /// The café's three places use the ENDS layout and its ends table (`cafetable_ends`, tools/make_cafetable_ends); `-CafeEnds 0` (dev builds) = the old row and the old table.
     nonisolated(unsafe) static var cafeEnds: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "CafeEnds") != nil && UserDefaults.standard.integer(forKey: "CafeEnds") == 0)
+    /// MEAL VARIANCE (feeding-old-r1, the owner: "they\'re eating too in rhythm ... have a variance"; `-MealVariance 0` = the lockstep of d321a058): each diner has his own first-lean delay (about 0 / 0.30-0.40 / 0.60-0.75 s,
+    /// handed out by a per-meal seeded shuffle), his own pace multiplier (0.88-1.12 of the tier's pace) and a random 0-0.3 s pause between bites or gulps (BlobBrain.DinePlan). Deterministic from `varianceSeed`
+    /// (a counter in dev builds, so `-FoodSeed` takes repeat; random in player builds; tests may set it).
+    nonisolated(unsafe) static var variance: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealVariance") != nil && UserDefaults.standard.integer(forKey: "MealVariance") == 0)
+    nonisolated(unsafe) static var varianceSeed: UInt64?
+    nonisolated(unsafe) private static var mealCounter: UInt64 = 0
+    private var varDelay: [Float] = [], varPace: [Float] = [], varSeeds: [UInt64] = [], varStyle: [Int] = [], varGlance: [Float] = [], varSeedShared: UInt64 = 0
+    private let varBoard = DineVariantBoard()
+    /// +1 / -1: the side (floor x) of diner i\'s nearest neighbour (the middle one looks right on a tie).
+    private func glanceSide(_ i: Int) -> Float {
+        let me = floor(i); var best: (d: Float, dx: Float)?
+        for j in brains.indices where j != i { let f = floor(j), d = simd_distance(f, me); if best == nil || d < best!.d - 1e-4 { best = (d, f.x - me.x) } }
+        return (best?.dx ?? 1) >= 0 ? 1 : -1
+    }
+    private func rollVariance() {
+        var s: UInt64
+        if let f = Self.varianceSeed { s = f } else { Self.mealCounter += 1; s = DevArgs.enabled ? Self.mealCounter &* 0x2545F4914F6CDD1D : UInt64.random(in: 1...UInt64.max) }
+        var offsets: [Float] = [0, 0.30 + 0.10 * VarianceRNG.unit(&s), 0.60 + 0.15 * VarianceRNG.unit(&s)].prefix(n).map { $0 }
+        for k in stride(from: offsets.count - 1, to: 0, by: -1) { offsets.swapAt(k, Int(VarianceRNG.next(&s) % UInt64(k + 1))) }          // (a seeded shuffle: not always the same place first)
+        varDelay = offsets
+        // personalities (a seeded shuffle of 0 eager / 1 savouring / 2 chatty): the eager one paces up and goes first, the savouring one slows down and goes last
+        var styles = Array(0..<min(n, 3)); for k in stride(from: styles.count - 1, to: 0, by: -1) { styles.swapAt(k, Int(VarianceRNG.next(&s) % UInt64(k + 1))) }
+        varStyle = styles
+        let sortedDelays = offsets.sorted()
+        let byStyle = [0: sortedDelays[0], 1: sortedDelays[sortedDelays.count - 1], 2: sortedDelays[sortedDelays.count / 2]]
+        varDelay = styles.map { byStyle[$0] ?? 0 }
+        varPace = styles.map { st in (st == 0 ? 1.04 : st == 1 ? 0.88 : 0.96) + 0.08 * VarianceRNG.unit(&s) }
+        varSeedShared = VarianceRNG.next(&s)
+        varSeeds = (0..<n).map { _ in VarianceRNG.next(&s) | 1 }
+    }
     private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
@@ -330,6 +360,7 @@ final class DiningGroup {
         finished = [Bool](repeating: false, count: n); released = [Bool](repeating: false, count: n)
         idle = [Float](repeating: 0, count: n); walkRetries = [Int](repeating: 0, count: n); mealRetries = [Int](repeating: 0, count: n)
         reserves = 0; gaveUp = false; age = 0
+        rollVariance()
         tiers = [NeedTier](repeating: .famished, count: n); paid = [Int](repeating: 0, count: n); piecesFor = [Int](repeating: DiningTiming.bitesPerServing, count: n)
         savedFinished = brains.map { $0.onFinished }; savedGap = brains.map { $0.peerGap }; savedPeers = brains.map { $0.peers }
         for (i, b) in brains.enumerated() {
@@ -517,6 +548,12 @@ final class DiningGroup {
         if tierOf != nil {
             brains[i].dinePlan = GameCare.plan(for: serving, tier: tiers[i], tray: dining, place: placeOf[i])
             if !eager { brains[i].dinePlan.pace = 1 }
+            if Self.variance, varDelay.indices.contains(i) {
+                brains[i].dinePlan.pace *= varPace[i]; brains[i].dinePlan.startDelay = varDelay[i]; brains[i].dinePlan.pauseMax = 0.3; brains[i].dinePlan.rngSeed = varSeeds[i]
+                brains[i].dinePlan.motion = true; brains[i].dinePlan.style = varStyle[i]; brains[i].dinePlan.variantSeed = varSeedShared; brains[i].dinePlan.board = varBoard
+                brains[i].dinePlan.glanceDir = glanceSide(i)
+                MealTrace.log("variance diner \(memberIDs[i]) delay=\(varDelay[i]) pace=\(brains[i].dinePlan.pace)")
+            }
             let r = GameCare.mealRequest(serving, tray: dining, place: placeOf[i], pieces: piecesFor[i])
             if brains[i].isSleeping || brains[i].mealWaking { brains[i].callToMeal(r) } else { brains[i].requestNow(r) }
         } else { brains[i].requestNow(GameCare.mealRequest(serving, tray: dining, place: placeOf[i])) }
