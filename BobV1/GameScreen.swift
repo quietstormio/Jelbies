@@ -688,6 +688,15 @@ struct GameScreen: View {
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
             care.startShow(jelly: who)
         }
+        // capture aid: -WearToggle <look> -WearToggleAt <on>,<off> puts that look on Jelly 0 (as the Dress up sheet does) <on> seconds after launch and takes it off again <off> seconds after launch
+        if let name = d.string(forKey: "WearToggle"), let look = WearLook(rawValue: name), let at = d.string(forKey: "WearToggleAt")?.split(separator: ",").compactMap({ Double($0) }), at.count == 2 {
+            let care = model.care
+            care.store.grant(StoreCatalog.item(wearing: look)?.id ?? "")
+            Task { @MainActor in
+                await sleep(at[0]); _ = care.store.wear(look, on: 0)
+                await sleep(max(0, at[1] - at[0])); care.store.takeOff(look.slot, from: 0)
+            }
+        }
         // capture aid: -StudioAfter <seconds> opens the Studio (the Jelly Show lobby) that long after launch, so a picture is taken after whatever -GameAction / -BlobGameDemo did first
         if d.double(forKey: "StudioAfter") > 0 {
             await sleep(d.double(forKey: "StudioAfter"))
