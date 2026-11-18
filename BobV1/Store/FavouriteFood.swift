@@ -20,6 +20,17 @@ nonisolated enum FavouriteFood {
     static let extraHearts = 2
     static let heartGap: Float = 0.45
 
+    /// Where the favourite hearts are drawn (world): over the eater's own standing crown (`stand` = his centroid standing upright at his place, not the leaning
+    /// body that hangs over the tray), a quarter of his height above it, a little to one side (`side` -1 / 1) so the three do not stack. Above every face on the table.
+    static func heartWorld(stand c: SIMD3<Float>, side: Float) -> SIMD3<Float> {
+        let H = BlobShape.H
+        return SIMD3(c.x + side * 0.22, c.y + 0.5 * H + 0.25 * H, c.z)
+    }
+    /// The standing centroid of a diner at `stand` (floor point of his place): the body's middle is half his height above the floor.
+    static func standCentroid(_ stand: SIMD2<Float>) -> SIMD3<Float> { SIMD3(stand.x, 0.5 * BlobShape.H, stand.y) }
+    /// Longest a cheer waits for him to straighten up from the first lean (seconds).
+    static let straightenWaitMax: Float = 1.6
+
     /// Seconds one serving of a food with `perk` gives.
     static func perkDuration(_ perk: PerkKind, favourite: Bool) -> TimeInterval { perk.duration * (favourite ? perkTimeMul : 1) }
 

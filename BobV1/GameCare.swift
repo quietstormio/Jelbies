@@ -146,7 +146,8 @@ final class GameCare {
     /// Store food bookkeeping (GameCare+Store.swift): the serving already paid from the inventory, Jellies owed their sugar-rush zoomies, soaps armed for the next Clean.
     @ObservationIgnored var servingCharged = false { didSet { if !servingCharged { favouriteCheered = [] } } }          // (a new serving: every diner may be cheered for his favourite again)
     @ObservationIgnored var favouriteCheered: Set<Int> = []
-    @ObservationIgnored var favouriteHearts: [Int: (left: Int, t: Float)] = [:]
+    @ObservationIgnored var favouriteHearts: [Int: (left: Int, t: Float, c: SIMD3<Float>)] = [:]
+    @ObservationIgnored var favouriteWaiting: [Int: (c: SIMD3<Float>, wait: Float)] = [:]
     @ObservationIgnored var zoomiesDue: Set<Int> = []
     @ObservationIgnored var armedSupplies: [Int: [String]] = [:]
     /// The Jelly whose bath is waiting for a soap pick (the card shows; nil = no card). 

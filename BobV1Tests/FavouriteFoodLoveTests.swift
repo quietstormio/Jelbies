@@ -93,4 +93,30 @@ final class FavouriteFoodLoveTests: XCTestCase {
         try eat(care, 1, Consumables.taco)
         XCTAssertEqual(love(care, 1), 1, accuracy: 0.0001)
     }
+
+    /// The hearts are drawn over the eater's own standing crown: on screen the anchor is nearest his own face and no heart (any of the three, any age's
+    /// drift of up to 14 pt, the largest size) touches any diner's face rect, whichever diner it is (the ends lean over the table, the stand does not).
+    func testHeartsStayOverTheEatersOwnStandingHeadAndClearOfEveryFace() throws {
+        let size = CGSize(width: 390, height: 844)
+        let H = BlobShape.H
+        let stands: [SIMD2<Float>] = [SIMD2(-1.2, 0.2), SIMD2(0, -0.1), SIMD2(1.2, 0.2)]          // the ends layout: left end, middle, right end
+        func scr(_ w: SIMD3<Float>) throws -> CGPoint { try XCTUnwrap(ThoughtBubbleView.project(w, size: size, focus: 0)) }
+        func face(_ s: SIMD2<Float>) throws -> CGRect {            // the face: the upper-middle of his body, +-0.45 wide, 0.4 tall, round the middle of his height
+            let c = FavouriteFood.standCentroid(s)
+            let a = try scr(c + SIMD3(-0.45, 0.30 * H, 0)), b = try scr(c + SIMD3(0.45, -0.10 * H, 0))
+            return CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+        }
+        let faces = try stands.map(face)
+        for eater in 0..<3 {
+            for side: Float in [-1, 1] {
+                let anchor = try scr(FavouriteFood.heartWorld(stand: FavouriteFood.standCentroid(stands[eater]), side: side))
+                let nearest = faces.indices.min { abs(faces[$0].midX - anchor.x) < abs(faces[$1].midX - anchor.x) }
+                XCTAssertEqual(nearest, eater, "diner \(eater): the heart anchor is over his own face")
+                for dx: CGFloat in [-14, 0, 14] {
+                    let r = CGRect(x: anchor.x + dx - 22, y: anchor.y - 22, width: 44, height: 44)
+                    for (k, f) in faces.enumerated() { XCTAssertFalse(r.intersects(f), "diner \(eater)'s heart (side \(side)) overlaps diner \(k)'s face \(f) \(r)") }
+                }
+            }
+        }
+    }
 }

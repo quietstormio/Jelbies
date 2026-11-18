@@ -37,25 +37,39 @@ extension GameCare {
         }
     }
 
-    /// The favourite-food moment for Jelly `id`: the heart now, two more a little later (`tickFavouriteHearts`), an excited face and a step of love.
+    /// The favourite-food moment for Jelly `id`: a step of love now, the hearts (and the excited face) once he has straightened up from the first lean,
+    /// all over his standing place (`FavouriteFood.heartWorld`), never over his leaning body: at the ends of the table that hangs over the middle diner.
     func favouriteCheer(_ id: Int) {
-        favouriteHeart(id)
-        favouriteHearts[id] = (FavouriteFood.extraHearts, FavouriteFood.heartGap)
-        brainFor(id)?.face(.excited, hold: 1.4)
         let before = needs(for: id).level(.attention)
         needs(for: id).gain(.attention, FavouriteFood.loveGain)
         if DevArgs.enabled { NSLog("[favlove] jelly %d love %.3f -> %.3f", id, before, needs(for: id).level(.attention)) }
+        let b = brainFor(id)
+        let stand = b.map { $0.activity == .eating || $0.activity == .drinking ? $0.dine.place.stand : $0.position }
+        let c = stand.map { FavouriteFood.standCentroid($0) } ?? (id == 0 ? headWorld : bubbleHub.heads[id] ?? headWorld) - SIMD3(0, BlobShape.H * 0.5, 0)
+        favouriteWaiting[id] = (c, b == nil ? 0 : FavouriteFood.straightenWaitMax)
+        tickFavouriteHearts(dt: 0)
     }
-    private func favouriteHeart(_ id: Int) {
-        let now = CACurrentMediaTime()
-        bubbleHub.spawnHeart(for: id, now: now)          // (the bubble hearts, over his head for every Jelmiko, Bob's slot too: GreetHeartsView)
+    private func favouriteHeart(_ id: Int, _ c: SIMD3<Float>) {
+        bubbleHub.spawnHeart(for: id, now: CACurrentMediaTime(), fixed: c)
     }
-    /// The later hearts of the favourite burst (once per step).
+    private func leaning(_ id: Int) -> Bool {
+        guard let b = brainFor(id), b.activity == .eating || b.activity == .drinking else { return false }
+        return b.dine.phase == .lean || b.dine.phase == .grab
+    }
+    /// Once per step: a waiting cheer starts when he is upright (or after the longest wait); then the later hearts of the burst, `heartGap` apart.
     func tickFavouriteHearts(dt: Float) {
-        guard !favouriteHearts.isEmpty else { return }
+        guard !favouriteWaiting.isEmpty || !favouriteHearts.isEmpty else { return }
+        for (id, var w) in favouriteWaiting {
+            w.wait -= dt
+            if w.wait > 0, leaning(id) { favouriteWaiting[id] = w; continue }
+            favouriteWaiting[id] = nil
+            favouriteHeart(id, w.c)
+            favouriteHearts[id] = (FavouriteFood.extraHearts, FavouriteFood.heartGap, w.c)
+            brainFor(id)?.face(.excited, hold: 1.4)
+        }
         for (id, var g) in favouriteHearts {
             g.t -= dt
-            if g.t <= 0 { g.t = FavouriteFood.heartGap; g.left -= 1; favouriteHeart(id) }
+            if g.t <= 0 { g.t = FavouriteFood.heartGap; g.left -= 1; favouriteHeart(id, g.c) }
             favouriteHearts[id] = g.left > 0 ? g : nil
         }
     }
