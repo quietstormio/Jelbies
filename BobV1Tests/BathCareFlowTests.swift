@@ -124,6 +124,20 @@ final class BathCareFlowTests: XCTestCase {
         XCTAssertNil(t.care.soapPrompt, "the game step closes it")
     }
 
+    func testAPickThatCannotStartABathLeavesNothingArmedSoTheNextCleanShowsTheCard() {
+        let r = CleanRun(dirt: 0); Self.keep.append(r)
+        r.care.store.grant("mintsoap")
+        r.care.requestClean(); XCTAssertEqual(r.care.soapPrompt, 0)
+        r.care.focus.force(.focused)          // the moment is gone before the tap lands
+        r.care.chooseSoap(.mint)
+        XCTAssertFalse(r.bath.active); XCTAssertNil(r.care.soapPrompt)
+        XCTAssertEqual(r.care.armedSupplies[0] ?? [], [], "the soap is not left armed")
+        XCTAssertEqual(r.care.store.count("mintsoap"), 1, "nothing used")
+        r.care.focus.force(.roaming)
+        r.care.requestClean()
+        XCTAssertEqual(r.care.soapPrompt, 0, "the next Clean shows the card again")
+    }
+
     func testCleanTappedTwiceFastIsOneBath() {
         let r = CleanRun(dirt: 0.3); Self.keep.append(r)
         r.care.requestClean(); r.care.requestClean(); r.care.clean()

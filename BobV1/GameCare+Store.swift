@@ -96,6 +96,7 @@ extension GameCare {
         armedSupplies[who] = ids
         AudioHub.shared.uiTap()
         clean(jelly: who)
+        if !bath.active { armedSupplies[who] = (armedSupplies[who] ?? []).filter { Soap.of(storeID: $0) == nil } }          // the bath could not start (the moment was gone): the pick does not stay armed, so the next Clean shows the card again
     }
     /// The card closes by itself when the moment is gone (a meal, a call, sleep, a trip, another bath).
     func soapCardTick() {
