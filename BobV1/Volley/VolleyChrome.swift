@@ -15,6 +15,11 @@ struct VolleyChrome: View {
     @State private var stickOrigin: CGPoint?
     @State private var stickKnob: CGSize = .zero
     @State private var hitDown = false
+    /// The double tap on your teammate (VolleyDoubleTap): when a finger came down, and the pair of taps so far.
+    @State private var tapDown: Date?
+    @State private var doubleTap = VolleyDoubleTap()
+    @State private var hintArmed = false
+    @AppStorage("volley.hint.doubleTap") private var doubleTapHintSeen = false
     @State private var aimShown: SIMD2<Float>?
     @State private var padH: CGFloat = 0
     /// iPad: the 1.45x scale does not change layout size, so cap the card's layout height at (screen height minus the top bar band) / 1.45.
@@ -54,6 +59,7 @@ struct VolleyChrome: View {
             Color.white.opacity(Double(volley.wipe)).ignoresSafeArea().allowsHitTesting(false)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { padH = $0 }
+        .onChange(of: volley.ui.waitingToServe) { _, now in if !now, hintArmed { doubleTapHintSeen = true; hintArmed = false } }          // (shown through that one serve wait, then never again)
         .allowsHitTesting(volley.active)
         .accessibilityElement(children: .contain)
         .padStatusBarHidden(volley.inScene)
@@ -68,7 +74,7 @@ struct VolleyChrome: View {
                 scoreBoard.frame(maxWidth: .infinity)          // (the score is centred in the room the pill leaves: 12 pt apart, never under it)
             }
             if volley.live, !volley.ui.touchDots.isEmpty { touchDots }
-            if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity) }
+            if let hint = hint { Text(hint).playFont(15, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream.opacity(0.92))).transition(.opacity).onAppear { if !doubleTapHintSeen, hint == Self.doubleTapHint { hintArmed = true } } }
             if let t = volley.toast { Text(t).playFont(14, .semibold).foregroundStyle(CareMenu.brown).padding(.horizontal, 14).padding(.vertical, 6).background(Capsule().fill(CareMenu.cream)) }
         }
         .padding(.top, 8)
@@ -116,7 +122,7 @@ struct VolleyChrome: View {
         let u = volley.ui
         guard volley.live else { return nil }
         if u.humanServes { return "Your serve. Tap to toss, tap again at the top" }
-        if u.waitingToServe { return "Their serve" }
+        if u.waitingToServe { return doubleTapHintSeen ? "Their serve" : Self.doubleTapHint }
         return nil
     }
 
@@ -135,7 +141,7 @@ struct VolleyChrome: View {
         GeometryReader { g in
             ZStack {
                 Color.clear.contentShape(Rectangle())
-                    .gesture(SpatialTapGesture(count: 2).onEnded { v in pick(v.location, g.size) })
+                    .gesture(tapWatch(g.size))
                 // the left half: the floating stick (it appears where the thumb lands)
                 HStack(spacing: 0) {
                     ZStack {
@@ -152,7 +158,7 @@ struct VolleyChrome: View {
                                     care.volleyStick(SIMD2(Float(d.width / R), Float(d.height / R)))
                                 }
                                 .onEnded { _ in stickOrigin = nil; stickKnob = .zero; care.volleyStick(.zero) })
-                            .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { v in pick(v.location, g.size) })
+                            .simultaneousGesture(tapWatch(g.size))
                             .padding(.top, 110)
                         if let o = stickOrigin {
                             ZStack {
@@ -165,6 +171,7 @@ struct VolleyChrome: View {
                     .frame(width: g.size.width * 0.5)
                     Spacer(minLength: 0).allowsHitTesting(false)
                 }
+                teammateElement(g.size)
                 if !volley.ui.calls.isEmpty {
                     TimelineView(.animation(minimumInterval: 1.0 / 60)) { _ in
                         ZStack {
@@ -179,28 +186,63 @@ struct VolleyChrome: View {
                     }.allowsHitTesting(false)
                 }
             }
+            #if targetEnvironment(simulator)
+            .task {          // capture aid: `-VolleyAutoDoubleTap 1` double-taps your teammate (the same lift / pick path as a finger) 6 s into the match, then once more 4 s later
+                guard UserDefaults.standard.bool(forKey: "VolleyAutoDoubleTap") else { return }
+                for _ in 0..<2 {
+                    try? await Task.sleep(nanoseconds: 6_000_000_000)
+                    let mate = 1 - min(max(volley.ui.controlled, 0), 1)
+                    guard volley.bodyPos.indices.contains(mate), let pt = VolleyPick.centre(volley.bodyPos[mate], size: g.size) else { continue }
+                    let t = Date().timeIntervalSinceReferenceDate
+                    _ = doubleTap.lift(at: pt, time: t, press: 0.08, travel: 1)
+                    if doubleTap.lift(at: pt, time: t + 0.15, press: 0.08, travel: 1) { pick(pt, g.size) }
+                }
+            }
+            #endif
         }
+        .coordinateSpace(name: Self.courtSpace)
         .ignoresSafeArea()
         .defersSystemGestures(on: .bottom)          // the bottom-edge controls win over the home swipe on the first touch
     }
 
-    /// A double-tap: the nearest of your two Jelbies to the finger takes control. The hit zone is about a body and a half wide on the screen (a body is ~1.1 world
-    /// units across; the radius is measured from the projected court, so it scales with the portrait / landscape camera), around the middle of his body.
-    /// Nothing else happens on a double-tap: no hit, serve or aim (those live on the Hit button). The haptic comes from the `.switched` event.
+    static let courtSpace = "volleyCourt"
+    /// Shown once, on the first serve of theirs (the line the screen already uses for "Their serve").
+    static let doubleTapHint = "Double-tap your teammate to switch"
+
+    /// Every touch that lifts is watched in the court layer's own space (not the padded left-half layer's: that was ~110 pt off, so a double tap on your teammate, who stands on the left,
+    /// missed him): two short, still taps within 0.3 s on one of your Jelmiko switch to him. Whatever else the finger did (the stick) is untouched: this only listens.
+    private func tapWatch(_ size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.courtSpace))
+            .onChanged { _ in if tapDown == nil { tapDown = Date() } }
+            .onEnded { v in
+                let down = tapDown ?? v.time
+                tapDown = nil
+                let travel = hypot(v.translation.width, v.translation.height)
+                if doubleTap.lift(at: v.location, time: v.time.timeIntervalSinceReferenceDate, press: v.time.timeIntervalSince(down), travel: travel) { pick(v.location, size) }
+            }
+    }
+
+    /// VoiceOver: an element on your teammate with the action "Switch to <name>".
+    private func teammateElement(_ size: CGSize) -> some View {
+        TimelineView(.animation(minimumInterval: 0.25)) { _ in
+            let mate = 1 - min(max(volley.ui.controlled, 0), 1)
+            let name = volley.teamNames.indices.contains(mate) && !volley.teamNames[mate].isEmpty ? volley.teamNames[mate] : "your teammate"
+            if volley.bodyPos.indices.contains(mate), let pt = VolleyPick.centre(volley.bodyPos[mate], size: size) {
+                Color.clear.frame(width: 130, height: 150).contentShape(Rectangle()).position(pt)
+                    .allowsHitTesting(false)
+                    .accessibilityElement().accessibilityLabel(name).accessibilityIdentifier("volley-teammate")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction(named: "Switch to \(name)") { care.volleySwitch(to: mate) }
+            }
+        }
+    }
+
+    /// A double tap: the nearest of your two Jelmiko to the finger takes control (see VolleyPick for the touch area). Nothing else happens on a double tap: no hit, serve or aim (those
+    /// live on the Hit button). The haptic comes from the `.switched` event. Works in every match state, the serve wait included (it changes who is steered, not who serves).
     private func pick(_ at: CGPoint, _ size: CGSize) {
         guard volley.live, volley.bodyPos.count >= 2 else { return }
-        var best: (Int, CGFloat)?
-        for i in 0..<2 {
-            let p = volley.bodyPos[i]
-            guard let c = GameCamera.screenPoint(floor: SIMD2(p.x, p.z), y: p.y * 0.5, size: size),
-                  let l = GameCamera.screenPoint(floor: SIMD2(p.x - 0.55, p.z), y: p.y * 0.5, size: size),
-                  let r = GameCamera.screenPoint(floor: SIMD2(p.x + 0.55, p.z), y: p.y * 0.5, size: size) else { continue }
-            let bodyW = hypot(r.x - l.x, r.y - l.y)
-            let reach = min(max(bodyW * 1.5, 64), 150)
-            let d = hypot(c.x - at.x, c.y - at.y)
-            if d < reach, d < (best?.1 ?? .infinity) { best = (i, d) }
-        }
-        if let (i, _) = best, i != volley.ui.controlled { care.volleySwitch(to: i) }
+        doubleTapHintSeen = true
+        if let i = VolleyPick.nearest(bodies: Array(volley.bodyPos.prefix(2)), at: at, size: size), i != volley.ui.controlled { care.volleySwitch(to: i) }
     }
 
     private var controls: some View {

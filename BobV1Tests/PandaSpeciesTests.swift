@@ -12,7 +12,7 @@ final class PandaSpeciesTests: XCTestCase {
     func testIdentity() {
         XCTAssertEqual(JellyRoster.pandaID, 6)
         XCTAssertEqual(JellyRoster.baseNames[6], "Panda")
-        XCTAssertEqual(JellyRoster.knownCount, 7)
+        XCTAssertEqual(JellyRoster.knownCount, 27)
         XCTAssertEqual(JellyRoster.baseNames.count, JellyRoster.knownCount)
         XCTAssertEqual(JellyRoster.feature(JellyRoster.pandaID), .ears, "Teddy's in-body ears path")
         XCTAssertNotNil(JellyRoster.palette(JellyRoster.pandaID))
@@ -41,12 +41,12 @@ final class PandaSpeciesTests: XCTestCase {
         XCTAssertEqual(BlueBelly.mode(for: WhiteWing.palette), 0, "Pearl is untouched")
         XCTAssertEqual(BlueBelly.mode(for: JellyRoster.palette(JellyRoster.teddyID)!), TeddyEarsVariant.active == .cream ? 43 : 33, "Teddy is untouched")
         XCTAssertNotEqual(panda.flesh, WhiteWing.palette.flesh)
-        for c in ParkColour.allCases { XCTAssertEqual(BlueBelly.mode(for: JellyPalettes.park(c)), 0, "park visitor \(c.rawValue) must not look like a Panda") }
+        for c in ParkColour.allCases { let m = BlueBelly.mode(for: JellyPalettes.park(c)); XCTAssertNotEqual(m, 51, "park visitor \(c.rawValue) must not look like a Panda"); XCTAssertEqual(m, c == .blue ? BlueBelly.mode(for: PaletteKey.blue.palette) : 0, "park visitor \(c.rawValue): a blue one is Bob's own palette and front, every other colour has none") }
         for id in 0..<4 { if let p = JellyRoster.palette(id) { XCTAssertEqual(BlueBelly.mode(for: p) >= 50, false) } }
     }
 
     func testAccessibilityAndMasks() {
         XCTAssertTrue(JelbieA11yText.description(character: 6).contains("black"))
-        XCTAssertEqual(EyeMaskModel.paletteCount, JellyRoster.knownCount)
+        XCTAssertEqual(EyeMaskModel.paletteCount, 10, "the sleep masks cover ids 0...8 (the other lineup characters, 9...26, wrap onto them until phase B) + palette 9 = Opal (12)")
     }
 }

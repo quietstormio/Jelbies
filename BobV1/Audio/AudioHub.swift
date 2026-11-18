@@ -687,15 +687,15 @@ final class AudioHub {
     nonisolated private static func preloadItems() -> [PreloadItem] {
         func find(_ n: String) -> URL? { Bundle.main.url(forResource: n, withExtension: "m4a") }
         var out: [PreloadItem] = []
-        for c in 0..<JellyVoiceSet.count { for r in [0.0, 0.99] {
+        for c in JellyVoiceSet.snoreCharacters { for r in [0.0, 0.99] {
             let name = JellyVoiceSet.snoreFile(character: c, roll: r)
             if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: false)) }
         } }
-        for c in 0..<JellyVoiceSet.count { for v in 1...JellyVoiceSet.sleepCooVariants {
+        for c in JellyVoiceSet.snoreCharacters { for v in 1...JellyVoiceSet.sleepCooVariants {
             let name = JellyVoiceSet.sleepCooFile(character: c, roll: (Double(v) - 0.5) / Double(JellyVoiceSet.sleepCooVariants))
             if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: false)) }
         } }
-        for c in 0..<JellyVoiceSet.voiceSets { for v in JellyVoice.allCases { for k in 1...(v.hasVariants ? 3 : 1) {
+        for c in JellyVoiceSet.voiceCharacters { for v in JellyVoice.allCases { for k in 1...(v.hasVariants ? 3 : 1) {
             let name = JellyVoiceSet.file(character: c, v, variant: k)
             if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: true)) }
         } } }
@@ -1054,6 +1054,32 @@ final class AudioHub {
         diag(what, jelly, nil, v: 0.8 * level)
         fire(name, volume: 0.8 * level, pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, .lala))
         return name
+    }
+
+    /// The bath's creature voice (Bath/BathVoices.swift): one of the existing voice clips (`v`, its variant) or, with `v` nil, the shared sneeze, in the voice set of the Jelly in
+    /// `jelly`'s slot. Past the shared gates (muted / background / level) and its own 0.9 s gap per Jelly; stamps `lastVoice` / `lastContextVoice` so no ambient voice lands on it.
+    /// Returns whether it was fired (the bath's plan only remembers a vocal that played). `soft` = the quiet idle one. Logged `bath:<voice>`.
+    static let bathVoiceGain: Float = 0.7, bathVoiceSoftGain: Float = 0.5, bathSneezeGain: Float = 1.0, bathVoiceGap: Double = 0.9
+    @ObservationIgnored private var lastBathVoice: [Double] = [-100, -100, -100]
+    @discardableResult
+    func bathVoice(jelly: Int, _ v: JellyVoice?, variant: Int = 1, soft: Bool = false, x: Float = 0) -> Bool {
+        let what = "bath:\(v?.rawValue ?? "sneeze")"
+        Self.requestTap?(what)
+        let name = JellyRoster.name(slot: jelly)
+        if let v { CaptionCenter.shared.post(SoundCaptions.voice(v, name: name)) }
+        else if let t = SoundCaptions.text(.emoteAchoo, jelly: name) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
+        if let w = gateWhy() { diag(what, jelly, w); return false }
+        let level = settings.sfxLevel * duck.gain
+        let i = min(max(jelly, 0), 2)
+        let now = Self.clock()
+        if now - lastBathVoice[i] < Self.bathVoiceGap { diag(what, jelly, "hush bath"); return false }
+        lastBathVoice[i] = now; lastVoice[i] = now; lastContextVoice[i] = now
+        let c = JellyRoster.speciesOf(slot: jelly)
+        let gain = (v == nil ? Self.bathSneezeGain : (soft ? Self.bathVoiceSoftGain : Self.bathVoiceGain)) * level
+        diag(what, jelly, nil, v: gain)
+        if let v { fire(JellyVoiceSet.file(character: c, v, variant: variant), volume: gain, pan: 0, rate: JellyVoiceSet.rate(character: c, v)) }
+        else { fire("emote_achoo_1", volume: gain, pan: 0) }
+        return true
     }
 
     @ObservationIgnored private var lastSleepAny: Double = -100

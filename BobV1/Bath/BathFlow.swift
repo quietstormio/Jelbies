@@ -122,6 +122,19 @@ final class BathFlow {
     @ObservationIgnored private var demoT: Float = 0
     @ObservationIgnored private var wetFading = false
 
+    // the creature's own voice (BathVoices.swift): its plan, timers and the one event waiting for its turn
+    @ObservationIgnored private var voicePlan = BathVoicePlan(seed: 0xB0CE)
+    @ObservationIgnored private var voiceSince: Float = 100
+    @ObservationIgnored private var voiceTouchT: Float = 3
+    @ObservationIgnored private var voiceIdleT: Float = 8
+    @ObservationIgnored private var voicePending: (moment: BathMoment, left: Float)?
+    @ObservationIgnored private var voiceTickle = false
+    @ObservationIgnored private var voiceFirstWater = false
+    /// Which moment the last vocal request was for (tests read it inside the hub's tap).
+    @ObservationIgnored private(set) var voiceMoment = ""
+    /// A vocal waits for the hub's gap (1 s) this long for its turn, then is dropped.
+    private static let voiceEventWait: Float = 5, voiceMinGap: Float = 1.0
+
     // which Jelly is being washed (Bob = 0). The others borrow `grime` / `look` for the run and hand Bob's back at the end.
     @ObservationIgnored private(set) var targetID = 0
     @ObservationIgnored private var bobGrime: BlobGrime?
@@ -344,6 +357,7 @@ final class BathFlow {
         }
         if demo, !demoHold { demoAdvance(dt: dt, brain: brain, sim: sim) }
         soapMoments(dt: dt, play: play)
+        voiceTick(dt: dt)
         if !acceptsTouch { touching = false; if phase != .exit { look.toolAt = nil; look.spray = nil } }
         look.sparkle = grime.sparkle
         look.dirt = grime.dirt
@@ -407,6 +421,7 @@ final class BathFlow {
         phase = p
         AudioHub.shared.scrubLoop(false)
         stageComplete = false; demoWait = 0; assistScrub = false
+        voiceStage(p)
         if let t = Self.workPrompt(p, soap: soap) { A11yEvents.say(t, .normal) }
         if p != .soap && p != .rinse { look.bubbles = []; bubbleAge = [] }      // sud bubbles live only in the soap / rinse phases
         switch p {
@@ -450,6 +465,7 @@ final class BathFlow {
         A11yEvents.say(Self.stageDoneAnnouncement(phase), .high)          // (the checkmark and the prompt are the visible half of the haptic)
         haptic(BathTuning.completeHaptic.0, BathTuning.completeHaptic.1)
         AudioHub.shared.uiConfirm()
+        voiceAsk(.stageDone)
     }
 
     /// The Next button: soap -> rinse -> shine -> finish. Ignored until the stage's goal is met.
@@ -496,6 +512,7 @@ final class BathFlow {
             AudioHub.shared.scrubLoop(v > 0.3)
         case .rinse:
             AudioHub.shared.scrubLoop(false)
+            if !voiceFirstWater { voiceFirstWater = true; voiceAsk(.firstWater) }
             look.spray = w + BathLook.sprayOffset
             look.rinse(local: l, radius: BathTuning.rinseRadius, amount: (BathTuning.rinsePassive + BathTuning.rinseGain * demoSpeed * v) * dt)
             look.wet = min(1, look.wet + BathTuning.wetRise * dt)
@@ -531,7 +548,65 @@ final class BathFlow {
         guard !look.bubbles.isEmpty else { return }
         for i in look.bubbles.indices { look.bubbles[i].y += 0.35 * dt; bubbleAge[i] -= dt }
         var k = 0
-        while k < look.bubbles.count { if bubbleAge[k] <= 0 { look.bubbles.remove(at: k); bubbleAge.remove(at: k); if popGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.bubblepop, volume: BathSFX.popVolume) } } else { k += 1 } }
+        while k < look.bubbles.count { if bubbleAge[k] <= 0 { look.bubbles.remove(at: k); bubbleAge.remove(at: k); if popGate.allow(now: CACurrentMediaTime()) { AudioHub.shared.play(.bubblepop, volume: BathSFX.popVolume) }; if voicePlan.rand() < 0.1 { voiceAsk(.pop) } } else { k += 1 } }
+    }
+
+    // MARK: the creature's voice (BathVoices.swift)
+
+    /// A stage starts: the soap is the first (a dirty one grumbles first, a clean one is excited to get in), the rinse / shine just reset the timers, the finish asks the proud babble.
+    private func voiceStage(_ p: BathPhase) {
+        voiceTouchT = voicePlan.range(BathVoicePlan.touchGap); voiceIdleT = voicePlan.range(BathVoicePlan.idleGap)
+        switch p {
+        case .soap:
+            voicePlan.reset(); voicePending = nil; voiceFirstWater = false; voiceTickle = false; voiceSince = 100
+            voiceAsk(grime.dirt >= 0.7 ? .grumble : .getIn)
+        case .finish: voiceAsk(.allClean)
+        default: break
+        }
+    }
+
+    /// An event asks for a vocal: it plays as soon as the hub's gap allows (a newer one replaces an older one; the proud babble is never replaced).
+    private func voiceAsk(_ m: BathMoment) {
+        guard phase == .soap || phase == .rinse || phase == .shine || phase == .finish else { return }
+        if let p = voicePending, p.moment == .allClean { return }
+        if m == .pop, voicePending != nil { return }
+        voicePending = (m, Self.voiceEventWait)
+    }
+
+    private func voiceTick(dt: Float) {
+        guard phase == .soap || phase == .rinse || phase == .shine || phase == .finish else { voicePending = nil; return }
+        voicePlan.advance(dt)
+        voiceSince += dt
+        if let p = voicePending { voicePending = p.left - dt > 0 ? (p.moment, p.left - dt) : nil }
+        if let p = voicePending {
+            if voiceSince >= Self.voiceMinGap { voicePending = nil; voiceSay(p.moment) }
+        } else if acceptsTouch {
+            if touching {
+                voiceTouchT -= dt
+                if voiceTouchT <= 0, voiceSince >= Self.voiceMinGap {
+                    switch phase {
+                    case .soap: voiceTickle.toggle(); voiceSay(voiceTickle ? .scrubHum : .scrubTickle)
+                    case .rinse: voiceSay(.rinseRelax)
+                    default: voiceSay(.shinePurr)
+                    }
+                }
+            } else {
+                voiceIdleT -= dt
+                if voiceIdleT <= 0, voiceSince >= Self.voiceMinGap { voiceSay(.idle) }
+            }
+        }
+    }
+
+    /// Plays the plan's pick for `m` now. Only what the hub really played goes into the plan's memory; a dropped one is tried again in a second.
+    private func voiceSay(_ m: BathMoment) {
+        if (sound as? BathSilence)?.muted() == true { voiceTouchT = 1; voiceIdleT = 1; return }          // (the voice mic owns the session)
+        guard let cue = voicePlan.pick(m) else { return }
+        voiceMoment = m.rawValue
+        if AudioHub.shared.bathVoice(jelly: targetID, cue.voice, variant: cue.variant, soft: cue.soft) {
+            voicePlan.played(cue)
+            voiceSince = 0
+            voiceTouchT = voicePlan.range(BathVoicePlan.touchGap); voiceIdleT = voicePlan.range(BathVoicePlan.idleGap)
+        } else { voiceTouchT = 1; voiceIdleT = 1 }
     }
 
     // MARK: scripted fake scrubs (capture aid)

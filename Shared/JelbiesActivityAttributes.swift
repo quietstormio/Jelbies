@@ -43,7 +43,7 @@ nonisolated struct JelbiesActivityAttributes: ActivityAttributes, Sendable {
         // nap
         /// Names of the Jelbies asleep.
         var sleepers: [String] = []
-        /// Each sleeper's colour key, in `sleepers` order ("blue", "yellow", "green", "lavender", "teddy", "pearl", "panda": the strings the widget snapshot uses).
+        /// Each sleeper's colour key, in `sleepers` order ("blue", "yellow", "green", "lavender", "teddy", "pearl", "panda", "tiger", "berry", then the lineup characters "marble" ... "bronze" (JellyRoster.baseNames, lowercased, no spaces or hyphens): the strings the widget snapshot uses).
         /// Optional so a payload from before this field decodes (nil: the old position colours).
         var sleeperColors: [String]? = nil
         /// Seconds since 1970 they are expected up (nap).

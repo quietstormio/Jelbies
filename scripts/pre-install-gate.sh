@@ -9,8 +9,9 @@
 # Env: GATE_SKIP_BUILD=1 reuse the existing build in <derived data>; GATE_SUITES="A B" override the list;
 #      GATE_SUITE_CAP=seconds per suite (default 1500); GATE_LOG_DIR=where the logs go (default <dd>/gate-logs);
 #      GATE_XB_MAX=N other xcodebuild processes tolerated while waiting (default 1; use 2 to allow two);
+#      GATE_LOAD_MAX=N 1-min load the gate waits to get under before each xcodebuild (default 8; raise it when several gate shards run at once);
 #      GATE_SKIP_MUSTFAIL=1 skips the must-fail row (see below; the row also only runs when the suite list contains FootWallTurnTests).
-# Guards: waits (30 s sleeps, max 25 min) for 1-min load < 8 and <= $GATE_XB_MAX (default 1) other xcodebuild before each xcodebuild; never pkill/killall; only kills its own PID on a cap.
+# Guards: waits (30 s sleeps, max 25 min) for 1-min load < $GATE_LOAD_MAX (default 8) and <= $GATE_XB_MAX (default 1) other xcodebuild before each xcodebuild; never pkill/killall; only kills its own PID on a cap.
 # Why FootWallTurnTests + the must-fail row (2026-11-15): the gate passed on a build whose lone Jelmiko had a floating foot in the
 #   room's back corners; FootWallTurnTests fails on that build. The row "FootWallTurn lone-floor-off" re-runs
 #   FootWallTurnTests/testLoneBodyCornerTurnKeepsFeetOn with TEST_RUNNER_FOOTWALL_ROAM=0 (old lone room) and must FAIL, proving the gate still sees the defect.
@@ -37,7 +38,7 @@ wait_quiet() { # bounded: 50 x 30 s = 25 min
   local i l n
   for i in $(seq 1 50); do
     l=$(sysctl -n vm.loadavg | awk '{print $2}'); n=$(pgrep -x xcodebuild | wc -l | tr -d ' ')
-    if awk "BEGIN{exit !($l < 8)}" && [ "$n" -le "${GATE_XB_MAX:-1}" ]; then return 0; fi
+    if awk "BEGIN{exit !($l < ${GATE_LOAD_MAX:-8})}" && [ "$n" -le "${GATE_XB_MAX:-1}" ]; then return 0; fi
     echo "gate: waiting (load $l, xcodebuild $n)"; sleep 30
   done
   echo "GATE EXPIRED: machine never quiet for 25 min"; return 1

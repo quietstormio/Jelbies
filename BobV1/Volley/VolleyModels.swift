@@ -42,6 +42,8 @@ nonisolated enum VolleyTuning {
     static let drag: Float = 0.10
     static let ballZ: Float = 0.06
     static let bodyTop: Float = 1.35             // a resting Jelbie's crown
+    /// `-VolleyOld 1`: the play and the serve ball as they were before 2026-11-17 (the "before" numbers of the win-rate table and the serve-timing pin).
+    nonisolated(unsafe) static var old: Bool = UserDefaults.standard.bool(forKey: "VolleyOld")
     // match
     static let pointsToWin = 3               // rally scoring: first to 3, no win-by-2, no cap
     static let maxTouches = 3                // bump, set, spike
