@@ -64,7 +64,7 @@ extension BlobBrain {
     /// 2026-11-12: on again, with the fixes the first version lacked (the group meal and the single flow count a meal-waking sleeper as busy, `mealWaking`; the end of the wake starts the walk in the
     /// same tick, `sleepFinish`; a call during the stretch is kept, not pending; the group's bounded fallback). Off (or `-MealOld 1` in the simulator) = every meal call is `requestNow`, exactly as
     /// before the staggered-sleep change; on = a sleeper is woken softly (stir, roll up, stretch) and then walks to the tray.
-    nonisolated(unsafe) static var softMealWake = true
+    nonisolated(unsafe) static var softMealWake = false          // OLD FLOW (feeding-old-r1): a meal call wakes a sleeper at once
 
     /// True while the meal's soft wake is in hand: he is "busy" to every idle check of the tray (his `activity` can read idle for a tick between two wake stages).
     var mealWaking: Bool { idleState.kind == .sleep && sleep.mealWake }
