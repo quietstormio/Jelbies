@@ -135,7 +135,7 @@ struct GameScreen: View {
 
             MusicBubbleView(care: model.care).photoHidden()          // the dancers' music-note thought bubbles (Music Ears, Needs/MusicBubbleView.swift)
 
-            CuddleNoticePoster(care: model.care)          // the close-up's "too hungry to cuddle" line goes to the one message bar (UI/GameMessageCenter.swift, with the sound captions)
+            CuddleNoticePoster(care: model.care, touch: model.touch)          // the close-up's "too hungry to cuddle" line goes to the one message bar (UI/GameMessageCenter.swift, with the sound captions)
 
             RefusalLabel(care: model.care).photoHidden()
 

@@ -38,20 +38,19 @@ extension GameCare {
         }
         return Self.cuddleGroupLine(blocked).map { [$0] } ?? []
     }
-
-    /// How many annoyed "hmph" touches the Jelmiko have answered so far (a stroke on one who refuses); the poster reads it to say the reason again.
-    var annoyedStrokeCount: Int { raceBook.actors.reduce(0) { $0 + ($1.brain?.hmphs ?? 0) } }
 }
 
 /// Posts the close-up's cuddle line to the one message bar: when it appears, and again each time the player strokes a Jelmiko who refuses (not more than once every 6 s),
 /// so the reason is there when they try. (A zero-size view; the pills that used to stack under "Let them go" are gone.)
 struct CuddleNoticePoster: View {
     let care: GameCare
+    let touch: TouchPlay          // its `hmphs` counts the annoyed "hmph" answers to a stroke
     static let repeatEvery: TimeInterval = 6
     @State private var lastPosted = Date.distantPast
     var body: some View {
-        let line = care.cuddleNotices.first
-        let strokes = care.annoyedStrokeCount
+        TimelineView(.periodic(from: .now, by: 0.25)) { _ in poster(line: care.cuddleNotices.first, strokes: touch.hmphs) }
+    }
+    private func poster(line: String?, strokes: Int) -> some View {
         Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
             .onChange(of: line, initial: true) { _, l in
                 guard let l else { return }
