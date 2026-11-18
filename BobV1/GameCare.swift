@@ -576,6 +576,12 @@ final class GameCare {
     static let sipCloser: Float = 0.08
     /// Eating stands a little FARTHER back than the layout's stand (negative = away from the tray): measured, the berries are reached with less miss.
     static let eatCloser: Float = -0.03
+    /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): food diners stand `reachCloser` nearer the tray (along the place yaw) so the nub
+    /// tip touches the piece at the grab. `-MealReach 0` (dev builds) = the old stand and reach.
+    nonisolated(unsafe) static var mealReach: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReach") != nil && UserDefaults.standard.integer(forKey: "MealReach") == 0)
+    nonisolated(unsafe) static var reachCloser: Float = 0
+    /// The most the nub may stretch past its rest length during the dine grab (a fraction of the rest nub); 0 = never.
+    nonisolated(unsafe) static var grabStretch: Double = 0
     func obstacle(_ p: SIMD3<Float>, radius: Float) -> SIMD3<Float> { dining.obstacle(p, radius: radius * RoomLayout.lowPropRadiusScale) }
     /// A passer-by (not eating) keeps a little more than his belly (0.6 of the 0.7 footprint = 0.42) off the whole drawn tray: his root moves in whole steps (a straight chord between two points that each clear it can clip a corner) and
     /// the drawn body trails its root by up to ~0.25.
@@ -659,6 +665,10 @@ final class GameCare {
             return .sip(place: place, gulps: max(min(left, pieces - (DiningTiming.gulpsPerDrink - left)), 1))
         default:
             place.stand += SIMD2(sinf(place.yaw), cosf(place.yaw)) * eatCloser
+            if mealReach, reachCloser != 0 {
+                let d = SIMD2(sinf(place.yaw), cosf(place.yaw))
+                place.stand += d * reachCloser
+            }
             let left = dining.bitesLeft[i] + (dining.forkBite[i] ? 1 : 0)
             return .dine(place: place, bites: max(min(left, pieces - (DiningTiming.bitesPerServing - left)), 1))
         }
