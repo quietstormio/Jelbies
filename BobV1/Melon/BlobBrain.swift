@@ -848,10 +848,12 @@ final class BlobBrain {
             script = .walk(target: fixed(p), then: .faceCamera); activity = .coming
         case .dine(let place, let bites):
             dine = DineState(place: place, bitesLeft: bites, mode: dineHooks?.fork == true ? .fork : .finger)
+            dine.wait = dinePlan.startDelay; dine.rng = dinePlan.rngSeed
             if shortDineStep(place) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: already on his stand: no walk that turns toward a point cm away)
             else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk { mealFinalYaw = place.yaw } }
         case .sip(let place, let gulps):
             dine = DineState(place: place, bitesLeft: gulps, mode: .sip)
+            dine.wait = dinePlan.startDelay; dine.rng = dinePlan.rngSeed
             if shortDineStep(place, limit: Self.sipStepMin) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: as above; a sip only below `sipStepMin`)
             else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk { mealFinalYaw = place.yaw } }
         }
@@ -2478,7 +2480,12 @@ final class BlobBrain {
     /// How this sitting goes (GameCare sets it with the hooks, from his hunger / thirst tier): `refuse` = he shakes his head at the tray and eats nothing,
     /// `pace` = beat speed (eager when famished), `levelBase` / `levelSpan` = the part of his drink share this sitting drains (a partial drink never
     /// empties the bottle). Defaults = the whole serving at the shared rate.
-    struct DinePlan: Equatable { var refuse = false; var pace: Float = 1; var levelBase: Float = 0; var levelSpan: Float = 1 }
+    struct DinePlan: Equatable { var refuse = false; var pace: Float = 1; var levelBase: Float = 0; var levelSpan: Float = 1
+        /// Meal variance (feeding-old-r1, `DiningGroup.variance`): seconds he waits at his place before his first lean / first gulp, the longest random pause between bites or gulps, and the seed of those pauses. All 0 = lockstep as before.
+        var startDelay: Float = 0; var pauseMax: Float = 0; var rngSeed: UInt64 = 0
+        /// Motion variance (same switch): `motion` on = each bite / gulp plays a variant (chew, after-bite, finish) picked from `variantSeed`; `style` 0 eager / 1 savouring / 2 chatty; `glanceDir` = +1 / -1: the side of his nearest neighbour (a glance is a twist toward it);
+        /// `board` hands out variants so two neighbours never play the same one at the same moment.
+        var motion = false; var style = 0; var variantSeed: UInt64 = 0; var glanceDir: Float = 1; var board: DineVariantBoard? = nil }
     var dinePlan = DinePlan()
     /// True while he shakes his head at a tray (the refusal): GameCare shows the "Not hungry" label for it.
     var isRefusing: Bool { if case .dine = script { return dinePlan.refuse }; return false }
@@ -2506,6 +2513,11 @@ final class BlobBrain {
         var landed = false
         var launch = SIMD3<Float>(0, 0, 0)          // where it left
         var window = false                          // inside a chomp / gulp window (mouth may be open)
+        var chewV = 0, afterV = 0, finishV = 0          // this bite's variants (0 = today's)
+        var crouch: Float = 0.9
+        var pauseTotal: Float = 0, pauseLook: Float = 0          // the pause after a bite (s), and the twist (rad) he glances with during it
+        var wait: Float = 0                         // seconds still to stand at the place (the plan's start delay, then a pause after each bite / gulp): the lean has not started, so no pose is frozen
+        var rng: UInt64 = 0
         init() {}
         init(place: DiningPlace, bitesLeft: Int, mode: DineMode) { self.place = place; self.bitesLeft = bitesLeft; total = bitesLeft; self.mode = mode }
     }
@@ -2622,7 +2634,8 @@ final class BlobBrain {
         if armBuilding || armKeyframes[ArmPath.nubToMouth.name] == nil { return }          // path still precomputing: stand and wait
         guard let h = dineHooks else { return }
         if !armActive { armActive = true; armPathName = ArmPath.nubToMouth.name; armT = 0; armBlend = 0 }
-        dine.t += dt * dinePlan.pace
+        let waiting = dine.wait > 0 && dine.phase == .lean          // (meal variance: he stands at his place, breathing, until his turn to lean)
+        if waiting { dine.wait -= dt } else { dine.t += dt * dinePlan.pace }
         let grabS = Float(ArmPath.nubGrabS)
         var pose = ReachPose()
         var armTarget: Float = 0, mouth: Float = 0, eyes: Float = 1, pulse: Float = 0
@@ -2631,19 +2644,21 @@ final class BlobBrain {
 
         switch dine.phase {
         case .lean:
+            if waiting { pose.twist = dinePauseTwist(); break }
             if !dine.entered {                      // first tick of this lean: solve the reach (turn / pitch / roll about the planted feet)
                 dine.entered = true
                 dine.from = ReachPose()
+                dine.crouch = dinePlan.motion ? 0.8 + 0.2 * VarianceRNG.unit(&dine.rng) : 0.9
                 if dine.mode == .fork {
                     let target = h.piece(dine.k)
                     solveDineReach(sim, holds: { s in
                         DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: Double(grabS)), side: s)
                             + DineGeometry.forkDir(s: grabS, side: s, grabS: grabS) * DineGeometry.forkLength
-                    }, target: target, crouch: 0.9)
+                    }, target: target, crouch: dine.crouch)
                 } else {
                     let berry = h.piece(dine.k) + SIMD3(0, 0.02, 0)
                     solveDineReach(sim, holds: { DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: Double(grabS)), side: $0) },
-                                   target: berry, crouch: 0.9)
+                                   target: berry, crouch: dine.crouch)
                 }
                 armSide = dine.side
                 if dine.mode == .fork && !dine.forkHeld {            // a small puff at his nub and the fork pops into his hand, tines up
@@ -2664,7 +2679,7 @@ final class BlobBrain {
             let u = MotionCurve.spring(dine.t / Self.tStraighten)
             pose = lerpPose(dine.reach, ReachPose(), u)
             armTarget = dine.t < 0.6 * Self.tStraighten ? grabS : 0.02        // the nub cocks back (still the stub, never longer) for the flick
-            if dine.t >= Self.tStraighten { dine.phase = .chew; dine.t = 0; dine.entered = false }
+            if dine.t >= Self.tStraighten { dine.phase = .chew; dine.t = 0; dine.entered = false; dinePickVariants() }
         case .chew:
             // THE TOSS: a quick flick of the stub (the nub swings forward, never longer than its rest length) launches the bite in a small arc into his
             // mouth; the mouth opens just before it lands, then a chomp with a squash pulse and a happy wiggle, a second chomp, swallow.
@@ -2676,25 +2691,38 @@ final class BlobBrain {
                 if dine.mode == .fork { h.launch() }
             }
             if dine.flying && dine.t >= landT { dine.landed = true }
-            let o1 = smooth01((dine.t - 0.30 * b) / (0.10 * b)) * (1 - smooth01((dine.t - 0.50 * b) / (0.08 * b)))
-            let o2 = smooth01((dine.t - 0.64 * b) / (0.08 * b)) * (1 - smooth01((dine.t - 0.82 * b) / (0.08 * b)))
-            mouth = min(1, max(o1, o2) * 0.9)
-            dine.window = (dine.t > 0.28 * b && dine.t < 0.60 * b) || (dine.t > 0.62 * b && dine.t < 0.92 * b)
-            pulse = max(MotionCurve.pulse((dine.t - landT) / (0.30 * b)), MotionCurve.pulse((dine.t - 0.66 * b) / (0.30 * b)))
-            if dine.t > landT {                         // the happy wiggle after the first chomp
+            // chew variants (meal variance; 0 = today): 0 two chomps, 1 three quick small chomps, 2 one slow big "savour" chomp with the eyes closed
+            let chomps: [(s: Float, e: Float, a: Float)] = dine.chewV == 1 ? [(0.28, 0.42, 0.65), (0.48, 0.62, 0.65), (0.68, 0.82, 0.65)]
+                : dine.chewV == 2 ? [(0.26, 0.86, 1.0)] : [(0.30, 0.50, 0.9), (0.64, 0.82, 0.9)]
+            var mo: Float = 0
+            for c in chomps { mo = max(mo, smooth01((dine.t - c.s * b) / (0.10 * b)) * (1 - smooth01((dine.t - c.e * b) / (0.08 * b))) * c.a) }
+            mouth = min(1, mo)
+            dine.window = chomps.contains { dine.t > ($0.s - 0.02) * b && dine.t < ($0.e + 0.10) * b }
+            if dine.chewV == 2 { eyes = 1 - 0.85 * smooth01((dine.t - 0.2 * b) / (0.1 * b)) * (1 - smooth01((dine.t - 0.9 * b) / (0.1 * b))) }
+            pulse = dine.chewV == 1 ? max(MotionCurve.pulse((dine.t - landT) / (0.22 * b)), MotionCurve.pulse((dine.t - 0.5 * b) / (0.22 * b)), MotionCurve.pulse((dine.t - 0.7 * b) / (0.22 * b))) * 0.7
+                : dine.chewV == 2 ? MotionCurve.pulse((dine.t - 0.4 * b) / (0.5 * b)) * 1.1
+                : max(MotionCurve.pulse((dine.t - landT) / (0.30 * b)), MotionCurve.pulse((dine.t - 0.66 * b) / (0.30 * b)))
+            if dine.t > landT {                         // after the bite: 0 the happy roll wiggle (today), 1 a squash bounce (feet planted), 2 an eyes-closed slow sway, 3 a glance toward a neighbour and back
                 let env = smooth01((dine.t - landT) / (0.05 * b)) * (1 - smooth01((dine.t - 0.9 * b) / (0.1 * b)))
-                pose.roll = 0.06 * sinf(2 * .pi * (dine.t - landT) / (0.3 * b)) * env
+                let ph = (dine.t - landT) / max(0.9 * b - landT, 0.1)
+                switch dine.afterV {
+                case 1: pose.squash = 1 - 0.05 * env * abs(sinf(2 * .pi * 1.5 * ph))
+                case 2: pose.roll = 0.05 * sinf(2 * .pi * 0.8 * (dine.t - landT) / (0.9 * b)) * env; eyes = min(eyes, 1 - 0.7 * env)
+                case 3: pose.twist = 0.25 * dinePlan.glanceDir * sinf(.pi * min(max(ph, 0), 1)) * env
+                default: pose.roll = 0.06 * sinf(2 * .pi * (dine.t - landT) / (0.3 * b)) * env
+                }
             }
             if dine.holding && dine.t > 0.56 * b { dine.holding = false; dine.flying = false; dine.landed = false; h.finish(); dine.bitesLeft -= 1 }
             if dine.t >= b {
-                if dine.bitesLeft > 0 { dine.k += 1; dine.phase = .lean; dine.t = 0; dine.entered = false; armTarget = 0 }
-                else { dine.phase = .happy; dine.t = 0 }
+                if dine.bitesLeft > 0 { dine.k += 1; dine.phase = .lean; dine.t = 0; dine.entered = false; armTarget = 0; dinePlan.board?.release(steerID); dineStartPause() }
+                else { dine.phase = .happy; dine.t = 0; dinePlan.board?.release(steerID); dine.finishV = dinePlan.motion ? (dinePlan.style + dine.k) % 3 : 0 }
             }
         case .happy:
             // happy: eyes fully closed (like the wave's closes) and one squash pulse, then he is done
             eyes = 0
             pulse = MotionCurve.pulse(dine.t / Self.tHappy)
             armTarget = 0
+            dineFinishMotion(&pose, &eyes)
             if dine.t >= Self.tHappy { dine.finished = true }
         }
         // the arm follows its target with the shared spring-less slew (rates in path units per second), so s never jumps
@@ -2752,31 +2780,78 @@ final class BlobBrain {
     }
 
     /// The sip: he tips his whole body until his mouth meets the tip of his own straw (hands-free), three gulps, a closed-eyes "ahh".
+    /// A random pause (0 ... `dinePlan.pauseMax` s) before the next bite / gulp, from the plan's seed (deterministic per meal). 0 with the variance off.
+    func dineNextPause() -> Float {
+        guard dinePlan.pauseMax > 0 else { return 0 }
+        return dinePlan.pauseMax * VarianceRNG.unit(&dine.rng)
+    }
+    /// The pause after a bite / gulp: sometimes (motion variance) a short look at his neighbour or at the camera while he waits.
+    func dineStartPause() {
+        dine.wait = dineNextPause(); dine.pauseTotal = dine.wait; dine.pauseLook = 0
+        guard dinePlan.motion, dine.wait > 0.1 else { return }
+        let r = VarianceRNG.unit(&dine.rng)
+        if r < 0.3 { dine.pauseLook = 0.28 * dinePlan.glanceDir } else if r < 0.5 { dine.pauseLook = max(-0.35, min(0.35, -wrapAngle(yaw) * 0.5)) }
+    }
+    func dinePauseTwist() -> Float {
+        guard dine.pauseLook != 0, dine.pauseTotal > 0 else { return 0 }
+        return dine.pauseLook * sinf(.pi * min(max(1 - dine.wait / dine.pauseTotal, 0), 1))
+    }
+    /// This bite's / gulp's variants, from the plan's shared seed through the group's board (two neighbours never hold the same chew variant, nor the same after-bite one, at the same moment;
+    /// his own previous one is avoided too). Food: chew 3 x after-bite 4; a drink: 3 gulp variants.
+    func dinePickVariants() {
+        guard dinePlan.motion else { dine.chewV = 0; dine.afterV = 0; return }
+        var s = dinePlan.variantSeed &+ UInt64(dine.k + 1) &* 0x9E3779B97F4A7C15 &+ UInt64(dinePlan.style + 1) &* 0xD1B54A32D192ED03
+        let nC = dine.mode == .sip ? 4 : 3          // (a drink has four gulp variants, so three diners can always differ)
+        let wantC = Int(VarianceRNG.next(&s) % UInt64(nC)), wantA = Int(VarianceRNG.next(&s) % 4)
+        if let b = dinePlan.board {
+            dine.chewV = b.pickChew(id: steerID, want: wantC, last: dine.chewV, k: dine.k, n: nC)
+            dine.afterV = dine.mode == .sip ? 0 : b.pickAfter(id: steerID, want: wantA, last: dine.afterV, k: dine.k)
+        } else { dine.chewV = wantC; dine.afterV = dine.mode == .sip ? 0 : wantA }
+    }
+    /// The finish: 0 today's closed-eyes pulse, 1 a roll wiggle, 2 a happy look at a neighbour.
+    func dineFinishMotion(_ pose: inout ReachPose, _ eyes: inout Float) {
+        let u = min(max(dine.t / Self.tHappy, 0), 1)
+        switch dine.finishV {
+        case 1: pose.roll = 0.07 * sinf(2 * .pi * 2 * u) * sinf(.pi * u)
+        case 2: pose.twist = 0.25 * dinePlan.glanceDir * sinf(.pi * u); eyes = 0.4
+        default: break
+        }
+    }
+
     func runSip(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
         guard let h = dineHooks else { return }
-        dine.t += dt * dinePlan.pace
+        let waiting = dine.wait > 0 && (dine.phase == .lean || dine.phase == .grab || dine.phase == .chew)          // (meal variance: before the first lean, and between gulps)
+        if waiting { dine.wait -= dt } else { dine.t += dt * dinePlan.pace }
         var pose = ReachPose()
         var mouth: Float = 0, eyes: Float = 1, pulse: Float = 0
         dine.window = false
         let b = Self.dineBeat
         switch dine.phase {
         case .lean, .grab:
+            if waiting { pose.twist = dinePauseTwist(); break }
             if !dine.entered {
                 dine.entered = true
                 solveDineReach(sim, holds: { _ in DineGeometry.mouthRest }, target: h.straw(), crouch: 1.0)
             }
             pose = lerpPose(ReachPose(), dine.reach, MotionCurve.spring(dine.t / Self.tSipLean))
-            if dine.t >= Self.tSipLean { dine.phase = .chew; dine.t = 0; dine.k = 0 }
+            if dine.t >= Self.tSipLean { dine.phase = .chew; dine.t = 0; dine.k = 0; dinePickVariants() }
         case .chew:                                     // the gulps
             pose = dine.reach
-            let w = smooth01((dine.t - 0.08 * b) / (0.14 * b)) * (1 - smooth01((dine.t - 0.55 * b) / (0.2 * b)))
-            mouth = w * 0.55
+            if waiting { pose.twist += dinePauseTwist(); break }
+            // gulp variants (meal variance; 0 = today): 0 quick gulp, 1 one long slurp with the eyes closed, 2 a sip with a little squash "ahh" after it
+            let fall: Float = dine.chewV == 1 ? 0.78 : 0.55
+            let w = smooth01((dine.t - 0.08 * b) / (0.14 * b)) * (1 - smooth01((dine.t - fall * b) / (0.2 * b)))
+            mouth = w * (dine.chewV == 1 ? 0.7 : 0.55)
+            if dine.chewV == 3 { mouth = max(w * 0.4, smooth01((dine.t - 0.5 * b) / (0.08 * b)) * (1 - smooth01((dine.t - 0.7 * b) / (0.08 * b))) * 0.35) }          // (a small double sip)
             dine.window = dine.t > 0.04 * b && dine.t < 0.78 * b
             pulse = MotionCurve.pulse((dine.t - 0.45 * b) / (0.5 * b))
+            if dine.chewV == 1 { eyes = 1 - 0.85 * smooth01((dine.t - 0.1 * b) / (0.1 * b)) * (1 - smooth01((dine.t - 0.85 * b) / (0.12 * b))) }
+            if dine.chewV == 2 { let ahh = smooth01((dine.t - 0.6 * b) / (0.1 * b)) * (1 - smooth01((dine.t - 0.9 * b) / (0.1 * b))); pose.squash = dine.reach.squash * (1 - 0.05 * ahh); eyes = 1 - 0.7 * ahh }
             h.level(dinePlan.levelBase + dinePlan.levelSpan * (Float(dine.k) + smooth01(dine.t / b)) / Float(max(dine.total, 1)))
             if dine.t >= b {
                 dine.k += 1; dine.bitesLeft -= 1; dine.t = 0
-                if dine.k >= dine.total { h.level(dinePlan.levelBase + dinePlan.levelSpan); dine.phase = .straighten }
+                if dine.k < dine.total { dinePlan.board?.release(steerID); dineStartPause(); dinePickVariants() }
+                if dine.k >= dine.total { h.level(dinePlan.levelBase + dinePlan.levelSpan); dine.phase = .straighten; dinePlan.board?.release(steerID); dine.finishV = dinePlan.motion ? (dinePlan.style + dine.k) % 3 : 0 }
             }
         case .straighten:
             pose = lerpPose(dine.reach, ReachPose(), MotionCurve.spring(dine.t / Self.tStraighten))
@@ -2784,6 +2859,7 @@ final class BlobBrain {
         case .happy:
             eyes = 0
             pulse = MotionCurve.pulse(dine.t / Self.tHappy)
+            dineFinishMotion(&pose, &eyes)
             if dine.t >= Self.tHappy { dine.finished = true }
         }
         applyDine(sim, skinner, pose: pose, mouth: mouth, eyes: eyes, pulse: pulse)
@@ -2806,6 +2882,7 @@ final class BlobBrain {
     static let refuseDuration: Float = 1.9
 
     func dineDone(_ sim: SoftBody, _ skinner: Skinner) {
+        dinePlan.board?.release(steerID)
         dinePlan = DinePlan()
         skinner.setEyeOpenness(1); mouthOpen = 0
         skinner.browCounterOn = false
@@ -2927,3 +3004,38 @@ private extension Float {
 struct PerkFlags: Equatable {
     var bouncy = false, social = false, bedtime = false
 }
+
+
+/// splitmix64: the meal variance's tiny deterministic generator (a seed in, the same numbers out: tests and `-FoodSeed` takes repeat).
+nonisolated enum VarianceRNG {
+    static func next(_ s: inout UInt64) -> UInt64 {
+        s &+= 0x9E3779B97F4A7C15
+        var z = s
+        z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+        z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+        return z ^ (z >> 31)
+    }
+    /// 0 ..< 1
+    static func unit(_ s: inout UInt64) -> Float { Float(next(&s) >> 40) / Float(1 << 24) }
+}
+
+
+/// Hands out the bite variants of one sitting (`DiningGroup`): at any moment no two diners hold the same chew variant, nor the same after-bite variant (tests read `chew` / `after`).
+@MainActor
+final class DineVariantBoard {
+    private(set) var chew: [Int: Int] = [:], after: [Int: Int] = [:]
+    nonisolated init() {}
+    private func pick(_ d: inout [Int: Int], id: Int, want: Int, last: Int, n: Int, k: Int) -> Int {
+        let others = Set(d.filter { $0.key != id }.values)
+        var v = want % n
+        for avoidLast in [k > 0, false] {
+            for _ in 0..<n { if !others.contains(v) && !(avoidLast && v == last) { d[id] = v; return v }; v = (v + 1) % n }
+        }
+        d[id] = want % n; return want % n
+    }
+    func pickChew(id: Int, want: Int, last: Int, k: Int, n: Int = 3) -> Int { pick(&chew, id: id, want: want, last: last, n: n, k: k) }
+    func pickAfter(id: Int, want: Int, last: Int, k: Int) -> Int { pick(&after, id: id, want: want, last: last, n: 4, k: k) }
+    func release(_ id: Int) { chew[id] = nil; after[id] = nil }
+}
+
+extension DineVariantBoard: Equatable { nonisolated static func == (a: DineVariantBoard, b: DineVariantBoard) -> Bool { a === b } }
