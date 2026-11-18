@@ -59,6 +59,7 @@ final class MealVarianceTests: XCTestCase {
             if b.dine.landed && !wasLanded[id] { tk.chomps[id, default: []].append(r.t) }          // (the bite lands in the mouth: the chomp moment, rising edge)
             wasLanded[id] = b.dine.landed
         }
+        XCTAssertFalse(b.armCapsuleOut && b.armPathActive, "no double arm")
         if b.dine.phase == .chew {
             inChew.append((id, b.dine.chewV, b.dine.afterV))
             tk.chewSets[id, default: []].insert(b.dine.chewV); tk.afterSets[id, default: []].insert(b.dine.afterV)
@@ -75,7 +76,8 @@ final class MealVarianceTests: XCTestCase {
             let n = min(ta.count, tb.count, 3)
             XCTAssertGreaterThan(n, 0)
             let d = (0..<n).map { abs(ta[$0] - tb[$0]) }
-            XCTAssertGreaterThanOrEqual(d.reduce(0, +) / Float(max(n, 1)), 0.12, "pair \(a)-\(b) average gap \(d)")
+            XCTAssertGreaterThanOrEqual(d.reduce(0, +) / Float(max(n, 1)), 0.25, "pair \(a)-\(b) average gap \(d)")
+            XCTAssertGreaterThanOrEqual(abs(ta[0] - tb[0]), 0.25, "pair \(a)-\(b) FIRST chomp / gulp moments \(ta[0]) \(tb[0])")
             XCTAssertLessThanOrEqual(d.filter { $0 < 0.05 }.count, 1, "pair \(a)-\(b) within 0.05 s on \(d.filter { $0 < 0.05 }.count) bites: \(d)")
         }
         XCTAssertLessThanOrEqual(v.end, lock.end * 1.2, "meal end \(v.end) vs lockstep \(lock.end)")
@@ -89,5 +91,41 @@ final class MealVarianceTests: XCTestCase {
     }
 
     func testFoodChompsAreVariedAndNeighboursNeverMatch() { check(drink: false) }
+
+    /// The late middle from the front (the meal1b case): diner 0 starts at z 6 and is given the middle place behind the tray; the others stand at their ends. The tray does not pop while he is on his way:
+    /// he stands at his place when it pops, all three eat WITH each other (nobody starts after another has been released), and nobody touches the tray box.
+    func testLateMiddleFromTheFrontReachesHisPlaceBeforeTheTray() {
+        DiningGroup.variance = true
+        let r = DiningJellyTests.Room(count: 3)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        for i in 0..<3 { r.care.needs(for: i).set(.hunger, 0.1) }
+        r.run(1)
+        let pts: [SIMD2<Float>] = [SIMD2(0, 6), SIMD2(-1.5, -0.5), SIMD2(1.5, -0.5)]
+        for (k, a) in r.actors.enumerated() { a.brain?.abortScript(a.sim, a.skinner); a.sim.teleport(toXZ: pts[k]); a.brain?.currentPose(a.sim) }
+        r.run(0.5)
+        let t0 = r.t
+        r.care.feed("berries")
+        var popT: Float?, standDistAtPop: Float = 9
+        var firstEat = [Float?](repeating: nil, count: 3), released = [Float?](repeating: nil, count: 3)
+        r.run(60) {
+            if popT == nil, r.care.dining.isPresent, r.care.group.isActive {
+                popT = r.t - t0
+                // diner 0's distance to his own stand (the middle one) the moment the tray is out
+                if let st = r.care.dining.places.indices.map({ r.care.dining.places[$0].stand }).min(by: { abs($0.x - r.actors[0].floor.x) < abs($1.x - r.actors[0].floor.x) }) { standDistAtPop = simd_distance(r.actors[0].floor, st) }
+            }
+            for a in r.actors {
+                if firstEat[a.id] == nil, a.brain?.activity == .eating { firstEat[a.id] = r.t - t0 }
+                if released[a.id] == nil, firstEat[a.id] != nil, !r.care.group.isHolding(a.id) { released[a.id] = r.t - t0 }
+            }
+            return r.t > t0 + 2 && !r.care.trayOut
+        }
+        XCTAssertNotNil(popT, "the tray came out")
+        XCTAssertLessThan(standDistAtPop, 0.5, "the late diner stood at (or at his place's end of) his walk when the tray popped: \(standDistAtPop)")
+        XCTAssertTrue(firstEat.allSatisfy { $0 != nil }, "all three ate \(firstEat)")
+        let lastStart = firstEat.compactMap { $0 }.max() ?? 0
+        let firstRelease = released.compactMap { $0 }.min() ?? 99
+        XCTAssertLessThan(lastStart, firstRelease, "everybody ate with the others: the last started at \(lastStart), the first was released at \(firstRelease)")
+        XCTAssertEqual(r.care.group.inBoxTicks, 0, "nobody touched the tray box")
+    }
     func testDrinkGulpsAreVariedAndNeighboursNeverMatch() { check(drink: true) }
 }

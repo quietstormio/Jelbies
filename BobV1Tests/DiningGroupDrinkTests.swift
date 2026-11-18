@@ -59,7 +59,7 @@ final class DiningGroupDrinkTests: XCTestCase {
             return r.t > 2 && !r.care.trayOut
         }
         XCTAssertFalse(r.care.trayOut)
-        XCTAssertEqual(r.level(1, .thirst), before[1], accuracy: 0.02, "the Quenched Jelly drank nothing")
+        XCTAssertEqual(r.level(1, .thirst), before[1], accuracy: 0.04, "the Quenched Jelly drank nothing")          // (0.04: the sitting is a little longer with the meal variance, and thirst decays with the clock)
         XCTAssertGreaterThan(r.level(0, .thirst), before[0] + 2.5 * MealAppetite.gainPerPiece, "Parched drank the most")
         XCTAssertGreaterThan(r.level(2, .thirst), before[2] + 0.5 * MealAppetite.gainPerPiece, "the middle one drank a little")
         XCTAssertLessThan(r.level(2, .thirst) - before[2], r.level(0, .thirst) - before[0] + 0.001)
