@@ -688,6 +688,11 @@ struct GameScreen: View {
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
             care.startShow(jelly: who)
         }
+        // capture aid: -StudioAfter <seconds> opens the Studio (the Jelly Show lobby) that long after launch, so a picture is taken after whatever -GameAction / -BlobGameDemo did first
+        if d.double(forKey: "StudioAfter") > 0 {
+            await sleep(d.double(forKey: "StudioAfter"))
+            care.requestTown(.studio)
+        }
         // capture aid: -BubbleDemo 1 takes the bubble wand out and plays a simulated blow (pulses); 2 blows without pause (Toys/BubbleWand.swift)
         if d.integer(forKey: "BubbleDemo") != 0 {
             await sleep(d.double(forKey: "BubbleDelay") > 0 ? d.double(forKey: "BubbleDelay") : 3)

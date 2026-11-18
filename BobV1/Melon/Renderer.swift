@@ -524,11 +524,13 @@ final class MelonRenderer {
     /// A clean, neutral body for one picture (lobby portraits): no dirt / soot / lint / shine, mouth shut, no blush. Returns what puts the live state back.
     func neutralBody(_ i: Int) -> () -> Void {
         guard i >= 0, i < slots.count else { return {} }
-        let live = (slots[i].bathLook, slots[i].mouthOpen, slots[i].blush)
+        let live = (slots[i].bathLook, slots[i].mouthOpen, slots[i].blush, slots[i].waveBlend, slots[i].legBlend)
         slots[i].bathLook = .dry; slots[i].mouthOpen = 0; slots[i].blush = 0
+        for k in slots[i].waveBlend.indices { slots[i].waveBlend[k] = .zero }          // (the live wave fillet is not in a picture of the arms at rest; the leg blend is re-set from the picture's own skin)
         return { [weak self] in
             guard let self, i < self.slots.count else { return }
             self.slots[i].bathLook = live.0; self.slots[i].mouthOpen = live.1; self.slots[i].blush = live.2
+            self.slots[i].waveBlend = live.3; self.slots[i].legBlend = live.4
         }
     }
     func setMouth(_ m: Float, body i: Int) { if i < slots.count { slots[i].mouthOpen = m } }

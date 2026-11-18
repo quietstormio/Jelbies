@@ -1463,13 +1463,14 @@ final class MelonController: NSObject, MTKViewDelegate {
         // (a lobby avatar with a brain skins AFTER its throwaway feature tick below, with that tick's own ear / pom scales, not the live ones)
         let skinLater = hp != nil && a.brain != nil
         if skinLater {}
-        else if hp != nil { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
+        else if hp != nil { a.skinner.withRestArms { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } } }
         else { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; w.ignoreHide = true
         if let b = a.brain {
             w.tick(id: id, brain: b, sim: a.sim, outfit: HeadPortraitKey.outfitDrawn(hp?.borrowed == true ? (hp?.wear.map { [$0.slot: $0] } ?? [:]) : care.store.outfit(id), pose: hp == nil ? 0 : hp?.pose), role: .none, hideAll: false, dt: 1.0 / 60)          // (a head portrait wears nothing)
-            if w.shown(id, .hands) != nil { w.setArms(id, care.armFrames(a)) }
+            if w.shown(id, .hands) != nil { w.setArms(id, care.armFrames(a, rest: hp != nil)) }
         }
+        if hp != nil { renderer.setLegBlend(a.skinner.legBlend, body: id) }          // (the leg join's shading follows the skin drawn here, not the live frame's)
         renderer.setJersey(w.jersey(id), body: id)
         // a lobby avatar also grows its species feature (Moss's daisy, on the hat band when he wears a hat; Lavender's wings; Pip's tail): a throwaway FeatureSet, ticked once on this
         // body, so the live one (the room's) is never touched. A Park friend has none (a visitor with a signature is never picked for the lobby).
@@ -1484,7 +1485,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             let drive = TeddyDrive.portrait(fs: fs, id: id, brain: b, sim: a.sim, feature: feature, worn: worn)
             let liveSkin = (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway), liveAntenna = (a.skinner.antennaOn, a.skinner.antennaScale, a.skinner.antennaLift)
             drive.apply(to: a.skinner)
-            a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) }
+            a.skinner.withRestArms { a.skinner.withNeutralFace { a.skinner.update(x: a.sim.x, index: renderMesh.index, into: renderer.dynPointer(body: id)) } }
             (a.skinner.teddyEarScale, a.skinner.teddyPomScale, a.skinner.teddySway) = liveSkin; (a.skinner.antennaOn, a.skinner.antennaScale, a.skinner.antennaLift) = liveAntenna
             if let fl = fs.slot(id) { w.setArtOverride(id, fl.fit.hatVariant) }
             fs.syncCarry(id, sim: a.sim)
