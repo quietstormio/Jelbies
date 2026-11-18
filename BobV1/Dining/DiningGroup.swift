@@ -546,6 +546,9 @@ final class DiningGroup {
         }
         savedFinished = []; savedGap = []; savedPeers = []
         quietLatch = []
+        #if targetEnvironment(simulator)
+        if MealTrace.poseOn { traceTailT = 3.5; released = [Bool](repeating: true, count: n) }          // (the walk-off window of the trace: everybody counts as released)
+        #endif
         if sideSet { DiningLayout.sideX = 1.11; DiningLayout.ends = false; sideSet = false }
     }
     /// The meal is dropped (Come here, grabbed, timeout): the tray poofs, what was eaten stays paid.
@@ -606,6 +609,7 @@ final class DiningGroup {
 
     // MARK: meal trace (simulator-only output, see MealTrace)
     private var traceCount: [Int] = [0, 0, 0]
+    private var traceTailT: Float = 0
     private var traceReadyIDs: Set<Int> = [], traceBiteIDs: Set<Int> = [], traceShareIDs: Set<Int> = []
     private(set) var popReason = "gathered"
     /// The tray came out for the awake diner(s) while sleepers were still waking (`awakeFirst`).
@@ -676,9 +680,14 @@ final class DiningGroup {
 
     func tick(dt: Float) {
         defer { if !shared { dining.update(dt: dt) } }
+        #if targetEnvironment(simulator)
+        if state == .idle, traceTailT > 0 { traceTailT -= dt; age += dt; traceTick(); return }          // (meal trace only: the walk-off, 3.5 s of pose lines after the sitting)
+        #endif
         guard state != .idle else { return }
         if tierOf != nil { for (i, b) in brains.enumerated() where !(released.indices.contains(i) && released[i]) { b.idleBlocked = true } }          // no idle trick mid-sitting (Bob's walk to the tray is never cut for a flip)
         age += dt
+        // a released diner walking off: once he is clear of the row (1 u from his stand) he keeps the room's normal peer gap again, not the diners' small one (two walk-offs pressed into each other)
+        for i in brains.indices where released.indices.contains(i) && released[i] && i < savedGap.count && placeOf.indices.contains(i) && brains[i].peerGap < savedGap[i] && simd_distance(floor(i), stands[placeOf[i]]) > 1.0 { brains[i].peerGap = savedGap[i] }
         varBoard.clock = age
         if age > GameCare.mealTimeout { MealTrace.log("giveup reason=timeout"); end(); gaveUp = true; return }
         traceTick()
