@@ -849,12 +849,12 @@ final class BlobBrain {
             dine = DineState(place: place, bitesLeft: bites, mode: dineHooks?.fork == true ? .fork : .finger)
             dine.wait = dinePlan.startDelay; dine.rng = dinePlan.rngSeed
             if shortDineStep(place) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: already on his stand: no walk that turns toward a point cm away)
-            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk { mealFinalYaw = place.yaw } }
+            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk, mealYawHint != nil { mealFinalYaw = place.yaw } }
         case .sip(let place, let gulps):
             dine = DineState(place: place, bitesLeft: gulps, mode: .sip)
             dine.wait = dinePlan.startDelay; dine.rng = dinePlan.rngSeed
             if shortDineStep(place, limit: Self.sipStepMin) { script = .turn(to: place.yaw, then: .dineGo); activity = .turning }          // (C5: as above; a sip only below `sipStepMin`)
-            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk { mealFinalYaw = place.yaw } }
+            else { script = .walk(target: fixed(place.stand), then: .dineTurn(place)); activity = .walking; if reserved, DiningGroup.straightWalk, mealYawHint != nil { mealFinalYaw = place.yaw } }
         }
     }
 
