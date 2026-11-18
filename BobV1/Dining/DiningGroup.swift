@@ -164,6 +164,8 @@ final class DiningGroup {
     private var progRef: [(t: Float, d: Float)] = [], stuckAt: [Float?] = []
     private var firstStartAge: Float?
     private var popAge: Float = 0, varBaseCache: Float?, hurryCheckT: Float = 0
+    /// `-MealSpotMakespan 0` = the tray spot by fewest-in-front, then total walk (4f9a3c84); on: the longest single walk first.
+    nonisolated(unsafe) static var spotMakespan: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealSpotMakespan") != nil && UserDefaults.standard.integer(forKey: "MealSpotMakespan") == 0)
     private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
@@ -205,9 +207,9 @@ final class DiningGroup {
     /// `-MealCalmWait 0` = the old wait, simulator / dev builds). Each diner's approach point lies behind his place ALONG his place's own facing, so the step-in is straight and
     /// he arrives squared up (no turn at the place); while he waits there he faces his place (BlobBrain.mealFaceYaw: one turn on arrival, then still: no look-around, no step in
     /// place, no face-the-camera turn); and he is sent to eat only once he faces it, or after `calmFacingWait` s ready (a diner who cannot square up is never held for good).
-    nonisolated(unsafe) static var calmWait: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "MealCalmWait") == 1
+    nonisolated(unsafe) static var calmWait: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealCalmWait") != nil && UserDefaults.standard.integer(forKey: "MealCalmWait") == 0)          // (main's value again: the SINGLE serving's calm wait / square-up is unchanged; the home GROUP does not use it, see `calm`)
     /// The calm wait is the HOME tray's (like the ordered line-up): the café keeps its own wait.
-    private var calm: Bool { Self.calmWait && forcedOrigin == nil }
+    private var calm: Bool { false }          // (the old-flow group: no calm wait; line-up first holds the place yaw instead (`mealFaceYaw`))
     static let calmFacing: Float = 0.2
     static let calmFacingWait: Float = 1.5
     /// Seconds diner i has stood ready (at his approach point, idle) in this approach (the facing fallback).
@@ -331,17 +333,20 @@ final class DiningGroup {
             if Self.trayToThem {          // (the tray goes to them: fewest diners in front of their stand line, then the least total walking)
                 let floors = brains.indices.map { f($0) }, closer = c.eatStyle == .sip ? GameCare.sipCloser : GameCare.eatCloser
                 was = { offered in
-                    var best: (front: Int, total: Float, o: SIMD2<Float>)?
+                    var best: (front: Int, total: Float, longest: Float, o: SIMD2<Float>)?
                     for o in offered {
                         let stands = L.places.map { SIMD2(o.x + $0.rel.x, o.y + $0.rel.y + closer) }
                         let slot = Self.orderedSlots(floors: floors, slots: stands)
-                        var front = 0, total: Float = 0
+                        var front = 0, total: Float = 0, longest: Float = 0
                         for i in floors.indices where slot[i] >= 0 {
                             let st = stands[slot[i]]
                             if floors[i].y > st.y + GameCare.popTolerance { front += 1 }
-                            total += simd_distance(floors[i], st)
+                            total += simd_distance(floors[i], st); longest = max(longest, simd_distance(floors[i], st))
                         }
-                        if best == nil || front < best!.front || (front == best!.front && total < best!.total - 1e-4) { best = (front, total, o) }
+                        if Self.spotMakespan {          // (the LONGEST single walk first, in 0.1 u steps, then the fewest in front, then the total: a far diner does not walk 7 u while the others walk 1)
+                            let lq = (longest * 10).rounded() / 10
+                            if best == nil || lq < best!.longest - 1e-4 || (abs(lq - best!.longest) < 1e-4 && (front < best!.front || (front == best!.front && total < best!.total - 1e-4))) { best = (front, total, lq, o) }
+                        } else if best == nil || front < best!.front || (front == best!.front && total < best!.total - 1e-4) { best = (front, total, longest, o) }
                     }
                     if let b = best { MealTrace.log("choose: tray to them front=\(b.front) walk=\(b.total)") }
                     return best?.o
