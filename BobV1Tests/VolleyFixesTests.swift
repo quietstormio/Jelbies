@@ -287,6 +287,35 @@ final class VolleyFixesTests: XCTestCase {
         XCTAssertTrue(c.unlocked(.shore), "a win opens it")
     }
 
+    /// Cross-check of the rig on REAL soft bodies: the scripted ordinary player against the first level, match after match in the real court, for a wall-clock budget
+    /// (`TEST_RUNNER_VOLLEY_REAL_MINUTES=20`; skipped otherwise). Prints `VOLLEYREAL`.
+    func testRealBodyWinRateAtTheFirstLevel() throws {
+        let minutes = Double(ProcessInfo.processInfo.environment["VOLLEY_REAL_MINUTES"] ?? "") ?? 0
+        try XCTSkipIf(minutes <= 0, "set TEST_RUNNER_VOLLEY_REAL_MINUTES to run")
+        let start = Date()
+        var wins = 0, matches = 0, simSeconds: Float = 0
+        var k: UInt64 = 0
+        while Date().timeIntervalSince(start) < minutes * 60 {
+            k += 1
+            let c = court(seed: 4000 + k * 31)
+            var script = VolleyScript(.ordinary, seed: 4000 + k * 31)
+            let dt = c.room.actors[0].sim.stepDt
+            var ticks = 0
+            while c.care.volley.live, c.sim.phase != .over, ticks < 60 * 360 {
+                var s = c.sim
+                script.drive(&s, dt: dt)
+                c.care.volley.sim = s
+                c.step(); ticks += 1
+            }
+            guard c.sim.phase == .over else { continue }
+            matches += 1; simSeconds += Float(ticks) * dt
+            if c.sim.winner == 0 { wins += 1 }
+            print("VOLLEYREALMATCH \(matches) win=\(c.sim.winner == 0) score=\(c.sim.score) sim_s=\(Int(Float(ticks) * dt)) elapsed=\(Int(Date().timeIntervalSince(start)))s")
+        }
+        print("VOLLEYREAL ordinary vs Sandcastle on real bodies: \(wins) / \(matches) = \(matches > 0 ? 100 * Float(wins) / Float(matches) : 0)%, avg \(matches > 0 ? simSeconds / Float(matches) : 0) sim s")
+        XCTAssertGreaterThan(matches, 0)
+    }
+
     // MARK: 3 · double tap to switch
 
     func testDoubleTapTiming() {
@@ -398,6 +427,7 @@ final class VolleyFixesTests: XCTestCase {
 
     func testBorrowedBodiesShowTheirSignature() throws {
         let seed = try XCTUnwrap(seedWithYellowAndLavender(), "a seed with a yellow and a lavender opponent")
+        print("VOLLEYSEED \(seed)")
         let c = court(seed: seed)
         c.run(60)
         let w = c.care.volleyWork
@@ -436,6 +466,7 @@ final class VolleyFixesTests: XCTestCase {
         var spawners: [String] = []
         for case let u as URL in en where u.pathExtension == "swift" {
             guard let text = try? String(contentsOf: u, encoding: .utf8) else { continue }
+            if u.lastPathComponent == "ContactDemo.swift" { continue }          // (a simulator capture aid, not a scene)
             if text.contains("parkBook.spawn?(") || text.contains("book.spawn?(") {
                 spawners.append(u.lastPathComponent)
                 XCTAssertTrue(text.contains("visitorLook("), "\(u.lastPathComponent) spawns visitor bodies but never calls visitorLook (their spikes / wings would not show)")

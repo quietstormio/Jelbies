@@ -186,6 +186,19 @@ struct VolleyChrome: View {
                     }.allowsHitTesting(false)
                 }
             }
+            #if targetEnvironment(simulator)
+            .task {          // capture aid: `-VolleyAutoDoubleTap 1` double-taps your teammate (the same lift / pick path as a finger) 6 s into the match, then once more 4 s later
+                guard UserDefaults.standard.bool(forKey: "VolleyAutoDoubleTap") else { return }
+                for _ in 0..<2 {
+                    try? await Task.sleep(nanoseconds: 6_000_000_000)
+                    let mate = 1 - min(max(volley.ui.controlled, 0), 1)
+                    guard volley.bodyPos.indices.contains(mate), let pt = VolleyPick.centre(volley.bodyPos[mate], size: g.size) else { continue }
+                    let t = Date().timeIntervalSinceReferenceDate
+                    _ = doubleTap.lift(at: pt, time: t, press: 0.08, travel: 1)
+                    if doubleTap.lift(at: pt, time: t + 0.15, press: 0.08, travel: 1) { pick(pt, g.size) }
+                }
+            }
+            #endif
         }
         .coordinateSpace(name: Self.courtSpace)
         .ignoresSafeArea()
