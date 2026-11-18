@@ -687,15 +687,15 @@ final class AudioHub {
     nonisolated private static func preloadItems() -> [PreloadItem] {
         func find(_ n: String) -> URL? { Bundle.main.url(forResource: n, withExtension: "m4a") }
         var out: [PreloadItem] = []
-        for c in 0..<JellyVoiceSet.count { for r in [0.0, 0.99] {
+        for c in JellyVoiceSet.snoreCharacters { for r in [0.0, 0.99] {
             let name = JellyVoiceSet.snoreFile(character: c, roll: r)
             if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: false)) }
         } }
-        for c in 0..<JellyVoiceSet.count { for v in 1...JellyVoiceSet.sleepCooVariants {
+        for c in JellyVoiceSet.snoreCharacters { for v in 1...JellyVoiceSet.sleepCooVariants {
             let name = JellyVoiceSet.sleepCooFile(character: c, roll: (Double(v) - 0.5) / Double(JellyVoiceSet.sleepCooVariants))
             if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: false)) }
         } }
-        for c in 0..<JellyVoiceSet.voiceSets { for v in JellyVoice.allCases { for k in 1...(v.hasVariants ? 3 : 1) {
+        for c in JellyVoiceSet.voiceCharacters { for v in JellyVoice.allCases { for k in 1...(v.hasVariants ? 3 : 1) {
             let name = JellyVoiceSet.file(character: c, v, variant: k)
             if let u = find(name) { out.append(PreloadItem(name: name, url: u, rate: true)) }
         } } }
