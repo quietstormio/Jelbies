@@ -80,11 +80,7 @@ final class PhotoMode {
     }
 
     func showNotice(_ text: String) {
-        withAnimation(.easeOut(duration: 0.2)) { notice = text }
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            withAnimation(.easeOut(duration: 0.3)) { if self?.notice == text { self?.notice = nil } }
-        }
+        GameMessageCenter.shared.post(text, priority: .important, identifier: "photo-notice")          // (the one message bar)
     }
 
     // MARK: shutter
@@ -148,17 +144,6 @@ struct PhotoModeView: View {
                 .transition(.opacity)
             }
             if let s = mode.shot { PhotoPreview(image: s.image, url: s.url, landscape: landscape) { withAnimation(.easeInOut(duration: 0.25)) { mode.shot = nil } } }
-            if let n = mode.notice {
-                VStack {
-                    Text(n).font(SK.font(15, .bold)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
-                        .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(Capsule().fill(SK.cream.opacity(0.96)).shadow(color: SK.shadow.opacity(0.25), radius: 4, y: 2))
-                        .padding(.top, 60)
-                    Spacer()
-                }
-                .padding(.horizontal, 20).allowsHitTesting(false).transition(.opacity)
-                .accessibilityElement(children: .combine)
-            }
             Color.white.ignoresSafeArea().opacity(mode.flash ? 0.9 : 0).allowsHitTesting(false)
         }
         .onAppear { Task { try? await Task.sleep(nanoseconds: 4_500_000_000); withAnimation { hint = false } } }

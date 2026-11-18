@@ -112,7 +112,7 @@ final class GroomTrip {
     func closePicker() { if phase == .picking { phase = .off; refusal = nil } }
     /// A tap during the visit: straight to the door.
     func skip() { if phase == .arriveIn || phase == .shop { skipRequested = true } }
-    func say(_ s: String) { toast = s; toastT = 0 }
+    func say(_ s: String) { toast = s; toastT = 0; GameMessageCenter.shared.post(s, identifier: "groom-toast") }          // (drawn by the one message bar)
     func finish() { phase = .off; wipe = 0; shopT = 0; cheerT = 0; skipRequested = false; onEnd() }
 
     /// Once per fixed step. `blocked`: something started under the fade (checked while fading out).

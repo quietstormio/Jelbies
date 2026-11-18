@@ -274,204 +274,16 @@ final class StartFlow {
 
     /// The creature just bought into Camp (home was full): the room it returns to may offer "waiting at Jelmiko Camp" for it. Read-and-clear by the one who shows it.
     var campArrival: Int?
-    /// "<name> is at Jelmiko Camp": the one short line the room shows once after a Camp-bound purchase (ContentView draws it; it clears itself).
-    var campNote: String?
-
-    /// Jelmiko Camp is a 3D yard visited from the room (a mode of the park trip); there is NO Camp phase. The room's model still exists during a visit, so the moves below only
-    /// write the save (kill-safe, JellyCamp.commit). What the visit changed at home is told by ONE pair of calls:
-    ///   `campVisitBegan(d)` when the yard is entered (remembers the saved home list), `campVisitEnded(d)` when it is left: true when the home list changed (a bring home, a drop off, a
-    ///   swap), and then the room has been rebuilt exactly once (`rebuildRoom`, the way adoption rebuilds it); false = nothing changed and nothing was rebuilt.
-    @ObservationIgnored private var campEntryHome: [Int]?
-    func campVisitBegan(_ d: UserDefaults = .standard) { campEntryHome = JellyRoster.savedIDs(d) }
-    /// Pure part of the hook: did the saved home list change since `entry`? (Order counts: a swap keeps the set of three but changes a slot.)
-    static func homeChanged(since entry: [Int]?, _ d: UserDefaults = .standard) -> Bool { entry.map { $0 != JellyRoster.savedIDs(d) } ?? false }
-    @discardableResult
-    func campVisitEnded(_ d: UserDefaults = .standard) -> Bool {
-        let changed = Self.homeChanged(since: campEntryHome, d)
-        campEntryHome = nil
-        if changed { rebuildRoom() }
-        return changed
-    }
-    /// The room is rebuilt from the saved lists (enterGame, callable): the caller has done `care.leftActive(); voice.training.save(); voice.cancel()`.
-    func rebuildRoom() { enterGame() }
-
-    enum CampMove: Equatable { case bringHome(Int), sendToCamp(Int), swap(in: Int, out: Int) }
-    /// One move between home and Camp, against the lists saved in `d`: the rule (refused = false, nothing written), the frozen clocks of the one coming home reset to `now`,
-    /// and the crash-safe write. Pure of the room: the live flow's `campBringHome` / `campSendToCamp` / `campSwap` call it, tests call it with a suite.
-    @discardableResult
-    static func campMove(_ move: CampMove, now: Date = Date(), _ d: UserDefaults = .standard) -> Bool {
-        let old = JellyCamp.savedLists(d)
-        let result: JellyCamp.Lists?
-        let coming: Int, going: Int
-        switch move {
-        case .bringHome(let id): result = JellyCamp.bringHome(id, home: old.home, camp: old.camp); coming = id; going = -1
-        case .sendToCamp(let id): result = JellyCamp.sendToCamp(id, home: old.home, camp: old.camp); coming = -1; going = id
-        case .swap(let inID, let out): result = JellyCamp.swap(in: inID, out: out, home: old.home, camp: old.camp); coming = inID; going = out
-        }
-        guard let new = result, JellyCamp.isConsistent(new) else { return false }
-        if going >= 0 { JellyCamp.settleCondition(going, now: now, d) }          // the one leaving: its condition decay so far is written in before its clocks stop
-        if coming >= 0 { JellyCamp.restamp(coming, now: now, d) }          // the one arriving: its clocks start again from now
-        return JellyCamp.commit(from: old, to: new, d)
-    }
-    /// After a live move: no hot-swap of bodies (the room is rebuilt on Home), a dev `-SetRoster` must not put the old list back, slot-numbered Siri / widget routes are stale,
-    /// and nobody "arrives" (the newcomer flags stay off: the arrival would welcome the last slot).
-    func afterCampMove() {
-        JellyRoster.setRosterSuspended = true
-        GameRouter.shared.clearPending()
-        GameCare.newcomerPending = false; GameCare.newcomerWithOthers = false
-        welcome = nil
-    }
-    @discardableResult func campBringHome(_ id: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.bringHome(id), now: now, d); if ok { afterCampMove() }; return ok }
-    @discardableResult func campSendToCamp(_ id: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.sendToCamp(id), now: now, d); if ok { afterCampMove() }; return ok }
-    @discardableResult func campSwap(in inID: Int, out outID: Int, now: Date = Date(), defaults d: UserDefaults = .standard) -> Bool { let ok = Self.campMove(.swap(in: inID, out: outID), now: now, d); if ok { afterCampMove() }; return ok }
-    /// "Say goodbye": the creature at Camp is let go for good (JellyCamp.letGo: marker, 100 coins once, purge). The yard shows the confirmation (press and hold) first.
-    @MainActor @discardableResult func campSayGoodbye(_ id: Int, defaults d: UserDefaults = .standard) -> Bool { let ok = JellyCamp.letGo(id, d); if ok { afterCampMove() }; return ok }
-    /// Whether a purchase would really have a place right now (home or Camp), read from the save: the Jelly Spring asks BEFORE it takes any coins.
-    static func canPlaceNew(_ d: UserDefaults = .standard) -> Bool {
-        let l = JellyCamp.savedLists(d)
-        return JellyCamp.destination(home: l.home.count, camp: l.camp.count) != .full
-    }
-
-    /// A Jelbie of `species` is chosen, named and paid for (`variant` = the Spring colour taken with him, nil = classic): he gets his INSTANCE id (the species id when he is
-    /// the first of his kind at home, else a fresh id from the counter: a second Bob is allowed), a fresh start for his state, his colour and name, and joins the roster; then the room.
-    /// The species map is written by `allocateInstance` before the roster is saved, so the new id is valid when the roster is read back.
-    /// Where a bought creature ended up (`placeNew`).
-    struct Placement: Equatable { let id: Int; let destination: JellyCamp.Destination }
-
-    /// The list side of a purchase, against `d`: the creature gets its instance id (allocated against home AND Camp, so a Camp Bob's id is never reused), a fresh start for its
-    /// state, colour, traits and name, and joins home (fewer than 3 there) or Camp. nil, and nothing written, when home and Camp are both full.
-    static func placeNew(species s: Int, name: String, variant: JellyVariant?, traits: JellyTraits?, first: Bool, _ d: UserDefaults = .standard) -> Placement? {
-        var ids = first ? [] : JellyRoster.savedIDs(d)
-        let camp = first ? [] : JellyCamp.load(home: ids, d)
-        let dest = JellyCamp.destination(home: ids.count, camp: camp.count)
-        guard dest != .full else { return nil }
-        let id = JellyRoster.allocateInstance(species: s, roster: JellyCamp.owned(home: ids, camp: camp), d)
-        resetCharacterState(id, d)          // always: a preview (or an old, released slot) may have left something under his keys
-        JellyVariants.adopt(id, variant, d)
-        JellyTraitsBook.adopt(id, traits, d)          // his personality, jars and favourite snack (his starting stats seed from it when his profile is first built)
-        if dest == .home { ids.append(id); JellyRoster.save(ids, to: d) } else { JellyCamp.addNew(id, camp: camp, d) }
-        JellyRoster.setName(id, name, d)
-        d.set(true, forKey: startedKey)
-        return Placement(id: id, destination: dest)
-    }
-
-    func bringHome(species s: Int, name: String, variant: JellyVariant? = nil, traits: JellyTraits? = nil, defaults d: UserDefaults = .standard) {
-        let first = phase == .adopt(.first)
-        let pendingCoins = DevArgs.enabled ? d.object(forKey: Self.firstCoinsKey) as? Int : nil          // `-NewGame first`: read before the wipe below
-        if first { oldSaveSnapshot = nil; if Self.hasSave(d) { Self.wipeAll() } }          // the new game really starts here: the previous save (if any) is replaced now, not when "Start over" was tapped
-        JellyRoster.setRosterSuspended = true          // a developer `-SetRoster` must never put the old list back over the roster that now holds him
-        guard let placed = Self.placeNew(species: s, name: name, variant: variant, traits: traits, first: first, d) else { enterGame(); return }          // home and Camp are full (the picker does not let it get here)
-        let id = placed.id
-        if placed.destination == .camp {          // home is full: he stays at Camp. No arrival (the newcomer flags stay off), no stale slot route
-            GameRouter.shared.clearPending()
-            GameCare.newcomerPending = false; GameCare.newcomerWithOthers = false
-            welcome = nil
-            campArrival = id
-            campNote = SpringStates.roomNote(name: JellyRoster.nameOf(id))
-            enterGame()          // back to the room as adoption always does (the home list is unchanged; nobody arrives)
-            return
-        }
-        if DevArgs.enabled { Self.applyPendingFirstCoins(pendingCoins ?? DevArgs.phoneNewGameCoins, first: first, defaults: d) }          // the room's wallet is created after this (it reads the key in init), so it shows the balance at once
-        // the first day at home in the REAL room (FirstDayTour.swift); .card = the old illustrated screen
-        let room = first && FirstDayStyle.current == .room && FirstDayTour.shared.arm(name: name, replay: false, reduceMotion: A11ySettings.shared.reduceMotion || UIAccessibility.isReduceMotionEnabled)
-        GameCare.newcomerPending = true; GameCare.newcomerWithOthers = JellyRoster.savedIDs(d).count > 1 || FirstDayTour.shared.armed          // (others at home, or the tour's run-in: the curtain is held until he is off-screen)
-        if room { welcome = nil; enterGame(); return }          // the tour says "Welcome home" itself
-        if first { welcome = nil; phase = .firstDay(id, name, false); return }          // the first day at home says "Welcome home" itself
-        welcome = JellyRoster.nameOf(id)
-        enterGame()
-    }
-
-    /// The first-day-home beat is over (or skipped): into the room. A new game's Jelbie starts fresh again (the preview wrote to his keys).
-    func finishFirstDay() {
-        guard case .firstDay(let c, _, let replay) = phase else { return }
-        if !replay { Self.resetCharacterState(c) }
-        enterGame()
-    }
-
-    private func enterGame() {
-        JellyRoster.current = JellyRoster.launchIDs()
-        LaunchGate.shared.hold(.resume)          // the short curtain covers the room building
-        session += 1
-        phase = .game
-    }
-
-    // MARK: saves
-
-    /// Posted after a wipe: observers (JellyNames, ...) drop their in-memory copies of the save.
-    static let didWipe = Notification.Name("JelbiesDidWipe")
-
-    /// Everything the app saved: this app's defaults, the old BobSave.json, the App Group files (widget snapshot + portraits), the Photos album,
-    /// widget timelines and Live Activities. (The intro-seen flag survives.)
-    static func wipeAll() {
-        let introSeen = UserDefaults.standard.bool(forKey: IntroGate.seenKey)
-        if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
-        if introSeen { IntroGate.markSeen() }          // starting over does not replay the intro
-        try? FileManager.default.removeItem(at: URL.applicationSupportDirectory.appending(path: "BobSave.json"))
-        let fm = FileManager.default
-        if let group = JellyShare.containerURL, let items = try? fm.contentsOfDirectory(at: group, includingPropertiesForKeys: [.isRegularFileKey]) {
-            for u in items where (try? u.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true { try? fm.removeItem(at: u) }          // jellies.json, portrait-N.png, the Siri queue (not the group's Library)
-        }
-        try? fm.removeItem(at: URL.documentsDirectory.appending(path: "Photos", directoryHint: .isDirectory))
-        WidgetCenter.shared.reloadAllTimelines()
-        let live = Activity<JelbiesActivityAttributes>.activities          // snapshot now: a Live Activity started later must not be ended by this
-        Task { for a in live { await a.end(nil, dismissalPolicy: .immediate) } }
-        JellyRoster.names = JellyRoster.loadNames()
-        JellyRoster.reloadSpecies()          // the duplicates' species map, counter and names died with the domain
-        JellyVariants.reload()
-        JellyTraitsBook.reload()
-        JellyRoster.current = [0]
-        DecorField.shared.set([])
-        DayClock.shared.resetForNewGame()          // Day 1, 8:00
-        GameRouter.shared.clearPending()          // a Siri / widget route asked before "New Game" must not fire on the new game
-        NotificationCenter.default.post(name: didWipe, object: nil)
-    }
-
-    /// A newcomer starts fresh: whatever a preview (the Adoption Center's stage) saved under his keys goes.
-    static func resetCharacterState(_ c: Int, _ d: UserDefaults = .standard) {
-        for k in [JellyKeys.needs(c), JellyKeys.grime(c), JellyKeys.words(c), JellyKeys.stats(c), JellyKeys.perks(c)] { d.removeObject(forKey: k) }
-        let stats = JellyKeys.stats(c)          // the stats' condition, meal diary and dances live under suffixed keys: a newcomer starts without them too
-        for s in [".cond", ".meals", ".dances"] { d.removeObject(forKey: stats + s) }          // (JellyTraits.v1 stays: the seed comes from it when his profile is first built)
-    }
-}
-
-/// The room, rebuilt per session (the body has no inputs that change otherwise, so SwiftUI does not re-make the game model).
-struct GameHost: View {
-    let session: Int
-    var body: some View { GameScreen().id(session) }
-}
-
-/// Adoption prices (Drops). Rationale: a race pays 250-1500 for a win, so the second Jelbie (500) is about two Puddle wins and the third (800) a few more, well above the dearest trick page
-/// (55) and decor piece (90), so the room fills over weeks. A rare Jelly Spring colour (an exclusive mutation) costs +300 on top, so the most anyone pays is 1,100. The first Jelbie of a new game is free.
-enum AdoptionPrice {
-    static let special = 2000
-    static let second = 500, third = 800, rareSurcharge = 300
-    /// Teddy, Pearl and Panda (Jelly Spring specials): 2,000 JellyCoins each, whichever slot they fill. That is 2.5x the dearest ordinary adoption (800) and 1.8x
-    /// the dearest rare colour (1,100): a long saving goal (about 2 Splash wins), so they feel earned. A special never carries a rare colour or the rare surcharge.
-    /// Cost of the next Jelbie when `home` are in the room (nil = the room is full); `rare` = the offered colour is a rare mutation (+300; never on the free first gift).
-    /// With Jelmiko Camp: the same prices while fewer than 3 are home; with home full a new one goes to Camp for what a third costs (800, rare 1,100, special 2,000) until Camp holds
-    /// `JellyCamp.cap`; nil when both are full (nothing is bought, nothing is paid).
-    static func next(home: Int, camp: Int, rare: Bool = false, special: Bool = false) -> Int? {
-        if home < JellyRoster.maxCount { return next(home: home, rare: rare, special: special) }
-        guard camp < JellyCamp.cap else { return nil }
-        return special ? Self.special : third + (rare ? rareSurcharge : 0)
-    }
-    static func next(home: Int, rare: Bool = false, special: Bool = false) -> Int? {
-        if special { return home < 1 ? 0 : (home < JellyRoster.maxCount ? Self.special : nil) }
-        switch home { case ..<1: return 0; case 1: return second + (rare ? rareSurcharge : 0); case 2: return third + (rare ? rareSurcharge : 0); default: return nil }
-    }
-}
-
-/// "<name> is at Jelmiko Camp": a calm line in the room for a few seconds (no hearts, no arrival).
+    /// "<name> is at Jelmiko Camp": a calm line on the one message bar (UI/GameMessageCenter.swift), then the flow's note is cleared.
 struct CampNoteBanner: View {
     let text: String
     var gone: () -> Void
     var body: some View {
-        Text(text).font(SK.font(20, .black)).foregroundStyle(SK.ink)
-            .padding(.horizontal, 20).frame(minHeight: 46).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
-            .offset(y: -140).allowsHitTesting(false)
-            .onAppear { Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
-            .accessibilityLabel(text).accessibilityIdentifier("camp-note")
-            .transition(.opacity)
+        Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
+            .onAppear {
+                GameMessageCenter.shared.post(text, identifier: "camp-note")
+                Task { try? await Task.sleep(nanoseconds: 200_000_000); gone() }
+            }
     }
 }
 
@@ -487,12 +299,9 @@ struct WelcomeBanner: View {
                     .offset(x: CGFloat(i - 3) * 38, y: up ? -170 - CGFloat(i % 3) * 30 : 20).opacity(up ? 0 : 0.95)
                     .animation(.easeOut(duration: 2.2).delay(Double(i) * 0.1), value: up)
             }
-            Text("Welcome home, \(name)!").font(SK.font(22, .black)).foregroundStyle(SK.ink)
-                .padding(.horizontal, 20).frame(minHeight: 50).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
-                .offset(y: -140)
         }
         .allowsHitTesting(false)
-        .onAppear { up = true; Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
+        .onAppear { up = true; GameMessageCenter.shared.post("Welcome home, \(name)!", identifier: "welcome-home"); Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Welcome home, \(name)")
         .transition(.opacity)

@@ -59,6 +59,12 @@ struct GameScreen: View {
     private var a11yMotionReduced: Bool { reduceMotionEnv || A11ySettings.shared.reduceMotion }
     private var cleaning: Bool { model.care.bath.active }
     private var racing: Bool { model.care.tripActive || model.care.play.active }          // (Play mode hides the HUD like a trip: Done is its way out)
+    /// Tells the message bar (and the tip cards) where the HUD's top rows end: the settings / coin row, plus the "Sleep until morning" pill when it is up. Never above the default band.
+    private func updateMessageTop() {
+        let info: CGFloat = (focus.isActive || cleaning || racing) ? 0 : hudInfoH
+        GameMessageLayout.hudBottom = max(GameMessageLayout.defaultHudBottom, 8 + hudTopH + 8 + (info > 0 ? info + 8 : 0))
+    }
+
     private func setUpSelect() {
         let sel = model.care.select
         if let l = SelectPreview.blobsFromLaunchArguments() { sel.setBlobs(l) }
@@ -129,7 +135,7 @@ struct GameScreen: View {
 
             MusicBubbleView(care: model.care).photoHidden()          // the dancers' music-note thought bubbles (Music Ears, Needs/MusicBubbleView.swift)
 
-            CaptionsView(center: .shared).photoHidden()          // sound captions (Accessibility settings; off by default)
+            CuddleNoticePoster(care: model.care)          // the close-up's "too hungry to cuddle" line goes to the one message bar (UI/GameMessageCenter.swift, with the sound captions)
 
             RefusalLabel(care: model.care).photoHidden()
 
@@ -183,13 +189,12 @@ struct GameScreen: View {
                             .transition(.opacity)
                         }
                     }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudTopH = $0 * ps }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudTopH = $0 * ps; updateMessageTop() }
                     .accessibilityElement(children: .contain)
                     .accessibilitySortPriority(4)          // VoiceOver order: top bar, left rail (book, bag, Go out, mic), then the paw
-                    CuddleNoticeRow(care: model.care)          // "Teddy is too hungry to cuddle": under "Let them go" while a need blocks the hearts
                     if !focus.isActive, !cleaning, !racing {
                         HStack(spacing: 8) { SleepUntilMorningButton(care: model.care); Spacer() }
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudInfoH = $0 }
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { hudInfoH = $0; updateMessageTop() }
                     }
                     Spacer()
                     if focus.showsDock {
@@ -498,12 +503,21 @@ struct GameScreen: View {
                 .presentationBackground(SK.cream)
         }
         .task { await GameScreen.runStoreDemo(model: model) }
-        .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false } }
+        .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
         .onChange(of: model.care.townRequest) { _, _ in                 // voice: "let's race" / "time to train" open the Track for the picked Jelly
             if let s = model.care.townScreen { bookOpen = false; rosterOpen = false; withAnimation(.easeInOut(duration: 0.25)) { town = s } }
         }
         .onAppear { model.care.select.gateDraw = true }
+        .task {          // capture aid (dev arguments only): `-ShowMessage "<text>"` posts that line to the message bar 3 s after the room is up ("a | b" = two lines one after the other; "!text" = an important one)
+            guard DevArgs.enabled, let raw = UserDefaults.standard.string(forKey: "ShowMessage"), !raw.isEmpty else { return }
+            for _ in 0..<300 where LaunchGate.shared.visible { try? await Task.sleep(nanoseconds: 100_000_000) }
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            for part in raw.split(separator: "|") {
+                let t = part.trimmingCharacters(in: .whitespaces)
+                GameMessageCenter.shared.post(t.hasPrefix("!") ? String(t.dropFirst()) : t, priority: t.hasPrefix("!") ? .important : .normal, identifier: "dev-message")
+            }
+        }
         .task {          // capture aid (dev arguments only): `-TipShow <id>` opens that card's screen from the room (the rest open from -StoreOpen / -LobbyAuto / -GameAction clean / -StartPark / -StartCamp)
             guard DevArgs.enabled, let id = TipBook.launchOverrides().show else { return }
             for _ in 0..<300 where LaunchGate.shared.visible { try? await Task.sleep(nanoseconds: 100_000_000) }
@@ -524,6 +538,7 @@ struct GameScreen: View {
         .onAppear {          // first-time tips: the game's state for the suppression, the heads for the keep-off check, the dev launch arguments (TipsReset / TipShow)
             let care = model.care
             TipWindowHost.care = care
+            GameMessageHost.install()          // the one message bar's window (top left, under the top-left control)
             TipBook.shared.context = { [weak care] in care.map { TipContext.live($0) } ?? TipContext() }
             TipBook.shared.applyLaunchOverrides()
         }
@@ -1694,28 +1709,14 @@ struct FocusHint: View {
         UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelmiko to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
     }
 
+    /// The hint is a line on the one message bar (UI/GameMessageCenter.swift): posted once when the close-up opens, for the first few visits.
     var body: some View {
-        if shown {
-            Text(text)
-                .jFont(15, .semibold)
-                .foregroundStyle(FocusStyle.brown)
-                .padding(.horizontal, 18).padding(.vertical, 10)
-                .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 7, y: 3))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-                .opacity(visible ? 1 : 0)
-                .allowsHitTesting(false)
-                .accessibilityIdentifier("focus-hint")
-                .task {
-                    UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
-                    if sticky {          // stays until the first touch or mic use (or 60 s, so it never lingers for good)
-                        var waited = 0.0
-                        while !Task.isCancelled, waited < 60, !interacted() { try? await Task.sleep(nanoseconds: 250_000_000); waited += 0.25 }
-                    } else {
-                        try? await Task.sleep(nanoseconds: 3_500_000_000)
-                    }
-                    withAnimation(.easeOut(duration: 0.5)) { visible = false }
-                }
-        }
+        Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
+            .onAppear {
+                guard shown else { return }
+                UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
+                GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint")
+            }
     }
 }
 

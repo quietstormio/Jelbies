@@ -101,24 +101,15 @@ struct VoiceTip: View {
     @State private var shown = UserDefaults.standard.integer(forKey: VoiceTip.key) == 0 || UserDefaults.standard.bool(forKey: "VoiceReset")
     @State private var visible = true
 
+    /// A line on the one message bar (UI/GameMessageCenter.swift), not a pill over the left rail.
     var body: some View {
-        if shown, voice.openCount == 0, !FirstDayTour.shared.holdsGame {          // (the first-day tour points at the mic itself)
-            Text("Hold to talk")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(FocusStyle.brown)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 3))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
-                .opacity(visible ? 1 : 0)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .accessibilityIdentifier("voice-tip")
-                .task {
-                    try? await Task.sleep(nanoseconds: 9_000_000_000)
-                    withAnimation(.easeOut(duration: 0.5)) { visible = false }
-                    UserDefaults.standard.set(1, forKey: VoiceTip.key)
-                }
-        }
+        Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
+            .task(id: shown && voice.openCount == 0 && !FirstDayTour.shared.holdsGame) {
+                guard shown, voice.openCount == 0, !FirstDayTour.shared.holdsGame else { return }
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                GameMessageCenter.shared.post("Hold the mic to talk", priority: .chatty, identifier: "voice-tip")
+                UserDefaults.standard.set(1, forKey: VoiceTip.key)
+            }
     }
 }
 

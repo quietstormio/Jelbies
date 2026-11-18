@@ -72,10 +72,10 @@ final class ParkTrip {
         card = nil; phase = .refreshOut
     }
     func goHome() {
-        guard canGoHome else { return }
+        guard canGoHome else { homeLine = nil; return }
         card = nil; phase = .leaveOut
     }
-    func finish() { gift = nil; phase = .off; wipe = 0; holdFrames = 0; card = nil; place = .park }
+    func finish() { gift = nil; homeLine = nil; phase = .off; wipe = 0; holdFrames = 0; card = nil; place = .park }
 
     /// Once per fixed step. `blocked`: something started under the fade (checked while fading out to the park).
     func step(dt: Float, blocked: Bool = false) {
@@ -95,10 +95,10 @@ final class ParkTrip {
             if wipe <= 0 { phase = .playing }
         case .leaveOut:
             wipe = min(wipe + dt / ParkTuning.fadeOut, 1)
-            if wipe >= 1 { phase = .leaveHold; holdFrames = 0; onSwap(.home) }
+            if wipe >= 1 { phase = .leaveHold; holdFrames = 0; toast = nil; toastSymbols = []; GameMessageCenter.shared.dismiss(scope: .outing); onSwap(.home) }          // (a line said out there is not shown back at home)
         case .leaveHold:
             holdFrames += 1
-            if holdFrames >= ParkTuning.holdSteps { phase = .leaveIn }
+            if holdFrames >= ParkTuning.holdSteps { phase = .leaveIn; if let l = homeLine { homeLine = nil; GameMessageCenter.shared.post(l, scope: .none, identifier: "park-toast") } }
         case .leaveIn:
             wipe = max(wipe - dt / ParkTuning.fadeIn, 0)
             if wipe <= 0 { finish() }
@@ -115,5 +115,11 @@ final class ParkTrip {
     }
 
     func showGift(friend: String, itemID: String) { gift = (friend, itemID); giftT = 0 }
-    func say(_ s: String, symbols: [String] = []) { toast = s; toastSymbols = symbols; toastT = 0 }
+    /// A friendly line: drawn by the one message bar (UI/GameMessageCenter.swift); `toast` stays as the model's record of it. Said while the park / camp is up, it goes with the outing (`leaveOut` below).
+    /// A line to show once the way home is done (the bedtime auto-return).
+    var homeLine: String?
+    func say(_ s: String, symbols: [String] = []) {
+        toast = s; toastSymbols = symbols; toastT = 0
+        GameMessageCenter.shared.post(s, icon: symbols.first, scope: phase == .playing ? .outing : .none, identifier: "park-toast")
+    }
 }

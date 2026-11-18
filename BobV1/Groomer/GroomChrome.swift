@@ -55,25 +55,9 @@ struct GroomChrome: View {
                 .animation(reduce ? nil : .spring(response: 0.35, dampingFraction: 0.6), value: groom.cheerT > 0.35)
                 .allowsHitTesting(false).transition(.opacity)
             }
-            if let t = groom.toast {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Text(t).font(SK.font(15, .heavy)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                            .accessibilityIdentifier("groom-toast")
-                        Spacer(minLength: 20)
-                    }
-                    .padding(.leading, 16).padding(.bottom, 24)
-                }
-                .allowsHitTesting(false).transition(.opacity)
-            }
         }
-        .animation(.easeInOut(duration: 0.2), value: groom.toast)
         .animation(.easeInOut(duration: 0.2), value: groom.picking)
-        .onChange(of: groom.toast) { _, t in if let t { A11yAnnounce.say(t) } }
-        .allowsHitTesting(groom.picking || groom.inScene || groom.toast != nil)
+        .allowsHitTesting(groom.picking || groom.inScene)
     }
 
     // MARK: the picker
