@@ -2514,6 +2514,10 @@ final class BlobBrain {
         var window = false                          // inside a chomp / gulp window (mouth may be open)
         var chewV = 0, afterV = 0, finishV = 0          // this bite's variants (0 = today's)
         var crouch: Float = 0.9
+        var refined = 0                                 // closed-loop corrections made for this bite's reach
+        var bias = SIMD3<Float>(0, 0, 0)                // the soft body's tip minus the model's, smoothed
+        var extra: Float = 0                            // seconds the lean was held for the tip to arrive
+        var grabS: Float = Float(ArmPath.nubGrabS)          // this bite's nub swing (meal-reach: solved per bite, a point on the same stub path; the old value 0.30 with -MealReach 0)
         var pauseTotal: Float = 0, pauseLook: Float = 0          // the pause after a bite (s), and the twist (rad) he glances with during it
         var wait: Float = 0                         // seconds still to stand at the place (the plan's start delay, then a pause after each bite / gulp): the lean has not started, so no pose is frozen
         var rng: UInt64 = 0
@@ -2608,22 +2612,61 @@ final class BlobBrain {
         dine.miss = bestMiss
     }
 
-    /// TEMP probe (meal-reach-r1): best miss per crouch and nub parameter for a target.
-    func dineReachProbe(_ sim: SoftBody, target: SIMD3<Float>) -> String {
-        let m = geom.mid, w = SIMD2(px, pz) + rotXZ(geom.midOff, yaw)
-        var out = ""
-        for sg: Double in [0.15, 0.30, 0.45] {
-            out += " s\(sg):"
-            for cr: Float in [0.7, 0.8, 0.9, 1.0] {
-                var best: Float = .infinity
-                for side in [-1, 1] {
-                    let r = DineGeometry.solveReach(hold: DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: sg), side: side), target: target, m: m, w: SIMD3(w.x, sim.floorY + m.y, w.y), c0: sim.restCentroid, yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side)
-                    best = min(best, r.miss)
+    /// meal-reach-r1: the food reach with a radial freedom. The body-led solve reaches a shell of fixed radius about the planted pivot, so a piece nearer or farther than that shell was missed by up to 18 cm
+    /// (the nub tip hung in the air and the piece slid to it). Per bite the nub swing `s` (a point on the same stub path: the arm is never longer) and the crouch (0.75 ... 1.0, as near the drawn
+    /// variance depth as it can) are chosen so the tip meets the piece; the lean, twist, pitch and roll are solved as ever.
+    /// How much higher (m per unit of lost height) the real body's centroid sits than the model's pinned pivot (measured in `MealReachTests`: 0.066 / 0.105 / 0.079 at crouch 0.85 / 0.75 / 0.80).
+    nonisolated static let dineRise: Float = 0.42
+    /// Closed loop for the grab: the model and the soft body differ (the body lags and sags), so from half way through the lean the tip's real position is compared with the model's for the pose being
+    /// applied; the (smoothed) difference shifts the target for a warm re-solve of the turn / pitch / roll (the arm parameter, the side and the crouch stay). Returns the real tip-to-piece distance.
+    @discardableResult
+    func refineDineReach(_ sim: SoftBody, piece: SIMD3<Float>) -> Float {
+        let m = geom.mid, w2 = SIMD2(px, pz) + rotXZ(geom.midOff, yaw)
+        let cr = dine.reach.squash, side = dine.side
+        let w = SIMD3<Float>(w2.x, sim.floorY + m.y + Self.dineRise * (1 - cr), w2.y)
+        let holdNow = DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: Double(dine.armS)), side: side)
+        let hold = DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: Double(dine.grabS)), side: side)
+        let cur = dine.cur
+        let wCur = SIMD3<Float>(w2.x, sim.floorY + m.y + Self.dineRise * (1 - cur.squash), w2.y)
+        let model = DineGeometry.reachTip(hold: holdNow, pose: cur, m: m, w: wCur, c0: sim.restCentroid, yaw: yaw, pitchBase: pitchBase)
+        let bp = sim.bodyPose(iterations: 3)
+        let actual = bodyPointWorld(holdNow, sim: sim, pose: (bp.centroid, bp.rotation))
+        let raw = actual - model
+        dine.bias = dine.refined == 0 ? raw : dine.bias + (raw - dine.bias) * 0.4
+        dine.refined += 1
+        let r = DineGeometry.solveReach(hold: hold, target: piece - dine.bias, m: m, w: w, c0: sim.restCentroid, yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side, start: dine.reach)
+        dine.reach = r.pose
+        return simd_distance(actual, piece)
+    }
+
+    func solveDineReachRadial(_ sim: SoftBody, target: SIMD3<Float>, crouch pref: Float) {
+        let m = geom.mid, w2 = SIMD2(px, pz) + rotXZ(geom.midOff, yaw)
+        let std = Float(ArmPath.nubGrabS)
+        func solve(_ sg: Float, _ cr: Float, fast: Bool) -> (side: Int, r: (pose: ReachPose, miss: Float)) {
+            let w = SIMD3<Float>(w2.x, sim.floorY + m.y + Self.dineRise * (1 - cr), w2.y)          // (the soft body stands this much higher than the pinned model when crouched: measured 0.4 (1 - crouch))
+            var best: (side: Int, r: (pose: ReachPose, miss: Float))?
+            for side in [-1, 1] {
+                let r = DineGeometry.solveReach(hold: DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: Double(sg)), side: side), target: target, m: m, w: w, c0: sim.restCentroid,
+                                                yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side, fast: fast)
+                if best == nil || r.miss < best!.r.miss { best = (side, r) }
+            }
+            return best!
+        }
+        func cost(_ miss: Float, _ sg: Float, _ cr: Float) -> Float { miss + 0.05 * abs(cr - pref) + 0.03 * abs(sg - std) }
+        var bestC = Float.infinity, bs = std, bc = pref
+        var first = solve(std, pref, fast: true)
+        bestC = cost(first.r.miss, std, pref)
+        if first.r.miss > 0.006 {
+            for sg: Float in [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45] {
+                for cr: Float in [pref, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0] {
+                    let r = solve(sg, cr, fast: true)
+                    let c = cost(r.r.miss, sg, cr)
+                    if c < bestC { bestC = c; bs = sg; bc = cr; first = r }
                 }
-                out += String(format: " %.1f", best * 100)
             }
         }
-        return out
+        let fin = solve(bs, bc, fast: false)
+        dine.side = fin.side; dine.reach = fin.r.pose; dine.miss = fin.r.miss; dine.grabS = bs; dine.crouch = bc
     }
 
     func applyDine(_ sim: SoftBody, _ skinner: Skinner, pose: ReachPose, mouth: Float, eyes: Float, pulse: Float) {
@@ -2665,6 +2708,7 @@ final class BlobBrain {
             if waiting { pose.twist = dinePauseTwist(); break }
             if !dine.entered {                      // first tick of this lean: solve the reach (turn / pitch / roll about the planted feet)
                 dine.entered = true
+                dine.refined = 0; dine.extra = 0
                 dine.from = ReachPose()
                 dine.crouch = dinePlan.motion ? 0.8 + 0.2 * VarianceRNG.unit(&dine.rng) : 0.9
                 if dine.mode == .fork {
@@ -2674,9 +2718,11 @@ final class BlobBrain {
                             + DineGeometry.forkDir(s: grabS, side: s, grabS: grabS) * DineGeometry.forkLength
                     }, target: target, crouch: dine.crouch)
                 } else {
-                    let berry = h.piece(dine.k) + SIMD3(0, 0.02, 0)
-                    solveDineReach(sim, holds: { DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: Double(grabS)), side: $0) },
-                                   target: berry, crouch: dine.crouch)
+                    let berry = h.piece(dine.k) + (GameCare.mealReach ? .zero : SIMD3(0, 0.02, 0))
+                    dine.grabS = grabS
+                    if GameCare.mealReach { solveDineReachRadial(sim, target: berry, crouch: dine.crouch) }
+                    else { solveDineReach(sim, holds: { DineGeometry.mirrored(DineGeometry.holdPoint(path: .nubToMouth, s: Double(grabS)), side: $0) },
+                                          target: berry, crouch: dine.crouch) }
                 }
                 armSide = dine.side
                 if dine.mode == .fork && !dine.forkHeld {            // a small puff at his nub and the fork pops into his hand, tines up
@@ -2685,18 +2731,29 @@ final class BlobBrain {
                     h.forkAppear(bodyPointWorld(nubHoldRest(s: 0), sim: sim, pose: (centroid: bp.centroid, rotation: bp.rotation)))
                 }
             }
+            var tipErr: Float = 0
+            if GameCare.mealReach, dine.mode == .finger, dine.t / Self.tLean >= 0.4 { tipErr = refineDineReach(sim, piece: h.piece(dine.k)) }
             let u = MotionCurve.spring(dine.t / Self.tLean)
             pose = lerpPose(dine.from, dine.reach, u)
-            armTarget = grabS * min(1, dine.t / Self.tLean * 1.2)
-            if dine.t >= Self.tLean { dine.phase = .grab; dine.t = 0; dine.entered = false }
+            armTarget = dine.grabS * min(1, dine.t / Self.tLean * 1.2)
+            if dine.t >= Self.tLean {
+                // (meal-reach: the lean waits, at most 0.15 s, for the tip to be within 1 cm of the piece)
+                if GameCare.mealReach, dine.mode == .finger, tipErr > 0.010, dine.extra < 0.15 { dine.extra += dt; dine.t = Self.tLean }
+                else { dine.phase = .grab; dine.t = 0; dine.entered = false }
+            }
         case .grab:
-            pose = dine.reach; armTarget = grabS
+            if GameCare.mealReach, dine.mode == .finger { refineDineReach(sim, piece: h.piece(dine.k)) }
+            pose = dine.reach; armTarget = dine.grabS
+            if !dine.entered {
+                dine.entered = true
+                if dine.mode == .finger { MealTrace.log("reach \(steerID) k\(dine.k) tipToPiece=\(String(format: "%.2f", simd_distance(nubTipWorld(sim: sim), h.piece(dine.k)) * 100))cm miss=\(String(format: "%.2f", dine.miss * 100)) s=\(String(format: "%.2f", dine.grabS)) crouch=\(String(format: "%.2f", dine.crouch)) at=\(String(format: "%.2f,%.2f", px, pz))") }
+            }
             if !dine.holding, h.begin() { dine.holding = true }
             if dine.t >= Self.tGrab { dine.phase = .straighten; dine.t = 0; dine.entered = false }
         case .straighten:
             let u = MotionCurve.spring(dine.t / Self.tStraighten)
             pose = lerpPose(dine.reach, ReachPose(), u)
-            armTarget = dine.t < 0.6 * Self.tStraighten ? grabS : 0.02        // the nub cocks back (still the stub, never longer) for the flick
+            armTarget = dine.t < 0.6 * Self.tStraighten ? dine.grabS : 0.02        // the nub cocks back (still the stub, never longer) for the flick
             if dine.t >= Self.tStraighten { dine.phase = .chew; dine.t = 0; dine.entered = false; dinePickVariants() }
         case .chew:
             // THE TOSS: a quick flick of the stub (the nub swings forward, never longer than its rest length) launches the bite in a small arc into his

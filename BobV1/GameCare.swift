@@ -571,7 +571,6 @@ final class GameCare {
     /// tip touches the piece at the grab. `-MealReach 0` (dev builds) = the old stand and reach.
     nonisolated(unsafe) static var mealReach: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReach") != nil && UserDefaults.standard.integer(forKey: "MealReach") == 0)
     nonisolated(unsafe) static var reachCloser: Float = 0
-    nonisolated(unsafe) static var reachMode = 0
     /// The most the nub may stretch past its rest length during the dine grab (a fraction of the rest nub); 0 = never.
     nonisolated(unsafe) static var grabStretch: Double = 0
     func obstacle(_ p: SIMD3<Float>, radius: Float) -> SIMD3<Float> { dining.obstacle(p, radius: radius * RoomLayout.lowPropRadiusScale) }
@@ -658,8 +657,7 @@ final class GameCare {
         default:
             place.stand += SIMD2(sinf(place.yaw), cosf(place.yaw)) * eatCloser
             if mealReach, reachCloser != 0 {
-                var d = SIMD2(sinf(place.yaw), cosf(place.yaw))
-                if reachMode == 1 { let t = dining.origin - place.stand; if simd_length(t) > 0.01 { d = simd_normalize(t) } }
+                let d = SIMD2(sinf(place.yaw), cosf(place.yaw))
                 place.stand += d * reachCloser
             }
             let left = dining.bitesLeft[i] + (dining.forkBite[i] ? 1 : 0)

@@ -74,10 +74,16 @@ nonisolated enum DineGeometry {
         return a + R * SIMD3((r.x - c0.x) * sxz, (r.y - c0.y) * sy, (r.z - c0.z) * sxz)
     }
 
+    /// World position of rest point `hold` under pose `p` (the same model `solveReach` fits).
+    static func reachTip(hold: SIMD3<Float>, pose p: ReachPose, m: SIMD3<Float>, w: SIMD3<Float>, c0: SIMD3<Float>, yaw: Float, pitchBase: Float) -> SIMD3<Float> {
+        let q = yawQuat(yaw + p.twist) * simd_quatf(angle: p.pitch + pitchBase, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: p.roll, axis: SIMD3(0, 0, 1))
+        return world(hold, q: q, sy: p.squash, m: m, w: w, c0: c0)
+    }
+
     /// Body-led reach: finds turn / pitch / roll (crouch fixed) so `hold` (the piece point on the nub, rest coordinates) meets `target`
     /// (world), pivoting on `m` (rest) pinned at `w` (world). Coarse grid + shrinking coordinate descent; returns the pose and the miss (u).
     static func solveReach(hold: SIMD3<Float>, target: SIMD3<Float>, m: SIMD3<Float>, w: SIMD3<Float>, c0: SIMD3<Float>,
-                           yaw: Float, pitchBase: Float, crouch: Float, side: Int) -> (pose: ReachPose, miss: Float) {
+                           yaw: Float, pitchBase: Float, crouch: Float, side: Int, fast: Bool = false, start: ReachPose? = nil) -> (pose: ReachPose, miss: Float) {
         func tip(_ p: ReachPose) -> SIMD3<Float> {
             let q = yawQuat(yaw + p.twist) * simd_quatf(angle: p.pitch + pitchBase, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: p.roll, axis: SIMD3(0, 0, 1))
             return world(hold, q: q, sy: p.squash, m: m, w: w, c0: c0)
@@ -86,8 +92,10 @@ nonisolated enum DineGeometry {
             let d = tip(p) - target
             return simd_length_squared(d) + 0.004 * (p.twist * p.twist + p.roll * p.roll) + 0.002 * p.pitch * p.pitch
         }
-        var best = ReachPose(twist: 0, pitch: 0, roll: 0, squash: crouch), bc = cost(best)
-        var tw: Float = -1.6
+        var best = start ?? ReachPose(twist: 0, pitch: 0, roll: 0, squash: crouch), bc = cost(best)
+        if start != nil { best.squash = crouch; bc = cost(best) }
+        var tw: Float = start != nil ? 9 : -1.6          // (a warm start skips the coarse grid)
+        let gT: Float = fast ? 0.2 : 0.1, gP: Float = fast ? 0.2 : 0.1, gR: Float = fast ? 0.3 : 0.1
         while tw <= 1.6 {
             var pt: Float = -0.3
             while pt <= 0.5 {
@@ -96,14 +104,14 @@ nonisolated enum DineGeometry {
                     let p = ReachPose(twist: tw, pitch: pt, roll: rl, squash: crouch)
                     let c = cost(p)
                     if c < bc { bc = c; best = p }
-                    rl += 0.1
+                    rl += gR
                 }
-                pt += 0.1
+                pt += gP
             }
-            tw += 0.1
+            tw += gT
         }
-        var step: Float = 0.05
-        for _ in 0..<14 {
+        var step: Float = start != nil ? 0.03 : 0.05
+        for _ in 0..<(start != nil ? 8 : 14) {
             var improved = false
             for k in 0..<3 {
                 for dir in [Float(-1), 1] {

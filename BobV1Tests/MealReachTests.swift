@@ -37,20 +37,30 @@ final class MealReachTests: XCTestCase {
         r.care.feed(food)
         var tk = Take()
         var seen = Set<Int>()
+        var series: [String] = []
+        defer { for l in series.prefix(40) { print("MEALREACH SERIES \(l)") } }
         r.run(120) {
             let dn = r.care.dining
             var ids: [Int] = []
             for a in r.actors {
                 guard let b = a.brain, case .dine = b.job ?? .goTo(.zero) else { continue }
                 ids.append(a.id)
+                if false, b.dine.phase == .grab, let h = b.dineHooks, b.dine.mode == .finger {
+                    let att = a.sim.attractor, bp = a.sim.bodyPose(iterations: 3)
+                    let dq = simd_length(simd_act(att.rotation.inverse * bp.rotation, SIMD3<Float>(0, 1, 0)) - SIMD3<Float>(0, 1, 0))
+                    series.append("\(a.id)k\(b.dine.k) t\(String(format: "%.3f", b.dine.t)) err \(String(format: "%.1f", simd_distance(b.nubTipWorld(sim: a.sim), h.piece(b.dine.k)) * 100)) rotErr \(String(format: "%.3f", dq)) cenErr \(String(format: "(%.3f,%.3f,%.3f)", bp.centroid.x - att.anchor.x, bp.centroid.y - att.anchor.y, bp.centroid.z - att.anchor.z)) anchorY \(String(format: "%.3f", att.anchor.y)) sq \(String(format: "%.2f", att.squash))")
+                }
                 if b.dine.phase == .grab, b.dine.holding, !seen.contains(a.id * 10 + b.dine.k), let h = b.dineHooks {
                     seen.insert(a.id * 10 + b.dine.k)
                     let tip = b.nubTipWorld(sim: a.sim), piece = h.piece(b.dine.k)
                     let dx = a.floor.x - dn.origin.x
                     let place = dx < -0.5 ? "left" : dx > 0.5 ? "right" : "middle"
-                    if ProcessInfo.processInfo.environment["MEALREACH_VERBOSE"] != nil || true {
+                    do {
+                        if !seen.contains(-1) { seen.insert(-1); print("MEALREACH STANDS \(food) origin \(dn.origin) places \(dn.places.map { String(format: "(%.2f,%.2f)", $0.stand.x - dn.origin.x, $0.stand.y - dn.origin.y) }) layout rel \(dn.layout.places.map { $0.rel }) mealReach \(GameCare.mealReach)") }
+                        let c = a.sim.centroid()
+                        print("MEALREACH CEN \(place) centroid-origin (\(String(format: "%.2f,%.2f", c.x - dn.origin.x, c.z - dn.origin.y))) floor-origin (\(String(format: "%.2f,%.2f", a.floor.x - dn.origin.x, a.floor.y - dn.origin.y)))")
                         let rp = b.dine.reach, fl = a.floor - dn.origin, sc = dn.layout.scale
-                        print("MEALREACH GRAB \(food) \(place) k\(b.dine.k) actual \(String(format: "%.1f", simd_distance(tip, piece) * 100)) pred \(String(format: "%.1f", b.dine.miss * 100)) floorRel(\(String(format: "%.2f,%.2f", fl.x, fl.y))) yaw \(String(format: "%.2f", b.yaw)) pose tw \(String(format: "%.2f", rp.twist)) pi \(String(format: "%.2f", rp.pitch)) ro \(String(format: "%.2f", rp.roll)) sq \(String(format: "%.2f", rp.squash)) side \(b.dine.side) scale \(sc) sideX \(DiningLayout.sideX) piece(\(String(format: "%.2f,%.2f,%.2f", piece.x - dn.origin.x, piece.y, piece.z - dn.origin.y))) tip(\(String(format: "%.2f,%.2f,%.2f", tip.x - dn.origin.x, tip.y, tip.z - dn.origin.y))) probe[c.7 .8 .9 1.0]\(b.dineReachProbe(a.sim, target: piece))")
+                        print("MEALREACH GRAB \(food) \(place) k\(b.dine.k) actual \(String(format: "%.1f", simd_distance(tip, piece) * 100)) pred \(String(format: "%.1f", b.dine.miss * 100)) floorRel(\(String(format: "%.2f,%.2f", fl.x, fl.y))) yaw \(String(format: "%.2f", b.yaw)) pose tw \(String(format: "%.2f", rp.twist)) pi \(String(format: "%.2f", rp.pitch)) ro \(String(format: "%.2f", rp.roll)) sq \(String(format: "%.2f", rp.squash)) side \(b.dine.side) scale \(sc) sideX \(DiningLayout.sideX) piece(\(String(format: "%.2f,%.2f,%.2f", piece.x - dn.origin.x, piece.y, piece.z - dn.origin.y))) tip(\(String(format: "%.2f,%.2f,%.2f", tip.x - dn.origin.x, tip.y, tip.z - dn.origin.y))) s \(String(format: "%.2f", b.dine.grabS)) crouch \(String(format: "%.2f", b.dine.crouch))")
                     }
                     tk.grabs.append(Grab(place: place, k: b.dine.k, miss: simd_distance(tip, piece), crouch: b.dine.crouch, side: b.dine.side))
                 }
@@ -66,11 +76,7 @@ final class MealReachTests: XCTestCase {
                     }
                 }
                 for x in 0..<r.actors.count { for y in (x + 1)..<r.actors.count where ids.contains(x) && ids.contains(y) {
-                    var m = Float.infinity
-                    let A = r.actors[x].sim, B = r.actors[y].sim
-                    for i in stride(from: 0, to: A.n, by: 3) { let p = SIMD2(A.x[3 * i], A.x[3 * i + 2])
-                        for j in stride(from: 0, to: B.n, by: 3) { m = min(m, simd_distance(p, SIMD2(B.x[3 * j], B.x[3 * j + 2]))) } }
-                    tk.minNeighbour = min(tk.minNeighbour, m)
+                    tk.minNeighbour = min(tk.minNeighbour, simd_distance(r.actors[x].floor, r.actors[y].floor) - 0.69)          // (floor points apart minus the footprint)
                 } }
             }
             return r.t > t0 + 2 && !r.care.trayOut
@@ -107,13 +113,6 @@ final class MealReachTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(tk.minNeighbour, 0, "neighbours' gap")
     }
 
-    func testSweepCloser() {
-        for m in [0] { for c: Float in [0] {
-            GameCare.reachCloser = c; GameCare.reachMode = m
-            report("SWEEP mode \(m) closer \(c)", "sushi", take(food: "sushi"))
-        } }
-        GameCare.reachCloser = 0; GameCare.reachMode = 0
-    }
     func testOldReachNumbers() {
         GameCare.mealReach = false
         for f in ["sushi", "cookie"] { report("OLD", f, take(food: f)) }

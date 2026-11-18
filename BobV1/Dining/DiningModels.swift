@@ -108,6 +108,9 @@ nonisolated enum DiningLayout {
     /// 1.3 / 1.2 / 1.12 as the floor allows); the middle one stays at z -1.07 (clears the rim by his real belly), the ends stand beside the tray, a little behind its centre line.
     nonisolated(unsafe) static var ends = false
     static let endsZ: Float = -0.05, endsYaw: Float = .pi / 4
+    /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): the end places of the ENDS layout stand at most this far from the tray centre
+    /// (the sitting used 1.5 / 1.4 / 1.3 / 1.2 as the floor allowed: the nub, a stub, hung 0.8 m from the pieces). `-MealReach 0` = as before.
+    nonisolated(unsafe) static var reachSideX: Float = 1.12
     static var sideYaw: Float { sideX > 1.12 ? 0 : 0.25 }
     static func make(n n0: Int) -> TrayLayout {
         let n = min(max(n0, 1), 3), s = DiningTiming.servingScale(n: n)
@@ -127,9 +130,10 @@ nonisolated enum DiningLayout {
             // 17.6 % wider than before (0.85 -> 1.00). All three Blobs now stand in a row on the far side of the wide tray (the portrait
             // screen cannot hold stands beside it), 1.11 apart, so no belly hangs over a corner: each clears the near rim by his real skin.
             if ends {
+                let sx = GameCare.mealReach ? min(sideX, reachSideX) : sideX
                 return TrayLayout(n: 3, scale: s, half: SIMD2(0.55, 0.6),
-                                  places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-sideX, endsZ), yaw: endsYaw),
-                                           TrayPlace(rel: SIMD2(sideX, endsZ), yaw: -endsYaw)],
+                                  places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-sx, endsZ), yaw: endsYaw),
+                                           TrayPlace(rel: SIMD2(sx, endsZ), yaw: -endsYaw)],
                                   colliderHalf: SIMD2(0.45, 0.3), berryAngles: [-.pi / 2, .pi, 0], ringRadius: 0.4)
             }
             return TrayLayout(n: 3, scale: s, half: SIMD2(1.0 + (sideX - 1.11), 0.6),
