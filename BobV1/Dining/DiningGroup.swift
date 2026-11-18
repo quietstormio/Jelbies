@@ -98,6 +98,8 @@ final class DiningGroup {
     nonisolated(unsafe) static var trayToThem: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealTrayToThem") != nil && UserDefaults.standard.integer(forKey: "MealTrayToThem") == 0)
     nonisolated(unsafe) static var straightWalk: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealStraight") != nil && UserDefaults.standard.integer(forKey: "MealStraight") == 0)
     nonisolated(unsafe) static var wideRow: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealWideRow") != nil && UserDefaults.standard.integer(forKey: "MealWideRow") == 0)
+    /// `endsLayout` (`-MealEnds 0`): the three-place home sitting seats two diners at the tray's two ENDS (45 deg toward tray and camera) and one in the middle behind it (DiningLayout.ends); it wins over `wideRow`.
+    nonisolated(unsafe) static var endsLayout: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealEnds") != nil && UserDefaults.standard.integer(forKey: "MealEnds") == 0)
     private var sideSet = false
     /// This sitting uses the x-ordered places (decided in `start`).
     private var ordered = false
@@ -245,11 +247,12 @@ final class DiningGroup {
         if let fo = forcedOrigin { origin = fo }
         else if let s = MealTrace.takeSpot() { origin = s; MealTrace.log("choose branch=forced spot=(\(s.x),\(s.y)) (-DiningSpot)") }
         else {
-            if Self.wideRow, n == 3 {          // (the widest side spacing the floor holds: 1.45, then 1.3, then the old 1.11)
+            if (Self.wideRow || Self.endsLayout), n == 3 {          // (the widest side spacing the floor holds: wide row 1.45 / 1.3 / 1.11; ends layout 1.3 / 1.2 / 1.12)
                 let js = avoid + brains.indices.map { f($0) }
-                for sx: Float in [1.45, 1.3, 1.11] {
+                DiningLayout.ends = Self.endsLayout
+                for sx: Float in (Self.endsLayout ? [1.3, 1.2, 1.12] : [1.45, 1.3, 1.11]) {
                     DiningLayout.sideX = sx
-                    if sx == 1.11 || !DiningSpot.openSpots(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: js).isEmpty { break }
+                    if sx == 1.11 || sx == 1.12 || !DiningSpot.openSpots(bob: SIMD2(99, 99), layout: DiningLayout.make(n: n), jellies: js).isEmpty { break }
                 }
                 sideSet = true
             }
@@ -431,7 +434,7 @@ final class DiningGroup {
         }
         savedFinished = []; savedGap = []; savedPeers = []
         quietLatch = []
-        if sideSet { DiningLayout.sideX = 1.11; sideSet = false }
+        if sideSet { DiningLayout.sideX = 1.11; DiningLayout.ends = false; sideSet = false }
     }
     /// The meal is dropped (Come here, grabbed, timeout): the tray poofs, what was eaten stays paid.
     func cancel() { guard state != .idle else { return }; end() }
