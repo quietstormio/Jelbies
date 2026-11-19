@@ -125,7 +125,7 @@ final class BlobSelect {
     }
 
     /// Drops the persistent highlight (a tap on empty floor) and stops any draw.
-    func clearHighlight() { confirmed = nil; if phase != .none { cancel() } }
+    func clearHighlight() { menuQuietID = nil; confirmed = nil; if phase != .none { cancel() } }
 
     /// The Blob under a screen point (the nearest one when silhouettes overlap), or nil for the floor.
     func hit(_ p: CGPoint) -> Int? {
@@ -205,9 +205,11 @@ final class BlobSelect {
     /// Highlights a Jelbie, also with a single Blob. Every draw confirms itself after the glow (`autoHold`).
     /// `quietHop`: no hop when the glow completes (a voice name already has its own hop, and a trick may be running).
     /// `instant`: a sleeper. No draw, no hop, no `selectedID`: the pick settles at once and he stays asleep.
-    func pick(_ id: Int, quietHop: Bool = false, instant: Bool = false) {
+    /// `opensMenu` false: the highlight a voice COMMAND gives (a name plus a trick): the ring and selection are the same, but the care menu stays shut (`menuWanted`).
+    func pick(_ id: Int, quietHop: Bool = false, instant: Bool = false, opensMenu: Bool = true) {
         guard blobs.contains(where: { $0.id == id }) else { return }
-        highlightActs += 1          // every pick is an action, counted when it is asked (also the same draw asked again): the menu opens now, not when the glow ends
+        menuQuietID = opensMenu ? nil : id
+        if opensMenu { highlightActs += 1 }          // every pick is an action, counted when it is asked (also the same draw asked again): the menu opens now, not when the glow ends
         if instant {
             phase = .none; confirmed = id; rosterPick = false; waiting = false; hopRequest = nil
             return
@@ -221,6 +223,10 @@ final class BlobSelect {
         arm()
     }
     func highlight(_ id: Int, quietHop: Bool = false) { pick(id, quietHop: quietHop) }
+    /// The Jelmiko a voice command highlighted WITHOUT opening the menu (cleared by any other pick, a tap on him, or clearing the highlight).
+    @ObservationIgnored private(set) var menuQuietID: Int?
+    /// Whether the care menu may open for the highlight on `id` (false only for the quiet voice-command highlight).
+    func menuWanted(for id: Int?) -> Bool { id == nil || id != menuQuietID }
     /// Seconds the glow holds after the halves meet before a roster pick confirms itself.
     static let autoHold: Float = 1.2
     /// The current draw is self-confirming (every draw is, now).
@@ -235,7 +241,7 @@ final class BlobSelect {
         phase = .none
     }
     /// A highlight action on the Blob that is already highlighted (a double tap on him again): nothing changes but the menu opens again.
-    func rehighlight() { if highlighted != nil { highlightActs += 1 } }
+    func rehighlight() { if highlighted != nil { menuQuietID = nil; highlightActs += 1 } }
 
     /// Stops a draw in progress.
     func cancel() {

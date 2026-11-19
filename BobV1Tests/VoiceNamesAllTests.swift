@@ -29,7 +29,9 @@ final class VoiceNamesAllTests: XCTestCase {
     private func trained(flip word: String = "flip") -> VoiceTraining {
         let v = VoiceTraining(defaults: suite(), persists: false, random: { 0 })
         v.names.roster = Array(0..<JellyRoster.baseNames.count)          // slot == character, whatever roster the host app launched with
-        for s in 1...VoiceTuning.repsToLearn + 2 { _ = v.decide(transcript: word, runningMove: .flip, mood: .happy, session: s) }
+        // Speaking a word no longer binds it (tricks are bought in the Shop; `decide` never teaches), so the old "say it five times" loop left flip unlearned and the
+        // setup assert below failed for that reason, not because of any word order. Bind the word the way a saved old lesson is.
+        v.debugLearn(.flip, word: word)
         return v
     }
 

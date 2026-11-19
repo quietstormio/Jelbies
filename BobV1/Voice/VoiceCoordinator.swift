@@ -638,8 +638,8 @@ final class VoiceCoordinator {
         if case .jellies = d.target, r != .social(.goodnight), r != .social(.wakeUp) { for id in ids { care.wakeSleeper(id) } }
         if ids.isEmpty { care.noteInteraction() } else { for id in ids { care.noteInteraction(jelly: id) } }
         // naming a Jelly selects it (the outline a tap gives); come already zooms onto him, and the close-up needs no highlight
-        if case .jelly(let id) = d.target, presentIDs.contains(id), !care.focus.isActive, r != .perform(.come) {
-            if let f = onSelect { f(id) } else { care.rosterPick(id, quietHop: true) }
+        if case .jelly(let id) = d.target, presentIDs.contains(id), !care.focus.isActive, r != .perform(.come), d.nameOnly || d.reaction == .nameHeard {
+            if let f = onSelect { f(id) } else { care.rosterPick(id, quietHop: true) }          // ONLY the name by itself selects him and opens the menu; a name with a trick / command runs it with no highlight and no menu
         }
         if d.target == .everyone { onEveryone?(ids) }
         if r == .ignore, (lastBook ?? training).lastMiss == .flip, flipRoll() < 0.5 {            // he knew it but missed: sometimes it is a faceplant

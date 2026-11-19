@@ -931,7 +931,8 @@ struct GameScreen: View {
         }
         if let words = d.string(forKey: "VoiceSay") {
             await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2)
-            await care.voice.simulate(words)
+            if d.integer(forKey: "VoiceTyped") != 0 { care.voice.typed(words) }          // -VoiceTyped 1: the typed path (no mic needed: the simulator has none), the same decision a heard phrase takes
+            else { await care.voice.simulate(words) }
         }
         #if DEBUG || SELECT_PREVIEW
         // capture aid: -BlobSelectPreview 3 -BlobSelectScript 1 double-taps Pip, switches to Moss, switches mid-draw back to Pip, then confirms
@@ -1069,6 +1070,8 @@ struct GameScreen: View {
             model.care.store.grant(DecorKind.blocks.storeID)
             if let p = model.care.store.place(DecorKind.blocks.storeID) { _ = model.care.store.move(p.uid, to: SIMD2(t[0], t[1])) }
         }
+        // capture aid (dev arguments only): -TrickSeed 1 gives the first Jelmiko the Moonwalk, Sing and Take a bow tricks (for recording a voice command with his name)
+        if DevArgs.enabled, d.integer(forKey: "TrickSeed") != 0 { for t in [VoiceTrick.moonwalk, .sing, .bow] { model.care.store.grantTrick(t, to: 0) } }
         // capture aid: -FoodSeed 1 puts three of each power-up food in the bag (no perks, no coins): for recording meals
         if FoodCaptureArgs.foodSeed(defaults: d) {
             for id in ["sushi", "popsicle", "taco", "donut", "nuggets", "onigiri", "cookie", "fries"] where model.care.store.count(id) < 3 { model.care.store.grant(id, 3 - model.care.store.count(id)) }
@@ -1226,9 +1229,9 @@ struct CareMenu: View {
             if !isOpen { picker = nil; competeRow = false; trickRow = false; quickOpen = false }
             else if UIAccessibility.isVoiceOverRunning { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focusedRow = HUDMenu.visibleItems(mode, care: care).first } }      // focus moves into the opened rows
         }
-        .onChange(of: care.highlightedJelly) { _, now in if now == nil { withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false } } else { openForHighlight() } }          // a creature was just picked (the outline starts drawing, the menu does not wait for the glow) or the pick moved: the menu is up at once on that creature's rows; cleared: nothing opens
-        .onChange(of: care.select.highlightActs) { _, _ in openForHighlight() }          // the same creature highlighted again (nothing else changed): the menu opens again
-        .onAppear { if care.highlightedJelly != nil, !care.focus.isActive, !care.bath.active, !care.tripActive, !care.arranging { openForHighlight() } }          // a highlight already present when the screen appears (back from a store / Show / park screen): the menu is open on it
+        .onChange(of: care.highlightedJelly) { _, now in if now == nil { withAnimation(Self.spring) { picker = nil; competeRow = false; trickRow = false } } else if care.select.menuWanted(for: now) { openForHighlight() } }          // a creature was just picked (the outline starts drawing, the menu does not wait for the glow) or the pick moved: the menu is up at once on that creature's rows; cleared: nothing opens
+        .onChange(of: care.select.highlightActs) { _, _ in if care.select.menuWanted(for: care.highlightedJelly) { openForHighlight() } }          // the same creature highlighted again (nothing else changed): the menu opens again
+        .onAppear { if care.highlightedJelly != nil, care.select.menuWanted(for: care.highlightedJelly), !care.focus.isActive, !care.bath.active, !care.tripActive, !care.arranging { openForHighlight() } }          // a highlight already present when the screen appears (back from a store / Show / park screen): the menu is open on it
         .onChange(of: picker) { _, k in care.pickerShowing = k != nil }          // the need bubbles stay out of the way of an open Feed / Drink / Play row
         .task {          // capture aid (dev arguments only): `-TipShow tricks` taps the first Jelmiko and opens his trick chips
             guard DevArgs.enabled, TipBook.launchOverrides().show == "tricks" else { return }
