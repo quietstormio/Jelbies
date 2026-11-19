@@ -73,6 +73,9 @@ nonisolated struct TrayLayout {
     var openFront: Bool = false
     /// The berry ring's radius round the tray centre (nil = the usual `0.125 + 0.065 (n - 1)`); the three-place ENDS layout sets it so the food lies toward each end.
     var ringRadius: Float? = nil
+    /// meal-reach: each place's pieces lie on an arc of equal distance from his stand, toward the tray centre (the one-Blob layout's `berryArcRadius` idea for the ends layout): the nub, a stub, reaches a shell of one radius, so
+    /// pieces at 0.90 / 0.98 / 1.04 from him cannot all be touched. The middle piece is where the ring put it.
+    var arcToCentre = false
 
     func mouthRel(_ i: Int) -> SIMD3<Float> {
         let p = places[i]
@@ -110,7 +113,7 @@ nonisolated enum DiningLayout {
     static let endsZ: Float = -0.05, endsYaw: Float = .pi / 4
     /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): the end places of the ENDS layout stand at most this far from the tray centre
     /// (the sitting used 1.5 / 1.4 / 1.3 / 1.2 as the floor allowed: the nub, a stub, hung 0.8 m from the pieces). `-MealReach 0` = as before.
-    nonisolated(unsafe) static var reachSideX: Float = (DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReachX") != nil) ? Float(UserDefaults.standard.double(forKey: "MealReachX")) : 1.3
+    nonisolated(unsafe) static var reachSideX: Float = (DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReachX") != nil) ? Float(UserDefaults.standard.double(forKey: "MealReachX")) : 1.25
     /// True while a FOOD sitting is set up (home: `DiningGroup.start`; café: its ends table): only food is reached with the nub, so only food sits at `reachSideX`; drinks keep the old end distance (straws reach the mouth).
     nonisolated(unsafe) static var reachFood = false
     static var sideYaw: Float { sideX > 1.12 ? 0 : 0.25 }
@@ -136,7 +139,7 @@ nonisolated enum DiningLayout {
                 return TrayLayout(n: 3, scale: s, half: SIMD2(0.55, 0.6),
                                   places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-sx, endsZ), yaw: endsYaw),
                                            TrayPlace(rel: SIMD2(sx, endsZ), yaw: -endsYaw)],
-                                  colliderHalf: SIMD2(0.45, 0.3), berryAngles: [-.pi / 2, .pi, 0], ringRadius: 0.4)
+                                  colliderHalf: SIMD2(0.45, 0.3), berryAngles: [-.pi / 2, .pi, 0], ringRadius: 0.4, arcToCentre: GameCare.mealReach && reachFood)
             }
             return TrayLayout(n: 3, scale: s, half: SIMD2(1.0 + (sideX - 1.11), 0.6),
                               places: [TrayPlace(rel: SIMD2(0, -1.07), yaw: 0), TrayPlace(rel: SIMD2(-sideX, -1.07), yaw: sideYaw),
@@ -240,6 +243,11 @@ nonisolated enum DiningModels {
     /// Resting centre of berry `j` (0...2) of place `i`.
     static func berryAnchor(layout L: TrayLayout, place i: Int, index j: Int, lift: Float = 0.058) -> SIMD3<Float> {
         let s = L.scale
+        if L.arcToCentre, let ring = L.ringRadius {
+            let p = L.places[i], dist = simd_length(p.rel), R = max(dist - ring, 0.3)
+            let a = atan2f(-p.rel.x, -p.rel.y) + Float(j - 1) * DiningDims.berrySpacing * s / R
+            return SIMD3(p.rel.x + sinf(a) * R, DiningDims.plateFloorY + lift * s, p.rel.y + cosf(a) * R)
+        }
         if let R = L.berryArcRadius {
             let p = L.places[i], a = p.yaw + Float(j - 1) * DiningDims.berrySpacing * s / R
             return SIMD3(p.rel.x + sinf(a) * R, DiningDims.plateFloorY + lift * s, p.rel.y + cosf(a) * R)

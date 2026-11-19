@@ -162,6 +162,74 @@ final class MealReachTests: XCTestCase {
         XCTAssertLessThan(res.filter { $0.0 }.map { $0.2 }.min() ?? 0, 4000 + (res.filter { !$0.0 }.map { $0.2 }.min() ?? 0), "the new reach adds < 4 ms to the worst tick")
     }
 
+    /// The model (the solver the lean uses) for each of the three Jellies at the LEFT and the RIGHT end place of the food ends layout, every piece, the three crouch draws, and a stand 4 cm too near / on it / 6 cm too far
+    /// (a diner stops up to ~6 cm off his stand): every bite within 2.5 cm. Both ends must do as well (the left end diner used to miss by 5-7 cm in the app: an asymmetric roll grid).
+    func testLeftAndRightEndEverySpecies() {
+        let savedEnds = DiningLayout.ends, savedSide = DiningLayout.sideX, savedFood = DiningLayout.reachFood
+        DiningLayout.ends = true; DiningLayout.sideX = GameCare.mealReachX; DiningLayout.reachFood = true
+        defer { DiningLayout.ends = savedEnds; DiningLayout.sideX = savedSide; DiningLayout.reachFood = savedFood }
+        let L = DiningLayout.make(n: 3)
+        let r = DiningJellyTests.Room(count: 3)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        for i in 0..<3 { r.care.needs(for: i).set(.hunger, 0.1) }
+        r.run(1); r.care.feed("sushi")
+        r.run(60) { r.t > 3 && !r.care.trayOut }          // (a whole meal first: the brains build their feet / pivot geometry on the first lean, which the model reads)
+        var worstBy: [String: Float] = [:]
+        for a in r.actors {
+            guard let b = a.brain else { continue }
+            for place in [0, 1, 2] {
+                let tp = L.places[place], dirOut: SIMD2<Float> = place == 0 ? SIMD2(0, -1) : (tp.rel.x < 0 ? SIMD2(-1, 0) : SIMD2(1, 0))
+                for off: Float in [-0.04, 0, 0.06] {
+                    let stand = tp.rel + SIMD2(sinf(tp.yaw), cosf(tp.yaw)) * GameCare.eatCloser + dirOut * off
+                    b.px = stand.x; b.pz = stand.y; b.yaw = tp.yaw
+                    for k in 0..<3 {
+                        let a3 = DiningModels.berryAnchor(layout: L, place: place, index: k)
+                        for c: Float in [0.8, 0.9, 1.0] {
+                            b.solveDineReachRadial(a.sim, target: a3, crouch: c)
+                            let key = "\(JellyRoster.names[a.id]) \(place == 0 ? "middle" : place == 1 ? "left" : "right")"
+                            worstBy[key] = max(worstBy[key] ?? 0, b.dine.miss)
+                            XCTAssertLessThanOrEqual(b.dine.miss, 0.025, "\(key) piece \(k) crouch \(c) stand off \(off): model miss \(b.dine.miss * 100) cm")
+                        }
+                    }
+                }
+            }
+        }
+        print("MEALREACH ENDS worst model miss (cm) " + worstBy.sorted { $0.key < $1.key }.map { "\($0.key) \(String(format: "%.2f", $0.value * 100))" }.joined(separator: " | "))
+    }
+
+    /// Sweep of the solver limits on the model (prints only): the worst model miss over both ends, every piece, 3 crouch draws, stand 4 cm near / on / 6 cm far.
+    func testSweepSolverLimits() {
+        let savedEnds = DiningLayout.ends, savedSide = DiningLayout.sideX, savedFood = DiningLayout.reachFood
+        DiningLayout.ends = true; DiningLayout.reachFood = true
+        defer { DiningLayout.ends = savedEnds; DiningLayout.sideX = savedSide; DiningLayout.reachFood = savedFood; BlobBrain.dineSMax = 0.65; BlobBrain.dineCrouchMin = 0.75; BlobBrain.dinePitchMax = 0.5 }
+        let r = DiningJellyTests.Room(count: 3)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        for i in 0..<3 { r.care.needs(for: i).set(.hunger, 0.1) }
+        r.run(1); r.care.feed("sushi"); r.run(60) { r.t > 3 && !r.care.trayOut }
+        guard let a = r.actors.first, let b = a.brain else { return }
+        DiningLayout.ends = true; DiningLayout.reachFood = true          // (the sitting's end put them back)
+        for sx: Float in [1.25] {
+            DiningLayout.sideX = sx
+            let L = DiningLayout.make(n: 3)
+            for (sm, cm, pm) in [(0.65, 0.75, 0.5)] as [(Float, Float, Float)] {
+                BlobBrain.dineSMax = sm; BlobBrain.dineCrouchMin = cm; BlobBrain.dinePitchMax = pm
+                var worst: [Float] = [0, 0, 0], worstOn: [Float] = [0, 0, 0]
+                for place in [0, 1, 2] {
+                    let tp = L.places[place], dirOut: SIMD2<Float> = place == 0 ? SIMD2(0, -1) : (tp.rel.x < 0 ? SIMD2(-1, 0) : SIMD2(1, 0))
+                    for off: Float in [-0.04, 0, 0.06] {
+                        let stand = tp.rel + SIMD2(sinf(tp.yaw), cosf(tp.yaw)) * GameCare.eatCloser + dirOut * off
+                        b.px = stand.x; b.pz = stand.y; b.yaw = tp.yaw
+                        for k in 0..<3 { for c: Float in [0.8, 0.9, 1.0] {
+                            b.solveDineReachRadial(a.sim, target: DiningModels.berryAnchor(layout: L, place: place, index: k), crouch: c)
+                            worst[place] = max(worst[place], b.dine.miss); if off == 0 { worstOn[place] = max(worstOn[place], b.dine.miss) }
+                        } }
+                    }
+                }
+                print("MEALREACH SWEEP sideX \(sx) s<=\(sm) crouch>=\(cm) pitch<=\(pm): worst miss cm (middle/left/right) any stand \(worst.map { String(format: "%.1f", $0 * 100) }) on stand \(worstOn.map { String(format: "%.1f", $0 * 100) })")
+            }
+        }
+    }
+
     func testOldReachNumbers() {
         GameCare.mealReach = false
         for f in ["sushi", "cookie"] { report("OLD", f, take(food: f)) }

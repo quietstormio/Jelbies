@@ -95,16 +95,17 @@ nonisolated enum DineGeometry {
         var best = start ?? ReachPose(twist: 0, pitch: 0, roll: 0, squash: crouch), bc = cost(best)
         if start != nil { best.squash = crouch; bc = cost(best) }
         var tw: Float = start != nil ? 9 : -1.6          // (a warm start skips the coarse grid)
-        let gT: Float = fast ? 0.2 : 0.1, gP: Float = fast ? 0.2 : 0.1, gR: Float = fast ? 0.3 : 0.1
+        let gT: Float = fast ? 0.25 : 0.1, gP: Float = fast ? 0.2 : 0.1, gR: Float = fast ? 0.3 : 0.1
+        // the roll samples are symmetric about 0 (a grid that started at -rollMax with a step that does not divide it favoured one sign: the left end diner missed where the right end did not)
+        let rn = Int((rollMax / gR + 1e-4).rounded(.down))
+        let rolls: [Float] = rn >= 1 ? (-rn...rn).map { Float($0) * gR } : [-rollMax, 0, rollMax]
         while tw <= 1.6 {
             var pt: Float = -0.3
             while pt <= pitchMax {
-                var rl: Float = -rollMax
-                while rl <= rollMax {
+                for rl in rolls {
                     let p = ReachPose(twist: tw, pitch: pt, roll: rl, squash: crouch)
                     let c = cost(p)
                     if c < bc { bc = c; best = p }
-                    rl += gR
                 }
                 pt += gP
             }
