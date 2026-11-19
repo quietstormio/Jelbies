@@ -2638,6 +2638,8 @@ final class BlobBrain {
     /// variance depth as it can) are chosen so the tip meets the piece; the lean, twist, pitch and roll are solved as ever.
     /// How much higher (m per unit of lost height) the real body's centroid sits than the model's pinned pivot (measured in `MealReachTests`: 0.066 / 0.105 / 0.079 at crouch 0.85 / 0.75 / 0.80).
     nonisolated static let dineRise: Float = 0.42
+    /// The soft body's tip-minus-model bias in the BODY frame (yaw only) from the last settled bite of any diner: the first bite of the next diner starts from it (the sag is the same on every body), so the swing / crouch are chosen for the real tip, not the model's.
+    nonisolated(unsafe) static var sharedBiasBody: SIMD3<Float>? = nil
     /// The reach solver's limits (tunables so `MealReachTests` can sweep them): the largest nub swing, the deepest crouch, the largest forward pitch.
     nonisolated(unsafe) static var dineSMax: Float = 0.65, dineCrouchMin: Float = 0.75, dinePitchMax: Float = 0.5
     /// Closed loop for the grab: the model and the soft body differ (the body lags and sags), so from half way through the lean the tip's real position is compared with the model's for the pose being
@@ -2657,7 +2659,7 @@ final class BlobBrain {
         let raw = actual - model
         // the soft body lags the pose while it moves, so the difference only means something once it has nearly arrived (65 % of the lean on): before that the bias of the last bite (the sag is the same
         // at the same place) is used; the bias starts at 0 for a diner's first bite
-        if dine.t / Self.tLean >= (Self.quick ? 0.5 : 0.65) || dine.phase == .grab { dine.bias = dine.biasKnown ? dine.bias + (raw - dine.bias) * 0.5 : raw; dine.biasKnown = true }
+        if dine.t / Self.tLean >= (Self.quick ? 0.5 : 0.65) || dine.phase == .grab { dine.bias = dine.biasKnown ? dine.bias + (raw - dine.bias) * 0.5 : raw; dine.biasKnown = true; let bxz = rotXZ(SIMD2(dine.bias.x, dine.bias.z), -yaw); Self.sharedBiasBody = SIMD3(bxz.x, dine.bias.y, bxz.y) }
         dine.refined += 1
         let err = simd_distance(actual, piece)
         if err > 0.004 {          // (a tip already within 0.4 cm keeps its pose: no re-solve, so the lean and the brows are not disturbed)
@@ -2667,7 +2669,12 @@ final class BlobBrain {
         return err
     }
 
-    func solveDineReachRadial(_ sim: SoftBody, target: SIMD3<Float>, crouch pref: Float) {
+    func solveDineReachRadial(_ sim: SoftBody, target tgt: SIMD3<Float>, crouch pref: Float) {
+        var target = tgt
+        if GameCare.mealReach, GameCare.reachFast {
+            if dine.biasKnown { target = tgt - dine.bias }
+            else if let b = Self.sharedBiasBody { let xz = rotXZ(SIMD2(b.x, b.z), yaw); dine.bias = SIMD3(xz.x, b.y, xz.y); target = tgt - dine.bias }
+        }
         let m = geom.mid, w2 = SIMD2(px, pz) + rotXZ(geom.midOff, yaw)
         let std = Float(ArmPath.nubGrabS)
         func solve(_ sg: Float, _ cr: Float, fast: Bool) -> (side: Int, r: (pose: ReachPose, miss: Float)) {
