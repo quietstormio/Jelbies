@@ -330,6 +330,7 @@ final class BlobBrain {
     var poseW: Float = 0            // 0 = free physics, 1 = fully driven
     var poseOn = false              // whether the current step wants the pose driven
     let kPose: Float = 650
+    var poseStiffNow: Float = 1
 
     var debugFeet = true
     var swayScale: Float = 1
@@ -1706,8 +1707,13 @@ final class BlobBrain {
         } else {
             sim.attractor.anchor = SIMD3(px, sim.groundedAnchorY(rotation: q, squash: sq) + lift, pz)
         }
-        var stiff: Float = 1
-        if case .dine = script, dine.mode == .finger, GameCare.mealReach, GameCare.reachFast, dine.phase == .lean || dine.phase == .grab || dine.phase == .straighten { stiff = 2.5 }          // (a quick bend: the body must follow the pose within ~0.05 s)
+        // (a quick bend: during a food dine's lean / grab / straighten ONLY the attractor is 2.5x stiffer so the body follows the pose within ~0.05 s; it blends back to the locked jelly firmness over ~0.15 s in the chew,
+        // and nothing else (idle, walk, sleep, play, ...) sees any change: `poseStiffNow` is 1 outside a dine)
+        var stiffTarget: Float = 1
+        if case .dine = script, dine.mode == .finger, GameCare.mealReach, GameCare.reachFast, dine.phase == .lean || dine.phase == .grab || dine.phase == .straighten { stiffTarget = 2.5 }
+        poseStiffNow += (stiffTarget - poseStiffNow) * min(1, dt * (stiffTarget > poseStiffNow ? 60 : 8))
+        if abs(poseStiffNow - 1) < 0.01 { poseStiffNow = 1 }
+        let stiff = poseStiffNow
         sim.attractor.strength = kPose * stiff * smooth01(poseW)
     }
 

@@ -65,6 +65,10 @@ final class MealReachTests: XCTestCase {
             for a in r.actors {
                 guard let b = a.brain, case .dine = b.job ?? .goTo(.zero) else { continue }
                 ids.append(a.id)
+                if food == "sushi", b.dine.mode == .finger, b.dine.bentOn, b.dine.k <= 1, let h = b.dineHooks {
+                    let dxs = a.floor.x - dn.origin.x
+                    print("MEALREACH LEANERR \(dxs < -0.5 ? "left" : dxs > 0.5 ? "right" : "middle") k\(b.dine.k) \(b.dine.phase) bent \(String(format: "%.3f", b.dine.bent)) err \(String(format: "%.1f", simd_distance(b.nubTipWorld(sim: a.sim), h.piece(b.dine.k)) * 100)) pitch \(String(format: "%.2f", b.dine.cur.pitch)) twist \(String(format: "%.2f", b.dine.cur.twist)) sq \(String(format: "%.2f", b.dine.cur.squash))")
+                }
                 if false, b.dine.phase == .grab, let h = b.dineHooks, b.dine.mode == .finger {
                     let att = a.sim.attractor, bp = a.sim.bodyPose(iterations: 3)
                     let dq = simd_length(simd_act(att.rotation.inverse * bp.rotation, SIMD3<Float>(0, 1, 0)) - SIMD3<Float>(0, 1, 0))
