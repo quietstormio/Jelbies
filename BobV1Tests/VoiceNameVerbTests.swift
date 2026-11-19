@@ -59,10 +59,10 @@ final class VoiceNameVerbTests: XCTestCase {
         }
         // 3. name + verb in one hold
         r = make(); say(r, "Pip spin")
-        XCTAssertEqual(obeyed(r, .spin), 1, "3"); XCTAssertEqual(r.care.targetJelly, 1)
-        // 4. verb before the name: highlight and do it at once
+        XCTAssertEqual(obeyed(r, .spin), 1, "3"); XCTAssertNil(r.care.highlightedJelly, "3: no highlight")
+        // 4. verb before the name: does it at once, no highlight
         r = make(); say(r, "spin Moss")
-        XCTAssertEqual(obeyed(r, .spin), 1, "4"); XCTAssertEqual(r.care.targetJelly, 2, "4: Moss is highlighted")
+        XCTAssertEqual(obeyed(r, .spin), 1, "4"); XCTAssertNil(r.care.highlightedJelly, "4: no highlight")
         XCTAssertEqual(VoiceCoordinator.running(r.care.brainFor(2)!), .spin, "4: Moss spins")
         // 5. a verb with no name goes to the highlighted one
         r = make(); r.care.rosterPick(2, quietHop: true); r.run(0.5)
@@ -101,7 +101,7 @@ final class VoiceNameVerbTests: XCTestCase {
         let r = make()
         r.care.jelly(1)?.training.unlocked = { $0 != .sing }
         say(r, "Pip sing")
-        XCTAssertEqual(r.care.targetJelly, 1, "the name still highlights")
+        XCTAssertNil(r.care.highlightedJelly, "a command does not highlight")
         XCTAssertEqual(obeyed(r, .sing), 0)
         XCTAssertEqual(r.care.voice.understood?.ok, false)
         XCTAssertTrue(r.care.voice.understood?.text.contains("doesn't know Sing yet") == true, "\(String(describing: r.care.voice.understood))")
@@ -116,10 +116,10 @@ final class VoiceNameVerbTests: XCTestCase {
         for i in 0..<3 { r.care.jelly(i)?.training.unlocked = { _ in true } }          // moonwalk is a Shop trick: give them all of it
         say(r, "Alien do moonwalk")
         XCTAssertEqual(obeyed(r, .moonwalk), 1)
-        XCTAssertEqual(r.care.targetJelly, 1)
+        XCTAssertNil(r.care.highlightedJelly)
         say(r, "Violet spin")
         XCTAssertEqual(obeyed(r, .spin), 1)
-        XCTAssertEqual(r.care.targetJelly, 2)
+        XCTAssertNil(r.care.highlightedJelly)
         say(r, "Alien, sing!"); say(r, "moonwalk Violet")
         XCTAssertEqual(obeyed(r, .sing), 1); XCTAssertEqual(obeyed(r, .moonwalk), 2)
     }
@@ -128,7 +128,7 @@ final class VoiceNameVerbTests: XCTestCase {
     func testWaveRunsTheWaveScript() {
         let r = make()
         say(r, "Bob wave hi")          // (slot 0 here: the other slots' brains are driven by MelonStage's onRemote, which the test rig does not wire)
-        XCTAssertEqual(r.care.targetJelly, 0)
+        XCTAssertNil(r.care.highlightedJelly)
         XCTAssertTrue(r.care.voice.feedbackLog.contains(.social(.wave)), "\(r.care.voice.feedbackLog)")
         XCTAssertTrue(r.run(4) { r.care.brainFor(0)?.isWaving == true }, "Bob waves")
     }

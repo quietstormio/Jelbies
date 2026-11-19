@@ -322,11 +322,11 @@ extension VoiceIntegrationTests {
         XCTAssertTrue(r.care.select.rosterPick)
     }
 
-    func testNamePlusTrickSelectsAndDoesTheTrick() {
+    func testNamePlusTrickDoesTheTrickWithoutSelecting() {
         let r = make()
         r.voice.training.debugLearn(.sit, word: "sit")
         r.say("Bob, sit", settle: 0)
-        XCTAssertEqual(r.care.select.selectedID, 0)
+        XCTAssertNil(r.care.select.selectedID, "a command with his name does not select him")
         XCTAssertTrue(r.run(3) { r.brain.idleState.kind == .sit })
     }
 
