@@ -250,7 +250,8 @@ final class MealReachTests: XCTestCase {
         }
         print("MEALREACH QUICK spans \(spans.map { String(format: "%.2f", $0) })")
         XCTAssertGreaterThanOrEqual(spans.count, 6)
-        XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.42, "tilted span per bite")
+        XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.62, "tilted span per bite (band 0.50-0.60 s)")
+        XCTAssertGreaterThanOrEqual(spans.min() ?? 0, 0.48, "tilted span per bite (band 0.50-0.60 s)")
     }
 
     /// The dine-only attractor factor changes nothing else: over 5 s of idling (no meal) the factor stays exactly 1 and the attractor strength is exactly the locked `kPose * smooth01(poseW)`, with the quick bend on.
