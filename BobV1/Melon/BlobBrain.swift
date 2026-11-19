@@ -2717,6 +2717,9 @@ final class BlobBrain {
         if !armActive { armActive = true; armPathName = ArmPath.nubToMouth.name; armT = 0; armBlend = 0 }
         let clockWait = dine.k == 0 && dine.phase == .lean && !dine.entered && (dinePlan.board.map { $0.clock < dinePlan.leanAt } ?? false)
         if dine.bentOn { dine.bent += dt }
+        #if targetEnvironment(simulator)
+        if dine.bentOn, dine.mode == .finger, let hh = dineHooks, MealTrace.poseOn, dine.entered || dine.phase != .lean { MealTrace.log("tip \(steerID) k\(dine.k) \(dine.phase) bent=\(String(format: "%.3f", dine.bent)) err=\(String(format: "%.1f", simd_distance(nubTipWorld(sim: sim), hh.piece(dine.k)) * 100))") }
+        #endif
         let waiting = clockWait || (dine.wait > 0 && dine.phase == .lean)          // (meal variance: he stands at his place, breathing, until his turn to lean)
         if waiting { if !clockWait { dine.wait -= dt } } else { dine.t += dt * dinePlan.pace }
         let grabS = Float(ArmPath.nubGrabS)
