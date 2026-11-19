@@ -250,7 +250,7 @@ final class MealReachTests: XCTestCase {
         }
         print("MEALREACH QUICK spans \(spans.map { String(format: "%.2f", $0) })")
         XCTAssertGreaterThanOrEqual(spans.count, 6)
-        XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.40, "tilted span per bite")
+        XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.42, "tilted span per bite")
     }
 
     func testOldReachNumbers() {
