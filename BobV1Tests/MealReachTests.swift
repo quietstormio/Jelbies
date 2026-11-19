@@ -27,7 +27,7 @@ final class MealReachTests: XCTestCase {
     }
 
     struct Grab { var arrived = true; var place: String; var k: Int; var miss: Float; var crouch: Float; var side: Int }
-    struct Take { var grabs: [Grab] = []; var minBodyBox: Float = .infinity; var minFloorBox: Float = .infinity; var minNeighbour: Float = .infinity; var maxFloorStand: Float = 0; var worstBrow: Float = .infinity; var browByPlace: [String: Float] = [:] }
+    struct Take { var spans: [Float] = []; var grabs: [Grab] = []; var minBodyBox: Float = .infinity; var minFloorBox: Float = .infinity; var minNeighbour: Float = .infinity; var maxFloorStand: Float = 0; var worstBrow: Float = .infinity; var browByPlace: [String: Float] = [:] }
 
     static let browIdx = buildEyeRig(render: MotionRig.renderMesh, sim: MotionRig.simMesh).brow
     /// Apparent slant (rad, inner end up) of each brow as the game camera sees the skinned render mesh (as DiningFlowTests measures it).
@@ -66,7 +66,8 @@ final class MealReachTests: XCTestCase {
             for a in r.actors {
                 guard let b = a.brain, case .dine = b.job ?? .goTo(.zero) else { continue }
                 ids.append(a.id)
-                if food == "sushi", b.dine.mode == .finger, b.dine.bentOn, b.dine.k <= 1, let h = b.dineHooks {
+                if b.dine.mode == .finger, b.dine.phase == .chew, !b.dine.bentOn, !seen.contains(1000 + a.id * 10 + b.dine.k) { seen.insert(1000 + a.id * 10 + b.dine.k); tk.spans.append(b.dine.bent) }
+                if false, food == "sushi", b.dine.mode == .finger, b.dine.bentOn, b.dine.k <= 1, let h = b.dineHooks {
                     let dxs = a.floor.x - dn.origin.x
                     print("MEALREACH LEANERR \(dxs < -0.5 ? "left" : dxs > 0.5 ? "right" : "middle") k\(b.dine.k) \(b.dine.phase) bent \(String(format: "%.3f", b.dine.bent)) err \(String(format: "%.1f", simd_distance(b.nubTipWorld(sim: a.sim), h.piece(b.dine.k)) * 100)) pitch \(String(format: "%.2f", b.dine.cur.pitch)) twist \(String(format: "%.2f", b.dine.cur.twist)) sq \(String(format: "%.2f", b.dine.cur.squash))")
                 }
@@ -251,6 +252,20 @@ final class MealReachTests: XCTestCase {
         print("MEALREACH QUICK spans \(spans.map { String(format: "%.2f", $0) })")
         XCTAssertGreaterThanOrEqual(spans.count, 6)
         XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.40, "tilted span per bite")
+    }
+
+    /// Sweep of the quick bend (lean beat, attractor factor): worst tilted span and worst reach per place (arrived diners), prints only.
+    func testQuickSweep() {
+        GameCare.quickBend = true
+        defer { GameCare.quickBend = false; BlobBrain.quickLean = 0.15; BlobBrain.quickGrab = 0.08; BlobBrain.quickStraighten = 0.20; BlobBrain.quickStiff = 2.5 }
+        for (lean, stiff) in [(0.25, 1.0), (0.25, 1.5), (0.25, 2.5), (0.30, 1.5), (0.30, 2.5), (0.40, 1.5)] as [(Float, Float)] {
+            BlobBrain.quickLean = lean; BlobBrain.quickStiff = stiff
+            BlobBrain.sharedBiasBody = nil
+            let tk = take(food: "sushi")
+            var per: [String: Float] = [:]
+            for g in tk.grabs where g.arrived { per[g.place] = max(per[g.place] ?? 0, g.miss) }
+            print("MEALREACH QSWEEP lean \(lean) stiff \(stiff): span max \(String(format: "%.2f", tk.spans.max() ?? 0)) mean \(String(format: "%.2f", tk.spans.reduce(0, +) / Float(max(tk.spans.count, 1)))) | worst reach cm " + ["left", "middle", "right"].map { "\($0) \(String(format: "%.1f", (per[$0] ?? -0.01) * 100))" }.joined(separator: " | ") + " | brow \(String(format: "%.3f", tk.worstBrow))")
+        }
     }
 
     func testOldReachNumbers() {

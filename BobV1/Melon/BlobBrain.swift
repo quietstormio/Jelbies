@@ -1710,7 +1710,7 @@ final class BlobBrain {
         // (a quick bend: during a food dine's lean / grab / straighten ONLY the attractor is 2.5x stiffer so the body follows the pose within ~0.05 s; it blends back to the locked jelly firmness over ~0.15 s in the chew,
         // and nothing else (idle, walk, sleep, play, ...) sees any change: `poseStiffNow` is 1 outside a dine)
         var stiffTarget: Float = 1
-        if case .dine = script, dine.mode == .finger, Self.quick, dine.phase == .lean || dine.phase == .grab || dine.phase == .straighten { stiffTarget = 2.5 }
+        if case .dine = script, dine.mode == .finger, Self.quick, dine.phase == .lean || dine.phase == .grab || dine.phase == .straighten { stiffTarget = Self.quickStiff }
         poseStiffNow += (stiffTarget - poseStiffNow) * min(1, dt * (stiffTarget > poseStiffNow ? 60 : 8))
         if abs(poseStiffNow - 1) < 0.01 { poseStiffNow = 1 }
         let stiff = poseStiffNow
@@ -2549,9 +2549,11 @@ final class BlobBrain {
     nonisolated static var dineBeat: Float { DiningTiming.beatPeriod }
     /// The tilted span of a food bite (lean + hold + grab + straighten) was ~0.8 s; the owner (2026-11-18): "they stay like that for like a whole second ... I don't want it that long": now ~0.3 s (`-MealReachFast 0` = the round-1 beats).
     private static var quick: Bool { GameCare.mealReach && GameCare.reachFast && GameCare.quickBend }
-    private static var tLean: Float { dineBeat * (quick ? 0.15 : 0.40) }
-    private static var tGrab: Float { dineBeat * (quick ? 0.08 : (GameCare.mealReach && GameCare.reachFast ? 0.12 : 0.15)) }
-    private static var tStraighten: Float { dineBeat * (quick ? 0.20 : 0.45) }
+    /// The quick bend's beats and the dine-only attractor factor (tunables for `MealReachTests.testQuickSweep`).
+    nonisolated(unsafe) static var quickLean: Float = 0.15, quickGrab: Float = 0.08, quickStraighten: Float = 0.20, quickStiff: Float = 2.5
+    private static var tLean: Float { dineBeat * (quick ? quickLean : 0.40) }
+    private static var tGrab: Float { dineBeat * (quick ? quickGrab : (GameCare.mealReach && GameCare.reachFast ? 0.12 : 0.15)) }
+    private static var tStraighten: Float { dineBeat * (quick ? quickStraighten : 0.45) }
     private static var tHappy: Float { dineBeat * 1.1 }
     private static var tSipLean: Float { dineBeat * 0.6 }
 
@@ -2661,6 +2663,7 @@ final class BlobBrain {
         // at the same place) is used; the bias starts at 0 for a diner's first bite
         if dine.t / Self.tLean >= (Self.quick ? 0.5 : 0.65) || dine.phase == .grab { dine.bias = dine.biasKnown ? dine.bias + (raw - dine.bias) * 0.5 : raw; dine.biasKnown = true; let bxz = rotXZ(SIMD2(dine.bias.x, dine.bias.z), -yaw); Self.sharedBiasBody = SIMD3(bxz.x, dine.bias.y, bxz.y) }
         dine.refined += 1
+        if Self.quick, dine.phase == .lean, dine.refined == 3, dine.biasKnown { solveDineReachRadial(sim, target: piece, crouch: dine.reach.squash) }          // (the bias is now measured: re-pick the swing and crouch for the real tip, not only the turn / pitch / roll)
         let err = simd_distance(actual, piece)
         if err > 0.004 {          // (a tip already within 0.4 cm keeps its pose: no re-solve, so the lean and the brows are not disturbed)
             let r = DineGeometry.solveReach(hold: hold, target: piece - dine.bias, m: m, w: w, c0: sim.restCentroid, yaw: yaw, pitchBase: pitchBase, crouch: cr, side: side, start: dine.reach, pitchMax: Self.dinePitchMax, rollMax: 0.18)
