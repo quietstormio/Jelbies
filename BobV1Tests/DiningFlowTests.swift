@@ -270,7 +270,7 @@ final class DiningFlowTests: XCTestCase {
         // the bite stays on the nub / tines until it is flicked off (<= 0.01 u)
         let carry = d.filter { $0.holding && !$0.flying && $0.phase != "grab" }.compactMap { $0.heldDist }
         MotionLog.write("DINEFLOW \(name) carry max \(carry.max() ?? -1) over \(carry.count) frames")
-        XCTAssertGreaterThan(carry.count, 60, file: file, line: line)
+        XCTAssertGreaterThan(carry.count, GameCare.quickBend ? 40 : 60, "frames carrying the bite before the flick (the quick bend's straighten is 0.20 beat, was 0.45)", file: file, line: line)
         XCTAssertLessThan(carry.max() ?? 1, 0.01, "\(name): the bite stays on the nub until the flick", file: file, line: line)
         // the arm never extends: the nub stays on the stub part of its path (s <= the grab pose) for the whole meal
         XCTAssertLessThanOrEqual(d.map { $0.armS }.max() ?? 1, grabS + 0.001, "\(name): the nub never goes past the stub's swing", file: file, line: line)
@@ -365,7 +365,7 @@ final class DiningFlowTests: XCTestCase {
         XCTAssertEqual(chew[0], chew[1], accuracy: 0.05, "every food takes the same chewing time")
         XCTAssertEqual(cycle[0], cycle[1], accuracy: 0.05, "and the same straighten + chew time per meal")
         XCTAssertEqual(chew[0], Float(DiningTiming.bitesPerServing) * b, accuracy: 0.1, "3 bites x 1 beat of chewing")
-        XCTAssertEqual(cycle[0], Float(DiningTiming.bitesPerServing) * 1.45 * b, accuracy: 0.15)
+        XCTAssertEqual(cycle[0], Float(DiningTiming.bitesPerServing) * (GameCare.quickBend ? 1.20 : 1.45) * b, accuracy: 0.15)          // (straighten 0.20 beat with the quick bend, 0.45 before + 1 beat of chew)
     }
 
     // MARK: sip
