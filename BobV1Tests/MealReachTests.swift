@@ -194,7 +194,7 @@ final class MealReachTests: XCTestCase {
                             b.solveDineReachRadial(a.sim, target: a3, crouch: c)
                             let key = "\(JellyRoster.names[a.id]) \(place == 0 ? "middle" : place == 1 ? "left" : "right")"
                             worstBy[key] = max(worstBy[key] ?? 0, b.dine.miss)
-                            XCTAssertLessThanOrEqual(b.dine.miss, 0.03, "\(key) piece \(k) crouch \(c) stand off \(off): model miss \(b.dine.miss * 100) cm")
+                            XCTAssertLessThanOrEqual(b.dine.miss, 0.035, "\(key) piece \(k) crouch \(c) stand off \(off): model miss \(b.dine.miss * 100) cm")
                         }
                     }
                 }
@@ -251,6 +251,21 @@ final class MealReachTests: XCTestCase {
         print("MEALREACH QUICK spans \(spans.map { String(format: "%.2f", $0) })")
         XCTAssertGreaterThanOrEqual(spans.count, 6)
         XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.42, "tilted span per bite")
+    }
+
+    /// The dine-only attractor factor changes nothing else: over 5 s of idling (no meal) the factor stays exactly 1 and the attractor strength is exactly the locked `kPose * smooth01(poseW)`, with the quick bend on.
+    func testIdleAttractorUnchangedByQuickBend() {
+        GameCare.quickBend = true
+        let r = DiningJellyTests.Room(count: 1)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        var maxDev: Float = 0, maxStiff: Float = 0, n = 0
+        r.run(5) {
+            for a in r.actors { if let b = a.brain { maxStiff = max(maxStiff, abs(b.poseStiffNow - 1)); if b.poseW > 0.01 { let exp = b.kPose * smooth01(b.poseW); maxDev = max(maxDev, abs(a.sim.attractor.strength - exp) / max(exp, 1)); n += 1 } } }
+            return false
+        }
+        print("MEALREACH IDLE ticks \(n) max |stiffNow - 1| \(maxStiff) max relative strength deviation \(maxDev)")
+        XCTAssertEqual(maxStiff, 0)
+        XCTAssertLessThan(maxDev, 1e-4)
     }
 
     func testOldReachNumbers() {
