@@ -2748,7 +2748,7 @@ final class BlobBrain {
             armTarget = dine.grabS * min(1, dine.t / Self.tLean * 1.2)
             if dine.t >= Self.tLean {
                 // (meal-reach: the lean waits, at most 0.25 s, for the tip to be within 0.6 cm of the piece)
-                if GameCare.mealReach, dine.mode == .finger, tipErr > (GameCare.reachFast ? 0.010 : 0.006), dine.extra < (GameCare.reachFast ? (dine.k == 0 ? 0.22 : 0.15) : 0.25) { dine.extra += dt; dine.t = Self.tLean }
+                if GameCare.mealReach, dine.mode == .finger, GameCare.reachFast ? (dine.k == 0 ? dine.extra < 0.2 : (tipErr > 0.010 && dine.extra < 0.15)) : (tipErr > 0.006 && dine.extra < 0.25) {          // (a diner's FIRST bite always holds the same 0.2 s: the meal variance's first-chomp gaps (>= 0.25 s) must not depend on how far the tip happened to be) dine.extra += dt; dine.t = Self.tLean }
                 else { dine.phase = .grab; dine.t = 0; dine.entered = false }
             }
         case .grab:
