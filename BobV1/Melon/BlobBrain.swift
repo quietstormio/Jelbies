@@ -2515,7 +2515,8 @@ final class BlobBrain {
         var chewV = 0, afterV = 0, finishV = 0          // this bite's variants (0 = today's)
         var crouch: Float = 0.9
         var refined = 0                                 // closed-loop corrections made for this bite's reach
-        var bias = SIMD3<Float>(0, 0, 0)                // the soft body's tip minus the model's, smoothed
+        var bias = SIMD3<Float>(0, 0, 0)                // the soft body's tip minus the model's, smoothed (kept from bite to bite)
+        var biasKnown = false
         var extra: Float = 0                            // seconds the lean was held for the tip to arrive
         var bentOn = false
         var bent: Float = 0                             // seconds from the lean's start to the straighten's start (bent at the plate)
@@ -2636,7 +2637,9 @@ final class BlobBrain {
         let bp = sim.bodyPose(iterations: 3)
         let actual = bodyPointWorld(holdNow, sim: sim, pose: (bp.centroid, bp.rotation))
         let raw = actual - model
-        dine.bias = dine.refined == 0 ? raw : dine.bias + (raw - dine.bias) * 0.4
+        // the soft body lags the pose while it moves, so the difference only means something once it has nearly arrived (65 % of the lean on): before that the bias of the last bite (the sag is the same
+        // at the same place) is used; the bias starts at 0 for a diner's first bite
+        if dine.t / Self.tLean >= 0.65 || dine.phase == .grab { dine.bias = dine.biasKnown ? dine.bias + (raw - dine.bias) * 0.5 : raw; dine.biasKnown = true }
         dine.refined += 1
         let err = simd_distance(actual, piece)
         if err > 0.004 {          // (a tip already within 0.4 cm keeps its pose: no re-solve, so the lean and the brows are not disturbed)
@@ -2745,7 +2748,7 @@ final class BlobBrain {
             armTarget = dine.grabS * min(1, dine.t / Self.tLean * 1.2)
             if dine.t >= Self.tLean {
                 // (meal-reach: the lean waits, at most 0.25 s, for the tip to be within 0.6 cm of the piece)
-                if GameCare.mealReach, !GameCare.reachFast, dine.mode == .finger, tipErr > 0.006, dine.extra < 0.25 { dine.extra += dt; dine.t = Self.tLean }
+                if GameCare.mealReach, dine.mode == .finger, tipErr > (GameCare.reachFast ? 0.015 : 0.006), dine.extra < (GameCare.reachFast ? 0.08 : 0.25) { dine.extra += dt; dine.t = Self.tLean }
                 else { dine.phase = .grab; dine.t = 0; dine.entered = false }
             }
         case .grab:
