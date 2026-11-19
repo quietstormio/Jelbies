@@ -207,6 +207,7 @@ final class MealReachTests: XCTestCase {
         for i in 0..<3 { r.care.needs(for: i).set(.hunger, 0.1) }
         r.run(1); r.care.feed("sushi"); r.run(60) { r.t > 3 && !r.care.trayOut }
         guard let a = r.actors.first, let b = a.brain else { return }
+        DiningLayout.ends = true; DiningLayout.reachFood = true          // (the sitting's end put them back)
         for sx: Float in [1.2, 1.25, 1.3] {
             DiningLayout.sideX = sx
             let L = DiningLayout.make(n: 3)
