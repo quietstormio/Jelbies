@@ -1662,6 +1662,13 @@ final class BlobBrain {
             mealFinalYaw = nil
             script = .turn(to: place.yaw, then: .dineGo)
         case .dineGo:
+            // meal-reach: the stepped turn on his stand can leave him 0.1-0.2 off it (the left end diner once stopped 0.155 farther from the tray than his stand, out of the nub's reach): one short corrective
+            // walk to the stand that ends facing the place yaw (no turn left to move him again), then the lean
+            if GameCare.mealReach, dine.mode == .finger, !dine.stepped, simd_distance(SIMD2(px, pz), dine.place.stand) > 0.08 {
+                dine.stepped = true; mealFinalYaw = dine.place.yaw
+                script = .walk(target: fixed(dine.place.stand), then: .dineTurn(dine.place)); activity = .walking
+                return
+            }
             dine.phase = .lean; dine.t = 0; dine.k = 0; dine.armS = 0; dine.entered = false
             script = .dine
         }
@@ -2519,6 +2526,7 @@ final class BlobBrain {
         var biasKnown = false
         var extra: Float = 0                            // seconds the lean was held for the tip to arrive
         var bentOn = false
+        var stepped = false                             // the one corrective step to his stand was made
         var bent: Float = 0                             // seconds from the lean's start to the straighten's start (bent at the plate)
         var grabS: Float = Float(ArmPath.nubGrabS)          // this bite's nub swing (meal-reach: solved per bite, a point on the same stub path; the old value 0.30 with -MealReach 0)
         var pauseTotal: Float = 0, pauseLook: Float = 0          // the pause after a bite (s), and the twist (rad) he glances with during it
