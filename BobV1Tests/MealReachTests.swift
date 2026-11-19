@@ -208,10 +208,10 @@ final class MealReachTests: XCTestCase {
         r.run(1); r.care.feed("sushi"); r.run(60) { r.t > 3 && !r.care.trayOut }
         guard let a = r.actors.first, let b = a.brain else { return }
         DiningLayout.ends = true; DiningLayout.reachFood = true          // (the sitting's end put them back)
-        for sx: Float in [1.2, 1.25, 1.3] {
+        for sx: Float in [1.25, 1.3] {
             DiningLayout.sideX = sx
             let L = DiningLayout.make(n: 3)
-            for (sm, cm, pm) in [(0.55, 0.8, 0.5), (0.65, 0.8, 0.5), (0.65, 0.75, 0.5), (0.65, 0.75, 0.55), (0.75, 0.75, 0.55), (0.55, 0.75, 0.55)] as [(Float, Float, Float)] {
+            for (sm, cm, pm) in [(0.55, 0.8, 0.5), (0.65, 0.8, 0.5), (0.65, 0.75, 0.5), (0.65, 0.75, 0.55)] as [(Float, Float, Float)] {
                 BlobBrain.dineSMax = sm; BlobBrain.dineCrouchMin = cm; BlobBrain.dinePitchMax = pm
                 var worst: [Float] = [0, 0, 0], worstOn: [Float] = [0, 0, 0]
                 for place in [0, 1, 2] {

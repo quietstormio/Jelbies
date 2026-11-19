@@ -2661,14 +2661,13 @@ final class BlobBrain {
         var bs = std, bc = pref
         var bestM = solve(std, pref, fast: true).r.miss, bestC = cost(bestM, std, pref)
         if bestM > 0.006 {
-            // two cheap stages instead of the whole grid: the swing first (at the drawn crouch), then the crouch (at that swing), then the swing's neighbours
-            for sg: Float in [0.15, 0.45, Self.dineSMax] { let m = solve(sg, pref, fast: true).r.miss; if cost(m, sg, pref) < bestC { bestC = cost(m, sg, pref); bs = sg; bestM = m } }
-            if bestM > 0.006 {
-                for cr: Float in [Self.dineCrouchMin, 0.5 * (Self.dineCrouchMin + 1), 1.0] where cr != pref { let m = solve(bs, cr, fast: true).r.miss; if cost(m, bs, cr) < bestC { bestC = cost(m, bs, cr); bc = cr; bestM = m } }
-            }
-            if bestM > 0.006 {
-                for sg in [bs - 0.075, bs + 0.075] where sg >= 0.1 && sg <= Self.dineSMax { let m = solve(sg, bc, fast: true).r.miss; if cost(m, sg, bc) < bestC { bestC = cost(m, sg, bc); bs = sg; bestM = m } }
-            }
+            // every (swing, crouch) pair on a coarse grid with the cheap solve (the staged search missed the best pair: both too-near and too-far pieces then missed by 4-10 cm)
+            let sgs: [Float] = [0.05, 0.15, 0.30, 0.45, Self.dineSMax]
+            let crs: [Float] = [pref, Self.dineCrouchMin, 0.5 * (Self.dineCrouchMin + 1), 1.0]
+            for sg in sgs { for cr in crs where !(sg == std && cr == pref) {
+                let m = solve(sg, cr, fast: true).r.miss, c = cost(m, sg, cr)
+                if c < bestC { bestC = c; bs = sg; bc = cr; bestM = m }
+            } }
         }
         let fin = solve(bs, bc, fast: false)
         dine.side = fin.side; dine.reach = fin.r.pose; dine.miss = fin.r.miss; dine.grabS = bs; dine.crouch = bc
