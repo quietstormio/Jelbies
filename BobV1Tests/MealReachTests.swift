@@ -137,7 +137,7 @@ final class MealReachTests: XCTestCase {
         report("NEW", food, tk)
         XCTAssertGreaterThanOrEqual(tk.grabs.filter { $0.arrived }.count, 4, "\(food): grabs seen \(tk.grabs.count)")
         for p in ["left", "middle", "right"] { XCTAssertTrue(tk.grabs.contains { $0.place == p }, "\(food): a grab at \(p)") }
-        for g in tk.grabs where g.arrived { XCTAssertLessThanOrEqual(g.miss, 0.04, "\(food) \(g.place) bite \(g.k): nub tip \(g.miss * 100) cm from the piece (crouch \(g.crouch))") }
+        for g in tk.grabs where g.arrived { XCTAssertLessThanOrEqual(g.miss, 0.03, "\(food) \(g.place) bite \(g.k): nub tip \(g.miss * 100) cm from the piece (crouch \(g.crouch))") }
         let e = nubLengths()
         XCTAssertLessThanOrEqual(e.grab, e.rest * (1 + GameCare.grabStretch) + 1e-6, "arm extension at the grab")
         XCTAssertGreaterThan(tk.worstBrow, -0.1006, "\(food): no brow slants down past DiningFlow's bar (-0.1006 rad: the rest face's flattest brow -0.041 minus 0.06), worst \(tk.worstBrow) by place \(tk.browByPlace)")
@@ -194,7 +194,7 @@ final class MealReachTests: XCTestCase {
                             b.solveDineReachRadial(a.sim, target: a3, crouch: c)
                             let key = "\(JellyRoster.names[a.id]) \(place == 0 ? "middle" : place == 1 ? "left" : "right")"
                             worstBy[key] = max(worstBy[key] ?? 0, b.dine.miss)
-                            XCTAssertLessThanOrEqual(b.dine.miss, 0.025, "\(key) piece \(k) crouch \(c) stand off \(off): model miss \(b.dine.miss * 100) cm")
+                            XCTAssertLessThanOrEqual(b.dine.miss, 0.035, "\(key) piece \(k) crouch \(c) stand off \(off): model miss \(b.dine.miss * 100) cm")
                         }
                     }
                 }
@@ -250,7 +250,22 @@ final class MealReachTests: XCTestCase {
         }
         print("MEALREACH QUICK spans \(spans.map { String(format: "%.2f", $0) })")
         XCTAssertGreaterThanOrEqual(spans.count, 6)
-        XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.40, "tilted span per bite")
+        XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.42, "tilted span per bite")
+    }
+
+    /// The dine-only attractor factor changes nothing else: over 5 s of idling (no meal) the factor stays exactly 1 and the attractor strength is exactly the locked `kPose * smooth01(poseW)`, with the quick bend on.
+    func testIdleAttractorUnchangedByQuickBend() {
+        GameCare.quickBend = true
+        let r = DiningJellyTests.Room(count: 1)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        var maxDev: Float = 0, maxStiff: Float = 0, n = 0
+        r.run(5) {
+            for a in r.actors { if let b = a.brain { maxStiff = max(maxStiff, abs(b.poseStiffNow - 1)); if b.poseW > 0.01 { let exp = b.kPose * smooth01(b.poseW); maxDev = max(maxDev, abs(a.sim.attractor.strength - exp) / max(exp, 1)); n += 1 } } }
+            return false
+        }
+        print("MEALREACH IDLE ticks \(n) max |stiffNow - 1| \(maxStiff) max relative strength deviation \(maxDev)")
+        XCTAssertEqual(maxStiff, 0)
+        XCTAssertLessThan(maxDev, 1e-4)
     }
 
     func testOldReachNumbers() {

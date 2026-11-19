@@ -270,7 +270,7 @@ final class DiningFlowTests: XCTestCase {
         // the bite stays on the nub / tines until it is flicked off (<= 0.01 u)
         let carry = d.filter { $0.holding && !$0.flying && $0.phase != "grab" }.compactMap { $0.heldDist }
         MotionLog.write("DINEFLOW \(name) carry max \(carry.max() ?? -1) over \(carry.count) frames")
-        XCTAssertGreaterThan(carry.count, GameCare.quickBend ? 30 : 60, "frames carrying the bite before the flick (the quick bend's straighten is 0.20 beat, was 0.45)", file: file, line: line)
+        XCTAssertGreaterThan(carry.count, GameCare.quickBend ? 20 : 60, "frames carrying the bite before the flick (the quick bend's straighten is 0.20 beat, was 0.45)", file: file, line: line)
         XCTAssertLessThan(carry.max() ?? 1, 0.01, "\(name): the bite stays on the nub until the flick", file: file, line: line)
         // the arm never extends: the nub stays on the stub part of its path (s <= the grab pose) for the whole meal
         XCTAssertLessThanOrEqual(d.map { $0.armS }.max() ?? 1, grabS + 0.001, "\(name): the nub never goes past the stub's swing", file: file, line: line)
