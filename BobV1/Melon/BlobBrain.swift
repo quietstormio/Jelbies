@@ -1710,7 +1710,7 @@ final class BlobBrain {
         // (a quick bend: during a food dine's lean / grab / straighten ONLY the attractor is 2.5x stiffer so the body follows the pose within ~0.05 s; it blends back to the locked jelly firmness over ~0.15 s in the chew,
         // and nothing else (idle, walk, sleep, play, ...) sees any change: `poseStiffNow` is 1 outside a dine)
         var stiffTarget: Float = 1
-        if case .dine = script, dine.mode == .finger, GameCare.mealReach, GameCare.reachFast, dine.phase == .lean || dine.phase == .grab || dine.phase == .straighten { stiffTarget = 2.5 }
+        if case .dine = script, dine.mode == .finger, Self.quick, dine.phase == .lean || dine.phase == .grab || dine.phase == .straighten { stiffTarget = 2.5 }
         poseStiffNow += (stiffTarget - poseStiffNow) * min(1, dt * (stiffTarget > poseStiffNow ? 60 : 8))
         if abs(poseStiffNow - 1) < 0.01 { poseStiffNow = 1 }
         let stiff = poseStiffNow
@@ -2548,9 +2548,9 @@ final class BlobBrain {
     // timeline (the shared rate: a bite is two beats of DiningTiming.beatPeriod, a gulp one)
     nonisolated static var dineBeat: Float { DiningTiming.beatPeriod }
     /// The tilted span of a food bite (lean + hold + grab + straighten) was ~0.8 s; the owner (2026-11-18): "they stay like that for like a whole second ... I don't want it that long": now ~0.3 s (`-MealReachFast 0` = the round-1 beats).
-    private static var quick: Bool { GameCare.mealReach && GameCare.reachFast }
+    private static var quick: Bool { GameCare.mealReach && GameCare.reachFast && GameCare.quickBend }
     private static var tLean: Float { dineBeat * (quick ? 0.15 : 0.40) }
-    private static var tGrab: Float { dineBeat * (quick ? 0.08 : 0.15) }
+    private static var tGrab: Float { dineBeat * (quick ? 0.08 : (GameCare.mealReach && GameCare.reachFast ? 0.12 : 0.15)) }
     private static var tStraighten: Float { dineBeat * (quick ? 0.20 : 0.45) }
     private static var tHappy: Float { dineBeat * 1.1 }
     private static var tSipLean: Float { dineBeat * 0.6 }
@@ -2671,7 +2671,7 @@ final class BlobBrain {
 
     func solveDineReachRadial(_ sim: SoftBody, target tgt: SIMD3<Float>, crouch pref: Float) {
         var target = tgt
-        if GameCare.mealReach, GameCare.reachFast {
+        if Self.quick {
             if dine.biasKnown { target = tgt - dine.bias }
             else if let b = Self.sharedBiasBody { let xz = rotXZ(SIMD2(b.x, b.z), yaw); dine.bias = SIMD3(xz.x, b.y, xz.y); target = tgt - dine.bias }
         }

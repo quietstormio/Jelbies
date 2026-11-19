@@ -16,10 +16,11 @@ final class MealReachTests: XCTestCase {
     private var savedPick: (([SIMD2<Float>]) -> SIMD2<Float>?)?
     override func setUp() {
         savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12
-        DiningGroup.homeSeats = 3; DiningGroup.varianceSeed = 424242
+        DiningGroup.homeSeats = 3; DiningGroup.varianceSeed = 424242; GameCare.quickBend = false
         savedPick = DiningSpot.pickOpen; DiningSpot.pickOpen = { $0.min { simd_distance($0, SIMD2(0.6, 1.6)) < simd_distance($1, SIMD2(0.6, 1.6)) } }          // (the home spot of the real app: both end stands on the floor)
     }
     override func tearDown() {
+        GameCare.quickBend = true
         DayClock.shared.forcedHour = savedHour; DiningGroup.homeSeats = 2; DiningGroup.variance = true; DiningGroup.varianceSeed = nil
         GameCare.mealReach = true
         if let savedPick { DiningSpot.pickOpen = savedPick }
@@ -232,6 +233,24 @@ final class MealReachTests: XCTestCase {
                 print("MEALREACH SWEEP sideX \(sx) s<=\(sm) crouch>=\(cm) pitch<=\(pm): worst miss cm (middle/left/right) any stand \(worst.map { String(format: "%.1f", $0 * 100) }) on stand \(worstOn.map { String(format: "%.1f", $0 * 100) })")
             }
         }
+    }
+
+    /// The quick bend: every bite's tilted span (lean down + grab + straighten back, `bent` at the chew) is <= 0.40 s (was ~0.8); the reach numbers are printed (the body-led reach is looser at this speed).
+    func testQuickBendSpan() {
+        GameCare.quickBend = true
+        defer { GameCare.quickBend = false }
+        let r = DiningJellyTests.Room(count: 3)
+        DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
+        for i in 0..<3 { r.care.needs(for: i).set(.hunger, 0.1) }
+        r.run(1); r.care.feed("sushi")
+        var spans: [Float] = [], seen = Set<Int>()
+        r.run(60) {
+            for a in r.actors { if let b = a.brain, b.dine.mode == .finger, b.dine.phase == .chew, !b.dine.bentOn, !seen.contains(a.id * 10 + b.dine.k) { seen.insert(a.id * 10 + b.dine.k); spans.append(b.dine.bent) } }
+            return r.t > 3 && !r.care.trayOut
+        }
+        print("MEALREACH QUICK spans \(spans.map { String(format: "%.2f", $0) })")
+        XCTAssertGreaterThanOrEqual(spans.count, 6)
+        XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.40, "tilted span per bite")
     }
 
     func testOldReachNumbers() {
