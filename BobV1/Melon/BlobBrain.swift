@@ -2748,7 +2748,7 @@ final class BlobBrain {
             armTarget = dine.grabS * min(1, dine.t / Self.tLean * 1.2)
             if dine.t >= Self.tLean {
                 // (meal-reach: the lean waits, at most 0.25 s, for the tip to be within 0.6 cm of the piece)
-                if GameCare.mealReach, dine.mode == .finger, tipErr > (GameCare.reachFast ? 0.012 : 0.006), dine.extra < (GameCare.reachFast ? 0.10 : 0.25) { dine.extra += dt; dine.t = Self.tLean }
+                if GameCare.mealReach, dine.mode == .finger, tipErr > (GameCare.reachFast ? 0.012 : 0.006), dine.extra < (GameCare.reachFast ? (dine.k == 0 ? 0.18 : 0.10) : 0.25) { dine.extra += dt; dine.t = Self.tLean }
                 else { dine.phase = .grab; dine.t = 0; dine.entered = false }
             }
         case .grab:
