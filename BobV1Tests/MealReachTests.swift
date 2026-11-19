@@ -16,7 +16,7 @@ final class MealReachTests: XCTestCase {
     private var savedPick: (([SIMD2<Float>]) -> SIMD2<Float>?)?
     override func setUp() {
         savedHour = DayClock.shared.forcedHour; DayClock.shared.forcedHour = 12
-        DiningGroup.homeSeats = 3; DiningGroup.varianceSeed = 424242; GameCare.quickBend = false
+        DiningGroup.homeSeats = 3; DiningGroup.varianceSeed = 424242; GameCare.quickBend = true
         savedPick = DiningSpot.pickOpen; DiningSpot.pickOpen = { $0.min { simd_distance($0, SIMD2(0.6, 1.6)) < simd_distance($1, SIMD2(0.6, 1.6)) } }          // (the home spot of the real app: both end stands on the floor)
     }
     override func tearDown() {
@@ -239,7 +239,6 @@ final class MealReachTests: XCTestCase {
     /// The quick bend: every bite's tilted span (lean down + grab + straighten back, `bent` at the chew) is <= 0.40 s (was ~0.8); the reach numbers are printed (the body-led reach is looser at this speed).
     func testQuickBendSpan() {
         GameCare.quickBend = true
-        defer { GameCare.quickBend = false }
         let r = DiningJellyTests.Room(count: 3)
         DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
         for i in 0..<3 { r.care.needs(for: i).set(.hunger, 0.1) }
@@ -254,22 +253,8 @@ final class MealReachTests: XCTestCase {
         XCTAssertLessThanOrEqual(spans.max() ?? 9, 0.40, "tilted span per bite")
     }
 
-    /// Sweep of the quick bend (lean beat, attractor factor): worst tilted span and worst reach per place (arrived diners), prints only.
-    func testQuickSweep() {
-        GameCare.quickBend = true
-        defer { GameCare.quickBend = false; BlobBrain.quickLean = 0.15; BlobBrain.quickGrab = 0.08; BlobBrain.quickStraighten = 0.20; BlobBrain.quickStiff = 2.5 }
-        for (lean, stiff) in [(0.25, 1.0), (0.25, 1.5), (0.25, 2.5), (0.30, 1.5), (0.30, 2.5), (0.40, 1.5)] as [(Float, Float)] {
-            BlobBrain.quickLean = lean; BlobBrain.quickStiff = stiff
-            BlobBrain.sharedBiasBody = nil
-            let tk = take(food: "sushi")
-            var per: [String: Float] = [:]
-            for g in tk.grabs where g.arrived { per[g.place] = max(per[g.place] ?? 0, g.miss) }
-            print("MEALREACH QSWEEP lean \(lean) stiff \(stiff): span max \(String(format: "%.2f", tk.spans.max() ?? 0)) mean \(String(format: "%.2f", tk.spans.reduce(0, +) / Float(max(tk.spans.count, 1)))) | worst reach cm " + ["left", "middle", "right"].map { "\($0) \(String(format: "%.1f", (per[$0] ?? -0.01) * 100))" }.joined(separator: " | ") + " | brow \(String(format: "%.3f", tk.worstBrow))")
-        }
-    }
-
     func testOldReachNumbers() {
-        GameCare.mealReach = false
+        GameCare.mealReach = false; GameCare.quickBend = false
         for f in ["sushi", "cookie"] { report("OLD", f, take(food: f)) }
     }
     func testSushiGrabsTouch() { check("sushi") }

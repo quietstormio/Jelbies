@@ -2550,7 +2550,8 @@ final class BlobBrain {
     /// The tilted span of a food bite (lean + hold + grab + straighten) was ~0.8 s; the owner (2026-11-18): "they stay like that for like a whole second ... I don't want it that long": now ~0.3 s (`-MealReachFast 0` = the round-1 beats).
     private static var quick: Bool { GameCare.mealReach && GameCare.reachFast && GameCare.quickBend }
     /// The quick bend's beats and the dine-only attractor factor (tunables for `MealReachTests.testQuickSweep`).
-    nonisolated(unsafe) static var quickLean: Float = 0.15, quickGrab: Float = 0.08, quickStraighten: Float = 0.20, quickStiff: Float = 2.5
+    nonisolated static func devBeat(_ key: String, _ d: Float) -> Float { (DevArgs.enabled && UserDefaults.standard.object(forKey: key) != nil) ? Float(UserDefaults.standard.double(forKey: key)) : d }
+    nonisolated(unsafe) static var quickLean: Float = devBeat("MealLeanBeat", 0.30), quickGrab: Float = devBeat("MealGrabBeat", 0.08), quickStraighten: Float = devBeat("MealStraightBeat", 0.15), quickStiff: Float = devBeat("MealDineStiff", 2.5)          // (dev args `-MealLeanBeat` `-MealGrabBeat` `-MealStraightBeat` `-MealDineStiff` for the captures)
     private static var tLean: Float { dineBeat * (quick ? quickLean : 0.40) }
     private static var tGrab: Float { dineBeat * (quick ? quickGrab : (GameCare.mealReach && GameCare.reachFast ? 0.12 : 0.15)) }
     private static var tStraighten: Float { dineBeat * (quick ? quickStraighten : 0.45) }
