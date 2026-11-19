@@ -2530,7 +2530,7 @@ final class BlobBrain {
 
     // timeline (the shared rate: a bite is two beats of DiningTiming.beatPeriod, a gulp one)
     nonisolated static var dineBeat: Float { DiningTiming.beatPeriod }
-    private static var tLean: Float { dineBeat * (GameCare.mealReach && GameCare.reachFast ? 0.25 : 0.40) }
+    private static var tLean: Float { dineBeat * 0.40 }
     private static var tGrab: Float { dineBeat * (GameCare.mealReach && GameCare.reachFast ? 0.12 : 0.15) }
     private static var tStraighten: Float { dineBeat * 0.45 }
     private static var tHappy: Float { dineBeat * 1.1 }
@@ -2701,6 +2701,7 @@ final class BlobBrain {
         guard let h = dineHooks else { return }
         if !armActive { armActive = true; armPathName = ArmPath.nubToMouth.name; armT = 0; armBlend = 0 }
         let clockWait = dine.k == 0 && dine.phase == .lean && !dine.entered && (dinePlan.board.map { $0.clock < dinePlan.leanAt } ?? false)
+        if dine.bentOn { dine.bent += dt }
         let waiting = clockWait || (dine.wait > 0 && dine.phase == .lean)          // (meal variance: he stands at his place, breathing, until his turn to lean)
         if waiting { if !clockWait { dine.wait -= dt } } else { dine.t += dt * dinePlan.pace }
         let grabS = Float(ArmPath.nubGrabS)
@@ -2738,7 +2739,7 @@ final class BlobBrain {
                 }
             }
             var tipErr: Float = 0
-            if GameCare.mealReach, dine.mode == .finger, dine.t / Self.tLean >= (GameCare.reachFast ? 0.12 : 0.4) { tipErr = refineDineReach(sim, piece: h.piece(dine.k)) }
+            if GameCare.mealReach, dine.mode == .finger, dine.t / Self.tLean >= 0.4 { tipErr = refineDineReach(sim, piece: h.piece(dine.k)) }
             let u = MotionCurve.spring(dine.t / Self.tLean)
             pose = lerpPose(dine.from, dine.reach, u)
             armTarget = dine.grabS * min(1, dine.t / Self.tLean * 1.2)
