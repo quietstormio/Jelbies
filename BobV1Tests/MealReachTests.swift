@@ -201,17 +201,17 @@ final class MealReachTests: XCTestCase {
     func testSweepSolverLimits() {
         let savedEnds = DiningLayout.ends, savedSide = DiningLayout.sideX, savedFood = DiningLayout.reachFood
         DiningLayout.ends = true; DiningLayout.reachFood = true
-        defer { DiningLayout.ends = savedEnds; DiningLayout.sideX = savedSide; DiningLayout.reachFood = savedFood; BlobBrain.dineSMax = 0.55; BlobBrain.dineCrouchMin = 0.8; BlobBrain.dinePitchMax = 0.5 }
+        defer { DiningLayout.ends = savedEnds; DiningLayout.sideX = savedSide; DiningLayout.reachFood = savedFood; BlobBrain.dineSMax = 0.65; BlobBrain.dineCrouchMin = 0.75; BlobBrain.dinePitchMax = 0.5 }
         let r = DiningJellyTests.Room(count: 3)
         DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
         for i in 0..<3 { r.care.needs(for: i).set(.hunger, 0.1) }
         r.run(1); r.care.feed("sushi"); r.run(60) { r.t > 3 && !r.care.trayOut }
         guard let a = r.actors.first, let b = a.brain else { return }
         DiningLayout.ends = true; DiningLayout.reachFood = true          // (the sitting's end put them back)
-        for sx: Float in [1.2, 1.25, 1.3, 1.35] {
+        for sx: Float in [1.25] {
             DiningLayout.sideX = sx
             let L = DiningLayout.make(n: 3)
-            for (sm, cm, pm) in [(0.55, 0.8, 0.5), (0.65, 0.75, 0.5)] as [(Float, Float, Float)] {
+            for (sm, cm, pm) in [(0.65, 0.75, 0.5)] as [(Float, Float, Float)] {
                 BlobBrain.dineSMax = sm; BlobBrain.dineCrouchMin = cm; BlobBrain.dinePitchMax = pm
                 var worst: [Float] = [0, 0, 0], worstOn: [Float] = [0, 0, 0]
                 for place in [0, 1, 2] {

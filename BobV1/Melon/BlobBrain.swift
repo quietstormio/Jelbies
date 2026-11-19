@@ -2618,7 +2618,7 @@ final class BlobBrain {
     /// How much higher (m per unit of lost height) the real body's centroid sits than the model's pinned pivot (measured in `MealReachTests`: 0.066 / 0.105 / 0.079 at crouch 0.85 / 0.75 / 0.80).
     nonisolated static let dineRise: Float = 0.42
     /// The reach solver's limits (tunables so `MealReachTests` can sweep them): the largest nub swing, the deepest crouch, the largest forward pitch.
-    nonisolated(unsafe) static var dineSMax: Float = 0.55, dineCrouchMin: Float = 0.8, dinePitchMax: Float = 0.5
+    nonisolated(unsafe) static var dineSMax: Float = 0.65, dineCrouchMin: Float = 0.75, dinePitchMax: Float = 0.5
     /// Closed loop for the grab: the model and the soft body differ (the body lags and sags), so from half way through the lean the tip's real position is compared with the model's for the pose being
     /// applied; the (smoothed) difference shifts the target for a warm re-solve of the turn / pitch / roll (the arm parameter, the side and the crouch stay). Returns the real tip-to-piece distance.
     @discardableResult
