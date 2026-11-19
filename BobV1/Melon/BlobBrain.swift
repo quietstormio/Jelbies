@@ -2517,6 +2517,8 @@ final class BlobBrain {
         var refined = 0                                 // closed-loop corrections made for this bite's reach
         var bias = SIMD3<Float>(0, 0, 0)                // the soft body's tip minus the model's, smoothed
         var extra: Float = 0                            // seconds the lean was held for the tip to arrive
+        var bentOn = false
+        var bent: Float = 0                             // seconds from the lean's start to the straighten's start (bent at the plate)
         var grabS: Float = Float(ArmPath.nubGrabS)          // this bite's nub swing (meal-reach: solved per bite, a point on the same stub path; the old value 0.30 with -MealReach 0)
         var pauseTotal: Float = 0, pauseLook: Float = 0          // the pause after a bite (s), and the twist (rad) he glances with during it
         var wait: Float = 0                         // seconds still to stand at the place (the plan's start delay, then a pause after each bite / gulp): the lean has not started, so no pose is frozen
@@ -2528,8 +2530,8 @@ final class BlobBrain {
 
     // timeline (the shared rate: a bite is two beats of DiningTiming.beatPeriod, a gulp one)
     nonisolated static var dineBeat: Float { DiningTiming.beatPeriod }
-    private static var tLean: Float { dineBeat * 0.40 }
-    private static var tGrab: Float { dineBeat * 0.15 }
+    private static var tLean: Float { dineBeat * (GameCare.mealReach && GameCare.reachFast ? 0.25 : 0.40) }
+    private static var tGrab: Float { dineBeat * (GameCare.mealReach && GameCare.reachFast ? 0.12 : 0.15) }
     private static var tStraighten: Float { dineBeat * 0.45 }
     private static var tHappy: Float { dineBeat * 1.1 }
     private static var tSipLean: Float { dineBeat * 0.6 }
@@ -2712,7 +2714,7 @@ final class BlobBrain {
             if waiting { pose.twist = dinePauseTwist(); break }
             if !dine.entered {                      // first tick of this lean: solve the reach (turn / pitch / roll about the planted feet)
                 dine.entered = true
-                dine.refined = 0; dine.extra = 0
+                dine.refined = 0; dine.extra = 0; dine.bent = 0; dine.bentOn = true
                 dine.from = ReachPose()
                 dine.crouch = dinePlan.motion ? 0.8 + 0.2 * VarianceRNG.unit(&dine.rng) : 0.9
                 if dine.mode == .fork {
@@ -2736,13 +2738,13 @@ final class BlobBrain {
                 }
             }
             var tipErr: Float = 0
-            if GameCare.mealReach, dine.mode == .finger, dine.t / Self.tLean >= 0.4 { tipErr = refineDineReach(sim, piece: h.piece(dine.k)) }
+            if GameCare.mealReach, dine.mode == .finger, dine.t / Self.tLean >= (GameCare.reachFast ? 0.12 : 0.4) { tipErr = refineDineReach(sim, piece: h.piece(dine.k)) }
             let u = MotionCurve.spring(dine.t / Self.tLean)
             pose = lerpPose(dine.from, dine.reach, u)
             armTarget = dine.grabS * min(1, dine.t / Self.tLean * 1.2)
             if dine.t >= Self.tLean {
                 // (meal-reach: the lean waits, at most 0.25 s, for the tip to be within 0.6 cm of the piece)
-                if GameCare.mealReach, dine.mode == .finger, tipErr > 0.006, dine.extra < 0.25 { dine.extra += dt; dine.t = Self.tLean }
+                if GameCare.mealReach, !GameCare.reachFast, dine.mode == .finger, tipErr > 0.006, dine.extra < 0.25 { dine.extra += dt; dine.t = Self.tLean }
                 else { dine.phase = .grab; dine.t = 0; dine.entered = false }
             }
         case .grab:
@@ -2753,7 +2755,11 @@ final class BlobBrain {
                 if dine.mode == .finger { MealTrace.log("reach \(steerID) k\(dine.k) tipToPiece=\(String(format: "%.2f", simd_distance(nubTipWorld(sim: sim), h.piece(dine.k)) * 100))cm miss=\(String(format: "%.2f", dine.miss * 100)) s=\(String(format: "%.2f", dine.grabS)) crouch=\(String(format: "%.2f", dine.crouch)) at=\(String(format: "%.2f,%.2f", px, pz))") }
             }
             if !dine.holding, h.begin() { dine.holding = true }
-            if dine.t >= Self.tGrab { dine.phase = .straighten; dine.t = 0; dine.entered = false }
+            if dine.t >= Self.tGrab {
+                dine.bentOn = false
+                if dine.mode == .finger { MealTrace.log("bent \(steerID) k\(dine.k) \(String(format: "%.3f", dine.bent))s") }
+                dine.phase = .straighten; dine.t = 0; dine.entered = false
+            }
         case .straighten:
             let u = MotionCurve.spring(dine.t / Self.tStraighten)
             pose = lerpPose(dine.reach, ReachPose(), u)

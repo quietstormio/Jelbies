@@ -574,6 +574,8 @@ final class GameCare {
     nonisolated(unsafe) static var reachCloser: Float = 0
     /// The most the nub may stretch past its rest length during the dine grab (a fraction of the rest nub); 0 = never.
     nonisolated(unsafe) static var grabStretch: Double = 0
+    /// The bent-at-the-plate time of a food bite (the owner 2026-11-18: "Why does it pause so long when they grab? make it .50 a second shorter"): the lean is shorter (0.25 beat), the grab 0.12 beat, and the old hold for the tip is gone (the tip is corrected while he moves). `-MealReachFast 0` = the round-1 timing (lean 0.40, grab 0.15, hold up to 0.25 s for the tip).
+    nonisolated(unsafe) static var reachFast: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReachFast") != nil && UserDefaults.standard.integer(forKey: "MealReachFast") == 0)
     func obstacle(_ p: SIMD3<Float>, radius: Float) -> SIMD3<Float> { dining.obstacle(p, radius: radius * RoomLayout.lowPropRadiusScale) }
     /// A passer-by (not eating) keeps a little more than his belly (0.6 of the 0.7 footprint = 0.42) off the whole drawn tray: his root moves in whole steps (a straight chord between two points that each clear it can clip a corner) and
     /// the drawn body trails its root by up to ~0.25.
