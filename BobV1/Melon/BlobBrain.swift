@@ -2551,7 +2551,7 @@ final class BlobBrain {
     private static var quick: Bool { GameCare.mealReach && GameCare.reachFast && GameCare.quickBend }
     /// The quick bend's beats and the dine-only attractor factor (tunables for `MealReachTests.testQuickSweep`).
     nonisolated static func devBeat(_ key: String, _ d: Float) -> Float { (DevArgs.enabled && UserDefaults.standard.object(forKey: key) != nil) ? Float(UserDefaults.standard.double(forKey: key)) : d }
-    nonisolated(unsafe) static var quickLean: Float = devBeat("MealLeanBeat", 0.50), quickGrab: Float = devBeat("MealGrabBeat", 0.08), quickStraighten: Float = devBeat("MealStraightBeat", 0.27), quickStiff: Float = devBeat("MealDineStiff", 4.0)          // (dev args `-MealLeanBeat` `-MealGrabBeat` `-MealStraightBeat` `-MealDineStiff` for the captures)
+    nonisolated(unsafe) static var quickLean: Float = devBeat("MealLeanBeat", 0.56), quickGrab: Float = devBeat("MealGrabBeat", 0.08), quickStraighten: Float = devBeat("MealStraightBeat", 0.30), quickStiff: Float = devBeat("MealDineStiff", 4.0)          // (dev args `-MealLeanBeat` `-MealGrabBeat` `-MealStraightBeat` `-MealDineStiff` for the captures)
     private static var tLean: Float { dineBeat * (quick ? quickLean : 0.40) }
     private static var tGrab: Float { dineBeat * (quick ? quickGrab : (GameCare.mealReach && GameCare.reachFast ? 0.12 : 0.15)) }
     private static var tStraighten: Float { dineBeat * (quick ? quickStraighten : 0.45) }
