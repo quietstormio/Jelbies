@@ -1706,7 +1706,9 @@ final class BlobBrain {
         } else {
             sim.attractor.anchor = SIMD3(px, sim.groundedAnchorY(rotation: q, squash: sq) + lift, pz)
         }
-        sim.attractor.strength = kPose * smooth01(poseW)
+        var stiff: Float = 1
+        if case .dine = script, dine.mode == .finger, GameCare.mealReach, GameCare.reachFast, dine.phase == .lean || dine.phase == .grab || dine.phase == .straighten { stiff = 2.5 }          // (a quick bend: the body must follow the pose within ~0.05 s)
+        sim.attractor.strength = kPose * stiff * smooth01(poseW)
     }
 
     // MARK: limbs
@@ -2539,9 +2541,11 @@ final class BlobBrain {
 
     // timeline (the shared rate: a bite is two beats of DiningTiming.beatPeriod, a gulp one)
     nonisolated static var dineBeat: Float { DiningTiming.beatPeriod }
-    private static var tLean: Float { dineBeat * 0.40 }
-    private static var tGrab: Float { dineBeat * (GameCare.mealReach && GameCare.reachFast ? 0.12 : 0.15) }
-    private static var tStraighten: Float { dineBeat * 0.45 }
+    /// The tilted span of a food bite (lean + hold + grab + straighten) was ~0.8 s; the owner (2026-11-18): "they stay like that for like a whole second ... I don't want it that long": now ~0.3 s (`-MealReachFast 0` = the round-1 beats).
+    private static var quick: Bool { GameCare.mealReach && GameCare.reachFast }
+    private static var tLean: Float { dineBeat * (quick ? 0.15 : 0.40) }
+    private static var tGrab: Float { dineBeat * (quick ? 0.08 : 0.15) }
+    private static var tStraighten: Float { dineBeat * (quick ? 0.20 : 0.45) }
     private static var tHappy: Float { dineBeat * 1.1 }
     private static var tSipLean: Float { dineBeat * 0.6 }
 
@@ -2647,7 +2651,7 @@ final class BlobBrain {
         let raw = actual - model
         // the soft body lags the pose while it moves, so the difference only means something once it has nearly arrived (65 % of the lean on): before that the bias of the last bite (the sag is the same
         // at the same place) is used; the bias starts at 0 for a diner's first bite
-        if dine.t / Self.tLean >= 0.65 || dine.phase == .grab { dine.bias = dine.biasKnown ? dine.bias + (raw - dine.bias) * 0.5 : raw; dine.biasKnown = true }
+        if dine.t / Self.tLean >= (Self.quick ? 0.5 : 0.65) || dine.phase == .grab { dine.bias = dine.biasKnown ? dine.bias + (raw - dine.bias) * 0.5 : raw; dine.biasKnown = true }
         dine.refined += 1
         let err = simd_distance(actual, piece)
         if err > 0.004 {          // (a tip already within 0.4 cm keeps its pose: no re-solve, so the lean and the brows are not disturbed)
@@ -2750,14 +2754,14 @@ final class BlobBrain {
                 }
             }
             var tipErr: Float = 0
-            if GameCare.mealReach, dine.mode == .finger, dine.t / Self.tLean >= 0.4 { tipErr = refineDineReach(sim, piece: h.piece(dine.k)) }
+            if GameCare.mealReach, dine.mode == .finger, dine.t / Self.tLean >= (Self.quick ? 0.25 : 0.4) { tipErr = refineDineReach(sim, piece: h.piece(dine.k)) }
             let u = MotionCurve.spring(dine.t / Self.tLean)
             pose = lerpPose(dine.from, dine.reach, u)
             armTarget = dine.grabS * min(1, dine.t / Self.tLean * 1.2)
             if dine.t >= Self.tLean {
                 // (meal-reach: the lean waits, at most 0.25 s, for the tip to be within 0.6 cm of the piece)
                 // (a diner's FIRST bite always holds the same 0.2 s: the meal variance's first-chomp gaps (>= 0.25 s) must not depend on how far the tip happened to be)
-                let hold = GameCare.mealReach && dine.mode == .finger && (GameCare.reachFast ? (dine.k == 0 ? dine.extra < 0.2 : (tipErr > 0.010 && dine.extra < 0.15)) : (tipErr > 0.006 && dine.extra < 0.25))
+                let hold = GameCare.mealReach && dine.mode == .finger && !Self.quick && (GameCare.reachFast ? (dine.k == 0 ? dine.extra < 0.2 : (tipErr > 0.010 && dine.extra < 0.15)) : (tipErr > 0.006 && dine.extra < 0.25))
                 if hold { dine.extra += dt; dine.t = Self.tLean }
                 else { dine.phase = .grab; dine.t = 0; dine.entered = false }
             }
@@ -2770,7 +2774,6 @@ final class BlobBrain {
             }
             if !dine.holding, h.begin() { dine.holding = true }
             if dine.t >= Self.tGrab {
-                dine.bentOn = false
                 if dine.mode == .finger { MealTrace.log("bent \(steerID) k\(dine.k) \(String(format: "%.3f", dine.bent))s") }
                 dine.phase = .straighten; dine.t = 0; dine.entered = false
             }
@@ -2778,7 +2781,10 @@ final class BlobBrain {
             let u = MotionCurve.spring(dine.t / Self.tStraighten)
             pose = lerpPose(dine.reach, ReachPose(), u)
             armTarget = dine.t < 0.6 * Self.tStraighten ? dine.grabS : 0.02        // the nub cocks back (still the stub, never longer) for the flick
-            if dine.t >= Self.tStraighten { dine.phase = .chew; dine.t = 0; dine.entered = false; dinePickVariants() }
+            if dine.t >= Self.tStraighten {
+                if dine.mode == .finger { MealTrace.log("span \(steerID) k\(dine.k) \(String(format: "%.3f", dine.bent))s") }
+                dine.bentOn = false; dine.phase = .chew; dine.t = 0; dine.entered = false; dinePickVariants()
+            }
         case .chew:
             // THE TOSS: a quick flick of the stub (the nub swings forward, never longer than its rest length) launches the bite in a small arc into his
             // mouth; the mouth opens just before it lands, then a chomp with a squash pulse and a happy wiggle, a second chomp, swallow.
