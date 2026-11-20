@@ -1110,6 +1110,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         PerfMeter.frameBegin()
         let cpu0 = CACurrentMediaTime()
         let now = cpu0
+        if MicTrace.recording { MicTrace.frame(now) }          // the mic trace's frame-pacing window (Voice/MicTrace.swift); one Bool test when off
         let dt = lastTime == 0 ? Float(1.0 / 60) : Self.pacedDt(Double(now - lastTime), fps: stage.preferredFramesPerSecond)
         lastTime = now
         adaptScale(stage, dt: Double(dt))

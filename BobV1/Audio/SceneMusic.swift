@@ -318,8 +318,10 @@ final class SceneMusicEngine {
     }
 
     /// Rebuilds the playing track on a fresh start of the engine (config change: route change, interruption end). Internal for tests.
+    var traceEngineID: ObjectIdentifier { ObjectIdentifier(engine) }
     func restartAfterConfigChange() {
         guard let t = current else { return }
+        MicTrace.record("sceneRestart", t.rawValue)
         alog("scene engine config change: replaying \(t.rawValue) from 0")
         let fade = 0.3
         for v in voices { v.cancelled = true; if v.node.engine != nil { v.node.stop(); engine.detach(v.node) } }
