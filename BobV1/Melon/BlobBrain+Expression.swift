@@ -191,7 +191,8 @@ extension BlobBrain {
         guard expr.enabled else { return }
         var owned = faceOwned
         var focusedRace = false
-        if race.active { owned = false; focusedRace = true }          // the race: a focused brow, nothing else
+        if race.active && !winCheer { owned = false; focusedRace = true }          // (the win celebration at the finish keeps its big happy face: `face(.excited)` below holds)
+        else if race.active { owned = false }
         let k = min(1, dt / ExprTuning.tau)
         if owned {
             if !expr.owned {
