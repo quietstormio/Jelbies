@@ -934,6 +934,7 @@ struct GameScreen: View {
             case "drink:water": care.drink("water")
             case "call": care.call()
             case "callall": care.comeHereEveryone()
+            case "roamhug": care.roamHug()          // capture aid: GameCare+RoamHug.swift
             case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()
             default: care.wave()
