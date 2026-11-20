@@ -306,17 +306,9 @@ nonisolated enum DiningModels {
         return m
     }
 
+    /// The serving surface under every food: the platter of the layout (DiningPlatter.swift).
     static func plate(layout L: TrayLayout, theme: RoomTheme, pizza: Bool = false) -> RoomMesh {
-        if !(L.arcToCentre && pizza) { return platterMesh(platter(layout: L, pizza: pizza), theme: theme) }          // food-on-plate-r1: the ends layout's pieces lie on a platter, see DiningPlatter.swift
-        let sw = theme.swatches, b = RoomMeshBuilder()
-        b.material = .plain
-        let pl = pizza ? pizzaPlate(L) : (r: DiningDims.plateRadius * L.scale, cz: Float(0))
-        let R = pl.r, y = DiningDims.plateFloorY, s = L.scale
-        let pts: [(r: Float, y: Float, ao: Float)] = [
-            (0, y - 0.004, 0.9), (R * 0.62, y - 0.004, 0.95), (R * 0.82, y + 0.008 * s, 1), (R * 0.95, y + 0.026 * s, 1),
-            (R, y + 0.034 * s, 1), (R * 0.985, y + 0.026 * s, 1), (R * 0.9, y - 0.004, 0.8), (R * 0.7, y - 0.022, 0.6), (R * 0.55, y - 0.022, 0.5)]
-        b.lathe(cx: 0, cz: pl.cz, profile: profile(pts), segments: 36, color: sw[4] * 1.08)
-        return b.mesh
+        platterMesh(platter(layout: L, pizza: pizza), theme: theme)
     }
 
     // MARK: Foods (tray-local; shared serving scaled for N)
@@ -391,27 +383,33 @@ nonisolated enum DiningModels {
     /// A slice's middle sits `sliceMid` from `P`.
     static let sliceMid: Float = 0.15
     static let sliceFan: Float = 36 * .pi / 180
+    /// food-on-plate-r1 (the ends layout, where the fan hung 0.3 outside the tray): the pizza's slices lie on the same arc as every other food's pieces for that place (`berryAnchor`),
+    /// crust toward him, each `pizzaArcScale` of the fan's slice size so the three fit side by side on the arc (0.169 apart) and on the platter. `pizzaOnArc = false` = the old fan (a test / A-B switch).
+    nonisolated(unsafe) static var pizzaOnArc = true
+    static let pizzaArcScale: Float = 0.6
+    static func pizzaArc(_ L: TrayLayout) -> Bool { L.arcToCentre && pizzaOnArc }
+    /// Size factor of a pizza slice or mini pizza for this layout (1 = the fan's full size).
+    static func pizzaPieceScale(_ L: TrayLayout) -> Float { pizzaArc(L) ? pizzaArcScale : 1 }
 
     /// Pie centre and the unit direction (xz, tray-local) from the centre toward the Blob, for place `i`. One Blob: the centre is a hair in front of the plate
     /// middle so all three slice middles are within the nub's reach (<= 0.595 from his stand, like the berries).
     static func pizzaPie(layout L: TrayLayout, place i: Int) -> (centre: SIMD2<Float>, toward: SIMD2<Float>) {
+        if pizzaArc(L) { let a = berryAnchor(layout: L, place: i, index: 1, lift: sliceLift), c = SIMD2(a.x, a.z); return (c, simd_normalize(L.places[i].rel - c)) }
         if L.n == 1 { return (SIMD2(0, -0.03), SIMD2(0, -1)) }
         let a = berryAnchor(layout: L, place: i, index: 1, lift: sliceLift)
         let c = SIMD2(a.x, a.z)
         let d = L.places[i].rel - c
         return (c, simd_normalize(d))
     }
-    /// The pizza plate: bigger than the berry plate so a whole fan of slices lies on it (radius, centre z).
-    static func pizzaPlate(_ L: TrayLayout) -> (r: Float, cz: Float) {
-        L.n == 1 ? (0.335, pizzaPie(layout: L, place: 0).centre.y) : (DiningDims.plateRadius * L.scale * 1.7, 0)
-    }
     /// Direction (xz) from the pie centre out to slice `j`'s middle.
     static func sliceDir(layout L: TrayLayout, place i: Int, index j: Int) -> SIMD2<Float> {
+        if pizzaArc(L) { return pizzaPie(layout: L, place: i).toward }          // (on the arc every slice points the same way: tip away from him)
         let d = pizzaPie(layout: L, place: i).toward, a = Float(j - 1) * sliceFan, c = cosf(a), sn = sinf(a)
         return SIMD2(d.x * c - d.y * sn, d.x * sn + d.y * c)
     }
     /// Where slice `j` of place `i` lies (its middle, on the plate, tray-local).
     static func pizzaAnchor(layout L: TrayLayout, place i: Int, index j: Int) -> SIMD3<Float> {
+        if pizzaArc(L) { let k = pizzaArcScale; return berryAnchor(layout: L, place: i, index: j, lift: sliceLift * k) }
         let s = L.scale, pie = pizzaPie(layout: L, place: i), d = sliceDir(layout: L, place: i, index: j)
         let q = pie.centre + d * sliceMid * s
         return SIMD3(q.x, DiningDims.plateFloorY + sliceLift * s, q.y)
@@ -430,11 +428,11 @@ nonisolated enum DiningModels {
                 let c = pizzaAnchor(layout: L, place: i, index: j)
                 if let piece {      // a meshed slice (mini pizza): the piece builder draws it at yaw 0, so turn it about its centre
                     let one = RoomMeshBuilder(); one.material = .plain
-                    piece(one, .zero, j, L.scale, p)
+                    piece(one, .zero, j, L.scale * pizzaPieceScale(L), p)
                     let y = sliceYaw(layout: L, place: i, index: j)
                     append(one.mesh, to: b, transform: translation(c, yaw: y))
                 } else {
-                    pizzaSlice(b, centre: c, yaw: sliceYaw(layout: L, place: i, index: j), palette: p, scale: L.scale)
+                    pizzaSlice(b, centre: c, yaw: sliceYaw(layout: L, place: i, index: j), palette: p, scale: L.scale * pizzaPieceScale(L))
                 }
             }
         }
