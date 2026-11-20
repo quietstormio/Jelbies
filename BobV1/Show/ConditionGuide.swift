@@ -22,8 +22,8 @@ enum ConditionGuide {
         guard let theme else { return nil }
         return t == theme.main ? "Today" : t == theme.friend ? "Helps today" : nil
     }
-    /// "Sweet: filled by sweet foods".
-    static func styleLine(_ key: ConditionKey) -> String { "\(key.title): filled by \(key.title.lowercased()) foods" }
+    /// "Sweet foods and drinks fill this jar."
+    static func styleLine(_ key: ConditionKey) -> String { "\(key.title) foods and drinks fill this jar." }
     static func rivalsLine(_ rank: ShowRank) -> String { "Rivals in \(rank.title) are about here." }
     static func jarLabel(_ tag: WearTag, number: Int, today: String?, grew: Bool) -> String {
         "\(tag.title) \(number)\(today.map { ", \($0)" } ?? "")\(grew ? ", just grew" : ""), double tap for foods that fill it"
@@ -35,18 +35,19 @@ enum ConditionGuide {
         var item: StoreItem
         var gain: Float
         var count: Int          // in the Bag (0 = not owned: the Shop sells it)
+        var isDrink: Bool { item.kind == .drink }
         var owned: Bool { count > 0 }
         var id: String { item.id }
     }
-    /// The Shop foods Feed can serve (no drinks) that raise this jar, the biggest gain first.
+    /// The Shop foods and drinks that raise this jar, the biggest gain first.
     static func allFoods(raising key: ConditionKey) -> [(item: StoreItem, gain: Float)] {
         StoreCatalog.items.compactMap { it in
-            guard it.food != nil, it.kind != .drink, let f = it.food, let c = Consumables.with(id: f), let g = c.condition[key], g > 0 else { return nil }
+            guard let f = it.food, let c = Consumables.with(id: f), let g = c.condition[key], g > 0 else { return nil }
             return (it, g)
         }
         .sorted { $0.gain != $1.gain ? $0.gain > $1.gain : $0.item.name < $1.item.name }
     }
-    /// What the jar card lists: every food the player owns that raises the jar first, then up to `shopMax` they do not own (marked with the Shop).
+    /// What the jar card lists: every food and drink the player owns that raises the jar first, then up to `shopMax` in all they do not own (marked with the Shop).
     static func fillers(raising key: ConditionKey, count: (String) -> Int, shopMax: Int = 3) -> [Filler] {
         let all = allFoods(raising: key).map { Filler(item: $0.item, gain: $0.gain, count: count($0.item.id)) }
         return all.filter(\.owned) + Array(all.filter { !$0.owned }.prefix(shopMax))
@@ -63,6 +64,7 @@ struct ConditionJarCard: View {
     var who: Int
     var tag: WearTag
     var feed: (() -> Void)?
+    var drink: (() -> Void)?
     var close: () -> Void
 
     var body: some View {
@@ -71,6 +73,8 @@ struct ConditionJarCard: View {
         let meals = ConditionGuide.meals(filling: key, in: care.jelly(who)?.stats.meals ?? [])
         let target = ShowUI.target(after: care.show.progress.unlockedRanks)
         let feedOK = feed != nil && HUDMenu.enabled(.feed, .group, care: care)
+        let drinkOK = drink != nil && HUDMenu.enabled(.drink, .group, care: care)
+        let ownsDrink = list.contains { $0.owned && $0.isDrink }
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -87,6 +91,7 @@ struct ConditionJarCard: View {
                         HStack(spacing: 10) {
                             ItemArt(item: f.item, size: 44)
                             Text(f.item.name).font(SK.font(15, .black)).foregroundStyle(SK.ink).fixedSize(horizontal: false, vertical: true)
+                            if f.isDrink { Image(systemName: HUDMenu.symbol(.drink)).font(.system(size: 14, weight: .heavy)).foregroundStyle(SK.skyDeep).accessibilityLabel("Drink") }
                             Spacer(minLength: 4)
                             if f.owned { Text("x\(f.count)").font(SK.font(13, .heavy)).foregroundStyle(SK.muted) }
                             else {
@@ -98,7 +103,10 @@ struct ConditionJarCard: View {
                         .accessibilityElement(children: .combine).accessibilityIdentifier("jarcard-food-\(f.item.id)")
                     }
                 }
-                ShowCTA(title: "Feed", symbol: "fork.knife", enabled: feedOK, id: "jarcard-feed", height: 52) { feed?() }
+                HStack(spacing: 10) {
+                    ShowCTA(title: "Feed", symbol: "fork.knife", enabled: feedOK, id: "jarcard-feed", height: 52) { feed?() }
+                    if ownsDrink { ShowCTA(title: "Drink", symbol: HUDMenu.symbol(.drink), enabled: drinkOK, id: "jarcard-drink", height: 52) { drink?() } }
+                }
                 if !meals.isEmpty {
                     Text("Last meals").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
                     ForEach(Array(meals.enumerated()), id: \.offset) { _, m in

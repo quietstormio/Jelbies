@@ -88,13 +88,14 @@ struct TownFlow: View {
     var groom: () -> Void = {}
     /// Feed: closes the Town and opens the normal Feed picker in the room (the Condition screen's jar card button).
     var feed: () -> Void = {}
+    var drink: () -> Void = {}
     /// The Jelly Spring (the adoption screen): leaves the room for the adoption screen (StartFlow).
     var adopt: () -> Void = { StartFlow.shared.openAdoption() }
     /// The screen the flow opened on: its back button leaves the flow (the Go out button opens the Town, so Track / Store go back to it).
     @State private var root: TownScreen
 
-    init(care: GameCare, screen: Binding<TownScreen?>, who: Int, cafe: @escaping () -> Void = {}, park: @escaping () -> Void = {}, groom: @escaping () -> Void = {}, feed: @escaping () -> Void = {}, goHome: @escaping () -> Void) {
-        self.care = care; self._screen = screen; self._who = State(initialValue: who); self.goHome = goHome; self.cafe = cafe; self.park = park; self.groom = groom; self.feed = feed
+    init(care: GameCare, screen: Binding<TownScreen?>, who: Int, cafe: @escaping () -> Void = {}, park: @escaping () -> Void = {}, groom: @escaping () -> Void = {}, feed: @escaping () -> Void = {}, drink: @escaping () -> Void = {}, goHome: @escaping () -> Void) {
+        self.care = care; self._screen = screen; self._who = State(initialValue: who); self.goHome = goHome; self.cafe = cafe; self.park = park; self.groom = groom; self.feed = feed; self.drink = drink
         self._root = State(initialValue: screen.wrappedValue ?? .town)
     }
     /// Back from the current screen: out of the flow when it is the root, else to `target`.
@@ -105,6 +106,7 @@ struct TownFlow: View {
     func choosePark() { goHome(); park() }
     func chooseGroom() { goHome(); groom() }
     func chooseFeed() { goHome(); feed() }
+    func chooseDrink() { goHome(); drink() }
     func chooseCamp() { goHome(); care.requestCamp() }
 
     var body: some View {
@@ -114,7 +116,7 @@ struct TownFlow: View {
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome).tipScreen("shop")
             case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, shop: { screen = .shop }, race: { goHome(); care.startRace(jelly: who) }).tipScreen("race")
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) }).tipScreen("show")
-            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.requestClean(jelly: who) }, feed: chooseFeed).tipScreen("trophies")
+            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.requestClean(jelly: who) }, feed: chooseFeed, drink: chooseDrink).tipScreen("trophies")
             case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, shop: { screen = .shop }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }).tipScreen("volley")
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }

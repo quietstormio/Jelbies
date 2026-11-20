@@ -668,6 +668,8 @@ struct ConditionScreen: View {
     var bath: (() -> Void)? = nil
     /// Starts the normal Feed flow (closes this screen and opens the Feed picker); nil = no Feed button action.
     var feed: (() -> Void)? = nil
+    /// Same for the Drink picker (the jar card shows the button only when an owned drink fills the jar).
+    var drink: (() -> Void)? = nil
     @Environment(\.verticalSizeClass) private var vsc
     @State private var jarOpen: WearTag?
     @State private var trophiesOpen = false
@@ -701,7 +703,7 @@ struct ConditionScreen: View {
         .accessibilityIdentifier("condition-screen")
         .onAppear { grown = false; withAnimation(.spring(response: 0.6, dampingFraction: 0.62).delay(0.15)) { grown = true } }
         .onChange(of: who) { _, _ in grown = false; withAnimation(.spring(response: 0.6, dampingFraction: 0.62).delay(0.1)) { grown = true } }
-        .sheet(item: $jarOpen) { t in ConditionJarCard(care: care, who: who, tag: t, feed: feed, close: { jarOpen = nil }).presentationDetents([.medium, .large]).presentationBackground(SK.cream) }
+        .sheet(item: $jarOpen) { t in ConditionJarCard(care: care, who: who, tag: t, feed: feed, drink: drink, close: { jarOpen = nil }).presentationDetents([.medium, .large]).presentationBackground(SK.cream) }
         .sheet(isPresented: $trophiesOpen) { TrophiesSheet(care: care, who: who) { trophiesOpen = false }.presentationDetents([.medium, .large]).presentationBackground(SK.cream) }
         .task {          // capture aid (dev arguments only): `-CondJar cute|sweet|sparkly|cool|sporty` opens that jar's card
             guard DevArgs.enabled, let raw = UserDefaults.standard.string(forKey: "CondJar"), let t = WearTag(rawValue: raw) else { return }

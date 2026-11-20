@@ -1,7 +1,7 @@
 //
 //  ConditionGuideTests.swift
 //  The Condition screen's words and lists (Show/ConditionGuide.swift): the foods that fill a jar (owned first, never empty for any of the five styles,
-//  nothing Feed cannot serve), the Glow wording, the "Today" tags and the meals that filled a jar. Display only.
+//  drinks too), the Glow wording, the "Today" tags and the meals that filled a jar. Display only.
 //
 
 import XCTest
@@ -15,7 +15,7 @@ final class ConditionGuideTests: XCTestCase {
             XCTAssertFalse(l.isEmpty, "\(k.title) lists foods")
             XCTAssertLessThanOrEqual(l.count, 3, "an empty bag lists at most three Shop foods")
             for f in l {
-                XCTAssertFalse(f.owned); XCTAssertNotEqual(f.item.kind, .drink)
+                XCTAssertFalse(f.owned)
                 XCTAssertGreaterThan(Consumables.with(id: f.item.food ?? "")?.condition[k] ?? 0, 0, "\(f.item.name) raises \(k.title)")
             }
         }
@@ -34,6 +34,21 @@ final class ConditionGuideTests: XCTestCase {
         let everything = ConditionGuide.fillers(raising: .sweet, count: { _ in 1 })
         XCTAssertEqual(everything.count, ConditionGuide.allFoods(raising: .sweet).count, "every owned food is listed")
         XCTAssertTrue(everything.allSatisfy(\.owned))
+    }
+
+    func testDrinksFillJarsToo() {
+        XCTAssertTrue(ConditionKey.allCases.contains { k in ConditionGuide.allFoods(raising: k).contains { $0.item.kind == .drink } }, "some drink raises a jar")
+        for k in ConditionKey.allCases {
+            let all = ConditionGuide.allFoods(raising: k)
+            for drinkFirst in [true, false] {          // own only the drinks, then only the foods: owned come first, at most three Shop rows in all
+                let owned = Set(all.filter { ($0.item.kind == .drink) == drinkFirst }.map(\.item.id))
+                let l = ConditionGuide.fillers(raising: k, count: { owned.contains($0) ? 1 : 0 })
+                XCTAssertEqual(l.prefix(owned.count).filter(\.owned).count, owned.count, "\(k.title): owned rows first")
+                XCTAssertTrue(l.dropFirst(owned.count).allSatisfy { !$0.owned })
+                XCTAssertLessThanOrEqual(l.count - owned.count, 3, "\(k.title): at most three Shop rows in all")
+                XCTAssertEqual(l.contains { $0.owned && $0.isDrink }, drinkFirst && !owned.isEmpty, "\(k.title): the Drink button shows only with an owned drink")
+            }
+        }
     }
 
     func testGlowWordsMapZeroToFive() {
@@ -60,7 +75,7 @@ final class ConditionGuideTests: XCTestCase {
         XCTAssertEqual(ConditionGuide.meals(filling: .sweet, in: ms).map(\.food), ["Donut"])
         XCTAssertEqual(ConditionGuide.meals(filling: .cute, in: ms).map(\.food), ["Sushi"])
         XCTAssertTrue(ConditionGuide.meals(filling: .sporty, in: ms).isEmpty)
-        XCTAssertEqual(ConditionGuide.styleLine(.sweet), "Sweet: filled by sweet foods")
+        XCTAssertEqual(ConditionGuide.styleLine(.sweet), "Sweet foods and drinks fill this jar.")
         XCTAssertEqual(ConditionGuide.rivalsLine(.lagoon), "Rivals in Lagoon are about here.")
     }
 }
