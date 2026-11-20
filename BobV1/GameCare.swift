@@ -694,6 +694,7 @@ final class GameCare {
             if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)), !(FocusGroup.sleeperFix && brain.isSleeping) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
             }
+            if let v = focusGroup.viaZero, simd_length(brain.position - v) < 0.6 || focusGroup.clock - focusGroup.viaZeroAt > 5 { focusGroup.viaZero = nil; queued = [.come(to: focusGroup.spot(of: 0))]; approachIdle = 0 }          // (walked round an uncalled body: now to his spot)
             focusReplan(dt: dt)
             if focusGroup.includes(0), !focusGroup.arrived.contains(0), !focusGroup.zeroPending, simd_length(brain.position - focusGroup.spot(of: 0)) < 0.25 { zeroOnSlot += dt } else { zeroOnSlot = 0 }
             if zeroOnSlot > 0.3, !focusGroup.arrived.contains(0) { zeroOnSlot = 0; enterFocus(brain: brain) }          // (on his slot and still: arrived; the wave plays after)
@@ -703,7 +704,7 @@ final class GameCare {
         case .approaching where focusGroup.includes(0):
             // the come request can be cancelled (for example he was grabbed): ask again a couple of times, then give up
             let act = brain.activity
-            if !callRunning, queued.isEmpty, !focusGroup.zeroPending, act == .idle || act == .lookingAround || act == .steppingInPlace {
+            if !callRunning, queued.isEmpty, !focusGroup.zeroPending, focusGroup.viaZero == nil, act == .idle || act == .lookingAround || act == .steppingInPlace {
                 approachIdle += dt
                 if approachIdle > 0.8 {
                     approachIdle = 0

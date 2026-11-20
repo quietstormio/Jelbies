@@ -22,7 +22,7 @@ final class FocusGroup {
     /// The steering gap each row member had before the line-up (he keeps only the row's gap from the others while it is on: the slots are 1.15 apart, the room's gap is 1.4).
     var gapSaved: [Int: Float] = [:]
     static let rowSteerGap: Float = 1.05
-    struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var short = 0; var hopped = false; var onSlot: Float = 0 }
+    struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var short = 0; var hopped = false; var onSlot: Float = 0; var via: SIMD2<Float>? = nil }
     /// A come walk that ended SHORT of the spot (someone stood on it and the floor rules dragged the target over the gap: he turned to wave 1.4 u early) is
     /// re-asked at once, this many times at most, while the stander steps aside (`MelonController.clearWay`); not counted against the calm retries.
     static let shortRetries = 6
@@ -53,6 +53,10 @@ final class FocusGroup {
     var clock: Float = 0
     var front = 0
     var zeroPending = false
+    /// The uncalled bodies' floor spots at the call (the row is laid clear of them; a walker detours round one that lies on his straight way), and Jelly 0's detour point.
+    var uncalled: [SIMD2<Float>] = []
+    var viaZero: SIMD2<Float>?
+    var viaZeroAt: Float = 0
     /// Smart line-up: the row's slots (0 = the middle), who has which, who is settled (within `Lineup.commitDistance` of his slot, or arrived), and the re-plan clock.
     private(set) var slots: [SIMD2<Float>] = []
     private(set) var slotOf: [Int: Int] = [:]
@@ -79,7 +83,7 @@ final class FocusGroup {
     var rowSpacing: Float = GameCamera.focusRowSpacing
 
     func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:], avoiding obstacles: [SIMD2<Float>] = [], reachable: @escaping (SIMD2<Float>) -> Bool = { _ in true }) {
-        ids = new; arrived = []; clock = 0; netShift = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
+        ids = new; uncalled = obstacles; viaZero = nil; arrived = []; clock = 0; netShift = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
             let row = Self.rowAvoiding(count: new.count, spacing: rowSpacing, obstacles: obstacles, reachable: reachable)          // (the same expression a preview group is born on, moved aside only when an uncalled body would stand between or over them)
@@ -133,13 +137,29 @@ final class FocusGroup {
         GameCamera.aspect > 1 ? min(GameCamera.roamRectWide.max.x - 0.4, max(2.2, GameCamera.visibleHalfWidthAtBody(z: z) * 0.93 - 0.3)) : 2.2
     }
 
-    /// The row's spots: the usual ones (`previewRowSpots`) unless an uncalled body (asleep or not) lies within `bodyApart` of one, or, for a row, would stand between or over them on screen;
-    /// then the nearest row to the call spot that is clear of all of them AND that the called can walk to (`reachable`). None clear and reachable: the usual row.
+    /// The spot is inside the floor's HUD-button cut-outs (`RoamFloor.railFree`): `GameCamera.constrain` would not move a body standing there.
+    static func railFreeAt(_ p: SIMD2<Float>) -> Bool {
+        guard let rf = GameCamera.roamFloor, !rf.railFree.isEmpty, let g = rf.zs.first, !rf.zs.isEmpty else { return true }
+        let i = min(max(Int(floorf((p.y - g) / GameCamera.RoamFloor.step)), 0), rf.zs.count - 1)
+        for r in [i, min(i + 1, rf.zs.count - 1)] where r < rf.railFree.count {
+            let spans = rf.railFree[r]
+            if spans.isEmpty || spans.contains(where: { $0.contains(p.x) }) { continue }
+            if rf.free.isEmpty || r >= rf.free.count { continue }
+            return false
+        }
+        return true
+    }
+
+    /// The row's spots (2026-11-20 rule): every called body in the FRONT-most row. An uncalled body (asleep or not) may stand BEHIND the row, even in the middle, but never beside or in front of it close enough
+    /// to cover one (it keeps `bodyApart` from every spot, and is behind every spot by 0.25, or wholly to one side of the row on screen). The usual row (`previewRowSpots`) when that holds; else the nearest
+    /// row to the call spot that holds it, that the called can walk to (`reachable`) and that lies inside the floor's button cut-outs. None: the usual row.
     static func rowAvoiding(count n: Int, spacing: Float, obstacles: [SIMD2<Float>], reachable: (SIMD2<Float>) -> Bool = { _ in true }) -> [SIMD2<Float>] {
         let base = GameCamera.previewRowSpots(count: n, spacing: spacing)
         guard !obstacles.isEmpty else { return base }
         func clear(_ sp: [SIMD2<Float>]) -> Bool {
-            sp.allSatisfy { s in obstacles.allSatisfy { simd_distance(s, $0) >= bodyApart } } && (n == 1 || screenClear(sp, obstacles) > 0.05)
+            obstacles.allSatisfy { o in
+                sp.allSatisfy { simd_distance($0, o) >= bodyApart } && (sp.allSatisfy { o.y <= $0.y - 0.25 } || screenClear(sp, [o]) > 0.05)
+            }
         }
         if clear(base) { return base }
         let offs = n > 1 ? GameCamera.focusRowSpots(count: n, anchor: .zero, spacing: spacing) : [SIMD2<Float>.zero]
@@ -147,17 +167,40 @@ final class FocusGroup {
         var x: Float = -2.6
         while x <= 2.6001 {
             var z = GameCamera.callSpot.y - 1.4
-            while z <= GameCamera.callSpot.y + 1e-4 {
+            while z <= GameCamera.callSpot.y + 0.7 {
                 let a = SIMD2<Float>(x, z)
                 let spots = offs.map { a + $0 }
                 z += 0.1
-                guard spots.allSatisfy({ abs($0.x) <= sideLimit(z: $0.y) && FreeFloor.isFree($0, radius: 0.8) && reachable($0) }), clear(spots) else { continue }
+                guard spots.allSatisfy({ abs($0.x) <= sideLimit(z: $0.y) && FreeFloor.isFree($0, radius: 0.8) && railFreeAt($0) && reachable($0) }), clear(spots) else { continue }
                 let d = simd_distance(a, GameCamera.callSpot)
                 if d < (best?.d ?? .infinity) { best = (spots, d) }
             }
             x += 0.1
         }
         return best?.spots ?? base
+    }
+
+    /// A point to walk round first, when the straight way from `p` to `s` brushes past an uncalled body (a lying body is 1.8 across: two of them leave a slit a walker is pinned in); nil = walk straight.
+    static func detour(from p: SIMD2<Float>, to s: SIMD2<Float>, obstacles: [SIMD2<Float>], fixed: (SIMD2<Float>) -> SIMD2<Float>) -> SIMD2<Float>? {
+        let d = s - p, len = simd_length(d)
+        guard len > 1.5 else { return nil }
+        let u = d / len
+        var hit: SIMD2<Float>?, hitT = Float.infinity
+        for o in obstacles {
+            let t = simd_dot(o - p, u)
+            guard t > 0.2, t < len - 0.2, simd_length(o - (p + u * t)) < 1.5, t < hitT else { continue }
+            hit = o; hitT = t
+        }
+        guard let o = hit else { return nil }
+        let n = SIMD2<Float>(-u.y, u.x)
+        var best: (SIMD2<Float>, Float)?
+        for side: Float in [-1, 1] {
+            let c = o + n * side * 2.1
+            guard simd_distance(fixed(c), c) < 0.15, obstacles.allSatisfy({ simd_distance($0, c) >= 1.3 }) else { continue }
+            let cost = simd_distance(p, c) + simd_distance(c, s)
+            if cost < (best?.1 ?? .infinity) { best = (c, cost) }
+        }
+        return best?.0
     }
 
     /// Smart line-up, once per fixed step while approaching: settle whoever is near his slot, re-plan the rest. Returns the Jellies whose spot changed.
@@ -186,7 +229,7 @@ final class FocusGroup {
     }
 
     func clear() {
-        ids = []; spots = [:]; slots = []; slotOf = [:]; committed = []; arrived = []; clock = 0; zeroPending = false; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; rowOpen = false; touchAnchor = nil; touchID = 0
+        ids = []; uncalled = []; viaZero = nil; spots = [:]; slots = []; slotOf = [:]; committed = []; arrived = []; clock = 0; zeroPending = false; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; rowOpen = false; touchAnchor = nil; touchID = 0
         GameCamera.focusSpots = []; GameCamera.focusFramed = []
     }
 }
@@ -246,7 +289,10 @@ extension GameCare {
             for id in ids where brainFor(id)?.isSleeping == true { wakeSleeper(id, groggy: false, fast: true); if id == 0 { zeroAsleep = true } }
         }
         if ids.contains(0) {
-            if focusGroup.mayGo(0, frontDistance: nil), !zeroAsleep { queued = [.come(to: focusGroup.spot(of: 0))] } else { focusGroup.zeroPending = true }
+            if focusGroup.mayGo(0, frontDistance: nil), !zeroAsleep {
+                if FocusGroup.sleeperFix, let b0 = brainFor(0), let v = FocusGroup.detour(from: b0.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, fixed: { b0.fixed($0) }) { focusGroup.viaZero = v; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(v)] }
+                else { queued = [.come(to: focusGroup.spot(of: 0))] }
+            } else { focusGroup.zeroPending = true }
         }
     }
 
@@ -344,10 +390,15 @@ extension GameCare {
                 guard g.mayGo(id, frontDistance: frontDistance(except: id)) else { return }
                 s.requested = true; s.age = 0
                 brain.onFinished = { [weak g] r in if case .come = r { g?.came.insert(id) } }
-                brain.requestNow(.come(to: g.spot(of: id)))
+                if FocusGroup.sleeperFix, let v = FocusGroup.detour(from: Self.floorPos(brain, sim), to: g.spot(of: id), obstacles: g.uncalled, fixed: { brain.fixed($0) }) { s.via = v; brain.requestNow(.goTo(v)) }
+                else { brain.requestNow(.come(to: g.spot(of: id))) }
                 return
             }
             s.age += dt
+            if let v = s.via {          // walking round an uncalled body first, then to his spot
+                if simd_length(Self.floorPos(brain, sim) - v) < 0.6 || s.age > 5 { s.via = nil; s.age = 0; s.short = 0; brain.requestNow(.come(to: g.spot(of: id))) }
+                return
+            }
             // standing on his slot and still = arrived (the turn and the wave play AFTER arrival, they do not gate it)
             if simd_length(Self.floorPos(brain, sim) - g.spot(of: id)) < 0.25 { s.onSlot += dt } else { s.onSlot = 0 }
             if s.onSlot > 0.3 {

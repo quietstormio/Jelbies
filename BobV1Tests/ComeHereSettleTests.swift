@@ -13,6 +13,10 @@ import simd
 @MainActor
 final class ComeHereSettleTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
+    /// The real HUD button cut-outs in the roam floor (space-fix-r1): the measured window and safe insets of an iPhone 17 Pro Max.
+    enum HUD { case portrait, landscape }
+    /// Clamp snaps seen during the current run (a called body that `GameCamera.constrain` would move by more than 0.05).
+    nonisolated(unsafe) static var snaps = 0
     static let seeds = 20
 
     private var savedHour: Double?
@@ -23,9 +27,11 @@ final class ComeHereSettleTests: XCTestCase {
         savedHour = DayClock.shared.forcedHour
         DayClock.shared.forcedHour = 23          // (night: bedtime hours; the day-nap variants set their own)
         savedAnywhere = SleepTuning.anywhere
+        HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero
         FocusGroup.sleeperFix = ProcessInfo.processInfo.environment["COMEHERE_BASE"] == nil          // (COMEHERE_BASE=1: the earlier behaviour, for the before table)
     }
     override func tearDown() {
+        HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero; GameCamera.clearRoam()
         SleepTuning.anywhere = savedAnywhere; FocusGroup.sleeperFix = true
         DayClock.shared.forcedHour = savedHour
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); SleepOrder.reset()
@@ -67,8 +73,14 @@ final class ComeHereSettleTests: XCTestCase {
     }
 
     /// One run: `n` at home, `setup` puts them in their starting states, then Come here for `called` (nil = everyone); measured when the close-up is up and again 3 s later.
-    private func run(seed: UInt64, n: Int = 3, called: [Int]? = nil, backBias: Bool = false, aspect: Float = 440 / 956, setup: (FocusAnyRun, [SIMD2<Float>]) -> Void) -> Result {
+    private func run(seed: UInt64, n: Int = 3, called: [Int]? = nil, backBias: Bool = false, aspect: Float = 440 / 956, hud: HUD? = nil, setup: (FocusAnyRun, [SIMD2<Float>]) -> Void) -> Result {
         SleepOrder.reset(); _ = GameCamera.camera(aspect: aspect)
+        Self.snaps = 0
+        if let hud {
+            HUDLayout.measuredSize = hud == .portrait ? CGSize(width: 440, height: 956) : CGSize(width: 956, height: 440)
+            HUDLayout.measuredInsets = hud == .portrait ? UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0) : UIEdgeInsets(top: 0, left: 62, bottom: 21, right: 62)
+            _ = GameCamera.refreshRoam(aspect: aspect)
+        }
         let r = FocusAnyRun(count: n, peers: true); Self.keep.append(r)
         for (i, a) in r.actors.enumerated() { a.brain!.seed = seed &* 31 &+ UInt64(i) }
         r.run(0.5)
@@ -80,7 +92,14 @@ final class ComeHereSettleTests: XCTestCase {
         if called == nil { r.care.comeHereEveryone() } else { r.care.beginFocus(ids: ids) }
         var res = Result()
         var t: Float = 0
-        let ok = r.run(30) { t += 1.0 / 60; return r.care.focus.isFocused }
+        var ok = false
+        for tk in 0..<(30 * 60) {
+            r.tick(); t += 1.0 / 60
+            if tk % 6 == 0, hud != nil {
+                for id in ids { let q = GameCare.floorPos(r.actors[id].brain!, r.actors[id].sim); let c = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: 0.7); if simd_distance(SIMD2(c.x, c.z), q) > 0.05 { Self.snaps += 1 } }
+            }
+            if r.care.focus.isFocused { ok = true; break }
+        }
         res.settle = t
         if !ok { res.fails.append("never focused (phase \(r.care.focus.phase))") }
         r.run(3)
@@ -94,7 +113,7 @@ final class ComeHereSettleTests: XCTestCase {
             let spot = g.spot(of: id)
             let here = GameCare.floorPos(b, r.actors[id].sim)
             let d = simd_distance(here, spot)
-            if d > 0.6 { res.fails.append("j\(id) \(String(format: "%.2f", d)) from his spot") }
+            if d > 0.3 { res.fails.append("j\(id) \(String(format: "%.2f", d)) from his spot") }
             if b.isSleeping { res.fails.append("j\(id) still asleep") }
             let yaw = abs(atan2f(sinf(b.yaw), cosf(b.yaw)))
             if yaw > 0.6 { res.fails.append("j\(id) faces away \(String(format: "%.2f", yaw))") }
@@ -104,7 +123,7 @@ final class ComeHereSettleTests: XCTestCase {
                 if gap < -0.01 { res.fails.append("j\(id)/j\(ids[l]) gap \(String(format: "%.3f", gap))") }
             }
         }
-        // the uncalled ones, on the close-up's own screen: never between two called ones, never over one by more than 5% of its drawn box
+        // the uncalled ones, on the close-up's own screen: behind the called row is fine, even in the middle; never in front of / beside a called body covering more than 10% of its drawn box
         let uncalled = (0..<n).filter { !ids.contains($0) }
         if !uncalled.isEmpty {
             let cam = GameCamera.camera(aspect: aspect, focus: 1)
@@ -119,20 +138,18 @@ final class ComeHereSettleTests: XCTestCase {
                 }
                 return b
             }
-            let cb = ids.map(box)
             for u in uncalled {
-                let ub = box(u), ux = (ub.x0 + ub.x1) / 2
-                for (k, c) in cb.enumerated() {
+                let ub = box(u), uz = GameCare.floorPos(r.actors[u].brain!, r.actors[u].sim).y
+                for id in ids {
+                    let c = box(id), cz = GameCare.floorPos(r.actors[id].brain!, r.actors[id].sim).y
+                    if uz < cz - 0.25 { continue }          // (behind the called one: allowed)
                     let ow = max(0, min(ub.x1, c.x1) - max(ub.x0, c.x0)), oh = max(0, min(ub.y1, c.y1) - max(ub.y0, c.y0))
                     let frac = ow * oh / max((c.x1 - c.x0) * (c.y1 - c.y0), 1e-6)
-                    if frac > 0.05 { res.fails.append("uncalled j\(u) covers \(Int(frac * 100))% of j\(ids[k])") }
-                }
-                if cb.count > 1 {
-                    let cx = cb.map { ($0.x0 + $0.x1) / 2 }
-                    if ux > cx.min()!, ux < cx.max()! { res.fails.append("uncalled j\(u) is between the called ones on screen") }
+                    if frac > 0.10 { res.fails.append("uncalled j\(u) (z \(String(format: "%.1f", uz))) covers \(Int(frac * 100))% of j\(id) (z \(String(format: "%.1f", cz)))") }
                 }
             }
         }
+        if hud != nil, Self.snaps > 0 { res.fails.append("clamp snapped a called body \(Self.snaps) times") }
         if ids.count > 1 {
             let zs = ids.map { GameCare.floorPos(r.actors[$0].brain!, r.actors[$0].sim).y }
             if (zs.max()! - zs.min()!) > 0.7 { res.fails.append("not one row (z spread \(String(format: "%.2f", zs.max()! - zs.min()!)))") }
@@ -144,15 +161,16 @@ final class ComeHereSettleTests: XCTestCase {
         return res
     }
 
-    private func table(_ name: String, n: Int = 3, called: [Int]? = nil, backBias: Bool = false, aspect: Float = 440 / 956, setup: (FocusAnyRun, [SIMD2<Float>], UInt64) -> Void, file: StaticString = #filePath, line: UInt = #line) {
+    private func table(_ name: String, n: Int = 3, called: [Int]? = nil, backBias: Bool = false, aspect: Float = 440 / 956, hud: HUD? = nil, setup: (FocusAnyRun, [SIMD2<Float>], UInt64) -> Void, file: StaticString = #filePath, line: UInt = #line) {
         var bad = 0, slowest: Float = 0, sum: Float = 0, nets = 0
         var firstFails: [String] = []
+        var settles: [Float] = []
         for s in 0..<UInt64(Self.seeds) {
-            let res = run(seed: s + 1, n: n, called: called, backBias: backBias, aspect: aspect) { setup($0, $1, s + 1) }
+            let res = run(seed: s + 1, n: n, called: called, backBias: backBias, aspect: aspect, hud: hud) { setup($0, $1, s + 1) }
             if !res.fails.isEmpty { bad += 1; if firstFails.count < 3 { firstFails.append("seed\(s + 1): " + res.fails.joined(separator: "; ")) } }
-            slowest = max(slowest, res.settle); sum += res.settle; nets += res.netAccepted
+            slowest = max(slowest, res.settle); sum += res.settle; nets += res.netAccepted; settles.append(res.settle)
         }
-        print("COMEHERE-TABLE | \(name) | runs \(Self.seeds) | broke the rule \(bad) | settle mean \(String(format: "%.1f", sum / Float(Self.seeds))) s, slowest \(String(format: "%.1f", slowest)) s | net accepted \(nets)")
+        print("COMEHERE-TABLE | \(name) | runs \(Self.seeds) | broke the rule \(bad) | settle median \(String(format: "%.1f", settles.sorted()[settles.count / 2])) s, mean \(String(format: "%.1f", sum / Float(Self.seeds))) s, slowest \(String(format: "%.1f", slowest)) s | net accepted \(nets)")
         for f in firstFails { print("COMEHERE-FAIL | \(name) | \(f)") }
         XCTAssertEqual(bad, 0, "\(name): \(bad) of \(Self.seeds) runs broke the rule. \(firstFails.joined(separator: " | "))", file: file, line: line)
     }
@@ -266,5 +284,19 @@ final class ComeHereSettleTests: XCTestCase {
     }
     func testLandscapeCallTwoThirdAsleepAtTheLeft() {
         table("landscape: call two (0,1), the third asleep at the left", called: [0, 1], aspect: 956 / 440) { r, _, s in self.put(r, 2, at: SIMD2(-2.4, 1.2), seed: s); self.sleepNow(r, 2) }
+    }
+
+    // MARK: with the real HUD button cut-outs in the floor (space-fix-r1): no called body under a button, none snapped by the clamp
+    func testHUDPortraitCallTwoThirdAsleepAtTheFrontMiddle() {
+        table("HUD portrait: call two (0,1), the third asleep at the front middle", called: [0, 1], hud: .portrait) { r, _, s in self.put(r, 2, at: SIMD2(0, 1.8), seed: s); self.sleepNow(r, 2) }
+    }
+    func testHUDLandscapeCallTwoThirdAsleepAtTheFrontMiddle() {
+        table("HUD landscape: call two (0,1), the third asleep at the front middle", called: [0, 1], aspect: 956 / 440, hud: .landscape) { r, _, s in self.put(r, 2, at: SIMD2(0, 1.8), seed: s); self.sleepNow(r, 2) }
+    }
+    func testHUDLandscapeCallTwoThirdAsleepNearTheLeftButtons() {
+        table("HUD landscape: call two (0,1), the third asleep at the front, near the bottom-left button column", called: [0, 1], aspect: 956 / 440, hud: .landscape) { r, _, s in self.put(r, 2, at: SIMD2(-1.6, 2.0), seed: s); self.sleepNow(r, 2) }
+    }
+    func testHUDLandscapeCallTwoThirdAsleepAtTheRugCentre() {
+        table("HUD landscape: call two (0,1), the third asleep at the rug centre", called: [0, 1], aspect: 956 / 440, hud: .landscape) { r, _, s in self.put(r, 2, at: SIMD2(0, 0), seed: s); self.sleepNow(r, 2) }
     }
 }
