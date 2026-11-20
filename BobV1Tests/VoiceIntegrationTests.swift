@@ -92,6 +92,7 @@ final class VoiceIntegrationTests: XCTestCase {
     func testIgnoredWhileTrayOut() {
         let r = make()
         r.voice.training.debugLearn(.sit, word: "sit")
+        r.care.store.grant("berries", 3)          // berries are a bag food: feed() returns early without one
         r.care.feed("berries")
         r.run(0.2)
         XCTAssertTrue(r.care.trayOut)
