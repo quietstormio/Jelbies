@@ -210,8 +210,11 @@ final class AppleFixesTests: XCTestCase {
     // MARK: I
 
     func testPhotoSaveMessages() {
-        XCTAssertEqual(PhotoAlbum.message(for: .failed), "Couldn't save the photo. Try again.")
-        XCTAssertEqual(PhotoAlbum.message(for: .noSpace), PhotoAlbum.noSpaceMessage)
+        PhotoAlbum.lastAddOutOfSpace = false
+        XCTAssertEqual(PhotoAlbum.addFailedMessage, "Couldn't save the photo. Try again.")
+        PhotoAlbum.lastAddOutOfSpace = true
+        XCTAssertEqual(PhotoAlbum.addFailedMessage, PhotoAlbum.noSpaceMessage)
+        PhotoAlbum.lastAddOutOfSpace = false
         XCTAssertTrue(PhotoAlbum.isOutOfSpace(NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)))
         XCTAssertTrue(PhotoAlbum.isOutOfSpace(NSError(domain: "x", code: 1, userInfo: [NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))])))
         XCTAssertFalse(PhotoAlbum.isOutOfSpace(NSError(domain: NSCocoaErrorDomain, code: NSFileWriteNoPermissionError)))

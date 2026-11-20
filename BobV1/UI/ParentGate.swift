@@ -6,6 +6,24 @@
 import SwiftUI
 import UIKit
 
+/// THE switch for the grown-up hold gate (owner 2026-11-19: "remove the parent gate if we don't need it"; the game is not in the App Store Kids category, so Apple does not
+/// require it). false = every gated exit (Share, Write to us, Settings, Shortcuts) runs its action at once and the gate screen is never shown. To bring it back (for
+/// example for the Kids category) set it to true: nothing else changes, every call site and the gate screen are still here, and the "grown-up" wording on the buttons,
+/// the support hint and the privacy page reappears with it. A var only so a test can flip it (and must restore it).
+enum ParentGate {
+    nonisolated(unsafe) static var required = false
+
+    /// When the gate is off and a gated exit asks to open it, the action runs here instead. True = it ran (the caller closes the request).
+    @discardableResult
+    static func intercept(isPresented: Bool, required: Bool = ParentGate.required, onPass: () -> Void) -> Bool {
+        guard isPresented, !required else { return false }
+        onPass()
+        return true
+    }
+    /// Hint text for a gated button: the grown-up wording only while the gate is on.
+    static func hint(_ gated: String, ungated: String) -> String { required ? gated : ungated }
+}
+
 /// The modal itself: opaque cream card, one brown button the adult holds for 2 seconds, and Cancel.
 /// VoiceOver: the button's activate action asks one more deliberate question before it passes.
 struct ParentGateView: View {
@@ -66,17 +84,20 @@ private struct ParentGateModifier: ViewModifier {
     @State private var passed = false
 
     func body(content: Content) -> some View {
-        content.fullScreenCover(isPresented: $isPresented, onDismiss: {
+        content.fullScreenCover(isPresented: Binding(get: { isPresented && ParentGate.required }, set: { isPresented = $0 }), onDismiss: {
             // Run the action only once the gate is fully gone, so Settings / the share sheet do not fight the cover.
             if passed { passed = false; onPass() }
         }) {
             ParentGateView(pass: { passed = true; isPresented = false }, cancel: { passed = false; isPresented = false })
         }
+        .onChange(of: isPresented) { _, now in
+            if ParentGate.intercept(isPresented: now, onPass: onPass) { isPresented = false }          // (gate off: the action runs at once, no gate screen)
+        }
     }
 }
 
 extension View {
-    /// Shows "Ask a grown-up" when isPresented turns true; onPass runs only after the adult holds the button.
+    /// Shows "Ask a grown-up" when isPresented turns true; onPass runs only after the adult holds the button. With `ParentGate.required` false it just runs onPass.
     func parentGate(isPresented: Binding<Bool>, onPass: @escaping () -> Void) -> some View {
         modifier(ParentGateModifier(isPresented: isPresented, onPass: onPass))
     }
@@ -92,14 +113,19 @@ enum ParentGateActions {
     }
 }
 
-/// UIKit share sheet, shown only after the gate has passed (ShareLink cannot be gated).
+/// UIKit share sheet, shown only after the gate has passed when the gate is on (ShareLink cannot be gated).
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: items, applicationActivities: nil) }
+    static func make(items: [Any]) -> UIActivityViewController {
+        let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        vc.excludedActivityTypes = [.saveToCameraRoll]          // (no saving to the phone's photo library from the share sheet either)
+        return vc
+    }
+    func makeUIViewController(context: Context) -> UIActivityViewController { Self.make(items: items) }
     func updateUIViewController(_ vc: UIActivityViewController, context: Context) { }
 }
 
-/// A Share button for a photo: gate first, then the system share sheet.
+/// A Share button for a photo: the gate first (when `ParentGate.required`), then the system share sheet.
 struct GatedShareButton: View {
     let image: UIImage
     @State private var gate = false
@@ -114,7 +140,7 @@ struct GatedShareButton: View {
     }
 }
 
-/// A text button that asks a grown-up, then runs the action (Open Settings and friends).
+/// A text button that asks a grown-up (when `ParentGate.required`), then runs the action (Open Settings and friends).
 struct GatedButton<Label: View>: View {
     var action: () -> Void
     @ViewBuilder var label: () -> Label
