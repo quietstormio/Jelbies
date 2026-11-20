@@ -154,6 +154,22 @@ nonisolated enum WallZone {
         return sp.shapes.contains(.landscape) ? .landscape : .portrait
     }
 
+    // MARK: the editor's spot hint
+
+    /// What the editor says while the picture hangs in a spot that a phone on its side does not show (`inBoth` false, e.g. above the windows).
+    static let uprightOnlyHint = "Up here it only shows when the phone is upright. Between the windows it shows both ways."
+    /// True while `picture` (as the room's spots hold it) is in a spot that is not on screen both ways; false in an `inBoth` spot and in a room with no spots.
+    static func showsUprightOnlyHint(_ picture: WallPicture, in room: RoomID) -> Bool {
+        guard let p = clamp(picture, in: room), let sp = spot(for: p, in: room) else { return false }
+        // a picture that lies wholly inside an inBoth spot is in it, even where the band overlaps that spot (the cabin)
+        if spots(room).contains(where: { $0.inBoth && $0.shapes.contains(p.shape) && contains($0.rect, p) }) { return false }
+        return !sp.inBoth
+    }
+    private static func contains(_ r: Rect, _ p: WallPicture) -> Bool {
+        let e: Float = 1e-3
+        return p.x - p.outerWidth / 2 >= r.minX - e && p.x + p.outerWidth / 2 <= r.maxX + e && p.y - p.outerHeight / 2 >= r.minY - e && p.y + p.outerHeight / 2 <= r.maxY + e
+    }
+
     // MARK: what is on screen
 
     /// A picture shows nothing when less than this share of its framed height is on screen (a sliver of a bottom edge at the top of a phone on its side reads as a bug).
