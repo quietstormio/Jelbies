@@ -75,6 +75,12 @@ extension GameCare {
     }
 
     /// Sets one Jelbie down at `p`, at rest (the same steps the Clean uses to place him in the tub).
+    /// Puts a body that is ASLEEP back on a floor spot without standing him up: the body moves and his lying spot moves with it (the sleep holds him at `sleep.spot`), his sleep goes on.
+    func rehomeAsleep(_ a: JellyActor, at p: SIMD2<Float>) {
+        a.sim.teleport(toXZ: p)
+        a.brain?.sleep.spot = p
+    }
+
     func rehome(_ a: JellyActor, at p: SIMD2<Float>) {
         guard let brain = a.brain else { a.sim.teleport(toXZ: p); return }
         brain.abortScript(a.sim, a.skinner)

@@ -220,7 +220,7 @@ extension GameCare {
                 rehome(a, at: brain.fixed(SIMD2(base.x + x, base.y)))
                 brain.startTurn(to: 0, sim: a.sim)
             } else if let h = book.homes[a.id] {
-                if brain.isSleeping { a.sim.teleport(toXZ: brain.fixed(h)); continue }          // (dozed off during the trip: back on the home floor, still asleep: not stood up)
+                if brain.isSleeping { rehomeAsleep(a, at: brain.fixed(h)); continue }          // (dozed off during the trip: back on the home floor, still asleep: not stood up)
                 rehome(a, at: brain.fixed(h))
             }
             brain.restTimer = 0.4

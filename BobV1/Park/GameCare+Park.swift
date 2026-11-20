@@ -539,7 +539,7 @@ extension GameCare {
                 taken.append(spot)
                 brain.autonomy = work.autonomy[a.id] ?? true
                 brain.idleBlocked = false
-                if brain.isSleeping { a.sim.teleport(toXZ: spot); continue }          // (dozed off during the trip: back on the home floor, still asleep: not stood up)
+                if brain.isSleeping { rehomeAsleep(a, at: spot); continue }          // (dozed off during the trip: back on the home floor, still asleep: not stood up)
                 rehome(a, at: spot)
                 brain.restTimer = 2
             }
