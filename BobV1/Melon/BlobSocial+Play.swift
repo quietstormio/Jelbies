@@ -165,7 +165,13 @@ extension BlobBrain {
                 if idleStart(.sit, sim) { idleState.hold = s.duration; socialBook.hopStarted = true }
                 else { s.finish(.aborted) }
             }
-            if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.5 { s.setPhase(2) }
+            if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.5 {
+                s.setPhase(2)
+                // (pair-distinct-r1: they sit with clear space between them, so the heart / squish / haptic that used to ride on the skins' touch ride on the plop of sitting down side by side)
+                AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.25)
+                jellyKick = max(jellyKick, 1.0); o.jellyKick = max(o.jellyKick, 1.0)
+                onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+            }
             else if isA, s.phaseT > 8 { s.finish(.aborted) }
         default:
             if idleState.kind == .sit || idleState.kind == .sleep { socialBook.wantRoll = leanSign(toward: o.position) * 0.05 }
@@ -177,6 +183,7 @@ extension BlobBrain {
     // MARK: nuzzle
 
     private func driveNuzzle(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody, _ dt: Float) {
+        socialBook.handWant = .tucked(side: handSide(toward: o))          // (pair-distinct-r1: arms in front, apart: the upper bodies are what meets)
         switch s.phase {
         case 0:
             if !isA { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw(); return }
@@ -190,9 +197,11 @@ extension BlobBrain {
             socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
             let ft = s.phaseT
             let lean = smooth01(ft / 0.9) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.12 * lean
+            // (pair-distinct-r1) a TENT: they stand a few cm apart and tip their heads together (the lean limiter stops each at the touch), then nod / rub gently - the pitch nod does not move the contact
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.22 * lean
+            socialBook.wantPitch = 0.07 * lean * sinf(2 * .pi * (ft - 0.9) / 1.5)
             socialBook.wantSquash = 1 - 0.03 * lean * (0.6 + 0.4 * sinf(2 * .pi * ft / 2.2))
-            socialBook.wantEyes = 1 - 0.5 * lean
+            socialBook.wantEyes = 1 - 0.7 * lean
             if lean > 0.85, !socialBook.hopStarted {
                 socialBook.hopStarted = true
                 jellyKick = max(jellyKick, 1.0)

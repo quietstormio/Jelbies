@@ -63,15 +63,19 @@ extension BlobBrain {
     // MARK: sway hug
 
     private func driveSwayHug(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool) {
+        socialBook.handWant = .tucked(side: handSide(toward: o))          // (pair-distinct-r1: arms in front, apart)
         if openSideBySide(s, o, isA, settle: 0.7) { return }
         holdFacing(faceCameraYaw())
         let g = socialGentle
         let ft = s.phaseT
+        // THE SQUEEZE AND SWAY (pair-distinct-r1): both lean in (the limiter stops them at the touch), then the pair squeezes three times (squash pulses) while the whole pair rocks side to side as one;
+        // (cuddleLean is the resting one: one leans, one stands.)
         let lean = smooth01(ft / 0.9) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
-        let sway = sinf(2 * .pi * (ft - 0.9) / 2.4) * smooth01((ft - 0.9) / 0.8)          // (both sway the same way in the world: one body)
-        socialBook.wantRoll = leanSign(toward: o.position) * 0.11 * lean * g + worldLean(1) * 0.07 * lean * sway * g
+        let sway = sinf(2 * .pi * (ft - 0.9) / 2.0) * smooth01((ft - 0.9) / 0.6)          // (both sway the same way in the world: one body)
+        let squeeze = max(pulse(ft - 1.2, up: 0.18, down: 0.30), pulse(ft - 2.3, up: 0.18, down: 0.30), pulse(ft - 3.4, up: 0.18, down: 0.30))
+        socialBook.wantRoll = leanSign(toward: o.position) * 0.22 * lean * g + worldLean(1) * 0.10 * lean * sway * g
         socialBook.wantEyes = 1 - 0.6 * lean
-        socialBook.wantSquash = 1 - 0.03 * lean
+        socialBook.wantSquash = 1 - 0.03 * lean - 0.03 * squeeze * g
         if isA {
             if !s.impacted, ft > 0.8 {
                 s.impacted = true
@@ -144,25 +148,25 @@ extension BlobBrain {
 
     private func driveWhisper(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         let whisperer = (s.roles == 0) == isA
-        // 2026-11-05 (user rule 2): the one who walked up rests a hand ON the partner (his arm / shoulder; the arm comes up on the way in, BlobSocial+Hands.swift) while the whispering goes on (the walker is always the reaching one: the walk-up
-        // lands the hand, the partner stands)
-        if isA { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
+        // (pair-distinct-r1) no hand on the partner any more: arms in front, apart. The whisperer LEANS FAR IN to the listener's side (head to head, the lean limiter stops it at the touch) with a nod; the listener
+        // tips an ear toward him, then jerks upright, surprised; then both wiggle-laugh.
+        socialBook.handWant = .tucked(side: handSide(toward: o))
         if openSideBySide(s, o, isA, settle: 0.65) { return }
         holdFacing(faceCameraYaw())
         let t = s.phaseT, g = socialGentle
         let whisp = smooth01((t - 0.2) / 0.5) * (1 - smooth01((t - 1.9) / 0.4))
         let giggle = smooth01((t - 2.1) / 0.2) * (1 - smooth01((t - 4.0) / 0.5))
         if whisperer {
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.07 * whisp * g          // (a hand rests between the two: a full lean swings the arm nub of the one into the hand of the other)
-            socialBook.wantPitch = 0.05 * whisp * g
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.30 * whisp * g
+            socialBook.wantPitch = 0.07 * whisp * g * sinf(2 * .pi * 2.2 * t)          // (the whispering nod)
         } else {
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.04 * whisp * g          // (an ear tilted toward the whisper)
-            if t > 0.7, !socialBook.sheepishStarted { socialBook.sheepishStarted = true; face(.hopeful, hold: 1.1) }          // (was .curious: its head tilt is a 0.10 rad body roll to a random side - 5 cm of arm nub swung into the hand on the partner)
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.16 * whisp * g          // (an ear tilted toward the whisper)
+            if t > 0.7, !socialBook.sheepishStarted { socialBook.sheepishStarted = true; face(.hopeful, hold: 1.1) }
             if t > 1.9, !socialBook.apartStarted { socialBook.apartStarted = true; face(.surprised, hold: 0.5) }
         }
         let wiggle = giggle * sinf(2 * .pi * 5.5 * (t - 2.1))
-        socialBook.wantRoll += (isA ? 0.03 : 0.06) * wiggle * g          // (the hand is on the partner: the giggle shakes the bodies a little less, they stay in touch)
-        socialBook.wantSquash = 1 - 0.02 * giggle * abs(sinf(2 * .pi * 2.75 * (t - 2.1))) * g          // (a squashed body is wider: with a hand between them the giggle's bounce is smaller)
+        socialBook.wantRoll += 0.05 * wiggle * g
+        socialBook.wantSquash = 1 - 0.03 * giggle * abs(sinf(2 * .pi * 2.75 * (t - 2.1))) * g
         if isA {
             if !s.impacted, t >= 2.1 {
                 s.impacted = true

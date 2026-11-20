@@ -26,7 +26,7 @@ enum PeakTuning {
     /// The widest the drive's own lean-away (wind-up / recoil) may open the skin gap (m): beyond it the stance's settle walks the pair back together, which is what made the bumps oscillate +-15 cm.
     nonisolated(unsafe) static var openCap: Float = env("PEAK_OPEN", 0.045)
     /// The hop / lunge kinds (bump, chestBump, highFive, bellyBounce, sneak): the strike stays AT contact - no wind-up gap beyond 1.5 cm, no squash bulge beyond the live gap, a small impact kick.
-    static let pressKinds: Set<SocialKind> = [.chestBump, .highFive, .bellyBounce, .sneak]
+    static let pressKinds: Set<SocialKind> = [.chestBump, .highFive, .sneak]          // (bellyBounce left the set in pair-distinct-r1: its rebound is a big lean-away, `openCapByKind`)
     nonisolated(unsafe) static var pressOpenCap: Float = env("PEAK_POPEN", 0.015)
     static func openCap(for k: SocialKind) -> Float { pressKinds.contains(k) ? pressOpenCap : openCap }
     /// The strike of a press / bump move may start once the pair stands this close (skin gap, m) and is planted (a strike fired mid-walk adds its lean to the walk's closing speed).
@@ -36,7 +36,9 @@ enum PeakTuning {
     nonisolated(unsafe) static var leanCap: Float = env("PEAK_CAP", 0.08)
     /// The skin gap the lean may close to (the stance's plush rest).
     /// Per-kind override of `openCap` (m). Empty: a squabble value of 1.2 cm was measured with NO effect on the hold (the +-2 cm pulse there is the jelly kick, not the guarded lean).
-    static let openCapByKind: [SocialKind: Float] = [:]
+    static let openCapByKind: [SocialKind: Float] = [.bellyBounce: 0.60]
+    /// Per-kind override of `leanCap` (rad): the side-by-side lean kinds tip further than a strike does (pair-distinct-r1).
+    static let leanCapByKind: [SocialKind: Float] = [.bellyBounce: 0.30, .cheekSquish: 0.25, .whisperGiggle: 0.32]
     /// Largest impact kick (JellyJiggle units) a touching drive fires at the moment of contact (env PEAK_KICK).
     nonisolated(unsafe) static var kickMax: Float = env("PEAK_KICK", 0.8)
     /// Squash is width: a body squashed by s bulges ~s x its radius at the belly (0.12 sank a bump 2 cm into the partner). The squash the drive may use is `sqBase` + `sqPerM` per metre of live skin gap.
@@ -79,7 +81,8 @@ extension BlobBrain {
         let b = PeakTuning.leanBounds(now: nowM, trim: book.leanTrim, gap: gap, openCap: PeakTuning.openCapByKind[s.kind] ?? PeakTuning.openCap(for: s.kind))
         var m = wantM
         if m > b.maxIn { m = b.maxIn }
-        if m > PeakTuning.leanCap { m = PeakTuning.leanCap }
+        let cap = PeakTuning.leanCapByKind[s.kind] ?? PeakTuning.leanCap
+        if m > cap { m = cap }
         if m < b.maxOut { m = b.maxOut }
         // squash: cap the drive's squash depth by the live gap (the squash bulge is part of the strike's travel)
         let allowed = PeakTuning.sqBase + PeakTuning.sqPerM * max(0, gap + 0.005)

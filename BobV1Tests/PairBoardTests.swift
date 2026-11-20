@@ -23,7 +23,7 @@ final class PairBoardTests: XCTestCase {
         guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal") }
         try FileManager.default.createDirectory(atPath: dir + "/crops", withIntermediateDirectories: true)
         var rows: [(String, [UIImage])] = []
-        var tsv = ["kind\tstarted\tseconds\tminSkin_cm\tminArmLevelPerf_cm\tminHeadPerf_cm\ttouches\ttouchGaps_cm"]
+        var tsv = ["kind\tstarted\tseconds\tminSkin_cm\tminArmLevelPerf_cm\tminHeadPerf_cm\ttouches\ttouchGaps_cm\tarmGap_cm\tsounds\thaptics\thearts"]
         for k in Self.kinds where only.isEmpty || only.contains(k.rawValue) {
             let r = PairProbe.run(kind: k, cast: [0, 1], castName: "Bob+Pip", shootEvery: 10, device: device)
             let f = PairProbe.five(r.shots)
@@ -36,7 +36,7 @@ final class PairBoardTests: XCTestCase {
                     try? up.pngData()!.write(to: URL(fileURLWithPath: dir + "/crops/\(tag)_\(k.rawValue)_contact.png"))
                 }
             }
-            tsv.append("\(k.rawValue)\t\(r.started)\t\(String(format: "%.1f", r.seconds))\t\(String(format: "%.1f", r.minSkin * 100))\t\(String(format: "%.1f", r.minArmLevelPerf * 100))\t\(String(format: "%.1f", r.minHeadPerf * 100))\t\(r.touchGaps.count)\t\(r.touchGaps.map { String(format: "%.1f", $0 * 100) }.joined(separator: ","))")
+            tsv.append("\(k.rawValue)\t\(r.started)\t\(String(format: "%.1f", r.seconds))\t\(String(format: "%.1f", r.minSkin * 100))\t\(String(format: "%.1f", r.minArmLevelPerf * 100))\t\(String(format: "%.1f", r.minHeadPerf * 100))\t\(r.touchGaps.count)\t\(r.touchGaps.map { String(format: "%.1f", $0 * 100) }.joined(separator: ","))\t\(String(format: "%.1f", r.minArmArmPerf * 100))\t\(r.sounds.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","))\t\(r.haps.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","))\t\(r.hearts)")
             XCTAssertTrue(r.started, "\(k) starts")
             PairProbe.tearDownGlobals()
         }

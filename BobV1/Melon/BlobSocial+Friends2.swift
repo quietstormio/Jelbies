@@ -361,16 +361,17 @@ extension BlobBrain {
     // MARK: belly bounce
 
     private func driveBellyBounce(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
+        socialBook.handWant = .tucked(side: handSide(toward: o))          // (pair-distinct-r1: arms in front, apart; they bump SIDE on - hip to hip - never face to face)
         if openSideBySide(s, o, isA, settle: 0.65) { return }
         let t = s.phaseT
         switch s.phase {
-        case 2:    // lean into each other, a squish, bounce apart with a jiggle
+        case 2:    // lean into each other (the limiter stops it at the touch), a squish, then SPRING APART - both tip away, clearly (heads ~ 15 cm apart), stretch tall - and swing back, twice
             holdFacing(faceCameraYaw())
             let toward = leanSign(toward: o.position)
-            let into = pulse(t, up: 0.22, down: 0.12)
-            let rebound = pulse(t - 0.34, up: 0.12, down: 0.45)
-            socialBook.wantRoll = toward * (0.16 * into - 0.11 * rebound)
-            socialBook.wantSquash = 1 - 0.10 * pulse(t - 0.16, up: 0.07, down: 0.26)
+            let into = pulse(t, up: 0.24, down: 0.10)
+            let rebound = pulse(t - 0.30, up: 0.16, down: 0.60)
+            socialBook.wantRoll = toward * (0.24 * into - 0.30 * rebound)
+            socialBook.wantSquash = 1 - 0.07 * pulse(t - 0.16, up: 0.07, down: 0.26) + 0.05 * rebound
             if isA {
                 if !s.impacted, t >= 0.2 {
                     s.impacted = true
@@ -379,7 +380,7 @@ extension BlobBrain {
                     contactCueFallback(o, .squish, 0.9)
                     AudioHub.shared.chirp(jelly: steerID, .babble)
                 }
-                if t > 1.15 {
+                if t > 1.7 {
                     s.round += 1; s.impacted = false
                     s.setPhase(s.round >= 2 ? 3 : 2)
                 }
@@ -452,16 +453,20 @@ extension BlobBrain {
     // MARK: cuddle lean
 
     private func driveCuddleLean(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool) {
+        socialBook.handWant = .tucked(side: handSide(toward: o))          // (pair-distinct-r1: arms in front, apart)
         if openSideBySide(s, o, isA, settle: 0.7) { return }
         holdFacing(faceCameraYaw())
         let ft = s.phaseT
-        let lean = smooth01(ft / 1.0) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
-        let sway = 0.035 * lean * sinf(2 * .pi * ft / 2.8)
-        socialBook.wantRoll = leanSign(toward: o.position) * 0.14 * lean + worldLean(1) * sway
+        // ONE RESTS ON THE OTHER (pair-distinct-r1): the leaner tips his head onto the partner's shoulder (the lean limiter stops it at the touch), the other stands upright and steady and takes the weight;
+        // both breathe slowly, eyes closed. (swayHug is the other tender one: both squeeze and the pair sways.)
+        let leaner = (s.roles == 0) == isA
+        let lean = smooth01(ft / 1.2) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
+        let breath = 1 - 0.02 * lean * (0.5 + 0.5 * sinf(2 * .pi * ft / 3.0))
+        socialBook.wantRoll = leaner ? leanSign(toward: o.position) * 0.28 * lean : -leanSign(toward: o.position) * 0.02 * lean
         socialBook.wantEyes = 1 - 0.97 * smooth01((ft - 0.6) / 0.6) * (1 - smooth01((ft - (s.duration - 0.6)) / 0.4))
-        socialBook.wantSquash = 1 - 0.025 * lean
+        socialBook.wantSquash = breath
         if isA {
-            if !s.impacted, ft > 0.9 {
+            if !s.impacted, ft > 1.1 {
                 s.impacted = true
                 jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)
                 contactBoopFallback(o)
