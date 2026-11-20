@@ -52,7 +52,7 @@ extension GameCare {
     func parkBlocker() -> String? {
         if park.active { return CafeBlock.busy.message }
         guard let b = cafeBlocker(), b != .noDrops else { return nil }
-        return b == .night ? "The park is closed at night. Come back in the morning!" : b.message
+        return b == .night ? "It's bedtime, so the park is closed. It opens in the morning!" : b.message
     }
 
     /// The special species (anything but the four starters) the player has UNLOCKED, as far as the park can tell: one is owned right now, or was owned on an earlier park visit (remembered in the defaults). Only these may come, rarely (`pickCast`).
@@ -162,8 +162,13 @@ extension GameCare {
         select.cancel()
         let who = park.picked
         park.cancelPicker()
-        if outingGate(who, again: { [weak self] in self?.park.resume(picked: who) }) { return }
-        park.resume(picked: who)
+        let go = { [weak self] in
+            guard let self else { return }
+            if self.outingGate(who, again: { [weak self] in self?.park.resume(picked: who) }) { return }
+            self.park.resume(picked: who)
+        }
+        if wakeForTrip(then: go) { return }          // by day a sleeper never refuses the trip: the short wake, then everybody runs out together (GameCare+Outing.swift)
+        go()
     }
 
     var parkFadeBlocked: Bool {

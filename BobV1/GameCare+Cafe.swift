@@ -89,6 +89,7 @@ extension GameCare {
     func cafeBlocker() -> CafeBlock? {
         if cafe.active { return .busy }
         if isBedtimeHours { return .night }
+        if outing.waking { return .waking }          // (a daytime trip is waking the house: park-wake-r1)
         if raceBusy || show.active { return .competition }
         if roomSwitch.active { return .moving }
         if let b = roomActivityBlocker() {
@@ -98,7 +99,7 @@ extension GameCare {
             case .focus: return .focus
             case .meal: return .meal
             case .arranging: return .arranging
-            case .sleeping: return .sleeping
+            case .sleeping: break          // (by day a sleeper never refuses a trip: the trip wakes him first, `wakeForTrip`; only the night closure above says no)
             default: return .busy
             }
         }
@@ -116,6 +117,7 @@ extension GameCare {
         }
         select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
+        if wakeForTrip(then: { [weak self] in self?.requestCafe() }) { return }          // (a sleeper gets the short wake first, then everybody runs out together)
         if outingGate(Array(jellies.indices), again: { [weak self] in self?.requestCafe() }) { return }          // everybody runs out of the room first (GameCare+Outing.swift)
         cafe.begin()
     }

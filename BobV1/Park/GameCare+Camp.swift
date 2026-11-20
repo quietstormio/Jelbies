@@ -2,7 +2,7 @@
 //  GameCare+Camp.swift
 //  The Jelmiko Camp visit as a MODE of the park trip (camp-yard-r1): `park.place == .camp`. Same white wipe, camera, hidden home bodies, tap routing and visitor bodies as the park, but nobody comes along,
 //  there is no picker, no cast from the pool, no toys, no friendships / gifts / save, no night closure (Camp is open day and night) and no bedtime call. The yard holds ONLY the Camp creatures.
-//  The home Jelmiko stay on the stage hidden and still, as at the park; a sleeping one stays asleep (it is neither woken nor moved: the park refuses to open with one asleep, Camp does not).
+//  The home Jelmiko stay on the stage hidden and still, as at the park; a sleeping one stays asleep (it is neither woken nor moved: the park wakes every sleeper before it opens, Camp leaves him asleep).
 //  Everything the player does here is parkTrip-shaped: `requestCamp` -> the wipe -> `campSwap(.park)` (scenery, camera, bodies under the opaque white) -> play -> "Go home" -> `campSwap(.home)`.
 //
 

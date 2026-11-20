@@ -58,8 +58,13 @@ extension GameCare {
         let who = groom.picked
         groom.closePicker()
         let go = { [weak self] in self?.groom.begin(tier) ?? () }
-        if outingGate(who, again: go) { return }          // the chosen Jelbies run out of the room first (GameCare+Outing.swift)
-        go()
+        let start = { [weak self] in
+            guard let self else { return }
+            if self.outingGate(who, again: go) { return }          // the chosen Jelbies run out of the room first (GameCare+Outing.swift)
+            go()
+        }
+        if wakeForTrip(then: start) { return }          // a sleeper gets the short wake first (park-wake-r1)
+        start()
     }
 
     private var groomFadeBlocked: Bool {
