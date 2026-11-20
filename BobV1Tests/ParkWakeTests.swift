@@ -132,7 +132,11 @@ final class ParkWakeTests: XCTestCase {
     /// A stay-home who was awake at departure falls asleep mid-trip (a nap, a needs-driven sleep): pin it so the trip cannot end it.
     private func dozeOff(_ r: Room, _ id: Int) {
         let b = r.actors[id].brain!
-        b.idleForced = true; _ = b.idleStart(.sleep, r.actors[id].sim); b.sleep.hold = 500; b.sleep.holdForce = true; b.idleForced = false
+        // (forced down at once and already lying (stage 3): a trip holds the body still (`idleBlocked`), which would end a sleeper who is still on his way down)
+        b.idleForced = true
+        XCTAssertTrue(b.sleepBegin(r.actors[id].sim, night: false, force: true), "control: sleep began")
+        b.sleep.stage = 3; b.sleep.t = 0; b.sleep.k = 1; b.sleep.hold = 500; b.sleep.holdForce = true
+        b.idleForced = false
         run(r, 2)
         XCTAssertTrue(b.isSleeping, "control: \(id) dozed off during the trip")
     }
