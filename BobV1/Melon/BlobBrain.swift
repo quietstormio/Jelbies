@@ -248,6 +248,8 @@ final class BlobBrain {
     var commandedNameHop = false
     /// Voice "goodnight": go to bed now (yawn, gather with the others, roll onto the back, sleep tucked in until morning or a tap).
     var commandedGoodnight = false
+    /// Told to go to bed in this very moment without a flag (the away arrival puts every body down in one loop): the others' spot search leaves him out (he yields, `sleepFairAnywhere`).
+    var sleepBound = false
     /// A race trip is asked or running: no bedtime for anybody (GameCare sets it on every brain).
     var sleepLocked = false
     /// The park outing is playing: decor, toys, hopscotch and bubbles stay open to this Jelbie although `sleepLocked` holds sleep off (GameCare+Park.swift sets it every step).

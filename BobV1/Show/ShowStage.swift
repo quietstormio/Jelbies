@@ -114,10 +114,14 @@ nonisolated enum ShowStage {
             return SIMD2(playerSpot.x + side * rank * 1.35, playerSpot.y - 0.45)
         }
     }
-    /// Where the player's Jelbie waits while a rival performs in the middle, and where the rivals stand during the Trick round (rival k: left front, then back left, back right).
-    static let playerAside = SIMD2<Float>(2.5, 2.2)
-    static func rivalRest(_ k: Int) -> SIMD2<Float> {
-        let fixed = [SIMD2<Float>(-2.5, 2.0), SIMD2(-1.3, 0.6), SIMD2(1.3, 0.6)]
+    /// Where the player's Jelbie waits while a rival performs in the middle, and where the rivals stand during the Trick round. The performer alone stands in the middle and the camera is
+    /// close on it (2026-11-17, the owner: "zoom in or something to them"), so the others wait BEHIND it in a back row, each whole body and face in the picture and clear of the performer (the camera looks down 0.45 rad, so the row stands above her head):
+    /// rival 0 back left, rival 1 back right, the player's Jelbie back middle, and rival 2 fully OFF the picture (right; left on its side) where she walks on from. Never a body half cut by the screen edge.
+    /// Every mark is 1.5+ from every other.
+    static let playerAside = SIMD2<Float>(0, -1.0)
+    /// `sideways` (a phone / tablet on its side): the chrome column is on the right, so rival 2 waits off the picture to the LEFT instead.
+    static func rivalRest(_ k: Int, sideways: Bool = false) -> SIMD2<Float> {
+        let fixed = [SIMD2<Float>(-1.4, 0.4), SIMD2(1.4, 0.4), SIMD2(sideways ? -3.4 : 3.4, 2.6)]
         return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
     }
     /// Where entrant k waits in the wing before she walks on to her rest spot (just outside the wide shot: left, left, right; a phone on its side: all from the left).
@@ -146,21 +150,24 @@ nonisolated struct ShowFrame: Equatable, Sendable {
     var landLeft = true
     /// With `landLeft`: how far (share of the visible width) the camera target moves off the body, i.e. the body sits at 0.5 - landShift of the width.
     var landShift: Float = 0.22
+    /// The camera's elevation above level (rad); the close-up's 0.17 unless a frame says otherwise (the Trick round looks down a little more so the back row shows over the performer).
+    var elevation: Float = GameCamera.focusElevation
     /// The Look round (trimmed screen: the creature 1.45x bigger and centred in the space the judge line left); `lookPad` keeps the tablet's old numbers.
     static let look = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.39, fill: 0.67)
     static let lookPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.30, fill: 0.46)
     static func look(pad: Bool) -> ShowFrame { pad ? lookPad : look }
-    /// The Trick round while he picks a trick: the camera holds the contestant alone, big (the entrants' bodies are hidden then); the wide `trick` shot comes back for his trick.
-    static let trickPick = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.34, fill: 0.44)
-    static let trickPickPad = ShowFrame(spots: [ShowStage.playerSpot], screenY: 0.39, fill: 0.46, landScreenY: 0.52, landFill: 0.6, landLeft: true)
-    static func trickPick(pad: Bool) -> ShowFrame { pad ? trickPickPad : trickPick }
-    /// The Trick round: the middle, the player's aside spot and the rivals' rest spots all in view (the rivals walk up to the middle in turn).
-    static let trick = ShowFrame(spots: [ShowStage.playerSpot, ShowStage.playerAside, ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)],
-                                 screenY: 0.39, fill: 0.88, landScreenY: 0.52, landFill: 1.55, landLeft: true, landShift: 0.235)          // landscape: the four bodies fill the stage area left of the Trick column (tuned in the real camera)
-    /// The Trick round on an iPad (idiom only): the bodies sit lower (the trick menu is bigger there, so the stage keeps the middle of the screen instead of
-    /// a band of backdrop above the menu), and in landscape they stay centred and a little bigger (no phone-style left third; the iPad's chrome is the portrait stack).
-    static let trickPad = ShowFrame(spots: trick.spots, screenY: 0.39, fill: 0.80, landScreenY: 0.52, landFill: 1.24, landLeft: true)
-    static func trick(pad: Bool) -> ShowFrame { pad ? trickPad : trick }
+    /// The Trick round (2026-11-17, "zoom in or something to them"): ONE frame for the whole round (his pick, his trick, every entrant's turn), so the camera never jumps. It is on the performer
+    /// alone (the middle), as big as lets the whole back row (`ShowStage.playerAside`, `rivalRest`) stay in the picture: ~34% of a phone portrait's width, 15% of its height (iPad 19%).
+    /// The body's middle sits at 0.41: its feet are above the trick menu, and the result toast sits in the floor below it. A phone on its side puts the performer in the left half.
+    static func trick(pad: Bool) -> ShowFrame {
+        func dev(_ key: String, _ v: Float) -> Float { DevArgs.enabled && UserDefaults.standard.object(forKey: key) != nil ? Float(UserDefaults.standard.double(forKey: key)) : v }
+        return ShowFrame(spots: [ShowStage.playerSpot],
+                         screenY: dev("ShowTrickSY", pad ? 0.42 : 0.41), fill: dev("ShowTrickFill", pad ? 0.30 : 0.32),
+                         landScreenY: dev("ShowTrickLandSY", 0.50), landFill: dev("ShowTrickLandFill", pad ? 0.50 : 0.62), landLeft: true, landShift: dev("ShowTrickLandShift", pad ? 0.27 : 0.25),
+                         elevation: dev("ShowTrickEl", 0.45))
+    }
+    static var trick: ShowFrame { trick(pad: false) }
+    static var trickPad: ShowFrame { trick(pad: true) }
     /// `pad` (iPad idiom only): the row of four fills less of a tablet portrait's width, so the end Jelbies (nearer the camera) are not cropped; false = the phone's numbers.
     /// One dancer (the trimmed Dance screen): the phone portrait fills 0.55 of the width with the body's middle at 0.34 (was 0.46 / 0.30); on its side the body sits left of the
     /// middle (x 0.41) at screenY 0.42 with nothing over it (the cheer strip is top right, the lane between the foot buttons).

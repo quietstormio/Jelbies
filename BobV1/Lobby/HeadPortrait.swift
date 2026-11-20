@@ -16,6 +16,8 @@ struct HeadPortraitKey: Hashable, Sendable {
     /// A Show rival's body tint and name: drawn with `LocalRivalSource.palette`, exactly as the stage paints a borrowed body.
     var rivalTint: SIMD3<Float>? = nil
     var rivalName: String? = nil
+    /// A Park friend's species signature (his spikes, wings, daisy ...): drawn on the borrowed body. nil (a Show rival, or no signature) = none.
+    var feature: JellyFeature? = nil
     /// nil: the head portrait. 0 / 1 / 2: the Studio's full-body action shot seen from the left / front / right (see MelonStage.renderSnapshot).
     var pose: Int? = nil
     /// Another creature on this body (a Park friend or a rival): no feature, no wear of his.

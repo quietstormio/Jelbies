@@ -142,7 +142,8 @@ extension GameCare {
 
     /// Takes Jelbie `id` to the stage for a show at `rank` (the chosen rank by default).
     func startShow(jelly id: Int, rank: ShowRank? = nil, seed: UInt64? = nil) {
-        guard canShow(jelly: id), let prof = jelly(id) else { return }
+        if let why = showBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
+        guard let prof = jelly(id) else { return }
         let r = rank.flatMap { show.progress.unlocked($0) ? $0 : nil } ?? show.progress.chosen
         for a in raceBook.actors { if let b = a.brain, b.isSleeping { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) } }
         select.cancel()
@@ -174,8 +175,10 @@ extension GameCare {
     func showHidesWear(_ id: Int) -> Bool { show.active && (id != show.playerID) }
     /// The Trick round shows the rivals' bodies only while the camera is on the wide shot: not while the player picks (the camera holds the contestant alone, big).
     var showRivalsVisible: Bool {
-        (show.round == .trick && (show.trickEntering || show.trickStage != .pick)) || (show.round == .results && show.trickStage != .pick)          // (the walk-on is on the wide shot; the last turn's entrants play on after the sim has its results)
+        show.round == .trick || (show.round == .results && show.trickStage != .pick)          // (they wait on the back marks behind the performer all through the round, in the same frame as his pick; the last turn's entrants play on after the sim has its results)
     }
+    /// The actor id of the borrowed body that plays rival `i` on the stage (nil: she has none; the scoreboard strip draws her head picture on it).
+    func showRivalBody(_ i: Int) -> Int? { showBook.rivalBody[i] }
     /// Only the contestant is ever drawn, plus the borrowed rival bodies while the wide Trick shot is on. The other Jelmiko at home wait off stage the whole Show.
     func showHides(_ id: Int) -> Bool {
         guard show.onStage, id != show.playerID else { return false }
@@ -346,7 +349,7 @@ extension GameCare {
             showDoTrick(a, t, success: ok, others: a.id)
         case .walkOut(let i):
             guard let a = rivalActor(i) else { return }
-            showWalk(a, to: ShowStage.rivalRest(i))
+            showWalk(a, to: ShowStage.rivalRest(i, sideways: GameCamera.aspect > 1))
         case .enter:
             guard let s = show.sim else { return }
             let side = GameCamera.aspect > 1          // (a phone on its side: the view is shifted, all three come from the left)
@@ -355,7 +358,7 @@ extension GameCare {
         case .snap:
             guard let s = show.sim else { return }
             book.enterDelay = nil
-            for k in s.rivals.indices { if let a = rivalActor(k) { showSnap(a, to: ShowStage.rivalRest(k)) } }
+            for k in s.rivals.indices { if let a = rivalActor(k) { showSnap(a, to: ShowStage.rivalRest(k, sideways: GameCamera.aspect > 1)) } }
             if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
             book.goals = [:]; book.flops = [:]
         }
@@ -506,7 +509,7 @@ extension GameCare {
         if let d = book.enterDelay {          // the walk-on: the entrants set off from the wing a moment after they were placed there
             if d - dt <= 0 {
                 book.enterDelay = nil
-                if let s = show.sim { for k in s.rivals.indices { if let a = rivalActor(k) { showWalk(a, to: ShowStage.rivalRest(k)) } } }
+                if let s = show.sim { for k in s.rivals.indices { if let a = rivalActor(k) { showWalk(a, to: ShowStage.rivalRest(k, sideways: GameCamera.aspect > 1)) } } }
             } else { book.enterDelay = d - dt }
         }
         for (aid, f0) in book.flops {          // a rival's cute flop: the move is cut short after a beat and she wobbles

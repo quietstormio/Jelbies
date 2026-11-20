@@ -21,7 +21,7 @@ nonisolated struct JelbieEntity: AppEntity, Sendable {
     }
 
     static func colorWord(_ c: String) -> String {
-        switch c { case "blue": return "Blue"; case "yellow": return "Yellow"; case "green": return "Green"; case "purple", "lavender": return "Lavender"; case "teddy": return "Brown"; case "pearl": return "White"; case "panda": return "Black and white"; default: return c.capitalized }
+        switch c { case "blue": return "Blue"; case "yellow": return "Yellow"; case "green": return "Green"; case "purple", "lavender": return "Lavender"; case "teddy": return "Brown"; case "pearl": return "White"; case "panda": return "Black and white"; case "tiger": return "Orange"; case "berry": return "Pink"; case "marble": return "Aqua"; case "gold": return "Gold"; case "silver": return "Silver"; case "opal": return "Pastel"; case "moo": return "White"; case "cocoa": return "Cream"; case "blush": return "Pale pink"; case "sunset": return "Orange"; case "ruby": return "Red"; case "midnight": return "Black"; case "cottoncandy": return "Lilac"; case "ocean": return "Sea blue"; case "lemonlime": return "Lime"; case "lagoon": return "Violet"; case "emerald": return "Emerald"; case "sapphire": return "Sapphire"; case "amethyst": return "Purple"; case "bronze": return "Bronze"; default: return c.capitalized }
     }
 }
 
@@ -36,7 +36,8 @@ nonisolated enum JelbieRoster {
         return []          // no snapshot (fresh install, the game never run): no Jelbies yet, so the Shortcuts picker offers none (it used to offer Bob / Pip / Moss)
     }
     /// SPECIES id -> colour name (Bob blue, Pip yellow, Moss green, Lavender lavender), the same as WidgetBridge.colorName (which is main-actor bound).
-    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda"][min(max(id, 0), 6)] }
+    static func colorName(_ id: Int) -> String { ["blue", "yellow", "green", "lavender", "teddy", "pearl", "panda", "tiger", "berry",
+                                                         "marble", "gold", "silver", "opal", "moo", "cocoa", "blush", "sunset", "ruby", "midnight", "cottoncandy", "ocean", "lemonlime", "lagoon", "emerald", "sapphire", "amethyst", "bronze"][min(max(id, 0), 26)] }
     /// A loose name match: case-insensitive, prefix or contained ("bob", "Bobby" -> Bob).
     static func match(_ text: String, in list: [JelbieEntity]) -> [JelbieEntity] {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

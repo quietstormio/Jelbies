@@ -17,7 +17,7 @@ final class SleepBackTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []
     // (2026-11-12: this suite pins today's quick wake: `slowWakeEverywhere` OFF here; SlowWakeTests covers the staged wake with the switch on.)
     override func setUp() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956); BlobBrain.slowWakeEverywhere = false }          // the room as the game runs it
-    override func tearDown() { RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); BlobBrain.slowWakeEverywhere = true }
+    override func tearDown() { SleepTuning.anywhere = true; RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); BlobBrain.slowWakeEverywhere = true }
 
     /// The face normal's height: +1 = face to the ceiling (on his back), 0 = upright, -1 = face down.
 
@@ -129,7 +129,27 @@ final class SleepBackTests: XCTestCase {
         XCTAssertFalse(a.brain.socialFree)
     }
 
+    /// The sleep-anywhere rule on the same scene: nobody joins a pile, everybody lies where he stands or one short step away, all asleep, never inside each other.
+    func testNapsLieWhereTheyStandUnderSleepAnywhere() {
+        SleepTuning.anywhere = true
+        let lab = SocialTests.Lab(positions: [SIMD2(-1.0, 0.6), SIMD2(0.7, 0.9), SIMD2(1.6, -1.2)], quiet: true, seed: 8)
+        for r in lab.rigs { r.brain.sleepEnabled = true; r.brain.idleForced = true }
+        let starts = lab.rigs.map { $0.brain.position }
+        XCTAssertTrue(lab.rigs[0].brain.idleStart(.sleep, lab.rigs[0].sim))
+        for r in lab.rigs { r.brain.sleep.hold = 500 }
+        for _ in 0..<(60 * 6) { lab.tick(watching: false) }
+        for i in 1..<3 { XCTAssertTrue(lab.rigs[i].brain.idleStart(.sleep, lab.rigs[i].sim), "rig \(i) goes to sleep"); lab.rigs[i].brain.sleep.hold = 500 }
+        XCTAssertFalse(lab.rigs.contains { $0.brain.sleep.joined }, "nobody heads for a pile")
+        var minGap: Float = .infinity
+        for f in 0..<(60 * 30) { lab.tick(watching: false); if f > 60 * 20 { minGap = min(minGap, lab.centreGap(0, 1), lab.centreGap(0, 2), lab.centreGap(1, 2)) } }
+        XCTAssertTrue(lab.rigs.allSatisfy { $0.brain.isNapping }, "all three asleep")
+        for (i, r) in lab.rigs.enumerated() { XCTAssertLessThan(simd_distance(r.brain.position, starts[i]), 1.2, "rig \(i) lies within a short step of where he stood") }
+        XCTAssertGreaterThan(minGap, 1.3, "never inside each other")
+    }
+
+    /// The old pile (`-SleepAnywhere 0`).
     func testSleepersSnuggleIntoOneRowTouchingNeverInsideEachOther() {
+        SleepTuning.anywhere = false
         let lab = SocialTests.Lab(positions: [SIMD2(-1.0, 0.6), SIMD2(0.7, 0.9), SIMD2(1.6, -1.2)], quiet: true, seed: 8)
         for r in lab.rigs { r.brain.sleepEnabled = true; r.brain.idleForced = true }
         XCTAssertTrue(lab.rigs[0].brain.idleStart(.sleep, lab.rigs[0].sim))

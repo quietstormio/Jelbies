@@ -672,6 +672,20 @@ nonisolated final class Skinner {
         }
         return body()
     }
+    /// Lobby pictures: the arms AT REST for one `update` (the plain nubs the body is made with: no walking / social / dining capsule, no wave or touch skin offsets, no wave fillet), whatever the live
+    /// Jelmiko is doing right now (waving, in a trick, mid-bath, holding something up). The live arm state is saved and put back after, so the next real frame is not disturbed.
+    func withRestArms<T>(_ body: () -> T) -> T {
+        let live = (armBlend, armPos, armStart, armCollarDelta, overrideVertices, overrideDelta, overrideMat, extraVertices, extraDelta, waveFit, waveBlend, pendingRestore)
+        armBlend = 0; armPos = [[], []]; armStart = [[], []]; armCollarDelta = []
+        overrideVertices = []; overrideDelta = []; overrideMat = []; extraVertices = []; extraDelta = []
+        waveFit = nil; for k in waveBlend.indices { waveBlend[k] = .zero }
+        defer {
+            armBlend = live.0; armPos = live.1; armStart = live.2; armCollarDelta = live.3
+            overrideVertices = live.4; overrideDelta = live.5; overrideMat = live.6; extraVertices = live.7; extraDelta = live.8
+            waveFit = live.9; waveBlend = live.10; pendingRestore = live.11
+        }
+        return body()
+    }
     /// The game camera as it is NOW (the screen-space brow measure multiplies by the live aspect, so the matrix must use it too: a frozen portrait one skews the slant in landscape).
     private static var gameViewProj: simd_float4x4 { M4.mul(M4.perspective(fovy: GameCamera.fovY, aspect: GameCamera.aspect, near: 0.3, far: 60),
                                                            M4.lookAt(eye: GameCamera.eye, at: GameCamera.target, up: SIMD3(0, 1, 0))) }

@@ -14,42 +14,51 @@ extension GameCare {
         return "\(name) is too \(what) to cuddle"
     }
 
-    /// The notices to show now: one per Jelbie of the close-up whose strokes are blocked; empty outside the close-up or once the need is met.
+    /// One line for a group: the names (up to three, then "and N more") and what they lack. Same need for all: "Violet, Alien and Pogo are too hungry and thirsty to cuddle"; mixed: "... too hungry or thirsty to cuddle".
+    static func cuddleGroupLine(_ entries: [(name: String, hungry: Bool, thirsty: Bool)]) -> String? {
+        guard !entries.isEmpty else { return nil }
+        if entries.count == 1, let e = entries.first { return "\(e.name) is too \(e.hungry && e.thirsty ? "hungry and thirsty" : e.hungry ? "hungry" : "thirsty") to cuddle" }
+        let both = entries.allSatisfy { $0.hungry && $0.thirsty }
+        let allHungry = entries.allSatisfy { $0.hungry && !$0.thirsty }, allThirsty = entries.allSatisfy { $0.thirsty && !$0.hungry }
+        let what = both ? "hungry and thirsty" : allHungry ? "hungry" : allThirsty ? "thirsty" : "hungry or thirsty"
+        let names = entries.map(\.name)
+        let list: String
+        if names.count <= 3 { list = names.count == 2 ? "\(names[0]) and \(names[1])" : "\(names[0]), \(names[1]) and \(names[2])" }
+        else { list = "\(names[0]), \(names[1]), \(names[2]) and \(names.count - 3) more" }
+        return "\(list) are too \(what) to cuddle"
+    }
+
+    /// The notices to show now: ONE merged line for the Jelmiko of the close-up whose strokes are blocked; empty outside the close-up or once the need is met.
     var cuddleNotices: [String] {
         guard focus.isFocused else { return [] }
-        return focusGroup.ids.compactMap { id in
+        let blocked: [(name: String, hungry: Bool, thirsty: Bool)] = focusGroup.ids.compactMap { id in
             let n = needs(for: id)
-            return Self.cuddleBlockLine(name: jelly(id)?.name ?? "Your Jelmiko", mood: n.mood, wanted: n.wantedNeed, hungry: n.isWanting(.hunger), thirsty: n.isWanting(.thirst))
+            guard Self.cuddleBlockLine(name: "x", mood: n.mood, wanted: n.wantedNeed, hungry: n.isWanting(.hunger), thirsty: n.isWanting(.thirst)) != nil else { return nil }
+            return (jelly(id)?.name ?? "Your Jelmiko", n.isWanting(.hunger), n.isWanting(.thirst))
         }
+        return Self.cuddleGroupLine(blocked).map { [$0] } ?? []
     }
 }
 
-/// The cream pill(s) under "Let them go" while strokes are blocked; same look as the refusal label.
-struct CuddleNoticeView: View {
+/// Posts the close-up's cuddle line to the one message bar: when it appears, and again each time the player strokes a Jelmiko who refuses (not more than once every 6 s),
+/// so the reason is there when they try. (A zero-size view; the pills that used to stack under "Let them go" are gone.)
+struct CuddleNoticePoster: View {
     let care: GameCare
+    let touch: TouchPlay          // its `hmphs` counts the annoyed "hmph" answers to a stroke
+    static let repeatEvery: TimeInterval = 6
+    @State private var lastPosted = Date.distantPast
     var body: some View {
-        let lines = care.cuddleNotices
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(lines, id: \.self) { line in
-                Text(line)
-                    .jFont(15, .bold)
-                    .foregroundStyle(FocusStyle.brown)
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                    .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.25), radius: 5, y: 2))
-                    .transition(.scale(scale: 0.6, anchor: .topLeading).combined(with: .opacity))
-                    .accessibilityIdentifier("cuddle-notice")
+        TimelineView(.periodic(from: .now, by: 0.25)) { _ in poster(line: care.cuddleNotices.first, strokes: touch.hmphs) }
+    }
+    private func poster(line: String?, strokes: Int) -> some View {
+        Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
+            .onChange(of: line, initial: true) { _, l in
+                guard let l else { return }
+                lastPosted = Date(); GameMessageCenter.shared.post(l, identifier: "cuddle-notice")
             }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: lines)
-        .allowsHitTesting(false)
-        .onChange(of: lines) { _, l in if let t = l.first { A11yAnnounce.say(t, priority: .normal) } }
-    }
-}
-
-/// The HUD row for it: left-aligned under the top bar, empty (no height) when there is nothing to say.
-struct CuddleNoticeRow: View {
-    let care: GameCare
-    var body: some View {
-        if !care.cuddleNotices.isEmpty { HStack { CuddleNoticeView(care: care); Spacer() } }
+            .onChange(of: strokes) { _, _ in
+                guard let l = care.cuddleNotices.first, Date().timeIntervalSince(lastPosted) >= Self.repeatEvery else { return }
+                lastPosted = Date(); GameMessageCenter.shared.post(l, identifier: "cuddle-notice")
+            }
     }
 }

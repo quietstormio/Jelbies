@@ -178,8 +178,8 @@ final class TipBookTests: XCTestCase {
     func testPlacementKeepsOffFacesAndStaysClearOfTheBottomBar() {
         let size = CGSize(width: 402, height: 874), safe = UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0)
         let room = TipPlace.of("feed")
-        // top rule: y = safe top + 62 = 124, centred x = 31
-        XCTAssertEqual(TipPlacement.origin(room, size: size, safe: safe, heads: [], h: 122), CGPoint(x: 31, y: 124))
+        // top rule: the message bar's band: y = safe top + 60 = 122, left margin x = 16
+        XCTAssertEqual(TipPlacement.origin(room, size: size, safe: safe, heads: [], h: 122), CGPoint(x: 16, y: 122))
         // a head under the card: the card tries the left edge, then the right edge
         let head = CGPoint(x: 200, y: 200)
         let moved = TipPlacement.origin(room, size: size, safe: safe, heads: [head], h: 122)
@@ -188,7 +188,7 @@ final class TipBookTests: XCTestCase {
         XCTAssertNotNil(side)
         XCTAssertEqual(TipPlacement.origin(TipPlace.of("town"), size: size, safe: safe, heads: [], h: 122), CGPoint(x: 31, y: 874 - 34 - 12 - 122), "town: bottom 828")
         XCTAssertEqual(TipPlacement.origin(TipPlace.of("race"), size: size, safe: safe, heads: [], h: 122)?.y, 764 - 122, "race: bottom 764")
-        XCTAssertEqual(TipPlacement.origin(TipPlace.of("park"), size: size, safe: safe, heads: [], h: 122)?.y, 176)
+        XCTAssertEqual(TipPlacement.origin(TipPlace.of("park"), size: size, safe: safe, heads: [], h: 122)?.y, 122)
     }
 
     func testLandscapeIPhoneHoldsTheQueueAndPortraitThenShowsTheCard() {

@@ -87,6 +87,8 @@ extension GameCare {
 
     /// Anybody still on their feet lies down at once, while the cover hides it.
     private func putEveryoneDown() {
+        for a in rosterActors { if let b = a.brain, !b.isSleeping, b.sleepEnabled { b.sleepBound = true } }          // (sleep anywhere: each lies where he stands; a later one yields to an earlier one's spot)
+        defer { for a in rosterActors { a.brain?.sleepBound = false } }
         for a in rosterActors {
             guard let b = a.brain, !b.isSleeping, b.sleepEnabled else { continue }
             b.abortAll(a.sim, a.skinner); b.pending = nil

@@ -143,19 +143,29 @@ nonisolated enum JellyVoice: String, Sendable, CaseIterable {
     var hasVariants: Bool { isContext && !isBatchB }
 }
 
-/// The voice set of a CHARACTER (0 Bob, 1 Pip, 2 Moss, 3 Lavender, 4 Teddy, 5 Pearl, 6 Panda): files chirp_jelly{c+1}_happy/_sad, babble_jelly{c+1}, <type>_jelly{c+1}[_v2|_v3].
-/// Snores and sleep coos exist for the first four only (`count`); Teddy, Pearl and Panda use Lavender's.
+/// The voice set of a CHARACTER (0 Bob, 1 Pip, 2 Moss, 3 Lavender, 4 Teddy, 5 Pearl, 6 Panda, 12 Opal -> jelly8, its own full set; every other id >= 7 uses Panda's):
+/// files chirp_jelly{c+1}_happy/_sad, babble_jelly{c+1}, <type>_jelly{c+1}[_v2|_v3].
+/// Snores and sleep coos exist for the first four only (`count`); Teddy, Pearl and Panda use Lavender's. Opal has her own (snore_jelly8_*, sleep_coo_jelly8_*).
 nonisolated enum JellyVoiceSet {
     static let count = 4
     static let voiceSets = 7
-    static func index(character c: Int) -> Int { min(max(c, 0), voiceSets - 1) + 1 }
-    /// The snore / coo set: the first four characters' (Teddy, Pearl and Panda share Lavender's).
-    static func baseIndex(character c: Int) -> Int { min(max(c, 0), count - 1) + 1 }
-    /// Batch-B voices for the newer species: Teddy -> Bob, Pearl -> Lavender, Panda -> Moss (and a pitch trim for Teddy, who is lower than Bob).
-    static func borrowed(_ n: Int) -> Int { n <= 4 ? n : (n == 5 ? 1 : (n == 6 ? 4 : 3)) }
+    /// Opal (12) has its own full set, jelly8 (2026-11-18): chirps, babble, the round-1 calls, batch B, snores and sleep coos, but no _v2 / _v3.
+    static let opalSet = 8
+    /// The 20 kinds Opal has files for; any kind added later without an Opal file borrows Pearl's (never silence).
+    static let opalKinds: Set<JellyVoice> = [.happy, .sad, .babble, .curious, .ooh, .hum, .giggle, .hello, .yawn, .yay, .uhoh,
+                                             .wheee, .tasty, .aww, .huh, .pfft, .lala, .eep, .mmhmm, .nyoo]
+    /// The characters whose snores / coos / voices are preloaded: the base sets, then Opal's own.
+    static var snoreCharacters: [Int] { Array(0..<count) + [JellyRoster.opalID] }
+    static var voiceCharacters: [Int] { Array(0..<voiceSets) + [JellyRoster.opalID] }
+    static func index(character c: Int) -> Int { c == JellyRoster.opalID ? opalSet : min(max(c, 0), voiceSets - 1) + 1 }
+    /// The snore / coo set: the first four characters' (Teddy, Pearl and Panda share Lavender's); Opal has her own.
+    static func baseIndex(character c: Int) -> Int { c == JellyRoster.opalID ? opalSet : min(max(c, 0), count - 1) + 1 }
+    /// Batch-B voices for the newer species: Teddy -> Bob, Pearl -> Lavender, Panda -> Moss (and a pitch trim for Teddy, who is lower than Bob). Opal's own set plays its own.
+    static func borrowed(_ n: Int) -> Int { n == opalSet ? n : (n <= 4 ? n : (n == 5 ? 1 : (n == 6 ? 4 : 3))) }
     static func rate(character c: Int, _ v: JellyVoice) -> Float { v.isBatchB && index(character: c) == 5 ? 0.87 : 1 }
     /// `variant` 1...3 (2 and 3 exist for the base four's round-1 types only; anything else plays the first).
     static func file(character c: Int, _ v: JellyVoice, variant: Int = 1) -> String {
+        if c == JellyRoster.opalID && !opalKinds.contains(v) { return file(character: JellyRoster.pearlID, v, variant: variant) }
         let n = index(character: c)
         switch v {
         case .babble: return "babble_jelly\(n)"

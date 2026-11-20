@@ -249,7 +249,7 @@ extension GameCare {
         }
         work.saveT += dt
         if work.saveT >= ParkTuning.saveEvery { work.saveT = 0; book.save() }
-        if park.phase == .playing, isBedtimeHours { park.say("It is getting late. Time to go home!"); park.goHome() }
+        if park.phase == .playing, isBedtimeHours { park.homeLine = "It got late, so everyone came home to rest."; park.goHome() }          // (the old "Time to go home!" line was up for 0.4 s at the park, then showed at home after the wipe: say what happened once they ARE home)
     }
 
     /// The visitors: their mood, their signature and worn item (the same wardrobe / feature sets the Jelbies use, keyed by their body id).

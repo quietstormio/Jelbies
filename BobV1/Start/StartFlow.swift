@@ -445,7 +445,7 @@ struct GameHost: View {
 enum AdoptionPrice {
     static let special = 2000
     static let second = 500, third = 800, rareSurcharge = 300
-    /// Teddy, Pearl and Panda (Jelly Spring specials): 2,000 JellyCoins each, whichever slot they fill. That is 2.5x the dearest ordinary adoption (800) and 1.8x
+    /// Teddy, Pearl, Panda and Opal (Jelly Spring specials): 2,000 JellyCoins each, whichever slot they fill. That is 2.5x the dearest ordinary adoption (800) and 1.8x
     /// the dearest rare colour (1,100): a long saving goal (about 2 Splash wins), so they feel earned. A special never carries a rare colour or the rare surcharge.
     /// Cost of the next Jelbie when `home` are in the room (nil = the room is full); `rare` = the offered colour is a rare mutation (+300; never on the free first gift).
     /// With Jelmiko Camp: the same prices while fewer than 3 are home; with home full a new one goes to Camp for what a third costs (800, rare 1,100, special 2,000) until Camp holds
@@ -461,17 +461,16 @@ enum AdoptionPrice {
     }
 }
 
-/// "<name> is at Jelmiko Camp": a calm line in the room for a few seconds (no hearts, no arrival).
+/// "<name> is at Jelmiko Camp": a calm line on the one message bar (UI/GameMessageCenter.swift), then the flow's note is cleared.
 struct CampNoteBanner: View {
     let text: String
     var gone: () -> Void
     var body: some View {
-        Text(text).font(SK.font(20, .black)).foregroundStyle(SK.ink)
-            .padding(.horizontal, 20).frame(minHeight: 46).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
-            .offset(y: -140).allowsHitTesting(false)
-            .onAppear { Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
-            .accessibilityLabel(text).accessibilityIdentifier("camp-note")
-            .transition(.opacity)
+        Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
+            .onAppear {
+                GameMessageCenter.shared.post(text, identifier: "camp-note")
+                Task { try? await Task.sleep(nanoseconds: 200_000_000); gone() }
+            }
     }
 }
 
@@ -487,12 +486,9 @@ struct WelcomeBanner: View {
                     .offset(x: CGFloat(i - 3) * 38, y: up ? -170 - CGFloat(i % 3) * 30 : 20).opacity(up ? 0 : 0.95)
                     .animation(.easeOut(duration: 2.2).delay(Double(i) * 0.1), value: up)
             }
-            Text("Welcome home, \(name)!").font(SK.font(22, .black)).foregroundStyle(SK.ink)
-                .padding(.horizontal, 20).frame(minHeight: 50).background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 8, y: 3))
-                .offset(y: -140)
         }
         .allowsHitTesting(false)
-        .onAppear { up = true; Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
+        .onAppear { up = true; GameMessageCenter.shared.post("Welcome home, \(name)!", identifier: "welcome-home"); Task { try? await Task.sleep(nanoseconds: 3_200_000_000); withAnimation(.easeOut(duration: 0.4)) { gone() } } }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Welcome home, \(name)")
         .transition(.opacity)

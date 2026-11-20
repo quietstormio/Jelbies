@@ -42,7 +42,9 @@ struct ParkChrome: View {
                             if wide { friends.frame(maxWidth: .infinity) } else { Spacer() }
                             DropsPill(wallet: care.bath.wallet)
                         }
-                        if !wide { friends }
+                        if !wide {
+                            friends.background(GeometryReader { r in Color.clear.preference(key: ParkFriendsRowKey.self, value: r.frame(in: .global).maxY) })          // (the message bar stands under it)
+                        }
                         Spacer()
                     }
                     .padding(.horizontal, 16).padding(.top, 8)
@@ -85,36 +87,17 @@ struct ParkChrome: View {
                     ParkGiftCard(friend: g.friend, item: item) { park.gift = nil }
                         .transition(.opacity)
                 }
-                if let t = park.toast {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            HStack(spacing: 8) {
-                                ForEach(park.toastSymbols, id: \.self) { Image(systemName: $0).font(SK.font(18, .black)).accessibilityHidden(true) }
-                                Text(t).multilineTextAlignment(.leading)
-                            }
-                                .font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
-                                .padding(.horizontal, 16).padding(.vertical, 10)
-                                .background(Capsule().fill(SK.cream).shadow(color: SK.shadow.opacity(0.22), radius: 6, y: 2))
-                                .accessibilityIdentifier("park-toast")
-                            Spacer(minLength: 20)
-                        }
-                        .padding(.leading, 16).padding(.bottom, park.phase == .playing ? (park.place == .camp ? 200 : 92) : 24)
-                    }
-                    .allowsHitTesting(false).transition(.opacity)
-                }
                 Color.white.opacity(Double(park.wipe)).ignoresSafeArea().allowsHitTesting(park.wipe > 0).accessibilityHidden(true)
             }
             .frame(width: g.size.width, height: g.size.height)
+            .onPreferenceChange(ParkFriendsRowKey.self) { GameMessageLayout.parkRowMaxY = $0 }
             .animation(.easeInOut(duration: 0.25), value: park.card)
             .animation(.easeInOut(duration: 0.25), value: park.phase == .playing)
             .animation(.easeInOut(duration: 0.2), value: toysOpen)
             .onChange(of: care.play.active) { _, on in if on { toysOpen = false } }
-            .animation(.easeInOut(duration: 0.2), value: park.toast)
             .animation(.easeInOut(duration: 0.25), value: park.gift?.itemID)
-            .onChange(of: park.toast) { _, t in if let t { A11yAnnounce.say(t) } }
         }
-        .allowsHitTesting(park.active || park.toast != nil || park.gift != nil)
+        .allowsHitTesting(park.active || park.gift != nil)
     }
 
     /// The home Play row's round button (GameScreen.swift CareMenu.row: cream circle, brown teddy, white rim), opening the toy picker.
@@ -324,4 +307,10 @@ struct VisitorCard: View {
         .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 6, y: 3))
         .accessibilityElement(children: .contain).accessibilityIdentifier("park-card")
     }
+}
+
+/// The bottom edge of the park's friends-chip row in window points (nil while the row is not drawn): where the message bar stands.
+private struct ParkFriendsRowKey: PreferenceKey {
+    static let defaultValue: CGFloat? = nil
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) { value = nextValue() ?? value }
 }

@@ -77,6 +77,12 @@ struct SleepState {
     var stirEye: Float = 0           // the eye crack the stir opened (carried into the roll, fading as the lie blend falls)
     var rollDur: Float = SleepTuning.rollBackTime
     var lookT0: Float = -1
+    // MARK: the get-up (owner 2026-11-17: "getting up ... they just like slide up doesn't look natural"; `SleepTuning.getUpNew`)
+    var shortUp = false              // the wake was asked for (a poke, a name, a meal): the short get-up
+    var upSet = false               // this wake's get-up shape is chosen (variant + duration), at the first tick of stage 4
+    var upVar = 0                    // 0 / 1 = prop onto one side or the other, 2 = a straighter sit-up with a bigger settle
+    var upRollW: Float = 0           // the extra rock onto a side while he props up (rad, about his own head-to-foot axis)
+    var upArm: Float = 0             // the stub arms pressing out and down (0...1)
     /// Woken by the meal tray (`callToMeal`): soft wake whatever the call; shown as a non-idle activity so the tray's "stuck idle" retry never re-sends him.
     var mealWake = false
     /// The tray's call that reached him during the stretch (stage 5): kept here (a pending request would abort the stretch) and started by `sleepFinish`.
@@ -203,6 +209,19 @@ enum SleepTuning {
     static let decorClear: Float = 0.85, decorFlatClear: Float = 0.3          // solid pieces / flat pieces (rug, mat, ball)
     /// The relaxed clearances (a full room with nowhere else): he may lie closer to a piece and nearer the edge of the rug, never inside a piece's footprint.
     static let decorClearRelaxed: Float = 0.5, decorFlatClearRelaxed: Float = 0.1
+
+    /// SLEEP ANYWHERE (owner 2026-11-17: "they don't have to lineup, they can sleep where ever ... they get buggy and run into each other when trying to line up"):
+    /// at bedtime (any path) a Jelmiko lies down where he stands; only when that spot is not fair does he walk, to the nearest fair one. false (dev: `-SleepAnywhere 0`) = the old row / rug pile.
+    /// The get-up in beats (prop up onto a side with the arms pressing, push up with a small overshoot, settle) instead of the one smooth pitch-up. false (dev: `-GetUp old`) = the old roll back.
+    nonisolated(unsafe) static var getUpNew: Bool = !(DevArgs.enabled && UserDefaults.standard.string(forKey: "GetUp") == "old")
+    /// Duration of the get-up (s) by variant for a normal soft wake, and for a poke / a waiting meal (about a second, the same shape).
+    static let getUpSoft: [Float] = [1.5, 1.9, 2.3], getUpShort: ClosedRange<Float> = 0.95...1.15
+    nonisolated(unsafe) static var anywhere: Bool = {
+        guard DevArgs.enabled, UserDefaults.standard.object(forKey: "SleepAnywhere") != nil else { return true }
+        return UserDefaults.standard.integer(forKey: "SleepAnywhere") != 0
+    }()
+    /// The clear gap kept between two lying skins (the footprint's own sway is inside the ellipse), the nearest-spot search range, and how far a mover may be sent before the old chooser takes over.
+    static let anywhereGap: Float = 0.15, anywhereReach: Float = 1.2, anywhereFarReach: Float = 2.2
 }
 
 extension BlobBrain {
@@ -247,8 +266,8 @@ extension BlobBrain {
 
     /// Do two lying footprints (ellipses, `footHalfLen` along the heading, `footHalfWid` across, + `footMargin`) whose centres are `d` apart intersect?
     /// Judged in each body's own heading frame (the pile shares one heading, so the two agree there); either frame saying "inside" is a clash.
-    static func lieClash(_ d: SIMD2<Float>, yawA: Float, yawB: Float, hold: Bool = false) -> Bool {
-        let hw = hold ? SleepTuning.holdHalfWid : SleepTuning.footHalfWid, k = hold ? 2 : 2 + SleepTuning.footMargin / SleepTuning.footHalfWid
+    static func lieClash(_ d: SIMD2<Float>, yawA: Float, yawB: Float, hold: Bool = false, margin: Float? = nil) -> Bool {
+        let hw = hold ? SleepTuning.holdHalfWid : SleepTuning.footHalfWid, k = hold ? 2 : 2 + (margin ?? SleepTuning.footMargin) / SleepTuning.footHalfWid
         for y in [yawA, yawB] {
             let l = SIMD2(simd_dot(d, SIMD2(cosf(y), -sinf(y))) / hw, simd_dot(d, SIMD2(sinf(y), cosf(y))) / SleepTuning.footHalfLen)
             if simd_length(l) < k { return true }
@@ -283,6 +302,7 @@ extension BlobBrain {
     /// Where he lies down: beside the pile if there is one, else here when this is a good spot, else the nearest good spot on the rug.
     /// `hold`: a row spot beside ONE sleeper at the hand-holding spacing (nil partner = no such spot, the usual choice).
     func chooseSleepSpot() -> (spot: SIMD2<Float>, yaw: Float, joined: Bool, partner: BlobBrain?) {
+        if SleepTuning.anywhere, let c = chooseSleepSpotAnywhere() { return c }          // (nil only in a room with no fair spot near him at all: the old search below is the last resort)
         let mates = sleepMates
         let here = position
         if let lead = mates.min(by: { $0.steerID < $1.steerID }) {
@@ -401,9 +421,11 @@ extension BlobBrain {
         // a free pet bed is the preferred spot for a Jelly who sleeps alone: he hops over its rim and curls up on the mattress
         var bed: (foot: DecorFoot, stand: SIMD2<Float>)?
         if sleepMates.isEmpty { bed = freeBed() }
+        if SleepTuning.anywhere, let b = bed, simd_distance(position, b.stand) > 0.8 { bed = nil }          // (sleep anywhere: no walk to the pet bed unless he already stands at it)
         var c = bed.map { b in (spot: b.foot.centre + b.foot.turned(SIMD2(DecorKind.sleepPoint.x, DecorKind.sleepPoint.z)), yaw: faceCameraYaw(), joined: false, partner: nil as BlobBrain?) } ?? chooseSleepSpot()
-        if force, bed == nil, !c.joined, !sleepFloorOK(c.spot, relaxed: true) || sleepOverlapsOthers(c.spot, yaw: c.yaw) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
-        guard force || bed != nil || c.joined || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
+        let fairAny = SleepTuning.anywhere && bed == nil && sleepFairAnywhere(c.spot)
+        if force, bed == nil, !c.joined, !fairAny, !sleepFloorOK(c.spot, relaxed: true) || sleepOverlapsOthers(c.spot, yaw: c.yaw) { c = (forceSpot() ?? position, faceCameraYaw(), false, nil) }
+        guard force || bed != nil || c.joined || fairAny || sleepFloorOK(c.spot, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); return false }          // nowhere good to lie down that he can reach: not now
         idleBegin(.sleep)
         sleep = SleepState()
         sleep.force = force
@@ -451,8 +473,9 @@ extension BlobBrain {
     private func sleepLingerEnd(_ skinner: Skinner) {
         sleep.lingering = false; sleep.t = 0
         skinner.setEyeOpenness(1)
-        if let tgt = sleep.lingerTarget {
+        if var tgt = sleep.lingerTarget {
             sleep.lingerTarget = nil
+            if SleepTuning.anywhere, sleep.bed < 0, !sleepFairAnywhere(tgt), let c = chooseSleepSpotAnywhere() { tgt = c.spot; sleep.spot = c.spot }          // (the spot he chose a moment ago was taken by somebody else since: a fresh nearest one)
             scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
             script = .walk(target: tgt, then: .none); activity = .walking
         } else {
@@ -484,7 +507,8 @@ extension BlobBrain {
                 return
             }
         }
-        if sleep.force, !sleepFloorOK(position, relaxed: true), !sleep.forceRetried, let f = forceSpot() {
+        let fairHere = SleepTuning.anywhere && sleepFairAnywhere(position)
+        if sleep.force, !fairHere, !sleepFloorOK(position, relaxed: true), !sleep.forceRetried, let f = forceSpot() {
             sleep.forceRetried = true
             sleep.spot = f
             if simd_distance(position, f) > 0.25 {
@@ -505,7 +529,7 @@ extension BlobBrain {
                 return
             }
         }
-        guard sleep.force || sleepFloorOK(position, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); idleFinish(skinner); return }          // no way to a good spot: not here (in front of the table, on the call spot): try again later
+        guard sleep.force || fairHere || sleepFloorOK(position, relaxed: true) else { sleepTryCool = rand(SleepTuning.tryCool.lowerBound, SleepTuning.tryCool.upperBound); idleFinish(skinner); return }          // no way to a good spot: not here (in front of the table, on the call spot): try again later
         sleep.spot = position
         sleep.stage = 1; sleep.t = 0; sleep.stageStart = true
         idleState.phaseT = 0
@@ -521,6 +545,7 @@ extension BlobBrain {
         if idleState.kind == .sleep { postEvent(.wokeUp) }
         guard idleState.kind == .sleep else { return }
         if sleep.stage <= 1 { idleState.yielding = true; return }          // not down yet: the usual yield ends it
+        if groggy || fast { sleep.shortUp = true }          // (somebody asked for the wake: a poke, a name, a meal: the short get-up; a natural / morning wake keeps the long one)
         let slowOn = Self.slowWakeOn
         let immediate = slowOn && !sleep.mealWake && ((fast && !slow) || sleep.quick)          // (an immediate cause; always false with the switch off)
         if slowOn, fast, !slow, !sleep.mealWake { sleep.quick = true }
@@ -560,7 +585,7 @@ extension BlobBrain {
     /// `wakeAsked` is cleared again, so `isNapping` (mask, snores) never blinked. Anything further along (or `fast`, which never joins a group) is left alone.
     func sleepSoftenQuickWake() {
         guard idleState.kind == .sleep, sleep.stage == 4, !sleep.softWake, !sleep.mealWake, sleep.kStart > 0.99, sleep.t <= 0.05 else { return }
-        sleep.stage = 3; sleep.t = 0; sleep.k = 1; sleep.kStart = 1; sleep.wakeAsked = false
+        sleep.stage = 3; sleep.t = 0; sleep.k = 1; sleep.kStart = 1; sleep.wakeAsked = false; sleep.upSet = false
         sleepBeginStir(lag: 0, groggy: true)
     }
 
@@ -795,6 +820,22 @@ extension BlobBrain {
                 sleepBeginStir(lag: SleepOrder.delay(.morning, slot: SleepOrder.slot(.morning, self), rand: { self.rand($0, $1) }), groggy: true)
             }
         default:    // 4: roll back over the way he went down
+            if SleepTuning.getUpNew {
+                if !sleep.upSet {          // the shape of this get-up: a variant per creature and wake, a long one for a normal soft wake, a short one for a poke / a meal waiting
+                    sleep.upSet = true; _ = rand(); _ = rand(); sleep.upVar = min(2, Int(rand() * 3))          // (two draws burned: a fresh seed's first draws are small)
+                    sleep.rollDur = (sleep.mealWake || sleep.quick || !sleep.softWake || sleep.shortUp) ? rand(SleepTuning.getUpShort.lowerBound, SleepTuning.getUpShort.upperBound) : SleepTuning.getUpSoft[sleep.upVar] * rand(0.95, 1.1)
+                }
+                let u = min(sleep.t / sleep.rollDur, 1)
+                let a = smooth01(u / 0.3), b = smooth01((u - 0.3) / 0.5), s = max(0, (u - 0.8) / 0.2)
+                let kHigh: Float = sleep.upVar == 2 ? 0.5 : 0.62          // (propped up: partly over)
+                // beats: 0 - 0.3 rock onto a side and prop (the arms press), 0.3 - 0.8 push up, 0.8 - 1 a small overshoot and settle
+                sleep.k = sleep.kStart * (kHigh + (1 - kHigh) * (1 - a)) * (1 - b) - 0.05 * sinf(.pi * s) * (1 - s) * (sleep.upVar == 2 ? 1.4 : 1)
+                sleep.upRollW = (sleep.upVar == 1 ? -0.55 : (sleep.upVar == 0 ? 0.55 : 0.2)) * a * (1 - b)
+                sleep.upArm = a * (1 - smooth01((u - 0.85) / 0.15))
+                if u >= 1 { sleep.k = 0; sleep.upRollW = 0; sleep.upArm = 0; sleepStand(sim, skinner); return false }
+                applyLie(sim, skinner, dt)
+                return true
+            }
             let x = min(sleep.t / sleep.rollDur, 1)
             sleep.k = sleep.kStart * (sleep.softWake ? 1 - smooth01(x) : (1 - x) * (1 - x))          // ease-out: the roll-up pops up fast, then settles onto his feet (a soft wake: a slow smoothstep)
             if sleep.t >= sleep.rollDur {
@@ -942,10 +983,12 @@ extension BlobBrain {
         let q0 = yawQuat(yaw) * simd_quatf(angle: pitchAng, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: SleepTuning.leanAngle * smooth01(sleep.leanW) * leanSign, axis: SIMD3(0, 1, 0))
         // (user 2026-11-04: belly-up he must NEVER spin like a clock hand. The heading offset is gone, and the side roll turns about his own head-to-foot
         //  axis, body y after the pitch back, so he rocks onto a side and back. It used to turn about body z, which points at the sky when lying, so it was a spin.)
-        let q = (rollScale > 0 && fid.rollW != 0) ? q0 * simd_quatf(angle: fid.rollW * rollScale, axis: SIMD3(0, 1, 0)) : q0
+        let rollTot = (rollScale > 0 ? fid.rollW * rollScale : 0) + (sleep.stage == 4 ? sleep.upRollW : 0)
+        let q = rollTot != 0 ? q0 * simd_quatf(angle: rollTot, axis: SIMD3(0, 1, 0)) : q0
         var sq = 1 - (1 - SleepTuning.lieSquash) * min(k, 1)
         if sleep.stage == 2 { sq *= 1 - SleepTuning.impactDip * SleepTuning.flopDip(sleep.t) }          // the squash on impact (exactly 1x in stage 3)
-        else if sleep.stage == 4 {                                                                          // the wake pop: a taller body for a beat as he comes up
+        else if sleep.stage == 4, SleepTuning.getUpNew { sq *= 1 + 0.05 * sinf(.pi * min(max((sleep.t / sleep.rollDur - 0.55) / 0.45, 0), 1)) }          // (the body stretches a little as it pushes up)
+        else if sleep.stage == 4 {                                                                        // the wake pop: a taller body for a beat as he comes up
             let x = sleep.t / sleep.rollDur
             if x > 0.5 { sq *= 1 + 0.07 * sinf(.pi * min((x - 0.5) / 0.5, 1)) }
         }
@@ -967,6 +1010,10 @@ extension BlobBrain {
         skinner.setEyeOpenness(min(1, 1 - 0.96 * smooth01(min(1, k * 1.6)) + (fa && fid.halfU >= 0 ? fid.halfAmp * sinf(.pi * fid.halfU) : 0) + sleep.stirEye))
         // feet: the rigid beans ride the body, arms stay the rest nubs
         armWalkWant = 0; armDirW = 0
+        if sleep.stage == 4, sleep.upArm > 0.001 {          // the get-up: the stub arms press out and down (capped to the stub like every arm)
+            armWalkWant = 1; armDirW = smooth01(sleep.upArm)
+            armDirEl = [-0.05, -0.05]; armDirSa = [0.1, 0.1]; armDirOut = 0.07
+        }
         if sleep.holdW > 0.001 {
             // the hold: the arm toward the other reaches a little sideways (capped to the stub like every arm), the far one hangs as it walks
             let rest = ArmPath.armWalkElevation(ArmPath.armWalkCentreDeg), restSa = ArmPath.armWalkCentreDeg * .pi / 180

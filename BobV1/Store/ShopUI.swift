@@ -54,8 +54,6 @@ struct ShopScreen: View {
     private var shown: [StoreItem] { tab == .wear ? tab.items.filter { wearSlot == nil || $0.wear?.slot == wearSlot } : tab.items }
     @State private var selected: StoreItem? = UserDefaults.standard.string(forKey: "StoreOpen") == "item" ? StoreCatalog.item(UserDefaults.standard.string(forKey: "StoreItem") ?? "sushi") : nil
 
-    @State private var boughtToast: String?
-
     private var book: StoreBook { care.store }
 
     var body: some View {
@@ -80,21 +78,12 @@ struct ShopScreen: View {
             .scrollBounceBehavior(.basedOnSize)
             .onGeometryChange(for: CGSize.self) { $0.size } action: { if pad { gridSize = $0 } }
         }
-        .overlay(alignment: .bottom) {
-            if let boughtToast {
-                Text(boughtToast).font(SK.font(15, .heavy)).foregroundStyle(SK.cream)
-                    .padding(.horizontal, 18).padding(.vertical, 10).background(Capsule().fill(SK.ink))
-                    .padding(.bottom, 24).transition(.move(edge: .bottom).combined(with: .opacity))
-                    .accessibilityIdentifier("shop-bought-toast")
-            }
-        }
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("shop-screen")
         .sheet(item: $selected) { item in
             ItemSheet(care: care, item: item, who: who, goHome: goHome, close: { selected = nil }, onBought: { msg in
                 selected = ShopSelection.afterBuy(selected, bought: true)
-                withAnimation(.spring(duration: 0.35)) { boughtToast = msg }
-                Task { try? await Task.sleep(for: .seconds(2.2)); withAnimation { boughtToast = nil } }
+                GameMessageCenter.shared.post(msg, identifier: "shop-bought-toast")          // (the one message bar)
             })
                 .presentationDetents(wide ? [.large] : [.height(560), .large])
                 .padSheetSizing()          // iPad: a centred page-sized card (the detents are ignored there); no-op on iPhone

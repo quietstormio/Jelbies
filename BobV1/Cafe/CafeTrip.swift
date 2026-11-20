@@ -109,5 +109,5 @@ final class CafeTrip {
         }
     }
 
-    func showRefusal(_ s: String) { refusal = s; toastT = 0 }
+    func showRefusal(_ s: String) { refusal = s; toastT = 0; GameMessageCenter.shared.post(s, priority: .important, identifier: "cafe-toast") }          // (drawn by the one message bar)
 }

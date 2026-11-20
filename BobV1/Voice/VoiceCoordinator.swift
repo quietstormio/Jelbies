@@ -438,6 +438,7 @@ final class VoiceCoordinator {
     func showUnderstood(_ text: String, ok: Bool) {
         understoodSeq += 1
         understood = VoiceUnderstood(id: understoodSeq, text: text, ok: ok, born: clock())
+        GameMessageCenter.shared.post(text, icon: ok ? "checkmark.circle.fill" : "questionmark.circle.fill", priority: ok ? .normal : .important, identifier: "voice-understood", announce: false)          // (the one message bar; A11yEvents below speaks it)
         A11yEvents.say(ok ? text : "Could not: \(text)", .normal)
     }
 
@@ -477,6 +478,7 @@ final class VoiceCoordinator {
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         heardSeq += 1
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
+        GameMessageCenter.shared.post(heard?.text ?? "", priority: .chatty, identifier: "voice-heard", announce: false)
         if !trimmed.isEmpty { A11yEvents.say("\(subjectName) heard \(trimmed)", .low) }          // a11y: the heard pill is transient
         if roomCommand(transcript) { Ears.shared.commandHeard(); return }           // a learned word in the room: every Jelbie who knows it, or the named / highlighted one
         let t0 = CACurrentMediaTime()

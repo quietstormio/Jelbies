@@ -464,6 +464,8 @@ nonisolated final class RoomRenderer {
     enum Parts { case all, staticOnly, diningOnly }
     /// The species picker: draw only what the Jelly wears / grows (no walls, floor, props, decor, dining, shoes).
     var cutout = false
+    /// A lobby action shot (drawn as a cutout) still draws the worn shoes: they are part of the Jelmiko, not of the room.
+    var shoesInCutout = false
 
     func encode(_ enc: MTLRenderCommandEncoder, viewProj: simd_float4x4, camPos: SIMD3<Float>,
                 lightViewProj: simd_float4x4?, shadowTex: MTLTexture?,
@@ -567,7 +569,7 @@ nonisolated final class RoomRenderer {
             enc.drawIndexedPrimitives(type: .triangle, indexCount: maskOpaque.indexCount, indexType: .uint32, indexBuffer: mi, indexBufferOffset: 0)
             enc.popDebugGroup()
         }
-        if parts != .staticOnly, !cutout, shoeMesh.indexCount > 0, let sv = shoeMesh.vb[shoeMesh.slot], let si = shoeMesh.ib[shoeMesh.slot] {
+        if parts != .staticOnly, !cutout || shoesInCutout, shoeMesh.indexCount > 0, let sv = shoeMesh.vb[shoeMesh.slot], let si = shoeMesh.ib[shoeMesh.slot] {
             enc.pushDebugGroup("shoes")
             enc.setVertexBuffer(sv, offset: 0, index: 1)
             enc.drawIndexedPrimitives(type: .triangle, indexCount: shoeMesh.indexCount, indexType: .uint32, indexBuffer: si, indexBufferOffset: 0)

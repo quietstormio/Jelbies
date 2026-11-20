@@ -38,7 +38,7 @@ struct VolleyLobby: View {
                 VolleyTeamCard(care: care, who: $who, compact: compact, park: park)
                     .padding(.top, compact ? 0 : 12)
             } bar: {
-                LobbyBottomBar(playID: "volley-play", playTitle: "Play", playIcon: needsPartner ? .lock : .ball, blocked: blocker != nil, upgradeID: "volley-upgrade",
+                LobbyBottomBar(playID: "volley-play", playTitle: "Play", playIcon: needsPartner ? .lock : .ball, blocked: blocker != nil, why: blocker ?? (needsPartner ? GameCare.volleyNeedsPartner : nil), upgradeID: "volley-upgrade",
                                upgradePoints: teamPoints, upgrade: { upgradeWho = who; open(.upgrade) }, play: { play(book.chosen) })
             }
             .accessibilityHidden(sheet != nil)

@@ -71,7 +71,7 @@ final class DuplicateJelbiesTests: XCTestCase {
         XCTAssertEqual(JellyRoster.previewID(4), 1004)
         XCTAssertEqual(JellyRoster.species(1004), 4)
         XCTAssertTrue(JellyRoster.isValid(1004))
-        XCTAssertFalse(JellyRoster.isValid(1007))
+        XCTAssertFalse(JellyRoster.isValid(1039))
         XCTAssertFalse(JellyRoster.isValid(100), "not in the map")
         JellyRoster.speciesMap = [100: 3]
         XCTAssertTrue(JellyRoster.isValid(100))
@@ -81,8 +81,8 @@ final class DuplicateJelbiesTests: XCTestCase {
     func testSanitisedKeepsRecordedDuplicatesAndDropsUnknownIds() {
         JellyRoster.speciesMap = [100: 0, 101: 0]
         XCTAssertEqual(JellyRoster.sanitised([0, 100, 101]), [0, 100, 101])
-        XCTAssertEqual(JellyRoster.sanitised([0, 9, 50, 100, 100]), [0, 100], "unknown ids dropped, repeats of one id dropped")
-        XCTAssertEqual(JellyRoster.sanitised([2, 2, 9, 1]), [2, 1], "unchanged")
+        XCTAssertEqual(JellyRoster.sanitised([0, 27, 50, 100, 100]), [0, 100], "unknown ids dropped, repeats of one id dropped")
+        XCTAssertEqual(JellyRoster.sanitised([2, 2, 27, 1]), [2, 1], "unchanged")
         XCTAssertEqual(JellyRoster.sanitised([0, 100, 101, 1]), [0, 100, 101], "capped at three")
     }
 

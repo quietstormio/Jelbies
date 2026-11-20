@@ -125,6 +125,7 @@ final class CaptionCenter {
         if let i = items.firstIndex(where: { $0.text == text }) { items.remove(at: i) }          // same sound again: refresh, do not stack
         seq += 1
         items.append(Caption(id: seq, text: text, born: now))
+        GameMessageCenter.shared.post(text, icon: "speaker.wave.2.fill", priority: .caption, identifier: "caption", announce: false, now: now)          // drawn by the one message bar
         if items.count > Self.maxShown { items.removeFirst(items.count - Self.maxShown) }
     }
     func prune(now: Date = Date()) { items.removeAll { now.timeIntervalSince($0.born) > Self.life } }

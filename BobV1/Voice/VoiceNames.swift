@@ -201,9 +201,11 @@ final class JellyNames {
     func nicknames(for id: Int) -> [String] { nicknames[character(id)] ?? [] }
     /// The words that MUST reach the recogniser: every roster base name, the player's own names and nicknames. Kept ahead of everything else
     /// so the 100-string cap in SpeechInput can never cut a name.
+    /// (each base name as it is said, e.g. "cotton candy", "lemon-lime"; matching keeps the joined one-token base)
     var priorityWords: [String] {
         var seen = Set<String>(), out: [String] = []
-        for w in JellyNameRoster.all.filter(speaks).map(\.base) + customNames.map(\.1) + nicknames.values.flatMap({ $0 }) where seen.insert(w).inserted { out.append(w) }
+        let said = JellyNameRoster.all.filter(speaks).map({ JellyRoster.baseNames.indices.contains($0.id) ? JellyRoster.baseNames[$0.id].lowercased() : $0.base })
+        for w in said + customNames.map(\.1) + nicknames.values.flatMap({ $0 }) where seen.insert(w).inserted { out.append(w) }
         return out
     }
     /// The words to hand the recogniser: the priority names first, then pet forms.

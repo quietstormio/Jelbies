@@ -18,6 +18,8 @@ final class VolleyWork {
     /// The bodies of players 0...3 (the human, his partner, the two opponents).
     var players: [JellyActor] = []
     var participants: Set<Int> = []
+    /// The borrowed bodies (opponents, and a Park friend filling in as partner) with their specs: their species signature (spikes, wings) is ticked every step (visitorLook).
+    var visitors: [(actor: JellyActor, spec: ParkVisitor)] = []
     var homes: [Int: SIMD2<Float>] = [:]
     var autonomy: [Int: Bool] = [:]
     var arena: [Int: Float] = [:]
@@ -120,8 +122,8 @@ extension GameCare {
     #endif
 
     func startVolley(jelly id: Int, mode: VolleyMode, seed: UInt64? = nil) {
-        guard canVolley(jelly: id) else { return }
-        if case .match = mode, volleyPartnerBlocker(jelly: id) != nil { return }          // no teammate (no other Jelbie, no Park friend): no match
+        if let why = volleyBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
+        if case .match = mode, let why = volleyPartnerBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // no teammate (no other Jelbie, no Park friend): no match
         select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }
@@ -227,6 +229,7 @@ extension GameCare {
                 for i in stride(from: pool.count - 1, to: 0, by: -1) { pool.swapAt(i, Int(rng.next() % UInt64(i + 1))) }
                 let specs = (w.partnerID == nil ? friend.map { [$0] } ?? [] : []) + Array(pool.prefix(2))
                 let vis = parkBook.spawn?(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) }) ?? []
+                w.visitors = zip(vis, specs).map { ($0.0, $0.1) }
                 if let p = w.partnerID { bodies.append(w.roster[p]) } else if let v = vis.first { bodies.append(v) }
                 let opp = w.partnerID == nil ? Array(vis.dropFirst()) : vis
                 bodies.append(contentsOf: opp.prefix(2))
@@ -248,6 +251,8 @@ extension GameCare {
         case .home:
             GameCare.volleySlowScale = 1; w.slowLeft = 0
             for a in w.players { a.brain?.volleyEnd(sim: a.sim, skinner: a.skinner) }
+            for v in w.visitors { visitorPutAway(v.actor) }
+            w.visitors = []
             parkBook.clear?()
             RoomLayout.apply(RoomCatalog.def(store.currentRoom))
             GameCamera.endBeach(count: max(jellies.count, 1))
@@ -298,11 +303,14 @@ extension GameCare {
         guard volley.active else { return }
         for a in actors { a.brain?.sleepLocked = true }
         guard volley.inScene, var s = volley.sim, !w.players.isEmpty else { return }
+        for v in w.visitors { visitorLook(v.actor, v.spec, dt: dt) }          // (their species signature every step: serve waits, between points, the results)
         // the ambience under the music
         w.ambT += dt
         if w.ambT > 1 { w.ambT = 0; AudioHub.shared.beachAmbience(volley.phase != .leaveOut) }
         if volley.phase != .playing {
-            for (i, a) in w.players.enumerated() where i < s.players.count { a.brain?.volleyWant(x: s.players[i].x, z: s.players[i].z, speed: s.players[i].stats.speed) }
+            for (i, a) in w.players.enumerated() where i < s.players.count { a.brain?.volleyWant(x: s.players[i].x, z: s.players[i].z, speed: s.players[i].stats.speed); s.setCrown(i, volleyCrown(a)) }
+            s.placeBallOnHead()          // (under the fade the ball already rests on the first server's head: it never hangs in the air)
+            volley.sim = s
             return
         }
         if forfeitAsk { return }          // the "Go home?" card holds the match still (ball, score, clocks)
@@ -317,6 +325,7 @@ extension GameCare {
                 while p < sb.n { let y = sb.x[3 * p + 1]; arr.append(SIMD2(sb.x[3 * p], y)); top = max(top, y); p += 4 }
             }
             s.setBody(i, x: c.x, z: c.z, lift: max(0, c.y - sb.restCentroid.y), top: top, grounded: b.volley.phase != .air)
+            s.setCrown(i, volleyCrown(a))
             if b.volley.finished { s.bodyDone(i) }
             else if b.volley.phase == .ground, s.players[i].act != .stand, s.players[i].actT > 0.3 { s.bodyDone(i) }
         }
@@ -354,6 +363,28 @@ extension GameCare {
         GameCamera.beachNudge = w.nudge
         if s.phase == .over { volley.settle() }
         volley.refreshUI()
+    }
+
+    /// The top of a body's head as the serve ball sees it (world x, y, z): the highest point of the soft skin (the middle of the points within 2 cm of it, so it does not jitter between
+    /// particles), or the top of the hat when one is worn (the highest point of what the wardrobe drew for him last frame, over the same axis). Every particle is read, not every fourth.
+    func volleyCrown(_ a: JellyActor) -> SIMD3<Float> {
+        let sb = a.sim
+        var top = -Float.infinity
+        for p in 0..<sb.n { top = max(top, sb.x[3 * p + 1]) }
+        var sum = SIMD2<Float>.zero, n: Float = 0
+        for p in 0..<sb.n where sb.x[3 * p + 1] > top - 0.02 { sum += SIMD2(sb.x[3 * p], sb.x[3 * p + 2]); n += 1 }
+        let skin = SIMD3<Float>(sum.x / max(n, 1), top, sum.y / max(n, 1))
+        if let hat = volleyHatTop(a.id), hat > skin.y { return SIMD3(skin.x, hat, skin.z) }
+        return skin
+    }
+
+    /// The top of the hat Jelly `id` wears, from the last wardrobe frame's boxes (one per Jelly that had something drawn, in body order). nil when he wears no hat.
+    func volleyHatTop(_ id: Int) -> Float? {
+        guard wardrobe.shown(id, .head) != nil else { return nil }
+        var k = 0
+        for i in 0..<id { if let s = wardrobe.slot(i), s.items.values.contains(where: { $0.scale > 0.001 && $0.look != nil }) || s.bib != nil { k += 1 } }
+        let b = wardrobe.lastBounds
+        return b.indices.contains(k) ? b[k].hi.y : nil
     }
 
     private func applyVolley(_ e: VolleyEvent, _ s: inout VolleySim) {

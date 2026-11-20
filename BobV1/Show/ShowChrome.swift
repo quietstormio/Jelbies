@@ -563,63 +563,124 @@ struct TrickRound: View {
         return GeometryReader { g in
             let size = g.size
             let full = CGSize(width: size.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, height: size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom)
-            let body = StageProject.body(ShowStage.playerSpot, frame: .trick(pad: PadLayout.isPad), size: size)
+            let body = StageProject.body(ShowStage.playerSpot, frame: show.frame, size: size)
             ZStack(alignment: .top) {
                 if show.burstFlash > 0 { Confetti(serial: show.burstFlash, at: body.centre).allowsHitTesting(false) }
                 if compact {
-                    // a phone on its side: the contestant has the left half; turn chips, Glow Burst and the menu (or the entrant's card) are the right column
+                    // a phone on its side: the performer has the left half (the camera frame), the right column holds the turn chips and, at the bottom, the toast, the scoreboard strip
+                    // and the menu (or Skip); the title and the round pips sit at the top left
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 8) {
                             SideHeader(round: 3, title: "Trick", kicker: turnPips.kicker, turns: turnPips)
-                            if let h = hint { StagePill(text: h) }
                             Spacer(minLength: 0)
                         }
                         Spacer(minLength: 0)
                         VStack(spacing: 8) {
                             turns
-                            if rivalsOn { rivalPanel(full: full) } else if show.trickStage == .pick { burst(height: 52); menuBox(rowCap: 4) }
                             Spacer(minLength: 0)
+                            bottomStack(full: full, rowCap: 3, burstHeight: 40)
                         }
                         .frame(width: size.width * 0.5)
                     }
                     .padding(.top, 14).padding(.bottom, 4)
                 } else if PadLayout.isPad && size.width > size.height {
-                    // iPad landscape: the stage fills the left ~55% (the camera frame puts the Jelbies there); chips, hint and the menu / entrant card are a clear right column
+                    // iPad landscape: the stage fills the left ~55% (the camera frame puts the Jelmiko there); chips, toast, strip and the menu / Skip are a clear right column
                     VStack(spacing: 8) {
                         RoundHeader(care: care, round: 3, title: "Trick", kicker: turnPips.kicker, turns: turnPips)
                         HStack(alignment: .top, spacing: 24) {
                             Color.clear.frame(width: size.width * 0.55 - 16)
                             VStack(spacing: 10) {
                                 turns
-                                if let h = hint { StagePill(text: h, scale: sc) }
                                 Spacer(minLength: 0)
-                                if rivalsOn { rivalPanel(full: full) } else if show.trickStage == .pick {
-                                    burst(height: 56 * sc)
-                                    menuBox(rowCap: 6)
-                                }
+                                bottomStack(full: full, rowCap: 6, burstHeight: 48 * sc)
                             }
                             .frame(maxWidth: 560)
                         }
                     }
                     .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24 + g.safeAreaInsets.bottom)
                 } else {
-                    VStack(spacing: 14) {
+                    VStack(spacing: 10) {
                         RoundHeader(care: care, round: 3, title: "Trick", kicker: turnPips.kicker, turns: turnPips)
                         turns.padReadable(760)
-                        if let h = hint { StagePill(text: h, scale: sc) }
-                        if rivalsOn {
-                            rivalPanel(full: full).padReadable(760)
-                        } else {
-                            Spacer(minLength: 0)
-                            if show.trickStage == .pick {
-                                VStack(spacing: 14) { burst(height: 58 * sc); menuBox(rowCap: nil) }.padReadable(760)
-                            }
-                        }
+                        Spacer(minLength: 0)
+                        bottomStack(full: full, rowCap: nil, burstHeight: 40 * sc).padReadable(760)
                     }
-                    .padding(.horizontal, 16).padding(.top, 0).padding(.bottom, PadLayout.isPad ? 24 + g.safeAreaInsets.bottom : (rivalsOn ? 4 : 36))
+                    .padding(.horizontal, 16).padding(.top, 0).padding(.bottom, PadLayout.isPad ? 24 + g.safeAreaInsets.bottom : 10)
                 }
             }
         }
+    }
+
+    // MARK: the bottom of the screen (the stage owns everything above it)
+
+    /// What sits low on the screen, bottom up: the action (Skip while the entrants perform, the trick menu while he picks, a clear slot otherwise so nothing moves), the scoreboard strip,
+    /// and the toast (his result, or the entrant's trick) just above the strip, with the Glow Burst button on the same row while it is ready.
+    private func bottomStack(full: CGSize, rowCap: Int?, burstHeight: CGFloat) -> some View {
+        let picking = show.trickStage == .pick && !(show.sim?.tricksDone ?? true)
+        return VStack(spacing: 8 * sc) {
+            ZStack {
+                if let s = show.sim, s.burstReady, picking { burst(height: burstHeight) }
+                else { toast }
+            }
+            .frame(minHeight: toastHeight)
+            ScoreStrip(care: care, scale: sc, compact: compact)
+            if rivalsOn { skipButton }
+            else if picking { menuBox(rowCap: rowCap) }
+            else { Color.clear.frame(height: (compact ? 46 : 50) * sc) }          // (the action slot: kept so the strip stays where it is while nothing is asked of him)
+        }
+    }
+    private var toastHeight: CGFloat { (compact ? 36 : 40) * sc }
+
+    private var skipButton: some View {
+        Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); show.skipRivals() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "forward.fill").font(.system(size: 18 * sc, weight: .black))
+                Text("Skip").font(SK.font(19 * sc, .black))
+            }
+            .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: (compact ? 46 : 50) * sc)
+            .background(Capsule().fill(ShowUI.gold))
+            .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 3))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Skip").accessibilityIdentifier("rivals-skip")
+    }
+
+    private var rivalsOn: Bool { show.trickStage == .rivals }
+
+    /// ONE line, 36 to 44 pt tall, never wider than the screen: his result ("Corkscrew jump! +24"), or the entrant on stage with her trick, stars and points (tap: skip just her).
+    @ViewBuilder private var toast: some View {
+        if rivalsOn, let n = show.rivalNow, let s = show.sim {
+            let r = s.rivals[n.rival], t = n.turn, stars = ShowTrickInfo.difficulty(t.trick)
+            Button { AudioHub.shared.uiTap(); show.skipCurrentRival() } label: {
+                HStack(spacing: 8 * sc) {
+                    Text(r.name).font(SK.font(16 * sc, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6)
+                    Text(t.trick.title).font(SK.font(14 * sc, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.6).layoutPriority(-1)
+                    StarRow(n: stars, size: 11 * sc)
+                    Spacer(minLength: 2)
+                    Text(show.rivalScored ? "+\(t.points)" : "\u{2026}").font(SK.font(20 * sc, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).fixedSize().layoutPriority(2)
+                }
+                .padding(.horizontal, 14 * sc).frame(maxWidth: .infinity).frame(height: toastHeight)
+                .background(Capsule().fill(SK.cream.opacity(0.97)))
+                .overlay(Capsule().strokeBorder(ShowUI.lilac, lineWidth: 2))
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(rivalToastLabel)
+            .accessibilityHint("Skips just this turn")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("rival-banner")
+        } else if let h = hint {
+            Text(h).font(SK.font(17 * sc, .black)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.6)
+                .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity).frame(height: toastHeight)
+                .background(Capsule().fill(ShowUI.light.opacity(0.97)))
+                .accessibilityIdentifier("trick-hint")
+        }
+    }
+    private var rivalToastLabel: String {
+        guard let n = show.rivalNow, let s = show.sim else { return "" }
+        let t = n.turn, stars = ShowTrickInfo.difficulty(t.trick)
+        let tail = show.rivalScored ? (t.success ? ", \(t.points) points" : ", a cute flop, \(t.points) points") : ""
+        return "\(s.rivals[n.rival].name), \(t.trick.title), \(stars) star\(stars == 1 ? "" : "s")\(tail)"
     }
 
     /// The flash over the stage while he performs ("Jumping jacks! +24"); nothing otherwise.
@@ -628,75 +689,7 @@ struct TrickRound: View {
         return t.success ? "\(t.trick.title)! +\(t.points)\(t.burst ? " and Glow Burst +10" : "")" : "A cute flop. +\(t.points)"
     }
 
-    private var rivalsOn: Bool { show.trickStage == .rivals }
-
-    /// An entrant's turn: the card (name, trick, stars, points; tap it to skip just her), the row of who is next, and the big Skip.
-    private func rivalPanel(full: CGSize) -> some View {
-        let s = show.sim
-        let k = compact ? CGFloat(0) : full.height / 874
-        return VStack(spacing: (compact ? 8 : 0) * sc) {
-            if !compact { Color.clear.frame(height: max(0, 254 * k - 14) * (PadLayout.isPad ? 0.9 : 1)) }
-            Button { AudioHub.shared.uiTap(); show.skipCurrentRival() } label: { rivalBanner }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("rival-banner")
-            if let s {
-                if !compact { Color.clear.frame(height: 74 * k) }
-                WhoIsNext(names: s.rivals.map(\.name), tints: s.rivals.map(\.tint), current: show.rivalNow?.rival,
-                          size: (compact ? 40 : 60) * sc, spacing: compact ? 20 : 34 * sc, font: (compact ? 13 : 16) * sc)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, compact ? 4 : 0)
-            }
-            if !compact { Spacer(minLength: 0) }
-            Button { UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiConfirm(); show.skipRivals() } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "forward.fill").font(.system(size: 20 * sc, weight: .black))
-                    Text("Skip").font(SK.font(20 * sc, .black))
-                }
-                .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: (compact ? 50 : 60) * sc)
-                .background(Capsule().fill(ShowUI.gold))
-                .overlay(Capsule().strokeBorder(ShowUI.light, lineWidth: 3))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Skip").accessibilityIdentifier("rivals-skip")
-        }
-    }
-    private var rivalBanner: some View {
-        let n = show.rivalNow, s = show.sim
-        return Group {
-            if let n, let s {
-                let r = s.rivals[n.rival], t = n.turn, stars = ShowTrickInfo.difficulty(t.trick)
-                HStack(spacing: 14 * sc) {
-                    EntrantBubble(tint: r.tint, size: (compact ? 40 : 56) * sc)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(r.name).font(SK.font((compact ? 19 : 24) * sc, .black)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                        HStack(spacing: 6) {
-                            Text(t.trick.title).font(SK.font((compact ? 14 : 17) * sc, .heavy)).foregroundStyle(SK.ink).lineLimit(1).minimumScaleFactor(0.7)
-                            StarRow(n: stars, size: 12 * sc)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                    Text(show.rivalScored ? "+\(t.points)" : "\u{2026}").font(SK.font((compact ? 26 : 34) * sc, .black)).foregroundStyle(SK.ink).monospacedDigit()
-                }
-            } else {
-                Text(show.rivalRound < 2 ? "Your turn next" : " ").font(SK.font(18 * sc, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .center)
-            }
-        }
-        .padding(.horizontal, 18 * sc).frame(maxWidth: .infinity, minHeight: (compact ? 66 : 96) * sc)
-        .background(RoundedRectangle(cornerRadius: 24 * sc, style: .continuous).fill(SK.cream.opacity(0.97)))
-        .overlay(RoundedRectangle(cornerRadius: 24 * sc, style: .continuous).strokeBorder(ShowUI.lilac, lineWidth: 3))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(rivalBannerLabel)
-        .accessibilityHint("Skips just this turn")
-        .accessibilityAddTraits(.isButton)
-    }
-    private var rivalBannerLabel: String {
-        guard let n = show.rivalNow, let s = show.sim else { return "Your turn next" }
-        let t = n.turn, stars = ShowTrickInfo.difficulty(t.trick)
-        let tail = show.rivalScored ? (t.success ? ", \(t.points) points" : ", a cute flop, \(t.points) points") : ""
-        return "\(s.rivals[n.rival].name), \(t.trick.title), \(stars) star\(stars == 1 ? "" : "s")\(tail)"
-    }
-
-    /// One row of three: only ONE capsule is gold, the one that is happening now (his go, his trick landing, or the entrant on stage with her name).
+    /// Three small capsules: which of the three turns it is (gold = the turn under way: "Your go", his result, or the entrant who is up) and what he scored in the ones done.
     /// The turn pips of the header: turns used so far, and the one up now.
     private var turnPips: TurnPips {
         let done = show.sim?.turns.count ?? 0
@@ -709,23 +702,25 @@ struct TrickRound: View {
         return HStack(spacing: 8) {
             ForEach(0..<3, id: \.self) { k in
                 let turn = done > k ? s?.turns[k] : nil
-                let playerBack = stage == .rivals && show.rivalStep == .playerBack          // (she is walking back: the entrant's turn is over, his next go is next)
+                let playerBack = stage == .rivals && show.rivalStep == .playerBack          // (the last entrant is back: his next go is next)
                 let entrantNow = stage == .rivals && show.rivalRound == k && !playerBack
                 let nextGo = playerBack && k == show.rivalRound + 1 && k < 3
                 let now: Bool = entrantNow || nextGo || (stage == .performing && k == done - 1) || (stage == .pick && !(s?.tricksDone ?? false) && k == done)
                 let text: String = {
+                    let tag = "Turn \(k + 1)"
                     if entrantNow {
-                        if let i = show.rivalTurn, let s { return s.rivals[i].name }
-                        return "\u{2026}"
+                        if let i = show.rivalTurn, let s { return "\(tag) \u{00B7} \(ScoreStrip.shortName(s.rivals[i].name))" }
+                        return "\(tag) \u{00B7} Rivals"
                     }
-                    if let turn { return "+\(turn.points)" }
-                    return now ? "Your go" : "\(k + 1)"
+                    if let turn { return "\(tag) \u{00B7} +\(turn.points)" }
+                    return now ? "\(tag) \u{00B7} Your go" : tag
                 }()
-                TurnChip(text: text, now: now, scale: sc, height: compact ? 42 : 46)
+                TurnChip(text: text, now: now, scale: sc, height: 34, font: 15)
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Turn \(k + 1): \(text)\(now ? ", now" : "")")
+                    .accessibilityLabel("\(text.replacingOccurrences(of: "\u{00B7}", with: ",")) \(now ? ", now" : "")")
             }
         }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .accessibilityIdentifier("trick-turns")
     }
 
@@ -755,16 +750,16 @@ struct TrickRound: View {
         let live = show.trickStage == .pick && !(s?.tricksDone ?? true)
         let cap = rowCap ?? 4
         return ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: compact ? 6 : 8) { ForEach(known, id: \.rawValue) { t in row(t, live: live) } }.padding(.vertical, 2)
+            VStack(spacing: compact ? 5 : 6) { ForEach(known, id: \.rawValue) { t in row(t, live: live) } }.padding(.vertical, 2)
         }
         .scrollBounceBehavior(.basedOnSize)
         .frame(maxHeight: Self.menuHeight(rows: min(known.count, cap), compact: compact, scale: sc))
         .modifier(SoftBottomFade(on: known.count > cap))
         .accessibilityIdentifier("trick-cards")
     }
-    /// The rows' height (68 pt, 59 on a phone on its side, 8 / 6 pt gaps).
+    /// The rows' height (54 pt, 48 on a phone on its side, 6 / 5 pt gaps: the trick menu is as low and as small as it can be, the stage keeps the screen above it).
     static func menuHeight(rows: Int, compact: Bool, scale: CGFloat = 1) -> CGFloat {
-        let row: CGFloat = (compact ? 59 : 68) * scale, gap: CGFloat = compact ? 6 : 8
+        let row: CGFloat = (compact ? 48 : 54) * scale, gap: CGFloat = compact ? 5 : 6
         let shown = CGFloat(max(rows, 1))
         return shown * row + (shown - 1) * gap + 4
     }
@@ -786,7 +781,7 @@ struct TrickRound: View {
                 if let tag { Text(tag.title).font(SK.font(13 * sc, .black)).foregroundStyle(SK.ink).padding(.horizontal, 10 * sc).padding(.vertical, 3 * sc).background(Capsule().fill(ShowUI.tag(tag))) }
                 Text("+\(pts)").font(SK.font(24 * sc, .black)).foregroundStyle(SK.ink).monospacedDigit().frame(minWidth: 52 * sc, alignment: .trailing)
             }
-            .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity, minHeight: (compact ? 59 : 68) * sc)
+            .padding(.horizontal, 16 * sc).frame(maxWidth: .infinity, minHeight: (compact ? 48 : 54) * sc)
             .background(RoundedRectangle(cornerRadius: 20 * sc, style: .continuous).fill(SK.cream.opacity(0.97)))
             .opacity(used ? 0.6 : 1)
             .contentShape(Rectangle())

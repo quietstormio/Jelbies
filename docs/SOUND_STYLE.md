@@ -15,6 +15,8 @@ The voice files were SYNTHESIZED IN CODE (numpy formant synth, `~/BobV1_sounds/2
 | jelly3 Moss | chirp 288-405 (225-470), babble 306 (285-440) | 0.37-0.51 s, babble 1.74 s | 480-585 (babble 626) | 0-2% |
 | jelly4 Lavender | chirp 510-723 (393-824), babble 538 (490-747) | 0.32-0.46 s, babble 1.51 s | 660-1225 (babble 950) | babble 15% |
 | snores 1-4 | 320-650 Hz | 1.35 s | 430-890 | 0-5% |
+| jelly8 Opal (soft shimmer, 2026-11-18) | chirp 456-629 (happy / sad medians; the 10-90 % spread is not in the report), babble 481, pooled 487 | chirp 0.30-0.44 s, babble 1.48 s (calls 0.35-0.46 s, wheee 1.07 s, lala 1.37 s) | 672-1209 (babble 757) | chirp 0-5.8%, babble 5.4% (calls 0-6.7%) |
+| snores / coos jelly8 | snore 443 (both), coos 427-474 | snore 1.35 s, coos 0.76-0.95 s | snore 512, coos 493-525 | 0% |
 
 A new Jelmiko vocal fits when ALL hold:
 - voiced f0 median 290-830 Hz (most sit 300-650), clean pitch track (pitch found in most frames);
@@ -43,7 +45,8 @@ Rules learned: say "creature" and "coo/hum", never "sigh/sneeze/breath/giggle/la
 `JellyVoiceSet.file(character:_:variant:)` (AudioCatalog.swift) picks `chirp_jelly{n}_{happy|sad}`, `babble_jelly{n}` and the context voices `<type>_jelly{n}[_v2|_v3]` with n = min(character, 6) + 1, via the character in the slot (`JellyRoster.character(slot)`):
 - Bob (0) -> jelly1; Pip (1) -> jelly2; Moss (2) -> jelly3; Lavender (3) -> jelly4; Teddy (4) -> jelly5 (about 380 Hz, round); Pearl (5) -> jelly6 (airy, 580 Hz); Panda (6) -> jelly7 (about 340 Hz). The three newer species got their own chirp, babble and round-1 context voices on 2026-11-05.
 - Context voices (`JellyVoice`, played by `AudioHub.contextVoice`, home room only, through the same gap and hush as the ambient chirp so they add variety rather than volume): curious, ooh, hum, giggle, hello, yawn, yay, uhoh (each with _v2/_v3 for the four base voices, picked so a repeat differs), and batch B: hmm, wheee, tasty, aww, huh, pfft, lala, eep, mmhmm, nyoo. Batch B exists for the first four only: Teddy borrows Bob's (played at rate 0.87), Pearl Lavender's, Panda Moss's.
-- Snores and sleep coos (`snore_jelly{n}_*`, `sleep_coo_jelly{n}_*`) exist for the first four only (`JellyVoiceSet.count`); Teddy, Pearl and Panda use Lavender's (`baseIndex`). Rendered by new_voices_synth.py / round2_synth.py (AAC 96 kbps mono 44.1 kHz).
+- Snores and sleep coos (`snore_jelly{n}_*`, `sleep_coo_jelly{n}_*`) exist for the first four only (`JellyVoiceSet.count`); Teddy, Pearl and Panda use Lavender's (`baseIndex`). Rendered by new_voices_synth.py / round2_synth.py (AAC 96 kbps mono 44.1 kHz). Opal has her own (below).
+- Opal (12) -> jelly8, its own full set (`JellyVoiceSet.opalSet`): chirps, babble, the 8 round-1 calls, the 9 batch-B calls, 2 snores and 3 sleep coos (25 files, no _v2 / _v3), at a 495 Hz centre between Bob and Lavender. Synthesized 2026-11-18 with the same formant synth plus Opal's soft shimmer: a second copy detuned about +-0.35% at 0.25-0.5 of the level, chosen per file so the beat is 2.8-4.7 dB, plus a slow vibrato and an i -> u glide. Recipe: `~/BobV1_sounds/2026-11-18/opal/opal_voice_synth.py --soft=0.5`, per-file levels in `soft_sh2.json`. A kind added later without an Opal file borrows Pearl's (`opalKinds`). Every other id >= 7 still uses Panda's set (unchanged).
 
 ## Where this applies
 New vocal in the emotes: `emote_hic_1`, `emote_achoo_1`, `emote_woozy_1`, and `storm_relief_sigh` follow this guide (redone 2026-11-02). `cheer_small_*` (older crowd cheer, centroid 1.2-1.8 kHz) was not part of the new batch.
