@@ -348,7 +348,7 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
                     raw.append(String(format: "(%.2f,%.2f)->moved %.2f peerFree %d", w.x, w.y, simd_distance(w, q), b.peerFree(q) ? 1 : 0))
                 }
                 print("HKO join why t\(i / 60): hopscotchStand \(String(describing: stand)) decorStand \(String(describing: ds)) reachable \(ds.map { b.reachable(b.position, $0) } ?? false) slot \(line.nextSlot(court.uid)) spots \(raw) peers \(b.steerPeers().map { "\($0.id)@\($0.pos)" }) gate \(b.parkToyGate(c)) avail \(DecorField.shared.available(c))")
-                b.decorIgnore = keep
+                if i == 200 { let ok = b.decorStart(.decorHopscotch, lab.rigs[1].sim, only: nil, uid: court.uid); print("HKO join why: manual decorStart at t3.3 -> \(ok), kind now \(String(describing: b.idleState.kind)), commanded \(b.commanded), anticsEnabled \(b.anticsEnabled)") } else { b.decorIgnore = keep }
             }
             if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { break }
         }
