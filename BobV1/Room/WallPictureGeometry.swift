@@ -5,6 +5,7 @@
 //
 
 import Foundation
+import os
 import simd
 
 nonisolated enum WallPictureGeometry {
@@ -14,13 +15,12 @@ nonisolated enum WallPictureGeometry {
     static let photoDepth: Float = 0.012
 
     /// The bundled frame art: wallframe_frame_<id>_<shape>.bin (Room/Resources).
-    private static let artLock = NSLock()
-    nonisolated(unsafe) private static var artCache: [String: DecorMeshes.Art] = [:]
+    private static let artCache = OSAllocatedUnfairLock(initialState: [String: DecorMeshes.Art]())
+    /// The bundled frame art: wallframe_frame_<id>_<shape>.bin (Room/Resources), read once.
     static func art(_ p: WallPicture) -> DecorMeshes.Art? {
-        artLock.lock(); defer { artLock.unlock() }
-        if let a = artCache[p.artID] { return a }
+        if let a = artCache.withLock({ $0[p.artID] }) { return a }
         guard let a = DecorMeshes.load(p.artID, prefix: "wall") else { return nil }
-        artCache[p.artID] = a
+        artCache.withLock { $0[p.artID] = a }
         return a
     }
 

@@ -17,6 +17,7 @@ struct WallEditorOverlay: View {
     @State private var lastTranslation = CGSize.zero
     @State private var pinchBase: Float?
     @State private var confirmTakeDown = false
+    @State private var controlsHeight: CGFloat = 0
     private enum DragKind { case move, resize, pan }
     private var compact: Bool { vsc == .compact }
 
@@ -177,23 +178,31 @@ struct WallEditorOverlay: View {
     private func panel(height: CGFloat) -> some View {
         let controls = VStack(spacing: 8) {
             if compact { Text(hint).font(SK.font(12, .bold)).foregroundStyle(SK.muted).multilineTextAlignment(.center) }
-            if compact && !ax {
-                HStack(spacing: 8) { modeToggle; shapeButtons; Spacer(minLength: 0); frameStrip }
-                HStack(spacing: 8) { photoActions; Spacer(minLength: 0) }
-            } else if ax {
+            if ax {
                 modeToggle; shapeButtons; frameStrip; photoActions
+            } else if compact {
+                ViewThatFits(in: .horizontal) {          // (a small phone on its side: the rows wrap rather than squeeze)
+                    HStack(spacing: 8) { modeToggle; shapeButtons; Spacer(minLength: 0); frameStrip }
+                    VStack(spacing: 8) { HStack(spacing: 8) { modeToggle; Spacer(minLength: 0); shapeButtons }; frameStrip }
+                }
+                HStack(spacing: 8) { photoActions; Spacer(minLength: 0) }
             } else {
-                HStack(spacing: 8) { modeToggle; Spacer(minLength: 0); shapeButtons }
+                ViewThatFits(in: .horizontal) {          // (a small phone: the mode buttons and the shapes go on two lines when one line is too narrow)
+                    HStack(spacing: 8) { modeToggle; Spacer(minLength: 0); shapeButtons }
+                    VStack(spacing: 8) { modeToggle; shapeButtons }
+                }
                 frameStrip
                 HStack(spacing: 8) { photoActions; Spacer(minLength: 0) }
             }
         }
+        // the scrolling part is exactly as tall as its controls, up to `height`; Cancel and Done stay pinned under it
+        let limit = max(height, 120)
         return VStack(spacing: 8) {
-            ViewThatFits(in: .vertical) {
-                controls
-                ScrollView(showsIndicators: true) { controls }.scrollBounceBehavior(.basedOnSize)
+            ScrollView(showsIndicators: true) {
+                controls.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { controlsHeight = $0 }
             }
-            .frame(maxHeight: max(height, 120))
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: controlsHeight > 0 ? min(controlsHeight, limit) : nil)
             if compact && !ax { HStack(spacing: 8) { Spacer(minLength: 0); finishActions } } else { finishActions }
         }
         .padding(12)
