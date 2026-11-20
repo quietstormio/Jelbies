@@ -556,6 +556,7 @@ extension BlobBrain {
         commanded = false
         armDirW = 0; armDirOut = 0
         idleState.jackRoll = 0
+        winCheer = false; winSettleT = 0
         if !nameHopping { gait.hopApex = 0.10; gait.hopDuration = 0.26 }       // the jacks' higher hop ends with them
         gait.flipTwist = 0; gait.crouchDepth = 0.18; gait.crouchHold = 0; gait.airStretch = 0.12; gait.landDepth = 0.2          // (the trick hops' knobs go with them)
         skinner?.setEyeOpenness(1)
@@ -758,6 +759,7 @@ extension BlobBrain {
             idleState.hop = 0; idleState.landT = 0
             script = .idle; activity = .playing
             idleState.phase = 1; idleState.phaseT = 0
+            if winCheer { winBegin() }          // (a first place: four tall bounces, arms up, a cheer: BlobBrain+Win.swift)
             idleScootHop(sim)
         case .giggle:
             idleBegin(.giggle)
@@ -1117,7 +1119,7 @@ extension BlobBrain {
         gait.facingYaw = idleState.kind == .startle ? yaw : atan2f(u.x, u.y)
         gait.home = here
         poseW = 0; poseOn = false
-        let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
+        let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .joy && winCheer) ? Self.winApex : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
         gait.hopApex = apex
         gait.hopDuration = 0.26 * sqrtf(apex / 0.10)
         gait.hop(sim, to: SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false)
@@ -1150,21 +1152,22 @@ extension BlobBrain {
             if gait.phase == .land { idleState.landT += dt } else { idleState.landT = 0 }
             if idleState.decorUID >= 0, gait.phase == .land, idleState.landT > 0, idleState.landT <= dt * 1.5 { DecorField.shared.kick(idleState.decorUID, 1) }
             let total = idleState.reps
-            if idleState.hop < total && gait.phase == .land && idleState.landT >= 0.05 {
+            if idleState.hop < total && gait.phase == .land && idleState.landT >= (winCheer ? Self.winLandHold : 0.05) {
                 idleState.hop += 1
                 if idleState.hop < total { idleScootHop(sim) }
             }
             let flap = sinf(2 * .pi * 5 * idleState.phaseT)
             armWalkWant = 1
             if kind == .joy {          // the jacks' arms-up pose, one rep
-                armDirW = smooth01(min(1, idleState.phaseT / 0.12)); armDirEl = [0.95, 0.95]; armDirSa = [0.10, 0.10]; armDirOut = 0.07
+                if winCheer, idleState.hop >= idleState.reps, !gait.isBusy { winSettleT += dt }          // (the win: after the last bounce the arms ease down over `winSettle`)
+                armDirW = smooth01(min(1, idleState.phaseT / 0.12)) * (winCheer ? 1 - smooth01(winSettleT / Self.winSettle) : 1); armDirEl = [0.95, 0.95]; armDirSa = [0.10, 0.10]; armDirOut = 0.07
             } else {
                 armDirW = 1; armDirEl = [0.45 + 0.1 * flap, 0.45 - 0.1 * flap]; armDirSa = [0.1, 0.1]; armDirOut = 0.05
             }
         }
         driveBeansRigid(sim, skinner, dt, tuck: gait.tuck)
         driveArms(sim, skinner, dt)
-        let done = kind == .slide ? !gait.isBusy : (idleState.hop >= idleState.reps && !gait.isBusy)
+        let done = kind == .slide ? !gait.isBusy : (idleState.hop >= idleState.reps && !gait.isBusy && (!winCheer || winSettleT >= Self.winSettle))
         if done {
             gait.basePitch = 0
             gait.hopApex = 0.10; gait.hopDuration = 0.26

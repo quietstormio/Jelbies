@@ -352,7 +352,10 @@ extension GameCare {
                 if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.2); AudioHub.shared.raceStumble() }
             case .hurdleCleared(let i): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.4, sharpness: 0.7); AudioHub.shared.chirp(jelly: race.playerID, .happy) }
             case .finished(let i, _): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.8, sharpness: 0.5) }
-            case .results: do { live?.raceFinished(place: race.sim?.playerPlace ?? 0, drops: race.earned) }          // (settled by the flow before the event reaches us)
+            case .results:
+                do { live?.raceFinished(place: race.sim?.playerPlace ?? 0, drops: race.earned) }          // (settled by the flow before the event reaches us)
+                // a first place that crossed the line: the player's own Jelmiko celebrates (four bounces, arms up, a cheer: BlobBrain+Win.swift); rivals and 2nd...4th do nothing new
+                if let s = race.sim, s.playerFinished, s.playerPlace == 1, !race.leaving, !race.forfeited, let a = body(RaceSim.playerIndex), let b = a.brain { b.raceWinCue(a.sim) }
             default: break
             }
         }

@@ -155,6 +155,9 @@ final class BlobBrain {
     var expr = ExpressionState()
     var leg = LegState()
     var joyWanted = false, joyAge: Float = 0
+    /// The WIN celebration (BlobBrain+Win.swift): set before `.joy` starts, the jump for joy then runs as four tall bounces with the arms held up and a settle. Cleared by `idleEnd`.
+    var winCheer = false
+    var winSettleT: Float = 0
     var hmphWanted = false, hmphAge: Float = 0
     var react = ReactState()
     var startingReaction = false

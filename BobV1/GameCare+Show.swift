@@ -470,6 +470,7 @@ extension GameCare {
             guard let b = a.brain else { continue }
             b.abortAll(a.sim, a.skinner)
             if k == 0 {
+                if place == 1 { b.winCheer = true }          // (first place: the jump for joy becomes the win celebration, BlobBrain+Win.swift)
                 b.commandedIdle = .joy
                 if place == 1 { b.proudStrutCue() }          // (batch-2 emote: a chest-out strut when he is next free)
                 b.blushBump(hold: 3.5, peak: place == 1 ? 0.9 : 0.7)

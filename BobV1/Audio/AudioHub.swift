@@ -1111,6 +1111,25 @@ final class AudioHub {
     }
     @ObservationIgnored private var lastVariant: [[String: Int]] = [[:], [:], [:]]
 
+    /// The WIN cheer (a first place, BlobBrain+Win.swift): the Jelmiko's own `yay` voice, always (no chance roll), in the race / Show scenes too (`contextVoice` is the home room's only).
+    /// Past the gates (muted / not started / level) like every voice; it takes the voice slots, so an ambient chirp does not talk over it.
+    func winVoice(jelly: Int, x: Float = 0) {
+        Self.requestTap?("voice:yay")
+        let what = "voice:yay@win"
+        CaptionCenter.shared.post(SoundCaptions.voice(.yay, name: JellyRoster.name(slot: jelly)))
+        if let w = gateWhy() { diag(what, jelly, w); return }
+        let level = settings.sfxLevel * duck.gain
+        let i = min(max(jelly, 0), 2)
+        let now = Self.clock()
+        lastVoice[i] = now; lastContextVoice[i] = now
+        diag(what, jelly, nil, v: 0.8 * level)
+        let c = JellyRoster.speciesOf(slot: jelly), j = i
+        var variant = 1
+        repeat { variant = Int.random(in: 1...3) } while variant == lastVariant[j]["yay"] ?? 0
+        lastVariant[j]["yay"] = variant
+        fire(JellyVoiceSet.file(character: c, .yay, variant: variant), volume: 0.8 * level, pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, .yay))
+    }
+
     @ObservationIgnored private var lastRegularVoice: Double = 0
     /// A café regular's voice (by species character, not roster slot): the same chirp / babble files.
     func chirp(character: Int, _ v: JellyVoice) {

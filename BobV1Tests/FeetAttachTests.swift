@@ -167,6 +167,7 @@ final class FeetAttachTests: XCTestCase {
         Move(name: "flourish: bounce-trot", game: true, seconds: 6, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.trot, $0.sim) }),
         Move(name: "flourish: stop and look", game: true, seconds: 6, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.stopLook, $0.sim) }),
         Move(name: "jump for joy", game: true, seconds: 3, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.joy, $0.sim) }),
+        Move(name: "win celebration (first place)", game: true, seconds: 4, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.winStart($0.sim) }),          // (BlobBrain+Win.swift: four tall bounces, arms up)
         Move(name: "reaction: giggle", game: true, seconds: 3, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.giggle, $0.sim) }),
         Move(name: "reaction: startle hop", game: true, seconds: 3, expectBeans: true, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.startle, $0.sim, goal: $0.root - SIMD2(0, 0.25)) }),
         Move(name: "big sigh", game: true, seconds: 6, expectBeans: false, start: { $0.brain.idleForced = true; _ = $0.brain.idleStart(.sigh, $0.sim) }),
