@@ -21,6 +21,8 @@ final class RaceBook {
     var actors: [JellyActor] = []
     /// Actor ids by racer index (0 = the player's Jelly, then the rivals).
     var racers: [Int] = []
+    /// The bodies that are on the track right now (set by the swap to the track, cleared by the swap home): only they wear a rival's numbered bib (`wearRole`).
+    var onTrack: Set<Int> = []
     var homes: [Int: SIMD2<Float>] = [:]
     var autonomy: [Int: Bool] = [:]
     var arena: [Int: Float] = [:]
@@ -212,6 +214,7 @@ extension GameCare {
                 brain.startRace(sim: a.sim, skinner: a.skinner, heading: 0, laneX: px)          // (the race script keeps the room's floor rules off him, and he just stands there)
                 a.skinner.jelly.reset()
             }
+            book.onTrack = Set(book.racers)
             let course = sim.course
             book.follow = nil
             #if targetEnvironment(simulator)
@@ -256,6 +259,7 @@ extension GameCare {
                 brain.restTimer = 2
             }
             book.parked = []
+            book.onTrack = []
             book.palettes = [:]
             book.follow = nil
         }
