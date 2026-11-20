@@ -695,6 +695,14 @@ final class GameCare {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
             }
             if let v = focusGroup.viaZero, simd_length(brain.position - v) < 0.6 || focusGroup.clock - focusGroup.viaZeroAt > 5 { focusGroup.viaZero = nil; queued = [.come(to: focusGroup.spot(of: 0))]; approachIdle = 0 }          // (walked round an uncalled body: now to his spot)
+            if FocusGroup.sleeperFix, focusGroup.includes(0), !focusGroup.arrived.contains(0), focusGroup.viaZero == nil, !focusGroup.zeroPending {          // pinned short of his spot by a lying body: walk round it (at most three times)
+                let d = simd_length(brain.position - focusGroup.spot(of: 0))
+                if d < focusGroup.zeroBest - 0.05 { focusGroup.zeroBest = d; focusGroup.zeroStuck = 0 } else { focusGroup.zeroStuck += dt }
+                if focusGroup.zeroStuck > 2, focusGroup.zeroDetours < 3, d > 0.5 {
+                    focusGroup.zeroStuck = 0; focusGroup.zeroDetours += 1
+                    if let v = FocusGroup.detour(from: brain.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, fixed: { brain.fixed($0) }) { focusGroup.viaZero = v; focusGroup.viaZeroAt = focusGroup.clock; focusGroup.zeroBest = .infinity; queued = [.goTo(v)] }
+                }
+            }
             focusReplan(dt: dt)
             if focusGroup.includes(0), !focusGroup.arrived.contains(0), !focusGroup.zeroPending, simd_length(brain.position - focusGroup.spot(of: 0)) < 0.25 { zeroOnSlot += dt } else { zeroOnSlot = 0 }
             if zeroOnSlot > 0.3, !focusGroup.arrived.contains(0) { zeroOnSlot = 0; enterFocus(brain: brain) }          // (on his slot and still: arrived; the wave plays after)
