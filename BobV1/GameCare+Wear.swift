@@ -13,7 +13,10 @@ extension GameCare {
     func wearRole(for id: Int) -> WearRaceRole {
         guard race.active else { return .none }
         if id == race.playerID { return .player(team: WearTeam.player(roster: id), number: WearTeam.playerNumber(roster: id)) }
-        guard let k = raceBook.racers.firstIndex(of: id), k > 0 else { return .rival(team: .lavender, number: 0) }
+        // race-depart-r1 (owner 2026-11-19, "the other Jelmikos in the room get race bibs on"): a housemate is a rival only while he is ON the track (`raceBook.onTrack`, set by the swap
+        // to the track and cleared by the swap home). In the room's fade out before it and fade in after it he wears what he always wears; before, every body that was not the player got
+        // the lavender #0 rival bib the moment the trip began, and kept it through the way home.
+        guard raceBook.onTrack.contains(id), let k = raceBook.racers.firstIndex(of: id), k > 0 else { return .none }
         return .rival(team: WearTeam.rivals[(k - 1) % WearTeam.rivals.count], number: WearTeam.rivalNumbers[(k - 1) % WearTeam.rivalNumbers.count])
     }
 
@@ -54,6 +57,9 @@ extension GameCare {
             PerfProbe.end("tickFeature", pf)
         }
         wardrobe.stepPuffs(dt: dt)
+        #if targetEnvironment(simulator)
+        raceDepartProbe(actors)
+        #endif
     }
 
     /// The posed arm frames of a Jelly (world): the capsule's A, B and r2 while the arm is out, blended from the resting nub by the capsule's own blend.
