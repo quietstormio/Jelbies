@@ -160,22 +160,35 @@ extension GameCamera {
     /// Always read through the GAME's pose (`gamePose: true`): Photo mode's / the species picker's orbit and the contact capture pose never shape the floor.
     @discardableResult
     static func refreshRoam(aspect: Float) -> RoamFloor? {
-        guard roomWideScale != 1 || roomEye != baseEye else { roamFloor = nil; return nil }          // the one-Jelly pose: the old floor
-        _ = camera(aspect: aspect)
+        let play = playFrame && parkRoamMaxZ == nil && !PlayTuning.old          // (Play mode: the floor is the part of it the play camera shows, `playFrame`)
+        guard play || roomWideScale != 1 || roomEye != baseEye else { roamFloor = nil; playFrameView = nil; return nil }          // the one-Jelly pose: the old floor
+        let blendWas = playBlend
+        if play { playBlend = 1 }          // (the settled play view, whatever the camera's ease is now)
+        defer { playBlend = blendWas }
+        let playCam = camera(aspect: aspect)
+        playFrameView = play ? (playCam.view, aspect) : nil
         let size = CGSize(width: CGFloat(1000 * aspect), height: 1000)
-        let bottom = (1 - roamBottomMargin) * 1000
+        let bottom = (play ? playFrameBottom : 1 - roamBottomMargin) * 1000
         let zb = floorPoint(screen: CGPoint(x: size.width / 2, y: CGFloat(bottom)), size: size, gamePose: true)?.y ?? walkMaxZ
         let maxZ = min(max(zb - roamBodyDepth, walkMaxZ), roamMaxZCap)
         let c = roamFurnitureClearance
         let cam = camera(aspect: aspect, gamePose: true)
-        let rails = (aspect < 1 || HUDLayout.phoneMeasured ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
-        let minZ = max(RoomLayout.minZ + c, campCap?.minZ ?? -.infinity)          // (the Camp yard: the first row is no further back than the cap, Park/CampScenery.swift)
+        let rails = (!play && (aspect < 1 || HUDLayout.phoneMeasured) ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
+        var minZ = max(RoomLayout.minZ + c, campCap?.minZ ?? -.infinity)          // (the Camp yard: the first row is no further back than the cap, Park/CampScenery.swift)
+        if play {          // the back: the crown (and ears / antennas / hat) of a body standing at the row stays below the top margin of the screen (the Done pill lives there)
+            let topY = playFrameTop * 1000, hgt = BobShape.H * 1.25
+            while minZ < maxZ - 1 {
+                let q = playCam.viewProj * SIMD4<Float>(0, hgt, minZ - 0.8, 1)
+                if q.w > 1e-4, CGFloat(1 - (q.y / q.w * 0.5 + 0.5)) * 1000 >= CGFloat(topY) { break }
+                minZ += RoamFloor.step
+            }
+        }
         let wallX = RoomLayout.maxX - (roamLateralExtent + 0.05)          // (the body, wings and shadow stay off the side walls too)
         var zs = [Float](), hw = [Float](), free = [[ClosedRange<Float>]](), railFree = [[ClosedRange<Float>]]()
         var z = minZ
         while z <= maxZ + 1e-4 {
             // (the body's nearest surface, 0.25 u nearer than `visibleHalfWidthAtBody`'s depth, sets the width the screen allows)
-            let wide = visibleHalfWidthAtBody(z: z + 0.25, aspect: aspect) * (1 - 2 * roamSideMargin) - roamLateralExtent
+            let wide = (play ? playHalfWidthAtBody(z: z + 0.25, view: playCam.view, aspect: aspect) * (1 - 2 * playFrameSide) : visibleHalfWidthAtBody(z: z + 0.25, aspect: aspect) * (1 - 2 * roamSideMargin)) - roamLateralExtent
             let h = max(min(wide, wallX, campCap?.halfWidth ?? .infinity), 0.6)          // (the Camp yard: never wider than the fence, whatever the screen shows)
             // the free spans of the row: what the sofa, plant and table leave (sampled every 5 cm)
             var spans = [ClosedRange<Float>](), start: Float?
@@ -200,9 +213,31 @@ extension GameCamera {
         let f = RoamFloor(aspect: aspect, minZ: minZ, maxZ: zs.last ?? maxZ, zs: zs, hw: hw, free: free, railFree: railFree)
         roamFloor = f
         RoomLayout.setFront(z: f.maxZ + 0.8)
+        if play { return f }          // (the sims' round safety wall stays the room's: it is wider than the frame, so the polygon is what holds them)
         let a = f.arena
         arenaCenter = a.centre; arenaRadius = a.radius
         return f
+    }
+
+    // MARK: Play mode's frame (play-frame-r1)
+
+    /// True while Play mode (the ball or the bubble wand) is on: `refreshRoam` then builds the floor from the PLAY camera (at `PlayTuning.camZoom`) instead of the room's, so a
+    /// body that stands anywhere on it is whole on the screen. Set by `PlayToss`; the park is left as it was.
+    nonisolated(unsafe) static var playFrame = false
+    /// The play view's matrix and aspect of the last `refreshRoam` in play (the ball's side walls read it); nil outside play.
+    nonisolated(unsafe) static var playFrameView: (view: simd_float4x4, aspect: Float)?
+    /// Screen fractions the play floor keeps bodies inside: the sides, the top (the Done pill) and the front edge of a body (the hand's band under it).
+    static let playFrameSide: Float = 0.03, playFrameTop: Float = 0.09, playFrameBottom: Float = 0.775
+    /// Half the screen's width at the height of a body's widest part at depth `z`, through `view`.
+    static func playHalfWidthAtBody(z: Float, view: simd_float4x4, aspect: Float) -> Float {
+        let p = view * SIMD4<Float>(0, 0.65, z + 0.3, 1)
+        return -p.z * tanf(fovY / 2) * aspect
+    }
+    /// The half width of the play view at depth `z`, at a ball's height, less a hair (the ball's own radius comes off in the ball's walls); nil = no play frame: the old walls.
+    static func playBallHalf(z: Float) -> Float? {
+        guard playFrame, !PlayTuning.old, let f = playFrameView else { return nil }
+        let p = f.view * SIMD4<Float>(0, 0.3, z, 1)
+        return -p.z * tanf(fovY / 2) * f.aspect * 0.95
     }
 
     /// Back to the old fixed floor (a new room set-up, tests).

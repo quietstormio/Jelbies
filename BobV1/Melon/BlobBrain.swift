@@ -303,6 +303,9 @@ final class BlobBrain {
     var runMoveDemo: IdleKind?
     /// Touch play: he runs (the run blend) back to the focus spot after a throw; cleared on arrival (BlobBrain+Touch `hurryUpdate`).
     var hurry = false
+    /// Play mode with a live ball (Play/PlayToss.swift, play-frame-r1): > 0 = his walks (the step under the ball, the walk round behind it) go this many times faster than the
+    /// walk they were, by the run blend's own gait points (`idleUpdateRun`); 0 = off, exactly as before.
+    var playChase: Float = 0
     /// Idle arm override (render only): per side elevation / sweep (rad) blended in by `armDirW`; 0 = the walking arm untouched.
     var armDirW: Float = 0
     var armDirEl: [Float] = [0, 0]

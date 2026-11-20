@@ -63,6 +63,7 @@ enum GameCamera {
     /// Sets the roaming camera and the floor the Jellies use for `count` Jellies. Call before the brains are made (`forGame` reads `roamRect`).
     static func configureRoom(count: Int, option: RoomCam = RoomCam.launch, wide: Int = wideLaunch) {
         roamFloor = nil; RoomLayout.setFront(z: RoomLayout.maxZ)          // (a new set-up: the old fixed floor until `refreshRoam`)
+        playFrame = false; playFrameView = nil          // (and no Play frame left over from an earlier play: PlayToss sets it again with its own `begin`)
         // (2026-11-11: the wide room view is the home view at ANY Jelbie count; `count` no longer picks the pose. Only the explicit `-RoomCam current` keeps the old close pose.)
         if option == .current {
             eye = baseEye; target = baseTarget; roomEye = baseEye; roomTarget = baseTarget; roomWideScale = 1; roomWideLift = 0
@@ -126,8 +127,9 @@ enum GameCamera {
         }
         if playBlend != 0 {                                 // Play mode (Play/PlayToss.swift): a lower, nearer view facing the Jelbies, the front of the floor left free for the ball's return
             let p = playPose(eye: e, target: t, aspect: aspect)
-            e += (p.eye - e) * playBlend
-            t += (p.target - t) * playBlend
+            let k = playBlend * (parkRoamMaxZ == nil ? PlayTuning.camZoom : 1)          // (`PlayTuning.camZoom`: 0 = the room's own camera ... 1 = the old play view; the park keeps the old view)
+            e += (p.eye - e) * k
+            t += (p.target - t) * k
         }
         if wallEditBlend != 0 {                             // the wall picture editor (Room/GameCamera+Wall.swift): on a phone on its side the view rises to show the whole band above the windows; 0 = nothing here runs
             let p = wallEditPose(eye: e, target: t, aspect: aspect)

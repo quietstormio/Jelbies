@@ -81,6 +81,12 @@ extension GameCare {
         guard play.active || play.camBlend > 0 || GameCamera.playBlend != 0 else { return }
         if play.active, focus.isActive || bath.active || (tripActive && !parkPlayOpen) || (park.active && !parkPlayOpen) || guestBook.present { endPlay() }          // (Go home / the bedtime call ends the park's play first)
         play.tick(dt: dt, world: tossWorld(), jellies: play.active ? playJellies() : [])
+        #if targetEnvironment(simulator)
+        if play.active, DevArgs.enabled, UserDefaults.standard.integer(forKey: "PlayDemo") > 0 || UserDefaults.standard.integer(forKey: "BubbleDemo") != 0, Int(play.clock * 60) % 30 == 0 {          // (capture aid: how far each body sticks out of the screen, for the take's cut count)
+            let sz = play.viewSize
+            NSLog("[playtoss] frame t=%.2f blend %.2f cut %@", play.clock, GameCamera.playBlend, play.jellies.map { String(format: "%.0f", PlayTuning.edgeCut($0.pos, size: sz)) }.joined(separator: ","))
+        }
+        #endif
         if play.active, UserDefaults.standard.integer(forKey: "PlayDemo") > 0, Int(play.clock * 60) % 15 == 0 {
             let b = play.ball
             NSLog("[playtoss] t=%.2f %@ ball (%.2f %.2f %.2f) v (%.1f %.1f %.1f) jellies %@", play.clock, String(describing: play.phase), b.pos.x, b.pos.y, b.pos.z, b.vel.x, b.vel.y, b.vel.z,
@@ -91,7 +97,7 @@ extension GameCare {
     /// The room as the ball sees it: the visible floor's sides, the furniture and the sofa under their tops.
     func tossWorld() -> TossWorld {
         var w = TossWorld()
-        w.xHalf = { DecorPlacement.visibleHalf(z: $0) + 0.3 }
+        w.xHalf = PlayToss.ballXHalf
         let solids = DecorField.shared.feet.filter { $0.spec.solid && $0.kind != .minigoal }
         let cyl = RoomLayout.cylinders
         w.solid = { p in
@@ -149,7 +155,7 @@ extension GameCare {
         let col = SIMD3<Float>(repeating: 0.55 + 0.25 * k) * SIMD3(0.9, 0.8, 0.7)
         if p.phase == .flying || p.phase == .loose { ParkScenery.disc(b, cx: ball.pos.x, cz: ball.pos.z, radius: ball.radius * (1.25 - 0.35 * k), y: 0.021, color: col) }
         // the landing marker: a soft ring + dot at the predicted touch-down, closing in and brightening as the ball comes down (gone once it is down)
-        if p.phase == .flying || (p.phase == .loose && h > 0.15), h > 0.12, let l = ball.landing(xHalf: { DecorPlacement.visibleHalf(z: $0) }), l.t < 3 {
+        if p.phase == .flying || (p.phase == .loose && h > 0.15), h > 0.12, let l = ball.landing(xHalf: PlayToss.ballReach), l.t < 3 {
             let prog = 1 - min(1, l.t / 1.6)                               // 0 = far, 1 = about to land
             let r = ball.radius * (2.1 - 0.9 * prog)
             let glow = SIMD3<Float>(0.70 + 0.30 * prog, 0.76 + 0.24 * prog, 0.86 + 0.14 * prog)
