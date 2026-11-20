@@ -60,7 +60,7 @@ struct ContactStance: Sendable {
     /// Proximity: stay at least this far (above the 0.5 cm sound window, so a near miss never squishes).
     static let near: Float = 0.012
     /// The clear space between two who sit together / stand before a hop-along (skin gap).
-    static let sitGap: Float = 0.14, hopGap: Float = 0.20
+    static let sitGap: Float = 0.14, hopGap: Float = 0.22
 
     /// Touching for the whole hold from phase `from`.
     static func holding(from: Int, facing: Facing = .each, walk0: Bool = true, until: Int? = nil, anchor: Anchor = .none, features: Bool = true, sound: SFX? = nil, volume: Float = 0.25, haptic: ContactHaptic = .none, pulses: [(phase: Int, from: Float, to: Float)] = []) -> ContactStance {

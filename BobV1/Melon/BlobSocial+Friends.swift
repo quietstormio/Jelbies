@@ -341,6 +341,7 @@ extension BlobBrain {
         let rounds = 2, gap: Float = 1.4, lag: Float = 0.55, dist: Float = 0.45
         let lead = (s.roles == 0) == isA
         let n = lead ? s.bumps : s.passes
+        socialBook.handWant = HandReach.armsIn(side: handSide(toward: o))          // (the arms stay in during the hops)
         let along = pairHopYaw(o)          // (the SAME heading for both: two bodies each hopping toward the camera point converge on it)
         if n < rounds, t >= Float(n) * gap + (lead ? 0 : lag), scriptIsNone, idleState.kind == nil, turnedTo(along, tol: 0.25) || t > Float(n) * gap + lag + 1.2 {
             yaw = along          // (the hop goes exactly along the shared heading: a turn step stops a few degrees short, and two hops 5 degrees off each other close 10 cm)

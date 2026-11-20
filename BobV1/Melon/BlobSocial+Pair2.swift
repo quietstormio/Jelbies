@@ -141,6 +141,7 @@ extension BlobBrain {
     private func driveJumpTurns(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         if openSideBySide(s, o, isA, settle: 0.6) { return }
         let t = s.phaseT
+        socialBook.handWant = HandReach.armsIn(side: handSide(toward: o))          // (the arms stay in during the hops)
         switch s.phase {
         case 2:
             let k = s.round
