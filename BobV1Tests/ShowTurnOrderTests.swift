@@ -54,6 +54,41 @@ final class ShowTurnOrderTests: XCTestCase {
         }
     }
 
+    /// The header pips and the turn pills read the SAME turn index at every step of a whole Trick round (never two counters), the kicker has no turn count, and
+    /// the turn only ever moves forward 0 -> 1 -> 2, ending with every pip filled.
+    func testPipsAndPillsAgreeAtEveryStepOfTheTrickRound() {
+        let f = flowAtTrick(Log(), perTurn: 3)
+        XCTAssertEqual(TurnPips.of(f).kicker, "ROUND 3 OF 3")
+        var seen: [Int] = [], last = -1
+        func check(_ where_: String) {
+            let pills = (0..<3).filter { f.isTrickTurnNow($0) }
+            XCTAssertLessThanOrEqual(pills.count, 1, "one pill at most is now: \(where_)")
+            let pips = TurnPips.of(f)
+            XCTAssertEqual(pips.current, pills.first ?? 3, "pips follow the pill: \(where_) stage \(f.trickStage)")
+            XCTAssertEqual(pips.used, pills.first ?? 3, where_)
+            if let k = pills.first {
+                XCTAssertGreaterThanOrEqual(k, last, "never goes back: \(where_)"); last = k
+                if seen.last != k { seen.append(k) }
+            } else {
+                XCTAssertTrue(f.sim?.tricksDone ?? false, "no turn now only when the round is over: \(where_)")
+            }
+        }
+        for t in [VoiceTrick.sit, .jacks, .flip] {
+            check("before pick")
+            f.pick(t)
+            var sawRivals = false
+            for _ in 0..<(95 * 60) {
+                f.tick(dt: 1 / 60); check("tick")
+                if f.trickStage == .rivals { sawRivals = true }
+                if sawRivals, f.trickStage == .pick { break }
+            }
+            XCTAssertTrue(sawRivals, "the rivals played after \(t)")
+        }
+        check("end")
+        XCTAssertEqual(seen, [0, 1, 2])
+        XCTAssertEqual(TurnPips.of(f).current, 3, "all filled when the round is over")
+    }
+
     /// The switch is at three, and after each of his tricks every rival goes once, in the same order, one at a time (the others wait).
     func testAllThreeRivalsPerformAfterEachPlayerTrick() {
         XCTAssertEqual(ShowFlow.entrantsPerTurn, 3)

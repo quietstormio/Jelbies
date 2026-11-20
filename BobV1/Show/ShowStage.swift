@@ -91,8 +91,7 @@ nonisolated enum ShowModels {
                 let fx = x + side * (0.1 + Float(k) * 0.16)
                 b.roundedBox(centre: SIMD3(fx, 2.9, -1.6 + 0.3 + Float(k) * 0.08), half: SIMD3(0.09, 3.0, 0.1), radius: 0.08, segments: 2, aoFloor: true, color: k % 2 == 0 ? curtainDeep : curtain)
             }
-            // a gold tie-back
-            b.roundedBox(centre: SIMD3(x - side * 0.15, 2.2, -1.25), half: SIMD3(0.5, 0.12, 0.16), radius: 0.11, segments: 3, aoFloor: false, color: gold)
+            // (no gold tie-back: on a phone on its side it sat behind the Home pill and crossed the "Look" / "Results" titles and the first podium name)
         }
         b.roundedBox(centre: SIMD3(0, 6.2, -1.7), half: SIMD3(curtainX + 0.7, 0.5, 0.45), radius: 0.3, segments: 4, aoFloor: false, color: curtain)
         for k in 0..<7 {
