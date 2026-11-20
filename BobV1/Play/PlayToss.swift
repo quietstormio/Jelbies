@@ -134,16 +134,25 @@ final class PlayToss {
     }
 
     // the frame (GameCamera.playFrame): the floor the Jelmiko play on is what the play camera shows
-    @ObservationIgnored private var frameSaved: (floor: GameCamera.RoamFloor?, walls: [RoomLayout.Plane])?
+    @ObservationIgnored private var frameSaved: (floor: GameCamera.RoamFloor?, walls: [RoomLayout.Plane], arena: (c: SIMD2<Float>, r: Float), hudRevision: Int)?
     @ObservationIgnored private var frameAspect: Float = 0
     private var viewAspect: Float { Float(viewSize.width / max(viewSize.height, 1)) }
     private func frameOn() {
         guard !PlayTuning.old, GameCamera.parkRoamMaxZ == nil else { return }
-        if frameSaved == nil { frameSaved = (GameCamera.roamFloor, RoomLayout.walls) }
+        if frameSaved == nil { frameSaved = (GameCamera.roamFloor, RoomLayout.walls, (GameCamera.arenaCenter, GameCamera.arenaRadius), HUDLayout.measuredRevision); logFrame("before") }
         GameCamera.playFrame = true
         frameAspect = viewAspect
         GameCamera.refreshRoam(aspect: frameAspect)
         frontWall()
+        logFrame("during")
+    }
+    /// Capture aid (simulator, `-PlayDemo`): the room's safety wall, front wall and floor before / during / after play.
+    private func logFrame(_ tag: String) {
+        #if targetEnvironment(simulator)
+        guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
+        let f = GameCamera.roamFloor
+        NSLog("[playtoss] walls %@: arena (%.2f, %.2f) r %.2f | front wall z %.2f | floor z %.2f...%.2f rows %d", tag, GameCamera.arenaCenter.x, GameCamera.arenaCenter.y, GameCamera.arenaRadius, -(RoomLayout.walls.count > 1 ? RoomLayout.walls[1].d : 0), f?.minZ ?? 0, f?.maxZ ?? 0, f?.zs.count ?? 0)
+        #endif
     }
     /// The ball's front wall: the floor at the bottom of the play view (the ball is never left off the bottom edge); the room's 9 as before when the dial is 1.
     private func frontWall() {
@@ -156,8 +165,12 @@ final class PlayToss {
         GameCamera.playFrame = false; GameCamera.playFrameView = nil
         guard let s = frameSaved else { return }
         frameSaved = nil
-        if s.floor == nil || abs((s.floor?.aspect ?? 0) - frameAspect) < 0.005 { GameCamera.roamFloor = s.floor; RoomLayout.walls = s.walls }
-        else { GameCamera.refreshRoam(aspect: frameAspect) }
+        // the saved room floor is put back only when nothing it was built from changed during play: the same aspect AND the same measured HUD (the stage rebuilds the floor when the
+        // HUD's rails move, and during play that rebuild is the PLAY floor, so the stage would never rebuild the room's: it is rebuilt here instead)
+        if s.floor == nil || (abs((s.floor?.aspect ?? 0) - frameAspect) < 0.005 && s.hudRevision == HUDLayout.measuredRevision) {
+            GameCamera.roamFloor = s.floor; RoomLayout.walls = s.walls; GameCamera.arenaCenter = s.arena.c; GameCamera.arenaRadius = s.arena.r
+        } else { GameCamera.refreshRoam(aspect: frameAspect) }
+        logFrame("after")
     }
 
     // MARK: begin / end
