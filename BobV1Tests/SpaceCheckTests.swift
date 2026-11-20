@@ -22,6 +22,7 @@ final class SpaceCheckTests: XCTestCase {
         DecorField.shared.clear(); ToyTuning.settle = 5
         GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0)
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
+        HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero
         SocialTests.keep.removeAll()
     }
 
@@ -54,6 +55,11 @@ final class SpaceCheckTests: XCTestCase {
 
     private func setup(home n: Int, aspect: Float) -> (floor: GameCamera.RoamFloor, bodies: Int, spots: [SIMD2<Float>]) {
         GameCamera.clearRoam(); DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0
+        if env["SPACE_HUD"] == "1" {          // the app's own inputs for the button cut-outs: the measured window (points, incl. safe areas) and its safe insets (iPhone 17 Pro Max)
+            let port = aspect < 1
+            HUDLayout.measuredSize = port ? CGSize(width: 440, height: 956) : CGSize(width: 956, height: 440)
+            HUDLayout.measuredInsets = port ? UIEdgeInsets(top: 62, left: 0, bottom: 34, right: 0) : UIEdgeInsets(top: 0, left: 62, bottom: 21, right: 62)
+        } else { HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero }
         for (uid, ps) in HopscotchLine.shared.lines { for pl in ps { HopscotchLine.shared.remove(uid, pl.id) } }
         if n == 0 {
             ParkPlayTuning.seesawInPark = false          // the shipped park has no seesaw (the test host turns it on for the seesaw's own suites)
@@ -143,7 +149,7 @@ final class SpaceCheckTests: XCTestCase {
     private func writeGeometry(name: String, rf: GameCamera.RoamFloor, aspect: Float, home n: Int) throws {
         let size = CGSize(width: CGFloat(1000 * aspect), height: 1000)
         let cam = GameCamera.camera(aspect: aspect, gamePose: true)
-        let rails = (aspect < 1 ? HUDLayout.railRects(aspect: aspect) : []) + (GameCamera.parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])
+        let rails = (aspect < 1 || HUDLayout.phoneMeasured ? HUDLayout.railRects(aspect: aspect) : []) + (GameCamera.parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])
         let c = GameCamera.roamFurnitureClearance
         let x0: Float = -6, z0: Float = -6, cell: Float = 0.25, cols = 48, rowsN = 72
         var codes = [[Int]]()          // 0 outside polygon, 1 walkable, 2 sofa, 3 cylinder, 4 HUD rail / pill, 5 solid toy footprint, 6 other cut
