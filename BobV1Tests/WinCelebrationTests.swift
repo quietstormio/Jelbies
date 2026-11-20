@@ -60,9 +60,9 @@ final class WinCelebrationTests: XCTestCase {
             frames += 1
             maxW = max(maxW, b.armDirW)
             maxTurn = max(maxTurn, abs(wrapAngle(b.yaw - yaw0)))
-            if b.armDirW > 0.95 && b.armDirEl == [0.95, 0.95] { armsUpFrames += 1 }
+            if b.armLiftNow > 0.95 && b.armDirW > 0.95 && abs(b.armDirEl[0] - WinTuning.armEl) < 0.1 { armsUpFrames += 1 }
             maxApex = max(maxApex, r.sim.centroid().y - y0)
-            if b.armDirW > 0.99 {
+            if b.armLiftNow > 0.95 && b.armDirW > 0.99 {          // (the arm rig has caught up with the command: its lift spring takes ~0.5 s)
                 // the DRAWN arms: the tip of each stub against its root in the body frame (elevation above the horizontal)
                 for si in 0..<2 { let g = b.armLastGeom[si]; let d = g.b - g.a; minElev = min(minElev, asinf(d.y / max(simd_length(d), 1e-4))) }
             }
