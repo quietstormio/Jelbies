@@ -93,10 +93,10 @@ enum HUDLayout {
     /// (plus the leading safe inset, which is 0 in portrait), and the heart at the trailing edge, both lifted by the bottom safe inset + the HUD's 8 pt + `lift`.
     static func phoneRails(size: CGSize, insets: UIEdgeInsets) -> [CGRect] {
         let w = size.width, h = size.height
-        let above = insets.bottom + hudVertical + lift(size: size, safeBottom: insets.bottom, compact: w > h)
-        let leftTop = h - above - railCapsuleHeight, rightTop = h - above - railHeart - cutMargin
-        let lx = insets.left + hudSide - cutMargin, lw = railWidth + 2 * cutMargin
-        let rw = railHeart + heartTrailing + 2 * cutMargin, rx = w - insets.right - hudSide - rw + cutMargin
+        let above = insets.bottom + HUDTuning.hudVertical + lift(size: size, safeBottom: insets.bottom, compact: w > h)
+        let leftTop = h - above - HUDTuning.railCapsuleHeight, rightTop = h - above - HUDTuning.railHeart - HUDTuning.cutMargin
+        let lx = insets.left + HUDTuning.hudSide - HUDTuning.cutMargin, lw = HUDTuning.railWidth + 2 * HUDTuning.cutMargin
+        let rw = HUDTuning.railHeart + HUDTuning.heartTrailing + 2 * HUDTuning.cutMargin, rx = w - insets.right - HUDTuning.hudSide - rw + HUDTuning.cutMargin
         return [CGRect(x: max(0, lx) / w, y: leftTop / h, width: lw / w, height: 1 - leftTop / h),
                 CGRect(x: rx / w, y: rightTop / h, width: min(rw, w - rx) / w, height: 1 - rightTop / h)]
     }
