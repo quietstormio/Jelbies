@@ -91,7 +91,7 @@ extension GameCare {
     /// The room as the ball sees it: the visible floor's sides, the furniture and the sofa under their tops.
     func tossWorld() -> TossWorld {
         var w = TossWorld()
-        w.xHalf = { DecorPlacement.visibleHalf(z: $0) + 0.3 }
+        w.xHalf = PlayToss.ballXHalf
         let solids = DecorField.shared.feet.filter { $0.spec.solid && $0.kind != .minigoal }
         let cyl = RoomLayout.cylinders
         w.solid = { p in
@@ -149,7 +149,7 @@ extension GameCare {
         let col = SIMD3<Float>(repeating: 0.55 + 0.25 * k) * SIMD3(0.9, 0.8, 0.7)
         if p.phase == .flying || p.phase == .loose { ParkScenery.disc(b, cx: ball.pos.x, cz: ball.pos.z, radius: ball.radius * (1.25 - 0.35 * k), y: 0.021, color: col) }
         // the landing marker: a soft ring + dot at the predicted touch-down, closing in and brightening as the ball comes down (gone once it is down)
-        if p.phase == .flying || (p.phase == .loose && h > 0.15), h > 0.12, let l = ball.landing(xHalf: { DecorPlacement.visibleHalf(z: $0) }), l.t < 3 {
+        if p.phase == .flying || (p.phase == .loose && h > 0.15), h > 0.12, let l = ball.landing(xHalf: PlayToss.ballReach), l.t < 3 {
             let prog = 1 - min(1, l.t / 1.6)                               // 0 = far, 1 = about to land
             let r = ball.radius * (2.1 - 0.9 * prog)
             let glow = SIMD3<Float>(0.70 + 0.30 * prog, 0.76 + 0.24 * prog, 0.86 + 0.14 * prog)

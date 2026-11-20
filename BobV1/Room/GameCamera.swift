@@ -126,8 +126,9 @@ enum GameCamera {
         }
         if playBlend != 0 {                                 // Play mode (Play/PlayToss.swift): a lower, nearer view facing the Jelbies, the front of the floor left free for the ball's return
             let p = playPose(eye: e, target: t, aspect: aspect)
-            e += (p.eye - e) * playBlend
-            t += (p.target - t) * playBlend
+            let k = playBlend * (parkRoamMaxZ == nil ? PlayTuning.camZoom : 1)          // (`PlayTuning.camZoom`: 0 = the room's own camera ... 1 = the old play view; the park keeps the old view)
+            e += (p.eye - e) * k
+            t += (p.target - t) * k
         }
         if bath != 0 {                                      // the clean-up close-up: snapped under the white fade (0 or 1), never blended on screen
             let p = bathPose(aspect: aspect)

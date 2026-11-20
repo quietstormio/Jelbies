@@ -681,9 +681,13 @@ final class BubbleWand: PlayToy {
               let front = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yBot), size: size),
               let l = GameCamera.floorPoint(screen: CGPoint(x: size.width * xl, y: size.height * yBot), size: size),
               let r = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) else { return nil }
-        let hx = max(min(abs(l.x), abs(r.x)) - 0.8, 1.2)          // (a body's half width inside the near edge)
+        var hx = max(min(abs(l.x), abs(r.x)) - 0.8, 1.2)          // (a body's half width inside the near edge)
         var zHi = min(front.y, GameCamera.roamMaxZ - 0.1)
         var zLo = max(back.y, GameCamera.parkRoamMaxZ != nil ? GameCamera.roamRect.min.y : RoomLayout.minZ + 1.6)          // (the park: its roam rect's back edge)
+        if GameCamera.playFrame, !PlayTuning.old, let rf = GameCamera.roamFloor {          // play-frame-r1: never outside the floor the play camera shows (whole bodies in frame)
+            zLo = max(zLo, rf.minZ); zHi = min(zHi, rf.maxZ)
+            hx = min(hx, max(min(rf.halfWidth(at: zLo), rf.halfWidth(at: zHi)), 0.6))
+        }
         if zHi - zLo < 1.6 { zLo = zHi - 1.6 }
         zHi = max(zHi, zLo + 0.5)
         areaCache = (size, SIMD2(-hx, zLo), SIMD2(hx, zHi))

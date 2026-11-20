@@ -478,6 +478,15 @@ extension BlobBrain {
         }
     }
 
+    /// The run blend whose walk covers the ground `gain` times as fast as the walk he walks now (the boosted roam walk when he is on no idle move, the plain one inside a move):
+    /// stride x(1 + 0.24 w), step rate x(1 + 0.17 w rate), against the boost the run drops (`idleGate`).
+    func runBlend(forGain gain: Float) -> Float {
+        let base: Float = idleState.kind == nil ? Self.walkBoost : 1
+        let a = 0.24 * 0.17 * runChar.rate, b = 0.24 + 0.17 * runChar.rate, c = 1 - gain * base
+        guard c < 0 else { return 0 }
+        return min(max((-b + (b * b - 4 * a * c).squareRoot()) / (2 * a), 0), 1)
+    }
+
     /// Ease the run blend: 1 while a run is under way and more than ~1.1 u from the goal, else back to 0 (exactly 0 once small).
     func idleUpdateRun(_ dt: Float) {
         var want: Float = 0
@@ -493,6 +502,7 @@ extension BlobBrain {
         if zoomWant == 0 && zoomW < 1e-3 { zoomW = 0 }
         if idleState.kind == .zoomies { runW += max(-dt / 0.2, min(dt / 0.45, want - runW)); if want == 0 && runW < 1e-3 { runW = 0 }; return }
         if hurry, case .walk(let target, _) = script, simd_length(target - SIMD2(px, pz)) > 0.35 { want = 1 }       // touch play: running back after a throw
+        if playChase > 0, want == 0, case .walk(let target, _) = script, simd_length(target - SIMD2(px, pz)) > 0.35 { want = runBlend(forGain: playChase) }          // a live ball in Play mode: a little faster
         if runW == want { return }
         runFalling = want < runW
         runW += max(-dt / 0.3, min(dt / 0.2, want - runW))              // blend in over 0.2 s, out over 0.3 s (the skid)
