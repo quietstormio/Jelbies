@@ -105,16 +105,16 @@ final class FocusGroup {
 
     // MARK: uncalled bodies are obstacles (2026-11-20: "two called, the third asleep in the middle": the called pair were pushed to either side of him and the close-up read as three in a row)
     /// A body's half width on the floor for the screen test (R 0.7 plus a sliver), and the clear screen gap wanted (in half-bodies at the row's depth: one half body of daylight between the row and the nearest uncalled body, so he reads as apart, not as a third in the row).
-    static let bodyHalf: Float = 0.75, clearGap: Float = 1.0, bodyApart: Float = 1.6
+    static let bodyHalf: Float = 0.75, lyingHalf: Float = 0.95, clearGap: Float = 1.0, bodyApart: Float = 1.6
 
     /// How far the uncalled bodies are from standing between or over the row `spots` on the close-up's screen, in half-bodies: > 0 = every one is wholly to one side (the bigger the better),
     /// <= 0 = one is between or over them; a body closer than `bodyApart` (a lying one is 1.8 across) to a spot counts as over.
     static func screenClear(_ spots: [SIMD2<Float>], _ obstacles: [SIMD2<Float>]) -> Float {
         let pose = GameCamera.focusPose(aspect: GameCamera.aspect, spots: spots)
         let f = simd_normalize(pose.target - pose.eye)
-        func box(_ p: SIMD2<Float>) -> (lo: Float, hi: Float) {
+        func box(_ p: SIMD2<Float>, half: Float = bodyHalf) -> (lo: Float, hi: Float) {
             let d = max(simd_dot(SIMD3<Float>(p.x, 0.5, p.y) - pose.eye, f), 0.3)
-            let c = (p.x - pose.eye.x) / d, h = bodyHalf / d
+            let c = (p.x - pose.eye.x) / d, h = half / d
             return (c - h, c + h)
         }
         let boxes = spots.map(box)
@@ -122,7 +122,7 @@ final class FocusGroup {
         let unit = bodyHalf / max(simd_dot(SIMD3<Float>(spots[0].x, 0.5, spots[0].y) - pose.eye, f), 0.3)          // (a half body at the row's depth, in screen units)
         var worst = Float.infinity
         for o in obstacles {
-            let b = box(o)
+            let b = box(o, half: lyingHalf)          // (the uncalled may be lying: 1.8 across)
             var gap = max(b.lo - hi, lo - b.hi) / unit
             if spots.contains(where: { simd_distance($0, o) < bodyApart }) { gap = min(gap, -0.01) }
             worst = min(worst, gap)
