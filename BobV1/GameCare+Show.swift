@@ -360,6 +360,12 @@ extension GameCare {
     }
     private func tickPendingWalks(dt: Float) {
         let book = showBook
+        // an entrant who set off while the one before her was still on the middle was given a goal beside it (the floor rules keep bodies apart): the moment the middle is clear she is sent to the middle itself
+        for (id, _) in book.heading {
+            guard let a = showBody(id), let g = book.goals[id], simd_distance(g, ShowStage.playerSpot) > 0.15, middleClear(for: id) else { continue }
+            let now = CACurrentMediaTime()
+            if now - (book.retryAt[id] ?? 0) > 0.3 { book.retryAt[id] = now; showWalk(a, to: ShowStage.playerSpot) }
+        }
         guard !book.pendingWalks.isEmpty else { return }
         var rest: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
         for w in book.pendingWalks {
