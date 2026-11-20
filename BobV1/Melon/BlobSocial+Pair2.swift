@@ -148,7 +148,8 @@ extension BlobBrain {
             let jumper = ((k % 2 == 0) == isA) ? self : o
             let dist = Pair2Tuning.jumpBase + Pair2Tuning.jumpStep * Float(k)
             if jumper === self {
-                if !socialBook.hopStarted, fxFree, t >= 0.4, turnedTo(pairHopYaw(o), tol: 0.06) || t > 2.0 {
+                if !socialBook.hopStarted, fxFree, t >= 0.4, turnedTo(pairHopYaw(o), tol: 0.25) || t > 2.0 {
+                    yaw = pairHopYaw(o)          // (exactly along the shared heading: see hopAlong)
                     socialBook.hopStarted = true
                     socialBook.hold = false; socialBook.faceYaw = nil
                     startHopPlay(sim: sim, distance: dist)

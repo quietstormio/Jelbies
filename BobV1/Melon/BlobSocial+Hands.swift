@@ -198,7 +198,7 @@ extension BlobBrain {
             if s0 < -0.004 { socialBook.handOut = max(-0.12, socialBook.handOut + s0 + 0.002) }
             else if s0 > (q.seek ? 0.012 : 0.004), socialBook.handOut < 0 { socialBook.handOut = min(0, socialBook.handOut + 0.25 * dt) }
             // THE CLAP'S LAST MILLIMETRES (pair-distinct-r1): hands of the high five that hover 0.5 - 2.5 cm apart half a second into the slap (the stubby arm of some species falls short by ~ 1 cm) creep out a hair (<= creepMax)
-            if !q.seek, let sess = social, sess.phase >= 3, sess.phaseT > 0.45, let sg = ContactField.skinGap(steerID, o.steerID), sg > 0.005, sg < 0.025 {
+            if !q.seek, let sess = social, sess.phase >= 3, sess.phaseT > 0.45, contactEvents + o.contactEvents <= sess.bumps, let sg = ContactField.skinGap(steerID, o.steerID), sg > 0.005, sg < 0.025 {          // (only a clap that has NOT touched yet: `bumps` = the touch count at the start of the slap)
                 socialBook.handOut = min(HandReach.creepMax, socialBook.handOut + 0.06 * dt)
             }
         } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0; saT = q.sa ?? 0 }
