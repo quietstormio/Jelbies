@@ -44,7 +44,7 @@ extension GameCare {
     }
 
     /// The bodies of the Jelbies that did not come along are away while the park is on.
-    func parkHides(_ id: Int) -> Bool { (park.inScene && id < jellies.count && !parkBook.comers.contains(id)) || volleyHides(id) || groomHides(id) }
+    func parkHides(_ id: Int) -> Bool { (park.inScene && id < jellies.count && !parkBook.comers.contains(id)) || volleyHides(id) || groomHides(id) || raceHides(id) }
 
     // MARK: blockers and the request
 

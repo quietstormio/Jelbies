@@ -258,7 +258,7 @@ extension GameCare {
         for id in book.wanted.sorted() {
             guard let b = selectBrain(id) else { continue }
             if b.isSleeping { if !b.sleep.wakeAsked { book.retryT[id] = 0 }; continue }          // down, on his way, or rolling up: wait
-            if b.race.active || b.sleepLocked || b.activity == .touched || b.activity == .recovering || b.reserved || held { continue }
+            if b.race.active || b.sleepLocked || b.bedtimeLocked || b.activity == .touched || b.activity == .recovering || b.reserved || held { continue }
             book.retryT[id, default: 0] -= dt
             if book.retryT[id]! <= 0 { b.commandedGoodnight = true; book.retryT[id] = NightRestTuning.retry }
         }

@@ -38,14 +38,15 @@ final class OutingBook {
 
 extension GameCare {
     /// The first call starts the run-out (true = the caller returns); `again` re-enters the caller once the Jelbies are out, and that second call passes (false).
-    func outingGate(_ ids: [Int], again: @escaping () -> Void) -> Bool {
+    func outingGate(_ ids: [Int], cheer: Bool = true, again: @escaping () -> Void) -> Bool {
         if outing.passed { outing.passed = false; return false }
         guard !outing.running else { return true }
-        runOut(ids) { [weak self] in self?.outing.passed = true; again(); self?.outing.passed = false }
+        runOut(ids, cheer: cheer) { [weak self] in self?.outing.passed = true; again(); self?.outing.passed = false }
         return true
     }
 
-    func runOut(_ ids: [Int], then done: @escaping () -> Void) {
+    /// `cheer`: the ones who stay home watch, pleased (a forced happy face for 2 s). The race passes false: a housemate keeps doing exactly what he was doing (race-depart-r2).
+    func runOut(_ ids: [Int], cheer: Bool = true, then done: @escaping () -> Void) {
         let o = outing
         let actors = groomBook.actors
         let going = actors.filter { ids.contains($0.id) && $0.brain != nil }
@@ -63,7 +64,7 @@ extension GameCare {
             o.runners[a.id] = OutingBook.Runner(delay: Float(k) * OutingTuning.stagger, lane: lane, pace: pace)
         }
         o.keepT = 0
-        for a in actors where !ids.contains(a.id) {          // the ones who stay: watch and cheer them off
+        for a in actors where cheer && !ids.contains(a.id) {          // the ones who stay: watch and cheer them off
             guard let b = a.brain, !b.isSleeping else { continue }
             b.face(.happy, hold: 2)
         }

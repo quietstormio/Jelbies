@@ -35,8 +35,8 @@ extension GameCare {
             guard let b = a.brain else { continue }
             let s = wardrobe.slot(a.id)
             let doing = "scr:\(b.scriptKindName) idle:\(b.idleState.kind.map { "\($0)" } ?? "-") act:\(b.activity) soc:\(b.social.map { "\($0.kind.rawValue)" } ?? "-") pend:\(b.pending == nil ? 0 : 1) hurry:\(b.hurry ? 1 : 0) auto:\(b.autonomy ? 1 : 0) cmd:\(b.commanded ? 1 : 0) sleep:\(b.isSleeping ? 1 : 0) stg:\(b.sleep.stage) it:\(String(format: "%.2f", b.idleState.t)) rest:\(String(format: "%.2f", b.restTimer)) face:\(String(format: "%.2f", b.expr.forcedLeft)) yaw:\(String(format: "%.2f", b.yaw))"
-            NSLog("[rdp] w=%.3f id=%d x=%.2f z=%.2f bib=%d jer=%d role=%@ ph=%@ out=%d wait=%d track=%d %@", now, a.id, a.floor.x, a.floor.y, s?.bib != nil ? 1 : 0, s?.jersey != nil ? 1 : 0,
-                  "\(wearRole(for: a.id))", "\(race.phase)", outing.running ? 1 : 0, raceWait != nil ? 1 : 0, race.trackVisible ? 1 : 0, doing)
+            NSLog("[rdp] w=%.3f id=%d x=%.2f z=%.2f bib=%d jer=%d role=%@ ph=%@ out=%d wait=%d track=%d away=%d %@", now, a.id, a.floor.x, a.floor.y, s?.bib != nil ? 1 : 0, s?.jersey != nil ? 1 : 0,
+                  "\(wearRole(for: a.id))", "\(race.phase)", outing.running ? 1 : 0, raceWait != nil ? 1 : 0, race.trackVisible ? 1 : 0, raceHides(a.id) ? 1 : 0, doing)
         }
     }
 

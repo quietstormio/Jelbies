@@ -757,13 +757,14 @@ final class MelonController: NSObject, MTKViewDelegate {
     /// The other Jellies' brain, jelly follow-through and mouth (their needs, mood and greeting are GameCare.tickOthers).
     private func otherTick(_ a: JellyActor, reduce: Bool) {
         guard let brain = a.brain, brain.enabled else { return }
+        if game, model.care.raceHides(a.id) { return }          // (race-depart-r2: a housemate away while the track is up is frozen exactly as he was: no brain tick, no jelly tick)
         if !brain.hasRenderMesh { brain.attach(renderMesh: renderMesh) }
         brain.amplitude = reduce ? 0.55 : 1
         let pv = model.preview          // a showcase Jelbie: noon, never sleepy, never in bed (like bobTick)
         brain.idleNight = pv ? 0 : DayClock.shared.nightFactor; brain.idleMorning = pv ? 0 : DayClock.shared.morningFactor; brain.idleDeepNight = pv ? 0 : DayClock.shared.deepNightFactor
-        let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(a.id)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
+        let roomLife = game && !(model.care.raceBusy && model.care.raceRacing(a.id)) && !brain.race.active && !model.care.parkHides(a.id)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
         brain.sleepEnabled = roomLife && !pv; brain.anticsEnabled = roomLife && !pv; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
-        brain.homeRoom = roomLife && !pv && !model.care.tripActive && !model.care.trayOut && !model.care.bath.active          // (the 11-15 room round, RoomRoam.swift: the home room only, and never while a meal, a drink or the bath is on)
+        brain.homeRoom = roomLife && !pv && !(model.care.otherTripActive || (model.care.race.active && model.care.raceRacing(a.id))) && !model.care.trayOut && !model.care.bath.active          // (the 11-15 room round, RoomRoam.swift: the home room only, and never while a meal, a drink or the bath is on)
         if let o = Self.idleMoodOverride { brain.idleMood = o }
         var ht = CACurrentMediaTime()
         brain.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: touchHolds(a.id))
@@ -782,9 +783,9 @@ final class MelonController: NSObject, MTKViewDelegate {
             brain.amplitude = reduce ? 0.55 : 1
             let pv = model.preview          // a showcase Jelbie: noon, never sleepy, never in bed
             brain.idleNight = pv ? 0 : DayClock.shared.nightFactor; brain.idleMorning = pv ? 0 : DayClock.shared.morningFactor; brain.idleDeepNight = pv ? 0 : DayClock.shared.deepNightFactor
-            let roomLife = game && !model.care.raceBusy && !brain.race.active && !model.care.parkHides(0)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
+            let roomLife = game && !(model.care.raceBusy && model.care.raceRacing(0)) && !brain.race.active && !model.care.parkHides(0)          // room life is OFF for every Jelly while a race trip is on (racer or rival body), and for the ones at home while the park is on
             brain.sleepEnabled = roomLife && !pv; brain.anticsEnabled = roomLife; brain.watching = roomLife && roomWatched; brain.musicPlaying = AudioHub.shared.musicAudible
-            brain.homeRoom = roomLife && !pv && !model.care.tripActive && !model.care.trayOut && !model.care.bath.active          // (the 11-15 room round, RoomRoam.swift: the home room only, and never while a meal, a drink or the bath is on)
+            brain.homeRoom = roomLife && !pv && !(model.care.otherTripActive || (model.care.race.active && model.care.raceRacing(0))) && !model.care.trayOut && !model.care.bath.active          // (the 11-15 room round, RoomRoam.swift: the home room only, and never while a meal, a drink or the bath is on)
             if game {      // room life (BlobBrain+Idle.swift): mood picks the idle behaviours; focus mode and a meal on the tray hold them back
                 brain.idleMood = Self.idleMoodOverride ?? model.care.mood
                 brain.idleBlocked = ((model.care.focus.isActive && model.care.focusGroup.includes(0)) || model.care.trayOut || model.care.bath.active || model.care.play.ballGame) && !brain.commanded          // (a close-up on someone else leaves Bob roaming, out of the camera's wedge)
@@ -794,10 +795,11 @@ final class MelonController: NSObject, MTKViewDelegate {
             let b0 = CACurrentMediaTime()
             var ht = b0
             throwHold = max(0, throwHold - sim.stepDt)
-            brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: touchHolds(0))
+            let bobAway = game && model.care.raceHides(0)          // (race-depart-r2: Bob at home while somebody else races: frozen exactly as he was; the care tick below still runs)
+            if !bobAway { brain.tick(sim: sim, skinner: skinner, dt: sim.stepDt, touched: touchHolds(0)) }
             dbgBrain += CACurrentMediaTime() - b0
             HopDiag.lap(.bobBrain, &ht)
-            skinner.jelly.tick(brain: brain, sim: sim, dt: sim.stepDt)   // jelly follow-through (JellyJiggle.swift)
+            if !bobAway { skinner.jelly.tick(brain: brain, sim: sim, dt: sim.stepDt) }   // jelly follow-through (JellyJiggle.swift)
             HopDiag.lap(.bobJelly, &ht)
             renderer?.mouthOpen = brain.mouthShown
             renderer?.setBlush(brain.blushNow, body: 0)
@@ -1171,7 +1173,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 let st0 = CACurrentMediaTime()
                 var lt = st0
                 stepSims.removeAll(keepingCapacity: true)
-                let awayOn = game && (model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene)
+                let awayOn = game && (model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene || model.care.raceBook.roomAway)
                 for a in actors where !(awayOn && model.care.parkHides(a.id)) && a.updateSleep(forceAwake: sleepForced(a)) { stepSims.append(a.sim) }          // (park / volleyball / groomer: the Jelbies at home are far away: not stepped, drawn or worn; at most 4 bodies play)
                 let touching = (stageView?.activeTouches ?? 0) > 0
                 for a in parkActors where a.updateSleep(forceAwake: touching || touchHolds(a.id)) { stepSims.append(a.sim) }          // (a visitor who stands still sleeps like the Jelbies do; a touch wakes him)          // (a guest asleep at home skips his step like the Jelbies)
@@ -1200,7 +1202,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         for a in actors { a.skinner.tickBlink(dt: dt) }
         for a in parkActors { a.skinner.tickBlink(dt: dt) }
         skinJobs.removeAll(keepingCapacity: true)
-        let parkOn = game && (model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene)
+        let parkOn = game && (model.care.park.inScene || model.care.volley.inScene || model.care.groom.inScene || model.care.raceBook.roomAway)
         let bathHides = game && (model.care.bath.look.visible || model.care.bath.cameraBlend > 0)
         let washedID = bathHides ? min(model.care.bath.targetID, actors.count - 1) : 0
         for a in actors {

@@ -32,7 +32,7 @@ final class RaceDepartUITests: XCTestCase {
         if landscape { XCUIDevice.shared.orientation = .landscapeLeft }
         sleep(8)
         try? "go".write(toFile: "/tmp/racedep_go", atomically: true, encoding: .utf8)          // the situation starts and is held from here
-        sleep(4)
+        sleep(sit == "asleep" ? 16 : 4)          // (a sleeper needs time to settle into his bed before the room is frozen behind the Town panels)
         XCTAssertTrue(app.buttons["go-out"].waitForExistence(timeout: 10))
         app.buttons["go-out"].tap()                                                         // the first tap
         XCTAssertTrue(app.buttons["town-track"].waitForExistence(timeout: 10))
