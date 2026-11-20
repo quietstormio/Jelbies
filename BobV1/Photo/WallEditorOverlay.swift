@@ -113,6 +113,11 @@ struct WallEditorOverlay: View {
 
     /// A dashed outline round the picture and, in picture mode, the corner handle (the resize grip).
     private func outlineView(size: CGSize) -> some View {
+        // redrawn every frame while the editor is up: the camera rises (and later falls) under it, so the picture moves on the screen without its own state changing
+        TimelineView(.animation) { _ in outlineCanvas(size: size) }
+    }
+
+    private func outlineCanvas(size: CGSize) -> some View {
         _ = session.draft; _ = session.photoMode          // (read here, in the body, so the outline follows the picture)
         return Canvas { ctx, _ in
             guard let r = outline(size) else { return }

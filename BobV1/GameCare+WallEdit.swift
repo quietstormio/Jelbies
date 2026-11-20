@@ -177,6 +177,10 @@ extension GameCare {
                 return
             }
             store.hangWallPicture(p)
+            // on a phone on its side the circled spot is off the top of the screen: say where the picture is, so a missing picture does not look like a mistake
+            if let top = GameCamera.wallVisibleTop(aspect: GameCamera.aspect), WallZone.visibleShare(p, visibleTop: top) < WallZone.minVisibleShare {
+                GameMessageCenter.shared.post("Hung! Turn the phone upright to see it", icon: "photo.artframe", identifier: "wall-edit-upright")
+            }
         }
         endWallEdit()
     }
