@@ -64,5 +64,5 @@ nonisolated enum WinTuning {
     static let armOut: Float = v("WinArmOut", 0.17)
     /// Apex of a bounce (u; the plain joy is 0.12) and the landing squash.
     static let apex: Float = v("WinApex", 0.23)
-    static let landDepth: Float = v("WinLandDepth", 0.24)
+    static let landDepth: Float = v("WinLandDepth", 0.20)
 }
