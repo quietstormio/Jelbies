@@ -108,7 +108,7 @@ struct ContactStance: Sendable {
         .groupHug: .holding(from: 2, walk0: false, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
         .circleDance: .holding(from: 2, walk0: false, features: true),
         // proximity
-        .twirl: .proximity(from: 1), .hopAlong: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: hopGap), Step(from: 2, target: nil)], features: true),          // (pair-distinct-r1: a body apart, then a line of hops) .littleRace: .proximity(), .leapfrog: .proximity(features: true),
+        .twirl: .proximity(from: 1), .hopAlong: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: hopGap, onlySeparate: true, walks: true), Step(from: 2, target: nil)], features: true),          // (pair-distinct-r1: a body apart, then a line of hops) .littleRace: .proximity(), .leapfrog: .proximity(features: true),
         .peekaboo: .proximity(features: true), .mirrorDance: .proximity(from: 1), .danceOff: .proximity(from: 1), .shyWave: .proximity(from: 3),
         .groupCheer: .proximity(from: 1), .conga: .proximity(), .congaLine: .proximity(features: true), .ringDance: .proximity(features: true),
         .follow: .proximity(), .line: .proximity(), .dance: .proximity(from: 1), .greet: .proximity(), .keepAway: .proximity(),
@@ -117,7 +117,7 @@ struct ContactStance: Sendable {
         .look: .proximity(), .zoomies: .proximity(), .pass: .proximity(),
         // (pair-distinct-r1, BlobSocial+Pair2.swift: clear gaps, no contact)
         .orbit: .proximity(), .upDown: ContactStance(facing: .each, cls: .proximity, steps: [Step(from: 0, target: 0.25), Step(from: 2, target: 0.15, onlySeparate: true)], features: true),
-        .jumpTurns: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: hopGap), Step(from: 2, target: nil)], features: true),
+        .jumpTurns: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: hopGap, onlySeparate: true, walks: true), Step(from: 2, target: nil)], features: true),
         .spinTogether: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: 0.45), Step(from: 2, target: near, onlySeparate: true)], features: true),
     ]
     static func entry(_ k: SocialKind) -> ContactStance? { table[k] }
