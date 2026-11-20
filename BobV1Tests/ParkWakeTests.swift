@@ -77,6 +77,52 @@ final class ParkWakeTests: XCTestCase {
     func testTwoJelmikoOneAsleepAtThePark() { daytimePark(count: 2, sleepers: [1]) }
     func testSingleJelmikoAsleepAtThePark() { daytimePark(count: 1, sleepers: [0]) }
 
+    // MARK: a sleeper who stays home is left alone
+
+    /// What a sleeping stay-home looks like: still asleep, never asked to wake, nothing reset.
+    private func untouched(_ r: Room, _ id: Int, _ what: String) {
+        let b = r.actors[id].brain!
+        XCTAssertTrue(b.isSleeping, "\(what): \(id) is still asleep")
+        XCTAssertFalse(b.sleep.shortUp, "\(what): \(id) was never asked to wake")
+        XCTAssertFalse(b.sleep.wakeAsked, "\(what): \(id) was never asked to wake")
+        XCTAssertEqual(b.idleState.kind, .sleep, "\(what): \(id) is in the same sleep")
+    }
+
+    /// 1 of 3 to the Spa, the traveller awake or asleep, with a sleeping stay-home: the stay-home keeps sleeping and the trip starts.
+    private func spa(goingAsleep: Bool) {
+        let r = room(3), c = r.care
+        c.groomBook.fixedDt = 1 / 60
+        c.bath.wallet.add(100 - c.bath.wallet.count, silent: true)
+        sleep(r, goingAsleep ? [0, 2] : [2])
+        XCTAssertNil(c.groomBlocker())
+        c.groom.openPicker(all: [0]); c.groom.picked = [0]
+        c.startGroom(.quick)
+        XCTAssertEqual(c.outing.waking, goingAsleep, "only a sleeping traveller is waited for")
+        var sawRun = false
+        run(r, 40) { if c.outing.running { sawRun = true }; return c.groom.inScene }
+        XCTAssertTrue(c.groom.active, "the Spa trip started")
+        XCTAssertTrue(sawRun, "the traveller ran out")
+        XCTAssertTrue(r.actors[0].brain?.isSleeping != true, "the traveller is awake")
+        untouched(r, 2, "spa")
+        run(r, 3); untouched(r, 2, "spa, later")
+    }
+    func testSpaOneOfThreeAwakeWithASleepingStayHome() { spa(goingAsleep: false) }
+    func testSpaOneOfThreeAsleepWithASleepingStayHome() { spa(goingAsleep: true) }
+
+    /// The park with a pick list of two: the sleeper who goes wakes and comes; the sleeper who stays keeps sleeping and does not hold the fade.
+    func testParkTwoOfThreeWithASleepingStayHome() {
+        let r = room(3), c = r.care
+        sleep(r, [1, 2])
+        c.requestPark(); c.park.picked = [0, 1]
+        c.startPark()
+        XCTAssertTrue(c.outing.waking)
+        run(r, 60) { c.park.phase == .playing }
+        XCTAssertEqual(c.park.phase, .playing, "the park loaded")
+        XCTAssertEqual(Set(c.parkBook.comers), [0, 1])
+        XCTAssertTrue(r.actors[1].brain?.isSleeping != true, "the traveller is awake")
+        untouched(r, 2, "park")
+    }
+
     /// The player's own Naptime a moment ago does not block the trip: the newer choice wins.
     func testNaptimeJustNowDoesNotBlockTheTrip() {
         let r = room(3), c = r.care

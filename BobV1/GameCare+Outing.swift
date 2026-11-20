@@ -36,6 +36,7 @@ final class OutingBook {
     /// A daytime trip was asked while somebody slept: he is being woken (the short get-up) and `wakeThen` starts the trip once everybody is upright (`GameCare.wakeForTrip`).
     var wakeThen: (() -> Void)?
     var wakeT: Float = 0
+    var wakeIDs: Set<Int> = []          // who is going (only they are woken, waited for and kept from dozing off; a sleeper who stays home is not touched)
     var waking: Bool { wakeThen != nil }
     nonisolated deinit {}
 }
@@ -52,20 +53,22 @@ extension GameCare {
     /// A trip that is not a competition (park, café, Jelly Spa) never refuses a daytime ask because somebody sleeps: every sleeper (and anybody just asked to nap) gets the SHORT wake
     /// (`fast`, not groggy: the quick get-up a scene change uses, never the slow staged morning wake; needs untouched) and `go` runs once all are upright. False = nobody slept, the caller carries on.
     /// Night is refused before this is reached (`cafeBlocker`), so this only ever runs by day. The player's own Naptime does not block it: the newer choice wins.
-    func wakeForTrip(then go: @escaping () -> Void) -> Bool {
+    /// `ids` = who is going. A Jelmiko who stays home keeps sleeping exactly where and as he is (no wake, no pause, no reset).
+    func wakeForTrip(_ ids: [Int], then go: @escaping () -> Void) -> Bool {
         let o = outing
-        let sleepers = raceBook.actors.filter { $0.brain?.isSleeping == true }.map(\.id)
-        for id in Set(sleepers).union(nightRest.wanted) { wakeSleeper(id, groggy: false, fast: true) }          // (also cancels a nap that was asked but not begun)
+        let going = Set(ids)
+        let sleepers = raceBook.actors.filter { going.contains($0.id) && $0.brain?.isSleeping == true }.map(\.id)
+        for id in Set(sleepers).union(nightRest.wanted.intersection(going)) { wakeSleeper(id, groggy: false, fast: true) }          // (also cancels a nap that was asked but not begun)
         guard !sleepers.isEmpty else { return false }
-        o.wakeThen = go; o.wakeT = 0
-        for a in raceBook.actors { a.brain?.sleepLocked = true }
+        o.wakeThen = go; o.wakeT = 0; o.wakeIDs = going
+        for a in raceBook.actors where going.contains(a.id) { a.brain?.sleepLocked = true }
         return true
     }
 
     private func tickTripWake(_ actors: [JellyActor], dt: Float) {
         let o = outing
         o.wakeT += dt
-        let sleeping = actors.filter { $0.brain?.isSleeping ?? false }
+        let sleeping = actors.filter { o.wakeIDs.contains($0.id) && ($0.brain?.isSleeping ?? false) }
         if o.wakeT > 1.5, o.wakeT.truncatingRemainder(dividingBy: 1) < dt { for a in sleeping { a.brain?.sleepWake(groggy: false, fast: true) } }
         if o.wakeT > 8 { for a in sleeping { if let b = a.brain { b.abortAll(a.sim, a.skinner); b.idleReset(a.skinner) } } }          // gave up waiting: stand him up (as the race does)
         if sleeping.isEmpty || o.wakeT > 8.5 {
@@ -102,7 +105,8 @@ extension GameCare {
     func tickOutExit(_ actors: [JellyActor], dt: Float) {
         let o = outing
         if o.waking { tickTripWake(actors, dt: dt) }
-        if o.waking || o.running { for a in actors { a.brain?.sleepLocked = true } }          // (nobody dozes off between the wake and the fade)
+        if o.waking { for a in actors where o.wakeIDs.contains(a.id) { a.brain?.sleepLocked = true } }
+        if o.running { for a in actors where o.runners[a.id] != nil { a.brain?.sleepLocked = true } }          // (nobody dozes off between the wake and the fade)
         if o.running {
             o.t += dt
             var allOut = true

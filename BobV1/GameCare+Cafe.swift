@@ -117,7 +117,7 @@ extension GameCare {
         }
         select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
-        if wakeForTrip(then: { [weak self] in self?.requestCafe() }) { return }          // (a sleeper gets the short wake first, then everybody runs out together)
+        if wakeForTrip(Array(jellies.indices), then: { [weak self] in self?.requestCafe() }) { return }          // (a sleeper gets the short wake first, then everybody runs out together)
         if outingGate(Array(jellies.indices), again: { [weak self] in self?.requestCafe() }) { return }          // everybody runs out of the room first (GameCare+Outing.swift)
         cafe.begin()
     }

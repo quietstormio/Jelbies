@@ -63,13 +63,13 @@ extension GameCare {
             if self.outingGate(who, again: go) { return }          // the chosen Jelbies run out of the room first (GameCare+Outing.swift)
             go()
         }
-        if wakeForTrip(then: start) { return }          // a sleeper gets the short wake first (park-wake-r1)
+        if wakeForTrip(who, then: start) { return }          // a sleeper gets the short wake first (park-wake-r1)
         start()
     }
 
     private var groomFadeBlocked: Bool {
         race.active || show.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active || park.active
-            || groomBook.actors.contains { $0.brain?.isSleeping == true }
+            || groomBook.actors.contains { groom.picked.contains($0.id) && $0.brain?.isSleeping == true }          // (a sleeper who stays home does not hold the fade)
     }
 
     // MARK: per fixed step

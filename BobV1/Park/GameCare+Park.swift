@@ -167,13 +167,13 @@ extension GameCare {
             if self.outingGate(who, again: { [weak self] in self?.park.resume(picked: who) }) { return }
             self.park.resume(picked: who)
         }
-        if wakeForTrip(then: go) { return }          // by day a sleeper never refuses the trip: the short wake, then everybody runs out together (GameCare+Outing.swift)
+        if wakeForTrip(who, then: go) { return }          // by day a sleeper never refuses the trip: the short wake, then everybody runs out together (GameCare+Outing.swift)
         go()
     }
 
     var parkFadeBlocked: Bool {
         race.active || show.active || volley.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active
-            || (park.place == .park && parkBook.roster.contains { $0.brain?.isSleeping == true })          // (Camp: a sleeping home Jelmiko just stays asleep, hidden)
+            || (park.place == .park && parkBook.roster.contains { park.picked.contains($0.id) && $0.brain?.isSleeping == true })          // (only one who is GOING blocks the fade; a sleeper who stays home, like Camp's, just stays asleep, hidden)
     }
 
     // MARK: per fixed step
