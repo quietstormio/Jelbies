@@ -24,7 +24,9 @@ struct ContactStance: Sendable {
     struct Step: Sendable { var from: Int; var target: Float?; var onlySeparate = false; var walks: Bool? = nil
         var retargets: Bool { walks ?? !onlySeparate } }
     /// How the pair stands once the stance is on (what the drive squares up to): face to face, or both facing the camera (side by side). The walk-up predicts the touch distance for THAT posture.
-    enum Facing: Sendable { case each, camera }
+    /// `vee` (pair-distinct-r1, the high five): side by side but each turned in toward the partner by `HighFiveTuning.turnIn` from the walk-up on, so the walk-up measures - and the clap keeps - the V's geometry.
+    enum Facing: Sendable { case each, camera, vee
+        var sideBySide: Bool { self != .each } }
     var facing: Facing = .each
     var cls: Class
     var steps: [Step]
@@ -88,7 +90,7 @@ struct ContactStance: Sendable {
         .sneak: .pressing(from: 1, press: 2, until: 3, anchor: .b, features: true, sound: .boop, volume: 0.9),
         .chestBump: .pressing(from: 1, press: 2, until: 3, sound: .squish, volume: 0.9),
         // high five (user rule 2): side by side, both arms are up from the first step (canonical pose) so the walk lands the hands together and the hands meet tip to tip (hand to hand, ready), the hold squeezes them to the press; phase 2 is the wind-up (arms up and back in, held at the stand-off), phase 3 the slap + hold, phase 4: the arms go down, they part.
-        .highFive: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.standFive, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.standFive, onlySeparate: true), Step(from: 3, target: hold, onlySeparate: true, walks: false), Step(from: 4, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
+        .highFive: ContactStance(facing: .vee, cls: .touching, steps: [Step(from: 0, target: HandReach.standFive, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.standFive, onlySeparate: true), Step(from: 3, target: hold, onlySeparate: true, walks: false), Step(from: 4, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
         .tag: .pressing(from: 1, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         .bellyBounce: .pressing(from: 1, press: 2, facing: .camera, until: 3, sound: .squish, volume: 0.9),
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
@@ -185,6 +187,7 @@ extension BlobBrain {
         switch f {
         case .each: mine = atan2f(-u.x, -u.y); his = atan2f(u.x, u.y)
         case .camera: mine = faceCameraYaw(); his = o.faceCameraYaw()
+        case .vee: mine = veeYaw(toward: o); his = o.veeYaw(toward: self)
         }
         let d1 = wrapAngle(mine - yaw), d2 = wrapAngle(his - o.yaw)
         guard let ea = ContactField.supportExt(steerID, rotXZ(-u, -d1)), let eb = ContactField.supportExt(o.steerID, rotXZ(u, -d2)) else { return nil }

@@ -82,6 +82,9 @@ extension BlobBrain {
         }
     }
 
+    /// The yaw of the high five's V: facing the camera, turned in toward `o` by `HighFiveTuning.turnIn` (ContactStance.Facing.vee).
+    func veeYaw(toward o: BlobBrain) -> Float { faceCameraYaw() + (rotXZ(o.position - position, -faceCameraYaw()).x >= 0 ? 1 : -1) * HighFiveTuning.turnIn }
+
     // MARK: starting
 
     func socialStartFriends(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
@@ -100,7 +103,7 @@ extension BlobBrain {
             guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: peerGap * 0.9) else { return false }
             let s = newSession(kind, with: o, duration: 0)
             s.goal = spot
-            o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
+            o.socialBook.hold = true; o.socialBook.faceYaw = o.veeYaw(toward: self)
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
         case .chestBump, .twirl:
             guard d > 0.5, d < 5.5 else { return false }
@@ -147,15 +150,16 @@ extension BlobBrain {
     }
 
     /// Same, side by side facing the room.
-    func openSideBySide(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, settle: Float) -> Bool {
+    func openSideBySide(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, settle: Float, facing: Float? = nil) -> Bool {
+        let fy = facing ?? faceCameraYaw()
         switch s.phase {
         case 0:
-            if !isA { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw(); return true }
-            if scriptIsNone { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw() }
+            if !isA { socialBook.hold = true; socialBook.faceYaw = fy; return true }
+            if scriptIsNone { socialBook.hold = true; socialBook.faceYaw = fy }
             _ = walkUpPhase(s, o, isA, faceBoth: false, near: 0.55)
             return true
         case 1:
-            socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
+            socialBook.hold = true; socialBook.faceYaw = fy
             if isA, s.phaseT > settle, !feet.active, !o.feet.active { s.setPhase(2); s.impacted = false }
             else if isA, s.phaseT > 3 { s.setPhase(2); s.impacted = false }
             return true
@@ -219,16 +223,14 @@ extension BlobBrain {
     /// both spring back with a second jiggle, the arms go down and they part. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown). (The old version leaned the bodies together and raised no arm: the hands hovered 55 cm from the partner.)
     private func driveHighFive(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         let reach = { (w: Float, el: Float) in self.socialBook.handWant = HandReach(side: self.handSide(toward: o), w: w, el: el, seek: false, partner: o.steerID) }
-        if openSideBySide(s, o, isA, settle: 0.7) {
+        if openSideBySide(s, o, isA, settle: 0.7, facing: veeYaw(toward: o)) {
             // the arms come up on the way in (the walk-up's touch distance then counts the hands: the last steps land the HANDS together, not the arm nubs)
             reach(1, HandReach.elFive)
             return
         }
         let t = s.phaseT
-        // (pair-distinct-r1) from the wind-up on both turn in toward each other (a V, not two flat fronts): the faces stay apart, the hands meet high in the middle
-        let inward: Float = rotXZ(o.position - position, -faceCameraYaw()).x >= 0 ? 1 : -1
-        let turn: Float = s.phase == 2 ? HighFiveTuning.turnIn * smooth01(t / 0.35) : (s.phase == 3 ? HighFiveTuning.turnIn : 0)
-        socialBook.hold = true; socialBook.faceYaw = faceCameraYaw() + inward * turn
+        // (pair-distinct-r1) both turn in toward each other from the walk-up on (a V, not two flat fronts; `ContactStance.Facing.vee` makes the walk-up measure and keep that geometry): the faces stay apart, the hands meet high in the middle
+        socialBook.hold = true; socialBook.faceYaw = s.phase <= 3 ? veeYaw(toward: o) : faceCameraYaw()
         let g = socialGentle
         switch s.phase {
         case 2:

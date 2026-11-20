@@ -171,7 +171,7 @@ extension BlobBrain {
         guard let s = social, let raw = (ContactStance.entry(s.kind).flatMap { touchRadiusFacing(p, along: u, $0.facing) } ?? touchRadius(p, along: u)) else { return nil }
         let key = steerID &* 4096 &+ p.steerID
         let sid = ObjectIdentifier(s)
-        let sideBySide = ContactStance.entry(s.kind)?.facing == .camera
+        let sideBySide = ContactStance.entry(s.kind)?.facing.sideBySide ?? false
         func planted(_ b: BlobBrain) -> Bool { !b.gait.isBusy && !b.flapHop.active && !b.airBothFeet && !b.feet.active }
         var e = ContactTouchMemory.store[key]
         if let x = e, x.session != sid || x.phase != s.phase || simd_dot(x.axis, u) < 0.906 || s.t + 0.001 < x.clock { e = nil }
@@ -199,7 +199,7 @@ extension BlobBrain {
     /// whose peer wall measures the partner against the walker's CURRENT walking outline and pushed every side-by-side destination ~6 cm further out (the walk stopped 6.4 cm apart). The spot is the touch spot by
     /// construction, so the partners are exempt for this one call, but ONLY side by side (face to face, boop / highFive walk-ups failed with it on).
     private func stanceFixed(_ p: SIMD2<Float>) -> SIMD2<Float> {
-        guard social.flatMap({ ContactStance.entry($0.kind)?.facing }) == .camera else { return fixed(p) }
+        guard social.flatMap({ ContactStance.entry($0.kind)?.facing })?.sideBySide == true else { return fixed(p) }
         stanceStepFree = true
         defer { stanceStepFree = false }
         return fixed(p)
@@ -218,7 +218,7 @@ extension BlobBrain {
     /// every walk alone: it must not be rewritten to the touch point.
     func contactStanceWalk(partner p: BlobBrain, gapWanted: Float, features: Bool = true, retarget: Bool = true) {
         guard let sim = contactSim else { return }
-        if retarget, case .walk = script { contactSideFinal = social.flatMap { ContactStance.entry($0.kind)?.facing } == .camera } else { contactSideFinal = false }          // (the last stride's brake: side by side it is slower, see ContactTuning.sideFinalStepRate; per brain)
+        if retarget, case .walk = script { contactSideFinal = social.flatMap { ContactStance.entry($0.kind)?.facing }?.sideBySide == true } else { contactSideFinal = false }          // (the last stride's brake: side by side it is slower, see ContactTuning.sideFinalStepRate; per brain)
         if ContactTrace.on {
             var w = "noWalk", tg = "-"
             if case .walk(let t, _) = script {
@@ -240,7 +240,7 @@ extension BlobBrain {
         if retarget, !locked, !ContactTouchMemory.shuffling.contains(steerID), case .walk(let t, let then) = script, simd_distance(t, p.position) < 3.2 {
             var u = t - p.position; let L = simd_length(u)
             ContactTouchMemory.exact.insert(steerID)          // (the stance owns this walk: planWalkStep lands its last step on the destination, within 1 cm)
-            if let st = social.flatMap({ ContactStance.entry($0.kind) }), st.facing == .camera { ContactTouchMemory.finalYaw[steerID] = faceCameraYaw() } else { ContactTouchMemory.finalYaw[steerID] = nil }          // (side by side: the walk turns into the pose during its last steps)
+            if let st = social.flatMap({ ContactStance.entry($0.kind) }), st.facing.sideBySide { ContactTouchMemory.finalYaw[steerID] = st.facing == .vee ? veeYaw(toward: p) : faceCameraYaw() } else { ContactTouchMemory.finalYaw[steerID] = nil }          // (side by side: the walk turns into the pose during its last steps)
             if L > 0.3 {
                 u /= L
                 var want: SIMD2<Float>, dist: Float, stable: Float?
@@ -279,7 +279,7 @@ extension BlobBrain {
                 }
             }
         }
-        if retarget, !locked, ContactTouchMemory.exact.contains(steerID), case .walk(let t, _) = script, simd_distance(position, t) < ((social.flatMap { ContactStance.entry($0.kind)?.facing } == .camera) ? ContactTuning.lockDistance : 0.8), ContactTouchMemory.rewrote.contains(steerID), ContactTouchMemory.finalYaw[steerID].map({ abs(wrapAngle($0 - yaw)) < 0.2 }) ?? true {          // (a body still turning into the pose has not got its final outline: its touch distance is read once it stands in it)
+        if retarget, !locked, ContactTouchMemory.exact.contains(steerID), case .walk(let t, _) = script, simd_distance(position, t) < ((social.flatMap { ContactStance.entry($0.kind)?.facing }?.sideBySide == true) ? ContactTuning.lockDistance : 0.8), ContactTouchMemory.rewrote.contains(steerID), ContactTouchMemory.finalYaw[steerID].map({ abs(wrapAngle($0 - yaw)) < 0.2 }) ?? true {          // (a body still turning into the pose has not got its final outline: its touch distance is read once it stands in it)
             ContactTouchMemory.locked[steerID] = (t, p.position)
         }
         if ContactTrace.on, socialBook.shuffleReq != 0 {
