@@ -18,6 +18,8 @@ final class ShowBook {
     var actors: [JellyActor] = []
     /// Actor ids on the stage: the player's first, then the rival bodies (rival index k -> performers[k + 1]).
     var performers: [Int] = []
+    /// First place came in: the player's body starts the win celebration as soon as the stage is set for the results (`tickShow`).
+    var winPending = false
     /// Actor ids that wait off stage.
     var parked: [Int] = []
     var homes: [Int: SIMD2<Float>] = [:]
@@ -201,7 +203,7 @@ extension GameCare {
             book.performers = book.actors.indices.contains(player) ? [player] : []          // the one roster body on the stage: the contestant
             book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko waits off stage (state saved, restored under the white on the way home)
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.danceRun = nil; book.flopT = nil; book.turned = []
-            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.enterDelay = nil
+            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.winPending = false; book.enterDelay = nil
             let spots = ShowStage.spots(bodies: book.performers.count)
             for (k, aid) in (book.performers + book.parked).enumerated() where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
@@ -470,7 +472,7 @@ extension GameCare {
             guard let b = a.brain else { continue }
             b.abortAll(a.sim, a.skinner)
             if k == 0 {
-                if place == 1 { b.winCheer = true }          // (first place: the jump for joy becomes the win celebration, BlobBrain+Win.swift)
+                if place == 1 { book.winPending = true }          // (first place: the win celebration, BlobBrain+Win.swift; started in tickShow once the Trick round's snap back to the podium spot has run, which cuts anything started this tick)
                 b.commandedIdle = .joy
                 if place == 1 { b.proudStrutCue() }          // (batch-2 emote: a chest-out strut when he is next free)
                 b.blushBump(hold: 3.5, peak: place == 1 ? 0.9 : 0.7)
@@ -507,6 +509,13 @@ extension GameCare {
         // the Trick round's stage: the rivals to their rest spots when it begins, back to the row when it is over
         let inTrick = show.round == .trick || (show.round == .results && show.trickStage != .pick)
         if inTrick != book.trickSet, show.wipe == 0 { showSetTrick(inTrick) }
+        if book.winPending, show.wipe == 0, !book.trickSet, let aid = book.performers.first, actors.indices.contains(aid), let b = actors[aid].brain {          // (first place: after the snap, so nothing cuts it; a tap on Done / Again cuts it with the rest of the stage)
+            book.winPending = false
+            b.abortAll(actors[aid].sim, actors[aid].skinner)
+            b.commandedIdle = nil
+            b.winCheer = true
+            b.commandedIdle = .joy
+        }
         if let d = book.enterDelay {          // the walk-on: the entrants set off from the wing a moment after they were placed there
             if d - dt <= 0 {
                 book.enterDelay = nil
