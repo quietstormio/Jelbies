@@ -462,6 +462,7 @@ final class Ears {
                 self.pipeline = box.pipe
                 self.usesClassifier = box.pipe.usesClassifier
                 self.state = .listening
+                MicTrace.record("earsStart", "")
                 self.observe(box.engine)
                 self.note("listening (\(box.pipe.usesClassifier ? "classifier + dsp" : "dsp only"), \(Int(box.pipe.sampleRate)) Hz)")
             } catch {
@@ -487,6 +488,7 @@ final class Ears {
         for o in observers { NotificationCenter.default.removeObserver(o) }
         observers.removeAll()
         guard let e = engine else { return }
+        MicTrace.record("earsStop", offMain ? "offMain" : "main")
         engine = nil
         pipeline = nil
         if offMain {

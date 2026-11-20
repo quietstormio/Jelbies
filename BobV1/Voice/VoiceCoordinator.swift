@@ -184,6 +184,9 @@ final class VoiceCoordinator {
     @ObservationIgnored private weak var brainRef: BlobBrain?
     @ObservationIgnored private var startTask: Task<Void, Never>?
     @ObservationIgnored var stopping = false
+    /// The timing trace of the newest press and of the one whose reaction is being decided (nil unless `-VoiceLog` / `-MicBench`; Voice/MicTrace.swift).
+    @ObservationIgnored private(set) var trace: PressTrace?
+    @ObservationIgnored private var decisionTrace: PressTrace?
     /// Capture / test aid: this text is "heard" on release instead of the input's.
     @ObservationIgnored var debugTranscript: String?
 
@@ -308,6 +311,7 @@ final class VoiceCoordinator {
         if micUnusable { showNotice(); return false }
         if needsExplainer { notice = .explainer; return false }
         downAt = CACurrentMediaTime()
+        trace = MicTrace.begin(t0: downAt)
         session = nextSession()
         glowLatencyMs = nil; audioLatencyMs = nil
         micLive = false; micLiveMs = nil; liveWatchFired = false; liveWatch?.cancel()
@@ -315,7 +319,7 @@ final class VoiceCoordinator {
         input.warmUp()                                 // first: the session + engine bring-up is spawned off the main thread at touch-down
         Ears.shared.voicePause()                       // Ears lets go of the input before the voice engine takes the session
         intentModel?.prewarm()                         // the first request must not pay the model load
-        guard mode.begin() else { return false }       // phase = .listening: the glow / pressed state read it on the very next view update
+        guard mode.begin() else { MicTrace.discard(trace); trace = nil; return false }       // phase = .listening: the glow / pressed state read it on the very next view update
         Ears.shared.holdBegan()                        // Music Ears (when owned) listens for music on this same mic while the button is held
         if Self.logging { NSLog("[voice] begin() ran synchronously in %d ms (glow state set)", Int((CACurrentMediaTime() - downAt) * 1000)) }
         let liveSession = session
@@ -366,6 +370,7 @@ final class VoiceCoordinator {
                 if self.micUnusable { self.showNotice() }
             }
         }
+        trace?.mark(.begin)
         return true
     }
 
@@ -375,6 +380,7 @@ final class VoiceCoordinator {
         let ms = Int((CACurrentMediaTime() - downAt) * 1000)
         micLive = true
         micLiveMs = ms
+        trace?.mark(.live)
         liveWatch?.cancel()
         if Self.logging {
             let skipped = (input as? DictationSpeechInput)?.lastPutBackSkipped ?? false
@@ -395,6 +401,9 @@ final class VoiceCoordinator {
     /// Release (button up / finger lifted). A hold under 0.25 s is a cancel; otherwise the transcript is collected and `hear` runs.
     func release() {
         guard mode.isListening else { return }
+        let tr = trace
+        MicTrace.released(tr)
+        decisionTrace = tr
         Ears.shared.holdEnded()                        // released: Music Ears stops listening, a dance tails off
         if Self.logging {
             NSLog("[voice] level range min %.3f max %.3f over %d updates (off-main %d)", levelCount > 0 ? levelMin : -1, levelMax, levelCount, offMain)
@@ -403,6 +412,7 @@ final class VoiceCoordinator {
         // The glow / pressed state end on THIS call: the transcript (analyzer finalise) can take a second, the UI never waits for it.
         let long = mode.endHold()
         liveWatch?.cancel(); micLive = false          // (after endHold: its close tick reads `micLive`)
+        tr?.mark(.listenOff)
         if !long {
             Task { [input] in await st?.value; await input.abort() }
             return
@@ -412,10 +422,12 @@ final class VoiceCoordinator {
             await st?.value
             guard let self else { return }
             let text = await self.input.stop()
+            tr?.mark(.transcript)
             self.stopping = false
             let said = self.debugTranscript ?? text
             self.debugTranscript = nil
             self.hear(said)
+            tr?.mark(.heard)
         }
     }
 
@@ -471,7 +483,7 @@ final class VoiceCoordinator {
         defer { mode.finish() }
         guard let care else { return }
         // a meal / tray owns him: commands are ignored and nothing is learned
-        if care.trayOut { enqueue(.ignore, nil); return }
+        if care.trayOut { decisionTrace?.mark(.reaction); enqueue(.ignore, nil); return }
         #if DEBUG          // what the player said never reaches the system log in a shipped build
         if Self.logging { NSLog("[voice] process transcript=\"%@\" tokens=%@", transcript, VoiceMatcher.tokens(transcript).joined(separator: ",")) }
         #endif
@@ -480,7 +492,7 @@ final class VoiceCoordinator {
         heard = VoiceHeard(id: heardSeq, text: trimmed.isEmpty ? "\u{2026}" : "\u{201C}\(trimmed)\u{201D}", born: clock())
         GameMessageCenter.shared.post(heard?.text ?? "", priority: .chatty, identifier: "voice-heard", announce: false)
         if !trimmed.isEmpty { A11yEvents.say("\(subjectName) heard \(trimmed)", .low) }          // a11y: the heard pill is transient
-        if roomCommand(transcript) { Ears.shared.commandHeard(); return }           // a learned word in the room: every Jelbie who knows it, or the named / highlighted one
+        if roomCommand(transcript) { decisionTrace?.mark(.reaction); Ears.shared.commandHeard(); return }           // a learned word in the room: every Jelbie who knows it, or the named / highlighted one
         let t0 = CACurrentMediaTime()
         let who = subject(for: transcript)
         let bk = book(for: who); lastBook = bk
@@ -519,6 +531,7 @@ final class VoiceCoordinator {
 
     private func recordParse(_ path: String, _ t0: Double, _ transcript: String) {
         let ms = Int((CACurrentMediaTime() - t0) * 1000)
+        decisionTrace?.mark(.reaction)          // (the real decision point: the router / model paths answer here, later than `heard`)
         lastParse = (path, ms)
         #if DEBUG
         if Self.logging { NSLog("VOICELOG parse path=%@ ms=%d text=\"%@\"", path, ms, transcript) }

@@ -466,12 +466,15 @@ final class DictationSpeechInput: SpeechInput {
         })
         if liveHandler != nil { pipe.arm() }
         sessionActive = true
+        let tr = MicTrace.recording ? MicTrace.latest : nil
+        tr?.mark(.sessionAsked)
         let task = Task.detached { () -> EngineBox in
-            try Self.activateSessionOffMain()
+            try Self.activateSessionOffMain(trace: tr)
             let engine = AVAudioEngine()
             try Self.installTap(engine: engine, pipe: pipe)
             engine.prepare()
             try engine.start()
+            tr?.mark(.engineUp)
             return EngineBox(engine)
         }
         return Launch(pipe: pipe, task: task)
@@ -507,6 +510,7 @@ final class DictationSpeechInput: SpeechInput {
         coolTask?.cancel(); coolTask = nil
         engine?.inputNode.removeTap(onBus: 0)
         engine?.stop()
+        if MicTrace.recording { MicTrace.latest?.mark(.engineStopped) }
         engine = nil
         pipe?.finish()
         pipe = nil
@@ -518,6 +522,8 @@ final class DictationSpeechInput: SpeechInput {
 
     func start(contextualWords: [String]) async throws {
         guard !isRunning, !starting else { throw SpeechInputError.alreadyRunning }
+        let tr = MicTrace.recording ? MicTrace.latest : nil
+        tr?.mark(.startEntered)
         starting = true
         defer { starting = false }
         coolTask?.cancel(); coolTask = nil
@@ -532,8 +538,10 @@ final class DictationSpeechInput: SpeechInput {
             throw SpeechInputError.noFormat
         }
 
+        tr?.mark(.engineReady)
         let transcriber = Self.makeTranscriber(locale)
         let analyzer = SpeechAnalyzer(modules: [transcriber])
+        tr?.mark(.analyzerBuilt)
         let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
         let started = CACurrentMediaTime()
         collector = Task {
@@ -541,6 +549,7 @@ final class DictationSpeechInput: SpeechInput {
             do {
                 for try await r in transcriber.results {
                     let text = String(r.text.characters)
+                    tr?.mark(.volatile)          // (the time of the first result only; the text is never traced)
                     acc.add(text: text, isFinal: r.isFinal)
                     #if DEBUG
                     VoiceTranscriptLog.log("result \(r.isFinal ? "FINAL" : "volatile") at +\(Int((CACurrentMediaTime() - started) * 1000)) ms: \"\(text)\"")
@@ -557,10 +566,13 @@ final class DictationSpeechInput: SpeechInput {
         let flushed = pipe.attach(continuation)
         VoiceTranscriptLog.log("attached stream; \(flushed) buffers fed before analyzer start (\(pipe.buffersBefore) recorded before attach)")
         do {
+            tr?.mark(.contextBegin)
             let ctx = AnalysisContext()
             ctx.contextualStrings[.general] = Array(contextualWords.filter { !$0.isEmpty }.prefix(100))
             try? await analyzer.setContext(ctx)
+            tr?.mark(.contextDone)
             try await analyzer.start(inputSequence: stream)
+            tr?.mark(.analyzerStarted)
             VoiceTranscriptLog.log("analyzer started; \(pipe.buffersAfter) buffers fed since attach")
             self.analyzer = analyzer
             isRunning = true
@@ -603,18 +615,23 @@ final class DictationSpeechInput: SpeechInput {
         teardownEngine()                       // removes the tap, stops the engine, ends the stream
         VoiceTranscriptLog.log("stopped; buffers fed after attach \(p?.buffersAfter ?? -1), converter failures \(p?.convertFailures ?? -1)")
         if let a { try? await a.finalizeAndFinishThroughEndOfInput() }
+        if MicTrace.recording { MicTrace.latest?.mark(.finalized) }
         let text = await collector?.value ?? ""
         collector = nil
         return text
     }
 
-    nonisolated private static func activateSessionOffMain() throws {
+    nonisolated private static func activateSessionOffMain(trace: PressTrace? = nil) throws {
         try AudioSessionQueue.shared.sync {          // ordered after any hub put-back / Ears engine stop still queued from the last release
+            trace?.mark(.queueEntered)
             let s = AVAudioSession.sharedInstance()
+            if trace != nil { trace?.setCategoryBefore(s.category.rawValue) }
             let plan = SessionPolicy.plan(musicOn: true, otherAudioPlaying: false, micActive: true)
             try s.setCategory(plan.category, mode: .default, options: plan.options)
             try s.setAllowHapticsAndSystemSoundsDuringRecording(true)
+            trace?.mark(.categoryDone)          // (setCategory + the haptics flag)
             try s.setActive(true)
+            trace?.mark(.activeDone)
         }
         Task { @MainActor in AudioHub.shared.micSessionBegan() }       // the audio hub owns the session; it keeps its hands off while the mic is up
     }
