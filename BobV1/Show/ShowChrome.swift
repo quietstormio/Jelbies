@@ -19,6 +19,7 @@ struct ShowChrome: View {
         let _ = show.revision          // the rules live in the unobserved sim: every step of the show bumps this
         return ZStack {
             if show.onStage {
+                ShowSpotlightLayer(care: care)          // (under every piece of chrome: the light dims the stage, never the cards)
                 switch show.round {
                 case .look: LookRound(care: care)
                 case .dance: DanceRound(care: care)
