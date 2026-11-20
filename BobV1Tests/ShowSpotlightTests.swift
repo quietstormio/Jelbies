@@ -5,6 +5,7 @@
 //
 
 import XCTest
+import SwiftUI
 import simd
 @testable import BobV1
 
@@ -73,17 +74,22 @@ final class ShowSpotlightTests: XCTestCase {
         var gapViolations = 0, windowTargetMisses = 0, maxFadeAfter = 0
         var diag: [String] = []
         var prevStage = care.show.trickStage, prevRival = care.show.rivalStep
+        var later: [(frame: Int, run: () -> Void)] = []
         func put(_ a: JellyActor, _ p: SIMD2<Float>) { a.sim.teleport(toXZ: p); a.brain?.currentPose(a.sim) }
+        var beatLit = 0, lateTargets = 0
         for frame in 0..<(400 * 60) {
             step(room)
-            // (the headless room's bodies do not walk by themselves: the player's step aside / back is done here, at the moment the real walk ends)
+            // (the headless room's bodies do not walk by themselves: the walks are done here, at the moment the real walk would end; his step off waits half a second, the score beat)
             let sh0 = care.show
-            if sh0.trickStage == .rivals && sh0.rivalStep == .playerAway && !(prevStage == .rivals && prevRival == .playerAway) { put(room.actors[0], ShowStage.playerAside) }
+            let enteredRival = sh0.trickStage == .rivals && (sh0.rivalStep != prevRival || prevStage != .rivals)
+            if enteredRival && sh0.rivalStep == .playerAway { later.append((frame + 30, { put(room.actors[0], ShowStage.playerAside) })) }
             if sh0.trickStage != .rivals && prevStage == .rivals { put(room.actors[0], ShowStage.playerSpot) }
-            if sh0.trickStage == .rivals, sh0.rivalStep != prevRival || prevStage != .rivals, let i = sh0.rivalTurn, let id = book.rivalBody[i], let a = book.extra.first(where: { $0.id == id }) {
-                if sh0.rivalStep == .perform { put(a, ShowStage.playerSpot) }          // (she has walked to the middle)
-                if sh0.rivalStep == .walkOut { put(a, ShowStage.rivalRest(i, sideways: GameCamera.aspect > 1)) }          // (and back to her mark)
+            if enteredRival, let i = sh0.rivalTurn, let id = book.rivalBody[i], let a = book.extra.first(where: { $0.id == id }) {
+                if sh0.rivalStep == .walkIn { later.append((frame + 75, { put(a, ShowStage.playerSpot) })) }          // (she walks up: 1.25 s)
+                if sh0.rivalStep == .walkOut { later.append((frame + 30, { put(a, ShowStage.rivalRest(i, sideways: GameCamera.aspect > 1)) })) }          // (her score beat, then back to her mark)
             }
+            for l in later where l.frame == frame { l.run() }
+            later.removeAll { $0.frame <= frame }
             prevStage = sh0.trickStage; prevRival = sh0.rivalStep
             if care.show.round == .results && care.show.trickStage == .pick && care.show.hasResults { break }
             let st = book.spot
@@ -108,16 +114,24 @@ final class ShowSpotlightTests: XCTestCase {
                 case .rivals: if sh.rivalStep == .perform { performer = sh.rivalTurn.flatMap { book.rivalBody[$0] } }
                 }
             }
+            // the score beat: she (he) still stands on the middle while stepping away is not yet under way
+            var beatActor: JellyActor?
+            if sh.trickStage == .rivals {
+                if sh.rivalStep == .walkOut, let i = sh.rivalTurn, let id = book.rivalBody[i] { beatActor = book.extra.first { $0.id == id } }
+                if sh.rivalStep == .playerAway { beatActor = room.actors[0] }
+            }
+            let beatNear: Bool = beatActor.map { let c = $0.sim.centroid(); return simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < 0.46 } ?? false
             if let p = performer {
                 sinceWindow = 0; winAge += 1
-                if st.target != p && winAge > 3 { windowTargetMisses += 1 }          // (the first frames: the body is still stepping into the middle)
+                if st.target != p && winAge > 30 { windowTargetMisses += 1 }          // (the first frames: the body is still turning to the camera after the walk)
             } else {
                 winAge = 0
                 sinceWindow += 1
-                if care.showSpotTarget != nil { gapViolations += 1; if diag.count < 6 { diag.append("f\(frame) target \(String(describing: st.target)) in gap: \(sh.trickStage) \(sh.rivalStep)") } }          // (the target is off in every gap)
-                if st.level > 0 { maxFadeAfter = max(maxFadeAfter, sinceWindow) }
-                if sinceWindow > 27 && st.level > 0 { gapViolations += 1; if diag.count < 6 { diag.append("f\(frame) level \(st.level) shown \(String(describing: st.shown)) \(sh.trickStage) \(sh.rivalStep) since \(sinceWindow)") } }          // (0.4 s fade out and then fully off)
+                if let ba = beatActor, beatNear, st.target != nil { if st.target == ba.id { beatLit += 1 } else { gapViolations += 1 } }          // (lit through the score beat: his own light)
+                else if care.showSpotTarget != nil { gapViolations += 1; if diag.count < 6 { diag.append("f\(frame) target \(String(describing: st.target)) in gap: \(sh.trickStage) \(sh.rivalStep)") } }          // (off while anyone walks / the middle is empty)
             }
+            if st.target == nil && st.level > 0 { lateTargets += 1 } else { lateTargets = 0 }
+            if lateTargets > 27 { gapViolations += 1; lateTargets = 0; if diag.count < 6 { diag.append("f\(frame) fade-out did not finish: level \(st.level) \(sh.trickStage) \(sh.rivalStep)") } }
             guard let p = performer, st.level >= 0.99, let litActor = care.showSpotActor, litActor.id == p else { continue }
             let key = "\(sh.trickTurnNow ?? -1)-\(p)"
             lit12.insert(key); litFrames[key, default: 0] += 1
@@ -141,6 +155,7 @@ final class ShowSpotlightTests: XCTestCase {
         XCTAssertTrue(offBetween, "no light in Look or Results")
         XCTAssertEqual(lit12.count, 12, "every one of the 12 turns (3 turns x the player and 3 entrants) was lit at full strength: \(lit12.sorted())")
         for (k, n) in litFrames { XCTAssertGreaterThan(n, 20, "turn \(k) was lit at full strength for a while") }
+        XCTAssertGreaterThan(beatLit, 30, "the light stays on through the score beat (entrants and the player)")
         XCTAssertEqual(windowTargetMisses, 0, "the light's target is the performer for his whole window")
         XCTAssertEqual(gapViolations, 0, "the light is off in every gap between turns (fade out within 0.4 s): \(diag)")
         XCTAssertLessThan(maxDist, 0.6, "the lit performer stays within 0.6 of the middle of the stage")
@@ -151,4 +166,52 @@ final class ShowSpotlightTests: XCTestCase {
 
     func testWholeTrickRoundPortrait() { wholeRound(size: CGSize(width: 440, height: 956)) }
     func testWholeTrickRoundLandscape() { wholeRound(size: CGSize(width: 956, height: 440)) }
+
+    // MARK: the picture of the light, rendered on a clear background
+
+    /// RGBA (premultiplied) pixels of the painter's output on a transparent canvas.
+    private func render(level: Double, scale: Double = 1, size: CGSize = CGSize(width: 200, height: 400)) -> (w: Int, h: Int, px: [UInt8])? {
+        let sh = ShowSpotlightShape(centre: CGPoint(x: 100, y: 150), halfW: 30, halfH: 40, floor: CGPoint(x: 100, y: 200))
+        let view = Canvas { ctx, sz in ShowSpotlightPainter.paint(&ctx, size: sz, shape: sh, level: level, scale: scale) }.frame(width: size.width, height: size.height)
+        let r = ImageRenderer(content: view); r.scale = 1
+        guard let cg = r.cgImage else { return nil }
+        let w = cg.width, h = cg.height
+        var px = [UInt8](repeating: 0, count: w * h * 4)
+        guard let c = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        c.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return (w, h, px)
+    }
+    private func alpha(_ i: (w: Int, h: Int, px: [UInt8]), _ x: Int, _ y: Int) -> Int { Int(i.px[(y * i.w + x) * 4 + 3]) }
+
+    /// With the light off the layer draws NOTHING (every pixel transparent), so the picture under it is the old build's picture exactly; fully on, the dim is 40% outside the hole and 0 over the body.
+    func testOffDrawsNothingAndOnDimsOutsideTheHole() throws {
+        let off = try XCTUnwrap(render(level: 0))
+        XCTAssertEqual(off.px.filter { $0 != 0 }.count, 0, "level 0: not one pixel is touched")
+        let tiny = try XCTUnwrap(render(level: 0.0005))
+        XCTAssertEqual(tiny.px.filter { $0 != 0 }.count, 0, "an invisible level draws nothing either")
+        let on = try XCTUnwrap(render(level: 1))
+        let corner = alpha(on, 4, 396)          // far from the body: the dim alone (0.40 of 255)
+        XCTAssertEqual(Double(corner), 0.40 * 255, accuracy: 4, "dim strength outside the light")
+        XCTAssertEqual(alpha(on, 100, 150), 0, "over the middle of his body: clear")
+        XCTAssertEqual(alpha(on, 100 + 28, 150), 0, "over the edge of his body: clear")
+        XCTAssertEqual(alpha(on, 100, 150 + 38), 0, "over his feet end of the body: clear")
+        let dance = try XCTUnwrap(render(level: 1, scale: ShowSpotlightShape.danceScale))
+        XCTAssertEqual(Double(alpha(dance, 4, 396)), 0.40 * 0.75 * 255, accuracy: 4, "the dance light is gentler")
+        // the half level (mid fade) is half the dim
+        let half = try XCTUnwrap(render(level: 0.5))
+        XCTAssertEqual(Double(alpha(half, 4, 396)), 0.40 * 0.5 * 255, accuracy: 4)
+    }
+
+    /// The light layer is a clear view while the light is fully off (no TimelineView, no frames): `isOn` is the one test the view makes.
+    func testLayerOnlyDrawsWhileTheLightShowsOrFades() {
+        var s = ShowSpotlightState()
+        XCTAssertFalse(s.isOn)
+        s.step(target: 1, dt: 1 / 60); XCTAssertTrue(s.isOn)
+        for _ in 0..<60 { s.step(target: 1, dt: 1 / 60) }
+        XCTAssertTrue(s.isOn)
+        for _ in 0..<12 { s.step(target: nil, dt: 1 / 60) }
+        XCTAssertTrue(s.isOn, "fading out: still drawn")
+        for _ in 0..<30 { s.step(target: nil, dt: 1 / 60) }
+        XCTAssertFalse(s.isOn, "fade over: clear again")
+    }
 }
