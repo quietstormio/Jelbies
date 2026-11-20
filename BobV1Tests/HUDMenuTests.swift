@@ -26,13 +26,37 @@ final class HUDMenuTests: XCTestCase {
         XCTAssertEqual(BagSheet.BagTab.rooms.rawValue, "Rooms")
         let care = care3()
         XCTAssertTrue(care.store.ownsRoom(.home), "the home room is always in the Bag's Rooms")
-        XCTAssertEqual(HUDMenu.items(.group).count, 6)          // (the paw's menu is unchanged; Go out is a rail button that opens the Town)
+        XCTAssertEqual(HUDMenu.items(.group).count, 5)          // (Decor left the paw menu 2026-11-19: owned furniture is placed from the suitcase Bag; Go out is a rail button that opens the Town)
+    }
+
+    /// 2026-11-19: the paw menu lost its Decor button. Owned furniture is still placed and arranged from the suitcase Bag.
+    func testFurnitureStillPlacedAndArrangedFromTheBagWithoutADecorButton() throws {
+        let care = care3()
+        let book = care.store
+        XCTAssertFalse(HUDMenu.items(.group).map(\.rawValue).contains("hud-decor"))
+        let items = StoreCatalog.decorItems(.furniture)
+        let piece = try XCTUnwrap(items.first, "the catalog still has furniture")
+        XCTAssertFalse(BagSheet.visibleTabs(book: book).contains(.furniture), "no furniture owned: no tab")
+        book.grant(piece.id)
+        XCTAssertTrue(BagSheet.visibleTabs(book: book).contains(.furniture), "an owned piece brings the Furniture tab")
+        XCTAssertTrue(book.canPlace(piece), "an owned, unplaced piece offers Place")
+        XCTAssertFalse(BagSheet.offersArrange(tab: .furniture, book: book), "nothing placed yet: no Arrange button")
+        XCTAssertNotNil(care.placeDecor(piece.id), "Place puts it in the room")
+        XCTAssertTrue(BagSheet.offersArrange(tab: .furniture, book: book), "a placed piece: the Furniture tab offers Arrange the room")
+        XCTAssertTrue(BagSheet.offersArrange(tab: .toys, book: book))
+        XCTAssertFalse(BagSheet.offersArrange(tab: .food, book: book))
+        care.beginArrange(); XCTAssertTrue(care.arranging)
+        care.arranging = false
+        let uid = try XCTUnwrap(book.placedDecor.first?.uid)
+        care.putAwayDecor(uid)
+        XCTAssertTrue(book.placedDecor.isEmpty, "Put away takes it back to the Bag")
+        XCTAssertTrue(book.canPlace(piece))
     }
 
     func testGroupModeWhenNothingHighlighted() {
         let care = care3()
         XCTAssertEqual(HUDMenu.mode(care), .group)
-        XCTAssertEqual(HUDMenu.items(.group), [.feed, .drink, .play, .decor, .bedtime, .callAll])
+        XCTAssertEqual(HUDMenu.items(.group), [.feed, .drink, .play, .bedtime, .callAll])
     }
 
     func testOneJelbieCanBeHighlightedForTheIndividualMenu() {
@@ -117,7 +141,6 @@ final class HUDMenuTests: XCTestCase {
         let care = care3()
         XCTAssertEqual(HUDMenu.perform(.dress, .individual(2), care: care), .bag(.wear, who: 2))
         XCTAssertEqual(HUDMenu.perform(.play, .group, care: care), .picker(.toy))          // (2026-11-02: Play opens the toy picker)
-        XCTAssertEqual(HUDMenu.perform(.decor, .group, care: care), .bag(.furniture, who: 0))
         XCTAssertEqual(HUDMenu.perform(.compete, .individual(2), care: care), .competeChips)
         XCTAssertEqual(HUDMenu.perform(.tricks, .individual(2), care: care), .trickChips)
         XCTAssertEqual(HUDMenu.compete(.track, id: 2), .town(.track, who: 2))

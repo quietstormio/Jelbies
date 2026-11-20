@@ -2,7 +2,7 @@
 //  MenuCloseWatchUITests.swift
 //  Not a regression test: drives the care menu through open / close-by-heart / close-by-outside-tap / close-by-row-tap while the host records the
 //  simulator screen (xcrun simctl io <udid> recordVideo). Env-gated: MENUCLOSE_ORIENT (TEST_RUNNER_MENUCLOSE_ORIENT) = portrait | landscape;
-//  MENUCLOSE_ROW = the row to tap in the last cycle (default hud-decor); MENUCLOSE_MARK = a file written when the sequence starts (MARK.done when it ends: the host stops the recording there).
+//  MENUCLOSE_ROW = the row to tap in the last cycle (default hud-bedtime); MENUCLOSE_MARK = a file written when the sequence starts (MARK.done when it ends: the host stops the recording there).
 //  Pass -HUDHighlight n in the launch arguments of the run to watch the individual menu (otherwise the group menu).
 //
 
@@ -44,7 +44,7 @@ final class MenuCloseWatchUITests: XCTestCase {
         mark("qopen"); menu.tap(); wait(2); mark("qclose"); menu.tap(); mark("qreopen"); menu.tap(); wait(3); mark("qfinal"); menu.tap(); wait()
         // 4: open, close by tapping a row
         mark("open3"); menu.tap(); wait()
-        let row = app.buttons[env["MENUCLOSE_ROW"] ?? "hud-decor"]
+        let row = app.buttons[env["MENUCLOSE_ROW"] ?? "hud-bedtime"]
         if row.waitForExistence(timeout: 3) { mark("close_row"); row.tap() }
         wait(4)
         if let mark = env["MENUCLOSE_MARK"] { try? "done".write(toFile: mark + ".done", atomically: true, encoding: .utf8) }

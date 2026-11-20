@@ -58,7 +58,7 @@ final class TipCardUITests: XCTestCase {
 
     /// On an iPhone no card shows in landscape (nothing written, it waits); turned back to portrait the card shows in its normal place.
     func testLandscapeShowsNoCardAndPortraitThenShowsIt() {
-        let cases: [(id: String, args: [String])] = [("shop", ["-StoreOpen", "shop"]), ("spring", []), ("town", ["-StoreOpen", "town"]), ("dress", []), ("decor", []), ("powerup", [])]
+        let cases: [(id: String, args: [String])] = [("shop", ["-StoreOpen", "shop"]), ("spring", []), ("town", ["-StoreOpen", "town"]), ("dress", []), ("powerup", [])]
         for c in cases {
             XCUIDevice.shared.orientation = .landscapeLeft
             let app = launch(["-TipShow", c.id] + c.args)

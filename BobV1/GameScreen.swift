@@ -290,7 +290,7 @@ struct GameScreen: View {
             if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
 
             if town != nil {                     // Go out: Town / Shop / Track
-                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }, groom: { model.care.requestGroom() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
+                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }, groom: { model.care.requestGroom() }, feed: { withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }, drink: { withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink } }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
                     .transition(.opacity)
             }
 
@@ -540,7 +540,6 @@ struct GameScreen: View {
                 case "feed": menuOpen = true; openPicker = .food
                 case "play": menuOpen = true; openPicker = .toy
                 case "dress": bagTab = .wear; bagWho = 0; bagOpen = true
-                case "decor": bagTab = .toys; bagWho = 0; bagOpen = true
                 case "spring": StartFlow.shared.openAdoption()
                 case "clean": model.care.bath.grime.dirt = 0.5; model.care.clean()
                 default: break
@@ -1124,6 +1123,21 @@ struct GameScreen: View {
             for id in Soap.boughtIDs where model.care.store.count(id) < 2 { model.care.store.grant(id, 2 - model.care.store.count(id)) }
             model.care.bath.wallet.add(max(0, 200 - model.care.bath.wallet.count), silent: true)
         }
+        // capture aid: -CondSeed 1 gives every Jelmiko mid-level jars (Cute 52, Sweet 38, Sparkly 65, Cool 38, Sporty 66), an earlier Donut meal then a Sushi meal
+        // (the Sushi jars show the "+1" droplet), half Glow, and owns two Sushi and one Smoothie only (so the Cute / Sparkly cards list an owned food, Sweet / Sporty an owned drink, Cool only Shop items); -CondJar <style> opens that jar's card
+        if d.integer(forKey: "CondSeed") != 0 {
+            for _ in 0..<300 where LaunchGate.shared.visible { try? await Task.sleep(nanoseconds: 100_000_000) }
+            let care = model.care
+            care.store.grantStarterIfNeeded()
+            if care.store.count("sushi") < 2 { care.store.grant("sushi", 2 - care.store.count("sushi")) }
+            if care.store.count("smoothie") < 1 { care.store.grant("smoothie") }
+            for j in care.jellies {
+                for (k, v) in [(ConditionKey.cute, Float(0.42)), (.sweet, 0.30), (.sparkle, 0.55), (.cool, 0.38), (.sporty, 0.66)] { j.stats.setCondition(k, v) }
+                j.stats.nudge([.sweet: 0.08, .cute: 0.0], food: "Donut")
+                j.stats.nudge([.cute: 0.10, .sparkle: 0.10], food: "Sushi")
+                j.grime.sparkle = 0.5; j.grime.dirt = 0
+            }
+        }
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
         let care = model.care
         care.store.grantStarterIfNeeded()
@@ -1251,7 +1265,7 @@ struct CareMenu: View {
     private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
-        // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Decor, Bedtime come back when it folds).
+        // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Bedtime come back when it folds).
         let all = HUDMenu.visibleItems(mode, care: care)
         let items = tight && trickRow ? all.filter { $0 == .tricks }          // (a phone on its side: only the Tricks row and its chips fit)
             : tight && picker != nil ? all.filter { picker == .toy ? $0 == .play : ($0 == .feed || $0 == .drink) } : all
