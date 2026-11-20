@@ -18,14 +18,15 @@ final class HighFiveContactTests: XCTestCase {
             let a = d.lab.rigs[0], b = d.lab.rigs[1]
             XCTAssertTrue(a.brain.socialStart(.highFive, with: b.brain, a.sim))
             var hhFirst: Float?, hhMin: Float = .infinity, handInBody: Float = .infinity, eggGap: Float = .infinity, skinGapMin: Float = .infinity
-            var planted = true, p2Start: [SIMD2<Float>]?, drift: Float = 0, framesSinceImpact = -1
+            var planted = true, p2Start: [SIMD2<Float>]?, drift: Float = 0, evAtPhase3 = -1, touchSeen = false
             var windUpPeakGap: Float = 0, sawPhase2 = false, sawPhase3 = false
             for _ in 0..<(60 * 14) {
                 d.tick()
                 let ph = a.brain.social?.phase ?? 0
                 if ph >= 2 {
                     if p2Start == nil { p2Start = [a.brain.position, b.brain.position] }
-                    if a.brain.feet.active || b.brain.feet.active || a.brain.stepLive || b.brain.stepLive || a.brain.gait.isBusy || b.brain.gait.isBusy { planted = false }
+                    // (pair-distinct-r1: the V - each turns in 0.45 rad toward the partner at the start of the wind-up, a turn on the spot with a few steps; the soles are judged planted from the clap on)
+                    if ph >= 3, touchSeen, a.brain.feet.active || b.brain.feet.active || a.brain.stepLive || b.brain.stepLive || a.brain.gait.isBusy || b.brain.gait.isBusy { planted = false }
                     drift = max(drift, simd_distance(a.brain.position, p2Start![0]), simd_distance(b.brain.position, p2Start![1]))
                 }
                 if ph == 2 {          // the wind-up: the hands open up (the arms lift and the pole's reach shrinks)
@@ -34,10 +35,12 @@ final class HighFiveContactTests: XCTestCase {
                     let h = ContactPolishTests.handHandNow(d, n: 2)
                     if h < BruteForceContactMetric.farApart { windUpPeakGap = max(windUpPeakGap, h) }
                 }
-                if ph == 3 { sawPhase3 = true }
-                if ph == 3, a.brain.social?.impacted == true {
-                    framesSinceImpact += 1
-                    if framesSinceImpact <= 10 {          // (the impact frame and the next ten: the drive sets `impacted` on the touch gate's event, the closest approach is within a few ticks)
+                if ph == 3 { sawPhase3 = true; if evAtPhase3 < 0 { evAtPhase3 = a.brain.contactEvents + b.brain.contactEvents } }
+                // the clap = the touch gate's event in the slap phase (the hands meet when the wind-up has swung back: the drive's timer `impacted` can come a few ticks earlier); measured from that frame to the end of the slap
+                let evNow = a.brain.contactEvents + b.brain.contactEvents
+                if ph == 3, evAtPhase3 >= 0, evNow > evAtPhase3 { touchSeen = true }
+                if ph == 3, touchSeen {
+                    do {
                         let S = d.contactSurfaces()          // (skins every body once)
                         let Sb = d.contactSurfacesNoSkin(bodyOnly: true)
                         let h = ContactPolishTests.handHandNow(d, n: 2)

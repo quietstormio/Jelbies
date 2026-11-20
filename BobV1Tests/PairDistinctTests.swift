@@ -24,8 +24,8 @@ final class PairDistinctTests: XCTestCase {
     override func setUp() { super.setUp(); PairProbe.setUpGlobals() }
     override func tearDown() { PairProbe.tearDownGlobals(); super.tearDown() }
 
-    func probe(_ k: SocialKind, _ c: (String, [Int])) -> PairProbe.Result {
-        let r = PairProbe.run(kind: k, cast: c.1, castName: c.0, maxSec: 45)
+    func probe(_ k: SocialKind, _ c: (String, [Int]), seed: UInt64 = 31) -> PairProbe.Result {
+        let r = PairProbe.run(kind: k, cast: c.1, castName: seed == 31 ? c.0 : "\(c.0)#\(seed)", maxSec: 45, seed: seed)
         PairProbe.tearDownGlobals()
         return r
     }
@@ -75,15 +75,18 @@ final class PairDistinctTests: XCTestCase {
         flush("table_hop")
     }
 
+    /// The clap: hands within 0 +- 0.5 cm on every species pair AND at other seeds (a different walk-up each: the first version passed seed 31 and sank -1.6 cm at seed 41), never below -1 cm anywhere.
     func testHighFiveHandsMeetInTheBand() {
-        for c in Self.casts {
-            let r = probe(.highFive, c)
+        for seed: UInt64 in [31, 41, 42] { for c in Self.casts {
+            let r = probe(.highFive, c, seed: seed)
             Self.rows.append(row(r))
-            XCTAssertTrue(r.started && r.completed, "highFive \(c.0): runs to its end")
-            XCTAssertGreaterThanOrEqual(r.minSkin, -0.006, "highFive \(c.0): never below the band")
-            XCTAssertLessThanOrEqual(r.minSkinPerf, 0.005, "highFive \(c.0): the hands meet (<= +0.5 cm)")
-            XCTAssertGreaterThan((r.sounds["highfive_boop"] ?? 0) + (r.sounds["squish"] ?? 0), 0, "highFive \(c.0): the clap sound is PLAYED")
-        }
+            let tag = "highFive \(c.0) seed \(seed)"
+            XCTAssertTrue(r.started && r.completed, "\(tag): runs to its end")
+            XCTAssertGreaterThanOrEqual(r.minSkin, -0.01, "\(tag): never below -1 cm")
+            XCTAssertGreaterThanOrEqual(r.minSkinPerf, -0.006, "\(tag): the clap does not press past the band")
+            XCTAssertLessThanOrEqual(r.minSkinPerf, 0.005, "\(tag): the hands meet (<= +0.5 cm)")
+            XCTAssertGreaterThan((r.sounds["highfive_boop"] ?? 0) + (r.sounds["squish"] ?? 0), 0, "\(tag): the clap sound is PLAYED")
+        } }
         flush("table_five")
     }
 

@@ -250,7 +250,7 @@ extension BlobBrain {
                 // the hands meet: the touch gate's own event (the wind-up opened the outline past its 3 cm re-arm, so it fires on the slap), or the timer if the gate never fires
                 if !s.impacted, contactEvents + o.contactEvents > s.bumps || t >= 0.35 {
                     s.impacted = true; s.bumpT = t
-                    jellyKick = max(jellyKick, impactKick(2.0)); o.jellyKick = max(o.jellyKick, impactKick(2.0))
+                    jellyKick = max(jellyKick, impactKick(0.5)); o.jellyKick = max(o.jellyKick, impactKick(0.5))          // (pair-distinct-r1: a soft wobble - the engine's own touch kick already rides on the touch)
                     contactBoopFallback(o)
                     contactCueFallback(o, .highFiveBoop, 0.85, haptic: .emote("highFive.bump"))
                     face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
@@ -258,7 +258,7 @@ extension BlobBrain {
                 if s.impacted {
                     if s.passes == 0, t - s.bumpT >= 0.42 {          // the second jiggle
                         s.passes = 1
-                        jellyKick = max(jellyKick, impactKick(1.8)); o.jellyKick = max(o.jellyKick, impactKick(1.8))
+                        jellyKick = max(jellyKick, impactKick(0.4)); o.jellyKick = max(o.jellyKick, impactKick(0.4))
                         AudioHub.shared.chirp(jelly: steerID, .happy); AudioHub.shared.chirp(jelly: o.steerID, .happy)
                         onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                     }
