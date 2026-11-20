@@ -31,8 +31,6 @@ struct HandReach: Sendable {
 extension HandReach {
     /// Both arms up over the head (a cheer).
     static func armsUp(side: Int) -> HandReach { HandReach(side: side, w: 1, el: 1.15, seek: false, partner: -1, sa: 0.1, freeEl: 1.15, freeSa: 0.1) }
-    /// How far a MEETING hand (high five) may creep OUT past its shoulder to close the last cm (m).
-    static let creepMax: Float = 0.015
     /// Both arms held low and forward (a hopping pair: the arms of Bob / Pip flare out sideways in a hop and would meet the partner's).
     static func armsIn(side: Int) -> HandReach { HandReach(side: side, w: 1, el: -0.2, seek: false, partner: -1, sa: 1.3, freeEl: -0.2, freeSa: 1.3) }
 }
@@ -199,11 +197,6 @@ extension BlobBrain {
             // (the give only runs once he stands: a walker re-derives his destination from the outline he has, so a hand that gives while he walks shortens the outline, the destination, the walk... until the arm is all the way in)
             if s0 < -0.004 { socialBook.handOut = max(-0.12, socialBook.handOut + s0 + 0.002) }
             else if s0 > (q.seek ? 0.012 : 0.004), socialBook.handOut < 0 { socialBook.handOut = min(0, socialBook.handOut + 0.25 * dt) }
-            // THE CLAP'S LAST MILLIMETRES (pair-distinct-r1): the clap no longer re-walks the pair (the V turn made the walker loop), so hands that stand ~1 cm short of each other (the stand-off the walk-up ends at)
-            // creep out a hair (<= creepMax each) until the skins touch; only while this slap has not touched yet (`bumps` = the touch count at its start), so a clap that already landed is never pushed deeper
-            if !q.seek, let sess = social, sess.phase >= 3, sess.phaseT > 0.3, contactEvents + o.contactEvents <= sess.bumps, let sg = ContactField.skinGap(steerID, o.steerID), sg > 0.004, sg < 0.03 {
-                socialBook.handOut = min(HandReach.creepMax, socialBook.handOut + 0.08 * dt)
-            }
         } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0; saT = q.sa ?? 0 }
         let rate: Float = 6 * dt
         socialBook.handEl[si] += max(-rate, min(rate, elT - socialBook.handEl[si]))
