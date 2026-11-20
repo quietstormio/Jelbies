@@ -54,7 +54,7 @@ extension GameCare {
     /// Does this actor wear shoes on screen right now?
     func shoeLook(for a: JellyActor) -> WearLook? {
         if let c = CampBook.shared.bodies[a.id] { return c.worn[.feet] }          // a Camp yard body wears its copied shoes (Park/CampLook.swift)
-        if race.active, a.id != race.playerID { return nil }
+        if race.active, a.id != race.playerID, raceBook.onTrack.contains(a.id) { return nil }          // (only the rivals ON the track go shoeless: a housemate in the room keeps his own shoes through the race's fade out / in)
         if show.active, a.id != show.playerID { return nil }          // a borrowed rival body on the stage is somebody else's Jelbie: no shoes of ours
         if bath.active, bath.targetID == a.id { return nil }
         if parkHides(a.id) { return nil }          // at home while the park is on

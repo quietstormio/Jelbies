@@ -252,6 +252,8 @@ final class BlobBrain {
     var sleepBound = false
     /// A race trip is asked or running: no bedtime for anybody (GameCare sets it on every brain).
     var sleepLocked = false
+    /// race-depart-r2: a race is on its way (or on): nobody is put to bed. A separate flag from `sleepLocked`, which also holds back new antics, toys and passes: only the racer is held by that one.
+    var bedtimeLocked = false
     /// The park outing is playing: decor, toys, hopscotch and bubbles stay open to this Jelbie although `sleepLocked` holds sleep off (GameCare+Park.swift sets it every step).
     var outingPlay = false
     /// The park's pick roll said no to this piece on the last start attempt (so a notice does not queue him at it).
@@ -731,7 +733,7 @@ final class BlobBrain {
         if commandedFlip { commandedFlip = false; startCommandedFlip(sim, skinner) }
         if let d = commandedDecor { commandedDecor = nil; startCommandedDecor(d.kind, only: d.only, sim, skinner) }
         if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
-        if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked { startGoodnight(sim, skinner) } }          // (never during a race)
+        if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked && !bedtimeLocked { startGoodnight(sim, skinner) } }          // (never during a race)
         contactSim = sim
         if let s = social, s.idA == steerID, s.end == nil { contactStanceTick(s) }
         sleepPileTick()          // the stance table (ContactStance.swift): the session's initiator holds the pair, every tick, before any move (hop, bounce, jacks) takes the body

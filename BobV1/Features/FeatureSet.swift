@@ -140,7 +140,7 @@ final class FeatureSet {
     // MARK: tick
 
     /// Once per fixed step for Jelly `id`. `worn` = the wearable art ids the wardrobe SHOWS on him now (FeatureCompat reads them).
-    func tick(id: Int, brain: BlobBrain, sim: SoftBody, feature: JellyFeature, worn: [String], hideAll: Bool, dt: Float, spec: FeatureSpec = .shared) {
+    func tick(id: Int, brain: BlobBrain, sim: SoftBody, feature: JellyFeature, worn: [String], hideAll: Bool, instant: Bool = false, dt: Float, spec: FeatureSpec = .shared) {
         while slots.count <= id { slots.append(Self.newSlot(slots.count)) }
         var s = slots[id]
         let pose = sim.bodyPose(iterations: 3)
@@ -156,7 +156,7 @@ final class FeatureSet {
         let hideAll = hideAll && !solidEars
         let hide = hideAll || (!ignoreHide && (Self.hidden(feature, brain) || s.fit.hidden))
         let desired = feature != .none && !hide
-        if hideAll || !s.primed {
+        if hideAll || instant || !s.primed {
             s.phase = desired ? .shown : .hidden; s.scale = desired ? 1 : 0; s.t = 0
         } else {
             switch s.phase {

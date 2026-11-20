@@ -443,7 +443,12 @@ struct GameScreen: View {
         .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
-        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
+        .onChange(of: town) { _, t in
+            #if targetEnvironment(simulator)
+            RaceDepartProbe.mark("town \(String(describing: t))")
+            #endif
+            model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t))
+        }
         .onChange(of: outing) { _, on in DayClock.shared.setOutingRate(on) }
         .onChange(of: covered) { _, c in model.coverUp = c }          // a full-screen screen hides the room: the stage renders at 5 fps until it closes (MelonController.applyFrameRate)
         .onAppear { model.coverUp = covered; DayClock.shared.setOutingRate(outing) }
