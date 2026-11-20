@@ -169,13 +169,13 @@ final class DiningTests: XCTestCase {
     func testBerriesThreePerBlobOnABiggerPlate() {
         let theme = RoomTheme()
         var counts: [Int] = []
-        var plateR: [Float] = []
         for n in 1...3 {
             let L = DiningLayout.make(n: n)
             let b = RoomMeshBuilder(); b.material = .plain
             Consumables.berries.serving!(b, ServingState(n: n, bitesLeft: Array(repeating: 3, count: n)), Consumables.berries.palette, L)
             counts.append(b.mesh.vertices.count)
-            plateR.append(DiningModels.plate(layout: L, theme: theme).vertices.map { simd_length(SIMD2($0.pos.x, $0.pos.z)) }.max() ?? 0)
+            let platter = DiningModels.platter(layout: L)          // (food-on-plate-r1: the round plate became a platter that covers every piece)
+            XCTAssertGreaterThan(DiningModels.plate(layout: L, theme: theme).vertices.count, 0)
             // berries do not overlap each other and sit on the plate
             var pts: [SIMD3<Float>] = []
             for i in 0..<n { for j in 0..<3 { pts.append(DiningModels.berryAnchor(layout: L, place: i, index: j)) } }
@@ -183,10 +183,9 @@ final class DiningTests: XCTestCase {
             for a in 0..<pts.count { for c in (a + 1)..<max(pts.count, a + 1) {
                 XCTAssertGreaterThan(simd_length(pts[a] - pts[c]), 2 * 0.065 * L.scale * 0.95, "n=\(n) berries \(a),\(c)")
             } }
-            for p in pts { XCTAssertLessThan(simd_length(SIMD2(p.x, p.z)) + 0.065 * L.scale, DiningDims.plateRadius * L.scale, "berry on the plate (n=\(n))") }
+            for p in pts { XCTAssertLessThan(platter.distance(x: p.x, z: p.z) + 0.065 * L.scale, 0, "berry on the plate (n=\(n))") }
         }
         XCTAssertEqual(counts[1], counts[0] * 2); XCTAssertEqual(counts[2], counts[0] * 3, "3 berries per Blob")
-        XCTAssertEqual(plateR[1] / plateR[0], 1.15, accuracy: 0.01); XCTAssertEqual(plateR[2] / plateR[0], 1.3, accuracy: 0.01)
         // pieces disappear per bite
         let L = DiningLayout.make(n: 2)
         var last = Int.max
@@ -211,7 +210,7 @@ final class DiningTests: XCTestCase {
             XCTAssertEqual(b.mesh.vertices.count, one.mesh.vertices.count * 3 * n, "3 slices per Blob (n=\(n))")
             // finger food: nothing but tray + plate + slices on the tray
             let g = DiningModels.trayGroup(layout: L, serving: Consumables.pizza, state: ServingState(n: n, bitesLeft: Array(repeating: 3, count: n)), theme: theme)
-            XCTAssertEqual(g.opaque.vertices.count, DiningModels.tray(layout: L, theme: theme).vertices.count + DiningModels.plate(layout: L, theme: theme).vertices.count + b.mesh.vertices.count)
+            XCTAssertEqual(g.opaque.vertices.count, DiningModels.tray(layout: L, theme: theme).vertices.count + DiningModels.plate(layout: L, theme: theme, pizza: true).vertices.count + b.mesh.vertices.count)
             // slices lie on the plate, inside the tray, never below the plate floor
             let ys = b.mesh.vertices.map { $0.pos.y }
             XCTAssertGreaterThan(ys.min() ?? 0, DiningDims.plateFloorY - 0.01)
@@ -221,7 +220,7 @@ final class DiningTests: XCTestCase {
         XCTAssertGreaterThan(widths[1], widths[0]); XCTAssertGreaterThan(widths[2], widths[0])
         // the pie (one Blob): three DISTINCT slices fanned around one centre, tips toward the centre, crusts outward, all on the plate and within the nub's reach
         let L1 = DiningLayout.make(n: 1)
-        let pie = DiningModels.pizzaPie(layout: L1, place: 0), plate = DiningModels.pizzaPlate(L1)
+        let pie = DiningModels.pizzaPie(layout: L1, place: 0), plate = DiningModels.platter(layout: L1, pizza: true)
         var mids: [SIMD2<Float>] = []
         for j in 0..<3 {
             let a = DiningModels.pizzaAnchor(layout: L1, place: 0, index: j), y = DiningModels.sliceYaw(layout: L1, place: 0, index: j)
@@ -232,7 +231,7 @@ final class DiningTests: XCTestCase {
             let one = RoomMeshBuilder(); one.material = .plain
             DiningModels.pizzaSlice(one, centre: a, yaw: y, palette: Consumables.pizza.palette, scale: 1)
             for v in one.mesh.vertices {
-                XCTAssertLessThan(simd_length(SIMD2(v.pos.x, v.pos.z) - SIMD2(0, plate.cz)), plate.r + 0.005, "slice \(j) lies on the plate")
+                XCTAssertLessThanOrEqual(plate.distance(x: v.pos.x, z: v.pos.z), 0, "slice \(j) lies on the plate")
             }
         }
         for (a, c) in [(0, 1), (1, 2), (0, 2)] { XCTAssertGreaterThan(simd_length(mids[a] - mids[c]), 0.09, "slices \(a) and \(c) are distinct") }
@@ -499,9 +498,10 @@ final class DiningTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(abs(L.places[0].rel.y), 0.70); XCTAssertLessThanOrEqual(abs(L.places[0].rel.y), 0.75, "stand 0.70-0.75 behind the tray centre")
         for a in 0..<3 { for c in (a + 1)..<3 { XCTAssertGreaterThanOrEqual(simd_length(ps[a] - ps[c]), 0.1235) } }
         // the berries stay on the plate
-        for p in ps { XCTAssertLessThan(simd_length(SIMD2(p.x, p.z)) + 0.065, DiningDims.plateRadius) }
+        let platter1 = DiningModels.platter(layout: L)
+        for p in ps { XCTAssertLessThan(platter1.distance(x: p.x, z: p.z) + 0.065, 0) }
         // the plate is inside the tray, and his stand clears the thin collider by his footprint
-        XCTAssertLessThanOrEqual(DiningDims.plateRadius, L.half.y - 0.06)
+        XCTAssertLessThanOrEqual(platter1.cz + platter1.hz, L.trayCentreZ + L.half.y - 0.06)
         let box = RoomLayout.FlatBox(centre: .zero, half: L.colliderHalf, height: 0.3)
         XCTAssertGreaterThanOrEqual(RoomLayout.boxDistanceXZ(stand, box), 0.69)
     }

@@ -307,7 +307,7 @@ nonisolated enum DiningModels {
     }
 
     static func plate(layout L: TrayLayout, theme: RoomTheme, pizza: Bool = false) -> RoomMesh {
-        if L.arcToCentre && !pizza { return platterMesh(platter(layout: L), theme: theme) }          // food-on-plate-r1: the ends layout's pieces lie on a platter, see DiningPlatter.swift
+        if !(L.arcToCentre && pizza) { return platterMesh(platter(layout: L, pizza: pizza), theme: theme) }          // food-on-plate-r1: the ends layout's pieces lie on a platter, see DiningPlatter.swift
         let sw = theme.swatches, b = RoomMeshBuilder()
         b.material = .plain
         let pl = pizza ? pizzaPlate(L) : (r: DiningDims.plateRadius * L.scale, cz: Float(0))
