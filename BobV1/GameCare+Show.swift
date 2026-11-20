@@ -344,7 +344,12 @@ extension GameCare {
         var rest: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
         for w in book.pendingWalks {
             guard let a = showBody(w.id) else { continue }
-            if middleClear(for: w.id) || w.waited >= Self.clearMax { showWalk(a, to: w.to) } else { rest.append((w.id, w.to, w.waited + dt)) }
+            if middleClear(for: w.id) || w.waited >= Self.clearMax {
+                #if targetEnvironment(simulator)
+                if DevArgs.enabled { print(String(format: "[showturn] waited %.2f s for the middle to clear (actor %d) t=%.3f", w.waited, w.id, CACurrentMediaTime())) }
+                #endif
+                showWalk(a, to: w.to)
+            } else { rest.append((w.id, w.to, w.waited + dt)) }
         }
         book.pendingWalks = rest
     }
