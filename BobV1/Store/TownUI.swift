@@ -709,18 +709,22 @@ struct BagSheet: View {
                 .accessibilityAddTraits(.isHeader).id("bag-frames").accessibilityIdentifier("bag-frames-header")
             ForEach(owned, id: \.self) { f in
                 if let item = StoreCatalog.item("frame-\(f.rawValue)") {
-                    HStack(spacing: 12) {
+                    let hang = pink("Hang a picture", enabled: true) {
+                        close()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { care.wallAlbumOpen = true }
+                    }.accessibilityLabel("Hang a picture in the \(item.name) frame").accessibilityHint("Opens your album to pick a photo, then the wall editor.")
+                    .accessibilityIdentifier("bag-hang-\(f.rawValue)")
+                    let info = HStack(spacing: 12) {
                         ItemArt(item: item, size: 64)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
                             Text(book.wallPicture?.frame == f ? "On the wall" : "Owned").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
                         }
                         Spacer(minLength: 0)
-                        pink("Hang a picture", enabled: true) {
-                            close()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { care.wallAlbumOpen = true }
-                        }.accessibilityLabel("Hang a picture in the \(item.name) frame").accessibilityHint("Opens your album to pick a photo, then the wall editor.")
-                        .accessibilityIdentifier("bag-hang-\(f.rawValue)")
+                    }
+                    Group {
+                        if typeSize.isAccessibilitySize { VStack(alignment: .leading, spacing: 10) { info; hang.frame(maxWidth: .infinity) } }
+                        else { HStack(spacing: 12) { info; hang } }
                     }
                     .padding(10)
                     .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))

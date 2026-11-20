@@ -102,7 +102,7 @@ struct ShopScreen: View {
                 if selected?.kind != .wallFrame { selected = ShopSelection.afterBuy(selected, bought: true) }          // (a bought frame keeps its sheet up: its next step, "Hang a picture", is on it)
                 GameMessageCenter.shared.post(msg, identifier: "shop-bought-toast")          // (the one message bar)
             })
-                .presentationDetents(wide ? [.large] : [.height(560), .large])
+                .presentationDetents(wide || dts.isAccessibilitySize ? [.large] : [.height(560), .large])
                 .padSheetSizing()          // iPad: a centred page-sized card (the detents are ignored there); no-op on iPhone
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
@@ -229,6 +229,7 @@ struct ItemSheet: View {
     @State private var qty = 1
     @State private var bought = 0
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var book: StoreBook { care.store }
     private var wallet: DropsWallet { care.bath.wallet }
@@ -271,8 +272,8 @@ struct ItemSheet: View {
                     .scrollBounceBehavior(.basedOnSize)
                 }
                 .padding(.horizontal, 20)
-            } else if HUDLayout.isPad {
-                // iPad: the picture, name and effect scroll; the quantity / who-for / Buy are pinned in a footer outside the scroll so the Buy is always on screen
+            } else if HUDLayout.isPad || typeSize.isAccessibilitySize {
+                // iPad (and the largest text sizes on a phone): the picture, name and effect scroll; the quantity / who-for / Buy are pinned in a footer outside the scroll so the Buy is always on screen
                 VStack(spacing: 0) {
                     ScrollView {
                         VStack(spacing: 12) {
