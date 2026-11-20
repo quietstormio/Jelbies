@@ -65,7 +65,7 @@ private final class VoiceRun {
 final class VoiceIntegrationTests: XCTestCase {
     nonisolated(unsafe) static var keep: [AnyObject] = []        // the runtime aborts when a rig is released (see MelonModel)
 
-    override func setUp() { RoomLayout.dynamicBoxes = [] }
+    override func setUp() { RoomLayout.dynamicBoxes = []; DayClock.shared.forcedHour = 12 }          // (the clock is pinned at noon: the night rest / meal rules must not depend on the hour the suite runs at)
     override func tearDown() { RoomLayout.dynamicBoxes = [] }
 
     private func make(roll: Double = 0, model: VoiceIntentModel? = nil) -> VoiceRun {
