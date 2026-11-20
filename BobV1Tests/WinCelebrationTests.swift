@@ -193,9 +193,11 @@ final class WinCelebrationTests: XCTestCase {
             }
             for _ in 0..<360 { step(); if care.show.onStage { break } }
             XCTAssertTrue(care.show.onStage)
+            care.showBook.trickSet = true          // (the Trick round was on: the first tick of the results snaps the player back to the podium spot, which cuts any move started before it)
             care.show.onResults(place)          // (what ShowFlow.settle sends when the results are in)
             var win = false, joy = false
-            for _ in 0..<60 { step(); let b = room.actors[0].brain!; win = win || b.winCheer; joy = joy || b.idleState.kind == .joy }
+            for _ in 0..<90 { step(); let b = room.actors[0].brain!; win = win || b.winCheer; joy = joy || b.idleState.kind == .joy }
+            if place == 1 { let b = room.actors[0].brain!; XCTAssertTrue(b.winCheer && b.idleState.kind == .joy, "still celebrating 1.5 s after the snap") }
             out = (win, joy, fired().filter { $0.hasPrefix("yay_jelly") }.count)
         }
         return out

@@ -1075,6 +1075,7 @@ final class BlobBrain {
     }
 
     func abortAll(_ sim: SoftBody, _ skinner: Skinner) {
+        winCheer = false; winSettleT = 0          // (a win asked but not yet started goes with everything else: BlobBrain+Win.swift)
         let wasLying = isLying || trickTipped
         if poseW > 0.2 { for i in sim.v.indices { sim.v[i] *= 0.25 } }       // dropped mid-stride: no carried-over momentum (he stays where he was stopped)
         mouthOpen = 0
