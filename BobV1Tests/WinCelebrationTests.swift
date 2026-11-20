@@ -44,6 +44,8 @@ final class WinCelebrationTests: XCTestCase {
 
     func testTheWinIsFourBouncesWithTheArmsUpAndASettle() {
         let r = rig(), b = r.brain
+        let yaw0 = b.yaw
+        var maxTurn: Float = 0
         XCTAssertTrue(b.winStart(r.sim))
         XCTAssertEqual(b.idleState.kind, .joy)
         XCTAssertEqual(b.idleState.reps, BlobBrain.winHops)
@@ -55,6 +57,7 @@ final class WinCelebrationTests: XCTestCase {
             wasAir = air
             frames += 1
             maxW = max(maxW, b.armDirW)
+            maxTurn = max(maxTurn, abs(wrapAngle(b.yaw - yaw0)))
             if b.armDirW > 0.95 && b.armDirEl == [0.95, 0.95] { armsUpFrames += 1 }
             XCTAssertLessThanOrEqual(b.armDirEl[0], 0.95 + 1e-4, "the arms never go higher than the joy / jacks pose")
             w.sample(r)
@@ -64,6 +67,7 @@ final class WinCelebrationTests: XCTestCase {
         XCTAssertNil(b.idleState.kind, "it ends by itself")
         XCTAssertEqual(airs, BlobBrain.winHops, "four bounces")
         XCTAssertGreaterThan(secs, 2.5); XCTAssertLessThan(secs, 3.6)
+        XCTAssertLessThan(maxTurn, 0.15, "he bounces on the spot facing the way he stood (was seen turning his back in the race)")
         XCTAssertGreaterThan(maxW, 0.99, "the arms are fully up")
         XCTAssertGreaterThan(Float(armsUpFrames) / Float(frames), 0.6, "the arms stay up through the bounces")
         XCTAssertFalse(b.winCheer); XCTAssertEqual(b.armDirW, 0); XCTAssertEqual(b.gait.hopApex, 0.10, accuracy: 1e-6, "the plain hop's numbers are back")

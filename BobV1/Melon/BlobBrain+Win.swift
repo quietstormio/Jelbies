@@ -20,6 +20,7 @@ extension BlobBrain {
     /// `idleStart(.joy)` with `winCheer` set: four reps, the big face and the cheer.
     func winBegin() {
         idleState.reps = Self.winHops
+        idleState.baseYaw = yaw
         blushBump(hold: 3.4, peak: 0.9)
         face(.excited, hold: 3.2)
         if !voiceMuted { AudioHub.shared.winVoice(jelly: steerID, x: px) }

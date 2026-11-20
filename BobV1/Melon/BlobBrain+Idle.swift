@@ -1116,7 +1116,7 @@ extension BlobBrain {
             step = simd_length(v); u = v / step
         }
         let rv = resolve(SIMD3(here.x + u.x * step, 0, here.y + u.y * step), footprint)
-        gait.facingYaw = idleState.kind == .startle ? yaw : atan2f(u.x, u.y)
+        gait.facingYaw = idleState.kind == .startle ? yaw : (idleState.kind == .joy && winCheer) ? idleState.baseYaw : atan2f(u.x, u.y)          // (the win bounces on the spot facing the way he stood: a zero-length hop has no direction of its own)
         gait.home = here
         poseW = 0; poseOn = false
         let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .joy && winCheer) ? Self.winApex : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
