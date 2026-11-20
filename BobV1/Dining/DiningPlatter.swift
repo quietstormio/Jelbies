@@ -27,13 +27,13 @@ nonisolated struct Platter: Equatable {
 nonisolated extension DiningModels {
     /// The platter of a layout (the pieces of every food of that layout lie inside it, see FoodOnPlateTests).
     static func platter(layout L: TrayLayout, pizza: Bool = false) -> Platter {
-        if L.arcToCentre { return Platter(cx: 0, cz: -0.13, hx: 0.55, hz: 0.405, r: 0.10) }          // the ends layout: x to the tray's outer edge, z from just short of the back rim to past the front pieces
+        if L.arcToCentre { return Platter(cx: 0, cz: -0.06, hx: 0.55, hz: 0.49, r: 0.10) }          // the ends layout: x to the tray's outer edge, z from the back rim's foot (-0.55) to 0.43 (the popsicle's stick, the longest piece, reaches 0.41)
         switch L.n {
         case 1:
             // his three pieces lie on the arc 0.595 in front of him; the platter stops short of his belly (the pizza's slices reach 0.09 closer to him, so its platter does too)
             return pizza ? Platter(cx: 0, cz: -0.13, hx: 0.28, hz: 0.22, r: 0.08) : Platter(cx: 0, cz: -0.095, hx: 0.26, hz: 0.17, r: 0.09)
-        case 2: return pizza ? Platter(cx: 0, cz: -0.164, hx: 0.62, hz: 0.19, r: 0.06) : Platter(cx: 0, cz: 0, hx: 0.31, hz: 0.27, r: 0.16)
-        default: return pizza ? Platter(cx: 0, cz: -0.25, hx: 0.675, hz: 0.405, r: 0.06) : Platter(cx: 0, cz: -0.01, hx: 0.385, hz: 0.365, r: 0.17)          // the wide row (-MealEnds 0)
+        case 2: return pizza ? Platter(cx: 0, cz: -0.164, hx: 0.62, hz: 0.19, r: 0.06) : Platter(cx: 0, cz: 0.065, hx: 0.31, hz: 0.335, r: 0.08)
+        default: return pizza ? Platter(cx: 0, cz: -0.2275, hx: 0.70, hz: 0.4275, r: 0.06) : Platter(cx: 0, cz: 0.0675, hx: 0.385, hz: 0.4425, r: 0.17)          // the wide row (-MealEnds 0)
         }
     }
 

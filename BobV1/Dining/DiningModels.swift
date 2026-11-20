@@ -446,10 +446,9 @@ nonisolated enum DiningModels {
         let y0 = c.y - 0.026 * s
         // dough + cheese: one rounded triangle (tip toward +z), cheese a hair proud on top
         extrudeRounded(b, poly: [xz(0, hl), xz(-hw, -hl), xz(hw, -hl)], y0: y0, y1: c.y + 0.006 * s, bevel: 0.018 * s, color: p.secondary)
-        // crust: a fat rounded bar along the base
-        let cc = xz(0, -hl + 0.012)
-        b.roundedBox(centre: SIMD3(cc.x, c.y - 0.002 * s, cc.y), half: SIMD3(hw * 0.98 * s, 0.03 * s, 0.026 * s),
-                     radius: 0.024 * s, segments: 2, aoFloor: false, color: p.primary)
+        // crust: a fat rounded bar along the base (turned with the slice: food-on-plate-r1, it was an axis-aligned box, which stuck 0.06 out past a sideways slice)
+        extrudeRounded(b, poly: [xz(-hw * 0.98, -hl + 0.012 - 0.026), xz(hw * 0.98, -hl + 0.012 - 0.026), xz(hw * 0.98, -hl + 0.012 + 0.026), xz(-hw * 0.98, -hl + 0.012 + 0.026)],
+                       y0: c.y - 0.032 * s, y1: c.y + 0.028 * s, bevel: 0.024 * s, color: p.primary)
         // pepperoni
         for (x, z, r) in [(Float(0), Float(0.06), Float(0.024)), (Float(-0.03), Float(-0.03), Float(0.03)), (Float(0.034), Float(-0.075), Float(0.026))] {
             let q = xz(x, z)
