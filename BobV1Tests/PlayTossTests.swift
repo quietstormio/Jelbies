@@ -163,7 +163,7 @@ final class PlayTossTests: XCTestCase {
             let t = run(r, p, seconds: 30) { p.phase == .catching || p.phase == .inHand }
             XCTAssertLessThanOrEqual(t, 12.5, "seed \(seed): the ball is back in hand within 12 s (took \(t); nudges \(p.nudges), headers \(p.headers), rescues \(p.rescues))")
             XCTAssertLessThanOrEqual(p.nudges, 5, "seed \(seed): at most 5 nudges (\(p.nudges))")
-            XCTAssertEqual(p.rescues, 0, "seed \(seed): the safety net was not needed")
+            XCTAssertEqual(p.rescues, 0, "seed \(seed): the safety net was not needed (ball \(p.ball.pos), phase \(p.phase), headers \(p.headers), nudges \(p.nudges), jelly \(r.brain.position), catchZ \(p.catchZ()), floor z \(GameCamera.roamFloor?.minZ ?? 0)...\(GameCamera.roamFloor?.maxZ ?? 0))")
             XCTAssertTrue(p.phase == .catching || p.phase == .inHand)
         }
     }
