@@ -19,6 +19,7 @@ extension BlobBrain {
 
     /// `idleStart(.joy)` with `winCheer` set: four reps, the big face and the cheer.
     func winBegin() {
+        NSLog("[melon] win celebration begins (slot %d, race %@)", steerID, race.active ? "yes" : "no")          // capture aid: proves it started in the real app
         idleState.reps = Self.winHops
         idleState.baseYaw = yaw
         blushBump(hold: 3.4, peak: 0.9)
@@ -38,7 +39,7 @@ extension BlobBrain {
     }
 
     /// Race: the player crossed the line first (place 1 is final then; the results card covers the track a few seconds later). He celebrates as soon as his feet are planted between coast steps (queued until then; the race card never waits for it).
-    func raceWinCue(_ sim: SoftBody) { race.winQueued = true; _ = raceWin(sim) }
+    func raceWinCue(_ sim: SoftBody) { NSLog("[melon] win celebration asked at the finish (slot %d)", steerID); race.winQueued = true; _ = raceWin(sim) }
 
     @discardableResult
     func raceWin(_ sim: SoftBody) -> Bool {
