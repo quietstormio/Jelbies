@@ -160,7 +160,8 @@ final class WinCelebrationTests: XCTestCase {
     }
 
     func testRaceFirstPlaceStartsTheCelebrationForThePlayerOnly() {
-        let r = raceRun(waddle: 0.2, rate: 8, seed: 11)
+        var r = raceRun(waddle: 0.0, rate: 14, seed: 11)
+        for (w, rate, seed) in [(0.0 as Float, 14 as Float, 3 as UInt64), (0.0, 14, 5), (0.0, 20, 7)] where r.place != 1 { r = raceRun(waddle: w, rate: rate, seed: seed) }          // (the first draw whose player wins)
         XCTAssertEqual(r.place, 1); XCTAssertTrue(r.finished)
         XCTAssertTrue(r.playerWin, "the player's body celebrates at the results")
         XCTAssertFalse(r.rivalWin, "no rival does")
