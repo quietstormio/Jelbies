@@ -129,8 +129,7 @@ struct VoiceGlow: View {
     var body: some View {
         Group {
             if voice.isListening && voice.micLive {          // the glow waits for the mic's first real buffer (the pressed state is instant)
-                let t = care.select.blobs.first?.tint ?? SIMD3(0.70, 0.83, 0.945)
-                let c = Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))
+                let c = ThemeStore.shared.currentPreset.glowColor          // the player's theme colour (reading it here follows a Settings change live)
                 let k = reduceMotion ? 0.35 : 0.15 + 0.85 * Double(voice.mode.glowLevel)     // calm at silence, clearly moving with speech
                 let w = CGFloat(46 + 50 * k)
                 let strong = c.opacity(0.62 + 0.36 * k)

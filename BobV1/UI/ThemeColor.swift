@@ -116,6 +116,20 @@ enum ThemeMath {
 }
 
 extension ThemePreset {
+    static let glowMinSaturation = 0.50, glowMinBrightness = 0.85
+    /// HSB of the preset's own swatch colour, lifted to the glow floors (hue kept): Midnight Navy becomes a luminous blue instead of a dark vignette.
+    var glowHSB: (h: Double, s: Double, b: Double) {
+        let r = Double(hex >> 16 & 255) / 255, g = Double(hex >> 8 & 255) / 255, b = Double(hex & 255) / 255
+        let mx = max(r, g, b), mn = min(r, g, b), d = mx - mn
+        var h = 0.0
+        if d > 0 {
+            if mx == r { h = ((g - b) / d).truncatingRemainder(dividingBy: 6) } else if mx == g { h = (b - r) / d + 2 } else { h = (r - g) / d + 4 }
+            h = (h / 6).truncatingRemainder(dividingBy: 1); if h < 0 { h += 1 }
+        }
+        return (h, max(mx == 0 ? 0 : d / mx, Self.glowMinSaturation), max(mx, Self.glowMinBrightness))
+    }
+    /// The edge colour of the voice glow (follows the chosen theme).
+    var glowColor: Color { let v = glowHSB; return Color(hue: v.h, saturation: v.s, brightness: v.b) }
     /// Deeper logo outline (the accent itself, deepened only where a preset is under 3:1 on white).
     var logoRim: UInt32? {
         switch self {
