@@ -27,7 +27,7 @@ enum HighFiveTuning {
     nonisolated(unsafe) static var windUpRise: Float = 0.30
     nonisolated(unsafe) static var windUpFall: Float = 0.26
     /// How far each turns in toward the partner from the wind-up on (rad): a V, faces apart, the hands up in the middle (pair-distinct-r1).
-    nonisolated(unsafe) static var turnIn: Float = ProcessInfo.processInfo.environment["PAIR_TURNIN"].flatMap { Float($0) } ?? 0.60
+    nonisolated(unsafe) static var turnIn: Float = ProcessInfo.processInfo.environment["PAIR_TURNIN"].flatMap { Float($0) } ?? 0.45
 }
 
 enum FriendTuning {
@@ -277,14 +277,14 @@ extension BlobBrain {
         if openSideBySide(s, o, isA, settle: 0.7) { return }
         socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
         let ft = s.phaseT
-        let lean = smooth01(ft / 0.5) * (1 - smooth01((ft - (s.duration - 0.6)) / 0.6))
-        let press = max(pulse(ft - 0.6, up: 0.16, down: 0.26), pulse(ft - 1.7, up: 0.16, down: 0.26))          // two quick squishes
-        socialBook.wantRoll = leanSign(toward: o.position) * (0.20 * lean + 0.05 * press)
+        let lean = smooth01(ft / 0.9) * (1 - smooth01((ft - (s.duration - 0.6)) / 0.6))
+        let press = max(pulse(ft - 1.0, up: 0.2, down: 0.26), pulse(ft - 2.0, up: 0.2, down: 0.26))          // two quick squishes
+        socialBook.wantRoll = leanSign(toward: o.position) * (0.20 * lean + 0.03 * press)
         socialBook.wantSquash = 1 - 0.05 * press          // (a squashed body is wider: the squeeze)
         socialBook.wantEyes = 1 - 0.7 * lean
         if isA {
-            if s.bumps == 0, ft > 0.82 { s.bumps = 1; squishBoth(o, first: true) }
-            if s.bumps == 1, ft > 1.92 { s.bumps = 2; squishBoth(o, first: false) }
+            if s.bumps == 0, ft > 1.15 { s.bumps = 1; squishBoth(o, first: true) }
+            if s.bumps == 1, ft > 2.15 { s.bumps = 2; squishBoth(o, first: false) }
             if ft > s.duration { finishHappy(s, o) }
         }
     }
@@ -332,44 +332,21 @@ extension BlobBrain {
     private func driveHopAlong(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         if openSideBySide(s, o, isA, settle: 0.6) { return }
         let t = s.phaseT
-        // (pair-distinct-r1) HOP ALONG THE FLOOR: they stand a body apart, both turn to face the same way (along the floor, toward the room's middle) and hop in a line - the leader first, the follower half a second
-        // later - three hops each, TRAVELLING (not bobbing on the spot); then both face the room again and share a cheer hop.
-        let rounds = 3, gap: Float = 1.25, lag: Float = 0.5, dist: Float = 0.5
-        switch s.phase {
-        case 2:
-            if isA, !s.ready {
-                let mid = (position + o.position) / 2
-                let sgn: Float = mid.x < 0 ? 1 : -1
-                s.laneYaw = sgn > 0 ? .pi / 2 : -.pi / 2
-                s.roles = (position.x - o.position.x) * sgn > 0 ? 0 : 1          // (0: A leads - the one further along the way)
-                s.ready = true
-            }
-            guard s.ready else { holdFacing(faceCameraYaw()); return }
-            holdFacing(s.laneYaw)
-            if isA, t > 0.4, turnedTo(s.laneYaw, tol: 0.2), o.turnedTo(s.laneYaw, tol: 0.2) { s.setPhase(3) }
-            else if isA, t > 4 { s.setPhase(3) }
-        case 3:
-            let lead = (s.roles == 0) == isA
-            let n = lead ? s.bumps : s.passes
-            if n < rounds, t >= Float(n) * gap + (lead ? 0 : lag), scriptIsNone, idleState.kind == nil {
-                if lead { s.bumps += 1 } else { s.passes += 1 }
-                socialBook.hold = false; socialBook.faceYaw = nil
-                startHopPlay(sim: sim, distance: dist)
-                face(.joyArc, hold: 0.8)
-            } else if scriptIsNone { holdFacing(s.laneYaw) }
-            if isA, s.bumps >= rounds, s.passes >= rounds, t > Float(rounds) * gap + lag + 0.2, scriptIsNone, o.scriptIsNone { s.setPhase(4) }
-            else if isA, t > 14 { s.finish(.done) }
-        default:
-            holdFacing(faceCameraYaw())
-            if !socialBook.apartStarted, scriptIsNone, turnedTo(faceCameraYaw(), tol: 0.2), s.phaseT > (isA ? 0.1 : 0.3) {
-                socialBook.apartStarted = true
-                hopJoy(sim)
-                AudioHub.shared.chirp(jelly: steerID, .happy)
-            }
-            if isA, socialBook.apartStarted, o.socialBook.apartStarted, s.phaseT > 0.5, scriptIsNone, o.scriptIsNone {
+        // (pair-distinct-r1) HOP ALONG: a body apart, the leader hops first, the follower half a second later, each hop TRAVELLING toward the room (not bobbing on the spot): a staggered line of hops, then a cheer.
+        let rounds = 2, gap: Float = 1.4, lag: Float = 0.55, dist: Float = 0.45
+        let lead = (s.roles == 0) == isA
+        let n = lead ? s.bumps : s.passes
+        if n < rounds, t >= Float(n) * gap + (lead ? 0 : lag), scriptIsNone, idleState.kind == nil {
+            if lead { s.bumps += 1 } else { s.passes += 1 }
+            socialBook.hold = false; socialBook.faceYaw = nil
+            startHopPlay(sim: sim, distance: dist)
+            face(.joyArc, hold: 0.8)
+        } else if scriptIsNone { holdFacing(faceCameraYaw()) }
+        if isA {
+            if s.bumps >= rounds, s.passes >= rounds, t > Float(rounds) * gap + lag + 0.4, scriptIsNone, o.scriptIsNone {
                 jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)
                 finishHappy(s, o)
-            } else if isA, s.phaseT > 6 { s.finish(.done) }
+            } else if t > 14 { s.finish(.done) }
         }
     }
 }

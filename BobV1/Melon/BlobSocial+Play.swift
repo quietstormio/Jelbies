@@ -198,7 +198,7 @@ extension BlobBrain {
             let ft = s.phaseT
             let lean = smooth01(ft / 0.9) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
             // (pair-distinct-r1) a TENT: they stand a few cm apart and tip their heads together (the lean limiter stops each at the touch), then nod / rub gently - the pitch nod does not move the contact
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.22 * lean
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.30 * lean
             socialBook.wantPitch = 0.07 * lean * sinf(2 * .pi * (ft - 0.9) / 1.5)
             socialBook.wantSquash = 1 - 0.03 * lean * (0.6 + 0.4 * sinf(2 * .pi * ft / 2.2))
             socialBook.wantEyes = 1 - 0.7 * lean

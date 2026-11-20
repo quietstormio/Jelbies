@@ -27,12 +27,13 @@ struct HandReach: Sendable {
     /// pair of hands), so the footprint the contact engine reads is the EGG's flank, not the arm nub: the side-by-side kinds then touch with the upper body and the arms clear each other.
     var sa: Float? = nil
     var freeEl: Float = -0.25, freeSa: Float = 0.35
+    var out: Float = 0          // (a pose's shoulder slide, rad-free metres; tucked: in)
 }
 
 extension HandReach {
-    static let tuckEl: Float = -0.30, tuckSa: Float = 1.35
+    static let tuckEl: Float = -0.20, tuckSa: Float = 1.50
     /// Both arms held forward, low, in front of the belly.
-    static func tucked(side: Int) -> HandReach { HandReach(side: side, w: 1, el: tuckEl, seek: false, partner: -1, sa: tuckSa, freeEl: tuckEl, freeSa: tuckSa) }
+    static func tucked(side: Int) -> HandReach { HandReach(side: side, w: 1, el: tuckEl, seek: false, partner: -1, sa: tuckSa, freeEl: tuckEl, freeSa: tuckSa, out: -0.10) }
 }
 
 extension HandReach {
@@ -197,7 +198,7 @@ extension BlobBrain {
             // (the give only runs once he stands: a walker re-derives his destination from the outline he has, so a hand that gives while he walks shortens the outline, the destination, the walk... until the arm is all the way in)
             if s0 < -0.004 { socialBook.handOut = max(-0.12, socialBook.handOut + s0 + 0.002) }
             else if s0 > (q.seek ? 0.012 : 0.004), socialBook.handOut < 0 { socialBook.handOut = min(0, socialBook.handOut + 0.25 * dt) }
-        } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0; saT = q.sa ?? 0 }
+        } else if goal > 0 { socialBook.handOut = q.out; socialBook.handPrevD = 0; saT = q.sa ?? 0 }
         let rate: Float = 6 * dt
         socialBook.handEl[si] += max(-rate, min(rate, elT - socialBook.handEl[si]))
         socialBook.handSa[si] += max(-rate, min(rate, saT - socialBook.handSa[si]))

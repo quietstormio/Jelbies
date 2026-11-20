@@ -103,14 +103,14 @@ struct ContactStance: Sendable {
         .bellyBounce: .leaning(wide: 0.06, press: 2, until: 3, sound: .squish, volume: 0.9),          // (pair-distinct-r1: arms tucked, stand wide, the lean closes it; the rebound lean-away is not walked back)
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         // holds
-        .nuzzle: .leaning(wide: 0.09, press: 2, sound: nil),
+        .nuzzle: .leaning(wide: 0.07, press: 2, sound: nil),
         .sitTogether: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: sitGap)], features: true),          // (pair-distinct-r1: they sit with clear space between them - no arm / skin contact)
         .bagSit: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (the second Jelbie sits on the floor beside a seated one / on a second piece: never inside, never moving a seated body)
         .cuddle: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true)], features: true),          // (loveseat: the two seats are the decor's; the table only keeps them apart)
         .cheekSquish: .leaning(wide: 0.07, press: 2, sound: .squish, volume: 0.7),          // (one continuous press: the second squish is a lean + squash, not a back-off and a second touch)
         .backToBack: .holding(from: 3, facing: .camera, features: true),
         .cuddleLean: .leaning(wide: 0.05, press: 2, sound: .squish, volume: 0.5),
-        .swayHug: .leaning(wide: 0.09, press: 2, sound: .squish, volume: 0.55),
+        .swayHug: .leaning(wide: 0.07, press: 2, sound: .squish, volume: 0.55),
         .whisperGiggle: .leaning(wide: 0.06, press: 2, sound: nil),
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
@@ -118,7 +118,7 @@ struct ContactStance: Sendable {
         .groupHug: .holding(from: 2, walk0: false, features: true, sound: .squish, volume: 0.7, pulses: [(2, 1.9, 2.4)]),
         .circleDance: .holding(from: 2, walk0: false, features: true),
         // proximity
-        .twirl: .proximity(from: 1), .hopAlong: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: hopGap), Step(from: 3, target: near, onlySeparate: true)], features: true),          // (pair-distinct-r1: a body apart, then a line of hops) .littleRace: .proximity(), .leapfrog: .proximity(features: true),
+        .twirl: .proximity(from: 1), .hopAlong: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: hopGap), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (pair-distinct-r1: a body apart, then a line of hops) .littleRace: .proximity(), .leapfrog: .proximity(features: true),
         .peekaboo: .proximity(features: true), .mirrorDance: .proximity(from: 1), .danceOff: .proximity(from: 1), .shyWave: .proximity(from: 3),
         .groupCheer: .proximity(from: 1), .conga: .proximity(), .congaLine: .proximity(features: true), .ringDance: .proximity(features: true),
         .follow: .proximity(), .line: .proximity(), .dance: .proximity(from: 1), .greet: .proximity(), .keepAway: .proximity(),
