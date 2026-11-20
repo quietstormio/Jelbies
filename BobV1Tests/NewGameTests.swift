@@ -24,6 +24,35 @@ final class NewGameTests: XCTestCase {
         if UserDefaults.standard.object(forKey: "MainMenu") == nil { XCTAssertEqual(flow.phase, .menu, "a cold launch shows Continue / New Game") }
     }
 
+    private func at(_ day: Int, _ h: Int, _ m: Int) -> Date {
+        var c = DateComponents(); c.year = 2026; c.month = 11; c.day = day; c.hour = h; c.minute = m
+        return Calendar.current.date(from: c)!
+    }
+
+    func testReturnFromTheBackgroundMenuRule() {
+        let d = suite("returnrule")
+        XCTAssertFalse(StartFlow.menuDueOnReturn(d, now: at(19, 9, 0)), "nothing stored: no menu")
+        StartFlow.noteLeft(d, at: at(18, 20, 0))
+        XCTAssertFalse(StartFlow.menuDueOnReturn(d, now: at(18, 23, 0)), "same day: no menu")
+        XCTAssertTrue(StartFlow.menuDueOnReturn(d, now: at(19, 9, 0)), "next day after 3 h: the menu")
+        XCTAssertTrue(StartFlow.returnShowsMenu(busy: false, d, now: at(19, 9, 0)))
+        XCTAssertFalse(StartFlow.returnShowsMenu(busy: true, d, now: at(19, 9, 0)), "a meal / bath / trip in progress: no menu")
+        StartFlow.noteLeft(d, at: at(18, 23, 55))
+        XCTAssertFalse(StartFlow.menuDueOnReturn(d, now: at(19, 0, 5)), "23:55 -> 00:05: under the 3 h floor")
+        XCTAssertTrue(StartFlow.menuDueOnReturn(d, now: at(19, 2, 55)), "3 h exactly, next day")
+        StartFlow.noteLeft(d, at: at(18, 6, 0))
+        XCTAssertFalse(StartFlow.menuDueOnReturn(d, now: at(18, 23, 0)), "17 h but the same day")
+    }
+
+    func testClockIsInjectable() {
+        let d = suite("clock")
+        let saved = StartFlow.clock; defer { StartFlow.clock = saved }
+        StartFlow.clock = { self.at(18, 21, 0) }
+        StartFlow.noteLeft(d)
+        StartFlow.clock = { self.at(19, 8, 0) }
+        XCTAssertTrue(StartFlow.menuDueOnReturn(d))
+    }
+
     func testNewGameWritesRosterCoinsAndFlagsOnceOnly() {
         let d = suite("once")
         let saved = JellyRoster.current

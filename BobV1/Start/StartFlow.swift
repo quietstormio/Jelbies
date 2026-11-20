@@ -44,6 +44,39 @@ final class StartFlow {
         d.bool(forKey: startedKey) || d.object(forKey: JellyRoster.rosterKey) != nil || d.object(forKey: DropsWallet.key) != nil
     }
 
+    // MARK: first return of the day
+
+    /// A return from the background shows the main menu when the local calendar day changed since the app was last on screen AND at least `menuReturnMinAway` has passed (a 23:55 -> 00:05 hop does not).
+    static let menuReturnMinAway: TimeInterval = 3 * 3600
+    /// The hour the player's "day" starts (0 = local midnight).
+    static let dayStartHour = 0
+    static let lastOnScreenKey = "Jelbies.lastOnScreen.v1"
+    /// The clock the rule reads (tests pin it).
+    nonisolated(unsafe) static var clock: () -> Date = { Date() }
+
+    /// The scene went to the background: remember when the app was last on screen. (Developer: `-LeftHoursAgo N` pretends it was N hours ago.)
+    static func noteLeft(_ d: UserDefaults = .standard, at t: Date = clock()) {
+        var when = t
+        #if DEBUG || targetEnvironment(simulator)
+        if d.object(forKey: "LeftHoursAgo") != nil { when = t.addingTimeInterval(-d.double(forKey: "LeftHoursAgo") * 3600) }
+        #endif
+        d.set(when.timeIntervalSince1970, forKey: lastOnScreenKey)
+    }
+
+    /// The whole rule: `busy` = a meal, bath, competition, trip, close-up... is on screen (the plain return then).
+    static func returnShowsMenu(busy: Bool, _ d: UserDefaults = .standard, now: Date = clock(), calendar: Calendar = .current) -> Bool {
+        !busy && menuDueOnReturn(d, now: now, calendar: calendar)
+    }
+
+    /// True on the first return of the day (the caller decides whether what is on screen may give way).
+    static func menuDueOnReturn(_ d: UserDefaults = .standard, now: Date = clock(), calendar: Calendar = .current) -> Bool {
+        guard d.object(forKey: lastOnScreenKey) != nil else { return false }
+        let left = Date(timeIntervalSince1970: d.double(forKey: lastOnScreenKey))
+        guard now.timeIntervalSince(left) >= menuReturnMinAway else { return false }
+        let shift = TimeInterval(-dayStartHour * 3600)
+        return !calendar.isDate(left.addingTimeInterval(shift), inSameDayAs: now.addingTimeInterval(shift))
+    }
+
     init() {
         let d = UserDefaults.standard
         phase = .menu

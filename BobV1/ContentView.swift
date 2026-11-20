@@ -7,6 +7,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var flow = StartFlow.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var introOn = IntroGate.shouldShow() && UserDefaults.standard.integer(forKey: "SkipIntro") == 0          // (-SkipIntro 1: capture aid)
     @State private var logoOn = !IntroGate.shouldShow() && UserDefaults.standard.integer(forKey: "SkipIntro") == 0          // every later cold launch: the ~1 s logo moment
     #if DEBUG
@@ -34,6 +35,7 @@ struct ContentView: View {
             }
             .onOpenURL { url in _ = GameRouter.shared.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|pet. Here at the root (not on GameScreen) so a tap that COLD-launches into the menu is heard; the route waits in `pending` until the room is up
             .onAppear { OrientationForce.apply() }
+            .onChange(of: scenePhase) { _, p in if p == .background { StartFlow.noteLeft() } }          // "last on screen", for the first-return-of-the-day menu (any screen)
             .overlay { if !introOn && !logoOn { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) } }          // no curtain over the intro clip
             .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)
         }

@@ -43,6 +43,12 @@ struct GameScreen: View {
     @State private var hudInfoH: CGFloat = 0          // measured: the info row (sleep-until-morning) under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var focus: BlobFocus { model.care.focus }
+    /// First return of the day AND only the room or the Town map is up (a meal, bath, competition, park / camp trip, close-up, Play or room arranging keeps the plain return).
+    private var menuDueOnReturn: Bool {
+        let c = model.care
+        let busy = !(town == nil || town == .town) || settingsOpen || c.trayOut || c.meal != nil || c.bath.active || c.tripActive || c.play.active || c.arranging || c.focus.isActive
+        return StartFlow.returnShowsMenu(busy: busy)
+    }
     /// Out somewhere (a Town screen, a race / show / volleyball, the café, the park, the groomer): the game clock runs faster (DayClock.setOutingRate).
     private var outing: Bool {
         let c = model.care
@@ -385,6 +391,12 @@ struct GameScreen: View {
                     return
                 }          // an `.inactive` blip (alert, Control Centre, app-switcher peek): nothing was torn down, nothing to rebuild
                 wentBackground = false
+                if menuDueOnReturn {          // the first return of the day: the main menu (Continue rebuilds the room from the save, which applies the time away once; so not here)
+                    DayClock.shared.snapToNow(); AudioHub.shared.setForeground(true); Ears.shared.setForeground(true)
+                    LiveActivities.shared.returnedActive(names: jellyNames, colors: model.care.jellyColorKeys, nobodyAsleep: !model.care.anySleepingOrWanted)
+                    withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.returnToMenu() }
+                    return
+                }
                 model.care.skipNightCutscene(force: true)          // back mid "Sleep until morning": finish the skip now
                 DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the bedtime check and the director see the foreground
                 model.care.voice.sceneBecameActive()          // a failed first-run speech download / a permission changed in Settings is retried
