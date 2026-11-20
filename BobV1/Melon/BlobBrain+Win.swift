@@ -14,7 +14,7 @@ extension BlobBrain {
     /// Bounces of the celebration, the apex of each (u; the plain joy is one hop of 0.12), the pause on the ground between two, and the arms' ease down at the end (s).
     static let winHops = 4
     static var winApex: Float { WinTuning.apex }
-    static let winLandHold: Float = 0.12
+    static let winLandHold: Float = 0.05
     static let winSettle: Float = 0.5
 
     /// `idleStart(.joy)` with `winCheer` set: four reps, the big face and the cheer.
