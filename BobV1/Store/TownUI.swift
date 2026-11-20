@@ -574,7 +574,10 @@ struct BagSheet: View {
     private var book: StoreBook { care.store }
 
     /// The tabs listed: Furniture only while the player owns a piece (the Shop no longer sells any, 2026-11-15).
-    private var tabs: [BagTab] { BagTab.allCases.filter { $0 != .furniture || !entries(.furniture).isEmpty } }
+    private var tabs: [BagTab] { Self.visibleTabs(book: book) }
+    static func visibleTabs(book: StoreBook) -> [BagTab] { BagTab.allCases.filter { $0 != .furniture || !StoreCatalog.decorItems(.furniture).filter { book.count($0.id) > 0 }.isEmpty } }
+    /// The "Arrange the room" button (move or put away placed pieces) shows on the Furniture and Toys tabs while anything is placed. Reached from the suitcase Bag, not from the paw menu.
+    static func offersArrange(tab: BagTab, book: StoreBook) -> Bool { tab.isDecor && !book.placedDecor.isEmpty }
     private func entries(_ t: BagTab) -> [StoreItem] {
         switch t {
         case .food: return StoreCatalog.items.filter { $0.food != nil && book.count($0.id) > 0 }
@@ -630,7 +633,7 @@ struct BagSheet: View {
                     Text(note).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(SK.honey.opacity(0.9))).accessibilityIdentifier("bag-wear-note")
                 }
-                if tab.isDecor, !book.placedDecor.isEmpty {
+                if Self.offersArrange(tab: tab, book: book) {
                     Button { AudioHub.shared.uiTap(); close(); care.beginArrange() } label: {
                         HStack(spacing: 8) { Image(systemName: "arrow.up.and.down.and.arrow.left.and.right").font(.system(size: 15, weight: .heavy)); Text("Arrange the room").font(SK.font(15, .black)) }
                             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 48).background(Capsule().fill(SK.honey))
