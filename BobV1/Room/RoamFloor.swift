@@ -25,6 +25,9 @@ extension GameCamera {
         var zs: [Float], hw: [Float]
         /// Per row, the x intervals inside +-hw that the furniture (sofa, plant, side table) leaves free for a body (empty = the whole row).
         var free: [[ClosedRange<Float>]] = []
+        /// Per row, the x intervals the HUD buttons alone leave free (empty list = the row has none built, e.g. no rails). `GameCamera.constrain` keeps every body out from under a button with these,
+        /// so a pair / group session's push cannot carry one there; the sofa, plant and table clearance is NOT in here (`free` has it, goals only).
+        var railFree: [[ClosedRange<Float>]] = []
         static let step: Float = 0.25
         /// Zones of `sampleZone`: 0 front, 1 back, 2 left, 3 right, 4 front-left, 5 front-right, 6 back-left, 7 back-right.
         static let zoneCount = 8
@@ -165,10 +168,10 @@ extension GameCamera {
         let maxZ = min(max(zb - roamBodyDepth, walkMaxZ), roamMaxZCap)
         let c = roamFurnitureClearance
         let cam = camera(aspect: aspect, gamePose: true)
-        let rails = (aspect < 1 ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
+        let rails = (aspect < 1 || HUDLayout.phoneMeasured ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
         let minZ = max(RoomLayout.minZ + c, campCap?.minZ ?? -.infinity)          // (the Camp yard: the first row is no further back than the cap, Park/CampScenery.swift)
         let wallX = RoomLayout.maxX - (roamLateralExtent + 0.05)          // (the body, wings and shadow stay off the side walls too)
-        var zs = [Float](), hw = [Float](), free = [[ClosedRange<Float>]]()
+        var zs = [Float](), hw = [Float](), free = [[ClosedRange<Float>]](), railFree = [[ClosedRange<Float>]]()
         var z = minZ
         while z <= maxZ + 1e-4 {
             // (the body's nearest surface, 0.25 u nearer than `visibleHalfWidthAtBody`'s depth, sets the width the screen allows)
@@ -176,20 +179,25 @@ extension GameCamera {
             let h = max(min(wide, wallX, campCap?.halfWidth ?? .infinity), 0.6)          // (the Camp yard: never wider than the fence, whatever the screen shows)
             // the free spans of the row: what the sofa, plant and table leave (sampled every 5 cm)
             var spans = [ClosedRange<Float>](), start: Float?
+            var rSpans = [ClosedRange<Float>](), rStart: Float?
             var x = -h
             while x <= h + 1e-4 {
                 let p = SIMD2(x, z)
-                let blocked = HUDLayout.bodyHitsRail(x: x, z: z, viewProj: cam.viewProj, size: size, rails: rails) || RoomLayout.sofaDistanceXZ(p) < c || RoomLayout.cylinders.contains { simd_distance(p, $0.centre) < $0.radius + c }
+                let underRail = HUDLayout.bodyHitsRail(x: x, z: z, viewProj: cam.viewProj, size: size, rails: rails)
+                let blocked = underRail || RoomLayout.sofaDistanceXZ(p) < c || RoomLayout.cylinders.contains { simd_distance(p, $0.centre) < $0.radius + c }
                 if !blocked { if start == nil { start = x } }
                 else if let s = start { spans.append(s ... x - 0.05); start = nil }
+                if !underRail { if rStart == nil { rStart = x } }
+                else if let s = rStart { rSpans.append(s ... x - 0.05); rStart = nil }
                 x += 0.05
             }
             if let s = start { spans.append(s ... h) }
-            zs.append(z); hw.append(h); free.append(spans.filter { $0.upperBound - $0.lowerBound > 0.1 })
+            if let s = rStart { rSpans.append(s ... h) }
+            zs.append(z); hw.append(h); free.append(spans.filter { $0.upperBound - $0.lowerBound > 0.1 }); railFree.append(rSpans)
             z += RoamFloor.step
         }
-        if let cap = parkRoamMaxZ { while zs.count > 2, let l = zs.last, l > cap + 1e-4 { zs.removeLast(); hw.removeLast(); free.removeLast() } }          // the park: a shorter play zone (Park/ParkRoom.swift)
-        let f = RoamFloor(aspect: aspect, minZ: minZ, maxZ: zs.last ?? maxZ, zs: zs, hw: hw, free: free)
+        if let cap = parkRoamMaxZ { while zs.count > 2, let l = zs.last, l > cap + 1e-4 { zs.removeLast(); hw.removeLast(); free.removeLast(); railFree.removeLast() } }          // the park: a shorter play zone (Park/ParkRoom.swift)
+        let f = RoamFloor(aspect: aspect, minZ: minZ, maxZ: zs.last ?? maxZ, zs: zs, hw: hw, free: free, railFree: railFree)
         roamFloor = f
         RoomLayout.setFront(z: f.maxZ + 0.8)
         let a = f.arena

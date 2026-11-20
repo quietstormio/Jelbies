@@ -419,6 +419,15 @@ enum GameCamera {
         let hw = roamFloor.map { max($0.halfWidth(at: q.z) + bodyHalfExtent - max(bodyHalfExtent, radius * 0.9), 0) }
             ?? max(visibleHalfWidthAtBody(z: q.z) * screenFill - max(bodyHalfExtent, radius * 0.9), 0)
         q.x = min(max(q.x, -hw), hw)
+        if let rf = roamFloor, !rf.railFree.isEmpty, let g = rf.zs.first, !rf.zs.isEmpty {          // no body stands under a HUD button, whatever pushed it there (RoamFloor.railFree)
+            let i = min(max(Int(floorf((q.z - g) / RoamFloor.step)), 0), rf.zs.count - 1)
+            for r in [i, min(i + 1, rf.zs.count - 1)] where r < rf.railFree.count {
+                let spans = rf.railFree[r]
+                if spans.isEmpty || spans.contains(where: { $0.contains(q.x) }) { continue }
+                if rf.free.isEmpty || r >= rf.free.count { continue }
+                if let nearest = spans.map({ min(max(q.x, $0.lowerBound), $0.upperBound) }).min(by: { abs($0 - q.x) < abs($1 - q.x) }) { q.x = nearest }
+            }
+        }
         return q
     }
 
