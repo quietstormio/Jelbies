@@ -12,7 +12,7 @@ final class PairRealAppUITests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         guard let out = env["PAIR_REAL_OUT"], !out.isEmpty, let kinds = env["PAIR_REAL_KINDS"], !kinds.isEmpty else { throw XCTSkip("PAIR_REAL_OUT / PAIR_REAL_KINDS not set") }
         let cast = env["PAIR_REAL_CAST"] ?? "bob,pip", orient = env["PAIR_REAL_ORIENT"] ?? "portrait"
-        let secs = env["PAIR_REAL_SECS"].flatMap(Double.init) ?? 30
+        let secs = env["PAIR_REAL_SECS"].flatMap(Double.init) ?? 150
         for kind in kinds.split(separator: ",").map(String.init) {
             let base = out + "/" + orient
             let dir = base + "/" + kind
@@ -26,20 +26,20 @@ final class PairRealAppUITests: XCTestCase {
             XCUIDevice.shared.orientation = orient == "landscape" ? .landscapeLeft : .portrait
             app.launch()
             let cont = app.buttons["Continue"]
-            if cont.waitForExistence(timeout: 20) { for _ in 0..<6 { if cont.exists, cont.isHittable { cont.tap() }; Thread.sleep(forTimeInterval: 1.5) } }
-            XCTAssertTrue(app.buttons["care-menu"].waitForExistence(timeout: 90), "\(kind): the room is up")
-            XCUIDevice.shared.orientation = orient == "landscape" ? .landscapeLeft : .portrait
-            Thread.sleep(forTimeInterval: 1)
             let t0 = Date()
-            try? String(format: "%.3f", t0.timeIntervalSince1970).write(toFile: base + "/" + kind + ".t0", atomically: true, encoding: .utf8)
+            try? String(format: "%.3f", t0.timeIntervalSince1970).write(toFile: base + "/" + kind + ".t0", atomically: true, encoding: .utf8)          // (frame f_<ms> is t0 + ms)
             func epoch(_ key: String) -> Double? {
                 guard let txt = try? String(contentsOfFile: log, encoding: .utf8), let r = txt.range(of: key + "=", options: .backwards) else { return nil }
                 return Double(txt[r.upperBound...].prefix(while: { $0 != "\n" && $0 != " " }))
             }
+            // (the demo starts by itself ~10-60 s after the launch whatever the test is doing: tap the intro's Continue while waiting, take NO screenshot until the emote has started, then one every loop to 2 s after it ends)
             var n = 0
             while Date().timeIntervalSince(t0) < secs {
-                let now = Date().timeIntervalSince1970
-                if let e = epoch("endEpoch"), now > e + 2.0 { break }
+                if epoch("startEpoch") == nil {
+                    if cont.exists, cont.isHittable { cont.tap() }
+                    Thread.sleep(forTimeInterval: 0.4); continue
+                }
+                if let e = epoch("endEpoch"), Date().timeIntervalSince1970 > e + 2.0 { break }
                 let ms = Int(Date().timeIntervalSince(t0) * 1000)
                 let png = XCUIScreen.main.screenshot().pngRepresentation
                 try? png.write(to: URL(fileURLWithPath: String(format: "%@/f_%06d.png", dir, ms)))
