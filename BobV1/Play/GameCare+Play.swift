@@ -81,6 +81,12 @@ extension GameCare {
         guard play.active || play.camBlend > 0 || GameCamera.playBlend != 0 else { return }
         if play.active, focus.isActive || bath.active || (tripActive && !parkPlayOpen) || (park.active && !parkPlayOpen) || guestBook.present { endPlay() }          // (Go home / the bedtime call ends the park's play first)
         play.tick(dt: dt, world: tossWorld(), jellies: play.active ? playJellies() : [])
+        #if targetEnvironment(simulator)
+        if play.active, DevArgs.enabled, UserDefaults.standard.integer(forKey: "PlayDemo") > 0 || UserDefaults.standard.integer(forKey: "BubbleDemo") != 0, Int(play.clock * 60) % 30 == 0 {          // (capture aid: how far each body sticks out of the screen, for the take's cut count)
+            let sz = play.viewSize
+            NSLog("[playtoss] frame t=%.2f blend %.2f cut %@", play.clock, GameCamera.playBlend, play.jellies.map { String(format: "%.0f", PlayTuning.edgeCut($0.pos, size: sz)) }.joined(separator: ","))
+        }
+        #endif
         if play.active, UserDefaults.standard.integer(forKey: "PlayDemo") > 0, Int(play.clock * 60) % 15 == 0 {
             let b = play.ball
             NSLog("[playtoss] t=%.2f %@ ball (%.2f %.2f %.2f) v (%.1f %.1f %.1f) jellies %@", play.clock, String(describing: play.phase), b.pos.x, b.pos.y, b.pos.z, b.vel.x, b.vel.y, b.vel.z,

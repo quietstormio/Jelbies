@@ -687,6 +687,19 @@ final class BubbleWand: PlayToy {
         if GameCamera.playFrame, !PlayTuning.old, let rf = GameCamera.roamFloor {          // play-frame-r1: never outside the floor the play camera shows (whole bodies in frame)
             zLo = max(zLo, rf.minZ); zHi = min(zHi, rf.maxZ)
             hx = min(hx, max(min(rf.halfWidth(at: zLo), rf.halfWidth(at: zHi)), 0.6))
+            // ... and no bigger than the area the old play view gave them, so the pop rate stays (a wider view must not scatter three Jelmiko over twice the floor)
+            if PlayTuning.camZoom < 1 {
+                let zoom = PlayTuning.zoomOverride; defer { PlayTuning.zoomOverride = zoom }
+                PlayTuning.zoomOverride = 1
+                if let b = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yTop), size: size),
+                   let f = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yBot), size: size),
+                   let ol = GameCamera.floorPoint(screen: CGPoint(x: size.width * xl, y: size.height * yBot), size: size),
+                   let orr = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) {
+                    let oldHx = max(min(abs(ol.x), abs(orr.x)) - 0.8, 1.2), oldSpan = max(f.y - b.y, 1.6)
+                    hx = min(hx, oldHx * 1.1)
+                    zLo = max(zLo, zHi - oldSpan * 1.15)
+                }
+            }
         }
         if zHi - zLo < 1.6 { zLo = zHi - 1.6 }
         zHi = max(zHi, zLo + 0.5)

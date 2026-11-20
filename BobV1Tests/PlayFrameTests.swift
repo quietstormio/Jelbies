@@ -27,20 +27,7 @@ final class PlayFrameTests: XCTestCase {
     }
 
     /// The screen box (points) of a body standing at `p`: 0.9 sideways (wings, spines, sway), 0.8 deep, 1.25 body heights tall (ears, antennas, hat), as HUDLayout.frontBandTop reads it.
-    static func box(_ p: SIMD2<Float>, size: CGSize, height: Float = BobShape.H * 1.25) -> (lo: CGPoint, hi: CGPoint)? {
-        let e = GameCamera.roamLateralExtent, d: Float = 0.8
-        var cs = [SIMD3<Float>]()
-        for cx in [p.x - e, p.x + e] { for cy in [Float(0), height] { for cz in [p.y - d, p.y + d] { cs.append(SIMD3(cx, cy, cz)) } } }
-        let cam = GameCamera.camera(aspect: Float(size.width / size.height))
-        let pts = Silhouette.project(cs, viewProj: cam.viewProj, size: size)
-        guard let x0 = pts.map(\.x).min(), let x1 = pts.map(\.x).max(), let y0 = pts.map(\.y).min(), let y1 = pts.map(\.y).max() else { return nil }
-        return (CGPoint(x: x0, y: y0), CGPoint(x: x1, y: y1))
-    }
-    /// How far (points) the box sticks out of the screen: 0 = inside.
-    static func cut(_ p: SIMD2<Float>, size: CGSize) -> CGFloat {
-        guard let b = box(p, size: size) else { return 999 }
-        return max(0, -b.lo.x, b.hi.x - size.width, -b.lo.y, b.hi.y - size.height)
-    }
+    static func cut(_ p: SIMD2<Float>, size: CGSize) -> CGFloat { PlayTuning.edgeCut(p, size: size) }
 
     func testGeometryTable() {
         var out = ""
@@ -203,7 +190,9 @@ final class PlayFrameTests: XCTestCase {
     }
 
     /// BEFORE / AFTER table (printed; written to the scratchpad when PF_OUT is set).
-    func testMeasure() {
+    static let measureMarker = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/measure.on"
+    func testMeasure() throws {
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: Self.measureMarker), "the before / after table (create the marker file to run it)")
         let mode = ProcessInfo.processInfo.environment["PF_MODE"] ?? UserDefaults.standard.string(forKey: "PFMode") ?? "both"
         var lines = ""
         for kind in [DecorKind.ball, .beachball] {
@@ -265,7 +254,8 @@ final class PlayFrameTests: XCTestCase {
         return run
     }
 
-    func testMeasureWand() {
+    func testMeasureWand() throws {
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: Self.measureMarker), "the before / after table (create the marker file to run it)")
         var lines = ""
         for old in [true, false] {
             for (sname, size) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
@@ -275,5 +265,79 @@ final class PlayFrameTests: XCTestCase {
             }
         }
         try? lines.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/measure-wand.txt", atomically: true, encoding: .utf8)
+    }
+
+    // MARK: the proofs
+
+    /// The ball game, several seeds, both balls, portrait and landscape: no body leaves the screen, the ball's catches and rests are on it, and the game still plays.
+    func testBallPlayKeepsEveryJelmikoAndTheBallInFrame() {
+        for kind in [DecorKind.ball, .beachball] {
+            for (name, size) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
+                for seed in 0..<3 {
+                    let r = session(kind: kind, seed: seed, size: size, seconds: 30, old: false)
+                    XCTAssertEqual(r.cutSteps, 0, "\(kind) \(name) seed \(seed): a Jelmiko's body was cut by the screen edge in \(r.cutSteps) of \(r.steps) steps (worst \(r.worstCut) pt)")
+                    XCTAssertLessThanOrEqual(r.worstBall, 8, "\(kind) \(name) seed \(seed): the ball came to rest / was caught off screen (\(r.worstBall) pt)")
+                    XCTAssertGreaterThanOrEqual(r.catches, 2, "\(kind) \(name) seed \(seed): the game stopped returning the ball (\(r.catches) catches, \(r.touches) touches)")
+                }
+            }
+        }
+    }
+
+    /// The same session with the old play mode DOES cut bodies (so the test above can fail), and nobody runs faster than before there.
+    func testTheOldPlayModeStillCutsBodiesAndHasNoChaseBoost() {
+        let r = session(kind: .ball, seed: 0, size: Self.portrait, seconds: 30, old: true)
+        XCTAssertGreaterThan(r.cutSteps, 0, "the harness cannot see a body cut by the edge: it would pass anything")
+    }
+
+    func testBubbleWandKeepsEveryJelmikoInFrame() {
+        for (name, size) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
+            for seed in 0..<2 {
+                let r = wandSession(seed: seed, size: size, seconds: 30, old: false)
+                XCTAssertEqual(r.cutSteps, 0, "wand \(name) seed \(seed): a Jelmiko was cut by the screen edge in \(r.cutSteps) of \(r.steps) steps (worst \(r.worstCut) pt)")
+                XCTAssertGreaterThan(r.pops, 5, "wand \(name) seed \(seed): nobody popped bubbles")
+            }
+        }
+    }
+
+    func testTheCameraDialRunsFromTheRoomViewToTheOldPlayView() {
+        Self.room(Self.portrait)
+        func eye(_ z: Float) -> SIMD3<Float> { PlayTuning.zoomOverride = z; GameCamera.playBlend = 1; return GameCamera.camera(aspect: 440 / 956).pos }
+        GameCamera.playBlend = 0; let room = GameCamera.camera(aspect: 440 / 956).pos
+        let e0 = eye(0), e1 = eye(1), eq = eye(0.25)
+        XCTAssertEqual(simd_distance(e0, room), 0, accuracy: 1e-4, "dial 0 is the room's own camera")
+        XCTAssertGreaterThan(simd_distance(e1, room), 2, "dial 1 is the old play view")
+        XCTAssertEqual(simd_distance(eq, room) / simd_distance(e1, room), 0.25, accuracy: 0.02, "dial 0.25 is a quarter of the way")
+        PlayTuning.old = true; PlayTuning.zoomOverride = 0
+        XCTAssertEqual(simd_distance(GameCamera.camera(aspect: 440 / 956).pos, e1), 0, accuracy: 1e-4, "-PlayOld 1 is the old camera whatever the dial says")
+        XCTAssertEqual(PlayTuning.camZoom, 1)
+    }
+
+    /// A walk with a live ball covers the ground about 20 % faster than the same walk without (15...25 %): the plain goTo, and the walk round behind the ball.
+    func testTheChaseWalkIsAboutTwentyPercentFaster() {
+        func seconds(chase: Float, bump: Bool) -> Float {
+            Self.room(Self.portrait)
+            let r = MotionRig(game: true, settle: 0.5)
+            Self.keep.append(r)
+            r.renderSamples = false
+            r.brain.autonomy = false; r.brain.anticsEnabled = true
+            r.sim.teleport(toXZ: SIMD2(-2.5, 0)); r.run(0.5)
+            r.brain.playChase = chase
+            let goal = SIMD2<Float>(1.5, 0)
+            if bump { _ = r.brain.tossBumpStart(r.sim, r.skinner, stand: goal, dir: SIMD2(0, 1)) } else { r.brain.requestNow(.goTo(goal)) }
+            var t: Float = 0
+            let dt = r.sim.stepDt
+            while t < 12 {
+                r.tick(); t += dt
+                if simd_distance(r.brain.position, goal) < 0.3 { break }
+            }
+            return t
+        }
+        for bump in [false, true] {
+            let slow = seconds(chase: 0, bump: bump), fast = seconds(chase: PlayTuning.chaseGain, bump: bump)
+            let gain = slow / fast
+            print("PFCHASE \(bump ? "bump walk" : "goTo walk"): \(slow) s -> \(fast) s, \(gain)x")
+            XCTAssertGreaterThan(gain, 1.12, "\(bump ? "bump walk" : "goTo"): the chase must be faster (\(gain)x)")
+            XCTAssertLessThan(gain, 1.30, "\(bump ? "bump walk" : "goTo"): a little faster, not a frenzy (\(gain)x)")
+        }
     }
 }

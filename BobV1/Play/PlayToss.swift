@@ -143,6 +143,14 @@ final class PlayToss {
         GameCamera.playFrame = true
         frameAspect = viewAspect
         GameCamera.refreshRoam(aspect: frameAspect)
+        frontWall()
+    }
+    /// The ball's front wall: the floor at the bottom of the play view (the ball is never left off the bottom edge); the room's 9 as before when the dial is 1.
+    private func frontWall() {
+        let was = GameCamera.playBlend
+        GameCamera.playBlend = 1; defer { GameCamera.playBlend = was }
+        guard let f = GameCamera.floorPoint(screen: CGPoint(x: viewSize.width / 2, y: viewSize.height * 0.94), size: viewSize) else { return }
+        TossTuning.zFront = min(9, max(f.y, catchZ() + 0.6))
     }
     private func frameOff() {
         GameCamera.playFrame = false; GameCamera.playFrameView = nil
@@ -323,6 +331,7 @@ final class PlayToss {
     private func reframe() {
         frameAspect = viewAspect
         GameCamera.refreshRoam(aspect: frameAspect)
+        frontWall()
         let line = jellies.filter { !$0.free }
         spots = Self.playSpots(count: line.count, size: viewSize)
         for (k, j) in line.sorted(by: { $0.pos.x < $1.pos.x }).enumerated() {
@@ -484,8 +493,9 @@ final class PlayToss {
         for j in jellies where !j.free && !except.contains(j.id) {
             guard !j.brain.tossBusy, Self.canHop(j.brain), j.brain.idleState.kind == nil, clock - (supportT[j.id] ?? -9) > PlayTuning.supportEvery else { continue }
             let d = simd_distance(j.pos, xz)
-            guard d > PlayTuning.supportMinDist, d < 7 else { continue }
+            guard d > PlayTuning.supportMinDist, d < PlayTuning.supportMaxDist else { continue }
             let step = min((d - PlayTuning.supportMinDist) * PlayTuning.supportReach, PlayTuning.supportMaxStep)
+            guard step >= PlayTuning.supportMinStep else { continue }          // (no shuffles: a step is worth walking)
             supportT[j.id] = clock
             j.brain.requestNow(.goTo(j.pos + (xz - j.pos) / d * step))
         }
