@@ -29,7 +29,7 @@ typealias IdleMood = BlobMood
 enum IdleTuning {
     static let okayZoomies: Float = 2.8, okayRun: Float = 3.4          // (2026-10-20, "too bland": was 0.8 / 0.6)
     /// Seconds between forced zoomies / runs while awake in the daytime and not grumpy (a visible burst every few minutes). Vars so the suites can shorten it.
-    nonisolated(unsafe) static var zoomUrge: ClosedRange<Float> = 70...110
+    nonisolated(unsafe) static var zoomUrge: ClosedRange<Float> = 30...55
     /// Seconds between the solo emotes (the treat slot, 2026-11-02): about one per 3 minutes per Jelbie.
     /// 2026-11-06 "play more often": 200...380 s divided by `treatSpeedUp` (the solo emotes carry vocals: hic, achoo, spin-hug, star-sigh...). A test sets the old range for its "before".
     static let treatSpeedUp: Float = 1.3
@@ -112,7 +112,7 @@ enum IdleKind: String, CaseIterable, Sendable {
 enum IdleTable {
     static func weights(_ m: IdleMood) -> [(kind: IdleKind, weight: Float)] {
         switch m {
-        case .happy: return [(.run, 3.0), (.jacks, 3), (.zoomies, 3.0), (.slide, 1.4), (.scoot, 1.6), (.look, 0.8), (.joy, 3), (.wander, 2)]
+        case .happy: return [(.run, 4.5), (.jacks, 3), (.zoomies, 5.0), (.slide, 1.4), (.scoot, 1.6), (.look, 0.8), (.joy, 3), (.wander, 2)]
         case .okay: return [(.sit, 1.5), (.look, 2), (.yawn, 0.8), (.joy, 0.8), (.scoot, 0.8), (.zoomies, IdleTuning.okayZoomies), (.run, IdleTuning.okayRun), (.wander, 2)]          // (zoomies + runs in okay too: the happy table alone almost never came up)
         case .grumpy: return [(.slump, 3), (.wander, 2)]
         }
@@ -165,17 +165,11 @@ enum IdleTable {
     static func set(_ m: IdleMood) -> Set<IdleKind> { Set(weights(m).map { $0.kind }.filter { $0 != .wander }) }
     /// Weighted pick, never `last`. `r` in 0..<1.
     static func pick(_ m: IdleMood, last: IdleKind?, r: Float, night: Float = 0, morning: Float = 0, sleep: Bool = false, antics: Bool = false, music: Bool = false,
-                     cooling: Set<IdleKind> = [], anticMul: Float = 1, decor: Set<IdleKind> = [], recent: Set<IdleKind> = [], scale: ((IdleKind) -> Float)? = nil, family: VarietyFamily? = nil, extra: ((IdleKind) -> Float)? = nil) -> IdleKind {
+                     cooling: Set<IdleKind> = [], anticMul: Float = 1, decor: Set<IdleKind> = [], recent: Set<IdleKind> = [], scale: ((IdleKind) -> Float)? = nil, family: VarietyFamily? = nil) -> IdleKind {
         // never the same special twice in a row (unless the mood has only one), and none that is still on its own cooldown
         var w = weights(m, night: night, morning: morning, sleep: sleep, antics: antics, music: music, anticMul: anticMul, decor: decor).filter { $0.kind != last || $0.kind == .wander || set(m).count < 2 }
         if let family { let f = w.filter { BlobBrain.varietyFamily($0.kind) == family }; if !f.isEmpty { w = f } }          // (the shuffle-bag's family, when the table has one)
         if let scale { for i in w.indices { w[i].weight *= scale(w[i].kind) } }
-        if let extra {          // (cluster / room memory: the specials trade shares among themselves; the non-wander mass stays, so nothing leaks into wander = no start)
-            let before = w.reduce(0) { $0 + ($1.kind == .wander ? 0 : $1.weight) }
-            for i in w.indices where w[i].kind != .wander { w[i].weight *= extra(w[i].kind) }
-            let after = w.reduce(0) { $0 + ($1.kind == .wander ? 0 : $1.weight) }
-            if before > 0, after > 1e-6 { let g = min(4, before / after); for i in w.indices where w[i].kind != .wander { w[i].weight *= g } }
-        }
         if !cooling.isEmpty { let f = w.filter { !cooling.contains($0.kind) }; if !f.isEmpty { w = f } }
         if !recent.isEmpty { let f = w.filter { $0.kind == .wander || !recent.contains($0.kind) }; if f.contains(where: { $0.kind != .wander }) { w = f } }          // (his own last three picks stay out while there is anything else)
         let total = w.reduce(0) { $0 + $1.weight }
@@ -330,15 +324,7 @@ extension BlobBrain {
         if (sleepEnabled || anticsEnabled), runMoveDemo == nil, zoomUrge <= 0, idleMood != .grumpy, idleNight < 0.5, idleDeepNight < 0.5, !race.active, fastOthers() < 2 {
             let ur = rand()
             var k: IdleKind = ur < 0.5 ? .zoomies : (ur < 0.85 ? .run : .slide)
-            if anticsEnabled {          // (the room: his own last three picks and what a friend just did stay out while anything else is free; a dash the room showed lately is less likely)
-                let base: [(IdleKind, Float)] = [(.zoomies, 0.5), (.run, 0.35), (.slide, 0.15)]
-                let cand = base.map { ($0.0, $0.1 * varietyNewScale($0.0)) }
-                let free = cand.filter { !idleState.recent.contains($0.0) && !kindCooling.contains($0.0) }
-                let pool = free.isEmpty ? cand : free
-                var x = ur * pool.reduce(0) { $0 + $1.1 }
-                k = pool.last!.0
-                for (kk, ww) in pool { if x < ww { k = kk; break }; x -= ww }
-            } else if idleState.recent.contains(k) || kindCooling.contains(k), let alt = [IdleKind.zoomies, .run, .slide].first(where: { !idleState.recent.contains($0) && !kindCooling.contains($0) }) { k = alt }          // (not his own last pick again, nor what a friend just did)
+            if idleState.recent.contains(k) || kindCooling.contains(k), let alt = [IdleKind.zoomies, .run, .slide].first(where: { !idleState.recent.contains($0) && !kindCooling.contains($0) }) { k = alt }          // (not his own last pick again, nor what a friend just did)
             let blockedByFriend = anticsEnabled && kindCooling.contains(k)          // (no dash is free: a friend is in one right now - wait a moment, never start the same moment's twin)
             let started = !blockedByFriend && idleStart(k, sim)
             zoomUrge = started ? rand(IdleTuning.zoomUrge.lowerBound, IdleTuning.zoomUrge.upperBound) : (blockedByFriend ? rand(1.5, 3) : 20)
@@ -369,8 +355,7 @@ extension BlobBrain {
         var kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand(), night: idleNight, morning: idleMorning, sleep: sleepEnabled, antics: anticsEnabled, music: musicPlaying,
                                                  cooling: anticsEnabled ? kindCooling : [], anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
                                                  decor: decorOffers, recent: anticsEnabled ? Set(idleState.recent) : [],
-                                                 scale: anticsEnabled ? { [unowned self] in self.varietyScale($0) } : nil, family: vFamily,
-                                                 extra: anticsEnabled ? { [unowned self] in self.varietyNewScale($0) } : nil)
+                                                 scale: anticsEnabled ? { [unowned self] in self.varietyScale($0) } : nil, family: vFamily)
         if sleepEnabled, runMoveDemo == nil, kind != .wander, kind != .sleep, idleNight < 0.2, rand() < 0.012 { kind = .sleep }       // a daytime nap now and then
         if varietyPeerJustStarted(kind) { kind = .wander }          // (never two of the same special within 10 s)
         if kind == .wander, RoamVoiceBoost.enabled, !voiceMuted, AudioHub.shared.atHome, let c = JellyVoiceSet.contextVoice(forIdle: .wander, mood: idleMood) {          // (2026-11-09: a walking Jelbie hums along: lala / pfft, home only)
@@ -387,49 +372,27 @@ extension BlobBrain {
     }
 
     /// The solo emote slot: when its own clock is due (and it is a quiet moment), one emote by the mood's treat table. It leaves the cooldown cycle alone (see `idleEnd`).
-    /// emote-variety-r1: his own last three treat picks (and his last three solo picks) stay out while anything else is free, the cluster / room memory apply, the rare kinds
-    /// have a floor share, and at night (>= 0.6, awake) the night-only batch-2 kind (stargazing) can be drawn: the old `idleNight < 0.6` guard made stargazing unreachable.
     func treatMaybeStart(_ sim: SoftBody) -> Bool {
         let cooling = kindCooling
-        if idleNight >= 0.6 {
-            guard anticsEnabled, idleDeepNight < 0.5, treat2Free else { idleState.treat = rand(8, 15); return false }
-            let pool = treat2Pool.filter { $0.idle == .stargazing }          // (the night-only kind; the floor nap goes straight to bed at bedtime hours, that stays the night rule's business)
-            guard !pool.isEmpty else { idleState.treat = rand(8, 15); return false }
-            let ws = pool.map { $0.weight * ($0.idle.map { varietyNewScale($0) } ?? 1) }
-            var x = rand() * ws.reduce(0, +)
-            var e = pool.last!
-            for (i, w) in ws.enumerated() { if x < w { e = pool[i]; break }; x -= w }
-            let started = treat2Start(e, sim)
+        var w = IdleTable.treatWeights(idleMood).filter { !cooling.contains($0.kind) && !varietyPeerJustStarted($0.kind) }
+        for i in w.indices { w[i].weight *= varietyScale(w[i].kind) }
+        let total = w.reduce(0) { $0 + $1.weight }
+        guard total > 0, idleNight < 0.6 else { idleState.treat = rand(8, 15); return false }
+        // batch 2 (BlobBrain+Emotes2.swift) shares the slot: its eligible entries are drawn against the batch-1 table by weight
+        let t2 = treat2Free ? treat2Pool.reduce(0) { $0 + $1.weight } : 0
+        var x = rand() * (total + t2)
+        if x >= total {
+            let started = treat2Pick(sim)
             idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
-            if started { noteTreat(e.name) }
             return started
         }
-        struct Item { var name: String; var idle: IdleKind?; var entry: EmoteTreats.Entry?; var w: Float }
-        var items = IdleTable.treatWeights(idleMood).filter { !cooling.contains($0.kind) && !varietyPeerJustStarted($0.kind) }
-            .map { Item(name: $0.kind.rawValue, idle: $0.kind, entry: nil, w: $0.weight * varietyScale($0.kind)) }
-        guard items.reduce(0, { $0 + $1.w }) > 0 else { idleState.treat = rand(8, 15); return false }
-        // batch 2 (BlobBrain+Emotes2.swift) shares the slot: its eligible entries are drawn against the batch-1 table by weight
-        if treat2Free { for e in treat2Pool { items.append(Item(name: e.name, idle: e.idle, entry: e, w: e.weight)) } }
-        for i in items.indices {
-            if let k = items[i].idle { items[i].w *= varietyNewScale(k) }
-            else if let sk = items[i].entry?.social { items[i].w *= varietyClusterMul(sk, with: []) }
-        }
-        let rec = Set(variety.treatRecent)
-        let fresh = items.filter { !rec.contains($0.name) && !($0.idle.map { idleState.recent.contains($0) } ?? false) }          // (his own last three: treats and solo picks)
-        if !fresh.isEmpty { items = fresh }
-        var ws = items.map { $0.w }
-        Self.raiseFloors(&ws, floor: { _ in VarietyTuning.treatFloor })
-        var x = rand() * ws.reduce(0, +)
-        var pick = items.last!
-        for (i, w) in ws.enumerated() { if x < w { pick = items[i]; break }; x -= w }
-        let started: Bool
-        if let e = pick.entry { started = treat2Start(e, sim) }
-        else { started = idleStart(pick.idle!, sim); if started { kindCooldownStart(pick.idle!) } }
+        var kind = w.last!.kind
+        for e in w { if x < e.weight { kind = e.kind; break }; x -= e.weight }
+        let started = idleStart(kind, sim)
         idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
-        if started { noteTreat(pick.name) }
+        if started { kindCooldownStart(kind) }
         return started
     }
-    func noteTreat(_ n: String) { variety.treatRecent.append(n); if variety.treatRecent.count > 3 { variety.treatRecent.removeFirst() } }
 
     /// Mood shapes the ordinary wander table too: grumpy skips waves and play, and idles longer.
     func idleShapeWander(_ w: inout [(Int, Float)]) {

@@ -15,42 +15,6 @@ import Foundation
 
 enum VarietyFamily: Int, CaseIterable, Sendable { case movement, spot, rest, decor, social }
 
-/// Look-alike clusters (emote-variety-r1): moves that read as "the same thing" from the sofa, whichever table they come from.
-enum EmoteCluster: Int, CaseIterable, Sendable {
-    case hop, spin, hug, dance, chase, dash
-    static func of(_ k: IdleKind) -> EmoteCluster? {
-        switch k {
-        case .bounce, .scoot, .jacks, .joy, .skipHop, .hopscotch, .flapHop: return .hop
-        case .tail, .legSpin, .oneLegSpin: return .spin
-        case .zoomies, .run, .slide, .trot, .stumble: return .dash
-        default: return nil
-        }
-    }
-    static func of(_ k: SocialKind) -> EmoteCluster? {
-        switch k {
-        case .hopAlong, .bellyBounce: return .hop
-        case .twirl: return .spin
-        case .groupHug, .swayHug, .spinHug, .cuddleLean, .cuddle, .nuzzle: return .hug
-        case .dance, .danceOff, .mirrorDance, .circleDance, .ringDance, .ringAround: return .dance
-        case .chase, .tag, .keepAway, .littleRace: return .chase
-        case .zoomies: return .dash
-        default: return nil
-        }
-    }
-    /// The solo kinds of a cluster (the echo window blocks them all for a few seconds).
-    static let idleKinds: [EmoteCluster: Set<IdleKind>] = Dictionary(uniqueKeysWithValues: EmoteCluster.allCases.map { c in (c, Set(IdleKind.allCases.filter { EmoteCluster.of($0) == c })) })
-}
-
-/// One start in the household's recent list (the last ~25 s): what, which cluster, and whether it was done together (pair / group / joining a friend).
-struct RoomStart {
-    var t: Float
-    var idle: IdleKind?
-    var social: SocialKind?
-    var cluster: EmoteCluster?
-    var together: Bool
-    var crew: [Int]
-}
-
 enum VarietyTuning {
     /// Seconds for a kind to come back to full weight (x floor right after); the big specials take longer.
     static let recover: Float = 210, bigRecover: Float = 360, floor: Float = 0.05
@@ -67,12 +31,6 @@ enum VarietyTuning {
     /// Pip's tail antics (BlobBrain+TailPlay.swift); `.tail` (the spin after his own tail) is his too.
     static let tailKinds: Set<IdleKind> = [.tailThump, .tailHug]
     static let socialBoost: Float = 2.5, socialBoostFor: Float = 15
-    /// Emote variety (emote-variety-r1): the same cluster as his own last / second-last pick is nearly the same thing; the room's memory of the last seconds.
-    /// `-EmoteLog 1` (dev arguments only): one console line per emote start, for the real-app count of distinct emotes and repeats.
-    static let emoteLog: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "EmoteLog")
-    static let clusterMul: Float = 0.35
-    static let roomWindow: Float = 25, roomKindMul: Float = 0.3, roomClusterMul: Float = 0.6
-    static let treatFloor: Float = 0.025
 
     /// Personality per CHARACTER (the roster's feature: none = Bob, spines = Pip, daisy = Moss, wings = Lavender). Edit here.
     struct Personality {
@@ -105,12 +63,6 @@ struct VarietyBook {
     var lastFamily: VarietyFamily?
     var bag: [VarietyFamily] = []
     var socialUntil: Float = -1
-    /// Clusters of his own last two starts (nil = a start with no cluster), newest last.
-    var lastPicks: [EmoteCluster?] = []
-    /// His own starts of the last ~25 s (the others read this: the room's memory).
-    var roomLog: [RoomStart] = []
-    /// His last three treat-slot picks (names).
-    var treatRecent: [String] = []
 }
 
 extension BlobBrain {
@@ -142,25 +94,11 @@ extension BlobBrain {
         guard anticsEnabled, k != .wander, k != .sleep else { return }
         variety.last[k] = variety.now
         variety.lastFamily = Self.varietyFamily(k)
-        if VarietyTuning.emoteLog { print("[emote] t=\(String(format: "%.1f", variety.now)) j\(steerID) idle:\(k.rawValue)\(social != nil ? " (in a session)" : "")") }
-        let together = social != nil          // (a dance's jacks, a joined zoomies: the session's own moves are not a solo pick)
-        varietyRecord(RoomStart(t: variety.now, idle: k, social: nil, cluster: EmoteCluster.of(k), together: together, crew: together ? (social?.members.map { $0.steerID } ?? []) : []), pick: !together)
-    }
-    /// The household's list and his own last two clusters.
-    func varietyRecord(_ e: RoomStart, pick: Bool) {
-        let now = variety.now          // (read first: the closure must not touch `variety` while it is being mutated: an exclusivity trap in Release)
-        variety.roomLog.removeAll { now - $0.t > VarietyTuning.roomWindow }
-        variety.roomLog.append(e)
-        if pick { variety.lastPicks.append(e.cluster); if variety.lastPicks.count > 2 { variety.lastPicks.removeFirst() } }
     }
     /// A social session began (both sides).
-    func varietyNoteSocial(_ k: SocialKind, with o: BlobBrain?, crew: [Int]? = nil) {
+    func varietyNoteSocial(_ k: SocialKind, with o: BlobBrain?) {
         guard anticsEnabled else { return }
-        if VarietyTuning.emoteLog { print("[emote] t=\(String(format: "%.1f", variety.now)) j\(steerID) social:\(k.rawValue)") }
-        for b in [self, o].compactMap({ $0 }) {
-            b.variety.lastSocial[k] = b.variety.now; b.variety.lastSocialAny = b.variety.now; b.variety.lastFamily = .social
-            b.varietyRecord(RoomStart(t: b.variety.now, idle: nil, social: k, cluster: EmoteCluster.of(k), together: true, crew: crew ?? [steerID, o?.steerID].compactMap { $0 }), pick: true)
-        }
+        for b in [self, o].compactMap({ $0 }) { b.variety.lastSocial[k] = b.variety.now; b.variety.lastSocialAny = b.variety.now; b.variety.lastFamily = .social }
         variety.socialUntil = -1
     }
 
@@ -177,13 +115,6 @@ extension BlobBrain {
         }
         if variety.lastFamily == Self.varietyFamily(k) { m *= VarietyTuning.familyRepeat }
         if let p = VarietyTuning.personality[personalityKey] { for (s, x) in p.idle where s.contains(k) { m *= x } }
-        m *= varietyPeerFactor(k)
-        if anticsEnabled { m *= toyWeight(k) }          // (a fresh toy pulls; a long-standing one less; just played, hardly: BlobBrain+ToyPlay.swift)
-        return max(0.01, m)
-    }
-    /// The anti-sync part of `varietyScale`: a kind a friend is doing or began lately.
-    func varietyPeerFactor(_ k: IdleKind) -> Float {
-        var m: Float = 1
         for o in variedPeers where k != .look {
             if o.idleState.kind == k { m *= VarietyTuning.syncMul; continue }
             if let t = o.variety.last[k] {
@@ -191,47 +122,9 @@ extension BlobBrain {
                 if ago < VarietyTuning.startGap { m *= 0.02 } else if ago < VarietyTuning.syncWindow { m *= VarietyTuning.syncMul }
             }
         }
-        return m
+        if anticsEnabled { m *= toyWeight(k) }          // (a fresh toy pulls; a long-standing one less; just played, hardly: BlobBrain+ToyPlay.swift)
+        return max(0.01, m)
     }
-
-    /// Emote variety (emote-variety-r1), on top of `varietyScale`: x0.35 when the kind's cluster was his own last / second-last pick; the room's memory (a kind any
-    /// other Jelmiko started in the last 25 s x0.3, the same cluster x0.6; never stricter than the anti-sync factor it overlaps; what the participants did TOGETHER is exempt).
-    func varietyNewScale(_ k: IdleKind) -> Float {
-        guard anticsEnabled, k != .wander, k != .look, k != .sleep else { return 1 }
-        let cl = EmoteCluster.of(k)
-        var m: Float = 1
-        if let cl, variety.lastPicks.contains(where: { $0 == cl }) { m *= VarietyTuning.clusterMul }
-        var room: Float = 1
-        for o in variedPeers {
-            for e in o.variety.roomLog where o.variety.now - e.t < VarietyTuning.roomWindow {
-                if e.together && e.crew.contains(steerID) { continue }
-                if e.idle == k { room = min(room, VarietyTuning.roomKindMul) } else if let cl, e.cluster == cl { room = min(room, VarietyTuning.roomClusterMul) }
-            }
-        }
-        if room < 1 { m *= min(1, room / max(varietyPeerFactor(k), 0.001)) }
-        return m
-    }
-    /// The cluster factor of a social kind: x0.35 when either of the pair (or the crew) did the cluster in the last two picks.
-    func varietyClusterMul(_ k: SocialKind, with others: [BlobBrain]) -> Float {
-        guard anticsEnabled, let cl = EmoteCluster.of(k) else { return 1 }
-        return ([self] + others).contains { $0.variety.lastPicks.contains { $0 == cl } } ? VarietyTuning.clusterMul : 1
-    }
-
-    /// Raise the entries under their floor share to it; the extra comes off the three largest other entries (the total stays). `floor(i)` = the floor share of entry i (0 = none).
-    static func raiseFloors(_ w: inout [Float], floor: (Int) -> Float) {
-        let total = w.reduce(0, +)
-        guard total > 0 else { return }
-        var add = [Int: Float]()
-        for i in w.indices where w[i] > 0 { let need = floor(i) * total - w[i]; if need > 0 { add[i] = need } }
-        let sum = add.values.reduce(0, +)
-        guard sum > 0 else { return }
-        let tops = w.indices.filter { add[$0] == nil }.sorted { w[$0] > w[$1] }.prefix(3)
-        let topSum = tops.reduce(0) { $0 + w[$1] }
-        guard topSum > 2 * sum else { return }
-        for i in tops { w[i] -= sum * w[i] / topSum }
-        for (i, a) in add { w[i] += a }
-    }
-
     /// A friend began this very special within the start gap (the scheduler turns such a pick into a wander).
     func varietyPeerJustStarted(_ k: IdleKind) -> Bool {
         guard anticsEnabled, k != .wander, k != .look, k != .sleep else { return false }
@@ -273,7 +166,6 @@ extension BlobBrain {
             var m: Float = 1
             for b in [self, o] { if let t = b.variety.lastSocial[k] { m *= VarietyTuning.floor + (1 - VarietyTuning.floor) * min(1, (b.variety.now - t) / VarietyTuning.socialRecover) } }
             if let p { for (s, x) in p.social where s.contains(k) { m *= x } }
-            m *= varietyClusterMul(k, with: [o])
             w[i].1 *= max(0.01, m)
         }
     }

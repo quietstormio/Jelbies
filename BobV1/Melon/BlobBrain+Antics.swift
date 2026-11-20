@@ -57,9 +57,7 @@ extension BlobBrain {
         let c = Self.kindCooldown(k) * (outingPlay && Self.decorKinds.contains(k) ? ParkPlayTuning.cooldownMul : 1); if c > 0 { kindCool[k] = c }
     }
     /// Kinds that may not be picked now: on their own cooldown, or what the others are doing this moment (two Jellies do not do the same thing at once).
-    var kindCooling: Set<IdleKind> { kindCoolingSet(clusters: true) }
-    /// `clusters: false` = the old family-only echo (the walk flourishes use it: their small pool must not shrink to the calm ones).
-    func kindCoolingSet(clusters: Bool) -> Set<IdleKind> {
+    var kindCooling: Set<IdleKind> {
         var s = Set(kindCool.keys)
         for o in socialOthers() {
             guard let k = o.idleState.kind, k != .wander, k != .look, k != .sleep else { continue }
@@ -68,7 +66,7 @@ extension BlobBrain {
             s.insert(k)
         }
         // what a friend began a moment ago (the echo window), with its family
-        for o in socialOthers() where o !== self { for k in o.idleState.echo.keys where k != .wander && k != .look && k != .sleep { s.formUnion(Self.family(k)); if clusters, let c = EmoteCluster.of(k) { s.formUnion(EmoteCluster.idleKinds[c] ?? []) } } }          // (the whole look-alike cluster, not only the dash / hop families)
+        for o in socialOthers() where o !== self { for k in o.idleState.echo.keys where k != .wander && k != .look && k != .sleep { s.formUnion(Self.family(k)) } }
         return s
     }
 

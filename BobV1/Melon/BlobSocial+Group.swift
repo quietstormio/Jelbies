@@ -30,7 +30,7 @@ enum GroupTuning {
     /// Others close by (not counting the asker) before a group roll may start. 1 = two Jelmiko present, but only for kinds marked `isTwoBody` (none yet: the calm 2-body group kinds come in a later round); the 3-body kinds still need two others.
     static let minCompany = 1
     /// Pick weights (the hug is the favourite).
-    static let weights: [(SocialKind, Float)] = [(.groupHug, 5.0), (.groupCheer, 3.5), (.conga, 3.5), (.circleDance, 3.5)]
+    static let weights: [(SocialKind, Float)] = [(.groupHug, 14.0), (.groupCheer, 3.0), (.conga, 2.7), (.circleDance, 3.0)]
     /// Neighbouring bodies in a huddle / ring touch at this fraction of `peerGap`; a loose circle keeps this fraction.
     static let touch: Float = 0.78, loose: Float = 1.15
     static let steps = 8, stepAngle: Float = .pi / 4.5
@@ -79,7 +79,7 @@ extension BlobBrain {
             if k.isFast, fastOthers(except: crew) > 0 { continue }
             if near.count < 2, !k.isTwoBody { continue }          // (the 3-body kinds keep their rule: two others)
             let base = k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)
-            w.append((k, (repeated ? base * 0.3 : base) * varietyClusterMul(k, with: crew)))          // (a hug may follow a hug, much less often)
+            w.append((k, repeated ? base * 0.6 : base))          // (a hug may follow a hug, less often: it is the favourite)
         }
         if w.isEmpty { if near.count < 2 { socialBook.groupIdle = socialBook.groupLimit * 0.7; return }; w = [(.groupHug, 1)] }
         var x = rand() * w.reduce(0) { $0 + $1.1 }
@@ -158,7 +158,7 @@ extension BlobBrain {
         default: return false
         }
         for m in crew { m.socialBook.passThrough = (kind == .groupHug || kind == .circleDance); m.socialBook.hold = true; m.socialBook.faceYaw = m.yawTo(s.home0) }
-        for m in crew { m.varietyNoteSocial(kind, with: nil, crew: crew.map { $0.steerID }) }
+        for m in crew { m.varietyNoteSocial(kind, with: nil) }
         return true
     }
 
