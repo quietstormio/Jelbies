@@ -393,4 +393,24 @@ final class WallPictureTests: XCTestCase {
             XCTAssertLessThan(p.y + p.outerHeight / 2, top - 0.1, "\(room): a little clear of the screen's top edge (top \(top))")
         }
     }
+
+    // MARK: the editor's hint about spots that only show upright
+
+    func testTheUprightOnlyHintShowsInThePortraitOnlySpotsAndNotWhereItShowsBothWays() throws {
+        XCTAssertEqual(WallZone.uprightOnlyHint, "Up here it only shows when the phone is upright. Between the windows it shows both ways.")
+        for room in [RoomID.home, .loft, .cabin] {
+            let band = try XCTUnwrap(WallZone.defaultPlacement(room: room, frame: .wood, shape: .landscape, file: "f"))
+            XCTAssertTrue(WallZone.showsUprightOnlyHint(band, in: room), "\(room): the first hang (above the windows) is the circled spot, and says so")
+            let side = try XCTUnwrap(WallZone.defaultPlacement(room: room, frame: .wood, shape: WallZone.defaultShape(room: room, sideways: true), file: "f", sideways: true))
+            XCTAssertFalse(WallZone.showsUprightOnlyHint(side, in: room), "\(room): in the spot that shows both ways the line is hidden")
+        }
+        XCTAssertFalse(WallZone.showsUprightOnlyHint(sample(), in: .cafe), "a room with no spots: no line")
+        // dragging it into the gap hides the line, dragging it back shows it again
+        let s = try XCTUnwrap(WallEditSession.make(photo: URL(fileURLWithPath: "/tmp/x.jpg"), imageSize: CGSize(width: 1320, height: 2868), existing: nil, owned: [.wood], room: .home, sideways: false))
+        XCTAssertTrue(WallZone.showsUprightOnlyHint(s.draft, in: .home))
+        s.setShape(.portrait, room: .home); s.move(to: SIMD2(-1.5, 3.0)); s.settle(.home)
+        XCTAssertFalse(WallZone.showsUprightOnlyHint(s.draft, in: .home))
+        s.move(to: SIMD2(0, 6)); s.settle(.home)
+        XCTAssertTrue(WallZone.showsUprightOnlyHint(s.draft, in: .home))
+    }
 }

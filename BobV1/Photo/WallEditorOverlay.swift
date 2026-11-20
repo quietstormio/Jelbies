@@ -116,7 +116,7 @@ struct WallEditorOverlay: View {
                 VStack(spacing: 8) {
                     if !compact { header }          // (a phone on its side: the hint is the panel's first line, so the band above the windows stays clear)
                     Spacer(minLength: 0)
-                    panel(height: g.size.height * (compact ? (ax ? 0.52 : 0.34) : (ax ? 0.55 : 0.42)))
+                    panel(height: panelLimit(size: g.size, bottomInset: max(inset.bottom, 0)))
                 }
                 .padding(.leading, inset.leading + 16).padding(.trailing, inset.trailing + 16)
                 .padding(.top, max(inset.top, 0) + 8).padding(.bottom, max(inset.bottom, 0) + 10)
@@ -161,6 +161,7 @@ struct WallEditorOverlay: View {
         VStack(spacing: 2) {
             Text("Hang your picture").font(SK.font(18, .black)).foregroundStyle(SK.ink)
             Text(hint).font(SK.font(12, .bold)).foregroundStyle(SK.muted).multilineTextAlignment(.center)
+            if uprightOnly { Text(WallZone.uprightOnlyHint).font(SK.font(12, .bold)).foregroundStyle(SK.muted).multilineTextAlignment(.center).accessibilityIdentifier("wall-edit-upright-hint") }
         }
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 16).padding(.vertical, 8)
@@ -169,6 +170,8 @@ struct WallEditorOverlay: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// The picture hangs where a phone on its side does not show it (WallZone.showsUprightOnlyHint).
+    private var uprightOnly: Bool { WallZone.showsUprightOnlyHint(session.draft, in: care.roomID) }
     private var hint: String { session.photoMode ? "Drag to slide the photo, pinch to zoom it" : "Drag to move it, pinch or drag the corner to size it" }
     private var ax: Bool { dts.isAccessibilitySize }
 
@@ -177,7 +180,10 @@ struct WallEditorOverlay: View {
     /// The controls scroll when they do not fit (large text, a small phone, a phone on its side); Cancel and Done stay pinned under them, always on screen.
     private func panel(height: CGFloat) -> some View {
         let controls = VStack(spacing: 8) {
-            if compact { Text(hint).font(SK.font(12, .bold)).foregroundStyle(SK.muted).multilineTextAlignment(.center) }
+            if compact {
+                Text(hint).font(SK.font(12, .bold)).foregroundStyle(SK.muted).multilineTextAlignment(.center)
+                if uprightOnly { Text(WallZone.uprightOnlyHint).font(SK.font(12, .bold)).foregroundStyle(SK.muted).multilineTextAlignment(.center).accessibilityIdentifier("wall-edit-upright-hint") }
+            }
             if ax {
                 modeToggle; shapeButtons; frameStrip; photoActions
             } else if compact {
@@ -185,7 +191,6 @@ struct WallEditorOverlay: View {
                     HStack(spacing: 8) { modeToggle; shapeButtons; Spacer(minLength: 0); frameStrip }
                     VStack(spacing: 8) { HStack(spacing: 8) { modeToggle; Spacer(minLength: 0); shapeButtons }; frameStrip }
                 }
-                HStack(spacing: 8) { photoActions; Spacer(minLength: 0) }
             } else {
                 ViewThatFits(in: .horizontal) {          // (a small phone: the mode buttons and the shapes go on two lines when one line is too narrow)
                     HStack(spacing: 8) { modeToggle; Spacer(minLength: 0); shapeButtons }
@@ -203,11 +208,21 @@ struct WallEditorOverlay: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(height: controlsHeight > 0 ? min(controlsHeight, limit) : nil)
-            if compact && !ax { HStack(spacing: 8) { Spacer(minLength: 0); finishActions } } else { finishActions }
+            if compact && !ax { HStack(spacing: 8) { photoActions; Spacer(minLength: 0); finishActions } } else { finishActions }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream.opacity(0.96)).shadow(color: SK.shadow.opacity(0.22), radius: 8, y: 2))
-        .frame(maxWidth: 640)
+        .frame(maxWidth: compact ? 820 : 640)
+    }
+
+    /// How tall the scrolling controls may be: the usual share of the screen, but never so tall that the panel reaches the picture (a phone on its side with the picture low, in the gap).
+    private func panelLimit(size: CGSize, bottomInset: CGFloat) -> CGFloat {
+        let usual = size.height * (compact ? (ax ? 0.52 : 0.40) : (ax ? 0.55 : 0.42))
+        let keep = GameCamera.wallEditBlend          // (measured with the camera risen all the way, where it ends up, not where the ease happens to be)
+        GameCamera.wallEditBlend = 1; defer { GameCamera.wallEditBlend = keep }
+        guard let r = outline(size) else { return usual }
+        let pinned: CGFloat = 52 + 8 + 24 + bottomInset + 10          // the Cancel / Done row, the gaps, the padding and the bottom margin under the panel
+        return max(60, min(usual, size.height - r.maxY - 14 - pinned))
     }
 
     @ViewBuilder private func stack<C: View>(@ViewBuilder _ c: () -> C) -> some View {

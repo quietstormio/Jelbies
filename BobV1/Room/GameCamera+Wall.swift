@@ -11,7 +11,7 @@ extension GameCamera {
     /// 0 = the room camera, 1 = the wall editor's view (eased by `GameCare.tickWallEdit`; like `playBlend`, global so the finger maths follow it).
     nonisolated(unsafe) static var wallEditBlend: Float = 0
     /// How far (wall units) the view rises on a phone on its side so the band above the windows (up to y = 7) is in view above the editor's header and clear of its panel; the portrait view already shows it.
-    static let wallEditLift: Float = 2.8
+    static let wallEditLift: Float = 2.5
     static func wallEditPose(eye e: SIMD3<Float>, target t: SIMD3<Float>, aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let lift = SIMD3<Float>(0, wallEditLift * poseBlend(aspect), 0)
         return (e + lift, t + lift)
