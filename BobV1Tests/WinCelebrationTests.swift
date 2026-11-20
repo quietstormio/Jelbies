@@ -20,7 +20,7 @@ final class WinCelebrationTests: XCTestCase {
     override func setUp() { DayClock.shared.forcedHour = 12 }
 
     /// Runs `body` with the hub open in dry-run and every fired clip recorded.
-    private func withHub(scene: MusicScene = .none, _ body: (_ fired: () -> [String]) -> Void) {
+    private func withHub(scene: MusicScene = .none, _ body: @MainActor (_ fired: () -> [String]) -> Void) {
         let hub = AudioHub.shared
         hub._openForTest(); AudioHub.dryRun = true
         let base = Self.clockBase
