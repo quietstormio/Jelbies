@@ -54,6 +54,9 @@ extension GameCare {
             PerfProbe.end("tickFeature", pf)
         }
         wardrobe.stepPuffs(dt: dt)
+        #if targetEnvironment(simulator)
+        raceDepartProbe(actors)
+        #endif
     }
 
     /// The posed arm frames of a Jelly (world): the capsule's A, B and r2 while the arm is out, blended from the resting nub by the capsule's own blend.
