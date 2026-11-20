@@ -73,7 +73,11 @@ nonisolated enum WallZone {
         var width: Float { maxX - minX }; var height: Float { maxY - minY }
         func distance(x: Float, y: Float) -> Float { hypot(max(minX - x, 0, x - maxX), max(minY - y, 0, y - maxY)) }
         func intersects(_ o: Rect) -> Bool { minX < o.maxX && maxX > o.minX && minY < o.maxY && maxY > o.minY } }
-    struct Spot: Equatable, Sendable { var name: String; var rect: Rect; var inBoth: Bool }
+    struct Spot: Equatable, Sendable {
+        var name: String; var rect: Rect; var inBoth: Bool
+        /// The shapes this spot takes: the narrow home gaps only an upright picture (a wide one would be a postage stamp there).
+        var shapes: Set<WallShape> = Set(WallShape.allCases)
+    }
     static let margin: Float = 0.05
     /// Smallest picture the player can make (width of the picture, wall units).
     static let minWidth: Float = 0.8
@@ -81,10 +85,10 @@ nonisolated enum WallZone {
     static func spots(_ room: RoomID) -> [Spot] {
         switch room {
         case .home: return [Spot(name: "above the windows", rect: Rect(minX: -4.6, maxX: 4.6, minY: 4.5, maxY: 7.0), inBoth: false),
-                            Spot(name: "between the windows, left", rect: Rect(minX: -2.0, maxX: -1.0, minY: 1.9, maxY: 4.1), inBoth: true),
-                            Spot(name: "between the windows, right", rect: Rect(minX: 1.0, maxX: 2.0, minY: 1.9, maxY: 4.1), inBoth: true)]
+                            Spot(name: "between the windows, left", rect: Rect(minX: -2.0, maxX: -1.0, minY: 1.9, maxY: 4.1), inBoth: true, shapes: [.portrait]),
+                            Spot(name: "between the windows, right", rect: Rect(minX: 1.0, maxX: 2.0, minY: 1.9, maxY: 4.1), inBoth: true, shapes: [.portrait])]
         case .loft: return [Spot(name: "above the windows", rect: Rect(minX: -4.6, maxX: 4.6, minY: 4.75, maxY: 7.0), inBoth: false),
-                            Spot(name: "between the windows", rect: loftGap, inBoth: true)]
+                            Spot(name: "between the windows", rect: loftGap, inBoth: true, shapes: [.portrait, .square])]
         case .cabin: return [Spot(name: "above the windows", rect: Rect(minX: -3.9, maxX: 4.6, minY: 3.75, maxY: 7.0), inBoth: false),
                              Spot(name: "low, above the windows", rect: Rect(minX: -3.9, maxX: 4.6, minY: 3.75, maxY: 5.2), inBoth: true)]
         default: return []
@@ -109,7 +113,7 @@ nonisolated enum WallZone {
 
     /// The spot a picture belongs to: the one its centre is in, else the nearest.
     static func spot(for p: WallPicture, in room: RoomID) -> Spot? {
-        spots(room).min { $0.rect.distance(x: p.x, y: p.y) < $1.rect.distance(x: p.x, y: p.y) }
+        spots(room).filter { $0.shapes.contains(p.shape) }.min { $0.rect.distance(x: p.x, y: p.y) < $1.rect.distance(x: p.x, y: p.y) }
     }
 
     /// The picture as it hangs in `room`: moved to its spot, shrunk when it is too big for it, then moved inside it. Nil in a room that has no zone (nothing is drawn there).
@@ -130,13 +134,33 @@ nonisolated enum WallZone {
         return abs(c.x) < loftGap.maxX && c.y < loftGap.maxY + 0.01 && c.y > loftGap.minY
     }
 
-    /// Where a picture first hangs: centred above the middle of the window row, as big as the band allows up to `defaultWidthCap`, high in the band.
+    /// Where a picture first hangs. Upright phone: centred above the middle of the window row (the band, the spot the owner circled), as big as the band allows up to `defaultWidthCap`.
     /// (Home, landscape, wood frame: a picture 2.7 wide and 2.0 high, 3.1 x 2.4 with its frame, about a third of the portrait screen's width; the owner's circle was roughly 60%.)
+    /// Phone on its side: the room's first spot that is on screen in both orientations (home: the gap left of the middle window, an upright picture; loft: between the windows;
+    /// cabin: low in the band), at the biggest size it takes.
     static let defaultWidthCap: Float = 2.8
-    static func defaultPlacement(room: RoomID, frame: WallFrame, shape: WallShape, file: String, crop: WallCrop = WallCrop(), source: String? = nil) -> WallPicture? {
-        guard let r = rect(room) else { return nil }
+    static func defaultPlacement(room: RoomID, frame: WallFrame, shape: WallShape, file: String, crop: WallCrop = WallCrop(), source: String? = nil, sideways: Bool = false) -> WallPicture? {
+        let all = spots(room)
+        guard let band = all.first else { return nil }
+        let sp = (sideways ? all.first { $0.inBoth && $0.shapes.contains(shape) } : nil) ?? band
+        let r = sp.rect
         let w = min(maxWidth(in: r, frame: frame, shape: shape), defaultWidthCap)
-        let p = WallPicture(file: file, frame: frame, shape: shape, x: 0, y: (r.minY + r.maxY) / 2, width: w, crop: crop, source: source)
+        let p = WallPicture(file: file, frame: frame, shape: shape, x: sp == band ? 0 : (r.minX + r.maxX) / 2, y: (r.minY + r.maxY) / 2, width: w, crop: crop, source: source)
         return clamp(p, in: room)
+    }
+    /// The shape a picture takes when it first hangs: sideways in a room whose both-ways spot only takes upright pictures, upright; else landscape (a family in a row).
+    static func defaultShape(room: RoomID, sideways: Bool) -> WallShape {
+        guard sideways, let sp = spots(room).first(where: \.inBoth) else { return .landscape }
+        return sp.shapes.contains(.landscape) ? .landscape : .portrait
+    }
+
+    // MARK: what is on screen
+
+    /// A picture shows nothing when less than this share of its framed height is on screen (a sliver of a bottom edge at the top of a phone on its side reads as a bug).
+    static let minVisibleShare: Float = 0.30
+    /// The share (0...1) of the framed picture's height that lies below `visibleTop`, the wall height at the top edge of the screen.
+    static func visibleShare(_ p: WallPicture, visibleTop: Float) -> Float {
+        let bottom = p.y - p.outerHeight / 2
+        return min(max((visibleTop - bottom) / p.outerHeight, 0), 1)
     }
 }

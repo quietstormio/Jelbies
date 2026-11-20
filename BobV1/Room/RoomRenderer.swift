@@ -377,6 +377,8 @@ nonisolated final class RoomRenderer {
     var hidesLoftArt = false { didSet { if hidesLoftArt != oldValue { rebuild() } } }
     /// True while a picture is set (the host clears it in the café, the park, ...; the room encode also draws it only in a room that has a wall zone).
     var hasWallPicture: Bool { wallFrame.count + wallPhoto.count > 0 }
+    /// The picture is drawn only once its photo is there: frame, photo and shadow come together, never a bare frame.
+    var drawsWallPicture: Bool { hasWallPicture && wallTexture != nil }
     private func staticMesh(_ m: RoomMesh, label: String) -> StaticMesh {
         guard !m.indices.isEmpty else { return StaticMesh() }
         let vb = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
@@ -402,7 +404,7 @@ nonisolated final class RoomRenderer {
     /// The photo arrived (the host decoded it off the main thread).
     func setWallPhotoTexture(_ t: MTLTexture?) { staticVersion &+= 1; wallTexture = t }
     private func encodeWallPicture(_ enc: MTLRenderCommandEncoder) {
-        guard hasWallPicture, !followsRoom || WallZone.allows(RoomLayout.current.id) else { return }
+        guard drawsWallPicture, !followsRoom || WallZone.allows(RoomLayout.current.id) else { return }
         enc.pushDebugGroup("wall picture")
         if wallShadow.count > 0, let vb = wallShadow.vb, let ib = wallShadow.ib {
             enc.setRenderPipelineState(blendPipeline); enc.setDepthStencilState(blendDepthState)

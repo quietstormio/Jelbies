@@ -16,7 +16,8 @@ nonisolated enum WallPictureGeometry {
     /// The bundled frame art: wallframe_frame_<id>_<shape>.bin (Room/Resources).
     static func art(_ p: WallPicture) -> DecorMeshes.Art? { DecorMeshes.load(p.artID, prefix: "wall") }
 
-    static func build(_ p: WallPicture, art: DecorMeshes.Art?) -> Meshes {
+    /// `uv` = the window of the photo shown in the frame (u0, v0, u1, v1; the whole photo by default): the editor shows the album photo itself and slides this window as the player pans and zooms.
+    static func build(_ p: WallPicture, art: DecorMeshes.Art?, uv: SIMD4<Float> = SIMD4(0, 0, 1, 1)) -> Meshes {
         var m = Meshes()
         let h = p.height, w = p.width, wallZ = RoomLayout.minZ
         // frame
@@ -31,8 +32,8 @@ nonisolated enum WallPictureGeometry {
             let x0 = p.x - w / 2 - e, x1 = p.x + w / 2 + e, y0 = p.y - h / 2 - e, y1 = p.y + h / 2 + e
             let b = RoomMeshBuilder(); b.material = .photo
             let n = SIMD3<Float>(0, 0, 1)
-            let a = b.vertex(SIMD3(x0, y1, z), n, ao: 1, color: SIMD3(0, 0, 0)), bb = b.vertex(SIMD3(x1, y1, z), n, ao: 1, color: SIMD3(1, 0, 0))
-            let c = b.vertex(SIMD3(x1, y0, z), n, ao: 1, color: SIMD3(1, 1, 0)), d = b.vertex(SIMD3(x0, y0, z), n, ao: 1, color: SIMD3(0, 1, 0))
+            let a = b.vertex(SIMD3(x0, y1, z), n, ao: 1, color: SIMD3(uv.x, uv.y, 0)), bb = b.vertex(SIMD3(x1, y1, z), n, ao: 1, color: SIMD3(uv.z, uv.y, 0))
+            let c = b.vertex(SIMD3(x1, y0, z), n, ao: 1, color: SIMD3(uv.z, uv.w, 0)), d = b.vertex(SIMD3(x0, y0, z), n, ao: 1, color: SIMD3(uv.x, uv.w, 0))
             b.quad(a, d, c, bb)
             m.photo = b.mesh
         }

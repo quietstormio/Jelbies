@@ -129,6 +129,11 @@ enum GameCamera {
             e += (p.eye - e) * playBlend
             t += (p.target - t) * playBlend
         }
+        if wallEditBlend != 0 {                             // the wall picture editor (Room/GameCamera+Wall.swift): on a phone on its side the view rises to show the whole band above the windows; 0 = nothing here runs
+            let p = wallEditPose(eye: e, target: t, aspect: aspect)
+            e += (p.eye - e) * wallEditBlend
+            t += (p.target - t) * wallEditBlend
+        }
         if bath != 0 {                                      // the clean-up close-up: snapped under the white fade (0 or 1), never blended on screen
             let p = bathPose(aspect: aspect)
             e += (p.eye - e) * bath
