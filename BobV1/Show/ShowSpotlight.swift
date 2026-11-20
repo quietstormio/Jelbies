@@ -47,31 +47,51 @@ nonisolated struct ShowSpotlightShape {
 }
 
 extension GameCare {
-    /// The body the spotlight wants lit right now (an actor id): only inside a performer's own window (his pick + trick at the middle, an entrant's trick at the middle, the dance), never while anyone walks; nil between turns and in the rounds that have no light (Look, Results, the wide walk-on).
+    /// How a performer is held in the light: `dance` the whole dance; `holdAtCentre` switched on once his walk to the middle has ended there; `holdWherever` switched on once he stands still
+    /// (the turn's wait for a late walker ran out: the light goes to HIM, wherever he is); `afterTrick` his score beat: kept only while he is still on the spot, off once he walks away.
+    private enum SpotMode { case dance, holdAtCentre, holdWherever, afterTrick }
+    /// The light is a spotlight, not a decoration: ON once the performer has arrived and stands still, kept through his trick AND his score beat (also when a hop / moonwalk carries him
+    /// off the middle), OFF (0.4 s fade) when he walks off. Never on an empty middle, on someone still walking in, or sliding across the floor to catch him; off in Look, Results and the wide walk-on.
     var showSpotTarget: Int? {
-        guard show.active, show.onStage, let s = show.sim else { return nil }
-        guard let id = showSpotCandidate(s), let a = showBook.actors.first(where: { $0.id == id }) ?? showBook.extra.first(where: { $0.id == id }) else { return nil }
-        // never a light on an empty middle or on someone still walking to it: the performer must stand at the centre
+        guard show.active, show.onStage, let s = show.sim, let (id, mode) = showSpotCandidate(s), let a = showSpotBody(id) else { return nil }
         let c = a.sim.centroid()          // (the body's own position: a borrowed entrant's `floor` is her far-off home spot)
-        // the gate is for switching ON only: once lit he keeps it for his whole window, even when his trick carries him off the middle (a hop, a moonwalk)
-        let alreadyLit = showBook.spot.target == id && showBook.spot.shown == id
-        if show.round != .dance, !alreadyLit, simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) > Self.spotArrive { return nil }
-        return id
+        let d = simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot)
+        let latched = showBook.spot.target == id && showBook.spot.shown == id
+        switch mode {
+        case .dance: return id
+        case .afterTrick: return latched && d < Self.spotHold ? id : nil
+        case .holdAtCentre: return latched || (!showSpotWalking(a) && d < Self.spotArrive) ? id : nil
+        case .holdWherever: return latched || !showSpotWalking(a) ? id : nil
+        }
     }
-    static let spotArrive: Float = 0.7
-    private func showSpotCandidate(_ s: ShowSim) -> Int? {
+    /// Arrival (the flow's own arrival radius), and how far he may drift from the middle in his score beat before the light lets go.
+    static let spotArrive: Float = 0.6, spotHold: Float = 0.45
+    /// Is this body still walking (a walk, a turn after it, or one asked for)? Test seam too.
+    func showSpotWalking(_ a: JellyActor) -> Bool {
+        guard let b = a.brain else { return false }
+        if b.pending != nil { return true }
+        if case .none = b.script { return false }
+        return true
+    }
+    private func showSpotBody(_ id: Int) -> JellyActor? { showBook.actors.first { $0.id == id } ?? showBook.extra.first { $0.id == id } }
+    private func showSpotCandidate(_ s: ShowSim) -> (Int, SpotMode)? {
+        let player = showBook.performers.first
         switch show.round {
         case .look: return nil
-        case .dance: return show.beat == .dancing ? showBook.performers.first : nil          // (on while the dance runs, off when it ends)
+        case .dance: return show.beat == .dancing ? player.map { ($0, .dance) } : nil          // (on while the dance runs, off when it ends)
         case .trick, .results:
             if show.round == .trick && show.trickEntering { return nil }
             switch show.trickStage {
-            case .pick: return (show.round == .trick && !s.tricksDone) ? showBook.performers.first : nil
-            case .performing: return showBook.performers.first
+            case .pick: return (show.round == .trick && !s.tricksDone) ? player.map { ($0, .holdWherever) } : nil
+            case .performing: return player.map { ($0, .holdWherever) }
             case .rivals:
+                let rival = show.rivalTurn.flatMap { showBook.rivalBody[$0] }
                 switch show.rivalStep {
-                case .perform: return show.rivalTurn.flatMap { showBook.rivalBody[$0] }          // (the light is a per-turn event: on only while the entrant stands at the middle doing her trick)
-                case .walkIn, .playerBack, .playerAway, .walkOut: return nil
+                case .walkIn: return rival.map { ($0, .holdAtCentre) }
+                case .perform: return rival.map { ($0, .holdWherever) }
+                case .walkOut: return rival.map { ($0, .afterTrick) }          // (her score beat: lit while she still stands there, off as she steps away)
+                case .playerAway: return player.map { ($0, .afterTrick) }          // (his score beat)
+                case .playerBack: return nil
                 }
             }
         }
