@@ -208,6 +208,7 @@ final class WallPictureTests: XCTestCase {
         let jpg = dir.appending(path: "photo.jpg")
         let dest = CGImageDestinationCreateWithURL(jpg as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
         CGImageDestinationAddImage(dest, makeImage(400, 800), nil); XCTAssertTrue(CGImageDestinationFinalize(dest))
+        WallPictureFiles.removeAll()          // (the simulator's app container may hold the folder from an earlier run)
         let none = StoreBook(wallet: DropsWallet(persists: false), persists: false)
         XCTAssertNil(WallPictureDev.apply(defaults: suite("WallPic.dev.none"), store: none), "no argument: nothing is hung")
         XCTAssertNil(none.wallPicture); XCTAssertFalse(FileManager.default.fileExists(atPath: WallPictureFiles.folder.path))
