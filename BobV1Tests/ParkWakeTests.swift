@@ -69,7 +69,7 @@ final class ParkWakeTests: XCTestCase {
         run(r, 60) { c.park.phase == .playing }
         XCTAssertEqual(c.park.phase, .playing, "the park loaded")
         XCTAssertTrue(asleep(r).isEmpty, "all awake at the park: \(asleep(r))")
-        XCTAssertEqual(c.parkBook.comers, Set(0..<count), "all of them came")
+        XCTAssertEqual(Set(c.parkBook.comers), Set(0..<count), "all of them came")
     }
     func testOneAsleepAtThePark() { daytimePark(count: 3, sleepers: [1]) }
     func testTwoAsleepAtThePark() { daytimePark(count: 3, sleepers: [0, 2]) }
