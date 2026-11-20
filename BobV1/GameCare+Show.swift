@@ -44,6 +44,15 @@ final class ShowBook {
     var trickSet = false
     /// Seconds until the entrants set off from the wing (they stand a moment after being placed there, so the feet are settled when the walk starts).
     var enterDelay: Float?
+    /// The spotlight (Show/ShowSpotlight.swift): which body is lit and how strongly.
+    var spot = ShowSpotlightState()
+    /// Walks to the middle that wait for the middle to be clear: (actor id, goal, seconds waited). A walker's goal is resolved round the bodies standing near it (the floor rules keep bodies apart),
+    /// so a goal asked while the last performer is still leaving the middle lands beside it, and the next performer then did her whole turn off-centre (spotlight round).
+    var pendingWalks: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
+    /// When a walker who stopped short was last asked again (CACurrentMediaTime), by actor id.
+    var retryAt: [Int: Double] = [:]
+    /// Bodies that are on their way to the middle (a turn's walk), with the seconds walked so far and the allowance: the walk's length at the stage pace + 1.5 s.
+    var heading: [Int: (age: Float, limit: Float)] = [:]
     nonisolated deinit {}
 }
 
@@ -60,6 +69,7 @@ extension GameCare {
         show.onBurst = { [weak self] in self?.showBurst() }
         show.onRival = { [weak self] cue in self?.showRivalCue(cue) }
         show.rivalReady = { [weak self] who, centre in self?.showArrived(who, atCentre: centre) ?? true }
+        show.rivalGiveUp = { [weak self] who in self?.showWalkExpired(who) ?? false }
         let d = UserDefaults.standard
         if ShowCaptureArgs.auto(defaults: d) { show.auto = true }
         if DevArgs.enabled, d.object(forKey: "ShowHomeAfter") != nil { show.autoHomeAfter = Float(d.double(forKey: "ShowHomeAfter")) }
@@ -315,7 +325,65 @@ extension GameCare {
         b.commandedIdle = nil; b.commandedFlip = false
         showBook.flops[a.id] = nil
         showBook.goals[a.id] = b.fixed(p)
+        if simd_distance(p, ShowStage.playerSpot) < 0.01 {          // a walk to the middle: its own allowance, counted from the first ask (a repeated ask keeps it)
+            if showBook.heading[a.id] == nil { let c = a.sim.centroid(); showBook.heading[a.id] = (0, simd_distance(SIMD2(c.x, c.z), p) / Self.stagePace + 1.5) }
+        } else { showBook.heading[a.id] = nil }
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled { let c = a.sim.centroid(); print(String(format: "[showturn] walk actor %d from (%.2f, %.2f) to (%.2f, %.2f) goal (%.2f, %.2f) t=%.3f", a.id, c.x, c.z, p.x, p.y, showBook.goals[a.id]!.x, showBook.goals[a.id]!.y, CACurrentMediaTime())) }
+        #endif
         b.requestNow(.come(to: p))
+    }
+    /// Seconds of walking at the measured stage pace (~0.55 u/s: the turn to the camera and the wait behind the one before are in it).
+    private static let stagePace: Float = 0.55
+    private func showWalkExpired(_ who: Int?) -> Bool {
+        guard let a = who.map({ rivalActor($0) }) ?? stageActor(0), let h = showBook.heading[a.id] else { return false }
+        return h.age > h.limit
+    }
+    /// The stage's floor rule for a walk (instead of the room's visible floor, which clamped the wing marks onto the edge of the picture): the platform and the wings, nothing else.
+    nonisolated static func showStageResolve(_ p: SIMD3<Float>) -> SIMD3<Float> { SIMD3(min(max(p.x, -9), 9), p.y, min(max(p.z, -2.4), 3.5)) }
+    /// A walk to the middle that starts once nobody else stands within `clearOf` of it (at most `clearMax` s: then it goes anyway).
+    private static let clearOf: Float = 1.25, clearMax: Float = 1.6
+    private func middleClear(for id: Int) -> Bool {
+        let book = showBook
+        let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+        return !bodies.contains { b in
+            guard b.id != id else { return false }
+            let c = b.sim.centroid()
+            return simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.clearOf
+        }
+    }
+    private func showWalkWhenClear(_ a: JellyActor, to p: SIMD2<Float>) {
+        let book = showBook
+        if book.heading[a.id] != nil, simd_distance(p, ShowStage.playerSpot) < 0.01 { return }          // (she set off for the middle early and has not arrived yet: not restarted; the walk may still be in its first turn)
+        book.pendingWalks.removeAll { $0.id == a.id }
+        if middleClear(for: a.id) { showWalk(a, to: p) } else { book.pendingWalks.append((a.id, p, 0)) }
+    }
+    private func tickPendingWalks(dt: Float) {
+        let book = showBook
+        // an entrant who set off while the one before her was still on the middle was given a goal beside it (the floor rules keep bodies apart): the moment the middle is clear she is sent to the middle itself
+        for (id, _) in book.heading {
+            guard let a = showBody(id), let g = book.goals[id], simd_distance(g, ShowStage.playerSpot) > 0.15, middleClear(for: id) else { continue }
+            let now = CACurrentMediaTime()
+            if now - (book.retryAt[id] ?? 0) > 0.3 { book.retryAt[id] = now; showWalk(a, to: ShowStage.playerSpot) }
+        }
+        guard !book.pendingWalks.isEmpty else { return }
+        var rest: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
+        for w in book.pendingWalks {
+            guard let a = showBody(w.id) else { continue }
+            if middleClear(for: w.id) || w.waited >= Self.clearMax {
+                #if targetEnvironment(simulator)
+                if DevArgs.enabled { print(String(format: "[showturn] waited %.2f s for the middle to clear (actor %d) t=%.3f", w.waited, w.id, CACurrentMediaTime())) }
+                #endif
+                showWalk(a, to: w.to)
+            } else { rest.append((w.id, w.to, w.waited + dt)) }
+        }
+        book.pendingWalks = rest
+    }
+    /// While one entrant performs, the next one already sets off for the middle (her walk is ~3.5 s at the stage pace, and the one before her is gone by the time she arrives), and during the last
+    /// entrant's trick his Jelmiko sets off back from the side. His turn then follows hers with no dead time (the turn used to wait the walk out and then put her there).
+    private func showStageNext(after i: Int) {
+        if let j = show.nextRivalUp, j != i { if let nb = rivalActor(j) { showWalk(nb, to: ShowStage.playerSpot) } }
+        else if show.nextRivalUp == nil, i >= 0, let p = stageActor(0) { showWalk(p, to: ShowStage.playerSpot) }
     }
     /// The Trick round's stage: the rivals stand at their rest spots; after it they are back in the dance row (and the borrowed ones far off) for the results.
     private func showSetTrick(_ on: Bool) {
@@ -330,22 +398,32 @@ extension GameCare {
             else if let j = book.extra.firstIndex(where: { $0.id == a.id }) { showSnap(a, to: Self.showFarSpot(j)) }
         }
         if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
-        if !on { book.goals = [:]; book.flops = [:]; book.enterDelay = nil }
+        if !on { book.goals = [:]; book.flops = [:]; book.enterDelay = nil; book.pendingWalks = []; book.heading = [:] }
     }
     /// The flow asks for the rivals' turn on the bodies.
     private func showRivalCue(_ cue: ShowFlow.RivalCue) {
         let book = showBook
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled { print(String(format: "[showturn] %@ t=%.3f", "\(cue)", CACurrentMediaTime())) }          // (capture aid: the turn's clock, the same line in every build that is timed)
+        #endif
         switch cue {
         case .playerAside(let aside):
             guard let a = stageActor(0) else { return }
-            showWalk(a, to: aside ? ShowStage.playerAside : ShowStage.playerSpot)
+            if aside { showWalk(a, to: ShowStage.playerAside) } else { showWalkWhenClear(a, to: ShowStage.playerSpot) }          // (the first entrant sets off once he is clear of the middle: set off together their paths cross)
         case .walkIn(let i):
             guard let a = rivalActor(i) else { return }
-            showWalk(a, to: ShowStage.playerSpot)
+            showWalkWhenClear(a, to: ShowStage.playerSpot)
         case .perform(let i, let t, let ok):
-            guard let a = rivalActor(i), let b = a.brain else { return }
-            if let g = book.goals[a.id], simd_distance(SIMD2(b.px, b.pz), g) > 0.8 { showSnap(a, to: g) }          // (a walk that never got there: he is in the middle for his trick)
+            guard let a = rivalActor(i), a.brain != nil else { return }
             book.goals[a.id] = nil
+            book.pendingWalks.removeAll { $0.id == a.id }; book.heading[a.id] = nil
+            #if targetEnvironment(simulator)
+            if DevArgs.enabled {          // (capture aid: she performs where she stands only when the turn's wait for her ran out; the light then goes to her)
+                let here = a.sim.centroid(), away = simd_distance(SIMD2(here.x, here.z), ShowStage.playerSpot)
+                if away > 0.8 { print(String(format: "[spotlight] cap: rival %d performs %.2f from the middle (the wait for her ran out)", i, away)) }
+            }
+            #endif
+            showStageNext(after: i)
             showDoTrick(a, t, success: ok, others: a.id)
         case .walkOut(let i):
             guard let a = rivalActor(i) else { return }
@@ -360,18 +438,37 @@ extension GameCare {
             book.enterDelay = nil
             for k in s.rivals.indices { if let a = rivalActor(k) { showSnap(a, to: ShowStage.rivalRest(k, sideways: GameCamera.aspect > 1)) } }
             if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
-            book.goals = [:]; book.flops = [:]
+            book.goals = [:]; book.flops = [:]; book.pendingWalks = []; book.heading = [:]
         }
     }
     /// Has the body got where it was sent (nil = the player's Jelbie; `atCentre` is only the flow's wording)? A body with no walk under way is there.
     private func showArrived(_ who: Int?, atCentre: Bool) -> Bool {
         let book = showBook
         let a = who.map { rivalActor($0) } ?? stageActor(0)
-        guard let a, let b = a.brain, let g = book.goals[a.id] else { return true }
+        if let a, book.pendingWalks.contains(where: { $0.id == a.id }) { return false }          // (still waiting for the middle to clear)
+        guard let a, let b = a.brain else { return true }
+        let c = a.sim.centroid()          // (the BODY's place, not the brain's: they differed by up to a metre while a walker was held back by the one before her)
+        if atCentre {          // a turn at the middle: she must really be THERE (measured on the middle itself, whatever goal the floor rules gave the walk)
+            if b.pending != nil { return false }
+            if case .walk = b.script { return false }          // (still stepping; the turn to the camera after the walk is not waited for: it can take seconds)
+            if simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.arriveRadius { book.goals[a.id] = nil; book.heading[a.id] = nil; showArrivedLog(a, "middle", c); return true }
+            let now = CACurrentMediaTime()          // she stopped short (held back by the one leaving, or pushed off it): ask again, at most every 0.6 s
+            if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: ShowStage.playerSpot) }
+            return false
+        }
+        guard let g = book.goals[a.id] else { return true }
         if b.pending != nil { return false }
-        if case .none = b.script {} else { return false }
-        if simd_distance(SIMD2(b.px, b.pz), g) < 0.6 { book.goals[a.id] = nil; return true }
+        if case .walk = b.script { return false }
+        if simd_distance(SIMD2(c.x, c.z), g) < Self.arriveRadius { book.goals[a.id] = nil; showArrivedLog(a, "mark", c); return true }
+        let now = CACurrentMediaTime()
+        if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: g) }
         return false
+    }
+    private static let arriveRadius: Float = 0.45
+    private func showArrivedLog(_ a: JellyActor, _ via: String, _ c: SIMD3<Float>) {
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled { print(String(format: "[showturn] arrived actor %d (%@) %.2f from the middle t=%.3f", a.id, via, simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot), CACurrentMediaTime())) }
+        #endif
     }
 
     // MARK: the bodies' acts
@@ -492,6 +589,9 @@ extension GameCare {
         #endif
         if show.active { for a in actors { a.brain?.sleepLocked = true } }
         if !(forfeitAsk && show.canPause) { show.tick(dt: dt) }          // (the "Go home?" card holds the stage still, except the dance: the song's own clock runs on)
+        showSpotStep(dt: dt)
+        tickPendingWalks(dt: dt)
+        for k in showBook.heading.keys { showBook.heading[k]?.age += dt }
         guard show.active, show.onStage else { return }
         let book = showBook
         for aid in book.parked where actors.indices.contains(aid) {          // the home Jelmiko off stage: held still (no autonomy, no room life), asleep never

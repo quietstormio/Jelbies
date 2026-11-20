@@ -191,6 +191,7 @@ final class ShowTurnOrderTests: XCTestCase {
         var t = 0.0, t0 = -1.0
         var turnStart: [Int: Double] = [:], turnLen: [Double] = [], aroundLen: [Double] = []
         var minGap: Float = 99
+        var minWhere = ""
         var round = -1
         var lastStep = ShowFlow.RivalStep.playerBack, diag: [String] = []
         var cur: Int? = nil, curT = 0.0
@@ -207,14 +208,17 @@ final class ShowTurnOrderTests: XCTestCase {
                 }
                 let all = [room.actors[0]] + book.extra
                 if care.show.rivalStep != lastStep { lastStep = care.show.rivalStep; if lastStep == .perform, let n = care.show.rivalTurn, let id = care.showRivalBody(n), let body = book.extra.first(where: { $0.id == id }) { diag.append(String(format: "r%d perform at %.1f s, %.2f from the middle", n, t - t0, simd_distance(body.floor, ShowStage.playerSpot))) } }
-                for i in all.indices { for j in all.indices where j > i { minGap = min(minGap, simd_distance(all[i].floor, all[j].floor)) } }
+                for i in all.indices { for j in all.indices where j > i {
+                    let g = simd_distance(all[i].floor, all[j].floor)
+                    if g < minGap { minGap = g; minWhere = "bodies \(all[i].id) \(all[i].floor) and \(all[j].floor) \(all[j].id) at \(String(format: "%.1f", t - t0)) s, step \(care.show.rivalStep), turn \(String(describing: care.show.rivalTurn))" }
+                } }
             } else if t0 >= 0 {
                 aroundLen.append(t - t0); t0 = -1; cur = nil
             }
             if care.show.round == .results && care.show.trickStage == .pick { break }
         }
         _ = curT
-        print("[ShowTurnOrder] diag", diag); print("[ShowTurnOrder] per-rival turn lengths (s):", turnLen.map { String(format: "%.1f", $0) }, "rivals' part per round:", aroundLen.map { String(format: "%.1f", $0) }, "min gap:", minGap)
+        print("[ShowTurnOrder] diag", diag); print("[ShowTurnOrder] per-rival turn lengths (s):", turnLen.map { String(format: "%.1f", $0) }, "rivals' part per round:", aroundLen.map { String(format: "%.1f", $0) }, "min gap:", minGap, minWhere)
         XCTAssertEqual(aroundLen.count, 3, "three rounds of entrants")
         // (the headless room's bodies do not walk on their own, so the flow's arrival time-outs set the lengths here: the real pace is `testRoundLengthWithWalksOfAboutASecond`)
         XCTAssertGreaterThan(minGap, 0.9, "no two bodies ever overlap while the entrants swap at the middle")

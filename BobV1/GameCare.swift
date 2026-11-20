@@ -842,6 +842,7 @@ final class GameCare {
         brain.resolve = { [weak self, weak brain] p, r in
             if self?.outing.lifted.contains(isBob ? 0 : (brain?.steerID ?? -1)) == true { return p }          // (an outing run-out: the Jelbie leaves the room toward the camera)
             if self?.bath.fenceLifted == true, self?.bath.targetID == (isBob ? 0 : brain?.steerID) { return p }          // the clean-up's exit run leaves the room: no floor bounds, only in that phase, only for the Jelly being washed
+            if self?.show.onStage == true { return Self.showStageResolve(p) }          // (the Jelly Show's stage has no room floor: the marks in the wings are walked to as they are; GameCare+Show.swift)
             let rr = self?.footprint(r) ?? r
             let id = isBob ? 0 : (brain?.steerID ?? 0)
             if self?.focusGroup.rowOpen == true, let me = self { return me.trayObstacle(GameCamera.constrain(p, radius: rr, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true), radius: r, id: id) }       // the wide close-up row stands past the roaming floor's sides
