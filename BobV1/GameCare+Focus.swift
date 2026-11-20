@@ -78,11 +78,11 @@ final class FocusGroup {
     /// Distance between neighbouring row centres: the game's, or the Adoption Center's wider pick row (set by `GameCare.beginFocus` for a preview).
     var rowSpacing: Float = GameCamera.focusRowSpacing
 
-    func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:]) {
+    func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:], avoiding obstacles: [SIMD2<Float>] = []) {
         ids = new; arrived = []; clock = 0; netShift = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
-            let row = GameCamera.previewRowSpots(count: new.count, spacing: rowSpacing)          // (the same expression a preview group is born on)
+            let row = Self.rowAvoiding(count: new.count, spacing: rowSpacing, obstacles: obstacles)          // (the same expression a preview group is born on, moved aside only when an uncalled body would stand between or over them)
             // no fixed spot per Jelly: whoever is nearest the middle takes it, the others the free slot on their side (`Lineup`), re-read while they come (`replan`)
             slots = row; slotOf = [:]; committed = []; replanClock = 0; replans = 0
             if floors.count == new.count {
@@ -96,11 +96,68 @@ final class FocusGroup {
             for id in new { spots[id] = row[slotOf[id]!] }
             GameCamera.focusSpots = new.map { spots[$0]! }
         } else {
-            let free = FreeFloor.nearest(to: GameCamera.callSpot)          // (decor may cover the usual spot)
+            let free = Self.rowAvoiding(count: 1, spacing: rowSpacing, obstacles: obstacles)[0]          // (decor may cover the usual spot; an uncalled body is never over him)
             for id in new { spots[id] = free }
             GameCamera.focusSpots = new.isEmpty ? [] : [free]
         }
         rowOpen = new.count > 1
+    }
+
+    // MARK: uncalled bodies are obstacles (2026-11-20: "two called, the third asleep in the middle": the called pair were pushed to either side of him and the close-up read as three in a row)
+    /// A body's half width on the floor for the screen test (R 0.7 plus a sliver), and the clear screen gap wanted (in half-bodies at the row's depth: one half body of daylight between the row and the nearest uncalled body, so he reads as apart, not as a third in the row).
+    static let bodyHalf: Float = 0.75, clearGap: Float = 1.0, bodyApart: Float = 1.6
+
+    /// How far the uncalled bodies are from standing between or over the row `spots` on the close-up's screen, in half-bodies: > 0 = every one is wholly to one side (the bigger the better),
+    /// <= 0 = one is between or over them; a body closer than `bodyApart` (a lying one is 1.8 across) to a spot counts as over.
+    static func screenClear(_ spots: [SIMD2<Float>], _ obstacles: [SIMD2<Float>]) -> Float {
+        let pose = GameCamera.focusPose(aspect: GameCamera.aspect, spots: spots)
+        let f = simd_normalize(pose.target - pose.eye)
+        func box(_ p: SIMD2<Float>) -> (lo: Float, hi: Float) {
+            let d = max(simd_dot(SIMD3<Float>(p.x, 0.5, p.y) - pose.eye, f), 0.3)
+            let c = (p.x - pose.eye.x) / d, h = bodyHalf / d
+            return (c - h, c + h)
+        }
+        let boxes = spots.map(box)
+        let lo = boxes.map(\.lo).min() ?? 0, hi = boxes.map(\.hi).max() ?? 0
+        let unit = bodyHalf / max(simd_dot(SIMD3<Float>(spots[0].x, 0.5, spots[0].y) - pose.eye, f), 0.3)          // (a half body at the row's depth, in screen units)
+        var worst = Float.infinity
+        for o in obstacles {
+            let b = box(o)
+            var gap = max(b.lo - hi, lo - b.hi) / unit
+            if spots.contains(where: { simd_distance($0, o) < bodyApart }) { gap = min(gap, -0.01) }
+            worst = min(worst, gap)
+        }
+        return worst
+    }
+
+    /// How far to the side a row spot may be at depth `z`: the room's walkable width (the wide floor on a phone on its side), and inside the picture.
+    static func sideLimit(z: Float) -> Float {
+        GameCamera.aspect > 1 ? min(GameCamera.roamRectWide.max.x - 0.4, max(2.3, GameCamera.visibleHalfWidthAtBody(z: z) * 0.93 - 0.3)) : 2.3
+    }
+
+    /// The row's spots: the usual ones (`previewRowSpots`) when no uncalled body is between or over them, else the nearest row to the call spot that is clear of all of them
+    /// (wholly to one side on screen), else the clearest one there is.
+    static func rowAvoiding(count n: Int, spacing: Float, obstacles: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        let base = GameCamera.previewRowSpots(count: n, spacing: spacing)
+        guard !obstacles.isEmpty, screenClear(base, obstacles) < clearGap else { return base }
+        let offs = n > 1 ? GameCamera.focusRowSpots(count: n, anchor: .zero, spacing: spacing) : [SIMD2<Float>.zero]
+        var best: (spots: [SIMD2<Float>], q: Float, d: Float)?
+        var x: Float = -3.0
+        while x <= 3.0001 {
+            var z = GameCamera.callSpot.y - 1.4
+            while z <= GameCamera.callSpot.y + 1e-4 {
+                let a = SIMD2<Float>(x, z)
+                let spots = offs.map { a + $0 }
+                z += 0.1
+                guard spots.allSatisfy({ abs($0.x) <= sideLimit(z: $0.y) && FreeFloor.isFree($0, radius: 0.8) }) else { continue }
+                let q = min(screenClear(spots, obstacles), clearGap)          // (clear enough is clear enough: then the nearest wins)
+                let d = simd_distance(a, GameCamera.callSpot)
+                if let b = best, b.q > q + 1e-4 || (abs(b.q - q) <= 1e-4 && b.d <= d) { continue }
+                best = (spots, q, d)
+            }
+            x += 0.1
+        }
+        return best?.spots ?? base
     }
 
     /// Smart line-up, once per fixed step while approaching: settle whoever is near his slot, re-plan the rest. Returns the Jellies whose spot changed.
@@ -179,7 +236,8 @@ extension GameCare {
         // to wipe `saved` in `begin` and leave them with autonomy off for good (2026-10-21: "the other ones are stuck"). Hand it back here first.
         for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a }
         focusGroup.rowSpacing = isPreview ? GameCamera.pickRowSpacing : GameCamera.focusRowSpacing
-        focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }))
+        let others = (isPreview || !FocusGroup.sleeperFix) ? [] : (0..<jellies.count).filter { !ids.contains($0) }.compactMap { floorOf($0) }          // (the uncalled: asleep or not, the row is laid clear of them)
+        focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }), avoiding: others)
         if ids.count > 1 { for id in ids { if let b = brainFor(id) { focusGroup.gapSaved[id] = b.peerGap; b.peerGap = min(b.peerGap, FocusGroup.rowSteerGap) } } }
         focus.beginApproach()
         approachIdle = 0; approachRetries = 0; approachShort = 0

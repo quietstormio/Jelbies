@@ -67,8 +67,8 @@ final class ComeHereSettleTests: XCTestCase {
     }
 
     /// One run: `n` at home, `setup` puts them in their starting states, then Come here for `called` (nil = everyone); measured when the close-up is up and again 3 s later.
-    private func run(seed: UInt64, n: Int = 3, called: [Int]? = nil, backBias: Bool = false, setup: (FocusAnyRun, [SIMD2<Float>]) -> Void) -> Result {
-        SleepOrder.reset()
+    private func run(seed: UInt64, n: Int = 3, called: [Int]? = nil, backBias: Bool = false, aspect: Float = 440 / 956, setup: (FocusAnyRun, [SIMD2<Float>]) -> Void) -> Result {
+        SleepOrder.reset(); _ = GameCamera.camera(aspect: aspect)
         let r = FocusAnyRun(count: n, peers: true); Self.keep.append(r)
         for (i, a) in r.actors.enumerated() { a.brain!.seed = seed &* 31 &+ UInt64(i) }
         r.run(0.5)
@@ -103,6 +103,35 @@ final class ComeHereSettleTests: XCTestCase {
                 if gap < -0.01 { res.fails.append("j\(id)/j\(ids[l]) gap \(String(format: "%.3f", gap))") }
             }
         }
+        // the uncalled ones, on the close-up's own screen: never between two called ones, never over one by more than 5% of its drawn box
+        let uncalled = (0..<n).filter { !ids.contains($0) }
+        if !uncalled.isEmpty {
+            let cam = GameCamera.camera(aspect: aspect, focus: 1)
+            func box(_ id: Int) -> (x0: Float, y0: Float, x1: Float, y1: Float) {
+                var d = [Float](repeating: 0, count: rm.vertexCount * 6)
+                d.withUnsafeMutableBufferPointer { r.actors[id].skinner.update(x: r.actors[id].sim.x, index: rm.index, into: $0.baseAddress!) }
+                var b = (x0: Float.infinity, y0: Float.infinity, x1: -Float.infinity, y1: -Float.infinity)
+                for i in stride(from: 0, to: rm.vertexCount, by: 3) {
+                    let c = cam.viewProj * SIMD4<Float>(d[6 * i], d[6 * i + 1], d[6 * i + 2], 1)
+                    let sx = c.x / c.w, sy = c.y / c.w
+                    b = (min(b.x0, sx), min(b.y0, sy), max(b.x1, sx), max(b.y1, sy))
+                }
+                return b
+            }
+            let cb = ids.map(box)
+            for u in uncalled {
+                let ub = box(u), ux = (ub.x0 + ub.x1) / 2
+                for (k, c) in cb.enumerated() {
+                    let ow = max(0, min(ub.x1, c.x1) - max(ub.x0, c.x0)), oh = max(0, min(ub.y1, c.y1) - max(ub.y0, c.y0))
+                    let frac = ow * oh / max((c.x1 - c.x0) * (c.y1 - c.y0), 1e-6)
+                    if frac > 0.05 { res.fails.append("uncalled j\(u) covers \(Int(frac * 100))% of j\(ids[k])") }
+                }
+                if cb.count > 1 {
+                    let cx = cb.map { ($0.x0 + $0.x1) / 2 }
+                    if ux > cx.min()!, ux < cx.max()! { res.fails.append("uncalled j\(u) is between the called ones on screen") }
+                }
+            }
+        }
         if ids.count > 1 {
             let zs = ids.map { GameCare.floorPos(r.actors[$0].brain!, r.actors[$0].sim).y }
             if (zs.max()! - zs.min()!) > 0.7 { res.fails.append("not one row (z spread \(String(format: "%.2f", zs.max()! - zs.min()!)))") }
@@ -110,11 +139,11 @@ final class ComeHereSettleTests: XCTestCase {
         return res
     }
 
-    private func table(_ name: String, n: Int = 3, called: [Int]? = nil, backBias: Bool = false, setup: (FocusAnyRun, [SIMD2<Float>], UInt64) -> Void, file: StaticString = #filePath, line: UInt = #line) {
+    private func table(_ name: String, n: Int = 3, called: [Int]? = nil, backBias: Bool = false, aspect: Float = 440 / 956, setup: (FocusAnyRun, [SIMD2<Float>], UInt64) -> Void, file: StaticString = #filePath, line: UInt = #line) {
         var bad = 0, slowest: Float = 0, sum: Float = 0, nets = 0
         var firstFails: [String] = []
         for s in 0..<UInt64(Self.seeds) {
-            let res = run(seed: s + 1, n: n, called: called, backBias: backBias) { setup($0, $1, s + 1) }
+            let res = run(seed: s + 1, n: n, called: called, backBias: backBias, aspect: aspect) { setup($0, $1, s + 1) }
             if !res.fails.isEmpty { bad += 1; if firstFails.count < 3 { firstFails.append("seed\(s + 1): " + res.fails.joined(separator: "; ")) } }
             slowest = max(slowest, res.settle); sum += res.settle; nets += res.netAccepted
         }
@@ -183,5 +212,39 @@ final class ComeHereSettleTests: XCTestCase {
     }
     func testOneAtHomeAsleep() {
         table("one at home, asleep", n: 1) { r, _, _ in self.sleepNow(r, 0) }
+    }
+
+    // MARK: the uncalled third (2026-11-20): never between or over the called ones on screen
+    func testCallTwoThirdAsleepInTheMiddleOfTheRug() {
+        table("call two (0,1), the third asleep at the rug centre", called: [0, 1]) { r, _, _ in r.place(2, at: SIMD2(0, 0)); self.sleepNow(r, 2) }
+    }
+    func testCallTwoThirdAsleepNearTheFront() {
+        table("call two (0,1), the third asleep at the front middle", called: [0, 1]) { r, _, _ in r.place(2, at: SIMD2(0, 1.6)); self.sleepNow(r, 2) }
+    }
+    func testCallTwoThirdAsleepAtTheLeft() {
+        table("call two (0,1), the third asleep at the left", called: [0, 1]) { r, _, _ in r.place(2, at: SIMD2(-2.0, 1.2)); self.sleepNow(r, 2) }
+    }
+    func testCallTwoThirdAsleepAtTheRight() {
+        table("call two (0,1), the third asleep at the right", called: [0, 1]) { r, _, _ in r.place(2, at: SIMD2(2.0, 1.2)); self.sleepNow(r, 2) }
+    }
+    func testCallTwoBobAsleepInTheMiddle() {
+        table("call two (1,2), Bob (0) asleep at the rug centre", called: [1, 2]) { r, _, _ in r.place(0, at: SIMD2(0, 0.4)); self.sleepNow(r, 0) }
+    }
+    func testCallOneOthersAsleepInTheMiddle() {
+        table("call one (1), the other two asleep (middle + side)", called: [1]) { r, _, _ in r.place(0, at: SIMD2(0, 0.4)); self.sleepNow(r, 0); r.place(2, at: SIMD2(-1.8, 1.4)); self.sleepNow(r, 2) }
+    }
+    func testCallTwoThirdAwakeStandingInTheMiddle() {
+        table("call two (0,1), the third awake, standing at the rug centre", called: [0, 1]) { r, _, _ in r.place(2, at: SIMD2(0, 0.4)) }
+    }
+
+    // MARK: a phone on its side
+    func testLandscapeEveryoneAsleep() {
+        table("landscape: all three asleep", aspect: 956 / 440) { r, _, _ in for i in 0..<3 { self.sleepNow(r, i) } }
+    }
+    func testLandscapeCallTwoThirdAsleepOnTheRug() {
+        table("landscape: call two (0,1), the third asleep at the rug centre", called: [0, 1], aspect: 956 / 440) { r, _, _ in r.place(2, at: SIMD2(0, 0)); self.sleepNow(r, 2) }
+    }
+    func testLandscapeCallTwoThirdAsleepAtTheLeft() {
+        table("landscape: call two (0,1), the third asleep at the left", called: [0, 1], aspect: 956 / 440) { r, _, _ in r.place(2, at: SIMD2(-2.4, 1.2)); self.sleepNow(r, 2) }
     }
 }
