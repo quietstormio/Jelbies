@@ -243,7 +243,15 @@ extension GameCare {
         approachIdle = 0; approachRetries = 0; approachShort = 0
         var zeroAsleep = false
         if FocusGroup.sleeperFix {          // whoever sleeps is woken now (the quick get-up, never the slow morning wake) and walks to his reserved spot once he is up
-            for id in ids where brainFor(id)?.isSleeping == true { wakeSleeper(id, groggy: false, fast: true); if id == 0 { zeroAsleep = true } }
+            for id in ids {
+                guard let b = brainFor(id) else { continue }
+                let asleep = b.isSleeping
+                // a bedtime already ordered for him (walking to bed, or "wanted" with the night's retry loop) is cancelled too: he must not lie down again inside the close-up
+                guard asleep || b.commandedGoodnight || nightRest.wanted.contains(id) || nightRest.dayOnce.contains(id) else { continue }
+                b.commandedGoodnight = false
+                if asleep { wakeSleeper(id, groggy: false, fast: true); if id == 0 { zeroAsleep = true } }
+                else { nightRest.wanted.remove(id); nightRest.dayOnce.remove(id); if isBedtimeHours { nightRest.nightWoken.insert(id) }; noteInteraction(jelly: id) }
+            }
         }
         if ids.contains(0) {
             if focusGroup.mayGo(0, frontDistance: nil), !zeroAsleep { queued = [.come(to: focusGroup.spot(of: 0))] } else { focusGroup.zeroPending = true }

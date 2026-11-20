@@ -247,4 +247,15 @@ final class ComeHereSettleTests: XCTestCase {
     func testLandscapeCallTwoThirdAsleepAtTheLeft() {
         table("landscape: call two (0,1), the third asleep at the left", called: [0, 1], aspect: 956 / 440) { r, _, _ in r.place(2, at: SIMD2(-2.4, 1.2)); self.sleepNow(r, 2) }
     }
+
+    /// A bedtime already ordered (the night's retry loop keeps asking) is cancelled for the called, or they lie down again inside the close-up (seen in the real app, 2026-11-20).
+    func testCallCancelsAPendingBedtimeForTheCalledOnly() {
+        let r = FocusAnyRun(count: 3, peers: true); Self.keep.append(r); r.run(0.5)
+        for i in 0..<3 { r.care.nightRest.wanted.insert(i); r.actors[i].brain!.commandedGoodnight = true }
+        r.care.beginFocus(ids: [0, 1])
+        XCTAssertEqual(r.care.nightRest.wanted, [2], "only the uncalled one is still wanted in bed")
+        XCTAssertFalse(r.actors[0].brain!.commandedGoodnight); XCTAssertFalse(r.actors[1].brain!.commandedGoodnight)
+        XCTAssertTrue(r.actors[2].brain!.commandedGoodnight)
+        XCTAssertTrue(r.care.nightRest.nightWoken.isSuperset(of: [0, 1]), "at night they go back to bed by the usual rule after the close-up")
+    }
 }
