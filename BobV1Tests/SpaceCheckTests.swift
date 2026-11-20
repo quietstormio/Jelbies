@@ -33,6 +33,10 @@ final class SpaceCheckTests: XCTestCase {
     func testHome2() throws { try runRoom(home: 2) }
     func testHome3() throws { try runRoom(home: 3) }
     func testPark() throws { try runRoom(home: 0) }
+    /// The owner's real states: 19:00 and low needs (SPACE_LOW=1 is set by these two): hunger 0.08, thirst 0.08, attention 0.5 (BlobNeeds.mood(of:) names the mood: grumpy), dirt 0.8 (dirt is not read by the roaming brain).
+    func testHome3Low() throws { low = true; defer { low = false }; try runRoom(home: 3) }
+    func testParkLow() throws { low = true; defer { low = false }; try runRoom(home: 0) }
+    private var low = false
 
     private func runRoom(home n: Int) throws {
         guard !dir.isEmpty else { throw XCTSkip("SPACE_DIR not set") }
@@ -78,8 +82,8 @@ final class SpaceCheckTests: XCTestCase {
     }
 
     private func runCase(home n: Int, orient: String, aspect: Float, seed: UInt64, minutes: Double) throws {
-        let name = (n == 0 ? "park" : "home\(n)") + "_" + orient
-        DayClock.shared.forcedHour = 12
+        let name = (n == 0 ? "park" : "home\(n)") + "_" + orient + (low ? "_low" : "")
+        DayClock.shared.forcedHour = low ? 19 : 12
         let (rf, bodies, spots) = setup(home: n, aspect: aspect)
         if seed == (env["SPACE_SEEDS"].flatMap { $0.split(separator: ",").compactMap { UInt64($0) }.first } ?? 1) { try writeGeometry(name: name, rf: rf, aspect: aspect, home: n) }
         let lab = SocialTests.Lab(n: bodies, positions: spots, quiet: false, seed: seed &* 1009 &+ UInt64(n) &* 17)
@@ -87,6 +91,10 @@ final class SpaceCheckTests: XCTestCase {
             r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
             let b = r.brain
             b.anticsEnabled = true; b.idleMood = .happy; b.watching = true; b.sleepEnabled = true
+            if low {          // as MelonStage.otherTick sets them each frame: the mood the needs make, and the clock's night / morning factors
+                b.idleMood = BlobNeeds.mood(of: [0.08, 0.08, 0.5])
+                b.idleNight = DayClock.shared.nightFactor; b.idleMorning = DayClock.shared.morningFactor; b.idleDeepNight = DayClock.shared.deepNightFactor
+            }
             if n == 0 { b.outingPlay = true; b.homeRoom = false } else { b.homeRoom = true }
         }
         let steps = Int(minutes * 60 * 60)
@@ -121,7 +129,7 @@ final class SpaceCheckTests: XCTestCase {
         // the floor must still be ours at the end (the hosting app's stage could rebuild it)
         let end = GameCamera.roamFloor
         XCTAssertEqual(end?.aspect, rf.aspect, "\(name): the floor is still the one the run started with"); XCTAssertEqual(end?.zs.count, rf.zs.count)
-        let meta = "case \(name) seed \(seed) aspect \(aspect) bodies \(bodies) minutes \(minutes) wall \(wall) s; floor minZ \(rf.minZ) maxZ \(rf.maxZ) rows \(rf.zs.count) area \(rf.area); traffic \(RoomRoam.traffic) loneFloor \(RoomTraffic.loneFloor) loneBack \(RoomTraffic.loneBack) loneBackCount \(RoomTraffic.counts[5]) spreadNew \(ParkPlayTuning.spreadNew) arena \(GameCamera.arenaCenter) r \(GameCamera.arenaRadius) forcedHour \(String(describing: DayClock.shared.forcedHour))"
+        let meta = "mood \(lab.rigs[0].brain.idleMood) night \(lab.rigs[0].brain.idleNight) morning \(lab.rigs[0].brain.idleMorning) deepNight \(lab.rigs[0].brain.idleDeepNight); case \(name) seed \(seed) aspect \(aspect) bodies \(bodies) minutes \(minutes) wall \(wall) s; floor minZ \(rf.minZ) maxZ \(rf.maxZ) rows \(rf.zs.count) area \(rf.area); traffic \(RoomRoam.traffic) loneFloor \(RoomTraffic.loneFloor) loneBack \(RoomTraffic.loneBack) loneBackCount \(RoomTraffic.counts[5]) spreadNew \(ParkPlayTuning.spreadNew) arena \(GameCamera.arenaCenter) r \(GameCamera.arenaRadius) forcedHour \(String(describing: DayClock.shared.forcedHour))"
         print("[space] " + meta)
         try csv.write(toFile: "\(dir)/\(name)_s\(seed).csv", atomically: true, encoding: .utf8)
         try emotes.write(toFile: "\(dir)/\(name)_s\(seed)_emotes.csv", atomically: true, encoding: .utf8)
