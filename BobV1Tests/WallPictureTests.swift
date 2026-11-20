@@ -236,7 +236,7 @@ final class WallPictureTests: XCTestCase {
         CGImageDestinationAddImage(dest, makeImage(w, h), nil); XCTAssertTrue(CGImageDestinationFinalize(dest))
     }
 
-    func testFrameShadowAndPhotoAreDrawnOnlyOnceThePhotoIsThere() throws {
+    func testFrameShadowAndPhotoAreDrawnOnlyOnceThePhotoIsThere() async throws {
         let dev = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let lib = try XCTUnwrap(dev.makeDefaultLibrary(bundle: Bundle(for: RoomRenderer.self)))
         let room = try XCTUnwrap(RoomRenderer(device: dev, library: lib, colorFormat: .rgba8Unorm_srgb, depthFormat: .depth32Float, sampleCount: 4))
@@ -248,15 +248,12 @@ final class WallPictureTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory.appending(path: "wallpic-tex-\(UUID().uuidString).jpg")
         defer { try? FileManager.default.removeItem(at: url) }
         writeJPEG(512, 384, to: url)
-        let done = expectation(description: "decoded")
-        nonisolated(unsafe) var tex: MTLTexture?
-        nonisolated(unsafe) var onMain = true
-        room.loadWallPhoto(url) { t in onMain = Thread.isMainThread; tex = t; done.fulfill() }
-        wait(for: [done], timeout: 20)
-        let t = try XCTUnwrap(tex)
-        XCTAssertFalse(onMain, "the photo is decoded off the main thread")
+        let loaded = await RoomRenderer.loadWallPhoto(device: dev, url: url)
+        let t = try XCTUnwrap(loaded)
         XCTAssertTrue([MTLPixelFormat.rgba8Unorm_srgb, .bgra8Unorm_srgb].contains(t.pixelFormat), "colour is sRGB")
         XCTAssertGreaterThan(t.mipmapLevelCount, 1, "mipmapped")
+        let missing = await RoomRenderer.loadWallPhoto(device: dev, url: url.appendingPathExtension("gone"))
+        XCTAssertNil(missing, "a missing file gives no texture (the frame is then not drawn)")
         room.setWallPhotoTexture(t)
         XCTAssertTrue(room.drawsWallPicture)
         room.setWallPicture(nil, texture: nil)

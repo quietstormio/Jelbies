@@ -719,10 +719,12 @@ struct BagSheet: View {
                         pink("Hang a picture", enabled: true) {
                             close()
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { care.wallAlbumOpen = true }
-                        }.accessibilityIdentifier("bag-hang-\(f.rawValue)")
+                        }.accessibilityLabel("Hang a picture in the \(item.name) frame").accessibilityHint("Opens your album to pick a photo, then the wall editor.")
+                        .accessibilityIdentifier("bag-hang-\(f.rawValue)")
                     }
                     .padding(10)
                     .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("bag-frame-\(f.rawValue)")
                 }
             }

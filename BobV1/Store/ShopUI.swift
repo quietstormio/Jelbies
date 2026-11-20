@@ -91,6 +91,10 @@ struct ShopScreen: View {
                 .onAppear { if ShopTab.scrollToFrames, tab == .rooms { ShopTab.scrollToFrames = false; Task { try? await Task.sleep(nanoseconds: 150_000_000); withAnimation { proxy.scrollTo("shop-frames", anchor: .top) } } } }
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {          // while the first-time Shop tip is up, the grid ends above it: the card never covers a card to buy
+            Color.clear.frame(height: TipBook.shared.current == "shop" ? (dts.isAccessibilitySize ? 250 : 165) : 0)
+                .animation(.easeInOut(duration: 0.2), value: TipBook.shared.current)
+        }
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("shop-screen")
         .sheet(item: $selected) { item in
@@ -196,6 +200,7 @@ struct ShopScreen: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("shop-item-\(item.id)")
         .accessibilityLabel("\(item.name), \(item.price) JellyCoins\(owned > 0 ? ", owned \(owned)" : "")")
+        .accessibilityHint(item.kind == .wallFrame ? (owned > 0 ? "A picture frame you own. Opens it; you can hang a picture in it from the album or the Bag." : "A picture frame for a photo from your album. Opens it to see what it does and buy it.") : "")
     }
 }
 

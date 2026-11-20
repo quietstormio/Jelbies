@@ -11,6 +11,7 @@ struct WallEditorOverlay: View {
     let care: GameCare
     let session: WallEditSession
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.dynamicTypeSize) private var dts
     @State private var drag: DragKind?
     @State private var grab = SIMD2<Float>(0, 0)
     @State private var lastTranslation = CGSize.zero
@@ -76,6 +77,18 @@ struct WallEditorOverlay: View {
         }
     }
 
+    /// What VoiceOver says about the picture: its frame, shape, size and where it hangs.
+    private var spoken: String {
+        let p = shown
+        let spot = WallZone.spot(for: p, in: care.roomID)?.name ?? "on the wall"
+        return "\(p.frame.title) frame, \(p.shape == .portrait ? "upright" : p.shape == .square ? "square" : "wide"), \(String(format: "%.1f", p.width)) wide, \(spot)"
+    }
+    /// The accessibility way to move the picture (the same clamp as a finger).
+    private func nudge(_ dx: Float, _ dy: Float) {
+        session.move(to: SIMD2(session.draft.x + dx, session.draft.y + dy)); session.settle(care.roomID)
+        UIAccessibility.post(notification: .announcement, argument: spoken)
+    }
+
     // MARK: body
 
     var body: some View {
@@ -90,12 +103,19 @@ struct WallEditorOverlay: View {
                         pinchBase = nil
                     })
                     .accessibilityIdentifier("wall-edit-surface")
-                    .accessibilityLabel("Room wall").accessibilityHint("Drag the picture to move it, pinch to make it bigger or smaller")
+                    .accessibilityLabel("Picture on the wall").accessibilityValue(spoken)
+                    .accessibilityHint("Drag to move it, pinch to make it bigger or smaller. Or use the actions: move, bigger, smaller.")
+                    .accessibilityAction(named: "Move left") { nudge(-0.3, 0) }
+                    .accessibilityAction(named: "Move right") { nudge(0.3, 0) }
+                    .accessibilityAction(named: "Move up") { nudge(0, 0.3) }
+                    .accessibilityAction(named: "Move down") { nudge(0, -0.3) }
+                    .accessibilityAction(named: "Bigger") { care.wallEditSetWidth(session.draft.width * 1.12); session.settle(care.roomID) }
+                    .accessibilityAction(named: "Smaller") { care.wallEditSetWidth(session.draft.width / 1.12); session.settle(care.roomID) }
                 outlineView(size: g.size)
                 VStack(spacing: 8) {
                     if !compact { header }          // (a phone on its side: the hint is the panel's first line, so the band above the windows stays clear)
                     Spacer(minLength: 0)
-                    panel(width: g.size.width - inset.leading - inset.trailing - 32)
+                    panel(height: g.size.height * (compact ? (ax ? 0.52 : 0.34) : (ax ? 0.55 : 0.42)))
                 }
                 .padding(.leading, inset.leading + 16).padding(.trailing, inset.trailing + 16)
                 .padding(.top, max(inset.top, 0) + 8).padding(.bottom, max(inset.bottom, 0) + 10)
@@ -139,39 +159,59 @@ struct WallEditorOverlay: View {
     private var header: some View {
         VStack(spacing: 2) {
             Text("Hang your picture").font(SK.font(18, .black)).foregroundStyle(SK.ink)
-            Text(session.photoMode ? "Drag to slide the photo, pinch to zoom it" : "Drag to move it, pinch or drag the corner to size it").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
+            Text(hint).font(SK.font(12, .bold)).foregroundStyle(SK.muted).multilineTextAlignment(.center)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 16).padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.cream.opacity(0.94)).shadow(color: SK.shadow.opacity(0.2), radius: 6, y: 2))
         .frame(maxWidth: 520)
         .accessibilityElement(children: .combine)
     }
 
+    private var hint: String { session.photoMode ? "Drag to slide the photo, pinch to zoom it" : "Drag to move it, pinch or drag the corner to size it" }
+    private var ax: Bool { dts.isAccessibilitySize }
+
     // MARK: the panel
 
-    private func panel(width: CGFloat) -> some View {
-        VStack(spacing: 8) {
-            if compact {
-                Text(session.photoMode ? "Drag to slide the photo, pinch to zoom it" : "Drag the picture to move it, pinch or drag the corner to size it").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
+    /// The controls scroll when they do not fit (large text, a small phone, a phone on its side); Cancel and Done stay pinned under them, always on screen.
+    private func panel(height: CGFloat) -> some View {
+        let controls = VStack(spacing: 8) {
+            if compact { Text(hint).font(SK.font(12, .bold)).foregroundStyle(SK.muted).multilineTextAlignment(.center) }
+            if compact && !ax {
                 HStack(spacing: 8) { modeToggle; shapeButtons; Spacer(minLength: 0); frameStrip }
-                HStack(spacing: 8) { photoActions; Spacer(minLength: 0); finishActions }
+                HStack(spacing: 8) { photoActions; Spacer(minLength: 0) }
+            } else if ax {
+                modeToggle; shapeButtons; frameStrip; photoActions
             } else {
                 HStack(spacing: 8) { modeToggle; Spacer(minLength: 0); shapeButtons }
                 frameStrip
                 HStack(spacing: 8) { photoActions; Spacer(minLength: 0) }
-                HStack(spacing: 8) { Spacer(minLength: 0); finishActions }
             }
+        }
+        return VStack(spacing: 8) {
+            ViewThatFits(in: .vertical) {
+                controls
+                ScrollView(showsIndicators: true) { controls }.scrollBounceBehavior(.basedOnSize)
+            }
+            .frame(maxHeight: max(height, 120))
+            if compact && !ax { HStack(spacing: 8) { Spacer(minLength: 0); finishActions } } else { finishActions }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream.opacity(0.96)).shadow(color: SK.shadow.opacity(0.22), radius: 8, y: 2))
         .frame(maxWidth: 640)
     }
 
+    @ViewBuilder private func stack<C: View>(@ViewBuilder _ c: () -> C) -> some View {
+        if ax { VStack(alignment: .leading, spacing: 6) { c() } } else { HStack(spacing: 6) { c() } }
+    }
+
     private var modeToggle: some View {
-        HStack(spacing: 6) {
-            chip("Move", symbol: "arrow.up.left.and.arrow.down.right", selected: !session.photoMode) { session.photoMode = false }
+        stack {
+            chip("Move", symbol: "arrow.up.left.and.arrow.down.right", selected: !session.photoMode,
+                 hint: "Drag the picture to move it. Pinch to make it bigger or smaller.") { session.photoMode = false }
                 .accessibilityIdentifier("wall-edit-mode-size")
-            chip("Photo", symbol: "photo", selected: session.photoMode, enabled: session.canCrop) { session.photoMode = true }
+            chip("Photo", symbol: "photo", selected: session.photoMode, enabled: session.canCrop,
+                 hint: session.canCrop ? "Drag to slide the photo inside the frame. Pinch to zoom it." : "Not available: the album photo is gone.") { session.photoMode = true }
                 .accessibilityIdentifier("wall-edit-mode-photo")
         }
     }
@@ -180,11 +220,14 @@ struct WallEditorOverlay: View {
         HStack(spacing: 6) {
             ForEach(WallShape.allCases, id: \.self) { s in
                 let sym = s == .portrait ? "rectangle.portrait" : s == .square ? "square" : "rectangle"
+                let name = s == .portrait ? "Upright" : s == .square ? "Square" : "Wide"
                 Button { AudioHub.shared.uiTap(); care.wallEditSetShape(s) } label: {
                     Image(systemName: sym).font(.system(size: 18, weight: .heavy)).foregroundStyle(SK.ink)
                         .frame(width: 48, height: 48).background(Circle().fill(session.draft.shape == s ? SK.honey : Color.white.opacity(0.92)))
                 }
-                .buttonStyle(.plain).disabled(!session.canReshape).opacity(session.canReshape ? 1 : 0.4).accessibilityLabel(s == .portrait ? "Upright" : s == .square ? "Square" : "Wide")
+                .buttonStyle(.plain).disabled(!session.canReshape).opacity(session.canReshape ? 1 : 0.4)
+                .accessibilityLabel("\(name) picture")
+                .accessibilityHint(session.canReshape ? "Makes the picture \(name.lowercased()). A spot that does not take this shape moves it to one that does." : "Not available: the album photo is gone.")
                 .accessibilityAddTraits(session.draft.shape == s ? .isSelected : [])
                 .accessibilityIdentifier("wall-edit-shape-\(s.rawValue)")
             }
@@ -192,66 +235,83 @@ struct WallEditorOverlay: View {
     }
 
     private var frameStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(WallFrame.allCases, id: \.self) { f in
-                    let item = StoreCatalog.item("frame-\(f.rawValue)")
-                    let owned = care.store.ownsFrame(f)
-                    Button {
-                        AudioHub.shared.uiTap()
-                        if owned { care.wallEditSetFrame(f) } else { care.wallShopRequest = true }          // an unowned frame leads to the Shop
-                    } label: {
-                        HStack(spacing: 6) {
-                            if let item { ItemArt(item: item, size: 40) }
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(f.title).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(1)
-                                if owned { Text(session.draft.frame == f ? "Hanging" : "Owned").font(SK.font(11, .bold)).foregroundStyle(SK.muted) }
-                                else if let item { HStack(spacing: 3) { JellyCoinIcon(size: 13); Text("\(item.price)").font(SK.font(11, .black)).foregroundStyle(SK.ink) } }
-                            }
-                        }
-                        .padding(.horizontal, 8).frame(minHeight: 52)
-                        .background(Capsule().fill(session.draft.frame == f ? SK.honey : Color.white.opacity(0.92)))
+        let chips = ForEach(WallFrame.allCases, id: \.self) { f in
+            let item = StoreCatalog.item("frame-\(f.rawValue)")
+            let owned = care.store.ownsFrame(f)
+            Button {
+                AudioHub.shared.uiTap()
+                if owned { care.wallEditSetFrame(f) } else { care.wallShopRequest = true }          // an unowned frame leads to the Shop
+            } label: {
+                HStack(spacing: 6) {
+                    if let item { ItemArt(item: item, size: 40) }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(f.title).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).lineLimit(ax ? 3 : 1)
+                        if owned { Text(session.draft.frame == f ? "Hanging" : "Owned").font(SK.font(11, .bold)).foregroundStyle(SK.muted) }
+                        else if let item { HStack(spacing: 3) { JellyCoinIcon(size: 13); Text("\(item.price)").font(SK.font(11, .black)).foregroundStyle(SK.ink) } }
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(owned ? "\(f.title) frame" : "\(f.title) frame, \(item?.price ?? 0) JellyCoins, opens the Shop")
-                    .accessibilityAddTraits(session.draft.frame == f ? .isSelected : [])
-                    .accessibilityIdentifier("wall-edit-frame-\(f.rawValue)")
+                    if ax { Spacer(minLength: 0) }
                 }
+                .padding(.horizontal, 8).frame(minHeight: 52).frame(maxWidth: ax ? .infinity : nil, alignment: .leading)
+                .background(Capsule().fill(session.draft.frame == f ? SK.honey : Color.white.opacity(0.92)))
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(owned ? "\(f.title) frame" : "\(f.title) frame, \(item?.price ?? 0) JellyCoins")
+            .accessibilityHint(owned ? "Puts this frame on your picture." : "You do not own it yet. Opens the Shop on the picture frames.")
+            .accessibilityValue(session.draft.frame == f ? "Hanging" : owned ? "Owned" : "Not owned")
+            .accessibilityAddTraits(session.draft.frame == f ? .isSelected : [])
+            .accessibilityIdentifier("wall-edit-frame-\(f.rawValue)")
         }
-        .frame(maxWidth: .infinity)
+        return Group {
+            if ax { VStack(spacing: 6) { chips } }
+            else { ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 8) { chips } }.frame(maxWidth: .infinity) }
+        }
     }
 
     private var photoActions: some View {
-        HStack(spacing: 8) {
+        stack {
             PhotoActionButton(title: "Change photo", symbol: "photo.on.rectangle", prominent: false) { care.wallAlbumOpen = true }
+                .accessibilityHint("Opens your album to pick another photo for this picture.")
                 .accessibilityIdentifier("wall-edit-change-photo")
             if session.original != nil {
                 PhotoActionButton(title: "Take down", symbol: "trash", prominent: false) { confirmTakeDown = true }
+                    .accessibilityHint("Takes the picture off the wall. You will be asked to confirm.")
                     .accessibilityIdentifier("wall-edit-take-down")
             }
         }
     }
 
     private var finishActions: some View {
-        HStack(spacing: 8) {
-            PhotoActionButton(title: "Cancel", symbol: "xmark", prominent: false) { care.finishWallEdit(save: false) }
-                .accessibilityIdentifier("wall-edit-cancel")
-            PhotoActionButton(title: "Done", symbol: "checkmark", prominent: true) { care.finishWallEdit(save: true) }
-                .accessibilityIdentifier("wall-edit-done")
+        Group {
+            if ax {
+                VStack(spacing: 6) {
+                    PhotoActionButton(title: "Done", symbol: "checkmark", prominent: true) { care.finishWallEdit(save: true) }
+                        .accessibilityHint("Hangs the picture on the wall as it is now.").accessibilityIdentifier("wall-edit-done")
+                    PhotoActionButton(title: "Cancel", symbol: "xmark", prominent: false) { care.finishWallEdit(save: false) }
+                        .accessibilityHint("Closes without changing the wall.").accessibilityIdentifier("wall-edit-cancel")
+                }
+            } else {
+                HStack(spacing: 8) {
+                    PhotoActionButton(title: "Cancel", symbol: "xmark", prominent: false) { care.finishWallEdit(save: false) }
+                        .accessibilityHint("Closes without changing the wall.").accessibilityIdentifier("wall-edit-cancel")
+                    PhotoActionButton(title: "Done", symbol: "checkmark", prominent: true) { care.finishWallEdit(save: true) }
+                        .accessibilityHint("Hangs the picture on the wall as it is now.").accessibilityIdentifier("wall-edit-done")
+                }
+            }
         }
     }
 
-    private func chip(_ title: String, symbol: String, selected: Bool, enabled: Bool = true, _ action: @escaping () -> Void) -> some View {
+    private func chip(_ title: String, symbol: String, selected: Bool, enabled: Bool = true, hint: String, _ action: @escaping () -> Void) -> some View {
         Button { AudioHub.shared.uiTap(); action() } label: {
             HStack(spacing: 5) {
                 Image(systemName: symbol).font(.system(size: 13, weight: .heavy))
-                Text(title).font(SK.font(14, .heavy)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(title).font(SK.font(14, .heavy)).lineLimit(ax ? 2 : 1).minimumScaleFactor(ax ? 1 : 0.8)
             }
             .foregroundStyle(SK.ink.opacity(enabled ? 1 : 0.4)).padding(.horizontal, 12).frame(minHeight: 44)
             .background(Capsule().fill(selected ? SK.honey : Color.white.opacity(0.92)))
         }
         .buttonStyle(.plain).disabled(!enabled)
+        .accessibilityLabel(title == "Move" ? "Move and size" : "Photo inside the frame")
+        .accessibilityHint(hint)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

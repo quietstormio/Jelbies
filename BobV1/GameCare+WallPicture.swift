@@ -65,17 +65,16 @@ extension GameCare {
     private func loadWallTexture(_ path: String, _ room: RoomRenderer) {
         guard !wallDrawn.loading.contains(path), !wallDrawn.failed.contains(path) else { return }
         wallDrawn.loading.insert(path)
-        room.loadWallPhoto(URL(fileURLWithPath: path)) { [weak self] t in
-            nonisolated(unsafe) let texture = t
-            Task { @MainActor in
-                guard let self else { return }
-                self.wallDrawn.loading.remove(path)
-                if let texture {
-                    if self.wallDrawn.textures.count >= 3 { self.wallDrawn.textures = self.wallDrawn.textures.filter { $0.key == self.wallDrawn.key?.path } }
-                    self.wallDrawn.textures[path] = texture
-                } else { self.wallDrawn.failed.insert(path) }
-                self.wallDrawn.key = nil          // draw again now that the photo is here
-            }
+        let device = room.gpuDevice, url = URL(fileURLWithPath: path)
+        Task { @MainActor [weak self] in
+            let texture = await RoomRenderer.loadWallPhoto(device: device, url: url)          // (decoded off the main thread; the result lands back here)
+            guard let self else { return }
+            self.wallDrawn.loading.remove(path)
+            if let texture {
+                if self.wallDrawn.textures.count >= 3 { self.wallDrawn.textures = self.wallDrawn.textures.filter { $0.key == self.wallDrawn.key?.path } }
+                self.wallDrawn.textures[path] = texture
+            } else { self.wallDrawn.failed.insert(path) }
+            self.wallDrawn.key = nil          // draw again now that the photo is here
         }
     }
 

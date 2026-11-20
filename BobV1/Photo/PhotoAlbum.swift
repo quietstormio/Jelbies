@@ -174,6 +174,7 @@ private struct PhotoViewer: View {
                     done()
                     if wall.owns { wall.hang(url) } else { wall.getFrame() }
                 }
+                .accessibilityHint(wall.owns ? "Hangs this photo on the wall in a frame you own." : "You have no picture frame yet. Opens the Shop on the picture frames.")
                 .accessibilityIdentifier("photo-hang-on-wall")
             }
             if let img { GatedShareButton(image: img) }

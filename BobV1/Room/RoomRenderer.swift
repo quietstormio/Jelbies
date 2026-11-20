@@ -393,13 +393,14 @@ nonisolated final class RoomRenderer {
         wallFrame = staticMesh(m.frame, label: "wall frame"); wallPhoto = staticMesh(m.photo, label: "wall photo"); wallShadow = staticMesh(m.shadow, label: "wall shadow")
         wallTexture = texture
     }
-    /// Decodes the wall picture's JPEG into an sRGB, mipmapped, private texture on the loader's own queue (never the main thread) and hands it to `done` (nil when it cannot be read).
-    func loadWallPhoto(_ url: URL, done: @escaping @Sendable (MTLTexture?) -> Void) {
-        let loader = MTKTextureLoader(device: device)
+    /// The Metal device the room draws with (the wall photo is decoded for it).
+    var gpuDevice: MTLDevice { device }
+    /// Decodes a wall picture's JPEG into an sRGB, mipmapped, private texture on the loader's own queue (never the main thread); nil when it cannot be read.
+    static func loadWallPhoto(device: MTLDevice, url: URL) async -> MTLTexture? {
         let options: [MTKTextureLoader.Option: Any] = [.SRGB: true, .generateMipmaps: true, .origin: MTKTextureLoader.Origin.topLeft,
                                                        .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
                                                        .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)]
-        loader.newTexture(URL: url, options: options) { tex, _ in done(tex) }
+        return try? await MTKTextureLoader(device: device).newTexture(URL: url, options: options)
     }
     /// The photo arrived (the host decoded it off the main thread).
     func setWallPhotoTexture(_ t: MTLTexture?) { staticVersion &+= 1; wallTexture = t }
