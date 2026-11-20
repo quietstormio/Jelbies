@@ -52,4 +52,46 @@ final class RaceDepartTests: XCTestCase {
         for _ in 0..<30 { room.step(); care.tickWear(room.actors, dt: 1.0 / 60) }
         for id in 0..<3 { XCTAssertNotNil(care.wardrobe.slot(id)?.bib, "racer body \(id) wears his numbered bib on the track") }
     }
+
+    /// race-depart-r1 follow-up: the same rule for what else a housemate wears. In the room, before the swap to the track and after the return, a stay-home Jelmiko wears exactly what he wore before the tap:
+    /// every wardrobe slot, his shoes (`shoeLook`) and the brain's `shoesWorn`. (Base: `shoeLook` and `syncPerks` hid the shoes of every body that was not the player the moment the trip began.)
+    func testHousematesKeepOutfitAndShoesInTheRoomAroundTheRace() {
+        let room = RaceTripTests.Room(count: 3)
+        RaceTripTests.keep.append(room)
+        let care = room.care
+        care.race.rivalSource = LocalRivalSourceFixed(waddle: 0.2)
+        care.race.autoRate = 8; care.race.autoReturnAfter = 0.5
+        let outfits: [Int: [WearLook]] = [1: [.sneakerCoral, .flowerCrown], 2: [.glitterShoes, .crownGold]]
+        care.store.saved.wearables = outfits.values.flatMap { $0 }.map(\.rawValue)
+        for (id, looks) in outfits { for l in looks { XCTAssertTrue(care.store.wear(l, on: id)) } }
+        func tick() {
+            room.step()
+            care.tickWear(room.actors, dt: 1.0 / 60)
+            for a in room.actors { if let b = a.brain { care.syncPerks(id: a.id, brain: b) } }
+        }
+        func snap(_ id: Int) -> [String] {
+            let a = room.actors[id]
+            var out = WearSlot.allCases.map { "\($0.rawValue)=\(care.wardrobe.slot(id)?.items[$0]?.look?.rawValue ?? "-")" }
+            out.append("shoes=\(care.shoeLook(for: a)?.rawValue ?? "-")"); out.append("shod=\(a.brain?.shoesWorn == true)")
+            return out
+        }
+        for _ in 0..<180 { tick() }
+        let before = [1, 2].map(snap)
+        XCTAssertTrue(before[0].contains("shoes=sneakerCoral") && before[1].contains("shoes=glitterShoes"), "the housemates are dressed: \(before)")
+        care.startRace(jelly: 0, seed: 11)
+        var roomSteps = 0, sawTrack = false, backSteps = 0
+        var bad: [String] = []
+        for _ in 0..<(150 * 60) {
+            tick()
+            if care.race.trackVisible { sawTrack = true }
+            if !care.race.active { if sawTrack { break }; continue }
+            if care.raceBook.onTrack.isEmpty {                       // the room: before the swap, or (onTrack cleared) after the return
+                if sawTrack { backSteps += 1; if backSteps <= 1 { continue } }          // (one step for the wardrobe to see the swap home)
+                roomSteps += 1
+                for (k, id) in [1, 2].enumerated() where snap(id) != before[k] { bad.append("body \(id): \(snap(id)) != \(before[k])") }
+            }
+        }
+        XCTAssertGreaterThan(roomSteps, 20, "the room's fade out and fade in were checked")
+        XCTAssertTrue(bad.isEmpty, "a housemate's outfit or shoes changed in the room: \(bad.prefix(2))")
+    }
 }
