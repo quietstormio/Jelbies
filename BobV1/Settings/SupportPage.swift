@@ -1,7 +1,7 @@
 //
 //  SupportPage.swift
 //  The in-app Help & Support page (Settings > Help & Support). The same text is published from docs/SUPPORT.md (keep the two in step).
-//  The address is selectable text, and a "Write to us" button opens a mailto link behind the grown-up hold gate (UI/ParentGate.swift).
+//  The address is selectable text, and a "Write to us" button opens a mailto link (behind the grown-up hold gate when `ParentGate.required`, UI/ParentGate.swift).
 //
 
 import SwiftUI
@@ -44,7 +44,7 @@ struct SupportPage: View {
                         .background(Capsule().fill(Color.white))
                 }
                 .accessibilityIdentifier("support-write")
-                .accessibilityHint("Asks a grown-up first, then opens Mail")
+                .accessibilityHint(ParentGate.hint("Asks a grown-up first, then opens Mail", ungated: "Opens Mail"))
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading).cloudCard(radius: 26)
         }
