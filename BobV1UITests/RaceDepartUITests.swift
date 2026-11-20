@@ -15,11 +15,12 @@ final class RaceDepartUITests: XCTestCase {
         let sits = (env["RACEDEP_SITUATIONS"] ?? "pair,walkemote,toy").split(separator: ",").map(String.init)
         let seeds = (env["RACEDEP_SEEDS"] ?? "1,2,3").split(separator: ",").map(String.init)
         let secs = Double(env["RACEDEP_SECS"] ?? "100") ?? 100
-        for sit in sits { for seed in seeds { one(sit: sit, seed: seed, secs: secs, landscape: env["RACEDEP_LANDSCAPE"] == "1") } }
+        for sit in sits { for seed in seeds { one(sit: sit, seed: seed, secs: secs, landscape: env["RACEDEP_LANDSCAPE"] == "1") } }          // ("pair!ctl": the control, Town open then Home, no race)
     }
 
     @MainActor
-    private func one(sit: String, seed: String, secs: Double, landscape: Bool) {
+    private func one(sit rawSit: String, seed: String, secs: Double, landscape: Bool) {
+        let control = rawSit.hasSuffix("!ctl"), sit = control ? String(rawSit.dropLast(4)) : rawSit
         try? FileManager.default.removeItem(atPath: "/tmp/racedep_go")
         let app = XCUIApplication()
         app.launchArguments += ["-MainMenu", "0", "-NewGame", "bob,lavender,moss", "-Mute", "1", "-ClockHour", "12", "-BlobSeed", seed, "-RaceSeed", "7", "-RaceAuto", "4", "-RaceControl", "pull",
@@ -40,6 +41,17 @@ final class RaceDepartUITests: XCTestCase {
         XCTAssertTrue(app.buttons["who-0"].waitForExistence(timeout: 10))
         sleep(1)
         app.buttons["who-0"].tap()
+        if control {          // the control: the same freeze and resume, no race (Track back, Town home)
+            sleep(1)
+            app.buttons["track-back"].tap()
+            XCTAssertTrue(app.buttons["town-home"].waitForExistence(timeout: 10))
+            app.buttons["town-home"].tap()
+            sleep(UInt32(min(secs, 12)))
+            try? FileManager.default.removeItem(atPath: "/tmp/racedep_go")
+            app.terminate()
+            sleep(2)
+            return
+        }
         let race = app.buttons["track-race"]
         XCTAssertTrue(race.waitForExistence(timeout: 10))
         sleep(1)

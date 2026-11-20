@@ -15,6 +15,7 @@ enum RaceDepartProbe {
     nonisolated(unsafe) static let setup: String? = DevArgs.enabled ? UserDefaults.standard.string(forKey: "RaceDepartSetup") : nil
     nonisolated(unsafe) static var steps = 0
     nonisolated(unsafe) static var toyPlaced = false
+    nonisolated(unsafe) static var lastSocial: [Int: SocialSession] = [:]
     static func mark(_ s: String) { if on { NSLog("[rdp] MARK w=%.3f %@", CACurrentMediaTime(), s) } }
 }
 
@@ -23,12 +24,17 @@ extension GameCare {
         guard RaceDepartProbe.on else { return }
         RaceDepartProbe.steps += 1
         if RaceDepartProbe.setup != nil, RaceDepartProbe.steps % 30 == 0 { raceDepartSetup(actors) }
+        for a in actors {          // why a pair emote ended (done / brokenUp / stopped / aborted), logged the step it ends
+            guard let b = a.brain else { continue }
+            if let s = b.social { RaceDepartProbe.lastSocial[a.id] = s }
+            else if let s = RaceDepartProbe.lastSocial[a.id] { RaceDepartProbe.lastSocial[a.id] = nil; RaceDepartProbe.mark("social end id=\(a.id) kind=\(s.kind.rawValue) end=\(s.end.map { "\($0)" } ?? "nil") phase=\(s.phase)") }
+        }
         guard RaceDepartProbe.steps % 3 == 0 else { return }
         let now = CACurrentMediaTime()
         for a in actors {
             guard let b = a.brain else { continue }
             let s = wardrobe.slot(a.id)
-            let doing = "scr:\(b.scriptKindName) idle:\(b.idleState.kind.map { "\($0)" } ?? "-") act:\(b.activity) soc:\(b.social.map { "\($0.kind.rawValue)" } ?? "-") pend:\(b.pending == nil ? 0 : 1) hurry:\(b.hurry ? 1 : 0) auto:\(b.autonomy ? 1 : 0) cmd:\(b.commanded ? 1 : 0) sleep:\(b.isSleeping ? 1 : 0) it:\(String(format: "%.2f", b.idleState.t)) rest:\(String(format: "%.2f", b.restTimer)) face:\(String(format: "%.2f", b.expr.forcedLeft)) yaw:\(String(format: "%.2f", b.yaw))"
+            let doing = "scr:\(b.scriptKindName) idle:\(b.idleState.kind.map { "\($0)" } ?? "-") act:\(b.activity) soc:\(b.social.map { "\($0.kind.rawValue)" } ?? "-") pend:\(b.pending == nil ? 0 : 1) hurry:\(b.hurry ? 1 : 0) auto:\(b.autonomy ? 1 : 0) cmd:\(b.commanded ? 1 : 0) sleep:\(b.isSleeping ? 1 : 0) stg:\(b.sleep.stage) it:\(String(format: "%.2f", b.idleState.t)) rest:\(String(format: "%.2f", b.restTimer)) face:\(String(format: "%.2f", b.expr.forcedLeft)) yaw:\(String(format: "%.2f", b.yaw))"
             NSLog("[rdp] w=%.3f id=%d x=%.2f z=%.2f bib=%d jer=%d role=%@ ph=%@ out=%d wait=%d track=%d %@", now, a.id, a.floor.x, a.floor.y, s?.bib != nil ? 1 : 0, s?.jersey != nil ? 1 : 0,
                   "\(wearRole(for: a.id))", "\(race.phase)", outing.running ? 1 : 0, raceWait != nil ? 1 : 0, race.trackVisible ? 1 : 0, doing)
         }
@@ -36,7 +42,7 @@ extension GameCare {
 
     /// Keeps the two housemates (ids 1 and 2) in the chosen situation until a trip starts. Needs the marker file (the UI test writes it just before it taps "Go out").
     private func raceDepartSetup(_ actors: [JellyActor]) {
-        guard let kind = RaceDepartProbe.setup, FileManager.default.fileExists(atPath: "/tmp/racedep_go"), !tripActive, !outing.running, raceWait == nil, actors.count >= 3,
+        guard let kind = RaceDepartProbe.setup, kind != "none", FileManager.default.fileExists(atPath: "/tmp/racedep_go"), !tripActive, !outing.running, raceWait == nil, actors.count >= 3,
               let b1 = actors[1].brain, let b2 = actors[2].brain else { return }
         func free(_ b: BlobBrain) -> Bool { b.social == nil && b.idleState.kind == nil && b.scriptIsNone && b.pending == nil && !b.isSleeping }
         switch kind {
@@ -51,6 +57,8 @@ extension GameCare {
                 store.grant("decor-ball"); _ = store.place("decor-ball"); syncDecor()
             }
             if free(b1) { _ = b1.startCommandedDecor(.decorKick, only: .ball, actors[1].sim, actors[1].skinner) }
+        case "asleep":          // housemate #1 goes to bed (the bedtime command) and stays there; #2 carries on as he likes
+            if !b1.isSleeping, b1.social == nil, !b1.commandedGoodnight { b1.commandedGoodnight = true }
         default: break
         }
     }
