@@ -429,7 +429,7 @@ extension GameCare {
         guard let g = book.goals[a.id] else {          // (no walk under way: for a turn at the middle she must really be there; she can have been pushed off it since she got there)
             guard atCentre else { return true }
             let c = a.sim.centroid()
-            if simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.arriveRadius { return true }
+            if simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.arriveRadius { showArrivedLog(a, "no walk", c); return true }
             let now = CACurrentMediaTime()
             if b.pending == nil, now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: ShowStage.playerSpot) }
             return false
@@ -437,13 +437,18 @@ extension GameCare {
         if b.pending != nil { return false }
         if case .walk = b.script { return false }          // (still stepping; the turn to the camera after the walk is not waited for: it can take seconds)
         let c = a.sim.centroid()          // (the BODY's place, not the brain's: they differed by up to a metre while a walker was held back by the one before her)
-        if simd_distance(SIMD2(c.x, c.z), g) < Self.arriveRadius { book.goals[a.id] = nil; return true }
+        if simd_distance(SIMD2(c.x, c.z), g) < Self.arriveRadius { book.goals[a.id] = nil; showArrivedLog(a, "walk", c); return true }
         // she stopped short (held back by the one leaving the middle): ask again, at most every 0.6 s, instead of waiting for the cap
         let now = CACurrentMediaTime()
         if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: g) }
         return false
     }
     private static let arriveRadius: Float = 0.45
+    private func showArrivedLog(_ a: JellyActor, _ via: String, _ c: SIMD3<Float>) {
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled { print(String(format: "[showturn] arrived actor %d (%@) %.2f from the middle t=%.3f", a.id, via, simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot), CACurrentMediaTime())) }
+        #endif
+    }
 
     // MARK: the bodies' acts
 
