@@ -167,7 +167,7 @@ final class FocusGroup {
         var x: Float = -2.6
         while x <= 2.6001 {
             var z = GameCamera.callSpot.y - 1.4
-            while z <= GameCamera.callSpot.y + 0.7 {
+            while z <= min(GameCamera.callSpot.y + 0.7, GameCamera.roamMaxZ - 0.4) {
                 let a = SIMD2<Float>(x, z)
                 let spots = offs.map { a + $0 }
                 z += 0.1
@@ -180,25 +180,36 @@ final class FocusGroup {
         return best?.spots ?? base
     }
 
-    /// A point to walk round first, when the straight way from `p` to `s` brushes past an uncalled body (a lying body is 1.8 across: two of them leave a slit a walker is pinned in); nil = walk straight.
+    /// A point to walk to first, when the straight way from `p` to `s` brushes past an uncalled body (a lying body is 1.8 across: two of them leave a slit a walker is pinned in, and a way round
+    /// one can lead through the bowls): the cheapest point `w` whose two legs both keep 1.3 from every uncalled body and stay on free floor. nil = the straight way is fine, or no point works.
     static func detour(from p: SIMD2<Float>, to s: SIMD2<Float>, obstacles: [SIMD2<Float>], fixed: (SIMD2<Float>) -> SIMD2<Float>) -> SIMD2<Float>? {
-        let d = s - p, len = simd_length(d)
-        guard len > 1.5 else { return nil }
-        let u = d / len
-        var hit: SIMD2<Float>?, hitT = Float.infinity
-        for o in obstacles {
-            let t = simd_dot(o - p, u)
-            guard t > 0.2, t < len - 0.2, simd_length(o - (p + u * t)) < 1.5, t < hitT else { continue }
-            hit = o; hitT = t
+        func segClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+            let d = b - a, len = simd_length(d)
+            guard len > 1e-3 else { return true }
+            let u = d / len
+            for o in obstacles {
+                let t = min(max(simd_dot(o - a, u), 0), len)
+                if simd_length(o - (a + u * t)) < 1.3 { return false }
+            }
+            var t: Float = 0.1
+            while t < len { let q = a + u * t; if !FreeFloor.isFree(q, radius: 0.5) { return false }; t += 0.25 }
+            return true
         }
-        guard let o = hit else { return nil }
-        let n = SIMD2<Float>(-u.y, u.x)
+        guard simd_length(s - p) > 1.5, !obstacles.isEmpty else { return nil }
+        let dir = s - p, dl = simd_length(dir)
+        guard obstacles.contains(where: { o in let t = min(max(simd_dot(o - p, dir / dl), 0), dl); return simd_length(o - (p + dir / dl * t)) < 1.3 }) else { return nil }          // (nobody on the straight way: the usual walk)
         var best: (SIMD2<Float>, Float)?
-        for side: Float in [-1, 1] {
-            let c = o + n * side * 2.1
-            guard simd_distance(fixed(c), c) < 0.15, obstacles.allSatisfy({ simd_distance($0, c) >= 1.3 }) else { continue }
-            let cost = simd_distance(p, c) + simd_distance(c, s)
-            if cost < (best?.1 ?? .infinity) { best = (c, cost) }
+        var x: Float = -2.2
+        while x <= 2.2001 {
+            var z: Float = -2.0
+            while z <= 3.0001 {
+                let w = SIMD2<Float>(x, z)
+                z += 0.25
+                guard simd_distance(fixed(w), w) < 0.15, obstacles.allSatisfy({ simd_distance($0, w) >= 1.5 }), segClear(p, w), segClear(w, s) else { continue }
+                let cost = simd_distance(p, w) + simd_distance(w, s)
+                if cost < (best?.1 ?? .infinity) { best = (w, cost) }
+            }
+            x += 0.25
         }
         return best?.0
     }
