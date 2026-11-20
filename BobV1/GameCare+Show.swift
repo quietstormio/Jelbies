@@ -356,12 +356,11 @@ extension GameCare {
         }
         book.pendingWalks = rest
     }
-    /// While one entrant performs, the next one who waits far off (rival 2 comes from the wing) already sets off for the middle: her walk is 2.7 s and the one before her is gone by the time she
-    /// arrives, so the turn does not wait for her (and the wait for her never runs out).
+    /// While one entrant performs, the next one already sets off for the middle (her walk is ~3.5 s at the stage pace, and the one before her is gone by the time she arrives), and during the last
+    /// entrant's trick his Jelmiko sets off back from the side. His turn then follows hers with no dead time (the turn used to wait the walk out and then put her there).
     private func showStageNext(after i: Int) {
-        guard let j = show.nextRivalUp, j != i, let nb = rivalActor(j) else { return }
-        guard simd_distance(ShowStage.rivalRest(j, sideways: GameCamera.aspect > 1), ShowStage.playerSpot) > 2.5 else { return }
-        showWalk(nb, to: ShowStage.playerSpot)
+        if let j = show.nextRivalUp, j != i { if let nb = rivalActor(j) { showWalk(nb, to: ShowStage.playerSpot) } }
+        else if show.nextRivalUp == nil, i >= 0, let p = stageActor(0) { showWalk(p, to: ShowStage.playerSpot) }
     }
     /// The Trick round's stage: the rivals stand at their rest spots; after it they are back in the dance row (and the borrowed ones far off) for the results.
     private func showSetTrick(_ on: Bool) {
@@ -387,7 +386,7 @@ extension GameCare {
         switch cue {
         case .playerAside(let aside):
             guard let a = stageActor(0) else { return }
-            if aside { showWalk(a, to: ShowStage.playerAside) } else { showWalkWhenClear(a, to: ShowStage.playerSpot) }
+            if aside { showWalk(a, to: ShowStage.playerAside); showStageNext(after: -1) } else { showWalkWhenClear(a, to: ShowStage.playerSpot) }
         case .walkIn(let i):
             guard let a = rivalActor(i) else { return }
             showWalkWhenClear(a, to: ShowStage.playerSpot)
@@ -426,7 +425,7 @@ extension GameCare {
         if let a, book.pendingWalks.contains(where: { $0.id == a.id }) { return false }          // (still waiting for the middle to clear)
         guard let a, let b = a.brain, let g = book.goals[a.id] else { return true }
         if b.pending != nil { return false }
-        if case .none = b.script {} else { return false }
+        if case .walk = b.script { return false }          // (still stepping; the turn to the camera after the walk is not waited for: it can take seconds)
         if simd_distance(SIMD2(b.px, b.pz), g) < 0.6 { book.goals[a.id] = nil; return true }
         return false
     }

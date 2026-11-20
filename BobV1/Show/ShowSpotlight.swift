@@ -68,12 +68,12 @@ extension GameCare {
     }
     /// Arrival (the flow's own arrival radius), and how far he may drift from the middle in his score beat before the light lets go.
     static let spotArrive: Float = 0.6, spotHold: Float = 0.45
-    /// Is this body still walking (a walk, a turn after it, or one asked for)? Test seam too.
+    /// Is this body still walking (stepping to a goal, or a walk asked for)? The turn to the camera after the walk does not count (it can take seconds and the trick cuts it short). Test seam too.
     func showSpotWalking(_ a: JellyActor) -> Bool {
         guard let b = a.brain else { return false }
         if b.pending != nil { return true }
-        if case .none = b.script { return false }
-        return true
+        if case .walk = b.script { return true }
+        return false
     }
     private func showSpotBody(_ id: Int) -> JellyActor? { showBook.actors.first { $0.id == id } ?? showBook.extra.first { $0.id == id } }
     private func showSpotCandidate(_ s: ShowSim) -> (Int, SpotMode)? {
