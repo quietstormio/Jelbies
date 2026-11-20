@@ -425,7 +425,15 @@ extension GameCare {
         let book = showBook
         let a = who.map { rivalActor($0) } ?? stageActor(0)
         if let a, book.pendingWalks.contains(where: { $0.id == a.id }) { return false }          // (still waiting for the middle to clear)
-        guard let a, let b = a.brain, let g = book.goals[a.id] else { return true }
+        guard let a, let b = a.brain else { return true }
+        guard let g = book.goals[a.id] else {          // (no walk under way: for a turn at the middle she must really be there; she can have been pushed off it since she got there)
+            guard atCentre else { return true }
+            let c = a.sim.centroid()
+            if simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.arriveRadius { return true }
+            let now = CACurrentMediaTime()
+            if b.pending == nil, now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: ShowStage.playerSpot) }
+            return false
+        }
         if b.pending != nil { return false }
         if case .walk = b.script { return false }          // (still stepping; the turn to the camera after the walk is not waited for: it can take seconds)
         let c = a.sim.centroid()          // (the BODY's place, not the brain's: they differed by up to a metre while a walker was held back by the one before her)
