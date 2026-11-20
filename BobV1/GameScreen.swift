@@ -936,6 +936,7 @@ struct GameScreen: View {
             case "callall": care.comeHereEveryone()
             case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()
+            case "park": care.requestPark(); if care.park.picking { care.startPark() }          // -GameAction park: the Town's Park row, then "Go to the park" with everybody picked (capture aid; shows the refusal line when blocked)
             default: care.wave()
             }
             // capture aid: -GameReleaseAfter <s> presses "Let Bob go" that long after the action

@@ -56,17 +56,25 @@ final class ParkWakeTests: XCTestCase {
         XCTAssertEqual(c.parkBlocker() == nil, false, "a second ask meanwhile is answered, not stacked")
         for id in sleepers { XCTAssertTrue(r.actors[id].brain?.sleep.shortUp == true, "\(id): the SHORT get-up, not the slow morning wake") }
         for id in sleepers { XCTAssertFalse(r.actors[id].brain?.sleep.softWake == true, "\(id): not the staged soft wake") }
-        var sawRun = false
-        run(r, 30) { sawRun = sawRun || c.outing.running; return c.park.phase != .off }
-        XCTAssertTrue(asleep(r).isEmpty, "nobody is asleep when the trip starts: \(asleep(r))")
-        XCTAssertTrue(sawRun || c.park.phase != .off, "everybody ran out, then the trip began")
+        var sawRun = false, lyingWhenRunning = false
+        run(r, 30) {
+            if c.outing.running { sawRun = true; if !self.asleep(r).isEmpty { lyingWhenRunning = true } }
+            return c.park.phase != .off
+        }
+        XCTAssertTrue(sawRun, "everybody ran out of the room first")
+        XCTAssertFalse(lyingWhenRunning, "nobody runs out lying down")
         XCTAssertFalse(c.outing.waking)
         XCTAssertNotEqual(c.park.phase, .off, "the park trip started")
         XCTAssertEqual(c.park.picked, Array(0..<count), "everybody together")
+        run(r, 60) { c.park.phase == .playing }
+        XCTAssertEqual(c.park.phase, .playing, "the park loaded")
+        XCTAssertTrue(asleep(r).isEmpty, "all awake at the park: \(asleep(r))")
+        XCTAssertEqual(c.parkBook.comers, Set(0..<count), "all of them came")
     }
     func testOneAsleepAtThePark() { daytimePark(count: 3, sleepers: [1]) }
     func testTwoAsleepAtThePark() { daytimePark(count: 3, sleepers: [0, 2]) }
     func testAllAsleepAtThePark() { daytimePark(count: 3, sleepers: [0, 1, 2]) }
+    func testTwoJelmikoOneAsleepAtThePark() { daytimePark(count: 2, sleepers: [1]) }
     func testSingleJelmikoAsleepAtThePark() { daytimePark(count: 1, sleepers: [0]) }
 
     /// The player's own Naptime a moment ago does not block the trip: the newer choice wins.
