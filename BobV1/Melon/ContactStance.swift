@@ -118,7 +118,7 @@ struct ContactStance: Sendable {
         // (pair-distinct-r1, BlobSocial+Pair2.swift: clear gaps, no contact)
         .orbit: .proximity(), .upDown: ContactStance(facing: .each, cls: .proximity, steps: [Step(from: 0, target: 0.25), Step(from: 2, target: 0.15, onlySeparate: true)], features: true),
         .jumpTurns: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: hopGap), Step(from: 2, target: near, onlySeparate: true)], features: true),
-        .spinTogether: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: 0.30), Step(from: 2, target: near, onlySeparate: true)], features: true),
+        .spinTogether: ContactStance(facing: .camera, cls: .proximity, steps: [Step(from: 0, target: 0.45), Step(from: 2, target: near, onlySeparate: true)], features: true),
     ]
     static func entry(_ k: SocialKind) -> ContactStance? { table[k] }
 }

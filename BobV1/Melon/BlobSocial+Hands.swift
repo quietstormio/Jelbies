@@ -32,7 +32,7 @@ extension HandReach {
     /// Both arms up over the head (a cheer).
     static func armsUp(side: Int) -> HandReach { HandReach(side: side, w: 1, el: 1.15, seek: false, partner: -1, sa: 0.1, freeEl: 1.15, freeSa: 0.1) }
     /// How far a MEETING hand (high five) may creep OUT past its resting shoulder to close the last cm (m): the stubby arm reaches 0.5 - 1 cm short of the partner's on some species.
-    static let creepMax: Float = 0.04
+    static let creepMax: Float = 0.03
 }
 
 extension HandReach {
@@ -193,14 +193,15 @@ extension BlobBrain {
             var gapNow: Float
             if let hisPole { let mp = poleW(elT, saT, out); gapNow = 0.5 * (u.x * (hisPole.x - mp.x) + u.y * (hisPole.z - mp.z)) }
             else { gapNow = Float(HandReach.restSDF(restPoint(of: poleW(elT, saT, out), sim: osim))) }
-            var s0 = gapNow - margin - 2 * dt * min(closing, 0.8)
-            if !q.seek, (social?.phase ?? 0) >= 3, let sg = ContactField.skinGap(steerID, o.steerID) { s0 = max(s0, sg - 0.001) }          // (the clap judged on the drawn skins too: the pole gap and the skin gap differ by up to 1 cm between species)
+            let s0 = gapNow - margin - 2 * dt * min(closing, 0.8)
+            if !q.seek, (social?.phase ?? 0) >= 3, let sg = ContactField.skinGap(steerID, o.steerID) {
+                // THE CLAP is judged on the drawn skins (the pole gap and the skin gap differ by up to 1 cm between species): a hand sunk deeper than 0.3 cm gives, hands that hover > 0.5 cm apart creep out (<= creepMax)
+                if sg < -0.003 { socialBook.handOut = max(-0.12, socialBook.handOut + sg + 0.002) }
+                else if sg > 0.005 { socialBook.handOut = min(HandReach.creepMax, socialBook.handOut + 0.25 * dt) }
+            } else {
             // (the give only runs once he stands: a walker re-derives his destination from the outline he has, so a hand that gives while he walks shortens the outline, the destination, the walk... until the arm is all the way in)
             if s0 < -0.004 { socialBook.handOut = max(-0.12, socialBook.handOut + s0 + 0.002) }
-            else if s0 > (q.seek ? 0.012 : 0.004) {
-                // (a seeking hand only gives back what it gave; a MEETING hand of the high five also creeps out up to `creepMax` while the hands hover apart, so the clap lands on every species)
-                let cap: Float = q.seek ? 0 : ((social?.phase ?? 0) >= 3 ? HandReach.creepMax : 0)
-                if socialBook.handOut < cap { socialBook.handOut = min(cap, socialBook.handOut + 0.25 * dt) }
+            else if s0 > (q.seek ? 0.012 : 0.004), socialBook.handOut < 0 { socialBook.handOut = min(0, socialBook.handOut + 0.25 * dt) }
             }
         } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0; saT = q.sa ?? 0 }
         let rate: Float = 6 * dt

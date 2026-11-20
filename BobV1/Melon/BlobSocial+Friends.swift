@@ -341,12 +341,13 @@ extension BlobBrain {
         let rounds = 2, gap: Float = 1.4, lag: Float = 0.55, dist: Float = 0.45
         let lead = (s.roles == 0) == isA
         let n = lead ? s.bumps : s.passes
+        let along = pairHopYaw(o)          // (the SAME heading for both: two bodies each hopping toward the camera point converge on it)
         if n < rounds, t >= Float(n) * gap + (lead ? 0 : lag), scriptIsNone, idleState.kind == nil {
             if lead { s.bumps += 1 } else { s.passes += 1 }
             socialBook.hold = false; socialBook.faceYaw = nil
             startHopPlay(sim: sim, distance: dist)
             face(.joyArc, hold: 0.8)
-        } else if scriptIsNone { holdFacing(faceCameraYaw()) }
+        } else if scriptIsNone { holdFacing(along) }
         if isA {
             if s.bumps >= rounds, s.passes >= rounds, t > Float(rounds) * gap + lag + 0.4, scriptIsNone, o.scriptIsNone {
                 jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)

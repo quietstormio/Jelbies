@@ -18,6 +18,9 @@ extension SocialKind {
 }
 
 extension BlobBrain {
+    /// The heading a side-by-side pair hops along: toward the camera from the pair's middle, the same for both (parallel hops keep the gap).
+    func pairHopYaw(_ o: BlobBrain) -> Float { atan2f(cameraPosXZ.x - (px + o.px) / 2, cameraPosXZ.y - (pz + o.pz) / 2) }
+
     // MARK: starting
 
     func socialStartPair2(_ kind: SocialKind, with o: BlobBrain, _ sim: SoftBody) -> Bool {
@@ -33,7 +36,7 @@ extension BlobBrain {
             o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(spot)
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
         case .jumpTurns, .spinTogether:
-            guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: peerGap * 1.1) else { return false }
+            guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: peerGap * (kind == .spinTogether ? 1.3 : 1.1)) else { return false }
             let s = newSession(kind, with: o, duration: 0)
             s.goal = spot
             o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
@@ -151,9 +154,9 @@ extension BlobBrain {
                     startHopPlay(sim: sim, distance: dist)
                     face(.joyArc, hold: 0.9)
                     AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.7)
-                } else if fxFree { holdFacing(faceCameraYaw()) }
+                } else if fxFree { holdFacing(pairHopYaw(o)) }
             } else {
-                holdFacing(faceCameraYaw())
+                holdFacing(pairHopYaw(o))
                 // the watcher cheers when the jumper lands: a small bounce and a chirp
                 if jumper.socialBook.hopStarted, jumper.fxFree, !socialBook.apartStarted {
                     socialBook.apartStarted = true; s.bumpT = t
