@@ -337,6 +337,19 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
             maxPlayers = max(maxPlayers, line.players(court.uid).count)
             for a in 0..<3 where line.square(court.uid, a) >= 0 { landed.insert(a) }
             if i % 120 == 0, i < 60 * 20 { let b = lab.rigs[1].brain; print("HKO join t\(i / 60) rig1 kind \(String(describing: b.idleState.kind)) notice \(b.toy.noticeUID) wait \(b.toy.waitUID) pending \(b.pending != nil) job \(b.job != nil) d \(court.distance(b.position)) ign \(b.decorIgnore ?? -1)") }
+            if i == 200 || i == 600 {          // (why does his decorStart say no?)
+                let b = lab.rigs[1].brain, keep = b.decorIgnore
+                b.decorIgnore = court.uid
+                let c = DecorField.shared.foot(court.uid)!
+                let stand = b.hopscotchStand(c), ds = b.decorStand(.decorHopscotch, c, from: b.position)
+                var raw: [String] = []
+                for off in [SIMD2<Float>(0, 0), SIMD2(0, 0.45), SIMD2(0.45, 0.45), SIMD2(0, -0.45)] {
+                    let w = c.centre + c.turned(HopscotchCourt.queueSpot(slot: line.nextSlot(court.uid)) + off), q = b.fixed(w)
+                    raw.append(String(format: "(%.2f,%.2f)->moved %.2f peerFree %d", w.x, w.y, simd_distance(w, q), b.peerFree(q) ? 1 : 0))
+                }
+                print("HKO join why t\(i / 60): hopscotchStand \(String(describing: stand)) decorStand \(String(describing: ds)) reachable \(ds.map { b.reachable(b.position, $0) } ?? false) slot \(line.nextSlot(court.uid)) spots \(raw) peers \(b.steerPeers().map { "\($0.id)@\($0.pos)" }) gate \(b.parkToyGate(c)) avail \(DecorField.shared.available(c))")
+                b.decorIgnore = keep
+            }
             if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { break }
         }
         print("HKO join: players at most \(maxPlayers), landed \(landed.sorted())")
