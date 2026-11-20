@@ -671,6 +671,14 @@ final class VoiceCoordinator {
         release()
     }
 
+    /// Capture aid (`-VoiceHoldOpen <s>`, dev args only): holds the mic open with the glow live for that long (the simulator has no mic buffers), then lets go.
+    func debugHoldOpen(_ seconds: Double) async {
+        guard begin() else { return }
+        goLive(session: session, watchdog: true)
+        try? await Task.sleep(nanoseconds: UInt64(seconds * 1e9))
+        cancel()
+    }
+
     /// Debug / capture (`-VoiceLearned 1`): his name and every trick count as learned with their suggestion words.
     func debugLearnAll() {
                 for t in VoiceTrick.allCases where training.unlocked(t) { training.debugLearn(t, word: t.suggestion, reliability: 0.95) }

@@ -970,6 +970,7 @@ struct GameScreen: View {
             }
             await sleep(d.double(forKey: "SpreadWait") > 0 ? d.double(forKey: "SpreadWait") : 9)
         }
+        if d.double(forKey: "VoiceHoldOpen") > 0 { await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2); await care.voice.debugHoldOpen(d.double(forKey: "VoiceHoldOpen")) }
         if let words = d.string(forKey: "VoiceSay") {
             await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2)
             if d.integer(forKey: "VoiceTyped") != 0 { care.voice.typed(words) }          // -VoiceTyped 1: the typed path (no mic needed: the simulator has none), the same decision a heard phrase takes
