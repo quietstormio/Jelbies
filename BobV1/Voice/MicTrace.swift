@@ -89,11 +89,7 @@ nonisolated struct PressSummary: Sendable {
 nonisolated enum MicTrace {
     /// Test seam: nil = decided once at launch from `-VoiceLog 1` / `-MicBench N`.
     nonisolated(unsafe) static var override: Bool?
-    private static let launchEnabled: Bool = isEnabled()
-    /// The trace runs only where dev arguments are on (never in an App Store build), and only with `-VoiceLog 1` or `-MicBench N`.
-    static func isEnabled(devArgs: Bool = DevArgs.enabled, defaults: UserDefaults = .standard) -> Bool {
-        devArgs && (defaults.bool(forKey: "VoiceLog") || MicBench.count(devArgs: devArgs, defaults: defaults) > 0)
-    }
+    private static let launchEnabled: Bool = UserDefaults.standard.bool(forKey: "VoiceLog") || MicBench.count() > 0
     static var enabled: Bool { override ?? launchEnabled }
     /// True while the frame / main-thread / playback recorders run (the stage's draw hook reads it: one Bool test per frame).
     nonisolated(unsafe) static private(set) var recording = false

@@ -42,17 +42,6 @@ final class MicTraceTests: XCTestCase {
         v.cancel()
     }
 
-    func testTraceNeedsTheDevSwitchEvenWithVoiceLog() {
-        let (d, done) = suite(); defer { done() }
-        d.set(true, forKey: "VoiceLog"); d.set(3, forKey: "MicBench")
-        XCTAssertFalse(MicTrace.isEnabled(devArgs: false, defaults: d), "a store build never traces, whatever the saved flags say")
-        XCTAssertTrue(MicTrace.isEnabled(devArgs: true, defaults: d))
-        d.removeObject(forKey: "MicBench")
-        XCTAssertTrue(MicTrace.isEnabled(devArgs: true, defaults: d), "-VoiceLog 1 still works in developer builds")
-        d.set(false, forKey: "VoiceLog")
-        XCTAssertFalse(MicTrace.isEnabled(devArgs: true, defaults: d))
-    }
-
     func testBenchArgumentNeedsTheDevSwitch() {
         let (d, done) = suite(); defer { done() }
         d.set(5, forKey: "MicBench"); d.set("warm", forKey: "MicVariant")

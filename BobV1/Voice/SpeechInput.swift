@@ -39,16 +39,9 @@ protocol SpeechInput: AnyObject {
     /// Calls `handler` (main actor, once) when the next real input buffer arrives from the mic tap. Inputs with no tap signal never call it
     /// (the coordinator's 1.2 s watchdog then goes live once `start` has returned).
     func armLive(_ handler: @escaping @MainActor () -> Void)
-    /// The finger lifted and `stop()` / `abort()` follows: a `start` that comes in before the tail has torn the engine down waits for that
-    /// (it never fails with "already running"), and a `armLive` made meanwhile is kept for it. Always followed by `stop()` or `abort()`.
-    func willStop()
-    /// A new press arrived while the post-roll still records: end the post-roll now (the previous command still finishes and returns its transcript).
-    func cutPostRoll()
 }
 
 extension SpeechInput {
-    func willStop() {}
-    func cutPostRoll() {}
     func warmUp() {}
     func coolDown() {}
     func abort() async { _ = await stop() }
@@ -391,7 +384,6 @@ final class DictationSpeechInput: SpeechInput {
     private var prepareTask: Task<Void, Never>?
 
     func armLive(_ handler: @escaping @MainActor () -> Void) {
-        if settling { pendingLive = handler; return }          // the previous listen's teardown would clear it: kept for after
         liveHandler = handler
         pipe?.arm()                  // the engine is already up (pre-warm): the next buffer is the proof
     }
@@ -409,37 +401,8 @@ final class DictationSpeechInput: SpeechInput {
     /// Warm-ups started (tests).
     var warmMakes: Int { gate.makes }
 
-    // MARK: the tail of the previous command (a press can open during it)
-
-    /// Between `willStop()` and the engine teardown of the previous listen (the post-roll). A press's `start` waits here.
-    private var settling = false
-    private var settleWaiters: [CheckedContinuation<Void, Never>] = []
-    private var settleGuard: Task<Void, Never>?
-    private var pendingLive: (@MainActor () -> Void)?
-    private var rollTask: Task<Void, Never>?
-
-    func willStop() {
-        settling = true
-        settleGuard?.cancel()
-        settleGuard = Task { [weak self] in          // never hang a press if no stop / abort follows
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            self?.endSettle()
-        }
-    }
-    /// Sticky: a press can arrive before `stop()` has even started its post-roll.
-    func cutPostRoll() { if settling { cutRequested = true }; rollTask?.cancel() }
-    private var cutRequested = false
-    private func endSettle() {
-        settling = false; cutRequested = false
-        settleGuard?.cancel(); settleGuard = nil
-        if let h = pendingLive { liveHandler = h; pendingLive = nil }
-        let w = settleWaiters; settleWaiters = []
-        for c in w { c.resume() }
-    }
-
     func warmUp() {
-        guard !isRunning, !starting, !settling else { return }
+        guard !isRunning, !starting else { return }
         guard Self.shouldWarm(availability: availability, permissionGranted: { Self.recordPermissionGranted() }), gate.wouldWarm else { return }
         t0 = CACurrentMediaTime()
         if availability == .ready, let fmt = analyzerFormat {
@@ -558,7 +521,6 @@ final class DictationSpeechInput: SpeechInput {
     // MARK: start / stop
 
     func start(contextualWords: [String]) async throws {
-        while settling { await withCheckedContinuation { settleWaiters.append($0) } }          // the previous command's post-roll / teardown
         guard !isRunning, !starting else { throw SpeechInputError.alreadyRunning }
         let tr = MicTrace.recording ? MicTrace.latest : nil
         tr?.mark(.startEntered)
@@ -644,25 +606,18 @@ final class DictationSpeechInput: SpeechInput {
     func abort() async { _ = await finish(postRoll: 0) }
 
     private func finish(postRoll: TimeInterval) async -> String {
-        guard isRunning else { endSettle(); return "" }
-        if postRoll > 0, !cutRequested {       // the tail of the last word is still being recorded (a new press cuts this short)
-            let t = Task<Void, Never> { _ = try? await Task.sleep(nanoseconds: UInt64(postRoll * 1e9)) }
-            rollTask = t
-            await t.value
-            rollTask = nil
-        }
+        guard isRunning else { return "" }
+        if postRoll > 0 { try? await Task.sleep(nanoseconds: UInt64(postRoll * 1e9)) }     // the tail of the last word is still being recorded
         isRunning = false
         let a = analyzer
         analyzer = nil
-        let col = collector                    // this listen's own collector: a press that opens during the finalize replaces `collector`
-        collector = nil
         let p = pipe
         teardownEngine()                       // removes the tap, stops the engine, ends the stream
-        endSettle()                            // a press waiting in `start` may bring its engine up now
         VoiceTranscriptLog.log("stopped; buffers fed after attach \(p?.buffersAfter ?? -1), converter failures \(p?.convertFailures ?? -1)")
         if let a { try? await a.finalizeAndFinishThroughEndOfInput() }
         if MicTrace.recording { MicTrace.latest?.mark(.finalized) }
-        let text = await col?.value ?? ""
+        let text = await collector?.value ?? ""
+        collector = nil
         return text
     }
 

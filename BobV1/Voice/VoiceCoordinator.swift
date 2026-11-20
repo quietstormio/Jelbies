@@ -316,7 +316,6 @@ final class VoiceCoordinator {
         glowLatencyMs = nil; audioLatencyMs = nil
         micLive = false; micLiveMs = nil; liveWatchFired = false; liveWatch?.cancel()
         levelMin = 1; levelMax = 0; levelCount = 0; offMain = 0
-        input.cutPostRoll()                            // a press during the previous command's post-roll ends it now; that command still finishes unseen
         input.warmUp()                                 // first: the session + engine bring-up is spawned off the main thread at touch-down
         Ears.shared.voicePause()                       // Ears lets go of the input before the voice engine takes the session
         intentModel?.prewarm()                         // the first request must not pay the model load
@@ -414,35 +413,23 @@ final class VoiceCoordinator {
         let long = mode.endHold()
         liveWatch?.cancel(); micLive = false          // (after endHold: its close tick reads `micLive`)
         tr?.mark(.listenOff)
-        input.willStop()
         if !long {
             Task { [input] in await st?.value; await input.abort() }
             return
         }
-        // The listen is over for the player at once, and a new press may open right away (it used to be refused until the transcript was in).
-        // The command is finished unseen, in order: each tail waits for the one before it, then is acted on with ITS press's session / subject.
-        let snap = (session, subjectAtOpen, runningAtOpen)
-        mode.finish()
-        let prev = lastTail
-        lastTail = Task { [weak self] in
+        stopping = true
+        Task { [weak self] in
             await st?.value
             guard let self else { return }
             let text = await self.input.stop()
             tr?.mark(.transcript)
-            await prev?.value
+            self.stopping = false
             let said = self.debugTranscript ?? text
             self.debugTranscript = nil
-            let now = (self.session, self.subjectAtOpen, self.runningAtOpen)
-            (self.session, self.subjectAtOpen, self.runningAtOpen) = snap
-            self.process(said)
-            (self.session, self.subjectAtOpen, self.runningAtOpen) = now
+            self.hear(said)
             tr?.mark(.heard)
         }
     }
-    /// The previous command's tail (post-roll, finalize, reaction): the next one is acted on after it.
-    @ObservationIgnored private var lastTail: Task<Void, Never>?
-    /// Test seam: waits for the newest command tail.
-    func _settleTail() async { await lastTail?.value }
 
     /// The end of a listen: the mode sends it (or cancels a short hold) and the reaction is queued.
     func hear(_ transcript: String) {
@@ -453,7 +440,7 @@ final class VoiceCoordinator {
     func cancel() {
         let st = startTask
         Ears.shared.holdEnded()
-        if mode.phase != .idle { mode.cancel(); mode.finish(); input.willStop(); Task { [input] in await st?.value; await input.abort() } }
+        if mode.phase != .idle { mode.cancel(); mode.finish(); Task { [input] in await st?.value; await input.abort() } }
         liveWatch?.cancel(); micLive = false
     }
 
