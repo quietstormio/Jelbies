@@ -100,7 +100,7 @@ struct ContactStance: Sendable {
         // high five (user rule 2): side by side, both arms are up from the first step (canonical pose) so the walk lands the hands together and the hands meet tip to tip (hand to hand, ready), the hold squeezes them to the press; phase 2 is the wind-up (arms up and back in, held at the stand-off), phase 3 the slap + hold, phase 4: the arms go down, they part.
         .highFive: ContactStance(facing: .camera, cls: .touching, steps: [Step(from: 0, target: HandReach.stand, onlySeparate: true, walks: true), Step(from: 1, target: HandReach.stand, onlySeparate: true), Step(from: 3, target: hold), Step(from: 4, target: near, onlySeparate: true)], anchor: .b, sound: .highFiveBoop, volume: 0.85, haptic: .emote("highFive.bump")),
         .tag: .pressing(from: 1, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
-        .bellyBounce: .leaning(wide: 0.06, press: 2, until: 3, sound: .squish, volume: 0.9),          // (pair-distinct-r1: arms tucked, stand wide, the lean closes it; the rebound lean-away is not walked back)
+        .bellyBounce: .leaning(wide: 0.04, press: 2, until: 3, sound: .squish, volume: 0.9),          // (pair-distinct-r1: arms tucked, stand wide, the lean closes it; the rebound lean-away is not walked back)
         .chase: .pressing(from: 2, press: 2, walk0: false, until: 3, sound: .boop, volume: 0.9),
         // holds
         .nuzzle: .leaning(wide: 0.07, press: 2, sound: nil),
@@ -111,7 +111,7 @@ struct ContactStance: Sendable {
         .backToBack: .holding(from: 3, facing: .camera, features: true),
         .cuddleLean: .leaning(wide: 0.05, press: 2, sound: .squish, volume: 0.5),
         .swayHug: .leaning(wide: 0.07, press: 2, sound: .squish, volume: 0.55),
-        .whisperGiggle: .leaning(wide: 0.06, press: 2, sound: nil),
+        .whisperGiggle: .leaning(wide: 0.04, press: 2, sound: nil),
         .ringAround: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 1, target: hold), Step(from: 2, target: near, onlySeparate: true)], features: true),          // (nose to nose in the greeting; the hop ring is a proximity move: the hops turn the bodies side on, so the ring is wider than the touch)
         .spinHug: ContactStance(cls: .touching, steps: [Step(from: 0, target: near, onlySeparate: true), Step(from: 2, target: hold), Step(from: 3, target: near, onlySeparate: true)], features: true, sound: .emoteSpinHug, volume: 1, haptic: .treat("spinHug.press")),
         // groups

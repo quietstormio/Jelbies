@@ -73,13 +73,13 @@ extension BlobBrain {
         let lean = smooth01(ft / 0.9) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
         let sway = sinf(2 * .pi * (ft - 0.9) / 2.0) * smooth01((ft - 0.9) / 0.6)          // (both sway the same way in the world: one body)
         let squeeze = max(pulse(ft - 1.2, up: 0.18, down: 0.30), pulse(ft - 2.3, up: 0.18, down: 0.30), pulse(ft - 3.4, up: 0.18, down: 0.30))
-        socialBook.wantRoll = leanSign(toward: o.position) * 0.30 * lean * g + worldLean(1) * 0.10 * lean * sway * g
+        socialBook.wantRoll = leanSign(toward: o.position) * 0.26 * lean * g + worldLean(1) * 0.10 * lean * sway * g
         socialBook.wantEyes = 1 - 0.6 * lean
         socialBook.wantSquash = 1 - 0.03 * lean - 0.03 * squeeze * g
         if isA {
             if !s.impacted, ft > 0.8 {
                 s.impacted = true
-                jellyKick = max(jellyKick, 1.6); o.jellyKick = max(o.jellyKick, 1.6)
+                jellyKick = max(jellyKick, 0.6); o.jellyKick = max(o.jellyKick, 0.6)
                 contactBoopFallback(o)
                 onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                 contactCueFallback(o, .squish, 0.55)
@@ -157,7 +157,7 @@ extension BlobBrain {
         let whisp = smooth01((t - 0.2) / 0.9) * (1 - smooth01((t - 1.9) / 0.4))
         let giggle = smooth01((t - 2.1) / 0.2) * (1 - smooth01((t - 4.0) / 0.5))
         if whisperer {
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.24 * whisp * g
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.30 * whisp * g
             socialBook.wantPitch = 0.07 * whisp * g * sinf(2 * .pi * 2.2 * t)          // (the whispering nod)
         } else {
             socialBook.wantRoll = leanSign(toward: o.position) * 0.12 * whisp * g          // (an ear tilted toward the whisper)

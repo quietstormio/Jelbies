@@ -370,7 +370,7 @@ extension BlobBrain {
             let toward = leanSign(toward: o.position)
             let into = pulse(t, up: 0.50, down: 0.10)
             let rebound = pulse(t - 0.62, up: 0.16, down: 0.60)
-            socialBook.wantRoll = toward * (0.22 * into - 0.30 * rebound)
+            socialBook.wantRoll = toward * (0.28 * into - 0.30 * rebound)
             socialBook.wantSquash = 1 - 0.07 * pulse(t - 0.16, up: 0.07, down: 0.26) + 0.05 * rebound
             if isA {
                 if !s.impacted, t >= 0.5 {
