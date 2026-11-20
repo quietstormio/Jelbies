@@ -68,6 +68,13 @@ extension BlobBrain {
         }
     }
 
+    /// park-hopscotch-r1: the bodies who are not in the line and stand on the court or in its margin (the park's wall is on). Nobody with the guard off.
+    func hopscotchOthersOn(_ f: DecorFoot) -> [BlobBrain] {
+        guard HopscotchTuning.guardOn else { return [] }
+        let line = HopscotchLine.shared
+        return socialOthers().filter { $0 !== self && !line.contains(f.uid, $0.steerID) && f.distance($0.position) < $0.footprint * HopscotchTuning.wallReach }
+    }
+
     /// Of the ones still queued (slot != 0) he is at the lowest slot, the nearest to the start: one steps up at a time, and nobody walks past a waiting friend to get there
     /// (a nearest-by-distance test cannot see friends who stand still: the roster hands those out under a placeholder id).
     private func hopscotchIsFront(_ uid: Int) -> Bool {
@@ -96,7 +103,7 @@ extension BlobBrain {
             var ok = true
             for k in 0...6 {          // (the sideways step, the way down the side and the end of it: clear floor, off the bench's path strip, outside the slide's box)
                 let p = k <= 2 ? a + (b - a) * (Float(k) / 2) : a + (b - a) * (Float(k - 3) / 3)
-                if ParkClearSpot.blocked(p, radius: 0.5) || abs(p.x - ParkScenery.pathX(p.y)) < HopscotchTuning.pathKeepOut { ok = false; break }
+                if ParkClearSpot.blocked(p, radius: 0.5, ignoring: f.uid) || abs(p.x - ParkScenery.pathX(p.y)) < HopscotchTuning.pathKeepOut { ok = false; break }
                 if let slide, slide.distance(p) < 0.9 { ok = false; break }
             }
             guard ok else { continue }
@@ -141,7 +148,7 @@ extension BlobBrain {
                 } else if line.startOpen(uid), hopscotchIsFront(uid) {
                     line.start(uid, me); idleState.seat = 0; idleState.decorRetry = 0
                     hopscotchStepUp(start)
-                } else if phT > HopscotchTuning.patience { idleFinish(skinner) }
+                } else if phT > HopscotchTuning.queuePatience { idleFinish(skinner) }
                 else if phT > 1.2, Int(phT * 2) % 5 == 0, (phT * 2).truncatingRemainder(dividingBy: 1) < dt * 2 { jellyKick = max(jellyKick, 0.5) }          // (a little eager bounce while the line moves)
                 return
             }
@@ -157,8 +164,10 @@ extension BlobBrain {
                 // (a friend who just stands on the square gets a few seconds to move on; a body only half over it is no reason to stop the game)
                 let clear: Float = phT > 4 ? 0.9 : HopscotchTuning.landingClear
                 let free = !steerPeers().contains { $0.id != me && simd_distance($0.pos, goal) < clear }
-                guard line.mayHop(uid, me, to: t), free else {
-                    if phT > (free ? HopscotchTuning.patience : HopscotchTuning.blockedPatience) { idleFinish(skinner) }
+                // park-hopscotch-r1: the first hop waits for the court to clear of others (the ones on it are walking off: `decorExitCheck`); a short wait, then he goes anyway (a body in a social)
+                let courtClear = t > 0 || phT > HopscotchTuning.clearWait || hopscotchOthersOn(f).isEmpty
+                guard line.mayHop(uid, me, to: t), free, courtClear else {
+                    if phT > (free ? HopscotchTuning.queuePatience : HopscotchTuning.blockedPatience) { idleFinish(skinner) }
                     return
                 }
             }
@@ -242,6 +251,6 @@ extension BlobBrain {
         idleState.slideStage = 3; idleState.decorGo = true; idleState.target = spot
         route = []; scriptT = 0; stuckT = 0; bestDist = .infinity; steerStall = 0
         script = .walk(target: spot, then: .none); activity = .walking
-        decorIgnore = nil
+        if !HopscotchTuning.guardOn { decorIgnore = nil }          // (park-hopscotch-r1: the court stays soft for him until `decorRelease`: it is a wall for the others while the line lasts)
     }
 }

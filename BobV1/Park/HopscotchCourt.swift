@@ -37,6 +37,27 @@ nonisolated enum HopscotchTuning {
     static let queueGap: Float = 1.7
     /// Walks to the start a stepped-up Jelbie tries before he gives the game up (a blocked start must not loop).
     static let startTries = 3
+
+    // MARK: park-hopscotch-r1 ("at the park if one is hopscotching please try to keep the others away", 2026-11-20)
+    /// While a game is on (a line has formed: from the moment the first hopper commits until the last one has stepped off) the court plus a margin of about one body is a wall for everybody
+    /// who is not in the line: the floor rules push out of it (so walk targets, the route planner and every pick go round it), nobody starts a social with a body on it, and a body who is on it
+    /// when the game starts walks off (`decorExitCheck`). Dev builds only: `-ParkHopGuard old` = off (main's rules: the court is flat paint), the headless soak's before arm. The same switch
+    /// keeps the old two-at-a-time hopping (`startAfter`) and the old patience.
+    nonisolated(unsafe) static var guardOn: Bool = {
+        guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "ParkHopGuard") else { return true }
+        return v != "old"
+    }()
+    /// Courts with a line on them right now (kept by `HopscotchLine`; the park has one court).
+    nonisolated(unsafe) static var lineCount = 0
+    /// The court is a wall for the ones outside the line.
+    static var walled: Bool { guardOn && lineCount > 0 }
+    /// The wall's reach: the margin round the court is `footprint * wallReach` (a body is ~0.7 across by the floor rules: 0.8 gives 0.56, one body radius; the hopper's landing check wants more
+    /// than 0.52 so a body just outside never holds the game; the slide's walk-out spots are 0.65 and 0.80 from the court's edge, so it stays under that).
+    static let wallReach: Float = 0.8
+    /// The hopper waits at the start for the court to clear of others (they walk off at once); after this he goes anyway (a body in a social or a long idle).
+    static let clearWait: Float = 6
+    /// A follower waits this long for his turn: one at a time, the fourth in the queue waits for three full games (was `patience` 30, two at a time).
+    static var queuePatience: Float { guardOn ? 45 : patience }
     /// A walk that stops further from the start than this is still travelling (it does not use up a try).
     static let startBlockedWithin: Float = 2.5
 }
@@ -92,6 +113,7 @@ final class HopscotchLine {
         let s = nextSlot(uid)
         lines[uid, default: []].append(Player(id: id, slot: s))
         if lines[uid]!.count == 1 { rolled[uid] = [id] }
+        HopscotchTuning.lineCount = lines.count
         return s
     }
     func remove(_ uid: Int, _ id: Int) {
@@ -99,6 +121,7 @@ final class HopscotchLine {
         l.removeAll { $0.id == id }
         lines[uid] = l.isEmpty ? nil : l
         if l.isEmpty { rolled[uid] = nil }
+        HopscotchTuning.lineCount = lines.count
     }
     func landed(_ uid: Int, _ id: Int, _ sq: Int) { if let i = lines[uid]?.firstIndex(where: { $0.id == id }) { lines[uid]![i].sq = sq } }
     func square(_ uid: Int, _ id: Int) -> Int { lines[uid]?.first { $0.id == id }?.sq ?? -1 }
@@ -110,6 +133,7 @@ final class HopscotchLine {
     /// Is the start free for the next one? (Nobody has stepped up, or the last one who did is a couple of squares in.)
     func startOpen(_ uid: Int) -> Bool {
         guard let last = lines[uid]?.last(where: { $0.slot == 0 }) else { return true }
+        if HopscotchTuning.guardOn { return last.sq >= Self.done }          // (park-hopscotch-r1: one at a time on the court; the next steps up once the last has hopped the eight and the two happy hops)
         return last.sq >= HopscotchTuning.startAfter
     }
     /// `id` leaves the queue for the start: slot 0, and his place in the order is right behind the last one who stepped up (the hop spacing follows the order).
@@ -135,6 +159,7 @@ final class HopscotchLine {
     func prune(keeping uids: Set<Int>) {
         for u in Array(lines.keys) where !uids.contains(u) { lines[u] = nil }
         for u in Array(rolled.keys) where !uids.contains(u) { rolled[u] = nil }
+        HopscotchTuning.lineCount = lines.count
     }
 }
 

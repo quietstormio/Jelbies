@@ -65,7 +65,7 @@ extension BlobBrain {
                     yaw = atan2f(d.x, d.y)
                 }
             }
-            if insideDecorT > 1.2, !footOwned, !held, !decorLocked, pending == nil, let out = decorFreeSpot(near: position) {
+            if insideDecorT > (f.kind == .hopscotch ? 0.3 : 1.2), !footOwned, !held, !decorLocked, pending == nil, !(f.kind == .hopscotch && social != nil), let out = decorFreeSpot(near: position) {          // (park-hopscotch-r1: off a court with a game on at once, never out of a social that is running)
                 insideDecorT = -1.5
                 walkOutFrom = position          // (the ease-out waits for a fresh 3 s once this walk has really moved him)
                 if walkOutSoftens(f) { decorIgnore = f.uid }          // (r4: a centre outside the slide's box walks out with it solid)
@@ -379,7 +379,7 @@ extension BlobBrain {
             if kind == .decorKick || kind == .soccerKick, field.anim[f.uid]?.moving == true || field.anim[f.uid]?.tumbling == true { continue }
             let seat = f.kind.hopSit ? (field.freeSeat(f, preferring: here.x - f.centre.x) ?? 0) : 0
             let roundSlide = kind == .decorSlide && f.uid == ParkToys.slideUID          // (the park's slide is a wall on the way to its ladder: legs round it, see slideFirstLeg; the home slide has no room behind it for a gate, it keeps the old walk)
-            decorIgnore = (kind == .decorSit || kind == .decorHop || (kind == .decorSlide && !roundSlide)) ? f.uid : exiting          // (a slide that is not the park's: soft from the start, as before)
+            decorIgnore = (kind == .decorSit || kind == .decorHop || (kind == .decorSlide && !roundSlide) || (kind == .decorHopscotch && HopscotchTuning.guardOn)) ? f.uid : exiting          // (a slide that is not the park's: soft from the start, as before)
             var slideLeg = 0
             var standSpot = decorStand(kind, f, from: here, seat: seat)
             if roundSlide {
