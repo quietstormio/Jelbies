@@ -294,7 +294,9 @@ nonisolated enum DiningModels {
             b.roundedBox(centre: SIMD3(0, ry, sz * (hz - 0.032)), half: SIMD3(hx, D.trayRim / 2 + 0.004, 0.032), radius: 0.028, segments: 2, aoFloor: false)
         }
         for sx in [Float(-1), 1] {
-            b.roundedBox(centre: SIMD3(sx * (hx - 0.032), ry, 0), half: SIMD3(0.032, D.trayRim / 2 + 0.004, hz - 0.03), radius: 0.028, segments: 2, aoFloor: false)
+            if !L.arcToCentre {          // (food-on-plate-r1: the ends layout's two short-side rims are left off: its platter lies over the bed to the tray's outer edge)
+                b.roundedBox(centre: SIMD3(sx * (hx - 0.032), ry, 0), half: SIMD3(0.032, D.trayRim / 2 + 0.004, hz - 0.03), radius: 0.028, segments: 2, aoFloor: false)
+            }
             b.color = sw[2]
             b.roundedBox(centre: SIMD3(sx * (hx + 0.085), D.trayTop - 0.035, 0), half: SIMD3(0.1, 0.03, 0.12), radius: 0.03, segments: 3, aoFloor: false)
             b.color = sw[3]
@@ -305,6 +307,7 @@ nonisolated enum DiningModels {
     }
 
     static func plate(layout L: TrayLayout, theme: RoomTheme, pizza: Bool = false) -> RoomMesh {
+        if L.arcToCentre && !pizza { return platterMesh(platter(layout: L), theme: theme) }          // food-on-plate-r1: the ends layout's pieces lie on a platter, see DiningPlatter.swift
         let sw = theme.swatches, b = RoomMeshBuilder()
         b.material = .plain
         let pl = pizza ? pizzaPlate(L) : (r: DiningDims.plateRadius * L.scale, cz: Float(0))
