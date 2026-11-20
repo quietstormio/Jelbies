@@ -18,6 +18,8 @@ nonisolated struct ShowSpotlightState: Equatable {
     var shown: Int?
     /// 0...1 (the dim / the light's strength).
     var level: Float = 0
+    /// The light is showing or fading (the layer draws only then).
+    var isOn: Bool { level > 0 || target != nil }
     /// Where the light sits (his centroid while he performs; frozen while it fades out, so it never follows him as he walks off).
     var anchor: SIMD3<Float>?
     static let fadeSeconds: Float = 0.4
@@ -104,8 +106,9 @@ extension GameCare {
     func showSpotStep(dt: Float) {
         var t = showSpotTarget
         if DevArgs.enabled && UserDefaults.standard.object(forKey: "ShowSpotlight") != nil && UserDefaults.standard.integer(forKey: "ShowSpotlight") == 0 { t = nil }
-        let before = showBook.spot.target
+        let before = showBook.spot.target, wasOn = showBook.spot.isOn
         showBook.spot.step(target: t, dt: dt)
+        if wasOn != showBook.spot.isOn { show.nudge() }          // (the layer appears / goes clear; it does not redraw while the light is off)
         #if targetEnvironment(simulator)
         if DevArgs.enabled, before != showBook.spot.target {          // (capture aid: one line per light on / off, with where he stands)
             if let id = showBook.spot.target, let a = showBook.actors.first(where: { $0.id == id }) ?? showBook.extra.first(where: { $0.id == id }) {
@@ -116,85 +119,104 @@ extension GameCare {
         #endif
         if showBook.spot.target == showBook.spot.shown, showBook.spot.shown != nil, let a = showSpotActor { showBook.spot.anchor = a.sim.centroid() }
     }
-    /// The projected box of the body (nil when none is lit).
+    /// The projected box of the body (nil when none is lit). One camera for all five points (this runs every frame the light is on).
     func showSpotShape(size: CGSize) -> ShowSpotlightShape? {
         guard let f = showFrame, let a = showSpotActor else { return nil }
         let c = showBook.spot.anchor ?? a.sim.centroid()
         let H = BobShape.H, R = BobShape.R
-        let mid = StageProject.point(SIMD2(c.x, c.z), y: c.y, frame: f, size: size)
-        let top = StageProject.point(SIMD2(c.x, c.z), y: c.y + H * 0.5, frame: f, size: size)
-        let bot = StageProject.point(SIMD2(c.x, c.z), y: c.y - H * 0.5, frame: f, size: size)
-        let side = StageProject.point(SIMD2(c.x + R, c.z), y: c.y, frame: f, size: size)
-        let floor = StageProject.point(SIMD2(c.x, c.z), y: 0, frame: f, size: size)
+        let vp = GameCamera.camera(aspect: Float(size.width / max(size.height, 1)), show: 1, showFrame: f).viewProj
+        @inline(__always) func pt(_ x: Float, _ y: Float) -> CGPoint {
+            let q = vp * SIMD4<Float>(x, y, c.z, 1)
+            guard q.w > 1e-4 else { return CGPoint(x: size.width / 2, y: size.height / 2) }
+            return CGPoint(x: CGFloat(q.x / q.w * 0.5 + 0.5) * size.width, y: CGFloat(1 - (q.y / q.w * 0.5 + 0.5)) * size.height)
+        }
+        let mid = pt(c.x, c.y), top = pt(c.x, c.y + H * 0.5), bot = pt(c.x, c.y - H * 0.5), side = pt(c.x + R, c.y), floor = pt(c.x, 0)
         return ShowSpotlightShape(centre: mid, halfW: abs(side.x - mid.x), halfH: max(abs(bot.y - top.y) / 2, 8), floor: floor)
     }
 }
 
-/// The light layer. It never takes touches and sits under the chrome.
+/// The drawing, pure (a test renders it): nothing at level 0; the dim with its hole; the cone; the floor pool. All gradients and paths are built once.
+nonisolated enum ShowSpotlightPainter {
+    nonisolated(unsafe) private static let unitEllipse = Path(ellipseIn: CGRect(x: -1, y: -1, width: 2, height: 2))
+    /// The cone in unit space: x -0.30 ... 0.30 at the top (y -1), -0.62 ... 0.62 at the body (y 0); scaled by (hole width, height of the picture above the body).
+    nonisolated(unsafe) private static let unitCone: Path = {
+        var p = Path(); p.move(to: CGPoint(x: -0.30, y: -1)); p.addLine(to: CGPoint(x: 0.30, y: -1)); p.addLine(to: CGPoint(x: 0.62, y: 0)); p.addLine(to: CGPoint(x: -0.62, y: 0)); p.closeSubpath(); return p
+    }()
+    nonisolated(unsafe) private static let coneFill = GraphicsContext.Shading.linearGradient(Gradient(colors: [.white.opacity(0), .white.opacity(0.30)]), startPoint: CGPoint(x: 0, y: -1), endPoint: .zero)
+    nonisolated(unsafe) private static let holeFill: GraphicsContext.Shading = {
+        let k = Double(1.5 / 3.3)          // (inner / outer: `ShowSpotlightShape.inner` / `.outer`)
+        return .radialGradient(Gradient(stops: [.init(color: .white, location: 0), .init(color: .white, location: k), .init(color: .white.opacity(0.35), location: k + (1 - k) * 0.45), .init(color: .white.opacity(0), location: 1)]),
+                               center: .zero, startRadius: 0, endRadius: 1)
+    }()
+    nonisolated(unsafe) private static let warm = Color(red: 1, green: 0.95, blue: 0.78)
+    nonisolated(unsafe) private static let poolFill = GraphicsContext.Shading.radialGradient(Gradient(stops: [.init(color: warm.opacity(0), location: 0), .init(color: warm.opacity(0), location: 0.5), .init(color: warm.opacity(0.32), location: 0.72), .init(color: warm.opacity(0), location: 1)]),
+                                                                       center: .zero, startRadius: 0, endRadius: 1)
+    nonisolated(unsafe) private static let cutFill = GraphicsContext.Shading.radialGradient(Gradient(stops: [.init(color: .white, location: 0), .init(color: .white, location: 0.8), .init(color: .white.opacity(0), location: 1)]),
+                                                                      center: .zero, startRadius: 0, endRadius: 1)
+
+    static func paint(_ ctx: inout GraphicsContext, size: CGSize, shape sh: ShowSpotlightShape, level: Double, scale: Double) {
+        guard level > 0.001 else { return }          // (fully off: nothing is drawn, not even a transparent layer)
+        let a = level * scale
+        // 1. the dim: black over everything, a soft elliptical hole round the body (clear over the whole body), and a faint cone of less dim from above
+        ctx.drawLayer { l in
+            l.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.black.opacity(ShowSpotlightShape.dim * a)))
+            l.blendMode = .destinationOut
+            var c = l
+            c.translateBy(x: sh.centre.x, y: sh.centre.y); c.scaleBy(x: sh.outer.width, y: sh.centre.y + 20)
+            c.fill(unitCone, with: coneFill)
+            var h = l
+            h.translateBy(x: sh.centre.x, y: sh.centre.y); h.scaleBy(x: sh.outer.width, y: sh.outer.height)
+            h.fill(unitEllipse, with: holeFill)
+        }
+        // 2. the pool of light on the floor under him (a pale ring-shaped ellipse that stays on the floor when he hops: clear over his body and feet, strongest just outside them),
+        //    and his body + feet cut out of it with a soft edge, so his own colours are not lightened and no dark disc shows round him
+        ctx.drawLayer { l in
+            var p = l
+            p.opacity = a
+            p.translateBy(x: sh.floor.x, y: sh.floor.y); p.scaleBy(x: sh.pool.width, y: sh.pool.height)
+            p.blendMode = .plusLighter
+            p.fill(unitEllipse, with: poolFill)
+            var b = l
+            b.blendMode = .destinationOut
+            let topY = sh.centre.y - sh.halfH * 1.06, botY = max(sh.floor.y + sh.halfW * 0.22, sh.centre.y + sh.halfH * 1.06)
+            b.translateBy(x: sh.centre.x, y: (topY + botY) / 2); b.scaleBy(x: sh.halfW * 1.25, y: (botY - topY) / 2 * 1.08)
+            b.fill(unitEllipse, with: cutFill)
+        }
+    }
+
+    // dev only: the layer's draw time while it is on, printed every 120 frames (CPU time to record the drawing; the compositing is on the GPU and shows in the usual perf line)
+    nonisolated(unsafe) private static var perfSum = 0.0, perfN = 0
+    static func perf(_ dt: Double, level: Double) {
+        perfSum += dt; perfN += 1
+        if perfN >= 120 { print(String(format: "[melon] spotlight layer: %d draws, %.3f ms avg (CPU record), level %.2f", perfN, perfSum / Double(perfN) * 1000, level)); perfSum = 0; perfN = 0 }
+    }
+}
+
+/// The light layer. It never takes touches and sits under the chrome. Fully off it is a clear view: no TimelineView, no Canvas, no frames (the show's `revision` is nudged when the light
+/// switches on and when its fade ends, and the layer subscribes to it).
 struct ShowSpotlightLayer: View {
     let care: GameCare
     var body: some View {
-        return GeometryReader { g in
-            TimelineView(.animation(minimumInterval: nil, paused: false)) { _ in
-                let st = care.showBook.spot
-                let level = Double(st.level)
-                let scale = care.show.round == .dance ? ShowSpotlightShape.danceScale : 1
-                Canvas { ctx, size in
-                    guard level > 0.001, let sh = care.showSpotShape(size: size) else { return }
-                    let a = level * scale
-                    let full = CGRect(origin: .zero, size: size)
-                    // 1. the dim: black over everything, a soft elliptical hole round the body (clear over the whole body), and a faint cone of less dim from above
-                    ctx.drawLayer { l in
-                        l.fill(Path(full), with: .color(.black.opacity(ShowSpotlightShape.dim * a)))
-                        l.blendMode = .destinationOut
-                        // the cone: narrow at the top of the picture, as wide as the light's hole at the body
-                        let topY: CGFloat = -20
-                        let cone = Path { p in
-                            p.move(to: CGPoint(x: sh.centre.x - sh.outer.width * 0.30, y: topY))
-                            p.addLine(to: CGPoint(x: sh.centre.x + sh.outer.width * 0.30, y: topY))
-                            p.addLine(to: CGPoint(x: sh.centre.x + sh.outer.width * 0.62, y: sh.centre.y))
-                            p.addLine(to: CGPoint(x: sh.centre.x - sh.outer.width * 0.62, y: sh.centre.y))
-                            p.closeSubpath()
-                        }
-                        l.fill(cone, with: .linearGradient(Gradient(colors: [.white.opacity(0.0), .white.opacity(0.30)]),
-                                                            startPoint: CGPoint(x: sh.centre.x, y: topY), endPoint: CGPoint(x: sh.centre.x, y: sh.centre.y)))
-                        // the hole: a circle gradient squashed into the body's ellipse
-                        var h = l
-                        h.translateBy(x: sh.centre.x, y: sh.centre.y)
-                        h.scaleBy(x: sh.outer.width, y: sh.outer.height)
-                        let k = Double(sh.inner.width / sh.outer.width)
-                        h.fill(Path(ellipseIn: CGRect(x: -1, y: -1, width: 2, height: 2)),
-                               with: .radialGradient(Gradient(stops: [.init(color: .white, location: 0), .init(color: .white, location: k),
-                                                                      .init(color: .white.opacity(0.35), location: k + (1 - k) * 0.45), .init(color: .white.opacity(0), location: 1)]),
-                                                     center: .zero, startRadius: 0, endRadius: 1))
+        let _ = care.show.revision
+        if care.showBook.spot.isOn {
+            GeometryReader { g in
+                TimelineView(.animation) { _ in
+                    let level = Double(care.showBook.spot.level)
+                    let scale = care.show.round == .dance ? ShowSpotlightShape.danceScale : 1
+                    Canvas { ctx, size in
+                        let t0 = DevArgs.enabled ? CACurrentMediaTime() : 0
+                        guard let sh = care.showSpotShape(size: size) else { return }
+                        ShowSpotlightPainter.paint(&ctx, size: size, shape: sh, level: level, scale: scale)
+                        if DevArgs.enabled { ShowSpotlightPainter.perf(CACurrentMediaTime() - t0, level: level) }
                     }
-                    // 2. the pool of light on the floor under him (a pale ring-shaped ellipse that stays on the floor when he hops: clear over his body and feet, strongest just
-                    //    outside them), and his body + feet cut out of it with a soft edge, so his own colours are not lightened and no dark disc shows round him
-                    ctx.drawLayer { l in
-                        let warm = Color(red: 1, green: 0.95, blue: 0.78)
-                        var p = l
-                        p.translateBy(x: sh.floor.x, y: sh.floor.y)
-                        p.scaleBy(x: sh.pool.width, y: sh.pool.height)
-                        p.blendMode = .plusLighter
-                        p.fill(Path(ellipseIn: CGRect(x: -1, y: -1, width: 2, height: 2)),
-                               with: .radialGradient(Gradient(stops: [.init(color: warm.opacity(0), location: 0), .init(color: warm.opacity(0), location: 0.5),
-                                                                      .init(color: warm.opacity(0.32 * a), location: 0.72), .init(color: warm.opacity(0), location: 1)]),
-                                                     center: .zero, startRadius: 0, endRadius: 1))
-                        var b = l
-                        b.blendMode = .destinationOut
-                        let topY = sh.centre.y - sh.halfH * 1.06, botY = max(sh.floor.y + sh.halfW * 0.22, sh.centre.y + sh.halfH * 1.06)
-                        b.translateBy(x: sh.centre.x, y: (topY + botY) / 2)
-                        b.scaleBy(x: sh.halfW * 1.25, y: (botY - topY) / 2 * 1.08)
-                        b.fill(Path(ellipseIn: CGRect(x: -1, y: -1, width: 2, height: 2)),
-                               with: .radialGradient(Gradient(stops: [.init(color: .white, location: 0), .init(color: .white, location: 0.8), .init(color: .white.opacity(0), location: 1)]),
-                                                     center: .zero, startRadius: 0, endRadius: 1))
-                    }
+                    .drawingGroup(opaque: false)
                 }
-                .drawingGroup(opaque: false)
             }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        } else {
+            Color.clear.allowsHitTesting(false).accessibilityHidden(true)
         }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
