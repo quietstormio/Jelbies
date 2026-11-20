@@ -388,7 +388,7 @@ extension GameCare {
         switch cue {
         case .playerAside(let aside):
             guard let a = stageActor(0) else { return }
-            if aside { showWalk(a, to: ShowStage.playerAside); showStageNext(after: -1) } else { showWalkWhenClear(a, to: ShowStage.playerSpot) }
+            if aside { showWalk(a, to: ShowStage.playerAside) } else { showWalkWhenClear(a, to: ShowStage.playerSpot) }          // (the first entrant sets off once he is clear of the middle: set off together their paths cross)
         case .walkIn(let i):
             guard let a = rivalActor(i) else { return }
             showWalkWhenClear(a, to: ShowStage.playerSpot)
