@@ -247,7 +247,11 @@ final class PlayToss {
         }()
         for (k, f) in fx.enumerated() {
             var sy: CGFloat = (k == 1 && n >= 3) ? 0.46 : 0.50          // (the middle one a touch further back: a shallow arc)
-            if let z = rowZ?[k], let s = GameCamera.screenPoint(floor: SIMD2(0, z), size: size) { sy = s.y / size.height }
+            if let z0 = rowZ?[k] {
+                // (the wide view puts the hand further from the row than the old view did: the row stands `rowForward` nearer so the ball's trips keep their length)
+                let z = min(z0 + PlayTuning.rowForward, (GameCamera.roamFloor?.maxZ ?? 9) - 0.3)
+                if let s = GameCamera.screenPoint(floor: SIMD2(0, z), size: size) { sy = s.y / size.height }
+            }
             if let p = GameCamera.floorPoint(screen: CGPoint(x: size.width * CGFloat(f), y: size.height * sy), size: size) { out[k] = p }
         }
         return out
@@ -478,7 +482,7 @@ final class PlayToss {
     private func restWatch(dt: Float) {
         guard phase == .loose || phase == .flying else { restT = 0; return }
         if ball.onFloor, ball.speedXZ < 0.35, bumper == nil || !(jelly(bumper!)?.brain.tossBusy ?? false) { restT += dt } else { restT = 0 }
-        guard restT > (leftHand ? Self.restRescueAfter : 0.8) else { return }
+        guard restT > (leftHand ? (PlayTuning.old ? Self.restRescueAfter : PlayTuning.restRescue) : 0.8) else { return }
         restT = 0
         if !leftHand { caught(); return }
         rescue()

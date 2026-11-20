@@ -76,6 +76,7 @@ final class PlayFrameTests: XCTestCase {
         var ballOff = 0, ballChecks = 0
         var worstBall: CGFloat = 0
         var perJellyTouches = [0, 0, 0]
+        var rescues = 0, whiffs = 0, untouchedCatches = 0, headers = 0, kicks = 0
     }
 
     nonisolated(unsafe) static var keep: [AnyObject] = []
@@ -113,10 +114,13 @@ final class PlayFrameTests: XCTestCase {
         var takers = Set<Int>()
         p.onEvent = { e in
             switch e {
+            case .rescue: run.rescues += 1
+            case .whiff: run.whiffs += 1
             case .header(let id, _), .kick(let id):
+                if case .header = e { run.headers += 1 } else { run.kicks += 1 }
                 run.touches += 1; run.perJellyTouches[id] += 1; takers.insert(id)
                 if !touched { touched = true; run.firstTouch.append(p.clock - throwAt) }
-            case .caught: run.catches += 1
+            case .caught: run.catches += 1; if !touched { run.untouchedCatches += 1 }
             default: break
             }
         }
@@ -269,6 +273,33 @@ final class PlayFrameTests: XCTestCase {
         try? lines.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/measure-wand.txt", atomically: true, encoding: .utf8)
     }
 
+    /// Returns per minute, 5 seeds x 60 s per case: mean, spread and what the rally did (rescues = a ball nobody sent back; untouched = caught with no header / kick).
+    /// Returns per minute, 5 seeds x 60 s per case (both balls, both orientations): the NEW mean is at least the OLD mean. Prints mean, sd, min / max and what the rally did
+    /// (rescues = a ball nobody sent back; untouched = caught with no header / kick).
+    func testReturnsPerMinuteAreAtLeastTheOldRate() {
+        var out = ""
+        for kind in [DecorKind.ball, .beachball] {
+            for (sname, size) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
+                var means: [Double] = []
+                for old in [true, false] {
+                    let rs = (0..<5).map { session(kind: kind, seed: $0 + 10, size: size, seconds: 60, old: old) }
+                    let perMin = rs.map { Double($0.catches) / (Double($0.seconds) / 60) }
+                    let mean = perMin.reduce(0, +) / 5, sd = (perMin.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / 4).squareRoot()
+                    means.append(mean)
+                    func sum(_ f: (Run) -> Int) -> Int { rs.reduce(0) { $0 + f($1) } }
+                    let ft = rs.flatMap(\.firstTouch).sorted()
+                    out += String(format: "PF5BALL %@ %@ %@ | returns/min mean %.2f sd %.2f min %.1f max %.1f per seed %@ | throws %d catches %d | headers %d kicks %d whiffs %d rescues %d untouched-catches %d | first touch median %.2f s | cut %d | ball off %d\n",
+                                  old ? "OLD" : "NEW", kind.rawValue, sname, mean, sd, perMin.min() ?? 0, perMin.max() ?? 0, perMin.map { String(format: "%.1f", $0) }.joined(separator: ","),
+                                  sum(\.tosses), sum(\.catches), sum(\.headers), sum(\.kicks), sum(\.whiffs), sum(\.rescues), sum(\.untouchedCatches), ft.isEmpty ? 0 : ft[ft.count / 2], sum(\.cutSteps), sum(\.ballOff))
+                    if !old { XCTAssertEqual(sum(\.cutSteps), 0, "\(kind) \(sname): a body was cut by an edge"); XCTAssertEqual(sum(\.ballOff), 0, "\(kind) \(sname): the ball rested off screen") }
+                }
+                XCTAssertGreaterThanOrEqual(means[1], means[0], "\(kind) \(sname): returns per minute \(means[1]) below the old \(means[0])")
+            }
+        }
+        print(out)
+        try? out.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/five_final.txt", atomically: true, encoding: .utf8)
+    }
+
     // MARK: the proofs
 
     /// The ball game, several seeds, both balls, portrait and landscape: no body leaves the screen, the ball's catches and rests are on it, and the game still plays.
@@ -291,13 +322,16 @@ final class PlayFrameTests: XCTestCase {
         XCTAssertGreaterThan(r.cutSteps, 0, "the harness cannot see a body cut by the edge: it would pass anything")
     }
 
-    func testBubbleWandKeepsEveryJelmikoInFrame() {
+    /// The wand, 5 seeds x 45 s per orientation, new against old: no body cut by an edge, and at least 0.9x the old pops as the MEAN of the seeds.
+    func testBubbleWandKeepsEveryJelmikoInFrameAndPopsAsMuchAsBefore() {
         for (name, size) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
-            for seed in 0..<2 {
-                let r = wandSession(seed: seed, size: size, seconds: 30, old: false)
-                XCTAssertEqual(r.cutSteps, 0, "wand \(name) seed \(seed): a Jelmiko was cut by the screen edge in \(r.cutSteps) of \(r.steps) steps (worst \(r.worstCut) pt)")
-                XCTAssertGreaterThan(r.pops, 5, "wand \(name) seed \(seed): nobody popped bubbles")
-            }
+            let o = (0..<5).map { wandSession(seed: $0, size: size, seconds: 45, old: true) }
+            let n = (0..<5).map { wandSession(seed: $0, size: size, seconds: 45, old: false) }
+            let om = Double(o.reduce(0) { $0 + $1.pops }) / 5, nm = Double(n.reduce(0) { $0 + $1.pops }) / 5
+            let line = "PF5WAND \(name) pops/seed OLD \(o.map(\.pops)) mean \(om) | NEW \(n.map(\.pops)) mean \(nm) ratio \(nm / max(om, 1)) | cut \(n.reduce(0) { $0 + $1.cutSteps }) | dist OLD \(o.map { String(format: "%.1f", $0.distSum / Float(max($0.steps, 1))) }) NEW \(n.map { String(format: "%.1f", $0.distSum / Float(max($0.steps, 1))) })"
+            print(line)
+            XCTAssertEqual(n.reduce(0) { $0 + $1.cutSteps }, 0, "wand \(name): a Jelmiko was cut by the screen edge")
+            XCTAssertGreaterThanOrEqual(nm, 0.9 * om, "wand \(name): mean pops \(nm) < 0.9 x old \(om)")
         }
     }
 

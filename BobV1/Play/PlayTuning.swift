@@ -30,6 +30,10 @@ nonisolated enum PlayTuning {
     static var wandSpreadK: Float = 1.5, wandDepthK: Float = 1.3
     /// The header's return flight to the hand: slope and cap (seconds before the floaty-ball factor). The old values are 0.07 and 1.25; a wider view puts the hand further away.
     static var returnFlightSlope: Float = 0.05, returnFlightCap: Float = 1.0
+    /// How far nearer the camera than the old play view's row the Jelmiko line stands (world units), so the ball's trips to and from the hand keep the old length.
+    static var rowForward: Float = 2.0
+    /// A loose ball resting where nobody sends it back is lobbed to the hand after this long (old 2 s).
+    static var restRescue: Float = 2
     /// The throw's flight to the Jelmiko: seconds per unit of range (old 0.085).
     static var throwFlightSlope: Float = 0.085
 
