@@ -15,21 +15,13 @@ final class NewGameTests: XCTestCase {
         return d
     }
 
-    func testColdLaunchResumesTheRoomOnlyWithASaveAndTheFlag() {
-        let d = suite("resume")
-        XCTAssertEqual(StartFlow.launchPhase(d), .menu)
-        d.set(true, forKey: StartFlow.lastInRoomKey)
-        XCTAssertEqual(StartFlow.launchPhase(d), .menu, "no save: the menu / opening")
+    func testColdLaunchWithASaveStartsAtTheMainMenu() {
+        let d = suite("coldmenu")
         d.set(true, forKey: StartFlow.startedKey)
-        XCTAssertEqual(StartFlow.launchPhase(d), .game)
-        StartFlow.rememberRoom(.adopt(.more), d)
-        XCTAssertEqual(StartFlow.launchPhase(d), .game, "other screens leave the flag alone")
-        StartFlow.rememberRoom(.menu, d)
-        XCTAssertEqual(StartFlow.launchPhase(d), .menu)
-        StartFlow.rememberRoom(.game, d)
-        XCTAssertEqual(StartFlow.launchPhase(d), .game)
-        StartFlow.rememberRoom(.wiping, d)
-        XCTAssertEqual(StartFlow.launchPhase(d), .menu)
+        XCTAssertTrue(StartFlow.hasSave(d))
+        d.set(true, forKey: "Jelbies.lastInRoom.v1")          // (the retired "left from the room" flag must not matter)
+        let flow = StartFlow()
+        if UserDefaults.standard.object(forKey: "MainMenu") == nil { XCTAssertEqual(flow.phase, .menu, "a cold launch shows Continue / New Game") }
     }
 
     func testNewGameWritesRosterCoinsAndFlagsOnceOnly() {

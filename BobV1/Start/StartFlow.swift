@@ -24,9 +24,7 @@ final class StartFlow {
     enum AdoptMode: Equatable { case first, more }
     enum Phase: Equatable { case menu, wiping, opening, adopt(AdoptMode), firstDay(Int, String, Bool), game }
 
-    var phase: Phase {
-        didSet { Self.rememberRoom(phase) }          // (not called for the assignments in `init`, so reading the flag there is safe)
-    }
+    var phase: Phase
     /// Bumped to rebuild the room (GameHost).
     private(set) var session = 0
     /// Settings > Watch the opening: the story plays over the room and ends back in it (no picker, no save changes).
@@ -46,26 +44,9 @@ final class StartFlow {
         d.bool(forKey: startedKey) || d.object(forKey: JellyRoster.rosterKey) != nil || d.object(forKey: DropsWallet.key) != nil
     }
 
-    /// Whether the player was in the room when the app last went away (iOS may drop a backgrounded app; the next cold launch then returns to the room instead of the menu).
-    static let lastInRoomKey = "Jelbies.lastInRoom.v1"
-
-    /// `.game` sets the flag; the main menu and a new game (`.wiping`) clear it; the other screens (picker, opening, first day) leave it as it was.
-    static func rememberRoom(_ p: Phase, _ d: UserDefaults = .standard) {
-        switch p {
-        case .game: d.set(true, forKey: lastInRoomKey)
-        case .menu, .wiping: d.set(false, forKey: lastInRoomKey)
-        default: break
-        }
-    }
-
-    /// The phase a cold launch starts in: the room when there is a save and the player left from the room, else the main menu.
-    static func launchPhase(_ d: UserDefaults = .standard) -> Phase {
-        hasSave(d) && d.bool(forKey: lastInRoomKey) ? .game : .menu
-    }
-
     init() {
         let d = UserDefaults.standard
-        phase = Self.launchPhase(d)
+        phase = .menu
         #if DEBUG || targetEnvironment(simulator)
         let save = Self.hasSave(d)
         if d.object(forKey: "MainMenu") != nil, d.integer(forKey: "MainMenu") == 0 { phase = save ? .game : .adopt(.first) }
@@ -218,9 +199,6 @@ final class StartFlow {
 
     /// Menu: Continue. The roster is the saved one.
     func continueGame() { LaunchTiming.mark("continue tapped"); enterGame() }
-
-    /// A cold launch that resumed straight into the room (no Continue tap): once the logo / intro is gone, the short curtain covers the room building, as after Continue.
-    func curtainForResume() { if phase == .game { LaunchGate.shared.hold(.resume) } }
 
     /// Pause card: back to the main menu (the room is dropped; Continue brings it back from the save).
     func returnToMenu() { if phase == .game { FirstDayTour.shared.reset(); phase = .menu } }
