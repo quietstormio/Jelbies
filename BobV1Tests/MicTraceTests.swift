@@ -106,4 +106,24 @@ final class MicTraceTests: XCTestCase {
         let line = MicBench.doneLine(variant: "base", presses: 3, dropped: 1, sums: [sum(100, 10), sum(300, nil), sum(200, 30)])
         XCTAssertEqual(line, "[micbench] done variant=base presses=3 dropped=1 median: live=200 engine=20")
     }
+
+    /// Simulator, fake input: shows the lines come out (the numbers are NOT evidence of anything about audio).
+    func testBenchPrintsOneLinePerPressAndADoneLine() async throws {
+        MicTrace.override = true
+        MicTrace.resetForTest()
+        let box = LineBox()
+        let (v, _) = make()
+        await MicBench.run(voice: v, count: 2, hold: 0.4, settle: 0.5, quickGap: 0.6, afterPutBack: 0.1, emit: { box.add($0) })
+        let lines = box.all
+        for l in lines { print("SIMBENCH \(l)") }
+        XCTAssertEqual(lines.filter { $0.hasPrefix("[micbench] press") }.count, 4, "2 presses + 2 quick re-presses")
+        XCTAssertEqual(lines.last?.hasPrefix("[micbench] done variant=base presses=4"), true, lines.last ?? "")
+        XCTAssertTrue(lines.contains { $0.contains("quick=1") })
+    }
+}
+
+private final class LineBox: @unchecked Sendable {
+    private let l = NSLock(); private var a: [String] = []
+    func add(_ s: String) { l.lock(); a.append(s); l.unlock() }
+    var all: [String] { l.lock(); defer { l.unlock() }; return a }
 }
