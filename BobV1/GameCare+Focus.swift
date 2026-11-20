@@ -61,6 +61,12 @@ final class FocusGroup {
     private(set) var replans = 0
     /// The line-up is never stuck: after `softAccept` seconds a Jelly within `nearEnough` of his spot is taken as arrived where he stands, after `hardAccept` anyone is.
     nonisolated(unsafe) static var softAccept: Float = 5.5, hardAccept: Float = 8
+    /// 2026-11-19 ("the purple was sleep and now he's in the back there"): a called sleeper is woken with the SHORT wake at the call, his walk is held until he is on his feet, and the
+    /// safety net's clock waits for him (at most `sleepWait` s), so he is never "accepted" lying / half-risen behind another. Off (dev `-ComeHereOld 1`, simulator builds) = the earlier behaviour.
+    nonisolated(unsafe) static var sleeperFix = !(DevArgs.enabled && UserDefaults.standard.integer(forKey: "ComeHereOld") == 1)
+    static let sleepWait: Float = 6
+    /// Seconds the safety net's clock was held for a sleeper still waking.
+    var netShift: Float = 0
     static let nearEnough: Float = 1.5, sidesWait: Float = 1.5
     /// Members the safety net had to accept where they stood (tests: a line-up that works needs none).
     var netAccepted = 0
@@ -73,7 +79,7 @@ final class FocusGroup {
     var rowSpacing: Float = GameCamera.focusRowSpacing
 
     func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:]) {
-        ids = new; arrived = []; clock = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
+        ids = new; arrived = []; clock = 0; netShift = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
             let row = GameCamera.previewRowSpots(count: new.count, spacing: rowSpacing)          // (the same expression a preview group is born on)
@@ -177,8 +183,12 @@ extension GameCare {
         if ids.count > 1 { for id in ids { if let b = brainFor(id) { focusGroup.gapSaved[id] = b.peerGap; b.peerGap = min(b.peerGap, FocusGroup.rowSteerGap) } } }
         focus.beginApproach()
         approachIdle = 0; approachRetries = 0; approachShort = 0
+        var zeroAsleep = false
+        if FocusGroup.sleeperFix {          // whoever sleeps is woken now (the quick get-up, never the slow morning wake) and walks to his reserved spot once he is up
+            for id in ids where brainFor(id)?.isSleeping == true { wakeSleeper(id, groggy: false, fast: true); if id == 0 { zeroAsleep = true } }
+        }
         if ids.contains(0) {
-            if focusGroup.mayGo(0, frontDistance: nil) { queued = [.come(to: focusGroup.spot(of: 0))] } else { focusGroup.zeroPending = true }
+            if focusGroup.mayGo(0, frontDistance: nil), !zeroAsleep { queued = [.come(to: focusGroup.spot(of: 0))] } else { focusGroup.zeroPending = true }
         }
     }
 
@@ -227,12 +237,14 @@ extension GameCare {
         let g = focusGroup
         guard focus.phase == .approaching, !g.ids.isEmpty else { return }
         g.clock += dt
-        guard g.clock > min(FocusGroup.softAccept, FocusGroup.hardAccept) else { return }
+        if FocusGroup.sleeperFix, g.netShift < FocusGroup.sleepWait, g.ids.contains(where: { brainFor($0)?.isSleeping == true }) { g.netShift += dt }          // (the net's clock waits for a sleeper to get up)
+        let netClock = g.clock - g.netShift
+        guard netClock > min(FocusGroup.softAccept, FocusGroup.hardAccept) else { return }
         for id in g.ids where !g.arrived.contains(id) {
             guard let b = brainFor(id) else { if g.markArrived(id) { focus.arrive(snap: isPreview) }; continue }
             let sim = id == 0 ? lastSim : bathPlug.actors[id]?.actor?.sim
             let d = simd_length(Self.floorPos(b, sim) - g.spot(of: id))
-            guard d < FocusGroup.nearEnough || g.clock > FocusGroup.hardAccept else { continue }
+            guard d < FocusGroup.nearEnough || netClock > FocusGroup.hardAccept else { continue }
             b.pending = nil; b.interruptScript = true; g.netAccepted += 1
             if id == 0 {
                 queued.removeAll { if case .come = $0 { return true }; return false }; callRunning = false
@@ -269,6 +281,7 @@ extension GameCare {
         switch phase {
         case .approaching:
             if g.arrived.contains(id) { return }
+            if FocusGroup.sleeperFix, brain.isSleeping { s.age = 0; s.calm = 0; s.onSlot = 0; return }          // (still getting up: the walk starts when he is on his feet)
             if !s.requested {
                 guard g.mayGo(id, frontDistance: frontDistance(except: id)) else { return }
                 s.requested = true; s.age = 0

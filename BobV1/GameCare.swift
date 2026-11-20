@@ -691,7 +691,7 @@ final class GameCare {
     private func tickFocus(brain: BlobBrain, sim: SoftBody?, dt: Float) {
         focusFrame(dt: dt)
         if focus.phase == .approaching {
-            if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)) {
+            if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)), !(FocusGroup.sleeperFix && brain.isSleeping) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
             }
             focusReplan(dt: dt)
