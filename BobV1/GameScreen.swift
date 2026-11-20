@@ -527,7 +527,6 @@ struct GameScreen: View {
                 case "feed": menuOpen = true; openPicker = .food
                 case "play": menuOpen = true; openPicker = .toy
                 case "dress": bagTab = .wear; bagWho = 0; bagOpen = true
-                case "decor": bagTab = .toys; bagWho = 0; bagOpen = true
                 case "spring": StartFlow.shared.openAdoption()
                 case "clean": model.care.bath.grime.dirt = 0.5; model.care.clean()
                 default: break
@@ -1237,7 +1236,7 @@ struct CareMenu: View {
     private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
-        // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Decor, Bedtime come back when it folds).
+        // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Bedtime come back when it folds).
         let all = HUDMenu.visibleItems(mode, care: care)
         let items = tight && trickRow ? all.filter { $0 == .tricks }          // (a phone on its side: only the Tricks row and its chips fit)
             : tight && picker != nil ? all.filter { picker == .toy ? $0 == .play : ($0 == .feed || $0 == .drink) } : all

@@ -598,7 +598,7 @@ struct BagSheet: View {
                         Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
-                .background { if fromHUD, tab == .wear { TipAnchor("dress", delay: 0.4) } else if fromHUD, tab.isDecor { TipAnchor("decor", delay: 0.4) } }
+                .background { if fromHUD, tab == .wear { TipAnchor("dress", delay: 0.4) } }
                 LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 84 : 140, sideBySide: vsc == .compact, showNote: false, pick: { who = $0 })
                 if HUDLayout.isPad, typeSize < .xxxLarge {          // iPad (larger type falls back to the scrolling row below so labels never truncate): all six tabs share the card's width (no clipped "Ro" at the edge); the label shrinks a touch if it must
                     HStack(spacing: 6) {

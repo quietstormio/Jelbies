@@ -112,7 +112,7 @@ final class HeartMenuAndSettingsRowsUITests: XCTestCase {
         app.terminate()
     }
 
-    private let groupRows = ["care-feed", "care-water", "hud-play", "hud-decor", "hud-bedtime", "hud-call-all"]
+    private let groupRows = ["care-feed", "care-water", "hud-play", "hud-bedtime", "hud-call-all"]
     private let creatureRows = ["hud-dress", "care-clean", "hud-tricks", "hud-compete", "hud-come"]
 
     /// (6) a pick opens the menu at once: seconds from the tap (returned) to the first row being hittable.
