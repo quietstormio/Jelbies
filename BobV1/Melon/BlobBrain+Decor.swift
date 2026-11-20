@@ -57,7 +57,7 @@ extension BlobBrain {
             if let s = walkOutFrom, simd_distance(position, s) > 0.05 { insideStuckT = 0; walkOutFrom = nil }
             insideStuckT += dt
             // the walk-out below finds no route from inside a piece (the planner steers round solids, and he is in one): after 3 s he is eased out in a straight line, feet with him
-            if insideStuckT > 3, !footOwned, !held, !decorLocked, case .none = script, let out = (f.kind == .hopscotch ? hopWalkOut(f) : nil) ?? decorFreeSpot(near: position) {
+            if insideStuckT > 3, !footOwned, !held, !decorLocked, !(f.kind == .hopscotch && hopJoining(f)), case .none = script, let out = (f.kind == .hopscotch ? hopWalkOut(f) : nil) ?? decorFreeSpot(near: position) {
                 let d = out - position, len = simd_length(d)
                 let m = len > 0.02 ? d / len * min(len, 1.3 * dt) : SIMD2<Float>.zero
                 if len > 0.02, !steerPeers().contains(where: { simd_distance($0.pos, position + m) < peerGap }) {          // (never into a friend)
@@ -65,7 +65,7 @@ extension BlobBrain {
                     yaw = atan2f(d.x, d.y)
                 }
             }
-            if insideDecorT > (f.kind == .hopscotch ? 0.3 : 1.2), !footOwned, !held, !decorLocked, pending == nil, !(f.kind == .hopscotch && social != nil), let out = (f.kind == .hopscotch ? hopWalkOut(f) : nil) ?? decorFreeSpot(near: position) {          // (park-hopscotch-r1: off a court with a game on at once, never out of a social that is running)
+            if insideDecorT > (f.kind == .hopscotch ? 0.3 : 1.2), !footOwned, !held, !decorLocked, pending == nil, !(f.kind == .hopscotch && (social != nil || hopJoining(f))), let out = (f.kind == .hopscotch ? hopWalkOut(f) : nil) ?? decorFreeSpot(near: position) {          // (park-hopscotch-r1: off a court with a game on at once, never out of a social that is running)
                 insideDecorT = -1.5
                 walkOutFrom = position          // (the ease-out waits for a fresh 3 s once this walk has really moved him)
                 if walkOutSoftens(f), !(f.kind == .hopscotch && f.distance(position) > 0) { decorIgnore = f.uid }          // (r4: a centre outside the slide's box walks out with it solid; park-hopscotch-r1: so does a body in the court's margin)

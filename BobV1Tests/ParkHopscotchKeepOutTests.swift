@@ -323,6 +323,26 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         XCTAssertFalse(line.active); XCTAssertEqual(HopscotchTuning.lineCount, 0)
     }
 
+    /// A body who stands in the court's margin when a line starts and rolls "join" is not walked off: he joins (HopscotchTests' three-Jelmiko line has Jelmiko 1 there).
+    func testBodyInTheMarginStillJoinsTheLine() {
+        HopscotchTuning.guardOn = true; HopscotchTuning.joinChance = 1
+        let lab = parkLab(n: 3, seed: 5, starts: [SIMD2(-2.1, -1.35), SIMD2(-0.7, 0.2), SIMD2(0.4, -0.4)])
+        let court = DecorField.shared.foot(ParkToys.hopscotchUID)!, line = HopscotchLine.shared
+        for r in lab.rigs { r.brain.autonomy = true }
+        lab.rigs[0].brain.idleForced = true
+        XCTAssertTrue(lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: court.uid))
+        var maxPlayers = 0, landed = Set<Int>()
+        for i in 0..<(60 * 80) {
+            lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+            maxPlayers = max(maxPlayers, line.players(court.uid).count)
+            for a in 0..<3 where line.square(court.uid, a) >= 0 { landed.insert(a) }
+            if i % 120 == 0, i < 60 * 20 { let b = lab.rigs[1].brain; print("HKO join t\(i / 60) rig1 kind \(String(describing: b.idleState.kind)) notice \(b.toy.noticeUID) wait \(b.toy.waitUID) pending \(b.pending != nil) job \(b.job != nil) d \(court.distance(b.position)) ign \(b.decorIgnore ?? -1)") }
+            if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { break }
+        }
+        print("HKO join: players at most \(maxPlayers), landed \(landed.sorted())")
+        XCTAssertEqual(maxPlayers, 3, "all three joined"); XCTAssertEqual(landed, [0, 1, 2], "all three hopped")
+    }
+
     /// The court is flat paint when no game is on (the floor rules, `ParkClearSpot`), a wall with a body's margin during one, and the park floor left of the court is wide enough to pass
     /// (printed: the roam floor's half width against the court's west edge).
     func testCourtIsAWallOnlyDuringAGame() {

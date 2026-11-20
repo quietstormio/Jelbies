@@ -75,6 +75,9 @@ extension BlobBrain {
         return socialOthers().filter { $0 !== self && !line.contains(f.uid, $0.steerID) && f.distance($0.position) < $0.footprint * HopscotchTuning.wallReach }
     }
 
+    /// park-hopscotch-r1: he has been told about this court's line and is on his way to join it (noticed it, or queued for it): the step-off walk leaves him alone, he is about to be a player.
+    func hopJoining(_ f: DecorFoot) -> Bool { toy.noticeUID == f.uid || toy.waitUID == f.uid || pending != nil && toy.noticeUID >= 0 }
+
     /// park-hopscotch-r1: the court's wall (the margin) is within `radius` of the floor point `c` while a game is on.
     func hopCourtWithin(_ c: SIMD2<Float>, _ radius: Float) -> Bool {
         guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID) else { return false }

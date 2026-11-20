@@ -76,8 +76,8 @@ struct SharedPlayTracker {
             let ids = Set(c.players.map(\.id))
             var paid = (lines[c.uid] ?? []).filter { ids.contains($0.home) && ids.contains($0.visitor) }
             let homes = c.players.filter { isHome($0.id) }, visitors = c.players.filter { isVisitor($0.id) }
-            for h in homes where h.sq >= 0 {
-                for v in visitors where v.sq >= 0 {
+            for h in homes {
+                for v in visitors where (HopscotchTuning.guardOn ? (h.sq >= 0 || v.sq >= 0) : (h.sq >= 0 && v.sq >= 0)) {          // (park-hopscotch-r1: one at a time, the leader has usually left the line before the next lands: one of the two playing and both in the line is the shared line)
                     let p = Pair(home: h.id, visitor: v.id)
                     if paid.contains(p) { continue }
                     paid.insert(p)
