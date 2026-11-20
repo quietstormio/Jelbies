@@ -99,4 +99,58 @@ final class MicTailTests: XCTestCase {
         XCTAssertEqual(v.heard?.text, "\u{201C}spin\u{201D}")
         XCTAssertFalse(input.running)
     }
+
+    override func tearDown() async throws { MicTuning.overlapOverride = nil }
+
+    // MARK: the off switch (MicTuning.overlapTail = false: exactly the behaviour before the overlapping tail)
+
+    func testSwitchOffRefusesAPressDuringThePostRollAndStillDeliversTheFirstResult() async throws {
+        MicTuning.overlapOverride = false
+        let (v, input, c) = make()
+        input.transcripts = ["sit"]
+        try await hold(v, c)
+        v.release()
+        XCTAssertFalse(v.isListening)
+        XCTAssertFalse(v.begin(), "a press during the post-roll is refused, as before the overlapping tail")
+        XCTAssertTrue(v.traceDropReason.contains("stopping"), v.traceDropReason)
+        await v._startTask?.value
+        for _ in 0..<100 where v.heard == nil { try await Task.sleep(nanoseconds: 20_000_000) }
+        XCTAssertEqual(v.heard?.text, "\u{201C}sit\u{201D}", "the first command's result still arrives")
+        XCTAssertFalse(input.running, "engine stopped")
+        XCTAssertEqual(input.events, ["start", "engineStopped"], "the post-roll was NOT cut and no second listen started")
+        XCTAssertTrue(v.begin(), "once the tail is done a press opens")
+        v.cancel()
+    }
+
+    func testSwitchOffRefusesAPressDuringTheFinalize() async throws {
+        MicTuning.overlapOverride = false
+        let (v, input, c) = make()
+        input.transcripts = ["sit"]
+        try await hold(v, c)
+        v.release()
+        while !input.events.contains("engineStopped") { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertFalse(v.begin(), "still refused while the analyzer finalizes")
+        for _ in 0..<100 where v.heard == nil { try await Task.sleep(nanoseconds: 20_000_000) }
+        XCTAssertEqual(v.heard?.text, "\u{201C}sit\u{201D}")
+        XCTAssertFalse(input.running)
+    }
+
+    func testSwitchStorageAndDevGate() {
+        let n = "MicTailTests.\(UUID().uuidString)"
+        let d = UserDefaults(suiteName: n)!; defer { d.removePersistentDomain(forName: n) }
+        XCTAssertTrue(MicTuning.storedOverlap(devArgs: true, defaults: d), "no stored value: on")
+        XCTAssertTrue(MicTuning.storedOverlap(devArgs: false, defaults: d, domain: n))
+        d.set(false, forKey: MicTuning.overlapKey)          // what the launch argument (or an earlier dev launch) leaves behind
+        XCTAssertFalse(MicTuning.storedOverlap(devArgs: true, defaults: d))
+        XCTAssertFalse(MicTuning.storedOverlap(devArgs: false, defaults: d, domain: n), "a STORED value is honoured outside the dev gate")
+        d.set(true, forKey: MicTuning.overlapKey)
+        XCTAssertTrue(MicTuning.storedOverlap(devArgs: true, defaults: d))
+        // the argument itself: only a dev build writes it
+        let n2 = n + ".b"; let e = UserDefaults(suiteName: n2)!; defer { e.removePersistentDomain(forName: n2) }
+        e.setVolatileDomain(["MicOverlapTail": false], forName: UserDefaults.argumentDomain)
+        MicTuning.applyLaunchArguments(devArgs: false, defaults: e)
+        XCTAssertNil(e.persistentDomain(forName: n2)?[MicTuning.overlapKey], "outside the dev gate the argument writes nothing")
+        MicTuning.applyLaunchArguments(devArgs: true, defaults: e)
+        XCTAssertEqual(e.persistentDomain(forName: n2)?[MicTuning.overlapKey] as? Bool, false, "in a dev build it is stored")
+    }
 }

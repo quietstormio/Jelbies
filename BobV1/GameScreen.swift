@@ -515,7 +515,7 @@ struct GameScreen: View {
                 .presentationBackground(SK.cream)
         }
         .task { await GameScreen.runStoreDemo(model: model) }
-        .task { await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
+        .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
         .onChange(of: model.care.townRequest) { _, _ in                 // voice: "let's race" / "time to train" open the Track for the picked Jelly

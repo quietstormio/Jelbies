@@ -26,6 +26,8 @@ nonisolated final class PressTrace: @unchecked Sendable {
     let variant: String
     private let lock = NSLock()
     private var at: [Double?] = Array(repeating: nil, count: TraceMark.allCases.count)
+    private var _overlap = true
+    var overlap: Bool { get { lock.lock(); defer { lock.unlock() }; return _overlap } set { lock.lock(); _overlap = newValue; lock.unlock() } }
     private var _quick = false, _ears = "", _cat0 = "", _putBack = "pending", _finished = false, _timedOut = false
     private var _summary: PressSummary?
     private var waiters: [@Sendable () -> Void] = []
@@ -251,7 +253,7 @@ nonisolated enum MicTrace {
         let end = (tp ?? (tr ?? t0)) + 1.0
         var s = PressSummary()
         func put(_ k: String, _ v: Double?) { s.fields.append((k, v)) }
-        s.extras = [("quick", t.quick ? "1" : "0"), ("ears", t.ears), ("cat0", t.categoryBefore.replacingOccurrences(of: "AVAudioSessionCategory", with: "")),
+        s.extras = [("overlap", t.overlap ? "1" : "0"), ("quick", t.quick ? "1" : "0"), ("ears", t.ears), ("cat0", t.categoryBefore.replacingOccurrences(of: "AVAudioSessionCategory", with: "")),
                     ("putBackOutcome", t.putBackOutcome)]
         if let note { s.extras.append(("note", note)) }
         if timedOut { s.extras.append(("timedOut", "1")) }
