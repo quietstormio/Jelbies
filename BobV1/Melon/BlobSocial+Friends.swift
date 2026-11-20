@@ -27,7 +27,7 @@ enum HighFiveTuning {
     nonisolated(unsafe) static var windUpRise: Float = 0.30
     nonisolated(unsafe) static var windUpFall: Float = 0.26
     /// How far each turns in toward the partner from the wind-up on (rad): a V, faces apart, the hands up in the middle (pair-distinct-r1).
-    nonisolated(unsafe) static var turnIn: Float = 0.45
+    nonisolated(unsafe) static var turnIn: Float = ProcessInfo.processInfo.environment["PAIR_TURNIN"].flatMap { Float($0) } ?? 0.45
 }
 
 enum FriendTuning {
