@@ -48,7 +48,9 @@ final class ShowSpotlightTests: XCTestCase {
         return CGRect(x: mid.x - w, y: top.y, width: 2 * w, height: bot.y - top.y)
     }
 
-    private func wholeRound(size: CGSize) {
+    private func wholeRound(size: CGSize, legacy: Bool = false) {
+        ShowStage.legacyLandscapeMark = legacy
+        defer { ShowStage.legacyLandscapeMark = false }
         let saved = GameCamera.aspect
         GameCamera.aspect = Float(size.width / size.height)
         defer { GameCamera.aspect = saved }
@@ -66,6 +68,7 @@ final class ShowSpotlightTests: XCTestCase {
         var maxDist: Float = 0
         var worstOverlap: CGFloat = 0
         var worstBody: CGFloat = 0, worstBodyArea: CGFloat = 0, peakHop: Float = 0
+        var worstBehind: CGFloat = 0, worstFront: CGFloat = 0          // body-box overlap with a waiting body, by depth: the waiter BEHIND the performer (she covers him) / IN FRONT of him (he covers her)
         var envLo = SIMD3<Float>(repeating: 99), envHi = SIMD3<Float>(repeating: -99)          // the performer's widest reach while he holds the light
         var envTrick: [String: (SIMD3<Float>, SIMD3<Float>)] = [:]
         var offBetween = true
@@ -148,7 +151,14 @@ final class ShowSpotlightTests: XCTestCase {
             peakHop = max(peakHop, litActor.sim.centroid().y)
             let cc = litActor.sim.centroid(); envLo = simd_min(envLo, cc); envHi = simd_max(envHi, cc)
             let tk = "\(sh.trickStage == .rivals ? "rival\(sh.rivalTurn ?? -1)" : "player")-\(sh.trickTurnNow ?? -1)"; if let e = envTrick[tk] { envTrick[tk] = (simd_min(e.0, cc), simd_max(e.1, cc)) } else { envTrick[tk] = (cc, cc) }
-            for o in others { let bi = mine.intersection(box(o, frame: f, size: size)); if !bi.isNull { let ob = box(o, frame: f, size: size); worstBodyArea = max(worstBodyArea, bi.width * bi.height); worstBody = max(worstBody, bi.width * bi.height / (ob.width * ob.height)) } }
+            for o in others {
+                let bi = mine.intersection(box(o, frame: f, size: size))
+                if !bi.isNull {
+                    let ob = box(o, frame: f, size: size), frac = bi.width * bi.height / (ob.width * ob.height)
+                    worstBodyArea = max(worstBodyArea, bi.width * bi.height); worstBody = max(worstBody, frac)
+                    if o.sim.centroid().z < litActor.sim.centroid().z - 0.02 { worstBehind = max(worstBehind, frac) } else { worstFront = max(worstFront, frac) }
+                }
+            }
             for o in others {          // (no waiting face is under the performer, and no two waiting faces overlap)
                 let inter = mine.intersection(box(o, frame: f, size: size, face: true))
                 if !inter.isNull { worstOverlap = max(worstOverlap, inter.width * inter.height); if diag.count < 6 { diag.append("f\(frame) performer \(p) over face of \(o.id) at \(o.floor) \(sh.trickStage) \(sh.rivalStep) \(inter)") } }
@@ -168,7 +178,9 @@ final class ShowSpotlightTests: XCTestCase {
         XCTAssertEqual(windowTargetMisses, 0, "the light's target is the performer for his whole window")
         XCTAssertEqual(gapViolations, 0, "the light is off in every gap between turns (fade out within 0.4 s): \(diag)")
         XCTAssertLessThan(maxDist, 0.6, "the lit performer stays within 0.6 of the middle of the stage")
-        XCTAssertEqual(worstOverlap, 0, accuracy: 1, "no waiting entrant's face is under the performer or another face (\(size)): \(diag)")
+        if !legacy { XCTAssertEqual(worstOverlap, 0, accuracy: 1, "no waiting entrant's face is under the performer or another face (\(size)): \(diag)") }
+        print("[ShowSpotlight] \(size) legacy marks \(legacy): body-box overlap by depth: waiter BEHIND the performer worst \(Int(worstBehind * 100)) %, waiter IN FRONT worst \(Int(worstFront * 100)) % (of the waiting body's box)")
+        if !legacy { XCTAssertEqual(worstFront, 0, accuracy: 0.0005, "no waiting body stands in front of the performer and is covered by him (\(size))") }
         print("[ShowSpotlight] \(size): worst body-box overlap of a waiting body with the performer: \(Int(worstBody * 100)) % of the waiting body's box (face overlap \(worstOverlap) px2), highest centroid while lit \(peakHop)")
         print("[ShowSpotlight] \(size) reach of the lit performer: x \(envLo.x)...\(envHi.x), y \(envLo.y)...\(envHi.y), z \(envLo.z)...\(envHi.z)")
         for (k, e) in envTrick.sorted(by: { $0.key < $1.key }) { print("[ShowSpotlight] reach \(k): x \(e.0.x)...\(e.1.x) y \(e.0.y)...\(e.1.y) z \(e.0.z)...\(e.1.z)") }
@@ -177,6 +189,8 @@ final class ShowSpotlightTests: XCTestCase {
 
     func testWholeTrickRoundPortrait() { wholeRound(size: CGSize(width: 440, height: 956)) }
     func testWholeTrickRoundLandscape() { wholeRound(size: CGSize(width: 956, height: 440)) }
+    /// The layout before the spotlight round (landscape rival 0 on (-1.4, 0.4)), measured by the same harness: the overlap numbers to compare with.
+    func testWholeTrickRoundLandscapeLegacyMarks() { wholeRound(size: CGSize(width: 956, height: 440), legacy: true) }
 
     // MARK: the picture of the light, rendered on a clear background
 

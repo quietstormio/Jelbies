@@ -119,8 +119,10 @@ nonisolated enum ShowStage {
     /// Every mark is 1.5+ from every other.
     static let playerAside = SIMD2<Float>(0, -1.0)
     /// `sideways` (a phone / tablet on its side): the chrome column is on the right, so rival 2 waits off the picture to the LEFT instead.
+    /// Test seam: the landscape mark rival 0 had before the spotlight round ((-1.4, 0.4)), to measure the old layout with the same harness.
+    nonisolated(unsafe) static var legacyLandscapeMark = false
     static func rivalRest(_ k: Int, sideways: Bool = false) -> SIMD2<Float> {
-        let fixed = [sideways ? SIMD2<Float>(-1.6, -0.2) : SIMD2<Float>(-1.4, 0.4), SIMD2(1.4, 0.4), SIMD2(sideways ? -3.4 : 3.4, 2.6)]          // (on its side the performer is in the left third: rival 0 stands back and up, her face above his head, not behind it)
+        let fixed = [sideways && !legacyLandscapeMark ? SIMD2<Float>(-1.6, -0.2) : SIMD2<Float>(-1.4, 0.4), SIMD2(1.4, 0.4), SIMD2(sideways ? -3.4 : 3.4, 2.6)]          // (on its side the performer is in the left third: rival 0 stands back and up, her face above his head, not behind it)
         return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
     }
     /// Where entrant k waits in the wing before she walks on to her rest spot (just outside the wide shot: left, left, right; a phone on its side: all from the left).
