@@ -15,6 +15,10 @@ enum HUDTuning {
     static let frontBandLandscape: CGFloat = 0
     static let railGap: CGFloat = 10            // space between buttons in a rail
     static let railWidth: CGFloat = 60, railRow: CGFloat = 54          // the left glass capsule: 60 wide, 54 pt rows
+    /// The left capsule's height: four 54 pt rows (book, bag, Go out, mic), the divider (1.5 + 4 + 4) and the capsule's 6 + 6 padding (GameScreen.swift's left rail).
+    static let railCapsuleHeight: CGFloat = 4 * 54 + 1.5 + 8 + 12
+    /// The heart (care menu button) beside the right edge, and the HUD's own padding (GameScreen: 16 horizontal, 8 vertical; the heart's 4 trailing).
+    static let railHeart: CGFloat = 72, hudSide: CGFloat = 16, hudVertical: CGFloat = 8, heartTrailing: CGFloat = 4, cutMargin: CGFloat = 4
     static let goOutSize: CGFloat = 56, goOutSizeTight: CGFloat = 46
 }
 
@@ -28,7 +32,13 @@ enum HUDLayout {
     }
 
     /// The HUD's measured size (the game screen's geometry, window not display), kept by GameScreen for the roam floor's rail cut-outs. Zero until measured.
-    nonisolated(unsafe) static var measuredSize: CGSize = .zero
+    nonisolated(unsafe) static var measuredSize: CGSize = .zero { didSet { if oldValue != measuredSize { measuredRevision &+= 1 } } }
+    /// The HUD's safe-area insets (leading / bottom / trailing, points) as GameScreen measures them; with `measuredSize` they place the phone's real button rectangles (`railRects(aspect:)`).
+    nonisolated(unsafe) static var measuredInsets: UIEdgeInsets = .zero { didSet { if oldValue != measuredInsets { measuredRevision &+= 1 } } }
+    /// Bumps whenever the measured size or insets change: the stage rebuilds the roam floor (its HUD cut-outs follow the real buttons) when it sees a new value.
+    nonisolated(unsafe) static var measuredRevision = 0
+    /// A phone whose HUD has been measured (iPad has its own scaled rects).
+    static var phoneMeasured: Bool { !isPad && measuredSize.width > 0 && measuredSize.height > 0 }
 
     /// iPad HUD scale from the measured short side (744 pt mini -> 1.1, 1032 pt 13-inch -> 1.3). Always 1 on iPhone, so the phone HUD is untouched.
     static func padScale(short: CGFloat) -> CGFloat {
@@ -67,13 +77,28 @@ enum HUDLayout {
 
     /// `railRects`, size-aware: on iPad the rails are scaled by `padScale` (and the window can be any size), so the cut-outs follow; on iPhone exactly `railRects`.
     static func railRects(aspect: Float) -> [CGRect] {
-        guard isPad else { return railRects }
+        guard isPad else {
+            guard phoneMeasured, (measuredSize.width < measuredSize.height) == (aspect < 1) else { return railRects }          // (not measured yet, or mid-rotation: the old 393 pt rects, portrait only)
+            return phoneRails(size: measuredSize, insets: measuredInsets)
+        }
         let size = padSize, s = padScale(size: size)
         let w = size.width, h = size.height
         return [
             CGRect(x: 0, y: 1 - min(0.6, 250 * s / h), width: (16 + 60 * s + 4) / w, height: min(0.6, 250 * s / h)),
             CGRect(x: 1 - (16 + 4 + 72 * s + 4) / w, y: 1 - (72 * s + 24) / h, width: (16 + 4 + 72 * s + 4) / w, height: (72 * s + 24) / h),
         ]
+    }
+
+    /// The phone's real button rectangles (fractions of the measured window, top-left origin), each reaching the bottom edge: the left capsule (book, bag, Go out, mic) at the HUD's leading padding
+    /// (plus the leading safe inset, which is 0 in portrait), and the heart at the trailing edge, both lifted by the bottom safe inset + the HUD's 8 pt + `lift`.
+    static func phoneRails(size: CGSize, insets: UIEdgeInsets) -> [CGRect] {
+        let w = size.width, h = size.height
+        let above = insets.bottom + hudVertical + lift(size: size, safeBottom: insets.bottom, compact: w > h)
+        let leftTop = h - above - railCapsuleHeight, rightTop = h - above - railHeart - cutMargin
+        let lx = insets.left + hudSide - cutMargin, lw = railWidth + 2 * cutMargin
+        let rw = railHeart + heartTrailing + 2 * cutMargin, rx = w - insets.right - hudSide - rw + cutMargin
+        return [CGRect(x: max(0, lx) / w, y: leftTop / h, width: lw / w, height: 1 - leftTop / h),
+                CGRect(x: rx / w, y: rightTop / h, width: min(rw, w - rx) / w, height: 1 - rightTop / h)]
     }
 
     /// True when a Jelbie centred at floor (x, z) has its body box (the same one the roam margins use) overlapping a rail rectangle on screen.

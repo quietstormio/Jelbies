@@ -285,9 +285,10 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var firstFrameDone = false
     /// The aspect the roaming polygon was built for (GameCamera.refreshRoam); rebuilt when it changes, and every sim's safety arena follows it.
     private var roamAspect: Float = 0
+    private var roamHUDRevision = -1          // (HUDLayout.measuredRevision the floor's button cut-outs were built for)
     private func syncRoam(aspect: Float) {
-        guard actors.count > 1 || !parkActors.isEmpty || (RoomTraffic.loneFloorLive && !model.preview && !model.care.tripActive && !model.care.raceBusy), abs(aspect - roamAspect) > 0.005, !(game && model.care.volley.inScene), !PhotoCam.active else { return }          // (the 11-15 room round, T7: one alone at home gets the whole floor too; never a showcase stage, never while he is out; RoomRoam+Traffic.swift) (never through the photo / picker camera's pose: the Jelly Spring page releases `PhotoCam` only after the new room stage's first draws, and the floor built through that pose reached 2.75 u past the screen's bottom edge; `roamAspect` is not written before this guard passes, so the first draw after the release builds the floor)
-        roamAspect = aspect
+        guard actors.count > 1 || !parkActors.isEmpty || (RoomTraffic.loneFloorLive && !model.preview && !model.care.tripActive && !model.care.raceBusy), (abs(aspect - roamAspect) > 0.005 || roamHUDRevision != HUDLayout.measuredRevision), !(game && model.care.volley.inScene), !PhotoCam.active else { return }          // (the 11-15 room round, T7: one alone at home gets the whole floor too; never a showcase stage, never while he is out; RoomRoam+Traffic.swift) (never through the photo / picker camera's pose: the Jelly Spring page releases `PhotoCam` only after the new room stage's first draws, and the floor built through that pose reached 2.75 u past the screen's bottom edge; `roamAspect` is not written before this guard passes, so the first draw after the release builds the floor)
+        roamAspect = aspect; roamHUDRevision = HUDLayout.measuredRevision
         guard GameCamera.refreshRoam(aspect: aspect) != nil else { return }
         Self.applyRoomArena(actors: actors, parkActors: parkActors, bathFenceLifted: model.care.bath.fenceLifted)
         BlobBrain.roomWalkIn(actors.map(\.brain) + parkActors.map(\.brain))          // (remedy D1, RoomRoam+Traffic.swift: a free home body the new floor leaves outside walks back in)
