@@ -166,7 +166,7 @@ extension GameCare {
         let total = tier.total(count: ids.count)
         guard !ids.isEmpty, bath.wallet.spend(total) else { return false }
         let book = groomBook
-        book.charged = total; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
+        book.charged = total; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.autonomy = [:]; book.homes = [:]; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]
         AudioHub.shared.playClip(GroomTuning.clipBell)
         CaptionCenter.shared.post("Shop bell")
         AudioHub.shared.playClip(GroomTuning.clipAmbience, volume: 0.9)
@@ -183,7 +183,7 @@ extension GameCare {
         for a in book.actors {
             guard let brain = a.brain else { continue }
             book.autonomy[a.id] = autonomySnapshot(a.id, brain); book.homes[a.id] = a.floor
-            if brain.isSleeping { continue }          // a sleeper who stays home stays exactly as he is: not woken, not moved
+            if brain.isSleeping { book.stayedAsleep.insert(a.id); continue }          // a sleeper who stays home stays exactly as he is: not woken, not moved
             brain.abortAll(a.sim, a.skinner)
             brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             brain.autonomy = false; brain.idleBlocked = true
@@ -195,7 +195,7 @@ extension GameCare {
         #endif
         for a in book.actors where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }          // (the room's small arena would pin the door step at z = -2.6: he could never leave the door)
         // everybody is inside the shop (not drawn): wait off to the right, so the room's spots do not become bodies in the street that block the door's walk-out (the peer steering sees them)
-        for (i, a) in book.actors.enumerated() { if let b = a.brain, !b.isSleeping { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.doorStep.y - 0.1 + 1.4 * Float(i % 4)))) } }
+        for (i, a) in book.actors.enumerated() { if let b = a.brain, !book.stayedAsleep.contains(a.id) { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.doorStep.y - 0.1 + 1.4 * Float(i % 4)))) } }
         syncDecor()
         if select.phase != .none { select.cancel() }
         return true
@@ -214,12 +214,13 @@ extension GameCare {
         tripReturned(ids)
         let base = VoiceCoordinator.comeSpot
         for a in book.actors {
-            guard let brain = a.brain, !brain.isSleeping else { continue }          // (a sleeper who stayed home was never moved)
+            guard let brain = a.brain, !book.stayedAsleep.contains(a.id) else { continue }          // (a sleeper who stayed home was never moved)
             if let k = ids.firstIndex(of: a.id) {          // the groomed ones are lined up at the front centre, facing the camera
                 let x = (Float(k) - Float(ids.count - 1) / 2) * GroomTuning.lineSpacing
                 rehome(a, at: brain.fixed(SIMD2(base.x + x, base.y)))
                 brain.startTurn(to: 0, sim: a.sim)
             } else if let h = book.homes[a.id] {
+                if brain.isSleeping { a.sim.teleport(toXZ: brain.fixed(h)); continue }          // (dozed off during the trip: back on the home floor, still asleep: not stood up)
                 rehome(a, at: brain.fixed(h))
             }
             brain.restTimer = 0.4
@@ -245,13 +246,13 @@ extension GameCare {
         let book = groomBook
         for a in book.actors {
             guard let b = a.brain, book.autonomy[a.id] != nil else { continue }
-            if b.isSleeping { b.autonomy = book.autonomy[a.id] ?? true; b.idleBlocked = false; continue }          // (a sleeper who stayed home: not woken)
+            if b.isSleeping { b.autonomy = book.autonomy[a.id] ?? true; b.idleBlocked = false; continue }          // (a sleeper who stayed home, or one who dozed off during the trip: not woken)
             b.abortAll(a.sim, a.skinner)          // (a longer exit emote must not hold him back from roaming)
             b.autonomy = book.autonomy[a.id] ?? true
             b.idleBlocked = false
             b.restTimer = 1.5
         }
-        book.autonomy = [:]; book.homes = [:]; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
+        book.autonomy = [:]; book.homes = [:]; book.stayedAsleep = []; book.emoted = []; book.twirled = []; book.out = []; book.outAt = [:]; book.arrivedAt = [:]; book.emote = [:]; book.charged = 0
     }
 
     // MARK: the street's animated bits

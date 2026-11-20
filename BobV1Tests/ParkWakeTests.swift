@@ -5,6 +5,7 @@
 //
 
 import XCTest
+import simd
 @testable import BobV1
 
 @MainActor
@@ -124,6 +125,60 @@ final class ParkWakeTests: XCTestCase {
         XCTAssertEqual(Set(c.parkBook.comers), [0, 1])
         XCTAssertTrue(r.actors[1].brain?.isSleeping != true, "the traveller is awake")
         untouched(r, 2, "park")
+    }
+
+    // MARK: a stay-home who dozes off DURING the trip is put back on the home floor, still asleep
+
+    /// A stay-home who was awake at departure falls asleep mid-trip (a nap, a needs-driven sleep): pin it so the trip cannot end it.
+    private func dozeOff(_ r: Room, _ id: Int) {
+        let b = r.actors[id].brain!
+        b.idleForced = true; _ = b.idleStart(.sleep, r.actors[id].sim); b.sleep.hold = 500; b.sleep.holdForce = true; b.idleForced = false
+        run(r, 2)
+        XCTAssertTrue(b.isSleeping, "control: \(id) dozed off during the trip")
+    }
+    /// Back home: on the home floor (inside the roam floor, near where he was), still asleep, not stood up.
+    private func backHomeAsleep(_ r: Room, _ id: Int, near home: SIMD2<Float>, _ what: String) {
+        let b = r.actors[id].brain!
+        XCTAssertTrue(b.isSleeping, "\(what): \(id) is still asleep, not stood up")
+        XCTAssertEqual(b.idleState.kind, .sleep, "\(what): in the same sleep")
+        let f = r.actors[id].floor
+        if let floor = GameCamera.refreshRoam(aspect: GameCamera.aspect) { XCTAssertTrue(floor.contains(f), "\(what): \(id) is on the home floor, not left in the street / park: \(f)") }
+        XCTAssertLessThan(simd_distance(f, home), 1.0, "\(what): \(id) is back where he lived (\(home) -> \(f))")
+    }
+
+    func testSpaStayHomeWhoDozesOffDuringTheTripComesBackAsleepOnTheFloor() {
+        let r = room(3), c = r.care
+        c.groomBook.fixedDt = 1 / 60
+        c.bath.wallet.add(100 - c.bath.wallet.count, silent: true)
+        run(r, 1)
+        let home = r.actors[2].floor
+        c.groom.openPicker(all: [0]); c.groom.picked = [0]
+        c.startGroom(.quick)
+        run(r, 40) { c.groom.inScene }
+        XCTAssertTrue(c.groom.inScene, "the Spa trip started")
+        XCTAssertFalse(c.groomBook.stayedAsleep.contains(2), "he was awake at departure")
+        dozeOff(r, 2)
+        run(r, 90) { !c.groom.active }
+        XCTAssertFalse(c.groom.active, "the trip is over")
+        run(r, 2)
+        backHomeAsleep(r, 2, near: home, "spa")
+    }
+
+    func testParkStayHomeWhoDozesOffDuringTheTripComesBackAsleepOnTheFloor() {
+        let r = room(3), c = r.care
+        run(r, 1)
+        let home = r.actors[2].floor
+        c.requestPark(); c.park.picked = [0, 1]
+        c.startPark()
+        run(r, 60) { c.park.phase == .playing }
+        XCTAssertEqual(c.park.phase, .playing, "the park loaded")
+        XCTAssertFalse(c.parkBook.work.stayedAsleep.contains(2), "he was awake at departure")
+        dozeOff(r, 2)
+        c.park.goHome()
+        run(r, 90) { c.park.phase == .off }
+        XCTAssertEqual(c.park.phase, .off, "back home")
+        run(r, 2)
+        backHomeAsleep(r, 2, near: home, "park")
     }
 
     /// The player's own Naptime a moment ago does not block the trip: the newer choice wins.
