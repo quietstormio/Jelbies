@@ -40,9 +40,9 @@ nonisolated enum HopscotchTuning {
 
     // MARK: park-hopscotch-r1 ("at the park if one is hopscotching please try to keep the others away", 2026-11-20)
     /// While a game is on (a line has formed: from the moment the first hopper commits until the last one has stepped off) the court plus a margin of about one body is a wall for everybody
-    /// who is not in the line: the floor rules push out of it (so walk targets, the route planner and every pick go round it), nobody starts a social with a body on it, and a body who is on it
-    /// when the game starts walks off (`decorExitCheck`). Dev builds only: `-ParkHopGuard old` = off (main's rules: the court is flat paint), the headless soak's before arm. The same switch
-    /// keeps the old two-at-a-time hopping (`startAfter`) and the old patience.
+    /// who is not on the line's route (noticed it, queued, hopping, walking off): the floor rules push out of it (so walk targets, the route planner and every pick go round it), nobody starts a social with a body on it, and a body who is on it
+    /// when the game starts walks off (`decorExitCheck`). Dev builds only: `-ParkHopGuard old` = off (main's rules: the court is flat paint), the headless soak's before arm. The line's own
+    /// stagger, spacing and patience are untouched.
     nonisolated(unsafe) static var guardOn: Bool = {
         guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "ParkHopGuard") else { return true }
         return v != "old"
@@ -56,8 +56,10 @@ nonisolated enum HopscotchTuning {
     static let wallReach: Float = 0.8
     /// The hopper waits at the start for the court to clear of others (they walk off at once; one in a social waits for it to end); after this he goes anyway.
     static let clearWait: Float = 12
-    /// A follower waits this long for his turn: one at a time, the fourth in the queue waits for three full games (was `patience` 30, two at a time).
-    static var queuePatience: Float { guardOn ? 45 : patience }
+    /// The wall's west side runs out to the floor's edge: the strip between the court and the left edge of the floor is narrower than a body, a dead end.
+    static let westExtend: Float = 1.0
+    /// While a game is on, the bystanders' wander goals keep this far beyond the wall (no standing about at the court's edge).
+    static let noRest: Float = 0.75
     /// A walk that stops further from the start than this is still travelling (it does not use up a try).
     static let startBlockedWithin: Float = 2.5
 }
@@ -133,7 +135,6 @@ final class HopscotchLine {
     /// Is the start free for the next one? (Nobody has stepped up, or the last one who did is a couple of squares in.)
     func startOpen(_ uid: Int) -> Bool {
         guard let last = lines[uid]?.last(where: { $0.slot == 0 }) else { return true }
-        if HopscotchTuning.guardOn { return last.sq >= Self.done }          // (park-hopscotch-r1: one at a time on the court; the next steps up once the last has hopped the eight and the two happy hops)
         return last.sq >= HopscotchTuning.startAfter
     }
     /// `id` leaves the queue for the start: slot 0, and his place in the order is right behind the last one who stepped up (the hop spacing follows the order).

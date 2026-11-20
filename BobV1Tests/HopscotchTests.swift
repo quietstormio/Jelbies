@@ -161,7 +161,7 @@ final class HopscotchTests: XCTestCase {
         var minGap = Float.infinity, maxPlayers = 0, minSqGap = 99
         var seqs: [[Int]] = [[], [], []]
         var allDone = false
-        for i in 0..<(60 * 170) {
+        for i in 0..<(60 * 80) {
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
             maxPlayers = max(maxPlayers, line.players(uid).count)
             for a in 0..<3 {
@@ -180,7 +180,7 @@ final class HopscotchTests: XCTestCase {
             if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { allDone = true; break }
         }
         print("[hopline] lab minGap=\(minGap) \(minWhere) minSqGap=\(minSqGap)")
-        XCTAssertGreaterThanOrEqual(maxPlayers, 2, "the others joined the line (park-hopscotch-r1: one hops at a time, the line is two or three long, not always all three at once): " + lab.rigs.enumerated().map { "#\($0.offset) noticed \($0.element.brain.toy.noticed) queued \($0.element.brain.toy.queued) took \($0.element.brain.toy.tookTurn) bored \($0.element.brain.toy.bored) kind \(String(describing: $0.element.brain.idleState.kind))" }.joined(separator: " | "))
+        XCTAssertEqual(maxPlayers, 3, "the others joined the line: " + lab.rigs.enumerated().map { "#\($0.offset) noticed \($0.element.brain.toy.noticed) queued \($0.element.brain.toy.queued) took \($0.element.brain.toy.tookTurn) bored \($0.element.brain.toy.bored) kind \(String(describing: $0.element.brain.idleState.kind))" }.joined(separator: " | "))
         XCTAssertTrue(allDone, "the line breaks up at the end")
         for a in 0..<3 { XCTAssertEqual(seqs[a], Array(0..<8), "Jelmiko \(a) landed on 1...8 in order: \(seqs[a])") }
         XCTAssertGreaterThanOrEqual(minSqGap, HopscotchTuning.spacingAhead, "followers stay \(HopscotchTuning.spacingAhead) squares behind (landed index gap \(minSqGap))")

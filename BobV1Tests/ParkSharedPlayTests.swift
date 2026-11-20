@@ -174,7 +174,7 @@ final class ParkSharedPlayTests: XCTestCase {
         var awards: [SharedPlayAward] = []
         var maxPlayers = 0
         var minPlayers = Float.infinity, minPlayersAt = "", minAll = Float.infinity, minAllAt = ""
-        for i in 0..<(60 * 170) {
+        for i in 0..<(60 * 80) {
             lab.tick(watching: false); DecorField.shared.tick(dt: dt)
             maxPlayers = max(maxPlayers, line.players(huid).count)
             for a in 0..<3 { for c in (a + 1)..<3 {
@@ -188,7 +188,7 @@ final class ParkSharedPlayTests: XCTestCase {
             if i > 600, !line.active { break }
         }
         print("[hopline] real seed=\(seed) minPlayers=\(minPlayers)@\(minPlayersAt) minAll=\(minAll)@\(minAllAt) players=\(maxPlayers) awards=\(awards.count)")
-        XCTAssertGreaterThanOrEqual(maxPlayers, 2)          // (park-hopscotch-r1: one hops at a time)
+        XCTAssertEqual(maxPlayers, 3)
         XCTAssertEqual(awards.count, 1, "seed \(seed): exactly one award during the line: \(awards)")
         XCTAssertEqual(awards.first?.points, SharedPlayTuning.hopBonus)
     }

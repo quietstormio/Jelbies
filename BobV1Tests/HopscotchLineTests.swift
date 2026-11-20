@@ -140,7 +140,7 @@ final class HopscotchLineTests: XCTestCase {
         lab.rigs[0].brain.idleForced = true
         XCTAssertTrue(lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: uid))
         var trace = [String](repeating: "", count: 3), prev = [Int](repeating: -9, count: 3), seqs = [[Int]](repeating: [], count: 3)
-        for i in 0..<(60 * 170) {
+        for i in 0..<(60 * 80) {
             lab.tick(watching: false); DecorField.shared.tick(dt: dt)
             for a in 0..<3 {
                 let b = lab.rigs[a].brain
@@ -203,7 +203,7 @@ final class HopscotchLineTests: XCTestCase {
         XCTAssertTrue(moved, "the friend reached the queue wait")
         XCTAssertGreaterThan(doneAt, 0, "the hopper finished the court")
         XCTAssertGreaterThan(firstLanding[1], firstLanding[0], "line order kept: the hopper first")
-        XCTAssertLessThan(worstStand, 8, "nobody stands over 8 s (6 before park-hopscotch-r1: one at a time, the friend waits for the court to clear of the hopper)")
+        XCTAssertLessThan(worstStand, 6, "nobody stands over 6 s")
         XCTAssertGreaterThanOrEqual(minGap, 0.85, "bodies never closer than 0.9 (0.05 is a hop's sway of the floor spot: the first run measured 0.899)")
         XCTAssertGreaterThanOrEqual(maxSide, HopscotchTuning.landingClear + 0.1 - 0.15, "the return walk stepped out of the lane first (widest \(maxSide))")
         XCTAssertGreaterThan(pathMin, 0.62, "the sideways step stays off the bench path strip")

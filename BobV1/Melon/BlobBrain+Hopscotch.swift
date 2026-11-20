@@ -75,8 +75,15 @@ extension BlobBrain {
         return socialOthers().filter { $0 !== self && !line.contains(f.uid, $0.steerID) && f.distance($0.position) < $0.footprint * HopscotchTuning.wallReach }
     }
 
-    /// park-hopscotch-r1: he has been told about this court's line and is on his way to join it (noticed it, or queued for it): the step-off walk leaves him alone, he is about to be a player.
-    func hopJoining(_ f: DecorFoot) -> Bool { toy.noticeUID == f.uid || toy.waitUID == f.uid || pending != nil && toy.noticeUID >= 0 }
+    /// park-hopscotch-r1: he is on the line's route to this court (told about it and on his way, queued for it, enrolled: the queue spot, the hops, the happy hops, the walk out). The wall is no wall to him and the
+    /// step-off walk leaves him alone. It ends on the tick he quits (`decorRelease` leaves the line, the notice / wait is cleared): from then on he is a bystander like anyone else.
+    func hopJoining(_ f: DecorFoot) -> Bool { toy.noticeUID == f.uid || toy.waitUID == f.uid || HopscotchLine.shared.contains(f.uid, steerID) }
+    /// The piece the floor rules do not push him out of because he is on the line's route (nil = none; read by the brain's `resolve`).
+    var hopPass: Int? {
+        guard HopscotchTuning.walled else { return nil }
+        let u = ParkToys.hopscotchUID
+        return toy.noticeUID == u || toy.waitUID == u || HopscotchLine.shared.contains(u, steerID) ? u : nil
+    }
 
     /// park-hopscotch-r1: the court's wall (the margin) is within `radius` of the floor point `c` while a game is on.
     func hopCourtWithin(_ c: SIMD2<Float>, _ radius: Float) -> Bool {
@@ -102,7 +109,7 @@ extension BlobBrain {
             for i in 1...n where f.distance(from + (q - from) * (Float(i) / Float(n))) < floorD { return false }
             return true
         }
-        for k in 1...45 {
+        for k in 1...70 {
             let r = Float(k) * 0.1
             let n = max(12, Int(2 * Float.pi * r / 0.12))
             var best: SIMD2<Float>?
@@ -189,7 +196,7 @@ extension BlobBrain {
                 } else if line.startOpen(uid), hopscotchIsFront(uid) {
                     line.start(uid, me); idleState.seat = 0; idleState.decorRetry = 0
                     hopscotchStepUp(start)
-                } else if phT > HopscotchTuning.queuePatience { idleFinish(skinner) }
+                } else if phT > HopscotchTuning.patience { idleFinish(skinner) }
                 else if phT > 1.2, Int(phT * 2) % 5 == 0, (phT * 2).truncatingRemainder(dividingBy: 1) < dt * 2 { jellyKick = max(jellyKick, 0.5) }          // (a little eager bounce while the line moves)
                 return
             }
@@ -208,7 +215,7 @@ extension BlobBrain {
                 // park-hopscotch-r1: the first hop waits for the court to clear of others (the ones on it are walking off: `decorExitCheck`); a short wait, then he goes anyway (a body in a social)
                 let courtClear = t > 0 || phT > HopscotchTuning.clearWait || hopscotchOthersOn(f).isEmpty
                 guard line.mayHop(uid, me, to: t), free, courtClear else {
-                    if phT > (free ? HopscotchTuning.queuePatience : HopscotchTuning.blockedPatience) { idleFinish(skinner) }
+                    if phT > (free ? HopscotchTuning.patience : HopscotchTuning.blockedPatience) { idleFinish(skinner) }
                     return
                 }
             }
