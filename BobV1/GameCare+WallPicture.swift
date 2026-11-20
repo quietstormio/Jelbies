@@ -19,6 +19,7 @@ final class WallPictureDrawn {
     var textureFile: String?
     var loading: String?
     weak var room: RoomRenderer?
+    nonisolated deinit {}
 }
 
 extension GameCare {

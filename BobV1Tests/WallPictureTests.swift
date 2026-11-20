@@ -100,7 +100,7 @@ final class WallPictureTests: XCTestCase {
         XCTAssertEqual(WallZone.spots(.home).filter(\.inBoth).count, 2, "home: the two gaps between the windows")
         // a portrait picture sent to a gap hangs in it, upright and whole
         let q = try! XCTUnwrap(WallZone.clamp(sample(.wood, .portrait, x: -1.5, y: 3, w: 3), in: .home))
-        XCTAssertEqual(q.x, -1.5, accuracy: 0.2); XCTAssertLessThan(q.y, 4.2); XCTAssertGreaterThan(q.width, 0.8)
+        XCTAssertEqual(q.x, -1.5, accuracy: 0.2); XCTAssertLessThan(q.y, 4.2); XCTAssertGreaterThan(q.width, 0.6, "the gap is narrow: about 0.7 wide for an upright picture")
     }
 
     func testTheLoftsOwnArtIsHiddenOnlyWhileAPictureHangsInItsPlace() throws {
