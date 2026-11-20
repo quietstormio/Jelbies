@@ -23,17 +23,16 @@ struct HandReach: Sendable {
     var el: Float = HandReach.elBoop        // the elevation (rad) the arm likes (the hover pose, and the seek's first guess)
     var seek = true               // solve the elevation so the pole lands ON the partner's skin
     var partner = -1              // steerID of the one the hand reaches for
-    /// A POSE, not a reach (partner < 0; pair-distinct-r1): the reaching arm's explicit sweep (rad, forward = +) and the elevation / sweep of the free arm. `tucked` holds both arms forward in front of the belly (a shy
-    /// pair of hands), so the footprint the contact engine reads is the EGG's flank, not the arm nub: the side-by-side kinds then touch with the upper body and the arms clear each other.
+    /// A POSE, not a reach (partner < 0; pair-distinct-r1): the arm's explicit sweep (rad, forward = +) and the elevation / sweep of the free arm (spinTogether: both arms up).
     var sa: Float? = nil
     var freeEl: Float = -0.25, freeSa: Float = 0.35
-    var out: Float = 0          // (a pose's shoulder slide, rad-free metres; tucked: in)
 }
 
 extension HandReach {
-    static let tuckEl: Float = -0.20, tuckSa: Float = 1.50
-    /// Both arms held forward, low, in front of the belly.
-    static func tucked(side: Int) -> HandReach { HandReach(side: side, w: 1, el: tuckEl, seek: false, partner: -1, sa: tuckSa, freeEl: tuckEl, freeSa: tuckSa, out: -0.10) }
+    /// Both arms up over the head (a cheer).
+    static func armsUp(side: Int) -> HandReach { HandReach(side: side, w: 1, el: 1.15, seek: false, partner: -1, sa: 0.1, freeEl: 1.15, freeSa: 0.1) }
+    /// How far a MEETING hand (high five) may creep OUT past its resting shoulder to close the last cm (m): the stubby arm reaches 0.5 - 1 cm short of the partner's on some species.
+    static let creepMax: Float = 0.04
 }
 
 extension HandReach {
@@ -194,11 +193,16 @@ extension BlobBrain {
             var gapNow: Float
             if let hisPole { let mp = poleW(elT, saT, out); gapNow = 0.5 * (u.x * (hisPole.x - mp.x) + u.y * (hisPole.z - mp.z)) }
             else { gapNow = Float(HandReach.restSDF(restPoint(of: poleW(elT, saT, out), sim: osim))) }
-            let s0 = gapNow - margin - 2 * dt * min(closing, 0.8)
+            var s0 = gapNow - margin - 2 * dt * min(closing, 0.8)
+            if !q.seek, (social?.phase ?? 0) >= 3, let sg = ContactField.skinGap(steerID, o.steerID) { s0 = max(s0, sg - 0.001) }          // (the clap judged on the drawn skins too: the pole gap and the skin gap differ by up to 1 cm between species)
             // (the give only runs once he stands: a walker re-derives his destination from the outline he has, so a hand that gives while he walks shortens the outline, the destination, the walk... until the arm is all the way in)
             if s0 < -0.004 { socialBook.handOut = max(-0.12, socialBook.handOut + s0 + 0.002) }
-            else if s0 > (q.seek ? 0.012 : 0.004), socialBook.handOut < 0 { socialBook.handOut = min(0, socialBook.handOut + 0.25 * dt) }
-        } else if goal > 0 { socialBook.handOut = q.out; socialBook.handPrevD = 0; saT = q.sa ?? 0 }
+            else if s0 > (q.seek ? 0.012 : 0.004) {
+                // (a seeking hand only gives back what it gave; a MEETING hand of the high five also creeps out up to `creepMax` while the hands hover apart, so the clap lands on every species)
+                let cap: Float = q.seek ? 0 : ((social?.phase ?? 0) >= 3 ? HandReach.creepMax : 0)
+                if socialBook.handOut < cap { socialBook.handOut = min(cap, socialBook.handOut + 0.25 * dt) }
+            }
+        } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0; saT = q.sa ?? 0 }
         let rate: Float = 6 * dt
         socialBook.handEl[si] += max(-rate, min(rate, elT - socialBook.handEl[si]))
         socialBook.handSa[si] += max(-rate, min(rate, saT - socialBook.handSa[si]))

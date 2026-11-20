@@ -112,7 +112,7 @@ final class ContactPolishTests: XCTestCase {
     /// A step BACK after the first touch is >= ~10 cm; the stance's own approach step opens the skins by up to ~4 cm by design (measured: hum 3.5-4.3, nuzzle 3.7). Past 5 cm the pair has really parted and walks in again.
     static let retreatMax: Float = 0.05
     /// The emotes whose HAND must end on the partner's skin (user rule 2): the hand-tip gap is measured for these.
-    static let handKinds: Set<SocialKind> = [.boop, .highFive, .cheekSquish, .whisperGiggle]
+    static let handKinds: Set<SocialKind> = [.boop, .highFive, .cheekSquish]          // (whisperGiggle left in pair-distinct-r1: a V with a clear gap, no hand on the partner)
     /// The hand gap of a frame: the least over every ordered pair (tip of i against the whole drawn skin of j) of `BruteForceContactMetric.handGap`; `farApart` when no hand is near anybody.
     static func handGapNow(_ d: Duo, _ S: [ContactSurface], n: Int) -> Float {
         var m = Float.infinity
@@ -135,10 +135,10 @@ final class ContactPolishTests: XCTestCase {
         ContactEntry(name: "boop", scenario: .social(.boop), stance: .touching, momentary: true), e("squabble", .squabble, .touching), e("nuzzle", .nuzzle, .touching), e("sitTogether", .sitTogether, .touching),
         e("sneak", .sneak, .touching), e("chestBump", .chestBump, .touching), e("highFive", .highFive, .touching), e("cheekSquish", .cheekSquish, .touching),
         e("bellyBounce", .bellyBounce, .touching), e("backToBack", .backToBack, .touching), e("cuddleLean", .cuddleLean, .touching),
-        e("ringAround", .ringAround, .touching), e("swayHug", .swayHug, .touching), e("whisperGiggle", .whisperGiggle, .touching), e("spinHug", .spinHug, .touching),
+        e("ringAround", .ringAround, .touching), e("swayHug", .swayHug, .touching), e("whisperGiggle", .whisperGiggle, .proximity), e("spinHug", .spinHug, .touching),
         ContactEntry(name: "tag", scenario: .social(.tag), stance: .touching, momentary: true), ContactEntry(name: "chase", scenario: .social(.chase), stance: .touching, maxSec: 40, momentary: true),          // (tag / chase: the emote IS a soft bump in a run: its hold step is the chase itself, so a "hold median" read 59-94 cm of running; judged at the touch frames like a boop)
         ContactEntry(name: "greet", scenario: .social(.greet), stance: .proximity, near: true), e("look", .look, .proximity), e("follow", .follow, .proximity), e("zoomies", .zoomies, .proximity, sec: 40), e("dance", .dance, .proximity),
-        e("keepAway", .keepAway, .proximity, sec: 30), e("line", .line, .proximity), e("twirl", .twirl, .proximity), e("hopAlong", .hopAlong, .proximity), e("littleRace", .littleRace, .proximity),
+        e("keepAway", .keepAway, .proximity, sec: 30), e("line", .line, .proximity), e("twirl", .twirl, .proximity), e("orbit", .orbit, .proximity, sec: 45), e("upDown", .upDown, .proximity), e("jumpTurns", .jumpTurns, .proximity), e("spinTogether", .spinTogether, .proximity), e("hopAlong", .hopAlong, .proximity), e("littleRace", .littleRace, .proximity),
         e("leapfrog", .leapfrog, .proximity), e("peekaboo", .peekaboo, .proximity), e("mirrorDance", .mirrorDance, .proximity), e("danceOff", .danceOff, .proximity), e("shyWave", .shyWave, .proximity),
         e("pass (ball)", .pass, .proximity, props: .ball, sec: 80), e("bagSit (beanbag)", .bagSit, .touching, props: .beanbag), e("cuddle (loveseat)", .cuddle, .touching, props: .loveseat),
         ContactEntry(name: "lieDown pair (LieClear)", scenario: .lie(.lieDown), stance: .touching, maxSec: 8),
@@ -302,6 +302,7 @@ final class ContactPolishTests: XCTestCase {
         var positions: [SIMD2<Float>]? = nil
         if case .lie = e.scenario { positions = [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)] }
         else if !e.near { positions = Array(Self.farStarts.prefix(n)) }
+        if case .social(.orbit) = e.scenario { positions = [SIMD2(-1.6, 0.4), SIMD2(0.0, 0.4)] }
         let d = makeDuo(cast: cast, positions: positions)
         Self.keep.append(d)
         let tap = Tap()

@@ -31,6 +31,7 @@ enum PairProbe {
         var shots: [Shot] = []
         var footSlide: Float = 0
         var sounds: [String: Int] = [:], haps: [String: Int] = [:]
+        var chirps: Int { sounds.filter { $0.key.hasPrefix("chirp") }.values.reduce(0, +) }
         var hearts = 0                      // .boop + .makeUp events (both bodies)
         var minArmArmPerf: Float { perf.map { $0.armArm }.min() ?? 9 }
         var startedPhase2: Float = -1
@@ -88,7 +89,8 @@ enum PairProbe {
         ContactField.reset(); FeatureClip.eggs = []
         var res = Result(); res.kind = kind.rawValue; res.cast = castName
         let n = cast.count
-        let d = Duo(positions: Array(ContactPolishTests.farStarts.prefix(n)), features: cast.map { OnePieceInvariantTests.characters[$0].1 }, seed: seed, quiet: true)
+        let starts: [SIMD2<Float>] = kind == .orbit ? [SIMD2(-1.6, 0.4), SIMD2(0.0, 0.4)] : Array(ContactPolishTests.farStarts.prefix(n))
+        let d = Duo(positions: starts, features: cast.map { OnePieceInvariantTests.characters[$0].1 }, seed: seed, quiet: true)
         keep.append(d)
         for r in d.lab.rigs { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true }
         d.live = true

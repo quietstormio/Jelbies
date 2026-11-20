@@ -17,7 +17,7 @@ import simd
 extension SocialKind {
     /// The "we like each other" kinds (the Park gives friendship a bonus while one is on).
     var isFriendly: Bool {
-        switch self { case .chestBump, .highFive, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround, .swayHug, .danceOff, .whisperGiggle, .shyWave, .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .spinHug: return true; default: return false }
+        switch self { case .chestBump, .highFive, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround, .swayHug, .danceOff, .whisperGiggle, .shyWave, .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .spinHug, .orbit, .upDown, .jumpTurns, .spinTogether: return true; default: return false }
     }
 }
 
@@ -27,7 +27,7 @@ enum HighFiveTuning {
     nonisolated(unsafe) static var windUpRise: Float = 0.30
     nonisolated(unsafe) static var windUpFall: Float = 0.26
     /// How far each turns in toward the partner from the wind-up on (rad): a V, faces apart, the hands up in the middle (pair-distinct-r1).
-    nonisolated(unsafe) static var turnIn: Float = ProcessInfo.processInfo.environment["PAIR_TURNIN"].flatMap { Float($0) } ?? 0.45
+    nonisolated(unsafe) static var turnIn: Float = 0.45
 }
 
 enum FriendTuning {
@@ -36,6 +36,9 @@ enum FriendTuning {
     static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.cheekSquish, 0.4), (.twirl, 2.0), (.hopAlong, 2.0),
                                                       (.littleRace, 1.3), (.tag, 1.3), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2),
                                                       (.swayHug, 1.5), (.danceOff, 1.3), (.whisperGiggle, 0.3), (.shyWave, 1.2)]
+    /// The four new pair kinds (pair-distinct-r1; BlobSocial+Pair2.swift): ONE obvious table, each at the median of `base` (1.3), used only where the variety layer runs (`anticsEnabled`: the room and the park). The variety
+    /// worker owns the pick tables and will integrate these.
+    static let newPair: [(SocialKind, Float)] = [(.orbit, 1.3), (.upDown, 1.3), (.jumpTurns, 1.3), (.spinTogether, 1.3)]
     /// Closeness multiplier by friendship level (stranger, pal, friend, best friend); housemates are 1.
     static let closeMul: [Float] = [0.55, 0.95, 1.5, 2.1]
     /// How much a close pair raises the chance that a social starts at all (per unit of closeness above 1).
@@ -66,7 +69,7 @@ extension BlobBrain {
     func socialFriendWeights(into w: inout [(SocialKind, Float)], partner o: BlobBrain, grumpy: Bool, night: Float, fastOK: Bool) {
         let c = socialCloseness(to: o)
         let taste = FriendTuning.taste[personalityKey] ?? []
-        for (k, base) in FriendTuning.base {
+        for (k, base) in FriendTuning.base + (anticsEnabled ? FriendTuning.newPair : []) {
             if k.isFast && !fastOK { continue }
             if k == socialBook.lastKind || k == o.socialBook.lastKind { continue }
             if k == .highFive, (socialBook.fiveCool[o.steerID] ?? 0) > 0 || (o.socialBook.fiveCool[steerID] ?? 0) > 0 { continue }          // (a pair high-fives at most once a minute)
@@ -271,20 +274,22 @@ extension BlobBrain {
     // MARK: cheek squish
 
     private func driveCheekSquish(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool) {
-        // (pair-distinct-r1: no hand on the partner any more - arms in front, apart. They stand a few cm apart, tip together (the lean limiter stops each at the touch) and SQUISH twice: a quick squash that widens
-        // both bodies into each other, a jiggle, a giggle face.)
-        socialBook.handWant = .tucked(side: handSide(toward: o))
+        // 2026-11-05 (user rule 2): the squisher's hand rests ON the partner (the arm comes up on the way in, BlobSocial+Hands.swift): the stub arm cannot reach a cheek from beside him, so it lands on his arm / shoulder where the
+        // skins meet, the pair stands at hand reach and the squish is the lean + squash of the bodies around it.
+        let reaching = isA
+        if reaching { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
         if openSideBySide(s, o, isA, settle: 0.7) { return }
         socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
         let ft = s.phaseT
-        let lean = smooth01(ft / 0.9) * (1 - smooth01((ft - (s.duration - 0.6)) / 0.6))
-        let press = max(pulse(ft - 1.0, up: 0.2, down: 0.26), pulse(ft - 2.0, up: 0.2, down: 0.26))          // two quick squishes
-        socialBook.wantRoll = leanSign(toward: o.position) * (0.20 * lean + 0.03 * press)
-        socialBook.wantSquash = 1 - 0.05 * press          // (a squashed body is wider: the squeeze)
-        socialBook.wantEyes = 1 - 0.7 * lean
+        let lean = smooth01(ft / 0.5) * (1 - smooth01((ft - (s.duration - 0.6)) / 0.6))
+        let press = max(pulse(ft - 0.6, up: 0.22, down: 0.30), pulse(ft - 1.7, up: 0.22, down: 0.30))          // two gentle squishes
+        let tilt: Float = 0.3          // (a hand rests between the two: the full lean of two bodies pressed together would swing the arm nub of the one into the hand of the other)
+        socialBook.wantRoll = leanSign(toward: o.position) * (0.09 * lean + 0.09 * press) * tilt
+        socialBook.wantSquash = 1 - 0.04 * press          // (a squashed body is wider: with a hand between them the squish is smaller)
+        socialBook.wantEyes = 1 - 0.55 * lean
         if isA {
-            if s.bumps == 0, ft > 1.15 { s.bumps = 1; squishBoth(o, first: true) }
-            if s.bumps == 1, ft > 2.15 { s.bumps = 2; squishBoth(o, first: false) }
+            if s.bumps == 0, ft > 0.82 { s.bumps = 1; squishBoth(o, first: true) }
+            if s.bumps == 1, ft > 1.92 { s.bumps = 2; squishBoth(o, first: false) }
             if ft > s.duration { finishHappy(s, o) }
         }
     }

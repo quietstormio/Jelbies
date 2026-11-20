@@ -63,23 +63,19 @@ extension BlobBrain {
     // MARK: sway hug
 
     private func driveSwayHug(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool) {
-        socialBook.handWant = .tucked(side: handSide(toward: o))          // (pair-distinct-r1: arms in front, apart)
         if openSideBySide(s, o, isA, settle: 0.7) { return }
         holdFacing(faceCameraYaw())
         let g = socialGentle
         let ft = s.phaseT
-        // THE SQUEEZE AND SWAY (pair-distinct-r1): both lean in (the limiter stops them at the touch), then the pair squeezes three times (squash pulses) while the whole pair rocks side to side as one;
-        // (cuddleLean is the resting one: one leans, one stands.)
         let lean = smooth01(ft / 0.9) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
-        let sway = sinf(2 * .pi * (ft - 0.9) / 2.0) * smooth01((ft - 0.9) / 0.6)          // (both sway the same way in the world: one body)
-        let squeeze = max(pulse(ft - 1.2, up: 0.18, down: 0.30), pulse(ft - 2.3, up: 0.18, down: 0.30), pulse(ft - 3.4, up: 0.18, down: 0.30))
-        socialBook.wantRoll = leanSign(toward: o.position) * 0.26 * lean * g + worldLean(1) * 0.10 * lean * sway * g
+        let sway = sinf(2 * .pi * (ft - 0.9) / 2.4) * smooth01((ft - 0.9) / 0.8)          // (both sway the same way in the world: one body)
+        socialBook.wantRoll = leanSign(toward: o.position) * 0.11 * lean * g + worldLean(1) * 0.07 * lean * sway * g
         socialBook.wantEyes = 1 - 0.6 * lean
-        socialBook.wantSquash = 1 - 0.03 * lean - 0.03 * squeeze * g
+        socialBook.wantSquash = 1 - 0.03 * lean
         if isA {
             if !s.impacted, ft > 0.8 {
                 s.impacted = true
-                jellyKick = max(jellyKick, 0.6); o.jellyKick = max(o.jellyKick, 0.6)
+                jellyKick = max(jellyKick, 1.6); o.jellyKick = max(o.jellyKick, 1.6)
                 contactBoopFallback(o)
                 onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                 contactCueFallback(o, .squish, 0.55)
@@ -148,36 +144,44 @@ extension BlobBrain {
 
     private func driveWhisper(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         let whisperer = (s.roles == 0) == isA
-        // (pair-distinct-r1) no hand on the partner any more: arms in front, apart. The whisperer LEANS FAR IN to the listener's side (head to head, the lean limiter stops it at the touch) with a nod; the listener
-        // tips an ear toward him, then jerks upright, surprised; then both wiggle-laugh.
-        socialBook.handWant = .tucked(side: handSide(toward: o))
+        // (pair-distinct-r1) A SECRET, THEN A LAUGH - and no contact at all: the two turn in toward each other (the high five's V, faces apart, a clear gap of >= 4 cm the whole time), the whisperer leans in and nods
+        // while he whispers, the listener tips an ear, then JUMPS (a startled little hop), and both wiggle and giggle. The stance (`whisperGiggle` row) keeps the skins >= 8 cm apart before the laugh.
         if openSideBySide(s, o, isA, settle: 0.65) { return }
-        holdFacing(faceCameraYaw())
         let t = s.phaseT, g = socialGentle
-        let whisp = smooth01((t - 0.2) / 0.9) * (1 - smooth01((t - 1.9) / 0.4))
-        let giggle = smooth01((t - 2.1) / 0.2) * (1 - smooth01((t - 4.0) / 0.5))
+        let inward: Float = rotXZ(o.position - position, -faceCameraYaw()).x >= 0 ? 1 : -1
+        let turned = faceCameraYaw() + inward * HighFiveTuning.turnIn * smooth01(t / 0.4)
+        if scriptIsNone { holdFacing(turned) }
+        let whisp = smooth01((t - 0.2) / 0.5) * (1 - smooth01((t - 1.9) / 0.4))
+        let giggle = smooth01((t - 2.4) / 0.2) * (1 - smooth01((t - 4.3) / 0.5))
         if whisperer {
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.30 * whisp * g
-            socialBook.wantPitch = 0.07 * whisp * g * sinf(2 * .pi * 2.2 * t)          // (the whispering nod)
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.10 * whisp * g
+            socialBook.wantPitch = 0.06 * whisp * g * sinf(2 * .pi * 2.2 * t)          // (the whispering nod)
         } else {
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.12 * whisp * g          // (an ear tilted toward the whisper)
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.06 * whisp * g          // (an ear tilted toward the whisper)
             if t > 0.7, !socialBook.sheepishStarted { socialBook.sheepishStarted = true; face(.hopeful, hold: 1.1) }
-            if t > 1.9, !socialBook.apartStarted { socialBook.apartStarted = true; face(.surprised, hold: 0.5) }
+            if t > 1.95, !socialBook.apartStarted, scriptIsNone, idleState.kind == nil {          // (the surprise: a startled little hop on the spot)
+                socialBook.apartStarted = true
+                socialBook.hold = false; socialBook.faceYaw = nil
+                startHopPlay(sim: sim, distance: 0.0001)
+                face(.surprised, hold: 0.7)
+                AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6)
+            }
         }
-        let wiggle = giggle * sinf(2 * .pi * 5.5 * (t - 2.1))
-        socialBook.wantRoll += 0.05 * wiggle * g
-        socialBook.wantSquash = 1 - 0.03 * giggle * abs(sinf(2 * .pi * 2.75 * (t - 2.1))) * g
+        let wiggle = giggle * sinf(2 * .pi * 5.5 * (t - 2.4))
+        socialBook.wantRoll += (whisperer ? 0.04 : 0.07) * wiggle * g
+        socialBook.wantSquash = 1 - 0.04 * giggle * abs(sinf(2 * .pi * 2.75 * (t - 2.4))) * g
         if isA {
-            if !s.impacted, t >= 2.1 {
+            if !s.impacted, t >= 2.4 {
                 s.impacted = true
-                jellyKick = max(jellyKick, 1.1); o.jellyKick = max(o.jellyKick, 1.1)
+                jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)
                 AudioHub.shared.chirp(jelly: steerID, .babble); AudioHub.shared.chirp(jelly: o.steerID, .happy)
                 face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
                 o.blushBump(hold: 2.0, peak: 0.5)
                 onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
             }
-            if s.passes == 0, t >= 3.1 { s.passes = 1; jellyKick = max(jellyKick, 0.8); o.jellyKick = max(o.jellyKick, 0.8) }
-            if t > 4.6 { finishHappy(s, o) }
+            if s.passes == 0, t >= 3.2 { s.passes = 1; AudioHub.shared.chirp(jelly: o.steerID, .happy); jellyKick = max(jellyKick, 0.8); o.jellyKick = max(o.jellyKick, 0.8) }
+            if s.passes == 1, t >= 3.9 { s.passes = 2; AudioHub.shared.chirp(jelly: steerID, .happy) }
+            if t > 5.0, scriptIsNone, o.scriptIsNone { finishHappy(s, o) }
         }
     }
 

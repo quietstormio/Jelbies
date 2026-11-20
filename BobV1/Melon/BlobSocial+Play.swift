@@ -183,7 +183,6 @@ extension BlobBrain {
     // MARK: nuzzle
 
     private func driveNuzzle(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody, _ dt: Float) {
-        socialBook.handWant = .tucked(side: handSide(toward: o))          // (pair-distinct-r1: arms in front, apart: the upper bodies are what meets)
         switch s.phase {
         case 0:
             if !isA { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw(); return }
@@ -197,14 +196,12 @@ extension BlobBrain {
             socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
             let ft = s.phaseT
             let lean = smooth01(ft / 0.9) * (1 - smooth01((ft - (s.duration - 0.8)) / 0.8))
-            // (pair-distinct-r1) a TENT: they stand a few cm apart and tip their heads together (the lean limiter stops each at the touch), then nod / rub gently - the pitch nod does not move the contact
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.26 * lean
-            socialBook.wantPitch = 0.07 * lean * sinf(2 * .pi * (ft - 0.9) / 1.5)
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.12 * lean
             socialBook.wantSquash = 1 - 0.03 * lean * (0.6 + 0.4 * sinf(2 * .pi * ft / 2.2))
-            socialBook.wantEyes = 1 - 0.7 * lean
+            socialBook.wantEyes = 1 - 0.5 * lean
             if lean > 0.85, !socialBook.hopStarted {
                 socialBook.hopStarted = true
-                jellyKick = max(jellyKick, 0.4)
+                jellyKick = max(jellyKick, 1.0)
                 if isA { contactBoopFallback(o) }
             }
             if isA, ft > s.duration { s.finish(.done) }

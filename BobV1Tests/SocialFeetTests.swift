@@ -92,6 +92,7 @@ final class SocialFeetTests: XCTestCase {
         var res = Result(); res.name = name; res.cast = castName
         var positions = Array(ContactPolishTests.farStarts.prefix(n))
         if case .lie = sc { positions = [SIMD2(-1.5, 0.6), SIMD2(1.5, 0.6)] }
+        if case .social(.orbit) = sc { positions = [SIMD2(-1.6, 0.4), SIMD2(0.0, 0.4)] }          // (the walker rings the one in the middle: the arc must fit the floor)
         let d = makeDuo(cast: cast, positions: positions)
         Self.keep.append(d)
         let rigs = d.lab.rigs
@@ -238,6 +239,12 @@ final class SocialFeetTests: XCTestCase {
     func testSwayHug() { pair("swayHug", .swayHug) }
     func testWhisperGiggle() { pair("whisperGiggle", .whisperGiggle) }
     func testSpinHug() { pair("spinHug", .spinHug) }
+    // pair-distinct-r1 (BlobSocial+Pair2.swift): the four clear-gap pair kinds, feet + arms invariants like every other kind
+    func testOrbit() { pair("orbit", .orbit, sec: 45) }
+    func testUpDown() { pair("upDown", .upDown) }
+    func testJumpTurns() { pair("jumpTurns", .jumpTurns) }
+    func testSpinTogether() { pair("spinTogether", .spinTogether) }
+    func testHopAlong() { pair("hopAlong", .hopAlong) }
     func testGroupHug() { trio("groupHug", .groupHug) }
     func testCircleDance() { trio("circleDance", .circleDance) }
     func testLieDownPair() { for (label, cast) in Self.pairCasts { run("lieDown pair", .lie(.lieDown), cast: cast, castName: label, maxSec: 8) } }

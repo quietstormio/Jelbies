@@ -13,7 +13,7 @@ import UIKit
 
 @MainActor
 final class PairBoardTests: XCTestCase {
-    static let kinds: [SocialKind] = [.boop, .nuzzle, .sitTogether, .highFive, .cheekSquish, .bellyBounce, .cuddleLean, .swayHug, .whisperGiggle, .hopAlong]
+    static let kinds: [SocialKind] = [.boop, .nuzzle, .sitTogether, .highFive, .cheekSquish, .bellyBounce, .cuddleLean, .swayHug, .whisperGiggle, .hopAlong] + SocialKind.newPair
 
     func testBoard() throws {
         let env = ProcessInfo.processInfo.environment
@@ -24,11 +24,16 @@ final class PairBoardTests: XCTestCase {
         try FileManager.default.createDirectory(atPath: dir + "/crops", withIntermediateDirectories: true)
         var rows: [(String, [UIImage])] = []
         var tsv = ["kind\tstarted\tseconds\tminSkin_cm\tminArmLevelPerf_cm\tminHeadPerf_cm\ttouches\ttouchGaps_cm\tarmGap_cm\tsounds\thaptics\thearts"]
+        var typical: [(String, UIImage)] = []
+        let extras: Set<SocialKind> = Set(SocialKind.newPair + [.whisperGiggle, .highFive, .hopAlong])
         for k in Self.kinds where only.isEmpty || only.contains(k.rawValue) {
-            let r = PairProbe.run(kind: k, cast: [0, 1], castName: "Bob+Pip", shootEvery: 10, device: device)
+          for (cn, cast) in [("Bob+Pip", [0, 1]), ("Teddy+Pearl", [4, 5])] {
+            if cn != "Bob+Pip", !extras.contains(k) { continue }
+            let r = PairProbe.run(kind: k, cast: cast, castName: cn, shootEvery: 10, device: device)
             let f = PairProbe.five(r.shots)
-            let title = String(format: "%@ | Bob+Pip | %.1fs | skin %.1f cm | arm-level %.1f cm | head %.1f cm | frames at %@", k.rawValue, r.seconds, r.minSkin * 100, r.minArmLevelPerf * 100, r.minHeadPerf * 100, f.map { String(format: "%.1f", $0.t) }.joined(separator: " "))
+            let title = String(format: "%@ | " + cn + " | %.1fs | skin %.1f cm | arm-level %.1f cm | head %.1f cm | frames at %@", k.rawValue, r.seconds, r.minSkin * 100, r.minArmLevelPerf * 100, r.minHeadPerf * 100, f.map { String(format: "%.1f", $0.t) }.joined(separator: " "))
             rows.append((title, f.map { $0.image }))
+            if cn == "Bob+Pip", let mid = r.shots.filter({ $0.phase >= 2 }).sorted(by: { $0.t < $1.t }).dropFirst(max(0, r.shots.filter({ $0.phase >= 2 }).count / 2)).first { typical.append((k.rawValue, mid.image)) }
             if let c = PairProbe.contactMoment(r.shots), let cg = c.image.cgImage {
                 let cr = CGRect(x: 70, y: 40, width: 200, height: 160)
                 if let sub = cg.cropping(to: cr) {
@@ -37,10 +42,18 @@ final class PairBoardTests: XCTestCase {
                 }
             }
             tsv.append("\(k.rawValue)\t\(r.started)\t\(String(format: "%.1f", r.seconds))\t\(String(format: "%.1f", r.minSkin * 100))\t\(String(format: "%.1f", r.minArmLevelPerf * 100))\t\(String(format: "%.1f", r.minHeadPerf * 100))\t\(r.touchGaps.count)\t\(r.touchGaps.map { String(format: "%.1f", $0 * 100) }.joined(separator: ","))\t\(String(format: "%.1f", r.minArmArmPerf * 100))\t\(r.sounds.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","))\t\(r.haps.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","))\t\(r.hearts)")
-            XCTAssertTrue(r.started, "\(k) starts")
+            XCTAssertTrue(r.started, "\(k) \(cn) starts")
             PairProbe.tearDownGlobals()
+          }
         }
         try PairProbe.board(rows: rows, to: dir + "/\(tag)_board.png", cell: CGSize(width: 340, height: 250))
+        // THE TELL-APART BOARD: one typical frame per kind, side by side (two columns of cells so it stays readable)
+        let half = (typical.count + 1) / 2
+        let trows = (0..<half).map { i -> (String, [UIImage]) in
+            let a = typical[i], b = i + half < typical.count ? typical[i + half] : nil
+            return (a.0 + (b.map { "   |   " + $0.0 } ?? ""), [a.1] + (b.map { [$0.1] } ?? []))
+        }
+        try PairProbe.board(rows: trows, to: dir + "/\(tag)_tellapart.png", cell: CGSize(width: 340, height: 250))
         try tsv.joined(separator: "\n").write(toFile: dir + "/\(tag)_runs.tsv", atomically: true, encoding: .utf8)
     }
 }

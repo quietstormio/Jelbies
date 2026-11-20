@@ -215,6 +215,10 @@ enum HapticCue: Hashable, Sendable {
         case .congaLine: return CueSpec(i: 0.15, s: 0.11, n: 3, gap: 0.19, decay: 0.95)
         case .ringDance: return CueSpec(i: 0.16, s: 0.10, n: 4, gap: 0.16, decay: 0.95)
         case .spinHug: return CueSpec(i: 0.12, s: 0.07, n: 3, gap: 0.18, decay: 0.95)
+        case .orbit: return CueSpec(i: 0.10, s: 0.10, n: 3, gap: 0.25, decay: 0.9)
+        case .upDown: return CueSpec(i: 0.13, s: 0.09, n: 4, gap: 0.3, decay: 0.9)
+        case .jumpTurns: return CueSpec(i: 0.24, s: 0.15, n: 3, gap: 0.3, decay: 0.9)
+        case .spinTogether: return CueSpec(i: 0.18, s: 0.11, n: 4, gap: 0.1, decay: 0.85)
         }
     }
 }

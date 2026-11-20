@@ -28,8 +28,8 @@ enum EmoteCluster: Int, CaseIterable, Sendable {
     }
     static func of(_ k: SocialKind) -> EmoteCluster? {
         switch k {
-        case .hopAlong, .bellyBounce: return .hop
-        case .twirl: return .spin
+        case .hopAlong, .bellyBounce, .jumpTurns: return .hop
+        case .twirl, .spinTogether: return .spin
         case .groupHug, .swayHug, .spinHug, .cuddleLean, .cuddle, .nuzzle: return .hug
         case .dance, .danceOff, .mirrorDance, .circleDance, .ringDance, .ringAround: return .dance
         case .chase, .tag, .keepAway, .littleRace: return .chase

@@ -18,8 +18,7 @@ import UIKit
 @MainActor
 final class PairDistinctTests: XCTestCase {
     static let casts: [(String, [Int])] = ContactPolishTests.pairs + [("Panda+Bob", [6, 0])]
-    static let leanKinds: [SocialKind] = [.nuzzle, .cheekSquish, .cuddleLean, .swayHug, .whisperGiggle, .bellyBounce]
-    static let allKinds: [SocialKind] = [.boop, .nuzzle, .sitTogether, .highFive, .cheekSquish, .bellyBounce, .cuddleLean, .swayHug, .whisperGiggle, .hopAlong]
+    static let allKinds: [SocialKind] = [.boop, .nuzzle, .sitTogether, .highFive, .cheekSquish, .bellyBounce, .cuddleLean, .swayHug, .whisperGiggle, .hopAlong] + SocialKind.newPair
     nonisolated(unsafe) static var rows: [String] = []
 
     override func setUp() { super.setUp(); PairProbe.setUpGlobals() }
@@ -47,22 +46,7 @@ final class PairDistinctTests: XCTestCase {
         try? ([Self.header] + Self.rows).joined(separator: "\n").write(toFile: dir + "/\(name).tsv", atomically: true, encoding: .utf8)
     }
 
-    // MARK: lean kinds
-
-    func testLeanKindsTouchWithTheUpperBodyAndTheArmsClear() {
-        for k in Self.leanKinds { for c in Self.casts {
-            let r = probe(k, c)
-            Self.rows.append(row(r))
-            let tag = "\(k.rawValue) \(c.0)"
-            XCTAssertTrue(r.started && r.completed, "\(tag): runs to its end")
-            XCTAssertGreaterThanOrEqual(r.minSkin, -0.01, "\(tag): never below -1 cm skin to skin (whole skin, arms and features included)")
-            XCTAssertLessThanOrEqual(r.minSkinPerf, 0.005, "\(tag): the intended contact is reached (<= +0.5 cm)")
-            if r.minArmArmPerf < 8 { XCTAssertGreaterThanOrEqual(r.minArmArmPerf, 0.03, "\(tag): the drawn arms stay >= 3 cm from the partner") }
-        } }
-        flush("table_lean")
-    }
-
-    // MARK: sit, hop, high five
+    // MARK: the reshapes that stay
 
     func testSitTogetherSitsApart() {
         for c in Self.casts {
@@ -76,25 +60,58 @@ final class PairDistinctTests: XCTestCase {
         flush("table_sit")
     }
 
-    func testHopAlongTravels() {
+    /// Never overlapping, never touching: at the closest moment the skins are >= 8 cm apart, and never more than ~25 cm apart there (it reads as hopping TOGETHER).
+    func testHopAlongStaysApartAndTogether() {
         for c in Self.casts {
             let r = probe(.hopAlong, c)
             Self.rows.append(row(r))
             XCTAssertTrue(r.started && r.completed, "hopAlong \(c.0): runs to its end")
-            XCTAssertGreaterThanOrEqual(r.minSkin, -0.01, "hopAlong \(c.0): never overlaps")
+            XCTAssertGreaterThanOrEqual(r.minSkin, 0.08, "hopAlong \(c.0): the closest moment is >= 8 cm")
+            XCTAssertLessThanOrEqual(r.minSkinPerf, 0.25, "hopAlong \(c.0): and <= ~25 cm")
+            XCTAssertGreaterThan(r.sounds["jump"] ?? 0, 0, "hopAlong \(c.0): the hop sound plays")
         }
         flush("table_hop")
     }
 
-    func testHighFiveHandsMeet() {
+    func testHighFiveHandsMeetInTheBand() {
         for c in Self.casts {
             let r = probe(.highFive, c)
             Self.rows.append(row(r))
             XCTAssertTrue(r.started && r.completed, "highFive \(c.0): runs to its end")
-            XCTAssertGreaterThanOrEqual(r.minSkin, -0.01, "highFive \(c.0): never below -1 cm")
-            XCTAssertLessThanOrEqual(r.minSkinPerf, 0.005, "highFive \(c.0): the hands meet")
+            XCTAssertGreaterThanOrEqual(r.minSkin, -0.006, "highFive \(c.0): never below the band")
+            XCTAssertLessThanOrEqual(r.minSkinPerf, 0.005, "highFive \(c.0): the hands meet (<= +0.5 cm)")
+            XCTAssertGreaterThan((r.sounds["highfive_boop"] ?? 0) + (r.sounds["squish"] ?? 0), 0, "highFive \(c.0): the clap sound is PLAYED")
         }
         flush("table_five")
+    }
+
+    /// whisperGiggle: no contact - a clear gap of >= 4 cm at every frame; the laugh (chirps) and the hearts stay.
+    func testWhisperGiggleIsAClearGapV() {
+        for c in Self.casts {
+            let r = probe(.whisperGiggle, c)
+            Self.rows.append(row(r))
+            XCTAssertTrue(r.started && r.completed, "whisper \(c.0): runs to its end")
+            XCTAssertGreaterThanOrEqual(r.minSkin, 0.04, "whisper \(c.0): skins >= 4 cm apart at every frame")
+            XCTAssertGreaterThan(r.chirps, 1, "whisper \(c.0): the giggle chirps are played")
+            XCTAssertGreaterThan(r.hearts, 0, "whisper \(c.0): the hearts stay")
+        }
+        flush("table_whisper")
+    }
+
+    // MARK: the four new kinds
+
+    func testNewPairKindsKeepAClearGap() {
+        for k in SocialKind.newPair { for c in Self.casts {
+            let r = probe(k, c)
+            Self.rows.append(row(r))
+            let tag = "\(k.rawValue) \(c.0)"
+            XCTAssertTrue(r.started && r.completed, "\(tag): runs to its end")
+            XCTAssertGreaterThanOrEqual(r.minSkin, 0, "\(tag): the skins never touch or overlap")
+            XCTAssertGreaterThan(r.chirps + (r.sounds["jump"] ?? 0) + (r.sounds["wobble"] ?? 0), 1, "\(tag): its sounds are PLAYED")
+            XCTAssertGreaterThan(r.hearts, 0, "\(tag): the hearts")
+            XCTAssertGreaterThan(r.seconds, 4, "\(tag): not a blink"); XCTAssertLessThan(r.seconds, 22, "\(tag): in line with the other pair emotes")
+        } }
+        flush("table_new")
     }
 
     /// Every ten kinds, the whole table (TEST_RUNNER_PAIR_OUT): kind x cast -> gaps, sounds, hearts. No assertions beyond starting.
