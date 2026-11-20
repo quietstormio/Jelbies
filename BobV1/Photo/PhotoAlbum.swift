@@ -1,11 +1,10 @@
 //
 //  PhotoAlbum.swift
-//  Every photo is kept in the app's Documents/Photos (JPEG). The in-game album: a grid, a viewer with Save to Photos / Share / Delete.
+//  Every photo is kept in the app's Documents/Photos (JPEG). The in-game album: a grid, a viewer with Share / Delete (Share is behind the grown-up gate; there is no save-to-Photos button).
 //  The main menu's Photos button shows it through StartFlow.albumView (registered at launch by PhotoAlbum.register()).
 //
 
 import SwiftUI
-import Photos
 import ImageIO
 import Observation
 
@@ -58,18 +57,6 @@ final class PhotoAlbum {
 
     func delete(_ url: URL) { try? FileManager.default.removeItem(at: url); PhotoThumbs.cache.removeObject(forKey: url as NSURL); reload() }
 
-    /// Add-only save to the system Photos library. True when it went in.
-    enum SaveResult { case saved, noAccess, failed, noSpace }
-    static func saveToPhotos(_ url: URL) async -> SaveResult {
-        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited else { return .noAccess }
-        guard let data = try? Data(contentsOf: url) else { return .failed }
-        do {
-            try await PHPhotoLibrary.shared().performChanges { PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil) }
-            return .saved
-        } catch { return isOutOfSpace(error) ? .noSpace : .failed }
-    }
-
     /// Only a real disk-full error (a Cocoa write error, an underlying POSIX ENOSPC) is called "out of space"; every other failure gets the generic line.
     static func isOutOfSpace(_ error: Error) -> Bool {
         let e = error as NSError
@@ -85,9 +72,6 @@ final class PhotoAlbum {
     /// What to say when `add` returned nil.
     static var addFailedMessage: String { lastAddOutOfSpace ? noSpaceMessage : failedMessage }
     static let failedMessage = "Couldn't save the photo. Try again."
-    static func message(for r: SaveResult) -> String? {
-        switch r { case .saved: return nil; case .noAccess: return "Allow Photos access in Settings to save."; case .failed: return failedMessage; case .noSpace: return noSpaceMessage }
-    }
 }
 
 enum PhotoThumbs {
@@ -155,11 +139,10 @@ struct PhotoAlbumView: View {
 
 extension URL: @retroactive Identifiable { public var id: String { absoluteString } }
 
-/// One photo, large: Save to Photos, Share, Delete (confirmed).
+/// One photo, large: Share, Delete (confirmed). `actions` is the row to extend (none is prominent yet).
 private struct PhotoViewer: View {
     let url: URL
     var done: () -> Void
-    @State private var saved: PhotoAlbum.SaveResult?
     @State private var confirmDelete = false
 
     var body: some View {
@@ -170,20 +153,21 @@ private struct PhotoViewer: View {
             VStack {
                 HStack { Spacer(); GameCircleButton(systemName: "xmark", label: "Close photo") { done() } }
                 Spacer()
-                HStack(spacing: 10) {
-                    PhotoActionButton(title: saved == .saved ? "Saved" : "Save to Photos", symbol: saved == .saved ? "checkmark" : "square.and.arrow.down", prominent: true) {
-                        Task { saved = await PhotoAlbum.saveToPhotos(url) }
-                    }
-                    if let img { GatedShareButton(image: img) }
-                    PhotoActionButton(title: "Delete", symbol: "trash", prominent: false) { confirmDelete = true }
-                }
-                if let m = saved.flatMap({ PhotoAlbum.message(for: $0) }) { Text(m).font(SK.font(14, .bold)).foregroundStyle(.white).multilineTextAlignment(.center).padding(.top, 4) }
+                actions(img)
             }
             .padding(16)
         }
         .alert("Delete this photo?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) { PhotoAlbum.shared.delete(url); done() }
             Button("Keep", role: .cancel) {}
+        }
+    }
+
+    /// The button row under the photo. Add new buttons here.
+    private func actions(_ img: UIImage?) -> some View {
+        HStack(spacing: 10) {
+            if let img { GatedShareButton(image: img) }
+            PhotoActionButton(title: "Delete", symbol: "trash", prominent: false) { confirmDelete = true }
         }
     }
 }
