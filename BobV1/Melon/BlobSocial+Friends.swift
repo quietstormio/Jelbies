@@ -239,12 +239,9 @@ extension BlobBrain {
             reach(1, HandReach.elFive + up)
             socialBook.wantSquash = 1 - 0.02 * pulse(t, up: 0.12, down: 0.25) * g
             socialBook.wantEyes = 1 - 0.55 * smooth01((t - 0.1) / 0.4)
-            if isA, t >= HighFiveTuning.windUpRise + HighFiveTuning.windUpFall { s.bumps = contactEvents + o.contactEvents; s.setPhase(3); s.impacted = false }
+            if isA, t >= HighFiveTuning.windUpRise + HighFiveTuning.windUpFall { s.bumps = contactEvents + o.contactEvents; s.contactTouches = 0; s.setPhase(3); s.impacted = false }          // (the clap is the session's touch for the emote's haptic: the arrival may have touched already)
         case 3:
             reach(1, HandReach.elFive)
-            // (pair-distinct-r1) the hands stand ~1 cm short of each other after the wind-up (the stand-off the walk-up ends at), and the clap phase no longer re-walks the pair: both LEAN in a hair (the contact
-            // engine's lean limiter stops each lean exactly at the skin touch, never past it), so the clap lands on every species
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.08 * smooth01(t / 0.2)
             let sinceBump = s.impacted ? t - s.bumpT : -1
             let press = s.impacted ? pulse(sinceBump, up: 0.07, down: 0.35) : 0
             socialBook.wantSquash = 1 - 0.025 * press * g          // (a squashed body is wider: the hands are the contact, a 7 % squash drives them into each other)
