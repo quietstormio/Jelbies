@@ -53,18 +53,23 @@ extension GameCare {
     }
 
     /// `-WallPicture frame,shape[,x,y,width]` + `-WallPictureFile path` [+ `-WallPictureCrop cx,cy,zoom`]: hangs a sample picture (dev builds only).
-    func applyWallPictureLaunchArguments(defaults d: UserDefaults = .standard) {
-        guard DevArgs.enabled, let spec = d.string(forKey: "WallPicture") else { return }
+    func applyWallPictureLaunchArguments(defaults d: UserDefaults = .standard) { WallPictureDev.apply(defaults: d, store: store) }
+}
+
+enum WallPictureDev {
+    @MainActor @discardableResult
+    static func apply(defaults d: UserDefaults, store: StoreBook) -> WallPicture? {
+        guard DevArgs.enabled, let spec = d.string(forKey: "WallPicture") else { return nil }
         let f = spec.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
         guard f.count >= 2, let frame = WallFrame(rawValue: f[0]), let shape = WallShape(rawValue: f[1]),
-              let path = d.string(forKey: "WallPictureFile"), let img = WallPictureFiles.image(at: URL(fileURLWithPath: path)) else { return }
+              let path = d.string(forKey: "WallPictureFile"), let img = WallPictureFiles.image(at: URL(fileURLWithPath: path)) else { return nil }
         let c = (d.string(forKey: "WallPictureCrop") ?? "").split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
         let crop = c.count == 3 ? WallCrop(cx: c[0], cy: c[1], zoom: c[2]) : WallCrop()
-        guard let file = WallPictureFiles.bake(source: img, shape: shape, crop: crop) else { return }
+        guard let file = WallPictureFiles.bake(source: img, shape: shape, crop: crop) else { return nil }
         let n = f.dropFirst(2).map { Float($0) }
         var p = WallZone.defaultPlacement(room: .home, frame: frame, shape: shape, file: file, crop: crop, source: URL(fileURLWithPath: path).lastPathComponent)
             ?? WallPicture(file: file, frame: frame, shape: shape, x: 0, y: 5.5, width: 2, crop: crop)
         if n.count >= 3, let x = n[0], let y = n[1], let w = n[2] { p.x = x; p.y = y; p.width = w }
-        store.hangWallPicture(p)
+        return store.hangWallPicture(p)
     }
 }

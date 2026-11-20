@@ -206,12 +206,14 @@ final class WallPictureTests: XCTestCase {
         let jpg = dir.appending(path: "photo.jpg")
         let dest = CGImageDestinationCreateWithURL(jpg as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
         CGImageDestinationAddImage(dest, makeImage(400, 800), nil); XCTAssertTrue(CGImageDestinationFinalize(dest))
-        let none = GameCare(jellyCount: 1, persistent: false, defaults: suite("WallPic.dev.none"))
-        XCTAssertNil(none.store.wallPicture, "no argument: nothing is hung")
+        let none = StoreBook(wallet: DropsWallet(persists: false), persists: false)
+        XCTAssertNil(WallPictureDev.apply(defaults: suite("WallPic.dev.none"), store: none), "no argument: nothing is hung")
+        XCTAssertNil(none.wallPicture); XCTAssertFalse(FileManager.default.fileExists(atPath: WallPictureFiles.folder.path))
         let d = suite("WallPic.dev.on")
         d.set("pastel,square,1.5,5.8,1.6", forKey: "WallPicture"); d.set(jpg.path, forKey: "WallPictureFile")
-        let care = GameCare(jellyCount: 1, persistent: false, defaults: d)
-        let p = try XCTUnwrap(care.store.wallPicture)
+        let store = StoreBook(wallet: DropsWallet(persists: false), persists: false)
+        let p = try XCTUnwrap(WallPictureDev.apply(defaults: d, store: store))
+        XCTAssertEqual(store.wallPicture, p)
         XCTAssertEqual(p.frame, .pastel); XCTAssertEqual(p.shape, .square)
         XCTAssertEqual(p.x, 1.5); XCTAssertEqual(p.y, 5.8); XCTAssertEqual(p.width, 1.6)
         XCTAssertTrue(FileManager.default.fileExists(atPath: WallPictureFiles.url(p.file).path))
@@ -220,7 +222,7 @@ final class WallPictureTests: XCTestCase {
     func testDeveloperArgumentIsBehindTheDevArgsGate() throws {
         let src = try String(contentsOfFile: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appending(path: "BobV1/GameCare+WallPicture.swift").path, encoding: .utf8)
-        let body = try XCTUnwrap(src.components(separatedBy: "func applyWallPictureLaunchArguments").last)
+        let body = try XCTUnwrap(src.components(separatedBy: "enum WallPictureDev").last)
         XCTAssertTrue(body.contains("guard DevArgs.enabled"), "the launch argument must be gated like every other developer argument")
     }
 }
