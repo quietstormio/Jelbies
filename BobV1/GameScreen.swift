@@ -961,6 +961,8 @@ struct GameScreen: View {
             case "roamhug": care.roamHug()          // capture aid: GameCare+RoamHug.swift
             case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()
+            case "spa": if care.bath.wallet.count < 40 { care.bath.wallet.add(40, silent: true) }; care.groom.openPicker(all: [0]); care.startGroom(.quick)          // -GameAction spa: Jelmiko 0 alone to the Jelly Spa, the others stay home (capture aid; use with -SleepNow 1 and a long -GameActionDelay)
+            case "park": care.requestPark(); if care.park.picking { care.startPark() }          // -GameAction park: the Town's Park row, then "Go to the park" with everybody picked (capture aid; shows the refusal line when blocked)
             default: care.wave()
             }
             // capture aid: -GameReleaseAfter <s> presses "Let Bob go" that long after the action

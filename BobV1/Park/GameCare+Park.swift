@@ -52,7 +52,7 @@ extension GameCare {
     func parkBlocker() -> String? {
         if park.active { return CafeBlock.busy.message }
         guard let b = cafeBlocker(), b != .noDrops else { return nil }
-        return b == .night ? "The park is closed at night. Come back in the morning!" : b.message
+        return b == .night ? "It's bedtime, so the park is closed. It opens in the morning!" : b.message
     }
 
     /// The special species (anything but the four starters) the player has UNLOCKED, as far as the park can tell: one is owned right now, or was owned on an earlier park visit (remembered in the defaults). Only these may come, rarely (`pickCast`).
@@ -162,13 +162,18 @@ extension GameCare {
         select.cancel()
         let who = park.picked
         park.cancelPicker()
-        if outingGate(who, again: { [weak self] in self?.park.resume(picked: who) }) { return }
-        park.resume(picked: who)
+        let go = { [weak self] in
+            guard let self else { return }
+            if self.outingGate(who, again: { [weak self] in self?.park.resume(picked: who) }) { return }
+            self.park.resume(picked: who)
+        }
+        if wakeForTrip(who, then: go) { return }          // by day a sleeper never refuses the trip: the short wake, then everybody runs out together (GameCare+Outing.swift)
+        go()
     }
 
     var parkFadeBlocked: Bool {
         race.active || show.active || volley.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active
-            || (park.place == .park && parkBook.roster.contains { $0.brain?.isSleeping == true })          // (Camp: a sleeping home Jelmiko just stays asleep, hidden)
+            || (park.place == .park && parkBook.roster.contains { park.picked.contains($0.id) && $0.brain?.isSleeping == true })          // (only one who is GOING blocks the fade; a sleeper who stays home, like Camp's, just stays asleep, hidden)
     }
 
     // MARK: per fixed step
@@ -446,6 +451,7 @@ extension GameCare {
             for a in roster {
                 guard let brain = a.brain else { continue }
                 work.homes[a.id] = a.floor; work.autonomy[a.id] = autonomySnapshot(a.id, brain); work.arena[a.id] = a.sim.arenaRadius
+                if brain.isSleeping { continue }          // a sleeper who stays home stays exactly as he is (the trip never woke him; the pick list left him out): not woken, not moved
                 brain.abortAll(a.sim, a.skinner)
                 brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             }
@@ -506,7 +512,7 @@ extension GameCare {
         case .home:
             // the visitors go: their looks are put away first (the wardrobe and feature slots are by body id), the Jelbies let go of any play with them
             for a in book.actors { visitorPutAway(a) }
-            for a in roster { a.brain?.abortAll(a.sim, a.skinner); a.brain?.commandedIdle = nil }
+            for a in roster where a.brain?.isSleeping != true { a.brain?.abortAll(a.sim, a.skinner); a.brain?.commandedIdle = nil }          // (a sleeper who stayed home is left alone)
             book.clear?()
             book.actors = []; book.cast = []
             book.save()
@@ -521,6 +527,7 @@ extension GameCare {
             var taken: [SIMD2<Float>] = []
             for a in roster {
                 guard let brain = a.brain else { continue }
+                if brain.isSleeping { brain.autonomy = work.autonomy[a.id] ?? true; brain.idleBlocked = false; continue }          // (asleep at home through the whole trip: not moved, not woken)
                 var spot = work.homes[a.id] ?? Self.greetSpot(a.id)
                 if taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
                     spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot

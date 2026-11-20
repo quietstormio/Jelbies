@@ -58,13 +58,18 @@ extension GameCare {
         let who = groom.picked
         groom.closePicker()
         let go = { [weak self] in self?.groom.begin(tier) ?? () }
-        if outingGate(who, again: go) { return }          // the chosen Jelbies run out of the room first (GameCare+Outing.swift)
-        go()
+        let start = { [weak self] in
+            guard let self else { return }
+            if self.outingGate(who, again: go) { return }          // the chosen Jelbies run out of the room first (GameCare+Outing.swift)
+            go()
+        }
+        if wakeForTrip(who, then: start) { return }          // a sleeper gets the short wake first (park-wake-r1)
+        start()
     }
 
     private var groomFadeBlocked: Bool {
         race.active || show.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active || park.active
-            || groomBook.actors.contains { $0.brain?.isSleeping == true }
+            || groomBook.actors.contains { groom.picked.contains($0.id) && $0.brain?.isSleeping == true }          // (a sleeper who stays home does not hold the fade)
     }
 
     // MARK: per fixed step
@@ -178,6 +183,7 @@ extension GameCare {
         for a in book.actors {
             guard let brain = a.brain else { continue }
             book.autonomy[a.id] = autonomySnapshot(a.id, brain); book.homes[a.id] = a.floor
+            if brain.isSleeping { continue }          // a sleeper who stays home stays exactly as he is: not woken, not moved
             brain.abortAll(a.sim, a.skinner)
             brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             brain.autonomy = false; brain.idleBlocked = true
@@ -189,7 +195,7 @@ extension GameCare {
         #endif
         for a in book.actors where a.sim.arenaRadius.isFinite { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }          // (the room's small arena would pin the door step at z = -2.6: he could never leave the door)
         // everybody is inside the shop (not drawn): wait off to the right, so the room's spots do not become bodies in the street that block the door's walk-out (the peer steering sees them)
-        for (i, a) in book.actors.enumerated() { if let b = a.brain { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.doorStep.y - 0.1 + 1.4 * Float(i % 4)))) } }
+        for (i, a) in book.actors.enumerated() { if let b = a.brain, !b.isSleeping { rehome(a, at: b.fixed(SIMD2(GroomTuning.waitX, GroomScenery.doorStep.y - 0.1 + 1.4 * Float(i % 4)))) } }
         syncDecor()
         if select.phase != .none { select.cancel() }
         return true
@@ -208,7 +214,7 @@ extension GameCare {
         tripReturned(ids)
         let base = VoiceCoordinator.comeSpot
         for a in book.actors {
-            guard let brain = a.brain else { continue }
+            guard let brain = a.brain, !brain.isSleeping else { continue }          // (a sleeper who stayed home was never moved)
             if let k = ids.firstIndex(of: a.id) {          // the groomed ones are lined up at the front centre, facing the camera
                 let x = (Float(k) - Float(ids.count - 1) / 2) * GroomTuning.lineSpacing
                 rehome(a, at: brain.fixed(SIMD2(base.x + x, base.y)))
@@ -239,6 +245,7 @@ extension GameCare {
         let book = groomBook
         for a in book.actors {
             guard let b = a.brain, book.autonomy[a.id] != nil else { continue }
+            if b.isSleeping { b.autonomy = book.autonomy[a.id] ?? true; b.idleBlocked = false; continue }          // (a sleeper who stayed home: not woken)
             b.abortAll(a.sim, a.skinner)          // (a longer exit emote must not hold him back from roaming)
             b.autonomy = book.autonomy[a.id] ?? true
             b.idleBlocked = false
