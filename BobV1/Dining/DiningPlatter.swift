@@ -24,6 +24,17 @@ nonisolated struct Platter: Equatable {
     }
 }
 
+/// The owner 2026-11-20: "Don't put any food on a plate just put it on the table". `.none` (the default) draws NO plate under the food, at home and in the café; the platter code stays for `-PlateStyle platter`
+/// (dev arguments, a capture aid: the frozen look) and for the tests.
+nonisolated enum PlateStyle: String { case none, platter }
+nonisolated enum DiningPlatter {
+    nonisolated(unsafe) static var style: PlateStyle = {
+        guard DevArgs.enabled else { return .none }
+        if UserDefaults.standard.string(forKey: "PlateStyle") == "platter" || ProcessInfo.processInfo.environment["PLATE_STYLE"] == "platter" { return .platter }
+        return .none
+    }()
+}
+
 nonisolated extension DiningModels {
     /// The platter of a layout (the pieces of every food of that layout lie inside it, see FoodOnPlateTests).
     static func platter(layout L: TrayLayout, pizza: Bool = false) -> Platter {

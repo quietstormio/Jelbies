@@ -850,8 +850,10 @@ nonisolated enum DiningModels {
         #endif
         if f.kind == .food {
             let pizzaPlate = f.pizzaLayout || f.id == Consumables.pizza.id
-            append(plate(layout: L, theme: theme, pizza: pizzaPlate), to: b, transform: matrix_identity_float4x4)
-            append(platterShadow(platter(layout: L, pizza: pizzaPlate), halfX: L.half.x, centreZ: L.trayCentreZ, halfZ: L.half.y, theme: theme), to: t, transform: matrix_identity_float4x4)          // (the platter's contact shadow)
+            if DiningPlatter.style == .platter {          // (no plate by default: the food sits straight on the tray / table)
+                append(plate(layout: L, theme: theme, pizza: pizzaPlate), to: b, transform: matrix_identity_float4x4)
+                append(platterShadow(platter(layout: L, pizza: pizzaPlate), halfX: L.half.x, centreZ: L.trayCentreZ, halfZ: L.half.y, theme: theme), to: t, transform: matrix_identity_float4x4)          // (the platter's contact shadow)
+            }
             let fb = RoomMeshBuilder(); fb.material = .plain
             f.serving?(fb, state, f.palette, L)
             append(fb.mesh, to: b, transform: matrix_identity_float4x4)

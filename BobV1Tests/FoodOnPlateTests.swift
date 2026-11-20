@@ -19,13 +19,58 @@ final class FoodOnPlateTests: XCTestCase {
         ("3 ends 1.12", 3, true, 1.12), ("3 ends 1.2", 3, true, 1.2), ("3 ends 1.25", 3, true, 1.25), ("3 wide 1.11", 3, false, 1.11), ("3 wide 1.45", 3, false, 1.45)]
 
     private var saved: (Bool, Float, Bool)?
-    override func setUp() { saved = (DiningLayout.ends, DiningLayout.sideX, DiningLayout.reachFood) }
-    override func tearDown() { if let s = saved { (DiningLayout.ends, DiningLayout.sideX, DiningLayout.reachFood) = s } }
+    private var savedStyle: PlateStyle?
+    override func setUp() { saved = (DiningLayout.ends, DiningLayout.sideX, DiningLayout.reachFood); savedStyle = DiningPlatter.style; DiningPlatter.style = .platter }          // (the platter tests pin the platter, still in the code for `-PlateStyle platter`; the no-plate tests set .none)
+    override func tearDown() { if let s = saved { (DiningLayout.ends, DiningLayout.sideX, DiningLayout.reachFood) = s }; if let s = savedStyle { DiningPlatter.style = s } }
 
     /// Every food served in pieces: the Feed picker's berries + pizza, the store foods and the café treats.
     static func foods() -> [Consumable] {
         Consumables.all.filter { $0.kind == .food } + CafeTreatID.allCases.map { Consumables.cafeFood($0) }.filter { $0.piece != nil }
     }
+    // MARK: no plate (the default since 2026-11-20)
+
+    /// No plate mesh is drawn under the food by default (home 1 / 2 / 3 diners, the wide row, the café): the group is the tray (or table skin) + the pieces, nothing else.
+    func testNoPlateIsDrawnByDefault() {
+        DiningPlatter.style = .none
+        XCTAssertEqual(PlateStyle.none.rawValue, "none")
+        for c in Self.configs {
+            let L = layout(c), theme = RoomTheme()
+            for f in [Consumables.sushi, Consumables.pizza, Consumables.minipizza, Consumables.cinnamonroll] {
+                let st = ServingState(n: c.n, bitesLeft: Array(repeating: 3, count: c.n))
+                let g = DiningModels.trayGroup(layout: L, serving: f, state: st, theme: theme)
+                let b = RoomMeshBuilder(); b.material = .plain
+                f.serving?(b, st, f.palette, L)
+                XCTAssertEqual(g.opaque.vertices.count, DiningModels.tray(layout: L, theme: theme).vertices.count + b.mesh.vertices.count, "\(f.id) \(c.name): only the tray and the pieces")
+                XCTAssertTrue(g.translucent.vertices.isEmpty, "\(f.id) \(c.name): no plate shadow")
+            }
+        }
+        DiningPlatter.style = .platter
+        let g = DiningModels.trayGroup(layout: layout(Self.configs[0]), serving: Consumables.sushi, state: ServingState(n: 1, bitesLeft: [3]), theme: RoomTheme())
+        XCTAssertFalse(g.translucent.vertices.isEmpty, "-PlateStyle platter brings the frozen platter back")
+    }
+
+    /// The edge check: every vertex of every piece lies on the tray / table top (x within the bed's half width, z within its half depth). Prints the worst overhang per food (m); the allowed overhangs are the
+    /// ones measured on 55106b13 and reported (the pieces are NOT moved to fix them).
+    func testEveryPieceLiesOnTheTrayTop() {
+        DiningPlatter.style = .none
+        var worst: [String: Float] = [:], where_: [String: String] = [:], pizzaCfg: [String] = []
+        for c in Self.configs {
+            let L = layout(c)
+            for f in Self.foods() {
+                let b = RoomMeshBuilder(); b.material = .plain
+                f.serving?(b, ServingState(n: c.n, bitesLeft: Array(repeating: 3, count: c.n)), f.palette, L)
+                XCTAssertFalse(b.mesh.vertices.isEmpty, "\(f.id) \(c.name)")
+                let o = b.mesh.vertices.map { max(abs($0.pos.x) - L.half.x, abs($0.pos.z - L.trayCentreZ) - L.half.y) }.max() ?? 0
+                if f.id == "pizza" || f.id == "minipizza" { pizzaCfg.append("\(f.id) @ \(c.name): \(String(format: "%.1f", -o * 100)) cm inside (negative = over)") }
+                let wide = !c.ends && c.n == 3          // (1 diner: the pizza arc overhangs the open front edge by 0.4 cm, measured, not moved; the -MealEnds 0 fallback keeps the old fan: its pizza hangs over the tray's back edge by 3.4 - 3.7 cm, as on 28ff07fe)
+                if !wide { if o > (worst[f.id] ?? -9) { worst[f.id] = o; where_[f.id] = c.name } }
+                XCTAssertLessThanOrEqual(o, wide ? 0.04 : 0.005, "\(f.id) at \(c.name): a piece hangs \(o) m over the tray / table edge")
+            }
+        }
+        print("TRAYEDGE worst overhang by food over home 1 / 2 / 3 diners (m; negative = inside the tray top): " + worst.sorted { $0.key < $1.key }.map { "\($0.key) \(String(format: "%.3f", $0.value)) (\(where_[$0.key] ?? ""))" }.joined(separator: ", "))
+        for l in pizzaCfg { print("TRAYEDGE pizza: " + l) }
+    }
+
     private func layout(_ c: Config) -> TrayLayout {
         DiningLayout.ends = c.ends; DiningLayout.sideX = c.sx; DiningLayout.reachFood = true
         return DiningLayout.make(n: c.n)

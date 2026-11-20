@@ -210,7 +210,7 @@ final class DiningTests: XCTestCase {
             XCTAssertEqual(b.mesh.vertices.count, one.mesh.vertices.count * 3 * n, "3 slices per Blob (n=\(n))")
             // finger food: nothing but tray + plate + slices on the tray
             let g = DiningModels.trayGroup(layout: L, serving: Consumables.pizza, state: ServingState(n: n, bitesLeft: Array(repeating: 3, count: n)), theme: theme)
-            XCTAssertEqual(g.opaque.vertices.count, DiningModels.tray(layout: L, theme: theme).vertices.count + DiningModels.plate(layout: L, theme: theme, pizza: true).vertices.count + b.mesh.vertices.count)
+            XCTAssertEqual(g.opaque.vertices.count, DiningModels.tray(layout: L, theme: theme).vertices.count + (DiningPlatter.style == .platter ? DiningModels.plate(layout: L, theme: theme, pizza: true).vertices.count : 0) + b.mesh.vertices.count)
             // slices lie on the plate, inside the tray, never below the plate floor
             let ys = b.mesh.vertices.map { $0.pos.y }
             XCTAssertGreaterThan(ys.min() ?? 0, DiningDims.plateFloorY - 0.01)
