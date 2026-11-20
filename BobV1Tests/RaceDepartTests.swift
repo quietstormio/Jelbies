@@ -157,4 +157,75 @@ final class RaceDepartTests: XCTestCase {
         while care.outing.running, r.t < 30 { tick(r); for id in [1, 2] { forced = max(forced, r.actors[id].brain!.expr.forcedLeft) } }
         XCTAssertLessThan(forced, 1.9, "no forced happy face on the housemates during the run-out")
     }
+
+    /// Bob is a housemate like the others (the stage's `bobTick` path): somebody else races, Bob stays home. He is hidden and not stepped while the track is up, wears no bib, and is back exactly where
+    /// and as he was.
+    func testBobAtHomeWhileAnotherRacesIsFrozenAndBackAsHeWas() {
+        let r = room(3); let care = r.care
+        let looks: [WearLook] = [.sneakerCoral, .flowerCrown]
+        care.store.saved.wearables = looks.map(\.rawValue)
+        for l in looks { XCTAssertTrue(care.store.wear(l, on: 0)) }
+        let bob = r.actors[0], b = bob.brain!
+        func snap() -> [String] {
+            var out = WearSlot.allCases.map { "\($0.rawValue)=\(care.wardrobe.slot(0)?.items[$0]?.look?.rawValue ?? "-")" }
+            out.append("shoes=\(care.shoeLook(for: bob)?.rawValue ?? "-")"); out.append("shod=\(b.shoesWorn)")
+            return out
+        }
+        for _ in 0..<180 { tick(r) }
+        let before = snap()
+        XCTAssertTrue(before.contains("shoes=sneakerCoral"), "Bob is dressed: \(before)")
+        b.requestNow(.goTo(SIMD2(-2.2, 0.3)))
+        care.startRace(jelly: 1, seed: 11)
+        var atWhite: SIMD2<Float>?, frozen: Float = 0, bibSteps = 0, awaySteps = 0, sawAway = false, homeSteps = 0
+        var firstHome: SIMD2<Float>?
+        var after: [String] = []
+        for _ in 0..<(150 * 60) {
+            tick(r)
+            if shown(care, 0) { bibSteps += 1 }
+            if care.raceBook.roomAway {
+                sawAway = true; awaySteps += 1
+                if atWhite == nil { atWhite = bob.floor }
+                frozen = max(frozen, simd_distance(bob.floor, atWhite!))
+                XCTAssertTrue(care.raceHides(0), "Bob is away while the track is up")
+            } else if sawAway {
+                homeSteps += 1
+                if firstHome == nil { firstHome = bob.floor }
+                if homeSteps == 2 { after = snap(); break }
+            }
+        }
+        XCTAssertTrue(sawAway, "the track went up")
+        XCTAssertGreaterThan(awaySteps, 60)
+        XCTAssertLessThan(frozen, 1e-4, "Bob does not move while he is away")
+        XCTAssertEqual(bibSteps, 0, "Bob never wears a bib or a jersey")
+        XCTAssertLessThan(simd_distance(firstHome ?? .zero, atWhite ?? SIMD2(99, 99)), 0.02, "back exactly where he was when the track went up")
+        XCTAssertEqual(after, before, "his wear and shoes are unchanged")
+    }
+
+    /// Bob asleep while somebody else races: still asleep, same spot and pose after the return, and not called to the welcome.
+    func testBobAsleepStaysAsleepWhileAnotherRaces() throws {
+        let r = room(3); let care = r.care
+        let bob = r.actors[0], b = bob.brain!
+        b.commandedGoodnight = true
+        r.run(40) { b.isSleeping && b.sleep.stage >= 4 }
+        try XCTSkipUnless(b.isSleeping, "no sleep in this host (the clock / night rest woke him)")
+        r.run(3)
+        let spot = bob.floor, centroid = bob.sim.centroid(), stage = b.sleep.stage
+        care.startRace(jelly: 1, seed: 11)
+        XCTAssertNil(care.raceWait, "a sleeping Bob does not hold the race up")
+        var woke = false, sawTrack = false
+        for _ in 0..<(150 * 60) {
+            tick(r)
+            if !b.isSleeping { woke = true }
+            if care.race.trackVisible { sawTrack = true }
+            if !care.race.active && sawTrack { break }
+        }
+        for _ in 0..<120 { tick(r); if !b.isSleeping { woke = true } }
+        XCTAssertTrue(sawTrack)
+        XCTAssertFalse(woke, "Bob was never woken")
+        XCTAssertEqual(b.sleep.stage, stage)
+        XCTAssertLessThan(simd_distance(bob.floor, spot), 0.02, "same spot")
+        XCTAssertLessThan(simd_distance(bob.sim.centroid(), centroid), 0.03, "same pose")
+        XCTAssertFalse(care.greeting, "the welcome home does not call a sleeping Bob")
+        XCTAssertFalse(care.queued.contains { if case .come = $0 { return true }; return false }, "no come-to-front for a sleeper")
+    }
 }
