@@ -21,7 +21,7 @@ final class PairSweepTests: XCTestCase {
         let saved = HighFiveTuning.turnIn
         defer { HighFiveTuning.turnIn = saved }
         var rows = ["turnIn\tcast\tcontactGap_cm\tworstSkin_cm\ttouchGaps_cm\tworstAt"]
-        for turn: Float in [0.45, 0.30, 0.15, 0.0] { for c in Self.casts {
+        for turn: Float in [0.45, 0.38] { for c in Self.casts {
             HighFiveTuning.turnIn = turn
             let r = PairProbe.run(kind: .highFive, cast: c.1, castName: c.0, maxSec: 30, trace: c.0 == "Pip+Teddy" || c.0 == "Bob+Teddy")
             PairProbe.tearDownGlobals()
@@ -38,7 +38,7 @@ final class PairSweepTests: XCTestCase {
         let (sa, sd, sj) = (Pair2Tuning.armsIn, Pair2Tuning.hopDist, Pair2Tuning.jumpBase)
         defer { Pair2Tuning.armsIn = sa; Pair2Tuning.hopDist = sd; Pair2Tuning.jumpBase = sj }
         var rows = ["kind\tarmsIn\tdist\tcast\tclosest_cm\tworstSkin_cm\tbody_cm\tarm_cm\ttouchGaps_cm\tworstAt"]
-        for kind in [SocialKind.hopAlong, .jumpTurns] { for arms in [true, false] { for dist: Float in [0.45, 0.30] { for c in Self.casts {
+        for kind in [SocialKind.hopAlong, .jumpTurns] { for arms in [false] { for dist: Float in [0.45] { for c in Self.casts {
             Pair2Tuning.armsIn = arms; Pair2Tuning.hopDist = dist; Pair2Tuning.jumpBase = dist - 0.1
             let tr = c.0 == "Bob+Teddy" || c.0 == "Teddy+Pearl"
             let r = PairProbe.run(kind: kind, cast: c.1, castName: c.0, maxSec: 30, trace: tr)
