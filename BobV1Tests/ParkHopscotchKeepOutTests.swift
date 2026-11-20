@@ -359,11 +359,21 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         lab.rigs[0].brain.idleForced = true
         _ = lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: court.uid)
         var found: Float?
+        var ev: [String] = [], pn = [-2, -2, -2], pw = [-2, -2, -2], pe = [false, false, false], pk = [String](repeating: "", count: 3)
         for i in 0..<(60 * 100) {
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+            if i < 60 * 20 { for k in 1...2 {
+                let b = lab.rigs[k].brain
+                let kind = String(describing: b.idleState.kind), en = line.contains(court.uid, k)
+                if b.toy.noticeUID != pn[k] || b.toy.waitUID != pw[k] || en != pe[k] || kind != pk[k] {
+                    ev.append(String(format: "t%.1f rig%d kind %@ notice %d wait %d enrolled %d pending %d job %d at (%.2f,%.2f)", Float(i) / 60, k, kind, b.toy.noticeUID, b.toy.waitUID, en ? 1 : 0, b.pending != nil ? 1 : 0, b.job != nil ? 1 : 0, b.position.x, b.position.y))
+                    pn[k] = b.toy.noticeUID; pw[k] = b.toy.waitUID; pe[k] = en; pk[k] = kind
+                }
+            } }
             if found == nil, line.contains(court.uid, 1) { found = Float(i) / 60 }
             if i > 600, !line.active, lab.rigs.allSatisfy({ $0.brain.idleState.kind == nil }) { break }
         }
+        print("HKO join events guard \(guardOn): \(ev.joined(separator: " | "))")
         for r in lab.rigs { r.brain.abortAll(r.sim, r.skinner) }
         return found
     }
