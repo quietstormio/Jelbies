@@ -37,11 +37,8 @@ nonisolated extension DiningModels {
         }
     }
 
-    /// The platter mesh: flat top at `Platter.floorY`, a low lip (crest 7.5 mm above the floor, outside the flat area) and a rounded underside that rests on the tray.
-    static func platterMesh(_ P: Platter, theme: RoomTheme) -> RoomMesh {
-        let b = RoomMeshBuilder(); b.material = .plain
-        let col = theme.swatches[4] * 1.08, y0 = Platter.floorY
-        // outline of the flat area (counter-clockwise from +x), with the outward normal of every point
+    /// Outline of the flat area (counter-clockwise from +x) with the outward normal of every point.
+    static func platterOutline(_ P: Platter) -> (pts: [SIMD2<Float>], outs: [SIMD2<Float>]) {
         var pts: [SIMD2<Float>] = [], outs: [SIMD2<Float>] = []
         let steps = 8
         for (k, sgn) in [(SIMD2<Float>(1, 1)), SIMD2(-1, 1), SIMD2(-1, -1), SIMD2(1, -1)].enumerated() {
@@ -52,17 +49,30 @@ nonisolated extension DiningModels {
                 pts.append(c + d * P.r); outs.append(d)
             }
         }
-        // (offset outward from the flat edge, height above the floor, outward normal part, upward normal part, ao)
-        let prof: [(d: Float, h: Float, nr: Float, ny: Float, ao: Float)] = [
-            (0, 0, 0, 1, 1), (0.010, 0.0006, 0.12, 0.99, 1), (0.020, 0.0045, 0.4, 0.92, 1), (0.028, 0.0075, 0, 1, 1), (0.035, 0.0055, 0.7, 0.7, 1),
-            (0.039, -0.002, 1, 0, 0.9), (0.037, -0.014, 0.9, -0.4, 0.7), (0.030, -0.0185, 0.3, -0.95, 0.6)]
+        return (pts, outs)
+    }
+    /// Rim height above the flat top (the crest), see `platterMesh`.
+    static let platterRimHeight: Float = 0.021
+
+    /// The platter mesh: flat top at `Platter.floorY` (the old plate's colour), a rounded rim OUTSIDE the flat area (crest 2.1 cm above the floor, 5 cm wide, a touch darker and
+    /// warmer than the top, with a soft shade line where it meets the flat) and a rounded underside that rests on the tray. Reads as the old round plate's rim stretched to the platter shape.
+    static func platterMesh(_ P: Platter, theme: RoomTheme) -> RoomMesh {
+        let b = RoomMeshBuilder(); b.material = .plain
+        let col = theme.swatches[4] * 1.08, y0 = Platter.floorY
+        let rimCol = col * SIMD3<Float>(0.84, 0.76, 0.66)          // (about 20 % darker and warmer: it has to read as a rim at the size of the phone)
+        let (pts, outs) = platterOutline(P)
+        // (offset outward from the flat edge, height above the floor, outward normal part, upward normal part, ao, 0 = top colour ... 1 = rim colour)
+        let prof: [(d: Float, h: Float, nr: Float, ny: Float, ao: Float, t: Float)] = [
+            (0, 0, 0, 1, 1, 0), (0.005, 0.0015, 0.5, 0.85, 0.55, 0.8), (0.0125, 0.0085, 0.8, 0.6, 0.8, 1), (0.0225, 0.018, 0.45, 0.9, 1, 1), (0.0325, platterRimHeight, 0, 1, 1, 1),
+            (0.0425, 0.0175, 0.7, 0.7, 1, 1), (0.049, 0.008, 1, 0.15, 0.95, 1), (0.050, -0.002, 1, -0.1, 0.9, 1), (0.046, -0.0135, 0.8, -0.6, 0.7, 0.9), (0.0375, -0.0185, 0.2, -0.98, 0.6, 0.8)]
         var rows: [[UInt32]] = []
         for p in prof {
             let nn = simd_normalize(SIMD2(p.nr, p.ny))
+            let c = col + (rimCol - col) * p.t
             var row: [UInt32] = []
             for i in pts.indices {
                 let q = pts[i] + outs[i] * p.d
-                row.append(b.vertex(SIMD3(q.x, y0 + p.h, q.y), SIMD3(outs[i].x * nn.x, nn.y, outs[i].y * nn.x), ao: p.ao, color: col))
+                row.append(b.vertex(SIMD3(q.x, y0 + p.h, q.y), SIMD3(outs[i].x * nn.x, nn.y, outs[i].y * nn.x), ao: p.ao, color: c))
             }
             rows.append(row)
         }
@@ -72,6 +82,30 @@ nonisolated extension DiningModels {
         for i in 0..<n { b.triangle(top, rows[0][i], rows[0][(i + 1) % n]) }
         let bot = b.vertex(SIMD3(P.cx, y0 - 0.0185, P.cz), SIMD3(0, -1, 0), ao: 0.5, color: col)
         for i in 0..<n { b.triangle(bot, rows[rows.count - 1][i], rows[rows.count - 1][(i + 1) % n]) }
+        return b.mesh
+    }
+
+    /// A soft contact shadow round the platter's foot (translucent, alpha per vertex), on the tray's / table's top, so the platter reads as lying ON it. It fades to nothing where it would
+    /// leave the tray / table (`halfX`, and z within `centreZ` +- `halfZ`): no shadow hangs in the air past the edge.
+    static func platterShadow(_ P: Platter, halfX: Float, centreZ: Float, halfZ: Float, theme: RoomTheme) -> RoomMesh {
+        let b = RoomMeshBuilder(); b.material = .plain
+        let (pts, outs) = platterOutline(P)
+        let col = theme.swatches[0], y = DiningDims.trayTop + 0.0035
+        let rings: [(d: Float, a: Float)] = [(0.046, 0.30), (0.072, 0.15), (0.105, 0)]
+        var rows: [[UInt32]] = []
+        for r in rings {
+            var row: [UInt32] = []
+            for i in pts.indices {
+                let q = pts[i] + outs[i] * r.d
+                let id = b.vertex(SIMD3(q.x, y, q.y), SIMD3(0, 1, 0), ao: 1, color: col)
+                let inside = abs(q.x) <= halfX && abs(q.y - centreZ) <= halfZ
+                b.mesh.vertices[Int(id)].color.w = inside ? r.a : 0
+                row.append(id)
+            }
+            rows.append(row)
+        }
+        let n = pts.count
+        for r in 0..<(rows.count - 1) { for i in 0..<n { b.quad(rows[r][i], rows[r][(i + 1) % n], rows[r + 1][(i + 1) % n], rows[r + 1][i]) } }
         return b.mesh
     }
 }

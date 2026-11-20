@@ -849,7 +849,9 @@ nonisolated enum DiningModels {
         if previewGhosts, L.n > 1 { append(ghostBlobs(layout: L), to: b, transform: matrix_identity_float4x4) }
         #endif
         if f.kind == .food {
-            append(plate(layout: L, theme: theme, pizza: f.pizzaLayout || f.id == Consumables.pizza.id), to: b, transform: matrix_identity_float4x4)
+            let pizzaPlate = f.pizzaLayout || f.id == Consumables.pizza.id
+            append(plate(layout: L, theme: theme, pizza: pizzaPlate), to: b, transform: matrix_identity_float4x4)
+            append(platterShadow(platter(layout: L, pizza: pizzaPlate), halfX: L.half.x, centreZ: L.trayCentreZ, halfZ: L.half.y, theme: theme), to: t, transform: matrix_identity_float4x4)          // (the platter's contact shadow)
             let fb = RoomMeshBuilder(); fb.material = .plain
             f.serving?(fb, state, f.palette, L)
             append(fb.mesh, to: b, transform: matrix_identity_float4x4)
