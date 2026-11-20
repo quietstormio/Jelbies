@@ -65,19 +65,21 @@ final class WallPictureTests: XCTestCase {
         XCTAssertEqual(WallZone.rect(.home), WallZone.Rect(minX: -4.6, maxX: 4.6, minY: 4.5, maxY: 7.0))
         XCTAssertEqual(WallZone.rect(.loft), WallZone.Rect(minX: -4.6, maxX: 4.6, minY: 4.75, maxY: 7.0))
         XCTAssertEqual(WallZone.rect(.cabin), WallZone.Rect(minX: -3.9, maxX: 4.6, minY: 3.75, maxY: 7.0))
+        XCTAssertEqual(WallZone.spots(.home).map(\.rect.minX), [-4.6, -2.0, 1.0])
     }
 
-    func testClampKeepsTheWholeFramedPictureInsideEveryZone() {
+    func testClampKeepsTheWholeFramedPictureInsideOneOfTheRoomsSpots() {
         for room in [RoomID.home, .loft, .cabin] {
-            let z = WallZone.rect(room)!
             for f in WallFrame.allCases { for s in WallShape.allCases {
-                for (x, y, w) in [(Float(0), Float(5.5), Float(2)), (-50, 40, 1), (50, -40, 30), (0, 0, 0.1), (3, 7, 5)] as [(Float, Float, Float)] {
+                for (x, y, w) in [(Float(0), Float(5.5), Float(2)), (-50, 40, 1), (50, -40, 30), (0, 0, 0.1), (3, 7, 5), (-1.5, 3, 3), (1.5, 2.5, 0.9)] as [(Float, Float, Float)] {
                     let q = try! XCTUnwrap(WallZone.clamp(sample(f, s, x: x, y: y, w: w), in: room))
                     let eps: Float = 1e-4
-                    XCTAssertGreaterThanOrEqual(q.x - q.outerWidth / 2, z.minX - eps, "\(room) \(f) \(s)")
-                    XCTAssertLessThanOrEqual(q.x + q.outerWidth / 2, z.maxX + eps, "\(room) \(f) \(s)")
-                    XCTAssertGreaterThanOrEqual(q.y - q.outerHeight / 2, z.minY - eps, "\(room) \(f) \(s)")
-                    XCTAssertLessThanOrEqual(q.y + q.outerHeight / 2, z.maxY + eps, "\(room) \(f) \(s)")
+                    let inside = WallZone.spots(room).contains { sp in
+                        let z = sp.rect
+                        return q.x - q.outerWidth / 2 >= z.minX - eps && q.x + q.outerWidth / 2 <= z.maxX + eps
+                            && q.y - q.outerHeight / 2 >= z.minY - eps && q.y + q.outerHeight / 2 <= z.maxY + eps
+                    }
+                    XCTAssertTrue(inside, "\(room) \(f) \(s) (\(x), \(y), \(w)) -> (\(q.x), \(q.y), \(q.width))")
                     XCTAssertGreaterThan(q.width, 0.3)
                 }
             } }
@@ -85,6 +87,32 @@ final class WallPictureTests: XCTestCase {
         // a picture that already fits does not move
         let p = sample(.wood, .landscape, x: 1, y: 5.8, w: 2)
         XCTAssertEqual(WallZone.clamp(p, in: .home), p)
+    }
+
+    func testTheOptionSpotsAreOnScreenInBothOrientations() {
+        // the phone on its side shows the back wall up to about y = 5.2; a spot marked inBoth must lie below that
+        for room in [RoomID.home, .loft, .cabin] {
+            let s = WallZone.spots(room)
+            XCTAssertFalse(s[0].inBoth, "the band above the windows is the portrait spot")
+            XCTAssertGreaterThanOrEqual(s.filter(\.inBoth).count, 1, "\(room) has a spot that shows in both")
+            for sp in s where sp.inBoth { XCTAssertLessThanOrEqual(sp.rect.maxY, 5.2 + 1e-4, "\(room) \(sp.name)") }
+        }
+        XCTAssertEqual(WallZone.spots(.home).filter(\.inBoth).count, 2, "home: the two gaps between the windows")
+        // a portrait picture sent to a gap hangs in it, upright and whole
+        let q = try! XCTUnwrap(WallZone.clamp(sample(.wood, .portrait, x: -1.5, y: 3, w: 3), in: .home))
+        XCTAssertEqual(q.x, -1.5, accuracy: 0.2); XCTAssertLessThan(q.y, 4.2); XCTAssertGreaterThan(q.width, 0.8)
+    }
+
+    func testTheLoftsOwnArtIsHiddenOnlyWhileAPictureHangsInItsPlace() throws {
+        let gap = try XCTUnwrap(WallZone.clamp(sample(.white, .portrait, x: 0, y: 3, w: 1), in: .loft))
+        XCTAssertTrue(WallZone.hidesLoftArt(gap, in: .loft))
+        let band = try XCTUnwrap(WallZone.clamp(sample(.white, .landscape, x: 0, y: 6, w: 2), in: .loft))
+        XCTAssertFalse(WallZone.hidesLoftArt(band, in: .loft))
+        XCTAssertFalse(WallZone.hidesLoftArt(gap, in: .home)); XCTAssertFalse(WallZone.hidesLoftArt(nil, in: .loft))
+        // the art piece exists under that name in the bundled loft, and the room without it has fewer triangles
+        let full = RoomGeometry.build(theme: RoomTheme(), def: RoomCatalog.loft)
+        let less = RoomGeometry.build(theme: RoomTheme(), def: RoomCatalog.loft, hideArt: ["wallart"])
+        XCTAssertEqual(full.indices.count - less.indices.count, 432 * 3)
     }
 
     func testDefaultPlacementIsCentredAboveTheWindowsAndReadable() {

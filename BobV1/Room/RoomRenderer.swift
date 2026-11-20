@@ -373,6 +373,8 @@ nonisolated final class RoomRenderer {
     private struct StaticMesh { var vb: MTLBuffer?, ib: MTLBuffer?; var count = 0 }
     private var wallFrame = StaticMesh(), wallPhoto = StaticMesh(), wallShadow = StaticMesh()
     private var wallTexture: MTLTexture?
+    /// The loft's own wall art (the part "wallart") is left out of the room while a picture hangs in its place (WallZone.hidesLoftArt).
+    var hidesLoftArt = false { didSet { if hidesLoftArt != oldValue { rebuild() } } }
     /// True while a picture is set (the host clears it in the café, the park, ...; the room encode also draws it only in a room that has a wall zone).
     var hasWallPicture: Bool { wallFrame.count + wallPhoto.count > 0 }
     private func staticMesh(_ m: RoomMesh, label: String) -> StaticMesh {
@@ -487,7 +489,7 @@ nonisolated final class RoomRenderer {
 
     private func rebuild() {
         staticVersion &+= 1
-        let m = RoomGeometry.build(theme: theme)
+        let m = RoomGeometry.build(theme: theme, hideArt: hidesLoftArt ? ["wallart"] : [])
         indexCount = m.indices.count
         vertexBuffer = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
         indexBuffer = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)

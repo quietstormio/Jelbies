@@ -161,7 +161,7 @@ enum RoomGeometry {
     static var windowY1: Float { RoomLayout.current.windows.y1 }
     static let insetDepth: Float = 0.18
 
-    static func build(theme: RoomTheme, def: RoomDef = RoomLayout.current) -> RoomMesh {
+    static func build(theme: RoomTheme, def: RoomDef = RoomLayout.current, hideArt: Set<String> = []) -> RoomMesh {
         if def.id == .beach { return BeachScenery.build(theme: theme) }          // the volleyball beach (Volley/VolleyScene.swift)
         if def.id == .groom { return GroomScenery.build(theme: theme) }          // the Jelly Spa street (Groomer/GroomRoom.swift)
         if def.id == .camp { return CampScenery.build(theme: theme) }          // the Jelmiko Camp yard (Park/CampScenery.swift)
@@ -254,7 +254,7 @@ enum RoomGeometry {
         }
 
         // ---- the furniture: the Blender art of the room, or the procedural living room set ----
-        if let art = def.art, RoomArt.emit(art, into: b) { return b.mesh }
+        if let art = def.art, RoomArt.emit(art, into: b, skipping: hideArt) { return b.mesh }
 
         // ---- sofa ----
         b.material = .plain

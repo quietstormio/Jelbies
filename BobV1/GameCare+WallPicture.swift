@@ -31,8 +31,10 @@ extension GameCare {
         wallDrawn.room = room
         guard !hidden, let saved = key.picture, let p = WallZone.clamp(saved, in: key.room) else {
             if room.hasWallPicture { room.setWallPicture(nil, texture: nil) }
+            room.hidesLoftArt = false
             return
         }
+        room.hidesLoftArt = WallZone.hidesLoftArt(p, in: key.room)
         let tex = wallDrawn.textureFile == p.file ? wallDrawn.texture : nil
         room.setWallPicture(WallPictureGeometry.build(p, art: WallPictureGeometry.art(p)), texture: tex)
         guard tex == nil, wallDrawn.loading != p.file else { return }
