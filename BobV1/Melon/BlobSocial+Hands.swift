@@ -40,9 +40,6 @@ extension HandReach {
     static let elFive: Float = 0.08          // (a small raise: the footprint meets the hands at the SPHERES of the tips, the metric at their poles - the steeper the arm the further apart they are: r2 (1 - cos) each)
     /// Where the hand-emote stances stand before the press (skin gap): a hair above the 0.5 cm touch window so the touch is the press, under the 1.5 cm arrival bar.
     static let stand: Float = 0.008
-    /// The high five's stand-off (pair-distinct-r1): the hands stand INSIDE the touch band (+0.3 cm) from the walk-up on, so the clap - after the wind-up has parted them - lands at +0.3 cm on every species. (The clap can no longer pull the pair in:
-    /// the arm is already at the wave's thumb cap, and the settle's pull was a walk that turned the walker 90 degrees.)
-    static let standFive: Float = 0.003
     /// The arm of the shoulder at +x/-x, from the walking-arm data (body frame, +x arm).
     static var shoulder: SIMD3<Float> { SIMD3(Float(ArmPath.armWalkRoot.x), Float(ArmPath.armWalkRoot.y), Float(ArmPath.armWalkRoot.z)) }
     /// Shoulder to the pole of the hand along the axis (the capsule's length + the tip radius).
@@ -192,7 +189,7 @@ extension BlobBrain {
             // (a walker closes ~1 cm a step and the arm is drawn a tick after it is set: judge the hand where it will be two ticks from now)
             let dNow = simd_distance(position, o.position), closing = socialBook.handPrevD > 0 ? max(0, (socialBook.handPrevD - dNow) / max(dt, 1e-3)) : 0
             socialBook.handPrevD = dNow
-            let margin: Float = (social?.phase ?? 0) < 2 ? (social?.kind == .highFive ? HandReach.standFive : HandReach.stand) : 0          // (until the press the hand stands off by the stance's own gap: the walk's last step and the landing squash then never push it into the partner)
+            let margin: Float = (social?.phase ?? 0) < 2 ? HandReach.stand : 0          // (until the press the hand stands off by the stance's own gap: the walk's last step and the landing squash then never push it into the partner)
             var gapNow: Float
             if let hisPole { let mp = poleW(elT, saT, out); gapNow = 0.5 * (u.x * (hisPole.x - mp.x) + u.y * (hisPole.z - mp.z)) }
             else { gapNow = Float(HandReach.restSDF(restPoint(of: poleW(elT, saT, out), sim: osim))) }

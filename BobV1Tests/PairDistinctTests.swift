@@ -5,7 +5,7 @@
 //        <= +0.5 cm), and the drawn ARMS never come within 3 cm of the partner (they are tucked in front);
 //    sitTogether: clear space the whole time (the skins never meet, never overlap);
 //    hopAlong: the pair really TRAVELS (its middle moves >= 0.9 m) and the skins never overlap;
-//    highFive: the hands meet (hand to hand inside the band at the clap), the skins never overlap by more than 1 cm.
+//    (highFive is NOT here: it was left as on the branch base - see the commit that reverts the V; HighFiveContactTests covers it.)
 //  Every kind runs for the species pairs of ContactPolishTests (blue, yellow tail + spikes, green antennas / daisy, wings, Teddy ears) + Panda. TEST_RUNNER_PAIR_OUT=<dir> also writes <dir>/table.tsv (kind x cast).
 //
 
@@ -73,21 +73,6 @@ final class PairDistinctTests: XCTestCase {
             XCTAssertGreaterThan(r.sounds["jump"] ?? 0, 0, "hopAlong \(c.0): the hop sound plays")
         }
         flush("table_hop")
-    }
-
-    /// The clap: hands within 0 +- 0.5 cm on every species pair AND at other seeds (a different walk-up each: the first version passed seed 31 and sank -1.6 cm at seed 41), never below -1 cm anywhere.
-    func testHighFiveHandsMeetInTheBand() {
-        for (seed, flip) in [(UInt64(31), false), (41, false), (42, false), (31, true), (42, true)] { for c in Self.casts {
-            let r = probe(.highFive, c, seed: seed, flip: flip)
-            Self.rows.append(row(r))
-            let tag = "highFive \(c.0) seed \(seed)" + (flip ? " (partner on the other side)" : "")
-            XCTAssertTrue(r.started && r.completed, "\(tag): runs to its end")
-            XCTAssertGreaterThanOrEqual(r.minSkin, -0.01, "\(tag): never below -1 cm")
-            XCTAssertGreaterThanOrEqual(r.minSkinPerf, -0.006, "\(tag): the clap does not press past the band")
-            XCTAssertLessThanOrEqual(r.minSkinPerf, 0.005, "\(tag): the hands meet (<= +0.5 cm)")
-            XCTAssertGreaterThan((r.sounds["highfive_boop"] ?? 0) + (r.sounds["squish"] ?? 0), 0, "\(tag): the clap sound is PLAYED")
-        } }
-        flush("table_five")
     }
 
     /// whisperGiggle: no contact - a clear gap of >= 4 cm at every frame; the laugh (chirps) and the hearts stay.

@@ -11,6 +11,9 @@
 import Foundation
 import simd
 
+/// How far each turns in toward the other in the whisper's V (rad).
+enum WhisperTuning { static let turnIn: Float = 0.45 }
+
 extension BlobBrain {
     /// Overlay size for reduce motion (the hops themselves shrink in the gait).
     var socialGentle: Float { amplitude < 0.7 ? 0.55 : 1 }
@@ -149,7 +152,7 @@ extension BlobBrain {
         if openSideBySide(s, o, isA, settle: 0.65) { return }
         let t = s.phaseT, g = socialGentle
         let inward: Float = rotXZ(o.position - position, -faceCameraYaw()).x >= 0 ? 1 : -1
-        let turned = faceCameraYaw() + inward * HighFiveTuning.turnIn * smooth01(t / 0.4)
+        let turned = faceCameraYaw() + inward * WhisperTuning.turnIn * smooth01(t / 0.4)
         if scriptIsNone { holdFacing(turned) }
         let whisp = smooth01((t - 0.2) / 0.5) * (1 - smooth01((t - 1.9) / 0.4))
         let giggle = smooth01((t - 2.4) / 0.2) * (1 - smooth01((t - 4.3) / 0.5))

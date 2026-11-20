@@ -17,17 +17,15 @@ import simd
 extension SocialKind {
     /// The "we like each other" kinds (the Park gives friendship a bonus while one is on).
     var isFriendly: Bool {
-        switch self { case .chestBump, .highFive, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround, .swayHug, .danceOff, .whisperGiggle, .shyWave, .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .spinHug, .orbit, .upDown, .jumpTurns, .spinTogether: return true; default: return false }
+        switch self { case .chestBump, .highFive, .cheekSquish, .twirl, .hopAlong, .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround, .swayHug, .danceOff, .whisperGiggle, .shyWave, .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance, .spinHug: return true; default: return false }
     }
 }
 
 /// The high five's wind-up (BlobSocial+Friends.driveHighFive): the near arm lifts `windUp` rad above the meeting elevation in `windUpRise` s, swings back in `windUpFall` s and the hands meet.
 enum HighFiveTuning {
-    nonisolated(unsafe) static var windUp: Float = 0.80          // (pair-distinct-r1: a BIG wind-up, the hands high; was 0.45)
-    nonisolated(unsafe) static var windUpRise: Float = 0.30
-    nonisolated(unsafe) static var windUpFall: Float = 0.26
-    /// How far each turns in toward the partner from the wind-up on (rad): a V, faces apart, the hands up in the middle (pair-distinct-r1).
-    nonisolated(unsafe) static var turnIn: Float = ProcessInfo.processInfo.environment["PAIR_TURNIN"].flatMap { Float($0) } ?? 0.45
+    nonisolated(unsafe) static var windUp: Float = 0.45
+    nonisolated(unsafe) static var windUpRise: Float = 0.18
+    nonisolated(unsafe) static var windUpFall: Float = 0.22
 }
 
 enum FriendTuning {
@@ -36,9 +34,6 @@ enum FriendTuning {
     static let base: [(SocialKind, Float)] = [(.chestBump, 2.2), (.highFive, 2.2), (.cheekSquish, 0.4), (.twirl, 2.0), (.hopAlong, 2.0),
                                                       (.littleRace, 1.3), (.tag, 1.3), (.peekaboo, 1.3), (.bellyBounce, 1.4), (.mirrorDance, 1.3), (.backToBack, 1.2), (.cuddleLean, 1.3), (.ringAround, 1.2),
                                                       (.swayHug, 1.5), (.danceOff, 1.3), (.whisperGiggle, 0.3), (.shyWave, 1.2)]
-    /// The four new pair kinds (pair-distinct-r1; BlobSocial+Pair2.swift): ONE obvious table, each at the median of `base` (1.3), used only where the variety layer runs (`anticsEnabled`: the room and the park). The variety
-    /// worker owns the pick tables and will integrate these.
-    static let newPair: [(SocialKind, Float)] = [(.orbit, 1.3), (.upDown, 1.3), (.jumpTurns, 1.3), (.spinTogether, 1.3)]
     /// Closeness multiplier by friendship level (stranger, pal, friend, best friend); housemates are 1.
     static let closeMul: [Float] = [0.55, 0.95, 1.5, 2.1]
     /// How much a close pair raises the chance that a social starts at all (per unit of closeness above 1).
@@ -69,7 +64,7 @@ extension BlobBrain {
     func socialFriendWeights(into w: inout [(SocialKind, Float)], partner o: BlobBrain, grumpy: Bool, night: Float, fastOK: Bool) {
         let c = socialCloseness(to: o)
         let taste = FriendTuning.taste[personalityKey] ?? []
-        for (k, base) in FriendTuning.base + (anticsEnabled ? FriendTuning.newPair : []) {
+        for (k, base) in FriendTuning.base {
             if k.isFast && !fastOK { continue }
             if k == socialBook.lastKind || k == o.socialBook.lastKind { continue }
             if k == .highFive, (socialBook.fiveCool[o.steerID] ?? 0) > 0 || (o.socialBook.fiveCool[steerID] ?? 0) > 0 { continue }          // (a pair high-fives at most once a minute)
@@ -81,9 +76,6 @@ extension BlobBrain {
             w.append((k, x))
         }
     }
-
-    /// The yaw of the high five's V: facing the camera, turned in toward `o` by `HighFiveTuning.turnIn` (ContactStance.Facing.vee).
-    func veeYaw(toward o: BlobBrain) -> Float { faceCameraYaw() + (rotXZ(o.position - position, -faceCameraYaw()).x >= 0 ? 1 : -1) * HighFiveTuning.turnIn }
 
     // MARK: starting
 
@@ -103,7 +95,7 @@ extension BlobBrain {
             guard d > 0.5, d < 5.5, let spot = sideSpot(of: o, gap: peerGap * 0.9) else { return false }
             let s = newSession(kind, with: o, duration: 0)
             s.goal = spot
-            o.socialBook.hold = true; o.socialBook.faceYaw = o.veeYaw(toward: self)
+            o.socialBook.hold = true; o.socialBook.faceYaw = o.faceCameraYaw()
             if simd_distance(me, spot) > 0.12 { socialWalk(to: spot, sim) } else { s.setPhase(1) }
         case .chestBump, .twirl:
             guard d > 0.5, d < 5.5 else { return false }
@@ -150,16 +142,15 @@ extension BlobBrain {
     }
 
     /// Same, side by side facing the room.
-    func openSideBySide(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, settle: Float, facing: Float? = nil) -> Bool {
-        let fy = facing ?? faceCameraYaw()
+    func openSideBySide(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, settle: Float) -> Bool {
         switch s.phase {
         case 0:
-            if !isA { socialBook.hold = true; socialBook.faceYaw = fy; return true }
-            if scriptIsNone { socialBook.hold = true; socialBook.faceYaw = fy }
+            if !isA { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw(); return true }
+            if scriptIsNone { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw() }
             _ = walkUpPhase(s, o, isA, faceBoth: false, near: 0.55)
             return true
         case 1:
-            socialBook.hold = true; socialBook.faceYaw = fy
+            socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
             if isA, s.phaseT > settle, !feet.active, !o.feet.active { s.setPhase(2); s.impacted = false }
             else if isA, s.phaseT > 3 { s.setPhase(2); s.impacted = false }
             return true
@@ -223,14 +214,13 @@ extension BlobBrain {
     /// both spring back with a second jiggle, the arms go down and they part. Cooldown per pair >= 60 s (EmoteTuning.fiveCooldown). (The old version leaned the bodies together and raised no arm: the hands hovered 55 cm from the partner.)
     private func driveHighFive(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         let reach = { (w: Float, el: Float) in self.socialBook.handWant = HandReach(side: self.handSide(toward: o), w: w, el: el, seek: false, partner: o.steerID) }
-        if openSideBySide(s, o, isA, settle: 0.7, facing: veeYaw(toward: o)) {
+        if openSideBySide(s, o, isA, settle: 0.7) {
             // the arms come up on the way in (the walk-up's touch distance then counts the hands: the last steps land the HANDS together, not the arm nubs)
             reach(1, HandReach.elFive)
             return
         }
         let t = s.phaseT
-        // (pair-distinct-r1) both turn in toward each other from the walk-up on (a V, not two flat fronts; `ContactStance.Facing.vee` makes the walk-up measure and keep that geometry): the faces stay apart, the hands meet high in the middle
-        socialBook.hold = true; socialBook.faceYaw = s.phase <= 3 ? veeYaw(toward: o) : faceCameraYaw()
+        socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
         let g = socialGentle
         switch s.phase {
         case 2:
@@ -241,7 +231,7 @@ extension BlobBrain {
             reach(1, HandReach.elFive + up)
             socialBook.wantSquash = 1 - 0.02 * pulse(t, up: 0.12, down: 0.25) * g
             socialBook.wantEyes = 1 - 0.55 * smooth01((t - 0.1) / 0.4)
-            if isA, t >= HighFiveTuning.windUpRise + HighFiveTuning.windUpFall { s.bumps = contactEvents + o.contactEvents; s.contactTouches = 0; s.setPhase(3); s.impacted = false }          // (the clap is the session's touch for the emote's haptic: the arrival may have touched already)
+            if isA, t >= HighFiveTuning.windUpRise + HighFiveTuning.windUpFall { s.bumps = contactEvents + o.contactEvents; s.setPhase(3); s.impacted = false }
         case 3:
             reach(1, HandReach.elFive)
             let sinceBump = s.impacted ? t - s.bumpT : -1
@@ -252,7 +242,7 @@ extension BlobBrain {
                 // the hands meet: the touch gate's own event (the wind-up opened the outline past its 3 cm re-arm, so it fires on the slap), or the timer if the gate never fires
                 if !s.impacted, contactEvents + o.contactEvents > s.bumps || t >= 0.35 {
                     s.impacted = true; s.bumpT = t
-                    jellyKick = max(jellyKick, impactKick(0.5)); o.jellyKick = max(o.jellyKick, impactKick(0.5))          // (pair-distinct-r1: a soft wobble - the engine's own touch kick already rides on the touch)
+                    jellyKick = max(jellyKick, impactKick(2.0)); o.jellyKick = max(o.jellyKick, impactKick(2.0))
                     contactBoopFallback(o)
                     contactCueFallback(o, .highFiveBoop, 0.85, haptic: .emote("highFive.bump"))
                     face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
@@ -260,7 +250,7 @@ extension BlobBrain {
                 if s.impacted {
                     if s.passes == 0, t - s.bumpT >= 0.42 {          // the second jiggle
                         s.passes = 1
-                        jellyKick = max(jellyKick, impactKick(0.4)); o.jellyKick = max(o.jellyKick, impactKick(0.4))
+                        jellyKick = max(jellyKick, impactKick(1.8)); o.jellyKick = max(o.jellyKick, impactKick(1.8))
                         AudioHub.shared.chirp(jelly: steerID, .happy); AudioHub.shared.chirp(jelly: o.steerID, .happy)
                         onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
                     }

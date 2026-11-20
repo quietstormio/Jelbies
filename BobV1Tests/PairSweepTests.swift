@@ -16,24 +16,6 @@ final class PairSweepTests: XCTestCase {
     static var out: String? { let d = ProcessInfo.processInfo.environment["PAIR_OUT"] ?? ""; return d.isEmpty ? nil : d }
     static func cm(_ f: Float) -> String { f >= 8 ? "-" : String(format: "%.1f", f * 100) }
 
-    func testSweepHighFive() throws {
-        guard let dir = Self.out else { throw XCTSkip("PAIR_OUT not set") }
-        let (st, sw) = (HighFiveTuning.turnIn, HighFiveTuning.windUp)
-        defer { HighFiveTuning.turnIn = st; HighFiveTuning.windUp = sw }
-        var rows = ["windUp\tturnIn\tcast\tseed\tflip\tcontactGap_cm\tworstSkin_cm\ttouchGaps_cm\tworstAt"]
-        for wind: Float in [0.8, 0.45, 0.2] { for turn: Float in [0.45, 0.0] { for (seed, flip) in [(UInt64(31), false), (42, false), (31, true)] {
-            HighFiveTuning.turnIn = turn; HighFiveTuning.windUp = wind
-            let c = Self.casts[0]
-            let r = PairProbe.run(kind: .highFive, cast: c.1, castName: c.0, maxSec: 30, seed: seed, trace: seed == 31 && !flip, flip: flip)
-            PairProbe.tearDownGlobals()
-            let w = r.samples.min { $0.skin < $1.skin }
-            rows.append("\(wind)\t\(turn)\t\(c.0)\t\(seed)\t\(flip)\t\(Self.cm(r.minSkinPerf))\t\(Self.cm(r.minSkin))\t\(r.touchGaps.map { Self.cm($0) }.joined(separator: ","))\t\(w.map { String(format: "t%.1f/ph%d", $0.t, $0.phase) } ?? "-")")
-            if !r.trace.isEmpty { try? (["t\tphase\taX\taZ\tbX\tbZ\taYaw\tbYaw\taState\tbState\tskin_cm\tbody_cm\tarm_cm"] + r.trace).joined(separator: "\n").write(toFile: dir + "/trace_highFive_wind\(wind)_turn\(turn).tsv", atomically: true, encoding: .utf8) }
-        } } }
-        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try rows.joined(separator: "\n").write(toFile: dir + "/sweep_five.tsv", atomically: true, encoding: .utf8)
-    }
-
     func testSweepHop() throws {
         guard let dir = Self.out else { throw XCTSkip("PAIR_OUT not set") }
         let (sa, sd, sj) = (Pair2Tuning.armsIn, Pair2Tuning.hopDist, Pair2Tuning.jumpBase)
