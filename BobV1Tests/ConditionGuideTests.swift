@@ -76,6 +76,6 @@ final class ConditionGuideTests: XCTestCase {
         XCTAssertEqual(ConditionGuide.meals(filling: .cute, in: ms).map(\.food), ["Sushi"])
         XCTAssertTrue(ConditionGuide.meals(filling: .sporty, in: ms).isEmpty)
         XCTAssertEqual(ConditionGuide.styleLine(.sweet), "Sweet foods and drinks fill this jar.")
-        XCTAssertEqual(ConditionGuide.rivalsLine(.lagoon), "Rivals in Lagoon are about here.")
+        XCTAssertEqual(ConditionGuide.rivalsLine(.lagoon), "Fill past the gold line to keep up with the Lagoon rivals.")
     }
 }

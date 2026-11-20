@@ -11,7 +11,7 @@ enum ConditionGuide {
     // MARK: words
 
     /// The plain line under the title.
-    static let subtitle = "Food fills the jars. Fuller jars score higher in the Jelly Show."
+    static let subtitle = "Food and drinks fill the jars. Fuller jars score higher in the Jelly Show."
     static let drainLine = "Jars slowly drain, so feed before a show."
     static let glowCaption = "A bath right before the show adds points."
     /// The Glow 0...5 as a word: 0 none, 1 to 3 a little, 4 to 5 full.
@@ -24,7 +24,7 @@ enum ConditionGuide {
     }
     /// "Sweet foods and drinks fill this jar."
     static func styleLine(_ key: ConditionKey) -> String { "\(key.title) foods and drinks fill this jar." }
-    static func rivalsLine(_ rank: ShowRank) -> String { "Rivals in \(rank.title) are about here." }
+    static func rivalsLine(_ rank: ShowRank) -> String { "Fill past the gold line to keep up with the \(rank.title) rivals." }
     static func jarLabel(_ tag: WearTag, number: Int, today: String?, grew: Bool) -> String {
         "\(tag.title) \(number)\(today.map { ", \($0)" } ?? "")\(grew ? ", just grew" : ""), double tap for foods that fill it"
     }
@@ -75,6 +75,8 @@ struct ConditionJarCard: View {
         let feedOK = feed != nil && HUDMenu.enabled(.feed, .group, care: care)
         let drinkOK = drink != nil && HUDMenu.enabled(.drink, .group, care: care)
         let ownsDrink = list.contains { $0.owned && $0.isDrink }
+        VStack(spacing: 0) {
+        ScrollViewReader { proxy in
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -103,10 +105,6 @@ struct ConditionJarCard: View {
                         .accessibilityElement(children: .combine).accessibilityIdentifier("jarcard-food-\(f.item.id)")
                     }
                 }
-                HStack(spacing: 10) {
-                    ShowCTA(title: "Feed", symbol: "fork.knife", enabled: feedOK, id: "jarcard-feed", height: 52) { feed?() }
-                    if ownsDrink { ShowCTA(title: "Drink", symbol: HUDMenu.symbol(.drink), enabled: drinkOK, id: "jarcard-drink", height: 52) { drink?() } }
-                }
                 if !meals.isEmpty {
                     Text("Last meals").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
                     ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
@@ -117,10 +115,24 @@ struct ConditionJarCard: View {
                         }
                     }
                 }
+                Color.clear.frame(height: 1).id("jarcard-end")
             }
             .padding(16)
         }
         .scrollBounceBehavior(.basedOnSize)
+        .task {          // capture aid (dev arguments only): `-CondJarEnd 1` scrolls the card to its end
+            guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "CondJarEnd") != 0 else { return }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            withAnimation { proxy.scrollTo("jarcard-end", anchor: .bottom) }
+        }
+        }
+        // the one action stays pinned under the scrolling list (never scrolls away, never over a row)
+        HStack(spacing: 10) {
+            ShowCTA(title: "Feed", symbol: "fork.knife", enabled: feedOK, id: "jarcard-feed", height: 52) { feed?() }
+            if ownsDrink { ShowCTA(title: "Drink", symbol: HUDMenu.symbol(.drink), enabled: drinkOK, id: "jarcard-drink", height: 52) { drink?() } }
+        }
+        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 12)
+        }
         .accessibilityIdentifier("jarcard-\(tag.rawValue)")
     }
 }
