@@ -36,7 +36,7 @@ extension BlobBrain {
         return false
     }
 
-    /// Race: the placings are in and the player took first. He celebrates as soon as his feet are planted between coast steps (queued until then; the race card never waits for it).
+    /// Race: the player crossed the line first (place 1 is final then; the results card covers the track a few seconds later). He celebrates as soon as his feet are planted between coast steps (queued until then; the race card never waits for it).
     func raceWinCue(_ sim: SoftBody) { race.winQueued = true; _ = raceWin(sim) }
 
     @discardableResult
