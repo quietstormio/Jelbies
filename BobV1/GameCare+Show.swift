@@ -49,6 +49,8 @@ final class ShowBook {
     /// Walks to the middle that wait for the middle to be clear: (actor id, goal, seconds waited). A walker's goal is resolved round the bodies standing near it (the floor rules keep bodies apart),
     /// so a goal asked while the last performer is still leaving the middle lands beside it, and the next performer then did her whole turn off-centre (spotlight round).
     var pendingWalks: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
+    /// When a walker who stopped short was last asked again (CACurrentMediaTime), by actor id.
+    var retryAt: [Int: Double] = [:]
     nonisolated deinit {}
 }
 
@@ -426,9 +428,14 @@ extension GameCare {
         guard let a, let b = a.brain, let g = book.goals[a.id] else { return true }
         if b.pending != nil { return false }
         if case .walk = b.script { return false }          // (still stepping; the turn to the camera after the walk is not waited for: it can take seconds)
-        if simd_distance(SIMD2(b.px, b.pz), g) < 0.6 { book.goals[a.id] = nil; return true }
+        let c = a.sim.centroid()          // (the BODY's place, not the brain's: they differed by up to a metre while a walker was held back by the one before her)
+        if simd_distance(SIMD2(c.x, c.z), g) < Self.arriveRadius { book.goals[a.id] = nil; return true }
+        // she stopped short (held back by the one leaving the middle): ask again, at most every 0.6 s, instead of waiting for the cap
+        let now = CACurrentMediaTime()
+        if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: g) }
         return false
     }
+    private static let arriveRadius: Float = 0.45
 
     // MARK: the bodies' acts
 
