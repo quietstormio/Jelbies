@@ -58,11 +58,11 @@ nonisolated enum WinTuning {
         guard DevArgs.enabled, UserDefaults.standard.object(forKey: key) != nil else { return def }
         return Float(UserDefaults.standard.double(forKey: key))
     }
-    /// The arms-up pose: elevation above the horizontal (rad; the jacks' pose is 0.95), sweep, and how far the stub stands out of the body (u).
-    static let armEl: Float = v("WinArmEl", 1.25)
-    static let armSa: Float = v("WinArmSa", 0.10)
-    static let armOut: Float = v("WinArmOut", 0.10)
+    /// The arms-up pose: elevation above the horizontal (rad), sweep (0 = in the plane of the shoulders, so a camera looking down on him still sees them rise; the jacks' 0.10 swings them toward the camera and flattens them), and how far the stub stands out of the body (u).
+    static let armEl: Float = v("WinArmEl", 0.85)
+    static let armSa: Float = v("WinArmSa", 0.0)
+    static let armOut: Float = v("WinArmOut", 0.17)
     /// Apex of a bounce (u; the plain joy is 0.12) and the landing squash.
-    static let apex: Float = v("WinApex", 0.24)
+    static let apex: Float = v("WinApex", 0.26)
     static let landDepth: Float = v("WinLandDepth", 0.30)
 }
