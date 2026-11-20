@@ -355,6 +355,13 @@ final class RacePullFlowTests: XCTestCase {
         }
     }
 
+    /// The default jiggle level (1) is what players have: the same three races, the same zero-leash rule (the first-place celebration is part of every one of them).
+    func testFeetStayAttachedAtTheDefaultJiggleLevel() {
+        feetRace("puddle level 1", tier: .puddle, seed: 3, level: 1)
+        feetRace("splash level 1", tier: .splash, seed: 7, level: 1)
+        feetRace("tsunami level 1", tier: .tsunami, seed: 11, level: 1)
+    }
+
     /// B1b 2.1: the skin's frame disagreement per phase on every course (the numbers for the Main session). Prints only.
     private func fdTable(_ rows: [(CourseTier, UInt64)], taps: Bool = false) {
         for (tier, seed) in rows {

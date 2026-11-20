@@ -13,7 +13,8 @@ import simd
 extension BlobBrain {
     /// Bounces of the celebration, the apex of each (u; the plain joy is one hop of 0.12), the pause on the ground between two, and the arms' ease down at the end (s).
     static let winHops = 4
-    static var winApex: Float { WinTuning.apex }
+    /// The bounce's apex for THIS body's jiggle level (the skin's wobble at the strongest level makes the leash move a foot piece on a tall landing: RacePullFlowTests).
+    func winApexNow() -> Float { WinTuning.apex(level: skinnerRef?.jelly.level ?? JellyJiggle.sharedLevel) }
     static let winLandHold: Float = 0.05
     static let winSettle: Float = 0.5
 
@@ -55,7 +56,9 @@ extension BlobBrain {
 /// `-WinApex`, `-WinLandDepth` change them for a capture session without a rebuild.
 nonisolated enum WinTuning {
     private static func v(_ key: String, _ def: Float) -> Float {
-        guard DevArgs.enabled, UserDefaults.standard.object(forKey: key) != nil else { return def }
+        guard DevArgs.enabled else { return def }
+        if let e = ProcessInfo.processInfo.environment["WIN_" + key], let f = Float(e) { return f }          // (test sweeps: TEST_RUNNER_WIN_<key>=...)
+        guard UserDefaults.standard.object(forKey: key) != nil else { return def }
         return Float(UserDefaults.standard.double(forKey: key))
     }
     /// The arms-up pose: elevation above the horizontal (rad), sweep (0 = in the plane of the shoulders, so a camera looking down on him still sees them rise; the jacks' 0.10 swings them toward the camera and flattens them), and how far the stub stands out of the body (u).
@@ -64,5 +67,9 @@ nonisolated enum WinTuning {
     static let armOut: Float = v("WinArmOut", 0.17)
     /// Apex of a bounce (u; the plain joy is 0.12) and the landing squash.
     static let apex: Float = v("WinApex", 0.23)
+    /// Apex by jiggle level: level 0 and 1 (the shipped default) keep `apex`; the strongest level 2 gets `apexL2`.
+    static let apexL1: Float = v("WinApexL1", 0.23)
+    static let apexL2: Float = v("WinApexL2", 0.16)
+    static func apex(level: Int) -> Float { level >= 2 ? apexL2 : level == 1 ? apexL1 : apex }
     static let landDepth: Float = v("WinLandDepth", 0.20)
 }
