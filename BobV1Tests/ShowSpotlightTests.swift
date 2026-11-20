@@ -66,6 +66,8 @@ final class ShowSpotlightTests: XCTestCase {
         var maxDist: Float = 0
         var worstOverlap: CGFloat = 0
         var worstBody: CGFloat = 0, worstBodyArea: CGFloat = 0, peakHop: Float = 0
+        var envLo = SIMD3<Float>(repeating: 99), envHi = SIMD3<Float>(repeating: -99)          // the performer's widest reach while he holds the light
+        var envTrick: [String: (SIMD3<Float>, SIMD3<Float>)] = [:]
         var offBetween = true
         var seenTrick = false
         var danceMiss = 0, danceLit = 0
@@ -139,6 +141,8 @@ final class ShowSpotlightTests: XCTestCase {
             let mine = box(litActor, frame: f, size: size)
             let others = (room.actors + book.extra).filter { $0.id != p && !care.showHides($0.id) }
             peakHop = max(peakHop, litActor.sim.centroid().y)
+            let cc = litActor.sim.centroid(); envLo = simd_min(envLo, cc); envHi = simd_max(envHi, cc)
+            let tk = "\(sh.trickStage == .rivals ? "rival\(sh.rivalTurn ?? -1)" : "player")-\(sh.trickTurnNow ?? -1)"; if let e = envTrick[tk] { envTrick[tk] = (simd_min(e.0, cc), simd_max(e.1, cc)) } else { envTrick[tk] = (cc, cc) }
             for o in others { let bi = mine.intersection(box(o, frame: f, size: size)); if !bi.isNull { let ob = box(o, frame: f, size: size); worstBodyArea = max(worstBodyArea, bi.width * bi.height); worstBody = max(worstBody, bi.width * bi.height / (ob.width * ob.height)) } }
             for o in others {          // (no waiting face is under the performer, and no two waiting faces overlap)
                 let inter = mine.intersection(box(o, frame: f, size: size, face: true))
@@ -161,6 +165,8 @@ final class ShowSpotlightTests: XCTestCase {
         XCTAssertLessThan(maxDist, 0.6, "the lit performer stays within 0.6 of the middle of the stage")
         XCTAssertEqual(worstOverlap, 0, accuracy: 1, "no waiting entrant's face is under the performer or another face (\(size)): \(diag)")
         print("[ShowSpotlight] \(size): worst body-box overlap of a waiting body with the performer: \(Int(worstBody * 100)) % of the waiting body's box (face overlap \(worstOverlap) px2), highest centroid while lit \(peakHop)")
+        print("[ShowSpotlight] \(size) reach of the lit performer: x \(envLo.x)...\(envHi.x), y \(envLo.y)...\(envHi.y), z \(envLo.z)...\(envHi.z)")
+        for (k, e) in envTrick.sorted(by: { $0.key < $1.key }) { print("[ShowSpotlight] reach \(k): x \(e.0.x)...\(e.1.x) y \(e.0.y)...\(e.1.y) z \(e.0.z)...\(e.1.z)") }
         care.show.abort()
     }
 
