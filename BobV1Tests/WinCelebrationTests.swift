@@ -50,6 +50,8 @@ final class WinCelebrationTests: XCTestCase {
         XCTAssertEqual(b.idleState.kind, .joy)
         XCTAssertEqual(b.idleState.reps, BlobBrain.winHops)
         var airs = 0, wasAir = false, armsUpFrames = 0, frames = 0, maxW: Float = 0
+        var minElev: Float = .infinity, maxApex: Float = 0, happyFrames = 0, smileFrames = 0
+        let y0 = r.sim.centroid().y
         var w = SocialTests.Watch()
         r.run(8, until: { b.idleState.kind == nil && r.t > 0.5 }, each: {
             let air = b.gait.phase == .air
@@ -59,7 +61,13 @@ final class WinCelebrationTests: XCTestCase {
             maxW = max(maxW, b.armDirW)
             maxTurn = max(maxTurn, abs(wrapAngle(b.yaw - yaw0)))
             if b.armDirW > 0.95 && b.armDirEl == [0.95, 0.95] { armsUpFrames += 1 }
-            XCTAssertLessThanOrEqual(b.armDirEl[0], 0.95 + 1e-4, "the arms never go higher than the joy / jacks pose")
+            maxApex = max(maxApex, r.sim.centroid().y - y0)
+            if b.armDirW > 0.99 {
+                // the DRAWN arms: the tip of each stub against its root in the body frame (elevation above the horizontal)
+                for si in 0..<2 { let g = b.armLastGeom[si]; let d = g.b - g.a; minElev = min(minElev, asinf(d.y / max(simd_length(d), 1e-4))) }
+            }
+            if b.expr.kind == .joyArc { happyFrames += 1 }
+            if b.mouthOpen > 0.5 { smileFrames += 1 }
             w.sample(r)
         })
         let secs = r.t - 1.0          // (MotionRig settles for 1 s first)
@@ -68,10 +76,28 @@ final class WinCelebrationTests: XCTestCase {
         XCTAssertEqual(airs, BlobBrain.winHops, "four bounces")
         XCTAssertGreaterThan(secs, 2.5); XCTAssertLessThan(secs, 3.6)
         XCTAssertLessThan(maxTurn, 0.15, "he bounces on the spot facing the way he stood (was seen turning his back in the race)")
+        MotionLog.write("WIN arms: lowest drawn tip elevation \(minElev) rad (jacks pose 0.95), apex \(maxApex) u, happy frames \(happyFrames) / \(frames), smile frames \(smileFrames)")
+        XCTAssertGreaterThan(minElev, 0.95, "both drawn arm tips stay above the jacks' pose (clearly above the shoulder line) through the bounces")
+        XCTAssertGreaterThan(Float(happyFrames) / Float(frames), 0.9, "the happy arc face for the whole move")
+        XCTAssertGreaterThan(Float(smileFrames) / Float(frames), 0.8, "an open smile")
         XCTAssertGreaterThan(maxW, 0.99, "the arms are fully up")
         XCTAssertGreaterThan(Float(armsUpFrames) / Float(frames), 0.6, "the arms stay up through the bounces")
         XCTAssertFalse(b.winCheer); XCTAssertEqual(b.armDirW, 0); XCTAssertEqual(b.gait.hopApex, 0.10, accuracy: 1e-6, "the plain hop's numbers are back")
         w.check("win celebration")
+    }
+
+    /// Low needs / a grumpy mood must not frown during the celebration, and his own faces come back after it.
+    func testTheFaceIsHappyWithLowNeedsAndComesBack() {
+        let r = rig(), b = r.brain
+        b.idleMood = .grumpy
+        r.run(0.5)
+        XCTAssertTrue(b.winStart(r.sim))
+        var frown = 0, frames = 0
+        r.run(5, until: { b.idleState.kind == nil && r.t > 0.5 }, each: { frames += 1; if b.expr.kind != .joyArc || b.expr.raiseL < 0 || b.expr.tiltL < 0 { frown += 1 } })
+        XCTAssertLessThanOrEqual(Float(frown) / Float(max(frames, 1)), 0.05, "no frown (a grumpy mood does not show) during the win: \(frown) of \(frames)")
+        r.run(1.0)
+        XCTAssertNotEqual(b.expr.kind, .joyArc, "the held happy arc does not stay on afterwards")
+        XCTAssertFalse(b.winCheer)
     }
 
     func testThePlainJoyIsUnchanged() {
@@ -134,8 +160,8 @@ final class WinCelebrationTests: XCTestCase {
     // MARK: the race
 
     /// A race to the results; `waddle` = the rivals' speed, `rate` = the player's taps per second. Returns what happened to each body.
-    private func raceRun(waddle: Float, rate: Float, seed: UInt64) -> (place: Int?, finished: Bool, playerWin: Bool, rivalWin: Bool, played: Int) {
-        var out: (Int?, Bool, Bool, Bool, Int) = (nil, false, false, false, 0)
+    private func raceRun(waddle: Float, rate: Float, seed: UInt64) -> (place: Int?, finished: Bool, playerWin: Bool, rivalWin: Bool, played: Int, held: Bool) {
+        var out: (Int?, Bool, Bool, Bool, Int, Bool) = (nil, false, false, false, 0, false)
         withHub(scene: .results) { fired in
             let room = RaceThreeTests.Room(count: 3)
             Self.keep.append(room)
@@ -154,7 +180,7 @@ final class WinCelebrationTests: XCTestCase {
                 return care.race.sim?.phase == .results && care.race.cardAge > 6
             }
             let s = care.race.sim
-            out = (s?.playerPlace, s?.playerFinished ?? false, playerWin, rivalWin, fired().filter { $0.hasPrefix("yay_jelly") }.count)
+            out = (s?.playerPlace, s?.playerFinished ?? false, playerWin, rivalWin, fired().filter { $0.hasPrefix("yay_jelly") }.count, care.race.winHoldT != nil)
         }
         return out
     }
@@ -166,6 +192,7 @@ final class WinCelebrationTests: XCTestCase {
         XCTAssertTrue(r.playerWin, "the player's body celebrates at the results")
         XCTAssertFalse(r.rivalWin, "no rival does")
         XCTAssertEqual(r.played, 1, "one cheer PLAYED")
+        XCTAssertTrue(r.held, "the results card was held for the win")
     }
 
     func testRaceOtherPlacesDoNothingNew() {
@@ -174,6 +201,30 @@ final class WinCelebrationTests: XCTestCase {
         XCTAssertFalse(r.playerWin)
         XCTAssertFalse(r.rivalWin)
         XCTAssertEqual(r.played, 0, "no win cheer")
+        XCTAssertFalse(r.held, "2nd / 3rd place: the card timing is exactly as today (no hold)")
+    }
+
+    /// First place holds the results card for the celebration (3 s cap after the finish, a tap brings it at once); nothing else changes.
+    func testTheWinHoldRules() {
+        let f = RaceFlow()
+        XCTAssertFalse(f.holdsCard, "no first place: the card comes when the results are in, exactly as before")
+        f.noteWinMove(active: true); f.noteWinMove(active: false)
+        XCTAssertFalse(f.holdsCard, "a move that was never asked changes nothing")
+        f.startWinHold()
+        XCTAssertTrue(f.holdsCard)
+        f.noteWinMove(active: false); XCTAssertTrue(f.holdsCard, "not started yet: still holding")
+        f.noteWinMove(active: true); XCTAssertTrue(f.holdsCard, "running")
+        f.noteWinMove(active: false); XCTAssertFalse(f.holdsCard, "the move ended: the card may come")
+        f.startWinHold(); f.skipWinHold(); XCTAssertFalse(f.holdsCard, "a tap brings the card at once")
+        f.startWinHold(); f.winHoldT = RaceFlow.winHoldMax - 0.01; XCTAssertTrue(f.holdsCard)
+        f.winHoldT = RaceFlow.winHoldMax; XCTAssertFalse(f.holdsCard, "3.0 s after the finish at the latest")
+    }
+
+    func testTwoBodiesOverTheLineInOneTickTheEarlierInterpolatedTimeWins() {
+        XCTAssertTrue(RaceSim.leadsAtFinish(player: 12.80, others: [13.7, nil]))
+        XCTAssertFalse(RaceSim.leadsAtFinish(player: 12.80, others: [12.79, nil]), "a rival over the line in the same tick with the earlier time is first")
+        XCTAssertFalse(RaceSim.leadsAtFinish(player: 12.80, others: [12.80, nil]), "an exact tie is not a clear first")
+        XCTAssertTrue(RaceSim.leadsAtFinish(player: 12.80, others: [nil, nil]))
     }
 
     // MARK: the Jelly Show

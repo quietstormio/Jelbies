@@ -220,7 +220,10 @@ extension BlobBrain {
         expr.t += dt
         if expr.forcedLeft > 0 { expr.forcedLeft -= dt }
         // choose
-        if focusedRace {
+        if winCheer {          // the win celebration: the happy arcs for the whole move, whatever his mood, his needs or the race's focused brow
+            if expr.kind != .joyArc { setFace(.joyArc, dur: 99) }
+            expr.forcedLeft = max(expr.forcedLeft, 0.3)
+        } else if focusedRace {
             if expr.kind != .focused { setFace(.focused, dur: 99) }
         } else if expr.forcedLeft <= 0 {
             expr.pickTimer -= dt
@@ -237,7 +240,8 @@ extension BlobBrain {
         let eL = pose.eyeL, eR = pose.eyeR, tL = pose.tiltL, tR = pose.tiltR, rL = pose.raiseL, rR = pose.raiseR
         var m = pose.mouth, roll = pose.roll
         // an open happy mouth while he is bouncing about (never grumpy)
-        if idleMood != .grumpy, expr.kind != .sleepy {
+        if winCheer { m = max(m, 0.8) }          // (an open smile)
+        else if idleMood != .grumpy, expr.kind != .sleepy {
             var lively = runW > 0.3
             if let ik = idleState.kind { switch ik { case .skipHop, .hopscotch, .trot, .joy, .zoomies, .run, .scoot, .bounce, .jacks, .startle: lively = true; default: break } }
             if lively { m = max(m, 0.45) }
@@ -268,6 +272,9 @@ extension BlobBrain {
         }
         applyBrows(skinner)
     }
+
+    /// The win celebration is over: his own faces come back (the held happy arc does not stay on).
+    func winFaceEnd() { expr.forcedLeft = 0; setFace(.neutral, dur: 99) }
 
     private func applyBrows(_ skinner: Skinner) {
         let any = expr.raiseL != 0 || expr.raiseR != 0 || expr.tiltL != 0 || expr.tiltR != 0

@@ -13,17 +13,18 @@ import simd
 extension BlobBrain {
     /// Bounces of the celebration, the apex of each (u; the plain joy is one hop of 0.12), the pause on the ground between two, and the arms' ease down at the end (s).
     static let winHops = 4
-    static let winApex: Float = 0.16
-    static let winLandHold: Float = 0.16
+    static var winApex: Float { WinTuning.apex }
+    static let winLandHold: Float = 0.12
     static let winSettle: Float = 0.5
 
     /// `idleStart(.joy)` with `winCheer` set: four reps, the big face and the cheer.
     func winBegin() {
-        NSLog("[melon] win celebration begins (slot %d, race %@)", steerID, race.active ? "yes" : "no")          // capture aid: proves it started in the real app
+        if Self.idleLog { NSLog("[melon] win celebration begins (slot %d, race %@)", steerID, race.active ? "yes" : "no") }          // capture aid (-VoiceLog 1): proves it started in the real app
+        gait.landDepth = WinTuning.landDepth          // (a deeper squash on every landing: the bounce reads at the race camera's distance; `idleEnd` puts 0.2 back)
         idleState.reps = Self.winHops
         idleState.baseYaw = yaw
         blushBump(hold: 3.4, peak: 0.9)
-        face(.joyArc, hold: 3.2)          // (the happy ^^ eyes with the brows up: `.excited` settles to a flat stare after half a second)
+        face(.joyArc, hold: 3.2)          // (the happy ^^ eyes, brows up, an open smile: `expressionTick` holds it for the whole move whatever his mood / needs / the race's focused brow)
         if !voiceMuted { AudioHub.shared.winVoice(jelly: steerID, x: px) }
     }
 
@@ -39,7 +40,7 @@ extension BlobBrain {
     }
 
     /// Race: the player crossed the line first (place 1 is final then; the results card covers the track a few seconds later). He celebrates as soon as his feet are planted between coast steps (queued until then; the race card never waits for it).
-    func raceWinCue(_ sim: SoftBody) { NSLog("[melon] win celebration asked at the finish (slot %d)", steerID); race.winQueued = true; _ = raceWin(sim) }
+    func raceWinCue(_ sim: SoftBody) { if Self.idleLog { NSLog("[melon] win celebration asked at the finish (slot %d)", steerID) }; race.winQueued = true; _ = raceWin(sim) }
 
     @discardableResult
     func raceWin(_ sim: SoftBody) -> Bool {
@@ -48,4 +49,20 @@ extension BlobBrain {
         if winStart(sim) { restTimer = max(restTimer, 1); return true }
         return false
     }
+}
+
+/// The numbers of the win move. The defaults are what ships; with developer arguments on (simulator / dev builds only) `-WinArmEl`, `-WinArmSa`, `-WinArmOut`,
+/// `-WinApex`, `-WinLandDepth` change them for a capture session without a rebuild.
+nonisolated enum WinTuning {
+    private static func v(_ key: String, _ def: Float) -> Float {
+        guard DevArgs.enabled, UserDefaults.standard.object(forKey: key) != nil else { return def }
+        return Float(UserDefaults.standard.double(forKey: key))
+    }
+    /// The arms-up pose: elevation above the horizontal (rad; the jacks' pose is 0.95), sweep, and how far the stub stands out of the body (u).
+    static let armEl: Float = v("WinArmEl", 1.25)
+    static let armSa: Float = v("WinArmSa", 0.10)
+    static let armOut: Float = v("WinArmOut", 0.10)
+    /// Apex of a bounce (u; the plain joy is 0.12) and the landing squash.
+    static let apex: Float = v("WinApex", 0.24)
+    static let landDepth: Float = v("WinLandDepth", 0.30)
 }

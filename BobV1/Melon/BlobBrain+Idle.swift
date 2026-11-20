@@ -556,6 +556,7 @@ extension BlobBrain {
         commanded = false
         armDirW = 0; armDirOut = 0
         idleState.jackRoll = 0
+        if winCheer { winFaceEnd() }          // (his own faces come back after the celebration)
         winCheer = false; winSettleT = 0
         if !nameHopping { gait.hopApex = 0.10; gait.hopDuration = 0.26 }       // the jacks' higher hop ends with them
         gait.flipTwist = 0; gait.crouchDepth = 0.18; gait.crouchHold = 0; gait.airStretch = 0.12; gait.landDepth = 0.2          // (the trick hops' knobs go with them)
@@ -1161,6 +1162,10 @@ extension BlobBrain {
             if kind == .joy {          // the jacks' arms-up pose, one rep
                 if winCheer, idleState.hop >= idleState.reps, !gait.isBusy { winSettleT += dt }          // (the win: after the last bounce the arms ease down over `winSettle`)
                 armDirW = smooth01(min(1, idleState.phaseT / 0.12)) * (winCheer ? 1 - smooth01(winSettleT / Self.winSettle) : 1); armDirEl = [0.95, 0.95]; armDirSa = [0.10, 0.10]; armDirOut = 0.07
+                if winCheer {          // the win: both arms held UP (higher than the jacks), a little wiggle
+                    let wig = 0.06 * sinf(2 * .pi * 2.5 * idleState.phaseT)
+                    armDirEl = [WinTuning.armEl + wig, WinTuning.armEl - wig]; armDirSa = [WinTuning.armSa, WinTuning.armSa]; armDirOut = WinTuning.armOut
+                }
             } else {
                 armDirW = 1; armDirEl = [0.45 + 0.1 * flap, 0.45 - 0.1 * flap]; armDirSa = [0.1, 0.1]; armDirOut = 0.05
             }
