@@ -30,6 +30,7 @@ enum PairProbe {
         var touchGaps: [Float] = []          // whole-skin gap at each touch event of the contact gate
         var shots: [Shot] = []
         var footSlide: Float = 0
+        var trace: [String] = []          // per frame: t, phase, roots, yaws, script / gait, skin / body / arm gaps (PairProbe.run(trace: true))
         var sounds: [String: Int] = [:], haps: [String: Int] = [:]
         var chirps: Int { sounds.filter { $0.key.hasPrefix("chirp") }.values.reduce(0, +) }
         var hearts = 0                      // .boop + .makeUp events (both bodies)
@@ -84,7 +85,7 @@ enum PairProbe {
     }
 
     /// shootEvery > 0: render the game camera every that many frames while the session runs (phase >= 1).
-    static func run(kind: SocialKind, cast: [Int], castName: String, maxSec: Float = 40, shootEvery: Int = 0, device: MTLDevice? = nil, hat: Bool = false, seed: UInt64 = 31) -> Result {
+    static func run(kind: SocialKind, cast: [Int], castName: String, maxSec: Float = 40, shootEvery: Int = 0, device: MTLDevice? = nil, hat: Bool = false, seed: UInt64 = 31, trace: Bool = false) -> Result {
         setUpGlobals()
         ContactField.reset(); FeatureClip.eggs = []
         var res = Result(); res.kind = kind.rawValue; res.cast = castName
@@ -111,6 +112,12 @@ enum PairProbe {
         while frame < maxF {
             d.tick()
             for (i, r) in rigs.enumerated() { d.lab.watch[i].sample(r) }
+            if trace, a.brain.social != nil {
+                let S = d.contactSurfaces(), Sb = d.contactSurfacesNoSkin(bodyOnly: true)
+                func st(_ r: MotionRig) -> String { "\(r.brain.activity)/\(r.brain.gait.isBusy ? "gait" : "-")/\(r.brain.feet.active ? "feet" : "-")/\(r.brain.scriptIsNone ? "-" : "script")" }
+                res.trace.append(String(format: "%.3f\t%d\t%.3f\t%.3f\t%.3f\t%.3f\t%.2f\t%.2f\t%@\t%@\t%.1f\t%.1f\t%.1f", Float(frame) / 60, a.brain.social?.phase ?? -1, a.root.x, a.root.y, b.root.x, b.root.y, a.brain.yaw, b.brain.yaw, st(a), st(b),
+                                                BruteForceContactMetric.skinGap(S[0], S[1]) * 100, BruteForceContactMetric.skinGap(Sb[0], Sb[1]) * 100, armToSkin(d, S) * 100))
+            }
             let ph = a.brain.social?.phase ?? -1
             if a.brain.social != nil { sessionSeen = true }
             let evNow = rigs.reduce(0) { $0 + $1.brain.contactEvents }

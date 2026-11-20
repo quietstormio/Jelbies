@@ -141,7 +141,7 @@ extension BlobBrain {
     private func driveJumpTurns(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         if openSideBySide(s, o, isA, settle: 0.6) { return }
         let t = s.phaseT
-        socialBook.handWant = HandReach.armsIn(side: handSide(toward: o))          // (the arms stay in during the hops)
+        if Pair2Tuning.armsIn { socialBook.handWant = HandReach.armsIn(side: handSide(toward: o)) }          // (the arms stay in during the hops)
         switch s.phase {
         case 2:
             let k = s.round
@@ -229,5 +229,9 @@ extension BlobBrain {
 enum Pair2Tuning {
     static let orbitR: Float = 1.65, orbitStep: Float = 0.70, orbitLegs = 6          // (6 legs of 40 degrees = 240 degrees; the chord of a leg stays >= 1.55 from the middle)
     static let upDownPeriod: Float = 1.1, upDownCycles = 4
-    static let jumpBase: Float = 0.35, jumpStep: Float = 0.2, jumpCount = 4
+    nonisolated(unsafe) static var jumpBase: Float = 0.35
+    static let jumpStep: Float = 0.2, jumpCount = 4
+    /// hopAlong / jumpTurns: the hop distance, and whether the arms are held in during the hops (test seams of the sweep: PairSweepTests).
+    nonisolated(unsafe) static var hopDist: Float = 0.45
+    nonisolated(unsafe) static var armsIn = true
 }
