@@ -353,7 +353,7 @@ extension BlobBrain {
             vFamily = f
         }
         var kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand(), night: idleNight, morning: idleMorning, sleep: sleepEnabled, antics: anticsEnabled, music: musicPlaying,
-                                                 cooling: anticsEnabled ? kindCooling : [], anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
+                                                 cooling: (anticsEnabled ? kindCooling : []).union(bedtimeUnderway ? [.yawn] : []), anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
                                                  decor: decorOffers, recent: anticsEnabled ? Set(idleState.recent) : [],
                                                  scale: anticsEnabled ? { [unowned self] in self.varietyScale($0) } : nil, family: vFamily)
         if sleepEnabled, runMoveDemo == nil, kind != .wander, kind != .sleep, idleNight < 0.2, rand() < 0.012 { kind = .sleep }       // a daytime nap now and then
