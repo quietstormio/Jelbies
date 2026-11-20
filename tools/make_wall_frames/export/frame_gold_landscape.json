@@ -1,0 +1,30 @@
+{
+ "id": "frame_gold_landscape",
+ "tris": 3784,
+ "verts": 2360,
+ "sub_meshes": [
+  {
+   "name": "frame",
+   "pivot": [
+    0,
+    0,
+    0
+   ],
+   "material": "plain",
+   "tris": 3784
+  }
+ ],
+ "bounds_min": [
+  -0.8549,
+  -0.6869,
+  0.0
+ ],
+ "bounds_max": [
+  0.8549,
+  0.6869,
+  0.1475
+ ],
+ "border": 0.185,
+ "opening_w": 1.3333333333333333,
+ "opening_h": 1.0
+}

@@ -1187,7 +1187,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             var rt = CACurrentMediaTime()
             if steps > 0 { for a in actors { a.brain?.refitBeans(a.sim, a.skinner) }; for a in parkActors { a.brain?.refitBeans(a.sim, a.skinner) } }          // (the beans follow the body's pose AFTER the step)
             let pmF = PerfMeter.begin()
-            if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }
+            if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))); model.care.refreshWallPicture(renderer: renderer) }
             PerfMeter.end(.feature, pmF)
             lapEnd(.refit, &rt)
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift

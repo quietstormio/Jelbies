@@ -1,0 +1,30 @@
+{
+ "id": "frame_wood_square",
+ "tris": 640,
+ "verts": 404,
+ "sub_meshes": [
+  {
+   "name": "frame",
+   "pivot": [
+    0,
+    0,
+    0
+   ],
+   "material": "plain",
+   "tris": 640
+  }
+ ],
+ "bounds_min": [
+  -0.5938,
+  -0.5938,
+  0.0
+ ],
+ "bounds_max": [
+  0.5938,
+  0.5938,
+  0.052
+ ],
+ "border": 0.09375,
+ "opening_w": 1.0,
+ "opening_h": 1.0
+}

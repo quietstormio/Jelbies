@@ -13,7 +13,7 @@ struct RoomVertex {
     var color: SIMD4<Float>
 }
 
-enum RoomMaterial: Float { case plain = 0, floor = 1, wall = 2, rug = 3, glow = 4, lamp = 5 }
+enum RoomMaterial: Float { case plain = 0, floor = 1, wall = 2, rug = 3, glow = 4, lamp = 5, photo = 9 }          // photo: the wall picture (roomPhotoFS; colour rg = uv)
 
 struct RoomMesh {
     var vertices: [RoomVertex] = []

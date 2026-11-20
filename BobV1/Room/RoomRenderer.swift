@@ -12,6 +12,7 @@
 //
 
 import Metal
+import MetalKit
 import simd
 
 struct RoomUniforms {
@@ -72,6 +73,8 @@ nonisolated final class RoomRenderer {
     private let pipeline: MTLRenderPipelineState
     private let depthState: MTLDepthStencilState
     private let blendPipeline: MTLRenderPipelineState
+    /// The wall picture's photo (roomPhotoFS: the same shading with the photo as albedo); nil when the shader is missing (then no photo is drawn).
+    private let photoPipeline: MTLRenderPipelineState?
     private let blendDepthState: MTLDepthStencilState
     private let dummyShadow: MTLTexture
     /// The shoe paint table the fragment shader reads (Wear/ShoeGPU.swift), bound at fragment buffer 2 wherever the room pipelines run.
@@ -164,6 +167,10 @@ nonisolated final class RoomRenderer {
         d.depthAttachmentPixelFormat = depthFormat
         guard let p = try? device.makeRenderPipelineState(descriptor: d) else { return nil }
         pipeline = p
+        d.label = "room photo"
+        d.fragmentFunction = library.makeFunction(name: "roomPhotoFS")
+        photoPipeline = try? device.makeRenderPipelineState(descriptor: d)
+        d.fragmentFunction = fs
         // translucent variant (puffs, contact shadows): straight alpha blend, depth-tested, no depth write
         d.label = "room blended"
         d.colorAttachments[0].isBlendingEnabled = true
@@ -362,6 +369,59 @@ nonisolated final class RoomRenderer {
         decorVB?.label = "decor vertices"; decorIB?.label = "decor indices"
     }
 
+    // The wall picture (Room/WallPicture.swift): static, so it joins the cached room. Frame (opaque), photo (opaque, needs its texture) and a blended contact shadow.
+    private struct StaticMesh { var vb: MTLBuffer?, ib: MTLBuffer?; var count = 0 }
+    private var wallFrame = StaticMesh(), wallPhoto = StaticMesh(), wallShadow = StaticMesh()
+    private var wallTexture: MTLTexture?
+    /// True while a picture is set (the host clears it in the café, the park, ...; the room encode also draws it only in a room that has a wall zone).
+    var hasWallPicture: Bool { wallFrame.count + wallPhoto.count > 0 }
+    private func staticMesh(_ m: RoomMesh, label: String) -> StaticMesh {
+        guard !m.indices.isEmpty else { return StaticMesh() }
+        let vb = device.makeBuffer(bytes: m.vertices, length: m.vertices.count * MemoryLayout<RoomVertex>.stride, options: .storageModeShared)
+        let ib = device.makeBuffer(bytes: m.indices, length: m.indices.count * 4, options: .storageModeShared)
+        vb?.label = label + " vertices"; ib?.label = label + " indices"
+        return StaticMesh(vb: vb, ib: ib, count: m.indices.count)
+    }
+    /// Hangs (or, with nil, takes down) the wall picture. `texture` is the photo (sRGB, mipmapped); until it arrives the frame hangs around the bare wall. Invalidates the room cache.
+    func setWallPicture(_ m: WallPictureGeometry.Meshes?, texture: MTLTexture?) {
+        staticVersion &+= 1
+        guard let m else { wallFrame = StaticMesh(); wallPhoto = StaticMesh(); wallShadow = StaticMesh(); wallTexture = nil; return }
+        wallFrame = staticMesh(m.frame, label: "wall frame"); wallPhoto = staticMesh(m.photo, label: "wall photo"); wallShadow = staticMesh(m.shadow, label: "wall shadow")
+        wallTexture = texture
+    }
+    /// Decodes the wall picture's JPEG into an sRGB, mipmapped, private texture on the loader's own queue (never the main thread) and hands it to `done` (nil when it cannot be read).
+    func loadWallPhoto(_ url: URL, done: @escaping @Sendable (MTLTexture?) -> Void) {
+        let loader = MTKTextureLoader(device: device)
+        let options: [MTKTextureLoader.Option: Any] = [.SRGB: true, .generateMipmaps: true, .origin: MTKTextureLoader.Origin.topLeft,
+                                                       .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue),
+                                                       .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)]
+        loader.newTexture(URL: url, options: options) { tex, _ in done(tex) }
+    }
+    /// The photo arrived (the host decoded it off the main thread).
+    func setWallPhotoTexture(_ t: MTLTexture?) { staticVersion &+= 1; wallTexture = t }
+    private func encodeWallPicture(_ enc: MTLRenderCommandEncoder) {
+        guard hasWallPicture, !followsRoom || WallZone.allows(RoomLayout.current.id) else { return }
+        enc.pushDebugGroup("wall picture")
+        if wallShadow.count > 0, let vb = wallShadow.vb, let ib = wallShadow.ib {
+            enc.setRenderPipelineState(blendPipeline); enc.setDepthStencilState(blendDepthState)
+            enc.setVertexBuffer(vb, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: wallShadow.count, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
+        }
+        enc.setRenderPipelineState(pipeline); enc.setDepthStencilState(depthState)
+        if wallFrame.count > 0, let vb = wallFrame.vb, let ib = wallFrame.ib {
+            enc.setVertexBuffer(vb, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: wallFrame.count, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
+        }
+        if wallPhoto.count > 0, let vb = wallPhoto.vb, let ib = wallPhoto.ib, let tex = wallTexture, let pp = photoPipeline {
+            enc.setRenderPipelineState(pp)
+            enc.setFragmentTexture(tex, index: 2)
+            enc.setVertexBuffer(vb, offset: 0, index: 1)
+            enc.drawIndexedPrimitives(type: .triangle, indexCount: wallPhoto.count, indexType: .uint32, indexBuffer: ib, indexBufferOffset: 0)
+            enc.setRenderPipelineState(pipeline)
+        }
+        enc.popDebugGroup()
+    }
+
     /// Tight boxes over a mesh's triangles, grouped by the world cell (xz, `cell` units) of each triangle's centroid; every triangle is fully inside its box.
     /// At most `maxBoxes` boxes remain (nearest merged).
     static func clusterBoxes(_ m: RoomMesh, cell: Float, maxBoxes: Int = 3) -> [(lo: SIMD3<Float>, hi: SIMD3<Float>)] {
@@ -550,6 +610,7 @@ nonisolated final class RoomRenderer {
             enc.drawIndexedPrimitives(type: .triangle, indexCount: decorIndexCount, indexType: .uint32, indexBuffer: di, indexBufferOffset: 0)
             enc.popDebugGroup()
         }
+        encodeWallPicture(enc)
         }
         if parts != .staticOnly, !cutout, decorActive.indexCount > 0, let dv = decorActive.vb[decorActive.slot], let di = decorActive.ib[decorActive.slot] {
             enc.pushDebugGroup("decor (animating)")

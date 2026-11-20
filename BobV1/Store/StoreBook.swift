@@ -82,6 +82,9 @@ final class StoreBook {
         var tricksMigrated: Bool? = nil
         /// The Music Ears grandfather check (an Ears switch that was already on) ran once.
         var earsChecked: Bool? = nil
+        /// The framed photos on the back wall (Room/WallPicture.swift; one for now, a list so more can come). Optional and nil until the first is hung: an older save decodes
+        /// without it and nothing is written while the feature is unused.
+        var wallPictures: [WallPicture]? = nil
     }
     static let key = "StoreBook.v1"
 
@@ -518,6 +521,7 @@ extension StoreBook.Saved {
     enum CodingKeys: String, CodingKey {
         case counts, pages, wearables, worn, starterGiven, newItems, placed, placedAt, nextDecorUID, awarded, unlistedRefunded, rooms, room, stash
         case gardenRefunded, staplesGiven, retiredDecorRefunded, glovesRefunded, headbandsRefunded, bodiesRefunded, wornAt, ownedTricks, everyone, tricksMigrated, earsChecked
+        case wallPictures
     }
     init(from decoder: Decoder) throws {
         self.init()
@@ -531,5 +535,6 @@ extension StoreBook.Saved {
         bodiesRefunded = c.value(.bodiesRefunded, bodiesRefunded); wornAt = c.value(.wornAt, wornAt)
         ownedTricks = c.value(.ownedTricks, ownedTricks); everyone = c.value(.everyone, everyone); tricksMigrated = c.value(.tricksMigrated, tricksMigrated)
         earsChecked = c.value(.earsChecked, earsChecked)
+        wallPictures = c.value(.wallPictures, wallPictures)
     }
 }

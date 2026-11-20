@@ -1,0 +1,30 @@
+{
+ "id": "frame_white_portrait",
+ "tris": 400,
+ "verts": 352,
+ "sub_meshes": [
+  {
+   "name": "frame",
+   "pivot": [
+    0,
+    0,
+    0
+   ],
+   "material": "plain",
+   "tris": 400
+  }
+ ],
+ "bounds_min": [
+  -0.475,
+  -0.6,
+  0.0
+ ],
+ "bounds_max": [
+  0.475,
+  0.6,
+  0.036
+ ],
+ "border": 0.1,
+ "opening_w": 0.75,
+ "opening_h": 1.0
+}
