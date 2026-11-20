@@ -24,8 +24,8 @@ final class PairDistinctTests: XCTestCase {
     override func setUp() { super.setUp(); PairProbe.setUpGlobals() }
     override func tearDown() { PairProbe.tearDownGlobals(); super.tearDown() }
 
-    func probe(_ k: SocialKind, _ c: (String, [Int]), seed: UInt64 = 31) -> PairProbe.Result {
-        let r = PairProbe.run(kind: k, cast: c.1, castName: seed == 31 ? c.0 : "\(c.0)#\(seed)", maxSec: 45, seed: seed)
+    func probe(_ k: SocialKind, _ c: (String, [Int]), seed: UInt64 = 31, flip: Bool = false) -> PairProbe.Result {
+        let r = PairProbe.run(kind: k, cast: c.1, castName: (seed == 31 ? c.0 : "\(c.0)#\(seed)") + (flip ? "/flip" : ""), maxSec: 45, seed: seed, flip: flip)
         PairProbe.tearDownGlobals()
         return r
     }
@@ -77,10 +77,10 @@ final class PairDistinctTests: XCTestCase {
 
     /// The clap: hands within 0 +- 0.5 cm on every species pair AND at other seeds (a different walk-up each: the first version passed seed 31 and sank -1.6 cm at seed 41), never below -1 cm anywhere.
     func testHighFiveHandsMeetInTheBand() {
-        for seed: UInt64 in [31, 41, 42] { for c in Self.casts {
-            let r = probe(.highFive, c, seed: seed)
+        for (seed, flip) in [(UInt64(31), false), (41, false), (42, false), (31, true), (42, true)] { for c in Self.casts {
+            let r = probe(.highFive, c, seed: seed, flip: flip)
             Self.rows.append(row(r))
-            let tag = "highFive \(c.0) seed \(seed)"
+            let tag = "highFive \(c.0) seed \(seed)" + (flip ? " (partner on the other side)" : "")
             XCTAssertTrue(r.started && r.completed, "\(tag): runs to its end")
             XCTAssertGreaterThanOrEqual(r.minSkin, -0.01, "\(tag): never below -1 cm")
             XCTAssertGreaterThanOrEqual(r.minSkinPerf, -0.006, "\(tag): the clap does not press past the band")

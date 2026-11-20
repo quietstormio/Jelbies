@@ -85,13 +85,13 @@ enum PairProbe {
     }
 
     /// shootEvery > 0: render the game camera every that many frames while the session runs (phase >= 1).
-    static func run(kind: SocialKind, cast: [Int], castName: String, maxSec: Float = 40, shootEvery: Int = 0, device: MTLDevice? = nil, hat: Bool = false, seed: UInt64 = 31, trace: Bool = false) -> Result {
+    static func run(kind: SocialKind, cast: [Int], castName: String, maxSec: Float = 40, shootEvery: Int = 0, device: MTLDevice? = nil, hat: Bool = false, seed: UInt64 = 31, trace: Bool = false, flip: Bool = false) -> Result {
         setUpGlobals()
         ContactField.reset(); FeatureClip.eggs = []
         var res = Result(); res.kind = kind.rawValue; res.cast = castName
         let n = cast.count
         let starts: [SIMD2<Float>] = kind == .orbit ? [SIMD2(-1.6, 0.4), SIMD2(0.0, 0.4)] : Array(ContactPolishTests.farStarts.prefix(n))
-        let d = Duo(positions: starts, features: cast.map { OnePieceInvariantTests.characters[$0].1 }, seed: seed, quiet: true)
+        let d = Duo(positions: flip ? Array(starts.reversed()) : starts, features: cast.map { OnePieceInvariantTests.characters[$0].1 }, seed: seed, quiet: true)
         keep.append(d)
         for r in d.lab.rigs { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true }
         d.live = true
