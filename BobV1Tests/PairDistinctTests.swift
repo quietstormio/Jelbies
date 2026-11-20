@@ -34,11 +34,13 @@ final class PairDistinctTests: XCTestCase {
     func row(_ r: PairProbe.Result) -> String {
         let ph = r.perf
         let travel = ph.isEmpty ? 0 : (ph.map { $0.sepRoot }.max() ?? 0) - (ph.map { $0.sepRoot }.min() ?? 0)
+        let worst = r.samples.min { $0.skin < $1.skin }
+        let at = worst.map { String(format: "t%.1f/ph%d", $0.t, $0.phase) } ?? "-"
         return [r.kind, r.cast, "\(r.started)", "\(r.completed)", String(format: "%.1f", r.seconds), Self.cm(r.minSkinPerf), Self.cm(r.minSkin), Self.cm(r.minBody), Self.cm(r.minArmArmPerf), Self.cm(r.minArmLevelPerf), Self.cm(r.minHeadPerf),
                 String(format: "%.0f", travel * 100), r.touchGaps.map { Self.cm($0) }.joined(separator: ","), r.sounds.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","),
-                r.haps.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","), "\(r.hearts)"].joined(separator: "\t")
+                r.haps.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: ","), "\(r.hearts)", at].joined(separator: "\t")
     }
-    static let header = ["kind", "cast", "started", "completed", "sec", "contactGap_cm", "worstSkin_cm", "bodyOnly_cm", "armGap_cm", "armLevel_cm", "headLevel_cm", "sepRange_cm", "touchGaps_cm", "sounds", "haptics", "hearts"].joined(separator: "\t")
+    static let header = ["kind", "cast", "started", "completed", "sec", "contactGap_cm", "worstSkin_cm", "bodyOnly_cm", "armGap_cm", "armLevel_cm", "headLevel_cm", "sepRange_cm", "touchGaps_cm", "sounds", "haptics", "hearts", "worstAt"].joined(separator: "\t")
 
     private func flush(_ name: String) {
         guard let dir = ProcessInfo.processInfo.environment["PAIR_OUT"], !dir.isEmpty else { return }
