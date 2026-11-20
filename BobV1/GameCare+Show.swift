@@ -348,6 +348,15 @@ extension GameCare {
         }
         book.pendingWalks = rest
     }
+    /// While one entrant performs, the next one who waits far off (rival 2 comes from off-stage) is already sent toward the middle, to a spot 1.6 out on her own side (clear of the performer,
+    /// so her goal is not displaced): by her turn she is a short step away and the wait for her never runs out.
+    private func showStageNext(after i: Int) {
+        guard let j = show.nextRivalUp, j != i, let nb = rivalActor(j) else { return }
+        let rest = ShowStage.rivalRest(j, sideways: GameCamera.aspect > 1)
+        let out = rest - ShowStage.playerSpot, far = simd_length(out)
+        guard far > 2.5 else { return }
+        showWalk(nb, to: ShowStage.playerSpot + out / far * 1.6)
+    }
     /// The Trick round's stage: the rivals stand at their rest spots; after it they are back in the dance row (and the borrowed ones far off) for the results.
     private func showSetTrick(_ on: Bool) {
         let book = showBook
@@ -366,6 +375,9 @@ extension GameCare {
     /// The flow asks for the rivals' turn on the bodies.
     private func showRivalCue(_ cue: ShowFlow.RivalCue) {
         let book = showBook
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled { print(String(format: "[showturn] %@ t=%.3f", "\(cue)", CACurrentMediaTime())) }          // (capture aid: the turn's clock, the same line in every build that is timed)
+        #endif
         switch cue {
         case .playerAside(let aside):
             guard let a = stageActor(0) else { return }
@@ -374,16 +386,16 @@ extension GameCare {
             guard let a = rivalActor(i) else { return }
             showWalkWhenClear(a, to: ShowStage.playerSpot)
         case .perform(let i, let t, let ok):
-            guard let a = rivalActor(i), let b = a.brain else { return }
+            guard let a = rivalActor(i), a.brain != nil else { return }
             book.goals[a.id] = nil
-            let here = a.sim.centroid()
-            if simd_distance(SIMD2(here.x, here.z), ShowStage.playerSpot) > 0.8 {          // (a walk that never got there, or was still waiting for the middle to clear: he is in the middle for his trick)
-                book.pendingWalks.removeAll { $0.id == a.id }
-                #if targetEnvironment(simulator)
-                if DevArgs.enabled { print(String(format: "[spotlight] snap to the middle: rival %d was %.2f away", i, simd_distance(SIMD2(here.x, here.z), ShowStage.playerSpot))) }
-                #endif
-                showSnap(a, to: b.fixed(ShowStage.playerSpot))          // (the floor rules' spot beside whoever still stands there)
+            book.pendingWalks.removeAll { $0.id == a.id }
+            #if targetEnvironment(simulator)
+            if DevArgs.enabled {          // (capture aid: she performs where she stands only when the turn's wait for her ran out; the light then goes to her)
+                let here = a.sim.centroid(), away = simd_distance(SIMD2(here.x, here.z), ShowStage.playerSpot)
+                if away > 0.8 { print(String(format: "[spotlight] cap: rival %d performs %.2f from the middle (the wait for her ran out)", i, away)) }
             }
+            #endif
+            showStageNext(after: i)
             showDoTrick(a, t, success: ok, others: a.id)
         case .walkOut(let i):
             guard let a = rivalActor(i) else { return }

@@ -554,7 +554,7 @@ final class ShowFlow {
             guard rivalT >= 0.3, rivalReady(nil, false) || rivalT > 0.9 else { return }
             nextRival()
         case .walkIn:
-            guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalT > 3.5 else { return }
+            guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalT > Self.walkInCap else { return }          // (the turn WAITS for her to arrive: no teleport; past the cap she performs where she stands)
             startRivalPerform(i)
         case .perform:
             guard let i = rivalTurn, rivalT >= Self.rivalSeconds(rivalNow?.turn.trick ?? .sit) else { return }
@@ -563,10 +563,16 @@ final class ShowFlow {
             guard rivalT >= 0.25, rivalT >= 0.55 || (rivalTurn.map { rivalReady($0, false) } ?? true) else { return }          // (the next entrant sets off while she is still stepping back: they leave and arrive on opposite sides)
             nextRival()
         case .playerBack:
-            guard rivalT >= 0.3, rivalReady(nil, true) || rivalT > 3 else { return }
+            guard rivalT >= 0.3, rivalReady(nil, true) || rivalT > Self.playerBackCap else { return }
             endRivals()
         }
     }
+    /// How long the turn waits for an entrant to reach the middle (was 3.5 s, and she was put there when it ran out), and for his Jelmiko to come back (was 3 s): 2.5 s more each.
+    static let walkInCap: Float = 6.0, playerBackCap: Float = 5.5
+    /// The entrant who is up after the one performing now (for the glue to start a far one walking early), nil at the end of the turn.
+    var nextRivalUp: Int? { rivalQueue.first }
+    /// The spotlight's state changed: the screens redraw (the light layer subscribes to `revision`).
+    func nudge() { revision += 1 }
     static func rivalSeconds(_ t: VoiceTrick) -> Float { min(ShowTrickInfo.seconds(t), rivalPerformCap) }
     private func startRivalPerform(_ i: Int) {
         guard let n = rivalNow else { return }
