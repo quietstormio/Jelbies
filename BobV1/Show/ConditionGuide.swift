@@ -11,7 +11,7 @@ enum ConditionGuide {
     // MARK: words
 
     /// The plain line under the title.
-    static let subtitle = "Food fills the jars. Fuller jars score higher in the Jelly Show."
+    static let subtitle = "Food and drinks fill the jars. Fuller jars score higher in the Jelly Show."
     static let drainLine = "Jars slowly drain, so feed before a show."
     static let glowCaption = "A bath right before the show adds points."
     /// The Glow 0...5 as a word: 0 none, 1 to 3 a little, 4 to 5 full.
