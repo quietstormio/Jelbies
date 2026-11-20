@@ -337,7 +337,7 @@ extension GameCare {
     }
     private func showWalkWhenClear(_ a: JellyActor, to p: SIMD2<Float>) {
         let book = showBook
-        if let b = a.brain, let g = book.goals[a.id], simd_distance(g, b.fixed(p)) < 0.05, showSpotWalking(a) { return }          // (she set off for the middle early: not restarted)
+        if let b = a.brain, let g = book.goals[a.id], simd_distance(g, b.fixed(p)) < 0.05 { return }          // (she set off for the middle early and has not arrived yet: not restarted; the walk may still be in its first turn)
         book.pendingWalks.removeAll { $0.id == a.id }
         if middleClear(for: a.id) { showWalk(a, to: p) } else { book.pendingWalks.append((a.id, p, 0)) }
     }
