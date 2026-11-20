@@ -1,0 +1,168 @@
+//
+//  EmoteSpot.swift
+//  WHERE emotes happen in the HOME rooms (2026-11-20, emote-spread-r1; the owner: "they're doing too much in the middle of the room ... spread out, use the entire room").
+//  THE ONE PLACE that chooses a spot for an emote: a solo emote's stand (`emoteSoloGate`), a pair's meeting spots (`emoteMeetPlan`), a group's ring centre (`emoteGroupCentre`).
+//  Nothing here changes a move, a body, a contact rule or a rate: an emote that was going to start is only started somewhere else first (a short walk), and only when the place it
+//  would have started on is clearly worse than another one. Home rooms only (`homeRoom`): the Park and the Camp never see it.
+//  The score of a spot: how often emotes happened there lately (`heat`, a decaying count per 1 u cell) and how near the rug centre it is; a long walk costs a little.
+//  Switch: `EmoteSpot.enabled` (dev: `-EmoteSpread 0`).
+//
+
+import simd
+import Foundation
+
+enum EmoteSpot {
+    nonisolated(unsafe) static var enabled: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "EmoteSpread") != nil && UserDefaults.standard.integer(forKey: "EmoteSpread") == 0)
+    /// Recent emotes per 1 u floor cell; every noted emote fades all of them by `decay` (no clock: a count of emotes, so the headless suites behave).
+    nonisolated(unsafe) static var heat: [Int: Float] = [:]
+    static let decay: Float = 0.94
+    /// Rug-centre penalty (a spot right on the centre costs this much; it fades to 0 at `rugReach`).
+    static let rugWeight: Float = 2.2
+    static let rugReach: Float = 2.6
+    /// A walk costs this per unit of its longest leg; a spot is taken only when it beats where the emote would have been by at least `margin`.
+    static let legCost: Float = 0.22
+    static let margin: Float = 0.7
+    /// Longest walk to a spot: solo, pair (each body), group (checked by the ring plan itself: GroupTuning.walkMax).
+    static let soloLeg: Float = 3.6, pairLeg: Float = 3.6
+    /// How far apart the two bodies of a pair stand on the meeting spot.
+    static let pairHalf: Float = 0.55
+
+    static func reset() { heat = [:] }
+    private static func key(_ cx: Int, _ cz: Int) -> Int { (cx + 50) * 1000 + cz + 50 }
+    static func note(_ p: SIMD2<Float>) {
+        for k in heat.keys { heat[k]! *= decay }
+        heat[key(Int(floorf(p.x)), Int(floorf(p.y))), default: 0] += 1
+    }
+    static func heatAt(_ p: SIMD2<Float>) -> Float {
+        let cx = Int(floorf(p.x)), cz = Int(floorf(p.y))
+        var h = heat[key(cx, cz)] ?? 0
+        for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1)] { h += 0.3 * (heat[key(cx + dx, cz + dz)] ?? 0) }
+        return h
+    }
+    static func score(_ p: SIMD2<Float>) -> Float {
+        let rug = max(0, 1 - simd_distance(p, RoomLayout.rugCentre) / rugReach)
+        return -heatAt(p) - rugWeight * rug
+    }
+    /// Standing emotes that are worth walking to a better place for (the in-place ones; the walkers, the reactions and the ones tied to a prop or a window stay as they are).
+    static let soloKinds: Set<IdleKind> = [.jacks, .slump, .yawn, .tail, .flop, .stretch, .bounce, .sway, .sigh, .shake, .lieDown, .chirp, .hiccup, .sneeze, .dizzyWobble,
+                                           .politeBow, .bellyDrum, .signatureFlourish, .proudStrut, .tailThump, .tailHug]
+    /// Pair kinds that start where they are (a glance across the room, a dash) are never moved.
+    static let pairStay: Set<SocialKind> = [.look, .zoomies, .greet, .bagSit]
+}
+
+/// Per brain: a solo emote waiting for its walk to the spot; seconds spent walking to the spot of the emote that just started (read and cleared by the soak harness).
+struct EmoteSpotState {
+    var soloKind: IdleKind?
+    var soloAt: Float = 0
+    var skip = false
+    var walked: Float = 0
+}
+
+extension BlobBrain {
+    /// A pair is on its way to / waiting on its meeting spots: nothing else may take either body.
+    var meetBusy: Bool { socialBook.meet != nil || socialMeetHeld }
+    var emoteSpotLive: Bool { EmoteSpot.enabled && homeRoom && roamProvider != nil && autonomy }
+
+    func emoteSendWalk(to t: SIMD2<Float>) {
+        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+        script = .walk(target: t, then: .none); activity = .walking
+    }
+
+    /// Best of up to 28 floor points for an emote centred there: within `maxLeg` of every body in `from`, the floor rules leave it alone, `ok` agrees. nil = none beats `here` by the margin.
+    func emoteBestSpot(from: [SIMD2<Float>], maxLeg: Float, here: SIMD2<Float>, ok: (SIMD2<Float>) -> Bool) -> SIMD2<Float>? {
+        guard let rf = roamProvider?() else { return nil }
+        let base = EmoteSpot.score(here)
+        var best: (SIMD2<Float>, Float)?
+        for _ in 0..<28 {
+            let c = rf.sampleArea(rand(), rand(), rand())
+            guard rf.contains(c) else { continue }
+            let leg = from.map { simd_distance($0, c) }.max() ?? 0
+            guard leg <= maxLeg, leg > 0.6 else { continue }
+            let s = EmoteSpot.score(c) - EmoteSpot.legCost * leg
+            guard s > base + EmoteSpot.margin, best == nil || s > best!.1, ok(c) else { continue }
+            best = (c, s)
+        }
+        return best?.0
+    }
+
+    // MARK: solo
+
+    /// idleStart's gate. True = the emote will start at its spot (he walks there first). False = start now, here (the spot is noted).
+    func emoteSoloGate(_ kind: IdleKind, _ sim: SoftBody) -> Bool {
+        guard emoteSpotLive, EmoteSpot.soloKinds.contains(kind), !emoteSpot.skip, social == nil, !held, !commanded, commandedIdle == nil, pending == nil, bubbleLeash == nil, !race.active else { return false }
+        let here = SIMD2(px, pz)
+        if let g = emoteBestSpot(from: [here], maxLeg: EmoteSpot.soloLeg, here: here, ok: { [unowned self] c in simd_distance(self.fixed(c), c) < 0.1 && self.peerFree(c) && self.reachable(here, c) }) {
+            emoteSpot.soloKind = kind; emoteSpot.soloAt = variety.now
+            emoteSendWalk(to: g)
+            return true
+        }
+        EmoteSpot.note(here)
+        return false
+    }
+
+    /// pickAutonomous, first thing: he has walked to the spot of a solo emote - start it.
+    func emoteSoloArrived(_ sim: SoftBody) -> Bool {
+        guard let k = emoteSpot.soloKind else { return false }
+        emoteSpot.soloKind = nil
+        guard variety.now - emoteSpot.soloAt < 14, !(anticsEnabled && BlobBrain.fastKinds.contains(k) && fastOthers() >= 2), !varietyPeerJustStarted(k) else { return false }
+        emoteSpot.skip = true; defer { emoteSpot.skip = false }
+        EmoteSpot.note(position)
+        if idleStart(k, sim) { emoteSpot.walked = variety.now - emoteSpot.soloAt; return true }
+        return false
+    }
+
+    // MARK: pair
+
+    /// The pair's meeting: where the two stand for `kind`. If the midpoint they are at is clearly worse than another spot, both walk to it first (`socialBook.meet`), then `socialStart`
+    /// runs as always. True = the meeting is on its way (the caller is done); false = start in place.
+    func emoteMeetPlan(_ kind: SocialKind, with o: BlobBrain) -> Bool {
+        guard emoteSpotLive, !EmoteSpot.pairStay.contains(kind), o.homeRoom, socialFree, o.socialFree else { return false }
+        let a = position, b = o.position
+        let mid = (a + b) / 2
+        // the whole pair moves as it stands (the same shift for both: the start geometry of every kind is what it was)
+        guard let m = emoteBestSpot(from: [mid], maxLeg: EmoteSpot.pairLeg, here: mid, ok: { [unowned self] c in
+            let pa = a + (c - mid), pb = b + (c - mid), rf = self.roamProvider?()
+            return rf?.contains(pa) == true && rf?.contains(pb) == true && simd_distance(self.fixed(pa), pa) < 0.1 && simd_distance(self.fixed(pb), pb) < 0.1 && self.peerFree(pa) && self.peerFree(pb) && self.reachable(a, pa) && self.reachable(b, pb)
+        }) else { EmoteSpot.note(mid); return false }
+        EmoteSpot.note(m)
+        emoteSendWalk(to: a + (m - mid)); o.emoteSendWalk(to: b + (m - mid))
+        socialBook.meet = (kind, o.steerID, 0)
+        o.socialBook.meetHeldBy = steerID
+        return true
+    }
+
+    /// Per tick while no session is on him: the meeting walk. Starts the pair the moment both stand still on their spots; dropped when somebody is taken or it takes too long.
+    func socialMeetTick(_ sim: SoftBody, _ dt: Float) {
+        guard var m = socialBook.meet else { return }
+        m.t += dt
+        socialBook.meet = m
+        guard let o = socialBrain(m.id), o.social == nil, !socialTaken, !o.socialTaken, m.t < 9 else { emoteMeetEnd(); return }
+        if socialFree, o.socialFree {
+            let t = m.t
+            emoteMeetEnd()
+            emoteSpot.walked = t
+            if !socialStart(m.kind, with: o, sim) { socialBook.cooldown = max(socialBook.cooldown, 5); emoteSpot.walked = 0 }
+        }
+    }
+    func emoteMeetEnd() {
+        if let m = socialBook.meet, let o = socialBrain(m.id) { o.socialBook.meetHeldBy = -1 }
+        socialBook.meet = nil
+    }
+    /// The partner of a meeting stands and waits on his spot (nothing new starts) while the meeting runs.
+    var socialMeetHeld: Bool {
+        guard socialBook.meetHeldBy >= 0 else { return false }
+        if let i = socialBrain(socialBook.meetHeldBy), let m = i.socialBook.meet, m.id == steerID { return true }
+        socialBook.meetHeldBy = -1
+        return false
+    }
+
+    // MARK: group
+
+    /// The ring centre of a group: a spot every member can walk to (the ring plan checks the legs and the floor), clearly better than the centroid they stand round. nil = the centroid.
+    func emoteGroupCentre(_ crew: [BlobBrain], here: SIMD2<Float>) -> SIMD2<Float>? {
+        guard emoteSpotLive, crew.allSatisfy({ $0.homeRoom }) else { return nil }
+        if let c = emoteBestSpot(from: crew.map(\.position), maxLeg: EmoteSpot.pairLeg + 0.4, here: here, ok: { _ in true }) { EmoteSpot.note(c); return c }
+        EmoteSpot.note(here)
+        return nil
+    }
+}

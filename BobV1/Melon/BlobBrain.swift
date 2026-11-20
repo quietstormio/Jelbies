@@ -174,6 +174,8 @@ final class BlobBrain {
     /// The stage says this body lives in the HOME room right now and no meal, drink or bath is on (not on a trip, not at the park). It gates the 11-15 room round
     /// (RoomRoam.swift). Only the stage sets it, so the headless suites and every outing stay on the old paths.
     var homeRoom = false
+    /// Where emotes happen (EmoteSpot.swift): a solo emote waiting for its walk to the spot, and the walk time of the emote that just started.
+    var emoteSpot = EmoteSpotState()
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
     /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
@@ -904,6 +906,9 @@ final class BlobBrain {
         if reserved && !commanded { waitPose(sim); return }
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
+        if !emoteSpotLive || reserved { emoteSpot.soloKind = nil; emoteMeetEnd(); socialBook.meetHeldBy = -1 }          // (EmoteSpot.swift: a meal, a bath or the park drops what was waiting for a spot)
+        if emoteSoloArrived(sim) { return }          // (EmoteSpot.swift: he has walked to the spot of a solo emote)
+        if meetBusy { restTimer = 0.25; return }          // (EmoteSpot.swift: a pair is meeting on its spots)
         var pt = CACurrentMediaTime()
         if slideFootRetry() { return }          // (park-slide-r4: he stands on the slide's foot waiting for his leg to clear)
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)

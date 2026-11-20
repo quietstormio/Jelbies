@@ -153,7 +153,7 @@ extension BlobBrain {
         for e in pool { if x < e.weight { pool = [e]; break }; x -= e.weight }
         let e = pool[0]
         if let k = e.idle {
-            guard idleStart(k, sim) else { return false }
+            guard emoteSoloGate(k, sim) || idleStart(k, sim) else { return false }
             kindCool[k] = treat2.rnd(e.cooldown.lowerBound, e.cooldown.upperBound)
             return true
         }

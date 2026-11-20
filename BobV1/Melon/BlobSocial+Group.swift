@@ -50,7 +50,7 @@ extension BlobBrain {
 
     /// Free (or just out on an ordinary wander leg: he finishes it, then joins), calm, close Jelbies other than me (nearest first).
     func groupCandidates() -> [BlobBrain] {
-        socialOthers().filter { $0 !== self && ($0.socialFree || $0.socialWandering) && $0.idleMood != .grumpy && $0.idleDeepNight < 0.5 && simd_distance($0.position, position) < GroupTuning.radius }
+        socialOthers().filter { $0 !== self && !$0.meetBusy && ($0.socialFree || $0.socialWandering) && $0.idleMood != .grumpy && $0.idleDeepNight < 0.5 && simd_distance($0.position, position) < GroupTuning.radius }
             .sorted { simd_distance($0.position, position) < simd_distance($1.position, position) }
     }
 
@@ -93,7 +93,7 @@ extension BlobBrain {
     // MARK: starting
 
     /// Plan a ring for `members` (the initiator first): centre, a spot and an angle each. nil = no room anywhere near.
-    private func groupPlan(_ members: [BlobBrain], chord: Float, packed: Bool) -> (c: SIMD2<Float>, r: Float, ang: [Int: Float], spots: [Int: SIMD2<Float>])? {
+    private func groupPlan(_ members: [BlobBrain], chord: Float, packed: Bool, centre: SIMD2<Float>? = nil) -> (c: SIMD2<Float>, r: Float, ang: [Int: Float], spots: [Int: SIMD2<Float>])? {
         let n = members.count
         let r = max(chord / (2 * sinf(.pi / Float(n))), peerGap * 0.4)
         let cen = members.reduce(SIMD2<Float>.zero) { $0 + $1.position } / Float(n)
@@ -113,7 +113,7 @@ extension BlobBrain {
             return [SIMD2(sinf(a), cosf(a)) * 0.5, SIMD2(sinf(a), cosf(a)) * 1.0]
         }
         for off in offs {
-            let c = ParkClearSpot.clear(cen + off, radius: footprint + r)          // (park only: the whole ring clear of a solid piece, see ParkClearSpot)
+            let c = ParkClearSpot.clear((centre ?? cen) + off, radius: footprint + r)          // (park only: the whole ring clear of a solid piece, see ParkClearSpot)
             var spots = [Int: SIMD2<Float>](), ok = true
             for m in members {
                 let a = ang[m.steerID]!
@@ -145,7 +145,9 @@ extension BlobBrain {
         switch kind {
         case .groupHug, .circleDance, .groupCheer:
             let packed = kind != .groupCheer
-            guard let plan = groupPlan(crew, chord: packed ? ringChord(crew) : peerGap * GroupTuning.loose, packed: packed) else { return false }
+            let chord = packed ? ringChord(crew) : peerGap * GroupTuning.loose
+            let cen0 = crew.reduce(SIMD2<Float>.zero) { $0 + $1.position } / Float(crew.count)
+            guard let plan = emoteGroupCentre(crew, here: cen0).flatMap({ groupPlan(crew, chord: chord, packed: packed, centre: $0) }) ?? groupPlan(crew, chord: chord, packed: packed) else { return false }          // (EmoteSpot.swift: the ring centre is picked over the whole floor)
             s = newGroupSession(kind, crew: crew, duration: kind == .groupHug ? vDur(5.8) : 0)
             s.home0 = plan.c; s.ringR = plan.r; s.slotAng = plan.ang
             s.slotSpot = plan.spots
