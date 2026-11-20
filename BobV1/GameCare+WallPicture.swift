@@ -13,47 +13,74 @@ import UIKit
 /// What the renderer was last given for the wall picture.
 @MainActor
 final class WallPictureDrawn {
-    struct Key: Equatable { var picture: WallPicture?; var room: RoomID; var hidden: Bool }
+    struct Key: Equatable {
+        var picture: WallPicture?; var room: RoomID; var hidden: Bool
+        /// The window of the photo shown (the editor slides it), the file shown, and the screen's shape and the editor's camera state (the landscape rule reads them).
+        var uv: SIMD4<Float>; var path: String; var aspect: Int; var editing: Bool; var cameraRaised: Bool
+    }
     var key: Key?
-    var texture: MTLTexture?
-    var textureFile: String?
-    var loading: String?
+    /// The decoded photos (a few, by path): the same file is not decoded again for a room change or a move.
+    var textures: [String: MTLTexture] = [:]
+    var loading: Set<String> = [], failed: Set<String> = []
     weak var room: RoomRenderer?
     nonisolated deinit {}
 }
 
 extension GameCare {
+    /// Dev only (`-WallLandscapeRule 0`): keeps drawing a picture that is mostly off the top of a phone on its side, for the before / after capture.
+    private var landscapeRuleOn: Bool { !(DevArgs.enabled && UserDefaults.standard.object(forKey: "WallLandscapeRule") != nil && UserDefaults.standard.integer(forKey: "WallLandscapeRule") == 0) }
+
     func refreshWallPicture(renderer: MelonRenderer?) {
         guard let room = renderer?.room else { return }
         let hidden = cafe.hidesDecor || park.hidesDecor || volley.hidesDecor || groom.inScene
-        let key = WallPictureDrawn.Key(picture: store.wallPicture, room: RoomLayout.current.id, hidden: hidden)
+        let ed = wallEdit
+        let pic = ed?.draft ?? store.wallPicture
+        let path = ed.map { $0.textureURL.path } ?? pic.map { WallPictureFiles.url($0.file).path } ?? ""
+        let key = WallPictureDrawn.Key(picture: pic, room: RoomLayout.current.id, hidden: hidden, uv: ed?.uvWindow ?? SIMD4(0, 0, 1, 1), path: path,
+                                       aspect: Int(GameCamera.aspect * 100), editing: ed != nil, cameraRaised: GameCamera.wallEditBlend > 0)
         guard key != wallDrawn.key else { return }
         wallDrawn.key = key
         wallDrawn.room = room
-        guard !hidden, let saved = key.picture, let p = WallZone.clamp(saved, in: key.room) else {
+        guard !hidden, let current = key.picture, let p = WallZone.clamp(current, in: key.room) else {
             if room.hasWallPicture { room.setWallPicture(nil, texture: nil) }
             room.hidesLoftArt = false
             return
         }
+        // a picture that is (almost) entirely above the top of the screen is not drawn outside the editor: a sliver of its bottom edge reads as a bug
+        if ed == nil, !key.cameraRaised, landscapeRuleOn, let top = GameCamera.wallVisibleTop(aspect: GameCamera.aspect),
+           WallZone.visibleShare(p, visibleTop: top) < WallZone.minVisibleShare {
+            if room.hasWallPicture { room.setWallPicture(nil, texture: nil) }
+            room.hidesLoftArt = WallZone.hidesLoftArt(p, in: key.room)
+            return
+        }
         room.hidesLoftArt = WallZone.hidesLoftArt(p, in: key.room)
-        let tex = wallDrawn.textureFile == p.file ? wallDrawn.texture : nil
-        room.setWallPicture(WallPictureGeometry.build(p, art: WallPictureGeometry.art(p)), texture: tex)
-        guard tex == nil, wallDrawn.loading != p.file else { return }
-        wallDrawn.loading = p.file
-        let file = p.file
-        room.loadWallPhoto(WallPictureFiles.url(file)) { [weak self] t in
+        guard let tex = wallDrawn.textures[path] else {
+            // the photo is not here yet: nothing new is shown (frame, photo and shadow come together, never a bare frame); what hangs now stays until it arrives
+            loadWallTexture(path, room)
+            return
+        }
+        room.setWallPicture(WallPictureGeometry.build(p, art: WallPictureGeometry.art(p), uv: key.uv), texture: tex)
+    }
+
+    private func loadWallTexture(_ path: String, _ room: RoomRenderer) {
+        guard !wallDrawn.loading.contains(path), !wallDrawn.failed.contains(path) else { return }
+        wallDrawn.loading.insert(path)
+        room.loadWallPhoto(URL(fileURLWithPath: path)) { [weak self] t in
             nonisolated(unsafe) let texture = t
             Task { @MainActor in
-                guard let self, self.wallDrawn.loading == file else { return }
-                self.wallDrawn.loading = nil
-                self.wallDrawn.texture = texture; self.wallDrawn.textureFile = file
-                if self.store.wallPicture?.file == file { self.wallDrawn.room?.setWallPhotoTexture(texture) }
+                guard let self else { return }
+                self.wallDrawn.loading.remove(path)
+                if let texture {
+                    if self.wallDrawn.textures.count >= 3 { self.wallDrawn.textures = self.wallDrawn.textures.filter { $0.key == self.wallDrawn.key?.path } }
+                    self.wallDrawn.textures[path] = texture
+                } else { self.wallDrawn.failed.insert(path) }
+                self.wallDrawn.key = nil          // draw again now that the photo is here
             }
         }
     }
 
     /// `-WallPicture frame,shape[,x,y,width]` + `-WallPictureFile path` [+ `-WallPictureCrop cx,cy,zoom`]: hangs a sample picture (dev builds only).
-    func applyWallPictureLaunchArguments(defaults d: UserDefaults = .standard) { WallPictureDev.apply(defaults: d, store: store) }
+    func applyWallPictureLaunchArguments(defaults d: UserDefaults = .standard) { WallDemo.prepare(store: store, defaults: d); WallPictureDev.apply(defaults: d, store: store) }
 }
 
 enum WallPictureDev {

@@ -89,6 +89,8 @@ enum PhotoThumbs {
 struct PhotoAlbumView: View {
     /// Close button for when the album is opened from inside the game; the main menu draws its own, so it passes nil.
     var close: (() -> Void)?
+    /// In the game (not the main menu): the viewer offers "Hang on wall" / "Get a frame" (GameCare+WallEdit.swift).
+    var wall: WallHangContext? = nil
     @State private var album = PhotoAlbum.shared
     @State private var viewing: URL?
     @Environment(\.verticalSizeClass) private var vsc
@@ -131,8 +133,8 @@ struct PhotoAlbumView: View {
                 }
             }
         }
-        .onAppear { album.reload() }
-        .fullScreenCover(item: $viewing) { url in PhotoViewer(url: url) { viewing = nil } }
+        .onAppear { album.reload(); if DevArgs.enabled, UserDefaults.standard.integer(forKey: "AlbumViewFirst") != 0 { viewing = album.items.first } }          // (capture aid: -AlbumViewFirst 1)
+        .fullScreenCover(item: $viewing) { url in PhotoViewer(url: url, wall: wall) { viewing = nil } }
         .accessibilityIdentifier("photo-album")
     }
 }
@@ -142,6 +144,7 @@ extension URL: @retroactive Identifiable { public var id: String { absoluteStrin
 /// One photo, large: Share, Delete (confirmed). `actions` is the row to extend (none is prominent yet).
 private struct PhotoViewer: View {
     let url: URL
+    var wall: WallHangContext? = nil
     var done: () -> Void
     @State private var confirmDelete = false
 
@@ -166,6 +169,13 @@ private struct PhotoViewer: View {
     /// The button row under the photo. Add new buttons here.
     private func actions(_ img: UIImage?) -> some View {
         HStack(spacing: 10) {
+            if let wall {          // the main (yellow) button: with no frame owned it leads to the Shop's frames
+                PhotoActionButton(title: wall.owns ? "Hang on wall" : "Get a frame", symbol: wall.owns ? "photo.artframe" : "bag.fill", prominent: true) {
+                    done()
+                    if wall.owns { wall.hang(url) } else { wall.getFrame() }
+                }
+                .accessibilityIdentifier("photo-hang-on-wall")
+            }
             if let img { GatedShareButton(image: img) }
             PhotoActionButton(title: "Delete", symbol: "trash", prominent: false) { confirmDelete = true }
         }

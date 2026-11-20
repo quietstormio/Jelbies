@@ -112,6 +112,11 @@ final class GameCare {
     @ObservationIgnored var decorDrawn = DecorDrawn()
     /// The wall picture (GameCare+WallPicture.swift): what was last handed to the renderer.
     @ObservationIgnored let wallDrawn = WallPictureDrawn()
+    /// The wall picture editor (GameCare+WallEdit.swift): the session while it is open, its camera ease (0...1), the album asked for from the Bag / Shop / editor, the Shop asked for from the album.
+    var wallEdit: WallEditSession?
+    @ObservationIgnored var wallEditT: Float = 0
+    var wallAlbumOpen = false
+    var wallShopRequest = false
     /// Arrange mode (drag the room's decor): set from the Bag's Place, ended by Done. The Jellies' touch is off meanwhile.
     var arranging = false
     var arrangingUID: Int? { didSet { DecorField.shared.held = arrangingUID } }

@@ -682,6 +682,35 @@ struct BagSheet: View {
                 .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
                 .accessibilityIdentifier("bag-room-\(d.id.rawValue)")
             }
+            framesList
+        }
+    }
+
+    /// The picture frames the player owns (bought in the Shop's Rooms tab): "Hang a picture" opens the album to pick the photo, then the wall editor.
+    @ViewBuilder private var framesList: some View {
+        let owned = book.ownedWallFrames
+        if !owned.isEmpty {
+            Text("Picture frames").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
+                .accessibilityAddTraits(.isHeader).accessibilityIdentifier("bag-frames-header")
+            ForEach(owned, id: \.self) { f in
+                if let item = StoreCatalog.item("frame-\(f.rawValue)") {
+                    HStack(spacing: 12) {
+                        ItemArt(item: item, size: 64)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                            Text(book.wallPicture?.frame == f ? "On the wall" : "Owned").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                        }
+                        Spacer(minLength: 0)
+                        pink("Hang a picture", enabled: true) {
+                            close()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { care.wallAlbumOpen = true }
+                        }.accessibilityIdentifier("bag-hang-\(f.rawValue)")
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
+                    .accessibilityIdentifier("bag-frame-\(f.rawValue)")
+                }
+            }
         }
     }
 

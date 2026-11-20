@@ -8,6 +8,9 @@ import Foundation
 extension StoreBook {
     var wallPictures: [WallPicture] { saved.wallPictures ?? [] }
     var wallPicture: WallPicture? { wallPictures.first }
+    /// The picture frames the player has bought (the Shop's Rooms tab).
+    func ownsFrame(_ f: WallFrame) -> Bool { count("frame-\(f.rawValue)") > 0 }
+    var ownedWallFrames: [WallFrame] { WallFrame.allCases.filter { ownsFrame($0) } }
 
     /// Hangs `p` (replacing the picture on the wall; its old file is deleted). Returns the picture as saved.
     @discardableResult

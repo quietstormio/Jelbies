@@ -12,7 +12,7 @@ enum ShopTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var kinds: [StoreKind] {
         switch self {
-        case .food: return [.food, .treat]; case .drinks: return [.drink]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture: return [.decor]; case .toys: return [.decor, .toy]; case .rooms: return [.room]
+        case .food: return [.food, .treat]; case .drinks: return [.drink]; case .care: return [.supply]; case .wear: return [.shoes, .wear]; case .tricks: return [.trickPage]; case .furniture: return [.decor]; case .toys: return [.decor, .toy]; case .rooms: return [.room, .wallFrame]
         }
     }
     var items: [StoreItem] {
@@ -24,6 +24,8 @@ enum ShopTab: String, CaseIterable, Identifiable {
     }
     /// A tab the next Shop opening starts on (the Play picker's "no toys yet" button sets it; the Shop takes it once).
     nonisolated(unsafe) static var pending: ShopTab?
+    /// The Rooms tab opens scrolled to its "Picture frames" group (the album's "Get a frame" sets it; the Shop takes it once).
+    nonisolated(unsafe) static var scrollToFrames = false
     /// The tab named by the `-StoreTab` capture aid ("decor" = furniture); nil for a tab the Shop does not show.
     static func named(_ s: String?) -> ShopTab? { let n = (s ?? "").capitalized; guard let t = ShopTab(rawValue: n == "Decor" ? "Furniture" : n), shown.contains(t) else { return nil }; return t }
     /// Tabs with goods in them. 2026-11-15 (the user's ask: "Remove Furniture section"): Furniture is never shown, so no furniture can be bought; the
@@ -69,20 +71,31 @@ struct ShopScreen: View {
                     .padding(.horizontal, 16).padding(.top, 8)
                     .accessibilityIdentifier("shop-food-power-line")
             }
-            ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount), spacing: 12) {
-                    ForEach(shown) { item in card(item) }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    if tab == .rooms {          // the rooms, then the "Picture frames" group (Room/WallPicture.swift)
+                        VStack(alignment: .leading, spacing: 4) {
+                            grid(shown.filter { $0.kind == .room })
+                            Text("Picture frames").font(SK.font(22 * sc, .black)).foregroundStyle(SK.ink).padding(.horizontal, 16).padding(.top, 6)
+                                .accessibilityAddTraits(.isHeader).id("shop-frames").accessibilityIdentifier("shop-frames-header")
+                            Text("Frame a photo from your Jelmiko album and hang it on the wall.").font(SK.font(13 * sc, .semibold)).foregroundStyle(SK.muted)
+                                .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 16)
+                            grid(shown.filter { $0.kind == .wallFrame })
+                        }
+                    } else {
+                        grid(shown)
+                    }
                 }
-                .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 30)
+                .scrollBounceBehavior(.basedOnSize)
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { if pad { gridSize = $0 } }
+                .onAppear { if ShopTab.scrollToFrames, tab == .rooms { ShopTab.scrollToFrames = false; Task { try? await Task.sleep(nanoseconds: 150_000_000); withAnimation { proxy.scrollTo("shop-frames", anchor: .top) } } } }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .onGeometryChange(for: CGSize.self) { $0.size } action: { if pad { gridSize = $0 } }
         }
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("shop-screen")
         .sheet(item: $selected) { item in
             ItemSheet(care: care, item: item, who: who, goHome: goHome, close: { selected = nil }, onBought: { msg in
-                selected = ShopSelection.afterBuy(selected, bought: true)
+                if selected?.kind != .wallFrame { selected = ShopSelection.afterBuy(selected, bought: true) }          // (a bought frame keeps its sheet up: its next step, "Hang a picture", is on it)
                 GameMessageCenter.shared.post(msg, identifier: "shop-bought-toast")          // (the one message bar)
             })
                 .presentationDetents(wide ? [.large] : [.height(560), .large])
@@ -131,6 +144,13 @@ struct ShopScreen: View {
         .padding(.bottom, 4)
     }
 
+    private func grid(_ items: [StoreItem]) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columnCount), spacing: 12) {
+            ForEach(items) { item in card(item) }
+        }
+        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 14)
+    }
+
     private func card(_ item: StoreItem) -> some View {
         let owned = book.owned(item)
         let afford = care.bath.wallet.count >= item.price
@@ -142,6 +162,7 @@ struct ShopScreen: View {
                 Text(item.name).font(SK.font(15 * sc, .heavy)).foregroundStyle(SK.ink).jLine(1, scale: 0.8)
                 if let p = item.perk { PerkChip(kind: p) }
                 else if item.kind == .room { Text("New room").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
+                else if item.kind == .wallFrame { Text("Picture frame").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .decor { Text(item.roomUnits == 1 ? "1 spot" : "\(item.roomUnits) spots").font(SK.font(11 * sc, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 8).padding(.vertical, 4).background(Capsule().fill(SK.mint.opacity(0.8))) }
                 else if item.kind == .trickPage {
                     VStack(spacing: 3) {
@@ -334,6 +355,15 @@ struct ItemSheet: View {
                 .accessibilityLabel("Move in to \(item.name)")
                 .accessibilityIdentifier("item-movein")
             }
+            if item.kind == .wallFrame, book.owns(item) {          // the clear next step after the first purchase: pick a photo to hang
+                Button {
+                    AudioHub.shared.uiTap(); close(); goHome(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { care.wallAlbumOpen = true }
+                } label: {
+                    Text("Hang a picture").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52).background(Capsule().fill(SK.honey))
+                }
+                .buttonStyle(.plain).padding(.horizontal, vsc == .compact ? 0 : 16)
+                .accessibilityIdentifier("item-hang-picture")
+            }
             if let refusal {
                 Text(refusal).font(SK.font(14, .heavy)).foregroundStyle(SK.ink)
                     .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(SK.honey.opacity(0.9)))
@@ -381,6 +411,7 @@ struct ItemSheet: View {
 
     private var footer: String {
         if item.kind == .room && book.owns(item) { return "Live there from Rooms" }
+        if item.kind == .wallFrame && book.owns(item) { return "Hang it from your Bag or the album" }
         if item.kind == .trickPage {
             if ownedNow { return "Yours already" }
             if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
@@ -389,13 +420,14 @@ struct ItemSheet: View {
         if item.isWearable && book.owns(item) { return "You have \(book.owned(item)) \u{00B7} buy another so two Jelmiko can match" }
         if item.unique && book.owns(item) { return "In your Bag" }
         if left < 0 { return "Win a Jelly Race to earn more JellyCoins" }
-        let dest = item.kind == .room ? "Live there from Rooms" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
+        let dest = item.kind == .room ? "Live there from Rooms" : item.kind == .wallFrame ? "Hang it from your Bag or the album" : item.isWearable ? "Wear it from your Bag" : item.kind == .decor ? "Place it from your Bag" : "goes to your Bag"
         return "You'll have \(left) JellyCoins left \u{00B7} \(dest)"
     }
 
     private var boughtMessage: (Int) -> String { { n in
         let what = n > 1 ? "\(n) \(item.name)" : item.name
         if item.kind == .room { return "\(what) is yours \u{00B7} live there from Rooms" }
+        if item.kind == .wallFrame { return "\(what) frame is yours \u{00B7} hang a picture in it" }
         if item.kind == .trickPage { return "\(what) unlocked" }
         return "\(what) added to your Bag"
     } }
@@ -408,6 +440,7 @@ struct ItemSheet: View {
         if let p = item.perk { return p.symbol }
         if item.kind == .decor { return "chair.lounge.fill" }
         if item.kind == .room { return "house.fill" }
+        if item.kind == .wallFrame { return "photo.artframe" }
         if item.kind == .toy { return "wand.and.stars" }
         if item.food != nil { return item.kind == .drink ? "drop.fill" : "fork.knife" }
         if item.id == TrickCatalog.earsID { return "ear.fill" }
@@ -418,6 +451,7 @@ struct ItemSheet: View {
         if item.isWearable { return "Looks only" }
         if item.kind == .decor { return item.roomUnits == 1 ? "Takes 1 spot" : "Takes \(item.roomUnits) spots" }
         if item.kind == .room { return "A new room to live in" }
+        if item.kind == .wallFrame { return "A frame for the wall" }
         if item.kind == .toy { return "A toy to play with" }
         if let c = item.food.flatMap({ Consumables.with(id: $0) }) { return c.kind == .drink ? "Quenches thirst" : "Fills the tummy" }
         if item.id == TrickCatalog.earsID { return "Music Ears \u{00B7} \(TrickScope.everyone.tag)" }
@@ -428,6 +462,7 @@ struct ItemSheet: View {
         if let p = item.perk { return p.blurb }
         if let w = item.wear { return w.isShoe ? "No effect on speed. Shows in the room and in the Jelly Race." : "No effect on anything but looks. Wear it from your Bag, one piece per spot." }
         if item.kind == .room { return "Your Jelmiko move in and the room keeps its own furniture." }
+        if item.kind == .wallFrame { return "Frame any photo from your album. You can move it, make it bigger or smaller, pick upright, square or wide, and slide the photo inside the frame." }
         if item.kind == .decor { return "Your room has \(StoreTuning.roomCapacity) spots; \(book.roomUnitsUsed) used. Place it from your Bag, then drag it where you like." }
         if item.kind == .toy { return "Pick it from Play and the Jelmiko join in." }
         if item.food != nil { return item.description }

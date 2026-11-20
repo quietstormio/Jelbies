@@ -157,7 +157,7 @@ nonisolated enum WallZone {
     // MARK: what is on screen
 
     /// A picture shows nothing when less than this share of its framed height is on screen (a sliver of a bottom edge at the top of a phone on its side reads as a bug).
-    static let minVisibleShare: Float = 0.30
+    static let minVisibleShare: Float = 0.35          // (measured: the home band's default shows 28% sideways, the cabin's low spot 100%)
     /// The share (0...1) of the framed picture's height that lies below `visibleTop`, the wall height at the top edge of the screen.
     static func visibleShare(_ p: WallPicture, visibleTop: Float) -> Float {
         let bottom = p.y - p.outerHeight / 2

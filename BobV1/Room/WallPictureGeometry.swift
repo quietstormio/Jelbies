@@ -14,7 +14,15 @@ nonisolated enum WallPictureGeometry {
     static let photoDepth: Float = 0.012
 
     /// The bundled frame art: wallframe_frame_<id>_<shape>.bin (Room/Resources).
-    static func art(_ p: WallPicture) -> DecorMeshes.Art? { DecorMeshes.load(p.artID, prefix: "wall") }
+    private static let artLock = NSLock()
+    nonisolated(unsafe) private static var artCache: [String: DecorMeshes.Art] = [:]
+    static func art(_ p: WallPicture) -> DecorMeshes.Art? {
+        artLock.lock(); defer { artLock.unlock() }
+        if let a = artCache[p.artID] { return a }
+        guard let a = DecorMeshes.load(p.artID, prefix: "wall") else { return nil }
+        artCache[p.artID] = a
+        return a
+    }
 
     /// `uv` = the window of the photo shown in the frame (u0, v0, u1, v1; the whole photo by default): the editor shows the album photo itself and slides this window as the player pans and zooms.
     static func build(_ p: WallPicture, art: DecorMeshes.Art?, uv: SIMD4<Float> = SIMD4(0, 0, 1, 1)) -> Meshes {

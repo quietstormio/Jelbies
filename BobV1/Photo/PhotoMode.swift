@@ -147,7 +147,7 @@ struct PhotoModeView: View {
             Color.white.ignoresSafeArea().opacity(mode.flash ? 0.9 : 0).allowsHitTesting(false)
         }
         .onAppear { Task { try? await Task.sleep(nanoseconds: 4_500_000_000); withAnimation { hint = false } } }
-        .fullScreenCover(isPresented: $mode.albumOpen) { PhotoAlbumView(close: { mode.albumOpen = false }) }
+        .fullScreenCover(isPresented: $mode.albumOpen) { PhotoAlbumView(close: { mode.albumOpen = false }, wall: care.wallHangContext(close: { mode.albumOpen = false })) }
         .accessibilityElement(children: .contain)
     }
 

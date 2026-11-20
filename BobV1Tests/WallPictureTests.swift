@@ -9,10 +9,12 @@ import simd
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
+import Metal
 @testable import BobV1
 
 @MainActor
 final class WallPictureTests: XCTestCase {
+    nonisolated(unsafe) static var keep: [AnyObject] = []
     private func sample(_ frame: WallFrame = .wood, _ shape: WallShape = .landscape, x: Float = 0, y: Float = 5.5, w: Float = 2) -> WallPicture {
         WallPicture(file: "pic-test.jpg", frame: frame, shape: shape, x: x, y: y, width: w, crop: WallCrop(cx: 0.4, cy: 0.6, zoom: 2), source: "Jelmiko-1.jpg")
     }
@@ -224,5 +226,173 @@ final class WallPictureTests: XCTestCase {
             .appending(path: "BobV1/GameCare+WallPicture.swift").path, encoding: .utf8)
         let body = try XCTUnwrap(src.components(separatedBy: "enum WallPictureDev").last)
         XCTAssertTrue(body.contains("guard DevArgs.enabled"), "the launch argument must be gated like every other developer argument")
+    }
+
+    // MARK: no bare frame, the photo texture
+
+    private func writeJPEG(_ w: Int, _ h: Int, to url: URL) {
+        let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(dest, makeImage(w, h), nil); XCTAssertTrue(CGImageDestinationFinalize(dest))
+    }
+
+    func testFrameShadowAndPhotoAreDrawnOnlyOnceThePhotoIsThere() throws {
+        let dev = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let lib = try XCTUnwrap(dev.makeDefaultLibrary(bundle: Bundle(for: RoomRenderer.self)))
+        let room = try XCTUnwrap(RoomRenderer(device: dev, library: lib, colorFormat: .rgba8Unorm_srgb, depthFormat: .depth32Float, sampleCount: 4))
+        let p = sample(.gold, .landscape, x: 0, y: 5.7, w: 2)
+        let meshes = WallPictureGeometry.build(p, art: WallPictureGeometry.art(p))
+        XCTAssertFalse(room.drawsWallPicture)
+        room.setWallPicture(meshes, texture: nil)
+        XCTAssertTrue(room.hasWallPicture); XCTAssertFalse(room.drawsWallPicture, "a frame whose photo is not here yet is not drawn: never a bare frame")
+        let url = FileManager.default.temporaryDirectory.appending(path: "wallpic-tex-\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: url) }
+        writeJPEG(512, 384, to: url)
+        let done = expectation(description: "decoded")
+        nonisolated(unsafe) var tex: MTLTexture?
+        nonisolated(unsafe) var onMain = true
+        room.loadWallPhoto(url) { t in onMain = Thread.isMainThread; tex = t; done.fulfill() }
+        wait(for: [done], timeout: 20)
+        let t = try XCTUnwrap(tex)
+        XCTAssertFalse(onMain, "the photo is decoded off the main thread")
+        XCTAssertTrue([MTLPixelFormat.rgba8Unorm_srgb, .bgra8Unorm_srgb].contains(t.pixelFormat), "colour is sRGB")
+        XCTAssertGreaterThan(t.mipmapLevelCount, 1, "mipmapped")
+        room.setWallPhotoTexture(t)
+        XCTAssertTrue(room.drawsWallPicture)
+        room.setWallPicture(nil, texture: nil)
+        XCTAssertFalse(room.hasWallPicture); XCTAssertFalse(room.drawsWallPicture)
+    }
+
+    // MARK: the editor's steps (no game needed)
+
+    func testFirstHangStartsInTheRightSpotForTheWayThePhoneIsHeld() throws {
+        let url = URL(fileURLWithPath: "/tmp/x.jpg"), size = CGSize(width: 1320, height: 2868)
+        for room in [RoomID.home, .loft, .cabin] {
+            let up = try XCTUnwrap(WallEditSession.make(photo: url, imageSize: size, existing: nil, owned: [.wood], room: room, sideways: false))
+            let band = try XCTUnwrap(WallZone.spots(room).first)
+            XCTAssertEqual(up.draft.shape, .landscape)
+            XCTAssertEqual(WallZone.spot(for: up.draft, in: room), band, "\(room): upright = the band above the windows (the circled spot)")
+            let side = try XCTUnwrap(WallEditSession.make(photo: url, imageSize: size, existing: nil, owned: [.wood], room: room, sideways: true))
+            let both = try XCTUnwrap(WallZone.spots(room).first { $0.inBoth })
+            XCTAssertEqual(WallZone.spot(for: side.draft, in: room), both, "\(room): sideways = the spot that is on screen both ways")
+            XCTAssertTrue(both.shapes.contains(side.draft.shape))
+            XCTAssertEqual(WallZone.clamp(side.draft, in: room), side.draft, "it already fits its spot")
+        }
+        XCTAssertEqual(try XCTUnwrap(WallEditSession.make(photo: url, imageSize: size, existing: nil, owned: [.gold], room: .home, sideways: true)).draft.shape, .portrait, "the home gaps take upright pictures")
+        XCTAssertNil(WallEditSession.make(photo: url, imageSize: size, existing: nil, owned: [], room: .home, sideways: false), "no frame owned: no editor")
+        XCTAssertNil(WallEditSession.make(photo: url, imageSize: size, existing: nil, owned: [.wood], room: .cafe, sideways: false), "no zone in the café")
+    }
+
+    func testEditingMovesSizesReshapesAndKeepsInsideTheSpots() throws {
+        let url = URL(fileURLWithPath: "/tmp/x.jpg"), size = CGSize(width: 1320, height: 2868)
+        let s = try XCTUnwrap(WallEditSession.make(photo: url, imageSize: size, existing: nil, owned: [.wood, .gold], room: .home, sideways: false))
+        s.move(to: SIMD2(-1.5, 3.0))                 // dragged down to the left gap with a wide picture: the gap does not take it, so it stays in the band
+        XCTAssertEqual(WallZone.spot(for: s.draft, in: .home), WallZone.spots(.home)[0])
+        s.setShape(.portrait, room: .home)           // upright: now the gap takes it
+        s.move(to: SIMD2(-1.5, 3.0)); s.settle(.home)
+        XCTAssertEqual(WallZone.spot(for: s.draft, in: .home), WallZone.spots(.home)[1])
+        XCTAssertLessThan(s.draft.width, 1.0); XCTAssertEqual(s.draft.shape, .portrait)
+        s.setWidth(50, room: .home)
+        XCTAssertLessThanOrEqual(s.draft.width, WallZone.maxWidth(in: WallZone.spots(.home)[1].rect, frame: .wood, shape: .portrait) + 1e-4, "never bigger than its spot")
+        s.setWidth(0.01, room: .home)
+        XCTAssertGreaterThanOrEqual(s.draft.width, 0.7 - 1e-4)
+        XCTAssertTrue(s.setFrame(.gold, room: .home, owned: [.wood, .gold])); XCTAssertEqual(s.draft.frame, .gold)
+        XCTAssertFalse(s.setFrame(.pastel, room: .home, owned: [.wood, .gold]), "an unowned frame cannot be selected"); XCTAssertEqual(s.draft.frame, .gold)
+        // the photo inside the frame: pan and zoom stay inside the photo
+        s.setZoom(3); XCTAssertEqual(s.draft.crop.zoom, 3)
+        s.pan(shareX: -5, shareY: 5)
+        let r = s.draft.crop.rect(imageSize: size, aspect: s.draft.shape.aspect)
+        XCTAssertGreaterThanOrEqual(r.minX, 0); XCTAssertLessThanOrEqual(r.maxX, size.width + 0.01); XCTAssertGreaterThanOrEqual(r.minY, 0); XCTAssertLessThanOrEqual(r.maxY, size.height + 0.01)
+        s.setZoom(99); XCTAssertEqual(s.draft.crop.zoom, 6); s.setZoom(0); XCTAssertEqual(s.draft.crop.zoom, 1)
+        let w = s.uvWindow
+        XCTAssertTrue(w.x >= 0 && w.y >= 0 && w.z <= 1.0001 && w.w <= 1.0001 && w.z > w.x && w.w > w.y)
+    }
+
+    func testDoneCutsTheCopyAndCancelLeavesTheSavedPictureAlone() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "wallpic-done-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let photo = dir.appending(path: "album.jpg"); writeJPEG(600, 1200, to: photo)
+        let s = try XCTUnwrap(WallEditSession.make(photo: photo, imageSize: CGSize(width: 600, height: 1200), existing: nil, owned: [.pastel], room: .loft, sideways: false))
+        let p = try XCTUnwrap(s.finalPicture(room: .loft, dir: dir))
+        XCTAssertFalse(p.file.isEmpty); XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appending(path: p.file).path))
+        XCTAssertEqual(p.source, "album.jpg"); XCTAssertEqual(WallZone.clamp(p, in: .loft), p)
+        // the saved picture is the book's, only Done changes it
+        let book = StoreBook(wallet: DropsWallet(persists: false), persists: false); Self.keep.append(book)
+        XCTAssertNil(book.wallPicture)                       // Cancel = nothing saved
+        book.hangWallPicture(p); XCTAssertEqual(book.wallPicture, p)
+        // editing the picture that hangs, album photo gone: the copy stays, the shape cannot change, no new copy is cut
+        let again = try XCTUnwrap(WallEditSession.make(photo: nil, imageSize: nil, existing: p, owned: [.pastel], room: .loft, sideways: false))
+        XCTAssertFalse(again.canCrop); XCTAssertFalse(again.canReshape)
+        again.setShape(.portrait, room: .loft); XCTAssertEqual(again.draft.shape, p.shape, "the game's own copy has the old shape")
+        again.move(to: SIMD2(1, 6)); again.settle(.loft)
+        let q = try XCTUnwrap(again.finalPicture(room: .loft, dir: dir))
+        XCTAssertEqual(q.file, p.file, "no new copy is cut without the album photo")
+    }
+
+    // MARK: Shop and Bag
+
+    func testPictureFramesAreFourCoinPricedGoodsInTheRoomsTab() throws {
+        let frames = StoreCatalog.items(.wallFrame)
+        XCTAssertEqual(frames.map(\.id), ["frame-wood", "frame-white", "frame-pastel", "frame-gold"])
+        XCTAssertEqual(frames.map(\.price), [45, 45, 70, 120], "the two plainest at the lowest step, Pastel one up, Gold at the top")
+        XCTAssertTrue(frames.allSatisfy { $0.price > 0 && $0.unique && $0.wallFrame != nil })
+        XCTAssertEqual(frames.compactMap(\.wallFrame), WallFrame.allCases)
+        XCTAssertEqual(ShopTab.rooms.items.filter { $0.kind == .wallFrame }.count, 4, "their own group in the Rooms tab")
+        XCTAssertFalse(ShopTab.shown.contains(.furniture)); XCTAssertEqual(ShopTab.shown.count, Set(ShopTab.shown).count, "no new tab")
+        let wallet = DropsWallet(persists: false); wallet.add(100, silent: true)
+        let book = StoreBook(wallet: wallet, persists: false); Self.keep.append(book)
+        XCTAssertTrue(book.ownedWallFrames.isEmpty)
+        XCTAssertEqual(book.buy("frame-gold"), .notEnough)
+        XCTAssertEqual(book.buy("frame-wood"), .bought); XCTAssertEqual(wallet.count, 55)
+        XCTAssertEqual(book.buy("frame-wood"), .alreadyOwned)
+        XCTAssertEqual(book.ownedWallFrames, [.wood]); XCTAssertTrue(book.ownsFrame(.wood)); XCTAssertFalse(book.ownsFrame(.gold))
+        XCTAssertEqual(book.sellState(try XCTUnwrap(StoreCatalog.item("frame-wood"))), .no, "a frame is kept")
+    }
+
+    // MARK: the camera
+
+    func testTheNormalCameraIsUntouchedWhenTheEditorIsClosed() {
+        GameCamera.configureRoom(count: 1)
+        defer { GameCamera.wallEditBlend = 0; GameCamera.configureRoom(count: 1) }
+        for aspect in [Float(0.46), 0.56, 0.75, 1.33, 2.17] {
+            GameCamera.wallEditBlend = 0
+            let c = GameCamera.camera(aspect: aspect)
+            let expected = M4.lookAt(eye: GameCamera.eye, at: GameCamera.target, up: SIMD3(0, 1, 0))
+            XCTAssertTrue(simd_equal(c.view, expected), "blend 0: the camera is exactly the room pose (aspect \(aspect))")
+            XCTAssertEqual(c.pos, GameCamera.eye)
+            // a ray / screen point round trip on the wall works at this aspect
+            let size = CGSize(width: 1000, height: CGFloat(1000 / aspect))
+            let sp = GameCamera.screenPoint(wall: SIMD2(1.5, 5.5), size: size)
+            let back = sp.flatMap { GameCamera.wallPoint(screen: $0, size: size) }
+            XCTAssertEqual(back?.x ?? 99, 1.5, accuracy: 0.01); XCTAssertEqual(back?.y ?? 99, 5.5, accuracy: 0.01)
+        }
+        // the editor's blend rises the view on a phone on its side only
+        GameCamera.wallEditBlend = 1
+        let base = { () -> Float in GameCamera.wallEditBlend = 0; return GameCamera.camera(aspect: 2.17).pos.y }()
+        GameCamera.wallEditBlend = 1
+        XCTAssertEqual(GameCamera.camera(aspect: 2.17).pos.y - base, GameCamera.wallEditLift, accuracy: 1e-3)
+        GameCamera.wallEditBlend = 0
+        let basePortrait = GameCamera.camera(aspect: 0.46).pos
+        GameCamera.wallEditBlend = 1
+        XCTAssertEqual(GameCamera.camera(aspect: 0.46).pos, basePortrait, "the upright view already shows the band: no lift")
+    }
+
+    func testWhatIsOnScreenOnAPhoneOnItsSideAndTheSliverRule() throws {
+        GameCamera.configureRoom(count: 3)
+        defer { GameCamera.wallEditBlend = 0; GameCamera.configureRoom(count: 1) }
+        let top = try XCTUnwrap(GameCamera.wallVisibleTop(aspect: 2.17)), topP = try XCTUnwrap(GameCamera.wallVisibleTop(aspect: 0.46))
+        XCTAssertTrue((5.0...5.5).contains(top), "a phone on its side shows the wall up to about y 5.2 (measured \(top))")
+        XCTAssertGreaterThan(topP, 7.5, "upright shows the whole band")
+        let home = try XCTUnwrap(WallZone.defaultPlacement(room: .home, frame: .wood, shape: .landscape, file: "f"))
+        XCTAssertLessThan(WallZone.visibleShare(home, visibleTop: top), WallZone.minVisibleShare, "the circled spot is mostly off the top: not drawn sideways")
+        XCTAssertEqual(WallZone.visibleShare(home, visibleTop: topP), 1, accuracy: 1e-4)
+        let low = try XCTUnwrap(WallZone.clamp(sample(.gold, .landscape, x: 0, y: 4.4, w: 1.3), in: .cabin))
+        XCTAssertGreaterThan(WallZone.visibleShare(low, visibleTop: top), 0.9, "the cabin's low spot shows sideways")
+        for room in [RoomID.home, .loft, .cabin] {
+            for sp in WallZone.spots(room) where sp.inBoth {
+                let p = try XCTUnwrap(WallZone.clamp(sample(.wood, sp.shapes.contains(.landscape) ? .landscape : .portrait, x: (sp.rect.minX + sp.rect.maxX) / 2, y: (sp.rect.minY + sp.rect.maxY) / 2, w: 5), in: room))
+                XCTAssertGreaterThan(WallZone.visibleShare(p, visibleTop: top), 0.95, "\(room) \(sp.name)")
+            }
+        }
     }
 }
