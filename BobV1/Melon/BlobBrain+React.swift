@@ -271,6 +271,7 @@ extension BlobBrain {
             if started { idleState.reaction = .hmph }
         case .yawn:
             guard standing, !commanded else { return false }
+            if bedtimeUnderway { return true }          // (a bedtime is on: no yawn but his own bedtime one; dropped for good, the other reactions stay)
             started = idleStart(.yawn, sim)
             if started { idleState.reaction = .yawn }
         case .comfort:

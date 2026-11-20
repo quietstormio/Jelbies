@@ -367,7 +367,7 @@ extension BlobBrain {
             vFamily = f
         }
         var kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand(), night: idleNight, morning: idleMorning, sleep: sleepEnabled, antics: anticsEnabled, music: musicPlaying,
-                                                 cooling: anticsEnabled ? kindCooling : [], anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
+                                                 cooling: (anticsEnabled ? kindCooling : []).union(bedtimeUnderway ? [.yawn] : []), anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
                                                  decor: decorOffers, recent: anticsEnabled ? Set(idleState.recent) : [],
                                                  scale: anticsEnabled ? { [unowned self] in self.varietyScale($0) } : nil, family: vFamily,
                                                  extra: anticsEnabled ? { [unowned self] in self.varietyNewScale($0) } : nil)
