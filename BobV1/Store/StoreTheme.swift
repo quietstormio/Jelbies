@@ -259,6 +259,7 @@ enum StoreThumb {
     }
     static func image(for item: StoreItem) -> UIImage? {
         if let r = item.room { return UIImage(named: "room_thumb_\(r.rawValue)") }
+        if let f = item.wallFrame { return frameImage(f) }
         guard let m = mesh(for: item) else { return nil }
         let a = angles(for: item)
         if let w = item.wear, !w.isShoe { return image(item.id, mesh: m, yaw: a.yaw, pitch: a.pitch, focus: wornFocus(w)) }
@@ -306,7 +307,46 @@ struct ItemArt: View {
     private var tint: Color {
         switch item.kind {
         case .food: return SK.honey.opacity(0.55); case .treat: return SK.pink.opacity(0.35); case .drink: return SK.sky.opacity(0.4); case .supply: return SK.sky.opacity(0.35)
-        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3); case .toy: return SK.honey.opacity(0.4)
+        case .trickPage: return SK.mint.opacity(0.55); case .shoes: return SK.sky.opacity(0.28); case .wear: return SK.pink.opacity(0.25); case .decor: return SK.honey.opacity(0.4); case .room: return SK.honey.opacity(0.3); case .toy: return SK.honey.opacity(0.4); case .wallFrame: return SK.honey.opacity(0.3)
         }
     }
+}
+
+
+extension StoreThumb {
+    /// A frame's picture: the real Blender frame (the same art the wall uses) holding a sample photo (a family portrait of three Jelmiko), seen straight on. One render per frame.
+    static func frameImage(_ f: WallFrame, size: CGFloat = 260) -> UIImage? {
+        let key = "wallframe-\(f.rawValue)"
+        if let c = frameCache[key] { return c }
+        let shape = WallShape.landscape
+        let p = WallPicture(file: "", frame: f, shape: shape, x: 0, y: 0, width: shape.aspect)          // the opening is 1.0 high, as authored
+        guard device != nil, let art = WallPictureGeometry.art(p) else { return nil }
+        let b = RoomMeshBuilder()
+        for part in art.parts { DecorMeshes.emit(part, into: b, offset: .zero) }
+        let scene = SCNScene()
+        let node = SCNNode(geometry: geometry(b.mesh))
+        scene.rootNode.addChildNode(node)
+        // the photo: a plane just behind the frame's inner lip, textured with the sample
+        let plane = SCNPlane(width: CGFloat(shape.aspect), height: 1)
+        let m = SCNMaterial(); m.lightingModel = .constant
+        if let sample = UIImage(named: "wall_frame_sample") { m.diffuse.contents = sample } else { m.diffuse.contents = UIColor(white: 0.85, alpha: 1) }
+        plane.materials = [m]
+        let pn = SCNNode(geometry: plane); pn.position = SCNVector3(0, 0, 0.012)
+        scene.rootNode.addChildNode(pn)
+        let cam = SCNNode(); cam.camera = SCNCamera(); cam.camera?.fieldOfView = 30; cam.camera?.zNear = 0.01; cam.camera?.zFar = 20
+        let r = Float(shape.aspect) / 2 + f.edge + 0.04
+        cam.position = SCNVector3(0, 0, r / sinf(15 * .pi / 180) * 1.0)
+        scene.rootNode.addChildNode(cam)
+        let amb = SCNNode(); amb.light = SCNLight(); amb.light?.type = .ambient; amb.light?.intensity = 700
+        scene.rootNode.addChildNode(amb)
+        let sun = SCNNode(); sun.light = SCNLight(); sun.light?.type = .directional; sun.light?.intensity = 500; sun.eulerAngles = SCNVector3(-0.5, -0.4, 0)
+        scene.rootNode.addChildNode(sun)
+        scene.background.contents = UIColor.clear
+        let renderer = SCNRenderer(device: device, options: nil)
+        renderer.scene = scene; renderer.pointOfView = cam
+        let img = renderer.snapshot(atTime: 0, with: CGSize(width: size, height: size), antialiasingMode: .multisampling4X)
+        frameCache[key] = img
+        return img
+    }
+    private static var frameCache: [String: UIImage] = [:]
 }

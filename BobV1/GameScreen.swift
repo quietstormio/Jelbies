@@ -285,7 +285,8 @@ struct GameScreen: View {
 
             VolleyChrome(care: model.care)          // Jelly Volleyball: score, controls, results, the white fade
 
-            if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
+            if model.care.arranging, model.care.wallEdit == nil { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
+            if let session = model.care.wallEdit { WallEditorOverlay(care: model.care, session: session) }          // the wall picture: drag, size, frame, Done (Photo/WallEditorOverlay.swift)
 
             if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
 
@@ -514,7 +515,18 @@ struct GameScreen: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
         }
+        .fullScreenCover(isPresented: Binding(get: { model.care.wallAlbumOpen }, set: { model.care.wallAlbumOpen = $0 })) {          // the album, asked for by the Bag / the Shop / the wall editor: pick a photo to hang
+            PhotoAlbumView(close: { model.care.wallAlbumOpen = false }, wall: model.care.wallHangContext(close: { model.care.wallAlbumOpen = false }))
+        }
+        .onChange(of: model.care.wallShopRequest) { _, on in          // the album's "Get a frame": the Shop on the Rooms tab, scrolled to the frames
+            guard on else { return }
+            model.care.wallShopRequest = false
+            if model.care.wallEdit != nil { model.care.finishWallEdit(save: false) }
+            ShopTab.pending = .rooms; ShopTab.scrollToFrames = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.25)) { town = .shop } }
+        }
         .task { await GameScreen.runStoreDemo(model: model) }
+        .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
         .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }

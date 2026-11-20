@@ -596,6 +596,7 @@ struct BagSheet: View {
     /// Opened by the HUD's Dress / Decor rows (a tab was asked for): the first-time tip for that tab.
     private let fromHUD: Bool
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
@@ -656,7 +657,13 @@ struct BagSheet: View {
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("bag-sheet")
         .overlay { sellCard }
-        .onAppear { book.markSeen() }
+        .onAppear {
+            book.markSeen()
+            if DevArgs.enabled, UserDefaults.standard.string(forKey: "BagScroll") == "frames" {          // (capture aid: -BagScroll frames)
+                Task { try? await Task.sleep(nanoseconds: 600_000_000); withAnimation { proxy.scrollTo("bag-frames", anchor: .top) } }
+            }
+        }
+        }
     }
 
     /// The rooms the player owns (the home room and the bought ones): choosing one moves the Jelbies in (the same `care.switchRoom` the old picker used).
@@ -689,6 +696,41 @@ struct BagSheet: View {
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
                 .accessibilityIdentifier("bag-room-\(d.id.rawValue)")
+            }
+            framesList
+        }
+    }
+
+    /// The picture frames the player owns (bought in the Shop's Rooms tab): "Hang a picture" opens the album to pick the photo, then the wall editor.
+    @ViewBuilder private var framesList: some View {
+        let owned = book.ownedWallFrames
+        if !owned.isEmpty {
+            Text("Picture frames").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
+                .accessibilityAddTraits(.isHeader).id("bag-frames").accessibilityIdentifier("bag-frames-header")
+            ForEach(owned, id: \.self) { f in
+                if let item = StoreCatalog.item("frame-\(f.rawValue)") {
+                    let hang = pink("Hang a picture", enabled: true) {
+                        close()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { care.wallAlbumOpen = true }
+                    }.accessibilityLabel("Hang a picture in the \(item.name) frame").accessibilityHint("Opens your album to pick a photo, then the wall editor.")
+                    .accessibilityIdentifier("bag-hang-\(f.rawValue)")
+                    let info = HStack(spacing: 12) {
+                        ItemArt(item: item, size: 64)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                            Text(book.wallPicture?.frame == f ? "On the wall" : "Owned").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    Group {
+                        if typeSize.isAccessibilitySize { VStack(alignment: .leading, spacing: 10) { info; hang.frame(maxWidth: .infinity) } }
+                        else { HStack(spacing: 12) { info; hang } }
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("bag-frame-\(f.rawValue)")
+                }
             }
         }
     }

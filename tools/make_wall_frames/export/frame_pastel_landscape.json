@@ -1,0 +1,30 @@
+{
+ "id": "frame_pastel_landscape",
+ "tris": 1440,
+ "verts": 816,
+ "sub_meshes": [
+  {
+   "name": "frame",
+   "pivot": [
+    0,
+    0,
+    0
+   ],
+   "material": "plain",
+   "tris": 1440
+  }
+ ],
+ "bounds_min": [
+  -0.7617,
+  -0.595,
+  0.0
+ ],
+ "bounds_max": [
+  0.7617,
+  0.595,
+  0.07
+ ],
+ "border": 0.095,
+ "opening_w": 1.3333333333333333,
+ "opening_h": 1.0
+}

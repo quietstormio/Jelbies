@@ -12,18 +12,20 @@ import Foundation
 
 nonisolated enum StoreKind: String, CaseIterable, Codable, Sendable {
     case food, treat, drink, supply, trickPage, shoes, wear, decor, room
+    /// A picture frame for the wall (Room/WallPicture.swift): bought once in the Shop's Rooms tab, hung from the Bag or the album.
+    case wallFrame
     /// A hand-held toy used from Play (the bubble wand): bought once, kept, never used up (2026-11-02, Play toys).
     case toy
     var title: String {
         switch self {
         case .food: return "Food"; case .treat: return "Treats"; case .drink: return "Drinks"; case .supply: return "Care"; case .trickPage: return "Tricks"
-        case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"; case .room: return "Rooms"; case .toy: return "Toys"
+        case .shoes: return "Shoes"; case .wear: return "Wear"; case .decor: return "Decor"; case .room: return "Rooms"; case .toy: return "Toys"; case .wallFrame: return "Picture frames"
         }
     }
     var symbol: String {
         switch self {
         case .food: return "fork.knife"; case .treat: return "birthday.cake.fill"; case .drink: return "cup.and.saucer.fill"; case .supply: return "sparkles"; case .trickPage: return "book.fill"
-        case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"; case .room: return "house.fill"; case .toy: return "wand.and.stars"
+        case .shoes: return "shoeprints.fill"; case .wear: return "crown.fill"; case .decor: return "chair.lounge.fill"; case .room: return "house.fill"; case .toy: return "wand.and.stars"; case .wallFrame: return "photo.artframe"
         }
     }
 }
@@ -81,7 +83,9 @@ nonisolated struct StoreItem: Identifiable, Sendable {
     /// A room to live in (Room/RoomDef.swift).
     var room: RoomID? = nil
     /// Bought once and kept (pages, wearables, rooms; decor placement is part B) as opposed to stacked and used up.
-    var unique: Bool { kind == .trickPage || kind == .shoes || kind == .wear || kind == .room || kind == .toy }
+    var unique: Bool { kind == .trickPage || kind == .shoes || kind == .wear || kind == .room || kind == .toy || kind == .wallFrame }
+    /// A picture frame: which one (the id is "frame-<WallFrame>").
+    var wallFrame: WallFrame? { kind == .wallFrame ? WallFrame(rawValue: String(id.dropFirst(6))) : nil }
     /// A wearable that is earned, not sold (the winner medal): never listed in the shop.
     var awarded = false
     var isWearable: Bool { kind == .shoes || kind == .wear }
@@ -90,7 +94,7 @@ nonisolated struct StoreItem: Identifiable, Sendable {
 }
 
 nonisolated enum StoreCatalog {
-    static let items: [StoreItem] = (base + batch2 + batch3 + batch4 + batch5).filter { !($0.decor?.isRetired ?? false) } + wearItems + roomItems + food4Items + playToyItems + trickItems + [earsItem]
+    static let items: [StoreItem] = (base + batch2 + batch3 + batch4 + batch5).filter { !($0.decor?.isRetired ?? false) } + wearItems + roomItems + frameItems + food4Items + playToyItems + trickItems + [earsItem]
 
     /// Music Ears: the existing Ears feature, sold once for everyone (Audio/EarsListener.swift).
     static let earsItem = StoreItem(id: TrickCatalog.earsID, name: "Music Ears", kind: .trickPage, price: 150, perk: nil,
@@ -112,6 +116,14 @@ nonisolated enum StoreCatalog {
     static let roomItems: [StoreItem] = [
         StoreItem(id: "room-loft", name: RoomCatalog.loft.title, kind: .room, price: StoreTuning.roomPrices[.loft] ?? 300, perk: nil, description: RoomCatalog.loft.blurb, symbol: "sun.max.fill", room: .loft),
         StoreItem(id: "room-cabin", name: RoomCatalog.cabin.title, kind: .room, price: StoreTuning.roomPrices[.cabin] ?? 400, perk: nil, description: RoomCatalog.cabin.blurb, symbol: "flame.fill", room: .cabin),
+    ]
+
+    /// The picture frames (the Shop's Rooms tab, group "Picture frames"): on the decor price ladder, the two plainest at the lowest step, Pastel a step up, Gold at the top.
+    static let frameItems: [StoreItem] = [
+        StoreItem(id: "frame-wood", name: WallFrame.wood.title, kind: .wallFrame, price: 45, perk: nil, description: "A warm wooden frame for a photo from your album. Hang it on the wall above the windows.", symbol: "photo.artframe"),
+        StoreItem(id: "frame-white", name: WallFrame.white.title, kind: .wallFrame, price: 45, perk: nil, description: "A clean white frame with a thin inner edge, for a photo from your album.", symbol: "photo.artframe"),
+        StoreItem(id: "frame-pastel", name: WallFrame.pastel.title, kind: .wallFrame, price: 70, perk: nil, description: "A soft, rounded pastel frame, as puffy as a cushion, for a photo from your album.", symbol: "photo.artframe"),
+        StoreItem(id: "frame-gold", name: "Gold (ornate)", kind: .wallFrame, price: 120, perk: nil, description: "An ornate golden frame with corner rosettes: a family portrait for the wall.", symbol: "photo.artframe"),
     ]
 
     /// The second batch of furniture and toys (prices and spots from the Blender exports' JSON).

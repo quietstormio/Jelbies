@@ -110,6 +110,13 @@ final class GameCare {
     @ObservationIgnored var shoeStats = (rebuilt: 0, reused: 0)
     /// Decor (GameCare+Decor.swift): what was last drawn, so the room mesh is rebuilt only when something changed.
     @ObservationIgnored var decorDrawn = DecorDrawn()
+    /// The wall picture (GameCare+WallPicture.swift): what was last handed to the renderer.
+    @ObservationIgnored let wallDrawn = WallPictureDrawn()
+    /// The wall picture editor (GameCare+WallEdit.swift): the session while it is open, its camera ease (0...1), the album asked for from the Bag / Shop / editor, the Shop asked for from the album.
+    var wallEdit: WallEditSession?
+    @ObservationIgnored var wallEditT: Float = 0
+    var wallAlbumOpen = false
+    var wallShopRequest = false
     /// Arrange mode (drag the room's decor): set from the Bag's Place, ended by Done. The Jellies' touch is off meanwhile.
     var arranging = false
     var arrangingUID: Int? { didSet { DecorField.shared.held = arrangingUID } }
@@ -325,6 +332,7 @@ final class GameCare {
         } else {
             applySavedRoom()
             DecorField.shared.set(store.placedDecor)          // (process-wide: a preview must not wipe the real room's decor)
+            applyWallPictureLaunchArguments(defaults: defaults)          // (dev builds only: -WallPicture ...)
         }
         if persistent { MemoryPressure.register("care.save") { [weak self] in          // a memory warning: write needs and grime now (the OS may end the app next); the away stamp is NOT touched
             guard let self else { return false }

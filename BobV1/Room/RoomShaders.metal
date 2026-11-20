@@ -363,11 +363,9 @@ static float3 roomJewel(int m, float3 vcol, float3 N, float3 P, float3 V, float3
     return mix(metal, gemCol, gem);
 }
 
-fragment float4 roomFS(RoomVOut in [[stage_in]],
-                       constant RoomUniforms& u [[buffer(0)]],
-                       constant float4* shoeTable [[buffer(2)]],
-                       depth2d<float> shadowMap [[texture(0)]],
-                       depth2d<float> heightMap [[texture(1)]]) {
+/// The room's shading (every material). `isPhoto` = the wall picture (material 9): its albedo is the photo's colour (`photo`, linear) instead of the vertex colour, and it is
+/// lit exactly like the wall it hangs on (same ambient, key, shadow and lamp pool, so at night it is as dark as the wall around it and never glows).
+static float4 roomShade(RoomVOut in, constant RoomUniforms& u, constant float4* shoeTable, depth2d<float> shadowMap, depth2d<float> heightMap, float3 photo, bool isPhoto) {
     float3 N = normalize(in.normal);
     float3 P = in.world;
     float3 camVec = u.camPos.xyz - P;
@@ -375,7 +373,7 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
     float3 V = camVec / max(dist, 1e-4);
     int m = int(in.mat + 0.5);
 
-    float3 albedo = in.color;
+    float3 albedo = isPhoto ? photo : in.color;
     float ao = in.ao;
     // baked AO above 1 marks an EMISSIVE vertex (the light-up sneakers' glow): the excess is the glow weight (every other mesh has ao <= 1)
     float emit = max(ao - 1.0, 0.0);
@@ -494,8 +492,20 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
     float3 keyCol = u.keyCol.rgb * u.keyDir.w;
     float3 sky = u.pal4.rgb * 0.9 + float3(0.1);
     float3 ground = u.pal2.rgb * 0.8;
-    float3 amb = mix(ground, sky, N.y * 0.5 + 0.5) * 0.62 * u.ambCol.rgb * u.ambCol.w;
-    float3 col = albedo * (amb * ao + keyCol * ndl * sh * mix(0.55, 1.0, ao) * 0.62);
+    float3 amb0 = mix(ground, sky, N.y * 0.5 + 0.5) * 0.62;          // (the plain day ambient: the photo is lit relative to it)
+    float3 amb = amb0 * u.ambCol.rgb * u.ambCol.w;
+    float3 lightT = amb * ao + keyCol * ndl * sh * mix(0.55, 1.0, ao) * 0.62;
+    if (isPhoto) {
+        // The photo already holds display colours (a screenshot), so it is NOT put through the film curve again (alpha 0 = matte, see postFS) and it is lit relative to the
+        // plain DAY light of this room: at day it shows exactly its own colours, at dusk and night it follows the wall's light (as dark as the wall at night: it never glows), and only
+        // 30% of the room's tint reaches it, so the Jelmiko keep their colours.
+        float3 lw = float3(0.3, 0.59, 0.11);
+        float3 lightDay = amb0 * ao + float3(1.0, 0.95, 0.88) * u.keyDir.w * ndl * mix(0.55, 1.0, ao) * 0.62;
+        float lumRatio = dot(lightT, lw) / max(dot(lightDay, lw), 1e-4);
+        float3 rel = lightT / max(lightDay, float3(1e-4));
+        lightT = mix(float3(lumRatio), rel, 0.3);
+    }
+    float3 col = albedo * lightT;
 
     // the table lamp: a warm pool of light around it, and the shade itself glows (material 5)
     if (u.lamp.w > 0.001) {
@@ -516,10 +526,31 @@ fragment float4 roomFS(RoomVOut in [[stage_in]],
     if (m >= 6 && m <= 8) { col = roomJewel(m, in.color, N, P, V, L, keyCol, sh, amb, ao, u.pal4.rgb, clamp(u.ambCol.w, 0.6, 1.0)); }
     if ((m == 1 || m == 3) && u.camPos.w > 0.5) { col *= 1.0 - 0.62 * roomContactAO(u, heightMap, P); }
 
-    // fog toward the background swatch
-    float f = saturate((dist - u.fog.x) / (u.fog.y - u.fog.x)) * u.fog.z;
+    // fog toward the background swatch (the photo hangs on the wall: no fog over it, or it would fade like distance)
+    float f = isPhoto ? 0.0 : saturate((dist - u.fog.x) / (u.fog.y - u.fog.x)) * u.fog.z;
     col = mix(col, u.pal3.rgb * 0.62 * u.ambCol.rgb * u.ambCol.w, f);
-    return float4(col, m >= 16 ? 1.0 : in.alpha);   // alpha only matters for the blended pipeline (dining puffs / contact shadows); opaque ones are 1
+    return float4(col, isPhoto ? 0.0 : (m >= 16 ? 1.0 : in.alpha));   // alpha only matters for the blended pipeline (dining puffs / contact shadows); opaque ones are 1
+}
+
+fragment float4 roomFS(RoomVOut in [[stage_in]],
+                       constant RoomUniforms& u [[buffer(0)]],
+                       constant float4* shoeTable [[buffer(2)]],
+                       depth2d<float> shadowMap [[texture(0)]],
+                       depth2d<float> heightMap [[texture(1)]]) {
+    return roomShade(in, u, shoeTable, shadowMap, heightMap, float3(0.0), false);
+}
+
+/// The wall picture (Room/WallPictureGeometry.swift): the vertex colour's rg is the uv into the picture (sRGB texture with mipmaps, so the sample is linear).
+constexpr sampler roomPhotoSampler(coord::normalized, address::clamp_to_edge, filter::linear, mip_filter::linear, max_anisotropy(4));
+
+fragment float4 roomPhotoFS(RoomVOut in [[stage_in]],
+                            constant RoomUniforms& u [[buffer(0)]],
+                            constant float4* shoeTable [[buffer(2)]],
+                            depth2d<float> shadowMap [[texture(0)]],
+                            depth2d<float> heightMap [[texture(1)]],
+                            texture2d<float> photoTex [[texture(2)]]) {
+    float3 photo = photoTex.sample(roomPhotoSampler, in.color.rg).rgb;
+    return roomShade(in, u, shoeTable, shadowMap, heightMap, photo, true);
 }
 
 /// Optional final-composite helper: darken screen corners. uv in 0..1.

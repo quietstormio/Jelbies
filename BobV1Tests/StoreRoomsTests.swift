@@ -34,7 +34,8 @@ final class StoreRoomsTests: XCTestCase {
         XCTAssertEqual(b.ownedRooms, [.home, .loft])
         XCTAssertFalse(b.moveIn(.cabin), "not owned")
         XCTAssertNil(StoreCatalog.item("room-home")); XCTAssertEqual(StoreCatalog.items(.room).count, 2)
-        XCTAssertEqual(ShopTab.rooms.items.count, 2)
+        XCTAssertEqual(ShopTab.rooms.items.count, 2 + 4, "the two rooms and the four picture frames (their own group in the same tab)")
+        XCTAssertEqual(ShopTab.rooms.items.filter { $0.kind == .room }.count, 2)
     }
 
     func testDecorIsPerRoom() {

@@ -423,6 +423,7 @@ final class StartFlow {
             for u in items where (try? u.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true { try? fm.removeItem(at: u) }          // jellies.json, portrait-N.png, the Siri queue (not the group's Library)
         }
         try? fm.removeItem(at: URL.documentsDirectory.appending(path: "Photos", directoryHint: .isDirectory))
+        WallPictureFiles.removeAll()          // the wall picture's own copy of its photo (Documents/Wall)
         WidgetCenter.shared.reloadAllTimelines()
         let live = Activity<JelbiesActivityAttributes>.activities          // snapshot now: a Live Activity started later must not be ended by this
         Task { for a in live { await a.end(nil, dismissalPolicy: .immediate) } }
