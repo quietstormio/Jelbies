@@ -359,7 +359,7 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         lab.rigs[0].brain.idleForced = true
         _ = lab.rigs[0].brain.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: court.uid)
         var found: Float?
-        var ev: [String] = [], pn = [-2, -2, -2], pw = [-2, -2, -2], pe = [false, false, false], pk = [String](repeating: "", count: 3)
+        var diag = 0, ev: [String] = [], pn = [-2, -2, -2], pw = [-2, -2, -2], pe = [false, false, false], pk = [String](repeating: "", count: 3)
         for i in 0..<(60 * 100) {
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
             if i < 60 * 20 { for k in 1...2 {
@@ -368,6 +368,24 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
                 if b.toy.noticeUID != pn[k] || b.toy.waitUID != pw[k] || en != pe[k] || kind != pk[k] {
                     ev.append(String(format: "t%.1f rig%d kind %@ notice %d wait %d enrolled %d pending %d job %d at (%.2f,%.2f)", Float(i) / 60, k, kind, b.toy.noticeUID, b.toy.waitUID, en ? 1 : 0, b.pending != nil ? 1 : 0, b.job != nil ? 1 : 0, b.position.x, b.position.y))
                     pn[k] = b.toy.noticeUID; pw[k] = b.toy.waitUID; pe[k] = en; pk[k] = kind
+                    if k == 1, guardOn, b.toy.waitUID == court.uid, diag == 0 {          // (he queued: why did his decorStart say no? read-only checks, the wall on and off)
+                        diag = 1
+                        let keep = b.decorIgnore; b.decorIgnore = court.uid
+                        let c = DecorField.shared.foot(court.uid)!
+                        func probe(_ tag: String) -> String {
+                            let st = b.hopscotchStand(c), ds = b.decorStand(.decorHopscotch, c, from: b.position)
+                            var leg = "-"
+                            if let ds { leg = String(format: "legClear %d reachable %d dist %.2f peers %@", b.legClear(b.position, ds, margin: b.steerMargin) ? 1 : 0, b.reachable(b.position, ds) ? 1 : 0, c.distance(ds), b.steerPeers().map { String(format: "%d@(%.2f,%.2f)", $0.id, $0.pos.x, $0.pos.y) }.joined(separator: ",")) }
+                            return "\(tag): stand \(String(describing: st)) decorStand \(String(describing: ds)) \(leg)"
+                        }
+                        ev.append("DIAG " + probe("wall on, court soft"))
+                        HopscotchTuning.guardOn = false
+                        ev.append("DIAG " + probe("wall off"))
+                        HopscotchTuning.guardOn = true
+                        b.decorIgnore = nil
+                        ev.append("DIAG " + probe("wall on, NOT soft (hopPass \(String(describing: b.hopPass)))"))
+                        b.decorIgnore = keep
+                    }
                 }
             } }
             if found == nil, line.contains(court.uid, 1) { found = Float(i) / 60 }
