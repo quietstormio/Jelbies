@@ -117,7 +117,7 @@ final class FocusGroup {
             let c = (p.x - pose.eye.x) / d, h = half / d
             return (c - h, c + h)
         }
-        let boxes = spots.map(box)
+        let boxes = spots.map { box($0) }
         let lo = boxes.map(\.lo).min() ?? 0, hi = boxes.map(\.hi).max() ?? 0
         let unit = bodyHalf / max(simd_dot(SIMD3<Float>(spots[0].x, 0.5, spots[0].y) - pose.eye, f), 0.3)          // (a half body at the row's depth, in screen units)
         var worst = Float.infinity
