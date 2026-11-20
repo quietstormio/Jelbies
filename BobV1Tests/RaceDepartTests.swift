@@ -228,4 +228,52 @@ final class RaceDepartTests: XCTestCase {
         XCTAssertFalse(care.greeting, "the welcome home does not call a sleeping Bob")
         XCTAssertFalse(care.queued.contains { if case .come = $0 { return true }; return false }, "no come-to-front for a sleeper")
     }
+
+    /// A housemate frozen mid-emote while the track is up resumes without a snap when the room fades back: the body does not jump across the resume step (no bigger than the steps it was taking before).
+    func testAHousemateFrozenMidEmoteResumesWithoutASnap() {
+        let r = room(3); let care = r.care
+        let h = r.actors[2], b = h.brain!
+        b.autonomy = true
+        b.idleBegin(.bounce)
+        func verts() -> [Float] { h.sim.x }
+        func maxDelta(_ a: [Float], _ c: [Float]) -> Float { zip(a, c).map { abs($0 - $1) }.max() ?? 0 }
+        var prev = verts(), typical: Float = 0
+        for _ in 0..<20 { r.step(); let v = verts(); typical = max(typical, maxDelta(prev, v)); prev = v }
+        XCTAssertGreaterThan(typical, 0, "he is moving before the race")
+        care.startRace(jelly: 0, seed: 11)
+        var lastBefore = verts(), sawAway = false, resume: Float?, away = false
+        for _ in 0..<(150 * 60) {
+            r.step()
+            if care.raceBook.roomAway { away = true; sawAway = true; continue }
+            if away { resume = maxDelta(lastBefore, verts()); break }
+            lastBefore = verts()
+        }
+        XCTAssertTrue(sawAway)
+        XCTAssertNotNil(resume)
+        XCTAssertLessThan(resume ?? 99, max(2 * typical, 0.05), "the first step home moves him no more than a normal step (typical \(typical))")
+    }
+
+    /// Needs keep running for a housemate who is away on the track (his brain is not ticked, but his hunger / thirst / attention go down as in a room with no race).
+    func testNeedsKeepRunningForAHousemateWhileTheTrackIsUp() {
+        let a = room(3), c = room(3)          // a: a race for Bob; c: the same seconds with no race
+        let kinds = NeedKind.allCases
+        let start = [1, 2].map { h in kinds.map { a.care.jelly(h)!.needs.level($0) } }
+        a.care.startRace(jelly: 0, seed: 11)
+        var steps = 0, sawAway = false
+        for _ in 0..<(150 * 60) {
+            tick(a); steps += 1
+            if a.care.raceBook.roomAway { sawAway = true }
+            if !a.care.race.active && sawAway { break }
+        }
+        XCTAssertTrue(sawAway)
+        XCTAssertGreaterThan(steps, 20 * 60, "a race of at least 20 s")
+        for _ in 0..<steps { tick(c) }
+        for (i, h) in [1, 2].enumerated() {
+            for (k, kind) in kinds.enumerated() {
+                let dRace = start[i][k] - a.care.jelly(h)!.needs.level(kind), dCtl = start[i][k] - c.care.jelly(h)!.needs.level(kind)
+                XCTAssertGreaterThan(dRace, 0, "housemate \(h) \(kind): the need ran down during the race")
+                XCTAssertEqual(dRace, dCtl, accuracy: max(0.02 * abs(dCtl), 1e-6), "housemate \(h) \(kind): the same drop as with no race")
+            }
+        }
+    }
 }

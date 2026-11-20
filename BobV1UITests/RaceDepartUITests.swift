@@ -3,7 +3,7 @@
 //  race-depart-r1 capture: the owner's real path to a race (Go out -> Town -> Track -> pick the racer -> Race), with the simulator-only probe on (-RaceDepartProbe 1, [rdp] log lines)
 //  and one of the housemates' situations held until the trip starts (-RaceDepartSetup, written by RaceDepartProbe.swift; the marker file /tmp/racedep_go starts it).
 //  testDepartFromTown runs every situation in RACEDEP_SITUATIONS (comma list, default pair,walkemote,toy) for every seed in RACEDEP_SEEDS (default 1,2,3), one launch each.
-//  Env: RACEDEP_SECS (how long to stay after the tap, default 100), RACEDEP_LANDSCAPE=1. The caller (the scratch scripts) streams the [rdp] lines and records the screen.
+//  Env: RACEDEP_RACER (the roster id who races, default 0), RACEDEP_SECS (how long to stay after the tap, default 100), RACEDEP_LANDSCAPE=1. The caller (the scratch scripts) streams the [rdp] lines and records the screen.
 //
 
 import XCTest
@@ -38,9 +38,10 @@ final class RaceDepartUITests: XCTestCase {
         XCTAssertTrue(app.buttons["town-track"].waitForExistence(timeout: 10))
         sleep(1)
         app.buttons["town-track"].tap()
-        XCTAssertTrue(app.buttons["who-0"].waitForExistence(timeout: 10))
+        let racer = ProcessInfo.processInfo.environment["RACEDEP_RACER"] ?? "0"          // (RACEDEP_RACER=1: Lavender races and Bob stays home)
+        XCTAssertTrue(app.buttons["who-\(racer)"].waitForExistence(timeout: 10))
         sleep(1)
-        app.buttons["who-0"].tap()
+        app.buttons["who-\(racer)"].tap()
         if control {          // the control: the same freeze and resume, no race (Track back, Town home)
             sleep(1)
             app.buttons["track-back"].tap()
