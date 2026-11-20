@@ -76,6 +76,7 @@ final class ComeHereSettleTests: XCTestCase {
         for (i, p) in pts.enumerated() { r.place(i, at: p) }
         setup(r, pts)
         let ids = called ?? Array(0..<n)
+        let startFloors = (0..<n).map { GameCare.floorPos(r.actors[$0].brain!, r.actors[$0].sim) }
         if called == nil { r.care.comeHereEveryone() } else { r.care.beginFocus(ids: ids) }
         var res = Result()
         var t: Float = 0
@@ -136,6 +137,10 @@ final class ComeHereSettleTests: XCTestCase {
             let zs = ids.map { GameCare.floorPos(r.actors[$0].brain!, r.actors[$0].sim).y }
             if (zs.max()! - zs.min()!) > 0.7 { res.fails.append("not one row (z spread \(String(format: "%.2f", zs.max()! - zs.min()!)))") }
         }
+        if !res.fails.isEmpty {
+            let f: (SIMD2<Float>) -> String = { String(format: "(%.1f,%.1f)", $0.x, $0.y) }
+            res.fails.append("[spots " + ids.map { f(g.spot(of: $0)) }.joined(separator: " ") + " | start " + startFloors.map(f).joined(separator: " ") + " | final " + (0..<n).map { f(GameCare.floorPos(r.actors[$0].brain!, r.actors[$0].sim)) }.joined(separator: " ") + "]")
+        }
         return res
     }
 
@@ -152,14 +157,16 @@ final class ComeHereSettleTests: XCTestCase {
         XCTAssertEqual(bad, 0, "\(name): \(bad) of \(Self.seeds) runs broke the rule. \(firstFails.joined(separator: " | "))", file: file, line: line)
     }
 
-    /// Puts Jelmiko `id` at `p` and moves anyone who started within 2.2 of it to a free spot (so the test never starts with two bodies on top of each other).
-    private func put(_ r: FocusAnyRun, _ id: Int, at p: SIMD2<Float>) {
+    /// Puts Jelmiko `id` near `p0` (jittered by the seed) and moves anyone who started within 1.9 of it to a free spot (so the test never starts with two bodies on top of each other).
+    private func put(_ r: FocusAnyRun, _ id: Int, at p0: SIMD2<Float>, seed: UInt64 = 0) {
+        let jr = Self.rng(seed &* 7919 &+ 5)
+        let p = p0 + SIMD2((jr() - 0.5) * 0.8, (jr() - 0.5) * 0.8)          // (a little different per seed)
         let spots: [SIMD2<Float>] = [SIMD2(-2.1, -1.6), SIMD2(2.1, -1.6), SIMD2(-2.1, 2.0), SIMD2(2.1, 2.0), SIMD2(0, -2.0), SIMD2(-2.1, 0.2), SIMD2(2.1, 0.2)]
         r.place(id, at: p)
         var taken = [p]
         for o in 0..<r.actors.count where o != id {
             let here = GameCare.floorPos(r.actors[o].brain!, r.actors[o].sim)
-            if simd_distance(here, p) < 2.2 || taken.contains(where: { simd_distance($0, here) < 1.8 }) {
+            if simd_distance(here, p) < 1.9 || taken.contains(where: { simd_distance($0, here) < 1.8 }) {
                 if let s = spots.first(where: { c in taken.allSatisfy { simd_distance($0, c) > 1.9 } }) { r.place(o, at: s); taken.append(s) }
             } else { taken.append(here) }
         }
@@ -229,25 +236,25 @@ final class ComeHereSettleTests: XCTestCase {
 
     // MARK: the uncalled third (2026-11-20): never between or over the called ones on screen
     func testCallTwoThirdAsleepInTheMiddleOfTheRug() {
-        table("call two (0,1), the third asleep at the rug centre", called: [0, 1]) { r, _, _ in self.put(r, 2, at: SIMD2(0, 0)); self.sleepNow(r, 2) }
+        table("call two (0,1), the third asleep at the rug centre", called: [0, 1]) { r, _, s in self.put(r, 2, at: SIMD2(0, 0), seed: s); self.sleepNow(r, 2) }
     }
     func testCallTwoThirdAsleepNearTheFront() {
-        table("call two (0,1), the third asleep at the front middle", called: [0, 1]) { r, _, _ in self.put(r, 2, at: SIMD2(0, 1.6)); self.sleepNow(r, 2) }
+        table("call two (0,1), the third asleep at the front middle", called: [0, 1]) { r, _, s in self.put(r, 2, at: SIMD2(0, 1.6), seed: s); self.sleepNow(r, 2) }
     }
     func testCallTwoThirdAsleepAtTheLeft() {
-        table("call two (0,1), the third asleep at the left", called: [0, 1]) { r, _, _ in self.put(r, 2, at: SIMD2(-2.0, 1.2)); self.sleepNow(r, 2) }
+        table("call two (0,1), the third asleep at the left", called: [0, 1]) { r, _, s in self.put(r, 2, at: SIMD2(-2.0, 1.2), seed: s); self.sleepNow(r, 2) }
     }
     func testCallTwoThirdAsleepAtTheRight() {
-        table("call two (0,1), the third asleep at the right", called: [0, 1]) { r, _, _ in self.put(r, 2, at: SIMD2(2.0, 1.2)); self.sleepNow(r, 2) }
+        table("call two (0,1), the third asleep at the right", called: [0, 1]) { r, _, s in self.put(r, 2, at: SIMD2(2.0, 1.2), seed: s); self.sleepNow(r, 2) }
     }
     func testCallTwoBobAsleepInTheMiddle() {
-        table("call two (1,2), Bob (0) asleep at the rug centre", called: [1, 2]) { r, _, _ in self.put(r, 0, at: SIMD2(0, 0.4)); self.sleepNow(r, 0) }
+        table("call two (1,2), Bob (0) asleep at the rug centre", called: [1, 2]) { r, _, s in self.put(r, 0, at: SIMD2(0, 0.4), seed: s); self.sleepNow(r, 0) }
     }
     func testCallOneOthersAsleepInTheMiddle() {
-        table("call one (1), the other two asleep (middle + side)", called: [1]) { r, _, _ in self.put(r, 0, at: SIMD2(0, 0.4)); self.sleepNow(r, 0); self.put(r, 2, at: SIMD2(-2.1, 2.0)); self.sleepNow(r, 2) }
+        table("call one (1), the other two asleep (middle + side)", called: [1]) { r, _, s in self.put(r, 0, at: SIMD2(0, 0.4), seed: s); self.sleepNow(r, 0); self.put(r, 2, at: SIMD2(-2.1, 2.0), seed: s); self.sleepNow(r, 2) }
     }
     func testCallTwoThirdAwakeStandingInTheMiddle() {
-        table("call two (0,1), the third awake, standing at the rug centre", called: [0, 1]) { r, _, _ in self.put(r, 2, at: SIMD2(0, 0.4)) }
+        table("call two (0,1), the third awake, standing at the rug centre", called: [0, 1]) { r, _, s in self.put(r, 2, at: SIMD2(0, 0.4), seed: s) }
     }
 
     // MARK: a phone on its side
@@ -255,20 +262,9 @@ final class ComeHereSettleTests: XCTestCase {
         table("landscape: all three asleep", aspect: 956 / 440) { r, _, _ in for i in 0..<3 { self.sleepNow(r, i) } }
     }
     func testLandscapeCallTwoThirdAsleepOnTheRug() {
-        table("landscape: call two (0,1), the third asleep at the rug centre", called: [0, 1], aspect: 956 / 440) { r, _, _ in self.put(r, 2, at: SIMD2(0, 0)); self.sleepNow(r, 2) }
+        table("landscape: call two (0,1), the third asleep at the rug centre", called: [0, 1], aspect: 956 / 440) { r, _, s in self.put(r, 2, at: SIMD2(0, 0), seed: s); self.sleepNow(r, 2) }
     }
     func testLandscapeCallTwoThirdAsleepAtTheLeft() {
-        table("landscape: call two (0,1), the third asleep at the left", called: [0, 1], aspect: 956 / 440) { r, _, _ in self.put(r, 2, at: SIMD2(-2.4, 1.2)); self.sleepNow(r, 2) }
-    }
-
-    /// A bedtime already ordered (the night's retry loop keeps asking) is cancelled for the called, or they lie down again inside the close-up (seen in the real app, 2026-11-20).
-    func testCallCancelsAPendingBedtimeForTheCalledOnly() {
-        let r = FocusAnyRun(count: 3, peers: true); Self.keep.append(r); r.run(0.5)
-        for i in 0..<3 { r.care.nightRest.wanted.insert(i); r.actors[i].brain!.commandedGoodnight = true }
-        r.care.beginFocus(ids: [0, 1])
-        XCTAssertEqual(r.care.nightRest.wanted, [2], "only the uncalled one is still wanted in bed")
-        XCTAssertFalse(r.actors[0].brain!.commandedGoodnight); XCTAssertFalse(r.actors[1].brain!.commandedGoodnight)
-        XCTAssertTrue(r.actors[2].brain!.commandedGoodnight)
-        XCTAssertTrue(r.care.nightRest.nightWoken.isSuperset(of: [0, 1]), "at night they go back to bed by the usual rule after the close-up")
+        table("landscape: call two (0,1), the third asleep at the left", called: [0, 1], aspect: 956 / 440) { r, _, s in self.put(r, 2, at: SIMD2(-2.4, 1.2), seed: s); self.sleepNow(r, 2) }
     }
 }

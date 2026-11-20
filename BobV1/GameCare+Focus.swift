@@ -78,11 +78,11 @@ final class FocusGroup {
     /// Distance between neighbouring row centres: the game's, or the Adoption Center's wider pick row (set by `GameCare.beginFocus` for a preview).
     var rowSpacing: Float = GameCamera.focusRowSpacing
 
-    func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:], avoiding obstacles: [SIMD2<Float>] = []) {
+    func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:], avoiding obstacles: [SIMD2<Float>] = [], reachable: @escaping (SIMD2<Float>) -> Bool = { _ in true }) {
         ids = new; arrived = []; clock = 0; netShift = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
-            let row = Self.rowAvoiding(count: new.count, spacing: rowSpacing, obstacles: obstacles)          // (the same expression a preview group is born on, moved aside only when an uncalled body would stand between or over them)
+            let row = Self.rowAvoiding(count: new.count, spacing: rowSpacing, obstacles: obstacles, reachable: reachable)          // (the same expression a preview group is born on, moved aside only when an uncalled body would stand between or over them)
             // no fixed spot per Jelly: whoever is nearest the middle takes it, the others the free slot on their side (`Lineup`), re-read while they come (`replan`)
             slots = row; slotOf = [:]; committed = []; replanClock = 0; replans = 0
             if floors.count == new.count {
@@ -96,7 +96,7 @@ final class FocusGroup {
             for id in new { spots[id] = row[slotOf[id]!] }
             GameCamera.focusSpots = new.map { spots[$0]! }
         } else {
-            let free = Self.rowAvoiding(count: 1, spacing: rowSpacing, obstacles: obstacles)[0]          // (decor may cover the usual spot; an uncalled body is never over him)
+            let free = Self.rowAvoiding(count: 1, spacing: rowSpacing, obstacles: obstacles, reachable: reachable)[0]          // (decor may cover the usual spot; an uncalled body is never over him)
             for id in new { spots[id] = free }
             GameCamera.focusSpots = new.isEmpty ? [] : [free]
         }
@@ -104,11 +104,11 @@ final class FocusGroup {
     }
 
     // MARK: uncalled bodies are obstacles (2026-11-20: "two called, the third asleep in the middle": the called pair were pushed to either side of him and the close-up read as three in a row)
-    /// A body's half width on the floor for the screen test (R 0.7 plus a sliver), and the clear screen gap wanted (in half-bodies at the row's depth: one half body of daylight between the row and the nearest uncalled body, so he reads as apart, not as a third in the row).
-    static let bodyHalf: Float = 0.75, lyingHalf: Float = 0.95, clearGap: Float = 1.0, bodyApart: Float = 1.6
+    /// A body's half width on the floor for the screen test (R 0.7 plus a sliver; an uncalled one may be lying: 1.8 across), and the floor distance a spot keeps from an uncalled body.
+    static let bodyHalf: Float = 0.75, lyingHalf: Float = 0.95, bodyApart: Float = 1.6
 
-    /// How far the uncalled bodies are from standing between or over the row `spots` on the close-up's screen, in half-bodies: > 0 = every one is wholly to one side (the bigger the better),
-    /// <= 0 = one is between or over them; a body closer than `bodyApart` (a lying one is 1.8 across) to a spot counts as over.
+    /// Where the uncalled bodies stand against the row `spots` on the close-up's screen: > 0 = every one is wholly to one side of the row (not between, not over), <= 0 = one is between or over them.
+    /// (In half-bodies at the row's depth.)
     static func screenClear(_ spots: [SIMD2<Float>], _ obstacles: [SIMD2<Float>]) -> Float {
         let pose = GameCamera.focusPose(aspect: GameCamera.aspect, spots: spots)
         let f = simd_normalize(pose.target - pose.eye)
@@ -119,41 +119,41 @@ final class FocusGroup {
         }
         let boxes = spots.map { box($0) }
         let lo = boxes.map(\.lo).min() ?? 0, hi = boxes.map(\.hi).max() ?? 0
-        let unit = bodyHalf / max(simd_dot(SIMD3<Float>(spots[0].x, 0.5, spots[0].y) - pose.eye, f), 0.3)          // (a half body at the row's depth, in screen units)
+        let unit = bodyHalf / max(simd_dot(SIMD3<Float>(spots[0].x, 0.5, spots[0].y) - pose.eye, f), 0.3)
         var worst = Float.infinity
         for o in obstacles {
-            let b = box(o, half: lyingHalf)          // (the uncalled may be lying: 1.8 across)
-            var gap = max(b.lo - hi, lo - b.hi) / unit
-            if spots.contains(where: { simd_distance($0, o) < bodyApart }) { gap = min(gap, -0.01) }
-            worst = min(worst, gap)
+            let b = box(o, half: lyingHalf)
+            worst = min(worst, max(b.lo - hi, lo - b.hi) / unit)
         }
         return worst
     }
 
-    /// How far to the side a row spot may be at depth `z`: the room's walkable width (the wide floor on a phone on its side), and inside the picture.
+    /// How far to the side a row spot may be at depth `z` (the room's walkable width; the wide floor on a phone on its side).
     static func sideLimit(z: Float) -> Float {
-        GameCamera.aspect > 1 ? min(GameCamera.roamRectWide.max.x - 0.4, max(2.3, GameCamera.visibleHalfWidthAtBody(z: z) * 0.93 - 0.3)) : 2.3
+        GameCamera.aspect > 1 ? min(GameCamera.roamRectWide.max.x - 0.4, max(2.2, GameCamera.visibleHalfWidthAtBody(z: z) * 0.93 - 0.3)) : 2.2
     }
 
-    /// The row's spots: the usual ones (`previewRowSpots`) when no uncalled body is between or over them, else the nearest row to the call spot that is clear of all of them
-    /// (wholly to one side on screen), else the clearest one there is.
-    static func rowAvoiding(count n: Int, spacing: Float, obstacles: [SIMD2<Float>]) -> [SIMD2<Float>] {
+    /// The row's spots: the usual ones (`previewRowSpots`) unless an uncalled body (asleep or not) lies within `bodyApart` of one, or, for a row, would stand between or over them on screen;
+    /// then the nearest row to the call spot that is clear of all of them AND that the called can walk to (`reachable`). None clear and reachable: the usual row.
+    static func rowAvoiding(count n: Int, spacing: Float, obstacles: [SIMD2<Float>], reachable: (SIMD2<Float>) -> Bool = { _ in true }) -> [SIMD2<Float>] {
         let base = GameCamera.previewRowSpots(count: n, spacing: spacing)
-        guard !obstacles.isEmpty, screenClear(base, obstacles) < clearGap else { return base }
+        guard !obstacles.isEmpty else { return base }
+        func clear(_ sp: [SIMD2<Float>]) -> Bool {
+            sp.allSatisfy { s in obstacles.allSatisfy { simd_distance(s, $0) >= bodyApart } } && (n == 1 || screenClear(sp, obstacles) > 0.05)
+        }
+        if clear(base) { return base }
         let offs = n > 1 ? GameCamera.focusRowSpots(count: n, anchor: .zero, spacing: spacing) : [SIMD2<Float>.zero]
-        var best: (spots: [SIMD2<Float>], q: Float, d: Float)?
-        var x: Float = -3.0
-        while x <= 3.0001 {
+        var best: (spots: [SIMD2<Float>], d: Float)?
+        var x: Float = -2.6
+        while x <= 2.6001 {
             var z = GameCamera.callSpot.y - 1.4
             while z <= GameCamera.callSpot.y + 1e-4 {
                 let a = SIMD2<Float>(x, z)
                 let spots = offs.map { a + $0 }
                 z += 0.1
-                guard spots.allSatisfy({ abs($0.x) <= sideLimit(z: $0.y) && FreeFloor.isFree($0, radius: 0.8) }) else { continue }
-                let q = min(screenClear(spots, obstacles), clearGap)          // (clear enough is clear enough: then the nearest wins)
+                guard spots.allSatisfy({ abs($0.x) <= sideLimit(z: $0.y) && FreeFloor.isFree($0, radius: 0.8) && reachable($0) }), clear(spots) else { continue }
                 let d = simd_distance(a, GameCamera.callSpot)
-                if let b = best, b.q > q + 1e-4 || (abs(b.q - q) <= 1e-4 && b.d <= d) { continue }
-                best = (spots, q, d)
+                if d < (best?.d ?? .infinity) { best = (spots, d) }
             }
             x += 0.1
         }
@@ -237,21 +237,13 @@ extension GameCare {
         for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a }
         focusGroup.rowSpacing = isPreview ? GameCamera.pickRowSpacing : GameCamera.focusRowSpacing
         let others = (isPreview || !FocusGroup.sleeperFix) ? [] : (0..<jellies.count).filter { !ids.contains($0) }.compactMap { floorOf($0) }          // (the uncalled: asleep or not, the row is laid clear of them)
-        focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }), avoiding: others)
+        focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }), avoiding: others, reachable: { p in ids.compactMap { self.brainFor($0) }.allSatisfy { simd_distance($0.fixed(p), p) < 0.12 } })
         if ids.count > 1 { for id in ids { if let b = brainFor(id) { focusGroup.gapSaved[id] = b.peerGap; b.peerGap = min(b.peerGap, FocusGroup.rowSteerGap) } } }
         focus.beginApproach()
         approachIdle = 0; approachRetries = 0; approachShort = 0
         var zeroAsleep = false
         if FocusGroup.sleeperFix {          // whoever sleeps is woken now (the quick get-up, never the slow morning wake) and walks to his reserved spot once he is up
-            for id in ids {
-                guard let b = brainFor(id) else { continue }
-                let asleep = b.isSleeping
-                // a bedtime already ordered for him (walking to bed, or "wanted" with the night's retry loop) is cancelled too: he must not lie down again inside the close-up
-                guard asleep || b.commandedGoodnight || nightRest.wanted.contains(id) || nightRest.dayOnce.contains(id) else { continue }
-                b.commandedGoodnight = false
-                if asleep { wakeSleeper(id, groggy: false, fast: true); if id == 0 { zeroAsleep = true } }
-                else { nightRest.wanted.remove(id); nightRest.dayOnce.remove(id); if isBedtimeHours { nightRest.nightWoken.insert(id) }; noteInteraction(jelly: id) }
-            }
+            for id in ids where brainFor(id)?.isSleeping == true { wakeSleeper(id, groggy: false, fast: true); if id == 0 { zeroAsleep = true } }
         }
         if ids.contains(0) {
             if focusGroup.mayGo(0, frontDistance: nil), !zeroAsleep { queued = [.come(to: focusGroup.spot(of: 0))] } else { focusGroup.zeroPending = true }
