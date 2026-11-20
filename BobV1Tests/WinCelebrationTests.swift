@@ -100,6 +100,34 @@ final class WinCelebrationTests: XCTestCase {
         XCTAssertFalse(b.winCheer)
     }
 
+    /// The strongest jiggle level (2): the win is squash pulses on planted feet (a hop landing made the skin leash move a foot piece in the pull race), the same arms / face / length.
+    func testTheWinAtTheStrongestJiggleIsFlatAndKeepsTheLeashQuiet() {
+        for level in [0, 1, 2] {
+            let r = rig(), b = r.brain
+            r.skinner.jelly.levelOverride = level
+            b.skinnerRef = r.skinner
+            var hits = 0, worst: Float = 0, airs = 0
+            Skinner.leashObserver = { _, pull, _ in hits += 1; worst = max(worst, pull) }
+            defer { Skinner.leashObserver = nil }
+            XCTAssertTrue(b.winStart(r.sim), "level \(level)")
+            XCTAssertEqual(b.winFlat, level >= 2, "level \(level): only the strongest level is flat")
+            var armsUp = 0, frames = 0
+            r.run(6, until: { b.idleState.kind == nil && r.t > 0.5 }, each: {
+                r.render()
+                frames += 1
+                if b.gait.phase == .air { airs += 1 }
+                if b.armLiftNow > 0.95 && b.armDirW > 0.95 { armsUp += 1 }
+            })
+            MotionLog.write("WIN level \(level): flat \(b.winFlat), \(String(format: "%.2f", r.t - 1.0)) s, air frames \(airs), arms up \(armsUp) of \(frames), leash hits \(hits) worst \(worst * 100) cm")
+            XCTAssertNil(b.idleState.kind, "level \(level): it ends by itself")
+            XCTAssertEqual(hits, 0, "level \(level): the skin leash never moves a foot piece (worst \(worst * 100) cm)")
+            if level >= 2 { XCTAssertEqual(airs, 0, "the strongest level does not hop") }
+            else { XCTAssertGreaterThan(airs, 20, "levels 0 and 1 bounce") }
+            XCTAssertGreaterThan(Float(armsUp) / Float(max(frames, 1)), 0.5, "level \(level): arms up")
+            XCTAssertGreaterThan(r.t - 1.0, 2.4); XCTAssertLessThan(r.t - 1.0, 3.8)
+        }
+    }
+
     func testThePlainJoyIsUnchanged() {
         let r = rig(), b = r.brain
         XCTAssertTrue(b.idleStart(.joy, r.sim))

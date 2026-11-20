@@ -24,6 +24,7 @@ extension BlobBrain {
         gait.landDepth = WinTuning.landDepth          // (a deeper squash on every landing: the bounce reads at the race camera's distance; `idleEnd` puts 0.2 back)
         idleState.reps = Self.winHops
         idleState.baseYaw = yaw
+        winFlat = (skinnerRef?.jelly.level ?? JellyJiggle.sharedLevel) >= 2          // (the strongest jiggle: squash pulses on planted feet, no hops)
         blushBump(hold: 3.4, peak: 0.9)
         face(.joyArc, hold: 3.2)          // (the happy ^^ eyes, brows up, an open smile: `expressionTick` holds it for the whole move whatever his mood / needs / the race's focused brow)
         if !voiceMuted { AudioHub.shared.winVoice(jelly: steerID, x: px) }
@@ -38,6 +39,24 @@ extension BlobBrain {
         if idleStart(.joy, sim) { return true }
         winCheer = false; commanded = false
         return false
+    }
+
+    /// The flat win (jiggle level 2): `winHops` squash pulses on planted feet with the same arms, face and cheer, then the arms ease down. From `runIdle` (`.joy` with `winCheer && winFlat`).
+    func runWinFlat(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        let t = idleState.phaseT
+        let period: Float = 0.62, body = Float(Self.winHops) * period
+        gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
+        activity = .playing
+        if t < body {
+            squash *= 1 + 0.06 * sinf(2 * .pi * t / period)
+            let beat = Int(t / period)
+            if beat >= idleState.hop { idleState.hop = beat + 1; jellyKick = max(jellyKick, 1.4) }          // (a skin kick on every pulse)
+        } else { winSettleT += dt }
+        armWalkWant = 1
+        let wig = 0.06 * sinf(2 * .pi * 2.5 * t)
+        armDirW = smooth01(min(1, t / 0.12)) * (1 - smooth01(winSettleT / Self.winSettle))
+        armDirEl = [WinTuning.armEl + wig, WinTuning.armEl - wig]; armDirSa = [WinTuning.armSa, WinTuning.armSa]; armDirOut = WinTuning.armOut
+        if winSettleT >= Self.winSettle && !feet.active { armDirW = 0; idleFinish(skinner) }
     }
 
     /// Race: the player crossed the line first (place 1 is final then; the results card covers the track a few seconds later). He celebrates as soon as his feet are planted between coast steps (queued until then; the race card never waits for it).

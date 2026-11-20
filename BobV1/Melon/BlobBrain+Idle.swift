@@ -557,7 +557,7 @@ extension BlobBrain {
         armDirW = 0; armDirOut = 0
         idleState.jackRoll = 0
         if winCheer { winFaceEnd() }          // (his own faces come back after the celebration)
-        winCheer = false; winSettleT = 0
+        winCheer = false; winFlat = false; winSettleT = 0
         if !nameHopping { gait.hopApex = 0.10; gait.hopDuration = 0.26 }       // the jacks' higher hop ends with them
         gait.flipTwist = 0; gait.crouchDepth = 0.18; gait.crouchHold = 0; gait.airStretch = 0.12; gait.landDepth = 0.2          // (the trick hops' knobs go with them)
         skinner?.setEyeOpenness(1)
@@ -761,7 +761,7 @@ extension BlobBrain {
             script = .idle; activity = .playing
             idleState.phase = 1; idleState.phaseT = 0
             if winCheer { winBegin() }          // (a first place: four tall bounces, arms up, a cheer: BlobBrain+Win.swift)
-            idleScootHop(sim)
+            if winFlat { idleState.phase = 0 } else { idleScootHop(sim) }          // (flat: no hops, `runWinFlat` runs from `runIdle`)
         case .giggle:
             idleBegin(.giggle)
             script = .idle; activity = .playing
@@ -821,6 +821,7 @@ extension BlobBrain {
         case .sit, .slump, .sway, .decorSit: runSit(sim, skinner, dt, slump: kind == .slump)
         case .look, .window, .decorBoop, .decorPeek, .stopLook: runLook(sim, skinner, dt)
         case .giggle: runGiggle(sim, skinner, dt)
+        case .joy where winCheer && winFlat: runWinFlat(sim, skinner, dt)
         case .sigh: runSigh(sim, skinner, dt)
         case .hmph: runHmph(sim, skinner, dt)
         case .tailThump: runTailThump(sim, skinner, dt)

@@ -157,6 +157,8 @@ final class BlobBrain {
     var joyWanted = false, joyAge: Float = 0
     /// The WIN celebration (BlobBrain+Win.swift): set before `.joy` starts, the jump for joy then runs as four tall bounces with the arms held up and a settle. Cleared by `idleEnd`.
     var winCheer = false
+    /// The win at the strongest jiggle level: squash pulses with the feet planted instead of hops (a hop landing there makes the skin leash move a foot piece: RacePullFlowTests).
+    var winFlat = false
     var winSettleT: Float = 0
     var hmphWanted = false, hmphAge: Float = 0
     var react = ReactState()
@@ -1075,7 +1077,7 @@ final class BlobBrain {
     }
 
     func abortAll(_ sim: SoftBody, _ skinner: Skinner) {
-        winCheer = false; winSettleT = 0          // (a win asked but not yet started goes with everything else: BlobBrain+Win.swift)
+        winCheer = false; winFlat = false; winSettleT = 0          // (a win asked but not yet started goes with everything else: BlobBrain+Win.swift)
         let wasLying = isLying || trickTipped
         if poseW > 0.2 { for i in sim.v.indices { sim.v[i] *= 0.25 } }       // dropped mid-stride: no carried-over momentum (he stays where he was stopped)
         mouthOpen = 0
