@@ -249,7 +249,7 @@ struct GameScreen: View {
                 .padding(.vertical, 8)
             }
             .jHUDCap()
-            .onGeometryChange(for: CGSize.self) { $0.size } action: { HUDLayout.measuredSize = CGSize(width: $0.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, height: $0.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom) }
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { HUDLayout.measuredInsets = UIEdgeInsets(top: g.safeAreaInsets.top, left: g.safeAreaInsets.leading, bottom: g.safeAreaInsets.bottom, right: g.safeAreaInsets.trailing); HUDLayout.measuredSize = CGSize(width: $0.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, height: $0.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom) }
             .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudInfoH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
                 - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: landscapeHUD)))
             }.photoHidden()
@@ -946,6 +946,7 @@ struct GameScreen: View {
             case "drink:water": care.drink("water")
             case "call": care.call()
             case "callall": care.comeHereEveryone()
+            case "roamhug": care.roamHug()          // capture aid: GameCare+RoamHug.swift
             case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()
             default: care.wave()
