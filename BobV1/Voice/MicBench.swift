@@ -56,7 +56,7 @@ nonisolated enum MicBench {
             let reason = voice.traceDropReason
             guard voice.begin() else {
                 dropped += 1
-                emit("[micbench] press \(number) variant=\(variant) quick=\(quick ? 1 : 0) DROPPED reason=\(reason)")
+                emit("[micbench] press \(number) variant=\(variant) quick=\(quick ? 1 : 0) DROPPED overlap=\(MicTuning.overlapTail ? 1 : 0) reason=\(reason)")
                 return nil
             }
             let tr = MicTrace.latest

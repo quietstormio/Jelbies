@@ -187,6 +187,8 @@ final class VoiceCoordinator {
     /// The timing trace of the newest press and of the one whose reaction is being decided (nil unless `-VoiceLog` / `-MicBench`; Voice/MicTrace.swift).
     @ObservationIgnored private(set) var trace: PressTrace?
     @ObservationIgnored private var decisionTrace: PressTrace?
+    /// `MicTuning.overlapTail` as read at the last press / release: false = the old behaviour (a press during the previous command's tail is refused).
+    @ObservationIgnored private var overlapAtPress = true
     /// Capture / test aid: this text is "heard" on release instead of the input's.
     @ObservationIgnored var debugTranscript: String?
 
@@ -284,6 +286,7 @@ final class VoiceCoordinator {
         self.input = input ?? SpeechInputFactory.make()
         availability = self.input.availability
         mode.onSend = { [weak self] text in self?.process(text) }
+        MicTuning.applyLaunchArguments()                // `-MicOverlapTail 0|1` (dev arguments only) is stored for later launches
     }
 
     // MARK: listening
@@ -305,6 +308,7 @@ final class VoiceCoordinator {
     /// Press (button down / second tap down). False = nothing opened (busy, or the mic is unusable and the book was requested instead).
     @discardableResult
     func begin() -> Bool {
+        overlapAtPress = MicTuning.overlapTail          // read on each press (a dev launch that sets it takes effect at once)
         guard mode.phase == .idle, !stopping else { return false }
         wake?()                                    // leave the 30 fps idle rest now (the mic button does not pass through the Metal view's touches)
         if micUnusable { input.resetForRetry(); availability = input.availability }
@@ -312,11 +316,12 @@ final class VoiceCoordinator {
         if needsExplainer { notice = .explainer; return false }
         downAt = CACurrentMediaTime()
         trace = MicTrace.begin(t0: downAt)
+        trace?.overlap = overlapAtPress
         session = nextSession()
         glowLatencyMs = nil; audioLatencyMs = nil
         micLive = false; micLiveMs = nil; liveWatchFired = false; liveWatch?.cancel()
         levelMin = 1; levelMax = 0; levelCount = 0; offMain = 0
-        input.cutPostRoll()                            // a press during the previous command's post-roll ends it now; that command still finishes unseen
+        if overlapAtPress { input.cutPostRoll() }      // a press during the previous command's post-roll ends it now; that command still finishes unseen
         input.warmUp()                                 // first: the session + engine bring-up is spawned off the main thread at touch-down
         Ears.shared.voicePause()                       // Ears lets go of the input before the voice engine takes the session
         intentModel?.prewarm()                         // the first request must not pay the model load
@@ -414,9 +419,25 @@ final class VoiceCoordinator {
         let long = mode.endHold()
         liveWatch?.cancel(); micLive = false          // (after endHold: its close tick reads `micLive`)
         tr?.mark(.listenOff)
-        input.willStop()
+        let overlap = MicTuning.overlapTail
+        if overlap { input.willStop() }
         if !long {
             Task { [input] in await st?.value; await input.abort() }
+            return
+        }
+        if !overlap {                                  // the switch is off: exactly the behaviour before the overlapping tail
+            stopping = true
+            Task { [weak self] in
+                await st?.value
+                guard let self else { return }
+                let text = await self.input.stop()
+                tr?.mark(.transcript)
+                self.stopping = false
+                let said = self.debugTranscript ?? text
+                self.debugTranscript = nil
+                self.hear(said)
+                tr?.mark(.heard)
+            }
             return
         }
         // The listen is over for the player at once, and a new press may open right away (it used to be refused until the transcript was in).
@@ -453,7 +474,7 @@ final class VoiceCoordinator {
     func cancel() {
         let st = startTask
         Ears.shared.holdEnded()
-        if mode.phase != .idle { mode.cancel(); mode.finish(); input.willStop(); Task { [input] in await st?.value; await input.abort() } }
+        if mode.phase != .idle { mode.cancel(); mode.finish(); if MicTuning.overlapTail { input.willStop() }; Task { [input] in await st?.value; await input.abort() } }
         liveWatch?.cancel(); micLive = false
     }
 
