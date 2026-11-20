@@ -368,6 +368,7 @@ struct ItemSheet: View {
                     Text("Hang a picture").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 52).background(Capsule().fill(SK.honey))
                 }
                 .buttonStyle(.plain).padding(.horizontal, vsc == .compact ? 0 : 16)
+                .accessibilityHint("Opens your album to pick a photo for this frame.")
                 .accessibilityIdentifier("item-hang-picture")
             }
             if let refusal {
