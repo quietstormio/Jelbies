@@ -72,7 +72,7 @@ extension BlobBrain {
     func hopscotchOthersOn(_ f: DecorFoot) -> [BlobBrain] {
         guard HopscotchTuning.guardOn else { return [] }
         let line = HopscotchLine.shared
-        return socialOthers().filter { $0 !== self && !line.contains(f.uid, $0.steerID) && f.distance($0.position) < $0.footprint * HopscotchTuning.wallReach }
+        return socialOthers().filter { $0 !== self && !line.contains(f.uid, $0.steerID) && !$0.hopJoining(f) && f.distance($0.position) < $0.footprint * HopscotchTuning.wallReach }          // (a body on his way to join is about to be a player, not an obstacle: the leader waited 12 s for him)
     }
 
     /// park-hopscotch-r1: he is on the line's route to this court (told about it and on his way, queued for it, enrolled: the queue spot, the hops, the happy hops, the walk out). The wall is no wall to him and the
