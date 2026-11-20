@@ -92,12 +92,12 @@ final class WallPictureTests: XCTestCase {
     }
 
     func testTheOptionSpotsAreOnScreenInBothOrientations() {
-        // the phone on its side shows the back wall up to about y = 5.2; a spot marked inBoth must lie below that
+        // the phone on its side shows the back wall up to about y = 5.0; a spot marked inBoth must lie below that
         for room in [RoomID.home, .loft, .cabin] {
             let s = WallZone.spots(room)
             XCTAssertFalse(s[0].inBoth, "the band above the windows is the portrait spot")
             XCTAssertGreaterThanOrEqual(s.filter(\.inBoth).count, 1, "\(room) has a spot that shows in both")
-            for sp in s where sp.inBoth { XCTAssertLessThanOrEqual(sp.rect.maxY, 5.2 + 1e-4, "\(room) \(sp.name)") }
+            for sp in s where sp.inBoth { XCTAssertLessThanOrEqual(sp.rect.maxY, 5.0 + 1e-4, "\(room) \(sp.name)") }
         }
         XCTAssertEqual(WallZone.spots(.home).filter(\.inBoth).count, 2, "home: the two gaps between the windows")
         // a portrait picture sent to a gap hangs in it, upright and whole
@@ -383,18 +383,16 @@ final class WallPictureTests: XCTestCase {
         GameCamera.configureRoom(count: 3)
         defer { GameCamera.wallEditBlend = 0; GameCamera.configureRoom(count: 1) }
         let top = try XCTUnwrap(GameCamera.wallVisibleTop(aspect: 2.17)), topP = try XCTUnwrap(GameCamera.wallVisibleTop(aspect: 0.46))
-        XCTAssertTrue((5.0...5.5).contains(top), "a phone on its side shows the wall up to about y 5.2 (measured \(top))")
+        XCTAssertTrue((4.9...5.3).contains(top), "a phone on its side shows the wall up to about y 5.0 (measured \(top))")
         XCTAssertGreaterThan(topP, 7.5, "upright shows the whole band")
         let home = try XCTUnwrap(WallZone.defaultPlacement(room: .home, frame: .wood, shape: .landscape, file: "f"))
         XCTAssertLessThan(WallZone.visibleShare(home, visibleTop: top), WallZone.minVisibleShare, "the circled spot is mostly off the top: not drawn sideways")
         XCTAssertEqual(WallZone.visibleShare(home, visibleTop: topP), 1, accuracy: 1e-4)
-        let low = try XCTUnwrap(WallZone.clamp(sample(.gold, .landscape, x: 0, y: 4.4, w: 1.3), in: .cabin))
-        XCTAssertGreaterThan(WallZone.visibleShare(low, visibleTop: top), 0.9, "the cabin's low spot shows sideways")
-        for room in [RoomID.home, .loft, .cabin] {
-            for sp in WallZone.spots(room) where sp.inBoth {
-                let p = try XCTUnwrap(WallZone.clamp(sample(.wood, sp.shapes.contains(.landscape) ? .landscape : .portrait, x: (sp.rect.minX + sp.rect.maxX) / 2, y: (sp.rect.minY + sp.rect.maxY) / 2, w: 5), in: room))
-                XCTAssertGreaterThan(WallZone.visibleShare(p, visibleTop: top), 0.95, "\(room) \(sp.name)")
-            }
+        for room in [RoomID.home, .loft, .cabin] {          // what a first hang with the phone on its side puts on screen: all of it
+            let shape = WallZone.defaultShape(room: room, sideways: true)
+            let p = try XCTUnwrap(WallZone.defaultPlacement(room: room, frame: .wood, shape: shape, file: "f", sideways: true))
+            XCTAssertGreaterThan(WallZone.visibleShare(p, visibleTop: top), 0.95, "\(room) sideways default")
+            XCTAssertLessThan(p.y + p.outerHeight / 2, top - 0.1, "\(room): a little clear of the screen's top edge (top \(top))")
         }
     }
 }

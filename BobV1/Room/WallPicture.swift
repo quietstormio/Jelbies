@@ -65,9 +65,9 @@ nonisolated struct WallPicture: Codable, Equatable, Sendable {
 }
 
 /// Where a picture may hang in each room: a LIST of rectangles of the back wall. The first is the band above the windows (clear of the stove pipe) that the portrait camera shows
-/// below the message bar. A phone on its side sees less of the wall (up to about y = 5.2): a picture in the band then hangs partly or wholly above what is on screen; that is
-/// accepted and nothing moves it when the phone turns. The others are free spots that are on screen in BOTH orientations (`inBoth`): the gaps between the home windows, the low
-/// part of the cabin's band, and in the loft the wall between the windows where the room's own wall art hangs (the art is hidden while a picture hangs there).
+/// below the message bar. A phone on its side sees less of the wall (up to about y = 5.0): a picture in the band then hangs partly or wholly above what is on screen; that is
+/// accepted and nothing moves it when the phone turns. The others are free spots that are on screen in BOTH orientations (`inBoth`): the gaps between the home windows, the wall between
+/// the cabin's two windows, and in the loft the wall between the windows where the room's own wall art hangs (the art is hidden while a picture hangs there).
 nonisolated enum WallZone {
     struct Rect: Equatable, Sendable { var minX: Float, maxX: Float, minY: Float, maxY: Float
         var width: Float { maxX - minX }; var height: Float { maxY - minY }
@@ -90,7 +90,7 @@ nonisolated enum WallZone {
         case .loft: return [Spot(name: "above the windows", rect: Rect(minX: -4.6, maxX: 4.6, minY: 4.75, maxY: 7.0), inBoth: false),
                             Spot(name: "between the windows", rect: loftGap, inBoth: true, shapes: [.portrait, .square])]
         case .cabin: return [Spot(name: "above the windows", rect: Rect(minX: -3.9, maxX: 4.6, minY: 3.75, maxY: 7.0), inBoth: false),
-                             Spot(name: "low, above the windows", rect: Rect(minX: -3.9, maxX: 4.6, minY: 3.75, maxY: 5.2), inBoth: true)]
+                             Spot(name: "between the windows", rect: Rect(minX: -1.75, maxX: 1.75, minY: 1.9, maxY: 4.9), inBoth: true)]
         default: return []
         }
     }
@@ -137,7 +137,7 @@ nonisolated enum WallZone {
     /// Where a picture first hangs. Upright phone: centred above the middle of the window row (the band, the spot the owner circled), as big as the band allows up to `defaultWidthCap`.
     /// (Home, landscape, wood frame: a picture 2.7 wide and 2.0 high, 3.1 x 2.4 with its frame, about a third of the portrait screen's width; the owner's circle was roughly 60%.)
     /// Phone on its side: the room's first spot that is on screen in both orientations (home: the gap left of the middle window, an upright picture; loft: between the windows;
-    /// cabin: low in the band), at the biggest size it takes.
+    /// cabin: between its two windows), at the biggest size it takes.
     static let defaultWidthCap: Float = 2.8
     static func defaultPlacement(room: RoomID, frame: WallFrame, shape: WallShape, file: String, crop: WallCrop = WallCrop(), source: String? = nil, sideways: Bool = false) -> WallPicture? {
         let all = spots(room)
@@ -157,7 +157,7 @@ nonisolated enum WallZone {
     // MARK: what is on screen
 
     /// A picture shows nothing when less than this share of its framed height is on screen (a sliver of a bottom edge at the top of a phone on its side reads as a bug).
-    static let minVisibleShare: Float = 0.35          // (measured: the home band's default shows 28% sideways, the cabin's low spot 100%)
+    static let minVisibleShare: Float = 0.35          // (measured: the home band's default shows 20% sideways, the cabin's between-windows spot 100%)
     /// The share (0...1) of the framed picture's height that lies below `visibleTop`, the wall height at the top edge of the screen.
     static func visibleShare(_ p: WallPicture, visibleTop: Float) -> Float {
         let bottom = p.y - p.outerHeight / 2

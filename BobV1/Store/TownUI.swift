@@ -588,6 +588,7 @@ struct BagSheet: View {
     /// Opened by the HUD's Dress / Decor rows (a tab was asked for): the first-time tip for that tab.
     private let fromHUD: Bool
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
@@ -648,7 +649,13 @@ struct BagSheet: View {
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("bag-sheet")
         .overlay { sellCard }
-        .onAppear { book.markSeen() }
+        .onAppear {
+            book.markSeen()
+            if DevArgs.enabled, UserDefaults.standard.string(forKey: "BagScroll") == "frames" {          // (capture aid: -BagScroll frames)
+                Task { try? await Task.sleep(nanoseconds: 600_000_000); withAnimation { proxy.scrollTo("bag-frames", anchor: .top) } }
+            }
+        }
+        }
     }
 
     /// The rooms the player owns (the home room and the bought ones): choosing one moves the Jelbies in (the same `care.switchRoom` the old picker used).
@@ -691,7 +698,7 @@ struct BagSheet: View {
         let owned = book.ownedWallFrames
         if !owned.isEmpty {
             Text("Picture frames").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
-                .accessibilityAddTraits(.isHeader).accessibilityIdentifier("bag-frames-header")
+                .accessibilityAddTraits(.isHeader).id("bag-frames").accessibilityIdentifier("bag-frames-header")
             ForEach(owned, id: \.self) { f in
                 if let item = StoreCatalog.item("frame-\(f.rawValue)") {
                     HStack(spacing: 12) {

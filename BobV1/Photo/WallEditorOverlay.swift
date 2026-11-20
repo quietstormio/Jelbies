@@ -93,7 +93,7 @@ struct WallEditorOverlay: View {
                     .accessibilityLabel("Room wall").accessibilityHint("Drag the picture to move it, pinch to make it bigger or smaller")
                 outlineView(size: g.size)
                 VStack(spacing: 8) {
-                    header
+                    if !compact { header }          // (a phone on its side: the hint is the panel's first line, so the band above the windows stays clear)
                     Spacer(minLength: 0)
                     panel(width: g.size.width - inset.leading - inset.trailing - 32)
                 }
@@ -147,6 +147,7 @@ struct WallEditorOverlay: View {
     private func panel(width: CGFloat) -> some View {
         VStack(spacing: 8) {
             if compact {
+                Text(session.photoMode ? "Drag to slide the photo, pinch to zoom it" : "Drag the picture to move it, pinch or drag the corner to size it").font(SK.font(12, .bold)).foregroundStyle(SK.muted)
                 HStack(spacing: 8) { modeToggle; shapeButtons; Spacer(minLength: 0); frameStrip }
                 HStack(spacing: 8) { photoActions; Spacer(minLength: 0); finishActions }
             } else {
@@ -163,7 +164,7 @@ struct WallEditorOverlay: View {
 
     private var modeToggle: some View {
         HStack(spacing: 6) {
-            chip("Move and size", symbol: "arrow.up.left.and.arrow.down.right", selected: !session.photoMode) { session.photoMode = false }
+            chip("Move", symbol: "arrow.up.left.and.arrow.down.right", selected: !session.photoMode) { session.photoMode = false }
                 .accessibilityIdentifier("wall-edit-mode-size")
             chip("Photo", symbol: "photo", selected: session.photoMode, enabled: session.canCrop) { session.photoMode = true }
                 .accessibilityIdentifier("wall-edit-mode-photo")
@@ -274,9 +275,11 @@ enum WallDemo {
     @MainActor static func run(model: MelonModel, defaults d: UserDefaults = .standard) async {
         guard DevArgs.enabled else { return }
         let care = model.care
-        if d.string(forKey: "WallFlow") == "album" {
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            care.wallAlbumOpen = true
+        switch d.string(forKey: "WallFlow") {
+        case "album": try? await Task.sleep(nanoseconds: 2_500_000_000); care.wallAlbumOpen = true          // as the Bag's "Hang a picture" does
+        case "shoprequest": try? await Task.sleep(nanoseconds: 2_500_000_000); care.wallShopRequest = true          // as the album's "Get a frame" does
+        case "hangfirst": try? await Task.sleep(nanoseconds: 2_500_000_000); if let u = PhotoAlbum.shared.items.first { care.hangFromAlbum(u) }          // as the album's "Hang on wall" does
+        default: break
         }
         if d.integer(forKey: "WallEdit") != 0 {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
