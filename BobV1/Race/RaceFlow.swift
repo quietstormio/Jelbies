@@ -142,7 +142,8 @@ final class RaceFlow {
     /// Seconds since the player crossed the line FIRST (nil = no hold: 2nd / 3rd place and every other race show the card exactly when the results are in).
     var winHoldT: Float?
     /// The celebration has been seen running / has ended / a tap asked for the card.
-    var winMoveSeen = false, winMoveEnded = false
+    var winMoveSeen = false
+    var winMoveEnded = false
     static let winHoldMax: Float = 3.0
     /// The results card waits for the winner's celebration (at most `winHoldMax` s after the finish; a tap brings it at once).
     var holdsCard: Bool { guard let t = winHoldT else { return false }; return !winMoveEnded && t < Self.winHoldMax }
