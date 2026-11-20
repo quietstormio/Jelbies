@@ -122,6 +122,11 @@ final class ShowSpotlightTests: XCTestCase {
                 if sh.rivalStep == .walkOut, let i = sh.rivalTurn, let id = book.rivalBody[i] { beatActor = book.extra.first { $0.id == id } }
                 if sh.rivalStep == .playerAway { beatActor = room.actors[0] }
             }
+            // an entrant who has walked up and stands at the middle is lit while the flow still says walkIn (its next tick moves on to her trick)
+            var arrivedInWalkIn = false
+            if sh.trickStage == .rivals, sh.rivalStep == .walkIn, let i = sh.rivalTurn, let id = book.rivalBody[i], let ra = book.extra.first(where: { $0.id == id }) {
+                let c = ra.sim.centroid(); arrivedInWalkIn = simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < 0.5 && care.showSpotTarget == id
+            }
             let beatNear: Bool = beatActor.map { let c = $0.sim.centroid(); return simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < 0.46 } ?? false
             if let p = performer {
                 sinceWindow = 0; winAge += 1
@@ -130,7 +135,7 @@ final class ShowSpotlightTests: XCTestCase {
                 winAge = 0
                 sinceWindow += 1
                 if let ba = beatActor, beatNear, st.target != nil { if st.target == ba.id { beatLit += 1 } else { gapViolations += 1 } }          // (lit through the score beat: his own light)
-                else if care.showSpotTarget != nil { gapViolations += 1; if diag.count < 6 { diag.append("f\(frame) target \(String(describing: st.target)) in gap: \(sh.trickStage) \(sh.rivalStep)") } }          // (off while anyone walks / the middle is empty)
+                else if care.showSpotTarget != nil && !arrivedInWalkIn { gapViolations += 1; if diag.count < 6 { diag.append("f\(frame) target \(String(describing: st.target)) in gap: \(sh.trickStage) \(sh.rivalStep)") } }          // (off while anyone walks / the middle is empty)
             }
             if st.target == nil && st.level > 0 { lateTargets += 1 } else { lateTargets = 0 }
             if lateTargets > 27 { gapViolations += 1; lateTargets = 0; if diag.count < 6 { diag.append("f\(frame) fade-out did not finish: level \(st.level) \(sh.trickStage) \(sh.rivalStep)") } }
