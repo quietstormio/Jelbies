@@ -23,7 +23,7 @@ extension BlobBrain {
         idleState.reps = Self.winHops
         idleState.baseYaw = yaw
         blushBump(hold: 3.4, peak: 0.9)
-        face(.excited, hold: 3.2)
+        face(.joyArc, hold: 3.2)          // (the happy ^^ eyes with the brows up: `.excited` settles to a flat stare after half a second)
         if !voiceMuted { AudioHub.shared.winVoice(jelly: steerID, x: px) }
     }
 
