@@ -328,7 +328,8 @@ extension StoreThumb {
         scene.rootNode.addChildNode(node)
         // the photo: a plane just behind the frame's inner lip, textured with the sample
         let plane = SCNPlane(width: CGFloat(shape.aspect), height: 1)
-        let m = SCNMaterial(); m.lightingModel = .constant; m.diffuse.contents = UIImage(named: "wall_frame_sample") ?? UIColor(white: 0.85, alpha: 1)
+        let m = SCNMaterial(); m.lightingModel = .constant
+        if let sample = UIImage(named: "wall_frame_sample") { m.diffuse.contents = sample } else { m.diffuse.contents = UIColor(white: 0.85, alpha: 1) }
         plane.materials = [m]
         let pn = SCNNode(geometry: plane); pn.position = SCNVector3(0, 0, 0.012)
         scene.rootNode.addChildNode(pn)

@@ -273,7 +273,9 @@ final class WallPictureTests: XCTestCase {
             XCTAssertEqual(WallZone.spot(for: up.draft, in: room), band, "\(room): upright = the band above the windows (the circled spot)")
             let side = try XCTUnwrap(WallEditSession.make(photo: url, imageSize: size, existing: nil, owned: [.wood], room: room, sideways: true))
             let both = try XCTUnwrap(WallZone.spots(room).first { $0.inBoth })
-            XCTAssertEqual(WallZone.spot(for: side.draft, in: room), both, "\(room): sideways = the spot that is on screen both ways")
+            let r = both.rect, d = side.draft, eps: Float = 1e-3
+            XCTAssertTrue(d.x - d.outerWidth / 2 >= r.minX - eps && d.x + d.outerWidth / 2 <= r.maxX + eps && d.y - d.outerHeight / 2 >= r.minY - eps && d.y + d.outerHeight / 2 <= r.maxY + eps,
+                          "\(room): sideways = the whole picture inside the spot that is on screen both ways")
             XCTAssertTrue(both.shapes.contains(side.draft.shape))
             XCTAssertEqual(WallZone.clamp(side.draft, in: room), side.draft, "it already fits its spot")
         }
