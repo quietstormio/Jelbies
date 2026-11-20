@@ -75,6 +75,44 @@ extension BlobBrain {
         return socialOthers().filter { $0 !== self && !line.contains(f.uid, $0.steerID) && f.distance($0.position) < $0.footprint * HopscotchTuning.wallReach }
     }
 
+    /// park-hopscotch-r1: the court's wall (the margin) is within `radius` of the floor point `c` while a game is on.
+    func hopCourtWithin(_ c: SIMD2<Float>, _ radius: Float) -> Bool {
+        guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID) else { return false }
+        return f.distance(c) < radius
+    }
+
+    /// park-hopscotch-r1: where a body on the court (or in its margin) walks off to when a game is on: the nearest free floor beyond the wall whose straight leg never comes nearer the court than
+    /// he is now (a walk off the court's edge goes away from it, along it at most, never across it: the slide's `slideLegClear` rule). nil = none within 4.5 (the caller falls back).
+    func hopWalkOut(_ f: DecorFoot) -> SIMD2<Float>? {
+        let from = position
+        let floorD = min(f.distance(from), 0.15) - 0.02
+        let clear = footprint * HopscotchTuning.wallReach + 0.12
+        func free(_ q: SIMD2<Float>) -> Bool {
+            guard f.distance(q) >= clear else { return false }
+            let r = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: footprint)
+            guard simd_distance(SIMD2(r.x, r.z), q) < 0.03, peerFree(q) else { return false }
+            for g in DecorField.shared.feet where g.uid != f.uid && g.spec.solid && g.distance(q) < footprint * g.spec.reach + 0.12 { return false }
+            return true
+        }
+        func legOK(_ q: SIMD2<Float>) -> Bool {
+            let n = max(1, Int(simd_distance(from, q) / 0.1))
+            for i in 1...n where f.distance(from + (q - from) * (Float(i) / Float(n))) < floorD { return false }
+            return true
+        }
+        for k in 1...45 {
+            let r = Float(k) * 0.1
+            let n = max(12, Int(2 * Float.pi * r / 0.12))
+            var best: SIMD2<Float>?
+            for j in 0..<n {
+                let a = Float(j) / Float(n) * 2 * .pi
+                let q = from + SIMD2(sinf(a), cosf(a)) * r
+                if free(q), legOK(q), best == nil || simd_distance(q, from) < simd_distance(best!, from) { best = q }
+            }
+            if let b = best { return b }
+        }
+        return nil
+    }
+
     /// Of the ones still queued (slot != 0) he is at the lowest slot, the nearest to the start: one steps up at a time, and nobody walks past a waiting friend to get there
     /// (a nearest-by-distance test cannot see friends who stand still: the roster hands those out under a placeholder id).
     private func hopscotchIsFront(_ uid: Int) -> Bool {

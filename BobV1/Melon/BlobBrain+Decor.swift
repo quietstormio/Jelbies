@@ -50,14 +50,14 @@ extension BlobBrain {
             // (park-slide-r3: the park slide turns soft only when his CENTRE is inside its box, which no walk can leave with it solid. A body only over its edge (a walk that came near, a
             // spot placed beside it) keeps it solid: his next step is pushed off it. Soft, the walk he was on went on straight through the slide: the real-app probe saw one cut the
             // slide's front corner at 0.25 from the box)
-            let rimOnly = f.uid == ParkToys.slideUID && Self.slideSoftEndEnabled && f.distance(position) > 0
+            let rimOnly = (f.uid == ParkToys.slideUID && Self.slideSoftEndEnabled && f.distance(position) > 0) || (f.kind == .hopscotch && f.distance(position) > 0)          // (park-hopscotch-r1: the court's margin, like the slide's rim: only a centre ON the court turns it soft; a body in the margin is pushed out and walks off with the wall solid)
             if decorIgnore == nil, !rimOnly { decorIgnore = f.uid }
             let footOwned = rimOnly && slideFootWaiting          // (r4: he waits on the slide's foot for his leg to clear, his own pick walks him: no straight ease-out, no walk-out that is held)
             insideDecorT += dt
             if let s = walkOutFrom, simd_distance(position, s) > 0.05 { insideStuckT = 0; walkOutFrom = nil }
             insideStuckT += dt
             // the walk-out below finds no route from inside a piece (the planner steers round solids, and he is in one): after 3 s he is eased out in a straight line, feet with him
-            if insideStuckT > 3, !footOwned, !held, !decorLocked, case .none = script, let out = decorFreeSpot(near: position) {
+            if insideStuckT > 3, !footOwned, !held, !decorLocked, case .none = script, let out = (f.kind == .hopscotch ? hopWalkOut(f) : nil) ?? decorFreeSpot(near: position) {
                 let d = out - position, len = simd_length(d)
                 let m = len > 0.02 ? d / len * min(len, 1.3 * dt) : SIMD2<Float>.zero
                 if len > 0.02, !steerPeers().contains(where: { simd_distance($0.pos, position + m) < peerGap }) {          // (never into a friend)
@@ -65,10 +65,10 @@ extension BlobBrain {
                     yaw = atan2f(d.x, d.y)
                 }
             }
-            if insideDecorT > (f.kind == .hopscotch ? 0.3 : 1.2), !footOwned, !held, !decorLocked, pending == nil, !(f.kind == .hopscotch && social != nil), let out = decorFreeSpot(near: position) {          // (park-hopscotch-r1: off a court with a game on at once, never out of a social that is running)
+            if insideDecorT > (f.kind == .hopscotch ? 0.3 : 1.2), !footOwned, !held, !decorLocked, pending == nil, !(f.kind == .hopscotch && social != nil), let out = (f.kind == .hopscotch ? hopWalkOut(f) : nil) ?? decorFreeSpot(near: position) {          // (park-hopscotch-r1: off a court with a game on at once, never out of a social that is running)
                 insideDecorT = -1.5
                 walkOutFrom = position          // (the ease-out waits for a fresh 3 s once this walk has really moved him)
-                if walkOutSoftens(f) { decorIgnore = f.uid }          // (r4: a centre outside the slide's box walks out with it solid)
+                if walkOutSoftens(f), !(f.kind == .hopscotch && f.distance(position) > 0) { decorIgnore = f.uid }          // (r4: a centre outside the slide's box walks out with it solid; park-hopscotch-r1: so does a body in the court's margin)
                 requestNow(.goTo(out))
             }
             return

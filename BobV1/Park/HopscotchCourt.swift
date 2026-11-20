@@ -54,8 +54,8 @@ nonisolated enum HopscotchTuning {
     /// The wall's reach: the margin round the court is `footprint * wallReach` (a body is ~0.7 across by the floor rules: 0.8 gives 0.56, one body radius; the hopper's landing check wants more
     /// than 0.52 so a body just outside never holds the game; the slide's walk-out spots are 0.65 and 0.80 from the court's edge, so it stays under that).
     static let wallReach: Float = 0.8
-    /// The hopper waits at the start for the court to clear of others (they walk off at once); after this he goes anyway (a body in a social or a long idle).
-    static let clearWait: Float = 6
+    /// The hopper waits at the start for the court to clear of others (they walk off at once; one in a social waits for it to end); after this he goes anyway.
+    static let clearWait: Float = 12
     /// A follower waits this long for his turn: one at a time, the fourth in the queue waits for three full games (was `patience` 30, two at a time).
     static var queuePatience: Float { guardOn ? 45 : patience }
     /// A walk that stops further from the start than this is still travelling (it does not use up a try).

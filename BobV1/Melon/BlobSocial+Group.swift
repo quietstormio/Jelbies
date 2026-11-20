@@ -114,6 +114,7 @@ extension BlobBrain {
         }
         for off in offs {
             let c = ParkClearSpot.clear(cen + off, radius: footprint + r)          // (park only: the whole ring clear of a solid piece, see ParkClearSpot)
+            if hopCourtWithin(c, r + footprint * HopscotchTuning.wallReach + 0.2) { continue }          // (park-hopscotch-r1: the whole ring, and its drift, is clear of a court with a game on)
             var spots = [Int: SIMD2<Float>](), ok = true
             for m in members {
                 let a = ang[m.steerID]!
@@ -138,6 +139,7 @@ extension BlobBrain {
         for o in groupCandidates() where crew.count < cap && !crew.contains(where: { $0 === o }) { crew.append(o) }
         crew = Array(crew.prefix(cap))
         guard crew.count >= (kind == .congaLine ? 2 : 3), crew.count <= cap else { return false }
+        if HopscotchTuning.walled, crew.contains(where: { hopCourtWithin($0.position, footprint * HopscotchTuning.wallReach + 0.5) }) { return false }          // (park-hopscotch-r1: no group move starts next to a court with a game on: a ring dance drifts 0.15 off its spots)
         if kind.isFast, fastOthers(except: crew) > 0 { return false }
         currentPose(sim)
         for m in crew where !m.socialFree { guard m.socialBeckonStop() else { return false } }          // (out on a wander leg: it ends a few steps on, then he joins)

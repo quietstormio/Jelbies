@@ -58,13 +58,14 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         var entries = 0, insideSecs: Float = 0, deepSamples = 0, startInsideGames = 0, leftoverSecs: Float = 0, leftoverMax: Float = 0
         var bumps = 0, edgeStillSecs: Float = 0, offFloor = 0, maxSimul = 0, simulSamples = 0
         var socials = 0, dist: Float = 0, stale = 0, stuckRepicks = 0
-        var entryTags: [String: Int] = [:], notes: [String] = []
+        var entryTags: [String: Int] = [:], edgeTags: [String: Int] = [:], offFloorNear = 0, notes: [String] = []
         mutating func merge(_ o: Run) {
             seconds += o.seconds; games += o.games; gameSecs += o.gameSecs; starts += o.starts; completed += o.completed; cut += o.cut; socialOnHopper += o.socialOnHopper; giveUps += o.giveUps
             entries += o.entries; insideSecs += o.insideSecs; deepSamples += o.deepSamples; startInsideGames += o.startInsideGames; leftoverSecs += o.leftoverSecs; leftoverMax = max(leftoverMax, o.leftoverMax)
             bumps += o.bumps; edgeStillSecs += o.edgeStillSecs; offFloor += o.offFloor; maxSimul = max(maxSimul, o.maxSimul); simulSamples += o.simulSamples
             socials += o.socials; dist += o.dist; stale += o.stale; stuckRepicks += o.stuckRepicks
             for (k, v) in o.entryTags { entryTags[k, default: 0] += v }
+            for (k, v) in o.edgeTags { edgeTags[k, default: 0] += v }; offFloorNear += o.offFloorNear
             notes += o.notes
         }
     }
@@ -133,7 +134,7 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
                 prevKind[k] = kind
                 if kind == .decorHopscotch, b.social != nil { if !socialOnNow[k] { out.socialOnHopper += 1 }; socialOnNow[k] = true } else { socialOnNow[k] = false }
                 if kind == .decorHopscotch, court.distance(floor[k]) < 0.9, b.idleState.slideStage == 1 || b.idleState.slideStage == 6 { simul += 1 }
-                if let rf = GameCamera.roamFloor, !rf.contains(floor[k]) { out.offFloor += 1 }
+                if let rf = GameCamera.roamFloor, !rf.contains(floor[k]) { out.offFloor += 1; if court.distance(floor[k]) < 1.3 { out.offFloorNear += 1 } }
                 guard gameOn, !episode.contains(k) else { prevInside[k] = false; continue }
                 // a body who is not in the line
                 let d = court.distance(floor[k])
@@ -164,7 +165,7 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
                 if gameOn {
                     for k in 0..<n where !episode.contains(k) && !leftover.contains(k) {
                         let d = court.distance(floor[k])
-                        if d >= Self.margin, d < 1.3, simd_distance(floor[k], refPos[k]) < 0.05, lab.rigs[k].brain.idleState.kind == nil { out.edgeStillSecs += 0.5 }
+                        if d >= Self.margin, d < 1.3, simd_distance(floor[k], refPos[k]) < 0.05, lab.rigs[k].brain.idleState.kind == nil { out.edgeStillSecs += 0.5; let tg = ParkSlideProbe.doing(lab.rigs[k].brain).split(separator: " ").filter { !$0.hasPrefix("pose") && !$0.hasPrefix("ign") }.joined(separator: " ") + (d < 0.7 ? " [d<0.7]" : " [d>=0.7]"); out.edgeTags[tg, default: 0] += 1 }
                     }
                 }
                 refPos = floor
@@ -184,8 +185,9 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         let mins = max(r.seconds / 60, 0.001), gmins = max(r.gameSecs / 60, 0.001)
         for nt in r.notes.prefix(30) { print("HKO \(name) note \(nt)") }
         for (k, v) in r.entryTags.sorted(by: { $0.value > $1.value }) { print("HKO \(name) entry \(v) [\(k)]") }
-        print(String(format: "HKO %@ games %d (%.1f game-min of %.1f park-min) | entries %d, inside %.1f s (deep samples %d), games that began with someone inside %d (their step-off %.1f s, longest %.1f s) | hopper: starts %d completed %d cut short %d, social started on him %d, bodies within 0.9 of him %d, give-ups %d, hopping at once max %d (%d samples) | edge-still %.1f s | offFloor %d stale %d | per park-min: games %.2f socials %.2f dist %.1f stuckRepicks %d",
-                     name, r.games, gmins, mins, r.entries, r.insideSecs, r.deepSamples, r.startInsideGames, r.leftoverSecs, r.leftoverMax, r.starts, r.completed, r.cut, r.socialOnHopper, r.bumps, r.giveUps, r.maxSimul, r.simulSamples, r.edgeStillSecs, r.offFloor, r.stale, Float(r.games) / mins, Float(r.socials) / mins, r.dist / mins, r.stuckRepicks))
+        for (k, v) in r.edgeTags.sorted(by: { $0.value > $1.value }).prefix(8) { print("HKO \(name) edge-still \(Float(v) * 0.5) s [\(k)]") }
+        print(String(format: "HKO %@ games %d (%.1f game-min of %.1f park-min) | entries %d, inside %.1f s (deep samples %d), games that began with someone inside %d (their step-off %.1f s, longest %.1f s) | hopper: starts %d completed %d cut short %d, social started on him %d, bodies within 0.9 of him %d, give-ups %d, hopping at once max %d (%d samples) | edge-still %.1f s | offFloor %d (near the court %d) stale %d | per park-min: games %.2f socials %.2f dist %.1f stuckRepicks %d",
+                     name, r.games, gmins, mins, r.entries, r.insideSecs, r.deepSamples, r.startInsideGames, r.leftoverSecs, r.leftoverMax, r.starts, r.completed, r.cut, r.socialOnHopper, r.bumps, r.giveUps, r.maxSimul, r.simulSamples, r.edgeStillSecs, r.offFloor, r.offFloorNear, r.stale, Float(r.games) / mins, Float(r.socials) / mins, r.dist / mins, r.stuckRepicks))
     }
 
     /// Both arms on the same seeds. Returns (before, after).
@@ -250,13 +252,14 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         hop.brain.idleForced = true
         XCTAssertTrue(hop.brain.decorStart(.decorHopscotch, hop.sim, only: nil, uid: court.uid))
         var last = other.brain.position, maxStep: Float = 0, outAt: Float?, hoppedAt: Float?, t: Float = 0
-        for _ in 0..<(60 * 40) {
+        for i in 0..<(60 * 40) {
             lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); t += 1.0 / 60
             let p = GameCare.floorPos(other.brain, other.sim)
             maxStep = max(maxStep, simd_distance(p, last)); last = p
             if outAt == nil, court.distance(p) >= Self.margin - 0.05 { outAt = t }
             if hoppedAt == nil, line.square(court.uid, hop.brain.steerID) >= 0 { hoppedAt = t }
-            if let o = outAt { XCTAssertGreaterThan(court.distance(p), Self.margin - 0.15, "t \(t): he walked back onto the court (stepped off at \(o))") }
+            if let o = outAt, line.active { XCTAssertGreaterThan(court.distance(p), Self.margin - 0.15, "t \(t): he walked back onto the court (stepped off at \(o))") }
+            if i % 30 == 0, t < 14 { print(String(format: "HKO stepoff t%.1f other d %.2f %@ ign %d | hopper stage %d step %d phaseT %.1f line %d on-court %d", t, court.distance(p), ParkSlideProbe.doing(other.brain), other.brain.decorIgnore ?? -1, hop.brain.idleState.slideStage, hop.brain.idleState.slideStep, hop.brain.idleState.phaseT, line.active ? 1 : 0, hop.brain.hopscotchOthersOn(court).count)) }
         }
         print("HKO stepoff: out at \(String(describing: outAt)) hopper landed on square 1 at \(String(describing: hoppedAt)) max step \(maxStep)")
         XCTAssertNotNil(outAt, "he stepped off the court"); XCTAssertLessThan(outAt ?? 99, 5, "promptly")
@@ -267,14 +270,14 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
     /// Walks the player asks for (a target in the middle of the court, a target across it) never go on to the court while a game is on, and do not stall for good.
     func testCalledWalksGoRoundTheCourt() {
         HopscotchTuning.guardOn = true
-        let lab = parkLab(n: 2, seed: 9, starts: [SIMD2(-2.1, -3.2), SIMD2(-4.0, 3.5)])
+        let lab = parkLab(n: 2, seed: 9, starts: [SIMD2(-2.1, -3.2), SIMD2(-0.2, 3.9)])
         let court = DecorField.shared.foot(ParkToys.hopscotchUID)!, line = HopscotchLine.shared
         let hop = lab.rigs[0], other = lab.rigs[1]
         hop.brain.idleForced = true
         XCTAssertTrue(hop.brain.decorStart(.decorHopscotch, hop.sim, only: nil, uid: court.uid))
         for _ in 0..<60 { lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60) }
         XCTAssertTrue(line.active)
-        let targets: [SIMD2<Float>] = [court.centre, court.centre + SIMD2(0.2, -1.0), SIMD2(0.6, 1.9)]
+        let targets: [SIMD2<Float>] = [court.centre, SIMD2(-2.1, -1.9), court.centre + SIMD2(0.2, -1.0)]
         for (ti, target) in targets.enumerated() {
             other.brain.requestNow(.goTo(target))
             var t: Float = 0, least: Float = 9
