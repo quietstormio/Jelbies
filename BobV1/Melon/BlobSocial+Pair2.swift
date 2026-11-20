@@ -233,5 +233,5 @@ enum Pair2Tuning {
     static let jumpStep: Float = 0.2, jumpCount = 4
     /// hopAlong / jumpTurns: the hop distance, and whether the arms are held in during the hops (test seams of the sweep: PairSweepTests).
     nonisolated(unsafe) static var hopDist: Float = 0.45
-    nonisolated(unsafe) static var armsIn = true
+    nonisolated(unsafe) static var armsIn = false
 }
