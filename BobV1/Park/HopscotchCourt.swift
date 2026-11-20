@@ -60,6 +60,8 @@ nonisolated enum HopscotchTuning {
     static let westExtend: Float = 1.0
     /// While a game is on, the bystanders' wander goals keep this far beyond the wall (no standing about at the court's edge).
     static let noRest: Float = 0.75
+    /// ... and one who stands still there this long is walked off.
+    static let restMax: Float = 0.8
     /// A walk that stops further from the start than this is still travelling (it does not use up a try).
     static let startBlockedWithin: Float = 2.5
 }

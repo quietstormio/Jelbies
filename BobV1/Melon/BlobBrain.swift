@@ -72,6 +72,8 @@ final class BlobBrain {
     var footprint: Float = 0.55
     /// The decor piece (uid) he is about to use and may therefore stand inside (the beanbag he sits in, the mat he hops on); nil = every solid piece is a wall.
     var decorIgnore: Int?
+    /// park-hopscotch-r1: seconds he has stood still at the court's edge while a game is on (`hopNoRestCheck`).
+    var hopRestT: Float = 0
     /// Seconds he has stood inside a solid piece's footprint (see `decorExitCheck`).
     var insideDecorT: Float = 0
     /// How long he has been inside a solid piece's footprint without getting out (the walk-out can find no route from inside a piece): after a few seconds `decorExitCheck` eases him out itself.

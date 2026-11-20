@@ -56,13 +56,13 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         var seconds: Float = 0, games = 0, gameSecs: Float = 0
         var starts = 0, completed = 0, cut = 0, socialOnHopper = 0, giveUps = 0
         var entries = 0, insideSecs: Float = 0, deepSamples = 0, startInsideGames = 0, leftoverSecs: Float = 0, leftoverMax: Float = 0
-        var bumps = 0, edgeStillSecs: Float = 0, offFloor = 0, maxSimul = 0, simulSamples = 0
+        var bumps = 0, edgeStillSecs: Float = 0, edgeAllSecs: Float = 0, offFloor = 0, maxSimul = 0, simulSamples = 0
         var socials = 0, dist: Float = 0, stale = 0, stuckRepicks = 0
         var entryTags: [String: Int] = [:], edgeTags: [String: Int] = [:], offTags: [String: Int] = [:], offFloorNear = 0, notes: [String] = []
         mutating func merge(_ o: Run) {
             seconds += o.seconds; games += o.games; gameSecs += o.gameSecs; starts += o.starts; completed += o.completed; cut += o.cut; socialOnHopper += o.socialOnHopper; giveUps += o.giveUps
             entries += o.entries; insideSecs += o.insideSecs; deepSamples += o.deepSamples; startInsideGames += o.startInsideGames; leftoverSecs += o.leftoverSecs; leftoverMax = max(leftoverMax, o.leftoverMax)
-            bumps += o.bumps; edgeStillSecs += o.edgeStillSecs; offFloor += o.offFloor; maxSimul = max(maxSimul, o.maxSimul); simulSamples += o.simulSamples
+            bumps += o.bumps; edgeStillSecs += o.edgeStillSecs; edgeAllSecs += o.edgeAllSecs; offFloor += o.offFloor; maxSimul = max(maxSimul, o.maxSimul); simulSamples += o.simulSamples
             socials += o.socials; dist += o.dist; stale += o.stale; stuckRepicks += o.stuckRepicks
             for (k, v) in o.entryTags { entryTags[k, default: 0] += v }
             for (k, v) in o.edgeTags { edgeTags[k, default: 0] += v }; for (k, v) in o.offTags { offTags[k, default: 0] += v }; offFloorNear += o.offFloorNear
@@ -165,6 +165,7 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
                 if gameOn {
                     for k in 0..<n where !episode.contains(k) && !leftover.contains(k) {
                         let d = court.distance(floor[k])
+                        if d < 1.3, simd_distance(floor[k], refPos[k]) < 0.05, lab.rigs[k].brain.idleState.kind == nil { out.edgeAllSecs += 0.5 }
                         if d >= Self.margin, d < 1.3, simd_distance(floor[k], refPos[k]) < 0.05, lab.rigs[k].brain.idleState.kind == nil { out.edgeStillSecs += 0.5; let tg = ParkSlideProbe.doing(lab.rigs[k].brain).split(separator: " ").filter { !$0.hasPrefix("pose") && !$0.hasPrefix("ign") }.joined(separator: " ") + (d < 0.7 ? " [d<0.7]" : " [d>=0.7]"); out.edgeTags[tg, default: 0] += 1 }
                     }
                 }
@@ -187,8 +188,8 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         for (k, v) in r.entryTags.sorted(by: { $0.value > $1.value }) { print("HKO \(name) entry \(v) [\(k)]") }
         for (k, v) in r.offTags.sorted(by: { $0.value > $1.value }).prefix(8) { print("HKO \(name) off-floor near court \(v) samples [\(k)]") }
         for (k, v) in r.edgeTags.sorted(by: { $0.value > $1.value }).prefix(8) { print("HKO \(name) edge-still \(Float(v) * 0.5) s [\(k)]") }
-        print(String(format: "HKO %@ games %d (%.1f game-min of %.1f park-min) | entries %d, inside %.1f s (deep samples %d), games that began with someone inside %d (their step-off %.1f s, longest %.1f s) | hopper: starts %d completed %d cut short %d, social started on him %d, bodies within 0.9 of him %d, give-ups %d, hopping at once max %d (%d samples) | edge-still %.1f s | offFloor %d (near the court %d) stale %d | per park-min: games %.2f socials %.2f dist %.1f stuckRepicks %d",
-                     name, r.games, gmins, mins, r.entries, r.insideSecs, r.deepSamples, r.startInsideGames, r.leftoverSecs, r.leftoverMax, r.starts, r.completed, r.cut, r.socialOnHopper, r.bumps, r.giveUps, r.maxSimul, r.simulSamples, r.edgeStillSecs, r.offFloor, r.offFloorNear, r.stale, Float(r.games) / mins, Float(r.socials) / mins, r.dist / mins, r.stuckRepicks))
+        print(String(format: "HKO %@ games %d (%.1f game-min of %.1f park-min) | entries %d, inside %.1f s (deep samples %d), games that began with someone inside %d (their step-off %.1f s, longest %.1f s) | hopper: starts %d completed %d cut short %d, social started on him %d, bodies within 0.9 of him %d, give-ups %d, hopping at once max %d (%d samples) | edge-still %.1f s (all within 1.3 m of the court, inside included: %.1f s) | offFloor %d (near the court %d) stale %d | per park-min: games %.2f socials %.2f dist %.1f stuckRepicks %d",
+                     name, r.games, gmins, mins, r.entries, r.insideSecs, r.deepSamples, r.startInsideGames, r.leftoverSecs, r.leftoverMax, r.starts, r.completed, r.cut, r.socialOnHopper, r.bumps, r.giveUps, r.maxSimul, r.simulSamples, r.edgeStillSecs, r.edgeAllSecs, r.offFloor, r.offFloorNear, r.stale, Float(r.games) / mins, Float(r.socials) / mins, r.dist / mins, r.stuckRepicks))
     }
 
     /// Both arms on the same seeds. Returns (before, after).

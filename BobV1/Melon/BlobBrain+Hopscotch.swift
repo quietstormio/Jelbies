@@ -85,6 +85,17 @@ extension BlobBrain {
         return toy.noticeUID == u || toy.waitUID == u || HopscotchLine.shared.contains(u, steerID) ? u : nil
     }
 
+    /// park-hopscotch-r1: nobody stands about at the court's edge while a game is on. A bystander who has stood still within `noRest` of the wall for `restMax` (no behaviour, no social, no job) is sent
+    /// on a short walk to the nearest free floor beyond it (`decorExitCheck` calls this every step with no behaviour running).
+    func hopNoRestCheck(_ dt: Float) {
+        guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID), social == nil, !held, !decorLocked, pending == nil, job == nil, !hopJoining(f), idleState.kind == nil, scriptIsNone,
+              f.distance(position) < footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest else { hopRestT = 0; return }
+        hopRestT += dt
+        guard hopRestT > HopscotchTuning.restMax else { return }
+        hopRestT = 0
+        if let out = hopWalkOut(f, beyond: HopscotchTuning.noRest + 0.1) { requestNow(.goTo(out)) }
+    }
+
     /// park-hopscotch-r1: the court's wall (the margin) is within `radius` of the floor point `c` while a game is on.
     func hopCourtWithin(_ c: SIMD2<Float>, _ radius: Float) -> Bool {
         guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID) else { return false }
@@ -93,10 +104,10 @@ extension BlobBrain {
 
     /// park-hopscotch-r1: where a body on the court (or in its margin) walks off to when a game is on: the nearest free floor beyond the wall whose straight leg never comes nearer the court than
     /// he is now (a walk off the court's edge goes away from it, along it at most, never across it: the slide's `slideLegClear` rule). nil = none within 4.5 (the caller falls back).
-    func hopWalkOut(_ f: DecorFoot) -> SIMD2<Float>? {
+    func hopWalkOut(_ f: DecorFoot, beyond: Float = 0.12) -> SIMD2<Float>? {
         let from = position
         let floorD = min(f.distance(from), 0.15) - 0.02
-        let clear = footprint * HopscotchTuning.wallReach + 0.12
+        let clear = footprint * HopscotchTuning.wallReach + beyond
         func free(_ q: SIMD2<Float>) -> Bool {
             guard f.distance(q) >= clear else { return false }
             let r = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: footprint)
