@@ -79,6 +79,9 @@ final class ParkWakeTests: XCTestCase {
 
     // MARK: a sleeper who stays home is left alone
 
+    /// A day nap ends by itself after a while: pin the stay-home's sleep so only a wake by the TRIP could end it.
+    private func pin(_ r: Room, _ id: Int) { r.actors[id].brain?.sleep.hold = 5000; r.actors[id].brain?.sleep.holdForce = true }
+
     /// What a sleeping stay-home looks like: still asleep, never asked to wake, nothing reset.
     private func untouched(_ r: Room, _ id: Int, _ what: String) {
         let b = r.actors[id].brain!
@@ -93,7 +96,7 @@ final class ParkWakeTests: XCTestCase {
         let r = room(3), c = r.care
         c.groomBook.fixedDt = 1 / 60
         c.bath.wallet.add(100 - c.bath.wallet.count, silent: true)
-        sleep(r, goingAsleep ? [0, 2] : [2])
+        sleep(r, goingAsleep ? [0, 2] : [2]); pin(r, 2)
         XCTAssertNil(c.groomBlocker())
         c.groom.openPicker(all: [0]); c.groom.picked = [0]
         c.startGroom(.quick)
@@ -112,7 +115,7 @@ final class ParkWakeTests: XCTestCase {
     /// The park with a pick list of two: the sleeper who goes wakes and comes; the sleeper who stays keeps sleeping and does not hold the fade.
     func testParkTwoOfThreeWithASleepingStayHome() {
         let r = room(3), c = r.care
-        sleep(r, [1, 2])
+        sleep(r, [1, 2]); pin(r, 2)
         c.requestPark(); c.park.picked = [0, 1]
         c.startPark()
         XCTAssertTrue(c.outing.waking)
