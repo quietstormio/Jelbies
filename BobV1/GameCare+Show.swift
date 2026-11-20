@@ -322,6 +322,8 @@ extension GameCare {
         showBook.goals[a.id] = b.fixed(p)
         b.requestNow(.come(to: p))
     }
+    /// The stage's floor rule for a walk (instead of the room's visible floor, which clamped the wing marks onto the edge of the picture): the platform and the wings, nothing else.
+    nonisolated static func showStageResolve(_ p: SIMD3<Float>) -> SIMD3<Float> { SIMD3(min(max(p.x, -9), 9), p.y, min(max(p.z, -2.4), 3.5)) }
     /// A walk to the middle that starts once nobody else stands within `clearOf` of it (at most `clearMax` s: then it goes anyway).
     private static let clearOf: Float = 1.25, clearMax: Float = 1.6
     private func middleClear(for id: Int) -> Bool {
@@ -335,6 +337,7 @@ extension GameCare {
     }
     private func showWalkWhenClear(_ a: JellyActor, to p: SIMD2<Float>) {
         let book = showBook
+        if let b = a.brain, let g = book.goals[a.id], simd_distance(g, b.fixed(p)) < 0.05, showSpotWalking(a) { return }          // (she set off for the middle early: not restarted)
         book.pendingWalks.removeAll { $0.id == a.id }
         if middleClear(for: a.id) { showWalk(a, to: p) } else { book.pendingWalks.append((a.id, p, 0)) }
     }
@@ -353,14 +356,12 @@ extension GameCare {
         }
         book.pendingWalks = rest
     }
-    /// While one entrant performs, the next one who waits far off (rival 2 comes from off-stage) is already sent toward the middle, to a spot 1.6 out on her own side (clear of the performer,
-    /// so her goal is not displaced): by her turn she is a short step away and the wait for her never runs out.
+    /// While one entrant performs, the next one who waits far off (rival 2 comes from the wing) already sets off for the middle: her walk is 2.7 s and the one before her is gone by the time she
+    /// arrives, so the turn does not wait for her (and the wait for her never runs out).
     private func showStageNext(after i: Int) {
         guard let j = show.nextRivalUp, j != i, let nb = rivalActor(j) else { return }
-        let rest = ShowStage.rivalRest(j, sideways: GameCamera.aspect > 1)
-        let out = rest - ShowStage.playerSpot, far = simd_length(out)
-        guard far > 2.5 else { return }
-        showWalk(nb, to: ShowStage.playerSpot + out / far * 1.6)
+        guard simd_distance(ShowStage.rivalRest(j, sideways: GameCamera.aspect > 1), ShowStage.playerSpot) > 2.5 else { return }
+        showWalk(nb, to: ShowStage.playerSpot)
     }
     /// The Trick round's stage: the rivals stand at their rest spots; after it they are back in the dance row (and the borrowed ones far off) for the results.
     private func showSetTrick(_ on: Bool) {
