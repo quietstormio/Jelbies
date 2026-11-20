@@ -696,8 +696,8 @@ final class BubbleWand: PlayToy {
                    let ol = GameCamera.floorPoint(screen: CGPoint(x: size.width * xl, y: size.height * yBot), size: size),
                    let orr = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) {
                     let oldHx = max(min(abs(ol.x), abs(orr.x)) - 0.8, 1.2), oldSpan = max(f.y - b.y, 1.6)
-                    hx = min(hx, oldHx * 1.1)
-                    zLo = max(zLo, zHi - oldSpan * 1.15)
+                    hx = min(hx, oldHx * PlayTuning.wandSpreadK)
+                    zLo = max(zLo, zHi - oldSpan * PlayTuning.wandDepthK)
                 }
             }
         }

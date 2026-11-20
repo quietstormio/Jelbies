@@ -256,7 +256,7 @@ enum TossAim {
         }
         // the flight: longer for a longer throw
         let rng = simd_length(SIMD2(target.x - start.x, target.z - start.z))
-        let T = min(max(0.55 + 0.085 * rng, 0.55), 1.25) * TossTuning.slow
+        let T = min(max(0.55 + (PlayTuning.old ? 0.085 : PlayTuning.throwFlightSlope) * rng, 0.55), 1.25) * TossTuning.slow          // (a wider play view puts the Jelmiko further from the hand: a slightly quicker ball keeps the rally's pace)
         let g = TossTuning.gravity
         let v = SIMD3<Float>((target.x - start.x) / T, (target.y - start.y + 0.5 * g * T * T) / T, (target.z - start.z) / T)
         return TossThrow(start: start, velocity: v, target: target, flight: T, assistedBody: assisted, assist: pull)

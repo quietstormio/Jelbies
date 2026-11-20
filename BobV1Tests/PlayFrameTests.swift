@@ -209,7 +209,7 @@ final class PlayFrameTests: XCTestCase {
 
     // MARK: the bubble wand
 
-    struct WandRun { var steps = 0, cutSteps = 0, worstCut: CGFloat = 0, pops = 0 }
+    struct WandRun { var steps = 0, cutSteps = 0, worstCut: CGFloat = 0, pops = 0, distSum: Float = 0 }
 
     func wandSession(seed: Int, size: CGSize, seconds: Int = 60, old: Bool) -> WandRun {
         PlayTuning.old = old
@@ -247,6 +247,8 @@ final class PlayFrameTests: XCTestCase {
             var cutNow = false
             for r in rs { let c = Self.cut(r.brain.position, size: size); run.worstCut = max(run.worstCut, c); if c > 1 { cutNow = true } }
             if cutNow { run.cutSteps += 1 }
+            let q = rs.map(\.brain.position)
+            run.distSum += (simd_distance(q[0], q[1]) + simd_distance(q[1], q[2]) + simd_distance(q[0], q[2])) / 3
         }
         run.pops = wand.popsByJelly.values.reduce(0, +)
         wand.deactivate(); p.end(); wand.resetForTests()
@@ -260,7 +262,7 @@ final class PlayFrameTests: XCTestCase {
         for old in [true, false] {
             for (sname, size) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
                 let runs = (0..<3).map { wandSession(seed: $0, size: size, old: old) }
-                let l = String(format: "%@ wand %@ | steps %d | cut steps %d | worst cut %.0f pt | pops %d", old ? "OLD" : "NEW", sname, runs.reduce(0) { $0 + $1.steps }, runs.reduce(0) { $0 + $1.cutSteps }, Double(runs.map(\.worstCut).max() ?? 0), runs.reduce(0) { $0 + $1.pops })
+                let l = String(format: "%@ wand %@ | steps %d | cut steps %d | worst cut %.0f pt | pops %d | mean distance between the three %.2f u", old ? "OLD" : "NEW", sname, runs.reduce(0) { $0 + $1.steps }, runs.reduce(0) { $0 + $1.cutSteps }, Double(runs.map(\.worstCut).max() ?? 0), runs.reduce(0) { $0 + $1.pops }, Double(runs.reduce(0) { $0 + $1.distSum }) / Double(max(runs.reduce(0) { $0 + $1.steps }, 1)))
                 print("PFWAND " + l); lines += l + "\n"
             }
         }
@@ -339,5 +341,59 @@ final class PlayFrameTests: XCTestCase {
             XCTAssertGreaterThan(gain, 1.12, "\(bump ? "bump walk" : "goTo"): the chase must be faster (\(gain)x)")
             XCTAssertLessThan(gain, 1.30, "\(bump ? "bump walk" : "goTo"): a little faster, not a frenzy (\(gain)x)")
         }
+    }
+
+    /// Sweep of the wand's Jelmiko-area knobs (printed; marker file as the others).
+    func testWandAreaSweep() throws {
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: Self.measureMarker + ".sweep"), "the wand area sweep (create measure.on.sweep to run it)")
+        var out = ""
+        for (name, size) in [("landscape", Self.landscape), ("portrait", Self.portrait)] {
+            var line = "SWEEP \(name) OLD pops/seed: "
+            for seed in 0..<6 { line += "\(wandSession(seed: seed, size: size, seconds: 30, old: true).pops) " }
+            out += line + "\n"
+            for (sp, dp) in [(1.1, 1.15), (1.5, 1.3), (2.0, 1.6), (3.0, 2.5)] as [(Float, Float)] {
+                PlayTuning.wandSpreadK = sp; PlayTuning.wandDepthK = dp
+                var l = String(format: "SWEEP %@ NEW spread %.1f depth %.2f pops/seed: ", name, sp, dp)
+                for seed in 0..<6 { let r = wandSession(seed: seed, size: size, seconds: 30, old: false); l += "\(r.pops)(c\(r.cutSteps),d\(String(format: "%.1f", r.distSum / Float(max(r.steps, 1))))) " }
+                out += l + "\n"
+            }
+            PlayTuning.wandSpreadK = 1.5; PlayTuning.wandDepthK = 1.3
+        }
+        print(out)
+        try? out.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/sweep2.txt", atomically: true, encoding: .utf8)
+    }
+
+    /// With no ball out (play mode waiting in the hand) and outside play mode, the walk is the old gait: no chase blend, the same time for the same walk, and `playChase` is never left on.
+    func testOrdinaryWalkingIsTheOldGait() {
+        func walk(chaseWas: Float) -> (t: Float, maxRun: Float) {
+            Self.room(Self.portrait)
+            let r = MotionRig(game: true, settle: 0.5)
+            Self.keep.append(r)
+            r.renderSamples = false
+            r.brain.autonomy = false
+            r.sim.teleport(toXZ: SIMD2(-2.5, 0)); r.run(0.5)
+            r.brain.playChase = chaseWas; r.brain.playChase = 0          // (on, then off: nothing may stay behind)
+            r.brain.requestNow(.goTo(SIMD2(1.5, 0)))
+            var t: Float = 0, mr: Float = 0
+            while t < 12 { r.tick(); t += r.sim.stepDt; mr = max(mr, r.brain.runW); if simd_distance(r.brain.position, SIMD2(1.5, 0)) < 0.3 { break } }
+            return (t, mr)
+        }
+        let a = walk(chaseWas: 0), b = walk(chaseWas: PlayTuning.chaseGain)
+        XCTAssertEqual(a.maxRun, 0, "an ordinary walk has no run blend")
+        XCTAssertEqual(b.maxRun, 0, "a walk after the chase flag was switched off has no run blend")
+        XCTAssertEqual(a.t, b.t, accuracy: 1e-5, "the same walk takes the same time")
+        // play mode with the ball in the hand: nobody is on the chase gait, nobody is sent to support
+        Self.room(Self.portrait)
+        let rs = (0..<3).map { i -> MotionRig in
+            let r = MotionRig(game: true, settle: 0.5); Self.keep.append(r); r.renderSamples = false
+            r.sim.teleport(toXZ: SIMD2(Float(i) * 1.5 - 1.5, 0.2)); r.run(0.3); return r
+        }
+        let p = PlayToss(); p.viewSize = Self.portrait
+        func js() -> [PlayJelly] { rs.enumerated().map { PlayJelly(id: $0.offset, brain: $0.element.brain, sim: $0.element.sim, skinner: $0.element.skinner) } }
+        p.begin(ball: .ball, title: "ball", jellies: js(), snapCamera: true)
+        var w = TossWorld(); w.xHalf = PlayToss.ballXHalf
+        for _ in 0..<600 { for r in rs { r.tick() }; p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js()); XCTAssertEqual(p.phase, .inHand); for r in rs { XCTAssertEqual(r.brain.playChase, 0); XCTAssertEqual(r.brain.runW, 0) } }
+        p.end()
+        for r in rs { XCTAssertEqual(r.brain.playChase, 0, "play over: the chase flag is off") }
     }
 }

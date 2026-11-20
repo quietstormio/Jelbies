@@ -431,7 +431,8 @@ final class PlayToss {
             let dist = simd_length(SIMD2(target.x - from.x, target.z - from.z))
             switch q {
             case .good:
-                v = TossAim.ballistic(from: from, to: target, flight: min(max(0.7 + 0.07 * dist, 0.8), 1.25) * TossTuning.slow)
+                let slope = PlayTuning.old ? 0.07 : PlayTuning.returnFlightSlope, cap = PlayTuning.old ? 1.25 : PlayTuning.returnFlightCap
+                v = TossAim.ballistic(from: from, to: target, flight: min(max(0.7 + slope * dist, 0.8), cap) * TossTuning.slow)
                 returnAim = SIMD2(target.x, target.z)
             case .short:
                 let k = 0.45 + 0.2 * rand()
