@@ -79,8 +79,8 @@ final class ParkWakeTests: XCTestCase {
 
     // MARK: a sleeper who stays home is left alone
 
-    /// A day nap ends by itself after a while: pin the stay-home's sleep so only a wake by the TRIP could end it.
-    private func pin(_ r: Room, _ id: Int) { r.actors[id].brain?.sleep.hold = 5000; r.actors[id].brain?.sleep.holdForce = true }
+    /// A day nap ends by itself after a minute (sleep.hold; above 600 s a daytime sleeper is taken for a morning sleeper and stirs): pin it at 500 s so only a wake by the TRIP could end it.
+    private func pin(_ r: Room, _ id: Int) { r.actors[id].brain?.sleep.hold = 500; r.actors[id].brain?.sleep.holdForce = true }
 
     /// What a sleeping stay-home looks like: still asleep, never asked to wake, nothing reset.
     private func untouched(_ r: Room, _ id: Int, _ what: String) {
