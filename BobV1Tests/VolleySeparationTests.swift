@@ -107,6 +107,8 @@ final class VolleySeparationTests: XCTestCase {
         // (the rally length and the split are reported, not pinned: with the bodies merged the old rule gave two players' cover at every ball, so its rallies were far
         //  longer; the matches must still play out as rallies with points on both sides)
         XCTAssertGreaterThan(after.points, 150)
-        XCTAssertGreaterThan(after.score[1], 50, "the other team still scores")
+        // (671c3fbb "gentler computer early", 2026-11-17, the owner: "make the computer a little less competitive especially in the beginning levels": on the Shore level the other team now
+        //  wins about a fifth of the points, 42 of ~195 over these 50 seeded matches, where it used to take more than 50; the check that it is not a walkover stays: it must still score at least 30)
+        XCTAssertGreaterThan(after.score[1], 30, "the other team still scores")
     }
 }

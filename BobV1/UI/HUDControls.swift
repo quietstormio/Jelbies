@@ -1,7 +1,7 @@
 //
 //  HUDControls.swift
 //  The one main HUD control (the paw, side of the screen) as a pure model: with nobody highlighted it serves the GROUP
-//  (Feed, Drink, Play, Decor, Bedtime / Naptime, Come here for everyone); with a Jelbie highlighted it serves HIM (Dress, Clean, Compete, Come here).
+//  (Feed, Drink, Play, Bedtime / Naptime, Come here for everyone); with a Jelbie highlighted it serves HIM (Dress, Clean, Compete, Come here).
 //  CareMenu draws it; the tests drive it headless.
 //
 
@@ -10,7 +10,7 @@ import SwiftUI
 enum HUDMode: Equatable { case group, individual(Int) }
 
 enum HUDItem: String, CaseIterable {           // the raw value is the accessibility identifier
-    case callAll = "hud-call-all", feed = "care-feed", drink = "care-water", play = "hud-play", decor = "hud-decor", bedtime = "hud-bedtime"
+    case callAll = "hud-call-all", feed = "care-feed", drink = "care-water", play = "hud-play", bedtime = "hud-bedtime"
     case come = "hud-come", dress = "hud-dress", clean = "care-clean", tricks = "hud-tricks", compete = "hud-compete"
 }
 
@@ -37,10 +37,10 @@ enum HUDMenu {
         items(mode).filter { $0 != .callAll || callAllAvailable(care) }
     }
 
-    /// Top to bottom. Six rows in the group menu, four in his (Come here last, nearest the thumb). Feed and Drink are the group's: a hungry / thirsty bubble drops the highlight and opens them there.
+    /// Top to bottom. Five rows in the group menu, four in his (Come here last, nearest the thumb). Feed and Drink are the group's: a hungry / thirsty bubble drops the highlight and opens them there.
     static func items(_ mode: HUDMode) -> [HUDItem] {
         switch mode {
-        case .group: return [.feed, .drink, .play, .decor, .bedtime, .callAll]
+        case .group: return [.feed, .drink, .play, .bedtime, .callAll]
         case .individual: return [.dress, .clean, .tricks, .compete, .come]
         }
     }
@@ -54,7 +54,6 @@ enum HUDMenu {
         case .come: return "Come here"
         case .drink: return name.map { "Water \($0)" } ?? "Drink"
         case .play: return "Play"
-        case .decor: return "Decor"
         case .bedtime: return bedtimeTitle(phase: DayClock.shared.phase)
         case .dress: return "Dress"
         case .clean: return "Clean"
@@ -83,7 +82,6 @@ enum HUDMenu {
         case .come: return sym("hand.wave.fill", "hand.raised.fill")
         case .drink: return CareMenu.waterSymbol
         case .play: return sym("teddybear.fill", "soccerball")
-        case .decor: return sym("sofa.fill", "chair.lounge.fill")
         case .bedtime: return "moon.zzz.fill"
         case .dress: return "tshirt.fill"
         case .clean: return CareMenu.cleanSymbol
@@ -101,7 +99,7 @@ enum HUDMenu {
         case .come: return care.focus.phase == .roaming && !care.bath.active && !care.tripActive && !care.raceBusy
         case .compete: return care.canRace(jelly: id) || care.canShow(jelly: id)
         case .bedtime: return !care.raceBusy && !care.trayOut && !care.bath.active
-        case .play, .decor, .dress, .tricks: return true          // (Tricks can always be opened: the chips say why one cannot run now)
+        case .play, .dress, .tricks: return true          // (Tricks can always be opened: the chips say why one cannot run now)
         }
     }
 
@@ -128,7 +126,7 @@ enum HUDMenu {
             if care.trayOut { return "Food is already out" }
             return "Not while cleaning"
         case .play: return care.playBlocker
-        case .decor, .dress, .tricks: return nil
+        case .dress, .tricks: return nil
         }
     }
 
@@ -141,7 +139,6 @@ enum HUDMenu {
         case .feed: return .picker(.food)
         case .drink: return .picker(.drink)
         case .play: return .picker(.toy)          // the toy picker (the same sliding strip as Feed); the bag's Toys tab is still the place to put toys in the room
-        case .decor: return .bag(.furniture, who: id)
         case .dress: return .bag(.wear, who: id)
         case .bedtime: care.bedtimeAll(); care.clearHighlight(); return .none
         case .clean: care.requestClean(jelly: id); return .none

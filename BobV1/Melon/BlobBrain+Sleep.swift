@@ -290,6 +290,9 @@ extension BlobBrain {
     }
 
     /// The other Jellies that sleep or are on their way to sleep (the pile).
+    /// A bedtime is on (2026-11-20, "he yawns twice"): it is night and somebody else is already down or on the way. From then until he is asleep himself the ONLY yawn he does is his own bedtime one:
+    /// the sleepy idle pick and the contagious (reaction) yawn leave it out. Other reactions and idles are untouched.
+    var bedtimeUnderway: Bool { idleNight >= 0.5 && !sleepMates.isEmpty }
     var sleepMates: [BlobBrain] { socialOthers().filter { $0 !== self && $0.idleState.kind == .sleep && $0.sleep.stage <= 4 } }
 
     /// Spacing at which the two reaching arm tips just touch (each arm stands out the capped stub length), never closer than the bodies allow.
@@ -727,7 +730,7 @@ extension BlobBrain {
         if let r = pending ?? call { pending = nil; start(request: r, sim) }
     }
 
-    /// Stage 1 after the turn, a goodnight bedtime: a pause (heavy eyes), the yawn (x `yawnScale`), for about one in three a gap and a second smaller yawn, a pause, then the flop (unchanged).
+    /// Stage 1 after the turn, a goodnight bedtime: a pause (heavy eyes), ONE yawn (x `yawnScale`), for about one in three a longer pause (what used to be a second, smaller yawn: nobody yawns twice), a pause, then the flop (unchanged).
     private func sleepStaggeredYawn(_ sim: SoftBody, _ skinner: Skinner) {
         if !sleep.staggerSet {
             sleep.staggerSet = true
@@ -748,7 +751,7 @@ extension BlobBrain {
         if t < t0 { sleepYawnPose(skinner, k: 0, mouth: 0, shake: false, sleepy: 0.4 * smooth01(t / 0.5)) }
         else if t < t1 { yawn(t - t0, Y1, 1) }
         else if t < t1b { sleepYawnPose(skinner, k: 0, mouth: 0, shake: false, sleepy: 0.5) }
-        else if t < t2 { yawn(t - t1b, Y2, 0.6) }
+        else if t < t2 { sleepYawnPose(skinner, k: 0, mouth: 0, shake: false, sleepy: 0.5) }          // (2026-11-20: was a second, smaller yawn; "he yawns twice for no reason". Its time stays as a pause so the three still do not move in sync)
         else { sleepYawnPose(skinner, k: 0, mouth: 0, shake: false, sleepy: 0.5) }
         gaitPose(sway: 0.04, bob: 0.0, rock: 0.2)
         if t > tEnd && !feet.active { sleepToLie(sim, skinner) }

@@ -7,6 +7,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var flow = StartFlow.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var introOn = IntroGate.shouldShow() && UserDefaults.standard.integer(forKey: "SkipIntro") == 0          // (-SkipIntro 1: capture aid)
     @State private var logoOn = !IntroGate.shouldShow() && UserDefaults.standard.integer(forKey: "SkipIntro") == 0          // every later cold launch: the ~1 s logo moment
     #if DEBUG
@@ -25,15 +26,16 @@ struct ContentView: View {
         Group {
             ZStack {
                 if introOn {          // the menu's room is not built until the intro is done (it would starve the video)
-                    IntroView { LaunchTiming.mark("intro done"); LaunchGate.shared.introCoveredLaunch(); flow.curtainForResume(); withAnimation(.easeInOut(duration: IntroClip.fadeSeconds)) { introOn = false } }.transition(.opacity).zIndex(1)
+                    IntroView { LaunchTiming.mark("intro done"); LaunchGate.shared.introCoveredLaunch(); withAnimation(.easeInOut(duration: IntroClip.fadeSeconds)) { introOn = false } }.transition(.opacity).zIndex(1)
                 } else if logoOn {
-                    LogoMoment { LaunchTiming.mark("logo moment done"); LaunchGate.shared.introCoveredLaunch(); flow.curtainForResume(); withAnimation(.easeInOut(duration: 0.3)) { logoOn = false } }.transition(.opacity).zIndex(1)
+                    LogoMoment { LaunchTiming.mark("logo moment done"); LaunchGate.shared.introCoveredLaunch(); withAnimation(.easeInOut(duration: 0.3)) { logoOn = false } }.transition(.opacity).zIndex(1)
                 } else { phaseView }
                 if let n = flow.campNote, flow.phase == .game { CampNoteBanner(text: n) { flow.campNote = nil } }
                 if let w = flow.welcome, flow.phase == .game, JellyRoster.savedIDs().count < 2 { WelcomeBanner(name: w) { flow.welcome = nil } }          // (with others at home the arrival moment says it: GameCare+Newcomer.swift)
             }
             .onOpenURL { url in _ = GameRouter.shared.handle(url) }          // widget / Live Activity tap: jelbies://jelly|feed|water|bed|race|pet. Here at the root (not on GameScreen) so a tap that COLD-launches into the menu is heard; the route waits in `pending` until the room is up
             .onAppear { OrientationForce.apply() }
+            .onChange(of: scenePhase) { _, p in if p == .background { StartFlow.noteLeft() } }          // "last on screen", for the first-return-of-the-day menu (any screen)
             .overlay { if !introOn && !logoOn { LaunchCurtain(gate: LaunchGate.shared).allowsHitTesting(LaunchGate.shared.visible) } }          // no curtain over the intro clip
             .animation(.easeOut(duration: 0.45), value: LaunchGate.shared.visible)
         }

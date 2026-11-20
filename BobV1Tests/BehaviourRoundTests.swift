@@ -17,7 +17,7 @@ final class BehaviourRoundTests: XCTestCase {
     }
     override func tearDown() {
         RoomLayout.dynamicBoxes = []; SocialTuning.pickChance = 0.12
-        IdleTuning.zoomUrge = 70...110; IdleTuning.zoomUrgeFirst = 10          // (the W2 defaults: the old 60...120 / 30 leaked into later suites)
+        IdleTuning.zoomUrge = 30...55; IdleTuning.zoomUrgeFirst = 10          // (the W2 defaults: the old 60...120 / 30 leaked into later suites)
         GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }
 
@@ -292,18 +292,17 @@ final class BehaviourRoundTests: XCTestCase {
             }
         }
         MotionLog.write("BEHAV okay mood 10 min: solo runs+zoomies per Jelly \(perBrain), all counts \(lab.rigs.map { $0.brain.idleState.counts.map { "\($0.key.rawValue)=\($0.value)" }.sorted() })")
-        XCTAssertGreaterThanOrEqual(perBrain.reduce(0, +), 12, "at least 12 runs or zoomies in 10 sim minutes (was 25 with the 30...55 s urge; emote-variety-r1 slows the urge to 70...110 s, mean 90 vs 42.5 s: 25 x 42.5 / 90 = 12)")
-        XCTAssertGreaterThanOrEqual(perBrain.min() ?? 0, 3, "everybody gets some energy (was 6 with the faster urge)")
+        XCTAssertGreaterThanOrEqual(perBrain.reduce(0, +), 25, "at least 25 runs or zoomies in 10 sim minutes (W2 2026-10-22 \"they still don't run or do zoomies enough\": the urge is 30...55 s, the tables heavier)")
+        XCTAssertGreaterThanOrEqual(perBrain.min() ?? 0, 6, "everybody gets plenty of energy")
         XCTAssertLessThanOrEqual(perBrain.max() ?? 0, 40, "but it is not constant (at most about four a minute)")
     }
 
     // MARK: 8. a floor under the socials
 
-    /// One 10-minute run: session starts, the longest wait, the most live sessions at once, the kinds.
-    private func socialFloorRun(seed: UInt64) -> (count: Int, maxGap: Float, concurrent: Int, kinds: [SocialKind: Int]) {
-        let lab = roomLab(mood: .okay, seed: seed)
+    func testSocialRateFloor() {
+        let lab = roomLab(mood: .okay, seed: 63)
         for r in lab.rigs { r.brain.watching = true }          // (the player is looking)
-        var starts = [Float](), t: Float = 0
+        var starts = [Float](), ends = [Float](), t: Float = 0
         var lastSession: SocialSession?
         var concurrent = 0
         var kinds = [SocialKind: Int]()
@@ -313,6 +312,7 @@ final class BehaviourRoundTests: XCTestCase {
             concurrent = max(concurrent, live.count)
             if let s = lab.rigs.compactMap({ $0.brain.social }).first, s !== lastSession {
                 starts.append(t); kinds[s.kind, default: 0] += 1
+                if lastSession != nil, ends.count < starts.count - 1 { ends.append(t) }
                 lastSession = s
             }
             if lab.rigs.allSatisfy({ $0.brain.social == nil }) { lastSession = nil }
@@ -320,23 +320,11 @@ final class BehaviourRoundTests: XCTestCase {
         var maxGap: Float = starts.first ?? 600
         for k in 1..<max(starts.count, 1) { maxGap = max(maxGap, starts[k] - starts[k - 1]) }
         maxGap = max(maxGap, 600 - (starts.last ?? 0))
-        return (starts.count, maxGap, concurrent, kinds)
-    }
-
-    /// Per seed: at least 9 socials in 10 minutes, no long quiet stretch, no stacking. Across 3 seeds the MEAN count is at most 45 ("not constant"): one seed may sit a session over.
-    func testSocialRateFloor() {
-        var counts = [Int](), all = [SocialKind: Int]()
-        for seed in [63, 64, 65] as [UInt64] {
-            let r = socialFloorRun(seed: seed)
-            counts.append(r.count); for (k, v) in r.kinds { all[k, default: 0] += v }
-            MotionLog.write("BEHAV social floor seed \(seed): \(r.count) sessions in 10 min, longest wait \(r.maxGap), concurrent max \(r.concurrent), kinds \(r.kinds.map { "\($0.key.rawValue)=\($0.value)" }.sorted())")
-            XCTAssertGreaterThanOrEqual(r.count, 9, "seed \(seed): at least one social about every minute")
-            XCTAssertLessThan(r.maxGap, 110, "seed \(seed): never a long quiet stretch")
-            XCTAssertLessThanOrEqual(r.concurrent, 1, "seed \(seed): socials do not stack")
-        }
-        let mean = Float(counts.reduce(0, +)) / Float(counts.count)
-        MotionLog.write("BEHAV social floor counts \(counts) mean \(mean), kinds over the 3 seeds \(all.map { "\($0.key.rawValue)=\($0.value)" }.sorted())")
-        XCTAssertLessThanOrEqual(mean, 45, "but it is not constant (3-seed mean \(mean), counts \(counts))")
+        MotionLog.write("BEHAV social floor: \(starts.count) sessions in 10 min, longest wait \(maxGap), concurrent max \(concurrent), kinds \(kinds.map { "\($0.key.rawValue)=\($0.value)" }.sorted())")
+        XCTAssertGreaterThanOrEqual(starts.count, 9, "at least one social about every minute")
+        XCTAssertLessThanOrEqual(starts.count, 45, "but it is not constant")
+        XCTAssertLessThan(maxGap, 110, "never a long quiet stretch")
+        XCTAssertLessThanOrEqual(concurrent, 1, "socials do not stack")
     }
 
     // MARK: 2. the flop

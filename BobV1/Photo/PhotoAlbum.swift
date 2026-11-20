@@ -1,6 +1,6 @@
 //
 //  PhotoAlbum.swift
-//  Every photo is kept in the app's Documents/Photos (JPEG). The in-game album: a grid, a viewer with Share / Delete (Share is behind the grown-up gate; there is no save-to-Photos button).
+//  Every photo is kept in the app's Documents/Photos (JPEG). The in-game album: a grid, a viewer with Share / Delete (no save-to-Photos button; the share sheet also excludes Save Image).
 //  The main menu's Photos button shows it through StartFlow.albumView (registered at launch by PhotoAlbum.register()).
 //
 

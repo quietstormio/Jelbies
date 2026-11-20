@@ -382,6 +382,14 @@ final class HapticDriver {
     var roomEngineHeld = false
     var roomRequests = 0, roomDropped = 0, roomEngineStarts = 0
     var soundHook: ((_ kind: String, _ intensity: Float) -> Void)?
+    /// Two-finger petting (Melon/PetLanes.swift): the levels the OTHER petted Jelmiko's lanes ask for right now (nil / zeros = none). The one motor plays ONE pattern: `update`
+    /// folds them into this driver's own request (`mix`), so with no lane the request goes out exactly as it always did.
+    var companion: (() -> (pi: Float, ps: Float, si: Float, ss: Float)?)?
+    /// How loud this driver's paired touch sounds are (1 = as always; a second petted Jelmiko's lane is quieter so two together stay sensible).
+    var soundGain: Float = 1
+
+    /// A little fuller with two: the stronger level plus a quarter of the weaker; a missing / zero second level returns the first untouched.
+    static func mix(_ a: Float, _ b: Float) -> Float { b <= 0 ? a : min(1, max(a, b) + 0.25 * min(a, b)) }
 
     static let minInterval: Double = 1.0 / 60 - 0.0006
     static let epsilon: Float = 0.012
@@ -428,6 +436,11 @@ final class HapticDriver {
             if e != enabled { enabled = e; if warm { for s in sinks { e ? s.start() : s.stop() }; level.removeAll() } }
         }
         guard warm, enabled else { return }
+        var petIntensity = petIntensity, petSharpness = petSharpness, squishIntensity = squishIntensity, squishSharpness = squishSharpness
+        if let c = companion?() {
+            if c.pi > 0 { if c.pi > petIntensity { petSharpness = c.ps }; petIntensity = Self.mix(petIntensity, c.pi) }
+            if c.si > 0 { if c.si > squishIntensity { squishSharpness = c.ss }; squishIntensity = Self.mix(squishIntensity, c.si) }
+        }
         send(.pet, now: now, i: petIntensity, s: petSharpness)
         send(.squish, now: now, i: squishIntensity, s: squishSharpness)
         for s in sinks { s.poll(now: now) }
@@ -445,7 +458,7 @@ final class HapticDriver {
 
     func transient(now: Double, intensity: Float, sharpness: Float) {
         guard warm else { return }
-        AudioHub.shared.touch(kind: "transient", intensity: intensity)         // the sound is paired with the haptic but does not need the haptics setting
+        AudioHub.shared.touch(kind: "transient", intensity: intensity, gain: soundGain)         // the sound is paired with the haptic but does not need the haptics setting
         soundHook?("transient", intensity)
         guard enabled else { return }
         for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
@@ -457,10 +470,16 @@ final class HapticDriver {
         for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
     }
 
+    /// A decaying buzz with NO sound (a second lane's wobble, already voiced by its own driver).
+    func softWobble(peak: Float, sharpness: Float, tau: Float, duration: Float) {
+        guard warm, enabled else { return }
+        for k in sinks { k.wobble(peak: peak, sharpness: sharpness, tau: tau, duration: duration) }
+    }
+
     /// A squash peak of a let-go settle: the same haptic as `transient`; the sound is the soft let-go boing (one per ring).
     func jellyPulse(now: Double, intensity: Float, sharpness: Float) {
         guard warm else { return }
-        AudioHub.shared.touch(kind: "letgo", intensity: intensity)
+        AudioHub.shared.touch(kind: "letgo", intensity: intensity, gain: soundGain)
         soundHook?("transient", intensity)
         guard enabled else { return }
         for k in sinks { k.transient(intensity: intensity, sharpness: sharpness) }
@@ -471,7 +490,7 @@ final class HapticDriver {
         guard warm, now - lastImpact >= Self.impactGap else { return }
         lastImpact = now
         let i = HapticMap.impactIntensity(speed: speed), s = HapticMap.impactSharpness(speed: speed)
-        AudioHub.shared.touch(kind: "impact", intensity: i)
+        AudioHub.shared.touch(kind: "impact", intensity: i, gain: soundGain)
         soundHook?("impact", i)
         guard enabled else { return }
         for k in sinks { k.transient(intensity: i, sharpness: s) }
@@ -479,7 +498,7 @@ final class HapticDriver {
 
     func wobble(now: Double, peak: Float) {
         guard warm else { return }
-        AudioHub.shared.touch(kind: "wobble", intensity: peak)
+        AudioHub.shared.touch(kind: "wobble", intensity: peak, gain: soundGain)
         soundHook?("wobble", peak)
         guard enabled else { return }
         for k in sinks { k.wobble(peak: peak, sharpness: 0.2, tau: HapticMap.wobbleTau, duration: HapticMap.wobbleDuration) }

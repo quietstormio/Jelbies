@@ -183,6 +183,18 @@ final class ShowFlow {
     /// The foot buttons are live.
     var buttonsLive: Bool { phase == .stage && beat == .dancing && wipe == 0 && !(sim?.danceDone ?? false) }
     var hasResults: Bool { sim?.round == .results && trickStage == .pick }
+    /// Is turn `k` (0...2) of the Trick round the one being played right now, by anyone: his go, his result showing, the entrant on stage, or (the last entrant back) his next go.
+    /// The ONE source for the turn pills and the header pips (the pips never keep a counter of their own).
+    func isTrickTurnNow(_ k: Int) -> Bool {
+        guard let s = sim, k >= 0, k < 3 else { return false }
+        let done = s.turns.count
+        let playerBack = trickStage == .rivals && rivalStep == .playerBack
+        let entrantNow = trickStage == .rivals && rivalRound == k && !playerBack
+        let nextGo = playerBack && k == rivalRound + 1
+        return entrantNow || nextGo || (trickStage == .performing && k == done - 1) || (trickStage == .pick && !s.tricksDone && k == done)
+    }
+    /// The turn being played now (0...2), nil when none is (the round is over, or a pause between turns).
+    var trickTurnNow: Int? { (0..<3).first { isTrickTurnNow($0) } }
     /// The rival under the lights and what she shows this turn (her name, trick, stars and points come from this).
     var rivalNow: (rival: Int, turn: ShowTrickTurn)? {
         guard trickStage == .rivals, let i = rivalTurn, let s = sim, s.rivalTurns.indices.contains(i), s.rivalTurns[i].indices.contains(rivalRound) else { return nil }

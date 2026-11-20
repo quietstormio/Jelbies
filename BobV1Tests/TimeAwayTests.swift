@@ -329,7 +329,7 @@ final class TimeAwayTests: XCTestCase {
         XCTAssertEqual(g.sparkle, 0.5, accuracy: 0.01, "half after 5 min")
         for _ in 0..<301 { g.step(dt: 1, travelled: 0) }
         XCTAssertEqual(g.sparkle, 0, accuracy: 1e-4, "gone after 10 min in the room")
-        let a = BlobGrime(persists: false)
+        let a = BlobGrime(persists: false, defaults: suite())          // (its own defaults: the away path reads the saved perks, and a shine perk left in the app's data by another test would slow the fade)
         a.sparkle = 1
         a.leaveActive(at: t0); a.returnActive(at: t0.addingTimeInterval(300))
         XCTAssertEqual(a.sparkle, 0.5, accuracy: 0.01, "the same rate away")

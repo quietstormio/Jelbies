@@ -355,6 +355,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     private var liftHeight: Float = 0
     private var throwHold: Float = 0
     private var touchSize = CGSize.zero
+    /// Two-finger petting (PetLanes.swift): the pet-only lanes of the fingers after the primary one.
+    private let lanes = PetLanes()
 
     #if DEBUG
     private var autoDrag = false
@@ -1110,6 +1112,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         PerfMeter.frameBegin()
         let cpu0 = CACurrentMediaTime()
         let now = cpu0
+        if MicTrace.recording { MicTrace.frame(now) }          // the mic trace's frame-pacing window (Voice/MicTrace.swift); one Bool test when off
         let dt = lastTime == 0 ? Float(1.0 / 60) : Self.pacedDt(Double(now - lastTime), fps: stage.preferredFramesPerSecond)
         lastTime = now
         adaptScale(stage, dt: Double(dt))
@@ -1150,6 +1153,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
         let tt0 = CACurrentMediaTime()
         touchDemo(now: now)
+        petTwoDemo(now: now)
         runScripted(now: now)
         if game, A11yAssist.active { a11y.tick(now: now) }
         touchTick(dt: dt, now: now)
@@ -1845,6 +1849,38 @@ final class MelonController: NSObject, MTKViewDelegate {
         return CGPoint(x: CGFloat(c.x / c.w * 0.5 + 0.5) * size.width, y: CGFloat(0.5 - c.y / c.w * 0.5) * size.height)
     }
 
+    /// Capture aid (DevArgs-gated, any build): `-PetTwo 2|3` strokes the close-up's first 2 (or 3) Jelmiko at once with scripted fingers, each on its own pointer, on a 12 s loop (9 s of strokes),
+    /// e.g. `-SetRoster pip,moss,lavender -GameAction callall -PetTwo 3`. `-PetTwo 1` = the first Jelmiko only (the single-stroke strip to compare).
+    private let petTwoCount: Int = DevArgs.enabled ? UserDefaults.standard.integer(forKey: "PetTwo") : 0
+    private let petTwoPointers = [NSObject(), NSObject(), NSObject()]
+    private var petTwoT0: CFTimeInterval = 0
+    private var petTwoDown = [false, false, false]
+
+    private func petTwoDemo(now: CFTimeInterval) {
+        guard petTwoCount > 0, game, haveCam, let stage = stageView else { return }
+        guard model.care.focus.isFocused, !model.care.focusGroup.ids.isEmpty else {
+            for k in 0..<3 where petTwoDown[k] { pointerUp(id: ObjectIdentifier(petTwoPointers[k])); petTwoDown[k] = false }
+            return
+        }
+        if petTwoT0 == 0 { petTwoT0 = now }
+        guard now - petTwoT0 > 2.0 else { return }
+        let t = (now - petTwoT0 - 2.0).truncatingRemainder(dividingBy: 12)
+        let size = stage.bounds.size
+        let right = SIMD3<Float>(lastCam.view.columns.0.x, lastCam.view.columns.1.x, lastCam.view.columns.2.x)
+        let up = SIMD3<Float>(lastCam.view.columns.0.y, lastCam.view.columns.1.y, lastCam.view.columns.2.y)
+        let ids = model.care.focusGroup.ids
+        for k in 0..<min(petTwoCount, 3, ids.count) {
+            let id = ObjectIdentifier(petTwoPointers[k])
+            let start = 0.0 + 0.4 * Double(k)
+            if t >= start, t < 9 {
+                let c = actors[ids[k]].sim.centroid()
+                let ph = Float(t - start), kk = Float(min(1, (t - start) / 0.6))
+                let pt = screenPoint(c + right * (0.4 * sinf(2 * .pi * 0.8 * ph + Float(k)) * kk) + up * (0.15 + 0.2 * sinf(2 * .pi * 0.4 * ph) * kk), size)
+                if !petTwoDown[k] { petTwoDown[k] = true; pointerDown(id: id, point: pt, size: size) } else { pointerMove(id: id, point: pt, size: size) }
+            } else if petTwoDown[k] { pointerUp(id: id); petTwoDown[k] = false }
+        }
+    }
+
     private func touchDemo(now: CFTimeInterval) {
         guard game, let name = touchDemoName, haveCam, let stage = stageView else { return }
         if name.hasPrefix("hold"), !tdCalled, !model.care.focus.isActive { tdCalled = true; model.care.call() }          // dev only (hold-wear-r1): the close-up for ONE Jelbie, as the call button does
@@ -1967,11 +2003,14 @@ final class MelonController: NSObject, MTKViewDelegate {
         if !(f.isFocused || bathLive) || model.paused {
             if mode == .pet || mode == .pending || mode == .cheeks { mode = .none }
             cheekFingers = []; gesture.cancel(); pickArm.reset()
+            cancelLanes()
             DeviceMotionFeed.shared.setRunning(false)
             if !play.holdsBrain { play.cancel(sim: tSim, brain: brain, skinner: tSkinner) }
             return
         }
         if restSurface == nil { restSurface = RestSurface(mesh: renderMesh) }
+        if bathLive { cancelLanes() }
+        laneTick(dt: dt, now: now)          // the second / third finger's pet lanes, before the primary's frame so its one haptic request sees their levels
         // phone tilt / shake (the -TouchDemo tilt capture aid feeds a scripted tilt and shakes instead of the sensors)
         var gx: Float, shk: Float
         if touchDemoName == "tilt" {
@@ -2039,6 +2078,46 @@ final class MelonController: NSObject, MTKViewDelegate {
         play.heldFrame(dt: dt, now: now, grabbing: tSim.grabbing, liftHeight: liftHeight, sim: tSim, brain: brain, skinner: tSkinner)
     }
 
+    // MARK: two-finger petting lanes (PetLanes.swift)
+
+    private func laneBody(_ id: Int) -> (SoftBody, BlobBrain?, Skinner)? {
+        id < actors.count ? (actors[id].sim, actors[id].brain, actors[id].skinner) : nil
+    }
+
+    private func cancelLane(_ id: Int) {
+        let b = laneBody(id)
+        lanes.cancel(id, sim: b?.0, brain: b?.1, skinner: b?.2)
+        model.care.bubbleHub.laneHeads[id] = nil
+    }
+
+    private func cancelLanes() {
+        guard !lanes.isEmpty else { return }
+        lanes.cancelAll(body: { laneBody($0) })
+        model.care.bubbleHub.laneHeads = [:]
+    }
+
+    private func laneTick(dt: Float, now: CFTimeInterval) {
+        if model.touch.haptics.companion == nil { model.touch.haptics.companion = { [weak self] in self?.lanes.companionLevels() } }
+        guard !lanes.isEmpty else { return }
+        let care = model.care
+        lanes.tick(dt: dt, now: now, surface: restSurface, body: { l in
+            guard l.jelly < actors.count, l.jelly != touchID, care.focusGroup.ids.contains(l.jelly), let br = actors[l.jelly].brain, br.enabled else { cancelLane(l.jelly); return nil }
+            let n = care.needs(for: l.jelly)
+            var ray: (o: SIMD3<Float>, d: SIMD3<Float>)?
+            var scr: SIMD2<Float>?
+            if l.finger != nil, l.size.width > 0 {
+                let r = unproject(ndc: ndc(l.point, l.size), invViewProj: lastCam.invViewProj)
+                ray = (r.o, r.d)
+                scr = SIMD2(Float(l.point.x / l.size.width), Float(l.point.y / l.size.height))
+            }
+            return PetLanes.Body(sim: actors[l.jelly].sim, brain: br, skinner: actors[l.jelly].skinner, mood: n.mood, attentionWanted: n.wantedNeed == .attention, ray: ray, screen: scr)
+        }, credit: { id, amount in care.needs(for: id).gain(.attention, amount) },
+        heart: { id, born in care.bubbleHub.spawnHeart(for: id, now: born) })
+        var heads: [Int: SIMD3<Float>] = [:]
+        for id in lanes.lanes.keys where id < actors.count { let c = actors[id].sim.centroid(); heads[id] = SIMD3(c.x, c.y + BlobShape.H * 0.5, c.z) }
+        care.bubbleHub.laneHeads = heads
+    }
+
     private func beginPickUp(_ p: CGPoint, _ size: CGSize) {
         guard let hit = gestureHit else { return }
         model.touch.releaseContact(sim: tSim, skinner: tSkinner)
@@ -2089,6 +2168,8 @@ final class MelonController: NSObject, MTKViewDelegate {
             let now = CACurrentMediaTime()
             if mode == .none {
                 guard model.touch.getUpPhase == .off, let picked = pickJelly(p, size) else { return }
+                if lanes.liveIDs.contains(picked.id) { return }                       // a second finger is already petting him: one stroke per body
+                if lanes.lanes[picked.id] != nil { cancelLane(picked.id) }            // (a lane still settling from a lifted finger: the new primary takes the body over)
                 let hit = picked.hit
                 routeTouch(to: picked.id)
                 mode = .pending; dragID = id; last = p; petPoint = p; touchSize = size; gestureHit = hit
@@ -2097,6 +2178,10 @@ final class MelonController: NSObject, MTKViewDelegate {
                 mode = .cheeks; touchSize = size
                 model.touch.releaseContact(sim: tSim, skinner: tSkinner)
                 cheekFingers = [(dragID!, petPoint), (id, p)]
+            } else if id != dragID, mode == .pending || mode == .pet, let picked = pickJelly(p, size),
+                      PetRoute.route(primary: mode == .pet ? .pet : .pending, picked: picked.id, touchID: touchID, liveLanes: lanes.liveIDs) == .lane {
+                // two thumbs: a later finger on ANOTHER Jelmiko pets him on his own lane; the first finger's gesture is not touched (a hold / drag / cheeks pinch ignores it, see PetRoute)
+                lanes.begin(jelly: picked.id, finger: id, point: p, size: size, target: model.touch.haptics)
             }
             return
         }
@@ -2125,6 +2210,7 @@ final class MelonController: NSObject, MTKViewDelegate {
     func pointerMove(id: ObjectIdentifier, point p: CGPoint, size: CGSize) {
         guard haveCam else { return }
         if game, model.care.park.place == .camp, CampUI.shared.dragMoved(id: id, to: p, now: CACurrentMediaTime()) { return }          // (the Camp yard: a drag on a body strokes it)
+        if lanes.move(finger: id, point: p, size: size) { return }
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) { cheekFingers[k].p = p; touchSize = size; return }
         if game, id == dragID, model.care.bath.acceptsTouch, mode == .pet { petPoint = p; touchSize = size; last = p; return }
         if game, id == dragID {
@@ -2161,6 +2247,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     func pointerUp(id: ObjectIdentifier, time: Double? = nil) {
         if CampUI.shared.endDrag(id: id) { return }
+        if lanes.end(finger: id) { return }          // (a lane finger lifted or cancelled by the system: its stroke ends, nothing else does)
         if let k = cheekFingers.firstIndex(where: { $0.id == id }) {
             cheekFingers.remove(at: k)
             if cheekFingers.count < 2, mode == .cheeks { mode = .none; dragID = nil; gesture.cancel() }
