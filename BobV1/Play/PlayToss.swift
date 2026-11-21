@@ -134,12 +134,12 @@ final class PlayToss {
     }
 
     // the frame (GameCamera.playFrame): the floor the Jelmiko play on is what the play camera shows
-    @ObservationIgnored private var frameSaved: (floor: GameCamera.RoamFloor?, walls: [RoomLayout.Plane], arena: (c: SIMD2<Float>, r: Float), hudRevision: Int)?
+    @ObservationIgnored private var frameSaved: (floor: GameCamera.RoamFloor?, walls: [RoomLayout.Plane], arena: (c: SIMD2<Float>, r: Float), hudRevision: Int, stageAspect: Float, viewAspect: Float)?
     @ObservationIgnored private var frameAspect: Float = 0
     private var viewAspect: Float { Float(viewSize.width / max(viewSize.height, 1)) }
     private func frameOn() {
         guard !PlayTuning.old, GameCamera.parkRoamMaxZ == nil else { return }
-        if frameSaved == nil { frameSaved = (GameCamera.roamFloor, RoomLayout.walls, (GameCamera.arenaCenter, GameCamera.arenaRadius), HUDLayout.measuredRevision); logFrame("before") }
+        if frameSaved == nil { frameSaved = (GameCamera.roamFloor, RoomLayout.walls, (GameCamera.arenaCenter, GameCamera.arenaRadius), HUDLayout.measuredRevision, GameCamera.aspect, viewAspect); logFrame("before") }
         GameCamera.playFrame = true
         frameAspect = viewAspect
         GameCamera.refreshRoam(aspect: frameAspect)
@@ -165,11 +165,15 @@ final class PlayToss {
         GameCamera.playFrame = false; GameCamera.playFrameView = nil
         guard let s = frameSaved else { return }
         frameSaved = nil
-        // the saved room floor is put back only when nothing it was built from changed during play: the same aspect AND the same measured HUD (the stage rebuilds the floor when the
-        // HUD's rails move, and during play that rebuild is the PLAY floor, so the stage would never rebuild the room's: it is rebuilt here instead)
-        if s.floor == nil || (abs((s.floor?.aspect ?? 0) - frameAspect) < 0.005 && s.hudRevision == HUDLayout.measuredRevision) {
+        // the saved room floor is put back only when nothing it was built from changed during play: the same view shape AND the same measured HUD (the stage rebuilds the floor when the
+        // HUD's rails move or the phone turns, and during play that rebuild is the PLAY floor, so the stage would never rebuild the room's: it is rebuilt here instead, for the STAGE's
+        // aspect (the play overlay can be narrower than the stage: the safe area; a turn swaps the stage's width and height as it does the overlay's)
+        let turned = abs(frameAspect - s.viewAspect) > 0.005
+        let stageNow = turned ? s.stageAspect * frameAspect / max(s.viewAspect, 0.01) : s.stageAspect
+        if s.floor == nil || (!turned && s.hudRevision == HUDLayout.measuredRevision) {
             GameCamera.roamFloor = s.floor; RoomLayout.walls = s.walls; GameCamera.arenaCenter = s.arena.c; GameCamera.arenaRadius = s.arena.r
-        } else { GameCamera.refreshRoam(aspect: frameAspect) }
+        } else { GameCamera.refreshRoam(aspect: stageNow) }
+        GameCamera.aspect = stageNow
         logFrame("after")
     }
 
