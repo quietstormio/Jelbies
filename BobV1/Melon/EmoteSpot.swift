@@ -28,6 +28,8 @@ enum EmoteSpot {
     static let soloLeg: Float = 4.0, pairLeg: Float = 2.5, groupLeg: Float = 4.5
     /// Weight of `score` in a roam goal's score (home rooms): the legs between emotes lean toward the spots emotes have used least, so most emotes need no walk of their own.
     static let roamWeight: Float = 0.6
+    /// A pair walks to a better meeting spot first (`emoteMeetPlan`). OFF since the real-app takes (2026-11-21): a pair starts where the two stand; where bodies ROAM is what is balanced (roam goals above).
+    static let pairMeet = false
     /// How far apart the two bodies of a pair stand on the meeting spot.
     static let pairHalf: Float = 0.55
 
@@ -184,7 +186,7 @@ extension BlobBrain {
     /// The pair's meeting: where the two stand for `kind`. If the midpoint they are at is clearly worse than another spot, both walk to it first (`socialBook.meet`), then `socialStart`
     /// runs as always. True = the meeting is on its way (the caller is done); false = start in place.
     func emoteMeetPlan(_ kind: SocialKind, with o: BlobBrain) -> Bool {
-        guard emoteSpotLive, !EmoteSpot.pairStay.contains(kind), o.homeRoom, socialFree, o.socialFree else { return false }
+        guard EmoteSpot.pairMeet, emoteSpotLive, !EmoteSpot.pairStay.contains(kind), o.homeRoom, socialFree, o.socialFree else { return false }
         let a = position, b = o.position
         let mid = (a + b) / 2
         // the whole pair moves as it stands (the same shift for both: the start geometry of every kind is what it was)
