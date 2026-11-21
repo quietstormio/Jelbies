@@ -72,6 +72,8 @@ final class BlobBrain {
     var footprint: Float = 0.55
     /// The decor piece (uid) he is about to use and may therefore stand inside (the beanbag he sits in, the mat he hops on); nil = every solid piece is a wall.
     var decorIgnore: Int?
+    /// park-hopscotch-r1: seconds he has stood still at the court's edge while a game is on (`hopNoRestCheck`).
+    var hopRestT: Float = 0
     /// Seconds he has stood inside a solid piece's footprint (see `decorExitCheck`).
     var insideDecorT: Float = 0
     /// How long he has been inside a solid piece's footprint without getting out (the walk-out can find no route from inside a piece): after a few seconds `decorExitCheck` eases him out itself.
@@ -506,7 +508,7 @@ final class BlobBrain {
         let b = BlobBrain()
         b.followsStudioCamera = false
         b.cameraPosXZ = SIMD2(GameCamera.eye.x, GameCamera.eye.z)
-        b.resolve = { [weak b] p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b?.decorIgnore) }      // the tray is low: only his base keeps off it
+        b.resolve = { [weak b] p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b?.decorIgnore ?? b?.hopPass) }      // the tray is low: only his base keeps off it
         b.footprint = 0.7
         b.wanderRect = GameCamera.roamRect
         b.wanderRectWide = GameCamera.roamRectWide
@@ -954,7 +956,7 @@ final class BlobBrain {
                 let raw = cand
                 let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); cand = SIMD2(rv.x, rv.z)
                 let d = simd_length(cand - here)
-                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) && reachable(here, cand) else { continue }
+                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) && !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest) && reachable(here, cand) else { continue }
                 // a goal the floor rules had to drag in (off the frame / onto a prop) piles up at the edges: take real floor first, the dragged one only as a fallback
                 if wanderRectWide != nil || wanderRect != nil, simd_length(cand - raw) > 0.15 { fallback = fallback ?? cand; continue }
                 target = cand; fallback = nil; break
@@ -1017,7 +1019,7 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
-            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
+            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))

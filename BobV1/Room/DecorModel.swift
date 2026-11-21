@@ -297,7 +297,13 @@ struct DecorFoot: Equatable, Sendable {
     func turned(_ v: SIMD2<Float>) -> SIMD2<Float> { DecorPlacement.turn(v, quarter) }
     func local(_ v: SIMD2<Float>) -> SIMD2<Float> { DecorPlacement.turn(v, (4 - quarter) & 3) }
     var radius: Float { spec.radius }
-    var box: RoomLayout.FlatBox { .init(centre: centre, half: spec.half, height: spec.height + lift, radius: min(spec.corner, min(spec.half.x, spec.half.y))) }
+    var box: RoomLayout.FlatBox {
+        let sp = spec          // (once: `box` is read every step by every body's footprint tests)
+        var c = centre, h = sp.half
+        // park-hopscotch-r1: while a game is on the wall runs out west to the floor's edge (the strip beside the court is narrower than a body: a dead end)
+        if kind == .hopscotch, quarter == 0, HopscotchTuning.walled { c.x -= HopscotchTuning.westExtend / 2; h.x += HopscotchTuning.westExtend / 2 }
+        return .init(centre: c, half: h, height: sp.height + lift, radius: min(sp.corner, min(sp.half.x, sp.half.y)))
+    }
     /// Distance from `p` to the edge of the footprint (negative inside).
     func distance(_ p: SIMD2<Float>) -> Float { RoomLayout.boxDistanceXZ(p, box) }
 }
@@ -737,6 +743,7 @@ final class DecorField {
 
     /// One step: eases the sits, decays the kicks, rolls the ball (it stays on the visible floor and bounces off solid pieces and the sofa).
     func tick(dt: Float) {
+        HopscotchLine.shared.watchdog(dt: dt)          // (park-hopscotch-r1: a line nobody plays in any more does not stay a wall)
         SoccerState.shared.advance(dt)
         toyAdvance(dt)
         ballContactStep(dt: dt)          // (balls are solid: bodies push them, they push each other: Room/DecorField+BallContact.swift)

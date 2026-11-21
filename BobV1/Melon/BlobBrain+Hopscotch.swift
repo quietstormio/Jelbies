@@ -68,6 +68,72 @@ extension BlobBrain {
         }
     }
 
+    /// park-hopscotch-r1: the bodies who are not in the line and stand on the court or in its margin (the park's wall is on). Nobody with the guard off.
+    func hopscotchOthersOn(_ f: DecorFoot) -> [BlobBrain] {
+        guard HopscotchTuning.guardOn else { return [] }
+        let line = HopscotchLine.shared
+        return socialOthers().filter { $0 !== self && !line.contains(f.uid, $0.steerID) && !$0.hopJoining(f) && f.distance($0.position) < $0.footprint * HopscotchTuning.wallReach }          // (a body on his way to join is about to be a player, not an obstacle: the leader waited 12 s for him)
+    }
+
+    /// park-hopscotch-r1: he is on the line's route to this court (told about it and on his way, queued for it, enrolled: the queue spot, the hops, the happy hops, the walk out). The wall is no wall to him and the
+    /// step-off walk leaves him alone. It ends on the tick he quits (`decorRelease` leaves the line, the notice / wait is cleared): from then on he is a bystander like anyone else.
+    func hopJoining(_ f: DecorFoot) -> Bool { toy.noticeUID == f.uid || toy.waitUID == f.uid || HopscotchLine.shared.contains(f.uid, steerID) }
+    /// The piece the floor rules do not push him out of because he is on the line's route (nil = none; read by the brain's `resolve`).
+    var hopPass: Int? {
+        guard HopscotchTuning.walled else { return nil }
+        let u = ParkToys.hopscotchUID
+        return toy.noticeUID == u || toy.waitUID == u || HopscotchLine.shared.contains(u, steerID) ? u : nil
+    }
+
+    /// park-hopscotch-r1: nobody stands about at the court's edge while a game is on. A bystander who has stood still within `noRest` of the wall for `restMax` (no behaviour, no social, no job) is sent
+    /// on a short walk to the nearest free floor beyond it (`decorExitCheck` calls this every step with no behaviour running).
+    func hopNoRestCheck(_ dt: Float) {
+        guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID), social == nil, !held, !decorLocked, pending == nil, job == nil, !hopJoining(f), idleState.kind == nil, scriptIsNone,
+              f.distance(position) < footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest else { hopRestT = 0; return }
+        hopRestT += dt
+        guard hopRestT > HopscotchTuning.restMax else { return }
+        hopRestT = 0
+        if let out = hopWalkOut(f, beyond: HopscotchTuning.noRest + 0.1) { requestNow(.goTo(out)) }
+    }
+
+    /// park-hopscotch-r1: the court's wall (the margin) is within `radius` of the floor point `c` while a game is on.
+    func hopCourtWithin(_ c: SIMD2<Float>, _ radius: Float) -> Bool {
+        guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID) else { return false }
+        return f.distance(c) < radius
+    }
+
+    /// park-hopscotch-r1: where a body on the court (or in its margin) walks off to when a game is on: the nearest free floor beyond the wall whose straight leg never comes nearer the court than
+    /// he is now (a walk off the court's edge goes away from it, along it at most, never across it: the slide's `slideLegClear` rule). nil = none within 4.5 (the caller falls back).
+    func hopWalkOut(_ f: DecorFoot, beyond: Float = 0.12) -> SIMD2<Float>? {
+        let from = position
+        let floorD = min(f.distance(from), 0.15) - 0.02
+        let clear = footprint * HopscotchTuning.wallReach + beyond
+        func free(_ q: SIMD2<Float>) -> Bool {
+            guard f.distance(q) >= clear else { return false }
+            let r = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: footprint)
+            guard simd_distance(SIMD2(r.x, r.z), q) < 0.03, peerFree(q) else { return false }
+            for g in DecorField.shared.feet where g.uid != f.uid && g.spec.solid && g.distance(q) < footprint * g.spec.reach + 0.12 { return false }
+            return true
+        }
+        func legOK(_ q: SIMD2<Float>) -> Bool {
+            let n = max(1, Int(simd_distance(from, q) / 0.1))
+            for i in 1...n where f.distance(from + (q - from) * (Float(i) / Float(n))) < floorD { return false }
+            return true
+        }
+        for k in 1...70 {
+            let r = Float(k) * 0.1
+            let n = max(12, Int(2 * Float.pi * r / 0.12))
+            var best: SIMD2<Float>?
+            for j in 0..<n {
+                let a = Float(j) / Float(n) * 2 * .pi
+                let q = from + SIMD2(sinf(a), cosf(a)) * r
+                if free(q), legOK(q), best == nil || simd_distance(q, from) < simd_distance(best!, from) { best = q }
+            }
+            if let b = best { return b }
+        }
+        return nil
+    }
+
     /// Of the ones still queued (slot != 0) he is at the lowest slot, the nearest to the start: one steps up at a time, and nobody walks past a waiting friend to get there
     /// (a nearest-by-distance test cannot see friends who stand still: the roster hands those out under a placeholder id).
     private func hopscotchIsFront(_ uid: Int) -> Bool {
@@ -96,7 +162,7 @@ extension BlobBrain {
             var ok = true
             for k in 0...6 {          // (the sideways step, the way down the side and the end of it: clear floor, off the bench's path strip, outside the slide's box)
                 let p = k <= 2 ? a + (b - a) * (Float(k) / 2) : a + (b - a) * (Float(k - 3) / 3)
-                if ParkClearSpot.blocked(p, radius: 0.5) || abs(p.x - ParkScenery.pathX(p.y)) < HopscotchTuning.pathKeepOut { ok = false; break }
+                if ParkClearSpot.blocked(p, radius: 0.5, ignoring: f.uid) || abs(p.x - ParkScenery.pathX(p.y)) < HopscotchTuning.pathKeepOut { ok = false; break }
                 if let slide, slide.distance(p) < 0.9 { ok = false; break }
             }
             guard ok else { continue }
@@ -157,7 +223,9 @@ extension BlobBrain {
                 // (a friend who just stands on the square gets a few seconds to move on; a body only half over it is no reason to stop the game)
                 let clear: Float = phT > 4 ? 0.9 : HopscotchTuning.landingClear
                 let free = !steerPeers().contains { $0.id != me && simd_distance($0.pos, goal) < clear }
-                guard line.mayHop(uid, me, to: t), free else {
+                // park-hopscotch-r1: the first hop waits for the court to clear of others (the ones on it are walking off: `decorExitCheck`); a short wait, then he goes anyway (a body in a social)
+                let courtClear = t > 0 || phT > HopscotchTuning.clearWait || hopscotchOthersOn(f).isEmpty
+                guard line.mayHop(uid, me, to: t), free, courtClear else {
                     if phT > (free ? HopscotchTuning.patience : HopscotchTuning.blockedPatience) { idleFinish(skinner) }
                     return
                 }
@@ -198,6 +266,7 @@ extension BlobBrain {
 
     /// The hops own the body (like the slide's steps): true = this step is handled.
     func hopscotchBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        if idleState.kind == .decorHopscotch { HopscotchTuning.sinceMember = 0 }          // (a member is alive: the line's watchdog, `HopscotchLine.watchdog`)
         if idleState.kind == .decorHopscotch, let f = DecorField.shared.foot(idleState.decorUID) { hopscotchApproachCheck(f, dt, skinner) }          // (every step, also while he walks: `runHopscotch` is not ticked then)
         guard idleState.kind == .decorHopscotch, idleState.slideStage == 1, case .idle = script, let f = DecorField.shared.foot(idleState.decorUID) else { return false }
         let line = HopscotchLine.shared, t = idleState.slideStep
@@ -242,6 +311,6 @@ extension BlobBrain {
         idleState.slideStage = 3; idleState.decorGo = true; idleState.target = spot
         route = []; scriptT = 0; stuckT = 0; bestDist = .infinity; steerStall = 0
         script = .walk(target: spot, then: .none); activity = .walking
-        decorIgnore = nil
+        if !HopscotchTuning.guardOn { decorIgnore = nil }          // (park-hopscotch-r1: the court stays soft for him until `decorRelease`: it is a wall for the others while the line lasts)
     }
 }
