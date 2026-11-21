@@ -439,7 +439,7 @@ extension GameCare {
             }
             s.age += dt
             if let v = s.via {          // walking round an uncalled body first, then to his spot
-                if simd_length(Self.floorPos(brain, sim) - v) < 0.4 || s.age > 5 {
+                if simd_length(Self.floorPos(brain, sim) - v) < 0.6 || s.age > 5 {
                     if let n = s.viaNext { s.via = n; s.viaNext = nil; s.age = 0; brain.requestNow(.goTo(n)) }
                     else { s.via = nil; s.age = 0; s.short = 0; s.best = .infinity; s.stuckT = 0; brain.requestNow(.come(to: g.spot(of: id))) }
                 }

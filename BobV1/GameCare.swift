@@ -702,7 +702,7 @@ final class GameCare {
             if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)), !(FocusGroup.sleeperFix && brain.isSleeping) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
             }
-            if let v = focusGroup.viaZero, simd_length(brain.position - v) < 0.4 || focusGroup.clock - focusGroup.viaZeroAt > 5 {
+            if let v = focusGroup.viaZero, simd_length(brain.position - v) < 0.6 || focusGroup.clock - focusGroup.viaZeroAt > 5 {
                 if let n = focusGroup.viaZeroNext { focusGroup.viaZero = n; focusGroup.viaZeroNext = nil; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(n)] }
                 else { focusGroup.viaZero = nil; queued = [.come(to: focusGroup.spot(of: 0))]; approachIdle = 0 }
             }          // (walked round an uncalled body: now to his spot)
