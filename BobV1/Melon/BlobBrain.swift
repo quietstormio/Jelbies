@@ -1363,6 +1363,13 @@ final class BlobBrain {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("steerTarget", probe) }
         let root = SIMD2(px, pz)
         heldByPeer = false
+        // conga-treat-r1: the moving conga line walks its planned waypoints and nothing else. Its legs were planned on the floor rules and the crew are no obstacles to each other; the general steering (legClear against
+        // the one standing / slow just ahead on the same line, a detour round him, the look-ahead) dropped a follower's waypoints, and it then walked straight to its last point across the inside of every turn,
+        // through the leader's path (skin gap -9 ... -29 cm).
+        if let s = social, s.kind == .congaLine, s.choreo, s.phase == 1, s.end == nil {
+            while let w = route.first, simd_distance(root, w) < 0.2 { route.removeFirst() }          // (0.2, not 0.4: every cut corner shortens the gap between two followers by about as much)
+            return route.first ?? target
+        }
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
             else if roomWaypointWait(root, w) { return nil }          // (the 11-15 room round, T5: nothing looked ahead on a waypoint leg; the one who gets there second stands a beat)
