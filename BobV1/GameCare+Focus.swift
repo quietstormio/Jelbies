@@ -71,6 +71,7 @@ final class FocusGroup {
     /// safety net's clock waits for him (at most `sleepWait` s), so he is never "accepted" lying / half-risen behind another. Off (dev `-ComeHereOld 1`, simulator builds) = the earlier behaviour.
     nonisolated(unsafe) static var sleeperFix = !(DevArgs.enabled && UserDefaults.standard.integer(forKey: "ComeHereOld") == 1)
     static let sleepWait: Float = 6
+    nonisolated(unsafe) static var twoCornerMin: Float = 1.3
     /// Seconds the safety net's clock was held for a sleeper still waking.
     var netShift: Float = 0
     static let nearEnough: Float = 1.5, sidesWait: Float = 1.5
@@ -221,7 +222,8 @@ final class FocusGroup {
                 x += 0.25
             }
             if let b = best { return [b.0] }
-            // two corners (along the back wall, then up the side): both legs and the last one clear
+            // two corners (along the back wall, then up the side): both legs and the last one clear (not through a gap tighter than `twoCornerMin`: walkers are pushed off those)
+            guard clr >= twoCornerMin else { continue }
             var cand: [SIMD2<Float>] = []
             var cx: Float = -2.2
             while cx <= 2.2001 {

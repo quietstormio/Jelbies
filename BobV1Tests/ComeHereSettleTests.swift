@@ -28,7 +28,8 @@ final class ComeHereSettleTests: XCTestCase {
         DayClock.shared.forcedHour = 23          // (night: bedtime hours; the day-nap variants set their own)
         savedAnywhere = SleepTuning.anywhere
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero
-        FocusGroup.sleeperFix = ProcessInfo.processInfo.environment["COMEHERE_BASE"] == nil          // (COMEHERE_BASE=1: the earlier behaviour, for the before table)
+        FocusGroup.sleeperFix = ProcessInfo.processInfo.environment["COMEHERE_BASE"] == nil
+        FocusGroup.twoCornerMin = Float(ProcessInfo.processInfo.environment["COMEHERE_TWO"] ?? "") ?? 1.3          // (COMEHERE_BASE=1: the earlier behaviour, for the before table)
     }
     override func tearDown() {
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero; GameCamera.clearRoam()
