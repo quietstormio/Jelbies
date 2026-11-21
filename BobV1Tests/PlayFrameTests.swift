@@ -493,4 +493,21 @@ final class PlayFrameTests: XCTestCase {
         let s = playOnce(size: Self.landscape)
         XCTAssertTrue(Self.sameFloor(s.before.floor, s.after.floor))
     }
+
+    /// The phone is turned during play: afterwards the room floor is the one for the NEW stage shape (the old floor is stale), built like a fresh refresh.
+    func testTurningThePhoneDuringPlayRebuildsTheRoomFloorForTheNewShape() {
+        Self.room(Self.portrait)
+        let r = MotionRig(game: true); Self.keep.append(r)
+        let p = PlayToss(); p.viewSize = Self.portrait
+        p.begin(ball: .ball, title: "ball", jellies: [PlayJelly(id: 0, brain: r.brain, sim: r.sim, skinner: r.skinner)], snapCamera: true)
+        p.viewSize = Self.landscape
+        var w = TossWorld(); w.xHalf = PlayToss.ballXHalf
+        p.tick(dt: r.sim.stepDt, world: w, jellies: [PlayJelly(id: 0, brain: r.brain, sim: r.sim, skinner: r.skinner)])
+        p.end()
+        let after = GameCamera.roamFloor
+        let a = Float(Self.landscape.width / Self.landscape.height)
+        XCTAssertEqual(after?.aspect ?? 0, a, accuracy: 0.02, "the room floor after a turn is for the landscape shape")
+        GameCamera.refreshRoam(aspect: a)
+        XCTAssertTrue(Self.sameFloor(after, GameCamera.roamFloor))
+    }
 }
