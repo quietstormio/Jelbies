@@ -480,6 +480,12 @@ struct GaitDriver {
         sim.targets = list
     }
 
+    /// Holds him upright over `xz` (a still pose, the attractor at `fade` of its hop strength): the win's settle keeps him planted on the spot while the arms ease down
+    /// (with the hop over and the attractor off, nothing plants his feet and the landing's squash slid him 13 cm forward in 0.4 s).
+    func holdUpright(_ sim: SoftBody, xz: SIMD2<Float>, yaw: Float, fade: Float) {
+        setUpright(sim, xz: xz, yaw: yaw, squash: 1, lift: 0, strength: kHop * fade)
+    }
+
     private func setUpright(_ sim: SoftBody, xz: SIMD2<Float>, yaw: Float, squash sy: Float, lift: Float, strength: Float) {
         // lowest point of the upright, squashed target sits on the floor (+ lift while he is in the air)
         sim.attractor.rotation = yawQ(yaw)

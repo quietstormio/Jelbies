@@ -423,7 +423,7 @@ extension GameCare {
         // the player crossed the line FIRST (place 1 is final once every body over the line this step is counted; the results card covers the track a few seconds later):
         // his own Jelmiko celebrates (four bounces, arms up, a cheer: BlobBrain+Win.swift) and the card waits for it (RaceFlow.holdsCard). Rivals and 2nd...4th do nothing new.
         if winCandidate, let s = race.sim, s.playerLeadsAtFinish, !race.leaving, !race.forfeited, let a = body(RaceSim.playerIndex), let b = a.brain {
-            b.raceWinCue(a.sim); race.startWinHold()
+            b.raceWinCue(a.sim); race.startWinHold(); fireGrandChampionConfetti()          // (owner 11-21: a cheerful confetti burst as the bounces begin: the arrival's falling burst, 70 small opaque pieces, ~3 s, Reduce Motion none)
         }
         if race.winHoldT != nil, let a = body(RaceSim.playerIndex), let b = a.brain { race.noteWinMove(active: b.winCheer) }
         if race.phase == .racing, let sim = race.sim, sim.phase != .results {

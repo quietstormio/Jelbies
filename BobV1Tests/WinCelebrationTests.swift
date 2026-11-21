@@ -53,7 +53,9 @@ final class WinCelebrationTests: XCTestCase {
         var minElev: Float = .infinity, maxApex: Float = 0, happyFrames = 0, smileFrames = 0
         let y0 = r.sim.centroid().y
         var w = SocialTests.Watch()
+        let c0 = r.sim.centroid(); var maxDrift: Float = 0          // (owner 11-21: "It bounced away when it won": the bounces are up and down IN PLACE)
         r.run(8, until: { b.idleState.kind == nil && r.t > 0.5 }, each: {
+            let cNow = r.sim.centroid(); maxDrift = max(maxDrift, simd_length(SIMD2(cNow.x - c0.x, cNow.z - c0.z)))
             let air = b.gait.phase == .air
             if air && !wasAir { airs += 1 }
             wasAir = air
@@ -72,6 +74,8 @@ final class WinCelebrationTests: XCTestCase {
         })
         let secs = r.t - 1.0          // (MotionRig settles for 1 s first)
         MotionLog.write("WIN move: \(String(format: "%.2f", secs)) s, \(airs) bounces, arms up \(armsUpFrames) of \(frames) frames")
+        MotionLog.write("WIN drift: max horizontal drift of the body centre \(maxDrift * 100) cm")
+        XCTAssertLessThan(maxDrift, 0.03, "the bounces are on the spot: the centre stays within 3 cm of where he stood")
         XCTAssertNil(b.idleState.kind, "it ends by itself")
         XCTAssertEqual(airs, BlobBrain.winHops, "four bounces")
         XCTAssertGreaterThan(secs, 2.5); XCTAssertLessThan(secs, 3.6)

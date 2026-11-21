@@ -615,6 +615,7 @@ extension GameCare {
             b.commandedIdle = nil
             b.winCheer = true
             b.commandedIdle = .joy
+            fireGrandChampionConfetti()          // (the same falling burst as the race win)
         }
         if let d = book.enterDelay {          // the walk-on: the entrants set off from the wing a moment after they were placed there
             if d - dt <= 0 {
