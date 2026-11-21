@@ -327,6 +327,13 @@ final class GameCare {
                 JellyTraitsBook.adopt(c, JellyTraits(personality: old?.personality ?? .brave, jars: old?.jars ?? [50, 50, 50, 50, 50], snack: String(id)))
             }
         }
+        // dev builds only: `-PerkSeed 6,4,1` gives slot 0, 1, 2 ... that many active power-ups (to check the roster chips)
+        if DevArgs.enabled, !preview, persistent, let list = UserDefaults.standard.string(forKey: "PerkSeed") {
+            let kinds = [PerkKind.tidy, .cozy, .snuggly, .shine, .zoomies, .focus, .bouncy]
+            for (slot, n) in list.split(separator: ",").enumerated() where slot < jellies.count {
+                for (i, k) in kinds.prefix(Int(n) ?? 0).enumerated() { jellies[slot].perks.grant(k, duration: [13560, 14940, 21300, 56760, 7200, 1500, 9000][i]) }
+            }
+        }
         if preview {
             for j in jellies { for k in NeedKind.allCases { j.needs.set(k, 1) } }          // happy and rested: he comes when asked and never wants anything while he is on show
         } else {
