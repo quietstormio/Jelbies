@@ -842,6 +842,9 @@ final class BlobBrain {
 
     /// OLD-FLOW FOLLOW-UP: the yaw the meal's straight walk to his stand should end in (the arc into it, `planWalkStep`); nil otherwise. Set by `.dine` / `.sip`, cleared by every new request and at the dine turn.
     var mealFinalYaw: Float?
+    /// meal-walk-r1: the largest angle (rad) between his travel direction and the place's yaw (and between his body and travel) at which the walk still turns toward the place's yaw on the way.
+    static let mealArcMax: Float = 0.6
+    var mealArcOff = false
     /// The yaw of the place the meal group is sending him to (set by `DiningGroup`, nil otherwise): a `.goTo` while he is reserved ends in it.
     var mealYawHint: Float?
     func start(request r: BlobRequest, _ sim: SoftBody) {
@@ -1463,12 +1466,15 @@ final class BlobBrain {
         var errF: Float = 0, finalTurn = false
         if let fy = (exact ? ContactTouchMemory.finalYaw[steerID] : nil) ?? mealFinalYaw {          // (a stance walk, or a meal's walk to his stand: the turn into the place's yaw is made on the way; a routed walk counts the rest of its route, so its LAST legs blend the yaw too)
             errF = wrapAngle(fy - yaw)
+            // meal-walk-r1: the arc into the place's yaw only when the place's facing is close to the way he is going (no walking backwards / sideways while the body turns to the tray); otherwise he faces his way, walks straight, and turns at the stand (`.dineTurn`)
+            if !exact, abs(wrapAngle(fy - hd)) > Self.mealArcMax || abs(err) > Self.mealArcMax { errF = 0; mealArcOff = true } else { mealArcOff = false }
             let n = (abs(errF) / max(m, 0.1)).rounded(.up)
             var rest = D
             if intermediate, exact == false, case .walk(let tgt, _) = script { var prev = target; for w in route.dropFirst() { rest += simd_distance(prev, w); prev = w }; rest += simd_distance(prev, tgt) }
             finalTurn = rest <= (n + ContactTuning.finalTurnExtra) * stride * runStrideMul * amplitude.clamped(0.6, 1)
+            if mealArcOff { finalTurn = false }
         }
-        let arc = (abs(err) <= 1.2 && D > 0.4 && !intermediate) || finalTurn         // turn while moving: a short arc into the new direction
+        let arc = (abs(err) <= (mealFinalYaw != nil ? 0.5 : 1.2) && D > 0.4 && !intermediate) || finalTurn          // (meal-walk-r1: a meal walk turns to its way first, then walks straight)         // turn while moving: a short arc into the new direction
         if abs(err) > 0.5 && !arc {                        // not facing the target yet: turn on the spot first
             let tp = turnPlan(err: err, idle: false)
             startStep(dyaw: tp.dyaw, peak: turnLift * amplitude, rate: stepRate * runRateMul * locoRateMul * tp.rate)
