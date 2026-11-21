@@ -519,7 +519,7 @@ final class ShowFlow {
             if let t = entrancePick { entrancePick = nil; pick(t) }
         }
     }
-    static let entranceMin: Float = 1.2, entranceMax: Float = 4.5
+    static let entranceMin: Float = 1.2, entranceMax: Float = 5.5
 
     // MARK: the rivals' turns
 
