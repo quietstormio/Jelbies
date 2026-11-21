@@ -184,7 +184,7 @@ final class FocusGroup {
     /// A point to walk to first, when the straight way from `p` to `s` brushes past an uncalled body. A lying body is 1.8 across (2.07 along) and a walker 1.4: the way past needs about 1.7 from its
     /// centre, so two lying bodies less than ~3.4 apart are a wall, not a slit a walker can use (r1 had them pin walkers at 1.3). The cheapest point `w` whose two legs both keep that clearance from every
     /// uncalled body and stay on free floor; the clearance steps down 1.7, 1.5, 1.3 only when no point works. nil = the straight way is fine, or no point works.
-    static func detour(from p: SIMD2<Float>, to s: SIMD2<Float>, obstacles: [SIMD2<Float>], fixed: (SIMD2<Float>) -> SIMD2<Float>) -> SIMD2<Float>? {
+    static func detour(from p: SIMD2<Float>, to s: SIMD2<Float>, obstacles: [SIMD2<Float>], soft: [SIMD2<Float>] = [], fixed: (SIMD2<Float>) -> SIMD2<Float>) -> SIMD2<Float>? {
         guard simd_length(s - p) > 1.5, !obstacles.isEmpty else { return nil }
         func segClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ clr: Float) -> Bool {
             let d = b - a, len = simd_length(d)
@@ -195,11 +195,16 @@ final class FocusGroup {
                 if simd_length(o - (a + u * t)) < clr { return false }
             }
             var t: Float = 0.1
-            while t < len { let q = a + u * t; if !FreeFloor.isFree(q, radius: 0.5) { return false }; t += 0.25 }
+            while t < len {
+                let q = a + u * t
+                if !FreeFloor.isFree(q, radius: 0.5) { return false }
+                if simd_distance(q, s) > 1.6, soft.contains(where: { simd_distance($0, q) < min(clr, 1.4) }) { return false }          // (a called neighbour who will be standing on his spot: not passed through, except in the last stretch to my own spot)
+                t += 0.2
+            }
             return true
         }
         let dir = s - p, dl = simd_length(dir)
-        guard obstacles.contains(where: { o in let t = min(max(simd_dot(o - p, dir / dl), 0), dl); return simd_length(o - (p + dir / dl * t)) < 1.7 }) else { return nil }          // (nobody on the straight way: the usual walk)
+        guard obstacles.contains(where: { o in let t = min(max(simd_dot(o - p, dir / dl), 0), dl); return simd_length(o - (p + dir / dl * t)) < 1.7 }) || !segClear(p, s, 1.7) else { return nil }          // (nobody in the way: the usual walk)          // (nobody on the straight way: the usual walk)
         for clr: Float in [1.7, 1.5, 1.3] {
             var best: (SIMD2<Float>, Float)?
             var x: Float = -2.2
@@ -306,7 +311,7 @@ extension GameCare {
         }
         if ids.contains(0) {
             if focusGroup.mayGo(0, frontDistance: nil), !zeroAsleep {
-                if FocusGroup.sleeperFix, let b0 = brainFor(0), let v = FocusGroup.detour(from: b0.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, fixed: { b0.fixed($0) }) { focusGroup.viaZero = v; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(v)] }
+                if FocusGroup.sleeperFix, let b0 = brainFor(0), let v = FocusGroup.detour(from: b0.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, soft: focusGroup.ids.filter { $0 != 0 }.map { focusGroup.spot(of: $0) }, fixed: { b0.fixed($0) }) { focusGroup.viaZero = v; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(v)] }
                 else { queued = [.come(to: focusGroup.spot(of: 0))] }
             } else { focusGroup.zeroPending = true }
         }
@@ -406,7 +411,7 @@ extension GameCare {
                 guard g.mayGo(id, frontDistance: frontDistance(except: id)) else { return }
                 s.requested = true; s.age = 0
                 brain.onFinished = { [weak g] r in if case .come = r { g?.came.insert(id) } }
-                if FocusGroup.sleeperFix, let v = FocusGroup.detour(from: Self.floorPos(brain, sim), to: g.spot(of: id), obstacles: g.uncalled, fixed: { brain.fixed($0) }) { s.via = v; brain.requestNow(.goTo(v)) }
+                if FocusGroup.sleeperFix, let v = FocusGroup.detour(from: Self.floorPos(brain, sim), to: g.spot(of: id), obstacles: g.uncalled, soft: g.ids.filter { $0 != id }.map { g.spot(of: $0) }, fixed: { brain.fixed($0) }) { s.via = v; brain.requestNow(.goTo(v)) }
                 else { brain.requestNow(.come(to: g.spot(of: id))) }
                 return
             }
@@ -421,7 +426,7 @@ extension GameCare {
                 if dNow < s.best - 0.05 { s.best = dNow; s.stuckT = 0 } else { s.stuckT += dt }
                 if s.stuckT > 2, s.detours < 3, dNow > 0.5 {
                     s.stuckT = 0; s.detours += 1
-                    if let v = FocusGroup.detour(from: hereNow, to: g.spot(of: id), obstacles: g.uncalled, fixed: { brain.fixed($0) }) { s.via = v; s.age = 0; brain.requestNow(.goTo(v)); return }
+                    if let v = FocusGroup.detour(from: hereNow, to: g.spot(of: id), obstacles: g.uncalled, soft: g.ids.filter { $0 != id }.map { g.spot(of: $0) }, fixed: { brain.fixed($0) }) { s.via = v; s.age = 0; brain.requestNow(.goTo(v)); return }
                 }
             }
             // standing on his slot and still = arrived (the turn and the wave play AFTER arrival, they do not gate it)

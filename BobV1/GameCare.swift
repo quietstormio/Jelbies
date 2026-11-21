@@ -708,7 +708,7 @@ final class GameCare {
                 if d < focusGroup.zeroBest - 0.05 { focusGroup.zeroBest = d; focusGroup.zeroStuck = 0 } else { focusGroup.zeroStuck += dt }
                 if focusGroup.zeroStuck > 2, focusGroup.zeroDetours < 3, d > 0.5 {
                     focusGroup.zeroStuck = 0; focusGroup.zeroDetours += 1
-                    if let v = FocusGroup.detour(from: brain.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, fixed: { brain.fixed($0) }) { focusGroup.viaZero = v; focusGroup.viaZeroAt = focusGroup.clock; focusGroup.zeroBest = .infinity; queued = [.goTo(v)] }
+                    if let v = FocusGroup.detour(from: brain.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, soft: focusGroup.ids.filter { $0 != 0 }.map { focusGroup.spot(of: $0) }, fixed: { brain.fixed($0) }) { focusGroup.viaZero = v; focusGroup.viaZeroAt = focusGroup.clock; focusGroup.zeroBest = .infinity; queued = [.goTo(v)] }
                 }
             }
             focusReplan(dt: dt)
