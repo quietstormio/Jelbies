@@ -20,10 +20,10 @@ enum EmoteSpot {
     static let rugWeight: Float = 2.2
     static let rugReach: Float = 2.6
     /// A walk costs this per unit of its longest leg; a spot is taken only when it beats where the emote would have been by at least `margin`.
-    static let legCost: Float = 0.22
-    static let margin: Float = 0.7
+    static let legCost: Float = 0.4
+    static let margin: Float = 0.9
     /// Longest walk to a spot: solo, pair (each body), group (checked by the ring plan itself: GroupTuning.walkMax).
-    static let soloLeg: Float = 3.6, pairLeg: Float = 3.6
+    static let soloLeg: Float = 3.0, pairLeg: Float = 3.0
     /// How far apart the two bodies of a pair stand on the meeting spot.
     static let pairHalf: Float = 0.55
 
@@ -68,12 +68,12 @@ extension BlobBrain {
         script = .walk(target: t, then: .none); activity = .walking
     }
 
-    /// Best of up to 28 floor points for an emote centred there: within `maxLeg` of every body in `from`, the floor rules leave it alone, `ok` agrees. nil = none beats `here` by the margin.
+    /// Best of up to 40 floor points for an emote centred there: within `maxLeg` of every body in `from`, the floor rules leave it alone, `ok` agrees. nil = none beats `here` by the margin.
     func emoteBestSpot(from: [SIMD2<Float>], maxLeg: Float, here: SIMD2<Float>, ok: (SIMD2<Float>) -> Bool) -> SIMD2<Float>? {
         guard let rf = roamProvider?() else { return nil }
         let base = EmoteSpot.score(here)
         var best: (SIMD2<Float>, Float)?
-        for _ in 0..<28 {
+        for _ in 0..<40 {
             let c = rf.sampleArea(rand(), rand(), rand())
             guard rf.contains(c) else { continue }
             let leg = from.map { simd_distance($0, c) }.max() ?? 0
