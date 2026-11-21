@@ -110,7 +110,12 @@ nonisolated enum DiningLayout {
     /// toward the tray and the camera, and the third in the middle behind it facing the camera. `sideX` is then the end places' distance from the tray centre (set per sitting by `DiningGroup.start`,
     /// 1.3 / 1.2 / 1.12 as the floor allows); the middle one stays at z -1.07 (clears the rim by his real belly), the ends stand beside the tray, a little behind its centre line.
     nonisolated(unsafe) static var ends = false
-    static let endsZ: Float = -0.05, endsYaw: Float = .pi / 4
+    static let endsZ: Float = -0.05
+    static let homeEndsYaw: Float = .pi / 4
+    /// cafe-straw-r1 (the owner: "make them face each other on the ends to do the chatting"): the café turns its two end places this far toward each other across the table (about 69 degrees,
+    /// a face still shows to the camera); set under the white fade in and put back (`homeEndsYaw`) under the fade home.
+    static let cafeEndsYaw: Float = 1.2
+    nonisolated(unsafe) static var endsYaw: Float = homeEndsYaw
     /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): the end places of the ENDS layout stand at most this far from the tray centre
     /// (the sitting used 1.5 / 1.4 / 1.3 / 1.2 as the floor allowed: the nub, a stub, hung 0.8 m from the pieces). `-MealReach 0` = as before.
     nonisolated(unsafe) static var reachSideX: Float = (DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReachX") != nil) ? Float(UserDefaults.standard.double(forKey: "MealReachX")) : 1.25
@@ -774,6 +779,7 @@ nonisolated enum DiningModels {
     /// Centreline of place `i`'s straw in tray-local coordinates. One Blob: straight up out of the neck to 0.10 above the lip, ONE rounded elbow of
     /// 65 degrees from vertical, a short arm toward the place. N >= 2: see `strawLongPath`. The last point is the straw TIP (`DiningSet.strawTip`).
     static func strawPath(layout L0: TrayLayout, drink d: Consumable, place i: Int) -> [SIMD3<Float>] {
+        if let ps = d.placeStraw { return ps(L0, i) }          // (the café: a cup per place, its straw ends at his mouth)
         let L = cupShifted(L0, for: d)
         guard let cm = containerModel(d, layout: L) else { return [] }
         let s = L.scale
@@ -858,6 +864,8 @@ nonisolated enum DiningModels {
             f.serving?(fb, state, f.palette, L)
             append(fb.mesh, to: b, transform: matrix_identity_float4x4)
             // fork foods: NO fork on the tray; the fork poofs straight into his hand (DiningSet draws `fork(withBite:)` at the held pose)
+        } else if let ps = f.placeServing {
+            ps(b, state, f.palette, L)
         } else if let cm = containerModel(f, layout: L, fill: Float(state.totalLeft) / Float(DiningTiming.gulpsPerDrink * L.n)) {
             let s = L.scale, cup = cupShifted(L, for: f).drinkCentre          // the cup stands out to his right; the straw path shifts itself
             let m = translation(SIMD3(cup.x, DiningDims.trayTop, cup.y), scale: s)
