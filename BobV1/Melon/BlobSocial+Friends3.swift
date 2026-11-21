@@ -172,8 +172,8 @@ extension BlobBrain {
             }
         }
         let wiggle = giggle * sinf(2 * .pi * 5.5 * (t - 2.4))
-        socialBook.wantRoll += (whisperer ? 0.04 : 0.07) * wiggle * g
-        socialBook.wantSquash = 1 - 0.04 * giggle * abs(sinf(2 * .pi * 2.75 * (t - 2.4))) * g
+        socialBook.wantRoll += (whisperer ? 0.02 : 0.03) * wiggle * g          // (a bigger giggle wiggle slid the planted soles: 32 mm at 0.04 / 0.07 rad, the base whisper's 0.03 / 0.06 passed the feet test)
+        socialBook.wantSquash = 1 - 0.025 * giggle * abs(sinf(2 * .pi * 2.75 * (t - 2.4))) * g
         if isA {
             if !s.impacted, t >= 2.4 {
                 s.impacted = true
