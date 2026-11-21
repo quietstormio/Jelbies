@@ -291,7 +291,7 @@ extension GameCare {
         // to wipe `saved` in `begin` and leave them with autonomy off for good (2026-10-21: "the other ones are stuck"). Hand it back here first.
         for (id, a) in focusGroup.saved { brainFor(id)?.autonomy = a }
         focusGroup.rowSpacing = isPreview ? GameCamera.pickRowSpacing : GameCamera.focusRowSpacing
-        let others = (isPreview || !FocusGroup.sleeperFix) ? [] : (0..<jellies.count).filter { !ids.contains($0) }.compactMap { floorOf($0) }          // (the uncalled: asleep or not, the row is laid clear of them)
+        let others = (isPreview || !FocusGroup.sleeperFix) ? [] : (0..<jellies.count).filter { !ids.contains($0) && brainFor($0)?.isSleeping == true }.compactMap { floorOf($0) }          // (the uncalled who LIE: the row is laid clear of them; an awake one walks out of the camera's wedge by himself, `evictFromKeepOut`)
         focusGroup.begin(ids: ids, front: front, floors: Dictionary(uniqueKeysWithValues: ids.compactMap { id in floorOf(id).map { (id, $0) } }), avoiding: others, reachable: { p in ids.compactMap { self.brainFor($0) }.allSatisfy { simd_distance($0.fixed(p), p) < 0.12 } })
         if ids.count > 1 { for id in ids { if let b = brainFor(id) { focusGroup.gapSaved[id] = b.peerGap; b.peerGap = min(b.peerGap, FocusGroup.rowSteerGap) } } }
         focus.beginApproach()
