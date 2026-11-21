@@ -364,7 +364,7 @@ extension BlobBrain {
         if kind == .wander { idleState.cooldown = rand(IdleTuning.wanderPickWait.lowerBound, IdleTuning.wanderPickWait.upperBound) * idleLively * vJit(); return false }          // (was 5...9)
         if kind == .look { socialPrepareLook(sim) }          // sometimes at a nearby Jelly, who glances back
         if anticsEnabled, Self.fastKinds.contains(kind), fastOthers() >= 2 { idleState.cooldown = rand(1.2, 2.5); return false }          // at most two Jellies in fast moves at once
-        let started = idleStart(kind, sim)
+        let started = emoteSoloGate(kind, sim) || idleStart(kind, sim)          // (EmoteSpot.swift: a standing emote walks to a better spot first, then starts)
         if started, kind == .run || kind == .zoomies { zoomUrge = max(zoomUrge, rand(IdleTuning.zoomUrge.lowerBound, IdleTuning.zoomUrge.upperBound) * 0.6) }          // (a burst of energy just happened: the urge starts over)
         if started, anticsEnabled { kindCooldownStart(kind) }
         if started && kind == .zoomies { socialOfferZoomies(sim) }
@@ -388,7 +388,7 @@ extension BlobBrain {
         }
         var kind = w.last!.kind
         for e in w { if x < e.weight { kind = e.kind; break }; x -= e.weight }
-        let started = idleStart(kind, sim)
+        let started = emoteSoloGate(kind, sim) || idleStart(kind, sim)
         idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
         if started { kindCooldownStart(kind) }
         return started

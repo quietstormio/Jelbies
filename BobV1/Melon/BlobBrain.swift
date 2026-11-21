@@ -183,6 +183,8 @@ final class BlobBrain {
     /// The stage says this body lives in the HOME room right now and no meal, drink or bath is on (not on a trip, not at the park). It gates the 11-15 room round
     /// (RoomRoam.swift). Only the stage sets it, so the headless suites and every outing stay on the old paths.
     var homeRoom = false
+    /// Where emotes happen (EmoteSpot.swift): a solo emote waiting for its walk to the spot, and the walk time of the emote that just started.
+    var emoteSpot = EmoteSpotState()
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
     /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
@@ -915,6 +917,9 @@ final class BlobBrain {
         if reserved && !commanded { waitPose(sim); return }
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
+        if !emoteSpotLive || reserved { emoteSpot.soloKind = nil; emoteMeetEnd(); socialBook.meetHeldBy = -1 }          // (EmoteSpot.swift: a meal, a bath or the park drops what was waiting for a spot)
+        if emoteSoloArrived(sim) { return }          // (EmoteSpot.swift: he has walked to the spot of a solo emote)
+        if meetBusy { restTimer = 0.25; return }          // (EmoteSpot.swift: a pair is meeting on its spots)
         var pt = CACurrentMediaTime()
         if slideFootRetry() { return }          // (park-slide-r4: he stands on the slide's foot waiting for his leg to clear)
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
@@ -1006,7 +1011,8 @@ final class BlobBrain {
     /// before, a long leg, and away from the rug centre the longer he has just spent there (`centreDwell`; 2026-10-21 "they stay in the centre too much").
     func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRoamGoal", probe) }
-        let maxL = idleLegMax(maxWanderLeg)
+        var maxL = idleLegMax(maxWanderLeg)
+        if EmoteSpot.enabled, homeRoom { maxL = max(maxL, EmoteSpot.roamLegMin) }          // (EmoteSpot.swift: a grumpy walk may still cross to a spot the room has used little: the whole room)
         let lo: Float = zone != nil ? 2.5 : 1.5
         guard maxL > lo else { return nil }
         let others = socialOthers().filter { $0 !== self }
@@ -1036,12 +1042,13 @@ final class BlobBrain {
                 for s in spots where cand.y > s.y + 0.3 && abs(cand.x - s.x) < 1.3 && cand.y - s.y < 3.0 { hides = 1 }
             }
             var score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
+            if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) - EmoteSpot.roamCellWeight * EmoteSpot.roamOver(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
             if live { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= 6 { break }
         }
-        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; return b.0 }
+        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
     }
 

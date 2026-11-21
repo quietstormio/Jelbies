@@ -128,6 +128,10 @@ extension GameCamera {
     /// The roaming polygon of the current aspect (nil = the old fixed box).
     nonisolated(unsafe) static var roamFloor: RoamFloor?
     /// The front limit of a roaming centre: the polygon's, else the old `walkMaxZ`.
+    /// THE ONE SWITCH for the home-room HUD button cut-outs (the two button rails are cut out of the roam floor so no body stands under a button; Main added them 2026-10-22, the owner never asked for
+    /// them and 2026-11-20 asked for the whole room). false (default) = bodies may walk under the buttons; true = the cut-outs back. The Park's Go-home pill is cut out either way.
+    /// Dev capture: launch with `-HomeRails 1` to put the cut-outs back (DevArgs builds only).
+    nonisolated(unsafe) static var homeRailCutouts: Bool = DevArgs.enabled && UserDefaults.standard.object(forKey: "HomeRails") != nil && UserDefaults.standard.integer(forKey: "HomeRails") == 1
     static var roamMaxZ: Float { roamFloor?.maxZ ?? walkMaxZ }
     /// The back limit of a roaming centre: the polygon's (the pockets beside the sofa reach the back wall), else the old `walkMinZ`.
     static var roamMinZ: Float { roamFloor?.minZ ?? walkMinZ }
@@ -173,7 +177,7 @@ extension GameCamera {
         let maxZ = min(max(zb - roamBodyDepth, walkMaxZ), roamMaxZCap)
         let c = roamFurnitureClearance
         let cam = camera(aspect: aspect, gamePose: true)
-        let rails = (!play && (aspect < 1 || HUDLayout.phoneMeasured) ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
+        let rails = (!play && GameCamera.homeRailCutouts && (aspect < 1 || HUDLayout.phoneMeasured) ? HUDLayout.railRects(aspect: aspect) : []) + (parkRoamMaxZ != nil ? [HUDLayout.parkHomeRect(aspect: aspect)] : [])          // (portrait: keep bodies out from under the bottom-corner button rails)
         var minZ = max(RoomLayout.minZ + c, campCap?.minZ ?? -.infinity)          // (the Camp yard: the first row is no further back than the cap, Park/CampScenery.swift)
         if play {          // the back: the crown (and ears / antennas / hat) of a body standing at the row stays below the top margin of the screen (the Done pill lives there)
             let topY = playFrameTop * 1000, hgt = BobShape.H * 1.25

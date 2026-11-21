@@ -133,6 +133,9 @@ struct SocialBook {
     var pairRoll: Float = 0, pairRollLimit: Float = 10          // (SocialMoreTuning.swift: the extra pair roll)
     /// A wandering partner was asked to stop; the social starts when his leg is over (or is dropped after `inviteWait`).
     var invite: (kind: SocialKind, id: Int, t: Float)?
+    /// EmoteSpot.swift: the pair walks to its meeting spots first (`meet`, on the initiator), the partner waits on his (`meetHeldBy` = the initiator's id).
+    var meet: (kind: SocialKind, id: Int, t: Float)?
+    var meetHeldBy = -1
     /// Wake-up greeting: a Jelly in the room woke (`greetWho`); after `wakeGreet` seconds this one looks at him and hops (`greetHop`).
     var wakeGreet: Float = -1
     var greetWho = -1
@@ -296,7 +299,7 @@ extension BlobBrain {
     /// Out on an ordinary wander leg: autonomous, nothing owns him, no behaviour running. He can be invited to a social (his leg is ended at the next stretch of the walk).
     var socialWandering: Bool {
         guard social == nil, bubbleLeash == nil, socialBook.enabled, attached, autonomy || idleForced, !held, !commanded, pending == nil, job == nil, commandedIdle == nil,
-              !commandedFlip, !commandedNameHop, !interruptScript, !hurry, !race.active, idleState.kind == nil, activity == .walking, !onSlideFoot else { return false }
+              !commandedFlip, !commandedNameHop, !interruptScript, !hurry, !race.active, idleState.kind == nil, activity == .walking, !onSlideFoot, !meetBusy else { return false }
         if case .walk = script { return true }
         return false
     }
@@ -421,7 +424,7 @@ extension BlobBrain {
     func socialMaybeStart(_ sim: SoftBody) -> Bool {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("socialMaybeStart", probe) }
         guard socialBook.enabled, social == nil, socialBook.cooldown <= 0, socialFree, idleDeepNight < 0.5 else { return false }
-        if socialBook.invite != nil { return true }          // waiting for the invited partner's leg to end
+        if socialBook.invite != nil || socialBook.meet != nil || socialMeetHeld { return true }          // waiting for the invited partner's leg to end
         let ps = socialOthers().map { (id: $0.steerID, pos: $0.position, b: $0) }
         if ps.isEmpty { return false }
         // the social floor: nobody has had one for ~45 s and none is on now -> ask for one (never stacked on a running session)
@@ -429,7 +432,7 @@ extension BlobBrain {
         var cands: [(BlobBrain, Float)] = []
         for p in ps {
             let o = p.b
-            guard o.socialFree || (anticsEnabled && o.socialWandering), (socialBook.pair[p.id] ?? 0) <= 0, (o.socialBook.pair[steerID] ?? 0) <= 0, o.socialBook.cooldown <= 6 else { continue }
+            guard !o.meetBusy, o.socialFree || (anticsEnabled && o.socialWandering), (socialBook.pair[p.id] ?? 0) <= 0, (o.socialBook.pair[steerID] ?? 0) <= 0, o.socialBook.cooldown <= 6 else { continue }
             if HopscotchTuning.walled, hopCourtBetween(position, p.pos) { continue }          // (park-hopscotch-r1)
             let d = simd_distance(p.pos, position)
             if d > peerGap * 0.8 && d < 4.8 { cands.append((o, d)) }
@@ -437,6 +440,7 @@ extension BlobBrain {
         if cands.isEmpty { return false }
         guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) * parkSocialPickMul else { return false }
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
+        if emotePairDefer(with: o) { return false }          // (EmoteSpot.swift: they stand on a much-used spot: they roam on, the roll comes round again)
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         // 2026-11-06: boop 3 -> 1.5. The user: "they do the hand holding emote a little too much ... not as often" (the standing side-by-side hand-on-arm boop): halved, not replaced.
         var w: [(SocialKind, Float)] = [(.boop, 0.6), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]
@@ -454,6 +458,7 @@ extension BlobBrain {
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
         if anticsEnabled { socialBook.lastKind = kind }
         for (a, b) in [(self, o), (o, self)] { var r = a.socialBook.recentWith[b.steerID] ?? []; r.append(kind); a.socialBook.recentWith[b.steerID] = Array(r.suffix(3)) }
+        if emoteMeetPlan(kind, with: o) { varietyNoteSocial(kind, with: o); return true }          // (EmoteSpot.swift: both walk to a spot first, the pair starts there)
         if !o.socialFree {          // he is out on a wander leg: ask him to stop; the social starts when he has (socialInviteTick)
             guard o.socialBeckonStop() else { socialBook.cooldown = max(socialBook.cooldown, 3); return false }
             socialBook.invite = (kind, o.steerID, 0)
@@ -573,6 +578,7 @@ extension BlobBrain {
 
     /// Every tick (after the idle gate, before the scripts run): cooldowns, greeting watch, the running session, the overlay easing.
     func socialTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        if EmoteSpot.logOn { emoteSpotLog(dt) }
         let blocked = held || !autonomy
         if !blocked { socialBook.cooldown -= dt; socialBook.groupCool -= dt; socialBook.treatCool -= dt }
         if !socialBook.fiveCool.isEmpty { for k in socialBook.fiveCool.keys { socialBook.fiveCool[k]! -= dt } }
@@ -592,12 +598,13 @@ extension BlobBrain {
             contactApplyLean()
         } else {
             socialInviteTick(sim, dt)
+            socialMeetTick(sim, dt)
             contactGlowTick(dt)
             if social == nil { socialWakeGreetTick(sim, dt) }
             if social == nil { socialWatch(sim, dt) }
-            if social == nil { socialGroupWatch(sim, dt) }
-            if social == nil { socialTreatWatch(sim, dt) }
-            if social == nil { socialPairWatch(sim, dt) }
+            if social == nil, !meetBusy { socialGroupWatch(sim, dt) }
+            if social == nil, !meetBusy { socialTreatWatch(sim, dt) }
+            if social == nil, !meetBusy { socialPairWatch(sim, dt) }
         }
         socialHandsTick(sim, dt)
         // ease the overlays (exactly neutral when nothing asks for them)
@@ -615,6 +622,7 @@ extension BlobBrain {
     /// Hard stop of this brain's side (abortAll, touch, request): nothing of the social is left on him.
     func socialAbort(_ skinner: Skinner?) {
         socialBook.invite = nil; socialBook.wakeGreet = -1; socialBook.greetHop = false
+        emoteMeetEnd(); socialBook.meetHeldBy = -1
         guard social != nil || socialBook.hold || socialBook.pitch != 0 || socialBook.roll != 0 || socialBook.squash != 1 || socialBook.squinting else { return }
         if let s = social { s.finish(.aborted) }
         socialRelease(skinner, hard: true)

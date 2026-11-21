@@ -20,7 +20,7 @@ final class SpaceCheckTests: XCTestCase {
     override func setUp() { DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0 }
     override func tearDown() {
         DecorField.shared.clear(); ToyTuning.settle = 5
-        GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0)
+        GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0); GameCamera.homeRailCutouts = false; EmoteSpot.enabled = true
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero
         SocialTests.keep.removeAll()
@@ -45,6 +45,7 @@ final class SpaceCheckTests: XCTestCase {
         let seeds = (env["SPACE_SEEDS"] ?? "1,2,3").split(separator: ",").compactMap { UInt64($0) }
         let orients = (env["SPACE_ORIENT"] ?? "p,l").split(separator: ",").map(String.init)
         let minutes = Double(env["SPACE_MIN"] ?? "30") ?? 30
+        GameCamera.homeRailCutouts = env["SPACE_RAILS"] == "1"          // (SPACE_RAILS=1: the home-room button cut-outs on; default off)
         for o in orients {
             let aspect = o == "p" ? Self.portrait : Self.landscape
             for seed in seeds { try runCase(home: n, orient: o, aspect: aspect, seed: seed, minutes: minutes) }
@@ -88,8 +89,9 @@ final class SpaceCheckTests: XCTestCase {
     }
 
     private func runCase(home n: Int, orient: String, aspect: Float, seed: UInt64, minutes: Double) throws {
-        let name = (n == 0 ? "park" : "home\(n)") + "_" + orient + (low ? "_low" : "")
+        let name = (n == 0 ? "park" : "home\(n)") + "_" + orient + (low ? "_low" : "") + (env["SPACE_RAILS"] == "1" ? "_rails" : "")
         DayClock.shared.forcedHour = low ? 19 : 12
+        EmoteSpot.reset(); EmoteSpot.enabled = env["SPACE_SPOT"] != "0"
         let (rf, bodies, spots) = setup(home: n, aspect: aspect)
         if seed == (env["SPACE_SEEDS"].flatMap { $0.split(separator: ",").compactMap { UInt64($0) }.first } ?? 1) { try writeGeometry(name: name, rf: rf, aspect: aspect, home: n) }
         let lab = SocialTests.Lab(n: bodies, positions: spots, quiet: false, seed: seed &* 1009 &+ UInt64(n) &* 17)
@@ -105,20 +107,26 @@ final class SpaceCheckTests: XCTestCase {
         }
         let steps = Int(minutes * 60 * 60)
         var csv = "t,id,x,z,state\n"
-        var emotes = "t,id,x,z,class,kind\n"
+        var emotes = "t,id,x,z,class,kind,walk\n"
         var prevKind = [String](repeating: "", count: bodies)
         var seen = Set<ObjectIdentifier>()
+        var arrived = Set<ObjectIdentifier>(); var began = [ObjectIdentifier: Double](); var preWalk = [ObjectIdentifier: Float]()
+        var arrive = "t,kind,group,walk\n"
         let t0 = Date()
         for s in 0..<steps {
             lab.tick(watching: false)
             // sessions: record the session's own spot once
             for r in lab.rigs { if let sess = r.brain.social, true, !seen.contains(ObjectIdentifier(sess)) {
-                seen.insert(ObjectIdentifier(sess))
+                seen.insert(ObjectIdentifier(sess)); began[ObjectIdentifier(sess)] = Double(s) / 60
+                var pre: Float = 0; for r2 in lab.rigs where r2.brain.social === sess { pre = max(pre, r2.brain.emoteSpot.walked); r2.brain.emoteSpot.walked = 0 }; preWalk[ObjectIdentifier(sess)] = pre
                 let t = Double(s) / 60
                 var spot: SIMD2<Float>
                 if sess.kind.isGroup, !sess.slotSpot.isEmpty { spot = sess.slotSpot.values.reduce(SIMD2<Float>(0, 0), +) / Float(sess.slotSpot.count) }
                 else { let ps = lab.rigs.filter { $0.brain.social === sess }.map { GameCare.floorPos($0.brain, $0.sim) }; spot = ps.reduce(SIMD2<Float>(0, 0), +) / Float(max(ps.count, 1)) }
-                emotes += String(format: "%.2f,%d,%.3f,%.3f,%@,%@\n", t, -1, spot.x, spot.y, sess.kind.isGroup ? "group" : "pair", sess.kind.rawValue)
+                emotes += String(format: "%.2f,%d,%.3f,%.3f,%@,%@,0\n", t, -1, spot.x, spot.y, sess.kind.isGroup ? "group" : "pair", sess.kind.rawValue)
+            } }
+            for r in lab.rigs { if let sess = r.brain.social, sess.phase >= 1, !arrived.contains(ObjectIdentifier(sess)), let b0 = began[ObjectIdentifier(sess)] {
+                arrived.insert(ObjectIdentifier(sess)); arrive += String(format: "%.2f,%@,%d,%.2f\n", b0, sess.kind.rawValue, sess.kind.isGroup ? 1 : 0, Double(s) / 60 - b0 + Double(preWalk[ObjectIdentifier(sess)] ?? 0))
             } }
             if s % 6 == 0 {
                 let t = Double(s) / 60
@@ -126,7 +134,7 @@ final class SpaceCheckTests: XCTestCase {
                     let p = GameCare.floorPos(r.brain, r.sim)
                     let st = stateOf(r.brain)
                     csv += String(format: "%.1f,%d,%.3f,%.3f,%@\n", t, i, p.x, p.y, st)
-                    if st.hasPrefix("solo:"), prevKind[i] != st { emotes += String(format: "%.2f,%d,%.3f,%.3f,solo,%@\n", t, i, p.x, p.y, String(st.dropFirst(5))) }
+                    if st.hasPrefix("solo:"), prevKind[i] != st { emotes += String(format: "%.2f,%d,%.3f,%.3f,solo,%@,%.2f\n", t, i, p.x, p.y, String(st.dropFirst(5)), r.brain.emoteSpot.walked); r.brain.emoteSpot.walked = 0 }
                     prevKind[i] = st
                 }
             }
@@ -139,6 +147,7 @@ final class SpaceCheckTests: XCTestCase {
         print("[space] " + meta)
         try csv.write(toFile: "\(dir)/\(name)_s\(seed).csv", atomically: true, encoding: .utf8)
         try emotes.write(toFile: "\(dir)/\(name)_s\(seed)_emotes.csv", atomically: true, encoding: .utf8)
+        try arrive.write(toFile: "\(dir)/\(name)_s\(seed)_arrive.csv", atomically: true, encoding: .utf8)
         try meta.write(toFile: "\(dir)/\(name)_s\(seed).meta.txt", atomically: true, encoding: .utf8)
         RoomTraffic.counts = [0, 0, 0, 0, 0, 0]
         SocialTests.keep.removeAll()
