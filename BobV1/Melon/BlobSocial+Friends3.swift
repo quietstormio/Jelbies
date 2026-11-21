@@ -152,7 +152,7 @@ extension BlobBrain {
         if openSideBySide(s, o, isA, settle: 0.65) { return }
         let t = s.phaseT, g = socialGentle
         let inward: Float = rotXZ(o.position - position, -faceCameraYaw()).x >= 0 ? 1 : -1
-        let turned = faceCameraYaw() + inward * WhisperTuning.turnIn * smooth01(t / 0.4)
+        let turned = faceCameraYaw() + inward * WhisperTuning.turnIn          // (one target, not a ramp: a body that is turned a little every tick slides its planted soles; a single target is a proper turn step)
         if scriptIsNone { holdFacing(turned) }
         let whisp = smooth01((t - 0.2) / 0.5) * (1 - smooth01((t - 1.9) / 0.4))
         let giggle = smooth01((t - 2.4) / 0.2) * (1 - smooth01((t - 4.3) / 0.5))
