@@ -298,10 +298,11 @@ struct DecorFoot: Equatable, Sendable {
     func local(_ v: SIMD2<Float>) -> SIMD2<Float> { DecorPlacement.turn(v, (4 - quarter) & 3) }
     var radius: Float { spec.radius }
     var box: RoomLayout.FlatBox {
-        var c = centre, h = spec.half
+        let sp = spec          // (once: `box` is read every step by every body's footprint tests)
+        var c = centre, h = sp.half
         // park-hopscotch-r1: while a game is on the wall runs out west to the floor's edge (the strip beside the court is narrower than a body: a dead end)
         if kind == .hopscotch, quarter == 0, HopscotchTuning.walled { c.x -= HopscotchTuning.westExtend / 2; h.x += HopscotchTuning.westExtend / 2 }
-        return .init(centre: c, half: h, height: spec.height + lift, radius: min(spec.corner, min(spec.half.x, spec.half.y)))
+        return .init(centre: c, half: h, height: sp.height + lift, radius: min(sp.corner, min(sp.half.x, sp.half.y)))
     }
     /// Distance from `p` to the edge of the footprint (negative inside).
     func distance(_ p: SIMD2<Float>) -> Float { RoomLayout.boxDistanceXZ(p, box) }
