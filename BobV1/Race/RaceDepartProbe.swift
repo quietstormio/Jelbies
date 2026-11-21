@@ -57,6 +57,9 @@ extension GameCare {
                 store.grant("decor-ball"); _ = store.place("decor-ball"); syncDecor()
             }
             if free(b1) { _ = b1.startCommandedDecor(.decorKick, only: .ball, actors[1].sim, actors[1].skinner) }
+        case "bobhome":          // Bob stays home doing a solo emote (somebody else races: UI test env RACEDEP_RACER=1)
+            if let b0 = actors[0].brain, free(b0) { b0.idleBegin(.bounce) }
+            if free(b1) { b1.idleBegin(.jacks) }
         case "asleep":          // housemate #1 goes to bed (the bedtime command) and stays there; #2 carries on as he likes
             if !b1.isSleeping, b1.social == nil, !b1.commandedGoodnight { b1.commandedGoodnight = true }
         default: break

@@ -443,7 +443,7 @@ extension GameCare {
         greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 && selectBrain($0)?.isSleeping != true })          // (race-depart-r2: a housemate who slept through the race sleeps on; the greeting is for the ones who are up)
         greetOthers = [:]
         bubbleHub.greetClock = 0; bubbleHub.greetHearts = [:]
-        if id != 0 {                               // Bob is one of the greeters: the usual come-to-front walk, then his hop and hearts
+        if id != 0, selectBrain(0)?.isSleeping != true {                               // Bob is one of the greeters: the usual come-to-front walk, then his hop and hearts (a sleeping Bob sleeps on)
             greeting = true; greetHop = false
             queued = [.come(to: greetSpotNow(0))]
         }
