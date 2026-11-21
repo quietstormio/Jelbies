@@ -223,7 +223,7 @@ final class FocusGroup {
             }
             if let b = best { return [b.0] }
             // two corners (along the back wall, then up the side): both legs and the last one clear (not through a gap tighter than `twoCornerMin`: walkers are pushed off those)
-            guard clr >= (soft.isEmpty ? 1.7 : twoCornerMin) else { continue }          // (one called body: corners only with 1.7 clear, a tighter one pinned him in r2's trials; a row: 1.3)
+            guard clr >= twoCornerMin, !soft.isEmpty else { continue }          // (a row only: for one called body the corner walks pinned him at ~1.5 from the lying body, 10 of 20 against 5 without them)
             var cand: [SIMD2<Float>] = []
             var cx: Float = -2.2
             while cx <= 2.2001 {
