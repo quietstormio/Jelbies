@@ -142,6 +142,8 @@ final class ShowFlow {
     /// The rivals' turn on the stage (bodies) and whether a body has got where it was sent (`who` nil = the player's Jelbie; `atCentre`: at the middle, else at his rest / aside spot).
     @ObservationIgnored var onRival: (RivalCue) -> Void = { _ in }
     @ObservationIgnored var rivalReady: (_ who: Int?, _ atCentre: Bool) -> Bool = { _, _ in true }
+    /// The walk to the middle has used up its own allowance (its length at the stage pace + 1.5 s, counted on the body by the glue): the turn goes on with her where she stands.
+    @ObservationIgnored var rivalGiveUp: (_ who: Int?) -> Bool = { _ in false }
     /// Money (the care glue sets it).
     @ObservationIgnored var wallet: DropsWallet?
     @ObservationIgnored var cue: (ShowCue) -> Void = { AudioHub.shared.showCue($0) }
@@ -183,6 +185,18 @@ final class ShowFlow {
     /// The foot buttons are live.
     var buttonsLive: Bool { phase == .stage && beat == .dancing && wipe == 0 && !(sim?.danceDone ?? false) }
     var hasResults: Bool { sim?.round == .results && trickStage == .pick }
+    /// Is turn `k` (0...2) of the Trick round the one being played right now, by anyone: his go, his result showing, the entrant on stage, or (the last entrant back) his next go.
+    /// The ONE source for the turn pills and the header pips (the pips never keep a counter of their own).
+    func isTrickTurnNow(_ k: Int) -> Bool {
+        guard let s = sim, k >= 0, k < 3 else { return false }
+        let done = s.turns.count
+        let playerBack = trickStage == .rivals && rivalStep == .playerBack
+        let entrantNow = trickStage == .rivals && rivalRound == k && !playerBack
+        let nextGo = playerBack && k == rivalRound + 1
+        return entrantNow || nextGo || (trickStage == .performing && k == done - 1) || (trickStage == .pick && !s.tricksDone && k == done)
+    }
+    /// The turn being played now (0...2), nil when none is (the round is over, or a pause between turns).
+    var trickTurnNow: Int? { (0..<3).first { isTrickTurnNow($0) } }
     /// The rival under the lights and what she shows this turn (her name, trick, stars and points come from this).
     var rivalNow: (rival: Int, turn: ShowTrickTurn)? {
         guard trickStage == .rivals, let i = rivalTurn, let s = sim, s.rivalTurns.indices.contains(i), s.rivalTurns[i].indices.contains(rivalRound) else { return nil }
@@ -505,7 +519,7 @@ final class ShowFlow {
             if let t = entrancePick { entrancePick = nil; pick(t) }
         }
     }
-    static let entranceMin: Float = 1.2, entranceMax: Float = 4.5
+    static let entranceMin: Float = 1.2, entranceMax: Float = 5.5
 
     // MARK: the rivals' turns
 
@@ -542,7 +556,7 @@ final class ShowFlow {
             guard rivalT >= 0.3, rivalReady(nil, false) || rivalT > 0.9 else { return }
             nextRival()
         case .walkIn:
-            guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalT > 3.5 else { return }
+            guard let i = rivalTurn, rivalT >= 0.3, rivalReady(i, true) || rivalGiveUp(i) || rivalT > Self.walkInCap else { return }          // (the turn WAITS for her to arrive: no teleport; past the cap she performs where she stands)
             startRivalPerform(i)
         case .perform:
             guard let i = rivalTurn, rivalT >= Self.rivalSeconds(rivalNow?.turn.trick ?? .sit) else { return }
@@ -551,10 +565,16 @@ final class ShowFlow {
             guard rivalT >= 0.25, rivalT >= 0.55 || (rivalTurn.map { rivalReady($0, false) } ?? true) else { return }          // (the next entrant sets off while she is still stepping back: they leave and arrive on opposite sides)
             nextRival()
         case .playerBack:
-            guard rivalT >= 0.3, rivalReady(nil, true) || rivalT > 3 else { return }
+            guard rivalT >= 0.3, rivalReady(nil, true) || rivalGiveUp(nil) || rivalT > Self.playerBackCap else { return }
             endRivals()
         }
     }
+    /// How long the turn waits for an entrant to reach the middle (was 3.5 s, and she was put there when it ran out), and for his Jelmiko to come back (was 3 s): 2.5 s more each.
+    static let walkInCap: Float = 15.0, playerBackCap: Float = 15.0          // (hard ceilings only: each walk has its own allowance, `rivalGiveUp`)
+    /// The entrant who is up after the one performing now (for the glue to start a far one walking early), nil at the end of the turn.
+    var nextRivalUp: Int? { rivalQueue.first }
+    /// The spotlight's state changed: the screens redraw (the light layer subscribes to `revision`).
+    func nudge() { revision += 1 }
     static func rivalSeconds(_ t: VoiceTrick) -> Float { min(ShowTrickInfo.seconds(t), rivalPerformCap) }
     private func startRivalPerform(_ i: Int) {
         guard let n = rivalNow else { return }

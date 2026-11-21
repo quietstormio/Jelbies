@@ -75,11 +75,13 @@ struct MainMenuView: View {
     @State private var loading = false          // Continue / New Game tapped: the spinner replaces the buttons until the screen is swapped
     private var theme = ThemeStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.verticalSizeClass) private var vsc          // .compact = iPhone on its side
     private var still: Bool { reduceMotion || A11ySettings.shared.reduceMotion }
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width, h = geo.size.height
+            if vsc == .compact && w > h { compactLandscape(geo) } else {
             let m = MenuMetrics(w: w, h: h, hasSave: hasSave)
             ZStack {
                 TitleBackdrop(still: still, size: geo.size, landscape: w > h, palette: theme.palette, scale: m.s, faceScale: m.faceScale, faceTop: m.faceTop)
@@ -94,6 +96,7 @@ struct MainMenuView: View {
                 if confirmNew { confirmCard.transition(.opacity) }
             }
             .frame(width: w, height: h)
+            }
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.2), value: confirmNew)
@@ -108,6 +111,40 @@ struct MainMenuView: View {
             #endif
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("main-menu")
+    }
+
+
+    /// iPhone landscape (compact height): a left / right split. The logo and the buttons stack on the left inside the safe area, the Jelmiko peeks on the right
+    /// with its brows and eyes clear of the buttons. (Portrait, iPad and every other size use the composition above.)
+    private func compactLandscape(_ geo: GeometryProxy) -> some View {
+        let w = geo.size.width, h = geo.size.height
+        let ins = geo.safeAreaInsets
+        let left = max(ins.leading, 20) + 8, right = max(ins.trailing, 20) + 8
+        let top = max(ins.top, 12) + 6, bottom = max(ins.bottom, 12) + 6
+        let colRight = 0.56 * w
+        let colW = max(200, colRight - left), colH = h - top - bottom
+        let btnUnits: CGFloat = hasSave ? 170 : 82, gap: CGFloat = 8
+        let k = max(MenuMetrics.minScale, min(0.85, (colH - gap) * 0.36 / btnUnits))          // the pills take ~ a third of the column
+        let titleH = colH - btnUnits * k - gap
+        let tw = max(120, min(colW, titleH / 0.5158, 0.5 * w))
+        let eyesY = 0.80 * h
+        let zoneL = colRight + 8, zoneR = w - right
+        let sf = max(1.6, min(3.0, (zoneR - zoneL) / 2 / 69))
+        let mascotX = (zoneL + zoneR) / 2
+        return ZStack {
+            TitleBackdrop(still: still, size: geo.size, landscape: true, palette: theme.palette, scale: 1, faceScale: sf, faceTop: eyesY - 51.5 * sf, faceX: mascotX)
+                .id(theme.palette.id).transition(.opacity)
+            VStack(spacing: gap) {
+                title(width: tw)
+                buttons(k: k).frame(width: min(colW, 0.8 * tw))
+                    .opacity(loading ? 0 : 1).disabled(loading)
+                    .overlay { if loading { ThemedSpinner(palette: theme.palette).transition(.identity) } }
+            }
+            .frame(width: colW, height: colH)
+            .position(x: left + colW / 2, y: top + colH / 2)
+            if confirmNew { confirmCard.transition(.opacity) }
+        }
+        .frame(width: w, height: h)
     }
 
     /// Show the spinner first, let it commit (the room build after Continue runs on the main thread and would otherwise freeze the menu before the spinner is drawn), then go.
@@ -240,6 +277,8 @@ struct TitleBackdrop: View {
     var scale: CGFloat? = nil
     var faceScale: CGFloat? = nil
     var faceTop: CGFloat? = nil
+    /// Where the face is centred across (nil = the middle: every layout but iPhone landscape).
+    var faceX: CGFloat? = nil
     /// false = just the colour and the pattern (the loading screen).
     var extras = true
 
@@ -315,9 +354,9 @@ struct TitleBackdrop: View {
                 // Sparkles (positions are fractions of the 440x956 design)
                 let tw = still ? 1.0 : 0.65 + 0.35 * cos(t * 2 * .pi / 2.4)
                 let ds = Double(scale ?? w / 440)
-                // iPad-sized windows: this canvas is taller than the screen (it shares a ZStack with the oversized pattern layer, margin 2 x 72 x short/440 on
+                // iPad-sized windows (and the iPhone-landscape split, which gives an absolute `faceX`): this canvas is taller than the screen (it shares a ZStack with the oversized pattern layer, margin 2 x 72 x short/440 on
                 // every side) and so starts that far above it; move the drawing back by the margin so the face lands where MenuMetrics put it. iPhone: unchanged.
-                let padShift = (faceTop != nil && min(size.width, size.height) > 600) ? Double(2 * 72 * min(size.width, size.height) / 440) : 0
+                let padShift = (faceTop != nil && (min(size.width, size.height) > 600 || faceX != nil)) ? Double(2 * 72 * min(size.width, size.height) / 440) : 0
                 var sc = ctx
                 sc.opacity = tw
                 for (x, y, r) in [(52.0, 157.5, 7.5), (398.0, 337.5, 7.5), (380.0, 133.0, 5.0)] {
@@ -325,7 +364,7 @@ struct TitleBackdrop: View {
                 }
                 // Peeking Jelbie
                 let scale = Double(faceScale ?? CGFloat(4.8 * ds))      // zoomed in: just the head dome, brows and eyes
-                let cx = w / 2
+                let cx = faceX.map { Double($0) + padShift } ?? w / 2
                 let bob = still ? 0 : -10 * ds * (0.5 - 0.5 * cos(t * 2 * .pi / 3.2))
                 let cy = (faceTop.map { Double($0) + 65.5 * scale } ?? 0.91 * h + 14 * scale) + bob + padShift                            // eyes sit ~9% of the screen above the bottom
                 var jc = ctx

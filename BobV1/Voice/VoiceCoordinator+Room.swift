@@ -5,6 +5,7 @@
 //
 
 import Foundation
+import AVFoundation
 
 extension VoiceCoordinator {
     /// A listen-session id unique across EVERY book (each Jelbie keeps its own book, so a per-book counter could repeat another book's id).
@@ -44,5 +45,17 @@ extension VoiceCoordinator {
         }
         recordParseRoom()
         return true
+    }
+}
+
+extension VoiceCoordinator {
+    /// Why a press made right now would be refused by `begin()` (the bench prints it on a dropped press; "none" = it would open).
+    var traceDropReason: String {
+        var r: [String] = []
+        if mode.phase != .idle { r.append("phase=\(mode.phase)") }
+        if stopping { r.append("stopping") }
+        if micUnusable { r.append("micUnusable") }
+        if input is DictationSpeechInput && AVAudioApplication.shared.recordPermission == .undetermined { r.append("explainer") }
+        return r.isEmpty ? "none" : r.joined(separator: ",")
     }
 }

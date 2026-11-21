@@ -681,9 +681,26 @@ final class BubbleWand: PlayToy {
               let front = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yBot), size: size),
               let l = GameCamera.floorPoint(screen: CGPoint(x: size.width * xl, y: size.height * yBot), size: size),
               let r = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) else { return nil }
-        let hx = max(min(abs(l.x), abs(r.x)) - 0.8, 1.2)          // (a body's half width inside the near edge)
+        var hx = max(min(abs(l.x), abs(r.x)) - 0.8, 1.2)          // (a body's half width inside the near edge)
         var zHi = min(front.y, GameCamera.roamMaxZ - 0.1)
         var zLo = max(back.y, GameCamera.parkRoamMaxZ != nil ? GameCamera.roamRect.min.y : RoomLayout.minZ + 1.6)          // (the park: its roam rect's back edge)
+        if GameCamera.playFrame, !PlayTuning.old, let rf = GameCamera.roamFloor {          // play-frame-r1: never outside the floor the play camera shows (whole bodies in frame)
+            zLo = max(zLo, rf.minZ); zHi = min(zHi, rf.maxZ)
+            hx = min(hx, max(min(rf.halfWidth(at: zLo), rf.halfWidth(at: zHi)), 0.6))
+            // ... and no bigger than the area the old play view gave them, so the pop rate stays (a wider view must not scatter three Jelmiko over twice the floor)
+            if PlayTuning.camZoom < 1 {
+                let zoom = PlayTuning.zoomOverride; defer { PlayTuning.zoomOverride = zoom }
+                PlayTuning.zoomOverride = 1
+                if let b = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yTop), size: size),
+                   let f = GameCamera.floorPoint(screen: CGPoint(x: size.width * 0.5, y: size.height * yBot), size: size),
+                   let ol = GameCamera.floorPoint(screen: CGPoint(x: size.width * xl, y: size.height * yBot), size: size),
+                   let orr = GameCamera.floorPoint(screen: CGPoint(x: size.width * xr, y: size.height * yBot), size: size) {
+                    let oldHx = max(min(abs(ol.x), abs(orr.x)) - 0.8, 1.2), oldSpan = max(f.y - b.y, 1.6)
+                    hx = min(hx, oldHx * PlayTuning.wandSpreadK)
+                    zLo = max(zLo, zHi - oldSpan * PlayTuning.wandDepthK)
+                }
+            }
+        }
         if zHi - zLo < 1.6 { zLo = zHi - 1.6 }
         zHi = max(zHi, zLo + 0.5)
         areaCache = (size, SIMD2(-hx, zLo), SIMD2(hx, zHi))

@@ -147,12 +147,13 @@ nonisolated enum CafeTuning {
 
 /// Why the café cannot be entered right now (a friendly line for the toast).
 nonisolated enum CafeBlock: String, Sendable {
-    case night, sleeping, competition, bath, focus, meal, arranging, moving, listening, noDrops, busy
+    case night, sleeping, waking, competition, bath, focus, meal, arranging, moving, listening, noDrops, busy
 
     var message: String {
         switch self {
         case .night: return "The café is closed at night. Come back in the morning!"
         case .sleeping: return "Shh, someone is napping."
+        case .waking: return "Waking everybody up."
         case .competition: return "Wait until the competition is over."
         case .bath: return "Finish the Clean first."
         case .focus: return "Let go of the close-up first."

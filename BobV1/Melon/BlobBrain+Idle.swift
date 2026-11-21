@@ -29,7 +29,7 @@ typealias IdleMood = BlobMood
 enum IdleTuning {
     static let okayZoomies: Float = 2.8, okayRun: Float = 3.4          // (2026-10-20, "too bland": was 0.8 / 0.6)
     /// Seconds between forced zoomies / runs while awake in the daytime and not grumpy (a visible burst every few minutes). Vars so the suites can shorten it.
-    nonisolated(unsafe) static var zoomUrge: ClosedRange<Float> = 70...110
+    nonisolated(unsafe) static var zoomUrge: ClosedRange<Float> = 30...55
     /// Seconds between the solo emotes (the treat slot, 2026-11-02): about one per 3 minutes per Jelbie.
     /// 2026-11-06 "play more often": 200...380 s divided by `treatSpeedUp` (the solo emotes carry vocals: hic, achoo, spin-hug, star-sigh...). A test sets the old range for its "before".
     static let treatSpeedUp: Float = 1.3
@@ -112,7 +112,7 @@ enum IdleKind: String, CaseIterable, Sendable {
 enum IdleTable {
     static func weights(_ m: IdleMood) -> [(kind: IdleKind, weight: Float)] {
         switch m {
-        case .happy: return [(.run, 3.0), (.jacks, 3), (.zoomies, 3.0), (.slide, 1.4), (.scoot, 1.6), (.look, 0.8), (.joy, 3), (.wander, 2)]
+        case .happy: return [(.run, 4.5), (.jacks, 3), (.zoomies, 5.0), (.slide, 1.4), (.scoot, 1.6), (.look, 0.8), (.joy, 3), (.wander, 2)]
         case .okay: return [(.sit, 1.5), (.look, 2), (.yawn, 0.8), (.joy, 0.8), (.scoot, 0.8), (.zoomies, IdleTuning.okayZoomies), (.run, IdleTuning.okayRun), (.wander, 2)]          // (zoomies + runs in okay too: the happy table alone almost never came up)
         case .grumpy: return [(.slump, 3), (.wander, 2)]
         }
@@ -165,17 +165,11 @@ enum IdleTable {
     static func set(_ m: IdleMood) -> Set<IdleKind> { Set(weights(m).map { $0.kind }.filter { $0 != .wander }) }
     /// Weighted pick, never `last`. `r` in 0..<1.
     static func pick(_ m: IdleMood, last: IdleKind?, r: Float, night: Float = 0, morning: Float = 0, sleep: Bool = false, antics: Bool = false, music: Bool = false,
-                     cooling: Set<IdleKind> = [], anticMul: Float = 1, decor: Set<IdleKind> = [], recent: Set<IdleKind> = [], scale: ((IdleKind) -> Float)? = nil, family: VarietyFamily? = nil, extra: ((IdleKind) -> Float)? = nil) -> IdleKind {
+                     cooling: Set<IdleKind> = [], anticMul: Float = 1, decor: Set<IdleKind> = [], recent: Set<IdleKind> = [], scale: ((IdleKind) -> Float)? = nil, family: VarietyFamily? = nil) -> IdleKind {
         // never the same special twice in a row (unless the mood has only one), and none that is still on its own cooldown
         var w = weights(m, night: night, morning: morning, sleep: sleep, antics: antics, music: music, anticMul: anticMul, decor: decor).filter { $0.kind != last || $0.kind == .wander || set(m).count < 2 }
         if let family { let f = w.filter { BlobBrain.varietyFamily($0.kind) == family }; if !f.isEmpty { w = f } }          // (the shuffle-bag's family, when the table has one)
         if let scale { for i in w.indices { w[i].weight *= scale(w[i].kind) } }
-        if let extra {          // (cluster / room memory: the specials trade shares among themselves; the non-wander mass stays, so nothing leaks into wander = no start)
-            let before = w.reduce(0) { $0 + ($1.kind == .wander ? 0 : $1.weight) }
-            for i in w.indices where w[i].kind != .wander { w[i].weight *= extra(w[i].kind) }
-            let after = w.reduce(0) { $0 + ($1.kind == .wander ? 0 : $1.weight) }
-            if before > 0, after > 1e-6 { let g = min(4, before / after); for i in w.indices where w[i].kind != .wander { w[i].weight *= g } }
-        }
         if !cooling.isEmpty { let f = w.filter { !cooling.contains($0.kind) }; if !f.isEmpty { w = f } }
         if !recent.isEmpty { let f = w.filter { $0.kind == .wander || !recent.contains($0.kind) }; if f.contains(where: { $0.kind != .wander }) { w = f } }          // (his own last three picks stay out while there is anything else)
         let total = w.reduce(0) { $0 + $1.weight }
@@ -330,15 +324,7 @@ extension BlobBrain {
         if (sleepEnabled || anticsEnabled), runMoveDemo == nil, zoomUrge <= 0, idleMood != .grumpy, idleNight < 0.5, idleDeepNight < 0.5, !race.active, fastOthers() < 2 {
             let ur = rand()
             var k: IdleKind = ur < 0.5 ? .zoomies : (ur < 0.85 ? .run : .slide)
-            if anticsEnabled {          // (the room: his own last three picks and what a friend just did stay out while anything else is free; a dash the room showed lately is less likely)
-                let base: [(IdleKind, Float)] = [(.zoomies, 0.5), (.run, 0.35), (.slide, 0.15)]
-                let cand = base.map { ($0.0, $0.1 * varietyNewScale($0.0)) }
-                let free = cand.filter { !idleState.recent.contains($0.0) && !kindCooling.contains($0.0) }
-                let pool = free.isEmpty ? cand : free
-                var x = ur * pool.reduce(0) { $0 + $1.1 }
-                k = pool.last!.0
-                for (kk, ww) in pool { if x < ww { k = kk; break }; x -= ww }
-            } else if idleState.recent.contains(k) || kindCooling.contains(k), let alt = [IdleKind.zoomies, .run, .slide].first(where: { !idleState.recent.contains($0) && !kindCooling.contains($0) }) { k = alt }          // (not his own last pick again, nor what a friend just did)
+            if idleState.recent.contains(k) || kindCooling.contains(k), let alt = [IdleKind.zoomies, .run, .slide].first(where: { !idleState.recent.contains($0) && !kindCooling.contains($0) }) { k = alt }          // (not his own last pick again, nor what a friend just did)
             let blockedByFriend = anticsEnabled && kindCooling.contains(k)          // (no dash is free: a friend is in one right now - wait a moment, never start the same moment's twin)
             let started = !blockedByFriend && idleStart(k, sim)
             zoomUrge = started ? rand(IdleTuning.zoomUrge.lowerBound, IdleTuning.zoomUrge.upperBound) : (blockedByFriend ? rand(1.5, 3) : 20)
@@ -367,10 +353,9 @@ extension BlobBrain {
             vFamily = f
         }
         var kind = runMoveDemo ?? IdleTable.pick(idleMood, last: idleState.last, r: rand(), night: idleNight, morning: idleMorning, sleep: sleepEnabled, antics: anticsEnabled, music: musicPlaying,
-                                                 cooling: anticsEnabled ? kindCooling : [], anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
+                                                 cooling: (anticsEnabled ? kindCooling : []).union(bedtimeUnderway ? [.yawn] : []), anticMul: perkFlags.bouncy ? PerkTuning.anticBoost : 1,
                                                  decor: decorOffers, recent: anticsEnabled ? Set(idleState.recent) : [],
-                                                 scale: anticsEnabled ? { [unowned self] in self.varietyScale($0) } : nil, family: vFamily,
-                                                 extra: anticsEnabled ? { [unowned self] in self.varietyNewScale($0) } : nil)
+                                                 scale: anticsEnabled ? { [unowned self] in self.varietyScale($0) } : nil, family: vFamily)
         if sleepEnabled, runMoveDemo == nil, kind != .wander, kind != .sleep, idleNight < 0.2, rand() < 0.012 { kind = .sleep }       // a daytime nap now and then
         if varietyPeerJustStarted(kind) { kind = .wander }          // (never two of the same special within 10 s)
         if kind == .wander, RoamVoiceBoost.enabled, !voiceMuted, AudioHub.shared.atHome, let c = JellyVoiceSet.contextVoice(forIdle: .wander, mood: idleMood) {          // (2026-11-09: a walking Jelbie hums along: lala / pfft, home only)
@@ -379,7 +364,7 @@ extension BlobBrain {
         if kind == .wander { idleState.cooldown = rand(IdleTuning.wanderPickWait.lowerBound, IdleTuning.wanderPickWait.upperBound) * idleLively * vJit(); return false }          // (was 5...9)
         if kind == .look { socialPrepareLook(sim) }          // sometimes at a nearby Jelly, who glances back
         if anticsEnabled, Self.fastKinds.contains(kind), fastOthers() >= 2 { idleState.cooldown = rand(1.2, 2.5); return false }          // at most two Jellies in fast moves at once
-        let started = idleStart(kind, sim)
+        let started = emoteSoloGate(kind, sim) || idleStart(kind, sim)          // (EmoteSpot.swift: a standing emote walks to a better spot first, then starts)
         if started, kind == .run || kind == .zoomies { zoomUrge = max(zoomUrge, rand(IdleTuning.zoomUrge.lowerBound, IdleTuning.zoomUrge.upperBound) * 0.6) }          // (a burst of energy just happened: the urge starts over)
         if started, anticsEnabled { kindCooldownStart(kind) }
         if started && kind == .zoomies { socialOfferZoomies(sim) }
@@ -387,49 +372,27 @@ extension BlobBrain {
     }
 
     /// The solo emote slot: when its own clock is due (and it is a quiet moment), one emote by the mood's treat table. It leaves the cooldown cycle alone (see `idleEnd`).
-    /// emote-variety-r1: his own last three treat picks (and his last three solo picks) stay out while anything else is free, the cluster / room memory apply, the rare kinds
-    /// have a floor share, and at night (>= 0.6, awake) the night-only batch-2 kind (stargazing) can be drawn: the old `idleNight < 0.6` guard made stargazing unreachable.
     func treatMaybeStart(_ sim: SoftBody) -> Bool {
         let cooling = kindCooling
-        if idleNight >= 0.6 {
-            guard anticsEnabled, idleDeepNight < 0.5, treat2Free else { idleState.treat = rand(8, 15); return false }
-            let pool = treat2Pool.filter { $0.idle == .stargazing }          // (the night-only kind; the floor nap goes straight to bed at bedtime hours, that stays the night rule's business)
-            guard !pool.isEmpty else { idleState.treat = rand(8, 15); return false }
-            let ws = pool.map { $0.weight * ($0.idle.map { varietyNewScale($0) } ?? 1) }
-            var x = rand() * ws.reduce(0, +)
-            var e = pool.last!
-            for (i, w) in ws.enumerated() { if x < w { e = pool[i]; break }; x -= w }
-            let started = treat2Start(e, sim)
+        var w = IdleTable.treatWeights(idleMood).filter { !cooling.contains($0.kind) && !varietyPeerJustStarted($0.kind) }
+        for i in w.indices { w[i].weight *= varietyScale(w[i].kind) }
+        let total = w.reduce(0) { $0 + $1.weight }
+        guard total > 0, idleNight < 0.6 else { idleState.treat = rand(8, 15); return false }
+        // batch 2 (BlobBrain+Emotes2.swift) shares the slot: its eligible entries are drawn against the batch-1 table by weight
+        let t2 = treat2Free ? treat2Pool.reduce(0) { $0 + $1.weight } : 0
+        var x = rand() * (total + t2)
+        if x >= total {
+            let started = treat2Pick(sim)
             idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
-            if started { noteTreat(e.name) }
             return started
         }
-        struct Item { var name: String; var idle: IdleKind?; var entry: EmoteTreats.Entry?; var w: Float }
-        var items = IdleTable.treatWeights(idleMood).filter { !cooling.contains($0.kind) && !varietyPeerJustStarted($0.kind) }
-            .map { Item(name: $0.kind.rawValue, idle: $0.kind, entry: nil, w: $0.weight * varietyScale($0.kind)) }
-        guard items.reduce(0, { $0 + $1.w }) > 0 else { idleState.treat = rand(8, 15); return false }
-        // batch 2 (BlobBrain+Emotes2.swift) shares the slot: its eligible entries are drawn against the batch-1 table by weight
-        if treat2Free { for e in treat2Pool { items.append(Item(name: e.name, idle: e.idle, entry: e, w: e.weight)) } }
-        for i in items.indices {
-            if let k = items[i].idle { items[i].w *= varietyNewScale(k) }
-            else if let sk = items[i].entry?.social { items[i].w *= varietyClusterMul(sk, with: []) }
-        }
-        let rec = Set(variety.treatRecent)
-        let fresh = items.filter { !rec.contains($0.name) && !($0.idle.map { idleState.recent.contains($0) } ?? false) }          // (his own last three: treats and solo picks)
-        if !fresh.isEmpty { items = fresh }
-        var ws = items.map { $0.w }
-        Self.raiseFloors(&ws, floor: { _ in VarietyTuning.treatFloor })
-        var x = rand() * ws.reduce(0, +)
-        var pick = items.last!
-        for (i, w) in ws.enumerated() { if x < w { pick = items[i]; break }; x -= w }
-        let started: Bool
-        if let e = pick.entry { started = treat2Start(e, sim) }
-        else { started = idleStart(pick.idle!, sim); if started { kindCooldownStart(pick.idle!) } }
+        var kind = w.last!.kind
+        for e in w { if x < e.weight { kind = e.kind; break }; x -= e.weight }
+        let started = emoteSoloGate(kind, sim) || idleStart(kind, sim)
         idleState.treat = started ? rand(IdleTuning.treatGap.lowerBound, IdleTuning.treatGap.upperBound) * idleLively * vJit() : rand(6, 12)
-        if started { noteTreat(pick.name) }
+        if started { kindCooldownStart(kind) }
         return started
     }
-    func noteTreat(_ n: String) { variety.treatRecent.append(n); if variety.treatRecent.count > 3 { variety.treatRecent.removeFirst() } }
 
     /// Mood shapes the ordinary wander table too: grumpy skips waves and play, and idles longer.
     func idleShapeWander(_ w: inout [(Int, Float)]) {
@@ -515,6 +478,15 @@ extension BlobBrain {
         }
     }
 
+    /// The run blend whose walk covers the ground `gain` times as fast as the walk he walks now (the boosted roam walk when he is on no idle move, the plain one inside a move):
+    /// stride x(1 + 0.24 w), step rate x(1 + 0.17 w rate), against the boost the run drops (`idleGate`).
+    func runBlend(forGain gain: Float) -> Float {
+        let base: Float = idleState.kind == nil ? Self.walkBoost : 1
+        let a = 0.24 * 0.17 * runChar.rate, b = 0.24 + 0.17 * runChar.rate, c = 1 - gain * base
+        guard c < 0 else { return 0 }
+        return min(max((-b + (b * b - 4 * a * c).squareRoot()) / (2 * a), 0), 1)
+    }
+
     /// Ease the run blend: 1 while a run is under way and more than ~1.1 u from the goal, else back to 0 (exactly 0 once small).
     func idleUpdateRun(_ dt: Float) {
         var want: Float = 0
@@ -530,6 +502,7 @@ extension BlobBrain {
         if zoomWant == 0 && zoomW < 1e-3 { zoomW = 0 }
         if idleState.kind == .zoomies { runW += max(-dt / 0.2, min(dt / 0.45, want - runW)); if want == 0 && runW < 1e-3 { runW = 0 }; return }
         if hurry, case .walk(let target, _) = script, simd_length(target - SIMD2(px, pz)) > 0.35 { want = 1 }       // touch play: running back after a throw
+        if playChase > 0, want == 0, case .walk(let target, _) = script, simd_length(target - SIMD2(px, pz)) > 0.35 { want = runBlend(forGain: playChase) }          // a live ball in Play mode: a little faster
         if runW == want { return }
         runFalling = want < runW
         runW += max(-dt / 0.3, min(dt / 0.2, want - runW))              // blend in over 0.2 s, out over 0.3 s (the skid)
@@ -556,6 +529,8 @@ extension BlobBrain {
         commanded = false
         armDirW = 0; armDirOut = 0
         idleState.jackRoll = 0
+        if winCheer { winFaceEnd() }          // (his own faces come back after the celebration)
+        winCheer = false; winFlat = false; winSettleT = 0; winSpot = nil; winRoot = nil; winLean = false
         if !nameHopping { gait.hopApex = 0.10; gait.hopDuration = 0.26 }       // the jacks' higher hop ends with them
         gait.flipTwist = 0; gait.crouchDepth = 0.18; gait.crouchHold = 0; gait.airStretch = 0.12; gait.landDepth = 0.2          // (the trick hops' knobs go with them)
         skinner?.setEyeOpenness(1)
@@ -758,7 +733,8 @@ extension BlobBrain {
             idleState.hop = 0; idleState.landT = 0
             script = .idle; activity = .playing
             idleState.phase = 1; idleState.phaseT = 0
-            idleScootHop(sim)
+            if winCheer { winBegin() }          // (a first place: four tall bounces, arms up, a cheer: BlobBrain+Win.swift)
+            if winFlat { idleState.phase = 0 } else { idleScootHop(sim) }          // (flat: no hops, `runWinFlat` runs from `runIdle`)
         case .giggle:
             idleBegin(.giggle)
             script = .idle; activity = .playing
@@ -818,6 +794,7 @@ extension BlobBrain {
         case .sit, .slump, .sway, .decorSit: runSit(sim, skinner, dt, slump: kind == .slump)
         case .look, .window, .decorBoop, .decorPeek, .stopLook: runLook(sim, skinner, dt)
         case .giggle: runGiggle(sim, skinner, dt)
+        case .joy where winCheer && winFlat: runWinFlat(sim, skinner, dt)
         case .sigh: runSigh(sim, skinner, dt)
         case .hmph: runHmph(sim, skinner, dt)
         case .tailThump: runTailThump(sim, skinner, dt)
@@ -1103,7 +1080,9 @@ extension BlobBrain {
         sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
         gait.wander = false
         let pose = sim.bodyPose(iterations: 6)
-        let here = SIMD2(pose.centroid.x, pose.centroid.z)
+        var here = SIMD2(pose.centroid.x, pose.centroid.z)
+        let winBounce = idleState.kind == .joy && winCheer
+        if winBounce { if winSpot == nil { winSpot = here }; here = winSpot! }          // (the win: every bounce takes off from and lands on the first one's spot)
         let d = idleState.target - here
         let dl = simd_length(d)
         var step = (idleState.kind == .bounce || idleState.kind == .joy || idleState.kind == .tossHeader) ? 0 : min(Self.scootHop, dl)
@@ -1114,13 +1093,13 @@ extension BlobBrain {
             step = simd_length(v); u = v / step
         }
         let rv = resolve(SIMD3(here.x + u.x * step, 0, here.y + u.y * step), footprint)
-        gait.facingYaw = idleState.kind == .startle ? yaw : atan2f(u.x, u.y)
+        gait.facingYaw = idleState.kind == .startle ? yaw : (idleState.kind == .joy && winCheer) ? idleState.baseYaw : atan2f(u.x, u.y)          // (the win bounces on the spot facing the way he stood: a zero-length hop has no direction of its own)
         gait.home = here
         poseW = 0; poseOn = false
-        let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
+        let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .joy && winCheer) ? winApexNow() : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
         gait.hopApex = apex
         gait.hopDuration = 0.26 * sqrtf(apex / 0.10)
-        gait.hop(sim, to: SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false)
+        gait.hop(sim, to: winBounce ? here : SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false, takeoff: winBounce ? here : nil)
         idleState.landT = 0
     }
     static let scootHop: Float = 0.34, scootApex: Float = 0.07, bounceApex: Float = 0.12
@@ -1139,6 +1118,16 @@ extension BlobBrain {
         pitchBase += max(-1.2 * dt, min(1.2 * dt, hopGoal - pitchBase))
         gait.basePitch = pitchBase
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
+        if kind == .joy, winCheer, let spot = winSpot, let root = winRoot, idleState.hop >= idleState.reps, gait.phase == .idle {          // (the win's settle: the hops are over; he is handed back to his idle stance NOW, while the arms still ease down, so nothing moves when the move ends)
+            // His idle stance is tipped back about its soles: its centre is ~16 cm from the root. The hops stand him UPRIGHT at the centre, so the hand-off puts the root back where it was before the win
+            // (the feet are planted at root + their offsets as before) and tips him back over 0.45 s while the target root eases from the hop spot to it: the centre stays where he stood and the soles do not move.
+            if !winLean { winLean = true; px = root.x; pz = root.y; yaw = idleState.baseYaw; roll = 0; pitch = 0; squash = 1; lift = 0; feetInit = false; feet.reset(); stepLive = false; walkFinal = false; poseW = 1 }
+            let u = smooth01(winSettleT / 0.45)
+            pitchBase = winPitch0 * u
+            ensureFeet(sim)          // (feet at root + offsets, once, with the root at the stance's)
+            px = spot.x + (root.x - spot.x) * u; pz = spot.y + (root.y - spot.y) * u
+            poseOn = true; drivePose(sim, dt)
+        }
         if kind == .slide {
             // the jelly kicks: the dive's impact and the pop-up landing
             let st = gait.slideT
@@ -1150,21 +1139,26 @@ extension BlobBrain {
             if gait.phase == .land { idleState.landT += dt } else { idleState.landT = 0 }
             if idleState.decorUID >= 0, gait.phase == .land, idleState.landT > 0, idleState.landT <= dt * 1.5 { DecorField.shared.kick(idleState.decorUID, 1) }
             let total = idleState.reps
-            if idleState.hop < total && gait.phase == .land && idleState.landT >= 0.05 {
+            if idleState.hop < total && gait.phase == .land && idleState.landT >= (winCheer ? Self.winLandHold : 0.05) {
                 idleState.hop += 1
                 if idleState.hop < total { idleScootHop(sim) }
             }
             let flap = sinf(2 * .pi * 5 * idleState.phaseT)
             armWalkWant = 1
             if kind == .joy {          // the jacks' arms-up pose, one rep
-                armDirW = smooth01(min(1, idleState.phaseT / 0.12)); armDirEl = [0.95, 0.95]; armDirSa = [0.10, 0.10]; armDirOut = 0.07
+                if winCheer, idleState.hop >= idleState.reps, !gait.isBusy { winSettleT += dt }          // (the win: after the last bounce the arms ease down over `winSettle`)
+                armDirW = smooth01(min(1, idleState.phaseT / 0.12)) * (winCheer ? 1 - smooth01(winSettleT / Self.winSettle) : 1); armDirEl = [0.95, 0.95]; armDirSa = [0.10, 0.10]; armDirOut = 0.07
+                if winCheer {          // the win: both arms held UP (higher than the jacks), a little wiggle
+                    let wig = 0.06 * sinf(2 * .pi * 2.5 * idleState.phaseT)
+                    armDirEl = [WinTuning.armEl + wig, WinTuning.armEl - wig]; armDirSa = [WinTuning.armSa, WinTuning.armSa]; armDirOut = WinTuning.armOut
+                }
             } else {
                 armDirW = 1; armDirEl = [0.45 + 0.1 * flap, 0.45 - 0.1 * flap]; armDirSa = [0.1, 0.1]; armDirOut = 0.05
             }
         }
         driveBeansRigid(sim, skinner, dt, tuck: gait.tuck)
         driveArms(sim, skinner, dt)
-        let done = kind == .slide ? !gait.isBusy : (idleState.hop >= idleState.reps && !gait.isBusy)
+        let done = kind == .slide ? !gait.isBusy : (idleState.hop >= idleState.reps && !gait.isBusy && (!winCheer || winSettleT >= Self.winSettle))
         if done {
             gait.basePitch = 0
             gait.hopApex = 0.10; gait.hopDuration = 0.26

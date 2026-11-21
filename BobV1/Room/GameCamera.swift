@@ -63,6 +63,7 @@ enum GameCamera {
     /// Sets the roaming camera and the floor the Jellies use for `count` Jellies. Call before the brains are made (`forGame` reads `roamRect`).
     static func configureRoom(count: Int, option: RoomCam = RoomCam.launch, wide: Int = wideLaunch) {
         roamFloor = nil; RoomLayout.setFront(z: RoomLayout.maxZ)          // (a new set-up: the old fixed floor until `refreshRoam`)
+        playFrame = false; playFrameView = nil          // (and no Play frame left over from an earlier play: PlayToss sets it again with its own `begin`)
         // (2026-11-11: the wide room view is the home view at ANY Jelbie count; `count` no longer picks the pose. Only the explicit `-RoomCam current` keeps the old close pose.)
         if option == .current {
             eye = baseEye; target = baseTarget; roomEye = baseEye; roomTarget = baseTarget; roomWideScale = 1; roomWideLift = 0
@@ -126,8 +127,14 @@ enum GameCamera {
         }
         if playBlend != 0 {                                 // Play mode (Play/PlayToss.swift): a lower, nearer view facing the Jelbies, the front of the floor left free for the ball's return
             let p = playPose(eye: e, target: t, aspect: aspect)
-            e += (p.eye - e) * playBlend
-            t += (p.target - t) * playBlend
+            let k = playBlend * (parkRoamMaxZ == nil ? PlayTuning.camZoom : 1)          // (`PlayTuning.camZoom`: 0 = the room's own camera ... 1 = the old play view; the park keeps the old view)
+            e += (p.eye - e) * k
+            t += (p.target - t) * k
+        }
+        if wallEditBlend != 0 {                             // the wall picture editor (Room/GameCamera+Wall.swift): on a phone on its side the view rises to show the whole band above the windows; 0 = nothing here runs
+            let p = wallEditPose(eye: e, target: t, aspect: aspect)
+            e += (p.eye - e) * wallEditBlend
+            t += (p.target - t) * wallEditBlend
         }
         if bath != 0 {                                      // the clean-up close-up: snapped under the white fade (0 or 1), never blended on screen
             let p = bathPose(aspect: aspect)
@@ -419,6 +426,15 @@ enum GameCamera {
         let hw = roamFloor.map { max($0.halfWidth(at: q.z) + bodyHalfExtent - max(bodyHalfExtent, radius * 0.9), 0) }
             ?? max(visibleHalfWidthAtBody(z: q.z) * screenFill - max(bodyHalfExtent, radius * 0.9), 0)
         q.x = min(max(q.x, -hw), hw)
+        if let rf = roamFloor, !rf.railFree.isEmpty, let g = rf.zs.first, !rf.zs.isEmpty {          // no body stands under a HUD button, whatever pushed it there (RoamFloor.railFree)
+            let i = min(max(Int(floorf((q.z - g) / RoamFloor.step)), 0), rf.zs.count - 1)
+            for r in [i, min(i + 1, rf.zs.count - 1)] where r < rf.railFree.count {
+                let spans = rf.railFree[r]
+                if spans.isEmpty || spans.contains(where: { $0.contains(q.x) }) { continue }
+                if rf.free.isEmpty || r >= rf.free.count { continue }
+                if let nearest = spans.map({ min(max(q.x, $0.lowerBound), $0.upperBound) }).min(by: { abs($0 - q.x) < abs($1 - q.x) }) { q.x = nearest }
+            }
+        }
         return q
     }
 

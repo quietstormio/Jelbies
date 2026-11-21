@@ -2,7 +2,7 @@
 //  PhotoMode.swift
 //  Photo mode: the room's HUD steps aside, a bottom bar offers Pose / Frame / Filter / Shutter / Close, a finger orbits and pans the camera, a
 //  pinch zooms (PhotoCam), a tap on a Jelbie makes him look at the camera. Shutter captures the stage view (the Metal frame, no HUD) with
-//  drawHierarchy, adds the filter and frame (PhotoLook, via ImageRenderer), keeps it in the album and shows a preview card (Save / Share).
+//  drawHierarchy, adds the filter and frame (PhotoLook, via ImageRenderer), keeps it in the album and shows a preview card (Share / Done).
 //  Hook for v2: a front-camera selfie bubble would sit in `PhotoModeView.topBar`'s trailing slot; nothing is built for it.
 //
 
@@ -147,7 +147,7 @@ struct PhotoModeView: View {
             Color.white.ignoresSafeArea().opacity(mode.flash ? 0.9 : 0).allowsHitTesting(false)
         }
         .onAppear { Task { try? await Task.sleep(nanoseconds: 4_500_000_000); withAnimation { hint = false } } }
-        .fullScreenCover(isPresented: $mode.albumOpen) { PhotoAlbumView(close: { mode.albumOpen = false }) }
+        .fullScreenCover(isPresented: $mode.albumOpen) { PhotoAlbumView(close: { mode.albumOpen = false }, wall: care.wallHangContext(close: { mode.albumOpen = false })) }
         .accessibilityElement(children: .contain)
     }
 
@@ -243,13 +243,12 @@ struct PhotoModeView: View {
     }
 }
 
-/// After the shutter: the picture, Save to Photos, Share, Done. It is already in the album.
+/// After the shutter: the picture, Share, Done (the prominent one). It is already in the album.
 private struct PhotoPreview: View {
     let image: UIImage
     let url: URL
     let landscape: Bool
     var done: () -> Void
-    @State private var saved: PhotoAlbum.SaveResult?
 
     var body: some View {
         ZStack {
@@ -276,15 +275,8 @@ private struct PhotoPreview: View {
     private var actions: some View {
         VStack(spacing: 10) {
             Text("Kept in your album").font(SK.font(14, .bold)).foregroundStyle(.white)
-            HStack(spacing: 10) {
-                PhotoActionButton(title: saved == .saved ? "Saved" : "Save to Photos", symbol: saved == .saved ? "checkmark" : "square.and.arrow.down", prominent: true) {
-                    Task { saved = await PhotoAlbum.saveToPhotos(url) }
-                }
-                GatedShareButton(image: image)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            if let m = saved.flatMap({ PhotoAlbum.message(for: $0) }) { Text(m).font(SK.font(13, .bold)).foregroundStyle(.white).multilineTextAlignment(.center) }
-            PhotoActionButton(title: "Done", symbol: "checkmark.circle", prominent: false) { done() }
+            GatedShareButton(image: image)
+            PhotoActionButton(title: "Done", symbol: "checkmark.circle", prominent: true) { done() }
         }
     }
 }

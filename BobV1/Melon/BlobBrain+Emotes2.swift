@@ -100,7 +100,7 @@ extension BlobBrain {
     // MARK: gates
 
     /// Evening / night, before the deep-night bedtime (stargazing).
-    var treat2Night: Bool { idleNight >= 0.6 && idleDeepNight < 0.5 && !Self.windowXs().isEmpty }
+    var treat2Night: Bool { idleNight > 0.6 && idleDeepNight < 0.5 && !Self.windowXs().isEmpty }
     /// Really sleepy: it is evening (the needs model has no energy bar; the NightRest rule puts them to bed later) or the deep night is on and he is still up.
     var treat2Sleepy: Bool { idleNight > 0.35 || idleDeepNight > 0.4 }
 
@@ -151,13 +151,9 @@ extension BlobBrain {
         guard !pool.isEmpty else { return false }
         var x = treat2.rnd() * pool.reduce(0) { $0 + $1.weight }
         for e in pool { if x < e.weight { pool = [e]; break }; x -= e.weight }
-        return treat2Start(pool[0], sim)
-    }
-
-    /// Start one given batch-2 entry (the idle move through `idleStart`, the social one with the nearest free partner).
-    func treat2Start(_ e: EmoteTreats.Entry, _ sim: SoftBody) -> Bool {
+        let e = pool[0]
         if let k = e.idle {
-            guard idleStart(k, sim) else { return false }
+            guard emoteSoloGate(k, sim) || idleStart(k, sim) else { return false }
             kindCool[k] = treat2.rnd(e.cooldown.lowerBound, e.cooldown.upperBound)
             return true
         }

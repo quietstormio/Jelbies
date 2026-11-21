@@ -18,6 +18,8 @@ import simd
 enum GroupTuning {
     /// Seconds spent together (3+ free and close) before a group move is asked for, drawn per Jelby.
     static let wait: (Float, Float) = (15, 40)
+    /// Home rooms only (2026-11-20, the owner: "not as many group emotes, bring down 10%"): the group rate is this fraction of what it was (the wait between rolls is longer by 1 / this). The Park is not touched.
+    static let homeRateScale: Float = 0.9
     /// Cooldown after any group move (per member).
     static let cooldown: (Float, Float) = (20, 35)
     /// How near a free Jelby must be (to the one who asks) to be pulled in, and the most that play together.
@@ -30,7 +32,7 @@ enum GroupTuning {
     /// Others close by (not counting the asker) before a group roll may start. 1 = two Jelmiko present, but only for kinds marked `isTwoBody` (none yet: the calm 2-body group kinds come in a later round); the 3-body kinds still need two others.
     static let minCompany = 1
     /// Pick weights (the hug is the favourite).
-    static let weights: [(SocialKind, Float)] = [(.groupHug, 5.0), (.groupCheer, 3.5), (.conga, 3.5), (.circleDance, 3.5)]
+    static let weights: [(SocialKind, Float)] = [(.groupHug, 14.0), (.groupCheer, 3.0), (.conga, 2.7), (.circleDance, 3.0)]
     /// Neighbouring bodies in a huddle / ring touch at this fraction of `peerGap`; a loose circle keeps this fraction.
     static let touch: Float = 0.78, loose: Float = 1.15
     static let steps = 8, stepAngle: Float = .pi / 4.5
@@ -50,7 +52,7 @@ extension BlobBrain {
 
     /// Free (or just out on an ordinary wander leg: he finishes it, then joins), calm, close Jelbies other than me (nearest first).
     func groupCandidates() -> [BlobBrain] {
-        socialOthers().filter { $0 !== self && ($0.socialFree || $0.socialWandering) && $0.idleMood != .grumpy && $0.idleDeepNight < 0.5 && simd_distance($0.position, position) < GroupTuning.radius }
+        socialOthers().filter { $0 !== self && !$0.meetBusy && ($0.socialFree || $0.socialWandering) && $0.idleMood != .grumpy && $0.idleDeepNight < 0.5 && simd_distance($0.position, position) < GroupTuning.radius }
             .sorted { simd_distance($0.position, position) < simd_distance($1.position, position) }
     }
 
@@ -79,13 +81,13 @@ extension BlobBrain {
             if k.isFast, fastOthers(except: crew) > 0 { continue }
             if near.count < 2, !k.isTwoBody { continue }          // (the 3-body kinds keep their rule: two others)
             let base = k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)
-            w.append((k, (repeated ? base * 0.3 : base) * varietyClusterMul(k, with: crew)))          // (a hug may follow a hug, much less often)
+            w.append((k, repeated ? base * 0.6 : base))          // (a hug may follow a hug, less often: it is the favourite)
         }
         if w.isEmpty { if near.count < 2 { socialBook.groupIdle = socialBook.groupLimit * 0.7; return }; w = [(.groupHug, 1)] }
         var x = rand() * w.reduce(0) { $0 + $1.1 }
         var kind = w[0].0
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
-        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul * moreGroupWaitMul
+        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul * moreGroupWaitMul * (homeRoom ? 1 / GroupTuning.homeRateScale : 1)
         socialBook.groupIdle = 0; socialBook.groupBusy = 0
         if !socialStartGroup(kind, with: crew, sim) { socialBook.groupIdle = socialBook.groupLimit * 0.7 }          // (no room right now: try again soon)
     }
@@ -93,7 +95,7 @@ extension BlobBrain {
     // MARK: starting
 
     /// Plan a ring for `members` (the initiator first): centre, a spot and an angle each. nil = no room anywhere near.
-    private func groupPlan(_ members: [BlobBrain], chord: Float, packed: Bool) -> (c: SIMD2<Float>, r: Float, ang: [Int: Float], spots: [Int: SIMD2<Float>])? {
+    private func groupPlan(_ members: [BlobBrain], chord: Float, packed: Bool, centre: SIMD2<Float>? = nil) -> (c: SIMD2<Float>, r: Float, ang: [Int: Float], spots: [Int: SIMD2<Float>])? {
         let n = members.count
         let r = max(chord / (2 * sinf(.pi / Float(n))), peerGap * 0.4)
         let cen = members.reduce(SIMD2<Float>.zero) { $0 + $1.position } / Float(n)
@@ -113,7 +115,8 @@ extension BlobBrain {
             return [SIMD2(sinf(a), cosf(a)) * 0.5, SIMD2(sinf(a), cosf(a)) * 1.0]
         }
         for off in offs {
-            let c = ParkClearSpot.clear(cen + off, radius: footprint + r)          // (park only: the whole ring clear of a solid piece, see ParkClearSpot)
+            let c = ParkClearSpot.clear((centre ?? cen) + off, radius: footprint + r)          // (park only: the whole ring clear of a solid piece, see ParkClearSpot)
+            if hopCourtWithin(c, r + footprint * HopscotchTuning.wallReach + 0.2) { continue }          // (park-hopscotch-r1: the whole ring, and its drift, is clear of a court with a game on)
             var spots = [Int: SIMD2<Float>](), ok = true
             for m in members {
                 let a = ang[m.steerID]!
@@ -138,6 +141,7 @@ extension BlobBrain {
         for o in groupCandidates() where crew.count < cap && !crew.contains(where: { $0 === o }) { crew.append(o) }
         crew = Array(crew.prefix(cap))
         guard crew.count >= (kind == .congaLine ? 2 : 3), crew.count <= cap else { return false }
+        if HopscotchTuning.walled, crew.contains(where: { hopCourtWithin($0.position, footprint * HopscotchTuning.wallReach + 0.5) }) { return false }          // (park-hopscotch-r1: no group move starts next to a court with a game on: a ring dance drifts 0.15 off its spots)
         if kind.isFast, fastOthers(except: crew) > 0 { return false }
         currentPose(sim)
         for m in crew where !m.socialFree { guard m.socialBeckonStop() else { return false } }          // (out on a wander leg: it ends a few steps on, then he joins)
@@ -145,7 +149,9 @@ extension BlobBrain {
         switch kind {
         case .groupHug, .circleDance, .groupCheer:
             let packed = kind != .groupCheer
-            guard let plan = groupPlan(crew, chord: packed ? ringChord(crew) : peerGap * GroupTuning.loose, packed: packed) else { return false }
+            let chord = packed ? ringChord(crew) : peerGap * GroupTuning.loose
+            let cen0 = crew.reduce(SIMD2<Float>.zero) { $0 + $1.position } / Float(crew.count)
+            guard let plan = emoteGroupCentre(crew, here: cen0).flatMap({ groupPlan(crew, chord: chord, packed: packed, centre: $0) }) ?? groupPlan(crew, chord: chord, packed: packed) else { return false }          // (EmoteSpot.swift: the ring centre is picked over the whole floor)
             s = newGroupSession(kind, crew: crew, duration: kind == .groupHug ? vDur(5.8) : 0)
             s.home0 = plan.c; s.ringR = plan.r; s.slotAng = plan.ang
             s.slotSpot = plan.spots
@@ -158,7 +164,7 @@ extension BlobBrain {
         default: return false
         }
         for m in crew { m.socialBook.passThrough = (kind == .groupHug || kind == .circleDance); m.socialBook.hold = true; m.socialBook.faceYaw = m.yawTo(s.home0) }
-        for m in crew { m.varietyNoteSocial(kind, with: nil, crew: crew.map { $0.steerID }) }
+        for m in crew { m.varietyNoteSocial(kind, with: nil) }
         return true
     }
 

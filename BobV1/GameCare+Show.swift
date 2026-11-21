@@ -18,6 +18,8 @@ final class ShowBook {
     var actors: [JellyActor] = []
     /// Actor ids on the stage: the player's first, then the rival bodies (rival index k -> performers[k + 1]).
     var performers: [Int] = []
+    /// First place came in: the player's body starts the win celebration as soon as the stage is set for the results (`tickShow`).
+    var winPending = false
     /// Actor ids that wait off stage.
     var parked: [Int] = []
     var homes: [Int: SIMD2<Float>] = [:]
@@ -44,6 +46,21 @@ final class ShowBook {
     var trickSet = false
     /// Seconds until the entrants set off from the wing (they stand a moment after being placed there, so the feet are settled when the walk starts).
     var enterDelay: Float?
+    /// The spotlight (Show/ShowSpotlight.swift): which body is lit and how strongly.
+    var spot = ShowSpotlightState()
+    /// Walks to the middle that wait for the middle to be clear: (actor id, goal, seconds waited). A walker's goal is resolved round the bodies standing near it (the floor rules keep bodies apart),
+    /// so a goal asked while the last performer is still leaving the middle lands beside it, and the next performer then did her whole turn off-centre (spotlight round).
+    var pendingWalks: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
+    /// When a walker who stopped short was last asked again (CACurrentMediaTime), by actor id.
+    var retryAt: [Int: Double] = [:]
+    /// Bodies that are on their way to the middle (a turn's walk), with the seconds walked so far and the allowance: the walk's length at the stage pace + 1.5 s.
+    var heading: [Int: (age: Float, limit: Float)] = [:]
+    /// Second legs of walks through the gate: actor id -> where he goes on to.
+    var via: [Int: (at: SIMD2<Float>, final: SIMD2<Float>)] = [:]
+    /// show-stayhome-r1: the stage is up and the housemates are away from the room: hidden, not stepped, not ticked, exactly as they were (`showStaysHome`).
+    var roomAway = false
+    /// Show asked while the contestant is asleep: the trip starts once he is upright (only he is woken and waited for).
+    var wait: (id: Int, rank: ShowRank?, seed: UInt64?, age: Float)?
     nonisolated deinit {}
 }
 
@@ -60,6 +77,7 @@ extension GameCare {
         show.onBurst = { [weak self] in self?.showBurst() }
         show.onRival = { [weak self] cue in self?.showRivalCue(cue) }
         show.rivalReady = { [weak self] who, centre in self?.showArrived(who, atCentre: centre) ?? true }
+        show.rivalGiveUp = { [weak self] who in self?.showWalkExpired(who) ?? false }
         let d = UserDefaults.standard
         if ShowCaptureArgs.auto(defaults: d) { show.auto = true }
         if DevArgs.enabled, d.object(forKey: "ShowHomeAfter") != nil { show.autoHomeAfter = Float(d.double(forKey: "ShowHomeAfter")) }
@@ -74,6 +92,7 @@ extension GameCare {
     func showBlocker(jelly id: Int) -> String? {
         guard jelly(id) != nil else { return "No such Jelmiko." }
         if show.active { return "A show is already on." }
+        if showBook.wait != nil { return "Waking \(jelly(id)?.name ?? "your Jelmiko") up." }
         if race.active || raceWait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at Jelly Race." }
         if volley.active || volleyWork.wait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the beach." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
@@ -143,14 +162,25 @@ extension GameCare {
     /// Takes Jelbie `id` to the stage for a show at `rank` (the chosen rank by default).
     func startShow(jelly id: Int, rank: ShowRank? = nil, seed: UInt64? = nil) {
         if let why = showBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
+        // show-stayhome-r1: only the contestant is woken and waited for; a housemate who sleeps stays asleep (he is hidden and unstepped while the stage is up, and back exactly as he was)
+        let sleepers = raceBook.actors.filter { $0.id == id }.compactMap { $0.brain }.filter { $0.isSleeping }
+        if !sleepers.isEmpty {
+            for b in sleepers { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true); b.sleepLocked = true }
+            showBook.wait = (id, rank, seed, 0)
+            for a in raceBook.actors { a.brain?.bedtimeLocked = true }          // (nobody is put to bed while he is being woken)
+            return
+        }
+        beginShow(jelly: id, rank: rank, seed: seed)
+    }
+
+    private func beginShow(jelly id: Int, rank: ShowRank?, seed: UInt64?) {
         guard let prof = jelly(id) else { return }
         let r = rank.flatMap { show.progress.unlocked($0) ? $0 : nil } ?? show.progress.chosen
-        for a in raceBook.actors { if let b = a.brain, b.isSleeping { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) } }
         select.cancel()
         cutWelcomeHome()
         queued.removeAll(); callRunning = false
         voice.cancel()
-        if outingGate([id], again: { [weak self] in self?.startShow(jelly: id, rank: rank, seed: seed) }) { return }          // he runs out of the room first
+        if outingGate([id], cheer: false, again: { [weak self] in self?.beginShow(jelly: id, rank: rank, seed: seed) }) { return }          // he runs out of the room first
         let bodies = 1          // the stage has ONE roster body (the contestant); every rival is a borrowed visitor body, every other home Jelmiko waits off stage (showSwap)
         show.begin(playerID: id, name: prof.name, character: prof.character, input: showPlayerInput(jelly: id), rank: r, dayKey: Self.showDay, bodies: bodies, seed: seed ?? Self.showSeed)
         show.setOutfit(showOutfitTags(jelly: id))
@@ -172,7 +202,7 @@ extension GameCare {
     /// How the camera frames the stage this frame (nil = not on stage).
     var showFrame: ShowFrame? { show.onStage ? show.frame : nil }
     /// A stage body: the player's or a rival's (the wardrobe hides on the rivals and the parked).
-    func showHidesWear(_ id: Int) -> Bool { show.active && (id != show.playerID) }
+    func showHidesWear(_ id: Int) -> Bool { show.onStage && (id != show.playerID) }          // (on the stage only: a housemate keeps his wear through the fade out / in; he is hidden while away anyway)
     /// The Trick round shows the rivals' bodies only while the camera is on the wide shot: not while the player picks (the camera holds the contestant alone, big).
     var showRivalsVisible: Bool {
         show.round == .trick || (show.round == .results && show.trickStage != .pick)          // (they wait on the back marks behind the performer all through the round, in the same frame as his pick; the last turn's entrants play on after the sim has its results)
@@ -187,6 +217,10 @@ extension GameCare {
     }
     /// Is this roster body one of the home Jelmiko waiting off stage (for the light's box and the tests)?
     func showParked(_ id: Int) -> Bool { show.onStage && showBook.parked.contains(id) }
+    /// show-stayhome-r1: while the stage is up every housemate who is not the contestant is away from the room: not drawn, not stepped, not ticked, so a sleeper sleeps on and a script waits.
+    func showStaysHome(_ id: Int) -> Bool { showBook.roomAway && id < jellies.count && id != show.playerID }
+    /// A housemate who stays home during any trip (race, show, beach): frozen exactly as he was (the stage skips his brain tick and his step).
+    func tripFrozen(_ id: Int) -> Bool { raceHides(id) || showStaysHome(id) || volleyHides(id) }
 
     // MARK: world swaps (under the white)
 
@@ -199,11 +233,12 @@ extension GameCare {
             #endif
             let player = show.playerID
             book.performers = book.actors.indices.contains(player) ? [player] : []          // the one roster body on the stage: the contestant
-            book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko waits off stage (state saved, restored under the white on the way home)
+            book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko stays home: hidden, not stepped, not ticked, never moved (show-stayhome-r1)
+            book.roomAway = true
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.danceRun = nil; book.flopT = nil; book.turned = []
-            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.enterDelay = nil
+            book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.winPending = false; book.enterDelay = nil
             let spots = ShowStage.spots(bodies: book.performers.count)
-            for (k, aid) in (book.performers + book.parked).enumerated() where book.actors.indices.contains(aid) {
+            for (k, aid) in book.performers.enumerated() where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
                 guard let brain = a.brain else { continue }
                 book.homes[aid] = a.floor; book.autonomy[aid] = brain.autonomy; book.arena[aid] = a.sim.arenaRadius
@@ -211,7 +246,7 @@ extension GameCare {
                 brain.commandedIdle = nil; brain.commandedFlip = false; brain.commandedDecor = nil
                 a.sim.arenaRadius = .infinity
                 let onStage = k < book.performers.count
-                a.sim.teleport(toXZ: onStage ? spots[k] : ShowStage.parkSpot(aid))
+                a.sim.teleport(toXZ: spots[k])
                 brain.currentPose(a.sim)
                 a.skinner.jelly.reset()
                 brain.autonomy = false
@@ -223,7 +258,9 @@ extension GameCare {
         case .room:
             let c = VoiceCoordinator.comeSpot
             var taken: [SIMD2<Float>] = [c]
-            for aid in book.performers + book.parked where book.actors.indices.contains(aid) {
+            book.roomAway = false
+            let atHome = book.parked.filter { book.actors.indices.contains($0) }.map { book.actors[$0].floor }          // (housemates who never left: the contestant must not land on one)
+            for aid in book.performers where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
                 guard let brain = a.brain else { continue }
                 brain.abortAll(a.sim, a.skinner)
@@ -231,6 +268,9 @@ extension GameCare {
                 let wall = book.arena[aid] ?? a.sim.arenaRadius
                 if wall.isFinite, GameCamera.roamFloor != nil { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius } else { a.sim.arenaRadius = wall }          // (the room's wall as it is NOW: the floor may have been rebuilt while his wall was lifted (a rotation, the rivals' first floor); the saved radius alone left the old wall under the new floor)
                 var spot = aid == show.playerID ? c : (book.homes[aid] ?? Self.greetSpot(aid))
+                if aid == show.playerID, atHome.contains(where: { simd_distance($0, spot) < 0.75 }) {
+                    spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !atHome.contains { simd_distance($0, s) < 1.2 } } ?? spot
+                }
                 if aid != show.playerID, taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
                     spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot
                 }
@@ -315,7 +355,122 @@ extension GameCare {
         b.commandedIdle = nil; b.commandedFlip = false
         showBook.flops[a.id] = nil
         showBook.goals[a.id] = b.fixed(p)
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled { let c = a.sim.centroid(); print(String(format: "[showturn] walk actor %d from (%.2f, %.2f) to (%.2f, %.2f) goal (%.2f, %.2f) t=%.3f", a.id, c.x, c.z, p.x, p.y, showBook.goals[a.id]!.x, showBook.goals[a.id]!.y, CACurrentMediaTime())) }
+        #endif
         b.requestNow(.come(to: p))
+    }
+    /// On its side the near seat (-1.65, 0) stands 1.3 from the straight line between the gate and the left back seat: that walk bends through this point (0.3, -0.3) so it never brushes the one who sits there.
+    private func seatWaypoint(_ seat: SIMD2<Float>) -> SIMD2<Float>? {
+        GameCamera.aspect > 1 && seat.x < -0.5 && seat.y < Self.backRow ? SIMD2(0.3, -0.3) : nil
+    }
+    /// A walk between a seat and the middle (or between two seats): back seats are left and reached through the gate, so a walk never goes through a body that sits out. `via` holds where he goes on to.
+    private func showRoute(_ a: JellyActor, to p: SIMD2<Float>) {
+        let book = showBook
+        let c = a.sim.centroid(), here = SIMD2(c.x, c.z)
+        let backHere = here.y < Self.backRow, backThere = p.y < Self.backRow, oneBack = backHere != backThere
+        var length = simd_distance(here, p)
+        if oneBack && simd_distance(here, ShowStage.gate) > 0.5 && simd_distance(p, ShowStage.gate) > 0.5 {
+            let first = backHere ? (seatWaypoint(here) ?? ShowStage.gate) : ShowStage.gate
+            book.via[a.id] = (first, p)
+            length = simd_distance(here, first) + simd_distance(first, ShowStage.gate) + simd_distance(ShowStage.gate, p)
+            if simd_distance(p, ShowStage.playerSpot) < 0.01, book.heading[a.id] == nil { book.heading[a.id] = (0, length / Self.stagePace + 1.5) }
+            showWalk(a, to: first)
+            return
+        }
+        book.via[a.id] = nil
+        if simd_distance(p, ShowStage.playerSpot) < 0.01 {          // a walk to the middle: its own allowance, counted from the first ask (a repeated ask keeps it)
+            if book.heading[a.id] == nil { book.heading[a.id] = (0, length / Self.stagePace + 1.5) }
+        } else { book.heading[a.id] = nil }
+        showWalk(a, to: p)
+    }
+    /// The next leg of a walk through the gate: once he has stopped where the last leg ended he goes on (to the middle only when it is clear).
+    private func tickVia() {
+        let book = showBook
+        for (id, leg) in book.via {
+            let at = leg.at, final = leg.final
+            guard let a = showBody(id), let b = a.brain else { book.via[id] = nil; continue }
+            let c = a.sim.centroid()
+            guard simd_distance(SIMD2(c.x, c.z), at) < 0.6 else { continue }
+            if b.pending != nil { continue }
+            if case .walk = b.script { continue }
+            let next = simd_distance(at, ShowStage.gate) < 0.6 ? (seatWaypoint(final) ?? final) : final
+            if simd_distance(next, ShowStage.playerSpot) < 0.01, !middleClear(for: id) { continue }          // (the middle is still occupied: wait where he is)
+            book.via[id] = next == final ? nil : (next, final)
+            showWalk(a, to: next)
+        }
+    }
+    /// Seconds of walking at the measured stage pace (~0.55 u/s: the turn to the camera and the wait behind the one before are in it).
+    private static let stagePace: Float = 0.55
+    private func showWalkExpired(_ who: Int?) -> Bool {
+        guard let a = who.map({ rivalActor($0) }) ?? stageActor(0), let h = showBook.heading[a.id] else { return false }
+        return h.age > h.limit
+    }
+    /// The stage's floor rule for a walk (instead of the room's visible floor, which clamped the wing marks onto the edge of the picture): the platform and the wings, nothing else.
+    nonisolated static func showStageResolve(_ p: SIMD3<Float>) -> SIMD3<Float> { SIMD3(min(max(p.x, -9), 9), p.y, min(max(p.z, -2.4), 3.5)) }
+    /// A walk to the middle starts once nobody else stands within `clearOf` of it (two body widths and a little: their skins never touch), and never before: no early start, no walking into anyone.
+    private static let clearOf: Float = 1.5
+    private func middleClear(for id: Int) -> Bool {
+        let book = showBook
+        let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+        return !bodies.contains { b in
+            guard b.id != id else { return false }
+            let c = b.sim.centroid()
+            return simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.clearOf
+        }
+    }
+    /// The back row stands behind this line; a body there starts for the middle by walking to the gate, which is free when nobody is within `clearOf` of it.
+    private static let backRow: Float = -0.7
+    private func spotClear(_ spot: SIMD2<Float>, radius: Float, for id: Int) -> Bool {
+        let book = showBook
+        let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+        return !bodies.contains { b in
+            guard b.id != id else { return false }
+            if book.via[b.id] != nil, spot == ShowStage.gate { return true }          // (he is on his way through the gate: two bodies never meet there)
+            let c = b.sim.centroid()
+            return simd_distance(SIMD2(c.x, c.z), spot) < radius
+        }
+    }
+    /// Free to set off: from the back row, the gate is free (nobody within 1.3 of it: the seats beside the middle are 1.45 off; the middle itself is waited for at the gate); from anywhere else, the middle is.
+    private func setOffClear(_ a: JellyActor) -> Bool {
+        let c = a.sim.centroid()
+        return c.z < Self.backRow ? spotClear(ShowStage.gate, radius: 1.3, for: a.id) : middleClear(for: a.id)
+    }
+    private func showWalkWhenClear(_ a: JellyActor, to p: SIMD2<Float>) {
+        let book = showBook
+        if book.heading[a.id] != nil, simd_distance(p, ShowStage.playerSpot) < 0.01 { return }          // (already on her way: not restarted)
+        book.pendingWalks.removeAll { $0.id == a.id }
+        if setOffClear(a) { showRoute(a, to: p) } else {
+            book.pendingWalks.append((a.id, p, 0))
+            #if targetEnvironment(simulator)
+            if DevArgs.enabled { let c = a.sim.centroid(); print(String(format: "[showturn] pending actor %d at (%.2f, %.2f) t=%.3f", a.id, c.x, c.z, CACurrentMediaTime())) }
+            #endif
+        }
+    }
+    private func tickPendingWalks(dt: Float) {
+        let book = showBook
+        guard show.trickStage == .rivals || show.trickEntering else { book.via = [:]; book.pendingWalks = []; return }          // (the rivals' part is over: no walk of it is left to go on)
+        tickVia()
+        guard !book.pendingWalks.isEmpty else { return }
+        var rest: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
+        for w in book.pendingWalks {
+            guard let a = showBody(w.id) else { continue }
+            if setOffClear(a) {
+                #if targetEnvironment(simulator)
+                if DevArgs.enabled { print(String(format: "[showturn] waited %.2f s for the middle to clear (actor %d) t=%.3f", w.waited, w.id, CACurrentMediaTime())) }
+                #endif
+                showRoute(a, to: w.to)
+            } else {
+                rest.append((w.id, w.to, w.waited + dt))
+                #if targetEnvironment(simulator)
+                if DevArgs.enabled, Int(w.waited) != Int(w.waited + dt), Int(w.waited) % 3 == 2 {
+                    let all = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+                    print("[showturn] still waiting actor \(w.id) at \(a.sim.centroid()): " + all.map { "\($0.id)@\($0.sim.centroid().x),\($0.sim.centroid().z) via \(book.via[$0.id] != nil)" }.joined(separator: " "))
+                }
+                #endif
+            }
+        }
+        book.pendingWalks = rest
     }
     /// The Trick round's stage: the rivals stand at their rest spots; after it they are back in the dance row (and the borrowed ones far off) for the results.
     private func showSetTrick(_ on: Bool) {
@@ -330,26 +485,35 @@ extension GameCare {
             else if let j = book.extra.firstIndex(where: { $0.id == a.id }) { showSnap(a, to: Self.showFarSpot(j)) }
         }
         if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
-        if !on { book.goals = [:]; book.flops = [:]; book.enterDelay = nil }
+        if !on { book.goals = [:]; book.flops = [:]; book.enterDelay = nil; book.pendingWalks = []; book.heading = [:]; book.via = [:] }
     }
     /// The flow asks for the rivals' turn on the bodies.
     private func showRivalCue(_ cue: ShowFlow.RivalCue) {
         let book = showBook
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled { print(String(format: "[showturn] %@ t=%.3f", "\(cue)", CACurrentMediaTime())) }          // (capture aid: the turn's clock, the same line in every build that is timed)
+        #endif
         switch cue {
         case .playerAside(let aside):
             guard let a = stageActor(0) else { return }
-            showWalk(a, to: aside ? ShowStage.playerAside : ShowStage.playerSpot)
+            if aside { showRoute(a, to: ShowStage.playerAside(sideways: GameCamera.aspect > 1)) } else { showWalkWhenClear(a, to: ShowStage.playerSpot) }          // (the first entrant sets off once he is clear of the middle: set off together their paths cross)
         case .walkIn(let i):
             guard let a = rivalActor(i) else { return }
-            showWalk(a, to: ShowStage.playerSpot)
+            showWalkWhenClear(a, to: ShowStage.playerSpot)
         case .perform(let i, let t, let ok):
-            guard let a = rivalActor(i), let b = a.brain else { return }
-            if let g = book.goals[a.id], simd_distance(SIMD2(b.px, b.pz), g) > 0.8 { showSnap(a, to: g) }          // (a walk that never got there: he is in the middle for his trick)
+            guard let a = rivalActor(i), a.brain != nil else { return }
             book.goals[a.id] = nil
+            book.pendingWalks.removeAll { $0.id == a.id }; book.heading[a.id] = nil
+            #if targetEnvironment(simulator)
+            if DevArgs.enabled {          // (capture aid: she performs where she stands only when the turn's wait for her ran out; the light then goes to her)
+                let here = a.sim.centroid(), away = simd_distance(SIMD2(here.x, here.z), ShowStage.playerSpot)
+                if away > 0.8 { print(String(format: "[spotlight] cap: rival %d performs %.2f from the middle (the wait for her ran out)", i, away)) }
+            }
+            #endif
             showDoTrick(a, t, success: ok, others: a.id)
         case .walkOut(let i):
             guard let a = rivalActor(i) else { return }
-            showWalk(a, to: ShowStage.rivalRest(i, sideways: GameCamera.aspect > 1))
+            showRoute(a, to: ShowStage.rivalRest(i, sideways: GameCamera.aspect > 1))
         case .enter:
             guard let s = show.sim else { return }
             let side = GameCamera.aspect > 1          // (a phone on its side: the view is shifted, all three come from the left)
@@ -360,18 +524,37 @@ extension GameCare {
             book.enterDelay = nil
             for k in s.rivals.indices { if let a = rivalActor(k) { showSnap(a, to: ShowStage.rivalRest(k, sideways: GameCamera.aspect > 1)) } }
             if let p = stageActor(0) { showSnap(p, to: ShowStage.playerSpot) }
-            book.goals = [:]; book.flops = [:]
+            book.goals = [:]; book.flops = [:]; book.pendingWalks = []; book.heading = [:]; book.via = [:]
         }
     }
     /// Has the body got where it was sent (nil = the player's Jelbie; `atCentre` is only the flow's wording)? A body with no walk under way is there.
     private func showArrived(_ who: Int?, atCentre: Bool) -> Bool {
         let book = showBook
         let a = who.map { rivalActor($0) } ?? stageActor(0)
-        guard let a, let b = a.brain, let g = book.goals[a.id] else { return true }
+        if let a, book.pendingWalks.contains(where: { $0.id == a.id }) { return false }          // (still waiting for the middle to clear)
+        guard let a, let b = a.brain else { return true }
+        let c = a.sim.centroid()          // (the BODY's place, not the brain's: they differed by up to a metre while a walker was held back by the one before her)
+        if atCentre {          // a turn at the middle: she must really be THERE (measured on the middle itself, whatever goal the floor rules gave the walk)
+            if b.pending != nil { return false }
+            if case .walk = b.script { return false }          // (still stepping; the turn to the camera after the walk is not waited for: it can take seconds)
+            if simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot) < Self.arriveRadius { book.goals[a.id] = nil; book.heading[a.id] = nil; showArrivedLog(a, "middle", c); return true }
+            let now = CACurrentMediaTime()          // she stopped short (held back by the one leaving, or pushed off it): ask again, at most every 0.6 s
+            if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showRoute(a, to: ShowStage.playerSpot) }
+            return false
+        }
+        guard let g = book.goals[a.id] else { return true }
         if b.pending != nil { return false }
-        if case .none = b.script {} else { return false }
-        if simd_distance(SIMD2(b.px, b.pz), g) < 0.6 { book.goals[a.id] = nil; return true }
+        if case .walk = b.script { return false }
+        if simd_distance(SIMD2(c.x, c.z), g) < Self.arriveRadius { book.goals[a.id] = nil; showArrivedLog(a, "mark", c); return true }
+        let now = CACurrentMediaTime()
+        if now - (book.retryAt[a.id] ?? 0) > 0.6 { book.retryAt[a.id] = now; showWalk(a, to: g) }
         return false
+    }
+    private static let arriveRadius: Float = 0.45
+    private func showArrivedLog(_ a: JellyActor, _ via: String, _ c: SIMD3<Float>) {
+        #if targetEnvironment(simulator)
+        if DevArgs.enabled { print(String(format: "[showturn] arrived actor %d (%@) %.2f from the middle t=%.3f", a.id, via, simd_distance(SIMD2(c.x, c.z), ShowStage.playerSpot), CACurrentMediaTime())) }
+        #endif
     }
 
     // MARK: the bodies' acts
@@ -470,6 +653,7 @@ extension GameCare {
             guard let b = a.brain else { continue }
             b.abortAll(a.sim, a.skinner)
             if k == 0 {
+                if place == 1 { book.winPending = true }          // (first place: the win celebration, BlobBrain+Win.swift; started in tickShow once the Trick round's snap back to the podium spot has run, which cuts anything started this tick)
                 b.commandedIdle = .joy
                 if place == 1 { b.proudStrutCue() }          // (batch-2 emote: a chest-out strut when he is next free)
                 b.blushBump(hold: 3.5, peak: place == 1 ? 0.9 : 0.7)
@@ -485,19 +669,38 @@ extension GameCare {
 
     // MARK: per fixed step (the stage calls it every step, with every Jelbie)
 
+    #if targetEnvironment(simulator)
+    nonisolated(unsafe) static var startShowFrames = 0
+    /// Capture aid (dev arguments, simulator only): `-StartShow 1` starts the Show for Jelmiko 0 once housemate #1 has slept for 10 s (use with `-RaceDepartSetup asleep` and its marker file).
+    private func startShowCaptureAid(_ actors: [JellyActor]) {
+        guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "StartShow") != 0, !show.active, showBook.wait == nil, actors.count > 1, let b1 = actors[1].brain, b1.isSleeping else { return }
+        Self.startShowFrames += 1
+        if Self.startShowFrames == 600 { startShow(jelly: 0, rank: .puddle, seed: Self.showSeed) }
+    }
+    #endif
+
     func tickShow(_ actors: [JellyActor], dt: Float) {
         showBook.actors = actors
         #if targetEnvironment(simulator)
+        startShowCaptureAid(actors)
+        #endif
+        #if targetEnvironment(simulator)
         tripArriveTick("show", actors + showBook.extra, dt: dt)          // (park-arrive-r2 capture aid: Park/ParkSlideProbe.swift)
         #endif
-        if show.active { for a in actors { a.brain?.sleepLocked = true } }
+        if show.active, actors.indices.contains(show.playerID) { actors[show.playerID].brain?.sleepLocked = true }          // (the contestant only: a housemate is never touched)
+        if var w = showBook.wait {          // the contestant is rolling up: start once he is upright (a housemate who sleeps does not hold the show up)
+            w.age += dt
+            let sleeping = actors.filter { $0.id == w.id && ($0.brain?.isSleeping ?? false) }
+            if w.age > 1.5 && w.age.truncatingRemainder(dividingBy: 1) < dt { for a in sleeping { a.brain?.sleepWake(groggy: false, fast: true) } }
+            if w.age > 8 { for a in sleeping { if let b = a.brain { b.abortAll(a.sim, a.skinner); b.idleReset(a.skinner) } } }
+            if sleeping.isEmpty || w.age > 8.5 { showBook.wait = nil; beginShow(jelly: w.id, rank: w.rank, seed: w.seed) } else { showBook.wait = w }
+        }
         if !(forfeitAsk && show.canPause) { show.tick(dt: dt) }          // (the "Go home?" card holds the stage still, except the dance: the song's own clock runs on)
+        showSpotStep(dt: dt)
+        tickPendingWalks(dt: dt)
+        for k in showBook.heading.keys { showBook.heading[k]?.age += dt }
         guard show.active, show.onStage else { return }
         let book = showBook
-        for aid in book.parked where actors.indices.contains(aid) {          // the home Jelmiko off stage: held still (no autonomy, no room life), asleep never
-            guard let b = actors[aid].brain else { continue }
-            b.idleBlocked = true; b.autonomy = false
-        }
         for (a, v) in zip(book.extra, book.extraSpecs) {          // the borrowed rival bodies: held like the others, their species art on
             guard let b = a.brain else { continue }
             b.idleBlocked = true; b.autonomy = false
@@ -506,10 +709,18 @@ extension GameCare {
         // the Trick round's stage: the rivals to their rest spots when it begins, back to the row when it is over
         let inTrick = show.round == .trick || (show.round == .results && show.trickStage != .pick)
         if inTrick != book.trickSet, show.wipe == 0 { showSetTrick(inTrick) }
+        if book.winPending, show.wipe == 0, !book.trickSet, let aid = book.performers.first, actors.indices.contains(aid), let b = actors[aid].brain {          // (first place: after the snap, so nothing cuts it; a tap on Done / Again cuts it with the rest of the stage)
+            book.winPending = false
+            b.abortAll(actors[aid].sim, actors[aid].skinner)
+            b.commandedIdle = nil
+            b.winCheer = true
+            b.commandedIdle = .joy
+            fireGrandChampionConfetti()          // (the same falling burst as the race win)
+        }
         if let d = book.enterDelay {          // the walk-on: the entrants set off from the wing a moment after they were placed there
             if d - dt <= 0 {
                 book.enterDelay = nil
-                if let s = show.sim { for k in s.rivals.indices { if let a = rivalActor(k) { showWalk(a, to: ShowStage.rivalRest(k, sideways: GameCamera.aspect > 1)) } } }
+                if let s = show.sim { for k in s.rivals.indices { if let a = rivalActor(k) { showRoute(a, to: ShowStage.rivalRest(k, sideways: GameCamera.aspect > 1)) } } }
             } else { book.enterDelay = d - dt }
         }
         for (aid, f0) in book.flops {          // a rival's cute flop: the move is cut short after a beat and she wobbles
@@ -542,10 +753,10 @@ extension GameCare {
     func showWelcomeHome(_ id: Int, won: Bool, again: Bool) {
         let book = raceBook
         book.returner = id; book.won = won; book.homeAge = 0; book.returnerHopped = false; book.celebrated = false
-        greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 })
+        greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 && selectBrain($0)?.isSleeping != true })          // (a housemate who slept through the show sleeps on)
         greetOthers = [:]
         bubbleHub.greetClock = 0; bubbleHub.greetHearts = [:]
-        if id != 0 { greeting = true; greetHop = false; queued = [.come(to: greetSpotNow(0))] }
+        if id != 0, selectBrain(0)?.isSleeping != true { greeting = true; greetHop = false; queued = [.come(to: greetSpotNow(0))] }
         if again { requestTown(.studio) }
     }
 }

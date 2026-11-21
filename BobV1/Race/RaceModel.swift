@@ -683,6 +683,13 @@ nonisolated struct RaceSim: Sendable {
     /// Drops the player earns on this course (0 until the results are in, and 0 when the player never crossed the line).
     var playerDrops: Int { playerFinished ? (playerPlace.map { RaceTuning.drops(place: $0, tier: course.tier) } ?? 0) : 0 }
     var playerWon: Bool { playerPlace == 1 }
+
+    /// The player is FIRST at the line: no other racer has a finish time at or before his (two bodies over the line in one tick: the interpolated finish times decide, as `endRace` does).
+    static func leadsAtFinish(player: Float, others: [Float?]) -> Bool { others.allSatisfy { ($0 ?? .infinity) > player } }
+    var playerLeadsAtFinish: Bool {
+        guard racers.indices.contains(Self.playerIndex), let t = racers[Self.playerIndex].finishTime else { return false }
+        return Self.leadsAtFinish(player: t, others: racers.indices.filter { $0 != Self.playerIndex }.map { racers[$0].finishTime })
+    }
 }
 
 // MARK: - pull control

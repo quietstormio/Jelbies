@@ -24,9 +24,7 @@ final class StartFlow {
     enum AdoptMode: Equatable { case first, more }
     enum Phase: Equatable { case menu, wiping, opening, adopt(AdoptMode), firstDay(Int, String, Bool), game }
 
-    var phase: Phase {
-        didSet { Self.rememberRoom(phase) }          // (not called for the assignments in `init`, so reading the flag there is safe)
-    }
+    var phase: Phase
     /// Bumped to rebuild the room (GameHost).
     private(set) var session = 0
     /// Settings > Watch the opening: the story plays over the room and ends back in it (no picker, no save changes).
@@ -46,26 +44,42 @@ final class StartFlow {
         d.bool(forKey: startedKey) || d.object(forKey: JellyRoster.rosterKey) != nil || d.object(forKey: DropsWallet.key) != nil
     }
 
-    /// Whether the player was in the room when the app last went away (iOS may drop a backgrounded app; the next cold launch then returns to the room instead of the menu).
-    static let lastInRoomKey = "Jelbies.lastInRoom.v1"
+    // MARK: first return of the day
 
-    /// `.game` sets the flag; the main menu and a new game (`.wiping`) clear it; the other screens (picker, opening, first day) leave it as it was.
-    static func rememberRoom(_ p: Phase, _ d: UserDefaults = .standard) {
-        switch p {
-        case .game: d.set(true, forKey: lastInRoomKey)
-        case .menu, .wiping: d.set(false, forKey: lastInRoomKey)
-        default: break
-        }
+    /// A return from the background shows the main menu when the local calendar day changed since the app was last on screen AND at least `menuReturnMinAway` has passed (a 23:55 -> 00:05 hop does not).
+    static let menuReturnMinAway: TimeInterval = 3 * 3600
+    /// The hour the player's "day" starts (0 = local midnight).
+    static let dayStartHour = 0
+    static let lastOnScreenKey = "Jelbies.lastOnScreen.v1"
+    /// The clock the rule reads (tests pin it).
+    nonisolated(unsafe) static var clock: () -> Date = { Date() }
+
+    /// The scene went to the background: remember when the app was last on screen. (Developer: `-LeftHoursAgo N` pretends it was N hours ago.)
+    static func noteLeft(_ d: UserDefaults = .standard, at t: Date = clock()) {
+        var when = t
+        #if DEBUG || targetEnvironment(simulator)
+        if d.object(forKey: "LeftHoursAgo") != nil { when = t.addingTimeInterval(-d.double(forKey: "LeftHoursAgo") * 3600) }
+        #endif
+        d.set(when.timeIntervalSince1970, forKey: lastOnScreenKey)
     }
 
-    /// The phase a cold launch starts in: the room when there is a save and the player left from the room, else the main menu.
-    static func launchPhase(_ d: UserDefaults = .standard) -> Phase {
-        hasSave(d) && d.bool(forKey: lastInRoomKey) ? .game : .menu
+    /// The whole rule: `busy` = a meal, bath, competition, trip, close-up... is on screen (the plain return then).
+    static func returnShowsMenu(busy: Bool, _ d: UserDefaults = .standard, now: Date = clock(), calendar: Calendar = .current) -> Bool {
+        !busy && menuDueOnReturn(d, now: now, calendar: calendar)
+    }
+
+    /// True on the first return of the day (the caller decides whether what is on screen may give way).
+    static func menuDueOnReturn(_ d: UserDefaults = .standard, now: Date = clock(), calendar: Calendar = .current) -> Bool {
+        guard d.object(forKey: lastOnScreenKey) != nil else { return false }
+        let left = Date(timeIntervalSince1970: d.double(forKey: lastOnScreenKey))
+        guard now.timeIntervalSince(left) >= menuReturnMinAway else { return false }
+        let shift = TimeInterval(-dayStartHour * 3600)
+        return !calendar.isDate(left.addingTimeInterval(shift), inSameDayAs: now.addingTimeInterval(shift))
     }
 
     init() {
         let d = UserDefaults.standard
-        phase = Self.launchPhase(d)
+        phase = .menu
         #if DEBUG || targetEnvironment(simulator)
         let save = Self.hasSave(d)
         if d.object(forKey: "MainMenu") != nil, d.integer(forKey: "MainMenu") == 0 { phase = save ? .game : .adopt(.first) }
@@ -218,9 +232,6 @@ final class StartFlow {
 
     /// Menu: Continue. The roster is the saved one.
     func continueGame() { LaunchTiming.mark("continue tapped"); enterGame() }
-
-    /// A cold launch that resumed straight into the room (no Continue tap): once the logo / intro is gone, the short curtain covers the room building, as after Continue.
-    func curtainForResume() { if phase == .game { LaunchGate.shared.hold(.resume) } }
 
     /// Pause card: back to the main menu (the room is dropped; Continue brings it back from the save).
     func returnToMenu() { if phase == .game { FirstDayTour.shared.reset(); phase = .menu } }
@@ -412,6 +423,7 @@ final class StartFlow {
             for u in items where (try? u.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true { try? fm.removeItem(at: u) }          // jellies.json, portrait-N.png, the Siri queue (not the group's Library)
         }
         try? fm.removeItem(at: URL.documentsDirectory.appending(path: "Photos", directoryHint: .isDirectory))
+        WallPictureFiles.removeAll()          // the wall picture's own copy of its photo (Documents/Wall)
         WidgetCenter.shared.reloadAllTimelines()
         let live = Activity<JelbiesActivityAttributes>.activities          // snapshot now: a Live Activity started later must not be ended by this
         Task { for a in live { await a.end(nil, dismissalPolicy: .immediate) } }

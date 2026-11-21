@@ -18,6 +18,10 @@ enum OrientationForce {
                 guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { continue }
                 if scene.interfaceOrientation == want { return }
                 scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+                if UIDevice.current.userInterfaceIdiom == .pad, DevArgs.enabled {          // an iPad window (iPadOS 26) ignores the scene request: turn the (simulated) device instead
+                    UIDevice.current.setValue(want.rawValue, forKey: "orientation")
+                    UIViewController.attemptRotationToDeviceOrientation()
+                }
             }
         }
     }

@@ -118,6 +118,65 @@ final class PlayToss {
     }
     func seed(_ s: UInt64) { rng = s | 1 }
 
+    /// The ball's side walls: half the width at depth `z`. Play mode: the play view's (the ball stays in frame); `-PlayOld 1`: the visible floor's, as it was.
+    static func ballXHalf(_ z: Float) -> Float { GameCamera.playBallHalf(z: z) ?? (DecorPlacement.visibleHalf(z: z) + 0.3) }
+    /// The same without the old extra 0.3 (the landing ring, the targets).
+    static func ballReach(_ z: Float) -> Float { GameCamera.playBallHalf(z: z) ?? DecorPlacement.visibleHalf(z: z) }
+    /// The most |x| a Jelmiko's centre may have at depth `z` while he plays: the play floor's row; the old rule outside the frame.
+    static func bodyReach(_ z: Float) -> Float {
+        if GameCamera.playFrame, !PlayTuning.old, let f = GameCamera.roamFloor { return f.halfWidth(at: z) }
+        return DecorPlacement.visibleHalf(z: z) - 0.8
+    }
+    /// The z range a Jelmiko's centre may have while he plays.
+    static func bodyZ() -> ClosedRange<Float> {
+        if GameCamera.playFrame, !PlayTuning.old, let f = GameCamera.roamFloor { return f.minZ ... f.maxZ }
+        return TossTuning.zBack + 1.2 ... 9
+    }
+
+    // the frame (GameCamera.playFrame): the floor the Jelmiko play on is what the play camera shows
+    @ObservationIgnored private var frameSaved: (floor: GameCamera.RoamFloor?, walls: [RoomLayout.Plane], arena: (c: SIMD2<Float>, r: Float), hudRevision: Int, stageAspect: Float, viewAspect: Float)?
+    @ObservationIgnored private var frameAspect: Float = 0
+    private var viewAspect: Float { Float(viewSize.width / max(viewSize.height, 1)) }
+    private func frameOn() {
+        guard !PlayTuning.old, GameCamera.parkRoamMaxZ == nil else { return }
+        if frameSaved == nil { frameSaved = (GameCamera.roamFloor, RoomLayout.walls, (GameCamera.arenaCenter, GameCamera.arenaRadius), HUDLayout.measuredRevision, GameCamera.aspect, viewAspect); logFrame("before") }
+        GameCamera.playFrame = true
+        frameAspect = viewAspect
+        GameCamera.refreshRoam(aspect: frameAspect)
+        frontWall()
+        logFrame("during")
+    }
+    /// Capture aid (simulator, `-PlayDemo`): the room's safety wall, front wall and floor before / during / after play.
+    private func logFrame(_ tag: String) {
+        #if targetEnvironment(simulator)
+        guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
+        let f = GameCamera.roamFloor
+        NSLog("[playtoss] walls %@: arena (%.2f, %.2f) r %.2f | front wall z %.2f | floor z %.2f...%.2f rows %d", tag, GameCamera.arenaCenter.x, GameCamera.arenaCenter.y, GameCamera.arenaRadius, -(RoomLayout.walls.count > 1 ? RoomLayout.walls[1].d : 0), f?.minZ ?? 0, f?.maxZ ?? 0, f?.zs.count ?? 0)
+        #endif
+    }
+    /// The ball's front wall: the floor at the bottom of the play view (the ball is never left off the bottom edge); the room's 9 as before when the dial is 1.
+    private func frontWall() {
+        let was = GameCamera.playBlend
+        GameCamera.playBlend = 1; defer { GameCamera.playBlend = was }
+        guard let f = GameCamera.floorPoint(screen: CGPoint(x: viewSize.width / 2, y: viewSize.height * 0.94), size: viewSize) else { return }
+        TossTuning.zFront = min(9, max(f.y, catchZ() + 0.6))
+    }
+    private func frameOff() {
+        GameCamera.playFrame = false; GameCamera.playFrameView = nil
+        guard let s = frameSaved else { return }
+        frameSaved = nil
+        // the saved room floor is put back only when nothing it was built from changed during play: the same view shape AND the same measured HUD (the stage rebuilds the floor when the
+        // HUD's rails move or the phone turns, and during play that rebuild is the PLAY floor, so the stage would never rebuild the room's: it is rebuilt here instead, for the STAGE's
+        // aspect (the play overlay can be narrower than the stage: the safe area; a turn swaps the stage's width and height as it does the overlay's)
+        let turned = abs(frameAspect - s.viewAspect) > 0.005
+        let stageNow = turned ? s.stageAspect * frameAspect / max(s.viewAspect, 0.01) : s.stageAspect
+        if s.floor == nil || (!turned && s.hudRevision == HUDLayout.measuredRevision) {
+            GameCamera.roamFloor = s.floor; RoomLayout.walls = s.walls; GameCamera.arenaCenter = s.arena.c; GameCamera.arenaRadius = s.arena.r
+        } else { GameCamera.refreshRoam(aspect: stageNow) }
+        GameCamera.aspect = stageNow
+        logFrame("after")
+    }
+
     // MARK: begin / end
 
     /// Play mode on with `kind`: the Jelbies take their places, the camera eases to the play view, the ball is in the hand.
@@ -131,6 +190,7 @@ final class PlayToss {
         rally = 0; shownRally = 0; nudges = 0; looseT = 0; bumper = nil; passTo = nil; finger = nil; leftHand = false
         camGoal = 1
         if snapCamera { camBlend = 1; GameCamera.playBlend = 1 }
+        frameOn()
         placeJellies()
     }
 
@@ -141,6 +201,7 @@ final class PlayToss {
         phase = .toy
         camGoal = 1
         if snapCamera { camBlend = 1; GameCamera.playBlend = 1 }
+        frameOn()
     }
 
     /// Done: the Jelbies go back to roaming, the camera eases home.
@@ -151,13 +212,14 @@ final class PlayToss {
         finger = nil
         release(jellies)
         jellies = []
+        frameOff()
     }
 
     private func release(_ js: [PlayJelly]) {
         for j in js {
             let b = j.brain
             if let s = saved[j.id] { b.reserved = s.reserved; b.idleBlocked = s.idleBlocked; b.waitFocus = s.waitFocus } else { b.reserved = false }
-            b.trackPoint = nil; b.tossFire = nil
+            b.trackPoint = nil; b.tossFire = nil; b.playChase = 0
         }
         saved = [:]
         interceptAt = [:]
@@ -187,8 +249,26 @@ final class PlayToss {
         let was = GameCamera.playBlend
         GameCamera.playBlend = 1; defer { GameCamera.playBlend = was }
         var out: [Int: SIMD2<Float>] = [:]
+        // (the row stands where it always stood on the FLOOR: the old play camera put the middle of the screen there. With the dial lower the screen's middle is the far back
+        // wall, so the row's depth is taken from the old view and only its width from the camera in use, at the same screen fractions across)
+        let rowZ: [Int: Float]? = {
+            guard !PlayTuning.old, PlayTuning.camZoom < 1 else { return nil }
+            let zoom = PlayTuning.zoomOverride; defer { PlayTuning.zoomOverride = zoom }
+            PlayTuning.zoomOverride = 1
+            var z: [Int: Float] = [:]
+            for (k, f) in fx.enumerated() {
+                let sy: CGFloat = (k == 1 && n >= 3) ? 0.46 : 0.50
+                if let p = GameCamera.floorPoint(screen: CGPoint(x: size.width * CGFloat(f), y: size.height * sy), size: size) { z[k] = p.y }
+            }
+            return z
+        }()
         for (k, f) in fx.enumerated() {
-            let sy: CGFloat = (k == 1 && n >= 3) ? 0.46 : 0.50          // (the middle one a touch further back: a shallow arc)
+            var sy: CGFloat = (k == 1 && n >= 3) ? 0.46 : 0.50          // (the middle one a touch further back: a shallow arc)
+            if let z0 = rowZ?[k] {
+                // (the wide view puts the hand further from the row than the old view did: the row stands `rowForward` nearer so the ball's trips keep their length)
+                let z = min(z0 + PlayTuning.rowForward, (GameCamera.roamFloor?.maxZ ?? 9) - 0.3)
+                if let s = GameCamera.screenPoint(floor: SIMD2(0, z), size: size) { sy = s.y / size.height }
+            }
             if let p = GameCamera.floorPoint(screen: CGPoint(x: size.width * CGFloat(f), y: size.height * sy), size: size) { out[k] = p }
         }
         return out
@@ -207,7 +287,7 @@ final class PlayToss {
     /// The z the ball must reach to count as back in the hand: the floor under the bottom band of the screen.
     func catchZ() -> Float {
         let p = CGPoint(x: viewSize.width / 2, y: viewSize.height * 0.80)
-        return min(max(GameCamera.floorPoint(screen: p, size: viewSize)?.y ?? 3.2, 1.8), 5)
+        return min(max(GameCamera.floorPoint(screen: p, size: viewSize)?.y ?? 3.2, 1.8), PlayTuning.old ? 5 : 9)          // (a wider view puts the bottom band further out: the old cap of 5 made the catch a long zip to the hand)
     }
 
     // MARK: the flick
@@ -242,6 +322,7 @@ final class PlayToss {
         }
         guard active else { return }
         jellies = js
+        if GameCamera.playFrame, abs(viewAspect - frameAspect) > 0.005 { reframe() }          // (the phone was turned: the frame is the new view's)
         switch phase {
         case .inHand:
             ball.pos = handWorld(); ball.vel = .zero
@@ -259,9 +340,26 @@ final class PlayToss {
             live(dt: dt, world: world)
         case .off, .toy: break
         }
+        // a live ball: they go for it a little faster (PlayTuning.chaseGain; -PlayOld 1 = the old walk)
+        let chase: Float = (!PlayTuning.old && (phase == .flying || phase == .loose)) ? PlayTuning.chaseGain : 0
+        for j in jellies where j.brain.playChase != chase { j.brain.playChase = chase }
         // the ball is a soft obstacle for the walkers (nobody walks through it)
         RoomLayout.ballSpheres.removeAll { $0.uid == Self.sphereUID }
         if (phase == .flying || phase == .loose), ball.pos.y < 0.9 { RoomLayout.ballSpheres.append(BallSphere(c: SIMD2(ball.pos.x, ball.pos.z), r: ball.radius, uid: Self.sphereUID)) }
+    }
+
+    /// The view changed shape: the play floor is rebuilt and the Jelmiko on the line walk to their new places.
+    private func reframe() {
+        frameAspect = viewAspect
+        GameCamera.refreshRoam(aspect: frameAspect)
+        frontWall()
+        let line = jellies.filter { !$0.free }
+        spots = Self.playSpots(count: line.count, size: viewSize)
+        for (k, j) in line.sorted(by: { $0.pos.x < $1.pos.x }).enumerated() {
+            let sp = spots[k] ?? .zero
+            home[j.id] = sp; homeT[j.id] = clock
+            if !j.brain.tossBusy { j.brain.requestNow(.goTo(sp)) }
+        }
     }
 
     /// Back in the hand: a Jelbie who stepped away to meet the ball strolls back to his place on the line.
@@ -339,7 +437,7 @@ final class PlayToss {
         let from = ball.pos
         let hand = handWorld()
         let tz = catchZ() + 0.55
-        let tx = min(max(hand.x * 0.5 + (rand() - 0.5) * 0.9, -(DecorPlacement.visibleHalf(z: tz) - 0.9)), DecorPlacement.visibleHalf(z: tz) - 0.9)
+        let tx = min(max(hand.x * 0.5 + (rand() - 0.5) * 0.9, -(Self.ballReach(tz) - 0.9)), Self.ballReach(tz) - 0.9)
         let target = SIMD3<Float>(tx, TossTuning.handHeight, tz)
         returnAim = nil
         let anotherHead = (passTo == nil && jellies.count > 1 && passes == 0 && rally >= 1 && rand() < Self.passChance) ? jellies.filter({ $0.id != id }).min(by: { simd_distance($0.pos, j.pos) < simd_distance($1.pos, j.pos) }) : nil
@@ -354,7 +452,8 @@ final class PlayToss {
             let dist = simd_length(SIMD2(target.x - from.x, target.z - from.z))
             switch q {
             case .good:
-                v = TossAim.ballistic(from: from, to: target, flight: min(max(0.7 + 0.07 * dist, 0.8), 1.25) * TossTuning.slow)
+                let slope = PlayTuning.old ? 0.07 : PlayTuning.returnFlightSlope, cap = PlayTuning.old ? 1.25 : PlayTuning.returnFlightCap
+                v = TossAim.ballistic(from: from, to: target, flight: min(max(0.7 + slope * dist, 0.8), cap) * TossTuning.slow)
                 returnAim = SIMD2(target.x, target.z)
             case .short:
                 let k = 0.45 + 0.2 * rand()
@@ -400,10 +499,28 @@ final class PlayToss {
     private func restWatch(dt: Float) {
         guard phase == .loose || phase == .flying else { restT = 0; return }
         if ball.onFloor, ball.speedXZ < 0.35, bumper == nil || !(jelly(bumper!)?.brain.tossBusy ?? false) { restT += dt } else { restT = 0 }
-        guard restT > (leftHand ? Self.restRescueAfter : 0.8) else { return }
+        guard restT > (leftHand ? (PlayTuning.old ? Self.restRescueAfter : PlayTuning.restRescue) : 0.8) else { return }
         restT = 0
         if !leftHand { caught(); return }
         rescue()
+    }
+
+    // MARK: ready steps (play-frame-r1: "when I throw it they run")
+
+    @ObservationIgnored private var supportT: [Int: Float] = [:]
+    /// The Jelmiko who are not the one going for the ball take a few steps toward where it will be (a step or two, at most `PlayTuning.supportReach` of the way, every
+    /// 1.4 s at most), so a live ball moves all three, not one: they are in position for a pass and the next bump. `rehome` sends them back to the line once it is caught.
+    private func support(toward xz: SIMD2<Float>, except: Set<Int>) {
+        guard !PlayTuning.old else { return }
+        for j in jellies where !j.free && !except.contains(j.id) {
+            guard !j.brain.tossBusy, Self.canHop(j.brain), j.brain.idleState.kind == nil, clock - (supportT[j.id] ?? -9) > PlayTuning.supportEvery else { continue }
+            let d = simd_distance(j.pos, xz)
+            guard d > PlayTuning.supportMinDist, d < PlayTuning.supportMaxDist else { continue }
+            let step = min((d - PlayTuning.supportMinDist) * PlayTuning.supportReach, PlayTuning.supportMaxStep)
+            guard step >= PlayTuning.supportMinStep else { continue }          // (no shuffles: a step is worth walking)
+            supportT[j.id] = clock
+            j.brain.requestNow(.goTo(j.pos + (xz - j.pos) / d * step))
+        }
     }
 
     // MARK: intercepts (the Jelbie it is heading for steps under it and hops)
@@ -428,6 +545,7 @@ final class PlayToss {
             guard d < Self.interceptReach else { continue }
             if best == nil || d < best!.d { best = (j, a.t, a.xz, d) }
         }
+        support(toward: best?.xz ?? ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: best.map { [$0.j.id] } ?? [])
         guard let b = best else { return }
         let j = b.j
         let busy = j.brain.tossBusy
@@ -435,7 +553,8 @@ final class PlayToss {
         if b.d > 0.30, !busy, b.t > 0.18 {
             let last = interceptAt[j.id]
             if last == nil || (clock - last!.t > 0.45 && simd_distance(last!.p, b.xz) > 0.25) {
-                let fx = SIMD2<Float>(min(max(b.xz.x, -DecorPlacement.visibleHalf(z: b.xz.y) + 0.8), DecorPlacement.visibleHalf(z: b.xz.y) - 0.8), min(max(b.xz.y, TossTuning.zBack + 1.2), catchZ() - 1.2))
+                let zr = Self.bodyZ(), zy = min(max(b.xz.y, zr.lowerBound), max(min(catchZ() - 1.2, zr.upperBound), zr.lowerBound)), bx = Self.bodyReach(PlayTuning.old ? b.xz.y : zy)
+                let fx = SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)
                 j.brain.requestNow(.goTo(fx))
                 interceptAt[j.id] = (b.xz, clock)
             }
@@ -451,6 +570,12 @@ final class PlayToss {
     private func loose(dt: Float) {
         let r = ball.radius
         if looseT > Self.rescueAfter { rescue(); return }
+        if looseT > 0.4 {          // (the ones who are not the next to bump: a few steps toward the ball)
+            let ballAt = SIMD2(ball.pos.x, ball.pos.z)
+            var skip = Set<Int>(); if let b = bumper { skip.insert(b) }
+            if let n = jellies.min(by: { simd_distance($0.pos, ballAt) < simd_distance($1.pos, ballAt) }) { skip.insert(n.id) }
+            support(toward: ballAt, except: skip)
+        }
         // a Jelbie already on his way / mid-stomp: let him
         if let b = bumper, let j = jelly(b) {
             if !j.brain.tossBusy {
@@ -471,7 +596,7 @@ final class PlayToss {
         let vLand = (ball.vel.y * ball.vel.y + 2 * gq * max(ball.pos.y - r, 0)).squareRoot()
         let airT = ball.pos.y > r + 0.03 || abs(ball.vel.y) > 0.5 ? min((ball.vel.y + vLand) / gq + 2 * vLand * e / (1 - e) / gq, 1.6) : 0
         var ballXZ = SIMD2(ball.pos.x, ball.pos.z) + SIMD2(ball.vel.x, ball.vel.z) * (airT * 0.75 + 0.8 / TossTuning.rollDecayPerS)
-        let lim = DecorPlacement.visibleHalf(z: ballXZ.y) - r
+        let lim = Self.ballReach(ballXZ.y) - r
         ballXZ = SIMD2(min(max(ballXZ.x, -lim), lim), min(max(ballXZ.y, TossTuning.zBack + r), catchZ()))
         let target = SIMD2<Float>(handWorld().x * 0.5, catchZ() + 0.6)
         var dir = target - ballXZ
@@ -527,7 +652,7 @@ final class PlayToss {
     private func rescue() {
         let ballXZ = SIMD2(ball.pos.x, ball.pos.z)
         let tz = catchZ() + 0.6
-        let lim = DecorPlacement.visibleHalf(z: tz) - 0.9
+        let lim = Self.ballReach(tz) - 0.9
         let target = SIMD3<Float>(min(max(handWorld().x * 0.5, -lim), lim), ball.radius, tz)
         let L = simd_length(SIMD2(target.x, target.z) - ballXZ)
         // a lob (clears the furniture and the Jelbies' shoulders) that comes down in the catch zone

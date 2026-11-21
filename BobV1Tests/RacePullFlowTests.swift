@@ -355,6 +355,13 @@ final class RacePullFlowTests: XCTestCase {
         }
     }
 
+    /// The default jiggle level (1) is what players have: the same three races, the same zero-leash rule (the first-place celebration is part of every one of them).
+    func testFeetStayAttachedAtTheDefaultJiggleLevel() {
+        feetRace("puddle level 1", tier: .puddle, seed: 3, level: 1)
+        feetRace("splash level 1", tier: .splash, seed: 7, level: 1)
+        feetRace("tsunami level 1", tier: .tsunami, seed: 11, level: 1)
+    }
+
     /// B1b 2.1: the skin's frame disagreement per phase on every course (the numbers for the Main session). Prints only.
     private func fdTable(_ rows: [(CourseTier, UInt64)], taps: Bool = false) {
         for (tier, seed) in rows {
@@ -431,12 +438,15 @@ final class RacePullFlowTests: XCTestCase {
         for (tier, seed) in [(CourseTier.puddle, UInt64(3)), (.wave, 9)] {
             let r = PullRace(tier: tier, seed: seed)
             var prevPos = [SIMD2<Float>?](repeating: nil, count: 3), prevYaw = [Float?](repeating: nil, count: 3), prevSpot = [SIMD2<Float>?](repeating: nil, count: 3)
+            var lastWinStep = [Int](repeating: -1000, count: 3)          // (the first-place celebration is its own move with its own tests: the frames it covers, and three steps after it, are not part of this walk's smoothness)
             var wMove: (d: Float, note: String) = (0, ""), wYaw: (d: Float, note: String) = (0, ""), wSpot: (d: Float, note: String) = (0, "")
             r.perStep = { r in
                 guard r.care.race.phase == .racing, !r.care.race.hasResults, r.care.race.wipe == 0 else { return }
                 for k in 0..<3 {
                     let a = r.body(k), c = a.sim.centroid(), pos = SIMD2(c.x, c.z)
                     let yaw = a.sim.bodyPose(iterations: 4).yaw, spot = a.brain!.raceSpot
+                    if a.brain!.winCheer { lastWinStep[k] = r.n }
+                    if r.n <= lastWinStep[k] + 3 { prevPos[k] = nil; prevYaw[k] = nil; prevSpot[k] = nil; continue }
                     let note = "\(tier) racer \(k) step \(r.n) script \(a.brain!.script) gait \(a.brain!.gait.phase)"
                     if let p = prevPos[k], simd_distance(p, pos) > wMove.d { wMove = (simd_distance(p, pos), note) }
                     if let y = prevYaw[k], abs(wrapAngle(yaw - y)) * 180 / .pi > wYaw.d { wYaw = (abs(wrapAngle(yaw - y)) * 180 / .pi, note) }
@@ -465,6 +475,7 @@ final class RacePullFlowTests: XCTestCase {
                 var script = "\(b.script)"
                 var ok = false
                 if case .race = b.script { ok = !b.feet.active && b.feetInit && b.race.pendingFoot == nil }
+                if k == 0, b.winCheer { ok = true; script += " (celebrating the win: BlobBrain+Win.swift, about 3.4 s from just after the line)" }          // (a first place: the player's body bounces with his arms up for the first seconds after the line; it stands afterwards)
                 script += " feetActive=\(b.feet.active) feetInit=\(b.feetInit) pending=\(b.race.pendingFoot != nil) jumping=\(b.race.jumping)"
                 checked[k] = (ok ? "ok " : "NOT standing ") + script
             }

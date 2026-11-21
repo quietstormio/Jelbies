@@ -48,7 +48,7 @@ final class NoSilentRefusalTests: XCTestCase {
         DayClock.shared.forcedHour = 23; step(r, 0.1)
         XCTAssertEqual(said { r.care.requestGroom() }, "The Jelly Spa is closed at night. Come back in the morning!")
         XCTAssertEqual(said { r.care.requestCafe() }, CafeBlock.night.message)
-        XCTAssertEqual(said { r.care.requestPark() }, "The park is closed at night. Come back in the morning!")
+        XCTAssertEqual(said { r.care.requestPark() }, "It's bedtime, so the park is closed. It opens in the morning!")
         XCTAssertEqual(TownRefusals.closedSub, "Closed until morning")
     }
 

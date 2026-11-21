@@ -306,14 +306,15 @@ final class SleepMaskTests: XCTestCase {
         let (r, set) = sleeper()
         napWithMask(r, set)
         r.brain.sleepWake(groggy: false)
-        var poofAt: Float?
-        for _ in 0..<120 {
+        var poofAt: Float?, roll: Float = 0
+        // (the wake is the staged one: the stir, then the get-up, whose length is the wake's own `rollDur`: 1 to 2.5 s with the new get-up; so the half-way mark is read from it, not from `rollBackTime`)
+        for _ in 0..<600 {
             step(r, set)
-            if poofAt == nil && set.phase(0) == .poofOut { poofAt = r.brain.sleep.t }
-            if r.brain.sleep.stage == 4 && r.brain.sleep.t < SleepTuning.rollBackTime * 0.4 { XCTAssertEqual(set.phase(0), .shown, "still on early in the roll") }
+            if poofAt == nil && set.phase(0) == .poofOut { poofAt = r.brain.sleep.t; roll = r.brain.sleep.rollDur }
+            if r.brain.sleep.stage == 4 && r.brain.sleep.t < r.brain.sleep.rollDur * 0.4 { XCTAssertEqual(set.phase(0), .shown, "still on early in the roll") }
         }
         XCTAssertNotNil(poofAt)
-        XCTAssertEqual(poofAt ?? 0, SleepTuning.rollBackTime * 0.5, accuracy: 0.1)
+        XCTAssertEqual(poofAt ?? 0, roll * SleepMaskTuning.holdRoll, accuracy: 0.1)
         XCTAssertFalse(set.isShown(0))
         XCTAssertEqual(set.liveZ(0), 0)
     }

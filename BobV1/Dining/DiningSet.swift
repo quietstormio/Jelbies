@@ -647,9 +647,9 @@ final class DiningSet {
         let key = "\(serving.id)-\(gi)-\(n)"
         if let m = heldBerry[key] { return m }
         let m: RoomMesh
-        if serving.id == Consumables.pizza.id { m = DiningModels.heldSlice(scale: layout.scale) }
-        else if serving.pizzaLayout && serving.piece == nil { m = DiningModels.heldSlice(scale: layout.scale, palette: serving.palette) }
-        else if serving.piece != nil || serving.placePiece != nil { m = DiningModels.heldPiece(serving, index: gi, scale: layout.scale) }
+        if serving.id == Consumables.pizza.id { m = DiningModels.heldSlice(scale: layout.scale * DiningModels.pizzaPieceScale(layout)) }
+        else if serving.pizzaLayout && serving.piece == nil { m = DiningModels.heldSlice(scale: layout.scale * DiningModels.pizzaPieceScale(layout), palette: serving.palette) }
+        else if serving.piece != nil || serving.placePiece != nil { m = DiningModels.heldPiece(serving, index: gi, scale: layout.scale * (serving.pizzaLayout ? DiningModels.pizzaPieceScale(layout) : 1)) }
         else { m = DiningModels.heldBerry(color: gi / 3 + gi % 3, scale: layout.scale) }
         heldBerry[key] = m; return m
     }

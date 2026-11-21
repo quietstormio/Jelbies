@@ -137,7 +137,20 @@ final class RaceFlow {
     var buttonsLive: Bool { racing && ui.live }
     var showsCountdown: Bool { phase == .racing && ui.phase == .countdown && cameraBlend > 0 }
     var showsGo: Bool { phase == .racing && ui.go }
-    var showsCard: Bool { phase == .racing && ui.phase == .results && !leaving && cameraBlend > 0 }
+    var showsCard: Bool { phase == .racing && ui.phase == .results && !leaving && cameraBlend > 0 && !holdsCard }
+    // MARK: the win hold (first place only)
+    /// Seconds since the player crossed the line FIRST (nil = no hold: 2nd / 3rd place and every other race show the card exactly when the results are in).
+    var winHoldT: Float?
+    /// The celebration has been seen running / has ended / a tap asked for the card.
+    var winMoveSeen = false
+    var winMoveEnded = false
+    static let winHoldMax: Float = 3.0
+    /// The results card waits for the winner's celebration (at most `winHoldMax` s after the finish; a tap brings it at once).
+    var holdsCard: Bool { guard let t = winHoldT else { return false }; return !winMoveEnded && t < Self.winHoldMax }
+    func startWinHold() { winHoldT = 0; winMoveSeen = false; winMoveEnded = false }
+    func skipWinHold() { winMoveEnded = true }
+    /// GameCare reports every step whether the player's celebration is running; once it has run and stopped the card may come.
+    func noteWinMove(active: Bool) { guard winHoldT != nil, !winMoveEnded else { return }; if active { winMoveSeen = true } else if winMoveSeen { winMoveEnded = true } }
     /// The race has results (the card is up or the way home has started).
     var hasResults: Bool { sim?.phase == .results }
 
@@ -162,12 +175,18 @@ final class RaceFlow {
         // a short memory of the last rivals met: the stock source skips them, and this race's rivals join the list (other sources are used as they are)
         var source = rivalSource
         if var local = source as? LocalRivalSource, let d = recentRivals { local.recent = RivalMemory.load(d); source = local }
-        let rs = source.rivals(count: rivalCount, player: player, playerTint: playerTint, seed: seed, tier: t)
+        var rs = source.rivals(count: rivalCount, player: player, playerTint: playerTint, seed: seed, tier: t)
+        // capture aid (developer arguments only): -RaceForcePlace n makes the first n-1 rivals unbeatable and the rest standing still, so the player's place is n (simulator proof of the 2nd / 3rd place strips)
+        if DevArgs.enabled, UserDefaults.standard.object(forKey: "RaceForcePlace") != nil {
+            let p = UserDefaults.standard.integer(forKey: "RaceForcePlace")
+            for k in rs.indices { rs[k].stats = k < p - 1 ? RacerStats(waddle: 1, focus: 1) : RacerStats(waddle: 0, focus: 0) }
+        }
         if source is LocalRivalSource, let d = recentRivals { RivalMemory.remember(rs.map(\.name), in: d) }
         rivals = rs; playerName = name; playerID = id
         sim = RaceSim(player: player, playerName: name, rivals: rs, seed: seed, playerBoost: boost, course: RaceCourse.course(t), control: control)
         ui = RaceUI()
         phase = .fade; fadeDest = .track; fadeStage = .out; holdT = 0; swapped = false; leaving = false
+        winHoldT = nil; winMoveSeen = false; winMoveEnded = false
         settled = false; forfeited = false; earned = 0; pointsEarned = 0; pointsAfter = 0; cardAge = 0; introT = 0; cueSerial = 0; autoT = 0; autoFoot = 0; unlockedNow = nil; awards = TrophyAwards()
         applyAssistAtStart()
         sim?.autoJumpPlayer = assist == .auto || A11ySettings.shared.autoJump          // (the hands-free run clears the hurdles for him)
@@ -247,6 +266,7 @@ final class RaceFlow {
         case .racing: break
         }
         guard sim != nil, wipe == 0 else { return [] }
+        if winHoldT != nil { winHoldT! += dt }
         if sim!.phase == .countdown, introT < Self.introPause { introT += dt; return [] }
         if control == .taps, let r = autoRate ?? autoAssistRate, buttonsLive {
             autoT += dt
@@ -392,7 +412,7 @@ final class RaceFlow {
     func abort() {
         guard phase != .off else { return }
         if cameraBlend > 0 || swapped && fadeDest == .track { onSwap(.room) }
-        cameraBlend = 0; wipe = 0; phase = .off; sim = nil; leaving = false
+        cameraBlend = 0; wipe = 0; phase = .off; sim = nil; leaving = false; winHoldT = nil
     }
 }
 

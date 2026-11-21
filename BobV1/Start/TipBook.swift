@@ -46,7 +46,7 @@ final class TipBook {
     static let gap: TimeInterval = 1.5
 
     nonisolated static func key(_ id: String) -> String { "Jelbies.tip.\(id).v1" }
-    nonisolated static let ids = ["feed", "clean", "tricks", "dress", "decor", "play", "shop", "town", "spring", "park", "trophies", "race", "show", "volley", "camp", "powerup"]
+    nonisolated static let ids = ["feed", "clean", "tricks", "dress", "play", "shop", "town", "spring", "park", "trophies", "race", "show", "volley", "camp", "powerup"]
     nonisolated static var allKeys: [String] { ids.map { key($0) } }
 
     /// The cards, word for word from the design (the Play card wording is the spec's spare line, "bump" made "bumps").
@@ -55,7 +55,6 @@ final class TipBook {
         TipCard(id: "clean", symbol: CareMenu.cleanSymbol, title: "Bath time", body: "Scrub, rinse, then rub to shine. Need a hand? Turn on Bath helper in Accessibility."),
         TipCard(id: "tricks", symbol: HUDMenu.symbol(.tricks), title: "Tricks", body: "Tap a trick and your Jelmiko does it. Locked ones are in the Shop."),
         TipCard(id: "dress", symbol: HUDMenu.symbol(.dress), title: "Dress up", body: "Tap Wear to put clothes on. Get more clothes in the Shop."),
-        TipCard(id: "decor", symbol: HUDMenu.symbol(.decor), title: "Decor", body: "Tap Place to put it in your room. Get toys in the Shop."),
         TipCard(id: "play", symbol: HUDMenu.symbol(.play), title: "Play", body: "Pick a toy and flick it. Your Jelmiko bumps it back."),
         TipCard(id: "shop", symbol: "bag.fill", title: "The Shop", body: "Spend JellyCoins on food, clothes and tricks. It all goes to your Bag."),
         TipCard(id: "town", symbol: "door.left.hand.open", title: "Where to?", body: "Race, dance and play to earn JellyCoins. Spend them in the Shop."),

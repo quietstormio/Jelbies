@@ -21,9 +21,9 @@ nonisolated enum RoomArt {
 
     /// Appends every part of the room's art; false when the resource is missing (the caller then builds the procedural furniture, so a room is never empty).
     @discardableResult
-    static func emit(_ name: String, into b: RoomMeshBuilder) -> Bool {
+    static func emit(_ name: String, into b: RoomMeshBuilder, skipping: Set<String> = []) -> Bool {
         guard let a = art(name) else { return false }
-        for part in a.parts { DecorMeshes.emit(part, into: b, offset: .zero) }
+        for part in a.parts where !skipping.contains(part.name) { DecorMeshes.emit(part, into: b, offset: .zero) }
         return true
     }
 }

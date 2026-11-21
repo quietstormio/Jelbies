@@ -151,6 +151,10 @@ final class EmoteFeetTests: XCTestCase {
         try? covered.joined(separator: "\n").write(toFile: Self.out + "emotes_covered.txt", atomically: true, encoding: .utf8)
     }
 
+    // play-frame-r1: the ball game's moves at the chase gait (PlayTuning.chaseGain) keep their feet
+    func testTossHeader() throws { try emote("toss header", "toss: header") }
+    func testTossBump() throws { try emote("toss bump", "toss: bump") }
+    func testTossRally() throws { try emote("toss rally", "toss: rally") }
     func testJacks() throws { try emote("jacks", "idle jacks") }
     func testHopPlay() throws { try emote("hopPlay", "hop") }
     func testFlip() throws { try emote("flip", "flip") }

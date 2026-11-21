@@ -78,7 +78,9 @@ extension InfoPage where Extra == EmptyView {
 enum PrivacyText {
     static let effective = "2026-11-09"
     static let contact = "dione@mgsllc.io"
-    static let sections: [InfoSection] = [
+    /// The page's sections; the "Grown-up check" one only while `ParentGate.required` (the gate is off by default).
+    static var sections: [InfoSection] { ParentGate.required ? allSections : allSections.filter { $0.heading != "Grown-up check" } }
+    private static let allSections: [InfoSection] = [
         InfoSection(heading: "Who we are", paragraphs: [
             "Jelmiko is made by MGS LLC. Effective \(effective).",
             "In short: Jelmiko works offline and never sends anything anywhere."]),
@@ -89,7 +91,7 @@ enum PrivacyText {
             "What you say is turned into words on the phone by Apple's on-device speech recognition. It is never recorded to a file or sent anywhere.",
             "Apple may download its speech model once over the internet. That download is done by iOS, not by Jelmiko, and no game data goes with it."]),
         InfoSection(heading: "Photos", paragraphs: [
-            "Photos taken in Photo mode stay inside the app. They only leave it if you choose to save them to your Photos or share them."]),
+            "Photos taken in Photo mode stay inside the app. They only leave it if you choose to share them."]),
         InfoSection(heading: "Grown-up check", paragraphs: [
             "Anything that leaves the game is behind a grown-up hold button: sharing photos, opening the phone's Settings or Shortcuts, and emailing Support."]),
         InfoSection(heading: "Names and saves", paragraphs: [

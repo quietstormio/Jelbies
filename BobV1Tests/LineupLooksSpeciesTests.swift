@@ -13,7 +13,7 @@ import simd
 final class LineupLooksSpeciesTests: XCTestCase {
     static let names = ["Marble", "Gold", "Silver", "Opal", "Moo", "Cocoa", "Blush", "Sunset", "Ruby", "Midnight", "Cotton Candy", "Ocean", "Lemon-Lime", "Lagoon", "Emerald", "Sapphire", "Amethyst", "Bronze"]
     static let ids = Array(9...26)
-    static let gradients: [Int: Float] = [16: 81, 19: 82, 20: 83, 21: 84, 22: 85]
+    static let gradients: [Int: Float] = [16: 81, 19: 82, 20: 83, 21: 84, 22: 85, 13: 91, 14: 93, 15: 95]          // (13 / 14 / 15 = the cow family, CowLook.swift)
 
     func testIdentity() {
         XCTAssertEqual(JellyRoster.knownCount, 27)
@@ -56,7 +56,7 @@ final class LineupLooksSpeciesTests: XCTestCase {
     }
 
     func testOfferedNowhere() {
-        for id in Self.ids where id != JellyRoster.opalID {          // (Opal 12 is a Jelly Spring special: OpalSpringTests)
+        for id in Self.ids where id != JellyRoster.opalID && !OpalSpringTests.springSeven.contains(id) {          // (Opal 12 and the seven new Spring looks are Jelly Spring specials: OpalSpringTests)
             XCTAssertFalse(SpeciesInfo.order.contains(id))
             XCTAssertFalse(SpeciesInfo.special.contains(id))
             XCTAssertFalse(SpeciesInfo.pages(includingSpecial: true).contains(id))
@@ -87,7 +87,7 @@ final class LineupLooksSpeciesTests: XCTestCase {
         for id in 1...3 { XCTAssertFalse([81, 82, 83, 84, 85, 86].contains(BlueBelly.mode(for: JellyRoster.palette(id)!))) }
         for c in ParkColour.allCases { XCTAssertFalse((81...86).contains(Int(BlueBelly.mode(for: JellyPalettes.park(c)))), "park visitor \(c.rawValue) must not look like a gradient character") }
         // the middle stop is the flesh and the swatch
-        for (id, _) in Self.gradients {
+        for (id, _) in Self.gradients where GradientLook.stops[id] != nil {
             let s = GradientLook.stops[id]!
             XCTAssertEqual(JellyRoster.palette(id)!.flesh, s.middle)
             XCTAssertEqual(JellyRoster.tint(id), s.middle)

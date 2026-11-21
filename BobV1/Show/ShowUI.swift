@@ -3,7 +3,7 @@
 //  The Jelly Show's places (the approved mockups Studio.dc.html, Condition.dc.html, Show.dc.html), reached from the Town:
 //    StudioScreen      the stage card with the Jelbie and his slot chips, the Show-ready bars, Dress up / Enter Jelly Show.
 //    ConditionScreen   the "Jelly Jars": five jars of stat-coloured jelly with numbers, a gold next-rank line, a +1 droplet on jars that just
-//                      grew, the Glow pill with a Bath button, Food diary and Trophies as row buttons, "See today's Jelly Show".
+//                      grew, the one Glow row with a Bath button, Trophies as a row button, a tap on a jar opens its card (ConditionGuide.swift), "See today's Jelly Show".
 //                      (it also picks the rank and shows the theme, the score estimate and its tip; Enter Jelly Show starts the show: there is no second lobby.)
 //  Plus the shared pieces: the Jelbie portrait, the stat chip, the wardrobe sheet (owned wearables, tap to wear), the dance picker.
 //  Everything lays out both ways: portrait stacks, a phone on its side puts the stage / poster beside the cards.
@@ -666,8 +666,12 @@ struct ConditionScreen: View {
     var back: () -> Void
     var show: () -> Void
     var bath: (() -> Void)? = nil
+    /// Starts the normal Feed flow (closes this screen and opens the Feed picker); nil = no Feed button action.
+    var feed: (() -> Void)? = nil
+    /// Same for the Drink picker (the jar card shows the button only when an owned drink fills the jar).
+    var drink: (() -> Void)? = nil
     @Environment(\.verticalSizeClass) private var vsc
-    @State private var diaryOpen = false
+    @State private var jarOpen: WearTag?
     @State private var trophiesOpen = false
     /// The jars fill from 0 to their level over 0.6 s when the card appears (and from the previous level after a meal).
     @State private var grown = false
@@ -680,18 +684,17 @@ struct ConditionScreen: View {
             if care.jellies.count > 1 { WhoRow(care: care, who: $who) }
             if compact {
                 HStack(alignment: .top, spacing: 12) {
-                    jars(p).frame(maxWidth: .infinity)
+                    ScrollView(showsIndicators: false) { jars(p) }.scrollBounceBehavior(.basedOnSize).frame(maxWidth: .infinity)
                     VStack(spacing: 10) {
+                        ScrollView(showsIndicators: false) { glowBlock(p).padding(12).background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream)) }.scrollBounceBehavior(.basedOnSize)
                         rows(p)
-                        Spacer(minLength: 0)
                         ShowCTA(title: "See today's Jelly Show", id: "condition-show", height: 54) { show() }
                     }
                     .frame(width: 300)
                 }
             } else {
-                jars(p)
+                ScrollView(showsIndicators: false) { jars(p) }.scrollBounceBehavior(.basedOnSize)
                 rows(p)
-                Spacer(minLength: 0)
                 ShowCTA(title: "See today's Jelly Show", id: "condition-show", height: 56) { show() }
             }
         }
@@ -700,8 +703,13 @@ struct ConditionScreen: View {
         .accessibilityIdentifier("condition-screen")
         .onAppear { grown = false; withAnimation(.spring(response: 0.6, dampingFraction: 0.62).delay(0.15)) { grown = true } }
         .onChange(of: who) { _, _ in grown = false; withAnimation(.spring(response: 0.6, dampingFraction: 0.62).delay(0.1)) { grown = true } }
-        .sheet(isPresented: $diaryOpen) { FoodDiarySheet(care: care, who: who) { diaryOpen = false }.presentationDetents([.medium, .large]).presentationBackground(SK.cream) }
+        .sheet(item: $jarOpen) { t in ConditionJarCard(care: care, who: who, tag: t, feed: feed, drink: drink, close: { jarOpen = nil }).presentationDetents([.medium, .large]).presentationBackground(SK.cream) }
         .sheet(isPresented: $trophiesOpen) { TrophiesSheet(care: care, who: who) { trophiesOpen = false }.presentationDetents([.medium, .large]).presentationBackground(SK.cream) }
+        .task {          // capture aid (dev arguments only): `-CondJar cute|sweet|sparkly|cool|sporty` opens that jar's card
+            guard DevArgs.enabled, let raw = UserDefaults.standard.string(forKey: "CondJar"), let t = WearTag(rawValue: raw) else { return }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            jarOpen = t
+        }
     }
 
     /// The last meal within half an hour: what it raised ("+1" droplets) and its name ("Just fed").
@@ -713,60 +721,83 @@ struct ConditionScreen: View {
     private func jars(_ p: JellyProfile?) -> some View {
         let name = care.rosterName(who)
         let meal = lastMeal(p)
-        let glow = p?.grime.sparkle ?? 0
         let levels = WearTag.jarOrder.map { p?.stats.condition($0.condition) ?? 0 }
-        let strongest = WearTag.jarOrder[levels.indices.max { levels[$0] < levels[$1] } ?? 0], weakest = WearTag.jarOrder[levels.indices.min { levels[$0] < levels[$1] } ?? 0]
         let target = ShowUI.target(after: care.show.progress.unlockedRanks)
+        let theme: ShowTheme? = ShowSchedule.theme(dayKey: GameCare.showDay)
+        let last = WearTag.jarOrder.count - 1
         return VStack(spacing: 8) {
-            HStack {
+            HStack(alignment: .top) { VStack(alignment: .leading, spacing: 2) {
                 Text("\(name)'s jelly jars").font(SK.font(18, .black)).foregroundStyle(SK.ink)
-                Spacer()
+                Text(ConditionGuide.subtitle).font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
             }
-            HStack {
-                if let meal { Text("Just fed: \(meal.food)").font(SK.font(13, .black)).foregroundStyle(ShowUI.brownGold).padding(.horizontal, 12).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: 0xFFE7A8))).accessibilityIdentifier("condition-fed") }
-                Spacer()
-                Button { AudioHub.shared.uiTap(); bath?() } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "drop.fill").font(.system(size: 14, weight: .black)).foregroundStyle(SK.skyDeep)
-                        Text("Glow \(ShowUI.glowOf5(glow))/5").font(SK.font(14, .black)).foregroundStyle(Color(hex: 0x2F6F8C))
-                        Text("Bath").font(SK.font(12, .black)).foregroundStyle(Color(hex: 0x2F6F8C)).padding(.horizontal, 10).frame(height: 28).background(Capsule().fill(.white))
-                    }
-                    .padding(.leading, 12).padding(.trailing, 6).frame(height: 44).background(Capsule().fill(Color(hex: 0xDDEFF6)))
-                }
-                .buttonStyle(.plain).disabled(bath == nil || !care.canClean(jelly: who))
-                .accessibilityLabel("Glow \(ShowUI.glowOf5(glow)) of 5. Tap to bathe").accessibilityIdentifier("condition-glow")
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if compact, let meal { fedChip(meal) } }
+            if !compact, let meal { HStack { fedChip(meal); Spacer() } }
             HStack(alignment: .bottom, spacing: 8) {
                 ForEach(Array(WearTag.jarOrder.enumerated()), id: \.offset) { i, t in
                     let v = levels[i]
                     let gain = meal?.gains[t.condition.rawValue] ?? 0
-                    JellyJar(tag: t, level: grown ? v : max(0, v - gain), previous: max(0, v - gain), grew: gain > 0.004 && grown, target: target?.level, number: ShowUI.pts(v))
-                        .accessibilityIdentifier("jar-\(t.rawValue)")
+                    let today = ConditionGuide.todayTag(t, theme: theme)
+                    let quiet = theme != nil && today == nil
+                    Button { AudioHub.shared.uiTap(); jarOpen = t } label: {
+                        JellyJar(tag: t, level: grown ? v : max(0, v - gain), previous: max(0, v - gain), grew: gain > 0.004 && grown, target: target?.level, targetTag: i == last ? target?.rank.title : nil, dim: quiet ? 0.6 : 1, number: ShowUI.pts(v))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(ConditionGuide.jarLabel(t, number: ShowUI.pts(v), today: today, grew: gain > 0.004 && grown))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityIdentifier("jar-\(t.rawValue)")
                 }
             }
-            .frame(maxHeight: compact ? 190 : 270)
-            HStack(spacing: 8) {
+            .frame(height: compact ? 125 : 320)
+            HStack(alignment: .top, spacing: 8) {
                 ForEach(WearTag.jarOrder, id: \.rawValue) { t in
-                    Text(t.title).font(SK.font(13, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 28).background(Capsule().fill(ShowUI.tag(t)))
+                    let today = ConditionGuide.todayTag(t, theme: theme)
+                    VStack(spacing: 3) {
+                        Text(t.title).font(SK.font(13, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.7).frame(maxWidth: .infinity, minHeight: 28).background(Capsule().fill(ShowUI.tag(t)))
+                        Text(today ?? " ").font(SK.font(11, .black)).foregroundStyle(ShowUI.brownGold).jLine(1, scale: 0.6)
+                            .padding(.horizontal, today == nil ? 0 : 6).padding(.vertical, 1).background(Capsule().fill(today == nil ? Color.clear : ShowUI.gold))
+                            .accessibilityHidden(true)
+                    }
+                    .opacity(theme != nil && today == nil ? 0.6 : 1)
                 }
             }
-            VStack(spacing: 2) {
-                Text("Strongest: \(strongest.title) \u{00B7} Weakest: \(weakest.title)").font(SK.font(15, .black)).foregroundStyle(SK.ink)
-                if let target { Text("Gold dashed line: \(target.rank.title) target").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
-                else { Text("Every rank is open. Keep your Jelmiko fed and shiny!").font(SK.font(12, .bold)).foregroundStyle(ShowUI.goldText) }
-            }
-            .accessibilityIdentifier("condition-summary")
+            if !compact { glowBlock(p) }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.12), radius: 6, y: 2))
         .accessibilityElement(children: .contain).accessibilityIdentifier("condition-jars")
     }
 
+    private func fedChip(_ meal: MealEntry) -> some View {
+        Text("Just fed: \(meal.food)").font(SK.font(13, .black)).foregroundStyle(ShowUI.brownGold).padding(.horizontal, 12).padding(.vertical, 5).background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(hex: 0xFFE7A8))).accessibilityIdentifier("condition-fed")
+    }
+    /// The Glow row (plain words and the Bath button), its caption and the drain line. Under the jars in portrait; in the right column in landscape.
+    private func glowBlock(_ p: JellyProfile?) -> some View {
+        let glow = p?.grime.sparkle ?? 0
+        return VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "drop.fill").font(.system(size: 14, weight: .black)).foregroundStyle(SK.skyDeep).accessibilityHidden(true)
+                Text("Fresh bath sparkle: \(ConditionGuide.glowWord(glow))").font(SK.font(14, .black)).foregroundStyle(Color(hex: 0x2F6F8C)).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("condition-glow-word")
+                Spacer(minLength: 4)
+                Button { AudioHub.shared.uiTap(); bath?() } label: {
+                    Text("Bath").font(SK.font(13, .black)).foregroundStyle(Color(hex: 0x2F6F8C)).padding(.horizontal, 14).frame(minHeight: 36).background(Capsule().fill(.white))
+                }
+                .buttonStyle(.plain).disabled(bath == nil || !care.canClean(jelly: who))
+                .accessibilityLabel("Bath. Fresh bath sparkle is \(ConditionGuide.glowWord(glow))").accessibilityIdentifier("condition-glow")
+            }
+            .padding(.leading, 12).padding(.trailing, 6).padding(.vertical, 4).frame(minHeight: 44).background(Capsule().fill(Color(hex: 0xDDEFF6)))
+            Text(ConditionGuide.glowCaption).font(SK.font(11, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            Text(ConditionGuide.drainLine).font(SK.font(11, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("condition-drain")
+        }
+    }
+
     private func rows(_ p: JellyProfile?) -> some View {
         let t = care.show.progress.trophies(character: p?.character ?? who)
         let ribbons = care.race.trophies.shelf(character: p?.character ?? who).raceRibbonCount          // (race ribbons: Trophies/)
         return VStack(spacing: 8) {
-            row("Food diary", note: "Last \(min(p?.stats.meals.count ?? 0, JellyStats.mealsKept)) meal\(p?.stats.meals.count == 1 ? "" : "s")", id: "condition-diary") { diaryOpen = true }
             row("Trophies", note: "\(t.cupCount) cup\(t.cupCount == 1 ? "" : "s") \u{00B7} \(t.rosettes.count) rosette\(t.rosettes.count == 1 ? "" : "s") \u{00B7} \(ribbons) ribbon\(ribbons == 1 ? "" : "s")", id: "condition-trophies") { trophiesOpen = true }
         }
     }
@@ -793,6 +824,10 @@ struct JellyJar: View {
     var previous: Float
     var grew: Bool
     var target: Float?
+    /// The rank's name on a small gold tag at the end of the dashed line (drawn on one jar only).
+    var targetTag: String? = nil
+    /// A quieter jar (not one of today's two styles).
+    var dim: Double = 1
     var number: Int
     var body: some View {
         GeometryReader { g in
@@ -801,6 +836,7 @@ struct JellyJar: View {
             let y = bottom - inner * CGFloat(min(max(level, 0), 1))
             let yp = bottom - inner * CGFloat(min(max(previous, 0), 1))
             let c = ShowUI.tag(tag)
+            ZStack(alignment: .top) {
             ZStack(alignment: .top) {
                 // glass
                 RoundedRectangle(cornerRadius: w * 0.26, style: .continuous).fill(.white.opacity(0.55))
@@ -835,10 +871,15 @@ struct JellyJar: View {
                     .accessibilityHidden(true)
                 }
                 // number plate
-                Text("\(number)").font(SK.font(w * 0.34, .black)).foregroundStyle(SK.ink).monospacedDigit()
+                Text("\(number)").font(SK.font(w * 0.34, .black)).foregroundStyle(SK.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.4)
                     .frame(width: w * 0.72, height: h * 0.12)
                     .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color(hex: 0xFBF6EA)).overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(SK.ink.opacity(0.3), lineWidth: 1.5)))
                     .offset(y: bottom - h * 0.17)
+            }.opacity(dim)
+            if let target, let targetTag {
+                Text(targetTag).font(.system(size: 10, weight: .black)).foregroundStyle(ShowUI.brownGold).lineLimit(1).minimumScaleFactor(0.6).fixedSize()
+                    .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(ShowUI.gold)).position(x: w * 0.9 - min(w * 0.4, 24), y: bottom - inner * CGFloat(target) - 9)
+            }
             }
         }
         .accessibilityElement(children: .ignore)
@@ -864,48 +905,6 @@ struct JellyFill: SwiftUI.Shape {
         p.addQuadCurve(to: CGPoint(x: x0, y: bottom - r), control: CGPoint(x: x0, y: bottom))
         p.closeSubpath()
         return p
-    }
-}
-
-/// The food diary: the last eight meals, newest first, with what each raised.
-struct FoodDiarySheet: View {
-    let care: GameCare
-    var who: Int
-    var close: () -> Void
-    var body: some View {
-        let meals = care.jelly(who)?.stats.meals ?? []
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Food diary").font(SK.font(26, .black)).foregroundStyle(SK.ink)
-                Spacer()
-                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
-                    .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("diary-close")
-            }
-            if meals.isEmpty { Text("Nothing eaten from the bag yet. Store foods fill the jars: sushi is Sparkly, donuts are Sweet.").font(SK.font(14, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true) }
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(Array(meals.enumerated()), id: \.offset) { _, m in
-                        HStack(spacing: 10) {
-                            Image(systemName: "fork.knife").font(.system(size: 16, weight: .heavy)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color(hex: 0xFFE7A8)))
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(m.food).font(SK.font(16, .black)).foregroundStyle(SK.ink)
-                                HStack(spacing: 4) {
-                                    ForEach(m.gains.sorted { $0.value > $1.value }, id: \.key) { k, v in
-                                        if let key = ConditionKey(rawValue: k) { Text("+\(max(1, Int((v * 100).rounded()))) \(key.title)").font(SK.font(11, .black)).foregroundStyle(SK.ink).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(ShowUI.tag(key.tag))) }
-                                    }
-                                }
-                            }
-                            Spacer()
-                            Text(m.date, style: .relative).font(SK.font(12, .heavy)).foregroundStyle(SK.muted) + Text(" ago").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
-                        }
-                        .padding(10).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.8)))
-                    }
-                }
-            }
-            .scrollBounceBehavior(.basedOnSize)
-        }
-        .padding(16)
-        .accessibilityIdentifier("diary-sheet")
     }
 }
 

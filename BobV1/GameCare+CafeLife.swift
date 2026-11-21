@@ -67,7 +67,7 @@ extension GameCare {
         let book = cafeBook
         if !book.lounged {
             book.lounged = true
-            if dining.phase == .present, !book.lastTreatByPlace.isEmpty { dining.restock(serving: CafePlate.cups(book.lastTreatByPlace)) }          // a cup in front of everybody: they sip
+            if dining.phase == .present, !book.lastTreatByPlace.isEmpty { dining.restock(serving: CafePlate.cups(book.lastTreatByPlace, straws: true)) }          // a cup in front of everybody: they sip
             for a in actors {
                 guard let b = a.brain else { continue }
                 b.abortAll(a.sim, a.skinner)
@@ -85,11 +85,16 @@ extension GameCare {
         for a in actors {
             guard let b = a.brain, var t = book.loungeIdle[a.id] else { continue }
             guard cafeIdleNow(b) else { continue }
+            if let cy = book.chatYaw[a.id] {          // (cafe-straw-r1: an end that is idle again after a hop / idle / walk turns straight back to the other end, not left facing the room)
+                book.turnCool[a.id, default: 0] -= dt
+                if abs(Self.wrapAngle(b.yaw - cy)) > 0.35, book.turnCool[a.id, default: 0] <= 0 { b.startTurn(to: cy, sim: a.sim); book.turnCool[a.id] = 1.0; continue }
+            }
             t -= dt
             if t > 0 { book.loungeIdle[a.id] = t; continue }
             book.loungeIdle[a.id] = Float.random(in: 3...6)
             if let st = book.stands[a.id], simd_distance(Self.floorPos(b, a.sim), st) > 0.3 { b.requestNow(.goTo(st)); book.loungeIdle[a.id] = 2; continue }
-            if abs(Self.wrapAngle(b.yaw - b.faceCameraYaw())) > 0.5 { b.startTurn(to: b.faceCameraYaw(), sim: a.sim); book.loungeIdle[a.id] = 1.3; continue }          // always facing the room, never away
+            let faceYaw = book.chatYaw[a.id] ?? b.faceCameraYaw()          // (the two ends face each other across the table, the middle one the room)
+            if abs(Self.wrapAngle(b.yaw - faceYaw)) > 0.5 { b.startTurn(to: faceYaw, sim: a.sim); book.loungeIdle[a.id] = 1.3; continue }          // never turned away
             b.commandedIdle = [IdleKind.chirp, .giggle, .bounce, .stretch].randomElement()
             b.face(.happy, hold: 1.5)
             if Float.random(in: 0..<1) < 0.5 { b.blushBump(hold: 2, peak: 0.5) }

@@ -28,7 +28,9 @@ enum EmoteTuning {
     static let treatWait: (Float, Float) = (40, 90)
     static let treatCrew = 3
     /// Conga: the gap between two in the line (x peerGap), the leg length (u), the longest route (legs), waddle frequency (Hz) and roll (rad).
-    static let congaGap: Float = 1.15, congaSpace: Float = 0.17, congaLeg: Float = 1.5, maxLegs = 7, minLegs = 3
+    /// (conga-treat-r1: congaSpace 0.17 -> 0.24: the ring touch is measured side by side, a file of bodies with tail / spikes / wings on the line is up to 3 cm closer at the same spacing)
+    /// (conga-treat-r1: congaSpace 0.17 -> 0.24: the ring touch is measured side by side; a file of bodies with tail / spikes / wings on the line stood up to 3 cm into each other at 0.17)
+    static let congaGap: Float = 1.15, congaSpace: Float = 0.24, congaLeg: Float = 1.5, maxLegs = 7, minLegs = 3
     static let waddleHz: Float = 1.8, waddleRoll: Float = 0.055, waddleSquash: Float = 0.03
     /// Ring: chord between neighbours (x peerGap), the plan of steps (0 = bounce, 1 = quarter-turn shuffle), the pitch of each member's chime.
     static let ringChord: Float = 1.25, ringSpace: Float = 0.30

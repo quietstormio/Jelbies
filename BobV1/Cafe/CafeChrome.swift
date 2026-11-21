@@ -87,7 +87,7 @@ struct CafeChrome: View {
                 Color.white.opacity(Double(cafe.wipe)).ignoresSafeArea().allowsHitTesting(cafe.wipe > 0).accessibilityHidden(true)
             }
             .frame(width: g.size.width, height: g.size.height)
-            .animation(.easeInOut(duration: 0.25), value: cafe.listOpen)
+            .animation(.easeInOut(duration: 0.4), value: cafe.listOpen)
             .animation(.easeInOut(duration: 0.25), value: cafe.canGoHome)
             .animation(.easeInOut(duration: 0.25), value: cafe.phase == .done)
         }

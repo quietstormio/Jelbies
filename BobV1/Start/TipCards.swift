@@ -22,7 +22,7 @@ struct TipPlace: Equatable {
         case "park": return TipPlace(kind: .top, offset: 114)
         case "camp": return TipPlace(kind: .top, offset: 116)
         case "clean": return TipPlace(kind: .top, offset: 62)
-        case "feed", "tricks", "dress", "decor", "play", "powerup": return TipPlace(kind: .top, offset: 62, faces: true)
+        case "feed", "tricks", "dress", "play", "powerup": return TipPlace(kind: .top, offset: 62, faces: true)
         case "spring": return TipPlace(kind: .bottom, offset: 99)
         case "race", "volley": return TipPlace(kind: .bottom, offset: 110)
         case "show": return TipPlace(kind: .bottom, offset: 108)

@@ -107,7 +107,7 @@ final class CafeTests: XCTestCase {
         let b = r.actors[1].brain!
         b.idleForced = true; _ = b.idleStart(.sleep, r.actors[1].sim); b.sleep.hold = 500; b.sleep.holdForce = true
         step(r, 0.2)
-        XCTAssertEqual(r.care.cafeBlocker(), .sleeping)
+        XCTAssertNil(r.care.cafeBlocker(), "by day a sleeper is not a refusal: the trip wakes him first (park-wake-r1)")
         b.idleForced = false; b.sleepWake(groggy: false, fast: true); step(r, 1)
         r.care.startRace(jelly: 0); step(r, 0.2)
         XCTAssertEqual(r.care.cafeBlocker(), .competition)

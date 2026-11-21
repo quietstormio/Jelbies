@@ -22,7 +22,7 @@ final class MealReachTests: XCTestCase {
     override func tearDown() {
         GameCare.quickBend = true
         DayClock.shared.forcedHour = savedHour; DiningGroup.homeSeats = 2; DiningGroup.variance = true; DiningGroup.varianceSeed = nil
-        GameCare.mealReach = true
+        GameCare.mealReach = true; DiningModels.pizzaOnArc = true
         if let savedPick { DiningSpot.pickOpen = savedPick }
     }
 
@@ -276,4 +276,11 @@ final class MealReachTests: XCTestCase {
     func testSushiGrabsTouch() { check("sushi") }
     func testCookieGrabsTouch() { check("cookie") }
     func testBerriesGrabsTouch() { check("berries") }
+    /// food-on-plate-r1: the pizza foods' slices lie on the same arc as the other foods (they hung 0.3 m off the tray in the fan): the same 3 cm bar, and the old fan's numbers for the report.
+    func testMinipizzaGrabsTouch() { check("minipizza") }
+    func testPizzaGrabsTouch() { check("pizza") }
+    func testPizzaOldFanReachNumbers() {
+        DiningModels.pizzaOnArc = false
+        for f in ["minipizza", "pizza"] { report("FAN", f, take(food: f)) }
+    }
 }

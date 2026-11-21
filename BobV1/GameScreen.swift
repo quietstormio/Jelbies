@@ -43,6 +43,12 @@ struct GameScreen: View {
     @State private var hudInfoH: CGFloat = 0          // measured: the info row (sleep-until-morning) under it
     @Environment(\.verticalSizeClass) private var vsc          // .compact = a phone on its side
     private var focus: BlobFocus { model.care.focus }
+    /// First return of the day AND only the room or the Town map is up (a meal, bath, competition, park / camp trip, close-up, Play or room arranging keeps the plain return).
+    private var menuDueOnReturn: Bool {
+        let c = model.care
+        let busy = !(town == nil || town == .town) || settingsOpen || c.trayOut || c.meal != nil || c.bath.active || c.tripActive || c.play.active || c.arranging || c.focus.isActive
+        return StartFlow.returnShowsMenu(busy: busy)
+    }
     /// Out somewhere (a Town screen, a race / show / volleyball, the café, the park, the groomer): the game clock runs faster (DayClock.setOutingRate).
     private var outing: Bool {
         let c = model.care
@@ -243,7 +249,7 @@ struct GameScreen: View {
                 .padding(.vertical, 8)
             }
             .jHUDCap()
-            .onGeometryChange(for: CGSize.self) { $0.size } action: { HUDLayout.measuredSize = CGSize(width: $0.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, height: $0.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom) }
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { HUDLayout.measuredInsets = UIEdgeInsets(top: g.safeAreaInsets.top, left: g.safeAreaInsets.leading, bottom: g.safeAreaInsets.bottom, right: g.safeAreaInsets.trailing); HUDLayout.measuredSize = CGSize(width: $0.width + g.safeAreaInsets.leading + g.safeAreaInsets.trailing, height: $0.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom) }
             .environment(\.a11yAvailableHeight, max(120, g.size.height - 16 - hudTopH - hudInfoH - 24    // 16 = HUD vertical padding, 24 = VStack gaps; then the paw's lift
                 - HUDLayout.lift(size: CGSize(width: g.size.width, height: g.size.height + g.safeAreaInsets.top + g.safeAreaInsets.bottom), safeBottom: g.safeAreaInsets.bottom, compact: landscapeHUD)))
             }.photoHidden()
@@ -279,12 +285,13 @@ struct GameScreen: View {
 
             VolleyChrome(care: model.care)          // Jelly Volleyball: score, controls, results, the white fade
 
-            if model.care.arranging { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
+            if model.care.arranging, model.care.wallEdit == nil { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
+            if let session = model.care.wallEdit { WallEditorOverlay(care: model.care, session: session) }          // the wall picture: drag, size, frame, Done (Photo/WallEditorOverlay.swift)
 
             if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
 
             if town != nil {                     // Go out: Town / Shop / Track
-                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }, groom: { model.care.requestGroom() }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
+                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }, groom: { model.care.requestGroom() }, feed: { withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }, drink: { withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink } }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
                     .transition(.opacity)
             }
 
@@ -390,6 +397,12 @@ struct GameScreen: View {
                     return
                 }          // an `.inactive` blip (alert, Control Centre, app-switcher peek): nothing was torn down, nothing to rebuild
                 wentBackground = false
+                if menuDueOnReturn {          // the first return of the day: the main menu (Continue rebuilds the room from the save, which applies the time away once; so not here)
+                    DayClock.shared.snapToNow(); AudioHub.shared.setForeground(true); Ears.shared.setForeground(true)
+                    LiveActivities.shared.returnedActive(names: jellyNames, colors: model.care.jellyColorKeys, nobodyAsleep: !model.care.anySleepingOrWanted)
+                    withAnimation(.easeInOut(duration: 0.4)) { StartFlow.shared.returnToMenu() }
+                    return
+                }
                 model.care.skipNightCutscene(force: true)          // back mid "Sleep until morning": finish the skip now
                 DayClock.shared.snapToNow()          // light, music bucket and night state jump to the real clock (no sweep), before the bedtime check and the director see the foreground
                 model.care.voice.sceneBecameActive()          // a failed first-run speech download / a permission changed in Settings is retried
@@ -430,7 +443,12 @@ struct GameScreen: View {
         .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
-        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
+        .onChange(of: town) { _, t in
+            #if targetEnvironment(simulator)
+            RaceDepartProbe.mark("town \(String(describing: t))")
+            #endif
+            model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t))
+        }
         .onChange(of: outing) { _, on in DayClock.shared.setOutingRate(on) }
         .onChange(of: covered) { _, c in model.coverUp = c }          // a full-screen screen hides the room: the stage renders at 5 fps until it closes (MelonController.applyFrameRate)
         .onAppear { model.coverUp = covered; DayClock.shared.setOutingRate(outing) }
@@ -502,7 +520,19 @@ struct GameScreen: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SK.cream)
         }
+        .fullScreenCover(isPresented: Binding(get: { model.care.wallAlbumOpen }, set: { model.care.wallAlbumOpen = $0 })) {          // the album, asked for by the Bag / the Shop / the wall editor: pick a photo to hang
+            PhotoAlbumView(close: { model.care.wallAlbumOpen = false }, wall: model.care.wallHangContext(close: { model.care.wallAlbumOpen = false }))
+        }
+        .onChange(of: model.care.wallShopRequest) { _, on in          // the album's "Get a frame": the Shop on the Rooms tab, scrolled to the frames
+            guard on else { return }
+            model.care.wallShopRequest = false
+            if model.care.wallEdit != nil { model.care.finishWallEdit(save: false) }
+            ShopTab.pending = .rooms; ShopTab.scrollToFrames = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.25)) { town = .shop } }
+        }
         .task { await GameScreen.runStoreDemo(model: model) }
+        .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
+        .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
         .onChange(of: rosterOpen) { _, on in model.care.select.sheetOpen = on || bookOpen }
         .onChange(of: model.care.townRequest) { _, _ in                 // voice: "let's race" / "time to train" open the Track for the picked Jelly
@@ -527,7 +557,6 @@ struct GameScreen: View {
                 case "feed": menuOpen = true; openPicker = .food
                 case "play": menuOpen = true; openPicker = .toy
                 case "dress": bagTab = .wear; bagWho = 0; bagOpen = true
-                case "decor": bagTab = .toys; bagWho = 0; bagOpen = true
                 case "spring": StartFlow.shared.openAdoption()
                 case "clean": model.care.bath.grime.dirt = 0.5; model.care.clean()
                 default: break
@@ -609,6 +638,7 @@ struct GameScreen: View {
                         NSLog("[playtoss] demo round %d done rally %d nudges %d headers %d t %.1f", round, care.play.rally, care.play.nudges, care.play.headers, waited)
                         await sleep(1.8)
                     }
+                    if d.integer(forKey: "PlayDemoEnd") != 0 { await sleep(3); NSLog("[playtoss] demo: Done"); care.endPlay() }          // (capture aid: -PlayDemoEnd 1 puts the ball away after the rounds, to log the room's walls and floor after play)
                 }
             }
         }
@@ -826,17 +856,17 @@ struct GameScreen: View {
                 let menu: [CafeTreatID] = [.swirl, .cocoa, .pancakes]
                 care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, care.cafeCanEat($0.element) ? menu[$0.offset % 3] : .juice) })))
             }
-            if m == "order" || m == "refuse" || m == "latte" || m == "latte2" {
+            if m == "order" || m == "refuse" || m == "latte" || m == "latte2" || m == "latte3" {
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
                 await sleep(2)
                 let ids = care.cafeDinerIDs
-                if m.hasPrefix("latte") { care.bath.wallet.add(100, silent: true) }
+                if m.hasPrefix("latte") { care.bath.wallet.add(100, silent: true) }          // (latte3: baby lattes for all three, the cafe-straw-r1 capture)
                 if m == "refuse" {
                     care.bath.wallet.add(9 - care.bath.wallet.count, silent: true)
                     care.cafe.cardRefusal = care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.map { ($0, CafeTreatID.sundae) })))
                 } else {
                     // latte: the first Jelbie gets the baby latte, the others slower treats; latte2: the first two get lattes
-                    let menu: [CafeTreatID] = m == "latte" ? [.latte, .sundae, .pancakes] : m == "latte2" ? [.latte, .sundae, .latte] : [.swirl, .pancakes, .sundae]
+                    let menu: [CafeTreatID] = m == "latte" ? [.latte, .sundae, .pancakes] : m == "latte2" ? [.latte, .sundae, .latte] : m == "latte3" ? [.latte, .latte, .latte] : [.swirl, .pancakes, .sundae]
                     care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, menu[$0.offset % 3]) })))
                 }
             }
@@ -934,8 +964,11 @@ struct GameScreen: View {
             case "drink:water": care.drink("water")
             case "call": care.call()
             case "callall": care.comeHereEveryone()
+            case "roamhug": care.roamHug()          // capture aid: GameCare+RoamHug.swift
             case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()
+            case "spa": if care.bath.wallet.count < 40 { care.bath.wallet.add(40, silent: true) }; care.groom.openPicker(all: [0]); care.startGroom(.quick)          // -GameAction spa: Jelmiko 0 alone to the Jelly Spa, the others stay home (capture aid; use with -SleepNow 1 and a long -GameActionDelay)
+            case "park": care.requestPark(); if care.park.picking { care.startPark() }          // -GameAction park: the Town's Park row, then "Go to the park" with everybody picked (capture aid; shows the refusal line when blocked)
             default: care.wave()
             }
             // capture aid: -GameReleaseAfter <s> presses "Let Bob go" that long after the action
@@ -958,6 +991,7 @@ struct GameScreen: View {
             }
             await sleep(d.double(forKey: "SpreadWait") > 0 ? d.double(forKey: "SpreadWait") : 9)
         }
+        if d.double(forKey: "VoiceHoldOpen") > 0 { await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2); await care.voice.debugHoldOpen(d.double(forKey: "VoiceHoldOpen")) }
         if let words = d.string(forKey: "VoiceSay") {
             await sleep(d.double(forKey: "VoiceDelay") > 0 ? d.double(forKey: "VoiceDelay") : 2)
             if d.integer(forKey: "VoiceTyped") != 0 { care.voice.typed(words) }          // -VoiceTyped 1: the typed path (no mic needed: the simulator has none), the same decision a heard phrase takes
@@ -1110,6 +1144,21 @@ struct GameScreen: View {
             for id in Soap.boughtIDs where model.care.store.count(id) < 2 { model.care.store.grant(id, 2 - model.care.store.count(id)) }
             model.care.bath.wallet.add(max(0, 200 - model.care.bath.wallet.count), silent: true)
         }
+        // capture aid: -CondSeed 1 gives every Jelmiko mid-level jars (Cute 52, Sweet 38, Sparkly 65, Cool 38, Sporty 66), an earlier Donut meal then a Sushi meal
+        // (the Sushi jars show the "+1" droplet), half Glow, and owns two Sushi and one Smoothie only (so the Cute / Sparkly cards list an owned food, Sweet / Sporty an owned drink, Cool only Shop items); -CondJar <style> opens that jar's card
+        if d.integer(forKey: "CondSeed") != 0 {
+            for _ in 0..<300 where LaunchGate.shared.visible { try? await Task.sleep(nanoseconds: 100_000_000) }
+            let care = model.care
+            care.store.grantStarterIfNeeded()
+            if care.store.count("sushi") < 2 { care.store.grant("sushi", 2 - care.store.count("sushi")) }
+            if care.store.count("smoothie") < 1 { care.store.grant("smoothie") }
+            for j in care.jellies {
+                for (k, v) in [(ConditionKey.cute, Float(0.42)), (.sweet, 0.30), (.sparkle, 0.55), (.cool, 0.38), (.sporty, 0.66)] { j.stats.setCondition(k, v) }
+                j.stats.nudge([.sweet: 0.08, .cute: 0.0], food: "Donut")
+                j.stats.nudge([.cute: 0.10, .sparkle: 0.10], food: "Sushi")
+                j.grime.sparkle = 0.5; j.grime.dirt = 0
+            }
+        }
         guard d.integer(forKey: "StoreSeed") != 0 else { return }
         let care = model.care
         care.store.grantStarterIfNeeded()
@@ -1237,7 +1286,7 @@ struct CareMenu: View {
     private var rowGap: CGFloat { tight ? 5 : 14 }
 
     var body: some View {
-        // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Decor, Bedtime come back when it folds).
+        // A phone on its side has no room for the picker row AND every other row: while Feed / Drink is unfolded only those two rows stay (Play, Bedtime come back when it folds).
         let all = HUDMenu.visibleItems(mode, care: care)
         let items = tight && trickRow ? all.filter { $0 == .tricks }          // (a phone on its side: only the Tricks row and its chips fit)
             : tight && picker != nil ? all.filter { picker == .toy ? $0 == .play : ($0 == .feed || $0 == .drink) } : all

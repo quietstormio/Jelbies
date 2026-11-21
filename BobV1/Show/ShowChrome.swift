@@ -19,6 +19,7 @@ struct ShowChrome: View {
         let _ = show.revision          // the rules live in the unobserved sim: every step of the show bumps this
         return ZStack {
             if show.onStage {
+                ShowSpotlightLayer(care: care)          // (under every piece of chrome: the light dims the stage, never the cards)
                 switch show.round {
                 case .look: LookRound(care: care)
                 case .dance: DanceRound(care: care)
@@ -83,7 +84,9 @@ struct RoundHeader: View {
 struct TurnPips: Equatable {
     var used: Int
     var current: Int
-    var kicker: String { "ROUND 3 OF 3 \u{00B7} TURN \(min(current, 2) + 1) OF 3" }
+    var kicker: String { "ROUND 3 OF 3" }
+    /// The pips of a flow: the SAME turn the pills show (`ShowFlow.isTrickTurnNow`); all filled when no turn is being played (the round is over).
+    @MainActor static func of(_ f: ShowFlow) -> TurnPips { let cur = f.trickTurnNow; return TurnPips(used: cur ?? 3, current: cur ?? 3) }
 }
 struct TurnPipRow: View {
     var pips: TurnPips
@@ -690,10 +693,9 @@ struct TrickRound: View {
     }
 
     /// Three small capsules: which of the three turns it is (gold = the turn under way: "Your go", his result, or the entrant who is up) and what he scored in the ones done.
-    /// The turn pips of the header: turns used so far, and the one up now.
+    /// The header pips follow the SAME turn index as the pills (`ShowFlow.trickTurnNow`): the turns before it are filled, it is outlined, all filled when the round is over.
     private var turnPips: TurnPips {
-        let done = show.sim?.turns.count ?? 0
-        return TurnPips(used: done, current: show.trickStage == .performing ? max(done - 1, 0) : done)
+        TurnPips.of(show)
     }
     private var turns: some View {
         let s = show.sim
@@ -704,8 +706,7 @@ struct TrickRound: View {
                 let turn = done > k ? s?.turns[k] : nil
                 let playerBack = stage == .rivals && show.rivalStep == .playerBack          // (the last entrant is back: his next go is next)
                 let entrantNow = stage == .rivals && show.rivalRound == k && !playerBack
-                let nextGo = playerBack && k == show.rivalRound + 1 && k < 3
-                let now: Bool = entrantNow || nextGo || (stage == .performing && k == done - 1) || (stage == .pick && !(s?.tricksDone ?? false) && k == done)
+                let now: Bool = show.isTrickTurnNow(k)
                 let text: String = {
                     let tag = "Turn \(k + 1)"
                     if entrantNow {

@@ -91,8 +91,7 @@ nonisolated enum ShowModels {
                 let fx = x + side * (0.1 + Float(k) * 0.16)
                 b.roundedBox(centre: SIMD3(fx, 2.9, -1.6 + 0.3 + Float(k) * 0.08), half: SIMD3(0.09, 3.0, 0.1), radius: 0.08, segments: 2, aoFloor: true, color: k % 2 == 0 ? curtainDeep : curtain)
             }
-            // a gold tie-back
-            b.roundedBox(centre: SIMD3(x - side * 0.15, 2.2, -1.25), half: SIMD3(0.5, 0.12, 0.16), radius: 0.11, segments: 3, aoFloor: false, color: gold)
+            // (no gold tie-back: on a phone on its side it sat behind the Home pill and crossed the "Look" / "Results" titles and the first podium name)
         }
         b.roundedBox(centre: SIMD3(0, 6.2, -1.7), half: SIMD3(curtainX + 0.7, 0.5, 0.45), radius: 0.3, segments: 4, aoFloor: false, color: curtain)
         for k in 0..<7 {
@@ -114,20 +113,20 @@ nonisolated enum ShowStage {
             return SIMD2(playerSpot.x + side * rank * 1.35, playerSpot.y - 0.45)
         }
     }
-    /// Where the player's Jelbie waits while a rival performs in the middle, and where the rivals stand during the Trick round. The performer alone stands in the middle and the camera is
-    /// close on it (2026-11-17, the owner: "zoom in or something to them"), so the others wait BEHIND it in a back row, each whole body and face in the picture and clear of the performer (the camera looks down 0.45 rad, so the row stands above her head):
-    /// rival 0 back left, rival 1 back right, the player's Jelbie back middle, and rival 2 fully OFF the picture (right; left on its side) where she walks on from. Never a body half cut by the screen edge.
-    /// Every mark is 1.5+ from every other.
-    static let playerAside = SIMD2<Float>(0, -1.0)
-    /// `sideways` (a phone / tablet on its side): the chrome column is on the right, so rival 2 waits off the picture to the LEFT instead.
+    /// Where the four wait during the Trick round (2026-11-21, the owner: "the fourth isn't in the screen and they're walking all on each other"): ALL FOUR seats are inside the picture, whole bodies,
+    /// the performer on the middle and the other three sitting out: two seats beside the middle (rivals 0 and 1) and two back seats (rival 2 and his Jelmiko), each 1.5+ from every other.
+    /// A walk between a back seat and the middle goes through the GATE (a point on the middle line, 1.45+ from every seat), so that no walk ever passes through a body that sits out.
+    /// `sideways` (a phone / tablet on its side): the performer is in the left third, the chrome column is on the right; rival 2 and the player swap back seats so the walk-on from the left never crosses a seat.
+    static func playerAside(sideways: Bool = false) -> SIMD2<Float> { SIMD2(sideways ? 0.9 : -0.9, -1.4) }
+    static let gate = SIMD2<Float>(0, 0.4)
     static func rivalRest(_ k: Int, sideways: Bool = false) -> SIMD2<Float> {
-        let fixed = [SIMD2<Float>(-1.4, 0.4), SIMD2(1.4, 0.4), SIMD2(sideways ? -3.4 : 3.4, 2.6)]
+        let fixed = [sideways ? SIMD2<Float>(-1.65, 0.0) : SIMD2<Float>(-1.45, 0.5), sideways ? SIMD2<Float>(1.5, 0.4) : SIMD2<Float>(1.45, 0.5), SIMD2<Float>(sideways ? -0.9 : 0.9, -1.4)]
         return k < fixed.count ? fixed[k] : SIMD2(1.3 + Float(k - 2) * 1.2, 0.6)
     }
     /// Where entrant k waits in the wing before she walks on to her rest spot (just outside the wide shot: left, left, right; a phone on its side: all from the left).
     static func wingSpot(_ k: Int, sideways: Bool, wide: Bool = false) -> SIMD2<Float> {
-        if sideways { return [SIMD2<Float>(-6.5, 2.0), SIMD2(-7.2, 0.4), SIMD2(-6.0, -1.2)][min(k, 2)] }
-        var p = [SIMD2<Float>(-4.7, 2.0), SIMD2(-5.4, 0.5), SIMD2(4.9, 0.6)][min(k, 2)]
+        if sideways { return [SIMD2<Float>(-5.2, -0.1), SIMD2(5.2, 0.4), SIMD2(-5.0, -1.6)][min(k, 2)] }          // (the far seat's walker comes from the other side, so no walk-on passes a seat; every wing is about 4 u from its seat)
+        var p = [SIMD2<Float>(-4.7, 0.5), SIMD2(4.9, 0.5), SIMD2(4.9, -1.6)][min(k, 2)]
         if wide { p.x += p.x < 0 ? -0.7 : 0.7 }          // (iPad portrait: the wide shot is wider, 0.80 fill instead of 0.88)
         return p
     }

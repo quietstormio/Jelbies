@@ -14,7 +14,7 @@ final class ShowStageBodiesTests: XCTestCase {
         care.show.songClock = { _ in nil }; care.show.audioReady = { _ in true }; care.show.cue = { _ in }
     }
     private func step(_ room: RaceThreeTests.Room) {
-        for a in room.actors + room.park { if let b = a.brain { b.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: false) } }
+        for a in room.actors + room.park { if a.id < room.actors.count, room.care.tripFrozen(a.id) { continue }; if let b = a.brain { b.tick(sim: a.sim, skinner: a.skinner, dt: a.sim.stepDt, touched: false) } }          // (a housemate away is not ticked, as the stage does)
         room.care.tickRace(room.actors, dt: 1 / 60)
         room.care.tickShow(room.actors, dt: 1 / 60)
     }
@@ -24,8 +24,12 @@ final class ShowStageBodiesTests: XCTestCase {
     func testNoTwoStageSpotsOverlap() {
         var spots: [(String, SIMD2<Float>)] = []
         spots.append(("stage0", ShowStage.playerSpot))          // (the dance is one body now: the contestant's spot; the Trick round's wing / rest / aside spots follow)
-        spots.append(("aside", ShowStage.playerAside))
+        spots.append(("aside", ShowStage.playerAside()))
         for k in 0..<3 { spots.append(("rest\(k)", ShowStage.rivalRest(k))) }
+        // the phone on its side has its own seats; the gate (where back-seat walks pass) keeps a body and a half from every seat
+        let side: [SIMD2<Float>] = [ShowStage.playerSpot, ShowStage.playerAside(sideways: true)] + (0..<3).map { ShowStage.rivalRest($0, sideways: true) }
+        for i in side.indices { for j in side.indices where j > i { XCTAssertGreaterThan(simd_distance(side[i], side[j]), 1.5, "sideways seats \(i), \(j) overlap") } }
+        for q in [ShowStage.playerAside(), ShowStage.playerAside(sideways: true)] + (0..<3).flatMap { [ShowStage.rivalRest($0), ShowStage.rivalRest($0, sideways: true)] } { XCTAssertGreaterThan(simd_distance(ShowStage.gate, q), 1.4, "the gate is clear of every seat") }
         for j in 0..<3 { spots.append(("far\(j)", GameCare.showFarSpot(j))); spots.append(("spawn\(j)", SIMD2(40 + Float(j) * 3, 0))) }
         for id in 0..<6 { spots.append(("park\(id)", ShowStage.parkSpot(id))) }
         for side in [false, true] {
@@ -51,6 +55,8 @@ final class ShowStageBodiesTests: XCTestCase {
         let auto: [Int: Bool] = Dictionary(uniqueKeysWithValues: room.actors.map { ($0.id, true) })
         for a in room.actors { a.brain?.autonomy = true }
         care.startShow(jelly: player, rank: .puddle, seed: 5)
+        run(room, 6) { care.showBook.roomAway }
+        for a in room.actors { homes[a.id] = a.floor }          // (the spot each one is frozen at: the stage is up)
         run(room, 6) { care.show.onStage }
         XCTAssertTrue(care.show.onStage, "\(count) at home")
         let book = care.showBook
@@ -63,12 +69,12 @@ final class ShowStageBodiesTests: XCTestCase {
         for a in book.extra { XCTAssertTrue(care.showHides(a.id), "hidden outside the wide Trick shot") }
         // nobody overlaps: every body that exists is at least 1.5 apart
         func spread() {
-            let all = room.actors + book.extra
+            let all = room.actors.filter { !book.parked.contains($0.id) } + book.extra          // (a housemate who stays home is hidden at his own spot, not on the stage)
             for i in all.indices { for j in all.indices where j > i { XCTAssertGreaterThan(simd_distance(all[i].floor, all[j].floor), 1.4, "bodies \(all[i].id) and \(all[j].id) overlap") } }
         }
         spread()
         let parkedAt = Dictionary(uniqueKeysWithValues: book.parked.map { ($0, room.actors[$0].floor) })
-        for (id, p) in parkedAt { XCTAssertLessThan(simd_distance(p, ShowStage.parkSpot(id)), 0.6) }
+        for (id, p) in parkedAt { XCTAssertLessThan(simd_distance(p, homes[id]!), 0.02, "stay-home \(id) was not moved to a parking spot") }
         if abort {
             run(room, 2)
             care.show.abort()
@@ -76,7 +82,7 @@ final class ShowStageBodiesTests: XCTestCase {
             care.show.auto = true
             run(room, 130) { care.show.trickStage == .rivals }
             XCTAssertEqual(care.show.trickStage, .rivals)
-            for (id, p) in parkedAt { XCTAssertLessThan(simd_distance(room.actors[id].floor, p), 0.6, "parked body \(id) has not moved") ; XCTAssertTrue(care.showHides(id)) }
+            for (id, p) in parkedAt { XCTAssertLessThan(simd_distance(room.actors[id].floor, p), 0.02, "stay-home \(id) has not moved") ; XCTAssertTrue(care.showHides(id)) }
             for a in book.extra { XCTAssertFalse(care.showHides(a.id)) }
             spread()
             care.show.abort()
@@ -113,6 +119,8 @@ final class ShowStageBodiesTests: XCTestCase {
             for a in room.actors { homes[a.id] = a.floor }
             care.show.auto = true; care.show.autoHomeAfter = 0.5
             care.startShow(jelly: 0, rank: .puddle, seed: 5)
+            run(room, 6) { care.showBook.roomAway }
+            for a in room.actors { homes[a.id] = a.floor }          // (the spot each one is frozen at: the stage is up)
             run(room, 6) { care.show.onStage }
             run(room, 400) { care.show.hasResults }
             XCTAssertTrue(care.show.hasResults, "\(count) at home: the Show reached the Results")

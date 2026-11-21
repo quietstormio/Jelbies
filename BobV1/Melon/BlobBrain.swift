@@ -72,6 +72,8 @@ final class BlobBrain {
     var footprint: Float = 0.55
     /// The decor piece (uid) he is about to use and may therefore stand inside (the beanbag he sits in, the mat he hops on); nil = every solid piece is a wall.
     var decorIgnore: Int?
+    /// park-hopscotch-r1: seconds he has stood still at the court's edge while a game is on (`hopNoRestCheck`).
+    var hopRestT: Float = 0
     /// Seconds he has stood inside a solid piece's footprint (see `decorExitCheck`).
     var insideDecorT: Float = 0
     /// How long he has been inside a solid piece's footprint without getting out (the walk-out can find no route from inside a piece): after a few seconds `decorExitCheck` eases him out itself.
@@ -155,6 +157,16 @@ final class BlobBrain {
     var expr = ExpressionState()
     var leg = LegState()
     var joyWanted = false, joyAge: Float = 0
+    /// The WIN celebration (BlobBrain+Win.swift): set before `.joy` starts, the jump for joy then runs as four tall bounces with the arms held up and a settle. Cleared by `idleEnd`.
+    var winCheer = false
+    /// The ground spot (x, z) the win bounces over: taken at the first bounce, reused by every later one (a hop re-bases on the centroid otherwise; pinned so no bounce can add a step).
+    var winSpot: SIMD2<Float>? = nil
+    var winRoot: SIMD2<Float>? = nil          // the standing root (px, pz) when the win began (nil = no standing pose then)
+    var winPitch0: Float = 0          // his idle tip-back (pitchBase) when the win began
+    var winLean = false          // the win's settle has handed the body to the standing pose
+    /// The win at the strongest jiggle level: squash pulses with the feet planted instead of hops (a hop landing there makes the skin leash move a foot piece: RacePullFlowTests).
+    var winFlat = false
+    var winSettleT: Float = 0
     var hmphWanted = false, hmphAge: Float = 0
     var react = ReactState()
     var startingReaction = false
@@ -174,6 +186,8 @@ final class BlobBrain {
     /// The stage says this body lives in the HOME room right now and no meal, drink or bath is on (not on a trip, not at the park). It gates the 11-15 room round
     /// (RoomRoam.swift). Only the stage sets it, so the headless suites and every outing stay on the old paths.
     var homeRoom = false
+    /// Where emotes happen (EmoteSpot.swift): a solo emote waiting for its walk to the spot, and the walk time of the emote that just started.
+    var emoteSpot = EmoteSpotState()
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
     /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
@@ -252,6 +266,8 @@ final class BlobBrain {
     var sleepBound = false
     /// A race trip is asked or running: no bedtime for anybody (GameCare sets it on every brain).
     var sleepLocked = false
+    /// race-depart-r2: a race is on its way (or on): nobody is put to bed. A separate flag from `sleepLocked`, which also holds back new antics, toys and passes: only the racer is held by that one.
+    var bedtimeLocked = false
     /// The park outing is playing: decor, toys, hopscotch and bubbles stay open to this Jelbie although `sleepLocked` holds sleep off (GameCare+Park.swift sets it every step).
     var outingPlay = false
     /// The park's pick roll said no to this piece on the last start attempt (so a notice does not queue him at it).
@@ -303,6 +319,9 @@ final class BlobBrain {
     var runMoveDemo: IdleKind?
     /// Touch play: he runs (the run blend) back to the focus spot after a throw; cleared on arrival (BlobBrain+Touch `hurryUpdate`).
     var hurry = false
+    /// Play mode with a live ball (Play/PlayToss.swift, play-frame-r1): > 0 = his walks (the step under the ball, the walk round behind it) go this many times faster than the
+    /// walk they were, by the run blend's own gait points (`idleUpdateRun`); 0 = off, exactly as before.
+    var playChase: Float = 0
     /// Idle arm override (render only): per side elevation / sweep (rad) blended in by `armDirW`; 0 = the walking arm untouched.
     var armDirW: Float = 0
     var armDirEl: [Float] = [0, 0]
@@ -496,7 +515,7 @@ final class BlobBrain {
         let b = BlobBrain()
         b.followsStudioCamera = false
         b.cameraPosXZ = SIMD2(GameCamera.eye.x, GameCamera.eye.z)
-        b.resolve = { [weak b] p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b?.decorIgnore) }      // the tray is low: only his base keeps off it
+        b.resolve = { [weak b] p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b?.decorIgnore ?? b?.hopPass) }      // the tray is low: only his base keeps off it
         b.footprint = 0.7
         b.wanderRect = GameCamera.roamRect
         b.wanderRectWide = GameCamera.roamRectWide
@@ -728,7 +747,7 @@ final class BlobBrain {
         if commandedFlip { commandedFlip = false; startCommandedFlip(sim, skinner) }
         if let d = commandedDecor { commandedDecor = nil; startCommandedDecor(d.kind, only: d.only, sim, skinner) }
         if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
-        if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked { startGoodnight(sim, skinner) } }          // (never during a race)
+        if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked && !bedtimeLocked { startGoodnight(sim, skinner) } }          // (never during a race)
         contactSim = sim
         if let s = social, s.idA == steerID, s.end == nil { contactStanceTick(s) }
         sleepPileTick()          // the stance table (ContactStance.swift): the session's initiator holds the pair, every tick, before any move (hop, bounce, jacks) takes the body
@@ -830,6 +849,9 @@ final class BlobBrain {
 
     /// OLD-FLOW FOLLOW-UP: the yaw the meal's straight walk to his stand should end in (the arc into it, `planWalkStep`); nil otherwise. Set by `.dine` / `.sip`, cleared by every new request and at the dine turn.
     var mealFinalYaw: Float?
+    /// meal-walk-r1: the largest angle (rad) between his travel direction and the place's yaw (and between his body and travel) at which the walk still turns toward the place's yaw on the way.
+    static let mealArcMax: Float = 0.6
+    var mealArcOff = false
     /// The yaw of the place the meal group is sending him to (set by `DiningGroup`, nil otherwise): a `.goTo` while he is reserved ends in it.
     var mealYawHint: Float?
     func start(request r: BlobRequest, _ sim: SoftBody) {
@@ -901,6 +923,9 @@ final class BlobBrain {
         if reserved && !commanded { waitPose(sim); return }
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
+        if !emoteSpotLive || reserved { emoteSpot.soloKind = nil; emoteMeetEnd(); socialBook.meetHeldBy = -1 }          // (EmoteSpot.swift: a meal, a bath or the park drops what was waiting for a spot)
+        if emoteSoloArrived(sim) { return }          // (EmoteSpot.swift: he has walked to the spot of a solo emote)
+        if meetBusy { restTimer = 0.25; return }          // (EmoteSpot.swift: a pair is meeting on its spots)
         var pt = CACurrentMediaTime()
         if slideFootRetry() { return }          // (park-slide-r4: he stands on the slide's foot waiting for his leg to clear)
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
@@ -944,7 +969,7 @@ final class BlobBrain {
                 let raw = cand
                 let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); cand = SIMD2(rv.x, rv.z)
                 let d = simd_length(cand - here)
-                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) && reachable(here, cand) else { continue }
+                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) && !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest) && reachable(here, cand) else { continue }
                 // a goal the floor rules had to drag in (off the frame / onto a prop) piles up at the edges: take real floor first, the dragged one only as a fallback
                 if wanderRectWide != nil || wanderRect != nil, simd_length(cand - raw) > 0.15 { fallback = fallback ?? cand; continue }
                 target = cand; fallback = nil; break
@@ -992,7 +1017,8 @@ final class BlobBrain {
     /// before, a long leg, and away from the rug centre the longer he has just spent there (`centreDwell`; 2026-10-21 "they stay in the centre too much").
     func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRoamGoal", probe) }
-        let maxL = idleLegMax(maxWanderLeg)
+        var maxL = idleLegMax(maxWanderLeg)
+        if EmoteSpot.enabled, homeRoom { maxL = max(maxL, EmoteSpot.roamLegMin) }          // (EmoteSpot.swift: a grumpy walk may still cross to a spot the room has used little: the whole room)
         let lo: Float = zone != nil ? 2.5 : 1.5
         guard maxL > lo else { return nil }
         let others = socialOthers().filter { $0 !== self }
@@ -1007,7 +1033,7 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
-            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
+            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
@@ -1022,12 +1048,13 @@ final class BlobBrain {
                 for s in spots where cand.y > s.y + 0.3 && abs(cand.x - s.x) < 1.3 && cand.y - s.y < 3.0 { hides = 1 }
             }
             var score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
+            if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) - EmoteSpot.roamCellWeight * EmoteSpot.roamOver(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
             if live { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= 6 { break }
         }
-        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; return b.0 }
+        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
     }
 
@@ -1072,6 +1099,7 @@ final class BlobBrain {
     }
 
     func abortAll(_ sim: SoftBody, _ skinner: Skinner) {
+        winCheer = false; winFlat = false; winSettleT = 0          // (a win asked but not yet started goes with everything else: BlobBrain+Win.swift)
         let wasLying = isLying || trickTipped
         if poseW > 0.2 { for i in sim.v.indices { sim.v[i] *= 0.25 } }       // dropped mid-stride: no carried-over momentum (he stays where he was stopped)
         mouthOpen = 0
@@ -1350,6 +1378,13 @@ final class BlobBrain {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("steerTarget", probe) }
         let root = SIMD2(px, pz)
         heldByPeer = false
+        // conga-treat-r1: the moving conga line walks its planned waypoints and nothing else. Its legs were planned on the floor rules and the crew are no obstacles to each other; the general steering (legClear against
+        // the one standing / slow just ahead on the same line, a detour round him, the look-ahead) dropped a follower's waypoints, and it then walked straight to its last point across the inside of every turn,
+        // through the leader's path (skin gap -9 ... -29 cm).
+        if let s = social, s.kind == .congaLine, s.choreo, s.phase == 1, s.end == nil {
+            while let w = route.first, simd_distance(root, w) < 0.2 { route.removeFirst() }          // (0.2, not 0.4: every cut corner shortens the gap between two followers by about as much)
+            return route.first ?? target
+        }
         if let w = route.first {
             if simd_distance(root, w) < 0.4 { route.removeFirst() }
             else if roomWaypointWait(root, w) { return nil }          // (the 11-15 room round, T5: nothing looked ahead on a waypoint leg; the one who gets there second stands a beat)
@@ -1381,13 +1416,32 @@ final class BlobBrain {
         let requested = job != nil || commanded || pending != nil
         let slideLeg = idleState.kind == .decorSlide && idleState.decorUID == ParkToys.slideUID && idleState.slideStage < 0          // (the way round the park slide: it gives a standing friend 2 s, then the leg is given up and planned the other way round, BlobBrain+Decor.swift)
         var forced = false; if let w = slideFootForceTo, case .goTo(let p)? = job, p == w { forced = true }          // (park-slide-r4: off the slide's foot after his longest wait: on past the friend, as a requested walk did after its 6 s)
-        let patience: Float = forced ? 0 : (requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6))
+        // a LYING body on the leg cannot step aside: a requested walk (the Come here call) did not set off for the whole 6 s of the standing patience (2026-11-21, come-here-r4: the walker stood 2.5 s before anything else moved him)
+        let sleeperOnly = Self.sleeperLegWait && requested && standing && !slideLeg && legBlockedOnlyBySleepers(root, target)
+        let patience: Float = forced ? 0 : (sleeperOnly ? 0.3 : (requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6)))
         if steerWait < patience, peerOnLeg(root, target) { heldByPeer = true; return nil }
         if !requested || (slideLeg && standing), peerOnLeg(root, target) { heldByPeer = true; steerGiveUp = true; return nil }
         return target
     }
 
     var steerWait: Float = 0
+    /// The standing bodies on the straight leg a -> b are all asleep (nobody there who could be asked to step aside). False when none is on the leg. `sleeperLegWait` off = the earlier 6 s patience.
+    nonisolated(unsafe) static var sleeperLegWait = true
+    func legBlockedOnlyBySleepers(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+        let others = steerPeers().filter { $0.id > steerID }
+        guard !others.isEmpty else { return false }
+        let brains = socialOthers().filter { $0 !== self }
+        let d = b - a, n = max(2, Int(simd_length(d) / 0.1))
+        var any = false
+        for o in others {
+            var near = false
+            for i in 0...n { let p = a + d * (Float(i) / Float(n)); if simd_distance(o.pos, p) < socialGap(at: o.pos) { near = true; break } }
+            guard near else { continue }
+            any = true
+            guard let br = brains.min(by: { simd_distance($0.position, o.pos) < simd_distance($1.position, o.pos) }), simd_distance(br.position, o.pos) < 0.5, br.isSleeping else { return false }
+        }
+        return any
+    }
     /// park-slide-r4 (BlobBrain+SlideFoot.swift): the slide-foot walk he is on (its spot: a walk off the slide's foot, or a step-aside asked of him there), the spot he stands waiting
     /// to walk to (that walk was held by a friend on its leg) and since when (his `peerClock`). `heldByPeer`: this step's `steerTarget` held the walk for a friend on the leg.
     var slideFootWalkTo: SIMD2<Float>?
@@ -1450,12 +1504,15 @@ final class BlobBrain {
         var errF: Float = 0, finalTurn = false
         if let fy = (exact ? ContactTouchMemory.finalYaw[steerID] : nil) ?? mealFinalYaw {          // (a stance walk, or a meal's walk to his stand: the turn into the place's yaw is made on the way; a routed walk counts the rest of its route, so its LAST legs blend the yaw too)
             errF = wrapAngle(fy - yaw)
+            // meal-walk-r1: the arc into the place's yaw only when the place's facing is close to the way he is going (no walking backwards / sideways while the body turns to the tray); otherwise he faces his way, walks straight, and turns at the stand (`.dineTurn`)
+            if !exact, abs(wrapAngle(fy - hd)) > Self.mealArcMax || abs(err) > Self.mealArcMax { errF = 0; mealArcOff = true } else { mealArcOff = false }
             let n = (abs(errF) / max(m, 0.1)).rounded(.up)
             var rest = D
             if intermediate, exact == false, case .walk(let tgt, _) = script { var prev = target; for w in route.dropFirst() { rest += simd_distance(prev, w); prev = w }; rest += simd_distance(prev, tgt) }
             finalTurn = rest <= (n + ContactTuning.finalTurnExtra) * stride * runStrideMul * amplitude.clamped(0.6, 1)
+            if mealArcOff { finalTurn = false }
         }
-        let arc = (abs(err) <= 1.2 && D > 0.4 && !intermediate) || finalTurn         // turn while moving: a short arc into the new direction
+        let arc = (abs(err) <= (mealFinalYaw != nil ? 0.5 : 1.2) && D > 0.4 && !intermediate) || finalTurn          // (meal-walk-r1: a meal walk turns to its way first, then walks straight)         // turn while moving: a short arc into the new direction
         if abs(err) > 0.5 && !arc {                        // not facing the target yet: turn on the spot first
             let tp = turnPlan(err: err, idle: false)
             startStep(dyaw: tp.dyaw, peak: turnLift * amplitude, rate: stepRate * runRateMul * locoRateMul * tp.rate)

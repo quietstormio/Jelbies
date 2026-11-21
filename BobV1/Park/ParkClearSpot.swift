@@ -22,10 +22,11 @@ enum ParkClearSpot {
     }
 
     /// A body of `radius` at `p` would be pushed off by a solid piece (the room's own rule, with NOTHING soft: `resolve` without an ignored piece), or stands on a hopscotch court.
-    static func blocked(_ p: SIMD2<Float>, radius: Float) -> Bool {
-        let q = RoomLayout.resolve(position: SIMD3(p.x, 0, p.y), radius: radius, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: nil)
+    /// `ignoring`: a piece he is using himself (park-hopscotch-r1: a hopper's sideways step round the court's lane is no wall to him).
+    static func blocked(_ p: SIMD2<Float>, radius: Float, ignoring: Int? = nil) -> Bool {
+        let q = RoomLayout.resolve(position: SIMD3(p.x, 0, p.y), radius: radius, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: ignoring)
         if simd_distance(SIMD2(q.x, q.z), p) > 1e-4 { return true }
-        return courts.contains { $0.distance(p) < 0 }
+        return courts.contains { $0.uid != ignoring && $0.distance(p) < 0 }
     }
 
     /// How many roam-pick candidates were checked / rejected by `legCrossesSolid` (park only; the tests print them).

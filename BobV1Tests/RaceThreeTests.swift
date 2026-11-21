@@ -1,7 +1,7 @@
 //
 //  RaceThreeTests.swift
-//  The track meet is always three racers (the player + two rivals), whatever the roster: a roster of 1 or 2 borrows temporary rival bodies (the park's visitor bodies) for the
-//  race and gives them back when it ends or is quit. A roster of 3 is unchanged.
+//  The track meet is always three racers (the player + two rivals), whatever the roster. race-depart-r2: the rivals are ALWAYS temporary visitor bodies (the park's visitor bodies),
+//  given back when the race ends or is quit; the housemates are never borrowed, they stay in the room.
 //
 
 import XCTest
@@ -65,6 +65,7 @@ final class RaceThreeTests: XCTestCase {
         func step() {
             let dt = actors[0].sim.stepDt
             for a in actors + park {
+                if a.id < actors.count, care.tripFrozen(a.id) { continue }          // (a housemate away on a trip is not ticked, as the stage does)
                 a.brain?.tick(sim: a.sim, skinner: a.skinner, dt: dt, touched: false)
                 a.skinner.jelly.tick(brain: a.brain!, sim: a.sim, dt: dt)
             }
@@ -72,7 +73,7 @@ final class RaceThreeTests: XCTestCase {
             care.tickOthers(actors, dt: dt)
             care.tickRace(actors, dt: dt)
             if withPark { care.tickPark(actors, dt: dt) }
-            for a in actors + park { a.sim.step() }
+            for a in actors + park where !(a.id < actors.count && care.tripFrozen(a.id)) { a.sim.step() }
         }
         func run(_ s: Float, until: (() -> Bool)? = nil) { for _ in 0..<Int(s * 60) { step(); if let u = until, u() { break } } }
     }
@@ -110,8 +111,10 @@ final class RaceThreeTests: XCTestCase {
         XCTAssertEqual(Set(care.raceBook.racers).count, 3, "roster \(n): three different bodies")
         XCTAssertEqual(Set(sim.racers.map(\.lane)).count, 3, "roster \(n): three lanes filled")
         XCTAssertEqual(care.raceBook.racers.first, 0, "the player's own Jelmiko is the player lane")
-        XCTAssertEqual(care.raceBook.extra.count, 3 - n, "roster \(n): temporary rivals = \(3 - n)")
-        XCTAssertEqual(room.park.count, 3 - n)
+        XCTAssertEqual(care.raceBook.extra.count, 2, "roster \(n): two temporary visitor rivals, whatever the roster")
+        XCTAssertEqual(room.park.count, 2)
+        XCTAssertEqual(care.raceBook.racers, [0] + care.raceBook.extra.map(\.id), "roster \(n): the player and the two visitor bodies; no housemate is a racer")
+        for h in 1..<max(n, 1) { XCTAssertTrue(care.raceHides(h), "roster \(n): housemate \(h) is away (hidden, not ticked) while the track is up") }
         let all = room.actors + room.park
         for (k, aid) in care.raceBook.racers.enumerated() {
             let a = all[aid]
@@ -119,10 +122,14 @@ final class RaceThreeTests: XCTestCase {
             XCTAssertTrue(a.brain!.race.active, "roster \(n): racer \(k) runs the race script")
             if k > 0 { XCTAssertNotNil(care.racePalette(for: aid), "rival \(k) is tinted"); XCTAssertEqual(care.wearRole(for: aid), .rival(team: WearTeam.rivals[(k - 1) % WearTeam.rivals.count], number: WearTeam.rivalNumbers[(k - 1) % WearTeam.rivalNumbers.count]), "rival \(k) has his jersey") }
         }
-        for (a, v) in zip(care.raceBook.extra, care.raceBook.extraSpecs) {
+        // the look of each rival body: the species feature of the housemate body that used to play that rival (a repainted winged Lavender keeps his wings), else the colour's feature as before
+        let housemates = Array(1..<max(n, 1))
+        for (i, (a, v)) in zip(care.raceBook.extra, care.raceBook.extraSpecs).enumerated() {
             XCTAssertTrue(care.race.rivals.contains { $0.name == v.name }, "named from the race's rivals")
             XCTAssertEqual(v.name, a.name)
-            XCTAssertEqual(v.signature, LocalRivalSource.signature(forTint: care.race.rivals.first { $0.name == v.name }!.tint))
+            XCTAssertEqual(v.name, care.race.rivals[i].name, "rival \(i + 1) keeps the race's own name, tint and number")
+            if i < housemates.count { XCTAssertEqual(v.signature, care.jelly(housemates[i])!.feature, "rival \(i + 1) shows the feature his housemate body showed") }
+            else { XCTAssertEqual(v.signature, LocalRivalSource.signature(forTint: care.race.rivals[i].tint)) }
             XCTAssertEqual(a.brain!.feature, v.signature)
         }
         let rosterBefore = care.jellies.count
@@ -132,7 +139,8 @@ final class RaceThreeTests: XCTestCase {
         XCTAssertTrue(care.raceBook.extra.isEmpty, "roster \(n): no temporary bodies left")
         XCTAssertTrue(room.park.isEmpty, "roster \(n): the spare bodies are given back")
         XCTAssertTrue(care.raceBook.extraSpecs.isEmpty)
-        XCTAssertEqual(care.raceBook.racers.count, n, "roster \(n): only the roster's own bodies remain")
+        XCTAssertEqual(care.raceBook.racers, [0], "roster \(n): only the racer's own body remains")
+        for h in 0..<n { XCTAssertFalse(care.raceHides(h), "roster \(n): everybody is back in the room") }
         XCTAssertTrue(care.raceBook.palettes.isEmpty)
         XCTAssertEqual(care.jellies.count, rosterBefore, "no roster change")
         XCTAssertEqual(care.jellies.count, n)
@@ -181,8 +189,8 @@ final class RaceThreeTests: XCTestCase {
         room.run(6) { care.race.trackVisible && care.raceBook.racers.count == 3 }
         XCTAssertEqual(care.race.rivals.count, 2)
         XCTAssertEqual(care.raceBook.racers.count, 3, "roster \(n): three on the track")
-        XCTAssertEqual(care.raceBook.extra.count, 3 - n)
-        XCTAssertEqual(care.raceBook.extra.first?.brain?.feature, care.parkBook.visitor(3)!.signature, "the guest's body is the first temporary rival")
+        XCTAssertEqual(care.raceBook.extra.count, 2)
+        XCTAssertEqual(care.raceBook.extra[n - 1].brain?.feature, care.parkBook.visitor(3)!.signature, "the guest's body is the first temporary rival that no housemate plays")
         XCTAssertEqual(care.guestBook.visit, visit, "the visit goes on, same guest")
         if quit { care.race.abort() }
         room.run(120) { !care.race.active && care.raceBook.extra.isEmpty && !care.race.trackVisible }

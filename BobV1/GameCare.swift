@@ -110,6 +110,13 @@ final class GameCare {
     @ObservationIgnored var shoeStats = (rebuilt: 0, reused: 0)
     /// Decor (GameCare+Decor.swift): what was last drawn, so the room mesh is rebuilt only when something changed.
     @ObservationIgnored var decorDrawn = DecorDrawn()
+    /// The wall picture (GameCare+WallPicture.swift): what was last handed to the renderer.
+    @ObservationIgnored let wallDrawn = WallPictureDrawn()
+    /// The wall picture editor (GameCare+WallEdit.swift): the session while it is open, its camera ease (0...1), the album asked for from the Bag / Shop / editor, the Shop asked for from the album.
+    var wallEdit: WallEditSession?
+    @ObservationIgnored var wallEditT: Float = 0
+    var wallAlbumOpen = false
+    var wallShopRequest = false
     /// Arrange mode (drag the room's decor): set from the Bag's Place, ended by Done. The Jellies' touch is off meanwhile.
     var arranging = false
     var arrangingUID: Int? { didSet { DecorField.shared.held = arrangingUID } }
@@ -320,11 +327,19 @@ final class GameCare {
                 JellyTraitsBook.adopt(c, JellyTraits(personality: old?.personality ?? .brave, jars: old?.jars ?? [50, 50, 50, 50, 50], snack: String(id)))
             }
         }
+        // dev builds only: `-PerkSeed 6,4,1` gives slot 0, 1, 2 ... that many active power-ups (to check the roster chips)
+        if DevArgs.enabled, !preview, persistent, let list = UserDefaults.standard.string(forKey: "PerkSeed") {
+            let kinds = [PerkKind.tidy, .cozy, .snuggly, .shine, .zoomies, .focus, .bouncy]
+            for (slot, n) in list.split(separator: ",").enumerated() where slot < jellies.count {
+                for (i, k) in kinds.prefix(Int(n) ?? 0).enumerated() { jellies[slot].perks.grant(k, duration: [13560, 14940, 21300, 56760, 7200, 1500, 9000][i]) }
+            }
+        }
         if preview {
             for j in jellies { for k in NeedKind.allCases { j.needs.set(k, 1) } }          // happy and rested: he comes when asked and never wants anything while he is on show
         } else {
             applySavedRoom()
             DecorField.shared.set(store.placedDecor)          // (process-wide: a preview must not wipe the real room's decor)
+            applyWallPictureLaunchArguments(defaults: defaults)          // (dev builds only: -WallPicture ...)
         }
         if persistent { MemoryPressure.register("care.save") { [weak self] in          // a memory warning: write needs and grime now (the OS may end the app next); the away stamp is NOT touched
             guard let self else { return false }
@@ -691,8 +706,21 @@ final class GameCare {
     private func tickFocus(brain: BlobBrain, sim: SoftBody?, dt: Float) {
         focusFrame(dt: dt)
         if focus.phase == .approaching {
-            if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)) {
+            if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)), !(FocusGroup.sleeperFix && brain.isSleeping) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
+            }
+            if let v = focusGroup.viaZero, simd_length(brain.position - v) < 0.6 || focusGroup.clock - focusGroup.viaZeroAt > 5 {
+                if let n = focusGroup.viaZeroNext { focusGroup.viaZero = n; focusGroup.viaZeroNext = nil; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(n)] }
+                else { focusGroup.viaZero = nil; queued = [.come(to: focusGroup.spot(of: 0))]; approachIdle = 0 }
+            }          // (walked round an uncalled body: now to his spot)
+            if FocusGroup.sleeperFix, focusGroup.includes(0), !focusGroup.arrived.contains(0), focusGroup.viaZero == nil, !focusGroup.zeroPending {          // pinned short of his spot by a lying body: walk round it (at most three times)
+                let d = simd_length(brain.position - focusGroup.spot(of: 0))
+                if d < focusGroup.zeroBest - 0.05 { focusGroup.zeroBest = d; focusGroup.zeroStuck = 0 } else { focusGroup.zeroStuck += dt }
+                if focusGroup.zeroStuck > 2, focusGroup.zeroDetours < 3, d > 0.5 {
+                    focusGroup.zeroStuck = 0; focusGroup.zeroDetours += 1
+                    let path = FocusGroup.detour(from: brain.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, soft: focusGroup.ids.filter { $0 != 0 }.map { focusGroup.spot(of: $0) }, fixed: { brain.fixed($0) })
+                    if let v = path.first { focusGroup.viaZero = v; focusGroup.viaZeroNext = path.count > 1 ? path[1] : nil; focusGroup.viaZeroAt = focusGroup.clock; focusGroup.zeroBest = .infinity; queued = [.goTo(v)] }
+                }
             }
             focusReplan(dt: dt)
             if focusGroup.includes(0), !focusGroup.arrived.contains(0), !focusGroup.zeroPending, simd_length(brain.position - focusGroup.spot(of: 0)) < 0.25 { zeroOnSlot += dt } else { zeroOnSlot = 0 }
@@ -703,7 +731,7 @@ final class GameCare {
         case .approaching where focusGroup.includes(0):
             // the come request can be cancelled (for example he was grabbed): ask again a couple of times, then give up
             let act = brain.activity
-            if !callRunning, queued.isEmpty, !focusGroup.zeroPending, act == .idle || act == .lookingAround || act == .steppingInPlace {
+            if !callRunning, queued.isEmpty, !focusGroup.zeroPending, focusGroup.viaZero == nil, act == .idle || act == .lookingAround || act == .steppingInPlace {
                 approachIdle += dt
                 if approachIdle > 0.8 {
                     approachIdle = 0
@@ -834,6 +862,7 @@ final class GameCare {
         brain.resolve = { [weak self, weak brain] p, r in
             if self?.outing.lifted.contains(isBob ? 0 : (brain?.steerID ?? -1)) == true { return p }          // (an outing run-out: the Jelbie leaves the room toward the camera)
             if self?.bath.fenceLifted == true, self?.bath.targetID == (isBob ? 0 : brain?.steerID) { return p }          // the clean-up's exit run leaves the room: no floor bounds, only in that phase, only for the Jelly being washed
+            if self?.show.onStage == true { return Self.showStageResolve(p) }          // (the Jelly Show's stage has no room floor: the marks in the wings are walked to as they are; GameCare+Show.swift)
             let rr = self?.footprint(r) ?? r
             let id = isBob ? 0 : (brain?.steerID ?? 0)
             if self?.focusGroup.rowOpen == true, let me = self { return me.trayObstacle(GameCamera.constrain(p, radius: rr, lowPropScale: RoomLayout.lowPropRadiusScale, openSides: true), radius: r, id: id) }       // the wide close-up row stands past the roaming floor's sides

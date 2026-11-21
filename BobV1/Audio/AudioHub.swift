@@ -228,7 +228,7 @@ final class AudioHub {
     /// `offMain`: the mic just let go of the session (every release). The category switch + reactivation are synchronous IPC to mediaserverd and
     /// stalled the main thread (the game loop) for a visible hitch on every mic release, so that path runs them on `AudioSessionQueue` (ordered
     /// before the next mic activation, which uses the same queue) and only the result comes back to the main actor.
-    private func setUpSession(offMain: Bool = false) {
+    private func setUpSession(offMain: Bool = false, trace: PressTrace? = nil) {
         guard !micSession, !earsSession else { return }
         refreshOtherAudio()
         let plan = SessionPolicy.plan(musicOn: settings.musicOn, otherAudioPlaying: otherAudioPlaying, micActive: false)
@@ -239,8 +239,10 @@ final class AudioHub {
                 let ok: Bool = await withCheckedContinuation { c in
                     AudioSessionQueue.shared.async {
                         // a mic press that came in before this ran voids it: no `.ambient` bounce in front of the next `.playAndRecord`
-                        guard PutBackGate.shared.shouldRun(gen) else { c.resume(returning: true); return }
-                        c.resume(returning: Self.applySession(plan))
+                        guard PutBackGate.shared.shouldRun(gen) else { trace?.putBackOutcome = "voided"; trace?.mark(.putBack); c.resume(returning: true); return }
+                        let ok = Self.applySession(plan)
+                        trace?.putBackOutcome = ok ? "ran" : "failed"; trace?.mark(.putBack)
+                        c.resume(returning: ok)
                     }
                 }
                 guard let self, !Task.isCancelled else { return }
@@ -377,6 +379,24 @@ final class AudioHub {
     func _forceGap(_ s: Double) { director.forceGap(s) }
     var _inGap: Bool { director.gapLeft != nil }
     var _micSession: Bool { micSession }
+    /// Trace only (Voice/MicTrace.swift): the scene engine's identity, and whether the game's music that should be playing is advancing.
+    var traceSceneEngineID: ObjectIdentifier? { scene?.traceEngineID }
+    @ObservationIgnored private var traceDeckPos: [ObjectIdentifier: (ct: Double, host: Double)] = [:]
+    func traceMusicProbe() -> (expected: Bool, playing: Bool) {
+        let host = CACurrentMediaTime()
+        var expected = false, advancing = false
+        for d in decks where d.fader.target > 0.01 {
+            expected = true
+            let id = ObjectIdentifier(d.player), ct = d.player.currentTime
+            if let p = traceDeckPos[id] {
+                let dh = host - p.host, dc = ct - p.ct
+                if d.player.isPlaying, dc < -0.01 || dc >= dh * 0.5 { advancing = true }          // (a loop wrap makes dc negative)
+            } else if d.player.isPlaying { advancing = true }
+            traceDeckPos[id] = (ct, host)
+        }
+        if let s = scene, let t = s.current { expected = true; if s.isPlaying(t) { advancing = true } }
+        return (expected, advancing)
+    }
     var _musicLevelNow: Float { musicLevelNow }
     func _setOtherAudio(_ on: Bool) { otherAudioPlaying = on; applyLevels(); refreshNowPlaying() }
     var _sceneEngine: SceneMusicEngine? { scene }
@@ -433,9 +453,10 @@ final class AudioHub {
     @discardableResult
     func micSessionEnded() -> Bool {
         micSession = false
-        if earsSession { Ears.shared.voiceResume() }
-        guard started else { return false }
-        setUpSession(offMain: true)
+        let tr = MicTrace.recording ? MicTrace.latest : nil
+        if earsSession { Ears.shared.voiceResume(); tr?.putBackOutcome = "none-ears"; tr?.mark(.putBack) }          // (Ears owns the session: no put-back runs)
+        guard started else { if !earsSession { tr?.putBackOutcome = "no-hub"; tr?.mark(.putBack) }; return false }
+        setUpSession(offMain: true, trace: tr)
         return true
     }
     /// Bob starts / stops listening: everything ducks to silence and returns after a short settle.
@@ -1111,6 +1132,25 @@ final class AudioHub {
     }
     @ObservationIgnored private var lastVariant: [[String: Int]] = [[:], [:], [:]]
 
+    /// The WIN cheer (a first place, BlobBrain+Win.swift): the Jelmiko's own `yay` voice, always (no chance roll), in the race / Show scenes too (`contextVoice` is the home room's only).
+    /// Past the gates (muted / not started / level) like every voice; it takes the voice slots, so an ambient chirp does not talk over it.
+    func winVoice(jelly: Int, x: Float = 0) {
+        Self.requestTap?("voice:yay")
+        let what = "voice:yay@win"
+        CaptionCenter.shared.post(SoundCaptions.voice(.yay, name: JellyRoster.name(slot: jelly)))
+        if let w = gateWhy() { diag(what, jelly, w); return }
+        let level = settings.sfxLevel * duck.gain
+        let i = min(max(jelly, 0), 2)
+        let now = Self.clock()
+        lastVoice[i] = now; lastContextVoice[i] = now
+        diag(what, jelly, nil, v: 0.8 * level)
+        let c = JellyRoster.speciesOf(slot: jelly), j = i
+        var variant = 1
+        repeat { variant = Int.random(in: 1...3) } while variant == lastVariant[j]["yay"] ?? 0
+        lastVariant[j]["yay"] = variant
+        fire(JellyVoiceSet.file(character: c, .yay, variant: variant), volume: 0.8 * level, pan: panFor(x: x), rate: JellyVoiceSet.rate(character: c, .yay))
+    }
+
     @ObservationIgnored private var lastRegularVoice: Double = 0
     /// A café regular's voice (by species character, not roster slot): the same chirp / babble files.
     func chirp(character: Int, _ v: JellyVoice) {
@@ -1126,17 +1166,17 @@ final class AudioHub {
     /// Haptics' touch transients -> squish / boop / wobble (the pairing HapticDriver.soundHook promised).
     private var letGoRing = LetGoRing()
 
-    func touch(kind: String, intensity: Float) {
+    func touch(kind: String, intensity: Float, gain: Float = 1) {
         guard !muted, started else { return }
         switch kind {
-        case "wobble": play(.wobble, volume: 0.5 + 0.5 * min(1, intensity * 1.5))
-        case "impact": play(.squish, volume: 0.6 + 0.4 * min(1, intensity))
+        case "wobble": play(.wobble, volume: (0.5 + 0.5 * min(1, intensity * 1.5)) * gain)
+        case "impact": play(.squish, volume: (0.6 + 0.4 * min(1, intensity)) * gain)
         case "letgo":
             guard letGoRing.shouldSound(now: CACurrentMediaTime()) else { return }
-            play(.letgo, volume: min(1, TouchSound.letGoBase + TouchSound.letGoSlope * intensity))
+            play(.letgo, volume: min(1, TouchSound.letGoBase + TouchSound.letGoSlope * intensity) * gain)
         default:
-            if intensity >= 0.85 { play(.boop, volume: 0.9) }
-            else if intensity >= 0.28 { play(.squish, volume: 0.55 + 0.5 * intensity) }
+            if intensity >= 0.85 { play(.boop, volume: 0.9 * gain) }
+            else if intensity >= 0.28 { play(.squish, volume: (0.55 + 0.5 * intensity) * gain) }
         }
     }
 

@@ -86,13 +86,16 @@ struct TownFlow: View {
     var park: () -> Void = {}
     /// The Groomer: closes the Town and opens the tier menu (Groomer/GroomChrome.swift).
     var groom: () -> Void = {}
+    /// Feed: closes the Town and opens the normal Feed picker in the room (the Condition screen's jar card button).
+    var feed: () -> Void = {}
+    var drink: () -> Void = {}
     /// The Jelly Spring (the adoption screen): leaves the room for the adoption screen (StartFlow).
     var adopt: () -> Void = { StartFlow.shared.openAdoption() }
     /// The screen the flow opened on: its back button leaves the flow (the Go out button opens the Town, so Track / Store go back to it).
     @State private var root: TownScreen
 
-    init(care: GameCare, screen: Binding<TownScreen?>, who: Int, cafe: @escaping () -> Void = {}, park: @escaping () -> Void = {}, groom: @escaping () -> Void = {}, goHome: @escaping () -> Void) {
-        self.care = care; self._screen = screen; self._who = State(initialValue: who); self.goHome = goHome; self.cafe = cafe; self.park = park; self.groom = groom
+    init(care: GameCare, screen: Binding<TownScreen?>, who: Int, cafe: @escaping () -> Void = {}, park: @escaping () -> Void = {}, groom: @escaping () -> Void = {}, feed: @escaping () -> Void = {}, drink: @escaping () -> Void = {}, goHome: @escaping () -> Void) {
+        self.care = care; self._screen = screen; self._who = State(initialValue: who); self.goHome = goHome; self.cafe = cafe; self.park = park; self.groom = groom; self.feed = feed; self.drink = drink
         self._root = State(initialValue: screen.wrappedValue ?? .town)
     }
     /// Back from the current screen: out of the flow when it is the root, else to `target`.
@@ -102,6 +105,8 @@ struct TownFlow: View {
     func chooseCafe() { goHome(); cafe() }
     func choosePark() { goHome(); park() }
     func chooseGroom() { goHome(); groom() }
+    func chooseFeed() { goHome(); feed() }
+    func chooseDrink() { goHome(); drink() }
     func chooseCamp() { goHome(); care.requestCamp() }
 
     var body: some View {
@@ -111,7 +116,7 @@ struct TownFlow: View {
             case .shop: ShopScreen(care: care, who: who, back: { up(.town) }, goHome: goHome).tipScreen("shop")
             case .track: TrackPanel(care: care, who: $who, back: { up(.town) }, shop: { screen = .shop }, race: { goHome(); care.startRace(jelly: who) }).tipScreen("race")
             case .studio: StudioScreen(care: care, who: $who, back: { up(.town) }, card: { screen = .condition }, show: { goHome(); care.startShow(jelly: who, rank: care.show.progress.chosen) }).tipScreen("show")
-            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.requestClean(jelly: who) }).tipScreen("trophies")
+            case .condition: ConditionScreen(care: care, who: $who, back: { if care.focus.isActive { goHome() } else { up(.studio) } }, show: { screen = .studio }, bath: { goHome(); care.requestClean(jelly: who) }, feed: chooseFeed, drink: chooseDrink).tipScreen("trophies")
             case .volley: VolleyLobby(care: care, who: $who, back: { up(.town) }, park: choosePark, shop: { screen = .shop }, play: { t in goHome(); care.volley.book.chosen = t; care.startVolley(jelly: who, mode: .match(t)) }).tipScreen("volley")
             case .friends: FriendsScreen(care: care, back: { up(.town) }, goHome: goHome)
             }
@@ -569,7 +574,10 @@ struct BagSheet: View {
     private var book: StoreBook { care.store }
 
     /// The tabs listed: Furniture only while the player owns a piece (the Shop no longer sells any, 2026-11-15).
-    private var tabs: [BagTab] { BagTab.allCases.filter { $0 != .furniture || !entries(.furniture).isEmpty } }
+    private var tabs: [BagTab] { Self.visibleTabs(book: book) }
+    static func visibleTabs(book: StoreBook) -> [BagTab] { BagTab.allCases.filter { $0 != .furniture || !StoreCatalog.decorItems(.furniture).filter { book.count($0.id) > 0 }.isEmpty } }
+    /// The "Arrange the room" button (move or put away placed pieces) shows on the Furniture and Toys tabs while anything is placed. Reached from the suitcase Bag, not from the paw menu.
+    static func offersArrange(tab: BagTab, book: StoreBook) -> Bool { tab.isDecor && !book.placedDecor.isEmpty }
     private func entries(_ t: BagTab) -> [StoreItem] {
         switch t {
         case .food: return StoreCatalog.items.filter { $0.food != nil && book.count($0.id) > 0 }
@@ -588,6 +596,7 @@ struct BagSheet: View {
     /// Opened by the HUD's Dress / Decor rows (a tab was asked for): the first-time tip for that tab.
     private let fromHUD: Bool
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
@@ -598,7 +607,7 @@ struct BagSheet: View {
                         Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(Color.white.opacity(0.85)))
                     }.buttonStyle(.plain).accessibilityLabel("Close bag").accessibilityIdentifier("bag-close")
                 }
-                .background { if fromHUD, tab == .wear { TipAnchor("dress", delay: 0.4) } else if fromHUD, tab.isDecor { TipAnchor("decor", delay: 0.4) } }
+                .background { if fromHUD, tab == .wear { TipAnchor("dress", delay: 0.4) } }
                 LobbyJelbiePicker(care: care, title: "Who is it for?", selected: [who], emptyLabel: "Empty slot", portraitCap: vsc == .compact ? 84 : 140, sideBySide: vsc == .compact, showNote: false, pick: { who = $0 })
                 if HUDLayout.isPad, typeSize < .xxxLarge {          // iPad (larger type falls back to the scrolling row below so labels never truncate): all six tabs share the card's width (no clipped "Ro" at the edge); the label shrinks a touch if it must
                     HStack(spacing: 6) {
@@ -625,7 +634,7 @@ struct BagSheet: View {
                     Text(note).font(SK.font(13, .heavy)).foregroundStyle(SK.ink).padding(.horizontal, 14).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(SK.honey.opacity(0.9))).accessibilityIdentifier("bag-wear-note")
                 }
-                if tab.isDecor, !book.placedDecor.isEmpty {
+                if Self.offersArrange(tab: tab, book: book) {
                     Button { AudioHub.shared.uiTap(); close(); care.beginArrange() } label: {
                         HStack(spacing: 8) { Image(systemName: "arrow.up.and.down.and.arrow.left.and.right").font(.system(size: 15, weight: .heavy)); Text("Arrange the room").font(SK.font(15, .black)) }
                             .foregroundStyle(SK.ink).frame(maxWidth: .infinity, minHeight: 48).background(Capsule().fill(SK.honey))
@@ -648,7 +657,13 @@ struct BagSheet: View {
         .background(SK.cream.ignoresSafeArea())
         .accessibilityIdentifier("bag-sheet")
         .overlay { sellCard }
-        .onAppear { book.markSeen() }
+        .onAppear {
+            book.markSeen()
+            if DevArgs.enabled, UserDefaults.standard.string(forKey: "BagScroll") == "frames" {          // (capture aid: -BagScroll frames)
+                Task { try? await Task.sleep(nanoseconds: 600_000_000); withAnimation { proxy.scrollTo("bag-frames", anchor: .top) } }
+            }
+        }
+        }
     }
 
     /// The rooms the player owns (the home room and the bought ones): choosing one moves the Jelbies in (the same `care.switchRoom` the old picker used).
@@ -681,6 +696,41 @@ struct BagSheet: View {
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
                 .accessibilityIdentifier("bag-room-\(d.id.rawValue)")
+            }
+            framesList
+        }
+    }
+
+    /// The picture frames the player owns (bought in the Shop's Rooms tab): "Hang a picture" opens the album to pick the photo, then the wall editor.
+    @ViewBuilder private var framesList: some View {
+        let owned = book.ownedWallFrames
+        if !owned.isEmpty {
+            Text("Picture frames").font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .leading).padding(.top, 6)
+                .accessibilityAddTraits(.isHeader).id("bag-frames").accessibilityIdentifier("bag-frames-header")
+            ForEach(owned, id: \.self) { f in
+                if let item = StoreCatalog.item("frame-\(f.rawValue)") {
+                    let hang = pink("Hang a picture", enabled: true) {
+                        close()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { care.wallAlbumOpen = true }
+                    }.accessibilityLabel("Hang a picture in the \(item.name) frame").accessibilityHint("Opens your album to pick a photo, then the wall editor.")
+                    .accessibilityIdentifier("bag-hang-\(f.rawValue)")
+                    let info = HStack(spacing: 12) {
+                        ItemArt(item: item, size: 64)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.name).font(SK.font(16, .black)).foregroundStyle(SK.ink)
+                            Text(book.wallPicture?.frame == f ? "On the wall" : "Owned").font(SK.font(12, .heavy)).foregroundStyle(SK.muted)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    Group {
+                        if typeSize.isAccessibilitySize { VStack(alignment: .leading, spacing: 10) { info; hang.frame(maxWidth: .infinity) } }
+                        else { HStack(spacing: 12) { info; hang } }
+                    }
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(SK.card))
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("bag-frame-\(f.rawValue)")
+                }
             }
         }
     }

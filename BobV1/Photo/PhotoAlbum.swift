@@ -1,11 +1,10 @@
 //
 //  PhotoAlbum.swift
-//  Every photo is kept in the app's Documents/Photos (JPEG). The in-game album: a grid, a viewer with Save to Photos / Share / Delete.
+//  Every photo is kept in the app's Documents/Photos (JPEG). The in-game album: a grid, a viewer with Share / Delete (no save-to-Photos button; the share sheet also excludes Save Image).
 //  The main menu's Photos button shows it through StartFlow.albumView (registered at launch by PhotoAlbum.register()).
 //
 
 import SwiftUI
-import Photos
 import ImageIO
 import Observation
 
@@ -58,18 +57,6 @@ final class PhotoAlbum {
 
     func delete(_ url: URL) { try? FileManager.default.removeItem(at: url); PhotoThumbs.cache.removeObject(forKey: url as NSURL); reload() }
 
-    /// Add-only save to the system Photos library. True when it went in.
-    enum SaveResult { case saved, noAccess, failed, noSpace }
-    static func saveToPhotos(_ url: URL) async -> SaveResult {
-        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard status == .authorized || status == .limited else { return .noAccess }
-        guard let data = try? Data(contentsOf: url) else { return .failed }
-        do {
-            try await PHPhotoLibrary.shared().performChanges { PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil) }
-            return .saved
-        } catch { return isOutOfSpace(error) ? .noSpace : .failed }
-    }
-
     /// Only a real disk-full error (a Cocoa write error, an underlying POSIX ENOSPC) is called "out of space"; every other failure gets the generic line.
     static func isOutOfSpace(_ error: Error) -> Bool {
         let e = error as NSError
@@ -85,9 +72,6 @@ final class PhotoAlbum {
     /// What to say when `add` returned nil.
     static var addFailedMessage: String { lastAddOutOfSpace ? noSpaceMessage : failedMessage }
     static let failedMessage = "Couldn't save the photo. Try again."
-    static func message(for r: SaveResult) -> String? {
-        switch r { case .saved: return nil; case .noAccess: return "Allow Photos access in Settings to save."; case .failed: return failedMessage; case .noSpace: return noSpaceMessage }
-    }
 }
 
 enum PhotoThumbs {
@@ -105,6 +89,8 @@ enum PhotoThumbs {
 struct PhotoAlbumView: View {
     /// Close button for when the album is opened from inside the game; the main menu draws its own, so it passes nil.
     var close: (() -> Void)?
+    /// In the game (not the main menu): the viewer offers "Hang on wall" / "Get a frame" (GameCare+WallEdit.swift).
+    var wall: WallHangContext? = nil
     @State private var album = PhotoAlbum.shared
     @State private var viewing: URL?
     @Environment(\.verticalSizeClass) private var vsc
@@ -147,19 +133,19 @@ struct PhotoAlbumView: View {
                 }
             }
         }
-        .onAppear { album.reload() }
-        .fullScreenCover(item: $viewing) { url in PhotoViewer(url: url) { viewing = nil } }
+        .onAppear { album.reload(); if DevArgs.enabled, UserDefaults.standard.integer(forKey: "AlbumViewFirst") != 0 { viewing = album.items.first } }          // (capture aid: -AlbumViewFirst 1)
+        .fullScreenCover(item: $viewing) { url in PhotoViewer(url: url, wall: wall) { viewing = nil } }
         .accessibilityIdentifier("photo-album")
     }
 }
 
 extension URL: @retroactive Identifiable { public var id: String { absoluteString } }
 
-/// One photo, large: Save to Photos, Share, Delete (confirmed).
+/// One photo, large: Share, Delete (confirmed). `actions` is the row to extend (none is prominent yet).
 private struct PhotoViewer: View {
     let url: URL
+    var wall: WallHangContext? = nil
     var done: () -> Void
-    @State private var saved: PhotoAlbum.SaveResult?
     @State private var confirmDelete = false
 
     var body: some View {
@@ -170,20 +156,29 @@ private struct PhotoViewer: View {
             VStack {
                 HStack { Spacer(); GameCircleButton(systemName: "xmark", label: "Close photo") { done() } }
                 Spacer()
-                HStack(spacing: 10) {
-                    PhotoActionButton(title: saved == .saved ? "Saved" : "Save to Photos", symbol: saved == .saved ? "checkmark" : "square.and.arrow.down", prominent: true) {
-                        Task { saved = await PhotoAlbum.saveToPhotos(url) }
-                    }
-                    if let img { GatedShareButton(image: img) }
-                    PhotoActionButton(title: "Delete", symbol: "trash", prominent: false) { confirmDelete = true }
-                }
-                if let m = saved.flatMap({ PhotoAlbum.message(for: $0) }) { Text(m).font(SK.font(14, .bold)).foregroundStyle(.white).multilineTextAlignment(.center).padding(.top, 4) }
+                actions(img)
             }
             .padding(16)
         }
         .alert("Delete this photo?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) { PhotoAlbum.shared.delete(url); done() }
             Button("Keep", role: .cancel) {}
+        }
+    }
+
+    /// The button row under the photo. Add new buttons here.
+    private func actions(_ img: UIImage?) -> some View {
+        HStack(spacing: 10) {
+            if let wall {          // the main (yellow) button: with no frame owned it leads to the Shop's frames
+                PhotoActionButton(title: wall.owns ? "Hang on wall" : "Get a frame", symbol: wall.owns ? "photo.artframe" : "bag.fill", prominent: true) {
+                    done()
+                    if wall.owns { wall.hang(url) } else { wall.getFrame() }
+                }
+                .accessibilityHint(wall.owns ? "Hangs this photo on the wall in a frame you own." : "You have no picture frame yet. Opens the Shop on the picture frames.")
+                .accessibilityIdentifier("photo-hang-on-wall")
+            }
+            if let img { GatedShareButton(image: img) }
+            PhotoActionButton(title: "Delete", symbol: "trash", prominent: false) { confirmDelete = true }
         }
     }
 }

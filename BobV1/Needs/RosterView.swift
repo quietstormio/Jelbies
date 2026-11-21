@@ -233,7 +233,10 @@ private struct PerkWrapRow: Layout {
         return (frames, CGSize(width: min(maxX, width), height: y + rowH))
     }
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        arrange(proposal.width ?? 300, subviews).size
+        let w = proposal.width ?? 300
+        // Report the FULL proposed width, not the widest row: the parent hands placeSubviews exactly the reported size, so a narrower report made the wrap
+        // happen at that narrower width (placed rows > measured rows) and the last chip spilled out of the card onto the next one.
+        return CGSize(width: w, height: arrange(w, subviews).size.height)
     }
     func placeSubviews(in r: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let a = arrange(r.width, subviews)
