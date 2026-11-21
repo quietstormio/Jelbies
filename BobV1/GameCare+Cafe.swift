@@ -73,6 +73,9 @@ final class CafeBook {
     /// What each place had (place -> treat), kept for the lounge's cups.
     var lastTreatByPlace: [Int: CafeTreatID] = [:]
     var loungeIdle: [Int: Float] = [:]
+    /// cafe-straw-r1: the yaw an END place faces (toward the other end); the middle one (and a table of one or two) is not in it and faces the room.
+    var chatYaw: [Int: Float] = [:]
+    var turnCool: [Int: Float] = [:]
     nonisolated deinit {}
 }
 
@@ -209,7 +212,7 @@ extension GameCare {
             dining.tableSkin = { n in FoodMeshes.mesh(id: n == 3 && DiningLayout.ends ? "cafetable_ends" : "cafetable_\(n)") }          // (the ends table for the ends layout: tools/make_cafetable_ends)
             let diners = actors.filter { $0.brain != nil }.prefix(DiningGroup.maxDiners)
             let n = max(diners.count, 1)
-            if n == 3, DiningGroup.cafeEnds { DiningLayout.ends = true; DiningLayout.sideX = 1.3; DiningLayout.reachFood = true }          // (the ENDS layout at the café too: `-CafeEnds 1`, see DiningGroup.cafeEnds)
+            if n == 3, DiningGroup.cafeEnds { DiningLayout.ends = true; DiningLayout.sideX = 1.3; DiningLayout.reachFood = true; DiningLayout.endsYaw = DiningLayout.cafeEndsYaw }          // (the ENDS layout at the café too: `-CafeEnds 1`, see DiningGroup.cafeEnds)
             let layout = DiningLayout.make(n: n)
             // the table sits well back (portrait) or to the left (landscape) so the order card never covers the Jelbies
             let aspect = GameCamera.aspect
@@ -218,12 +221,13 @@ extension GameCare {
             dining.spawn(serving: CafePlate.emptyTable, n: n, bobAt: SIMD2(99, 99), forcedOrigin: book.origin)
             book.tableOut = true
             let order: [Int] = n == 3 ? [1, 0, 2] : Array(0..<n)          // left, middle, right
-            book.stands = [:]
+            book.stands = [:]; book.chatYaw = [:]; book.turnCool = [:]
             for (k, a) in diners.enumerated() {
                 let pl = layout.places[order[k]]
                 var st = book.origin + pl.rel
                 st.y += GameCare.eatCloser
                 book.stands[a.id] = st
+                book.chatYaw[a.id] = DiningLayout.ends && order[k] != 0 ? pl.yaw : nil          // (cafe-straw-r1: the two ends keep facing each other across the table, also in the lounge)
                 rehome(a, at: st)
                 guard let brain = a.brain else { continue }
                 brain.autonomy = false; brain.idleBlocked = true; brain.restTimer = 0.4
@@ -245,7 +249,7 @@ extension GameCare {
             }
             groupWanted = nil
             dining.reset()
-            DiningLayout.ends = false; DiningLayout.sideX = 1.11; DiningLayout.reachFood = false
+            DiningLayout.ends = false; DiningLayout.sideX = 1.11; DiningLayout.reachFood = false; DiningLayout.endsYaw = DiningLayout.homeEndsYaw
             book.tableOut = false; book.stands = [:]; book.thought = nil; book.replyIn = [:]; book.lounged = false; book.loungeIdle = [:]
             RoomLayout.apply(RoomCatalog.def(store.currentRoom))
             if GameCamera.refreshRoam(aspect: GameCamera.aspect) != nil {

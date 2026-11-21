@@ -52,8 +52,8 @@ final class CafeTrip {
     var menuOpen: Bool { phase == .menu }
     /// Go home is on screen from the moment the café fades in until the end (leaving mid-meal is safe: GameCare+Cafe cleans up under the white).
     var canGoHome: Bool { switch phase { case .arriveIn, .menu, .eating, .cheer, .lounge, .done: return true; default: return false } }
-    /// The order list stays up from the menu to the end.
-    var listOpen: Bool { switch phase { case .menu, .eating, .cheer, .lounge, .done: return true; default: return false } }
+    /// The order card is up only while the order is being made (cafe-straw-r1: it fades away once the order is placed, so the scene is clear while they drink and chat).
+    var listOpen: Bool { phase == .menu }
     /// They are at the table, relaxed (after the meal).
     var atTable: Bool { phase == .lounge || phase == .done || phase == .cheer }
 

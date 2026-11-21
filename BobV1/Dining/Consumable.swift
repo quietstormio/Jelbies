@@ -88,6 +88,7 @@ typealias ContainerBuilder = @Sendable (_ n: Int, _ palette: ConsumablePalette, 
 /// One piece of a plate food, built around its centre `c` (tray-local), `j` = which of a Jelly's three, `s` = the serving scale.
 typealias PieceBuilder = @Sendable (_ b: RoomMeshBuilder, _ c: SIMD3<Float>, _ j: Int, _ s: Float, _ p: ConsumablePalette) -> Void
 /// A mixed plate (the café): a piece builder chosen by PLACE (place, j = which of his three, s = the serving scale), built around the centre `c`.
+typealias PlaceStrawBuilder = @Sendable (_ layout: TrayLayout, _ place: Int) -> [SIMD3<Float>]
 typealias PlacePieceBuilder = @Sendable (_ b: RoomMeshBuilder, _ c: SIMD3<Float>, _ place: Int, _ j: Int, _ s: Float) -> Void
 
 nonisolated struct Consumable {
@@ -120,6 +121,9 @@ nonisolated struct Consumable {
     /// to his right of the standard bottle spot: a big cup beside the mouth would hide it.
     var thinStraw: Float = 1
     var cupSide: Float = 0
+    /// cafe-straw-r1: a drink served in a cup of its own in front of each place (drawn by this builder: cups + each place's straw) and where each place's straw ends at his mouth.
+    var placeServing: FoodServingBuilder? = nil
+    var placeStraw: PlaceStrawBuilder? = nil
 }
 
 nonisolated enum Consumables {
