@@ -440,6 +440,7 @@ extension BlobBrain {
         if cands.isEmpty { return false }
         guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) * parkSocialPickMul else { return false }
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
+        if emotePairDefer(with: o) { return false }          // (EmoteSpot.swift: they stand on a much-used spot: they roam on, the roll comes round again)
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         // 2026-11-06: boop 3 -> 1.5. The user: "they do the hand holding emote a little too much ... not as often" (the standing side-by-side hand-on-arm boop): halved, not replaced.
         var w: [(SocialKind, Float)] = [(.boop, 0.6), (.follow, 2), (.squabble, grumpy ? SocialTuning.squabbleGrumpy : SocialTuning.squabbleBase)]

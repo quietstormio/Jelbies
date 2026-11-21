@@ -30,6 +30,9 @@ enum EmoteSpot {
     static let roamWeight: Float = 0.6
     /// A pair walks to a better meeting spot first (`emoteMeetPlan`). OFF since the real-app takes (2026-11-21): a pair starts where the two stand; where bodies ROAM is what is balanced (roam goals above).
     static let pairMeet = false
+    /// A pair roll is put off (up to `deferMax` s, the roll comes round again on its own) while the midpoint of the two is a worse spot than this: they roam on, and start where they next stand.
+    static let deferBelow: Float = -1.3
+    static let deferMax: Float = 25
     /// How far apart the two bodies of a pair stand on the meeting spot.
     static let pairHalf: Float = 0.55
 
@@ -113,6 +116,7 @@ struct EmoteSpotState {
     var skip = false
     var walked: Float = 0
     var logT: Float = 0
+    var deferSince: Float = -1
 }
 
 extension BlobBrain {
@@ -182,6 +186,17 @@ extension BlobBrain {
     }
 
     // MARK: pair
+
+    /// True = not now: the two stand on a spot emotes have used a lot lately (or on the rug centre); the roll is tried again later (EmoteSpot.deferMax s at most).
+    func emotePairDefer(with o: BlobBrain) -> Bool {
+        guard emoteSpotLive, o.homeRoom, let rf = roamProvider?() else { return false }
+        let mid = (position + o.position) / 2
+        if EmoteSpot.score(mid, rf) >= EmoteSpot.deferBelow { emoteSpot.deferSince = -1; return false }
+        if emoteSpot.deferSince < 0 { emoteSpot.deferSince = variety.now }
+        if variety.now - emoteSpot.deferSince < EmoteSpot.deferMax { return true }
+        emoteSpot.deferSince = -1
+        return false
+    }
 
     /// The pair's meeting: where the two stand for `kind`. If the midpoint they are at is clearly worse than another spot, both walk to it first (`socialBook.meet`), then `socialStart`
     /// runs as always. True = the meeting is on its way (the caller is done); false = start in place.
