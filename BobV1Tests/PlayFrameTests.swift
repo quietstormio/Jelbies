@@ -6,6 +6,7 @@
 
 import XCTest
 import simd
+import UIKit
 @testable import BobV1
 
 @MainActor
@@ -429,5 +430,84 @@ final class PlayFrameTests: XCTestCase {
         for _ in 0..<600 { for r in rs { r.tick() }; p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js()); XCTAssertEqual(p.phase, .inHand); for r in rs { XCTAssertEqual(r.brain.playChase, 0); XCTAssertEqual(r.brain.runW, 0) } }
         p.end()
         for r in rs { XCTAssertEqual(r.brain.playChase, 0, "play over: the chase flag is off") }
+    }
+
+    // MARK: the room comes back as it was (play-frame-r2)
+
+    static func sameFloor(_ a: GameCamera.RoamFloor?, _ b: GameCamera.RoamFloor?) -> Bool {
+        guard let a, let b else { return a == nil && b == nil }
+        return a.aspect == b.aspect && a.minZ == b.minZ && a.maxZ == b.maxZ && a.zs == b.zs && a.hw == b.hw && a.free == b.free && a.railFree == b.railFree
+    }
+    struct RoomState { var floor: GameCamera.RoamFloor?; var arenaC: SIMD2<Float>; var arenaR: Float; var front: Float
+        init() { floor = GameCamera.roamFloor; arenaC = GameCamera.arenaCenter; arenaR = GameCamera.arenaRadius; front = RoomLayout.walls[1].d } }
+    func playOnce(size: CGSize, bumpHUD: (() -> Void)? = nil) -> (before: RoomState, during: RoomState, after: RoomState) {
+        let r = MotionRig(game: true); Self.keep.append(r)
+        let p = PlayToss(); p.viewSize = size
+        let before = RoomState()
+        p.begin(ball: .ball, title: "ball", jellies: [PlayJelly(id: 0, brain: r.brain, sim: r.sim, skinner: r.skinner)], snapCamera: true)
+        let during = RoomState()
+        if let bump = bumpHUD { bump(); GameCamera.refreshRoam(aspect: Float(size.width / size.height)) }          // (what the stage's syncRoam does when the measured HUD changes during play)
+        p.end()
+        return (before, during, RoomState())
+    }
+
+    /// Play on and off, portrait and landscape: the room's floor (rows, free spans, button spans), safety wall (arena) and front wall are exactly what they were before.
+    func testPlayLeavesTheRoomsFloorSafetyWallAndFrontWallAsTheyWere() {
+        for (name, size) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
+            Self.room(size)
+            let s = playOnce(size: size)
+            XCTAssertTrue(Self.sameFloor(s.before.floor, s.after.floor), "\(name): the room floor after play is not the one before")
+            XCTAssertEqual(s.after.arenaC, s.before.arenaC, "\(name): arena centre"); XCTAssertEqual(s.after.arenaR, s.before.arenaR, "\(name): arena radius")
+            XCTAssertEqual(s.after.front, s.before.front, "\(name): front wall")
+            XCTAssertFalse(Self.sameFloor(s.before.floor, s.during.floor), "\(name): during play the floor is the play floor")
+            XCTAssertEqual(s.during.arenaR, s.before.arenaR, "\(name): the safety wall is not touched during play")
+            print("PFROOM \(name): arena \(s.before.arenaC) r \(s.before.arenaR) front \(s.before.front) | during arena r \(s.during.arenaR) front \(s.during.front) floor z \(s.during.floor?.minZ ?? 0)...\(s.during.floor?.maxZ ?? 0) | after arena r \(s.after.arenaR) front \(s.after.front)")
+        }
+    }
+
+    /// The measured HUD changes during play (the stage rebuilds the PLAY floor for it): after play the room floor is the one a fresh `refreshRoam` builds with the NEW buttons, not the saved one.
+    func testAHudChangeDuringPlayRebuildsTheRoomFloorAfterwards() {
+        let wasSize = HUDLayout.measuredSize, wasInsets = HUDLayout.measuredInsets
+        defer { HUDLayout.measuredSize = wasSize; HUDLayout.measuredInsets = wasInsets }
+        for (name, size) in [("portrait", Self.portrait), ("landscape", Self.landscape)] {
+            HUDLayout.measuredSize = size; HUDLayout.measuredInsets = UIEdgeInsets(top: 0, left: 0, bottom: 20, right: 0)
+            Self.room(size)
+            let rev = HUDLayout.measuredRevision
+            let s = playOnce(size: size) { HUDLayout.measuredInsets = UIEdgeInsets(top: 0, left: 59, bottom: 34, right: 59) }
+            XCTAssertNotEqual(HUDLayout.measuredRevision, rev, "\(name): the HUD revision moved")
+            // a fresh floor with the new rails
+            let a = Float(size.width / size.height)
+            let after = GameCamera.roamFloor
+            GameCamera.refreshRoam(aspect: a)
+            XCTAssertTrue(Self.sameFloor(after, GameCamera.roamFloor), "\(name): the room floor after play was not rebuilt for the new buttons")
+            XCTAssertFalse(Self.sameFloor(s.before.floor, after), "\(name): the old floor was put back (its button cut-outs are stale)")
+        }
+    }
+
+    /// Nothing changed during play (same aspect, same measured HUD): the floor put back is the pre-play floor, identical.
+    func testAnUnchangedHudPutsTheSavedFloorBack() {
+        let wasSize = HUDLayout.measuredSize, wasInsets = HUDLayout.measuredInsets
+        defer { HUDLayout.measuredSize = wasSize; HUDLayout.measuredInsets = wasInsets }
+        HUDLayout.measuredSize = Self.landscape; HUDLayout.measuredInsets = UIEdgeInsets(top: 0, left: 59, bottom: 21, right: 59)
+        Self.room(Self.landscape)
+        let s = playOnce(size: Self.landscape)
+        XCTAssertTrue(Self.sameFloor(s.before.floor, s.after.floor))
+    }
+
+    /// The phone is turned during play: afterwards the room floor is the one for the NEW stage shape (the old floor is stale), built like a fresh refresh.
+    func testTurningThePhoneDuringPlayRebuildsTheRoomFloorForTheNewShape() {
+        Self.room(Self.portrait)
+        let r = MotionRig(game: true); Self.keep.append(r)
+        let p = PlayToss(); p.viewSize = Self.portrait
+        p.begin(ball: .ball, title: "ball", jellies: [PlayJelly(id: 0, brain: r.brain, sim: r.sim, skinner: r.skinner)], snapCamera: true)
+        p.viewSize = Self.landscape
+        var w = TossWorld(); w.xHalf = PlayToss.ballXHalf
+        p.tick(dt: r.sim.stepDt, world: w, jellies: [PlayJelly(id: 0, brain: r.brain, sim: r.sim, skinner: r.skinner)])
+        p.end()
+        let after = GameCamera.roamFloor
+        let a = Float(Self.landscape.width / Self.landscape.height)
+        XCTAssertEqual(after?.aspect ?? 0, a, accuracy: 0.02, "the room floor after a turn is for the landscape shape")
+        GameCamera.refreshRoam(aspect: a)
+        XCTAssertTrue(Self.sameFloor(after, GameCamera.roamFloor))
     }
 }

@@ -638,6 +638,7 @@ struct GameScreen: View {
                         NSLog("[playtoss] demo round %d done rally %d nudges %d headers %d t %.1f", round, care.play.rally, care.play.nudges, care.play.headers, waited)
                         await sleep(1.8)
                     }
+                    if d.integer(forKey: "PlayDemoEnd") != 0 { await sleep(3); NSLog("[playtoss] demo: Done"); care.endPlay() }          // (capture aid: -PlayDemoEnd 1 puts the ball away after the rounds, to log the room's walls and floor after play)
                 }
             }
         }
