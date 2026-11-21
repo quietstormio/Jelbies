@@ -175,7 +175,7 @@ extension BlobBrain {
             stepKey(2100)
             if fxFree { holdFacing(faceCameraYaw()) }
             let w = smooth01(t / 0.2) * (1 - smooth01((t - 1.4) / 0.4))
-            socialBook.wantRoll = 0.04 * w * sinf(2 * .pi * 4.5 * t) * socialGentle          // (small: a bigger wobble slides the planted soles, 24 mm at 0.10 rad)
+            socialBook.wantRoll = 0          // (no roll wobble: it slid the planted soles 21 - 24 mm; the happy wobble is the squash pulses and the kicks)
             socialBook.wantSquash = 1 - 0.03 * w * abs(sinf(2 * .pi * 2.25 * t))
             if isA {
                 if !s.impacted, t > 0.1 { s.impacted = true; jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2); AudioHub.shared.chirp(jelly: steerID, .happy); AudioHub.shared.chirp(jelly: o.steerID, .happy) }

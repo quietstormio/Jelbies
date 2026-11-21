@@ -12,7 +12,8 @@ import Foundation
 import simd
 
 /// How far each turns in toward the other in the whisper's V (rad).
-enum WhisperTuning { static let turnIn: Float = 0.45 }
+/// 0 = facing the camera: a 26-degree turn in place is not a turn STEP in the engine, it rotates the body with the soles planted (SocialFeetTests measured 58 - 96 mm of planted-sole skate), so the whisper keeps its clear gap, the lean and the startled hop but stays front on.
+enum WhisperTuning { static let turnIn: Float = 0 }
 
 extension BlobBrain {
     /// Overlay size for reduce motion (the hops themselves shrink in the gait).
