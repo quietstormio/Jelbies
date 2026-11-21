@@ -56,7 +56,7 @@ final class ShowBook {
     /// Bodies that are on their way to the middle (a turn's walk), with the seconds walked so far and the allowance: the walk's length at the stage pace + 1.5 s.
     var heading: [Int: (age: Float, limit: Float)] = [:]
     /// Second legs of walks through the gate: actor id -> where he goes on to.
-    var via: [Int: SIMD2<Float>] = [:]
+    var via: [Int: (at: SIMD2<Float>, final: SIMD2<Float>)] = [:]
     /// show-stayhome-r1: the stage is up and the housemates are away from the room: hidden, not stepped, not ticked, exactly as they were (`showStaysHome`).
     var roomAway = false
     /// Show asked while the contestant is asleep: the trip starts once he is upright (only he is woken and waited for).
@@ -360,17 +360,22 @@ extension GameCare {
         #endif
         b.requestNow(.come(to: p))
     }
-    /// A walk between a seat and the middle (or between two seats): back seats are left and reached through the gate, so a walk never goes through a body that sits out. `via` holds the second leg.
+    /// On its side the near seat (-1.65, 0) stands 1.3 from the straight line between the gate and the left back seat: that walk bends through this point (0.3, -0.3) so it never brushes the one who sits there.
+    private func seatWaypoint(_ seat: SIMD2<Float>) -> SIMD2<Float>? {
+        GameCamera.aspect > 1 && seat.x < -0.5 && seat.y < Self.backRow ? SIMD2(0.3, -0.3) : nil
+    }
+    /// A walk between a seat and the middle (or between two seats): back seats are left and reached through the gate, so a walk never goes through a body that sits out. `via` holds where he goes on to.
     private func showRoute(_ a: JellyActor, to p: SIMD2<Float>) {
         let book = showBook
         let c = a.sim.centroid(), here = SIMD2(c.x, c.z)
         let backHere = here.y < Self.backRow, backThere = p.y < Self.backRow, oneBack = backHere != backThere
         var length = simd_distance(here, p)
         if oneBack && simd_distance(here, ShowStage.gate) > 0.5 && simd_distance(p, ShowStage.gate) > 0.5 {
-            book.via[a.id] = p
-            length = simd_distance(here, ShowStage.gate) + simd_distance(ShowStage.gate, p)
+            let first = backHere ? (seatWaypoint(here) ?? ShowStage.gate) : ShowStage.gate
+            book.via[a.id] = (first, p)
+            length = simd_distance(here, first) + simd_distance(first, ShowStage.gate) + simd_distance(ShowStage.gate, p)
             if simd_distance(p, ShowStage.playerSpot) < 0.01, book.heading[a.id] == nil { book.heading[a.id] = (0, length / Self.stagePace + 1.5) }
-            showWalk(a, to: ShowStage.gate)
+            showWalk(a, to: first)
             return
         }
         book.via[a.id] = nil
@@ -379,18 +384,20 @@ extension GameCare {
         } else { book.heading[a.id] = nil }
         showWalk(a, to: p)
     }
-    /// The second leg of a walk through the gate: once he has stopped at the gate he goes on.
+    /// The next leg of a walk through the gate: once he has stopped where the last leg ended he goes on (to the middle only when it is clear).
     private func tickVia() {
         let book = showBook
-        for (id, final) in book.via {
+        for (id, leg) in book.via {
+            let at = leg.at, final = leg.final
             guard let a = showBody(id), let b = a.brain else { book.via[id] = nil; continue }
             let c = a.sim.centroid()
-            guard simd_distance(SIMD2(c.x, c.z), ShowStage.gate) < 0.5 else { continue }
+            guard simd_distance(SIMD2(c.x, c.z), at) < 0.6 else { continue }
             if b.pending != nil { continue }
             if case .walk = b.script { continue }
-            book.via[id] = nil
-            if simd_distance(final, ShowStage.playerSpot) < 0.01, !middleClear(for: id) { book.via[id] = final; continue }          // (the middle is still occupied: wait at the gate)
-            showWalk(a, to: final)
+            let next = simd_distance(at, ShowStage.gate) < 0.6 ? (seatWaypoint(final) ?? final) : final
+            if simd_distance(next, ShowStage.playerSpot) < 0.01, !middleClear(for: id) { continue }          // (the middle is still occupied: wait where he is)
+            book.via[id] = next == final ? nil : (next, final)
+            showWalk(a, to: next)
         }
     }
     /// Seconds of walking at the measured stage pace (~0.55 u/s: the turn to the camera and the wait behind the one before are in it).
@@ -419,6 +426,7 @@ extension GameCare {
         let bodies = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
         return !bodies.contains { b in
             guard b.id != id else { return false }
+            if book.via[b.id] != nil, spot == ShowStage.gate { return true }          // (he is on his way through the gate: two bodies never meet there)
             let c = b.sim.centroid()
             return simd_distance(SIMD2(c.x, c.z), spot) < radius
         }
@@ -432,10 +440,16 @@ extension GameCare {
         let book = showBook
         if book.heading[a.id] != nil, simd_distance(p, ShowStage.playerSpot) < 0.01 { return }          // (already on her way: not restarted)
         book.pendingWalks.removeAll { $0.id == a.id }
-        if setOffClear(a) { showRoute(a, to: p) } else { book.pendingWalks.append((a.id, p, 0)) }
+        if setOffClear(a) { showRoute(a, to: p) } else {
+            book.pendingWalks.append((a.id, p, 0))
+            #if targetEnvironment(simulator)
+            if DevArgs.enabled { let c = a.sim.centroid(); print(String(format: "[showturn] pending actor %d at (%.2f, %.2f) t=%.3f", a.id, c.x, c.z, CACurrentMediaTime())) }
+            #endif
+        }
     }
     private func tickPendingWalks(dt: Float) {
         let book = showBook
+        guard show.trickStage == .rivals || show.trickEntering else { book.via = [:]; book.pendingWalks = []; return }          // (the rivals' part is over: no walk of it is left to go on)
         tickVia()
         guard !book.pendingWalks.isEmpty else { return }
         var rest: [(id: Int, to: SIMD2<Float>, waited: Float)] = []
@@ -446,7 +460,15 @@ extension GameCare {
                 if DevArgs.enabled { print(String(format: "[showturn] waited %.2f s for the middle to clear (actor %d) t=%.3f", w.waited, w.id, CACurrentMediaTime())) }
                 #endif
                 showRoute(a, to: w.to)
-            } else { rest.append((w.id, w.to, w.waited + dt)) }
+            } else {
+                rest.append((w.id, w.to, w.waited + dt))
+                #if targetEnvironment(simulator)
+                if DevArgs.enabled, Int(w.waited) != Int(w.waited + dt), Int(w.waited) % 3 == 2 {
+                    let all = book.performers.compactMap { book.actors.indices.contains($0) ? book.actors[$0] : nil } + book.extra
+                    print("[showturn] still waiting actor \(w.id) at \(a.sim.centroid()): " + all.map { "\($0.id)@\($0.sim.centroid().x),\($0.sim.centroid().z) via \(book.via[$0.id] != nil)" }.joined(separator: " "))
+                }
+                #endif
+            }
         }
         book.pendingWalks = rest
     }

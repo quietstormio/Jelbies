@@ -210,7 +210,7 @@ final class ShowTurnOrderTests: XCTestCase {
                 if care.show.rivalStep != lastStep { lastStep = care.show.rivalStep; if lastStep == .perform, let n = care.show.rivalTurn, let id = care.showRivalBody(n), let body = book.extra.first(where: { $0.id == id }) { diag.append(String(format: "r%d perform at %.1f s, %.2f from the middle", n, t - t0, simd_distance(body.floor, ShowStage.playerSpot))) } }
                 for i in all.indices { for j in all.indices where j > i {
                     let g = simd_distance(all[i].floor, all[j].floor)
-                    if g < minGap { minGap = g; minWhere = "bodies \(all[i].id) \(all[i].floor) and \(all[j].floor) \(all[j].id) at \(String(format: "%.1f", t - t0)) s, step \(care.show.rivalStep), turn \(String(describing: care.show.rivalTurn))" }
+                    if g < minGap { minGap = g; minWhere = "bodies \(all[i].id) \(all[i].floor) and \(all[j].floor) \(all[j].id) at \(String(format: "%.1f", t - t0)) s, step \(care.show.rivalStep), turn \(String(describing: care.show.rivalTurn)); all: \(all.map { "\($0.id)@\($0.floor)" })" }
                 } }
             } else if t0 >= 0 {
                 aroundLen.append(t - t0); t0 = -1; cur = nil
