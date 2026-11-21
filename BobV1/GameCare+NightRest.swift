@@ -114,7 +114,7 @@ extension GameCare {
 
     /// Wake ONLY this Jelbie (a name, a poke). A no-op on an awake one besides the bookkeeping. `fast` = something needs him now (the newcomer welcome): the quick wake, never the soft staggered one.
     func wakeSleeper(_ id: Int, groggy: Bool = true, fast: Bool = false) {
-        if let b = selectBrain(id), b.isSleeping, !b.sleep.wakeAsked {
+        if let b = selectBrain(id) ?? brainFor(id), b.isSleeping, !b.sleep.wakeAsked {
             b.commandedGoodnight = false
             b.sleepWake(groggy: groggy, fast: fast)
             if isBedtimeHours { nightRest.nightWoken.insert(id) }
