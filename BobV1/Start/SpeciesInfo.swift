@@ -40,7 +40,7 @@ struct SpeciesInfo {
     /// 2026-11-21 (spring-seven-r1): + the seven new looks: Moo, Cocoa, Blush (the cows; only while `cowsInStore`) and the gradients Sunset, Cotton Candy, Ocean, Lagoon.
     static let special = [JellyRoster.teddyID, JellyRoster.pearlID, JellyRoster.pandaID, JellyRoster.opalID] + (cowsInStore ? cowIDs : []) + gradientIDs
     /// THE ONE SWITCH for the three cows: false until cow-looks-r1 (body modes 91 / 93 / 95) is merged; then true and Moo, Cocoa, Blush appear in the Jelly Spring.
-    static let cowsInStore = false
+    static let cowsInStore = true
     static let cowIDs = [JellyRoster.mooID, JellyRoster.cocoaID, JellyRoster.blushID]
     static let gradientIDs = [JellyRoster.sunsetID, JellyRoster.cottonCandyID, JellyRoster.oceanID, JellyRoster.lagoonID]
     /// The picker pages: the four starters, then (when adopting more, not the free first gift) the four specials.
