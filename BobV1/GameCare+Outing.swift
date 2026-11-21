@@ -189,7 +189,7 @@ extension GameCare {
     func outingTidy() {
         let o = outing
         o.tidyT = nil
-        let busy = tripActive || raceWait != nil
+        let busy = tripActive || raceWait != nil || showBook.wait != nil
         for a in groomBook.actors where o.runners[a.id] != nil {
             a.outingHome = nil
             a.sim.arenaSuspended = false

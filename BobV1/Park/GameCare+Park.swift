@@ -47,7 +47,7 @@ extension GameCare {
     }
 
     /// The bodies of the Jelbies that did not come along are away while the park is on.
-    func parkHides(_ id: Int) -> Bool { (park.inScene && id < jellies.count && !parkBook.comers.contains(id)) || volleyHides(id) || groomHides(id) || raceHides(id) }
+    func parkHides(_ id: Int) -> Bool { (park.inScene && id < jellies.count && !parkBook.comers.contains(id)) || volleyHides(id) || groomHides(id) || raceHides(id) || showStaysHome(id) }
 
     // MARK: blockers and the request
 
@@ -175,7 +175,7 @@ extension GameCare {
     }
 
     var parkFadeBlocked: Bool {
-        race.active || show.active || volley.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active
+        race.active || show.active || volley.active || raceWait != nil || showBook.wait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active
             || (park.place == .park && parkBook.roster.contains { park.picked.contains($0.id) && $0.brain?.isSleeping == true })          // (only one who is GOING blocks the fade; a sleeper who stays home, like Camp's, just stays asleep, hidden)
     }
 

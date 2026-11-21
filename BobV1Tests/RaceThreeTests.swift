@@ -65,7 +65,7 @@ final class RaceThreeTests: XCTestCase {
         func step() {
             let dt = actors[0].sim.stepDt
             for a in actors + park {
-                if a.id < actors.count, care.raceHides(a.id) { continue }          // (a housemate away while the track is up is not ticked, as the stage does)
+                if a.id < actors.count, care.tripFrozen(a.id) { continue }          // (a housemate away on a trip is not ticked, as the stage does)
                 a.brain?.tick(sim: a.sim, skinner: a.skinner, dt: dt, touched: false)
                 a.skinner.jelly.tick(brain: a.brain!, sim: a.sim, dt: dt)
             }
@@ -73,7 +73,7 @@ final class RaceThreeTests: XCTestCase {
             care.tickOthers(actors, dt: dt)
             care.tickRace(actors, dt: dt)
             if withPark { care.tickPark(actors, dt: dt) }
-            for a in actors + park where !(a.id < actors.count && care.raceHides(a.id)) { a.sim.step() }
+            for a in actors + park where !(a.id < actors.count && care.tripFrozen(a.id)) { a.sim.step() }
         }
         func run(_ s: Float, until: (() -> Bool)? = nil) { for _ in 0..<Int(s * 60) { step(); if let u = until, u() { break } } }
     }
