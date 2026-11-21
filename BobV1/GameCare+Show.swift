@@ -613,11 +613,11 @@ extension GameCare {
 
     #if targetEnvironment(simulator)
     nonisolated(unsafe) static var startShowFrames = 0
-    /// Capture aid (dev arguments, simulator only): `-StartShow 1` starts the Show for Jelmiko 0 once housemate #1 sleeps deeply (use with `-RaceDepartSetup asleep` and its marker file).
+    /// Capture aid (dev arguments, simulator only): `-StartShow 1` starts the Show for Jelmiko 0 once housemate #1 has slept for 10 s (use with `-RaceDepartSetup asleep` and its marker file).
     private func startShowCaptureAid(_ actors: [JellyActor]) {
-        guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "StartShow") != 0, !show.active, showBook.wait == nil, actors.count > 1, let b1 = actors[1].brain, b1.isSleeping, b1.sleep.stage >= 4 else { return }
+        guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "StartShow") != 0, !show.active, showBook.wait == nil, actors.count > 1, let b1 = actors[1].brain, b1.isSleeping else { return }
         Self.startShowFrames += 1
-        if Self.startShowFrames == 240 { startShow(jelly: 0, rank: .puddle, seed: Self.showSeed) }
+        if Self.startShowFrames == 600 { startShow(jelly: 0, rank: .puddle, seed: Self.showSeed) }
     }
     #endif
 
