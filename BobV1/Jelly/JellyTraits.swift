@@ -142,6 +142,13 @@ nonisolated enum JellyCandidates {
         case JellyRoster.pearlID: return [65, 60, 90, 45, 35]
         case JellyRoster.pandaID: return [70, 80, 35, 40, 55]
         case JellyRoster.opalID: return [72, 68, 90, 50, 38]
+        case JellyRoster.mooID: return [74, 82, 38, 36, 50]
+        case JellyRoster.cocoaID: return [72, 84, 34, 40, 44]
+        case JellyRoster.blushID: return [90, 72, 48, 30, 42]
+        case JellyRoster.sunsetID: return [66, 62, 84, 44, 56]
+        case JellyRoster.cottonCandyID: return [82, 86, 66, 34, 40]
+        case JellyRoster.oceanID: return [56, 60, 62, 84, 46]
+        case JellyRoster.lagoonID: return [68, 60, 86, 52, 44]
         default: return [50, 50, 50, 50, 50]
         }
     }
@@ -149,7 +156,10 @@ nonisolated enum JellyCandidates {
     static func lovedSnack(_ species: Int) -> String? {
         switch species {
         case 0: return "sushi"
-        case 1, JellyRoster.pandaID: return "donut"
+        case 1, JellyRoster.pandaID, JellyRoster.mooID, JellyRoster.blushID, JellyRoster.sunsetID, JellyRoster.cottonCandyID: return "donut"
+        case JellyRoster.cocoaID: return "cookie"
+        case JellyRoster.oceanID: return "sushi"
+        case JellyRoster.lagoonID: return "popsicle"
         case 3, JellyRoster.teddyID: return "cookie"
         case 2, JellyRoster.pearlID: return "onigiri"
         case JellyRoster.opalID: return "popsicle"          // the store's Ice pop
