@@ -530,7 +530,7 @@ extension BlobBrain {
         armDirW = 0; armDirOut = 0
         idleState.jackRoll = 0
         if winCheer { winFaceEnd() }          // (his own faces come back after the celebration)
-        winCheer = false; winFlat = false; winSettleT = 0
+        winCheer = false; winFlat = false; winSettleT = 0; winSpot = nil
         if !nameHopping { gait.hopApex = 0.10; gait.hopDuration = 0.26 }       // the jacks' higher hop ends with them
         gait.flipTwist = 0; gait.crouchDepth = 0.18; gait.crouchHold = 0; gait.airStretch = 0.12; gait.landDepth = 0.2          // (the trick hops' knobs go with them)
         skinner?.setEyeOpenness(1)
@@ -1080,7 +1080,9 @@ extension BlobBrain {
         sim.targets = []; beanHold = 0; feetInit = false; feet.reset(); stepLive = false
         gait.wander = false
         let pose = sim.bodyPose(iterations: 6)
-        let here = SIMD2(pose.centroid.x, pose.centroid.z)
+        var here = SIMD2(pose.centroid.x, pose.centroid.z)
+        let winBounce = idleState.kind == .joy && winCheer
+        if winBounce { if winSpot == nil { winSpot = here }; here = winSpot! }          // (the win: every bounce takes off from and lands on the first one's spot)
         let d = idleState.target - here
         let dl = simd_length(d)
         var step = (idleState.kind == .bounce || idleState.kind == .joy || idleState.kind == .tossHeader) ? 0 : min(Self.scootHop, dl)
@@ -1097,7 +1099,7 @@ extension BlobBrain {
         let apex: Float = idleState.kind == .tossHeader ? Self.tossApex : (idleState.kind == .joy && winCheer) ? winApexNow() : (idleState.kind == .bounce || idleState.kind == .joy) ? Self.bounceApex : (idleState.kind == .startle ? 0.09 : Self.scootApex)
         gait.hopApex = apex
         gait.hopDuration = 0.26 * sqrtf(apex / 0.10)
-        gait.hop(sim, to: SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false)
+        gait.hop(sim, to: winBounce ? here : SIMD2(rv.x, rv.z), reduceMotion: amplitude < 0.7, chained: false, takeoff: winBounce ? here : nil)
         idleState.landT = 0
     }
     static let scootHop: Float = 0.34, scootApex: Float = 0.07, bounceApex: Float = 0.12
@@ -1116,6 +1118,9 @@ extension BlobBrain {
         pitchBase += max(-1.2 * dt, min(1.2 * dt, hopGoal - pitchBase))
         gait.basePitch = pitchBase
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
+        if kind == .joy, winCheer, let spot = winSpot, idleState.hop >= idleState.reps, gait.phase == .idle {          // (the win's settle: held planted on the spot while the arms ease down, the grip let go over its last 0.2 s; with the hop over and the attractor off, the body slid ~13 cm in 0.5 s)
+            gait.holdUpright(sim, xz: spot, yaw: gait.facingYaw, fade: 1 - smooth01((winSettleT - (Self.winSettle - 0.2)) / 0.2))
+        }
         if kind == .slide {
             // the jelly kicks: the dive's impact and the pop-up landing
             let st = gait.slideT

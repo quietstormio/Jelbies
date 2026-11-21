@@ -159,6 +159,8 @@ final class BlobBrain {
     var joyWanted = false, joyAge: Float = 0
     /// The WIN celebration (BlobBrain+Win.swift): set before `.joy` starts, the jump for joy then runs as four tall bounces with the arms held up and a settle. Cleared by `idleEnd`.
     var winCheer = false
+    /// The ground spot (x, z) the win bounces over: taken at the first bounce, reused by every later one (a hop re-bases on the centroid otherwise; pinned so no bounce can add a step).
+    var winSpot: SIMD2<Float>? = nil
     /// The win at the strongest jiggle level: squash pulses with the feet planted instead of hops (a hop landing there makes the skin leash move a foot piece: RacePullFlowTests).
     var winFlat = false
     var winSettleT: Float = 0
