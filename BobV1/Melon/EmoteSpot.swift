@@ -19,21 +19,47 @@ enum EmoteSpot {
     /// Rug-centre penalty (a spot right on the centre costs this much; it fades to 0 at `rugReach`).
     static let rugWeight: Float = 2.2
     static let rugReach: Float = 2.6
+    /// Weight of a depth / width third being used more (less) than its third of the recent emotes.
+    static let bandWeight: Float = 5
     /// A walk costs this per unit of its longest leg; a spot is taken only when it beats where the emote would have been by at least `margin`.
-    static let legCost: Float = 0.4
-    static let margin: Float = 0.9
+    static let legCost: Float = 0.2
+    static let margin: Float = 1.0
     /// Longest walk to a spot: solo, pair (each body), group (checked by the ring plan itself: GroupTuning.walkMax).
-    static let soloLeg: Float = 3.0, pairLeg: Float = 3.0
+    static let soloLeg: Float = 5.5, pairLeg: Float = 7.0
     /// How far apart the two bodies of a pair stand on the meeting spot.
     static let pairHalf: Float = 0.55
 
     /// Dev capture (`-EmoteLog 1`, DevArgs builds only): one `[emotespot]` line per body per second: game time, id, floor x / z, what he is doing.
     nonisolated(unsafe) static var logOn: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "EmoteLog")
-    static func reset() { heat = [:] }
+    static func reset() { heat = [:]; zUse = [0, 0, 0]; xUse = [0, 0, 0] }
     private static func key(_ cx: Int, _ cz: Int) -> Int { (cx + 50) * 1000 + cz + 50 }
-    static func note(_ p: SIMD2<Float>) {
+
+    /// Recent emotes per depth third and per width third of the walkable floor (equal-AREA thirds of the roam floor's free spans; faded like `heat`).
+    nonisolated(unsafe) static var zUse: [Float] = [0, 0, 0], xUse: [Float] = [0, 0, 0]
+    nonisolated(unsafe) private static var cutKey = ""
+    nonisolated(unsafe) private static var zCut: (Float, Float) = (0, 0), xCut: (Float, Float) = (0, 0)
+    private static func cuts(_ rf: GameCamera.RoamFloor) {
+        let k = "\(rf.aspect)/\(rf.zs.count)/\(rf.minZ)/\(rf.maxZ)/\(rf.free.reduce(0) { $0 + $1.count })"
+        guard k != cutKey else { return }
+        cutKey = k
+        var zs = [Float](), xs = [Float]()
+        for (i, z) in rf.zs.enumerated() where i < rf.free.count {
+            for sp in rf.free[i] { var x = sp.lowerBound; while x <= sp.upperBound { zs.append(z); xs.append(x); x += 0.25 } }
+        }
+        guard zs.count > 9 else { zCut = (-1e3, 1e3); xCut = (-1e3, 1e3); return }
+        zs.sort(); xs.sort()
+        zCut = (zs[zs.count / 3], zs[2 * zs.count / 3]); xCut = (xs[xs.count / 3], xs[2 * xs.count / 3])
+    }
+    private static func band(_ p: SIMD2<Float>) -> (z: Int, x: Int) {
+        (p.y < zCut.0 ? 0 : (p.y < zCut.1 ? 1 : 2), p.x < xCut.0 ? 0 : (p.x < xCut.1 ? 1 : 2))
+    }
+    static func note(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) {
+        cuts(rf)
         for k in heat.keys { heat[k]! *= decay }
         heat[key(Int(floorf(p.x)), Int(floorf(p.y))), default: 0] += 1
+        let b = band(p)
+        for i in 0..<3 { zUse[i] *= decay; xUse[i] *= decay }
+        zUse[b.z] += 1; xUse[b.x] += 1
     }
     static func heatAt(_ p: SIMD2<Float>) -> Float {
         let cx = Int(floorf(p.x)), cz = Int(floorf(p.y))
@@ -41,9 +67,14 @@ enum EmoteSpot {
         for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1)] { h += 0.3 * (heat[key(cx + dx, cz + dz)] ?? 0) }
         return h
     }
-    static func score(_ p: SIMD2<Float>) -> Float {
+    /// How good a spot is for the next emote (higher = better): few recent emotes in its cell, its depth third and its width third, and away from the rug centre.
+    static func score(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) -> Float {
+        cuts(rf)
         let rug = max(0, 1 - simd_distance(p, RoomLayout.rugCentre) / rugReach)
-        return -heatAt(p) - rugWeight * rug
+        let b = band(p)
+        let zt = zUse.reduce(0, +), xt = xUse.reduce(0, +)
+        let over = (zt > 1 ? zUse[b.z] / zt - 1 / 3 : 0) + (xt > 1 ? xUse[b.x] / xt - 1 / 3 : 0)
+        return -heatAt(p) - rugWeight * rug - bandWeight * over
     }
     /// Standing emotes that are worth walking to a better place for (the in-place ones; the walkers, the reactions and the ones tied to a prop or a window stay as they are).
     static let soloKinds: Set<IdleKind> = [.jacks, .slump, .yawn, .tail, .flop, .stretch, .bounce, .sway, .sigh, .shake, .lieDown, .chirp, .hiccup, .sneeze, .dizzyWobble,
@@ -77,6 +108,8 @@ extension BlobBrain {
         NSLog("[emotespot] t=%.1f id=%d x=%.2f z=%.2f %@", variety.now, steerID, px, pz, st)
     }
 
+    func emoteNote(_ p: SIMD2<Float>) { if let rf = roamProvider?() { EmoteSpot.note(p, rf) } }
+
     func emoteSendWalk(to t: SIMD2<Float>) {
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         script = .walk(target: t, then: .none); activity = .walking
@@ -85,14 +118,14 @@ extension BlobBrain {
     /// Best of up to 40 floor points for an emote centred there: within `maxLeg` of every body in `from`, the floor rules leave it alone, `ok` agrees. nil = none beats `here` by the margin.
     func emoteBestSpot(from: [SIMD2<Float>], maxLeg: Float, here: SIMD2<Float>, ok: (SIMD2<Float>) -> Bool) -> SIMD2<Float>? {
         guard let rf = roamProvider?() else { return nil }
-        let base = EmoteSpot.score(here)
+        let base = EmoteSpot.score(here, rf)
         var best: (SIMD2<Float>, Float)?
         for _ in 0..<40 {
             let c = rf.sampleArea(rand(), rand(), rand())
             guard rf.contains(c) else { continue }
             let leg = from.map { simd_distance($0, c) }.max() ?? 0
             guard leg <= maxLeg, leg > 0.6 else { continue }
-            let s = EmoteSpot.score(c) - EmoteSpot.legCost * leg
+            let s = EmoteSpot.score(c, rf) - EmoteSpot.legCost * leg
             guard s > base + EmoteSpot.margin, best == nil || s > best!.1, ok(c) else { continue }
             best = (c, s)
         }
@@ -110,7 +143,7 @@ extension BlobBrain {
             emoteSendWalk(to: g)
             return true
         }
-        EmoteSpot.note(here)
+        emoteNote(here)
         return false
     }
 
@@ -120,7 +153,7 @@ extension BlobBrain {
         emoteSpot.soloKind = nil
         guard variety.now - emoteSpot.soloAt < 14, !(anticsEnabled && BlobBrain.fastKinds.contains(k) && fastOthers() >= 2), !varietyPeerJustStarted(k) else { return false }
         emoteSpot.skip = true; defer { emoteSpot.skip = false }
-        EmoteSpot.note(position)
+        emoteNote(position)
         if idleStart(k, sim) { emoteSpot.walked = variety.now - emoteSpot.soloAt; return true }
         return false
     }
@@ -137,8 +170,8 @@ extension BlobBrain {
         guard let m = emoteBestSpot(from: [mid], maxLeg: EmoteSpot.pairLeg, here: mid, ok: { [unowned self] c in
             let pa = a + (c - mid), pb = b + (c - mid), rf = self.roamProvider?()
             return rf?.contains(pa) == true && rf?.contains(pb) == true && simd_distance(self.fixed(pa), pa) < 0.1 && simd_distance(self.fixed(pb), pb) < 0.1 && self.peerFree(pa) && self.peerFree(pb) && self.reachable(a, pa) && self.reachable(b, pb)
-        }) else { EmoteSpot.note(mid); return false }
-        EmoteSpot.note(m)
+        }) else { emoteNote(mid); return false }
+        emoteNote(m)
         emoteSendWalk(to: a + (m - mid)); o.emoteSendWalk(to: b + (m - mid))
         socialBook.meet = (kind, o.steerID, 0)
         o.socialBook.meetHeldBy = steerID
@@ -150,7 +183,7 @@ extension BlobBrain {
         guard var m = socialBook.meet else { return }
         m.t += dt
         socialBook.meet = m
-        guard let o = socialBrain(m.id), o.social == nil, !socialTaken, !o.socialTaken, m.t < 9 else { emoteMeetEnd(); return }
+        guard let o = socialBrain(m.id), o.social == nil, !socialTaken, !o.socialTaken, m.t < 14 else { emoteMeetEnd(); return }
         if socialFree, o.socialFree {
             let t = m.t
             emoteMeetEnd()
@@ -175,8 +208,8 @@ extension BlobBrain {
     /// The ring centre of a group: a spot every member can walk to (the ring plan checks the legs and the floor), clearly better than the centroid they stand round. nil = the centroid.
     func emoteGroupCentre(_ crew: [BlobBrain], here: SIMD2<Float>) -> SIMD2<Float>? {
         guard emoteSpotLive, crew.allSatisfy({ $0.homeRoom }) else { return nil }
-        if let c = emoteBestSpot(from: crew.map(\.position), maxLeg: EmoteSpot.pairLeg + 0.4, here: here, ok: { _ in true }) { EmoteSpot.note(c); return c }
-        EmoteSpot.note(here)
+        if let c = emoteBestSpot(from: crew.map(\.position), maxLeg: EmoteSpot.pairLeg, here: here, ok: { _ in true }) { emoteNote(c); return c }
+        emoteNote(here)
         return nil
     }
 }
