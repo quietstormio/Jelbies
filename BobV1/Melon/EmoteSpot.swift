@@ -72,6 +72,8 @@ enum EmoteSpot {
     }
     /// Weight of `roamOver` in a roam goal's score.
     static let roamCellWeight: Float = 100
+    /// Home rooms: the longest roam leg is at least this (a grumpy Jelmiko's legs are 1.8 u, too short to ever reach the far front corners).
+    static let roamLegMin: Float = 3.4
     static func note(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) {
         cuts(rf)
         for k in heat.keys { heat[k]! *= decay }

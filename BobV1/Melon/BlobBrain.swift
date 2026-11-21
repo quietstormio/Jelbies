@@ -1000,7 +1000,8 @@ final class BlobBrain {
     /// before, a long leg, and away from the rug centre the longer he has just spent there (`centreDwell`; 2026-10-21 "they stay in the centre too much").
     func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRoamGoal", probe) }
-        let maxL = idleLegMax(maxWanderLeg)
+        var maxL = idleLegMax(maxWanderLeg)
+        if EmoteSpot.enabled, homeRoom { maxL = max(maxL, EmoteSpot.roamLegMin) }          // (EmoteSpot.swift: a grumpy walk may still cross to a spot the room has used little: the whole room)
         let lo: Float = zone != nil ? 2.5 : 1.5
         guard maxL > lo else { return nil }
         let others = socialOthers().filter { $0 !== self }
