@@ -181,38 +181,42 @@ final class FocusGroup {
         return best?.spots ?? base
     }
 
-    /// A point to walk to first, when the straight way from `p` to `s` brushes past an uncalled body (a lying body is 1.8 across: two of them leave a slit a walker is pinned in, and a way round
-    /// one can lead through the bowls): the cheapest point `w` whose two legs both keep 1.3 from every uncalled body and stay on free floor. nil = the straight way is fine, or no point works.
+    /// A point to walk to first, when the straight way from `p` to `s` brushes past an uncalled body. A lying body is 1.8 across (2.07 along) and a walker 1.4: the way past needs about 1.7 from its
+    /// centre, so two lying bodies less than ~3.4 apart are a wall, not a slit a walker can use (r1 had them pin walkers at 1.3). The cheapest point `w` whose two legs both keep that clearance from every
+    /// uncalled body and stay on free floor; the clearance steps down 1.7, 1.5, 1.3 only when no point works. nil = the straight way is fine, or no point works.
     static func detour(from p: SIMD2<Float>, to s: SIMD2<Float>, obstacles: [SIMD2<Float>], fixed: (SIMD2<Float>) -> SIMD2<Float>) -> SIMD2<Float>? {
-        func segClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+        guard simd_length(s - p) > 1.5, !obstacles.isEmpty else { return nil }
+        func segClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ clr: Float) -> Bool {
             let d = b - a, len = simd_length(d)
             guard len > 1e-3 else { return true }
             let u = d / len
             for o in obstacles {
                 let t = min(max(simd_dot(o - a, u), 0), len)
-                if simd_length(o - (a + u * t)) < 1.3 { return false }
+                if simd_length(o - (a + u * t)) < clr { return false }
             }
             var t: Float = 0.1
             while t < len { let q = a + u * t; if !FreeFloor.isFree(q, radius: 0.5) { return false }; t += 0.25 }
             return true
         }
-        guard simd_length(s - p) > 1.5, !obstacles.isEmpty else { return nil }
         let dir = s - p, dl = simd_length(dir)
-        guard obstacles.contains(where: { o in let t = min(max(simd_dot(o - p, dir / dl), 0), dl); return simd_length(o - (p + dir / dl * t)) < 1.3 }) else { return nil }          // (nobody on the straight way: the usual walk)
-        var best: (SIMD2<Float>, Float)?
-        var x: Float = -2.2
-        while x <= 2.2001 {
-            var z: Float = -2.0
-            while z <= 3.0001 {
-                let w = SIMD2<Float>(x, z)
-                z += 0.25
-                guard simd_distance(fixed(w), w) < 0.15, obstacles.allSatisfy({ simd_distance($0, w) >= 1.5 }), segClear(p, w), segClear(w, s) else { continue }
-                let cost = simd_distance(p, w) + simd_distance(w, s)
-                if cost < (best?.1 ?? .infinity) { best = (w, cost) }
+        guard obstacles.contains(where: { o in let t = min(max(simd_dot(o - p, dir / dl), 0), dl); return simd_length(o - (p + dir / dl * t)) < 1.7 }) else { return nil }          // (nobody on the straight way: the usual walk)
+        for clr: Float in [1.7, 1.5, 1.3] {
+            var best: (SIMD2<Float>, Float)?
+            var x: Float = -2.2
+            while x <= 2.2001 {
+                var z: Float = -2.0
+                while z <= 3.0001 {
+                    let w = SIMD2<Float>(x, z)
+                    z += 0.25
+                    guard simd_distance(fixed(w), w) < 0.15, obstacles.allSatisfy({ simd_distance($0, w) >= clr + 0.1 }), segClear(p, w, clr), segClear(w, s, clr) else { continue }
+                    let cost = simd_distance(p, w) + simd_distance(w, s)
+                    if cost < (best?.1 ?? .infinity) { best = (w, cost) }
+                }
+                x += 0.25
             }
-            x += 0.25
+            if let b = best { return b.0 }
         }
-        return best?.0
+        return nil
     }
 
     /// Smart line-up, once per fixed step while approaching: settle whoever is near his slot, re-plan the rest. Returns the Jellies whose spot changed.
