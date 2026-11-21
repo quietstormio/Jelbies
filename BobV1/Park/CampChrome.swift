@@ -94,7 +94,7 @@ struct CampChrome: View {
                         if wide { HStack { Spacer(); card(c).frame(width: min(320, g.size.width * 0.37)).padding(.top, 70).padding(.bottom, 90).padding(.trailing, 8) } }
                         else { VStack { Spacer(); card(c).padding(.horizontal, 10).padding(.bottom, 14) } }
                     }
-                    if ui.selected == nil, ui.sheet == .none, !ui.moving { bottomBar }
+                    if selectedCreature == nil, ui.sheet == .none, ui.leaving == nil { bottomBar }          // (no card open: the way home is always here; a stale selection or a stuck `moving` can no longer hide it)
                     sheets(wide: wide)
                 }
             }

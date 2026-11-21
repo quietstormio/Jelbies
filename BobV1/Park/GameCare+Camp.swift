@@ -274,6 +274,7 @@ extension GameCare {
         campSpawnNow()
         if let sel = ui.selected, !ui.members.contains(where: { $0.id == sel }) { ui.selected = nil }
         ui.leaving = nil
+        ui.moving = false          // (the move is over: without this the card and the Drop off / Home bar stayed hidden for the rest of the visit: no way home)
         if let t = ui.pendingToast { park.say(t); ui.pendingToast = nil }
     }
 
