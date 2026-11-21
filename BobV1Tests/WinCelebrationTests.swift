@@ -53,7 +53,9 @@ final class WinCelebrationTests: XCTestCase {
         var minElev: Float = .infinity, maxApex: Float = 0, happyFrames = 0, smileFrames = 0
         let y0 = r.sim.centroid().y
         var w = SocialTests.Watch()
-        let c0 = r.sim.centroid(); var maxDrift: Float = 0          // (owner 11-21: "It bounced away when it won": the bounces are up and down IN PLACE)
+        // owner 11-21: "It bounced away when it won": up and down IN PLACE, and no slide when the move hands him back to idle. The body centre against where he stood, from the start to 2 s after the end.
+        let c0 = r.sim.centroid(); var maxDrift: Float = 0, afterDrift: Float = 0
+        MotionLog.write("WIN stance before: pitchBase \(b.pitchBase), root - centre z \(b.pz - c0.z), poseW \(b.poseW)")
         r.run(8, until: { b.idleState.kind == nil && r.t > 0.5 }, each: {
             let cNow = r.sim.centroid(); maxDrift = max(maxDrift, simd_length(SIMD2(cNow.x - c0.x, cNow.z - c0.z)))
             let air = b.gait.phase == .air
@@ -74,8 +76,10 @@ final class WinCelebrationTests: XCTestCase {
         })
         let secs = r.t - 1.0          // (MotionRig settles for 1 s first)
         MotionLog.write("WIN move: \(String(format: "%.2f", secs)) s, \(airs) bounces, arms up \(armsUpFrames) of \(frames) frames")
-        MotionLog.write("WIN drift: max horizontal drift of the body centre \(maxDrift * 100) cm")
-        XCTAssertLessThan(maxDrift, 0.03, "the bounces are on the spot: the centre stays within 3 cm of where he stood")
+        r.run(2, each: { let c = r.sim.centroid(); afterDrift = max(afterDrift, simd_length(SIMD2(c.x - c0.x, c.z - c0.z))) })
+        MotionLog.write("WIN drift: body centre in the move \(maxDrift * 100) cm, in the 2 s after \(afterDrift * 100) cm")
+        XCTAssertLessThan(maxDrift, 0.05, "the bounces are on the spot (they stay within ~1 cm; the 4 cm is the stance leaning back in over the settle): the centre stays within 5 cm of where he stood the whole move")
+        XCTAssertLessThan(afterDrift, 0.03, "no slide when the move hands him back to idle: within 3 cm for 2 s after")
         XCTAssertNil(b.idleState.kind, "it ends by itself")
         XCTAssertEqual(airs, BlobBrain.winHops, "four bounces")
         XCTAssertGreaterThan(secs, 2.5); XCTAssertLessThan(secs, 3.6)

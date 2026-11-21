@@ -23,6 +23,7 @@ extension BlobBrain {
         if Self.idleLog { NSLog("[melon] win celebration begins (slot %d, race %@)", steerID, race.active ? "yes" : "no") }          // capture aid (-VoiceLog 1): proves it started in the real app
         gait.landDepth = WinTuning.landDepth          // (a deeper squash on every landing: the bounce reads at the race camera's distance; `idleEnd` puts 0.2 back)
         idleState.reps = Self.winHops
+        winRoot = poseW > 0 ? SIMD2(px, pz) : nil; winPitch0 = pitchBase          // (the stance he goes back to when the bounces end: see the settle in `idleBodyMoveTick`)
         idleState.baseYaw = yaw
         winFlat = (skinnerRef?.jelly.level ?? JellyJiggle.sharedLevel) >= 2          // (the strongest jiggle: squash pulses on planted feet, no hops)
         blushBump(hold: 3.4, peak: 0.9)

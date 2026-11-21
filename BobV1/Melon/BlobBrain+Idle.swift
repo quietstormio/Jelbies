@@ -530,7 +530,7 @@ extension BlobBrain {
         armDirW = 0; armDirOut = 0
         idleState.jackRoll = 0
         if winCheer { winFaceEnd() }          // (his own faces come back after the celebration)
-        winCheer = false; winFlat = false; winSettleT = 0; winSpot = nil
+        winCheer = false; winFlat = false; winSettleT = 0; winSpot = nil; winRoot = nil; winLean = false
         if !nameHopping { gait.hopApex = 0.10; gait.hopDuration = 0.26 }       // the jacks' higher hop ends with them
         gait.flipTwist = 0; gait.crouchDepth = 0.18; gait.crouchHold = 0; gait.airStretch = 0.12; gait.landDepth = 0.2          // (the trick hops' knobs go with them)
         skinner?.setEyeOpenness(1)
@@ -1118,8 +1118,15 @@ extension BlobBrain {
         pitchBase += max(-1.2 * dt, min(1.2 * dt, hopGoal - pitchBase))
         gait.basePitch = pitchBase
         gait.tick(sim, held: false, reduce: amplitude < 0.7)
-        if kind == .joy, winCheer, let spot = winSpot, idleState.hop >= idleState.reps, gait.phase == .idle {          // (the win's settle: held planted on the spot while the arms ease down, the grip let go over its last 0.2 s; with the hop over and the attractor off, the body slid ~13 cm in 0.5 s)
-            gait.holdUpright(sim, xz: spot, yaw: gait.facingYaw, fade: 1 - smooth01((winSettleT - (Self.winSettle - 0.2)) / 0.2))
+        if kind == .joy, winCheer, let spot = winSpot, let root = winRoot, idleState.hop >= idleState.reps, gait.phase == .idle {          // (the win's settle: the hops are over; he is handed back to his idle stance NOW, while the arms still ease down, so nothing moves when the move ends)
+            // His idle stance is tipped back about its soles: its centre is ~16 cm from the root. The hops stand him UPRIGHT at the centre, so the hand-off puts the root back where it was before the win
+            // (the feet are planted at root + their offsets as before) and tips him back over 0.45 s while the target root eases from the hop spot to it: the centre stays where he stood and the soles do not move.
+            if !winLean { winLean = true; px = root.x; pz = root.y; yaw = idleState.baseYaw; roll = 0; pitch = 0; squash = 1; lift = 0; feetInit = false; feet.reset(); stepLive = false; walkFinal = false; poseW = 1 }
+            let u = smooth01(winSettleT / 0.45)
+            pitchBase = winPitch0 * u
+            ensureFeet(sim)          // (feet at root + offsets, once, with the root at the stance's)
+            px = spot.x + (root.x - spot.x) * u; pz = spot.y + (root.y - spot.y) * u
+            poseOn = true; drivePose(sim, dt)
         }
         if kind == .slide {
             // the jelly kicks: the dive's impact and the pop-up landing
