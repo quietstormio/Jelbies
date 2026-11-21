@@ -468,6 +468,26 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         XCTAssertEqual(deadEnds(aspect: 956.0 / 440.0).count, 0, "landscape: a strip with no way out")
     }
 
+    /// A line nobody plays in any more (an entry left behind) does not stay a wall for good: the watchdog drops it after `staleAfter` s; a line with a live member is kept.
+    func testALeakedLineIsDropped() {
+        HopscotchTuning.guardOn = true; HopscotchTuning.joinChance = 0
+        let lab = parkLab(n: 1, seed: 3, starts: [SIMD2(-2.1, -3.0)])
+        let court = DecorField.shared.foot(ParkToys.hopscotchUID)!, line = HopscotchLine.shared
+        line.enroll(court.uid, 77)          // (nobody ticks as 77)
+        XCTAssertTrue(HopscotchTuning.walled)
+        for _ in 0..<(60 * 4) { DecorField.shared.tick(dt: 1.0 / 60) }
+        XCTAssertTrue(line.active, "not yet")
+        for _ in 0..<(60 * 2) { DecorField.shared.tick(dt: 1.0 / 60) }
+        XCTAssertFalse(line.active, "dropped after the watchdog"); XCTAssertFalse(HopscotchTuning.walled); XCTAssertEqual(HopscotchTuning.lineCount, 0)
+        // a live member keeps his line for as long as he plays
+        let a = lab.rigs[0]
+        a.brain.idleForced = true
+        XCTAssertTrue(a.brain.decorStart(.decorHopscotch, a.sim, only: nil, uid: court.uid))
+        for _ in 0..<(60 * 12) { lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60); XCTAssertTrue(line.active || a.brain.idleState.kind == nil, "a live member's line was dropped") }
+        a.brain.abortAll(a.sim, a.skinner)
+        XCTAssertFalse(line.active)
+    }
+
     /// The court is flat paint when no game is on (the floor rules, `ParkClearSpot`), a wall with a body's margin during one, and the park floor left of the court is wide enough to pass
     /// (printed: the roam floor's half width against the court's west edge).
     func testCourtIsAWallOnlyDuringAGame() {

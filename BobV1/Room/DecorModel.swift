@@ -743,6 +743,7 @@ final class DecorField {
 
     /// One step: eases the sits, decays the kicks, rolls the ball (it stays on the visible floor and bounces off solid pieces and the sofa).
     func tick(dt: Float) {
+        HopscotchLine.shared.watchdog(dt: dt)          // (park-hopscotch-r1: a line nobody plays in any more does not stay a wall)
         SoccerState.shared.advance(dt)
         toyAdvance(dt)
         ballContactStep(dt: dt)          // (balls are solid: bodies push them, they push each other: Room/DecorField+BallContact.swift)

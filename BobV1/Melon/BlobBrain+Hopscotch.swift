@@ -266,6 +266,7 @@ extension BlobBrain {
 
     /// The hops own the body (like the slide's steps): true = this step is handled.
     func hopscotchBodyTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) -> Bool {
+        if idleState.kind == .decorHopscotch { HopscotchTuning.sinceMember = 0 }          // (a member is alive: the line's watchdog, `HopscotchLine.watchdog`)
         if idleState.kind == .decorHopscotch, let f = DecorField.shared.foot(idleState.decorUID) { hopscotchApproachCheck(f, dt, skinner) }          // (every step, also while he walks: `runHopscotch` is not ticked then)
         guard idleState.kind == .decorHopscotch, idleState.slideStage == 1, case .idle = script, let f = DecorField.shared.foot(idleState.decorUID) else { return false }
         let line = HopscotchLine.shared, t = idleState.slideStep

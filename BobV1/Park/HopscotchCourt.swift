@@ -49,6 +49,9 @@ nonisolated enum HopscotchTuning {
     }()
     /// Courts with a line on them right now (kept by `HopscotchLine`; the park has one court).
     nonisolated(unsafe) static var lineCount = 0
+    /// Seconds since a member of a line last ticked; a line nobody ticks in for `staleAfter` s is dropped (a leaked entry must not stay a wall for good).
+    nonisolated(unsafe) static var sinceMember: Float = 0
+    static let staleAfter: Float = 5
     /// The court is a wall for the ones outside the line.
     static var walled: Bool { guardOn && lineCount > 0 }
     /// The wall's reach: the margin round the court is `footprint * wallReach` (a body is ~0.7 across by the floor rules: 0.8 gives 0.56, one body radius; the hopper's landing check wants more
@@ -102,6 +105,13 @@ final class HopscotchLine {
     static let done = 99
 
     func players(_ uid: Int) -> [Player] { lines[uid] ?? [] }
+    /// park-hopscotch-r1: called every step by the decor field. A line that has had no ticking member for `staleAfter` s (a member released without leaving it) is dropped.
+    func watchdog(dt: Float) {
+        guard !lines.isEmpty else { HopscotchTuning.sinceMember = 0; return }
+        HopscotchTuning.sinceMember += dt
+        if HopscotchTuning.sinceMember > HopscotchTuning.staleAfter { lines = [:]; rolled = [:]; HopscotchTuning.lineCount = 0; HopscotchTuning.sinceMember = 0; Self.staleDrops += 1 }
+    }
+    nonisolated(unsafe) static var staleDrops = 0
     var active: Bool { !lines.isEmpty }
     func contains(_ uid: Int, _ id: Int) -> Bool { lines[uid]?.contains { $0.id == id } ?? false }
     /// The slot a newcomer would get: 0 (the start spot) for the first, else the lowest free slot from 1.
