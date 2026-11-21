@@ -68,7 +68,7 @@ extension GameCare {
     }
 
     private var groomFadeBlocked: Bool {
-        race.active || show.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active || park.active
+        race.active || show.active || raceWait != nil || showBook.wait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging || cafe.active || park.active
             || groomBook.actors.contains { groom.picked.contains($0.id) && $0.brain?.isSleeping == true }          // (a sleeper who stays home does not hold the fade)
     }
 

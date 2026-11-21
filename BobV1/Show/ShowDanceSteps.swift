@@ -44,6 +44,7 @@ nonisolated struct DanceStepSpec: Sendable {
     var sway: Float = 0.08, bob: Float = 0.03, rock: Float = 0.3
     var twist: Float = 0, pitch: Float = 0
     var lean: Float = 0                                               // lean into the direction of travel (rad)
+    var settle = false                                                // the dance's last step: the foot lands a normal stance away from the standing foot (the step-touch would end with the shoes together under the belly)
 }
 
 /// A step of the schedule: the foot plants at song time `plant`; the step lasts `st` seconds (its foot leaves the floor at `plant - swingFrac * st`).
@@ -201,8 +202,14 @@ extension BlobBrain {
         guard danceDrive != nil, !feet.active, feetInit else { return false }
         nextSwing = s.side
         let a = amplitude
+        var rootD = rotXZ(s.rootD, yaw), reach = SIMD2<Float>.zero
+        if s.settle {          // the stance foot stays where it is; the swing foot lands the stance's own distance from it (not the touch's 0.16 closer), so the round ends standing on two feet
+            rootD = .zero
+            let o = 1 - s.side, landYaw = yaw + s.dyaw
+            reach = feet.pos[o] - rotXZ(geom.off[o], landYaw) - SIMD2(px, pz)
+        }
         // (the stomp lifts the foot higher, capped at 0.13: more than the strut's 0.095 by a third is as high as the join has been shown clean)
-        startStep(rootD: rotXZ(s.rootD, yaw), dyaw: s.dyaw, reach: .zero, peak: min(s.peak * (accent ? 1.6 : 1), 0.13) * a,
+        startStep(rootD: rootD, dyaw: s.dyaw, reach: reach, peak: min(s.peak * (accent ? 1.6 : 1), 0.13) * a,
                   rate: 1 / st, swingFrac: ShowDancePlan.swingFrac, inPlace: s.inPlace, outScale: s.out)
         danceDrive?.cur = s; danceDrive?.accent = accent; danceDrive?.accentDone = !accent
         return true
@@ -226,7 +233,8 @@ extension BlobBrain {
             let s = run.schedule[run.nextIndex]
             if now > s.plant + 0.12 { run.nextIndex += 1 }          // (a late frame: that step's moment has gone by)
             else if now >= s.plant - Double(ShowDancePlan.swingFrac * s.st) {
-                let spec = ShowDancePlan.spec(run.phrases[s.bar], step: s, off: off, yaw: yaw, lively: run.lively, final: last || s.bar == run.phrases.count - 1)
+                var spec = ShowDancePlan.spec(run.phrases[s.bar], step: s, off: off, yaw: yaw, lively: run.lively, final: last || s.bar == run.phrases.count - 1)
+                if last { spec.settle = true; spec.inPlace = false }
                 if danceLaunch(spec, st: s.st, accent: run.accentPending) { run.accentPending = false; run.launched.append((s.plant, s.side)); run.nextIndex += 1 }
             }
         }

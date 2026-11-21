@@ -77,7 +77,7 @@ extension GameCare {
     /// Once per fixed step for Jelly `id`: his perks reach his brain, and a sugar rush runs once he has finished eating.
     func syncPerks(id: Int, brain: BlobBrain) {
         // shoes keep the beans out for good (the same rule as `shoeLook`: no shoes drawn on a race rival or on the Jelly in the wash)
-        let shod = store.worn(id, .feet) != nil && !(race.active && id != race.playerID && raceBook.onTrack.contains(id)) && !(show.active && id != show.playerID) && !(bath.active && bath.targetID == id)
+        let shod = store.worn(id, .feet) != nil && !(race.active && id != race.playerID && raceBook.onTrack.contains(id)) && !(showBook.roomAway && id != show.playerID) && !(bath.active && bath.targetID == id)
         if brain.shoesWorn != shod { brain.shoesWorn = shod }
         guard let p = jelly(id)?.perks else { return }
         let c = p.cache

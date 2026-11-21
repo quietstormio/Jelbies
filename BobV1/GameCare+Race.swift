@@ -112,7 +112,7 @@ extension GameCare {
     func raceBlocker(jelly id: Int) -> String? {
         guard jelly(id) != nil else { return "No such Jelmiko." }
         if race.active { return "Jelly Race is already on." }
-        if show.active { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the Jelly Show." }
+        if show.active || showBook.wait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the Jelly Show." }
         if volley.active || volleyWork.wait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the beach." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
         if bath.active { return "The clean-up is going on." }
@@ -157,7 +157,7 @@ extension GameCare {
     }
 
     /// True from the moment Race is asked (even while a sleeper is still rolling up) until the trip is over: no bedtime, no sleep. The show's trip too.
-    var raceBusy: Bool { race.active || raceWait != nil || show.active || volley.active || volleyWork.wait != nil }
+    var raceBusy: Bool { race.active || raceWait != nil || showBook.wait != nil || show.active || volley.active || volleyWork.wait != nil }
 
     private func beginRace(jelly id: Int, seed: UInt64?) {
         guard let prof = jelly(id) else { return }
@@ -313,7 +313,7 @@ extension GameCare {
     }
 
     /// Is this body the one who is racing (waking for it, running out, on the track)? Room life and the bedtime lock are off for him only.
-    func raceRacing(_ id: Int) -> Bool { (race.active && race.playerID == id) || raceWait?.id == id }
+    func raceRacing(_ id: Int) -> Bool { (race.active && race.playerID == id) || raceWait?.id == id || showBook.wait?.id == id }
 
     /// While the track is up and the rivals are visitor bodies, every housemate is away from the room: not drawn, not stepped, not ticked (so a sleeper sleeps on, a script waits). The park, the
     /// beach and the groomer treat the ones who stay home the same way (`parkHides`).

@@ -57,6 +57,10 @@ final class ShowBook {
     var heading: [Int: (age: Float, limit: Float)] = [:]
     /// Second legs of walks through the gate: actor id -> where he goes on to.
     var via: [Int: SIMD2<Float>] = [:]
+    /// show-stayhome-r1: the stage is up and the housemates are away from the room: hidden, not stepped, not ticked, exactly as they were (`showStaysHome`).
+    var roomAway = false
+    /// Show asked while the contestant is asleep: the trip starts once he is upright (only he is woken and waited for).
+    var wait: (id: Int, rank: ShowRank?, seed: UInt64?, age: Float)?
     nonisolated deinit {}
 }
 
@@ -88,6 +92,7 @@ extension GameCare {
     func showBlocker(jelly id: Int) -> String? {
         guard jelly(id) != nil else { return "No such Jelmiko." }
         if show.active { return "A show is already on." }
+        if showBook.wait != nil { return "Waking \(jelly(id)?.name ?? "your Jelmiko") up." }
         if race.active || raceWait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at Jelly Race." }
         if volley.active || volleyWork.wait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the beach." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
@@ -157,14 +162,25 @@ extension GameCare {
     /// Takes Jelbie `id` to the stage for a show at `rank` (the chosen rank by default).
     func startShow(jelly id: Int, rank: ShowRank? = nil, seed: UInt64? = nil) {
         if let why = showBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
+        // show-stayhome-r1: only the contestant is woken and waited for; a housemate who sleeps stays asleep (he is hidden and unstepped while the stage is up, and back exactly as he was)
+        let sleepers = raceBook.actors.filter { $0.id == id }.compactMap { $0.brain }.filter { $0.isSleeping }
+        if !sleepers.isEmpty {
+            for b in sleepers { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true); b.sleepLocked = true }
+            showBook.wait = (id, rank, seed, 0)
+            for a in raceBook.actors { a.brain?.bedtimeLocked = true }          // (nobody is put to bed while he is being woken)
+            return
+        }
+        beginShow(jelly: id, rank: rank, seed: seed)
+    }
+
+    private func beginShow(jelly id: Int, rank: ShowRank?, seed: UInt64?) {
         guard let prof = jelly(id) else { return }
         let r = rank.flatMap { show.progress.unlocked($0) ? $0 : nil } ?? show.progress.chosen
-        for a in raceBook.actors { if let b = a.brain, b.isSleeping { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) } }
         select.cancel()
         cutWelcomeHome()
         queued.removeAll(); callRunning = false
         voice.cancel()
-        if outingGate([id], again: { [weak self] in self?.startShow(jelly: id, rank: rank, seed: seed) }) { return }          // he runs out of the room first
+        if outingGate([id], cheer: false, again: { [weak self] in self?.beginShow(jelly: id, rank: rank, seed: seed) }) { return }          // he runs out of the room first
         let bodies = 1          // the stage has ONE roster body (the contestant); every rival is a borrowed visitor body, every other home Jelmiko waits off stage (showSwap)
         show.begin(playerID: id, name: prof.name, character: prof.character, input: showPlayerInput(jelly: id), rank: r, dayKey: Self.showDay, bodies: bodies, seed: seed ?? Self.showSeed)
         show.setOutfit(showOutfitTags(jelly: id))
@@ -186,7 +202,7 @@ extension GameCare {
     /// How the camera frames the stage this frame (nil = not on stage).
     var showFrame: ShowFrame? { show.onStage ? show.frame : nil }
     /// A stage body: the player's or a rival's (the wardrobe hides on the rivals and the parked).
-    func showHidesWear(_ id: Int) -> Bool { show.active && (id != show.playerID) }
+    func showHidesWear(_ id: Int) -> Bool { show.onStage && (id != show.playerID) }          // (on the stage only: a housemate keeps his wear through the fade out / in; he is hidden while away anyway)
     /// The Trick round shows the rivals' bodies only while the camera is on the wide shot: not while the player picks (the camera holds the contestant alone, big).
     var showRivalsVisible: Bool {
         show.round == .trick || (show.round == .results && show.trickStage != .pick)          // (they wait on the back marks behind the performer all through the round, in the same frame as his pick; the last turn's entrants play on after the sim has its results)
@@ -201,6 +217,10 @@ extension GameCare {
     }
     /// Is this roster body one of the home Jelmiko waiting off stage (for the light's box and the tests)?
     func showParked(_ id: Int) -> Bool { show.onStage && showBook.parked.contains(id) }
+    /// show-stayhome-r1: while the stage is up every housemate who is not the contestant is away from the room: not drawn, not stepped, not ticked, so a sleeper sleeps on and a script waits.
+    func showStaysHome(_ id: Int) -> Bool { showBook.roomAway && id < jellies.count && id != show.playerID }
+    /// A housemate who stays home during any trip (race, show, beach): frozen exactly as he was (the stage skips his brain tick and his step).
+    func tripFrozen(_ id: Int) -> Bool { raceHides(id) || showStaysHome(id) || volleyHides(id) }
 
     // MARK: world swaps (under the white)
 
@@ -213,11 +233,12 @@ extension GameCare {
             #endif
             let player = show.playerID
             book.performers = book.actors.indices.contains(player) ? [player] : []          // the one roster body on the stage: the contestant
-            book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko waits off stage (state saved, restored under the white on the way home)
+            book.parked = book.actors.indices.filter { !book.performers.contains($0) }          // every other home Jelmiko stays home: hidden, not stepped, not ticked, never moved (show-stayhome-r1)
+            book.roomAway = true
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.danceRun = nil; book.flopT = nil; book.turned = []
             book.flops = [:]; book.goals = [:]; book.rivalBody = [:]; book.trickSet = false; book.winPending = false; book.enterDelay = nil
             let spots = ShowStage.spots(bodies: book.performers.count)
-            for (k, aid) in (book.performers + book.parked).enumerated() where book.actors.indices.contains(aid) {
+            for (k, aid) in book.performers.enumerated() where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
                 guard let brain = a.brain else { continue }
                 book.homes[aid] = a.floor; book.autonomy[aid] = brain.autonomy; book.arena[aid] = a.sim.arenaRadius
@@ -225,7 +246,7 @@ extension GameCare {
                 brain.commandedIdle = nil; brain.commandedFlip = false; brain.commandedDecor = nil
                 a.sim.arenaRadius = .infinity
                 let onStage = k < book.performers.count
-                a.sim.teleport(toXZ: onStage ? spots[k] : ShowStage.parkSpot(aid))
+                a.sim.teleport(toXZ: spots[k])
                 brain.currentPose(a.sim)
                 a.skinner.jelly.reset()
                 brain.autonomy = false
@@ -237,7 +258,9 @@ extension GameCare {
         case .room:
             let c = VoiceCoordinator.comeSpot
             var taken: [SIMD2<Float>] = [c]
-            for aid in book.performers + book.parked where book.actors.indices.contains(aid) {
+            book.roomAway = false
+            let atHome = book.parked.filter { book.actors.indices.contains($0) }.map { book.actors[$0].floor }          // (housemates who never left: the contestant must not land on one)
+            for aid in book.performers where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
                 guard let brain = a.brain else { continue }
                 brain.abortAll(a.sim, a.skinner)
@@ -245,6 +268,9 @@ extension GameCare {
                 let wall = book.arena[aid] ?? a.sim.arenaRadius
                 if wall.isFinite, GameCamera.roamFloor != nil { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius } else { a.sim.arenaRadius = wall }          // (the room's wall as it is NOW: the floor may have been rebuilt while his wall was lifted (a rotation, the rivals' first floor); the saved radius alone left the old wall under the new floor)
                 var spot = aid == show.playerID ? c : (book.homes[aid] ?? Self.greetSpot(aid))
+                if aid == show.playerID, atHome.contains(where: { simd_distance($0, spot) < 0.75 }) {
+                    spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !atHome.contains { simd_distance($0, s) < 1.2 } } ?? spot
+                }
                 if aid != show.playerID, taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
                     spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot
                 }
@@ -621,22 +647,38 @@ extension GameCare {
 
     // MARK: per fixed step (the stage calls it every step, with every Jelbie)
 
+    #if targetEnvironment(simulator)
+    nonisolated(unsafe) static var startShowFrames = 0
+    /// Capture aid (dev arguments, simulator only): `-StartShow 1` starts the Show for Jelmiko 0 once housemate #1 has slept for 10 s (use with `-RaceDepartSetup asleep` and its marker file).
+    private func startShowCaptureAid(_ actors: [JellyActor]) {
+        guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "StartShow") != 0, !show.active, showBook.wait == nil, actors.count > 1, let b1 = actors[1].brain, b1.isSleeping else { return }
+        Self.startShowFrames += 1
+        if Self.startShowFrames == 600 { startShow(jelly: 0, rank: .puddle, seed: Self.showSeed) }
+    }
+    #endif
+
     func tickShow(_ actors: [JellyActor], dt: Float) {
         showBook.actors = actors
         #if targetEnvironment(simulator)
+        startShowCaptureAid(actors)
+        #endif
+        #if targetEnvironment(simulator)
         tripArriveTick("show", actors + showBook.extra, dt: dt)          // (park-arrive-r2 capture aid: Park/ParkSlideProbe.swift)
         #endif
-        if show.active { for a in actors { a.brain?.sleepLocked = true } }
+        if show.active, actors.indices.contains(show.playerID) { actors[show.playerID].brain?.sleepLocked = true }          // (the contestant only: a housemate is never touched)
+        if var w = showBook.wait {          // the contestant is rolling up: start once he is upright (a housemate who sleeps does not hold the show up)
+            w.age += dt
+            let sleeping = actors.filter { $0.id == w.id && ($0.brain?.isSleeping ?? false) }
+            if w.age > 1.5 && w.age.truncatingRemainder(dividingBy: 1) < dt { for a in sleeping { a.brain?.sleepWake(groggy: false, fast: true) } }
+            if w.age > 8 { for a in sleeping { if let b = a.brain { b.abortAll(a.sim, a.skinner); b.idleReset(a.skinner) } } }
+            if sleeping.isEmpty || w.age > 8.5 { showBook.wait = nil; beginShow(jelly: w.id, rank: w.rank, seed: w.seed) } else { showBook.wait = w }
+        }
         if !(forfeitAsk && show.canPause) { show.tick(dt: dt) }          // (the "Go home?" card holds the stage still, except the dance: the song's own clock runs on)
         showSpotStep(dt: dt)
         tickPendingWalks(dt: dt)
         for k in showBook.heading.keys { showBook.heading[k]?.age += dt }
         guard show.active, show.onStage else { return }
         let book = showBook
-        for aid in book.parked where actors.indices.contains(aid) {          // the home Jelmiko off stage: held still (no autonomy, no room life), asleep never
-            guard let b = actors[aid].brain else { continue }
-            b.idleBlocked = true; b.autonomy = false
-        }
         for (a, v) in zip(book.extra, book.extraSpecs) {          // the borrowed rival bodies: held like the others, their species art on
             guard let b = a.brain else { continue }
             b.idleBlocked = true; b.autonomy = false
@@ -688,10 +730,10 @@ extension GameCare {
     func showWelcomeHome(_ id: Int, won: Bool, again: Bool) {
         let book = raceBook
         book.returner = id; book.won = won; book.homeAge = 0; book.returnerHopped = false; book.celebrated = false
-        greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 })
+        greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 && selectBrain($0)?.isSleeping != true })          // (a housemate who slept through the show sleeps on)
         greetOthers = [:]
         bubbleHub.greetClock = 0; bubbleHub.greetHearts = [:]
-        if id != 0 { greeting = true; greetHop = false; queued = [.come(to: greetSpotNow(0))] }
+        if id != 0, selectBrain(0)?.isSleeping != true { greeting = true; greetHop = false; queued = [.come(to: greetSpotNow(0))] }
         if again { requestTown(.studio) }
     }
 }

@@ -25,12 +25,41 @@ final class OpalSpringTests: XCTestCase {
     }
     private func suite() -> UserDefaults { let s = "OpalSpringTests.\(UUID().uuidString)"; suites.append(s); return UserDefaults(suiteName: s)! }
 
+    /// Moo, Cocoa, Blush (cows; listed only while `SpeciesInfo.cowsInStore`) and Sunset, Cotton Candy, Ocean, Lagoon.
+    static let springSeven = [13, 14, 15, 16, 19, 20, 22]
+
     // MARK: the Spring
+
+    func testTheSevenNewSpringLooksAreSpecialsAtOpalsPriceAndRules() {
+        let gradients = [16, 19, 20, 22]
+        XCTAssertEqual(SpeciesInfo.gradientIDs, gradients)
+        XCTAssertEqual(SpeciesInfo.cowIDs, [13, 14, 15])
+        for id in Self.springSeven {
+            XCTAssertEqual(SpeciesInfo.of(id).character, id, "an info entry for \(id)")
+            XCTAssertEqual(SpeciesInfo.of(id).name, JellyRoster.baseNames[id])
+            XCTAssertEqual(SpeciesInfo.of(id).traits, JellyCandidates.baseJars(id))
+            XCTAssertFalse(SpeciesInfo.order.contains(id))
+            XCTAssertFalse(SpeciesInfo.pages(includingSpecial: false).contains(id))
+            XCTAssertFalse(JellyRoster.defaultIDs.contains(id))
+            XCTAssertFalse(JellyVariants.takesVariant(id))
+            XCTAssertNotNil(NameIdeas.pool[id])
+            XCTAssertTrue(ParkPool.all().allSatisfy { $0.species != id }, "no park visitor of \(id)")
+            let listed = gradients.contains(id) || SpeciesInfo.cowsInStore
+            XCTAssertEqual(SpeciesInfo.special.contains(id), listed, "\(id)")
+            XCTAssertEqual(SpeciesInfo.pages(includingSpecial: true).contains(id), listed, "\(id)")
+            XCTAssertEqual(SpeciesInfo.of(id).isSpecial, listed, "\(id)")
+            if listed {
+                XCTAssertEqual(AdoptionPrice.next(home: 1, special: true), 2000)
+                let c = AdoptionCenter.makeCandidates(mode: .more, species: id, dayKey: 800_001, home: [0])
+                XCTAssertTrue(c.allSatisfy { $0.variant == nil })
+            }
+        }
+    }
 
     func testOpalIsOnTheSpringListWithTheSpecialsPriceAndRules() {
         XCTAssertEqual(opal, 12)
-        XCTAssertEqual(SpeciesInfo.special, [4, 5, 6, 12])
-        XCTAssertEqual(SpeciesInfo.pages(includingSpecial: true), [0, 1, 3, 2, 4, 5, 6, 12], "its own page after Panda")
+        XCTAssertEqual(SpeciesInfo.special, [4, 5, 6, 12] + (SpeciesInfo.cowsInStore ? [13, 14, 15] : []) + [16, 19, 20, 22])
+        XCTAssertEqual(SpeciesInfo.pages(includingSpecial: true), [0, 1, 3, 2] + SpeciesInfo.special, "its own page after Panda")
         XCTAssertTrue(SpeciesInfo.of(opal).isSpecial)
         XCTAssertEqual(SpeciesInfo.of(opal).name, "Opal")
         // never a starter / free first gift
@@ -55,7 +84,7 @@ final class OpalSpringTests: XCTestCase {
 
     func testOtherLineupIdsAreStillOfferedNowhere() {
         let pool = ParkPool.all()
-        for id in 7...26 where id != opal {
+        for id in 7...26 where id != opal && !Self.springSeven.contains(id) {
             XCTAssertFalse(SpeciesInfo.order.contains(id), "\(id)")
             XCTAssertFalse(SpeciesInfo.special.contains(id), "\(id)")
             XCTAssertFalse(SpeciesInfo.pages(includingSpecial: true).contains(id), "\(id)")

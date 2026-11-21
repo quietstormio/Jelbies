@@ -59,6 +59,13 @@ extension GameCare {
 
     func volleyHides(_ id: Int) -> Bool { volley.inScene && id < jellies.count && !volleyWork.participants.contains(id) }
 
+    /// show-stayhome-r1: the Jelmiko who go to the beach for this ask: the one asked and, in a match, his partner. Only they are woken and waited for; every other housemate stays home untouched.
+    func volleyGoing(_ id: Int, mode: VolleyMode) -> Set<Int> {
+        var going: Set<Int> = [id]
+        if case .match = mode, let p = volleyPartner(for: id) { going.insert(p.id) }
+        return going
+    }
+
     // MARK: asking
 
     /// The teammate of `id` in a match: the one chosen in the lobby (`VolleyBook.partner`, a character) while he is still in the room and is not `id`, else the first other Jelbie; nil when alone.
@@ -104,7 +111,7 @@ extension GameCare {
         guard jelly(id) != nil else { return "No such Jelmiko." }
         if volley.active || volleyWork.wait != nil { return "A match is already on." }
         if race.active || raceWait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at Jelly Race." }
-        if show.active { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the Jelly Show." }
+        if show.active || showBook.wait != nil { return "\(jelly(id)?.name ?? "Your Jelmiko") is at the Jelly Show." }
         if cafe.active || park.active { return "\(jelly(id)?.name ?? "Your Jelmiko") is out already." }
         if trayOut || meal != nil || wanted != nil { return "A meal is out. Let \(jelly(id)?.name ?? "Your Jelmiko") finish first." }
         if bath.active { return "The clean-up is going on." }
@@ -126,13 +133,15 @@ extension GameCare {
         if case .match = mode, let why = volleyPartnerBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // no teammate (no other Jelbie, no Park friend): no match
         select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
-        let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }
+        let going = volleyGoing(id, mode: mode)
+        let sleepers = raceBook.actors.filter { going.contains($0.id) }.compactMap { $0.brain }.filter { $0.isSleeping }
         let s = seed ?? UInt64(Date().timeIntervalSince1970 * 1000) & 0xFFFFFF
         if !sleepers.isEmpty {
             for b in sleepers { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) }
             volleyWork.wait = (id, mode, 0)
             volleyWork.pendingSeed = s
-            for a in raceBook.actors { a.brain?.sleepLocked = true }
+            for b in sleepers { b.sleepLocked = true }
+            for a in raceBook.actors { a.brain?.bedtimeLocked = true }          // (nobody is put to bed while they are being woken)
             return
         }
         beginVolley(jelly: id, mode: mode, seed: s)
@@ -152,7 +161,7 @@ extension GameCare {
         guard let prof = jelly(id) else { return }
         var going = [id]
         if case .match = mode, let p = volleyPartner(for: id) { going.append(p.id) }
-        if outingGate(going, again: { [weak self] in self?.beginVolley(jelly: id, mode: mode, seed: seed) }) { return }          // they run out of the room first
+        if outingGate(going, cheer: false, again: { [weak self] in self?.beginVolley(jelly: id, mode: mode, seed: seed) }) { return }          // they run out of the room first
         let w = volleyWork
         w.pendingSeed = seed
         var partner: JellyProfile?
@@ -209,7 +218,7 @@ extension GameCare {
             if let p = w.partnerID { parts.append(p) }
             w.participants = Set(parts)
             w.homes = [:]; w.autonomy = [:]; w.arena = [:]
-            for a in w.roster {
+            for a in w.roster where w.participants.contains(a.id) {          // (a housemate who stays home is never touched: no abort, no autonomy change, no new spot)
                 guard let b = a.brain else { continue }
                 w.homes[a.id] = a.floor; w.autonomy[a.id] = b.autonomy; w.arena[a.id] = a.sim.arenaRadius
                 b.abortAll(a.sim, a.skinner)
@@ -261,9 +270,13 @@ extension GameCare {
             }
             syncDecor()
             var taken: [SIMD2<Float>] = []
-            for a in w.roster {
+            let atHome = w.roster.filter { !w.participants.contains($0.id) }.map(\.floor)          // (housemates who never left: nobody lands on one)
+            for a in w.roster where w.participants.contains(a.id) {
                 guard let brain = a.brain else { continue }
                 var spot = w.homes[a.id] ?? Self.greetSpot(a.id)
+                if atHome.contains(where: { simd_distance($0, spot) < 0.75 }) {
+                    spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !atHome.contains { simd_distance($0, s) < 1.2 } && !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot
+                }
                 if taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
                     spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot
                 }
@@ -294,14 +307,15 @@ extension GameCare {
         #endif
         if var wt = w.wait {
             wt.age += dt
-            let sleeping = actors.filter { $0.brain?.isSleeping ?? false }
+            let going = volleyGoing(wt.id, mode: wt.mode)
+            let sleeping = actors.filter { going.contains($0.id) && ($0.brain?.isSleeping ?? false) }
             if wt.age > 1.5, wt.age.truncatingRemainder(dividingBy: 1) < dt { for a in sleeping { a.brain?.sleepWake(groggy: false, fast: true) } }
             if wt.age > 8 { for a in sleeping { if let b = a.brain { b.abortAll(a.sim, a.skinner); b.idleReset(a.skinner) } } }
             if sleeping.isEmpty || wt.age > 8.5 { w.wait = nil; beginVolley(jelly: wt.id, mode: wt.mode, seed: w.pendingSeed) } else { w.wait = wt }
         }
         volley.step(dt: dt)
         guard volley.active else { return }
-        for a in actors { a.brain?.sleepLocked = true }
+        for a in actors where volleyGoing(volley.playerID, mode: volley.mode).contains(a.id) { a.brain?.sleepLocked = true }          // (the players only: a housemate is never touched)
         guard volley.inScene, var s = volley.sim, !w.players.isEmpty else { return }
         for v in w.visitors { visitorLook(v.actor, v.spec, dt: dt) }          // (their species signature every step: serve waits, between points, the results)
         // the ambience under the music
