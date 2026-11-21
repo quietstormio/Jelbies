@@ -856,17 +856,17 @@ struct GameScreen: View {
                 let menu: [CafeTreatID] = [.swirl, .cocoa, .pancakes]
                 care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, care.cafeCanEat($0.element) ? menu[$0.offset % 3] : .juice) })))
             }
-            if m == "order" || m == "refuse" || m == "latte" || m == "latte2" {
+            if m == "order" || m == "refuse" || m == "latte" || m == "latte2" || m == "latte3" {
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
                 await sleep(2)
                 let ids = care.cafeDinerIDs
-                if m.hasPrefix("latte") { care.bath.wallet.add(100, silent: true) }
+                if m.hasPrefix("latte") { care.bath.wallet.add(100, silent: true) }          // (latte3: baby lattes for all three, the cafe-straw-r1 capture)
                 if m == "refuse" {
                     care.bath.wallet.add(9 - care.bath.wallet.count, silent: true)
                     care.cafe.cardRefusal = care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.map { ($0, CafeTreatID.sundae) })))
                 } else {
                     // latte: the first Jelbie gets the baby latte, the others slower treats; latte2: the first two get lattes
-                    let menu: [CafeTreatID] = m == "latte" ? [.latte, .sundae, .pancakes] : m == "latte2" ? [.latte, .sundae, .latte] : [.swirl, .pancakes, .sundae]
+                    let menu: [CafeTreatID] = m == "latte" ? [.latte, .sundae, .pancakes] : m == "latte2" ? [.latte, .sundae, .latte] : m == "latte3" ? [.latte, .latte, .latte] : [.swirl, .pancakes, .sundae]
                     care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, menu[$0.offset % 3]) })))
                 }
             }
