@@ -1030,13 +1030,13 @@ final class BlobBrain {
                 for s in spots where cand.y > s.y + 0.3 && abs(cand.x - s.x) < 1.3 && cand.y - s.y < 3.0 { hides = 1 }
             }
             var score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
-            if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
+            if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) - EmoteSpot.roamCellWeight * EmoteSpot.roamOver(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
             if live { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= 6 { break }
         }
-        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; return b.0 }
+        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
     }
 

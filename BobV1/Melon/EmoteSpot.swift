@@ -33,7 +33,7 @@ enum EmoteSpot {
 
     /// Dev capture (`-EmoteLog 1`, DevArgs builds only): one `[emotespot]` line per body per second: game time, id, floor x / z, what he is doing.
     nonisolated(unsafe) static var logOn: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "EmoteLog")
-    static func reset() { heat = [:]; zUse = [0, 0, 0]; xUse = [0, 0, 0] }
+    static func reset() { heat = [:]; zUse = [0, 0, 0]; xUse = [0, 0, 0]; roamUse = [Float](repeating: 0, count: 9) }
     private static func key(_ cx: Int, _ cz: Int) -> Int { (cx + 50) * 1000 + cz + 50 }
 
     /// Recent emotes per depth third and per width third of the walkable floor (equal-AREA thirds of the roam floor's free spans; faded like `heat`).
@@ -55,6 +55,23 @@ enum EmoteSpot {
     private static func band(_ p: SIMD2<Float>) -> (z: Int, x: Int) {
         (p.y < zCut.0 ? 0 : (p.y < zCut.1 ? 1 : 2), p.x < xCut.0 ? 0 : (p.x < xCut.1 ? 1 : 2))
     }
+    /// Roam goals chosen lately per cell of the 3 x 3 floor grid (depth third x width third), faded like `heat`: `roamOver` is how much more than its ninth a cell has had.
+    nonisolated(unsafe) static var roamUse: [Float] = [Float](repeating: 0, count: 9)
+    static let roamDecay: Float = 0.97
+    static func noteRoam(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) {
+        cuts(rf)
+        for i in 0..<9 { roamUse[i] *= roamDecay }
+        let b = band(p); roamUse[b.z * 3 + b.x] += 1
+    }
+    static func roamOver(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) -> Float {
+        cuts(rf)
+        let t = roamUse.reduce(0, +)
+        guard t > 3 else { return 0 }
+        let b = band(p)
+        return roamUse[b.z * 3 + b.x] / t - 1 / 9
+    }
+    /// Weight of `roamOver` in a roam goal's score.
+    static let roamCellWeight: Float = 14
     static func note(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) {
         cuts(rf)
         for k in heat.keys { heat[k]! *= decay }
