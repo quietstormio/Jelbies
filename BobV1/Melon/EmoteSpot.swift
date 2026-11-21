@@ -71,7 +71,7 @@ enum EmoteSpot {
         return roamUse[b.z * 3 + b.x] / t - 1 / 9
     }
     /// Weight of `roamOver` in a roam goal's score.
-    static let roamCellWeight: Float = 14
+    static let roamCellWeight: Float = 40
     static func note(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) {
         cuts(rf)
         for k in heat.keys { heat[k]! *= decay }
