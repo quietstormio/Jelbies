@@ -16,6 +16,9 @@ import simd
 /// What GameCare keeps while the park trip is on.
 @MainActor
 final class ParkWork {
+    /// Who was ASLEEP at home when the trip left (and so was never touched: no wake, no move). The way back keys on this set, not on who happens to be asleep then:
+    /// a stay-home who was awake at departure was moved like everybody, and gets put back on the home floor even if he dozed off meanwhile (his sleep kept).
+    var stayedAsleep: Set<Int> = []
     var homes: [Int: SIMD2<Float>] = [:]
     var autonomy: [Int: Bool] = [:]
     var arena: [Int: Float] = [:]
@@ -445,13 +448,13 @@ extension GameCare {
         let roster = book.roster
         switch dest {
         case .park:
-            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftState = 0; work.saveT = 0; work.friendSession = [:]; work.shared.reset()
+            work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]; work.giftState = 0; work.saveT = 0; work.friendSession = [:]; work.shared.reset(); work.stayedAsleep = []
             book.comers = park.picked.filter { roster.indices.contains($0) && $0 < jellies.count }
             if book.comers.isEmpty { book.comers = Array(roster.indices) }
             for a in roster {
                 guard let brain = a.brain else { continue }
                 work.homes[a.id] = a.floor; work.autonomy[a.id] = autonomySnapshot(a.id, brain); work.arena[a.id] = a.sim.arenaRadius
-                if brain.isSleeping { continue }          // a sleeper who stays home stays exactly as he is (the trip never woke him; the pick list left him out): not woken, not moved
+                if brain.isSleeping { work.stayedAsleep.insert(a.id); continue }          // a sleeper who stays home stays exactly as he is (the trip never woke him; the pick list left him out): not woken, not moved
                 brain.abortAll(a.sim, a.skinner)
                 brain.commandedIdle = nil; brain.commandedDecor = nil; brain.commandedFlip = false
             }
@@ -512,7 +515,7 @@ extension GameCare {
         case .home:
             // the visitors go: their looks are put away first (the wardrobe and feature slots are by body id), the Jelbies let go of any play with them
             for a in book.actors { visitorPutAway(a) }
-            for a in roster where a.brain?.isSleeping != true { a.brain?.abortAll(a.sim, a.skinner); a.brain?.commandedIdle = nil }          // (a sleeper who stayed home is left alone)
+            for a in roster where !work.stayedAsleep.contains(a.id) && a.brain?.isSleeping != true { a.brain?.abortAll(a.sim, a.skinner); a.brain?.commandedIdle = nil }          // (a sleeper who stayed home is left alone; one who dozed off during the trip keeps his sleep too)
             book.clear?()
             book.actors = []; book.cast = []
             book.save()
@@ -527,18 +530,20 @@ extension GameCare {
             var taken: [SIMD2<Float>] = []
             for a in roster {
                 guard let brain = a.brain else { continue }
-                if brain.isSleeping { brain.autonomy = work.autonomy[a.id] ?? true; brain.idleBlocked = false; continue }          // (asleep at home through the whole trip: not moved, not woken)
+                if work.stayedAsleep.contains(a.id) { brain.autonomy = work.autonomy[a.id] ?? true; brain.idleBlocked = false; continue }          // (asleep at home through the whole trip: not moved, not woken)
                 var spot = work.homes[a.id] ?? Self.greetSpot(a.id)
                 if taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
                     spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot
                 }
                 spot = brain.fixed(spot)
                 taken.append(spot)
-                rehome(a, at: spot)
                 brain.autonomy = work.autonomy[a.id] ?? true
                 brain.idleBlocked = false
+                if brain.isSleeping { rehomeAsleep(a, at: spot); continue }          // (dozed off during the trip: back on the home floor, still asleep: not stood up)
+                rehome(a, at: spot)
                 brain.restTimer = 2
             }
+            work.stayedAsleep = []
             tripReturned(book.comers, extraThirst: TripClockTuning.parkThirst)
             work.homes = [:]; work.autonomy = [:]; work.arena = [:]; work.owed = [:]
             book.comers = []
