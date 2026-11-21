@@ -39,6 +39,7 @@ private struct RaceChromeLayout: View {
         ZStack {
             if race.trackVisible {
                 if pullSurfaceOn { RacePullSurface(race: race) }          // (pull control: the whole screen is the control, under everything else)
+                if race.holdsCard { Color.clear.contentShape(Rectangle()).ignoresSafeArea().onTapGesture { race.skipWinHold() } }          // (first place: the card waits for the celebration; a tap anywhere brings it at once)
                 VStack(spacing: 0) {
                     topBar.allowsHitTesting(!race.ui.pull)          // (a pull may start on the title pill)
                     Spacer()

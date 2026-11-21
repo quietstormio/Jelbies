@@ -406,17 +406,26 @@ extension GameCare {
         }
         let events = forfeitAsk ? [] : race.tick(dt: dt, bodyFree: { body($0)?.brain?.raceStepFree ?? true }, bodyReady: { body($0)?.brain?.raceBodyReady ?? true },
                                bodyBetween: { body($0)?.brain?.raceBetweenSteps ?? true })
+        var winCandidate = false
         for e in events {
             if let i = e.racer, let a = body(i), let b = a.brain { b.raceApply(e, sim: a.sim) }
             switch e {
             case .stumble(let i), .trip(let i):
                 if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.2); AudioHub.shared.raceStumble() }
             case .hurdleCleared(let i): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.4, sharpness: 0.7); AudioHub.shared.chirp(jelly: race.playerID, .happy) }
-            case .finished(let i, _): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.8, sharpness: 0.5) }
+            case .finished(let i, let place):
+                if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.8, sharpness: 0.5) }
+                if i == RaceSim.playerIndex, place == 1 { winCandidate = true }          // (decided after the step: a rival over the line in the same tick may have the earlier interpolated time)
             case .results: do { live?.raceFinished(place: race.sim?.playerPlace ?? 0, drops: race.earned) }          // (settled by the flow before the event reaches us)
             default: break
             }
         }
+        // the player crossed the line FIRST (place 1 is final once every body over the line this step is counted; the results card covers the track a few seconds later):
+        // his own Jelmiko celebrates (four bounces, arms up, a cheer: BlobBrain+Win.swift) and the card waits for it (RaceFlow.holdsCard). Rivals and 2nd...4th do nothing new.
+        if winCandidate, let s = race.sim, s.playerLeadsAtFinish, !race.leaving, !race.forfeited, let a = body(RaceSim.playerIndex), let b = a.brain {
+            b.raceWinCue(a.sim); race.startWinHold()
+        }
+        if race.winHoldT != nil, let a = body(RaceSim.playerIndex), let b = a.brain { race.noteWinMove(active: b.winCheer) }
         if race.phase == .racing, let sim = race.sim, sim.phase != .results {
             let st = sim.playerStanding
             live?.raceProgress(position: st.position, progress: st.progress, lap: 1)          // the policy only publishes a change of place / a quarter of the course

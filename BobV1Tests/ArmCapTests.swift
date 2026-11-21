@@ -106,6 +106,7 @@ final class ArmCapTests: XCTestCase {
         for (n, k) in [("skip-hop", IdleKind.skipHop), ("hopscotch", .hopscotch), ("mid-leg spin", .legSpin), ("bounce-trot", .trot), ("stop and look", .stopLook), ("jump for joy", .joy), ("giggle", .giggle), ("startle hop", .startle), ("big sigh", .sigh), ("hmph puff", .hmph)] {
             note(n); rows.append((n, capsuleStat(10, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }
+        note("win celebration"); rows.append(("win celebration (first place)", capsuleStat(5, start: { r in r.brain.idleForced = true; _ = r.brain.winStart(r.sim) }, until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         for (n, k) in [("shake", IdleKind.shake), ("lie down", .lieDown), ("chirp", .chirp)] {
             note(n); rows.append((n, capsuleStat(14, start: idle(k), until: { $0.brain.idleState.kind == nil && $0.t > 1 })))
         }

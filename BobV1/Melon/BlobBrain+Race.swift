@@ -47,6 +47,8 @@ struct RaceDrive {
     var hopQueued: (length: Float, apex: Float, air: Float, crouch: Float)?
     /// A look-around asked while he was still in a landing: starts the moment he stands.
     var lookQueued = false
+    /// The win celebration asked at the results (first place): starts the moment he stands between steps (BlobBrain+Win.swift).
+    var winQueued = false
     /// Where the body really is while a hop carries it (the centroid read for the race's progress this tick); `spotLive` = valid.
     var spot = SIMD2<Float>.zero
     var spotLive = false
@@ -250,6 +252,7 @@ extension BlobBrain {
     /// `.race`, once per fixed step (BlobBrain.runScript): pose like the walk; start the committed step when the feet are free.
     func raceRun(_ sim: SoftBody, _ dt: Float) {
         if race.jumpQueued, !feet.active, race.pendingFoot == nil { raceJump(sim); return }
+        if race.winQueued, raceCanLook, raceWin(sim) { return }          // (the results' first place: the celebration takes the standing body; BlobBrain+Win.swift)
         if race.pull, race.lookQueued, raceCanLook, raceLook(sim) { race.lookQueued = false; return }
         poseOn = true; ensureFeet(sim)
         if feet.active { race.idle = 0 } else { race.idle += dt }
