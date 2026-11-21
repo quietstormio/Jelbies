@@ -124,7 +124,7 @@ extension GameCare {
 
     /// Something that started under the fade out (the same checks as a room swap, less the café's own trip flag).
     private var cafeFadeBlocked: Bool {
-        race.active || show.active || raceWait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging
+        race.active || show.active || raceWait != nil || showBook.wait != nil || bath.active || focus.isActive || trayOut || dining.phase != .absent || groupActive || arranging
             || cafeBook.actors.contains { $0.brain?.isSleeping == true }
     }
 
