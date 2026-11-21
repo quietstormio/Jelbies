@@ -61,7 +61,7 @@ final class OpalSpeciesTests: XCTestCase {
         // earlier species keep their jars / snacks
         XCTAssertEqual(JellyCandidates.baseJars(JellyRoster.pandaID), [70, 80, 35, 40, 55])
         XCTAssertEqual(JellyCandidates.lovedSnack(JellyRoster.pearlID), "onigiri")
-        XCTAssertNil(JellyCandidates.lovedSnack(JellyRoster.mooID))
+        XCTAssertNil(JellyCandidates.lovedSnack(JellyRoster.tigerID))          // (Moo now loves donuts: a Spring special)
     }
 
     func testSleepMask() {
