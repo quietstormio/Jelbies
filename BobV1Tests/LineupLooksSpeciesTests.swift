@@ -56,7 +56,7 @@ final class LineupLooksSpeciesTests: XCTestCase {
     }
 
     func testOfferedNowhere() {
-        for id in Self.ids where id != JellyRoster.opalID {          // (Opal 12 is a Jelly Spring special: OpalSpringTests)
+        for id in Self.ids where id != JellyRoster.opalID && !OpalSpringTests.springSeven.contains(id) {          // (Opal 12 and the seven new Spring looks are Jelly Spring specials: OpalSpringTests)
             XCTAssertFalse(SpeciesInfo.order.contains(id))
             XCTAssertFalse(SpeciesInfo.special.contains(id))
             XCTAssertFalse(SpeciesInfo.pages(includingSpecial: true).contains(id))
