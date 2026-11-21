@@ -350,6 +350,7 @@ nonisolated enum JellyRoster {
         case tigerID: return TigerLook.palette
         case berryID: return BerryLook.palette
         case opalID, sunsetID, cottonCandyID, oceanID, lemonLimeID, lagoonID: return GradientLook.palette(species(instance))
+        case mooID, cocoaID, blushID: return CowLook.palette(species(instance))
         case marbleID...bronzeID: return LineupLook.palette(species(instance))
         default: return nil
         }
@@ -368,6 +369,7 @@ nonisolated enum JellyRoster {
         case tigerID: return TigerLook.swatch
         case berryID: return BerryLook.swatch
         case opalID, sunsetID, cottonCandyID, oceanID, lemonLimeID, lagoonID: return GradientLook.swatch(species(instance))
+        case mooID, cocoaID, blushID: return CowLook.swatch(species(instance))
         case marbleID...bronzeID: return LineupLook.swatch(species(instance))
         default: return SIMD3(0.70, 0.83, 0.945)
         }
