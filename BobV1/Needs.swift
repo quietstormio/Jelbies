@@ -65,6 +65,7 @@ final class BlobNeeds {
             if defaults.bool(forKey: "NeedsReset") { defaults.removeObject(forKey: key) }       // capture aid: -NeedsReset 1 re-seeds
             load()
             if defaults.bool(forKey: "NeedsHappy") { raw = [1, 1, 1]; publish(force: true) }       // capture aid: -NeedsHappy 1 starts every need full
+            if DevArgs.enabled, defaults.bool(forKey: "NeedsLow") { raw = [0.08, 0.08, 0.5]; publish(force: true) }       // capture aid: -NeedsLow 1 = the owner's grumpy state (hunger / thirst 0.08, attention 0.5)
         } else {
             raw = [NeedsTuning.seedOthers, NeedsTuning.seedOthers, NeedsTuning.seedOthers]
         }
