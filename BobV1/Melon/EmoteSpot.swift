@@ -27,6 +27,8 @@ enum EmoteSpot {
     /// How far apart the two bodies of a pair stand on the meeting spot.
     static let pairHalf: Float = 0.55
 
+    /// Dev capture (`-EmoteLog 1`, DevArgs builds only): one `[emotespot]` line per body per second: game time, id, floor x / z, what he is doing.
+    nonisolated(unsafe) static var logOn: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "EmoteLog")
     static func reset() { heat = [:] }
     private static func key(_ cx: Int, _ cz: Int) -> Int { (cx + 50) * 1000 + cz + 50 }
     static func note(_ p: SIMD2<Float>) {
@@ -56,12 +58,24 @@ struct EmoteSpotState {
     var soloAt: Float = 0
     var skip = false
     var walked: Float = 0
+    var logT: Float = 0
 }
 
 extension BlobBrain {
     /// A pair is on its way to / waiting on its meeting spots: nothing else may take either body.
     var meetBusy: Bool { socialBook.meet != nil || socialMeetHeld }
     var emoteSpotLive: Bool { EmoteSpot.enabled && homeRoom && roamProvider != nil && autonomy }
+
+    func emoteSpotLog(_ dt: Float) {
+        emoteSpot.logT += dt
+        guard emoteSpot.logT >= 1 else { return }
+        emoteSpot.logT = 0
+        let st: String
+        if let s = social { st = (s.kind.isGroup ? "group:" : "pair:") + s.kind.rawValue }
+        else if let k = idleState.kind { st = (k == .sleep || k == .sit ? "rest:" : "solo:") + k.rawValue }
+        else if activity == .walking || activity == .coming { st = "walk" } else { st = "stand" }
+        NSLog("[emotespot] t=%.1f id=%d x=%.2f z=%.2f %@", variety.now, steerID, px, pz, st)
+    }
 
     func emoteSendWalk(to t: SIMD2<Float>) {
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil

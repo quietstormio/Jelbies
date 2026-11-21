@@ -563,6 +563,7 @@ extension BlobBrain {
 
     /// Every tick (after the idle gate, before the scripts run): cooldowns, greeting watch, the running session, the overlay easing.
     func socialTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        if EmoteSpot.logOn { emoteSpotLog(dt) }
         let blocked = held || !autonomy
         if !blocked { socialBook.cooldown -= dt; socialBook.groupCool -= dt; socialBook.treatCool -= dt }
         if !socialBook.fiveCool.isEmpty { for k in socialBook.fiveCool.keys { socialBook.fiveCool[k]! -= dt } }
