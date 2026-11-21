@@ -210,7 +210,7 @@ final class ShowTurnOrderTests: XCTestCase {
                 if care.show.rivalStep != lastStep { lastStep = care.show.rivalStep; if lastStep == .perform, let n = care.show.rivalTurn, let id = care.showRivalBody(n), let body = book.extra.first(where: { $0.id == id }) { diag.append(String(format: "r%d perform at %.1f s, %.2f from the middle", n, t - t0, simd_distance(body.floor, ShowStage.playerSpot))) } }
                 for i in all.indices { for j in all.indices where j > i {
                     let g = simd_distance(all[i].floor, all[j].floor)
-                    if g < minGap { minGap = g; minWhere = "bodies \(all[i].id) \(all[i].floor) and \(all[j].floor) \(all[j].id) at \(String(format: "%.1f", t - t0)) s, step \(care.show.rivalStep), turn \(String(describing: care.show.rivalTurn))" }
+                    if g < minGap { minGap = g; minWhere = "bodies \(all[i].id) \(all[i].floor) and \(all[j].floor) \(all[j].id) at \(String(format: "%.1f", t - t0)) s, step \(care.show.rivalStep), turn \(String(describing: care.show.rivalTurn)); all: \(all.map { "\($0.id)@\($0.floor)" })" }
                 } }
             } else if t0 >= 0 {
                 aroundLen.append(t - t0); t0 = -1; cur = nil
@@ -226,14 +226,15 @@ final class ShowTurnOrderTests: XCTestCase {
 
     // MARK: the screen: the performer is the hero, the marks stay apart
 
-    /// The performer on the middle mark is big (phone 14%+ of the screen height, iPad 17%+), his feet are above the trick menu and his top under the header; the waiting entrants stand on the back row:
-    /// each whole body is INSIDE the picture (never half cut by the edge), their faces are clear above the performer's head, and rival 2 is wholly OFF the picture; marks are 1.5+ apart.
+    /// The performer on the middle mark is big (phone 14%+ of the screen height, iPad 17%+), his feet are above the trick menu and his top under the header; ALL THREE waiting bodies (the player's
+    /// Jelmiko and two rivals, then rival 2 as well when the player performs) stand INSIDE the picture, whole (never cut by an edge), faces clear of the performer's head; marks are 1.5+ apart.
     func testPerformerIsLargeAndTheWaitingRowIsWhollyInOrWhollyOut() {
-        func extent(_ spot: SIMD2<Float>, _ f: ShowFrame, _ size: CGSize) -> (l: CGFloat, r: CGFloat, face: CGFloat) {
+        func extent(_ spot: SIMD2<Float>, _ f: ShowFrame, _ size: CGSize) -> (l: CGFloat, r: CGFloat, face: CGFloat, foot: CGFloat) {
             let c = StageProject.point(spot, y: BobShape.H * 0.5, frame: f, size: size)
             let e = StageProject.point(SIMD2(spot.x + BobShape.R * 1.25, spot.y), y: BobShape.H * 0.5, frame: f, size: size)          // (the body and its arms)
             let face = StageProject.point(spot, y: BobShape.H * 0.65, frame: f, size: size)
-            return (c.x - abs(e.x - c.x), c.x + abs(e.x - c.x), face.y)
+            let foot = StageProject.point(spot, y: 0, frame: f, size: size)
+            return (c.x - abs(e.x - c.x), c.x + abs(e.x - c.x), face.y, foot.y)
         }
         for (name, size, pad) in [("17e", CGSize(width: 390, height: 844), false), ("17 Pro Max", CGSize(width: 440, height: 956), false), ("small phone", CGSize(width: 375, height: 812), false), ("iPad", CGSize(width: 820, height: 1180), true)] {
             let f = ShowFrame.trick(pad: pad)
@@ -241,25 +242,23 @@ final class ShowTurnOrderTests: XCTestCase {
             XCTAssertGreaterThan((foot.y - top.y) / size.height, pad ? 0.17 : 0.13, "\(name): the performer is big")
             XCTAssertLessThan(foot.y / size.height, 0.58, "\(name): his feet are above the menu")
             XCTAssertGreaterThan(top.y / size.height, 0.2, "\(name): his top is under the header")
-            for spot in [ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.playerAside] {
+            for spot in [ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2), ShowStage.playerAside()] {
                 let e = extent(spot, f, size)
                 XCTAssertGreaterThanOrEqual(e.l, 0, "\(name): a waiting body is cut by the left edge"); XCTAssertLessThanOrEqual(e.r, size.width, "\(name): a waiting body is cut by the right edge")
                 XCTAssertLessThan(e.face, top.y + 4, "\(name): a waiting face is above the performer's head, never behind her")
+                XCTAssertGreaterThan(e.face, size.height * 0.15, "\(name): a waiting body is under the header")
             }
-            let off = extent(ShowStage.rivalRest(2), f, size)
-            XCTAssertTrue(off.l >= size.width || off.r <= 0, "\(name): rival 2 is wholly off the picture")
         }
-        // a phone / tablet on its side: the same, in the left part (the chrome column is on the right), rival 2 off to the left
+        // a phone / tablet on its side: the same, in the left part (the chrome column is on the right)
         for (name, size, pad) in [("17e on its side", CGSize(width: 844, height: 390), false), ("iPad on its side", CGSize(width: 1180, height: 820), true)] {
             let f = ShowFrame.trick(pad: pad)
-            for spot in [ShowStage.rivalRest(0, sideways: true), ShowStage.rivalRest(1, sideways: true), ShowStage.playerAside] {
+            for spot in [ShowStage.rivalRest(0, sideways: true), ShowStage.rivalRest(1, sideways: true), ShowStage.rivalRest(2, sideways: true), ShowStage.playerAside(sideways: true)] {
                 let e = extent(spot, f, size)
-                XCTAssertGreaterThanOrEqual(e.l, 0, "\(name)"); XCTAssertLessThanOrEqual(e.r, size.width * (pad ? 0.55 : 0.52), "\(name): a waiting body is not under the chrome column")
+                XCTAssertGreaterThanOrEqual(e.l, 0, "\(name): a waiting body is cut by the left edge"); XCTAssertLessThanOrEqual(e.r, size.width * (pad ? 0.55 : 0.52), "\(name): a waiting body is not under the chrome column")
+                XCTAssertLessThanOrEqual(e.foot, size.height, "\(name): a waiting body's feet are inside the picture")
             }
-            let off = extent(ShowStage.rivalRest(2, sideways: true), f, size)
-            XCTAssertLessThanOrEqual(off.r, 0, "\(name): rival 2 is off to the left")
         }
-        let marks = [ShowStage.playerSpot, ShowStage.playerAside, ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2), ShowStage.rivalRest(2, sideways: true)]
-        for i in marks.indices { for j in marks.indices where j > i && !(i == 4 && j == 5) { XCTAssertGreaterThan(simd_distance(marks[i], marks[j]), 1.5) } }
+        let marks = [ShowStage.playerSpot, ShowStage.playerAside(), ShowStage.rivalRest(0), ShowStage.rivalRest(1), ShowStage.rivalRest(2)]
+        for i in marks.indices { for j in marks.indices where j > i { XCTAssertGreaterThan(simd_distance(marks[i], marks[j]), 1.5) } }
     }
 }

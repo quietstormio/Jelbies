@@ -48,9 +48,7 @@ final class ShowSpotlightTests: XCTestCase {
         return CGRect(x: mid.x - w, y: top.y, width: 2 * w, height: bot.y - top.y)
     }
 
-    private func wholeRound(size: CGSize, legacy: Bool = false) {
-        ShowStage.legacyLandscapeMark = legacy
-        defer { ShowStage.legacyLandscapeMark = false }
+    private func wholeRound(size: CGSize) {
         let saved = GameCamera.aspect
         GameCamera.aspect = Float(size.width / size.height)
         defer { GameCamera.aspect = saved }
@@ -87,7 +85,7 @@ final class ShowSpotlightTests: XCTestCase {
             // (the headless room's bodies do not walk by themselves: the walks are done here, at the moment the real walk would end; his step off waits half a second, the score beat)
             let sh0 = care.show
             let enteredRival = sh0.trickStage == .rivals && (sh0.rivalStep != prevRival || prevStage != .rivals)
-            if enteredRival && sh0.rivalStep == .playerAway { later.append((frame + 30, { put(room.actors[0], ShowStage.playerAside) })) }
+            if enteredRival && sh0.rivalStep == .playerAway { later.append((frame + 30, { put(room.actors[0], ShowStage.playerAside(sideways: GameCamera.aspect > 1)) })) }
             if sh0.trickStage != .rivals && prevStage == .rivals { put(room.actors[0], ShowStage.playerSpot) }
             if enteredRival, let i = sh0.rivalTurn, let id = book.rivalBody[i], let a = book.extra.first(where: { $0.id == id }) {
                 if sh0.rivalStep == .walkIn { later.append((frame + 75, { put(a, ShowStage.playerSpot) })) }          // (she walks up: 1.25 s)
@@ -178,9 +176,9 @@ final class ShowSpotlightTests: XCTestCase {
         XCTAssertEqual(windowTargetMisses, 0, "the light's target is the performer for his whole window")
         XCTAssertEqual(gapViolations, 0, "the light is off in every gap between turns (fade out within 0.4 s): \(diag)")
         XCTAssertLessThan(maxDist, 0.6, "the lit performer stays within 0.6 of the middle of the stage")
-        if !legacy { XCTAssertEqual(worstOverlap, 0, accuracy: 1, "no waiting entrant's face is under the performer or another face (\(size)): \(diag)") }
-        print("[ShowSpotlight] \(size) legacy marks \(legacy): body-box overlap by depth: waiter BEHIND the performer worst \(Int(worstBehind * 100)) %, waiter IN FRONT worst \(Int(worstFront * 100)) % (of the waiting body's box)")
-        if !legacy { XCTAssertEqual(worstFront, 0, accuracy: 0.0005, "no waiting body stands in front of the performer and is covered by him (\(size))") }
+        XCTAssertEqual(worstOverlap, 0, accuracy: 1, "no waiting entrant's face is under the performer or another face (\(size)): \(diag)")
+        print("[ShowSpotlight] \(size) body-box overlap by depth: waiter BEHIND the performer worst \(Int(worstBehind * 100)) %, waiter IN FRONT worst \(Int(worstFront * 100)) % (of the waiting body's box)")
+        XCTAssertEqual(worstFront, 0, accuracy: 0.0005, "no waiting body stands in front of the performer and is covered by him (\(size))")
         print("[ShowSpotlight] \(size): worst body-box overlap of a waiting body with the performer: \(Int(worstBody * 100)) % of the waiting body's box (face overlap \(worstOverlap) px2), highest centroid while lit \(peakHop)")
         print("[ShowSpotlight] \(size) reach of the lit performer: x \(envLo.x)...\(envHi.x), y \(envLo.y)...\(envHi.y), z \(envLo.z)...\(envHi.z)")
         for (k, e) in envTrick.sorted(by: { $0.key < $1.key }) { print("[ShowSpotlight] reach \(k): x \(e.0.x)...\(e.1.x) y \(e.0.y)...\(e.1.y) z \(e.0.z)...\(e.1.z)") }
@@ -190,7 +188,6 @@ final class ShowSpotlightTests: XCTestCase {
     func testWholeTrickRoundPortrait() { wholeRound(size: CGSize(width: 440, height: 956)) }
     func testWholeTrickRoundLandscape() { wholeRound(size: CGSize(width: 956, height: 440)) }
     /// The layout before the spotlight round (landscape rival 0 on (-1.4, 0.4)), measured by the same harness: the overlap numbers to compare with.
-    func testWholeTrickRoundLandscapeLegacyMarks() { wholeRound(size: CGSize(width: 956, height: 440), legacy: true) }
 
     // MARK: the picture of the light, rendered on a clear background
 

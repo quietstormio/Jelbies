@@ -24,8 +24,12 @@ final class ShowStageBodiesTests: XCTestCase {
     func testNoTwoStageSpotsOverlap() {
         var spots: [(String, SIMD2<Float>)] = []
         spots.append(("stage0", ShowStage.playerSpot))          // (the dance is one body now: the contestant's spot; the Trick round's wing / rest / aside spots follow)
-        spots.append(("aside", ShowStage.playerAside))
+        spots.append(("aside", ShowStage.playerAside()))
         for k in 0..<3 { spots.append(("rest\(k)", ShowStage.rivalRest(k))) }
+        // the phone on its side has its own seats; the gate (where back-seat walks pass) keeps a body and a half from every seat
+        let side: [SIMD2<Float>] = [ShowStage.playerSpot, ShowStage.playerAside(sideways: true)] + (0..<3).map { ShowStage.rivalRest($0, sideways: true) }
+        for i in side.indices { for j in side.indices where j > i { XCTAssertGreaterThan(simd_distance(side[i], side[j]), 1.5, "sideways seats \(i), \(j) overlap") } }
+        for q in [ShowStage.playerAside(), ShowStage.playerAside(sideways: true)] + (0..<3).flatMap { [ShowStage.rivalRest($0), ShowStage.rivalRest($0, sideways: true)] } { XCTAssertGreaterThan(simd_distance(ShowStage.gate, q), 1.4, "the gate is clear of every seat") }
         for j in 0..<3 { spots.append(("far\(j)", GameCare.showFarSpot(j))); spots.append(("spawn\(j)", SIMD2(40 + Float(j) * 3, 0))) }
         for id in 0..<6 { spots.append(("park\(id)", ShowStage.parkSpot(id))) }
         for side in [false, true] {
