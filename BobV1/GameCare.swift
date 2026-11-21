@@ -702,13 +702,17 @@ final class GameCare {
             if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)), !(FocusGroup.sleeperFix && brain.isSleeping) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
             }
-            if let v = focusGroup.viaZero, simd_length(brain.position - v) < 0.6 || focusGroup.clock - focusGroup.viaZeroAt > 5 { focusGroup.viaZero = nil; queued = [.come(to: focusGroup.spot(of: 0))]; approachIdle = 0 }          // (walked round an uncalled body: now to his spot)
+            if let v = focusGroup.viaZero, simd_length(brain.position - v) < 0.6 || focusGroup.clock - focusGroup.viaZeroAt > 5 {
+                if let n = focusGroup.viaZeroNext { focusGroup.viaZero = n; focusGroup.viaZeroNext = nil; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(n)] }
+                else { focusGroup.viaZero = nil; queued = [.come(to: focusGroup.spot(of: 0))]; approachIdle = 0 }
+            }          // (walked round an uncalled body: now to his spot)
             if FocusGroup.sleeperFix, focusGroup.includes(0), !focusGroup.arrived.contains(0), focusGroup.viaZero == nil, !focusGroup.zeroPending {          // pinned short of his spot by a lying body: walk round it (at most three times)
                 let d = simd_length(brain.position - focusGroup.spot(of: 0))
                 if d < focusGroup.zeroBest - 0.05 { focusGroup.zeroBest = d; focusGroup.zeroStuck = 0 } else { focusGroup.zeroStuck += dt }
                 if focusGroup.zeroStuck > 2, focusGroup.zeroDetours < 3, d > 0.5 {
                     focusGroup.zeroStuck = 0; focusGroup.zeroDetours += 1
-                    if let v = FocusGroup.detour(from: brain.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, soft: focusGroup.ids.filter { $0 != 0 }.map { focusGroup.spot(of: $0) }, fixed: { brain.fixed($0) }) { focusGroup.viaZero = v; focusGroup.viaZeroAt = focusGroup.clock; focusGroup.zeroBest = .infinity; queued = [.goTo(v)] }
+                    let path = FocusGroup.detour(from: brain.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, soft: focusGroup.ids.filter { $0 != 0 }.map { focusGroup.spot(of: $0) }, fixed: { brain.fixed($0) })
+                    if let v = path.first { focusGroup.viaZero = v; focusGroup.viaZeroNext = path.count > 1 ? path[1] : nil; focusGroup.viaZeroAt = focusGroup.clock; focusGroup.zeroBest = .infinity; queued = [.goTo(v)] }
                 }
             }
             focusReplan(dt: dt)
