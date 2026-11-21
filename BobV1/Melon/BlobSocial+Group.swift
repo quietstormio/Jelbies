@@ -18,6 +18,8 @@ import simd
 enum GroupTuning {
     /// Seconds spent together (3+ free and close) before a group move is asked for, drawn per Jelby.
     static let wait: (Float, Float) = (15, 40)
+    /// Home rooms only (2026-11-20, the owner: "not as many group emotes, bring down 10%"): the group rate is this fraction of what it was (the wait between rolls is longer by 1 / this). The Park is not touched.
+    static let homeRateScale: Float = 0.9
     /// Cooldown after any group move (per member).
     static let cooldown: (Float, Float) = (20, 35)
     /// How near a free Jelby must be (to the one who asks) to be pulled in, and the most that play together.
@@ -85,7 +87,7 @@ extension BlobBrain {
         var x = rand() * w.reduce(0) { $0 + $1.1 }
         var kind = w[0].0
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
-        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul * moreGroupWaitMul
+        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul * moreGroupWaitMul * (homeRoom ? 1 / GroupTuning.homeRateScale : 1)
         socialBook.groupIdle = 0; socialBook.groupBusy = 0
         if !socialStartGroup(kind, with: crew, sim) { socialBook.groupIdle = socialBook.groupLimit * 0.7 }          // (no room right now: try again soon)
     }

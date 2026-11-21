@@ -128,10 +128,10 @@ extension GameCamera {
     /// The roaming polygon of the current aspect (nil = the old fixed box).
     nonisolated(unsafe) static var roamFloor: RoamFloor?
     /// The front limit of a roaming centre: the polygon's, else the old `walkMaxZ`.
-    /// THE ONE SWITCH for the home-room HUD button cut-outs (the two button rails are cut out of the roam floor so no body stands under a button; Main added them 2026-10-22,
-    /// the owner never asked for them). true = today's behaviour; false = bodies may stand under the buttons. The Park's Go-home pill is cut out either way.
-    /// Dev capture: launch with `-HomeRails 0` (DevArgs builds only).
-    nonisolated(unsafe) static var homeRailCutouts: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "HomeRails") != nil && UserDefaults.standard.integer(forKey: "HomeRails") == 0)
+    /// THE ONE SWITCH for the home-room HUD button cut-outs (the two button rails are cut out of the roam floor so no body stands under a button; Main added them 2026-10-22, the owner never asked for
+    /// them and 2026-11-20 asked for the whole room). false (default) = bodies may walk under the buttons; true = the cut-outs back. The Park's Go-home pill is cut out either way.
+    /// Dev capture: launch with `-HomeRails 1` to put the cut-outs back (DevArgs builds only).
+    nonisolated(unsafe) static var homeRailCutouts: Bool = DevArgs.enabled && UserDefaults.standard.object(forKey: "HomeRails") != nil && UserDefaults.standard.integer(forKey: "HomeRails") == 1
     static var roamMaxZ: Float { roamFloor?.maxZ ?? walkMaxZ }
     /// The back limit of a roaming centre: the polygon's (the pockets beside the sofa reach the back wall), else the old `walkMinZ`.
     static var roamMinZ: Float { roamFloor?.minZ ?? walkMinZ }

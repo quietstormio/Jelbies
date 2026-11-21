@@ -10,7 +10,10 @@ import simd
 
 @MainActor
 final class HUDRealRailsTests: XCTestCase {
+    /// These suites test the cut-outs themselves: the home-room switch (`GameCamera.homeRailCutouts`, default off since 2026-11-20) is put on for them.
+    override func setUp() { GameCamera.homeRailCutouts = true }
     override func tearDown() {
+        GameCamera.homeRailCutouts = false
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero
         GameCamera.clearRoam(); GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0)
     }

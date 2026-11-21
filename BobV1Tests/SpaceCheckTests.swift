@@ -20,7 +20,7 @@ final class SpaceCheckTests: XCTestCase {
     override func setUp() { DecorField.shared.clear(); DecorField.shared.toys = ToyBook(); ToyTuning.settle = 0 }
     override func tearDown() {
         DecorField.shared.clear(); ToyTuning.settle = 5
-        GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0); GameCamera.homeRailCutouts = true; EmoteSpot.enabled = true
+        GameCamera.endPark(count: 3); _ = GameCamera.camera(aspect: 440.0 / 956.0); GameCamera.homeRailCutouts = false; EmoteSpot.enabled = true
         GameCamera.configureRoom(count: 1); GameCamera.clearRoam(); RoomLayout.apply(RoomCatalog.home)
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero
         SocialTests.keep.removeAll()
@@ -45,7 +45,7 @@ final class SpaceCheckTests: XCTestCase {
         let seeds = (env["SPACE_SEEDS"] ?? "1,2,3").split(separator: ",").compactMap { UInt64($0) }
         let orients = (env["SPACE_ORIENT"] ?? "p,l").split(separator: ",").map(String.init)
         let minutes = Double(env["SPACE_MIN"] ?? "30") ?? 30
-        GameCamera.homeRailCutouts = env["SPACE_RAILS"] != "0"          // (SPACE_RAILS=0: the home-room button cut-outs off)
+        GameCamera.homeRailCutouts = env["SPACE_RAILS"] == "1"          // (SPACE_RAILS=1: the home-room button cut-outs on; default off)
         for o in orients {
             let aspect = o == "p" ? Self.portrait : Self.landscape
             for seed in seeds { try runCase(home: n, orient: o, aspect: aspect, seed: seed, minutes: minutes) }
@@ -89,7 +89,7 @@ final class SpaceCheckTests: XCTestCase {
     }
 
     private func runCase(home n: Int, orient: String, aspect: Float, seed: UInt64, minutes: Double) throws {
-        let name = (n == 0 ? "park" : "home\(n)") + "_" + orient + (low ? "_low" : "") + (env["SPACE_RAILS"] == "0" ? "_norail" : "")
+        let name = (n == 0 ? "park" : "home\(n)") + "_" + orient + (low ? "_low" : "") + (env["SPACE_RAILS"] == "1" ? "_rails" : "")
         DayClock.shared.forcedHour = low ? 19 : 12
         EmoteSpot.reset(); EmoteSpot.enabled = env["SPACE_SPOT"] != "0"
         let (rf, bodies, spots) = setup(home: n, aspect: aspect)
