@@ -64,3 +64,7 @@ shyWave_pearl_teddy	pearl,teddy	shyWave	perp,top	-	90
 groupCheer_bob_teddy_pearl	bob,teddy,pearl	groupCheer	perp,top	-	90
 conga_pip_lavender_teddy	pip,lavender,teddy	conga	perp,top	-	90
 congaLine_pip_pearl_moss	pip,pearl,moss	congaLine	perp,top	-	90
+orbit_bob_pip	bob,pip	orbit	perp,top	-	90
+upDown_bob_pip	bob,pip	upDown	perp,top	-	90
+jumpTurns_bob_pip	bob,pip	jumpTurns	perp,top	-	90
+spinTogether_bob_pip	bob,pip	spinTogether	perp,top	-	90

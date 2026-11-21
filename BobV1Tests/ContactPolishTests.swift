@@ -737,8 +737,9 @@ final class ContactPolishTests: XCTestCase {
     /// tag / chase are judged at their touch frames (a soft bump inside a run), the holding stances (hum ...) are the ones whose arrival / retreat apply, the pressing ones (bump ...) are not.
     func testHoldsStanceClassification() {
         func entry(_ k: SocialKind) -> ContactEntry { (Self.pairEntries + Self.groupEntries).first { Self.kindOf($0) == k }! }
-        for k in [SocialKind.nuzzle, .cheekSquish, .backToBack, .cuddleLean, .swayHug, .whisperGiggle, .groupHug, .highFive] { XCTAssertTrue(Self.holdsStance(entry(k)), "\(k) is a holding stance") }
-        for k in [SocialKind.boop, .tag, .chase, .look, .follow] { XCTAssertFalse(Self.holdsStance(entry(k)), "\(k) is not") }
+        for k in [SocialKind.nuzzle, .cheekSquish, .backToBack, .cuddleLean, .swayHug, .groupHug, .highFive] { XCTAssertTrue(Self.holdsStance(entry(k)), "\(k) is a holding stance") }
+        // (pair-distinct-r1: whisperGiggle and sitTogether are deliberately NON-touching now - a V / a seat with a clear gap - so they are no holding stance)
+        for k in [SocialKind.boop, .tag, .chase, .look, .follow, .whisperGiggle, .sitTogether] { XCTAssertFalse(Self.holdsStance(entry(k)), "\(k) is not") }
         XCTAssertTrue(entry(.tag).momentary && entry(.chase).momentary, "tag / chase: judged at the touch")
     }
 
