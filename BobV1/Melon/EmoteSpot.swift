@@ -20,12 +20,12 @@ enum EmoteSpot {
     static let rugWeight: Float = 2.2
     static let rugReach: Float = 2.6
     /// Weight of a depth / width third being used more (less) than its third of the recent emotes.
-    static let bandWeight: Float = 5
+    static let bandWeight: Float = 9
     /// A walk costs this per unit of its longest leg; a spot is taken only when it beats where the emote would have been by at least `margin`.
     static let legCost: Float = 0.55
     static let margin: Float = 1.6
     /// Longest walk to a spot: solo, pair (each body), group (checked by the ring plan itself: GroupTuning.walkMax).
-    static let soloLeg: Float = 4.0, pairLeg: Float = 4.5
+    static let soloLeg: Float = 4.0, pairLeg: Float = 2.5, groupLeg: Float = 4.5
     /// Weight of `score` in a roam goal's score (home rooms): the legs between emotes lean toward the spots emotes have used least, so most emotes need no walk of their own.
     static let roamWeight: Float = 0.6
     /// How far apart the two bodies of a pair stand on the meeting spot.
@@ -229,7 +229,7 @@ extension BlobBrain {
     /// The ring centre of a group: a spot every member can walk to (the ring plan checks the legs and the floor), clearly better than the centroid they stand round. nil = the centroid.
     func emoteGroupCentre(_ crew: [BlobBrain], here: SIMD2<Float>) -> SIMD2<Float>? {
         guard emoteSpotLive, crew.allSatisfy({ $0.homeRoom }) else { return nil }
-        if let c = emoteBestSpot(from: crew.map(\.position), maxLeg: EmoteSpot.pairLeg, here: here, ok: { _ in true }) { emoteNote(c); return c }
+        if let c = emoteBestSpot(from: crew.map(\.position), maxLeg: EmoteSpot.groupLeg, here: here, ok: { _ in true }) { emoteNote(c); return c }
         emoteNote(here)
         return nil
     }
