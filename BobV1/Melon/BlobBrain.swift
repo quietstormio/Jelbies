@@ -161,6 +161,9 @@ final class BlobBrain {
     var winCheer = false
     /// The ground spot (x, z) the win bounces over: taken at the first bounce, reused by every later one (a hop re-bases on the centroid otherwise; pinned so no bounce can add a step).
     var winSpot: SIMD2<Float>? = nil
+    var winRoot: SIMD2<Float>? = nil          // the standing root (px, pz) when the win began (nil = no standing pose then)
+    var winPitch0: Float = 0          // his idle tip-back (pitchBase) when the win began
+    var winLean = false          // the win's settle has handed the body to the standing pose
     /// The win at the strongest jiggle level: squash pulses with the feet planted instead of hops (a hop landing there makes the skin leash move a foot piece: RacePullFlowTests).
     var winFlat = false
     var winSettleT: Float = 0
