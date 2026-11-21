@@ -1416,13 +1416,32 @@ final class BlobBrain {
         let requested = job != nil || commanded || pending != nil
         let slideLeg = idleState.kind == .decorSlide && idleState.decorUID == ParkToys.slideUID && idleState.slideStage < 0          // (the way round the park slide: it gives a standing friend 2 s, then the leg is given up and planned the other way round, BlobBrain+Decor.swift)
         var forced = false; if let w = slideFootForceTo, case .goTo(let p)? = job, p == w { forced = true }          // (park-slide-r4: off the slide's foot after his longest wait: on past the friend, as a requested walk did after its 6 s)
-        let patience: Float = forced ? 0 : (requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6))
+        // a LYING body on the leg cannot step aside: a requested walk (the Come here call) did not set off for the whole 6 s of the standing patience (2026-11-21, come-here-r4: the walker stood 2.5 s before anything else moved him)
+        let sleeperOnly = Self.sleeperLegWait && requested && standing && !slideLeg && legBlockedOnlyBySleepers(root, target)
+        let patience: Float = forced ? 0 : (sleeperOnly ? 0.3 : (requested ? (standing ? (slideLeg ? 2.0 : 6) : 0.7) : (standing ? 1.0 : 0.6)))
         if steerWait < patience, peerOnLeg(root, target) { heldByPeer = true; return nil }
         if !requested || (slideLeg && standing), peerOnLeg(root, target) { heldByPeer = true; steerGiveUp = true; return nil }
         return target
     }
 
     var steerWait: Float = 0
+    /// The standing bodies on the straight leg a -> b are all asleep (nobody there who could be asked to step aside). False when none is on the leg. `sleeperLegWait` off = the earlier 6 s patience.
+    nonisolated(unsafe) static var sleeperLegWait = true
+    func legBlockedOnlyBySleepers(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+        let others = steerPeers().filter { $0.id > steerID }
+        guard !others.isEmpty else { return false }
+        let brains = socialOthers().filter { $0 !== self }
+        let d = b - a, n = max(2, Int(simd_length(d) / 0.1))
+        var any = false
+        for o in others {
+            var near = false
+            for i in 0...n { let p = a + d * (Float(i) / Float(n)); if simd_distance(o.pos, p) < socialGap(at: o.pos) { near = true; break } }
+            guard near else { continue }
+            any = true
+            guard let br = brains.min(by: { simd_distance($0.position, o.pos) < simd_distance($1.position, o.pos) }), simd_distance(br.position, o.pos) < 0.5, br.isSleeping else { return false }
+        }
+        return any
+    }
     /// park-slide-r4 (BlobBrain+SlideFoot.swift): the slide-foot walk he is on (its spot: a walk off the slide's foot, or a step-aside asked of him there), the spot he stands waiting
     /// to walk to (that walk was held by a friend on its leg) and since when (his `peerClock`). `heldByPeer`: this step's `steerTarget` held the walk for a friend on the leg.
     var slideFootWalkTo: SIMD2<Float>?

@@ -29,11 +29,12 @@ final class ComeHereSettleTests: XCTestCase {
         savedAnywhere = SleepTuning.anywhere
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero
         FocusGroup.sleeperFix = ProcessInfo.processInfo.environment["COMEHERE_BASE"] == nil
+        BlobBrain.sleeperLegWait = ProcessInfo.processInfo.environment["COMEHERE_OLDWAIT"] == nil          // (COMEHERE_OLDWAIT=1: the 6 s patience behind a lying body, for the before rows)
         FocusGroup.twoCornerMin = Float(ProcessInfo.processInfo.environment["COMEHERE_TWO"] ?? "") ?? 1.3          // (COMEHERE_BASE=1: the earlier behaviour, for the before table)
     }
     override func tearDown() {
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero; GameCamera.clearRoam()
-        SleepTuning.anywhere = savedAnywhere; FocusGroup.sleeperFix = true
+        SleepTuning.anywhere = savedAnywhere; FocusGroup.sleeperFix = true; BlobBrain.sleeperLegWait = true
         DayClock.shared.forcedHour = savedHour
         RoomLayout.dynamicBoxes = []; GameCamera.configureRoom(count: 1); _ = GameCamera.camera(aspect: 440.0 / 956.0); SleepOrder.reset()
     }
@@ -105,7 +106,7 @@ final class ComeHereSettleTests: XCTestCase {
                 for id in ids {
                     let b = r.actors[id].brain!, q = GameCare.floorPos(b, r.actors[id].sim), ap = g0.approach[id]
                     let near = g0.uncalled.map { simd_distance($0, q) }.min() ?? 99
-                    trace.append(String(format: "t%.1f j%d (%.1f,%.1f) d_spot %.1f d_obst %.1f act %@ come %d walk %d via %@ stuck %.1f det %d req %d arr %d", Float(tk) / 60, id, q.x, q.y, simd_distance(q, g0.spot(of: id)), near, "\(b.activity)", b.isCome ? 1 : 0, b.isWalkScript ? 1 : 0, ap?.via.map { String(format: "(%.1f,%.1f)", $0.x, $0.y) } ?? "-", ap?.stuckT ?? 0, ap?.detours ?? 0, (ap?.requested ?? false) ? 1 : 0, g0.arrived.contains(id) ? 1 : 0))
+                    trace.append(String(format: "t%.1f j%d (%.1f,%.1f) d_spot %.1f d_obst %.1f act %@ held %d wait %.1f come %d walk %d via %@ stuck %.1f det %d req %d arr %d", Float(tk) / 60, id, q.x, q.y, simd_distance(q, g0.spot(of: id)), near, "\(b.activity)", b.heldByPeer ? 1 : 0, b.steerWait, b.isCome ? 1 : 0, b.isWalkScript ? 1 : 0, ap?.via.map { String(format: "(%.1f,%.1f)", $0.x, $0.y) } ?? "-", ap?.stuckT ?? 0, ap?.detours ?? 0, (ap?.requested ?? false) ? 1 : 0, g0.arrived.contains(id) ? 1 : 0))
                 }
             }
             if r.care.focus.isFocused { ok = true; break }
