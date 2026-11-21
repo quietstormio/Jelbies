@@ -22,7 +22,7 @@ final class FocusGroup {
     /// The steering gap each row member had before the line-up (he keeps only the row's gap from the others while it is on: the slots are 1.15 apart, the room's gap is 1.4).
     var gapSaved: [Int: Float] = [:]
     static let rowSteerGap: Float = 1.05
-    struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var short = 0; var hopped = false; var onSlot: Float = 0; var via: SIMD2<Float>? = nil; var best: Float = .infinity; var stuckT: Float = 0; var detours = 0 }
+    struct Approach { var requested = false; var age: Float = 0; var calm: Float = 0; var retries = 0; var short = 0; var hopped = false; var onSlot: Float = 0; var via: SIMD2<Float>? = nil; var viaNext: SIMD2<Float>? = nil; var best: Float = .infinity; var stuckT: Float = 0; var detours = 0 }
     /// A come walk that ended SHORT of the spot (someone stood on it and the floor rules dragged the target over the gap: he turned to wave 1.4 u early) is
     /// re-asked at once, this many times at most, while the stander steps aside (`MelonController.clearWay`); not counted against the calm retries.
     static let shortRetries = 6
@@ -56,6 +56,7 @@ final class FocusGroup {
     /// The uncalled bodies' floor spots at the call (the row is laid clear of them; a walker detours round one that lies on his straight way), and Jelly 0's detour point.
     var uncalled: [SIMD2<Float>] = []
     var viaZero: SIMD2<Float>?
+    var viaZeroNext: SIMD2<Float>?
     var viaZeroAt: Float = 0
     var zeroBest: Float = .infinity, zeroStuck: Float = 0, zeroDetours = 0
     /// Smart line-up: the row's slots (0 = the middle), who has which, who is settled (within `Lineup.commitDistance` of his slot, or arrived), and the re-plan clock.
@@ -70,6 +71,7 @@ final class FocusGroup {
     /// safety net's clock waits for him (at most `sleepWait` s), so he is never "accepted" lying / half-risen behind another. Off (dev `-ComeHereOld 1`, simulator builds) = the earlier behaviour.
     nonisolated(unsafe) static var sleeperFix = !(DevArgs.enabled && UserDefaults.standard.integer(forKey: "ComeHereOld") == 1)
     static let sleepWait: Float = 6
+    nonisolated(unsafe) static var twoCornerMin: Float = 1.3
     /// Seconds the safety net's clock was held for a sleeper still waking.
     var netShift: Float = 0
     static let nearEnough: Float = 1.5, sidesWait: Float = 1.5
@@ -84,7 +86,7 @@ final class FocusGroup {
     var rowSpacing: Float = GameCamera.focusRowSpacing
 
     func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:], avoiding obstacles: [SIMD2<Float>] = [], reachable: @escaping (SIMD2<Float>) -> Bool = { _ in true }) {
-        ids = new; uncalled = obstacles; viaZero = nil; zeroBest = .infinity; zeroStuck = 0; zeroDetours = 0; arrived = []; clock = 0; netShift = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
+        ids = new; uncalled = obstacles; viaZero = nil; viaZeroNext = nil; zeroBest = .infinity; zeroStuck = 0; zeroDetours = 0; arrived = []; clock = 0; netShift = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
             let row = Self.rowAvoiding(count: new.count, spacing: rowSpacing, obstacles: obstacles, reachable: reachable)          // (the same expression a preview group is born on, moved aside only when an uncalled body would stand between or over them)
@@ -181,38 +183,67 @@ final class FocusGroup {
         return best?.spots ?? base
     }
 
-    /// A point to walk to first, when the straight way from `p` to `s` brushes past an uncalled body (a lying body is 1.8 across: two of them leave a slit a walker is pinned in, and a way round
-    /// one can lead through the bowls): the cheapest point `w` whose two legs both keep 1.3 from every uncalled body and stay on free floor. nil = the straight way is fine, or no point works.
-    static func detour(from p: SIMD2<Float>, to s: SIMD2<Float>, obstacles: [SIMD2<Float>], fixed: (SIMD2<Float>) -> SIMD2<Float>) -> SIMD2<Float>? {
-        func segClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+    /// A point to walk to first, when the straight way from `p` to `s` brushes past an uncalled body. A lying body is 1.8 across (2.07 along) and a walker 1.4: the way past needs about 1.7 from its
+    /// centre, so two lying bodies less than ~3.4 apart are a wall, not a slit a walker can use (r1 had them pin walkers at 1.3). The cheapest point `w` whose two legs both keep that clearance from every
+    /// uncalled body and stay on free floor; the clearance steps down 1.7, 1.5, 1.3 only when no point works. nil = the straight way is fine, or no point works.
+    static func detour(from p: SIMD2<Float>, to s: SIMD2<Float>, obstacles: [SIMD2<Float>], soft: [SIMD2<Float>] = [], fixed: (SIMD2<Float>) -> SIMD2<Float>) -> [SIMD2<Float>] {
+        guard simd_length(s - p) > 1.5, !obstacles.isEmpty else { return [] }
+        func segClear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ clr: Float) -> Bool {
             let d = b - a, len = simd_length(d)
             guard len > 1e-3 else { return true }
             let u = d / len
             for o in obstacles {
                 let t = min(max(simd_dot(o - a, u), 0), len)
-                if simd_length(o - (a + u * t)) < 1.3 { return false }
+                if simd_length(o - (a + u * t)) < clr { return false }
             }
             var t: Float = 0.1
-            while t < len { let q = a + u * t; if !FreeFloor.isFree(q, radius: 0.5) { return false }; t += 0.25 }
+            while t < len {
+                let q = a + u * t
+                if !FreeFloor.isFree(q, radius: 0.5) { return false }
+                if simd_distance(q, s) > 1.6, soft.contains(where: { simd_distance($0, q) < min(clr, 1.4) }) { return false }          // (a called neighbour who will be standing on his spot: not passed through, except in the last stretch to my own spot)
+                t += 0.2
+            }
             return true
         }
-        guard simd_length(s - p) > 1.5, !obstacles.isEmpty else { return nil }
         let dir = s - p, dl = simd_length(dir)
-        guard obstacles.contains(where: { o in let t = min(max(simd_dot(o - p, dir / dl), 0), dl); return simd_length(o - (p + dir / dl * t)) < 1.3 }) else { return nil }          // (nobody on the straight way: the usual walk)
-        var best: (SIMD2<Float>, Float)?
-        var x: Float = -2.2
-        while x <= 2.2001 {
-            var z: Float = -2.0
-            while z <= 3.0001 {
-                let w = SIMD2<Float>(x, z)
-                z += 0.25
-                guard simd_distance(fixed(w), w) < 0.15, obstacles.allSatisfy({ simd_distance($0, w) >= 1.5 }), segClear(p, w), segClear(w, s) else { continue }
-                let cost = simd_distance(p, w) + simd_distance(w, s)
-                if cost < (best?.1 ?? .infinity) { best = (w, cost) }
+        guard obstacles.contains(where: { o in let t = min(max(simd_dot(o - p, dir / dl), 0), dl); return simd_length(o - (p + dir / dl * t)) < 1.7 }) || !segClear(p, s, 1.7) else { return [] }          // (nobody in the way: the usual walk)          // (nobody on the straight way: the usual walk)
+        for clr: Float in [1.7, 1.5, 1.3] {
+            var best: (SIMD2<Float>, Float)?
+            var x: Float = -2.2
+            while x <= 2.2001 {
+                var z: Float = -2.0
+                while z <= 3.0001 {
+                    let w = SIMD2<Float>(x, z)
+                    z += 0.25
+                    guard simd_distance(fixed(w), w) < 0.15, obstacles.allSatisfy({ simd_distance($0, w) >= clr + 0.1 }), segClear(p, w, clr), segClear(w, s, clr) else { continue }
+                    let cost = simd_distance(p, w) + simd_distance(w, s)
+                    if cost < (best?.1 ?? .infinity) { best = (w, cost) }
+                }
+                x += 0.25
             }
-            x += 0.25
+            if let b = best { return [b.0] }
+            // two corners (along the back wall, then up the side): both legs and the last one clear (not through a gap tighter than `twoCornerMin`: walkers are pushed off those)
+            guard clr >= twoCornerMin, !soft.isEmpty else { continue }          // (a row only: for one called body the corner walks pinned him at ~1.5 from the lying body, 10 of 20 against 5 without them)
+            var cand: [SIMD2<Float>] = []
+            var cx: Float = -2.2
+            while cx <= 2.2001 {
+                var cz: Float = -2.0
+                while cz <= 3.0001 {
+                    let w = SIMD2<Float>(cx, cz); cz += 0.5
+                    if simd_distance(fixed(w), w) < 0.15, obstacles.allSatisfy({ simd_distance($0, w) >= clr + 0.1 }) { cand.append(w) }
+                }
+                cx += 0.5
+            }
+            var best2: ([SIMD2<Float>], Float)?
+            for a in cand where segClear(p, a, clr) {
+                for b in cand where b != a && segClear(a, b, clr) && segClear(b, s, clr) {
+                    let cost = simd_distance(p, a) + simd_distance(a, b) + simd_distance(b, s)
+                    if cost < (best2?.1 ?? .infinity) { best2 = ([a, b], cost) }
+                }
+            }
+            if let b = best2 { return b.0 }
         }
-        return best?.0
+        return []
     }
 
     /// Smart line-up, once per fixed step while approaching: settle whoever is near his slot, re-plan the rest. Returns the Jellies whose spot changed.
@@ -241,7 +272,7 @@ final class FocusGroup {
     }
 
     func clear() {
-        ids = []; uncalled = []; viaZero = nil; spots = [:]; slots = []; slotOf = [:]; committed = []; arrived = []; clock = 0; zeroPending = false; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; rowOpen = false; touchAnchor = nil; touchID = 0
+        ids = []; uncalled = []; viaZero = nil; viaZeroNext = nil; spots = [:]; slots = []; slotOf = [:]; committed = []; arrived = []; clock = 0; zeroPending = false; saved = [:]; approach = [:]; evictT = [:]; koCache = nil; rowOpen = false; touchAnchor = nil; touchID = 0
         GameCamera.focusSpots = []; GameCamera.focusFramed = []
     }
 }
@@ -302,7 +333,7 @@ extension GameCare {
         }
         if ids.contains(0) {
             if focusGroup.mayGo(0, frontDistance: nil), !zeroAsleep {
-                if FocusGroup.sleeperFix, let b0 = brainFor(0), let v = FocusGroup.detour(from: b0.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, fixed: { b0.fixed($0) }) { focusGroup.viaZero = v; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(v)] }
+                if FocusGroup.sleeperFix, let b0 = brainFor(0), case let path = FocusGroup.detour(from: b0.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, soft: focusGroup.ids.filter { $0 != 0 }.map { focusGroup.spot(of: $0) }, fixed: { b0.fixed($0) }), let v = path.first { focusGroup.viaZero = v; focusGroup.viaZeroNext = path.count > 1 ? path[1] : nil; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(v)] }
                 else { queued = [.come(to: focusGroup.spot(of: 0))] }
             } else { focusGroup.zeroPending = true }
         }
@@ -402,13 +433,16 @@ extension GameCare {
                 guard g.mayGo(id, frontDistance: frontDistance(except: id)) else { return }
                 s.requested = true; s.age = 0
                 brain.onFinished = { [weak g] r in if case .come = r { g?.came.insert(id) } }
-                if FocusGroup.sleeperFix, let v = FocusGroup.detour(from: Self.floorPos(brain, sim), to: g.spot(of: id), obstacles: g.uncalled, fixed: { brain.fixed($0) }) { s.via = v; brain.requestNow(.goTo(v)) }
+                if FocusGroup.sleeperFix, case let path = FocusGroup.detour(from: Self.floorPos(brain, sim), to: g.spot(of: id), obstacles: g.uncalled, soft: g.ids.filter { $0 != id }.map { g.spot(of: $0) }, fixed: { brain.fixed($0) }), let v = path.first { s.via = v; s.viaNext = path.count > 1 ? path[1] : nil; brain.requestNow(.goTo(v)) }
                 else { brain.requestNow(.come(to: g.spot(of: id))) }
                 return
             }
             s.age += dt
             if let v = s.via {          // walking round an uncalled body first, then to his spot
-                if simd_length(Self.floorPos(brain, sim) - v) < 0.6 || s.age > 5 { s.via = nil; s.age = 0; s.short = 0; s.best = .infinity; s.stuckT = 0; brain.requestNow(.come(to: g.spot(of: id))) }
+                if simd_length(Self.floorPos(brain, sim) - v) < 0.6 || s.age > 5 {
+                    if let n = s.viaNext { s.via = n; s.viaNext = nil; s.age = 0; brain.requestNow(.goTo(n)) }
+                    else { s.via = nil; s.age = 0; s.short = 0; s.best = .infinity; s.stuckT = 0; brain.requestNow(.come(to: g.spot(of: id))) }
+                }
                 return
             }
             // pinned (a lying body's keep-apart holds him short of his spot): walk round it from where he stands, at most three times
@@ -417,7 +451,8 @@ extension GameCare {
                 if dNow < s.best - 0.05 { s.best = dNow; s.stuckT = 0 } else { s.stuckT += dt }
                 if s.stuckT > 2, s.detours < 3, dNow > 0.5 {
                     s.stuckT = 0; s.detours += 1
-                    if let v = FocusGroup.detour(from: hereNow, to: g.spot(of: id), obstacles: g.uncalled, fixed: { brain.fixed($0) }) { s.via = v; s.age = 0; brain.requestNow(.goTo(v)); return }
+                    let path = FocusGroup.detour(from: hereNow, to: g.spot(of: id), obstacles: g.uncalled, soft: g.ids.filter { $0 != id }.map { g.spot(of: $0) }, fixed: { brain.fixed($0) })
+                    if let v = path.first { s.via = v; s.viaNext = path.count > 1 ? path[1] : nil; s.age = 0; brain.requestNow(.goTo(v)); return }
                 }
             }
             // standing on his slot and still = arrived (the turn and the wave play AFTER arrival, they do not gate it)

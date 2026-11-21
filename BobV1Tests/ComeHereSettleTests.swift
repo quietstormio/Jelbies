@@ -28,7 +28,8 @@ final class ComeHereSettleTests: XCTestCase {
         DayClock.shared.forcedHour = 23          // (night: bedtime hours; the day-nap variants set their own)
         savedAnywhere = SleepTuning.anywhere
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero
-        FocusGroup.sleeperFix = ProcessInfo.processInfo.environment["COMEHERE_BASE"] == nil          // (COMEHERE_BASE=1: the earlier behaviour, for the before table)
+        FocusGroup.sleeperFix = ProcessInfo.processInfo.environment["COMEHERE_BASE"] == nil
+        FocusGroup.twoCornerMin = Float(ProcessInfo.processInfo.environment["COMEHERE_TWO"] ?? "") ?? 1.3          // (COMEHERE_BASE=1: the earlier behaviour, for the before table)
     }
     override func tearDown() {
         HUDLayout.measuredSize = .zero; HUDLayout.measuredInsets = .zero; GameCamera.clearRoam()
@@ -93,10 +94,19 @@ final class ComeHereSettleTests: XCTestCase {
         var res = Result()
         var t: Float = 0
         var ok = false
+        var trace: [String] = []
         for tk in 0..<(30 * 60) {
             r.tick(); t += 1.0 / 60
             if tk % 6 == 0, hud != nil {
                 for id in ids { let q = GameCare.floorPos(r.actors[id].brain!, r.actors[id].sim); let c = GameCamera.constrain(SIMD3(q.x, 0, q.y), radius: 0.7); if simd_distance(SIMD2(c.x, c.z), q) > 0.05 { Self.snaps += 1 } }
+            }
+            if tk % 30 == 0 {          // a trace of every called body twice a second (printed only for a failing run)
+                let g0 = r.care.focusGroup
+                for id in ids {
+                    let b = r.actors[id].brain!, q = GameCare.floorPos(b, r.actors[id].sim), ap = g0.approach[id]
+                    let near = g0.uncalled.map { simd_distance($0, q) }.min() ?? 99
+                    trace.append(String(format: "t%.1f j%d (%.1f,%.1f) d_spot %.1f d_obst %.1f act %@ come %d walk %d via %@ stuck %.1f det %d req %d arr %d", Float(tk) / 60, id, q.x, q.y, simd_distance(q, g0.spot(of: id)), near, "\(b.activity)", b.isCome ? 1 : 0, b.isWalkScript ? 1 : 0, ap?.via.map { String(format: "(%.1f,%.1f)", $0.x, $0.y) } ?? "-", ap?.stuckT ?? 0, ap?.detours ?? 0, (ap?.requested ?? false) ? 1 : 0, g0.arrived.contains(id) ? 1 : 0))
+                }
             }
             if r.care.focus.isFocused { ok = true; break }
         }
@@ -154,6 +164,7 @@ final class ComeHereSettleTests: XCTestCase {
             let zs = ids.map { GameCare.floorPos(r.actors[$0].brain!, r.actors[$0].sim).y }
             if (zs.max()! - zs.min()!) > 0.7 { res.fails.append("not one row (z spread \(String(format: "%.2f", zs.max()! - zs.min()!)))") }
         }
+        if !res.fails.isEmpty { for l in trace { print("COMEHERE-TRACE | seed \(seed) | \(l)") } }
         if !res.fails.isEmpty {
             let f: (SIMD2<Float>) -> String = { String(format: "(%.1f,%.1f)", $0.x, $0.y) }
             res.fails.append("[spots " + ids.map { f(g.spot(of: $0)) }.joined(separator: " ") + " | start " + startFloors.map(f).joined(separator: " ") + " | final " + (0..<n).map { f(GameCare.floorPos(r.actors[$0].brain!, r.actors[$0].sim)) }.joined(separator: " ") + "]")
@@ -298,5 +309,14 @@ final class ComeHereSettleTests: XCTestCase {
     }
     func testHUDLandscapeCallTwoThirdAsleepAtTheRugCentre() {
         table("HUD landscape: call two (0,1), the third asleep at the rug centre", called: [0, 1], aspect: 956 / 440, hud: .landscape) { r, _, s in self.put(r, 2, at: SIMD2(0, 0), seed: s); self.sleepNow(r, 2) }
+    }
+
+    /// The five rows that still failed (r1): run alone while iterating.
+    func testPinnedRowsOnly() {
+        table("PIN call one (1), the other two asleep (middle + side)", called: [1]) { r, _, s in self.put(r, 0, at: SIMD2(0, 0.4), seed: s); self.sleepNow(r, 0); self.put(r, 2, at: SIMD2(-2.1, 2.0), seed: s); self.sleepNow(r, 2) }
+        table("PIN call two (0,1), the third asleep at the front middle", called: [0, 1]) { r, _, s in self.put(r, 2, at: SIMD2(0, 1.6), seed: s); self.sleepNow(r, 2) }
+        table("PIN call two (1,2), Bob (0) asleep at the rug centre", called: [1, 2]) { r, _, s in self.put(r, 0, at: SIMD2(0, 0.4), seed: s); self.sleepNow(r, 0) }
+        table("PIN HUD portrait front middle", called: [0, 1], hud: .portrait) { r, _, s in self.put(r, 2, at: SIMD2(0, 1.8), seed: s); self.sleepNow(r, 2) }
+        table("PIN HUD landscape front middle", called: [0, 1], aspect: 956 / 440, hud: .landscape) { r, _, s in self.put(r, 2, at: SIMD2(0, 1.8), seed: s); self.sleepNow(r, 2) }
     }
 }
