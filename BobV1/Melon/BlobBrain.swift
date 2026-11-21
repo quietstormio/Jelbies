@@ -72,6 +72,8 @@ final class BlobBrain {
     var footprint: Float = 0.55
     /// The decor piece (uid) he is about to use and may therefore stand inside (the beanbag he sits in, the mat he hops on); nil = every solid piece is a wall.
     var decorIgnore: Int?
+    /// park-hopscotch-r1: seconds he has stood still at the court's edge while a game is on (`hopNoRestCheck`).
+    var hopRestT: Float = 0
     /// Seconds he has stood inside a solid piece's footprint (see `decorExitCheck`).
     var insideDecorT: Float = 0
     /// How long he has been inside a solid piece's footprint without getting out (the walk-out can find no route from inside a piece): after a few seconds `decorExitCheck` eases him out itself.
@@ -155,6 +157,11 @@ final class BlobBrain {
     var expr = ExpressionState()
     var leg = LegState()
     var joyWanted = false, joyAge: Float = 0
+    /// The WIN celebration (BlobBrain+Win.swift): set before `.joy` starts, the jump for joy then runs as four tall bounces with the arms held up and a settle. Cleared by `idleEnd`.
+    var winCheer = false
+    /// The win at the strongest jiggle level: squash pulses with the feet planted instead of hops (a hop landing there makes the skin leash move a foot piece: RacePullFlowTests).
+    var winFlat = false
+    var winSettleT: Float = 0
     var hmphWanted = false, hmphAge: Float = 0
     var react = ReactState()
     var startingReaction = false
@@ -254,6 +261,8 @@ final class BlobBrain {
     var sleepBound = false
     /// A race trip is asked or running: no bedtime for anybody (GameCare sets it on every brain).
     var sleepLocked = false
+    /// race-depart-r2: a race is on its way (or on): nobody is put to bed. A separate flag from `sleepLocked`, which also holds back new antics, toys and passes: only the racer is held by that one.
+    var bedtimeLocked = false
     /// The park outing is playing: decor, toys, hopscotch and bubbles stay open to this Jelbie although `sleepLocked` holds sleep off (GameCare+Park.swift sets it every step).
     var outingPlay = false
     /// The park's pick roll said no to this piece on the last start attempt (so a notice does not queue him at it).
@@ -501,7 +510,7 @@ final class BlobBrain {
         let b = BlobBrain()
         b.followsStudioCamera = false
         b.cameraPosXZ = SIMD2(GameCamera.eye.x, GameCamera.eye.z)
-        b.resolve = { [weak b] p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b?.decorIgnore) }      // the tray is low: only his base keeps off it
+        b.resolve = { [weak b] p, r in GameCamera.constrain(p, radius: r, lowPropScale: RoomLayout.lowPropRadiusScale, ignoreDecor: b?.decorIgnore ?? b?.hopPass) }      // the tray is low: only his base keeps off it
         b.footprint = 0.7
         b.wanderRect = GameCamera.roamRect
         b.wanderRectWide = GameCamera.roamRectWide
@@ -733,7 +742,7 @@ final class BlobBrain {
         if commandedFlip { commandedFlip = false; startCommandedFlip(sim, skinner) }
         if let d = commandedDecor { commandedDecor = nil; startCommandedDecor(d.kind, only: d.only, sim, skinner) }
         if commandedNameHop { commandedNameHop = false; startNameHop(sim, skinner) }
-        if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked { startGoodnight(sim, skinner) } }          // (never during a race)
+        if commandedGoodnight { commandedGoodnight = false; if !race.active && !sleepLocked && !bedtimeLocked { startGoodnight(sim, skinner) } }          // (never during a race)
         contactSim = sim
         if let s = social, s.idA == steerID, s.end == nil { contactStanceTick(s) }
         sleepPileTick()          // the stance table (ContactStance.swift): the session's initiator holds the pair, every tick, before any move (hop, bounce, jacks) takes the body
@@ -952,7 +961,7 @@ final class BlobBrain {
                 let raw = cand
                 let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); cand = SIMD2(rv.x, rv.z)
                 let d = simd_length(cand - here)
-                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) && reachable(here, cand) else { continue }
+                guard d > 0.8 && d < idleLegMax(maxWanderLeg) && peerFree(cand) && !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest) && reachable(here, cand) else { continue }
                 // a goal the floor rules had to drag in (off the frame / onto a prop) piles up at the edges: take real floor first, the dragged one only as a fallback
                 if wanderRectWide != nil || wanderRect != nil, simd_length(cand - raw) > 0.15 { fallback = fallback ?? cand; continue }
                 target = cand; fallback = nil; break
@@ -1016,7 +1025,7 @@ final class BlobBrain {
             let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
             if loneBack, RoomTraffic.loneBackDrop(cand.y, rand()) { continue }          // (T8: `rand()` is drawn only while T8 is live, so every other case keeps its numbers)
             let d = simd_length(cand - here)
-            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
+            guard simd_length(cand - raw) < 0.15, d > lo, d < maxL, peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }          // (r4: not a leg that ends on the park slide's foot)
             var nearest: Float = 5
             for o in others {
                 nearest = min(nearest, simd_distance(o.position, cand))
@@ -1082,6 +1091,7 @@ final class BlobBrain {
     }
 
     func abortAll(_ sim: SoftBody, _ skinner: Skinner) {
+        winCheer = false; winFlat = false; winSettleT = 0          // (a win asked but not yet started goes with everything else: BlobBrain+Win.swift)
         let wasLying = isLying || trickTipped
         if poseW > 0.2 { for i in sim.v.indices { sim.v[i] *= 0.25 } }       // dropped mid-stride: no carried-over momentum (he stays where he was stopped)
         mouthOpen = 0

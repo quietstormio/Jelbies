@@ -642,6 +642,11 @@ final class RaceTripTests: XCTestCase {
     final class Room {
         let care: GameCare
         let actors: [JellyActor]
+        /// race-depart-r2: the stage's spare "park" bodies (what `parkBook.spawn` hands out for the race's rivals). Off by default: most classes run the race on the fallback path (the housemates'
+        /// own bodies are the rivals, as a headless host with no spawner does); `spawns = true` gives the production path (visitor rivals, the housemates stay home).
+        var park: [JellyActor] = []
+        var spawns = false
+        var runsOut = false          // tick the groomer glue too, so a race's departure has its run-out (the stage does)
         var t: Float = 0
         init(count: Int = 3) {
             let d = UserDefaults(suiteName: "RaceTrip.\(UUID().uuidString)")!
@@ -665,18 +670,39 @@ final class RaceTripTests: XCTestCase {
                 return a
             }
             care.race.cue = { _ in }
+            care.parkBook.spawn = { [unowned self] specs, spots in
+                guard self.spawns else { return [] }
+                self.park.removeAll()
+                for (k, v) in specs.enumerated() {
+                    let a = JellyActor(id: self.actors.count + k, name: v.name, simMesh: sm, renderMesh: rm, embedding: emb, appearance: .berry, firmness: 0.95, damping: 0.45, spawn: spots[k])
+                    a.care = care
+                    let b = BlobBrain.forGame()
+                    b.demo = nil; b.runMoveDemo = nil; b.autonomy = true
+                    b.steerID = a.id
+                    care.wireWorld(b, isBob: false)
+                    b.attach(renderMesh: rm, synchronous: true)
+                    a.brain = b
+                    b.feature = v.signature
+                    b.currentPose(a.sim)
+                    self.park.append(a)
+                }
+                return self.park
+            }
+            care.parkBook.clear = { [unowned self] in self.park.removeAll() }
             for _ in 0..<120 { step() }
         }
         func step() {
             let dt = actors[0].sim.stepDt
-            for a in actors {
+            for a in actors + park {
+                if a.id < actors.count, care.raceHides(a.id) { continue }          // (a housemate away while the track is up is not ticked, as the stage does)
                 a.brain?.tick(sim: a.sim, skinner: a.skinner, dt: dt, touched: false)
                 a.skinner.jelly.tick(brain: a.brain!, sim: a.sim, dt: dt)
             }
             care.tick(brain: actors[0].brain!, renderer: nil, dt: dt, sim: actors[0].sim)
             care.tickOthers(actors, dt: dt)
             care.tickRace(actors, dt: dt)
-            for a in actors { a.sim.step() }
+            if runsOut { care.tickGroom(actors, dt: dt) }
+            for a in actors + park where !(a.id < actors.count && care.raceHides(a.id)) { a.sim.step() }
             t += dt
         }
         func run(_ s: Float, until: (() -> Bool)? = nil) { for _ in 0..<Int(s * 60) { step(); if let u = until, u() { break } } }
@@ -684,6 +710,7 @@ final class RaceTripTests: XCTestCase {
 
     func testTheWholeTripWithThreeBodies() {
         let room = Room()
+        room.spawns = true          // race-depart-r2: the rivals are visitor bodies, the two housemates stay home
         Self.keep.append(room)
         let care = room.care
         // a quick player and slow rivals, auto-tapped, back home by itself
@@ -692,6 +719,7 @@ final class RaceTripTests: XCTestCase {
         care.race.autoRate = 8; care.race.autoReturnAfter = 0.5
         XCTAssertTrue(care.canRace(jelly: 1), "Race is offered for the picked Jelly")
         let homes = room.actors.map(\.floor)
+        let atTheTap = [0, 2].map { room.actors[$0].floor }
         let waddleBefore = care.jelly(1)!.stats.waddle
         let dropsBefore = care.bath.wallet.count
         care.startRace(jelly: 1, seed: 11)
@@ -702,21 +730,26 @@ final class RaceTripTests: XCTestCase {
         XCTAssertTrue(care.race.trackVisible); XCTAssertEqual(care.race.cameraBlend, 1)
         XCTAssertEqual(care.race.swapLog.last?.wipe, 1, "swapped under a fully opaque white")
         XCTAssertEqual(care.raceBook.racers.first, 1, "the picked Jelly races in the player's place")
-        XCTAssertEqual(Set(care.raceBook.racers), [0, 1, 2], "the two others' bodies are the rivals")
-        XCTAssertNotNil(care.racePalette(for: 0)); XCTAssertNotNil(care.racePalette(for: 2)); XCTAssertNil(care.racePalette(for: 1), "the player keeps his own colours")
+        XCTAssertEqual(care.raceBook.racers.count, 3, "three on the track")
+        XCTAssertEqual(Set(care.raceBook.racers), [1, 3, 4], "the player and two visitor bodies race; the two housemates are not on the track")
+        for rv in care.raceBook.racers.dropFirst() { XCTAssertNotNil(care.racePalette(for: rv), "rival body \(rv) is tinted") }
+        for h in [0, 2] { XCTAssertNil(care.racePalette(for: h), "housemate \(h) is never repainted"); XCTAssertTrue(care.raceHides(h), "housemate \(h) is away while the track is up") }
+        XCTAssertNil(care.racePalette(for: 1), "the player keeps his own colours")
+        let all = room.actors + room.park
         for (k, aid) in care.raceBook.racers.enumerated() {
-            let c = room.actors[aid].sim.centroid()
+            let c = all[aid].sim.centroid()
             XCTAssertEqual(c.x, RaceTuning.laneX(care.race.sim!.racers[k].lane), accuracy: 0.35, "racer \(k) on his lane")
             XCTAssertEqual(c.z, RaceTuning.startZ, accuracy: 0.4, "on the start line")
-            XCTAssertTrue(room.actors[aid].brain!.race.active)
-            XCTAssertEqual(room.actors[aid].sim.arenaRadius, .infinity, "no room fence out there")
+            XCTAssertTrue(all[aid].brain!.race.active)
+            XCTAssertEqual(all[aid].sim.arenaRadius, .infinity, "no room fence out there")
         }
+        for h in [0, 2] { XCTAssertFalse(room.actors[h].brain!.race.active, "housemate \(h) never runs the race script"); XCTAssertEqual(room.actors[h].sim.arenaRadius, GameCamera.arenaRadius, accuracy: 1e-3, "his fence stays") }
         // countdown, race
         room.run(8, until: { care.race.sim?.phase == .running })
         XCTAssertEqual(care.race.sim?.phase, .running)
-        let z0 = care.raceBook.racers.map { room.actors[$0].brain!.pz }
+        let z0 = care.raceBook.racers.map { all[$0].brain!.pz }
         room.run(3)
-        for (k, aid) in care.raceBook.racers.enumerated() { XCTAssertGreaterThan(room.actors[aid].brain!.pz, z0[k] + 1.0, "racer \(k) is running toward the camera") }
+        for (k, aid) in care.raceBook.racers.enumerated() { XCTAssertGreaterThan(all[aid].brain!.pz, z0[k] + 1.0, "racer \(k) is running toward the camera") }
         room.run(40, until: { care.race.hasResults })
         XCTAssertTrue(care.race.hasResults)
         XCTAssertEqual(care.race.sim?.playerPlace, 1, "the quick player won")
@@ -727,13 +760,15 @@ final class RaceTripTests: XCTestCase {
         room.run(10, until: { !care.race.active })
         XCTAssertFalse(care.race.active)
         XCTAssertEqual(care.race.cameraBlend, 0); XCTAssertEqual(care.race.wipe, 0)
-        for a in room.actors { XCTAssertFalse(a.brain!.race.active); XCTAssertEqual(a.sim.arenaRadius, GameCamera.arenaRadius, accuracy: 1e-3) }
+        for a in room.actors { XCTAssertFalse(a.brain!.race.active); XCTAssertEqual(a.sim.arenaRadius, GameCamera.arenaRadius, accuracy: 1e-3); XCTAssertFalse(care.raceHides(a.id), "everybody is back in the room") }
+        XCTAssertTrue(room.park.isEmpty, "the visitor rivals are given back")
         XCTAssertNil(care.racePalette(for: 0))
         // the returner is at the front spot; the others are home and on their way over to greet him
         XCTAssertEqual(care.raceBook.returner, 1)
         let c = room.actors[1].sim.centroid()
-        XCTAssertEqual(SIMD2(c.x, c.z).x, VoiceCoordinator.comeSpot.x, accuracy: 0.5)
-        XCTAssertEqual(SIMD2(c.x, c.z).y, VoiceCoordinator.comeSpot.y, accuracy: 0.5)
+        // (race-depart-r2: the housemates never left, so the returner lands at the front spot unless one of them is standing right there; then he takes the nearest free spot beside it)
+        XCTAssertLessThan(simd_distance(SIMD2(c.x, c.z), VoiceCoordinator.comeSpot), 2.6, "the returner is at the front, near the come spot")
+        for h in [0, 2] { XCTAssertGreaterThan(simd_distance(SIMD2(c.x, c.z), room.actors[h].floor), 0.5, "he did not land on housemate \(h)") }
         XCTAssertEqual(care.greetSpotNow(1), VoiceCoordinator.comeSpot)
         XCTAssertNotEqual(care.greetSpotNow(0), care.greetSpotNow(2), "the two greeters fan out behind him")
         let spots = [0: care.greetSpotNow(0), 2: care.greetSpotNow(2)]

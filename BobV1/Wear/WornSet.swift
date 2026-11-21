@@ -149,7 +149,7 @@ final class WornSet {
     // MARK: tick
 
     /// Once per fixed step for Jelly `id`.
-    func tick(id: Int, brain: BlobBrain, sim: SoftBody, outfit: [WearSlot: WearLook], role: WearRaceRole, hideAll: Bool, dt: Float) {
+    func tick(id: Int, brain: BlobBrain, sim: SoftBody, outfit: [WearSlot: WearLook], role: WearRaceRole, hideAll: Bool, instant: Bool = false, dt: Float) {
         while slots.count <= id { slots.append(Slot()) }
         var s = slots[id]
         let pose = sim.bodyPose(iterations: 3)
@@ -168,7 +168,7 @@ final class WornSet {
             var it = s.items[slot] ?? Item()
             let hide = hideAll || (!ignoreHide && (want.map { Self.hidden($0, brain) } ?? false))
             let desired = hide ? nil : want
-            if hideAll || !s.primed {                                // the wash / the first frame: no puff, just there or not
+            if hideAll || instant || !s.primed {                     // the wash / the first frame / coming home from the track: no puff, just there or not
                 it.look = desired; it.phase = desired == nil ? .hidden : .shown; it.scale = desired == nil ? 0 : 1; it.t = 0
             } else {
                 step(&it, desired: desired, dt: dt, spawn: { [self] in spawnPuff(id: id, look: $0, carry: s.carry); burst = true })

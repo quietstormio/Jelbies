@@ -23,6 +23,10 @@ final class RaceBook {
     var racers: [Int] = []
     /// The bodies that are on the track right now (set by the swap to the track, cleared by the swap home): only they wear a rival's numbered bib (`wearRole`).
     var onTrack: Set<Int> = []
+    /// race-depart-r2: the track is on screen and the rivals are separate (visitor) bodies, so the housemates are away: hidden, not stepped, not ticked, exactly as they were (`raceHides`).
+    var roomAway = false
+    /// Housemates that were away (their wear / features come back at once, no pop-in, on the first step they are home).
+    var wasAway: Set<Int> = []
     var homes: [Int: SIMD2<Float>] = [:]
     var autonomy: [Int: Bool] = [:]
     var arena: [Int: Float] = [:]
@@ -135,13 +139,18 @@ extension GameCare {
 
     /// Takes Jelly `id` to the track.
     func startRace(jelly id: Int, seed: UInt64? = nil) {
+        #if targetEnvironment(simulator)
+        RaceDepartProbe.mark("startRace jelly=\(id)")
+        #endif
         if let why = raceBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
         // A Jelly that is asleep (or going to bed) rolls back up first; the trip starts once everybody is on their feet.
-        let sleepers = raceBook.actors.compactMap { $0.brain }.filter { $0.isSleeping }
+        // race-depart-r2: only the racer is woken and waited for; a housemate who sleeps stays asleep (he is never touched, the rivals are visitor bodies)
+        let sleepers = raceBook.actors.filter { $0.id == id }.compactMap { $0.brain }.filter { $0.isSleeping }
         if !sleepers.isEmpty {
             for b in sleepers { b.commandedGoodnight = false; b.sleepWake(groggy: false, fast: true) }
             raceWait = RaceWait(id: id, seed: seed)
-            for a in raceBook.actors { a.brain?.sleepLocked = true }
+            for b in sleepers { b.sleepLocked = true }
+            for a in raceBook.actors { a.brain?.bedtimeLocked = true }          // (nobody is put to bed while the racer is being woken: the lock is on this very step, not at the next tick)
             return
         }
         beginRace(jelly: id, seed: seed)
@@ -156,7 +165,7 @@ extension GameCare {
         cutWelcomeHome()
         queued.removeAll(); callRunning = false
         voice.cancel()
-        if outingGate([id], again: { [weak self] in self?.beginRace(jelly: id, seed: seed) }) { return }          // he runs out of the room first (GameCare+Outing.swift)
+        if outingGate([id], cheer: false, again: { [weak self] in self?.beginRace(jelly: id, seed: seed) }) { return }          // he runs out of the room first (GameCare+Outing.swift)
         let rivals = Self.raceRivalCount          // always two rivals: a short roster borrows temporary bodies for them at the track (raceSwap)
         race.stats = prof.stats
         race.playerCharacter = prof.character
@@ -199,10 +208,15 @@ extension GameCare {
             guard let sim = race.sim else { return }
             let player = race.playerID
             let others = book.actors.indices.filter { $0 != player }
-            raceSpawnExtras(missing: max(sim.racers.count - 1 - others.count, 0), from: race.rivals.count - max(sim.racers.count - 1 - others.count, 0))
-            book.racers = ([player] + others + book.extra.map(\.id)).prefix(sim.racers.count).map { $0 }
+            // race-depart-r2: the rivals are always separate visitor bodies (the same names, tints, signatures and species the borrowed housemate bodies showed), so the housemates stay in the
+            // room untouched (hidden while the track is up, never woken, scripted or moved). Only a headless host with no body spawner falls back to borrowing the housemates.
+            raceSpawnRivalBodies(count: sim.racers.count - 1, housemates: others)
+            let separate = !book.extra.isEmpty && book.extra.count == sim.racers.count - 1
+            if !separate { raceSpawnExtras(missing: max(sim.racers.count - 1 - others.count, 0), from: race.rivals.count - max(sim.racers.count - 1 - others.count, 0)) }
+            book.racers = ((separate ? [player] : [player] + others) + book.extra.map(\.id)).prefix(sim.racers.count).map { $0 }
             book.palettes = [:]; book.homes = [:]; book.autonomy = [:]; book.arena = [:]
-            book.parked = book.actors.indices.filter { !book.racers.contains($0) }
+            book.parked = separate ? [] : book.actors.indices.filter { !book.racers.contains($0) }
+            book.roomAway = separate
             let all = book.actors + book.extra          // (bodies are indexed by id: the roster's, then the temporary rivals')
             for aid in book.parked {                 // practising alone: the others wait far off the track, and come back where they stood
                 let a = book.actors[aid]
@@ -236,8 +250,10 @@ extension GameCare {
             }
         case .room:
             raceRemoveExtras()
+            book.roomAway = false
             let c = VoiceCoordinator.comeSpot
             var taken: [SIMD2<Float>] = [c]
+            let atHome = book.actors.filter { $0.id != race.playerID && !book.racers.contains($0.id) && !book.parked.contains($0.id) }.map(\.floor)          // (housemates who never left: the returner must not land on one)
             for aid in book.racers + book.parked where book.actors.indices.contains(aid) {
                 let a = book.actors[aid]
                 guard let brain = a.brain else { continue }
@@ -248,6 +264,9 @@ extension GameCare {
                 var spot = aid == race.playerID ? c : (book.homes[aid] ?? Self.greetSpot(aid))
                 if aid != race.playerID, taken.contains(where: { simd_distance($0, spot) < 1.5 }) {
                     spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !taken.contains { simd_distance($0, s) < 1.5 } } ?? spot
+                }
+                if aid == race.playerID, atHome.contains(where: { simd_distance($0, spot) < 0.75 }) {
+                    spot = [SIMD2<Float>(-1.6, 0.4), SIMD2(1.6, 0.4), SIMD2(0, -1.0), SIMD2(-1.8, -1.2)].first { s in !atHome.contains { simd_distance($0, s) < 1.2 } } ?? spot
                 }
                 spot = brain.fixed(spot)          // never back inside a piece of decor put down while he was away (the floor rules push him out)
                 taken.append(spot)
@@ -264,6 +283,44 @@ extension GameCare {
             book.follow = nil
         }
     }
+
+    /// race-depart-r2: the two rivals are always visitor bodies (the stage's `parkActors`), spawned for the trip and given back at the end. Each looks like the housemate body that played that
+    /// rival before (his species and species feature, so a repainted winged Lavender still has wings), the rest as `raceSpawnExtras` always did (the feature of the rival's colour; a friend who is
+    /// over lends the first of those). Names, tints and jerseys come from the race's rivals exactly as before. Does nothing when the stage cannot spawn bodies (a headless host).
+    private func raceSpawnRivalBodies(count: Int, housemates: [Int]) {
+        let book = raceBook
+        guard count > 0, book.extra.isEmpty, let spawn = parkBook.spawn, race.rivals.count >= count else { return }
+        let borrowed = min(housemates.count, count)
+        let specs: [ParkVisitor] = (0..<count).map { i -> ParkVisitor in
+            let r = race.rivals[i]
+            if i < borrowed, let h = jelly(housemates[i]) {
+                var v = ParkVisitor(id: 9000 + i, name: r.name, colour: .cream, signature: h.feature, wear: nil, style: .balanced, blurb: "", greeting: "")
+                let sp = JellyRoster.species(h.character)
+                v.species = sp >= JellyRoster.teddyID ? sp : nil          // (Teddy / Pearl / Panda keep their own body)
+                return v
+            }
+            if i == borrowed, let g = guestBook.visit, g.arrived, var v = parkBook.visitor(g.visitor) {
+                v = ParkVisitor(id: 9000 + i, name: r.name, colour: v.colour, signature: v.signature, wear: nil, style: v.style, blurb: "", greeting: "")
+                return v
+            }
+            return ParkVisitor(id: 9000 + i, name: r.name, colour: .cream, signature: LocalRivalSource.signature(forTint: r.tint), wear: nil, style: .balanced, blurb: "", greeting: "")
+        }
+        if guestBook.actor != nil { guestRemove() }
+        let bodies = spawn(specs, specs.indices.map { SIMD2<Float>(40 + Float($0) * 3, 0) })
+        guard bodies.count == specs.count, bodies.enumerated().allSatisfy({ $0.element.id == book.actors.count + $0.offset }) else { parkBook.clear?(); return }
+        book.extra = bodies; book.extraSpecs = specs
+        for a in bodies { a.sim.arenaRadius = .infinity }
+    }
+
+    /// Is this body the one who is racing (waking for it, running out, on the track)? Room life and the bedtime lock are off for him only.
+    func raceRacing(_ id: Int) -> Bool { (race.active && race.playerID == id) || raceWait?.id == id }
+
+    /// While the track is up and the rivals are visitor bodies, every housemate is away from the room: not drawn, not stepped, not ticked (so a sleeper sleeps on, a script waits). The park, the
+    /// beach and the groomer treat the ones who stay home the same way (`parkHides`).
+    func raceHides(_ id: Int) -> Bool { raceBook.roomAway && id < jellies.count && id != race.playerID && !raceBook.racers.contains(id) }
+
+    /// A trip other than the race is on (the café, the park, the groomer, the show, the beach): everything it did to the whole room still holds.
+    var otherTripActive: Bool { show.active || cafe.active || park.active || groom.active || volley.active }
 
     /// A short roster races with temporary rival bodies: the park's visitor bodies (the stage's `parkActors`, like the café regulars and the beach opponents), named and tinted from
     /// the race's rivals `first...` and given the species signature of their colour (purple = wings, yellow = tail + spikes, green = daisy, else none). Removed by `raceRemoveExtras`.
@@ -320,10 +377,10 @@ extension GameCare {
         #if targetEnvironment(simulator)
         tripArriveTick("race", actors + raceBook.extra, dt: dt)          // (park-arrive-r2 capture aid: Park/ParkSlideProbe.swift)
         #endif
-        for a in actors { a.brain?.sleepLocked = raceBusy }
+        for a in actors { a.brain?.sleepLocked = raceBusy && raceRacing(a.id); a.brain?.bedtimeLocked = raceBusy }          // (no bedtime / new antics lock for a housemate: only the racer is held)
         if var w = raceWait {
             w.age += dt
-            let sleeping = actors.filter { $0.brain?.isSleeping ?? false }
+            let sleeping = actors.filter { $0.id == w.id && ($0.brain?.isSleeping ?? false) }
             if w.age > 1.5 && w.age.truncatingRemainder(dividingBy: 1) < dt { for a in sleeping { a.brain?.sleepWake(groggy: false, fast: true) } }
             if w.age > 8 { for a in sleeping { if let b = a.brain { b.abortAll(a.sim, a.skinner); b.idleReset(a.skinner) } } }       // gave up waiting: stand him up
             if sleeping.isEmpty || w.age > 8.5 {
@@ -349,17 +406,26 @@ extension GameCare {
         }
         let events = forfeitAsk ? [] : race.tick(dt: dt, bodyFree: { body($0)?.brain?.raceStepFree ?? true }, bodyReady: { body($0)?.brain?.raceBodyReady ?? true },
                                bodyBetween: { body($0)?.brain?.raceBetweenSteps ?? true })
+        var winCandidate = false
         for e in events {
             if let i = e.racer, let a = body(i), let b = a.brain { b.raceApply(e, sim: a.sim) }
             switch e {
             case .stumble(let i), .trip(let i):
                 if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.5, sharpness: 0.2); AudioHub.shared.raceStumble() }
             case .hurdleCleared(let i): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.4, sharpness: 0.7); AudioHub.shared.chirp(jelly: race.playerID, .happy) }
-            case .finished(let i, _): if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.8, sharpness: 0.5) }
+            case .finished(let i, let place):
+                if i == 0 { touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: 0.8, sharpness: 0.5) }
+                if i == RaceSim.playerIndex, place == 1 { winCandidate = true }          // (decided after the step: a rival over the line in the same tick may have the earlier interpolated time)
             case .results: do { live?.raceFinished(place: race.sim?.playerPlace ?? 0, drops: race.earned) }          // (settled by the flow before the event reaches us)
             default: break
             }
         }
+        // the player crossed the line FIRST (place 1 is final once every body over the line this step is counted; the results card covers the track a few seconds later):
+        // his own Jelmiko celebrates (four bounces, arms up, a cheer: BlobBrain+Win.swift) and the card waits for it (RaceFlow.holdsCard). Rivals and 2nd...4th do nothing new.
+        if winCandidate, let s = race.sim, s.playerLeadsAtFinish, !race.leaving, !race.forfeited, let a = body(RaceSim.playerIndex), let b = a.brain {
+            b.raceWinCue(a.sim); race.startWinHold()
+        }
+        if race.winHoldT != nil, let a = body(RaceSim.playerIndex), let b = a.brain { race.noteWinMove(active: b.winCheer) }
         if race.phase == .racing, let sim = race.sim, sim.phase != .results {
             let st = sim.playerStanding
             live?.raceProgress(position: st.position, progress: st.progress, lap: 1)          // the policy only publishes a change of place / a quarter of the course
@@ -374,10 +440,10 @@ extension GameCare {
         if won { AudioHub.shared.contextVoice(jelly: id, .yay, chance: 1); selectBrain(id)?.proudStrutCue() }       // (batch-2 emote: he struts when he is next free)
         if won { store.awardMedal() }                     // a first place on the Circuit earns the winner medal (wearable from the Bag; never sold)
         book.returner = id; book.won = won; book.homeAge = 0; book.returnerHopped = false; book.celebrated = false
-        greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 })
+        greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 && selectBrain($0)?.isSleeping != true })          // (race-depart-r2: a housemate who slept through the race sleeps on; the greeting is for the ones who are up)
         greetOthers = [:]
         bubbleHub.greetClock = 0; bubbleHub.greetHearts = [:]
-        if id != 0 {                               // Bob is one of the greeters: the usual come-to-front walk, then his hop and hearts
+        if id != 0, selectBrain(0)?.isSleeping != true {                               // Bob is one of the greeters: the usual come-to-front walk, then his hop and hearts (a sleeping Bob sleeps on)
             greeting = true; greetHop = false
             queued = [.come(to: greetSpotNow(0))]
         }
@@ -415,11 +481,11 @@ extension GameCare {
         if arrived, book.won, !book.celebrated {      // a win: everybody bounces together once
             book.celebrated = true
             for a in actors {
-                guard let b = a.brain else { continue }
+                guard let b = a.brain, !b.isSleeping else { continue }
                 if b.feature == .wings, !b.wingsFolded, b.idleState.kind == nil { b.commandedIdle = .flapHop } else { b.startHopPlay(sim: a.sim, distance: 0.0001) }
                 AudioHub.shared.chirp(jelly: a.id, .happy)
             }
-            for a in actors where a.id > 0 { startGreetHearts(a.id) }
+            for a in actors where a.id > 0 && !(a.brain?.isSleeping ?? false) { startGreetHearts(a.id) }
             touchPlay?.spawnHeart(now: CACurrentMediaTime())
         }
         if (arrived && (book.celebrated || !book.won) && book.homeAge > 2) || book.homeAge > 25 { book.returner = nil }

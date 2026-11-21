@@ -55,7 +55,10 @@ extension DecorKind {
         switch self {
         case .seesaw: return DecorSpec(half: SIMD2(1.05, 0.28), height: 0.55, solid: true, units: 2, corner: 0.2, reach: 1, box: true)
         case .sandbox: return DecorSpec(half: SIMD2(1.25, 0.90), height: 0.22, solid: true, units: 3, corner: 0.25, reach: 1, box: true)
-        case .hopscotch: return DecorSpec(half: HopscotchCourt.slabHalf, height: 0.05, solid: false, units: 3, corner: 0.1, reach: 0.5, box: true)
+        case .hopscotch:
+            // (park-hopscotch-r1: while a game is on the court is a wall with a body's margin for everybody outside the line, see HopscotchTuning.walled; otherwise flat paint as before)
+            let wall = HopscotchTuning.walled
+            return DecorSpec(half: HopscotchCourt.slabHalf, height: 0.05, solid: wall, units: 3, corner: 0.1, reach: wall ? HopscotchTuning.wallReach : 0.5, box: true)
         default: return DecorSpec(half: SIMD2(0.4, 0.4), height: 1, solid: true, units: 1, corner: 0.2, reach: 1, box: true)
         }
     }

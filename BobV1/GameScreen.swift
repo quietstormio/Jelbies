@@ -443,7 +443,12 @@ struct GameScreen: View {
         .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
-        .onChange(of: town) { _, t in model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t)) }
+        .onChange(of: town) { _, t in
+            #if targetEnvironment(simulator)
+            RaceDepartProbe.mark("town \(String(describing: t))")
+            #endif
+            model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t))
+        }
         .onChange(of: outing) { _, on in DayClock.shared.setOutingRate(on) }
         .onChange(of: covered) { _, c in model.coverUp = c }          // a full-screen screen hides the room: the stage renders at 5 fps until it closes (MelonController.applyFrameRate)
         .onAppear { model.coverUp = covered; DayClock.shared.setOutingRate(outing) }
@@ -633,6 +638,7 @@ struct GameScreen: View {
                         NSLog("[playtoss] demo round %d done rally %d nudges %d headers %d t %.1f", round, care.play.rally, care.play.nudges, care.play.headers, waited)
                         await sleep(1.8)
                     }
+                    if d.integer(forKey: "PlayDemoEnd") != 0 { await sleep(3); NSLog("[playtoss] demo: Done"); care.endPlay() }          // (capture aid: -PlayDemoEnd 1 puts the ball away after the rounds, to log the room's walls and floor after play)
                 }
             }
         }

@@ -37,6 +37,34 @@ nonisolated enum HopscotchTuning {
     static let queueGap: Float = 1.7
     /// Walks to the start a stepped-up Jelbie tries before he gives the game up (a blocked start must not loop).
     static let startTries = 3
+
+    // MARK: park-hopscotch-r1 ("at the park if one is hopscotching please try to keep the others away", 2026-11-20)
+    /// While a game is on (a line has formed: from the moment the first hopper commits until the last one has stepped off) the court plus a margin of about one body is a wall for everybody
+    /// who is not on the line's route (noticed it, queued, hopping, walking off): the floor rules push out of it (so walk targets, the route planner and every pick go round it), nobody starts a social with a body on it, and a body who is on it
+    /// when the game starts walks off (`decorExitCheck`). Dev builds only: `-ParkHopGuard old` = off (main's rules: the court is flat paint), the headless soak's before arm. The line's own
+    /// stagger, spacing and patience are untouched.
+    nonisolated(unsafe) static var guardOn: Bool = {
+        guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "ParkHopGuard") else { return true }
+        return v != "old"
+    }()
+    /// Courts with a line on them right now (kept by `HopscotchLine`; the park has one court).
+    nonisolated(unsafe) static var lineCount = 0
+    /// Seconds since a member of a line last ticked; a line nobody ticks in for `staleAfter` s is dropped (a leaked entry must not stay a wall for good).
+    nonisolated(unsafe) static var sinceMember: Float = 0
+    static let staleAfter: Float = 5
+    /// The court is a wall for the ones outside the line.
+    static var walled: Bool { guardOn && lineCount > 0 }
+    /// The wall's reach: the margin round the court is `footprint * wallReach` (a body is ~0.7 across by the floor rules: 0.8 gives 0.56, one body radius; the hopper's landing check wants more
+    /// than 0.52 so a body just outside never holds the game; the slide's walk-out spots are 0.65 and 0.80 from the court's edge, so it stays under that).
+    static let wallReach: Float = 0.8
+    /// The hopper waits at the start for the court to clear of others (they walk off at once; one in a social waits for it to end); after this he goes anyway.
+    static let clearWait: Float = 12
+    /// The wall's west side runs out to the floor's edge: the strip between the court and the left edge of the floor is narrower than a body, a dead end.
+    static let westExtend: Float = 1.0
+    /// While a game is on, the bystanders' wander goals keep this far beyond the wall (no standing about at the court's edge).
+    static let noRest: Float = 0.75
+    /// ... and one who stands still there this long is walked off.
+    static let restMax: Float = 0.3
     /// A walk that stops further from the start than this is still travelling (it does not use up a try).
     static let startBlockedWithin: Float = 2.5
 }
@@ -77,6 +105,13 @@ final class HopscotchLine {
     static let done = 99
 
     func players(_ uid: Int) -> [Player] { lines[uid] ?? [] }
+    /// park-hopscotch-r1: called every step by the decor field. A line that has had no ticking member for `staleAfter` s (a member released without leaving it) is dropped.
+    func watchdog(dt: Float) {
+        guard !lines.isEmpty else { HopscotchTuning.sinceMember = 0; return }
+        HopscotchTuning.sinceMember += dt
+        if HopscotchTuning.sinceMember > HopscotchTuning.staleAfter { lines = [:]; rolled = [:]; HopscotchTuning.lineCount = 0; HopscotchTuning.sinceMember = 0; Self.staleDrops += 1 }
+    }
+    nonisolated(unsafe) static var staleDrops = 0
     var active: Bool { !lines.isEmpty }
     func contains(_ uid: Int, _ id: Int) -> Bool { lines[uid]?.contains { $0.id == id } ?? false }
     /// The slot a newcomer would get: 0 (the start spot) for the first, else the lowest free slot from 1.
@@ -92,6 +127,7 @@ final class HopscotchLine {
         let s = nextSlot(uid)
         lines[uid, default: []].append(Player(id: id, slot: s))
         if lines[uid]!.count == 1 { rolled[uid] = [id] }
+        HopscotchTuning.lineCount = lines.count
         return s
     }
     func remove(_ uid: Int, _ id: Int) {
@@ -99,6 +135,7 @@ final class HopscotchLine {
         l.removeAll { $0.id == id }
         lines[uid] = l.isEmpty ? nil : l
         if l.isEmpty { rolled[uid] = nil }
+        HopscotchTuning.lineCount = lines.count
     }
     func landed(_ uid: Int, _ id: Int, _ sq: Int) { if let i = lines[uid]?.firstIndex(where: { $0.id == id }) { lines[uid]![i].sq = sq } }
     func square(_ uid: Int, _ id: Int) -> Int { lines[uid]?.first { $0.id == id }?.sq ?? -1 }
@@ -135,6 +172,7 @@ final class HopscotchLine {
     func prune(keeping uids: Set<Int>) {
         for u in Array(lines.keys) where !uids.contains(u) { lines[u] = nil }
         for u in Array(rolled.keys) where !uids.contains(u) { rolled[u] = nil }
+        HopscotchTuning.lineCount = lines.count
     }
 }
 

@@ -114,7 +114,7 @@ extension GameCare {
 
     /// Wake ONLY this Jelbie (a name, a poke). A no-op on an awake one besides the bookkeeping. `fast` = something needs him now (the newcomer welcome): the quick wake, never the soft staggered one.
     func wakeSleeper(_ id: Int, groggy: Bool = true, fast: Bool = false) {
-        if let b = selectBrain(id), b.isSleeping, !b.sleep.wakeAsked {
+        if let b = selectBrain(id) ?? brainFor(id), b.isSleeping, !b.sleep.wakeAsked {
             b.commandedGoodnight = false
             b.sleepWake(groggy: groggy, fast: fast)
             if isBedtimeHours { nightRest.nightWoken.insert(id) }
@@ -258,7 +258,7 @@ extension GameCare {
         for id in book.wanted.sorted() {
             guard let b = selectBrain(id) else { continue }
             if b.isSleeping { if !b.sleep.wakeAsked { book.retryT[id] = 0 }; continue }          // down, on his way, or rolling up: wait
-            if b.race.active || b.sleepLocked || b.activity == .touched || b.activity == .recovering || b.reserved || held { continue }
+            if b.race.active || b.sleepLocked || b.bedtimeLocked || b.activity == .touched || b.activity == .recovering || b.reserved || held { continue }
             book.retryT[id, default: 0] -= dt
             if book.retryT[id]! <= 0 { b.commandedGoodnight = true; book.retryT[id] = NightRestTuning.retry }
         }

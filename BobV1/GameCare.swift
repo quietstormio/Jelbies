@@ -699,8 +699,21 @@ final class GameCare {
     private func tickFocus(brain: BlobBrain, sim: SoftBody?, dt: Float) {
         focusFrame(dt: dt)
         if focus.phase == .approaching {
-            if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)) {
+            if focusGroup.zeroPending, focusGroup.mayGo(0, frontDistance: frontDistance(except: 0)), !(FocusGroup.sleeperFix && brain.isSleeping) {
                 focusGroup.zeroPending = false; queued = [.come(to: focusGroup.spot(of: 0))]
+            }
+            if let v = focusGroup.viaZero, simd_length(brain.position - v) < 0.6 || focusGroup.clock - focusGroup.viaZeroAt > 5 {
+                if let n = focusGroup.viaZeroNext { focusGroup.viaZero = n; focusGroup.viaZeroNext = nil; focusGroup.viaZeroAt = focusGroup.clock; queued = [.goTo(n)] }
+                else { focusGroup.viaZero = nil; queued = [.come(to: focusGroup.spot(of: 0))]; approachIdle = 0 }
+            }          // (walked round an uncalled body: now to his spot)
+            if FocusGroup.sleeperFix, focusGroup.includes(0), !focusGroup.arrived.contains(0), focusGroup.viaZero == nil, !focusGroup.zeroPending {          // pinned short of his spot by a lying body: walk round it (at most three times)
+                let d = simd_length(brain.position - focusGroup.spot(of: 0))
+                if d < focusGroup.zeroBest - 0.05 { focusGroup.zeroBest = d; focusGroup.zeroStuck = 0 } else { focusGroup.zeroStuck += dt }
+                if focusGroup.zeroStuck > 2, focusGroup.zeroDetours < 3, d > 0.5 {
+                    focusGroup.zeroStuck = 0; focusGroup.zeroDetours += 1
+                    let path = FocusGroup.detour(from: brain.position, to: focusGroup.spot(of: 0), obstacles: focusGroup.uncalled, soft: focusGroup.ids.filter { $0 != 0 }.map { focusGroup.spot(of: $0) }, fixed: { brain.fixed($0) })
+                    if let v = path.first { focusGroup.viaZero = v; focusGroup.viaZeroNext = path.count > 1 ? path[1] : nil; focusGroup.viaZeroAt = focusGroup.clock; focusGroup.zeroBest = .infinity; queued = [.goTo(v)] }
+                }
             }
             focusReplan(dt: dt)
             if focusGroup.includes(0), !focusGroup.arrived.contains(0), !focusGroup.zeroPending, simd_length(brain.position - focusGroup.spot(of: 0)) < 0.25 { zeroOnSlot += dt } else { zeroOnSlot = 0 }
@@ -711,7 +724,7 @@ final class GameCare {
         case .approaching where focusGroup.includes(0):
             // the come request can be cancelled (for example he was grabbed): ask again a couple of times, then give up
             let act = brain.activity
-            if !callRunning, queued.isEmpty, !focusGroup.zeroPending, act == .idle || act == .lookingAround || act == .steppingInPlace {
+            if !callRunning, queued.isEmpty, !focusGroup.zeroPending, focusGroup.viaZero == nil, act == .idle || act == .lookingAround || act == .steppingInPlace {
                 approachIdle += dt
                 if approachIdle > 0.8 {
                     approachIdle = 0

@@ -45,15 +45,17 @@ extension GameCare {
             var hide = bath.active || parkHides(a.id)          // (the wash, or at home while the park is on)
             if race.active, raceBook.parked.contains(a.id) { hide = true; role = .none }
             if showHidesWear(a.id) { hide = true; role = .none }          // the show: rival bodies and the parked wear nothing of ours
+            var instant = false          // (race-depart-r2: a housemate who was away on the track gets his wear and feature back at once, not with a pop-in)
+            if raceHides(a.id) { raceBook.wasAway.insert(a.id) } else if raceBook.wasAway.remove(a.id) != nil { instant = true }
             let worn = outfit(a.id)
             let sig = worn.map { $0.key.rawValue.hashValue ^ $0.value.rawValue.hashValue }.reduce(0, ^) &+ worn.count
             if let was = outfitSeen[a.id], was != sig, !worn.isEmpty, !hide { b.postEvent(.newOutfit); b.blushBump(hold: 2.4, peak: 0.55) }          // a new outfit: the others admire it
             outfitSeen[a.id] = sig
             let pw = PerfProbe.begin()
-            wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: worn, role: role, hideAll: hide, dt: dt)
+            wardrobe.tick(id: a.id, brain: b, sim: a.sim, outfit: worn, role: role, hideAll: hide, instant: instant, dt: dt)
             PerfProbe.end("wardrobe.tick", pw)
             let pf = PerfProbe.begin()
-            tickFeature(a, brain: b, hideAll: hide, dt: dt)
+            tickFeature(a, brain: b, hideAll: hide, instant: instant, dt: dt)
             PerfProbe.end("tickFeature", pf)
         }
         wardrobe.stepPuffs(dt: dt)

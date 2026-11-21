@@ -282,7 +282,19 @@ extension BlobBrain {
     var socialFree: Bool {
         social == nil && socialBook.enabled && attached && (autonomy || idleForced) && !held && !commanded && pending == nil && job == nil && bubbleLeash == nil
             && commandedIdle == nil && !commandedFlip && !commandedNameHop && !interruptScript && !hurry
-            && activity != .touched && activity != .recovering && scriptIsNone && idleState.kind == nil && !onSlideFoot          // (park-slide-r4: not on the slide's foot)
+            && activity != .touched && activity != .recovering && scriptIsNone && idleState.kind == nil && !onSlideFoot && !onHopCourt          // (park-slide-r4: not on the slide's foot; park-hopscotch-r1: nor on a court with a game on)
+    }
+    /// park-hopscotch-r1: a hopscotch game is on and his floor spot is on the court or in its margin: nothing starts with him there (`decorExitCheck` walks him off).
+    var onHopCourt: Bool {
+        guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID) else { return false }
+        return f.distance(position) < footprint * HopscotchTuning.wallReach
+    }
+    /// park-hopscotch-r1: the straight line a -> b (two bodies of a pair, sampled every 0.2) touches the court's wall while a game is on. No pair emote is started across it.
+    func hopCourtBetween(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
+        guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID) else { return false }
+        let m = footprint * HopscotchTuning.wallReach, n = max(1, Int(simd_distance(a, b) / 0.2))
+        for i in 0...n where f.distance(a + (b - a) * (Float(i) / Float(n))) < m { return true }
+        return false
     }
     /// Out on an ordinary wander leg: autonomous, nothing owns him, no behaviour running. He can be invited to a social (his leg is ended at the next stretch of the walk).
     var socialWandering: Bool {
@@ -350,6 +362,7 @@ extension BlobBrain {
         guard socialFree, o.socialFree, o !== self else { return false }
         currentPose(sim)          // (his own body only: the partner has a sim of his own, and re-seeding HIS root from THIS sim teleported him onto the initiator)
         let me = position, you = o.position
+        guard !hopCourtBetween(me, you) else { return false }          // (park-hopscotch-r1: no pair emote across or on the court while a game is on)
         let d = simd_distance(me, you)
         switch kind {
         case .boop, .squabble:
@@ -420,6 +433,7 @@ extension BlobBrain {
         for p in ps {
             let o = p.b
             guard !o.meetBusy, o.socialFree || (anticsEnabled && o.socialWandering), (socialBook.pair[p.id] ?? 0) <= 0, (o.socialBook.pair[steerID] ?? 0) <= 0, o.socialBook.cooldown <= 6 else { continue }
+            if HopscotchTuning.walled, hopCourtBetween(position, p.pos) { continue }          // (park-hopscotch-r1)
             let d = simd_distance(p.pos, position)
             if d > peerGap * 0.8 && d < 4.8 { cands.append((o, d)) }
         }

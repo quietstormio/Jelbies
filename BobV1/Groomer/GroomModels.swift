@@ -152,6 +152,8 @@ final class GroomTrip {
 /// What GameCare keeps while the visit is on.
 @MainActor
 final class GroomBook {
+    /// Who was ASLEEP at home when the trip left (never touched; the way back keys on this, not on who is asleep then: see ParkWork.stayedAsleep).
+    var stayedAsleep: Set<Int> = []
     var actors: [JellyActor] = []
     var autonomy: [Int: Bool] = [:]
     var homes: [Int: SIMD2<Float>] = [:]
