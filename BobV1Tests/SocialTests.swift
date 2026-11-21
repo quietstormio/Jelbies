@@ -415,7 +415,8 @@ final class SocialTests: XCTestCase {
             let before = Float(n) * wa / tWithNose * (Float(total) / Float(n)), after = Float(n) * wa / tA * (Float(total) / Float(n))
             lines.append("\(k.rawValue): before \(String(format: "%.1f", before)) after \(String(format: "%.1f", after)) (x\(String(format: "%.3f", after / before)))")
             XCTAssertGreaterThanOrEqual(after, before * 0.9, "\(k): expected picks do not fall below 90% of before")
-            XCTAssertGreaterThan(after, before, "\(k): expected picks rise")
+            // (pair-distinct-r1: the look-alike kinds are held back on purpose - VarietyTuning.pairLookAlike: cheekSquish / bellyBounce never, cuddleLean / swayHug half - so their picks do not rise)
+            if VarietyTuning.pairLookAlike[k] == nil { XCTAssertGreaterThan(after, before, "\(k): expected picks rise") }
         }
         MotionLog.write("SOCIAL PICKS noseBoop removal (expected picks per \(total) rolls): " + lines.joined(separator: " | "))
         print("NOSEBOOP-REMOVAL-PICKS " + lines.joined(separator: " | "))
