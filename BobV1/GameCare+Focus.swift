@@ -70,7 +70,8 @@ final class FocusGroup {
     /// 2026-11-19 ("the purple was sleep and now he's in the back there"): a called sleeper is woken with the SHORT wake at the call, his walk is held until he is on his feet, and the
     /// safety net's clock waits for him (at most `sleepWait` s), so he is never "accepted" lying / half-risen behind another. Off (dev `-ComeHereOld 1`, simulator builds) = the earlier behaviour.
     nonisolated(unsafe) static var sleeperFix = !(DevArgs.enabled && UserDefaults.standard.integer(forKey: "ComeHereOld") == 1)
-    static let sleepWait: Float = 6
+    static let sleepWait: Float = 6, moveWait: Float = 4
+    var netMoved: Float = 0
     nonisolated(unsafe) static var twoCornerMin: Float = 1.3
     /// Seconds the safety net's clock was held for a sleeper still waking.
     var netShift: Float = 0
@@ -86,7 +87,7 @@ final class FocusGroup {
     var rowSpacing: Float = GameCamera.focusRowSpacing
 
     func begin(ids new: [Int], front frontAsked: Int? = nil, floors: [Int: SIMD2<Float>] = [:], avoiding obstacles: [SIMD2<Float>] = [], reachable: @escaping (SIMD2<Float>) -> Bool = { _ in true }) {
-        ids = new; uncalled = obstacles; viaZero = nil; viaZeroNext = nil; zeroBest = .infinity; zeroStuck = 0; zeroDetours = 0; arrived = []; clock = 0; netShift = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
+        ids = new; uncalled = obstacles; viaZero = nil; viaZeroNext = nil; zeroBest = .infinity; zeroStuck = 0; zeroDetours = 0; arrived = []; clock = 0; netShift = 0; netMoved = 0; netAccepted = 0; zeroPending = false; front = frontAsked.flatMap { new.contains($0) ? $0 : nil } ?? new.first ?? 0; saved = [:]; gapSaved = [:]; approach = [:]; came = []; evictT = [:]; koCache = nil; touchID = new.first ?? 0; touchAnchor = nil; petOwed = 0; petClock = 0
         spots = [:]; GameCamera.focusFramed = []
         if new.count > 1 {
             let row = Self.rowAvoiding(count: new.count, spacing: rowSpacing, obstacles: obstacles, reachable: reachable)          // (the same expression a preview group is born on, moved aside only when an uncalled body would stand between or over them)
@@ -385,6 +386,8 @@ extension GameCare {
         guard focus.phase == .approaching, !g.ids.isEmpty else { return }
         g.clock += dt
         if FocusGroup.sleeperFix, g.netShift < FocusGroup.sleepWait, g.ids.contains(where: { brainFor($0)?.isSleeping == true }) { g.netShift += dt }          // (the net's clock waits for a sleeper to get up)
+        // a called body still making progress toward his spot is not cut off at the hard limit (a long way round a lying body needs more than 8 s): the clock waits for him, at most `moveWait` s in all
+        if FocusGroup.sleeperFix, g.netMoved < FocusGroup.moveWait, !g.uncalled.isEmpty, g.ids.contains(where: { id in !g.arrived.contains(id) && (id == 0 ? (g.zeroStuck < 1 && !g.zeroPending) : (g.approach[id].map { $0.requested && $0.stuckT < 1 } ?? false)) }) { g.netShift += dt; g.netMoved += dt }
         let netClock = g.clock - g.netShift
         guard netClock > min(FocusGroup.softAccept, FocusGroup.hardAccept) else { return }
         for id in g.ids where !g.arrived.contains(id) {
