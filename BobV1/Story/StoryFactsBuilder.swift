@@ -69,7 +69,7 @@ enum StoryFactsBuilder {
     }
 
     nonisolated static func housemate(_ h: StoryHabits, id: Int, name: String, kind: String) -> StoryFacts.Housemate {
-        StoryFacts.Housemate(id: id, name: name, kindName: kind, playShare: h.playShare(with: id), togetherSeconds: h.seconds(with: id), topEmote: h.topEmote(with: id))
+        StoryFacts.Housemate(id: id, name: name, kindName: kind, playShare: h.playShare(with: id), togetherSeconds: h.seconds(with: id), topEmote: h.topEmote(with: id), sharedGroup: h.groupSeconds(with: id) >= 20)
     }
 
     nonisolated static func markMostPlayed(_ f: inout StoryFacts) {

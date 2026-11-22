@@ -18,6 +18,8 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
     var act: [String: Float] = [:]
     var partner: [String: Float] = [:]
     var emote: [String: Float] = [:]
+    /// Seconds in group sessions with each housemate (a shared event for the friendship notes).
+    var group: [String: Float]? = nil
     var area: [String: Float] = [:]
     /// Seconds sampled lately (decayed like the rest) and ever (not decayed, capped for sanity).
     var total: Float = 0
@@ -42,6 +44,7 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
             let kind = String(activity.drop(while: { $0 != ":" }).dropFirst())
             for p in partners {
                 partner[String(p), default: 0] += dt
+                if activity.hasPrefix("group:") { var g = group ?? [:]; g[String(p), default: 0] += dt; group = g }
                 if activity.hasPrefix("pair:") { emote["\(p)|\(kind)", default: 0] += dt }
             }
             Self.cap(&emote, Self.maxEmoteKeys); Self.cap(&partner, Self.maxPartnerKeys)
@@ -61,6 +64,7 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
         for k in act.keys { act[k]! *= f }
         for k in partner.keys { partner[k]! *= f }
         for k in emote.keys { emote[k]! *= f }
+        if var g = group { for k in g.keys { g[k]! *= f }; group = g.filter { $0.value >= Self.dropBelow } }
         for k in area.keys { area[k]! *= f }
         total *= f
         act = act.filter { $0.value >= Self.dropBelow }; partner = partner.filter { $0.value >= Self.dropBelow }
@@ -105,6 +109,7 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
         return Int(m.key)
     }
     func seconds(with id: Int) -> Int { Int(partner[String(id)] ?? 0) }
+    func groupSeconds(with id: Int) -> Int { Int(group?[String(id)] ?? 0) }
     /// The share of all the pair time that was with this housemate (0 when there is none).
     func playShare(with id: Int) -> Double {
         let t = partner.values.reduce(0, +)

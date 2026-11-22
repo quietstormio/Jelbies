@@ -87,7 +87,7 @@ final class StoryTemplatesTests: XCTestCase {
         }
         print("[story-test] blurbs \(aboutCount) distinct templates \(distinctAbout.count), notes \(noteCount) distinct \(distinctNote.count), rejected inside \(rejectedInside), longest blurb \(maxAbout), longest note \(maxNote), immediate repeats \(immediate)")
         XCTAssertGreaterThan(distinctAbout.count, 40)
-        XCTAssertGreaterThanOrEqual(distinctNote.count, 25)
+        XCTAssertGreaterThanOrEqual(distinctNote.count, 23)
         try? "blurbs \(aboutCount) distinct \(distinctAbout.count), notes \(noteCount) distinct \(distinctNote.count), rejected inside \(rejectedInside), longest blurb \(maxAbout), longest note \(maxNote), immediate repeats \(immediate)".write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/story/test_stats.txt", atomically: true, encoding: .utf8)
         XCTAssertLessThan(Double(immediate) / 20_000, 0.05)
     }

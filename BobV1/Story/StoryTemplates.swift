@@ -123,10 +123,10 @@ nonisolated enum StoryTemplates {
     // MARK: the friendship bank (one sentence each)
 
     enum Tier: String, Sendable { case close, regular, few }
-    struct NotePattern: Sendable { let id: Int; let tiers: Set<Tier>; let emote: Bool; let keys: [String]; let text: String }
-    private static func N(_ id: Int, _ tiers: [Tier], _ emote: Bool, _ text: String) -> NotePattern {
+    struct NotePattern: Sendable { let id: Int; let tiers: Set<Tier>; let emote: Bool; let group: Bool; let keys: [String]; let text: String }
+    private static func N(_ id: Int, _ tiers: [Tier], _ emote: Bool, _ text: String, group: Bool = false) -> NotePattern {
         let together = tiers.contains(.close) || tiers.contains(.regular)
-        return NotePattern(id: id, tiers: Set(tiers), emote: emote, keys: (together ? ["together"] : ["gettingToKnow"]) + (emote ? ["topEmote"] : []), text: text)
+        return NotePattern(id: id, tiers: Set(tiers), emote: emote, group: group, keys: (together ? ["together"] : ["gettingToKnow"]) + (emote ? ["topEmote"] : []) + (group ? ["sharedGroup"] : []), text: text)
     }
 
     static let noteBank: [NotePattern] = [
@@ -143,21 +143,22 @@ nonisolated enum StoryTemplates {
         N(11, [.close, .regular], true, "When {A} and {B} play, they are often {EMOTE}."),
         N(12, [.regular], false, "{A} and {B} play together now and then."),
         N(13, [.regular], false, "{A} plays with {B} fairly often."),
-        N(14, [.regular], false, "{A} and {B} get on well."),
-        N(15, [.regular], false, "{B} often joins {A} to play."),
-        N(16, [.regular], false, "{A} and {B} have been playing together more lately."),
         N(17, [.regular], false, "{A} and {B} share the room and often play."),
         N(18, [.few], false, "{A} and {B} are still getting to know each other."),
-        N(19, [.few], false, "{A} and {B} have only played together a little so far."),
         N(20, [.few], false, "{A} and {B} have not played together much yet."),
         N(21, [.few], false, "{A} and {B} are just getting started as friends."),
         N(22, [.few], false, "{A} is still getting to know {B}."),
         N(23, [.few], false, "{A} and {B} are getting used to each other."),
-        N(24, [.few], false, "{A} and {B} mostly keep to themselves for now."),
         N(25, [.few, .regular], false, "{A} and {B} share the room."),
-        N(26, [.few], false, "{A} and {B} say hello now and then."),
         N(27, [.regular, .close], false, "{A} and {B} play together a lot."),
-        N(28, [.regular], false, "{A} and {B} play together some days."),
+        N(31, [.close], false, "{A} and {B} are often together."),
+        N(33, [.close], false, "{B} is {A}'s best playmate."),
+        N(34, [.regular], false, "{A} and {B} play together fairly often."),
+        N(35, [.few], false, "{A} and {B} are still new to each other."),
+        N(37, [.regular], false, "{A} and {B} sometimes play together."),
+        // a shared event: they took part in a group activity together lately
+        N(29, [.close, .regular], false, "{A} and {B} joined in group play lately.", group: true),
+        N(30, [.close, .regular], false, "{A} and {B} took part in a group activity lately.", group: true),
     ]
 
     // MARK: eligibility
@@ -223,7 +224,7 @@ nonisolated enum StoryTemplates {
     static func friendship(_ f: StoryFacts, with h: StoryFacts.Housemate, used: Set<Int>, seed: UInt64) -> Written? {
         let t = tier(h)
         let values = StoryFill.values(f, with: h), offered = StoryFill.offered(f, with: h), avail = StoryFill.facts(f, with: h)
-        let eligible = noteBank.filter { $0.tiers.contains(t) && (!$0.emote || values["EMOTE"] != nil) }
+        let eligible = noteBank.filter { $0.tiers.contains(t) && (!$0.emote || values["EMOTE"] != nil) && (!$0.group || h.sharedGroup) }
         var pool = eligible.filter { !used.contains($0.id) }
         if pool.isEmpty { pool = eligible }
         var rejected = 0

@@ -22,6 +22,8 @@ nonisolated struct StoryFacts: Codable, Equatable, Sendable {
         var playShare = 0.0, togetherSeconds = 0
         var topEmote: String?
         var mostPlayedWith = false
+        /// Took part in a group activity together lately (about half a minute or more).
+        var sharedGroup = false
         /// Phase 3 fills this (a "Relationship" level for the pair); nil for now.
         var relationshipLevel: String?
     }
@@ -144,7 +146,7 @@ nonisolated enum StoryFill {
         if f.sleepHabit != nil { k.insert("nap") }
         if f.newcomer { k.insert("newcomer") } else if f.daysTracked >= 4 { k.insert("settled") }
         if let m = h ?? f.housemates.first(where: { $0.id == f.mostPlayedWithID }), m.togetherSeconds >= 60 {
-            if h == nil { k.insert("partner") } else { k.insert("together") }
+            if h == nil { k.insert("partner") } else { k.insert("together"); if m.sharedGroup { k.insert("sharedGroup") } }
             if v["EMOTE"] != nil { k.insert("topEmote") }
         } else if h != nil { k.insert("gettingToKnow") }
         if f.relationshipLevel != nil { k.insert("bond") }

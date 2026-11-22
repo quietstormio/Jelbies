@@ -81,7 +81,7 @@ enum StoryDev {
             let secs: Float = [0, 150, 330, 900][min(m, 4) - 1 == 0 ? 0 : min(m, 4) - 1]
             if m >= 2 { h.partner[String(o.character)] = secs; h.act["pair:chase"] = secs; h.total += secs }
             if m >= 2 { h.emote["\(o.character)|\(m >= 4 ? "cuddle" : "chase")"] = secs }
-            if m == 3 { h.act["group:groupHug"] = 120; h.partner[String(o.character)] = 450; h.emote["\(o.character)|dance"] = 200 }
+            if m == 3 { h.act["group:groupHug"] = 120; h.group = [String(o.character): 120]; h.partner[String(o.character)] = 450; h.emote["\(o.character)|dance"] = 200 }
             StoryHabitStore.shared.set(h, for: c)
             NSLog("[story] moment aid %d: %@ with %@ %.0f s", m, JellyRoster.nameOf(c), o.name, secs)
         }

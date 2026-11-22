@@ -135,6 +135,7 @@ nonisolated enum StoryPrompt {
         case .regular: lines.append("- [together] they often play together")
         case .few: lines.append("- [gettingToKnow] they are still getting to know each other")
         }
+        if h.sharedGroup { lines.append("- [sharedGroup] they joined in a group activity lately") }
         if let x = v["EMOTE"], StoryTemplates.tier(h) != .few { lines.append("- [topEmote] they are often: {EMOTE} (\(x))") }
         lines.append("Placeholders you may use: " + v.keys.filter { $0 != "BKIND" }.sorted().map { "{\($0)}" }.joined(separator: " ") + ".")
         return lines.joined(separator: "\n")

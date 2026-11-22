@@ -45,7 +45,7 @@ nonisolated enum StoryFingerprint {
     /// A fingerprint of a text (placeholders in), for "Don't show this one" and the feedback lookup.
     static func text(_ template: String) -> String { hex(["t", template]) }
     static func note(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> String {
-        hex(["n", String(h.id), StoryTemplates.tier(h).rawValue, h.topEmote ?? "-", h.relationshipLevel ?? "-", h.mostPlayedWith ? "mp" : "-"])
+        hex(["n", String(h.id), StoryTemplates.tier(h).rawValue, h.topEmote ?? "-", h.relationshipLevel ?? "-", h.mostPlayedWith ? "mp" : "-", h.sharedGroup ? "grp" : "-"])
     }
 }
 
