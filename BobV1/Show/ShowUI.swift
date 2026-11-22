@@ -839,7 +839,9 @@ struct DressUpFigure: View {
     var rank: ShowRank
     var height: CGFloat
     /// Where his feet (the disc top) stand in the area, as a fraction of its height; the picture is as tall as the area, so the room above is the 0.42-of-his-height the renderer leaves for hats.
-    static let floorAt: CGFloat = 0.88
+    static let floorAt: CGFloat = 0.87
+    /// The picture is this much of the area's height (a margin of about 3% above the tallest hat in the catalogue, the party cone, and the disc's front rim kept inside the area).
+    static let fill: CGFloat = 0.94
     private func chip(_ t: WearTag, _ prefix: String) -> some View {
         Text("\(prefix)\(t.title)").font(SK.font(12, .black)).foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: 22).background(Capsule().fill(ShowUI.tag(t)))
     }
@@ -856,7 +858,7 @@ struct DressUpFigure: View {
         let wearing = rank.slotOrder.compactMap { outfit[$0]?.title } + outfit.filter { !rank.slotOrder.contains($0.key) }.map { $0.value.title }
         ZStack {
             StageBackdrop()
-            JelbieActionShot(care: care, who: who, fill: 1.0, floorAt: Self.floorAt)
+            JelbieActionShot(care: care, who: who, fill: Self.fill, floorAt: Self.floorAt)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(care.rosterName(who))\(wearing.isEmpty ? ", wearing nothing" : ", wearing \(wearing.joined(separator: " and "))")")
             HStack(spacing: 0) {
