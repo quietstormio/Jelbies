@@ -22,7 +22,7 @@ final class StoryDevTests: XCTestCase {
     func testTheDumpWritesBlurbsAndNotes() async {
         var f = StoryFacts(id: 1, name: "Berry", kindName: "Blush", kindAbout: "", shownParagraph: "Pale pink with rose patches.", mood: "")
         f.personality = "sleepy"; f.favouriteFood = "popsicle"; f.minutesSeen = 90
-        f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: 400, topEmote: "chase", mostPlayedWith: true)]
+        f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: 700, topEmote: "chase", mostPlayedWith: true)]
         let s = await StoryDev.dump(f, n: 3, chain: StoryChain([TemplateWriter(memory: StoryMemory(salt: 2))]))
         XCTAssertEqual(s.components(separatedBy: "about ").count - 1, 3)
         XCTAssertEqual(s.components(separatedBy: "note Berry>Latte").count - 1, 3)
