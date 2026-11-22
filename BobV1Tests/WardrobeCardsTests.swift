@@ -15,8 +15,9 @@ final class WardrobeCardsTests: XCTestCase {
         let c = UIHostingController(rootView: v)
         return c.sizeThatFits(in: CGSize(width: width ?? 1000, height: 5000))
     }
-    private func face(_ look: WearLook, _ w: CGFloat, worn: Bool = false) -> WardrobeCardFace {
-        WardrobeCardFace(look: look, tag: look.tags.first, match: 1, worn: worn, otherName: nil, width: w)
+    /// The card at its own natural height (the card asks for all the height it is offered, so a row can stretch it: pin it to what it needs for the measurement).
+    private func face(_ look: WearLook, _ w: CGFloat, worn: Bool = false) -> some View {
+        WardrobeCardFace(look: look, tag: look.tags.first, match: 1, worn: worn, otherName: nil, width: w).fixedSize(horizontal: false, vertical: true)
     }
 
     func testEveryCardHasTheSameHeightAtTwoWidths() {

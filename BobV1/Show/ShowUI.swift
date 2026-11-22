@@ -926,7 +926,7 @@ struct WardrobeSheet: View {
                 TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ")
                 Spacer()
             }
-            Text("\(rank.title) rank scores \(rank.slots) slots: \(rank.slotOrder.map { $0.title }.joined(separator: ", ")). Gold = matches \(theme.main.title).").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+            Text("\(rank.title) rank scores \(rank.slots) slots: \(rank.slotOrder.map { $0.title }.joined(separator: ", ")). Gold = matches \(theme.main.title).").font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(low && UIScreen.main.bounds.height < 700 ? 1 : nil).minimumScaleFactor(low && UIScreen.main.bounds.height < 700 ? 0.7 : 1).fixedSize(horizontal: false, vertical: true)
         }
     }
     private var wornPanel: some View {
