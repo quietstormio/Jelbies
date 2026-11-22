@@ -127,8 +127,26 @@ final class StartFlow {
     static func applyClearCamp(_ d: UserDefaults = .standard) {
         guard DevArgs.enabled, let token = d.string(forKey: "ClearCamp"), !token.isEmpty, d.string(forKey: "ClearCamp.applied") != token else { return }
         let ids = JellyCamp.savedLists(d).camp
-        var done = 0
-        for id in ids where JellyCamp.letGo(id, d) { done += 1 }
+        // `-ClearCampKeepTrophies 1`: the purge removes each creature's shelf in the trophy book; read it (raw JSON, so it comes back exactly) and the names first, put them back after.
+        let keep = d.integer(forKey: "ClearCampKeepTrophies") != 0
+        let trophyKey = TrophyBook.key, namesKey = "Circuit.retiredNames.v1"
+        var before: [String: Any] = [:]
+        if keep, let data = d.data(forKey: trophyKey), let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] { before = root }
+        let names = Dictionary(uniqueKeysWithValues: ids.map { (String($0), JellyRoster.nameOf($0)) })
+        var released: [Int] = []
+        for id in ids where JellyCamp.letGo(id, d) { released.append(id) }
+        let done = released.count
+        if keep {
+            var root: [String: Any] = [:]
+            if let data = d.data(forKey: trophyKey), let r = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] { root = r }
+            var kept: [Int] = [], n = 0
+            for id in released { if let entry = before[String(id)] { root[String(id)] = entry; kept.append(id); n += ((entry as? [String: Any])?["earned"] as? [Any])?.count ?? 0 } }
+            if !kept.isEmpty, let out = try? JSONSerialization.data(withJSONObject: root) { d.set(out, forKey: trophyKey) }
+            var retired = d.dictionary(forKey: namesKey) as? [String: String] ?? [:]
+            for id in kept { retired[String(id)] = names[String(id)] }
+            if !kept.isEmpty { d.set(retired, forKey: namesKey) }
+            print("[camp] ClearCamp kept trophies for ids \(kept.map(String.init).joined(separator: ",")) (\(n) trophies)")
+        }
         d.set(token, forKey: "ClearCamp.applied")
         print("[camp] ClearCamp: let go \(done) of \(ids.count) (ids \(ids.map(String.init).joined(separator: ",")))")
     }
