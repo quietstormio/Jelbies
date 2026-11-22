@@ -411,6 +411,7 @@ final class PlayToss {
                 if phase == .flying { phase = .loose; looseT = 0 }
             case .bodyHit(let id, let s):
                 if s > 0.9 { onEvent?(.bodyBoop(id: id)) }
+                if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, let j = jelly(id) { NSLog("[playsoft] clock=%.3f throw=%d id=%d speed=%.2f ballY=%.2f headTop=%.2f idle=%@ stage=%d phase=%@", clock, throwSerial, id, s, ball.pos.y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, String(describing: phase)) }
                 if phase == .flying { phase = .loose; looseT = 0 }
             case .headHit(let id):
                 if !headed { headed = true; header(by: id) }
