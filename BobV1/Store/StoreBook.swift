@@ -210,7 +210,8 @@ final class StoreBook {
     @ObservationIgnored var rosterCharacters: () -> [Int] = { [0] }
     /// Does this CHARACTER know `t`? Defaults, plus owned by him, plus owned for everyone (so a newly adopted Jelbie is covered at once).
     func knows(_ t: VoiceTrick, character: Int) -> Bool {
-        TrickCatalog.isDefault(t) || (saved.everyone ?? []).contains(t.rawValue) || (saved.ownedTricks?["\(character)"] ?? []).contains(t.rawValue)
+        if t == .hug { return BestHug.isUnlocked(for: character) }          // (the best-friends hug: not bought, not a default)
+        return TrickCatalog.isDefault(t) || (saved.everyone ?? []).contains(t.rawValue) || (saved.ownedTricks?["\(character)"] ?? []).contains(t.rawValue)
     }
     /// Where a trick comes from for this character (nil = a default or not known): the show menu's tag.
     func trickScope(_ t: VoiceTrick, character: Int) -> TrickScope? {
