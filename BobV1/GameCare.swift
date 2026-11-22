@@ -295,6 +295,15 @@ final class GameCare {
         bath = BathFlow(persists: preview ? false : nil, grimeKey: (c0 == 0 && !preview) ? nil : JellyKeys.grime(c0), grimeSeed: 0xB47B &+ UInt32(c0) &* 7919)
         group = DiningGroup(dining: dining, shared: true)
         store = StoreBook(wallet: bath.wallet, persists: !preview && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
+        // Dev aid (owner's phone test builds only): `-AddCoins N -AddCoinsToken T` adds N JellyCoins ONCE per token T, so a relaunch never adds twice.
+        if DevArgs.enabled, !preview, persistent {
+            let d = UserDefaults.standard
+            let n = d.integer(forKey: "AddCoins"), token = d.string(forKey: "AddCoinsToken") ?? ""
+            if n > 0, !token.isEmpty, d.string(forKey: "devAddCoins.lastToken") != token {
+                bath.wallet.add(n, silent: true)
+                d.set(token, forKey: "devAddCoins.lastToken")
+            }
+        }
         let v = voice ?? VoiceCoordinator(training: (c0 == 0 && !preview) ? nil : VoiceTraining(defaults: defaults, key: JellyKeys.words(c0), name: JellyRoster.nameOf(c0), persists: persistent), ai: preview ? AIHub(model: nil) : nil)
         self.voice = v
         upgrades = UpgradeBook(persists: persistent && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, defaults: defaults)
