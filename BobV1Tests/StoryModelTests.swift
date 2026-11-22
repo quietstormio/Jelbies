@@ -76,11 +76,12 @@ final class StoryModelTests: XCTestCase {
 
     func testAMarkerLeftBehindTurnsTheModelOffAndTheBankAnswers() async {
         let d = suite()
-        StoryModelSentinel.begin("respond(about)", d)            // ...and the process dies here: nothing calls `end`
-        XCTAssertNotNil(d.string(forKey: StoryModelSentinel.markerKey))
-        StoryModelSentinel.end(StoryModelSentinel.inFlight == 0 ? 0 : -1, d)          // (a different token: the marker must survive, as it would in a dead process)
+        let t = StoryModelSentinel.begin("respond(about)", d)
+        XCTAssertNotNil(d.string(forKey: StoryModelSentinel.markerKey))          // the process dies here: `end` never runs; its marker is all that is left on disk
+        let left = d.string(forKey: StoryModelSentinel.markerKey)
+        StoryModelSentinel.end(t, d)          // (the test process lives on, so its in-memory state is tidied)
+        d.set(left, forKey: StoryModelSentinel.markerKey)
         // relaunch
-        d.set("respond(about)#4", forKey: StoryModelSentinel.markerKey)
         XCTAssertEqual(StoryModelSentinel.launchCheck(d), "respond(about)")
         XCTAssertEqual(StoryModelSentinel.disabledStep(d), "respond(about)")
         XCTAssertNil(d.string(forKey: StoryModelSentinel.markerKey))
