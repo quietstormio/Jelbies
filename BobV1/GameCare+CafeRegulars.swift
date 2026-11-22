@@ -230,7 +230,7 @@ extension GameCare {
                 let p = table.layout.places[i]
                 return (t + p.rel + SIMD2(0, GameCare.eatCloser), p.yaw)
             }
-            let walkable = ends.allSatisfy { e in GameCamera.roamFloor?.contains(e.stand) ?? true }          // (both stands on the floor, not under a button)
+            let walkable = ends.allSatisfy { e in simd_distance(e.stand, GameCamera.arenaCenter) <= GameCamera.arenaRadius + 0.3 }          // (both stands inside the café's floor arena)
             guard walkable, floors.allSatisfy({ f in ends.allSatisfy { simd_distance(f, $0.stand) >= Self.regularMargin } }) else { table.reset(); continue }
             let door = Self.regularDoor(landscape: landscape)
             ends.sort { simd_distance($0.stand, door) < simd_distance($1.stand, door) }          // (the first in takes the end nearer the door)
