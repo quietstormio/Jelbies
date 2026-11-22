@@ -88,7 +88,7 @@ nonisolated enum WearRules {
     /// wear-audit-r1 (2026-11-22): a per-hat seat correction applied to the authored mesh before it is bound (not in WearGenerated.swift, which the converter rewrites): the whole hat
     /// is raised `dy` and tipped back `tip` rad (the front rim rises, the back dips) about the point `pivotY` below the anchor, so a rim the art drew above the brows clears them on the
     /// real head. The cowboy hat's brim came down over the brows (audit AUDIT.md); tests and captures can override the table (`hatFitOverride`).
-    struct HatFit: Equatable { var dy: Float; var tip: Float; var pivotY: Float = -0.15 }
+    struct HatFit: Equatable { var dy: Float; var tip: Float; var pivotY: Float = -0.15; var stretch: Float = 1 }
     nonisolated(unsafe) static var hatFitOverride: [WearLook: HatFit] = [:]
     static func hatFit(_ l: WearLook) -> HatFit? {
         if let o = hatFitOverride[l] { return o }
@@ -99,7 +99,9 @@ nonisolated enum WearRules {
     }
     /// The offset of authored vertex `v` (relative to the anchor) after the hat's seat correction.
     @inline(__always) static func seated(_ v: SIMD3<Float>, _ f: HatFit) -> SIMD3<Float> {
-        let y = v.y - f.pivotY, c = cosf(f.tip), s = sinf(f.tip)
+        var y = v.y - f.pivotY
+        if y > 0 { y *= f.stretch }                                           // (stretch: the part above the pivot is made taller, a chef's pouf)
+        let c = cosf(f.tip), s = sinf(f.tip)
         return SIMD3(v.x, y * c + v.z * s + f.pivotY + f.dy, -y * s + v.z * c)
     }
 
