@@ -501,6 +501,10 @@ final class WearTests: XCTestCase {
         XCTAssertEqual(diff(in: mouth), 0, "the open mouth region is pixel-identical with the jersey on")
         let b0 = px(SIMD3(-0.4, 0.5, 0.35)), b1 = px(SIMD3(0.4, 0.25, 0.35))
         let band = (SIMD2(min(b0.x, b1.x), min(b0.y, b1.y)), SIMD2(max(b0.x, b1.x), max(b0.y, b1.y)))
-        XCTAssertGreaterThan(diff(in: band), 1500, "the band is drawn on the belly")
+        // (wear-audit-r1 2026-11-22: the expectation was an absolute 1500 px, written for a nearer camera. The room camera is wider now, the Jelmiko is about 90 px wide and the whole band test box is
+        // only ~57 x 17 px = 969 px, so 1500 could never be met. The band IS drawn (blue over the belly, picture in scratchpad wearaudit/jersey.jpg): it fills 97% of the box. The test now asks for
+        // most of the box, whatever the camera.)
+        let bandArea = Float((Int(band.1.x) - Int(band.0.x) + 1) * (Int(band.1.y) - Int(band.0.y) + 1))
+        XCTAssertGreaterThan(Float(diff(in: band)), 0.8 * bandArea, "the band is drawn on the belly")
     }
 }
