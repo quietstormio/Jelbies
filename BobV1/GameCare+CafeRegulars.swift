@@ -24,6 +24,12 @@ nonisolated enum CafeGuestPlan: Equatable, Sendable {
         if slots == 1 || r < nobodyShare + soloShare { return .solo }
         return r < nobodyShare + soloShare + pairHereShare ? .pairHere : .pairWalkIn
     }
+    /// Capture aid (dev arguments only): `-CafeGuestAtP x,z` / `-CafeGuestAtL x,z` put the pair's table (portrait / landscape) at that floor spot instead of the candidates.
+    static func forcedSpot(landscape: Bool) -> SIMD2<Float>? {
+        guard DevArgs.enabled, let s = UserDefaults.standard.string(forKey: landscape ? "CafeGuestAtL" : "CafeGuestAtP") else { return nil }
+        let v = s.split(separator: ",").compactMap { Float($0) }
+        return v.count == 2 ? SIMD2(v[0], v[1]) : nil
+    }
     /// Capture aid (dev arguments only): `-CafeGuests none|solo|pair|pairwalk`.
     static var forced: CafeGuestPlan? {
         guard DevArgs.enabled, let s = UserDefaults.standard.string(forKey: "CafeGuests") else { return nil }
@@ -47,6 +53,8 @@ final class CafeGuests {
 
 
 extension GameCare {
+    /// How far the pair's two stands are from their table's centre (the player's three use 1.25...1.3).
+    static let pairSideX: Float = 1.15
     /// A regular keeps at least this far from every Jelbie (centre to centre) when he picks where to stand.
     static let regularMargin: Float = 1.8
     /// Where regulars come in: the door side of the café, just outside the floor.
@@ -139,7 +147,7 @@ extension GameCare {
                     guard cafeOpenPairTable(floors: floors, landscape: landscape), let t = g.table, g.stands.indices.contains(k) else { book.regularWait[a.id] = 3; Self.guestLog("no clear pair table for guest \(k)"); continue }          // nothing clear yet: try again in a moment
                     stand = g.stands[k]; table = t
                     g.yaw[a.id] = g.yaws[k]
-                    g.waypoint[a.id] = SIMD2(stand.x, g.origin.y + 1.1)
+                    g.waypoint[a.id] = SIMD2(stand.x, max(g.origin.y + 1.1, Self.regularDoor(landscape: landscape).y - 0.2))          // (the lane along the front of the room, then straight to the stand: round the player's table and rug)
                 } else {
                     var spot: SIMD2<Float>?
                     for t in Self.regularTables(landscape: landscape) {
@@ -156,7 +164,7 @@ extension GameCare {
                     book.extraTables.append(tb); book.extraFrames.append(nil)
                     stand = t + SIMD2(0, -0.735 + GameCare.eatCloser); table = tb
                 }
-                a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius
+                if !pair { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }          // (a pair is placed by hand, not bound to the player's floor arena)
                 rehome(a, at: Self.regularDoor(landscape: landscape))
                 book.regularHome[a.id] = stand; book.regularTable[a.id] = table
                 book.regularState[a.id] = 1; book.regularWait[a.id] = nil
@@ -214,13 +222,13 @@ extension GameCare {
     func cafeOpenPairTable(floors: [SIMD2<Float>], landscape: Bool, quiet: Bool = false) -> Bool {
         let book = cafeBook, g = book.guests
         if g.table != nil { return true }
-        for t in Self.regularPairTables(landscape: landscape) {
+        for t in (CafeGuestPlan.forcedSpot(landscape: landscape).map { [$0] } ?? Self.regularPairTables(landscape: landscape)) {
             guard simd_distance(t, book.origin) > 2.2 else { continue }
             let table = DiningSet()
             table.registersCollider = false
             table.tableSkin = { n in FoodMeshes.mesh(id: n == 3 ? "cafetable_ends" : "cafetable_\(n)") }
             let saved = (DiningLayout.ends, DiningLayout.sideX, DiningLayout.reachFood, DiningLayout.endsYaw)
-            DiningLayout.ends = true; DiningLayout.sideX = 1.3; DiningLayout.reachFood = false; DiningLayout.endsYaw = DiningLayout.cafeEndsYaw
+            DiningLayout.ends = true; DiningLayout.sideX = Self.pairSideX; DiningLayout.reachFood = false; DiningLayout.endsYaw = DiningLayout.cafeEndsYaw
             AudioHub.hushTableSetup = quiet
             table.spawn(serving: CafePlate.emptyTable, n: 3, bobAt: SIMD2(99, 99), forcedOrigin: t)
             AudioHub.hushTableSetup = false
@@ -253,7 +261,6 @@ extension GameCare {
             g.yaw[a.id] = g.yaws[k]
             book.regularHome[a.id] = g.stands[k]; book.regularTable[a.id] = g.table
             book.regularState[a.id] = 2; book.regularWait[a.id] = nil
-            a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius
             rehome(a, at: g.stands[k])
             a.brain?.startTurn(to: g.yaws[k], sim: a.sim)
             book.regularIdle[a.id] = Float.random(in: 2...4)
