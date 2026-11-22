@@ -149,7 +149,7 @@ struct ProfileParagraph: View {
     var body: some View {
         ProfileRulerText(text: text, ruler: ProfileRuler.paragraphs, font: SK.font(15, .bold), lineSpacing: 3)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, -3).padding(.bottom, 1)          // line-box trim: the card rhythm (about 14 pt) is measured to the letters
+            .padding(.top, -3).padding(.bottom, -3)          // line-box trim: the card rhythm (about 14 pt) is measured to the letters
     }
 }
 

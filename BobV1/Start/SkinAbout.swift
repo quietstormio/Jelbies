@@ -27,7 +27,7 @@ nonisolated enum SkinAbout {
         8: ("Strawberry pink, with seeds and a leaf top.", "Sweet, cheerful and bouncy."),
         9: ("Aqua with milky white ribbons swirled in.", "Swirly and curious, and one of a kind."),
         10: ("Shiny gold from top to toe.", "Proud, cheerful and a bit of a show-off."),
-        11: ("Shiny silver chrome from top to toe.", "Cool and calm, with a silly side."),
+        11: ("Shiny silver chrome from top to toe.", "Calm and sleek, with a silly side."),
         12: ("Pastel rainbow of pink, mint, sky and lilac.", "Playful, and a little proud of its colours."),
         13: ("White with black cow-print patches.", "Gentle, clumsy and up for a snack."),
         14: ("Cream with chocolate cow-print patches.", "Warm, sleepy and happiest in the sun."),
