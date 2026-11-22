@@ -24,6 +24,8 @@ nonisolated struct StoryFacts: Codable, Equatable, Sendable {
         var mostPlayedWith = false
         /// Took part in a group activity together lately (about half a minute or more).
         var sharedGroup = false
+        /// Which kind of group session they shared most (a SocialKind key); a group note exists only when this is known.
+        var groupKind: String?
         /// Both favour the same floor area (a StoryPhrases.spot key), and both nap a lot: true shared facts for the notes.
         var sharedSpot: String?
         var napBuddies = false

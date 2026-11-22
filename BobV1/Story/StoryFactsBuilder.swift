@@ -69,7 +69,8 @@ enum StoryFactsBuilder {
     }
 
     nonisolated static func housemate(_ h: StoryHabits, id: Int, name: String, kind: String, other: StoryHabits? = nil) -> StoryFacts.Housemate {
-        var m = StoryFacts.Housemate(id: id, name: name, kindName: kind, playShare: h.playShare(with: id), togetherSeconds: h.seconds(with: id), topEmote: h.topEmote(with: id), sharedGroup: h.groupSeconds(with: id) >= 20)
+        var m = StoryFacts.Housemate(id: id, name: name, kindName: kind, playShare: h.playShare(with: id), togetherSeconds: h.seconds(with: id), topEmote: h.topEmote(with: id))
+        m.groupKind = h.topGroupKind(with: id); m.sharedGroup = m.groupKind != nil
         if let o = other {
             if let a = h.favouriteSpot, a == o.favouriteSpot { m.sharedSpot = a }
             m.napBuddies = h.hasHistory && o.hasHistory && h.restShare >= 0.3 && o.restShare >= 0.3

@@ -165,6 +165,10 @@ final class StoryTemplatesTests: XCTestCase {
         let table = counts.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
         print("[story-test] note bank openings (\(n) patterns): " + table.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
         XCTAssertGreaterThanOrEqual(n, 30)
+        // the Relationship stage names and the Park row's words are the player's own: a housemate note never reuses them; "group" is our word
+        let banned = ["just met", "getting to know you", "good friends", "close friends", "best friends", "best of friends", "best friend", "group"]
+        for p in StoryTemplates.noteBank { for w in banned { XCTAssertFalse(p.text.lowercased().contains(w) && p.text != "Only just met.", "\(p.text) uses \"\(w)\"") } }
+        for id in [10, 14, 15, 21, 22] { XCTAssertFalse(StoryTemplates.noteBank.contains { $0.id == id }) }
         XCTAssertLessThanOrEqual(Double(table.first!.value) / Double(n), 0.2, "\(table.first!.key) leads too many notes")
         XCTAssertLessThanOrEqual(counts["they"] ?? 0, 3)
         for p in StoryTemplates.noteBank { XCTAssertFalse(p.text.hasPrefix("{"), "a note must not open with a slot: \(p.text)") }
@@ -180,7 +184,7 @@ final class StoryTemplatesTests: XCTestCase {
             var f = StoryFacts(id: 1, name: "Berry", kindName: "Blush", kindAbout: "", mood: "")
             f.favouriteSpot = "window"
             var h = StoryFacts.Housemate(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: p.tiers.contains(.close) ? 900 : (p.tiers.contains(.regular) ? 100 : 0), topEmote: p.only ?? "chase")
-            h.sharedGroup = p.group; h.sharedSpot = p.spot ? "window" : nil; h.napBuddies = p.nap
+            h.groupKind = p.groupKinds.first; h.sharedGroup = h.groupKind != nil; h.sharedSpot = p.spot ? "window" : nil; h.napBuddies = p.nap
             let tier = StoryTemplates.tier(h)
             guard p.tiers.contains(tier) else { continue }
             let values = StoryFill.values(f, with: h)

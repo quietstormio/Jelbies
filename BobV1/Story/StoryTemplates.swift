@@ -124,10 +124,11 @@ nonisolated enum StoryTemplates {
         let id: Int; let tiers: Set<Tier>; let keys: [String]; let text: String
         var emote = false          // uses {EMOTE}
         var only: String?          // only when their top shared activity is exactly this SocialKind key
-        var group = false, spot = false, nap = false
+        var groupKinds: [String] = []          // only when the group session they shared most is one of these SocialKind keys
+        var spot = false, nap = false
     }
-    private static func N(_ id: Int, _ tiers: [Tier], _ keys: [String], _ text: String, emote: Bool = false, only: String? = nil, group: Bool = false, spot: Bool = false, nap: Bool = false) -> NotePattern {
-        NotePattern(id: id, tiers: Set(tiers), keys: keys, text: text, emote: emote, only: only, group: group, spot: spot, nap: nap)
+    private static func N(_ id: Int, _ tiers: [Tier], _ keys: [String], _ text: String, emote: Bool = false, only: String? = nil, groupKinds: [String] = [], spot: Bool = false, nap: Bool = false) -> NotePattern {
+        NotePattern(id: id, tiers: Set(tiers), keys: keys, text: text, emote: emote, only: only, groupKinds: groupKinds, spot: spot, nap: nap)
     }
     private static let tg = ["together"], few = ["gettingToKnow"]
 
@@ -145,21 +146,16 @@ nonisolated enum StoryTemplates {
         N(7, [.regular], tg, "Starting to play together."),
         N(8, [.regular], tg, "Play together now and then."),
         N(9, [.regular], tg, "Sometimes play together."),
-        N(10, [.regular], tg, "Fairly often found playing together."),
         // most played with
         N(11, [.regular, .close], tg, "Play together a lot."),
         N(12, [.close], tg, "Together most of the day."),
         N(13, [.close], tg, "Hardly ever apart."),
-        N(14, [.close], tg, "Best of friends."),
-        N(15, [.close], tg, "Close friends."),
         N(16, [.close], tg, "Inseparable."),
         N(17, [.close], tg, "Favourite playmate."),
         N(18, [.close], tg, "Spend most of their time together."),
         // what they do together most
         N(19, [.close, .regular], tg + ["topEmote"], "Often {EMOTE}.", emote: true),
         N(20, [.close, .regular], tg + ["topEmote"], "Always up for {EMOTE}.", emote: true),
-        N(21, [.close, .regular], tg + ["topEmote"], "A lot of time spent {EMOTE}.", emote: true),
-        N(22, [.close, .regular], tg + ["topEmote"], "Keep on {EMOTE}.", emote: true),
         N(23, [.close, .regular], tg + ["topEmote"], "Chase is their favourite thing.", only: "chase"),
         N(24, [.close, .regular], tg + ["topEmote"], "Always up for a round of chase.", only: "chase"),
         N(25, [.close, .regular], tg + ["topEmote"], "Love a dance together.", only: "dance"),
@@ -174,10 +170,11 @@ nonisolated enum StoryTemplates {
         N(33, [.close, .regular, .few], ["favouriteSpot", "sharedSpot"], "Often found {SPOT} together.", spot: true),
         N(34, [.close, .regular, .few], ["napBuddies"], "Nap buddies.", nap: true),
         N(35, [.close, .regular, .few], ["napBuddies"], "Both big nappers.", nap: true),
-        // group play
-        N(36, [.close, .regular], tg + ["sharedGroup"], "Joined in group play lately.", group: true),
-        N(37, [.close, .regular], tg + ["sharedGroup"], "Took part in a group activity lately.", group: true),
-        N(38, [.close, .regular], tg + ["sharedGroup"], "Played in a group lately.", group: true),
+        // a group session they shared lately (only when the game knows which kind it was)
+        N(36, [.close, .regular], tg + ["sharedGroup"], "Joined a conga line together.", groupKinds: ["conga", "congaLine"]),
+        N(37, [.close, .regular], tg + ["sharedGroup"], "Shared a group hug lately.", groupKinds: ["groupHug"]),
+        N(38, [.close, .regular], tg + ["sharedGroup"], "Danced in a ring together.", groupKinds: ["circleDance", "ringDance"]),
+        N(39, [.close, .regular], tg + ["sharedGroup"], "Cheered together lately.", groupKinds: ["groupCheer"]),
     ]
 
     /// The first word of a note as it will be read (letters only, lower case).
@@ -249,7 +246,7 @@ nonisolated enum StoryTemplates {
         let t = tier(h)
         let values = StoryFill.values(f, with: h), offered = StoryFill.offered(f, with: h), avail = StoryFill.facts(f, with: h)
         let eligible = noteBank.filter { p in
-            guard p.tiers.contains(t), !p.emote || values["EMOTE"] != nil, p.only == nil || p.only == h.topEmote, !p.group || h.sharedGroup, !p.spot || (h.sharedSpot != nil && values["SPOT"] != nil), !p.nap || h.napBuddies else { return false }
+            guard p.tiers.contains(t), !p.emote || values["EMOTE"] != nil, p.only == nil || p.only == h.topEmote, (p.groupKinds.isEmpty || (h.groupKind.map { p.groupKinds.contains($0) } ?? false)), !p.spot || (h.sharedSpot != nil && values["SPOT"] != nil), !p.nap || h.napBuddies else { return false }
             return !avoid.contains(firstWord(p.text))
         }
         var pool = eligible.filter { !used.contains($0.id) }

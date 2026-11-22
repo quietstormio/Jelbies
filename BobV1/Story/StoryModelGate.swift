@@ -137,13 +137,15 @@ nonisolated enum StoryPrompt {
         case .regular: lines.append("- [together] they often play together")
         case .few: lines.append("- [gettingToKnow] they are still getting to know each other")
         }
-        if h.sharedGroup { lines.append("- [sharedGroup] they joined in a group activity lately") }
+        if let k = h.groupKind, let w = StoryPrompt.groupWords[k] { lines.append("- [sharedGroup] lately they \(w)") }
         if h.sharedSpot != nil { lines.append("- [sharedSpot] they both like the same spot: {SPOT} (\(v["SPOT"] ?? ""))") }
         if h.napBuddies { lines.append("- [napBuddies] they both nap a lot") }
         if let x = v["EMOTE"], StoryTemplates.tier(h) != .few { lines.append("- [topEmote] they are often: {EMOTE} (\(x))") }
         lines.append("Placeholders you may use: {EMOTE} only with the topEmote fact, {SPOT} only with the sharedSpot fact.")
         return lines.joined(separator: "\n")
     }
+
+    static let groupWords = ["conga": "joined a conga line together", "congaLine": "joined a conga line together", "groupHug": "shared a group hug", "circleDance": "danced in a ring together", "ringDance": "danced in a ring together", "groupCheer": "cheered together"]
 
     /// The deny list over the prompt (Apple: check input and output). nil = clean.
     static func denied(_ prompt: String) -> String? { StoryGuard.denied(StoryGuard.masked(prompt), raw: prompt) }
