@@ -358,6 +358,7 @@ final class BlobBrain {
     var runArmS: [Float] = [0, 0], runArmV: [Float] = [0, 0]
     var runFalling = false           // the run blend is ramping out (the skid-stop)
     var pitchBase: Float = 0
+    var chat = ChatOverlay()             // cafe-talk-r1: the café table talk's nod / lean / look / arms / mouth, additive and never moving the feet or `yaw` (BlobBrain+ChatOverlay.swift)
     var twist: Float = 0                 // extra heading (the dining reach turns his body toward the arm; the feet stay where they are)
     var poseW: Float = 0            // 0 = free physics, 1 = fully driven
     var poseOn = false              // whether the current step wants the pose driven
@@ -1770,10 +1771,11 @@ final class BlobBrain {
     // MARK: pose
 
     func drivePose(_ sim: SoftBody, _ dt: Float) {
+        if chat.active { chat.tick(dt); if chat.armW > 0.3 { armWalkWant = max(armWalkWant, 1) }; if chat.mouthNow > 0 { mouthOpen = max(mouthOpen, chat.mouthNow) } }          // (cafe-talk-r1)
         if poseOn { poseW = min(1, poseW + dt / 0.25) } else { poseW = max(0, poseW - dt / 0.3) }
         guard poseW > 0 else { if sim.attractor.strength > 0 && !gait.isBusy { sim.attractor.strength = 0 }; return }
         // pitch outermost, roll innermost: rolling no longer turns the face (pitch * roll coupling was -3.9 deg in the game)
-        let q = yawQuat(yaw + twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch + ears.pitch + storm.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll + expr.roll + ears.roll + storm.roll, axis: SIMD3(0, 0, 1))
+        let q = yawQuat(yaw + twist + chat.twist) * simd_quatf(angle: pitch + pitchBase + touchPitch + socialBook.pitch + ears.pitch + storm.pitch + chat.pitch, axis: SIMD3(1, 0, 0)) * simd_quatf(angle: roll + touchRoll + socialBook.roll + expr.roll + ears.roll + storm.roll + chat.roll, axis: SIMD3(0, 0, 1))
         sim.attractor.rotation = q
         let sq = squash * touchSquash * socialBook.squash * ears.squash * storm.squash
         sim.attractor.squash = sq

@@ -35,9 +35,9 @@ final class CafeTalkProbe {
         next += 1
         for a in actors {
             guard let b = a.brain, let st = care.cafeBook.stands[a.id] else { continue }
-            let want = care.cafeBook.chatYaw[a.id] ?? b.faceCameraYaw()
+            let want = care.cafeSeats(actors).first { $0.id == a.id }?.yaw ?? b.faceCameraYaw()
             let d = simd_distance(GameCare.floorPos(b, a.sim), st)
-            let e = abs(GameCare.wrapAngle(b.yaw + b.twist - want))
+            let e = abs(GameCare.wrapAngle(b.yaw + b.twist + b.chat.twist - want))
             NSLog("[cafetalk] t=%.1f phase=%@ id=%d dist=%.3f yawErr=%.3f act=%@ idle=%@ feet=%d chirps=%@", clock, "\(ph)", a.id, d, e, "\(b.activity)", b.idleState.kind?.rawValue ?? "-", b.feet.active ? 1 : 0, "\(chirps.sorted { $0.key < $1.key })")
         }
     }

@@ -76,6 +76,8 @@ final class CafeBook {
     /// cafe-straw-r1: the yaw an END place faces (toward the other end); the middle one (and a table of one or two) is not in it and faces the room.
     var chatYaw: [Int: Float] = [:]
     var turnCool: [Int: Float] = [:]
+    /// cafe-talk-r1: the player's table's conversation (CafeChat.swift), fresh at the start of the lounge.
+    var chat = CafeChatState()
     nonisolated deinit {}
 }
 
