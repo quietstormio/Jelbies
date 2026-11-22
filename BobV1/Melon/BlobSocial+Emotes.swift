@@ -65,7 +65,7 @@ extension BlobBrain {
     /// pending request anywhere means no treat); two free Jelbies make a conga line, three also a ring dance.
     func socialTreatWatch(_ sim: SoftBody, _ dt: Float) {
         guard anticsEnabled, socialBook.enabled, social == nil, !held, autonomy || idleForced, idleState.kind != .sleep, idleDeepNight < 0.5, idleNight < 0.5, idleMood != .grumpy,
-              socialBook.treatCool <= 0 else { return }
+              socialBook.treatCool <= 0, !(MoveMix.on && (socialBook.groupCool > 0 || mixQuiet)) else { return }          // (MoveMix: treats share the one group clock)
         let others = socialOthers().filter { $0 !== self }
         let awake = others.filter { $0.idleState.kind != .sleep && !$0.sleepLocked }
         guard !awake.isEmpty, awake.allSatisfy({ !$0.held && simd_distance($0.position, position) < GroupTuning.radius }) else { socialBook.treatIdle = max(0, socialBook.treatIdle - 0.5 * dt); return }

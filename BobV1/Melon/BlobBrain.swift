@@ -197,6 +197,7 @@ final class BlobBrain {
     var emoteSpot = EmoteSpotState()
     /// move-mix-r1 (Melon/MoveMix.swift): what the last pick was, the no-social wait, a stroll that is due.
     var mix = MixBook()
+    var napWhy = "table"          // (round 2b: which roll started the last sleep: the logger counts nap causes)
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
     /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
@@ -261,6 +262,8 @@ final class BlobBrain {
     var commanded = false
     /// Voice v1: a trick to start on the next tick (the brain owns the skinner, so GameCare only queues it; see `startCommanded`).
     var commandedIdle: IdleKind?
+    /// The best-friends hug's request / walk / hearts (BlobBrain+BestHug.swift).
+    var bestHug = BestHugState()
     /// The dizzy spin trick: the commanded spin (`.tail`) ends in the dizzy wobble every time (BlobBrain+Antics.swift `tailNext`), instead of the usual 35 %.
     var commandedDizzyEnd = false
     /// Voice v1: the backflip trick, queued for the next tick. `flipCompact` = focus mode (lower apex so he stays in frame).
@@ -716,10 +719,10 @@ final class BlobBrain {
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
-        defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) }; storySample(dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
+        defer { if EmoteSpot.logOn { emoteSpotLog(dt) }; var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) }; storySample(dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
-        centreDwellTick(dt)
+        centreDwellTick(dt); mixOwnTick()
         contactTick(dt)          // (every tick, whatever he is doing: the touch event of the drawn skins, BlobBrain+Contact.swift)
         HopDiag.lap(.tkPre, &ht)
         reactTick(sim, skinner, dt)
@@ -749,6 +752,7 @@ final class BlobBrain {
 
         HopDiag.lap(.tkCommands, &ht)
         if volley.active { volleyTick(sim, skinner, dt); return }          // Jelly Volleyball owns the body
+        bestHugTick(dt)          // (the hug: the walk to the front, then a flagged hula; before the slow-wake hold so a sleeper's hug waits for the wake)
         slowWakeHoldCommands()          // (slow wake: a voice / trick command met a sleeper: it waits for the staged wake)
         if interruptScript { interruptScript = false; if case .none = script {} else { abortScript(sim, skinner) } }
         if blinkRequested { blinkRequested = false; skinner.blinkNow() }
@@ -940,6 +944,7 @@ final class BlobBrain {
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
         if footKeep { Self.slideFootTurnAways += 1 }
         if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { slideFootWalkTo = out; request(.goTo(out)); restTimer = 0.3; return }
+        if !footKeep, mixAfterRunDue(sim) { return }
         if !footKeep, mixStrollDue(sim) { return }          // (MoveMix.swift: a walk away after a pair / group emote)
         let mixLeg = !footKeep && mixWantsLeg()          // (MoveMix.swift: this pick is a leg, no special: after an in-place pick, after a solo emote, or from under a HUD button; a pair roll still comes first)
         if !footKeep, socialMaybeStart(sim) { mix.last = .social; return }
@@ -957,7 +962,7 @@ final class BlobBrain {
         var choice = w[0].0
         for (k, wt) in w { if r < wt { choice = k; break }; r -= wt }
         if footKeep || mixLeg { choice = 0 }
-        if MoveMix.on { mix.last = choice == 0 ? .leg : (choice == 1 || choice == 2 ? .inPlace : .solo) }
+        if MoveMix.on { mix.last = choice == 0 ? .leg : (choice == 1 || choice == 2 ? .inPlace : .solo); if choice == 0 { mix.legKind = mixLeg && !mixStopOK(position) ? "out" : "roam" } }
         lastPick = choice
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         switch choice {
@@ -988,6 +993,7 @@ final class BlobBrain {
             }
             if simd_length(target - here) < 0.3, let f = fallback { target = f }
             if simd_length(target - here) < 0.3 { restTimer = pickTimedOut ? 0.03 : 0.6; return }          // (out of time: look again in two frames, not after a rest)
+            if roamed, MoveMix.on, mixTryRun(to: target, sim) { mix.last = .leg; return }          // (MoveMix.swift: a long leg is sometimes run, with the game's own run gait)
             script = .walk(target: target, then: .none); activity = .walking
         case 1: script = .look(index: 0, t: 0, base: yaw)
         case 2: script = .stepInPlace(t: 0, dur: rand(1.8, 3.0)); activity = .steppingInPlace
@@ -1030,6 +1036,7 @@ final class BlobBrain {
     func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRoamGoal", probe) }
         var maxL = idleLegMax(maxWanderLeg)
+        if MoveMix.on { maxL = max(maxL, idleMood == .grumpy ? MoveMix.legMaxGrumpy : MoveMix.legMax) }          // (MoveMix.swift: the floor is ~11 u deep; with legs of 5.5 a body in the back needs two legs to reach the front)
         if EmoteSpot.enabled, homeRoom { maxL = max(maxL, EmoteSpot.roamLegMin) }          // (EmoteSpot.swift: a grumpy walk may still cross to a spot the room has used little: the whole room)
         var lo: Float = zone != nil ? 2.5 : 1.5
         if MoveMix.on { lo = max(lo, MoveMix.legMin) }          // (MoveMix.swift: roam legs of at least 2.5 u when the floor allows; the retry below drops to the old minimum)
@@ -1068,9 +1075,9 @@ final class BlobBrain {
             if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) - EmoteSpot.roamCellWeight * EmoteSpot.roamOver(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
             if MoveMix.on, !(rfStop?.stopOK(cand) ?? true) { score -= MoveMix.underButtonPenalty }          // (a goal under a HUD button is a pass-through spot: allowed, less liked; nothing starts there)
             if live || MoveMix.on { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
-            if MoveMix.on, let b = board {          // (MoveMix.swift: stale floor is the main term; a spot another body has claimed is out)
-                if b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
-                score += MoveMix.idleWeight * b.idleness(at: cand, now: b.now) / WalkBoard.idleCap
+            if MoveMix.on {          // (MoveMix.swift: stale floor is the main term, shared map blended with this body's own; a spot another body has claimed is out)
+                if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
+                score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap + MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
             }
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1

@@ -783,12 +783,14 @@ final class VoiceCoordinator {
         case .bow: return .politeBow
         case .bellyDrum: return .bellyDrum
         case .dizzySpin: return .tail          // (the spin; `commandedDizzyEnd` makes it end in the dizzy wobble)
+        case .hug: return nil          // (not an IdleKind of its own: `BlobBrain.commandBestHug`, a flagged hula, BlobBrain+BestHug.swift)
         case .flip, .come: return nil
         }
     }
     /// The trick-able move he is doing right now (nil = none).
     static func running(_ b: BlobBrain) -> VoiceTrick? {
         if case .flipPlay = b.script { return .flip }
+        if b.isBestHugging { return .hug }
         if !b.idleState.yielding, let t = trick(for: b.idleState.kind) { return t }
         return nil
     }
@@ -1089,6 +1091,8 @@ final class VoiceCoordinator {
                                                  // (a grumpy Bob comes too: his grumpy walk is already slow and small, and the close-up petting cheers him up)
         case .run where focused:
             pendingHop = true; hopWait = 0; walkAfterHop = false      // a run would carry him off the focus spot
+        case .hug:
+            care.startBond(brain: brain)
         case .flip:
             brain.flipCompact = focused
             brain.commandedFlipFail = rollFlipFail()

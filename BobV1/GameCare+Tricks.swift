@@ -32,14 +32,18 @@ extension GameCare {
         /// False = locked: the chip shows the price and opens the Shop's Tricks tab.
         let known: Bool
         let price: Int
+        /// A lock that is not a price (the Hug: "Reach Best friends to unlock"): a heart, no coins, the tap shows the hint.
+        var hint: String? = nil
         var id: String { trick.rawValue }
     }
 
     /// The row for this Jelbie: what he knows (defaults + bought) in stage order, then what he does not (locked, in Shop order).
     func trickMenu(jelly id: Int) -> [TrickChip] {
-        let known = ShowTrickInfo.stageTricks.filter { knows($0, jelly: id) }.map { TrickChip(trick: $0, known: true, price: 0) }
+        var known = ShowTrickInfo.stageTricks.filter { knows($0, jelly: id) }.map { TrickChip(trick: $0, known: true, price: 0) }
+        let hugOpen = knows(.hug, jelly: id)
+        if hugOpen { known.append(TrickChip(trick: .hug, known: true, price: 0)) }          // (the Hug is on no stage: BestHug, never sold)
         let locked = TrickCatalog.forSale.filter { ShowTrickInfo.stageTricks.contains($0.trick) && !knows($0.trick, jelly: id) }.map { TrickChip(trick: $0.trick, known: false, price: $0.price) }
-        return known + locked
+        return known + locked + (hugOpen ? [] : [TrickChip(trick: .hug, known: false, price: 0, hint: BestHug.hint)])
     }
 
     /// Why he cannot do a trick right now, in a few words (nil = he can).
@@ -57,12 +61,15 @@ extension GameCare {
     /// The player's tap on a known trick chip: that Jelbie does it at once. Always succeeds (no reliability roll). False = blocked or not his trick.
     @discardableResult
     func performTrick(_ t: VoiceTrick, jelly id: Int) -> Bool {
-        guard trickBlocker(jelly: id) == nil, knows(t, jelly: id), let b = brainFor(id) else { return false }
+        let inHisCloseUp = t == .hug && focus.phase == .focused && focusGroup.includes(id) && brainFor(id)?.activity != .touched && !(brainFor(id)?.isSleeping ?? true)          // (Bond while he is in the close-up: the "holding him" refusal is that very close-up)
+        guard inHisCloseUp || trickBlocker(jelly: id) == nil, knows(t, jelly: id), let b = brainFor(id) else { return false }
         b.idleState.trickFailNext = false          // (the button always succeeds: a flop flag left over from the Show must not turn this into a flop)
         if t == .flip {
             b.flipCompact = focus.isActive
             b.commandedFlipFail = false
             b.commandedFlip = true
+        } else if t == .hug {
+            startBond(slot: id)
         } else if let k = VoiceCoordinator.idleKind(for: t) {
             if t == .superSpring || t == .corkscrew || t == .moonwalk { b.flipCompact = focus.isActive }
             b.commandedIdle = k
