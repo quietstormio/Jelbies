@@ -16,10 +16,11 @@ import simd
 
 nonisolated enum BestHugTuning {
     /// Seconds from the end of the turn: the dip, the arms open, the arms close (the squeeze starts), the squeeze, the release.
-    static let dip: Float = 0.30, open: Float = 0.50, close: Float = 0.45
-    static var openEnd: Float { dip + 0.5 }
+    static let dip: Float = 0.30, rise: Float = 0.45, hold: Float = 1.0, close: Float = 0.45
+    /// The arms are up and open from `dip + rise` and held for `hold` ("come here"), then close.
+    static var openEnd: Float { dip + rise + hold }
     static var squeezeStart: Float { openEnd + close }
-    static let squeeze: Float = 1.5, release: Float = 0.70
+    static let squeeze: Float = 1.5, release: Float = 0.95
     static var squeezeEnd: Float { squeezeStart + squeeze }
     static var total: Float { squeezeEnd + release }
     /// Arms: elevation / sweep (rad) wide open and up, then closed round the front; the lean to the glass (rad of pitch), the press (squash), the sway (rad of roll).
@@ -43,6 +44,7 @@ struct BestHugState {
     var go = false            // the next hula that starts is the hug
     var hearts = 0            // hearts GameCare still has to float up from him
     var bigHeart = false
+    var burst = 0             // the fuller burst at the peak of the squeeze
     var buzz: Float = 0       // a haptic pulse (intensity) for GameCare to play (0 = none)
     var heartT: Float = 0
     var buzzT: Float = 0
@@ -124,11 +126,12 @@ extension BlobBrain {
         }
         // envelopes
         let dipK = t < T.dip ? sinf(.pi * t / T.dip) : 0
-        let armW = smooth01((t - 0.12) / 0.30) * (1 - smooth01((t - (T.squeezeEnd + 0.12)) / 0.30))
+        let armW = smooth01((t - 0.12) / 0.30) * (1 - smooth01((t - (T.squeezeEnd + 0.50)) / 0.30))          // (the arms open again at the release, a beat, then down)
         let closed = smooth01((t - T.openEnd) / T.close) * (1 - smooth01((t - T.squeezeEnd) / 0.25))
         let leanK = smooth01((t - T.openEnd) / T.close) * (1 - smooth01((t - T.squeezeEnd) / 0.30))
         let sq = smooth01((t - T.squeezeStart + 0.15) / 0.25) * (1 - smooth01((t - T.squeezeEnd) / 0.2))
         let upK = smooth01((t - 0.2) / 0.35) * (1 - smooth01((t - T.openEnd) / 0.3))
+        let burstAt = T.squeezeStart + 0.7
         // the body: a dip of anticipation, a little rise as the arms go up, the lean to the glass, the press, the slow sway
         squash *= (1 - 0.06 * dipK * a) * (1 + 0.035 * upK * a)
         pitch += T.lean * leanK * a
@@ -149,6 +152,7 @@ extension BlobBrain {
             if idleState.steps & 2 == 0 { idleState.steps |= 2; AudioHub.shared.chirp(jelly: steerID, .happy, x: px); jellyKick = max(jellyKick, 1.0); bestHug.buzz = 0.45 }
             bestHug.heartT -= dt
             if bestHug.heartT <= 0 { bestHug.heartT = T.heartGap; bestHug.hearts += 1 }
+            if idleState.steps & 8 == 0, t >= burstAt { idleState.steps |= 8; bestHug.burst = 4 }          // (the fuller burst at the peak)
             bestHug.buzzT -= dt
             if bestHug.buzzT <= 0 { bestHug.buzzT = 1 / 2.6; bestHug.buzz = max(bestHug.buzz, 0.16 + 0.12 * sq) }
         }

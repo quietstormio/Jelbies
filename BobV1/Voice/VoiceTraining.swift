@@ -39,7 +39,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .hula: return "Hula"; case .superSpring: return "Super spring"; case .corkscrew: return "Corkscrew jump"; case .oneLegSpin: return "One-leg spin"
         case .moonwalk: return "Moonwalk"; case .backBounce: return "Back bounce"; case .headstand: return "Headstand"
         case .bow: return "Take a bow"; case .bellyDrum: return "Belly drum"; case .dizzySpin: return "Dizzy spin"
-        case .hug: return "Hug"
+        case .hug: return "Bond"
         }
     }
     /// The words that command this trick (exact match, short commands). A trick the Jelbie owns is commanded with these; a word taught in the old
@@ -53,7 +53,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .hula: return ["hula", "hula dance", "dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]; case .oneLegSpin: return ["one leg spin", "pirouette", "tiptoe spin"]
         case .moonwalk: return ["moonwalk", "moon walk", "moan walk", "moonwalking", "moon walking", "moon walks"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
         case .bow: return ["bow", "take a bow", "take bow", "take your bow", "bow down", "take a bough"]; case .bellyDrum: return ["drum", "belly drum", "drum your belly", "drum belly", "drum on your belly", "belly drumming", "belly drums"]; case .dizzySpin: return ["dizzy", "dizzy spin", "dizzy spinning", "dizzy spins", "dizzy twirl"]
-        case .hug: return ["hug", "hugs", "hug me", "give hug", "give me hug", "hugging", "big hug"]
+        case .hug: return ["bond", "bonds", "bonding", "hug", "hugs", "hug me", "give hug", "give me hug", "hugging", "big hug"]
         }
     }
     /// A word to suggest, in the tip text only.
@@ -66,7 +66,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .hula: return "hula"; case .superSpring: return "super spring"; case .corkscrew: return "corkscrew"; case .oneLegSpin: return "one leg spin"
         case .moonwalk: return "moonwalk"; case .backBounce: return "back bounce"; case .headstand: return "headstand"
         case .bow: return "take a bow"; case .bellyDrum: return "belly drum"; case .dizzySpin: return "dizzy spin"
-        case .hug: return "hug"
+        case .hug: return "bond"
         }
     }
 }

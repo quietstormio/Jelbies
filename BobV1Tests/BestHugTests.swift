@@ -31,10 +31,10 @@ final class BestHugTests: XCTestCase {
 
     // MARK: voice
 
-    func testNamePlusHugRunsTheTrickWithNoMenuAndTheBareNameStillOpensIt() {
+    func testNamePlusBondOrHugRunsTheTrickWithNoMenuAndTheBareNameStillOpensIt() {
         let v = book { _ in true }
         let name = JellyRoster.names[1]
-        for said in ["\(name) hug", "\(name) give me a hug", "\(name) hug me", "hug me \(name)", "hey \(name) can you give me a hug"] {
+        for said in ["\(name) bond", "\(name) hug", "\(name) give me a hug", "\(name) hug me", "hug me \(name)", "hey \(name) can you give me a hug"] {
             let d = v.decideFull(transcript: said, runningMove: nil, mood: .happy, session: 1)
             XCTAssertEqual(d.reaction, .perform(.hug), "\"\(said)\"")
             XCTAssertFalse(d.nameOnly, "no menu: \"\(said)\"")
@@ -93,6 +93,11 @@ final class BestHugTests: XCTestCase {
 
     // MARK: the motion
 
+    func testTheTrickIsCalledBond() {
+        XCTAssertEqual(VoiceTrick.hug.title, "Bond"); XCTAssertTrue(BestHug.hint.hasSuffix("unlock Bond"))
+        XCTAssertEqual(BestHug.message(name: "Violet"), "Violet and you are best friends! New trick: Bond")
+    }
+
     func testHugOpensTheArmsSqueezesWithHeartsAndHandsBackClean() {
         let r = MotionRig(game: true)
         r.brain.idleForced = true; r.brain.commanded = true
@@ -108,6 +113,7 @@ final class BestHugTests: XCTestCase {
             guard b.idleState.kind == .hula, b.idleState.phase >= 1 else { return }
             hearts += b.bestHug.hearts; b.bestHug.hearts = 0
             if b.bestHug.bigHeart { big = true; b.bestHug.bigHeart = false }
+            hearts += b.bestHug.burst; b.bestHug.burst = 0
             if b.bestHug.buzz > 0 { buzzes += 1; b.bestHug.buzz = 0 }
             maxHearts = max(maxHearts, hearts)
             maxPitch = max(maxPitch, b.pitch); minSquash = min(minSquash, b.squash); maxRoll = max(maxRoll, abs(b.roll))

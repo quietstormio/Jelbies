@@ -19,8 +19,8 @@ nonisolated enum BestHug {
         return DevArgs.enabled && UserDefaults.standard.integer(forKey: "BestHugUnlocked") != 0
     }
     /// What a locked Hug chip says.
-    static let hint = "Reach Best friends to unlock"
-    static func message(name: String) -> String { "\(name) and you are best friends! New trick: Hug" }
+    static let hint = "Reach Best friends to unlock Bond"
+    static func message(name: String) -> String { "\(name) and you are best friends! New trick: Bond" }
 
     static func revealKey(_ id: Int) -> String { "BestHug.revealShown.\(id)" }
     static func revealShown(_ id: Int, _ d: UserDefaults = .standard) -> Bool { d.bool(forKey: revealKey(id)) }
@@ -38,11 +38,12 @@ extension GameCare {
             guard let b = brainFor(id) else { continue }
             while b.bestHug.hearts > 0 {
                 b.bestHug.hearts -= 1
-                bubbleHub.spawnHeart(for: id, now: now)          // (the hub's hearts for every slot, Bob too: the touch play's own list is wiped every frame it has no finger on him)
+                bubbleHub.spawnHeart(for: id, now: now, top: true)          // (the hub's hearts for every slot, Bob too: the touch play's own list is wiped every frame it has no finger on him)
             }
+            while b.bestHug.burst > 0 { b.bestHug.burst -= 1; bubbleHub.spawnHeart(for: id, now: now, top: true) }
             if b.bestHug.bigHeart {
                 b.bestHug.bigHeart = false
-                bubbleHub.spawnHeart(for: id, now: now, big: true)
+                bubbleHub.spawnHeart(for: id, now: now, big: true, top: true)
             }
             if b.bestHug.buzz > 0 {
                 let i = b.bestHug.buzz; b.bestHug.buzz = 0
