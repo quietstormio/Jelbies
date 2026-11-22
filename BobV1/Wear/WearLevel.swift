@@ -25,7 +25,8 @@ nonisolated enum WearLevel {
     static let window: Float = 0.62, reachY: Float = 0.16
     /// Radius (m) over which the skin radius is dilated and averaged; a clearance up to `bulgeFull` is bulged around fully, beyond `bulgeNone` the limb is left to pass (an arm
     /// pointing straight out would need a tent as long as the arm): the amount fades smoothly between them.
-    static let neighbourhood: Float = 0.06, bulgeFull: Float = 0.07, bulgeNone: Float = 0.15
+    static let neighbourhood: Float = 0.06
+    nonisolated(unsafe) static var bulgeFull: Float = envF("WEARBAND_BULGEFULL", 0.07), bulgeNone: Float = envF("WEARBAND_BULGENONE", 0.15)
 
     // MARK: the necklace tilt
     /// Necklace-class pieces (chains, pearl strings, the Diamond J) are kept on a TILTED loop in the body frame instead of a level one. The front centre keeps its authored height

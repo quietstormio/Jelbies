@@ -118,6 +118,7 @@ nonisolated enum WearMeshes {
         let p = WearPrepared(l)
         let anchor = l.row.anchorRest
         let isArm = WearRules.isArm(l)
+        let hatFit = isArm ? nil : WearRules.hatFit(l)
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
         for (pi, part) in a.parts.filter({ !WearRules.drops(l, part: $0.name) }).enumerated() {
             let rule = WearRules.rule(l, part: part.name)
@@ -128,7 +129,7 @@ nonisolated enum WearMeshes {
             for q in part.positions { ylo = min(ylo, q.y); yhi = max(yhi, q.y) }
             for k in 0..<part.positions.count {
                 let v = part.positions[k]
-                let r = isArm ? v : anchor + v
+                let r = isArm ? v : anchor + (hatFit.map { WearRules.seated(v, $0) } ?? v)
                 p.rest.append(r); p.nrm.append(part.normals[k]); p.ao.append(part.ao[k])
                 if material != 0 { if p.mat.isEmpty { p.mat = [Float](repeating: 0, count: p.rest.count - 1) }; p.mat.append(material) } else if !p.mat.isEmpty { p.mat.append(0) }
                 var c = part.colors[k]

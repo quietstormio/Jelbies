@@ -457,7 +457,7 @@ final class WearSweepTests: XCTestCase {
         for l in list {
             var rows: [[UIImage]] = []
             for id in [0, 1] {
-                for motion in ["walk", "bounce", "sleep"] {
+                for motion in (env("WEAR_AUDIT_MOTIONS")?.split(separator: ",").map(String.init) ?? ["walk", "bounce", "sleep"]) {
                     DayClock.shared.forcedHour = 12
                     let st = try makeStage(id)
                     let r = st.rig
@@ -467,6 +467,7 @@ final class WearSweepTests: XCTestCase {
                     let tg: [SIMD2<Float>] = [SIMD2(1.6, 0.4), SIMD2(-1.2, 1.0)]
                     switch motion {
                     case "walk": r.brain.request(.goTo(tg[0]))
+                    case "run": r.brain.hurry = true; r.brain.request(.goTo(tg[0]))
                     case "bounce": r.brain.idleForced = true; _ = r.brain.idleStart(.bounce, r.sim)
                     default:
                         r.brain.sleepEnabled = false; r.brain.idleForced = true
@@ -477,7 +478,7 @@ final class WearSweepTests: XCTestCase {
                         for _ in 0..<9 {
                             st.lab.tick(watching: false)
                             if motion == "sleep" { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }
-                            if motion == "walk", r.brain.activity != .walking && r.brain.activity != .coming { which = 1 - which; r.brain.request(.goTo(tg[which])) }
+                            if motion == "walk" || motion == "run", r.brain.activity != .walking && r.brain.activity != .coming { which = 1 - which; r.brain.request(.goTo(tg[which])) }
                             tick(st, l)
                         }
                         row.append(caption(shot(st, l, yaw: 0.65, focus: auditFocus(l.slot), lift: 0.15), "\(Self.names[id]) \(l.rawValue) \(motion) \(k)"))
@@ -487,6 +488,31 @@ final class WearSweepTests: XCTestCase {
             }
             try stack(rows, header: "\(l.rawValue): Bob then Pip; walk, happy bounce, asleep; six frames each").jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/motion/\(l.rawValue).jpg"))
         }
+    }
+
+    /// Capture-only: WEAR_AUDIT_DIR=<dir>, WEAR_AUDIT_HAT=cowboyHat, WEAR_AUDIT_FITS="0:0,0.03:0.1,0.05:0.12" (dy:tip pairs; "off" = no seat correction) writes <dir>/hatfit_<look>.jpg:
+    /// one row per fit and family (Bob, Moss, Teddy), columns front | 3/4 | side | room cam | low cam. The shipped fit is whatever `WearRules.hatFit` says when WEAR_AUDIT_FITS is "ship".
+    func testAuditHatFits() throws {
+        guard let d = env("WEAR_AUDIT_DIR"), let look = env("WEAR_AUDIT_HAT").flatMap({ WearLook(rawValue: $0) }) else { throw XCTSkip("WEAR_AUDIT_DIR / WEAR_AUDIT_HAT not set") }
+        try FileManager.default.createDirectory(atPath: d, withIntermediateDirectories: true)
+        let fits = (env("WEAR_AUDIT_FITS") ?? "ship").split(separator: ",").map(String.init)
+        let fams = env("WEAR_AUDIT_SP")?.split(separator: ",").compactMap { Int($0) } ?? [0, 2, 4]
+        let views: [(String, Float, Float)] = [("front", 0, 0.05), ("3/4", 0.65, 0.1), ("side", 1.5, 0.1), ("room cam", 0.25, 0.7), ("low cam", 0.25, -0.25)]
+        var stages: [Stage] = []
+        for id in fams { DayClock.shared.forcedHour = 12; stages.append(try makeStage(id)) }
+        let saved = WearRules.hatFitOverride; defer { WearRules.hatFitOverride = saved; WearMeshes.clearCache(); AntennaFit.clearCache() }
+        var rows: [[UIImage]] = []
+        for f in fits {
+            if f == "ship" { WearRules.hatFitOverride = [:] }
+            else if f == "off" { WearRules.hatFitOverride = [look: WearRules.HatFit(dy: 0, tip: 0)] }
+            else { let p = f.split(separator: ":").compactMap { Float($0) }; WearRules.hatFitOverride = [look: WearRules.HatFit(dy: p[0], tip: p.count > 1 ? p[1] : 0)] }
+            WearMeshes.clearCache(); AntennaFit.clearCache()
+            for (k, id) in fams.enumerated() {
+                dress(stages[k], look, ticks: 70, settleSim: true)
+                rows.append(views.map { v in caption(shot(stages[k], look, yaw: v.1, focus: auditFocus(look.slot), lift: v.2), "\(Self.names[id]) fit \(f) \(v.0)") })
+            }
+        }
+        try stack(rows, header: "\(look.rawValue): fits \(fits.joined(separator: " | ")) x \(fams.map { Self.names[$0] }.joined(separator: ", "))").jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/hatfit_\(look.rawValue).jpg"))
     }
 
     /// Writes Pip's shipped spike + tail geometry (rest space) to WEAR4_DIR/pip_geometry.json: the Blender generator of the Pip wardrobe variants clears it
