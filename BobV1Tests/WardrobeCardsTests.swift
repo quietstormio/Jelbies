@@ -127,4 +127,49 @@ final class WardrobeCardsTests: XCTestCase {
         }
         XCTAssertEqual(all.map { theme.match($0.tags) }, all.map { theme.match($0.tags) }.sorted(by: >), "best theme match first")
     }
+
+    // MARK: every picture shows its item
+
+    private func pixels(_ img: UIImage) -> [UInt8]? {
+        guard let cg = img.cgImage else { return nil }
+        let w = cg.width, h = cg.height
+        var data = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &data, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return data
+    }
+
+    /// A piece that renders nothing (inside the arm, at the origin, culled) would leave its card the bare Jelmiko: every catalogue item's card picture must differ from the
+    /// bare catalogue Jelmiko's, framed the same way, by a minimum number of pixels (shoes, which draw on their own foot stubs, must at least fill a fair part of the picture).
+    func testEveryItemsCardPictureDiffersFromTheBareJelmiko() throws {
+        var slots = Set<WearSlot>()
+        for item in StoreCatalog.items where item.isWearable {
+            guard let w = item.wear, let img = StoreThumb.wardrobeImage(item), let px = pixels(img) else { XCTFail("no picture for \(item.id)"); continue }
+            slots.insert(w.slot)
+            if w.isShoe {
+                let opaque = stride(from: 3, to: px.count, by: 4).filter { px[$0] > 40 }.count
+                XCTAssertGreaterThan(opaque, px.count / 4 / 20, "\(item.id): the shoes fill the picture")
+                continue
+            }
+            guard let bare = StoreThumb.wardrobeBareImage(item), let bpx = pixels(bare), bpx.count == px.count else { XCTFail("no bare picture for \(item.id)"); continue }
+            var diff = 0
+            for i in stride(from: 0, to: px.count, by: 4) {
+                let d = max(abs(Int(px[i]) - Int(bpx[i])), abs(Int(px[i + 1]) - Int(bpx[i + 1])), abs(Int(px[i + 2]) - Int(bpx[i + 2])), abs(Int(px[i + 3]) - Int(bpx[i + 3])))
+                if d > 24 { diff += 1 }
+            }
+            XCTAssertGreaterThan(diff, 700, "\(item.id) (\(w.slot.title)) shows its piece: \(diff) pixels differ from the bare Jelmiko")
+        }
+        XCTAssertTrue(slots.contains(.hands) && slots.contains(.head) && slots.contains(.feet) && slots.contains(.neck), "the check covers every slot the catalogue uses")
+    }
+
+    /// Writes the hand items' card picture and the Shop's own thumbnail to the capture folder (a look at the fit; skipped when the folder is not there).
+    func testWriteHandPictures() throws {
+        let dir = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/dressup"
+        guard FileManager.default.fileExists(atPath: dir) else { throw XCTSkip("no capture folder") }
+        for item in StoreCatalog.items where item.wear?.slot == .hands {
+            if let c = StoreThumb.wardrobeImage(item)?.pngData() { try c.write(to: URL(fileURLWithPath: "\(dir)/hands_card_\(item.id).png")) }
+            if let s = StoreThumb.image(for: item)?.pngData() { try s.write(to: URL(fileURLWithPath: "\(dir)/hands_shop_\(item.id).png")) }
+        }
+    }
 }

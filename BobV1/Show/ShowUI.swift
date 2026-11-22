@@ -543,8 +543,15 @@ extension StoreThumb {
         return image("ward-\(item.id)", mesh: drawn, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w, mesh: m))
     }
     static func wardrobeCached(_ item: StoreItem) -> UIImage? { cachedImage("ward-\(item.id)") }
+    /// The same picture of the bare catalogue Jelmiko (no piece), framed exactly as `wardrobeImage` frames the item: for telling a piece that renders nothing from one that does.
+    static func wardrobeBareImage(_ item: StoreItem) -> UIImage? {
+        guard let w = item.wear, !w.isShoe, let m = mesh(for: item) else { return nil }
+        let a = angles(for: item)
+        let bare = w.slot == .hands ? creamBody(jelbieBody()) : jelbieBody()
+        return image("wardbare-\(item.id)", mesh: bare, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w, mesh: m))
+    }
     /// The catalogue Jelmiko's body vertices recoloured cream (the eyes and the piece keep their colours).
-    private static func creamBody(_ m: RoomMesh) -> RoomMesh {
+    static func creamBody(_ m: RoomMesh) -> RoomMesh {
         let flesh = JellyRoster.palette(0)?.flesh ?? OKLab.srgbToLinear(SIMD3(0.50, 0.68, 0.95))
         let cream = OKLab.srgbToLinear(SIMD3<Float>(0.98, 0.94, 0.84))
         var out = m
