@@ -615,7 +615,7 @@ final class PlayToss {
             else if b.d > 0.30, interceptAt[j.id] == nil || clock - interceptAt[j.id]!.t > 0.45 {          // (he is in the middle of something the stand cannot interrupt: as before he is sent walking at once, the stand follows next step)
                 j.brain.requestNow(.goTo(stand)); interceptAt[j.id] = (meetXZ, clock)
             }
-            if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, Int(clock * 20) % 4 == 0 { NSLog("[playhead] clock=%.2f best=%d t=%.2f d=%.2f meetT=%.2f meet=(%.2f,%.2f) stand=(%.2f,%.2f) busy=%d kind=%@ script=%@", clock, j.id, b.t, b.d, meetT, meetXZ.x, meetXZ.y, stand.x, stand.y, j.brain.tossBusy ? 1 : 0, String(describing: j.brain.idleState.kind), String(describing: j.brain.script).prefix(20) as CVarArg) }
+            if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, Int(clock * 20) % 4 == 0 { NSLog("[playhead] clock=%.2f best=%d t=%.2f d=%.2f meetT=%.2f meet=(%.2f,%.2f) stand=(%.2f,%.2f) busy=%d kind=%@ script=%@", clock, j.id, b.t, b.d, meetT, meetXZ.x, meetXZ.y, stand.x, stand.y, j.brain.tossBusy ? 1 : 0, String(describing: j.brain.idleState.kind), String(String(describing: j.brain.script).prefix(20))) }
         } else if b.d > 0.30, !busy, b.t > 0.18 {          // (the old step under it: with `-BallReturnOld 1` always; otherwise for the late ball there is no time for a stand, crouch and jump: he steps under it as before and the old hop below meets it)
             let last = interceptAt[j.id]
             if last == nil || (clock - last!.t > 0.45 && simd_distance(last!.p, b.xz) > 0.25) {
