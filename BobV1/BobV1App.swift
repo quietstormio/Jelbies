@@ -16,7 +16,7 @@ struct BobV1App: App {
         #if !DEBUG
         if DevArgs.enabled { NSLog("[jelbies] DEV ARGS ENABLED in a non-Debug build: never ship this to the App Store") }
         #endif
-        LaunchTiming.mark("app init"); StartFlow.applyLaunchArguments(); PerfMeter.configure(); PhotoAlbum.register(); FootLog.configure() }          // -ResetForAdoption 1 (simulator) wipes before anything reads a save
+        LaunchTiming.mark("app init"); StartFlow.applyLaunchArguments(); PerfMeter.configure(); PhotoAlbum.register(); FootLog.configure(); MoveLog.configure() }          // -ResetForAdoption 1 (simulator) wipes before anything reads a save
 
     /// iPad only (sizeRestrictions is nil on iPhone): a resizable window never goes below about 600 x 500 pt.
     @MainActor private static func applyPadMinimumWindow() {
