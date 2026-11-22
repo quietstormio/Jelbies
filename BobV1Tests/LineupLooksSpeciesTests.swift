@@ -13,7 +13,7 @@ import simd
 final class LineupLooksSpeciesTests: XCTestCase {
     static let names = ["Marble", "Gold", "Silver", "Opal", "Moo", "Cocoa", "Blush", "Sunset", "Ruby", "Midnight", "Cotton Candy", "Ocean", "Lemon-Lime", "Lagoon", "Emerald", "Sapphire", "Amethyst", "Bronze"]
     static let ids = Array(9...26)
-    static let gradients: [Int: Float] = [16: 81, 19: 82, 20: 83, 21: 84, 22: 85, 13: 91, 14: 93, 15: 95]          // (13 / 14 / 15 = the cow family, CowLook.swift)
+    static let gradients: [Int: Float] = [16: 81, 19: 82, 20: 83, 21: 84, 22: 85, 13: 91, 14: 93, 15: 95, 10: 101, 11: 102, 26: 103, 17: 104, 23: 105, 24: 106, 25: 107]          // (13 / 14 / 15 = the cow family, CowLook.swift)
 
     func testIdentity() {
         XCTAssertEqual(JellyRoster.knownCount, 27)

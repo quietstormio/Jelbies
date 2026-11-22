@@ -42,6 +42,7 @@ static float teddyPomMask(float3 Q) {
 #include "BerryMarks.h"
 #include "GradientMarks.h"
 #include "CowMarks.h"
+#include "FinishMarks.h"
 
 constant int fastTier [[function_constant(0)]];
 // Species specialisation (tier 0 and up): a body without the lighter-front marking compiles the whole belly block out; one that is not Teddy
@@ -314,7 +315,8 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     float pandaPatch = 0.0;
     float jCover = 0.0, jBlush = 0.0;
     if (hasBelly && hasTeddy && tn > 4.5) {              // Panda (modes 51 / 52), Tiger (61 / 62), Berry (71 / 72): the painted markings, no belly (PandaMarks.h, TigerMarks.h, BerryMarks.h)
-        if (tn > 8.5) { col = cowPaint(col, Q, bm); }          // cow family (modes 91 / 93 / 95): patches (CowMarks.h)
+        if (tn > 9.5) { col = finishPaint(col, Q, bm, N, normalize(u.camPos.xyz - i.wp)); }          // finish family (modes 101...107): metal sheen / jewel sparkle (FinishMarks.h)
+        else if (tn > 8.5) { col = cowPaint(col, Q, bm); }          // cow family (modes 91 / 93 / 95): patches (CowMarks.h)
         else if (tn > 7.5) { col = gradientPaint(col, Q, bm); }          // gradient family (modes 81...85): the colour by height (GradientMarks.h)
         else if (tn > 6.5) { col = berryPaint(col, Q, bm); }
         else if (tn > 5.5) { col = tigerPaint(col, Q, bm); }
