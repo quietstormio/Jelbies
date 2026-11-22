@@ -15,13 +15,18 @@ private struct GuestSplitMix: RandomNumberGenerator {
 
 @MainActor
 final class CafeRegularsTests: XCTestCase {
+    private var savedArena: (SIMD2<Float>, Float, GameCamera.RoamFloor?, Float)?
+    override func setUp() {
+        super.setUp()
+        savedArena = (GameCamera.arenaCenter, GameCamera.arenaRadius, GameCamera.roamFloor, GameCamera.aspect)
+    }
     override func tearDown() {
         RoomLayout.apply(RoomCatalog.home)
         DecorField.shared.set([])
         DayClock.shared.forcedHour = 12
         GameCamera.aspect = 440.0 / 956.0
         DiningLayout.ends = false; DiningLayout.sideX = 1.11; DiningLayout.reachFood = false; DiningLayout.endsYaw = DiningLayout.homeEndsYaw
-        _ = GameCamera.refreshRoam(aspect: GameCamera.aspect)
+        if let a = savedArena { GameCamera.arenaCenter = a.0; GameCamera.arenaRadius = a.1; GameCamera.roamFloor = a.2; GameCamera.aspect = a.3 }          // (the café visits move the arena and the roam floor: put them back for the tests that run after)
         super.tearDown()
     }
 
