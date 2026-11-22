@@ -441,7 +441,7 @@ extension BlobBrain {
             if HopscotchTuning.walled, hopCourtBetween(position, p.pos) { continue }          // (park-hopscotch-r1)
             let d = simd_distance(p.pos, position)
             if MoveMix.on, o.mixQuiet || !mixStopOK(p.pos) { continue }          // (MoveMix.swift)
-            if d > max(peerGap * 0.8, MoveMix.on ? MoveMix.pairMinDist : 0) && d < 4.8 { cands.append((o, d)) }          // (MoveMix: a pair begins with a walk-up: at least 1.4 u apart)
+            if d > max(peerGap * 0.8, MoveMix.on ? MoveMix.pairMinDist : 0) && d < (MoveMix.on ? MoveMix.pairMaxDist : 4.8) { cands.append((o, d)) }          // (MoveMix: a pair begins with a walk-up: at least 1.4 u apart)
         }
         if cands.isEmpty { return false }
         guard starved || rand() < SocialTuning.pickChance * (watching ? (MoveMix.on ? MoveMix.watchPairMul : SocialTuning.livelyChance) : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) * parkSocialPickMul else { return false }
@@ -662,12 +662,12 @@ extension BlobBrain {
                 socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1) * parkSocialWaitMul * moreGroupWaitMul; socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
                 if s.kind.isTreat { socialBook.treatCool = rand(EmoteTuning.treatCooldown.0, EmoteTuning.treatCooldown.1); socialBook.treatIdle = 0; socialBook.treatBusy = 0; socialBook.lastTreat = s.kind }
             }
-            if MoveMix.on, !s.kind.isTreat {          // (MoveMix.swift: the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
-                let again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
-                socialBook.pair[pid] = again
-                if s.idC >= 0, s.idC != steerID { socialBook.pair[s.idC] = again }
-                if s.kind.isGroup {
-                    for id in s.crewIDs where id != steerID { socialBook.pair[id] = again }
+            if MoveMix.on, !s.kind.isTreat {          // (MoveMix.swift: after a PAIR the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
+                if !s.kind.isGroup {
+                    let again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
+                    socialBook.pair[pid] = again
+                    if s.idC >= 0, s.idC != steerID { socialBook.pair[s.idC] = again }
+                } else {
                     socialBook.groupCool = rand(MoveMix.groupCoolHome.lowerBound, MoveMix.groupCoolHome.upperBound) * (outingPlay ? MoveMix.groupCoolParkMul : 1)
                 }
             }

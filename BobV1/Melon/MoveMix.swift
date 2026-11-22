@@ -37,10 +37,15 @@ nonisolated enum MoveMix {
     static let groupWaitMul: Float = 2
     // 4. walking
     static let legAfterSolo: Float = 0.7
+    /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
+    static let soloGapMul: Float = 1.8
     static let legMin: Float = 2.5
     static let idleWeight: Float = 3.5          // x board.idleness / 60 in a roam goal's score
     static let roamCandidates = 8          // (was 6 valid candidates)
     static let claimRadius: Float = 1.1
+    static let underButtonPenalty: Float = 2.0
+    /// A pair partner may be this far (was 4.8): the strolls spread them out.
+    static let pairMaxDist: Float = 6.5
     /// Night / sleepy: the in-place chain rule and the forced leg off the buttons do not apply.
     static let sleepyNight: Float = 0.4
     // 5. buttons: see RoamFloor.stopFree / stopOK
@@ -83,7 +88,7 @@ extension BlobBrain {
 
     /// A pair / group session of this body just ended (BlobSocial.socialRelease): quiet period, then a stroll away.
     func mixSessionEnded(_ s: SocialSession, hard: Bool) {
-        guard MoveMix.on, s.kind != .look, s.kind != .zoomies, !s.kind.isTreat else { return }
+        guard MoveMix.on, s.kind != .look, s.kind != .zoomies else { return }
         let now = variety.now
         mix.quietUntil = now + rand(MoveMix.quiet.lowerBound, MoveMix.quiet.upperBound)
         socialBook.cooldown = max(socialBook.cooldown, mix.quietUntil - now)
@@ -103,8 +108,12 @@ extension BlobBrain {
     func mixStrollDue(_ sim: SoftBody) -> Bool {
         guard MoveMix.on, mix.strollUntil > 0 else { return false }
         let now = variety.now
-        defer { mix.strollUntil = -1 }
-        guard now < mix.strollUntil, idleState.kind == nil, let g = mixStrollGoal() else { return false }
+        guard now < mix.strollUntil, idleState.kind == nil else { mix.strollUntil = -1; return false }
+        guard let g = mixStrollGoal() else {
+            if pickTimedOut { restTimer = 0.03; return true }          // (out of pick time, not out of places: stay due, look again in two frames)
+            mix.strollUntil = -1; return false
+        }
+        mix.strollUntil = -1
         let here = position
         let d = g - here
         let len = simd_length(d)
@@ -129,6 +138,8 @@ extension BlobBrain {
             for _ in 0..<40 {
                 if pickOver { break }
                 let raw = rf.sampleArea(rand(), rand(), rand())
+                let dr = simd_distance(raw, here)
+                guard dr > lo, dr < hi, rf.stopOK(raw), pass > 0 || simd_dot((raw - here) / dr, out) >= cosf(MoveMix.strollOutward) else { continue }          // (the cheap tests first)
                 let rv = resolve(SIMD3(raw.x, 0, raw.y), footprint); let cand = SIMD2(rv.x, rv.z)
                 let d = simd_distance(cand, here)
                 guard simd_length(cand - raw) < 0.15, d > lo, d < hi, rf.stopOK(cand), peerFree(cand), !slideFootPoint(cand), !hopCourtWithin(cand, footprint * HopscotchTuning.wallReach + HopscotchTuning.noRest), reachable(here, cand) else { continue }
@@ -142,7 +153,7 @@ extension BlobBrain {
                     nearest = min(nearest, simd_distance(o.position, cand))
                     if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
                 }
-                var score = 0.6 * nearest + 0.3 * rand()
+                var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false)
                 if let b = board {
                     if b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
                     score += MoveMix.idleWeight * b.idleness(at: cand, now: b.now) / WalkBoard.idleCap
