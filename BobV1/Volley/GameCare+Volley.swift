@@ -300,8 +300,11 @@ extension GameCare {
         if Self.startVolleyPending, !volley.active, w.wait == nil {          // capture aid: `-StartVolley 1` match
             Self.startVolleyFrames += 1
             if Self.startVolleyFrames > 120 {
-                Self.startVolleyPending = false
-                startVolley(jelly: 0, mode: .match(volley.book.chosen), seed: UInt64(max(UserDefaults.standard.integer(forKey: "VolleySeed"), 1)))
+                if let why = volleyBlocker(jelly: 0, match: true) { if Self.startVolleyFrames % 120 == 0 { volleyAidLog("STARTVOLLEY blocked: \(why)\n") } }          // (retries every step until the room allows it)
+                else {
+                    Self.startVolleyPending = false
+                    startVolley(jelly: 0, mode: .match(volley.book.chosen), seed: UInt64(max(UserDefaults.standard.integer(forKey: "VolleySeed"), 1)))
+                }
             }
         }
         #endif
