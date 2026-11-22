@@ -35,6 +35,7 @@ extension BlobBrain {
         guard socialBook.pairRoll >= socialBook.pairRollLimit else { return }
         let r = outingPlay ? SocialMore.parkPairRoll : SocialMore.homePairRoll
         socialBook.pairRoll = 0; socialBook.pairRollLimit = rand(r.0, r.1)
+        if mixSoccerUrge(sim) { return }          // (MoveMix round 3b: a free body also looks for a ball pass here, every 4-8 s: the others are rarely free at his scheduler pick)
         _ = socialMaybeStart(sim)
     }
 }

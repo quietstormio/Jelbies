@@ -401,7 +401,7 @@ extension BlobBrain {
             MoveMix.soccerDbg["passFail-" + why, default: 0] += 1
             if EmoteSpot.logOn { NSLog("[soccerpass] t=%.1f id=%d fail=%@ tries=%d", variety.now, steerID, why, mix.soccerPassTries) }
             mix.soccerPassTries += 1
-            if mix.soccerPassTries <= 8 { MoveMix.soccerNextAt = clock + rand(6, 10); return false }          // (the pass is what was wanted: look again in a few seconds, do not turn it into a solo kick yet)
+            if mix.soccerPassTries <= 14 { MoveMix.soccerNextAt = clock + rand(2, 4); return false }          // (the pass is what was wanted: look again in a few seconds, do not turn it into a solo kick yet)
             mix.soccerPassTries = 0
         }
         mix.soccerOwn = true; defer { mix.soccerOwn = false }
