@@ -116,6 +116,7 @@ struct EmoteSpotState {
     var skip = false
     var walked: Float = 0
     var logT: Float = 0
+    var storyT: Float = 0          // the Profile story's sampler (Story/StorySampler.swift)
     var deferSince: Float = -1
 }
 

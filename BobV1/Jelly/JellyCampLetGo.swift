@@ -79,7 +79,7 @@ nonisolated extension JellyCamp {
     /// are also the prefix of every other id's keys). Anything per-instance that lives INSIDE a shared book is handled in `purge`; both lists are the one place to add to.
     @MainActor static func instanceKeys(_ id: Int) -> [String] {
         let stats = JellyKeys.stats(id)
-        return [JellyKeys.needs(id), JellyKeys.grime(id), JellyKeys.words(id), stats, stats + ".cond", stats + ".meals", stats + ".dances", JellyKeys.perks(id)]
+        return [JellyKeys.needs(id), JellyKeys.grime(id), JellyKeys.words(id), stats, stats + ".cond", stats + ".meals", stats + ".dances", stats + ".story", JellyKeys.perks(id)]
     }
 
     /// The shared books that hold an entry per instance, and where the entry is. (Documentation for `purge`; the test that scans a played creature checks each one.)
@@ -118,6 +118,8 @@ nonisolated extension JellyCamp {
         } else {
             for k in [JellyRoster.extraNamesKey, JellyRoster.speciesKey] { if var m = d.dictionary(forKey: k) { m.removeValue(forKey: sid); d.set(m, forKey: k) } }
         }
+        StoryBook.purge(id, d); StoryHabitStore.shared.forget(id)          // (Story/: the blurb, the notes naming this one, and the habit counters)
+        if d === UserDefaults.standard { StoryBook.shared.reload() }
         for hook in onPurge { hook(id) }
         JellyRoster.reloadSpecies(d); JellyRoster.names = JellyRoster.loadNames(d)          // the in-memory copies follow the save
         JellyVariants.reload(d); JellyTraitsBook.reload(d)

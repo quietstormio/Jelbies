@@ -1,0 +1,133 @@
+//
+//  StoryFacts.swift
+//  Everything a text about one Jelmiko may draw on, gathered from data the game really has (plain Codable; no player-typed word is ever sent to a writer: `StoryFill` swaps the
+//  placeholders for the real words only AFTER the guard). The values here are KEYS and facts; the words for the keys live in `StoryPhrases`.
+//
+
+import Foundation
+
+nonisolated struct StoryFacts: Codable, Equatable, Sendable {
+    struct Trophies: Codable, Equatable, Sendable {
+        var raceWins = 0, raceRibbons = 0, volleyWins = 0, showCups = 0, rosettes = 0
+        /// The hardest course a race was won on ("Puddle", "Ripple" ...), the highest Show rank with a cup.
+        var bestRaceTier: String?, bestShowRank: String?
+        /// The most recent engraved win: "race" / "volley" / "show" / "trophy", its tier or rank title, its date text and how many days ago.
+        var recentKind: String?, recentTier: String?, recentDate: String?, recentDaysAgo: Int?
+        var total: Int { raceWins + volleyWins + showCups + rosettes }
+    }
+    struct Housemate: Codable, Equatable, Sendable {
+        var id: Int
+        var name: String, kindName: String
+        /// This housemate's share of the pair / group time (0...1), seconds lately, the pair emote done together most (a SocialKind key), and whether they are the most played with.
+        var playShare = 0.0, togetherSeconds = 0
+        var topEmote: String?
+        var mostPlayedWith = false
+        /// Phase 3 fills this (a "Relationship" level for the pair); nil for now.
+        var relationshipLevel: String?
+    }
+
+    var id: Int
+    var name: String
+    var kindName: String
+    /// The kind's short description (the Jelly Spring's `SpeciesInfo.about`).
+    var kindAbout: String
+    /// The static paragraph the Profile shows above the blurb: ALREADY SHOWN, never repeated (colour and character note).
+    var shownParagraph: String?
+    var personality: String?
+    /// The favourite snack's store id ("cookie", "popsicle"): `StoryPhrases.food` has the words.
+    var favouriteFood: String?
+    /// hungry / thirsty / sleepy / happy (the Profile's own status words), "" when unknown.
+    var mood: String
+    var trophies = Trophies()
+    /// "naps" when much of the time lately is rest, else nil.
+    var sleepHabit: String?
+    // habits
+    var favouriteActivity: String?          // a StoryPhrases activity key ("bounce", "chase", "toy")
+    var favouriteActivityKind: String?      // "solo" / "pair" / "toy"
+    var favouriteSpot: String?              // "window" / "rug" / "couch" / "front"
+    var togetherShare = 0.0
+    var restShare = 0.0
+    var minutesSeen = 0
+    var daysTracked = 0
+    /// A brand-new Jelmiko: almost no history anywhere.
+    var newcomer = false
+    var housemates: [Housemate] = []
+    var mostPlayedWithID: Int?
+    /// Phase 3 fills this (a "Relationship" level with the player); nil for now.
+    var relationshipLevel: String?
+}
+
+/// The words for the keys. ONE table per kind; a key with no entry is simply not used in a sentence.
+nonisolated enum StoryPhrases {
+    /// {ACT}: fits "likes {ACT}" and "is often found {ACT}".
+    static let activity: [String: String] = [
+        "bounce": "bouncing about", "jacks": "doing jumping jacks", "sway": "swaying to the music", "window": "looking out of the window", "tail": "chasing a tail",
+        "flop": "flopping down for a wiggle", "stretch": "having a big stretch", "yawn": "having a big yawn", "chirp": "chirping a little tune", "skipHop": "skipping about",
+        "hopscotch": "playing hopscotch", "legSpin": "spinning about", "trot": "trotting about", "giggle": "giggling", "joy": "dancing for joy", "bellyDrum": "drumming a tummy beat",
+        "politeBow": "taking a polite bow", "proudStrut": "strutting about", "tailThump": "thumping a tail", "flapHop": "flapping and hopping", "peek": "peeking round the sofa",
+        "decorSit": "settling into a cushion", "decorBoop": "sniffing the plant", "decorKick": "kicking the ball about", "decorHop": "bouncing on the mat", "decorPeek": "peeking in the toy box",
+        "decorSlide": "riding the slide", "slide": "sliding about", "scoot": "scooting about", "zoomies": "zooming about", "run": "running about", "lieDown": "lying flat for a moment",
+        "toy": "playing with the toys",
+        // together
+        "chase": "playing chase", "tag": "playing tag", "dance": "dancing together", "highFive": "swapping high fives", "pass": "passing the ball", "hopAlong": "hopping along together",
+        "twirl": "twirling together", "leapfrog": "playing leapfrog", "peekaboo": "playing peekaboo", "mirrorDance": "mirror dancing", "sitTogether": "sitting side by side",
+        "bagSit": "sharing a beanbag", "cuddle": "cuddling on the couch", "cuddleLean": "leaning on each other", "nuzzle": "sitting close", "boop": "giving little boops",
+        "follow": "following each other about", "line": "walking in a line", "chestBump": "bumping tummies", "littleRace": "having little races", "bellyBounce": "bouncing tummies",
+        "backToBack": "standing back to back", "ringAround": "going round in a ring", "swayHug": "swaying in a hug", "danceOff": "having a dance-off", "whisperGiggle": "whispering and giggling",
+        "shyWave": "waving hello", "cheekSquish": "squishing side by side", "spinHug": "spinning in a hug", "keepAway": "playing keep away", "greet": "saying hello", "spinTogether": "spinning together",
+        "orbit": "circling round", "upDown": "bouncing up and down together", "jumpTurns": "taking turns to jump",
+    ]
+    /// {FOOD}: bare plural / mass forms, so every pattern reads right ("never says no to cookies", "a soft spot for sushi"). Store food ids (JellyPersonality.snacks).
+    static let food: [String: String] = [
+        "donut": "donuts", "fries": "fries", "taco": "tacos", "cookie": "cookies", "cupcake": "cupcakes", "dumplings": "dumplings", "sushi": "sushi", "sandwich": "sandwiches",
+        "popsicle": "ice pops", "onigiri": "rice balls", "pancakestack": "pancakes", "minipizza": "mini pizzas", "cheeseburger": "cheeseburgers", "cinnamonroll": "cinnamon rolls",
+        "fruitskewer": "fruit skewers", "nuggets": "nuggets", "cakeslice": "cake",
+    ]
+    /// {SPOT}
+    static let spot: [String: String] = ["window": "by the window", "rug": "on the rug", "couch": "near the couch", "front": "at the front of the room"]
+    /// The words of a personality, lower case ("a sleepy type").
+    static func personality(_ p: String?) -> String? { p?.lowercased() }
+    /// The longest name the game allows (JellyRoster caps at 14); names are cleaned and cut here too.
+    static func cleanName(_ raw: String, fallback: String = "This Jelmiko") -> String {
+        var s = ""
+        for ch in raw where ch.isLetter || ch.isNumber || ch == " " || ch == "-" || ch == "'" || ch == "\u{2019}" { s.append(ch) }
+        s = s.split(separator: " ").joined(separator: " ")
+        s = String(s.prefix(14)).trimmingCharacters(in: .whitespaces)
+        return s.isEmpty ? fallback : s
+    }
+}
+
+/// Putting the real words in, AFTER the guard. A writer (templates or the model) only ever handles the tokens.
+nonisolated enum StoryFill {
+    /// The token values for a blurb about `f`, or a note about `f` and `with`. Only tokens with a real fact behind them are offered.
+    static func values(_ f: StoryFacts, with h: StoryFacts.Housemate? = nil) -> [String: String] {
+        var v: [String: String] = ["A": StoryPhrases.cleanName(f.name)]
+        if let h { v["B"] = StoryPhrases.cleanName(h.name, fallback: "a housemate"); if !h.kindName.isEmpty { v["BKIND"] = h.kindName } }
+        if let food = f.favouriteFood, let p = StoryPhrases.food[food] { v["FOOD"] = p }
+        if let k = f.favouriteActivity, let p = StoryPhrases.activity[k] { v["ACT"] = p }
+        if let s = f.favouriteSpot, let p = StoryPhrases.spot[s] { v["SPOT"] = p }
+        if let h, let e = h.topEmote, let p = StoryPhrases.activity[e] { v["EMOTE"] = p }
+        if let t = f.trophies.bestRaceTier { v["RACE"] = t }
+        if let t = f.trophies.bestShowRank { v["SHOW"] = t }
+        if let p = f.personality { v["PERS"] = p.lowercased() }
+        return v
+    }
+    static func offered(_ f: StoryFacts, with h: StoryFacts.Housemate? = nil) -> Set<String> { Set(values(f, with: h).keys) }
+
+    /// Puts the values in. Unknown tokens are left alone (the guard rejects a text that still has braces).
+    static func apply(_ text: String, _ values: [String: String]) -> String {
+        var out = text
+        for (k, val) in values { out = out.replacingOccurrences(of: "{\(k)}", with: val) }
+        return capitaliseSentences(out)
+    }
+
+    /// A value that starts a sentence ("cookies ...") gets a capital; names are left as typed.
+    static func capitaliseSentences(_ t: String) -> String {
+        var out = "", up = true
+        for ch in t {
+            if up, ch.isLetter { out.append(contentsOf: String(ch).uppercased()); up = false } else { out.append(ch); if ch.isLetter || ch.isNumber { up = false } }
+            if ch == "." || ch == "!" { up = true }
+        }
+        return out
+    }
+}
