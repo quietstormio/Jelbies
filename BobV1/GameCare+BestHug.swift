@@ -50,10 +50,15 @@ extension GameCare {
     func startBond(slot id: Int) {
         guard let b = brainFor(id), bondRun == nil else { return }
         if b.isSleeping { b.commandBestHug(inPlace: false); return }
-        if focus.phase == .focused, focusGroup.includes(id) { b.commandBestHug(inPlace: true); return }
+        if focus.phase == .focused, focusGroup.includes(id) {
+            if GameMessageCenter.shared.current?.identifier == "focus-hint" { GameMessageCenter.shared.dismiss(identifier: "focus-hint"); bondHintRestore = true; bondHugSeen = false }          // (the cuddle hint is off for the length of the hug and comes back after it)
+            b.commandBestHug(inPlace: true); return
+        }
         if focus.phase == .roaming, !bath.active, !tripActive {
+            FocusHint.suppressed = true          // (the close-up's first-visits hint stays off for a Bond that brings him to the front)
             beginFocus(ids: [id])
             if focus.phase == .approaching { bondRun = BondRunState(slot: id); return }
+            FocusHint.suppressed = false
         }
         b.commandBestHug(inPlace: false)
     }
@@ -64,6 +69,7 @@ extension GameCare {
 
     /// The run's per-step work: wait for the close-up, settle, hug, then let him go (the close-up's own release). Anything that ends the close-up on the way ends the run.
     private func tickBondRun(dt: Float) {
+        defer { FocusHint.suppressed = bondRun != nil }
         guard var r = bondRun else { return }
         r.t += dt
         guard let b = brainFor(r.slot), r.t < 40 else { bondRun = nil; if focus.phase == .focused || focus.phase == .approaching { release() }; return }
@@ -117,6 +123,14 @@ extension GameCare {
             if b.bestHug.buzz > 0 {
                 let i = b.bestHug.buzz; b.bestHug.buzz = 0
                 touchPlay?.haptics.transient(now: now, intensity: i, sharpness: 0.22)          // (the cuddle's own driver: it also plays in the close-up, where the room cues are refused)
+            }
+        }
+        if bondHintRestore {          // the hug is over and he is still in the close-up: the hint comes back exactly as it was
+            let hugging = jellies.indices.contains { id in brainFor(id).map { $0.isBestHugging || $0.bestHug.want || $0.bestHug.go } ?? false }
+            if hugging { bondHugSeen = true }
+            else if bondHugSeen || !focus.isActive {
+                bondHintRestore = false; bondHugSeen = false
+                if focus.phase == .focused { GameMessageCenter.shared.post(FocusHint.hintText, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky) }
             }
         }
         revealCheck(dt: dt)

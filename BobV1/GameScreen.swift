@@ -1815,15 +1815,18 @@ struct FocusHint: View {
     static var petActionsInRotor = false
     /// With VoiceOver on, or "Longer hints" set, the hint stays until the first interaction instead of fading at 3.5 s.
     private var sticky: Bool { A11ySettings.shared.longerHints || UIAccessibility.isVoiceOverRunning }
-    private var text: String {
+    static var hintText: String {
         UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelmiko to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
     }
+    private var text: String { Self.hintText }
+    /// True while a Bond is coming to the front in the close-up (GameCare+BestHug.swift): the hint is not posted (and does not count as a visit).
+    nonisolated(unsafe) static var suppressed = false
 
     /// The hint is a line on the one message bar (UI/GameMessageCenter.swift): posted once when the close-up opens, for the first few visits.
     var body: some View {
         Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
             .onAppear {
-                guard shown else { return }
+                guard shown, !Self.suppressed else { return }
                 UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
                 GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky)
             }
