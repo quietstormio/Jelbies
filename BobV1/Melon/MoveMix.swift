@@ -102,6 +102,7 @@ struct MixBook {
     var strollDirAt: Float = -99
     var strollThird = -1
     var soccerFollowAt: Float = -1
+    var soccerLogAt: Float = -99
     var windowUntil: Float = -1
     /// A run covers the first `runShare` of a leg; the rest is walked at the normal blend (afterRun = the real goal), so a run never ends in a stop.
     var afterRun: SIMD2<Float>?
@@ -358,6 +359,11 @@ extension BlobBrain {
 
     /// pickAutonomous (before the pair roll): with a soccer ball in the room, about every minute or so one of them starts a soccer moment: a pass with a friend, else a kick of his own.
     func mixSoccerUrge(_ sim: SoftBody) -> Bool {
+        if EmoteSpot.logOn, variety.now - mix.soccerLogAt > 10, let sb = DecorField.shared.feet.first(where: { $0.kind == .soccerball }) {          // (round 3 diagnosis: why a ball moment does not start)
+            mix.soccerLogAt = variety.now
+            let f = DecorField.shared
+            NSLog("[soccerurge] t=%.1f id=%d ball=(%.2f,%.2f) moving=%d occupant=%d wired=%d held=%d due=%d mood=%d res=%d soc=%d idle=%d hold=%d", variety.now, steerID, f.position(sb).x, f.position(sb).y, f.anim[sb.uid]?.moving == true ? 1 : 0, f.occupant[sb.uid] ?? -1, DecorKind.wired.contains(sb.kind) ? 1 : 0, sb.uid == f.held ? 1 : 0, SoccerState.shared.clock >= MoveMix.soccerNextAt ? 1 : 0, idleMood == .grumpy ? 1 : 0, reserved ? 1 : 0, social == nil ? 0 : 1, idleState.kind == nil ? 0 : 1, socialBook.hold ? 1 : 0)
+        }
         guard MoveMix.on, anticsEnabled, idleMood != .grumpy, !mixSleepy, !reserved, social == nil, idleState.kind == nil, !socialBook.hold, let ball = mixFreeSoccer() else { return false }
         let clock = SoccerState.shared.clock
         guard clock >= MoveMix.soccerNextAt else { return false }
