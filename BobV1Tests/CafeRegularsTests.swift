@@ -21,6 +21,7 @@ final class CafeRegularsTests: XCTestCase {
         DayClock.shared.forcedHour = 12
         GameCamera.aspect = 440.0 / 956.0
         DiningLayout.ends = false; DiningLayout.sideX = 1.11; DiningLayout.reachFood = false; DiningLayout.endsYaw = DiningLayout.homeEndsYaw
+        _ = GameCamera.refreshRoam(aspect: GameCamera.aspect)
         super.tearDown()
     }
 
