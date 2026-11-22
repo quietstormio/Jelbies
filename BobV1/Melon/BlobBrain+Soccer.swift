@@ -78,8 +78,10 @@ extension BlobBrain {
         let force = soccerModeForce
         let goal = nearestGoal(to: ball)
         var underButton: SIMD2<Float>?
-        if MoveMix.on, force == nil, !mixStopOK(ball) {          // (the ball lies under a HUD button, where it cannot be seen: it is dribbled out to floor that can)
-            outer: for r in [Float(1.6), 2.4, 3.2] { for k in 0..<12 { let a = Float(k) * .pi / 6; let p = ball + SIMD2(sinf(a), cosf(a)) * r; if field.openFloor(p), mixStopOK(p) { underButton = p; break outer } } }
+        let rfBall = roamProvider?()
+        let offFloor = rfBall.map { !$0.contains(ball) || $0.halfWidth(at: ball.y) - abs(ball.x) < 0.3 } ?? false          // (against a wall / outside the floor the Jelmiko walk on: nobody can stand behind it)
+        if MoveMix.on, force == nil, !mixStopOK(ball) || offFloor {          // (the ball lies under a HUD button, where it cannot be seen, or out at the wall: it is dribbled out to floor that can be used)
+            outer: for r in [Float(1.6), 2.4, 3.2] { for k in 0..<12 { let a = Float(k) * .pi / 6; let p = ball + SIMD2(sinf(a), cosf(a)) * r; if field.openFloor(p), mixStopOK(p), rfBall.map({ $0.contains(p) && $0.halfWidth(at: p.y) - abs(p.x) > 0.5 }) ?? true { underButton = p; break outer } } }
         }
         if let ub = underButton {
             plan.mode = .rescue; plan.target = ub
