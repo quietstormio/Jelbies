@@ -230,7 +230,10 @@ extension GameCare {
                 let p = table.layout.places[i]
                 return (t + p.rel + SIMD2(0, GameCare.eatCloser), p.yaw)
             }
-            guard floors.allSatisfy({ f in ends.allSatisfy { simd_distance(f, $0.stand) >= Self.regularMargin } }) else { table.reset(); continue }
+            guard floors.allSatisfy({ f in ends.allSatisfy { simd_distance(f, $0.stand) >= Self.regularMargin } }) else {
+                Self.guestLog("pair table at \(t) blocked: nearest body \(floors.flatMap { f in ends.map { simd_distance(f, $0.stand) } }.min() ?? 0) of floors \(floors)")
+                table.reset(); continue
+            }
             let door = Self.regularDoor(landscape: landscape)
             ends.sort { simd_distance($0.stand, door) < simd_distance($1.stand, door) }          // (the first in takes the end nearer the door)
             g.table = table; g.origin = t
@@ -245,7 +248,7 @@ extension GameCare {
     /// A pair that is already there when the player arrives: the table out, both at its ends facing each other, the cups down.
     private func cafeSeatPairAtOnce(_ actors: [JellyActor]) {
         let book = cafeBook, g = book.guests
-        guard cafeOpenPairTable(floors: actors.map(\.floor), landscape: GameCamera.aspect >= 1, quiet: true), book.regulars.count == 2 else { g.plan = .pairWalkIn; Self.guestLog("pair not seated at once, walks in"); return }
+        guard cafeOpenPairTable(floors: Array(book.stands.values), landscape: GameCamera.aspect >= 1, quiet: true), book.regulars.count == 2 else { g.plan = .pairWalkIn; Self.guestLog("pair not seated at once, walks in"); return }
         for (k, a) in book.regulars.enumerated() {
             g.yaw[a.id] = g.yaws[k]
             book.regularHome[a.id] = g.stands[k]; book.regularTable[a.id] = g.table
