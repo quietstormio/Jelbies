@@ -67,6 +67,24 @@ enum ProfileWords {
         while !SleepHours.isNight(hour: DayMath.wrap(t)), n < 36 * 60 { t += 1.0 / 60; n += 1 }
         return t
     }
+    /// The Profile's short status line (Siri and the widget keep `JellyStatus.sentence`): no needs / one need = the full sentence; two or more = "Berry needs you: hungry and thirsty."
+    /// (at most two reasons, the most urgent first; the Right now chips show the rest).
+    static func shortStatus(_ s: JellyState, sleeping: Bool, night: Bool) -> String {
+        let needy = JellyCare.allCases.filter { s.tier($0).rawValue >= NeedTier.hungry.rawValue }
+        guard needy.count >= 2 else { return JellyStatus.sentence(s, sleeping: sleeping, night: night) }
+        let worst = needy.sorted { a, b in
+            let ta = s.tier(a).rawValue, tb = s.tier(b).rawValue
+            return ta != tb ? ta > tb : s.level(a) < s.level(b)
+        }.prefix(2).map { c -> String in
+            switch c {
+            case .food: return "hungry"
+            case .water: return "thirsty"
+            case .heart: return "lonely"
+            case .soap: return "dirty"
+            }
+        }
+        return "\(s.name) needs you: \(worst.joined(separator: " and "))."
+    }
     /// "7 AM", "8:20 PM": rounded to `round` minutes.
     static func clock(_ h: Double, round step: Int) -> String {
         let total = Int((DayMath.wrap(h) * 60 / Double(step)).rounded()) * step
@@ -92,16 +110,16 @@ private struct BondHeartsRow: View {
     let level: BondLevel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var popped: Int? = nil
-    private static let box = CGSize(width: 24, height: 22)
+    private static let box = CGSize(width: 19, height: 17)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Text("Relationship").font(SK.font(14, .heavy)).foregroundStyle(SK.muted)
-                ForEach(0..<BondTuning.hearts, id: \.self) { i in heart(i) }
-                Spacer(minLength: 0)
-            }
-            Text(level.name).font(SK.font(15, .black)).foregroundStyle(SK.ink).accessibilityIdentifier("profile-relationship-level")
+        let label = Text("Relationship").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
+        let hearts = HStack(spacing: 1) { ForEach(0..<BondTuning.hearts, id: \.self) { i in heart(i) } }
+        let name = Text(level.name).font(SK.font(14, .black)).foregroundStyle(SK.ink).accessibilityIdentifier("profile-relationship-level")
+        return ViewThatFits(in: .horizontal) {          // one line when it fits; the stage name wraps under only at large text sizes
+            HStack(spacing: 6) { label; hearts; name; Spacer(minLength: 0) }
+            VStack(alignment: .leading, spacing: 2) { HStack(spacing: 8) { label; hearts; Spacer(minLength: 0) }; name }
+            VStack(alignment: .leading, spacing: 2) { label; hearts; name }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(level.spoken)
@@ -135,9 +153,16 @@ struct ProfileScreen: View {
     var feed: (() -> Void)? = nil
     var drink: (() -> Void)? = nil
     @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.dynamicTypeSize) private var dts
     @State private var trophiesOpen = false
     @State private var stylesOpen = false
     private var compact: Bool { vsc == .compact }
+
+    /// The living line about the pet's life (one short sentence, at most two lines; another worker feeds it). Nil = the slot is hidden. `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
+    private static func lately(_ f: Facts) -> String? {
+        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return "Berry plays most with Latte, and an ice pop is her favourite treat." }
+        return nil
+    }
 
     private static let good = (bg: Color(hex: 0xDDF1E1), fg: Color(hex: 0x2F7A4A))
     private static let soon = (bg: Color(hex: 0xFFEBB0), fg: Color(hex: 0x8A5A00))
@@ -168,7 +193,7 @@ struct ProfileScreen: View {
             .task {          // capture aid (dev arguments only): `-ProfileScroll 1` scrolls the trophies card into view
                 guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileScroll") != 0 else { return }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
-                withAnimation { proxy.scrollTo("profile-trophies", anchor: .bottom) }
+                withAnimation { proxy.scrollTo(UserDefaults.standard.integer(forKey: "ProfileScroll") == 2 ? "profile-who" : "profile-trophies", anchor: .bottom) }          // `-ProfileScroll 2` scrolls the top card's bottom into view (landscape captures)
             }
             }
             ShowCTA(title: "See today's Jelly Show", id: "condition-show", height: compact ? 54 : 56) { show() }
@@ -194,6 +219,8 @@ struct ProfileScreen: View {
         let state: JellyState?
         let asleep: Bool
         let sentence: String
+        /// The short status line of the new top card.
+        let short: String
         let hour: Double
         /// The relationship now (points from the save; display only).
         let bond: BondLevel
@@ -206,6 +233,7 @@ struct ProfileScreen: View {
             let st = inp.map { JellyState(record: WidgetBridge.record($0, look: ""), awaySeconds: 0) }
             state = st
             sentence = st.map { JellyStatus.sentence($0, sleeping: sleeping, night: SleepHours.isNight(hour: DayClock.shared.hour)) } ?? ""
+            short = st.map { ProfileWords.shortStatus($0, sleeping: sleeping, night: SleepHours.isNight(hour: DayClock.shared.hour)) } ?? ""
             hour = DayClock.shared.hour
         }
     }
@@ -225,46 +253,102 @@ struct ProfileScreen: View {
 
     // MARK: 1. who
 
-    private func whoCard(_ f: Facts) -> some View {
+    private struct WhoBits { let body: Color; let species: Int; let info: SpeciesInfo?; let variant: JellyVariant? }
+    private func whoBits(_ f: Facts) -> WhoBits {
         let character = f.p?.character ?? who
         let t = JellyRoster.tint(character)
-        let body = Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))
         let species = JellyRoster.species(character)
-        let info = SpeciesInfo.all.first { $0.character == species }
+        return WhoBits(body: Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z)), species: species,
+                       info: SpeciesInfo.all.first { $0.character == species }, variant: JellyVariants.adopted(character))
+    }
+
+    private func whoPicture(_ b: WhoBits, _ size: CGFloat) -> some View {
+        ZStack {
+            Circle().fill(b.body.opacity(0.35))
+            Circle().strokeBorder(b.body.opacity(0.7), lineWidth: 3)
+            JelbiePortrait(care: care, who: who, size: size * 0.92, head: true, frameless: true)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private func whoName(_ center: Bool) -> some View {
+        Text(care.rosterName(who)).font(SK.font(30, .black)).foregroundStyle(SK.ink).jLine(2, scale: 0.6)
+            .multilineTextAlignment(center ? .center : .leading)
+            .accessibilityIdentifier("profile-name")
+    }
+
+    private func whoChip(icon: String, color: Color, text: String, id: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 13, weight: .black)).foregroundStyle(color).accessibilityHidden(true)
+            Text(text).font(SK.font(15, .heavy)).foregroundStyle(SK.ink)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(Capsule().fill(color.opacity(0.16)))
+        .accessibilityElement(children: .combine).accessibilityIdentifier(id)
+    }
+
+    /// The kind chip ("Blush") and the type chip ("Sleepy type"): side by side when they fit, else stacked.
+    private func whyChips(_ f: Facts, _ b: WhoBits, center: Bool) -> some View {
+        let al: HorizontalAlignment = center ? .center : .leading
+        let kind = b.info.map { whoChip(icon: "sparkles", color: ShowUI.goldDeep, text: $0.name, id: "profile-kind") }
+        let type = f.p?.traits.map { whoChip(icon: $0.personality.symbol, color: SK.pink, text: "\($0.personality.title) type", id: "profile-type") }
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) { kind; type }
+            VStack(alignment: al, spacing: 6) { kind; type }
+        }
+        .frame(maxWidth: .infinity, alignment: center ? .center : .leading)
+    }
+
+    private func whoStatus(_ f: Facts, center: Bool) -> some View {
+        Text(f.short).font(SK.font(18, .black)).foregroundStyle(SK.ink).lineSpacing(2)
+            .multilineTextAlignment(center ? .center : .leading)
+            .frame(maxWidth: .infinity, alignment: center ? .center : .leading).fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("profile-sentence")
+    }
+
+    /// The description as ONE paragraph, exactly as the game words it (SkinAbout: the colour sentence + the character sentence; the same words as the Spring page).
+    @ViewBuilder private func aboutParagraph(_ b: WhoBits) -> some View {
+        if b.info != nil {
+            Text(SkinAbout.text(look: b.species, variant: b.variant)).font(SK.font(15, .bold)).foregroundStyle(SK.ink).lineSpacing(3)
+                .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("profile-about")
+        }
+    }
+
+    /// The living-line slot: a soft bubble in the pet's body tint with a small sparkle; nothing at all when there is no text.
+    @ViewBuilder private func latelyBubble(_ f: Facts, _ b: WhoBits) -> some View {
+        if let text = Self.lately(f), !text.isEmpty {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "sparkle").font(.system(size: 13, weight: .black)).foregroundStyle(ShowUI.goldDeep).padding(.top, 3).accessibilityHidden(true)
+                Text(text).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).lineSpacing(3).jLine(2, scale: 1)
+                    .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(b.body.opacity(0.3)))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(b.body.opacity(0.5), lineWidth: 1.5))
+            .accessibilityElement(children: .ignore).accessibilityLabel("Lately: \(text)").accessibilityIdentifier("profile-lately")
+        }
+    }
+
+    /// The top card: header row (picture, name, chips, short status), the description paragraph, the living line (when there is one), the Relationship line.
+    private func whoCard(_ f: Facts) -> some View {
+        let b = whoBits(f)
+        let text = VStack(alignment: .leading, spacing: 6) {
+            whoName(false); whyChips(f, b, center: false); whoStatus(f, center: false)
+        }
         return card {
-            VStack(spacing: 10) {
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle().fill(body.opacity(0.35))
-                        Circle().strokeBorder(body.opacity(0.7), lineWidth: 3)
-                        JelbiePortrait(care: care, who: who, size: compact ? 96 : 118, head: true, frameless: true)
-                    }
-                    .frame(width: compact ? 104 : 128, height: compact ? 104 : 128)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(care.rosterName(who)).font(SK.font(30, .black)).foregroundStyle(SK.ink).jLine(2, scale: 0.6).accessibilityIdentifier("profile-name")
-                        if let info {
-                            HStack(spacing: 6) {
-                                Image(systemName: "sparkles").font(.system(size: 12, weight: .black)).foregroundStyle(ShowUI.goldDeep).accessibilityHidden(true)
-                                Text(info.name).font(SK.font(15, .heavy)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-                            }
-                            .accessibilityElement(children: .combine).accessibilityIdentifier("profile-kind")
-                            Text(SkinAbout.text(look: species, variant: JellyVariants.adopted(character))).font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("profile-about")          // SkinAbout: the same words as the Spring page, with this Jelmiko's own colour
-                        }
-                        if let tr = f.p?.traits {
-                            HStack(spacing: 6) {
-                                Image(systemName: tr.personality.symbol).font(.system(size: 12, weight: .black)).foregroundStyle(SK.pink).accessibilityHidden(true)
-                                Text("\(tr.personality.title) type \u{00B7} \(tr.personality.blurb)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-                            }
-                            .accessibilityElement(children: .combine)
-                        }
-                    }
-                    Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 12) {
+                if dts.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 10) { whoPicture(b, 104); text }
+                } else {
+                    HStack(alignment: .center, spacing: 14) { whoPicture(b, compact ? 104 : 128); text.frame(maxWidth: .infinity, alignment: .leading) }
                 }
-                Text(f.sentence).font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("profile-sentence")
+                aboutParagraph(b)
+                latelyBubble(f, b)
                 BondHeartsRow(level: f.bond).frame(maxWidth: .infinity, alignment: .leading).id(who)
             }
         }
+        .id("profile-who")
     }
 
     // MARK: 2. right now
