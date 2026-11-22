@@ -76,12 +76,12 @@ final class WearSweepTests: XCTestCase {
     }
 
     /// Fresh wardrobe + feature set wearing `look` (a few ticks so the carry settles).
-    private func dress(_ st: Stage, _ look: WearLook, ticks: Int = 3) {
+    private func dress(_ st: Stage, _ look: WearLook, ticks: Int = 3, settleSim: Bool = false) {
         let ticks = env("WEAR4_SETTLE").flatMap { Int($0) } ?? ticks          // capture-only: more ticks so a feature that pops in on a fresh FeatureSet (Moss's antennas) has finished
         let w = WornSet(); w.body = WearBody.shared; w.soundOn = false; Self.keep.append(w)
         let f = FeatureSet(); f.body = WearBody.shared; Self.keep.append(f)
         st.worn = w; st.feat = f
-        let settle = env("WEAR4_SETTLE") != nil
+        let settle = settleSim || env("WEAR4_SETTLE") != nil
         for _ in 0..<ticks { if settle { st.lab.tick(watching: false) }; tick(st, look) }          // (settle: the soft antennas live in the skinner and need the sim stepping too; the jelly.tick of the sleep loop crashed here)
     }
     private func tick(_ st: Stage, _ look: WearLook, dt: Float = 1.0 / 60) {
@@ -405,18 +405,26 @@ final class WearSweepTests: XCTestCase {
         let list = looks()
         guard !list.isEmpty else { throw XCTSkip("nothing selected") }
         let views: [(String, Float, Float)] = [("front", 0, 0.05), ("3/4", 0.65, 0.1), ("side", 1.5, 0.1), ("back", .pi, 0.1), ("room cam 35 down", 0.25, 0.7), ("low cam up", 0.25, -0.25)]
-        var tiles: [WearLook: [[UIImage]]] = [:]
-        for id in fams {
-            DayClock.shared.forcedHour = 12
-            let st = try makeStage(id)
-            for l in list {
-                dress(st, l, ticks: 8)
-                let f = auditFocus(l.slot)
-                tiles[l, default: []].append(views.map { v in caption(shot(st, l, yaw: v.1, focus: f, lift: v.2), "\(Self.names[id]) \(l.rawValue) \(v.0)") })
-            }
-        }
+        // hands: the whole front, then a close-up of each arm (front, 3/4), then the back and the room camera
+        let handViews: [(String, Float, Float, Float, Float, Float)] = [("front", 0, 0.05, 0, 0.05, 2.0), ("left arm close", 0, 0.05, -0.5, -0.1, 1.15), ("right arm close", 0, 0.05, 0.5, -0.1, 1.15),
+                                                                         ("left arm 3/4", 0.7, 0.1, -0.5, -0.1, 1.15), ("right arm 3/4", -0.7, 0.1, 0.5, -0.1, 1.15), ("room cam 35 down", 0.25, 0.7, 0, 0.05, 2.0)]
+        var stages: [Stage] = []
+        for id in fams { DayClock.shared.forcedHour = 12; stages.append(try makeStage(id)) }
+        var small: [WearLook: [UIImage]] = [:]          // the 3/4 tile of each family, for the overviews
         for l in list {
-            let img = stack(tiles[l] ?? [], header: "\(l.title) (\(l.rawValue), \(l.slot.rawValue)): rows \(fams.map { Self.names[$0] }.joined(separator: ", ")); columns front | 3/4 | side | back | room cam 35 down | low cam up")
+            var rows: [[UIImage]] = []
+            for (k, id) in fams.enumerated() {
+                let st = stages[k]
+                dress(st, l, ticks: 70, settleSim: true)
+                let f = auditFocus(l.slot)
+                if l.slot == .hands {
+                    rows.append(handViews.map { v in caption(shot(st, l, yaw: v.1, focus: (v.4, v.5), side: v.3, lift: v.2), "\(Self.names[id]) \(l.rawValue) \(v.0)") })
+                } else {
+                    rows.append(views.map { v in caption(shot(st, l, yaw: v.1, focus: f, lift: v.2), "\(Self.names[id]) \(l.rawValue) \(v.0)") })
+                }
+            }
+            small[l] = rows.map { $0[1] }
+            let img = stack(rows, header: "\(l.title) (\(l.rawValue), \(l.slot.rawValue)): rows \(fams.map { Self.names[$0] }.joined(separator: ", ")); columns front | 3/4 | side | back | room cam 35 down | low cam up")
             try img.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/sheets/\(l.rawValue).jpg"))
         }
         // one overview per slot: the 3/4 tile of every look on every family (small)
@@ -430,8 +438,8 @@ final class WearSweepTests: XCTestCase {
                 UIColor(white: 0.12, alpha: 1).setFill(); UIRectFill(CGRect(origin: .zero, size: size))
                 for (k, l) in ls.enumerated() {
                     let row = CGFloat(k / 2), half = CGFloat(k % 2) * CGFloat(fams.count)
-                    for (fi, rowTiles) in (tiles[l] ?? []).enumerated() where rowTiles.count > 1 {
-                        rowTiles[1].draw(in: CGRect(x: (half + CGFloat(fi)) * cell, y: row * cell, width: cell, height: cell))
+                    for (fi, tile) in (small[l] ?? []).enumerated() {
+                        tile.draw(in: CGRect(x: (half + CGFloat(fi)) * cell, y: row * cell, width: cell, height: cell))
                     }
                 }
             }
