@@ -95,23 +95,37 @@ final class WardrobeCardsTests: XCTestCase {
         return room.care
     }
 
-    /// The low height is exactly what the content needs, whatever the room offered, at the narrowest and the widest phone width, and it holds a whole card row.
-    func testLowHeightIsContentSizedAndHoldsAWholeCardRow() {
+    // MARK: the Dress up screen
+
+    /// The picture area is the same size with and without anything worn, and the feet stand at the same place in it, at the smallest and the tallest phone.
+    func testPictureAreaIsTheSameWithAndWithoutAnItem() {
         let care = stocked()
         let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
-        for w in [CGFloat(375), 440] {
-            let card = WardrobeStrip.rowCard(sheetWidth: w)
-            let gap = WardrobeCardFace.gap
-            XCTAssertLessThan(16 + 3 * card + 3 * gap, w, "part of the fourth card shows at \(w)")
-            XCTAssertGreaterThan(16 + 3 * card + 3 * gap + card, w, "the fourth card runs off the edge at \(w)")
-            XCTAssertGreaterThanOrEqual(card, 100, "cards keep their size at \(w)")
-            let sheet = WardrobeSheet(care: care, who: 0, theme: theme, rank: care.show.progress.chosen, low: true) {}
-            let tall = size(sheet, width: w).height
-            let c = UIHostingController(rootView: sheet)
-            let short = c.sizeThatFits(in: CGSize(width: w, height: 400)).height
-            XCTAssertEqual(tall, short, accuracy: 0.5, "the low sheet is as tall as its content, not as the room, at \(w)")
-            XCTAssertGreaterThanOrEqual(tall, size(face(looks[0], card), width: card).height, "a whole card fits at \(w)")
+        let rank = care.show.progress.chosen
+        for (w, h) in [(CGFloat(375), CGFloat(667 - 20)), (440, 956 - 62 - 34)] {
+            let area = DressUpScreen.figureHeight(containerHeight: h)
+            let bare = UIHostingController(rootView: DressUpFigure(care: care, who: 0, theme: theme, rank: rank, height: area)).sizeThatFits(in: CGSize(width: w - 32, height: 2000))
+            XCTAssertTrue(care.store.wear(.partyHat, on: 0)); XCTAssertTrue(care.store.wear(.glitterShoes, on: 0))
+            let dressed = UIHostingController(rootView: DressUpFigure(care: care, who: 0, theme: theme, rank: rank, height: area)).sizeThatFits(in: CGSize(width: w - 32, height: 2000))
+            care.store.takeOff(.head, from: 0); care.store.takeOff(.feet, from: 0)
+            XCTAssertEqual(bare.height, area, accuracy: 0.5, "the area is its fixed height at \(w)")
+            XCTAssertEqual(dressed, bare, "wearing things changes nothing about the picture area at \(w)")
         }
+    }
+
+    /// His feet (the disc top) and the disc itself are inside the picture area on every phone, with the room under them the disc needs; the area leaves a full row of cards below it on the smallest phone.
+    func testFeetAreInsideTheAreaAndARowFitsBelowOnTheSmallestPhone() {
+        for h in [CGFloat(667 - 20), 956 - 62 - 34, 667 - 20 - 44] {
+            let area = DressUpScreen.figureHeight(containerHeight: h)
+            let feet = area * DressUpFigure.floorAt
+            XCTAssertLessThan(feet + 0.07 * area, area, "feet and the front of the disc are in view at \(h)")
+        }
+        let h = CGFloat(667 - 20)
+        let area = DressUpScreen.figureHeight(containerHeight: h)
+        let card = WardrobeStrip.columns(for: 375 - 32 - 12).card
+        let cardHeight = UIHostingController(rootView: face(.partyHat, card)).sizeThatFits(in: CGSize(width: card, height: 2000)).height
+        let chrome: CGFloat = 4 + 52 + 6 + area + 6 + 46 + 6 + 44 + 6          // header, area, rule + hint, chips, gaps
+        XCTAssertGreaterThanOrEqual(h - chrome, cardHeight, "one whole row of cards shows under the picture on the smallest phone (\(h - chrome) pt for a \(cardHeight) pt card)")
     }
 
     /// The row and the grid are the same cards in the same order, and filtering keeps that order.
