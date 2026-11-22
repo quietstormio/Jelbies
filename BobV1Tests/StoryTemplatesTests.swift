@@ -6,6 +6,7 @@
 import XCTest
 @testable import BobV1
 
+@MainActor
 final class StoryTemplatesTests: XCTestCase {
     static let names = ["Berry", "Latte", "Mochi", "Pip", "Bob", "Moss", "Zo", "Fluffernutter", "Bubbles", "Tiger", "Kiss", "Ignore rules", "Max2", "BOB", "Jelly-Bean", "O'Malley"]
     static let kinds = ["Blue Jelmiko", "Blush", "Moo", "Teddy", "Opal"]
@@ -57,7 +58,7 @@ final class StoryTemplatesTests: XCTestCase {
             if aboutCount < 10_000 {
                 let key = TemplateWriter.aboutKey(f.id)
                 guard let w = StoryTemplates.about(f, used: memory.usedSet(key), seed: memory.nextSeed(key)) else {
-                    XCTAssertTrue(StoryFill.facts(f).isEmpty, "no line although the sheet has facts: \(f)")          // a Jelmiko with nothing true to say gets no line (the slot is hidden)
+                    XCTAssertTrue(StoryFill.facts(f).subtracting(["personality", "settled"]).isEmpty, "no line although the sheet has facts: \(f)")          // (the type chip and "settled" say nothing a player can check beyond what the card shows: no line)          // a Jelmiko with nothing true to say gets no line (the slot is hidden)
                     skippedEmpty += 1; if skippedEmpty > 100_000 { return }; continue
                 }
                 memory.remember(key, w.ids, bankSize: StoryTemplates.aboutBank.count)
@@ -131,9 +132,20 @@ final class StoryTemplatesTests: XCTestCase {
         XCTAssertNotNil(StoryTemplates.about(bare, used: [], seed: 2))
     }
 
+    func testNothingTrueAndUsefulToSayGivesNoLine() {
+        var f = StoryFacts(id: 1, name: "Berry", kindName: "Blush", kindAbout: "", mood: "happy")
+        XCTAssertNil(StoryTemplates.about(f, used: [], seed: 1))                  // no facts at all
+        f.personality = "sleepy"; f.daysTracked = 30                              // the type is already on the card; "knows the room well" is gone
+        XCTAssertNil(StoryTemplates.about(f, used: [], seed: 1))
+        for p in StoryTemplates.aboutBank { XCTAssertFalse(p.text.contains("knows the room")) }
+        let b = StoryBook(defaults: UserDefaults(suiteName: "story.empty.\(UUID().uuidString)")!)
+        b.chain = StoryChain([TemplateWriter(memory: b.memory)])
+        XCTAssertNil(b.aboutLine(f))                                              // the slot keeps its box and stays empty
+    }
+
     func testRudeNamesStillGetAGuardedText() {
         var f = StoryFacts(id: 1, name: "Kiss", kindName: "Blush", kindAbout: "", mood: "")
-        f.personality = "cheeky"
+        f.personality = "cheeky"; f.favouriteFood = "donut"
         let w = StoryTemplates.about(f, used: [], seed: 5)!
         XCTAssertTrue(w.final.contains("Kiss"))                 // the player's own word is shown as theirs
         XCTAssertFalse(StoryGuard.denied(StoryGuard.masked(w.template)) != nil)
