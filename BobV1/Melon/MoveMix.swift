@@ -40,6 +40,7 @@ nonisolated enum MoveMix {
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
     static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
+    static let windowGap: Float = 90
     /// Longest roam leg (was 5.5; 3.4 grumpy): a stale far cell is reachable in one leg.
     static let legMax: Float = 8.0, legMaxGrumpy: Float = 5.5
     static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
@@ -82,6 +83,7 @@ struct MixBook {
     var strollDir = SIMD2<Float>.zero
     var strollDirAt: Float = -99
     var strollThird = -1
+    var windowUntil: Float = -1
     /// What kind of leg this body was last sent on (the foot-lift proof logs by it): "roam", "stroll", "out" (from under a button).
     var legKind = "roam"
     /// The body's OWN idleness map: game time it was last in each of the 6 x 6 cells of the live floor (-inf = never).
