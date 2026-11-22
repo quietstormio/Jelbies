@@ -192,7 +192,8 @@ struct TrophyCaseOverlay: View {
                         .padding(.horizontal, 16).padding(.bottom, compact ? 16 : g.size.height * 0.31)          // (portrait: above the left button rail; landscape: centred, clear of the rail)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if care.trophyCardOpen {
-                    card.frame(maxWidth: compact ? 340 : 420)
+                    cardBody(maxListHeight: compact ? g.size.height - 245 : g.size.height * 0.5)          // (a look picked with -TrophyCardStyle, else today's card; landscape: clear of the coin pill)
+                        .frame(maxWidth: compact ? (TrophyCardStyle.current == nil ? 340 : 410) : 420)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .trailing : .bottom)
                         .padding(.horizontal, 12).padding(.top, compact ? 12 : 0).padding(.bottom, compact ? 12 : 110)
                         .transition(.move(edge: compact ? .trailing : .bottom).combined(with: .opacity))
@@ -203,6 +204,10 @@ struct TrophyCaseOverlay: View {
             .animation(.easeInOut(duration: 0.25), value: care.trophyFocusID)
         }
         .allowsHitTesting(care.trophyCardOpen || care.trophyFocusID != nil)
+    }
+
+    @ViewBuilder private func cardBody(maxListHeight: CGFloat) -> some View {
+        if let style = TrophyCardStyle.current { TrophyCardLook(care: care, style: style, compact: compact, maxListHeight: maxListHeight) } else { card }
     }
 
     private var card: some View {

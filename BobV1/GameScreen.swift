@@ -926,15 +926,18 @@ struct GameScreen: View {
                 if care.jellies.count > 1 { care.race.trophies.recordRace(character: care.jellies[1].character, tier: .ripple, place: 1) }
             }
             if m.contains("trophycase") {          // capture aid: wins on every course + a Show cup on the wall case; "trophycard" opens its card, "trophyfocus" looks at the Puddle cup, "trophyoff" hides the case
-                for t in CourseTier.allCases { care.race.trophies.recordRace(character: c, tier: t, place: 1) }
+                let one = m.contains("trophyone")          // "trophyone": a shelf with the Puddle cup only (the owner's real save)
+                for t in (one ? [CourseTier.puddle] : CourseTier.allCases) { care.race.trophies.recordRace(character: c, tier: t, place: 1) }
+                if !one {
                 care.show.progress.record(rank: .puddle, place: 1, theme: ShowSchedule.theme(dayKey: GameCare.showDay), character: c, burst: false, perfectDance: false, hatTrick: false)
                 care.race.trophies.recordShowCup(character: c, rank: .puddle, place: 1)
+                }
                 if m.contains("trophyold") { var sh = care.race.trophies.shelf(character: c); sh.won = sh.won?.filter { !$0.key.contains("puddle") }; care.race.trophies.setShelf(sh, character: c) }          // "trophyold": the Puddle win has no date
                 if m.contains("trophyfull") {          // "trophyfull": also the 10 / 25 win trophies and a volleyball cup on every court (every kind of trophy the case can show)
                     var sh = care.race.trophies.shelf(character: c)
                     for t in [Trophy.wins10, .wins25] where !sh.has(t) { sh.earned.append(t.id); sh.stamp("trophy.\(t.id)", Date()) }
                     care.race.trophies.setShelf(sh, character: c)
-                    for t in VolleyTier.allCases { care.race.trophies.recordVolleyWin(character: c, tier: t) }
+                    for t in VolleyTier.allCases { care.race.trophies.recordVolleyWin(character: t == .sandcastle || t == .shore ? (c == 1 ? 2 : 1) : c, tier: t) }          // (the first two courts were won by another Jelmiko, so a card by winner has more than one block)
                 }
                 if m.contains("trophyoff") { care.setTrophyCase(visible: false) }
                 if m.contains("trophycard") { await sleep(1); care.openTrophyCard() }
