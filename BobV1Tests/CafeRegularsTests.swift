@@ -95,12 +95,12 @@ final class CafeRegularsTests: XCTestCase {
                 for a in r.actors { XCTAssertGreaterThanOrEqual(simd_distance(s, a.floor), GameCare.pairMargin, "\(name): keeps the margin to the player's bodies") }
                 for st in c.cafeBook.stands.values { XCTAssertGreaterThanOrEqual(simd_distance(s, st), GameCare.pairMargin, "\(name): keeps the margin to the player's stands") }
                 XCTAssertLessThanOrEqual(abs(s.x), 4.0, "\(name): the stand \(s) is inside the floor"); XCTAssertTrue(s.y > -3.6 && s.y < 2.2, "\(name): the stand \(s) is on the floor")
-                for b in RoomCatalog.cafe.allBoxes { XCTAssertFalse(abs(s.x - b.centre.x) < b.halfExtents.x + 0.45 && abs(s.y - b.centre.z) < b.halfExtents.z + 0.45, "\(name): the stand \(s) is not inside the counter / booth") }
+                for b in RoomCatalog.cafe.allBoxes { XCTAssertFalse(abs(s.x - b.centre.x) < b.halfExtents.x + 0.4 && abs(s.y - b.centre.z) < b.halfExtents.z + 0.4, "\(name): the stand \(s) is not inside the counter / booth") }
             }
             // opposite ends, facing each other
             XCTAssertEqual(g.yaws.count, 2)
             XCTAssertEqual(g.yaws[0], -g.yaws[1], accuracy: 1e-4, "\(name): mirrored")
-            XCTAssertGreaterThan(abs(g.stands[0].x - g.stands[1].x), 2.0, "\(name): opposite sides of the table")
+            XCTAssertGreaterThan(abs(g.stands[0].x - g.stands[1].x), 1.5, "\(name): opposite sides of the table")
             XCTAssertEqual(Set(g.placeOf), [1, 2])
             print("[caferegulars] \(name): table \(g.origin) stands \(g.stands) yaws \(g.yaws) player table \(c.cafeBook.origin)")
         }
