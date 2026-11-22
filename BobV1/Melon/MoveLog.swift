@@ -41,6 +41,7 @@ final class MoveLog {
         var arrN = 0; var arrSec: Float = 0, arrDist: Float = 0          // (walks that ended within 0.5 u of their goal: their seconds and straight-line metres)
         /// Activity budget seconds: 0 roam leg, 1 walk to an emote / job, 2 plain stand, 3 solo emote, 4 pair emote, 5 group emote, 6 toy / play, 7 lying / sitting / sleeping, 8 waiting (held, stood on a walk), 9 other (eating, touched ...)
         var act = [Float](repeating: 0, count: 10)
+        var walkTimes: [Float] = []          // seconds of each walk that arrived
         var stands: [Float] = []          // plain stand episodes (s)
         var bump = [Int](repeating: 0, count: 3)          // body-body contacts of two bodies not in one session: both standing / one walking / both walking
         var pairN = 0, groupN = 0; var pairSec: Float = 0, groupSec: Float = 0          // finished sessions
@@ -58,7 +59,7 @@ final class MoveLog {
         for c in 0..<3 { a.bump[c] += o.bump[c] }
         a.walkSec += o.walkSec; a.gameSec += o.gameSec; a.emoteN += o.emoteN; a.walkN += o.walkN
         a.arrN += o.arrN; a.arrSec += o.arrSec; a.arrDist += o.arrDist
-        a.stands += o.stands; a.pairN += o.pairN; a.groupN += o.groupN; a.pairSec += o.pairSec; a.groupSec += o.groupSec
+        a.stands += o.stands; a.walkTimes += o.walkTimes; a.pairN += o.pairN; a.groupN += o.groupN; a.pairSec += o.pairSec; a.groupSec += o.groupSec
         a.idleMax3 = max(a.idleMax3, o.idleMax3); a.idleMax6 = max(a.idleMax6, o.idleMax6)
         a.idleCells3 = o.idleCells3; a.idleCells6 = o.idleCells6
     }
@@ -151,7 +152,7 @@ final class MoveLog {
             if b.isPerched || o.isPerched { s.overlapping.remove(o.steerID); continue }
             let g: Float = ContactField.gap(b.steerID, o.steerID, features: false) ?? (simd_distance(b.position, o.position) - 0.5 * b.peerGap)
             if g < 0 { if s.overlapping.insert(o.steerID).inserted { Self.note(.overlap) } } else { s.overlapping.remove(o.steerID) }
-            if g <= 0 {
+            if g <= 0, !(b.social != nil && b.social === o.social) {          // (bumps: bodies NOT in one session)
                 if s.touching.insert(o.steerID).inserted {
                     let me = s.speed > 0.15, he = (bodies[o.steerID]?.speed ?? 0) > 0.15
                     let k = (me ? 1 : 0) + (he ? 1 : 0)
@@ -170,7 +171,7 @@ final class MoveLog {
         guard let g = s.lastGoal, simd_distance(s.lastP, g) < 0.5 else { return }
         let d = simd_distance(s.walkStart, g)
         guard d > 0.3 else { return }
-        total.arrN += 1; total.arrSec += s.walkT; total.arrDist += d; window.arrN += 1; window.arrSec += s.walkT; window.arrDist += d
+        total.walkTimes.append(s.walkT); total.arrN += 1; total.arrSec += s.walkT; total.arrDist += d; window.arrN += 1; window.arrSec += s.walkT; window.arrDist += d
     }
 
     // MARK: move-b-r1: activity budget, stands, sessions, floor idleness (logging only)
@@ -269,6 +270,7 @@ final class MoveLog {
         var s = "act% [\(actText(t.act))]"
         s += String(format: " | stands %.1f/min med %.1f p90 %.1f max %.1f s, >5s %.1f/min >10s %.1f/min", Float(st.count) / mins, pct(st, 0.5), pct(st, 0.9), st.max() ?? 0, Float(st.filter { $0 > 5 }.count) / mins, Float(st.filter { $0 > 10 }.count) / mins)
         s += String(format: " | bumps/min stand-stand %.1f one-walking %.1f both-walking %.1f", Float(t.bump[0]) / mins, Float(t.bump[1]) / mins, Float(t.bump[2]) / mins)
+        s += String(format: " | walk-to-goal median %.1f s p90 %.1f s (%d arrivals)", pct(t.walkTimes, 0.5), pct(t.walkTimes, 0.9), t.arrN)
         s += String(format: " | pairs %.1f/h len %.1f s, groups %.1f/h len %.1f s", Float(t.pairN) / mins * 60, t.pairSec / Float(max(t.pairN, 1)), Float(t.groupN) / mins * 60, t.groupSec / Float(max(t.groupN, 1)))
         let g = max(t.gameSec, 0.01)
         s += String(format: " | idleness 3x3 mean %.1f max %.1f s, 6x6 mean %.1f max %.1f s", t.idleSum3.reduce(0, +) / g / Float(max(t.idleCells3, 1)), t.idleMax3, t.idleSum6.reduce(0, +) / g / Float(max(t.idleCells6, 1)), t.idleMax6)
