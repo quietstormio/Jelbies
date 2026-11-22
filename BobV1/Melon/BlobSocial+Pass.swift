@@ -70,7 +70,7 @@ extension BlobBrain {
             if MoveMix.on, f.kind == .soccerball, s.passes == 0, s.roles == 0, let sp = s.mixSpot, !s.mixReady {          // (round 3b: first the receiver walks out to his spot; the kicker waits for him)
                 if iKick { socialBook.hold = true; socialBook.faceYaw = yawTo(ball); if isA, s.phaseT > 12 { s.finish(.aborted) }; return }
                 if !socialBook.hopStarted { socialBook.hopStarted = true; socialBook.hold = false; socialBook.faceYaw = nil; if simd_distance(position, sp) > 0.3 { socialWalk(to: sp, sim) } }
-                if scriptIsNone, idleState.kind == nil, simd_distance(position, sp) < 0.5 { s.mixReady = true; socialBook.hopStarted = false }
+                if scriptIsNone, idleState.kind == nil, !feet.active, s.phaseT > 0.6, simd_distance(position, sp) < 0.5 || (s.phaseT > 2.5 && simd_distance(position, ball) > 1.9) { s.mixReady = true; socialBook.hopStarted = false }          // (arrived; or the walk ended short of the spot but still a pass away from the ball)
                 else { if isA, s.phaseT > 12 { s.finish(.aborted) }; return }
             }
             if !iKick { socialBook.hold = true; socialBook.faceYaw = yawTo(ball); if isA, s.phaseT > 12 { s.finish(.aborted) }; return }
