@@ -1,6 +1,6 @@
 //
-//  CafeTestsRegulars.swift
-//  cafe-regulars-r1 (named so it runs AFTER CafeTests: a café visit leaves statics behind that testCafeDefKeepsTheFloor is sensitive to): the café guests. The visit roll (nobody / one / a pair, the shares over many seeds, never more than five bodies), the pair's table (clear of the player's, in the walkable floor,
+//  CafeRegularsTests.swift
+//  cafe-regulars-r1 the café guests. The visit roll (nobody / one / a pair, the shares over many seeds, never more than five bodies), the pair's table (clear of the player's, in the walkable floor,
 //  both aspects), the pair's in-place conversation (holds its spot and its facing for 30 s, takes turns), and who the guests are (never special, never twice).
 //
 
@@ -14,7 +14,7 @@ private struct GuestSplitMix: RandomNumberGenerator {
 }
 
 @MainActor
-final class CafeTestsRegulars: XCTestCase {
+final class CafeRegularsTests: XCTestCase {
     private var savedArena: (SIMD2<Float>, Float, GameCamera.RoamFloor?, Float)?
     override func setUp() {
         super.setUp()
@@ -90,11 +90,12 @@ final class CafeTestsRegulars: XCTestCase {
             XCTAssertTrue(c.cafeOpenPairTable(floors: r.actors.map(\.floor), landscape: aspect >= 1), name)
             let g = c.cafeBook.guests
             XCTAssertEqual(g.stands.count, 2, name)
-            XCTAssertGreaterThan(simd_distance(g.origin, c.cafeBook.origin), 2.2, "\(name): clear of the player's table")
+            XCTAssertGreaterThanOrEqual(simd_distance(g.origin, c.cafeBook.origin), 3.0, "\(name): the two table centres are at least 3 u apart")
             for s in g.stands {
-                for a in r.actors { XCTAssertGreaterThanOrEqual(simd_distance(s, a.floor), GameCare.regularMargin, "\(name): keeps the margin to the player's bodies") }
-                for st in c.cafeBook.stands.values { XCTAssertGreaterThanOrEqual(simd_distance(s, st), GameCare.regularMargin, "\(name): keeps the margin to the player's stands") }
-                XCTAssertLessThanOrEqual(abs(s.x), 4.0, "\(name): the stand \(s) is inside the floor"); XCTAssertTrue(s.y > -0.6 && s.y < 2.2, "\(name): the stand \(s) is in the open front floor")
+                for a in r.actors { XCTAssertGreaterThanOrEqual(simd_distance(s, a.floor), GameCare.pairMargin, "\(name): keeps the margin to the player's bodies") }
+                for st in c.cafeBook.stands.values { XCTAssertGreaterThanOrEqual(simd_distance(s, st), GameCare.pairMargin, "\(name): keeps the margin to the player's stands") }
+                XCTAssertLessThanOrEqual(abs(s.x), 4.0, "\(name): the stand \(s) is inside the floor"); XCTAssertTrue(s.y > -3.6 && s.y < 2.2, "\(name): the stand \(s) is on the floor")
+                for b in RoomCatalog.cafe.allBoxes { XCTAssertFalse(abs(s.x - b.centre.x) < b.halfExtents.x + 0.45 && abs(s.y - b.centre.z) < b.halfExtents.z + 0.45, "\(name): the stand \(s) is not inside the counter / booth") }
             }
             // opposite ends, facing each other
             XCTAssertEqual(g.yaws.count, 2)

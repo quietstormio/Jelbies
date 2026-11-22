@@ -46,23 +46,29 @@ final class CafeGuests {
     var stands: [SIMD2<Float>] = [], yaws: [Float] = [], placeOf: [Int] = []
     var yaw: [Int: Float] = [:], waypoint: [Int: SIMD2<Float>] = [:]
     var chat = CafeChatState()
+    var back = false
     var isPair: Bool { plan == .pairHere || plan == .pairWalkIn }
-    func reset() { plan = .nobody; table = nil; origin = .zero; stands = []; yaws = []; placeOf = []; yaw = [:]; waypoint = [:]; chat = CafeChatState() }
+    func reset() { plan = .nobody; table = nil; origin = .zero; stands = []; yaws = []; placeOf = []; yaw = [:]; waypoint = [:]; back = false; chat = CafeChatState() }
     nonisolated deinit {}
 }
 
 
 extension GameCare {
     /// How far the pair's two stands are from their table's centre (the player's three use 1.25...1.3).
-    static let pairSideX: Float = 1.05
+    static var pairSideX: Float {
+        if DevArgs.enabled, UserDefaults.standard.double(forKey: "CafeGuestSide") > 0 { return Float(UserDefaults.standard.double(forKey: "CafeGuestSide")) }          // (capture aid: -CafeGuestSide 0.9)
+        return 0.95
+    }
+    /// The pair keeps this far from the player's bodies (the single guests keep `regularMargin`).
+    static let pairMargin: Float = 1.7
     /// A regular keeps at least this far from every Jelbie (centre to centre) when he picks where to stand.
     static let regularMargin: Float = 1.8
     /// Where regulars come in: the door side of the café, just outside the floor.
     static func regularDoor(landscape: Bool) -> SIMD2<Float> { landscape ? SIMD2(4.4, 1.0) : SIMD2(3.7, 1.8) }
     /// Their little tables (floor x, z of the table centre), away from the player's.
-    static func regularTables(landscape: Bool) -> [SIMD2<Float>] { landscape ? [SIMD2(0.7, 0.9), SIMD2(2.9, -0.3)] : [SIMD2(-2.2, 0.5), SIMD2(2.2, 0.5)] }
+    static func regularTables(landscape: Bool) -> [SIMD2<Float>] { landscape ? [SIMD2(2.8, -1.9)] : [SIMD2(2.9, -2.4)] }          // (a lone guest's small table: at the back right, by the counter, like the pair's)
     /// The pair's table (floor x, z of the table centre; the ends stand 1.3 either side of it). Tried in order, the first that is clear of the player's table and bodies.
-    static func regularPairTables(landscape: Bool) -> [SIMD2<Float>] { landscape ? [SIMD2(2.3, 0.2), SIMD2(2.5, 0.5), SIMD2(2.6, -0.2)] : [SIMD2(-0.3, 1.2), SIMD2(0.0, 1.5), SIMD2(0.0, 0.9)] }
+    static func regularPairTables(landscape: Bool) -> [SIMD2<Float>] { landscape ? [SIMD2(2.8, -2.6)] : [SIMD2(2.6, -3.2)] }          // (the back right, by the counter: background patrons, off the player's rug, clear of the order sheet)
 
     /// Who the regulars are: the player's Park friends first (best friendship first), then the day's visitors; `count` of them.
     func cafeRegularCast(count: Int) -> [ParkVisitor] {
@@ -147,7 +153,7 @@ extension GameCare {
                     guard cafeOpenPairTable(floors: floors, landscape: landscape), let t = g.table, g.stands.indices.contains(k) else { book.regularWait[a.id] = 3; Self.guestLog("no clear pair table for guest \(k)"); continue }          // nothing clear yet: try again in a moment
                     stand = g.stands[k]; table = t
                     g.yaw[a.id] = g.yaws[k]
-                    g.waypoint[a.id] = SIMD2(stand.x, max(g.origin.y + 1.1, Self.regularDoor(landscape: landscape).y - 0.2))          // (the lane along the front of the room, then straight to the stand: round the player's table and rug)
+                    g.waypoint[a.id] = g.back ? SIMD2(3.8, stand.y + 0.9) : SIMD2(stand.x, max(g.origin.y + 1.1, Self.regularDoor(landscape: landscape).y - 0.2))          // (a back table: up the right edge of the room, behind the player's rug, then to the stand; a front table: along the front)
                 } else {
                     var spot: SIMD2<Float>?
                     for t in Self.regularTables(landscape: landscape) {
@@ -163,6 +169,7 @@ extension GameCare {
                     tb.spawn(serving: CafePlate.emptyTable, n: 1, bobAt: SIMD2(99, 99), forcedOrigin: t)
                     book.extraTables.append(tb); book.extraFrames.append(nil)
                     stand = t + SIMD2(0, -0.735 + GameCare.eatCloser); table = tb
+                    g.yaw[a.id] = -0.5; g.waypoint[a.id] = SIMD2(3.8, stand.y + 0.9)          // (a lone guest faces the room three-quarters, comes in up the right edge)
                 }
                 if !pair { a.sim.arenaCenter = GameCamera.arenaCenter; a.sim.arenaRadius = GameCamera.arenaRadius }          // (a pair is placed by hand, not bound to the player's floor arena)
                 rehome(a, at: Self.regularDoor(landscape: landscape))
@@ -201,7 +208,8 @@ extension GameCare {
             let facing = g.yaw[a.id] ?? b.faceCameraYaw()
             if simd_distance(Self.floorPos(b, a.sim), home) > 0.4 { b.requestNow(.goTo(home)); book.regularIdle[a.id] = 2.5; continue }
             if abs(Self.wrapAngle(b.yaw - facing)) > 0.6 { b.startTurn(to: facing, sim: a.sim); book.regularIdle[a.id] = 1.2; continue }
-            b.commandedIdle = [IdleKind.look, .look, .giggle, .stretch, .bounce].randomElement()
+            b.commandedIdle = [IdleKind.look, .look, .giggle, .stretch].randomElement()
+            if Float.random(in: 0..<1) < 0.35 { AudioHub.shared.chirp(character: Self.regularVoiceCharacter(v), Bool.random() ? .happy : .babble, quiet: true) }          // (a quiet chirp now and then)
             b.face(.happy, hold: 1.5)
             if Float.random(in: 0..<1) < 0.4 { b.blushBump(hold: 2, peak: 0.4) }
         }
@@ -238,12 +246,14 @@ extension GameCare {
                 let p = table.layout.places[i]
                 return (t + p.rel + SIMD2(0, GameCare.eatCloser), p.yaw)
             }
-            guard floors.allSatisfy({ f in ends.allSatisfy { simd_distance(f, $0.stand) >= Self.regularMargin } }) else {
+            guard floors.allSatisfy({ f in ends.allSatisfy { simd_distance(f, $0.stand) >= Self.pairMargin } }) else {
                 Self.guestLog("pair table at \(t) blocked: nearest body \(floors.flatMap { f in ends.map { simd_distance(f, $0.stand) } }.min() ?? 0) of floors \(floors)")
                 table.reset(); continue
             }
             let door = Self.regularDoor(landscape: landscape)
-            ends.sort { simd_distance($0.stand, door) < simd_distance($1.stand, door) }          // (the first in takes the end nearer the door)
+            let back = t.y < book.origin.y - 0.5
+            ends.sort { back ? simd_distance($0.stand, door) > simd_distance($1.stand, door) : simd_distance($0.stand, door) < simd_distance($1.stand, door) }          // (a table in front: the first in takes the end nearer the door; a table at the back: the FAR end, so the second never walks past the first)
+            g.back = back
             g.table = table; g.origin = t
             g.stands = ends.map(\.stand); g.yaws = ends.map(\.yaw)
             g.placeOf = ends.map { e in e.yaw > 0 ? 1 : 2 }
