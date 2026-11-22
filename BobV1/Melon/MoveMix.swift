@@ -43,7 +43,7 @@ nonisolated enum MoveMix {
     // 7. soccer by themselves (round 3): with a soccer ball placed, some moment about every `soccerGap` s of field time, a real pass exchange of `passKicksMin...Max` kicks
     nonisolated(unsafe) static var soccerNextAt: Float = 0
     nonisolated(unsafe) static var soccerDbg: [String: Int] = [:]
-    static let soccerGap: ClosedRange<Float> = 70...110
+    static let soccerGap: ClosedRange<Float> = 45...70, soccerSoloSkip: Float = 0.5
     static let passChance: Float = 0.85, passKicksMin = 3, passKicksMax = 6
     static let followGoal: Float = 0.55, followThird: Float = 0.35          // after a pass: a shot run (goal placed) / the third one joins with a kick
     /// Leg against the board's predicted positions over the next 2 s (see `mixBoardConflict`).
@@ -106,6 +106,7 @@ struct MixBook {
     var soccerLogAt: Float = -99
     var soccerNudgeAt: Float = -99
     var soccerPassTries = 0
+    var soccerOwn = false
     var soccerNudgeT: Float = -99, soccerStuck = 0
     var soccerNudgeBall = SIMD2<Float>.zero
     var windowUntil: Float = -1
@@ -403,6 +404,7 @@ extension BlobBrain {
             if mix.soccerPassTries <= 8 { MoveMix.soccerNextAt = clock + rand(6, 10); return false }          // (the pass is what was wanted: look again in a few seconds, do not turn it into a solo kick yet)
             mix.soccerPassTries = 0
         }
+        mix.soccerOwn = true; defer { mix.soccerOwn = false }
         if decorStart(.soccerKick, sim, only: .soccerball) { mix.last = .solo; return true }
         MoveMix.soccerNextAt = clock + 8
         return false
@@ -433,6 +435,7 @@ extension BlobBrain {
         let late = now > mix.soccerFollowAt + 8
         mix.soccerFollowAt = -1
         guard !late, !reserved, social == nil, idleState.kind == nil, mixFreeSoccer() != nil else { return false }
+        mix.soccerOwn = true; defer { mix.soccerOwn = false }
         if decorStart(.soccerKick, sim, only: .soccerball) { mix.last = .solo; return true }
         return false
     }
