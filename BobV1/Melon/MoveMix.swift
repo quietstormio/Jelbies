@@ -32,22 +32,46 @@ nonisolated enum MoveMix {
     static let pairMinDist: Float = 1.4
     static let watchPairMul: Float = 1.5          // was SocialTuning.livelyChance 4.0
     // 3. group
-    static let groupCoolHome: ClosedRange<Float> = 110...170
+    static let groupCoolHome: ClosedRange<Float> = 170...230          // (round 2: one group moment of any kind per ~3 min at home; treats share this clock)
     static let groupCoolParkMul: Float = 0.5
     static let groupWaitMul: Float = 2
     // 4. walking
     static let legAfterSolo: Float = 0.7
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
-    static let soloGapMul: Float = 2.6
+    static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
-    static let idleWeight: Float = 3.5          // x board.idleness / 60 in a roam goal's score
+    static let windowGap: Float = 90
+    /// Longest roam leg (was 5.5; 3.4 grumpy): a stale far cell is reachable in one leg.
+    nonisolated(unsafe) static var legMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_LEGMAX"].flatMap { Float($0) } ?? 6.5
+    static let legMaxGrumpy: Float = 5.5
+    static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
+    /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
+    static let ownShare: Float = 0.7
+    static let thirdWeight: Float = 30, thirdWindow: Float = 180
+    /// Rug-centre penalty of EmoteSpot.score (was 2.2): pair / group spots lean away from the centre.
+    static let rugWeight: Float = 3.4
+    /// A stroll goal in another depth third than where the body stands / where its mates strolled to.
+    static let strollThirdBonus: Float = 1.2
     static let roamCandidates = 8          // (was 6 valid candidates)
     static let claimRadius: Float = 1.1
-    static let underButtonPenalty: Float = 0.8
+    /// Dev (round 2b, finding what empties the front): `-MixStopOff 1` = stopOK always true; `-MixPenaltyOff 1` = no under-button goal penalty.
+    nonisolated(unsafe) static var stopOff: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "MixStopOff")
+    nonisolated(unsafe) static var penaltyOff: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "MixPenaltyOff")
+    static var underButtonPenalty: Float { penaltyOff ? 0 : 0 }          // (round 2b: off; stopOK and the forced leg already keep stops clear of the buttons)
     /// A pair partner may be this far (was 4.8): the strolls spread them out.
     static let pairMaxDist: Float = 6.5
     /// Night / sleepy: the in-place chain rule and the forced leg off the buttons do not apply.
     static let sleepyNight: Float = 0.4
+    // 6. a little more running about (round 2): a share of the long roam / stroll legs is done with the game's own RUN gait (idleStart(.run, goal:)), happy / okay only, less at night
+    nonisolated(unsafe) static var runChance: Float = {
+        if let v = ProcessInfo.processInfo.environment["MOVEMIX_RUNCHANCE"], let f = Float(v) { return f }
+        if DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "MoveMixRun"), let f = Float(v) { return f }
+        return 0.3
+    }()
+    static let runLegMin: Float = 3.5
+    static let runShare: Float = 0.68, runTail: Float = 1.3          // the run ends this fraction of the leg in (and at least `runTail` u before the goal); the walk finishes it
+    static let runClearance: Float = 1.7          // a run keeps this far from any body that is in an emote (a session, a special) or walking its own leg across
+    static let okayRunMul: Float = 0.6
     // 5. buttons: see RoamFloor.stopFree / stopOK
 }
 
@@ -64,12 +88,23 @@ struct MixBook {
     var strollFrom = SIMD2<Float>.zero
     var strollDir = SIMD2<Float>.zero
     var strollDirAt: Float = -99
+    var strollThird = -1
+    var windowUntil: Float = -1
+    /// A run covers the first `runShare` of a leg; the rest is walked at the normal blend (afterRun = the real goal), so a run never ends in a stop.
+    var afterRun: SIMD2<Float>?
+    var afterRunUntil: Float = -1
+    /// What kind of leg this body was last sent on (the foot-lift proof logs by it): "roam", "stroll", "out" (from under a button).
+    var legKind = "roam"
+    /// The body's OWN idleness map: game time it was last in each of the 6 x 6 cells of the live floor (-inf = never).
+    var own = [Float](repeating: -.infinity, count: 36)
+    /// Round 2b: seconds this body spent in the back / middle / front third of the floor's depth (decaying over ~3 min): the goal score nudges toward the third it has had least.
+    var thirdT: [Float] = [1, 1, 1]
 }
 
 extension GameCamera.RoamFloor {
     /// True when a body standing at `p` is clear of the HUD button rails (`stopFree`, built whether or not the rails are cut out of the walkable floor). No rails built = everywhere.
     func stopOK(_ p: SIMD2<Float>) -> Bool {
-        guard !stopFree.isEmpty, let g = zs.first else { return true }
+        guard !MoveMix.stopOff, !stopFree.isEmpty, let g = zs.first else { return true }
         let i = min(max(Int(floorf((p.y - g) / Self.step)), 0), zs.count - 1)
         for r in [i, min(i + 1, zs.count - 1)] where r < stopFree.count {
             if !stopFree[r].contains(where: { $0.contains(p.x) }) { return false }
@@ -118,9 +153,11 @@ extension BlobBrain {
         let d = g - here
         let len = simd_length(d)
         mix.strollDir = len > 1e-3 ? d / len : .zero; mix.strollDirAt = now
+        if let rf = roamProvider?() { mix.strollThird = mixThird(g.y, rf) }
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+        mix.last = .leg; mix.legKind = "stroll"
+        if mixTryRun(to: g, sim) { return true }
         script = .walk(target: g, then: .none); activity = .walking
-        mix.last = .leg
         return true
     }
 
@@ -154,10 +191,12 @@ extension BlobBrain {
                     if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
                 }
                 var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false)
-                if let b = board {
-                    if b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
-                    score += MoveMix.idleWeight * b.idleness(at: cand, now: b.now) / WalkBoard.idleCap
-                }
+                if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
+                score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
+                score += MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
+                let th = mixThird(cand.y, rf)
+                if th != mixThird(here.y, rf) { score += MoveMix.strollThirdBonus }
+                if mates.contains(where: { now - $0.mix.strollDirAt < 8 && $0.mix.strollThird == th }) { score -= MoveMix.strollThirdBonus }
                 if best == nil || score > best!.1 { best = (cand, score) }
             }
             if let b = best { roamVisits[roamKeyMix(b.0), default: 0] += 1; return b.0 }
@@ -183,5 +222,77 @@ extension BlobBrain {
         guard MoveMix.on else { return }
         let k = idleState.kind ?? emoteSpot.soloKind
         mix.last = k.map { Self.inPlaceKinds.contains($0) ? .inPlace : .solo } ?? .solo
+    }
+}
+
+extension BlobBrain {
+    /// 6 x 6 cell of a floor point (the board's grid: the live floor's bounds).
+    func mixCell(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) -> Int {
+        let b = rf.bounds, n: Float = 6
+        let u = min(max((p.x - b.min.x) / max(b.max.x - b.min.x, 0.01), 0), 0.9999), v = min(max((p.y - b.min.y) / max(b.max.y - b.min.y, 0.01), 0), 0.9999)
+        return Int(v * n) * 6 + Int(u * n)
+    }
+    /// Every tick (centreDwellTick): the cell this body is in is "here now".
+    func mixOwnTick() {
+        guard MoveMix.on, let rf = roamProvider?() else { return }
+        mix.own[mixCell(position, rf)] = variety.now
+        let cur = mixThird(position.y, rf), k = 1 - 1 / (MoveMix.thirdWindow * 60)          // (one tick = 1/60 s)
+        for i in 0..<3 { mix.thirdT[i] = mix.thirdT[i] * k + (i == cur ? 1 / 60 : 0) }
+    }
+    /// 0...60: the blend of the shared idleness and this body's own for a goal at `p`.
+    func mixIdleness(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) -> Float {
+        let own = min(WalkBoard.idleCap, max(0, variety.now - mix.own[mixCell(p, rf)]))
+        var shared = own
+        if let b = board { shared = b.idleness(at: p, now: b.now) }
+        return MoveMix.ownShare * own + (1 - MoveMix.ownShare) * shared
+    }
+    /// 0 back, 1 middle, 2 front third of the floor's depth.
+    /// How much less than a third of its recent time this body has spent in the depth third of `z` (positive = under-used).
+    func mixThirdNeed(_ z: Float, _ rf: GameCamera.RoamFloor) -> Float {
+        let tot = max(mix.thirdT.reduce(0, +), 1e-3)
+        return 1.0 / 3.0 - mix.thirdT[mixThird(z, rf)] / tot
+    }
+    func mixThird(_ z: Float, _ rf: GameCamera.RoamFloor) -> Int { min(2, max(0, Int((z - rf.minZ) / max(rf.maxZ - rf.minZ, 0.1) * 3))) }
+}
+
+extension BlobBrain {
+    /// The leg `here -> g` was just picked (roam or stroll): sometimes run it with the game's own run gait. True = the run started (the caller must not start the walk).
+    func mixTryRun(to g: SIMD2<Float>, _ sim: SoftBody) -> Bool {
+        guard MoveMix.on, MoveMix.runChance > 0, idleMood != .grumpy, !mixSleepy, runMoveDemo == nil, !race.active, idleState.kind == nil, !hurry, commandedIdle == nil else { return false }
+        let here = position, d = simd_distance(here, g)
+        guard d >= MoveMix.runLegMin, fastOthers() < 2 else { return false }
+        let others = socialOthers().filter { $0 !== self }
+        for o in others {
+            // never through a pair / group that is emoting, nor past anyone who is busy near the line
+            let busy = o.social != nil || o.idleState.kind != nil || o.meetBusy
+            let ab = g - here, t = max(0, min(1, simd_dot(o.position - here, ab) / max(simd_dot(ab, ab), 1e-4)))
+            let near = simd_distance(o.position, here + ab * t)
+            if (busy && near < MoveMix.runClearance) || near < peerGap * 1.1 { return false }
+        }
+        if let b = board, b.claimed(near: g, radius: MoveMix.claimRadius, except: steerID) { return false }
+        guard roomLegConflict(from: here, to: g, speed: roomNominalWalk * 1.6, others: others, dash: true) < 0.01 else { return false }
+        let chance = MoveMix.runChance * (1 - 0.75 * idleNight) * (idleMood == .happy ? 1 : MoveMix.okayRunMul)
+        guard rand() < chance else { return false }
+        var rg = here + (g - here) * MoveMix.runShare
+        if d - simd_distance(here, rg) < MoveMix.runTail { rg = here + (g - here) / d * max(d - MoveMix.runTail, 0) }
+        guard simd_distance(here, rg) >= 2.3, simd_distance(fixed(rg), rg) < 0.1, peerFree(rg), reachable(here, rg) else { return false }
+        guard idleStart(.run, sim, goal: rg) else { return false }
+        mix.afterRun = g; mix.afterRunUntil = variety.now + 14
+        if anticsEnabled { kindCooldownStart(.run) }
+        mix.legKind = "run"
+        return true
+    }
+}
+
+extension BlobBrain {
+    /// pickAutonomous: a run just ended short of its goal: walk the rest (the normal blend in, no stop between).
+    func mixAfterRunDue(_ sim: SoftBody) -> Bool {
+        guard MoveMix.on, let g = mix.afterRun else { return false }
+        mix.afterRun = nil
+        guard variety.now < mix.afterRunUntil, idleState.kind == nil, simd_distance(position, g) > 0.5, peerFree(g) else { return false }
+        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+        script = .walk(target: g, then: .none); activity = .walking
+        mix.last = .leg; mix.legKind = "run-tail"
+        return true
     }
 }

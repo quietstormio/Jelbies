@@ -37,7 +37,7 @@ final class AvoidanceTests: XCTestCase {
             for (i, r) in lab.rigs.enumerated() {
                 r.skinner.autoBlink = false
                 let b = r.brain
-                b.sleepEnabled = false; b.anticsEnabled = true; b.watching = ProcessInfo.processInfo.environment["MOVELOG_WATCHING"] == "1"; b.homeRoom = ProcessInfo.processInfo.environment["MOVELOG_HOMEROOM"] != "0"          // (move-b-r1: TEST_RUNNER_MOVELOG_HOMEROOM=0 = the old headless way, homeRoom off)
+                b.sleepEnabled = ProcessInfo.processInfo.environment["MOVELOG_SLEEP"] == "1"; b.anticsEnabled = true; b.watching = ProcessInfo.processInfo.environment["MOVELOG_WATCHING"] == "1"; b.homeRoom = ProcessInfo.processInfo.environment["MOVELOG_HOMEROOM"] != "0"          // (move-b-r1: TEST_RUNNER_MOVELOG_HOMEROOM=0 = the old headless way, homeRoom off)
                 b.idleMood = mood; b.idleNight = 0; b.idleDeepNight = 0; b.idleMorning = 0
                 b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
                 r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
