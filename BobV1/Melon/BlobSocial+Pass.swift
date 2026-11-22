@@ -103,7 +103,7 @@ extension BlobBrain {
             socialBook.hold = true; socialBook.faceYaw = yawTo(o.position)
             socialBook.wantPitch = 0.16 * pulse(t - 0.15, up: 0.14, down: 0.30)
             if f.kind == .soccerball { soccerPassStomp(s, t) }          // (the soccer ball is kicked with the stomp step)
-            if !s.impacted, t >= 0.38 {
+            if !s.impacted, t >= 0.38, !(MoveMix.on && f.kind == .soccerball) || socialBook.hopStarted2 || t > 1.4 {          // (round 3b: the kicker walked up to his spot: the ball waits for the stomp step to have started)
                 s.impacted = true
                 let to = o.position
                 var dir = to - ball; let L = simd_length(dir); dir = L > 1e-3 ? dir / L : SIMD2(0, 1)
@@ -114,7 +114,7 @@ extension BlobBrain {
                 jellyKick = max(jellyKick, 1.4)
                 AudioHub.shared.play(.boop, jelly: steerID, x: px, volume: 0.7)
             }
-            if t > 0.9 { s.setPhase(2) }
+            if t > 0.9, !(MoveMix.on && f.kind == .soccerball) || socialBook.soccerReturned || t > 2.2 { s.setPhase(2) }
         case 2:   // the ball rolls; both watch it; then the roles swap
             socialBook.hold = true; socialBook.faceYaw = yawTo(ball)
             if isA, s.phaseT > 0.5, !rolling {
