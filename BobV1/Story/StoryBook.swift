@@ -59,7 +59,7 @@ nonisolated final class StoryGateBox: @unchecked Sendable {
     var lowPower: Bool { get { lock.lock(); defer { lock.unlock() }; return _lowPower } set { lock.lock(); _lowPower = newValue; lock.unlock() } }
     func input() -> StoryModelGate.Input {
         StoryModelGate.Input(modelAvailable: false, localeSupported: false, english: StoryModelGate.appIsEnglish, foreground: StoryAppState.foreground, busy: busy,
-                             lowPower: lowPower || ProcessInfo.processInfo.isLowPowerModeEnabled, thermalOK: StoryModelGate.thermalOK(ProcessInfo.processInfo.thermalState), switchedOn: StorySettings.modelNotes)
+                             lowPower: lowPower || ProcessInfo.processInfo.isLowPowerModeEnabled, thermalOK: StoryModelGate.thermalOK(ProcessInfo.processInfo.thermalState), switchedOn: StorySettings.rawOn(), crashDisabled: StoryModelSentinel.disabledStep() != nil, profileReady: StoryAppState.profileReady())
     }
 }
 
@@ -98,6 +98,7 @@ final class StoryBook {
     private var inFlight: Set<String> = []
 
     init(defaults: UserDefaults = .standard, chain: StoryChain? = nil) {
+        if defaults === UserDefaults.standard { StoryModelSentinel.launchCheckOnce() }
         self.defaults = defaults
         var s = Self.load(defaults)
         if s.salt == 0 { s.salt = UInt64.random(in: 1...UInt64.max); defaults.set(try? JSONEncoder().encode(s), forKey: Self.defaultsKey) }

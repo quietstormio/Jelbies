@@ -4,6 +4,8 @@
 //    -StoryDump <n>        writes n About blurbs and n friendship notes for each Jelmiko at home (writer, guard verdict, final text) to Documents/story_dump.txt and the console
 //    -StoryDumpSeeded 1    the same, with made-up habits (so the habit and friendship sentences show; the save is not touched)
 //    -StoryForce 1         the schedule is ignored (StoryBook.force)
+//    -StoryEvalRuns <k>    times each evaluation sheet asks the model (1...3)
+//    -StoryModelRearm 1    clears "model disabled after a crash" at launch (one more try)
 //
 
 import Foundation
@@ -13,6 +15,7 @@ enum StoryDev {
     static func runIfRequested(care: GameCare) async {
         guard DevArgs.enabled else { return }
         let d = UserDefaults.standard
+        if d.integer(forKey: "StoryModelRearm") != 0 { StoryModelSentinel.rearm(d); NSLog("[story] model re-armed by -StoryModelRearm") }          // `-StoryModelRearm 1`: clears "model disabled after a crash" (one more try)
         if d.integer(forKey: "StoryReset") != 0 {          // `-StoryReset 1`: forget every habit, event and saved line (a clean start for a capture)
             for j in care.jellies { d.removeObject(forKey: StoryHabitStore.key(j.character)); d.removeObject(forKey: StoryEventStore.key(j.character)) }
             d.removeObject(forKey: StoryBook.defaultsKey)
@@ -24,6 +27,7 @@ enum StoryDev {
         let n = d.integer(forKey: "StoryDump")
         guard n > 0 else { return }
         NSLog("[story] dump requested n=%d", n)
+        StoryAppState.devAllowsModelWithoutProfile()          // the dump has no Profile on screen; dev arguments only
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         // Gather everything the main actor owns first, then run the writing off the main thread (a starved main thread made each hop minutes long in the simulator).
         let writers = StoryBook.shared.chain.writers
@@ -44,7 +48,7 @@ enum StoryDev {
         }
         let sheets = evaluationSheets()
         let out = await Task.detached(priority: .utility) { () -> String in
-            var o = "[story] dump n=\(n) at \(Date())\n"
+            var o = (StoryModelSentinel.headerLine().map { $0 + "\n" } ?? "") + "[story] dump n=\(n) at \(Date())\n"
             for (title, list) in groups {
                 o += title
                 for f in list { o += await dump(f, n: n, chain: StoryChain(writers)); NSLog("[story] dumped %@", f.name) }
@@ -161,7 +165,8 @@ enum StoryDev {
         NSLog("[story] evaluation begins")
         var out = "\n=== EVALUATION SHEETS (fixed fact sheets through the whole chain) ===\n"
         out += "model: \(modelLine)\n"
-        let runs = hasModel ? 3 : 1
+        let wanted = UserDefaults.standard.integer(forKey: "StoryEvalRuns")          // `-StoryEvalRuns <1...3>`: how many times each sheet asks the model (default 3 with a model, 1 without)
+        let runs = hasModel ? (wanted > 0 ? min(wanted, 3) : 3) : 1
         StoryModelStats.shared.reset()
         var leaks = 0
         for (label, f) in sheets {
