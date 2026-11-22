@@ -43,7 +43,7 @@ nonisolated enum MoveMix {
     // 7. soccer by themselves (round 3): with a soccer ball placed, some moment about every `soccerGap` s of field time, a real pass exchange of `passKicksMin...Max` kicks
     nonisolated(unsafe) static var soccerNextAt: Float = 0
     static let soccerGap: ClosedRange<Float> = 55...85
-    static let passChance: Float = 0.55, passKicksMin = 3, passKicksMax = 6
+    static let passChance: Float = 0.65, passKicksMin = 3, passKicksMax = 6
     static let followGoal: Float = 0.55, followThird: Float = 0.35          // after a pass: a shot run (goal placed) / the third one joins with a kick
     /// Leg against the board's predicted positions over the next 2 s (see `mixBoardConflict`).
     static let boardNear: Float = 1.05, boardPenalty: Float = 6
@@ -377,11 +377,15 @@ extension BlobBrain {
         if rand() < MoveMix.passChance, !mixQuiet, !mixBallSpotBad(c), !ballOff {
             let cands = others.filter { o in
                 let d = simd_distance(o.position, position)
-                return o.socialFree && !o.mixQuiet && (socialBook.pair[o.steerID] ?? 0) <= 0 && (o.socialBook.pair[steerID] ?? 0) <= 0 && d > 1.6 && d < 5.5 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 6.5
+                return (o.socialFree || o.socialWandering) && !o.mixQuiet && (socialBook.pair[o.steerID] ?? 0) <= 0 && (o.socialBook.pair[steerID] ?? 0) <= 0 && d > 1.6 && d < 5.5 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 6.5
             }
             if !cands.isEmpty {
                 let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]
-                if socialStart(.pass, with: o, sim) { varietyNoteSocial(.pass, with: o); mix.last = .social; return true }
+                if o.socialFree {
+                    if socialStart(.pass, with: o, sim) { varietyNoteSocial(.pass, with: o); mix.last = .social; return true }
+                } else if o.socialBeckonStop() {          // (he is out on a leg: asked to stop; the pass starts when he has, like the other pairs)
+                    socialBook.invite = (.pass, o.steerID, 0); varietyNoteSocial(.pass, with: o); mix.last = .social; return true
+                }
             }
         }
         if decorStart(.soccerKick, sim, only: .soccerball) { mix.last = .solo; return true }
