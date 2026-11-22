@@ -295,7 +295,7 @@ nonisolated enum TrophyContour {
         guard !m.vertices.isEmpty else { return nil }
         var lo = SIMD2<Float>(repeating: .greatestFiniteMagnitude), hi = SIMD2<Float>(repeating: -.greatestFiniteMagnitude)
         for v in m.vertices { lo = simd_min(lo, SIMD2(v.pos.x, v.pos.y)); hi = simd_max(hi, SIMD2(v.pos.x, v.pos.y)) }
-        let margin: Float = 3 * cell
+        let closeR = 7, margin: Float = Float(closeR + 3) * cell          // (closeR: the closing radius below, in cells)
         let x0 = lo.x - margin, y1 = hi.y + margin
         let W = Int((hi.x - lo.x + 2 * margin) / cell) + 1, H = Int((hi.y - lo.y + 2 * margin) / cell) + 1
         var mask = [Bool](repeating: false, count: W * H)
@@ -323,6 +323,18 @@ nonisolated enum TrophyContour {
         var g = mask
         for y in 0..<H { for x in 0..<W where mask[y * W + x] {
             for dy in -1...1 { for dx in -1...1 { let xx = x + dx, yy = y + dy; if xx >= 0, yy >= 0, xx < W, yy < H { g[yy * W + xx] = true } } }
+        } }
+        // morphological closing (grow, then shrink by the same disc, 7 cells = 1.75 cm) bridges the slits between a handle and the bowl so they read as one shape;
+        // the open space beside the stem and the foot is far wider than the disc, so the waist stays
+        var disc: [(Int, Int)] = []
+        for dy in -closeR...closeR { for dx in -closeR...closeR where dx * dx + dy * dy <= closeR * closeR { disc.append((dx, dy)) } }
+        var d = g
+        for y in 0..<H { for x in 0..<W where g[y * W + x] {
+            for (dx, dy) in disc { let xx = x + dx, yy = y + dy; if xx >= 0, yy >= 0, xx < W, yy < H { d[yy * W + xx] = true } }
+        } }
+        g = d
+        for y in 0..<H { for x in 0..<W where d[y * W + x] {
+            for (dx, dy) in disc { let xx = x + dx, yy = y + dy; if xx < 0 || yy < 0 || xx >= W || yy >= H || !d[yy * W + xx] { g[y * W + x] = false; break } }
         } }
         func on(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < W && y < H && g[y * W + x] }
         guard let start = (0..<(W * H)).first(where: { g[$0] }) else { return nil }
