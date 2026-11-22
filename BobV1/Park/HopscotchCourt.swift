@@ -90,8 +90,9 @@ nonisolated enum HopscotchCourt {
         default: return SIMD2(2.5 * g, z0 - 0.866 * g)
         }
     }
-    /// Where the finished hopper walks: past the last square, to the side.
-    static let exitSpot = SIMD2<Float>(1.5, squares[7].y + 0.25)
+    /// Where the finished hopper walks: past the last square, out to the side and AHEAD (hop-leave-r1: the way he already faces, about 30 degrees off, so the walk is one arc away from the landing; the old
+    /// spot was 80 degrees off his facing and the walk first turned on the spot for ~0.75 s).
+    static let exitSpot = SIMD2<Float>(1.0, squares[7].y + 1.7)
 }
 
 /// Who is in the line at each court: their order, their slot in the queue and the last square each has landed on. Main thread, like `DecorField`.

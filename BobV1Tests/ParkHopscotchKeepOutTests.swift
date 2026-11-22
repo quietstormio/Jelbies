@@ -276,6 +276,42 @@ final class ParkHopscotchKeepOutTests: XCTestCase {
         XCTAssertNotNil(hoppedAt, "the game was played")
     }
 
+    /// hop-leave-r1: someone walking across the court when a game starts is not shoved: he finishes the crossing (past the middle) or turns and walks out, always with a forward gait.
+    /// A shove frame = the floor spot moved more than 1 cm sideways of his facing in one tick (or more than 5 cm in all) within the wall's reach of the court.
+    func testCrossingWalkerIsNotShoved() {
+        HopscotchTuning.guardOn = true; HopscotchTuning.joinChance = 0
+        var shoves = 0, frames = 0, maxLat: Float = 0
+        for (k, frac) in ([0.15, 0.4, 0.6, 0.85] as [Float]).enumerated() {
+            let lab = parkLab(n: 2, seed: UInt64(20 + k), starts: [SIMD2(-2.1, -3.2), SIMD2(-2.1, 1.9)], quiet: false)
+            let court = DecorField.shared.foot(ParkToys.hopscotchUID)!
+            let hop = lab.rigs[0], walker = lab.rigs[1]
+            for r in lab.rigs { r.brain.autonomy = false }
+            let z = HopscotchCourt.squares[3].y
+            let a = court.centre + court.turned(SIMD2(-2.0, z)), b = court.centre + court.turned(SIMD2(2.0, z))
+            place(walker, a)
+            walker.brain.requestNow(.goTo(b))
+            var last = GameCare.floorPos(walker.brain, walker.sim), started = false
+            for i in 0..<(60 * 14) {
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+                let p = GameCare.floorPos(walker.brain, walker.sim)
+                let along = simd_dot(p - a, b - a) / simd_length_squared(b - a)
+                if !started, along >= frac {
+                    started = true
+                    hop.brain.idleForced = true
+                    XCTAssertTrue(hop.brain.decorStart(.decorHopscotch, hop.sim, only: nil, uid: court.uid))
+                }
+                if started, court.distance(p) < 0.5 {
+                    let d = p - last, f = SIMD2<Float>(sinf(walker.brain.yaw), cosf(walker.brain.yaw)), lat = abs(d.x * f.y - d.y * f.x)
+                    frames += 1; maxLat = max(maxLat, lat)
+                    if lat > 0.01 || simd_length(d) > 0.05 { shoves += 1 }
+                }
+                last = p
+            }
+        }
+        print("HKO shove frames \(shoves) of \(frames) near the court, max lateral \(maxLat)")
+        XCTAssertEqual(shoves, 0, "a walker crossing when the game starts is never shoved sideways")
+    }
+
     /// Walks the player asks for (a target in the middle of the court, a target across it) never go on to the court while a game is on, and do not stall for good.
     func testCalledWalksGoRoundTheCourt() {
         HopscotchTuning.guardOn = true; HopscotchTuning.joinChance = 0
