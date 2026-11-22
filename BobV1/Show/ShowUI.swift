@@ -940,7 +940,7 @@ struct DressUpScreen: View {
             guard DevArgs.enabled else { return }
             if let raw = UserDefaults.standard.string(forKey: "WardrobeSlot"), let s = WearSlot(rawValue: raw) { slot = s }
             if let raw = UserDefaults.standard.string(forKey: "WardrobeWear") {
-                for name in raw.split(separator: ",") { if let l = WearLook(rawValue: String(name)) { _ = care.store.wear(l, on: who) } }
+                for name in raw.split(separator: ",") { if let l = WearLook(rawValue: String(name)) { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? ""); _ = care.store.wear(l, on: who) } }
             }
         }
     }
