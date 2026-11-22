@@ -227,6 +227,12 @@ extension BlobBrain {
         let atToe = (dist < SoccerTuning.dribbleTouch && ahead > 0.5 * dist) || (dist < 0.5 && ahead > -0.1 && !stepping)          // (facing it within ~60 degrees, or right under him)
         let standTouch = standing && dist < SoccerTuning.dribbleReach && ahead > 0.8 * dist
         if footfall || atToe || standTouch {
+            if MoveMix.on {          // (round 3b: a nudge at most every half second, and a ball that does not move for three nudges (against the goal frame / a wall) ends the dribble: no endless pushing)
+                if variety.now - mix.soccerNudgeT < 0.5 { return }
+                if simd_distance(ball, mix.soccerNudgeBall) < 0.06 { mix.soccerStuck += 1 } else { mix.soccerStuck = 0 }
+                mix.soccerNudgeT = variety.now; mix.soccerNudgeBall = ball
+                if mix.soccerStuck >= 3 { mix.soccerStuck = 0; idleFinish(skinner); return }
+            }
             let toT = s.target - ball, L = simd_length(toT)
             let u = L > 0.05 ? toT / L : fwd
             // a nudge that leaves the ball a stride ahead of him (and never past the target)

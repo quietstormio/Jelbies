@@ -104,6 +104,8 @@ struct MixBook {
     var soccerFollowAt: Float = -1
     var soccerLogAt: Float = -99
     var soccerNudgeAt: Float = -99
+    var soccerNudgeT: Float = -99, soccerStuck = 0
+    var soccerNudgeBall = SIMD2<Float>.zero
     var windowUntil: Float = -1
     /// A run covers the first `runShare` of a leg; the rest is walked at the normal blend (afterRun = the real goal), so a run never ends in a stop.
     var afterRun: SIMD2<Float>?
