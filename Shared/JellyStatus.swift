@@ -7,9 +7,13 @@
 import Foundation
 
 nonisolated enum JellyStatus {
-    /// What a Jelbie is up to right now, in two words or so: "hungry", "napping", "happy", "fine", "sparkling".
-    static func word(_ s: JellyState, sleeping: Bool) -> String {
-        if sleeping, !s.needsAttention { return "napping" }
+    /// The word for a Jelmiko at rest that wants nothing: "asleep" during the night sleep hours (`SleepHours`, Shared/DayHours.swift), "napping" for a daytime nap.
+    /// `night` is passed by every caller (no default), so none can forget it.
+    static func rest(night: Bool) -> String { night ? "asleep" : "napping" }
+
+    /// What a Jelbie is up to right now, in two words or so: "hungry", "napping" (by night "asleep"), "happy", "fine", "sparkling".
+    static func word(_ s: JellyState, sleeping: Bool, night: Bool) -> String {
+        if sleeping, !s.needsAttention { return rest(night: night) }
         let (c, t) = s.neediest
         if t.rawValue >= NeedTier.hungry.rawValue {
             switch c {
@@ -19,33 +23,33 @@ nonisolated enum JellyStatus {
             case .soap: return s.coat.word.lowercased()
             }
         }
-        if sleeping { return "napping" }
+        if sleeping { return rest(night: night) }
         if s.coat == .beautiful { return "sparkling" }
         return s.mood == .happy ? "happy" : "fine"
     }
 
     /// "Bob is hungry · Pip napping · Moss fine" (the first gets "is", the rest are terse), or "Open the game" with nobody.
-    static func line(_ states: [JellyState], sleeping: Bool) -> String {
+    static func line(_ states: [JellyState], sleeping: Bool, night: Bool) -> String {
         guard !states.isEmpty else { return "Open the game to meet your Jelmiko" }
         let sorted = states.sorted { $0.id < $1.id }
-        return sorted.enumerated().map { i, s in i == 0 ? "\(s.name) is \(word(s, sleeping: sleeping))" : "\(s.name) \(word(s, sleeping: sleeping))" }
+        return sorted.enumerated().map { i, s in i == 0 ? "\(s.name) is \(word(s, sleeping: sleeping, night: night))" : "\(s.name) \(word(s, sleeping: sleeping, night: night))" }
             .joined(separator: " · ")
     }
 
 
-    /// The Home Screen headline: `JellyState.headline`, except a Jelbie that is asleep and wants nothing says "Lemon is napping." (a needy one still shows its need).
-    static func headline(_ s: JellyState, sleeping: Bool) -> String {
-        if sleeping, !s.needsAttention { return "\(s.name) is napping" }
+    /// The Home Screen headline: `JellyState.headline`, except a Jelbie that is asleep and wants nothing says "Lemon is napping." (by night "Lemon is asleep."; a needy one still shows its need).
+    static func headline(_ s: JellyState, sleeping: Bool, night: Bool) -> String {
+        if sleeping, !s.needsAttention { return "\(s.name) is \(rest(night: night))" }
         return s.headline
     }
 
     /// The Lock Screen rectangular line. Three or more in the same state: the short group line ("All 3 are happy" / "Everyone is napping").
     /// Otherwise the needy first, and each "Name word" pair keeps its words together (no-break spaces), so a wrap can only fall between pairs.
-    static func rectangularLine(_ states: [JellyState], sleeping: Bool) -> String {
-        guard states.count >= 3 else { return line(states, sleeping: sleeping) }
-        let words = Set(states.map { word($0, sleeping: sleeping) })
+    static func rectangularLine(_ states: [JellyState], sleeping: Bool, night: Bool) -> String {
+        guard states.count >= 3 else { return line(states, sleeping: sleeping, night: night) }
+        let words = Set(states.map { word($0, sleeping: sleeping, night: night) })
         if words.count == 1, let w = words.first {
-            if w == "napping" { return "Everyone is napping" }
+            if w == rest(night: night) { return "Everyone is \(w)" }
             return "All \(states.count) are \(w)"
         }
         let nb = "\u{00A0}"
@@ -54,23 +58,23 @@ nonisolated enum JellyStatus {
             return a.id < b.id
         }
         return ordered.enumerated().map { i, s in
-            i == 0 ? "\(s.name)\(nb)is\(nb)\(word(s, sleeping: sleeping))" : "\(s.name)\(nb)\(word(s, sleeping: sleeping))"
+            i == 0 ? "\(s.name)\(nb)is\(nb)\(word(s, sleeping: sleeping, night: night))" : "\(s.name)\(nb)\(word(s, sleeping: sleeping, night: night))"
         }.joined(separator: " · ")
     }
 
     /// One short phrase for the inline Lock Screen slot: the neediest Jelbie, or "Everyone is napping" / "All N Jelbies are fine".
-    static func inline(_ states: [JellyState], sleeping: Bool) -> String {
+    static func inline(_ states: [JellyState], sleeping: Bool, night: Bool) -> String {
         guard !states.isEmpty else { return "Jelmiko" }
-        if let n = JellyState.neediest(in: states), n.needsAttention { return "\(n.name) is \(word(n, sleeping: false))" }
-        if sleeping { return states.count == 1 ? "\(states[0].name) is napping" : "Everyone is napping" }
-        if states.count == 1 { return "\(states[0].name) is \(word(states[0], sleeping: false))" }
+        if let n = JellyState.neediest(in: states), n.needsAttention { return "\(n.name) is \(word(n, sleeping: false, night: night))" }
+        if sleeping { return states.count == 1 ? "\(states[0].name) is \(rest(night: night))" : "Everyone is \(rest(night: night))" }
+        if states.count == 1 { return "\(states[0].name) is \(word(states[0], sleeping: false, night: night))" }
         let happy = states.filter { $0.mood == .happy }.count
         return happy == states.count ? "All \(states.count) Jelmiko are happy" : "All \(states.count) Jelmiko are fine"
     }
 
     /// The Siri answer: one sentence per Jelbie with its mood and every item that wants care, e.g.
     /// "Bob is hungry and a little lonely. Pip is napping. Moss is happy and sparkling."
-    static func spoken(_ states: [JellyState], sleeping: Bool) -> String {
+    static func spoken(_ states: [JellyState], sleeping: Bool, night: Bool) -> String {
         guard !states.isEmpty else { return noneYet }
         // Everyone fine and awake (2+): one sentence instead of near-identical ones.
         if states.count >= 2, !sleeping, !states.contains(where: \.needsAttention) {
@@ -81,7 +85,7 @@ nonisolated enum JellyStatus {
             }
             return "All \(states.count == 3 ? "three" : String(states.count)) are \(allHappy ? "happy" : "doing fine")."
         }
-        return states.sorted { $0.id < $1.id }.map { sentence($0, sleeping: sleeping) }.joined(separator: " ")
+        return states.sorted { $0.id < $1.id }.map { sentence($0, sleeping: sleeping, night: night) }.joined(separator: " ")
     }
 
     static let noneYet = "You have not met your Jelmiko yet. Open the game to say hello."
@@ -137,7 +141,7 @@ nonisolated enum JellyStatus {
         return "Yes, \(joinNames(clauses))."
     }
 
-    static func sentence(_ s: JellyState, sleeping: Bool) -> String {
+    static func sentence(_ s: JellyState, sleeping: Bool, night: Bool) -> String {
         var wants: [String] = []
         for c in JellyCare.allCases {
             let t = s.tier(c)
@@ -152,7 +156,7 @@ nonisolated enum JellyStatus {
             wants.append(t == .famished || c == .soap ? w : "a little \(w)")
         }
         if wants.isEmpty {
-            if sleeping { return "\(s.name) is napping." }
+            if sleeping { return "\(s.name) is \(rest(night: night))." }
             if s.coat == .beautiful { return "\(s.name) is happy and sparkling." }
             return s.mood == .happy ? "\(s.name) is happy." : "\(s.name) is doing fine."
         }

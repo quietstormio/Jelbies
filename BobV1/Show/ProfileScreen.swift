@@ -1,7 +1,7 @@
 //
 //  ProfileScreen.swift
 //  The Profile of a Jelmiko (replaces the "Condition" screen the circled close-up button and the Studio's card link used to open): a head picture, the name and
-//  kind, ONE plain sentence on how they are (the same words Siri and the Lock Screen say: Shared/JellyStatus.swift), a row of hearts, four status chips
+//  kind, ONE plain sentence on how they are (the same words Siri and the Lock Screen say: Shared/JellyStatus.swift), the RELATIONSHIP (five hearts that fill partly + a level name; Jelly/JellyBond.swift), four status chips
 //  (food, water, clean, sleep), the favourites the save really holds, the trophies, and "See today's Jelly Show". No meters with numbers: the old jelly jars
 //  are one small row at the bottom ("Jelly Show styles") that opens the old jars card (ConditionScreen in `sheetMode`).
 //
@@ -76,13 +76,54 @@ enum ProfileWords {
     }
 }
 
-/// One trophy chip on the Profile.
+/// One trophy chip on the Profile. `entry` = the same real mini render the Trophy Shelf card draws (TrophyEntry.picture); the symbol is only the fallback.
 private struct ProfileTrophyChip: Identifiable {
     let id: String
     let icon: String
     let color: Color
     let caption: String
     let date: String?
+    var entry: TrophyEntry? = nil
+}
+
+/// The Relationship row: label, five hearts (the current one fills partly, bottom up), the level name under them. When a heart fills while this is on screen it pops
+/// (no pop under Reduce Motion, and none on first appearance or when another Jelmiko is picked: the view is re-made per Jelmiko with `.id`).
+private struct BondHeartsRow: View {
+    let level: BondLevel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var popped: Int? = nil
+    private static let box = CGSize(width: 24, height: 22)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text("Relationship").font(SK.font(14, .heavy)).foregroundStyle(SK.muted)
+                ForEach(0..<BondTuning.hearts, id: \.self) { i in heart(i) }
+                Spacer(minLength: 0)
+            }
+            Text(level.name).font(SK.font(15, .black)).foregroundStyle(SK.ink).accessibilityIdentifier("profile-relationship-level")
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(level.spoken)
+        .accessibilityIdentifier("profile-hearts")
+        .onChange(of: level.hearts) { old, new in
+            guard new > old, !reduceMotion else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.45)) { popped = new - 1 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { withAnimation(.easeOut(duration: 0.2)) { popped = nil } }
+        }
+    }
+
+    private func heart(_ i: Int) -> some View {
+        let f = level.fill(i)
+        return ZStack {
+            Image(systemName: "heart.fill").resizable().scaledToFit().foregroundStyle(SK.pink.opacity(0.22))
+            Image(systemName: "heart.fill").resizable().scaledToFit().foregroundStyle(SK.pink)
+                .mask(alignment: .bottom) { Rectangle().frame(height: Self.box.height * f) }          // a true partial fill, bottom up (the heart glyph is not swapped for a half-heart)
+        }
+        .frame(width: Self.box.width, height: Self.box.height)
+        .scaleEffect(popped == i ? 1.4 : 1)
+        .accessibilityHidden(true)
+    }
 }
 
 struct ProfileScreen: View {
@@ -154,14 +195,17 @@ struct ProfileScreen: View {
         let asleep: Bool
         let sentence: String
         let hour: Double
+        /// The relationship now (points from the save; display only).
+        let bond: BondLevel
         init(care: GameCare, who: Int) {
             p = care.jelly(who)
+            bond = BondLevel(points: JellyBond.points(care.jelly(who)?.character ?? who))
             let inp = care.widgetInputs().first { $0.id == who }
             let sleeping = care.asleepForAway(who)
             asleep = sleeping
             let st = inp.map { JellyState(record: WidgetBridge.record($0, look: ""), awaySeconds: 0) }
             state = st
-            sentence = st.map { JellyStatus.sentence($0, sleeping: sleeping) } ?? ""
+            sentence = st.map { JellyStatus.sentence($0, sleeping: sleeping, night: SleepHours.isNight(hour: DayClock.shared.hour)) } ?? ""
             hour = DayClock.shared.hour
         }
     }
@@ -187,7 +231,6 @@ struct ProfileScreen: View {
         let body = Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))
         let species = JellyRoster.species(character)
         let info = SpeciesInfo.all.first { $0.character == species }
-        let loved = Int(((f.state?.levels[NeedKind.attention.rawValue] ?? 0) * 5).rounded())
         return card {
             VStack(spacing: 10) {
                 HStack(spacing: 14) {
@@ -219,17 +262,7 @@ struct ProfileScreen: View {
                 }
                 Text(f.sentence).font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("profile-sentence")
-                HStack(spacing: 6) {
-                    Text("Feels loved").font(SK.font(14, .heavy)).foregroundStyle(SK.muted)
-                    ForEach(0..<5, id: \.self) { i in
-                        Image(systemName: i < loved ? "heart.fill" : "heart").font(.system(size: 20, weight: .black))
-                            .foregroundStyle(i < loved ? SK.pink : SK.pink.opacity(0.4))
-                    }
-                    Spacer(minLength: 0)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Feels loved: \(loved) of 5 hearts")
-                .accessibilityIdentifier("profile-hearts")
+                BondHeartsRow(level: f.bond).frame(maxWidth: .infinity, alignment: .leading).id(who)
             }
         }
     }
@@ -314,27 +347,35 @@ struct ProfileScreen: View {
 
     // MARK: 4. trophies
 
-    // TODO: the pictures are a coloured trophy symbol per kind because the mini trophy renders of branch `trophy-card-r1` are not on this base; when they are, use `StoreThumb.image` + `TrophyShelfGeometry.singleMesh(id:color:)` here.
+    /// The pictures are the Trophy Shelf card's own (`TrophyEntry.make(...).picture`: the trophy's mesh through StoreThumb, in its real metal, cached); the coloured symbol stays as the fallback.
     private func trophyChips() -> (chips: [ProfileTrophyChip], total: Int, ribbons: Int) {
         let c = care.jelly(who)?.character ?? who
         let shelf = care.race.trophies.shelf(character: c)
         let show = care.show.progress.trophies(character: c)
         let since = care.race.trophies.engravingSince
         func date(_ key: String) -> String { TrophyShelfItem.dateText(shelf.won?[key], before: since) }
+        func entry(_ id: String, caption: String, spec: TrophyShelfSpec) -> TrophyEntry { TrophyEntry.make(TrophyShelfItem(id: id, event: caption, character: c, date: nil), spec: spec) }
         let medal: [Color] = [Color(hex: 0xF2B530), Color(hex: 0xA9B3C2), Color(hex: 0xC98B55)]
         var out: [ProfileTrophyChip] = []
         for t in Trophy.all + Trophy.allVolley where shelf.has(t) {
-            out.append(ProfileTrophyChip(id: "t-\(t.id)", icon: "trophy.fill", color: Color(hex: 0xF2B530), caption: t.title, date: date("trophy.\(t.id)")))
+            var spec = TrophyShelfSpec(), id = t.id
+            if t.id.hasPrefix("first."), let tier = CourseTier(rawValue: String(t.id.dropFirst(6))), let k = CourseTier.allCases.firstIndex(of: tier) {
+                id = "cup.\(tier.rawValue)"; spec.cups[k] = UInt8(shelf.bestRace(tier) ?? 1)          // the cup of his best place there (as on the wall)
+            }
+            if t.id.hasPrefix("vfirst.") { id = "volley.\(t.id.dropFirst(7))" }          // the first volleyball win: the volleyball cup
+            let pic: TrophyEntry? = TrophyShelfGeometry.singleMesh(id: id) == nil ? nil : entry(id, caption: t.title, spec: spec)          // (a trophy the wall has no model for keeps its symbol)
+            out.append(ProfileTrophyChip(id: "t-\(t.id)", icon: "trophy.fill", color: Color(hex: 0xF2B530), caption: t.title, date: date("trophy.\(t.id)"), entry: pic))
         }
         for r in ShowRank.allCases { if let p = show.cup(r) {
             let key = "show.\(r.rawValue).\(p)"
-            out.append(ProfileTrophyChip(id: "cup-\(r.rawValue)", icon: "trophy.fill", color: medal[min(max(p, 1), 3) - 1], caption: "\(r.title) Show cup \u{00B7} \(ShowUI.ordinal(p))", date: date(key)))
+            var spec = TrophyShelfSpec(); spec.contest = UInt8(min(max(p, 1), 3))
+            out.append(ProfileTrophyChip(id: "cup-\(r.rawValue)", icon: "trophy.fill", color: medal[min(max(p, 1), 3) - 1], caption: "\(r.title) Show cup \u{00B7} \(ShowUI.ordinal(p))", date: date(key), entry: entry("contest", caption: r.title, spec: spec)))
         } }
         for tag in WearTag.jarOrder where show.hasRosette(tag) {
             out.append(ProfileTrophyChip(id: "ros-\(tag.rawValue)", icon: "seal.fill", color: ShowUI.tag(tag), caption: "\(tag.title) rosette", date: nil))
         }
         for t in VolleyTier.allCases where shelf.volleyWon(t) > 0 {
-            out.append(ProfileTrophyChip(id: "vol-\(t.rawValue)", icon: "figure.volleyball", color: SK.sky, caption: "Volleyball \(t.title) \u{00D7}\(shelf.volleyWon(t))", date: date("volley.\(t.rawValue)")))
+            out.append(ProfileTrophyChip(id: "vol-\(t.rawValue)", icon: "figure.volleyball", color: SK.sky, caption: "Volleyball \(t.title) \u{00D7}\(shelf.volleyWon(t))", date: date("volley.\(t.rawValue)"), entry: entry("volley.\(t.rawValue)", caption: t.title, spec: TrophyShelfSpec())))
         }
         return (out, out.count, shelf.raceRibbonCount)
     }
@@ -357,7 +398,8 @@ struct ProfileScreen: View {
                         FlowLayout(spacing: 6) {
                             ForEach(shown) { c in
                                 HStack(spacing: 6) {
-                                    Image(systemName: c.icon).font(.system(size: 13, weight: .black)).foregroundStyle(c.color).accessibilityHidden(true)
+                                    if let img = c.entry?.picture { Image(uiImage: img).resizable().scaledToFit().frame(width: 30, height: 30).accessibilityHidden(true) }
+                                    else { Image(systemName: c.icon).font(.system(size: 13, weight: .black)).foregroundStyle(c.color).accessibilityHidden(true) }
                                     VStack(alignment: .leading, spacing: 0) {
                                         Text(c.caption).font(SK.font(12, .black)).foregroundStyle(SK.ink)
                                         if let d = c.date { Text(d).font(SK.font(10, .bold)).foregroundStyle(SK.muted) }
@@ -411,6 +453,14 @@ struct ProfileScreen: View {
         guard DevArgs.enabled else { return }
         let d = UserDefaults.standard
         if d.object(forKey: "OpenProfile") != nil, care.jellies.indices.contains(d.integer(forKey: "OpenProfile")) { who.wrappedValue = d.integer(forKey: "OpenProfile") }
+        if d.integer(forKey: "ProfileFed") != 0 { for j in care.jellies { for k in NeedKind.allCases { j.needs.set(k, 1) }; j.grime.dirt = 0 } }          // `-ProfileFed 1`: nobody wants anything (to see the plain "asleep" sentence)
+        if d.object(forKey: "BondSet") != nil {          // `-BondSet <points>` sets the picked Jelmiko's relationship points outright (a capture aid: the only place that can LOWER them)
+            let c = care.jelly(who.wrappedValue)?.character ?? who.wrappedValue
+            JellyBond.seedIfNeeded(c)
+            var m = UserDefaults.standard.dictionary(forKey: JellyBond.key(c)) ?? [:]
+            m["p"] = max(d.integer(forKey: "BondSet"), 0)
+            UserDefaults.standard.set(m, forKey: JellyBond.key(c))
+        }
         if d.integer(forKey: "ProfileSeed") != 0, d.integer(forKey: "ProfileSeeded") == 0 {
             d.set(1, forKey: "ProfileSeeded")
             let c = care.jelly(who.wrappedValue)?.character ?? who.wrappedValue

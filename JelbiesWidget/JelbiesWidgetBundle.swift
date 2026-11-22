@@ -34,9 +34,11 @@ struct JelbiesEntry: TimelineEntry {
     let portraits: [Int: UIImage]
     /// Night (21:00-06:00) or tucked in by "Put my Jelbies to bed".
     var sleeping = false
+    /// The room's night sleep hours at `date` (the sentence says "asleep").
+    var night = false
     /// Queued quick actions (a Water tap waiting for the game to open).
     var queued: [JellyRoute] = []
-    var accessory: JellyAccessoryModel { JellyAccessoryModel(states: states, sleeping: sleeping, queued: queued) }
+    var accessory: JellyAccessoryModel { JellyAccessoryModel(states: states, sleeping: sleeping, night: night, queued: queued) }
 }
 
 struct JelbiesWidgetView: View {
@@ -62,7 +64,7 @@ struct JelbiesWidgetView: View {
                     .widgetURL(link)
                     .containerBackground(for: .widget) { JellyPalette.night }
             } else {
-                JellyWidgetContent(family: family, states: entry.states, portraits: entry.portraits, sleeping: entry.sleeping,
+                JellyWidgetContent(family: family, states: entry.states, portraits: entry.portraits, sleeping: entry.sleeping, night: entry.night,
                                    showsWater: family != .systemSmall, queued: entry.queued)
                     .widgetURL(link)
                     .containerBackground(for: .widget) { WidgetTheme.card }

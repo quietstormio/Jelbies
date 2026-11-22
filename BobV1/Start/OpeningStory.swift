@@ -640,7 +640,7 @@ struct OpeningStoryView: View {
     // MARK: replay keeps the save as it was (the previews write their Jelbies' needs / stats while they stand on the stage)
 
     private static func keys() -> [String] {
-        (0..<4).flatMap { c in [JellyKeys.needs(c), JellyKeys.grime(c), JellyKeys.words(c), JellyKeys.stats(c), JellyKeys.perks(c)] }
+        (0..<4).flatMap { c in [JellyKeys.needs(c), JellyKeys.grime(c), JellyKeys.words(c), JellyKeys.stats(c), JellyKeys.perks(c), JellyKeys.bond(c)] }
     }
     static func saveSnapshot() -> [String: Any] {
         var s: [String: Any] = [:]

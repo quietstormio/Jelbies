@@ -45,6 +45,8 @@ final class VolleyFlow {
     private(set) var mode: VolleyMode = .match(.sandcastle)
     var playerID = 0
     var playerCharacter = 0
+    /// The relationship hook: (character, won) when a match is settled and the player really played.
+    var onBond: ((Int, Bool) -> Void)?
     var playerName = ""
     var partnerName = ""
     var opponentNames: [String] = []
@@ -181,7 +183,7 @@ final class VolleyFlow {
             earned = played ? Int((Float(VolleyTuning.drops(win: win, tier: t)) * assistFactor).rounded(.down)) : 0
             wallet?.add(earned)
             unlockedNow = book.finishMatch(character: playerCharacter, tier: t, win: win, closeLoss: close)
-            if played { awardPoints(win: win, closeLoss: close) }
+            if played { awardPoints(win: win, closeLoss: close); onBond?(playerCharacter, win) }          // (the relationship, GameCare+Bond.swift)
             if win, let tb = trophies { awards = tb.recordVolleyWin(character: playerCharacter, tier: t) }
             A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) JellyCoins" : "They won \(s.score[1]) to \(s.score[0]). \(earned) JellyCoins", .high)
             if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
