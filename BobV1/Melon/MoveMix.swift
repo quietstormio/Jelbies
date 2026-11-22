@@ -43,7 +43,7 @@ nonisolated enum MoveMix {
     // 7. soccer by themselves (round 3): with a soccer ball placed, some moment about every `soccerGap` s of field time, a real pass exchange of `passKicksMin...Max` kicks
     nonisolated(unsafe) static var soccerNextAt: Float = 0
     static let soccerGap: ClosedRange<Float> = 55...85
-    static let passChance: Float = 0.65, passKicksMin = 3, passKicksMax = 6
+    static let passChance: Float = 0.85, passKicksMin = 3, passKicksMax = 6
     static let followGoal: Float = 0.55, followThird: Float = 0.35          // after a pass: a shot run (goal placed) / the third one joins with a kick
     /// Leg against the board's predicted positions over the next 2 s (see `mixBoardConflict`).
     static let boardNear: Float = 1.05, boardPenalty: Float = 6
