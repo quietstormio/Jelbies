@@ -161,6 +161,8 @@ final class GameCare {
     @ObservationIgnored var favouriteCheered: Set<Int> = []
     /// Diners already counted for this serving's relationship points (GameCare+Bond.swift); a new serving clears it.
     @ObservationIgnored var bondFed: Set<Int> = []
+    /// Where the relationship points live (the care's own defaults: `.standard` in the game, a scratch suite in tests).
+    @ObservationIgnored private(set) var bondDefaults: UserDefaults = .standard
     /// Seconds of enjoyed stroking per slot since the last stroke event (GameCare+Bond.swift).
     @ObservationIgnored var bondPetSeconds: [Int: Float] = [:]
     @ObservationIgnored var favouriteHearts: [Int: (left: Int, t: Float, c: SIMD3<Float>)] = [:]
@@ -291,6 +293,7 @@ final class GameCare {
         // written to the save (needs, dirt, stats, perks, words, the store, the wallet, the saved room and decor), there is no time away, and he starts happy.
         let persistent = persistent && !preview
         isPreview = preview
+        bondDefaults = defaults
         syncsAppGroup = persistent
         var chars: [Int]
         if let roster { chars = JellyRoster.sanitised(roster, allowPreview: preview) }
@@ -784,7 +787,6 @@ final class GameCare {
         guard n > mealPaid else { return }
         needs(for: mealJelly).gain(meal!.kind == .food ? .hunger : .thirst, Float(n - mealPaid) * MealAppetite.gainPerPiece)
         ate(jelly: mealJelly, meal!, pieces: n - mealPaid)
-        bondAte(slot: mealJelly, meal!)          // (the relationship: once per serving, the first piece)
         mealPaid = n
     }
 

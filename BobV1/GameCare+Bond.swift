@@ -15,8 +15,8 @@ extension GameCare {
 
     func bondEarn(_ kind: BondKind, character c: Int, favourite: Bool = false, win: Bool = false) {
         guard !isPreview, !JellyRoster.isPreview(c), jellies.contains(where: { $0.character == c }) else { return }
-        let add = JellyBond.earn(kind, c, favourite: favourite, win: win)
-        if DevArgs.enabled { NSLog("[bond] character %d %@ +%d -> %d points", c, kind.rawValue, add, JellyBond.points(c)) }
+        let add = JellyBond.earn(kind, c, favourite: favourite, win: win, bondDefaults)
+        if DevArgs.enabled { NSLog("[bond] character %d %@ +%d -> %d points", c, kind.rawValue, add, JellyBond.points(c, bondDefaults)) }
     }
 
     /// Every Jelmiko at home, once per kind-cap (the first open of a day).
