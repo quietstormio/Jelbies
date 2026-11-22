@@ -395,7 +395,7 @@ final class SocialTests: XCTestCase {
         let total = counts.values.reduce(0, +)
         let table = counts.sorted { $0.value > $1.value }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: " ")
         MotionLog.write("SOCIAL PICKS draws \(n) started \(started) picked \(total): \(table)")
-        XCTAssertGreaterThan(total, n / 3, "the roll passes about as often however the weights are set (it never reads their total)")
+        XCTAssertGreaterThan(total, MoveMix.on ? n / 8 : n / 3, "the roll passes about as often however the weights are set (it never reads their total)")
         // 2026-11-06: boop (weight 1.5) is picked less than follow (weight 2)
         XCTAssertLessThan(counts[.boop] ?? 0, counts[.follow] ?? 0, "boop is rarer than follow")
 

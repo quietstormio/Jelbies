@@ -40,9 +40,9 @@ nonisolated enum MoveMix {
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
     static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
-    static let idleWeight: Float = 4.5          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
+    static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
     /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
-    static let ownShare: Float = 0.55
+    static let ownShare: Float = 0.7
     /// Rug-centre penalty of EmoteSpot.score (was 2.2): pair / group spots lean away from the centre.
     static let rugWeight: Float = 3.4
     /// A stroll goal in another depth third than where the body stands / where its mates strolled to.
