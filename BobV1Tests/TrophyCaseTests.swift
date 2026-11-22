@@ -98,15 +98,63 @@ final class TrophyCaseTests: XCTestCase {
         XCTAssertNil(items(book).first { $0.id == "volley.sandcastle" }?.pair)
     }
 
-    func testOldVolleyRecordDecodesWithOneWinnerAndStaysSo() throws {
+    private static let oldShadow = #"{"4":{"race":{},"earned":["vfirst.sandcastle"],"volleyWins":{"sandcastle":1},"won":{"volley.sandcastle":780000000}}}"#
+    private func oldBook() -> TrophyBook {
         let d = defaults()
-        d.set(Data(#"{"4":{"race":{},"earned":["vfirst.sandcastle"],"volleyWins":{"sandcastle":1},"won":{"volley.sandcastle":780000000}}}"#.utf8), forKey: TrophyBook.key)
-        let book = TrophyBook(persists: true, defaults: d)
+        d.set(Data(Self.oldShadow.utf8), forKey: TrophyBook.key)
+        return TrophyBook(persists: true, defaults: d)
+    }
+
+    func testOldVolleyRecordDecodesWithOneWinner() throws {
+        let book = oldBook()
         XCTAssertNil(book.shelf(character: 4).volleyPairs)
+        let item = try XCTUnwrap(items(book).first { $0.id == "volley.sandcastle" })
+        XCTAssertNil(item.pair)
+        XCTAssertEqual(item.character, 4)
+    }
+
+    func testOldRecordTakesItsPairFromTheNextWinWithAnOwnPartner() throws {
+        let book = oldBook()
+        _ = book.recordVolleyWin(character: 4, tier: .sandcastle, name: "Shadow", partner: (5, "Berry"), now: Date())
+        let item = try XCTUnwrap(items(book).first { $0.id == "volley.sandcastle" })
+        XCTAssertEqual(item.pair, VolleyPair(asked: 4, askedName: "Shadow", mate: 5, mateName: "Berry"))
+        XCTAssertEqual(item.date, Date(timeIntervalSinceReferenceDate: 780000000), "the original date stays")
+        XCTAssertEqual(book.shelf(character: 5).volleyWon(.sandcastle), 1, "the partner has the court trophy on its own shelf")
+        XCTAssertEqual(book.shelf(character: 4).volleyWon(.sandcastle), 2)
+    }
+
+    func testOldRecordHeldByThePartnerIsUpgradedToo() throws {
+        let book = oldBook()          // Shadow (4) holds the old record; Berry (5) asks and plays with him
+        _ = book.recordVolleyWin(character: 5, tier: .sandcastle, name: "Berry", partner: (4, "Shadow"), now: Date())
+        let item = try XCTUnwrap(items(book).first { $0.id == "volley.sandcastle" })
+        XCTAssertEqual(item.pair, VolleyPair(asked: 5, askedName: "Berry", mate: 4, mateName: "Shadow"))
+        XCTAssertEqual(item.date, Date(timeIntervalSinceReferenceDate: 780000000))
+        XCTAssertEqual(item.character, 5)
+    }
+
+    func testOldRecordTakesItsPairFromTheNextWinWithAParkFriend() throws {
+        let book = oldBook()
+        _ = book.recordVolleyWin(character: 4, tier: .sandcastle, name: "Shadow", partner: (nil, "Pebble"))
+        let item = try XCTUnwrap(items(book).first { $0.id == "volley.sandcastle" })
+        XCTAssertEqual(item.pair, VolleyPair(asked: 4, askedName: "Shadow", mate: nil, mateName: "Pebble"))
+        XCTAssertEqual(item.date, Date(timeIntervalSinceReferenceDate: 780000000))
+        XCTAssertEqual(book.shelves.count, 1)
+    }
+
+    func testAnExistingPairIsNeverChangedByALaterWinWithSomeoneElse() throws {
+        let book = TrophyBook(persists: false)
+        _ = book.recordVolleyWin(character: 1, tier: .sandcastle, name: "Shadow", partner: (2, "Berry"))
+        _ = book.recordVolleyWin(character: 1, tier: .sandcastle, name: "Shadow", partner: (nil, "Pebble"))
+        _ = book.recordVolleyWin(character: 1, tier: .sandcastle, name: "Shadow", partner: (3, "Latte"))
+        XCTAssertEqual(items(book).first { $0.id == "volley.sandcastle" }?.pair, VolleyPair(asked: 1, askedName: "Shadow", mate: 2, mateName: "Berry"))
+    }
+
+    func testAnOldRecordOnOneCourtIsNotTouchedByAWinOnAnother() throws {
+        let book = oldBook()
+        _ = book.recordVolleyWin(character: 4, tier: .shore, name: "Shadow", partner: (5, "Berry"))
         XCTAssertNil(items(book).first { $0.id == "volley.sandcastle" }?.pair)
-        _ = book.recordVolleyWin(character: 4, tier: .sandcastle, name: "Shadow", partner: (5, "Berry"))          // a later pair win does not turn the old trophy into a pair one
-        XCTAssertNil(items(book).first { $0.id == "volley.sandcastle" }?.pair)
-        XCTAssertNotNil(book.shelf(character: 5).volleyPairs)
+        XCTAssertNotNil(items(book).first { $0.id == "volley.shore" }?.pair)
+        XCTAssertNil(book.shelf(character: 4).volleyPairs?["sandcastle"])
     }
 
     func testPairSurvivesASaveAndReload() throws {

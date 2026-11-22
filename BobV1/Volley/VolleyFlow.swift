@@ -223,7 +223,9 @@ extension TrophyBook {
         var s = shelf(character: c)
         var w = s.volleyWins ?? [:]
         a.newRibbon = (w[tier.rawValue] ?? 0) == 0
-        if a.newRibbon, let pair { var m = s.volleyPairs ?? [:]; m[tier.rawValue] = pair; s.volleyPairs = m }          // (only the first win on a court names winners: an older one-winner trophy stays as it was)
+        // The pair is written when this court's trophy has none yet: the first win on the court, or an older one-winner trophy (saved before two winners) on its NEXT win here, which keeps its
+        // original date and now reads both names. A trophy that already has a pair keeps it for good (a later win with someone else never changes it). Other courts are never touched.
+        if let pair, s.volleyPairs?[tier.rawValue] == nil { var m = s.volleyPairs ?? [:]; m[tier.rawValue] = pair; s.volleyPairs = m }
         w[tier.rawValue, default: 0] += 1
         s.volleyWins = w
         s.stamp("volley.\(tier.rawValue)", now)
