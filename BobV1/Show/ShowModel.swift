@@ -195,10 +195,11 @@ nonisolated enum ShowTrickInfo {
         case .bow: return [.sweet, .cute]
         case .bellyDrum: return [.cute, .sporty]
         case .dizzySpin: return [.cute, .sparkly]
+        case .hug: return [.sweet, .cute]
         }
     }
     /// The tricks a Jelbie can show on stage: everything learned but the come and the run (walks, not stage tricks: he would leave the spotlight).
-    static let stageTricks: [VoiceTrick] = VoiceTrick.allCases.filter { $0 != .come && $0 != .run }
+    static let stageTricks: [VoiceTrick] = VoiceTrick.allCases.filter { $0 != .come && $0 != .run && $0 != .hug }
     /// The tricks every Jelbie has on the menu, learned or not.
     static let defaults: [VoiceTrick] = [.sit, .spin, .hop, .jacks]
     /// The menu: the defaults plus whatever else he has learned (and owns the page for), in the fixed stage order.
@@ -208,7 +209,7 @@ nonisolated enum ShowTrickInfo {
     /// Difficulty in stars, 1...3: harder tricks score more and slip more often.
     static func difficulty(_ t: VoiceTrick) -> Int {
         switch t {
-        case .sit, .hop, .look, .come, .run, .strut, .sing, .hula, .bow: return 1
+        case .sit, .hop, .look, .come, .run, .strut, .sing, .hula, .bow, .hug: return 1
         case .jacks, .spin, .superSpring, .corkscrew, .oneLegSpin, .backBounce, .bellyDrum, .dizzySpin: return 2
         case .flip, .showOff, .moonwalk, .headstand: return 3
         }
@@ -222,7 +223,7 @@ nonisolated enum ShowTrickInfo {
         case .come: return "figure.walk"; case .run: return "figure.run"
         case .showOff: return "crown.fill"; case .strut: return "figure.walk.motion"; case .sing: return "music.note"; case .hula: return "figure.dance"; case .superSpring: return "arrow.up.to.line.circle.fill"; case .corkscrew: return "tornado"; case .oneLegSpin: return "figure.skating"
         case .moonwalk: return "moon.stars.fill"; case .backBounce: return "figure.fall"; case .headstand: return "figure.yoga"
-        case .bow: return "person.fill.turn.down"; case .bellyDrum: return "circle.circle.fill"; case .dizzySpin: return "sparkles"
+        case .bow: return "person.fill.turn.down"; case .bellyDrum: return "circle.circle.fill"; case .dizzySpin: return "sparkles"; case .hug: return "heart.fill"
         }
     }
     /// How long the stage gives a trick to play out (seconds). The move runs to its own end; the old fixed 2.6 s cut the longer ones short.

@@ -32,14 +32,18 @@ extension GameCare {
         /// False = locked: the chip shows the price and opens the Shop's Tricks tab.
         let known: Bool
         let price: Int
+        /// A lock that is not a price (the Hug: "Reach Best friends to unlock"): a heart, no coins, the tap shows the hint.
+        var hint: String? = nil
         var id: String { trick.rawValue }
     }
 
     /// The row for this Jelbie: what he knows (defaults + bought) in stage order, then what he does not (locked, in Shop order).
     func trickMenu(jelly id: Int) -> [TrickChip] {
-        let known = ShowTrickInfo.stageTricks.filter { knows($0, jelly: id) }.map { TrickChip(trick: $0, known: true, price: 0) }
+        var known = ShowTrickInfo.stageTricks.filter { knows($0, jelly: id) }.map { TrickChip(trick: $0, known: true, price: 0) }
+        let hugOpen = knows(.hug, jelly: id)
+        if hugOpen { known.append(TrickChip(trick: .hug, known: true, price: 0)) }          // (the Hug is on no stage: BestHug, never sold)
         let locked = TrickCatalog.forSale.filter { ShowTrickInfo.stageTricks.contains($0.trick) && !knows($0.trick, jelly: id) }.map { TrickChip(trick: $0.trick, known: false, price: $0.price) }
-        return known + locked
+        return known + locked + (hugOpen ? [] : [TrickChip(trick: .hug, known: false, price: 0, hint: BestHug.hint)])
     }
 
     /// Why he cannot do a trick right now, in a few words (nil = he can).
@@ -63,6 +67,8 @@ extension GameCare {
             b.flipCompact = focus.isActive
             b.commandedFlipFail = false
             b.commandedFlip = true
+        } else if t == .hug {
+            b.commandBestHug(inPlace: focus.isActive)
         } else if let k = VoiceCoordinator.idleKind(for: t) {
             if t == .superSpring || t == .corkscrew || t == .moonwalk { b.flipCompact = focus.isActive }
             b.commandedIdle = k

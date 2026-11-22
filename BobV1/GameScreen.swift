@@ -1000,6 +1000,7 @@ struct GameScreen: View {
             case "drink:water": care.drink("water")
             case "call": care.call()
             case "callall": care.comeHereEveryone()
+            case "hug": _ = care.performTrick(.hug, jelly: care.voiceSubject)          // capture aid: the best-friends Hug (needs -BestHugUnlocked 1)
             case "roamhug": care.roamHug()          // capture aid: GameCare+RoamHug.swift
             case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()
@@ -1537,12 +1538,14 @@ struct CareMenu: View {
         let t = c.trick
         let stars = ShowTrickInfo.difficulty(t)
         let dim = c.known ? blocked : true
-        let label = c.known ? (blocked ? "\(t.title), not now" : t.title) : "\(t.title), locked, \(c.price) coins, opens the Shop"
+        let label = c.known ? (blocked ? "\(t.title), not now" : t.title) : (c.hint.map { "\(t.title), locked. \($0)" } ?? "\(t.title), locked, \(c.price) coins, opens the Shop")
         return Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             if c.known {
                 guard !blocked else { return }
                 if care.performTrick(t, jelly: id) { withAnimation(Self.spring) { trickRow = false; open = false } }
+            } else if let hint = c.hint {
+                GameMessageCenter.shared.post(hint, icon: "heart.fill", identifier: "best-hug-locked")          // (a lock that is not a price: nothing to buy, the line says how)
             } else {
                 ShopTab.pending = .tricks
                 withAnimation(Self.spring) { trickRow = false; open = false }
@@ -1556,7 +1559,9 @@ struct CareMenu: View {
                 }
                 HStack(spacing: 2) {
                     ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 9, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : Self.brown.opacity(0.35)) }
-                    if !c.known {
+                    if !c.known, c.hint != nil {
+                        Image(systemName: "heart.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Color(red: 0.914, green: 0.541, blue: 0.643)).padding(.leading, 4)
+                    } else if !c.known {
                         Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold)).padding(.leading, 4)
                         JellyCoinIcon(size: 12)
                         Text("\(c.price)").jFont(11, .black)

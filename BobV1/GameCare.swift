@@ -37,6 +37,7 @@ final class GameCare {
     @ObservationIgnored var queued: [BlobRequest] = []      // one-shot brain requests (wave / come)
     @ObservationIgnored private var hooked = false
     @ObservationIgnored var callRunning = false
+    @ObservationIgnored var revealClock: Float = 0          // the best-friends hug reveal's check timer (GameCare+BestHug.swift)
     /// The "Go home?" card of a competition is up (Race/ForfeitHome.swift); the race / show / match waits behind it.
     var forfeitAsk = false
     @ObservationIgnored private var finished: [BlobRequest] = []
@@ -963,6 +964,7 @@ final class GameCare {
             if let sim, !greetBlocked { brain.startHopPlay(sim: sim, distance: 0.0001); greetHearts = 3; greetT = 0; AudioHub.shared.chirp(jelly: 0, .happy, src: "greet") }       // the existing in-place hop (arm / feet caps hold)
         }
         tickFavouriteHearts(dt: dt)
+        tickBestHug(dt: dt)          // (the hug's hearts / buzz and the best-friends reveal: GameCare+BestHug.swift)
         if greetHearts > 0 { greetT -= dt; if greetT <= 0 { greetT = 0.45; greetHearts -= 1; touchPlay?.spawnHeart(now: CACurrentMediaTime()) } }
 
         // finished jobs

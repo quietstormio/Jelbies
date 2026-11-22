@@ -64,10 +64,10 @@ final class BubbleHub {
     nonisolated deinit {}
 
     func setOwner(_ id: Int) { owner = id }
-    func spawnHeart(for id: Int, now: Double, fixed: SIMD3<Float>? = nil) {
+    func spawnHeart(for id: Int, now: Double, fixed: SIMD3<Float>? = nil, big: Bool = false) {
         hearts.removeAll { now - $0.heart.born > TouchPlay.heartLife }
         func r() -> Float { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return Float(rng >> 8) / Float(1 << 24) }
-        hearts.append((id, TouchPlay.Heart(born: now, drift: (r() - 0.5) * 2, start: (r() - 0.5) * 2, side: hearts.count % 2 == 0 ? -1 : 1, fixed: fixed)))
+        hearts.append((id, TouchPlay.Heart(born: now, drift: (r() - 0.5) * 2, start: big ? 1 : (r() - 0.5) * 2, side: hearts.count % 2 == 0 ? -1 : 1, fixed: fixed)))
     }
     func pruneHearts(now: Double) { if !hearts.isEmpty { hearts.removeAll { now - $0.heart.born > TouchPlay.heartLife } } }
     /// Greeting hearts a Jelly gives: 3, 0.45 s apart (Bob's own are in GameCare).
