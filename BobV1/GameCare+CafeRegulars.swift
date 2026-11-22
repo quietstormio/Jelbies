@@ -27,7 +27,7 @@ nonisolated enum CafeGuestPlan: Equatable, Sendable {
     /// Capture aid (dev arguments only): `-CafeGuestAtP x,z` / `-CafeGuestAtL x,z` put the pair's table (portrait / landscape) at that floor spot instead of the candidates.
     static func forcedSpot(landscape: Bool) -> SIMD2<Float>? {
         guard DevArgs.enabled, let s = UserDefaults.standard.string(forKey: landscape ? "CafeGuestAtL" : "CafeGuestAtP") else { return nil }
-        let v = s.split(separator: ",").compactMap { Float($0) }
+        let v = s.split(separator: ",").compactMap { t in Float(t.hasPrefix("m") ? "-" + t.dropFirst() : String(t)) }          // ("m2.3,m3.0" = -2.3,-3.0: a launch value cannot start with a minus)
         return v.count == 2 ? SIMD2(v[0], v[1]) : nil
     }
     /// Capture aid (dev arguments only): `-CafeGuests none|solo|pair|pairwalk`.
@@ -54,7 +54,7 @@ final class CafeGuests {
 
 extension GameCare {
     /// How far the pair's two stands are from their table's centre (the player's three use 1.25...1.3).
-    static let pairSideX: Float = 1.15
+    static let pairSideX: Float = 1.05
     /// A regular keeps at least this far from every Jelbie (centre to centre) when he picks where to stand.
     static let regularMargin: Float = 1.8
     /// Where regulars come in: the door side of the café, just outside the floor.
