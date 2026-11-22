@@ -91,9 +91,9 @@ nonisolated struct TemplateWriter: StoryWriter {
         memory.remember(key, w.ids, bankSize: StoryTemplates.aboutBank.count)
         return StoryAnswer(w.template, keys: w.keys)
     }
-    func writeNote(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> StoryAnswer? {
+    func writeNote(_ f: StoryFacts, _ h: StoryFacts.Housemate, avoid: Set<String> = []) -> StoryAnswer? {
         let key = Self.noteKey(f.id, h.id)
-        guard let w = StoryTemplates.friendship(f, with: h, used: memory.usedSet(key), seed: memory.nextSeed(key)) else { return nil }
+        guard let w = StoryTemplates.friendship(f, with: h, used: memory.usedSet(key), seed: memory.nextSeed(key), avoid: avoid) else { return nil }
         memory.remember(key, w.ids, bankSize: StoryTemplates.noteBank.count)
         return StoryAnswer(w.template, keys: w.keys)
     }

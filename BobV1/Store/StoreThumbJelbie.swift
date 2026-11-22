@@ -75,21 +75,31 @@ extension StoreThumb {
         guard var piece = WearMeshes.restMesh(look) else { return nil }
         var m = jelbieBody()
         if look.slot == .hands {
-            // arm-local mitts / wristbands: put them on both rest arms, as the wardrobe does on the posed ones
+            // Mitts / wristbands on both rest arms, fitted the way the worn body fits them (WornSet.emitArms): the art is a ring about its own y axis (inner radius 0.098, middle at y 0.060),
+            // set 0.83 of the way from the arm's tip toward the shoulder and pushed out to the arm's skin there (round cone of the tip sphere and the root sphere) plus its wall. The old
+            // placement hung the ring at the tip centre at its authored radius (about 0.10), inside the 0.15 bulb of the rest arm: the band was hidden in the arm.
             let a0 = SIMD3<Float>(Float(BobForm.armTop.x), Float(BobForm.armTop.y), Float(BobForm.armTop.z))
             let b0 = SIMD3<Float>(Float(BobForm.armTip.x), Float(BobForm.armTip.y), Float(BobForm.armTip.z))
-            let k = Float(BobForm.armTipR) / 0.15
+            let rTip = Float(BobForm.armTipR), rTop = Float(BobForm.armTopR)
+            let station: Float = 0.83, bandInner: Float = 0.098, bandMid: Float = 0.060, bandSquash: Float = 0.90, gap: Float = 0.004
             var out = RoomMesh()
             for sigma: Float in [1, -1] {
-                let a = SIMD3(sigma * a0.x, a0.y, a0.z), bT = SIMD3(sigma * b0.x, b0.y, b0.z)
-                let Y = simd_normalize(a - bT)
+                let A = SIMD3(sigma * a0.x, a0.y, a0.z), B = SIMD3(sigma * b0.x, b0.y, b0.z)
+                let L = simd_length(A - B), Y = (A - B) / L
                 var Z0 = SIMD3<Float>(0, 0, 1); Z0 -= Y * simd_dot(Z0, Y)
+                Z0 = simd_normalize(Z0)
                 let X = simd_normalize(simd_cross(Y, Z0)), Z = simd_cross(X, Y)
+                let sc = L * (1 - station), centre = B + Y * sc
+                func skin(_ s: Float) -> Float { max(sqrtf(max(rTip * rTip - s * s, 0)), sqrtf(max(rTop * rTop - (L - s) * (L - s), 0)), 0.02) }
                 let base = UInt32(out.vertices.count)
                 for v in piece.vertices {
                     let l = SIMD3<Float>(v.pos.x, v.pos.y, v.pos.z)
-                    let y = max(l.y, -0.15)
-                    let q = bT + (X * (sigma * l.x) + Y * y + Z * l.z) * k
+                    let rho = (l.x * l.x + (l.z / bandSquash) * (l.z / bandSquash)).squareRoot()
+                    let cs = rho > 1e-6 ? l.x / rho : 1, sn = rho > 1e-6 ? l.z / bandSquash / rho : 0
+                    let axial = sc + (l.y - bandMid)
+                    let dir = X * (sigma * cs) + Z * sn
+                    let R = skin(axial) + gap + max(rho - bandInner, 0)
+                    let q = centre + Y * (axial - sc) + dir * R
                     let n0 = SIMD3<Float>(v.normal.x, v.normal.y, v.normal.z)
                     let n = simd_normalize(X * (sigma * n0.x) + Y * n0.y + Z * n0.z)
                     out.vertices.append(RoomVertex(pos: SIMD4(q, 0), normal: SIMD4(n, v.normal.w), color: v.color))

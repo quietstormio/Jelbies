@@ -110,4 +110,18 @@ final class StoryHabitsTests: XCTestCase {
         try? "sampler: \(per) microseconds per body-second (includes the once-a-minute save)".write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/story/sampler_cost.txt", atomically: true, encoding: .utf8)
         XCTAssertLessThan(per, 50, "a body-second of sampling must stay in the tens of microseconds")
     }
+
+    func testTheKindOfGroupSessionIsKnownOnlyWhenSampled() {
+        var h = StoryHabits()
+        for _ in 0..<25 { h.add(activity: "group:groupHug", partners: [7], area: nil, day: 5) }
+        for _ in 0..<10 { h.add(activity: "group:conga", partners: [8], area: nil, day: 5) }
+        XCTAssertEqual(h.topGroupKind(with: 7), "groupHug")
+        XCTAssertNil(h.topGroupKind(with: 8))          // 10 s is not enough to name it
+        XCTAssertNil(h.topGroupKind(with: 9))
+        var f = StoryFacts(id: 1, name: "Berry", kindName: "Blush", kindAbout: "", mood: "")
+        let m = StoryFactsBuilder.housemate(h, id: 7, name: "Latte", kind: "Moo")
+        XCTAssertEqual(m.groupKind, "groupHug"); XCTAssertTrue(m.sharedGroup)
+        f.housemates = [m]
+        XCTAssertFalse(StoryFactsBuilder.housemate(h, id: 8, name: "Pip", kind: "Moo").sharedGroup)
+    }
 }

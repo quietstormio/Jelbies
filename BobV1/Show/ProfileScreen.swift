@@ -380,6 +380,8 @@ struct ProfileScreen: View {
             ConditionScreen(care: care, who: $who, back: { stylesOpen = false }, show: { stylesOpen = false; show() }, bath: { stylesOpen = false; bath?() }, feed: feed, drink: drink, sheetMode: true)
                 .presentationDetents([.large]).presentationBackground(ShowUI.sand)
         }
+        .onAppear { StoryAppState.profileAppeared() }          // the model may be asked only a second after a Profile is on screen with its pre-written lines
+        .onDisappear { StoryAppState.profileGone() }
         .task(id: who) {          // the living line and the notes: asked for fresh text now and then while the Profile is open (StoryBook's schedule decides)
             var first = true          // (only the first ask after opening may rotate an old line; while the Profile stays open a line changes for a new event or a changed fact only)
             while !Task.isCancelled {

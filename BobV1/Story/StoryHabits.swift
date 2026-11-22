@@ -20,6 +20,8 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
     var emote: [String: Float] = [:]
     /// Seconds in group sessions with each housemate (a shared event for the friendship notes).
     var group: [String: Float]? = nil
+    /// "<partner>|<kind>" seconds in group sessions (which kind of group session they shared).
+    var groupKinds: [String: Float]? = nil
     var area: [String: Float] = [:]
     /// Seconds sampled lately (decayed like the rest) and ever (not decayed, capped for sanity).
     var total: Float = 0
@@ -44,7 +46,7 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
             let kind = String(activity.drop(while: { $0 != ":" }).dropFirst())
             for p in partners {
                 partner[String(p), default: 0] += dt
-                if activity.hasPrefix("group:") { var g = group ?? [:]; g[String(p), default: 0] += dt; group = g }
+                if activity.hasPrefix("group:") { var g = group ?? [:]; g[String(p), default: 0] += dt; group = g; var gk = groupKinds ?? [:]; gk["\(p)|\(kind)", default: 0] += dt; if gk.count > 16 { for k in gk.sorted(by: { $0.value < $1.value }).prefix(gk.count - 16).map(\.key) { gk.removeValue(forKey: k) } }; groupKinds = gk }
                 if activity.hasPrefix("pair:") { emote["\(p)|\(kind)", default: 0] += dt }
             }
             Self.cap(&emote, Self.maxEmoteKeys); Self.cap(&partner, Self.maxPartnerKeys)
@@ -65,6 +67,7 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
         for k in partner.keys { partner[k]! *= f }
         for k in emote.keys { emote[k]! *= f }
         if var g = group { for k in g.keys { g[k]! *= f }; group = g.filter { $0.value >= Self.dropBelow } }
+        if var g = groupKinds { for k in g.keys { g[k]! *= f }; groupKinds = g.filter { $0.value >= Self.dropBelow } }
         for k in area.keys { area[k]! *= f }
         total *= f
         act = act.filter { $0.value >= Self.dropBelow }; partner = partner.filter { $0.value >= Self.dropBelow }
@@ -109,6 +112,12 @@ nonisolated struct StoryHabits: Codable, Equatable, Sendable {
         return Int(m.key)
     }
     func seconds(with id: Int) -> Int { Int(partner[String(id)] ?? 0) }
+    /// The kind of group session they shared most (a SocialKind key), nil when there is not at least 20 s of one kind.
+    func topGroupKind(with id: Int) -> String? {
+        let pre = "\(id)|"
+        let m = (groupKinds ?? [:]).filter { $0.key.hasPrefix(pre) && $0.value >= 20 }.max { ($0.value, $1.key) < ($1.value, $0.key) }
+        return m.map { String($0.key.dropFirst(pre.count)) }
+    }
     func groupSeconds(with id: Int) -> Int { Int(group?[String(id)] ?? 0) }
     /// The share of all the pair time that was with this housemate (0 when there is none).
     func playShare(with id: Int) -> Double {

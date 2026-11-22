@@ -1136,7 +1136,7 @@ struct GameScreen: View {
         // capture aid: `-LobbyAuto volley|volleyTrain|volleyHow|track|trackHow` opens the Volleyball / Track lobby (and the sheet) at launch (the lobbies read the same argument)
         switch UserDefaults.standard.string(forKey: "LobbyAuto") {
         case "volley", "volleyTrain", "volleyHow": return .volley
-        case "track", "trackHow": return .track
+        case "track", "trackHow", "trackUpgrade": return .track
         case "show", "showHow": return .studio          // (the Jelly Show lobby is the Studio now)
         default: break
         }

@@ -472,7 +472,10 @@ struct TrackPanel: View {
             }
         }
         .accessibilityElement(children: .contain).accessibilityIdentifier("track-screen")
-        .onAppear { if UserDefaults.standard.string(forKey: "LobbyAuto") == "trackHow" { howOpen = true } }          // capture aid: -LobbyAuto trackHow
+        .onAppear {          // capture aids: -LobbyAuto trackHow / trackUpgrade
+            let a = UserDefaults.standard.string(forKey: "LobbyAuto")
+            if a == "trackHow" { howOpen = true } else if a == "trackUpgrade" { upgradeOpen = true }
+        }
     }
 
     /// 3 -> "three" (the How to play copy).

@@ -170,6 +170,11 @@ struct JelbiePortrait: View {
 struct JelbieActionShot: View {
     let care: GameCare
     var who: Int
+    /// The picture's size as a fraction of the card's height, and where the disc top sits in the card (fraction of its height). The Studio's card draws a smaller Jelmiko with room round it; Dress up fills its taller picture area.
+    var fill: CGFloat = 0.86
+    var floorAt: CGFloat = 0.80
+    /// The Studio's card shows a spinner while its first picture loads; Dress up never does (it opens on the lobby's cached picture and keeps the old one while a new one is drawn).
+    var spinner = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var frames: [UIImage?] = [nil, nil, nil]
     @State private var breathe = false        // a slow render-server driven autoreversing swell
@@ -177,19 +182,19 @@ struct JelbieActionShot: View {
 
     var body: some View {
         GeometryReader { g in
-            let h = g.size.height, S = h * 0.86
-            let floorY = h * 0.80                                  // the disc's top-centre, in the card
+            let h = g.size.height, S = h * fill
+            let floorY = h * floorAt                                  // the disc's top-centre, in the card
             let discW = S * 0.64, discH = discW * 0.30, rimH = discH * 0.42
             let x = g.size.width / 2
             ZStack {
                 ActionPodium(width: discW, topH: discH, rim: rimH).position(x: x, y: floorY + rimH / 2)
                 Ellipse().fill(RadialGradient(colors: [.black.opacity(0.42), .black.opacity(0)], center: .center, startRadius: 0, endRadius: discW * 0.26))
                     .frame(width: discW * 0.58, height: discH * 0.62).position(x: x, y: floorY)
-                if let img = frames[0] {
+                if let img = frames[0] ?? HeadPortraitCache.shared.cached(key(0), care: care) {
                     Image(uiImage: img).resizable().scaledToFit().frame(width: S, height: S)
                         .scaleEffect(x: 1 + 0.008 * (breathe && !reduceMotion ? 1 : 0), y: 1 + 0.014 * (breathe && !reduceMotion ? 1 : 0), anchor: UnitPoint(x: 0.5, y: img.feetFraction ?? HeadPortraitKey.actionFloorFraction))
                         .position(x: x, y: floorY + discH * 0.08 - S * (img.feetFraction ?? HeadPortraitKey.actionFloorFraction) + S / 2)
-                } else { ProgressView().tint(ShowUI.light).position(x: x, y: h * 0.5) }
+                } else if spinner { ProgressView().tint(ShowUI.light).position(x: x, y: h * 0.5) }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: breathe)
         }
@@ -204,7 +209,7 @@ struct JelbieActionShot: View {
 
     private func load() async {
         let t0 = CACurrentMediaTime()
-        frames = [HeadPortraitCache.shared.cached(key(0), care: care), nil, nil]
+        if let hit = HeadPortraitCache.shared.cached(key(0), care: care) { frames[0] = hit }          // (the picture already there stays until the new one lands: a tapped item never flashes a spinner)
         for pose in [0] {
             if frames[pose] != nil { continue }
             // a render that finds no stage / drawable yet (nil) is asked again, a few times, so the picture never stays on its spinner
@@ -296,19 +301,16 @@ struct ShowCTA: View {
 
 /// Owned wearables as tap-to-wear cards, the theme's matches edged in gold. One card per look; the worn one of a slot is marked. At the sheet's low height they are ONE row that
 /// scrolls sideways (snapping to a card edge, part of the next card showing); pulled up to large they are a vertically scrolling grid (3 columns on a phone in portrait,
-/// more when there is room). `focus` is the card index at the start of the row / near the top of the grid, so switching between the two keeps your place.
+/// more when there is room).
 struct WardrobeStrip: View {
     let care: GameCare
     var who: Int
     var theme: ShowTheme
     var slots: [WearSlot]? = nil          // nil = every slot
-    var low = false                       // the sideways row
-    var width: CGFloat = 0                // the sheet's width (the row's card size follows it)
-    @Binding var focus: Int
     var onChange: () -> Void = {}
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var scrolling = false
-    /// Every owned look, best theme match first: the one list both layouts draw.
+    /// Every owned look, best theme match first.
     static func ordered(care: GameCare, theme: ShowTheme, slots: [WearSlot]?) -> [WearLook] {
         StoreCatalog.items.filter { $0.isWearable && care.store.owns($0) }.compactMap(\.wear).filter { slots?.contains($0.slot) ?? true }
             .sorted { theme.match($0.tags) > theme.match($1.tags) }
@@ -320,19 +322,11 @@ struct WardrobeStrip: View {
         let n = max(accessibility ? 2 : 3, Int(((width + gap) / (WardrobeCardFace.minWidth + gap)).rounded(.down)))
         return (n, max(60, (width - gap * CGFloat(n - 1)) / CGFloat(n)))
     }
-    /// The sideways row's card width: three whole cards and a quarter of the fourth from the sheet's side margin to its edge (so it is plain the row scrolls).
-    static func rowCard(sheetWidth w: CGFloat, accessibility: Bool = false) -> CGFloat {
-        let gap = WardrobeCardFace.gap, margin: CGFloat = 16
-        let shown: CGFloat = accessibility ? 1.25 : 3.25, gaps: CGFloat = accessibility ? 1 : 3
-        return max(60, (w - margin - gap * gaps) / shown)
-    }
     var body: some View {
         let list = Self.ordered(care: care, theme: theme, slots: slots)
         Group {
             if list.isEmpty {
-                Text("Nothing to wear yet. The Shop has hats, bows and shoes.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, minHeight: 60)
-            } else if low {
-                row(list)
+                Text("Nothing to wear yet. The Shop has hats, bows and shoes.").font(SK.font(13, .bold)).foregroundStyle(ShowUI.lilacPale).frame(maxWidth: .infinity, minHeight: 60)
             } else {
                 grid(list)
             }
@@ -340,51 +334,10 @@ struct WardrobeStrip: View {
         .task(id: list.map(\.rawValue)) { await prewarm(list) }
     }
 
-    private func row(_ list: [WearLook]) -> some View {
-        let cw = Self.rowCard(sheetWidth: width, accessibility: typeSize.isAccessibilitySize)
-        let pos = Binding<Int?>(get: { focus }, set: { if let v = $0 { focus = v } })
-        return ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: WardrobeCardFace.gap) {
-                    ForEach(Array(list.enumerated()), id: \.offset) { i, look in card(look, width: cw).id(i) }
-                }
-                .scrollTargetLayout()
-                .padding(.vertical, 6)
-            }
-            .contentMargins(.horizontal, 16, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: pos, anchor: .leading)
-            .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("wardrobe-row")
-            .task {          // capture aids (dev arguments only): `-WardrobeRowScroll <seconds>` scrolls the row two cards along; `-WardrobeFlick <seconds>` flicks it end to end three times and logs the frame times
-                let d = UserDefaults.standard
-                guard DevArgs.enabled, list.count > 3 else { return }
-                if let t = d.string(forKey: "WardrobeRowScroll").flatMap(Double.init) {
-                    try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
-                    withAnimation { proxy.scrollTo(2, anchor: .leading) }
-                }
-                if let f = d.string(forKey: "WardrobeFlick").flatMap(Double.init) {
-                    try? await Task.sleep(nanoseconds: UInt64(f * 1_000_000_000))
-                    let probe = FrameProbe(); probe.start()
-                    for _ in 0..<3 {
-                        withAnimation(.linear(duration: 0.35)) { proxy.scrollTo(list.count - 1, anchor: .trailing) }
-                        try? await Task.sleep(nanoseconds: 450_000_000)
-                        withAnimation(.linear(duration: 0.35)) { proxy.scrollTo(0, anchor: .leading) }
-                        try? await Task.sleep(nanoseconds: 450_000_000)
-                    }
-                    let line = "rowflick prewarm=\(Self.prewarmOn) \(probe.stop())\n"
-                    if let path = d.string(forKey: "WardrobeFlickLog") { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
-                }
-            }
-        }
-    }
-
     private func grid(_ list: [WearLook]) -> some View {
         GeometryReader { g in
             let cols = Self.columns(for: g.size.width - 12, accessibility: typeSize.isAccessibilitySize)
             let rows = Self.rows(list, columns: cols.count)
-            let pos = Binding<Int?>(get: { focus / cols.count }, set: { if let v = $0 { focus = v * cols.count } })
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: WardrobeCardFace.gap) {
@@ -397,10 +350,8 @@ struct WardrobeStrip: View {
                             .id(r)
                         }
                     }
-                    .scrollTargetLayout()
                     .padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 30)
                 }
-                .scrollPosition(id: pos, anchor: .top)
                 .accessibilityIdentifier("wardrobe-grid")
                 .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
                 .task {          // capture aids (dev arguments only): `-WardrobeScroll <seconds>` scrolls the grid to its third row after that long; `-WardrobeFlick <seconds>` flicks it top to bottom three times and logs the frame times
@@ -543,8 +494,15 @@ extension StoreThumb {
         return image("ward-\(item.id)", mesh: drawn, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w, mesh: m))
     }
     static func wardrobeCached(_ item: StoreItem) -> UIImage? { cachedImage("ward-\(item.id)") }
+    /// The same picture of the bare catalogue Jelmiko (no piece), framed exactly as `wardrobeImage` frames the item: for telling a piece that renders nothing from one that does.
+    static func wardrobeBareImage(_ item: StoreItem) -> UIImage? {
+        guard let w = item.wear, !w.isShoe, let m = mesh(for: item) else { return nil }
+        let a = angles(for: item)
+        let bare = w.slot == .hands ? creamBody(jelbieBody()) : jelbieBody()
+        return image("wardbare-\(item.id)", mesh: bare, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w, mesh: m))
+    }
     /// The catalogue Jelmiko's body vertices recoloured cream (the eyes and the piece keep their colours).
-    private static func creamBody(_ m: RoomMesh) -> RoomMesh {
+    static func creamBody(_ m: RoomMesh) -> RoomMesh {
         let flesh = JellyRoster.palette(0)?.flesh ?? OKLab.srgbToLinear(SIMD3(0.50, 0.68, 0.95))
         let cream = OKLab.srgbToLinear(SIMD3<Float>(0.98, 0.94, 0.84))
         var out = m
@@ -630,8 +588,6 @@ struct StudioScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var wardrobeOpen = false
     /// Dress up opens low enough that the stage (the player's own Jelmiko wearing what they tap) stays in view above it; drag it up to browse.
-    @State private var wardrobeLowHeight: CGFloat = (UIScreen.main.bounds.height * 0.55).rounded()
-    @State private var wardrobeDetent: PresentationDetent = .height((UIScreen.main.bounds.height * 0.55).rounded())
     @State private var howOpen = false
     @State private var rankHint: String?
     /// The player has opened Dress up this visit: the button stops asking for attention.
@@ -730,33 +686,13 @@ struct StudioScreen: View {
             try? await Task.sleep(nanoseconds: UInt64(UserDefaults.standard.double(forKey: "WardrobeAfter") * 1_000_000_000))
             wardrobeOpen = true
         }
-        .sheet(isPresented: Binding(get: { wardrobeOpen && !compact }, set: { wardrobeOpen = $0 })) {
-            WardrobeSheet(care: care, who: who, theme: theme, rank: rank, low: wardrobeDetent != .large, onLowHeight: setWardrobeLow) { wardrobeOpen = false }
-                .presentationDetents([.height(wardrobeLowHeight), .large], selection: $wardrobeDetent).presentationBackground(SK.cream)
-        }
-        .overlay(alignment: .trailing) {          // landscape: a panel at the trailing edge instead of a sheet, so the stage stays in view beside it
-            if wardrobeOpen && compact {
-                WardrobeSheet(care: care, who: who, theme: theme, rank: rank, side: true) { wardrobeOpen = false }
-                    .frame(width: 410)
-                    .background(UnevenRoundedRectangle(topLeadingRadius: 24, bottomLeadingRadius: 24).fill(SK.cream).ignoresSafeArea())
+        .overlay {          // Dress up is its own full screen over the lobby (not a sheet); back returns to the lobby exactly as it was
+            if wardrobeOpen {
+                DressUpScreen(care: care, who: who, theme: theme, rank: rank) { AudioHub.shared.uiTap(); wardrobeOpen = false }
+                    .transition(.move(edge: .trailing))
             }
         }
-        .task {          // capture aid (dev arguments only): `-WardrobeLarge <seconds>` drags Dress up to the large height that long after the Studio appears
-            let t = UserDefaults.standard.double(forKey: "WardrobeLarge")
-            guard DevArgs.enabled, t > 0 else { return }
-            try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
-            wardrobeDetent = .large
-        }
-    }
-
-    /// Dress up's low height is exactly what its content needs (plus the home-indicator strip), so the stage above it is as visible as it can be on every phone.
-    private func setWardrobeLow(_ contentHeight: CGFloat) {
-        let bottom = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom }.first ?? 0
-        let h = (contentHeight + bottom).rounded(.up)
-        guard abs(h - wardrobeLowHeight) > 1 else { return }
-        let wasLow = wardrobeDetent != .large
-        wardrobeLowHeight = h
-        if wasLow { wardrobeDetent = .height(h) }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: wardrobeOpen)
     }
 
     private func setHow(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { howOpen = on } }
@@ -895,74 +831,121 @@ struct StageBackdrop: View {
     }
 }
 
-/// Dress up: the whole owned wardrobe by slot (the scored slots first), tap to wear / take off. The Studio's and the Look round's.
-/// Three shapes: `low` (the height it opens at, only as tall as its content: the title, the theme, the worn slots, the filters and ONE sideways row of cards, so the stage and the
-/// player's own Jelmiko stay in view above it), large (the same header over a vertical grid of every card) and `side` (landscape: a panel at the trailing edge, the grid in it, the stage beside it).
-struct WardrobeSheet: View {
+/// The Dress up picture: the player's own Jelmiko, whole, on the stage disc under the spotlight in what he wears now (the lobby's action shot, drawn to fill this taller area), the worn slots
+/// either side of him, the theme's tags in the top corners. Its size is a fixed `height` per device and orientation, and the Jelmiko's feet always stand at `floorAt` of it, so a tall hat
+/// or a tapped item never moves or rescales him.
+struct DressUpFigure: View {
     let care: GameCare
     var who: Int
     var theme: ShowTheme
     var rank: ShowRank
-    var low = false
-    var side = false
-    var onLowHeight: (CGFloat) -> Void = { _ in }
-    var close: () -> Void
-    @State private var slot: WearSlot?
-    @State private var focus = 0
-    @State private var sheetWidth: CGFloat = UIScreen.main.bounds.width
-    private var headerRow: some View {
-        HStack {
-            Text("Dress up").font(SK.font(26, .black)).foregroundStyle(SK.ink)
-            Spacer()
-            Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
-                .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("wardrobe-close")
+    var height: CGFloat
+    /// Where his feet (the disc top) stand in the area, as a fraction of its height; the picture is as tall as the area, so the room above is the 0.42-of-his-height the renderer leaves for hats.
+    static let floorAt: CGFloat = 0.87
+    /// The picture is this much of the area's height (a margin of about 3% above the tallest hat in the catalogue, the party cone, and the disc's front rim kept inside the area).
+    static let fill: CGFloat = 0.94
+    private func chip(_ t: WearTag, _ prefix: String) -> some View {
+        Text("\(prefix)\(t.title)").font(SK.font(12, .black)).foregroundStyle(SK.ink).padding(.horizontal, 9).frame(minHeight: 22).background(Capsule().fill(ShowUI.tag(t)))
+    }
+    private func column(_ slots: [WearSlot], _ outfit: [WearSlot: WearLook]) -> some View {
+        VStack(spacing: 10) {
+            ForEach(slots, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme, caption: false) { if let l = outfit[s] { care.store.takeOff(l.slot, from: who) } } }
         }
-    }
-    private var themeRows: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text("\(theme.title):").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
-                TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ")
-                Spacer()
-            }
-            Text("\(rank.title) rank scores \(rank.slots) slots: \(rank.slotOrder.map { $0.title }.joined(separator: ", ")). Gold = matches \(theme.main.title).").font(SK.font(12, .bold)).foregroundStyle(SK.muted).lineLimit(low && UIScreen.main.bounds.height < 700 ? 1 : nil).minimumScaleFactor(low && UIScreen.main.bounds.height < 700 ? 0.7 : 1).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-    private var wornPanel: some View {
-        let outfit = care.store.outfit(who)
-        return HStack(spacing: 10) {
-            ForEach(rank.slotOrder, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme) { if let l = outfit[s] { care.store.takeOff(l.slot, from: who) } } }
-            Text("Tap a worn slot to take it off.").font(SK.font(11, .bold)).foregroundStyle(ShowUI.mist).multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ShowUI.stage))
-    }
-    private var chips: some View {
-        WardrobeFilterChips(slot: Binding(get: { slot }, set: { slot = $0; focus = 0 }), slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && care.store.owns($0) } })
-    }
-    private func strip(low: Bool) -> some View {
-        WardrobeStrip(care: care, who: who, theme: theme, slots: slot.map { [$0] }, low: low, width: sheetWidth, focus: $focus)
+        .frame(width: 56)
     }
     var body: some View {
-        Group {
-            if low && !side {
-                VStack(alignment: .leading, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 8) { headerRow; themeRows; wornPanel; chips }.padding(.horizontal, 16)
-                    strip(low: true)
-                }
-                .padding(.top, 12).padding(.bottom, 2)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onLowHeight($0) }
-            } else {
-                VStack(alignment: .leading, spacing: 8) { headerRow; themeRows; wornPanel; chips; strip(low: false).frame(maxWidth: .infinity, maxHeight: .infinity).ignoresSafeArea(edges: .bottom) }
-                    .padding(.horizontal, 16).padding(.top, 12)
+        let outfit = care.store.outfit(who)
+        let slots = rank.slotOrder
+        let left = Array(slots.prefix((slots.count + 1) / 2)), right = Array(slots.dropFirst((slots.count + 1) / 2))
+        let wearing = rank.slotOrder.compactMap { outfit[$0]?.title } + outfit.filter { !rank.slotOrder.contains($0.key) }.map { $0.value.title }
+        ZStack {
+            StageBackdrop()
+            JelbieActionShot(care: care, who: who, fill: Self.fill, floorAt: Self.floorAt, spinner: false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(care.rosterName(who))\(wearing.isEmpty ? ", wearing nothing" : ", wearing \(wearing.joined(separator: " and "))")")
+            HStack(spacing: 0) {
+                column(left, outfit); Spacer(minLength: 0); column(right, outfit)
+            }
+            .padding(.horizontal, 14)
+            VStack {
+                HStack(spacing: 0) { chip(theme.main, ""); Spacer(minLength: 0); chip(theme.friend, "+ ") }.padding(.horizontal, 10).padding(.top, 8)
+                Spacer()
             }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { if $0 > 0 { sheetWidth = $0 } }
-        .accessibilityIdentifier("wardrobe-sheet")
-        .task {          // capture aids (dev arguments only): `-WardrobeSlot <head|feet|...>` starts on that filter
+        .frame(height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .accessibilityElement(children: .contain).accessibilityIdentifier("dressup-figure")
+    }
+}
+
+/// Dress up, its own full screen (not a sheet): over the lobby, with the lobby's back arrow. The Jelmiko in what he wears fills a pinned picture at the top (feet always in view, see
+/// `DressUpFigure`), the one-line rule and the hint under it, and below that the filter chips and a grid of cards that scrolls on its own. Landscape and iPad: the picture on the leading
+/// side at full height, the chips and the grid on the trailing side. What a tap does is the same as ever: it puts the item on / takes it off (the Studio's show-outfit rule sits in the Town).
+struct DressUpScreen: View {
+    let care: GameCare
+    var who: Int
+    var theme: ShowTheme
+    var rank: ShowRank
+    var close: () -> Void
+    @State private var slot: WearSlot?
+    @Environment(\.horizontalSizeClass) private var hsc
+    @Environment(\.verticalSizeClass) private var vsc
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// The picture area's height in a stacked (portrait phone) layout: a fixed share of the room, more of it on a tall phone, less on a short one so a full row of cards still shows under it.
+    static func figureHeight(containerHeight h: CGFloat) -> CGFloat { (h * (h < 700 ? 0.38 : 0.44)).rounded() }
+    static func isSplit(width: CGFloat, height: CGFloat, hSize: UserInterfaceSizeClass?, vSize: UserInterfaceSizeClass?) -> Bool { vSize == .compact || hSize == .regular || width > height * 1.2 }
+
+    private var rule: some View {
+        VStack(spacing: 2) {
+            Text("\(rank.title) rank scores \(rank.slots) slots: \(rank.slotOrder.map { $0.title }.joined(separator: ", ")). Gold = matches \(theme.main.title).")
+                .font(SK.font(12, .bold)).foregroundStyle(ShowUI.lilacPale).multilineTextAlignment(.center).lineLimit(typeSize.isAccessibilitySize ? nil : 2).minimumScaleFactor(0.8)
+            Text("Tap a worn slot to take it off.").font(SK.font(11, .bold)).foregroundStyle(ShowUI.lilac)
+        }
+        .frame(maxWidth: .infinity)
+    }
+    private var chips: some View {
+        WardrobeFilterChips(slot: $slot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && care.store.owns($0) } })
+    }
+    private var grid: some View {
+        WardrobeStrip(care: care, who: who, theme: theme, slots: slot.map { [$0] }).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    private var header: some View { ShowHeader(title: "Dress up", light: true, backID: "dressup-back", back: close) { EmptyView() } }
+
+    var body: some View {
+        GeometryReader { g in
+            Group {
+                if Self.isSplit(width: g.size.width, height: g.size.height, hSize: hsc, vSize: vsc) {
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(spacing: 6) {
+                            header
+                            DressUpFigure(care: care, who: who, theme: theme, rank: rank, height: max(160, g.size.height - 52 - 56 - 16))
+                            rule
+                        }
+                        .frame(maxWidth: .infinity)
+                        VStack(spacing: 8) { chips; grid }.frame(width: min(430, g.size.width * 0.46))
+                    }
+                } else {
+                    VStack(spacing: 6) {
+                        header
+                        DressUpFigure(care: care, who: who, theme: theme, rank: rank, height: Self.figureHeight(containerHeight: g.size.height))
+                        rule
+                        chips
+                        grid
+                    }
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 4)
+        }
+        .background(ShowUI.hall.ignoresSafeArea())
+        .accessibilityElement(children: .contain).accessibilityAddTraits(.isModal)
+        .accessibilityIdentifier("dressup-screen")
+        .task {          // capture aids (dev arguments only): `-WardrobeSlot <head|feet|...>` starts on that filter; `-WardrobeWear <look,look>` puts those on (a tap each)
             guard DevArgs.enabled else { return }
             if let raw = UserDefaults.standard.string(forKey: "WardrobeSlot"), let s = WearSlot(rawValue: raw) { slot = s }
+            if let raw = UserDefaults.standard.string(forKey: "WardrobeWear") {
+                for name in raw.split(separator: ",") { if let l = WearLook(rawValue: String(name)) { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? ""); _ = care.store.wear(l, on: who) } }
+            }
         }
     }
 }

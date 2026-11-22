@@ -54,6 +54,8 @@ nonisolated final class AppleModelClient: StoryModelClient, @unchecked Sendable 
         // simulator never touches the model unless asked to (`-StoryModelInSim 1`); the pre-written bank answers.
         if !UserDefaults.standard.bool(forKey: "StoryModelInSim") { return (false, false, "simulator: model not used") }
         #endif
+        let tok = StoryModelSentinel.begin("availability")          // (creating the model object and asking what it can do)
+        defer { StoryModelSentinel.end(tok) }
         let a = model.availability
         let ok: Bool, detail: String
         switch a {
@@ -61,6 +63,7 @@ nonisolated final class AppleModelClient: StoryModelClient, @unchecked Sendable 
         case .unavailable(let r): ok = false; detail = "unavailable(\(r))"
         @unknown default: ok = false; detail = "unavailable(unknown)"
         }
+        StoryModelSentinel.note("supportsLocale")
         return (ok, model.supportsLocale(Locale.current), detail)
     }
 
@@ -70,6 +73,7 @@ nonisolated final class AppleModelClient: StoryModelClient, @unchecked Sendable 
 
     /// The prompt, the instructions and the answer's schema must fit the window (4096 in older systems).
     private func checkWindow(_ prompt: String, schema: GenerationSchema) async throws {
+        StoryModelSentinel.note("tokenCount")
         if #available(iOS 26.4, *) {          // (`tokenCount(for:)` / `contextSize` are 26.4+; on 26.0 - 26.3 the window is 4096 tokens and the fixed text below is far under it)
             let ctx = model.contextSize
             let used = try await model.tokenCount(for: Instructions(StoryPrompt.instructions)) + model.tokenCount(for: Prompt(prompt)) + model.tokenCount(for: schema)
@@ -80,7 +84,9 @@ nonisolated final class AppleModelClient: StoryModelClient, @unchecked Sendable 
 
     func draftAbout(prompt: String) async throws -> (sentence: String, keys: [String]) {
         try await checkWindow(prompt, schema: StoryAboutDraft.generationSchema)
+        StoryModelSentinel.note("session")
         let s = fresh()
+        StoryModelSentinel.note("respond")
         let r = try await s.respond(to: prompt, generating: StoryAboutDraft.self, options: options())
         remember(r.content.sentence, s)
         return (r.content.sentence, r.content.facts)
@@ -88,7 +94,9 @@ nonisolated final class AppleModelClient: StoryModelClient, @unchecked Sendable 
 
     func draftNote(prompt: String) async throws -> (sentence: String, keys: [String]) {
         try await checkWindow(prompt, schema: StoryNoteDraft.generationSchema)
+        StoryModelSentinel.note("session")
         let s = fresh()
+        StoryModelSentinel.note("respond")
         let r = try await s.respond(to: prompt, generating: StoryNoteDraft.self, options: options())
         remember(r.content.sentence, s)
         return (r.content.sentence, r.content.facts)

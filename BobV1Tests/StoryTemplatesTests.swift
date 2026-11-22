@@ -50,7 +50,7 @@ final class StoryTemplatesTests: XCTestCase {
         var g = RNG(s: 42)
         let memory = StoryMemory(salt: 7)
         var aboutCount = 0, noteCount = 0, rejectedInside = 0, skippedEmpty = 0
-        var distinctAbout = Set<String>(), distinctNote = Set<String>()
+        var distinctAbout = Set<String>(), distinctNote = Set<String>(), noteFirst: [String: Int] = [:]
         var lastAbout: [Int: String] = [:], lastNote: [String: String] = [:], immediate = 0
         var maxAbout = 0, maxNote = 0
         while aboutCount < 10_000 || noteCount < 10_000 {
@@ -84,10 +84,14 @@ final class StoryTemplatesTests: XCTestCase {
                 let k = "\(f.id)>\(h.id)"
                 if lastNote[k] == w.template { immediate += 1 }
                 lastNote[k] = w.template
-                distinctNote.insert(w.template); maxNote = max(maxNote, w.final.count); noteCount += 1
+                distinctNote.insert(w.template); noteFirst[StoryTemplates.firstWord(w.final), default: 0] += 1; maxNote = max(maxNote, w.final.count); noteCount += 1
             }
         }
         print("[story-test] blurbs \(aboutCount) distinct templates \(distinctAbout.count), notes \(noteCount) distinct \(distinctNote.count), rejected inside \(rejectedInside), longest blurb \(maxAbout), longest note \(maxNote), immediate repeats \(immediate)")
+        let table = noteFirst.sorted { $0.value > $1.value }.map { "\($0.key)\t\($0.value)" }.joined(separator: "\n")
+        try? table.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/story/test_firstwords.txt", atomically: true, encoding: .utf8)
+        print("[story-test] note opening words over \(noteCount) generated notes:\n\(table)")
+        XCTAssertNil(noteFirst["they"])          // no generated note opens with "They"
         XCTAssertGreaterThan(distinctAbout.count, 40)
         XCTAssertGreaterThanOrEqual(distinctNote.count, 20)
         try? "blurbs \(aboutCount) distinct \(distinctAbout.count), notes \(noteCount) distinct \(distinctNote.count), rejected inside \(rejectedInside), longest blurb \(maxAbout), longest note \(maxNote), immediate repeats \(immediate)".write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/story/test_stats.txt", atomically: true, encoding: .utf8)
@@ -150,5 +154,44 @@ final class StoryTemplatesTests: XCTestCase {
         XCTAssertTrue(w.final.contains("Kiss"))                 // the player's own word is shown as theirs
         XCTAssertFalse(StoryGuard.denied(StoryGuard.masked(w.template)) != nil)
         XCTAssertFalse(w.template.contains("Kiss"))              // but the writer never held it
+    }
+
+    // MARK: the note bank's openings
+
+    func testNoOpeningWordLeadsMoreThanAFifthOfTheNoteBankAndTheyLeadsNone() {
+        var counts: [String: Int] = [:]
+        for p in StoryTemplates.noteBank { counts[StoryTemplates.firstWord(p.text), default: 0] += 1 }
+        let n = StoryTemplates.noteBank.count
+        let table = counts.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+        print("[story-test] note bank openings (\(n) patterns): " + table.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
+        XCTAssertGreaterThanOrEqual(n, 30)
+        // the Relationship stage names and the Park row's words are the player's own: a housemate note never reuses them; "group" is our word
+        let banned = ["just met", "getting to know you", "good friends", "close friends", "best friends", "best of friends", "best friend", "group play", "group activity", "played in a group"]
+        for p in StoryTemplates.noteBank { for w in banned { XCTAssertFalse(p.text.lowercased().contains(w) && p.text != "Only just met.", "\(p.text) uses \"\(w)\"") } }
+        for id in [10, 14, 15, 21, 22] { XCTAssertFalse(StoryTemplates.noteBank.contains { $0.id == id }) }
+        XCTAssertLessThanOrEqual(Double(table.first!.value) / Double(n), 0.2, "\(table.first!.key) leads too many notes")
+        XCTAssertLessThanOrEqual(counts["they"] ?? 0, 3)
+        for p in StoryTemplates.noteBank { XCTAssertFalse(p.text.hasPrefix("{"), "a note must not open with a slot: \(p.text)") }
+        // the whole bank, one example each, for a person to read (the owner reads every line before it goes on the phone)
+        let v = ["EMOTE": "playing chase", "SPOT": "by the window"]
+        var out = "id\ttiers\tfirst word\tfacts\texample\n"
+        for p in StoryTemplates.noteBank { out += "\(p.id)\t\(p.tiers.map(\.rawValue).sorted().joined(separator: "/"))\t\(StoryTemplates.firstWord(p.text))\t\(p.keys.joined(separator: ","))\t\(StoryFill.apply(p.text, v))\n" }
+        try? out.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/story/note_bank_raw.txt", atomically: true, encoding: .utf8)
+    }
+
+    func testEveryNoteInTheBankPassesTheGuardWhenItsFactsHold() {
+        for p in StoryTemplates.noteBank {
+            var f = StoryFacts(id: 1, name: "Berry", kindName: "Blush", kindAbout: "", mood: "")
+            f.favouriteSpot = "window"
+            var h = StoryFacts.Housemate(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: p.tiers.contains(.close) ? 900 : (p.tiers.contains(.regular) ? 100 : 0), topEmote: p.only ?? "chase")
+            h.groupKind = p.groupKinds.first; h.sharedGroup = h.groupKind != nil; h.sharedSpot = p.spot ? "window" : nil; h.napBuddies = p.nap
+            let tier = StoryTemplates.tier(h)
+            guard p.tiers.contains(tier) else { continue }
+            let values = StoryFill.values(f, with: h)
+            let fin = StoryFill.apply(p.text, values)
+            let v = StoryGuard.check(template: p.text, final: fin, kind: .friendship, offered: StoryFill.offered(f, with: h), values: values, keys: p.keys, available: StoryFill.facts(f, with: h))
+            XCTAssertTrue(v.passed, "\(p.id) \(fin) -> \(v)")
+            XCTAssertLessThanOrEqual(fin.count, StoryGuard.noteMaxChars)
+        }
     }
 }

@@ -24,6 +24,11 @@ nonisolated struct StoryFacts: Codable, Equatable, Sendable {
         var mostPlayedWith = false
         /// Took part in a group activity together lately (about half a minute or more).
         var sharedGroup = false
+        /// Which kind of group session they shared most (a SocialKind key); a group note exists only when this is known.
+        var groupKind: String?
+        /// Both favour the same floor area (a StoryPhrases.spot key), and both nap a lot: true shared facts for the notes.
+        var sharedSpot: String?
+        var napBuddies = false
         /// Phase 3 fills this (a "Relationship" level for the pair); nil for now.
         var relationshipLevel: String?
     }
@@ -149,6 +154,7 @@ nonisolated enum StoryFill {
             if h == nil { k.insert("partner") } else { k.insert("together"); if m.sharedGroup { k.insert("sharedGroup") } }
             if v["EMOTE"] != nil { k.insert("topEmote") }
         } else if h != nil { k.insert("gettingToKnow") }
+        if let h { if h.sharedSpot != nil, v["SPOT"] != nil { k.insert("sharedSpot") }; if h.napBuddies { k.insert("napBuddies") } }
         if f.relationshipLevel != nil { k.insert("bond") }
         if let n = f.news, n.kind != "bond" || v["LEVEL"] != nil { k.insert(n.factKey) }
         return k

@@ -210,7 +210,7 @@ final class HeadPortraitFrameTests: XCTestCase {
         var pitch = asinf(min(max(down.y / max(simd_length(down), 1e-3), 0), 0.9))
         if action {
             let floorY = stood?.floorY ?? floor
-            span = max((topY - floorY) * 1.42, 1.3)
+            span = max((topY - floorY) * HeadPortraitKey.actionHeadroom, 1.3)
             let thA = tanf(GameCamera.fovY / 2), m = min(thA, thA * aspect), pt = HeadPortraitKey.actionPitch
             let kf = Float(2 * HeadPortraitKey.actionFloorFraction - 1)
             focusY = floorY + (kf * span / 2) / (cosf(pt) - kf * sinf(pt) * m)

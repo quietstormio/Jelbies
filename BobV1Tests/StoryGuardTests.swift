@@ -141,6 +141,9 @@ final class StoryGuardTests: XCTestCase {
         XCTAssertTrue(StoryGuard.isEnglish("Berry has settled in as if it was always home."))
         XCTAssertFalse(StoryGuard.isEnglish("Berry se ha instalado como si siempre hubiera sido su casa."))
         XCTAssertFalse(StoryGuard.isEnglish("Berry hat sich eingelebt, als waere es schon immer sein Zuhause."))
+        // very short phrases: the bank's own pass, a confident other language does not
+        for ok in ["Nap buddies.", "Inseparable.", "Only just met.", "Best of friends."] { XCTAssertTrue(StoryGuard.isEnglish(ok), ok) }
+        for bad in ["Hola amigos.", "Siempre juntos.", "Bonjour mes amis.", "Das ist gut."] { XCTAssertFalse(StoryGuard.isEnglish(bad), bad) }
         // The sentiment model is not present in every test host (the iOS simulator answers 0.0 for everything); the real checks run where it answers.
         let live = StoryGuard.sentiment("Berry and Latte are the best of friends.") != 0 || StoryGuard.sentiment("Berry is sad and cries all day.") != 0
         print("[story-test] NLTagger sentiment live in this host: \(live)")

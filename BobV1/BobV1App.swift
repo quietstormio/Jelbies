@@ -16,6 +16,7 @@ struct BobV1App: App {
         #if !DEBUG
         if DevArgs.enabled { NSLog("[jelbies] DEV ARGS ENABLED in a non-Debug build: never ship this to the App Store") }
         #endif
+        StoryModelSentinel.launchCheckOnce(); StoryAppState.install()          // before anything in Story runs: a marker left by a death inside the model turns the model off (Story/StoryModelGate.swift)
         LaunchTiming.mark("app init"); StartFlow.applyLaunchArguments(); PerfMeter.configure(); PhotoAlbum.register(); FootLog.configure(); MoveLog.configure() }          // -ResetForAdoption 1 (simulator) wipes before anything reads a save
 
     /// iPad only (sizeRestrictions is nil on iPhone): a resizable window never goes below about 600 x 500 pt.
