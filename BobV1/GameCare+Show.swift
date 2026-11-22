@@ -61,6 +61,8 @@ final class ShowBook {
     var roomAway = false
     /// Show asked while the contestant is asleep: the trip starts once he is upright (only he is woken and waited for).
     var wait: (id: Int, rank: ShowRank?, seed: UInt64?, age: Float)?
+    /// show-wardrobe-r1: the contestant is on his way to the stage (or on it): the Studio closing must not give the everyday outfit back yet; the way home does.
+    var wardrobeHeld = false
     nonisolated deinit {}
 }
 
@@ -163,6 +165,7 @@ extension GameCare {
     /// Takes Jelbie `id` to the stage for a show at `rank` (the chosen rank by default).
     func startShow(jelly id: Int, rank: ShowRank? = nil, seed: UInt64? = nil) {
         if let why = showBlocker(jelly: id) { GameMessageCenter.shared.refuse(why); return }          // (never silent: UI/GameMessageCenter.swift)
+        store.rememberEveryday(id); showBook.wardrobeHeld = true          // show-wardrobe-r1: the everyday outfit is kept until he is home (the Studio has done it already; a capture start has not)
         // show-stayhome-r1: only the contestant is woken and waited for; a housemate who sleeps stays asleep (he is hidden and unstepped while the stage is up, and back exactly as he was)
         let sleepers = raceBook.actors.filter { $0.id == id }.compactMap { $0.brain }.filter { $0.isSleeping }
         if !sleepers.isEmpty {
@@ -257,6 +260,7 @@ extension GameCare {
             }
             showSpawnExtras()
         case .room:
+            showWardrobeHome()          // show-wardrobe-r1: under the white, the everyday outfit is back on before the room shows
             let c = VoiceCoordinator.comeSpot
             var taken: [SIMD2<Float>] = [c]
             book.roomAway = false
@@ -752,6 +756,7 @@ extension GameCare {
 
     /// Back in the room: a 1st is celebrated like a race win (everybody bounces); "Show again" reopens the lobby.
     func showWelcomeHome(_ id: Int, won: Bool, again: Bool) {
+        showWardrobeHome()          // (idempotent: the swap home did it already)
         let book = raceBook
         book.returner = id; book.won = won; book.homeAge = 0; book.returnerHopped = false; book.celebrated = false
         greetPending = Set((0..<max(jellies.count, 1)).filter { $0 != id && $0 > 0 && selectBrain($0)?.isSleeping != true })          // (a housemate who slept through the show sleeps on)
@@ -768,5 +773,24 @@ nonisolated enum ShowCaptureArgs {
     static func rank(devArgs: Bool = DevArgs.enabled, defaults: UserDefaults = .standard) -> ShowRank? {
         guard devArgs, let r = defaults.string(forKey: "ShowRank") else { return nil }
         return ShowRank(rawValue: r.lowercased())
+    }
+}
+
+// MARK: - the show wardrobe (show-wardrobe-r1)
+
+extension GameCare {
+    /// The player starts getting `id` ready (the Studio opened on him, or he was picked in it): his everyday outfit is remembered before the first change.
+    func showWardrobeReady(_ id: Int) { store.rememberEveryday(id) }
+    /// The Studio is left without a show (back, another Jelmiko picked, the Town closed): everyday outfits back on. While the contestant is on his way to the stage nothing moves.
+    func showWardrobeLeaveLobby() {
+        guard !showBook.wardrobeHeld else { return }
+        showWardrobeHome()
+    }
+    /// The way home (the show is over, forfeited or aborted): everyday outfits back on, once. Every picture of him shows them again.
+    func showWardrobeHome() {
+        showBook.wardrobeHeld = false
+        guard store.hasEveryday else { return }
+        store.restoreEveryday()
+        for a in raceBook.actors { outfitSeen[a.id] = Self.outfitSig(outfit(a.id)) }          // (no "new outfit" admiring for what is only the old outfit coming back)
     }
 }

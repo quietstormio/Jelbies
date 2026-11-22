@@ -741,6 +741,12 @@ struct GameScreen: View {
             let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0
             for _ in 0..<100 where !care.canShow(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
+            // capture aid: -ShowDress "partyHat,glitterShoes" is what Dress up does in the Studio: the everyday outfit is remembered, then the contestant is dressed in exactly these looks
+            if let list = d.string(forKey: "ShowDress") {
+                care.showWardrobeReady(who)
+                for sl in WearSlot.allCases { care.store.takeOff(sl, from: who) }
+                for n in list.split(separator: ",") { if let l = WearLook(rawValue: String(n)) { if !care.store.ownsLook(l) { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }; _ = care.store.wear(l, on: who) } }
+            }
             care.startShow(jelly: who)
         }
         // capture aid: -WearToggle <look> -WearToggleAt <on>,<off> puts that look on Jelly 0 (as the Dress up sheet does) <on> seconds after launch and takes it off again <off> seconds after launch

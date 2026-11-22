@@ -17,7 +17,7 @@ enum EmoteSpot {
     nonisolated(unsafe) static var heat: [Int: Float] = [:]
     static let decay: Float = 0.94
     /// Rug-centre penalty (a spot right on the centre costs this much; it fades to 0 at `rugReach`).
-    static let rugWeight: Float = 2.2
+    static var rugWeight: Float { MoveMix.on ? MoveMix.rugWeight : 2.2 }
     static let rugReach: Float = 2.6
     /// Weight of a depth / width third being used more (less) than its third of the recent emotes.
     static let bandWeight: Float = 9
@@ -129,12 +129,20 @@ extension BlobBrain {
         guard emoteSpot.logT >= 1 else { return }
         emoteSpot.logT = 0
         let st: String
-        if let s = social { st = (s.kind.isGroup ? "group:" : "pair:") + s.kind.rawValue }
-        else if let k = idleState.kind { st = (k == .sleep || k == .sit ? "rest:" : "solo:") + k.rawValue }
+        if held { st = "held" }
+        else if let s = social { st = (s.kind.isGroup ? "group:" : "pair:") + s.kind.rawValue }
+        else if let k = idleState.kind { st = (k == .sleep || k == .sit ? "rest:" : (Self.travelKinds.contains(k) ? "move:" : "solo:")) + k.rawValue }
         else if activity == .walking || activity == .coming { st = "walk" } else { st = "stand" }
+        if !Self.floorLogged, let rf = roamProvider?() {          // (round 2b: once, the live floor: per row z, half width, the stop-clear spans (HUD buttons cut out) - the allowed / not allowed picture)
+            Self.floorLogged = true
+            for (i, z) in rf.zs.enumerated() { NSLog("[roamfloor] z=%.2f hw=%.2f stop=%@ free=%@", z, rf.hw[i], i < rf.stopFree.count ? rf.stopFree[i].map { String(format: "%.2f..%.2f", $0.lowerBound, $0.upperBound) }.joined(separator: ",") : "-", i < rf.free.count ? rf.free[i].map { String(format: "%.2f..%.2f", $0.lowerBound, $0.upperBound) }.joined(separator: ",") : "-") }
+        }
         NSLog("[emotespot] t=%.1f id=%d x=%.2f z=%.2f %@", variety.now, steerID, px, pz, st)
     }
 
+    /// Travel kinds (round 2, move-mix): the pet is going somewhere, so the log says "move:", not "solo:".
+    static let travelKinds: Set<IdleKind> = [.run, .trot, .zoomies, .stumble, .slide, .scoot]
+    nonisolated(unsafe) static var floorLogged = false
     func emoteNote(_ p: SIMD2<Float>) { if let rf = roamProvider?() { EmoteSpot.note(p, rf) } }
 
     func emoteSendWalk(to t: SIMD2<Float>) {

@@ -85,6 +85,10 @@ final class StoreBook {
         /// The framed photos on the back wall (Room/WallPicture.swift; one for now, a list so more can come). Optional and nil until the first is hung: an older save decodes
         /// without it and nothing is written while the feature is unused.
         var wallPictures: [WallPicture]? = nil
+        /// show-wardrobe-r1: what each Jelmiko (by character) wore AT HOME when the player started getting him ready for the Jelly Show ("<character>" -> slot -> look, an empty
+        /// outfit is an empty dictionary). Present only between that moment and the way back home; a launch that finds one puts it back and clears it (`restoreEveryday`).
+        var showHome: [String: [String: String]]? = nil
+        var showHomeAt: [String: Double]? = nil
     }
     static let key = "StoreBook.v1"
 
@@ -127,6 +131,7 @@ final class StoreBook {
             if saved.pages.contains("roll") { saved.pages.removeAll { $0 == "roll" }; wallet.add(55, silent: true); save() } }
         if migrateGarden() { save() }
         if persists { defaults.removeObject(forKey: "Garden.v1") }          // the removed Garden's plots
+        if saved.showHome != nil { restoreEveryday() }          // show-wardrobe-r1: the last run ended in the Show lobby or on the stage: the everyday outfits come back, once
     }
 
     /// The Garden was removed: seeds are refunded at their old prices, garden fruit dropped, the room unowned (250 Drops back once if it was bought) and the
@@ -411,6 +416,30 @@ final class StoreBook {
         save()
     }
 
+    // MARK: the Jelly Show wardrobe (show-wardrobe-r1)
+    // What a Jelmiko is dressed in FOR the show is a show outfit only. Everyone's everyday outfits are remembered (and saved) before the first change, and put back on
+    // every way out. The whole wardrobe is remembered, not just the contestant's: a Dress up piece that is worn at home by a housemate moves to the contestant, and goes back.
+
+    /// Remembers what everyone wears now (and `jelly`, who may wear nothing). Does nothing while a memory is held (the first one is the true one).
+    func rememberEveryday(_ jelly: Int) {
+        guard saved.showHome == nil else { return }
+        var home = saved.worn
+        if home[wornKey(jelly)] == nil { home[wornKey(jelly)] = [:] }
+        saved.showHome = home; saved.showHomeAt = saved.wornAt ?? [:]
+        save()
+    }
+    var hasEveryday: Bool { saved.showHome != nil }
+    /// Puts the remembered everyday outfits back and forgets them (never twice). No-op when nothing is remembered.
+    func restoreEveryday() {
+        guard let home = saved.showHome else { return }
+        let at = saved.showHomeAt ?? [:]
+        saved.showHome = nil; saved.showHomeAt = nil
+        for (k, o) in home { saved.worn[k] = o }
+        saved.worn = saved.worn.filter { !$0.value.isEmpty || home[$0.key] != nil }
+        saved.wornAt = at.isEmpty && saved.wornAt == nil ? nil : at
+        save()
+    }
+
     // MARK: decor
 
     var placedDecor: [PlacedDecor] { saved.placedAt ?? [] }
@@ -522,7 +551,7 @@ extension StoreBook.Saved {
     enum CodingKeys: String, CodingKey {
         case counts, pages, wearables, worn, starterGiven, newItems, placed, placedAt, nextDecorUID, awarded, unlistedRefunded, rooms, room, stash
         case gardenRefunded, staplesGiven, retiredDecorRefunded, glovesRefunded, headbandsRefunded, bodiesRefunded, wornAt, ownedTricks, everyone, tricksMigrated, earsChecked
-        case wallPictures
+        case wallPictures, showHome, showHomeAt
     }
     init(from decoder: Decoder) throws {
         self.init()
@@ -537,5 +566,6 @@ extension StoreBook.Saved {
         ownedTricks = c.value(.ownedTricks, ownedTricks); everyone = c.value(.everyone, everyone); tricksMigrated = c.value(.tricksMigrated, tricksMigrated)
         earsChecked = c.value(.earsChecked, earsChecked)
         wallPictures = c.value(.wallPictures, wallPictures)
+        showHome = c.value(.showHome, showHome); showHomeAt = c.value(.showHomeAt, showHomeAt)
     }
 }
