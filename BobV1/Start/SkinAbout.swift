@@ -17,8 +17,8 @@ nonisolated enum SkinAbout {
     /// Colour sentence + character sentence of a look in its own classic colour, by look (species) id.
     static let looks: [Int: (colour: String, character: String)] = [
         0: ("Baby blue, plain and round.", "Cool and unbothered, then follows you everywhere."),
-        1: ("Butter yellow, with a spiky tail.", "Sunny and bright, and wags that tail at everyone."),
-        2: ("Mint green, with a little daisy on top.", "Calm and cosy, and never far from a nap."),
+        1: ("Sunny yellow, with a tail and back spikes.", "Sunny and bright, and wags that tail at everyone."),
+        2: ("Mint green, with two wobbly antennas.", "Calm and cosy, and never far from a nap."),
         3: ("Soft lavender purple, with small wings.", "Dreamy, with its head in the clouds."),
         4: ("Honey brown, round ears and a cream belly.", "Soft as a pillow, and happiest when hugged."),
         5: ("Soft pearly white, with pearl-cream wings.", "Gentle and shimmery, always fluttering about."),
@@ -47,17 +47,17 @@ nonisolated enum SkinAbout {
 
     /// Colour sentences of the colour variants of the four starters: look id -> variant title ("Soft", "Deep", the rare jewel tone, an old exclusive) -> sentence.
     static let variants: [Int: [String: String]] = [
-        0: ["Soft": "Soft pale blue, a shade lighter than most.",
-            "Deep": "Deep blue, a shade darker than most.",
+        0: ["Soft": "Soft sky blue, a shade lighter than most.",
+            "Deep": "Cornflower blue, a shade darker than most.",
             "Sapphire": "Rich sapphire blue, a rare jewel tone."],
-        1: ["Soft": "Pale yellow, a shade lighter than most.",
-            "Deep": "Deep yellow, a shade darker than most.",
+        1: ["Soft": "Light gold, a shade lighter than most.",
+            "Deep": "Mustard yellow, a shade darker than most.",
             "Amber": "Glowing amber orange, a rare jewel tone."],
         2: ["Soft": "Pale mint green, a shade lighter than most.",
-            "Deep": "Deep green, a shade darker than most.",
+            "Deep": "Fern green, a shade darker than most.",
             "Emerald": "Deep emerald green, a rare jewel tone."],
         3: ["Soft": "Pale lilac, a shade lighter than most.",
-            "Deep": "Deep purple, a shade darker than most.",
+            "Deep": "Dusty violet, a shade darker than most.",
             "Amethyst": "Rich amethyst purple, a rare jewel tone."],
     ]
     /// The five old exclusive colours that a save made before the jewel tones may still hold (any starter can wear one; the colour is the same on every look).
@@ -102,10 +102,10 @@ nonisolated enum SkinColour {
             case .red: return ["red", "ruby", "crimson", "scarlet"]
             case .orange: return ["orange", "amber", "apricot", "peach", "coral", "tangerine", "bronze", "copper", "rust"]
             case .brown: return ["brown", "chocolate", "caramel", "honey", "toffee", "bronze", "copper", "rust"]
-            case .yellow: return ["yellow", "gold", "lemon", "butter", "cream", "sunbeam"]
-            case .green: return ["green", "lime", "mint", "emerald", "sea-foam", "aurora"]
+            case .yellow: return ["yellow", "gold", "lemon", "butter", "cream", "sunbeam", "mustard"]
+            case .green: return ["green", "lime", "mint", "emerald", "sea-foam", "aurora", "fern"]
             case .teal: return ["teal", "aqua", "turquoise", "sea-foam", "green", "blue"]
-            case .blue: return ["blue", "sapphire", "navy", "sky", "royal", "indigo", "periwinkle"]
+            case .blue: return ["blue", "sapphire", "navy", "sky", "royal", "indigo", "periwinkle", "cornflower"]
             case .purple: return ["purple", "violet", "lilac", "lavender", "plum", "amethyst", "indigo"]
             case .pink: return ["pink", "rose", "blush", "magenta"]
             case .white: return ["white", "cream", "pearl", "milky", "ivory"]
