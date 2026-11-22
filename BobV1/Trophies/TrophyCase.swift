@@ -436,8 +436,8 @@ struct PlaqueNames: View {
         let r = PlaqueFit.fit(names: names, width: avail) { ($0 as NSString).size(withAttributes: [.font: font]).width }
         VStack(spacing: 0) {
             ForEach(Array(r.lines.enumerated()), id: \.offset) { _, l in
-                Text(l).font(SK.font(size, .black)).foregroundStyle(ink).lineLimit(1).fixedSize().scaleEffect(r.scale)
-                    .frame(width: avail, height: px * 1.2 * r.scale)
+                Color.clear.frame(maxWidth: .infinity).frame(height: px * 1.2 * r.scale)          // (the line is drawn over an empty strip, so its own width never widens the card or the tile)
+                    .overlay(Text(l).font(SK.font(size, .black)).foregroundStyle(ink).lineLimit(1).fixedSize().scaleEffect(r.scale))
             }
         }
         .frame(maxWidth: .infinity)
