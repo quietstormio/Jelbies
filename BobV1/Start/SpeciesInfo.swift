@@ -38,10 +38,15 @@ struct SpeciesInfo {
     static let order = [0, 1, 3, 2]
     /// The special species sold in the Jelly Spring for JellyCoins (never the free first gift): Teddy, Pearl, Panda, Opal (AdoptionPrice.special).
     /// 2026-11-21 (spring-seven-r1): + the seven new looks: Moo, Cocoa, Blush (the cows; only while `cowsInStore`) and the gradients Sunset, Cotton Candy, Ocean, Lagoon.
-    static let special = [JellyRoster.teddyID, JellyRoster.pearlID, JellyRoster.pandaID, JellyRoster.opalID] + (cowsInStore ? cowIDs : []) + gradientIDs
+    static let special = [JellyRoster.teddyID, JellyRoster.pearlID, JellyRoster.pandaID, JellyRoster.opalID] + (cowsInStore ? cowIDs : []) + gradientIDs + (lineupRestInStore ? lineupRestIDs : [])
     /// THE ONE SWITCH for the three cows: false until cow-looks-r1 (body modes 91 / 93 / 95) is merged; then true and Moo, Cocoa, Blush appear in the Jelly Spring.
     static let cowsInStore = true
     static let cowIDs = [JellyRoster.mooID, JellyRoster.cocoaID, JellyRoster.blushID]
+    /// THE ONE SWITCH for the rest of the Lineup (spring-lineup-r1): Marble, Gold, Silver, Ruby, Midnight, Lemon-Lime, Emerald, Sapphire, Amethyst, Bronze sold like Opal.
+    /// true while the owner reviews the boards; Main flips it to false (and they vanish from the Spring and every generator) if not approved.
+    static let lineupRestInStore = true
+    static let lineupRestIDs = [JellyRoster.marbleID, JellyRoster.goldID, JellyRoster.silverID, JellyRoster.rubyID, JellyRoster.midnightID,
+                                JellyRoster.lemonLimeID, JellyRoster.emeraldID, JellyRoster.sapphireID, JellyRoster.amethystID, JellyRoster.bronzeID]
     static let gradientIDs = [JellyRoster.sunsetID, JellyRoster.cottonCandyID, JellyRoster.oceanID, JellyRoster.lagoonID]
     /// The picker pages: the four starters, then (when adopting more, not the free first gift) the four specials.
     static func pages(includingSpecial: Bool) -> [Int] { includingSpecial ? order + special : order }
@@ -177,6 +182,87 @@ struct SpeciesInfo {
                     moves: [SpeciesMoveInfo(title: "Twirl", subtitle: "Signature move", icon: "drop.fill", move: .idle(.tail)),
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.tail), .face(.hopeful), .blink, .idle(.sway), .hop]),
+        // spring-lineup-r1 (2026-11-21): the rest of the Lineup, sold like Opal (listed in `special` only while `lineupRestInStore`). Never starters, classic colour only, borrowed voice.
+        SpeciesInfo(character: JellyRoster.marbleID, name: "Marble", epithet: "The swirly one",
+                    about: "Aqua with milky white ribbons swirled through it. No two Marbles swirl alike.",
+                    signature: "Ribbon swirl", signatureIcon: "scribble.variable",
+                    lore: "Woke up inside a glass marble, watching the ribbons drift. Marbles still look a little dizzy and very pleased.",
+                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Ice pop", traits: [68, 66, 80, 48, 42],
+                    moves: [SpeciesMoveInfo(title: "Twirl", subtitle: "Signature move", icon: "scribble.variable", move: .idle(.tail)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
+        SpeciesInfo(character: JellyRoster.goldID, name: "Gold", epithet: "The shiny one",
+                    about: "Polished liquid gold that catches every light. Proud, cheerful and a bit of a show-off.",
+                    signature: "Golden gleam", signatureIcon: "sparkles",
+                    lore: "Woke up at the bottom of a rainbow, still warm to the touch. Golds love to be admired and love to share.",
+                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Donut", traits: [64, 58, 92, 46, 48],
+                    moves: [SpeciesMoveInfo(title: "Twirl", subtitle: "Signature move", icon: "sparkles", move: .idle(.tail)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
+        SpeciesInfo(character: JellyRoster.silverID, name: "Silver", epithet: "The mirror one",
+                    about: "Polished chrome that shows the whole room in its belly. Cool, calm and secretly silly.",
+                    signature: "Mirror shine", signatureIcon: "sparkle",
+                    lore: "Woke up in a spoon at a tea party and saw its own funny face. Silvers wink at their reflections.",
+                    bestAt: "Cool", bestAtKey: .cool, loves: "Sushi", traits: [58, 62, 82, 70, 44],
+                    moves: [SpeciesMoveInfo(title: "Sway", subtitle: "Signature move", icon: "sparkle", move: .idle(.sway)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.sway), .blink, .face(.focused), .hop, .blink]),
+        SpeciesInfo(character: JellyRoster.rubyID, name: "Ruby", epithet: "The fiery one",
+                    about: "Deep jewel red with a polished shine and a few sparkles. Bold, warm-hearted and quick to giggle.",
+                    signature: "Ruby glow", signatureIcon: "diamond.fill",
+                    lore: "Woke up in a cave where one red gem kept humming. Rubies glow a little brighter when they are loved.",
+                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Donut", traits: [76, 60, 88, 44, 52],
+                    moves: [SpeciesMoveInfo(title: "Twirl", subtitle: "Signature move", icon: "diamond.fill", move: .idle(.tail)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
+        SpeciesInfo(character: JellyRoster.midnightID, name: "Midnight", epithet: "The quiet one",
+                    about: "Glossy black with pale lilac eyes. Dreamy, gentle and most awake when the lights go low.",
+                    signature: "Moonlit sway", signatureIcon: "moon.stars.fill",
+                    lore: "Woke up under the first star of the night. Midnights glow in the dark when they think nobody is looking.",
+                    bestAt: "Cool", bestAtKey: .cool, loves: "Cookie", traits: [60, 70, 62, 82, 40],
+                    moves: [SpeciesMoveInfo(title: "Sway", subtitle: "Signature move", icon: "moon.stars.fill", move: .idle(.sway)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.sway), .blink, .face(.focused), .hop, .blink]),
+        SpeciesInfo(character: JellyRoster.lemonLimeID, name: "Lemon-Lime", epithet: "The zesty one",
+                    about: "Lemon yellow on top, fading to lime green at the feet. Fizzy, bright and always up for a game.",
+                    signature: "Zesty bounce", signatureIcon: "leaf.fill",
+                    lore: "Woke up in a glass of lemonade with a slice of lime on the rim. Lemon-Limes never sit still for long.",
+                    bestAt: "Sporty", bestAtKey: .sporty, loves: "Ice pop", traits: [58, 60, 56, 40, 86],
+                    moves: [SpeciesMoveInfo(title: "Bounce", subtitle: "Signature move", icon: "leaf.fill", move: .idle(.bounce)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
+        SpeciesInfo(character: JellyRoster.emeraldID, name: "Emerald", epithet: "The leafy one",
+                    about: "Deep green with a polished shine and a few sparkles. Wise, steady and fond of quiet gardens.",
+                    signature: "Emerald glow", signatureIcon: "diamond.fill",
+                    lore: "Woke up in a mossy cave where a green gem hummed in the dark. Emeralds are kind to everyone they meet.",
+                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Onigiri", traits: [66, 76, 80, 52, 44],
+                    moves: [SpeciesMoveInfo(title: "Twirl", subtitle: "Signature move", icon: "diamond.fill", move: .idle(.tail)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.sway), .face(.hopeful), .blink, .hop, .blink]),
+        SpeciesInfo(character: JellyRoster.sapphireID, name: "Sapphire", epithet: "The royal one",
+                    about: "Royal blue with a polished shine and a few sparkles. Calm, loyal and the first to notice a sad face.",
+                    signature: "Sapphire glow", signatureIcon: "diamond.fill",
+                    lore: "Woke up beside a deep blue pool that hummed a lullaby. Sapphires are very good at keeping secrets.",
+                    bestAt: "Cool", bestAtKey: .cool, loves: "Sushi", traits: [62, 66, 76, 80, 44],
+                    moves: [SpeciesMoveInfo(title: "Sway", subtitle: "Signature move", icon: "diamond.fill", move: .idle(.sway)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.sway), .blink, .face(.focused), .hop, .blink]),
+        SpeciesInfo(character: JellyRoster.amethystID, name: "Amethyst", epithet: "The dreamy one",
+                    about: "Purple with a polished shine and a few sparkles. Curious, creative and full of wonderful ideas.",
+                    signature: "Amethyst glow", signatureIcon: "diamond.fill",
+                    lore: "Woke up in a lilac crystal and has been dreaming out loud ever since. Amethysts hum when they are thinking.",
+                    bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Cookie", traits: [70, 64, 88, 50, 42],
+                    moves: [SpeciesMoveInfo(title: "Twirl", subtitle: "Signature move", icon: "diamond.fill", move: .idle(.tail)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.sway), .face(.hopeful), .blink, .hop, .blink]),
+        SpeciesInfo(character: JellyRoster.bronzeID, name: "Bronze", epithet: "The warm one",
+                    about: "Polished bronze with warm highlights. Sturdy, friendly and ready for any adventure.",
+                    signature: "Bronze shine", signatureIcon: "medal.fill",
+                    lore: "Woke up beside a bell that rang once at sunrise. Bronzes are proud of every little thing they win.",
+                    bestAt: "Sporty", bestAtKey: .sporty, loves: "Donut", traits: [66, 60, 62, 46, 82],
+                    moves: [SpeciesMoveInfo(title: "Sway", subtitle: "Signature move", icon: "medal.fill", move: .idle(.sway)),
+                            SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
+                    emotes: [.idle(.sway), .face(.hopeful), .blink, .hop, .blink]),
     ]
 
     /// The mockup's palette for the picker screen (saturated page colours sampled from the design boards; purple follows the same family).
@@ -228,6 +314,27 @@ struct SpeciesLook {
                                    card: Color(hex: 0xF6F8F8), rowHi: Color(hex: 0xD2ECF8), padTop: Color(hex: 0xE9F1F5), glow: Color(hex: 0x2E5A96))
         case JellyRoster.lagoonID: return SpeciesLook(top: Color(hex: 0xB8A6F0), bottom: Color(hex: 0x5CCFD0), dot: Color(hex: 0xA070E8), tabFill: Color(hex: 0xE3DAFA), tabLine: Color(hex: 0xB9A3EA),
                                    card: Color(hex: 0xF8F6F8), rowHi: Color(hex: 0xE3DAFA), padTop: Color(hex: 0xEFEDF6), glow: Color(hex: 0x5D4AA8))
+        case JellyRoster.marbleID: return SpeciesLook(top: Color(hex: 0xC6F0EA), bottom: Color(hex: 0x7FD3CB), dot: Color(hex: 0x6CCBC2), tabFill: Color(hex: 0xDDF6F2), tabLine: Color(hex: 0x9FDCD5),
+                                   card: Color(hex: 0xF8FBFA), rowHi: Color(hex: 0xDDF6F2), padTop: Color(hex: 0xEAF4F3), glow: Color(hex: 0x3E9A92))
+        case JellyRoster.goldID: return SpeciesLook(top: Color(hex: 0xF8E3A0), bottom: Color(hex: 0xE8BE45), dot: Color(hex: 0xE0B03A), tabFill: Color(hex: 0xFBEFC8), tabLine: Color(hex: 0xE8C970),
+                                   card: Color(hex: 0xFCF8EC), rowHi: Color(hex: 0xFBEFC8), padTop: Color(hex: 0xF4EEDD), glow: Color(hex: 0xA8821E))
+        case JellyRoster.silverID: return SpeciesLook(top: Color(hex: 0xE3E6EE), bottom: Color(hex: 0xB4BAC8), dot: Color(hex: 0xA9B0C0), tabFill: Color(hex: 0xEEF0F5), tabLine: Color(hex: 0xC3C9D6),
+                                   card: Color(hex: 0xF8F9FB), rowHi: Color(hex: 0xEEF0F5), padTop: Color(hex: 0xF0F1F5), glow: Color(hex: 0x6F7A92))
+        case JellyRoster.rubyID: return SpeciesLook(top: Color(hex: 0xF2A3B8), bottom: Color(hex: 0xD04A72), dot: Color(hex: 0xC43B64), tabFill: Color(hex: 0xFBD9E3), tabLine: Color(hex: 0xE08BA5),
+                                   card: Color(hex: 0xFCF5F6), rowHi: Color(hex: 0xFBD9E3), padTop: Color(hex: 0xF5ECEF), glow: Color(hex: 0x9A2A4E))
+        case JellyRoster.midnightID: return SpeciesLook(top: Color(hex: 0x3A3850), bottom: Color(hex: 0x1F1E30), dot: Color(hex: 0x4A4862), tabFill: Color(hex: 0xE4E2EE), tabLine: Color(hex: 0xB0AEC4),
+                                   card: Color(hex: 0xF8F7FA), rowHi: Color(hex: 0xE4E2EE), padTop: Color(hex: 0xF1F0F5), glow: Color(hex: 0x6D6A94),
+                                   isDark: true, rimOverride: (Color(hex: 0x8A8A98), Color(hex: 0x6A6A78)))
+        case JellyRoster.lemonLimeID: return SpeciesLook(top: Color(hex: 0xFBF08A), bottom: Color(hex: 0xB5E04F), dot: Color(hex: 0xD6E64A), tabFill: Color(hex: 0xFDF8C6), tabLine: Color(hex: 0xD3E78A),
+                                   card: Color(hex: 0xFCFCEE), rowHi: Color(hex: 0xF4F8CC), padTop: Color(hex: 0xF3F5E4), glow: Color(hex: 0x7A9A22))
+        case JellyRoster.emeraldID: return SpeciesLook(top: Color(hex: 0x8FE0B8), bottom: Color(hex: 0x2FAE7A), dot: Color(hex: 0x27A06C), tabFill: Color(hex: 0xD0F2E2), tabLine: Color(hex: 0x7FCFAA),
+                                   card: Color(hex: 0xF6FBF8), rowHi: Color(hex: 0xD0F2E2), padTop: Color(hex: 0xE8F2EC), glow: Color(hex: 0x1F7A52))
+        case JellyRoster.sapphireID: return SpeciesLook(top: Color(hex: 0x9DB6F2), bottom: Color(hex: 0x3F5FC8), dot: Color(hex: 0x3753B8), tabFill: Color(hex: 0xD6E0FA), tabLine: Color(hex: 0x8FA8E6),
+                                   card: Color(hex: 0xF6F8FC), rowHi: Color(hex: 0xD6E0FA), padTop: Color(hex: 0xE9EEF8), glow: Color(hex: 0x28408F))
+        case JellyRoster.amethystID: return SpeciesLook(top: Color(hex: 0xD9B4F4), bottom: Color(hex: 0x9B52D6), dot: Color(hex: 0x8F46CC), tabFill: Color(hex: 0xEBD9FA), tabLine: Color(hex: 0xC49BE8),
+                                   card: Color(hex: 0xFAF6FC), rowHi: Color(hex: 0xEBD9FA), padTop: Color(hex: 0xF2ECF7), glow: Color(hex: 0x6A2FA0))
+        case JellyRoster.bronzeID: return SpeciesLook(top: Color(hex: 0xF0C79A), bottom: Color(hex: 0xC27A3A), dot: Color(hex: 0xB86F2F), tabFill: Color(hex: 0xF8E2CB), tabLine: Color(hex: 0xDDAE80),
+                                   card: Color(hex: 0xFCF6EF), rowHi: Color(hex: 0xF8E2CB), padTop: Color(hex: 0xF4EBE2), glow: Color(hex: 0x8A4F1E))
         default: return SpeciesLook(top: Color(hex: 0x9DD0F2), bottom: Color(hex: 0x6DADE0), dot: Color(hex: 0x79B7E6), tabFill: Color(hex: 0xD4EAFA), tabLine: Color(hex: 0x8DC1EA),
                                     card: Color(hex: 0xF8F6F1), rowHi: Color(hex: 0xD4EAFA), padTop: Color(hex: 0xEAF0F5), glow: Color(hex: 0x4F83B5))
         }

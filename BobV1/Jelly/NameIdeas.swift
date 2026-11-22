@@ -23,6 +23,16 @@ nonisolated enum NameIdeas {
         19: ["Cotton Candy", "Floss", "Sugar", "Candy", "Puff", "Fairy", "Sprinkle", "Taffy", "Spun", "Fluffy", "Bonbon", "Meringue"],
         20: ["Ocean", "Tide", "Wave", "Marina", "Coral", "Splash", "Reef", "Brine", "Neptune", "Kelp", "Drift", "Pearly"],
         22: ["Lagoon", "Mermaid", "Lily", "Shimmer", "Ripple", "Cove", "Tropic", "Atoll", "Siren", "Surf", "Misty", "Opaline"],
+        9: ["Marble", "Swirl", "Ribbon", "Milky", "Ripple", "Mist", "Pebble", "Glassy", "Twirl", "Wisp", "Cloud", "Aqua"],
+        10: ["Gold", "Goldie", "Nugget", "Midas", "Gleam", "Treasure", "Honey", "Sunny", "Aurum", "Glint", "Ducat", "Shine"],
+        11: ["Silver", "Chrome", "Mirror", "Spoon", "Quick", "Frost", "Tinsel", "Sterling", "Ripple", "Moon", "Glint", "Nickel"],
+        17: ["Ruby", "Cherry", "Garnet", "Rosie", "Ember", "Scarlet", "Poppy", "Crimson", "Jewel", "Berry", "Blaze", "Rouge"],
+        18: ["Midnight", "Luna", "Raven", "Onyx", "Shadow", "Twilight", "Orion", "Nox", "Cosmo", "Inky", "Dusk", "Comet"],
+        21: ["Lemon-Lime", "Zest", "Citrus", "Fizz", "Limey", "Soda", "Zing", "Sprite", "Tangy", "Kiwi", "Lemony", "Spritz"],
+        23: ["Emerald", "Fern", "Jade", "Clover", "Ivy", "Moss", "Willow", "Basil", "Verde", "Sage", "Olive", "Glade"],
+        24: ["Sapphire", "Azure", "Indigo", "Cobalt", "Navy", "Royal", "Sky", "Marine", "Denim", "Blue", "Cosmo", "Lapis"],
+        25: ["Amethyst", "Violet", "Lilac", "Orchid", "Plum", "Iris", "Mystic", "Lavender", "Grape", "Wisteria", "Dream", "Crystal"],
+        26: ["Bronze", "Copper", "Penny", "Rusty", "Amber", "Chestnut", "Bell", "Medal", "Ginger", "Autumn", "Brass", "Toffee"],
         12: ["Opal", "Prism", "Rainbow", "Iris", "Fizz", "Pastel", "Bubbles", "Candy", "Sorbet", "Gleam", "Swirl", "Confetti"],
     ]
 

@@ -58,7 +58,7 @@ final class OpalSpringTests: XCTestCase {
 
     func testOpalIsOnTheSpringListWithTheSpecialsPriceAndRules() {
         XCTAssertEqual(opal, 12)
-        XCTAssertEqual(SpeciesInfo.special, [4, 5, 6, 12] + (SpeciesInfo.cowsInStore ? [13, 14, 15] : []) + [16, 19, 20, 22])
+        XCTAssertEqual(SpeciesInfo.special, [4, 5, 6, 12] + (SpeciesInfo.cowsInStore ? [13, 14, 15] : []) + [16, 19, 20, 22] + (SpeciesInfo.lineupRestInStore ? SpeciesInfo.lineupRestIDs : []))
         XCTAssertEqual(SpeciesInfo.pages(includingSpecial: true), [0, 1, 3, 2] + SpeciesInfo.special, "its own page after Panda")
         XCTAssertTrue(SpeciesInfo.of(opal).isSpecial)
         XCTAssertEqual(SpeciesInfo.of(opal).name, "Opal")

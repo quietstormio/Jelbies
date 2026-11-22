@@ -149,6 +149,16 @@ nonisolated enum JellyCandidates {
         case JellyRoster.cottonCandyID: return [82, 86, 66, 34, 40]
         case JellyRoster.oceanID: return [56, 60, 62, 84, 46]
         case JellyRoster.lagoonID: return [68, 60, 86, 52, 44]
+        case JellyRoster.marbleID: return [68, 66, 80, 48, 42]
+        case JellyRoster.goldID: return [64, 58, 92, 46, 48]
+        case JellyRoster.silverID: return [58, 62, 82, 70, 44]
+        case JellyRoster.rubyID: return [76, 60, 88, 44, 52]
+        case JellyRoster.midnightID: return [60, 70, 62, 82, 40]
+        case JellyRoster.lemonLimeID: return [58, 60, 56, 40, 86]
+        case JellyRoster.emeraldID: return [66, 76, 80, 52, 44]
+        case JellyRoster.sapphireID: return [62, 66, 76, 80, 44]
+        case JellyRoster.amethystID: return [70, 64, 88, 50, 42]
+        case JellyRoster.bronzeID: return [66, 60, 62, 46, 82]
         default: return [50, 50, 50, 50, 50]
         }
     }
@@ -158,6 +168,11 @@ nonisolated enum JellyCandidates {
         case 0: return "sushi"
         case 1, JellyRoster.pandaID, JellyRoster.mooID, JellyRoster.blushID, JellyRoster.sunsetID, JellyRoster.cottonCandyID: return "donut"
         case JellyRoster.cocoaID: return "cookie"
+        case JellyRoster.goldID, JellyRoster.rubyID, JellyRoster.bronzeID: return "donut"
+        case JellyRoster.silverID, JellyRoster.sapphireID: return "sushi"
+        case JellyRoster.midnightID, JellyRoster.amethystID: return "cookie"
+        case JellyRoster.marbleID, JellyRoster.lemonLimeID: return "popsicle"
+        case JellyRoster.emeraldID: return "onigiri"
         case JellyRoster.oceanID: return "sushi"
         case JellyRoster.lagoonID: return "popsicle"
         case 3, JellyRoster.teddyID: return "cookie"
