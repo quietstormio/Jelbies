@@ -605,8 +605,8 @@ final class PlayToss {
             j.brain.idleState.toss.abort = true          // (the ball moved on: he is released and sent to the new place next step)
             interceptAt[j.id] = nil
         }
-        // the go: crouch now so the crown is rising as the ball arrives
-        if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let tm = meetTime(j), tm <= BlobBrain.tossCrouch + Self.riseTime(Self.meetRise) {
+        // the go: crouch now so the crown is rising as the ball arrives (met as near the top of the jump as the ball's own height allows)
+        if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let m = meetTime(j), m.t <= BlobBrain.tossCrouch + Self.riseTime(m.rise) {
             j.brain.idleState.toss.go = true
         }
         // fallback: no approach could be set (mid-step ...): the old hop, timed so the top of it meets the ball
@@ -615,22 +615,24 @@ final class PlayToss {
         }
     }
 
-    /// How far above his standing crown the ball is met (the crown has risen this much when it arrives), and the seconds a jump takes to raise the crown by `h`.
-    static let meetRise: Float = 0.22
+    /// The seconds a jump takes to raise the crown by `h` (the hop's parabola: apex `tossCrownRise` at `tossJumpLead`).
     private static func riseTime(_ h: Float) -> Float {
         let k = min(max(h / BlobBrain.tossCrownRise, 0), 1)
         return BlobBrain.tossJumpLead * (1 - (1 - k).squareRoot())
     }
     @ObservationIgnored private var standTop: [Int: Float] = [:]
-    /// Seconds until the (falling) ball is at the height his crown has at the meeting rise.
-    private func meetTime(_ j: PlayJelly) -> Float? {
+    /// Where the falling ball is met: the highest rise of his crown (from a list, the top of the jump first) at which the ball's own path still comes down through the crown's height, and the seconds until then.
+    private func meetTime(_ j: PlayJelly) -> (t: Float, rise: Float)? {
         let top = standTop[j.id] ?? (j.sim.restCentroid.y + BobShape.H * 0.5)
-        let g = TossTuning.gravity
-        let y0 = ball.pos.y - (top + Self.meetRise + ball.radius * 0.55), vy = ball.vel.y
-        let disc = vy * vy + 2 * g * y0
-        guard disc >= 0 else { return nil }
-        let t = (vy + disc.squareRoot()) / g
-        return t > -0.2 ? t : nil
+        let g = TossTuning.gravity, vy = ball.vel.y
+        for h in [Float(0.38), 0.28, 0.18, 0.08] {
+            let y0 = ball.pos.y - (top + h + ball.radius * 0.9)
+            let disc = vy * vy + 2 * g * y0
+            guard disc >= 0 else { continue }
+            let t = (vy + disc.squareRoot()) / g
+            if t > -0.2 { return (t, h) }
+        }
+        return nil
     }
 
     // MARK: loose ball
