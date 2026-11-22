@@ -57,7 +57,7 @@ extension GameCare {
     /// How far the pair's two stands are from their table's centre (the player's three use 1.25...1.3).
     static var pairSideX: Float {
         if DevArgs.enabled, UserDefaults.standard.double(forKey: "CafeGuestSide") > 0 { return Float(UserDefaults.standard.double(forKey: "CafeGuestSide")) }          // (capture aid: -CafeGuestSide 0.9)
-        return 0.95
+        return 0.85
     }
     /// The pair keeps this far from the player's bodies (the single guests keep `regularMargin`).
     static let pairMargin: Float = 1.7
@@ -68,7 +68,7 @@ extension GameCare {
     /// Their little tables (floor x, z of the table centre), away from the player's.
     static func regularTables(landscape: Bool) -> [SIMD2<Float>] { landscape ? [SIMD2(2.8, -1.9)] : [SIMD2(2.9, -2.4)] }          // (a lone guest's small table: at the back right, by the counter, like the pair's)
     /// The pair's table (floor x, z of the table centre; the ends stand 1.3 either side of it). Tried in order, the first that is clear of the player's table and bodies.
-    static func regularPairTables(landscape: Bool) -> [SIMD2<Float>] { landscape ? [SIMD2(2.8, -2.6)] : [SIMD2(2.6, -3.2)] }          // (the back right, by the counter: background patrons, off the player's rug, clear of the order sheet)
+    static func regularPairTables(landscape: Bool) -> [SIMD2<Float>] { landscape ? [SIMD2(2.8, -2.6)] : [SIMD2(2.7, -3.3)] }          // (the back right, by the counter: background patrons, off the player's rug, clear of the order sheet)
 
     /// Who the regulars are: the player's Park friends first (best friendship first), then the day's visitors; `count` of them.
     func cafeRegularCast(count: Int) -> [ParkVisitor] {
