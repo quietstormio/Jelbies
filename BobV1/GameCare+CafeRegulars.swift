@@ -39,8 +39,9 @@ final class CafeGuests {
     /// The two stands of the pair's table (the nearer the door first), the yaw each faces, which of the table's places each stands at, and each guest's (by actor id) facing and way-point.
     var stands: [SIMD2<Float>] = [], yaws: [Float] = [], placeOf: [Int] = []
     var yaw: [Int: Float] = [:], waypoint: [Int: SIMD2<Float>] = [:]
-    let talk = CafeTalkState()
-    func reset() { plan = .nobody; table = nil; origin = .zero; stands = []; yaws = []; placeOf = []; yaw = [:]; waypoint = [:]; talk.beatIn = 1.2; talk.lastSpeaker = -1; talk.replyIn = -1; talk.giggleIn = -1; talk.sipIn = -1 }
+    var chat = CafeChatState()
+    var isPair: Bool { plan == .pairHere || plan == .pairWalkIn }
+    func reset() { plan = .nobody; table = nil; origin = .zero; stands = []; yaws = []; placeOf = []; yaw = [:]; waypoint = [:]; chat = CafeChatState() }
     nonisolated deinit {}
 }
 
@@ -198,8 +199,12 @@ extension GameCare {
         }
         // 3. the pair, once both are at the table: their conversation in place
         if pair, book.regulars.count == 2, book.regulars.allSatisfy({ book.regularState[$0.id] == 2 }) {
-            let talkers = book.regulars.enumerated().map { k, a in CafeTalker(actor: a, stand: book.regularHome[a.id] ?? .zero, yaw: g.yaw[a.id] ?? 0, voice: Self.regularVoiceCharacter(book.regularVisitors[k])) }
-            tickCafeInPlaceTalk(talkers, state: g.talk, dt: dt)
+            let seats = book.regulars.enumerated().compactMap { k, a -> CafeChatSeat? in
+                guard let b = a.brain else { return nil }
+                return CafeChatSeat(id: a.id, brain: b, sim: a.sim, skinner: a.skinner, stand: book.regularHome[a.id] ?? .zero, yaw: g.yaw[a.id] ?? 0)
+            }
+            let voices = Dictionary(uniqueKeysWithValues: zip(book.regulars.map(\.id), book.regularVisitors.map { Self.regularVoiceCharacter($0) }))
+            tickCafeChat(seats, state: g.chat, dt: dt) { s, v in AudioHub.shared.chirp(character: voices[s.id] ?? 0, v, quiet: true) }          // (the same conversation as the player's table, a quiet murmur)
         }
         for t in book.extraTables { t.update(dt: dt) }
     }

@@ -98,7 +98,7 @@ final class CafeRegularsTests: XCTestCase {
         }
     }
 
-    // the in-place conversation: five bodies (the rig's last two are the guests)
+    // the in-place conversation (the shared tickCafeChat): five bodies (the rig's last two are the guests)
 
     func testPairTalksInPlaceFor30Seconds() {
         GameCamera.aspect = 440.0 / 956.0
@@ -108,34 +108,31 @@ final class CafeRegularsTests: XCTestCase {
         let g = [r.actors[3], r.actors[4]]
         let stands: [SIMD2<Float>] = [SIMD2(-1.6, 1.1), SIMD2(1.0, 1.1)], yaws: [Float] = [DiningLayout.cafeEndsYaw, -DiningLayout.cafeEndsYaw]
         for (k, a) in g.enumerated() { c.rehome(a, at: stands[k]); a.brain?.startTurn(to: yaws[k], sim: a.sim) }
-        let talkers = g.enumerated().map { CafeTalker(actor: $1, stand: stands[$0], yaw: yaws[$0], voice: $0) }
-        let st = CafeTalkState()
-        var sawIdle = false, spoke = Set<Int>(), last = -1, maxMove: [Float] = [0, 0], maxYaw: [Float] = [0, 0], changes = 0
+        let seats = g.enumerated().map { CafeChatSeat(id: $1.id, brain: $1.brain!, sim: $1.sim, skinner: $1.skinner, stand: stands[$0], yaw: yaws[$0]) }
+        let st = CafeChatState(seed: 11)
+        var voices = [Int: Int]()
+        var maxMove: [Float] = [0, 0], maxYaw: [Float] = [0, 0]
         let dt: Float = 1.0 / 60
         for step in 0..<(34 * 60) {
             r.tick()
-            c.tickCafeInPlaceTalk(talkers, state: st, dt: dt)
-            if g.contains(where: { $0.brain?.idleState.kind != nil }) { sawIdle = true }
-            if st.lastSpeaker != last { last = st.lastSpeaker; if last >= 0 { spoke.insert(last); changes += 1 } }
+            c.tickCafeChat(seats, state: st, dt: dt) { s, _ in voices[s.id, default: 0] += 1 }
             if step > 4 * 60 {          // (4 s to square up, then 30 s measured)
                 for (k, a) in g.enumerated() {
                     guard let b = a.brain else { continue }
                     maxMove[k] = max(maxMove[k], simd_distance(GameCare.floorPos(b, a.sim), stands[k]))
-                    maxYaw[k] = max(maxYaw[k], abs(GameCare.wrapAngle(b.yaw - yaws[k])))
+                    maxYaw[k] = max(maxYaw[k], abs(GameCare.wrapAngle(b.yaw + b.twist + b.chat.twist - yaws[k])))
                 }
             }
         }
-        print("[caferegulars] talk 30 s: move \(maxMove) yaw \(maxYaw) turns \(changes)")
+        print("[caferegulars] talk 30 s: move \(maxMove) yaw \(maxYaw) lines \(st.lines) answers \(st.answers) laughs \(st.laughs) corrections \(st.corrections) voices \(voices)")
         for k in 0..<2 {
             XCTAssertLessThan(maxMove[k], 0.05, "guest \(k) holds his spot")
             XCTAssertLessThan(maxYaw[k], 0.15, "guest \(k) holds his facing")
         }
-        print("[caferegulars] a gesture idle ran while reserved: \(sawIdle)")
-        XCTAssertTrue(sawIdle, "a gesture idle really runs in the held state (not statues)")
-        XCTAssertEqual(spoke, [0, 1], "they take turns")
-        XCTAssertGreaterThanOrEqual(changes, 6, "a conversation, not a statue")
-        let d = simd_distance(g[0].floor, g[1].floor)
-        XCTAssertGreaterThan(d, 2.0, "faces never close (opposite sides of the table)")
+        XCTAssertEqual(Set(voices.keys), Set(g.map(\.id)), "they take turns: both speak")
+        XCTAssertGreaterThanOrEqual(st.lines, 4, "a conversation, not a statue")
+        XCTAssertEqual(st.corrections, 0, "never walked or turned back")
+        XCTAssertGreaterThan(simd_distance(g[0].floor, g[1].floor), 2.0, "faces never close (opposite sides of the table)")
     }
 
     /// MEASURE (the base code's rule): over 20 visits with three Jelmiko, how many guests the OLD single tables seat (one or two asked for each visit), per aspect.

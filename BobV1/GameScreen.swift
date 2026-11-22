@@ -1027,7 +1027,6 @@ struct GameScreen: View {
             case "clean": care.clean()
             case "spa": if care.bath.wallet.count < 40 { care.bath.wallet.add(40, silent: true) }; care.groom.openPicker(all: [0]); care.startGroom(.quick)          // -GameAction spa: Jelmiko 0 alone to the Jelly Spa, the others stay home (capture aid; use with -SleepNow 1 and a long -GameActionDelay)
             case "park": care.requestPark(); if care.park.picking { care.startPark() }          // -GameAction park: the Town's Park row, then "Go to the park" with everybody picked (capture aid; shows the refusal line when blocked)
-            case "cafe": care.requestCafe(); if d.integer(forKey: "CafeOrder") != 0 { for _ in 0..<300 where care.cafe.phase != .menu { await sleep(0.1) }; await sleep(1); _ = care.orderCafe(CafeOrder(forTable: .cocoa)) }          // -GameAction cafe (+ -CafeOrder 1 places a cocoa order for the whole table, -CafeGuests none|solo|pair|pairwalk forces the guests; capture aids)
             default: care.wave()
             }
             // capture aid: -GameReleaseAfter <s> presses "Let Bob go" that long after the action

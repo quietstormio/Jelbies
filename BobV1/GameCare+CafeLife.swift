@@ -40,7 +40,7 @@ extension GameCare {
         if lounging {
             if book.chatT <= 0 {
                 book.chatT = Float.random(in: CafeTuning.chatEvery)
-                if !book.regulars.isEmpty, Float.random(in: 0..<1) < 0.25, let k = book.regularVisitors.indices.randomElement(), let rb = book.regulars[k].brain {          // a regular chimes in (his own species' voice)
+                if !book.regulars.isEmpty, !book.guests.isPair, Float.random(in: 0..<1) < 0.25, let k = book.regularVisitors.indices.randomElement(), let rb = book.regulars[k].brain {          // a regular chimes in (his own species' voice)
                     AudioHub.shared.chirp(character: Self.regularVoiceCharacter(book.regularVisitors[k]), Bool.random() ? .babble : .happy)
                     rb.face(.excited, hold: 1.2)
                 }
@@ -48,7 +48,7 @@ extension GameCare {
         } else if book.chatT <= 0 {
             book.chatT = Float.random(in: CafeTuning.chatEvery)
             let pool = live.count > 1 ? live.filter { $0.id != book.lastSpeaker } : live
-            if !book.regulars.isEmpty, Float.random(in: 0..<1) < 0.25, let k = book.regularVisitors.indices.randomElement(), let rb = book.regulars[k].brain {          // a regular chimes in (his own species' voice)
+            if !book.regulars.isEmpty, !book.guests.isPair, Float.random(in: 0..<1) < 0.25, let k = book.regularVisitors.indices.randomElement(), let rb = book.regulars[k].brain {          // a regular chimes in (his own species' voice)
                 AudioHub.shared.chirp(character: Self.regularVoiceCharacter(book.regularVisitors[k]), Bool.random() ? .babble : .happy)
                 rb.face(.excited, hold: 1.2)
             } else if let sp = pool.randomElement(), let sb = sp.brain {
