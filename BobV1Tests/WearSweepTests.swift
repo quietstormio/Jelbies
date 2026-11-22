@@ -505,7 +505,7 @@ final class WearSweepTests: XCTestCase {
         for f in fits {
             if f == "ship" { WearRules.hatFitOverride = [:] }
             else if f == "off" { WearRules.hatFitOverride = [look: WearRules.HatFit(dy: 0, tip: 0)] }
-            else { let p = f.split(separator: ":").compactMap { Float($0) }; WearRules.hatFitOverride = [look: WearRules.HatFit(dy: p[0], tip: p.count > 1 ? p[1] : 0, pivotY: p.count > 3 ? p[3] : -0.15, stretch: p.count > 2 ? p[2] : 1)] }
+            else { let p = f.split(separator: ":").compactMap { Float($0) }; WearRules.hatFitOverride = [look: WearRules.HatFit(dy: p[0], tip: p.count > 1 ? p[1] : 0, pivotY: p.count > 3 ? p[3] : -0.15, stretch: p.count > 2 ? p[2] : 1, bandScale: p.count > 4 ? p[4] : 1)] }
             WearMeshes.clearCache(); AntennaFit.clearCache()
             for (k, id) in fams.enumerated() {
                 dress(stages[k], look, ticks: 70, settleSim: true)
