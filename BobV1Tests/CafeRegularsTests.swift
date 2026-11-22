@@ -8,7 +8,7 @@ import XCTest
 import simd
 @testable import BobV1
 
-private struct SplitMix: RandomNumberGenerator {
+private struct GuestSplitMix: RandomNumberGenerator {
     var s: UInt64
     mutating func next() -> UInt64 { s &+= 0x9E3779B97F4A7C15; var z = s; z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27)) &* 0x94D049BB133111EB; return z ^ (z >> 31) }
 }
@@ -24,7 +24,7 @@ final class CafeRegularsTests: XCTestCase {
     }
 
     func testVisitSharesOverManySeeds() {
-        var rng = SplitMix(s: 2026)
+        var rng = GuestSplitMix(s: 2026)
         var n = [CafeGuestPlan: Int](), N = 30_000
         for _ in 0..<N { n[CafeGuestPlan.roll(slots: 2, using: &rng), default: 0] += 1 }
         let f = { (p: CafeGuestPlan) in Double(n[p] ?? 0) / Double(N) }
@@ -37,7 +37,7 @@ final class CafeRegularsTests: XCTestCase {
     }
 
     func testNeverMoreThanFiveBodies() {
-        var rng = SplitMix(s: 7)
+        var rng = GuestSplitMix(s: 7)
         for owned in 1...6 {
             for _ in 0..<2000 {
                 let slots = CafeTuning.regularCount(owned: owned, want: CafeTuning.maxRegulars)
