@@ -442,7 +442,7 @@ final class CafeTests: XCTestCase {
 
     /// The special takes 20 % off the treat it names and nothing off the others, through the real order path (the day is pinned: the game's own `-ShowDay` seam).
     func testTheSpecialTakesTwentyPercentOffTheTreatItNames() {
-        for special in [CafeTreatID.sundae, .swirl, .cocoa] {
+        for special in [CafeTreatID.sundae, .juice, .jellycup, .pancakes] {
             let r = room(drops: 100)
             let day = pinDay(special: special)
             XCTAssertNotEqual(day, 0)
