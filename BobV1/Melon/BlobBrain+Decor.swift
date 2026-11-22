@@ -371,7 +371,6 @@ extension BlobBrain {
     func decorStart(_ kind: IdleKind, _ sim: SoftBody, only: DecorKind? = nil, uid onlyUID: Int? = nil) -> Bool {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("decorStart", probe) }
         guard !decorLocked else { return false }
-        if MoveMix.on, kind == .soccerKick, !mix.soccerOwn, rand() < MoveMix.soccerSoloSkip { return false }          // (round 3b: the scheduler's own solo kicks come half as often: the soccer urge and the follow-ups make the moments, with passes)
         let here = SIMD2(px, pz)
         let field = DecorField.shared
         let exiting = decorIgnore          // (still standing in the bag he sat in: that stays soft for him)
