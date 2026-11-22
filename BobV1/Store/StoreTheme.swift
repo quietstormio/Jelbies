@@ -201,6 +201,8 @@ enum StoreThumb {
         return n
     }
 
+    /// A picture already drawn under this key, if any.
+    static func cachedImage(_ key: String) -> UIImage? { cache[key] }
     /// The cached thumbnail of a mesh (one render per key).
     static func image(_ key: String, mesh: RoomMesh, glass: RoomMesh? = nil, size: CGFloat = 200, yaw: Float = 0.6, pitch: Float = 0.5, focus: (SIMD3<Float>, Float)? = nil, tight: Bool = false) -> UIImage? {
         if let c = cache[key] { return c }

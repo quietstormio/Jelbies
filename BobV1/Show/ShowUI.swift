@@ -293,51 +293,143 @@ struct ShowCTA: View {
 
 // MARK: - the wardrobe sheet (Dress up / the Look round's wardrobe)
 
-/// Owned wearables as tap-to-wear cards, the theme's matches edged in gold. One card per look; the worn one of a slot is marked.
+/// Owned wearables as tap-to-wear cards in a vertically scrolling grid (3 columns on a phone in portrait, more when there is room), the theme's matches edged in gold.
+/// One card per look; the worn one of a slot is marked. Rows are built by hand so every card in a row is as tall as the tallest.
 struct WardrobeStrip: View {
     let care: GameCare
     var who: Int
     var theme: ShowTheme
     var slots: [WearSlot]? = nil          // nil = every slot
     var onChange: () -> Void = {}
+    @Environment(\.dynamicTypeSize) private var typeSize
     private var looks: [WearLook] {
         StoreCatalog.items.filter { $0.isWearable && care.store.owns($0) }.compactMap(\.wear).filter { slots?.contains($0.slot) ?? true }
             .sorted { theme.match($0.tags) > theme.match($1.tags) }
+    }
+    /// Columns and card width for the room there is: cards about 105 to 160 pt wide, never fewer than 3 columns (2 at accessibility text sizes).
+    static func columns(for width: CGFloat, accessibility: Bool = false) -> (count: Int, card: CGFloat) {
+        let gap = WardrobeCardFace.gap
+        let n = max(accessibility ? 2 : 3, Int(((width + gap) / (WardrobeCardFace.minWidth + gap)).rounded(.down)))
+        return (n, max(60, (width - gap * CGFloat(n - 1)) / CGFloat(n)))
     }
     var body: some View {
         let list = looks
         if list.isEmpty {
             Text("Nothing to wear yet. The Shop has hats, bows and shoes.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, minHeight: 60)
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(list, id: \.rawValue) { look in
-                        let worn = care.store.worn(who, look.slot) == look
-                        let other = worn || care.store.freeCopies(look) > 0 ? nil : care.store.wearer(look, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }
-                        let m = theme.match(look.tags)
-                        Button {
-                            AudioHub.shared.play(.shoeOn)
-                            if worn { care.store.takeOff(look.slot, from: who) } else if care.store.wear(look, on: who) { care.jelly(who)?.stats.nudge([.cool: 0.02]) }
-                            onChange()
-                        } label: {
-                            VStack(spacing: 3) {
-                                if let item = StoreCatalog.item(wearing: look) { ItemArt(item: item, size: 34) } else { Image(systemName: look.slot.symbol).font(.system(size: 22, weight: .heavy)).foregroundStyle(SK.ink) }
-                                Text(look.title).font(SK.font(11, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.7)
-                                if let t = look.tags.first(where: { $0 == theme.main }) ?? look.tags.first(where: { $0 == theme.friend }) ?? look.tags.first { TagChip(tag: t, size: 10) }
-                                Text(worn ? "Wearing" : other.map { "On \($0)" } ?? look.slot.title).font(SK.font(10, .heavy)).foregroundStyle(worn ? ShowUI.brownGold : SK.muted).jLine(1, scale: 0.7)
+            GeometryReader { g in
+                let cols = Self.columns(for: g.size.width - 12, accessibility: typeSize.isAccessibilitySize)
+                let rows = stride(from: 0, to: list.count, by: cols.count).map { Array(list[$0..<min($0 + cols.count, list.count)]) }
+                ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: WardrobeCardFace.gap) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                            HStack(alignment: .top, spacing: WardrobeCardFace.gap) {
+                                ForEach(row, id: \.rawValue) { look in card(look, width: cols.card) }
+                                if row.count < cols.count { ForEach(0..<(cols.count - row.count), id: \.self) { _ in Color.clear.frame(width: cols.card) } }
                             }
-                            .padding(.horizontal, 4).frame(width: 78, height: 102)
-                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(worn ? ShowUI.gold.opacity(0.35) : .white))
-                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(m >= 1 ? ShowUI.gold : m >= 0.5 ? Color(hex: 0xF4D98C) : ShowUI.bar, lineWidth: 2))
-                            .shadow(color: ShowUI.gold.opacity(m >= 1 ? 0.9 : m >= 0.5 ? 0.45 : 0), radius: m >= 1 ? 6 : 5)
+                            .fixedSize(horizontal: false, vertical: true)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(look.title), \(look.tags.map(\.title).joined(separator: " ")), \(worn ? "worn" : "not worn")\(other.map { ", worn by \($0)" } ?? "")")
-                        .accessibilityIdentifier("wardrobe-\(look.rawValue)")
                     }
+                    .padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 30)
                 }
-                .padding(.horizontal, 2).padding(.vertical, 6)
+                .accessibilityIdentifier("wardrobe-grid")
+                .task {          // capture aid (dev arguments only): `-WardrobeScroll <seconds>` scrolls the grid to its third row after that long
+                    let t = UserDefaults.standard.double(forKey: "WardrobeScroll")
+                    guard DevArgs.enabled, t > 0 else { return }
+                    try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
+                    withAnimation { proxy.scrollTo(min(2, rows.count - 1), anchor: .top) }
+                }
+                }
             }
+        }
+    }
+    private func card(_ look: WearLook, width: CGFloat) -> some View {
+        let worn = care.store.worn(who, look.slot) == look
+        let other = worn || care.store.freeCopies(look) > 0 ? nil : care.store.wearer(look, among: care.jellies.count).flatMap { $0 != who ? care.jelly($0)?.name : nil }
+        let m = theme.match(look.tags)
+        return Button {
+            AudioHub.shared.play(.shoeOn)
+            if worn { care.store.takeOff(look.slot, from: who) } else if care.store.wear(look, on: who) { care.jelly(who)?.stats.nudge([.cool: 0.02]) }
+            onChange()
+        } label: {
+            WardrobeCardFace(look: look, tag: Self.shownTag(look, theme), match: m, worn: worn, otherName: other, width: width)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(look.title), \(look.tags.map(\.title).joined(separator: " ")), \(worn ? "worn" : "not worn")\(other.map { ", worn by \($0)" } ?? "")")
+        .accessibilityIdentifier("wardrobe-\(look.rawValue)")
+    }
+    static func shownTag(_ look: WearLook, _ theme: ShowTheme) -> WearTag? {
+        look.tags.first(where: { $0 == theme.main }) ?? look.tags.first(where: { $0 == theme.friend }) ?? look.tags.first
+    }
+}
+
+/// What a Dress up card looks like (no game state: the picture loads itself from the shared mini-render cache). The picture is a square as wide as the card
+/// less the padding, under it the full name (two lines reserved), the theme tag and the slot (or "Wearing" / "On <name>"), so every card has the same height.
+struct WardrobeCardFace: View {
+    static let gap: CGFloat = 10
+    static let minWidth: CGFloat = 100
+    static let pad: CGFloat = 8
+    var look: WearLook
+    var tag: WearTag?
+    var match: Float
+    var worn: Bool
+    var otherName: String?
+    var width: CGFloat
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var image: UIImage?
+    var picture: CGFloat { width - 2 * Self.pad }
+    var body: some View {
+        VStack(spacing: 5) {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: picture * 0.16, style: .continuous).fill(SK.pink.opacity(0.25))
+                if let image { Image(uiImage: image).resizable().scaledToFit() }
+                else if StoreCatalog.item(wearing: look) == nil { Image(systemName: look.slot.symbol).font(.system(size: 30, weight: .heavy)).foregroundStyle(SK.ink) }
+                if worn {
+                    Image(systemName: "checkmark").font(.system(size: 12, weight: .black)).foregroundStyle(SK.ink)
+                        .frame(width: 24, height: 24).background(Circle().fill(ShowUI.gold)).padding(5)
+                }
+            }
+            .frame(width: picture, height: picture)
+            Text(look.title).font(SK.font(13, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+                .lineLimit(typeSize.isAccessibilitySize ? 4 : 2, reservesSpace: true).frame(maxWidth: .infinity)
+            if let tag { TagChip(tag: tag, size: 11) } else { Color.clear.frame(height: 22) }
+            Text(worn ? "Wearing" : otherName.map { "On \($0)" } ?? look.slot.title).font(SK.font(11, .heavy)).foregroundStyle(worn ? ShowUI.brownGold : SK.muted).lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .padding(Self.pad)
+        .frame(width: width)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(worn ? ShowUI.gold.opacity(0.35) : .white))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(match >= 1 ? ShowUI.gold : match >= 0.5 ? Color(hex: 0xF4D98C) : ShowUI.bar, lineWidth: match >= 1 || worn ? 3 : 2))
+        .shadow(color: ShowUI.gold.opacity(match >= 1 ? 0.9 : match >= 0.5 ? 0.45 : 0), radius: match >= 1 ? 6 : 5)
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .task(id: look) {
+            guard let item = StoreCatalog.item(wearing: look) else { return }
+            if let hit = StoreThumb.wardrobeCached(item) { image = hit; return }
+            await Task.yield()          // one picture per turn, so scrolling a screenful of new cards never holds a frame for long
+            image = StoreThumb.wardrobeImage(item)
+        }
+    }
+}
+
+@MainActor
+extension StoreThumb {
+    /// The Dress up card's picture: the same Jelmiko-wearing-it mesh as the shop's thumbnail, drawn once per item at 360 px (about 120 pt at 3x) and framed tighter on the part that wears it.
+    static func wardrobeImage(_ item: StoreItem) -> UIImage? {
+        guard let w = item.wear, let m = mesh(for: item) else { return nil }
+        let a = angles(for: item)
+        if w.isShoe { return image("ward-\(item.id)", mesh: m, size: 360, yaw: a.yaw, pitch: a.pitch, tight: true) }
+        return image("ward-\(item.id)", mesh: m, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w))
+    }
+    static func wardrobeCached(_ item: StoreItem) -> UIImage? { cachedImage("ward-\(item.id)") }
+    /// (centre, radius) for the card: closer than the shop's thumbnail so the item fills the picture.
+    static func cardFocus(_ look: WearLook) -> (SIMD3<Float>, Float) {
+        switch look.slot {
+        case .head: return (SIMD3(0, 1.0, 0.05), 0.63)
+        case .face: return (SIMD3(0, 0.86, 0.30), 0.50)
+        case .neck: return look == .diamondJ ? (SIMD3(0, 0.36, 0.25), 0.42) : (SIMD3(0, 0.52, 0.2), 0.58)
+        case .hands: return (SIMD3(0, 0.45, 0.10), 0.80)
+        default: let f = wornFocus(look); return (f.0, f.1 * 0.85)
         }
     }
 }
@@ -483,7 +575,7 @@ struct StudioScreen: View {
         }
         .sheet(isPresented: $wardrobeOpen) {
             WardrobeSheet(care: care, who: who, theme: theme, rank: rank) { wardrobeOpen = false }
-                .presentationDetents(compact ? [.large] : [.medium, .large]).presentationBackground(SK.cream)
+                .presentationDetents([.large]).presentationBackground(SK.cream)
         }
     }
 
@@ -624,6 +716,8 @@ struct StageBackdrop: View {
 }
 
 /// Dress up: the whole owned wardrobe by slot (the scored slots first), tap to wear / take off. The Studio's and the Look round's.
+/// The worn-slots panel sits directly under the header lines and above the grid, so it stays in view while the grid scrolls; in landscape the header and the panel
+/// take the left column and the filters and the grid the right.
 struct WardrobeSheet: View {
     let care: GameCare
     var who: Int
@@ -631,44 +725,87 @@ struct WardrobeSheet: View {
     var rank: ShowRank
     var close: () -> Void
     @State private var slot: WearSlot?
-    var body: some View {
-        ScrollViewReader { proxy in
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Dress up").font(SK.font(26, .black)).foregroundStyle(SK.ink)
-                    Spacer()
-                    Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
-                        .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("wardrobe-close")
-                }
-                HStack(spacing: 6) {
-                    Text("\(theme.title):").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
-                    TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ")
-                    Spacer()
-                }
-                Text("\(rank.title) rank scores \(rank.slots) slots: \(rank.slotOrder.map { $0.title }.joined(separator: ", ")). Gold = matches \(theme.main.title).").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-                SlotChips(slot: $slot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && care.store.owns($0) } }, idPrefix: "wardrobe-slot-")
-                WardrobeStrip(care: care, who: who, theme: theme, slots: slot.map { [$0] })
-                let outfit = care.store.outfit(who)
-                HStack(spacing: 10) {
-                    ForEach(rank.slotOrder, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme) { if let l = outfit[s] { care.store.takeOff(l.slot, from: who) } } }
-                    Spacer()
-                }
-                .padding(12).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ShowUI.stage))
-                Text("Tap a worn slot to take it off.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
-                Color.clear.frame(height: 1).id("wardrobe-end")
-            }
-            .padding(16)
+    @Environment(\.verticalSizeClass) private var vsc
+    private var headerRow: some View {
+        HStack {
+            Text("Dress up").font(SK.font(26, .black)).foregroundStyle(SK.ink)
+            Spacer()
+            Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
+                .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("wardrobe-close")
         }
-        .scrollBounceBehavior(.basedOnSize)
+    }
+    private var themeRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("\(theme.title):").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
+                TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ")
+                Spacer()
+            }
+            Text("\(rank.title) rank scores \(rank.slots) slots: \(rank.slotOrder.map { $0.title }.joined(separator: ", ")). Gold = matches \(theme.main.title).").font(SK.font(12, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    private var wornPanel: some View {
+        let outfit = care.store.outfit(who)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                ForEach(rank.slotOrder, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme) { if let l = outfit[s] { care.store.takeOff(l.slot, from: who) } } }
+                Spacer()
+            }
+            .padding(10).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ShowUI.stage))
+            Text("Tap a worn slot to take it off.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
+        }
+    }
+    private var chips: some View {
+        WardrobeFilterChips(slot: $slot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && care.store.owns($0) } })
+    }
+    private var grid: some View { WardrobeStrip(care: care, who: who, theme: theme, slots: slot.map { [$0] }).frame(maxWidth: .infinity, maxHeight: .infinity).ignoresSafeArea(edges: .bottom) }
+    var body: some View {
+        Group {
+            if vsc == .compact {
+                HStack(alignment: .top, spacing: 16) {
+                    ScrollView(showsIndicators: false) { VStack(alignment: .leading, spacing: 10) { headerRow; themeRows; wornPanel } }
+                        .scrollBounceBehavior(.basedOnSize).frame(width: 340)
+                    VStack(spacing: 8) { chips; grid }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 10) { headerRow; themeRows; wornPanel; chips; grid }
+            }
+        }
+        .padding(.horizontal, 16).padding(.top, 16)
         .accessibilityIdentifier("wardrobe-sheet")
-        .task {          // capture aids (dev arguments only): `-WardrobeSlot <hats|shoes|...>` starts on that filter; `-WardrobeScroll <seconds>` scrolls to the bottom after that long
+        .task {          // capture aids (dev arguments only): `-WardrobeSlot <head|feet|...>` starts on that filter
             guard DevArgs.enabled else { return }
             if let raw = UserDefaults.standard.string(forKey: "WardrobeSlot"), let s = WearSlot(rawValue: raw) { slot = s }
-            let t = UserDefaults.standard.double(forKey: "WardrobeScroll")
-            if t > 0 { try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000)); withAnimation { proxy.scrollTo("wardrobe-end", anchor: .bottom) } }
         }
+    }
+}
+
+/// The filter chips (All + one per slot with goods): the same look as the Shop's, but the row starts at the sheet's side margin and only scrolls when it must.
+struct WardrobeFilterChips: View {
+    @Binding var slot: WearSlot?
+    var slots: [WearSlot]
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("All", symbol: "square.grid.2x2.fill", on: slot == nil, id: "all") { slot = nil }
+                ForEach(slots, id: \.rawValue) { s in chip(s.title, symbol: s.symbol, on: slot == s, id: s.rawValue) { slot = s } }
+            }
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .contentMargins(.vertical, 0, for: .scrollContent)
+        .frame(height: 44)
+        .accessibilityIdentifier("wardrobe-slot-chips")
+    }
+    private func chip(_ title: String, symbol: String, on: Bool, id: String, _ action: @escaping () -> Void) -> some View {
+        Button { AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.12)) { action() } } label: {
+            HStack(spacing: 5) {
+                Image(systemName: symbol).font(.system(size: 12, weight: .heavy))
+                Text(title).font(SK.font(13, .heavy))
+            }
+            .foregroundStyle(SK.ink).padding(.horizontal, 12).frame(minHeight: 44)
+            .background(Capsule().fill(on ? SK.honey : Color.white.opacity(0.8)))
+        }
+        .buttonStyle(.plain).accessibilityIdentifier("wardrobe-slot-\(id)").accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
