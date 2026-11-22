@@ -428,6 +428,7 @@ extension BlobBrain {
     func socialMaybeStart(_ sim: SoftBody) -> Bool {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("socialMaybeStart", probe) }
         guard socialBook.enabled, social == nil, socialBook.cooldown <= 0, socialFree, idleDeepNight < 0.5 else { return false }
+        if MoveMix.on, mixQuiet || !mixStopOK(position) { return false }          // (MoveMix.swift: no chaining; nothing starts under a HUD button)
         if socialBook.invite != nil || socialBook.meet != nil || socialMeetHeld { return true }          // waiting for the invited partner's leg to end
         let ps = socialOthers().map { (id: $0.steerID, pos: $0.position, b: $0) }
         if ps.isEmpty { return false }
@@ -439,10 +440,11 @@ extension BlobBrain {
             guard !o.meetBusy, o.socialFree || (anticsEnabled && o.socialWandering), (socialBook.pair[p.id] ?? 0) <= 0, (o.socialBook.pair[steerID] ?? 0) <= 0, o.socialBook.cooldown <= 6 else { continue }
             if HopscotchTuning.walled, hopCourtBetween(position, p.pos) { continue }          // (park-hopscotch-r1)
             let d = simd_distance(p.pos, position)
-            if d > peerGap * 0.8 && d < 4.8 { cands.append((o, d)) }
+            if MoveMix.on, o.mixQuiet || !mixStopOK(p.pos) { continue }          // (MoveMix.swift)
+            if d > max(peerGap * 0.8, MoveMix.on ? MoveMix.pairMinDist : 0) && d < (MoveMix.on ? MoveMix.pairMaxDist : 4.8) { cands.append((o, d)) }          // (MoveMix: a pair begins with a walk-up: at least 1.4 u apart)
         }
         if cands.isEmpty { return false }
-        guard starved || rand() < SocialTuning.pickChance * (watching ? SocialTuning.livelyChance : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) * parkSocialPickMul else { return false }
+        guard starved || rand() < SocialTuning.pickChance * (watching ? (MoveMix.on ? MoveMix.watchPairMul : SocialTuning.livelyChance) : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) * parkSocialPickMul else { return false }
         let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
         if emotePairDefer(with: o) { return false }          // (EmoteSpot.swift: they stand on a much-used spot: they roam on, the roll comes round again)
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
@@ -651,7 +653,7 @@ extension BlobBrain {
         if let st = ContactStance.entry(s.kind), st.cls != .none { for id in (s.kind.isGroup ? s.crewIDs : [pid]) where id != steerID { socialBook.glow[id] = 1.5 } }
         if s.kind == .look { socialBook.lookPair[pid] = SocialTuning.lookCooldown; socialBook.cooldown = max(socialBook.cooldown, 4) }
         else {
-            let wait = (watching ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1) * parkSocialWaitMul * morePairWaitMul          // (social-more-r1: the wait after a group is the short pair wait too, so a group adds on top of pairs; SocialMoreTuning.swift)
+            let wait = (watching && !MoveMix.on ? SocialTuning.livelyWait : 1) * (perkFlags.social ? 0.6 : 1) * parkSocialWaitMul * morePairWaitMul          // (social-more-r1: the wait after a group is the short pair wait too, so a group adds on top of pairs; SocialMoreTuning.swift)
             socialBook.cooldown = rand(SocialTuning.brainCooldown.0, SocialTuning.brainCooldown.1) * wait
             socialBook.pair[pid] = rand(SocialTuning.pairCooldown.0, SocialTuning.pairCooldown.1) * (s.kind == .squabble ? 1.4 : 1) * wait
             if s.idC >= 0, s.idC != steerID, let c = socialBrain(s.idC) { _ = c; socialBook.pair[s.idC] = socialBook.pair[pid] }
@@ -660,9 +662,19 @@ extension BlobBrain {
                 socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1) * parkSocialWaitMul * moreGroupWaitMul; socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
                 if s.kind.isTreat { socialBook.treatCool = rand(EmoteTuning.treatCooldown.0, EmoteTuning.treatCooldown.1); socialBook.treatIdle = 0; socialBook.treatBusy = 0; socialBook.lastTreat = s.kind }
             }
+            if MoveMix.on, !s.kind.isTreat {          // (MoveMix.swift: after a PAIR the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
+                if !s.kind.isGroup {
+                    let again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
+                    socialBook.pair[pid] = again
+                    if s.idC >= 0, s.idC != steerID { socialBook.pair[s.idC] = again }
+                } else {
+                    socialBook.groupCool = rand(MoveMix.groupCoolHome.lowerBound, MoveMix.groupCoolHome.upperBound) * (outingPlay ? MoveMix.groupCoolParkMul : 1)
+                }
+            }
             if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
+        mixSessionEnded(s, hard: hard || s.end == .aborted || s.end == .stopped)          // (MoveMix.swift: quiet period + a stroll away)
         if s.kind == .squabble { wantHmph() }          // a huff after a squabble
         if s.end != .aborted, s.end != .stopped, s.kind != .squabble, rand() < 0.35 { wantJoy(); blushBump(hold: 2.2, peak: 0.5) }          // a social ended happily
         onSocial?(.ended(s.kind, partner: pid, s.end ?? .aborted))

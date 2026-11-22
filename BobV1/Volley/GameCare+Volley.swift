@@ -50,6 +50,7 @@ extension GameCare {
         volley.trophies = race.trophies
         volley.wallet = bath.wallet
         volley.upgrades = upgrades
+        volley.onBond = { [weak self] c, won in self?.bondEarn(.volley, character: c, win: won) }
         #if targetEnvironment(simulator)
         if UserDefaults.standard.bool(forKey: "VolleyToys"), store.placedDecor.isEmpty {          // capture aid: `-VolleyToys 1` puts a few toys in the room (to see they stay home)
             for k in [DecorKind.soccerball, .drum, .beachball, .plushbear] { store.grant(k.storeID); _ = store.place(k.storeID) }
@@ -300,8 +301,11 @@ extension GameCare {
         if Self.startVolleyPending, !volley.active, w.wait == nil {          // capture aid: `-StartVolley 1` match
             Self.startVolleyFrames += 1
             if Self.startVolleyFrames > 120 {
-                Self.startVolleyPending = false
-                startVolley(jelly: 0, mode: .match(volley.book.chosen), seed: UInt64(max(UserDefaults.standard.integer(forKey: "VolleySeed"), 1)))
+                if let why = volleyBlocker(jelly: 0, match: true) { if Self.startVolleyFrames % 120 == 0 { volleyAidLog("STARTVOLLEY blocked: \(why)\n") } }          // (retries every step until the room allows it)
+                else {
+                    Self.startVolleyPending = false
+                    startVolley(jelly: 0, mode: .match(volley.book.chosen), seed: UInt64(max(UserDefaults.standard.integer(forKey: "VolleySeed"), 1)))
+                }
             }
         }
         #endif
@@ -460,7 +464,9 @@ extension GameCare {
             for (i, a) in w.players.enumerated() where i / 2 == team { a.brain?.volleyCheer(sim: a.sim) }
         case .serveReady(let p):
             if p < 2 { A11yEvents.say("Your serve. Tap Hit to toss, tap again at the top", .normal) }
-        case .matchOver: AudioHub.shared.play(.cheerSmall)
+        case .matchOver(let winner):
+            AudioHub.shared.play(.cheerSmall)          // (the crowd cheer both ways, as before; it is a sound effect, not music)
+            if winner == 0 { volley.celebrateWin(); fireGrandChampionConfetti() }          // a win: the race win's results jingle + confetti burst (same calls as GameCare+Race.swift:426); a loss stays as it was
         }
     }
 
@@ -554,6 +560,9 @@ extension GameCare {
         case "serve":
             if s.waitingToServe, s.servingPlayer == s.controlled { s.tap() }
             if s.phase == .rally, p.act == .stand, let r = s.ring, abs(r.tau - r.lead) < 0.03 { s.tap() }
+        case "win", "lose":          // `-VolleyDemo win|lose`: the player's team (or the other) takes every point at once, so the match ends within seconds
+            if s.waitingToServe, s.servingPlayer == s.controlled { s.tap() }
+            if s.phase == .rally, s.clock - w.demoT > 1.2 { w.demoT = s.clock; s.forcePoint(team: k == "win" ? 0 : 1) }
         case "cheer":
             if s.waitingToServe, s.servingPlayer == s.controlled { s.tap() }
             if s.phase == .rally, s.clock - w.demoT > 3 { w.demoT = s.clock; s.forcePoint(team: 0) }

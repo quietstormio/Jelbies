@@ -19,6 +19,7 @@ extension GameCare {
     /// A Jelly ate `pieces` more of `c` (single or group meal). Store foods use up one serving from the bag on the first bite of a serving, and
     /// each bite nudges his condition and starts his perk.
     func ate(jelly: Int, _ c: Consumable, pieces: Int) {
+        if pieces > 0 { bondAte(slot: jelly, c) }          // (the relationship: once per serving per diner; both the single and the group meal come through here, stored food or not)
         guard pieces > 0, c.stored, let prof = self.jelly(jelly) else { return }
         if !servingCharged, let id = c.storeID {
             servingCharged = true; store.use(id)

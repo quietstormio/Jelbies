@@ -146,7 +146,12 @@ final class BlobBrain {
     }
     enum After { case none, faceCamera, wave, face(SIMD2<Float>), eat(SIMD2<Float>, Bool), doEat(SIMD2<Float>, Bool), dineTurn(DiningPlace), dineGo }
 
-    var script: Script = .none
+    var script: Script = .none {
+        didSet { if board != nil, case .walk = script { publishToBoard(pos: position) } }          // (the walk-board: a walk that begins is on the board at once; nothing reads it, WalkBoard.swift)
+    }
+    /// The stage's walk board (one per stage, injected beside `peers`; nil = none) and the brain's reusable intent for it.
+    var board: WalkBoard?
+    var boardIntent = WalkIntent()
     /// Jelly Circuit race state (BlobBrain+Race.swift).
     var race = RaceDrive()
     /// Jelly Volleyball (Volley/BlobBrain+Volley.swift).
@@ -190,6 +195,8 @@ final class BlobBrain {
     var homeRoom = false
     /// Where emotes happen (EmoteSpot.swift): a solo emote waiting for its walk to the spot, and the walk time of the emote that just started.
     var emoteSpot = EmoteSpotState()
+    /// move-mix-r1 (Melon/MoveMix.swift): what the last pick was, the no-social wait, a stroll that is due.
+    var mix = MixBook()
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
     /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
@@ -929,16 +936,18 @@ final class BlobBrain {
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         if !emoteSpotLive || reserved { emoteSpot.soloKind = nil; emoteMeetEnd(); socialBook.meetHeldBy = -1 }          // (EmoteSpot.swift: a meal, a bath or the park drops what was waiting for a spot)
-        if emoteSoloArrived(sim) { return }          // (EmoteSpot.swift: he has walked to the spot of a solo emote)
+        if emoteSoloArrived(sim) { mixNoteIdle(); return }          // (EmoteSpot.swift: he has walked to the spot of a solo emote)
         if meetBusy { restTimer = 0.25; return }          // (EmoteSpot.swift: a pair is meeting on its spots)
         var pt = CACurrentMediaTime()
         if slideFootRetry() { return }          // (park-slide-r4: he stands on the slide's foot waiting for his leg to clear)
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
         if footKeep { Self.slideFootTurnAways += 1 }
         if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { slideFootWalkTo = out; request(.goTo(out)); restTimer = 0.3; return }
-        if !footKeep, socialMaybeStart(sim) { return }
+        if !footKeep, mixStrollDue(sim) { return }          // (MoveMix.swift: a walk away after a pair / group emote)
+        let mixLeg = !footKeep && mixWantsLeg()          // (MoveMix.swift: this pick is a leg, no special: after an in-place pick, after a solo emote, or from under a HUD button; a pair roll still comes first)
+        if !footKeep, socialMaybeStart(sim) { mix.last = .social; return }
         HopDiag.lap(.tkPickSocial, &pt)
-        if !footKeep, idleMaybeStart(sim) { return }
+        if !footKeep, !mixLeg, idleMaybeStart(sim) { mixNoteIdle(); return }
         HopDiag.lap(.tkPickIdle, &pt)
         defer { HopDiag.lap(.tkPickWander, &pt) }
         var w: [(Int, Float)] = [(0, 7.5), (1, 1.2), (2, 0.8)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
@@ -950,7 +959,8 @@ final class BlobBrain {
         var r = rand() * total
         var choice = w[0].0
         for (k, wt) in w { if r < wt { choice = k; break }; r -= wt }
-        if footKeep { choice = 0 }
+        if footKeep || mixLeg { choice = 0 }
+        if MoveMix.on { mix.last = choice == 0 ? .leg : (choice == 1 || choice == 2 ? .inPlace : .solo) }
         lastPick = choice
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         switch choice {
@@ -1024,14 +1034,19 @@ final class BlobBrain {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRoamGoal", probe) }
         var maxL = idleLegMax(maxWanderLeg)
         if EmoteSpot.enabled, homeRoom { maxL = max(maxL, EmoteSpot.roamLegMin) }          // (EmoteSpot.swift: a grumpy walk may still cross to a spot the room has used little: the whole room)
-        let lo: Float = zone != nil ? 2.5 : 1.5
-        guard maxL > lo else { return nil }
+        var lo: Float = zone != nil ? 2.5 : 1.5
+        if MoveMix.on { lo = max(lo, MoveMix.legMin) }          // (MoveMix.swift: roam legs of at least 2.5 u when the floor allows; the retry below drops to the old minimum)
+        guard maxL > min(lo, zone != nil ? 2.5 : 1.5) else { return nil }
+        let rfStop: GameCamera.RoamFloor? = MoveMix.on ? rf : nil
         let others = socialOthers().filter { $0 !== self }
         let live = RoomTraffic.goalAware && roomTraffic          // (the 11-15 room round, T6: RoomRoam+Traffic.swift; read once)
         let loneBack = others.isEmpty && roomLoneBack          // (the 11-15 room round, T8: one alone picks fewer goals in the far back; RoomRoam+Traffic.swift; read once)
         let centreBias = min(1, centreDwell / IdleTuning.centreDwellFull)
         var best: (SIMD2<Float>, Float)?
         var valid = 0
+        let mixTries = MoveMix.on ? 2 : 1
+        for attempt in 0..<mixTries {
+        if attempt == 1 { if best != nil { break }; lo = zone != nil ? 2.5 : 1.5; guard maxL > lo else { break }; valid = 0 }
         for _ in 0..<48 {
             if pickOver { break }
             let raw = zone.map { rf.sampleZone($0, rand(), rand(), rand()) } ?? rf.sampleArea(rand(), rand(), rand())
@@ -1054,10 +1069,16 @@ final class BlobBrain {
             }
             var score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
             if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) - EmoteSpot.roamCellWeight * EmoteSpot.roamOver(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
-            if live { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
+            if MoveMix.on, !(rfStop?.stopOK(cand) ?? true) { score -= MoveMix.underButtonPenalty }          // (a goal under a HUD button is a pass-through spot: allowed, less liked; nothing starts there)
+            if live || MoveMix.on { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
+            if MoveMix.on, let b = board {          // (MoveMix.swift: stale floor is the main term; a spot another body has claimed is out)
+                if b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
+                score += MoveMix.idleWeight * b.idleness(at: cand, now: b.now) / WalkBoard.idleCap
+            }
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
-            if valid >= 6 { break }
+            if valid >= (MoveMix.on ? MoveMix.roamCandidates : 6) { break }
+        }
         }
         if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
@@ -1598,6 +1619,7 @@ final class BlobBrain {
                 let pF = PerfProbe.begin(); let fl = flourishMaybe(sim, skinner, target: target); PerfProbe.end("rs.flourishMaybe", pF)
                 if fl { return }          // (between two steps: a skip, a hop, a spin, a look; the walk resumes after)
                 let pS = PerfProbe.begin(); let effOpt = steerTarget(to: target); PerfProbe.end("rs.steerTarget", pS)
+                if board != nil { publishToBoard(pos: position) }          // (the walk-board: once per step, after the route is settled; nothing reads it)
                 guard let eff = effOpt else {
                     steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
                     if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; MoveLog.note(.pinned); step(after: .none, sim, giveUp: true); restTimer = 0.25 }

@@ -167,8 +167,9 @@ extension GameCare {
         park.cancelPicker()
         let go = { [weak self] in
             guard let self else { return }
-            if self.outingGate(who, again: { [weak self] in self?.park.resume(picked: who) }) { return }
-            self.park.resume(picked: who)
+            let resume = { [weak self] in guard let self else { return }; self.park.resume(picked: who); for s in who { self.bondEarn(.park, slot: s) } }          // (the relationship: a park visit, for each who goes)
+            if self.outingGate(who, again: resume) { return }
+            resume()
         }
         if wakeForTrip(who, then: go) { return }          // by day a sleeper never refuses the trip: the short wake, then everybody runs out together (GameCare+Outing.swift)
         go()
@@ -257,7 +258,7 @@ extension GameCare {
         }
         work.saveT += dt
         if work.saveT >= ParkTuning.saveEvery { work.saveT = 0; book.save() }
-        if park.phase == .playing, isBedtimeHours { park.homeLine = "It got late, so everyone came home to rest."; park.goHome() }          // (the old "Time to go home!" line was up for 0.4 s at the park, then showed at home after the wipe: say what happened once they ARE home)
+        if park.phase == .playing, isBedtimeHours { park.homeLine = "It's getting late, let's head home."; park.goHome() }          // (the old "Time to go home!" line was up for 0.4 s at the park, then showed at home after the wipe: say what happened once they ARE home)
     }
 
     /// The visitors: their mood, their signature and worn item (the same wardrobe / feature sets the Jelbies use, keyed by their body id).

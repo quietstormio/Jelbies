@@ -184,14 +184,14 @@ final class LockLookRenderTests: XCTestCase {
 
     func testRectangularLineAndHomeHeadline() {
         let fine = states("r3", "fine")
-        XCTAssertEqual(JellyStatus.rectangularLine(fine, sleeping: false), "All 3 are happy")
-        XCTAssertEqual(JellyStatus.rectangularLine(fine, sleeping: true), "Everyone is napping")
+        XCTAssertEqual(JellyStatus.rectangularLine(fine, sleeping: false, night: false), "All 3 are happy")
+        XCTAssertEqual(JellyStatus.rectangularLine(fine, sleeping: true, night: false), "Everyone is napping")
         let needy = states("r3", "needyQ")          // Pearl thirsty
-        XCTAssertTrue(JellyStatus.rectangularLine(needy, sleeping: false).hasPrefix("Pearl\u{00A0}is\u{00A0}thirsty"), JellyStatus.rectangularLine(needy, sleeping: false))
-        XCTAssertEqual(JellyStatus.line(fine, sleeping: false), "Eliza is happy · Pearl happy · Bao happy", "the existing line is unchanged")
-        XCTAssertEqual(JellyStatus.headline(fine[0], sleeping: true), "Eliza is napping")
-        XCTAssertEqual(JellyStatus.headline(needy[1], sleeping: true), needy[1].headline, "a needy Jelmiko still shows its need")
-        XCTAssertEqual(JellyStatus.headline(fine[0], sleeping: false), fine[0].headline)
+        XCTAssertTrue(JellyStatus.rectangularLine(needy, sleeping: false, night: false).hasPrefix("Pearl\u{00A0}is\u{00A0}thirsty"), JellyStatus.rectangularLine(needy, sleeping: false, night: false))
+        XCTAssertEqual(JellyStatus.line(fine, sleeping: false, night: false), "Eliza is happy · Pearl happy · Bao happy", "the existing line is unchanged")
+        XCTAssertEqual(JellyStatus.headline(fine[0], sleeping: true, night: false), "Eliza is napping")
+        XCTAssertEqual(JellyStatus.headline(needy[1], sleeping: true, night: false), needy[1].headline, "a needy Jelmiko still shows its need")
+        XCTAssertEqual(JellyStatus.headline(fine[0], sleeping: false, night: false), fine[0].headline)
     }
 
     func testWakeCardKeepsColours() throws {

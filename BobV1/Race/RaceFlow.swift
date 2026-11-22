@@ -31,6 +31,8 @@ final class RaceFlow {
     /// Ribbons and trophies per Jelbie (Trophies/TrophyBook.swift), saved outside tests; `playerCharacter` is the racing Jelbie's character id (set by the glue).
     var trophies = TrophyBook(persists: ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil)
     var playerCharacter = 0
+    /// The relationship hook: (character, won) when a finished race is settled.
+    var onBond: ((Int, Bool) -> Void)?
     /// What the finished race earned him (the results card says "New ribbon!" / "Trophy!").
     private(set) var awards = TrophyAwards()
     /// The course of the race under way (the chosen one when none is).
@@ -355,6 +357,7 @@ final class RaceFlow {
         if s.playerFinished, let place = s.playerPlace {
             wallet?.add(earned)
             stats?.afterRace(place: place)
+            onBond?(playerCharacter, place == 1)          // (the relationship, GameCare+Bond.swift)
             if let up = upgrades {          // Upgrade points by place (once: `settled` guards the whole block)
                 pointsEarned = UpgradeTuning.racePoints(place: place)
                 up.add(pointsEarned, .race, character: playerCharacter)

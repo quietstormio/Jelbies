@@ -94,32 +94,32 @@ final class SiriStatusTests: XCTestCase {
     // MARK: collapsed spoken
 
     func testSpokenCollapsesWhenEveryoneIsFineAndAwake() {
-        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon")], sleeping: false), "Lemon is happy.", "one Jelmiko keeps its sentence")
-        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon"), s(1, "Pip")], sleeping: false), "Lemon and Pip are both happy.")
-        XCTAssertEqual(JellyStatus.spoken([s(0, "A"), s(1, "B"), s(2, "C")], sleeping: false), "All three are happy.")
+        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon")], sleeping: false, night: false), "Lemon is happy.", "one Jelmiko keeps its sentence")
+        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon"), s(1, "Pip")], sleeping: false, night: false), "Lemon and Pip are both happy.")
+        XCTAssertEqual(JellyStatus.spoken([s(0, "A"), s(1, "B"), s(2, "C")], sleeping: false, night: false), "All three are happy.")
         // okay mood (not happy): "doing fine"
         let ok: [Float] = [0.55, 0.55, 0.55]
         XCTAssertEqual(AwayMath.mood(of: ok), .okay)
-        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon", ok), s(1, "Pip", ok)], sleeping: false), "Lemon and Pip are both doing fine.")
-        XCTAssertEqual(JellyStatus.spoken([s(0, "A", ok), s(1, "B", ok), s(2, "C", ok)], sleeping: false), "All three are doing fine.")
+        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon", ok), s(1, "Pip", ok)], sleeping: false, night: false), "Lemon and Pip are both doing fine.")
+        XCTAssertEqual(JellyStatus.spoken([s(0, "A", ok), s(1, "B", ok), s(2, "C", ok)], sleeping: false, night: false), "All three are doing fine.")
     }
 
     func testSpokenDoesNotCollapseWhenSomeoneNeedsCareOrSleeps() {
-        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon", [0.3, 1, 1]), s(1, "Pip")], sleeping: false),
+        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon", [0.3, 1, 1]), s(1, "Pip")], sleeping: false, night: false),
                        "Lemon is a little hungry. Pip is happy.")
-        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon"), s(1, "Pip")], sleeping: true), "Lemon is napping. Pip is napping.")
-        XCTAssertEqual(JellyStatus.spoken([], sleeping: false), none)
+        XCTAssertEqual(JellyStatus.spoken([s(0, "Lemon"), s(1, "Pip")], sleeping: true, night: false), "Lemon is napping. Pip is napping.")
+        XCTAssertEqual(JellyStatus.spoken([], sleeping: false, night: false), none)
     }
 
     func testSpokenThreeWithFamishedAndThirsty() {
-        let text = JellyStatus.spoken([s(0, "Lemon", [0.1, 1, 1]), s(1, "Pip", [1, 0.3, 1]), s(2, "Moss")], sleeping: false)
+        let text = JellyStatus.spoken([s(0, "Lemon", [0.1, 1, 1]), s(1, "Pip", [1, 0.3, 1]), s(2, "Moss")], sleeping: false, night: false)
         XCTAssertEqual(text, "Lemon is grumpy: famished. Pip is a little thirsty. Moss is happy.")
     }
 
     func testWidgetStringsUnchanged() {
         let a = s(0, "Lemon", [0.3, 1, 1])
-        XCTAssertEqual(JellyStatus.word(a, sleeping: false), "hungry")
-        XCTAssertEqual(JellyStatus.line([a, s(1, "Pip")], sleeping: false), "Lemon is hungry · Pip happy")
+        XCTAssertEqual(JellyStatus.word(a, sleeping: false, night: false), "hungry")
+        XCTAssertEqual(JellyStatus.line([a, s(1, "Pip")], sleeping: false, night: false), "Lemon is hungry · Pip happy")
         XCTAssertEqual(a.headline, "Lemon is hungry!")
     }
 

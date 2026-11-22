@@ -402,6 +402,8 @@ final class MelonController: NSObject, MTKViewDelegate {
     static let jellyGap: Float = 1.4
     /// Positions of every Jelly at the start of the fixed step (the others steer by last step's positions, so the order they tick in does not matter).
     var peerSnapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
+    /// The walk board (move-board-r1): every brain publishes its movement intent here; nothing reads it yet. One per stage, handed to each brain in `wireRoster`.
+    let walkBoard = WalkBoard()
     /// When each Jelbie last got a social heart (`socialHeart`).
     var socialHeartAt: [Int: Double] = [:]
 
@@ -422,6 +424,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         b.feature = JellyRoster.feature(slot: id)
         guard actors.count > 1 || !parkActors.isEmpty else { return }
         b.steerID = id
+        b.board = walkBoard
         b.bus = eventBus
         b.peerGap = Self.jellyGap
         if id < actors.count { model.care.voice.ai.register(b, id: id) }            // AI hub: his naps / socials for the diary, and "go to sleep" for him
@@ -631,6 +634,19 @@ final class MelonController: NSObject, MTKViewDelegate {
         for i in 0..<actors.count { peerSnapshot[i] = (pos: actors[i].floor, walking: actors[i].isWalking) }          // in place: no array per step
     }
 
+    /// The walk board's regular publish (move-board-r1): after the peer snapshot, every body on the stage (the roster less the ones who stayed home while the park is on, and the visitors).
+    private func publishWalkBoard() {
+        guard WalkBoard.publishOn, actors.count > 1 || !parkActors.isEmpty else { return }
+        walkBoard.advance(dt: sim.stepDt)
+        let n = actors.count + parkActors.count
+        guard peerSnapshot.count == n else { return }
+        for i in 0..<n {
+            let a = i < actors.count ? actors[i] : parkActors[i - actors.count]
+            guard let b = a.brain, b.board === walkBoard, peerSnapshot[i].pos.x < 800 else { walkBoard.remove(i < actors.count ? actors[i].id : parkActors[i - actors.count].id); continue }
+            walkBoard.tickBody(b, pos: peerSnapshot[i].pos)
+        }
+    }
+
     /// Called once before each fixed sim step.
     private func hopTick(reduce: Bool) {
         // the one-time foot set-up of each brain, one brain per step, before it has to walk (see BlobBrain.warmFeet)
@@ -638,6 +654,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         BlobBrain.stepProbeBudget = BlobBrain.probesPerStep          // all the brains' route searches together stay within this many floor probes per fixed step
         var lt = CACurrentMediaTime()
         publishPeers()
+        publishWalkBoard()
         lapEnd(.peers, &lt)
         let racing = game && model.care.tripActive
         if actors.count > 1, !racing {
@@ -2127,7 +2144,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 scr = SIMD2(Float(l.point.x / l.size.width), Float(l.point.y / l.size.height))
             }
             return PetLanes.Body(sim: actors[l.jelly].sim, brain: br, skinner: actors[l.jelly].skinner, mood: n.mood, attentionWanted: n.wantedNeed == .attention, ray: ray, screen: scr)
-        }, credit: { id, amount in care.needs(for: id).gain(.attention, amount) },
+        }, credit: { id, amount in care.needs(for: id).gain(.attention, amount); let n = care.needs(for: id); if n.mood != .grumpy || n.wantedNeed == .attention { care.bondTouch(slot: id, seconds: amount / NeedsTuning.petRate) } },
         heart: { id, born in care.bubbleHub.spawnHeart(for: id, now: born) })
         var heads: [Int: SIMD3<Float>] = [:]
         for id in lanes.lanes.keys where id < actors.count { let c = actors[id].sim.centroid(); heads[id] = SIMD3(c.x, c.y + BlobShape.H * 0.5, c.z) }

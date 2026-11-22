@@ -479,7 +479,7 @@ final class StartFlow {
 
     /// A newcomer starts fresh: whatever a preview (the Adoption Center's stage) saved under his keys goes.
     static func resetCharacterState(_ c: Int, _ d: UserDefaults = .standard) {
-        for k in [JellyKeys.needs(c), JellyKeys.grime(c), JellyKeys.words(c), JellyKeys.stats(c), JellyKeys.perks(c)] { d.removeObject(forKey: k) }
+        for k in [JellyKeys.needs(c), JellyKeys.grime(c), JellyKeys.words(c), JellyKeys.stats(c), JellyKeys.perks(c), JellyKeys.bond(c)] { d.removeObject(forKey: k) }
         BestHug.purge(c, d)          // (the hug's "best friends" reveal has not been shown to a newcomer)
         let stats = JellyKeys.stats(c)          // the stats' condition, meal diary and dances live under suffixed keys: a newcomer starts without them too
         for s in [".cond", ".meals", ".dances"] { d.removeObject(forKey: stats + s) }          // (JellyTraits.v1 stays: the seed comes from it when his profile is first built)

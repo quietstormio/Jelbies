@@ -50,6 +50,8 @@ enum JellyKeys {
     static func words(_ id: Int) -> String { suffixed(VoiceTuning.defaultsKey, id) }
     static func stats(_ id: Int) -> String { suffixed(StatTuning.defaultsKey, id) }
     static func perks(_ id: Int) -> String { suffixed(PerkTuning.defaultsKey, id) }
+    /// The relationship points (Jelly/JellyBond.swift).
+    static func bond(_ id: Int) -> String { JellyBond.key(id) }
     private static func suffixed(_ legacy: String, _ id: Int) -> String { id == 0 ? legacy : "\(legacy).jelly\(id)" }
 }
 

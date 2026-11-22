@@ -485,7 +485,7 @@ extension GameCare {
         case .focused:
             if id == g.touchID, let tp = touchPlay {                 // petting Pip fills Pip's attention (Bob's goes through tickNeeds)
                 let petting = tp.contact && tp.speed > TouchPlay.strokeSpeed * 0.5
-                if petting || tp.isPurring { g.petOwed += dt * (tp.isPurring ? NeedsTuning.purrRate : NeedsTuning.petRate) }
+                if petting || tp.isPurring { g.petOwed += dt * (tp.isPurring ? NeedsTuning.purrRate : NeedsTuning.petRate); if !tp.annoyed { bondTouch(slot: id, seconds: dt) } }
             }
             g.petClock += dt
             if g.petClock >= 0.5 {
