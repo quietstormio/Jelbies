@@ -701,7 +701,7 @@ struct GameScreen: View {
         // capture aid: -FocusGroupDemo 1 calls everyone (the pair / trio close-up) after 4 s and stays there
         if d.integer(forKey: "FocusGroupDemo") > 0 {
             await sleep(4)
-            care.comeHereEveryone()
+            if care.jellies.count > 1 { care.comeHereEveryone() } else { care.call() }          // (one Jelmiko: the single close-up)
             for _ in 0..<1200 where !care.focus.isFocused { await sleep(0.1) }
             NSLog("[hudfix] group focused: %@", String(describing: care.focus.phase))
         }
