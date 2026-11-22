@@ -65,8 +65,18 @@ extension BlobBrain {
                 socialBook.hopStarted = true
                 let from = o.position
                 var u = ball - from; let L = simd_length(u); u = L > 1e-3 ? u / L : SIMD2(0, 1)
-                let spot = fixed(ball + u * 0.95)
-                if simd_distance(spot, ball + u * 0.95) > 0.1 { s.finish(.aborted); return }
+                var spot = fixed(ball + u * 0.95)
+                if simd_distance(spot, ball + u * 0.95) > 0.1 {
+                    var found = false
+                    if MoveMix.on {          // (MoveMix round 3: the spot straight behind the ball is a wall / a piece: come at it from a little to the side, the kick still goes at the friend)
+                        for a in [Float(0.4), -0.4, 0.8, -0.8, 1.2, -1.2] {
+                            let uu = SIMD2(u.x * cosf(a) - u.y * sinf(a), u.x * sinf(a) + u.y * cosf(a))
+                            let sp = fixed(ball + uu * 0.95)
+                            if simd_distance(sp, ball + uu * 0.95) <= 0.1, peerFree(sp) { spot = sp; found = true; break }
+                        }
+                    }
+                    if !found { s.finish(.aborted); return }
+                }
                 socialBook.hold = false
                 if simd_distance(position, spot) > 0.15 { socialWalk(to: spot, sim) }
             }
