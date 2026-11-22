@@ -381,10 +381,10 @@ extension BlobBrain {
         let passWanted = rand() < MoveMix.passChance || mix.soccerPassTries > 0
         if passWanted, !ballOff, !mixBallSpotBad(c) {
             var why = "quiet"
-            if !mixQuiet {
+            do {          // (round 3b: a ball pass is the owner's own ask: it does not wait out the quiet period or the same-pair cooldown of the pair emotes)
                 let cands = others.filter { o in
                     let d = simd_distance(o.position, position)
-                    return (o.socialFree || o.socialWandering) && !o.mixQuiet && (socialBook.pair[o.steerID] ?? 0) <= 0 && (o.socialBook.pair[steerID] ?? 0) <= 0 && d > 1.6 && d < 9 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 7.5
+                    return (o.socialFree || o.socialWandering) && d > 1.6 && d < 9 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 7.5
                 }
                 why = cands.isEmpty ? "nobody" : "plan"
                 if !cands.isEmpty {
