@@ -131,7 +131,7 @@ final class StoryModelTests: XCTestCase {
         for _ in 0..<40 where d.string(forKey: key) != nil { try await Task.sleep(nanoseconds: 100_000_000) }
         XCTAssertNil(d.string(forKey: key), "cleared once the call really returned"); XCTAssertEqual(StoryModelSentinel.outstanding(d), 0)
         XCTAssertNil(StoryModelSentinel.launchCheck(d))
-        let after = await w.about(facts: facts()); XCTAssertNotNil(after, "the next call is allowed")
+        let after = await writer(FakeClient(), defaults: d).about(facts: facts()); XCTAssertNotNil(after, "the next call is allowed")
         // a watchdog kill while a timed-out call is out is caught at the next launch
         d = suite(); w = writer(FakeClient(delay: 900_000_000, stubborn: true), timeout: 0.2, defaults: d)
         _ = await w.friendship(facts: facts(), with: facts().housemates[0])
