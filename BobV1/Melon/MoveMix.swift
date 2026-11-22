@@ -369,10 +369,10 @@ extension BlobBrain {
         if EmoteSpot.logOn, variety.now - mix.soccerLogAt > 10, let sb = DecorField.shared.feet.first(where: { $0.kind == .soccerball }) {          // (round 3 diagnosis: why a ball moment does not start)
             mix.soccerLogAt = variety.now
             let f = DecorField.shared
-            NSLog("[soccerurge] t=%.1f id=%d ball=(%.2f,%.2f) moving=%d occupant=%d wired=%d held=%d due=%d mood=%d res=%d soc=%d idle=%d hold=%d", variety.now, steerID, f.position(sb).x, f.position(sb).y, f.anim[sb.uid]?.moving == true ? 1 : 0, f.occupant[sb.uid] ?? -1, DecorKind.wired.contains(sb.kind) ? 1 : 0, sb.uid == f.held ? 1 : 0, SoccerState.shared.clock >= MoveMix.soccerNextAt ? 1 : 0, idleMood == .grumpy ? 1 : 0, reserved ? 1 : 0, social == nil ? 0 : 1, idleState.kind == nil ? 0 : 1, socialBook.hold ? 1 : 0)
+            NSLog("[soccerurge] t=%.1f id=%d ball=(%.2f,%.2f) moving=%d occupant=%d wired=%d held=%d due=%d mood=%d res=%d soc=%d idle=%d hold=%d", variety.now, steerID, f.position(sb).x, f.position(sb).y, f.anim[sb.uid]?.moving == true ? 1 : 0, f.occupant[sb.uid] ?? -1, DecorKind.wired.contains(sb.kind) ? 1 : 0, sb.uid == f.held ? 1 : 0, variety.now >= MoveMix.soccerNextAt ? 1 : 0, idleMood == .grumpy ? 1 : 0, reserved ? 1 : 0, social == nil ? 0 : 1, idleState.kind == nil ? 0 : 1, socialBook.hold ? 1 : 0)
         }
         guard MoveMix.on, anticsEnabled, idleMood != .grumpy, !mixSleepy, !reserved, social == nil, idleState.kind == nil, !socialBook.hold, let ball = mixFreeSoccer() else { return false }
-        let clock = SoccerState.shared.clock
+        let clock = variety.now          // (round 3b: game time of the brain; the field clock runs slowly while nothing rolls)
         guard clock >= MoveMix.soccerNextAt else { return false }
         let c = DecorField.shared.position(ball)
         let others = socialOthers().filter { $0 !== self }
