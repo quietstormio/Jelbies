@@ -106,7 +106,7 @@ final class AvoidanceTests: XCTestCase {
             GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 440 / 956)
             _ = GameCamera.refreshRoam(aspect: 440 / 956)
             RoomLayout.dynamicBoxes = []
-            DecorField.shared.clear(); SoccerState.shared.reset(); SoccerEvents.clear()
+            DecorField.shared.clear(); SoccerState.shared.reset(); SoccerEvents.clear(); MoveMix.soccerNextAt = 0
             var placed = [PlacedDecor(uid: 7, kind: .soccerball, x: -1.2, z: 1.4)]
             if withGoal { placed.append(PlacedDecor(uid: 8, kind: .minigoal, x: 0, z: -1.6)) }
             DecorField.shared.set(placed)
