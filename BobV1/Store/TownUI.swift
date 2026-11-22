@@ -123,6 +123,7 @@ struct TownFlow: View {
         }
         .transition(.opacity)
         .accessibilityAddTraits(.isModal)          // VoiceOver stays inside the Town: the HUD and the Jelbies behind it are not reachable
+        .showWardrobeGuard(care: care, screen: screen, who: who)          // show-wardrobe-r1: Dress up is a show outfit; the everyday one comes back on every way out
         .onAppear { HeadPortraitCache.shared.prewarm(care: care) }          // the stage is paused behind the Town: draw every lobby picture now (one at a time, see prewarm)
         .onDisappear { HeadPortraitCache.shared.cancelPrewarm() }
         .simultaneousGesture(TapGesture().onEnded { HeadPortraitCache.shared.cancelPrewarm() })          // a tap: the player is busy, no more hitches from the warm-up
@@ -978,4 +979,27 @@ struct SlotChips: View {
         }
         .buttonStyle(.plain).accessibilityIdentifier("\(idPrefix)\(id)").accessibilityAddTraits(on ? .isSelected : [])
     }
+}
+
+/// show-wardrobe-r1: the Jelly Show lobby's wardrobe rule. Opening the Studio (or picking another Jelmiko in it) remembers the everyday outfit before Dress up can change it;
+/// leaving the Studio for anywhere but the Show-ready card (its Profile), picking someone else, or closing the Town gives it back. Enter Jelly Show keeps it until he is home.
+private struct ShowWardrobeGuard: ViewModifier {
+    let care: GameCare
+    let screen: TownScreen?
+    let who: Int
+    func body(content: Content) -> some View {
+        content
+            .onAppear { if screen == .studio { care.showWardrobeReady(who) } }
+            .onChange(of: screen) { _, now in
+                if now == .studio { care.showWardrobeReady(who) } else if now != .condition { care.showWardrobeLeaveLobby() }
+            }
+            .onChange(of: who) { _, now in
+                care.showWardrobeLeaveLobby()
+                if screen == .studio { care.showWardrobeReady(now) }
+            }
+            .onDisappear { care.showWardrobeLeaveLobby() }
+    }
+}
+extension View {
+    func showWardrobeGuard(care: GameCare, screen: TownScreen?, who: Int) -> some View { modifier(ShowWardrobeGuard(care: care, screen: screen, who: who)) }
 }
