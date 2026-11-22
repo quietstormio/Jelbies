@@ -5,8 +5,8 @@
 //
 //  ALL the Jelbies of the room come along. At the café nobody roams and the room's decor is away. The player picks a treat for each (Drops are charged once, at Order);
 //  the usual group dining runs: each walks to his place and tosses his treat into his mouth, piece by piece (never an arm to the mouth). Café treats are never refused,
-//  fill hunger, nudge condition, start the treat's perk (a longer one than the store's) and a whole outing is love (attention). Then a cheer and "Head home".
-//  Persisted: nothing new. Only Drops (DropsWallet), perks (JellyPerks), needs (BlobNeeds) and condition (JellyStats) change, in their own stores.
+//  food fills hunger and a drink thirst (the home amount per piece), nudge condition, start the treat's perk (a longer one than the store's) and a whole outing is love (attention). Then a cheer and "Head home".
+//  The outing costs nothing: hunger and thirst stand still from leaving until home (BlobNeeds.holdBodyNeeds) and no trip-clock time step is applied for it. Persisted: nothing new. Only Drops (DropsWallet), perks (JellyPerks), needs (BlobNeeds) and condition (JellyStats) change, in their own stores.
 //
 
 import Foundation
@@ -32,6 +32,9 @@ final class CafeBook {
     var ate: [Int: Int] = [:]
     /// What the order cost.
     var charged = 0
+    /// Hunger / thirst at the moment the outing began, by Jelmiko: nobody comes home with less (the floor at the home swap).
+    var needsAtLeave: [Int: [Float]] = [:]
+    var needsAtLeaveAt = Date.distantPast
     /// Seconds until each Jelbie's arrival hop / cheer (by actor id).
     var hopIn: [Int: Float] = [:]
     var cheerIn: [Int: Float] = [:]
@@ -76,6 +79,8 @@ final class CafeBook {
     /// cafe-straw-r1: the yaw an END place faces (toward the other end); the middle one (and a table of one or two) is not in it and faces the room.
     var chatYaw: [Int: Float] = [:]
     var turnCool: [Int: Float] = [:]
+    /// cafe-talk-r1: the player's table's conversation (CafeChat.swift), fresh at the start of the lounge.
+    var chat = CafeChatState()
     nonisolated deinit {}
 }
 
@@ -118,6 +123,11 @@ extension GameCare {
             AudioHub.shared.play(.notEnough)
             return
         }
+        // the levels at the first tap (the wake and the run out below come first and cost nothing either); the retry after them keeps the first snapshot (within 60 s)
+        if Date().timeIntervalSince(cafeBook.needsAtLeaveAt) > 60 || cafeBook.needsAtLeave.isEmpty {
+            cafeBook.needsAtLeaveAt = Date()
+            for j in jellies { cafeBook.needsAtLeave[j.id] = [j.needs.level(.hunger), j.needs.level(.thirst)] }
+        }
         select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         if wakeForTrip(Array(jellies.indices), then: { [weak self] in self?.requestCafe() }) { return }          // (a sleeper gets the short wake first, then everybody runs out together)
@@ -146,6 +156,7 @@ extension GameCare {
         #if targetEnvironment(simulator)
         tripArriveTick("cafe", actors, dt: dt)          // (park-arrive-r2 capture aid: Park/ParkSlideProbe.swift)
         #endif
+        for a in actors { jelly(a.id)?.needs.holdBodyNeeds = cafe.active }          // (the outing costs nothing: hunger and thirst stand still until home)
         if cafe.active { for a in actors { a.brain?.sleepLocked = true } }
         cafe.step(dt: dt, blocked: cafe.phase == .goOut && cafeFadeBlocked)
         guard cafe.active else { return }
@@ -274,7 +285,12 @@ extension GameCare {
                 brain.idleBlocked = false
                 brain.restTimer = 2
             }
-            tripReturned(Array(book.homes.keys))
+            for id in book.homes.keys {
+                guard let n = jelly(id)?.needs else { continue }
+                n.holdBodyNeeds = false
+                if let was = book.needsAtLeave[id] { n.gain(.hunger, max(0, was[0] - n.level(.hunger))); n.gain(.thirst, max(0, was[1] - n.level(.thirst))) }          // (a floor: never lower than when he left)
+            }
+            book.needsAtLeave = [:]          // (no trip-clock time skip for the café: the outing costs nothing; the Park and the Spa keep theirs)
             book.homes = [:]; book.autonomy = [:]; book.arena = [:]; book.hopIn = [:]; book.cheerIn = [:]; book.zoomT = [:]; book.zoomOver = [:]; book.zoomed = []; cafe.holdCheer = false; book.hooks = nil; book.plate = nil; book.ate = [:]; book.charged = 0
         }
     }
@@ -317,7 +333,7 @@ extension GameCare {
                 guard let self else { return }
                 let t = o.treat(for: id)
                 let drink = t.map { CafeMenu.treat($0).category == .drink } ?? false
-                self.needs(for: id).gain(.hunger, Float(k) * (drink ? CafeRules.drinkFillPerPiece : MealAppetite.gainPerPiece))
+                self.needs(for: id).gain(drink ? .thirst : .hunger, Float(k) * MealAppetite.gainPerPiece)          // (the same amount per piece as at home: food fills hunger, a drink thirst)
                 if let t { self.cafeAte(jelly: id, treat: t, pieces: k) }
             },
             seated: { ids, placeOf in
@@ -348,7 +364,8 @@ extension GameCare {
         if first {
             bondEarn(.meal, slot: id)          // (the relationship: a café treat is a meal, once per treat)
             let fresh = !prof.perks.isActive(t.perk)
-            prof.perks.grant(t.perk, duration: t.perk.raceOnly ? nil : t.perk.duration * CafeTuning.perkDurationMul)
+            let dur = t.perk.raceOnly ? t.perk.duration : t.perk.duration * CafeTuning.perkDurationMul
+            prof.perks.grant(t.perk, duration: max(dur, prof.perks.remaining(t.perk)))          // (never cuts a longer one short, as at home)
             if fresh { AudioHub.shared.play(.perkSparkle, volume: 0.9) }
             if t.perk == .zoomies { zoomiesDue.insert(id) }
             // (no café burst: they stay at their tables to sip and chat; the .zoomies perk brings the run once home)

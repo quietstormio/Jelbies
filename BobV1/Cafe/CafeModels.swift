@@ -10,7 +10,7 @@ import Observation
 
 nonisolated enum CafeTreatID: String, CaseIterable, Codable, Sendable { case swirl, fizzmac, pancakes, sundae, jellycup, latte, cocoa, juice }
 
-/// Food fills hunger (and is only for the hungry); a drink never does (a tiny bit at most) and anybody can order one.
+/// Food fills hunger (and is only for the hungry); a drink fills thirst (as at home) and anybody can order one.
 nonisolated enum CafeCategory: String, Sendable { case food, drink }
 
 nonisolated struct CafeTreat: Sendable, Identifiable {
@@ -58,8 +58,6 @@ nonisolated enum CafeMenu {
 nonisolated enum CafeRules {
     static func canEatFood(_ tier: NeedTier) -> Bool { tier != .full }
     static func canOrder(_ t: CafeTreatID, tier: NeedTier) -> Bool { CafeMenu.treat(t).category == .drink || canEatFood(tier) }
-    /// A drink fills hunger only a tiny bit per piece.
-    static let drinkFillPerPiece: Float = 0.01
 }
 
 /// The stamp card: 8 slots, one stamp per visit with an order; with a full card the next order is free and the card starts again.

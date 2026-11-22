@@ -859,6 +859,7 @@ struct GameScreen: View {
             await sleep(4)
             if let h = d.string(forKey: "CafeHunger") { for (i, w) in h.split(separator: ",").enumerated() where care.jellies.indices.contains(i) { care.needs(for: care.jellies[i].id).set(.hunger, w == "full" ? 0.95 : 0.2) } }
             if let n = d.string(forKey: "CafeStamps").flatMap(Int.init) { care.cafe.stamps.set(n) }
+            NSLog("[cafe-needs] before %@", care.jellies.map { String(format: "%d:h%.3f/t%.3f", $0.id, $0.needs.level(.hunger), $0.needs.level(.thirst)) }.joined(separator: " "))
             care.requestCafe()
             if let n = d.string(forKey: "CafeSkips").flatMap(Int.init) {          // capture aid: skip the café music n times and log each title (proof the playlist cycles)
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
@@ -871,6 +872,19 @@ struct GameScreen: View {
                 let ids = care.cafeDinerIDs
                 let menu: [CafeTreatID] = [.swirl, .cocoa, .pancakes]
                 care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, care.cafeCanEat($0.element) ? menu[$0.offset % 3] : .juice) })))
+            }
+            if m == "drinks" || m == "mixed" || m == "foodhome" {          // capture aid (cafe-needs-r1): drinks for all / mixed / food for all, then home from the lounge; the needs are logged as [cafe-needs]
+                let log = { (tag: String) in NSLog("[cafe-needs] %@ %@", tag, care.jellies.map { String(format: "%d:h%.3f/t%.3f", $0.id, $0.needs.level(.hunger), $0.needs.level(.thirst)) }.joined(separator: " ")) }
+                for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
+                await sleep(2)
+                care.bath.wallet.add(100, silent: true)
+                let menu: [CafeTreatID] = m == "drinks" ? [.juice, .latte, .cocoa] : m == "mixed" ? [.swirl, .latte, .pancakes] : [.swirl, .pancakes, .sundae]
+                care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: care.cafeDinerIDs.enumerated().map { ($0.element, menu[$0.offset % 3]) })))
+                for _ in 0..<1200 where care.cafe.phase != .lounge { await sleep(0.1) }
+                log("lounge")
+                care.cafe.goHome()
+                for _ in 0..<300 where care.cafe.phase != .off { await sleep(0.1) }
+                log("home")
             }
             if m == "order" || m == "refuse" || m == "latte" || m == "latte2" || m == "latte3" {
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
@@ -953,6 +967,10 @@ struct GameScreen: View {
                     for t in [Trophy.wins10, .wins25] where !sh.has(t) { sh.earned.append(t.id); sh.stamp("trophy.\(t.id)", Date()) }
                     care.race.trophies.setShelf(sh, character: c)
                     for t in VolleyTier.allCases { care.race.trophies.recordVolleyWin(character: t == .sandcastle || t == .shore ? (c == 1 ? 2 : 1) : c, tier: t) }          // (the first two courts were won by another Jelmiko, so a card by winner has more than one block)
+                }
+                if m.contains("trophypair") {          // capture aid: "trophypair": a Sandcastle volleyball win by the first Jelmiko with the second (a Park friend "Pebble" when there is only one); "trophylong" is a Shore win with a Park friend of a long name
+                    let a = care.jellies[0], b = care.jellies.count > 1 ? care.jellies[1] : nil
+                    care.race.trophies.recordVolleyWin(character: a.character, tier: m.contains("trophylong") ? .shore : .sandcastle, name: a.name, partner: m.contains("trophylong") ? (nil, "Marshmallow Crumblecake") : b.map { ($0.character, $0.name) } ?? (nil, "Pebble"))
                 }
                 if m.contains("trophyoff") { care.setTrophyCase(visible: false) }
                 if m.contains("trophycard") { await sleep(1); care.openTrophyCard() }
