@@ -73,8 +73,9 @@ nonisolated enum TrophyShelfGeometry {
 
     /// One trophy on its own at x = 0 with its foot (the rosette's stand) on y = 0: the same `cup` / `rosette` calls and scales as `add`, for the focus outline's contour.
     /// `lift` = how far the slot (`TrophyShelfGeometry.slots`) sits above that foot.
-    static func singleMesh(id: String) -> (mesh: RoomMesh, lift: Float)? {
+    static func singleMesh(id: String, color: SIMD3<Float>? = nil) -> (mesh: RoomMesh, lift: Float)? {
         let b = RoomMeshBuilder(); b.material = .plain
+        let gold = color ?? TrophyShelfGeometry.gold          // (the focus outline only needs the shape; the card's pictures pass the trophy's real metal / court tint)
         let z: Float = 0
         if id == "contest" { rosette(b, x: 0, y: 0, z: z, color: gold); return (b.mesh, 0.2) }
         if id.hasPrefix("cup.") { cup(b, x: 0, y: 0, z: z, scale: 0.85, color: gold, lid: false) }

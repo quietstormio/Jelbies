@@ -2,9 +2,9 @@
 //  TrophyCase.swift
 //  The trophy case's two player-facing pieces (trophy-case-r1):
 //
-//    SETTINGS   double-tap the case on the wall: a small card with "Show trophy case in the room" (on by default, saved in TrophyBook) and the list of trophies.
+//    SETTINGS   double-tap the case on the wall: the Trophy Shelf card (Trophies/TrophyShelfCard.swift): "Show trophy shelf in the room" (on by default, saved in TrophyBook) and a grid of the trophies.
 //               Off: the shelf is not drawn; the same switch sits at the top of the Trophies sheet and in Settings > Game, so it can always be turned back on.
-//    ENGRAVING  tap a trophy on the shelf (or its row in the card): the camera eases in on it and an engraved plate shows the Jelmiko's name, the event and the date.
+//    ENGRAVING  tap a trophy on the shelf (or its tile in the card): the camera eases in on it and an engraved plate shows the Jelmiko's name, the event and the date.
 //               The dates are written at the win (JelbieTrophies.won); a win from before that shows "Won before <the day this save first got engravings>" (no other record keeps a date per win).
 //
 //  Nothing here changes how trophies are earned.
@@ -192,9 +192,11 @@ struct TrophyCaseOverlay: View {
                         .padding(.horizontal, 16).padding(.bottom, compact ? 16 : g.size.height * 0.31)          // (portrait: above the left button rail; landscape: centred, clear of the rail)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if care.trophyCardOpen {
-                    card.frame(maxWidth: compact ? 340 : 420)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .trailing : .bottom)
-                        .padding(.horizontal, 12).padding(.top, compact ? 12 : 0).padding(.bottom, compact ? 12 : 110)
+                    // portrait: lifted clear of the left button column (as the plate is); landscape: a wider card at the right, under the coin pill and left of the paw button's column
+                    TrophyShelfCard(care: care, compact: compact, maxListHeight: compact ? g.size.height - 152 : g.size.height * 0.69 - 262)
+                        .frame(maxWidth: compact ? 600 : 420)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .bottomTrailing : .bottom)
+                        .padding(.leading, 12).padding(.trailing, compact ? 92 : 12).padding(.bottom, compact ? 12 : g.size.height * 0.31)
                         .transition(.move(edge: compact ? .trailing : .bottom).combined(with: .opacity))
                 }
             }
@@ -203,50 +205,6 @@ struct TrophyCaseOverlay: View {
             .animation(.easeInOut(duration: 0.25), value: care.trophyFocusID)
         }
         .allowsHitTesting(care.trophyCardOpen || care.trophyFocusID != nil)
-    }
-
-    private var card: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Trophy Shelf").font(SK.font(22, .black)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button { care.closeTrophyCard() } label: {
-                    Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85)))
-                }.buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("trophy-card-close")
-            }
-            TrophyCaseToggle(care: care)
-            let items = care.trophyItems
-            if !items.isEmpty {
-                Text("Tap a trophy to look at it").font(SK.font(12, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 6) {
-                        ForEach(items) { it in
-                            Button { care.focusTrophy(it.id) } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "trophy.fill").font(.system(size: 14, weight: .black)).foregroundStyle(ShowUI.goldDeep).accessibilityHidden(true)
-                                    Text(it.event).font(SK.font(13, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.leading)
-                                    Spacer(minLength: 0)
-                                }
-                                .padding(.horizontal, 12).padding(.vertical, 9).frame(minHeight: 44)
-                                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.8)))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("\(it.event), \(care.trophyWinnerName(it)), \(it.dateLine)")
-                            .accessibilityHint("Looks at the trophy")
-                            .accessibilityIdentifier("trophy-row-\(it.id)")
-                        }
-                    }
-                }
-                .frame(maxHeight: compact ? 110 : 150)
-                .disabled(!care.race.trophies.caseVisible)
-                .opacity(care.race.trophies.caseVisible ? 1 : 0.45)
-            }
-        }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.25), radius: 12, y: 4))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("trophy-card")
-        .accessibilityAction(.escape) { care.closeTrophyCard() }
     }
 
     /// The engraved brass plate.
