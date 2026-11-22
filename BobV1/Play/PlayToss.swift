@@ -588,8 +588,11 @@ final class PlayToss {
         // struck: that is `headHit` -> `header(by:)` as before; this only prepares the body (a late or unready Jelmiko still strikes it).
         if !busy, b.t > BlobBrain.tossCrouch + 0.1, !PlayTuning.ballReturnOld {
             let zr = Self.bodyZ(), zy = min(max(b.xz.y, zr.lowerBound), max(min(catchZ() - 1.2, zr.upperBound), zr.lowerBound)), bx = Self.bodyReach(PlayTuning.old ? b.xz.y : zy)
-            var stand = SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)
-            if b.d <= 0.30 { stand = j.pos }          // (already under it: he stays)
+            let meet = SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)
+            // he comes within `Self.steerReach` of the meeting point and no nearer (the last bit is the ball's: see `steerOntoCrown`), so the walk is short and he has time to turn onto the player
+            var stand = j.pos
+            let off = meet - j.pos
+            if simd_length(off) > Self.steerReach { stand = meet - off / simd_length(off) * (Self.steerReach * 0.6) }
             let dirP = playerPoint() - stand
             let dir = simd_length(dirP) > 1e-3 ? simd_normalize(dirP) : SIMD2<Float>(0, 1)
             j.brain.tossFire = nil
@@ -601,10 +604,11 @@ final class PlayToss {
                 j.brain.requestNow(.goTo(SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)))
                 interceptAt[j.id] = (b.xz, clock)
             }
-        } else if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage < 3, let last = interceptAt[j.id], simd_distance(last.p, b.xz) > 0.45, clock - last.t > 0.3 {
+        } else if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage < 3, let last = interceptAt[j.id], simd_distance(j.brain.idleState.toss.stand, b.xz) > Self.steerReach + 0.4, clock - last.t > 0.3 {
             j.brain.idleState.toss.abort = true          // (the ball moved on: he is released and sent to the new place next step)
             interceptAt[j.id] = nil
         }
+        steerOntoCrown(j, arriveIn: b.t)
         // the go: crouch now so the crown is rising as the ball arrives (met as near the top of the jump as the ball's own height allows)
         if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let m = meetTime(j), m.t <= BlobBrain.tossCrouch + Self.riseTime(m.rise) {
             j.brain.idleState.toss.go = true
@@ -613,6 +617,24 @@ final class PlayToss {
         if !busy, b.d < 0.55, b.t <= BlobBrain.tossHeaderLead + 0.03, Self.canHop(j.brain) {
             j.brain.tossHeaderStart(j.sim, j.skinner)
         }
+    }
+
+    /// How far from his crown's line the ball may be and still be eased onto it (play-ball-r2, mechanism b: the ball's last moment is nudged onto the crown of the Jelmiko who is set to head it, so he need not walk under it with his back turned).
+    static let steerReach: Float = 0.8
+    /// The cap on the sideways speed the nudge may add (m/s): a gentle curve, never a snap.
+    static let steerMaxDV: Float = 1.7
+    private func steerOntoCrown(_ j: PlayJelly, arriveIn t: Float) {
+        guard !PlayTuning.ballReturnOld, j.brain.tossBusy, t > 0.04, t < 1.4 else { return }
+        let target: SIMD2<Float> = (j.brain.idleState.kind == .tossBump && j.brain.idleState.toss.walking) ? j.brain.idleState.toss.stand : j.pos
+        let here = SIMD2(ball.pos.x, ball.pos.z) + SIMD2(ball.vel.x, ball.vel.z) * t
+        let miss = target - here
+        guard simd_length(miss) < Self.steerReach + 0.2 else { return }
+        let want = SIMD2(ball.vel.x, ball.vel.z) + miss / t
+        let cur = SIMD2(ball.vel.x, ball.vel.z)
+        var d = (want - cur) * min(1, 0.05 / max(t, 0.05) + 0.1)
+        let L = simd_length(d), cap = Self.steerMaxDV * 0.02          // (per tick; about 60 ticks a second)
+        if L > cap { d *= cap / L }
+        ball.vel.x += d.x; ball.vel.z += d.y
     }
 
     /// The seconds a jump takes to raise the crown by `h` (the hop's parabola: apex `tossCrownRise` at `tossJumpLead`).
