@@ -37,6 +37,8 @@ extension GameCare {
         return o
     }
 
+    static func outfitSig(_ worn: [WearSlot: WearLook]) -> Int { worn.map { $0.key.rawValue.hashValue ^ $0.value.rawValue.hashValue }.reduce(0, ^) &+ worn.count }
+
     /// Once per fixed step, after every Jelly has been ticked.
     func tickWear(_ actors: [JellyActor], dt: Float) {
         for a in actors {
@@ -48,7 +50,7 @@ extension GameCare {
             var instant = false          // (race-depart-r2: a housemate who was away on the track gets his wear and feature back at once, not with a pop-in)
             if tripFrozen(a.id) { raceBook.wasAway.insert(a.id) } else if raceBook.wasAway.remove(a.id) != nil { instant = true }
             let worn = outfit(a.id)
-            let sig = worn.map { $0.key.rawValue.hashValue ^ $0.value.rawValue.hashValue }.reduce(0, ^) &+ worn.count
+            let sig = Self.outfitSig(worn)
             if let was = outfitSeen[a.id], was != sig, !worn.isEmpty, !hide { b.postEvent(.newOutfit); b.blushBump(hold: 2.4, peak: 0.55) }          // a new outfit: the others admire it
             outfitSeen[a.id] = sig
             let pw = PerfProbe.begin()
