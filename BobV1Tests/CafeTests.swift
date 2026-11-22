@@ -14,11 +14,27 @@ final class CafeTests: XCTestCase {
         RoomLayout.apply(RoomCatalog.home)
         DecorField.shared.set([])
         DayClock.shared.forcedHour = 12
+        UserDefaults.standard.removeObject(forKey: "ShowDay")
         super.tearDown()
+    }
+
+    /// Pins the show's calendar day (the seam the game already has: `-ShowDay yyyymmdd`, read by `GameCare.showDay`) to one whose café special is `special`,
+    /// so the Drops these tests count do not depend on the real date. Searches the theme calendar for such a day.
+    @discardableResult
+    private func pinDay(special: CafeTreatID) -> Int {
+        for day in 20270101..<20270401 {
+            if CafeMenu.special(theme: ShowSchedule.theme(dayKey: day), dayKey: day) == special {
+                UserDefaults.standard.set(day, forKey: "ShowDay")
+                return day
+            }
+        }
+        XCTFail("no day with the special \(special)")
+        return 0
     }
 
     private func room(count: Int = 3, drops: Int = 100) -> DiningJellyTests.Room {
         DayClock.shared.forcedHour = 12
+        pinDay(special: .juice)          // (a day whose special is none of the treats the price tests order: they pass on every real day)
         let r = DiningJellyTests.Room(count: count)
         DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
         r.care.bath.wallet.add(drops - r.care.bath.wallet.count, silent: true)
@@ -422,6 +438,25 @@ final class CafeTests: XCTestCase {
         let o = CafeOrder(picks: [0: .sundae, 1: .swirl])
         XCTAssertEqual(o.total(jellies: [0, 1], special: .sundae), 14 + 14)
         XCTAssertEqual(o.fullPrice(jellies: [0, 1]), 32)
+    }
+
+    /// The special takes 20 % off the treat it names and nothing off the others, through the real order path (the day is pinned: the game's own `-ShowDay` seam).
+    func testTheSpecialTakesTwentyPercentOffTheTreatItNames() {
+        for special in [CafeTreatID.sundae, .swirl, .cocoa] {
+            let r = room(drops: 100)
+            let day = pinDay(special: special)
+            XCTAssertNotEqual(day, 0)
+            enter(r)
+            let c = r.care
+            XCTAssertEqual(c.cafeSpecial, special)
+            let full = CafeMenu.treat(special).price
+            XCTAssertEqual(CafeMenu.price(special, special: special), Int((Double(full) * 0.8).rounded()))
+            XCTAssertLessThan(CafeMenu.price(special, special: special), full)
+            let other: CafeTreatID = special == .pancakes ? .swirl : .pancakes
+            XCTAssertEqual(CafeMenu.price(other, special: special), CafeMenu.treat(other).price, "the others stay at full price")
+            XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: special, 1: other, 2: other])))
+            XCTAssertEqual(c.bath.wallet.count, 100 - (CafeMenu.price(special, special: special) + 2 * CafeMenu.treat(other).price))
+        }
     }
 
     func testStampCardEighthOrderIsFree() {

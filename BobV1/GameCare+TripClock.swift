@@ -15,7 +15,7 @@ enum TripClockTuning {
 }
 
 extension GameCare {
-    /// `ids`: the roster ids that were out. `thirst`: the extra thirst to take off (the Park only).
+    /// `ids`: the roster ids that were out (the Park and the Spa; the café does not call this: its outing costs nothing). `thirst`: the extra thirst to take off (the Park only).
     func tripReturned(_ ids: [Int], extraThirst thirst: Float = 0) {
         for id in ids {
             guard let j = jelly(id) else { continue }
