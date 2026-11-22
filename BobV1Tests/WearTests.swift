@@ -52,7 +52,7 @@ final class WearTests: XCTestCase {
         }
     }
 
-    static func ellipse(_ p: SIMD3<Float>) -> Float {
+    nonisolated static func ellipse(_ p: SIMD3<Float>) -> Float {
         let x = (p.x - 0) / 0.15, y = (p.y - 0.651) / 0.10
         return x * x + y * y
     }
