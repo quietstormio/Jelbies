@@ -741,6 +741,12 @@ struct GameScreen: View {
             let who = d.object(forKey: "RaceJelly") != nil ? d.integer(forKey: "RaceJelly") : 0
             for _ in 0..<100 where !care.canShow(jelly: who) || care.raceBook.actors.isEmpty { await sleep(0.1) }
             await sleep(d.double(forKey: "RaceStartDelay") > 0 ? d.double(forKey: "RaceStartDelay") : 1.5)
+            // capture aid: -ShowDress "partyHat,glitterShoes" is what Dress up does in the Studio: the everyday outfit is remembered, then the contestant is dressed in exactly these looks
+            if let list = d.string(forKey: "ShowDress") {
+                care.showWardrobeReady(who)
+                for sl in WearSlot.allCases { care.store.takeOff(sl, from: who) }
+                for n in list.split(separator: ",") { if let l = WearLook(rawValue: String(n)) { if !care.store.ownsLook(l) { care.store.grant(StoreCatalog.item(wearing: l)?.id ?? "") }; _ = care.store.wear(l, on: who) } }
+            }
             care.startShow(jelly: who)
         }
         // capture aid: -WearToggle <look> -WearToggleAt <on>,<off> puts that look on Jelly 0 (as the Dress up sheet does) <on> seconds after launch and takes it off again <off> seconds after launch
@@ -853,6 +859,7 @@ struct GameScreen: View {
             await sleep(4)
             if let h = d.string(forKey: "CafeHunger") { for (i, w) in h.split(separator: ",").enumerated() where care.jellies.indices.contains(i) { care.needs(for: care.jellies[i].id).set(.hunger, w == "full" ? 0.95 : 0.2) } }
             if let n = d.string(forKey: "CafeStamps").flatMap(Int.init) { care.cafe.stamps.set(n) }
+            NSLog("[cafe-needs] before %@", care.jellies.map { String(format: "%d:h%.3f/t%.3f", $0.id, $0.needs.level(.hunger), $0.needs.level(.thirst)) }.joined(separator: " "))
             care.requestCafe()
             if let n = d.string(forKey: "CafeSkips").flatMap(Int.init) {          // capture aid: skip the café music n times and log each title (proof the playlist cycles)
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
@@ -865,6 +872,19 @@ struct GameScreen: View {
                 let ids = care.cafeDinerIDs
                 let menu: [CafeTreatID] = [.swirl, .cocoa, .pancakes]
                 care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, care.cafeCanEat($0.element) ? menu[$0.offset % 3] : .juice) })))
+            }
+            if m == "drinks" || m == "mixed" || m == "foodhome" {          // capture aid (cafe-needs-r1): drinks for all / mixed / food for all, then home from the lounge; the needs are logged as [cafe-needs]
+                let log = { (tag: String) in NSLog("[cafe-needs] %@ %@", tag, care.jellies.map { String(format: "%d:h%.3f/t%.3f", $0.id, $0.needs.level(.hunger), $0.needs.level(.thirst)) }.joined(separator: " ")) }
+                for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }
+                await sleep(2)
+                care.bath.wallet.add(100, silent: true)
+                let menu: [CafeTreatID] = m == "drinks" ? [.juice, .latte, .cocoa] : m == "mixed" ? [.swirl, .latte, .pancakes] : [.swirl, .pancakes, .sundae]
+                care.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: care.cafeDinerIDs.enumerated().map { ($0.element, menu[$0.offset % 3]) })))
+                for _ in 0..<1200 where care.cafe.phase != .lounge { await sleep(0.1) }
+                log("lounge")
+                care.cafe.goHome()
+                for _ in 0..<300 where care.cafe.phase != .off { await sleep(0.1) }
+                log("home")
             }
             if m == "order" || m == "refuse" || m == "latte" || m == "latte2" || m == "latte3" {
                 for _ in 0..<300 where !care.cafe.menuOpen { await sleep(0.1) }

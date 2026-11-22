@@ -584,7 +584,6 @@ extension BlobBrain {
 
     /// Every tick (after the idle gate, before the scripts run): cooldowns, greeting watch, the running session, the overlay easing.
     func socialTick(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
-        if EmoteSpot.logOn { emoteSpotLog(dt) }
         let blocked = held || !autonomy
         if !blocked { socialBook.cooldown -= dt; socialBook.groupCool -= dt; socialBook.treatCool -= dt }
         if !socialBook.fiveCool.isEmpty { for k in socialBook.fiveCool.keys { socialBook.fiveCool[k]! -= dt } }
@@ -662,7 +661,7 @@ extension BlobBrain {
                 socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1) * parkSocialWaitMul * moreGroupWaitMul; socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
                 if s.kind.isTreat { socialBook.treatCool = rand(EmoteTuning.treatCooldown.0, EmoteTuning.treatCooldown.1); socialBook.treatIdle = 0; socialBook.treatBusy = 0; socialBook.lastTreat = s.kind }
             }
-            if MoveMix.on, !s.kind.isTreat {          // (MoveMix.swift: after a PAIR the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
+            if MoveMix.on {          // (MoveMix.swift: after a PAIR the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
                 if !s.kind.isGroup {
                     let again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
                     socialBook.pair[pid] = again
