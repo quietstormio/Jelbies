@@ -58,7 +58,7 @@ final class MoveLog {
         for k in 0..<a.n.count { a.n[k] += o.n[k] }
         for c in 0..<9 { a.bodySec[c] += o.bodySec[c]; a.emoteSec[c] += o.emoteSec[c]; a.idleSum3[c] += o.idleSum3[c] }
         for c in 0..<36 { a.idleSum6[c] += o.idleSum6[c] }
-        for c in 0..<10 { a.act[c] += o.act[c] }
+        for c in 0..<11 { a.act[c] += o.act[c] }
         for c in 0..<3 { a.bump[c] += o.bump[c] }
         for (k, v) in o.kindSec { a.kindSec[k, default: 0] += v }; a.kinds.formUnion(o.kinds); a.quietSec += o.quietSec; a.huddleSec += o.huddleSec; a.chainMax = max(a.chainMax, o.chainMax); a.kindCounts += o.kindCounts.isEmpty ? [o.kinds.count] : o.kindCounts
         a.walkSec += o.walkSec; a.gameSec += o.gameSec; a.emoteN += o.emoteN; a.walkN += o.walkN
