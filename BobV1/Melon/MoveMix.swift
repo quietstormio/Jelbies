@@ -48,7 +48,7 @@ nonisolated enum MoveMix {
     /// Leg against the board's predicted positions over the next 2 s (see `mixBoardConflict`).
     static let boardNear: Float = 1.05, boardPenalty: Float = 6
     /// A kind unseen for this long gets the full recency boost (x1 + 1); never seen = full.
-    static let recencyFull: Float = 600
+    static let recencyFull: Float = 600, recencyExtra: Float = 2          // (x3 at most: 1 + 2; the brief said about x2, the 10-minute kind count needed more)
     static let windowGap: Float = 90
     /// Longest roam leg (was 5.5; 3.4 grumpy): a stale far cell is reachable in one leg.
     nonisolated(unsafe) static var legMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_LEGMAX"].flatMap { Float($0) } ?? 6.5
@@ -314,7 +314,7 @@ extension BlobBrain {
 
 extension BlobBrain {
     /// 1...2: the weight boost of a kind last seen `ago` seconds ago (nil = never).
-    func mixRecency(_ ago: Float?) -> Float { 1 + min(1, (ago ?? MoveMix.recencyFull) / MoveMix.recencyFull) }
+    func mixRecency(_ ago: Float?) -> Float { 1 + MoveMix.recencyExtra * min(1, (ago ?? MoveMix.recencyFull) / MoveMix.recencyFull) }
 }
 
 extension BlobBrain {
