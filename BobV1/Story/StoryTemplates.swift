@@ -65,7 +65,6 @@ nonisolated enum StoryTemplates {
         P(20, [.show], ["showCup"], "{A} has a {SHOW} cup from the Jelly Show."),
         P(21, [.volley], ["volleyWin"], "{A} has won a volleyball match."),
         P(22, [.milestone], ["raceMilestone"], "{A} needs {LEFT} for a new trophy."),
-        P(23, [.milestone], ["raceMilestone"], "{A} is {LEFT} away from a new trophy."),
         // brand new
         P(25, [.newcomer], ["newcomer"], "{A} has only just moved in."),
         P(26, [.newcomer], ["newcomer"], "{A} is still settling in."),
