@@ -209,7 +209,8 @@ final class MoveLog {
         if case .walk = b.script { isWalkScript = true }
         if walkingAct, isWalkScript, b.social == nil { s.slowT = s.speed < 0.1 ? s.slowT + dt : 0 } else { s.slowT = 0 }
         var cat = 9
-        if let sn = b.social { cat = (sn.crew.count >= 3 || sn.idC >= 0) ? 5 : 4 }
+        if let sn = b.social { cat = sn.kind == .pass ? 6 : ((sn.crew.count >= 3 || sn.idC >= 0) ? 5 : 4) }          // (the ball pass is ball play: its own class)
+        else if k == .soccerKick { cat = 6 }
         else if let k, BlobBrain.travelKinds.contains(k) { cat = 10 }          // (round 2: run / trot / zoomies / slide ... are TRAVEL: a "moving" class of its own, not a solo emote)
         else if k == .sleep || k == .sit || k == .slump || k == .flop { cat = 7 }
         else if walkingAct && isWalkScript {
