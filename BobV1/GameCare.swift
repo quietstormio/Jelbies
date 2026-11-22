@@ -37,6 +37,9 @@ final class GameCare {
     @ObservationIgnored var queued: [BlobRequest] = []      // one-shot brain requests (wave / come)
     @ObservationIgnored private var hooked = false
     @ObservationIgnored var callRunning = false
+    @ObservationIgnored var bondRun: BondRunState?          // a Bond coming to the front in the close-up (GameCare+BestHug.swift)
+    @ObservationIgnored var bestHugDevT: Float = 0          // capture aids
+    @ObservationIgnored var bestHugDevFlags = 0
     @ObservationIgnored var revealClock: Float = 0          // the best-friends hug reveal's check timer (GameCare+BestHug.swift)
     /// The "Go home?" card of a competition is up (Race/ForfeitHome.swift); the race / show / match waits behind it.
     var forfeitAsk = false

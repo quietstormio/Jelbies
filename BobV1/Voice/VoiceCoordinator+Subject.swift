@@ -36,7 +36,7 @@ extension VoiceCoordinator {
                 b.commandedFlipFail = rollFlipFail()
                 b.commandedFlip = true
             case .superSpring, .corkscrew, .moonwalk: b.flipCompact = focused; b.commandedIdle = Self.idleKind(for: t)
-            case .hug: b.commandBestHug(inPlace: focused)
+            case .hug: care.startBond(brain: b)
             default: b.commandedIdle = Self.idleKind(for: t)
             }
             b.commandedDizzyEnd = t == .dizzySpin

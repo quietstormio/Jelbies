@@ -61,14 +61,15 @@ extension GameCare {
     /// The player's tap on a known trick chip: that Jelbie does it at once. Always succeeds (no reliability roll). False = blocked or not his trick.
     @discardableResult
     func performTrick(_ t: VoiceTrick, jelly id: Int) -> Bool {
-        guard trickBlocker(jelly: id) == nil, knows(t, jelly: id), let b = brainFor(id) else { return false }
+        let inHisCloseUp = t == .hug && focus.phase == .focused && focusGroup.includes(id) && brainFor(id)?.activity != .touched && !(brainFor(id)?.isSleeping ?? true)          // (Bond while he is in the close-up: the "holding him" refusal is that very close-up)
+        guard inHisCloseUp || trickBlocker(jelly: id) == nil, knows(t, jelly: id), let b = brainFor(id) else { return false }
         b.idleState.trickFailNext = false          // (the button always succeeds: a flop flag left over from the Show must not turn this into a flop)
         if t == .flip {
             b.flipCompact = focus.isActive
             b.commandedFlipFail = false
             b.commandedFlip = true
         } else if t == .hug {
-            b.commandBestHug(inPlace: focus.isActive)
+            startBond(slot: id)
         } else if let k = VoiceCoordinator.idleKind(for: t) {
             if t == .superSpring || t == .corkscrew || t == .moonwalk { b.flipCompact = focus.isActive }
             b.commandedIdle = k

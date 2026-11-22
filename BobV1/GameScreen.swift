@@ -1001,7 +1001,7 @@ struct GameScreen: View {
             case "drink:water": care.drink("water")
             case "call": care.call()
             case "callall": care.comeHereEveryone()
-            case "hug": if care.focus.isActive, let hb = care.brainFor(care.voiceSubject) { hb.commandBestHug(inPlace: true) } else { _ = care.performTrick(.hug, jelly: care.voiceSubject) }          // capture aid: the best-friends Hug (needs -BestHugUnlocked 1)
+            case "hug": _ = care.performTrick(.hug, jelly: care.focus.isActive ? care.voiceSubject : care.targetJelly)          // capture aid: the best-friends Hug (needs -BestHugUnlocked 1)
             case "roamhug": care.roamHug()          // capture aid: GameCare+RoamHug.swift
             case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()

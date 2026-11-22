@@ -24,9 +24,9 @@ nonisolated enum BestHugTuning {
     static var squeezeEnd: Float { squeezeStart + squeeze }
     static var total: Float { squeezeEnd + release }
     /// Arms: elevation / sweep (rad) wide open and up, then closed round the front; the lean to the glass (rad of pitch), the press (squash), the sway (rad of roll).
-    nonisolated(unsafe) static var openEl: Float = 1.05, openSa: Float = 1.05
-    nonisolated(unsafe) static var closeEl: Float = 0.30, closeSa: Float = 0.60
-    nonisolated(unsafe) static var lean: Float = 0.38, press: Float = 0.09, sway: Float = 0.17
+    nonisolated(unsafe) static var openEl: Float = 0.95, openSa: Float = 0.30
+    nonisolated(unsafe) static var closeEl: Float = 0.15, closeSa: Float = 1.35
+    nonisolated(unsafe) static var lean: Float = 0.45, press: Float = 0.11, sway: Float = 0.17
     /// A heart every this many seconds of the squeeze (a normal cuddle: one per 0.6 to 1.0 s).
     static let heartGap: Float = 0.22
     /// The walk: how far toward the camera (u), and the least that is worth a walk.
@@ -49,6 +49,7 @@ struct BestHugState {
     var heartT: Float = 0
     var buzzT: Float = 0
     var started = false
+    var reach = false         // `armReachW` is ours (the arms use the wave's full reach, not the short idle cap)
 }
 
 extension BestHug {
@@ -66,6 +67,7 @@ extension BlobBrain {
 
     /// Every tick, before the commands are read: starts the walk to the front, then the hug itself.
     func bestHugTick(_ dt: Float) {
+        if bestHug.reach, !isBestHugging { bestHug.reach = false; armReachW = 0 }          // (the hug is over or was cut short: the arms go back to the ordinary short cap)
         if bestHug.want {
             bestHug.want = false
             var spot: SIMD2<Float>?
@@ -132,6 +134,9 @@ extension BlobBrain {
         let sq = smooth01((t - T.squeezeStart + 0.15) / 0.25) * (1 - smooth01((t - T.squeezeEnd) / 0.2))
         let upK = smooth01((t - 0.2) / 0.35) * (1 - smooth01((t - T.openEnd) / 0.3))
         let burstAt = T.squeezeStart + 0.7
+        // the held "come here": a small bounce, twice, so the open arms are unmistakable
+        let holdU = t - (T.dip + T.rise)
+        if holdU > 0, holdU < T.hold { squash *= 1 + 0.035 * sinf(2 * .pi * holdU / 0.5) * a; if Int(holdU / 0.5) != idleState.hop { idleState.hop = Int(holdU / 0.5); jellyKick = max(jellyKick, 0.7) } }
         // the body: a dip of anticipation, a little rise as the arms go up, the lean to the glass, the press, the slow sway
         squash *= (1 - 0.06 * dipK * a) * (1 + 0.035 * upK * a)
         pitch += T.lean * leanK * a
@@ -140,11 +145,11 @@ extension BlobBrain {
         // the arms: open wide and up, then closed round the front in an arc
         armDirW = armW
         for s in 0..<2 {
-            let side: Float = s == 0 ? 1 : -1
             armDirEl[s] = T.openEl + (T.closeEl - T.openEl) * closed
-            armDirSa[s] = side * (T.openSa + (T.closeSa - T.openSa) * closed)
+            armDirSa[s] = T.openSa + (T.closeSa - T.openSa) * closed          // (the same sign on both arms, like the belly drum: the sweep 0 is straight out to the side, 1.4 is forward at the glass)
         }
         armDirOut = 0.05
+        armReachW = armW; bestHug.reach = true          // (the wave's own full arm reach for the open and the squeeze: ArmCap still holds the length and the join)
         // the face: the happy curve from the arms-up on, a blush at the squeeze
         if t >= T.openEnd, idleState.steps & 1 == 0 { idleState.steps |= 1; skinner.setEyeOpenness(0.2); face(.joyArc, hold: T.squeeze + T.close + 0.3); blushBump(hold: 3.0, peak: 0.5) }
         // the squeeze: the chirp, the purr of pulses, hearts all along

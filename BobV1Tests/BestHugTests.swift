@@ -93,6 +93,16 @@ final class BestHugTests: XCTestCase {
 
     // MARK: the motion
 
+    func testTheGateFollowsTheRelationshipTopStage() {
+        let d = UserDefaults(suiteName: { let n = "BestHugTests.\(UUID().uuidString)"; suites.append(n); return n }())!
+        XCTAssertFalse(BestHug.bestFriends(5, d), "no key: not best friends (and nothing is written)")
+        XCTAssertNil(d.object(forKey: JellyBond.key(5)))
+        d.set(["p": 839], forKey: JellyBond.key(5)); XCTAssertFalse(BestHug.bestFriends(5, d))
+        d.set(["p": 840], forKey: JellyBond.key(5)); XCTAssertTrue(BestHug.bestFriends(5, d), "five hearts full = Best friends")
+        XCTAssertEqual(BondLevel(points: 840).name, "Best friends")
+        XCTAssertFalse(BestHug.bestFriends(6, d), "per character")
+    }
+
     func testTheTrickIsCalledBond() {
         XCTAssertEqual(VoiceTrick.hug.title, "Bond"); XCTAssertTrue(BestHug.hint.hasSuffix("unlock Bond"))
         XCTAssertEqual(BestHug.message(name: "Violet"), "Violet and you are best friends! New trick: Bond")

@@ -16,7 +16,12 @@ nonisolated enum BestHug {
     nonisolated(unsafe) static var provider: ((Int) -> Bool)?
     static func isUnlocked(for id: Int) -> Bool {
         if let p = provider { return p(id) }
-        return DevArgs.enabled && UserDefaults.standard.integer(forKey: "BestHugUnlocked") != 0
+        if DevArgs.enabled && UserDefaults.standard.integer(forKey: "BestHugUnlocked") != 0 { return true }          // (dev override)
+        return bestFriends(id)
+    }
+    /// The top Relationship stage ("Best friends": all five hearts full, Jelly/JellyBond.swift). Read straight from the save, never seeding it (an unseeded creature is at most `seedCap`, far from the top).
+    static func bestFriends(_ id: Int, _ d: UserDefaults = .standard) -> Bool {
+        ((d.dictionary(forKey: JellyBond.key(id))?["p"] as? Int) ?? 0) >= (BondTuning.heartFull.last ?? Int.max)
     }
     /// What a locked Hug chip says.
     static let hint = "Reach Best friends to unlock Bond"
@@ -30,9 +35,73 @@ nonisolated enum BestHug {
     static var revealAllowed: Bool { !(DevArgs.enabled && UserDefaults.standard.object(forKey: "BestHugReveal") != nil && UserDefaults.standard.integer(forKey: "BestHugReveal") == 0) }
 }
 
+/// A Bond that brings him to the front first: the close-up's own approach and camera ease, the hug in place, then the close-up's own release.
+struct BondRunState {
+    var slot: Int
+    /// 0 coming to the front (the close-up's approach), 1 settling on the spot, 2 hugging.
+    var stage = 0
+    var t: Float = 0
+    var seenHug = false
+}
+
 extension GameCare {
-    /// Once per fixed step: the hearts and buzz the hugging brains raised, and the reveal check.
+    /// The player asked for Bond (the Tricks row, voice, the reveal) for the Jelmiko in `slot`. His camera is the cuddle close-up: it eases in while he comes to the front, holds for the
+    /// hug, eases out at the release. Already in HIS close-up: the hug in place, no extra move. Asleep, or the close-up cannot start (a bath, a trip): the hug where he stands.
+    func startBond(slot id: Int) {
+        guard let b = brainFor(id), bondRun == nil else { return }
+        if b.isSleeping { b.commandBestHug(inPlace: false); return }
+        if focus.phase == .focused, focusGroup.includes(id) { b.commandBestHug(inPlace: true); return }
+        if focus.phase == .roaming, !bath.active, !tripActive {
+            beginFocus(ids: [id])
+            if focus.phase == .approaching { bondRun = BondRunState(slot: id); return }
+        }
+        b.commandBestHug(inPlace: false)
+    }
+    func startBond(brain b: BlobBrain) {
+        guard let id = jellies.indices.first(where: { brainFor($0) === b }) else { b.commandBestHug(inPlace: false); return }
+        startBond(slot: id)
+    }
+
+    /// The run's per-step work: wait for the close-up, settle, hug, then let him go (the close-up's own release). Anything that ends the close-up on the way ends the run.
+    private func tickBondRun(dt: Float) {
+        guard var r = bondRun else { return }
+        r.t += dt
+        guard let b = brainFor(r.slot), r.t < 40 else { bondRun = nil; if focus.phase == .focused || focus.phase == .approaching { release() }; return }
+        switch r.stage {
+        case 0:
+            if focus.phase == .focused, focusGroup.includes(r.slot) { r.stage = 1; r.t = 0 }
+            else if focus.phase == .roaming || focus.phase == .leaving { bondRun = nil; return }
+        case 1:
+            guard focus.phase == .focused else { bondRun = nil; return }
+            if r.t > 0.9 { b.commandBestHug(inPlace: true); r.stage = 2; r.t = 0 }
+        default:
+            if focus.phase != .focused { bondRun = nil; return }
+            if b.isBestHugging { r.seenHug = true }
+            if (r.seenHug && !b.isBestHugging && !b.bestHug.want && !b.bestHug.go) || r.t > 12 { bondRun = nil; release(); return }
+        }
+        bondRun = r
+    }
+
+    /// Dev captures only: `-BestHugBondSetAll <points>` sets every Jelmiko's Relationship points once (the day's table is cleared, so the next earning counts);
+    /// `-BestHugEarnAfter <s>` then earns one stroke event for each of them after that many seconds (the honest way across the line).
+    private func bestHugDevTick(dt: Float) {
+        guard DevArgs.enabled else { return }
+        let d = UserDefaults.standard
+        bestHugDevT += dt
+        if bestHugDevFlags & 1 == 0, bestHugDevT > 0.5, d.object(forKey: "BestHugBondSetAll") != nil {
+            bestHugDevFlags |= 1
+            for j in jellies { d.set(["p": max(d.integer(forKey: "BestHugBondSetAll"), 0), "d": 0, "t": [String: Int]()] as [String: Any], forKey: JellyBond.key(j.character)) }
+        }
+        if bestHugDevFlags & 2 == 0, d.double(forKey: "BestHugEarnAfter") > 0, bestHugDevT > Float(d.double(forKey: "BestHugEarnAfter")) {
+            bestHugDevFlags |= 2
+            for j in jellies { bondEarn(.stroke, slot: j.id) }
+        }
+    }
+
+    /// Once per fixed step: the hearts and buzz the hugging brains raised, the Bond run, and the reveal check.
     func tickBestHug(dt: Float) {
+        bestHugDevTick(dt: dt)
+        tickBondRun(dt: dt)
         let now = CACurrentMediaTime()
         for id in jellies.indices {
             guard let b = brainFor(id) else { continue }

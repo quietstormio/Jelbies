@@ -1092,7 +1092,7 @@ final class VoiceCoordinator {
         case .run where focused:
             pendingHop = true; hopWait = 0; walkAfterHop = false      // a run would carry him off the focus spot
         case .hug:
-            brain.commandBestHug(inPlace: focused)
+            care.startBond(brain: brain)
         case .flip:
             brain.flipCompact = focused
             brain.commandedFlipFail = rollFlipFail()
