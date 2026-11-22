@@ -476,6 +476,11 @@ struct StudioScreen: View {
         .environment(\.lobbyTheme, .studio)
         .accessibilityElement(children: .contain).accessibilityIdentifier("studio-screen")
         .onChange(of: wardrobeOpen) { _, open in if open { dressed = true } }
+        .task {          // capture aid (dev arguments only): `-WardrobeAfter <seconds>` opens Dress up that long after the Studio appears
+            guard DevArgs.enabled, UserDefaults.standard.double(forKey: "WardrobeAfter") > 0 else { return }
+            try? await Task.sleep(nanoseconds: UInt64(UserDefaults.standard.double(forKey: "WardrobeAfter") * 1_000_000_000))
+            wardrobeOpen = true
+        }
         .sheet(isPresented: $wardrobeOpen) {
             WardrobeSheet(care: care, who: who, theme: theme, rank: rank) { wardrobeOpen = false }
                 .presentationDetents(compact ? [.large] : [.medium, .large]).presentationBackground(SK.cream)
@@ -627,6 +632,7 @@ struct WardrobeSheet: View {
     var close: () -> Void
     @State private var slot: WearSlot?
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
@@ -650,11 +656,19 @@ struct WardrobeSheet: View {
                 }
                 .padding(12).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ShowUI.stage))
                 Text("Tap a worn slot to take it off.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
+                Color.clear.frame(height: 1).id("wardrobe-end")
             }
             .padding(16)
         }
         .scrollBounceBehavior(.basedOnSize)
         .accessibilityIdentifier("wardrobe-sheet")
+        .task {          // capture aids (dev arguments only): `-WardrobeSlot <hats|shoes|...>` starts on that filter; `-WardrobeScroll <seconds>` scrolls to the bottom after that long
+            guard DevArgs.enabled else { return }
+            if let raw = UserDefaults.standard.string(forKey: "WardrobeSlot"), let s = WearSlot(rawValue: raw) { slot = s }
+            let t = UserDefaults.standard.double(forKey: "WardrobeScroll")
+            if t > 0 { try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000)); withAnimation { proxy.scrollTo("wardrobe-end", anchor: .bottom) } }
+        }
+        }
     }
 }
 
