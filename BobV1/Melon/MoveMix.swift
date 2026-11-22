@@ -377,7 +377,7 @@ extension BlobBrain {
         if rand() < MoveMix.passChance, !mixQuiet, !mixBallSpotBad(c), !ballOff {
             let cands = others.filter { o in
                 let d = simd_distance(o.position, position)
-                return (o.socialFree || o.socialWandering) && !o.mixQuiet && (socialBook.pair[o.steerID] ?? 0) <= 0 && (o.socialBook.pair[steerID] ?? 0) <= 0 && d > 1.6 && d < 5.5 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 6.5
+                return (o.socialFree || o.socialWandering) && !o.mixQuiet && (socialBook.pair[o.steerID] ?? 0) <= 0 && (o.socialBook.pair[steerID] ?? 0) <= 0 && d > 1.6 && d < 9 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 7.5
             }
             if !cands.isEmpty {
                 let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]

@@ -27,15 +27,22 @@ extension BlobBrain {
         let me = position, you = o.position
         let d = simd_distance(me, you)
         if kind == .cuddle { return socialStartToss(kind, with: o, sim) }
-        guard !sleepLocked, d > 1.6, d < 5.5 || kind == .bagSit else { return false }
+        let longPass = MoveMix.on && kind == .pass          // (round 3b: the receiver walks out to a spot 2.6...3.4 u away, so the two may start further apart)
+        guard !sleepLocked, d > 1.6, d < (longPass ? 9 : 5.5) || kind == .bagSit else { return false }
         if kind == .pass {
             guard let ball = freeBall() else { return false }
             let c = DecorField.shared.position(ball)
-            guard simd_distance(me, c) < 6.5, simd_distance(you, c) < 6.5 else { return false }
-            let s = newSession(.pass, with: o, duration: 60)
+            guard simd_distance(me, c) < (longPass ? 7.5 : 6.5), simd_distance(you, c) < (longPass ? 7.5 : 6.5) else { return false }
+            var plan: (pk: SIMD2<Float>, pr: SIMD2<Float>)?
+            if MoveMix.on, ball.kind == .soccerball {
+                plan = mixPassPlan(ball: c, with: o)
+                if plan == nil { return false }
+            }
+            let s = newSession(.pass, with: o, duration: 75)
+            s.mixSpot = plan?.pr
             s.uid = ball.uid; s.passTarget = (MoveMix.on && ball.kind == .soccerball) ? MoveMix.passKicksMin + Int(rand() * Float(MoveMix.passKicksMax - MoveMix.passKicksMin + 1)) : 2 + Int(rand() * 3); s.roles = 0; s.passes = 0
             DecorField.shared.occupant[ball.uid] = steerID
-            o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(c)
+            if plan == nil { o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(c) } else { o.socialBook.hold = false; o.socialBook.faceYaw = nil }
             return true
         }
         // bagSit: A heads for the piece now (the ordinary decor sit), B follows a beat later
@@ -60,6 +67,12 @@ extension BlobBrain {
         let rolling = field.anim[s.uid]?.moving == true
         switch s.phase {
         case 0:   // the kicker walks to his spot behind the ball; the other watches the ball
+            if MoveMix.on, f.kind == .soccerball, s.passes == 0, s.roles == 0, let sp = s.mixSpot, !s.mixReady {          // (round 3b: first the receiver walks out to his spot; the kicker waits for him)
+                if iKick { socialBook.hold = true; socialBook.faceYaw = yawTo(ball); if isA, s.phaseT > 12 { s.finish(.aborted) }; return }
+                if !socialBook.hopStarted { socialBook.hopStarted = true; socialBook.hold = false; socialBook.faceYaw = nil; if simd_distance(position, sp) > 0.3 { socialWalk(to: sp, sim) } }
+                if scriptIsNone, idleState.kind == nil, simd_distance(position, sp) < 0.5 { s.mixReady = true; socialBook.hopStarted = false }
+                else { if isA, s.phaseT > 12 { s.finish(.aborted) }; return }
+            }
             if !iKick { socialBook.hold = true; socialBook.faceYaw = yawTo(ball); if isA, s.phaseT > 12 { s.finish(.aborted) }; return }
             if !socialBook.hopStarted, scriptIsNone, idleState.kind == nil {
                 socialBook.hopStarted = true
@@ -151,5 +164,37 @@ extension BlobBrain {
             socialBook.sheepishStarted = true
             if idleStart(.sit, sim) { idleState.hold = rand(6, 11) } else { s.finish(.aborted) }
         }
+    }
+}
+
+extension BlobBrain {
+    /// Round 3b: where the two stand for a real pass of the soccer ball: the kicker 0.95 u behind the ball, the receiver `D` = 3.4...2.0 u from the ball on the other side, along a line that is clear of bodies, furniture,
+    /// sleepers and the HUD buttons. nil = the room has no such line (no pass).
+    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
+        let field = DecorField.shared
+        guard let rf = roamProvider?() else { return nil }
+        let others = socialOthers().filter { $0 !== self && $0 !== o }
+        if others.contains(where: { $0.reserved }) { return nil }          // (a meal is on: no ball across the floor)
+        func good(_ p: SIMD2<Float>) -> Bool {
+            guard rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 0.45, rf.stopOK(p), simd_distance(fixed(p), p) < 0.08 else { return false }
+            return !others.contains { simd_distance($0.position, p) < 1.0 } && !mixBallSpotBad(p)
+        }
+        var best: (pk: SIMD2<Float>, pr: SIMD2<Float>, score: Float)?
+        for D in [Float(3.4), 3.2, 3.0, 2.8, 2.6, 2.3, 2.0] {
+            for k in 0..<16 {
+                let a = Float(k) * .pi / 8
+                let v = SIMD2(sinf(a), cosf(a))
+                let pk = c - v * 0.95, pr = c + v * D
+                guard good(pk), good(pr) else { continue }
+                var clear = true
+                var d: Float = 0.4
+                while d <= D { let p = c + v * d; if !field.openFloor(p) || mixBallSpotBad(p) || others.contains(where: { simd_distance($0.position, p) < 0.9 }) { clear = false; break }; d += 0.4 }
+                guard clear, reachable(position, pk), reachable(o.position, pr) else { continue }
+                let score = -(simd_distance(position, pk) + simd_distance(o.position, pr))
+                if best == nil || score > best!.score { best = (pk, pr, score) }
+            }
+            if best != nil { break }
+        }
+        return best.map { ($0.pk, $0.pr) }
     }
 }

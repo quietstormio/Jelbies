@@ -202,6 +202,9 @@ final class SocialSession {
     var uid = -1, passes = 0, passTarget = 3
     /// MoveMix round 3: who follows a finished ball pass with a kick of his own (-2 not decided yet, -1 nobody).
     var mixFollowID = -2
+    /// MoveMix round 3b: the receiver's spot of a ball pass (2...3.4 u from the ball along a clear line) and whether he stands on it.
+    var mixSpot: SIMD2<Float>?
+    var mixReady = false
     var goal = SIMD2<Float>.zero
     /// Friends2: the second runner's goal, the two start spots, the lane / orbit angle, the plan is made.
     var goal2 = SIMD2<Float>.zero, home0 = SIMD2<Float>.zero, home1 = SIMD2<Float>.zero, laneYaw: Float = 0, ready = false
