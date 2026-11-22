@@ -286,6 +286,7 @@ struct GameScreen: View {
             VolleyChrome(care: model.care)          // Jelly Volleyball: score, controls, results, the white fade
 
             if model.care.arranging, model.care.wallEdit == nil { ArrangeOverlay(care: model.care) }          // decor: drag the room's pieces about
+            TrophyCaseOverlay(care: model.care)          // the trophy case card + the engraved plate (Trophies/TrophyCase.swift)
             if let session = model.care.wallEdit { WallEditorOverlay(care: model.care, session: session) }          // the wall picture: drag, size, frame, Done (Photo/WallEditorOverlay.swift)
 
             if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
@@ -923,6 +924,14 @@ struct GameScreen: View {
             if m.contains("wins3") {          // the trophy badge: the first Jelmiko has 3 wins on Ripple (the picked course), the second 1
                 for _ in 0..<2 { care.race.progress.record(tier: .ripple, place: 1); care.race.trophies.recordRace(character: c, tier: .ripple, place: 1) }
                 if care.jellies.count > 1 { care.race.trophies.recordRace(character: care.jellies[1].character, tier: .ripple, place: 1) }
+            }
+            if m.contains("trophycase") {          // capture aid: wins on every course + a Show cup on the wall case; "trophycard" opens its card, "trophyfocus" looks at the Puddle cup, "trophyoff" hides the case
+                for t in CourseTier.allCases { care.race.trophies.recordRace(character: c, tier: t, place: 1) }
+                care.show.progress.record(rank: .puddle, place: 1, theme: ShowSchedule.theme(dayKey: GameCare.showDay), character: c, burst: false, perfectDance: false, hatTrick: false)
+                care.race.trophies.recordShowCup(character: c, rank: .puddle, place: 1)
+                if m.contains("trophyoff") { care.setTrophyCase(visible: false) }
+                if m.contains("trophycard") { await sleep(1); care.openTrophyCard() }
+                if m.contains("trophyfocus") { await sleep(8); care.focusTrophy("cup.puddle") }
             }
             if m.contains("blocked") { care.store.grant("berries"); care.feed("berries") }          // (foods are fed from the bag now: one berry in it)
         }

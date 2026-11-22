@@ -39,11 +39,16 @@ nonisolated struct JelbieTrophies: Codable, Equatable, Sendable {
     var earned: [String] = []
     /// Beach volleyball match wins per tier (Volley/VolleyFlow.swift); optional so older saves decode.
     var volleyWins: [String: Int]? = nil
-    init(race: [String: [Int]] = [:], earned: [String] = [], volleyWins: [String: Int]? = nil) { self.race = race; self.earned = earned; self.volleyWins = volleyWins }
+    /// When each engraved win happened (the trophy plate's date), by key: "race.<tier>.<place>" (the first time that place was won there), "trophy.<id>", "volley.<tier>",
+    /// "show.<rank>.<place>". Optional so older saves decode: a win with no date reads "Won earlier".
+    var won: [String: Date]? = nil
+    init(race: [String: [Int]] = [:], earned: [String] = [], volleyWins: [String: Int]? = nil, won: [String: Date]? = nil) { self.race = race; self.earned = earned; self.volleyWins = volleyWins; self.won = won }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        race = c.value(.race, [:]); earned = c.value(.earned, []); volleyWins = c.value(.volleyWins, nil)
+        race = c.value(.race, [:]); earned = c.value(.earned, []); volleyWins = c.value(.volleyWins, nil); won = c.value(.won, nil)
     }
+    /// Writes the date of an engraved win once (the first time stays).
+    mutating func stamp(_ key: String, _ now: Date) { var w = won ?? [:]; if w[key] == nil { w[key] = now; won = w } }
     var volleyTotal: Int { (volleyWins ?? [:]).values.reduce(0, +) }
     func volleyWon(_ t: VolleyTier) -> Int { volleyWins?[t.rawValue] ?? 0 }
 
@@ -86,6 +91,9 @@ nonisolated struct TrophyShelfSpec: Equatable, Sendable {
 @Observable
 final class TrophyBook {
     private(set) var shelves: [String: JelbieTrophies] = [:]
+    /// Whether the trophy case hangs on the room's wall (the player's choice; on by default; saved under its own key so older saves are untouched).
+    private(set) var caseVisible = true
+    static let caseKey = "Circuit.trophyCaseShown.v1"
     @ObservationIgnored private let persists: Bool
     @ObservationIgnored private let defaults: UserDefaults
     static let key = "Circuit.trophies.v1"
@@ -93,8 +101,22 @@ final class TrophyBook {
 
     init(persists: Bool = false, defaults: UserDefaults = .standard) {
         self.persists = persists; self.defaults = defaults
+        if persists, defaults.object(forKey: Self.caseKey) != nil { caseVisible = defaults.bool(forKey: Self.caseKey) }
         guard persists, let s = SaveRecovery.decode([String: JelbieTrophies].self, key: Self.key, defaults: defaults) else { return }
         shelves = s
+    }
+
+    func setCaseVisible(_ on: Bool) {
+        caseVisible = on
+        if persists { defaults.set(on, forKey: Self.caseKey) }
+    }
+
+    /// A Show cup was won (place 1...3): the first time that place is won at that rank is dated for the plate.
+    func recordShowCup(character c: Int, rank: ShowRank, place: Int, now: Date = Date()) {
+        guard (1...3).contains(place) else { return }
+        var s = shelf(character: c)
+        s.stamp("show.\(rank.rawValue).\(place)", now)
+        setShelf(s, character: c)
     }
 
     func shelf(character c: Int) -> JelbieTrophies { shelves["\(c)"] ?? JelbieTrophies() }
@@ -102,16 +124,17 @@ final class TrophyBook {
 
     /// A race on `tier` ended with Jelbie `character` in `place` (1...3 earn a ribbon; 1st also counts toward the trophies).
     @discardableResult
-    func recordRace(character c: Int, tier: CourseTier, place: Int) -> TrophyAwards {
+    func recordRace(character c: Int, tier: CourseTier, place: Int, now: Date = Date()) -> TrophyAwards {
         var a = TrophyAwards(place: place <= 3 ? place : nil)
         guard place >= 1, place <= 3 else { return a }
         var s = shelf(character: c)
         var r = s.raceRibbons(tier)
         a.newRibbon = r[place - 1] == 0
+        if a.newRibbon { s.stamp("race.\(tier.rawValue).\(place)", now) }
         r[place - 1] += 1
         s.race[tier.rawValue] = r
         if place == 1 {
-            func grant(_ t: Trophy) { if !s.has(t) { s.earned.append(t.id); a.trophies.append(t) } }
+            func grant(_ t: Trophy) { if !s.has(t) { s.earned.append(t.id); a.trophies.append(t); s.stamp("trophy.\(t.id)", now) } }
             grant(.firstWin(tier))
             for m in Trophy.milestones where s.raceWins >= m.wins { grant(m.trophy) }
             if CourseTier.allCases.allSatisfy({ s.raceRibbons($0)[0] > 0 }) { grant(.champion) }

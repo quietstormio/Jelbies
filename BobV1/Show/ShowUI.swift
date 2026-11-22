@@ -922,6 +922,7 @@ struct TrophiesSheet: View {
                 Button { close() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
                     .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("trophies-close")
             }
+            TrophyCaseToggle(care: care)
             Text("Cups").font(SK.font(13, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
             HStack(spacing: 10) {
                 ForEach(ShowRank.allCases, id: \.rawValue) { r in

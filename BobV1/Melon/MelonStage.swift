@@ -1321,7 +1321,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             let washed = bathRoom ? min(model.care.bath.targetID, actors.count - 1) : 0
             renderer.bathBody = washed
             renderer.raceCourse = model.care.race.course.tier
-            renderer.trophyShelf = model.care.race.trophies.roomShelf(contestBest: model.care.show.progress.bestCup)
+            renderer.trophyShelf = model.care.shownTrophySpec          // (empty when the player hid the case: Trophies/TrophyCase.swift)
             renderer.cutout = model.cutout
             renderer.dayHourOverride = model.preview ? 12 : nil          // a showcase is always noon (the portrait path does the same, below)
             renderer.raceVisible = model.care.race.trackVisible
@@ -1655,6 +1655,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             if model.care.select.highlighted == id, model.care.selectBrain(id)?.isSleeping == true { model.care.select.rehighlight(); model.care.pokeSleeper(id); return }          // (the poke is also a highlight action: the menu opens)
             model.care.tapJelly(id); return
         }
+        if trophyCaseTap(p).face { model.care.openTrophyCard(); return }          // the trophy case on the wall: its settings card
         if let uid = decorUnderFinger(p) { model.care.pickUpDecor(uid) }          // a placed piece (and no Jelly in front of it): pick it up to move it
     }
 
@@ -1685,10 +1686,21 @@ final class MelonController: NSObject, MTKViewDelegate {
             if sel.isSelecting { sel.cancel() }                                                       // the floor: let go of the highlight
             if sel.highlighted != nil { model.care.clearHighlight() }
         } else if game, sel.isSelecting, sel.hit(p) == nil { sel.cancel() }
+        if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, touchSize.width > 1, pickJelly(p, touchSize) == nil, let id = trophyCaseTap(p).item {
+            model.care.focusTrophy(id); return          // a trophy on the wall: look at it (its plate shows)
+        }
         if game, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive, touchSize.width > 1, pickJelly(p, touchSize) == nil, windowTapped(p, touchSize) {
             DayClock.shared.skipToNextPhase()            // the window: skip to the next part of the day (a short time-lapse)
             AudioHub.shared.uiConfirm()
         }          // (a tap on empty floor / wall / sky does nothing: no head tilt, no cue)
+    }
+
+    /// What a screen point hits of the trophy case on the back wall (nothing while the editor, a close-up or the plate is up, or when the case is hidden).
+    func trophyCaseTap(_ p: CGPoint) -> (item: String?, face: Bool) {
+        guard game, haveCam, !PhotoCam.active, !model.care.arranging, model.care.wallEdit == nil, model.care.trophyFocusID == nil, !model.care.focus.isActive, !model.care.bath.active, !model.care.tripActive,
+              let size = stageView?.bounds.size, size.width > 1,
+              let w = GameCamera.wallHit(ndc: ndc(p, size), invViewProj: lastCam.invViewProj) else { return (nil, false) }
+        return model.care.trophyHit(wall: w)
     }
 
     /// True when a screen point lands on one of the back-wall windows.

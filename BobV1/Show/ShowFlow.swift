@@ -138,6 +138,8 @@ final class ShowFlow {
     /// A press of the L (0) / R (1) button during the dance, before it is judged: his foot on that side steps.
     @ObservationIgnored var onTap: (Int) -> Void = { _ in }
     @ObservationIgnored var onResults: (Int) -> Void = { _ in }
+    /// A cup placing (1...3) was settled for this character at this rank (the trophy plate's date: Trophies/TrophyBook.swift).
+    @ObservationIgnored var onCup: (Int, ShowRank, Int) -> Void = { _, _, _ in }
     @ObservationIgnored var onBurst: () -> Void = {}
     /// The rivals' turn on the stage (bodies) and whether a body has got where it was sent (`who` nil = the player's Jelbie; `atCentre`: at the middle, else at his rest / aside spot).
     @ObservationIgnored var onRival: (RivalCue) -> Void = { _ in }
@@ -617,6 +619,7 @@ final class ShowFlow {
         wallet?.add(earned)
         awards = progress.record(rank: s.rank, place: place, theme: s.theme, character: character, burst: s.entrants.first(where: \.isPlayer)?.burst ?? false,
                                  perfectDance: s.perfectDance, hatTrick: s.hatTrick)
+        if place <= 3 { onCup(character, s.rank, place) }
         cardAge = 0
         cue(.jingle(win: place <= 2))
         A11yEvents.say("\(playerName) placed \(A11yEvents.ordinal(place)) in the Jelly Show. \(earned) JellyCoins", .high)
