@@ -149,7 +149,7 @@ struct ProfileParagraph: View {
     var body: some View {
         ProfileRulerText(text: text, ruler: ProfileRuler.paragraphs, font: SK.font(15, .bold), lineSpacing: 3)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, -3)          // line-box trim: the card rhythm is measured to the letters
+            .padding(.top, -3).padding(.bottom, 1)          // line-box trim: the card rhythm (about 14 pt) is measured to the letters
     }
 }
 
@@ -461,10 +461,9 @@ struct ProfileScreen: View {
     }
 
     /// The description as ONE paragraph, exactly as the game words it (SkinAbout: the colour sentence + the character sentence; the same words as the Spring page).
-    @ViewBuilder private func aboutParagraph(_ b: WhoBits) -> some View {
-        if b.info != nil {
-            ProfileParagraph(text: SkinAbout.text(look: b.species, variant: b.variant)).accessibilityIdentifier("profile-about")
-        }
+    /// Always there, even for a look without a Lineup page (then the box is simply empty): the cards below never move.
+    private func aboutParagraph(_ b: WhoBits) -> some View {
+        ProfileParagraph(text: SkinAbout.hasLook(b.species) ? SkinAbout.text(look: b.species, variant: b.variant) : "").accessibilityIdentifier("profile-about")
     }
 
     /// The living-line slot: a soft bubble in the pet's body tint with a small sparkle; nothing at all when there is no text.
