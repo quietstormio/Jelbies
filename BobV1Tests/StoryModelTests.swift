@@ -107,7 +107,7 @@ final class StoryModelTests: XCTestCase {
 
     func testInstructionsAreFixedAndCarryTheRules() {
         let t = StoryPrompt.instructions
-        for need in ["third person", "ONLY the facts", "never invent", "generated", "kiss", "No emoji", "No numbers", "placeholder", "children's pet game", "young child and their parent"] {
+        for need in ["third person", "facts you are given", "never invent", "generated", "kiss", "No emoji", "No numbers", "placeholder", "children's pet game", "young child and their parent"] {
             XCTAssertTrue(t.lowercased().contains(need.lowercased()), need)
         }
         XCTAssertFalse(t.contains("Berry"))

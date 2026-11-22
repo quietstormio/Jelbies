@@ -204,6 +204,7 @@ nonisolated enum StoryTemplates {
             let news = newsBank.filter { $0.news == n.factKey && ($0.cond == 0 || ($0.cond == 1) == win) }
             if !news.isEmpty { eligible = news }
         }
+        if f.newcomer, f.news == nil { let n = eligible.filter { $0.needs.contains(.newcomer) }; if !n.isEmpty { eligible = n } }          // a brand-new Jelmiko: "just moved in" lines only
         var pool = eligible.filter { !used.contains($0.id) }
         if pool.count < 2 { pool = eligible }          // the bank is through: start over
         var rejected = 0

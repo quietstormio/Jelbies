@@ -48,7 +48,7 @@ final class StoryTemplatesTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(StoryTemplates.noteBank.count, 25)
         var g = RNG(s: 42)
         let memory = StoryMemory(salt: 7)
-        var aboutCount = 0, noteCount = 0, rejectedInside = 0
+        var aboutCount = 0, noteCount = 0, rejectedInside = 0, skippedEmpty = 0
         var distinctAbout = Set<String>(), distinctNote = Set<String>()
         var lastAbout: [Int: String] = [:], lastNote: [String: String] = [:], immediate = 0
         var maxAbout = 0, maxNote = 0
@@ -56,7 +56,10 @@ final class StoryTemplatesTests: XCTestCase {
             let f = Self.randomFacts(&g)
             if aboutCount < 10_000 {
                 let key = TemplateWriter.aboutKey(f.id)
-                guard let w = StoryTemplates.about(f, used: memory.usedSet(key), seed: memory.nextSeed(key)) else { XCTFail("no blurb for \(f)"); return }
+                guard let w = StoryTemplates.about(f, used: memory.usedSet(key), seed: memory.nextSeed(key)) else {
+                    XCTAssertTrue(StoryFill.facts(f).isEmpty, "no line although the sheet has facts: \(f)")          // a Jelmiko with nothing true to say gets no line (the slot is hidden)
+                    skippedEmpty += 1; if skippedEmpty > 100_000 { return }; continue
+                }
                 memory.remember(key, w.ids, bankSize: StoryTemplates.aboutBank.count)
                 rejectedInside += w.rejected
                 let v = StoryGuard.check(template: w.template, final: w.final, kind: .about, offered: StoryFill.offered(f), shown: f.shownParagraph, values: StoryFill.values(f), keys: w.keys, available: StoryFill.facts(f))
