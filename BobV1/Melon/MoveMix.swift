@@ -42,7 +42,8 @@ nonisolated enum MoveMix {
     static let legMin: Float = 2.5
     static let windowGap: Float = 90
     /// Longest roam leg (was 5.5; 3.4 grumpy): a stale far cell is reachable in one leg.
-    static let legMax: Float = 8.0, legMaxGrumpy: Float = 5.5
+    nonisolated(unsafe) static var legMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_LEGMAX"].flatMap { Float($0) } ?? 8.0
+    static let legMaxGrumpy: Float = 5.5
     static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
     /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
     static let ownShare: Float = 0.7
