@@ -173,6 +173,8 @@ struct JelbieActionShot: View {
     /// The picture's size as a fraction of the card's height, and where the disc top sits in the card (fraction of its height). The Studio's card draws a smaller Jelmiko with room round it; Dress up fills its taller picture area.
     var fill: CGFloat = 0.86
     var floorAt: CGFloat = 0.80
+    /// The Studio's card shows a spinner while its first picture loads; Dress up never does (it opens on the lobby's cached picture and keeps the old one while a new one is drawn).
+    var spinner = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var frames: [UIImage?] = [nil, nil, nil]
     @State private var breathe = false        // a slow render-server driven autoreversing swell
@@ -188,11 +190,11 @@ struct JelbieActionShot: View {
                 ActionPodium(width: discW, topH: discH, rim: rimH).position(x: x, y: floorY + rimH / 2)
                 Ellipse().fill(RadialGradient(colors: [.black.opacity(0.42), .black.opacity(0)], center: .center, startRadius: 0, endRadius: discW * 0.26))
                     .frame(width: discW * 0.58, height: discH * 0.62).position(x: x, y: floorY)
-                if let img = frames[0] {
+                if let img = frames[0] ?? HeadPortraitCache.shared.cached(key(0), care: care) {
                     Image(uiImage: img).resizable().scaledToFit().frame(width: S, height: S)
                         .scaleEffect(x: 1 + 0.008 * (breathe && !reduceMotion ? 1 : 0), y: 1 + 0.014 * (breathe && !reduceMotion ? 1 : 0), anchor: UnitPoint(x: 0.5, y: img.feetFraction ?? HeadPortraitKey.actionFloorFraction))
                         .position(x: x, y: floorY + discH * 0.08 - S * (img.feetFraction ?? HeadPortraitKey.actionFloorFraction) + S / 2)
-                } else { ProgressView().tint(ShowUI.light).position(x: x, y: h * 0.5) }
+                } else if spinner { ProgressView().tint(ShowUI.light).position(x: x, y: h * 0.5) }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: breathe)
         }
@@ -858,7 +860,7 @@ struct DressUpFigure: View {
         let wearing = rank.slotOrder.compactMap { outfit[$0]?.title } + outfit.filter { !rank.slotOrder.contains($0.key) }.map { $0.value.title }
         ZStack {
             StageBackdrop()
-            JelbieActionShot(care: care, who: who, fill: Self.fill, floorAt: Self.floorAt)
+            JelbieActionShot(care: care, who: who, fill: Self.fill, floorAt: Self.floorAt, spinner: false)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(care.rosterName(who))\(wearing.isEmpty ? ", wearing nothing" : ", wearing \(wearing.joined(separator: " and "))")")
             HStack(spacing: 0) {
