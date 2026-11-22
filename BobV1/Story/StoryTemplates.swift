@@ -139,7 +139,6 @@ nonisolated enum StoryTemplates {
         N(8, [.close, .regular], true, "{A} and {B} are often {EMOTE}."),
         N(9, [.close, .regular], true, "{A} and {B} have been {EMOTE} a lot."),
         N(10, [.close, .regular], true, "{A} and {B} spend a lot of time {EMOTE}."),
-        N(11, [.close, .regular], true, "When {A} and {B} play, they are often {EMOTE}."),
         N(12, [.regular], false, "{A} and {B} play together now and then."),
         N(13, [.regular], false, "{A} plays with {B} fairly often."),
         N(18, [.few], false, "{A} and {B} are still getting to know each other."),
