@@ -47,7 +47,7 @@ nonisolated enum StoryFingerprint {
     /// A fingerprint of a text (placeholders in), for "Don't show this one" and the feedback lookup.
     static func text(_ template: String) -> String { hex(["t", template]) }
     static func note(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> String {
-        hex(["n", String(h.id), StoryTemplates.tier(h).rawValue, h.topEmote ?? "-", h.relationshipLevel ?? "-", h.mostPlayedWith ? "mp" : "-", h.sharedGroup ? "grp" : "-"])
+        hex(["n", String(h.id), StoryTemplates.tier(h).rawValue, h.topEmote ?? "-", h.relationshipLevel ?? "-", h.mostPlayedWith ? "mp" : "-", h.sharedGroup ? "grp" : "-", h.sharedSpot ?? "-", h.napBuddies ? "nap" : "-"])
     }
 }
 
@@ -175,14 +175,27 @@ final class StoryBook {
         return Line(text: StoryFill.apply(t.template, values), byModel: false)
     }
 
+    /// The opening words of the notes ABOVE this one on the same Profile: two notes on one page never start with the same word (the row order decides, so the first row never moves for the second).
+    private func earlierOpenings(_ f: StoryFacts, before h: StoryFacts.Housemate) -> Set<String> {
+        var out: Set<String> = []
+        for p in f.housemates {
+            if p.id == h.id { break }
+            if let l = noteLine(f, with: p) { out.insert(StoryTemplates.firstWord(l.text)) }
+        }
+        return out
+    }
+
     func noteLine(_ f: StoryFacts, with h: StoryFacts.Housemate) -> Line? {
         let key = "\(f.id)>\(h.id)"
         let values = StoryFill.values(f, with: h), offered = Set(values.keys)
+        let avoid = earlierOpenings(f, before: h)
         if let e = saved.notes[key], !hidden.contains(StoryFingerprint.text(e.template)) {
             let fin = StoryFill.apply(e.template, values)
-            if StoryGuard.check(template: e.template, final: fin, kind: .friendship, offered: offered, values: values, keys: e.keys, available: e.keys == nil ? nil : StoryFill.facts(f, with: h)).passed { return Line(text: fin, byModel: e.byModel) }
+            if !avoid.contains(StoryTemplates.firstWord(fin)),
+               StoryGuard.check(template: e.template, final: fin, kind: .friendship, offered: offered, values: values, keys: e.keys, available: e.keys == nil ? nil : StoryFill.facts(f, with: h)).passed { return Line(text: fin, byModel: e.byModel) }
         }
-        guard let t = TemplateWriter(memory: memory).writeNote(f, h) else { return nil }
+        let pre = TemplateWriter(memory: memory)
+        guard let t = pre.writeNote(f, h, avoid: avoid) ?? pre.writeNote(f, h) else { return nil }
         saved.notes[key] = StoryEntry(template: t.template, fingerprint: StoryFingerprint.note(f, h), day: today(), writer: "template", keys: t.keys)
         persist()
         return Line(text: StoryFill.apply(t.template, values), byModel: false)

@@ -233,7 +233,7 @@ nonisolated enum StoryGuard {
     /// Which fact each placeholder stands for. A text that uses one must name that fact.
     static let tokenFact: [String: String] = ["FOOD": "favouriteFood", "ACT": "favouriteActivity", "SPOT": "favouriteSpot", "RACE": "raceWin", "SHOW": "showCup", "PERS": "personality", "EMOTE": "topEmote", "LEFT": "raceMilestone"]
     /// Every fact key a text may name (the writers' vocabulary; the model's guide lists these).
-    static let allFactKeys = ["personality", "favouriteFood", "favouriteActivity", "favouriteSpot", "raceWin", "showCup", "volleyWin", "partner", "topEmote", "nap", "newcomer", "settled", "raceMilestone", "together", "gettingToKnow", "sharedGroup", "bond"] + StoryEvent.kinds.map { "recent" + $0.prefix(1).uppercased() + $0.dropFirst() }
+    static let allFactKeys = ["personality", "favouriteFood", "favouriteActivity", "favouriteSpot", "raceWin", "showCup", "volleyWin", "partner", "topEmote", "nap", "newcomer", "settled", "raceMilestone", "together", "gettingToKnow", "sharedGroup", "sharedSpot", "napBuddies", "bond"] + StoryEvent.kinds.map { "recent" + $0.prefix(1).uppercased() + $0.dropFirst() }
 
     /// The line must name at least one fact, every named fact must be on the sheet (true), and every fact placeholder it uses must be named. `keys` nil = not checked (pure-shape tests).
     static func checkFacts(_ t: String, kind: StoryKind, keys: [String]?, available: Set<String>?) -> StoryReason? {
@@ -331,7 +331,10 @@ nonisolated enum StoryGuard {
     static func isEnglish(_ text: String) -> Bool {
         let r = NLLanguageRecognizer()
         r.processString(text)
-        return r.dominantLanguage == .english && (r.languageHypotheses(withMaximum: 5)[.english] ?? 0) >= englishMin
+        let c = r.languageHypotheses(withMaximum: 5)[.english] ?? 0
+        // a very short phrase ("Nap buddies.") cannot be told apart reliably: English only has to be a real candidate; the alphabet, the deny list and the facts check still apply
+        if text.count < 26 { return r.dominantLanguage == .english || c >= 0.25 }
+        return r.dominantLanguage == .english && c >= englishMin
     }
 
     /// NLTagger's sentiment score of the whole text, -1 (very negative) ... 1 (very positive); 0 when the tagger has no answer.

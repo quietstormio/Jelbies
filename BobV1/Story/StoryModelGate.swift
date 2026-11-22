@@ -131,15 +131,17 @@ nonisolated enum StoryPrompt {
     static func note(_ f: StoryFacts, with h: StoryFacts.Housemate) -> String {
         let v = StoryFill.values(f, with: h)
         // The Profile row is titled with the housemate's name, so the note says "They" and never a name.
-        var lines = ["Write one plain sentence, at most 45 characters, about how two housemate pets get on. Start with the word They. Do not use any name or placeholder.", "Facts:"]
+        var lines = ["Write one short plain phrase, at most 40 characters, about how two housemate pets get on, with no subject, like \"Play together a lot.\" or \"Only just met.\" Never start with the word They. Do not use any name or placeholder.", "Facts:"]
         switch StoryTemplates.tier(h) {
         case .close: lines.append("- [together] they play together more than anyone, the closest of friends")
         case .regular: lines.append("- [together] they often play together")
         case .few: lines.append("- [gettingToKnow] they are still getting to know each other")
         }
         if h.sharedGroup { lines.append("- [sharedGroup] they joined in a group activity lately") }
+        if h.sharedSpot != nil { lines.append("- [sharedSpot] they both like the same spot: {SPOT} (\(v[\"SPOT\"] ?? \"\"))") }
+        if h.napBuddies { lines.append("- [napBuddies] they both nap a lot") }
         if let x = v["EMOTE"], StoryTemplates.tier(h) != .few { lines.append("- [topEmote] they are often: {EMOTE} (\(x))") }
-        lines.append("Placeholder you may use: {EMOTE} only if you use the topEmote fact.")
+        lines.append("Placeholders you may use: {EMOTE} only with the topEmote fact, {SPOT} only with the sharedSpot fact.")
         return lines.joined(separator: "\n")
     }
 

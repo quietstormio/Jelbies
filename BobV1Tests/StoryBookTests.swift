@@ -235,4 +235,19 @@ final class StoryBookTests: XCTestCase {
         XCTAssertEqual(Set(b.saved.notes.keys), ["3>1"])                  // every note naming 2, in either direction, is gone
         XCTAssertTrue(b.saved.used.keys.allSatisfy { !$0.contains("2") || $0 == "about.1" || $0 == "note.3>1" })
     }
+
+    func testTwoNotesOnOneProfileNeverStartWithTheSameWord() {
+        var g = StoryTemplatesTests.RNG(s: 99)
+        for round in 0..<300 {
+            let b = book(suite(), day: Box(100))
+            var f = StoryTemplatesTests.randomFacts(&g)
+            f.id = 1
+            f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: [0, 120, 900][round % 3], topEmote: round % 2 == 0 ? "chase" : "cuddle"),
+                            .init(id: 3, name: "Pip", kindName: "Moo", playShare: 0.8, togetherSeconds: [900, 0, 120][round % 3], topEmote: round % 2 == 0 ? "chase" : "dance")]
+            let a = b.noteLine(f, with: f.housemates[0])!.text, c = b.noteLine(f, with: f.housemates[1])!.text
+            XCTAssertNotEqual(StoryTemplates.firstWord(a), StoryTemplates.firstWord(c), "\(a) / \(c)")
+            // and it stays so when shown again
+            XCTAssertEqual(b.noteLine(f, with: f.housemates[0])!.text, a); XCTAssertEqual(b.noteLine(f, with: f.housemates[1])!.text, c)
+        }
+    }
 }

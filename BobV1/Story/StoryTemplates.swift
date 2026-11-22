@@ -120,40 +120,70 @@ nonisolated enum StoryTemplates {
     // MARK: the friendship bank (one sentence each)
 
     enum Tier: String, Sendable { case close, regular, few }
-    struct NotePattern: Sendable { let id: Int; let tiers: Set<Tier>; let emote: Bool; let group: Bool; let keys: [String]; let text: String }
-    private static func N(_ id: Int, _ tiers: [Tier], _ emote: Bool, _ text: String, group: Bool = false) -> NotePattern {
-        let together = tiers.contains(.close) || tiers.contains(.regular)
-        return NotePattern(id: id, tiers: Set(tiers), emote: emote, group: group, keys: (together ? ["together"] : ["gettingToKnow"]) + (emote ? ["topEmote"] : []) + (group ? ["sharedGroup"] : []), text: text)
+    struct NotePattern: Sendable {
+        let id: Int; let tiers: Set<Tier>; let keys: [String]; let text: String
+        var emote = false          // uses {EMOTE}
+        var only: String?          // only when their top shared activity is exactly this SocialKind key
+        var group = false, spot = false, nap = false
     }
+    private static func N(_ id: Int, _ tiers: [Tier], _ keys: [String], _ text: String, emote: Bool = false, only: String? = nil, group: Bool = false, spot: Bool = false, nap: Bool = false) -> NotePattern {
+        NotePattern(id: id, tiers: Set(tiers), keys: keys, text: text, emote: emote, only: only, group: group, spot: spot, nap: nap)
+    }
+    private static let tg = ["together"], few = ["gettingToKnow"]
 
-    /// The row title on the Profile is the housemate's name alone, so a note never repeats the names: "They ..." (the pair; never he / she).
+    /// The row title on the Profile is the housemate's name, so a note has no subject and never repeats the names. The openings are varied on purpose: no opening word leads more than a fifth of the
+    /// bank and "They" none (tested); the two notes on one Profile never start with the same word (`friendship(avoid:)`).
     static let noteBank: [NotePattern] = [
-        N(1, [.close], false, "They play together more than anyone."),
-        N(2, [.close], false, "They are hardly ever apart."),
-        N(3, [.close], false, "They are the best of friends."),
-        N(4, [.close], false, "They are close friends."),
-        N(5, [.close], false, "They spend most of their time together."),
-        N(6, [.close], false, "They are often together."),
-        N(7, [.close], false, "They are inseparable."),
-        N(8, [.close, .regular], true, "They are often {EMOTE}."),
-        N(9, [.close, .regular], true, "They have been {EMOTE} a lot."),
-        N(10, [.close, .regular], true, "They spend a lot of time {EMOTE}."),
-        N(11, [.close, .regular], true, "They like {EMOTE}."),
-        N(12, [.regular], false, "They play together now and then."),
-        N(13, [.regular], false, "They play together fairly often."),
-        N(14, [.regular], false, "They sometimes play together."),
-        N(15, [.regular, .close], false, "They play together a lot."),
-        N(16, [.regular], false, "They have started playing together."),
-        N(17, [.few], false, "They are still getting to know each other."),
-        N(18, [.few], false, "They have not played together much yet."),
-        N(19, [.few], false, "They are just getting started as friends."),
-        N(20, [.few], false, "They are getting used to each other."),
-        N(21, [.few], false, "They are still new to each other."),
-        N(22, [.few], false, "They are just meeting."),
-        N(23, [.close, .regular], false, "They joined in group play lately.", group: true),
-        N(24, [.close, .regular], false, "They took part in a group activity lately.", group: true),
-        N(25, [.close, .regular], false, "They played in a group lately.", group: true),
+        // little time together (they have just met)
+        N(1, [.few], few, "Only just met."),
+        N(2, [.few], few, "Still new to each other."),
+        N(3, [.few], few, "Just getting to know each other."),
+        N(4, [.few], few, "Not much play together yet."),
+        N(5, [.few], few, "Getting used to each other."),
+        N(6, [.few], few, "Just getting started as friends."),
+        // some play
+        N(7, [.regular], tg, "Starting to play together."),
+        N(8, [.regular], tg, "Play together now and then."),
+        N(9, [.regular], tg, "Sometimes play together."),
+        N(10, [.regular], tg, "Fairly often found playing together."),
+        // most played with
+        N(11, [.regular, .close], tg, "Play together a lot."),
+        N(12, [.close], tg, "Together most of the day."),
+        N(13, [.close], tg, "Hardly ever apart."),
+        N(14, [.close], tg, "Best of friends."),
+        N(15, [.close], tg, "Close friends."),
+        N(16, [.close], tg, "Inseparable."),
+        N(17, [.close], tg, "Favourite playmate."),
+        N(18, [.close], tg, "Spend most of their time together."),
+        // what they do together most
+        N(19, [.close, .regular], tg + ["topEmote"], "Often {EMOTE}.", emote: true),
+        N(20, [.close, .regular], tg + ["topEmote"], "Always up for {EMOTE}.", emote: true),
+        N(21, [.close, .regular], tg + ["topEmote"], "A lot of time spent {EMOTE}.", emote: true),
+        N(22, [.close, .regular], tg + ["topEmote"], "Keep on {EMOTE}.", emote: true),
+        N(23, [.close, .regular], tg + ["topEmote"], "Chase is their favourite game.", only: "chase"),
+        N(24, [.close, .regular], tg + ["topEmote"], "Always up for a game of chase.", only: "chase"),
+        N(25, [.close, .regular], tg + ["topEmote"], "Love a dance together.", only: "dance"),
+        N(26, [.close, .regular], tg + ["topEmote"], "Often found side by side on the couch.", only: "cuddle"),
+        N(27, [.close, .regular], tg + ["topEmote"], "Cuddles on the couch are a favourite.", only: "cuddle"),
+        N(28, [.close, .regular], tg + ["topEmote"], "Lots of high fives.", only: "highFive"),
+        N(29, [.close, .regular], tg + ["topEmote"], "Passing the ball about is their thing.", only: "pass"),
+        N(30, [.close, .regular], tg + ["topEmote"], "Hopping along side by side.", only: "hopAlong"),
+        // a shared spot and a shared habit
+        N(31, [.close, .regular, .few], ["favouriteSpot", "sharedSpot"], "Both like it {SPOT}.", spot: true),
+        N(32, [.close, .regular, .few], ["favouriteSpot", "sharedSpot"], "Share a favourite spot {SPOT}.", spot: true),
+        N(33, [.close, .regular, .few], ["favouriteSpot", "sharedSpot"], "Often found {SPOT} together.", spot: true),
+        N(34, [.close, .regular, .few], ["napBuddies"], "Nap buddies.", nap: true),
+        N(35, [.close, .regular, .few], ["napBuddies"], "Both big nappers.", nap: true),
+        // group play
+        N(36, [.close, .regular], tg + ["sharedGroup"], "Joined in group play lately.", group: true),
+        N(37, [.close, .regular], tg + ["sharedGroup"], "Took part in a group activity lately.", group: true),
+        N(38, [.close, .regular], tg + ["sharedGroup"], "Played in a group lately.", group: true),
     ]
+
+    /// The first word of a note as it will be read (letters only, lower case).
+    static func firstWord(_ text: String) -> String {
+        String(text.split(separator: " ").first ?? "").lowercased().filter { $0.isLetter }
+    }
 
     // MARK: eligibility
 
@@ -214,11 +244,14 @@ nonisolated enum StoryTemplates {
         return nil
     }
 
-    /// One friendship note for `f` about housemate `h`.
-    static func friendship(_ f: StoryFacts, with h: StoryFacts.Housemate, used: Set<Int>, seed: UInt64) -> Written? {
+    /// One friendship note for `f` about housemate `h`. `avoid`: opening words already used by the note above on the same Profile (never two notes that start alike).
+    static func friendship(_ f: StoryFacts, with h: StoryFacts.Housemate, used: Set<Int>, seed: UInt64, avoid: Set<String> = []) -> Written? {
         let t = tier(h)
         let values = StoryFill.values(f, with: h), offered = StoryFill.offered(f, with: h), avail = StoryFill.facts(f, with: h)
-        let eligible = noteBank.filter { $0.tiers.contains(t) && (!$0.emote || values["EMOTE"] != nil) && (!$0.group || h.sharedGroup) }
+        let eligible = noteBank.filter { p in
+            guard p.tiers.contains(t), !p.emote || values["EMOTE"] != nil, p.only == nil || p.only == h.topEmote, !p.group || h.sharedGroup, !p.spot || (h.sharedSpot != nil && values["SPOT"] != nil), !p.nap || h.napBuddies else { return false }
+            return !avoid.contains(firstWord(p.text))
+        }
         var pool = eligible.filter { !used.contains($0.id) }
         if pool.isEmpty { pool = eligible }
         var rejected = 0
