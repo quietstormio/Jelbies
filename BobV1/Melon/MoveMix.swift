@@ -40,6 +40,8 @@ nonisolated enum MoveMix {
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
     static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
+    /// Leg against the board's predicted positions over the next 2 s (see `mixBoardConflict`).
+    static let boardNear: Float = 1.05, boardPenalty: Float = 6
     /// A kind unseen for this long gets the full recency boost (x1 + 1); never seen = full.
     static let recencyFull: Float = 600
     static let windowGap: Float = 90
@@ -195,7 +197,8 @@ extension BlobBrain {
                     nearest = min(nearest, simd_distance(o.position, cand))
                     if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
                 }
-                var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false)
+                if mixLegThroughSolid(here, cand) { continue }
+                var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) - mixBoardConflict(from: here, to: cand, speed: roomNominalWalk)
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
                 score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
                 score += MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
@@ -275,7 +278,7 @@ extension BlobBrain {
             if (busy && near < MoveMix.runClearance) || near < peerGap * 1.1 { return false }
         }
         if let b = board, b.claimed(near: g, radius: MoveMix.claimRadius, except: steerID) { return false }
-        guard roomLegConflict(from: here, to: g, speed: roomNominalWalk * 1.6, others: others, dash: true) < 0.01 else { return false }
+        guard roomLegConflict(from: here, to: g, speed: roomNominalWalk * 1.6, others: others, dash: true) < 0.01, mixBoardConflict(from: here, to: g, speed: roomNominalWalk * 1.6) < 0.01, !mixLegThroughSolid(here, g) else { return false }
         let chance = MoveMix.runChance * (outingPlay ? MoveMix.parkRunMul : 1) * (1 - 0.75 * idleNight) * (idleMood == .happy ? 1 : MoveMix.okayRunMul)
         guard rand() < chance else { return false }
         var rg = here + (g - here) * MoveMix.runShare
@@ -305,4 +308,29 @@ extension BlobBrain {
 extension BlobBrain {
     /// 1...2: the weight boost of a kind last seen `ago` seconds ago (nil = never).
     func mixRecency(_ ago: Float?) -> Float { 1 + min(1, (ago ?? MoveMix.recencyFull) / MoveMix.recencyFull) }
+}
+
+extension BlobBrain {
+    /// Round 3 (park, destination level): the leg `here -> cand` runs through a park solid (slide, seesaw, bench ...). Always false at home.
+    func mixLegThroughSolid(_ here: SIMD2<Float>, _ cand: SIMD2<Float>) -> Bool {
+        MoveMix.on && ParkClearSpot.legCrossesSolid(here, cand, radius: footprint)
+    }
+    /// 0...`boardPenalty`: the leg would come within a body's width of where another body will be (from the shared board) in the next 2 s. Not only for runs.
+    func mixBoardConflict(from here: SIMD2<Float>, to cand: SIMD2<Float>, speed: Float) -> Float {
+        guard MoveMix.on, let b = board else { return 0 }
+        let L = simd_distance(here, cand)
+        guard L > 0.05, speed > 0.1 else { return 0 }
+        var worst: Float = 0
+        let near = peerGap * MoveMix.boardNear
+        for o in socialOthers() where o !== self {
+            for k in 1...4 {
+                let t = Float(k) * 0.5
+                guard let q = b.position(of: o.steerID, after: t) else { break }
+                let mine = here + (cand - here) * min(1, speed * t / L)
+                let d = simd_distance(mine, q)
+                if d < near { worst = max(worst, 1 - d / near) }
+            }
+        }
+        return worst * MoveMix.boardPenalty
+    }
 }

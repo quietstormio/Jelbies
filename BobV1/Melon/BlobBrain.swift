@@ -1073,6 +1073,8 @@ final class BlobBrain {
             }
             var score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
             if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) - EmoteSpot.roamCellWeight * EmoteSpot.roamOver(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
+            if MoveMix.on, mixLegThroughSolid(here, cand) { continue }          // (park: never a leg through a solid piece)
+            if MoveMix.on { score -= mixBoardConflict(from: here, to: cand, speed: roomNominalWalk) }
             if MoveMix.on, !(rfStop?.stopOK(cand) ?? true) { score -= MoveMix.underButtonPenalty }          // (a goal under a HUD button is a pass-through spot: allowed, less liked; nothing starts there)
             if live || MoveMix.on { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
             if MoveMix.on {          // (MoveMix.swift: stale floor is the main term, shared map blended with this body's own; a spot another body has claimed is out)
