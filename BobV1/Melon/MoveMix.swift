@@ -54,6 +54,15 @@ nonisolated enum MoveMix {
     static let pairMaxDist: Float = 6.5
     /// Night / sleepy: the in-place chain rule and the forced leg off the buttons do not apply.
     static let sleepyNight: Float = 0.4
+    // 6. a little more running about (round 2): a share of the long roam / stroll legs is done with the game's own RUN gait (idleStart(.run, goal:)), happy / okay only, less at night
+    nonisolated(unsafe) static var runChance: Float = {
+        if let v = ProcessInfo.processInfo.environment["MOVEMIX_RUNCHANCE"], let f = Float(v) { return f }
+        if DevArgs.enabled, let v = UserDefaults.standard.object(forKey: "MoveMixRun") as? NSNumber { return v.floatValue }
+        return 0.3
+    }()
+    static let runLegMin: Float = 3.5
+    static let runClearance: Float = 1.7          // a run keeps this far from any body that is in an emote (a session, a special) or walking its own leg across
+    static let okayRunMul: Float = 0.6
     // 5. buttons: see RoamFloor.stopFree / stopOK
 }
 
@@ -131,8 +140,9 @@ extension BlobBrain {
         mix.strollDir = len > 1e-3 ? d / len : .zero; mix.strollDirAt = now
         if let rf = roamProvider?() { mix.strollThird = mixThird(g.y, rf) }
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
-        script = .walk(target: g, then: .none); activity = .walking
         mix.last = .leg; mix.legKind = "stroll"
+        if mixTryRun(to: g, sim) { return true }
+        script = .walk(target: g, then: .none); activity = .walking
         return true
     }
 
@@ -220,4 +230,29 @@ extension BlobBrain {
     }
     /// 0 back, 1 middle, 2 front third of the floor's depth.
     func mixThird(_ z: Float, _ rf: GameCamera.RoamFloor) -> Int { min(2, max(0, Int((z - rf.minZ) / max(rf.maxZ - rf.minZ, 0.1) * 3))) }
+}
+
+extension BlobBrain {
+    /// The leg `here -> g` was just picked (roam or stroll): sometimes run it with the game's own run gait. True = the run started (the caller must not start the walk).
+    func mixTryRun(to g: SIMD2<Float>, _ sim: SoftBody) -> Bool {
+        guard MoveMix.on, MoveMix.runChance > 0, idleMood != .grumpy, !mixSleepy, runMoveDemo == nil, !race.active, idleState.kind == nil, !hurry, commandedIdle == nil else { return false }
+        let here = position, d = simd_distance(here, g)
+        guard d >= MoveMix.runLegMin, fastOthers() < 2 else { return false }
+        let others = socialOthers().filter { $0 !== self }
+        for o in others {
+            // never through a pair / group that is emoting, nor past anyone who is busy near the line
+            let busy = o.social != nil || o.idleState.kind != nil || o.meetBusy
+            let ab = g - here, t = max(0, min(1, simd_dot(o.position - here, ab) / max(simd_dot(ab, ab), 1e-4)))
+            let near = simd_distance(o.position, here + ab * t)
+            if (busy && near < MoveMix.runClearance) || near < peerGap * 1.1 { return false }
+        }
+        if let b = board, b.claimed(near: g, radius: MoveMix.claimRadius, except: steerID) { return false }
+        guard roomLegConflict(from: here, to: g, speed: roomNominalWalk * 1.6, others: others, dash: true) < 0.01 else { return false }
+        let chance = MoveMix.runChance * (1 - 0.75 * idleNight) * (idleMood == .happy ? 1 : MoveMix.okayRunMul)
+        guard rand() < chance else { return false }
+        guard idleStart(.run, sim, goal: g) else { return false }
+        if anticsEnabled { kindCooldownStart(.run) }
+        mix.legKind = "run"
+        return true
+    }
 }

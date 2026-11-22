@@ -988,6 +988,7 @@ final class BlobBrain {
             }
             if simd_length(target - here) < 0.3, let f = fallback { target = f }
             if simd_length(target - here) < 0.3 { restTimer = pickTimedOut ? 0.03 : 0.6; return }          // (out of time: look again in two frames, not after a rest)
+            if roamed, MoveMix.on, mixTryRun(to: target, sim) { mix.last = .leg; return }          // (MoveMix.swift: a long leg is sometimes run, with the game's own run gait)
             script = .walk(target: target, then: .none); activity = .walking
         case 1: script = .look(index: 0, t: 0, base: yaw)
         case 2: script = .stepInPlace(t: 0, dur: rand(1.8, 3.0)); activity = .steppingInPlace
