@@ -385,11 +385,13 @@ extension BlobBrain {
         let mates = sleepMates
         if mates.isEmpty { return false }
         let fresh = mates.contains { $0.idleState.t < 20 && $0.sleep.stage <= 3 }
-        if fresh && rand() < 0.3 { return true }
+        if fresh && rand() < 0.3 { napWhy = "mate-fresh"; return true }
         // "come snuggle": any time of day, an awake Jelly may lie down beside one who is fully asleep (the roll starts a cooldown, win or lose)
         if snuggleCool <= 0, !race.active, !sleepLocked, mates.contains(where: { $0.isNapping }) {
             snuggleCool = rand(SleepTuning.snuggleCool.lowerBound, SleepTuning.snuggleCool.upperBound)
-            return rand() < (idleNight > 0.2 ? SleepTuning.snuggleChanceTired : SleepTuning.snuggleChanceRare)
+            let won = rand() < (idleNight > 0.2 ? SleepTuning.snuggleChanceTired : SleepTuning.snuggleChanceRare)
+            if won { napWhy = "snuggle" }
+            return won
         }
         return false
     }

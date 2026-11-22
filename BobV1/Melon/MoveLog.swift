@@ -48,6 +48,8 @@ final class MoveLog {
         var idleSum3 = [Float](repeating: 0, count: 9), idleSum6 = [Float](repeating: 0, count: 36)          // integral of "seconds since a body was last in this cell"
         var idleMax3: Float = 0, idleMax6: Float = 0
         var idleCells3 = 9, idleCells6 = 36
+        var napWhy: [String: Int] = [:]
+        var napN = 0; var napSec: Float = 0          // (round 2b: daytime sleeps: starts and seconds, all bodies)
         var quietSec: Float = 0, huddleSec: Float = 0, chainMax: Float = 0          // (move-mix-r1: seconds with nobody in any emote, with every body within 2.5 u of every other, the longest run of pair emotes of the same two (gaps <= 6 s))
         var kindSec: [String: Float] = [:]          // seconds of body time per emote kind (idle kind, or social kind)
         var kinds = Set<String>(), kindCounts: [Int] = []          // (the different emote kinds seen: this run's set; the sizes of the runs folded in)
@@ -60,7 +62,7 @@ final class MoveLog {
         for c in 0..<36 { a.idleSum6[c] += o.idleSum6[c] }
         for c in 0..<11 { a.act[c] += o.act[c] }
         for c in 0..<3 { a.bump[c] += o.bump[c] }
-        for (k, v) in o.kindSec { a.kindSec[k, default: 0] += v }; a.kinds.formUnion(o.kinds); a.quietSec += o.quietSec; a.huddleSec += o.huddleSec; a.chainMax = max(a.chainMax, o.chainMax); a.kindCounts += o.kindCounts.isEmpty ? [o.kinds.count] : o.kindCounts
+        for (k, v) in o.kindSec { a.kindSec[k, default: 0] += v }; a.kinds.formUnion(o.kinds); for (k, v) in o.napWhy { a.napWhy[k, default: 0] += v }; a.napN += o.napN; a.napSec += o.napSec; a.quietSec += o.quietSec; a.huddleSec += o.huddleSec; a.chainMax = max(a.chainMax, o.chainMax); a.kindCounts += o.kindCounts.isEmpty ? [o.kinds.count] : o.kindCounts
         a.walkSec += o.walkSec; a.gameSec += o.gameSec; a.emoteN += o.emoteN; a.walkN += o.walkN
         a.arrN += o.arrN; a.arrSec += o.arrSec; a.arrDist += o.arrDist
         a.stands += o.stands; a.walkTimes += o.walkTimes; a.pairN += o.pairN; a.groupN += o.groupN; a.pairSec += o.pairSec; a.groupSec += o.groupSec
@@ -87,7 +89,7 @@ final class MoveLog {
         var sideT: Float = 0, backT: Float = 0, sideDone = false, backDone = false, hardCool: Float = 0
         var overlapping: Set<Int> = []
         var prevP = SIMD2<Float>.zero, speed: Float = 0, slowT: Float = 0, cat = -1, catT: Float = 0, touching: Set<Int> = []
-        var inPlace = false, emoting = false, lastGoal: SIMD2<Float>?, walkStart = SIMD2<Float>.zero, walkT: Float = 0, lastP = SIMD2<Float>.zero
+        var napping = false, inPlace = false, emoting = false, lastGoal: SIMD2<Float>?, walkStart = SIMD2<Float>.zero, walkT: Float = 0, lastP = SIMD2<Float>.zero
     }
     private var bodies: [Int: Body] = [:]
     private var clock: Float = 0, lastFlush: Float = 0, mixTickClock: Float = -1
@@ -130,6 +132,9 @@ final class MoveLog {
         var inPlaceNow = b.social != nil          // (round 2: an IN-PLACE emote or a pair / group: not travel, not a flourish on a walk, not a lying / sitting rest)
         if let k = b.idleState.kind, k != .sleep, !BlobBrain.travelKinds.contains(k), !b.isWalkScript { inPlaceNow = true }
         s.inPlace = inPlaceNow
+        let napNow = b.idleState.kind == .sleep
+        if napNow { total.napSec += dt; window.napSec += dt; if !s.napping { total.napN += 1; window.napN += 1; total.napWhy[b.napWhy, default: 0] += 1; b.napWhy = "table" } }
+        s.napping = napNow
         if emoteNow { total.emoteSec[c] += dt; window.emoteSec[c] += dt; if !s.emoting { total.emoteN += 1; window.emoteN += 1; if let n = b.social?.kind.rawValue ?? b.idleState.kind?.rawValue { total.kinds.insert(n); window.kinds.insert(n) } } }
         s.emoting = emoteNow
         if emoteNow, let n = b.social?.kind.rawValue ?? b.idleState.kind?.rawValue { total.kindSec[n, default: 0] += dt }
@@ -303,6 +308,7 @@ final class MoveLog {
         let g = max(t.gameSec, 0.01)
         s += String(format: " | nobody-emoting %.0f%% huddle(all within 2.5 u) %.0f%% longest same-pair chain %.0f s kinds/run %@", t.quietSec / max(t.gameSec, 0.01) * 100, t.huddleSec / max(t.gameSec, 0.01) * 100, t.chainMax, (t.kindCounts.isEmpty ? [t.kinds.count] : t.kindCounts).map(String.init).joined(separator: "/"))
         s += String(format: " | idleness 3x3 mean %.1f max %.1f s, 6x6 mean %.1f max %.1f s", t.idleSum3.reduce(0, +) / g / Float(max(t.idleCells3, 1)), t.idleMax3, t.idleSum6.reduce(0, +) / g / Float(max(t.idleCells6, 1)), t.idleMax6)
+        s += String(format: " | NAPS %d starts %.0f s (per body per 10 min: %.1f starts) why %@", t.napN, t.napSec, Float(t.napN) / max(t.gameSec / 600, 0.01) / 3, t.napWhy.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: ","))
         let bs = max(t.bodySec.reduce(0, +), 0.001)
         s += " | 3x3 body% (back..front rows) " + (0..<3).map { r in (0..<3).map { String(format: "%.0f", t.bodySec[r * 3 + $0] / bs * 100) }.joined(separator: " ") }.joined(separator: " / ")
         let ks = t.kindSec.sorted { $0.value > $1.value }.prefix(16).map { "\($0.key) \(String(format: "%.1f", $0.value / max(t.gameSec, 0.01) / 3 * 100))" }

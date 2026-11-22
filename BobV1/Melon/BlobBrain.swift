@@ -197,6 +197,7 @@ final class BlobBrain {
     var emoteSpot = EmoteSpotState()
     /// move-mix-r1 (Melon/MoveMix.swift): what the last pick was, the no-social wait, a stroll that is due.
     var mix = MixBook()
+    var napWhy = "table"          // (round 2b: which roll started the last sleep: the logger counts nap causes)
     /// Perks (Store/Perks.swift) that change how he behaves; the game sets them from his JellyPerks every step.
     var perkFlags = PerkFlags()
     /// The extra solo antics and the new social kinds are in the tables (the room); the headless suites that predate them leave this off.
@@ -716,7 +717,7 @@ final class BlobBrain {
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
-        defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) } }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
+        defer { if EmoteSpot.logOn { emoteSpotLog(dt) }; var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) } }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
         centreDwellTick(dt); mixOwnTick()

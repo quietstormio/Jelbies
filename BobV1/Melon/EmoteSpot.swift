@@ -129,7 +129,8 @@ extension BlobBrain {
         guard emoteSpot.logT >= 1 else { return }
         emoteSpot.logT = 0
         let st: String
-        if let s = social { st = (s.kind.isGroup ? "group:" : "pair:") + s.kind.rawValue }
+        if held { st = "held" }
+        else if let s = social { st = (s.kind.isGroup ? "group:" : "pair:") + s.kind.rawValue }
         else if let k = idleState.kind { st = (k == .sleep || k == .sit ? "rest:" : (Self.travelKinds.contains(k) ? "move:" : "solo:")) + k.rawValue }
         else if activity == .walking || activity == .coming { st = "walk" } else { st = "stand" }
         NSLog("[emotespot] t=%.1f id=%d x=%.2f z=%.2f %@", variety.now, steerID, px, pz, st)
