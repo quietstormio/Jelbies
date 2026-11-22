@@ -15,24 +15,26 @@ import FoundationModels
 
 @available(iOS 26.0, *)
 nonisolated enum StoryModelPatterns {
-    /// One sentence: 8 to 80 characters of letters, spaces, commas, apostrophes, hyphens or a {PLACEHOLDER}, then one full stop.
-    static let sentence: Regex<AnyRegexOutput> = try! Regex("(?:[A-Za-z ,'-]|\\{[A-Z]{1,6}\\}){8,80}\\.")
+    /// One sentence: 8 to 75 characters of letters, spaces, commas, apostrophes, hyphens or a {PLACEHOLDER}, then one full stop.
+    static let sentence: Regex<AnyRegexOutput> = try! Regex("(?:[A-Za-z ,'-]|\\{[A-Z]{1,6}\\}){8,75}\\.")
 }
 
 @available(iOS 26.0, *)
-@Generable(description: "A short note about a pet")
+@Generable(description: "One plain sentence about a pet and the facts it states")
 nonisolated struct StoryAboutDraft {
-    @Guide(description: "First sentence", .pattern(StoryModelPatterns.sentence))
-    var first: String
-    @Guide(description: "Optional second sentence", .pattern(StoryModelPatterns.sentence))
-    var second: String?
+    @Guide(description: "The sentence", .pattern(StoryModelPatterns.sentence))
+    var sentence: String
+    @Guide(description: "Keys of the facts used", .maximumCount(2))
+    var facts: [String]
 }
 
 @available(iOS 26.0, *)
-@Generable(description: "One short sentence about two pets")
+@Generable(description: "One plain sentence about two pets and the facts it states")
 nonisolated struct StoryNoteDraft {
     @Guide(description: "The sentence", .pattern(StoryModelPatterns.sentence))
     var sentence: String
+    @Guide(description: "Keys of the facts used", .maximumCount(2))
+    var facts: [String]
 }
 
 @available(iOS 26.0, *)
@@ -70,20 +72,20 @@ nonisolated final class AppleModelClient: StoryModelClient, @unchecked Sendable 
     }
     struct StoryWindowError: Error {}
 
-    func draftAbout(prompt: String) async throws -> (first: String, second: String?) {
+    func draftAbout(prompt: String) async throws -> (sentence: String, keys: [String]) {
         try await checkWindow(prompt, schema: StoryAboutDraft.generationSchema)
         let s = fresh()
         let r = try await s.respond(to: prompt, generating: StoryAboutDraft.self, options: options())
-        remember(StoryDraft.about(first: r.content.first, second: r.content.second), s)
-        return (r.content.first, r.content.second)
+        remember(r.content.sentence, s)
+        return (r.content.sentence, r.content.facts)
     }
 
-    func draftNote(prompt: String) async throws -> String {
+    func draftNote(prompt: String) async throws -> (sentence: String, keys: [String]) {
         try await checkWindow(prompt, schema: StoryNoteDraft.generationSchema)
         let s = fresh()
         let r = try await s.respond(to: prompt, generating: StoryNoteDraft.self, options: options())
         remember(r.content.sentence, s)
-        return r.content.sentence
+        return (r.content.sentence, r.content.facts)
     }
 
     private func remember(_ template: String, _ s: LanguageModelSession) {

@@ -24,8 +24,9 @@ final class StoryBookTests: XCTestCase {
         var name: String
         var aboutText: String?
         var noteText: String?
-        func about(facts: StoryFacts) async -> String? { aboutText }
-        func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> String? { noteText }
+        var keys: [String] = ["favouriteFood"]
+        func about(facts: StoryFacts) async -> StoryAnswer? { aboutText.map { StoryAnswer($0, keys: keys) } }
+        func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> StoryAnswer? { noteText.map { StoryAnswer($0, keys: ["together"]) } }
     }
     private func book(_ d: UserDefaults, day: Box) -> StoryBook {
         let b = StoryBook(defaults: d)
@@ -114,7 +115,7 @@ final class StoryBookTests: XCTestCase {
     // MARK: the chain
 
     func testTheChainTakesTheFirstAcceptableAnswerAndEveryAnswerIsGuarded() async {
-        let good = Fake(name: "model", aboutText: "{A} tidies up {SPOT} with a big smile.", noteText: "{A} and {B} are close.")
+        let good = Fake(name: "model", aboutText: "{A} spends a lot of time {SPOT}.", noteText: "{A} and {B} are close friends.", keys: ["favouriteSpot"])
         let tmpl = TemplateWriter(memory: StoryMemory())
         var r = await StoryChain([good, tmpl]).about(facts())
         XCTAssertEqual(r?.writer, "template")          // {SPOT} was not offered for these facts: the guard refused the model's text, the template answered
@@ -123,12 +124,19 @@ final class StoryBookTests: XCTestCase {
         var f = facts(); f.favouriteSpot = "window"
         r = await StoryChain([good, tmpl]).about(f)
         XCTAssertEqual(r?.writer, "model")
-        XCTAssertEqual(r?.final, "Berry tidies up by the window with a big smile.")
+        XCTAssertEqual(r?.final, "Berry spends a lot of time by the window.")
+        XCTAssertEqual(r?.keys, ["favouriteSpot"])
         // a model that answers nothing, or something bad, falls through
-        for bad in [nil, "I like Berry a lot.", "Berry is sick today.", "Berry is VERY happy.", "Berry is happy", "Berry is kissed.", "Berry and the AI model are friends."] as [String?] {
+        for bad in [nil, "I like Berry a lot.", "Berry is sick today.", "Berry is VERY happy.", "Berry likes cookies best", "Berry is kissed.", "Berry and the AI model are friends.",
+                    "{A} trots over the moment {FOOD} appears.", "{A} likes her {FOOD}.", "{A} likes {FOOD}. {A} likes {SPOT}."] as [String?] {
             r = await StoryChain([Fake(name: "model", aboutText: bad), tmpl]).about(facts())
             XCTAssertEqual(r?.writer, "template", "\(bad ?? "nil")")
         }
+        // a line that states no fact, or names one the sheet does not back, is refused
+        r = await StoryChain([Fake(name: "model", aboutText: "{A} is a Jelmiko.", keys: []), tmpl]).about(facts())
+        XCTAssertEqual(r?.writer, "template"); XCTAssertEqual(r?.attempts.first?.verdict, "reject(no-fact-named)")
+        r = await StoryChain([Fake(name: "model", aboutText: "{A} has won a volleyball match.", keys: ["volleyWin"]), tmpl]).about(facts())
+        XCTAssertEqual(r?.attempts.first?.verdict, "reject(unknown-fact:volleyWin)")
         // the note too
         let h = facts().housemates[0]
         let n = await StoryChain([Fake(name: "model", aboutText: nil, noteText: "{A} kissed {B}."), tmpl]).friendship(facts(), with: h)
@@ -141,14 +149,14 @@ final class StoryBookTests: XCTestCase {
     func testAChainWithAModelStoresWhoWroteIt() async {
         let day = Box(100)
         let b = book(suite(), day: day)
-        b.chain = StoryChain([Fake(name: "model", aboutText: "{A} is a {PERS} type who never turns down a nap.", noteText: "{A} and {B} are the best of pals."), TemplateWriter(memory: b.memory)])
+        b.chain = StoryChain([Fake(name: "model", aboutText: "{A} is a {PERS} type.", noteText: "{A} and {B} are close friends.", keys: ["personality"]), TemplateWriter(memory: b.memory)])
         _ = b.aboutLine(facts())                        // the first view is pre-written
         XCTAssertEqual(b.saved.about["1"]!.writer, "template")
         day.v = 101
         let done = await b.refresh(facts())             // the next day the model's turn comes (a pre-written one waits for it)
         XCTAssertTrue(done.contains("about"))
         XCTAssertTrue(b.aboutLine(facts())!.byModel)
-        XCTAssertEqual(b.aboutLine(facts())!.text, "Berry is a sleepy type who never turns down a nap.")
+        XCTAssertEqual(b.aboutLine(facts())!.text, "Berry is a sleepy type.")
     }
 
     // MARK: save / load / purge / old save

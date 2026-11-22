@@ -21,7 +21,7 @@ nonisolated enum StoryReason: Equatable, Sendable, CustomStringConvertible {
     case empty, lineBreak, quote, bracket, emoji, badCharacter, digit, allCaps, tooManyExclamations, noFullStop, sentenceCount, tooLong
     case firstPerson, secondPerson, question
     case denied(String), unknownPlaceholder(String), unfilledPlaceholder
-    case notEnglish, negativeTone, repeatsShown
+    case notEnglish, negativeTone, repeatsShown, strained, noFacts, unknownFact(String), missingFactKey(String)
     var description: String {
         switch self {
         case .empty: return "empty"
@@ -45,6 +45,10 @@ nonisolated enum StoryReason: Equatable, Sendable, CustomStringConvertible {
         case .notEnglish: return "not-english"
         case .negativeTone: return "negative-tone"
         case .repeatsShown: return "repeats-shown-text"
+        case .strained: return "strained-phrase"
+        case .noFacts: return "no-fact-named"
+        case .unknownFact(let k): return "unknown-fact:\(k)"
+        case .missingFactKey(let k): return "fact-not-named:\(k)"
         }
     }
 }
@@ -59,27 +63,28 @@ nonisolated enum StoryVerdict: Equatable, Sendable, CustomStringConvertible {
 nonisolated enum StoryGuard {
     // MARK: the limits
 
-    /// About blurb: one or two short sentences, at most this many characters in all (the final text, names included). (110 since the owner kept the static paragraph above it.)
-    static let aboutMaxChars = 110, aboutSentences = 2
+    /// About blurb: ONE plain sentence, at most this many characters (the final text, names included): two lines in its bubble. (The owner cut it from 130 to 110 to 90.)
+    static let aboutMaxChars = 90, aboutSentences = 1
     /// Friendship note: one sentence, at most this many characters.
     static let noteMaxChars = 80, noteSentences = 1
-    /// Tone: NLTagger's paragraph sentiment (-1...1) of the final text must be at least this. NLTagger scores in steps of 0.2 and is noisy on short text: harmless bank sentences ("hardly ever apart", "never far from") score down to -0.6 while unkind samples score -0.6 to -1.0 or 0.0. So this is only the backstop (it rejects <= -0.8); the deny list does the real work.
-    static let sentimentMin = -0.7
+    /// Tone: NLTagger's paragraph sentiment (-1...1) of the final text must be at least this. NLTagger scores in steps of 0.2 and is very noisy on short factual sentences (measured on the Mac: "Zed naps a lot." -0.8, "Luna naps a lot." -0.2, "The dog is sad and hurt." -0.6, "Berry is not happy at all." -1.0), so it cannot tell a plain line from an unkind one. It is only a backstop for the very negative (it rejects -1.0); the deny list and the fact check do the real work.
+    static let sentimentMin = -0.9
     /// Language: NLLanguageRecognizer's confidence for English must be at least this on the final text.
     static let englishMin = 0.60
 
     static func maxChars(_ k: StoryKind) -> Int { k == .about ? aboutMaxChars : noteMaxChars }
     static func sentences(_ k: StoryKind) -> Int { k == .about ? aboutSentences : noteSentences }
-    static func sentenceRange(_ k: StoryKind) -> ClosedRange<Int> { k == .about ? 1...aboutSentences : 1...noteSentences }
+    static func sentenceRange(_ k: StoryKind) -> ClosedRange<Int> { 1...sentences(k) }
 
     // MARK: the one function
 
     /// `template`: the writer's text WITH placeholders. `final`: the same text with the real words put in. `offered`: the placeholder names the writer was allowed ("A", "B", "FOOD" ...).
     /// `checkTone`: false only for the pure-shape tests that must not depend on the language model's mood.
     /// `shown`: text the screen already shows next to this one (the static kind paragraph: colour and character note); an About blurb must not repeat it (`repeatsShown`).
-    static func check(template: String, final: String, kind: StoryKind, offered: Set<String>, shown: String? = nil, values: [String: String]? = nil, checkTone: Bool = true) -> StoryVerdict {
+    static func check(template: String, final: String, kind: StoryKind, offered: Set<String>, shown: String? = nil, values: [String: String]? = nil, keys: [String]? = nil, available: Set<String>? = nil, checkTone: Bool = true) -> StoryVerdict {
         if let r = checkTemplate(template, kind: kind, offered: offered) { return .reject(r) }
         if kind == .about, repeatsShown(masked(template), shown: shown) { return .reject(.repeatsShown) }
+        if let r = checkFacts(template, kind: kind, keys: keys, available: available) { return .reject(r) }
         if let r = checkFinal(final, kind: kind, checkTone: checkTone, toneText: values.map { toneText(template, $0) }) { return .reject(r) }
         return .pass
     }
@@ -118,6 +123,7 @@ nonisolated enum StoryGuard {
         if isQuestion(m) { return .question }
         if let r = voice(m) { return r }
         if let w = denied(m, raw: t) { return .denied(w) }
+        if strained(m) { return .strained }
         let n = sentenceCount(m)
         if !sentenceRange(kind).contains(n) { return .sentenceCount }
         return nil
@@ -220,6 +226,39 @@ nonisolated enum StoryGuard {
         return nil
     }
 
+    // MARK: traceable to the fact sheet
+
+    /// Which fact each placeholder stands for. A text that uses one must name that fact.
+    static let tokenFact: [String: String] = ["FOOD": "favouriteFood", "ACT": "favouriteActivity", "SPOT": "favouriteSpot", "RACE": "raceWin", "SHOW": "showCup", "PERS": "personality", "EMOTE": "topEmote", "LEFT": "raceMilestone"]
+    /// Every fact key a text may name (the writers' vocabulary; the model's guide lists these).
+    static let allFactKeys = ["personality", "favouriteFood", "favouriteActivity", "favouriteSpot", "raceWin", "showCup", "volleyWin", "recentWin", "partner", "topEmote", "nap", "newcomer", "settled", "raceMilestone", "together", "gettingToKnow", "bond"]
+
+    /// The line must name at least one fact, every named fact must be on the sheet (true), and every fact placeholder it uses must be named. `keys` nil = not checked (pure-shape tests).
+    static func checkFacts(_ t: String, kind: StoryKind, keys: [String]?, available: Set<String>?) -> StoryReason? {
+        guard let keys else { return nil }
+        if keys.isEmpty { return .noFacts }
+        if let available { for k in keys where !available.contains(k) { return .unknownFact(k) } }
+        for tok in tokens(in: t) { if let need = tokenFact[tok], !keys.contains(need) { return .missingFactKey(need) } }
+        if kind == .about, tokens(in: t).contains("B"), !keys.contains("partner") { return .missingFactKey("partner") }
+        return nil
+    }
+
+    // MARK: strained phrases (editable)
+
+    /// Stage directions and strained verbs the owner does not want ("trots over the moment ... appears"). Whole-phrase, case-insensitive. Add to it, nowhere else.
+    static let strainedPhrases: [String] = [
+        "trots over", "trots", "the moment", "never says no", "never say no", "every time", "a little spin", "comes running", "cannot get enough", "through and through", "as if it was always", "wiggle at",
+        "adventure", "big, bright", "big heart", "makes a mark", "making a mark", "cheers up", "ends up", "can often be found", "keeps coming back", "hang about", "sniff", "pick every", "is happiest",
+        "does a little", "dances for joy", "shone", "shows", "proper racer", "glowing", "champion napper", "little jelmiko", "good jelmiko", "happy little",
+    ]
+    /// Pronouns that would guess a gender (the game has none): a Jelmiko is its name.
+    static let pronounPattern = try! NSRegularExpression(pattern: "(?<![A-Za-z'\u{2019}])(he|she|him|her|hers|his|himself|herself|he's|she's|he'll|she'll)(?![A-Za-z'\u{2019}])", options: [.caseInsensitive])
+    static func strained(_ m: String) -> Bool {
+        let l = m.lowercased()
+        if strainedPhrases.contains(where: { l.contains($0) }) { return true }
+        return pronounPattern.firstMatch(in: m, range: NSRange(location: 0, length: (m as NSString).length)) != nil
+    }
+
     // MARK: not repeating the static paragraph
 
     /// Colour words an About blurb never uses (the static paragraph above it says the colour, for every skin).
@@ -248,7 +287,7 @@ nonisolated enum StoryGuard {
     /// The text the language and tone checks read: the real values put in, but the names (the player's own words) replaced by stand-ins, so a name can never tip the tone.
     static func toneText(_ template: String, _ values: [String: String]) -> String {
         var v = values
-        v["A"] = "Zed"; v["B"] = "Mia"; v["C"] = "Kit"; v["BKIND"] = "friend"
+        v["A"] = "Rosie"; v["B"] = "Max"; v["C"] = "Pip"; v["BKIND"] = "friend"
         return StoryFill.apply(template, v)
     }
 

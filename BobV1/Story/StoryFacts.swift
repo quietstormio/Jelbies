@@ -62,12 +62,10 @@ nonisolated enum StoryPhrases {
     /// {ACT}: fits "likes {ACT}" and "is often found {ACT}".
     static let activity: [String: String] = [
         "bounce": "bouncing about", "jacks": "doing jumping jacks", "sway": "swaying to the music", "window": "looking out of the window", "tail": "chasing a tail",
-        "flop": "flopping down for a wiggle", "stretch": "having a big stretch", "yawn": "having a big yawn", "chirp": "chirping a little tune", "skipHop": "skipping about",
-        "hopscotch": "playing hopscotch", "legSpin": "spinning about", "trot": "trotting about", "giggle": "giggling", "joy": "dancing for joy", "bellyDrum": "drumming a tummy beat",
-        "politeBow": "taking a polite bow", "proudStrut": "strutting about", "tailThump": "thumping a tail", "flapHop": "flapping and hopping", "peek": "peeking round the sofa",
-        "decorSit": "settling into a cushion", "decorBoop": "sniffing the plant", "decorKick": "kicking the ball about", "decorHop": "bouncing on the mat", "decorPeek": "peeking in the toy box",
-        "decorSlide": "riding the slide", "slide": "sliding about", "scoot": "scooting about", "zoomies": "zooming about", "run": "running about", "lieDown": "lying flat for a moment",
-        "toy": "playing with the toys",
+        "chirp": "chirping a little tune", "skipHop": "skipping about",
+        "hopscotch": "playing hopscotch", "legSpin": "spinning about", "trot": "trotting about", "giggle": "giggling", "proudStrut": "strutting about", "flapHop": "flapping and hopping", "peek": "peeking round the sofa",
+        "decorSit": "settling into a cushion", "decorKick": "kicking the ball about", "decorHop": "bouncing on the mat", "decorPeek": "peeking in the toy box",
+        "decorSlide": "riding the slide", "slide": "sliding about", "scoot": "scooting about", "zoomies": "zooming about", "run": "running about", "toy": "playing with the toys",
         // together
         "chase": "playing chase", "tag": "playing tag", "dance": "dancing together", "highFive": "swapping high fives", "pass": "passing the ball", "hopAlong": "hopping along together",
         "twirl": "twirling together", "leapfrog": "playing leapfrog", "peekaboo": "playing peekaboo", "mirrorDance": "mirror dancing", "sitTogether": "sitting side by side",
@@ -99,18 +97,49 @@ nonisolated enum StoryPhrases {
 
 /// Putting the real words in, AFTER the guard. A writer (templates or the model) only ever handles the tokens.
 nonisolated enum StoryFill {
-    /// The token values for a blurb about `f`, or a note about `f` and `with`. Only tokens with a real fact behind them are offered.
+    static let numberWords = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"]
+    /// Race wins that earn the next milestone trophy (TrophyBook: 5, 10, 25 wins).
+    static let milestones = [5, 10, 25]
+
+    /// The token values for a blurb about `f` (B = the housemate played with most), or a note about `f` and `with`. Only tokens with a real fact behind them are offered.
     static func values(_ f: StoryFacts, with h: StoryFacts.Housemate? = nil) -> [String: String] {
         var v: [String: String] = ["A": StoryPhrases.cleanName(f.name)]
-        if let h { v["B"] = StoryPhrases.cleanName(h.name, fallback: "a housemate"); if !h.kindName.isEmpty { v["BKIND"] = h.kindName } }
+        let mate = h ?? f.housemates.first(where: { $0.id == f.mostPlayedWithID })
+        if let mate { v["B"] = StoryPhrases.cleanName(mate.name, fallback: "a housemate"); if !mate.kindName.isEmpty { v["BKIND"] = mate.kindName } }
         if let food = f.favouriteFood, let p = StoryPhrases.food[food] { v["FOOD"] = p }
         if let k = f.favouriteActivity, let p = StoryPhrases.activity[k] { v["ACT"] = p }
         if let s = f.favouriteSpot, let p = StoryPhrases.spot[s] { v["SPOT"] = p }
-        if let h, let e = h.topEmote, let p = StoryPhrases.activity[e] { v["EMOTE"] = p }
-        if let t = f.trophies.bestRaceTier { v["RACE"] = t }
-        if let t = f.trophies.bestShowRank { v["SHOW"] = t }
+        if let mate, let e = mate.topEmote, let p = StoryPhrases.activity[e] { v["EMOTE"] = p }
+        if f.trophies.raceWins > 0, let t = f.trophies.bestRaceTier { v["RACE"] = t }
+        if let t = f.trophies.bestShowRank, f.trophies.showCups > 0 { v["SHOW"] = t }
         if let p = f.personality { v["PERS"] = p.lowercased() }
+        if f.trophies.raceWins > 0, let next = milestones.first(where: { $0 > f.trophies.raceWins }) {
+            let left = next - f.trophies.raceWins
+            if left < numberWords.count { v["LEFT"] = "\(numberWords[left]) more race win\(left == 1 ? "" : "s")" }
+        }
         return v
+    }
+    /// The fact keys this sheet really backs (StoryGuard.allFactKeys is the vocabulary): a line may name only these.
+    static func facts(_ f: StoryFacts, with h: StoryFacts.Housemate? = nil) -> Set<String> {
+        let v = values(f, with: h)
+        var k: Set<String> = []
+        if v["PERS"] != nil { k.insert("personality") }
+        if v["FOOD"] != nil { k.insert("favouriteFood") }
+        if v["ACT"] != nil { k.insert("favouriteActivity") }
+        if v["SPOT"] != nil { k.insert("favouriteSpot") }
+        if v["RACE"] != nil { k.insert("raceWin") }
+        if v["SHOW"] != nil { k.insert("showCup") }
+        if f.trophies.volleyWins > 0 { k.insert("volleyWin") }
+        if f.trophies.recentKind == "race", let d = f.trophies.recentDaysAgo, d <= 7 { k.insert("recentWin") }
+        if v["LEFT"] != nil { k.insert("raceMilestone") }
+        if f.sleepHabit != nil { k.insert("nap") }
+        if f.newcomer { k.insert("newcomer") } else if f.daysTracked >= 4 { k.insert("settled") }
+        if let m = h ?? f.housemates.first(where: { $0.id == f.mostPlayedWithID }), m.togetherSeconds >= 60 {
+            if h == nil { k.insert("partner") } else { k.insert("together") }
+            if v["EMOTE"] != nil { k.insert("topEmote") }
+        } else if h != nil { k.insert("gettingToKnow") }
+        if f.relationshipLevel != nil { k.insert("bond") }
+        return k
     }
     static func offered(_ f: StoryFacts, with h: StoryFacts.Housemate? = nil) -> Set<String> { Set(values(f, with: h).keys) }
 

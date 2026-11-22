@@ -6,19 +6,27 @@
 
 import Foundation
 
+/// What a writer returns: the text with placeholders and the fact keys it states (StoryGuard checks that the sheet backs them).
+nonisolated struct StoryAnswer: Sendable, Equatable {
+    var template: String
+    var keys: [String]
+    init(_ template: String, keys: [String]) { self.template = template; self.keys = keys }
+}
+
 nonisolated protocol StoryWriter: Sendable {
     /// Short name for the log and the dump ("template", "model").
     var name: String { get }
-    /// The About blurb with placeholders; nil = no answer (the next writer is asked).
-    func about(facts: StoryFacts) async -> String?
+    /// The About line (one sentence) with placeholders and the fact keys it uses; nil = no answer (the next writer is asked).
+    func about(facts: StoryFacts) async -> StoryAnswer?
     /// The note about how `facts` gets on with housemate `with`, with placeholders; nil = no answer.
-    func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> String?
+    func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> StoryAnswer?
 }
 
 /// What a writer answered and what the guard said (every attempt is kept for the dump and the log).
 nonisolated struct StoryAttempt: Sendable, Equatable {
     var writer: String
     var raw: String?
+    var keys: [String] = []
     var verdict: String
 }
 
@@ -28,6 +36,7 @@ nonisolated struct StoryResult: Sendable, Equatable {
     var final: String
     var writer: String
     var attempts: [StoryAttempt]
+    var keys: [String] = []
 }
 
 /// The memory the pre-written writer needs between calls: which patterns were used lately (no repeat until the bank is through) and the seed counter. Saved by `StoryBook`.
@@ -69,20 +78,20 @@ nonisolated struct TemplateWriter: StoryWriter {
     static func aboutKey(_ id: Int) -> String { "about.\(id)" }
     static func noteKey(_ a: Int, _ b: Int) -> String { "note.\(a)>\(b)" }
 
-    func about(facts: StoryFacts) async -> String? { writeAbout(facts) }
-    func friendship(facts: StoryFacts, with h: StoryFacts.Housemate) async -> String? { writeNote(facts, h) }
+    func about(facts: StoryFacts) async -> StoryAnswer? { writeAbout(facts) }
+    func friendship(facts: StoryFacts, with h: StoryFacts.Housemate) async -> StoryAnswer? { writeNote(facts, h) }
 
-    func writeAbout(_ f: StoryFacts) -> String? {
+    func writeAbout(_ f: StoryFacts) -> StoryAnswer? {
         let key = Self.aboutKey(f.id)
         guard let w = StoryTemplates.about(f, used: memory.usedSet(key), seed: memory.nextSeed(key)) else { return nil }
         memory.remember(key, w.ids, bankSize: StoryTemplates.aboutBank.count)
-        return w.template
+        return StoryAnswer(w.template, keys: w.keys)
     }
-    func writeNote(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> String? {
+    func writeNote(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> StoryAnswer? {
         let key = Self.noteKey(f.id, h.id)
         guard let w = StoryTemplates.friendship(f, with: h, used: memory.usedSet(key), seed: memory.nextSeed(key)) else { return nil }
         memory.remember(key, w.ids, bankSize: StoryTemplates.noteBank.count)
-        return w.template
+        return StoryAnswer(w.template, keys: w.keys)
     }
 }
 
@@ -95,29 +104,31 @@ nonisolated struct StoryChain: Sendable {
     private func hiddenByPlayer(_ t: String) -> Bool { hidden?.contains(StoryFingerprint.text(t)) ?? false }
 
     func about(_ f: StoryFacts) async -> StoryResult? {
-        let values = StoryFill.values(f), offered = Set(values.keys)
+        let values = StoryFill.values(f), offered = Set(values.keys), avail = StoryFill.facts(f)
         var attempts: [StoryAttempt] = []
         for w in writers {
-            guard let t = await w.about(facts: f) else { attempts.append(StoryAttempt(writer: w.name, raw: nil, verdict: "no answer")); continue }
+            guard let ans = await w.about(facts: f) else { attempts.append(StoryAttempt(writer: w.name, raw: nil, verdict: "no answer")); continue }
+            let t = ans.template
             let fin = StoryFill.apply(t, values)
-            let v = StoryGuard.check(template: t, final: fin, kind: .about, offered: offered, shown: f.shownParagraph, values: values)
+            let v = StoryGuard.check(template: t, final: fin, kind: .about, offered: offered, shown: f.shownParagraph, values: values, keys: ans.keys, available: avail)
             let hid = v.passed && hiddenByPlayer(t)
-            attempts.append(StoryAttempt(writer: w.name, raw: t, verdict: hid ? "hidden-by-player" : v.description))
-            if v.passed && !hid { return StoryResult(template: t, final: fin, writer: w.name, attempts: attempts) }
+            attempts.append(StoryAttempt(writer: w.name, raw: t, keys: ans.keys, verdict: hid ? "hidden-by-player" : v.description))
+            if v.passed && !hid { return StoryResult(template: t, final: fin, writer: w.name, attempts: attempts, keys: ans.keys) }
         }
         return nil
     }
 
     func friendship(_ f: StoryFacts, with h: StoryFacts.Housemate) async -> StoryResult? {
-        let values = StoryFill.values(f, with: h), offered = Set(values.keys)
+        let values = StoryFill.values(f, with: h), offered = Set(values.keys), avail = StoryFill.facts(f, with: h)
         var attempts: [StoryAttempt] = []
         for w in writers {
-            guard let t = await w.friendship(facts: f, with: h) else { attempts.append(StoryAttempt(writer: w.name, raw: nil, verdict: "no answer")); continue }
+            guard let ans = await w.friendship(facts: f, with: h) else { attempts.append(StoryAttempt(writer: w.name, raw: nil, verdict: "no answer")); continue }
+            let t = ans.template
             let fin = StoryFill.apply(t, values)
-            let v = StoryGuard.check(template: t, final: fin, kind: .friendship, offered: offered, values: values)
+            let v = StoryGuard.check(template: t, final: fin, kind: .friendship, offered: offered, values: values, keys: ans.keys, available: avail)
             let hid = v.passed && hiddenByPlayer(t)
-            attempts.append(StoryAttempt(writer: w.name, raw: t, verdict: hid ? "hidden-by-player" : v.description))
-            if v.passed && !hid { return StoryResult(template: t, final: fin, writer: w.name, attempts: attempts) }
+            attempts.append(StoryAttempt(writer: w.name, raw: t, keys: ans.keys, verdict: hid ? "hidden-by-player" : v.description))
+            if v.passed && !hid { return StoryResult(template: t, final: fin, writer: w.name, attempts: attempts, keys: ans.keys) }
         }
         return nil
     }

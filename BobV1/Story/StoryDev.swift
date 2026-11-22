@@ -15,6 +15,7 @@ enum StoryDev {
         let d = UserDefaults.standard
         let n = d.integer(forKey: "StoryDump")
         guard n > 0 else { return }
+        NSLog("[story] dump requested n=%d", n)
         try? await Task.sleep(nanoseconds: 2_000_000_000)
         var out = "[story] dump n=\(n) at \(Date())\n"
         for seeded in d.integer(forKey: "StoryDumpSeeded") != 0 ? [false, true] : [false] {
@@ -23,6 +24,7 @@ enum StoryDev {
                 guard var f = StoryFactsBuilder.make(care: care, slot: slot) else { continue }
                 if seeded { seed(&f, index: slot) }
                 out += await dump(f, n: n, chain: StoryBook.shared.chain)
+                NSLog("[story] dumped %@", f.name)
             }
         }
         out += await evaluation(n: n)
@@ -92,6 +94,7 @@ enum StoryDev {
     }
 
     static func evaluation(n: Int) async -> String {
+        NSLog("[story] evaluation begins")
         var out = "\n=== EVALUATION SHEETS (fixed fact sheets through the whole chain) ===\n"
         var model = "no FoundationModels in this build"
         #if canImport(FoundationModels)
@@ -109,12 +112,12 @@ enum StoryDev {
                 let memory = StoryMemory(salt: StoryTemplates.fnv(["eval", label, String(run)]))
                 let chain = StoryChain(StoryBook.shared.chain.writers.map { $0.name == "template" ? TemplateWriter(memory: memory) : $0 })
                 let a = await chain.about(f)
-                out += "run \(run) about: " + (a.map { "[\($0.writer)] \($0.final)" } ?? "NONE") + "\n"
-                for at in a?.attempts ?? [] { out += "      \(at.writer): raw=\(at.raw ?? "-")  verdict=\(at.verdict)\n" }
+                out += "run \(run) about: " + (a.map { "[\($0.writer)] \($0.final)  keys=\($0.keys.joined(separator: ","))" } ?? "NONE") + "\n"
+                for at in a?.attempts ?? [] { out += "      \(at.writer): raw=\(at.raw ?? "-")  keys=\(at.keys.joined(separator: ","))  verdict=\(at.verdict)\n" }
                 if let h = f.housemates.first {
                     let nn = await chain.friendship(f, with: h)
-                    out += "run \(run) note:  " + (nn.map { "[\($0.writer)] \($0.final)" } ?? "NONE") + "\n"
-                    for at in nn?.attempts ?? [] { out += "      \(at.writer): raw=\(at.raw ?? "-")  verdict=\(at.verdict)\n" }
+                    out += "run \(run) note:  " + (nn.map { "[\($0.writer)] \($0.final)  keys=\($0.keys.joined(separator: ","))" } ?? "NONE") + "\n"
+                    for at in nn?.attempts ?? [] { out += "      \(at.writer): raw=\(at.raw ?? "-")  keys=\(at.keys.joined(separator: ","))  verdict=\(at.verdict)\n" }
                 }
             }
         }
@@ -129,12 +132,12 @@ enum StoryDev {
         let memory = StoryMemory(salt: StoryTemplates.fnv(["dump", String(f.id)]))
         let local = StoryChain(chain.writers.map { $0.name == "template" ? TemplateWriter(memory: memory) : $0 })
         for i in 1...n {
-            if let r = await local.about(f) { out += "about \(i): [\(r.writer)] \(r.final)   {\(r.attempts.map { "\($0.writer):\($0.verdict)" }.joined(separator: ", "))}\n" }
+            if let r = await local.about(f) { out += "about \(i): [\(r.writer)] \(r.final)   keys=\(r.keys.joined(separator: ","))  {\(r.attempts.map { "\($0.writer):\($0.verdict)" }.joined(separator: ", "))}\n" }
             else { out += "about \(i): NONE\n" }
         }
         for h in f.housemates {
             for i in 1...n {
-                if let r = await local.friendship(f, with: h) { out += "note \(f.name)>\(h.name) \(i): [\(r.writer)] \(r.final)   {\(r.attempts.map { "\($0.writer):\($0.verdict)" }.joined(separator: ", "))}\n" }
+                if let r = await local.friendship(f, with: h) { out += "note \(f.name)>\(h.name) \(i): [\(r.writer)] \(r.final)   keys=\(r.keys.joined(separator: ","))  {\(r.attempts.map { "\($0.writer):\($0.verdict)" }.joined(separator: ", "))}\n" }
                 else { out += "note \(f.name)>\(h.name) \(i): NONE\n" }
             }
         }

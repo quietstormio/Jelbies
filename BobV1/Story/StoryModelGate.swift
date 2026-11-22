@@ -73,43 +73,49 @@ nonisolated final class StoryModelStats: @unchecked Sendable {
 /// The fixed words the model is given. NOTHING variable goes into the instructions; the prompt is our template with the facts as labelled lines.
 nonisolated enum StoryPrompt {
     static let instructions = """
-    You write tiny, gentle notes about a pet for a children's pet game. The reader is a young child and their parent.
-    Rules: write in the third person only. Use the present tense or the recent past. Be warm and use simple words a young child can read. \
-    Use ONLY the facts you are given and never invent events. Never mention being written or generated. Nothing sad, scary, romantic or rude. \
-    Never use the word kiss. Ask no questions. No emoji. No numbers. Never write a name: keep every {...} placeholder exactly as given, such as {A}.
+    You write one tiny, plain, useful note about a pet for a children's pet game. The reader is a young child and their parent.
+    Rules: write exactly ONE sentence in the third person, the way a parent would say it aloud: a plain subject, a plain verb. Use present tense or the recent past, \
+    warm and simple words a young child can read. State one or two TRUE things from the facts you are given and nothing else: never invent events or behaviour. \
+    No stage directions, no cute extras, no strained verbs. Never use he, she, him or her: use the placeholder or no pronoun. Never mention being written or generated. \
+    Nothing sad, scary, romantic or rude. Never use the word kiss. Ask no questions. No emoji. No numbers. Never write a name: keep every {...} placeholder exactly as given, such as {A}. \
+    Also return the keys of the facts you used, exactly as written in square brackets.
     """
 
-    /// The About prompt: the facts as short labelled lines. No player-typed word: the pet is {A}.
+    /// The About prompt: the facts as short labelled lines, each with its key. No player-typed word: the pet is {A}.
     static func about(_ f: StoryFacts) -> String {
-        let v = StoryFill.values(f)
-        var lines = ["Write a short note about the pet {A}: one or two short sentences, at most 80 characters in all.", "Facts:"]
-        if let p = v["PERS"] { lines.append("- personality: \(p)") }
-        if let x = v["FOOD"] { lines.append("- favourite food: {FOOD} (\(x))") }
-        if let x = v["ACT"] { lines.append("- likes lately: {ACT} (\(x))") }
-        if let x = v["SPOT"] { lines.append("- favourite spot: {SPOT} (\(x))") }
-        if let x = v["RACE"] { lines.append("- has won a race on a course called {RACE} (\(x))") }
-        if let x = v["SHOW"] { lines.append("- has a cup from the Jelly Show at the level called {SHOW} (\(x))") }
-        if f.trophies.volleyWins > 0 { lines.append("- has won on the volleyball sand") }
-        if f.sleepHabit != nil { lines.append("- takes lots of naps") }
-        if f.togetherShare >= 0.12 { lines.append("- plays with the housemates a lot") }
-        if f.newcomer { lines.append("- has only just moved in") } else if f.daysTracked >= 4 { lines.append("- has lived here for a good while") }
-        if let l = f.relationshipLevel { lines.append("- bond with the player: \(l)") }
+        let v = StoryFill.values(f), keys = StoryFill.facts(f)
+        var lines = ["Write one plain sentence about the pet {A}, at most 70 characters, stating one or two of these facts.", "Facts:"]
+        if keys.contains("personality") { lines.append("- [personality] personality: \(v["PERS"]!)") }
+        if keys.contains("favouriteFood") { lines.append("- [favouriteFood] favourite food: {FOOD} (\(v["FOOD"]!))") }
+        if keys.contains("favouriteActivity") { lines.append("- [favouriteActivity] has been doing this a lot this week: {ACT} (\(v["ACT"]!))") }
+        if keys.contains("favouriteSpot") { lines.append("- [favouriteSpot] spends the most time here: {SPOT} (\(v["SPOT"]!))") }
+        if keys.contains("partner") { lines.append("- [partner] plays with the housemate {B} most") }
+        if keys.contains("topEmote") { lines.append("- [topEmote] they are often: {EMOTE} (\(v["EMOTE"]!))") }
+        if keys.contains("raceWin") { lines.append("- [raceWin] has won a race on a course called {RACE} (\(v["RACE"]!))") }
+        if keys.contains("showCup") { lines.append("- [showCup] has a cup from the Jelly Show at the level called {SHOW} (\(v["SHOW"]!))") }
+        if keys.contains("volleyWin") { lines.append("- [volleyWin] has won a volleyball match") }
+        if keys.contains("recentWin") { lines.append("- [recentWin] won a race this week") }
+        if keys.contains("raceMilestone") { lines.append("- [raceMilestone] needs {LEFT} for a new trophy (\(v["LEFT"]!))") }
+        if keys.contains("nap") { lines.append("- [nap] takes lots of naps") }
+        if keys.contains("newcomer") { lines.append("- [newcomer] has only just moved in") }
+        if keys.contains("settled") { lines.append("- [settled] has lived here for a good while") }
+        if let l = f.relationshipLevel { lines.append("- [bond] bond with the player: \(l)") }
         // the static paragraph is our own text, but a few kind descriptions use words the deny list refuses ("baby", "games", "sad"): then it is left out (the guard still rejects any colour word)
         if let s = f.shownParagraph, !s.isEmpty, denied(s) == nil { lines.append("Already shown above (do not repeat): \(s)") }
-        lines.append("Placeholders you may use: " + v.keys.sorted().map { "{\($0)}" }.joined(separator: " ") + ".")
+        lines.append("Placeholders you may use: " + v.keys.filter { $0 != "BKIND" }.sorted().map { "{\($0)}" }.joined(separator: " ") + ".")
         lines.append("Do not say the pet's colour or kind.")
         return lines.joined(separator: "\n")
     }
 
     static func note(_ f: StoryFacts, with h: StoryFacts.Housemate) -> String {
         let v = StoryFill.values(f, with: h)
-        var lines = ["Write one short sentence, at most 55 characters, about how the pet {A} gets on with its housemate {B}.", "Facts:"]
+        var lines = ["Write one plain sentence, at most 55 characters, about how the pet {A} gets on with its housemate {B}.", "Facts:"]
         switch StoryTemplates.tier(h) {
-        case .close: lines.append("- they play together all the time, the closest of friends")
-        case .regular: lines.append("- they often play together")
-        case .few: lines.append("- they are still getting to know each other")
+        case .close: lines.append("- [together] they play together more than anyone, the closest of friends")
+        case .regular: lines.append("- [together] they often play together")
+        case .few: lines.append("- [gettingToKnow] they are still getting to know each other")
         }
-        if let x = v["EMOTE"] { lines.append("- they do this together most: {EMOTE} (\(x))") }
+        if let x = v["EMOTE"], StoryTemplates.tier(h) != .few { lines.append("- [topEmote] they are often: {EMOTE} (\(x))") }
         lines.append("Placeholders you may use: " + v.keys.filter { $0 != "BKIND" }.sorted().map { "{\($0)}" }.joined(separator: " ") + ".")
         return lines.joined(separator: "\n")
     }
@@ -118,26 +124,18 @@ nonisolated enum StoryPrompt {
     static func denied(_ prompt: String) -> String? { StoryGuard.denied(StoryGuard.masked(prompt), raw: prompt) }
 }
 
-/// What the model's typed answer becomes: the sentences joined into one text with placeholders.
-nonisolated enum StoryDraft {
-    static func about(first: String, second: String?) -> String {
-        let a = first.trimmingCharacters(in: .whitespacesAndNewlines)
-        let b = (second ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return b.isEmpty ? a : a + " " + b
-    }
-}
-
 /// A model that can be asked for a typed draft. The real one is `AppleModelClient` (StoryModelWriter.swift); tests use a fake.
 nonisolated protocol StoryModelClient: Sendable {
     /// What the model can do right now (before any prompt).
     func readiness() -> (available: Bool, localeSupported: Bool, detail: String)
-    func draftAbout(prompt: String) async throws -> (first: String, second: String?)
-    func draftNote(prompt: String) async throws -> String
+    /// The sentence (placeholders in) and the fact keys it says it used.
+    func draftAbout(prompt: String) async throws -> (sentence: String, keys: [String])
+    func draftNote(prompt: String) async throws -> (sentence: String, keys: [String])
     /// The reason code of a thrown error.
     func classify(_ error: Error) -> StoryModelFailure
 }
 
-/// The model-backed writer: gate -> prompt (deny-listed) -> typed draft within a timeout -> text with placeholders. Any trouble = nil (the next writer answers) and a reason code in the log.
+/// The model-backed writer: gate -> prompt (deny-listed) -> typed draft within a timeout -> text with placeholders + fact keys. Any trouble = nil (the next writer answers) and a reason code in the log.
 nonisolated struct ModelWriter: StoryWriter {
     var name: String { "model" }
     let client: StoryModelClient
@@ -158,22 +156,24 @@ nonisolated struct ModelWriter: StoryWriter {
         return true
     }
 
-    func about(facts: StoryFacts) async -> String? {
+    func about(facts: StoryFacts) async -> StoryAnswer? {
         guard await mayAsk() else { return nil }
         let prompt = StoryPrompt.about(facts)
         if let bad = StoryPrompt.denied(prompt) { stats.bump(.promptDenied, bad); return nil }
         do {
             let d = try await withTimeout { try await client.draftAbout(prompt: prompt) }
-            return StoryDraft.about(first: d.first, second: d.second)
+            return StoryAnswer(d.sentence.trimmingCharacters(in: .whitespacesAndNewlines), keys: d.keys)
         } catch { fail(error); return nil }
     }
 
-    func friendship(facts: StoryFacts, with h: StoryFacts.Housemate) async -> String? {
+    func friendship(facts: StoryFacts, with h: StoryFacts.Housemate) async -> StoryAnswer? {
         guard await mayAsk() else { return nil }
         let prompt = StoryPrompt.note(facts, with: h)
         if let bad = StoryPrompt.denied(prompt) { stats.bump(.promptDenied, bad); return nil }
-        do { return try await withTimeout { try await client.draftNote(prompt: prompt) }.trimmingCharacters(in: .whitespacesAndNewlines) }
-        catch { fail(error); return nil }
+        do {
+            let d = try await withTimeout { try await client.draftNote(prompt: prompt) }
+            return StoryAnswer(d.sentence.trimmingCharacters(in: .whitespacesAndNewlines), keys: d.keys)
+        } catch { fail(error); return nil }
     }
 
     private struct TimedOut: Error {}
@@ -181,14 +181,15 @@ nonisolated struct ModelWriter: StoryWriter {
         let r: StoryModelFailure = e is TimedOut ? .timeout : client.classify(e)
         stats.bump(r, String(describing: e).prefix(80).description)
     }
+
+    /// Our own timeout: the first of the work and the clock wins, and the caller is released at once even if the framework call ignores cancellation (the abandoned call just finishes in the background).
     private func withTimeout<T: Sendable>(_ work: @escaping @Sendable () async throws -> T) async throws -> T {
         let secs = timeout
-        return try await withThrowingTaskGroup(of: T.self) { g in
-            g.addTask { try await work() }
-            g.addTask { try await Task.sleep(nanoseconds: UInt64(secs * 1_000_000_000)); throw TimedOut() }
-            defer { g.cancelAll() }
-            guard let first = try await g.next() else { throw TimedOut() }
-            return first
+        return try await withCheckedThrowingContinuation { (c: CheckedContinuation<T, Error>) in
+            let once = OSAllocatedUnfairLock(initialState: false)
+            @Sendable func finish(_ r: Result<T, Error>) { if once.withLock({ let was = $0; $0 = true; return !was }) { c.resume(with: r) } }
+            let job = Task { do { finish(.success(try await work())) } catch { finish(.failure(error)) } }
+            Task { try? await Task.sleep(nanoseconds: UInt64(secs * 1_000_000_000)); finish(.failure(TimedOut())); job.cancel() }
         }
     }
 }

@@ -15,6 +15,8 @@ nonisolated struct StoryEntry: Codable, Equatable, Sendable {
     var day: Int
     /// Who wrote it ("template" / "model").
     var writer: String = "template"
+    /// The fact keys the text states (nil in an older save: such a line is checked by shape only).
+    var keys: [String]? = nil
     var byModel: Bool { writer == "model" }
 }
 
@@ -140,12 +142,13 @@ final class StoryBook {
         let values = StoryFill.values(f), offered = Set(values.keys)
         if let e = saved.about[key], !hidden.contains(StoryFingerprint.text(e.template)) {
             let fin = StoryFill.apply(e.template, values)
-            if StoryGuard.check(template: e.template, final: fin, kind: .about, offered: offered, shown: f.shownParagraph, values: values).passed { return Line(text: fin, byModel: e.byModel) }
+            // a saved line is shown only while the sheet still backs every fact it states (a rename, a changed favourite): otherwise a true one is written on the spot
+            if StoryGuard.check(template: e.template, final: fin, kind: .about, offered: offered, shown: f.shownParagraph, values: values, keys: e.keys, available: e.keys == nil ? nil : StoryFill.facts(f)).passed { return Line(text: fin, byModel: e.byModel) }
         }
         guard let t = TemplateWriter(memory: memory).writeAbout(f) else { return nil }
-        saved.about[key] = StoryEntry(template: t, fingerprint: StoryFingerprint.about(f), day: today(), writer: "template")
+        saved.about[key] = StoryEntry(template: t.template, fingerprint: StoryFingerprint.about(f), day: today(), writer: "template", keys: t.keys)
         persist()
-        return Line(text: StoryFill.apply(t, values), byModel: false)
+        return Line(text: StoryFill.apply(t.template, values), byModel: false)
     }
 
     func noteLine(_ f: StoryFacts, with h: StoryFacts.Housemate) -> Line? {
@@ -153,12 +156,12 @@ final class StoryBook {
         let values = StoryFill.values(f, with: h), offered = Set(values.keys)
         if let e = saved.notes[key], !hidden.contains(StoryFingerprint.text(e.template)) {
             let fin = StoryFill.apply(e.template, values)
-            if StoryGuard.check(template: e.template, final: fin, kind: .friendship, offered: offered, values: values).passed { return Line(text: fin, byModel: e.byModel) }
+            if StoryGuard.check(template: e.template, final: fin, kind: .friendship, offered: offered, values: values, keys: e.keys, available: e.keys == nil ? nil : StoryFill.facts(f, with: h)).passed { return Line(text: fin, byModel: e.byModel) }
         }
         guard let t = TemplateWriter(memory: memory).writeNote(f, h) else { return nil }
-        saved.notes[key] = StoryEntry(template: t, fingerprint: StoryFingerprint.note(f, h), day: today(), writer: "template")
+        saved.notes[key] = StoryEntry(template: t.template, fingerprint: StoryFingerprint.note(f, h), day: today(), writer: "template", keys: t.keys)
         persist()
-        return Line(text: StoryFill.apply(t, values), byModel: false)
+        return Line(text: StoryFill.apply(t.template, values), byModel: false)
     }
 
     // MARK: the schedule
@@ -194,7 +197,7 @@ final class StoryBook {
             inFlight.insert("a" + key); defer { inFlight.remove("a" + key) }
             let chain = self.chain
             let r = await Task.detached(priority: .utility) { await chain.about(f) }.value
-            if let r { saved.about[key] = StoryEntry(template: r.template, fingerprint: fp, day: day, writer: r.writer); done.append("about"); persist() }
+            if let r { saved.about[key] = StoryEntry(template: r.template, fingerprint: fp, day: day, writer: r.writer, keys: r.keys); done.append("about"); persist() }
         }
         for h in f.housemates {
             let nk = "\(f.id)>\(h.id)", nfp = StoryFingerprint.note(f, h)
@@ -202,7 +205,7 @@ final class StoryBook {
             inFlight.insert("n" + nk); defer { inFlight.remove("n" + nk) }
             let chain = self.chain
             let r = await Task.detached(priority: .utility) { await chain.friendship(f, with: h) }.value
-            if let r { saved.notes[nk] = StoryEntry(template: r.template, fingerprint: nfp, day: day, writer: r.writer); done.append("note:\(nk)"); persist() }
+            if let r { saved.notes[nk] = StoryEntry(template: r.template, fingerprint: nfp, day: day, writer: r.writer, keys: r.keys); done.append("note:\(nk)"); persist() }
         }
         return done
     }
@@ -231,8 +234,8 @@ final class StoryBook {
             let r: StoryResult? = await Task.detached(priority: .userInitiated) { h == nil ? await chain.about(f) : await chain.friendship(f, with: h!) }.value
             guard let r else { break }
             if r.template == oldKey?.template { continue }
-            if let h { saved.notes["\(f.id)>\(h.id)"] = StoryEntry(template: r.template, fingerprint: StoryFingerprint.note(f, h), day: day, writer: r.writer) }
-            else { saved.about[String(f.id)] = StoryEntry(template: r.template, fingerprint: StoryFingerprint.about(f), day: day, writer: r.writer) }
+            if let h { saved.notes["\(f.id)>\(h.id)"] = StoryEntry(template: r.template, fingerprint: StoryFingerprint.note(f, h), day: day, writer: r.writer, keys: r.keys) }
+            else { saved.about[String(f.id)] = StoryEntry(template: r.template, fingerprint: StoryFingerprint.about(f), day: day, writer: r.writer, keys: r.keys) }
             persist()
             return .written(Line(text: r.final, byModel: r.writer == "model"))
         }
@@ -251,9 +254,10 @@ final class StoryBook {
         let pre = TemplateWriter(memory: memory)
         var line: Line?
         for _ in 0..<6 {
-            guard let t = h == nil ? pre.writeAbout(f) : pre.writeNote(f, h!), !hidden.contains(StoryFingerprint.text(t)), t != old?.template else { continue }
-            if let h { saved.notes["\(f.id)>\(h.id)"] = StoryEntry(template: t, fingerprint: StoryFingerprint.note(f, h), day: today(), writer: "template"); line = Line(text: StoryFill.apply(t, StoryFill.values(f, with: h)), byModel: false) }
-            else { saved.about[String(f.id)] = StoryEntry(template: t, fingerprint: StoryFingerprint.about(f), day: today(), writer: "template"); line = Line(text: StoryFill.apply(t, StoryFill.values(f)), byModel: false) }
+            guard let ans = h == nil ? pre.writeAbout(f) : pre.writeNote(f, h!), !hidden.contains(StoryFingerprint.text(ans.template)), ans.template != old?.template else { continue }
+            let t = ans.template
+            if let h { saved.notes["\(f.id)>\(h.id)"] = StoryEntry(template: t, fingerprint: StoryFingerprint.note(f, h), day: today(), writer: "template", keys: ans.keys); line = Line(text: StoryFill.apply(t, StoryFill.values(f, with: h)), byModel: false) }
+            else { saved.about[String(f.id)] = StoryEntry(template: t, fingerprint: StoryFingerprint.about(f), day: today(), writer: "template", keys: ans.keys); line = Line(text: StoryFill.apply(t, StoryFill.values(f)), byModel: false) }
             break
         }
         persist()

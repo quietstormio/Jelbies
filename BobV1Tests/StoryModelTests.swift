@@ -23,13 +23,13 @@ final class StoryModelTests: XCTestCase {
 
     struct FakeClient: StoryModelClient {
         var available = true, locale = true
-        var about: Result<(String, String?), Error> = .success(("{A} is a {PERS} type who never turns down a nap.", "{A} likes it best {SPOT}."))
-        var note: Result<String, Error> = .success("{A} and {B} are the best of pals.")
+        var about: Result<(String, [String]), Error> = .success(("{A} is a {PERS} type who likes {ACT}.", ["personality", "favouriteActivity"]))
+        var note: Result<(String, [String]), Error> = .success(("{A} and {B} play together more than anyone.", ["together"]))
         var failure: StoryModelFailure = .unknown
         var delay: UInt64 = 0
         func readiness() -> (available: Bool, localeSupported: Bool, detail: String) { (available, locale, "fake") }
-        func draftAbout(prompt: String) async throws -> (first: String, second: String?) { if delay > 0 { try await Task.sleep(nanoseconds: delay) }; return try about.get() }
-        func draftNote(prompt: String) async throws -> String { if delay > 0 { try await Task.sleep(nanoseconds: delay) }; return try note.get() }
+        func draftAbout(prompt: String) async throws -> (sentence: String, keys: [String]) { if delay > 0 { try await Task.sleep(nanoseconds: delay) }; return try about.get() }
+        func draftNote(prompt: String) async throws -> (sentence: String, keys: [String]) { if delay > 0 { try await Task.sleep(nanoseconds: delay) }; return try note.get() }
         func classify(_ error: Error) -> StoryModelFailure { failure }
     }
     struct Boom: Error {}
@@ -115,13 +115,11 @@ final class StoryModelTests: XCTestCase {
 
     // MARK: the model writer
 
-    func testAnAnswerBecomesTextWithPlaceholders() async {
+    func testAnAnswerBecomesTextWithPlaceholdersAndKeys() async {
         let t = await writer(FakeClient()).about(facts: facts())
-        XCTAssertEqual(t, "{A} is a {PERS} type who never turns down a nap. {A} likes it best {SPOT}.")
+        XCTAssertEqual(t, StoryAnswer("{A} is a {PERS} type who likes {ACT}.", keys: ["personality", "favouriteActivity"]))
         let n = await writer(FakeClient()).friendship(facts: facts(), with: facts().housemates[0])
-        XCTAssertEqual(n, "{A} and {B} are the best of pals.")
-        let one = await writer(FakeClient(about: .success(("{A} is happy.", nil)))).about(facts: facts())
-        XCTAssertEqual(one, "{A} is happy.")
+        XCTAssertEqual(n, StoryAnswer("{A} and {B} play together more than anyone.", keys: ["together"]))
     }
 
     func testEveryFailureReasonFallsBackAndIsCounted() async {
@@ -147,11 +145,10 @@ final class StoryModelTests: XCTestCase {
 
     func testTheModelsTextGoesThroughTheGuardLikeAnyOther() async {
         let tmpl = TemplateWriter(memory: StoryMemory())
-        let bads: [(String, String?)] = [("I like {A} a lot.", nil), ("{A} is sick today.", nil), ("{A} is so VERY happy.", nil), ("{A} is a Blush.", "{A} is pink."),
-                                         ("{A} met {NAME}.", nil), ("{A} got a kiss.", nil), ("{A} is happy and kind", nil), ("Who is {A}.", nil), ("{A} is 7 years old.", nil),
-                                         ("{A} is happy. {A} is kind. {A} is calm.", nil), ("Pale pink {A} is shy at first, then friendly.", nil)]
+        let bads: [String] = ["I like {A} a lot.", "{A} is sick today.", "{A} is so VERY happy.", "{A} is pink.", "{A} met {NAME}.", "{A} got a kiss.", "{A} is happy and kind", "Who is {A}.",
+                              "{A} is 7 years old.", "{A} is happy. {A} is kind.", "Pale pink {A} is shy at first, then friendly.", "{A} trots over the moment {FOOD} appears.", "{A} likes her {FOOD}."]
         for b in bads {
-            let r = await StoryChain([writer(FakeClient(about: .success(b))), tmpl]).about(facts())
+            let r = await StoryChain([writer(FakeClient(about: .success((b, ["favouriteFood"])))), tmpl]).about(facts())
             XCTAssertEqual(r?.writer, "template", "\(b)")
             XCTAssertEqual(r?.attempts.first?.writer, "model")
             XCTAssertTrue(r?.attempts.first?.verdict.hasPrefix("reject") ?? false, "\(b)")
@@ -159,7 +156,7 @@ final class StoryModelTests: XCTestCase {
         // a good one is kept, with the names put in
         let ok = await StoryChain([writer(FakeClient()), tmpl]).about(facts(name: "Rosie"))
         XCTAssertEqual(ok?.writer, "model")
-        XCTAssertEqual(ok?.final, "Rosie is a sleepy type who never turns down a nap. Rosie likes it best by the window.")
+        XCTAssertEqual(ok?.final, "Rosie is a sleepy type who likes bouncing about.")
     }
 
     func testTheRudeNameRoundTrip() async {
@@ -206,7 +203,7 @@ final class StoryModelTests: XCTestCase {
 
     func testDontShowThisOneNeverReturns() async {
         let day = Box(400)
-        let model = Fake(name: "model", aboutText: "{A} is a {PERS} type who never turns down a nap.", noteText: "{A} and {B} are the best of pals.")
+        let model = Fake(name: "model", aboutText: "{A} is a {PERS} type.", noteText: "{A} and {B} are close friends.", keys: ["personality"])
         let b = book(day)
         b.chain = StoryChain([model, TemplateWriter(memory: b.memory)])
         var filed: [String] = []
@@ -231,9 +228,9 @@ final class StoryModelTests: XCTestCase {
     }
 
     struct Fake: StoryWriter {
-        var name: String; var aboutText: String?; var noteText: String?
-        func about(facts: StoryFacts) async -> String? { aboutText }
-        func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> String? { noteText }
+        var name: String; var aboutText: String?; var noteText: String?; var keys: [String] = ["personality"]
+        func about(facts: StoryFacts) async -> StoryAnswer? { aboutText.map { StoryAnswer($0, keys: keys) } }
+        func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> StoryAnswer? { noteText.map { StoryAnswer($0, keys: ["together"]) } }
     }
     private func facts(trophies: Int) -> StoryFacts { var f = facts(); f.trophies.raceWins = trophies; return f }
 }

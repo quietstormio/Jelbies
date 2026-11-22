@@ -1,29 +1,26 @@
 //
 //  StoryTemplates.swift
-//  The fallback writer that needs no model: a bank of pre-written sentence patterns with {slots}, picked from the facts with seeded variety.
-//  About blurb (one or two short sentences, <= 110 characters): the bank below is about THEIR LIFE (lately, spot, food, trophies, who they play with, the personality type woven in, how settled
-//  they are); it never says the colour or the kind (the static paragraph above it does). Friendship note (one sentence, <= 80 characters).
-//  No pronouns (the game has no gender data): sentences use the name or no subject. Every text that leaves here has passed `StoryGuard` with its real names in.
+//  The fallback writer that needs no model: a bank of pre-written one-sentence patterns with {slots}, picked from the facts with seeded variety.
+//  About line: ONE plain sentence, at most 90 characters, that says one or two TRUE things from the fact sheet (a favourite, who they play with most, a routine, a trophy and what the next one
+//  needs, that they have just moved in) in the way a parent would say it aloud. Every pattern names the facts it uses (`keys`); StoryGuard checks that the sheet backs them.
+//  Friendship note: one plain sentence, at most 80 characters.
+//  No pronouns (the game has no gender data): the name, or no subject. No stage directions. Every text that leaves here has passed `StoryGuard` with its real names in.
 //  Pure Foundation (no game types), nonisolated.
 //
 
 import Foundation
 
-nonisolated enum StoryNeed: String, Hashable, Sendable { case pers, act, spot, food, race, show, volley, recent, together, nap, newcomer, settled, notNewcomer, history }
+nonisolated enum StoryNeed: String, Hashable, Sendable { case pers, act, spot, food, race, show, volley, recentRace, partner, emote, milestone, nap, newcomer, settled, notNewcomer }
 
 nonisolated struct StoryPattern: Sendable {
-    enum Role { case first, second, either }
     let id: Int
-    let role: Role
-    /// What the sentence is about: a blurb never uses two sentences of one topic.
-    let topic: String
     let needs: Set<StoryNeed>
+    /// The fact keys the sentence states (StoryGuard.allFactKeys).
+    let keys: [String]
     let text: String
 }
 
 nonisolated enum StoryTemplates {
-    // MARK: seeds
-
     /// FNV-1a: a stable hash (Swift's `hashValue` changes every launch).
     static func fnv(_ parts: [String]) -> UInt64 {
         var h: UInt64 = 0xcbf29ce484222325
@@ -31,142 +28,128 @@ nonisolated enum StoryTemplates {
         return h
     }
 
-    // MARK: the About bank
+    private static func P(_ id: Int, _ needs: [StoryNeed], _ keys: [String], _ text: String) -> StoryPattern { StoryPattern(id: id, needs: Set(needs), keys: keys, text: text) }
 
-    private static func P(_ id: Int, _ role: StoryPattern.Role, _ topic: String, _ needs: [StoryNeed], _ text: String) -> StoryPattern {
-        StoryPattern(id: id, role: role, topic: topic, needs: Set(needs), text: text)
-    }
+    // MARK: the About bank (one sentence each)
 
     static let aboutBank: [StoryPattern] = [
-        // personality
-        P(1, .first, "pers", [.pers, .notNewcomer], "{A} is a {PERS} type through and through."),
-        P(2, .first, "pers", [.pers, .notNewcomer], "{A} is the {PERS} one of the house."),
-        P(3, .first, "pers", [.pers, .notNewcomer], "Everybody knows {A} as the {PERS} one."),
-        P(4, .first, "pers", [.pers, .notNewcomer], "A {PERS} type, {A} has settled in well."),
-        P(5, .either, "pers", [.pers, .notNewcomer], "{A} is a {PERS} little Jelmiko with a big heart."),
-        // lately
-        P(10, .first, "act", [.act, .history], "Lately {A} has been busy {ACT}."),
-        P(11, .first, "act", [.act, .history], "{A} spends a lot of time {ACT}."),
-        P(12, .first, "act", [.act, .history], "These days {A} is happiest {ACT}."),
-        P(13, .first, "act", [.act, .history], "Most days {A} ends up {ACT}."),
-        P(14, .either, "act", [.act, .history], "Lately {A} cannot get enough of {ACT}."),
-        P(15, .either, "act", [.act, .history], "{A} has been {ACT} a lot lately."),
-        P(16, .second, "act", [.act, .history], "Best of all, {A} likes {ACT}."),
-        P(17, .first, "act", [.act, .pers, .history], "A {PERS} type, {A} has lately been {ACT}."),
-        P(18, .first, "act", [.act, .pers, .history], "{A} is a {PERS} type who spends a lot of time {ACT}."),
-        // spot
-        P(20, .first, "spot", [.spot, .history], "Lately {A} likes to hang about {SPOT}."),
-        P(21, .first, "spot", [.spot, .history], "{A} is often {SPOT}, watching the room."),
-        P(22, .either, "spot", [.spot, .history], "{A} keeps coming back to the spot {SPOT}."),
-        P(23, .second, "spot", [.spot, .history], "{A} likes it best {SPOT}."),
-        P(24, .first, "spot", [.spot, .pers, .history], "{A} is a {PERS} type who likes it best {SPOT}."),
-        // food
-        P(30, .second, "food", [.food], "{A} never says no to {FOOD}."),
-        P(31, .second, "food", [.food], "{A}'s favourite treat is {FOOD}."),
-        P(32, .second, "food", [.food], "{A} comes running at the first sniff of {FOOD}."),
-        P(33, .second, "food", [.food], "Nothing cheers {A} up like {FOOD}."),
-        P(34, .second, "food", [.food], "{A} would pick {FOOD} every time."),
-        P(35, .either, "food", [.food, .pers, .notNewcomer], "{A} is a {PERS} type with a soft spot for {FOOD}."),
-        P(36, .second, "food", [.food, .newcomer], "So far, {A} has a soft spot for {FOOD} in the new home."),
-        // trophies
-        P(40, .second, "race", [.race], "{A} has won a {RACE} race, and it shows."),
-        P(41, .second, "race", [.race], "A {RACE} race win sits on {A}'s shelf."),
-        P(42, .either, "race", [.race], "{A} is a proper racer with a {RACE} win."),
-        P(43, .second, "race", [.race, .pers], "A {PERS} type, {A} still found time to win a {RACE} race."),
-        P(44, .second, "show", [.show], "{A} has a {SHOW} cup from the Jelly Show."),
-        P(45, .either, "show", [.show], "{A} shone at the {SHOW} Jelly Show."),
-        P(46, .second, "volley", [.volley], "{A} has won on the volleyball sand."),
-        P(47, .second, "recent", [.recent], "{A} is still glowing from a recent win."),
-        P(48, .first, "recent", [.recent], "A win came {A}'s way only the other day."),
-        // company
-        P(50, .second, "together", [.together, .history], "{A} is happiest with a housemate nearby."),
-        P(51, .second, "together", [.together, .history], "{A} likes company and always finds a playmate."),
-        P(52, .first, "together", [.together, .pers, .history], "A {PERS} type, {A} is happiest with a housemate nearby."),
-        P(53, .second, "together", [.together, .history], "Playtime with the housemates is a favourite."),
-        // sleep
-        P(60, .either, "nap", [.nap], "{A} is a champion napper."),
-        P(61, .second, "nap", [.nap], "A cosy nap is never far from {A}'s mind."),
-        P(62, .second, "nap", [.nap], "Naps are a big part of {A}'s day."),
-        P(63, .first, "nap", [.nap, .pers], "{A} is a {PERS} type who never turns down a nap."),
-        // settled in
-        P(70, .second, "settled", [.settled], "{A} knows every corner of the room by now."),
-        P(71, .second, "settled", [.settled], "{A} has settled in as if it was always home."),
-        P(72, .either, "settled", [.settled], "{A} has been a happy part of the home for a good while."),
+        // a favourite
+        P(1, [.food], ["favouriteFood"], "{A}'s favourite food is {FOOD}."),
+        P(2, [.food], ["favouriteFood"], "{A} likes {FOOD} best."),
+        P(3, [.food], ["favouriteFood"], "The treat {A} likes most is {FOOD}."),
+        // a routine
+        P(4, [.spot], ["favouriteSpot"], "{A} spends a lot of time {SPOT}."),
+        P(5, [.spot], ["favouriteSpot"], "{A}'s favourite place in the room is {SPOT}."),
+        P(6, [.spot], ["favouriteSpot"], "{A} has been {SPOT} a lot this week."),
+        P(7, [.act], ["favouriteActivity"], "{A} has been {ACT} a lot this week."),
+        P(8, [.act], ["favouriteActivity"], "{A} spends a lot of time {ACT}."),
+        P(9, [.act], ["favouriteActivity"], "{A} likes {ACT}."),
+        P(10, [.nap], ["nap"], "{A} naps a lot."),
+        P(11, [.nap], ["nap"], "{A} is a big napper."),
+        P(12, [.nap], ["nap"], "{A} has been napping a lot this week."),
+        // who they play with
+        P(13, [.partner], ["partner"], "{A} plays with {B} most."),
+        P(14, [.partner], ["partner"], "{B} is the one {A} plays with most."),
+        P(15, [.partner], ["partner"], "{A} and {B} play together a lot."),
+        P(16, [.partner, .emote], ["partner", "topEmote"], "{A} and {B} are often {EMOTE}."),
+        P(17, [.partner, .emote], ["partner", "topEmote"], "{A} plays with {B} most, often {EMOTE}."),
+        // trophies and what is next
+        P(18, [.race], ["raceWin"], "{A} has won a {RACE} race."),
+        P(19, [.race], ["raceWin"], "{A} is a {RACE} race winner."),
+        P(20, [.show], ["showCup"], "{A} has a {SHOW} cup from the Jelly Show."),
+        P(21, [.volley], ["volleyWin"], "{A} has won a volleyball match."),
+        P(22, [.milestone], ["raceMilestone"], "{A} needs {LEFT} for a new trophy."),
+        P(23, [.milestone], ["raceMilestone"], "{A} is {LEFT} away from a new trophy."),
+        P(24, [.recentRace], ["recentWin"], "{A} won a race this week."),
         // brand new
-        P(80, .first, "new", [.newcomer], "{A} has only just moved in, and everything is new."),
-        P(81, .first, "new", [.newcomer], "{A} is settling in, one little sniff at a time."),
-        P(82, .first, "new", [.newcomer], "New here, {A} is still finding the best spots."),
-        P(83, .first, "new", [.newcomer], "{A} has only just arrived and is getting to know the room."),
-        P(84, .second, "new2", [.newcomer], "Everything is new and worth a sniff."),
-        P(85, .second, "new2", [.newcomer], "It is a big, bright new home to explore."),
-        P(86, .second, "new2", [.newcomer, .pers], "A {PERS} type, {A} is already making a mark."),
-        P(87, .second, "new2", [.newcomer], "Every day brings something new to wiggle at."),
-        // always works
-        P(90, .either, "any", [.notNewcomer], "{A} is a happy little Jelmiko."),
-        P(91, .either, "any", [.notNewcomer], "{A} is a good Jelmiko to have around."),
-        P(92, .either, "any", [.notNewcomer], "Home is a cosy place for {A}."),
-        P(93, .second, "any2", [.notNewcomer], "There is always something to wiggle at."),
-        P(94, .second, "any2", [.notNewcomer], "Every day has a little adventure in it."),
+        P(25, [.newcomer], ["newcomer"], "{A} has only just moved in."),
+        P(26, [.newcomer], ["newcomer"], "{A} is still settling in."),
+        P(27, [.newcomer], ["newcomer"], "{A} is still getting to know the room."),
+        P(28, [.newcomer, .pers], ["newcomer", "personality"], "{A} is a {PERS} type who has only just moved in."),
+        P(29, [.newcomer, .food], ["newcomer", "favouriteFood"], "{A} has only just moved in and likes {FOOD} best."),
+        P(30, [.settled], ["settled"], "{A} knows the room well by now."),
+        // the personality type woven in
+        P(31, [.pers], ["personality"], "{A} is a {PERS} type."),
+        P(32, [.pers, .act, .notNewcomer], ["personality", "favouriteActivity"], "{A} is a {PERS} type who likes {ACT}."),
+        P(33, [.pers, .food, .notNewcomer], ["personality", "favouriteFood"], "{A} is a {PERS} type whose favourite food is {FOOD}."),
+        P(34, [.pers, .spot], ["personality", "favouriteSpot"], "{A} is a {PERS} type who likes it {SPOT}."),
+        P(35, [.pers, .partner], ["personality", "partner"], "{A} is a {PERS} type who plays with {B} most."),
+        P(36, [.pers, .nap], ["personality", "nap"], "{A} is a {PERS} type who naps a lot."),
+        P(37, [.pers, .race], ["personality", "raceWin"], "{A} is a {PERS} type with a {RACE} race win."),
+        // two facts, joined plainly
+        P(38, [.partner, .food], ["partner", "favouriteFood"], "{A} plays with {B} most and likes {FOOD} best."),
+        P(39, [.spot, .food], ["favouriteSpot", "favouriteFood"], "{A} spends a lot of time {SPOT} and likes {FOOD} best."),
+        P(40, [.act, .food], ["favouriteActivity", "favouriteFood"], "{A} has been {ACT} lately and likes {FOOD} best."),
+        P(41, [.race, .food], ["raceWin", "favouriteFood"], "{A} has won a {RACE} race and likes {FOOD} best."),
+        P(42, [.race, .partner], ["raceWin", "partner"], "{A} has won a {RACE} race and plays with {B} most."),
+        P(43, [.nap, .spot], ["nap", "favouriteSpot"], "{A} naps a lot and likes it {SPOT}."),
+        P(44, [.nap, .food], ["nap", "favouriteFood"], "{A} naps a lot and likes {FOOD} best."),
+        P(45, [.show, .food], ["showCup", "favouriteFood"], "{A} has a {SHOW} cup and likes {FOOD} best."),
+        P(46, [.spot, .partner], ["favouriteSpot", "partner"], "{A} spends time {SPOT} and plays with {B} most."),
+        P(47, [.act, .partner], ["favouriteActivity", "partner"], "{A} has been {ACT} and plays with {B} most."),
+        P(48, [.volley, .food], ["volleyWin", "favouriteFood"], "{A} has won a volleyball match and likes {FOOD} best."),
+        P(49, [.milestone, .partner], ["raceMilestone", "partner"], "{A} plays with {B} most and needs {LEFT} for a new trophy."),
     ]
 
-    // MARK: the friendship bank
+    // MARK: the friendship bank (one sentence each)
 
     enum Tier: String, Sendable { case close, regular, few }
-    struct NotePattern: Sendable { let id: Int; let tiers: Set<Tier>; let emote: Bool; let text: String }
-    private static func N(_ id: Int, _ tiers: [Tier], _ emote: Bool, _ text: String) -> NotePattern { NotePattern(id: id, tiers: Set(tiers), emote: emote, text: text) }
+    struct NotePattern: Sendable { let id: Int; let tiers: Set<Tier>; let emote: Bool; let keys: [String]; let text: String }
+    private static func N(_ id: Int, _ tiers: [Tier], _ emote: Bool, _ text: String) -> NotePattern {
+        let together = tiers.contains(.close) || tiers.contains(.regular)
+        return NotePattern(id: id, tiers: Set(tiers), emote: emote, keys: (together ? ["together"] : ["gettingToKnow"]) + (emote ? ["topEmote"] : []), text: text)
+    }
 
     static let noteBank: [NotePattern] = [
-        N(1, [.close], false, "{A} and {B} are the best of pals."),
-        N(2, [.close], false, "{A} and {B} are hardly ever apart."),
-        N(3, [.close], true, "{A} and {B} are inseparable, always {EMOTE}."),
-        N(4, [.close], false, "{A} and {B} spend most of the day together."),
-        N(5, [.close], false, "No one plays with {A} more than {B} does."),
-        N(6, [.close], false, "{B} is {A}'s favourite playmate."),
-        N(7, [.close, .regular], true, "{A} and {B} are often {EMOTE}."),
-        N(8, [.regular], false, "{A} and {B} often play together."),
-        N(9, [.regular, .close], false, "{A} and {B} make a happy pair."),
-        N(10, [.regular, .close], false, "{A} has a lot of fun with {B}."),
-        N(11, [.regular], false, "{B} often joins {A} for a bit of fun."),
-        N(12, [.regular, .few], false, "{A} and {B} are good housemates."),
-        N(13, [.regular, .few], false, "{A} and {B} share the room happily."),
-        N(14, [.regular], true, "Sometimes {A} and {B} end up {EMOTE}."),
-        N(15, [.regular, .close], true, "{A} and {B} have fun {EMOTE}."),
-        N(16, [.regular], false, "{B} and {A} are good company for each other."),
-        N(17, [.few], false, "{A} and {B} are still getting to know each other."),
-        N(18, [.few], false, "{A} and {B} are warming up to each other."),
-        N(19, [.few], false, "{A} is making friends with {B}, bit by bit."),
-        N(20, [.few], false, "{A} and {B} say hello now and then."),
-        N(21, [.few], false, "{A} is getting used to having {B} around."),
-        N(22, [.few], false, "{A} is still learning what {B} likes best."),
-        N(23, [.few], false, "Slowly, {A} and {B} are becoming friends."),
-        N(24, [.few, .regular], false, "{A} shares a cosy home with {B}."),
-        N(25, [.few, .regular], true, "{A} and {B} sometimes try {EMOTE}."),
-        N(26, [.regular, .close], true, "{A} likes {EMOTE} with {B}."),
-        N(27, [.regular, .few], false, "{A} and {B} are growing closer, one day at a time."),
-        N(28, [.close], false, "{B} is never far from {A}."),
-        N(29, [.close, .regular], false, "{A} and {B} keep each other company."),
-        N(30, [.close, .regular], false, "With {B} around, {A} always has a playmate."),
-        N(31, [.few, .regular], false, "{A} and {B} have their own little ways of saying hello."),
-        N(32, [.close, .regular], false, "{A} and {B} are a good team."),
+        N(1, [.close], false, "{A} and {B} play together more than anyone."),
+        N(2, [.close], false, "{A} plays with {B} most of all."),
+        N(3, [.close], false, "{B} is the one {A} plays with most."),
+        N(4, [.close], false, "{A} and {B} spend most of their time together."),
+        N(5, [.close], false, "{A} and {B} are close friends."),
+        N(6, [.close], false, "{A} and {B} are hardly ever apart."),
+        N(7, [.close], false, "{A} and {B} are the best of friends."),
+        N(8, [.close, .regular], true, "{A} and {B} are often {EMOTE}."),
+        N(9, [.close, .regular], true, "{A} and {B} have been {EMOTE} a lot."),
+        N(10, [.close, .regular], true, "{A} and {B} spend a lot of time {EMOTE}."),
+        N(11, [.close, .regular], true, "When {A} and {B} play, they are often {EMOTE}."),
+        N(12, [.regular], false, "{A} and {B} play together now and then."),
+        N(13, [.regular], false, "{A} plays with {B} fairly often."),
+        N(14, [.regular], false, "{A} and {B} get on well."),
+        N(15, [.regular], false, "{B} often joins {A} to play."),
+        N(16, [.regular], false, "{A} and {B} have been playing together more lately."),
+        N(17, [.regular], false, "{A} and {B} share the room and often play."),
+        N(18, [.few], false, "{A} and {B} are still getting to know each other."),
+        N(19, [.few], false, "{A} and {B} have only played together a little so far."),
+        N(20, [.few], false, "{A} and {B} have not played together much yet."),
+        N(21, [.few], false, "{A} and {B} are just getting started as friends."),
+        N(22, [.few], false, "{A} is still getting to know {B}."),
+        N(23, [.few], false, "{A} and {B} are getting used to each other."),
+        N(24, [.few], false, "{A} and {B} mostly keep to themselves for now."),
+        N(25, [.few, .regular], false, "{A} and {B} share the room."),
+        N(26, [.few], false, "{A} and {B} say hello now and then."),
+        N(27, [.regular, .close], false, "{A} and {B} play together a lot."),
+        N(28, [.regular], false, "{A} and {B} play together some days."),
     ]
 
     // MARK: eligibility
 
     static func needs(_ f: StoryFacts) -> Set<StoryNeed> {
+        let k = StoryFill.facts(f), v = StoryFill.values(f)
         var n: Set<StoryNeed> = []
-        if f.personality != nil { n.insert(.pers) }
-        if f.favouriteActivity != nil, StoryFill.values(f)["ACT"] != nil { n.insert(.act) }
-        if f.favouriteSpot != nil, StoryFill.values(f)["SPOT"] != nil { n.insert(.spot) }
-        if StoryFill.values(f)["FOOD"] != nil { n.insert(.food) }
-        if f.trophies.raceWins > 0, f.trophies.bestRaceTier != nil { n.insert(.race) }
-        if f.trophies.showCups > 0, f.trophies.bestShowRank != nil { n.insert(.show) }
-        if f.trophies.volleyWins > 0 { n.insert(.volley) }
-        if let d = f.trophies.recentDaysAgo, d <= 7, f.trophies.total > 0 { n.insert(.recent) }
-        if f.togetherShare >= 0.12, f.housemates.contains(where: { $0.togetherSeconds >= 60 }) { n.insert(.together) }
-        if f.sleepHabit != nil { n.insert(.nap) }
+        if k.contains("personality") { n.insert(.pers) }
+        if k.contains("favouriteActivity") { n.insert(.act) }
+        if k.contains("favouriteSpot") { n.insert(.spot) }
+        if k.contains("favouriteFood") { n.insert(.food) }
+        if k.contains("raceWin") { n.insert(.race) }
+        if k.contains("showCup") { n.insert(.show) }
+        if k.contains("volleyWin") { n.insert(.volley) }
+        if k.contains("recentWin") { n.insert(.recentRace) }
+        if k.contains("partner"), v["B"] != nil { n.insert(.partner) }
+        if k.contains("topEmote") { n.insert(.emote) }
+        if k.contains("raceMilestone") { n.insert(.milestone) }
+        if k.contains("nap") { n.insert(.nap) }
         if f.newcomer { n.insert(.newcomer) } else { n.insert(.notNewcomer) }
-        if f.daysTracked >= 4 && !f.newcomer { n.insert(.settled) }
-        if f.minutesSeen >= 5 { n.insert(.history) }
+        if k.contains("settled") { n.insert(.settled) }
         return n
     }
 
@@ -176,62 +159,47 @@ nonisolated enum StoryTemplates {
         return .few
     }
 
-    /// Stable order of the candidates for this Jelmiko and this write: a hash of (seed, who, pattern id).
     private static func order<T>(_ items: [T], id: (T) -> Int, seed: UInt64, salt: String) -> [T] {
         items.sorted { fnv([salt, String(seed), String(id($0))]) < fnv([salt, String(seed), String(id($1))]) }
     }
 
     // MARK: writing
 
-    struct Written: Sendable, Equatable { var template: String; var ids: [Int]; var final: String; var rejected = 0 }
+    struct Written: Sendable, Equatable { var template: String; var ids: [Int]; var keys: [String]; var final: String; var rejected = 0 }
 
-    /// The About blurb for `f`: the first combination of patterns (in this seed's order, skipping the ones in `used` until the bank is through) that passes the guard with the real names in.
-    /// Never nil in practice (the always-works patterns fit any facts); nil only if every candidate failed.
-    static func about(_ f: StoryFacts, used: Set<Int>, seed: UInt64, kind: StoryKind = .about) -> Written? {
-        let have = needs(f)
-        let offeredTokens = StoryFill.offered(f)
-        let values = StoryFill.values(f)
+    /// The About line for `f`: the first pattern (in this seed's order, skipping the ones in `used` until the bank is through) that the sheet backs and the guard passes with the real names in.
+    static func about(_ f: StoryFacts, used: Set<Int>, seed: UInt64) -> Written? {
+        let have = needs(f), values = StoryFill.values(f), offered = Set(values.keys), avail = StoryFill.facts(f)
         let eligible = aboutBank.filter { $0.needs.isSubset(of: have) }
         var pool = eligible.filter { !used.contains($0.id) }
-        if pool.count < 3 { pool = eligible }          // the bank is through: start over
-        var firstPool = pool.filter { $0.role != .second }
-        if f.newcomer { let n = firstPool.filter { $0.topic == "new" }; if !n.isEmpty { firstPool = n } }          // a brand-new Jelmiko's blurb opens with "just moved in"
-        let firsts = order(firstPool, id: \.id, seed: seed, salt: "f\(f.id)")
-        let seconds = order(pool.filter { $0.role != .first }, id: \.id, seed: seed, salt: "s\(f.id)")
+        if pool.count < 2 { pool = eligible }          // the bank is through: start over
         var rejected = 0
-        func tryText(_ t: String, _ ids: [Int]) -> Written? {
-            let fin = StoryFill.apply(t, values)
-            let v = StoryGuard.check(template: t, final: fin, kind: .about, offered: offeredTokens, shown: f.shownParagraph, values: values)
-            if v.passed { return Written(template: t, ids: ids, final: fin, rejected: rejected) }
-            rejected += 1; return nil
+        let seeded = order(pool, id: \.id, seed: seed, salt: "f\(f.id)")
+        let rest = order(eligible.filter { e in !pool.contains { $0.id == e.id } }, id: \.id, seed: seed, salt: "r\(f.id)")
+        for p in seeded + rest {
+            let fin = StoryFill.apply(p.text, values)
+            let v = StoryGuard.check(template: p.text, final: fin, kind: .about, offered: offered, shown: f.shownParagraph, values: values, keys: p.keys, available: avail)
+            if v.passed { return Written(template: p.text, ids: [p.id], keys: p.keys, final: fin, rejected: rejected) }
+            rejected += 1
         }
-        // prefer the facts that are most specific: rank the first sentences by how many needs they use (more = more about this Jelmiko), then by the seed's order
-        for p1 in firsts.prefix(8) {
-            for p2 in seconds where p2.topic != p1.topic && p2.id != p1.id {
-                if let w = tryText(p1.text + " " + p2.text, [p1.id, p2.id]) { return w }
-                if rejected > 40 { break }
-            }
-        }
-        for p in firsts + seconds { if let w = tryText(p.text, [p.id]) { return w } }
-        for p in aboutBank.filter({ $0.needs.isSubset(of: have.intersection([.notNewcomer, .newcomer])) }) { if let w = tryText(p.text, [p.id]) { return w } }
         return nil
     }
 
     /// One friendship note for `f` about housemate `h`.
     static func friendship(_ f: StoryFacts, with h: StoryFacts.Housemate, used: Set<Int>, seed: UInt64) -> Written? {
         let t = tier(h)
-        let hasEmote = StoryFill.values(f, with: h)["EMOTE"] != nil
-        let values = StoryFill.values(f, with: h)
-        let offeredTokens = StoryFill.offered(f, with: h)
-        let eligible = noteBank.filter { $0.tiers.contains(t) && (!$0.emote || hasEmote) }
+        let values = StoryFill.values(f, with: h), offered = StoryFill.offered(f, with: h), avail = StoryFill.facts(f, with: h)
+        let eligible = noteBank.filter { $0.tiers.contains(t) && (!$0.emote || values["EMOTE"] != nil) }
         var pool = eligible.filter { !used.contains($0.id) }
         if pool.isEmpty { pool = eligible }
         var rejected = 0
-        // the unused ones first (in the seed's order), then, if none of them fits these names, the rest of the bank
         let seeded = order(pool, id: \.id, seed: seed, salt: "n\(f.id)-\(h.id)")
-        for p in seeded + order(eligible.filter { e in !pool.contains { $0.id == e.id } }, id: \.id, seed: seed, salt: "m\(f.id)-\(h.id)") {
+        let rest = order(eligible.filter { e in !pool.contains { $0.id == e.id } }, id: \.id, seed: seed, salt: "m\(f.id)-\(h.id)")
+        for p in seeded + rest {
             let fin = StoryFill.apply(p.text, values)
-            if StoryGuard.check(template: p.text, final: fin, kind: .friendship, offered: offeredTokens, values: values).passed { return Written(template: p.text, ids: [p.id], final: fin, rejected: rejected) }
+            if StoryGuard.check(template: p.text, final: fin, kind: .friendship, offered: offered, values: values, keys: p.keys, available: avail).passed {
+                return Written(template: p.text, ids: [p.id], keys: p.keys, final: fin, rejected: rejected)
+            }
             rejected += 1
         }
         return nil
