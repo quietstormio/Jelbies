@@ -158,15 +158,9 @@ struct ProfileScreen: View {
     @State private var stylesOpen = false
     private var compact: Bool { vsc == .compact }
 
-    /// The top card's layout. `-ProfileTopStyle A|B` (dev arguments only; default A); `0` = the card as it was before this round (a comparison aid for the board).
-    private enum TopStyle { case today, a, b }
-    private static var topStyle: TopStyle {
-        guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "ProfileTopStyle") else { return .a }
-        switch v.uppercased() { case "B": return .b; case "0", "TODAY": return .today; default: return .a }
-    }
-    /// The living line about the pet's life (up to 110 characters, another worker feeds it). Nil = the slot is hidden. `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
+    /// The living line about the pet's life (one short sentence, at most two lines; another worker feeds it). Nil = the slot is hidden. `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
     private static func lately(_ f: Facts) -> String? {
-        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return "Lately Berry naps by the window and trots over the moment an ice pop appears." }
+        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return "Berry plays most with Latte, and an ice pop is her favourite treat." }
         return nil
     }
 
@@ -199,7 +193,7 @@ struct ProfileScreen: View {
             .task {          // capture aid (dev arguments only): `-ProfileScroll 1` scrolls the trophies card into view
                 guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileScroll") != 0 else { return }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
-                withAnimation { proxy.scrollTo("profile-trophies", anchor: .bottom) }
+                withAnimation { proxy.scrollTo(UserDefaults.standard.integer(forKey: "ProfileScroll") == 2 ? "profile-who" : "profile-trophies", anchor: .bottom) }          // `-ProfileScroll 2` scrolls the top card's bottom into view (landscape captures)
             }
             }
             ShowCTA(title: "See today's Jelly Show", id: "condition-show", height: compact ? 54 : 56) { show() }
@@ -259,56 +253,6 @@ struct ProfileScreen: View {
 
     // MARK: 1. who
 
-    private func whoCardToday(_ f: Facts) -> some View {
-        let character = f.p?.character ?? who
-        let t = JellyRoster.tint(character)
-        let body = Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))
-        let species = JellyRoster.species(character)
-        let info = SpeciesInfo.all.first { $0.character == species }
-        return card {
-            VStack(spacing: 10) {
-                HStack(spacing: 14) {
-                    ZStack {
-                        Circle().fill(body.opacity(0.35))
-                        Circle().strokeBorder(body.opacity(0.7), lineWidth: 3)
-                        JelbiePortrait(care: care, who: who, size: compact ? 96 : 118, head: true, frameless: true)
-                    }
-                    .frame(width: compact ? 104 : 128, height: compact ? 104 : 128)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(care.rosterName(who)).font(SK.font(30, .black)).foregroundStyle(SK.ink).jLine(2, scale: 0.6).accessibilityIdentifier("profile-name")
-                        if let info {
-                            HStack(spacing: 6) {
-                                Image(systemName: "sparkles").font(.system(size: 12, weight: .black)).foregroundStyle(ShowUI.goldDeep).accessibilityHidden(true)
-                                Text(info.name).font(SK.font(15, .heavy)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-                            }
-                            .accessibilityElement(children: .combine).accessibilityIdentifier("profile-kind")
-                            Text(SkinAbout.text(look: species, variant: JellyVariants.adopted(character))).font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("profile-about")          // SkinAbout: the same words as the Spring page, with this Jelmiko's own colour
-                        }
-                        if let tr = f.p?.traits {
-                            HStack(spacing: 6) {
-                                Image(systemName: tr.personality.symbol).font(.system(size: 12, weight: .black)).foregroundStyle(SK.pink).accessibilityHidden(true)
-                                Text("\(tr.personality.title) type \u{00B7} \(tr.personality.blurb)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
-                            }
-                            .accessibilityElement(children: .combine)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                }
-                Text(f.sentence).font(SK.font(18, .black)).foregroundStyle(SK.ink).frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("profile-sentence")
-                BondHeartsRow(level: f.bond).frame(maxWidth: .infinity, alignment: .leading).id(who)
-            }
-        }
-    }
-
-    @ViewBuilder private func whoCard(_ f: Facts) -> some View {
-        switch Self.topStyle {
-        case .today: whoCardToday(f)
-        case .a: whoCardStacked(f)
-        case .b: whoCardPortrait(f)
-        }
-    }
-
     private struct WhoBits { let body: Color; let species: Int; let info: SpeciesInfo?; let variant: JellyVariant? }
     private func whoBits(_ f: Facts) -> WhoBits {
         let character = f.p?.character ?? who
@@ -362,24 +306,12 @@ struct ProfileScreen: View {
             .accessibilityIdentifier("profile-sentence")
     }
 
-    /// One sentence with a small soft icon in front (the colour sentence, the character sentence).
-    private func iconLine(_ icon: String, _ color: Color, _ text: String, id: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon).font(.system(size: 14, weight: .black)).foregroundStyle(color)
-                .frame(width: 30, height: 30).background(Circle().fill(color.opacity(0.18))).accessibilityHidden(true)
-            Text(text).font(SK.font(15, .bold)).foregroundStyle(SK.ink).lineSpacing(3)
-                .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 4)
-        }
-        .accessibilityElement(children: .combine).accessibilityIdentifier(id)
-    }
-
-    @ViewBuilder private func aboutLines(_ b: WhoBits) -> some View {
+    /// The description as ONE paragraph, exactly as the game words it (SkinAbout: the colour sentence + the character sentence; the same words as the Spring page).
+    @ViewBuilder private func aboutParagraph(_ b: WhoBits) -> some View {
         if b.info != nil {
-            VStack(alignment: .leading, spacing: 8) {          // SkinAbout: the same words as the Spring page, with this Jelmiko's own colour (one sentence per line)
-                iconLine("paintpalette.fill", SK.sky, SkinAbout.colour(look: b.species, variant: b.variant), id: "profile-about-colour")
-                iconLine("heart.fill", SK.pink, SkinAbout.character(look: b.species), id: "profile-about-character")
-            }
+            Text(SkinAbout.text(look: b.species, variant: b.variant)).font(SK.font(15, .bold)).foregroundStyle(SK.ink).lineSpacing(3)
+                .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("profile-about")
         }
     }
 
@@ -398,8 +330,8 @@ struct ProfileScreen: View {
         }
     }
 
-    /// Layout A, "Stacked": picture + name + chips + short status on top; under it, full width, the two icon lines, the living line and the Relationship line.
-    private func whoCardStacked(_ f: Facts) -> some View {
+    /// The top card: header row (picture, name, chips, short status), the description paragraph, the living line (when there is one), the Relationship line.
+    private func whoCard(_ f: Facts) -> some View {
         let b = whoBits(f)
         let text = VStack(alignment: .leading, spacing: 6) {
             whoName(false); whyChips(f, b, center: false); whoStatus(f, center: false)
@@ -407,36 +339,16 @@ struct ProfileScreen: View {
         return card {
             VStack(alignment: .leading, spacing: 12) {
                 if dts.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 10) { whoPicture(b, 96); text }
+                    VStack(alignment: .leading, spacing: 10) { whoPicture(b, 104); text }
                 } else {
-                    HStack(alignment: .center, spacing: 14) { whoPicture(b, compact ? 88 : 104); text.frame(maxWidth: .infinity, alignment: .leading) }
+                    HStack(alignment: .center, spacing: 14) { whoPicture(b, compact ? 104 : 128); text.frame(maxWidth: .infinity, alignment: .leading) }
                 }
-                aboutLines(b)
+                aboutParagraph(b)
                 latelyBubble(f, b)
                 BondHeartsRow(level: f.bond).frame(maxWidth: .infinity, alignment: .leading).id(who)
             }
         }
-    }
-
-    /// Layout B, "Portrait card": a little ID card, the picture centred and large with the name, chips and status centred under it in a tinted panel; then the lines, living line and Relationship line.
-    private func whoCardPortrait(_ f: Facts) -> some View {
-        let b = whoBits(f)
-        return card {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(spacing: 8) {
-                    whoPicture(b, compact ? 96 : 148)
-                    whoName(true)
-                    whyChips(f, b, center: true)
-                    whoStatus(f, center: true).padding(.top, 2)
-                }
-                .padding(.horizontal, 12).padding(.vertical, 14).frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(b.body.opacity(0.14)))
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(b.body.opacity(0.45), lineWidth: 2))
-                aboutLines(b)
-                latelyBubble(f, b)
-                BondHeartsRow(level: f.bond).frame(maxWidth: .infinity, alignment: .leading).id(who)
-            }
-        }
+        .id("profile-who")
     }
 
     // MARK: 2. right now
