@@ -330,10 +330,16 @@ nonisolated enum StoryGuard {
     }
     static func isEnglish(_ text: String) -> Bool {
         let r = NLLanguageRecognizer()
+        r.languageConstraints = [.english, .spanish, .french, .german, .italian, .portuguese, .dutch]
         r.processString(text)
-        let c = r.languageHypotheses(withMaximum: 5)[.english] ?? 0
-        // a very short phrase ("Nap buddies.") cannot be told apart reliably: English only has to be a real candidate; the alphabet, the deny list and the facts check still apply
-        if text.count < 26 { return r.dominantLanguage == .english || c >= 0.25 }
+        let hyp = r.languageHypotheses(withMaximum: 7)
+        let c = hyp[.english] ?? 0
+        // a very short phrase ("Nap buddies.", "Inseparable.") cannot be told apart reliably: it is refused only when another language is a CONFIDENT match (measured: real Spanish / French / German
+        // phrases score 0.98-1.00 for their language, the bank's short phrases at most 0.90); the alphabet, the deny list and the facts check still apply
+        if text.count < 26 {
+            let other = hyp.filter { $0.key != .english }.map(\.value).max() ?? 0
+            return r.dominantLanguage == .english || other < 0.95
+        }
         return r.dominantLanguage == .english && c >= englishMin
     }
 
