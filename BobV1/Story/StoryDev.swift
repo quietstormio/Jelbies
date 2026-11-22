@@ -25,17 +25,33 @@ enum StoryDev {
         guard n > 0 else { return }
         NSLog("[story] dump requested n=%d", n)
         try? await Task.sleep(nanoseconds: 2_000_000_000)
-        var out = "[story] dump n=\(n) at \(Date())\n"
+        // Gather everything the main actor owns first, then run the writing off the main thread (a starved main thread made each hop minutes long in the simulator).
+        let writers = StoryBook.shared.chain.writers
+        var modelLine = "no FoundationModels in this build"
+        var hasModel = false
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) { let r = AppleModelClient.shared.readiness(); hasModel = StoryModelSupport.deviceHasModel; modelLine = "availability: \(r.detail), locale supported: \(r.localeSupported), app English: \(StoryModelGate.appIsEnglish), usable: \(hasModel)" }
+        #endif
+        var groups: [(String, [StoryFacts])] = []
         for seeded in d.integer(forKey: "StoryDumpSeeded") != 0 ? [false, true] : [false] {
-            out += seeded ? "\n=== SEEDED HABITS (made up, not saved) ===\n" : "\n=== THE SAVE AS IT IS ===\n"
+            var list: [StoryFacts] = []
             for slot in care.jellies.indices {
                 guard var f = StoryFactsBuilder.make(care: care, slot: slot) else { continue }
                 if seeded { seed(&f, index: slot) }
-                out += await dump(f, n: n, chain: StoryBook.shared.chain)
-                NSLog("[story] dumped %@", f.name)
+                list.append(f)
             }
+            groups.append((seeded ? "\n=== SEEDED HABITS (made up, not saved) ===\n" : "\n=== THE SAVE AS IT IS ===\n", list))
         }
-        out += await evaluation(n: n)
+        let sheets = evaluationSheets()
+        let out = await Task.detached(priority: .utility) { () -> String in
+            var o = "[story] dump n=\(n) at \(Date())\n"
+            for (title, list) in groups {
+                o += title
+                for f in list { o += await dump(f, n: n, chain: StoryChain(writers)); NSLog("[story] dumped %@", f.name) }
+            }
+            o += await evaluation(n: n, sheets: sheets, writers: writers, modelLine: modelLine, hasModel: hasModel)
+            return o
+        }.value
         if let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("story_dump.txt") { try? out.write(to: url, atomically: true, encoding: .utf8) }
         for line in out.split(separator: "\n") { NSLog("[story] %@", String(line)) }
     }
@@ -116,6 +132,13 @@ enum StoryDev {
                 f.togetherShare = 0.5; f.favouriteActivity = "chase"; f.favouriteActivityKind = "pair"; f.favouriteSpot = "rug"
                 f.housemates = [mate(11 - i, i == 0 ? "Latte" : "Cocoa", secs: 900, emote: "cuddle", kind: "Cocoa")] }))
         }
+        // news from today / yesterday
+        let newsCases: [(String, [String: String], Int)] = [("race", ["tier": "Puddle", "win": "1"], 0), ("show", ["tier": "Pond", "place": "2"], 1), ("park", [:], 0), ("bubbles", [:], 1), ("cafe", [:], 0), ("bond", ["level": "Good friends"], 0)]
+        for (i, c) in newsCases.enumerated() {
+            let (k, d, ago) = c
+            out.append(("news: \(k)", sheet(60 + i, "Mochi", kind: 0, pers: "curious", food: "dumplings") { f in
+                f.today = 100; f.news = StoryEvent(kind: k, day: 100 - ago, d: d); f.events = [f.news!]; f.favouriteSpot = "window"; f.relationshipLevel = k == "bond" ? "Good friends" : nil }))
+        }
         // every kind family (the Spring's species list)
         for (i, info) in SpeciesInfo.all.prefix(14).enumerated() {
             out.append(("kind: \(info.name)", sheet(20 + i, ["Pip", "Bob", "Zinnia", "Teddy", "Pearl", "Panda", "Opal", "Moo", "Cocoa", "Blush", "Sunset", "Cotton", "Ocean", "Lagoon"][i], kind: info.character, pers: JellyPersonality.allCases[i % 8].rawValue, food: ["donut", "taco", "dumplings", "popsicle", "cakeslice", "fries"][i % 6]) { f in
@@ -132,24 +155,20 @@ enum StoryDev {
         return out
     }
 
-    static func evaluation(n: Int) async -> String {
+    nonisolated static func evaluation(n: Int, sheets: [(String, StoryFacts)], writers: [StoryWriter], modelLine: String, hasModel: Bool) async -> String {
         NSLog("[story] evaluation begins")
         var out = "\n=== EVALUATION SHEETS (fixed fact sheets through the whole chain) ===\n"
-        var model = "no FoundationModels in this build"
-        #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) { let r = AppleModelClient.shared.readiness(); model = "availability: \(r.detail), locale supported: \(r.localeSupported), app English: \(StoryModelGate.appIsEnglish), usable: \(StoryModelSupport.deviceHasModel)" }
-        #endif
-        out += "model: \(model)\n"
-        let runs = StoryModelSupport.deviceHasModel ? 3 : 1
+        out += "model: \(modelLine)\n"
+        let runs = hasModel ? 3 : 1
         StoryModelStats.shared.reset()
         var leaks = 0
-        for (label, f) in evaluationSheets() {
+        for (label, f) in sheets {
             let promptA = StoryPrompt.about(f), promptN = f.housemates.first.map { StoryPrompt.note(f, with: $0) } ?? ""
             for typed in [f.name] + f.housemates.map(\.name) where promptA.contains(typed) || promptN.contains(typed) { leaks += 1; out += "LEAK: \(typed) reached a prompt\n" }
             out += "\n--- [\(label)] \(f.name) (kind \(f.kindName), \(f.personality ?? "-"))  prompt-denied: \(StoryPrompt.denied(promptA) ?? "no")\n"
             for run in 1...runs {
                 let memory = StoryMemory(salt: StoryTemplates.fnv(["eval", label, String(run)]))
-                let chain = StoryChain(StoryBook.shared.chain.writers.map { $0.name == "template" ? TemplateWriter(memory: memory) : $0 })
+                let chain = StoryChain(writers.map { $0.name == "template" ? TemplateWriter(memory: memory) : $0 })
                 let a = await chain.about(f)
                 out += "run \(run) about: " + (a.map { "[\($0.writer)] \($0.final)  keys=\($0.keys.joined(separator: ","))" } ?? "NONE") + "\n"
                 for at in a?.attempts ?? [] { out += "      \(at.writer): raw=\(at.raw ?? "-")  keys=\(at.keys.joined(separator: ","))  verdict=\(at.verdict)\n" }
@@ -165,7 +184,7 @@ enum StoryDev {
         return out
     }
 
-    static func dump(_ f: StoryFacts, n: Int, chain: StoryChain) async -> String {
+    nonisolated static func dump(_ f: StoryFacts, n: Int, chain: StoryChain) async -> String {
         var out = "\n--- \(f.name) (id \(f.id)): \(f.kindName), \(f.personality ?? "-"), food \(f.favouriteFood ?? "-"), act \(f.favouriteActivity ?? "-"), spot \(f.favouriteSpot ?? "-"), trophies \(f.trophies.total), newcomer \(f.newcomer), minutes \(f.minutesSeen)\n"
         // a fresh memory per dump so the "no repeat until the bank is through" shows
         let memory = StoryMemory(salt: StoryTemplates.fnv(["dump", String(f.id)]))
