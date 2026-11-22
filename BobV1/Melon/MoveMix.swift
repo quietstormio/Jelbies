@@ -38,12 +38,12 @@ nonisolated enum MoveMix {
     // 4. walking
     static let legAfterSolo: Float = 0.7
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
-    static let soloGapMul: Float = 1.8
+    static let soloGapMul: Float = 2.6
     static let legMin: Float = 2.5
     static let idleWeight: Float = 3.5          // x board.idleness / 60 in a roam goal's score
     static let roamCandidates = 8          // (was 6 valid candidates)
     static let claimRadius: Float = 1.1
-    static let underButtonPenalty: Float = 2.0
+    static let underButtonPenalty: Float = 0.8
     /// A pair partner may be this far (was 4.8): the strolls spread them out.
     static let pairMaxDist: Float = 6.5
     /// Night / sleepy: the in-place chain rule and the forced leg off the buttons do not apply.
