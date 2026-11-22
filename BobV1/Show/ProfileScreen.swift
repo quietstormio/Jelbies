@@ -106,6 +106,7 @@ struct ProfileScreen: View {
         VStack(spacing: compact ? 8 : 12) {
             ShowHeader(title: "Profile", light: false, backID: "condition-back", back: back) { EmptyView() }
             if care.jellies.count > 1 { WhoRow(care: care, who: $who, heads: true) }
+            ScrollViewReader { proxy in
             TimelineView(.periodic(from: .now, by: 3)) { _ in
                 let facts = Facts(care: care, who: who)
                 if compact {
@@ -123,6 +124,12 @@ struct ProfileScreen: View {
                     .scrollBounceBehavior(.basedOnSize)
                 }
             }
+            .task {          // capture aid (dev arguments only): `-ProfileScroll 1` scrolls the trophies card into view
+                guard DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileScroll") != 0 else { return }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                withAnimation { proxy.scrollTo("profile-trophies", anchor: .bottom) }
+            }
+            }
             ShowCTA(title: "See today's Jelly Show", id: "condition-show", height: compact ? 54 : 56) { show() }
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 14)
@@ -133,7 +140,10 @@ struct ProfileScreen: View {
             ConditionScreen(care: care, who: $who, back: { stylesOpen = false }, show: { stylesOpen = false; show() }, bath: { stylesOpen = false; bath?() }, feed: feed, drink: drink, sheetMode: true)
                 .presentationDetents([.large]).presentationBackground(ShowUI.sand)
         }
-        .task { await Self.captureAids(care: care, who: $who) }
+        .task {
+            await Self.captureAids(care: care, who: $who)
+            if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileStyles") != 0 { try? await Task.sleep(nanoseconds: 2_500_000_000); stylesOpen = true }          // capture aid: `-ProfileStyles 1` opens the Jelly Show styles sheet
+        }
     }
 
     // MARK: facts (all read from the save)
@@ -198,7 +208,7 @@ struct ProfileScreen: View {
                         if let tr = f.p?.traits {
                             HStack(spacing: 6) {
                                 Image(systemName: tr.personality.symbol).font(.system(size: 12, weight: .black)).foregroundStyle(SK.pink).accessibilityHidden(true)
-                                Text("\(tr.personality.title): \(tr.personality.blurb)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+                                Text("\(tr.personality.title) type \u{00B7} \(tr.personality.blurb)").font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
                             }
                             .accessibilityElement(children: .combine)
                         }
@@ -334,7 +344,7 @@ struct ProfileScreen: View {
             card {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        cardTitle(empty ? "Trophies" : "\(t.total) trophy\(t.total == 1 ? "" : "s")" + (t.ribbons > 0 ? " \u{00B7} \(t.ribbons) ribbon\(t.ribbons == 1 ? "" : "s")" : ""), icon: "trophy.fill", color: ShowUI.goldDeep)
+                        cardTitle(empty ? "Trophies" : "\(t.total) \(t.total == 1 ? "trophy" : "trophies")" + (t.ribbons > 0 ? " \u{00B7} \(t.ribbons) ribbon\(t.ribbons == 1 ? "" : "s")" : ""), icon: "trophy.fill", color: ShowUI.goldDeep)
                         Spacer(minLength: 4)
                         Image(systemName: "chevron.right").font(.system(size: 13, weight: .black)).foregroundStyle(SK.ink).accessibilityHidden(true)
                     }
@@ -374,6 +384,7 @@ struct ProfileScreen: View {
         .accessibilityElement(children: .contain)
         .accessibilityHint("Opens the trophy shelf")
         .accessibilityIdentifier("condition-trophies")
+        .id("profile-trophies")
     }
 
     // MARK: the old jars, out of the way

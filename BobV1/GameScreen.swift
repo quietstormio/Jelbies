@@ -532,6 +532,13 @@ struct GameScreen: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.25)) { town = .shop } }
         }
         .task { await GameScreen.runStoreDemo(model: model) }
+        .task {          // capture aid (dev arguments only): `-OpenProfile <i> -OpenProfileAfter <seconds>` opens the Profile after a wait (they have gone to sleep by then)
+            guard DevArgs.enabled, UserDefaults.standard.object(forKey: "OpenProfile") != nil else { return }
+            let after = UserDefaults.standard.integer(forKey: "OpenProfileAfter")
+            guard after > 0 else { return }
+            try? await Task.sleep(nanoseconds: UInt64(after) * 1_000_000_000)
+            town = .condition
+        }
         .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
         .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
@@ -1101,7 +1108,7 @@ struct GameScreen: View {
         case "show", "showHow": return .studio          // (the Jelly Show lobby is the Studio now)
         default: break
         }
-        if UserDefaults.standard.object(forKey: "OpenProfile") != nil { return .condition }          // capture aid: `-OpenProfile <index>` opens that Jelmiko's Profile
+        if UserDefaults.standard.object(forKey: "OpenProfile") != nil, UserDefaults.standard.integer(forKey: "OpenProfileAfter") == 0 { return .condition }          // capture aid: `-OpenProfile <index>` opens that Jelmiko's Profile
         switch UserDefaults.standard.string(forKey: "StoreOpen") {
         case "town": return .town
         case "shop", "item": return .shop
