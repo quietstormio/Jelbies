@@ -92,7 +92,7 @@ nonisolated enum StoryPrompt {
         if keys.contains("partner") { lines.append("- [partner] plays with the housemate {B} most") }
         if keys.contains("topEmote") { lines.append("- [topEmote] they are often: {EMOTE} (\(v["EMOTE"]!))") }
         if keys.contains("raceWin") { lines.append("- [raceWin] has won a race on a course called {RACE} (\(v["RACE"]!))") }
-        if keys.contains("showCup") { lines.append("- [showCup] has a cup from the Jelly Show at the level called {SHOW} (\(v["SHOW"]!))") }
+        if keys.contains("showCup") { lines.append("- [showCup] has a cup from the Jelly Show, rank {SHOW} (\(v["SHOW"]!))") }
         if keys.contains("volleyWin") { lines.append("- [volleyWin] has won a volleyball match") }
         if let n = f.news, keys.contains(n.factKey) { lines.append("- [\(n.factKey)] NEWS \(v["WHEN"] ?? "today"): \(StoryPrompt.newsText(n))") }
         if keys.contains("raceMilestone") { lines.append("- [raceMilestone] needs {LEFT} for a new trophy (\(v["LEFT"]!))") }

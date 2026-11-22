@@ -96,6 +96,9 @@ final class StoryModelTests: XCTestCase {
             var f = facts(); f.shownParagraph = info.about
             XCTAssertNil(StoryPrompt.denied(StoryPrompt.about(f)), "\(info.name): \(StoryPrompt.denied(StoryPrompt.about(f)) ?? "")")
         }
+        var all = facts(); all.trophies.showCups = 1; all.trophies.bestShowRank = "Lagoon"; all.trophies.volleyWins = 2; all.sleepHabit = "naps"; all.newcomer = false
+        XCTAssertNil(StoryPrompt.denied(StoryPrompt.about(all)), "the prompt itself must pass our own deny list: \(StoryPrompt.denied(StoryPrompt.about(all)) ?? "")")
+        for kind in StoryEvent.kinds { var f = facts(); f.today = 100; f.news = StoryEvent(kind: kind, day: 100, d: ["tier": "Pond", "place": "2", "win": "1", "level": "Good friends"]); XCTAssertNil(StoryPrompt.denied(StoryPrompt.about(f)), kind) }
         for (k, _) in StoryPhrases.activity {
             var f = facts(); f.favouriteActivity = k
             XCTAssertNil(StoryPrompt.denied(StoryPrompt.about(f)), k)
