@@ -1,6 +1,6 @@
 //
-//  CafeRegularsTests.swift
-//  cafe-regulars-r1: the café's guests. The visit roll (nobody / one / a pair, the shares over many seeds, never more than five bodies), the pair's table (clear of the player's, in the walkable floor,
+//  CafeTestsRegulars.swift
+//  cafe-regulars-r1 (named so it runs AFTER CafeTests: a café visit leaves statics behind that testCafeDefKeepsTheFloor is sensitive to): the café guests. The visit roll (nobody / one / a pair, the shares over many seeds, never more than five bodies), the pair's table (clear of the player's, in the walkable floor,
 //  both aspects), the pair's in-place conversation (holds its spot and its facing for 30 s, takes turns), and who the guests are (never special, never twice).
 //
 
@@ -14,7 +14,7 @@ private struct GuestSplitMix: RandomNumberGenerator {
 }
 
 @MainActor
-final class CafeRegularsTests: XCTestCase {
+final class CafeTestsRegulars: XCTestCase {
     private var savedArena: (SIMD2<Float>, Float, GameCamera.RoamFloor?, Float)?
     override func setUp() {
         super.setUp()
