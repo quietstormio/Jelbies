@@ -81,7 +81,7 @@ extension BlobBrain {
             if repeated, k != .groupHug { continue }
             if k.isFast, fastOthers(except: crew) > 0 { continue }
             if near.count < 2, !k.isTwoBody { continue }          // (the 3-body kinds keep their rule: two others)
-            let base = k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)
+            let base = (k == .groupHug ? x * (1 + 0.8 * night) : (k.isFast ? x * (1 - 0.8 * night) : x)) * (MoveMix.on ? mixRecency(variety.lastSocial[k].map { variety.now - $0 }) : 1)
             w.append((k, repeated ? base * 0.6 : base))          // (a hug may follow a hug, less often: it is the favourite)
         }
         if w.isEmpty { if near.count < 2 { socialBook.groupIdle = socialBook.groupLimit * 0.7; return }; w = [(.groupHug, 1)] }

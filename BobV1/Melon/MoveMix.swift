@@ -40,10 +40,15 @@ nonisolated enum MoveMix {
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
     static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
+    /// A kind unseen for this long gets the full recency boost (x1 + 1); never seen = full.
+    static let recencyFull: Float = 600
     static let windowGap: Float = 90
     /// Longest roam leg (was 5.5; 3.4 grumpy): a stale far cell is reachable in one leg.
     nonisolated(unsafe) static var legMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_LEGMAX"].flatMap { Float($0) } ?? 6.5
     static let legMaxGrumpy: Float = 5.5
+    /// The park (round 3): roam legs no longer than before the mix, and a share of the runs.
+    nonisolated(unsafe) static var parkLegMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_PARKLEG"].flatMap { Float($0) } ?? 5.5
+    nonisolated(unsafe) static var parkRunMul: Float = ProcessInfo.processInfo.environment["MOVEMIX_PARKRUN"].flatMap { Float($0) } ?? 0.4
     static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
     /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
     static let ownShare: Float = 0.7
@@ -271,7 +276,7 @@ extension BlobBrain {
         }
         if let b = board, b.claimed(near: g, radius: MoveMix.claimRadius, except: steerID) { return false }
         guard roomLegConflict(from: here, to: g, speed: roomNominalWalk * 1.6, others: others, dash: true) < 0.01 else { return false }
-        let chance = MoveMix.runChance * (1 - 0.75 * idleNight) * (idleMood == .happy ? 1 : MoveMix.okayRunMul)
+        let chance = MoveMix.runChance * (outingPlay ? MoveMix.parkRunMul : 1) * (1 - 0.75 * idleNight) * (idleMood == .happy ? 1 : MoveMix.okayRunMul)
         guard rand() < chance else { return false }
         var rg = here + (g - here) * MoveMix.runShare
         if d - simd_distance(here, rg) < MoveMix.runTail { rg = here + (g - here) / d * max(d - MoveMix.runTail, 0) }
@@ -295,4 +300,9 @@ extension BlobBrain {
         mix.last = .leg; mix.legKind = "run-tail"
         return true
     }
+}
+
+extension BlobBrain {
+    /// 1...2: the weight boost of a kind last seen `ago` seconds ago (nil = never).
+    func mixRecency(_ ago: Float?) -> Float { 1 + min(1, (ago ?? MoveMix.recencyFull) / MoveMix.recencyFull) }
 }
