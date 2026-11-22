@@ -98,4 +98,16 @@ final class StoryHabitsTests: XCTestCase {
         XCTAssertEqual(StorySampling.area(x: 3, z: 3, sofaDistance: 3, rugDistance: 4, backZ: -5, frontZ: 3.5), "front")
         XCTAssertNil(StorySampling.area(x: 4, z: -1, sofaDistance: 3, rugDistance: 4, backZ: -5, frontZ: 3.5))
     }
+
+    /// The sampler's per-second work for one body, measured: the habit counters and the store (the per-tick part is one Float add and one compare).
+    func testASecondOfSamplingCostsMicroseconds() {
+        let st = StoryHabitStore(); st.defaults = suite(); st.resolve = { $0 }; st.today = { 50 }
+        let kinds = ["walk", "stand", "rest", "solo:bounce", "pair:chase", "group:conga", "toy", "solo:sway"]
+        let n = 100_000
+        let t0 = CFAbsoluteTimeGetCurrent()
+        for i in 0..<n { st.sample(slot: i % 3, activity: kinds[i % kinds.count], partnerSlots: i % 3 == 0 ? [1, 2] : [0], area: i % 2 == 0 ? "rug" : "window") }
+        let per = (CFAbsoluteTimeGetCurrent() - t0) / Double(n) * 1_000_000
+        try? "sampler: \(per) microseconds per body-second (includes the once-a-minute save)".write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/story/sampler_cost.txt", atomically: true, encoding: .utf8)
+        XCTAssertLessThan(per, 50, "a body-second of sampling must stay in the tens of microseconds")
+    }
 }
