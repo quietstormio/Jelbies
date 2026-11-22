@@ -379,6 +379,7 @@ struct GameScreen: View {
                     ShopTab.pending = .tricks          // Music Ears is a page in the Tricks tab
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.25)) { town = .shop } }          // after the Settings cover is gone
                 },
+                care: model.care,
                 close: { settingsOpen = false })
             #if DEBUG
             .developerStudio { settingsOpen = false; model.paused = true; DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { showStudio = true } }

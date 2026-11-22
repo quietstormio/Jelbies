@@ -3,7 +3,7 @@
 //  The trophy case's two player-facing pieces (trophy-case-r1):
 //
 //    SETTINGS   double-tap the case on the wall: a small card with "Show trophy case in the room" (on by default, saved in TrophyBook) and the list of trophies.
-//               Off: the shelf is not drawn; the same switch sits at the top of the Trophies sheet and in Settings, so it can always be turned back on.
+//               Off: the shelf is not drawn; the same switch sits at the top of the Trophies sheet and in Settings > Game, so it can always be turned back on.
 //    ENGRAVING  tap a trophy on the shelf (or its row in the card): the camera eases in on it and an engraved plate shows the Jelmiko's name, the event and the date.
 //               The dates are written at the win (JelbieTrophies.won); a win from before that shows "Won before <the day this save first got engravings>" (no other record keeps a date per win).
 //
@@ -418,7 +418,7 @@ struct TrophyGoldOutline: View {
     }
 }
 
-/// "Show trophy case in the room": the switch, on the card, in the Trophies sheet and in Settings.
+/// "Show trophy shelf in the room": the switch, on the card, in the Trophies sheet; Settings > Game has its own row on the same flag (care.setTrophyCase).
 struct TrophyCaseToggle: View {
     let care: GameCare
     var body: some View {

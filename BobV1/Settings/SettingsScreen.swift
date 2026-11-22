@@ -17,6 +17,8 @@ struct SettingsScreen: View {
     var watchOpening: () -> Void = {}
     var openShop: () -> Void = {}
     var close: () -> Void
+    /// The game's care model: the trophy shelf switch reads and writes the same flag as the shelf's card (nil only in previews).
+    var care: GameCare? = nil
 
     @Bindable private var hub = AudioHub.shared
     private var theme = ThemeStore.shared
@@ -36,8 +38,8 @@ struct SettingsScreen: View {
     private var landscape: Bool { vsc == .compact }
     private let ink = CloudTheme.ink
 
-    init(mainMenu: @escaping () -> Void, resetSave: @escaping () -> Void, openPhoto: @escaping () -> Void = {}, watchOpening: @escaping () -> Void = {}, openShop: @escaping () -> Void = {}, close: @escaping () -> Void) {
-        self.mainMenu = mainMenu; self.resetSave = resetSave; self.openPhoto = openPhoto; self.watchOpening = watchOpening; self.openShop = openShop; self.close = close
+    init(mainMenu: @escaping () -> Void, resetSave: @escaping () -> Void, openPhoto: @escaping () -> Void = {}, watchOpening: @escaping () -> Void = {}, openShop: @escaping () -> Void = {}, care: GameCare? = nil, close: @escaping () -> Void) {
+        self.care = care; self.mainMenu = mainMenu; self.resetSave = resetSave; self.openPhoto = openPhoto; self.watchOpening = watchOpening; self.openShop = openShop; self.close = close
     }
 
     var body: some View {
@@ -46,17 +48,24 @@ struct SettingsScreen: View {
             pal.bg.ignoresSafeArea()
             VStack(spacing: 0) {
                 header(pal).padReadable(landscape ? 1000 : 680)
+                ScrollViewReader { proxy in
                 ScrollView {
                     if landscape {
                         HStack(alignment: .top, spacing: 16) {
                             VStack(spacing: 16) { appearance(pal); sound }.frame(maxWidth: .infinity)
-                            VStack(spacing: 16) { accessibility; voice; game; about }.frame(maxWidth: .infinity)
+                            VStack(spacing: 16) { accessibility; voice; game.id("settings-game-card"); about }.frame(maxWidth: .infinity)
                         }
                         .padding(16)
                     } else {
-                        VStack(spacing: 16) { appearance(pal); sound; accessibility; voice; game; about }
+                        VStack(spacing: 16) { appearance(pal); sound; accessibility; voice; game.id("settings-game-card"); about }
                             .padding(16)
                     }
+                }
+                .onAppear {          // capture aid (-SettingsOpen 1 -SettingsScrollGame 1: dev args only): scroll the Game card into view
+                    if DevArgs.enabled && UserDefaults.standard.integer(forKey: "SettingsScrollGame") != 0 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { proxy.scrollTo("settings-game-card", anchor: .center) }
+                    }
+                }
                 }
                 .padReadable(landscape ? 1000 : 680)          // iPad: a centred readable column (no-op on iPhone)
             }
@@ -220,6 +229,11 @@ struct SettingsScreen: View {
                 .pickerStyle(.segmented).accessibilityIdentifier("settings-cuddle-jiggle-level")
             }
             #endif
+            if let care {
+                Toggle("Show trophy shelf in the room", isOn: Binding(get: { care.race.trophies.caseVisible }, set: { care.setTrophyCase(visible: $0) }))
+                    .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
+                    .accessibilityIdentifier("settings-trophy-shelf-toggle")
+            }
             Toggle("Follow real clock", isOn: Binding(get: { followReal }, set: { followReal = $0; DayClock.shared.setFollowReal($0) }))
                 .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
                 .accessibilityIdentifier("settings-follow-real-clock")
