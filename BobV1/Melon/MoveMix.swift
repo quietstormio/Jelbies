@@ -52,7 +52,10 @@ nonisolated enum MoveMix {
     static let strollThirdBonus: Float = 1.2
     static let roamCandidates = 8          // (was 6 valid candidates)
     static let claimRadius: Float = 1.1
-    static let underButtonPenalty: Float = 0.4
+    /// Dev (round 2b, finding what empties the front): `-MixStopOff 1` = stopOK always true; `-MixPenaltyOff 1` = no under-button goal penalty.
+    nonisolated(unsafe) static var stopOff: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "MixStopOff")
+    nonisolated(unsafe) static var penaltyOff: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "MixPenaltyOff")
+    static var underButtonPenalty: Float { penaltyOff ? 0 : 0.4 }
     /// A pair partner may be this far (was 4.8): the strolls spread them out.
     static let pairMaxDist: Float = 6.5
     /// Night / sleepy: the in-place chain rule and the forced leg off the buttons do not apply.
@@ -97,7 +100,7 @@ struct MixBook {
 extension GameCamera.RoamFloor {
     /// True when a body standing at `p` is clear of the HUD button rails (`stopFree`, built whether or not the rails are cut out of the walkable floor). No rails built = everywhere.
     func stopOK(_ p: SIMD2<Float>) -> Bool {
-        guard !stopFree.isEmpty, let g = zs.first else { return true }
+        guard !MoveMix.stopOff, !stopFree.isEmpty, let g = zs.first else { return true }
         let i = min(max(Int(floorf((p.y - g) / Self.step)), 0), zs.count - 1)
         for r in [i, min(i + 1, zs.count - 1)] where r < stopFree.count {
             if !stopFree[r].contains(where: { $0.contains(p.x) }) { return false }
