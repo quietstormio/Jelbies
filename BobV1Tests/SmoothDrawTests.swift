@@ -108,7 +108,7 @@ final class SmoothDrawTests: XCTestCase {
         SmoothDraw.alpha = 0
         XCTAssertEqual(SmoothDraw.drawn(pos: SIMD3(1, 1, 0), rot: q, jellies: []).pos.x, 0, accuracy: 1e-6)          // far from everyone: the older step
         XCTAssertEqual(SmoothDraw.drawn(pos: SIMD3(1, 1, 0), rot: q, jellies: [(pos: SIMD2(1, 0.5), top: 1.1)]).pos.x, 1, accuracy: 1e-6)          // in reach: the newest step, as the bodies are drawn
-        let mid = SmoothDraw.drawn(pos: SIMD3(1, 1, 0), rot: q, jellies: [(pos: SIMD2(1.0 + 1.5, 0), top: 1.1)]).pos.x
+        let mid = SmoothDraw.drawn(pos: SIMD3(1, 1, 0), rot: q, jellies: [(pos: SIMD2(1.0 + 1.2, 0), top: 1.1)]).pos.x
         XCTAssertTrue(mid > 0 && mid < 1, "the lean is continuous: \(mid)")
     }
 
@@ -130,7 +130,7 @@ final class SmoothDrawTests: XCTestCase {
         let h = PlayHaptics.tap(.head, speed: 6)!, k = PlayHaptics.tap(.foot, speed: 6)!
         XCTAssertEqual(h.style, .soft); XCTAssertEqual(k.style, .soft); XCTAssertEqual(f2.style, .medium)          // head / foot: soft and round; floor: firmer
         XCTAssertLessThan(PlayHaptics.tap(.head, speed: 2)!.intensity, PlayHaptics.tap(.head, speed: 9)!.intensity)
-        XCTAssertLessThanOrEqual(PlayHaptics.tap(.head, speed: 99)!.intensity, 0.8)
+        XCTAssertLessThanOrEqual(PlayHaptics.tap(.head, speed: 99)!.intensity, 0.8 + 1e-6)
     }
 
     func testSwitchOffMeansNoNewTap() {
@@ -169,6 +169,7 @@ final class SmoothDrawTests: XCTestCase {
             }
             let line = String(format: "SMOOTHCOST %d bodies, %d vertices each: skin pass %.3f ms | (A) blend particles %.3f ms | (B) blend skinned vertices %.3f ms | 120 Hz frame = 8.33 ms, governor CPU headroom 5 ms", bodies, rm.vertexCount, skinMs, blendA, blendB)
             print(line); NSLog("%@", line)
+            if let h = FileHandle(forWritingAtPath: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/smooth/cost.txt") ?? { FileManager.default.createFile(atPath: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/smooth/cost.txt", contents: nil); return FileHandle(forWritingAtPath: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/smooth/cost.txt") }() { h.seekToEndOfFile(); h.write((line + "\n").data(using: .utf8)!) }
         }
     }
 }

@@ -42,8 +42,8 @@ enum SmoothDraw {
 
     /// Largest distance the ball may move in one step and still be one continuous path (a throw's start, a header's lift are far less; a teleport is more).
     static let teleport: Float = 1.0
-    /// Distance (3D, ball centre to the Jelmiko's upright axis, floor to crown) inside which the ball leans to the newest step. Tight: the kick reach is 1.15 u.
-    static let nearFull: Float = 1.2, nearNone: Float = 1.8
+    /// Distance (3D, ball centre to the Jelmiko's upright axis, floor to crown) inside which the ball leans to the newest step. Tight on purpose (a lean repeats poses at 120 Hz): the ball's radius 0.27 + the body's half width ~0.55 + one step of travel.
+    static let nearFull: Float = 0.95, nearNone: Float = 1.4
     private(set) static var lastWeight: Float = 0
 
     /// After every fixed step (the stage calls it after `hopTick`): remember the ball's state.
