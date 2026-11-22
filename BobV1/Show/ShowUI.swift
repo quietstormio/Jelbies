@@ -737,9 +737,8 @@ struct StudioScreen: View {
         .overlay(alignment: .trailing) {          // landscape: a panel at the trailing edge instead of a sheet, so the stage stays in view beside it
             if wardrobeOpen && compact {
                 WardrobeSheet(care: care, who: who, theme: theme, rank: rank, side: true) { wardrobeOpen = false }
-                    .frame(width: 400)
-                    .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).ignoresSafeArea())
-                    .padding(.vertical, 6).padding(.trailing, 6)
+                    .frame(width: 410)
+                    .background(UnevenRoundedRectangle(topLeadingRadius: 24, bottomLeadingRadius: 24).fill(SK.cream).ignoresSafeArea())
             }
         }
         .task {          // capture aid (dev arguments only): `-WardrobeLarge <seconds>` drags Dress up to the large height that long after the Studio appears
@@ -952,7 +951,7 @@ struct WardrobeSheet: View {
                     VStack(alignment: .leading, spacing: 8) { headerRow; themeRows; wornPanel; chips }.padding(.horizontal, 16)
                     strip(low: true)
                 }
-                .padding(.top, 12).padding(.bottom, 8)
+                .padding(.top, 12).padding(.bottom, 2)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onLowHeight($0) }
             } else {
                 VStack(alignment: .leading, spacing: 8) { headerRow; themeRows; wornPanel; chips; strip(low: false).frame(maxWidth: .infinity, maxHeight: .infinity).ignoresSafeArea(edges: .bottom) }
