@@ -28,4 +28,14 @@ final class StoryDevTests: XCTestCase {
         XCTAssertEqual(s.components(separatedBy: "note Berry>Latte").count - 1, 3)
         XCTAssertFalse(s.contains("NONE"))
     }
+
+    func testTheSeededHabitsOfEveryIndexBuildWithoutTrapping() {
+        for index in 0..<8 {
+            var f = StoryFacts(id: 1, name: "Berry", kindName: "Blush", kindAbout: "", mood: "")
+            f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo"), .init(id: 3, name: "Pip", kindName: "Moo")]
+            StoryDev.seed(&f, index: index)
+            XCTAssertGreaterThan(f.minutesSeen, 5)
+            XCTAssertNotNil(f.mostPlayedWithID)
+        }
+    }
 }
