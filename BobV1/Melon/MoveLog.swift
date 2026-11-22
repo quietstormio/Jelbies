@@ -27,6 +27,8 @@ final class MoveLog {
     nonisolated deinit {}
     /// Free text put in every line (the harness / the take: "home happy", "park").
     var tag = ""
+    /// Seconds of game time per window line (60; `-MoveLogSeconds n` shortens it for a starved host, the rates stay per minute).
+    nonisolated(unsafe) static var windowSeconds: Float = 60
     var url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("movelog.txt")
 
     enum Kind: Int { case push, hard, back, side, overlap, pinned }
@@ -56,6 +58,7 @@ final class MoveLog {
         let v = defaults.object(forKey: "MoveLog") != nil && defaults.bool(forKey: "MoveLog")
         defaults.set(v, forKey: "MoveLog")
         on = v
+        if v, defaults.object(forKey: "MoveLogSeconds") != nil { windowSeconds = max(5, Float(defaults.double(forKey: "MoveLogSeconds"))) }
         if v { shared.reset(); shared.line("start") }
     }
 
@@ -110,7 +113,7 @@ final class MoveLog {
             if g < 0 { if s.overlapping.insert(o.steerID).inserted { Self.note(.overlap) } } else { s.overlapping.remove(o.steerID) }
         }
         bodies[b.steerID] = s
-        if clock - lastFlush >= 60 { flush() }
+        if clock - lastFlush >= Self.windowSeconds { flush() }
     }
 
     private func rates(_ t: Totals, minutes: Float) -> String {
