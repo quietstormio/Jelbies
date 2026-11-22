@@ -494,18 +494,21 @@ extension StoreThumb {
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
         for v in m.vertices[n...] {
             let p = SIMD3(v.pos.x, v.pos.y, v.pos.z)
-            if look.slot == .hands && p.x < 0 { continue }          // the model is turned so its +x arm is the near one (the other is behind the body)
-            lo = simd_min(lo, p); hi = simd_max(hi, p)
+                        lo = simd_min(lo, p); hi = simd_max(hi, p)
         }
         guard lo.x.isFinite else { return base }
         let mid = (lo + hi) / 2, half = (hi - lo) / 2
-        if look.slot == .hands { return (mid, min(max(0.42, simd_length(half) * 1.5), 0.9)) }
+        if look.slot == .hands { return (mid, min(max(0.55, simd_length(half) * 1.3), 0.9)) }          // both arms
         let c = SIMD3(base.0.x + (mid.x - base.0.x) * 0.8, base.0.y + (mid.y - base.0.y) * 0.4, base.0.z + (mid.z - base.0.z) * 0.4)          // sideways almost onto the piece (a clip at the side of the head), up and back only part way
         var need: Float = 0
         for sx: Float in [-1, 1] { for sy: Float in [-1, 1] { for sz: Float in [-1, 1] {
             need = max(need, simd_length(SIMD3(mid.x + sx * half.x, mid.y + sy * half.y, mid.z + sz * half.z) - c))
         } } }
-        return (c, min(max(base.1, need * 1.12), 1.3))
+        if look.slot == .neck || look.slot == .body {          // a thin piece (a medal, a whistle, a chain) fills the picture: frame by its own width and height, not the torso's
+            let off = simd_length(SIMD2(c.x - mid.x, c.y - mid.y))
+            return (c, min(max(0.38, max(half.x, half.y) * 1.3 + off), 1.0))
+        }
+        return (c, min(max(0.58, need * 0.95), 1.3))
     }
 }
 
