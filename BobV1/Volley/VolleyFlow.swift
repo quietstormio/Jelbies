@@ -195,14 +195,15 @@ final class VolleyFlow {
 extension TrophyBook {
     /// A beach volleyball match was won on `tier`: the ribbon for the first win there, then the 5 / 10 / 25 win trophies.
     @discardableResult
-    func recordVolleyWin(character c: Int, tier: VolleyTier) -> TrophyAwards {
+    func recordVolleyWin(character c: Int, tier: VolleyTier, now: Date = Date()) -> TrophyAwards {
         var a = TrophyAwards(place: 1)
         var s = shelf(character: c)
         var w = s.volleyWins ?? [:]
         a.newRibbon = (w[tier.rawValue] ?? 0) == 0
         w[tier.rawValue, default: 0] += 1
         s.volleyWins = w
-        func grant(_ t: Trophy) { if !s.has(t) { s.earned.append(t.id); a.trophies.append(t) } }
+        s.stamp("volley.\(tier.rawValue)", now)
+        func grant(_ t: Trophy) { if !s.has(t) { s.earned.append(t.id); a.trophies.append(t); s.stamp("trophy.\(t.id)", now) } }
         grant(.volleyFirst(tier))
         for m in Trophy.volleyMilestones where s.volleyTotal >= m.wins { grant(m.trophy) }
         setShelf(s, character: c)

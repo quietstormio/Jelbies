@@ -43,10 +43,12 @@ extension BlobBrain {
     /// footprint (a piece put down, dragged or turned onto him, or a push) is soft to that piece and, after a moment, walks out to the nearest free floor
     /// (before, he stayed standing inside it: "stuck behind the table").
     func decorExitCheck(dt: Float = 0) {
+        hopCrossCheck()
         hopNoRestCheck(dt)          // (park-hopscotch-r1: nobody stands about at a court with a game on)
         slideFootCheck()          // (first: a stander on the slide's foot is inside its footprint, so the walk-out branch below returns before the end)
         var inside: DecorFoot?
         for f in DecorField.shared.feet where f.spec.solid && f.distance(position) < footprint * f.spec.reach - 0.05 { inside = f; break }
+        if hopCross { insideDecorT = 0; insideStuckT = 0; return }          // (hop-leave-r1: he is crossing on his own walk)
         if let f = inside {
             // (park-slide-r3: the park slide turns soft only when his CENTRE is inside its box, which no walk can leave with it solid. A body only over its edge (a walk that came near, a
             // spot placed beside it) keeps it solid: his next step is pushed off it. Soft, the walk he was on went on straight through the slide: the real-app probe saw one cut the

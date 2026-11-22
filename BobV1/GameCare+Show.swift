@@ -74,6 +74,7 @@ extension GameCare {
         show.onHit = { [weak self] g in self?.showHit(g) }
         show.onTap = { [weak self] foot in self?.showDanceTap(foot) }
         show.onResults = { [weak self] place in self?.showCelebrate(place: place) }
+        show.onCup = { [weak self] c, rank, place in self?.race.trophies.recordShowCup(character: c, rank: rank, place: place) }
         show.onBurst = { [weak self] in self?.showBurst() }
         show.onRival = { [weak self] cue in self?.showRivalCue(cue) }
         show.rivalReady = { [weak self] who, centre in self?.showArrived(who, atCentre: centre) ?? true }

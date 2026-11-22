@@ -40,6 +40,7 @@ extension GameCare {
     func tickDecor(dt: Float) {
         tickRoomSwitch(dt: dt)
         tickWallEdit(dt: dt)
+        tickTrophyFocus(dt: dt)
         syncDecor()
         let f = DecorField.shared
         guard !f.feet.isEmpty else { return }

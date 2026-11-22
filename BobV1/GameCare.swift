@@ -115,6 +115,10 @@ final class GameCare {
     /// The wall picture editor (GameCare+WallEdit.swift): the session while it is open, its camera ease (0...1), the album asked for from the Bag / Shop / editor, the Shop asked for from the album.
     var wallEdit: WallEditSession?
     @ObservationIgnored var wallEditT: Float = 0
+    /// The trophy case card (Trophies/TrophyCase.swift): open, the trophy being looked at (id), and its camera ease (0...1).
+    var trophyCardOpen = false
+    var trophyFocusID: String?
+    @ObservationIgnored var trophyFocusT: Float = 0
     var wallAlbumOpen = false
     var wallShopRequest = false
     /// Arrange mode (drag the room's decor): set from the Bag's Place, ended by Done. The Jellies' touch is off meanwhile.

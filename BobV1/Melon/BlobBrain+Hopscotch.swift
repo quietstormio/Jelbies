@@ -82,7 +82,19 @@ extension BlobBrain {
     var hopPass: Int? {
         guard HopscotchTuning.walled else { return nil }
         let u = ParkToys.hopscotchUID
-        return toy.noticeUID == u || toy.waitUID == u || HopscotchLine.shared.contains(u, steerID) ? u : nil
+        return toy.noticeUID == u || toy.waitUID == u || HopscotchLine.shared.contains(u, steerID) || hopCross ? u : nil
+    }
+
+    /// hop-leave-r1: a walker already on the court when the wall comes up is never shoved (`resolve` pushing him out sideways while his gait went on forward: a slide). He keeps his own walk through the
+    /// margin (exempt from the push); a walk that was to END on the court is re-planned at once as a normal walk out the nearest side (`hopWalkOut`). Off once he is out of the margin or the walk ends:
+    /// a body then standing inside gets the usual walk-out (a short walk, `decorExitCheck`). Called every step with no behaviour running.
+    func hopCrossCheck() {
+        guard HopscotchTuning.walled, let f = DecorField.shared.foot(ParkToys.hopscotchUID), social == nil, !held, case .walk(let target, _) = script, !hopJoining(f) else { hopCross = false; return }
+        let reach = footprint * HopscotchTuning.wallReach
+        if hopCross { if f.distance(position) > reach + 0.3 { hopCross = false }; return }
+        guard f.distance(position) < reach else { return }
+        hopCross = true
+        if f.distance(target) < reach + 0.1, let out = hopWalkOut(f) { requestNow(.goTo(out)) }
     }
 
     /// park-hopscotch-r1: nobody stands about at the court's edge while a game is on. A bystander who has stood still within `noRest` of the wall for `restMax` (no behaviour, no social, no job) is sent

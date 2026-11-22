@@ -74,6 +74,8 @@ final class BlobBrain {
     var decorIgnore: Int?
     /// park-hopscotch-r1: seconds he has stood still at the court's edge while a game is on (`hopNoRestCheck`).
     var hopRestT: Float = 0
+    /// hop-leave-r1: he was already walking on / through the court's margin when the game's wall came up: his walk is exempt from the wall's push (no shove, no sideways slide) until it is out.
+    var hopCross = false
     /// Seconds he has stood inside a solid piece's footprint (see `decorExitCheck`).
     var insideDecorT: Float = 0
     /// How long he has been inside a solid piece's footprint without getting out (the walk-out can find no route from inside a piece): after a few seconds `decorExitCheck` eases him out itself.
