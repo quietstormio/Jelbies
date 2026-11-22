@@ -53,8 +53,12 @@ nonisolated struct StoryFacts: Codable, Equatable, Sendable {
     var newcomer = false
     var housemates: [Housemate] = []
     var mostPlayedWithID: Int?
-    /// Phase 3 fills this (a "Relationship" level with the player); nil for now.
+    /// The Relationship stage with the player ("Good friends"), nil when unknown.
     var relationshipLevel: String?
+    /// Recent events (StoryEvents.swift) and the one piece of NEWS the line should prefer: from today or yesterday, and not already used for its day. `today` = the real day number.
+    var events: [StoryEvent] = []
+    var news: StoryEvent?
+    var today = 0
 }
 
 /// The words for the keys. ONE table per kind; a key with no entry is simply not used in a sentence.
@@ -113,6 +117,12 @@ nonisolated enum StoryFill {
         if f.trophies.raceWins > 0, let t = f.trophies.bestRaceTier { v["RACE"] = t }
         if let t = f.trophies.bestShowRank, f.trophies.showCups > 0 { v["SHOW"] = t }
         if let p = f.personality { v["PERS"] = p.lowercased() }
+        if let n = f.news {
+            v["WHEN"] = f.today - n.day <= 0 ? "today" : "yesterday"
+            if let t = n.d["tier"], !t.isEmpty { v["TIER"] = t }
+            if let p = n.d["place"], let i = Int(p), i >= 1, i <= 4 { v["PLACE"] = ["first", "second", "third", "fourth"][i - 1] }
+            if let l = n.d["level"] { v["LEVEL"] = l }
+        }
         if f.trophies.raceWins > 0, let next = milestones.first(where: { $0 > f.trophies.raceWins }) {
             let left = next - f.trophies.raceWins
             if left < numberWords.count { v["LEFT"] = "\(numberWords[left]) more race win\(left == 1 ? "" : "s")" }
@@ -130,7 +140,6 @@ nonisolated enum StoryFill {
         if v["RACE"] != nil { k.insert("raceWin") }
         if v["SHOW"] != nil { k.insert("showCup") }
         if f.trophies.volleyWins > 0 { k.insert("volleyWin") }
-        if f.trophies.recentKind == "race", let d = f.trophies.recentDaysAgo, d <= 7 { k.insert("recentWin") }
         if v["LEFT"] != nil { k.insert("raceMilestone") }
         if f.sleepHabit != nil { k.insert("nap") }
         if f.newcomer { k.insert("newcomer") } else if f.daysTracked >= 4 { k.insert("settled") }
@@ -139,6 +148,7 @@ nonisolated enum StoryFill {
             if v["EMOTE"] != nil { k.insert("topEmote") }
         } else if h != nil { k.insert("gettingToKnow") }
         if f.relationshipLevel != nil { k.insert("bond") }
+        if let n = f.news, n.kind != "bond" || v["LEVEL"] != nil { k.insert(n.factKey) }
         return k
     }
     static func offered(_ f: StoryFacts, with h: StoryFacts.Housemate? = nil) -> Set<String> { Set(values(f, with: h).keys) }

@@ -18,6 +18,9 @@ nonisolated struct StoryPattern: Sendable {
     /// The fact keys the sentence states (StoryGuard.allFactKeys).
     let keys: [String]
     let text: String
+    /// A NEWS pattern: the fact key of the event it is about ("recentRace") and whether it needs a win (1), a non-win (2) or either (0).
+    var news: String? = nil
+    var cond = 0
 }
 
 nonisolated enum StoryTemplates {
@@ -29,6 +32,9 @@ nonisolated enum StoryTemplates {
     }
 
     private static func P(_ id: Int, _ needs: [StoryNeed], _ keys: [String], _ text: String) -> StoryPattern { StoryPattern(id: id, needs: Set(needs), keys: keys, text: text) }
+    private static func NW(_ id: Int, _ key: String, _ cond: Int, _ text: String, extra: [String] = []) -> StoryPattern {
+        StoryPattern(id: id, needs: [], keys: [key] + extra, text: text, news: key, cond: cond)
+    }
 
     // MARK: the About bank (one sentence each)
 
@@ -60,7 +66,6 @@ nonisolated enum StoryTemplates {
         P(21, [.volley], ["volleyWin"], "{A} has won a volleyball match."),
         P(22, [.milestone], ["raceMilestone"], "{A} needs {LEFT} for a new trophy."),
         P(23, [.milestone], ["raceMilestone"], "{A} is {LEFT} away from a new trophy."),
-        P(24, [.recentRace], ["recentWin"], "{A} won a race this week."),
         // brand new
         P(25, [.newcomer], ["newcomer"], "{A} has only just moved in."),
         P(26, [.newcomer], ["newcomer"], "{A} is still settling in."),
@@ -89,6 +94,30 @@ nonisolated enum StoryTemplates {
         P(47, [.act, .partner], ["favouriteActivity", "partner"], "{A} has been {ACT} and plays with {B} most."),
         P(48, [.volley, .food], ["volleyWin", "favouriteFood"], "{A} has won a volleyball match and likes {FOOD} best."),
         P(49, [.milestone, .partner], ["raceMilestone", "partner"], "{A} plays with {B} most and needs {LEFT} for a new trophy."),
+    ]
+
+    /// NEWS: what happened today or yesterday (StoryEvents.swift). When there is news the line says it; otherwise it falls back to the bank above.
+    static let newsBank: [StoryPattern] = [
+        NW(100, "recentRace", 1, "{A} won the {TIER} race {WHEN}."),
+        NW(101, "recentRace", 2, "{A} ran the {TIER} race {WHEN}."),
+        NW(102, "recentShow", 0, "{A} came {PLACE} at the {TIER} Jelly Show {WHEN}."),
+        NW(103, "recentShow", 0, "{A} took part in the {TIER} Jelly Show {WHEN}."),
+        NW(104, "recentVolley", 1, "{A} won a volleyball match on the {TIER} court {WHEN}."),
+        NW(105, "recentVolley", 2, "{A} played volleyball on the {TIER} court {WHEN}."),
+        NW(106, "recentPark", 0, "{A} went to the park {WHEN}."),
+        NW(107, "recentPark", 0, "{A} had a day out at the park {WHEN}."),
+        NW(108, "recentCafe", 0, "{A} went to the cafe {WHEN}."),
+        NW(109, "recentCafe", 0, "{A} had a treat at the cafe {WHEN}."),
+        NW(110, "recentBubbles", 0, "{A} played with bubbles {WHEN}."),
+        NW(111, "recentBubbles", 0, "{A} chased bubbles {WHEN}."),
+        NW(112, "recentBall", 0, "{A} played with the ball {WHEN}."),
+        NW(113, "recentBath", 0, "{A} had a bath {WHEN}."),
+        NW(114, "recentGroom", 0, "{A} was groomed {WHEN}."),
+        NW(115, "recentTrick", 0, "{A} did a trick when asked {WHEN}."),
+        NW(116, "recentMeal", 0, "{A} had a favourite meal {WHEN}."),
+        NW(117, "recentMeal", 0, "{A} had {FOOD} {WHEN}, a favourite.", extra: ["favouriteFood"]),
+        NW(118, "recentCuddle", 0, "{A} had a good cuddle {WHEN}."),
+        NW(119, "recentBond", 0, "{A} has moved up to {LEVEL}."),
     ]
 
     // MARK: the friendship bank (one sentence each)
@@ -143,7 +172,6 @@ nonisolated enum StoryTemplates {
         if k.contains("raceWin") { n.insert(.race) }
         if k.contains("showCup") { n.insert(.show) }
         if k.contains("volleyWin") { n.insert(.volley) }
-        if k.contains("recentWin") { n.insert(.recentRace) }
         if k.contains("partner"), v["B"] != nil { n.insert(.partner) }
         if k.contains("topEmote") { n.insert(.emote) }
         if k.contains("raceMilestone") { n.insert(.milestone) }
@@ -170,7 +198,12 @@ nonisolated enum StoryTemplates {
     /// The About line for `f`: the first pattern (in this seed's order, skipping the ones in `used` until the bank is through) that the sheet backs and the guard passes with the real names in.
     static func about(_ f: StoryFacts, used: Set<Int>, seed: UInt64) -> Written? {
         let have = needs(f), values = StoryFill.values(f), offered = Set(values.keys), avail = StoryFill.facts(f)
-        let eligible = aboutBank.filter { $0.needs.isSubset(of: have) }
+        var eligible = aboutBank.filter { $0.needs.isSubset(of: have) }
+        if let n = f.news, avail.contains(n.factKey) {          // news first (today or yesterday); the bank above is the fallback
+            let win = n.d["win"] == "1"
+            let news = newsBank.filter { $0.news == n.factKey && ($0.cond == 0 || ($0.cond == 1) == win) }
+            if !news.isEmpty { eligible = news }
+        }
         var pool = eligible.filter { !used.contains($0.id) }
         if pool.count < 2 { pool = eligible }          // the bank is through: start over
         var rejected = 0

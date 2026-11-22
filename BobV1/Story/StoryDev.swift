@@ -13,6 +13,7 @@ enum StoryDev {
     static func runIfRequested(care: GameCare) async {
         guard DevArgs.enabled else { return }
         let d = UserDefaults.standard
+        applyAids(care: care)
         let n = d.integer(forKey: "StoryDump")
         guard n > 0 else { return }
         NSLog("[story] dump requested n=%d", n)
@@ -30,6 +31,37 @@ enum StoryDev {
         out += await evaluation(n: n)
         if let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("story_dump.txt") { try? out.write(to: url, atomically: true, encoding: .utf8) }
         for line in out.split(separator: "\n") { NSLog("[story] %@", String(line)) }
+    }
+
+    /// `-StoryEvent <kind>` [`-StoryEventWho <slot>`] [`-StoryEventDaysAgo <n>`]: puts one news item in the log of that Jelmiko (the same store the game's hooks write to).
+    /// `-StoryMoment <1...4>`: made-up habits between slot 0 and the next Jelmiko: 1 just met, 2 a few days of play, 3 after a park trip together, 4 clearly the favourite.
+    static func applyAids(care: GameCare) {
+        let d = UserDefaults.standard
+        let who = d.object(forKey: "StoryEventWho") != nil ? d.integer(forKey: "StoryEventWho") : 0
+        guard let c = care.jelly(who)?.character else { return }
+        if let kind = d.string(forKey: "StoryEvent"), StoryEvent.kinds.contains(kind) {
+            let details: [String: [String: String]] = ["race": ["tier": "Puddle", "win": "1"], "show": ["tier": "Pond", "place": "2"], "volley": ["tier": "Shore", "win": "1"],
+                "meal": ["food": care.jelly(who)?.traits?.snack ?? "cookie"], "bond": ["level": "Good friends"]]
+            let store = StoryEventStore.shared
+            let ago = d.integer(forKey: "StoryEventDaysAgo")
+            var l = store.list(c)
+            l.add(StoryEvent(kind: kind, day: store.today() - ago, d: details[kind] ?? [:]))
+            if let data = try? JSONEncoder().encode(l) { store.defaults.set(data, forKey: StoryEventStore.key(c)) }
+            NSLog("[story] event aid: %@ for %d (%d days ago)", kind, c, ago)
+        }
+        let m = d.integer(forKey: "StoryMoment")
+        if m > 0, care.jellies.count > 1, let o = care.jellies.first(where: { $0.character != c }) {
+            var h = StoryHabitStore.shared.habits(c)
+            let day = StoryHabitStore.shared.today()
+            h.partner = [:]; h.emote = [:]
+            h.act["walk"] = 900; h.act["stand"] = 400; h.act["solo:bounce"] = 300; h.total = 1600; h.everSeconds = 1600; h.firstDay = day - 6; h.decayDay = day
+            let secs: Float = [0, 150, 330, 900][min(m, 4) - 1 == 0 ? 0 : min(m, 4) - 1]
+            if m >= 2 { h.partner[String(o.character)] = secs; h.act["pair:chase"] = secs; h.total += secs }
+            if m >= 2 { h.emote["\(o.character)|\(m >= 4 ? "cuddle" : "chase")"] = secs }
+            if m == 3 { h.act["group:groupHug"] = 120; h.partner[String(o.character)] = 450; h.emote["\(o.character)|dance"] = 200 }
+            StoryHabitStore.shared.set(h, for: c)
+            NSLog("[story] moment aid %d: %@ with %@ %.0f s", m, JellyRoster.nameOf(c), o.name, secs)
+        }
     }
 
     /// Made-up habits for the dump: a different "lately" for each Jelmiko.

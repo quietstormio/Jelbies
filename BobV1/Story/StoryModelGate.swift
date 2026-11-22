@@ -94,7 +94,7 @@ nonisolated enum StoryPrompt {
         if keys.contains("raceWin") { lines.append("- [raceWin] has won a race on a course called {RACE} (\(v["RACE"]!))") }
         if keys.contains("showCup") { lines.append("- [showCup] has a cup from the Jelly Show at the level called {SHOW} (\(v["SHOW"]!))") }
         if keys.contains("volleyWin") { lines.append("- [volleyWin] has won a volleyball match") }
-        if keys.contains("recentWin") { lines.append("- [recentWin] won a race this week") }
+        if let n = f.news, keys.contains(n.factKey) { lines.append("- [\(n.factKey)] NEWS \(v["WHEN"] ?? "today"): \(StoryPrompt.newsText(n))") }
         if keys.contains("raceMilestone") { lines.append("- [raceMilestone] needs {LEFT} for a new trophy (\(v["LEFT"]!))") }
         if keys.contains("nap") { lines.append("- [nap] takes lots of naps") }
         if keys.contains("newcomer") { lines.append("- [newcomer] has only just moved in") }
@@ -105,6 +105,26 @@ nonisolated enum StoryPrompt {
         lines.append("Placeholders you may use: " + v.keys.filter { $0 != "BKIND" }.sorted().map { "{\($0)}" }.joined(separator: " ") + ".")
         lines.append("Do not say the pet's colour or kind.")
         return lines.joined(separator: "\n")
+    }
+
+    /// The news as plain words with placeholders for the variable parts ({TIER}, {PLACE}, {LEVEL}); {WHEN} is today / yesterday.
+    static func newsText(_ n: StoryEvent) -> String {
+        switch n.kind {
+        case "race": return n.d["win"] == "1" ? "won the {TIER} race" : "ran the {TIER} race"
+        case "show": return "took part in the {TIER} Jelly Show, place {PLACE}"
+        case "volley": return n.d["win"] == "1" ? "won a volleyball match on the {TIER} court" : "played volleyball on the {TIER} court"
+        case "park": return "went to the park"
+        case "cafe": return "went to the cafe for a treat"
+        case "bubbles": return "played with bubbles"
+        case "ball": return "played with the ball"
+        case "bath": return "had a bath"
+        case "groom": return "was groomed"
+        case "trick": return "did a trick when asked"
+        case "meal": return "had a favourite meal"
+        case "cuddle": return "had a good cuddle"
+        case "bond": return "moved up to {LEVEL}, a closer bond with the family"
+        default: return n.kind
+        }
     }
 
     static func note(_ f: StoryFacts, with h: StoryFacts.Housemate) -> String {

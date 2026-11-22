@@ -39,6 +39,13 @@ enum StoryFactsBuilder {
         }
         f.trophies = t
 
+        // events: the news the line prefers (today or yesterday, not used for its day yet)
+        let day = StoryEventStore.shared.today()
+        f.today = day
+        f.events = StoryEventStore.shared.list(c).newestFirst()
+        f.news = f.events.first { day - $0.day <= 1 && StoryBook.shared.newsAvailable($0) }
+        f.relationshipLevel = JellyBond.level(c, care.bondDefaults).name
+
         // habits
         applyHabits(habits, to: &f)
         f.newcomer = habits.everSeconds < 1800 && t.total == 0 && p.stats.meals.isEmpty && p.stats.races == 0

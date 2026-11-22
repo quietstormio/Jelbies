@@ -30,13 +30,17 @@ nonisolated struct StorySaved: Codable, Equatable, Sendable {
     var hidden: [String]? = nil
     /// "Write another": per blurb / note key, [day, count]; at most `StoryBook.rewritesPerDay` a day.
     var rewrites: [String: [Int]]? = nil
+    /// News events (StoryEvent.id) -> the day each was first used in a line: a news item is used for one day only.
+    var news: [String: Int]? = nil
+    /// News events the model has already been asked about once.
+    var newsTried: [String]? = nil
 }
 
 nonisolated enum StoryFingerprint {
     private static func hex(_ parts: [String]) -> String { String(StoryTemplates.fnv(parts), radix: 16) }
     /// Only the coarse notable facts (never mood or percentages): trophy count, favourite thing, most played with, relationship level, newcomer, personality, favourite food.
     static func about(_ f: StoryFacts) -> String {
-        hex(["a", String(f.trophies.total), f.favouriteActivity ?? "-", f.mostPlayedWithID.map(String.init) ?? "-", f.relationshipLevel ?? "-", f.newcomer ? "new" : "old", f.personality ?? "-", f.favouriteFood ?? "-"])
+        hex(["a", String(f.trophies.total), f.favouriteActivity ?? "-", f.mostPlayedWithID.map(String.init) ?? "-", f.relationshipLevel ?? "-", f.newcomer ? "new" : "old", f.personality ?? "-", f.favouriteFood ?? "-", f.news?.id ?? "-"])
     }
     /// A fingerprint of a text (placeholders in), for "Don't show this one" and the feedback lookup.
     static func text(_ template: String) -> String { hex(["t", template]) }
@@ -132,6 +136,23 @@ final class StoryBook {
         #endif
     }
 
+    // MARK: news (one item is used for at most a day)
+
+    /// True while a news item may still be used: never used, or first used today.
+    func newsAvailable(_ e: StoryEvent) -> Bool { let u = saved.news?[e.id]; return u == nil || u == today() }
+    private func noteNewsUse(_ f: StoryFacts, keys: [String]) {
+        guard let n = f.news, keys.contains(n.factKey) else { return }
+        var m = saved.news ?? [:]
+        if m[n.id] == nil { m[n.id] = today() }
+        m = m.filter { today() - $0.value <= 3 }
+        saved.news = m
+    }
+    /// News is pending when there is a fresh item and the saved line does not already say it.
+    private func newsPending(_ f: StoryFacts, _ e: StoryEntry?) -> Bool {
+        guard let n = f.news, StoryFill.facts(f).contains(n.factKey) else { return false }
+        return !(e?.keys ?? []).contains(n.factKey)
+    }
+
     // MARK: showing (synchronous, never empty)
 
     struct Line: Equatable { var text: String; var byModel: Bool }
@@ -140,13 +161,14 @@ final class StoryBook {
     func aboutLine(_ f: StoryFacts) -> Line? {
         let key = String(f.id)
         let values = StoryFill.values(f), offered = Set(values.keys)
-        if let e = saved.about[key], !hidden.contains(StoryFingerprint.text(e.template)) {
+        if let e = saved.about[key], !hidden.contains(StoryFingerprint.text(e.template)), !newsPending(f, e) {
             let fin = StoryFill.apply(e.template, values)
             // a saved line is shown only while the sheet still backs every fact it states (a rename, a changed favourite): otherwise a true one is written on the spot
             if StoryGuard.check(template: e.template, final: fin, kind: .about, offered: offered, shown: f.shownParagraph, values: values, keys: e.keys, available: e.keys == nil ? nil : StoryFill.facts(f)).passed { return Line(text: fin, byModel: e.byModel) }
         }
         guard let t = TemplateWriter(memory: memory).writeAbout(f) else { return nil }
         saved.about[key] = StoryEntry(template: t.template, fingerprint: StoryFingerprint.about(f), day: today(), writer: "template", keys: t.keys)
+        noteNewsUse(f, keys: t.keys)
         persist()
         return Line(text: StoryFill.apply(t.template, values), byModel: false)
     }
@@ -166,8 +188,9 @@ final class StoryBook {
 
     // MARK: the schedule
 
-    nonisolated static func aboutDue(_ e: StoryEntry?, fingerprint: String, today: Int, hasModel: Bool) -> Bool {
+    nonisolated static func aboutDue(_ e: StoryEntry?, fingerprint: String, today: Int, hasModel: Bool, news: Bool = false) -> Bool {
         guard let e else { return true }
+        if news { return true }                                                   // fresh news may replace the line the same day
         if e.day >= today { return false }                                        // at most once a day
         if e.fingerprint != fingerprint { return true }                           // something notable changed
         if today - e.day >= aboutMinAgeDays { return true }                       // old enough
@@ -193,11 +216,16 @@ final class StoryBook {
         var done: [String] = []
         let day = today()
         let fp = StoryFingerprint.about(f), key = String(f.id)
-        if force || (Self.aboutDue(saved.about[key], fingerprint: fp, today: day, hasModel: hasModel) && !inFlight.contains("a" + key)) {
+        let upgradeNews: Bool = {          // today's pre-written news line gets the model's one chance
+            guard hasModel, let n = f.news, let e = saved.about[key], e.keys?.contains(n.factKey) == true, !e.byModel else { return false }
+            return !(saved.newsTried ?? []).contains(n.id)
+        }()
+        if upgradeNews, let n = f.news { saved.newsTried = ((saved.newsTried ?? []) + [n.id]).suffix(20).map { $0 } }
+        if force || upgradeNews || (Self.aboutDue(saved.about[key], fingerprint: fp, today: day, hasModel: hasModel) && !inFlight.contains("a" + key)) {
             inFlight.insert("a" + key); defer { inFlight.remove("a" + key) }
             let chain = self.chain
             let r = await Task.detached(priority: .utility) { await chain.about(f) }.value
-            if let r { saved.about[key] = StoryEntry(template: r.template, fingerprint: fp, day: day, writer: r.writer, keys: r.keys); done.append("about"); persist() }
+            if let r { saved.about[key] = StoryEntry(template: r.template, fingerprint: fp, day: day, writer: r.writer, keys: r.keys); noteNewsUse(f, keys: r.keys); done.append("about"); persist() }
         }
         for h in f.housemates {
             let nk = "\(f.id)>\(h.id)", nfp = StoryFingerprint.note(f, h)

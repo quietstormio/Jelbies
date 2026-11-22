@@ -73,7 +73,7 @@ extension GameCare {
         show.onDance = { [weak self] d, on in self?.showDance(d, on: on) }
         show.onHit = { [weak self] g in self?.showHit(g) }
         show.onTap = { [weak self] foot in self?.showDanceTap(foot) }
-        show.onResults = { [weak self] place in guard let self else { return }; self.bondEarn(.show, character: self.show.character, win: place == 1); self.showCelebrate(place: place) }          // (+ the relationship)
+        show.onResults = { [weak self] place in guard let self else { return }; self.bondEarn(.show, character: self.show.character, win: place == 1, story: ["tier": self.show.rank.title, "place": String(place)]); self.showCelebrate(place: place) }          // (+ the relationship)
         show.onCup = { [weak self] c, rank, place in self?.race.trophies.recordShowCup(character: c, rank: rank, place: place) }
         show.onBurst = { [weak self] in self?.showBurst() }
         show.onRival = { [weak self] cue in self?.showRivalCue(cue) }

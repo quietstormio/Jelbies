@@ -156,12 +156,15 @@ struct ProfileScreen: View {
     @Environment(\.dynamicTypeSize) private var dts
     @State private var trophiesOpen = false
     @State private var stylesOpen = false
+    @State private var storyRev = 0
     private var compact: Bool { vsc == .compact }
 
-    /// The living line about the pet's life (one short sentence, at most two lines; another worker feeds it). Nil = the slot is hidden. `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
-    private static func lately(_ f: Facts) -> String? {
-        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return "Berry plays most with Latte, and an ice pop is her favourite treat." }
-        return nil
+    /// The living line about the pet's life (Story/: one plain sentence, at most 90 characters; news from today or yesterday first, then favourites and routines). Nil = the slot is hidden.
+    /// `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
+    private func lately(_ f: Facts) -> StoryBook.Line? {
+        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return StoryBook.Line(text: "Berry plays most with Latte, and an ice pop is her favourite treat.", byModel: false) }
+        guard let sf = f.story else { return nil }
+        return StoryBook.shared.aboutLine(sf)
     }
 
     private static let good = (bg: Color(hex: 0xDDF1E1), fg: Color(hex: 0x2F7A4A))
@@ -188,6 +191,15 @@ struct ProfileScreen: View {
                         VStack(spacing: 12) { whoCard(facts); rightNowCard(facts); favouritesCard(facts); trophiesCard(); stylesRow }
                     }
                     .scrollBounceBehavior(.basedOnSize)
+                }
+            }
+            .task(id: who) {          // the living line and the notes: asked for fresh text now and then while the Profile is open (StoryBook's schedule decides)
+                while !Task.isCancelled {
+                    if let sf = StoryFactsBuilder.make(care: care, slot: who, shownParagraph: SkinAbout.text(look: JellyRoster.species(care.jelly(who)?.character ?? who), variant: JellyVariants.adopted(care.jelly(who)?.character ?? who))) {
+                        let done = await StoryBook.shared.refresh(sf)
+                        if !done.isEmpty { storyRev += 1 }
+                    }
+                    try? await Task.sleep(nanoseconds: 4_000_000_000)
                 }
             }
             .task {          // capture aid (dev arguments only): `-ProfileScroll 1` scrolls the trophies card into view
@@ -224,8 +236,12 @@ struct ProfileScreen: View {
         let hour: Double
         /// The relationship now (points from the save; display only).
         let bond: BondLevel
+        /// What the living line and the friends notes are written from (Story/); nil when this Jelmiko is not at home.
+        let story: StoryFacts?
         init(care: GameCare, who: Int) {
             p = care.jelly(who)
+            let ch = care.jelly(who)?.character ?? who
+            story = StoryFactsBuilder.make(care: care, slot: who, shownParagraph: SkinAbout.text(look: JellyRoster.species(ch), variant: JellyVariants.adopted(ch)))
             bond = BondLevel(points: JellyBond.points(care.jelly(who)?.character ?? who))
             let inp = care.widgetInputs().first { $0.id == who }
             let sleeping = care.asleepForAway(who)
@@ -317,38 +333,29 @@ struct ProfileScreen: View {
 
     /// The living-line slot: a soft bubble in the pet's body tint with a small sparkle; nothing at all when there is no text.
     @ViewBuilder private func latelyBubble(_ f: Facts, _ b: WhoBits) -> some View {
-        if let text = Self.lately(f), !text.isEmpty {
+        let _ = storyRev
+        if let line = lately(f), !line.text.isEmpty {
             HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "sparkle").font(.system(size: 13, weight: .black)).foregroundStyle(ShowUI.goldDeep).padding(.top, 3).accessibilityHidden(true)
-                Text(text).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).lineSpacing(3).jLine(2, scale: 1)
+                Image(systemName: "sparkle").font(.system(size: 13, weight: .black)).foregroundStyle(ShowUI.goldDeep).padding(.top, 3)
+                    .accessibilityLabel(line.byModel ? "Written on this iPhone" : "").accessibilityHidden(!line.byModel)
+                Text(line.text).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).lineSpacing(3).jLine(2, scale: 1)
                     .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(b.body.opacity(0.3)))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(b.body.opacity(0.5), lineWidth: 1.5))
-            .accessibilityElement(children: .ignore).accessibilityLabel("Lately: \(text)").accessibilityIdentifier("profile-lately")
+            .accessibilityElement(children: .ignore).accessibilityLabel("Lately: \(line.text)" + (line.byModel ? ". Written on this iPhone" : "")).accessibilityIdentifier("profile-lately")
+            .contextMenu { storyActions(f, nil) }
         }
     }
 
-    /// The top card: header row (picture, name, chips, short status), the description paragraph, the living line (when there is one), the Relationship line.
-    private func whoCard(_ f: Facts) -> some View {
-        let b = whoBits(f)
-        let text = VStack(alignment: .leading, spacing: 6) {
-            whoName(false); whyChips(f, b, center: false); whoStatus(f, center: false)
+    /// The two long-press actions on a line or a note.
+    @ViewBuilder private func storyActions(_ f: Facts, _ h: StoryFacts.Housemate?) -> some View {
+        if let sf = f.story {
+            Button { Task { _ = await StoryBook.shared.writeAnother(sf, with: h); storyRev += 1 } } label: { Label("Write another", systemImage: "arrow.triangle.2.circlepath") }
+                .disabled(StoryBook.shared.rewritesLeft(sf, h) == 0)
+            Button(role: .destructive) { StoryBook.shared.dontShow(sf, with: h); storyRev += 1 } label: { Label("Don't show this one", systemImage: "hand.raised") }
         }
-        return card {
-            VStack(alignment: .leading, spacing: 12) {
-                if dts.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 10) { whoPicture(b, 104); text }
-                } else {
-                    HStack(alignment: .center, spacing: 14) { whoPicture(b, compact ? 104 : 128); text.frame(maxWidth: .infinity, alignment: .leading) }
-                }
-                aboutParagraph(b)
-                latelyBubble(f, b)
-                BondHeartsRow(level: f.bond).frame(maxWidth: .infinity, alignment: .leading).id(who)
-            }
-        }
-        .id("profile-who")
     }
 
     // MARK: 2. right now
@@ -407,11 +414,43 @@ struct ProfileScreen: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Favourite food: \(item?.name ?? f.p?.traits?.snackName ?? "still finding out")")
                 .accessibilityIdentifier("profile-fav-food")
+                friendsBlock(f)
                 favRow(icon: "person.2.fill", color: SK.mint, title: "Best friend at the Park",
                        value: friend.map { "\($0.0.name) \u{00B7} \(ParkFriendLevel.of($0.1).title)" } ?? "Still finding out", id: "profile-fav-friend")
                 if !powerUps.isEmpty {
                     favRow(icon: "bolt.fill", color: SK.honeyDeep, title: "Power-up now",
                            value: powerUps.map { k in "\(k.title) \u{00B7} \(SK.timeLeft(f.p?.perks.remaining(k) ?? 0)) left" }.joined(separator: ", "), id: "profile-fav-perk")
+                }
+            }
+        }
+    }
+
+    /// One row per housemate: the two small head pictures, the names, and the one-line note (Story/StoryBook: it follows how the two really play).
+    @ViewBuilder private func friendsBlock(_ f: Facts) -> some View {
+        let _ = storyRev
+        if let sf = f.story, !sf.housemates.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Housemates").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase)
+                ForEach(sf.housemates, id: \.id) { h in
+                    let slot = care.jellies.first { $0.character == h.id }?.id
+                    HStack(alignment: .center, spacing: 10) {
+                        HStack(spacing: -10) {
+                            JelbiePortrait(care: care, who: who, size: 40, head: true, frameless: true).clipShape(Circle())
+                            if let slot { JelbiePortrait(care: care, who: slot, size: 40, head: true, frameless: true).clipShape(Circle()) }
+                        }
+                        .frame(width: 72, alignment: .leading).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("\(sf.name) and \(h.name)").font(SK.font(14, .black)).foregroundStyle(SK.ink).lineLimit(1)
+                            if let n = StoryBook.shared.noteLine(sf, with: h) {
+                                Text(n.text).font(SK.font(13, .semibold)).foregroundStyle(SK.muted).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityLabel(n.text + (n.byModel ? ". Written on this iPhone" : ""))
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                    .contextMenu { storyActions(f, h) }
+                    .accessibilityElement(children: .combine).accessibilityIdentifier("profile-friend-\(h.id)")
                 }
             }
         }

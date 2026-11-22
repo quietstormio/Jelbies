@@ -231,7 +231,7 @@ nonisolated enum StoryGuard {
     /// Which fact each placeholder stands for. A text that uses one must name that fact.
     static let tokenFact: [String: String] = ["FOOD": "favouriteFood", "ACT": "favouriteActivity", "SPOT": "favouriteSpot", "RACE": "raceWin", "SHOW": "showCup", "PERS": "personality", "EMOTE": "topEmote", "LEFT": "raceMilestone"]
     /// Every fact key a text may name (the writers' vocabulary; the model's guide lists these).
-    static let allFactKeys = ["personality", "favouriteFood", "favouriteActivity", "favouriteSpot", "raceWin", "showCup", "volleyWin", "recentWin", "partner", "topEmote", "nap", "newcomer", "settled", "raceMilestone", "together", "gettingToKnow", "bond"]
+    static let allFactKeys = ["personality", "favouriteFood", "favouriteActivity", "favouriteSpot", "raceWin", "showCup", "volleyWin", "partner", "topEmote", "nap", "newcomer", "settled", "raceMilestone", "together", "gettingToKnow", "bond"] + StoryEvent.kinds.map { "recent" + $0.prefix(1).uppercased() + $0.dropFirst() }
 
     /// The line must name at least one fact, every named fact must be on the sheet (true), and every fact placeholder it uses must be named. `keys` nil = not checked (pure-shape tests).
     static func checkFacts(_ t: String, kind: StoryKind, keys: [String]?, available: Set<String>?) -> StoryReason? {
@@ -240,6 +240,7 @@ nonisolated enum StoryGuard {
         if let available { for k in keys where !available.contains(k) { return .unknownFact(k) } }
         for tok in tokens(in: t) { if let need = tokenFact[tok], !keys.contains(need) { return .missingFactKey(need) } }
         if kind == .about, tokens(in: t).contains("B"), !keys.contains("partner") { return .missingFactKey("partner") }
+        if !Set(tokens(in: t)).isDisjoint(with: ["WHEN", "TIER", "PLACE", "LEVEL"]), !keys.contains(where: { $0.hasPrefix("recent") }) { return .missingFactKey("recent news") }
         return nil
     }
 
