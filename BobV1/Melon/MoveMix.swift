@@ -319,7 +319,13 @@ extension BlobBrain {
 extension BlobBrain {
     /// Round 3 (park, destination level): the leg `here -> cand` runs through a park solid (slide, seesaw, bench ...). Always false at home.
     func mixLegThroughSolid(_ here: SIMD2<Float>, _ cand: SIMD2<Float>) -> Bool {
-        MoveMix.on && ParkClearSpot.legCrossesSolid(here, cand, radius: footprint)
+        guard MoveMix.on else { return false }
+        if ParkClearSpot.legCrossesSolid(here, cand, radius: footprint) { return true }
+        let courts = ParkClearSpot.courts
+        guard !courts.isEmpty else { return false }          // (park hopscotch court: a leg across it meets the hoppers / the line)
+        let n = max(1, Int(simd_distance(here, cand) / 0.2))
+        for i in 0...n { let p = here + (cand - here) * (Float(i) / Float(n)); if courts.contains(where: { $0.distance(p) < 0.35 }) { return true } }
+        return false
     }
     /// 0...`boardPenalty`: the leg would come within a body's width of where another body will be (from the shared board) in the next 2 s. Not only for runs.
     func mixBoardConflict(from here: SIMD2<Float>, to cand: SIMD2<Float>, speed: Float) -> Float {
