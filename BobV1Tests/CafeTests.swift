@@ -191,6 +191,84 @@ final class CafeTests: XCTestCase {
         XCTAssertFalse(c.tripActive)
     }
 
+    // MARK: needs and power-ups after the outing (cafe-needs-r1)
+
+    /// Runs one whole outing with `order`: every Jelmiko starts at hunger 0.3 / thirst 0.4, then home. Returns (before, after) as [hunger, thirst] by roster id.
+    private func trip(_ order: CafeOrder, label: String) -> (DiningJellyTests.Room, [[Float]], [[Float]]) {
+        let r = room(drops: 100)
+        let c = r.care
+        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.3); c.needs(for: i).set(.thirst, 0.4) }
+        let before = (0..<3).map { [r.level($0), r.level($0, .thirst)] }
+        enter(r)
+        XCTAssertNil(c.orderCafe(order))
+        step(r, 120) { c.cafe.phase == .lounge }
+        c.cafe.goHome(); step(r, 8) { c.cafe.phase == .off }          // (sampled the moment he is home)
+        XCTAssertEqual(c.cafe.phase, .off)
+        let after = (0..<3).map { [r.level($0), r.level($0, .thirst)] }
+        print("CAFENEEDS \(label) before(hunger,thirst)=\(before) after=\(after)")
+        return (r, before, after)
+    }
+
+    func testFoodForEveryoneRaisesHungerAndLosesNothing() {
+        let (_, b, a) = trip(CafeOrder(forTable: .pancakes), label: "food")
+        for i in 0..<3 {
+            XCTAssertGreaterThanOrEqual(a[i][0], min(1, b[i][0] + 3 * MealAppetite.gainPerPiece) - 0.001, "as much as a home meal of 3 pieces")
+            XCTAssertGreaterThanOrEqual(a[i][1], b[i][1] - 0.0001, "thirst did not drop")
+        }
+    }
+    func testDrinkForEveryoneRaisesThirstLikeHome() {
+        let (_, b, a) = trip(CafeOrder(forTable: .juice), label: "drink")
+        for i in 0..<3 {
+            XCTAssertGreaterThanOrEqual(a[i][1], min(1, b[i][1] + 3 * MealAppetite.gainPerPiece) - 0.001, "thirst rose like a home drink")
+            XCTAssertGreaterThanOrEqual(a[i][0], b[i][0] - 0.0001, "hunger did not drop")
+        }
+    }
+    func testMixedOrderLosesNoNeed() {
+        let (_, b, a) = trip(CafeOrder(picks: [0: .swirl, 1: .latte, 2: .pancakes]), label: "mixed")
+        XCTAssertGreaterThan(a[0][0], b[0][0]); XCTAssertGreaterThan(a[1][1], b[1][1]); XCTAssertGreaterThan(a[2][0], b[2][0])
+        for i in 0..<3 { for k in 0..<2 { XCTAssertGreaterThanOrEqual(a[i][k], b[i][k] - 0.0001, "no need is lower after the trip (Jelmiko \(i), need \(k))") } }
+    }
+    func testLeavingWithoutOrderingCostsNothing() {
+        let r = room(drops: 100)
+        let c = r.care
+        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.5); c.needs(for: i).set(.thirst, 0.5) }
+        enter(r)
+        step(r, 30)
+        c.cafe.goHome(); step(r, 8) { c.cafe.phase == .off }
+        for i in 0..<3 { XCTAssertEqual(r.level(i), 0.5, accuracy: 0.0005); XCTAssertEqual(r.level(i, .thirst), 0.5, accuracy: 0.0005) }
+    }
+    /// The cause of the drop, in numbers: the trip clock's 2700 s step (what every outing used to get on the way home) is hunger -4.5 %, thirst -5.6 %.
+    func testTheOldTripClockStepIsWhatLoweredBothNeeds() {
+        let r = room(drops: 100)
+        let c = r.care
+        for i in 0..<3 { c.needs(for: i).set(.hunger, 0.5); c.needs(for: i).set(.thirst, 0.5) }
+        c.tripReturned([0])
+        print("CAFENEEDS old trip-clock step on 0.5/0.5: hunger \(r.level(0)) thirst \(r.level(0, .thirst))")
+        XCTAssertLessThan(r.level(0), 0.5 - 0.04); XCTAssertLessThan(r.level(0, .thirst), 0.5 - 0.05)
+    }
+    func testEveryTreatGivesItsPowerUp() {
+        let ids: [CafeTreatID] = [.swirl, .fizzmac, .pancakes, .sundae, .jellycup, .latte, .cocoa, .juice]
+        for t in ids {
+            let r = room(drops: 100)
+            let c = r.care
+            let perk = CafeMenu.treat(t).perk
+            for i in 0..<3 { c.jelly(i)!.perks.clear(perk) }          // (no leftover from the last treat of the same perk can pass this)
+            for i in 0..<3 { XCTAssertFalse(c.jelly(i)!.perks.isActive(perk)) }
+            enter(r)
+            XCTAssertNil(c.orderCafe(CafeOrder(forTable: t)))
+            step(r, 120) { c.cafe.phase == .cheer }
+            for i in 0..<3 {
+                let p = c.jelly(i)!.perks
+                XCTAssertTrue(p.isActive(perk), "\(t) gives \(perk.title) to Jelmiko \(i)")
+                XCTAssertTrue(p.active.contains(perk), "shown on the Profile row")
+                let want = perk.raceOnly ? perk.duration : perk.duration * CafeTuning.perkDurationMul
+                XCTAssertEqual(p.remaining(perk), want, accuracy: 30, "\(t) lasts \(want) s")
+            }
+            print("CAFEPERK \(t.rawValue) -> \(perk.title) \(Int(c.jelly(0)!.perks.remaining(perk))) s")
+            c.cafe.goHome(); step(r, 8) { c.cafe.phase == .off }
+        }
+    }
+
     // 7. each eats his own
 
     func testEachJelbieEatsHisOwnTreat() {
@@ -314,8 +392,8 @@ final class CafeTests: XCTestCase {
         for i in 0..<3 { c.needs(for: i).set(.hunger, 0.3) }
         XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .cocoa, 1: .juice, 2: .swirl])))
         step(r, 120) { c.cafe.phase == .cheer }
-        XCTAssertLessThan(r.level(0), 0.3 + 3 * CafeRules.drinkFillPerPiece + 0.02, "a drink is not a meal")
-        XCTAssertLessThan(r.level(1), 0.3 + 3 * CafeRules.drinkFillPerPiece + 0.02)
+        XCTAssertLessThan(r.level(0), 0.3 + 0.02, "a drink is not a meal")
+        XCTAssertLessThan(r.level(1), 0.3 + 0.02)
         XCTAssertGreaterThan(r.level(2), 0.4, "the food filled him")
         XCTAssertTrue(c.jelly(0)!.perks.isActive(.cozy)); XCTAssertTrue(c.jelly(1)!.perks.isActive(.bouncy))
     }

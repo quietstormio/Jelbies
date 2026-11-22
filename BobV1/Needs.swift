@@ -88,8 +88,11 @@ final class BlobNeeds {
     /// Real-time decay by `dt` seconds, plus attention while petting (rate 0.05/s, more during the purr).
     /// `exerting`: hunger and thirst drain `exertionDrain` times faster.
     /// `drainScale`: 1 normally; `NeedsTuning.napDrain` (0.5) while he naps at night.
+    /// The café outing: hunger and thirst stand still from leaving home until home again (GameCare+Cafe.swift sets it each step).
+    var holdBodyNeeds = false
     func step(dt: Float, petting: Bool = false, purring: Bool = false, exerting: Bool = false, drainScale: Float = 1, perkDrain: [Double] = [1, 1, 1]) {
         for k in NeedKind.allCases {
+            if holdBodyNeeds, k != .attention { continue }
             let mul = (exerting && k != .attention ? NeedsTuning.exertionDrain : 1) * Double(drainScale) * perkDrain[k.rawValue]
             raw[k.rawValue] -= Float(Double(dt) * mul / (NeedsTuning.hoursToEmpty(k) * 3600))
         }
