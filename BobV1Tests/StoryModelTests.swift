@@ -88,7 +88,7 @@ final class StoryModelTests: XCTestCase {
         XCTAssertFalse(StorySettings.isOn(d), "the Settings switch shows the truth")
         XCTAssertEqual(StoryModelSentinel.headerLine(d), "[story] model disabled: died in respond(about)")
         let c = FakeClient(), st = StoryModelStats()
-        let w = writer(c, defaults: d, stats: st)
+        let w = writer(c, stats: st, defaults: d)
         let a = await w.about(facts: facts()), n = await w.friendship(facts: facts(), with: facts().housemates[0])
         XCTAssertNil(a); XCTAssertNil(n)
         XCTAssertEqual(st.count(.crashDisabled), 2)
