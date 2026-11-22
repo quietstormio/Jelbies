@@ -21,14 +21,26 @@ nonisolated enum StoryLayout {
     static let headsWidth: CGFloat = 72
 }
 
+/// The mark in front of / beside a text: ONLY text written by the on-device model carries the Apple Intelligence sparkle (with its label). Pre-written text carries nothing: the same
+/// fixed slot is kept empty, so the box is exactly the same size either way.
+struct StoryMark: View {
+    var byModel: Bool
+    var body: some View {
+        Group {
+            if byModel { Image(systemName: "sparkle").font(.system(size: 13, weight: .black)).foregroundStyle(ShowUI.goldDeep).accessibilityLabel("Written on this iPhone") }
+            else { Color.clear.accessibilityHidden(true) }
+        }
+        .frame(width: 14, height: 18)
+    }
+}
+
 struct StoryLivingBubble: View {
     var text: String
     var byModel = false
     var tint: Color
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "sparkle").font(.system(size: 13, weight: .black)).foregroundStyle(ShowUI.goldDeep).frame(width: 14, height: 18)
-                .opacity(text.isEmpty ? 0 : 1).accessibilityHidden(true)
+            StoryMark(byModel: byModel && !text.isEmpty)
             Text(text.isEmpty ? " " : text).font(SK.font(StoryLayout.lineSize, .semibold)).foregroundStyle(SK.ink).lineLimit(2, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -50,7 +62,11 @@ struct StoryFriendRow<Heads: View>: View {
         HStack(alignment: .top, spacing: 10) {
             heads().frame(width: StoryLayout.headsWidth, height: 40, alignment: .leading).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text(names.isEmpty ? " " : names).font(SK.font(14, .black)).foregroundStyle(SK.ink).lineLimit(1, reservesSpace: true)
+                HStack(spacing: 4) {
+                    Text(names.isEmpty ? " " : names).font(SK.font(14, .black)).foregroundStyle(SK.ink).lineLimit(1, reservesSpace: true)
+                    Spacer(minLength: 0)
+                    StoryMark(byModel: byModel)
+                }
                 Text(note.isEmpty ? " " : note).font(SK.font(StoryLayout.noteSize, .semibold)).foregroundStyle(SK.muted).lineLimit(2, reservesSpace: true)
             }
             Spacer(minLength: 0)

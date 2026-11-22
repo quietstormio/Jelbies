@@ -34,6 +34,8 @@ nonisolated struct StorySaved: Codable, Equatable, Sendable {
     var news: [String: Int]? = nil
     /// News events the model has already been asked about once.
     var newsTried: [String]? = nil
+    /// "<key>" -> "<day>|<fingerprint of the pre-written text>": the model was asked once to replace that pre-written text today.
+    var modelTried: [String: String]? = nil
 }
 
 nonisolated enum StoryFingerprint {
@@ -188,50 +190,72 @@ final class StoryBook {
 
     // MARK: the schedule
 
-    nonisolated static func aboutDue(_ e: StoryEntry?, fingerprint: String, today: Int, hasModel: Bool, news: Bool = false) -> Bool {
+    /// When a new About line is due. `rotate` false = the Profile is open: only a new event (`news`) or a changed notable fact may change the line, never just its age.
+    nonisolated static func aboutDue(_ e: StoryEntry?, fingerprint: String, today: Int, news: Bool = false, rotate: Bool = true) -> Bool {
         guard let e else { return true }
         if news { return true }                                                   // fresh news may replace the line the same day
         if e.day >= today { return false }                                        // at most once a day
         if e.fingerprint != fingerprint { return true }                           // something notable changed
-        if today - e.day >= aboutMinAgeDays { return true }                       // old enough
-        return hasModel && !e.byModel                                             // a pre-written one waits for the model's turn
+        return rotate && today - e.day >= aboutMinAgeDays                         // old enough (never while a Profile is open)
     }
-    nonisolated static func noteDue(_ e: StoryEntry?, fingerprint: String, today: Int, hasModel: Bool) -> Bool {
+    nonisolated static func noteDue(_ e: StoryEntry?, fingerprint: String, today: Int, rotate: Bool = true) -> Bool {
         guard let e else { return true }
         if e.day >= today { return false }
         if e.fingerprint != fingerprint { return true }
-        if today - e.day >= noteMinAgeDays { return true }
-        return hasModel && !e.byModel
+        return rotate && today - e.day >= noteMinAgeDays
     }
 
-    var hasModel: Bool { chain.writers.contains { $0.name != "template" } }
+    /// A model writer that can really answer right now (framework, system, language, the player's switch). The simulator and unsupported phones are false.
+    var hasModel: Bool { chain.writers.contains { $0.name != "template" && $0.isUsable } }
     var mayWriteNow: Bool { !busy() && !lowPower() }
     func syncGate() { gateBox.busy = busy(); gateBox.lowPower = lowPower() }
 
-    /// Asks the chain for new text where the schedule says so. Call from a screen's task or a quiet moment; returns what was rewritten. Never blocks the main thread: the chain runs off it.
+    /// Asks the chain for new text where the schedule says so. Never blocks the main thread (the chain runs off it) and never touches what is on screen until it has an answer.
+    /// While a Profile is open (`rotate: false`) a line changes only when a new event arrives or a notable fact changed; the model's turn replaces a PRE-WRITTEN line only with a model line that passed
+    /// the guard, once per text per day. A model that gives no answer changes nothing.
     @discardableResult
-    func refresh(_ f: StoryFacts) async -> [String] {
+    func refresh(_ f: StoryFacts, rotate: Bool = true) async -> [String] {
         guard force || mayWriteNow else { return [] }
         syncGate()
         var done: [String] = []
         let day = today()
         let fp = StoryFingerprint.about(f), key = String(f.id)
-        let upgradeNews: Bool = {          // today's pre-written news line gets the model's one chance
-            guard hasModel, let n = f.news, let e = saved.about[key], e.keys?.contains(n.factKey) == true, !e.byModel else { return false }
-            return !(saved.newsTried ?? []).contains(n.id)
-        }()
-        if upgradeNews, let n = f.news { saved.newsTried = ((saved.newsTried ?? []) + [n.id]).suffix(20).map { $0 } }
-        if force || upgradeNews || (Self.aboutDue(saved.about[key], fingerprint: fp, today: day, hasModel: hasModel) && !inFlight.contains("a" + key)) {
+        let chain = self.chain
+        let modelOnly = StoryChain(chain.writers.filter { $0.name != "template" && $0.isUsable }); var mo = modelOnly; mo.hidden = hidden
+        // 1. the model's turn on a pre-written line
+        if hasModel, let e = saved.about[key], !e.byModel, !inFlight.contains("a" + key) {
+            let tag = "\(day)|\(StoryFingerprint.text(e.template))"
+            if (saved.modelTried ?? [:])[key] != tag {
+                var t = saved.modelTried ?? [:]; t[key] = tag; saved.modelTried = t
+                inFlight.insert("a" + key); defer { inFlight.remove("a" + key) }
+                let m = mo
+                let r = await Task.detached(priority: .utility) { await m.about(f) }.value
+                // (the line may have been rewritten while we waited: only replace the very text we asked about)
+                if let r, saved.about[key]?.template == e.template { saved.about[key] = StoryEntry(template: r.template, fingerprint: fp, day: day, writer: r.writer, keys: r.keys); noteNewsUse(f, keys: r.keys); done.append("about"); persist() }
+                else { persist() }
+            }
+        }
+        // 2. an ordinary rewrite: no line yet, a notable fact changed, or (not while open) it is old enough
+        if force || (Self.aboutDue(saved.about[key], fingerprint: fp, today: day, rotate: rotate) && !inFlight.contains("a" + key)) {
             inFlight.insert("a" + key); defer { inFlight.remove("a" + key) }
-            let chain = self.chain
             let r = await Task.detached(priority: .utility) { await chain.about(f) }.value
             if let r { saved.about[key] = StoryEntry(template: r.template, fingerprint: fp, day: day, writer: r.writer, keys: r.keys); noteNewsUse(f, keys: r.keys); done.append("about"); persist() }
         }
         for h in f.housemates {
             let nk = "\(f.id)>\(h.id)", nfp = StoryFingerprint.note(f, h)
-            guard force || (Self.noteDue(saved.notes[nk], fingerprint: nfp, today: day, hasModel: hasModel) && !inFlight.contains("n" + nk)) else { continue }
+            if hasModel, let e = saved.notes[nk], !e.byModel, !inFlight.contains("n" + nk) {
+                let tag = "\(day)|\(StoryFingerprint.text(e.template))"
+                if (saved.modelTried ?? [:])[nk] != tag {
+                    var t = saved.modelTried ?? [:]; t[nk] = tag; saved.modelTried = t
+                    inFlight.insert("n" + nk); defer { inFlight.remove("n" + nk) }
+                    let m = mo
+                    let r = await Task.detached(priority: .utility) { await m.friendship(f, with: h) }.value
+                    if let r, saved.notes[nk]?.template == e.template { saved.notes[nk] = StoryEntry(template: r.template, fingerprint: nfp, day: day, writer: r.writer, keys: r.keys); done.append("note:\(nk)") }
+                    persist()
+                }
+            }
+            guard force || (Self.noteDue(saved.notes[nk], fingerprint: nfp, today: day, rotate: rotate) && !inFlight.contains("n" + nk)) else { continue }
             inFlight.insert("n" + nk); defer { inFlight.remove("n" + nk) }
-            let chain = self.chain
             let r = await Task.detached(priority: .utility) { await chain.friendship(f, with: h) }.value
             if let r { saved.notes[nk] = StoryEntry(template: r.template, fingerprint: nfp, day: day, writer: r.writer, keys: r.keys); done.append("note:\(nk)"); persist() }
         }

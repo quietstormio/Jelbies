@@ -59,23 +59,23 @@ final class StoryBookTests: XCTestCase {
 
     func testAboutScheduleRules() {
         let e = StoryEntry(template: "{A} is happy.", fingerprint: "x", day: 100)
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 100, hasModel: false))          // never twice in a day
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "y", today: 100, hasModel: false))          // not even when something changed
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 101, hasModel: false))          // too young and nothing new
-        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 102, hasModel: false))
-        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "x", today: 103, hasModel: false))           // 3 days old
-        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "y", today: 101, hasModel: false))           // a day old but something notable changed
-        XCTAssertTrue(StoryBook.aboutDue(nil, fingerprint: "x", today: 100, hasModel: false))
-        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "x", today: 101, hasModel: true))            // a pre-written one waits for the model's turn the next day
-        var m = e; m.writer = "model"
-        XCTAssertFalse(StoryBook.aboutDue(m, fingerprint: "x", today: 101, hasModel: true))
+        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 100))          // never twice in a day
+        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "y", today: 100))          // not even when something changed
+        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 101))          // too young and nothing new
+        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 102))
+        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "x", today: 103))           // 3 days old
+        XCTAssertFalse(StoryBook.aboutDue(e, fingerprint: "x", today: 103, rotate: false))          // ...but never just for its age while a Profile is open
+        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "y", today: 101))           // a day old but something notable changed
+        XCTAssertTrue(StoryBook.aboutDue(e, fingerprint: "x", today: 100, news: true))          // a new event may replace it the same day
+        XCTAssertTrue(StoryBook.aboutDue(nil, fingerprint: "x", today: 100))
     }
     func testNoteScheduleRules() {
-        let e = StoryEntry(template: "{A} and {B} are pals.", fingerprint: "x", day: 100)
-        XCTAssertFalse(StoryBook.noteDue(e, fingerprint: "y", today: 100, hasModel: false))
-        XCTAssertTrue(StoryBook.noteDue(e, fingerprint: "y", today: 101, hasModel: false))
-        XCTAssertFalse(StoryBook.noteDue(e, fingerprint: "x", today: 106, hasModel: false))
-        XCTAssertTrue(StoryBook.noteDue(e, fingerprint: "x", today: 107, hasModel: false))
+        let e = StoryEntry(template: "They are pals.", fingerprint: "x", day: 100)
+        XCTAssertFalse(StoryBook.noteDue(e, fingerprint: "y", today: 100))
+        XCTAssertTrue(StoryBook.noteDue(e, fingerprint: "y", today: 101))
+        XCTAssertFalse(StoryBook.noteDue(e, fingerprint: "x", today: 106))
+        XCTAssertTrue(StoryBook.noteDue(e, fingerprint: "x", today: 107))
+        XCTAssertFalse(StoryBook.noteDue(e, fingerprint: "x", today: 107, rotate: false))
     }
 
     func testFingerprintIgnoresMoodButSeesATrophy() {
@@ -158,6 +158,49 @@ final class StoryBookTests: XCTestCase {
         XCTAssertTrue(b.aboutLine(facts())!.byModel)
         XCTAssertEqual(b.aboutLine(facts())!.text, "Berry is a sleepy type.")
     }
+
+    // MARK: a line that is on screen does not change by itself
+
+    /// A model writer that says it is usable but gives no answer (what the simulator, or a model that refused, looks like): the pre-written line must stay put.
+    struct Silent: StoryWriter {
+        var name: String { "model" }
+        func about(facts: StoryFacts) async -> StoryAnswer? { nil }
+        func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> StoryAnswer? { nil }
+    }
+
+    func testTheSameSheetOpenedFiftyTimesGivesTheSameSentence() async {
+        let day = Box(500)
+        let b = book(StoryBookTests.suiteFor(self), day: day)
+        b.chain = StoryChain([Silent(), TemplateWriter(memory: b.memory)])
+        let news = StoryEvent(kind: "bubbles", day: 500)
+        var f = facts(); f.today = 500; f.news = news; f.events = [news]
+        let first = b.aboutLine(f)!.text
+        let note = b.noteLine(f, with: f.housemates[0])!.text
+        for i in 0..<50 {
+            _ = await b.refresh(f, rotate: i == 0)                // the Profile's loop: only the first ask may rotate
+            XCTAssertEqual(b.aboutLine(f)!.text, first, "open \(i)")
+            XCTAssertEqual(b.noteLine(f, with: f.housemates[0])!.text, note, "open \(i)")
+            // the facts are rebuilt every few seconds: the news item must not change under the same day
+            var g = facts(); g.today = 500; g.news = b.newsAvailable(news) ? news : nil; g.events = [news]
+            XCTAssertEqual(b.aboutLine(g)!.text, first)
+        }
+        XCTAssertTrue(first.contains("bubbles"))
+    }
+
+    func testAModelLineReplacesAPreWrittenOneOnceAndThenStaysPut() async {
+        let day = Box(600)
+        let b = book(StoryBookTests.suiteFor(self), day: day)
+        b.chain = StoryChain([Fake(name: "model", aboutText: "{A} is a {PERS} type.", noteText: "They play together a lot.", keys: ["personality"]), TemplateWriter(memory: b.memory)])
+        let f = facts()
+        let pre = b.aboutLine(f)!
+        XCTAssertFalse(pre.byModel)                              // the pre-written line is what shows first: the model never delays or blocks it
+        _ = await b.refresh(f, rotate: false)
+        let after = b.aboutLine(f)!
+        XCTAssertTrue(after.byModel); XCTAssertEqual(after.text, "Berry is a sleepy type.")
+        for _ in 0..<20 { _ = await b.refresh(f, rotate: false); XCTAssertEqual(b.aboutLine(f)!.text, after.text) }
+    }
+
+    static func suiteFor(_ t: XCTestCase) -> UserDefaults { let n = "story.book.\(UUID().uuidString)"; let d = UserDefaults(suiteName: n)!; d.removePersistentDomain(forName: n); return d }
 
     // MARK: save / load / purge / old save
 

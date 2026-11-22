@@ -182,6 +182,7 @@ enum StoryDev {
             }
         }
         out += "\nprompt leaks of a player-typed name: \(leaks)\nmodel counters: \(StoryModelStats.shared.snapshot().sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))\n"
+        out += "model failure log (reason, detail; a guardrail hit or refusal on OUR fixed prompt is a bug in the prompt):\n" + StoryModelStats.shared.logLines().prefix(60).map { "   \($0)" }.joined(separator: "\n") + "\n"
         out += "guardrail hits on our fixed prompt (a bug in the prompt): \(StoryModelStats.shared.count(.guardrail))\n"
         return out
     }

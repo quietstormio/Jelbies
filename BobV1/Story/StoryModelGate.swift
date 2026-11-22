@@ -66,6 +66,7 @@ nonisolated final class StoryModelStats: @unchecked Sendable {
     func bump(_ name: String) { lock.lock(); counts[name, default: 0] += 1; lock.unlock() }
     func count(_ k: StoryModelFailure) -> Int { lock.lock(); defer { lock.unlock() }; return counts[k.rawValue] ?? 0 }
     func count(_ name: String) -> Int { lock.lock(); defer { lock.unlock() }; return counts[name] ?? 0 }
+    func logLines() -> [String] { lock.lock(); defer { lock.unlock() }; return log }
     func snapshot() -> [String: Int] { lock.lock(); defer { lock.unlock() }; return counts }
     func reset() { lock.lock(); counts = [:]; log = []; lock.unlock() }
 }
@@ -129,7 +130,8 @@ nonisolated enum StoryPrompt {
 
     static func note(_ f: StoryFacts, with h: StoryFacts.Housemate) -> String {
         let v = StoryFill.values(f, with: h)
-        var lines = ["Write one plain sentence, at most 55 characters, about how the pet {A} gets on with its housemate {B}.", "Facts:"]
+        // The Profile row is titled with the housemate's name, so the note says "They" and never a name.
+        var lines = ["Write one plain sentence, at most 45 characters, about how two housemate pets get on. Start with the word They. Do not use any name or placeholder.", "Facts:"]
         switch StoryTemplates.tier(h) {
         case .close: lines.append("- [together] they play together more than anyone, the closest of friends")
         case .regular: lines.append("- [together] they often play together")
@@ -137,7 +139,7 @@ nonisolated enum StoryPrompt {
         }
         if h.sharedGroup { lines.append("- [sharedGroup] they joined in a group activity lately") }
         if let x = v["EMOTE"], StoryTemplates.tier(h) != .few { lines.append("- [topEmote] they are often: {EMOTE} (\(x))") }
-        lines.append("Placeholders you may use: " + v.keys.filter { $0 != "BKIND" }.sorted().map { "{\($0)}" }.joined(separator: " ") + ".")
+        lines.append("Placeholder you may use: {EMOTE} only if you use the topEmote fact.")
         return lines.joined(separator: "\n")
     }
 
@@ -175,6 +177,12 @@ nonisolated struct ModelWriter: StoryWriter {
         i.modelAvailable = r.available; i.localeSupported = r.localeSupported
         if let why = StoryModelGate.skipReason(i) { stats.bump(why, r.detail); return false }
         return true
+    }
+
+    /// Cheap: the model exists here, speaks this locale, and the player's switch is on.
+    var isUsable: Bool {
+        let r = client.readiness()
+        return r.available && r.localeSupported && StorySettings.modelNotes && StoryModelGate.appIsEnglish
     }
 
     func about(facts: StoryFacts) async -> StoryAnswer? {

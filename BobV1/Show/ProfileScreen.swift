@@ -381,10 +381,11 @@ struct ProfileScreen: View {
                 .presentationDetents([.large]).presentationBackground(ShowUI.sand)
         }
         .task(id: who) {          // the living line and the notes: asked for fresh text now and then while the Profile is open (StoryBook's schedule decides)
+            var first = true          // (only the first ask after opening may rotate an old line; while the Profile stays open a line changes for a new event or a changed fact only)
             while !Task.isCancelled {
                 let ch = care.jelly(who)?.character ?? who
                 if let sf = StoryFactsBuilder.make(care: care, slot: who, shownParagraph: SkinAbout.text(look: JellyRoster.species(ch), variant: JellyVariants.adopted(ch))) {
-                    let done = await StoryBook.shared.refresh(sf)
+                    let done = await StoryBook.shared.refresh(sf, rotate: first); first = false
                     if !done.isEmpty { storyRev += 1 }
                 }
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
@@ -511,7 +512,7 @@ struct ProfileScreen: View {
                     let h = sf.housemates[i]
                     let slot = care.jellies.first { $0.character == h.id }?.id
                     let n = StoryBook.shared.noteLine(sf, with: h)
-                    StoryFriendRow(names: "\(sf.name) and \(h.name)", note: n?.text ?? "Still finding out", byModel: n?.byModel ?? false) {
+                    StoryFriendRow(names: h.name, note: n?.text ?? "Still finding out", byModel: n?.byModel ?? false) {
                         HStack(spacing: -10) {
                             JelbiePortrait(care: care, who: who, size: 40, head: true, frameless: true).clipShape(Circle())
                             if let slot { JelbiePortrait(care: care, who: slot, size: 40, head: true, frameless: true).clipShape(Circle()) }

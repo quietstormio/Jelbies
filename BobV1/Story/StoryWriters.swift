@@ -17,10 +17,14 @@ nonisolated protocol StoryWriter: Sendable {
     /// Short name for the log and the dump ("template", "model").
     var name: String { get }
     /// The About line (one sentence) with placeholders and the fact keys it uses; nil = no answer (the next writer is asked).
+    /// False when this writer cannot answer right now (a model that is unavailable, off or in the wrong language). The pre-written writer is always usable.
+    var isUsable: Bool { get }
     func about(facts: StoryFacts) async -> StoryAnswer?
     /// The note about how `facts` gets on with housemate `with`, with placeholders; nil = no answer.
     func friendship(facts: StoryFacts, with: StoryFacts.Housemate) async -> StoryAnswer?
 }
+
+extension StoryWriter { var isUsable: Bool { true } }
 
 /// What a writer answered and what the guard said (every attempt is kept for the dump and the log).
 nonisolated struct StoryAttempt: Sendable, Equatable {

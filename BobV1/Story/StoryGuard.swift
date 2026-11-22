@@ -68,7 +68,7 @@ nonisolated enum StoryGuard {
     /// About blurb: ONE plain sentence, at most this many characters (the final text, names included): two lines in its bubble. (The owner cut it from 130 to 110 to 90.)
     static let aboutMaxChars = 90, aboutSentences = 1
     /// Friendship note: one sentence, at most this many characters.
-    static let noteMaxChars = 80, noteSentences = 1
+    static let noteMaxChars = 60, noteSentences = 1
     /// Tone: NLTagger's paragraph sentiment (-1...1) of the final text must be at least this. NLTagger scores in steps of 0.2 and is very noisy on short factual sentences (measured on the Mac: "Zed naps a lot." -0.8, "Luna naps a lot." -0.2, "The dog is sad and hurt." -0.6, "Berry is not happy at all." -1.0), so it cannot tell a plain line from an unkind one. It is only a backstop for the very negative (it rejects -1.0); the deny list and the fact check do the real work.
     static let sentimentMin = -0.9
     /// Language: NLLanguageRecognizer's confidence for English must be at least this on the final text.
