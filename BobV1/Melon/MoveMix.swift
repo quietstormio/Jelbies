@@ -371,7 +371,8 @@ extension BlobBrain {
         let others = socialOthers().filter { $0 !== self }
         if others.contains(where: { $0.reserved || ($0.idleState.kind == .sleep && simd_distance($0.position, c) < 3.5) }) { MoveMix.soccerNextAt = clock + 8; return false }          // (a meal on, or a sleeper by the ball)
         MoveMix.soccerNextAt = clock + rand(MoveMix.soccerGap.lowerBound, MoveMix.soccerGap.upperBound)
-        if rand() < MoveMix.passChance, !mixQuiet, !mixBallSpotBad(c) {
+        let ballOff = roamProvider?().map { !$0.contains(c) || $0.halfWidth(at: c.y) - abs(c.x) < 0.3 } ?? false
+        if rand() < MoveMix.passChance, !mixQuiet, !mixBallSpotBad(c), !ballOff {
             let cands = others.filter { o in
                 let d = simd_distance(o.position, position)
                 return o.socialFree && !o.mixQuiet && (socialBook.pair[o.steerID] ?? 0) <= 0 && (o.socialBook.pair[steerID] ?? 0) <= 0 && d > 1.6 && d < 5.5 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 6.5
