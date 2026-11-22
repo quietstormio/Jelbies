@@ -108,7 +108,7 @@ struct CareRow: View {
             ForEach(JellyCare.allCases, id: \.self) { CareIcon(care: $0, tier: state.tier($0), size: size) }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(JellyStatus.sentence(state, sleeping: false))          // "Pip is hungry and a little lonely."
+        .accessibilityLabel(JellyStatus.sentence(state, sleeping: false, night: false))          // "Pip is hungry and a little lonely."
     }
 }
 
@@ -182,6 +182,8 @@ struct JellyWidgetContent: View {
     let portraits: [Int: UIImage]
     /// Asleep (night, or tucked in): the home cards say "napping" and show the moon badge, like the Lock Screen accessories.
     var sleeping = false
+    /// The night sleep hours: "asleep" instead of "napping".
+    var night = false
     /// Show the Water quick action inside the layout (medium / large; never over a portrait or text).
     var showsWater = false
     var queued: [JellyRoute] = []
@@ -204,8 +206,8 @@ struct JellyWidgetContent: View {
         return w.isShown ? w : nil
     }
     private func headline(_ s: JellyState) -> String {
-        let t = JellyStatus.headline(s, sleeping: sleeping)
-        return t.hasSuffix("is napping") ? t + "." : t          // "Lemon is napping." beside "Lemon is happy!": every home headline ends in a mark
+        let t = JellyStatus.headline(s, sleeping: sleeping, night: night)
+        return t.hasSuffix("is \(JellyStatus.rest(night: night))") ? t + "." : t          // "Lemon is napping." beside "Lemon is happy!": every home headline ends in a mark
     }
 
     // MARK: Home Screen
@@ -215,7 +217,7 @@ struct JellyWidgetContent: View {
             if let s = neediest {
                 VStack(spacing: 6) {
                     JellyPortraitTile(state: s, image: portraits[s.id], asleep: asleep(s))
-                    Text(sleeping && states.count > 1 && states.allSatisfy({ asleep($0) }) ? "Everyone is napping." : headline(s))
+                    Text(sleeping && states.count > 1 && states.allSatisfy({ asleep($0) }) ? "Everyone is \(JellyStatus.rest(night: night))." : headline(s))
                         .font(WidgetTheme.font(15)).foregroundStyle(WidgetTheme.ink)
                         .lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)

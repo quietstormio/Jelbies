@@ -37,6 +37,12 @@ final class GameCare {
     @ObservationIgnored var queued: [BlobRequest] = []      // one-shot brain requests (wave / come)
     @ObservationIgnored private var hooked = false
     @ObservationIgnored var callRunning = false
+    @ObservationIgnored var bondRun: BondRunState?          // a Bond coming to the front in the close-up (GameCare+BestHug.swift)
+    @ObservationIgnored var bestHugDevT: Float = 0          // capture aids
+    @ObservationIgnored var bestHugDevFlags = 0
+    @ObservationIgnored var bondHintRestore = false          // the cuddle hint comes back after an in-place Bond
+    @ObservationIgnored var bondHugSeen = false
+    @ObservationIgnored var revealClock: Float = 0          // the best-friends hug reveal's check timer (GameCare+BestHug.swift)
     /// The "Go home?" card of a competition is up (Race/ForfeitHome.swift); the race / show / match waits behind it.
     var forfeitAsk = false
     @ObservationIgnored private var finished: [BlobRequest] = []
@@ -157,8 +163,14 @@ final class GameCare {
     /// "Sleep until morning": the cut-scene's state (GameCare+SkipNight.swift).
     var nightSkip = NightSkipState()
     /// Store food bookkeeping (GameCare+Store.swift): the serving already paid from the inventory, Jellies owed their sugar-rush zoomies, soaps armed for the next Clean.
-    @ObservationIgnored var servingCharged = false { didSet { if !servingCharged { favouriteCheered = [] } } }          // (a new serving: every diner may be cheered for his favourite again)
+    @ObservationIgnored var servingCharged = false { didSet { if !servingCharged { favouriteCheered = []; bondFed = [] } } }          // (a new serving: every diner may be cheered for his favourite again)
     @ObservationIgnored var favouriteCheered: Set<Int> = []
+    /// Diners already counted for this serving's relationship points (GameCare+Bond.swift); a new serving clears it.
+    @ObservationIgnored var bondFed: Set<Int> = []
+    /// Where the relationship points live (the care's own defaults: `.standard` in the game, a scratch suite in tests).
+    @ObservationIgnored private(set) var bondDefaults: UserDefaults = .standard
+    /// Seconds of enjoyed stroking per slot since the last stroke event (GameCare+Bond.swift).
+    @ObservationIgnored var bondPetSeconds: [Int: Float] = [:]
     @ObservationIgnored var favouriteHearts: [Int: (left: Int, t: Float, c: SIMD3<Float>)] = [:]
     @ObservationIgnored var favouriteWaiting: [Int: (c: SIMD3<Float>, wait: Float)] = [:]
     @ObservationIgnored var zoomiesDue: Set<Int> = []
@@ -287,6 +299,7 @@ final class GameCare {
         // written to the save (needs, dirt, stats, perks, words, the store, the wallet, the saved room and decor), there is no time away, and he starts happy.
         let persistent = persistent && !preview
         isPreview = preview
+        bondDefaults = defaults
         syncsAppGroup = persistent
         var chars: [Int]
         if let roster { chars = JellyRoster.sanitised(roster, allowPreview: preview) }
@@ -321,6 +334,7 @@ final class GameCare {
         let perks0: JellyPerks? = (c0 == 0 && !preview) ? nil : JellyPerks(persists: persistent, defaults: defaults, key: JellyKeys.perks(c0))
         jellies = [JellyProfile(id: 0, character: c0, name: JellyRoster.nameOf(c0), needs: needs, grime: bath.grime, training: v.training, stats: stats0, perks: perks0)]
             + chars.dropFirst().enumerated().map { JellyProfile(id: $0.offset + 1, character: $0.element, name: JellyRoster.nameOf($0.element), persists: persistent, defaults: defaults) }
+        if persistent { for j in jellies { JellyBond.seedIfNeeded(j.character, defaults) } }          // an old save's relationship starts from what it records, once (Jelly/JellyBond.swift)
         if n > 1 { select.setBlobs(JellyRoster.selectBlobs(roster: chars)) }
         store.characterOf = { [weak self] slot in self?.jelly(slot)?.character ?? slot }       // outfits are saved by character
         bath.haptic = { [weak self] i, s in self?.touchPlay?.haptics.transient(now: CACurrentMediaTime(), intensity: i, sharpness: s) }
@@ -441,6 +455,7 @@ final class GameCare {
         pk?.step(dt: dt)
         var drain = pk?.cache.drain ?? [1, 1, 1]
         if store.beanbagPlaced { drain[NeedKind.attention.rawValue] = min(drain[NeedKind.attention.rawValue], StoreTuning.beanbagAttentionDrain) }          // Cozy-lite: a beanbag in the room
+        if petting || purring, touchPlay?.annoyed != true { bondTouch(slot: 0, seconds: dt) }          // (the relationship: only a stroke he enjoys counts)
         needs.setAsleep(asleepForAway(0))
         needs.step(dt: Self.introHold ? 0 : dt, petting: petting, purring: purring, exerting: brain.isExerting, drainScale: brain.napDrainScale, perkDrain: drain)
         // where his head is (for the bubble) and his floor spot (for the highlight)
@@ -502,6 +517,7 @@ final class GameCare {
     func returnedActive(at t: Date? = nil) -> TimeInterval {
         var away: TimeInterval = 0
         for j in jellies { away = max(away, j.returnedActive(at: t)) }
+        bondDayOpen()          // (the relationship: the first open of a new day; the day cap makes later ones count nothing)
         greetIfAway(away)
         welcomeWiggleIfAway(away)
         return away
@@ -511,6 +527,7 @@ final class GameCare {
     func launched(away: TimeInterval? = nil) {
         guard !launchGreeted else { return }
         launchGreeted = true
+        bondDayOpen()          // (the relationship: the first open of a new day)
         // A cold launch (2026-11-16, user: "launching the app after like closing it ... they should wake up"): the game clock is never touched, the back-at-night arrival does not put anyone to bed
         // (`awayBedtime(launching:)`), whoever is still asleep at launch for another reason gets the slow wake (`tickNightRest`), and at night the bedtime logic keeps off for `NightRestTuning.coldLaunchGrace`
         // (Goodnight / Naptime still work). Never on a return from the background.
@@ -963,6 +980,7 @@ final class GameCare {
             if let sim, !greetBlocked { brain.startHopPlay(sim: sim, distance: 0.0001); greetHearts = 3; greetT = 0; AudioHub.shared.chirp(jelly: 0, .happy, src: "greet") }       // the existing in-place hop (arm / feet caps hold)
         }
         tickFavouriteHearts(dt: dt)
+        tickBestHug(dt: dt)          // (the hug's hearts / buzz and the best-friends reveal: GameCare+BestHug.swift)
         if greetHearts > 0 { greetT -= dt; if greetT <= 0 { greetT = 0.45; greetHearts -= 1; touchPlay?.spawnHeart(now: CACurrentMediaTime()) } }
 
         // finished jobs

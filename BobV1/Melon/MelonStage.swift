@@ -2144,7 +2144,7 @@ final class MelonController: NSObject, MTKViewDelegate {
                 scr = SIMD2(Float(l.point.x / l.size.width), Float(l.point.y / l.size.height))
             }
             return PetLanes.Body(sim: actors[l.jelly].sim, brain: br, skinner: actors[l.jelly].skinner, mood: n.mood, attentionWanted: n.wantedNeed == .attention, ray: ray, screen: scr)
-        }, credit: { id, amount in care.needs(for: id).gain(.attention, amount) },
+        }, credit: { id, amount in care.needs(for: id).gain(.attention, amount); let n = care.needs(for: id); if n.mood != .grumpy || n.wantedNeed == .attention { care.bondTouch(slot: id, seconds: amount / NeedsTuning.petRate) } },
         heart: { id, born in care.bubbleHub.spawnHeart(for: id, now: born) })
         var heads: [Int: SIMD3<Float>] = [:]
         for id in lanes.lanes.keys where id < actors.count { let c = actors[id].sim.centroid(); heads[id] = SIMD3(c.x, c.y + BlobShape.H * 0.5, c.z) }

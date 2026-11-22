@@ -23,6 +23,8 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
     case moonwalk, backBounce, headstand
     /// Three Shop tricks built from the existing emotes (politeBow, bellyDrum, a spin that ends in the dizzy wobble): no new motion.
     case bow, bellyDrum, dizzySpin
+    /// The best-friends hug (BlobBrain+BestHug.swift): never sold, never on the stage; known when `BestHug.isUnlocked` (StoreBook.knows).
+    case hug
 
     var isStarter: Bool { switch self { case .sit, .jacks, .run, .flip, .look, .come: return true; default: return false } }
     static var starters: [VoiceTrick] { allCases.filter(\.isStarter) }
@@ -37,6 +39,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .hula: return "Hula"; case .superSpring: return "Super spring"; case .corkscrew: return "Corkscrew jump"; case .oneLegSpin: return "One-leg spin"
         case .moonwalk: return "Moonwalk"; case .backBounce: return "Back bounce"; case .headstand: return "Headstand"
         case .bow: return "Take a bow"; case .bellyDrum: return "Belly drum"; case .dizzySpin: return "Dizzy spin"
+        case .hug: return "Bond"
         }
     }
     /// The words that command this trick (exact match, short commands). A trick the Jelbie owns is commanded with these; a word taught in the old
@@ -50,6 +53,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .hula: return ["hula", "hula dance", "dance"]; case .superSpring: return ["super spring", "spring"]; case .corkscrew: return ["corkscrew", "corkscrew jump"]; case .oneLegSpin: return ["one leg spin", "pirouette", "tiptoe spin"]
         case .moonwalk: return ["moonwalk", "moon walk", "moan walk", "moonwalking", "moon walking", "moon walks"]; case .backBounce: return ["back bounce", "bounce on your back"]; case .headstand: return ["headstand", "head stand"]
         case .bow: return ["bow", "take a bow", "take bow", "take your bow", "bow down", "take a bough"]; case .bellyDrum: return ["drum", "belly drum", "drum your belly", "drum belly", "drum on your belly", "belly drumming", "belly drums"]; case .dizzySpin: return ["dizzy", "dizzy spin", "dizzy spinning", "dizzy spins", "dizzy twirl"]
+        case .hug: return ["bond", "bonds", "bonding", "hug", "hugs", "hug me", "give hug", "give me hug", "hugging", "big hug"]
         }
     }
     /// A word to suggest, in the tip text only.
@@ -62,6 +66,7 @@ nonisolated enum VoiceTrick: String, CaseIterable, Codable, Sendable {
         case .hula: return "hula"; case .superSpring: return "super spring"; case .corkscrew: return "corkscrew"; case .oneLegSpin: return "one leg spin"
         case .moonwalk: return "moonwalk"; case .backBounce: return "back bounce"; case .headstand: return "headstand"
         case .bow: return "take a bow"; case .bellyDrum: return "belly drum"; case .dizzySpin: return "dizzy spin"
+        case .hug: return "bond"
         }
     }
 }
@@ -293,13 +298,15 @@ final class VoiceTraining {
         return out
     }
 
+    private static let hugOtherWords: Set<String> = ["who", "wants", "want", "needs", "misses", "lonely", "whose"]
     private static let bowWearWords: Set<String> = ["wear", "wearing", "put", "tie", "ribbon", "hair", "dress", "give", "outfit", "wardrobe", "new", "buy", "hat"]
 
     private func plainTrickExact(in rest: [String]) -> (trick: VoiceTrick, known: Bool)? {
         guard !rest.isEmpty, rest.count <= 6 else { return nil }
         var best: (t: VoiceTrick, len: Int)?
         for t in VoiceTrick.allCases where t != .come {
-            if t == .bow, !Set(rest).isDisjoint(with: Self.bowWearWords) { continue }          // "wear the bow" / "put a bow on" is the wardrobe, not the trick
+            if t == .bow, !Set(rest).isDisjoint(with: Self.bowWearWords) { continue }
+            if t == .hug, !Set(rest).isDisjoint(with: Self.hugOtherWords) { continue }          // ("who wants a hug" is the who-is question, not the trick)          // "wear the bow" / "put a bow on" is the wardrobe, not the trick
             for w in t.commandWords {
                 let wt = w.split(separator: " ").map(String.init), compact = wt.joined(), wtLean = Self.withoutFiller(wt)          // ("bounce on your back" is also said "bounce on back" once the filler is dropped)
                 // the command word is a run of neighbouring tokens, spelt apart or together ("moon walk", "moonwalk", "moon-walk" is "moon walk"); at most 2 other words

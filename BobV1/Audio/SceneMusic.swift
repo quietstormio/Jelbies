@@ -18,6 +18,8 @@ import AVFoundation
 nonisolated enum SceneTrack: String, CaseIterable, Sendable {
     case circuitRace = "circuit_race_3", circuitFinal = "circuit_final_2", shop = "shop_2", town = "town_1"
     case studioPractice = "studio_practice_1", contestStage = "contest_stage_2"
+    /// The Profile screen's own calm loop (2026-11-22; about 88 BPM, 60 s): the whole file loops like the park / café tracks. The Studio keeps studio_practice_1 (the dance drill's beat grid is tied to it).
+    case profile1 = "profile_1"
     case park1 = "park_1", park2 = "park_2", cafe1 = "cafe_1", cafe2 = "cafe_2", volley1 = "volley_1", volley2 = "volley_2"      // 2026-10-24; loops = the whole file (past a 2000-frame lead-in), seam crossfaded
 
     /// The café playlist's other tracks (2026-11-03): the whole file loops like the others.
@@ -41,7 +43,7 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .town: return 655_869
         case .studioPractice: return 1_235_736
         case .contestStage: return 1_511_597
-        case .park1, .park2, .park3, .park4, .park5, .park6, .cafe1, .cafe2, .cafe3, .cafe4, .cafe5, .cafe6, .cafe7, .cafe8, .volley1, .volley2: return 2_000
+        case .park1, .park2, .park3, .park4, .park5, .park6, .cafe1, .cafe2, .cafe3, .cafe4, .cafe5, .cafe6, .cafe7, .cafe8, .volley1, .volley2, .profile1: return 2_000
         }
     }
     var loopEndFrame: Int {
@@ -63,6 +65,7 @@ nonisolated enum SceneTrack: String, CaseIterable, Sendable {
         case .cafe6, .cafe8: return 4_629_882
         case .volley1: return 3_308_105
         case .volley2: return 3_307_833
+        case .profile1: return 2_647_058          // = the decoded length of profile_1.m4a (AVAudioFile.length), like the park / café tracks
         case .dance1, .dance2, .dance3, .dance4: return 0          // (plays once: the whole file, see SceneRender.render)
         }
     }
@@ -88,6 +91,8 @@ nonisolated enum MusicScene: Equatable, Sendable {
     case volley
     /// The Jelly Show (Show/): the Studio and its dance drill play studio_practice_1, the stage plays contest_stage_2.
     case studio, show
+    /// The Profile screen (BobV1/Show/ProfileScreen.swift): its own slower loop, profile_1.
+    case profile
     /// The Jelly Show's dance round plays dance song `i` (0...3) once; the stage loop is out while it plays.
     case danceSong(Int)
 
@@ -98,6 +103,7 @@ nonisolated enum MusicScene: Equatable, Sendable {
         case .shop: return .shop
         case .town: return .town
         case .studio: return .studioPractice
+        case .profile: return .profile1
         case .show: return .contestStage
         case .danceSong(let i): return SceneTrack.danceSongs[min(max(i, 0), SceneTrack.danceSongs.count - 1)]
         case .park: return .park1

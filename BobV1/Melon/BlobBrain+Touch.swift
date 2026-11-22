@@ -365,7 +365,7 @@ final class TouchPlay {
 
     /// A heart in a little thought bubble that pops out above his head (the overlay projects his head every frame, so only the birth time, a
     /// sideways drift and a start offset are kept; both in -1...1). Pruned after `heartLife`.
-    struct Heart { var born: Double; var drift: Float; var start: Float; var side: Float; var fixed: SIMD3<Float>? = nil }          // `fixed`: draw over this standing centroid, not his live head (the favourite-food hearts)
+    struct Heart { var born: Double; var drift: Float; var start: Float; var side: Float; var fixed: SIMD3<Float>? = nil; var top = false }          // `fixed`: draw over this standing centroid, not his live head (the favourite-food hearts)
     private(set) var hearts: [Heart] = []
     static let heartLife: Double = 1.2
     private var lastHeartNow: Double = -1
@@ -386,10 +386,10 @@ final class TouchPlay {
         if !hearts.isEmpty { hearts.removeAll { now - $0.born > Self.heartLife } }
     }
     /// Voice v1: one heart bubble beside his head now (a trick just learned), outside any touch; pruned here because no touch frame runs.
-    func spawnHeart(now: Double) {
+    func spawnHeart(now: Double, big: Bool = false) {          // `big`: the hug's last heart (the widest size the effect has)
         hearts.removeAll { now - $0.born > Self.heartLife }
         heartSide = -heartSide
-        hearts.append(Heart(born: now, drift: (rand() - 0.5) * 2, start: (rand() - 0.5) * 2, side: heartSide))
+        hearts.append(Heart(born: now, drift: (rand() - 0.5) * 2, start: big ? 1 : (rand() - 0.5) * 2, side: heartSide))
     }
     /// Voice v1: drop expired hearts when no touch frame is running.
     func pruneHearts(now: Double) { if !hearts.isEmpty { hearts.removeAll { now - $0.born > Self.heartLife } } }

@@ -586,7 +586,7 @@ struct StudioScreen: View {
             LobbyStatRow(label: "Diet", value: 0.7 * main + 0.3 * friend, color: SK.mint, note: "\(theme.main.title) \(ShowUI.pts(main)) \u{00B7} \(theme.friend.title) \(ShowUI.pts(friend))"),
             LobbyStatRow(label: "Score", value: Float(fc.total) / 300, color: SK.pinkStrong, note: "about \(fc.total) of 300\nentrants about \(fc.rivals)"),
         ])], id: "studio-ready", trailing: {
-            Button { AudioHub.shared.uiTap(); card() } label: { Text("\(care.rosterName(who))'s card \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44) }
+            Button { AudioHub.shared.uiTap(); card() } label: { Text("\(care.rosterName(who))'s profile \u{203A}").font(SK.font(14, .heavy)).foregroundStyle(SK.muted).lineLimit(1).minimumScaleFactor(0.8).frame(minHeight: 44) }
                 .buttonStyle(.plain).padding(.vertical, -10).accessibilityIdentifier("studio-card")
         }, footer: {
             HStack(spacing: 7) {
@@ -670,6 +670,8 @@ struct ConditionScreen: View {
     var feed: (() -> Void)? = nil
     /// Same for the Drink picker (the jar card shows the button only when an owned drink fills the jar).
     var drink: (() -> Void)? = nil
+    /// The old jars card on its own, as the sheet the Profile's "Jelly Show styles" row opens (no header, pills, Trophies row or Show button; a close button instead).
+    var sheetMode = false
     @Environment(\.verticalSizeClass) private var vsc
     @State private var jarOpen: WearTag?
     @State private var trophiesOpen = false
@@ -679,6 +681,22 @@ struct ConditionScreen: View {
 
     var body: some View {
         let p = care.jelly(who)
+        if sheetMode {
+            VStack(spacing: 10) {
+                HStack {
+                    Text("Jelly Show styles").font(SK.font(22, .black)).foregroundStyle(SK.ink).jLine(1, scale: 0.7)
+                    Spacer()
+                    Button { AudioHub.shared.uiTap(); back() } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85))) }
+                        .buttonStyle(.plain).accessibilityLabel("Close").accessibilityIdentifier("styles-close")
+                }
+                if care.jellies.count > 1 { WhoRow(care: care, who: $who) }
+                ScrollView(showsIndicators: false) { jars(p) }.scrollBounceBehavior(.basedOnSize)
+            }
+            .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 14)
+            .accessibilityIdentifier("condition-styles-sheet")
+            .onAppear { grown = false; withAnimation(.spring(response: 0.6, dampingFraction: 0.62).delay(0.15)) { grown = true } }
+            .sheet(item: $jarOpen) { t in ConditionJarCard(care: care, who: who, tag: t, feed: feed, drink: drink, close: { jarOpen = nil }).presentationDetents([.medium, .large]).presentationBackground(SK.cream) }
+        } else {
         VStack(spacing: compact ? 8 : 12) {
             ShowHeader(title: "Condition", light: false, backID: "condition-back", back: back) { EmptyView() }
             if care.jellies.count > 1 { WhoRow(care: care, who: $who) }
@@ -709,6 +727,7 @@ struct ConditionScreen: View {
             guard DevArgs.enabled, let raw = UserDefaults.standard.string(forKey: "CondJar"), let t = WearTag(rawValue: raw) else { return }
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             jarOpen = t
+        }
         }
     }
 
@@ -762,7 +781,7 @@ struct ConditionScreen: View {
                     .opacity(theme != nil && today == nil ? 0.6 : 1)
                 }
             }
-            if !compact { glowBlock(p) }
+            if !compact || sheetMode { glowBlock(p) }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(SK.cream).shadow(color: SK.shadow.opacity(0.12), radius: 6, y: 2))

@@ -154,6 +154,12 @@ final class OnePieceInvariantTests: XCTestCase {
             r.brain.idleState.dizzyEnd = true; r.brain.idleState.reps = max(r.brain.idleState.reps, 1)
             return ok
         }), chars: Array(0..<characters.count)))
+        // the best-friends hug (BlobBrain+BestHug.swift): a flagged hula, standing: the turn, the arms up, the squeeze, the release
+        out.append(Job(name: "trick bestHug", sc: SC(name: "trick: bestHug", game: true, seconds: 6, setup: { r, _ in
+            r.brain.idleForced = true
+            r.brain.bestHug.go = true
+            return r.brain.idleStart(.hula, r.sim)
+        }), chars: Array(0..<characters.count)))
         // the win celebration (BlobBrain+Win.swift): the jump for joy as four tall bounces, arms up, settle
         out.append(Job(name: "win celebration", sc: SC(name: "win celebration", game: true, seconds: 4, setup: { r, _ in r.brain.idleForced = true; return r.brain.winStart(r.sim) }), chars: Array(0..<characters.count)))
         // the Jelly Show's dance steps (Show/ShowDanceSteps.swift): every move of the plan, four bars of it at 0.5 s a beat, bare and with shoes; "stomp" = the Perfect's accent on every step

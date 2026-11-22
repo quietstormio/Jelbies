@@ -220,6 +220,8 @@ struct SleepZs: View {
 nonisolated struct JellyAccessoryModel: Sendable {
     var states: [JellyState]
     var sleeping = false
+    /// The night sleep hours (`SleepHours`): the sentence says "asleep", not "napping".
+    var night = false
     var queued: [JellyRoute] = []
     var neediest: JellyState? { JellyState.neediest(in: states) }
 }
@@ -254,7 +256,7 @@ struct JellyRectangularView: View {
                 if JellyStatus.needyCount(states) > 0 { Circle().frame(width: 5, height: 5).widgetAccentable() }
                 if !model.queued.isEmpty { Image(systemName: "drop.fill").font(.system(size: 8, weight: .bold)).opacity(0.8) }
             }
-            Text(JellyStatus.rectangularLine(states, sleeping: model.sleeping))
+            Text(JellyStatus.rectangularLine(states, sleeping: model.sleeping, night: model.night))
                 .font(JellyPalette.font(14))
                 .lineLimit(2).minimumScaleFactor(0.75)
                 .widgetAccentable()
@@ -279,11 +281,11 @@ struct JellyInlineView: View {
     let model: JellyAccessoryModel
     var body: some View {
         if let s = model.neediest, s.needsAttention {
-            Label(JellyStatus.inline(model.states, sleeping: model.sleeping), systemImage: s.neediest.care.systemImage)
+            Label(JellyStatus.inline(model.states, sleeping: model.sleeping, night: model.night), systemImage: s.neediest.care.systemImage)
         } else if model.sleeping {
-            Label(JellyStatus.inline(model.states, sleeping: true), systemImage: "moon.zzz.fill")
+            Label(JellyStatus.inline(model.states, sleeping: true, night: model.night), systemImage: "moon.zzz.fill")
         } else {
-            Label(JellyStatus.inline(model.states, sleeping: false), systemImage: "heart.fill")
+            Label(JellyStatus.inline(model.states, sleeping: false, night: model.night), systemImage: "heart.fill")
         }
     }
 }
@@ -323,7 +325,7 @@ struct JellyStandByView: View {
                 if model.sleeping, !s.needsAttention { SleepZs(size: 13, color: JellyPalette.moon).offset(x: 14, y: -8) }
             }
             Text(s.name).font(JellyPalette.font(24)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
-            Text(JellyStatus.word(s, sleeping: model.sleeping).capitalized)
+            Text(JellyStatus.word(s, sleeping: model.sleeping, night: model.night).capitalized)
                 .font(JellyPalette.font(16, .semibold))
                 .foregroundStyle(s.needsAttention ? WidgetTheme.tint(s.neediest.tier) : .white.opacity(0.75))
                 .lineLimit(1).minimumScaleFactor(0.7)
@@ -348,7 +350,7 @@ struct JellyStandByView: View {
                     Text(s.name).font(JellyPalette.font(21)).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7)
                     HStack(spacing: 4) {
                         if s.needsAttention { Image(systemName: s.neediest.care.systemImage).font(.system(size: 13, weight: .bold)).foregroundStyle(WidgetTheme.tint(s.neediest.tier)) }
-                        Text(JellyStatus.word(s, sleeping: model.sleeping).capitalized)
+                        Text(JellyStatus.word(s, sleeping: model.sleeping, night: model.night).capitalized)
                             .font(JellyPalette.font(15, .semibold))
                             .foregroundStyle(s.needsAttention ? WidgetTheme.tint(s.neediest.tier) : .white.opacity(0.75))
                     }

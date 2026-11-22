@@ -783,12 +783,14 @@ final class VoiceCoordinator {
         case .bow: return .politeBow
         case .bellyDrum: return .bellyDrum
         case .dizzySpin: return .tail          // (the spin; `commandedDizzyEnd` makes it end in the dizzy wobble)
+        case .hug: return nil          // (not an IdleKind of its own: `BlobBrain.commandBestHug`, a flagged hula, BlobBrain+BestHug.swift)
         case .flip, .come: return nil
         }
     }
     /// The trick-able move he is doing right now (nil = none).
     static func running(_ b: BlobBrain) -> VoiceTrick? {
         if case .flipPlay = b.script { return .flip }
+        if b.isBestHugging { return .hug }
         if !b.idleState.yielding, let t = trick(for: b.idleState.kind) { return t }
         return nil
     }
@@ -990,6 +992,19 @@ final class VoiceCoordinator {
             if Set(meant) == Set(presentIDs) { care.wakeAll() } else { for id in meant { care.wakeSleeper(id) } }
             return
         }
+        if case .perform = r {          // the relationship: a trick (or "come here") obeyed on a voice command counts for each Jelmiko meant (a flop `.wrongTrick` does not)
+            let comesToCloseUp = r == .perform(.come) && !focused && onComeHere == nil && care.jellyCount > 1
+            let meant: [Int]
+            if comesToCloseUp {
+                switch target {
+                case .jelly(let id): meant = [id]
+                case .jellies(let named): meant = named
+                case .selected: meant = [care.targetJelly]
+                case .everyone: meant = presentIDs
+                }
+            } else { meant = ids.isEmpty ? [0] : ids }
+            care.bondObeyed(meant)
+        }
         if r == .perform(.come), !focused, onComeHere == nil, care.jellyCount > 1 {      // come goes to the close-up of the Jelly meant (GameCare+Focus)
             emitFeedback(r, override: kind)
             comeUntil = clock() + Self.comeWindow
@@ -1076,6 +1091,8 @@ final class VoiceCoordinator {
                                                  // (a grumpy Bob comes too: his grumpy walk is already slow and small, and the close-up petting cheers him up)
         case .run where focused:
             pendingHop = true; hopWait = 0; walkAfterHop = false      // a run would carry him off the focus spot
+        case .hug:
+            care.startBond(brain: brain)
         case .flip:
             brain.flipCompact = focused
             brain.commandedFlipFail = rollFlipFail()

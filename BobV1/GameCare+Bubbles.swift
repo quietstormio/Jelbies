@@ -64,10 +64,10 @@ final class BubbleHub {
     nonisolated deinit {}
 
     func setOwner(_ id: Int) { owner = id }
-    func spawnHeart(for id: Int, now: Double, fixed: SIMD3<Float>? = nil) {
+    func spawnHeart(for id: Int, now: Double, fixed: SIMD3<Float>? = nil, big: Bool = false, top: Bool = false) {
         hearts.removeAll { now - $0.heart.born > TouchPlay.heartLife }
         func r() -> Float { rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return Float(rng >> 8) / Float(1 << 24) }
-        hearts.append((id, TouchPlay.Heart(born: now, drift: (r() - 0.5) * 2, start: (r() - 0.5) * 2, side: hearts.count % 2 == 0 ? -1 : 1, fixed: fixed)))
+        hearts.append((id, TouchPlay.Heart(born: now, drift: top ? (hearts.count % 2 == 0 ? -1 : 1) * (1.2 + 1.0 * r()) : (r() - 0.5) * 2, start: big ? 1 : (r() - 0.5) * 2, side: hearts.count % 2 == 0 ? -1 : 1, fixed: fixed, top: top)))
     }
     func pruneHearts(now: Double) { if !hearts.isEmpty { hearts.removeAll { now - $0.heart.born > TouchPlay.heartLife } } }
     /// Greeting hearts a Jelly gives: 3, 0.45 s apart (Bob's own are in GameCare).
@@ -178,7 +178,7 @@ struct GreetHeartsView: View {
                     let a = (now - h.born) / TouchPlay.heartLife
                     guard a >= 0, a < 1 else { continue }
                     let mid = care.bubbleHead(id) - SIMD3(0, H * 0.5, 0)
-                    let w = h.fixed.map { FavouriteFood.heartWorld(stand: $0, side: h.side) } ?? SIMD3<Float>(mid.x + h.side * 0.80, mid.y - 0.64 + 0.8 * H, mid.z)
+                    let w = h.fixed.map { FavouriteFood.heartWorld(stand: $0, side: h.side) } ?? (h.top ? SIMD3<Float>(mid.x + h.start * 0.08, mid.y - 0.64 + 1.0 * H, mid.z) : SIMD3<Float>(mid.x + h.side * 0.80, mid.y - 0.64 + 0.8 * H, mid.z))
                     guard let p0 = ThoughtBubbleView.project(w, size: size, focus: care.focus.blend) else { continue }
                     let p = TouchHeartsView.place(h, age: a, anchor: p0, size: size, safeTop: TouchHeartsView.safeTop, calm: A11ySettings.shared.reduceMotion)
                     var c = ctx

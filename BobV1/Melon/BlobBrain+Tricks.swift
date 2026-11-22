@@ -179,6 +179,7 @@ extension BlobBrain {
         idleState.trick.fail = idleState.trickFailNext; idleState.trickFailNext = false
         idleState.goalYaw = faceCameraYaw()
         idleState.phase = 0
+        if kind == .hula, bestHug.go { bestHug.go = false; idleState.trick.flags |= BestHug.flagBit }          // (the best-friends hug rides the hula: BlobBrain+BestHug.swift)
         return true
     }
 
@@ -201,6 +202,7 @@ extension BlobBrain {
     // MARK: hula
 
     func runHula(_ sim: SoftBody, _ skinner: Skinner, _ dt: Float) {
+        if idleState.trick.flags & BestHug.flagBit != 0 { runBestHug(sim, skinner, dt); return }
         let a = amplitude
         if idleState.phase == 0 {
             let turning = turnSteps(goal: idleState.goalYaw, tol: 0.1)

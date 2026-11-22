@@ -156,7 +156,7 @@ struct GameScreen: View {
                         if focus.showsRelease {
                             ReleaseButton(name: model.care.focusGroup.ids.count == 1 ? model.care.jelly(model.care.focusGroup.ids[0])?.name : nil) { withAnimation(CareMenu.spring) { model.care.release() } }
                                 .transition(.move(edge: .leading).combined(with: .opacity))
-                            GameCircleButton(systemName: "rectangle.portrait.on.rectangle.portrait.angled", label: "Condition card") {
+                            GameCircleButton(systemName: "person.crop.circle", label: "Profile") {
                                 AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.25)) { town = .condition }
                             }
                             .accessibilityIdentifier("focus-card")
@@ -445,6 +445,7 @@ struct GameScreen: View {
         .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
+        .onChange(of: model.care.volley.winMusic) { _, _ in AudioHub.shared.setTownScene(currentMusicScene) }
         .onChange(of: town) { _, t in
             #if targetEnvironment(simulator)
             RaceDepartProbe.mark("town \(String(describing: t))")
@@ -533,6 +534,13 @@ struct GameScreen: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.25)) { town = .shop } }
         }
         .task { await GameScreen.runStoreDemo(model: model) }
+        .task {          // capture aid (dev arguments only): `-OpenProfile <i> -OpenProfileAfter <seconds>` opens the Profile after a wait (they have gone to sleep by then)
+            guard DevArgs.enabled, UserDefaults.standard.object(forKey: "OpenProfile") != nil else { return }
+            let after = UserDefaults.standard.integer(forKey: "OpenProfileAfter")
+            guard after > 0 else { return }
+            try? await Task.sleep(nanoseconds: UInt64(after) * 1_000_000_000)
+            town = .condition
+        }
         .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
         .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
@@ -701,7 +709,7 @@ struct GameScreen: View {
         // capture aid: -FocusGroupDemo 1 calls everyone (the pair / trio close-up) after 4 s and stays there
         if d.integer(forKey: "FocusGroupDemo") > 0 {
             await sleep(4)
-            care.comeHereEveryone()
+            if care.jellies.count > 1 { care.comeHereEveryone() } else { care.call() }          // (one Jelmiko: the single close-up)
             for _ in 0..<1200 where !care.focus.isFocused { await sleep(0.1) }
             NSLog("[hudfix] group focused: %@", String(describing: care.focus.phase))
         }
@@ -927,15 +935,18 @@ struct GameScreen: View {
                 if care.jellies.count > 1 { care.race.trophies.recordRace(character: care.jellies[1].character, tier: .ripple, place: 1) }
             }
             if m.contains("trophycase") {          // capture aid: wins on every course + a Show cup on the wall case; "trophycard" opens its card, "trophyfocus" looks at the Puddle cup, "trophyoff" hides the case
-                for t in CourseTier.allCases { care.race.trophies.recordRace(character: c, tier: t, place: 1) }
+                let one = m.contains("trophyone")          // "trophyone": a shelf with the Puddle cup only (the owner's real save)
+                for t in (one ? [CourseTier.puddle] : CourseTier.allCases) { care.race.trophies.recordRace(character: c, tier: t, place: 1) }
+                if !one {
                 care.show.progress.record(rank: .puddle, place: 1, theme: ShowSchedule.theme(dayKey: GameCare.showDay), character: c, burst: false, perfectDance: false, hatTrick: false)
                 care.race.trophies.recordShowCup(character: c, rank: .puddle, place: 1)
+                }
                 if m.contains("trophyold") { var sh = care.race.trophies.shelf(character: c); sh.won = sh.won?.filter { !$0.key.contains("puddle") }; care.race.trophies.setShelf(sh, character: c) }          // "trophyold": the Puddle win has no date
                 if m.contains("trophyfull") {          // "trophyfull": also the 10 / 25 win trophies and a volleyball cup on every court (every kind of trophy the case can show)
                     var sh = care.race.trophies.shelf(character: c)
                     for t in [Trophy.wins10, .wins25] where !sh.has(t) { sh.earned.append(t.id); sh.stamp("trophy.\(t.id)", Date()) }
                     care.race.trophies.setShelf(sh, character: c)
-                    for t in VolleyTier.allCases { care.race.trophies.recordVolleyWin(character: c, tier: t) }
+                    for t in VolleyTier.allCases { care.race.trophies.recordVolleyWin(character: t == .sandcastle || t == .shore ? (c == 1 ? 2 : 1) : c, tier: t) }          // (the first two courts were won by another Jelmiko, so a card by winner has more than one block)
                 }
                 if m.contains("trophyoff") { care.setTrophyCase(visible: false) }
                 if m.contains("trophycard") { await sleep(1); care.openTrophyCard() }
@@ -990,6 +1001,7 @@ struct GameScreen: View {
             case "drink:water": care.drink("water")
             case "call": care.call()
             case "callall": care.comeHereEveryone()
+            case "hug": _ = care.performTrick(.hug, jelly: care.focus.isActive ? care.voiceSubject : care.targetJelly)          // capture aid: the best-friends Hug (needs -BestHugUnlocked 1)
             case "roamhug": care.roamHug()          // capture aid: GameCare+RoamHug.swift
             case _ where a.hasPrefix("callids:"): care.beginFocus(ids: a.dropFirst(8).split(separator: ",").compactMap { Int($0) })          // -GameAction callids:1,2
             case "clean": care.clean()
@@ -1055,15 +1067,16 @@ struct GameScreen: View {
     private var currentMusicScene: MusicScene {
         if model.care.cafe.inScene { return CafeTuning.music }
         if model.care.park.inScene { return ParkTuning.music }
-        if model.care.volley.inScene { return .volley }
+        if model.care.volley.inScene { return model.care.volley.winMusic ? .results : .volley }          // a won match: the results jingle plays, the court track is out (as after a race win)
         return GameScreen.townMusic(town)
     }
-    /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).
+    /// What each Town screen plays: the Shop its own loop, the Studio / Show lobby the studio practice loop, the Profile (TownScreen.condition) its own profile_1 loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).
     static func townMusic(_ t: TownScreen?) -> MusicScene {
         switch t {
         case nil: return .none
         case .shop?: return .shop
-        case .studio?, .condition?: return .studio
+        case .studio?: return .studio
+        case .condition?: return .profile          // the Profile screen (2026-11-22) plays its own calmer loop; the Studio keeps studio_practice_1
         default: return .none
         }
     }
@@ -1102,6 +1115,7 @@ struct GameScreen: View {
         case "show", "showHow": return .studio          // (the Jelly Show lobby is the Studio now)
         default: break
         }
+        if UserDefaults.standard.object(forKey: "OpenProfile") != nil, UserDefaults.standard.integer(forKey: "OpenProfileAfter") == 0 { return .condition }          // capture aid: `-OpenProfile <index>` opens that Jelmiko's Profile
         switch UserDefaults.standard.string(forKey: "StoreOpen") {
         case "town": return .town
         case "shop", "item": return .shop
@@ -1525,12 +1539,14 @@ struct CareMenu: View {
         let t = c.trick
         let stars = ShowTrickInfo.difficulty(t)
         let dim = c.known ? blocked : true
-        let label = c.known ? (blocked ? "\(t.title), not now" : t.title) : "\(t.title), locked, \(c.price) coins, opens the Shop"
+        let label = c.known ? (blocked ? "\(t.title), not now" : t.title) : (c.hint.map { "\(t.title), locked. \($0)" } ?? "\(t.title), locked, \(c.price) coins, opens the Shop")
         return Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
             if c.known {
                 guard !blocked else { return }
                 if care.performTrick(t, jelly: id) { withAnimation(Self.spring) { trickRow = false; open = false } }
+            } else if let hint = c.hint {
+                GameMessageCenter.shared.post(hint, icon: "heart.fill", identifier: "best-hug-locked")          // (a lock that is not a price: nothing to buy, the line says how)
             } else {
                 ShopTab.pending = .tricks
                 withAnimation(Self.spring) { trickRow = false; open = false }
@@ -1544,7 +1560,9 @@ struct CareMenu: View {
                 }
                 HStack(spacing: 2) {
                     ForEach(0..<3, id: \.self) { k in Image(systemName: k < stars ? "star.fill" : "star").font(.system(size: 9, weight: .black)).foregroundStyle(k < stars ? ShowUI.goldDeep : Self.brown.opacity(0.35)) }
-                    if !c.known {
+                    if !c.known, c.hint != nil {
+                        Image(systemName: "heart.fill").font(.system(size: 10, weight: .bold)).foregroundStyle(Color(red: 0.914, green: 0.541, blue: 0.643)).padding(.leading, 4)
+                    } else if !c.known {
                         Image(systemName: "lock.fill").font(.system(size: 10, weight: .bold)).padding(.leading, 4)
                         JellyCoinIcon(size: 12)
                         Text("\(c.price)").jFont(11, .black)
@@ -1797,15 +1815,18 @@ struct FocusHint: View {
     static var petActionsInRotor = false
     /// With VoiceOver on, or "Longer hints" set, the hint stays until the first interaction instead of fading at 3.5 s.
     private var sticky: Bool { A11ySettings.shared.longerHints || UIAccessibility.isVoiceOverRunning }
-    private var text: String {
+    static var hintText: String {
         UIAccessibility.isVoiceOverRunning && Self.petActionsInRotor ? "Use the Actions rotor on a Jelmiko to pet, pat or toss" : "Rub to pet · double-tap & hold to pick up · flick to throw"
     }
+    private var text: String { Self.hintText }
+    /// True while a Bond is coming to the front in the close-up (GameCare+BestHug.swift): the hint is not posted (and does not count as a visit).
+    nonisolated(unsafe) static var suppressed = false
 
     /// The hint is a line on the one message bar (UI/GameMessageCenter.swift): posted once when the close-up opens, for the first few visits.
     var body: some View {
         Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
             .onAppear {
-                guard shown else { return }
+                guard shown, !Self.suppressed else { return }
                 UserDefaults.standard.set(UserDefaults.standard.integer(forKey: FocusHint.key) + 1, forKey: FocusHint.key)
                 GameMessageCenter.shared.post(text, priority: .chatty, identifier: "focus-hint", sticky: GameMessageCenter.hintsSticky)
             }

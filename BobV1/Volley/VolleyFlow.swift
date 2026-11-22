@@ -45,6 +45,8 @@ final class VolleyFlow {
     private(set) var mode: VolleyMode = .match(.sandcastle)
     var playerID = 0
     var playerCharacter = 0
+    /// The relationship hook: (character, won) when a match is settled and the player really played.
+    var onBond: ((Int, Bool) -> Void)?
     var playerName = ""
     var partnerName = ""
     var opponentNames: [String] = []
@@ -62,6 +64,16 @@ final class VolleyFlow {
     private var pointsGiven = false
     @ObservationIgnored var upgrades: UpgradeBook?
     private(set) var cueSerial = 0
+    /// The player's team won the match and the win music is on (owner 11-22: the race win's jingle + confetti, at the win; GameCare+Volley applyVolley): the court track steps out for the jingle (`musicScene`).
+    private(set) var winMusic = false
+    /// The win jingle: the race's own (Race/RaceFlow.swift `jingle`, AudioHub.playJingle(.win): results_win_2).
+    @ObservationIgnored var jingle: (Bool) -> Void = { AudioHub.shared.playJingle($0 ? .win : .lose) }
+    /// The match was won: the results music (the court track fades out, the jingle plays once). Once per match.
+    func celebrateWin() {
+        guard !winMusic else { return }
+        winMusic = true
+        jingle(true)
+    }
     var toast: String?
     @ObservationIgnored var toastT: Float = 0
     @ObservationIgnored var holdFrames = 0
@@ -94,7 +106,7 @@ final class VolleyFlow {
         guard phase == .off else { return }
         mode = m; playerID = id; playerCharacter = character; playerName = name
         sim = s; ui = VolleyUI()
-        earned = 0; awards = TrophyAwards(); unlockedNow = nil; gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0); settled = false; forfeited = false; pointsEarned = 0; pointsAfter = 0; pointsGiven = false; cueSerial = 0
+        earned = 0; awards = TrophyAwards(); unlockedNow = nil; gain = VolleyStats(speed: 0, power: 0, hops: 0, timing: 0); settled = false; forfeited = false; pointsEarned = 0; pointsAfter = 0; pointsGiven = false; cueSerial = 0; winMusic = false
         phase = .goOut; wipe = 0; holdFrames = 0; started += 1
     }
 
@@ -181,7 +193,7 @@ final class VolleyFlow {
             earned = played ? Int((Float(VolleyTuning.drops(win: win, tier: t)) * assistFactor).rounded(.down)) : 0
             wallet?.add(earned)
             unlockedNow = book.finishMatch(character: playerCharacter, tier: t, win: win, closeLoss: close)
-            if played { awardPoints(win: win, closeLoss: close) }
+            if played { awardPoints(win: win, closeLoss: close); onBond?(playerCharacter, win) }          // (the relationship, GameCare+Bond.swift)
             if win, let tb = trophies { awards = tb.recordVolleyWin(character: playerCharacter, tier: t) }
             A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) JellyCoins" : "They won \(s.score[1]) to \(s.score[0]). \(earned) JellyCoins", .high)
             if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }

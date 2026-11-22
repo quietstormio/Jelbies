@@ -170,6 +170,7 @@ final class EmoteFeetTests: XCTestCase {
     func testMoonwalk() throws { try emote("moonwalk", "idle moonwalk") }          // (the Moonwalk: feet planted / sliding flat under a gliding root, a walk back)
     func testBackBounce() throws { try emote("backBounce", "idle backBounce") }          // (the Back bounce: on his back, the feet kicking, forced beans)
     func testHeadstand() throws { try emote("headstand", "idle headstand") }          // (the Headstand: on his head, the feet kicking in the air, forced beans)
+    func testBestHug() throws { try emote("bestHug", "trick bestHug") }          // (the best-friends Hug: a flagged hula; arms up then closed, the lean and press, the sway, feet planted)
     func testHula() throws { try emote("hula", "idle hula") }          // (the Hula trick: standing, the base circles over planted feet)
     func testSing() throws { try emote("sing", "idle sing") }          // (the Sing trick: standing, feet planted)
     func testPoliteBow() throws { try emote("politeBow", "idle politeBow") }          // (the Take a bow trick)
