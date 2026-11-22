@@ -32,18 +32,24 @@ nonisolated enum MoveMix {
     static let pairMinDist: Float = 1.4
     static let watchPairMul: Float = 1.5          // was SocialTuning.livelyChance 4.0
     // 3. group
-    static let groupCoolHome: ClosedRange<Float> = 110...170
+    static let groupCoolHome: ClosedRange<Float> = 170...230          // (round 2: one group moment of any kind per ~3 min at home; treats share this clock)
     static let groupCoolParkMul: Float = 0.5
     static let groupWaitMul: Float = 2
     // 4. walking
     static let legAfterSolo: Float = 0.7
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
-    static let soloGapMul: Float = 2.6
+    static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
-    static let idleWeight: Float = 3.5          // x board.idleness / 60 in a roam goal's score
+    static let idleWeight: Float = 4.5          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
+    /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
+    static let ownShare: Float = 0.55
+    /// Rug-centre penalty of EmoteSpot.score (was 2.2): pair / group spots lean away from the centre.
+    static let rugWeight: Float = 3.4
+    /// A stroll goal in another depth third than where the body stands / where its mates strolled to.
+    static let strollThirdBonus: Float = 1.2
     static let roamCandidates = 8          // (was 6 valid candidates)
     static let claimRadius: Float = 1.1
-    static let underButtonPenalty: Float = 0.8
+    static let underButtonPenalty: Float = 0.4
     /// A pair partner may be this far (was 4.8): the strolls spread them out.
     static let pairMaxDist: Float = 6.5
     /// Night / sleepy: the in-place chain rule and the forced leg off the buttons do not apply.
@@ -64,6 +70,11 @@ struct MixBook {
     var strollFrom = SIMD2<Float>.zero
     var strollDir = SIMD2<Float>.zero
     var strollDirAt: Float = -99
+    var strollThird = -1
+    /// What kind of leg this body was last sent on (the foot-lift proof logs by it): "roam", "stroll", "out" (from under a button).
+    var legKind = "roam"
+    /// The body's OWN idleness map: game time it was last in each of the 6 x 6 cells of the live floor (-inf = never).
+    var own = [Float](repeating: -.infinity, count: 36)
 }
 
 extension GameCamera.RoamFloor {
@@ -118,9 +129,10 @@ extension BlobBrain {
         let d = g - here
         let len = simd_length(d)
         mix.strollDir = len > 1e-3 ? d / len : .zero; mix.strollDirAt = now
+        if let rf = roamProvider?() { mix.strollThird = mixThird(g.y, rf) }
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         script = .walk(target: g, then: .none); activity = .walking
-        mix.last = .leg
+        mix.last = .leg; mix.legKind = "stroll"
         return true
     }
 
@@ -154,10 +166,11 @@ extension BlobBrain {
                     if case .walk(let t, _) = o.script { nearest = min(nearest, simd_distance(t, cand)) }
                 }
                 var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false)
-                if let b = board {
-                    if b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
-                    score += MoveMix.idleWeight * b.idleness(at: cand, now: b.now) / WalkBoard.idleCap
-                }
+                if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
+                score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
+                let th = mixThird(cand.y, rf)
+                if th != mixThird(here.y, rf) { score += MoveMix.strollThirdBonus }
+                if mates.contains(where: { now - $0.mix.strollDirAt < 8 && $0.mix.strollThird == th }) { score -= MoveMix.strollThirdBonus }
                 if best == nil || score > best!.1 { best = (cand, score) }
             }
             if let b = best { roamVisits[roamKeyMix(b.0), default: 0] += 1; return b.0 }
@@ -184,4 +197,27 @@ extension BlobBrain {
         let k = idleState.kind ?? emoteSpot.soloKind
         mix.last = k.map { Self.inPlaceKinds.contains($0) ? .inPlace : .solo } ?? .solo
     }
+}
+
+extension BlobBrain {
+    /// 6 x 6 cell of a floor point (the board's grid: the live floor's bounds).
+    func mixCell(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) -> Int {
+        let b = rf.bounds, n: Float = 6
+        let u = min(max((p.x - b.min.x) / max(b.max.x - b.min.x, 0.01), 0), 0.9999), v = min(max((p.y - b.min.y) / max(b.max.y - b.min.y, 0.01), 0), 0.9999)
+        return Int(v * n) * 6 + Int(u * n)
+    }
+    /// Every tick (centreDwellTick): the cell this body is in is "here now".
+    func mixOwnTick() {
+        guard MoveMix.on, let rf = roamProvider?() else { return }
+        mix.own[mixCell(position, rf)] = variety.now
+    }
+    /// 0...60: the blend of the shared idleness and this body's own for a goal at `p`.
+    func mixIdleness(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) -> Float {
+        let own = min(WalkBoard.idleCap, max(0, variety.now - mix.own[mixCell(p, rf)]))
+        var shared = own
+        if let b = board { shared = b.idleness(at: p, now: b.now) }
+        return MoveMix.ownShare * own + (1 - MoveMix.ownShare) * shared
+    }
+    /// 0 back, 1 middle, 2 front third of the floor's depth.
+    func mixThird(_ z: Float, _ rf: GameCamera.RoamFloor) -> Int { min(2, max(0, Int((z - rf.minZ) / max(rf.maxZ - rf.minZ, 0.1) * 3))) }
 }

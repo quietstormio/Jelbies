@@ -28,6 +28,8 @@ final class SocialTests: XCTestCase {
         var plain = FeetAttachTests.FootFrame(soleRise: -.infinity, centreHeight: -.infinity, radius: 0, overlap: -.infinity)
         var plainFrames = 0
         var worstTag = "", plainTag = ""
+        /// move-mix-r1 round 2: the worst sole rise of the plain frames per STEP TYPE (walk by leg kind, idle kind, ...), to show which kind of step reaches 0.12.
+        var typeMax: [String: (Float, Int)] = [:]
         mutating func sample(_ r: MotionRig) {
             if let f = FeetAttachTests.footFrame(r) {
                 let b = r.brain.socialBook
@@ -38,6 +40,10 @@ final class SocialTests: XCTestCase {
                 } else {
                     if f.overlap > plain.overlap { plainTag = "kind \(r.brain.social?.kind.rawValue ?? "-") idle \(String(describing: r.brain.idleState.kind)) act \(r.brain.activity) runW \(r.brain.runW) zoomW \(r.brain.zoomW) feetActive \(r.brain.feet.active) route \(r.brain.route.count) t \(r.t)" }
                     FeetAttachTests.accumulate(&plain, f); plainFrames += 1
+                    let br = r.brain
+                    let key: String = br.social != nil ? "social:\(br.social!.kind.rawValue)" : (br.idleState.kind.map { "idle:\($0.rawValue)" } ?? (br.isWalkScript ? "walk:\(br.mix.legKind)" : "script:other"))
+                    let old = typeMax[key] ?? (-.infinity, 0)
+                    typeMax[key] = (max(old.0, f.soleRise), old.1 + 1)
                 }
             }
             guard r.brain.armG > 0.5 else { return }
@@ -47,6 +53,7 @@ final class SocialTests: XCTestCase {
             }
         }
         func check(_ name: String, plainBound: Float = FeetAttachTests.minOverlap + 0.015) {
+            MotionLog.write("FOOTTYPE \(name) " + typeMax.sorted { $0.value.0 > $1.value.0 }.map { String(format: "%@ max %.4f n %d", $0.key, $0.value.0, $0.value.1) }.joined(separator: " | "))
             MotionLog.write("SOCIAL \(name): overlay frames \(feetFrames), plain frames \(plainFrames), plain worst overlap \(plain.overlap), overlay worst at \(worstTag); plain worst at \(plainTag)")
             FeetAttachTests.check(name + " (overlay frames)", feet, frames: feetFrames)
             var p2 = plain; p2.overlap = -.infinity            // (the overlap of plain frames gets its own, relaxed bound below)

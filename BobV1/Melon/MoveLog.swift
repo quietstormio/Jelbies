@@ -40,7 +40,7 @@ final class MoveLog {
         var walkSec: Float = 0, gameSec: Float = 0
         var arrN = 0; var arrSec: Float = 0, arrDist: Float = 0          // (walks that ended within 0.5 u of their goal: their seconds and straight-line metres)
         /// Activity budget seconds: 0 roam leg, 1 walk to an emote / job, 2 plain stand, 3 solo emote, 4 pair emote, 5 group emote, 6 toy / play, 7 lying / sitting / sleeping, 8 waiting (held, stood on a walk), 9 other (eating, touched ...)
-        var act = [Float](repeating: 0, count: 10)
+        var act = [Float](repeating: 0, count: 11)
         var walkTimes: [Float] = []          // seconds of each walk that arrived
         var stands: [Float] = []          // plain stand episodes (s)
         var bump = [Int](repeating: 0, count: 3)          // body-body contacts of two bodies not in one session: both standing / one walking / both walking
@@ -60,7 +60,7 @@ final class MoveLog {
         for c in 0..<36 { a.idleSum6[c] += o.idleSum6[c] }
         for c in 0..<10 { a.act[c] += o.act[c] }
         for c in 0..<3 { a.bump[c] += o.bump[c] }
-        for (k, v) in o.kindSec { a.kindSec[k, default: 0] += v }; a.quietSec += o.quietSec; a.huddleSec += o.huddleSec; a.chainMax = max(a.chainMax, o.chainMax); a.kindCounts += o.kindCounts.isEmpty ? [o.kinds.count] : o.kindCounts
+        for (k, v) in o.kindSec { a.kindSec[k, default: 0] += v }; a.kinds.formUnion(o.kinds); a.quietSec += o.quietSec; a.huddleSec += o.huddleSec; a.chainMax = max(a.chainMax, o.chainMax); a.kindCounts += o.kindCounts.isEmpty ? [o.kinds.count] : o.kindCounts
         a.walkSec += o.walkSec; a.gameSec += o.gameSec; a.emoteN += o.emoteN; a.walkN += o.walkN
         a.arrN += o.arrN; a.arrSec += o.arrSec; a.arrDist += o.arrDist
         a.stands += o.stands; a.walkTimes += o.walkTimes; a.pairN += o.pairN; a.groupN += o.groupN; a.pairSec += o.pairSec; a.groupSec += o.groupSec
@@ -70,6 +70,8 @@ final class MoveLog {
     private(set) var total = Totals()
     /// Seconds per activity of each body (cumulative; the per-body view of the budget).
     private(set) var actBody: [Int: [Float]] = [:]
+    /// Seconds per 3 x 3 cell of each body (round 2: every Jelmiko should use the whole floor).
+    private(set) var cellBody: [Int: [Float]] = [:]
     private var sess: [ObjectIdentifier: (first: Float, last: Float, group: Bool, pair: Int)] = [:]
     private var chains: [Int: (start: Float, end: Float)] = [:]
     private var lastVisit3 = [Float](repeating: 0, count: 9), lastVisit6 = [Float](repeating: 0, count: 36)
@@ -85,7 +87,7 @@ final class MoveLog {
         var sideT: Float = 0, backT: Float = 0, sideDone = false, backDone = false, hardCool: Float = 0
         var overlapping: Set<Int> = []
         var prevP = SIMD2<Float>.zero, speed: Float = 0, slowT: Float = 0, cat = -1, catT: Float = 0, touching: Set<Int> = []
-        var emoting = false, lastGoal: SIMD2<Float>?, walkStart = SIMD2<Float>.zero, walkT: Float = 0, lastP = SIMD2<Float>.zero
+        var inPlace = false, emoting = false, lastGoal: SIMD2<Float>?, walkStart = SIMD2<Float>.zero, walkT: Float = 0, lastP = SIMD2<Float>.zero
     }
     private var bodies: [Int: Body] = [:]
     private var clock: Float = 0, lastFlush: Float = 0, mixTickClock: Float = -1
@@ -99,7 +101,7 @@ final class MoveLog {
         if v { shared.reset(); shared.line("start \(RoomTraffic.switchesText)") }
     }
 
-    func reset() { total = Totals(); window = Totals(); bodies = [:]; actBody = [:]; sess = [:]; chains = [:]; lastVisit3 = [Float](repeating: 0, count: 9); lastVisit6 = [Float](repeating: 0, count: 36); maskKey = ""; clock = 0; lastFlush = 0; minute = 0; windowWall = CACurrentMediaTime() }
+    func reset() { total = Totals(); window = Totals(); bodies = [:]; actBody = [:]; cellBody = [:]; sess = [:]; chains = [:]; lastVisit3 = [Float](repeating: 0, count: 9); lastVisit6 = [Float](repeating: 0, count: 36); maskKey = ""; clock = 0; lastFlush = 0; minute = 0; windowWall = CACurrentMediaTime() }
 
     /// A counted moment from the walk code (a push, a pinned walk).
     static func note(_ k: Kind) { guard on else { return }; shared.total.n[k.rawValue] += 1; shared.window.n[k.rawValue] += 1 }
@@ -114,7 +116,7 @@ final class MoveLog {
     /// Once per brain tick (the end of `BlobBrain.tick`).
     func sample(_ b: BlobBrain, dt: Float) {
         guard b.enabled else { return }
-        if b.held { total.act[8] += dt; window.act[8] += dt; actBody[b.steerID, default: [Float](repeating: 0, count: 10)][8] += dt; return }
+        if b.held { total.act[8] += dt; window.act[8] += dt; actBody[b.steerID, default: [Float](repeating: 0, count: 11)][8] += dt; return }
         var s = bodies[b.steerID] ?? Body()
         s.clock += dt
         let p = b.position, c = cell(p)
@@ -123,7 +125,11 @@ final class MoveLog {
         s.speed = s.clock > dt * 1.5 ? simd_distance(p, s.prevP) / max(dt, 1e-4) : 0; s.prevP = p
         activity(b, &s, dt)
         total.bodySec[c] += dt; window.bodySec[c] += dt
+        cellBody[b.steerID, default: [Float](repeating: 0, count: 9)][c] += dt
         let emoteNow = (b.idleState.kind != nil && b.idleState.kind != .sleep) || b.social != nil
+        var inPlaceNow = b.social != nil          // (round 2: an IN-PLACE emote or a pair / group: not travel, not a flourish on a walk, not a lying / sitting rest)
+        if let k = b.idleState.kind, k != .sleep, !BlobBrain.travelKinds.contains(k), !b.isWalkScript { inPlaceNow = true }
+        s.inPlace = inPlaceNow
         if emoteNow { total.emoteSec[c] += dt; window.emoteSec[c] += dt; if !s.emoting { total.emoteN += 1; window.emoteN += 1; if let n = b.social?.kind.rawValue ?? b.idleState.kind?.rawValue { total.kinds.insert(n); window.kinds.insert(n) } } }
         s.emoting = emoteNow
         if emoteNow, let n = b.social?.kind.rawValue ?? b.idleState.kind?.rawValue { total.kindSec[n, default: 0] += dt }
@@ -169,7 +175,7 @@ final class MoveLog {
         bodies[b.steerID] = s
         if s.clock >= clock - 1e-6, bodies.count > 1, mixTickClock != clock {          // (once per game tick)
             mixTickClock = clock
-            let any = bodies.values.contains { $0.emoting }
+            let any = bodies.values.contains { $0.inPlace }
             if !any { total.quietSec += dt; window.quietSec += dt }
             let ps = bodies.values.map { $0.prevP }
             var tight = ps.count >= 3
@@ -199,6 +205,7 @@ final class MoveLog {
         if walkingAct, isWalkScript, b.social == nil { s.slowT = s.speed < 0.1 ? s.slowT + dt : 0 } else { s.slowT = 0 }
         var cat = 9
         if let sn = b.social { cat = (sn.crew.count >= 3 || sn.idC >= 0) ? 5 : 4 }
+        else if let k, BlobBrain.travelKinds.contains(k) { cat = 10 }          // (round 2: run / trot / zoomies / slide ... are TRAVEL: a "moving" class of its own, not a solo emote)
         else if k == .sleep || k == .sit || k == .slump || k == .flop { cat = 7 }
         else if walkingAct && isWalkScript {
             if s.slowT > 0.25 { cat = 8 }
@@ -216,7 +223,7 @@ final class MoveLog {
         }
         s.catT += dt
         total.act[cat] += dt; window.act[cat] += dt
-        actBody[b.steerID, default: [Float](repeating: 0, count: 10)][cat] += dt
+        actBody[b.steerID, default: [Float](repeating: 0, count: 11)][cat] += dt
         if let sn = b.social {
             let id = ObjectIdentifier(sn), group = sn.crew.count >= 3 || sn.idC >= 0
             sess[id] = (sess[id]?.first ?? clock, clock, group, min(sn.idA, sn.idB) * 100 + max(sn.idA, sn.idB))
@@ -278,7 +285,7 @@ final class MoveLog {
         }
     }
 
-    static let actNames = ["roam", "toTask", "stand", "solo", "pair", "group", "play", "lie", "wait", "other"]
+    static let actNames = ["roam", "toTask", "stand", "solo", "pair", "group", "play", "lie", "wait", "other", "moving"]
     static func actText(_ a: [Float]) -> String {
         let sum = max(a.reduce(0, +), 0.001)
         return zip(actNames, a).map { "\($0) \(String(format: "%.0f", $1 / sum * 100))" }.joined(separator: " ")
@@ -300,6 +307,7 @@ final class MoveLog {
         s += " | 3x3 body% (back..front rows) " + (0..<3).map { r in (0..<3).map { String(format: "%.0f", t.bodySec[r * 3 + $0] / bs * 100) }.joined(separator: " ") }.joined(separator: " / ")
         let ks = t.kindSec.sorted { $0.value > $1.value }.prefix(16).map { "\($0.key) \(String(format: "%.1f", $0.value / max(t.gameSec, 0.01) / 3 * 100))" }
         s += " | emote kinds % of body time (3 bodies): " + ks.joined(separator: ", ")
+        s += " | KINDS(" + String(t.kinds.count) + ") " + t.kinds.sorted().joined(separator: ",")
         return s
     }
 
@@ -318,7 +326,12 @@ final class MoveLog {
     var summary: String {
         let t = total
         let body = actBody.keys.sorted().map { "b\($0) [\(Self.actText(actBody[$0]!))]" }.joined(separator: " ")
-        return "movelog \(tag) \(String(format: "%.1f", t.gameSec / 60)) min | \(rates(t, minutes: t.gameSec / 60)) | walk \(String(format: "%.0f", t.walkSec)) s / \(t.walkN) walks, \(t.arrN) arrivals \(String(format: "%.2f", t.arrSec / max(t.arrDist, 0.01))) s per u | emotes \(t.emoteN) | \(gridText(t)) | \(Self.extra(t)) | per body act% \(body)"
+        let thirds = cellBody.keys.sorted().map { id -> String in
+            let v = cellBody[id]!, tot = max(v.reduce(0, +), 0.001)
+            let z = (0..<3).map { r in (0..<3).map { v[r * 3 + $0] }.reduce(0, +) / tot * 100 }, x = (0..<3).map { c in (0..<3).map { v[$0 * 3 + c] }.reduce(0, +) / tot * 100 }
+            return "b\(id) back/mid/front " + z.map { String(format: "%.0f", $0) }.joined(separator: "/") + " left/ctr/right " + x.map { String(format: "%.0f", $0) }.joined(separator: "/") + " cells>0: \(v.filter { $0 > 0 }.count)"
+        }.joined(separator: "; ")
+        return "movelog \(tag) \(String(format: "%.1f", t.gameSec / 60)) min | \(rates(t, minutes: t.gameSec / 60)) | walk \(String(format: "%.0f", t.walkSec)) s / \(t.walkN) walks, \(t.arrN) arrivals \(String(format: "%.2f", t.arrSec / max(t.arrDist, 0.01))) s per u | emotes \(t.emoteN) | \(gridText(t)) | \(Self.extra(t)) | per body act% \(body) | THIRDS \(thirds)"
     }
 
     private func flush() {

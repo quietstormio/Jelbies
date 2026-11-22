@@ -719,7 +719,7 @@ final class BlobBrain {
         defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) } }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
-        centreDwellTick(dt)
+        centreDwellTick(dt); mixOwnTick()
         contactTick(dt)          // (every tick, whatever he is doing: the touch event of the drawn skins, BlobBrain+Contact.swift)
         HopDiag.lap(.tkPre, &ht)
         reactTick(sim, skinner, dt)
@@ -957,7 +957,7 @@ final class BlobBrain {
         var choice = w[0].0
         for (k, wt) in w { if r < wt { choice = k; break }; r -= wt }
         if footKeep || mixLeg { choice = 0 }
-        if MoveMix.on { mix.last = choice == 0 ? .leg : (choice == 1 || choice == 2 ? .inPlace : .solo) }
+        if MoveMix.on { mix.last = choice == 0 ? .leg : (choice == 1 || choice == 2 ? .inPlace : .solo); if choice == 0 { mix.legKind = mixLeg && !mixStopOK(position) ? "out" : "roam" } }
         lastPick = choice
         scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
         switch choice {
@@ -1068,9 +1068,9 @@ final class BlobBrain {
             if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) - EmoteSpot.roamCellWeight * EmoteSpot.roamOver(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
             if MoveMix.on, !(rfStop?.stopOK(cand) ?? true) { score -= MoveMix.underButtonPenalty }          // (a goal under a HUD button is a pass-through spot: allowed, less liked; nothing starts there)
             if live || MoveMix.on { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
-            if MoveMix.on, let b = board {          // (MoveMix.swift: stale floor is the main term; a spot another body has claimed is out)
-                if b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
-                score += MoveMix.idleWeight * b.idleness(at: cand, now: b.now) / WalkBoard.idleCap
+            if MoveMix.on {          // (MoveMix.swift: stale floor is the main term, shared map blended with this body's own; a spot another body has claimed is out)
+                if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
+                score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
             }
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1

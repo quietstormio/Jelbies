@@ -662,7 +662,7 @@ extension BlobBrain {
                 socialBook.groupCool = rand(GroupTuning.cooldown.0, GroupTuning.cooldown.1) * parkSocialWaitMul * moreGroupWaitMul; socialBook.groupIdle = 0; socialBook.lastGroup = s.kind
                 if s.kind.isTreat { socialBook.treatCool = rand(EmoteTuning.treatCooldown.0, EmoteTuning.treatCooldown.1); socialBook.treatIdle = 0; socialBook.treatBusy = 0; socialBook.lastTreat = s.kind }
             }
-            if MoveMix.on, !s.kind.isTreat {          // (MoveMix.swift: after a PAIR the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
+            if MoveMix.on {          // (MoveMix.swift: after a PAIR the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
                 if !s.kind.isGroup {
                     let again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
                     socialBook.pair[pid] = again
