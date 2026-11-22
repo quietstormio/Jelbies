@@ -40,6 +40,7 @@ extension BlobBrain {
             }
             let s = newSession(.pass, with: o, duration: 75)
             s.mixSpot = plan?.pr
+            if plan != nil { socialBook.hopStarted = false; o.socialBook.hopStarted = false; socialBook.roundSeen = -1; o.socialBook.roundSeen = -1 }          // (the flags of an earlier session must not skip the receiver's walk out)
             s.uid = ball.uid; s.passTarget = (MoveMix.on && ball.kind == .soccerball) ? MoveMix.passKicksMin + Int(rand() * Float(MoveMix.passKicksMax - MoveMix.passKicksMin + 1)) : 2 + Int(rand() * 3); s.roles = 0; s.passes = 0
             DecorField.shared.occupant[ball.uid] = steerID
             if plan == nil { o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(c) } else { o.socialBook.hold = false; o.socialBook.faceYaw = nil }
