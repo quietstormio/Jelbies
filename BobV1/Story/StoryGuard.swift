@@ -14,6 +14,7 @@
 
 import Foundation
 import NaturalLanguage
+import UIKit
 
 nonisolated enum StoryKind: String, Codable, Sendable { case about, friendship }
 
@@ -21,7 +22,7 @@ nonisolated enum StoryReason: Equatable, Sendable, CustomStringConvertible {
     case empty, lineBreak, quote, bracket, emoji, badCharacter, digit, allCaps, tooManyExclamations, noFullStop, sentenceCount, tooLong
     case firstPerson, secondPerson, question
     case denied(String), unknownPlaceholder(String), unfilledPlaceholder
-    case notEnglish, negativeTone, repeatsShown, strained, noFacts, unknownFact(String), missingFactKey(String)
+    case notEnglish, negativeTone, tooWide, repeatsShown, strained, noFacts, unknownFact(String), missingFactKey(String)
     var description: String {
         switch self {
         case .empty: return "empty"
@@ -44,6 +45,7 @@ nonisolated enum StoryReason: Equatable, Sendable, CustomStringConvertible {
         case .unfilledPlaceholder: return "unfilled-placeholder"
         case .notEnglish: return "not-english"
         case .negativeTone: return "negative-tone"
+        case .tooWide: return "needs-a-third-line"
         case .repeatsShown: return "repeats-shown-text"
         case .strained: return "strained-phrase"
         case .noFacts: return "no-fact-named"
@@ -300,12 +302,23 @@ nonisolated enum StoryGuard {
         if f.count > maxChars(kind) { return .tooLong }
         if !f.hasSuffix(".") { return .noFullStop }
         if !sentenceRange(kind).contains(sentenceCount(f)) { return .sentenceCount }
+        // the Profile's slots hold two lines at the narrowest phone (375 pt): a longer text is refused here, never cut with "..." on screen
+        if !fitsLines(f, width: kind == .about ? StoryLayout.lineWidth : StoryLayout.noteWidth, size: kind == .about ? StoryLayout.lineSize : StoryLayout.noteSize, lines: 2) { return .tooWide }
         if checkTone {
             let t = toneText ?? f
             if !isEnglish(t) { return .notEnglish }
             if sentiment(t) < sentimentMin { return .negativeTone }
         }
         return nil
+    }
+
+    /// True when `text` wraps to at most `lines` lines in a column `width` wide at semibold rounded `size` (the Profile's own face, measured with UIKit; a 4 % margin for the font's own width).
+    static func fitsLines(_ text: String, width: CGFloat, size: CGFloat, lines: Int) -> Bool {
+        var font = UIFont.systemFont(ofSize: size, weight: .semibold)
+        if let d = font.fontDescriptor.withDesign(.rounded) { font = UIFont(descriptor: d, size: size) }
+        let ns = NSAttributedString(string: text, attributes: [.font: font])
+        let r = ns.boundingRect(with: CGSize(width: width * 0.96, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        return Int((r.height / font.lineHeight).rounded()) <= lines
     }
 
     // MARK: Natural Language

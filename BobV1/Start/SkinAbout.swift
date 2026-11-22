@@ -6,7 +6,7 @@
 //  Built from two parts so it can never name the wrong colour:
 //    - the COLOUR sentence belongs to a skin = a look (id 0...26) plus, for the four starters (0...3), a colour variant (Soft, Deep, the rare jewel tone, or an old exclusive);
 //    - the CHARACTER sentence belongs to the look and is shared by its variants.
-//  Rules (SkinAboutTests): colour <= 45 characters, character <= 60, whole <= 100; plain, warm, third person, no numbers, nothing romantic; the colour words match the palette.
+//  Rules (SkinAboutTests): colour <= 45 characters, character <= 52, whole <= 88 (every paragraph is exactly two lines on the Profile: ProfileStableTests); plain, warm, third person, no numbers, nothing romantic; the colour words match the palette.
 //  A new look or colour variant without text here fails SkinAboutTests; there is no fallback to another look's text.
 //
 
@@ -16,33 +16,33 @@ import simd
 nonisolated enum SkinAbout {
     /// Colour sentence + character sentence of a look in its own classic colour, by look (species) id.
     static let looks: [Int: (colour: String, character: String)] = [
-        0: ("Baby blue, plain and round.", "Cool and unbothered, then follows you everywhere."),
-        1: ("Sunny yellow, with a tail and back spikes.", "Sunny and bright, and wags that tail at everyone."),
-        2: ("Mint green, with two wobbly antennas.", "Calm and cosy, and never far from a nap."),
+        0: ("Baby blue, plain and perfectly round.", "Cool, calm and happy to follow you."),
+        1: ("Sunny yellow, with a tail and back spikes.", "Bright, sunny and full of cheer."),
+        2: ("Mint green, with two wobbly antennas.", "Calm, cosy and always sleepy."),
         3: ("Soft lavender purple, with small wings.", "Dreamy, with its head in the clouds."),
-        4: ("Honey brown, round ears and a cream belly.", "Soft as a pillow, and happiest when hugged."),
-        5: ("Soft pearly white, with pearl-cream wings.", "Gentle and shimmery, always fluttering about."),
+        4: ("Honey brown, round ears and a cream belly.", "Soft as a pillow, loves a hug."),
+        5: ("Soft pearly white, with pearl-cream wings.", "Gentle, shimmery and light."),
         6: ("White with black ears, patches and feet.", "Silly, happy and full of wobble."),
         7: ("Bright orange with rust-brown stripes.", "Bold and bouncy, and full of energy."),
-        8: ("Strawberry pink, with seeds and a leaf top.", "Sweet and cheerful, with a happy little bounce."),
+        8: ("Strawberry pink, with seeds and a leaf top.", "Sweet, cheerful and bouncy."),
         9: ("Aqua with milky white ribbons swirled in.", "Swirly and curious, and one of a kind."),
         10: ("Shiny gold from top to toe.", "Proud, cheerful and a bit of a show-off."),
-        11: ("Shiny silver chrome from top to toe.", "Cool, calm and secretly silly."),
+        11: ("Shiny silver chrome from top to toe.", "Calm and sleek, with a silly side."),
         12: ("Pastel rainbow of pink, mint, sky and lilac.", "Playful, and a little proud of its colours."),
-        13: ("White with black cow-print patches.", "Gentle, a little clumsy and always up for a snack."),
-        14: ("Cream with chocolate cow-print patches.", "Warm, sleepy and happiest in a sunny spot."),
+        13: ("White with black cow-print patches.", "Gentle, clumsy and up for a snack."),
+        14: ("Cream with chocolate cow-print patches.", "Warm, sleepy and happiest in the sun."),
         15: ("Pale pink with rose patches.", "Shy at first, then the friendliest one in the room."),
         16: ("Red on top, melting to gold at the feet.", "Warm to look at, warmer to hug."),
         17: ("Deep jewel red with a polished shine.", "Bold, warm-hearted and quick to giggle."),
-        18: ("Glossy black with pale lilac eyes.", "Quiet and gentle, happiest when the lights go low."),
+        18: ("Glossy black with pale lilac eyes.", "Quiet and gentle, loves low light."),
         19: ("Pink on top, lilac in the middle, blue below.", "Sweet and fluffy as a fairground treat."),
         20: ("Sea-foam on top, sinking to deep navy.", "Calm on the surface, curious underneath."),
         21: ("Lemon yellow on top, lime green below.", "Fizzy, bright and always up for a game."),
         22: ("Teal on top, then violet, then pink.", "Dreamy and easy-going, like a slow tide."),
         23: ("Deep emerald green with a polished shine.", "Wise, steady and calm as a forest pond."),
         24: ("Royal blue with a polished shine.", "Calm, loyal and good at keeping secrets."),
-        25: ("Bright purple with a polished shine.", "Curious, creative and full of wonderful ideas."),
-        26: ("Shiny bronze with warm highlights.", "Sturdy, friendly and always glad to see you."),
+        25: ("Bright purple with a polished shine.", "Curious, creative and full of ideas."),
+        26: ("Shiny bronze with warm highlights.", "Sturdy, friendly and glad to see you."),
     ]
 
     /// Colour sentences of the colour variants of the four starters: look id -> variant title ("Soft", "Deep", the rare jewel tone, an old exclusive) -> sentence.
