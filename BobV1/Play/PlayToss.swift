@@ -445,9 +445,9 @@ final class PlayToss {
         let sz = viewSize
         let js = GameCamera.screenPoint(floor: j.pos, y: j.sim.centroid().y, size: sz) ?? .zero
         let bs = GameCamera.screenPoint(floor: SIMD2(ball.pos.x, ball.pos.z), y: ball.pos.y, size: sz) ?? .zero
-        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f centroidY=%.3f headTop=%.3f idle=%@ jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
+        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f centroidY=%.3f headTop=%.3f idle=%@ stage=%d rise=%.3f jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
               clock, throwSerial, ballKind == .soccerball ? "soccer" : (ballKind == .beachball ? "beach" : "bouncy"), kind, j.id, err,
-              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
+              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, j.headTop - (standTop[j.id] ?? j.headTop), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
     }
 
     /// Where the player stands: the hand's spot (the flick's origin, the camera side).
