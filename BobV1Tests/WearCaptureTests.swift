@@ -578,7 +578,7 @@ extension WearCaptureTests {
                 var row: [UIImage] = []
                 for v in views {
                     let dir = SIMD3<Float>(fwd.x * cosf(v.1) + fwd.z * sinf(v.1), 0, -fwd.x * sinf(v.1) + fwd.z * cosf(v.1))
-                    let cam = Self.lookCamera(target: SIMD3(c.x, r.sim.floorY + 0.2, c.z), dir: dir, dist: 1.9, aspect: 1, lift: v.2)
+                    let cam = Self.lookCamera(target: SIMD3(c.x, r.sim.floorY + 0.08, c.z), dir: dir, dist: 1.5, aspect: 1, lift: v.2)
                     row.append(labelled(composite(lab, sets, [outfit], ren, target, cam: cam).uiImage()!, "\(look.rawValue) \(pose) \(v.0)"))
                 }
                 rows.append(row)
