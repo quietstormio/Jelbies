@@ -51,7 +51,7 @@ extension BlobBrain {
         autonomy && job == nil && pending == nil && !commanded && !commandedGoodnight && !held && !focusPaused && idleState.kind != .sleep
     }
     /// Step 1 is live for this body: a free body in the home room that is not in a social session (a walk-up to a friend keeps its own arrival code).
-    var roomTraffic: Bool { RoomRoam.gate(0, homeRoom && RoomRoam.traffic && roomFree && social == nil) }
+    var roomTraffic: Bool { RoomRoam.gate(0, RoomRoam.traffic && (homeRoom || (RoomTraffic.park && outingPlay)) && roomFree && social == nil) }          // (move-b-r1: the park's playing visit too, `RoomTraffic.park`)
     /// Step 2 is live for this body.
     var roomTogether: Bool { RoomRoam.gate(1, homeRoom && RoomRoam.together && roomFree) }
     /// Step 3 is live for this body.

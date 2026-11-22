@@ -32,6 +32,7 @@ nonisolated enum RoomTraffic {
     nonisolated(unsafe) static var arrivalOrder = (devAsked("RoomTrafficOrder") || envOn.contains("order")) && !envOff.contains("order")          // (T2, opt-in)
     nonisolated(unsafe) static var waypointWait = (devAsked("RoomTrafficWait") || envOn.contains("wait")) && !envOff.contains("wait")          // (T5, opt-in)
     nonisolated(unsafe) static var goalAware = (devAsked("RoomTrafficGoals") || envOn.contains("goals")) && !envOff.contains("goals")          // (T6, opt-in)
+    nonisolated(unsafe) static var park = (devAsked("RoomTrafficPark") || envOn.contains("park")) && !envOff.contains("park")          // (move-b-r1, MEASURING EXPERIMENT only: OFF by default and in the app. As shipped, `roomTraffic` is false in the park; with `ROOMTRAFFIC_ON=...,park` T1/T2/T5/T6 also run for a body with `outingPlay`)
     nonisolated(unsafe) static var loneFloor = devOn("RoomTrafficLone") && !envOff.contains("lone")
     nonisolated(unsafe) static var loneBack = devOn("RoomTrafficLoneBack") && !envOff.contains("loneback")
     nonisolated(unsafe) static var walkIn = devOn("RoomTrafficWalkIn") && !envOff.contains("walkin")          // (remedy D1: on by default)
@@ -68,6 +69,8 @@ nonisolated enum RoomTraffic {
         counts[5] += 1
         return true
     }
+    /// The switches as read at launch (logged once by the measuring test).
+    static var switchesText: String { "roomtraffic switches speed=\(realSpeed) order=\(arrivalOrder) wait=\(waypointWait) goals=\(goalAware) park=\(park) ROOMTRAFFIC_ON='\(ProcessInfo.processInfo.environment["ROOMTRAFFIC_ON"] ?? "")'" }
     static var report: String { "roomtraffic giveWay=\(counts[0]) walkOn=\(counts[1]) waitTicks=\(counts[2]) wanderMarked=\(counts[3]) dashSkipped=\(counts[4]) loneBack=\(counts[5])" }
 }
 
