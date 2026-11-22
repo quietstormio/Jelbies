@@ -541,6 +541,7 @@ struct GameScreen: View {
             try? await Task.sleep(nanoseconds: UInt64(after) * 1_000_000_000)
             town = .condition
         }
+        .task { await StoryDev.runIfRequested(care: model.care) }          // `-StoryDump <n>` (dev arguments only): Story/StoryDev.swift
         .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
         .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }

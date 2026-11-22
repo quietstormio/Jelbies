@@ -326,6 +326,7 @@ struct ProfileScreen: View {
     @Environment(\.dynamicTypeSize) private var dts
     @State private var trophiesOpen = false
     @State private var stylesOpen = false
+    @State private var storyRev = 0
     private var compact: Bool { vsc == .compact }
 
     /// Capture aid (dev arguments only): `-ProfileTypeSample Gentle` shows that personality word on every Jelmiko (roster arguments make Jelmiko without a personality).
@@ -333,12 +334,13 @@ struct ProfileScreen: View {
         guard DevArgs.enabled, let t = UserDefaults.standard.string(forKey: "ProfileTypeSample"), !t.isEmpty else { return nil }
         return t
     }
-    /// The living line about the pet's life (one short sentence, at most two lines; another worker feeds it). Nil = the slot is hidden. `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
-    private static func lately(_ f: Facts) -> String? {
-        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return "Berry plays most with Latte, and an ice pop is her favourite treat." }
-        return nil
+    /// The living line about the pet's life (Story/: ONE plain sentence, at most 90 characters and two lines at the narrowest phone; news from today or yesterday first, then favourites and routines).
+    /// Nil = no line (the slot keeps its box). `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
+    private func lately(_ f: Facts) -> StoryBook.Line? {
+        if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return StoryBook.Line(text: "Berry plays most with Latte, and an ice pop is her favourite treat.", byModel: false) }
+        guard let sf = f.story else { return nil }
+        return StoryBook.shared.aboutLine(sf)
     }
-
 
     var body: some View {
         VStack(spacing: compact ? 8 : 12) {
@@ -378,6 +380,17 @@ struct ProfileScreen: View {
             ConditionScreen(care: care, who: $who, back: { stylesOpen = false }, show: { stylesOpen = false; show() }, bath: { stylesOpen = false; bath?() }, feed: feed, drink: drink, sheetMode: true)
                 .presentationDetents([.large]).presentationBackground(ShowUI.sand)
         }
+        .task(id: who) {          // the living line and the notes: asked for fresh text now and then while the Profile is open (StoryBook's schedule decides)
+            var first = true          // (only the first ask after opening may rotate an old line; while the Profile stays open a line changes for a new event or a changed fact only)
+            while !Task.isCancelled {
+                let ch = care.jelly(who)?.character ?? who
+                if let sf = StoryFactsBuilder.make(care: care, slot: who, shownParagraph: SkinAbout.text(look: JellyRoster.species(ch), variant: JellyVariants.adopted(ch))) {
+                    let done = await StoryBook.shared.refresh(sf, rotate: first); first = false
+                    if !done.isEmpty { storyRev += 1 }
+                }
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+            }
+        }
         .task {
             await Self.captureAids(care: care, who: $who)
             if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileStyles") != 0 { try? await Task.sleep(nanoseconds: 2_500_000_000); stylesOpen = true }          // capture aid: `-ProfileStyles 1` opens the Jelly Show styles sheet
@@ -396,8 +409,12 @@ struct ProfileScreen: View {
         let hour: Double
         /// The relationship now (points from the save; display only).
         let bond: BondLevel
+        /// What the living line and the friends notes are written from (Story/); nil when this Jelmiko is not at home.
+        let story: StoryFacts?
         init(care: GameCare, who: Int) {
             p = care.jelly(who)
+            let ch = care.jelly(who)?.character ?? who
+            story = StoryFactsBuilder.make(care: care, slot: who, shownParagraph: SkinAbout.text(look: JellyRoster.species(ch), variant: JellyVariants.adopted(ch)))
             bond = BondLevel(points: JellyBond.points(care.jelly(who)?.character ?? who))
             let inp = care.widgetInputs().first { $0.id == who }
             let sleeping = care.asleepForAway(who)
@@ -466,18 +483,46 @@ struct ProfileScreen: View {
         ProfileParagraph(text: SkinAbout.hasLook(b.species) ? SkinAbout.text(look: b.species, variant: b.variant) : "").accessibilityIdentifier("profile-about")
     }
 
-    /// The living-line slot: a soft bubble in the pet's body tint with a small sparkle; nothing at all when there is no text.
+    /// The living-line slot: ALWAYS the same box (two lines of space, the sparkle inside it); the tinted bubble is simply not drawn when there is no line.
     @ViewBuilder private func latelyBubble(_ f: Facts, _ b: WhoBits) -> some View {
-        if let text = Self.lately(f), !text.isEmpty {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "sparkle").font(.system(size: 13, weight: .black)).foregroundStyle(ShowUI.goldDeep).padding(.top, 3).accessibilityHidden(true)
-                Text(text).font(SK.font(15, .semibold)).foregroundStyle(SK.ink).lineSpacing(3).lineLimit(dts.isAccessibilitySize ? 5 : 2, reservesSpace: true)          // always two lines of space
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        let _ = storyRev
+        let line = lately(f)
+        StoryLivingBubble(text: line?.text ?? "", byModel: line?.byModel ?? false, tint: b.body)
+            .accessibilityIdentifier("profile-lately")
+            .contextMenu { if line != nil { storyActions(f, nil) } }
+    }
+
+    /// The two long-press actions on a line or a note.
+    @ViewBuilder private func storyActions(_ f: Facts, _ h: StoryFacts.Housemate?) -> some View {
+        if let sf = f.story {
+            Button { Task { _ = await StoryBook.shared.writeAnother(sf, with: h); storyRev += 1 } } label: { Label("Write another", systemImage: "arrow.triangle.2.circlepath") }
+                .disabled(StoryBook.shared.rewritesLeft(sf, h) == 0)
+            Button(role: .destructive) { StoryBook.shared.dontShow(sf, with: h); storyRev += 1 } label: { Label("Don't show this one", systemImage: "hand.raised") }
+        }
+    }
+
+    /// Housemates: always two rows of the same height (the game has at most three Jelmiko); a row with nobody keeps its box with a calm line.
+    @ViewBuilder private func friendsBlock(_ f: Facts) -> some View {
+        let _ = storyRev
+        let sf = f.story
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Housemates").font(SK.font(11, .heavy)).foregroundStyle(SK.muted).textCase(.uppercase).lineLimit(1)
+            ForEach(0..<2, id: \.self) { i in
+                if let sf, sf.housemates.indices.contains(i) {
+                    let h = sf.housemates[i]
+                    let slot = care.jellies.first { $0.character == h.id }?.id
+                    let n = StoryBook.shared.noteLine(sf, with: h)
+                    StoryFriendRow(names: h.name, note: n?.text ?? "Still finding out", byModel: n?.byModel ?? false) {
+                        HStack(spacing: -10) {
+                            JelbiePortrait(care: care, who: who, size: 40, head: true, frameless: true).clipShape(Circle())
+                            if let slot { JelbiePortrait(care: care, who: slot, size: 40, head: true, frameless: true).clipShape(Circle()) }
+                        }
+                    }
+                    .contentShape(Rectangle()).contextMenu { storyActions(f, h) }.accessibilityIdentifier("profile-friend-\(h.id)")
+                } else {
+                    StoryFriendPlaceholder()
+                }
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(b.body.opacity(0.3)))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(b.body.opacity(0.5), lineWidth: 1.5))
-            .accessibilityElement(children: .ignore).accessibilityLabel("Lately: \(text)").accessibilityIdentifier("profile-lately")
         }
     }
 
@@ -543,6 +588,7 @@ struct ProfileScreen: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Favourite food: \(item?.name ?? f.p?.traits?.snackName ?? "still finding out")")
                 .accessibilityIdentifier("profile-fav-food")
+                friendsBlock(f)
                 ProfileFavRow(title: "Best friend at the Park", value: { ProfileFavText(text: friend.map { "\($0.0.name) \u{00B7} \(ParkFriendLevel.of($0.1).title)" } ?? "Still finding out", lines: 2) }) {
                     Image(systemName: "person.2.fill").font(.system(size: 20, weight: .black)).foregroundStyle(.white).frame(width: 48, height: 48).background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(SK.mint))
                 }

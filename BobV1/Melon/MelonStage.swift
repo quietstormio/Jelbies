@@ -425,6 +425,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard actors.count > 1 || !parkActors.isEmpty else { return }
         b.steerID = id
         b.board = walkBoard
+        StoryHabitStore.shared.resolve = { [weak self] slot in self?.model.care.jelly(slot)?.character }          // (Story/: the slot of a body -> its Jelmiko, for the habit sampler)
         b.bus = eventBus
         b.peerGap = Self.jellyGap
         if id < actors.count { model.care.voice.ai.register(b, id: id) }            // AI hub: his naps / socials for the diary, and "go to sleep" for him
