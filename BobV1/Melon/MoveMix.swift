@@ -40,6 +40,8 @@ nonisolated enum MoveMix {
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
     static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
+    /// Longest roam leg (was 5.5; 3.4 grumpy): a stale far cell is reachable in one leg.
+    static let legMax: Float = 8.0, legMaxGrumpy: Float = 5.5
     static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
     /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
     static let ownShare: Float = 0.7
@@ -58,7 +60,7 @@ nonisolated enum MoveMix {
     nonisolated(unsafe) static var runChance: Float = {
         if let v = ProcessInfo.processInfo.environment["MOVEMIX_RUNCHANCE"], let f = Float(v) { return f }
         if DevArgs.enabled, let v = UserDefaults.standard.object(forKey: "MoveMixRun") as? NSNumber { return v.floatValue }
-        return 0.3
+        return 0.4
     }()
     static let runLegMin: Float = 3.5
     static let runClearance: Float = 1.7          // a run keeps this far from any body that is in an emote (a session, a special) or walking its own leg across

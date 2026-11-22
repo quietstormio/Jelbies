@@ -1031,6 +1031,7 @@ final class BlobBrain {
     func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRoamGoal", probe) }
         var maxL = idleLegMax(maxWanderLeg)
+        if MoveMix.on { maxL = max(maxL, idleMood == .grumpy ? MoveMix.legMaxGrumpy : MoveMix.legMax) }          // (MoveMix.swift: the floor is ~11 u deep; with legs of 5.5 a body in the back needs two legs to reach the front)
         if EmoteSpot.enabled, homeRoom { maxL = max(maxL, EmoteSpot.roamLegMin) }          // (EmoteSpot.swift: a grumpy walk may still cross to a spot the room has used little: the whole room)
         var lo: Float = zone != nil ? 2.5 : 1.5
         if MoveMix.on { lo = max(lo, MoveMix.legMin) }          // (MoveMix.swift: roam legs of at least 2.5 u when the floor allows; the retry below drops to the old minimum)
