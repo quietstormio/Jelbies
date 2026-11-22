@@ -38,8 +38,37 @@ final class MoveLog {
         var n = [Int](repeating: 0, count: 6)
         var bodySec = [Float](repeating: 0, count: 9), emoteSec = [Float](repeating: 0, count: 9)
         var walkSec: Float = 0, gameSec: Float = 0
+        var arrN = 0; var arrSec: Float = 0, arrDist: Float = 0          // (walks that ended within 0.5 u of their goal: their seconds and straight-line metres)
+        /// Activity budget seconds: 0 roam leg, 1 walk to an emote / job, 2 plain stand, 3 solo emote, 4 pair emote, 5 group emote, 6 toy / play, 7 lying / sitting / sleeping, 8 waiting (held, stood on a walk), 9 other (eating, touched ...)
+        var act = [Float](repeating: 0, count: 10)
+        var stands: [Float] = []          // plain stand episodes (s)
+        var bump = [Int](repeating: 0, count: 3)          // body-body contacts of two bodies not in one session: both standing / one walking / both walking
+        var pairN = 0, groupN = 0; var pairSec: Float = 0, groupSec: Float = 0          // finished sessions
+        var idleSum3 = [Float](repeating: 0, count: 9), idleSum6 = [Float](repeating: 0, count: 36)          // integral of "seconds since a body was last in this cell"
+        var idleMax3: Float = 0, idleMax6: Float = 0
+        var idleCells3 = 9, idleCells6 = 36
+        var emoteN = 0, walkN = 0          // (move-b-r1: emote starts (an idle move or a social) and walks to a new goal; walkSec / walkN = mean walk time to a goal)
+    }
+    /// Fold another run's totals in (the harness: several seeds into one table).
+    static func add(_ a: inout Totals, _ o: Totals) {
+        for k in 0..<a.n.count { a.n[k] += o.n[k] }
+        for c in 0..<9 { a.bodySec[c] += o.bodySec[c]; a.emoteSec[c] += o.emoteSec[c]; a.idleSum3[c] += o.idleSum3[c] }
+        for c in 0..<36 { a.idleSum6[c] += o.idleSum6[c] }
+        for c in 0..<10 { a.act[c] += o.act[c] }
+        for c in 0..<3 { a.bump[c] += o.bump[c] }
+        a.walkSec += o.walkSec; a.gameSec += o.gameSec; a.emoteN += o.emoteN; a.walkN += o.walkN
+        a.arrN += o.arrN; a.arrSec += o.arrSec; a.arrDist += o.arrDist
+        a.stands += o.stands; a.pairN += o.pairN; a.groupN += o.groupN; a.pairSec += o.pairSec; a.groupSec += o.groupSec
+        a.idleMax3 = max(a.idleMax3, o.idleMax3); a.idleMax6 = max(a.idleMax6, o.idleMax6)
+        a.idleCells3 = o.idleCells3; a.idleCells6 = o.idleCells6
     }
     private(set) var total = Totals()
+    /// Seconds per activity of each body (cumulative; the per-body view of the budget).
+    private(set) var actBody: [Int: [Float]] = [:]
+    private var sess: [ObjectIdentifier: (first: Float, last: Float, group: Bool)] = [:]
+    private var lastVisit3 = [Float](repeating: 0, count: 9), lastVisit6 = [Float](repeating: 0, count: 36)
+    private var valid3 = [Bool](repeating: true, count: 9), valid6 = [Bool](repeating: true, count: 36), maskKey = ""
+
     private var window = Totals()
     private var windowWall = CACurrentMediaTime()
     private var minute = 0
@@ -49,6 +78,8 @@ final class MoveLog {
         var hist: [SIMD2<Float>] = []
         var sideT: Float = 0, backT: Float = 0, sideDone = false, backDone = false, hardCool: Float = 0
         var overlapping: Set<Int> = []
+        var prevP = SIMD2<Float>.zero, speed: Float = 0, slowT: Float = 0, cat = -1, catT: Float = 0, touching: Set<Int> = []
+        var emoting = false, lastGoal: SIMD2<Float>?, walkStart = SIMD2<Float>.zero, walkT: Float = 0, lastP = SIMD2<Float>.zero
     }
     private var bodies: [Int: Body] = [:]
     private var clock: Float = 0, lastFlush: Float = 0
@@ -59,10 +90,10 @@ final class MoveLog {
         defaults.set(v, forKey: "MoveLog")
         on = v
         if v, defaults.object(forKey: "MoveLogSeconds") != nil { windowSeconds = max(5, Float(defaults.double(forKey: "MoveLogSeconds"))) }
-        if v { shared.reset(); shared.line("start") }
+        if v { shared.reset(); shared.line("start \(RoomTraffic.switchesText)") }
     }
 
-    func reset() { total = Totals(); window = Totals(); bodies = [:]; clock = 0; lastFlush = 0; minute = 0; windowWall = CACurrentMediaTime() }
+    func reset() { total = Totals(); window = Totals(); bodies = [:]; actBody = [:]; sess = [:]; lastVisit3 = [Float](repeating: 0, count: 9); lastVisit6 = [Float](repeating: 0, count: 36); maskKey = ""; clock = 0; lastFlush = 0; minute = 0; windowWall = CACurrentMediaTime() }
 
     /// A counted moment from the walk code (a push, a pinned walk).
     static func note(_ k: Kind) { guard on else { return }; shared.total.n[k.rawValue] += 1; shared.window.n[k.rawValue] += 1 }
@@ -76,16 +107,25 @@ final class MoveLog {
 
     /// Once per brain tick (the end of `BlobBrain.tick`).
     func sample(_ b: BlobBrain, dt: Float) {
-        guard b.enabled, !b.held else { return }
+        guard b.enabled else { return }
+        if b.held { total.act[8] += dt; window.act[8] += dt; actBody[b.steerID, default: [Float](repeating: 0, count: 10)][8] += dt; return }
         var s = bodies[b.steerID] ?? Body()
         s.clock += dt
-        if s.clock > clock { let adv = s.clock - clock; clock = s.clock; total.gameSec += adv; window.gameSec += adv }
         let p = b.position, c = cell(p)
+        if s.clock > clock { let adv = s.clock - clock; clock = s.clock; total.gameSec += adv; window.gameSec += adv; idleTick(adv) }
+        visit(p)
+        s.speed = s.clock > dt * 1.5 ? simd_distance(p, s.prevP) / max(dt, 1e-4) : 0; s.prevP = p
+        activity(b, &s, dt)
         total.bodySec[c] += dt; window.bodySec[c] += dt
-        if (b.idleState.kind != nil && b.idleState.kind != .sleep) || b.social != nil { total.emoteSec[c] += dt; window.emoteSec[c] += dt }
+        let emoteNow = (b.idleState.kind != nil && b.idleState.kind != .sleep) || b.social != nil
+        if emoteNow { total.emoteSec[c] += dt; window.emoteSec[c] += dt; if !s.emoting { total.emoteN += 1; window.emoteN += 1 } }
+        s.emoting = emoteNow
         var goal: SIMD2<Float>?
         if case .walk(let g, _) = b.script, b.activity == .walking || b.activity == .coming, b.social == nil { goal = g }
+        if goal == nil || s.lastGoal.map({ simd_distance($0, goal!) > 0.01 }) == true { endWalk(&s) }
         if let g = goal {
+            if s.lastGoal == nil { total.walkN += 1; window.walkN += 1; s.walkStart = p; s.walkT = 0 }
+            s.lastGoal = g; s.walkT += dt; s.lastP = p
             total.walkSec += dt; window.walkSec += dt
             s.hist.append(p); if s.hist.count > 25 { s.hist.removeFirst() }
             let h = s.hist, yawDir = SIMD2<Float>(sinf(b.yaw), cosf(b.yaw))
@@ -111,9 +151,128 @@ final class MoveLog {
             if b.isPerched || o.isPerched { s.overlapping.remove(o.steerID); continue }
             let g: Float = ContactField.gap(b.steerID, o.steerID, features: false) ?? (simd_distance(b.position, o.position) - 0.5 * b.peerGap)
             if g < 0 { if s.overlapping.insert(o.steerID).inserted { Self.note(.overlap) } } else { s.overlapping.remove(o.steerID) }
+            if g <= 0 {
+                if s.touching.insert(o.steerID).inserted {
+                    let me = s.speed > 0.15, he = (bodies[o.steerID]?.speed ?? 0) > 0.15
+                    let k = (me ? 1 : 0) + (he ? 1 : 0)
+                    total.bump[k] += 1; window.bump[k] += 1
+                }
+            } else if g > 0.03 { s.touching.remove(o.steerID) }
         }
         bodies[b.steerID] = s
+        foldSessions()
         if clock - lastFlush >= Self.windowSeconds { flush() }
+    }
+
+    /// A walk ended (no goal now, or another goal): an arrival counts when the last sample was within 0.5 u of the goal.
+    private func endWalk(_ s: inout Body) {
+        defer { s.lastGoal = nil }
+        guard let g = s.lastGoal, simd_distance(s.lastP, g) < 0.5 else { return }
+        let d = simd_distance(s.walkStart, g)
+        guard d > 0.3 else { return }
+        total.arrN += 1; total.arrSec += s.walkT; total.arrDist += d; window.arrN += 1; window.arrSec += s.walkT; window.arrDist += d
+    }
+
+    // MARK: move-b-r1: activity budget, stands, sessions, floor idleness (logging only)
+
+    private func activity(_ b: BlobBrain, _ s: inout Body, _ dt: Float) {
+        let k = b.idleState.kind
+        let walkingAct = b.activity == .walking || b.activity == .coming
+        var isWalkScript = false
+        if case .walk = b.script { isWalkScript = true }
+        if walkingAct, isWalkScript, b.social == nil { s.slowT = s.speed < 0.1 ? s.slowT + dt : 0 } else { s.slowT = 0 }
+        var cat = 9
+        if let sn = b.social { cat = (sn.crew.count >= 3 || sn.idC >= 0) ? 5 : 4 }
+        else if k == .sleep || k == .sit || k == .slump || k == .flop { cat = 7 }
+        else if walkingAct && isWalkScript {
+            if s.slowT > 0.25 { cat = 8 }
+            else if b.job != nil || b.pending != nil || b.commanded { cat = 1 }
+            else if let k, k != .wander, k != .run { cat = 1 }
+            else { cat = 0 }
+        }
+        else if b.activity == .playing || b.toy.waitUID >= 0 || b.toy.chaseSpot != nil { cat = 6 }
+        else if b.activity == .eating || b.activity == .drinking || b.activity == .touched || b.activity == .recovering { cat = 9 }
+        else if let k { cat = (k == .wander || k == .run) ? 0 : 3 }
+        else { cat = 2 }
+        if cat != s.cat {
+            if s.cat == 2, s.catT > 0.2 { total.stands.append(s.catT); window.stands.append(s.catT) }
+            s.cat = cat; s.catT = 0
+        }
+        s.catT += dt
+        total.act[cat] += dt; window.act[cat] += dt
+        actBody[b.steerID, default: [Float](repeating: 0, count: 10)][cat] += dt
+        if let sn = b.social {
+            let id = ObjectIdentifier(sn), group = sn.crew.count >= 3 || sn.idC >= 0
+            sess[id] = (sess[id]?.first ?? clock, clock, group)
+        }
+    }
+
+    /// Sessions not seen for 2 s are over: counted with the length they were seen for.
+    private func foldSessions() {
+        for (id, v) in sess where clock - v.last > 2 {
+            let len = v.last - v.first
+            if v.group { total.groupN += 1; total.groupSec += len; window.groupN += 1; window.groupSec += len }
+            else { total.pairN += 1; total.pairSec += len; window.pairN += 1; window.pairSec += len }
+            sess[id] = nil
+        }
+    }
+
+    private func cellIndex(_ p: SIMD2<Float>, _ n: Int) -> Int {
+        var lo = SIMD2<Float>(-3, -3), hi = SIMD2<Float>(3, 3)
+        if let f = GameCamera.roamFloor { let b = f.bounds; lo = b.min; hi = b.max }
+        let cx = min(n - 1, max(0, Int((p.x - lo.x) / max(hi.x - lo.x, 0.1) * Float(n)))), cz = min(n - 1, max(0, Int((p.y - lo.y) / max(hi.y - lo.y, 0.1) * Float(n))))
+        return cz * n + cx
+    }
+    private func refreshMask() {
+        guard let f = GameCamera.roamFloor else { return }
+        let b = f.bounds, key = "\(b.min) \(b.max) \(f.zs.count)"
+        guard key != maskKey else { return }
+        maskKey = key
+        func mask(_ n: Int) -> [Bool] {
+            (0..<(n * n)).map { i in
+                let cx = i % n, cz = i / n
+                return f.contains(SIMD2(b.min.x + (Float(cx) + 0.5) / Float(n) * (b.max.x - b.min.x), b.min.y + (Float(cz) + 0.5) / Float(n) * (b.max.y - b.min.y)))
+            }
+        }
+        valid3 = mask(3); valid6 = mask(6)
+        if !valid3.contains(true) { valid3 = [Bool](repeating: true, count: 9) }
+        if !valid6.contains(true) { valid6 = [Bool](repeating: true, count: 36) }
+        total.idleCells3 = valid3.filter { $0 }.count; total.idleCells6 = valid6.filter { $0 }.count
+        window.idleCells3 = total.idleCells3; window.idleCells6 = total.idleCells6
+    }
+    private func visit(_ p: SIMD2<Float>) { lastVisit3[cellIndex(p, 3)] = clock; lastVisit6[cellIndex(p, 6)] = clock }
+    /// Once per game tick: the integral of the seconds since a body was last in each (floor) cell.
+    private func idleTick(_ adv: Float) {
+        refreshMask()
+        for i in 0..<9 where valid3[i] {
+            let since = clock - lastVisit3[i]
+            total.idleSum3[i] += since * adv; window.idleSum3[i] += since * adv
+            total.idleMax3 = max(total.idleMax3, since); window.idleMax3 = max(window.idleMax3, since)
+        }
+        for i in 0..<36 where valid6[i] {
+            let since = clock - lastVisit6[i]
+            total.idleSum6[i] += since * adv; window.idleSum6[i] += since * adv
+            total.idleMax6 = max(total.idleMax6, since); window.idleMax6 = max(window.idleMax6, since)
+        }
+    }
+
+    static let actNames = ["roam", "toTask", "stand", "solo", "pair", "group", "play", "lie", "wait", "other"]
+    static func actText(_ a: [Float]) -> String {
+        let sum = max(a.reduce(0, +), 0.001)
+        return zip(actNames, a).map { "\($0) \(String(format: "%.0f", $1 / sum * 100))" }.joined(separator: " ")
+    }
+    static func pct(_ v: [Float], _ q: Float) -> Float { v.isEmpty ? 0 : v.sorted()[min(v.count - 1, Int(Float(v.count) * q))] }
+    /// All the move-b-r1 numbers of a totals block as text lines.
+    static func extra(_ t: Totals) -> String {
+        let mins = max(t.gameSec / 60, 0.01)
+        let st = t.stands
+        var s = "act% [\(actText(t.act))]"
+        s += String(format: " | stands %.1f/min med %.1f p90 %.1f max %.1f s, >5s %.1f/min >10s %.1f/min", Float(st.count) / mins, pct(st, 0.5), pct(st, 0.9), st.max() ?? 0, Float(st.filter { $0 > 5 }.count) / mins, Float(st.filter { $0 > 10 }.count) / mins)
+        s += String(format: " | bumps/min stand-stand %.1f one-walking %.1f both-walking %.1f", Float(t.bump[0]) / mins, Float(t.bump[1]) / mins, Float(t.bump[2]) / mins)
+        s += String(format: " | pairs %.1f/h len %.1f s, groups %.1f/h len %.1f s", Float(t.pairN) / mins * 60, t.pairSec / Float(max(t.pairN, 1)), Float(t.groupN) / mins * 60, t.groupSec / Float(max(t.groupN, 1)))
+        let g = max(t.gameSec, 0.01)
+        s += String(format: " | idleness 3x3 mean %.1f max %.1f s, 6x6 mean %.1f max %.1f s", t.idleSum3.reduce(0, +) / g / Float(max(t.idleCells3, 1)), t.idleMax3, t.idleSum6.reduce(0, +) / g / Float(max(t.idleCells6, 1)), t.idleMax6)
+        return s
     }
 
     private func rates(_ t: Totals, minutes: Float) -> String {
@@ -128,13 +287,17 @@ final class MoveLog {
     }
 
     /// The report of the whole run so far, per minute of game time.
-    var summary: String { "movelog \(tag) \(String(format: "%.1f", total.gameSec / 60)) min | \(rates(total, minutes: total.gameSec / 60)) | walk \(String(format: "%.0f", total.walkSec)) s | \(gridText(total))" }
+    var summary: String {
+        let t = total
+        let body = actBody.keys.sorted().map { "b\($0) [\(Self.actText(actBody[$0]!))]" }.joined(separator: " ")
+        return "movelog \(tag) \(String(format: "%.1f", t.gameSec / 60)) min | \(rates(t, minutes: t.gameSec / 60)) | walk \(String(format: "%.0f", t.walkSec)) s / \(t.walkN) walks, \(t.arrN) arrivals \(String(format: "%.2f", t.arrSec / max(t.arrDist, 0.01))) s per u | emotes \(t.emoteN) | \(gridText(t)) | \(Self.extra(t)) | per body act% \(body)"
+    }
 
     private func flush() {
         minute += 1
         let wall = Float(CACurrentMediaTime() - windowWall)
-        line("min \(minute) | \(rates(window, minutes: window.gameSec / 60)) | walk \(String(format: "%.0f", window.walkSec)) s | pace \(String(format: "%.2f", window.gameSec / max(wall, 0.01))) | \(gridText(window))")
-        window = Totals(); windowWall = CACurrentMediaTime(); lastFlush = clock
+        line("min \(minute) | \(rates(window, minutes: window.gameSec / 60)) | walk \(String(format: "%.0f", window.walkSec)) s | pace \(String(format: "%.2f", window.gameSec / max(wall, 0.01))) | \(gridText(window)) | \(Self.extra(window))")
+        window = Totals(); window.idleCells3 = total.idleCells3; window.idleCells6 = total.idleCells6; windowWall = CACurrentMediaTime(); lastFlush = clock
     }
 
     func line(_ s: String) {
