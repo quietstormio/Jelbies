@@ -136,6 +136,11 @@ enum GameCamera {
             e += (p.eye - e) * wallEditBlend
             t += (p.target - t) * wallEditBlend
         }
+        if trophyBlend != 0 {                               // looking at one trophy on the wall (Trophies/TrophyCase.swift): 0 = nothing here runs
+            let p = trophyPose(aspect: aspect)
+            e += (p.eye - e) * trophyBlend
+            t += (p.target - t) * trophyBlend
+        }
         if bath != 0 {                                      // the clean-up close-up: snapped under the white fade (0 or 1), never blended on screen
             let p = bathPose(aspect: aspect)
             e += (p.eye - e) * bath
