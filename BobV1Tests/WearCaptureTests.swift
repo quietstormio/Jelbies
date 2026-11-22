@@ -157,7 +157,7 @@ final class WearCaptureTests: XCTestCase {
                                  [.head: .beaniePink, .neck: .bandanaCoral]]
     static let setB: [Outfit] = [[.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .hands: .wristbandsSky, .feet: .hightopRed],
                                  [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .body: .sashSky, .feet: .sneakerLightup],
-                                 [.head: .crownGold, .neck: .pearls, .body: .tutuPink, .feet: .balletPink]]
+                                 [.head: .crownGold, .neck: .pearls, .body: .capeHero, .feet: .balletPink]]
     static let setC: [Outfit] = [[.head: .witchHat, .face: .gogglesAviator, .body: .capeHero, .feet: .rainBoots],
                                  [.head: .bucketHatPink, .neck: .scarfSky, .feet: .rainBoots],
                                  [.head: .catEars, .face: .heartShades, .body: .backpackSky, .neck: .medalGold]]
@@ -561,7 +561,7 @@ extension WearCaptureTests {
         let r = lab.rigs[0]
         r.brain.autonomy = false; r.brain.expr.enabled = false
         let table: [String: Outfit] = ["bandana": [.neck: .bandanaCoral, .head: .sweatband], "scarf": [.neck: .scarfCosy, .head: .sweatband], "scarfsilk": [.neck: .scarfSilk], "pearls": [.neck: .pearls], "whistle": [.neck: .whistleCoach],
-                                       "chain": [.neck: .pearls], "diamond": [.neck: .diamondJ], "lei": [.neck: .lei], "bowtie": [.neck: .bowtiePink], "tutu": [.body: .tutuPink], "hoodie": [.body: .hoodie], "raincoat": [.body: .raincoat]]
+                                       "chain": [.neck: .pearls], "diamond": [.neck: .diamondJ], "lei": [.neck: .lei], "bowtie": [.neck: .bowtiePink], "cape": [.body: .capeHero], "hoodie": [.body: .hoodie], "raincoat": [.body: .raincoat]]
         let outfit: Outfit = table[ProcessInfo.processInfo.environment["BAND_CAP_OUTFIT"] ?? "bandana"] ?? table["bandana"]!
         let sets = dress(lab, [outfit])
         let (ren, target) = try renderer(lab)

@@ -32,7 +32,7 @@ final class WearSweepTests: XCTestCase {
 
     /// Shipped pieces rebuilt in this sweep.
     static let upgraded: [WearLook] = [.glassesRound, .sunglassesStar, .heartShades, .gogglesAviator, .monocleGold, .sashPink, .sashSky, .bibPink, .bibSky, .bandanaCoral, .bandanaMint,
-                                       .tutuPink, .capeHero, .pearls, .lei, .whistleCoach, .backpackSky, .scarfCosy, .scarfSky, .bowtiePink, .bowtieSky]
+                                       .capeHero, .pearls, .lei, .whistleCoach, .backpackSky, .scarfCosy, .scarfSky, .bowtiePink, .bowtieSky]
 
     private func env(_ k: String) -> String? { ProcessInfo.processInfo.environment[k].flatMap { $0.isEmpty ? nil : $0 } }
     private func dir() throws -> String {
@@ -380,6 +380,63 @@ final class WearSweepTests: XCTestCase {
             }
         }
         try write(stack(rows, header: "Held-back pieces at game-camera distance: Bob, Pip, Moss, Lavender (front | 3/4)"), d + "/wear4_five_game_distance.png")
+    }
+
+    // MARK: the audit sheets (wear-audit-r1)
+
+    /// Where the audit camera looks per slot: (look height above the centroid, distance). Tighter than `framing`: the piece fills about 300 px of a 400 px tile.
+    private func auditFocus(_ slot: WearSlot) -> (Float, Float) {
+        switch slot {
+        case .head: return (0.60, 1.75)
+        case .face: return (0.50, 1.45)
+        case .neck: return (0.22, 1.95)
+        case .body: return (0.10, 2.25)
+        case .hands: return (0.05, 2.0)
+        case .feet: return (-0.2, 2.0)
+        }
+    }
+
+    /// Capture-only: WEAR_AUDIT_DIR=<dir> writes <dir>/sheets/<look>.jpg for every non-shoe wearable (rows = body families, columns = front, 3/4, side, back, the room camera looking
+    /// down 35 degrees, a low camera looking up) and one overview per slot. WEAR_AUDIT_SP=0,1,2,3,4 picks the families (Bob, Pip, Moss, Lavender, Teddy), WEAR4_ONLY limits the looks.
+    func testAuditSheets() throws {
+        guard let d = env("WEAR_AUDIT_DIR") else { throw XCTSkip("WEAR_AUDIT_DIR not set") }
+        try FileManager.default.createDirectory(atPath: d + "/sheets", withIntermediateDirectories: true)
+        let fams = env("WEAR_AUDIT_SP")?.split(separator: ",").compactMap { Int($0) } ?? [0, 1, 2, 3, 4]
+        let list = looks()
+        guard !list.isEmpty else { throw XCTSkip("nothing selected") }
+        let views: [(String, Float, Float)] = [("front", 0, 0.05), ("3/4", 0.65, 0.1), ("side", 1.5, 0.1), ("back", .pi, 0.1), ("room cam 35 down", 0.25, 0.7), ("low cam up", 0.25, -0.25)]
+        var tiles: [WearLook: [[UIImage]]] = [:]
+        for id in fams {
+            DayClock.shared.forcedHour = 12
+            let st = try makeStage(id)
+            for l in list {
+                dress(st, l, ticks: 8)
+                let f = auditFocus(l.slot)
+                tiles[l, default: []].append(views.map { v in caption(shot(st, l, yaw: v.1, focus: f, lift: v.2), "\(Self.names[id]) \(l.rawValue) \(v.0)") })
+            }
+        }
+        for l in list {
+            let img = stack(tiles[l] ?? [], header: "\(l.title) (\(l.rawValue), \(l.slot.rawValue)): rows \(fams.map { Self.names[$0] }.joined(separator: ", ")); columns front | 3/4 | side | back | room cam 35 down | low cam up")
+            try img.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/sheets/\(l.rawValue).jpg"))
+        }
+        // one overview per slot: the 3/4 tile of every look on every family (small)
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        for slot in [WearSlot.head, .face, .neck, .body, .hands] {
+            let ls = list.filter { $0.slot == slot }
+            if ls.isEmpty { continue }
+            let cell: CGFloat = 220, cols = CGFloat(fams.count) * 2
+            let size = CGSize(width: cell * cols, height: cell * CGFloat((ls.count + 1) / 2) )
+            let img = UIGraphicsImageRenderer(size: size, format: fmt).image { _ in
+                UIColor(white: 0.12, alpha: 1).setFill(); UIRectFill(CGRect(origin: .zero, size: size))
+                for (k, l) in ls.enumerated() {
+                    let row = CGFloat(k / 2), half = CGFloat(k % 2) * CGFloat(fams.count)
+                    for (fi, rowTiles) in (tiles[l] ?? []).enumerated() where rowTiles.count > 1 {
+                        rowTiles[1].draw(in: CGRect(x: (half + CGFloat(fi)) * cell, y: row * cell, width: cell, height: cell))
+                    }
+                }
+            }
+            try img.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/overview_\(slot.rawValue).jpg"))
+        }
     }
 
     /// Writes Pip's shipped spike + tail geometry (rest space) to WEAR4_DIR/pip_geometry.json: the Blender generator of the Pip wardrobe variants clears it

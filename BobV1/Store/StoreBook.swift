@@ -127,6 +127,9 @@ final class StoreBook {
             if noBands.headbandsRefunded != saved.headbandsRefunded { saved = noBands; if bandRefund > 0 { wallet.add(bandRefund, silent: true) }; save() }
             let (noBodies, bodiesRefund) = Self.dropRetiredBodies(saved)
             if noBodies.bodiesRefunded != saved.bodiesRefunded { saved = noBodies; if bodiesRefund > 0 { wallet.add(bodiesRefund, silent: true) }; save() }
+            // 2026-11-22: the Ballet tutu is retired: taken off, out of the bag, each copy refunded (StoreBook+RetiredTutu.swift; no flag, it pays for what it removes)
+            let (noTutu, tutuRefund, tutuChanged) = Self.dropRetiredTutu(saved)
+            if tutuChanged { saved = noTutu; if tutuRefund > 0 { wallet.add(tutuRefund, silent: true) }; save() }
             let (noChain, chainChanged) = Self.dropRetiredLooks(saved); if chainChanged { saved = noChain; save() }
             if saved.pages.contains("roll") { saved.pages.removeAll { $0 == "roll" }; wallet.add(55, silent: true); save() } }
         if migrateGarden() { save() }
