@@ -69,7 +69,8 @@ final class WardrobeCardsTests: XCTestCase {
         guard FileManager.default.fileExists(atPath: dir) else { throw XCTSkip("no capture folder") }
         let items = StoreCatalog.items.filter { $0.isWearable && $0.wear != nil }
         let cell: CGFloat = 330, label: CGFloat = 46, cols = 6, rows = (items.count + cols - 1) / cols
-        let r = UIGraphicsImageRenderer(size: CGSize(width: cell * CGFloat(cols), height: (cell + label) * CGFloat(rows)))
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        let r = UIGraphicsImageRenderer(size: CGSize(width: cell * CGFloat(cols), height: (cell + label) * CGFloat(rows)), format: fmt)
         let sheet = r.image { ctx in
             UIColor(white: 0.93, alpha: 1).setFill(); ctx.fill(CGRect(origin: .zero, size: r.format.bounds.size))
             for (i, item) in items.enumerated() {

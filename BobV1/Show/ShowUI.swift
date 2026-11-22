@@ -485,7 +485,7 @@ extension StoreThumb {
         switch look.slot {
         case .head: base = (SIMD3(0, 1.0, 0.05), 0.63)
         case .face: base = (SIMD3(0, 0.86, 0.30), 0.50)
-        case .neck: base = look == .diamondJ ? (SIMD3(0, 0.36, 0.25), 0.42) : (SIMD3(0, 0.52, 0.2), 0.58)
+        case .neck: base = look == .diamondJ ? (SIMD3(0, 0.36, 0.25), 0.40) : (SIMD3(0, 0.50, 0.2), 0.46)
         case .hands: base = (SIMD3(0, 0.45, 0.10), 0.80)
         default: let f = wornFocus(look); base = (f.0, f.1 * 0.85)
         }
@@ -494,13 +494,13 @@ extension StoreThumb {
         var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
         for v in m.vertices[n...] {
             let p = SIMD3(v.pos.x, v.pos.y, v.pos.z)
-            if look.slot == .hands && p.x > 0 { continue }          // the model is turned so its -x arm is the near one
+            if look.slot == .hands && p.x < 0 { continue }          // the model is turned so its +x arm is the near one (the other is behind the body)
             lo = simd_min(lo, p); hi = simd_max(hi, p)
         }
         guard lo.x.isFinite else { return base }
         let mid = (lo + hi) / 2, half = (hi - lo) / 2
         if look.slot == .hands { return (mid, min(max(0.42, simd_length(half) * 1.5), 0.9)) }
-        let c = base.0 + (mid - base.0) * 0.4
+        let c = SIMD3(base.0.x + (mid.x - base.0.x) * 0.8, base.0.y + (mid.y - base.0.y) * 0.4, base.0.z + (mid.z - base.0.z) * 0.4)          // sideways almost onto the piece (a clip at the side of the head), up and back only part way
         var need: Float = 0
         for sx: Float in [-1, 1] { for sy: Float in [-1, 1] { for sz: Float in [-1, 1] {
             need = max(need, simd_length(SIMD3(mid.x + sx * half.x, mid.y + sy * half.y, mid.z + sz * half.z) - c))
