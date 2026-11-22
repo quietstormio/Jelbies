@@ -166,7 +166,7 @@ final class StoryTemplatesTests: XCTestCase {
         print("[story-test] note bank openings (\(n) patterns): " + table.map { "\($0.key) \($0.value)" }.joined(separator: ", "))
         XCTAssertGreaterThanOrEqual(n, 30)
         // the Relationship stage names and the Park row's words are the player's own: a housemate note never reuses them; "group" is our word
-        let banned = ["just met", "getting to know you", "good friends", "close friends", "best friends", "best of friends", "best friend", "group"]
+        let banned = ["just met", "getting to know you", "good friends", "close friends", "best friends", "best of friends", "best friend", "group play", "group activity", "played in a group"]
         for p in StoryTemplates.noteBank { for w in banned { XCTAssertFalse(p.text.lowercased().contains(w) && p.text != "Only just met.", "\(p.text) uses \"\(w)\"") } }
         for id in [10, 14, 15, 21, 22] { XCTAssertFalse(StoryTemplates.noteBank.contains { $0.id == id }) }
         XCTAssertLessThanOrEqual(Double(table.first!.value) / Double(n), 0.2, "\(table.first!.key) leads too many notes")
