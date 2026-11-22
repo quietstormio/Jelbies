@@ -132,6 +132,9 @@ final class StartFlow {
         let trophyKey = TrophyBook.key, namesKey = "Circuit.retiredNames.v1"
         var before: [String: Any] = [:]
         if keep, let data = d.data(forKey: trophyKey), let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] { before = root }
+        let showKey = ShowProgress.key
+        var showBefore: [String: Any] = [:]
+        if keep, let data = d.data(forKey: showKey), let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], let t = root["trophies"] as? [String: Any] { showBefore = t }
         let names = Dictionary(uniqueKeysWithValues: ids.map { (String($0), JellyRoster.nameOf($0)) })
         var released: [Int] = []
         for id in ids where JellyCamp.letGo(id, d) { released.append(id) }
@@ -145,7 +148,13 @@ final class StartFlow {
             var retired = d.dictionary(forKey: namesKey) as? [String: String] ?? [:]
             for id in kept { retired[String(id)] = names[String(id)] }
             if !kept.isEmpty { d.set(retired, forKey: namesKey) }
-            print("[camp] ClearCamp kept trophies for ids \(kept.map(String.init).joined(separator: ",")) (\(n) trophies)")
+            // the Show cups: put back `trophies` of the released ids only (`records` / `chosen` stay as the purge left them)
+            var showRoot: [String: Any] = [:]
+            if let data = d.data(forKey: showKey), let r = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] { showRoot = r }
+            var showT = showRoot["trophies"] as? [String: Any] ?? [:], showKept: [Int] = []
+            for id in released { if let entry = showBefore[String(id)] { showT[String(id)] = entry; showKept.append(id) } }
+            if !showKept.isEmpty { showRoot["trophies"] = showT; if let out = try? JSONSerialization.data(withJSONObject: showRoot) { d.set(out, forKey: showKey) } }
+            print("[camp] ClearCamp kept trophies for ids \(kept.map(String.init).joined(separator: ",")) (\(n) trophies; \(showKept.count) Show entries, ids \(showKept.map(String.init).joined(separator: ",")))")
         }
         d.set(token, forKey: "ClearCamp.applied")
         print("[camp] ClearCamp: let go \(done) of \(ids.count) (ids \(ids.map(String.init).joined(separator: ",")))")
