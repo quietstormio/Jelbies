@@ -33,7 +33,7 @@ extension BlobBrain {
             let c = DecorField.shared.position(ball)
             guard simd_distance(me, c) < 6.5, simd_distance(you, c) < 6.5 else { return false }
             let s = newSession(.pass, with: o, duration: 60)
-            s.uid = ball.uid; s.passTarget = 2 + Int(rand() * 3); s.roles = 0; s.passes = 0
+            s.uid = ball.uid; s.passTarget = (MoveMix.on && ball.kind == .soccerball) ? MoveMix.passKicksMin + Int(rand() * Float(MoveMix.passKicksMax - MoveMix.passKicksMin + 1)) : 2 + Int(rand() * 3); s.roles = 0; s.passes = 0
             DecorField.shared.occupant[ball.uid] = steerID
             o.socialBook.hold = true; o.socialBook.faceYaw = o.yawTo(c)
             return true

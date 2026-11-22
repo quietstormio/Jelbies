@@ -200,6 +200,8 @@ final class SocialSession {
     var path: [SIMD2<Float>] = [], choreo = false, moveT: Float = 0
     /// Ball pass: the decor piece, the passes made / wanted.
     var uid = -1, passes = 0, passTarget = 3
+    /// MoveMix round 3: who follows a finished ball pass with a kick of his own (-2 not decided yet, -1 nobody).
+    var mixFollowID = -2
     var goal = SIMD2<Float>.zero
     /// Friends2: the second runner's goal, the two start spots, the lane / orbit angle, the plan is made.
     var goal2 = SIMD2<Float>.zero, home0 = SIMD2<Float>.zero, home1 = SIMD2<Float>.zero, laneYaw: Float = 0, ready = false
@@ -673,6 +675,7 @@ extension BlobBrain {
             if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
+        mixPassEnded(s)
         mixSessionEnded(s, hard: hard || s.end == .aborted || s.end == .stopped)          // (MoveMix.swift: quiet period + a stroll away)
         if s.kind == .squabble { wantHmph() }          // a huff after a squabble
         if s.end != .aborted, s.end != .stopped, s.kind != .squabble, rand() < 0.35 { wantJoy(); blushBump(hold: 2.2, peak: 0.5) }          // a social ended happily

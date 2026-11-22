@@ -62,7 +62,7 @@ extension BlobBrain {
             let a = ring * 0.45 * side
             let u = rotate(base, a)
             var open: Float = 0
-            for d in [Float(0.8), 1.6, 2.4] where field.openFloor(ball + u * d) { open += 1 }
+            for d in [Float(0.8), 1.6, 2.4] where field.openFloor(ball + u * d) && !mixBallSpotBad(ball + u * d) { open += 1 }          // (MoveMix: never toward a sleeper, nor to where the ball would lie under a HUD button)
             let score = open - 0.15 * abs(a)
             if score > bestScore { bestScore = score; best = u }
             if open == 3 { break }
@@ -77,7 +77,13 @@ extension BlobBrain {
         var plan = SoccerIdle()
         let force = soccerModeForce
         let goal = nearestGoal(to: ball)
-        if force == 3 || (force == nil && SoccerState.shared.isStuck(f.uid)) {
+        var underButton: SIMD2<Float>?
+        if MoveMix.on, force == nil, !mixStopOK(ball) {          // (the ball lies under a HUD button, where it cannot be seen: it is dribbled out to floor that can)
+            outer: for r in [Float(1.6), 2.4, 3.2] { for k in 0..<12 { let a = Float(k) * .pi / 6; let p = ball + SIMD2(sinf(a), cosf(a)) * r; if field.openFloor(p), mixStopOK(p) { underButton = p; break outer } } }
+        }
+        if let ub = underButton {
+            plan.mode = .rescue; plan.target = ub
+        } else if force == 3 || (force == nil && SoccerState.shared.isStuck(f.uid)) {
             guard let open = field.nearestOpenFloor(to: ball) else { return nil }
             plan.mode = .rescue; plan.target = open
         } else if let g = goal, force == 1 || force == 2 || (force == nil && rand() < 0.7) {
