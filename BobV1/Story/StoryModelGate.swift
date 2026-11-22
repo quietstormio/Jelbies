@@ -99,7 +99,7 @@ nonisolated enum StoryPrompt {
         if keys.contains("nap") { lines.append("- [nap] takes lots of naps") }
         if keys.contains("newcomer") { lines.append("- [newcomer] has only just moved in") }
         if keys.contains("settled") { lines.append("- [settled] has lived here for a good while") }
-        if let l = f.relationshipLevel { lines.append("- [bond] bond with the player: \(l)") }
+        if let l = f.relationshipLevel { lines.append("- [bond] bond with the family: \(l)") }
         // the static paragraph is our own text, but a few kind descriptions use words the deny list refuses ("baby", "games", "sad"): then it is left out (the guard still rejects any colour word)
         if let s = f.shownParagraph, !s.isEmpty, denied(s) == nil { lines.append("Already shown above (do not repeat): \(s)") }
         lines.append("Placeholders you may use: " + v.keys.filter { $0 != "BKIND" }.sorted().map { "{\($0)}" }.joined(separator: " ") + ".")
