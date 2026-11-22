@@ -184,6 +184,7 @@ final class PlayToss {
         guard phase == .off else { return }
         ballKind = kind; toyTitle = title
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, let q = UserDefaults.standard.string(forKey: "PlayDemoQuality") { forceQuality = q == "weak" ? .weak : (q == "short" ? .short : .good) }
+        if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, UserDefaults.standard.object(forKey: "PlayDemoSeed") != nil { seed(UInt64(max(UserDefaults.standard.integer(forKey: "PlayDemoSeed"), 1))) }          // (capture aid: the same rolls every take)
         ball = TossBall(pos: SIMD3(0, kind.rollRadius, 3), radius: kind.rollRadius)
         jellies = js
         phase = .inHand
@@ -421,6 +422,22 @@ final class PlayToss {
         return true
     }
 
+    /// Capture aid (`-PlayDemo`): one line per strike with the striker's visible facing error toward the player (the hand), its lift and the screen points for cutting pictures.
+    private func touchLog(_ kind: String, _ j: PlayJelly) {
+        guard UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
+        let hand = handWorld()
+        let to = SIMD2(hand.x - j.pos.x, hand.z - j.pos.y)
+        let ys = j.sim.yaw()
+        let fwd = SIMD2<Float>(sinf(ys), cosf(ys))
+        let err = acosf(max(-1, min(1, simd_dot(fwd, to) / max(simd_length(to), 1e-4)))) * 180 / .pi
+        let sz = viewSize
+        let js = GameCamera.screenPoint(floor: j.pos, y: j.sim.centroid().y, size: sz) ?? .zero
+        let bs = GameCamera.screenPoint(floor: SIMD2(ball.pos.x, ball.pos.z), y: ball.pos.y, size: sz) ?? .zero
+        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f centroidY=%.3f headTop=%.3f idle=%@ jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
+              clock, throwSerial, ballKind == .soccerball ? "soccer" : (ballKind == .beachball ? "beach" : "bouncy"), kind, j.id, err,
+              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
+    }
+
     // MARK: header
 
     private func jelly(_ id: Int) -> PlayJelly? { jellies.first { $0.id == id } }
@@ -477,6 +494,7 @@ final class PlayToss {
         rally += 1; headers += 1; touched = true
         phase = .flying
         looseT = 0
+        touchLog("header", j)
         j.brain.jellyKick = max(j.brain.jellyKick, 2.2)
         if !j.brain.tossBusy, Self.canHop(j.brain) { j.brain.tossHeaderStart(j.sim, j.skinner) }
         onEvent?(.header(id: id, quality: q))
@@ -644,6 +662,7 @@ final class PlayToss {
         ball.pos.y = max(ball.pos.y, ball.radius + 0.02)
         nudges += 1; touched = true
         phase = .loose; looseT = 0
+        touchLog("kick", j)
         onEvent?(.kick(id: j.id))
         j.brain.jellyKick = max(j.brain.jellyKick, 1.6)
     }
