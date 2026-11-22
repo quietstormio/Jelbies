@@ -53,7 +53,7 @@ enum StoryFactsBuilder {
         // housemates
         for o in care.jellies where o.character != c {
             let oi = SpeciesInfo.of(JellyRoster.species(o.character))
-            f.housemates.append(housemate(habits, id: o.character, name: o.name, kind: oi.name))
+            f.housemates.append(housemate(habits, id: o.character, name: o.name, kind: oi.name, other: StoryHabitStore.shared.habits(o.character)))
         }
         markMostPlayed(&f)
         return f
@@ -68,8 +68,14 @@ enum StoryFactsBuilder {
         f.daysTracked = h.firstDay == 0 ? 0 : max(0, h.decayDay - h.firstDay)
     }
 
-    nonisolated static func housemate(_ h: StoryHabits, id: Int, name: String, kind: String) -> StoryFacts.Housemate {
-        StoryFacts.Housemate(id: id, name: name, kindName: kind, playShare: h.playShare(with: id), togetherSeconds: h.seconds(with: id), topEmote: h.topEmote(with: id), sharedGroup: h.groupSeconds(with: id) >= 20)
+    nonisolated static func housemate(_ h: StoryHabits, id: Int, name: String, kind: String, other: StoryHabits? = nil) -> StoryFacts.Housemate {
+        var m = StoryFacts.Housemate(id: id, name: name, kindName: kind, playShare: h.playShare(with: id), togetherSeconds: h.seconds(with: id), topEmote: h.topEmote(with: id))
+        m.groupKind = h.topGroupKind(with: id); m.sharedGroup = m.groupKind != nil
+        if let o = other {
+            if let a = h.favouriteSpot, a == o.favouriteSpot { m.sharedSpot = a }
+            m.napBuddies = h.hasHistory && o.hasHistory && h.restShare >= 0.3 && o.restShare >= 0.3
+        }
+        return m
     }
 
     nonisolated static func markMostPlayed(_ f: inout StoryFacts) {
