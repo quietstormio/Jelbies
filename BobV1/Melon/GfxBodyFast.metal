@@ -43,6 +43,7 @@ static float teddyPomMask(float3 Q) {
 #include "GradientMarks.h"
 #include "CowMarks.h"
 #include "MarbleMarks.h"
+#include "FinishMarks.h"
 
 constant int fastTier [[function_constant(0)]];
 // Species specialisation (tier 0 and up): a body without the lighter-front marking compiles the whole belly block out; one that is not Teddy
@@ -262,7 +263,7 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     if (jellyC && jelly) {
         // JELLY (round 4, matched to the reference picture by measured numbers)
         float glow = jl[1].x, sat = jl[1].z, rimK = jl[1].y, warmK = jl[2].w;
-        if (u.shape.w > 110.5 && u.shape.w < 111.5) { glow = 0.0; rimK *= 0.10; warmK *= 0.10; }          // Midnight (mode 111): the near-black body keeps its depth: no milky inner glow / light band
+        if (u.shape.w > 130.5 && u.shape.w < 131.5) { glow = 0.0; rimK *= 0.10; warmK *= 0.10; }          // Midnight (mode 131): the near-black body keeps its depth: no milky inner glow / light band
         jV = normalize(u.camPos.xyz - i.wp);
         jCr = float3(u.view[0][0], u.view[1][0], u.view[2][0]); jCu = float3(u.view[0][1], u.view[1][1], u.view[2][1]);
         jNdv = saturate(dot(Ns, jV));
@@ -316,8 +317,9 @@ static float4 softMatteFastBody(FastJellyIn i, bool ff, constant FastUniforms& u
     float pandaPatch = 0.0;
     float jCover = 0.0, jBlush = 0.0;
     if (hasBelly && hasTeddy && tn > 4.5) {              // Panda (modes 51 / 52), Tiger (61 / 62), Berry (71 / 72): the painted markings, no belly (PandaMarks.h, TigerMarks.h, BerryMarks.h)
-        if (tn > 10.5) { col *= float3(0.30, 0.29, 0.36); }          // Midnight (mode 111): the near-black body, the shading would lift it to grey (its light eyes + brows: fsEyesMatte)
-        else if (tn > 9.5) { col = marblePaint(col, Q); }          // Marble (mode 101): the white veins (MarbleMarks.h)
+        if (tn > 12.5) { col *= float3(0.30, 0.29, 0.36); }          // Midnight (mode 131): the near-black body, the shading would lift it to grey (its light eyes + brows: fsEyesMatte)
+        else if (tn > 11.5) { col = marblePaint(col, Q); }          // Marble (mode 121): the white veins (MarbleMarks.h)
+        else if (tn > 9.5) { col = finishPaint(col, Q, bm, N, normalize(u.camPos.xyz - i.wp)); }          // finish family (modes 101...107): metal sheen / jewel sparkle (FinishMarks.h)
         else if (tn > 8.5) { col = cowPaint(col, Q, bm); }          // cow family (modes 91 / 93 / 95): patches (CowMarks.h)
         else if (tn > 7.5) { col = gradientPaint(col, Q, bm); }          // gradient family (modes 81...85): the colour by height (GradientMarks.h)
         else if (tn > 6.5) { col = berryPaint(col, Q, bm); }

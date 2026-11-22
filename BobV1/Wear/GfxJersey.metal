@@ -42,6 +42,7 @@ static float teddyPomMask(float3 Q) {
 #include "../Melon/GradientMarks.h"
 #include "../Melon/CowMarks.h"
 #include "../Melon/MarbleMarks.h"
+#include "../Melon/FinishMarks.h"
 #include "../Melon/JellyFinish.h"
 
 struct JerseyUniforms {
@@ -148,8 +149,9 @@ fragment float4 fsSoftMatteJersey(JerseyOut i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52), Tiger (61 / 62), Berry (71 / 72): the painted markings, no belly (PandaMarks.h, TigerMarks.h, BerryMarks.h)
-        if (tn > 10.5) { col *= float3(0.30, 0.29, 0.36); }          // Midnight (mode 111): the near-black body, the shading would lift it to grey (its light eyes + brows: fsEyesMatte)
-        else if (tn > 9.5) { col = marblePaint(col, Q); }          // Marble (mode 101): the white veins (MarbleMarks.h)
+        if (tn > 12.5) { col *= float3(0.30, 0.29, 0.36); }          // Midnight (mode 131): the near-black body, the shading would lift it to grey (its light eyes + brows: fsEyesMatte)
+        else if (tn > 11.5) { col = marblePaint(col, Q); }          // Marble (mode 121): the white veins (MarbleMarks.h)
+        else if (tn > 9.5) { col = finishPaint(col, Q, bm, N, normalize(u.camPos.xyz - i.wp)); }          // finish family (modes 101...107): metal sheen / jewel sparkle (FinishMarks.h)
         else if (tn > 8.5) { col = cowPaint(col, Q, bm); }          // cow family (modes 91 / 93 / 95): patches (CowMarks.h)
         else if (tn > 7.5) { col = gradientPaint(col, Q, bm); }          // gradient family (modes 81...85): the colour by height (GradientMarks.h)
         else if (tn > 6.5) { col = berryPaint(col, Q, bm); }

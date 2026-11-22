@@ -78,7 +78,9 @@ nonisolated enum BlueBelly: Int, CaseIterable {
         if let m = GradientLook.mode(forFlesh: palette.flesh) { return m }
         // The cow family (Moo 91, Cocoa 93, Blush 95): patches painted on the egg (CowMarks.h, CowLook.swift)
         if let m = CowLook.mode(forFlesh: palette.flesh) { return m }
-        // Marble 101 (white veins, MarbleMarks.h) and Midnight 111 (near-black, light eyes): MarbleLook.swift
+        // The finish family (metals Gold 101, Silver 102, Bronze 103; jewels Ruby 104, Emerald 105, Sapphire 106, Amethyst 107): sheen + sparkle stars (FinishMarks.h, FinishLook.swift)
+        if let m = FinishLook.mode(forFlesh: palette.flesh) { return m }
+        // Marble 121 (white veins, MarbleMarks.h) and Midnight 131 (near-black, light eyes): MarbleLook.swift
         if let m = MarbleLook.mode(forFlesh: palette.flesh) { return m }
         if palette.flesh == TeddyLook.current.flesh { return TeddyEarsVariant.active == .cream ? 43 : 33 }        // 43 = the same plus the cream inner ear + pom (tone 4, shaders teddyEarMask / teddyPomMask)
         let c = current

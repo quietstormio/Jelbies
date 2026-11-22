@@ -19,3 +19,21 @@ extension FeatureCaptureTests {
         }
     }
 }
+
+extension FeatureCaptureTests {
+    /// The finish family (FinishLook.swift): cut-out front / back / side at 768 px with the phone build's jelly look (finish_<name>_<view>.png, transparent background), for the drawing boards.
+    func testFinishViews() throws {
+        let d = try pandaDir(); DayClock.shared.forcedHour = 12
+        let was = (JellyLook.level, JellyLook.all); JellyLook.level = 1; JellyLook.all = true
+        defer { JellyLook.level = was.0; JellyLook.all = was.1 }
+        let env = ProcessInfo.processInfo.environment
+        let dist = Float(env["CHAR_DIST"] ?? "") ?? 3.3, lookY = Float(env["CHAR_LOOKY"] ?? "") ?? 0.3, lift = Float(env["CHAR_LIFT"] ?? "") ?? 0.2
+        for (id, name) in [(10, "gold"), (11, "silver"), (26, "bronze"), (17, "ruby"), (23, "emerald"), (24, "sapphire"), (25, "amethyst")] {
+            for (view, yaw) in [("front", Float(0)), ("back", Float.pi), ("side", -Float.pi / 2)] {
+                let s = try charSheetStill(id: id, yaw: yaw, size: 768, dist: dist, lookY: lookY, lift: lift, warm: 150)
+                try charSheetWritePNG(s.cut, d + "/finish_\(name)_\(view).png")
+                if view == "front" { try charSheetWritePNG(s.room, d + "/finish_\(name)_room.png") }
+            }
+        }
+    }
+}

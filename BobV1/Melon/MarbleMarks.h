@@ -1,7 +1,7 @@
 //
 //  MarbleMarks.h
 //  Marble's paint (Lineup id 9; MarbleLook.swift) for the matte, bath and jersey body shaders: pale aqua jelly with flowing white marble veins / ribbons wrapping the body (front and
-//  back differ), baked from the owner's drawings. Body mode 101 (tone 10, shape mode 1). The whole body is one draw (a foot or limb piece takes the vein of its own rest position).
+//  back differ), baked from the owner's drawings. Body mode 121 (tone 12, shape mode 1). The whole body is one draw (a foot or limb piece takes the vein of its own rest position).
 //  Everything is in the body's REST space (Q), so the veins ride the body. The veins cross the face too, as in the drawing (eyes, brows and mouth are drawn over them).
 //  THE VEIN TINT BELOW IS MIRRORED IN MarbleLook.swift (sRGB 0...1): the two must match.
 //
@@ -543,7 +543,7 @@ static float marbleVein(float3 Q) {
     return m;
 }
 
-// Marble (body mode 101). `col` is the shaded body colour (the palette's flesh, lit); the vein keeps that light: col * (vein tint / flesh).
+// Marble (body mode 121). `col` is the shaded body colour (the palette's flesh, lit); the vein keeps that light: col * (vein tint / flesh).
 static float3 marblePaint(float3 col, float3 Q) {
     const float3 flesh = float3(0.525, 0.863, 0.812), tint = float3(0.97, 1.0, 0.99);
     return mix(col, col * (tint / flesh), 0.92 * marbleVein(Q));
