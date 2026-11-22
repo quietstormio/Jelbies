@@ -121,7 +121,16 @@ final class AvoidanceTests: XCTestCase {
                 r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
             }
             var kicks = 0, goals = 0
-            SoccerEvents.sink = { e in switch e { case .kick: kicks += 1; case .goal: goals += 1; default: break } }
+            var passDist: [Float] = []
+            SoccerEvents.sink = { e in
+                switch e {
+                case .kick:
+                    kicks += 1
+                    if let sn = lab.rigs.compactMap({ $0.brain.social }).first(where: { $0.kind == .pass }), let x = sn.a, let y = sn.b { passDist.append(simd_distance(x.position, y.position)) }          // (the two bodies' distance at each pass kick)
+                case .goal: goals += 1
+                default: break
+                }
+            }
             var sessions: [ObjectIdentifier: Int] = [:], soloOn = [false, false, false], solo = 0
             var moment = 0, momentLast: Float = -99, momentsN = 0
             MoveLog.shared.reset(); MoveLog.shared.tag = "soccer seed \(seed)"; MoveLog.writeFile = false; MoveLog.on = true
@@ -147,6 +156,7 @@ final class AvoidanceTests: XCTestCase {
             let tt = MoveLog.shared.total
             totals.moments += momentsN; totals.passes += sessions.count; totals.solo += solo; totals.kicksInPass += sessions.values.map { $0 }; totals.goals += goals; totals.kicks += kicks; totals.mins += seconds / 60
             totals.play += tt.act[6]; totals.all += tt.act.reduce(0, +)
+            MotionLog.write("SOCCER pass kicks: distance between the two bodies at each kick min \(passDist.min() ?? 0) mean \(passDist.isEmpty ? 0 : passDist.reduce(0, +) / Float(passDist.count)) max \(passDist.max() ?? 0) (n \(passDist.count))")
             MotionLog.write("SOCCER seed \(seed) \(seconds) s: moments \(momentsN), pass sessions \(sessions.count) kicks-per-pass \(sessions.values.sorted()), solo starts \(solo), kicks \(kicks), goals \(goals), ball play \(String(format: "%.1f", tt.act[6] / max(tt.act.reduce(0, +), 0.01) * 100))% of body time, MoveMix \(MoveMix.on)")
             DecorField.shared.clear()
         }
