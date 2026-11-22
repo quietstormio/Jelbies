@@ -284,6 +284,7 @@ nonisolated struct ModelWriter: StoryWriter {
     private func mayAsk() async -> Bool {
         var i = await gate()
         if StoryModelSentinel.disabledStep(defaults) != nil { i.crashDisabled = true }
+        if !profileReady() { i.profileReady = false }
         // nothing touches the model (not even its availability) until the cheap checks pass: the switch, the crash flag, a Profile on screen for a second, the foreground
         if let why = StoryModelGate.earlySkip(i) { stats.bump(why, "model not touched"); return false }
         let r = client.readiness()
