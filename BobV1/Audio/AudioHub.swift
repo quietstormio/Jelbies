@@ -1153,14 +1153,15 @@ final class AudioHub {
 
     @ObservationIgnored private var lastRegularVoice: Double = 0
     /// A café regular's voice (by species character, not roster slot): the same chirp / babble files.
-    func chirp(character: Int, _ v: JellyVoice) {
+    /// A café guest's voice (cafe-regulars-r1: a background murmur at another table, half the volume of the player's own Jelmiko; `quiet` = the pair's shorter hush, so two guests can take turns).
+    func chirp(character: Int, _ v: JellyVoice, quiet: Bool = false) {
         guard !muted, started, active else { return }
         let level = settings.sfxLevel * duck.gain
         guard level > 0.01 else { return }
         let now = Self.clock()
-        if now - lastRegularVoice < 2.2 { return }
+        if now - lastRegularVoice < (quiet ? 1.0 : 2.2) { return }
         lastRegularVoice = now
-        fire(JellyVoiceSet.file(character: character, v), volume: 0.6 * level, pan: 0)
+        fire(JellyVoiceSet.file(character: character, v), volume: 0.3 * level, pan: 0)
     }
 
     /// Haptics' touch transients -> squish / boop / wobble (the pairing HapticDriver.soundHook promised).
