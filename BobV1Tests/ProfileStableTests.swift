@@ -135,12 +135,12 @@ final class ProfileStableTests: XCTestCase {
     func testEveryLineThatPassesTheGuardFitsTwoLinesAt375() {
         for t in livingLines() where !t.isEmpty && StoryGuard.checkFinal(t, kind: .about, checkTone: false) == nil {
             XCTAssertTrue(StoryGuard.fitsLines(t, width: StoryLayout.lineWidth, size: StoryLayout.lineSize, lines: 2), t)
-            let one = height(Text(t).font(SK.font(StoryLayout.lineSize, .semibold)).lineSpacing(3).frame(width: StoryLayout.lineWidth, alignment: .leading), width: StoryLayout.lineWidth)
-            let two = height(Text("Aa\nBb").font(SK.font(StoryLayout.lineSize, .semibold)).lineSpacing(3).frame(width: StoryLayout.lineWidth, alignment: .leading), width: StoryLayout.lineWidth)
+            let one = height(Text(t).font(SK.font(StoryLayout.lineSize, .semibold)).frame(width: StoryLayout.lineWidth, alignment: .leading), width: StoryLayout.lineWidth)
+            let two = height(Text("Aa\nBb").font(SK.font(StoryLayout.lineSize, .semibold)).frame(width: StoryLayout.lineWidth, alignment: .leading), width: StoryLayout.lineWidth)
             XCTAssertLessThanOrEqual(one, two + 0.5, "needs a third line in the real font: \(t)")
         }
         // and a text the guard refuses for width is refused
-        XCTAssertEqual(StoryGuard.checkFinal(String(repeating: "Wide wide words ", count: 5).trimmingCharacters(in: .whitespaces) + ".", kind: .about, checkTone: false), .tooLong)
+        XCTAssertEqual(StoryGuard.checkFinal(String(repeating: "Wide wide words ", count: 5).trimmingCharacters(in: .whitespaces) + ".", kind: .about, checkTone: false), .tooWide)
     }
 
     func testEveryFriendRowTakesTheSameHeight() {

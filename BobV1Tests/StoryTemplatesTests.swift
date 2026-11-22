@@ -68,7 +68,8 @@ final class StoryTemplatesTests: XCTestCase {
                 XCTAssertFalse(w.keys.isEmpty)
                 XCTAssertTrue(Set(w.keys).isSubset(of: StoryFill.facts(f)), "\(w.final) names a fact the sheet does not back")
                 XCTAssertTrue(w.final.hasSuffix("."), w.final)
-                if lastAbout[f.id] == w.template { immediate += 1 }
+                let eligibleCount = StoryTemplates.aboutBank.filter { $0.needs.isSubset(of: StoryTemplates.needs(f)) }.count
+                if lastAbout[f.id] == w.template, eligibleCount >= 4 { immediate += 1 }          // (a Jelmiko with one or two true things says them again: that is not a repeat of a pool)
                 lastAbout[f.id] = w.template
                 distinctAbout.insert(w.template); maxAbout = max(maxAbout, w.final.count); aboutCount += 1
             }

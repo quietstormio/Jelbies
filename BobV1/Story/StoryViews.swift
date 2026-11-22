@@ -29,7 +29,7 @@ struct StoryLivingBubble: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "sparkle").font(.system(size: 13, weight: .black)).foregroundStyle(ShowUI.goldDeep).frame(width: 14, height: 18)
                 .opacity(text.isEmpty ? 0 : 1).accessibilityHidden(true)
-            Text(text.isEmpty ? " " : text).font(SK.font(StoryLayout.lineSize, .semibold)).foregroundStyle(SK.ink).lineSpacing(3).lineLimit(2, reservesSpace: true)
+            Text(text.isEmpty ? " " : text).font(SK.font(StoryLayout.lineSize, .semibold)).foregroundStyle(SK.ink).lineLimit(2, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -50,8 +50,8 @@ struct StoryFriendRow<Heads: View>: View {
         HStack(alignment: .top, spacing: 10) {
             heads().frame(width: StoryLayout.headsWidth, height: 40, alignment: .leading).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text(names).font(SK.font(14, .black)).foregroundStyle(SK.ink).lineLimit(1, reservesSpace: true)
-                Text(note).font(SK.font(StoryLayout.noteSize, .semibold)).foregroundStyle(SK.muted).lineLimit(2, reservesSpace: true)
+                Text(names.isEmpty ? " " : names).font(SK.font(14, .black)).foregroundStyle(SK.ink).lineLimit(1, reservesSpace: true)
+                Text(note.isEmpty ? " " : note).font(SK.font(StoryLayout.noteSize, .semibold)).foregroundStyle(SK.muted).lineLimit(2, reservesSpace: true)
             }
             Spacer(minLength: 0)
         }

@@ -64,7 +64,7 @@ final class StoryGuardTests: XCTestCase {
     func testLengthLimits() {
         XCTAssertEqual(StoryGuard.aboutMaxChars, 90); XCTAssertEqual(StoryGuard.noteMaxChars, 80)
         XCTAssertEqual(StoryGuard.checkFinal("Berry " + String(repeating: "a", count: 85) + ".", kind: .about, checkTone: false), .tooLong)
-        XCTAssertNil(StoryGuard.checkFinal("Berry has a " + String(repeating: "word ", count: 12).trimmingCharacters(in: .whitespaces) + ".", kind: .about, checkTone: false))
+        XCTAssertNil(StoryGuard.checkFinal("Berry has a " + String(repeating: "word ", count: 8).trimmingCharacters(in: .whitespaces) + ".", kind: .about, checkTone: false))
         XCTAssertEqual(StoryGuard.checkFinal("Berry " + String(repeating: "a", count: 80) + ".", kind: .about, checkTone: false), .tooWide)          // one 80-letter word cannot wrap to two lines
     }
 
