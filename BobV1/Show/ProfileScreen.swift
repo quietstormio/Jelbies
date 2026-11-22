@@ -205,7 +205,7 @@ struct ProfileScreen: View {
                                 Text(info.name).font(SK.font(15, .heavy)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
                             }
                             .accessibilityElement(children: .combine).accessibilityIdentifier("profile-kind")
-                            Text(info.about).font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("profile-about")          // the Spring page's one-line description, as written there
+                            Text(SkinAbout.text(look: species, variant: JellyVariants.adopted(character))).font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("profile-about")          // SkinAbout: the same words as the Spring page, with this Jelmiko's own colour
                         }
                         if let tr = f.p?.traits {
                             HStack(spacing: 6) {
