@@ -172,4 +172,37 @@ final class SmoothDrawTests: XCTestCase {
             if let h = FileHandle(forWritingAtPath: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/smooth/cost.txt") ?? { FileManager.default.createFile(atPath: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/smooth/cost.txt", contents: nil); return FileHandle(forWritingAtPath: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/smooth/cost.txt") }() { h.seekToEndOfFile(); h.write((line + "\n").data(using: .utf8)!) }
         }
     }
+
+    // MARK: same-seed physics with real bodies (the switch must not change one bit of the ball or the bodies)
+    nonisolated(unsafe) static var keep: [MotionRig] = []
+    func tossTrace(on: Bool) -> [String] {
+        SmoothDraw.on = on; SmoothDraw.reset()
+        GameCamera.playBlend = 0; DecorField.shared.clear()
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: 393.0 / 852.0)
+        let r = MotionRig(game: true); Self.keep.append(r)
+        r.renderSamples = false; r.brain.anticsEnabled = true; r.brain.abortScript(r.sim, r.skinner)
+        r.sim.teleport(toXZ: SIMD2(0, 0.6)); for _ in 0..<120 { r.sim.step() }; r.brain.currentPose(r.sim)
+        let p = PlayToss(); p.forceQuality = .good; p.seed(11); p.viewSize = CGSize(width: 393, height: 852)
+        let jelly = { PlayJelly(id: 0, brain: r.brain, sim: r.sim, skinner: r.skinner) }
+        var w = TossWorld(); w.xHalf = { DecorPlacement.visibleHalf(z: $0) + 0.3 }
+        p.begin(ball: .ball, title: "Bouncy ball", jellies: [jelly()], snapCamera: true)
+        p.onEvent = { e in PlayHaptics.play(e, incoming: SmoothDraw.incomingSpeed, outgoing: simd_length(p.ball.vel)) }          // (the stage's feel hook)
+        var out: [String] = []
+        for k in 0..<(60 * 14) {
+            if k == 180 { p.flick(from: CGPoint(x: 393 * 0.5, y: 852 * 0.83), velocity: CGVector(dx: 0, dy: -852 * 1.8)) }
+            r.tick(); p.tick(dt: r.sim.stepDt, world: w, jellies: [jelly()])
+            if on { SmoothDraw.record(pos: p.ball.pos, rot: p.ball.rot, phase: p.phase); SmoothDraw.alpha = Float(k % 2) * 0.5; _ = SmoothDraw.ball(p) }
+            var sum: UInt64 = 0; for v in r.sim.x { sum = sum &* 1099511628211 &+ UInt64(v.bitPattern) }
+            out.append(String(format: "%a %a %a %016llx", Double(p.ball.pos.x), Double(p.ball.pos.y), Double(p.ball.pos.z), sum))
+        }
+        return out
+    }
+
+    func testBallAndBodyPhysicsAreBitIdenticalWithTheSwitchOnOrOff() {
+        let a = tossTrace(on: false), b = tossTrace(on: false), c = tossTrace(on: true)
+        XCTAssertEqual(a.count, 840)
+        XCTAssertEqual(a, b, "the harness itself must be deterministic")
+        XCTAssertEqual(a, c, "the ball and the body, every step: identical with SmoothDraw on")
+        XCTAssertTrue(a.contains { $0.hasPrefix("0x") } && Set(a.map { String($0.prefix(30)) }).count > 50, "the ball really flew")
+    }
 }
