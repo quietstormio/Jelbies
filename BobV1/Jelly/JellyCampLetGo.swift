@@ -75,11 +75,11 @@ nonisolated extension JellyCamp {
 
     // MARK: the purge
 
-    /// Every plain per-instance defaults key of `id`: needs, dirt, words, stats (+ condition, meals, dances), boosts. Exact keys only (id 0 owns the bare legacy keys, which
+    /// Every plain per-instance defaults key of `id`: needs, dirt, words, stats (+ condition, meals, dances), boosts, relationship (BlobBond). Exact keys only (id 0 owns the bare legacy keys, which
     /// are also the prefix of every other id's keys). Anything per-instance that lives INSIDE a shared book is handled in `purge`; both lists are the one place to add to.
     @MainActor static func instanceKeys(_ id: Int) -> [String] {
         let stats = JellyKeys.stats(id)
-        return [JellyKeys.needs(id), JellyKeys.grime(id), JellyKeys.words(id), stats, stats + ".cond", stats + ".meals", stats + ".dances", stats + ".story", JellyKeys.perks(id)]
+        return [JellyKeys.needs(id), JellyKeys.grime(id), JellyKeys.words(id), stats, stats + ".cond", stats + ".meals", stats + ".dances", stats + ".story", stats + ".events", JellyKeys.perks(id), JellyKeys.bond(id)]
     }
 
     /// The shared books that hold an entry per instance, and where the entry is. (Documentation for `purge`; the test that scans a played creature checks each one.)

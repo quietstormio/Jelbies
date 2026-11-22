@@ -79,6 +79,7 @@ enum GameCamera {
     /// The wander pick's box (2026-10-18): wider than the frame; goals the frame clamp would drag in are rejected, so the whole visible floor is used.
     nonisolated(unsafe) static var roamRectWide: (min: SIMD2<Float>, max: SIMD2<Float>) = (SIMD2(-3.2, -2.6), SIMD2(3.2, 3.1))
 
+    nonisolated(unsafe) static var lastFocusLog = SIMD3<Float>(repeating: .nan)
     static let fovY: Float = 34 * .pi / 180
     /// The aspect the close-up poses (focus, bath, race) are SIZED for. A phone on its side (aspect >= 1.2) keeps the portrait framing's height, so the Jelly / track is
     /// the same size on the screen's short side and the extra width shows more room, not a face-filling zoom. Below that nothing changes (portrait, the widget's square).
@@ -124,6 +125,7 @@ enum GameCamera {
             let p = focusSpots.isEmpty ? focusPose(aspect: aspect) : focusPose(aspect: aspect, spots: focusFramed.count == focusSpots.count ? focusFramed : focusSpots)
             e += (p.eye - e) * focus
             t += (p.target - t) * focus
+            if DevArgs.enabled, focus == 1, p.eye != lastFocusLog { lastFocusLog = p.eye; NSLog("[cuddle] aspect %.4f focus eye %.5f %.5f %.5f target %.5f %.5f %.5f", aspect, p.eye.x, p.eye.y, p.eye.z, p.target.x, p.target.y, p.target.z) }
         }
         if playBlend != 0 {                                 // Play mode (Play/PlayToss.swift): a lower, nearer view facing the Jelbies, the front of the floor left free for the ball's return
             let p = playPose(eye: e, target: t, aspect: aspect)
@@ -258,15 +260,29 @@ enum GameCamera {
     static let focusElevation: Float = 0.17
 
     /// Eye / target of the close-up: centred on the front spot, facing him.
-    static func focusPose(aspect: Float, spot: SIMD2<Float> = callSpot) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+    static func focusPose(aspect: Float, spot: SIMD2<Float> = callSpot, closeUp: Bool = true) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let visW = 2 * BobShape.R / (focusWidthFill - 0.16 * tabletPortraitAmount(aspect))          // a tablet's portrait: a little looser (he would be ~62% of the screen height)
-        let visH = visW / max(framingAspect(aspect), 0.2)
+        var visH = visW / max(framingAspect(aspect), 0.2)
+        if closeUp { let k = cuddleLandK(aspect); if k != 0 { visH += (cuddleLandVisH(aspect: aspect, span: 0) - visH) * k } }          // a phone on its side: closer (2026-11-22); portrait k = 0, untouched
         let dist = visH / (2 * tanf(fovY / 2))
         let mid = 0.5 * BobShape.H
         let ty = mid - (0.5 - focusBodyScreenY) * visH           // below his middle -> he sits above the screen centre
         let t = SIMD3<Float>(spot.x, ty, spot.y)
         let e = t + SIMD3<Float>(0, sinf(focusElevation), cosf(focusElevation)) * dist
         return (e, t)
+    }
+
+    // MARK: Cuddle close-up on a phone on its side (2026-11-22: "the cuddle in horizontal is too far")
+    /// `-CuddleLandOld 1` (dev builds) puts the old landscape framing back, for before / after captures.
+    static let cuddleLandOld: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "CuddleLandOld") > 0
+    /// 0 in portrait, a square window and every tablet aspect (the old maths stays exactly); 1 on a phone on its side.
+    static func cuddleLandK(_ aspect: Float) -> Float { cuddleLandOld ? 0 : poseBlend(aspect) * (1 - tabletBand(aspect)) }
+    /// The row (outer centres `span` apart plus one body) fills this share of the screen width, and no body is taller than `cuddleLandMaxBodyH` of the screen height.
+    static let cuddleLandRowFill: Float = 0.6, cuddleLandMaxBodyH: Float = 0.6
+    /// Visible world height (at the focus depth) of the landscape cuddle: the row's width target, but never closer than the height cap (one Jelly alone).
+    static func cuddleLandVisH(aspect: Float, span: Float) -> Float {
+        let byWidth = (span + 2 * BobShape.R) / (cuddleLandRowFill * max(aspect, 0.2))
+        return max(byWidth, BobShape.H / cuddleLandMaxBodyH)
     }
 
     // MARK: Focus close-up of several Jellies ("Everyone, come here")
@@ -314,7 +330,7 @@ enum GameCamera {
     /// Projects the standing spots of a group close-up (the picker's stage; `PhotoCam` applied when it is on) into the stage view, so SwiftUI can draw tap bands, chips,
     /// a ring and a pedestal exactly where the Metal view draws the bodies. Pure: no ray casts into the renderer.
     static func projectRow(spots: [SIMD2<Float>], aspect: Float = 1) -> [RowProjection] {
-        let p = spots.count > 1 ? focusPose(aspect: aspect, spots: spots) : focusPose(aspect: aspect, spot: spots.first ?? callSpot)
+        let p = spots.count > 1 ? focusPose(aspect: aspect, spots: spots, closeUp: false) : focusPose(aspect: aspect, spot: spots.first ?? callSpot, closeUp: false)
         let (e, t) = PhotoCam.active ? PhotoCam.apply(eye: p.eye, target: p.target) : p
         let vp = M4.mul(M4.perspective(fovy: fovY, aspect: aspect, near: 0.3, far: 60), M4.lookAt(eye: e, at: t, up: SIMD3(0, 1, 0)))
         let fwd = simd_normalize(t - e), right = simd_normalize(simd_cross(fwd, SIMD3(0, 1, 0)))
@@ -327,14 +343,15 @@ enum GameCamera {
     }
 
     /// Eye / target framing every spot: the row's width (plus a body) fills the screen; a single spot is exactly `focusPose(spot:)`.
-    static func focusPose(aspect: Float, spots: [SIMD2<Float>]) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
-        guard spots.count > 1 else { return focusPose(aspect: aspect, spot: spots.first ?? callSpot) }
+    static func focusPose(aspect: Float, spots: [SIMD2<Float>], closeUp: Bool = true) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
+        guard spots.count > 1 else { return focusPose(aspect: aspect, spot: spots.first ?? callSpot, closeUp: closeUp) }
         var lo = spots[0], hi = spots[0]
         for s in spots { lo = simd_min(lo, s); hi = simd_max(hi, s) }
         let mid = (lo + hi) * 0.5
         let visW = (hi.x - lo.x + 2 * BobShape.R * focusRowBodyRoom) / focusRowFill
         // a tablet's landscape (~1.33): the row gets its own width (framing 0.96, not the phone's 0.56) so the trio fills ~64% of the screen, not ~37%. tabletBand is 0 for phones / 1.0.
-        let visH = visW / max(framingAspect(aspect) + focusRowTabletWiden * poseBlend(aspect) * tabletBand(aspect), 0.2)
+        var visH = visW / max(framingAspect(aspect) + focusRowTabletWiden * poseBlend(aspect) * tabletBand(aspect), 0.2)
+        if closeUp { let k = cuddleLandK(aspect); if k != 0 { visH += (cuddleLandVisH(aspect: aspect, span: hi.x - lo.x) - visH) * k } }
         let dist = visH / (2 * tanf(fovY / 2))
         let ty = 0.5 * BobShape.H - (0.5 - focusRowScreenY) * visH
         let t = SIMD3<Float>(mid.x, ty, hi.y)

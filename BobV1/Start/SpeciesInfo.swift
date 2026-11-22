@@ -23,7 +23,7 @@ struct SpeciesMoveInfo: Identifiable {
 
 struct SpeciesInfo {
     let character: Int
-    let name: String, epithet: String, about: String, signature: String, signatureIcon: String
+    let name: String, epithet: String, signature: String, signatureIcon: String
     let lore: String
     let bestAt: String, bestAtKey: ConditionKey
     let loves: String
@@ -32,6 +32,8 @@ struct SpeciesInfo {
     let moves: [SpeciesMoveInfo]
     /// What the Jelbie does now and then while the player reads (gentle, in place).
     let emotes: [StageMove]
+    /// The Spring page's paragraph for this look in its own classic colour: SkinAbout is the one source (the Profile uses it too, with the Jelmiko's real colour variant).
+    var about: String { SkinAbout.text(look: character, variant: nil) }
     var defaultName: String { JellyRoster.baseNames[character] }
 
     /// Picker order (blue, yellow, purple, green), as character ids.
@@ -59,7 +61,6 @@ struct SpeciesInfo {
 
     static let all: [SpeciesInfo] = [
         SpeciesInfo(character: 0, name: "Blueberry", epithet: "The unbothered one",
-                    about: "Cool as a cucumber. Acts like they don't care, then follows you everywhere.",
                     signature: "Side-eye", signatureIcon: "eye.fill",
                     lore: "Woke up in a rain puddle at dusk, under a blue-grey sky. Blueberries take life slow and steady. Nothing rattles them, but they always sit a little closer to their favourite person.",
                     bestAt: "Cool", bestAtKey: .cool, loves: "Sushi", traits: [50, 45, 30, 85, 55],
@@ -67,7 +68,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Shrug-hop", subtitle: "A lazy little hop", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.look), .blink, .hop, .face(.focused), .blink]),
         SpeciesInfo(character: 1, name: "Lemon Drop", epithet: "The sunny one",
-                    about: "Sunshine on legs. First one up, last one to nap, and it wags that spiky tail at everyone.",
                     signature: "Tail wag", signatureIcon: "sun.max.fill",
                     lore: "Woke up inside a sunbeam. The little orange spikes down its back are sun-sparks that cooled off and went soft. Lemon Drops can't sit still: zooming, bouncing and chasing are their love language.",
                     bestAt: "Sporty", bestAtKey: .sporty, loves: "Donut", traits: [58, 60, 46, 28, 85],
@@ -75,7 +75,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.bounce), .hop, .face(.excited), .idle(.tail), .hop]),
         SpeciesInfo(character: 3, name: "Taro", epithet: "The dreamy one",
-                    about: "Head in the clouds, and nearly the rest of it too. Flaps, floats, dances and nuzzles.",
                     signature: "Little wings", signatureIcon: "bird.fill",
                     lore: "Woke up in the very last drop of twilight, just as the first stars came out. That's why Taros can almost fly: their little wings lift them for a moment or two, and they always land smiling.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Cookie", traits: [70, 55, 84, 40, 45],
@@ -84,7 +83,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.flapHop), .face(.hopeful), .idle(.flapHop), .blink, .idle(.sway)]),
         SpeciesInfo(character: 2, name: "Matcha", epithet: "The sleepy one",
-                    about: "Calm and cosy. Loves a long sit, a big stretch and a look out the window. Never far from a nap.",
                     signature: "Antennas", signatureIcon: "camera.macro",
                     lore: "Woke up under a tea bush in the shade. Two little sprouts grew on its head that very morning and have wobbled along ever since. Matchas say the antennas tell them when it's nap time. It is always nap time.",
                     bestAt: "Sweet", bestAtKey: .sweet, loves: "Onigiri", traits: [62, 82, 40, 50, 30],
@@ -92,7 +90,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Sleepy sway", subtitle: "When it's nap time", icon: "moon.zzz.fill", move: .idle(.sway))],
                     emotes: [.idle(.stretch), .face(.sleepy), .blink, .idle(.sway), .blink]),
         SpeciesInfo(character: JellyRoster.teddyID, name: "Teddy", epithet: "The cuddly one",
-                    about: "Soft as a pillow, with round bear ears and a puffy tail. Loves hugs more than anything.",
                     signature: "Bear ears", signatureIcon: "heart.fill",
                     lore: "Woke up in a pile of warm blankets. Teddies are always ready for a cuddle, and they hum when they are happy.",
                     bestAt: "Cute", bestAtKey: .cute, loves: "Cookie", traits: [88, 75, 40, 35, 40],
@@ -100,7 +97,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .blink, .hop, .face(.hopeful), .blink]),
         SpeciesInfo(character: JellyRoster.pearlID, name: "Pearl", epithet: "The shimmery one",
-                    about: "Soft white and shiny, with little pearly wings. Floats, flutters and sparkles.",
                     signature: "Pearly wings", signatureIcon: "bird.fill",
                     lore: "Woke up inside a seashell at moonrise. Pearls glow a little in the dark, and their wings lift them for a happy flutter.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Onigiri", traits: [65, 60, 90, 45, 35],
@@ -108,7 +104,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.flapHop), .face(.hopeful), .idle(.sway), .blink, .idle(.flapHop)]),
         SpeciesInfo(character: JellyRoster.pandaID, name: "Panda", epithet: "The silly one",
-                    about: "Black ears, black patches and a big happy wobble. Loves to roll around and play.",
                     signature: "Silly wobble", signatureIcon: "face.smiling.fill",
                     lore: "Woke up in a bamboo grove, and has been snacking and giggling ever since. Pandas always find a sunny spot for a nap.",
                     bestAt: "Sweet", bestAtKey: .sweet, loves: "Donut", traits: [70, 80, 35, 40, 55],
@@ -117,7 +112,6 @@ struct SpeciesInfo {
                     emotes: [.idle(.stretch), .blink, .hop, .face(.excited), .idle(.sway)]),
         // Opal (12): a special, sold in the Jelly Spring like Teddy / Pearl / Panda (`special`, so `pages`); never a starter.
         SpeciesInfo(character: JellyRoster.opalID, name: "Opal", epithet: "The rainbow one",
-                    about: "Pastel rainbow from head to toe. Every turn shows a new colour, and it loves to show them off.",
                     signature: "Rainbow glow", signatureIcon: "rainbow",
                     lore: "Woke up inside a soap bubble at sunrise, just as the light turned every colour at once. Opals keep a little of that rainbow wherever they go.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Ice pop", traits: [72, 68, 90, 50, 38],
@@ -127,7 +121,6 @@ struct SpeciesInfo {
         // The seven new Spring looks (2026-11-21): cows Moo / Cocoa / Blush (listed in `special` only while `cowsInStore`) and the gradients Sunset / Cotton Candy / Ocean / Lagoon.
         // Specials like Opal: never a starter, a classic colour only, a voice set borrowed from Panda's (every id >= 7), Opal's price.
         SpeciesInfo(character: JellyRoster.mooID, name: "Moo", epithet: "The patchy one",
-                    about: "White with big black patches. Gentle, a little clumsy and always up for a snack.",
                     signature: "Patchy wobble", signatureIcon: "pawprint.fill",
                     lore: "Woke up in a meadow at milking time, with every patch landing somewhere new. No two Moos are spotted the same.",
                     bestAt: "Sweet", bestAtKey: .sweet, loves: "Donut", traits: [74, 82, 38, 36, 50],
@@ -135,7 +128,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .blink, .hop, .face(.hopeful), .blink]),
         SpeciesInfo(character: JellyRoster.cocoaID, name: "Cocoa", epithet: "The cosy one",
-                    about: "Cream with chocolate patches. Warm, sleepy and happiest in a sunny spot.",
                     signature: "Cosy stretch", signatureIcon: "cup.and.saucer.fill",
                     lore: "Woke up beside a mug of hot chocolate on the first cold morning. Cocoas smell faintly of toast.",
                     bestAt: "Sweet", bestAtKey: .sweet, loves: "Cookie", traits: [72, 84, 34, 40, 44],
@@ -143,7 +135,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.stretch), .blink, .idle(.sway), .face(.sleepy), .hop]),
         SpeciesInfo(character: JellyRoster.blushID, name: "Blush", epithet: "The rosy one",
-                    about: "Pale pink with rose patches. Shy at first, then the friendliest one in the room.",
                     signature: "Rosy giggle", signatureIcon: "heart.fill",
                     lore: "Woke up in a strawberry field at sunrise, and has been a little pink in the cheeks ever since.",
                     bestAt: "Cute", bestAtKey: .cute, loves: "Donut", traits: [90, 72, 48, 30, 42],
@@ -151,7 +142,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .face(.hopeful), .blink, .hop, .blink]),
         SpeciesInfo(character: JellyRoster.sunsetID, name: "Sunset", epithet: "The glowing one",
-                    about: "Red on top, melting through orange to golden yellow at the feet. Warm to look at, warmer to hug.",
                     signature: "Sunset glow", signatureIcon: "sun.horizon.fill",
                     lore: "Woke up at the very end of the day, as the sky poured from red to gold. Sunsets glow a little brighter when they are happy.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Donut", traits: [66, 62, 84, 44, 56],
@@ -159,7 +149,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
         SpeciesInfo(character: JellyRoster.cottonCandyID, name: "Cotton Candy", epithet: "The fluffy one",
-                    about: "Pink on top, lilac in the middle and baby blue at the feet. Sweet as a fairground treat.",
                     signature: "Candy swirl", signatureIcon: "cloud.fill",
                     lore: "Woke up spinning in a cloud of sugar at the fair. Cotton Candies never quite stop giggling.",
                     bestAt: "Sweet", bestAtKey: .sweet, loves: "Donut", traits: [82, 86, 66, 34, 40],
@@ -167,7 +156,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
         SpeciesInfo(character: JellyRoster.oceanID, name: "Ocean", epithet: "The deep one",
-                    about: "Sea-foam green on top, sinking through blue to navy at the feet. Calm on the surface, curious underneath.",
                     signature: "Tide sway", signatureIcon: "water.waves",
                     lore: "Woke up where the shallows turn deep, with the tide rocking it to sleep. Oceans hum along with the waves.",
                     bestAt: "Cool", bestAtKey: .cool, loves: "Sushi", traits: [56, 60, 62, 84, 46],
@@ -175,7 +163,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .blink, .face(.focused), .hop, .blink]),
         SpeciesInfo(character: JellyRoster.lagoonID, name: "Lagoon", epithet: "The dreamy tide",
-                    about: "Teal on top, violet in the middle and pink at the feet. Every angle is a new sunset in the water.",
                     signature: "Lagoon glow", signatureIcon: "drop.fill",
                     lore: "Woke up in a hidden lagoon where the light never quite settles. Lagoons are shy, but love to splash.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Ice pop", traits: [68, 60, 86, 52, 44],
@@ -184,7 +171,6 @@ struct SpeciesInfo {
                     emotes: [.idle(.tail), .face(.hopeful), .blink, .idle(.sway), .hop]),
         // spring-lineup-r1 (2026-11-21): the rest of the Lineup, sold like Opal (listed in `special` only while `lineupRestInStore`). Never starters, classic colour only, borrowed voice.
         SpeciesInfo(character: JellyRoster.marbleID, name: "Marble", epithet: "The swirly one",
-                    about: "Aqua with milky white ribbons swirled through it. No two Marbles swirl alike.",
                     signature: "Ribbon swirl", signatureIcon: "scribble.variable",
                     lore: "Woke up inside a glass marble, watching the ribbons drift. Marbles still look a little dizzy and very pleased.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Ice pop", traits: [68, 66, 80, 48, 42],
@@ -192,7 +178,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
         SpeciesInfo(character: JellyRoster.goldID, name: "Gold", epithet: "The shiny one",
-                    about: "Polished liquid gold that catches every light. Proud, cheerful and a bit of a show-off.",
                     signature: "Golden gleam", signatureIcon: "sparkles",
                     lore: "Woke up at the bottom of a rainbow, still warm to the touch. Golds love to be admired and love to share.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Donut", traits: [64, 58, 92, 46, 48],
@@ -200,7 +185,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
         SpeciesInfo(character: JellyRoster.silverID, name: "Silver", epithet: "The mirror one",
-                    about: "Polished chrome that shows the whole room in its belly. Cool, calm and secretly silly.",
                     signature: "Mirror shine", signatureIcon: "sparkle",
                     lore: "Woke up in a spoon at a tea party and saw its own funny face. Silvers wink at their reflections.",
                     bestAt: "Cool", bestAtKey: .cool, loves: "Sushi", traits: [58, 62, 82, 70, 44],
@@ -208,7 +192,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .blink, .face(.focused), .hop, .blink]),
         SpeciesInfo(character: JellyRoster.rubyID, name: "Ruby", epithet: "The fiery one",
-                    about: "Deep jewel red with a polished shine and a few sparkles. Bold, warm-hearted and quick to giggle.",
                     signature: "Ruby glow", signatureIcon: "diamond.fill",
                     lore: "Woke up in a cave where one red gem kept humming. Rubies glow a little brighter when they are loved.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Donut", traits: [76, 60, 88, 44, 52],
@@ -216,7 +199,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
         SpeciesInfo(character: JellyRoster.midnightID, name: "Midnight", epithet: "The quiet one",
-                    about: "Glossy black with pale lilac eyes. Dreamy, gentle and most awake when the lights go low.",
                     signature: "Moonlit sway", signatureIcon: "moon.stars.fill",
                     lore: "Woke up under the first star of the night. Midnights glow in the dark when they think nobody is looking.",
                     bestAt: "Cool", bestAtKey: .cool, loves: "Cookie", traits: [60, 70, 62, 82, 40],
@@ -224,7 +206,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .blink, .face(.focused), .hop, .blink]),
         SpeciesInfo(character: JellyRoster.lemonLimeID, name: "Lemon-Lime", epithet: "The zesty one",
-                    about: "Lemon yellow on top, fading to lime green at the feet. Fizzy, bright and always up for a game.",
                     signature: "Zesty bounce", signatureIcon: "leaf.fill",
                     lore: "Woke up in a glass of lemonade with a slice of lime on the rim. Lemon-Limes never sit still for long.",
                     bestAt: "Sporty", bestAtKey: .sporty, loves: "Ice pop", traits: [58, 60, 56, 40, 86],
@@ -232,7 +213,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.tail), .face(.excited), .blink, .idle(.sway), .hop]),
         SpeciesInfo(character: JellyRoster.emeraldID, name: "Emerald", epithet: "The leafy one",
-                    about: "Deep green with a polished shine and a few sparkles. Wise, steady and fond of quiet gardens.",
                     signature: "Emerald glow", signatureIcon: "diamond.fill",
                     lore: "Woke up in a mossy cave where a green gem hummed in the dark. Emeralds are kind to everyone they meet.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Onigiri", traits: [66, 76, 80, 52, 44],
@@ -240,7 +220,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .face(.hopeful), .blink, .hop, .blink]),
         SpeciesInfo(character: JellyRoster.sapphireID, name: "Sapphire", epithet: "The royal one",
-                    about: "Royal blue with a polished shine and a few sparkles. Calm, loyal and the first to notice a sad face.",
                     signature: "Sapphire glow", signatureIcon: "diamond.fill",
                     lore: "Woke up beside a deep blue pool that hummed a lullaby. Sapphires are very good at keeping secrets.",
                     bestAt: "Cool", bestAtKey: .cool, loves: "Sushi", traits: [62, 66, 76, 80, 44],
@@ -248,7 +227,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .blink, .face(.focused), .hop, .blink]),
         SpeciesInfo(character: JellyRoster.amethystID, name: "Amethyst", epithet: "The dreamy one",
-                    about: "Purple with a polished shine and a few sparkles. Curious, creative and full of wonderful ideas.",
                     signature: "Amethyst glow", signatureIcon: "diamond.fill",
                     lore: "Woke up in a lilac crystal and has been dreaming out loud ever since. Amethysts hum when they are thinking.",
                     bestAt: "Sparkly", bestAtKey: .sparkle, loves: "Cookie", traits: [70, 64, 88, 50, 42],
@@ -256,7 +234,6 @@ struct SpeciesInfo {
                             SpeciesMoveInfo(title: "Happy hop", subtitle: "When you come home", icon: "arrow.up", move: .hop)],
                     emotes: [.idle(.sway), .face(.hopeful), .blink, .hop, .blink]),
         SpeciesInfo(character: JellyRoster.bronzeID, name: "Bronze", epithet: "The warm one",
-                    about: "Polished bronze with warm highlights. Sturdy, friendly and ready for any adventure.",
                     signature: "Bronze shine", signatureIcon: "medal.fill",
                     lore: "Woke up beside a bell that rang once at sunrise. Bronzes are proud of every little thing they win.",
                     bestAt: "Sporty", bestAtKey: .sporty, loves: "Donut", traits: [66, 60, 62, 46, 82],

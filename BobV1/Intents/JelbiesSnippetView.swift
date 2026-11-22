@@ -9,6 +9,7 @@ import SwiftUI
 struct JelbiesSnippetView: View {
     let states: [JellyState]
     var sleeping = false
+    var night = false
 
     var body: some View {
         let sorted = states.sorted { $0.id < $1.id }
@@ -33,7 +34,7 @@ struct JelbiesSnippetView: View {
     private func title(_ s: [JellyState]) -> String {
         if s.isEmpty { return "Jelmiko" }
         let needy = JellyStatus.needyCount(s)
-        if needy == 0 { return sleeping ? "Everyone is napping" : (s.count == 1 ? "\(s[0].name) is doing well" : "Everyone is doing well") }
+        if needy == 0 { return sleeping ? "Everyone is \(JellyStatus.rest(night: night))" : (s.count == 1 ? "\(s[0].name) is doing well" : "Everyone is doing well") }
         return needy == 1 ? "Someone needs you" : "\(needy) Jelmiko need you"
     }
 
@@ -49,7 +50,7 @@ struct JelbiesSnippetView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(s.name).font(JellyPalette.font(16)).foregroundStyle(JellyPalette.ink)
-                Text(JellyStatus.sentence(s, sleeping: sleeping).replacingOccurrences(of: "\(s.name) is ", with: "").capitalizingFirst)
+                Text(JellyStatus.sentence(s, sleeping: sleeping, night: night).replacingOccurrences(of: "\(s.name) is ", with: "").capitalizingFirst)
                     .font(JellyPalette.font(13, .semibold)).foregroundStyle(JellyPalette.inkSoft).lineLimit(2)
             }
             Spacer(minLength: 0)
