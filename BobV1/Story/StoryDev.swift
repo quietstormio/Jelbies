@@ -94,7 +94,7 @@ enum StoryDev {
         h.act = ["walk": 900, "stand": 500, "pair:chase": 300, "pair:dance": 100]          // (assigned one by one: a literal with a repeated key traps at run time)
         h.act[kinds.0, default: 0] += 700
         h.act["rest", default: 0] += index % 4 == 2 ? 1800 : 400
-        h.area = [kinds.1: 900, "rug": 200]
+        h.area = [:]; h.area[kinds.1, default: 0] += 900; h.area["rug", default: 0] += 200
         for (i, o) in f.housemates.enumerated() { h.partner[String(o.id)] = Float(i == 0 ? 360 : 90); h.emote["\(o.id)|\(i == 0 ? "chase" : "dance")"] = Float(i == 0 ? 280 : 70) }
         h.total = h.act.values.reduce(0, +); h.everSeconds = h.total; h.firstDay = 1; h.decayDay = 9
         StoryFactsBuilder.applyHabits(h, to: &f)
