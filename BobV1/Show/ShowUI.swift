@@ -369,7 +369,9 @@ struct WardrobeStrip: View {
 struct WardrobeCardFace: View {
     static let gap: CGFloat = 10
     static let minWidth: CGFloat = 100
-    static let pad: CGFloat = 8
+    static let pad: CGFloat = 5
+    /// The name may shrink to this much of its size to stay in two lines (the test measures with it).
+    static let nameScale: CGFloat = 0.85
     var look: WearLook
     var tag: WearTag?
     var match: Float
@@ -391,7 +393,8 @@ struct WardrobeCardFace: View {
                 }
             }
             .frame(width: picture, height: picture)
-            Text(look.title).font(SK.font(13, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+            Text(look.title).font(SK.font(12, .black)).foregroundStyle(SK.ink).multilineTextAlignment(.center)
+                .minimumScaleFactor(typeSize.isAccessibilitySize ? 1 : WardrobeCardFace.nameScale)
                 .lineLimit(typeSize.isAccessibilitySize ? 4 : 2, reservesSpace: true).frame(maxWidth: .infinity)
             if let tag { TagChip(tag: tag, size: 11) } else { Color.clear.frame(height: 22) }
             Text(worn ? "Wearing" : otherName.map { "On \($0)" } ?? look.slot.title).font(SK.font(11, .heavy)).foregroundStyle(worn ? ShowUI.brownGold : SK.muted).lineLimit(1).minimumScaleFactor(0.7)

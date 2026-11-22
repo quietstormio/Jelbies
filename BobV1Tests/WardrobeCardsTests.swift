@@ -21,7 +21,7 @@ final class WardrobeCardsTests: XCTestCase {
 
     func testEveryCardHasTheSameHeightAtTwoWidths() {
         XCTAssertGreaterThan(looks.count, 10)
-        for w in [CGFloat(105), 130] {
+        for w in [CGFloat(103), 125] {
             let hs = Set(looks.map { l in (size(face(l, w), width: w).height * 2).rounded() })
             XCTAssertEqual(hs.count, 1, "card heights at width \(w): \(hs)")
             // and the worn card is the same height as the others
@@ -30,14 +30,14 @@ final class WardrobeCardsTests: XCTestCase {
     }
 
     func testNoNameIsCutOff() {
-        for w in [CGFloat(105), 130] {
-            let textW = w - 2 * WardrobeCardFace.pad
-            let line = size(Text("Ag").font(SK.font(13, .black)).fixedSize()).height
+        for w in [CGFloat(103), 125] {
+            let textW = (w - 2 * WardrobeCardFace.pad) / WardrobeCardFace.nameScale          // the name may shrink to nameScale to keep two lines
+            let line = size(Text("Ag").font(SK.font(12, .black)).fixedSize()).height
             for l in looks {
-                let h = size(Text(l.title).font(SK.font(13, .black)).multilineTextAlignment(.center).frame(width: textW).fixedSize(horizontal: false, vertical: true)).height
+                let h = size(Text(l.title).font(SK.font(12, .black)).multilineTextAlignment(.center).frame(width: textW).fixedSize(horizontal: false, vertical: true)).height
                 XCTAssertLessThanOrEqual(h, line * 2 + 1, "\(l.title) needs more than two lines at card width \(w)")
                 for word in l.title.split(separator: " ") {
-                    let ww = size(Text(String(word)).font(SK.font(13, .black)).fixedSize()).width
+                    let ww = size(Text(String(word)).font(SK.font(12, .black)).fixedSize()).width
                     XCTAssertLessThanOrEqual(ww, textW, "the word \(word) of \(l.title) does not fit one line at card width \(w)")
                 }
             }
