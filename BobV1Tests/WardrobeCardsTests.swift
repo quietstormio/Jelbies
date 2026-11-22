@@ -15,13 +15,14 @@ final class WardrobeCardsTests: XCTestCase {
         let c = UIHostingController(rootView: v)
         return c.sizeThatFits(in: CGSize(width: width ?? 1000, height: 5000))
     }
-    private func face(_ look: WearLook, _ w: CGFloat, worn: Bool = false) -> WardrobeCardFace {
-        WardrobeCardFace(look: look, tag: look.tags.first, match: 1, worn: worn, otherName: nil, width: w)
+    /// The card at its own natural height (the card asks for all the height it is offered, so a row can stretch it: pin it to what it needs for the measurement).
+    private func face(_ look: WearLook, _ w: CGFloat, worn: Bool = false) -> some View {
+        WardrobeCardFace(look: look, tag: look.tags.first, match: 1, worn: worn, otherName: nil, width: w).fixedSize(horizontal: false, vertical: true)
     }
 
     func testEveryCardHasTheSameHeightAtTwoWidths() {
         XCTAssertGreaterThan(looks.count, 10)
-        for w in [CGFloat(103), 125] {
+        for w in [CGFloat(100), 125] {
             let hs = Set(looks.map { l in (size(face(l, w), width: w).height * 2).rounded() })
             XCTAssertEqual(hs.count, 1, "card heights at width \(w): \(hs)")
             // and the worn card is the same height as the others
@@ -30,7 +31,7 @@ final class WardrobeCardsTests: XCTestCase {
     }
 
     func testNoNameIsCutOff() {
-        for w in [CGFloat(103), 125] {
+        for w in [CGFloat(100), 125] {
             let textW = (w - 2 * WardrobeCardFace.pad) / WardrobeCardFace.nameScale          // the name may shrink to nameScale to keep two lines
             let line = size(Text("Ag").font(SK.font(12, .black)).fixedSize()).height
             for l in looks {
@@ -83,5 +84,47 @@ final class WardrobeCardsTests: XCTestCase {
             }
         }
         try sheet.jpegData(compressionQuality: 0.9)?.write(to: URL(fileURLWithPath: dir + "/all_items.jpg"))
+    }
+
+    // MARK: the sideways row at the low height
+
+    private func stocked() -> GameCare {
+        let room = RaceThreeTests.Room(count: 1)
+        RaceThreeTests.keep.append(room)
+        for item in StoreCatalog.items where item.isWearable { room.care.store.grant(item.id) }
+        return room.care
+    }
+
+    /// The low height is exactly what the content needs, whatever the room offered, at the narrowest and the widest phone width, and it holds a whole card row.
+    func testLowHeightIsContentSizedAndHoldsAWholeCardRow() {
+        let care = stocked()
+        let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
+        for w in [CGFloat(375), 440] {
+            let card = WardrobeStrip.rowCard(sheetWidth: w)
+            let gap = WardrobeCardFace.gap
+            XCTAssertLessThan(16 + 3 * card + 3 * gap, w, "part of the fourth card shows at \(w)")
+            XCTAssertGreaterThan(16 + 3 * card + 3 * gap + card, w, "the fourth card runs off the edge at \(w)")
+            XCTAssertGreaterThanOrEqual(card, 100, "cards keep their size at \(w)")
+            let sheet = WardrobeSheet(care: care, who: 0, theme: theme, rank: care.show.progress.chosen, low: true) {}
+            let tall = size(sheet, width: w).height
+            let c = UIHostingController(rootView: sheet)
+            let short = c.sizeThatFits(in: CGSize(width: w, height: 400)).height
+            XCTAssertEqual(tall, short, accuracy: 0.5, "the low sheet is as tall as its content, not as the room, at \(w)")
+            XCTAssertGreaterThanOrEqual(tall, size(face(looks[0], card), width: card).height, "a whole card fits at \(w)")
+        }
+    }
+
+    /// The row and the grid are the same cards in the same order, and filtering keeps that order.
+    func testRowAndGridShowTheSameItemsInTheSameOrder() {
+        let care = stocked()
+        let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
+        let all = WardrobeStrip.ordered(care: care, theme: theme, slots: nil)
+        XCTAssertGreaterThan(all.count, 10)
+        for n in [3, 4, 6] { XCTAssertEqual(WardrobeStrip.rows(all, columns: n).flatMap { $0 }, all, "\(n) columns") }
+        for slot in WearSlot.allCases {
+            let some = WardrobeStrip.ordered(care: care, theme: theme, slots: [slot])
+            XCTAssertEqual(some, all.filter { $0.slot == slot }, "the \(slot.title) filter keeps the order")
+        }
+        XCTAssertEqual(all.map { theme.match($0.tags) }, all.map { theme.match($0.tags) }.sorted(by: >), "best theme match first")
     }
 }
