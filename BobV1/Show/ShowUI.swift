@@ -28,8 +28,6 @@ enum ShowUI {
         guard let next = ShowRank.allCases.first(where: { !unlocked.contains($0) }) else { return nil }
         return (next, ShowRivalSource.base(next).main)
     }
-    /// Dress up's first height: leaves the stage's Jelmiko in view above the sheet.
-    static let wardrobeLow = PresentationDetent.fraction(0.66)
     static let weekday: [String] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     /// "Tuesday's theme" for a day key.
     static func dayName(_ dayKey: Int) -> String { weekday[((ShowSchedule.dayOrdinal(dayKey) + 4) % 7 + 7) % 7] }
@@ -296,50 +294,115 @@ struct ShowCTA: View {
 
 // MARK: - the wardrobe sheet (Dress up / the Look round's wardrobe)
 
-/// Owned wearables as tap-to-wear cards in a vertically scrolling grid (3 columns on a phone in portrait, more when there is room), the theme's matches edged in gold.
-/// One card per look; the worn one of a slot is marked. Rows are built by hand so every card in a row is as tall as the tallest.
+/// Owned wearables as tap-to-wear cards, the theme's matches edged in gold. One card per look; the worn one of a slot is marked. At the sheet's low height they are ONE row that
+/// scrolls sideways (snapping to a card edge, part of the next card showing); pulled up to large they are a vertically scrolling grid (3 columns on a phone in portrait,
+/// more when there is room). `focus` is the card index at the start of the row / near the top of the grid, so switching between the two keeps your place.
 struct WardrobeStrip: View {
     let care: GameCare
     var who: Int
     var theme: ShowTheme
     var slots: [WearSlot]? = nil          // nil = every slot
+    var low = false                       // the sideways row
+    var width: CGFloat = 0                // the sheet's width (the row's card size follows it)
+    @Binding var focus: Int
     var onChange: () -> Void = {}
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var scrolling = false
-    private var looks: [WearLook] {
+    /// Every owned look, best theme match first: the one list both layouts draw.
+    static func ordered(care: GameCare, theme: ShowTheme, slots: [WearSlot]?) -> [WearLook] {
         StoreCatalog.items.filter { $0.isWearable && care.store.owns($0) }.compactMap(\.wear).filter { slots?.contains($0.slot) ?? true }
             .sorted { theme.match($0.tags) > theme.match($1.tags) }
     }
-    /// Columns and card width for the room there is: cards about 105 to 160 pt wide, never fewer than 3 columns (2 at accessibility text sizes).
+    static func rows<T>(_ list: [T], columns: Int) -> [[T]] { stride(from: 0, to: list.count, by: columns).map { Array(list[$0..<min($0 + columns, list.count)]) } }
+    /// Columns and card width for the room there is: cards about 100 to 160 pt wide, never fewer than 3 columns (2 at accessibility text sizes).
     static func columns(for width: CGFloat, accessibility: Bool = false) -> (count: Int, card: CGFloat) {
         let gap = WardrobeCardFace.gap
         let n = max(accessibility ? 2 : 3, Int(((width + gap) / (WardrobeCardFace.minWidth + gap)).rounded(.down)))
         return (n, max(60, (width - gap * CGFloat(n - 1)) / CGFloat(n)))
     }
+    /// The sideways row's card width: three whole cards and a quarter of the fourth from the sheet's side margin to its edge (so it is plain the row scrolls).
+    static func rowCard(sheetWidth w: CGFloat, accessibility: Bool = false) -> CGFloat {
+        let gap = WardrobeCardFace.gap, margin: CGFloat = 16
+        let shown: CGFloat = accessibility ? 1.25 : 3.25, gaps: CGFloat = accessibility ? 1 : 3
+        return max(60, (w - margin - gap * gaps) / shown)
+    }
     var body: some View {
-        let list = looks
-        if list.isEmpty {
-            Text("Nothing to wear yet. The Shop has hats, bows and shoes.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, minHeight: 60)
-        } else {
-            GeometryReader { g in
-                let cols = Self.columns(for: g.size.width - 12, accessibility: typeSize.isAccessibilitySize)
-                let rows = stride(from: 0, to: list.count, by: cols.count).map { Array(list[$0..<min($0 + cols.count, list.count)]) }
-                ScrollViewReader { proxy in
+        let list = Self.ordered(care: care, theme: theme, slots: slots)
+        Group {
+            if list.isEmpty {
+                Text("Nothing to wear yet. The Shop has hats, bows and shoes.").font(SK.font(13, .bold)).foregroundStyle(SK.muted).frame(maxWidth: .infinity, minHeight: 60)
+            } else if low {
+                row(list)
+            } else {
+                grid(list)
+            }
+        }
+        .task(id: list.map(\.rawValue)) { await prewarm(list) }
+    }
+
+    private func row(_ list: [WearLook]) -> some View {
+        let cw = Self.rowCard(sheetWidth: width, accessibility: typeSize.isAccessibilitySize)
+        let pos = Binding<Int?>(get: { focus }, set: { if let v = $0 { focus = v } })
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: WardrobeCardFace.gap) {
+                    ForEach(Array(list.enumerated()), id: \.offset) { i, look in card(look, width: cw).id(i) }
+                }
+                .scrollTargetLayout()
+                .padding(.vertical, 6)
+            }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: pos, anchor: .leading)
+            .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("wardrobe-row")
+            .task {          // capture aids (dev arguments only): `-WardrobeRowScroll <seconds>` scrolls the row two cards along; `-WardrobeFlick <seconds>` flicks it end to end three times and logs the frame times
+                let d = UserDefaults.standard
+                guard DevArgs.enabled, list.count > 3 else { return }
+                if let t = d.string(forKey: "WardrobeRowScroll").flatMap(Double.init) {
+                    try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
+                    withAnimation { proxy.scrollTo(2, anchor: .leading) }
+                }
+                if let f = d.string(forKey: "WardrobeFlick").flatMap(Double.init) {
+                    try? await Task.sleep(nanoseconds: UInt64(f * 1_000_000_000))
+                    let probe = FrameProbe(); probe.start()
+                    for _ in 0..<3 {
+                        withAnimation(.linear(duration: 0.35)) { proxy.scrollTo(list.count - 1, anchor: .trailing) }
+                        try? await Task.sleep(nanoseconds: 450_000_000)
+                        withAnimation(.linear(duration: 0.35)) { proxy.scrollTo(0, anchor: .leading) }
+                        try? await Task.sleep(nanoseconds: 450_000_000)
+                    }
+                    let line = "rowflick prewarm=\(Self.prewarmOn) \(probe.stop())\n"
+                    if let path = d.string(forKey: "WardrobeFlickLog") { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
+                }
+            }
+        }
+    }
+
+    private func grid(_ list: [WearLook]) -> some View {
+        GeometryReader { g in
+            let cols = Self.columns(for: g.size.width - 12, accessibility: typeSize.isAccessibilitySize)
+            let rows = Self.rows(list, columns: cols.count)
+            let pos = Binding<Int?>(get: { focus / cols.count }, set: { if let v = $0 { focus = v * cols.count } })
+            ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: WardrobeCardFace.gap) {
-                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                        ForEach(Array(rows.enumerated()), id: \.offset) { r, row in
                             HStack(alignment: .top, spacing: WardrobeCardFace.gap) {
                                 ForEach(row, id: \.rawValue) { look in card(look, width: cols.card) }
                                 if row.count < cols.count { ForEach(0..<(cols.count - row.count), id: \.self) { _ in Color.clear.frame(width: cols.card) } }
                             }
                             .fixedSize(horizontal: false, vertical: true)
+                            .id(r)
                         }
                     }
+                    .scrollTargetLayout()
                     .padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 30)
                 }
+                .scrollPosition(id: pos, anchor: .top)
                 .accessibilityIdentifier("wardrobe-grid")
                 .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
-                .task(id: list.map(\.rawValue)) { await prewarm(list) }
                 .task {          // capture aids (dev arguments only): `-WardrobeScroll <seconds>` scrolls the grid to its third row after that long; `-WardrobeFlick <seconds>` flicks it top to bottom three times and logs the frame times
                     let d = UserDefaults.standard
                     guard DevArgs.enabled else { return }
@@ -361,12 +424,12 @@ struct WardrobeStrip: View {
                         if let path = d.string(forKey: "WardrobeFlickLog") { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
                     }
                 }
-                }
             }
         }
     }
-    /// Pictures for the whole grid, in the order the cards appear: the first two screens at once, the rest one per frame and only while the grid is not being touched,
-    /// so a flick down never lands on a row of empty placeholders for long. (The mini renderer draws on the main actor between frames, so this is one picture per turn.)
+
+    /// Pictures for the whole wardrobe, in the order the cards appear: the first row and the next few at once, the rest one per frame and only while nothing is being scrolled,
+    /// so a flick never lands on a run of empty placeholders for long. (The mini renderer draws on the main actor between frames, so this is one picture per turn.)
     static var prewarmOn: Bool { !(DevArgs.enabled && UserDefaults.standard.string(forKey: "WardrobePrewarm") == "0") }
     private func prewarm(_ list: [WearLook]) async {
         guard Self.prewarmOn else { return }
@@ -475,9 +538,22 @@ extension StoreThumb {
         guard let w = item.wear, let m = mesh(for: item) else { return nil }
         let a = angles(for: item)
         if w.isShoe { return image("ward-\(item.id)", mesh: m, size: 360, yaw: a.yaw, pitch: a.pitch, tight: true) }
-        return image("ward-\(item.id)", mesh: m, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w, mesh: m))
+        // hand items: a cream body, so a sky-blue band does not vanish into the blue catalogue Jelmiko
+        let drawn = w.slot == .hands ? creamBody(m) : m
+        return image("ward-\(item.id)", mesh: drawn, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w, mesh: m))
     }
     static func wardrobeCached(_ item: StoreItem) -> UIImage? { cachedImage("ward-\(item.id)") }
+    /// The catalogue Jelmiko's body vertices recoloured cream (the eyes and the piece keep their colours).
+    private static func creamBody(_ m: RoomMesh) -> RoomMesh {
+        let flesh = JellyRoster.palette(0)?.flesh ?? OKLab.srgbToLinear(SIMD3(0.50, 0.68, 0.95))
+        let cream = OKLab.srgbToLinear(SIMD3<Float>(0.98, 0.94, 0.84))
+        var out = m
+        for i in 0..<min(JellyPortraitRenderer.renderMesh.vertexCount, out.vertices.count) {
+            let c = out.vertices[i].color
+            if simd_length(SIMD3(c.x, c.y, c.z) - flesh) < 0.002 { out.vertices[i].color = SIMD4(cream, 1) }
+        }
+        return out
+    }
     /// (centre, radius) for the card: closer than the shop's thumbnail, then moved and widened so the whole piece is inside (a clip at the side of the head, a tall cone,
     /// a wristband on the arm). Hand items are framed on the arm nearest the camera.
     static func cardFocus(_ look: WearLook, mesh m: RoomMesh) -> (SIMD3<Float>, Float) {
@@ -554,7 +630,8 @@ struct StudioScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var wardrobeOpen = false
     /// Dress up opens low enough that the stage (the player's own Jelmiko wearing what they tap) stays in view above it; drag it up to browse.
-    @State private var wardrobeDetent: PresentationDetent = ShowUI.wardrobeLow
+    @State private var wardrobeLowHeight: CGFloat = (UIScreen.main.bounds.height * 0.55).rounded()
+    @State private var wardrobeDetent: PresentationDetent = .height((UIScreen.main.bounds.height * 0.55).rounded())
     @State private var howOpen = false
     @State private var rankHint: String?
     /// The player has opened Dress up this visit: the button stops asking for attention.
@@ -653,9 +730,17 @@ struct StudioScreen: View {
             try? await Task.sleep(nanoseconds: UInt64(UserDefaults.standard.double(forKey: "WardrobeAfter") * 1_000_000_000))
             wardrobeOpen = true
         }
-        .sheet(isPresented: $wardrobeOpen) {
-            WardrobeSheet(care: care, who: who, theme: theme, rank: rank) { wardrobeOpen = false }
-                .presentationDetents(compact ? [.large] : [ShowUI.wardrobeLow, .large], selection: $wardrobeDetent).presentationBackground(SK.cream)
+        .sheet(isPresented: Binding(get: { wardrobeOpen && !compact }, set: { wardrobeOpen = $0 })) {
+            WardrobeSheet(care: care, who: who, theme: theme, rank: rank, low: wardrobeDetent != .large, onLowHeight: setWardrobeLow) { wardrobeOpen = false }
+                .presentationDetents([.height(wardrobeLowHeight), .large], selection: $wardrobeDetent).presentationBackground(SK.cream)
+        }
+        .overlay(alignment: .trailing) {          // landscape: a panel at the trailing edge instead of a sheet, so the stage stays in view beside it
+            if wardrobeOpen && compact {
+                WardrobeSheet(care: care, who: who, theme: theme, rank: rank, side: true) { wardrobeOpen = false }
+                    .frame(width: 400)
+                    .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(SK.cream).ignoresSafeArea())
+                    .padding(.vertical, 6).padding(.trailing, 6)
+            }
         }
         .task {          // capture aid (dev arguments only): `-WardrobeLarge <seconds>` drags Dress up to the large height that long after the Studio appears
             let t = UserDefaults.standard.double(forKey: "WardrobeLarge")
@@ -663,6 +748,16 @@ struct StudioScreen: View {
             try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
             wardrobeDetent = .large
         }
+    }
+
+    /// Dress up's low height is exactly what its content needs (plus the home-indicator strip), so the stage above it is as visible as it can be on every phone.
+    private func setWardrobeLow(_ contentHeight: CGFloat) {
+        let bottom = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom }.first ?? 0
+        let h = (contentHeight + bottom).rounded(.up)
+        guard abs(h - wardrobeLowHeight) > 1 else { return }
+        let wasLow = wardrobeDetent != .large
+        wardrobeLowHeight = h
+        if wasLow { wardrobeDetent = .height(h) }
     }
 
     private func setHow(_ on: Bool) { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.28)) { howOpen = on } }
@@ -802,16 +897,20 @@ struct StageBackdrop: View {
 }
 
 /// Dress up: the whole owned wardrobe by slot (the scored slots first), tap to wear / take off. The Studio's and the Look round's.
-/// The worn-slots panel sits directly under the header lines and above the grid, so it stays in view while the grid scrolls; in landscape the header and the panel
-/// take the left column and the filters and the grid the right.
+/// Three shapes: `low` (the height it opens at, only as tall as its content: the title, the theme, the worn slots, the filters and ONE sideways row of cards, so the stage and the
+/// player's own Jelmiko stay in view above it), large (the same header over a vertical grid of every card) and `side` (landscape: a panel at the trailing edge, the grid in it, the stage beside it).
 struct WardrobeSheet: View {
     let care: GameCare
     var who: Int
     var theme: ShowTheme
     var rank: ShowRank
+    var low = false
+    var side = false
+    var onLowHeight: (CGFloat) -> Void = { _ in }
     var close: () -> Void
     @State private var slot: WearSlot?
-    @Environment(\.verticalSizeClass) private var vsc
+    @State private var focus = 0
+    @State private var sheetWidth: CGFloat = UIScreen.main.bounds.width
     private var headerRow: some View {
         HStack {
             Text("Dress up").font(SK.font(26, .black)).foregroundStyle(SK.ink)
@@ -841,22 +940,26 @@ struct WardrobeSheet: View {
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ShowUI.stage))
     }
     private var chips: some View {
-        WardrobeFilterChips(slot: $slot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && care.store.owns($0) } })
+        WardrobeFilterChips(slot: Binding(get: { slot }, set: { slot = $0; focus = 0 }), slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && care.store.owns($0) } })
     }
-    private var grid: some View { WardrobeStrip(care: care, who: who, theme: theme, slots: slot.map { [$0] }).frame(maxWidth: .infinity, maxHeight: .infinity).ignoresSafeArea(edges: .bottom) }
+    private func strip(low: Bool) -> some View {
+        WardrobeStrip(care: care, who: who, theme: theme, slots: slot.map { [$0] }, low: low, width: sheetWidth, focus: $focus)
+    }
     var body: some View {
         Group {
-            if vsc == .compact {
-                HStack(alignment: .top, spacing: 16) {
-                    ScrollView(showsIndicators: false) { VStack(alignment: .leading, spacing: 10) { headerRow; themeRows; wornPanel } }
-                        .scrollBounceBehavior(.basedOnSize).frame(width: 340)
-                    VStack(spacing: 8) { chips; grid }
+            if low && !side {
+                VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) { headerRow; themeRows; wornPanel; chips }.padding(.horizontal, 16)
+                    strip(low: true)
                 }
+                .padding(.top, 12).padding(.bottom, 8)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onLowHeight($0) }
             } else {
-                VStack(alignment: .leading, spacing: 8) { headerRow; themeRows; wornPanel; chips; grid }
+                VStack(alignment: .leading, spacing: 8) { headerRow; themeRows; wornPanel; chips; strip(low: false).frame(maxWidth: .infinity, maxHeight: .infinity).ignoresSafeArea(edges: .bottom) }
+                    .padding(.horizontal, 16).padding(.top, 12)
             }
         }
-        .padding(.horizontal, 16).padding(.top, 12)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { if $0 > 0 { sheetWidth = $0 } }
         .accessibilityIdentifier("wardrobe-sheet")
         .task {          // capture aids (dev arguments only): `-WardrobeSlot <head|feet|...>` starts on that filter
             guard DevArgs.enabled else { return }
