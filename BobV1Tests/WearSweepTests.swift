@@ -388,7 +388,7 @@ final class WearSweepTests: XCTestCase {
     private func auditFocus(_ slot: WearSlot) -> (Float, Float) {
         switch slot {
         case .head: return (0.55, 2.2)
-        case .face: return (0.45, 1.7)
+        case .face: return (0.28, 2.0)
         case .neck: return (0.22, 1.95)
         case .body: return (0.10, 2.25)
         case .hands: return (0.05, 2.0)
