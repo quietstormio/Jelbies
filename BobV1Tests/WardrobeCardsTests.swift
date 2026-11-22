@@ -102,7 +102,7 @@ final class WardrobeCardsTests: XCTestCase {
         let care = stocked()
         let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
         let rank = care.show.progress.chosen
-        for (w, h) in [(CGFloat(375), CGFloat(667 - 20)), (440, 956 - 62 - 34)] {
+        for (w, h) in [(CGFloat(375), CGFloat(647)), (CGFloat(440), CGFloat(860))] {
             let area = DressUpScreen.figureHeight(containerHeight: h)
             let bare = UIHostingController(rootView: DressUpFigure(care: care, who: 0, theme: theme, rank: rank, height: area)).sizeThatFits(in: CGSize(width: w - 32, height: 2000))
             XCTAssertTrue(care.store.wear(.partyHat, on: 0)); XCTAssertTrue(care.store.wear(.glitterShoes, on: 0))
@@ -115,12 +115,12 @@ final class WardrobeCardsTests: XCTestCase {
 
     /// His feet (the disc top) and the disc itself are inside the picture area on every phone, with the room under them the disc needs; the area leaves a full row of cards below it on the smallest phone.
     func testFeetAreInsideTheAreaAndARowFitsBelowOnTheSmallestPhone() {
-        for h in [CGFloat(667 - 20), 956 - 62 - 34, 667 - 20 - 44] {
+        for h in [CGFloat(647), CGFloat(860), CGFloat(603)] {
             let area = DressUpScreen.figureHeight(containerHeight: h)
             let feet = area * DressUpFigure.floorAt
             XCTAssertLessThan(feet + 0.07 * area, area, "feet and the front of the disc are in view at \(h)")
         }
-        let h = CGFloat(667 - 20)
+        let h = CGFloat(647)
         let area = DressUpScreen.figureHeight(containerHeight: h)
         let card = WardrobeStrip.columns(for: 375 - 32 - 12).card
         let cardHeight = UIHostingController(rootView: face(.partyHat, card)).sizeThatFits(in: CGSize(width: card, height: 2000)).height
