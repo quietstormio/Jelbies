@@ -1074,7 +1074,7 @@ final class BlobBrain {
             if live || MoveMix.on { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
             if MoveMix.on {          // (MoveMix.swift: stale floor is the main term, shared map blended with this body's own; a spot another body has claimed is out)
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
-                score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
+                score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap + MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
             }
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1

@@ -46,6 +46,7 @@ nonisolated enum MoveMix {
     static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
     /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
     static let ownShare: Float = 0.7
+    static let thirdWeight: Float = 12, thirdWindow: Float = 180
     /// Rug-centre penalty of EmoteSpot.score (was 2.2): pair / group spots lean away from the centre.
     static let rugWeight: Float = 3.4
     /// A stroll goal in another depth third than where the body stands / where its mates strolled to.
@@ -95,6 +96,8 @@ struct MixBook {
     var legKind = "roam"
     /// The body's OWN idleness map: game time it was last in each of the 6 x 6 cells of the live floor (-inf = never).
     var own = [Float](repeating: -.infinity, count: 36)
+    /// Round 2b: seconds this body spent in the back / middle / front third of the floor's depth (decaying over ~3 min): the goal score nudges toward the third it has had least.
+    var thirdT: [Float] = [1, 1, 1]
 }
 
 extension GameCamera.RoamFloor {
@@ -189,6 +192,7 @@ extension BlobBrain {
                 var score = 0.6 * nearest + 0.3 * rand() - roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false)
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
                 score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
+                score += MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
                 let th = mixThird(cand.y, rf)
                 if th != mixThird(here.y, rf) { score += MoveMix.strollThirdBonus }
                 if mates.contains(where: { now - $0.mix.strollDirAt < 8 && $0.mix.strollThird == th }) { score -= MoveMix.strollThirdBonus }
@@ -231,6 +235,8 @@ extension BlobBrain {
     func mixOwnTick() {
         guard MoveMix.on, let rf = roamProvider?() else { return }
         mix.own[mixCell(position, rf)] = variety.now
+        let cur = mixThird(position.y, rf), k = 1 - 1 / (MoveMix.thirdWindow * 60)          // (one tick = 1/60 s)
+        for i in 0..<3 { mix.thirdT[i] = mix.thirdT[i] * k + (i == cur ? 1 / 60 : 0) }
     }
     /// 0...60: the blend of the shared idleness and this body's own for a goal at `p`.
     func mixIdleness(_ p: SIMD2<Float>, _ rf: GameCamera.RoamFloor) -> Float {
@@ -240,6 +246,11 @@ extension BlobBrain {
         return MoveMix.ownShare * own + (1 - MoveMix.ownShare) * shared
     }
     /// 0 back, 1 middle, 2 front third of the floor's depth.
+    /// How much less than a third of its recent time this body has spent in the depth third of `z` (positive = under-used).
+    func mixThirdNeed(_ z: Float, _ rf: GameCamera.RoamFloor) -> Float {
+        let tot = max(mix.thirdT.reduce(0, +), 1e-3)
+        return 1.0 / 3.0 - mix.thirdT[mixThird(z, rf)] / tot
+    }
     func mixThird(_ z: Float, _ rf: GameCamera.RoamFloor) -> Int { min(2, max(0, Int((z - rf.minZ) / max(rf.maxZ - rf.minZ, 0.1) * 3))) }
 }
 
