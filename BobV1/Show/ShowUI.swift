@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import simd
 
 // MARK: - palette and small pieces
 
