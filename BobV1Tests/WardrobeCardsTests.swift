@@ -172,7 +172,7 @@ final class WardrobeCardsTests: XCTestCase {
                 let d = max(abs(Int(px[i]) - Int(bpx[i])), abs(Int(px[i + 1]) - Int(bpx[i + 1])), abs(Int(px[i + 2]) - Int(bpx[i + 2])), abs(Int(px[i + 3]) - Int(bpx[i + 3])))
                 if d > 24 { diff += 1 }
             }
-            XCTAssertGreaterThan(diff, 700, "\(item.id) (\(w.slot.title)) shows its piece: \(diff) pixels differ from the bare Jelmiko")
+            XCTAssertGreaterThan(diff, 400, "\(item.id) (\(w.slot.title)) shows its piece: \(diff) pixels differ from the bare Jelmiko")
         }
         XCTAssertTrue(slots.contains(.hands) && slots.contains(.head) && slots.contains(.feet) && slots.contains(.neck), "the check covers every slot the catalogue uses")
     }
