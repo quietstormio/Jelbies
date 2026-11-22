@@ -56,6 +56,8 @@ enum SocialKind: String, CaseIterable, Sendable {
     case congaLine, ringDance
     /// Batch 2 (2026-11-02, BlobSocial+Emotes2.swift): a pair presses cheeks and slowly turns once round their shared centre with real steps, then parts with hearts
     case spinHug
+    /// pair-distinct-r1 (BlobSocial+Pair2.swift): four clear-gap pair emotes
+    case orbit, upDown, jumpTurns, spinTogether
 }
 
 enum SocialEnd: Sendable { case done, brokenUp, stopped, aborted }
@@ -407,6 +409,8 @@ extension BlobBrain {
             return socialStartFriends3(kind, with: o, sim)
         case .spinHug:
             return socialStartSpinHug(with: o, sim)
+        case .orbit, .upDown, .jumpTurns, .spinTogether:
+            return socialStartPair2(kind, with: o, sim)
         case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance:
             return socialStartGroup(kind, with: [o], sim)          // (the others near by join; a pair is not enough)
         case .zoomies:
@@ -754,6 +758,7 @@ extension BlobBrain {
         case .littleRace, .tag, .leapfrog, .peekaboo, .bellyBounce, .mirrorDance, .backToBack, .cuddleLean, .ringAround: driveMore(s, o, isA, sim, dt)
         case .swayHug, .danceOff, .whisperGiggle, .shyWave: driveFriends3(s, o, isA, sim, dt)
         case .spinHug: driveSpinHug(s, o, isA, sim, dt)
+        case .orbit, .upDown, .jumpTurns, .spinTogether: driveSocialPair2(s, o, isA, sim)
         case .groupHug, .groupCheer, .conga, .circleDance, .congaLine, .ringDance: break          // (handled above)
         }
         if let e = s.end, isA { _ = e }

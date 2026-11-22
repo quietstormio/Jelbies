@@ -222,7 +222,8 @@ enum ContactDemo {
         if let c = d.string(forKey: "ContactCam"), c == "perp" || c == "top" { let bs = cast.compactMap(\.brain); Task { @MainActor in await track(bs, top: c == "top") } }
         // side by side across the screen first (a pair along the camera axis hides the touch): spots at z -0.9 (the camera's look-at depth), 2.6 u apart (3: 2.4 u)
         let half: Float = (name == "lieDown" || name == "flop" || name == "sleepPile") ? 0.65 : 1.3          // (the lie-down / sleep placement wants them ~1.2 u apart, as the Lab does)
-        let xs: [Float] = cast.count == 2 ? [-half, half] : (0..<cast.count).map { (Float($0) - Float(cast.count - 1) / 2) * 1.8 }
+        var xs: [Float] = cast.count == 2 ? [-half, half] : (0..<cast.count).map { (Float($0) - Float(cast.count - 1) / 2) * 1.8 }
+        if name == "orbit", cast.count == 2 { xs = [-1.4, 0] }          // (the walker rings the one in the middle: the 240-degree arc must fit the floor)
         let spots = xs.map { SIMD2<Float>($0, park ? 1.2 : -0.9) }          // (the park: the middle of its play floor)
         for a in cast { if let b = a.brain { note(" start (%.2f, %.2f)", b.position.x, b.position.y) } }
         for (a, g) in zip(cast, spots) { a.brain?.requestNow(.goTo(g)) }

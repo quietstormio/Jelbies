@@ -165,7 +165,13 @@ extension BlobBrain {
                 if idleStart(.sit, sim) { idleState.hold = s.duration; socialBook.hopStarted = true }
                 else { s.finish(.aborted) }
             }
-            if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.5 { s.setPhase(2) }
+            if isA, socialBook.hopStarted, o.socialBook.hopStarted, s.phaseT > 0.5 {
+                s.setPhase(2)
+                // (pair-distinct-r1: they sit with clear space between them, so the heart / squish / haptic that used to ride on the skins' touch ride on the plop of sitting down side by side)
+                AudioHub.shared.play(.squish, jelly: steerID, x: px, volume: 0.25)
+                jellyKick = max(jellyKick, 1.0); o.jellyKick = max(o.jellyKick, 1.0)
+                onSocial?(.boop(partner: o.steerID)); o.onSocial?(.boop(partner: steerID))
+            }
             else if isA, s.phaseT > 8 { s.finish(.aborted) }
         default:
             if idleState.kind == .sit || idleState.kind == .sleep { socialBook.wantRoll = leanSign(toward: o.position) * 0.05 }

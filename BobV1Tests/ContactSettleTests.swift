@@ -395,7 +395,8 @@ final class ContactSettleTests: XCTestCase {
     /// r4-engine-arrival (2026-11-05, ported from 9d200976): a side-by-side stance walk lands on the standing touch spot. `fixed` ran the destination through the room's peer wall, which pushed it
     /// 6 cm out. Measured at the first planted frame after the last step: gap in -1 ... +1.5 cm, no touch-and-retreat before the hold (the gap never rebounds past 3 cm).
     func testSideBySideWalkUpPlantsOnTheTouchSpot() {
-        for (kind, seed) in [(SocialKind.swayHug, 31), (.cuddleLean, 32), (.whisperGiggle, 33), (.nuzzle, 34)] as [(SocialKind, UInt64)] {
+        // (whisperGiggle left this list in pair-distinct-r1: it is deliberately NON-touching now - a V with a 12 cm gap - so "plants on the touch spot" does not apply; PairDistinctTests pins its gap)
+        for (kind, seed) in [(SocialKind.swayHug, 31), (.cuddleLean, 32), (.nuzzle, 34)] as [(SocialKind, UInt64)] {
             let d = FeatureClipTests.Duo(positions: [SIMD2(-1.5, 0.6), SIMD2(1.35, 0.9)], features: [.none, .none], seed: seed)
             d.live = true
             for _ in 0..<3 { d.tick() }

@@ -23,6 +23,16 @@ struct HandReach: Sendable {
     var el: Float = HandReach.elBoop        // the elevation (rad) the arm likes (the hover pose, and the seek's first guess)
     var seek = true               // solve the elevation so the pole lands ON the partner's skin
     var partner = -1              // steerID of the one the hand reaches for
+    /// A POSE, not a reach (partner < 0; pair-distinct-r1): the arm's explicit sweep (rad, forward = +) and the elevation / sweep of the free arm (spinTogether: both arms up).
+    var sa: Float? = nil
+    var freeEl: Float = -0.25, freeSa: Float = 0.35
+}
+
+extension HandReach {
+    /// Both arms up over the head (a cheer).
+    static func armsUp(side: Int) -> HandReach { HandReach(side: side, w: 1, el: 1.15, seek: false, partner: -1, sa: 0.1, freeEl: 1.15, freeSa: 0.1) }
+    /// Both arms held low and forward (a hopping pair: the arms of Bob / Pip flare out sideways in a hop and would meet the partner's).
+    static func armsIn(side: Int) -> HandReach { HandReach(side: side, w: 1, el: -0.2, seek: false, partner: -1, sa: 1.3, freeEl: -0.2, freeSa: 1.3) }
 }
 
 extension HandReach {
@@ -109,7 +119,7 @@ extension BlobBrain {
         }
         armReachW = 1; armDirW = socialBook.handW; armDirOut = socialBook.handOut
         // the free arm hangs relaxed, a little forward
-        armDirEl[other] = -0.25; armDirSa[other] = 0.35
+        armDirEl[other] = q.freeEl; armDirSa[other] = q.freeSa
         var elT = q.el, saT: Float = 0
         if goal == 0 { elT = socialBook.handEl[si]; saT = socialBook.handSa[si] }          // (letting go: the arm goes down from where it is, it is not re-aimed)
         let sg: Float = si == 0 ? -1 : 1
@@ -187,7 +197,7 @@ extension BlobBrain {
             // (the give only runs once he stands: a walker re-derives his destination from the outline he has, so a hand that gives while he walks shortens the outline, the destination, the walk... until the arm is all the way in)
             if s0 < -0.004 { socialBook.handOut = max(-0.12, socialBook.handOut + s0 + 0.002) }
             else if s0 > (q.seek ? 0.012 : 0.004), socialBook.handOut < 0 { socialBook.handOut = min(0, socialBook.handOut + 0.25 * dt) }
-        } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0 }
+        } else if goal > 0 { socialBook.handOut = 0; socialBook.handPrevD = 0; saT = q.sa ?? 0 }
         let rate: Float = 6 * dt
         socialBook.handEl[si] += max(-rate, min(rate, elT - socialBook.handEl[si]))
         socialBook.handSa[si] += max(-rate, min(rate, saT - socialBook.handSa[si]))

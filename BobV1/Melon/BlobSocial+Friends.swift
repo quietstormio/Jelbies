@@ -329,21 +329,19 @@ extension BlobBrain {
     private func driveHopAlong(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         if openSideBySide(s, o, isA, settle: 0.6) { return }
         let t = s.phaseT
-        let rounds = 3
-        let gap: Float = 1.6, lag: Float = 0.5
-        if isA {
-            if s.bumps < rounds, t >= Float(s.bumps) * gap, scriptIsNone, idleState.kind == nil {
-                s.bumps += 1
-                socialBook.hold = false; socialBook.faceYaw = nil
-                startHopPlay(sim: sim, distance: 0.0001)
-            }
-        } else if s.passes < rounds, t >= Float(s.passes) * gap + lag, scriptIsNone, idleState.kind == nil {
-            s.passes += 1
+        // (pair-distinct-r1) HOP ALONG: a body apart, the leader hops first, the follower half a second later, each hop TRAVELLING toward the room (not bobbing on the spot): a staggered line of hops, then a cheer.
+        let rounds = 2, gap: Float = 1.4, lag: Float = 0.55, dist = Pair2Tuning.hopDist
+        let lead = (s.roles == 0) == isA
+        let n = lead ? s.bumps : s.passes
+        if Pair2Tuning.armsIn { socialBook.handWant = HandReach.armsIn(side: handSide(toward: o)) }          // (the arms stay in during the hops)
+        let along = pairHopYaw(o)          // (the SAME heading for both: two bodies each hopping toward the camera point converge on it)
+        if n < rounds, t >= Float(n) * gap + (lead ? 0 : lag), scriptIsNone, idleState.kind == nil, turnedTo(along, tol: 0.25) || t > Float(n) * gap + lag + 1.2 {
+            yaw = along          // (the hop goes exactly along the shared heading: a turn step stops a few degrees short, and two hops 5 degrees off each other close 10 cm)
+            if lead { s.bumps += 1 } else { s.passes += 1 }
             socialBook.hold = false; socialBook.faceYaw = nil
-            startHopPlay(sim: sim, distance: 0.0001)
+            startHopPlay(sim: sim, distance: dist)
             face(.joyArc, hold: 0.8)
-        }
-        if scriptIsNone { socialBook.hold = true; socialBook.faceYaw = faceCameraYaw() }
+        } else if scriptIsNone { holdFacing(along) }
         if isA {
             if s.bumps >= rounds, s.passes >= rounds, t > Float(rounds) * gap + lag + 0.4, scriptIsNone, o.scriptIsNone {
                 jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)

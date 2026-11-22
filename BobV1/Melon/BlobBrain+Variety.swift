@@ -20,6 +20,9 @@ enum VarietyTuning {
     static let recover: Float = 210, bigRecover: Float = 360, floor: Float = 0.05
     static let bigKinds: Set<IdleKind> = [.zoomies, .slide, .soccerKick, .flapHop, .lieDown, .tail, .tailThump, .tailHug]          // (the decor moves are not here: a toy that is out recovers at the ordinary pace, so the slide is not shut for 6 minutes after a ride)
     static let socialRecover: Float = 150
+    /// THE LOOK-ALIKE TABLE (pair-distinct-r1, the coordinator's call): from the room's board nuzzle / cheekSquish / bellyBounce read as the same picture, cuddleLean and swayHug are the two worth keeping as "close together" kinds.
+    /// Kept in the code, only the PICK changes, and only where the variety layer runs: cheekSquish and bellyBounce are never picked (0), cuddleLean and swayHug at half weight. ONE table.
+    static let pairLookAlike: [SocialKind: Float] = [.cheekSquish: 0, .bellyBounce: 0, .cuddleLean: 0.5, .swayHug: 0.5]
     /// A friend did / is doing the same lately.
     static let syncWindow: Float = 20, syncMul: Float = 0.25, startGap: Float = 10
     static let familyRepeat: Float = 0.4
@@ -166,7 +169,7 @@ extension BlobBrain {
             var m: Float = 1
             for b in [self, o] { if let t = b.variety.lastSocial[k] { m *= VarietyTuning.floor + (1 - VarietyTuning.floor) * min(1, (b.variety.now - t) / VarietyTuning.socialRecover) } }
             if let p { for (s, x) in p.social where s.contains(k) { m *= x } }
-            w[i].1 *= max(0.01, m)
+            w[i].1 *= max(0.01, m) * (VarietyTuning.pairLookAlike[k] ?? 1)
         }
     }
 }

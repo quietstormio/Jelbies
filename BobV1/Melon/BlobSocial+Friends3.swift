@@ -11,6 +11,10 @@
 import Foundation
 import simd
 
+/// How far each turns in toward the other in the whisper's V (rad).
+/// 0 = facing the camera: a 26-degree turn in place is not a turn STEP in the engine, it rotates the body with the soles planted (SocialFeetTests measured 58 - 96 mm of planted-sole skate), so the whisper keeps its clear gap, the lean and the startled hop but stays front on.
+enum WhisperTuning { static let turnIn: Float = 0 }
+
 extension BlobBrain {
     /// Overlay size for reduce motion (the hops themselves shrink in the gait).
     var socialGentle: Float { amplitude < 0.7 ? 0.55 : 1 }
@@ -144,36 +148,44 @@ extension BlobBrain {
 
     private func driveWhisper(_ s: SocialSession, _ o: BlobBrain, _ isA: Bool, _ sim: SoftBody) {
         let whisperer = (s.roles == 0) == isA
-        // 2026-11-05 (user rule 2): the one who walked up rests a hand ON the partner (his arm / shoulder; the arm comes up on the way in, BlobSocial+Hands.swift) while the whispering goes on (the walker is always the reaching one: the walk-up
-        // lands the hand, the partner stands)
-        if isA { socialBook.handWant = HandReach(side: handSide(toward: o), w: 1, el: HandReach.elBoop, seek: true, partner: o.steerID) }
+        // (pair-distinct-r1) A SECRET, THEN A LAUGH - and no contact at all: the two turn in toward each other (the high five's V, faces apart, a clear gap of >= 4 cm the whole time), the whisperer leans in and nods
+        // while he whispers, the listener tips an ear, then JUMPS (a startled little hop), and both wiggle and giggle. The stance (`whisperGiggle` row) keeps the skins >= 8 cm apart before the laugh.
         if openSideBySide(s, o, isA, settle: 0.65) { return }
-        holdFacing(faceCameraYaw())
         let t = s.phaseT, g = socialGentle
+        let inward: Float = rotXZ(o.position - position, -faceCameraYaw()).x >= 0 ? 1 : -1
+        let turned = faceCameraYaw() + inward * WhisperTuning.turnIn          // (one target, not a ramp: a body that is turned a little every tick slides its planted soles; a single target is a proper turn step)
+        if scriptIsNone { holdFacing(turned) }
         let whisp = smooth01((t - 0.2) / 0.5) * (1 - smooth01((t - 1.9) / 0.4))
-        let giggle = smooth01((t - 2.1) / 0.2) * (1 - smooth01((t - 4.0) / 0.5))
+        let giggle = smooth01((t - 2.4) / 0.2) * (1 - smooth01((t - 4.3) / 0.5))
         if whisperer {
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.07 * whisp * g          // (a hand rests between the two: a full lean swings the arm nub of the one into the hand of the other)
-            socialBook.wantPitch = 0.05 * whisp * g
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.10 * whisp * g
+            socialBook.wantPitch = 0.06 * whisp * g * sinf(2 * .pi * 2.2 * t)          // (the whispering nod)
         } else {
-            socialBook.wantRoll = leanSign(toward: o.position) * 0.04 * whisp * g          // (an ear tilted toward the whisper)
-            if t > 0.7, !socialBook.sheepishStarted { socialBook.sheepishStarted = true; face(.hopeful, hold: 1.1) }          // (was .curious: its head tilt is a 0.10 rad body roll to a random side - 5 cm of arm nub swung into the hand on the partner)
-            if t > 1.9, !socialBook.apartStarted { socialBook.apartStarted = true; face(.surprised, hold: 0.5) }
+            socialBook.wantRoll = leanSign(toward: o.position) * 0.06 * whisp * g          // (an ear tilted toward the whisper)
+            if t > 0.7, !socialBook.sheepishStarted { socialBook.sheepishStarted = true; face(.hopeful, hold: 1.1) }
+            if t > 1.95, !socialBook.apartStarted, scriptIsNone, idleState.kind == nil {          // (the surprise: a startled little hop on the spot)
+                socialBook.apartStarted = true
+                socialBook.hold = false; socialBook.faceYaw = nil
+                startHopPlay(sim: sim, distance: 0.0001)
+                face(.surprised, hold: 0.7)
+                AudioHub.shared.play(.jump, jelly: steerID, x: px, volume: 0.6)
+            }
         }
-        let wiggle = giggle * sinf(2 * .pi * 5.5 * (t - 2.1))
-        socialBook.wantRoll += (isA ? 0.03 : 0.06) * wiggle * g          // (the hand is on the partner: the giggle shakes the bodies a little less, they stay in touch)
-        socialBook.wantSquash = 1 - 0.02 * giggle * abs(sinf(2 * .pi * 2.75 * (t - 2.1))) * g          // (a squashed body is wider: with a hand between them the giggle's bounce is smaller)
+        let wiggle = giggle * sinf(2 * .pi * 5.5 * (t - 2.4))
+        socialBook.wantRoll += (whisperer ? 0.02 : 0.03) * wiggle * g          // (a bigger giggle wiggle slid the planted soles: 32 mm at 0.04 / 0.07 rad, the base whisper's 0.03 / 0.06 passed the feet test)
+        socialBook.wantSquash = 1 - 0.025 * giggle * abs(sinf(2 * .pi * 2.75 * (t - 2.4))) * g
         if isA {
-            if !s.impacted, t >= 2.1 {
+            if !s.impacted, t >= 2.4 {
                 s.impacted = true
-                jellyKick = max(jellyKick, 1.1); o.jellyKick = max(o.jellyKick, 1.1)
+                jellyKick = max(jellyKick, 1.2); o.jellyKick = max(o.jellyKick, 1.2)
                 AudioHub.shared.chirp(jelly: steerID, .babble); AudioHub.shared.chirp(jelly: o.steerID, .happy)
                 face(.joyArc, hold: 1.8); o.face(.joyArc, hold: 1.8)
                 o.blushBump(hold: 2.0, peak: 0.5)
                 onSocial?(.makeUp(partner: o.steerID)); o.onSocial?(.makeUp(partner: steerID))
             }
-            if s.passes == 0, t >= 3.1 { s.passes = 1; jellyKick = max(jellyKick, 0.8); o.jellyKick = max(o.jellyKick, 0.8) }
-            if t > 4.6 { finishHappy(s, o) }
+            if s.passes == 0, t >= 3.2 { s.passes = 1; AudioHub.shared.chirp(jelly: o.steerID, .happy); jellyKick = max(jellyKick, 0.8); o.jellyKick = max(o.jellyKick, 0.8) }
+            if s.passes == 1, t >= 3.9 { s.passes = 2; AudioHub.shared.chirp(jelly: steerID, .happy) }
+            if t > 5.0, scriptIsNone, o.scriptIsNone { finishHappy(s, o) }
         }
     }
 
