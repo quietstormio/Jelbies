@@ -220,6 +220,7 @@ struct TrophyShelfCard: View {
                         .shadow(color: SK.shadow.opacity(0.25), radius: 1.5, y: 1.5)
                     Text(e.caption).font(SK.font(12, .black)).foregroundStyle(SK.ink).lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center).padding(.top, 5)
                         .frame(minHeight: compact ? 16 : 30, alignment: .top)
+                    if let pair = e.item.pair { PlaqueNames(names: care.trophyPairNames(pair), size: 11, ink: SK.ink).padding(.top, 2) }          // (two winners: both names, scaled to fit, else on two lines)
                     Text(e.item.dateLine).font(SK.font(10, .bold)).foregroundStyle(SK.muted).lineLimit(2).minimumScaleFactor(0.75).multilineTextAlignment(.center)
                         .frame(minHeight: 26, alignment: .top)
                 }
