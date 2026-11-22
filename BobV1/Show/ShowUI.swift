@@ -348,7 +348,7 @@ struct WardrobeStrip: View {
                         try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
                         withAnimation { proxy.scrollTo(min(2, rows.count - 1), anchor: .top) }
                     }
-                    if let f = d.object(forKey: "WardrobeFlick") as? Double, rows.count > 2 {
+                    if let f = d.string(forKey: "WardrobeFlick").flatMap(Double.init), rows.count > 2 {
                         try? await Task.sleep(nanoseconds: UInt64(f * 1_000_000_000))
                         let probe = FrameProbe(); probe.start()
                         for _ in 0..<3 {
