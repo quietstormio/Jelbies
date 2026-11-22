@@ -519,7 +519,7 @@ extension BlobBrain {
             if social == nil && !flourish { idleState.last = k == .stumble ? .run : k; if k != .wander { idleState.recent.append(k == .stumble ? .run : k); if idleState.recent.count > 3 { idleState.recent.removeFirst() } } }          // (the moves a social session starts - a bump's bounces, a dance - are not his own pick: they must not hide his last solo one)
             idleState.counts[k, default: 0] += 1
             if treat { idleState.cooldown = max(idleState.cooldown, 0.5) }
-            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) }
+            if cooldown && !flourish { idleState.cooldown = runMoveDemo != nil ? 2.5 : max((watching ? 3 : 3.5) * idleLively, rand(6, 12) * idleLively * vJit() - idleState.t) * (MoveMix.on && social == nil ? MoveMix.soloGapMul : 1) }
         }
         idleState.kind = nil; idleState.yielding = false; idleState.k = 0
         sig = SignatureDrive(); runAir = 0          // (an emote's feature drive and its hop go with it)
