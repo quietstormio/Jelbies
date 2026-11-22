@@ -138,7 +138,7 @@ nonisolated enum StoryPrompt {
         case .few: lines.append("- [gettingToKnow] they are still getting to know each other")
         }
         if h.sharedGroup { lines.append("- [sharedGroup] they joined in a group activity lately") }
-        if h.sharedSpot != nil { lines.append("- [sharedSpot] they both like the same spot: {SPOT} (\(v[\"SPOT\"] ?? \"\"))") }
+        if h.sharedSpot != nil { lines.append("- [sharedSpot] they both like the same spot: {SPOT} (\(v["SPOT"] ?? ""))") }
         if h.napBuddies { lines.append("- [napBuddies] they both nap a lot") }
         if let x = v["EMOTE"], StoryTemplates.tier(h) != .few { lines.append("- [topEmote] they are often: {EMOTE} (\(x))") }
         lines.append("Placeholders you may use: {EMOTE} only with the topEmote fact, {SPOT} only with the sharedSpot fact.")
