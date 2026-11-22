@@ -149,6 +149,31 @@ final class HopscotchTests: XCTestCase {
         XCTAssertNil(DecorField.shared.occupant[uid]); XCTAssertNil(DecorField.shared.coUsers[uid])
     }
 
+    /// hop-leave-r1: after the last landing (the second happy hop) he walks straight off: >= 0.3 m from the landing spot within `maxLeave` s, over several seeds (median printed).
+    func testLeaveIsAtOnce() {
+        var times: [Float] = []
+        for seed in [5, 6, 7, 8, 9] as [UInt64] {
+            DecorField.shared.clear(); DecorField.shared.toys = ToyBook();
+            let lab = parkLab(n: 1, seed: seed)
+            let b = lab.rigs[0].brain
+            b.idleForced = true
+            XCTAssertTrue(b.decorStart(.decorHopscotch, lab.rigs[0].sim, only: nil, uid: uid))
+            var t3: Float = -1, t0: Float = -1, p0 = SIMD2<Float>(0, 0), got: Float = -1
+            for i in 0..<(60 * 40) {
+                lab.tick(watching: false); DecorField.shared.tick(dt: 1.0 / 60)
+                let now = Float(i) / 60
+                if t0 < 0, b.idleState.slideStep == HopscotchCourt.count + 1, b.idleState.slideStage == 1, b.idleState.decorBooped { t0 = now; p0 = b.position }
+                if t0 >= 0, t3 < 0, b.idleState.slideStage == 3 { t3 = now - t0; print("HOPLEAVE stage3 at \(t3) yawErr \(wrapAngle(atan2f(b.idleState.target.x - b.position.x, b.idleState.target.y - b.position.y) - b.yaw)) dist \(simd_distance(b.idleState.target, b.position))") }
+                if t0 >= 0, simd_distance(b.position, p0) >= 0.3 { got = now - t0; break }
+            }
+            XCTAssertGreaterThan(got, 0, "seed \(seed): he walks off")
+            times.append(got)
+        }
+        times.sort()
+        print("HOPLEAVE times \(times) median \(times[times.count / 2])")
+        XCTAssertLessThan(times[times.count / 2], 1.2, "he is walking away at once")
+    }
+
     /// The line: the leader starts, the others join (join chance forced to 1), queue behind and follow; they keep their spacing and nobody overlaps.
     func testFollowersQueueKeepSpacingAndNeverOverlap() {
         HopscotchTuning.joinChance = 1
