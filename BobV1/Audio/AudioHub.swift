@@ -847,7 +847,7 @@ final class AudioHub {
     nonisolated(unsafe) static var requestSrcTap: ((String, Int) -> Void)?
     func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
         Self.requestTap?(sfx.rawValue)
-        if let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
+        if !PlayHaptics.ownsTap, let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
         if let t = SoundCaptions.text(sfx, jelly: jelly.map { JellyRoster.name(slot: $0) }) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
         if let w = gateWhy() { diag("play:\(sfx.rawValue)", jelly, w); return }
         let level = settings.sfxLevel * duck.gain

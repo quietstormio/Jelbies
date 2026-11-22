@@ -182,6 +182,7 @@ extension GameCare {
         volley.trophies = race.trophies
         volley.wallet = bath.wallet
         volley.partnerName = partner?.name ?? ""
+        volley.partnerCharacter = partner?.character
         volley.teamNames = [prof.name, partner?.name ?? ""]
         volley.begin(mode: mode, playerID: id, character: prof.character, name: prof.name, sim: sim)
     }
