@@ -231,7 +231,7 @@ final class SoccerTests: XCTestCase {
                 if a.brain.social == nil, b.brain.social == nil, passes > 0 { done = true; break }
             }
             XCTAssertTrue(done, "seed \(seed): the exchange ended")
-            XCTAssertGreaterThanOrEqual(passes, 2, "seed \(seed): 2...4 passes (\(passes))"); XCTAssertLessThanOrEqual(passes, 4)
+            XCTAssertGreaterThanOrEqual(passes, 2, "seed \(seed): 2...4 passes, 3...6 kicks with the mix on (\(passes))"); XCTAssertLessThanOrEqual(passes, MoveMix.on ? MoveMix.passKicksMax : 4)
             let kicks = SoccerEvents.recent.compactMap { e -> (Int, Float)? in if case .kick(let j, let v, _) = e { return (j, v) }; return nil }
             XCTAssertEqual(Set(kicks.map { $0.0 }), [0, 1], "seed \(seed): both kicked")
             for (_, v) in kicks { XCTAssertTrue(SoccerTuning.kickSpeed.contains(v), "seed \(seed): pass speed \(v)") }
