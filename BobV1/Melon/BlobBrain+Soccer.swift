@@ -259,9 +259,13 @@ extension BlobBrain {
             let turning = turnSteps(goal: idleState.goalYaw, tol: 0.08)
             if !turning && !feet.active && t > 0.12 {
                 let ball = field.position(f)
-                if simd_distance(ball, position) > SoccerTuning.kickReach + 0.3 || field.anim[f.uid]?.moving == true {
+                let rolling = field.anim[f.uid]?.moving == true
+                if MoveMix.on, rolling, t < 3.0, simd_distance(ball, position) < 3.5 { idleState.soccer = s; return }          // (MoveMix: the ball is still rolling from a bump: he waits a moment for it, he does not walk off)
+                if simd_distance(ball, position) > SoccerTuning.kickReach + 0.3 || rolling {
                     // the ball is not where he lined up for it (bumped away): once more, or done
-                    if s.reps > 0, soccerAgain(f) { idleState.soccer.reps = s.reps - 1 } else { idleFinish(skinner) }
+                    if s.reps > 0, soccerAgain(f) { idleState.soccer.reps = s.reps - 1 }
+                    else if MoveMix.on, s.legs < 2 { let tries = s.legs; if soccerAgain(f) { idleState.soccer.legs = tries + 1 } else { idleFinish(skinner) } }          // (MoveMix: up to two more goes at a ball that moved on)
+                    else { idleFinish(skinner) }
                     return
                 }
                 s.stage = 1; s.fired = false; idleState.phaseT = 0
