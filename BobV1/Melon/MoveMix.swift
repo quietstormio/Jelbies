@@ -64,6 +64,7 @@ nonisolated enum MoveMix {
         return 0.3
     }()
     static let runLegMin: Float = 3.5
+    static let runShare: Float = 0.68, runTail: Float = 1.3          // the run ends this fraction of the leg in (and at least `runTail` u before the goal); the walk finishes it
     static let runClearance: Float = 1.7          // a run keeps this far from any body that is in an emote (a session, a special) or walking its own leg across
     static let okayRunMul: Float = 0.6
     // 5. buttons: see RoamFloor.stopFree / stopOK
@@ -84,6 +85,9 @@ struct MixBook {
     var strollDirAt: Float = -99
     var strollThird = -1
     var windowUntil: Float = -1
+    /// A run covers the first `runShare` of a leg; the rest is walked at the normal blend (afterRun = the real goal), so a run never ends in a stop.
+    var afterRun: SIMD2<Float>?
+    var afterRunUntil: Float = -1
     /// What kind of leg this body was last sent on (the foot-lift proof logs by it): "roam", "stroll", "out" (from under a button).
     var legKind = "roam"
     /// The body's OWN idleness map: game time it was last in each of the 6 x 6 cells of the live floor (-inf = never).
@@ -254,9 +258,26 @@ extension BlobBrain {
         guard roomLegConflict(from: here, to: g, speed: roomNominalWalk * 1.6, others: others, dash: true) < 0.01 else { return false }
         let chance = MoveMix.runChance * (1 - 0.75 * idleNight) * (idleMood == .happy ? 1 : MoveMix.okayRunMul)
         guard rand() < chance else { return false }
-        guard idleStart(.run, sim, goal: g) else { return false }
+        var rg = here + (g - here) * MoveMix.runShare
+        if d - simd_distance(here, rg) < MoveMix.runTail { rg = here + (g - here) / d * max(d - MoveMix.runTail, 0) }
+        guard simd_distance(here, rg) >= 2.3, simd_distance(fixed(rg), rg) < 0.1, peerFree(rg), reachable(here, rg) else { return false }
+        guard idleStart(.run, sim, goal: rg) else { return false }
+        mix.afterRun = g; mix.afterRunUntil = variety.now + 14
         if anticsEnabled { kindCooldownStart(.run) }
         mix.legKind = "run"
+        return true
+    }
+}
+
+extension BlobBrain {
+    /// pickAutonomous: a run just ended short of its goal: walk the rest (the normal blend in, no stop between).
+    func mixAfterRunDue(_ sim: SoftBody) -> Bool {
+        guard MoveMix.on, let g = mix.afterRun else { return false }
+        mix.afterRun = nil
+        guard variety.now < mix.afterRunUntil, idleState.kind == nil, simd_distance(position, g) > 0.5, peerFree(g) else { return false }
+        scriptT = 0; stuckT = 0; bestDist = .infinity; route = []; steerStall = 0; job = nil
+        script = .walk(target: g, then: .none); activity = .walking
+        mix.last = .leg; mix.legKind = "run-tail"
         return true
     }
 }

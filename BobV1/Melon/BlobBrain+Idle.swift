@@ -1053,6 +1053,7 @@ extension BlobBrain {
         armWalkWant = 0
         script = .none
         restTimer = rand(1.0, 2.5) * idleLively
+        if MoveMix.on, mix.afterRun != nil { restTimer = 0.04 }          // (a run that ends short of its goal: the walk to the goal follows at once)
     }
 
     // MARK: belly slide + scoot (the hop machinery owns the body, like the jacks)
