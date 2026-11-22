@@ -445,6 +445,7 @@ struct GameScreen: View {
         .onChange(of: model.care.cafe.inScene) { _, on in AudioHub.shared.setTownScene(on ? CafeTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.park.inScene) { _, on in AudioHub.shared.setTownScene(on ? ParkTuning.music : GameScreen.townMusic(town)) }
         .onChange(of: model.care.volley.inScene) { _, on in AudioHub.shared.setTownScene(on ? .volley : GameScreen.townMusic(town)); AudioHub.shared.beachAmbience(on) }
+        .onChange(of: model.care.volley.winMusic) { _, _ in AudioHub.shared.setTownScene(currentMusicScene) }
         .onChange(of: town) { _, t in
             #if targetEnvironment(simulator)
             RaceDepartProbe.mark("town \(String(describing: t))")
@@ -1058,7 +1059,7 @@ struct GameScreen: View {
     private var currentMusicScene: MusicScene {
         if model.care.cafe.inScene { return CafeTuning.music }
         if model.care.park.inScene { return ParkTuning.music }
-        if model.care.volley.inScene { return .volley }
+        if model.care.volley.inScene { return model.care.volley.winMusic ? .results : .volley }          // a won match: the results jingle plays, the court track is out (as after a race win)
         return GameScreen.townMusic(town)
     }
     /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).

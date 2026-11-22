@@ -460,7 +460,9 @@ extension GameCare {
             for (i, a) in w.players.enumerated() where i / 2 == team { a.brain?.volleyCheer(sim: a.sim) }
         case .serveReady(let p):
             if p < 2 { A11yEvents.say("Your serve. Tap Hit to toss, tap again at the top", .normal) }
-        case .matchOver: AudioHub.shared.play(.cheerSmall)
+        case .matchOver(let winner):
+            AudioHub.shared.play(.cheerSmall)          // (the crowd cheer both ways, as before; it is a sound effect, not music)
+            if winner == 0 { volley.celebrateWin(); fireGrandChampionConfetti() }          // a win: the race win's results jingle + confetti burst (same calls as GameCare+Race.swift:426); a loss stays as it was
         }
     }
 
@@ -554,6 +556,9 @@ extension GameCare {
         case "serve":
             if s.waitingToServe, s.servingPlayer == s.controlled { s.tap() }
             if s.phase == .rally, p.act == .stand, let r = s.ring, abs(r.tau - r.lead) < 0.03 { s.tap() }
+        case "win", "lose":          // `-VolleyDemo win|lose`: the player's team (or the other) takes every point at once, so the match ends within seconds
+            if s.waitingToServe, s.servingPlayer == s.controlled { s.tap() }
+            if s.phase == .rally, s.clock - w.demoT > 1.2 { w.demoT = s.clock; s.forcePoint(team: k == "win" ? 0 : 1) }
         case "cheer":
             if s.waitingToServe, s.servingPlayer == s.controlled { s.tap() }
             if s.phase == .rally, s.clock - w.demoT > 3 { w.demoT = s.clock; s.forcePoint(team: 0) }
