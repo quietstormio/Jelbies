@@ -156,7 +156,7 @@ struct GameScreen: View {
                         if focus.showsRelease {
                             ReleaseButton(name: model.care.focusGroup.ids.count == 1 ? model.care.jelly(model.care.focusGroup.ids[0])?.name : nil) { withAnimation(CareMenu.spring) { model.care.release() } }
                                 .transition(.move(edge: .leading).combined(with: .opacity))
-                            GameCircleButton(systemName: "rectangle.portrait.on.rectangle.portrait.angled", label: "Condition card") {
+                            GameCircleButton(systemName: "person.crop.circle", label: "Profile") {
                                 AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.25)) { town = .condition }
                             }
                             .accessibilityIdentifier("focus-card")
@@ -1101,6 +1101,7 @@ struct GameScreen: View {
         case "show", "showHow": return .studio          // (the Jelly Show lobby is the Studio now)
         default: break
         }
+        if UserDefaults.standard.object(forKey: "OpenProfile") != nil { return .condition }          // capture aid: `-OpenProfile <index>` opens that Jelmiko's Profile
         switch UserDefaults.standard.string(forKey: "StoreOpen") {
         case "town": return .town
         case "shop", "item": return .shop
