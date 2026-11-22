@@ -401,6 +401,7 @@ final class PlayToss {
         let before = ball.pos
         let events = ball.step(dt, in: world)
         for j in jellies where !j.brain.tossBusy && !j.brain.feet.active && j.brain.idleState.kind == nil { standTop[j.id] = j.headTop }
+        if !PlayTuning.ballReturnOld { for o in jellies { let P = playerPoint() - o.pos; o.brain.tossFaceYaw = (o.brain.tossBusy && simd_length(P) > 1e-3) ? atan2f(P.x, P.y) : nil } }          // (the header's hop turns him toward the player in the air)
         watch(ball.pos)
         if simd_distance(ball.pos, handWorld()) > 1.5 || ball.pos.z < catchZ() - 0.6 { leftHand = true }
         var headed = false
@@ -423,7 +424,7 @@ final class PlayToss {
         if leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
             caught(); return
         }
-        if phase == .loose { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.idleState.toss.abort = true } }          // (a ball on the floor: nobody holds a header stand for it)
+        if phase == .loose { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) } }          // (a ball on the floor: nobody holds a header stand for it)
         if phase == .flying { steerReturn(dt: dt); intercepts(dt: dt, before: before) }
         restWatch(dt: dt)
         if phase == .loose { looseT += dt; loose(dt: dt) }
@@ -587,7 +588,7 @@ final class PlayToss {
             if best == nil || d < best!.d { best = (j, a.t, a.xz, d) }
         }
         support(toward: best?.xz ?? ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: best.map { [$0.j.id] } ?? [])
-        guard let b = best else { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.idleState.toss.abort = true }; return }
+        guard let b = best else { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }
         let j = b.j
         let busy = j.brain.tossBusy
         // play-ball-r2: the one it is heading for goes to where it will come down, turns onto the player, crouches and jumps so the crown meets it. NOTHING here decides whether the ball is
@@ -611,12 +612,11 @@ final class PlayToss {
                 interceptAt[j.id] = (b.xz, clock)
             }
         } else if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage < 3, let last = interceptAt[j.id], simd_distance(j.brain.idleState.toss.stand, b.xz) > Self.steerReach + 0.4, clock - last.t > 0.3 {
-            j.brain.idleState.toss.abort = true          // (the ball moved on: he is released and sent to the new place next step)
+            j.brain.tossHeaderRelease(j.sim, j.skinner)          // (the ball moved on: he is released and sent to the new place next step)
             interceptAt[j.id] = nil
         }
         // the ones whose approach the ball has left behind (it is not coming to them any more) are released at once: the old loose-ball job is then done by whoever is nearest
-        for o in jellies where o.id != j.id && o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.idleState.toss.abort = true }
-        for o in jellies { let P = playerPoint() - o.pos; if simd_length(P) > 1e-3 { o.brain.tossFaceYaw = o.brain.tossBusy ? atan2f(P.x, P.y) : nil } }
+        for o in jellies where o.id != j.id && o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }
         steerOntoCrown(j, arriveIn: b.t)
         // the go: crouch now so the crown is rising as the ball arrives (met as near the top of the jump as the ball's own height allows)
         if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let m = meetTime(j), m.t <= BlobBrain.tossCrouch + Self.riseTime(m.rise) + Self.goEarly {

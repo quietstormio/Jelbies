@@ -89,6 +89,14 @@ extension BlobBrain {
     func tossAirborne(_ sim: SoftBody) -> Bool { idleState.kind == .tossHeader && idleState.phase >= 1 && idleState.toss.ground > 0 && sim.centroid().y - idleState.toss.ground > 0.10 }
     /// Is he standing ready for a header (approach done, facing the player).
     var tossHeaderReady: Bool { idleState.kind == .tossBump && idleState.toss.header && idleState.toss.stage >= 3 }
+    /// The controller lets a header stand go (the ball is not coming to him any more): a stand not yet crouched is stopped at once between steps (the same clean stop `tossHeaderStart` uses), so whoever is nearest the loose ball can do the loose-ball job.
+    func tossHeaderRelease(_ sim: SoftBody, _ skinner: Skinner) {
+        guard idleState.kind == .tossBump, idleState.toss.header, idleState.toss.stage < 4 else { return }
+        idleState.toss.abort = true
+        guard !feet.active else { return }
+        abortAll(sim, skinner)
+        tossFaceYaw = nil
+    }
     /// Has a header approach going (walking, turning, ready or crouching): the controller may re-aim or release it.
     var tossHeaderApproach: Bool { idleState.kind == .tossBump && idleState.toss.header }
 
