@@ -103,6 +103,7 @@ struct MixBook {
     var strollThird = -1
     var soccerFollowAt: Float = -1
     var soccerLogAt: Float = -99
+    var soccerNudgeAt: Float = -99
     var windowUntil: Float = -1
     /// A run covers the first `runShare` of a leg; the rest is walked at the normal blend (afterRun = the real goal), so a run never ends in a stop.
     var afterRun: SIMD2<Float>?
@@ -359,6 +360,7 @@ extension BlobBrain {
 
     /// pickAutonomous (before the pair roll): with a soccer ball in the room, about every minute or so one of them starts a soccer moment: a pass with a friend, else a kick of his own.
     func mixSoccerUrge(_ sim: SoftBody) -> Bool {
+        mixSoccerWallNudge()
         if EmoteSpot.logOn, variety.now - mix.soccerLogAt > 10, let sb = DecorField.shared.feet.first(where: { $0.kind == .soccerball }) {          // (round 3 diagnosis: why a ball moment does not start)
             mix.soccerLogAt = variety.now
             let f = DecorField.shared
@@ -414,5 +416,22 @@ extension BlobBrain {
         guard !late, !reserved, social == nil, idleState.kind == nil, mixFreeSoccer() != nil else { return false }
         if decorStart(.soccerKick, sim, only: .soccerball) { mix.last = .solo; return true }
         return false
+    }
+}
+
+extension BlobBrain {
+    /// A soccer ball that has rolled to the wall, outside the floor the Jelmiko walk on, cannot be stood behind: it gets a gentle roll back in (nobody is the kicker). Every 6 s at most.
+    func mixSoccerWallNudge() {
+        guard MoveMix.on, variety.now - mix.soccerNudgeAt > 6, let rf = roamProvider?() else { return }
+        let f = DecorField.shared
+        guard let sb = f.feet.first(where: { $0.kind == .soccerball }), f.occupant[sb.uid] == nil, sb.uid != f.held, f.anim[sb.uid]?.moving != true else { return }
+        let c = f.position(sb)
+        guard !rf.contains(c) || rf.halfWidth(at: c.y) - abs(c.x) < 0.3 else { return }
+        mix.soccerNudgeAt = variety.now
+        let hw = max(rf.halfWidth(at: c.y) - 1.1, 0.5)
+        let target = SIMD2(min(max(c.x, -hw), hw), min(max(c.y, rf.minZ + 0.6), rf.maxZ - 0.6))
+        let d = target - c, L = simd_length(d)
+        let dir = L > 0.05 ? d / L : SIMD2<Float>(c.x > 0 ? -1 : 1, 0)
+        f.kickBall(sb.uid, direction: dir, speed: 1.4, by: -1)
     }
 }
