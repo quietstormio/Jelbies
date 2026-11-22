@@ -20,14 +20,15 @@ nonisolated enum JelbiesSiriStatus {
     struct Report: Sendable {
         var states: [JellyState]
         var sleeping: Bool
-        var spoken: String { JellyStatus.spoken(states, sleeping: sleeping) }
+        var night: Bool
+        var spoken: String { JellyStatus.spoken(states, sleeping: sleeping, night: night) }
         var asleepAnswer: String { JellyStatus.asleepAnswer(states, sleeping: sleeping) }
         var hungryAnswer: String { JellyStatus.hungryAnswer(states, sleeping: sleeping) }
     }
     static func report(directory: URL? = JellyShare.containerURL, now: Date = .now, calendar: Calendar = .current) -> Report {
         let states = JellySnapshot.read(from: directory)?.projectNightAware(at: now, calendar: calendar) ?? []
         let sleeping = Bedtime.isSleeping(at: now, tuckedIn: Bedtime.read(from: directory, now: now), calendar: calendar)
-        return Report(states: states, sleeping: sleeping)
+        return Report(states: states, sleeping: sleeping, night: SleepHours.isNight(at: now, calendar: calendar))
     }
 }
 
@@ -52,7 +53,7 @@ struct CheckOnJelbiesIntent: AppIntent {
             let one = r.states.filter { $0.id == id }
             if !one.isEmpty { r.states = one }
         }
-        return .result(dialog: IntentDialog(stringLiteral: r.spoken), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping))
+        return .result(dialog: IntentDialog(stringLiteral: r.spoken), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping, night: r.night))
     }
 }
 
@@ -68,7 +69,7 @@ struct AreJelbiesAsleepIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let r = JelbiesSiriStatus.report()
-        return .result(dialog: IntentDialog(stringLiteral: r.asleepAnswer), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping))
+        return .result(dialog: IntentDialog(stringLiteral: r.asleepAnswer), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping, night: r.night))
     }
 }
 
@@ -82,7 +83,7 @@ struct AreJelbiesHungryIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let r = JelbiesSiriStatus.report()
-        return .result(dialog: IntentDialog(stringLiteral: r.hungryAnswer), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping))
+        return .result(dialog: IntentDialog(stringLiteral: r.hungryAnswer), view: JelbiesSnippetView(states: r.states, sleeping: r.sleeping, night: r.night))
     }
 }
 

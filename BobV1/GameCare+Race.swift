@@ -69,6 +69,7 @@ extension GameCare {
     func wireRace() {
         race.wallet = bath.wallet
         race.upgrades = upgrades
+        race.onBond = { [weak self] c, won in self?.bondEarn(.race, character: c, win: won) }
         race.onSwap = { [weak self] dest in self?.raceSwap(dest) }
         race.onReturned = { [weak self] id, won in self?.raceWelcomeHome(id, won: won) }
         race.onSetComplete = { [weak self] in self?.fireGrandChampionConfetti() }

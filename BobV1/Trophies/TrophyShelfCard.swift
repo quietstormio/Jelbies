@@ -56,9 +56,15 @@ struct TrophyEntry: Identifiable {
     }
 
     /// The trophy's own mesh, rendered small once (StoreThumb caches by key).
+    /// Also used by the Profile's trophies; the finished picture is kept per key here too, so a view that asks every few seconds never rebuilds the mesh.
+    @MainActor private static var pictures: [String: UIImage] = [:]
     @MainActor var picture: UIImage? {
-        guard let m = TrophyShelfGeometry.singleMesh(id: id, color: mesh)?.mesh else { return nil }
-        return StoreThumb.image("trophy-\(id)-\(placeNumber)", mesh: m, size: 200, yaw: 0.32, pitch: 0.16, tight: true)
+        let key = "trophy-\(id)-\(placeNumber)"
+        if let p = Self.pictures[key] { return p }
+        guard let m = TrophyShelfGeometry.singleMesh(id: id, color: mesh)?.mesh,
+              let img = StoreThumb.image(key, mesh: m, size: 200, yaw: 0.32, pitch: 0.16, tight: true) else { return nil }
+        Self.pictures[key] = img
+        return img
     }
 }
 
