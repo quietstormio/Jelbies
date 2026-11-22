@@ -160,6 +160,7 @@ final class AvoidanceTests: XCTestCase {
             MotionLog.write("SOCCER seed \(seed) \(seconds) s: moments \(momentsN), pass sessions \(sessions.count) kicks-per-pass \(sessions.values.sorted()), solo starts \(solo), kicks \(kicks), goals \(goals), ball play \(String(format: "%.1f", tt.act[6] / max(tt.act.reduce(0, +), 0.01) * 100))% of body time, MoveMix \(MoveMix.on)")
             DecorField.shared.clear()
         }
+        MotionLog.write("SOCCER pass urges: \(MoveMix.soccerDbg.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))"); MoveMix.soccerDbg = [:]
         MotionLog.write("SOCCER TOTAL goal=\(withGoal) MoveMix=\(MoveMix.on): \(totals.moments) moments in \(totals.mins) min (one per \(String(format: "%.0f", totals.mins * 60 / Float(max(totals.moments, 1)))) s), \(totals.passes) pass sessions (one per \(String(format: "%.1f", totals.mins / Float(max(totals.passes, 1)))) min) kicks per pass \(totals.kicksInPass.sorted()), solo starts \(totals.solo), kicks \(totals.kicks), goals \(totals.goals), ball play \(String(format: "%.1f", totals.play / max(totals.all, 0.01) * 100))%")
     }
 

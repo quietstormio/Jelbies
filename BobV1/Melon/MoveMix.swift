@@ -42,6 +42,7 @@ nonisolated enum MoveMix {
     static let legMin: Float = 2.5
     // 7. soccer by themselves (round 3): with a soccer ball placed, some moment about every `soccerGap` s of field time, a real pass exchange of `passKicksMin...Max` kicks
     nonisolated(unsafe) static var soccerNextAt: Float = 0
+    nonisolated(unsafe) static var soccerDbg: [String: Int] = [:]
     static let soccerGap: ClosedRange<Float> = 70...110
     static let passChance: Float = 0.85, passKicksMin = 3, passKicksMax = 6
     static let followGoal: Float = 0.55, followThird: Float = 0.35          // after a pass: a shot run (goal placed) / the third one joins with a kick
@@ -104,6 +105,7 @@ struct MixBook {
     var soccerFollowAt: Float = -1
     var soccerLogAt: Float = -99
     var soccerNudgeAt: Float = -99
+    var soccerPassTries = 0
     var soccerNudgeT: Float = -99, soccerStuck = 0
     var soccerNudgeBall = SIMD2<Float>.zero
     var windowUntil: Float = -1
@@ -376,19 +378,30 @@ extension BlobBrain {
         if others.contains(where: { $0.reserved || ($0.idleState.kind == .sleep && simd_distance($0.position, c) < 3.5) }) { MoveMix.soccerNextAt = clock + 8; return false }          // (a meal on, or a sleeper by the ball)
         MoveMix.soccerNextAt = clock + rand(MoveMix.soccerGap.lowerBound, MoveMix.soccerGap.upperBound)
         let ballOff = roamProvider?().map { !$0.contains(c) || $0.halfWidth(at: c.y) - abs(c.x) < 0.3 } ?? false
-        if rand() < MoveMix.passChance, !mixQuiet, !mixBallSpotBad(c), !ballOff {
-            let cands = others.filter { o in
-                let d = simd_distance(o.position, position)
-                return (o.socialFree || o.socialWandering) && !o.mixQuiet && (socialBook.pair[o.steerID] ?? 0) <= 0 && (o.socialBook.pair[steerID] ?? 0) <= 0 && d > 1.6 && d < 9 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 7.5
-            }
-            if !cands.isEmpty {
-                let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]
-                if o.socialFree {
-                    if socialStart(.pass, with: o, sim) { varietyNoteSocial(.pass, with: o); mix.last = .social; return true }
-                } else if o.socialBeckonStop() {          // (he is out on a leg: asked to stop; the pass starts when he has, like the other pairs)
-                    socialBook.invite = (.pass, o.steerID, 0); varietyNoteSocial(.pass, with: o); mix.last = .social; return true
+        let passWanted = rand() < MoveMix.passChance || mix.soccerPassTries > 0
+        if passWanted, !ballOff, !mixBallSpotBad(c) {
+            var why = "quiet"
+            if !mixQuiet {
+                let cands = others.filter { o in
+                    let d = simd_distance(o.position, position)
+                    return (o.socialFree || o.socialWandering) && !o.mixQuiet && (socialBook.pair[o.steerID] ?? 0) <= 0 && (o.socialBook.pair[steerID] ?? 0) <= 0 && d > 1.6 && d < 9 && o.mixStopOK(o.position) && simd_distance(o.position, c) < 7.5
+                }
+                why = cands.isEmpty ? "nobody" : "plan"
+                if !cands.isEmpty {
+                    let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]
+                    if o.socialFree {
+                        if socialStart(.pass, with: o, sim) { mix.soccerPassTries = 0; varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passStarted", default: 0] += 1; return true }
+                    } else if o.socialBeckonStop() {          // (he is out on a leg: asked to stop; the pass starts when he has, like the other pairs)
+                        mix.soccerPassTries = 0
+                        socialBook.invite = (.pass, o.steerID, 0); varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passInvited", default: 0] += 1; return true
+                    } else { why = "beckon" }
                 }
             }
+            MoveMix.soccerDbg["passFail-" + why, default: 0] += 1
+            if EmoteSpot.logOn { NSLog("[soccerpass] t=%.1f id=%d fail=%@ tries=%d", variety.now, steerID, why, mix.soccerPassTries) }
+            mix.soccerPassTries += 1
+            if mix.soccerPassTries <= 8 { MoveMix.soccerNextAt = clock + rand(6, 10); return false }          // (the pass is what was wanted: look again in a few seconds, do not turn it into a solo kick yet)
+            mix.soccerPassTries = 0
         }
         if decorStart(.soccerKick, sim, only: .soccerball) { mix.last = .solo; return true }
         MoveMix.soccerNextAt = clock + 8
