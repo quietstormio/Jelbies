@@ -171,8 +171,8 @@ struct ProfileChipView: View {
     let chip: ProfileWords.Chip
     var body: some View {
         let tone = ProfileTone.of(chip.tone)
-        HStack(spacing: 8) {
-            Image(systemName: chip.icon).font(.system(size: 17, weight: .black)).foregroundStyle(tone.fg).frame(width: 26).accessibilityHidden(true)
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: chip.icon).font(.system(size: 17, weight: .black)).foregroundStyle(tone.fg).frame(width: 26, height: 34).accessibilityHidden(true)          // beside the first line, not the middle of the reserved space
             VStack(alignment: .leading, spacing: 0) {
                 Text(chip.title).font(SK.font(11, .heavy)).foregroundStyle(tone.fg.opacity(0.8)).textCase(.uppercase).lineLimit(1)
                 Text(chip.value).font(SK.font(15, .black)).foregroundStyle(SK.ink).lineLimit(2, reservesSpace: true)
@@ -328,6 +328,11 @@ struct ProfileScreen: View {
     @State private var stylesOpen = false
     private var compact: Bool { vsc == .compact }
 
+    /// Capture aid (dev arguments only): `-ProfileTypeSample Gentle` shows that personality word on every Jelmiko (roster arguments make Jelmiko without a personality).
+    private static var typeSample: String? {
+        guard DevArgs.enabled, let t = UserDefaults.standard.string(forKey: "ProfileTypeSample"), !t.isEmpty else { return nil }
+        return t
+    }
     /// The living line about the pet's life (one short sentence, at most two lines; another worker feeds it). Nil = the slot is hidden. `-ProfileLatelySample 1` (dev arguments only) fills it with a sample.
     private static func lately(_ f: Facts) -> String? {
         if DevArgs.enabled, UserDefaults.standard.integer(forKey: "ProfileLatelySample") != 0 { return "Berry plays most with Latte, and an ice pop is her favourite treat." }
@@ -447,7 +452,7 @@ struct ProfileScreen: View {
 
     /// The kind chip ("Blush") and the type chip ("Sleepy type"): ALWAYS exactly one row, the same for every Jelmiko (ProfileTagRow).
     private func whyChips(_ f: Facts, _ b: WhoBits, center: Bool) -> some View {
-        ProfileTagRow(kind: b.info?.name, type: f.p?.traits?.personality.title, typeIcon: f.p?.traits?.personality.symbol ?? "sparkles")
+        ProfileTagRow(kind: b.info?.name, type: Self.typeSample ?? f.p?.traits?.personality.title, typeIcon: f.p?.traits?.personality.symbol ?? "sparkles")
             .frame(maxWidth: .infinity, alignment: center ? .center : .leading)
     }
 
