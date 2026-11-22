@@ -42,12 +42,12 @@ nonisolated enum MoveMix {
     static let legMin: Float = 2.5
     static let windowGap: Float = 90
     /// Longest roam leg (was 5.5; 3.4 grumpy): a stale far cell is reachable in one leg.
-    nonisolated(unsafe) static var legMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_LEGMAX"].flatMap { Float($0) } ?? 8.0
+    nonisolated(unsafe) static var legMax: Float = ProcessInfo.processInfo.environment["MOVEMIX_LEGMAX"].flatMap { Float($0) } ?? 6.5
     static let legMaxGrumpy: Float = 5.5
     static let idleWeight: Float = 6.0          // x (blend of the shared and the body's own idleness) / 60 in a roam goal's score
     /// Round 2: each body also keeps its OWN 6 x 6 "seconds since I was last here"; the goal score blends it with the shared board map (this much own).
     static let ownShare: Float = 0.7
-    static let thirdWeight: Float = 12, thirdWindow: Float = 180
+    static let thirdWeight: Float = 30, thirdWindow: Float = 180
     /// Rug-centre penalty of EmoteSpot.score (was 2.2): pair / group spots lean away from the centre.
     static let rugWeight: Float = 3.4
     /// A stroll goal in another depth third than where the body stands / where its mates strolled to.
@@ -57,7 +57,7 @@ nonisolated enum MoveMix {
     /// Dev (round 2b, finding what empties the front): `-MixStopOff 1` = stopOK always true; `-MixPenaltyOff 1` = no under-button goal penalty.
     nonisolated(unsafe) static var stopOff: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "MixStopOff")
     nonisolated(unsafe) static var penaltyOff: Bool = DevArgs.enabled && UserDefaults.standard.bool(forKey: "MixPenaltyOff")
-    static var underButtonPenalty: Float { penaltyOff ? 0 : 0.4 }
+    static var underButtonPenalty: Float { penaltyOff ? 0 : 0 }          // (round 2b: off; stopOK and the forced leg already keep stops clear of the buttons)
     /// A pair partner may be this far (was 4.8): the strolls spread them out.
     static let pairMaxDist: Float = 6.5
     /// Night / sleepy: the in-place chain rule and the forced leg off the buttons do not apply.
