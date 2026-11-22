@@ -358,6 +358,28 @@ struct ProfileScreen: View {
         }
     }
 
+
+    /// The top card: header row (picture, name, chips, short status), the description paragraph, the living line (when there is one), the Relationship line.
+    private func whoCard(_ f: Facts) -> some View {
+        let b = whoBits(f)
+        let text = VStack(alignment: .leading, spacing: 6) {
+            whoName(false); whyChips(f, b, center: false); whoStatus(f, center: false)
+        }
+        return card {
+            VStack(alignment: .leading, spacing: 12) {
+                if dts.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 10) { whoPicture(b, 104); text }
+                } else {
+                    HStack(alignment: .center, spacing: 14) { whoPicture(b, compact ? 104 : 128); text.frame(maxWidth: .infinity, alignment: .leading) }
+                }
+                aboutParagraph(b)
+                latelyBubble(f, b)
+                BondHeartsRow(level: f.bond).frame(maxWidth: .infinity, alignment: .leading).id(who)
+            }
+        }
+        .id("profile-who")
+    }
+
     // MARK: 2. right now
 
     private func rightNowCard(_ f: Facts) -> some View {

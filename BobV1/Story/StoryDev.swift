@@ -13,6 +13,13 @@ enum StoryDev {
     static func runIfRequested(care: GameCare) async {
         guard DevArgs.enabled else { return }
         let d = UserDefaults.standard
+        if d.integer(forKey: "StoryReset") != 0 {          // `-StoryReset 1`: forget every habit, event and saved line (a clean start for a capture)
+            for j in care.jellies { d.removeObject(forKey: StoryHabitStore.key(j.character)); d.removeObject(forKey: StoryEventStore.key(j.character)) }
+            d.removeObject(forKey: StoryBook.defaultsKey)
+            StoryHabitStore.shared.reset(); StoryBook.shared.reload()
+        }
+        let late = d.double(forKey: "StoryEventAfter")          // `-StoryEventAfter <s>`: the aid runs that long after launch (a line changing while the Profile is open)
+        if late > 0 { try? await Task.sleep(nanoseconds: UInt64(late * 1_000_000_000)) }
         applyAids(care: care)
         let n = d.integer(forKey: "StoryDump")
         guard n > 0 else { return }

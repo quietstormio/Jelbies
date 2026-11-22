@@ -19,7 +19,7 @@ enum StoryFactsBuilder {
 
         if let inp = care.widgetInputs().first(where: { $0.id == slot }) {
             let st = JellyState(record: WidgetBridge.record(inp, look: ""), awaySeconds: 0)
-            f.mood = JellyStatus.word(st, sleeping: care.asleepForAway(slot))
+            f.mood = JellyStatus.word(st, sleeping: care.asleepForAway(slot), night: SleepHours.isNight(hour: DayClock.shared.hour))
         }
 
         // trophies
