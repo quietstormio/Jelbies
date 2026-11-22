@@ -930,9 +930,23 @@ struct GameScreen: View {
                 care.show.progress.record(rank: .puddle, place: 1, theme: ShowSchedule.theme(dayKey: GameCare.showDay), character: c, burst: false, perfectDance: false, hatTrick: false)
                 care.race.trophies.recordShowCup(character: c, rank: .puddle, place: 1)
                 if m.contains("trophyold") { var sh = care.race.trophies.shelf(character: c); sh.won = sh.won?.filter { !$0.key.contains("puddle") }; care.race.trophies.setShelf(sh, character: c) }          // "trophyold": the Puddle win has no date
+                if m.contains("trophyfull") {          // "trophyfull": also the 10 / 25 win trophies and a volleyball cup on every court (every kind of trophy the case can show)
+                    var sh = care.race.trophies.shelf(character: c)
+                    for t in [Trophy.wins10, .wins25] where !sh.has(t) { sh.earned.append(t.id); sh.stamp("trophy.\(t.id)", Date()) }
+                    care.race.trophies.setShelf(sh, character: c)
+                    for t in VolleyTier.allCases { care.race.trophies.recordVolleyWin(character: c, tier: t) }
+                }
                 if m.contains("trophyoff") { care.setTrophyCase(visible: false) }
                 if m.contains("trophycard") { await sleep(1); care.openTrophyCard() }
                 if m.contains("trophyfocus") { await sleep(8); care.focusTrophy("cup.puddle") }
+                if let steps = d.string(forKey: "TrophyScript") {          // capture aid: -TrophyScript "contest 6, volley.reef 6, none": after 8 s, focus each id in turn (or "none" = unfocus) with the given seconds between
+                    await sleep(8)
+                    for st in steps.split(separator: ",") {
+                        let f = st.split(separator: " ").map(String.init)
+                        if let id = f.first { if id == "none" { care.unfocusTrophy() } else { care.focusTrophy(id) } }
+                        await sleep(Double(f.dropFirst().first ?? "5") ?? 5)
+                    }
+                }
                 if m.contains("trophyswitch") { await sleep(8); care.focusTrophy("cup.puddle"); await sleep(5); care.focusTrophy("cup.ripple") }          // "trophyswitch": looks at one, then taps another
             }
             if m.contains("blocked") { care.store.grant("berries"); care.feed("berries") }          // (foods are fed from the bag now: one berry in it)
