@@ -929,9 +929,11 @@ struct GameScreen: View {
                 for t in CourseTier.allCases { care.race.trophies.recordRace(character: c, tier: t, place: 1) }
                 care.show.progress.record(rank: .puddle, place: 1, theme: ShowSchedule.theme(dayKey: GameCare.showDay), character: c, burst: false, perfectDance: false, hatTrick: false)
                 care.race.trophies.recordShowCup(character: c, rank: .puddle, place: 1)
+                if m.contains("trophyold") { var sh = care.race.trophies.shelf(character: c); sh.won = sh.won?.filter { !$0.key.contains("puddle") }; care.race.trophies.setShelf(sh, character: c) }          // "trophyold": the Puddle win has no date
                 if m.contains("trophyoff") { care.setTrophyCase(visible: false) }
                 if m.contains("trophycard") { await sleep(1); care.openTrophyCard() }
                 if m.contains("trophyfocus") { await sleep(8); care.focusTrophy("cup.puddle") }
+                if m.contains("trophyswitch") { await sleep(8); care.focusTrophy("cup.puddle"); await sleep(5); care.focusTrophy("cup.ripple") }          // "trophyswitch": looks at one, then taps another
             }
             if m.contains("blocked") { care.store.grant("berries"); care.feed("berries") }          // (foods are fed from the bag now: one berry in it)
         }

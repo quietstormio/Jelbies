@@ -94,6 +94,9 @@ final class TrophyBook {
     /// Whether the trophy case hangs on the room's wall (the player's choice; on by default; saved under its own key so older saves are untouched).
     private(set) var caseVisible = true
     static let caseKey = "Circuit.trophyCaseShown.v1"
+    /// The day this save first ran with engravings (written once, on the first launch; nothing else keeps a date per win). Trophies won earlier read "Won before <this day>".
+    private(set) var engravingSince: Date?
+    static let sinceKey = "Circuit.trophyEngravingSince.v1"
     @ObservationIgnored private let persists: Bool
     @ObservationIgnored private let defaults: UserDefaults
     static let key = "Circuit.trophies.v1"
@@ -102,6 +105,10 @@ final class TrophyBook {
     init(persists: Bool = false, defaults: UserDefaults = .standard) {
         self.persists = persists; self.defaults = defaults
         if persists, defaults.object(forKey: Self.caseKey) != nil { caseVisible = defaults.bool(forKey: Self.caseKey) }
+        if persists {
+            if let t = defaults.object(forKey: Self.sinceKey) as? Double { engravingSince = Date(timeIntervalSince1970: t) }
+            else { let now = Date(); engravingSince = now; defaults.set(now.timeIntervalSince1970, forKey: Self.sinceKey) }
+        }
         guard persists, let s = SaveRecovery.decode([String: JelbieTrophies].self, key: Self.key, defaults: defaults) else { return }
         shelves = s
     }

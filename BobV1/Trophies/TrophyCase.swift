@@ -5,7 +5,7 @@
 //    SETTINGS   double-tap the case on the wall: a small card with "Show trophy case in the room" (on by default, saved in TrophyBook) and the list of trophies.
 //               Off: the shelf is not drawn; the same switch sits at the top of the Trophies sheet and in Settings, so it can always be turned back on.
 //    ENGRAVING  tap a trophy on the shelf (or its row in the card): the camera eases in on it and an engraved plate shows the Jelmiko's name, the event and the date.
-//               The dates are written at the win (JelbieTrophies.won); a win from before that shows "Won earlier".
+//               The dates are written at the win (JelbieTrophies.won); a win from before that shows "Won before <the day this save first got engravings>" (no other record keeps a date per win).
 //
 //  Nothing here changes how trophies are earned.
 //
@@ -19,11 +19,14 @@ nonisolated struct TrophyShelfItem: Equatable, Sendable, Identifiable {
     var event: String       // "Jelly Race (Puddle) \u{2013} 1st"
     var character: Int?     // who won it (nil: not known)
     var date: Date?         // nil: won before dates were kept
+    var before: Date? = nil // the day this save first got engravings (TrophyBook.engravingSince): an undated win was won before it
 
-    static func dateText(_ d: Date?) -> String {
-        guard let d else { return "Won earlier" }
+    var dateLine: String { Self.dateText(date, before: before) }
+    static func dateText(_ d: Date?, before: Date? = nil) -> String {
         let f = DateFormatter(); f.locale = Locale(identifier: "en_GB"); f.dateFormat = "d MMM yyyy"
-        return f.string(from: d)
+        if let d { return f.string(from: d) }
+        if let before { return "Won before \(f.string(from: before))" }
+        return "Won earlier"
     }
 }
 
@@ -39,28 +42,29 @@ extension TrophyBook {
             for (c, s) in books where who.contains(c) { if let d = s.won?[key], best == nil || d < best!.1 { best = (c, d) } }
             return (best?.0 ?? who.first, best?.1)
         }
+        let since = engravingSince
         var out: [TrophyShelfItem] = []
         for (k, t) in CourseTier.allCases.enumerated() where spec.cups[k] != 0 {
             let p = Int(spec.cups[k])
             let holders = books.filter { $0.1.bestRace(t) == p }.map(\.0)
             let (c, d) = earliest("race.\(t.rawValue).\(p)", among: holders)
-            out.append(TrophyShelfItem(id: "cup.\(t.rawValue)", event: "Jelly Race (\(t.title)) \u{2013} \(Self.ord(p))", character: c, date: d))
+            out.append(TrophyShelfItem(id: "cup.\(t.rawValue)", event: "Jelly Race (\(t.title)) \u{2013} \(Self.ord(p))", character: c, date: d, before: since))
         }
         if spec.contest != 0 {
             let p = Int(spec.contest)
             var d: Date?
             if let w = contestWho, let s = shelves["\(w)"]?.won { d = ShowRank.allCases.compactMap { s["show.\($0.rawValue).\(p)"] }.min() }
-            out.append(TrophyShelfItem(id: "contest", event: "Jelly Show \u{2013} \(Self.ord(p))", character: contestWho, date: d))
+            out.append(TrophyShelfItem(id: "contest", event: "Jelly Show \u{2013} \(Self.ord(p))", character: contestWho, date: d, before: since))
         }
         for (k, t) in [Trophy.wins5, .wins10, .wins25, .champion].enumerated() where spec.milestones[k] {
             let holders = books.filter { $0.1.has(t) }.map(\.0)
             let (c, d) = earliest("trophy.\(t.id)", among: holders)
-            out.append(TrophyShelfItem(id: t.id, event: "Jelly Race \u{2013} \(t.title)", character: c, date: d))
+            out.append(TrophyShelfItem(id: t.id, event: "Jelly Race \u{2013} \(t.title)", character: c, date: d, before: since))
         }
         for (k, t) in VolleyTier.allCases.enumerated() where spec.volley[k] {
             let holders = books.filter { $0.1.volleyWon(t) > 0 }.map(\.0)
             let (c, d) = earliest("volley.\(t.rawValue)", among: holders)
-            out.append(TrophyShelfItem(id: "volley.\(t.rawValue)", event: "Beach Volleyball (\(t.title)) \u{2013} 1st", character: c, date: d))
+            out.append(TrophyShelfItem(id: "volley.\(t.rawValue)", event: "Beach Volleyball (\(t.title)) \u{2013} 1st", character: c, date: d, before: since))
         }
         return out
     }
@@ -111,7 +115,7 @@ extension GameCamera {
     static func trophyPose(aspect: Float) -> (eye: SIMD3<Float>, target: SIMD3<Float>) {
         let visibleH: Float = 2.6          // (the height of wall in view; the width follows the aspect)
         let d = visibleH * 0.5 / tanf(fovY / 2)
-        let drop: Float = visibleH * (aspect > 1 ? 0.16 : 0.2)
+        let drop: Float = visibleH * (aspect > 1 ? 0.16 : 0.08)
         let t = SIMD3<Float>(trophyAt.x, trophyAt.y - drop, RoomLayout.minZ)
         return (t + SIMD3(0, 0, d), t)
     }
@@ -129,7 +133,10 @@ extension GameCare {
     /// "Jelmiko name" for a plate: the Jelmiko's own name while he is home; "A Jelmiko" when he is not on the roster any more or the win predates records.
     func trophyWinnerName(_ item: TrophyShelfItem) -> String {
         guard let c = item.character else { return "A Jelmiko" }
-        return jellies.first { $0.character == c }?.name ?? "A Jelmiko"
+        if let n = jellies.first(where: { $0.character == c })?.name { return n }
+        if let n = GameCare.campSource().first(where: { $0.id == c })?.name, !n.isEmpty { return n }          // (at the Camp)
+        if let n = (UserDefaults.standard.dictionary(forKey: "Circuit.retiredNames.v1") as? [String: String])?["\(c)"], !n.isEmpty { return n }          // (let go, trophies kept: read each time)
+        return "A Jelmiko"
     }
 
     func openTrophyCard() { guard !trophyCardOpen else { return }; AudioHub.shared.uiTap(); trophyCardOpen = true; A11yEvents.say("Trophy case settings", .normal) }
@@ -143,7 +150,7 @@ extension GameCare {
         GameCamera.trophyAt = SIMD2(s.x, s.y)
         trophyFocusID = id
         AudioHub.shared.uiTap()
-        if let it = trophyFocused { A11yEvents.say("\(trophyWinnerName(it)). \(it.event). \(TrophyShelfItem.dateText(it.date))", .normal) }
+        if let it = trophyFocused { A11yEvents.say("\(trophyWinnerName(it)). \(it.event). \(it.dateLine)", .normal) }
     }
     func unfocusTrophy() { trophyFocusID = nil }
 
@@ -177,11 +184,12 @@ struct TrophyCaseOverlay: View {
         GeometryReader { g in
             ZStack {
                 if let item = care.trophyFocused {
+                    TrophyGoldOutline(care: care, id: item.id).allowsHitTesting(false).accessibilityHidden(true)
                     Color.clear.contentShape(Rectangle()).onTapGesture { care.unfocusTrophy() }
                         .accessibilityHidden(true)
                     plate(item).frame(maxWidth: 360)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compact ? .bottomLeading : .bottom)
-                        .padding(.horizontal, 16).padding(.bottom, compact ? 16 : 40)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.horizontal, 16).padding(.bottom, compact ? 16 : g.size.height * 0.31)          // (portrait: above the left button rail; landscape: centred, clear of the rail)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if care.trophyCardOpen {
                     card.frame(maxWidth: compact ? 340 : 420)
@@ -223,7 +231,7 @@ struct TrophyCaseOverlay: View {
                                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.8)))
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("\(it.event), \(care.trophyWinnerName(it)), \(TrophyShelfItem.dateText(it.date))")
+                            .accessibilityLabel("\(it.event), \(care.trophyWinnerName(it)), \(it.dateLine)")
                             .accessibilityHint("Looks at the trophy")
                             .accessibilityIdentifier("trophy-row-\(it.id)")
                         }
@@ -243,7 +251,7 @@ struct TrophyCaseOverlay: View {
 
     /// The engraved brass plate.
     private func plate(_ item: TrophyShelfItem) -> some View {
-        let name = care.trophyWinnerName(item), date = TrophyShelfItem.dateText(item.date)
+        let name = care.trophyWinnerName(item), date = item.dateLine
         let brass = Color(red: 0.80, green: 0.62, blue: 0.28), dark = Color(red: 0.36, green: 0.24, blue: 0.08)
         return VStack(spacing: 10) {
             VStack(spacing: 6) {
@@ -263,6 +271,40 @@ struct TrophyCaseOverlay: View {
                 Text("Back").font(SK.font(16, .black)).foregroundStyle(SK.ink).padding(.horizontal, 28).frame(minHeight: 44).background(Capsule().fill(SK.cream))
             }.buttonStyle(.plain).accessibilityIdentifier("trophy-plate-back")
         }
+    }
+}
+
+/// The focused trophy's highlight: the selected Jelmiko's outline look (glow layers, a solid core, a white line, the 0.7 s soft pulse; Selection/SelectionOverlay.swift) in gold,
+/// drawn round the cup on the wall through the stage's camera. Follows the camera ease; gone when the focus ends.
+struct TrophyGoldOutline: View {
+    let care: GameCare
+    let id: String
+    static let gold = Color(red: 1.0, green: 0.78, blue: 0.16)
+    var body: some View {
+        TimelineView(.animation) { tl in
+            let t = tl.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, _ in
+                guard let proj = care.trophyProj, let s = TrophyShelfGeometry.slots(care.race.trophies.roomShelf(contestBest: care.show.progress.bestCup)).first(where: { $0.id == id }) else { return }
+                let hw: Float = id == "champion" ? 0.17 : 0.125, z = RoomLayout.minZ + 0.14          // (the slot is the cup's middle: its foot is 0.11 below, the bowl's top ~0.08 above)
+                let rosette = id == "contest", ball = id.hasPrefix("volley.")
+                let x0 = s.x - hw, x1 = s.x + hw, r: Float = 0.04
+                let y0 = s.y - (rosette ? 0.24 : 0.15), y1 = s.y + (id == "champion" ? 0.28 : ball ? 0.18 : rosette ? 0.13 : 0.11)
+                var w: [SIMD3<Float>] = []
+                for (cx, cy, a0) in [(x1 - r, y1 - r, Float(0)), (x0 + r, y1 - r, .pi / 2), (x0 + r, y0 + r, .pi), (x1 - r, y0 + r, .pi * 1.5)] {
+                    for k in 0...6 { let a = a0 + Float(k) / 6 * .pi / 2; w.append(SIMD3(cx + r * cosf(a), cy + r * sinf(a), z)) }
+                }
+                let pts = Silhouette.project(w, viewProj: proj.vp, size: proj.size)
+                guard pts.count == w.count else { return }
+                var p = Path(); p.move(to: pts[0]); for q in pts.dropFirst() { p.addLine(to: q) }; p.closeSubpath()
+                let glow = A11ySettings.shared.reduceMotion ? 1.0 : 0.5 + 0.5 * sin(t * 2 * .pi / 0.7 - .pi / 2)
+                let style = { (w: CGFloat) in StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round) }
+                for (w, a) in [(26.0, 0.10), (16.0, 0.18), (9.0, 0.30)] { ctx.stroke(p, with: .color(Self.gold.opacity(a * (0.55 + 0.45 * glow))), style: style(w)) }
+                ctx.stroke(p, with: .color(Self.gold), style: style(4.6))
+                ctx.stroke(p, with: .color(.white.opacity(0.85)), style: style(1.6))
+            }
+            .ignoresSafeArea()
+        }
+        .id(id)
     }
 }
 

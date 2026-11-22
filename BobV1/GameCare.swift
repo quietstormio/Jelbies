@@ -119,6 +119,8 @@ final class GameCare {
     var trophyCardOpen = false
     var trophyFocusID: String?
     @ObservationIgnored var trophyFocusT: Float = 0
+    /// The frame's camera and screen size while a trophy is looked at (written by the stage; the gold outline projects through it).
+    @ObservationIgnored var trophyProj: (vp: simd_float4x4, size: CGSize)?
     var wallAlbumOpen = false
     var wallShopRequest = false
     /// Arrange mode (drag the room's decor): set from the Bag's Place, ended by Done. The Jellies' touch is off meanwhile.
