@@ -102,7 +102,7 @@ extension GameCare {
                 group.forcedOrigin = nil; group.keepTable = false
                 group.eager = eagerWhenFamished
                 group.tierOf = { [weak self] i in self?.needs(for: i).tier(kind) ?? .normal }
-                group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k) }
+                group.pay = { [weak self] i, k in self?.needs(for: i).gain(kind, Float(k) * MealAppetite.gainPerPiece); self?.ate(jelly: i, c, pieces: k); if k > 0 { self?.bondAte(slot: i, c) } }
             }
             group.avoid = jellyFloors
             #if targetEnvironment(simulator)

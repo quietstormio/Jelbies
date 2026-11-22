@@ -30,7 +30,7 @@ struct JelbiesProvider: TimelineProvider {
     /// One entry at `date`: the projected Jelbies, whether they sleep then, and what is queued.
     static func entry(_ snap: JellySnapshot, at date: Date, portraits: [Int: UIImage], tuckedIn: Date?, queued: [JellyRoute]) -> JelbiesEntry {
         JelbiesEntry(date: date, states: snap.projectNightAware(at: date), portraits: portraits,
-                     sleeping: Bedtime.isSleeping(at: date, tuckedIn: tuckedIn), queued: queued)
+                     sleeping: Bedtime.isSleeping(at: date, tuckedIn: tuckedIn), night: SleepHours.isNight(at: date), queued: queued)
     }
 
     func placeholder(in context: Context) -> JelbiesEntry {

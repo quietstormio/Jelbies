@@ -167,8 +167,9 @@ extension GameCare {
         park.cancelPicker()
         let go = { [weak self] in
             guard let self else { return }
-            if self.outingGate(who, again: { [weak self] in self?.park.resume(picked: who) }) { return }
-            self.park.resume(picked: who)
+            let resume = { [weak self] in guard let self else { return }; self.park.resume(picked: who); for s in who { self.bondEarn(.park, slot: s) } }          // (the relationship: a park visit, for each who goes)
+            if self.outingGate(who, again: resume) { return }
+            resume()
         }
         if wakeForTrip(who, then: go) { return }          // by day a sleeper never refuses the trip: the short wake, then everybody runs out together (GameCare+Outing.swift)
         go()

@@ -990,6 +990,19 @@ final class VoiceCoordinator {
             if Set(meant) == Set(presentIDs) { care.wakeAll() } else { for id in meant { care.wakeSleeper(id) } }
             return
         }
+        if case .perform = r {          // the relationship: a trick (or "come here") obeyed on a voice command counts for each Jelmiko meant (a flop `.wrongTrick` does not)
+            let comesToCloseUp = r == .perform(.come) && !focused && onComeHere == nil && care.jellyCount > 1
+            let meant: [Int]
+            if comesToCloseUp {
+                switch target {
+                case .jelly(let id): meant = [id]
+                case .jellies(let named): meant = named
+                case .selected: meant = [care.targetJelly]
+                case .everyone: meant = presentIDs
+                }
+            } else { meant = ids.isEmpty ? [0] : ids }
+            care.bondObeyed(meant)
+        }
         if r == .perform(.come), !focused, onComeHere == nil, care.jellyCount > 1 {      // come goes to the close-up of the Jelly meant (GameCare+Focus)
             emitFeedback(r, override: kind)
             comeUntil = clock() + Self.comeWindow
