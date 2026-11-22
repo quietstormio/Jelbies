@@ -9,7 +9,29 @@
 import Foundation
 import simd
 
+/// How a ball is played (owner 2026-11-22: "the soccer ball should be mostly kicking and they can bounce it off their head ... the beach ball can be bounce off their head and kicked back but not as kick involved"). ONE table of numbers; step 2 / 3 read it (step 1: not used yet).
+nonisolated struct BallStyle {
+    /// Of the balls that come down through the air, how many are headed (the rest are let drop and kicked: a trap, then a foot).
+    var headShare: Float
+    /// How many balls go to a friend before they go back to the player (with two or three Jelmiko), and the most passes in one chain. A header passes in the air, a kick along the floor.
+    var chainChance: Float
+    var chainMax: Int
+}
+
 nonisolated enum PlayTuning {
+    /// Soccer: a ground game (about 9 touches in 10 with the feet, half the balls passed 1...3 times); beach: an air game (about 60% headers, one ball in five to a friend); bouncy and footbag: as before.
+    static func style(_ kind: DecorKind) -> BallStyle {
+        switch kind {
+        case .soccerball: return BallStyle(headShare: 0.12, chainChance: 0.5, chainMax: 3)
+        case .beachball: return BallStyle(headShare: 0.9, chainChance: 0.2, chainMax: 1)
+        default: return BallStyle(headShare: 1, chainChance: 0.16, chainMax: 1)
+        }
+    }
+    /// A pass goes to a friend at least this far from the passer (bodies and faces never come close at a pass).
+    static let passMinDist: Float = 1.3
+
+    /// Dev builds only: `-BallReturnOld 1` = the header's approach (walk, turn onto the player, crouch, jump) is off: the ball returns as it did before play-ball-r2.
+    nonisolated(unsafe) static var ballReturnOld: Bool = DevArgs.enabled && (UserDefaults.standard.integer(forKey: "BallReturnOld") != 0 || ProcessInfo.processInfo.environment["BALL_RETURN_OLD"] == "1")
     /// Dev builds only: `-PlayOld 1` = the play mode as it was (camera, floor, speed).
     nonisolated(unsafe) static var old: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "PlayOld") != 0
     /// Launch value of the camera dial (`-PlayZoom <0...1>`, dev builds); tests set `zoomOverride`.

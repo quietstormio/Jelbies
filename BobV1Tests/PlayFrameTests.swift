@@ -61,7 +61,7 @@ final class PlayFrameTests: XCTestCase {
             }
         }
         print(out)
-        try? out.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/geometry-table-0.txt", atomically: true, encoding: .utf8)
+        try? out.write(toFile: (ProcessInfo.processInfo.environment["PF_OUT_DIR"] ?? "/tmp/pf_unused") + "/geometry-table-0.txt", atomically: true, encoding: .utf8)
     }
 
     // MARK: the harness: three Jelmiko, a ball thrown again and again
@@ -195,7 +195,7 @@ final class PlayFrameTests: XCTestCase {
     }
 
     /// BEFORE / AFTER table (printed; written to the scratchpad when PF_OUT is set).
-    static let measureMarker = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/measure.on"
+    static let measureMarker = (ProcessInfo.processInfo.environment["PF_OUT_DIR"] ?? "/tmp/pf_unused") + "/measure.on"
     func testMeasure() throws {
         try XCTSkipUnless(FileManager.default.fileExists(atPath: Self.measureMarker), "the before / after table (create the marker file to run it)")
         let mode = ProcessInfo.processInfo.environment["PF_MODE"] ?? UserDefaults.standard.string(forKey: "PFMode") ?? "both"
@@ -209,7 +209,7 @@ final class PlayFrameTests: XCTestCase {
                 }
             }
         }
-        try? lines.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/measure-\(mode).txt", atomically: true, encoding: .utf8)
+        try? lines.write(toFile: (ProcessInfo.processInfo.environment["PF_OUT_DIR"] ?? "/tmp/pf_unused") + "/measure-\(mode).txt", atomically: true, encoding: .utf8)
     }
 
     // MARK: the bubble wand
@@ -271,7 +271,7 @@ final class PlayFrameTests: XCTestCase {
                 print("PFWAND " + l); lines += l + "\n"
             }
         }
-        try? lines.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/measure-wand.txt", atomically: true, encoding: .utf8)
+        try? lines.write(toFile: (ProcessInfo.processInfo.environment["PF_OUT_DIR"] ?? "/tmp/pf_unused") + "/measure-wand.txt", atomically: true, encoding: .utf8)
     }
 
     /// Returns per minute, 5 seeds x 60 s per case: mean, spread and what the rally did (rescues = a ball nobody sent back; untouched = caught with no header / kick).
@@ -298,7 +298,7 @@ final class PlayFrameTests: XCTestCase {
             }
         }
         print(out)
-        try? out.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/five_final.txt", atomically: true, encoding: .utf8)
+        try? out.write(toFile: (ProcessInfo.processInfo.environment["PF_OUT_DIR"] ?? "/tmp/pf_unused") + "/five_final.txt", atomically: true, encoding: .utf8)
     }
 
     // MARK: the proofs
@@ -395,7 +395,7 @@ final class PlayFrameTests: XCTestCase {
             PlayTuning.wandSpreadK = 1.5; PlayTuning.wandDepthK = 1.3
         }
         print(out)
-        try? out.write(toFile: "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/4c5ade4b-a768-4e5e-a1b1-52f2de759290/scratchpad/playframe/sweep2.txt", atomically: true, encoding: .utf8)
+        try? out.write(toFile: (ProcessInfo.processInfo.environment["PF_OUT_DIR"] ?? "/tmp/pf_unused") + "/sweep2.txt", atomically: true, encoding: .utf8)
     }
 
     /// With no ball out (play mode waiting in the hand) and outside play mode, the walk is the old gait: no chase blend, the same time for the same walk, and `playChase` is never left on.
