@@ -37,11 +37,11 @@ final class CafeTalkTests: XCTestCase {
         for j in c.jellies { c.needs(for: j.id).set(.hunger, 0.3) }
         step(r, 1)
         c.requestCafe()
-        step(r, 6) { c.cafe.phase == .menu }
+        step(r, 6, until: { c.cafe.phase == .menu })
         XCTAssertEqual(c.cafe.phase, .menu)
         let menu: [CafeTreatID] = [.swirl, .cocoa, .pancakes]
         XCTAssertNil(c.orderCafe(CafeOrder(picks: Dictionary(uniqueKeysWithValues: c.cafeDinerIDs.enumerated().map { ($0.element, menu[$0.offset % 3]) }))))
-        step(r, 180) { c.cafe.phase == .lounge }
+        step(r, 180, until: { c.cafe.phase == .lounge })
         XCTAssertEqual(c.cafe.phase, .lounge)
         step(r, 6)          // (the settle window: the cheer's hops are walked back to the stands and each body turns to its facing, once)
         c.cafeBook.chat = CafeChatState(seed: seed)
