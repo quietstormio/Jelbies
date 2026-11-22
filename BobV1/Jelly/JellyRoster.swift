@@ -351,6 +351,7 @@ nonisolated enum JellyRoster {
         case berryID: return BerryLook.palette
         case opalID, sunsetID, cottonCandyID, oceanID, lemonLimeID, lagoonID: return GradientLook.palette(species(instance))
         case mooID, cocoaID, blushID: return CowLook.palette(species(instance))
+        case marbleID, midnightID: return LineupLook.palette(species(instance))          // (Marble 101 / Midnight 111: MarbleLook.swift; the flesh stays LineupLook's)
         case marbleID...bronzeID: return LineupLook.palette(species(instance))
         default: return nil
         }

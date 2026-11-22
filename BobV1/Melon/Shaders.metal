@@ -41,6 +41,7 @@ static float teddyPomMask(float3 Q) {
 #include "BerryMarks.h"
 #include "GradientMarks.h"
 #include "CowMarks.h"
+#include "MarbleMarks.h"
 
 struct Uniforms {
     float4x4 viewProj;
@@ -556,7 +557,9 @@ fragment float4 fsSoftMatte(JellyOut i [[stage_in]],
     float bm = bb - 10.0 * tn;                           // shape mode 1...9
     float pandaPatch = 0.0;
     if (tn > 4.5) {                                      // Panda (modes 51 / 52), Tiger (61 / 62), Berry (71 / 72): the painted markings, no belly (PandaMarks.h, TigerMarks.h, BerryMarks.h)
-        if (tn > 8.5) { col = cowPaint(col, Q, bm); }          // cow family (modes 91 / 93 / 95): patches (CowMarks.h)
+        if (tn > 10.5) { col *= float3(0.30, 0.29, 0.36); }          // Midnight (mode 111): the near-black body, the shading would lift it to grey (its light eyes + brows: fsEyesMatte)
+        else if (tn > 9.5) { col = marblePaint(col, Q); }          // Marble (mode 101): the white veins (MarbleMarks.h)
+        else if (tn > 8.5) { col = cowPaint(col, Q, bm); }          // cow family (modes 91 / 93 / 95): patches (CowMarks.h)
         else if (tn > 7.5) { col = gradientPaint(col, Q, bm); }          // gradient family (modes 81...85): the colour by height (GradientMarks.h)
         else if (tn > 6.5) { col = berryPaint(col, Q, bm); }
         else if (tn > 5.5) { col = tigerPaint(col, Q, bm); }
@@ -639,6 +642,8 @@ fragment float4 fsEyesMatte(MeshOut i [[stage_in]], constant Uniforms& u [[buffe
         // Panda only (body mode 51, the egg; PandaMarks.h): near-black cool beads that sit in the charcoal patch with no brown halo (user 11-05). Still a bead: the dome keeps
         // its soft highlight (hi) and the thin edge rim, all in cool greys, so the eye reads against the patch (the beads are darker than the patch, the highlight lighter).
         if (u.shape.w > 50.5 && u.shape.w < 51.5) { lo = float3(0.0045, 0.0050, 0.0080); mid = float3(0.0090, 0.0100, 0.0160); hi = float3(0.085, 0.092, 0.130); rimC = float3(0.115, 0.125, 0.165); }
+        // Midnight (body mode 111): pale lilac beads that read on the near-black face, a dark outline rim
+        if (u.shape.w > 110.5 && u.shape.w < 111.5) { lo = float3(0.45, 0.42, 0.62); mid = float3(0.80, 0.76, 0.98); hi = float3(1.0, 0.98, 1.0); rimC = float3(0.03, 0.03, 0.05); }
         float tl = dot(N, normalize(float3(-0.55, 0.65, 0.52))) * 0.5 + 0.5;
         tl = clamp((tl - 0.76) * 2.6 + 0.47, 0.0, 1.0);
         col = mix(lo, mid, smoothstep(0.12, 0.5, tl));
@@ -653,6 +658,7 @@ fragment float4 fsEyesMatte(MeshOut i [[stage_in]], constant Uniforms& u [[buffe
         col = mix(col, rimC, edgeL * (0.35 + 0.6 * below));
     } else {
         float3 base = float3(0.133, 0.070, 0.045);   // #664B3C
+        if (u.shape.w > 110.5 && u.shape.w < 111.5) { base = float3(0.62, 0.58, 0.80); }          // Midnight: light brow bars
         float bevel = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
         col = base * (0.62 + 0.55 * smoothstep(0.2, 0.8, bevel));
     }
