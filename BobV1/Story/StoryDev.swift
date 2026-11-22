@@ -83,10 +83,10 @@ enum StoryDev {
             let day = StoryHabitStore.shared.today()
             h.partner = [:]; h.emote = [:]
             h.act["walk"] = 900; h.act["stand"] = 400; h.act["solo:bounce"] = 300; h.total = 1600; h.everSeconds = 1600; h.firstDay = day - 6; h.decayDay = day
-            let secs: Float = [0, 150, 330, 900][min(m, 4) - 1 == 0 ? 0 : min(m, 4) - 1]
+            let secs: Float = [0, 650, 800, 1500][min(m, 4) - 1 == 0 ? 0 : min(m, 4) - 1]
             if m >= 2 { h.partner[String(o.character)] = secs; h.act["pair:chase"] = secs; h.total += secs }
             if m >= 2 { h.emote["\(o.character)|\(m >= 4 ? "cuddle" : "chase")"] = secs }
-            if m == 3 { h.act["group:groupHug"] = 120; h.group = [String(o.character): 120]; h.groupKinds = ["\(o.character)|groupHug": 120]; h.partner[String(o.character)] = 450; h.emote["\(o.character)|dance"] = 200 }
+            if m == 3 { h.act["group:groupHug"] = 120; h.group = [String(o.character): 120]; h.groupKinds = ["\(o.character)|groupHug": 120]; h.partner[String(o.character)] = 800; h.emote["\(o.character)|dance"] = 200 }
             StoryHabitStore.shared.set(h, for: c)
             NSLog("[story] moment aid %d: %@ with %@ %.0f s", m, JellyRoster.nameOf(c), o.name, secs)
         }
@@ -100,7 +100,7 @@ enum StoryDev {
         h.act[kinds.0, default: 0] += 700
         h.act["rest", default: 0] += index % 4 == 2 ? 1800 : 400
         h.area = [:]; h.area[kinds.1, default: 0] += 900; h.area["rug", default: 0] += 200
-        for (i, o) in f.housemates.enumerated() { h.partner[String(o.id)] = Float(i == 0 ? 360 : 90); h.emote["\(o.id)|\(i == 0 ? "chase" : "dance")"] = Float(i == 0 ? 280 : 70) }
+        for (i, o) in f.housemates.enumerated() { h.partner[String(o.id)] = Float(i == 0 ? 900 : 650); h.emote["\(o.id)|\(i == 0 ? "chase" : "dance")"] = Float(i == 0 ? 280 : 70) }
         h.total = h.act.values.reduce(0, +); h.everSeconds = h.total; h.firstDay = 1; h.decayDay = 9
         StoryFactsBuilder.applyHabits(h, to: &f)
         f.newcomer = false
