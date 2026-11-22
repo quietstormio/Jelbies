@@ -1577,7 +1577,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             }          // the whole face, from below the mouth up past the crown and the feature
             if hp?.pose != nil, topY.isFinite {          // the Studio's action shot: the whole body from the floor to the crown (and a hat), centred, with a margin all round
                 let floorY = stood?.floorY ?? a.sim.floorY          // (off its feet: the soles of the stood body)
-                span = max((topY - floorY) * 1.42, 1.3)          // room above the hat
+                span = max((topY - floorY) * HeadPortraitKey.actionHeadroom, 1.3)          // room above the hat
                 // the camera aims so the floor under him lands at `actionFloorFraction` of the picture's height (solved for the pitch and the aspect: the same in either orientation)
                 let thA = tanf(GameCamera.fovY / 2), m = min(thA, thA * Float(W) / Float(H)), pt = HeadPortraitKey.actionPitch
                 let k = Float(2 * HeadPortraitKey.actionFloorFraction - 1)

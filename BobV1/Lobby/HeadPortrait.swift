@@ -31,6 +31,8 @@ struct HeadPortraitKey: Hashable, Sendable {
     static let actionFloorFraction: CGFloat = 0.885
     /// The action shot's camera pitch above level (rad): high enough that a tutu reads as a skirt, low enough that the shoes show.
     static let actionPitch: Float = 0.36
+    /// The action shot's span as a multiple of the body's height (floor to crown): the room above him for a hat. 1.42 clipped the knob of the party cone, the tallest hat in the catalogue; 1.52 keeps it whole.
+    static let actionHeadroom: Float = 1.52
     // MARK: the lobby head portrait (2026-11-16, the owner: "should include their whole face, doesn't need to have the clothes")
     /// The picture shows the WHOLE face: from below the mouth (rest y 0.665) up past the brows (0.945) to the crown, with some room above it for a species feature. The camera looks down at the body like the room
     /// camera (26 degrees), so the front of the face is nearer and lower on the picture than the body's middle: the camera therefore aims at the FRONT of the face, `faceTargetForward` ahead of the body's centre,
