@@ -541,6 +541,7 @@ struct GameScreen: View {
             try? await Task.sleep(nanoseconds: UInt64(after) * 1_000_000_000)
             town = .condition
         }
+        .task { await StoryDev.runIfRequested(care: model.care) }          // `-StoryDump <n>` (dev arguments only): Story/StoryDev.swift
         .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
         .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
@@ -967,6 +968,10 @@ struct GameScreen: View {
                     for t in [Trophy.wins10, .wins25] where !sh.has(t) { sh.earned.append(t.id); sh.stamp("trophy.\(t.id)", Date()) }
                     care.race.trophies.setShelf(sh, character: c)
                     for t in VolleyTier.allCases { care.race.trophies.recordVolleyWin(character: t == .sandcastle || t == .shore ? (c == 1 ? 2 : 1) : c, tier: t) }          // (the first two courts were won by another Jelmiko, so a card by winner has more than one block)
+                }
+                if m.contains("trophypair") {          // capture aid: "trophypair": a Sandcastle volleyball win by the first Jelmiko with the second (a Park friend "Pebble" when there is only one); "trophylong" is a Shore win with a Park friend of a long name
+                    let a = care.jellies[0], b = care.jellies.count > 1 ? care.jellies[1] : nil
+                    care.race.trophies.recordVolleyWin(character: a.character, tier: m.contains("trophylong") ? .shore : .sandcastle, name: a.name, partner: m.contains("trophylong") ? (nil, "Marshmallow Crumblecake") : b.map { ($0.character, $0.name) } ?? (nil, "Pebble"))
                 }
                 if m.contains("trophyoff") { care.setTrophyCase(visible: false) }
                 if m.contains("trophycard") { await sleep(1); care.openTrophyCard() }

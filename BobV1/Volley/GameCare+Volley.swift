@@ -50,7 +50,7 @@ extension GameCare {
         volley.trophies = race.trophies
         volley.wallet = bath.wallet
         volley.upgrades = upgrades
-        volley.onBond = { [weak self] c, won in self?.bondEarn(.volley, character: c, win: won) }
+        volley.onBond = { [weak self] c, won in self?.bondEarn(.volley, character: c, win: won, story: ["tier": self?.volley.tier.title ?? ""]) }
         #if targetEnvironment(simulator)
         if UserDefaults.standard.bool(forKey: "VolleyToys"), store.placedDecor.isEmpty {          // capture aid: `-VolleyToys 1` puts a few toys in the room (to see they stay home)
             for k in [DecorKind.soccerball, .drum, .beachball, .plushbear] { store.grant(k.storeID); _ = store.place(k.storeID) }
@@ -182,6 +182,7 @@ extension GameCare {
         volley.trophies = race.trophies
         volley.wallet = bath.wallet
         volley.partnerName = partner?.name ?? ""
+        volley.partnerCharacter = partner?.character
         volley.teamNames = [prof.name, partner?.name ?? ""]
         volley.begin(mode: mode, playerID: id, character: prof.character, name: prof.name, sim: sim)
     }

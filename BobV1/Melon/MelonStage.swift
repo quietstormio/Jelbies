@@ -425,6 +425,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         guard actors.count > 1 || !parkActors.isEmpty else { return }
         b.steerID = id
         b.board = walkBoard
+        StoryHabitStore.shared.resolve = { [weak self] slot in self?.model.care.jelly(slot)?.character }          // (Story/: the slot of a body -> its Jelmiko, for the habit sampler)
         b.bus = eventBus
         b.peerGap = Self.jellyGap
         if id < actors.count { model.care.voice.ai.register(b, id: id) }            // AI hub: his naps / socials for the diary, and "go to sleep" for him
@@ -1077,7 +1078,7 @@ final class MelonController: NSObject, MTKViewDelegate {
 
     /// preferredFramesPerSecond = the governor's 60 / 120, or 30 while resting.
     private func applyFrameRate(_ stage: MelonStageView) {
-        let want = model.coverUp ? 5 : idleRest.resting ? 30 : lastAppliedFPS          // (covered by a full-screen screen: nobody sees the room)
+        let want = SmoothDraw.forceFPS ?? (model.coverUp ? 5 : idleRest.resting ? 30 : lastAppliedFPS)          // (covered by a full-screen screen: nobody sees the room)
         if stage.preferredFramesPerSecond != want { stage.preferredFramesPerSecond = want }
     }
 
@@ -1131,7 +1132,8 @@ final class MelonController: NSObject, MTKViewDelegate {
         LaunchTiming.mark("first frame drawn")
         PerfMeter.frameBegin()
         let cpu0 = CACurrentMediaTime()
-        let now = cpu0
+        if let f = SmoothDraw.forceFPS, stage.preferredFramesPerSecond != f { stage.preferredFramesPerSecond = f }          // (-SmoothForceFPS: a pinned display rate for the scripted checks)
+        let now = SmoothDraw.virtualClock && lastTime != 0 ? lastTime + 1.0 / Double(max(stage.preferredFramesPerSecond, 1)) : cpu0          // (-SmoothVirtualClock: a synthetic clock, one display interval per frame)
         if MicTrace.recording { MicTrace.frame(now) }          // the mic trace's frame-pacing window (Voice/MicTrace.swift); one Bool test when off
         let dt = lastTime == 0 ? Float(1.0 / 60) : Self.pacedDt(Double(now - lastTime), fps: stage.preferredFramesPerSecond)
         lastTime = now
@@ -1182,15 +1184,17 @@ final class MelonController: NSObject, MTKViewDelegate {
         // fixed-step simulation
         let s0 = CACurrentMediaTime()
         var steppedThisFrame = false
+        var smoothSteps = 0
         if !paused {
             acc += dt * (m.slow ? 0.25 : 1) * (game && model.care.volley.inScene ? GameCare.volleyTimeScale * GameCare.volleySlowScale : 1)          // (-VolleySlow: capture aid)
             // At most 2 steps per frame; leftover time is dropped so one slow frame cannot snowball into more work.
             // (a frame whose last pass already cost over 12 ms of CPU does at most ONE step: slow motion for a moment instead of a catch-up spiral of 2 steps per frame)
-            let maxSteps = lastCPUFrameMs > 12 ? 1 : 2
+            let maxSteps = SmoothDraw.maxSteps(base: lastCPUFrameMs > 12 ? 1 : 2, dt: dt, fps: stage.preferredFramesPerSecond, stepDt: sim.stepDt, cpuMs: lastCPUFrameMs)          // (smooth-motion-r1: a steady 30 / 24 fps frame keeps real speed)
             var steps = 0
             while acc >= sim.stepDt - 1e-6 && steps < maxSteps {          // (1e-6: a snapped 1/60 frame is exactly one step)
                 let pmB = PerfMeter.begin()
                 hopTick(reduce: reduce)
+                if game, SmoothDraw.on { SmoothDraw.recordStep(model.care.play) }          // (the ball's state after this step: what the next frames interpolate from)
                 PerfMeter.end(.brain, pmB)
                 let st0 = CACurrentMediaTime()
                 var lt = st0
@@ -1204,14 +1208,18 @@ final class MelonController: NSObject, MTKViewDelegate {
                 JellyParallel.step(stepSims)                   // every awake body's XPBD step, one per core (settled Jellies sleep)
                 PerfMeter.end(.sim, pmS)
                 lapEnd(.step, &lt)
+                if SmoothDraw.trace { SmoothDraw.traceStep(play: game ? model.care.play : nil, bodies: stepSims) }
                 dbgStepOnly += CACurrentMediaTime() - st0; acc -= sim.stepDt; steps += 1
             }
             if steps == maxSteps { acc = min(acc, sim.stepDt) }
             steppedThisFrame = steps > 0
+            smoothSteps = steps
+            SmoothDraw.alpha = min(max(acc / sim.stepDt, 0), 1)          // how far this frame is into the next step
             var rt = CACurrentMediaTime()
             if steps > 0 { for a in actors { a.brain?.refitBeans(a.sim, a.skinner) }; for a in parkActors { a.brain?.refitBeans(a.sim, a.skinner) } }          // (the beans follow the body's pose AFTER the step)
             let pmF = PerfMeter.begin()
             if game, steps > 0 { model.care.refreshHeld(actors: actors, renderer: renderer); model.care.refreshMasks(renderer: renderer); model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))); model.care.refreshWallPicture(renderer: renderer) }
+            else if game, SmoothDraw.wantsBallFrame(model.care.play) { model.care.refreshDecor(renderer: renderer, time: Float(CACurrentMediaTime().truncatingRemainder(dividingBy: 1000))) }          // (a frame with no step: the ball between two steps)
             PerfMeter.end(.feature, pmF)
             lapEnd(.refit, &rt)
             simTime += dt * (m.slow ? 0.25 : 1) * (reduce ? 0.25 : 1)   // drives the lava colour drift
@@ -1387,6 +1395,7 @@ final class MelonController: NSObject, MTKViewDelegate {
             publishReadouts()
         }
 
+        SmoothDraw.frame(steps: smoothSteps, play: game ? model.care.play : nil, now: now, fps: stage.preferredFramesPerSecond, measuredFPS: nil, stepDt: sim.stepDt)
         PerfMeter.frameEnd()
         dbgCPU += CACurrentMediaTime() - cpu0
         lastCPUFrameMs = (CACurrentMediaTime() - cpu0 - (dbgWait - waitBefore)) * 1000

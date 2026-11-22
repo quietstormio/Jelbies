@@ -226,6 +226,7 @@ final class HoldWearTests: XCTestCase {
                 let brain = sc.r.rig.brain, sim = sc.r.rig.sim
                 var started = false
                 if trick == .flip { brain.flipCompact = false; brain.commandedFlipFail = false; brain.commandedFlip = true }
+                else if trick == .hug { brain.idleForced = true; brain.commanded = true; brain.bestHug.go = true; started = brain.idleStart(.hula, sim); XCTAssertTrue(started, "the Bond (a flagged hula, unlocked) starts") }          // (Bond is no IdleKind of its own: `commandBestHug` flags the next hula; locked until Best friends in the game, unlocked here)
                 else if let k = VoiceCoordinator.idleKind(for: trick) { brain.idleForced = true; brain.commanded = true; brain.idleState.trickFailNext = false; started = brain.idleStart(k, sim); XCTAssertTrue(started, "\(trick) starts") }
                 var seen = false, k = 0, n = 0, maxTilt: Float = 0, hiddenFrames = 0, undrawn = 0, mouth = 0, worstOff: Float = 0
                 var feetWorst: Float = 0

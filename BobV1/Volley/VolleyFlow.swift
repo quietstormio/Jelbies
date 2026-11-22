@@ -49,6 +49,8 @@ final class VolleyFlow {
     var onBond: ((Int, Bool) -> Void)?
     var playerName = ""
     var partnerName = ""
+    /// The teammate's character when he is one of the player's own (nil: a Park friend filling in, or no teammate).
+    var partnerCharacter: Int?
     var opponentNames: [String] = []
     /// Results.
     private(set) var earned = 0
@@ -194,7 +196,7 @@ final class VolleyFlow {
             wallet?.add(earned)
             unlockedNow = book.finishMatch(character: playerCharacter, tier: t, win: win, closeLoss: close)
             if played { awardPoints(win: win, closeLoss: close); onBond?(playerCharacter, win) }          // (the relationship, GameCare+Bond.swift)
-            if win, let tb = trophies { awards = tb.recordVolleyWin(character: playerCharacter, tier: t) }
+            if win, let tb = trophies { awards = tb.recordVolleyWin(character: playerCharacter, tier: t, name: playerName, partner: partnerName.isEmpty ? nil : (partnerCharacter, partnerName)) }          // (two winners: the asked Jelmiko and his teammate)
             A11yEvents.say(win ? "You won \(s.score[0]) to \(s.score[1]). \(earned) JellyCoins" : "They won \(s.score[1]) to \(s.score[0]). \(earned) JellyCoins", .high)
             if awards.newRibbon { A11yEvents.say("New ribbon!", .normal) }
             for tr in awards.trophies { A11yEvents.say("New trophy! \(tr.title)", .normal) }
@@ -206,12 +208,24 @@ final class VolleyFlow {
 
 extension TrophyBook {
     /// A beach volleyball match was won on `tier`: the ribbon for the first win there, then the 5 / 10 / 25 win trophies.
+    /// A match has two winners: `partner` (nil = no teammate recorded, e.g. old callers) is the teammate, one of the player's own Jelmiko (`character` set) or a Park friend (`character` nil).
+    /// Both own winners get the win on their shelf (so the trophy shows on both Profiles); the first win on a court also writes the two names (`VolleyPair`). The returned awards are the asked Jelmiko's.
     @discardableResult
-    func recordVolleyWin(character c: Int, tier: VolleyTier, now: Date = Date()) -> TrophyAwards {
+    func recordVolleyWin(character c: Int, tier: VolleyTier, name: String = "", partner: (character: Int?, name: String)? = nil, now: Date = Date()) -> TrophyAwards {
+        let pair = partner.map { VolleyPair(asked: c, askedName: name, mate: $0.character, mateName: $0.name) }
+        let a = creditVolley(character: c, tier: tier, pair: pair, now: now)
+        if let m = partner?.character, m != c { _ = creditVolley(character: m, tier: tier, pair: pair, now: now) }
+        return a
+    }
+
+    private func creditVolley(character c: Int, tier: VolleyTier, pair: VolleyPair?, now: Date) -> TrophyAwards {
         var a = TrophyAwards(place: 1)
         var s = shelf(character: c)
         var w = s.volleyWins ?? [:]
         a.newRibbon = (w[tier.rawValue] ?? 0) == 0
+        // The pair is written when this court's trophy has none yet: the first win on the court, or an older one-winner trophy (saved before two winners) on its NEXT win here, which keeps its
+        // original date and now reads both names. A trophy that already has a pair keeps it for good (a later win with someone else never changes it). Other courts are never touched.
+        if let pair, s.volleyPairs?[tier.rawValue] == nil { var m = s.volleyPairs ?? [:]; m[tier.rawValue] = pair; s.volleyPairs = m }
         w[tier.rawValue, default: 0] += 1
         s.volleyWins = w
         s.stamp("volley.\(tier.rawValue)", now)

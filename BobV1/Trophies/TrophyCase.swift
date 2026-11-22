@@ -20,6 +20,7 @@ nonisolated struct TrophyShelfItem: Equatable, Sendable, Identifiable {
     var character: Int?     // who won it (nil: not known)
     var date: Date?         // nil: won before dates were kept
     var before: Date? = nil // the day this save first got engravings (TrophyBook.engravingSince): an undated win was won before it
+    var pair: VolleyPair? = nil // a beach volleyball trophy won by two (the asked Jelmiko and his teammate); nil: one winner (older trophies, races, the Show)
 
     var dateLine: String { Self.dateText(date, before: before) }
     static func dateText(_ d: Date?, before: Date? = nil) -> String {
@@ -64,7 +65,9 @@ extension TrophyBook {
         for (k, t) in VolleyTier.allCases.enumerated() where spec.volley[k] {
             let holders = books.filter { $0.1.volleyWon(t) > 0 }.map(\.0)
             let (c, d) = earliest("volley.\(t.rawValue)", among: holders)
-            out.append(TrophyShelfItem(id: "volley.\(t.rawValue)", event: "Beach Volleyball (\(t.title)) \u{2013} 1st", character: c, date: d, before: since))
+            let pair = c.flatMap { shelves["\($0)"]?.volleyPairs?[t.rawValue] }          // (the earliest winner's record: both names, in the order asked / teammate)
+            let face = pair.map { holders.contains($0.asked) ? $0.asked : c } ?? c
+            out.append(TrophyShelfItem(id: "volley.\(t.rawValue)", event: "Beach Volleyball (\(t.title)) \u{2013} 1st", character: face, date: d, before: since, pair: pair))
         }
         return out
     }
@@ -132,11 +135,22 @@ extension GameCare {
     var trophyFocused: TrophyShelfItem? { trophyFocusID.flatMap { id in trophyItems.first { $0.id == id } } }
     /// "Jelmiko name" for a plate: the Jelmiko's own name while he is home; "A Jelmiko" when he is not on the roster any more or the win predates records.
     func trophyWinnerName(_ item: TrophyShelfItem) -> String {
+        if let p = item.pair { return trophyPairNames(p).joined(separator: " & ") }          // two winners: "Shadow & Berry" (a Park friend by the name shown in the Park)
         guard let c = item.character else { return "A Jelmiko" }
         if let n = jellies.first(where: { $0.character == c })?.name { return n }
         if let n = GameCare.campSource().first(where: { $0.id == c })?.name, !n.isEmpty { return n }          // (at the Camp)
         if let n = (UserDefaults.standard.dictionary(forKey: "Circuit.retiredNames.v1") as? [String: String])?["\(c)"], !n.isEmpty { return n }          // (let go, trophies kept: read each time)
         return "A Jelmiko"
+    }
+
+    /// The two names of a pair, asked Jelmiko first. A name is read live (renamed Jelmiko follow) only while that Jelmiko is still the player's and his own shelf holds this record;
+    /// otherwise the name written at the win stands, so "Shadow & Berry" never turns into "Shadow & A Jelmiko".
+    func trophyPairNames(_ p: VolleyPair) -> [String] {
+        func name(_ c: Int?, _ saved: String) -> String {
+            guard let c, race.trophies.shelf(character: c).volleyPairs?.values.contains(p) == true, let live = jellies.first(where: { $0.character == c })?.name, !live.isEmpty else { return saved.isEmpty ? "A Jelmiko" : saved }
+            return live
+        }
+        return [name(p.asked, p.askedName), name(p.mate, p.mateName)]
     }
 
     func openTrophyCard() { guard !trophyCardOpen else { return }; AudioHub.shared.uiTap(); trophyCardOpen = true; A11yEvents.say("Trophy shelf settings", .normal) }
@@ -213,7 +227,8 @@ struct TrophyCaseOverlay: View {
         let brass = Color(red: 0.80, green: 0.62, blue: 0.28), dark = Color(red: 0.36, green: 0.24, blue: 0.08)
         return VStack(spacing: 10) {
             VStack(spacing: 6) {
-                Text(name).font(SK.font(24, .black)).foregroundStyle(dark)
+                if let pair = item.pair { PlaqueNames(names: care.trophyPairNames(pair), size: 24, ink: dark) }
+                else { Text(name).font(SK.font(24, .black)).foregroundStyle(dark) }
                 Text(item.event).font(SK.font(16, .heavy)).foregroundStyle(dark).multilineTextAlignment(.center)
                 Rectangle().fill(dark.opacity(0.35)).frame(height: 1).padding(.horizontal, 24)
                 Text(date).font(SK.font(15, .bold)).foregroundStyle(dark.opacity(0.85))
@@ -387,5 +402,54 @@ struct TrophyCaseToggle: View {
         .padding(.horizontal, 14).padding(.vertical, 8).frame(minHeight: 48)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.white.opacity(0.8)))
         .accessibilityIdentifier("trophy-case-toggle")
+    }
+}
+
+
+// MARK: - two names on one line
+
+/// How a line of text fits a width: `scale` it down to `minScale` at most, and only then break it into `lines` (at the "&" of "A & B": "A &" over "B"); a line that is still too wide
+/// is scaled further (a name is never cut short with dots). Pure, so the rule is testable; `measure` = the width of a string at the base size.
+nonisolated enum PlaqueFit {
+    struct Result: Equatable { var lines: [String]; var scale: CGFloat }
+    static let minScale: CGFloat = 0.7
+    static func fit(names: [String], width: CGFloat, measure: (String) -> CGFloat) -> Result {
+        let one = names.joined(separator: " & ")
+        let w = measure(one)
+        if w <= width || names.count < 2 { return Result(lines: [one], scale: w <= width || w <= 0 ? 1 : max(width / w, 0.4)) }
+        if width / w >= minScale { return Result(lines: [one], scale: width / w) }
+        let lines = names.enumerated().map { $0.offset == names.count - 1 ? $0.element : $0.element + " &" }
+        let widest = lines.map(measure).max() ?? 0
+        return Result(lines: lines, scale: widest <= width || widest <= 0 ? 1 : width / widest)
+    }
+}
+
+/// The plaque's first line for two winners: one line scaled down to ~70%, else two lines broken at the "&". The plate keeps its width.
+struct PlaqueNames: View {
+    let names: [String]
+    let size: CGFloat
+    let ink: Color
+    @State private var avail: CGFloat = 300
+    var body: some View {
+        let px = JFont.scaledSize(size)
+        let font = UIFont.systemFont(ofSize: px, weight: .black).rounded()
+        let r = PlaqueFit.fit(names: names, width: avail) { ($0 as NSString).size(withAttributes: [.font: font]).width }
+        VStack(spacing: 0) {
+            ForEach(Array(r.lines.enumerated()), id: \.offset) { _, l in
+                Color.clear.frame(maxWidth: .infinity).frame(height: px * 1.2 * r.scale)          // (the line is drawn over an empty strip, so its own width never widens the card or the tile)
+                    .overlay(Text(l).font(SK.font(size, .black)).foregroundStyle(ink).lineLimit(1).fixedSize().scaleEffect(r.scale))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(GeometryReader { g in Color.clear.preference(key: PlaqueW.self, value: g.size.width) })
+        .onPreferenceChange(PlaqueW.self) { if $0 > 0, abs($0 - avail) > 0.5 { avail = $0 } }
+    }
+}
+private struct PlaqueW: PreferenceKey { static var defaultValue: CGFloat = 0; static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) } }
+
+private extension UIFont {
+    func rounded() -> UIFont {
+        guard let d = fontDescriptor.withDesign(.rounded) else { return self }
+        return UIFont(descriptor: d, size: pointSize)
     }
 }

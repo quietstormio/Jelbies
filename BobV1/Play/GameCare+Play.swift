@@ -53,7 +53,7 @@ extension GameCare {
         applyPlayWorld()
         play.onEvent = { [weak self] e in self?.playFeedback(e) }
         play.begin(ball: kind, title: kind.title, jellies: playJellies())
-        for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id) }          // (the relationship: a toy the player starts)
+        for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id, story: ["toy": "ball"]) }          // (the relationship: a toy the player starts)
         AudioHub.shared.play(.uiconfirm)
     }
 
@@ -66,7 +66,7 @@ extension GameCare {
         applyPlayWorld()
         play.beginToy(title: wand.title)
         wand.begin(care: self)
-        for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id) }          // (the relationship: a toy the player starts)
+        for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id, story: ["toy": "bubbles"]) }          // (the relationship: a toy the player starts)
         AudioHub.shared.play(.uiconfirm)
     }
 
@@ -116,7 +116,8 @@ extension GameCare {
     func playFeedback(_ e: PlayEvent) {
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playtoss] %@", String(describing: e)) }
         let hub = AudioHub.shared
-        func buzz(_ style: UIImpactFeedbackGenerator.FeedbackStyle, _ i: CGFloat) { Haptic.impact(style, intensity: i) }
+        let tapped = PlayHaptics.play(e, incoming: SmoothDraw.incomingSpeed, outgoing: simd_length(play.ball.vel)); PlayHaptics.ownsTap = tapped; defer { PlayHaptics.ownsTap = false }          // (smooth-motion-r1: header / kick / firm bounce taps, prepared at the throw)
+        func buzz(_ style: UIImpactFeedbackGenerator.FeedbackStyle, _ i: CGFloat) { if !tapped { Haptic.impact(style, intensity: i) } }
         switch e {
         case .release(let s):
             buzz(.soft, min(0.9, 0.35 + CGFloat(s) * 0.04)); hub.play(.tick, volume: 0.6, rate: 1.1)
@@ -151,11 +152,12 @@ extension GameCare {
         func add(_ m: RoomMesh) { let off = UInt32(b.mesh.vertices.count); b.mesh.vertices.append(contentsOf: m.vertices); b.mesh.indices.append(contentsOf: m.indices.map { $0 + off }) }
         if !active.isEmpty { add(DecorModels.build(feet: f.feet.filter { active.contains($0.uid) }, field: f, time: time)) }
         let ball = p.ball
+        let dr = SmoothDraw.ball(p)          // (smooth-motion-r1: the pose drawn this frame, between the last two steps)
         let h = max(ball.pos.y - ball.radius, 0)
         // a soft dark disc under it: smaller and fainter the higher it is
         let k = min(1, h / 3)
         let col = SIMD3<Float>(repeating: 0.55 + 0.25 * k) * SIMD3(0.9, 0.8, 0.7)
-        if p.phase == .flying || p.phase == .loose { ParkScenery.disc(b, cx: ball.pos.x, cz: ball.pos.z, radius: ball.radius * (1.25 - 0.35 * k), y: 0.021, color: col) }
+        if p.phase == .flying || p.phase == .loose { ParkScenery.disc(b, cx: dr.pos.x, cz: dr.pos.z, radius: ball.radius * (1.25 - 0.35 * k), y: 0.021, color: col) }
         // the landing marker: a soft ring + dot at the predicted touch-down, closing in and brightening as the ball comes down (gone once it is down)
         if p.phase == .flying || (p.phase == .loose && h > 0.15), h > 0.12, let l = ball.landing(xHalf: PlayToss.ballReach), l.t < 3 {
             let prog = 1 - min(1, l.t / 1.6)                               // 0 = far, 1 = about to land
@@ -165,9 +167,9 @@ extension GameCare {
             ParkScenery.disc(b, cx: l.xz.x, cz: l.xz.y, radius: r * 1.15, y: 0.024, color: haloC)
             VolleyBallMesh.annulus(b, cx: l.xz.x, cz: l.xz.y, r0: r * 0.80, r1: r * 1.0, y: 0.03, color: glow)
         }
-        var a = DecorAnim(); a.rot = ball.rot; a.pos = SIMD2(ball.pos.x, ball.pos.z)
+        var a = DecorAnim(); a.rot = dr.rot; a.pos = SIMD2(dr.pos.x, dr.pos.z)
         let m = RoomMeshBuilder(); m.material = .plain
-        DecorModels.add(p.ballKind, at: SIMD2(ball.pos.x, ball.pos.z), lift: h, anim: a, time: time, uid: 0, into: m)
+        DecorModels.add(p.ballKind, at: SIMD2(dr.pos.x, dr.pos.z), lift: max(dr.pos.y - ball.radius, 0), anim: a, time: time, uid: 0, into: m)
         add(m.mesh)
         room.setDecorActive(b.mesh)
         decorDrawn.activeShown = true

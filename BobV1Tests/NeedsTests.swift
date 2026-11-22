@@ -147,7 +147,16 @@ final class NeedsTests: XCTestCase {
     }
 
     func testADroppedMealRestoresNothing() {
-        let (r, care) = feedRun("berries")
+        // the tray spot is random in the game (DiningSpot.pickOpen); a near one has him taking a bite inside the 3 s, a far one does not: pin the FARTHEST free spot so the drop always lands before the first bite
+        let was = DiningSpot.pickOpen; defer { DiningSpot.pickOpen = was }
+        let r = FocusRun(); Self.keep.append(r)
+        let care = r.care
+        for k in NeedKind.allCases { care.needs.set(k, 0.9) }
+        care.needs.set(.hunger, 0.1); care.needs.set(.thirst, 0.1)
+        r.run(2)
+        let here = r.brain.position
+        DiningSpot.pickOpen = { open in open.max { simd_distance($0, here) < simd_distance($1, here) } }
+        care.feed("berries")
         r.run(3)
         care.comeHere()                                                  // drops the meal
         r.run(30)

@@ -58,7 +58,7 @@ extension GameCare {
         let shined = bath.phase == .finish
         let washed = bath.targetID
         bath.done(brain: brain, sim: sim)
-        if shined { bondEarn(.care, slot: washed) }          // (the relationship: a finished bath)
+        if shined { bondEarn(.care, slot: washed, story: ["care": "bath"]) }          // (the relationship: a finished bath)
         if shined { brain.postEvent(.shined); brain.blushBump(hold: 2.8, peak: 0.6); brain.wantJoy() }          // the others admire the shine
     }
     /// The brain and body of the clean-up that is running (must be `id` when one is given).
