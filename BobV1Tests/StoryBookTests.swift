@@ -223,9 +223,9 @@ final class StoryBookTests: XCTestCase {
         let d = suite()
         let b = book(d, day: Box(100))
         _ = b.aboutLine(facts(id: 1)); _ = b.aboutLine(facts(id: 2, name: "Latte"))
-        var f1 = facts(id: 1); f1.housemates = [.init(id: 2, name: "Latte", kindName: "Moo")]
-        var f2 = facts(id: 2, name: "Latte"); f2.housemates = [.init(id: 1, name: "Berry", kindName: "Blush")]
-        var f3 = facts(id: 3, name: "Pip"); f3.housemates = [.init(id: 1, name: "Berry", kindName: "Blush"), .init(id: 2, name: "Latte", kindName: "Moo")]
+        var f1 = facts(id: 1); f1.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: 700)]
+        var f2 = facts(id: 2, name: "Latte"); f2.housemates = [.init(id: 1, name: "Berry", kindName: "Blush", playShare: 0.8, togetherSeconds: 700)]
+        var f3 = facts(id: 3, name: "Pip"); f3.housemates = [.init(id: 1, name: "Berry", kindName: "Blush", playShare: 0.8, togetherSeconds: 700), .init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: 700)]
         _ = b.noteLine(f1, with: f1.housemates[0]); _ = b.noteLine(f2, with: f2.housemates[0])
         _ = b.noteLine(f3, with: f3.housemates[0]); _ = b.noteLine(f3, with: f3.housemates[1])
         XCTAssertEqual(b.saved.notes.count, 4)

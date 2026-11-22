@@ -76,6 +76,7 @@ final class StoryTemplatesTests: XCTestCase {
             }
             for h in f.housemates where noteCount < 10_000 {
                 let key = TemplateWriter.noteKey(f.id, h.id)
+                guard StoryTemplates.noteAllowed(f, h) else { continue }          // (a long-time Jelmiko with under 10 minutes together: no note, the row shows its placeholder)
                 guard let w = StoryTemplates.friendship(f, with: h, used: memory.usedSet(key), seed: memory.nextSeed(key)) else { XCTFail("no note"); return }
                 memory.remember(key, w.ids, bankSize: StoryTemplates.noteBank.count)
                 let v = StoryGuard.check(template: w.template, final: w.final, kind: .friendship, offered: StoryFill.offered(f, with: h), values: StoryFill.values(f, with: h), keys: w.keys, available: StoryFill.facts(f, with: h))

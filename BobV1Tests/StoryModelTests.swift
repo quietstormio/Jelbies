@@ -16,7 +16,7 @@ final class StoryModelTests: XCTestCase {
         var f = StoryFacts(id: id, name: name, kindName: "Blush", kindAbout: "", shownParagraph: "Pale pink with rose patches. Shy at first, then the friendliest one in the room.", mood: "happy")
         f.personality = "sleepy"; f.favouriteFood = "cookie"; f.favouriteActivity = "bounce"; f.favouriteSpot = "window"; f.minutesSeen = 120; f.daysTracked = 9
         f.trophies.raceWins = 1; f.trophies.bestRaceTier = "Puddle"
-        f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: 400, topEmote: "chase", mostPlayedWith: true)]
+        f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: 700, topEmote: "chase", mostPlayedWith: true)]
         f.mostPlayedWithID = 2; f.togetherShare = 0.3
         return f
     }
