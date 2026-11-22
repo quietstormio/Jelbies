@@ -389,8 +389,8 @@ final class WearSweepTests: XCTestCase {
         switch slot {
         case .head: return (0.55, 2.2)
         case .face: return (0.28, 2.0)
-        case .neck: return (0.22, 1.95)
-        case .body: return (0.10, 2.25)
+        case .neck: return (-0.18, 2.3)
+        case .body: return (-0.1, 2.6)
         case .hands: return (0.05, 2.0)
         case .feet: return (-0.2, 2.0)
         }
@@ -444,6 +444,48 @@ final class WearSweepTests: XCTestCase {
                 }
             }
             try img.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/overview_\(slot.rawValue).jpg"))
+        }
+    }
+
+    /// Capture-only: WEAR_AUDIT_DIR=<dir> + WEAR_AUDIT_MOTION=look,look writes <dir>/motion/<look>.jpg: rows = Bob / Pip x (walk, happy bounce, sleep), six frames each, 3/4 view.
+    func testAuditMotionStrips() throws {
+        guard let d = env("WEAR_AUDIT_DIR") else { throw XCTSkip("WEAR_AUDIT_DIR not set") }
+        try FileManager.default.createDirectory(atPath: d + "/motion", withIntermediateDirectories: true)
+        let names = env("WEAR_AUDIT_MOTION")?.split(separator: ",").map(String.init) ?? ["whistleCoach", "pearls", "lei", "diamondJ", "bandanaCoral", "scarfCosy"]
+        let list = names.compactMap { WearLook(rawValue: $0) }
+        guard !list.isEmpty else { throw XCTSkip("nothing selected") }
+        for l in list {
+            var rows: [[UIImage]] = []
+            for id in [0, 1] {
+                for motion in ["walk", "bounce", "sleep"] {
+                    DayClock.shared.forcedHour = 12
+                    let st = try makeStage(id)
+                    let r = st.rig
+                    dress(st, l, ticks: 70, settleSim: true)
+                    for _ in 0..<40 { st.lab.tick(watching: false) }
+                    var which = 0
+                    let tg: [SIMD2<Float>] = [SIMD2(1.6, 0.4), SIMD2(-1.2, 1.0)]
+                    switch motion {
+                    case "walk": r.brain.request(.goTo(tg[0]))
+                    case "bounce": r.brain.idleForced = true; _ = r.brain.idleStart(.bounce, r.sim)
+                    default:
+                        r.brain.sleepEnabled = false; r.brain.idleForced = true
+                        if r.brain.idleStart(.sleep, r.sim) { r.brain.sleep.hold = 5000; var f = 0; while !r.brain.isNapping && f < 60 * 40 { st.lab.tick(watching: false); r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt); f += 1 } }
+                    }
+                    var row: [UIImage] = []
+                    for k in 0..<6 {
+                        for _ in 0..<9 {
+                            st.lab.tick(watching: false)
+                            if motion == "sleep" { r.skinner.jelly.tick(brain: r.brain, sim: r.sim, dt: r.sim.stepDt) }
+                            if motion == "walk", r.brain.activity != .walking && r.brain.activity != .coming { which = 1 - which; r.brain.request(.goTo(tg[which])) }
+                            tick(st, l)
+                        }
+                        row.append(caption(shot(st, l, yaw: 0.65, focus: auditFocus(l.slot), lift: 0.15), "\(Self.names[id]) \(l.rawValue) \(motion) \(k)"))
+                    }
+                    rows.append(row)
+                }
+            }
+            try stack(rows, header: "\(l.rawValue): Bob then Pip; walk, happy bounce, asleep; six frames each").jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: d + "/motion/\(l.rawValue).jpg"))
         }
     }
 
