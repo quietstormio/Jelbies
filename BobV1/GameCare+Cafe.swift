@@ -60,6 +60,8 @@ final class CafeBook {
     var lounged = false
     /// The regulars (Park friends at the bistro table and the counter): bodies, who they are, seconds to each one's next idle, and where each stands.
     var regularsPending = false
+    /// cafe-regulars-r1: this visit's guest plan, the pair's table and their talk (GameCare+CafeRegulars.swift).
+    let guests = CafeGuests()
     var regulars: [JellyActor] = []
     var regularVisitors: [ParkVisitor] = []
     var regularIdle: [Int: Float] = [:]
