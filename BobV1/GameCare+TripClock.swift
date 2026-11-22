@@ -1,6 +1,6 @@
 //
 //  GameCare+TripClock.swift
-//  Being out (Park, Café, Groomer) takes a little while: on the way home the Jelbies who went get a small extra step of time on the ONE existing
+//  Being out (Park, Groomer; the Café costs nothing, see GameCare+Cafe.swift) takes a little while: on the way home the Jelbies who went get a small extra step of time on the ONE existing
 //  time-away path (`BlobNeeds.applyAway`, the gentle away curve with its floor), so the day moves a bit faster for them. No second clock.
 //  After the Park they are also a little thirstier (they played).
 //
