@@ -22,6 +22,7 @@ extension GameCare {
         let book = cafeBook
         let live = actors.filter { $0.brain != nil }
         guard !live.isEmpty else { return }
+        CafeTalkProbe.shared.tick(self, actors, dt: dt)
         // the one who answers
         for (id, t) in book.replyIn {
             let left = t - dt
