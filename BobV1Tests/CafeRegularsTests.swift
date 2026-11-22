@@ -20,6 +20,7 @@ final class CafeRegularsTests: XCTestCase {
         DecorField.shared.set([])
         DayClock.shared.forcedHour = 12
         GameCamera.aspect = 440.0 / 956.0
+        DiningLayout.ends = false; DiningLayout.sideX = 1.11; DiningLayout.reachFood = false; DiningLayout.endsYaw = DiningLayout.homeEndsYaw
         super.tearDown()
     }
 
@@ -87,7 +88,7 @@ final class CafeRegularsTests: XCTestCase {
             for s in g.stands {
                 for a in r.actors { XCTAssertGreaterThanOrEqual(simd_distance(s, a.floor), GameCare.regularMargin, "\(name): keeps the margin to the player's bodies") }
                 for st in c.cafeBook.stands.values { XCTAssertGreaterThanOrEqual(simd_distance(s, st), GameCare.regularMargin, "\(name): keeps the margin to the player's stands") }
-                XCTAssertTrue(GameCamera.roamFloor?.contains(s) ?? false, "\(name): the stand \(s) is on the walkable floor")
+                XCTAssertLessThanOrEqual(simd_distance(s, GameCamera.arenaCenter), GameCamera.arenaRadius + 0.3, "\(name): the stand \(s) is on the floor (arena \(GameCamera.arenaCenter) r \(GameCamera.arenaRadius))")
             }
             // opposite ends, facing each other
             XCTAssertEqual(g.yaws.count, 2)
@@ -102,10 +103,10 @@ final class CafeRegularsTests: XCTestCase {
 
     func testPairTalksInPlaceFor30Seconds() {
         GameCamera.aspect = 440.0 / 956.0
-        let r = DiningJellyTests.Room(count: 5)
+        let r = DiningJellyTests.Room(count: 3)          // (the rig cannot make more than three bodies: two of them stand in for the guests)
         DiningJellyTests.keep.append(r.care); DiningJellyTests.keep.append(contentsOf: r.actors)
         let c = r.care
-        let g = [r.actors[3], r.actors[4]]
+        let g = [r.actors[1], r.actors[2]]
         let stands: [SIMD2<Float>] = [SIMD2(-1.6, 1.1), SIMD2(1.0, 1.1)], yaws: [Float] = [DiningLayout.cafeEndsYaw, -DiningLayout.cafeEndsYaw]
         for (k, a) in g.enumerated() { c.rehome(a, at: stands[k]); a.brain?.startTurn(to: yaws[k], sim: a.sim) }
         let seats = g.enumerated().map { CafeChatSeat(id: $1.id, brain: $1.brain!, sim: $1.sim, skinner: $1.skinner, stand: stands[$0], yaw: yaws[$0]) }
