@@ -88,7 +88,7 @@ final class CafeRegularsTests: XCTestCase {
             for s in g.stands {
                 for a in r.actors { XCTAssertGreaterThanOrEqual(simd_distance(s, a.floor), GameCare.regularMargin, "\(name): keeps the margin to the player's bodies") }
                 for st in c.cafeBook.stands.values { XCTAssertGreaterThanOrEqual(simd_distance(s, st), GameCare.regularMargin, "\(name): keeps the margin to the player's stands") }
-                XCTAssertLessThanOrEqual(simd_distance(s, GameCamera.arenaCenter), GameCamera.arenaRadius + 0.3, "\(name): the stand \(s) is on the floor (arena \(GameCamera.arenaCenter) r \(GameCamera.arenaRadius))")
+                XCTAssertLessThanOrEqual(abs(s.x), 4.0, "\(name): the stand \(s) is inside the floor"); XCTAssertTrue(s.y > -0.6 && s.y < 2.2, "\(name): the stand \(s) is in the open front floor")
             }
             // opposite ends, facing each other
             XCTAssertEqual(g.yaws.count, 2)
