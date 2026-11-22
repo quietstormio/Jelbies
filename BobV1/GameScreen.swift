@@ -156,7 +156,7 @@ struct GameScreen: View {
                         if focus.showsRelease {
                             ReleaseButton(name: model.care.focusGroup.ids.count == 1 ? model.care.jelly(model.care.focusGroup.ids[0])?.name : nil) { withAnimation(CareMenu.spring) { model.care.release() } }
                                 .transition(.move(edge: .leading).combined(with: .opacity))
-                            GameCircleButton(systemName: "rectangle.portrait.on.rectangle.portrait.angled", label: "Condition card") {
+                            GameCircleButton(systemName: "person.crop.circle", label: "Profile") {
                                 AudioHub.shared.uiTap(); withAnimation(.easeInOut(duration: 0.25)) { town = .condition }
                             }
                             .accessibilityIdentifier("focus-card")
@@ -533,6 +533,13 @@ struct GameScreen: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { withAnimation(.easeInOut(duration: 0.25)) { town = .shop } }
         }
         .task { await GameScreen.runStoreDemo(model: model) }
+        .task {          // capture aid (dev arguments only): `-OpenProfile <i> -OpenProfileAfter <seconds>` opens the Profile after a wait (they have gone to sleep by then)
+            guard DevArgs.enabled, UserDefaults.standard.object(forKey: "OpenProfile") != nil else { return }
+            let after = UserDefaults.standard.integer(forKey: "OpenProfileAfter")
+            guard after > 0 else { return }
+            try? await Task.sleep(nanoseconds: UInt64(after) * 1_000_000_000)
+            town = .condition
+        }
         .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
         .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
         .onChange(of: focus.isActive) { _, on in if on { rosterOpen = false }; updateMessageTop() }
@@ -1061,12 +1068,13 @@ struct GameScreen: View {
         if model.care.volley.inScene { return .volley }
         return GameScreen.townMusic(town)
     }
-    /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).
+    /// What each Town screen plays: the Shop its own loop, the Studio / Show lobby the studio practice loop, the Profile (TownScreen.condition) its own profile_1 loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).
     static func townMusic(_ t: TownScreen?) -> MusicScene {
         switch t {
         case nil: return .none
         case .shop?: return .shop
-        case .studio?, .condition?: return .studio
+        case .studio?: return .studio
+        case .condition?: return .profile          // the Profile screen (2026-11-22) plays its own calmer loop; the Studio keeps studio_practice_1
         default: return .none
         }
     }
@@ -1105,6 +1113,7 @@ struct GameScreen: View {
         case "show", "showHow": return .studio          // (the Jelly Show lobby is the Studio now)
         default: break
         }
+        if UserDefaults.standard.object(forKey: "OpenProfile") != nil, UserDefaults.standard.integer(forKey: "OpenProfileAfter") == 0 { return .condition }          // capture aid: `-OpenProfile <index>` opens that Jelmiko's Profile
         switch UserDefaults.standard.string(forKey: "StoreOpen") {
         case "town": return .town
         case "shop", "item": return .shop

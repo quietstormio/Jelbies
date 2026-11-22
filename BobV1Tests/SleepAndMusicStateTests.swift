@@ -24,7 +24,10 @@ final class SleepAndMusicStateTests: XCTestCase {
         for t: TownScreen? in [nil, .town, .track, .friends, .volley] { XCTAssertEqual(GameScreen.townMusic(t), MusicScene.none, "\(String(describing: t))") }          // the menu and the plain lobbies: the home music carries on
         XCTAssertEqual(GameScreen.townMusic(.shop), .shop)
         XCTAssertEqual(GameScreen.townMusic(.studio), .studio)
-        XCTAssertEqual(GameScreen.townMusic(.condition), .studio)
+        XCTAssertEqual(GameScreen.townMusic(.condition), .profile)          // the Profile has its own loop
+        XCTAssertEqual(MusicScene.profile.track, .profile1)
+        XCTAssertEqual(MusicScene.studio.track, .studioPractice)          // the Studio keeps its track (the dance drill's beat grid)
+        XCTAssertEqual(SceneTrack.profile1.rawValue, "profile_1")
     }
 
     func testWatchdogRestartsSilentMusicThenRetriesSlowly() {

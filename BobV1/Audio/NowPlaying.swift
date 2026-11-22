@@ -28,6 +28,7 @@ nonisolated struct NowPlaying: Equatable, Sendable {
         case .cafe: return "Café"
         case .volley: return "Jelly Volleyball"
         case .studio: return "Jelly Show"
+        case .profile: return "Profile"
         case .show, .danceSong: return "Jelly Show"
         case .results: return "Results"
         default: return "Screen"
