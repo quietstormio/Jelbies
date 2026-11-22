@@ -68,6 +68,8 @@ extension MelonController {
             renderer?.setMouth(0, body: a.id)
             a.brain?.abortAll(a.sim, a.skinner)
             JellyRoster.visitorSpecies[a.id] = nil
+            walkBoard.remove(a.id)
+            a.brain?.board = nil
         }
         parkActors.removeAll()
         if actors.count == 1 { peerSnapshot.removeAll() }

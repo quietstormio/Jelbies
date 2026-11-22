@@ -146,7 +146,12 @@ final class BlobBrain {
     }
     enum After { case none, faceCamera, wave, face(SIMD2<Float>), eat(SIMD2<Float>, Bool), doEat(SIMD2<Float>, Bool), dineTurn(DiningPlace), dineGo }
 
-    var script: Script = .none
+    var script: Script = .none {
+        didSet { if board != nil, case .walk = script { publishToBoard(pos: position) } }          // (the walk-board: a walk that begins is on the board at once; nothing reads it, WalkBoard.swift)
+    }
+    /// The stage's walk board (one per stage, injected beside `peers`; nil = none) and the brain's reusable intent for it.
+    var board: WalkBoard?
+    var boardIntent = WalkIntent()
     /// Jelly Circuit race state (BlobBrain+Race.swift).
     var race = RaceDrive()
     /// Jelly Volleyball (Volley/BlobBrain+Volley.swift).
@@ -1595,6 +1600,7 @@ final class BlobBrain {
                 let pF = PerfProbe.begin(); let fl = flourishMaybe(sim, skinner, target: target); PerfProbe.end("rs.flourishMaybe", pF)
                 if fl { return }          // (between two steps: a skip, a hop, a spin, a look; the walk resumes after)
                 let pS = PerfProbe.begin(); let effOpt = steerTarget(to: target); PerfProbe.end("rs.steerTarget", pS)
+                if board != nil { publishToBoard(pos: position) }          // (the walk-board: once per step, after the route is settled; nothing reads it)
                 guard let eff = effOpt else {
                     steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
                     if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; MoveLog.note(.pinned); step(after: .none, sim, giveUp: true); restTimer = 0.25 }

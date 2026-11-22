@@ -67,6 +67,8 @@ final class SocialTests: XCTestCase {
         var minPair: Float = .infinity, minTag = ""
         var snapshot: [(pos: SIMD2<Float>, walking: Bool)] = []
         var aside: [Float], asideClock: Float = 0
+        /// The walk board (move-board-r1), shared by every rig like the stage's: nothing reads it.
+        let board = WalkBoard()
         nonisolated deinit {}
         /// Wired like the stage's `wireRoster`: peers from a snapshot (a standing Jelly has a huge id), keepApart under the floor rules, peerGap = jellyGap,
         /// and the stage's makeRoom every 0.25 s.
@@ -84,7 +86,7 @@ final class SocialTests: XCTestCase {
                 for _ in 0..<120 { r.sim.step() }
                 r.brain.currentPose(r.sim)
                 r.brain.seed = seed + UInt64(i) * 7
-                r.brain.steerID = i; r.brain.peerGap = MelonController.jellyGap
+                r.brain.steerID = i; r.brain.peerGap = MelonController.jellyGap; r.brain.board = board
                 r.brain.onSocial = { [unowned self] e in self.events[i].append(e) }
             }
             snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: false) }
@@ -104,6 +106,7 @@ final class SocialTests: XCTestCase {
         var resolveStat: [(calls: Int, pass: Int, push: Float)] = Array(repeating: (0, 0, 0), count: 8)          // (ContactTrace only: per tick, how often the Lab's wall ran for this body, how often it was bypassed by passThrough, the biggest push)
         func tick(watching: Bool = true) {
             snapshot = rigs.map { (pos: GameCare.floorPos($0.brain, $0.sim), walking: $0.brain.activity == .walking || $0.brain.activity == .coming) }          // (as the stage: the body's centroid while a hop / scoot / slide has the body, else the root)
+            if WalkBoard.publishOn { board.advance(dt: 1.0 / 60); for (i, r) in rigs.enumerated() { board.tickBody(r.brain, pos: snapshot[i].pos) } }
             asideClock += 1.0 / 60
             if asideClock >= 0.25 { MelonController.makeRoom(snapshot: snapshot, brains: rigs.map { $0.brain }, cooldown: &aside, dt: asideClock); asideClock = 0 }
             for (i, r) in rigs.enumerated() { r.tick(); if watching { watch[i].sample(r) } }
