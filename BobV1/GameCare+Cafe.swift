@@ -34,6 +34,7 @@ final class CafeBook {
     var charged = 0
     /// Hunger / thirst at the moment the outing began, by Jelmiko: nobody comes home with less (the floor at the home swap).
     var needsAtLeave: [Int: [Float]] = [:]
+    var needsAtLeaveAt = Date.distantPast
     /// Seconds until each Jelbie's arrival hop / cheer (by actor id).
     var hopIn: [Int: Float] = [:]
     var cheerIn: [Int: Float] = [:]
@@ -120,11 +121,15 @@ extension GameCare {
             AudioHub.shared.play(.notEnough)
             return
         }
+        // the levels at the first tap (the wake and the run out below come first and cost nothing either); the retry after them keeps the first snapshot (within 60 s)
+        if Date().timeIntervalSince(cafeBook.needsAtLeaveAt) > 60 || cafeBook.needsAtLeave.isEmpty {
+            cafeBook.needsAtLeaveAt = Date()
+            for j in jellies { cafeBook.needsAtLeave[j.id] = [j.needs.level(.hunger), j.needs.level(.thirst)] }
+        }
         select.cancel(); cutWelcomeHome(); queued.removeAll(); callRunning = false
         voice.cancel()
         if wakeForTrip(Array(jellies.indices), then: { [weak self] in self?.requestCafe() }) { return }          // (a sleeper gets the short wake first, then everybody runs out together)
         if outingGate(Array(jellies.indices), again: { [weak self] in self?.requestCafe() }) { return }          // everybody runs out of the room first (GameCare+Outing.swift)
-        for j in jellies { cafeBook.needsAtLeave[j.id] = [j.needs.level(.hunger), j.needs.level(.thirst)] }
         cafe.begin()
     }
 
