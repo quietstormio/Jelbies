@@ -71,11 +71,25 @@ nonisolated enum TrophyShelfGeometry {
         }
     }
 
+    /// One trophy on its own at x = 0 with its foot (the rosette's stand) on y = 0: the same `cup` / `rosette` calls and scales as `add`, for the focus outline's contour.
+    /// `lift` = how far the slot (`TrophyShelfGeometry.slots`) sits above that foot.
+    static func singleMesh(id: String) -> (mesh: RoomMesh, lift: Float)? {
+        let b = RoomMeshBuilder(); b.material = .plain
+        let z: Float = 0
+        if id == "contest" { rosette(b, x: 0, y: 0, z: z, color: gold); return (b.mesh, 0.2) }
+        if id.hasPrefix("cup.") { cup(b, x: 0, y: 0, z: z, scale: 0.85, color: gold, lid: false) }
+        else if id.hasPrefix("volley.") { cup(b, x: 0, y: 0, z: z, scale: 0.85, color: gold, lid: false, ball: true) }
+        else if let k = ["wins5", "wins10", "wins25"].firstIndex(of: id) { cup(b, x: 0, y: 0, z: z, scale: 0.8 + 0.12 * Float(k), color: gold, lid: false) }          // (as in `add`)
+        else if id == "champion" { cup(b, x: 0, y: 0, z: z, scale: 1.2, color: gold, lid: true) }
+        else { return nil }
+        return (b.mesh, 0.11)
+    }
+
     /// The volleyball cups' tints, by court: Sandcastle (sand), Shore (aqua), Reef (coral), Tidal (deep blue).
     static let volleyTint: [SIMD3<Float>] = [RaceModels.srgb(0.93, 0.78, 0.48), RaceModels.srgb(0.40, 0.78, 0.84), RaceModels.srgb(0.95, 0.52, 0.46), RaceModels.srgb(0.32, 0.50, 0.90)]
 
     /// A goblet: foot, stem, bowl with a rim, two small handles; the Champion's has a lid and a ball on top.
-    private static func cup(_ b: RoomMeshBuilder, x: Float, y: Float, z: Float, scale k: Float, color: SIMD3<Float>, lid: Bool, ball: Bool = false) {
+    static func cup(_ b: RoomMeshBuilder, x: Float, y: Float, z: Float, scale k: Float, color: SIMD3<Float>, lid: Bool, ball: Bool = false) {
         typealias PP = RoomMeshBuilder.ProfilePoint
         func pp(_ r: Float, _ h: Float, _ nr: Float, _ ny: Float, _ ao: Float = 1) -> PP { PP(r: r * k, y: y + h * k, nr: nr, ny: ny, ao: ao) }
         var prof: [PP] = [
@@ -103,7 +117,7 @@ nonisolated enum TrophyShelfGeometry {
     }
 
     /// A rosette standing on the plank: a ring of eight round petals around a darker button, on a short stand, with two ribbon tails.
-    private static func rosette(_ b: RoomMeshBuilder, x: Float, y: Float, z: Float, color: SIMD3<Float>) {
+    static func rosette(_ b: RoomMeshBuilder, x: Float, y: Float, z: Float, color: SIMD3<Float>) {
         let cy = y + 0.2
         b.roundedBox(centre: SIMD3(x, y + 0.04, z), half: SIMD3(0.05, 0.04, 0.035), radius: 0.02, segments: 2, aoFloor: false, color: ink)          // little stand
         for s in [Float(-1), 1] {           // the two ribbon tails

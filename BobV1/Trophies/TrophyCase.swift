@@ -139,7 +139,7 @@ extension GameCare {
         return "A Jelmiko"
     }
 
-    func openTrophyCard() { guard !trophyCardOpen else { return }; AudioHub.shared.uiTap(); trophyCardOpen = true; A11yEvents.say("Trophy case settings", .normal) }
+    func openTrophyCard() { guard !trophyCardOpen else { return }; AudioHub.shared.uiTap(); trophyCardOpen = true; A11yEvents.say("Trophy shelf settings", .normal) }
     func closeTrophyCard() { trophyCardOpen = false; trophyFocusID = nil }
     func setTrophyCase(visible: Bool) {
         race.trophies.setCaseVisible(visible)
@@ -208,7 +208,7 @@ struct TrophyCaseOverlay: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Trophy case").font(SK.font(22, .black)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
+                Text("Trophy Shelf").font(SK.font(22, .black)).foregroundStyle(SK.ink).accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button { care.closeTrophyCard() } label: {
                     Image(systemName: "xmark").font(.system(size: 15, weight: .black)).foregroundStyle(SK.ink).frame(width: 44, height: 44).background(Circle().fill(.white.opacity(0.85)))
@@ -274,27 +274,125 @@ struct TrophyCaseOverlay: View {
     }
 }
 
+/// The focused trophy's outline shape, made once per trophy from its own mesh (`TrophyShelfGeometry.singleMesh`, the same cup / rosette code that draws it on the wall):
+/// the triangles are filled into a small mask (2.5 mm a cell, seen straight on), the mask grown one cell to close seams, its outer edge walked (Moore tracing),
+/// then smoothed and thinned to ~130 points. Cached; the per-frame work is only projecting those points through the stage camera and pushing them out a few points.
+nonisolated enum TrophyContour {
+    static let cell: Float = 0.0025
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var cache: [String: (pts: [SIMD2<Float>], lift: Float)] = [:]
+
+    /// The contour in wall units, relative to the trophy's foot at x = 0 (add the slot's x and the slot's y - lift), and the lift.
+    static func get(_ id: String) -> (pts: [SIMD2<Float>], lift: Float)? {
+        lock.lock(); defer { lock.unlock() }
+        if let c = cache[id] { return c }
+        guard let (mesh, lift) = TrophyShelfGeometry.singleMesh(id: id), let pts = build(mesh), pts.count > 8 else { return nil }
+        cache[id] = (pts, lift)
+        return (pts, lift)
+    }
+
+    private static func build(_ m: RoomMesh) -> [SIMD2<Float>]? {
+        guard !m.vertices.isEmpty else { return nil }
+        var lo = SIMD2<Float>(repeating: .greatestFiniteMagnitude), hi = SIMD2<Float>(repeating: -.greatestFiniteMagnitude)
+        for v in m.vertices { lo = simd_min(lo, SIMD2(v.pos.x, v.pos.y)); hi = simd_max(hi, SIMD2(v.pos.x, v.pos.y)) }
+        let margin: Float = 3 * cell
+        let x0 = lo.x - margin, y1 = hi.y + margin
+        let W = Int((hi.x - lo.x + 2 * margin) / cell) + 1, H = Int((hi.y - lo.y + 2 * margin) / cell) + 1
+        var mask = [Bool](repeating: false, count: W * H)
+        func px(_ p: SIMD4<Float>) -> SIMD2<Float> { SIMD2((p.x - x0) / cell, (y1 - p.y) / cell) }          // (cell units, y down)
+        var i = 0
+        while i + 2 < m.indices.count {
+            let a = px(m.vertices[Int(m.indices[i])].pos), b = px(m.vertices[Int(m.indices[i + 1])].pos), c = px(m.vertices[Int(m.indices[i + 2])].pos)
+            i += 3
+            let minx = max(0, Int(min(a.x, b.x, c.x).rounded(.down))), maxx = min(W - 1, Int(max(a.x, b.x, c.x).rounded(.up)))
+            let miny = max(0, Int(min(a.y, b.y, c.y).rounded(.down))), maxy = min(H - 1, Int(max(a.y, b.y, c.y).rounded(.up)))
+            if minx > maxx || miny > maxy { continue }
+            let area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+            for y in miny...maxy {
+                for x in minx...maxx {
+                    let p = SIMD2<Float>(Float(x) + 0.5, Float(y) + 0.5)
+                    if abs(area) < 1e-6 { continue }
+                    let w0 = ((b.x - p.x) * (c.y - p.y) - (b.y - p.y) * (c.x - p.x)) / area
+                    let w1 = ((c.x - p.x) * (a.y - p.y) - (c.y - p.y) * (a.x - p.x)) / area
+                    let w2 = 1 - w0 - w1
+                    if w0 >= -0.02 && w1 >= -0.02 && w2 >= -0.02 { mask[y * W + x] = true }
+                }
+            }
+        }
+        // grow one cell (3x3) so thin faces and seams close
+        var g = mask
+        for y in 0..<H { for x in 0..<W where mask[y * W + x] {
+            for dy in -1...1 { for dx in -1...1 { let xx = x + dx, yy = y + dy; if xx >= 0, yy >= 0, xx < W, yy < H { g[yy * W + xx] = true } } }
+        } }
+        func on(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < W && y < H && g[y * W + x] }
+        guard let start = (0..<(W * H)).first(where: { g[$0] }) else { return nil }
+        let sx = start % W, sy = start / W
+        // Moore tracing, clockwise on screen; directions E SE S SW W NW N NE
+        let dirs: [(Int, Int)] = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+        var path: [(Int, Int)] = [(sx, sy)]
+        var cx = sx, cy = sy, back = 4, firstDir = -1
+        for _ in 0..<(W * H * 4) {
+            var found = -1
+            for k in 1...8 { let d = (back + k) % 8; if on(cx + dirs[d].0, cy + dirs[d].1) { found = d; break } }
+            if found < 0 { break }          // (a single pixel)
+            if cx == sx && cy == sy && firstDir >= 0 && found == firstDir { break }
+            if firstDir < 0 { firstDir = found }
+            let prev = (found + 7) % 8          // the last background neighbour looked at, as seen from the old pixel
+            let nx = cx + dirs[found].0, ny = cy + dirs[found].1
+            let bx = cx + dirs[prev].0 - nx, by = cy + dirs[prev].1 - ny
+            back = dirs.firstIndex(where: { $0.0 == bx && $0.1 == by }) ?? ((found + 4) % 8)
+            cx = nx; cy = ny
+            if cx == sx && cy == sy { path.append((cx, cy)) } else { path.append((cx, cy)) }
+        }
+        if path.count > 1, path.last! == path.first! { path.removeLast() }
+        var pts = path.map { SIMD2<Float>(x0 + (Float($0.0) + 0.5) * cell, y1 - (Float($0.1) + 0.5) * cell) }
+        // smooth (circular moving average, twice) and thin
+        for _ in 0..<2 {
+            let n = pts.count, q = pts
+            for j in 0..<n { var s = SIMD2<Float>(repeating: 0); for o in -3...3 { s += q[(j + o + n) % n] }; pts[j] = s / 7 }
+        }
+        return stride(from: 0, to: pts.count, by: 3).map { pts[$0] }
+    }
+
+    /// `pts` (screen, a closed loop) pushed outward by `d` points, then ironed once.
+    static func grown(_ pts: [CGPoint], by d: CGFloat) -> [CGPoint] {
+        let n = pts.count
+        guard n > 8 else { return pts }
+        var area: CGFloat = 0
+        for j in 0..<n { let a = pts[j], b = pts[(j + 1) % n]; area += a.x * b.y - b.x * a.y }
+        let sgn: CGFloat = area > 0 ? 1 : -1          // (y down: positive = clockwise on screen, whose outward normal is (ty, -tx))
+        var out = (0..<n).map { j -> CGPoint in
+            let a = pts[(j + n - 2) % n], b = pts[(j + 2) % n], p = pts[j]
+            var nx = (b.y - a.y) * sgn, ny = -(b.x - a.x) * sgn
+            let l = hypot(nx, ny)
+            if l < 1e-6 { return p }
+            nx /= l; ny /= l
+            return CGPoint(x: p.x + nx * d, y: p.y + ny * d)
+        }
+        let q = out
+        for j in 0..<n { let a = q[(j + n - 1) % n], b = q[(j + 1) % n]; out[j] = CGPoint(x: 0.25 * a.x + 0.5 * q[j].x + 0.25 * b.x, y: 0.25 * a.y + 0.5 * q[j].y + 0.25 * b.y) }
+        return out
+    }
+}
+
 /// The focused trophy's highlight: the selected Jelmiko's outline look (glow layers, a solid core, a white line, the 0.7 s soft pulse; Selection/SelectionOverlay.swift) in gold,
-/// drawn round the cup on the wall through the stage's camera. Follows the camera ease; gone when the focus ends.
+/// following the trophy's own silhouette (`TrophyContour`), projected through the stage's camera each frame. Follows the camera ease; gone when the focus ends.
 struct TrophyGoldOutline: View {
     let care: GameCare
     let id: String
     static let gold = Color(red: 1.0, green: 0.78, blue: 0.16)
+    static let pad: CGFloat = 5          // (as the selected Jelmiko's: the gap between the true edge and the line's centre)
     var body: some View {
+        let shape = TrophyContour.get(id)
         TimelineView(.animation) { tl in
             let t = tl.date.timeIntervalSinceReferenceDate
             Canvas { ctx, _ in
-                guard let proj = care.trophyProj, let s = TrophyShelfGeometry.slots(care.race.trophies.roomShelf(contestBest: care.show.progress.bestCup)).first(where: { $0.id == id }) else { return }
-                let hw: Float = id == "champion" ? 0.17 : 0.125, z = RoomLayout.minZ + 0.14          // (the slot is the cup's middle: its foot is 0.11 below, the bowl's top ~0.08 above)
-                let rosette = id == "contest", ball = id.hasPrefix("volley.")
-                let x0 = s.x - hw, x1 = s.x + hw, r: Float = 0.04
-                let y0 = s.y - (rosette ? 0.24 : 0.15), y1 = s.y + (id == "champion" ? 0.28 : ball ? 0.18 : rosette ? 0.13 : 0.11)
-                var w: [SIMD3<Float>] = []
-                for (cx, cy, a0) in [(x1 - r, y1 - r, Float(0)), (x0 + r, y1 - r, .pi / 2), (x0 + r, y0 + r, .pi), (x1 - r, y0 + r, .pi * 1.5)] {
-                    for k in 0...6 { let a = a0 + Float(k) / 6 * .pi / 2; w.append(SIMD3(cx + r * cosf(a), cy + r * sinf(a), z)) }
-                }
-                let pts = Silhouette.project(w, viewProj: proj.vp, size: proj.size)
-                guard pts.count == w.count else { return }
+                guard let shape, let proj = care.trophyProj, let s = TrophyShelfGeometry.slots(care.race.trophies.roomShelf(contestBest: care.show.progress.bestCup)).first(where: { $0.id == id }) else { return }
+                let z = RoomLayout.minZ + 0.13, base = SIMD2(s.x, s.y - shape.lift)          // (z: the cup's axis, as `TrophyShelfGeometry.add`)
+                let w = shape.pts.map { SIMD3<Float>(base.x + $0.x, base.y + $0.y, z) }
+                let scr = Silhouette.project(w, viewProj: proj.vp, size: proj.size)
+                guard scr.count == w.count else { return }
+                let pts = TrophyContour.grown(scr, by: Self.pad)
                 var p = Path(); p.move(to: pts[0]); for q in pts.dropFirst() { p.addLine(to: q) }; p.closeSubpath()
                 let glow = A11ySettings.shared.reduceMotion ? 1.0 : 0.5 + 0.5 * sin(t * 2 * .pi / 0.7 - .pi / 2)
                 let style = { (w: CGFloat) in StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round) }
@@ -313,7 +411,7 @@ struct TrophyCaseToggle: View {
     let care: GameCare
     var body: some View {
         Toggle(isOn: Binding(get: { care.race.trophies.caseVisible }, set: { care.setTrophyCase(visible: $0) })) {
-            Text("Show trophy case in the room").font(SK.font(15, .black)).foregroundStyle(SK.ink)
+            Text("Show trophy shelf in the room").font(SK.font(15, .black)).foregroundStyle(SK.ink)
         }
         .tint(SK.sky)
         .padding(.horizontal, 14).padding(.vertical, 8).frame(minHeight: 48)
