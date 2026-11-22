@@ -27,6 +27,8 @@ enum ShowUI {
         guard let next = ShowRank.allCases.first(where: { !unlocked.contains($0) }) else { return nil }
         return (next, ShowRivalSource.base(next).main)
     }
+    /// Dress up's first height: leaves the stage's Jelmiko in view above the sheet.
+    static let wardrobeLow = PresentationDetent.fraction(0.66)
     static let weekday: [String] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     /// "Tuesday's theme" for a day key.
     static func dayName(_ dayKey: Int) -> String { weekday[((ShowSchedule.dayOrdinal(dayKey) + 4) % 7 + 7) % 7] }
@@ -302,6 +304,7 @@ struct WardrobeStrip: View {
     var slots: [WearSlot]? = nil          // nil = every slot
     var onChange: () -> Void = {}
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var scrolling = false
     private var looks: [WearLook] {
         StoreCatalog.items.filter { $0.isWearable && care.store.owns($0) }.compactMap(\.wear).filter { slots?.contains($0.slot) ?? true }
             .sorted { theme.match($0.tags) > theme.match($1.tags) }
@@ -334,14 +337,44 @@ struct WardrobeStrip: View {
                     .padding(.horizontal, 6).padding(.top, 6).padding(.bottom, 30)
                 }
                 .accessibilityIdentifier("wardrobe-grid")
-                .task {          // capture aid (dev arguments only): `-WardrobeScroll <seconds>` scrolls the grid to its third row after that long
-                    let t = UserDefaults.standard.double(forKey: "WardrobeScroll")
-                    guard DevArgs.enabled, t > 0 else { return }
-                    try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
-                    withAnimation { proxy.scrollTo(min(2, rows.count - 1), anchor: .top) }
+                .onScrollPhaseChange { _, phase in scrolling = phase != .idle }
+                .task(id: list.map(\.rawValue)) { await prewarm(list) }
+                .task {          // capture aids (dev arguments only): `-WardrobeScroll <seconds>` scrolls the grid to its third row after that long; `-WardrobeFlick <seconds>` flicks it top to bottom three times and logs the frame times
+                    let d = UserDefaults.standard
+                    guard DevArgs.enabled else { return }
+                    let t = d.double(forKey: "WardrobeScroll")
+                    if t > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
+                        withAnimation { proxy.scrollTo(min(2, rows.count - 1), anchor: .top) }
+                    }
+                    if let f = d.object(forKey: "WardrobeFlick") as? Double, rows.count > 2 {
+                        try? await Task.sleep(nanoseconds: UInt64(f * 1_000_000_000))
+                        let probe = FrameProbe(); probe.start()
+                        for _ in 0..<3 {
+                            withAnimation(.linear(duration: 0.35)) { proxy.scrollTo(rows.count - 1, anchor: .bottom) }
+                            try? await Task.sleep(nanoseconds: 450_000_000)
+                            withAnimation(.linear(duration: 0.35)) { proxy.scrollTo(0, anchor: .top) }
+                            try? await Task.sleep(nanoseconds: 450_000_000)
+                        }
+                        let line = "flick prewarm=\(Self.prewarmOn) \(probe.stop())\n"
+                        if let path = d.string(forKey: "WardrobeFlickLog") { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
+                    }
                 }
                 }
             }
+        }
+    }
+    /// Pictures for the whole grid, in the order the cards appear: the first two screens at once, the rest one per frame and only while the grid is not being touched,
+    /// so a flick down never lands on a row of empty placeholders for long. (The mini renderer draws on the main actor between frames, so this is one picture per turn.)
+    static var prewarmOn: Bool { !(DevArgs.enabled && UserDefaults.standard.string(forKey: "WardrobePrewarm") == "0") }
+    private func prewarm(_ list: [WearLook]) async {
+        guard Self.prewarmOn else { return }
+        for (i, look) in list.enumerated() {
+            guard let item = StoreCatalog.item(wearing: look), StoreThumb.wardrobeCached(item) == nil else { continue }
+            if i >= 12 { while scrolling && !Task.isCancelled { try? await Task.sleep(nanoseconds: 80_000_000) } }
+            if Task.isCancelled { return }
+            if StoreThumb.wardrobeImage(item) != nil { WardrobePictures.shared.version += 1 }
+            try? await Task.sleep(nanoseconds: i < 12 ? 2_000_000 : 17_000_000)
         }
     }
     private func card(_ look: WearLook, width: CGFloat) -> some View {
@@ -379,10 +412,12 @@ struct WardrobeCardFace: View {
     var otherName: String?
     var width: CGFloat
     @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var image: UIImage?
+    private var pictures = WardrobePictures.shared
     var picture: CGFloat { width - 2 * Self.pad }
     var body: some View {
-        VStack(spacing: 5) {
+        let _ = pictures.version          // redraw when a picture lands in the cache
+        let image = StoreCatalog.item(wearing: look).flatMap { StoreThumb.wardrobeCached($0) }
+        return VStack(spacing: 5) {
             ZStack(alignment: .topTrailing) {
                 RoundedRectangle(cornerRadius: picture * 0.16, style: .continuous).fill(SK.pink.opacity(0.25))
                 if let image { Image(uiImage: image).resizable().scaledToFit() }
@@ -407,33 +442,69 @@ struct WardrobeCardFace: View {
         .shadow(color: ShowUI.gold.opacity(match >= 1 ? 0.9 : match >= 0.5 ? 0.45 : 0), radius: match >= 1 ? 6 : 5)
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .task(id: look) {
-            guard let item = StoreCatalog.item(wearing: look) else { return }
-            if let hit = StoreThumb.wardrobeCached(item) { image = hit; return }
-            await Task.yield()          // one picture per turn, so scrolling a screenful of new cards never holds a frame for long
-            image = StoreThumb.wardrobeImage(item)
+            guard let item = StoreCatalog.item(wearing: look), StoreThumb.wardrobeCached(item) == nil else { return }
+            await Task.yield()          // a card that scrolled in before the sweep reached it draws its own picture, one per turn
+            if StoreThumb.wardrobeImage(item) != nil { pictures.version += 1 }
         }
     }
 }
 
+/// Bumped when a Dress up picture lands in the cache, so the cards showing a placeholder redraw.
+@MainActor @Observable final class WardrobePictures {
+    static let shared = WardrobePictures()
+    var version = 0
+}
+
+/// Frame timing for the capture aids (dev arguments only): the worst gap between two frames while it runs.
+@MainActor final class FrameProbe: NSObject {
+    private var link: CADisplayLink?
+    private var last = 0.0, worst = 0.0, frames = 0, over33 = 0
+    func start() { link = CADisplayLink(target: self, selector: #selector(tick(_:))); link?.add(to: .main, forMode: .common) }
+    @objc private func tick(_ l: CADisplayLink) {
+        if last > 0 { let d = l.timestamp - last; worst = max(worst, d); frames += 1; if d > 0.0334 { over33 += 1 } }
+        last = l.timestamp
+    }
+    func stop() -> String { link?.invalidate(); return "frames=\(frames) worst_ms=\(Int(worst * 1000)) over33ms=\(over33)" }
+}
+
 @MainActor
 extension StoreThumb {
-    /// The Dress up card's picture: the same Jelmiko-wearing-it mesh as the shop's thumbnail, drawn once per item at 360 px (about 120 pt at 3x) and framed tighter on the part that wears it.
+    /// The Dress up card's picture: the same Jelmiko-wearing-it mesh as the shop's thumbnail, drawn once per item at 360 px (about 120 pt at 3x) and framed on the item.
     static func wardrobeImage(_ item: StoreItem) -> UIImage? {
         guard let w = item.wear, let m = mesh(for: item) else { return nil }
         let a = angles(for: item)
         if w.isShoe { return image("ward-\(item.id)", mesh: m, size: 360, yaw: a.yaw, pitch: a.pitch, tight: true) }
-        return image("ward-\(item.id)", mesh: m, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w))
+        return image("ward-\(item.id)", mesh: m, size: 360, yaw: a.yaw, pitch: a.pitch, focus: cardFocus(w, mesh: m))
     }
     static func wardrobeCached(_ item: StoreItem) -> UIImage? { cachedImage("ward-\(item.id)") }
-    /// (centre, radius) for the card: closer than the shop's thumbnail so the item fills the picture.
-    static func cardFocus(_ look: WearLook) -> (SIMD3<Float>, Float) {
+    /// (centre, radius) for the card: closer than the shop's thumbnail, then moved and widened so the whole piece is inside (a clip at the side of the head, a tall cone,
+    /// a wristband on the arm). Hand items are framed on the arm nearest the camera.
+    static func cardFocus(_ look: WearLook, mesh m: RoomMesh) -> (SIMD3<Float>, Float) {
+        var base: (SIMD3<Float>, Float)
         switch look.slot {
-        case .head: return (SIMD3(0, 1.0, 0.05), 0.63)
-        case .face: return (SIMD3(0, 0.86, 0.30), 0.50)
-        case .neck: return look == .diamondJ ? (SIMD3(0, 0.36, 0.25), 0.42) : (SIMD3(0, 0.52, 0.2), 0.58)
-        case .hands: return (SIMD3(0, 0.45, 0.10), 0.80)
-        default: let f = wornFocus(look); return (f.0, f.1 * 0.85)
+        case .head: base = (SIMD3(0, 1.0, 0.05), 0.63)
+        case .face: base = (SIMD3(0, 0.86, 0.30), 0.50)
+        case .neck: base = look == .diamondJ ? (SIMD3(0, 0.36, 0.25), 0.42) : (SIMD3(0, 0.52, 0.2), 0.58)
+        case .hands: base = (SIMD3(0, 0.45, 0.10), 0.80)
+        default: let f = wornFocus(look); base = (f.0, f.1 * 0.85)
         }
+        let n = jelbieBody().vertices.count
+        guard m.vertices.count > n else { return base }
+        var lo = SIMD3<Float>(repeating: .infinity), hi = SIMD3<Float>(repeating: -.infinity)
+        for v in m.vertices[n...] {
+            let p = SIMD3(v.pos.x, v.pos.y, v.pos.z)
+            if look.slot == .hands && p.x > 0 { continue }          // the model is turned so its -x arm is the near one
+            lo = simd_min(lo, p); hi = simd_max(hi, p)
+        }
+        guard lo.x.isFinite else { return base }
+        let mid = (lo + hi) / 2, half = (hi - lo) / 2
+        if look.slot == .hands { return (mid, min(max(0.42, simd_length(half) * 1.5), 0.9)) }
+        let c = base.0 + (mid - base.0) * 0.4
+        var need: Float = 0
+        for sx: Float in [-1, 1] { for sy: Float in [-1, 1] { for sz: Float in [-1, 1] {
+            need = max(need, simd_length(SIMD3(mid.x + sx * half.x, mid.y + sy * half.y, mid.z + sz * half.z) - c))
+        } } }
+        return (c, min(max(base.1, need * 1.12), 1.3))
     }
 }
 
@@ -478,6 +549,8 @@ struct StudioScreen: View {
     @Environment(\.verticalSizeClass) private var vsc
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var wardrobeOpen = false
+    /// Dress up opens low enough that the stage (the player's own Jelmiko wearing what they tap) stays in view above it; drag it up to browse.
+    @State private var wardrobeDetent: PresentationDetent = ShowUI.wardrobeLow
     @State private var howOpen = false
     @State private var rankHint: String?
     /// The player has opened Dress up this visit: the button stops asking for attention.
@@ -578,7 +651,13 @@ struct StudioScreen: View {
         }
         .sheet(isPresented: $wardrobeOpen) {
             WardrobeSheet(care: care, who: who, theme: theme, rank: rank) { wardrobeOpen = false }
-                .presentationDetents([.large]).presentationBackground(SK.cream)
+                .presentationDetents(compact ? [.large] : [ShowUI.wardrobeLow, .large], selection: $wardrobeDetent).presentationBackground(SK.cream)
+        }
+        .task {          // capture aid (dev arguments only): `-WardrobeLarge <seconds>` drags Dress up to the large height that long after the Studio appears
+            let t = UserDefaults.standard.double(forKey: "WardrobeLarge")
+            guard DevArgs.enabled, t > 0 else { return }
+            try? await Task.sleep(nanoseconds: UInt64(t * 1_000_000_000))
+            wardrobeDetent = .large
         }
     }
 
@@ -738,7 +817,7 @@ struct WardrobeSheet: View {
         }
     }
     private var themeRows: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text("\(theme.title):").font(SK.font(13, .heavy)).foregroundStyle(SK.muted)
                 TagChip(tag: theme.main); TagChip(tag: theme.friend, prefix: "+ friend: ")
@@ -749,14 +828,13 @@ struct WardrobeSheet: View {
     }
     private var wornPanel: some View {
         let outfit = care.store.outfit(who)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
-                ForEach(rank.slotOrder, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme) { if let l = outfit[s] { care.store.takeOff(l.slot, from: who) } } }
-                Spacer()
-            }
-            .padding(10).background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ShowUI.stage))
-            Text("Tap a worn slot to take it off.").font(SK.font(11, .bold)).foregroundStyle(SK.muted)
+        return HStack(spacing: 10) {
+            ForEach(rank.slotOrder, id: \.rawValue) { s in SlotChip(slot: s, look: outfit[s], theme: theme) { if let l = outfit[s] { care.store.takeOff(l.slot, from: who) } } }
+            Text("Tap a worn slot to take it off.").font(SK.font(11, .bold)).foregroundStyle(ShowUI.mist).multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(ShowUI.stage))
     }
     private var chips: some View {
         WardrobeFilterChips(slot: $slot, slots: WearSlot.allCases.filter { s in StoreCatalog.items.contains { $0.wear?.slot == s && care.store.owns($0) } })
@@ -771,10 +849,10 @@ struct WardrobeSheet: View {
                     VStack(spacing: 8) { chips; grid }
                 }
             } else {
-                VStack(alignment: .leading, spacing: 10) { headerRow; themeRows; wornPanel; chips; grid }
+                VStack(alignment: .leading, spacing: 8) { headerRow; themeRows; wornPanel; chips; grid }
             }
         }
-        .padding(.horizontal, 16).padding(.top, 16)
+        .padding(.horizontal, 16).padding(.top, 12)
         .accessibilityIdentifier("wardrobe-sheet")
         .task {          // capture aids (dev arguments only): `-WardrobeSlot <head|feet|...>` starts on that filter
             guard DevArgs.enabled else { return }

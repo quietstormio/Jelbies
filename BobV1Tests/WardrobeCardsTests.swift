@@ -62,4 +62,25 @@ final class WardrobeCardsTests: XCTestCase {
             if let a, let b { XCTAssertTrue(a === b, "\(item.id) is rendered once and cached") }
         }
     }
+
+    /// Writes every wearable's card picture on one sheet (6 per row) when the capture folder exists, for a look at the framing. Not an assertion beyond "every picture drew".
+    func testContactSheetOfEveryCardPicture() throws {
+        let dir = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/dressup"
+        guard FileManager.default.fileExists(atPath: dir) else { throw XCTSkip("no capture folder") }
+        let items = StoreCatalog.items.filter { $0.isWearable && $0.wear != nil }
+        let cell: CGFloat = 330, label: CGFloat = 46, cols = 6, rows = (items.count + cols - 1) / cols
+        let r = UIGraphicsImageRenderer(size: CGSize(width: cell * CGFloat(cols), height: (cell + label) * CGFloat(rows)))
+        let sheet = r.image { ctx in
+            UIColor(white: 0.93, alpha: 1).setFill(); ctx.fill(CGRect(origin: .zero, size: r.format.bounds.size))
+            for (i, item) in items.enumerated() {
+                let x = CGFloat(i % cols) * cell, y = CGFloat(i / cols) * (cell + label)
+                UIColor(red: 0.98, green: 0.88, blue: 0.9, alpha: 1).setFill()
+                UIBezierPath(roundedRect: CGRect(x: x + 8, y: y + 8, width: cell - 16, height: cell - 16), cornerRadius: 36).fill()
+                if let img = StoreThumb.wardrobeImage(item) { img.draw(in: CGRect(x: x + 8, y: y + 8, width: cell - 16, height: cell - 16)) }
+                else { XCTFail("no picture for \(item.id)") }
+                (item.wear?.title ?? item.id as NSString as String).draw(at: CGPoint(x: x + 12, y: y + cell - 4), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 26), .foregroundColor: UIColor.black])
+            }
+        }
+        try sheet.jpegData(compressionQuality: 0.9)?.write(to: URL(fileURLWithPath: dir + "/all_items.jpg"))
+    }
 }
