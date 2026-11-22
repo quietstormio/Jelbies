@@ -31,6 +31,16 @@ nonisolated struct Trophy: Equatable, Sendable, Identifiable {
     static var all: [Trophy] { CourseTier.allCases.map(firstWin) + [wins5, wins10, wins25, champion] }
 }
 
+/// The two winners of a beach volleyball trophy (a match is two against two). Written with the first win on a court, on the shelf of each winner who is the player's own:
+/// the Jelmiko who was asked and the teammate (one of the player's own, `mate` = his character id, or a Park friend, `mate` nil). The names are snapshots, so the plaque still
+/// reads both after one of them has left (a leaver's id has no live name; the snapshot is the fallback).
+nonisolated struct VolleyPair: Codable, Equatable, Sendable {
+    var asked: Int
+    var askedName: String
+    var mate: Int?
+    var mateName: String
+}
+
 /// One Jelbie's ribbons and trophies.
 nonisolated struct JelbieTrophies: Codable, Equatable, Sendable {
     /// Course tier raw value -> [1st, 2nd, 3rd] counts.
@@ -42,10 +52,12 @@ nonisolated struct JelbieTrophies: Codable, Equatable, Sendable {
     /// When each engraved win happened (the trophy plate's date), by key: "race.<tier>.<place>" (the first time that place was won there), "trophy.<id>", "volley.<tier>",
     /// "show.<rank>.<place>". Optional so older saves decode: a win with no date reads "Won earlier".
     var won: [String: Date]? = nil
-    init(race: [String: [Int]] = [:], earned: [String] = [], volleyWins: [String: Int]? = nil, won: [String: Date]? = nil) { self.race = race; self.earned = earned; self.volleyWins = volleyWins; self.won = won }
+    /// Who won the first volleyball match on each court, by tier raw value (both names, `VolleyPair`). Optional so older saves decode; a trophy won before it has one winner and stays so.
+    var volleyPairs: [String: VolleyPair]? = nil
+    init(race: [String: [Int]] = [:], earned: [String] = [], volleyWins: [String: Int]? = nil, won: [String: Date]? = nil, volleyPairs: [String: VolleyPair]? = nil) { self.race = race; self.earned = earned; self.volleyWins = volleyWins; self.won = won; self.volleyPairs = volleyPairs }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        race = c.value(.race, [:]); earned = c.value(.earned, []); volleyWins = c.value(.volleyWins, nil); won = c.value(.won, nil)
+        race = c.value(.race, [:]); earned = c.value(.earned, []); volleyWins = c.value(.volleyWins, nil); won = c.value(.won, nil); volleyPairs = c.value(.volleyPairs, nil)
     }
     /// Writes the date of an engraved win once (the first time stays).
     mutating func stamp(_ key: String, _ now: Date) { var w = won ?? [:]; if w[key] == nil { w[key] = now; won = w } }
