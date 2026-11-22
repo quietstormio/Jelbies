@@ -845,7 +845,10 @@ final class AudioHub {
     nonisolated(unsafe) static var requestTap: ((String) -> Void)?
     /// Like requestTap but for chirps only, with the caller tag ("chirp:happy@idle") and the slot (diagnosis soak).
     nonisolated(unsafe) static var requestSrcTap: ((String, Int) -> Void)?
+    /// cafe-regulars-r1: true only while the café sets the guest pair's table out before the player sees the room: no clink, no "ooh" (they and their table are simply there).
+    nonisolated(unsafe) static var hushTableSetup = false
     func play(_ sfx: SFX, jelly: Int? = nil, x: Float? = nil, volume: Float = 1, rate: Float = 1) {
+        if Self.hushTableSetup, sfx == .setdown { return }
         Self.requestTap?(sfx.rawValue)
         if let c = SFXCue(rawValue: sfx.rawValue) { HapticDriver.room?.cue(.sfx(c), energy: volume) }          // (the landing / squish / boop haptic: Haptics+Emotes.swift; independent of the sound being muted)
         if let t = SoundCaptions.text(sfx, jelly: jelly.map { JellyRoster.name(slot: $0) }) { CaptionCenter.shared.post(t) }          // a11y: captions even when muted
@@ -1108,6 +1111,7 @@ final class AudioHub {
     /// The context voices (curious / ooh / hum / giggle / hello / yawn / yay / uhoh): a short call that fits what the Jelbie is doing, in the home room only. They ADD variety:
     /// they wait for the ambient voice's gap (1 s) and their own (2.2 s), and an ambient chirp waits 0.5 s after one, so a Jelbie never plays two voices at once.
     func contextVoice(jelly: Int, _ v: JellyVoice, chance: Double = 1, x: Float = 0) {
+        if Self.hushTableSetup { return }
         Self.requestTap?("voice:\(v.rawValue)")
         let what = "voice:\(v.rawValue)"
         guard v.isContext else { diag(what, jelly, "notContext"); return }

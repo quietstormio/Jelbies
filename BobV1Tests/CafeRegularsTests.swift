@@ -110,11 +110,12 @@ final class CafeRegularsTests: XCTestCase {
         for (k, a) in g.enumerated() { c.rehome(a, at: stands[k]); a.brain?.startTurn(to: yaws[k], sim: a.sim) }
         let talkers = g.enumerated().map { CafeTalker(actor: $1, stand: stands[$0], yaw: yaws[$0], voice: $0) }
         let st = CafeTalkState()
-        var spoke = Set<Int>(), last = -1, maxMove: [Float] = [0, 0], maxYaw: [Float] = [0, 0], changes = 0
+        var sawIdle = false, spoke = Set<Int>(), last = -1, maxMove: [Float] = [0, 0], maxYaw: [Float] = [0, 0], changes = 0
         let dt: Float = 1.0 / 60
         for step in 0..<(34 * 60) {
             r.tick()
             c.tickCafeInPlaceTalk(talkers, state: st, dt: dt)
+            if g.contains(where: { $0.brain?.idleState.kind != nil }) { sawIdle = true }
             if st.lastSpeaker != last { last = st.lastSpeaker; if last >= 0 { spoke.insert(last); changes += 1 } }
             if step > 4 * 60 {          // (4 s to square up, then 30 s measured)
                 for (k, a) in g.enumerated() {
@@ -129,6 +130,8 @@ final class CafeRegularsTests: XCTestCase {
             XCTAssertLessThan(maxMove[k], 0.05, "guest \(k) holds his spot")
             XCTAssertLessThan(maxYaw[k], 0.15, "guest \(k) holds his facing")
         }
+        print("[caferegulars] a gesture idle ran while reserved: \(sawIdle)")
+        XCTAssertTrue(sawIdle, "a gesture idle really runs in the held state (not statues)")
         XCTAssertEqual(spoke, [0, 1], "they take turns")
         XCTAssertGreaterThanOrEqual(changes, 6, "a conversation, not a statue")
         let d = simd_distance(g[0].floor, g[1].floor)
