@@ -709,7 +709,7 @@ final class BlobBrain {
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
-        defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
+        defer { var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) } }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
         centreDwellTick(dt)
@@ -1499,8 +1499,8 @@ final class BlobBrain {
         let s = simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), u)    // how far the stance foot leads
         let exact = !intermediate && social != nil && ContactTouchMemory.exact.contains(steerID)          // (a stance walk: the destination is the touch spot, 1 cm)
         if D < (exact ? 0.01 : 0.06) && abs(s) < 0.08 && !intermediate { return 1 }
-        if scriptT > 14 + D / 0.25 { return 1 }
-        if stuckT > 1.5 { return 2 }
+        if scriptT > 14 + D / 0.25 { MoveLog.note(.pinned); return 1 }          // (MoveLog: a walk that timed out)
+        if stuckT > 1.5 { MoveLog.note(.pinned); return 2 }
         // A stance walk that ends in a posture other than 'facing the partner' (side by side, facing the camera) turns into it during the last steps - an arc into the pose - so nobody squares up in place at contact
         // (the turn on the spot at touching range sweeps the wide axis through the partner, and the wall / the parting retreat pushes the pair apart again).
         var errF: Float = 0, finalTurn = false
@@ -1535,6 +1535,7 @@ final class BlobBrain {
         let pRV = PerfProbe.begin(); let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); PerfProbe.end("rs.resolve", pRV)
         stanceStepFree = false
         let got = SIMD2(rv.x, rv.z) - root
+        if MoveLog.on, simd_distance(SIMD2(rv.x, rv.z), cand) > 0.01 { MoveLog.note(.push) }          // (MoveLog: the floor rules / the peer spring moved the planned step by more than 1 cm)
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
         let wm = finalTurn ? max(-m, min(m, errF)) : (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err)))
@@ -1583,7 +1584,7 @@ final class BlobBrain {
             // stuck detector: an autonomous walk whose root has not moved 0.12 u in 3 s (a half turn on the spot takes ~1.7 s) is dropped and re-picked
             if simd_distance(SIMD2(px, pz), walkStallRoot) > 0.12 { walkStallRoot = SIMD2(px, pz); walkStallT = 0 } else { walkStallT += dt }
             if walkStallT > 3.0, job == nil, !commanded, pending == nil {
-                walkStallT = 0; stuckRepicks += 1
+                walkStallT = 0; stuckRepicks += 1; MoveLog.note(.pinned)
                 step(after: .none, sim, giveUp: true); restTimer = 0.25
                 return
             }
@@ -1596,7 +1597,7 @@ final class BlobBrain {
                 let pS = PerfProbe.begin(); let effOpt = steerTarget(to: target); PerfProbe.end("rs.steerTarget", pS)
                 guard let eff = effOpt else {
                     steerWait += dt; gaitPose(sway: waddleRoll, bob: 0.12); armWalkWant = 1
-                    if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; step(after: .none, sim, giveUp: true); restTimer = 0.25 }
+                    if steerGiveUp { steerGiveUp = false; steerWait = 0; stuckRepicks += 1; MoveLog.note(.pinned); step(after: .none, sim, giveUp: true); restTimer = 0.25 }
                     else if steerWait > 0.25, heldByPeer, slideFootHoldStands { steerWait = 0; slideFootStand(sim) }          // (park-slide-r4: held on the slide's foot, he stands and waits: no walk on the spot)
                     return
                 }

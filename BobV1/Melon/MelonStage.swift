@@ -923,7 +923,7 @@ final class MelonController: NSObject, MTKViewDelegate {
         c.maxFPS = view?.window?.screen.maximumFramesPerSecond ?? 0
         c.renderScale = Double(view?.contentScaleFactor ?? 0)
         if Self.metalFXFlag && !model.cutout { c.renderScale = fxScale }
-        c.ctx = [renderer?.takePerfContext() ?? "", brainTop(), FootLog.on ? FootLog.shared.summary : ""].filter { !$0.isEmpty }.joined(separator: " ")
+        c.ctx = [renderer?.takePerfContext() ?? "", brainTop(), FootLog.on ? FootLog.shared.summary : "", MoveLog.on ? MoveLog.shared.summary : ""].filter { !$0.isEmpty }.joined(separator: " ")
         c.tier = String(format: "adaptive %@ level %d, MetalFX %@, fastMatte %d, roomCache %@, idleRest %@%@", Self.adaptiveEnabled ? "on" : "off", scaler?.level ?? 0,
                         Self.metalFXFlag ? "on" : "off", Self.gfxOptFlags.fastMatteTier, Self.roomCacheFlag ? "on" : "off", idleRest.resting ? "RESTING" : "awake", lastAppliedFPS == 0 ? "" : " (gov \(lastAppliedFPS) Hz)")
         return c
