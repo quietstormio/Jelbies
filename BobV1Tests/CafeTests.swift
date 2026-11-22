@@ -469,6 +469,7 @@ final class CafeTests: XCTestCase {
             XCTAssertNil(c.orderCafe(CafeOrder(picks: [0: .jellycup, 1: .jellycup, 2: .jellycup])))
             XCTAssertEqual(c.cafe.stamps.card.count, visit)
             XCTAssertLessThan(c.bath.wallet.count, before)
+            step(r, 120) { c.cafe.phase == .lounge }          // (they eat first: leaving mid-meal with nothing eaten gives the stamp back, tested apart)
             c.cafe.goHome(); step(r, 8) { c.cafe.phase == .off }; step(r, 2)
             for j in c.jellies { c.needs(for: j.id).set(.hunger, 0.3) }
         }
