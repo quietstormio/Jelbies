@@ -165,7 +165,7 @@ extension BlobBrain {
     func emoteSoloGate(_ kind: IdleKind, _ sim: SoftBody) -> Bool {
         guard emoteSpotLive, EmoteSpot.soloKinds.contains(kind), !emoteSpot.skip, social == nil, !held, !commanded, commandedIdle == nil, pending == nil, bubbleLeash == nil, !race.active else { return false }
         let here = SIMD2(px, pz)
-        if let g = emoteBestSpot(from: [here], maxLeg: EmoteSpot.soloLeg, here: here, ok: { [unowned self] c in simd_distance(self.fixed(c), c) < 0.1 && self.peerFree(c) && self.reachable(here, c) }) {
+        if let g = emoteBestSpot(from: [here], maxLeg: EmoteSpot.soloLeg, here: here, ok: { [unowned self] c in simd_distance(self.fixed(c), c) < 0.1 && self.peerFree(c) && self.reachable(here, c) && self.mixStopOK(c) }) {
             emoteSpot.soloKind = kind; emoteSpot.soloAt = variety.now
             emoteSendWalk(to: g)
             return true

@@ -48,6 +48,8 @@ final class MoveLog {
         var idleSum3 = [Float](repeating: 0, count: 9), idleSum6 = [Float](repeating: 0, count: 36)          // integral of "seconds since a body was last in this cell"
         var idleMax3: Float = 0, idleMax6: Float = 0
         var idleCells3 = 9, idleCells6 = 36
+        var quietSec: Float = 0, huddleSec: Float = 0, chainMax: Float = 0          // (move-mix-r1: seconds with nobody in any emote, with every body within 2.5 u of every other, the longest run of pair emotes of the same two (gaps <= 6 s))
+        var kinds = Set<String>(), kindCounts: [Int] = []          // (the different emote kinds seen: this run's set; the sizes of the runs folded in)
         var emoteN = 0, walkN = 0          // (move-b-r1: emote starts (an idle move or a social) and walks to a new goal; walkSec / walkN = mean walk time to a goal)
     }
     /// Fold another run's totals in (the harness: several seeds into one table).
@@ -57,6 +59,7 @@ final class MoveLog {
         for c in 0..<36 { a.idleSum6[c] += o.idleSum6[c] }
         for c in 0..<10 { a.act[c] += o.act[c] }
         for c in 0..<3 { a.bump[c] += o.bump[c] }
+        a.quietSec += o.quietSec; a.huddleSec += o.huddleSec; a.chainMax = max(a.chainMax, o.chainMax); a.kindCounts += o.kindCounts.isEmpty ? [o.kinds.count] : o.kindCounts
         a.walkSec += o.walkSec; a.gameSec += o.gameSec; a.emoteN += o.emoteN; a.walkN += o.walkN
         a.arrN += o.arrN; a.arrSec += o.arrSec; a.arrDist += o.arrDist
         a.stands += o.stands; a.walkTimes += o.walkTimes; a.pairN += o.pairN; a.groupN += o.groupN; a.pairSec += o.pairSec; a.groupSec += o.groupSec
@@ -66,7 +69,8 @@ final class MoveLog {
     private(set) var total = Totals()
     /// Seconds per activity of each body (cumulative; the per-body view of the budget).
     private(set) var actBody: [Int: [Float]] = [:]
-    private var sess: [ObjectIdentifier: (first: Float, last: Float, group: Bool)] = [:]
+    private var sess: [ObjectIdentifier: (first: Float, last: Float, group: Bool, pair: Int)] = [:]
+    private var chains: [Int: (start: Float, end: Float)] = [:]
     private var lastVisit3 = [Float](repeating: 0, count: 9), lastVisit6 = [Float](repeating: 0, count: 36)
     private var valid3 = [Bool](repeating: true, count: 9), valid6 = [Bool](repeating: true, count: 36), maskKey = ""
 
@@ -83,7 +87,7 @@ final class MoveLog {
         var emoting = false, lastGoal: SIMD2<Float>?, walkStart = SIMD2<Float>.zero, walkT: Float = 0, lastP = SIMD2<Float>.zero
     }
     private var bodies: [Int: Body] = [:]
-    private var clock: Float = 0, lastFlush: Float = 0
+    private var clock: Float = 0, lastFlush: Float = 0, mixTickClock: Float = -1
 
     static func configure(defaults: UserDefaults = .standard, devArgs: Bool = DevArgs.enabled) {
         guard devArgs else { on = false; return }
@@ -94,7 +98,7 @@ final class MoveLog {
         if v { shared.reset(); shared.line("start \(RoomTraffic.switchesText)") }
     }
 
-    func reset() { total = Totals(); window = Totals(); bodies = [:]; actBody = [:]; sess = [:]; lastVisit3 = [Float](repeating: 0, count: 9); lastVisit6 = [Float](repeating: 0, count: 36); maskKey = ""; clock = 0; lastFlush = 0; minute = 0; windowWall = CACurrentMediaTime() }
+    func reset() { total = Totals(); window = Totals(); bodies = [:]; actBody = [:]; sess = [:]; chains = [:]; lastVisit3 = [Float](repeating: 0, count: 9); lastVisit6 = [Float](repeating: 0, count: 36); maskKey = ""; clock = 0; lastFlush = 0; minute = 0; windowWall = CACurrentMediaTime() }
 
     /// A counted moment from the walk code (a push, a pinned walk).
     static func note(_ k: Kind) { guard on else { return }; shared.total.n[k.rawValue] += 1; shared.window.n[k.rawValue] += 1 }
@@ -119,7 +123,7 @@ final class MoveLog {
         activity(b, &s, dt)
         total.bodySec[c] += dt; window.bodySec[c] += dt
         let emoteNow = (b.idleState.kind != nil && b.idleState.kind != .sleep) || b.social != nil
-        if emoteNow { total.emoteSec[c] += dt; window.emoteSec[c] += dt; if !s.emoting { total.emoteN += 1; window.emoteN += 1 } }
+        if emoteNow { total.emoteSec[c] += dt; window.emoteSec[c] += dt; if !s.emoting { total.emoteN += 1; window.emoteN += 1; if let n = b.social?.kind.rawValue ?? b.idleState.kind?.rawValue { total.kinds.insert(n); window.kinds.insert(n) } } }
         s.emoting = emoteNow
         var goal: SIMD2<Float>?
         if case .walk(let g, _) = b.script, b.activity == .walking || b.activity == .coming, b.social == nil { goal = g }
@@ -161,6 +165,15 @@ final class MoveLog {
             } else if g > 0.03 { s.touching.remove(o.steerID) }
         }
         bodies[b.steerID] = s
+        if s.clock >= clock - 1e-6, bodies.count > 1, mixTickClock != clock {          // (once per game tick)
+            mixTickClock = clock
+            let any = bodies.values.contains { $0.emoting }
+            if !any { total.quietSec += dt; window.quietSec += dt }
+            let ps = bodies.values.map { $0.prevP }
+            var tight = ps.count >= 3
+            for i in ps.indices { for j in ps.indices where j > i && simd_distance(ps[i], ps[j]) > 2.5 { tight = false } }
+            if tight { total.huddleSec += dt; window.huddleSec += dt }
+        }
         foldSessions()
         if clock - lastFlush >= Self.windowSeconds { flush() }
     }
@@ -204,7 +217,7 @@ final class MoveLog {
         actBody[b.steerID, default: [Float](repeating: 0, count: 10)][cat] += dt
         if let sn = b.social {
             let id = ObjectIdentifier(sn), group = sn.crew.count >= 3 || sn.idC >= 0
-            sess[id] = (sess[id]?.first ?? clock, clock, group)
+            sess[id] = (sess[id]?.first ?? clock, clock, group, min(sn.idA, sn.idB) * 100 + max(sn.idA, sn.idB))
         }
     }
 
@@ -213,7 +226,13 @@ final class MoveLog {
         for (id, v) in sess where clock - v.last > 2 {
             let len = v.last - v.first
             if v.group { total.groupN += 1; total.groupSec += len; window.groupN += 1; window.groupSec += len }
-            else { total.pairN += 1; total.pairSec += len; window.pairN += 1; window.pairSec += len }
+            else {
+                total.pairN += 1; total.pairSec += len; window.pairN += 1; window.pairSec += len
+                var ch = chains[v.pair] ?? (v.first, v.last)
+                if v.first - ch.end > 6 { ch = (v.first, v.last) } else { ch.end = v.last }
+                chains[v.pair] = ch
+                total.chainMax = max(total.chainMax, ch.end - ch.start); window.chainMax = max(window.chainMax, ch.end - ch.start)
+            }
             sess[id] = nil
         }
     }
@@ -273,6 +292,7 @@ final class MoveLog {
         s += String(format: " | walk-to-goal median %.1f s p90 %.1f s (%d arrivals)", pct(t.walkTimes, 0.5), pct(t.walkTimes, 0.9), t.arrN)
         s += String(format: " | pairs %.1f/h len %.1f s, groups %.1f/h len %.1f s", Float(t.pairN) / mins * 60, t.pairSec / Float(max(t.pairN, 1)), Float(t.groupN) / mins * 60, t.groupSec / Float(max(t.groupN, 1)))
         let g = max(t.gameSec, 0.01)
+        s += String(format: " | nobody-emoting %.0f%% huddle(all within 2.5 u) %.0f%% longest same-pair chain %.0f s kinds/run %@", t.quietSec / max(t.gameSec, 0.01) * 100, t.huddleSec / max(t.gameSec, 0.01) * 100, t.chainMax, (t.kindCounts.isEmpty ? [t.kinds.count] : t.kindCounts).map(String.init).joined(separator: "/"))
         s += String(format: " | idleness 3x3 mean %.1f max %.1f s, 6x6 mean %.1f max %.1f s", t.idleSum3.reduce(0, +) / g / Float(max(t.idleCells3, 1)), t.idleMax3, t.idleSum6.reduce(0, +) / g / Float(max(t.idleCells6, 1)), t.idleMax6)
         return s
     }

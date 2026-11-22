@@ -52,7 +52,7 @@ extension BlobBrain {
 
     /// Free (or just out on an ordinary wander leg: he finishes it, then joins), calm, close Jelbies other than me (nearest first).
     func groupCandidates() -> [BlobBrain] {
-        socialOthers().filter { $0 !== self && !$0.meetBusy && ($0.socialFree || $0.socialWandering) && $0.idleMood != .grumpy && $0.idleDeepNight < 0.5 && simd_distance($0.position, position) < GroupTuning.radius }
+        socialOthers().filter { $0 !== self && !$0.meetBusy && ($0.socialFree || $0.socialWandering) && $0.idleMood != .grumpy && $0.idleDeepNight < 0.5 && simd_distance($0.position, position) < GroupTuning.radius && !(MoveMix.on && ($0.mixQuiet || !$0.mixStopOK($0.position))) }
             .sorted { simd_distance($0.position, position) < simd_distance($1.position, position) }
     }
 
@@ -60,6 +60,7 @@ extension BlobBrain {
     func socialGroupWatch(_ sim: SoftBody, _ dt: Float) {
         guard anticsEnabled, socialBook.enabled, social == nil, !held, autonomy || idleForced, idleState.kind != .sleep, idleDeepNight < 0.5, idleMood != .grumpy else { return }          // (the wait runs while he walks about too; the start needs him standing: `socialFree` below)
         guard socialBook.groupCool <= 0 else { return }
+        if MoveMix.on, mixQuiet || !mixStopOK(position) { return }          // (MoveMix.swift)
         // the wait runs while there is company close by (awake, not held); the start needs them free (or just walking) at the moment it is time
         let company = socialOthers().filter { $0 !== self && !$0.held && $0.idleState.kind != .sleep && simd_distance($0.position, position) < GroupTuning.radius }
         guard company.count >= GroupTuning.minCompany else { socialBook.groupIdle = max(0, socialBook.groupIdle - 0.5 * dt); return }
@@ -87,7 +88,7 @@ extension BlobBrain {
         var x = rand() * w.reduce(0) { $0 + $1.1 }
         var kind = w[0].0
         for (k, wt) in w { if x < wt { kind = k; break }; x -= wt }
-        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul * moreGroupWaitMul * (homeRoom ? 1 / GroupTuning.homeRateScale : 1)
+        socialBook.groupLimit = rand(GroupTuning.wait.0, GroupTuning.wait.1) * parkSocialWaitMul * moreGroupWaitMul * (homeRoom ? 1 / GroupTuning.homeRateScale : 1) * (MoveMix.on ? MoveMix.groupWaitMul : 1)
         socialBook.groupIdle = 0; socialBook.groupBusy = 0
         if !socialStartGroup(kind, with: crew, sim) { socialBook.groupIdle = socialBook.groupLimit * 0.7 }          // (no room right now: try again soon)
     }
@@ -115,14 +116,15 @@ extension BlobBrain {
             return [SIMD2(sinf(a), cosf(a)) * 0.5, SIMD2(sinf(a), cosf(a)) * 1.0]
         }
         for off in offs {
-            let c = ParkClearSpot.clear((centre ?? cen) + off, radius: footprint + r)          // (park only: the whole ring clear of a solid piece, see ParkClearSpot)
+            let c = ParkClearSpot.clear((centre ?? cen) + off, radius: footprint + r)
+            if MoveMix.on, !mixStopOK(c) { continue }          // (MoveMix.swift: the ring's centre and slots are clear of the HUD buttons)          // (park only: the whole ring clear of a solid piece, see ParkClearSpot)
             if hopCourtWithin(c, r + footprint * HopscotchTuning.wallReach + 0.2) { continue }          // (park-hopscotch-r1: the whole ring, and its drift, is clear of a court with a game on)
             var spots = [Int: SIMD2<Float>](), ok = true
             for m in members {
                 let a = ang[m.steerID]!
                 let want = c + SIMD2(sinf(a), cosf(a)) * r
                 let p = fixed(want)
-                if simd_distance(p, want) > 0.12 || simd_distance(p, m.position) > GroupTuning.walkMax { ok = false; break }
+                if simd_distance(p, want) > 0.12 || simd_distance(p, m.position) > GroupTuning.walkMax || (MoveMix.on && !mixStopOK(p)) { ok = false; break }
                 if socialOthers().contains(where: { x in !members.contains { $0 === x } && simd_distance(x.position, p) < peerGap * 0.9 }) { ok = false; break }
                 spots[m.steerID] = p
             }

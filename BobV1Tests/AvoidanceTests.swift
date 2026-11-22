@@ -37,7 +37,7 @@ final class AvoidanceTests: XCTestCase {
             for (i, r) in lab.rigs.enumerated() {
                 r.skinner.autoBlink = false
                 let b = r.brain
-                b.sleepEnabled = false; b.anticsEnabled = true; b.watching = false; b.homeRoom = ProcessInfo.processInfo.environment["MOVELOG_HOMEROOM"] != "0"          // (move-b-r1: TEST_RUNNER_MOVELOG_HOMEROOM=0 = the old headless way, homeRoom off)
+                b.sleepEnabled = false; b.anticsEnabled = true; b.watching = ProcessInfo.processInfo.environment["MOVELOG_WATCHING"] == "1"; b.homeRoom = ProcessInfo.processInfo.environment["MOVELOG_HOMEROOM"] != "0"          // (move-b-r1: TEST_RUNNER_MOVELOG_HOMEROOM=0 = the old headless way, homeRoom off)
                 b.idleMood = mood; b.idleNight = 0; b.idleDeepNight = 0; b.idleMorning = 0
                 b.socialBook.cooldown = 6 + Float(i) * 3; b.idleState.cooldown = 8 + Float(i) * 2; b.restTimer = 0.5 + Float(i)
                 r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
@@ -51,7 +51,7 @@ final class AvoidanceTests: XCTestCase {
             lab = SocialTests.Lab(n: n, positions: pts, quiet: false, seed: seed)
             for (k, r) in lab.rigs.enumerated() {
                 r.sim.arenaCenter = GameCamera.arenaCenter; r.sim.arenaRadius = GameCamera.arenaRadius
-                r.brain.anticsEnabled = true; r.brain.idleMood = .happy; r.brain.outingPlay = true; r.skinner.autoBlink = false; r.renderSamples = false
+                r.brain.anticsEnabled = true; r.brain.watching = ProcessInfo.processInfo.environment["MOVELOG_WATCHING"] == "1"; r.brain.idleMood = .happy; r.brain.outingPlay = true; r.skinner.autoBlink = false; r.renderSamples = false
                 r.brain.feature = JellyRoster.feature(k % 5)
                 r.skinner.configureTail(MotionRig.renderMesh); r.skinner.tailOn = r.brain.feature == .spines; r.brain.skinnerRef = r.skinner
                 for (j, o) in lab.rigs.enumerated() where o !== r && (j >= 2 || k >= 2) { r.brain.socialBook.close[o.brain.steerID] = 0.55 }
