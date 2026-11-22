@@ -99,6 +99,7 @@ final class StartFlow {
     /// Runs before anything reads a save: `-ResetForAdoption 1` (simulator builds only).
     static func applyLaunchArguments() {
         JellyCamp.resumeRelease()          // a "Say goodbye" a kill interrupted is finished before anything reads the save
+        applyClearCamp()                   // `-ClearCamp <token>` (dev arguments only, once per token)
         #if DEBUG || targetEnvironment(simulator)
         if UserDefaults.standard.integer(forKey: "ResetForAdoption") != 0 { wipeAll() }
         #endif
@@ -119,6 +120,17 @@ final class StartFlow {
         // Not simulator-gated: `-ImportSave 1` merges Documents/import_save.plist (an old save's room) into this game, once (`-ImportSave 0` re-arms). Runs before StoreBook is created.
         ImportSave.apply(arg: UserDefaults.standard.object(forKey: ImportSave.argKey) != nil ? UserDefaults.standard.integer(forKey: ImportSave.argKey) : nil)
         #endif
+    }
+
+    /// `-ClearCamp <token>` (dev-args-gated, once per token): lets go of every creature at Camp through the real "Say goodbye" (`JellyCamp.letGo`: pays the thank-you, purges).
+    /// Home creatures are never touched. The token is stored under "ClearCamp.applied", so a relaunch with the same token (or none) does nothing.
+    static func applyClearCamp(_ d: UserDefaults = .standard) {
+        guard DevArgs.enabled, let token = d.string(forKey: "ClearCamp"), !token.isEmpty, d.string(forKey: "ClearCamp.applied") != token else { return }
+        let ids = JellyCamp.savedLists(d).camp
+        var done = 0
+        for id in ids where JellyCamp.letGo(id, d) { done += 1 }
+        d.set(token, forKey: "ClearCamp.applied")
+        print("[camp] ClearCamp: let go \(done) of \(ids.count) (ids \(ids.map(String.init).joined(separator: ",")))")
     }
 
     #if targetEnvironment(simulator)
