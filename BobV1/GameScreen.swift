@@ -1065,12 +1065,13 @@ struct GameScreen: View {
         if model.care.volley.inScene { return .volley }
         return GameScreen.townMusic(town)
     }
-    /// What each Town screen plays: the Shop its own loop, the Studio / Condition / Show lobby the studio practice loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).
+    /// What each Town screen plays: the Shop its own loop, the Studio / Show lobby the studio practice loop, the Profile (TownScreen.condition) its own profile_1 loop; every other Town screen (the "Where to?" menu, the Track lobby, Friends, the Volleyball lobby) plays nothing of its own, so the home music carries on underneath (2026-11-09: the owner found the separate menu song a jarring sudden change).
     static func townMusic(_ t: TownScreen?) -> MusicScene {
         switch t {
         case nil: return .none
         case .shop?: return .shop
-        case .studio?, .condition?: return .studio
+        case .studio?: return .studio
+        case .condition?: return .profile          // the Profile screen (2026-11-22) plays its own calmer loop; the Studio keeps studio_practice_1
         default: return .none
         }
     }

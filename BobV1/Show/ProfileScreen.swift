@@ -187,7 +187,6 @@ struct ProfileScreen: View {
         let body = Color(red: Double(t.x), green: Double(t.y), blue: Double(t.z))
         let species = JellyRoster.species(character)
         let info = SpeciesInfo.all.first { $0.character == species }
-        let kind = info?.name ?? JellyRoster.baseNames[min(max(species, 0), JellyRoster.baseNames.count - 1)]
         let loved = Int(((f.state?.levels[NeedKind.attention.rawValue] ?? 0) * 5).rounded())
         return card {
             VStack(spacing: 10) {
@@ -200,11 +199,14 @@ struct ProfileScreen: View {
                     .frame(width: compact ? 104 : 128, height: compact ? 104 : 128)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(care.rosterName(who)).font(SK.font(30, .black)).foregroundStyle(SK.ink).jLine(2, scale: 0.6).accessibilityIdentifier("profile-name")
-                        HStack(spacing: 6) {
-                            Image(systemName: "sparkles").font(.system(size: 12, weight: .black)).foregroundStyle(ShowUI.goldDeep).accessibilityHidden(true)
-                            Text(info.map { "\($0.name) \u{00B7} \($0.epithet)" } ?? kind).font(SK.font(14, .heavy)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+                        if let info {
+                            HStack(spacing: 6) {
+                                Image(systemName: "sparkles").font(.system(size: 12, weight: .black)).foregroundStyle(ShowUI.goldDeep).accessibilityHidden(true)
+                                Text(info.name).font(SK.font(15, .heavy)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true)
+                            }
+                            .accessibilityElement(children: .combine).accessibilityIdentifier("profile-kind")
+                            Text(info.about).font(SK.font(13, .bold)).foregroundStyle(SK.muted).fixedSize(horizontal: false, vertical: true).accessibilityIdentifier("profile-about")          // the Spring page's one-line description, as written there
                         }
-                        .accessibilityElement(children: .combine)
                         if let tr = f.p?.traits {
                             HStack(spacing: 6) {
                                 Image(systemName: tr.personality.symbol).font(.system(size: 12, weight: .black)).foregroundStyle(SK.pink).accessibilityHidden(true)
@@ -312,6 +314,7 @@ struct ProfileScreen: View {
 
     // MARK: 4. trophies
 
+    // TODO: the pictures are a coloured trophy symbol per kind because the mini trophy renders of branch `trophy-card-r1` are not on this base; when they are, use `StoreThumb.image` + `TrophyShelfGeometry.singleMesh(id:color:)` here.
     private func trophyChips() -> (chips: [ProfileTrophyChip], total: Int, ribbons: Int) {
         let c = care.jelly(who)?.character ?? who
         let shelf = care.race.trophies.shelf(character: c)
