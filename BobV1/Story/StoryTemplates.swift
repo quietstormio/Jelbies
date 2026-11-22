@@ -203,6 +203,10 @@ nonisolated enum StoryTemplates {
         return n
     }
 
+    /// Sampled awake time together below which a long-time Jelmiko's row says nothing ("Still finding out"): about 10 minutes. The "little time together" notes belong to a real newcomer only.
+    static let noteMinSeconds = 600
+    static func noteAllowed(_ f: StoryFacts, _ h: StoryFacts.Housemate) -> Bool { f.newcomer || h.togetherSeconds >= noteMinSeconds }
+
     static func tier(_ h: StoryFacts.Housemate) -> Tier {
         if h.togetherSeconds >= 300 && h.playShare >= 0.5 { return .close }
         if h.togetherSeconds >= 60 { return .regular }
@@ -243,6 +247,7 @@ nonisolated enum StoryTemplates {
 
     /// One friendship note for `f` about housemate `h`. `avoid`: opening words already used by the note above on the same Profile (never two notes that start alike).
     static func friendship(_ f: StoryFacts, with h: StoryFacts.Housemate, used: Set<Int>, seed: UInt64, avoid: Set<String> = []) -> Written? {
+        guard noteAllowed(f, h) else { return nil }
         let t = tier(h)
         let values = StoryFill.values(f, with: h), offered = StoryFill.offered(f, with: h), avail = StoryFill.facts(f, with: h)
         let eligible = noteBank.filter { p in

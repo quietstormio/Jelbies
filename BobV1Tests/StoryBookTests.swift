@@ -15,7 +15,7 @@ final class StoryBookTests: XCTestCase {
         var f = StoryFacts(id: id, name: name, kindName: "Blush", kindAbout: "", shownParagraph: "Pale pink with rose patches. Shy at first, then the friendliest one in the room.", mood: "happy")
         f.personality = "sleepy"; f.favouriteFood = "cookie"; f.favouriteActivity = "bounce"; f.minutesSeen = 120; f.daysTracked = 9
         f.trophies.raceWins = trophies; f.trophies.bestRaceTier = trophies > 0 ? "Puddle" : nil
-        f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: 400, topEmote: "chase", mostPlayedWith: true)]
+        f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: 700, topEmote: "chase", mostPlayedWith: true)]
         f.mostPlayedWithID = 2; f.togetherShare = 0.3
         return f
     }
@@ -223,9 +223,9 @@ final class StoryBookTests: XCTestCase {
         let d = suite()
         let b = book(d, day: Box(100))
         _ = b.aboutLine(facts(id: 1)); _ = b.aboutLine(facts(id: 2, name: "Latte"))
-        var f1 = facts(id: 1); f1.housemates = [.init(id: 2, name: "Latte", kindName: "Moo")]
-        var f2 = facts(id: 2, name: "Latte"); f2.housemates = [.init(id: 1, name: "Berry", kindName: "Blush")]
-        var f3 = facts(id: 3, name: "Pip"); f3.housemates = [.init(id: 1, name: "Berry", kindName: "Blush"), .init(id: 2, name: "Latte", kindName: "Moo")]
+        var f1 = facts(id: 1); f1.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: 700)]
+        var f2 = facts(id: 2, name: "Latte"); f2.housemates = [.init(id: 1, name: "Berry", kindName: "Blush", playShare: 0.8, togetherSeconds: 700)]
+        var f3 = facts(id: 3, name: "Pip"); f3.housemates = [.init(id: 1, name: "Berry", kindName: "Blush", playShare: 0.8, togetherSeconds: 700), .init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: 700)]
         _ = b.noteLine(f1, with: f1.housemates[0]); _ = b.noteLine(f2, with: f2.housemates[0])
         _ = b.noteLine(f3, with: f3.housemates[0]); _ = b.noteLine(f3, with: f3.housemates[1])
         XCTAssertEqual(b.saved.notes.count, 4)
@@ -242,8 +242,8 @@ final class StoryBookTests: XCTestCase {
             let b = book(suite(), day: Box(100))
             var f = StoryTemplatesTests.randomFacts(&g)
             f.id = 1
-            f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: [0, 120, 900][round % 3], topEmote: round % 2 == 0 ? "chase" : "cuddle"),
-                            .init(id: 3, name: "Pip", kindName: "Moo", playShare: 0.8, togetherSeconds: [900, 0, 120][round % 3], topEmote: round % 2 == 0 ? "chase" : "dance")]
+            f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.8, togetherSeconds: [650, 700, 900][round % 3], topEmote: round % 2 == 0 ? "chase" : "cuddle"),
+                            .init(id: 3, name: "Pip", kindName: "Moo", playShare: 0.8, togetherSeconds: [900, 650, 700][round % 3], topEmote: round % 2 == 0 ? "chase" : "dance")]
             let a = b.noteLine(f, with: f.housemates[0])!.text, c = b.noteLine(f, with: f.housemates[1])!.text
             XCTAssertNotEqual(StoryTemplates.firstWord(a), StoryTemplates.firstWord(c), "\(a) / \(c)")
             // and it stays so when shown again

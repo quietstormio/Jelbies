@@ -36,7 +36,7 @@ final class StoryTemplatesTests: XCTestCase {
         f.daysTracked = Int(g.next() % 15)
         let nh = Int(g.next() % 3)
         for i in 0..<nh {
-            let secs = chance(0.3) ? 0 : Int(g.next() % 900)
+            let secs = chance(0.3) ? 0 : (f.newcomer ? Int(g.next() % 900) : 600 + Int(g.next() % 600))          // (a long-time Jelmiko's row says nothing under 10 minutes together: see testLongTimeHousematesWithNoSampledTimeGetNoNote)
             f.housemates.append(.init(id: 10 + i, name: pick(names), kindName: pick(kinds), playShare: Double(g.next() % 100) / 100, togetherSeconds: secs, topEmote: chance(0.6) ? pick(["chase", "dance", "highFive", "cuddle", "pass", "hopAlong", "nuzzle", "boop"]) : nil))
         }
         if f.housemates.contains(where: { $0.togetherSeconds >= 60 }) { f.togetherShare = 0.2 }
@@ -76,6 +76,7 @@ final class StoryTemplatesTests: XCTestCase {
             }
             for h in f.housemates where noteCount < 10_000 {
                 let key = TemplateWriter.noteKey(f.id, h.id)
+                guard StoryTemplates.noteAllowed(f, h) else { continue }          // (a long-time Jelmiko with under 10 minutes together: no note, the row shows its placeholder)
                 guard let w = StoryTemplates.friendship(f, with: h, used: memory.usedSet(key), seed: memory.nextSeed(key)) else { XCTFail("no note"); return }
                 memory.remember(key, w.ids, bankSize: StoryTemplates.noteBank.count)
                 let v = StoryGuard.check(template: w.template, final: w.final, kind: .friendship, offered: StoryFill.offered(f, with: h), values: StoryFill.values(f, with: h), keys: w.keys, available: StoryFill.facts(f, with: h))
@@ -183,7 +184,8 @@ final class StoryTemplatesTests: XCTestCase {
         for p in StoryTemplates.noteBank {
             var f = StoryFacts(id: 1, name: "Berry", kindName: "Blush", kindAbout: "", mood: "")
             f.favouriteSpot = "window"
-            var h = StoryFacts.Housemate(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: p.tiers.contains(.close) ? 900 : (p.tiers.contains(.regular) ? 100 : 0), topEmote: p.only ?? "chase")
+            var h = StoryFacts.Housemate(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: p.tiers.contains(.close) ? 900 : (p.tiers.contains(.regular) ? 700 : 0), topEmote: p.only ?? "chase")
+            if !p.tiers.contains(.close) && !p.tiers.contains(.regular) { f.newcomer = true }          // the "little time together" notes belong to a real newcomer
             h.groupKind = p.groupKinds.first; h.sharedGroup = h.groupKind != nil; h.sharedSpot = p.spot ? "window" : nil; h.napBuddies = p.nap
             let tier = StoryTemplates.tier(h)
             guard p.tiers.contains(tier) else { continue }
@@ -193,5 +195,22 @@ final class StoryTemplatesTests: XCTestCase {
             XCTAssertTrue(v.passed, "\(p.id) \(fin) -> \(v)")
             XCTAssertLessThanOrEqual(fin.count, StoryGuard.noteMaxChars)
         }
+    }
+
+    func testLongTimeHousematesWithNoSampledTimeGetNoNoteAndOnlyARealNewcomerGetsTheLittleTimeNotes() {
+        var f = StoryFacts(id: 1, name: "Berry", kindName: "Blush", kindAbout: "", mood: "")
+        f.newcomer = false
+        for secs in [0, 5, 59, 60, 299, 300, 599] {
+            let h = StoryFacts.Housemate(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: secs, topEmote: "chase")
+            XCTAssertNil(StoryTemplates.friendship(f, with: h, used: [], seed: 1), "\(secs) s with no newcomer: no claim")
+            XCTAssertNil(TemplateWriter(memory: StoryMemory()).writeNote(f, h))
+            XCTAssertNil(StoryBook(defaults: UserDefaults(suiteName: "day1.\(UUID())")!, chain: StoryChain([TemplateWriter(memory: StoryMemory())])).noteLine(f, with: h))
+        }
+        let ten = StoryFacts.Housemate(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: 600, topEmote: "chase")
+        XCTAssertNotNil(StoryTemplates.friendship(f, with: ten, used: [], seed: 1), "from 10 minutes there is something to say")
+        // a real newcomer may say the little-time-together things
+        f.newcomer = true
+        let none = StoryFacts.Housemate(id: 2, name: "Latte", kindName: "Moo", playShare: 0, togetherSeconds: 0, topEmote: nil)
+        XCTAssertNotNil(StoryTemplates.friendship(f, with: none, used: [], seed: 1))
     }
 }

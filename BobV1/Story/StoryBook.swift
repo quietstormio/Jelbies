@@ -59,7 +59,7 @@ nonisolated final class StoryGateBox: @unchecked Sendable {
     var lowPower: Bool { get { lock.lock(); defer { lock.unlock() }; return _lowPower } set { lock.lock(); _lowPower = newValue; lock.unlock() } }
     func input() -> StoryModelGate.Input {
         StoryModelGate.Input(modelAvailable: false, localeSupported: false, english: StoryModelGate.appIsEnglish, foreground: StoryAppState.foreground, busy: busy,
-                             lowPower: lowPower || ProcessInfo.processInfo.isLowPowerModeEnabled, thermalOK: StoryModelGate.thermalOK(ProcessInfo.processInfo.thermalState), switchedOn: StorySettings.rawOn(), crashDisabled: StoryModelSentinel.disabledStep() != nil, profileReady: StoryAppState.profileReady())
+                             lowPower: lowPower || ProcessInfo.processInfo.isLowPowerModeEnabled, thermalOK: StoryModelGate.thermalOK(ProcessInfo.processInfo.thermalState), switchedOn: StorySettings.rawOn() || StoryAppState.devDump, crashDisabled: StoryModelSentinel.disabledStep() != nil, profileReady: StoryAppState.profileReady())
     }
 }
 
@@ -187,6 +187,7 @@ final class StoryBook {
     }
 
     func noteLine(_ f: StoryFacts, with h: StoryFacts.Housemate) -> Line? {
+        guard StoryTemplates.noteAllowed(f, h) else { return nil }          // not enough sampled time together to say anything true: the row shows its calm placeholder
         let key = "\(f.id)>\(h.id)"
         let values = StoryFill.values(f, with: h), offered = Set(values.keys)
         let avoid = earlierOpenings(f, before: h)

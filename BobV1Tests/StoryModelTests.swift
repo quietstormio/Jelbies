@@ -16,7 +16,7 @@ final class StoryModelTests: XCTestCase {
         var f = StoryFacts(id: id, name: name, kindName: "Blush", kindAbout: "", shownParagraph: "Pale pink with rose patches. Shy at first, then the friendliest one in the room.", mood: "happy")
         f.personality = "sleepy"; f.favouriteFood = "cookie"; f.favouriteActivity = "bounce"; f.favouriteSpot = "window"; f.minutesSeen = 120; f.daysTracked = 9
         f.trophies.raceWins = 1; f.trophies.bestRaceTier = "Puddle"
-        f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: 400, topEmote: "chase", mostPlayedWith: true)]
+        f.housemates = [.init(id: 2, name: "Latte", kindName: "Moo", playShare: 0.9, togetherSeconds: 700, topEmote: "chase", mostPlayedWith: true)]
         f.mostPlayedWithID = 2; f.togetherShare = 0.3
         return f
     }
@@ -27,13 +27,15 @@ final class StoryModelTests: XCTestCase {
         var note: Result<(String, [String]), Error> = .success(("{A} and {B} play together more than anyone.", ["together"]))
         var failure: StoryModelFailure = .unknown
         var delay: UInt64 = 0
+        /// The wait ignores cancellation (like a framework call that hangs): our own timeout fires, the call is still out.
+        var stubborn = false
         let probe = Probe()
         final class Probe: @unchecked Sendable { private let l = NSLock(); private var r = 0, d = 0
             func readiness() { l.lock(); r += 1; l.unlock() }; func draft() { l.lock(); d += 1; l.unlock() }
             var readinessCalls: Int { l.lock(); defer { l.unlock() }; return r }; var draftCalls: Int { l.lock(); defer { l.unlock() }; return d } }
         func readiness() -> (available: Bool, localeSupported: Bool, detail: String) { probe.readiness(); return (available, locale, "fake") }
-        func draftAbout(prompt: String) async throws -> (sentence: String, keys: [String]) { probe.draft(); if delay > 0 { try await Task.sleep(nanoseconds: delay) }; return try about.get() }
-        func draftNote(prompt: String) async throws -> (sentence: String, keys: [String]) { probe.draft(); if delay > 0 { try await Task.sleep(nanoseconds: delay) }; return try note.get() }
+        func draftAbout(prompt: String) async throws -> (sentence: String, keys: [String]) { probe.draft(); if delay > 0 { if stubborn { await Task.detached { try? await Task.sleep(nanoseconds: delay) }.value } else { try await Task.sleep(nanoseconds: delay) } }; return try about.get() }
+        func draftNote(prompt: String) async throws -> (sentence: String, keys: [String]) { probe.draft(); if delay > 0 { if stubborn { await Task.detached { try? await Task.sleep(nanoseconds: delay) }.value } else { try await Task.sleep(nanoseconds: delay) } }; return try note.get() }
         func classify(_ error: Error) -> StoryModelFailure { failure }
     }
     struct Boom: Error {}
@@ -98,7 +100,7 @@ final class StoryModelTests: XCTestCase {
         let r = await StoryChain([w, TemplateWriter(memory: StoryMemory())]).about(facts())
         XCTAssertEqual(r?.writer, "template")
         // a launch with no marker changes nothing
-        let e = suite(); XCTAssertNil(StoryModelSentinel.launchCheck(e)); XCTAssertTrue(StorySettings.isOn(e))
+        let e = suite(); XCTAssertNil(StoryModelSentinel.launchCheck(e)); XCTAssertFalse(StorySettings.isOn(e), "off by default"); StorySettings.setModelNotes(true, e); XCTAssertTrue(StorySettings.isOn(e))
     }
 
     func testTheMarkerIsSetDuringACallAndClearedOnSuccessErrorAndTimeout() async throws {
@@ -115,14 +117,26 @@ final class StoryModelTests: XCTestCase {
         d = suite(); w = writer(FakeClient(about: .failure(Boom()), note: .failure(Boom())), defaults: d)
         let bad = await w.about(facts: facts()); XCTAssertNil(bad); XCTAssertNil(d.string(forKey: key))
         let badN = await w.friendship(facts: facts(), with: facts().housemates[0]); XCTAssertNil(badN); XCTAssertNil(d.string(forKey: key))
-        // a timeout
-        d = suite(); w = writer(FakeClient(delay: 3_000_000_000), timeout: 0.2, defaults: d)
-        t = Task { await w.friendship(facts: self.facts(), with: self.facts().housemates[0]) }
-        try await Task.sleep(nanoseconds: 80_000_000)
-        XCTAssertTrue(d.string(forKey: key)?.hasPrefix("respond(note)#") ?? false)
-        let slow = await t.value
-        XCTAssertNil(slow); XCTAssertNil(d.string(forKey: key), "cleared on a timeout"); XCTAssertEqual(StoryModelSentinel.inFlight, 0)
-        XCTAssertNil(StoryModelSentinel.launchCheck(d), "so a relaunch after a plain timeout does not disable the model")
+        // a timeout whose call is still out: the marker STAYS until the call itself returns, and no second call starts meanwhile
+        d = suite(); let c = FakeClient(delay: 900_000_000, stubborn: true); let st = StoryModelStats()
+        w = writer(c, stats: st, timeout: 0.2, defaults: d)
+        let slow = await w.friendship(facts: facts(), with: facts().housemates[0])
+        XCTAssertNil(slow, "our own timeout fired")
+        XCTAssertEqual(st.count(.timeout), 1)
+        XCTAssertTrue(d.string(forKey: key)?.hasPrefix("respond(note)#") ?? false, "kept while the timed-out call is outstanding")
+        XCTAssertEqual(StoryModelSentinel.outstanding(d), 1)
+        let second = await w.about(facts: facts()); XCTAssertNil(second)
+        XCTAssertEqual(st.count(.busy), 1); XCTAssertEqual(c.probe.draftCalls, 1, "no second model call while one is outstanding"); XCTAssertEqual(c.probe.readinessCalls, 1)
+        XCTAssertFalse(w.isUsable)
+        for _ in 0..<40 where d.string(forKey: key) != nil { try await Task.sleep(nanoseconds: 100_000_000) }
+        XCTAssertNil(d.string(forKey: key), "cleared once the call really returned"); XCTAssertEqual(StoryModelSentinel.outstanding(d), 0)
+        XCTAssertNil(StoryModelSentinel.launchCheck(d))
+        let after = await writer(FakeClient(), defaults: d).about(facts: facts()); XCTAssertNotNil(after, "the next call is allowed")
+        // a watchdog kill while a timed-out call is out is caught at the next launch
+        d = suite(); w = writer(FakeClient(delay: 900_000_000, stubborn: true), timeout: 0.2, defaults: d)
+        _ = await w.friendship(facts: facts(), with: facts().housemates[0])
+        XCTAssertEqual(StoryModelSentinel.launchCheck(d), "respond(note)")
+        for _ in 0..<40 where StoryModelSentinel.outstanding(d) > 0 { try await Task.sleep(nanoseconds: 100_000_000) }
         // the counter counts every call
         XCTAssertGreaterThan(d.integer(forKey: StoryModelSentinel.counterKey), 0)
     }
@@ -140,6 +154,7 @@ final class StoryModelTests: XCTestCase {
     func testTurningTheSwitchOnByHandRearmsOneMoreTry() {
         let d = suite()
         d.set("respond(note)#2", forKey: StoryModelSentinel.markerKey); StoryModelSentinel.launchCheck(d)
+        StorySettings.setModelNotes(true, d); XCTAssertTrue(StorySettings.isOn(d)); d.set("respond(note)#2", forKey: StoryModelSentinel.markerKey); StoryModelSentinel.launchCheck(d)
         XCTAssertFalse(StorySettings.isOn(d))
         StorySettings.setModelNotes(false, d); XCTAssertNotNil(StoryModelSentinel.disabledStep(d), "off by hand does not clear the flag")
         StorySettings.setModelNotes(true, d)
@@ -171,9 +186,30 @@ final class StoryModelTests: XCTestCase {
         let ok = await writer(c).about(facts: facts()); XCTAssertNotNil(ok); XCTAssertEqual(c.probe.draftCalls, 1)
     }
 
+    func testTheDumpRunsTheModelWithTheSwitchOffButOnlyInsideItsOwnTask() async {
+        let box = StoryGateBox()
+        XCTAssertFalse(box.input().switchedOn, "default off")
+        XCTAssertFalse(StoryAppState.devDump)
+        let c = FakeClient(), st = StoryModelStats()
+        let w = ModelWriter(client: c, stats: st, gate: { box.input() })
+        let off = await w.about(facts: facts()); XCTAssertNil(off); XCTAssertEqual(c.probe.draftCalls, 0)          // the game: no model
+        StoryAppState.profileAppeared(Date().addingTimeInterval(-5)); defer { StoryAppState.profileGone() }
+        let stillOff = await w.about(facts: facts()); XCTAssertNil(stillOff, "a Profile on screen does not switch it on")
+        let viaDump = await StoryAppState.$devDump.withValue(true) { await w.about(facts: facts()) }
+        XCTAssertNotNil(viaDump); XCTAssertEqual(c.probe.draftCalls, 1)
+        let after = await w.about(facts: facts()); XCTAssertNil(after, "and it ends with the dump's task")
+        // nothing the chain-only dump makes is kept: a book's saved lines, schedule and Write-another counts are untouched
+        let d = suite(); let book = StoryBook(defaults: d, chain: StoryChain([w, TemplateWriter(memory: StoryMemory())]))
+        let before = d.data(forKey: StoryBook.defaultsKey)
+        _ = await StoryAppState.$devDump.withValue(true) { await StoryChain([w, TemplateWriter(memory: StoryMemory())]).about(facts()) }
+        XCTAssertEqual(d.data(forKey: StoryBook.defaultsKey), before)
+        XCTAssertEqual(book.rewritesLeft(facts()), StoryBook.rewritesPerDay)
+    }
+
     func testTheSwitch() {
         let d = suite()
-        XCTAssertTrue(StorySettings.isOn(d))                 // default on
+        XCTAssertFalse(StorySettings.isOn(d), "the default is OFF until the dump from the owner's phone has been read")
+        XCTAssertFalse(StorySettings.defaultOn)
         StorySettings.setModelNotes(false, d); XCTAssertFalse(StorySettings.isOn(d))
         StorySettings.setModelNotes(true, d); XCTAssertTrue(StorySettings.isOn(d))
         XCTAssertEqual(StorySettings.explanation, "Little notes on the Profile are written on this iPhone. Nothing leaves it.")

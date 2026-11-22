@@ -50,11 +50,12 @@ nonisolated enum StoryModelGate {
     static var appIsEnglish: Bool { (Bundle.main.preferredLocalizations.first ?? "en").hasPrefix("en") && (Locale.current.language.languageCode?.identifier ?? "en") == "en" }
 }
 
-/// The player's switch: Settings > Game > "Notes written by Apple Intelligence". Default on; off = the pre-written notes only.
+/// The player's switch: Settings > Game > "Notes written by Apple Intelligence". Default OFF (for now); off = the pre-written notes only.
 nonisolated enum StorySettings {
     static let key = "Story.modelNotes"
-    /// What the switch holds (default on).
-    static func rawOn(_ d: UserDefaults = .standard) -> Bool { d.object(forKey: key) == nil ? true : d.bool(forKey: key) }
+    /// What the switch holds. DEFAULT OFF for now (the owner switches it on; the default is flipped after the dump from their phone has been read).
+    static let defaultOn = false
+    static func rawOn(_ d: UserDefaults = .standard) -> Bool { d.object(forKey: key) == nil ? defaultOn : d.bool(forKey: key) }
     /// What the player is shown and what the writer obeys: the switch, and not turned off for good after a crash inside a model call.
     static func isOn(_ d: UserDefaults = .standard) -> Bool { rawOn(d) && StoryModelSentinel.disabledStep(d) == nil }
     static var modelNotes: Bool { isOn() }
@@ -71,14 +72,13 @@ nonisolated enum StoryAppState {
 
     /// When the Profile last came on screen (nil = no Profile is open). The model may be asked only a second after that.
     private static let shown = OSAllocatedUnfairLock<Date?>(initialState: nil)
-    /// Dev arguments only (the evaluation dump has no Profile on screen).
-    private static let dev = OSAllocatedUnfairLock(initialState: false)
+    /// True ONLY inside the evaluation dump's own task (dev arguments): the model may run with the switch off and with no Profile on screen. A task-local, so it never reaches the game's own writing.
+    @TaskLocal static var devDump = false
     static func profileAppeared(_ now: Date = Date()) { shown.withLock { if $0 == nil { $0 = now } } }
     static func profileGone() { shown.withLock { $0 = nil } }
-    static func devAllowsModelWithoutProfile() { dev.withLock { $0 = true } }
     static let settleSeconds: TimeInterval = 1
     static func profileReady(_ now: Date = Date()) -> Bool {
-        if dev.withLock({ $0 }) { return true }
+        if devDump { return true }
         guard let at = shown.withLock({ $0 }) else { return false }
         return now.timeIntervalSince(at) >= settleSeconds
     }
@@ -101,7 +101,7 @@ nonisolated enum StoryModelSentinel {
     static let disabledKey = "Story.modelDisabledAfterCrash"          // the step the app died in
     static let counterKey = "Story.modelCalls"
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var open: [(token: Int, step: String)] = []
+    nonisolated(unsafe) private static var open: [(token: Int, step: String, owner: ObjectIdentifier)] = []
     nonisolated(unsafe) private static var seq = 0
     nonisolated(unsafe) private static var checked = false
 
@@ -109,11 +109,22 @@ nonisolated enum StoryModelSentinel {
     @discardableResult
     static func begin(_ step: String, _ d: UserDefaults = .standard) -> Int {
         lock.lock(); defer { lock.unlock() }
-        seq += 1; open.append((seq, step))
+        return beginLocked(step, d)
+    }
+    private static func beginLocked(_ step: String, _ d: UserDefaults) -> Int {
+        seq += 1; open.append((seq, step, ObjectIdentifier(d)))
         let n = d.integer(forKey: counterKey) + 1
         d.set(n, forKey: counterKey); d.set("\(step)#\(n)", forKey: markerKey); d.synchronize()
         return seq
     }
+    /// Starts a call only when none is outstanding (a timed-out call that has not really returned counts): nil = busy.
+    static func beginIfIdle(_ step: String, _ d: UserDefaults = .standard) -> Int? {
+        lock.lock(); defer { lock.unlock() }
+        if open.contains(where: { $0.owner == ObjectIdentifier(d) }) { return nil }
+        return beginLocked(step, d)
+    }
+    /// Calls into the model that have not returned or thrown yet.
+    static func outstanding(_ d: UserDefaults = .standard) -> Int { lock.lock(); defer { lock.unlock() }; return open.filter { $0.owner == ObjectIdentifier(d) }.count }
     /// A finer step inside the call that is running now (the marker names it, so "died in <step>" says where).
     static func note(_ step: String, _ d: UserDefaults = .standard) {
         lock.lock(); defer { lock.unlock() }
@@ -287,6 +298,7 @@ nonisolated struct ModelWriter: StoryWriter {
         if !profileReady() { i.profileReady = false }
         // nothing touches the model (not even its availability) until the cheap checks pass: the switch, the crash flag, a Profile on screen for a second, the foreground
         if let why = StoryModelGate.earlySkip(i) { stats.bump(why, "model not touched"); return false }
+        if StoryModelSentinel.outstanding(defaults) > 0 { stats.bump(.busy, "a model call has not returned yet"); return false }          // never a second call while one is outstanding
         let r = client.readiness()
         i.modelAvailable = r.available; i.localeSupported = r.localeSupported
         if let why = StoryModelGate.skipReason(i) { stats.bump(why, r.detail); return false }
@@ -295,7 +307,7 @@ nonisolated struct ModelWriter: StoryWriter {
 
     /// Cheap: the model exists here, speaks this locale, and the player's switch is on.
     var isUsable: Bool {
-        guard StorySettings.isOn(defaults), profileReady(), StoryAppState.foreground, StoryModelGate.appIsEnglish else { return false }
+        guard StorySettings.isOn(defaults), profileReady(), StoryAppState.foreground, StoryModelGate.appIsEnglish, StoryModelSentinel.outstanding(defaults) == 0 else { return false }
         let r = client.readiness()
         return r.available && r.localeSupported
     }
@@ -304,20 +316,23 @@ nonisolated struct ModelWriter: StoryWriter {
         guard await mayAsk() else { return nil }
         let prompt = StoryPrompt.about(facts)
         if let bad = StoryPrompt.denied(prompt) { stats.bump(.promptDenied, bad); return nil }
-        let tok = StoryModelSentinel.begin("respond(about)", defaults); defer { StoryModelSentinel.end(tok, defaults) }
+        guard let tok = StoryModelSentinel.beginIfIdle("respond(about)", defaults) else { stats.bump(.busy, "a model call has not returned yet"); return nil }
         do {
-            let d = try await withTimeout { try await client.draftAbout(prompt: prompt) }
+            // (the marker is cleared when the framework call itself has returned or thrown, NOT when our own timeout fires)
+            let d = try await withTimeout(settled: { StoryModelSentinel.end(tok, defaults) }) { try await client.draftAbout(prompt: prompt) }
             return StoryAnswer(d.sentence.trimmingCharacters(in: .whitespacesAndNewlines), keys: d.keys)
         } catch { fail(error); return nil }
     }
 
     func friendship(facts: StoryFacts, with h: StoryFacts.Housemate) async -> StoryAnswer? {
+        guard StoryTemplates.noteAllowed(facts, h) else { return nil }
         guard await mayAsk() else { return nil }
         let prompt = StoryPrompt.note(facts, with: h)
         if let bad = StoryPrompt.denied(prompt) { stats.bump(.promptDenied, bad); return nil }
-        let tok = StoryModelSentinel.begin("respond(note)", defaults); defer { StoryModelSentinel.end(tok, defaults) }
+        guard let tok = StoryModelSentinel.beginIfIdle("respond(note)", defaults) else { stats.bump(.busy, "a model call has not returned yet"); return nil }
         do {
-            let d = try await withTimeout { try await client.draftNote(prompt: prompt) }
+            // (the marker is cleared when the framework call itself has returned or thrown, NOT when our own timeout fires)
+            let d = try await withTimeout(settled: { StoryModelSentinel.end(tok, defaults) }) { try await client.draftNote(prompt: prompt) }
             return StoryAnswer(d.sentence.trimmingCharacters(in: .whitespacesAndNewlines), keys: d.keys)
         } catch { fail(error); return nil }
     }
@@ -329,12 +344,12 @@ nonisolated struct ModelWriter: StoryWriter {
     }
 
     /// Our own timeout: the first of the work and the clock wins, and the caller is released at once even if the framework call ignores cancellation (the abandoned call just finishes in the background).
-    private func withTimeout<T: Sendable>(_ work: @escaping @Sendable () async throws -> T) async throws -> T {
+    private func withTimeout<T: Sendable>(settled: @escaping @Sendable () -> Void, _ work: @escaping @Sendable () async throws -> T) async throws -> T {
         let secs = timeout
         return try await withCheckedThrowingContinuation { (c: CheckedContinuation<T, Error>) in
             let once = OSAllocatedUnfairLock(initialState: false)
             @Sendable func finish(_ r: Result<T, Error>) { if once.withLock({ let was = $0; $0 = true; return !was }) { c.resume(with: r) } }
-            let job = Task { do { finish(.success(try await work())) } catch { finish(.failure(error)) } }
+            let job = Task { do { let v = try await work(); settled(); finish(.success(v)) } catch { settled(); finish(.failure(error)) } }
             Task { try? await Task.sleep(nanoseconds: UInt64(secs * 1_000_000_000)); finish(.failure(TimedOut())); job.cancel() }
         }
     }
