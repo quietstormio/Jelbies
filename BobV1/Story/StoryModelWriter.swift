@@ -39,15 +39,21 @@ nonisolated struct StoryNoteDraft {
 
 @available(iOS 26.0, *)
 nonisolated final class AppleModelClient: StoryModelClient, @unchecked Sendable {
-    let model: SystemLanguageModel
+    /// Created on first use (never at launch). Guardrails are set here: `.default`, the only mode that checks input and output.
+    private(set) lazy var model: SystemLanguageModel = SystemLanguageModel(useCase: .general, guardrails: .default)
     /// The sessions of the last few texts written this launch (for "Don't show this one": the feedback needs the transcript). Fingerprint of the final template -> session.
     private let lock = NSLock()
     private var sessions: [(key: String, session: LanguageModelSession)] = []
 
     static let shared = AppleModelClient()
-    init() { model = SystemLanguageModel(useCase: .general, guardrails: .default) }
+    init() {}
 
     func readiness() -> (available: Bool, localeSupported: Bool, detail: String) {
+        #if targetEnvironment(simulator)
+        // Measured 2026-11-22 (iOS 27.2 simulator on this Mac): the first use of SystemLanguageModel ends the app process within seconds (intelligencecontextd sees the client exit), so the
+        // simulator never touches the model unless asked to (`-StoryModelInSim 1`); the pre-written bank answers.
+        if !UserDefaults.standard.bool(forKey: "StoryModelInSim") { return (false, false, "simulator: model not used") }
+        #endif
         let a = model.availability
         let ok: Bool, detail: String
         switch a {
