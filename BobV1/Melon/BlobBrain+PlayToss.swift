@@ -68,6 +68,7 @@ extension BlobBrain {
         script = .idle; activity = .playing
         idleState.phase = 1; idleState.phaseT = 0
         idleScootHop(sim)
+        tossFaceYaw = nil
         return true
     }
 
@@ -81,6 +82,7 @@ extension BlobBrain {
         idleState.phase = 1; idleState.phaseT = 0
         Self.tossApexOverride = Self.tossJumpApex; defer { Self.tossApexOverride = nil }
         idleScootHop(sim)
+        tossFaceYaw = nil
     }
 
     /// Is a header's jump under way and the body off the ground (the strike counts only then).

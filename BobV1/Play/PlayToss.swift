@@ -423,6 +423,7 @@ final class PlayToss {
         if leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
             caught(); return
         }
+        if phase == .loose { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.idleState.toss.abort = true } }          // (a ball on the floor: nobody holds a header stand for it)
         if phase == .flying { steerReturn(dt: dt); intercepts(dt: dt, before: before) }
         restWatch(dt: dt)
         if phase == .loose { looseT += dt; loose(dt: dt) }
@@ -443,12 +444,16 @@ final class PlayToss {
         let ys = j.sim.yaw()
         let fwd = SIMD2<Float>(sinf(ys), cosf(ys))
         let err = acosf(max(-1, min(1, simd_dot(fwd, to) / max(simd_length(to), 1e-4)))) * 180 / .pi
+        // what the eye sees: in a jump the body's heading is the hop's attractor (the root heading `brain.yaw` is not updated in the air and `sim.yaw()` reads the soft body's tilt as turn)
+        let af = j.sim.attractor.rotation.act(SIMD3<Float>(0, 0, 1))
+        let vy = j.brain.idleState.kind == .tossHeader ? atan2f(af.x, af.z) : j.brain.yaw
+        let visErr = abs(wrapAngle(atan2f(to.x, to.y) - vy)) * 180 / .pi
         let sz = viewSize
         let js = GameCamera.screenPoint(floor: j.pos, y: j.sim.centroid().y, size: sz) ?? .zero
         let bs = GameCamera.screenPoint(floor: SIMD2(ball.pos.x, ball.pos.z), y: ball.pos.y, size: sz) ?? .zero
-        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f centroidY=%.3f headTop=%.3f idle=%@ stage=%d rise=%.3f jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
+        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f visErr=%.1f centroidY=%.3f headTop=%.3f idle=%@ stage=%d rise=%.3f jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
               clock, throwSerial, ballKind == .soccerball ? "soccer" : (ballKind == .beachball ? "beach" : "bouncy"), kind, j.id, err,
-              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, j.headTop - (standTop[j.id] ?? j.headTop), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
+              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, visErr, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, j.headTop - (standTop[j.id] ?? j.headTop), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
     }
 
     /// Where the player stands: the hand's spot (the flick's origin, the camera side).
@@ -488,7 +493,7 @@ final class PlayToss {
             switch q {
             case .good:
                 let slope = PlayTuning.old ? 0.07 : PlayTuning.returnFlightSlope, cap = PlayTuning.old ? 1.25 : PlayTuning.returnFlightCap
-                v = TossAim.ballistic(from: from, to: target, flight: min(max(0.7 + slope * dist, 0.8), cap) * TossTuning.slow)
+                v = TossAim.ballistic(from: from, to: target, flight: (PlayTuning.ballReturnOld ? min(max(0.7 + slope * dist, 0.8), cap) : min(max(0.55 + slope * dist, 0.65), 0.88)) * TossTuning.slow)          // (play-ball-r2: a flatter, quicker return that visibly leaves the head toward the player)
                 returnAim = SIMD2(target.x, target.z)
             case .short:
                 let k = 0.45 + 0.2 * rand()
@@ -514,7 +519,7 @@ final class PlayToss {
         looseT = 0
         touchLog("header", j)
         j.brain.jellyKick = max(j.brain.jellyKick, 2.2)
-        if !j.brain.tossBusy, Self.canHop(j.brain) { j.brain.tossHeaderStart(j.sim, j.skinner) }
+        if !j.brain.tossBusy, Self.canHop(j.brain) { let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }; j.brain.tossHeaderStart(j.sim, j.skinner) }
         onEvent?(.header(id: id, quality: q))
     }
 
@@ -582,7 +587,7 @@ final class PlayToss {
             if best == nil || d < best!.d { best = (j, a.t, a.xz, d) }
         }
         support(toward: best?.xz ?? ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: best.map { [$0.j.id] } ?? [])
-        guard let b = best else { return }
+        guard let b = best else { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.idleState.toss.abort = true }; return }
         let j = b.j
         let busy = j.brain.tossBusy
         // play-ball-r2: the one it is heading for goes to where it will come down, turns onto the player, crouches and jumps so the crown meets it. NOTHING here decides whether the ball is
@@ -609,18 +614,24 @@ final class PlayToss {
             j.brain.idleState.toss.abort = true          // (the ball moved on: he is released and sent to the new place next step)
             interceptAt[j.id] = nil
         }
+        // the ones whose approach the ball has left behind (it is not coming to them any more) are released at once: the old loose-ball job is then done by whoever is nearest
+        for o in jellies where o.id != j.id && o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.idleState.toss.abort = true }
+        for o in jellies { let P = playerPoint() - o.pos; if simd_length(P) > 1e-3 { o.brain.tossFaceYaw = o.brain.tossBusy ? atan2f(P.x, P.y) : nil } }
         steerOntoCrown(j, arriveIn: b.t)
         // the go: crouch now so the crown is rising as the ball arrives (met as near the top of the jump as the ball's own height allows)
-        if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let m = meetTime(j), m.t <= BlobBrain.tossCrouch + Self.riseTime(m.rise) {
+        if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let m = meetTime(j), m.t <= BlobBrain.tossCrouch + Self.riseTime(m.rise) + Self.goEarly {
             j.brain.idleState.toss.go = true
         }
         // fallback: no approach could be set (mid-step ...): the old hop, timed so the top of it meets the ball
         if !busy, b.d < 0.55, b.t <= BlobBrain.tossHeaderLead + 0.03, Self.canHop(j.brain) {
+            let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }
             j.brain.tossHeaderStart(j.sim, j.skinner)
         }
     }
 
     /// How far from his crown's line the ball may be and still be eased onto it (play-ball-r2, mechanism b: the ball's last moment is nudged onto the crown of the Jelmiko who is set to head it, so he need not walk under it with his back turned).
+    /// The jump starts this much earlier than the ball's own path says, so the crown meets it at the top (measured: without it the contact came at about 55% of the rise).
+    static let goEarly: Float = 0.10
     static let steerReach: Float = 0.8
     /// The cap on the sideways speed the nudge may add (m/s): a gentle curve, never a snap.
     static let steerMaxDV: Float = 1.7
