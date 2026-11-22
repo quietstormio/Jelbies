@@ -60,8 +60,8 @@ nonisolated enum MoveMix {
     // 6. a little more running about (round 2): a share of the long roam / stroll legs is done with the game's own RUN gait (idleStart(.run, goal:)), happy / okay only, less at night
     nonisolated(unsafe) static var runChance: Float = {
         if let v = ProcessInfo.processInfo.environment["MOVEMIX_RUNCHANCE"], let f = Float(v) { return f }
-        if DevArgs.enabled, let v = UserDefaults.standard.object(forKey: "MoveMixRun") as? NSNumber { return v.floatValue }
-        return 0.4
+        if DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "MoveMixRun"), let f = Float(v) { return f }
+        return 0.3
     }()
     static let runLegMin: Float = 3.5
     static let runClearance: Float = 1.7          // a run keeps this far from any body that is in an emote (a session, a special) or walking its own leg across
