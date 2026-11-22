@@ -40,10 +40,24 @@ static float3 finishPaint(float3 col, float3 Q, float bm, float3 N, float3 V) {
         float sp = pow(saturate(dot(N, normalize(normalize(float3(-0.4, 0.8, 0.5)) + V))), 90.0);
         col += tint * 0.25 * sp;
     }
+    // the jelly look's warm / cool rim band must not tint these looks: near the silhouette the colour goes back to the look's own hue (anchor = the palette flesh, FinishLook.swift) at the shaded brightness
+    float3 anchor = bm < 1.5 ? float3(0.941, 0.761, 0.235) : bm < 2.5 ? float3(0.788, 0.808, 0.839) : bm < 3.5 ? float3(0.722, 0.412, 0.180) : bm < 4.5 ? float3(0.784, 0.137, 0.310)
+                  : bm < 5.5 ? float3(0.122, 0.710, 0.478) : bm < 6.5 ? float3(0.141, 0.286, 0.784) : float3(0.604, 0.271, 0.839);
+    float ndv = saturate(dot(N, V));
+    float lumC = dot(col, float3(0.2126, 0.7152, 0.0722)), lumA = dot(anchor, float3(0.2126, 0.7152, 0.0722));
+    col = mix(col, anchor * (lumC / max(lumA, 1.0e-3)), smoothstep(0.55, 0.15, ndv) * 0.9);
     // the drawing's colour: the jelly shading above lifts and drifts every body (ruby toward pink, sapphire toward sky), so each look is pulled back to the drawing's tone (a per-channel gain on the shaded colour)
     float3 gain = bm < 1.5 ? float3(0.935, 0.81, 0.58) : bm < 2.5 ? float3(0.86, 0.91, 0.956) : bm < 3.5 ? float3(0.755, 0.55, 0.45) : bm < 4.5 ? float3(0.72, 0.29, 0.27)
                 : bm < 5.5 ? float3(0.98, 0.81, 0.65) : bm < 6.5 ? float3(0.27, 0.39, 0.72) : float3(0.52, 0.29, 0.68);
     col *= gain;
+    // the darker lower band round the body (the drawings' shaded belly band) and, on the back, the big soft gloss highlight
+    float3 pb = normalize((Q - float3(0.0, 0.725, 0.0)) / float3(0.55, 0.62, 0.55));
+    col *= 1.0 - 0.30 * smoothstep(-0.12, -0.32, pb.y) * smoothstep(-0.78, -0.50, pb.y);
+    float2 gq = (float2(pb.x - 0.02, pb.y - 0.56)) / float2(0.22, 0.12);
+    float gl = (1.0 - smoothstep(0.55, 1.0, length(gq))) * smoothstep(-0.25, -0.55, pb.z);
+    float2 gd = (float2(pb.x - 0.03, pb.y - 0.38)) / float2(0.035, 0.028);
+    gl = max(gl, (1.0 - smoothstep(0.6, 1.0, length(gd))) * smoothstep(-0.25, -0.55, pb.z));
+    col = mix(col, float3(1.0), gl * 0.55);
     // the sparkle stars (every look)
     float3 p = normalize((Q - float3(0.0, 0.725, 0.0)) / float3(0.55, 0.62, 0.55));
     float st = 0.0;
