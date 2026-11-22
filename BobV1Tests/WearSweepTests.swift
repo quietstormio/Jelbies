@@ -387,8 +387,8 @@ final class WearSweepTests: XCTestCase {
     /// Where the audit camera looks per slot: (look height above the centroid, distance). Tighter than `framing`: the piece fills about 300 px of a 400 px tile.
     private func auditFocus(_ slot: WearSlot) -> (Float, Float) {
         switch slot {
-        case .head: return (0.60, 1.75)
-        case .face: return (0.50, 1.45)
+        case .head: return (0.55, 2.2)
+        case .face: return (0.45, 1.7)
         case .neck: return (0.22, 1.95)
         case .body: return (0.10, 2.25)
         case .hands: return (0.05, 2.0)
@@ -406,8 +406,8 @@ final class WearSweepTests: XCTestCase {
         guard !list.isEmpty else { throw XCTSkip("nothing selected") }
         let views: [(String, Float, Float)] = [("front", 0, 0.05), ("3/4", 0.65, 0.1), ("side", 1.5, 0.1), ("back", .pi, 0.1), ("room cam 35 down", 0.25, 0.7), ("low cam up", 0.25, -0.25)]
         // hands: the whole front, then a close-up of each arm (front, 3/4), then the back and the room camera
-        let handViews: [(String, Float, Float, Float, Float, Float)] = [("front", 0, 0.05, 0, 0.05, 2.0), ("left arm close", 0, 0.05, -0.5, -0.1, 1.15), ("right arm close", 0, 0.05, 0.5, -0.1, 1.15),
-                                                                         ("left arm 3/4", 0.7, 0.1, -0.5, -0.1, 1.15), ("right arm 3/4", -0.7, 0.1, 0.5, -0.1, 1.15), ("room cam 35 down", 0.25, 0.7, 0, 0.05, 2.0)]
+        let handViews: [(String, Float, Float, Float, Float, Float)] = [("front", 0, 0.05, 0, 0.05, 2.0), ("left arm close", 0, 0.05, -0.8, -0.1, 1.2), ("right arm close", 0, 0.05, 0.8, -0.1, 1.2),
+                                                                         ("left arm 3/4", 0.7, 0.1, -0.8, -0.1, 1.2), ("right arm 3/4", -0.7, 0.1, 0.8, -0.1, 1.2), ("room cam 35 down", 0.25, 0.7, 0, 0.05, 2.0)]
         var stages: [Stage] = []
         for id in fams { DayClock.shared.forcedHour = 12; stages.append(try makeStage(id)) }
         var small: [WearLook: [UIImage]] = [:]          // the 3/4 tile of each family, for the overviews
