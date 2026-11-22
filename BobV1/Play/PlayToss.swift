@@ -591,11 +591,15 @@ final class PlayToss {
         guard let b = best else { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }
         let j = b.j
         let busy = j.brain.tossBusy
+        // where the ball is when it is at the crown's height at the jump's top (a fast, flat ball is a long way from where it crosses the standing crown's height: the stand and the nudge aim at THIS point)
+        let mt = meetTime(j)
+        let meetT = mt?.t ?? b.t
+        let meetXZ: SIMD2<Float> = mt != nil ? SIMD2(ball.pos.x + ball.vel.x * meetT, ball.pos.z + ball.vel.z * meetT) : b.xz
         // play-ball-r2: the one it is heading for goes to where it will come down, turns onto the player, crouches and jumps so the crown meets it. NOTHING here decides whether the ball is
         // struck: that is `headHit` -> `header(by:)` as before; this only prepares the body (a late or unready Jelmiko still strikes it).
         if !busy, b.t > BlobBrain.tossCrouch + 0.1, !PlayTuning.ballReturnOld {
-            let zr = Self.bodyZ(), zy = min(max(b.xz.y, zr.lowerBound), max(min(catchZ() - 1.2, zr.upperBound), zr.lowerBound)), bx = Self.bodyReach(PlayTuning.old ? b.xz.y : zy)
-            let meet = SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)
+            let zr = Self.bodyZ(), zy = min(max(meetXZ.y, zr.lowerBound), max(min(catchZ() - 1.2, zr.upperBound), zr.lowerBound)), bx = Self.bodyReach(PlayTuning.old ? meetXZ.y : zy)
+            let meet = SIMD2<Float>(min(max(meetXZ.x, -bx), bx), zy)
             // he comes within `Self.steerReach` of the meeting point and no nearer (the last bit is the ball's: see `steerOntoCrown`), so the walk is short and he has time to turn onto the player
             var stand = j.pos
             let off = meet - j.pos
@@ -603,7 +607,7 @@ final class PlayToss {
             let dirP = playerPoint() - stand
             let dir = simd_length(dirP) > 1e-3 ? simd_normalize(dirP) : SIMD2<Float>(0, 1)
             j.brain.tossFire = nil
-            if j.brain.tossBumpStart(j.sim, j.skinner, stand: stand, dir: dir, header: true) { interceptAt[j.id] = (b.xz, clock) }
+            if j.brain.tossBumpStart(j.sim, j.skinner, stand: stand, dir: dir, header: true) { interceptAt[j.id] = (meetXZ, clock) }
         } else if PlayTuning.ballReturnOld, b.d > 0.30, !busy, b.t > 0.18 {          // (the old step under it)
             let last = interceptAt[j.id]
             if last == nil || (clock - last!.t > 0.45 && simd_distance(last!.p, b.xz) > 0.25) {
@@ -611,13 +615,13 @@ final class PlayToss {
                 j.brain.requestNow(.goTo(SIMD2<Float>(min(max(b.xz.x, -bx), bx), zy)))
                 interceptAt[j.id] = (b.xz, clock)
             }
-        } else if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage < 3, let last = interceptAt[j.id], simd_distance(j.brain.idleState.toss.stand, b.xz) > Self.steerReach + 0.4, clock - last.t > 0.3 {
+        } else if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage < 3, let last = interceptAt[j.id], simd_distance(j.brain.idleState.toss.stand, meetXZ) > Self.steerReach + 0.4, clock - last.t > 0.3 {
             j.brain.tossHeaderRelease(j.sim, j.skinner)          // (the ball moved on: he is released and sent to the new place next step)
             interceptAt[j.id] = nil
         }
         // the ones whose approach the ball has left behind (it is not coming to them any more) are released at once: the old loose-ball job is then done by whoever is nearest
         for o in jellies where o.id != j.id && o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }
-        steerOntoCrown(j, arriveIn: b.t)
+        steerOntoCrown(j, arriveIn: meetT)
         // the go: crouch now so the crown is rising as the ball arrives (met as near the top of the jump as the ball's own height allows)
         if busy, j.brain.tossHeaderApproach, j.brain.idleState.toss.stage == 3, let m = meetTime(j), m.t <= BlobBrain.tossCrouch + Self.riseTime(m.rise) + Self.goEarly {
             j.brain.idleState.toss.go = true
