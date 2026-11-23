@@ -42,8 +42,8 @@ nonisolated enum SoccerSessionTuning {
         guard DevArgs.enabled, let v = UserDefaults.standard.string(forKey: "SoccerSessions") else { return true }
         return !["0", "no", "false", "old", "off"].contains(v.lowercased())
     }()
-    static let kickoffLen: ClosedRange<Float> = 40...75
-    static let recurLen: ClosedRange<Float> = 20...40
+    static let kickoffLen: ClosedRange<Float> = 55...80
+    static let recurLen: ClosedRange<Float> = 32...50
     static let gap: ClosedRange<Float> = 35...60
     static let openingWait: ClosedRange<Float> = 20...40
     static let kickoffWait: ClosedRange<Float> = 1.0...2.0
@@ -83,6 +83,8 @@ final class SoccerSession {
     private var restSince: Float = -1
     private var soloNextAt: Float = 0
     private var soloWaiting = false
+    private var blockedSince: [Int: Float] = [:]
+    private var firstOfSession = false
     private var failStreak = 0, awaitRest = false, awaitedRoll = false
     /// Tests: play this game first.
     var forceGame: Game?
@@ -134,6 +136,7 @@ final class SoccerSession {
             for m in all { m.toy.handled = max(m.toy.handled, serial); m.toy.noticeUID = -1; m.toy.waitUID = -1; m.toy.chaseSpot = nil }          // (the toy news "a new ball" would send the nearest ones to it by themselves: the session is the kick-off)
             log("ball out uid=\(ball.uid) opening=\(opening) first session at +\(String(format: "%.1f", nextStart - clock))")
         }
+        for m in all where m.mix.sess && !members.contains(m.steerID) { m.sessRelease(); log("stale member \(m.steerID) released") }          // (nobody may be left holding an order for a session that is not running)
         if field.held == ball.uid { return }          // (picked up in arrange mode: wait until it is put down)
         if !active {
             guard clock >= nextStart else { return }
@@ -144,7 +147,11 @@ final class SoccerSession {
         var gone = false
         for id in members {
             guard let m = all.first(where: { $0.steerID == id }) else { gone = true; continue }
-            if let why = m.sessBlock(inSession: true) { m.sessRelease(); log("member \(id) leaves (\(why))"); members.removeAll { $0 == id }; gone = true }
+            if let why = m.sessBlock(inSession: true) {
+                let since = blockedSince[id] ?? clock; blockedSince[id] = since
+                if clock - since < 2.0, ["antics", "autonomy", "attached"].contains(why) { continue }          // (a blink of a flag is not a reason to leave)
+                m.sessRelease(); log("member \(id) leaves (\(why))"); members.removeAll { $0 == id }; gone = true; blockedSince[id] = nil
+            } else { blockedSince[id] = nil }
         }
         _ = gone
         for m in all where !m.mix.sess && clock < endsAt - 3 && m.sessEligible(inSession: false) {          // (everyone awake and free joins, whenever they become so)
@@ -182,6 +189,7 @@ final class SoccerSession {
         log("start #\(sessions) kickoff=\(kickoffSession) members=\(members) len=\(String(format: "%.0f", endsAt - clock))")
         if kickoffSession, ready.count >= 2, forceGame == nil { forceGame = .pass }          // (the kick-off is a pass: the simplest game first)
         kickoffSession = false
+        firstOfSession = true
         lastGame = nil
         chooseGame(ready)
     }
@@ -206,6 +214,8 @@ final class SoccerSession {
         let all = gamesFor(ms.count, !DecorField.shared.goals.isEmpty)
         let pool = all.filter { $0 != lastGame }
         game = (pool.isEmpty ? all : pool)[Int(ms[0].rand() * Float(pool.isEmpty ? all.count : pool.count)) % (pool.isEmpty ? all.count : pool.count)]
+        if forceGame == nil, firstOfSession, ms.count >= 3, all.contains(.pass) { forceGame = .pass }          // (with three the session opens with the ring: everybody kicks)
+        firstOfSession = false
         if let fg = forceGame, all.contains(fg) { game = fg; forceGame = nil }
         lastGame = game
         dribbled = false; turnWasDribble = false
@@ -213,7 +223,7 @@ final class SoccerSession {
         phase = .plan; kIdx = 0; rIdx = 1 % max(ms.count, 1); kicks = 0; failures = 0; planAt = -9; restSince = -1
         kickTarget = Int(ms[0].rand(SoccerSessionTuning.passKicks.lowerBound, SoccerSessionTuning.passKicks.upperBound))          // (shots: 3...6 of them)
         soloNextAt = clock + 0.8; soloWaiting = false
-        gameEnds = clock + max(14, (endsAt - clock) * 0.55)          // (each game of the playlist gets its share of the session)
+        gameEnds = clock + max(Float(max(ms.count, 2)) * 9, (endsAt - clock) * 0.6)          // (long enough for a whole ring: each kick takes about 8 s)          // (each game of the playlist gets its share of the session)
         for m in ms { m.mix.order = SessOrder() }
         log("game \(game) members=\(ms.map { $0.steerID })")
     }
