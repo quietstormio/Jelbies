@@ -1058,7 +1058,7 @@ final class PlayToss {
     private func loose(dt: Float) {
         let r = ball.radius
         if looseT > Self.rescueAfter { rescue(); return }
-        if looseT > 0.4, !keeping, clock - bout.endedAt > 6 {          // (the ones who are not the next to bump: a few steps toward the ball; not right after a bout: they would crowd round it)
+        if looseT > 0.4, !keeping {          // (the ones who are not the next to bump: a few steps toward the ball)
             let ballAt = SIMD2(ball.pos.x, ball.pos.z)
             var skip = Set<Int>(); if let b = bumper { skip.insert(b) }
             if let n = jellies.min(by: { simd_distance($0.pos, ballAt) < simd_distance($1.pos, ballAt) }) { skip.insert(n.id) }
