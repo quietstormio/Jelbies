@@ -633,7 +633,7 @@ final class PlayToss {
                 j.brain.requestNow(.goTo(stand)); interceptAt[j.id] = (meetXZ, clock)
             }
             if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, Int(clock * 20) % 4 == 0 { NSLog("[playhead] clock=%.2f best=%d t=%.2f d=%.2f meetT=%.2f meet=(%.2f,%.2f) stand=(%.2f,%.2f) busy=%d kind=%@ script=%@", clock, j.id, b.t, b.d, meetT, meetXZ.x, meetXZ.y, stand.x, stand.y, j.brain.tossBusy ? 1 : 0, String(describing: j.brain.idleState.kind), String(String(describing: j.brain.script).prefix(20))) }
-        } else if b.d > 0.30, !busy, b.t > 0.18 {          // (the old step under it: with `-BallReturnOld 1` always; otherwise for the late ball there is no time for a stand, crouch and jump: he steps under it as before and the old hop below meets it)
+        } else if b.d > (PlayTuning.ballReturnOld ? 0.30 : Self.lateWalk), !busy, b.t > 0.18 {          // (the old step under it: with `-BallReturnOld 1` always; otherwise for the late ball there is no time for a stand, crouch and jump: he steps under it as before and the old hop below meets it)
             let last = interceptAt[j.id]
             if last == nil || (clock - last!.t > 0.45 && simd_distance(last!.p, b.xz) > 0.25) {
                 let zr = Self.bodyZ(), zy = min(max(b.xz.y, zr.lowerBound), max(min(catchZ() - 1.2, zr.upperBound), zr.lowerBound)), bx = Self.bodyReach(PlayTuning.old ? b.xz.y : zy)
@@ -652,7 +652,7 @@ final class PlayToss {
             j.brain.idleState.toss.go = true
         }
         // fallback: no approach could be set (mid-step ...): the old hop, timed so the top of it meets the ball
-        if !busy, b.d < 0.55, b.t <= BlobBrain.tossHeaderLead + (PlayTuning.ballReturnOld ? 0.03 : 0.10), Self.canHop(j.brain) {
+        if !busy, b.d < (PlayTuning.ballReturnOld ? 0.55 : Self.lateWalk), b.t <= BlobBrain.tossHeaderLead + (PlayTuning.ballReturnOld ? 0.03 : 0.10), Self.canHop(j.brain) {
             let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }
             j.brain.tossHeaderStart(j.sim, j.skinner, jump: !PlayTuning.ballReturnOld)
         }
@@ -661,6 +661,8 @@ final class PlayToss {
     /// How far from his crown's line the ball may be and still be eased onto it (play-ball-r2, mechanism b: the ball's last moment is nudged onto the crown of the Jelmiko who is set to head it, so he need not walk under it with his back turned).
     /// The jump starts this much earlier than the ball's own path says, so the crown meets it at the top (measured: without it the contact came at about 55% of the rise).
     static let goEarly: Float = 0.10
+    /// A late ball (no time for a stand) that will pass within this of him is not walked to: he jumps where he stands, turning toward the player in the air, and the nudge brings the ball onto his crown. Further out he steps under it as before (walking, so facing his walk).
+    static let lateWalk: Float = 0.9
     static let steerReach: Float = 0.8
     /// The cap on the sideways speed the nudge may add (m/s): a gentle curve, never a snap.
     static let steerMaxDV: Float = 1.7
