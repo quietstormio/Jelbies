@@ -642,7 +642,13 @@ struct GameScreen: View {
             if mode >= 2, mode <= 3 {
                 withAnimation(CareMenu.spring) { open.wrappedValue = true; picker.wrappedValue = .toy }
             } else {
-                let kind: DecorKind = { switch d.string(forKey: "PlayDemoBall") ?? "" { case "soccer": return .soccerball; case "beach": return .beachball; default: return .ball } }()
+                func ballKind(_ k: String?) -> DecorKind? { switch k ?? "" { case "soccer": return .soccerball; case "beach": return .beachball; case "ball": return .ball; default: return nil } }
+                // -PlayDemoNext soccer|beach|ball: after the first game is closed (-PlayDemoEnd 1) a second ball game in the same launch (capture aid: the second game's numbers must equal a fresh launch's)
+                var games: [DecorKind] = [ballKind(d.string(forKey: "PlayDemoBall")) ?? .ball]
+                if let n = ballKind(d.string(forKey: "PlayDemoNext")) { games.append(n) }
+                for (gi, kind) in games.enumerated() {
+                if gi > 0 { await sleep(3) }
+                NSLog("[playtoss] demo game %d %@", gi, "\(kind)")
                 care.beginPlay(ball: kind)
                 for _ in 0..<100 where care.play.camBlend < 0.95 { await sleep(0.1) }
                 await sleep(1.5)
@@ -665,7 +671,8 @@ struct GameScreen: View {
                         NSLog("[playtoss] demo round %d done rally %d nudges %d headers %d t %.1f", round, care.play.rally, care.play.nudges, care.play.headers, waited)
                         await sleep(1.8)
                     }
-                    if d.integer(forKey: "PlayDemoEnd") != 0 { await sleep(3); NSLog("[playtoss] demo: Done"); care.endPlay() }          // (capture aid: -PlayDemoEnd 1 puts the ball away after the rounds, to log the room's walls and floor after play)
+                    if d.integer(forKey: "PlayDemoEnd") != 0 || gi < games.count - 1 { await sleep(3); NSLog("[playtoss] demo: Done"); care.endPlay() }          // (capture aid: -PlayDemoEnd 1 puts the ball away after the rounds, to log the room's walls and floor after play)
+                }
                 }
             }
         }
