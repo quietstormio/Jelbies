@@ -74,4 +74,104 @@ final class RetiredTutuTests: XCTestCase {
         XCTAssertNil(b.worn(0, .body), "the remembered tutu is not put back")
         XCTAssertFalse(b.hasEveryday)
     }
+    // MARK: the three necklaces (2026-11-23: "Remove all necklaces besides the diamond chain"): the same four checks for each, over the list
+
+    static let necklaces: [(look: WearLook, price: Int)] = [(.pearls, 65), (.lei, 45), (.whistleCoach, 30)]
+
+    func testTheCatalogueNoLongerListsTheNecklaces() {
+        XCTAssertTrue(WearLook.retired.contains(.diamondJ) == false, "the Diamond J chain stays")
+        XCTAssertNotNil(StoreCatalog.item(wearing: .diamondJ))
+        XCTAssertTrue(WearLook.pieces.contains(.diamondJ))
+        for (l, price) in Self.necklaces {
+            XCTAssertTrue(WearLook.retired.contains(l), l.rawValue)
+            XCTAssertEqual(l.row.price, price, "\(l.rawValue) price")
+            XCTAssertNil(StoreCatalog.item(wearing: l), l.rawValue)
+            XCTAssertFalse(StoreCatalog.items.contains { $0.wear == l }, l.rawValue)
+            XCTAssertFalse(StoreCatalog.items(.wear).contains { $0.wear == l }, l.rawValue)
+            XCTAssertFalse(WearLook.pieces.contains(l), l.rawValue)
+            XCTAssertNil(WearLook.pieces.first { $0.art == l.art }, l.rawValue)
+        }
+        // other neck pieces are not necklaces and stay
+        for l in [WearLook.bandanaCoral, .scarfCosy, .bowtiePink, .bibPink, .medalGold, .scarfSilk] { XCTAssertTrue(WearLook.pieces.contains(l), l.rawValue) }
+        // no sold neck item is a string necklace
+        XCTAssertFalse(StoreCatalog.items.contains { $0.name.lowercased().contains("necklace") || $0.name.lowercased().contains("lei") && $0.wear != nil || $0.name.lowercased().contains("whistle") && $0.wear != nil })
+    }
+
+    func testNobodyGeneratedWearsTheNecklaces() {
+        for (l, _) in Self.necklaces { XCTAssertFalse(ParkPool.wearables.contains(l), l.rawValue) }
+        for seed in [UInt64(1), 7, 42, 2026] {
+            for v in ParkPool.generate(seed: seed) + ParkPool.extras(seed: seed) { XCTAssertFalse(WearLook.retired.contains { $0 == v.wear }, "\(v.name) seed \(seed)") }
+        }
+        for v in ParkPool.all() + ParkPool.speciesVisitors() { XCTAssertFalse(Self.necklaces.contains { $0.look == v.wear }, v.name) }
+        XCTAssertFalse(StoreCatalog.items.compactMap(\.wear).contains { l in Self.necklaces.contains { $0.look == l } })
+    }
+
+    func testASaveThatOwnsAndWearsTheNecklacesLosesThemAndIsRefundedOnce() throws {
+        let suite = "RetiredTutuTests.neck.\(UUID().uuidString)"
+        let d = try XCTUnwrap(UserDefaults(suiteName: suite)); defer { d.removePersistentDomain(forName: suite) }
+        var saved = StoreBook.Saved()
+        // the owner's save shape: a whistle and pearls (one pearls twice), the Diamond J, a bandana; the lei worn by a second Jelmiko
+        saved.wearables = [WearLook.whistleCoach.rawValue, WearLook.pearls.rawValue, WearLook.pearls.row.storeID, WearLook.diamondJ.rawValue, WearLook.bandanaCoral.rawValue, WearLook.lei.rawValue]
+        saved.worn = ["0": ["neck": WearLook.pearls.rawValue, "head": WearLook.beret.rawValue], "1": ["neck": WearLook.lei.rawValue], "2": ["neck": WearLook.diamondJ.rawValue]]
+        saved.showHome = ["0": ["neck": WearLook.whistleCoach.rawValue, "head": WearLook.beret.rawValue], "1": ["neck": WearLook.diamondJ.rawValue]]
+        d.set(try JSONEncoder().encode(saved), forKey: StoreBook.key)
+        let w = DropsWallet(persists: false); let before = w.count
+        let b = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b)
+        let expected = 30 + 2 * 65 + 45
+        XCTAssertEqual(w.count - before, expected, "each copy is paid at its Shop price")
+        for (l, _) in Self.necklaces { XCTAssertFalse(b.ownsLook(l), l.rawValue) }
+        XCTAssertEqual(Set(b.saved.wearables), [WearLook.diamondJ.rawValue, WearLook.bandanaCoral.rawValue])
+        XCTAssertNil(b.worn(0, .neck))
+        XCTAssertEqual(b.worn(1, .neck), .diamondJ, "the remembered home outfit comes back on load (its lei gone, its Diamond J kept)")
+        XCTAssertEqual(b.worn(2, .neck), .diamondJ, "the Diamond J stays on")
+        XCTAssertEqual(b.worn(0, .head), .beret, "other clothes stay")
+        let all = Set(Self.necklaces.flatMap { [$0.look.rawValue, $0.look.row.storeID] })
+        XCTAssertFalse(b.saved.worn.values.contains { $0.values.contains { all.contains($0) } })
+        XCTAssertNil(b.saved.showHome, "restored on load")
+        XCTAssertFalse((b.saved.showHome ?? [:]).values.contains { $0.values.contains { all.contains($0) } }, "no remembered outfit holds one")
+        let b2 = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b2)
+        XCTAssertEqual(w.count - before, expected, "a second load never pays twice")
+        XCTAssertFalse(StoreBook.dropRetiredRefunded(b2.saved).changed)
+        XCTAssertEqual(StoreBook.dropRetiredRefunded(StoreBook.Saved()).refund, 0)
+    }
+
+    /// The owner's real save (a copy of the 11-21 phone backup, read only): one whistle, one pearls, no lei, one tutu, one Diamond J. Set NECK_SAVE_PLIST to run it.
+    func testTheOwnersSaveIsRefundedWhatItOwns() throws {
+        guard let path = ProcessInfo.processInfo.environment["NECK_SAVE_PLIST"] else { throw XCTSkip("NECK_SAVE_PLIST not set") }
+        let plist = try XCTUnwrap(PropertyListSerialization.propertyList(from: Data(contentsOf: URL(fileURLWithPath: path)), format: nil) as? [String: Any])
+        let raw = try XCTUnwrap(plist[StoreBook.key])
+        let data: Data
+        if let d = raw as? Data { data = d } else { data = try JSONSerialization.data(withJSONObject: raw) }
+        let saved = try JSONDecoder().decode(StoreBook.Saved.self, from: data)
+        let necklaces = StoreBook.dropRetiredWear(saved, [.pearls, .lei, .whistleCoach])
+        let tutu = StoreBook.dropRetiredTutu(saved)
+        print("[necklace] owner's save: necklaces refund \(necklaces.refund), tutu refund \(tutu.refund), all \(StoreBook.dropRetiredRefunded(saved).refund)")
+        XCTAssertEqual(necklaces.refund, 30 + 65); XCTAssertEqual(tutu.refund, 60)
+        XCTAssertTrue(StoreBook.dropRetiredRefunded(saved).saved.wearables.contains(WearLook.diamondJ.rawValue))
+    }
+
+    func testTheTutuPassStillPaysOnlyTheTutu() {
+        var s = StoreBook.Saved()
+        s.wearables = [WearLook.tutuPink.rawValue, WearLook.pearls.rawValue]
+        let r = StoreBook.dropRetiredTutu(s)
+        XCTAssertEqual(r.refund, 60); XCTAssertEqual(r.saved.wearables, [WearLook.pearls.rawValue])
+        // an outfit that only WEARS a necklace (never owned) is still changed, nothing is paid
+        var t = StoreBook.Saved(); t.worn = ["0": ["neck": WearLook.lei.rawValue]]
+        let q = StoreBook.dropRetiredRefunded(t)
+        XCTAssertEqual(q.refund, 0); XCTAssertTrue(q.changed); XCTAssertNil(q.saved.worn["0"]?["neck"])
+    }
+
+    func testAShowWardrobeThatRemembersANecklaceComesBackWithoutIt() throws {
+        let suite = "RetiredTutuTests.homeneck.\(UUID().uuidString)"
+        let d = try XCTUnwrap(UserDefaults(suiteName: suite)); defer { d.removePersistentDomain(forName: suite) }
+        var saved = StoreBook.Saved()
+        saved.showHome = ["0": ["neck": WearLook.lei.rawValue], "1": ["neck": WearLook.diamondJ.rawValue]]
+        saved.worn = ["0": ["neck": WearLook.whistleCoach.rawValue], "1": [:]]
+        d.set(try JSONEncoder().encode(saved), forKey: StoreBook.key)
+        let w = DropsWallet(persists: false); let before = w.count
+        let b = StoreBook(wallet: w, persists: true, defaults: d); Self.keep.append(b)
+        XCTAssertEqual(w.count, before)
+        XCTAssertNil(b.saved.showHome)
+        XCTAssertNil(b.worn(0, .neck), "neither the Show outfit's lei nor the worn whistle is put back")
+    }
 }

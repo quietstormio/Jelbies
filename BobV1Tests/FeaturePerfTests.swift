@@ -24,8 +24,8 @@ final class FeaturePerfTests: XCTestCase {
         WearBody.install(MotionRig.renderMesh)
         let outfits: [[WearSlot: WearLook]] = [
             [.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .body: .capeHero, .hands: .wristbandsSky, .feet: .hightopRed],
-            [.head: .catEars, .face: .heartShades, .neck: .pearls, .body: .capeHero, .hands: .wristbandsSky, .feet: .sneakerLightup],
-            [.head: .beanieHoney, .face: .gogglesAviator, .neck: .whistleCoach, .body: .heroPatch, .hands: .wristbandsSky, .feet: .balletPink],
+            [.head: .catEars, .face: .heartShades, .neck: .diamondJ, .body: .capeHero, .hands: .wristbandsSky, .feet: .sneakerLightup],
+            [.head: .beanieHoney, .face: .gogglesAviator, .neck: .bandanaCoral, .body: .heroPatch, .hands: .wristbandsSky, .feet: .balletPink],
             [.face: .glassesRound, .body: .backpackSky, .hands: .wristbandsSky, .feet: .rainBoots]]          // (a hat or a neck item with the backpack folds the wings: the lab's intersection rule)
         let set = WornSet(); set.body = WearBody.shared; set.soundOn = false; Self.keep.append(set)
         let feats = FeatureSet(); feats.body = WearBody.shared; Self.keep.append(feats)

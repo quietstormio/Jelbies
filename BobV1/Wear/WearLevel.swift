@@ -49,21 +49,29 @@ nonisolated enum WearLevel {
     /// The side height is per piece: the chain takes `tiltSideY`; the tall rigid pieces (the Diamond J's gems stand 4.9 cm above their loop point, the pearls 4.6 cm) are capped so their TOP stays under
     /// the 0.72 neck-crease bound (J 0.670, pearls 0.672; the cap is the bound minus the piece's half-height, not a loosened bound). Never above `tiltSideY`.
     nonisolated(unsafe) static var capJ: Float = envF("WEARBAND_TILT_CAPJ", 0.670), capPearls: Float = envF("WEARBAND_TILT_CAPPEARLS", 0.672)
-    static func sideY(_ l: WearLook) -> Float { l == .diamondJ ? min(tiltSideY, capJ) : l == .pearls ? min(tiltSideY, capPearls) : tiltSideY }
+    static func sideY(_ l: WearLook) -> Float { l == .diamondJ ? (WearRules.diamondArc < 900 ? jSideY : min(tiltSideY, capJ)) : l == .pearls ? min(tiltSideY, capPearls) : tiltSideY }
     static func tilts(_ l: WearLook) -> Bool { tiltOn && (l == .diamondJ || l == .pearls || l == .bandanaCoral || l == .bandanaMint || l == .bandanaSun) }
     @inline(__always) private static func smooth(_ x: Float) -> Float { let u = min(max(x, 0), 1); return u * u * (3 - 2 * u) }
-    /// 0 at the front (up to `tiltFrom`), 1 from the arm roots round the back.
-    static func tiltWeight(az: Float) -> Float { smooth((abs(az) - tiltFrom) / (tiltSideAt - tiltFrom)) }
+    /// 0 at the front (up to `tiltFrom`), 1 from the arm roots round the back. `from` / `at` replace the global window for one piece (the front-only Diamond J, `jWindow`).
+    static func tiltWeight(az: Float, from: Float? = nil, at: Float? = nil) -> Float { let f = from ?? tiltFrom, a = at ?? tiltSideAt; return smooth((abs(az) - f) / (a - f)) }
     /// The height of the tilted loop at azimuth `az` (0 = front centre, +-pi = back centre) for a loop whose front centre is at `yFront`.
-    static func loopY(az: Float, yFront: Float, side: Float? = nil) -> Float {
+    static func loopY(az: Float, yFront: Float, side: Float? = nil, from: Float? = nil, at: Float? = nil) -> Float {
         let sy = side ?? tiltSideY
-        let w1 = tiltWeight(az: az), w2 = smooth((abs(az) - tiltSideAt) / (Float.pi - tiltSideAt))
+        let w1 = tiltWeight(az: az, from: from, at: at), w2 = smooth((abs(az) - (at ?? tiltSideAt)) / (Float.pi - (at ?? tiltSideAt)))
         return yFront + (sy - yFront) * w1 + (tiltBackY - sy) * w2
     }
     /// Where a point authored at height `y0` and azimuth `az` goes: a hanging part (a pendant) keeps its authored offset below the loop point; the loop itself fades its authored sag out.
-    static func targetY(y0: Float, az: Float, yFront: Float, hanging: Bool, side: Float? = nil) -> Float {
-        let rise = loopY(az: az, yFront: yFront, side: side) - yFront
-        return hanging ? y0 + rise : yFront + rise + (y0 - yFront) * (1 - tiltWeight(az: az))
+    static func targetY(y0: Float, az: Float, yFront: Float, hanging: Bool, side: Float? = nil, from: Float? = nil, at: Float? = nil) -> Float {
+        let rise = loopY(az: az, yFront: yFront, side: side, from: from, at: at) - yFront
+        return hanging ? y0 + rise : yFront + rise + (y0 - yFront) * (1 - tiltWeight(az: az, from: from, at: at))
+    }
+    /// necklace-r1: the front-only Diamond J rises from the pendant to the neck crease over ITS OWN arc (from just past the mouth keep-out to the last stone), not over the whole body.
+    /// nil = the global window (the old closed loop, WEAR_J_ARC=off, and every other piece).
+    /// (the rise starts at `jFromRad` just past the mouth keep-out, is complete at `jAtRad`, and tops out at `jSideY`: only the first ~0.54 rad of it is drawn, so the last stones lift 4-5 cm)
+    nonisolated(unsafe) static var jFromRad: Float = envF("WEARBAND_J_FROM", 0.15), jAtRad: Float = envF("WEARBAND_J_AT", 0.75), jSideY: Float = envF("WEARBAND_J_SIDEY", 0.64)
+    static func jWindow(_ l: WearLook) -> (from: Float, at: Float)? {
+        guard l == .diamondJ, WearRules.diamondArc < 900 else { return nil }
+        return (jFromRad, jAtRad)
     }
 
     /// Tests: when set, `emit` records per vertex of the last piece how far the bulge moved it (`recBulge`) and how far the limb would have had to be cleared (`recRaw`; >= `bulgeFull` = an arm swallows it and is drawn over it).
@@ -98,7 +106,7 @@ nonisolated enum WearLevel {
             for v in vs { b.insert(bin(p.rest[v])) }
             if b.count >= minBins, hi - lo <= maxSpan { ring = true; for v in vs { p.lvRing[v] = true } }
         }
-        let chain = smallCount >= 8 && smallBins.count >= minBins
+        let chain = (smallCount >= 8 && smallBins.count >= minBins) || (p.look == .diamondJ && WearRules.diamondArc < 900 && smallCount >= 3)          // (the front-only Diamond J: a short chain still levels and hugs)
         guard ring || chain else { return }
         p.levelPiece = true
         for i in 0..<n where p.w[i] > 0.001 { p.level[i] = true }
@@ -128,7 +136,7 @@ nonisolated enum WearLevel {
             p.tiltFrontY = cnt > 0 ? sum / cnt : p.pivot.y
         }
         /// How far the tilt moves a point authored at `q` (0 for a level piece).
-        func lifted(_ q: SIMD3<Float>, hang: Bool) -> Float { p.tilted ? targetY(y0: q.y, az: atan2(q.x, q.z - zc), yFront: p.tiltFrontY, hanging: hang, side: p.tiltSide) - q.y : 0 }
+        func lifted(_ q: SIMD3<Float>, hang: Bool) -> Float { p.tilted ? targetY(y0: q.y, az: atan2(q.x, q.z - zc), yFront: p.tiltFrontY, hanging: hang, side: p.tiltSide, from: p.tiltFromP, at: p.tiltAtP) - q.y : 0 }
         // a bandana's string is a TUBE: every vertex of a cross-section takes the lift of the tube's centreline there (the mean authored height of the string's vertices at that azimuth), so the
         // sag fade moves the tube as a whole and never flattens its round section into a ribbon / point
         var vLift = [Float?](repeating: nil, count: p.rest.count), vOut = [Float](repeating: 0, count: p.rest.count)

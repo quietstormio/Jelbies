@@ -479,7 +479,7 @@ final class WearFitAuditTests: XCTestCase {
                         var one = Stat()
                         measure(l, stride: 3, verts: worldVerts(wd.sets[k].set, skin: sk), field: field, rest: rest[l]!, tag: "\(Self.charNames[id]) \(m.name) \(l.rawValue) t=\(String(format: "%.2f", t))", st: &one)
                         if one.worstLimb > worst { worst = one.worstLimb; where_ = one.whereLimb }
-                        if [.pearls, .lei, .diamondJ].contains(l), one.worstFloat > floatWorst { floatWorst = one.worstFloat; floatWhere = one.whereFloat }
+                        if l == .diamondJ, one.worstFloat > floatWorst { floatWorst = one.worstFloat; floatWhere = one.whereFloat }
                         frames += 1
                     }
                 }
@@ -494,7 +494,7 @@ final class WearFitAuditTests: XCTestCase {
     func testLimbPushCost() throws {
         WearBody.install(MotionRig.renderMesh); SkinField.prepare(MotionRig.renderMesh)
         let lab = makeLab(0)
-        let outfits: [(String, Outfit)] = [("chain", [.neck: .pearls]), ("pearls", [.neck: .pearls]), ("diamondJ", [.neck: .diamondJ]), ("vest", [.body: .vestPuffer]), ("hoodie", [.body: .hoodie]), ("chain + vest", [.neck: .chainGold, .body: .vestPuffer])]
+        let outfits: [(String, Outfit)] = [("diamondJ", [.neck: .diamondJ]), ("vest", [.body: .vestPuffer]), ("hoodie", [.body: .hoodie]), ("chain + vest", [.neck: .chainGold, .body: .vestPuffer])]
         let sets = outfits.map { _ in WornSet() }
         for (k, s) in sets.enumerated() { s.body = WearBody.shared; s.soundOn = false; for _ in 0..<3 { tick(s, lab, 0, outfits[k].1, feats: nil) } }
         let r0 = lab.rigs[0], p0 = r0.sim.bodyPose(iterations: 3).centroid
@@ -641,7 +641,7 @@ final class WearFitAuditTests: XCTestCase {
     func testPickerSpin() throws {
         let d = try dir()
         let id = Int(env("WEARFIT_CHAR") ?? "3") ?? 3
-        let look = WearLook(rawValue: env("WEARFIT_LOOK") ?? "pearls") ?? .pearls
+        let look = WearLook(rawValue: env("WEARFIT_LOOK") ?? "diamondJ") ?? .diamondJ
         let outfit: Outfit = [look.slot: look]
         let lab = makeLab(id, at: GameCamera.callSpot, quiet: env("WEARFIT_BUSY") == nil)
         let wd = wardrobe(lab, id: id, looks: [outfit])
