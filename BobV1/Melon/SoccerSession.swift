@@ -113,7 +113,7 @@ final class SoccerSession {
     private func b0(_ k: BlobBrain) -> Float { k.variety.now }
 
     /// Dev / tests: forget everything.
-    func reset() { stamp = [:]; clock = 0; lastNow = -1; firstTick = true; ballAtFirstTick = false; seenUID = nil; nextStart = .infinity; active = false; members = []; phase = .plan; kicks = 0; failures = 0; sessions = 0; passKicks = 0 }
+    func reset() { stamp = [:]; clock = 0; lastNow = -1; firstTick = true; ballAtFirstTick = false; seenUID = nil; nextStart = .infinity; active = false; members = []; phase = .plan; kicks = 0; failures = 0; sessions = 0; passKicks = 0; kickoffDirects = 0 }
     var isActive: Bool { active }
     var gameName: String { active ? "\(game)" : "" }
     var memberIDs: [Int] { members }
