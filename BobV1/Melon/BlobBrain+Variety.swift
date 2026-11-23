@@ -82,6 +82,7 @@ extension BlobBrain {
     func varietyTick(_ dt: Float) {
         guard anticsEnabled else { return }
         variety.now += dt
+        if MoveClockOverlay.on, steerID == 0 { MoveClockOverlay.t = variety.now }
         if !variety.started {
             variety.started = true
             idleState.cooldown += Float(steerID % 3) * 2.3 + rand(0, 2.5)

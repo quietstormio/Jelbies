@@ -212,6 +212,7 @@ final class MoveLog {
             if !rf.stopOK(ahead) { return "hud" }
             if !rf.contains(ahead + dir * 0.3) || rf.halfWidth(at: ahead.y) - abs(ahead.x) < 0.35 { return "edge" }
         }
+        if b.peerClock - b.spotTurnClock < 0.7 { return "turn" }          // (curved-walk-r1: the stop is a turn on the spot, `planWalkStep`)
         return "other"
     }
 
