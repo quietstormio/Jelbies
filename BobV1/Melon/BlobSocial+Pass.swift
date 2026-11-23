@@ -180,7 +180,7 @@ extension BlobBrain {
 extension BlobBrain {
     /// Round 3b: where the two stand for a real pass of the soccer ball: the kicker 0.95 u behind the ball, the receiver `D` = 3.4...2.0 u from the ball on the other side, along a line that is clear of bodies, furniture,
     /// sleepers and the HUD buttons. nil = the room has no such line (no pass).
-    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
+    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain, restOK: ((SIMD2<Float>) -> Bool)? = nil, bodyGap: Float = 1.0) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
         let field = DecorField.shared
         guard let rf = roamProvider?() else { return nil }
         let others = socialOthers().filter { $0 !== self && $0 !== o }
@@ -190,7 +190,7 @@ extension BlobBrain {
             if !rf.contains(p) || rf.halfWidth(at: p.y) - abs(p.x) <= 0.45 { why["floorEdge", default: 0] += 1; return false }
             if !rf.stopOK(p) { why["hudKeepOut", default: 0] += 1; return false }
             if simd_distance(fixed(p), p) >= 0.08 { why["furniture", default: 0] += 1; return false }
-            if others.contains(where: { simd_distance($0.position, p) < 1.0 }) { why["body", default: 0] += 1; return false }
+            if others.contains(where: { simd_distance($0.position, p) < bodyGap }) { why["body", default: 0] += 1; return false }
             if mixBallSpotBad(p) { why["sleeperOrHud", default: 0] += 1; return false }
             return true
         }
@@ -202,6 +202,7 @@ extension BlobBrain {
                 let v = SIMD2(sinf(a), cosf(a))
                 let pk = c - v * 0.95, pr = c + v * D
                 guard good(pk), good(pr) else { continue }
+                if let ok = restOK, !ok(c + v * max(D - 1.0, 0.45)) { why["restInPocket", default: 0] += 1; continue }          // (soccer-room-r1: where the ball will stop must be open floor)
                 var clear = true
                 var d: Float = 0.4
                 while d <= D { let p = c + v * d; if !field.openFloor(p) { why["lineFurniture", default: 0] += 1; clear = false; break }; if mixBallSpotBad(p) { why["lineSleeperHud", default: 0] += 1; clear = false; break }; if others.contains(where: { simd_distance($0.position, p) < 0.9 }) { why["lineBody", default: 0] += 1; clear = false; break }; d += 0.4 }

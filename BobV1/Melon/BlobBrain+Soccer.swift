@@ -149,13 +149,33 @@ extension BlobBrain {
             }
             best = (q, a); break
         }
-        guard let (q, a) = best else { return nil }
+        guard let (q, a) = best ?? sessSideStand(ball: ball, plan: plan, here: here) else { return nil }
         if a != 0 {
             if plan.mode == .shoot { plan.mode = .kick; plan.target = .zero; plan.goal = -1 }
             if plan.mode == .kick { plan.dir = rotate(plan.dir, a) }
         }
         soccerPlan = plan
         return q
+    }
+
+    /// soccer-room-r1: a ball nobody can stand behind (at a wall, in a pocket): he comes up to it from the open side, to a spot beside it (not between it and the open floor), and the dribble's toe nudge sends it out along the wall.
+    func sessSideStand(ball: SIMD2<Float>, plan: SoccerIdle, here: SIMD2<Float>) -> (SIMD2<Float>, Float)? {
+        guard MoveMix.on, SoccerSessionTuning.on, plan.mode == .rescue || plan.mode == .dribble else { return nil }
+        var best: (SIMD2<Float>, Float)?
+        for r in [Float(0.75), 0.9, 1.05] {
+            for k in 0..<16 {
+                let a = Float(k) * .pi / 8
+                let p = ball + SIMD2(sinf(a), cosf(a)) * r
+                let q = fixed(p)
+                let d = simd_distance(q, ball)
+                guard simd_distance(p, q) < 0.25, d > 0.5, d < 1.15, peerFree(q), reachable(here, q) else { continue }
+                let along = simd_dot((q - ball) / d, plan.dir)
+                guard along > -0.35, along < 0.6 else { continue }
+                let sc = -simd_distance(q, here)
+                if best == nil || sc > best!.1 { best = (q, sc) }
+            }
+        }
+        return best.map { ($0.0, 0) }
     }
 
     // MARK: arriving, legs
@@ -361,16 +381,19 @@ extension BlobBrain {
         var dir = s.dir
         var speed: Float
         if s.mode == .shoot {
+            var shortMiss = false
             var aim = s.target
             if soccerModeForce == nil, rand() < 0.25, let g = field.foot(s.goal) {
-                aim = g.centre + g.turned(SIMD2((rand() < 0.5 ? -1 : 1) * (GoalGeometry.mouthHalfWidth + 0.35), GoalGeometry.mouthZ))          // wide, just outside a post
+                let side: Float = rand() < 0.5 ? -1 : 1
+                if mix.sess, SoccerSessionTuning.on { shortMiss = true; aim = g.centre + g.turned(SIMD2(side * (GoalGeometry.mouthHalfWidth + 0.5), GoalGeometry.mouthZ + 1.0)) }          // (soccer-room-r1: a miss on purpose stops in front of the mouth, never in the gap beside the goal)
+                else { aim = g.centre + g.turned(SIMD2(side * (GoalGeometry.mouthHalfWidth + 0.35), GoalGeometry.mouthZ)) }          // wide, just outside a post
             } else {
                 aim += (field.foot(s.goal)?.turned(SIMD2(rand(-0.25, 0.25), 0))) ?? SIMD2(rand(-0.25, 0.25), 0)
             }
             let d = aim - ball, L = simd_length(d)
             dir = L > 1e-3 ? d / L : s.dir
             // reaches the net with some pace (the roll is v / 1.15)
-            speed = min(max((L + 0.9) * SoccerTuning.linearDecayPerS, SoccerTuning.kickSpeed.lowerBound), SoccerTuning.kickSpeed.upperBound)
+            speed = min(max((L + (shortMiss ? 0.1 : 0.9)) * SoccerTuning.linearDecayPerS, SoccerTuning.kickSpeed.lowerBound), SoccerTuning.kickSpeed.upperBound)
         } else if s.roll >= 0 {          // (a session's pass: straight at the friend, stopping a body-length short of him)
             dir = rotate(dir, rand(-0.04, 0.04))
             speed = min(max(SoccerTuning.linearDecayPerS * s.roll + 0.1, SoccerTuning.kickSpeed.lowerBound), SoccerTuning.kickSpeed.upperBound)

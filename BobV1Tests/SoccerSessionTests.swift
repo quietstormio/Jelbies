@@ -158,4 +158,61 @@ final class SoccerSessionTests: XCTestCase {
             XCTAssertTrue(on == off1, "seed \(seed): the movement differs with sessions on and no ball")
         }
     }
+
+    /// A planned pass never stops in a pocket: the plan, asked for a rest point 0.9 from the walls on open floor, only returns lines that rest there (ball put at several spots, three Jelmiko).
+    func testAPlannedKickNeverRestsInAPocket() {
+        let l = lab(n: 3, ball: false)
+        let field = DecorField.shared
+        var planned = 0
+        for (i, at) in [SIMD2<Float>(-2.3, 0.6), SIMD2(2.2, 2.0), SIMD2(0, 1.5), SIMD2(-1.5, 3.5), SIMD2(1.0, 0.0)].enumerated() {
+            field.set([PlacedDecor(uid: 7, kind: .soccerball, x: at.x, z: at.y)])
+            run(l, seconds: 0.5)
+            let K = l.rigs[0].brain, R = l.rigs[1 + i % 2].brain
+            guard let rf = K.roamProvider?() else { return XCTFail("no floor") }
+            let ok: (SIMD2<Float>) -> Bool = { p in rf.contains(p) && rf.halfWidth(at: p.y) - abs(p.x) >= 0.9 && rf.stopOK(p) && field.openFloor(p) }
+            if let plan = K.mixPassPlan(ball: at, with: R, restOK: ok) {
+                planned += 1
+                let v = plan.pr - at, L = simd_length(v)
+                let rest = at + v / L * max(L - 1.0, 0.45)
+                XCTAssertTrue(ok(rest), "ball at \(at): the planned rest point \(rest) is not open floor")
+            }
+        }
+        XCTAssertGreaterThanOrEqual(planned, 1)
+        finish(l)
+    }
+
+    /// A ring game with three does not end until each of them has kicked.
+    func testARingGivesEveryMemberAKickBeforeItEnds() {
+        SoccerSession.shared.forceGame = .pass
+        let l = lab(n: 3)
+        var kickers = Set<Int>()
+        SoccerEvents.sink = { e in if case .kick(let j, _, _) = e { kickers.insert(j) } }
+        run(l, seconds: 140)
+        XCTAssertEqual(SoccerSession.shared.gamesEndedNotAll, 0, "a pass game ended before everybody had kicked")
+        XCTAssertEqual(kickers, [0, 1, 2], diag(l))
+        finish(l)
+    }
+
+    /// A miss on purpose (aimed in front of the mouth beside a post, with the speed for that distance) comes to rest in front of the goal, never in the gap beside it or inside the net.
+    func testADeliberateMissStaysInFrontOfTheGoal() {
+        let field = DecorField.shared
+        for side in [Float(-1), 1] {
+            SoccerState.shared.reset(); SoccerEvents.clear()
+            field.set([PlacedDecor(uid: 8, kind: .minigoal, x: 0, z: -1.6)])
+            guard let g = field.foot(8) else { return XCTFail("no goal") }
+            let ballAt = g.centre + g.turned(SIMD2(0, 1.7))
+            field.set([PlacedDecor(uid: 7, kind: .soccerball, x: ballAt.x, z: ballAt.y), PlacedDecor(uid: 8, kind: .minigoal, x: 0, z: -1.6)])
+            for _ in 0..<30 { field.tick(dt: 1.0 / 60) }
+            let b0 = field.position(field.foot(7)!)
+            let aim = g.centre + g.turned(SIMD2(side * (GoalGeometry.mouthHalfWidth + 0.5), GoalGeometry.mouthZ + 1.0))
+            let d = aim - b0, L = simd_length(d)
+            field.kickBall(7, direction: d / L, speed: min(max((L + 0.1) * SoccerTuning.linearDecayPerS, SoccerTuning.kickSpeed.lowerBound), SoccerTuning.kickSpeed.upperBound), by: 0)
+            for _ in 0..<(60 * 8) { field.tick(dt: 1.0 / 60) }
+            let rest = field.position(field.foot(7)!)
+            let local = g.local(rest - g.centre)
+            XCTAssertEqual(SoccerState.shared.goals, 0, "side \(side): a deliberate miss scored")
+            XCTAssertGreaterThan(local.y, GoalGeometry.mouthZ + 0.3, "side \(side): the miss stopped at \(local), not in front of the mouth")
+        }
+        field.clear()
+    }
 }

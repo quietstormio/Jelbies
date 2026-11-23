@@ -34,6 +34,8 @@ struct SessOrder {
     var beckoned = false
     var waited: Float = 0
     var cheered = false
+    var turned = false
+    var turnT: Float = 0
     var logged = false
 }
 
@@ -85,6 +87,9 @@ final class SoccerSession {
     private var soloWaiting = false
     private var blockedSince: [Int: Float] = [:]
     private var firstOfSession = false
+    private var fetchFails = 0
+    private(set) var gamesEndedNotAll = 0
+    private var gameKick: [Int: Int] = [:], prevK = -1
     private var failStreak = 0, awaitRest = false, awaitedRoll = false
     /// Tests: play this game first.
     var forceGame: Game?
@@ -162,7 +167,8 @@ final class SoccerSession {
         let ms = members.compactMap { id in all.first { $0.steerID == id } }
         if ms.isEmpty { endSession(all, why: "nobody left"); return }
         watchGoals(ms, field)
-        if clock >= endsAt, phase == .plan || game == .solo { endSession(all, why: "time"); return }
+        let ringOpen = (game == .pass || game == .dribblePass) && ms.count >= 2 && !ms.allSatisfy { (gameKick[$0.steerID] ?? 0) >= 1 } && clock < endsAt + 25
+        if clock >= endsAt, !ringOpen, phase == .plan || game == .solo { endSession(all, why: "time"); return }
         let wanted = gamesFor(ms.count, !field.goals.isEmpty)
         if !wanted.contains(game) { chooseGame(ms); return }
         switch game {
@@ -218,7 +224,7 @@ final class SoccerSession {
         firstOfSession = false
         if let fg = forceGame, all.contains(fg) { game = fg; forceGame = nil }
         lastGame = game
-        dribbled = false; turnWasDribble = false
+        dribbled = false; turnWasDribble = false; gameKick = [:]; prevK = -1; fetchFails = 0
         for m in ms { m.mix.sessFace = nil }
         phase = .plan; kIdx = 0; rIdx = 1 % max(ms.count, 1); kicks = 0; failures = 0; planAt = -9; restSince = -1
         kickTarget = Int(ms[0].rand(SoccerSessionTuning.passKicks.lowerBound, SoccerSessionTuning.passKicks.upperBound))          // (shots: 3...6 of them)
@@ -233,7 +239,9 @@ final class SoccerSession {
     private func stepPass(_ ms: [BlobBrain], _ ballFoot: DecorFoot) {
         let field = DecorField.shared
         let n = ms.count
-        kIdx %= n; rIdx = (kIdx + 1) % n
+        kIdx %= n
+        if phase == .plan { rIdx = pickReceiver(ms) }
+        rIdx %= n
         let K = ms[kIdx], R = ms[rIdx]
         let c = field.position(ballFoot)
         let moving = field.anim[ballFoot.uid]?.moving == true
@@ -256,13 +264,18 @@ final class SoccerSession {
                 return
             }
             turnWasDribble = false
-            guard let plan = K.mixPassPlan(ball: c, with: R) else {
+            let rf0 = K.roamProvider?()
+            let restOK: (SIMD2<Float>) -> Bool = { p in          // (where the ball will stop must be open floor: 0.9 from the walls, clear of furniture and the goal)
+                guard let rf = rf0 else { return true }
+                return rf.contains(p) && rf.halfWidth(at: p.y) - abs(p.x) >= 0.9 && rf.stopOK(p) && field.openFloor(p) && field.goals.allSatisfy { simd_distance($0.centre, p) > 1.3 }
+            }
+            guard let plan = K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK) else {
                 failures += 1
                 log("no line K=\(K.steerID) R=\(R.steerID) why=\(K.mix.passWhy)")
                 if failures == 1 || failures == 4 {          // (the ball lies where no line fits: one of them dribbles it out toward the middle, then the turn is planned again)
                     MoveMix.ballNeedsRoom = true; MoveMix.ballNeedsRoomSince = b0(K)
                     K.mix.order = SessOrder(kind: .kick)
-                    phase = .fetch; phaseAt = clock; fetches += 1
+                    phase = .fetch; phaseAt = clock; fetches += 1; ballAtPlan = c
                     log("fetch by \(K.steerID)")
                 } else if failures >= 8 { gameDone("no line") }
                 return
@@ -273,7 +286,7 @@ final class SoccerSession {
             K.mix.order = SessOrder(kind: .station, spot: plan.pk)
             R.mix.order = SessOrder(kind: .station, spot: plan.pr)
             K.mix.order.kick = SessKick(dir: dir, roll: max(L - 1.0, 0.45))
-            for m in ms where m !== K && m !== R { m.sessSpectate(ball: c, avoid: [plan.pk, plan.pr]) }
+            for m in ms where m !== K && m !== R { m.sessSpectate(ball: c, avoid: [plan.pk, plan.pr, K.position, R.position]) }
             ballAtPlan = c; phase = .walking; phaseAt = clock; awaitRest = false; awaitedRoll = false; restAt = clock
             log("turn K=\(K.steerID) R=\(R.steerID) ball=(\(String(format: "%.2f,%.2f", c.x, c.y))) line=\(String(format: "%.2f", L))")
         case .walking:
@@ -295,8 +308,13 @@ final class SoccerSession {
                 phase = .kicking; phaseAt = clock
             }
         case .fetch:
-            if K.mix.order.state == -1 || clock - phaseAt > 20 {          // (nobody can stand behind it: the last resort, the ball rolls itself out)
+            let fetchedOK = K.mix.order.state == 2 && K.idleState.kind != .soccerKick && !moving
+            if fetchedOK, simd_distance(c, ballAtPlan) > 0.5 { K.mix.order = SessOrder(); phase = .plan; planAt = clock; fetchFails = 0; log("fetched"); return }
+            if K.mix.order.state == -1 || clock - phaseAt > 20 || fetchedOK {          // (the fetch did not move it: twice, then the last resort, the ball rolls itself out)
                 K.mix.order = SessOrder(); phase = .plan; planAt = clock + 0.5
+                fetchFails += 1
+                if fetchFails < 2 { failures = 0; planAt = clock + 1.0; log("fetch did not work, once more"); return }
+                fetchFails = 0
                 if let rest = K.sessRollOut() {
                     selfRolls += 1; planAt = clock + 3; log("fetch failed: the ball rolls itself out")
                     if let plan = K.mixPassPlan(ball: rest, with: R) {          // (they walk to their places while it rolls: the first kick is not held up by the walk)
@@ -308,7 +326,6 @@ final class SoccerSession {
                 }
                 return
             }
-            if K.mix.order.state == 2, K.idleState.kind != .soccerKick, !moving { K.mix.order = SessOrder(); phase = .plan; planAt = clock; log("fetched") }
         case .kicking:
             if K.mix.order.state == 2 { phase = .rolling; phaseAt = clock; restSince = -1 }
             else if K.mix.order.state == -1 || clock - phaseAt > 8 {
@@ -327,12 +344,26 @@ final class SoccerSession {
                 K.mix.order = SessOrder(); phase = .plan; planAt = clock - 0.3
                 return
             }
-            if travelled > 1.0 { dribbled = false; kicks += 1; passKicks += 1; failures = 0; replans = 0; log("kick \(kicks) K=\(K.steerID) -> R=\(R.steerID) travelled=\(String(format: "%.2f", travelled))") ; kIdx = rIdx }
+            if travelled > 1.0 { dribbled = false; gameKick[K.steerID, default: 0] += 1; prevK = kIdx; kicks += 1; passKicks += 1; failures = 0; replans = 0; log("kick \(kicks) K=\(K.steerID) -> R=\(R.steerID) travelled=\(String(format: "%.2f", travelled))") ; kIdx = rIdx }
             else { failures += 1; log("kick missed K=\(K.steerID) travelled=\(String(format: "%.2f", travelled))") }
             K.mix.order = SessOrder()
             phase = .plan; planAt = clock - 0.3
-            if kicks >= kickTarget || clock > gameEnds || failures >= 3 { gameDone(kicks >= kickTarget ? "done" : "enough") }
+            let allKicked = ms.allSatisfy { (gameKick[$0.steerID] ?? 0) >= 1 }
+            if ((kicks >= kickTarget || clock > gameEnds) && allKicked) || clock > gameEnds + 25 || failures >= 3 { gameDone(kicks >= kickTarget ? "done" : "enough") }          // (a ring does not end until each of them has kicked)
         }
+    }
+
+    /// The one who gets the ball next: the one with the fewest kicks in this game (the one who has just kicked last of all).
+    private func pickReceiver(_ ms: [BlobBrain]) -> Int {
+        let n = ms.count
+        let cands = (0..<n).filter { $0 != kIdx }.sorted { a, b in
+            let ca = gameKick[ms[a].steerID] ?? 0, cb = gameKick[ms[b].steerID] ?? 0
+            if ca != cb { return ca < cb }
+            if (a == prevK) != (b == prevK) { return b == prevK }
+            return a < b
+        }
+        guard !cands.isEmpty else { return 0 }
+        return cands[(failures % 2 == 1 && cands.count > 1) ? 1 : 0]
     }
 
     private func failTurn(_ ms: [BlobBrain], _ why: String) {
@@ -344,6 +375,7 @@ final class SoccerSession {
     }
 
     private func gameDone(_ why: String) {
+        if (game == .pass || game == .dribblePass), members.count >= 2, why == "done" || why == "enough", !members.allSatisfy({ (gameKick[$0] ?? 0) >= 1 }) { gamesEndedNotAll += 1 }
         log("game over (\(why)) kicks=\(kicks)")
         let bad = why == "failed" || why == "no line" || why == "not ready" || why == "ball keeps moving"
         failStreak = bad ? failStreak + 1 : 0
@@ -413,12 +445,12 @@ final class SoccerSession {
             if S.mix.order.state == 2 { phase = .rolling; phaseAt = clock; restSince = -1 }
             else if S.mix.order.state == -1 || clock - phaseAt > 8 {
                 S.mix.order = SessOrder(); failures += 1; phase = .plan; planAt = clock + 1
-                if failures == 1 || failures == 4, S.sessRollOut() != nil { selfRolls += 1; log("shot turn cannot start: the ball rolls itself out"); planAt = clock + 3 }
+                if failures == 2 || failures == 5, S.sessRollOut() != nil { selfRolls += 1; log("shot turn cannot start: the ball rolls itself out"); planAt = clock + 3 }
                 if failures >= 7 { gameDone("failed") }
             }
         case .rolling:
             let kDone = S.idleState.kind != .soccerKick
-            let cheering = clock - goalAt < 4.0 && !goalReported
+            let cheering = clock - goalAt < 5.0 && !goalReported
             if moving || !kDone || cheering { restSince = -1; if clock - phaseAt > 18 { S.mix.order = SessOrder(); phase = .plan; planAt = clock; failures += 1 }; return }
             if restSince < 0 { restSince = clock; return }
             guard clock - restSince > 0.5 else { return }
@@ -446,7 +478,7 @@ final class SoccerSession {
         }
         eventSerial = SoccerEvents.serial
         // a goal checked after the cheers have had their time
-        if !goalReported, clock - goalAt > 3.5 {
+        if !goalReported, clock - goalAt > 4.5 {
             goalReported = true
             let done = goalCheerers.filter { id in ms.first { $0.steerID == id }?.mix.order.cheered == true }.count
             cheersDone += done
@@ -604,8 +636,15 @@ extension BlobBrain {
             }
         case .cheer:
             guard o.state == 0 else { if o.state == 2 { o.cheered = true }; return }
-            if o.waited > 5 { o.state = -1; return }
+            if o.waited > 6 { o.state = -1; return }
             guard socialFreeBase else { return }
+            if !o.turned {          // (the player is the audience: turn to the camera first, then jump)
+                o.turnT += 1.0 / 60
+                socialBook.hold = true; socialBook.faceYaw = faceCameraYaw()
+                let dy = atan2f(sinf(yaw - faceCameraYaw()), cosf(yaw - faceCameraYaw()))
+                if abs(dy) > 0.3, o.turnT < 1.2 { return }
+                o.turned = true
+            }
             socialBook.hold = false; socialBook.faceYaw = nil
             face(.excited, hold: 1.1); blushBump(hold: 2.4, peak: 0.7)
             let ok = idleStart(.joy, sim)
