@@ -1217,6 +1217,8 @@ struct GameScreen: View {
         let d = UserDefaults.standard
         // capture aid: -GrantTrick <rawValue> buys that Shop trick for everyone (the Tricks row shows it unlocked, the rest locked)
         if let g = d.string(forKey: "GrantTrick"), let t = VoiceTrick(rawValue: g) { model.care.store.grantTrickToEveryone(t) }
+        // capture aid: -GrantSoccerNet 1 owns the Soccer net (as if bought in the Shop; it is never placeable)
+        if d.integer(forKey: "GrantSoccerNet") != 0, model.care.store.count(DecorKind.minigoal.storeID) < 1 { model.care.store.grant(DecorKind.minigoal.storeID) }
         // capture aid: -ShowSeedGoods 1 makes a cared-for Jelbie for the Jelly Show: fed to the day's theme, bathed, Sway half learned, the three trick pages
         // bought and every trick learned, the wardrobe owned and dressed to the theme
         if d.integer(forKey: "ShowSeedGoods") != 0 {
