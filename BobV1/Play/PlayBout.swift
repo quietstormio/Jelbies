@@ -14,7 +14,7 @@ import simd
 nonisolated enum BoutMath {
     /// The most touches in one bout; after them the last header goes to the player. One header in this many is aimed out of reach (the ball comes down).
     nonisolated(unsafe) static var touchCap = 8
-    nonisolated(unsafe) static var missEvery: Float = 4
+    nonisolated(unsafe) static var missEvery: Float = 4.5
     /// A spot nobody else stands nearer than this to (bodies keep apart).
     static let keepAway: Float = 1.75
     /// A ball never comes down further out sideways than this (a wide landscape floor: a ball against a side wall is not reachable from behind).
@@ -113,7 +113,7 @@ extension PlayToss {
         let zr = Self.bodyZ()
         let zs = jellies.filter { !$0.free }.compactMap { home[$0.id]?.y }
         let zc = zs.isEmpty ? j.pos.y : zs.reduce(0, +) / Float(zs.count)
-        let zlo = max(zr.lowerBound + 0.25, TossTuning.zBack + 2.5, zc - 1.6)          // (a ball on the floor needs room behind it for the one who sends it back)
+        let zlo = max(zr.lowerBound + 0.25, TossTuning.zBack + 3.0, zc - 1.6)          // (a ball on the floor needs room behind it for the one who sends it back)
         let zhi = max(min(zr.upperBound - 0.25, catchZ() - 1.3, zc + 1.0), zlo + 0.5)          // (the row's own depth: the ball is never aimed into the far back or the front band)
         let r = ball.radius, g = TossTuning.gravity
         var from = ball.pos
@@ -132,7 +132,7 @@ extension PlayToss {
             let vEnd = vel.y - g * T
             let tf = H > r + 0.05 ? (vEnd + (vEnd * vEnd + 2 * g * (H - r)).squareRoot()) / g : 0
             let land = spot + SIMD2(vel.x, vel.z) * tf
-            let out = max(0, (TossTuning.zBack + 2.2) - land.y, land.y - (zhi + 0.1), abs(land.x) - min(Self.bodyReach(min(max(land.y, zlo), zhi)) - 0.5, BoutMath.sideLimit - 0.1))
+            let out = max(0, (TossTuning.zBack + 2.7) - land.y, land.y - (zhi + 0.1), abs(land.x) - min(Self.bodyReach(min(max(land.y, zlo), zhi)) - 0.5, BoutMath.sideLimit - 0.1))
             if out < 0.01 || attempt == 7 { break }
         }
         ball.vel = vel
@@ -222,7 +222,7 @@ extension PlayToss {
         // the ball's own bounce carries it to the hand: horizontal speed toward the catch zone (about 1.5 s of low bounces and a roll); lifted over anybody in its way
         let hand = handWorld(), here = SIMD2(ball.pos.x, ball.pos.z), to = SIMD2(hand.x * 0.5, catchZ() + 0.6) - here, d = simd_length(to)
         if d > 0.3 {
-            let v = min(d * 1.0, 5.5)
+            let v = min(d * 1.2, 7)
             ball.vel.x = to.x / d * v; ball.vel.z = to.y / d * v
             var lifted = ball.vel; boutLift(&lifted, from: ball.pos, by: -1); ball.vel.y = max(ball.vel.y, lifted.y)
             bout.homing = true; bout.homeStart = clock; returnAim = SIMD2(hand.x * 0.5, catchZ() + 0.6)
