@@ -978,6 +978,10 @@ final class PlayToss {
         let k = TossTuning.rollDecayPerS
         if plan.until > clock, j.brain.tossFootReady {          // (a pass rolling to him: the go is timed by when the ball reaches the spot in front of him, so the foot lands as it arrives, not by where it will be later)
             let d = simd_distance(ballXZ, plan.spot), sp = simd_length(vxz)
+            if sp < 0.6, d > 1.3, ball.onFloor, !inKickReach(j) {          // (the pass stopped short or went elsewhere: nobody waits for it, the nearest takes it now and the chain is over)
+                j.brain.tossFootRelease(j.sim, j.skinner); footChoice = nil; bumper = nil; passPlan = nil; ownGame = .none; pendingPasses = 0
+                NSLog("[playfoot] pass-stopped clock=%.3f id=%d d=%.2f", clock, c, d); return
+            }
             if inKickReach(j) || d < 0.5 { NSLog("[playfoot] strike-pass clock=%.3f id=%d d=%.2f (ball already here)", clock, c, d); passPlan = nil; strikeByContact(j) }          // (he was set late: no time for the wind-up, the ball is struck at once)
             else if sp > 0.3, simd_dot(vxz, plan.spot - ballXZ) > 0 {
                 let rem = 1 - d * k / sp
