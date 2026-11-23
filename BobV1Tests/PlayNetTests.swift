@@ -264,6 +264,32 @@ final class PlayNetTests: XCTestCase {
         p.end()
     }
 
+    /// Merge with ball step 3: a goal while a pass chain runs ends the chain before the cheer; "Pass it back" (`recall()`) while the ball is held does nothing.
+    func testAGoalEndsAPassChainAndRecallInTheNetDoesNothing() {
+        var set = false, atGoal = false, chainAtGoal = true, pendingAtGoal = -1, holdBefore = false, holdAfter = false, phaseSame = false, keepingAfter = true, cheersStarted = false
+        let (p, rs, _, g) = goalGame(returns: true, maxT: 14) { p, rs in
+            if !set { set = true; p.setOwn(.passing(left: 2, from: 0, to: 1)); return false }
+            if p.net.goals > 0, !atGoal {
+                atGoal = true; chainAtGoal = p.keeping; pendingAtGoal = p.pendingPasses
+                holdBefore = p.net.hold != nil
+                let ph = p.phase
+                p.recall()
+                holdAfter = p.net.hold != nil; phaseSame = p.phase == ph; keepingAfter = p.keeping
+            }
+            if atGoal, rs.contains(where: { $0.brain.idleState.kind == .joy || $0.brain.idleState.kind == .bounce }) { cheersStarted = true }
+            return atGoal && p.phase == .inHand
+        }
+        XCTAssertNotNil(g, "the middle shot scores")
+        XCTAssertFalse(chainAtGoal, "a goal ends the pass chain (keeping false)")
+        XCTAssertEqual(pendingAtGoal, 0, "no pass is pending")
+        XCTAssertTrue(holdBefore && holdAfter && phaseSame, "recall() in the net changes nothing: the ball is still held")
+        XCTAssertFalse(keepingAfter)
+        XCTAssertTrue(cheersStarted, "the cheers start")
+        XCTAssertEqual(p.phase, .inHand, "the ball still comes back to the hand")
+        _ = rs
+        p.end()
+    }
+
     func testWithReturnsToPlayerOffTheOldShortRollOutHappens() {
         var returning = false, rolledOutLoose = false
         let (p, _, n, g) = goalGame(returns: false, maxT: 6) { p, _ in

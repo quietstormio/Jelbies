@@ -496,7 +496,7 @@ extension PlayToss {
                 ball.vel = SIMD3((T.x - S.x) / lp.flight, lp.vy, (T.y - S.y) / lp.flight)
                 returnAim = T
                 mode = String(format: "lob vy=%.1f", lp.vy)
-            } else if let b = any, b.c >= -0.4 {
+            } else if let b = any, b.c >= -0.25 {
                 mode = roll(b, "roll-squeeze")          // (a body close in front of the net: through the least tight way, a soft brush at worst)
             } else {
                 return false          // (a body right in front of the mouth: no return; the old short roll-out)
