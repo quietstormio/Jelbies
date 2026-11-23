@@ -260,6 +260,23 @@ final class BestFriendTests: XCTestCase {
         XCTAssertLessThanOrEqual(a.socialBook.bondNextAt, before + 12.01)
     }
 
+    func testASoccerSessionMemberGetsNoFlagAndABlockBodyIsMarked() {
+        let lab = buddies(seed: 45)
+        let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner); r.brain.idleState.kind = nil }
+        BondMoment.soccerMember = { $0 == b.steerID }
+        defer { BondMoment.soccerMember = nil }
+        a.socialBook.bondNextAt = a.variety.now - 1
+        XCTAssertTrue(b.buddyAway)
+        XCTAssertFalse(a.bondUrge(lab.rigs[0].sim))
+        XCTAssertNil(a.socialBook.block); XCTAssertNil(b.socialBook.block, "a soccer-session member gets no flag")
+        XCTAssertFalse(a.inBuddyBlock)
+        BondMoment.soccerMember = nil
+        a.socialBook.bondNextAt = a.variety.now - 1
+        _ = a.bondUrge(lab.rigs[0].sim)
+        XCTAssertTrue(a.inBuddyBlock && b.inBuddyBlock, "a flagged body reports it, so soccer leaves it alone")
+    }
+
     func testACancelledRendezvousLeavesBothFree() {
         let lab = buddies(seed: 43)
         let a = lab.rigs[0].brain, b = lab.rigs[1].brain

@@ -78,6 +78,8 @@ nonisolated enum BondMoment {
     /// The one block in progress in a place (round 5: at most one at a time).
     nonisolated(unsafe) static var active: BuddyBlock?
     /// Test hook: a kind of a block started with `up` bodies up.
+    /// Soccer sessions (another branch): true for a body that is a member of a running soccer session; such a body is "away" (no flag). The session code sets this one closure.
+    nonisolated(unsafe) static var soccerMember: ((_ steerID: Int) -> Bool)?
     nonisolated(unsafe) static var onKind: ((_ block: Int, _ kind: SocialKind, _ up: Int) -> Void)?
 }
 
@@ -97,7 +99,10 @@ final class BuddyBlock {
 
 extension BlobBrain {
     /// Away: nothing is asked of a body that sleeps, naps, eats, is held or commanded, is in a group emote, a ball game or on park equipment, is grumpy or sleepy.
+    /// True while the body holds a buddy-block flag or is in a block: a soccer session leaves such a body alone until the block ends.
+    var inBuddyBlock: Bool { socialBook.block != nil }
     var buddyAway: Bool {
+        if BondMoment.soccerMember?(steerID) == true { return true }
         if isSleeping || isNapping || reserved || held || commanded || commandedIdle != nil || isPerched || idleMood == .grumpy || mixSleepy { return true }
         if let s = social, s.kind.isGroup || s.kind == .pass { return true }
         if let k = idleState.kind, k == .decorSit || k == .decorSlide || k == .decorHopscotch || k == .decorKick || k == .soccerKick || k == .tossBump || k == .sleep { return true }
