@@ -136,7 +136,8 @@ extension BlobBrain {
     func bondDuoAsk(goal g: SIMD2<Float>) {
         guard BondPairing.multiplier != 1, MoveMix.on, !socialBook.bestFriends.isEmpty, idleMood != .grumpy, !mixSleepy else { return }
         guard let o = socialOthers().first(where: { $0 !== self && BondPairing.isBest(self, $0) }) else { return }
-        guard o.socialFree, o.idleMood != .grumpy, !o.mixSleepy, !o.held, !o.commanded, o.idleState.kind == nil, rand() < BondMoment.duoChance else { return }
+        let onLeg = o.social == nil && o.idleState.kind == nil && o.activity == .walking && o.pending == nil && o.job == nil          // (a friend already on a wander leg is turned onto the buddy leg)
+        guard o.socialFree || onLeg, o.idleMood != .grumpy, !o.mixSleepy, !o.held, !o.commanded, rand() < BondMoment.duoChance else { return }
         let dir = g - position, len = simd_length(dir)
         guard len > 0.6 else { return }
         let u = dir / len, perp = SIMD2<Float>(-u.y, u.x)
@@ -147,7 +148,7 @@ extension BlobBrain {
             let raw = g + perp * sgn * d * (k < 2 ? 1 : 1)
             let spot = o.fixed(raw)
             guard simd_distance(spot, raw) < 0.25, simd_distance(spot, g) > 1.25, o.mixStopOK(spot), o.peerFree(spot), o.reachable(o.position, spot) else { continue }
-            o.request(.goTo(spot))
+            if onLeg { o.requestNow(.goTo(spot)) } else { o.request(.goTo(spot)) }
             return
         }
     }
