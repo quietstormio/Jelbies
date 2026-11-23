@@ -469,9 +469,26 @@ extension PlayToss {
             var T = target
             if !exitsMouth(T) { T.x = n.centre.x }
             let L = simd_length(T - S)
-            // (the lob rises steeply, 5 u/s up: under the bar at the mouth (0.65 away or less: about 0.9 high), over the line's shoulders (about 2 high there), then down at the catch zone)
-            let g = TossTuning.gravity, vy: Float = 5.0
-            let flight = (vy + (vy * vy + 2 * g * max(ball.pos.y - r, 0)).squareRoot()) / g
+            // (the lob rises just steeply enough: under the bar at the mouth, over every body's head on the way (the line can stand 1.6 from the mouth), then down at the catch zone; the smallest
+            // rise that does both is taken, from a list)
+            let g = TossTuning.gravity, y0 = ball.pos.y
+            let dir = L > 1e-3 ? (T - S) / L : SIMD2<Float>(0, 1)
+            func plan(_ vy: Float) -> (flight: Float, ok: Bool) {
+                let flight = (vy + (vy * vy + 2 * g * max(y0 - r, 0)).squareRoot()) / g
+                let hs = L / flight
+                var ok = true
+                var sD: Float = 0
+                while sD <= L, ok {
+                    let q = S + dir * sD, t = sD / hs, y = y0 + vy * t - 0.5 * g * t * t
+                    if S.y < n.mouthZ, q.y < n.mouthZ + 0.05, q.y > n.mouthZ - 0.05, y + r > n.barBottom - 0.12 { ok = false }          // (the bar)
+                    for b in bodies where simd_distance(q, b) < TossTuning.bodyRadius + r + 0.1 && y - r < TossTuning.bodyTop + 0.1 { ok = false }          // (a head)
+                    sD += 0.05
+                }
+                return (flight, ok)
+            }
+            var vy: Float = 5.0
+            for cand in stride(from: Float(4.0), through: 9.0, by: 0.5) { vy = cand; if plan(cand).ok { break } }
+            let flight = plan(vy).flight
             let v = SIMD3<Float>((T.x - S.x) / flight, vy, (T.y - S.y) / flight)
             ball.vel = v
             returnAim = T
