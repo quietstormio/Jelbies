@@ -112,13 +112,14 @@ extension BlobBrain {
         if underButton == nil, MoveMix.on, force == nil, !mixStopOK(ball) || offFloor {          // (the ball lies under a HUD button, where it cannot be seen, or out at the wall: it is dribbled out to floor that can be used)
             outer: for r in [Float(1.6), 2.4, 3.2] { for k in 0..<12 { let a = Float(k) * .pi / 6; let p = ball + SIMD2(sinf(a), cosf(a)) * r; if field.openFloor(p), mixStopOK(p), rfBall.map({ $0.contains(p) && $0.halfWidth(at: p.y) - abs(p.x) > 0.5 }) ?? true { underButton = p; break outer } } }
         }
+        if underButton == nil, mix.sessFetch, SoccerSessionTuning.on, let open = field.nearestOpenFloor(to: ball) { underButton = open }          // (soccer-room-r1: a fetch always brings it out to open floor)
         if let ub = underButton {
             plan.mode = .rescue; plan.target = ub
         } else if force == 3 || (force == nil && SoccerState.shared.isStuck(f.uid)) {
             guard let open = field.nearestOpenFloor(to: ball) else { return nil }
             plan.mode = .rescue; plan.target = open
         } else if let g = goal, force == 1 || force == 2 || (force == nil && (sessShoot || rand() < 0.7)) {
-            let spots = field.kickSpots(g)
+            let spots = SoccerSessionTuning.on && mix.sess ? field.kickSpots(g).filter { sessKickSpotUsable($0) } : field.kickSpots(g)          // (soccer-room-r1: a goal at a wall: only the spots with floor to stand on)
             guard let near = spots.min(by: { simd_distance($0.ball, ball) < simd_distance($1.ball, ball) }) else { return nil }
             plan.goal = g.uid
             if force == 1 || (force != 2 && simd_distance(near.ball, ball) > 0.5) { plan.mode = .dribble; plan.target = near.ball }
@@ -156,6 +157,14 @@ extension BlobBrain {
         }
         soccerPlan = plan
         return q
+    }
+
+    /// soccer-room-r1: a kick spot of a goal he can use: the ball's spot is open floor 0.6 from the walls, the stand behind it is floor.
+    func sessKickSpotUsable(_ s: (ball: SIMD2<Float>, stand: SIMD2<Float>, aim: SIMD2<Float>)) -> Bool {
+        guard let rf = roamProvider?() else { return true }
+        let f = DecorField.shared
+        return rf.contains(s.ball) && rf.halfWidth(at: s.ball.y) - abs(s.ball.x) >= 0.6 && rf.stopOK(s.ball) && f.openFloor(s.ball, margin: 0.4)
+            && rf.contains(s.stand) && rf.halfWidth(at: s.stand.y) - abs(s.stand.x) >= 0.4 && f.openFloor(s.stand, margin: 0.1)
     }
 
     /// soccer-room-r1: a ball nobody can stand behind (at a wall, in a pocket): he comes up to it from the open side, to a spot beside it (not between it and the open floor), and the dribble's toe nudge sends it out along the wall.

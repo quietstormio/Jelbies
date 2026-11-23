@@ -215,4 +215,30 @@ final class SoccerSessionTests: XCTestCase {
         }
         field.clear()
     }
+
+    /// A goal that stands at a wall: after a goal the ball comes to rest on open floor (0.9 from the walls), not in the pocket beside the goal.
+    func testRollOutSpotIsOpenFloorForAGoalAtAWall() {
+        let aspect: Float = 440.0 / 956.0
+        GameCamera.configureRoom(count: 3, option: .A, wide: 2); _ = GameCamera.camera(aspect: aspect); _ = GameCamera.refreshRoam(aspect: aspect)
+        let field = DecorField.shared
+        field.set([PlacedDecor(uid: 8, kind: .minigoal, x: 3.0, z: 0.4)])
+        guard let g = field.foot(8), let rf = GameCamera.roamFloor else { return XCTFail("no goal / floor") }
+        let spot = field.rollOutSpot(g, from: g.centre)
+        XCTAssertGreaterThanOrEqual(rf.halfWidth(at: spot.y) - abs(spot.x), 0.85, "the roll-out spot \(spot) is in the wall pocket")
+        XCTAssertTrue(field.openFloor(spot), "the roll-out spot \(spot) is not open floor")
+        field.clear()
+    }
+
+    /// A ball that lies out at the front of the floor (where the camera clamp refused every stand) is fetched by a member and brought back: it does not roll itself.
+    func testABallAtTheFrontEdgeIsFetchedNotRolled() {
+        let l = lab(n: 3, ball: false)
+        guard let rf = l.rigs[0].brain.roamProvider?() else { return XCTFail("no floor") }
+        let farZ = rf.maxZ - 1.0
+        DecorField.shared.set([PlacedDecor(uid: 7, kind: .soccerball, x: 0.0, z: farZ)])
+        run(l, seconds: 90)
+        let c = DecorField.shared.position(DecorField.shared.foot(7)!)
+        XCTAssertLessThan(c.y, farZ - 1.0, "the ball is still out at the front: \(c) \(diag(l))")
+        XCTAssertEqual(SoccerSession.shared.selfRolls, 0, "the ball rolled itself \(diag(l))")
+        finish(l)
+    }
 }

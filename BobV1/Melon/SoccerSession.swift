@@ -27,6 +27,7 @@ struct SessOrder {
     var kick: SessKick?
     var force: Int?
     var shoot = false
+    var fetch = false
     var dribbleTo: SIMD2<Float>?
     /// 0 waiting to start, 1 walking, 2 done (arrived / the kick began), -1 failed.
     var state = 0
@@ -48,7 +49,7 @@ nonisolated enum SoccerSessionTuning {
     static let recurLen: ClosedRange<Float> = 32...50
     static let gap: ClosedRange<Float> = 35...60
     static let openingWait: ClosedRange<Float> = 20...40
-    static let kickoffWait: ClosedRange<Float> = 1.0...2.0
+    static let kickoffWait: ClosedRange<Float> = 0.3...0.8
     static let passKicks: ClosedRange<Float> = 5...8
 }
 
@@ -88,6 +89,7 @@ final class SoccerSession {
     private var blockedSince: [Int: Float] = [:]
     private var firstOfSession = false
     private var fetchFails = 0
+    private var kickoffTurn = false          // (the first turn of a kick-off: the two nearest the ball, a short pass)
     private(set) var gamesEndedNotAll = 0
     private var gameKick: [Int: Int] = [:], prevK = -1
     private var failStreak = 0, awaitRest = false, awaitedRoll = false
@@ -196,8 +198,10 @@ final class SoccerSession {
         for m in ready { m.sessSpectate(ball: DecorField.shared.position(ball), avoid: []) }          // (everybody comes over and spreads out, 2.2 or more apart, before the first turn is planned)
         log("start #\(sessions) kickoff=\(kickoffSession) members=\(members) len=\(String(format: "%.0f", endsAt - clock))")
         if kickoffSession, ready.count >= 2, forceGame == nil { forceGame = .pass }          // (the kick-off is a pass: the simplest game first)
+        let kickoffSessionWas = kickoffSession
         kickoffSession = false
         firstOfSession = true
+        kickoffTurn = kickoffSessionWas
         lastGame = nil
         chooseGame(ready)
     }
@@ -213,9 +217,16 @@ final class SoccerSession {
     private func gamesFor(_ n: Int, _ goal: Bool) -> [Game] {
         var g: [Game] = []
         if n >= 2 { g += [.pass, .dribblePass] }
-        if goal { g.append(.shots) }
+        if goal, goalPlayable() { g.append(.shots) }
         if n == 1 && !goal { g.append(.solo) }
         return g
+    }
+
+    /// A goal with at least one kick spot the Jelmiko can use (a goal pushed into a corner has none).
+    private func goalPlayable() -> Bool {
+        guard let b = roster.first(where: { $0.roamProvider != nil }) else { return true }
+        let f = DecorField.shared
+        return f.goals.contains { g in f.kickSpots(g).contains { b.sessKickSpotUsable($0) } }
     }
 
     private func chooseGame(_ ms: [BlobBrain]) {
@@ -242,7 +253,13 @@ final class SoccerSession {
         let field = DecorField.shared
         let n = ms.count
         kIdx %= n
-        if phase == .plan { rIdx = pickReceiver(ms) }
+        if phase == .plan {
+            if kickoffTurn, n >= 2 {          // (kick-off: the one nearest the ball kicks it to the next nearest)
+                let cc = field.position(ballFoot)
+                let order = (0..<n).sorted { simd_distance(ms[$0].position, cc) < simd_distance(ms[$1].position, cc) }
+                kIdx = order[0]; rIdx = order[1]
+            } else { rIdx = pickReceiver(ms) }
+        }
         rIdx %= n
         let K = ms[kIdx], R = ms[rIdx]
         let c = field.position(ballFoot)
@@ -269,16 +286,13 @@ final class SoccerSession {
             let rf0 = K.roamProvider?()
             let restOK: (SIMD2<Float>) -> Bool = { p in          // (where the ball will stop must be open floor: 0.9 from the walls, clear of furniture and the goal)
                 guard let rf = rf0 else { return true }
-                return rf.contains(p) && rf.halfWidth(at: p.y) - abs(p.x) >= 0.9 && rf.stopOK(p) && field.openFloor(p) && field.goals.allSatisfy { simd_distance($0.centre, p) > 1.3 }
+                return rf.contains(p) && rf.halfWidth(at: p.y) - abs(p.x) >= 0.9 && p.y > rf.minZ + 0.9 && p.y < rf.maxZ - 0.9 && rf.stopOK(p) && field.openFloor(p, margin: 0.6) && field.goals.allSatisfy { simd_distance($0.centre, p) > 1.3 }
             }
-            guard let plan = K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK) else {
+            guard let plan = K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6, dists: kickoffTurn ? [2.4, 2.2, 2.0, 2.6, 3.0] : nil) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK, dists: kickoffTurn ? [2.4, 2.2, 2.0, 2.6, 3.0] : nil) else {
                 failures += 1
                 log("no line K=\(K.steerID) R=\(R.steerID) why=\(K.mix.passWhy)")
                 if failures == 1 || failures == 4 {          // (the ball lies where no line fits: one of them dribbles it out toward the middle, then the turn is planned again)
-                    MoveMix.ballNeedsRoom = true; MoveMix.ballNeedsRoomSince = b0(K)
-                    K.mix.order = SessOrder(kind: .kick)
-                    phase = .fetch; phaseAt = clock; fetches += 1; ballAtPlan = c
-                    log("fetch by \(K.steerID)")
+                    startFetch(ms, ball: c)
                 } else if failures >= 8 { gameDone("no line") }
                 return
             }
@@ -289,6 +303,7 @@ final class SoccerSession {
             R.mix.order = SessOrder(kind: .station, spot: plan.pr)
             K.mix.order.kick = SessKick(dir: dir, roll: max(L - 1.0, 0.45))
             for m in ms where m !== K && m !== R { m.sessSpectate(ball: c, avoid: [plan.pk, plan.pr, K.position, R.position]) }
+            kickoffTurn = false
             ballAtPlan = c; phase = .walking; phaseAt = clock; awaitRest = false; awaitedRoll = false; restAt = clock
             log("turn K=\(K.steerID) R=\(R.steerID) ball=(\(String(format: "%.2f,%.2f", c.x, c.y))) line=\(String(format: "%.2f", L))")
         case .walking:
@@ -310,23 +325,13 @@ final class SoccerSession {
                 phase = .kicking; phaseAt = clock
             }
         case .fetch:
-            let fetchedOK = K.mix.order.state == 2 && K.idleState.kind != .soccerKick && !moving
-            if fetchedOK, simd_distance(c, ballAtPlan) > 0.5 { K.mix.order = SessOrder(); phase = .plan; planAt = clock; fetchFails = 0; log("fetched"); return }
-            if K.mix.order.state == -1 || clock - phaseAt > 20 || fetchedOK {          // (the fetch did not move it: twice, then the last resort, the ball rolls itself out)
-                K.mix.order = SessOrder(); phase = .plan; planAt = clock + 0.5
-                fetchFails += 1
-                if fetchFails < 2 { failures = 0; planAt = clock + 1.0; log("fetch did not work, once more"); return }
-                fetchFails = 0
-                if let rest = K.sessRollOut() {
-                    selfRolls += 1; planAt = clock + 3; log("fetch failed: the ball rolls itself out")
-                    if let plan = K.mixPassPlan(ball: rest, with: R) {          // (they walk to their places while it rolls: the first kick is not held up by the walk)
-                        K.mix.order = SessOrder(kind: .station, spot: plan.pk); R.mix.order = SessOrder(kind: .station, spot: plan.pr)
-                        for m in ms where m !== K && m !== R { m.sessSpectate(ball: rest, avoid: [plan.pk, plan.pr]) }
-                        ballAtPlan = rest; phase = .walking; phaseAt = clock; awaitRest = true; awaitedRoll = false; restAt = clock
-                        log("places taken while the ball rolls to (\(String(format: "%.2f,%.2f", rest.x, rest.y)))")
-                    }
+            stepFetch(ms, c: c, moving: moving) { rest in          // (the last resort: they walk to their places while the ball rolls, the first kick is not held up by the walk)
+                if let plan = K.mixPassPlan(ball: rest, with: R) {
+                    K.mix.order = SessOrder(kind: .station, spot: plan.pk); R.mix.order = SessOrder(kind: .station, spot: plan.pr)
+                    for m in ms where m !== K && m !== R { m.sessSpectate(ball: rest, avoid: [plan.pk, plan.pr]) }
+                    self.ballAtPlan = rest; self.phase = .walking; self.phaseAt = self.clock; self.awaitRest = true; self.awaitedRoll = false; self.restAt = self.clock
+                    self.log("places taken while the ball rolls to (\(String(format: "%.2f,%.2f", rest.x, rest.y)))")
                 }
-                return
             }
         case .kicking:
             if K.mix.order.state == 2 { phase = .rolling; phaseAt = clock; restSince = -1 }
@@ -352,6 +357,35 @@ final class SoccerSession {
             phase = .plan; planAt = clock - 0.3
             let allKicked = ms.allSatisfy { (gameKick[$0.steerID] ?? 0) >= 1 }
             if ((kicks >= kickTarget || clock > gameEnds) && allKicked) || clock > gameEnds + 25 || failures >= 3 { gameDone(kicks >= kickTarget ? "done" : "enough") }          // (a ring does not end until each of them has kicked)
+        }
+    }
+
+    // MARK: fetch (round 2: a ball that lies where nobody can stand behind it)
+
+    private var fetcherID = -1
+    /// The member nearest the ball (the next nearest on the second try) walks to it from the open side and nudges it out; only after two failed fetches may the ball roll itself.
+    private func startFetch(_ ms: [BlobBrain], ball c: SIMD2<Float>) {
+        let byDist = ms.sorted { simd_distance($0.position, c) < simd_distance($1.position, c) }
+        let F = byDist[min(fetchFails, byDist.count - 1)]
+        fetcherID = F.steerID
+        for m in ms { m.mix.order = SessOrder() }
+        F.mix.order = SessOrder(kind: .kick); F.mix.order.fetch = true
+        phase = .fetch; phaseAt = clock; fetches += 1; ballAtPlan = c
+        log("fetch by \(F.steerID)")
+    }
+
+    private func stepFetch(_ ms: [BlobBrain], c: SIMD2<Float>, moving: Bool, afterRoll: (SIMD2<Float>) -> Void) {
+        guard let F = ms.first(where: { $0.steerID == fetcherID }) else { phase = .plan; planAt = clock; return }
+        let fetchedOK = F.mix.order.state == 2 && F.idleState.kind != .soccerKick && !moving
+        if fetchedOK, simd_distance(c, ballAtPlan) > 0.5 { F.mix.order = SessOrder(); phase = .plan; planAt = clock; fetchFails = 0; log("fetched"); return }
+        guard F.mix.order.state == -1 || clock - phaseAt > 20 || fetchedOK else { return }
+        F.mix.order = SessOrder(); phase = .plan; planAt = clock + 0.5
+        fetchFails += 1
+        if fetchFails < 2 { failures = 0; planAt = clock + 1.5; log("fetch did not work, once more (the next nearest)"); return }
+        fetchFails = 0
+        if let rest = F.sessRollOut() {
+            selfRolls += 1; planAt = clock + 3; log("fetch failed twice: the ball rolls itself out")
+            afterRoll(rest)
         }
     }
 
@@ -381,7 +415,7 @@ final class SoccerSession {
         log("game over (\(why)) kicks=\(kicks)")
         let bad = why == "failed" || why == "no line" || why == "not ready" || why == "ball keeps moving"
         failStreak = bad ? failStreak + 1 : 0
-        phase = .plan; kicks = 0; failures = 0; planAt = clock + (bad ? 2.5 : 1.0)
+        phase = .plan; kicks = 0; failures = 0; planAt = clock + (bad ? 2.5 : 0.4)
         if failStreak >= 3 { failStreak = 0; endsAt = clock; log("three games in a row would not start: the session ends") }
         for id in members { if let m = lookup(id) { m.mix.order = SessOrder() } }
         if clock >= endsAt - 3 { endsAt = clock } else { chooseGame(members.compactMap { lookup($0) }) }          // (the next game of the playlist: never the same twice running while there is another)
@@ -447,7 +481,7 @@ final class SoccerSession {
             if S.mix.order.state == 2 { phase = .rolling; phaseAt = clock; restSince = -1 }
             else if S.mix.order.state == -1 || clock - phaseAt > 8 {
                 S.mix.order = SessOrder(); failures += 1; phase = .plan; planAt = clock + 1
-                if failures == 2 || failures == 5, S.sessRollOut() != nil { selfRolls += 1; log("shot turn cannot start: the ball rolls itself out"); planAt = clock + 3 }
+                if failures == 2 || failures == 5 { startFetch(ms, ball: c) }
                 if failures >= 7 { gameDone("failed") }
             }
         case .rolling:
@@ -461,6 +495,8 @@ final class SoccerSession {
             kIdx = (kIdx + 1) % n
             phase = .plan; planAt = clock - 0.3
             if kicks >= kickTarget - 2 || clock > gameEnds { gameDone("done") }
+        case .fetch:
+            stepFetch(ms, c: c, moving: moving) { _ in }
         default: phase = .plan
         }
     }
@@ -625,9 +661,10 @@ extension BlobBrain {
             guard o.state == 0 else { return }
             guard socialFreeBase else { if scriptIsWalking, !o.beckoned { o.beckoned = true; _ = socialBeckonStop() }; return }
             socialBook.hold = false; socialBook.faceYaw = nil
-            mix.sessKick = o.kick; soccerModeForce = o.force; mix.sessShoot = o.shoot; mix.sessDribbleTo = o.dribbleTo
+            mix.sessKick = o.kick; soccerModeForce = o.force; mix.sessShoot = o.shoot; mix.sessDribbleTo = o.dribbleTo; mix.sessFetch = o.fetch
+            if o.fetch { MoveMix.ballNeedsRoom = true }
             let ok = decorStart(.soccerKick, sim, only: .soccerball)
-            soccerModeForce = nil; mix.sessKick = nil; mix.sessShoot = false; mix.sessDribbleTo = nil
+            soccerModeForce = nil; mix.sessKick = nil; mix.sessShoot = false; mix.sessDribbleTo = nil; mix.sessFetch = false; MoveMix.ballNeedsRoom = false
             o.state = ok ? 2 : -1
             if !ok, EmoteSpot.logOn, let bf = DecorField.shared.soccerBalls.first {
                 let f = DecorField.shared, c = f.position(bf)

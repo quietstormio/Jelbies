@@ -180,7 +180,7 @@ extension BlobBrain {
 extension BlobBrain {
     /// Round 3b: where the two stand for a real pass of the soccer ball: the kicker 0.95 u behind the ball, the receiver `D` = 3.4...2.0 u from the ball on the other side, along a line that is clear of bodies, furniture,
     /// sleepers and the HUD buttons. nil = the room has no such line (no pass).
-    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain, restOK: ((SIMD2<Float>) -> Bool)? = nil, bodyGap: Float = 1.0) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
+    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain, restOK: ((SIMD2<Float>) -> Bool)? = nil, bodyGap: Float = 1.0, dists: [Float]? = nil) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
         let field = DecorField.shared
         guard let rf = roamProvider?() else { return nil }
         let others = socialOthers().filter { $0 !== self && $0 !== o }
@@ -196,7 +196,7 @@ extension BlobBrain {
         }
         defer { mix.passWhy = why.sorted { $0.value > $1.value }.map { "\($0.key)=\($0.value)" }.joined(separator: ",") }
         var best: (pk: SIMD2<Float>, pr: SIMD2<Float>, score: Float)?
-        for D in [Float(3.4), 3.2, 3.0, 2.8, 2.6, 2.3, 2.0] {
+        for D in dists ?? [Float(3.4), 3.2, 3.0, 2.8, 2.6, 2.3, 2.0] {
             for k in 0..<16 {
                 let a = Float(k) * .pi / 8
                 let v = SIMD2(sinf(a), cosf(a))

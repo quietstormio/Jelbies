@@ -1575,7 +1575,13 @@ final class BlobBrain {
         let pRV = PerfProbe.begin(); let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); PerfProbe.end("rs.resolve", pRV)
         stanceStepFree = false
         let got = SIMD2(rv.x, rv.z) - root
-        if MoveLog.on, simd_distance(SIMD2(rv.x, rv.z), cand) > 0.01 { MoveLog.note(.push) }          // (MoveLog: the floor rules / the peer spring moved the planned step by more than 1 cm)
+        if MoveLog.on, simd_distance(SIMD2(rv.x, rv.z), cand) > 0.01 {
+            MoveLog.note(.push)
+            if EmoteSpot.logOn, mix.sess {          // (soccer-room-r1 log only: which body, which moment, what pushed it)
+                let pe = steerPeers().map { (id: $0.id, d: simd_distance($0.pos, cand)) }.min { $0.d < $1.d }
+                NSLog("[push] t=%.1f id=%d at=(%.2f,%.2f) moved=%.2f nearestPeer=%d d=%.2f order=%@ st=%d script=%@ idle=%@ target=(%.2f,%.2f)", variety.now, steerID, root.x, root.y, simd_distance(SIMD2(rv.x, rv.z), cand), pe?.id ?? -1, pe?.d ?? -1, String(describing: mix.order.kind), mix.order.state, String(describing: script).prefix(14) as CVarArg, String(describing: idleState.kind) as CVarArg, target.x, target.y)
+            }
+        }          // (MoveLog: the floor rules / the peer spring moved the planned step by more than 1 cm)
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
         let wm = finalTurn ? max(-m, min(m, errF)) : (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err)))

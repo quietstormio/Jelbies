@@ -123,6 +123,7 @@ struct MixBook {
     var sessKick: SessKick?
     /// The next stand-spot pick shoots at a goal (when one is placed) / dribbles to this spot; where a waiting member looks (nil = the ball).
     var sessShoot = false
+    var sessFetch = false          // (a session's fetch of a ball nobody can stand behind: the stand is the soccer one, no camera clamp)
     var sessDribbleTo: SIMD2<Float>?
     var sessFace: SIMD2<Float>?
     var windowUntil: Float = -1
