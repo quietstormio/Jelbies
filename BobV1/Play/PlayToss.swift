@@ -703,6 +703,7 @@ final class PlayToss {
 
     private func intercepts(dt: Float, before: SIMD3<Float>) {
         guard ball.ignoring == nil || ball.ignoreT < 0.2 else { return }
+        if netUp, net.deadFlight { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }          // (play-net keep-out: the net's dead-ball return flies to the player; nobody heads it back toward the goal)
         if footFlight, !PlayTuning.ballReturnOld, footIntercepts() { return }
         var best: (j: PlayJelly, t: Float, xz: SIMD2<Float>, d: Float)?
         for j in jellies {

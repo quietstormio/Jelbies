@@ -202,6 +202,8 @@ struct PlayNetState {
     /// Keep-out round: the closest any body came to the footprint (0 = inside), the ball's floor contacts inside the dead zone, and the dead returns.
     var minBodyDist: Float = 99
     var outT: [Int: Float] = [:]
+    /// A dead ball's return flight is on: nobody heads it (the net's return is the player's, not theirs); cleared at the catch.
+    var deadFlight = false
     var floorHits = 0, prevVy: Float = 0, deadReturns = 0, keepOutSamples = 0
     var goals = 0
     /// Bodies that stay where they are while the net is up (sleepers): the net is placed clear of them.
@@ -250,7 +252,7 @@ extension PlayToss {
         if ball.pos.y < ball.radius + 0.08, net.prevVy < -0.4, ball.vel.y > 0 { net.floorHits += 1 }          // (a real floor bounce, not only a settled ball)
         net.prevVy = ball.vel.y
         guard ball.pos.y < ball.radius + 0.08, net.floorHits >= 2 || (ball.onFloor && ball.speedXZ < 0.3) else { return }
-        net.floorHits = 0; net.prevVy = 0; net.deadReturns += 1
+        net.floorHits = 0; net.prevVy = 0; net.deadReturns += 1; net.deadFlight = true
         net.goalAt = clock; net.awaitHand = true; net.rescuesAtGoal = rescues
         phase = .loose; looseT = 0; restT = 0; returnAim = nil; bumper = nil
         for j in jellies {          // (nobody fetches a ball from there: a body in his own kick / header plan or on a walk to it is stopped, as at a goal; one in the air lands first)
@@ -388,6 +390,7 @@ extension PlayToss {
                 if let p0 = net.goalPos[j.id], simd_distance(p0, m) - simd_distance(j.pos, m) > 0.35 { net.nearLogged.insert(j.id); NSLog("[playnet] BODY WALKED TOWARD NET id=%d from %.2f,%.2f to %.2f,%.2f", j.id, p0.x, p0.y, j.pos.x, j.pos.y) }
             }
         }
+        if net.deadFlight, phase == .inHand || phase == .catching || phase == .off || clock - net.goalAt > 9 { net.deadFlight = false }
         netDeadTick()          // (play-net keep-out)
         for j in jellies where !j.free && netKeepOut(j.pos) && !j.brain.tossBusy && Self.canHop(j.brain) && j.brain.idleState.kind == nil && clock - (net.outT[j.id] ?? -9) > 0.8 {          // (a body that stands in the keep-out walks out of it)
             net.outT[j.id] = clock; j.brain.requestNow(.goTo(netStand(j.pos)))
@@ -418,7 +421,7 @@ extension PlayToss {
     /// A Jelmiko touched the ball (header / kick): he is the one who scores if it goes in.
     func netNoteToucher(_ id: Int) { if netUp { net.lastToucher = id } }
     /// A new throw / a rescue lob: nobody has touched it since.
-    func netThrowReset() { if netUp { net.lastToucher = nil; net.hold = nil; net.returning = false; ball.inNet = false; resetShot() } }
+    func netThrowReset() { if netUp { net.deadFlight = false; net.lastToucher = nil; net.hold = nil; net.returning = false; ball.inNet = false; resetShot() } }
     func resetShot() { net.first = nil; net.over = false }
 
     // MARK: the ball and the net
@@ -467,7 +470,7 @@ extension PlayToss {
         if !h.rolled, ready, ball.pos.y <= ball.radius + 0.05 || h.t >= (toPlayer ? PlayNetTuning.holdCheerMax : PlayNetTuning.holdTime) + 0.9 {          // (a ball still bouncing in the net waits to lie on the floor)
             if toPlayer {
                 if netReturnLaunch(n) { net.hold = nil; return false }
-                if h.dead { net.hold = nil; ball.inNet = false; ball.pos.y = max(ball.pos.y, ball.radius + 0.02); NSLog("[playnet] return blocked: dead ball, the safety lob instead"); netDeadLob(); return false }          // (a dead ball is never rolled out in front of the mouth: it would lie in the keep-out again)
+                if h.dead { net.hold = nil; ball.inNet = false; ball.pos = SIMD3(min(max(ball.pos.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), ball.radius + 0.02, n.mouthZ + 0.45); NSLog("[playnet] return blocked: dead ball, the safety lob instead"); netDeadLob(); return false }          // (a dead ball is never rolled out in front of the mouth: it would lie in the keep-out again)
                 NSLog("[playnet] return blocked: the old short roll-out")          // (a body stands right in front of the mouth: no way past him; the ball comes out 0.9 and the loose-ball handling has it)
             }
             h.rolled = true
