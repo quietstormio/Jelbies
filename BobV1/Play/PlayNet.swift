@@ -37,8 +37,8 @@ nonisolated enum PlayNetTuning {
     static let cheerWait: Float = 3.0
     /// Keep-out round: no body is sent into the goal's footprint plus this margin; a stand there is moved to this far in front of the mouth line.
     static let keepOutMargin: Float = 0.35, standFront: Float = 0.6
-    /// A ball at rest, or on its second floor contact, inside the goal's footprint (plus this much at the sides) without having scored is returned by the net (no cheer).
-    static let deadSide: Float = 0.3
+    /// A ball at rest, or on its second floor contact, in the keep-out or up to this far in front of the mouth line (anywhere across the floor) without having scored is returned by the net (no cheer).
+    static let deadFront: Float = 0.85
 }
 
 nonisolated enum TossNetEvent: Equatable, Sendable {
@@ -243,21 +243,26 @@ extension PlayToss {
     /// play-net keep-out: a ball that has not scored but lies in the goal's footprint (over the bar and down the back, off a post into the side, rolled in from the side) and comes to rest or touches the floor a second
     /// time there is returned by the net exactly as after a goal (no cheer, no goal sound): put inside the mouth, held no longer than the cheer's minimum, then the roll / lob to the player.
     func netDeadTick() {
-        guard net.spec != nil, net.hold == nil, !net.returning, phase == .loose || phase == .flying else { net.floorHits = 0; net.prevVy = 0; return }
+        guard let n = net.spec, net.hold == nil, !net.returning, phase == .loose || phase == .flying else { net.floorHits = 0; net.prevVy = 0; return }
         let p = SIMD2(ball.pos.x, ball.pos.z)
-        guard netKeepOut(p) else { net.floorHits = 0; net.prevVy = ball.vel.y; return }          // (the zone is the keep-out: nobody may stand there, so nobody can play a ball that lies there)
+        guard p.y < n.mouthZ + PlayNetTuning.deadFront else { net.floorHits = 0; net.prevVy = ball.vel.y; return }          // (the keep-out and the strip in front of it a stand cannot serve from behind, and the pockets beside / behind the goal)
         if ball.pos.y < ball.radius + 0.08, net.prevVy < -0.4, ball.vel.y > 0 { net.floorHits += 1 }          // (a real floor bounce, not only a settled ball)
         net.prevVy = ball.vel.y
-        guard let n = net.spec, ball.pos.y < ball.radius + 0.08, net.floorHits >= 2 || (ball.onFloor && ball.speedXZ < 0.3) else { return }
+        guard ball.pos.y < ball.radius + 0.08, net.floorHits >= 2 || (ball.onFloor && ball.speedXZ < 0.3) else { return }
         net.floorHits = 0; net.prevVy = 0; net.deadReturns += 1
-        let at = SIMD2(min(max(p.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), n.mouthZ - 0.3)
-        ball.pos = SIMD3(at.x, ball.radius, at.y); ball.vel = .zero; ball.inNet = true
-        net.hold = .init(t: PlayNetTuning.holdCheer, rolled: false, scorer: nil)
-        net.goalAt = clock; net.awaitHand = true; net.returning = false; net.rescuesAtGoal = rescues
+        net.goalAt = clock; net.awaitHand = true; net.rescuesAtGoal = rescues
         phase = .loose; looseT = 0; restT = 0; returnAim = nil; bumper = nil
         for j in jellies where j.brain.tossHeaderApproach { j.brain.tossHeaderRelease(j.sim, j.skinner) }
         netClearFoot()
-        NSLog("[playnet] return reason=dead from %.2f,%.2f (floor contacts / at rest in the goal without a goal)", p.x, p.y)
+        if n.contains(p) {          // inside the frame (over the bar and down into it, a side net): the net rolls / lobs it out of the mouth exactly as after a goal, no cheer
+            let at = SIMD2(min(max(p.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), min(p.y, n.mouthZ - 0.3))
+            ball.pos = SIMD3(at.x, ball.radius, at.y); ball.vel = .zero; ball.inNet = true
+            net.hold = .init(t: PlayNetTuning.holdCheer, rolled: false, scorer: nil)
+            NSLog("[playnet] return reason=dead (in the frame) from %.2f,%.2f", p.x, p.y)
+        } else {          // beside / in front of / behind the goal where nobody may stand: the same lob to the catch zone, from where it lies (the safety lob), no walk to the ball
+            NSLog("[playnet] return reason=dead (beside or in front) from %.2f,%.2f", p.x, p.y)
+            netDeadLob()
+        }
     }
 
     // MARK: the API for the shots
