@@ -357,7 +357,7 @@ final class BestFriendTests: XCTestCase {
                 if blk.running || blk.ended { break }
                 maxA = max(maxA, simd_distance(a.position, startA)); movedB = max(movedB, simd_distance(b.position, startB))
             }
-            XCTAssertLessThanOrEqual(maxA, 1.15, "seed \(seed): the first one stays (at most 1.0 away to clear floor)")
+            XCTAssertLessThanOrEqual(maxA, 1.15, "seed \(seed): the first one stays (at most 1.0 away to clear floor) startA \(startA) now \(a.position) startB \(startB) nowB \(b.position) ended \(blk.ended) running \(blk.running) spotA \(String(describing: blk.spot[a.steerID])) arrived \(blk.arrived)")
             XCTAssertGreaterThan(movedB, 0.8, "seed \(seed): the second one walks to it")
         }
     }
