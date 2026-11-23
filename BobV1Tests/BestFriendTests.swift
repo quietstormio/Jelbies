@@ -44,6 +44,7 @@ final class BestFriendTests: XCTestCase {
 
     /// Five bodies: Jelmiko 0, 1, 2 and visitors 3 (Jelmiko 0's best friend) and 4. Closeness as the park sets it (best friend 2.1, strangers 0.55, housemates 1).
     private func lab5(seed: UInt64, bond: Bool) -> SocialTests.Lab {
+        BondMoment.active = nil          // (a block left over from the previous run / iteration would hold every pair back: one block at a time)
         let pos: [SIMD2<Float>] = [SIMD2(-1.2, 0.5), SIMD2(1.6, 1.4), SIMD2(0.2, 3.0), SIMD2(-0.2, 3.6), SIMD2(2.2, -0.3)]
         let lab = SocialTests.Lab(n: 5, positions: pos, quiet: true, seed: seed)
         for (i, r) in lab.rigs.enumerated() {
