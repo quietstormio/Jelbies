@@ -72,6 +72,8 @@ final class ToyAuditTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         try XCTSkipUnless(env["TOYAUDIT"] != nil, "slow: set TEST_RUNNER_TOYAUDIT=1")
         let secs = Float(env["TOYAUDIT_SECONDS"] ?? "") ?? 300
+        BlobBrain.audienceOn = env["TOYAUDIENCE"] != "0"
+        defer { BlobBrain.audienceOn = true }
         let out = env["TOYAUDIT_OUT"] ?? "/tmp/toyaudit_out.txt"
         var lines: [String] = ["toys in the shop: \(Self.shopToys.count): \(Self.shopToys.map { $0.rawValue }.joined(separator: ","))", "seconds per seed: \(secs), seeds 3"]
         if env["TOYAUDIT_MIX"] != nil {

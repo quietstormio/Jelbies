@@ -297,6 +297,8 @@ extension BlobBrain {
 //  the walk there keeps 1.3 from every standing body. With nobody else at home nothing here runs.
 
 extension BlobBrain {
+    /// The audience switch (dev: `-ToyAudience 0`; the tests: ToyAuditTests TOYAUDIENCE=0): off = the toys as they were.
+    nonisolated(unsafe) static var audienceOn: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ToyAudience") != nil && UserDefaults.standard.integer(forKey: "ToyAudience") == 0)
     static let audienceKinds: Set<DecorKind> = [.drum, .spintop, .hoop, .bouncymat]
     static func audienceChance(_ k: DecorKind) -> Float { switch k { case .drum: return 0.5; case .spintop: return 0.55; case .hoop: return 0.5; default: return 0.4 } }
     static func audienceLimit(_ k: DecorKind) -> Int { k == .spintop ? 2 : 1 }
@@ -307,6 +309,7 @@ extension BlobBrain {
     /// true = the audience owns this tick.
     func toyAudienceTick(_ sim: SoftBody, _ f: DecorField, _ clock: Float) -> Bool {
         if toy.audUID >= 0 { return toyAudienceRun(sim, f, clock) }
+        guard Self.audienceOn else { return false }
         guard clock >= toy.audCool, clock >= toy.audPoll, !f.toys.shows.isEmpty else { return false }
         toy.audPoll = clock + 0.4
         guard audienceEligible else { return false }
