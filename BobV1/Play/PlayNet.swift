@@ -402,6 +402,14 @@ extension PlayToss {
         guard b.idleState.kind == nil else { return false }
         // (a Jelmiko in mid-stride is given 0.3 s to land a step; then he is stopped where he stands: round 2 found one walking to the ball for 1.8 s whose cheer never came)
         if b.feet.active, clock - net.goalAt < 0.3 { return false }
+        // turned well away from the audience (he was going for the ball): he turns to the player first, then cheers (the hop cannot turn a body round)
+        if let tu = turnUntil, clock < tu, !{ if case .none = b.script { return true }; return false }() { return false }
+        if turnUntil == nil, netFacing(j) > 60 {
+            if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) }
+            b.startTurn(to: b.yawTo(playerPoint()), sim: j.sim)
+            net.pending[j.id] = (scorer, net.pending[j.id]?.until ?? clock + PlayNetTuning.cheerWait, clock + 1.4)
+            return false
+        }
         if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) }
         let was = netFacing(j)
         let started: Bool
