@@ -280,7 +280,7 @@ final class SoccerSessionTests: XCTestCase {
 
     /// Round 3: a receiver or spectator already within 0.8 of his spot does not walk; the gap between recurring sessions is long (the ball is about a third of their time).
     func testNearTheSpotMeansNoWalkAndTheGapIsLong() {
-        XCTAssertGreaterThanOrEqual(SoccerSessionTuning.gap.lowerBound, 60)
+        XCTAssertGreaterThanOrEqual(SoccerSessionTuning.gap.lowerBound, 100)
         let l = lab(n: 2, ball: false)
         let b = l.rigs[1].brain
         run(l, seconds: 3)
