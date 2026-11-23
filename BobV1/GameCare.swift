@@ -627,6 +627,7 @@ final class GameCare {
     nonisolated static var mealReachX: Float { DiningLayout.reachSideX }
     /// meal-reach-r1 (the owner 2026-11-18: "they are reaching but actually not grabbing the food ... closer to the table"): food diners stand `reachCloser` nearer the tray (along the place yaw) so the nub
     /// tip touches the piece at the grab. `-MealReach 0` (dev builds) = the old stand and reach.
+    static let toyMoodAid: BlobMood? = DevArgs.enabled ? UserDefaults.standard.string(forKey: "ToyMood").flatMap(BlobMood.init(rawValue:)) : nil
     nonisolated(unsafe) static var mealReach: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "MealReach") != nil && UserDefaults.standard.integer(forKey: "MealReach") == 0)
     nonisolated(unsafe) static var reachCloser: Float = 0
     /// The most the nub may stretch past its rest length during the dine grab (a fraction of the rest nub); 0 = never.
@@ -914,7 +915,7 @@ final class GameCare {
             guard let brain = a.brain, let profile = jelly(a.id) else { continue }
             let here = Self.floorPos(brain, a.sim)
             if tickBathOther(a, brain: brain, profile: profile, dt: dt) {} else { profile.step(dt: dt, position: here, exerting: brain.isExerting, drainScale: brain.napDrainScale, asleep: asleepForAway(a.id)) }
-            brain.idleMood = profile.needs.mood
+            brain.idleMood = Self.toyMoodAid ?? profile.needs.mood          // (toy-audit-r1 capture aid: -ToyMood happy|okay|grumpy, DevArgs builds: the owner's save copy has grumpy Jelmiko, who only boop toys)
             syncPerks(id: a.id, brain: brain)
             brain.idleBlocked = (bath.active || play.ballGame || isPreview) && !brain.commanded          // (the others keep roaming in a close-up: they only keep out of the camera's wedge)
             brain.focusPaused = false
