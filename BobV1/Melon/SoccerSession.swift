@@ -169,7 +169,7 @@ final class SoccerSession {
         if ms.isEmpty { endSession(all, why: "nobody left"); return }
         watchGoals(ms, field)
         let ringOpen = (game == .pass || game == .dribblePass) && ms.count >= 2 && !ms.allSatisfy { (gameKick[$0.steerID] ?? 0) >= 1 } && clock < endsAt + 25
-        if clock >= endsAt, !ringOpen, phase == .plan || game == .solo { endSession(all, why: "time"); return }
+        if clock >= endsAt, !ringOpen, goalReported, phase == .plan || game == .solo { endSession(all, why: "time"); return }
         let wanted = gamesFor(ms.count, !field.goals.isEmpty)
         if !wanted.contains(game) { chooseGame(ms); return }
         switch game {
