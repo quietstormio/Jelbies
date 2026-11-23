@@ -18,7 +18,7 @@ extension BlobBrain {
         return curvedWalkDefault
     }()
     /// SHIPPING DEFAULT (set by the real-app gate; see the hand-back).
-    static let curvedWalkDefault = false          // (round 2 decides; `-CurvedWalk 1` turns it on)
+    static let curvedWalkDefault = true          // (SHIPPED ON, Main's decision after the real-app gate; `-CurvedWalk 0` / env CURVEDWALK=0 = the old walk)
     static let curveMaxErr: Float = 2.4
     nonisolated(unsafe) static var curveCounts = [0, 0]          // (test seam: curved steps planned, spot turns while moving)
     static let curveAhead: [Float] = [0.9, 0.6]

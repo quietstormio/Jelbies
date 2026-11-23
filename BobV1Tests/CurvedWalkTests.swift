@@ -118,4 +118,12 @@ final class CurvedWalkTests: XCTestCase {
         let tr = walk(on: true, start: a, route: [c], target: e, seconds: 10, setup: { $0.playChase = 1 })
         XCTAssertEqual(tr.curved, 0, "no curved step in the ball game")
     }
+
+    /// The shipped default is ON, and the switch still turns it off.
+    func testShippingDefault() {
+        XCTAssertTrue(BlobBrain.curvedWalkDefault, "shipped ON")
+        let a = SIMD2<Float>(-2.0, 0.4), c = SIMD2<Float>(0.2, 0.4), e = SIMD2<Float>(0.2, 2.4)
+        XCTAssertGreaterThan(walk(on: true, start: a, route: [c], target: e, seconds: 10).curved, 0)
+        XCTAssertEqual(walk(on: false, start: a, route: [c], target: e, seconds: 10).curved, 0, "the switch turns it off")
+    }
 }
