@@ -224,7 +224,8 @@ extension PlayToss {
         if d > 0.3 {
             let v = min(d * 1.2, 7)
             ball.vel.x = to.x / d * v; ball.vel.z = to.y / d * v
-            var lifted = ball.vel; boutLift(&lifted, from: ball.pos, by: -1); ball.vel.y = max(ball.vel.y, lifted.y)
+            var lifted = ball.vel; boutLift(&lifted, from: ball.pos, by: -1)
+            if lifted.y > ball.vel.y { ball.vel.y = min(lifted.y, 4.2); ball.vel.x *= 0.85; ball.vel.z *= 0.85 }          // (a body in the way: a higher first bounce, a little slower, so it still comes down at the hand and not past the front wall)
             bout.homing = true; bout.homeStart = clock; returnAim = SIMD2(hand.x * 0.5, catchZ() + 0.6)
         } else { ball.vel.x = 0; ball.vel.z = 0 }
         NSLog("[bout] homing clock=%.3f from=(%.2f,%.2f) d=%.2f", clock, here.x, here.y, d)
