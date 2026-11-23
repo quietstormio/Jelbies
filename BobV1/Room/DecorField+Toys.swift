@@ -29,7 +29,8 @@ enum ToyTuning {
     /// Least seconds between two of his toy sessions' starts (so toy play is mixed with roaming, socials and rest).
     static let directGap: Float = 20
     /// toy-audit-r1: a grumpy Jelmiko plays with the kick / hop toys at this share of a happy one's rate (a shorter go: no run of kicks, fewer bounces).
-    static let grumpyShare: Float = 0.5
+    nonisolated(unsafe) static var grumpyPlay: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ToyGrumpy") != nil && UserDefaults.standard.integer(forKey: "ToyGrumpy") == 0)          // (dev: -ToyGrumpy 0 = the old never)
+    static var grumpyShare: Float { grumpyPlay ? 0.5 : 0 }
     /// Founding set-up (launch, room switches) is not news.
     nonisolated(unsafe) static var settle: TimeInterval = 5
 }

@@ -639,7 +639,7 @@ extension IdleTable {
         switch m {
         case .happy: table = [(.decorSit, 2.0), (.decorBoop, 1.6), (.decorKick, 2.4), (.decorHop, 2.2), (.decorPeek, 1.3), (.decorSlide, 2.2), (.decorHopscotch, 2.4), (.soccerKick, 2.6)]
         case .okay: table = [(.decorSit, 3.0), (.decorBoop, 1.4), (.decorKick, 1.0), (.decorHop, 0.8), (.decorPeek, 1.2), (.decorSlide, 0.8), (.decorHopscotch, 1.2), (.soccerKick, 1.1)]
-        case .grumpy: table = [(.decorSit, 1.6), (.decorBoop, 0.5), (.decorKick, 1.2), (.decorHop, 1.1)]          // (toy-audit-r1: half the happy weights for the kick / hop toys)
+        case .grumpy: table = [(.decorSit, 1.6), (.decorBoop, 0.5)] + (ToyTuning.grumpyPlay ? [(.decorKick, 1.2), (.decorHop, 1.1)] : [])          // (toy-audit-r1: half the happy weights for the kick / hop toys)
         }
         // a stuck soccer ball (20 s against a wall / under furniture) wants rescuing: the soccer pick dominates until it is out
         return table.filter { offers.contains($0.0) }.map { (kind: $0.0, weight: $0.0 == .soccerKick && SoccerState.shared.anyStuck ? BlobBrain.soccerRescueWeight : $0.1) }
