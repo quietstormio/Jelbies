@@ -18,21 +18,24 @@ extension BlobBrain {
         return curvedWalkDefault
     }()
     /// SHIPPING DEFAULT (set by the real-app gate; see the hand-back).
-    static let curvedWalkDefault = true
+    static let curvedWalkDefault = false          // (OFF: the real-app gate failed the mid-walk-turn row, see the hand-back; `-CurvedWalk 1` turns it on)
     static let curveMaxErr: Float = 2.4
     nonisolated(unsafe) static var curveCounts = [0, 0]          // (test seam: curved steps planned, spot turns while moving)
     static let curveAhead: [Float] = [0.9, 0.6]
 
     /// A free, autonomous or requested ordinary walk that is already moving (the first step of a walk from a stand is the old turn, then walk).
     var curveBody: Bool {
-        guard Self.curvedWalk, enabled, !held, social == nil, bubbleLeash == nil, !race.active, !volley.active, toy.waitUID < 0, toy.chaseSpot == nil,
-              mealFinalYaw == nil, !stanceStepFree, !ContactTouchMemory.exact.contains(steerID), peerClock - lastTranslateClock < 0.5 else { return false }
+        guard Self.curvedWalk, enabled, !held, social == nil || social?.kind == .follow, bubbleLeash == nil, !race.active, !volley.active, toy.waitUID < 0, toy.chaseSpot == nil,
+              mealFinalYaw == nil, job == nil, playChase == 0, !tossBusy, !stanceStepFree, !ContactTouchMemory.exact.contains(steerID), peerClock - lastTranslateClock < 0.5 else { return false }
         switch job { case .some(.dine), .some(.sip): return false; default: break }
-        switch idleState.kind { case nil, .some(.wander), .some(.run): return true; default: return false }
+        switch idleState.kind {
+        case nil, .some(.wander), .some(.run): return true
+        case .some(let k): return k != .soccerKick && Self.decorKinds.contains(k) && idleState.decorGo          // (the walk to a piece of decor: a plain walk to a stand; the emote itself is not touched)
+        }
     }
 
     /// The bend of the next step toward a direction `err` off the heading: the travel direction (through half the turn) and the heading change, or nil when the turn would not land on free floor.
-    func curvedBend(_ root: SIMD2<Float>, _ err: Float) -> (u: SIMD2<Float>, dy: Float)? {
+    func curvedBend(_ root: SIMD2<Float>, _ err: Float, dist D: Float) -> (u: SIMD2<Float>, dy: Float)? {
         let m = turnRate * min(max(amplitude, 0.5), 1) * feet.stepTime
         let dy = (err < 0 ? -1 : 1) * min(abs(err), m)
         let th = yaw + dy * 0.5
@@ -41,13 +44,17 @@ extension BlobBrain {
         let s = simd_dot(feet.pos[stance] - (root + rotXZ(geom.off[stance], yaw)), u)
         let L = stride * runStrideMul * min(max(amplitude, 0.6), 1) * 0.6          // (the gait's own shortened arc step)
         let cand = root + u * (s + 0.5 * L)
+        // the turn circle (radius = the step's travel / the heading change per step): a target inside it would be orbited, so the old stop and turn
+        let R = max(s + 0.5 * L, 0.5 * L) / max(abs(dy), 0.05)
+        let lat = D * sinf(abs(err)), fwd = D * cosf(abs(err))
+        if simd_length(SIMD2(lat - R, fwd)) < R * 1.05 { return nil }
         let a0 = simd_distance(fixed(root), root)
         for f: Float in [0.5, 1.0] {
             let p = root + (cand - root) * f
             if simd_distance(fixed(p), p) > max(0.012, a0 + 0.004) { return nil }
         }
         let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint)
-        if simd_distance(SIMD2(rv.x, rv.z), cand) > 0.03 { return nil }          // (a body would push the landing: the old way)
+        if simd_distance(SIMD2(rv.x, rv.z), cand) > 0.01 { return nil }          // (a body would push the landing: the old way)
         return (u, dy)
     }
 
@@ -74,7 +81,7 @@ extension BlobBrain {
             let err = wrapAngle(atan2f(d.x, d.y) - yaw)
             if abs(err) <= 0.5 {
                 if curveStraightFree(root, d) { return aim }
-            } else if abs(err) <= Self.curveMaxErr, !(simd_length(d) < 0.6 && abs(err) > 1.2), curvedBend(root, err) != nil { return aim }
+            } else if abs(err) <= Self.curveMaxErr, !(simd_length(d) < 0.6 && abs(err) > 1.2), curvedBend(root, err, dist: simd_length(d)) != nil { return aim }
         }
         return eff
     }
@@ -88,7 +95,7 @@ extension BlobBrain {
         let a0 = simd_distance(fixed(root), root)
         if simd_distance(fixed(cand), cand) > max(0.012, a0 + 0.004) { return false }
         let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint)
-        return simd_distance(SIMD2(rv.x, rv.z), cand) <= 0.03
+        return simd_distance(SIMD2(rv.x, rv.z), cand) <= 0.01
     }
 
     // MARK: log only (console, `-EmoteLog 1`)
@@ -108,8 +115,10 @@ extension BlobBrain {
     func curveLogTurn(err: Float, D: Float, intermediate: Bool, exact: Bool) {
         NSLog("[midturn] t=%.2f id=%d kind=%@ inter=%d err=%.2f D=%.2f", variety.now, steerID, curveKind, intermediate ? 1 : 0, abs(err), D)
     }
-    func curveLogStep(err: Float, D: Float, intermediate: Bool, dy: Float) {
-        NSLog("[curve] t=%.2f id=%d kind=%@ inter=%d err=%.2f D=%.2f dy=%.2f x=%.2f z=%.2f", variety.now, steerID, curveKind, intermediate ? 1 : 0, abs(err), D, dy, px, pz)
+    func curveLogStep(err: Float, D: Float, intermediate: Bool, dy: Float, bend: Bool, travel: SIMD2<Float>) {
+        var slip: Float = 0
+        if simd_length(travel) > 0.02 { slip = abs(wrapAngle(atan2f(travel.x, travel.y) - (yaw + dy))) }
+        NSLog("[curve] t=%.2f id=%d kind=%@ inter=%d bend=%d err=%.2f D=%.2f dy=%.2f slip=%.2f x=%.2f z=%.2f", variety.now, steerID, curveKind, intermediate ? 1 : 0, bend ? 1 : 0, abs(err), D, dy, slip, px, pz)
     }
     func curveLogPush(got: SIMD2<Float>, cand: SIMD2<Float>, curved: Bool) {
         var nd: Float = 9, nw = false

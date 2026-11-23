@@ -29,15 +29,16 @@ final class CurvedWalkTests: XCTestCase {
         b.yaw = yaw0
         setup?(b)
         var tr = Trace()
-        var wasActive = false, t: Float = 0
+        var didReaim = false
+        var last = (SIMD2<Float>.zero, SIMD2<Float>.zero, Float(0), Float(0)), t: Float = 0
         BlobBrain.curveCounts = [0, 0]
         b.route = route; b.scriptT = 0; b.stuckT = 0; b.script = .walk(target: target, then: .none); b.activity = .walking
         if moving { b.lastTranslateClock = b.peerClock }          // (a walk that is already moving; `moving: false` = a walk from a stand)
-        for _ in 0..<Int(seconds * 60) {
-            if let r = reaim, !b.feet.active, t >= r.t, case .walk = b.script { b.script = .walk(target: r.to, then: .none); b.route = []; b.scriptT = 0 }
+        for fr in 0..<Int(seconds * 60) {
+            if let r = reaim, !didReaim, t >= r.t, case .walk = b.script { didReaim = true; b.script = .walk(target: r.to, then: .none); b.route = []; b.scriptT = 0 }
             lab.tick(watching: false); t += 1.0 / 60
-            if b.feet.active && !wasActive { tr.steps.append((b.position, b.yaw, simd_length(b.stepRootD), b.stepYawD)) }
-            wasActive = b.feet.active
+            let cur = (b.stepRoot0, b.stepRootD, b.stepYaw0, b.stepYawD)          // (a new step = a new plan: its start, travel, heading and heading change)
+            if cur.0 != last.0 || cur.1 != last.1 || cur.2 != last.2 || cur.3 != last.3 { tr.steps.append((b.stepRoot0, b.stepYaw0, simd_length(b.stepRootD), b.stepYawD)); last = cur }
             if !b.isWalkScript, t > 1 { break }
         }
         tr.curved = BlobBrain.curveCounts[0]
@@ -97,5 +98,24 @@ final class CurvedWalkTests: XCTestCase {
         // a walk that starts from a stand with the target behind-left: turn on the spot first, as before
         let back = SIMD2<Float>(-2.3, 2.2)
         same(walk(on: true, start: a, target: back, seconds: 6, moving: false), walk(on: false, start: a, target: back, seconds: 6, moving: false), "stand start")
+    }
+
+    /// An obtuse corner (about 125 degrees) is rounded without doubling back on the route: the path is not much longer than the polyline and the body arrives.
+    func testObtuseCornerDoesNotDoubleBack() {
+        let a = SIMD2<Float>(-2.0, 0.4), c = SIMD2<Float>(0.2, 0.4), e = SIMD2<Float>(-1.0, 2.2)
+        let on = walk(on: true, start: a, route: [c], target: e, seconds: 16)
+        var len: Float = 0
+        for (p, q) in zip(on.steps, on.steps.dropFirst()) { len += simd_distance(p.pos, q.pos) }
+        let poly = simd_distance(a, c) + simd_distance(c, e)
+        MotionLog.write("CURVED obtuse: steps \(on.steps.count), path \(len) against polyline \(poly), curved \(on.curved), end \(on.steps.last!.pos)")
+        XCTAssertLessThan(len, poly * 1.35, "no doubling back")
+        XCTAssertLessThan(simd_distance(on.steps.last!.pos, e), 0.8, "and arrives")
+    }
+
+    /// A body in the ball game (the Play session's chase) plans no curved step, whatever its route.
+    func testBallGameBodyPlansNoCurvedStep() {
+        let a = SIMD2<Float>(-2.0, 0.4), c = SIMD2<Float>(0.2, 0.4), e = SIMD2<Float>(0.2, 2.4)
+        let tr = walk(on: true, start: a, route: [c], target: e, seconds: 10, setup: { $0.playChase = 1 })
+        XCTAssertEqual(tr.curved, 0, "no curved step in the ball game")
     }
 }
