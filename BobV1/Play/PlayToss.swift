@@ -868,6 +868,10 @@ final class PlayToss {
         recallAt = clock
         ownGame = .none; pendingPasses = 0
         NSLog("[playrecall] clock=%.3f phase=%@ ballTo=%d pos=%.2f,%.2f,%.2f", clock, String(describing: phase), to, ball.pos.x, ball.pos.y, ball.pos.z)
+        // a pass that is already past / short of its receiver: nobody waits for it, the nearest free one takes it now
+        if phase == .loose, let c = footChoice, let j = jelly(c), simd_distance(SIMD2(ball.pos.x, ball.pos.z), j.pos) > 2.2 {
+            j.brain.tossFootRelease(j.sim, j.skinner); footChoice = nil; bumper = nil; passPlan = nil
+        }
         // the friend who is set to receive turns to where the ball will go (the player) instead of the next friend
         if let c = footChoice, let j = jelly(c), j.brain.tossFootApproach, j.brain.idleState.toss.stage <= 6, j.brain.idleState.toss.stage != 1, j.brain.idleState.toss.stage != 5 {
             let P = playerPoint() - j.pos
