@@ -24,7 +24,8 @@ final class ToyAuditTests: XCTestCase {
         let starts: [SIMD2<Float>] = [SIMD2(-1.8, 1.4), SIMD2(-0.2, 1.8), SIMD2(1.4, 1.2)]
         let lab = SocialTests.Lab(n: 3, positions: starts, quiet: false, seed: seed)
         Self.keep.append(contentsOf: lab.rigs)
-        for r in lab.rigs { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true; r.brain.idleMood = .happy }
+        let mood = BlobMood(rawValue: ProcessInfo.processInfo.environment["TOYAUDIT_MOOD"] ?? "happy") ?? .happy
+        for r in lab.rigs { r.brain.anticsEnabled = true; r.brain.sleepEnabled = true; r.brain.idleMood = mood }
         var placed: [PlacedDecor] = []
         for (i, k) in kinds.enumerated() {
             if let at = DecorPlacement.findSpot(k, among: placed) { placed.append(PlacedDecor(uid: i + 1, kind: k, x: at.x, z: at.y)) }

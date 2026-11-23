@@ -304,7 +304,9 @@ extension BlobBrain {
     static func audienceChance(_ k: DecorKind) -> Float { switch k { case .drum: return 0.5; case .spintop: return 0.55; case .hoop: return 0.5; default: return 0.4 } }
     static func audienceLimit(_ k: DecorKind) -> Int { k == .spintop ? 2 : 1 }
 
-    private var audienceEligible: Bool { toyFree && toyFreeForQueueA && toy.waitUID < 0 && toy.noticeUID < 0 && toy.retryUID < 0 && toy.chaseSpot == nil && pending == nil }
+    /// `toyFree` without the mood clause: a grumpy one may watch too (the audience rolls at half the chance and keeps to looks: no dance, no cheer, no bounce).
+    private var toyFreeAnyMood: Bool { anticsEnabled && !decorLocked && reactFree && scriptIsNone && idleState.kind == nil && !race.active && idleNight < 0.6 }
+    private var audienceEligible: Bool { toyFreeAnyMood && toyFreeForQueueA && toy.waitUID < 0 && toy.noticeUID < 0 && toy.retryUID < 0 && toy.chaseSpot == nil && pending == nil }
     private var toyFreeForQueueA: Bool { attached && !held && !commanded && social == nil && job == nil && !decorLocked && !race.active && commandedIdle == nil }
 
     /// true = the audience owns this tick.
@@ -325,7 +327,7 @@ extension BlobBrain {
             ranked.sort { simd_distance($0.position, c) < simd_distance($1.position, c) }
             let taken = toyPeers.filter { $0.toy.audUID == uid }.count
             guard let i = ranked.firstIndex(where: { $0 === self }), i + taken < Self.audienceLimit(foot.kind) else { continue }
-            guard rand() < Self.audienceChance(foot.kind) else { continue }
+            guard rand() < Self.audienceChance(foot.kind) * (idleMood == .grumpy ? ToyTuning.grumpyShare : 1) else { continue }
             guard let spot = toyAudienceSpot(foot, user: user) else { continue }
             toy.joined += 1; toy.audUID = uid; toy.audBy = show.by; toy.audStage = 1; toy.audSpot = spot; toy.audUntil = clock + 14
             toy.audNext = clock; toy.audReacted = false; toy.audTurn = false
@@ -356,7 +358,8 @@ extension BlobBrain {
             return true
         }
         // standing at the spot
-        guard toyFree, pending == nil, scriptIsNone else { return true }
+        guard toyFreeAnyMood, pending == nil, scriptIsNone else { return true }
+        let grump = idleMood == .grumpy
         let c = f.position(foot)
         switch foot.kind {
         case .drum:
@@ -372,16 +375,17 @@ extension BlobBrain {
             }
             guard clock >= toy.audNext else { return true }
             toy.audNext = clock + 0.5
-            face(.excited, hold: 1.4)
+            if !grump { face(.excited, hold: 1.4) }
             let moves: [IdleKind] = [.bounce, .skipHop, .joy, .bounce]
-            if idleStart(moves[toy.shared % moves.count], sim) { toy.shared += 1 } else { _ = beginLook(at: c, hold: 1.2, resume: nil, face: .excited, kind: .watch) }
+            if grump { _ = beginLook(at: c, hold: 1.6, resume: nil, face: .curious, kind: .watch) }
+            else if idleStart(moves[toy.shared % moves.count], sim) { toy.shared += 1 } else { _ = beginLook(at: c, hold: 1.2, resume: nil, face: .excited, kind: .watch) }
         case .spintop:
             let a = f.anim[uid]
             if toy.audReacted { toyAudienceEnd(clock, cool: 45); return false }
             if let a, a.fallT >= 0, a.fallT < 1.2 {
                 toy.audReacted = true; toy.shared += 1
-                face(.excited, hold: 1.4)
-                if !idleStart(rand() < 0.65 ? .giggle : .startle, sim) { _ = beginLook(at: c, hold: 1.0, resume: nil, face: .excited, kind: .watch) }
+                if !grump { face(.excited, hold: 1.4) }
+                if !idleStart(grump || rand() >= 0.65 ? .startle : .giggle, sim) { _ = beginLook(at: c, hold: 1.0, resume: nil, face: .excited, kind: .watch) }
             } else if clock >= toy.audNext {
                 toy.audNext = clock + rand(1.6, 2.6)
                 _ = beginLook(at: c, hold: rand(1.2, 1.8), resume: nil, face: .curious, kind: .watch)
@@ -395,8 +399,7 @@ extension BlobBrain {
             guard playing else { toyAudienceEnd(clock, cool: 30); return false }
             if user?.idleState.decorBooped == true {
                 toy.audReacted = true; toy.audTurn = true; toy.shared += 1
-                face(.excited, hold: 1.4)
-                _ = idleStart(.joy, sim)
+                if grump { _ = beginLook(at: c, hold: 1.4, resume: nil, face: .curious, kind: .watch) } else { face(.excited, hold: 1.4); _ = idleStart(.joy, sim) }
             } else if clock >= toy.audNext {
                 toy.audNext = clock + rand(1.4, 2.2)
                 _ = beginLook(at: c, hold: rand(1.0, 1.6), resume: nil, face: .hopeful, kind: .watch)
@@ -410,8 +413,7 @@ extension BlobBrain {
             }
             if clock >= toy.audNext, arrived {
                 toy.audNext = clock + rand(1.6, 2.4)
-                face(.excited, hold: 1.2)
-                _ = idleStart(.bounce, sim)
+                if grump { _ = beginLook(at: c, hold: 1.4, resume: nil, face: .curious, kind: .watch) } else { face(.excited, hold: 1.2); _ = idleStart(.bounce, sim) }
             }
         }
         return true
