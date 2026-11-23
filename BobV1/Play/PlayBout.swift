@@ -108,7 +108,7 @@ extension PlayToss {
         let zr = Self.bodyZ()
         let zs = jellies.filter { !$0.free }.compactMap { home[$0.id]?.y }
         let zc = zs.isEmpty ? j.pos.y : zs.reduce(0, +) / Float(zs.count)
-        let zlo = max(zr.lowerBound + 0.25, TossTuning.zBack + 1.9, zc - 1.6)
+        let zlo = max(zr.lowerBound + 0.25, TossTuning.zBack + 2.5, zc - 1.6)          // (a ball on the floor needs room behind it for the one who sends it back)
         let zhi = max(min(zr.upperBound - 0.25, catchZ() - 1.3, zc + 1.4), zlo + 0.5)          // (the row's own depth: the ball is never aimed into the far back or the front band)
         let r = ball.radius, g = TossTuning.gravity
         var from = ball.pos
@@ -127,7 +127,7 @@ extension PlayToss {
             let vEnd = vel.y - g * T
             let tf = H > r + 0.05 ? (vEnd + (vEnd * vEnd + 2 * g * (H - r)).squareRoot()) / g : 0
             let land = spot + SIMD2(vel.x, vel.z) * tf
-            let out = max(0, (TossTuning.zBack + 1.3) - land.y, land.y - (zhi + 0.1), abs(land.x) - (Self.bodyReach(min(max(land.y, zlo), zhi)) - 0.5))
+            let out = max(0, (TossTuning.zBack + 2.2) - land.y, land.y - (zhi + 0.1), abs(land.x) - (Self.bodyReach(min(max(land.y, zlo), zhi)) - 0.5))
             if out < 0.01 || attempt == 7 { break }
         }
         ball.vel = vel
