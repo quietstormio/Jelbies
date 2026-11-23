@@ -38,6 +38,8 @@ struct TossIdle {
     var struck = false
     /// How long the foot has been down waiting for the ball to come into reach (stage 1).
     var waitT: Float = 0
+    /// The side the wind-up leans to (+1 / -1); the stomp snaps through to the other side.
+    var leanSide: Float = 1
 }
 
 extension BlobBrain {
@@ -54,6 +56,8 @@ extension BlobBrain {
     /// The crouch before the jump (play-ball-r1) and how far the crown rises at the top of the jump (measured by PlayTossTests.testHeaderHopTiming / BallReturnTests).
     static let tossCrouch: Float = 0.20
     static let tossCrownRise: Float = 0.42
+    /// The side lean of a planned kick's wind-up and snap (rad).
+    static let tossLeanAmount: Float = 0.22
 
     var tossBusy: Bool { idleState.kind == .tossHeader || idleState.kind == .tossBump }
 
@@ -146,6 +150,7 @@ extension BlobBrain {
         commanded = true
         var t = idleState.toss
         t = TossIdle(); t.dir = dir; t.stand = stand; t.lean = lean; t.header = header; t.foot = foot; t.lunge = lunge
+        if lunge { tossLeanSide = -tossLeanSide; t.leanSide = tossLeanSide }
         idleState.toss = t
         idleState.target = stand
         idleState.goalYaw = atan2f(dir.x, dir.y)
@@ -192,6 +197,9 @@ extension BlobBrain {
             if s.lunge {          // (play-ball-s2: the lunge into the ball: a deep forward lean and a squash dip that peaks as the foot lands)
                 let l = sinf(.pi * min(1, t / 0.32))
                 squash *= 1 - 0.10 * l; pitch += 0.34 * l
+                // the side lean the front camera can see (pitch is foreshortened): from the wind-up's side it snaps through to the other as the foot lands, then settles
+                let q = min(1, t / 0.2), eq = q * q * (3 - 2 * q), settle = 1 - min(1, max(0, (t - 0.2) / 0.3))
+                roll += s.leanSide * Self.tossLeanAmount * (t < 0.2 ? (1 - 2 * eq) : -settle)
             } else {
                 squash *= 1 - 0.07 * k * s.lean
                 pitch += 0.20 * k * s.lean
@@ -210,6 +218,7 @@ extension BlobBrain {
             let k = min(1, t / wind), e = k * k * (3 - 2 * k)
             pitch -= (s.lunge ? 0.26 : 0.14) * e          // (play-ball-s2: the planned kick leans back and squashes further: it reads from the camera)
             squash *= 1 - (s.lunge ? 0.09 : 0.05) * e
+            if s.lunge { roll += s.leanSide * Self.tossLeanAmount * e }
             if s.foot, s.abort || idleState.yielding { idleState.toss = s; idleFinish(skinner); return }
             if t >= wind, !feet.active {
                 s.stage = 1; s.fired = false; idleState.phaseT = 0
