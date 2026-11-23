@@ -47,6 +47,8 @@ struct ToyBook {
     var burstUID = -1, burstBy = -1
     var burstT: Float = -99
     var burstPos = SIMD2<Float>.zero
+    /// toy-audit-r1: the last go at a toy others may watch (drum, top, hoop, mat): who started it and when (BlobBrain+ToyPlay.swift, the audience).
+    var shows: [Int: (by: Int, t: Float)] = [:]
 }
 
 extension DecorField {

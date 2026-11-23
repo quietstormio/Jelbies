@@ -405,6 +405,7 @@ extension BlobBrain {
             if f.kind.hopSit { field.take(f.uid, seat: seat, by: steerID) } else { field.use(f.uid, by: steerID) }
             if f.kind == .playtunnel { tunnelCommit(f, stand: stand) }
             if f.kind == .hopscotch { hopscotchCommit(f) }
+            if BlobBrain.audienceKinds.contains(f.kind) { field.toys.shows[f.uid] = (steerID, field.toys.clock) }          // (toy-audit-r1: a housemate may come and watch / dance)
             if EmoteSpot.logOn { NSLog("[toyuse] t=%.1f id=%d uid=%d kind=%@ move=%@", variety.now, steerID, f.uid, f.kind.rawValue, "\(kind)") }          // (toy-audit-r1 log)
             script = .walk(target: stand, then: .none); activity = .walking
             return true
