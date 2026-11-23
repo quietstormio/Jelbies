@@ -45,14 +45,18 @@ extension GameCare {
     /// The ball's back wall: the room's, or the park's roam rect (GameCamera.configurePark).
     private func applyPlayWorld() { TossTuning.zBack = park.inScene ? GameCamera.roamRect.min.y : -2.4; TossTuning.zFront = park.inScene ? 4.95 : 9 }
 
-    /// A toy was picked: Play mode on with that ball.
-    func beginPlay(ball kind: DecorKind) {
+    /// A toy was picked: Play mode on with that ball (`net`: the soccer net is put up at the back, Play/PlayNet.swift; the home room only).
+    func beginPlay(ball kind: DecorKind, net: Bool = false) {
         guard canPlay else { AudioHub.shared.play(.notEnough); return }
         select.cancel()
         clearHighlight()
         applyPlayWorld()
         play.onEvent = { [weak self] e in self?.playFeedback(e) }
         play.begin(ball: kind, title: kind.title, jellies: playJellies())
+        if net, kind == .soccerball, !park.inScene {          // (play-net-r1: the net comes with the soccer ball; the sleepers stay where they are, the net keeps off them)
+            let line = Set(playJellies().map(\.id))
+            play.netStart(blockers: playActors.filter { !line.contains($0.id) }.compactMap { $0.brain?.position })
+        }
         for j in playJellies() where !j.free { bondEarn(.toy, slot: j.id, story: ["toy": "ball"]) }          // (the relationship: a toy the player starts)
         AudioHub.shared.play(.uiconfirm)
     }
@@ -100,6 +104,7 @@ extension GameCare {
     func tossWorld() -> TossWorld {
         var w = TossWorld()
         w.xHalf = PlayToss.ballXHalf
+        w.net = play.netUp ? play.net.spec : nil          // (play-net-r1)
         let solids = DecorField.shared.feet.filter { $0.spec.solid && $0.kind != .minigoal }
         let cyl = RoomLayout.cylinders
         w.solid = { p in
@@ -132,6 +137,10 @@ extension GameCare {
         case .pass:
             hub.play(.sparkle, volume: 0.35)
         case .whiff, .rescue: break
+        case .goal:
+            buzz(.medium, 0.9); hub.play(.volleyPoint); hub.play(.cheerSmall, volume: 0.6)          // (play-net-r1: the ball is in the net)
+        case .netHit(let s):
+            buzz(.light, min(0.7, 0.25 + CGFloat(s) * 0.06)); hub.play(.boop, volume: min(0.5, 0.15 + s * 0.05), rate: 1.7)
         case .caught(let rally):
             buzz(.soft, 1.0); hub.play(.squish, volume: 0.6, rate: 0.8)
             if rally >= 1 { hub.play(.cheerSmall, volume: 0.35) }

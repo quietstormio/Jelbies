@@ -256,7 +256,7 @@ final class PlayTossTests: XCTestCase {
         XCTAssertEqual(b.buy("decor-ball"), .bought)
         XCTAssertEqual(PlayToyRegistry.offered(book: b).map(\.toyID), ["ball-ball"], "the ball he bought, and nothing else")
         b.grant("decor-soccerball")
-        XCTAssertEqual(PlayToyRegistry.offered(book: b).map(\.toyID), ["ball-ball", "ball-soccerball"])
+        XCTAssertEqual(PlayToyRegistry.offered(book: b).map(\.toyID), ["ball-ball", "ball-soccerball", "ball-soccernet"], "the soccer ball brings the net card right after it (play-net-r1)")
         XCTAssertFalse(PlayToyRegistry.offered(book: b).contains { $0.toyID == "bubbleWand" }, "the wand is not offered before it is bought")
         XCTAssertEqual(b.buy("toy-bubbleWand"), .bought)
         XCTAssertTrue(PlayToyRegistry.offered(book: b).contains { $0.toyID == "bubbleWand" }, "bought: it appears")
@@ -266,6 +266,7 @@ final class PlayTossTests: XCTestCase {
 
     func testEveryToyOfThePickerHasAStoreItemInThePriceBand() {
         for t in PlayToyRegistry.entries.isEmpty ? { _ = PlayToyRegistry.offered(book: book()); return PlayToyRegistry.entries }() : PlayToyRegistry.entries {
+            if t.toyID == SoccerNetToy.id { continue }          // (play-net-r1: the net card is the soccer ball's, nothing is sold for it; its picture is the Mini goal's)
             guard let i = StoreCatalog.item(t.storeID) else { XCTFail("\(t.toyID) is not sold"); continue }
             XCTAssertTrue((25...60).contains(i.price), "\(i.name) \(i.price)")
         }

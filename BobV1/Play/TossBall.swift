@@ -48,6 +48,8 @@ nonisolated enum TossEvent: Equatable, Sendable {
     case wall
     case bodyHit(id: Int, speed: Float)
     case headHit(id: Int)
+    /// play-net-r1: the soccer net (Play/PlayNet.swift).
+    case net(TossNetEvent)
 }
 
 /// What the ball may not enter, besides the Jelbies. `xHalf(z)` is the visible half width of the floor at depth z; `solid` is the signed distance to the
@@ -58,6 +60,8 @@ nonisolated struct TossWorld {
     var zFront: Float = TossTuning.zFront
     var solid: ((SIMD2<Float>) -> Float)?
     var solidTop: Float = 0.9
+    /// play-net-r1: the soccer net while it is up (nil = no net: nothing changes).
+    var net: TossNet?
 }
 
 nonisolated struct TossBall: Sendable {
@@ -69,6 +73,8 @@ nonisolated struct TossBall: Sendable {
     /// The Jelbie whose head the ball is on (a header in progress): the ball is not tested against him until it has left.
     var ignoring: Int?
     var ignoreT: Float = 0
+    /// play-net-r1: a goal was scored with this ball and it lies in the net (until the controller rolls it out).
+    var inNet = false
 
     init(pos: SIMD3<Float>, radius: Float) { self.pos = pos; self.radius = radius }
 
@@ -143,6 +149,7 @@ nonisolated struct TossBall: Sendable {
                 if vn < 0 { vel.x -= nrm.x * vn * (1 + 0.5); vel.z -= nrm.y * vn * (1 + 0.5); ev.append(.wall) }
             }
         }
+        if let net = w.net { net.resolve(&self, before: before, h: h, &ev) }          // (play-net-r1)
         // the Jelbies
         for b in w.bodies where b.id != ignoring {
             let d = SIMD2(pos.x - b.pos.x, pos.z - b.pos.y)

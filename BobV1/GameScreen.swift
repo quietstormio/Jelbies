@@ -672,9 +672,24 @@ struct GameScreen: View {
                 for (gi, kind) in games.enumerated() {
                 if gi > 0 { await sleep(3) }
                 NSLog("[playtoss] demo game %d %@", gi, "\(kind)")
-                care.beginPlay(ball: kind)
+                care.beginPlay(ball: kind, net: gi == 0 && d.integer(forKey: "PlayDemoNet") != 0)          // (-PlayDemoNet 1: with the soccer net)
                 for _ in 0..<100 where care.play.camBlend < 0.95 { await sleep(0.1) }
                 await sleep(1.5)
+                #if targetEnvironment(simulator)
+                if d.integer(forKey: "PlayNetShots") != 0 || d.string(forKey: "PlayNetOnly") != nil {
+                    let enc = JSONEncoder(); enc.outputFormatting = .sortedKeys
+                    let decorJSON = { String(decoding: (try? enc.encode(care.store.placedDecor)) ?? Data(), as: UTF8.self) }
+                    NSLog("[playnet] store decor before Done: %@", decorJSON())
+                    NSLog("[playnet] field minigoals during Play: %@", DecorField.shared.kinds(.minigoal).map { "uid\($0.uid)@\($0.centre.x),\($0.centre.y)" }.joined(separator: " "))
+                    await care.play.runNetShots(runs: max(d.integer(forKey: "PlayNetShots"), 1), only: d.string(forKey: "PlayNetOnly"))
+                    if d.integer(forKey: "PlayDemoEnd") != 0 {
+                        await sleep(3); care.endPlay(); await sleep(0.3)
+                        NSLog("[playnet] store decor after Done: %@", decorJSON())
+                        await sleep(1.7)
+                        NSLog("[playnet] after Done: net pieces %d, minigoals: %@", DecorField.shared.feet.filter { $0.uid == PlayNetTuning.uid }.count, DecorField.shared.kinds(.minigoal).map { "uid\($0.uid)@\($0.centre.x),\($0.centre.y)" }.joined(separator: " "))
+                    }
+                }          // (capture aid: the play net's fixed shots, Play/PlayNetShots.swift)
+                #endif
                 if mode == 1 {
                     let speed = d.double(forKey: "PlayDemoSpeed") > 0 ? d.double(forKey: "PlayDemoSpeed") : 1.8
                     for round in 0..<max(d.integer(forKey: "PlayDemoRounds"), 1) where care.play.active {

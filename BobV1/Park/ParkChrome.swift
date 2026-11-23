@@ -120,7 +120,7 @@ struct ParkChrome: View {
 
     /// The toy picker, the same entries as the home Play row (the toys the player owns): tap one to start the ball or the bubble wand.
     private var toyStrip: some View {
-        let toys = PlayToyRegistry.offered(book: care.store)
+        let toys = PlayToyRegistry.offered(book: care.store, park: true)          // (play-net-r1: the net is the home room's)
         return Group {
             if toys.isEmpty {
                 Text("No toys yet. Get a ball in the Shop").font(SK.font(13, .heavy)).foregroundStyle(CareMenu.brown)
