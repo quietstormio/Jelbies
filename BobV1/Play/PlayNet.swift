@@ -304,6 +304,7 @@ extension PlayToss {
     /// Every step while the game is on: the cheers that are waiting for a free (or a turned) Jelmiko, the cheer log, and a Jelmiko inside the net (logged).
     func netTick(dt: Float) {
         guard netUp else { return }
+        if net.returning, phase == .catching || phase == .inHand { net.returning = false; NSLog("[playnet] return caught %@ t=%.1f", rescues > net.rescuesAtGoal ? "AFTER RESCUE" : "at the hand", net.retT) }
         if net.awaitHand, phase == .inHand { net.awaitHand = false; NSLog("[playnet] goal-to-hand %.1f s", clock - net.goalAt) }
         for (id, p) in net.pending {
             guard let j = jellies.first(where: { $0.id == id }) else { net.pending[id] = nil; continue }
