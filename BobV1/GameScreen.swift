@@ -662,8 +662,16 @@ struct GameScreen: View {
             await sleep(2.5)
             NSLog("[placetoys] before %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)@\($0.x),\($0.z)" })")
             for name in list.split(separator: ",") {
-                guard let k = DecorKind(rawValue: name.trimmingCharacters(in: .whitespaces)) else { NSLog("[placetoys] unknown %@", String(name)); continue }
-                if !care.store.placedDecor.contains(where: { $0.kind == k }) { care.store.grant(k.storeID); _ = care.store.place(k.storeID) }
+                // "kind" or "kind@x,z" (the second puts it there when the spot is valid)
+                let parts = name.split(separator: "@"); let nm = parts[0].trimmingCharacters(in: .whitespaces)
+                guard let k = DecorKind(rawValue: nm) else { NSLog("[placetoys] unknown %@", String(name)); continue }
+                if !care.store.placedDecor.contains(where: { $0.kind == k }) {
+                    care.store.grant(k.storeID)
+                    if let p = care.store.place(k.storeID), parts.count > 1 {
+                        let xz = parts[1].split(separator: ",").compactMap { Float($0) }
+                        if xz.count == 2 { NSLog("[placetoys] move %@ %@", nm, care.store.move(p.uid, to: SIMD2(xz[0], xz[1])) ? "ok" : "REFUSED") }
+                    }
+                }
             }
             care.syncDecor()
             NSLog("[placetoys] placed %@", "\(care.store.placedDecor.map { "\($0.kind.rawValue)#\($0.uid)@\($0.x),\($0.z)" })")
