@@ -41,6 +41,9 @@ enum PlayEvent: Equatable {
     case whiff(id: Int)
     case rescue
     case caught(rally: Int)
+    /// play-net-r1: a goal in the net (who kicked / headed it last; nil = the player's own throw), and the ball met a post or the bar.
+    case goal(scorer: Int?)
+    case netHit(speed: Float)
 }
 
 @MainActor
@@ -50,7 +53,7 @@ final class PlayToss {
     enum Quality: Equatable { case good, short, weak }
 
     // MARK: observed state (the UI)
-    private(set) var phase: Phase = .off
+    var phase: Phase = .off          // (play-net-r1: the net's goal hands the ball back as .loose, PlayNet.swift)
     var active: Bool { phase != .off }
     /// The ball game is on (the Jelbies are held to their play line); a non-ball toy (the bubble wand, `.toy`) leaves them free.
     var ballGame: Bool { active && phase != .toy }
@@ -72,7 +75,7 @@ final class PlayToss {
     /// The finger is on the ball (view points); nil = the ball rests in the hand's spot.
     @ObservationIgnored var finger: CGPoint?
     @ObservationIgnored private(set) var nudges = 0
-    @ObservationIgnored private(set) var looseT: Float = 0
+    @ObservationIgnored var looseT: Float = 0          // (play-net-r1: internal set)
     @ObservationIgnored private(set) var flightT: Float = 0
     @ObservationIgnored private(set) var headers = 0
     @ObservationIgnored private(set) var rescues = 0
@@ -82,11 +85,14 @@ final class PlayToss {
     @ObservationIgnored private(set) var touched = false
     @ObservationIgnored private var catchFrom = SIMD3<Float>.zero
     @ObservationIgnored private var catchT: Float = 0
-    @ObservationIgnored private var bumper: Int?
-    @ObservationIgnored private var passTo: Int?
+    @ObservationIgnored var bumper: Int?          // (play-net-r1: internal)
+    @ObservationIgnored var passTo: Int?
     /// Where a good return is meant to come down (the catch zone), and the steering assist that eases it there; the seconds the loose ball has lain still.
-    @ObservationIgnored private var returnAim: SIMD2<Float>?
-    @ObservationIgnored private var restT: Float = 0
+    @ObservationIgnored var returnAim: SIMD2<Float>?          // (play-net-r1: internal)
+    @ObservationIgnored var restT: Float = 0
+    // --- play-net-r1 (Play/PlayNet.swift): the soccer net; inert while `netUp` is false ---
+    var netUp = false
+    @ObservationIgnored var net = PlayNetState()
     @ObservationIgnored private var bumpNeeded = false
     @ObservationIgnored private var interceptAt: [Int: (p: SIMD2<Float>, t: Float)] = [:]
     @ObservationIgnored private var saved: [Int: (reserved: Bool, idleBlocked: Bool, waitFocus: SIMD2<Float>?)] = [:]
@@ -208,6 +214,7 @@ final class PlayToss {
     /// Done: the Jelbies go back to roaming, the camera eases home.
     func end() {
         guard phase != .off else { return }
+        netEnd()          // (play-net-r1)
         phase = .off
         camGoal = 0
         finger = nil
@@ -317,6 +324,7 @@ final class PlayToss {
         rally = 0; nudges = 0; looseT = 0; flightT = 0; leftHand = false; touched = false; bumper = nil; passTo = nil; headers = 0; rescues = 0; passes = 0
         throwSerial += 1
         returnAim = nil; restT = 0
+        netThrowReset()          // (play-net-r1)
         onEvent?(.release(speed: simd_length(v)))
     }
 
@@ -356,6 +364,7 @@ final class PlayToss {
         let chase: Float = (!PlayTuning.old && (phase == .flying || phase == .loose)) ? PlayTuning.chaseGain : 0
         for j in jellies where j.brain.playChase != chase { j.brain.playChase = chase }
         // the ball is a soft obstacle for the walkers (nobody walks through it)
+        netTick(dt: dt)          // (play-net-r1)
         RoomLayout.ballSpheres.removeAll { $0.uid == Self.sphereUID }
         if (phase == .flying || phase == .loose), ball.pos.y < 0.9 { RoomLayout.ballSpheres.append(BallSphere(c: SIMD2(ball.pos.x, ball.pos.z), r: ball.radius, uid: Self.sphereUID)) }
     }
@@ -372,6 +381,7 @@ final class PlayToss {
             home[j.id] = sp; homeT[j.id] = clock
             if !j.brain.tossBusy { j.brain.requestNow(.goTo(sp)) }
         }
+        netReframe()          // (play-net-r1)
     }
 
     /// Back in the hand: a Jelbie who stepped away to meet the ball strolls back to his place on the line.
@@ -424,8 +434,10 @@ final class PlayToss {
             case .headHit(let id):
                 if !headed { headed = true; header(by: id) }
             case .wall: break
+            case .net(let n): netEvent(n)          // (play-net-r1)
             }
         }
+        if netUp, netHoldTick(dt: dt) { return }          // (play-net-r1: the ball lies in the net after a goal; nobody goes for it until it rolls out)
         if ball.resting || (ball.onFloor && phase == .flying) { if phase == .flying { phase = .loose; looseT = 0 } }
         // back at the bottom of the screen: caught
         if leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
@@ -447,6 +459,7 @@ final class PlayToss {
 
     /// Capture aid (`-PlayDemo`): one line per strike with the striker's visible facing error toward the player (the hand), its lift and the screen points for cutting pictures.
     private func touchLog(_ kind: String, _ j: PlayJelly) {
+        netNoteToucher(j.id)          // (play-net-r1: the last one to touch it is the scorer)
         guard UserDefaults.standard.integer(forKey: "PlayDemo") > 0 else { return }
         let hand = handWorld()
         let toHand = SIMD2(hand.x - j.pos.x, hand.z - j.pos.y)

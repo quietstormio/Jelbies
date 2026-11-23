@@ -292,7 +292,13 @@ struct DecorFoot: Equatable, Sendable {
     /// Quarter turns (see `PlacedDecor.turns`).
     var quarter = 0
     var yaw: Float { Float(quarter) * .pi / 2 }
-    var spec: DecorSpec { kind.spec(quarter: quarter) }
+    /// play-net-r1: the temporary play net is the mini goal drawn and measured 1.6 times its size (a per-piece scale; nothing is saved).
+    var scale: Float { uid == PlayNetTuning.uid ? PlayNetTuning.scale : 1 }
+    var spec: DecorSpec {
+        var s = kind.spec(quarter: quarter)
+        if scale != 1 { s.half *= scale; s.height *= scale; s.corner *= scale }
+        return s
+    }
     /// A piece-local offset (x, z) in the world, and a world offset in the piece's frame.
     func turned(_ v: SIMD2<Float>) -> SIMD2<Float> { DecorPlacement.turn(v, quarter) }
     func local(_ v: SIMD2<Float>) -> SIMD2<Float> { DecorPlacement.turn(v, (4 - quarter) & 3) }
@@ -473,7 +479,7 @@ enum DecorPlacement {
 
     /// The feet the room and the Jellies see for a list of placed pieces (items fully on the rug are lifted).
     static func feet(_ placed: [PlacedDecor]) -> [DecorFoot] {
-        placed.map { p in DecorFoot(uid: p.uid, kind: p.kind, centre: p.at, lift: rugLift(p.kind, at: p.at, others: placed, ignoring: p.uid), quarter: p.quarter) }
+        placed.map { p in DecorFoot(uid: p.uid, kind: p.kind, centre: p.at, lift: p.uid == PlayNetTuning.uid ? 0 : rugLift(p.kind, at: p.at, others: placed, ignoring: p.uid), quarter: p.quarter) }
     }
     /// Saved rooms: any slide that fails the placement rules (e.g. its landing is off the walkable floor) moves to the nearest valid spot, searching outward. Only slides are touched.
     /// Returns the fixed list, nil when nothing changed.

@@ -643,9 +643,12 @@ struct GameScreen: View {
                 withAnimation(CareMenu.spring) { open.wrappedValue = true; picker.wrappedValue = .toy }
             } else {
                 let kind: DecorKind = { switch d.string(forKey: "PlayDemoBall") ?? "" { case "soccer": return .soccerball; case "beach": return .beachball; default: return .ball } }()
-                care.beginPlay(ball: kind)
+                care.beginPlay(ball: kind, net: d.integer(forKey: "PlayDemoNet") != 0)          // (-PlayDemoNet 1: with the soccer net)
                 for _ in 0..<100 where care.play.camBlend < 0.95 { await sleep(0.1) }
                 await sleep(1.5)
+                #if targetEnvironment(simulator)
+                if d.integer(forKey: "PlayNetShots") != 0 { await care.play.runNetShots(runs: d.integer(forKey: "PlayNetShots")) }          // (capture aid: the play net's fixed shots, Play/PlayNetShots.swift)
+                #endif
                 if mode == 1 {
                     let speed = d.double(forKey: "PlayDemoSpeed") > 0 ? d.double(forKey: "PlayDemoSpeed") : 1.8
                     for round in 0..<max(d.integer(forKey: "PlayDemoRounds"), 1) where care.play.active {
