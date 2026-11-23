@@ -288,7 +288,7 @@ final class SoccerSession {
                     let Kk = ms[ki], Rr = ms[ri]
                     let v = Rr.position - c, L = simd_length(v)
                     kIdx = ki; rIdx = ri
-                    Kk.mix.order = SessOrder(kind: .kick); Kk.mix.order.kick = SessKick(dir: v / L, roll: max(L - 1.0, 0.45))
+                    Kk.mix.order = SessOrder(kind: .kick); Kk.mix.order.kick = SessKick(dir: v / L, roll: L <= 3.9 ? max(L - 1.0, 0.45) : 2.4)
                     Rr.mix.order = SessOrder(kind: .station, spot: Rr.position); Rr.mix.order.tolerance = 1.0
                     for m in ms where m !== Kk && m !== Rr { m.mix.order = SessOrder() }
                     ballAtPlan = c; turnWasDribble = false; kickoffTurn = false; kickoffDirects += 1
@@ -429,7 +429,7 @@ final class SoccerSession {
         }
     }
 
-    /// Round 3: the kick-off pair: the member nearest the ball (the kicker) and the nearest other one 1.3...3.9 from it with nobody on the line and open floor where the ball will stop (a standing one first).
+    /// Round 3: the kick-off pair: the member nearest the ball (the kicker) and the nearest other one at least 1.3 from it with nobody on the line and open floor where the ball will stop (a standing one first).
     private func kickoffPair(_ ms: [BlobBrain], _ c: SIMD2<Float>) -> (Int, Int)? {
         let field = DecorField.shared
         let order = (0..<ms.count).sorted { simd_distance(ms[$0].position, c) < simd_distance(ms[$1].position, c) }
@@ -439,13 +439,13 @@ final class SoccerSession {
         for ri in order.dropFirst() {
             let R = ms[ri]
             let v = R.position - c, L = simd_length(v)
-            guard L >= 1.3, L <= 3.9 else { continue }
+            guard L >= 1.3 else { continue }          // (a far one: the ball goes 2.4 his way and the next turn is planned from where it lies)
             let dir = v / L
-            let rest = c + dir * max(L - 1.0, 0.45)
+            let rest = c + dir * (L <= 3.9 ? max(L - 1.0, 0.45) : 2.4)
             guard rf.contains(rest), rf.stopOK(rest), field.openFloor(rest, margin: 0.4) else { continue }
             var clear = true
             var d: Float = 0.4
-            while d < L - 0.3 { let p = c + dir * d; if !field.openFloor(p) || ms.contains(where: { $0 !== K && $0 !== R && simd_distance($0.position, p) < 0.9 }) { clear = false; break }; d += 0.4 }
+            while d < min(L - 0.3, 2.6) { let p = c + dir * d; if !field.openFloor(p) || ms.contains(where: { $0 !== K && $0 !== R && simd_distance($0.position, p) < 0.9 }) { clear = false; break }; d += 0.4 }
             if clear { good.append(ri) }
         }
         guard let ri = good.first(where: { !ms[$0].scriptIsWalking }) ?? good.first else { return nil }
