@@ -495,7 +495,7 @@ final class PlayToss {
             switch q {
             case .good:
                 let slope = PlayTuning.old ? 0.07 : PlayTuning.returnFlightSlope, cap = PlayTuning.old ? 1.25 : PlayTuning.returnFlightCap
-                v = TossAim.ballistic(from: from, to: target, flight: (PlayTuning.ballReturnOld ? min(max(0.7 + slope * dist, 0.8), cap) : min(max(0.55 + slope * dist, 0.65), 0.88)) * TossTuning.slow)          // (play-ball-r2: a flatter, quicker return that visibly leaves the head toward the player)
+                v = TossAim.ballistic(from: from, to: target, flight: (PlayTuning.ballReturnOld ? min(max(0.7 + slope * dist, 0.8), cap) : min(max(0.40 + 0.04 * dist, 0.55), 0.70)) * TossTuning.slow)          // (play-ball-r2: a flatter, quicker return that visibly leaves the head toward the player)
                 returnAim = SIMD2(target.x, target.z)
             case .short:
                 let k = 0.45 + 0.2 * rand()
@@ -512,7 +512,7 @@ final class PlayToss {
                 v.x *= 0.55 / 1.45; v.z *= 0.55 / 1.45
             }
         }
-        v.y = max(v.y, 2.6 / TossTuning.slow)
+        v.y = max(v.y, (PlayTuning.ballReturnOld ? 2.6 : 1.75) / TossTuning.slow)          // (play-ball-r2: a lower, quicker departure; seen from the room's camera a high slow one cancels its own move toward the player and the ball seems to hang on the crown)
         ball.vel = v
         ball.pos.y = max(ball.pos.y, j.headTop + ball.radius * 0.8)
         ball.ignoring = id; ball.ignoreT = 0.45
