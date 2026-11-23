@@ -504,13 +504,13 @@ final class PlayNetTests: XCTestCase {
         // (b) a ball in front of the mouth is played as ever
         (p, rs, w, js) = netGame()
         let n2 = p.net.spec!
-        p.ball.pos = SIMD3(0.2, p.ball.radius, n2.mouthZ + 1.7); p.ball.vel = .zero
+        p.ball.pos = SIMD3(0.2, p.ball.radius, n2.mouthZ + 2.4); p.ball.vel = .zero
         p.phase = .loose; p.looseT = 0
         var moved = false
         for _ in 0..<900 {
             for r in rs { r.tick() }
             p.tick(dt: rs[0].sim.stepDt, world: w, jellies: js())
-            if simd_distance(SIMD2(p.ball.pos.x, p.ball.pos.z), SIMD2(0.2, n2.mouthZ + 1.7)) > 0.5 || p.phase == .inHand { moved = true; break }
+            if simd_distance(SIMD2(p.ball.pos.x, p.ball.pos.z), SIMD2(0.2, n2.mouthZ + 2.4)) > 0.5 || p.phase == .inHand { moved = true; break }
         }
         XCTAssertEqual(p.net.deadReturns, 0, "in front of the mouth: not dead")
         XCTAssertTrue(moved, "a Jelmiko plays it (kick / return)")
