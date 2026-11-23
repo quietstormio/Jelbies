@@ -676,6 +676,7 @@ final class PlayToss {
     /// The Jelmiko who are not the one going for the ball take a few steps toward where it will be (a step or two, at most `PlayTuning.supportReach` of the way, every
     /// 1.4 s at most), so a live ball moves all three, not one: they are in position for a pass and the next bump. `rehome` sends them back to the line once it is caught.
     private func support(toward xz: SIMD2<Float>, except: Set<Int>) {
+        if netKeepOut(xz) { netReject("stand", "support-target-in-keepout", who: nil, at: xz) }
         guard !PlayTuning.old, !netKeepOut(xz) else { return }          // (play-net keep-out: nobody takes steps toward a ball in or at the goal)
         for j in jellies where !j.free && !except.contains(j.id) {
             guard !j.brain.tossBusy, Self.canHop(j.brain), j.brain.idleState.kind == nil, clock - (supportT[j.id] ?? -9) > PlayTuning.supportEvery else { continue }
@@ -710,7 +711,7 @@ final class PlayToss {
             guard let a = arrival(j) else { continue }
             let d = simd_distance(j.pos, a.xz)
             guard d < Self.interceptReach else { continue }
-            if netKeepOut(a.xz) { continue }          // (play-net keep-out: a ball that will come down in or at the goal is not walked under: he lets it land)
+            if netKeepOut(a.xz) { netReject("stand", "landing-in-keepout", who: j.id, at: a.xz); continue }          // (play-net keep-out: a ball that will come down in or at the goal is not walked under: he lets it land)
             if best == nil || d < best!.d { best = (j, a.t, a.xz, d) }
         }
         // the one already going for it keeps it (two Jelmiko about as near as each other must not hand it back and forth every step: each hand-over releases the other's stand and nobody gets there)
@@ -976,7 +977,7 @@ final class PlayToss {
         var stand = spot - dir * cd
         stand.y = min(max(stand.y, zr.lowerBound), zr.upperBound)
         stand.x = min(max(stand.x, -Self.bodyReach(stand.y)), Self.bodyReach(stand.y))
-        if netKeepOut(stand) || netKeepOut(k.xz) { footFlight = false; return false }          // (play-net keep-out: no kick stand in the goal; the ball is let land)
+        if netKeepOut(stand) || netKeepOut(k.xz) { netReject("kick", "foot-stand-or-spot-in-keepout", who: passTo, at: k.xz); footFlight = false; return false }          // (play-net keep-out: no kick stand in the goal; the ball is let land)
         var best: (j: PlayJelly, walk: Float)?
         for j in jellies {
             let f = j.brain.fixed(stand)
@@ -1093,7 +1094,8 @@ final class PlayToss {
             let u = SIMD2<Float>(dir.x * c - dir.y * s, dir.x * s + dir.y * c)
             let q = ballXZ - u * back
             let f = j.brain.fixed(q)
-            if netUp, let n = net.spec, ballXZ.y < n.mouthZ + 1.5, u.y < 0.35 { continue }          // (play-net keep-out: a ball near the goal is never kicked toward it / along its line)
+            if netUp, let n = net.spec, ballXZ.y < n.mouthZ + 1.5, u.y < 0.35 { netReject("kick", "toward-goal", who: j.id, at: ballXZ); continue }          // (play-net keep-out: a ball near the goal is never kicked toward it / along its line)
+            if simd_distance(f, q) < 0.1, j.brain.peerFree(f), netKeepOut(f) { netReject("kick", "stand-in-keepout", who: j.id, at: f) }
             if simd_distance(f, q) < 0.1, j.brain.peerFree(f), !netKeepOut(f) { plan = (f, u); break }          // (play-net keep-out)
         }
         if plan == nil, !PlayTuning.ballReturnOld {          // (a ball against a side wall: the nearest allowed spot to it, kicking along the wall toward the player, before the safety net)

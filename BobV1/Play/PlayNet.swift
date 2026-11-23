@@ -202,6 +202,7 @@ struct PlayNetState {
     /// Keep-out round: the closest any body came to the footprint (0 = inside), the ball's floor contacts inside the dead zone, and the dead returns.
     var minBodyDist: Float = 99
     var outT: [Int: Float] = [:]
+    var rejT: [String: Float] = [:]
     /// A dead ball's return flight is on: nobody heads it (the net's return is the player's, not theirs); cleared at the catch.
     var deadFlight = false
     var floorHits = 0, prevVy: Float = 0, deadReturns = 0, keepOutSamples = 0
@@ -229,11 +230,20 @@ extension PlayToss {
     /// play-net keep-out: a stand / walk target in the keep-out is moved to the nearest spot outside: in front of the mouth (at least `standFront` from the mouth line), or to the side when that is nearer.
     func netStand(_ p: SIMD2<Float>) -> SIMD2<Float> {
         guard netKeepOut(p), let n = net.spec else { return p }
+        netReject("stand", "moved-out-of-keepout", who: nil, at: p)
         let fwd = SIMD2(p.x, n.mouthZ + PlayNetTuning.standFront)
         let edge = n.outerHalf + PlayNetTuning.keepOutMargin + 0.05
         let side = SIMD2(n.centre.x + (p.x >= n.centre.x ? edge : -edge), p.y)
         if p.y >= n.rearZ, abs(side.x - p.x) < fwd.y - p.y, abs(side.x) < Self.bodyReach(side.y) { return side }
         return fwd
+    }
+
+    /// play-net keep-out: a rejected or changed plan is logged (`plan-rejected kind= reason= who= at=`), at most once per 0.3 s per kind and reason.
+    func netReject(_ kind: String, _ reason: String, who: Int?, at: SIMD2<Float>?) {
+        let key = kind + reason
+        guard clock - (net.rejT[key] ?? -9) > 0.3 else { return }
+        net.rejT[key] = clock
+        NSLog("[playnet] plan-rejected kind=%@ reason=%@ who=%@ at=%@ clock=%.1f", kind, reason, who.map(String.init) ?? "-", at.map { String(format: "%.2f,%.2f", $0.x, $0.y) } ?? "-", clock)
     }
 
     /// Distance from the goal's footprint to a point on the floor (0 inside).
