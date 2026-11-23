@@ -201,7 +201,7 @@ struct PlayNetState {
     var awaitHand = false
     /// Keep-out round: the closest any body came to the footprint (0 = inside), the ball's floor contacts inside the dead zone, and the dead returns.
     var minBodyDist: Float = 99
-    var floorHits = 0, wasFloor = false, deadReturns = 0
+    var floorHits = 0, prevVy: Float = 0, deadReturns = 0
     var goals = 0
     /// Bodies that stay where they are while the net is up (sleepers): the net is placed clear of them.
     var blockers: [SIMD2<Float>] = []
@@ -243,14 +243,13 @@ extension PlayToss {
     /// play-net keep-out: a ball that has not scored but lies in the goal's footprint (over the bar and down the back, off a post into the side, rolled in from the side) and comes to rest or touches the floor a second
     /// time there is returned by the net exactly as after a goal (no cheer, no goal sound): put inside the mouth, held no longer than the cheer's minimum, then the roll / lob to the player.
     func netDeadTick() {
-        guard let n = net.spec, net.hold == nil, !net.returning, phase == .loose || phase == .flying else { net.floorHits = 0; net.wasFloor = false; return }
+        guard net.spec != nil, net.hold == nil, !net.returning, phase == .loose || phase == .flying else { net.floorHits = 0; net.prevVy = 0; return }
         let p = SIMD2(ball.pos.x, ball.pos.z)
-        guard abs(p.x - n.centre.x) < n.outerHalf + PlayNetTuning.deadSide, p.y < n.frontZ else { net.floorHits = 0; net.wasFloor = false; return }
-        let onFloor = ball.onFloor
-        if onFloor, !net.wasFloor { net.floorHits += 1 }
-        net.wasFloor = onFloor
-        guard onFloor, net.floorHits >= 2 || ball.speedXZ < 0.3 else { return }
-        net.floorHits = 0; net.wasFloor = false; net.deadReturns += 1
+        guard netKeepOut(p) else { net.floorHits = 0; net.prevVy = ball.vel.y; return }          // (the zone is the keep-out: nobody may stand there, so nobody can play a ball that lies there)
+        if ball.pos.y < ball.radius + 0.08, net.prevVy < -0.4, ball.vel.y > 0 { net.floorHits += 1 }          // (a real floor bounce, not only a settled ball)
+        net.prevVy = ball.vel.y
+        guard let n = net.spec, ball.pos.y < ball.radius + 0.08, net.floorHits >= 2 || (ball.onFloor && ball.speedXZ < 0.3) else { return }
+        net.floorHits = 0; net.prevVy = 0; net.deadReturns += 1
         let at = SIMD2(min(max(p.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), n.mouthZ - 0.3)
         ball.pos = SIMD3(at.x, ball.radius, at.y); ball.vel = .zero; ball.inNet = true
         net.hold = .init(t: PlayNetTuning.holdCheer, rolled: false, scorer: nil)
@@ -381,7 +380,7 @@ extension PlayToss {
         netDeadTick()          // (play-net keep-out)
         for j in jellies where !j.free {          // (the closest any body came to the footprint: the keep-out's proof)
             let d = netDistance(j.pos)
-            if d < net.minBodyDist - 0.03 { net.minBodyDist = d; NSLog("[playnet] closest body to the footprint: %.2f (id %d at %.2f,%.2f)", d, j.id, j.pos.x, j.pos.y) }
+            if d < net.minBodyDist - 0.03 { net.minBodyDist = d; NSLog("[playnet] closest body to the footprint: %.2f (id %d at %.2f,%.2f) clock=%.1f", d, j.id, j.pos.x, j.pos.y, clock) }
         }
         if let n = net.spec {
             for j in jellies where n.contains(j.pos, margin: 0.1) { if clock - (net.bodyLogT[j.id] ?? -9) > 1 { net.bodyLogT[j.id] = clock; NSLog("[playnet] BODY IN NET id=%d at %.2f,%.2f", j.id, j.pos.x, j.pos.y) } }

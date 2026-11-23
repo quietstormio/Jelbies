@@ -475,6 +475,7 @@ final class PlayNetTests: XCTestCase {
             XCTAssertFalse(p.netKeepOut(m), "\(q) is moved out: \(m)")
             XCTAssertTrue(m.y >= n.mouthZ + PlayNetTuning.standFront - 1e-3 || abs(m.x - n.centre.x) >= n.outerHalf + PlayNetTuning.keepOutMargin, "in front of the mouth line by 0.6, or beside the net")
         }
+        for dz in [Float(0.6), 1.0, 1.7] { let q = SIMD2<Float>(0.3, n.mouthZ + dz); if !p.netKeepOut(q) { XCTAssertEqual(p.netStand(q), q) } }
         let front = SIMD2<Float>(0.3, n.mouthZ + 1.6)
         XCTAssertFalse(p.netKeepOut(front)); XCTAssertEqual(p.netStand(front), front, "a stand in front of the mouth stays")
         p.end()

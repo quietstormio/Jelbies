@@ -676,7 +676,7 @@ final class PlayToss {
     /// The Jelmiko who are not the one going for the ball take a few steps toward where it will be (a step or two, at most `PlayTuning.supportReach` of the way, every
     /// 1.4 s at most), so a live ball moves all three, not one: they are in position for a pass and the next bump. `rehome` sends them back to the line once it is caught.
     private func support(toward xz: SIMD2<Float>, except: Set<Int>) {
-        guard !PlayTuning.old else { return }
+        guard !PlayTuning.old, !netKeepOut(xz) else { return }          // (play-net keep-out: nobody takes steps toward a ball in or at the goal)
         for j in jellies where !j.free && !except.contains(j.id) {
             guard !j.brain.tossBusy, Self.canHop(j.brain), j.brain.idleState.kind == nil, clock - (supportT[j.id] ?? -9) > PlayTuning.supportEvery else { continue }
             let d = simd_distance(j.pos, xz)
