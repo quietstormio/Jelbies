@@ -76,9 +76,9 @@ nonisolated enum BondMoment {
     nonisolated(unsafe) static var nextID = 1
     /// Round 5: more than this many bodies up in the place = crowded: no chasing kinds, one travelling kind per block at most.
     static let crowd = 3
-    /// FINAL ROUND: the per-place switch. At home (the sleepover / play date; everything that is not the park) a block runs only while this is true: stay kinds only, 2 kinds, walker's spot searched in 12 directions.
+    /// FINAL ROUND: the per-place switch (SHIPS OFF: the one home try, take 1, read 7.7 hard stops and 8.8 pushes per minute against the bar of 7.5). At home (the sleepover / play date; everything that is not the park) a block runs only while this is true: stay kinds only, 2 kinds, walker's spot searched in 12 directions.
     /// false = at home the pair gets the greeting and the pick weight only (the phone build's traffic by construction: no block, no flag, no parting). The park is never affected.
-    nonisolated(unsafe) static var blocksAtHome = true
+    nonisolated(unsafe) static var blocksAtHome = false          // (FINAL ROUND decision: the home try failed the rule, so at home the pair gets only the greeting and the pick weight)
     /// Crowded: the calm kinds (one of the travelling pair at most, the others stay put).
     static let calmTravel: [SocialKind] = [.hopAlong, .follow]
     static let calmStay: [SocialKind] = [.swayHug, .sitTogether, .dance, .peekaboo, .backToBack]

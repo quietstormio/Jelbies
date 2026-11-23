@@ -10,6 +10,10 @@ import simd
 
 @MainActor
 final class BestFriendTests: XCTestCase {
+    /// The block mechanics are tested at home too, so the switch is on for these tests; it ships off.
+    override func setUp() { super.setUp(); BondMoment.blocksAtHome = true }
+    override func tearDown() { BondMoment.blocksAtHome = false; super.tearDown() }
+
     private func visitor(_ id: Int, _ pts: [Int: Float], merged: Int? = nil) -> ParkVisitor {
         var v = ParkVisitor(id: id, name: "V\(id)", colour: .cream, signature: .none, wear: nil, style: .balanced, blurb: "", greeting: "")
         for (c, p) in pts { v.friendship[String(c)] = p }
@@ -278,7 +282,7 @@ final class BestFriendTests: XCTestCase {
     }
 
     func testAtHomeABlockUsesStayKindsOnlyAndTheSwitchTurnsItOff() {
-        defer { BondMoment.blocksAtHome = true; BondMoment.onKind = nil }
+        defer { BondMoment.blocksAtHome = true; BondMoment.onKind = nil }  // (setUp turns it on for the class)
         BondMoment.blocksAtHome = false
         var lab = buddies(seed: 47)
         var a = lab.rigs[0].brain, b = lab.rigs[1].brain
