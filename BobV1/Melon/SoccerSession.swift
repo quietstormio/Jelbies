@@ -193,6 +193,7 @@ final class SoccerSession {
         members = ready.map { $0.steerID }.sorted()
         let serial = DecorField.shared.toys.news.last?.serial ?? 0
         for m in ready { m.mix.sess = true; m.mix.order = SessOrder(); m.toy.handled = max(m.toy.handled, serial); m.toy.noticeUID = -1; m.toy.chaseSpot = nil }
+        for m in ready { m.sessSpectate(ball: DecorField.shared.position(ball), avoid: []) }          // (everybody comes over and spreads out, 2.2 or more apart, before the first turn is planned)
         log("start #\(sessions) kickoff=\(kickoffSession) members=\(members) len=\(String(format: "%.0f", endsAt - clock))")
         if kickoffSession, ready.count >= 2, forceGame == nil { forceGame = .pass }          // (the kick-off is a pass: the simplest game first)
         kickoffSession = false
@@ -578,7 +579,8 @@ extension BlobBrain {
             let t = min(max(simd_dot(p - a, ab) / L2, 0), 1)
             return simd_distance(p, a + ab * t) >= 1.4
         }
-        func okHere(_ p: SIMD2<Float>) -> Bool { avoid.allSatisfy { simd_distance($0, p) >= (line != nil ? 1.8 : 2.6) } && simd_distance(p, c) < 4.2 && simd_distance(p, c) > 1.5 && offLine(p) }
+        let peers = socialOthers().filter { $0 !== self && $0.mix.sess }.map { $0.position }
+        func okHere(_ p: SIMD2<Float>) -> Bool { peers.allSatisfy { simd_distance($0, p) >= 2.2 } && avoid.allSatisfy { simd_distance($0, p) >= (line != nil ? 1.8 : 2.6) } && simd_distance(p, c) < 4.2 && simd_distance(p, c) > 1.5 && offLine(p) }
         if okHere(position) { mix.order = SessOrder(); return }
         guard let rf = roamProvider?() else { return }
         let others = socialOthers().filter { $0 !== self }
