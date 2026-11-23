@@ -246,6 +246,8 @@ final class BlobBrain {
     var tossFire: ((BlobBrain) -> Void)?
     /// play-ball-s2: a planned kick's foot may land only when this says the ball is in reach (nil = always, the old stomp).
     var tossFireReady: ((BlobBrain) -> Bool)?
+    /// play-ball-s2 refinement: which side the planned kick leans to first (alternates between kicks).
+    var tossLeanSide: Float = 1
     /// play-ball-r2: where the play header's hop turns the body to (toward the player), set by the play controller; nil = the hop keeps its heading (bubble wand, emote suites). Cleared once the hop has begun.
     var tossFaceYaw: Float?
     /// The bubble wand's play area while Play mode with the wand is on (Toys/BubbleWand.swift sets and clears it; BlobBrain+Bubbles.swift acts on it): he stays on his spot in view.
