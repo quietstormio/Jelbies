@@ -398,7 +398,9 @@ extension PlayToss {
         if let tu = turnUntil, clock < tu {
             if case .none = b.script {} else { return false }
         }
-        guard b.idleState.kind == nil, !b.feet.active else { return false }
+        guard b.idleState.kind == nil else { return false }
+        // (a Jelmiko in mid-stride is given 0.3 s to land a step; then he is stopped where he stands: round 2 found one walking to the ball for 1.8 s whose cheer never came)
+        if b.feet.active, clock - net.goalAt < 0.3 { return false }
         if netFacing(j) > 25, turnUntil == nil {          // turned away from the audience: turn first (a short turn on the spot)
             if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) }
             b.startTurn(to: b.yawTo(playerPoint()), sim: j.sim)

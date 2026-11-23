@@ -661,8 +661,8 @@ struct GameScreen: View {
             for _ in 0..<400 where LaunchGate.shared.visible || care.playJellies().isEmpty { await sleep(0.1) }
             await sleep(2.5)
             let mode = d.integer(forKey: "PlayDemo")
-            if mode != 3 { for k in [DecorKind.ball, .soccerball, .beachball] { care.store.grant(k.storeID) }; if mode == 2 { care.store.grant("toy-bubbleWand") } }
-            if mode >= 2, mode <= 3 {
+            if mode != 3 { for k in (mode == 5 ? [DecorKind.ball, .soccerball] : [DecorKind.ball, .soccerball, .beachball]) { care.store.grant(k.storeID) }; if mode == 2 { care.store.grant("toy-bubbleWand") } }          // (-PlayDemo 5: only the bouncy and soccer balls, so the picker shows the Soccer net card without scrolling)
+            if mode >= 2, mode <= 3 || mode == 5 {
                 withAnimation(CareMenu.spring) { open.wrappedValue = true; picker.wrappedValue = .toy }
             } else {
                 func ballKind(_ k: String?) -> DecorKind? { switch k ?? "" { case "soccer": return .soccerball; case "beach": return .beachball; case "ball": return .ball; default: return nil } }
