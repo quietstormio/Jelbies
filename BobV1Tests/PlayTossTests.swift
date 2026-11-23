@@ -345,7 +345,7 @@ extension PlayTossTests {
         var planned = 0
         for seed in UInt64(1)...6 {
             let r = rigAt(SIMD2(0, 0.6)), p = PlayToss()
-            p.seed(seed); beginBall(r, p, .soccerball)
+            p.seed(seed &* 0x9E3779B97F4A7C15); beginBall(r, p, .soccerball)
             var events: [PlayEvent] = []
             p.onEvent = { events.append($0) }
             throwAtMiddle(p)
@@ -377,7 +377,7 @@ extension PlayTossTests {
         Self.room(Self.portrait)
         for seed in UInt64(1)...4 {
             let r = rigAt(SIMD2(0, 0.6)), p = PlayToss()
-            p.seed(seed); beginBall(r, p, .soccerball)
+            p.seed(seed &* 0x9E3779B97F4A7C15); beginBall(r, p, .soccerball)
             var passes = 0, kept = false
             p.onEvent = { if case .pass = $0 { passes += 1 } }
             throwAtMiddle(p)
@@ -392,7 +392,7 @@ extension PlayTossTests {
         var recalled = 0, chains = 0
         for seed in UInt64(1)...10 {
             let t = trio(), p = PlayToss()
-            p.seed(seed); p.viewSize = Self.portrait
+            p.seed(seed &* 0x9E3779B97F4A7C15); p.viewSize = Self.portrait
             p.begin(ball: .soccerball, title: "Ball", jellies: t.js(), snapCamera: true)
             runTrio(t, p, seconds: 3) { false }
             p.recall(); XCTAssertEqual(p.ownGame, .none, "recall with the ball in the hand does nothing")
