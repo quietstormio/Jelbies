@@ -38,6 +38,8 @@ struct SessOrder {
     var turned = false
     var turnT: Float = 0
     var logged = false
+    /// A station is reached within this of the spot (a receiver or a spectator already near it does not walk).
+    var tolerance: Float = 0.45
 }
 
 nonisolated enum SoccerSessionTuning {
@@ -47,7 +49,7 @@ nonisolated enum SoccerSessionTuning {
     }()
     static let kickoffLen: ClosedRange<Float> = 55...80
     static let recurLen: ClosedRange<Float> = 32...50
-    static let gap: ClosedRange<Float> = 35...60
+    static let gap: ClosedRange<Float> = 65...95          // (round 3: the ball is about a third of their time, not almost half)
     static let openingWait: ClosedRange<Float> = 20...40
     static let kickoffWait: ClosedRange<Float> = 0.3...0.8
     static let passKicks: ClosedRange<Float> = 5...8
@@ -91,6 +93,9 @@ final class SoccerSession {
     private var firstOfSession = false
     private var fetchFails = 0
     private var startWaitSince: Float = -1
+    private(set) var kickoffDirects = 0
+    private var kickoffDirectTried = false
+    private var pendingOrder: (who: Int, after: Int, order: SessOrder)?          // (two walks that would cross go one after the other: the second waits where he is)
     private var kickoffTurn = false          // (the first turn of a kick-off: the two nearest the ball, a short pass)
     private(set) var gamesEndedNotAll = 0
     private var gameKick: [Int: Int] = [:], prevK = -1
@@ -209,7 +214,7 @@ final class SoccerSession {
         let kickoffSessionWas = kickoffSession
         kickoffSession = false
         firstOfSession = true
-        kickoffTurn = kickoffSessionWas
+        kickoffTurn = kickoffSessionWas; kickoffDirectTried = false; pendingOrder = nil
         lastGame = nil
         chooseGame(ready)
     }
@@ -277,6 +282,21 @@ final class SoccerSession {
         case .plan:
             guard !moving, field.occupant[ballFoot.uid] == nil, clock - planAt >= 0.5 else { return }
             planAt = clock
+            if kickoffTurn, !kickoffDirectTried, n >= 2 {          // round 3: the first kick of a kick-off: the nearest member goes straight to the ball and kicks it to the nearest other where he stands; nobody walks to a station first
+                kickoffDirectTried = true
+                if let (ki, ri) = kickoffPair(ms, c) {
+                    let Kk = ms[ki], Rr = ms[ri]
+                    let v = Rr.position - c, L = simd_length(v)
+                    kIdx = ki; rIdx = ri
+                    Kk.mix.order = SessOrder(kind: .kick); Kk.mix.order.kick = SessKick(dir: v / L, roll: max(L - 1.0, 0.45))
+                    Rr.mix.order = SessOrder(kind: .station, spot: Rr.position); Rr.mix.order.tolerance = 1.0
+                    for m in ms where m !== Kk && m !== Rr { m.mix.order = SessOrder() }
+                    ballAtPlan = c; turnWasDribble = false; kickoffTurn = false; kickoffDirects += 1
+                    phase = .kicking; phaseAt = clock
+                    log("kick-off: K=\(Kk.steerID) straight to the ball, R=\(Rr.steerID) only turns to it line=\(String(format: "%.2f", L))")
+                    return
+                }
+            }
             // both must be standing free (a walking one is asked to stop once); an emote in progress runs out
             var ready = true
             for m in [K, R] where !m.socialFreeBase {
@@ -298,7 +318,8 @@ final class SoccerSession {
                 guard let rf = rf0 else { return true }
                 return K.sessRestFloor(rf, p) && field.openFloor(p, margin: 0.6) && field.goals.allSatisfy { simd_distance($0.centre, p) > 1.3 }
             }
-            guard let plan = K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6, dists: kickoffTurn ? [2.0, 2.2, 2.4, 2.6, 3.0] : nil) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK, dists: kickoffTurn ? [2.0, 2.2, 2.4, 2.6, 3.0] : nil) else {
+            let kd: [Float]? = kickoffTurn ? [2.0, 2.2, 2.4, 2.6, 3.0] : nil
+            guard let plan = K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6, dists: kd, strict: true) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK, dists: kd, strict: true) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6, dists: kd) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK, dists: kd) else {
                 failures += 1
                 log("no line K=\(K.steerID) R=\(R.steerID) why=\(K.mix.passWhy)")
                 if failures == 1 || failures == 4 {          // (the ball lies where no line fits: one of them dribbles it out toward the middle, then the turn is planned again)
@@ -309,14 +330,23 @@ final class SoccerSession {
             let v = plan.pr - c; let L = simd_length(v)
             guard L > 0.5 else { failures += 1; return }
             let dir = v / L
-            K.mix.order = SessOrder(kind: .station, spot: plan.pk)
-            R.mix.order = SessOrder(kind: .station, spot: plan.pr)
-            K.mix.order.kick = SessKick(dir: dir, roll: max(L - 1.0, 0.45))
+            var kOrder = SessOrder(kind: .station, spot: plan.pk)
+            var rOrder = SessOrder(kind: .station, spot: plan.pr); rOrder.tolerance = 0.8
+            kOrder.kick = SessKick(dir: dir, roll: max(L - 1.0, 0.45))
+            K.mix.order = kOrder; R.mix.order = rOrder
+            pendingOrder = nil
+            // round 3: walks that would cross go one after the other (the one whose way is blocked waits where he is until the other has arrived)
+            if K.sessPathNear(K.position, plan.pk, [R.position]), simd_distance(R.position, plan.pr) > 0.8 {
+                pendingOrder = (K.steerID, R.steerID, kOrder); K.mix.order = SessOrder()
+            } else if R.sessPathNear(R.position, plan.pr, [K.position]), simd_distance(K.position, plan.pk) > 0.8 {
+                pendingOrder = (R.steerID, K.steerID, rOrder); R.mix.order = SessOrder()
+            }
             for m in ms where m !== K && m !== R { m.sessSpectate(ball: c, avoid: [plan.pk, plan.pr, K.position, R.position]) }
             kickoffTurn = false
             ballAtPlan = c; phase = .walking; phaseAt = clock; awaitRest = false; awaitedRoll = false; restAt = clock
             log("turn K=\(K.steerID) R=\(R.steerID) ball=(\(String(format: "%.2f,%.2f", c.x, c.y))) line=\(String(format: "%.2f", L))")
         case .walking:
+            if let p = pendingOrder, let who = ms.first(where: { $0.steerID == p.who }), let after = ms.first(where: { $0.steerID == p.after }), after.mix.order.state == 2 || clock - phaseAt > 6 { who.mix.order = p.order; pendingOrder = nil }
             let kOK = K.mix.order.state == 2, rOK = R.mix.order.state == 2
             if moving { if awaitRest || clock - restAt < 8 { return } } else { restAt = clock; if awaitRest { awaitRest = false; awaitedRoll = true; phaseAt = clock } }
             if simd_distance(c, ballAtPlan) > (awaitedRoll ? 1.6 : 1.0) {          // (somebody brushed the ball on the way: the line is planned again from where it lies, not a failure)
@@ -397,6 +427,29 @@ final class SoccerSession {
             selfRolls += 1; planAt = clock + 3; log("fetch failed twice: the ball rolls itself out")
             afterRoll(rest)
         }
+    }
+
+    /// Round 3: the kick-off pair: the member nearest the ball (the kicker) and the nearest other one 1.6...3.9 from it with nobody on the line and open floor where the ball will stop (a standing one first).
+    private func kickoffPair(_ ms: [BlobBrain], _ c: SIMD2<Float>) -> (Int, Int)? {
+        let field = DecorField.shared
+        let order = (0..<ms.count).sorted { simd_distance(ms[$0].position, c) < simd_distance(ms[$1].position, c) }
+        guard let ki = order.first, let rf = ms[ki].roamProvider?() else { return nil }
+        let K = ms[ki]
+        var good: [Int] = []
+        for ri in order.dropFirst() {
+            let R = ms[ri]
+            let v = R.position - c, L = simd_length(v)
+            guard L >= 1.6, L <= 3.9 else { continue }
+            let dir = v / L
+            let rest = c + dir * max(L - 1.0, 0.45)
+            guard rf.contains(rest), rf.stopOK(rest), field.openFloor(rest, margin: 0.4) else { continue }
+            var clear = true
+            var d: Float = 0.4
+            while d < L - 0.3 { let p = c + dir * d; if !field.openFloor(p) || ms.contains(where: { $0 !== K && $0 !== R && simd_distance($0.position, p) < 0.9 }) { clear = false; break }; d += 0.4 }
+            if clear { good.append(ri) }
+        }
+        guard let ri = good.first(where: { !ms[$0].scriptIsWalking }) ?? good.first else { return nil }
+        return (ki, ri)
     }
 
     /// The one who gets the ball next: the one with the fewest kicks in this game (the one who has just kicked last of all).
@@ -618,6 +671,15 @@ extension BlobBrain {
         if scriptIsNone { restTimer = min(restTimer, rand(0.3, 1.2)) }
     }
 
+    /// Round 3: does the straight walk a -> b pass within `gap` of any of `bodies` (the first 0.6 of it is ignored: he walks AWAY from whoever he starts beside)?
+    func sessPathNear(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ bodies: [SIMD2<Float>], gap: Float = 1.3) -> Bool {
+        let ab = b - a, L = simd_length(ab)
+        guard L > 0.6 else { return false }
+        var d: Float = 0.6
+        while d <= L { let q = a + ab * (d / L); if bodies.contains(where: { simd_distance($0, q) < gap }) { return true }; d += 0.15 }
+        return false
+    }
+
     /// A spot for one who waits: 2.6 or more from the two passers' spots, about 3 from the ball, on floor that can be used.
     func sessSpectate(ball c: SIMD2<Float>, avoid: [SIMD2<Float>], line: (SIMD2<Float>, SIMD2<Float>)? = nil) {
         func offLine(_ p: SIMD2<Float>) -> Bool {
@@ -636,7 +698,7 @@ extension BlobBrain {
             for k in 0..<16 {
                 let a = Float(k) * .pi / 8
                 let p = c + SIMD2(sinf(a), cosf(a)) * r
-                guard rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 0.45, rf.stopOK(p), simd_distance(fixed(p), p) < 0.08, okHere(p), !mixBallSpotBad(p),
+                guard rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 0.45, rf.stopOK(p), simd_distance(fixed(p), p) < 0.08, okHere(p), !mixBallSpotBad(p), !sessPathNear(position, p, others.map { $0.position }),
                       !others.contains(where: { simd_distance($0.position, p) < 1.2 }), DecorField.shared.openFloor(p), reachable(position, p) else { continue }
                 let sc = -simd_distance(position, p)
                 if best == nil || sc > best!.1 { best = (p, sc) }
@@ -661,7 +723,7 @@ extension BlobBrain {
             guard o.state >= 0, o.state < 2 else { if o.state == 2 { faceIt() }; return }
             if socialFreeBase || (scriptIsNone && idleState.kind == nil) {
                 let d = simd_distance(position, o.spot)
-                if d < 0.45 && !feet.active { o.state = 2; faceIt(); return }
+                if d < o.tolerance && !feet.active { o.state = 2; faceIt(); return }
                 if o.state == 1, o.walks >= 3 { o.state = d < 1.0 ? 2 : -1; return }
                 socialBook.hold = false; socialBook.faceYaw = nil
                 socialWalk(to: o.spot, sim); o.state = 1; o.walks += 1

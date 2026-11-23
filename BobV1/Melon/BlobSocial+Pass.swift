@@ -180,7 +180,7 @@ extension BlobBrain {
 extension BlobBrain {
     /// Round 3b: where the two stand for a real pass of the soccer ball: the kicker 0.95 u behind the ball, the receiver `D` = 3.4...2.0 u from the ball on the other side, along a line that is clear of bodies, furniture,
     /// sleepers and the HUD buttons. nil = the room has no such line (no pass).
-    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain, restOK: ((SIMD2<Float>) -> Bool)? = nil, bodyGap: Float = 1.0, dists: [Float]? = nil) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
+    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain, restOK: ((SIMD2<Float>) -> Bool)? = nil, bodyGap: Float = 1.0, dists: [Float]? = nil, strict: Bool = false) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
         let field = DecorField.shared
         guard let rf = roamProvider?() else { return nil }
         let others = socialOthers().filter { $0 !== self && $0 !== o }
@@ -216,7 +216,10 @@ extension BlobBrain {
                     return false
                 }
                 let thirds = others.map { $0.position }
-                let crowd = (crowds(position, pk, thirds + [o.position]) ? 1 : 0) + (crowds(o.position, pr, thirds + [position]) ? 1 : 0)
+                let kCross = sessPathNear(position, pk, thirds + [o.position]), rCross = sessPathNear(o.position, pr, thirds + [position])
+                // strict (round 3): a walk past a standing third member is out; so is a pair whose walks cross each other (one of them alone is sequenced by the director)
+                if strict, sessPathNear(position, pk, thirds) || sessPathNear(o.position, pr, thirds) || (sessPathNear(position, pk, [o.position]) && sessPathNear(o.position, pr, [position])) { why["walkCrowds", default: 0] += 1; continue }
+                let crowd = (kCross ? 1 : 0) + (rCross ? 1 : 0)
                 let score = -(max(wk, wr) + 0.25 * (wk + wr)) - 4 * Float(crowd)          // (the kick waits for the slower walker)
                 if best == nil || score > best!.score { best = (pk, pr, score) }
             }

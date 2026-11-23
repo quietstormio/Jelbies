@@ -241,4 +241,56 @@ final class SoccerSessionTests: XCTestCase {
         XCTAssertEqual(SoccerSession.shared.selfRolls, 0, "the ball rolled itself \(diag(l))")
         finish(l)
     }
+
+    /// Round 3: the first kick of a kick-off is taken by the member nearest the ball, straight away: no station walk first.
+    func testKickoffFirstKickIsStraightFromTheNearestMember() {
+        var firstKick: Float?
+        let l = lab(n: 3)
+        var t: Float = 0
+        SoccerEvents.sink = { e in if case .kick = e, firstKick == nil { firstKick = t } }
+        for _ in 0..<(60 * 14) {
+            l.tick(watching: false); t += 1.0 / 60
+            DecorField.shared.bodies = l.rigs.map { ($0.brain.steerID, $0.brain.position) }; DecorField.shared.tick(dt: 1.0 / 60)
+        }
+        XCTAssertEqual(SoccerSession.shared.kickoffDirects, 1, "the kick-off was not taken straight: \(diag(l))")
+        XCTAssertNotNil(firstKick, diag(l))
+        XCTAssertLessThan(firstKick ?? 99, 9, "first kick of the kick-off at \(firstKick ?? -1) s (the ball goes out at 1 s)")
+        finish(l)
+    }
+
+    /// Round 3: a strict pass plan never has a member walk past a standing third member, and the two walks never cross each other.
+    func testStrictPassPlanNeverWalksPastAStandingMember() {
+        let l = lab(n: 3, ball: false)
+        let field = DecorField.shared
+        var planned = 0
+        for at in [SIMD2<Float>(0, 1.5), SIMD2(-1.2, 0.5), SIMD2(1.0, 2.0), SIMD2(0.2, -0.8)] {
+            field.set([PlacedDecor(uid: 7, kind: .soccerball, x: at.x, z: at.y)])
+            run(l, seconds: 0.5)
+            let K = l.rigs[0].brain, R = l.rigs[1].brain, T = l.rigs[2].brain
+            if let plan = K.mixPassPlan(ball: at, with: R, strict: true) {
+                planned += 1
+                XCTAssertFalse(K.sessPathNear(K.position, plan.pk, [T.position]), "K's walk passes the third member")
+                XCTAssertFalse(R.sessPathNear(R.position, plan.pr, [T.position]), "R's walk passes the third member")
+                XCTAssertFalse(K.sessPathNear(K.position, plan.pk, [R.position]) && R.sessPathNear(R.position, plan.pr, [K.position]), "the two walks cross")
+            }
+        }
+        XCTAssertGreaterThanOrEqual(planned, 1)
+        finish(l)
+    }
+
+    /// Round 3: a receiver or spectator already within 0.8 of his spot does not walk; the gap between recurring sessions is long (the ball is about a third of their time).
+    func testNearTheSpotMeansNoWalkAndTheGapIsLong() {
+        XCTAssertGreaterThanOrEqual(SoccerSessionTuning.gap.lowerBound, 60)
+        let l = lab(n: 2, ball: false)
+        let b = l.rigs[1].brain
+        run(l, seconds: 3)
+        b.mix.sess = true
+        var o = SessOrder(kind: .station, spot: b.position + SIMD2(0.7, 0)); o.tolerance = 0.8
+        b.mix.order = o
+        let start = b.position
+        run(l, seconds: 4)
+        XCTAssertEqual(b.mix.order.state, 2, "he walked instead of staying (\(b.mix.order.state))")
+        XCTAssertLessThan(simd_distance(b.position, start), 0.35)
+        finish(l)
+    }
 }
