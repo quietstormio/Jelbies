@@ -394,9 +394,8 @@ extension PlayToss {
         let ready = toPlayer ? (h.t >= PlayNetTuning.holdCheer && !cheersOn || h.t >= PlayNetTuning.holdCheerMax) : h.t >= PlayNetTuning.holdTime
         if !h.rolled, ready, ball.pos.y <= ball.radius + 0.05 || h.t >= (toPlayer ? PlayNetTuning.holdCheerMax : PlayNetTuning.holdTime) + 0.9 {          // (a ball still bouncing in the net waits to lie on the floor)
             if toPlayer {
-                netReturnLaunch(n)
-                net.hold = nil
-                return false
+                if netReturnLaunch(n) { net.hold = nil; return false }
+                NSLog("[playnet] return blocked: the old short roll-out")          // (a body stands right in front of the mouth: no way past him; the ball comes out 0.9 and the loose-ball handling has it)
             }
             h.rolled = true
             ball.inNet = false
@@ -426,7 +425,7 @@ extension PlayToss {
     /// The ball leaves the net toward the player's catch zone (the target `rescue()` uses): rolled firmly along the floor through the widest gap between the bodies on the line (a gap needs
     /// a ball's width plus 0.3 clear), else a low lob over the line (as the rescue lob clears shoulders). It is then a normal return flight: `phase` .flying, `returnAim` set, `touched`, so
     /// `caught()` fires at the hand.
-    private func netReturnLaunch(_ n: TossNet) {
+    private func netReturnLaunch(_ n: TossNet) -> Bool {
         let r = ball.radius
         let hand = handWorld()
         let tz = catchZ() + 0.6
@@ -497,18 +496,17 @@ extension PlayToss {
                 ball.vel = SIMD3((T.x - S.x) / lp.flight, lp.vy, (T.y - S.y) / lp.flight)
                 returnAim = T
                 mode = String(format: "lob vy=%.1f", lp.vy)
-            } else if let b = any {
-                mode = roll(b, "roll-squeeze")          // (a body right in front of the net: through the least tight way, a soft brush at worst)
+            } else if let b = any, b.c >= -0.25 {
+                mode = roll(b, "roll-squeeze")          // (a body close in front of the net: through the least tight way, a soft brush at worst)
             } else {
-                let d = target - S, D = max(simd_length(d), 1e-3)
-                ball.vel = SIMD3(d.x / D * 8, 0, d.y / D * 8); returnAim = target
-                mode = "roll-straight"
+                return false          // (a body right in front of the mouth: no return; the old short roll-out)
             }
         }
         touched = true
         phase = .flying; looseT = 0; restT = 0
         net.returning = true; net.retT = 0; net.rescuesAtGoal = rescues
         NSLog("[playnet] return %@ from %.2f,%.2f speed %.1f", mode, S.x, S.y, simd_length(ball.vel))
+        return true
     }
 
     /// While the net's return is on the ball stays a flying return (a roll along the floor would otherwise turn into a loose ball the Jelmiko go to fetch) until `caught()` takes it.
