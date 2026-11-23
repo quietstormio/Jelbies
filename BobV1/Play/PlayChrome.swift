@@ -69,6 +69,7 @@ struct PlayChrome: View {
                     .accessibilityHint("Swipe up to throw it to a Jelmiko")
                     .accessibilityAddTraits(.allowsDirectInteraction)
                     .accessibilityAction(named: "Throw to a Jelmiko") { throwToMiddle(size) }
+                    .accessibilityAction(named: "Pass it back") { if play.keeping { play.recall() } }
                     .accessibilityIdentifier("play-surface")
                 Color.clear.frame(width: 0, height: 0).allowsHitTesting(false).accessibilityHidden(true)
                     .onChange(of: play.phase == .inHand && !thrown && play.camBlend > 0.8, initial: true) { _, on in          // (the hint is a line on the one message bar)
@@ -94,6 +95,17 @@ struct PlayChrome: View {
                     }
                 }
                 .allowsHitTesting(false).accessibilityHidden(true)
+                // play-ball-s3: while the Jelmiko keep the ball (a pass chain) the hand's place holds "Pass it back"; one tap asks for the next strike to come to you
+                ZStack {
+                    if play.keeping {
+                        PassBackPill { play.recall() }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                            .padding(.bottom, max(g.safeAreaInsets.bottom + 16, size.height * (HUDLayout.isLandscape(vsc: vsc, size: size) ? 0.085 : 0.10)))
+                            .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    }
+                }
+                .frame(width: g.size.width, height: g.size.height)
+                .animation(.spring(response: 0.3, dampingFraction: 0.82), value: play.keeping)
                 if rallyShown >= 2 {
                     HStack(spacing: 4) {
                         Image(systemName: "heart.fill").font(.system(size: 11, weight: .bold)).foregroundStyle(FocusStyle.pink)
@@ -156,5 +168,29 @@ struct DonePill: View {
         .accessibilityLabel("Done")
         .accessibilityHint("Stops playing and lets everyone roam")
         .keyboardShortcut(.escape, modifiers: [])
+    }
+}
+
+/// "Pass it back": asks the Jelmiko to send the ball back to you while they are passing it among themselves. The same cream capsule as `DonePill`.
+struct PassBackPill: View {
+    let action: () -> Void
+    var body: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
+            action()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "arrow.uturn.down").font(.system(size: 13, weight: .bold))
+                Text("Pass it back").jFont(16, .semibold).fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(FocusStyle.brown)
+            .padding(.horizontal, 18).padding(.vertical, 10).frame(minHeight: 44)
+            .background(Capsule().fill(FocusStyle.cream).shadow(color: FocusStyle.shadow.opacity(0.2), radius: 6, y: 2))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("play-pass-back")
+        .accessibilityLabel("Pass it back")
+        .accessibilityHint("Asks the Jelmiko to send the ball back to you")
     }
 }
