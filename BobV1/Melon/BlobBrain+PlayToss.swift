@@ -53,7 +53,7 @@ extension BlobBrain {
     // MARK: header
 
     @discardableResult
-    func tossHeaderStart(_ sim: SoftBody, _ skinner: Skinner? = nil) -> Bool {
+    func tossHeaderStart(_ sim: SoftBody, _ skinner: Skinner? = nil, jump: Bool = false) -> Bool {
         guard idleState.kind == nil else { return false }
         if case .none = script {} else {          // a waiting pose (a look, a step on the spot): stopped cleanly first
             guard let skinner, !feet.active else { return false }
@@ -67,7 +67,9 @@ extension BlobBrain {
         idleState.hop = 0; idleState.landT = 0
         script = .idle; activity = .playing
         idleState.phase = 1; idleState.phaseT = 0
+        if jump { Self.tossApexOverride = Self.tossJumpApex }          // (play-ball-r2: the late ball's hop is the same real jump as the planned header's)
         idleScootHop(sim)
+        Self.tossApexOverride = nil
         tossFaceYaw = nil
         return true
     }

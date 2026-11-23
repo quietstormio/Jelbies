@@ -521,7 +521,7 @@ final class PlayToss {
         looseT = 0
         touchLog("header", j)
         j.brain.jellyKick = max(j.brain.jellyKick, 2.2)
-        if !j.brain.tossBusy, Self.canHop(j.brain) { let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }; j.brain.tossHeaderStart(j.sim, j.skinner) }
+        if !j.brain.tossBusy, Self.canHop(j.brain) { let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }; j.brain.tossHeaderStart(j.sim, j.skinner, jump: !PlayTuning.ballReturnOld) }
         onEvent?(.header(id: id, quality: q))
     }
 
@@ -591,7 +591,9 @@ final class PlayToss {
         // the one already going for it keeps it (two Jelmiko about as near as each other must not hand it back and forth every step: each hand-over releases the other's stand and nobody gets there)
         if !PlayTuning.ballReturnOld, let c = headChoice, c != best?.j.id, let jc = jelly(c), let a = arrival(jc), simd_distance(jc.pos, a.xz) < Self.interceptReach { best = (jc, a.t, a.xz, simd_distance(jc.pos, a.xz)) }
         headChoice = best?.j.id
-        support(toward: best?.xz ?? ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: best.map { [$0.j.id] } ?? [])
+        if PlayTuning.ballReturnOld || best == nil {
+            support(toward: ball.landing(xHalf: Self.ballReach)?.xz ?? SIMD2(ball.pos.x, ball.pos.z), except: [])
+        }          // (play-ball-r2: while a ball is on its way to one Jelmiko the others stand: in landscape they are 3 u apart and walked across its path)
         guard let b = best else { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) }; return }
         let j = b.j
         let busy = j.brain.tossBusy
@@ -635,9 +637,9 @@ final class PlayToss {
             j.brain.idleState.toss.go = true
         }
         // fallback: no approach could be set (mid-step ...): the old hop, timed so the top of it meets the ball
-        if !busy, b.d < 0.55, b.t <= BlobBrain.tossHeaderLead + 0.03, Self.canHop(j.brain) {
+        if !busy, b.d < 0.55, b.t <= BlobBrain.tossHeaderLead + (PlayTuning.ballReturnOld ? 0.03 : 0.10), Self.canHop(j.brain) {
             let P = playerPoint() - j.pos; if simd_length(P) > 1e-3 { j.brain.tossFaceYaw = atan2f(P.x, P.y) }
-            j.brain.tossHeaderStart(j.sim, j.skinner)
+            j.brain.tossHeaderStart(j.sim, j.skinner, jump: !PlayTuning.ballReturnOld)
         }
     }
 
@@ -727,6 +729,18 @@ final class PlayToss {
             let q = ballXZ - u * back
             let f = j.brain.fixed(q)
             if simd_distance(f, q) < 0.1, j.brain.peerFree(f) { plan = (f, u); break }
+        }
+        if plan == nil, !PlayTuning.ballReturnOld {          // (a ball against a side wall: the nearest allowed spot to it, kicking along the wall toward the player, before the safety net)
+            for back2 in [back, back * 0.8, back * 0.6] {
+                for a in [Float(0), 0.5, -0.5, 1.0, -1.0] {
+                    let c = cosf(a), s = sinf(a)
+                    let u = SIMD2<Float>(dir.x * c - dir.y * s, dir.x * s + dir.y * c)
+                    let f = j.brain.fixed(ballXZ - u * back2)
+                    let g = ballXZ - f
+                    if simd_length(g) > 0.45, simd_length(g) < 1.8, j.brain.peerFree(f) { plan = (f, simd_normalize(g)); break }
+                }
+                if plan != nil { break }
+            }
         }
         guard let p = plan else { return }
         j.brain.tossFire = { [weak self] b in self?.fired(by: b) }
