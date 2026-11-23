@@ -106,6 +106,7 @@ final class PlayToss {
     /// The passes this throw is meant to make before the ball goes back (rolled at the throw from the style: 0 = none) and when the player asked for it back.
     @ObservationIgnored private(set) var pendingPasses = 0
     @ObservationIgnored private var recallAt: Float?
+    @ObservationIgnored private var passStill: Float?
     /// A pass under way: where the ball is to come to rest and how hard it is braked (m/s^2).
     @ObservationIgnored private var passTrack: (spot: SIMD2<Float>, decel: Float)?
     @ObservationIgnored private var passPlan: (to: Int, spot: SIMD2<Float>, dir: SIMD2<Float>, until: Float)?
@@ -848,7 +849,7 @@ final class PlayToss {
         }
         guard D >= 1.6 else { setOwn(.none); liveKick(by: j); return }          // (never a pass that close: the ball goes back)
         // 0.7 to 1.1 s of travel whatever the distance; the ball is braked evenly so that it comes to rest at the spot (the receiver traps it, then kicks): v0 = 2 D / T, a = v0 / T
-        let T = min(max(0.7 + 0.1 * D, 0.8), 1.1)
+        let T = min(max(0.9 + 0.05 * D, 1.0), 1.1)
         let speed = 2 * D / T
         let d = (spot - ballXZ) / D
         ball.vel = SIMD3(d.x * speed, 0, d.y * speed)
@@ -1015,7 +1016,10 @@ final class PlayToss {
                 NSLog("[playfoot] pass-stopped clock=%.3f id=%d d=%.2f", clock, c, d); return
             }
             // he traps it: the wind-up starts when the ball has arrived and (nearly) stopped, so his foot lands 0.35-0.6 s after it
-            if d < 0.35 && sp < 0.9 { j.brain.tossFootGo(); NSLog("[playfoot] go-pass clock=%.3f id=%d d=%.2f sp=%.2f", clock, c, d, sp) }
+            if d < 0.3 && sp < 0.15 {
+                if passStill == nil { passStill = clock }
+                if clock - passStill! >= 0.1 { j.brain.tossFootGo(); NSLog("[playfoot] go-pass clock=%.3f id=%d d=%.2f sp=%.2f still=%.2f", clock, c, d, sp, clock - passStill!) }          // (he looks at it for 0.1 s: his foot lands 0.5 s after it came to rest)
+            } else { passStill = nil }
             return
         }
         let ahead = ballXZ + vxz * ((1 - expf(-k * Self.footLead)) / k)
