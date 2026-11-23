@@ -301,7 +301,7 @@ extension BlobBrain {
     /// The audience switch (dev: `-ToyAudience 0`; the tests: ToyAuditTests TOYAUDIENCE=0): off = the toys as they were.
     nonisolated(unsafe) static var audienceOn: Bool = !(DevArgs.enabled && UserDefaults.standard.object(forKey: "ToyAudience") != nil && UserDefaults.standard.integer(forKey: "ToyAudience") == 0)
     static let audienceKinds: Set<DecorKind> = [.drum, .spintop, .hoop, .bouncymat]
-    static func audienceChance(_ k: DecorKind) -> Float { switch k { case .drum: return 0.5; case .spintop: return 0.55; case .hoop: return 0.5; default: return 0.4 } }
+    static func audienceChance(_ k: DecorKind) -> Float { switch k { case .drum: return 0.5; case .spintop: return 0.55; case .hoop: return 0.5; default: return 0.25 } }
     static func audienceLimit(_ k: DecorKind) -> Int { k == .spintop ? 2 : 1 }
 
     /// `toyFree` without the mood clause: a grumpy one may watch too (the audience rolls at half the chance and keeps to looks: no dance, no cheer, no bounce).
@@ -406,7 +406,9 @@ extension BlobBrain {
             }
         default:          // bouncy mat: bob while the first bounces, take the turn as he gets off
             if !playing {
-                toyAudienceEnd(clock, cool: 45)
+                // the first one is off the mat's pad AND out of the waiter's way before the next steps on (never two bodies on one spot)
+                if let user, simd_distance(user.position, c) < 1.6 || simd_distance(user.position, position) < 1.3 { return true }
+                toyAudienceEnd(clock, cool: 60)
                 toy.shared += 1
                 toyGo(uid, sim)
                 return false

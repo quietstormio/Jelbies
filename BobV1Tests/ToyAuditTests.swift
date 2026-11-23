@@ -18,7 +18,7 @@ final class ToyAuditTests: XCTestCase {
     static let mixToys: [DecorKind] = [.drum, .blocks, .spintop, .bouncymat, .hoop, .plushbear]
 
     struct Result { var first: Float = -1; var uses = 0; var dur: [Float] = []; var stuck = 0; var minGap: Float = .infinity; var crowd = 0; var queued = 0; var tookTurn = 0; var gaveUp = 0; var perKind: [String: Int] = [:]
-        var walkF = 0, standF = 0, soloF = 0, pairF = 0, groupF = 0, frames = 0, otherIdle: [String: Int] = [:], starts: [String: Int] = [:], shared = 0, minShareGap: Float = .infinity }
+        var walkF = 0, standF = 0, soloF = 0, pairF = 0, groupF = 0, frames = 0, otherIdle: [String: Int] = [:], starts: [String: Int] = [:], shared = 0, minShareGap: Float = .infinity, minTag = "" }
 
     func run(kinds: [DecorKind], seconds: Float, seed: UInt64) -> Result {
         let starts: [SIMD2<Float>] = [SIMD2(-1.8, 1.4), SIMD2(-0.2, 1.8), SIMD2(1.4, 1.2)]
@@ -58,7 +58,7 @@ final class ToyAuditTests: XCTestCase {
                     let paired = lab.rigs[i].brain.social != nil && lab.rigs[i].brain.social === lab.rigs[j].brain.social
                     if paired { continue }
                     let g = lab.centreGap(i, j)
-                    res.minGap = min(res.minGap, g)
+                    if g < res.minGap { res.minGap = g; let bi = lab.rigs[i].brain, bj = lab.rigs[j].brain; res.minTag = "t\(Int(t)) \(i):\(bi.idleState.kind.map { "\($0)" } ?? "-")/aud\(bi.toy.audUID)s\(bi.toy.audStage)/wait\(bi.toy.waitUID)/\(bi.activity) vs \(j):\(bj.idleState.kind.map { "\($0)" } ?? "-")/aud\(bj.toy.audUID)s\(bj.toy.audStage)/wait\(bj.toy.waitUID)/\(bj.activity)" }
                     let usingI = curUID[i] >= 0, usingJ = curUID[j] >= 0
                     if (usingI || usingJ) && g < 1.2 { res.crowd += 1 }
                 } }
@@ -79,16 +79,16 @@ final class ToyAuditTests: XCTestCase {
         var lines: [String] = ["toys in the shop: \(Self.shopToys.count): \(Self.shopToys.map { $0.rawValue }.joined(separator: ","))", "seconds per seed: \(secs), seeds 3"]
         if env["TOYAUDIT_MIX"] != nil {
             var tot = Result(); var firsts: [Float] = []
-            for seed in [3, 5, 9] as [UInt64] {
+            for seed in (0..<(Int(env["TOYAUDIT_SEEDS"] ?? "") ?? 3)).map({ UInt64([3, 5, 9, 13, 17, 21, 25, 29][$0 % 8]) }) {
                 let r = run(kinds: Self.mixToys, seconds: secs, seed: seed)
                 tot.uses += r.uses; tot.stuck += r.stuck; tot.crowd += r.crowd; tot.queued += r.queued; tot.tookTurn += r.tookTurn; tot.gaveUp += r.gaveUp
-                tot.walkF += r.walkF; tot.standF += r.standF; tot.soloF += r.soloF; tot.pairF += r.pairF; tot.frames += r.frames; tot.minGap = min(tot.minGap, r.minGap); tot.shared += r.shared; for (k, v) in r.starts { tot.starts[k, default: 0] += v }
+                tot.walkF += r.walkF; tot.standF += r.standF; tot.soloF += r.soloF; tot.pairF += r.pairF; tot.frames += r.frames; if r.minGap < tot.minGap { tot.minGap = r.minGap; tot.minTag = r.minTag }; tot.shared += r.shared; for (k, v) in r.starts { tot.starts[k, default: 0] += v }
                 for (k, v) in r.perKind { tot.perKind[k, default: 0] += v }
                 for (k, v) in r.otherIdle { tot.otherIdle[k, default: 0] += v }
                 firsts.append(r.first)
-                lines.append(String(format: "MIX seed %d: uses %d, per kind %@, minGap %.2f", seed, r.uses, "\(r.perKind.sorted { $0.key < $1.key })", r.minGap))
+                lines.append(String(format: "MIX seed %d: uses %d, per kind %@, minGap %.2f (%@)", seed, r.uses, "\(r.perKind.sorted { $0.key < $1.key })", r.minGap, r.minTag))
             }
-            let mins = Float(3) * secs / 60
+            let mins = Float(Int(env["TOYAUDIT_SEEDS"] ?? "") ?? 3) * secs / 60
             lines.append(String(format: "MIX total uses per 10 min per body-trio: %.1f; stuck %d crowd %d queued %d tookTurn %d gaveUp %d minGap %.2f; share walk %.1f%% stand %.1f%% solo %.1f%% pair %.1f%%",
                                 Float(tot.uses) / mins * 10, tot.stuck, tot.crowd, tot.queued, tot.tookTurn, tot.gaveUp, tot.minGap,
                                 100 * Float(tot.walkF) / Float(tot.frames), 100 * Float(tot.standF) / Float(tot.frames), 100 * Float(tot.soloF) / Float(tot.frames), 100 * Float(tot.pairF) / Float(tot.frames)))
