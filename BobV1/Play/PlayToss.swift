@@ -496,6 +496,7 @@ final class PlayToss {
         if leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
             caught(); return
         }
+        if netUp, net.returning { return }          // (play-net-r2: the net's return to the player is a plain flight to the hand: no flight planning, no kick plan, nobody sent to fetch it; `caught()` above ends it)
         if phase == .loose { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) } }          // (a ball on the floor: nobody holds a header stand for it)
         if phase != .flying { headChoice = nil }
         if phase == .flying { steerReturn(dt: dt); intercepts(dt: dt, before: before) }
