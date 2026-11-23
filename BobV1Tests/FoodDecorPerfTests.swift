@@ -93,8 +93,8 @@ final class FoodDecorPerfTests: XCTestCase {
         WearBody.install(MotionRig.renderMesh)
         let outfits: [[WearSlot: WearLook]] = [
             [.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .body: .capeHero, .hands: .wristbandsSky, .feet: .hightopRed],
-            [.head: .flowerCrown, .face: .heartShades, .neck: .pearls, .body: .capeHero, .hands: .wristbandsSky, .feet: .sneakerLightup],
-            [.head: .crownGold, .face: .gogglesAviator, .neck: .whistleCoach, .body: .backpackSky, .hands: .wristbandsSky, .feet: .balletPink]]
+            [.head: .flowerCrown, .face: .heartShades, .neck: .diamondJ, .body: .capeHero, .hands: .wristbandsSky, .feet: .sneakerLightup],
+            [.head: .crownGold, .face: .gogglesAviator, .neck: .bandanaCoral, .body: .backpackSky, .hands: .wristbandsSky, .feet: .balletPink]]
         let set = WornSet(); set.body = WearBody.shared; set.soundOn = false; Self.keep.append(set)
         for a in s.actors { if a.brain == nil { a.brain = BlobBrain() } }
         var extraMs = 0.0, tris = (wear: 0, shoes: 0)

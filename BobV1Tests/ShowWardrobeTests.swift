@@ -21,7 +21,7 @@ final class ShowWardrobeTests: XCTestCase {
     }
     private func stocked(_ d: UserDefaults) -> StoreBook {
         let b = book(d)
-        b.saved.wearables = [WearLook.partyHat, .glitterShoes, .flowerCrown, .pearls].map(\.rawValue)
+        b.saved.wearables = [WearLook.partyHat, .glitterShoes, .flowerCrown, .diamondJ].map(\.rawValue)
         b.save()
         return b
     }
@@ -42,7 +42,7 @@ final class ShowWardrobeTests: XCTestCase {
     }
     func testCaseB_XAtHome_YForTheShow_XAfter() {
         let b = stocked(defaults())
-        XCTAssertTrue(b.wear(.flowerCrown, on: 0)); XCTAssertTrue(b.wear(.pearls, on: 0))
+        XCTAssertTrue(b.wear(.flowerCrown, on: 0)); XCTAssertTrue(b.wear(.diamondJ, on: 0))
         let before = b.outfit(0), items = owned(b)
         b.rememberEveryday(0)
         XCTAssertTrue(b.wear(.partyHat, on: 0)); b.takeOff(.neck, from: 0)
@@ -113,7 +113,7 @@ final class ShowWardrobeTests: XCTestCase {
         let r = Room(count: 3)
         RaceThreeTests.keep.append(r)
         r.care.show.songClock = { _ in nil }; r.care.show.audioReady = { _ in true }; r.care.show.cue = { _ in }
-        r.care.store.saved.wearables = [WearLook.partyHat, .glitterShoes, .flowerCrown, .pearls].map(\.rawValue)
+        r.care.store.saved.wearables = [WearLook.partyHat, .glitterShoes, .flowerCrown, .diamondJ].map(\.rawValue)
         return r
     }
     private func toStage(_ r: Room) {
@@ -169,13 +169,13 @@ final class ShowWardrobeTests: XCTestCase {
     }
     func testPickingAnotherJelmikoInTheLobbyGivesTheFirstItsClothesBack() {
         let r = room(), c = r.care
-        XCTAssertTrue(c.store.wear(.pearls, on: 1))
+        XCTAssertTrue(c.store.wear(.diamondJ, on: 1))
         dressInLobby(r, home: [.flowerCrown], show: [.partyHat])
         c.showWardrobeLeaveLobby(); c.showWardrobeReady(1)          // (the Studio's who change)
         XCTAssertEqual(c.store.outfit(0), [.head: .flowerCrown])
         XCTAssertTrue(c.store.wear(.glitterShoes, on: 1))
         c.showWardrobeLeaveLobby()
-        XCTAssertEqual(c.store.outfit(1), [.neck: .pearls])
+        XCTAssertEqual(c.store.outfit(1), [.neck: .diamondJ])
         XCTAssertEqual(c.store.outfit(0), [.head: .flowerCrown])
     }
     func testClosingTheStudioToEnterTheShowKeepsTheShowOutfitUntilHome() {

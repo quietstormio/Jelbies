@@ -814,12 +814,10 @@ final class PipTailChecklistTests: XCTestCase {
         picks.append(("beanie_shades", [.head: .beaniePink, .face: .heartShades]))
         picks.append(("neck_scarf", [.neck: .scarfCosy]))
         picks.append(("neck_scarf_beanie", [.neck: .scarfCosy, .head: .beaniePink]))
-        picks.append(("neck_chain", [.neck: .pearls]))
-        picks.append(("neck_chain_beanie", [.neck: .pearls, .head: .beaniePink]))
+        picks.append(("neck_chain", [.neck: .diamondJ]))
+        picks.append(("neck_chain_beanie", [.neck: .diamondJ, .head: .beaniePink]))
         picks.append(("neck_medal", [.neck: .medalGold]))
         picks.append(("neck_medal_beanie", [.neck: .medalGold, .head: .beaniePink]))
-        picks.append(("neck_pearls", [.neck: .pearls]))
-        picks.append(("neck_pearls_beanie", [.neck: .pearls, .head: .beaniePink]))
         picks.append(("lowcap_scarf", [.neck: .scarfCosy, .head: .capTeamPink]))
         let views: [View] = [View(name: "back34", yaw: 2.5, dist: 3.6, lookBack: 0.35), View(name: "side", yaw: .pi / 2, dist: 3.6, lookBack: 0.35), View(name: "back", yaw: .pi, dist: 3.6, lookBack: 0.35)]
         for (n, outfit) in picks {
