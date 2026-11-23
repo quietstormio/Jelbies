@@ -291,7 +291,7 @@ final class SoccerSession {
                 guard let rf = rf0 else { return true }
                 return K.sessRestFloor(rf, p) && field.openFloor(p, margin: 0.6) && field.goals.allSatisfy { simd_distance($0.centre, p) > 1.3 }
             }
-            guard let plan = K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6, dists: kickoffTurn ? [2.4, 2.2, 2.0, 2.6, 3.0] : nil) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK, dists: kickoffTurn ? [2.4, 2.2, 2.0, 2.6, 3.0] : nil) else {
+            guard let plan = K.mixPassPlan(ball: c, with: R, restOK: restOK, bodyGap: 1.6, dists: kickoffTurn ? [2.0, 2.2, 2.4, 2.6, 3.0] : nil) ?? K.mixPassPlan(ball: c, with: R, restOK: restOK, dists: kickoffTurn ? [2.0, 2.2, 2.4, 2.6, 3.0] : nil) else {
                 failures += 1
                 log("no line K=\(K.steerID) R=\(R.steerID) why=\(K.mix.passWhy)")
                 if failures == 1 || failures == 4 {          // (the ball lies where no line fits: one of them dribbles it out toward the middle, then the turn is planned again)
