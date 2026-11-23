@@ -386,10 +386,12 @@ final class PlayToss {
     /// Every Jelbie keeps turning to the ball (the waiting pose); the one under it keeps his own legs.
     private func watch(_ p: SIMD3<Float>) {
         for j in jellies {
-            j.brain.trackPoint = SIMD2(p.x, p.z); j.brain.waitFocus = SIMD2(p.x, p.z)
+            // play-ball-r2: the head follows the ball everywhere, but the BODY keeps facing the player while the ball is behind him (a ball that flew past him to the back wall turned the outer ones right round, and the next ball found them with their backs to the room)
+            let body: SIMD2<Float> = (PlayTuning.ballReturnOld || p.z > j.pos.y + 0.3) ? SIMD2(p.x, p.z) : playerPoint()
+            j.brain.trackPoint = SIMD2(p.x, p.z); j.brain.waitFocus = body
             // turned well away from it (he walked back to his place with his back to the room): he turns to watch it, on the spot
             guard !j.brain.tossBusy, Self.canHop(j.brain), j.brain.idleState.kind == nil, case .none = j.brain.script, clock - (turnT[j.id] ?? -9) > 0.7 else { continue }
-            let want = j.brain.yawTo(SIMD2(p.x, p.z))
+            let want = j.brain.yawTo(body)
             if abs(wrapAngle(want - j.brain.yaw)) > 0.5 { turnT[j.id] = clock; j.brain.startTurn(to: want, sim: j.sim) }
         }
     }
