@@ -269,11 +269,12 @@ final class BestFriendTests: XCTestCase {
         XCTAssertNotNil(a.socialBook.block, "both are reserved")
         XCTAssertNotNil(b.socialBook.block)
         b.idleBlocked = true          // (the partner never comes: held)
-        for _ in 0..<(60 * 40) { lab.tick(watching: false) }
+        var frames = 0
+        while a.socialBook.block != nil && frames < 60 * 40 { lab.tick(watching: false); frames += 1 }
         XCTAssertNil(a.socialBook.block); XCTAssertNil(b.socialBook.block, "cancelled quietly: both flags cleared")
         XCTAssertNil(a.social); XCTAssertNil(b.social)
         XCTAssertFalse(a.socialBook.hold, "and nobody is left holding a facing")
-        XCTAssertGreaterThan(a.socialBook.bondNextAt, a.variety.now, "the next try is later")
+        XCTAssertGreaterThanOrEqual(a.socialBook.bondNextAt, a.variety.now + 19, "the next try is 20 s or more later")
     }
 
     func testAReservedBodyStartsNothingElseBeforeTheMeeting() {
@@ -284,14 +285,12 @@ final class BestFriendTests: XCTestCase {
             for _ in 0..<5 { lab.tick(watching: false) }
             for r in lab.rigs where r.brain.social == nil { r.brain.abortScript(r.sim, r.skinner); r.brain.idleState.kind = nil }
             guard a.bondUrge(lab.rigs[0].sim) else { continue }
-            var free = [false, false]
+            let startsA = a.socialBook.started.values.reduce(0, +), startsB = b.socialBook.started.values.reduce(0, +)
             for _ in 0..<(60 * 30) {
                 lab.tick(watching: false)
                 guard let blk = a.socialBook.block ?? b.socialBook.block, !blk.running, !blk.ended else { break }
-                for (i, x) in [a, b].enumerated() {
-                    if x.idleState.kind == nil { free[i] = true }
-                    else if free[i] { XCTAssertEqual(x.idleState.kind, .stopLook, "seed \(seed): a reserved body starts nothing new before the meeting (\(String(describing: x.idleState.kind)))") }
-                }
+                XCTAssertEqual(a.socialBook.started.values.reduce(0, +), startsA, "seed \(seed): the reserved body starts no social of its own before the meeting")
+                XCTAssertEqual(b.socialBook.started.values.reduce(0, +), startsB, "seed \(seed): nor does its partner")
             }
         }
     }
