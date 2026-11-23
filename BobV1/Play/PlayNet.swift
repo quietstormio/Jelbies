@@ -252,7 +252,12 @@ extension PlayToss {
         net.floorHits = 0; net.prevVy = 0; net.deadReturns += 1
         net.goalAt = clock; net.awaitHand = true; net.rescuesAtGoal = rescues
         phase = .loose; looseT = 0; restT = 0; returnAim = nil; bumper = nil
-        for j in jellies where j.brain.tossHeaderApproach { j.brain.tossHeaderRelease(j.sim, j.skinner) }
+        for j in jellies {          // (nobody fetches a ball from there: a body in his own kick / header plan or on a walk to it is stopped, as at a goal; one in the air lands first)
+            let b = j.brain
+            if b.tossHeaderApproach { b.tossHeaderRelease(j.sim, j.skinner) }
+            if (b.idleState.kind == .tossBump || b.idleState.kind == .tossHeader), !b.tossAirborne(j.sim) { b.abortAll(j.sim, j.skinner); b.tossFaceYaw = nil; b.tossFire = nil; b.tossFireReady = nil }
+            else if b.idleState.kind == nil, !b.isSleeping, !b.isNapping { if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) } }
+        }
         netClearFoot()
         if n.contains(p) {          // inside the frame (over the bar and down into it, a side net): the net rolls / lobs it out of the mouth exactly as after a goal, no cheer
             let at = SIMD2(min(max(p.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), min(p.y, n.mouthZ - 0.3))
