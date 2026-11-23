@@ -183,6 +183,7 @@ struct PlayNetState {
     var goalAt: Float = -99
     var sampleAt: Float = 0
     var bodyLogT: [Int: Float] = [:]
+    var awaitHand = false
     var goals = 0
     /// Bodies that stay where they are while the net is up (sleepers): the net is placed clear of them.
     var blockers: [SIMD2<Float>] = []
@@ -291,6 +292,7 @@ extension PlayToss {
     /// Every step while the game is on: the cheers that are waiting for a free (or a turned) Jelmiko, the cheer log, and a Jelmiko inside the net (logged).
     func netTick(dt: Float) {
         guard netUp else { return }
+        if net.awaitHand, phase == .inHand { net.awaitHand = false; NSLog("[playnet] goal-to-hand %.1f s", clock - net.goalAt) }
         for (id, p) in net.pending {
             guard let j = jellies.first(where: { $0.id == id }) else { net.pending[id] = nil; continue }
             if netCelebrate(j, scorer: p.scorer, turnUntil: p.turnUntil) { net.pending[id] = nil }
@@ -325,7 +327,7 @@ extension PlayToss {
             if net.first == nil { net.first = "goal" }
             let scorer = touched ? net.lastToucher : nil
             net.hold = .init(t: 0, rolled: false, scorer: scorer)
-            net.goalAt = clock; net.sampleAt = clock
+            net.goalAt = clock; net.sampleAt = clock; net.awaitHand = true
             phase = .loose; looseT = 0; restT = 0; returnAim = nil; bumper = nil; passTo = nil
             for j in jellies where j.brain.tossHeaderApproach { j.brain.tossHeaderRelease(j.sim, j.skinner) }
             netClearFoot()
@@ -335,9 +337,11 @@ extension PlayToss {
             net.onGoal?(scorer)
             NSLog("[playnet] goal speed=%.2f scorer=%@", speed, scorer.map(String.init) ?? "none")
         case .post(let s):
+            NSLog("[playnet] net hit post speed=%.1f", s)
             if net.first == nil { net.first = "post" }
             onEvent?(.netHit(speed: s))
         case .bar(let s):
+            NSLog("[playnet] net hit bar speed=%.1f", s)
             if net.first == nil { net.first = "bar" }
             onEvent?(.netHit(speed: s))
         case .lid:
@@ -363,6 +367,7 @@ extension PlayToss {
         }
         // out of the mouth (or given up): the normal handling takes over
         if h.rolled, ball.pos.z > n.mouthZ + ball.radius + 0.1 || h.t > PlayNetTuning.holdMax {
+            if h.t > PlayNetTuning.holdMax { NSLog("[playnet] hold forced out") }
             if h.t > PlayNetTuning.holdMax, ball.pos.z <= n.mouthZ { ball.pos = SIMD3(n.rollOutSpot(from: SIMD2(ball.pos.x, ball.pos.z)).x, ball.radius, n.mouthZ + PlayNetTuning.rollOutStop); ball.vel = .zero }
             net.hold = nil
             phase = .loose; looseT = 0; restT = 0
