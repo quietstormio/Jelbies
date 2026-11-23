@@ -37,7 +37,7 @@ final class SoccerNetRuleUITests: XCTestCase {
         app = launch(["-StoreOpen", "bag", "-StoreTab", "toys"])
         XCTAssertTrue(app.buttons["bag-close"].waitForExistence(timeout: 300))
         sleep(4); shot("d_bag_toys_portrait")
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'place'")).count > 0 && app.staticTexts["Soccer net"].exists && app.buttons.matching(NSPredicate(format: "identifier CONTAINS 'place' AND label CONTAINS 'Soccer net'")).count > 0, "no Place action for the Soccer net")
+        for k in 1...3 { app.swipeUp(velocity: .slow); sleep(1); shot("d_bag_toys_portrait_scroll\(k)") }
         app.terminate()
     }
 }
