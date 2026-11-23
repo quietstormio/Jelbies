@@ -244,6 +244,8 @@ final class BlobBrain {
     /// Play mode: the floor point a waiting Jelly keeps turning to (the ball); nil = none. And the controller's hook for the moment a bump's foot lands (BlobBrain+PlayToss.swift).
     var trackPoint: SIMD2<Float>?
     var tossFire: ((BlobBrain) -> Void)?
+    /// play-ball-s2: a planned kick's foot may land only when this says the ball is in reach (nil = always, the old stomp).
+    var tossFireReady: ((BlobBrain) -> Bool)?
     /// play-ball-r2: where the play header's hop turns the body to (toward the player), set by the play controller; nil = the hop keeps its heading (bubble wand, emote suites). Cleared once the hop has begun.
     var tossFaceYaw: Float?
     /// The bubble wand's play area while Play mode with the wand is on (Toys/BubbleWand.swift sets and clears it; BlobBrain+Bubbles.swift acts on it): he stays on his spot in view.

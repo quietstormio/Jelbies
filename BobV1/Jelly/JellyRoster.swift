@@ -190,6 +190,11 @@ nonisolated enum JellyRoster {
     }
     /// The name of Jelbie `id` (instance id): the v1 names array below 27, the extra names from 100, a preview scratch id its species' base name.
     static func nameOf(_ id: Int) -> String {
+        let n = rawNameOf(id)
+        if DevArgs.enabled, let from = UserDefaults.standard.string(forKey: "DevNameFor"), from == n, let to = UserDefaults.standard.string(forKey: "DevNameTo") { return to }          // capture aid: `-DevNameFor Berry -DevNameTo "Marshmallow Bean"` (dev arguments only)
+        return n
+    }
+    private static func rawNameOf(_ id: Int) -> String {
         if names.indices.contains(id) { return names[id] }
         if let n = extraNames[id], !n.isEmpty { return n }
         return baseNames[species(id)]

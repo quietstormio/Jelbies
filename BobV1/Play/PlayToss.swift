@@ -84,6 +84,12 @@ final class PlayToss {
     @ObservationIgnored private var catchT: Float = 0
     @ObservationIgnored private var bumper: Int?
     @ObservationIgnored private var passTo: Int?
+    /// play-ball-s2: this flight is played by foot (rolled once per flight from `PlayTuning.style`), who has the foot plan (the kick spot, the direction), and when the ball first got down to kick height.
+    @ObservationIgnored private(set) var footFlight = false
+    @ObservationIgnored private var footChoice: Int?
+    @ObservationIgnored private var footPlan: [Int: (spot: SIMD2<Float>, dir: SIMD2<Float>, planned: Float)] = [:]
+    @ObservationIgnored private var kickHeightT: Float?
+    @ObservationIgnored private var footAimed = false          // (the throw was aimed at his feet: a header fallback cannot meet it, so the plan is held to the last moment)
     /// Where a good return is meant to come down (the catch zone), and the steering assist that eases it there; the seconds the loose ball has lain still.
     @ObservationIgnored private var returnAim: SIMD2<Float>?
     @ObservationIgnored private var restT: Float = 0
@@ -111,6 +117,10 @@ final class PlayToss {
     /// A loose ball resting where nobody is sending it back for this long is lobbed to the hand (user 2026-11-07: > 2 s unreachable).
     static let restRescueAfter: Float = 2
     static let passChance: Float = 0.16
+    /// play-ball-s2: seconds from the go to the planned kick's foot landing (wind-up 0.18 + the stomp to its landing), the ball's kick height above the floor (centre), and how far in front of his centre the ball is met (just outside his body's circle).
+    static let footLead: Float = 0.42
+    static let kickHeightAbove: Float = 0.30
+    static func contactDist(_ r: Float) -> Float { TossTuning.bodyRadius + r + 0.08 }
 
     private func rand() -> Float {
         rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17
@@ -301,17 +311,44 @@ final class PlayToss {
         guard var t = TossAim.throwFor(f, bodies: bodies, radius: ball.radius) else { return }
         // the ball starts in the hand (never behind the camera or inside the catch band's far edge)
         t.start.y = max(t.start.y, ball.radius + 0.2)
-        letGo(from: t.start, velocity: t.velocity)
+        let foot = rollFoot()
+        footAimed = false
+        var v = t.velocity
+        // play-ball-s2: a ball that is played by foot is thrown to come down at his feet, just in front of him on the player's side, not at his crown (the gentle nudge cannot move a ball two units, and the one it is heading for should not have to walk backwards with his back to the room)
+        if foot, t.flight > 0, let id = t.assistedBody, let b = jelly(id), let tv = footThrow(from: t.start, flight: t.flight, to: b) { v = tv; footAimed = true }
+        letGo(from: t.start, velocity: v, foot: foot)
+    }
+
+    /// The seeded roll for one incoming flight: by foot (1 - headShare) or by head. No roll for a ball that is always headed (the bouncy ball keeps its random stream).
+    func rollFoot() -> Bool {
+        guard !PlayTuning.ballReturnOld, !jellies.isEmpty else { return false }
+        let h = PlayTuning.style(ballKind).headShare
+        guard h < 1 else { return false }
+        return rand() >= h
+    }
+
+    private func footThrow(from start: SIMD3<Float>, flight T: Float, to b: PlayJelly) -> SIMD3<Float>? {
+        let r = ball.radius
+        let pp = playerPoint()
+        let d = pp - b.pos
+        guard simd_length(d) > 1e-3 else { return nil }
+        var spot = b.pos + simd_normalize(d) * Self.contactDist(r)
+        let lim = Self.ballReach(spot.y) - r - 0.1
+        spot.x = min(max(spot.x, -lim), lim)
+        spot.y = min(spot.y, catchZ() - 0.8)
+        return TossAim.ballistic(from: start, to: SIMD3(spot.x, r + Self.kickHeightAbove, spot.y), flight: T)
     }
 
     /// Test / capture entry: the ball is let go at `start` with `velocity` exactly as a flick would (a roll or a low pass a finger cannot throw is made this way).
     func launch(from start: SIMD3<Float>, velocity v: SIMD3<Float>) {
         guard phase == .inHand else { return }
         finger = nil
-        letGo(from: start, velocity: v)
+        footAimed = false
+        letGo(from: start, velocity: v, foot: rollFoot())
     }
 
-    private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>) {
+    private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>, foot: Bool = false) {
+        footFlight = foot; footChoice = nil; footPlan = [:]; kickHeightT = nil
         ball.pos = start; ball.vel = v; ball.floorBounces = 0; ball.ignoring = nil
         phase = .flying
         rally = 0; nudges = 0; looseT = 0; flightT = 0; leftHand = false; touched = false; bumper = nil; passTo = nil; headers = 0; rescues = 0; passes = 0
@@ -415,9 +452,22 @@ final class PlayToss {
         for e in events {
             switch e {
             case .floorBounce(let s):
+                if kickHeightT == nil { kickHeightT = clock }
                 onEvent?(.floorBounce(speed: s))
                 if phase == .flying { phase = .loose; looseT = 0 }
             case .bodyHit(let id, let s):
+                // play-ball-s2: any contact with the Jelmiko who is set to kick it is a strike, not a soft bounce
+                if footFlight || footChoice != nil, let kj = jelly(id), ball.pos.y < ball.radius + 0.9, !PlayTuning.ballReturnOld, kj.brain.tossFootApproach || !kj.brain.tossBusy {
+                    kj.brain.tossFire = { [weak self] b in self?.fired(by: b) }
+                    if !kj.brain.tossFootApproach {          // (not set up for it: the kick starts from where he stands, facing the player)
+                        let P = playerPoint() - kj.pos
+                        _ = kj.brain.tossBumpStart(kj.sim, kj.skinner, stand: kj.pos, dir: simd_length(P) > 1e-3 ? simd_normalize(P) : SIMD2(0, 1), foot: true, lunge: true)
+                    }
+                    kj.brain.tossStrikeNow()
+                    NSLog("[playfoot] bodystrike clock=%.3f id=%d ballY=%.2f", clock, id, ball.pos.y)
+                    fired(by: kj.brain, force: true)
+                    break
+                }
                 if s > 0.9 { onEvent?(.bodyBoop(id: id)) }
                 if UserDefaults.standard.integer(forKey: "PlayDemo") > 0, let j = jelly(id) { NSLog("[playsoft] clock=%.3f throw=%d id=%d speed=%.2f ballY=%.2f headTop=%.2f idle=%@ stage=%d phase=%@", clock, throwSerial, id, s, ball.pos.y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, String(describing: phase)) }
                 if phase == .flying { phase = .loose; looseT = 0 }
@@ -427,6 +477,8 @@ final class PlayToss {
             }
         }
         if ball.resting || (ball.onFloor && phase == .flying) { if phase == .flying { phase = .loose; looseT = 0 } }
+        if kickHeightT == nil, ball.pos.y <= ball.radius + Self.kickHeightAbove + 0.02, ball.vel.y <= 0.3, ball.ignoring == nil { kickHeightT = clock }
+        if !PlayTuning.ballReturnOld, footFlight || footChoice != nil { footTick() }
         // back at the bottom of the screen: caught
         if leftHand, ball.pos.z > catchZ(), ball.pos.y < 2.6, (ball.vel.z > -0.2 || ball.onFloor), ball.ignoring == nil, touched || ball.speedXZ < 1.0 {
             caught(); return
@@ -461,9 +513,9 @@ final class PlayToss {
         let sz = viewSize
         let js = GameCamera.screenPoint(floor: j.pos, y: j.sim.centroid().y, size: sz) ?? .zero
         let bs = GameCamera.screenPoint(floor: SIMD2(ball.pos.x, ball.pos.z), y: ball.pos.y, size: sz) ?? .zero
-        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f visErr=%.1f handErr=%.1f yaw=%.0f pl=%.1f,%.1f pos=%.1f,%.1f centroidY=%.3f headTop=%.3f idle=%@ stage=%d rise=%.3f jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f",
+        NSLog("[playtouch] clock=%.3f throw=%d ball=%@ kind=%@ id=%d face=%.1f brainYawErr=%.1f visErr=%.1f handErr=%.1f yaw=%.0f pl=%.1f,%.1f pos=%.1f,%.1f centroidY=%.3f headTop=%.3f idle=%@ stage=%d rise=%.3f jellyScr=%.0f,%.0f ballScr=%.0f,%.0f view=%.0fx%.0f planned=%d since=%.2f",
               clock, throwSerial, ballKind == .soccerball ? "soccer" : (ballKind == .beachball ? "beach" : "bouncy"), kind, j.id, err,
-              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, visErr, abs(wrapAngle(atan2f(toHand.x, toHand.y) - vy)) * 180 / .pi, vy * 180 / .pi, playerPoint().x, playerPoint().y, j.pos.x, j.pos.y, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, j.headTop - (standTop[j.id] ?? j.headTop), js.x, js.y, bs.x, bs.y, sz.width, sz.height)
+              abs(wrapAngle(atan2f(to.x, to.y) - j.brain.yaw)) * 180 / .pi, visErr, abs(wrapAngle(atan2f(toHand.x, toHand.y) - vy)) * 180 / .pi, vy * 180 / .pi, playerPoint().x, playerPoint().y, j.pos.x, j.pos.y, j.sim.centroid().y, j.headTop, String(describing: j.brain.idleState.kind), j.brain.idleState.toss.stage, j.headTop - (standTop[j.id] ?? j.headTop), js.x, js.y, bs.x, bs.y, sz.width, sz.height, footPlan[j.id] != nil ? 1 : 0, kickHeightT.map { clock - $0 } ?? -1)
     }
 
     /// Where the player stands: the hand's spot (the flick's origin, the camera side).
@@ -485,6 +537,8 @@ final class PlayToss {
     /// The ball is on `id`'s crown: it goes back toward the hand, with a quality.
     private func header(by id: Int) {
         guard let j = jelly(id) else { return }
+        footFlight = false; footChoice = nil
+        if j.brain.tossFootApproach { j.brain.tossFootRelease(j.sim, j.skinner) }
         var q: Quality = forceQuality ?? {
             let r = rand()
             return r < 0.74 ? .good : (r < 0.94 ? .short : .weak)
@@ -596,6 +650,7 @@ final class PlayToss {
 
     private func intercepts(dt: Float, before: SIMD3<Float>) {
         guard ball.ignoring == nil || ball.ignoreT < 0.2 else { return }
+        if footFlight, !PlayTuning.ballReturnOld, footIntercepts() { return }
         var best: (j: PlayJelly, t: Float, xz: SIMD2<Float>, d: Float)?
         for j in jellies {
             guard let a = arrival(j) else { continue }
@@ -666,9 +721,9 @@ final class PlayToss {
     static let steerReach: Float = 0.8
     /// The cap on the sideways speed the nudge may add (m/s): a gentle curve, never a snap.
     static let steerMaxDV: Float = 1.7
-    private func steerOntoCrown(_ j: PlayJelly, arriveIn t: Float) {
+    private func steerOntoCrown(_ j: PlayJelly, arriveIn t: Float, to spot: SIMD2<Float>? = nil) {
         guard !PlayTuning.ballReturnOld, j.brain.tossBusy, t > 0.04, t < 1.4 else { return }
-        let target: SIMD2<Float> = (j.brain.idleState.kind == .tossBump && j.brain.idleState.toss.walking) ? j.brain.idleState.toss.stand : j.pos
+        let target: SIMD2<Float> = spot ?? ((j.brain.idleState.kind == .tossBump && j.brain.idleState.toss.walking) ? j.brain.idleState.toss.stand : j.pos)
         let here = SIMD2(ball.pos.x, ball.pos.z) + SIMD2(ball.vel.x, ball.vel.z) * t
         let miss = target - here
         guard simd_length(miss) < Self.steerReach + 0.2 else { return }
@@ -701,6 +756,94 @@ final class PlayToss {
         return nil
     }
 
+    // MARK: planned kicks (play-ball-s2)
+
+    /// When the falling ball's centre is at kick height, and where.
+    private func kickArrival() -> (t: Float, xz: SIMD2<Float>)? {
+        let g = TossTuning.gravity
+        let y0 = ball.pos.y - (ball.radius + Self.kickHeightAbove)
+        guard y0 > 0 else { return nil }
+        let t = (ball.vel.y + (ball.vel.y * ball.vel.y + 2 * g * y0).squareRoot()) / g
+        guard t > 0, t < 1.8 * TossTuning.slow else { return nil }
+        return (t, SIMD2(ball.pos.x + ball.vel.x * t, ball.pos.z + ball.vel.z * t))
+    }
+
+    private func inKickReach(_ j: PlayJelly) -> Bool {
+        let rel = SIMD2(ball.pos.x, ball.pos.z) - j.pos, dist = simd_length(rel)
+        let fwd = SIMD2<Float>(sinf(j.brain.yaw), cosf(j.brain.yaw))
+        return dist < Self.kickReach + (ball.radius - SoccerTuning.radius) && dist > 1e-3 && simd_dot(rel / dist, fwd) > 0.4 && ball.pos.y < ball.radius + 0.55
+    }
+
+    /// A foot flight: the Jelmiko the ball is coming to goes to a stand behind where it comes down to kick height, turns to where the kick will go and holds it; `footTick` gives the go. NOTHING here decides whether the ball is struck (it is: a body contact, a header, or the loose path): a late or surprise ball falls back to the header path. True = handled this tick.
+    private func footIntercepts() -> Bool {
+        if let c = footChoice, let jc = jelly(c), jc.brain.tossFootApproach { return true }
+        guard let k = kickArrival() else { return false }
+        let r = ball.radius, cd = Self.contactDist(r)
+        let pp = playerPoint()
+        let dv = pp - k.xz
+        let dir = simd_length(dv) > 1e-3 ? simd_normalize(dv) : SIMD2<Float>(0, 1)
+        var spot = k.xz
+        let zr = Self.bodyZ()
+        let lim = Self.ballReach(spot.y) - r - 0.1
+        spot.x = min(max(spot.x, -lim), lim)
+        var stand = spot - dir * cd
+        stand.y = min(max(stand.y, zr.lowerBound), zr.upperBound)
+        stand.x = min(max(stand.x, -Self.bodyReach(stand.y)), Self.bodyReach(stand.y))
+        var best: (j: PlayJelly, walk: Float)?
+        for j in jellies {
+            let f = j.brain.fixed(stand)
+            guard simd_distance(f, stand) < 0.25, j.brain.peerFree(f) else { continue }
+            let w = simd_distance(j.pos, stand)
+            if w < Self.interceptReach, best == nil || w < best!.walk { best = (j, w) }
+        }
+        guard let b = best else { if footAimed { return true }; footFlight = false; return false }
+        let j = b.j
+        let need = b.walk / 1.5 + 0.2 + Self.footLead + (j.brain.tossBusy || !Self.canHop(j.brain) ? 0.15 : 0)
+        if k.t < (footAimed ? 0.45 : need) {
+            NSLog("[playfoot] late clock=%.3f throw=%d id=%d tk=%.2f need=%.2f walk=%.2f aimed=%d", clock, throwSerial, j.id, k.t, need, b.walk, footAimed ? 1 : 0)
+            if footAimed { return true }          // (the ball was thrown at his feet: a header cannot meet it; the body contact is the strike, see `live`)
+            footFlight = false; return false
+        }          // (no time for a stand: the header path, where he stands, as in step 1)
+        let wasBusy = j.brain.tossBusy
+        j.brain.tossFire = { [weak self] bb in self?.fired(by: bb) }
+        j.brain.tossFireReady = { [weak self] bb in self?.fireReady(bb) ?? true }
+        let spotNow = stand + dir * cd
+        if j.brain.tossBumpStart(j.sim, j.skinner, stand: stand, dir: dir, lean: 1, foot: true, lunge: true) {
+            footChoice = j.id; footPlan[j.id] = (spotNow, dir, clock); bumper = j.id
+            NSLog("[playfoot] plan clock=%.3f throw=%d id=%d tk=%.2f need=%.2f walk=%.2f stand=(%.2f,%.2f) spot=(%.2f,%.2f) busy=%d", clock, throwSerial, j.id, k.t, need, b.walk, stand.x, stand.y, spotNow.x, spotNow.y, wasBusy ? 1 : 0)
+            return true
+        }
+        if b.walk > 0.3, interceptAt[j.id] == nil || clock - interceptAt[j.id]!.t > 0.45 { j.brain.requestNow(.goTo(stand)); interceptAt[j.id] = (stand, clock) }
+        return true          // (not yet: he is mid-step; next tick)
+    }
+
+    private func fireReady(_ b: BlobBrain) -> Bool {
+        guard let j = jellies.first(where: { $0.brain === b }) else { return true }
+        return inKickReach(j)
+    }
+
+    /// Every tick while a kick is planned: ease the ball onto the kick spot, give the go so the foot lands as the ball arrives, let a plan go when the ball went elsewhere.
+    private func footTick() {
+        guard let c = footChoice, let j = jelly(c) else { return }
+        guard j.brain.tossFootApproach else { if !j.brain.tossBusy { footChoice = nil }; return }
+        guard let plan = footPlan[c] else { return }
+        let ballXZ = SIMD2(ball.pos.x, ball.pos.z)
+        let low = ball.pos.y <= ball.radius + Self.kickHeightAbove + 0.02
+        if !low, let k = kickArrival() {
+            if phase == .flying { steerOntoCrown(j, arriveIn: k.t, to: plan.spot) }
+            if j.brain.tossFootReady, k.t <= Self.footLead { j.brain.tossFootGo(); NSLog("[playfoot] go clock=%.3f id=%d tk=%.2f dist=%.2f", clock, c, k.t, simd_distance(ballXZ, plan.spot)) }
+            return
+        }
+        // on the floor (a bounce, a roll): in reach now or by the time the foot lands: go at once; gone off: let him go
+        let vxz = SIMD2(ball.vel.x, ball.vel.z)
+        let k = TossTuning.rollDecayPerS
+        let ahead = ballXZ + vxz * ((1 - expf(-k * Self.footLead)) / k)
+        if j.brain.tossFootReady {
+            if simd_distance(j.pos, ahead) < Self.kickReach + (ball.radius - SoccerTuning.radius) - 0.05 || inKickReach(j) { j.brain.tossFootGo(); NSLog("[playfoot] go-floor clock=%.3f id=%d dist=%.2f", clock, c, simd_distance(j.pos, ballXZ)) }
+            else if simd_distance(j.pos, ahead) > 2.0 || looseT > 0.5 { j.brain.tossFootRelease(j.sim, j.skinner); footChoice = nil; bumper = nil; NSLog("[playfoot] release clock=%.3f id=%d dist=%.2f", clock, c, simd_distance(j.pos, ballXZ)) }
+        }
+    }
+
     // MARK: loose ball
 
     private func loose(dt: Float) {
@@ -721,7 +864,8 @@ final class PlayToss {
         // wait for it to settle (or for the wait to run out), unless it will land on a head
         if ball.pos.y > 0.7 + r { return }
         let slow = ball.speedXZ < Self.looseWaitSpeed
-        guard slow || looseT > 1.6 else { return }
+        let byFoot = footFlight && !PlayTuning.ballReturnOld          // (play-ball-s2: a ball that was to be kicked is kicked on the bounce the moment he can be there: no waiting for it to slow down)
+        guard slow || looseT > 1.6 || byFoot else { return }
         // who goes: the nearest Jelbie that is free (the friend the last bump was passed to goes first)
         let free = jellies.filter { !$0.brain.tossBusy }
         let choice = (passTo.flatMap { id in free.first { $0.id == id } }) ?? free.min { simd_distance($0.pos, SIMD2(ball.pos.x, ball.pos.z)) < simd_distance($1.pos, SIMD2(ball.pos.x, ball.pos.z)) }
@@ -761,23 +905,27 @@ final class PlayToss {
         }
         guard let p = plan else { return }
         j.brain.tossFire = { [weak self] b in self?.fired(by: b) }
-        if j.brain.tossBumpStart(j.sim, j.skinner, stand: p.stand, dir: p.dir, lean: 1) { bumper = j.id }          // (mid-step: the next tick)
+        let lively = !PlayTuning.ballReturnOld && PlayTuning.style(ballKind).headShare < 1          // (soccer and beach kicks: the readable wind-up and lunge; the foot lands only when the ball is in reach)
+        j.brain.tossFireReady = lively ? { [weak self] b in self?.fireReady(b) ?? true } : nil
+        if j.brain.tossBumpStart(j.sim, j.skinner, stand: p.stand, dir: p.dir, lean: 1, lunge: lively) { bumper = j.id }          // (mid-step: the next tick)
     }
 
     /// The bump's foot landed.
-    private func fired(by b: BlobBrain) {
+    private func fired(by b: BlobBrain, force: Bool = false) {
         guard let j = jellies.first(where: { $0.brain === b }) else { return }
         let ballXZ = SIMD2(ball.pos.x, ball.pos.z)
         let rel = ballXZ - j.pos, dist = simd_length(rel)
         let fwd = SIMD2<Float>(sinf(b.yaw), cosf(b.yaw))
         let inReach = dist < Self.kickReach + (ball.radius - SoccerTuning.radius) && dist > 1e-3 && simd_dot(rel / dist, fwd) > 0.4 && ball.pos.y < ball.radius + 0.55
-        guard inReach, phase == .loose || phase == .flying else { onEvent?(.whiff(id: j.id)); return }
+        guard inReach || force, phase == .loose || phase == .flying else { onEvent?(.whiff(id: j.id)); NSLog("[playfoot] whiff clock=%.3f id=%d dist=%.2f y=%.2f", clock, j.id, dist, ball.pos.y); return }
         let hand = handWorld()
-        var target = SIMD2<Float>(hand.x * 0.5, catchZ() + 0.6)
         var factor: Float = [0.8, 0.95, 1.1, 1.25, 1.4, 1.5][min(nudges, 5)] * (0.88 + 0.22 * rand())
         var err: Float = nudges < 3 ? (rand() - 0.5) * 0.35 : 0
+        let passFriend: PlayJelly? = (passTo == nil && jellies.count > 1 && nudges == 0 && rand() < Self.passChance) ? jellies.filter({ $0.id != j.id }).min(by: { simd_distance($0.pos, ballXZ) < simd_distance($1.pos, ballXZ) }) : nil
+        if !PlayTuning.ballReturnOld, PlayTuning.style(ballKind).headShare < 1, passFriend == nil { liveKick(by: j); return }          // (play-ball-s2: soccer / beach kicks leave as a low lively arc toward the hand)
+        var target = SIMD2<Float>(hand.x * 0.5, catchZ() + 0.6)
         // a pass: to the friend
-        if passTo == nil, jellies.count > 1, nudges == 0, rand() < Self.passChance, let o = jellies.filter({ $0.id != j.id }).min(by: { simd_distance($0.pos, ballXZ) < simd_distance($1.pos, ballXZ) }) {
+        if let o = passFriend {
             target = o.pos + SIMD2(0, 0.6); factor = 0.95; err = 0; passTo = o.id; passes += 1
             onEvent?(.pass(from: j.id, to: o.id))
         } else { passTo = nil }
@@ -797,6 +945,42 @@ final class PlayToss {
         j.brain.jellyKick = max(j.brain.jellyKick, 1.6)
     }
 
+    /// play-ball-s2: a kick that goes to the player: it leaves faster than it came, on a low lively arc that comes down in the catch zone (the same steering as a header's return eases it there).
+    private func liveKick(by j: PlayJelly) {
+        let from = ball.pos
+        let hand = handWorld()
+        let tz = catchZ() + 0.55
+        let tx = min(max(hand.x * 0.5 + (rand() - 0.5) * 0.9, -(Self.ballReach(tz) - 0.9)), Self.ballReach(tz) - 0.9)
+        let target = SIMD3<Float>(tx, TossTuning.handHeight, tz)
+        let dist = simd_length(SIMD2(target.x - from.x, target.z - from.z))
+        var v = TossAim.ballistic(from: from, to: target, flight: min(max(0.40 + 0.07 * dist, 0.5), 0.95) * TossTuning.slow)
+        v.y = max(v.y, 1.6 / TossTuning.slow)
+        // a Jelmiko in the way (a kick from the back of the room goes through the row): the arc is lifted just enough to pass over his crown (without it the ball hit his side, a soft bounce, and went back to the wall)
+        let g = TossTuning.gravity, vh = SIMD2(v.x, v.z), sp = simd_length(vh)
+        if sp > 1e-3 {
+            for o in jellies where o.id != j.id {
+                let rel = o.pos - SIMD2(from.x, from.z)
+                let t = simd_dot(rel, vh) / (sp * sp)
+                guard t > 0.02, t < 3 else { continue }
+                let lateral = simd_length(rel - vh * t)
+                guard lateral < TossTuning.bodyRadius + ball.radius + 0.1 else { continue }
+                let need = o.headTop + ball.radius + 0.12
+                v.y = max(v.y, (need - from.y + 0.5 * g * t * t) / t)
+            }
+        }
+        ball.vel = v
+        ball.pos.y = max(ball.pos.y, ball.radius + 0.06)
+        ball.ignoring = j.id; ball.ignoreT = 0.35
+        returnAim = SIMD2(target.x, target.z)
+        passTo = nil
+        nudges += 1; touched = true; rally += 1
+        phase = .flying; looseT = 0
+        touchLog("kick", j)
+        footFlight = false; footChoice = nil; kickHeightT = nil; bumper = nil; footPlan[j.id] = nil
+        onEvent?(.kick(id: j.id))
+        j.brain.jellyKick = max(j.brain.jellyKick, 1.6)
+    }
+
     /// The safety net: a ball that will not come (stuck behind furniture ...) is rolled to the front by a nudge from nobody in particular.
     private func rescue() {
         let ballXZ = SIMD2(ball.pos.x, ball.pos.z)
@@ -810,6 +994,7 @@ final class PlayToss {
         ball.vel = v
         ball.pos.y = max(ball.pos.y, ball.radius + 0.02)
         ball.ignoring = nil; touched = true
+        footFlight = false; footChoice = nil; kickHeightT = nil
         phase = .flying; returnAim = SIMD2(target.x, target.z)
         rescues += 1; looseT = 0
         onEvent?(.rescue)
@@ -822,7 +1007,8 @@ final class PlayToss {
         catchSerial += 1
         onEvent?(.caught(rally: rally))
         bumper = nil; passTo = nil; returnAim = nil; restT = 0
-        for j in jellies { j.brain.tossFire = nil }
+        footFlight = false; footChoice = nil; footPlan = [:]; kickHeightT = nil
+        for j in jellies { j.brain.tossFire = nil; j.brain.tossFireReady = nil }
         RoomLayout.ballSpheres.removeAll { $0.uid == Self.sphereUID }
     }
 }

@@ -150,19 +150,24 @@ struct BlobCard: View {
     @ViewBuilder private var card: some View {
         let shown = perks.first(where: { $0.kind == openPerk })?.kind
         VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(red: Double(blob.tint.x), green: Double(blob.tint.y), blue: Double(blob.tint.z)))
-                        .frame(width: 18, height: 18)
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
-                        .accessibilityHidden(true)          // the tint is decoration; the name carries the identity
-                    Text(blob.name).jFont(17, .bold).foregroundStyle(FocusStyle.brown).lineLimit(1).minimumScaleFactor(0.7)
-                    Spacer(minLength: 4)
-                    Text(needs.mood.word)
-                        .jFont(12, .semibold).foregroundStyle(FocusStyle.brown)
-                        .lineLimit(1).fixedSize()
-                        .padding(.horizontal, 9).padding(.vertical, 3)
-                        .background(Capsule().fill(Self.moodColor(needs.mood)))
-                    if profile != nil { Color.clear.frame(width: 40, height: 1) }          // room for the Profile button
+                let moodChip = Text(needs.mood.word)
+                    .jFont(12, .semibold).foregroundStyle(FocusStyle.brown)
+                    .lineLimit(1).fixedSize()
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(Capsule().fill(Self.moodColor(needs.mood)))
+                let stackMood = dts.isAccessibilitySize          // largest text: the mood chip drops under the name so the name keeps its room beside the Profile button
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Circle().fill(Color(red: Double(blob.tint.x), green: Double(blob.tint.y), blue: Double(blob.tint.z)))
+                            .frame(width: 18, height: 18)
+                            .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
+                            .accessibilityHidden(true)          // the tint is decoration; the name carries the identity
+                        Text(blob.name).jFont(17, .bold).foregroundStyle(FocusStyle.brown).lineLimit(1).minimumScaleFactor(0.7)
+                        Spacer(minLength: 4)
+                        if !stackMood { moodChip }
+                        if profile != nil { Color.clear.frame(width: 40, height: 1) }          // room for the Profile button
+                    }
+                    if stackMood { moodChip }
                 }
                 if let personality { Text(personality).jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.7) }
                 let meters = dts.isAccessibilitySize
