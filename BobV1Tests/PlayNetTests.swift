@@ -452,7 +452,7 @@ final class PlayNetTests: XCTestCase {
 
     // MARK: keep-out round (no body in the goal; the net returns what lands in it)
 
-    private func netGame() -> (PlayToss, [Rig], TossWorld, () -> [PlayJelly]) {
+    private func netGame() -> (PlayToss, [MotionRig], TossWorld, () -> [PlayJelly]) {
         PlayTossTests.room(PlayTossTests.portrait)
         ToyTuning.settle = 0
         let rs = rigs(3)
