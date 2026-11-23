@@ -699,7 +699,13 @@ struct GameScreen: View {
                         NSLog("[playtoss] demo throw %d", round)
                         care.play.flick(from: CGPoint(x: sz.width * 0.5, y: sz.height * 0.83), velocity: CGVector(dx: dx * 2, dy: -sz.height * speed))
                         var waited = 0.0
-                        while care.play.phase != .inHand, waited < 25 { await sleep(0.1); waited += 0.1 }
+                        // capture aid (play-ball-s3): -PlayDemoRecall 1 presses "Pass it back" 0.3 to 2.0 s after the Jelmiko start keeping the ball
+                        var keptFor = 0.0, recalled = false
+                        let recallAfter = 0.3 + 1.7 * Double((round &* 7919 &+ 13) % 100) / 100
+                        while care.play.phase != .inHand, waited < 25 {
+                            await sleep(0.1); waited += 0.1
+                            if d.integer(forKey: "PlayDemoRecall") != 0, !recalled, care.play.keeping { keptFor += 0.1; if keptFor >= recallAfter { recalled = true; care.play.recall() } }
+                        }
                         NSLog("[playtoss] demo round %d done rally %d nudges %d headers %d t %.1f", round, care.play.rally, care.play.nudges, care.play.headers, waited)
                         await sleep(1.8)
                     }

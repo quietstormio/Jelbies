@@ -360,3 +360,60 @@ extension PlayTossTests {
         XCTAssertGreaterThanOrEqual(planned, 3, "most soccer flights are by foot")
     }
 }
+
+// MARK: play-ball-s3: they pass to each other
+
+extension PlayTossTests {
+    func trio() -> (rigs: [MotionRig], js: () -> [PlayJelly]) {
+        let rs = [rigAt(SIMD2(-1.8, 1.2)), rigAt(SIMD2(0, 0.9)), rigAt(SIMD2(1.8, 1.2))]
+        return (rs, { rs.enumerated().map { PlayJelly(id: $0.offset, brain: $0.element.brain, sim: $0.element.sim, skinner: $0.element.skinner) } })
+    }
+    func runTrio(_ t: (rigs: [MotionRig], js: () -> [PlayJelly]), _ p: PlayToss, seconds: Float, until done: () -> Bool) {
+        var s: Float = 0
+        while s < seconds { for r in t.rigs { r.tick() }; p.tick(dt: t.rigs[0].sim.stepDt, world: world(), jellies: t.js()); s += t.rigs[0].sim.stepDt; if done() { break } }
+    }
+
+    /// With ONE Jelmiko at home nothing is passed and the Pass-it-back state never turns on.
+    func testOneJelmikoNeverPassesOrKeeps() {
+        Self.room(Self.portrait)
+        for seed in UInt64(1)...4 {
+            let r = rigAt(SIMD2(0, 0.6)), p = PlayToss()
+            p.seed(seed &* 0x9E3779B97F4A7C15); beginBall(r, p, .soccerball)
+            var passes = 0, kept = false
+            p.onEvent = { if case .pass = $0 { passes += 1 } }
+            throwAtMiddle(p)
+            run(r, p, seconds: 14) { if p.keeping { kept = true }; return p.phase == .catching || p.phase == .inHand }
+            XCTAssertEqual(passes, 0, "seed \(seed)"); XCTAssertFalse(kept, "seed \(seed)"); XCTAssertEqual(p.pendingPasses, 0)
+        }
+    }
+
+    /// A chain never has more passes than chainMax, and it ends with the ball back at the player; a recall during a chain makes the next strike go to the player and ends the chain; a recall with the ball in the hand does nothing.
+    func testAChainIsShortEndsAtThePlayerAndARecallEndsIt() {
+        Self.room(Self.portrait)
+        var recalled = 0, chains = 0
+        for seed in UInt64(1)...10 {
+            let t = trio(), p = PlayToss()
+            p.seed(seed &* 0x9E3779B97F4A7C15); p.viewSize = Self.portrait
+            p.begin(ball: .soccerball, title: "Ball", jellies: t.js(), snapCamera: true)
+            runTrio(t, p, seconds: 3) { false }
+            p.recall(); XCTAssertEqual(p.ownGame, .none, "recall with the ball in the hand does nothing")
+            var passes = 0
+            p.onEvent = { if case .pass = $0 { passes += 1 } }
+            let s = p.viewSize
+            p.flick(from: CGPoint(x: s.width * 0.5, y: s.height * 0.83), velocity: CGVector(dx: 0, dy: -s.height * 1.8))
+            let planned = p.pendingPasses
+            XCTAssertLessThanOrEqual(planned, PlayTuning.style(.soccerball).chainMax)
+            var didRecall = false
+            runTrio(t, p, seconds: 25) {
+                if p.keeping, !didRecall, seed % 2 == 0 { didRecall = true; recalled += 1; let before = passes; p.recall(); XCTAssertFalse(p.keeping); XCTAssertEqual(passes, before) }
+                return p.phase == .catching || p.phase == .inHand
+            }
+            XCTAssertTrue(p.phase == .catching || p.phase == .inHand, "seed \(seed): the ball came back")
+            XCTAssertLessThanOrEqual(passes, PlayTuning.style(.soccerball).chainMax, "seed \(seed)")
+            if passes > 0 { chains += 1 }
+            if didRecall { XCTAssertLessThanOrEqual(passes, planned) }
+            XCTAssertFalse(p.keeping)
+        }
+        XCTAssertGreaterThan(chains, 0, "some soccer balls are passed")
+    }
+}
