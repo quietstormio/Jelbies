@@ -50,8 +50,9 @@ nonisolated extension WearLook {
     /// (2026-10-28: the cardigan, vest, silk scarf, gold chain and the Diamond J chain were released after their art was reworked; hoodie and raincoat stay out.)
     static let unlisted: Set<WearLook> = [.hoodie, .raincoat]
     /// 2026-11-16 (the owner: "remove the puffer vest and cardigan"): the Puffer vest and Cable cardigan leave too, with a refund per copy (StoreBook+RetiredBodies.swift) before the silent unequip. Their art stays (the Pip variants and the fit tests read it).
+    /// 2026-11-22 (the owner: "Remove the tutu it looks stupid"): the Ballet tutu leaves too, refunded per copy (StoreBook+RetiredTutu.swift, no flag). Mesh and Pip variant stay in the bundle, unused.
     /// SHIP 2026-11-06: removed from the game (not sold, not in the Bag / Wear picker, not carried by a saved outfit). The enum case, row and art stay so old saves decode; StoreBook.dropRetiredLooks unequips and unowns it silently on load.
-    static let retired: Set<WearLook> = [.chainGold, .vestPuffer, .cardiganCable]
+    static let retired: Set<WearLook> = [.chainGold, .vestPuffer, .cardiganCable, .tutuPink]
     static let pieces: [WearLook] = WearGenerated.rows.filter { $0.slot != .feet && !retired.contains($0.look) }.map(\.look)
 }
 
@@ -82,6 +83,28 @@ nonisolated enum WearRules {
         default: return nil
         }
         return NeckLift(up: up, from: 0.44, full: 1.48)
+    }
+
+    /// wear-audit-r1 (2026-11-22): a per-hat seat correction applied to the authored mesh before it is bound (not in WearGenerated.swift, which the converter rewrites): the whole hat
+    /// is raised `dy` and tipped back `tip` rad (the front rim rises, the back dips) about the point `pivotY` below the anchor, so a rim the art drew above the brows clears them on the
+    /// real head. The cowboy hat's brim came down over the brows (audit AUDIT.md); tests and captures can override the table (`hatFitOverride`).
+    struct HatFit: Equatable { var dy: Float; var tip: Float; var pivotY: Float = -0.15; var stretch: Float = 1; var bandScale: Float = 1 }
+    nonisolated(unsafe) static var hatFitOverride: [WearLook: HatFit] = [:]
+    static func hatFit(_ l: WearLook) -> HatFit? {
+        if let o = hatFitOverride[l] { return o }
+        switch l {
+        case .cowboyHat: return HatFit(dy: 0.05, tip: 0.12, pivotY: -0.2, stretch: 1.35)          // brim clears the brows, a taller crown (audit round 2: raised 5 cm, tipped back 7 degrees)
+        case .chefHat: return HatFit(dy: -0.015, tip: 0, pivotY: -0.22, stretch: 1.15, bandScale: 0.96)          // seated lower, the band drawn a touch narrower so no ring of air shows from above, a little taller
+        default: return nil
+        }
+    }
+    /// The offset of authored vertex `v` (relative to the anchor) after the hat's seat correction.
+    @inline(__always) static func seated(_ v: SIMD3<Float>, _ f: HatFit) -> SIMD3<Float> {
+        var y = v.y - f.pivotY
+        var x = v.x, z = v.z
+        if y > 0 { y *= f.stretch } else if f.bandScale != 1 { x *= f.bandScale; z *= f.bandScale }          // (below the pivot: the band / brim ring)                                           // (stretch: the part above the pivot is made taller, a chef's pouf)
+        let c = cosf(f.tip), s = sinf(f.tip)
+        return SIMD3(x, y * c + z * s + f.pivotY + f.dy, -y * s + z * c)
     }
 
     static func hide(_ l: WearLook) -> WearHide {

@@ -722,7 +722,7 @@ final class BlobBrain {
         stepCounter &+= 1; peerClock += dt
         planCool = max(0, planCool - dt)
         var ht = CACurrentMediaTime()
-        defer { if EmoteSpot.logOn { emoteSpotLog(dt) }; var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) } }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
+        defer { if EmoteSpot.logOn { emoteSpotLog(dt) }; var et = CACurrentMediaTime(); expressionTick(sim, skinner, dt); HopDiag.lap(.tkExpr, &et); if MoveLog.on { MoveLog.shared.sample(self, dt: dt) }; storySample(dt) }          // the face layer runs on every path out of the tick (it yields to whatever owns the face)
         applyBagFloor(sim, skinner)
         sinceWave += dt; sincePlay += dt; joyAge += dt; hmphAge += dt
         centreDwellTick(dt); mixOwnTick()
@@ -947,9 +947,11 @@ final class BlobBrain {
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
         if footKeep { Self.slideFootTurnAways += 1 }
         if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { slideFootWalkTo = out; request(.goTo(out)); restTimer = 0.3; return }
+        if !footKeep, mixSoccerFollowDue(sim) { return }
         if !footKeep, mixAfterRunDue(sim) { return }
         if !footKeep, mixStrollDue(sim) { return }          // (MoveMix.swift: a walk away after a pair / group emote)
         let mixLeg = !footKeep && mixWantsLeg()          // (MoveMix.swift: this pick is a leg, no special: after an in-place pick, after a solo emote, or from under a HUD button; a pair roll still comes first)
+        if !footKeep, mixSoccerUrge(sim) { return }
         if !footKeep, socialMaybeStart(sim) { mix.last = .social; return }
         HopDiag.lap(.tkPickSocial, &pt)
         if !footKeep, !mixLeg, idleMaybeStart(sim) { mixNoteIdle(); return }
@@ -1039,7 +1041,7 @@ final class BlobBrain {
     func pickRoamGoal(_ rf: GameCamera.RoamFloor, from here: SIMD2<Float>, zone: Int?) -> SIMD2<Float>? {
         let probe = PerfProbe.begin(); defer { PerfProbe.end("pickRoamGoal", probe) }
         var maxL = idleLegMax(maxWanderLeg)
-        if MoveMix.on { maxL = max(maxL, idleMood == .grumpy ? MoveMix.legMaxGrumpy : MoveMix.legMax) }          // (MoveMix.swift: the floor is ~11 u deep; with legs of 5.5 a body in the back needs two legs to reach the front)
+        if MoveMix.on { maxL = max(maxL, idleMood == .grumpy ? MoveMix.legMaxGrumpy : (outingPlay ? MoveMix.parkLegMax : MoveMix.legMax)) }          // (MoveMix.swift: the floor is ~11 u deep; with legs of 5.5 a body in the back needs two legs to reach the front)
         if EmoteSpot.enabled, homeRoom { maxL = max(maxL, EmoteSpot.roamLegMin) }          // (EmoteSpot.swift: a grumpy walk may still cross to a spot the room has used little: the whole room)
         var lo: Float = zone != nil ? 2.5 : 1.5
         if MoveMix.on { lo = max(lo, MoveMix.legMin) }          // (MoveMix.swift: roam legs of at least 2.5 u when the floor allows; the retry below drops to the old minimum)
@@ -1076,6 +1078,8 @@ final class BlobBrain {
             }
             var score = 0.6 * nearest - 1.2 * hides + 1.5 / Float(1 + roamVisits[roamKey(cand), default: 0]) + 0.3 * rand() + 0.3 * min(d, 4.0) - 2.0 * centreBias * central
             if EmoteSpot.enabled, homeRoom { score += EmoteSpot.roamWeight * EmoteSpot.score(cand, rf) - EmoteSpot.roamCellWeight * EmoteSpot.roamOver(cand, rf) }          // (EmoteSpot.swift: the spots emotes have used least are the better goals)
+            if MoveMix.on, mixLegThroughSolid(here, cand) { continue }          // (park: never a leg through a solid piece)
+            if MoveMix.on { score -= mixBoardConflict(from: here, to: cand, speed: roomNominalWalk) }
             if MoveMix.on, !(rfStop?.stopOK(cand) ?? true) { score -= MoveMix.underButtonPenalty }          // (a goal under a HUD button is a pass-through spot: allowed, less liked; nothing starts there)
             if live || MoveMix.on { score -= roomLegConflict(from: here, to: cand, speed: roomNominalWalk, others: others, dash: false) }          // (T6: a leg that would meet another's leg in space and time scores lower)
             if MoveMix.on {          // (MoveMix.swift: stale floor is the main term, shared map blended with this body's own; a spot another body has claimed is out)

@@ -61,7 +61,7 @@ nonisolated enum ImportSave {
             guard StoreCatalog.item(k) != nil else { r.dropped.append("item:\(k)"); continue }
             if n > (s.counts[k] ?? 0) { s.counts[k] = n; counts += 1 }
         }
-        let wear = ((oj["wearables"] as? [String]) ?? []).filter { WearLook(rawValue: $0) != nil }
+        let wear = ((oj["wearables"] as? [String]) ?? []).filter { WearLook(rawValue: $0).map { !WearLook.retired.contains($0) } ?? false }          // (a backup's retired pieces, the tutu too, do not come back)
         let wearNew = wear.filter { !s.wearables.contains($0) }
         s.wearables += wearNew
         let awardNew = ((oj["awarded"] as? [String]) ?? []).filter { !(s.awarded ?? []).contains($0) }

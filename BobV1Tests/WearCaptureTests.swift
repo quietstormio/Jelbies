@@ -157,7 +157,7 @@ final class WearCaptureTests: XCTestCase {
                                  [.head: .beaniePink, .neck: .bandanaCoral]]
     static let setB: [Outfit] = [[.head: .pirateHat, .face: .monocleGold, .neck: .scarfCosy, .hands: .wristbandsSky, .feet: .hightopRed],
                                  [.head: .sweatband, .neck: .whistleCoach, .hands: .wristbandsSky, .body: .sashSky, .feet: .sneakerLightup],
-                                 [.head: .crownGold, .neck: .pearls, .body: .tutuPink, .feet: .balletPink]]
+                                 [.head: .crownGold, .neck: .pearls, .body: .capeHero, .feet: .balletPink]]
     static let setC: [Outfit] = [[.head: .witchHat, .face: .gogglesAviator, .body: .capeHero, .feet: .rainBoots],
                                  [.head: .bucketHatPink, .neck: .scarfSky, .feet: .rainBoots],
                                  [.head: .catEars, .face: .heartShades, .body: .backpackSky, .neck: .medalGold]]
@@ -545,6 +545,62 @@ extension WearCaptureTests {
         }
     }
 
+    // MARK: the shoe audit sheets (wear-audit-r1)
+
+    /// Capture-only: WEAR_AUDIT_DIR=<dir> writes <dir>/sheets/<shoe>.jpg for every shoe (rows: standing, mid-walk; columns: front, 3/4, side, back, the room camera looking down 35
+    /// degrees, a low camera looking up) and <dir>/overview_feet.jpg. Every family shares the feet (only the extras above differ), so the sheet is drawn on the plain body.
+    func testAuditShoeSheets() throws {
+        guard let out = ProcessInfo.processInfo.environment["WEAR_AUDIT_DIR"], !out.isEmpty else { throw XCTSkip("WEAR_AUDIT_DIR not set") }
+        try FileManager.default.createDirectory(atPath: out + "/sheets", withIntermediateDirectories: true)
+        DayClock.shared.forcedHour = 12
+        W = 400; H = 400
+        let only = ProcessInfo.processInfo.environment["WEAR_AUDIT_ONLY"]?.split(separator: ",").map(String.init)
+        let looks = WearLook.shoes.filter { only == nil || only!.contains($0.rawValue) }
+        let views: [(String, Float, Float)] = [("front", 0, 0.1), ("3/4", 0.65, 0.15), ("side", 1.5, 0.1), ("back", .pi, 0.1), ("room cam 35 down", 0.25, 0.7), ("low cam up", 0.25, -0.2)]
+        var shared: (MelonRenderer, MTLTexture)?
+        var small: [UIImage] = []
+        for look in looks {
+            var rows: [[UIImage]] = []
+            for pose in ["stand", "walk"] {
+                let lab = setUpLab([SIMD2(0, 0.4)], seed: 3)
+                if shared == nil { shared = try renderer(lab) }
+                let (ren, target) = shared!
+                let outfit: Outfit = [.feet: look]
+                let sets = dress(lab, [outfit])
+                for r in lab.rigs { r.brain.shoesWorn = true }
+                func step(_ n: Int) { for _ in 0..<n { lab.tick(watching: false); for q in lab.rigs { q.skinner.jelly.tick(brain: q.brain, sim: q.sim, dt: q.sim.stepDt) } } }
+                step(60 * 2)
+                if pose == "walk" { for r in lab.rigs { r.brain.request(.goTo(r.root + SIMD2(0, 1.2))) }; step(70) }
+                let r = lab.rigs[0]
+                let bp = r.sim.bodyPose(iterations: 3)
+                var fwd = bp.rotation.act(SIMD3<Float>(0, 0, 1)); fwd.y = 0; fwd = simd_normalize(fwd)
+                let c = r.sim.centroid()
+                var row: [UIImage] = []
+                for v in views {
+                    let dir = SIMD3<Float>(fwd.x * cosf(v.1) + fwd.z * sinf(v.1), 0, -fwd.x * sinf(v.1) + fwd.z * cosf(v.1))
+                    let cam = Self.lookCamera(target: SIMD3(c.x, r.sim.floorY + 0.08, c.z), dir: dir, dist: 1.5, aspect: 1, lift: v.2)
+                    row.append(labelled(composite(lab, sets, [outfit], ren, target, cam: cam).uiImage()!, "\(look.rawValue) \(pose) \(v.0)"))
+                }
+                rows.append(row)
+                SocialTests.keep.removeAll()
+            }
+            let cw: CGFloat = 400, ch: CGFloat = 440
+            let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+            let sheet = UIGraphicsImageRenderer(size: CGSize(width: cw * 6, height: ch * 2), format: fmt).image { _ in
+                for (ri, row) in rows.enumerated() { for (ci, i) in row.enumerated() { i.draw(in: CGRect(x: CGFloat(ci) * cw, y: CGFloat(ri) * ch, width: cw, height: ch)) } }
+            }
+            try sheet.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: out + "/sheets/\(look.rawValue).jpg"))
+            small.append(rows[0][1])
+        }
+        let cell: CGFloat = 300, cols = 4
+        let rowsN = (small.count + cols - 1) / cols
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+        let ov = UIGraphicsImageRenderer(size: CGSize(width: cell * CGFloat(cols), height: cell * 1.1 * CGFloat(rowsN)), format: fmt).image { _ in
+            for (k, i) in small.enumerated() { i.draw(in: CGRect(x: CGFloat(k % cols) * cell, y: CGFloat(k / cols) * cell * 1.1, width: cell, height: cell * 1.1)) }
+        }
+        try ov.jpegData(compressionQuality: 0.85)!.write(to: URL(fileURLWithPath: out + "/overview_feet.jpg"))
+    }
+
     // MARK: encircling bands (BAND_CAP_DIR)
 
     /// Side-on frames of a Jelbie in a bandana + sweatband + tutu waistband walking, hopping and doing jumping-jacks (arms out), every 0.5 s: BAND_CAP_DIR=<dir> (TEST_RUNNER_BAND_CAP_DIR),
@@ -561,7 +617,7 @@ extension WearCaptureTests {
         let r = lab.rigs[0]
         r.brain.autonomy = false; r.brain.expr.enabled = false
         let table: [String: Outfit] = ["bandana": [.neck: .bandanaCoral, .head: .sweatband], "scarf": [.neck: .scarfCosy, .head: .sweatband], "scarfsilk": [.neck: .scarfSilk], "pearls": [.neck: .pearls], "whistle": [.neck: .whistleCoach],
-                                       "chain": [.neck: .pearls], "diamond": [.neck: .diamondJ], "lei": [.neck: .lei], "bowtie": [.neck: .bowtiePink], "tutu": [.body: .tutuPink], "hoodie": [.body: .hoodie], "raincoat": [.body: .raincoat]]
+                                       "chain": [.neck: .pearls], "diamond": [.neck: .diamondJ], "lei": [.neck: .lei], "bowtie": [.neck: .bowtiePink], "cape": [.body: .capeHero], "hoodie": [.body: .hoodie], "raincoat": [.body: .raincoat]]
         let outfit: Outfit = table[ProcessInfo.processInfo.environment["BAND_CAP_OUTFIT"] ?? "bandana"] ?? table["bandana"]!
         let sets = dress(lab, [outfit])
         let (ren, target) = try renderer(lab)

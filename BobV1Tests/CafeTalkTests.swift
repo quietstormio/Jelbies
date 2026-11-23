@@ -13,6 +13,7 @@ final class CafeTalkTests: XCTestCase {
         RoomLayout.apply(RoomCatalog.home)
         DecorField.shared.set([])
         DayClock.shared.forcedHour = 12
+        DiningLayout.ends = false; DiningLayout.sideX = 1.11; DiningLayout.reachFood = false; DiningLayout.endsYaw = DiningLayout.homeEndsYaw          // (a café visit sets the ends layout: put it back for the tests that run after)
         super.tearDown()
     }
 

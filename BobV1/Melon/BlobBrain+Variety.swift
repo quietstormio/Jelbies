@@ -117,6 +117,7 @@ extension BlobBrain {
             m *= VarietyTuning.floor + (1 - VarietyTuning.floor) * min(1, max(0, (variety.now - t) / T))
         }
         if variety.lastFamily == Self.varietyFamily(k) { m *= VarietyTuning.familyRepeat }
+        if MoveMix.on { m *= mixRecency(variety.last[k].map { variety.now - $0 }) }          // (MoveMix round 3: a kind not seen for long jumps the queue, up to x2)
         if let p = VarietyTuning.personality[personalityKey] { for (s, x) in p.idle where s.contains(k) { m *= x } }
         for o in variedPeers where k != .look {
             if o.idleState.kind == k { m *= VarietyTuning.syncMul; continue }
@@ -168,6 +169,7 @@ extension BlobBrain {
             let k = w[i].0
             var m: Float = 1
             for b in [self, o] { if let t = b.variety.lastSocial[k] { m *= VarietyTuning.floor + (1 - VarietyTuning.floor) * min(1, (b.variety.now - t) / VarietyTuning.socialRecover) } }
+            if MoveMix.on { m *= mixRecency([self, o].compactMap { b in b.variety.lastSocial[k].map { b.variety.now - $0 } }.min()) }
             if let p { for (s, x) in p.social where s.contains(k) { m *= x } }
             w[i].1 *= max(0.01, m) * (VarietyTuning.pairLookAlike[k] ?? 1)
         }

@@ -15,13 +15,14 @@ final class WardrobeCardsTests: XCTestCase {
         let c = UIHostingController(rootView: v)
         return c.sizeThatFits(in: CGSize(width: width ?? 1000, height: 5000))
     }
-    private func face(_ look: WearLook, _ w: CGFloat, worn: Bool = false) -> WardrobeCardFace {
-        WardrobeCardFace(look: look, tag: look.tags.first, match: 1, worn: worn, otherName: nil, width: w)
+    /// The card at its own natural height (the card asks for all the height it is offered, so a row can stretch it: pin it to what it needs for the measurement).
+    private func face(_ look: WearLook, _ w: CGFloat, worn: Bool = false) -> some View {
+        WardrobeCardFace(look: look, tag: look.tags.first, match: 1, worn: worn, otherName: nil, width: w).fixedSize(horizontal: false, vertical: true)
     }
 
     func testEveryCardHasTheSameHeightAtTwoWidths() {
         XCTAssertGreaterThan(looks.count, 10)
-        for w in [CGFloat(103), 125] {
+        for w in [CGFloat(100), 125] {
             let hs = Set(looks.map { l in (size(face(l, w), width: w).height * 2).rounded() })
             XCTAssertEqual(hs.count, 1, "card heights at width \(w): \(hs)")
             // and the worn card is the same height as the others
@@ -30,7 +31,7 @@ final class WardrobeCardsTests: XCTestCase {
     }
 
     func testNoNameIsCutOff() {
-        for w in [CGFloat(103), 125] {
+        for w in [CGFloat(100), 125] {
             let textW = (w - 2 * WardrobeCardFace.pad) / WardrobeCardFace.nameScale          // the name may shrink to nameScale to keep two lines
             let line = size(Text("Ag").font(SK.font(12, .black)).fixedSize()).height
             for l in looks {
@@ -83,5 +84,106 @@ final class WardrobeCardsTests: XCTestCase {
             }
         }
         try sheet.jpegData(compressionQuality: 0.9)?.write(to: URL(fileURLWithPath: dir + "/all_items.jpg"))
+    }
+
+    // MARK: the sideways row at the low height
+
+    private func stocked() -> GameCare {
+        let room = RaceThreeTests.Room(count: 1)
+        RaceThreeTests.keep.append(room)
+        for item in StoreCatalog.items where item.isWearable { room.care.store.grant(item.id) }
+        return room.care
+    }
+
+    // MARK: the Dress up screen
+
+    /// The picture area is the same size with and without anything worn, and the feet stand at the same place in it, at the smallest and the tallest phone.
+    func testPictureAreaIsTheSameWithAndWithoutAnItem() {
+        let care = stocked()
+        let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
+        let rank = care.show.progress.chosen
+        for (w, h) in [(CGFloat(375), CGFloat(647)), (CGFloat(440), CGFloat(860))] {
+            let area = DressUpScreen.figureHeight(containerHeight: h)
+            let bare = UIHostingController(rootView: DressUpFigure(care: care, who: 0, theme: theme, rank: rank, height: area)).sizeThatFits(in: CGSize(width: w - 32, height: 2000))
+            XCTAssertTrue(care.store.wear(.partyHat, on: 0)); XCTAssertTrue(care.store.wear(.glitterShoes, on: 0))
+            let dressed = UIHostingController(rootView: DressUpFigure(care: care, who: 0, theme: theme, rank: rank, height: area)).sizeThatFits(in: CGSize(width: w - 32, height: 2000))
+            care.store.takeOff(.head, from: 0); care.store.takeOff(.feet, from: 0)
+            XCTAssertEqual(bare.height, area, accuracy: 0.5, "the area is its fixed height at \(w)")
+            XCTAssertEqual(dressed, bare, "wearing things changes nothing about the picture area at \(w)")
+        }
+    }
+
+    /// His feet (the disc top) and the disc itself are inside the picture area on every phone, with the room under them the disc needs; the area leaves a full row of cards below it on the smallest phone.
+    func testFeetAreInsideTheAreaAndARowFitsBelowOnTheSmallestPhone() {
+        for h in [CGFloat(647), CGFloat(860), CGFloat(603)] {
+            let area = DressUpScreen.figureHeight(containerHeight: h)
+            let feet = area * DressUpFigure.floorAt
+            XCTAssertLessThan(feet + 0.07 * area, area, "feet and the front of the disc are in view at \(h)")
+        }
+        let h = CGFloat(647)
+        let area = DressUpScreen.figureHeight(containerHeight: h)
+        let card = WardrobeStrip.columns(for: 375 - 32 - 12).card
+        let cardHeight = UIHostingController(rootView: face(.partyHat, card)).sizeThatFits(in: CGSize(width: card, height: 2000)).height
+        let chrome: CGFloat = 4 + 52 + 6 + area + 6 + 46 + 6 + 44 + 6          // header, area, rule + hint, chips, gaps
+        XCTAssertGreaterThanOrEqual(h - chrome, cardHeight, "one whole row of cards shows under the picture on the smallest phone (\(h - chrome) pt for a \(cardHeight) pt card)")
+    }
+
+    /// The row and the grid are the same cards in the same order, and filtering keeps that order.
+    func testRowAndGridShowTheSameItemsInTheSameOrder() {
+        let care = stocked()
+        let theme = ShowSchedule.theme(dayKey: GameCare.showDay)
+        let all = WardrobeStrip.ordered(care: care, theme: theme, slots: nil)
+        XCTAssertGreaterThan(all.count, 10)
+        for n in [3, 4, 6] { XCTAssertEqual(WardrobeStrip.rows(all, columns: n).flatMap { $0 }, all, "\(n) columns") }
+        for slot in WearSlot.allCases {
+            let some = WardrobeStrip.ordered(care: care, theme: theme, slots: [slot])
+            XCTAssertEqual(some, all.filter { $0.slot == slot }, "the \(slot.title) filter keeps the order")
+        }
+        XCTAssertEqual(all.map { theme.match($0.tags) }, all.map { theme.match($0.tags) }.sorted(by: >), "best theme match first")
+    }
+
+    // MARK: every picture shows its item
+
+    private func pixels(_ img: UIImage) -> [UInt8]? {
+        guard let cg = img.cgImage else { return nil }
+        let w = cg.width, h = cg.height
+        var data = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &data, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return data
+    }
+
+    /// A piece that renders nothing (inside the arm, at the origin, culled) would leave its card the bare Jelmiko: every catalogue item's card picture must differ from the
+    /// bare catalogue Jelmiko's, framed the same way, by a minimum number of pixels (shoes, which draw on their own foot stubs, must at least fill a fair part of the picture).
+    func testEveryItemsCardPictureDiffersFromTheBareJelmiko() throws {
+        var slots = Set<WearSlot>()
+        for item in StoreCatalog.items where item.isWearable {
+            guard let w = item.wear, let img = StoreThumb.wardrobeImage(item), let px = pixels(img) else { XCTFail("no picture for \(item.id)"); continue }
+            slots.insert(w.slot)
+            if w.isShoe {
+                let opaque = stride(from: 3, to: px.count, by: 4).filter { px[$0] > 40 }.count
+                XCTAssertGreaterThan(opaque, px.count / 4 / 20, "\(item.id): the shoes fill the picture")
+                continue
+            }
+            guard let bare = StoreThumb.wardrobeBareImage(item), let bpx = pixels(bare), bpx.count == px.count else { XCTFail("no bare picture for \(item.id)"); continue }
+            var diff = 0
+            for i in stride(from: 0, to: px.count, by: 4) {
+                let d = max(abs(Int(px[i]) - Int(bpx[i])), abs(Int(px[i + 1]) - Int(bpx[i + 1])), abs(Int(px[i + 2]) - Int(bpx[i + 2])), abs(Int(px[i + 3]) - Int(bpx[i + 3])))
+                if d > 24 { diff += 1 }
+            }
+            XCTAssertGreaterThan(diff, 400, "\(item.id) (\(w.slot.title)) shows its piece: \(diff) pixels differ from the bare Jelmiko")
+        }
+        XCTAssertTrue(slots.contains(.hands) && slots.contains(.head) && slots.contains(.feet) && slots.contains(.neck), "the check covers every slot the catalogue uses")
+    }
+
+    /// Writes the hand items' card picture and the Shop's own thumbnail to the capture folder (a look at the fit; skipped when the folder is not there).
+    func testWriteHandPictures() throws {
+        let dir = "/private/tmp/claude-501/-Users-dmarshall94-Desktop-BobV1/e0755ccf-aeea-4c40-b871-1f1d2b621362/scratchpad/dressup"
+        guard FileManager.default.fileExists(atPath: dir) else { throw XCTSkip("no capture folder") }
+        for item in StoreCatalog.items where item.wear?.slot == .hands {
+            if let c = StoreThumb.wardrobeImage(item)?.pngData() { try c.write(to: URL(fileURLWithPath: "\(dir)/hands_card_\(item.id).png")) }
+            if let s = StoreThumb.image(for: item)?.pngData() { try s.write(to: URL(fileURLWithPath: "\(dir)/hands_shop_\(item.id).png")) }
+        }
     }
 }

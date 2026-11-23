@@ -29,6 +29,7 @@ struct SettingsScreen: View {
     @State private var showPrivacy = false
     @State private var showSupport = DevArgs.enabled && UserDefaults.standard.integer(forKey: "SupportOpen") != 0          // (-SettingsOpen 1 -SupportOpen 1: capture aid, dev-args only)
     @State private var followReal = DayClock.shared.followReal
+    @State private var storyNotes = StorySettings.modelNotes
     @AppStorage(HapticSettings.key) private var hapticsOn = true
     #if DEBUG || JELBIES_DEV_ARGS || targetEnvironment(simulator)
     @State private var cuddleLevel = CuddleJiggle.sharedLevel         // TEMPORARY owner A/B switch for the cuddle jiggle (dev builds only)
@@ -239,6 +240,12 @@ struct SettingsScreen: View {
                 .accessibilityIdentifier("settings-follow-real-clock")
             Text(followReal ? "Day and night follow your phone's clock." : "One game hour is one real minute. Day \(DayClock.shared.day) so far. You can also skip the night with the moon button.")
                 .font(CloudTheme.font(13, .medium)).foregroundStyle(ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+            if StoryModelSupport.deviceHasModel {          // (Story/: only where Apple's on-device model can run)
+                Toggle(StorySettings.title, isOn: Binding(get: { storyNotes }, set: { storyNotes = $0; StorySettings.setModelNotes($0) }))
+                    .font(CloudTheme.font(16, .semibold)).foregroundStyle(ink).tint(theme.controlAccent).frame(minHeight: 44)
+                    .accessibilityIdentifier("settings-story-notes-toggle")
+                Text(StorySettings.explanation).font(CloudTheme.font(13, .medium)).foregroundStyle(ink.opacity(0.75)).fixedSize(horizontal: false, vertical: true)
+            }
             Button { AudioHub.shared.uiTap(); confirmReset = true } label: {
                 Label("Reset save", systemImage: "trash").font(CloudTheme.font(16, .bold)).foregroundStyle(Color(hex: 0xB3261E))
                     .frame(maxWidth: .infinity, minHeight: 44)
