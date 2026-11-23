@@ -218,15 +218,107 @@ final class BestFriendTests: XCTestCase {
         for i in [1, 2, 4] { XCTAssertGreaterThanOrEqual(Float(onT.pairMoments[i]), 0.7 * Float(offT.pairMoments[i]), "body \(i) keeps at least 70 % of its pair moments") }
     }
 
-    /// The best-friend pair's OWN intended range (round 3): clearly more time together than without the buddies, but not all of it.
+    /// The best-friend pair's OWN intended range (round 4): with the buddy blocks the pair spends 25...45 % of its time in pair moments together (a block is about a third of the time).
     func testTheBestFriendPairsOwnShareStaysInItsIntendedRange() {
         defer { BondPairing.multiplier = 2.4 }
-        BondPairing.multiplier = 1; let off = roam(seed: 500, bond: true, seconds: 150)
-        BondPairing.multiplier = 2.4; let on = roam(seed: 500, bond: true, seconds: 150)
+        BondPairing.multiplier = 1; let off = roam(seed: 500, bond: true, seconds: 180)
+        BondPairing.multiplier = 2.4; let on = roam(seed: 500, bond: true, seconds: 180)
         let pairOn = Float(on.pairFrames[0] + on.pairFrames[3]) / Float(2 * on.frames), pairOff = Float(off.pairFrames[0] + off.pairFrames[3]) / Float(2 * off.frames)
         MotionLog.write("BESTFRIEND pair own share: off \(pairOff) on \(pairOn); gap 0-3 off \(off.gapSum / Float(off.frames)) on \(on.gapSum / Float(on.frames))")
         XCTAssertGreaterThan(pairOn, pairOff, "the pair spends more time in pair moments than without the buddies")
-        XCTAssertLessThanOrEqual(pairOn, 0.45, "but not more than 45 % of the time")
-        XCTAssertLessThan(on.gapSum / Float(on.frames), 0.9 * off.gapSum / Float(off.frames), "and stays nearer each other")
+        XCTAssertGreaterThanOrEqual(pairOn, 0.25, "the pair's share with the best friend present is at least 25 %")
+        XCTAssertLessThanOrEqual(pairOn, 0.45, "and at most 45 %")
+    }
+
+    // MARK: the buddy block (round 4)
+
+    /// Two buddies (best friends of each other) in a quiet-free lab, mood set; the block is fired by hand where a test needs it.
+    private func buddies(seed: UInt64, n: Int = 2) -> SocialTests.Lab {
+        let pos: [SIMD2<Float>] = [SIMD2(-1.6, 0.8), SIMD2(1.8, 1.6), SIMD2(0.2, 3.0)]
+        let lab = SocialTests.Lab(n: n, positions: Array(pos.prefix(n)), quiet: false, seed: seed)
+        for (i, r) in lab.rigs.enumerated() {
+            r.brain.anticsEnabled = true; r.brain.idleMood = .okay
+            r.brain.socialBook.cooldown = 3; r.brain.idleState.cooldown = 9; r.brain.restTimer = 0.5 + Float(i)
+            if i < 2 { r.brain.socialBook.bestFriends = [1 - i]; r.brain.socialBook.close[1 - i] = FriendTuning.closeMul[3] }
+            if i >= 2 { r.brain.socialBook.housemates = [] }
+        }
+        if n > 2 { lab.rigs[0].brain.socialBook.housemates = [2]; lab.rigs[1].brain.socialBook.housemates = [2] }
+        return lab
+    }
+
+    func testAnAwayBodyGetsNoFlag() {
+        let lab = buddies(seed: 41)
+        let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner); r.brain.idleState.kind = nil }
+        b.idleBlocked = true          // (held: away)
+        a.socialBook.bondNextAt = a.variety.now - 1
+        let before = a.variety.now
+        XCTAssertFalse(a.bondUrge(lab.rigs[0].sim))
+        XCTAssertNil(a.socialBook.block); XCTAssertNil(b.socialBook.block, "no flag on either body")
+        XCTAssertGreaterThanOrEqual(a.socialBook.bondNextAt, before + 8, "the clock retries in 8...12 s")
+        XCTAssertLessThanOrEqual(a.socialBook.bondNextAt, before + 12.01)
+    }
+
+    func testACancelledRendezvousLeavesBothFree() {
+        let lab = buddies(seed: 43)
+        let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner); r.brain.idleState.kind = nil; r.brain.idleState.cooldown = 1e6; r.brain.socialBook.cooldown = 1e6 }
+        a.socialBook.bondNextAt = a.variety.now - 1
+        _ = a.bondUrge(lab.rigs[0].sim)
+        XCTAssertNotNil(a.socialBook.block, "both are reserved")
+        XCTAssertNotNil(b.socialBook.block)
+        b.idleBlocked = true          // (the partner never comes: held)
+        for _ in 0..<(60 * 40) { lab.tick(watching: false) }
+        XCTAssertNil(a.socialBook.block); XCTAssertNil(b.socialBook.block, "cancelled quietly: both flags cleared")
+        XCTAssertNil(a.social); XCTAssertNil(b.social)
+        XCTAssertFalse(a.socialBook.hold, "and nobody is left holding a facing")
+        XCTAssertGreaterThan(a.socialBook.bondNextAt, a.variety.now, "the next try is later")
+    }
+
+    func testAReservedBodyStartsNothingElseBeforeTheMeeting() {
+        for seed in [51, 52, 53] as [UInt64] {
+            let lab = buddies(seed: seed, n: 3)
+            let a = lab.rigs[0].brain, b = lab.rigs[1].brain
+            a.socialBook.bondNextAt = a.variety.now - 1
+            for _ in 0..<5 { lab.tick(watching: false) }
+            for r in lab.rigs where r.brain.social == nil { r.brain.abortScript(r.sim, r.skinner); r.brain.idleState.kind = nil }
+            guard a.bondUrge(lab.rigs[0].sim) else { continue }
+            var free = [false, false]
+            for _ in 0..<(60 * 30) {
+                lab.tick(watching: false)
+                guard let blk = a.socialBook.block ?? b.socialBook.block, !blk.running, !blk.ended else { break }
+                for (i, x) in [a, b].enumerated() {
+                    if x.idleState.kind == nil { free[i] = true }
+                    else if free[i] { XCTAssertEqual(x.idleState.kind, .stopLook, "seed \(seed): a reserved body starts nothing new before the meeting (\(String(describing: x.idleState.kind)))") }
+                }
+            }
+        }
+    }
+
+    func testABlockChainsAtLeastTwoKindsAndTheHousemateRuleFires() {
+        var kinds: [Int] = [], boosted = 0
+        BondMoment.onBlockEnd = { k, _ in kinds.append(k) }
+        defer { BondMoment.onBlockEnd = nil }
+        for seed in 0..<4 {
+            let lab = buddies(seed: 60 + UInt64(seed) * 5, n: 3)
+            for _ in 0..<(60 * 150) {
+                lab.tick(watching: false)
+                if lab.rigs[0].brain.socialBook.housemateBoost { boosted += 1 }
+            }
+        }
+        MotionLog.write("BESTFRIEND blocks ended: kinds per block \(kinds); ticks with the housemate preference on \(boosted)")
+        XCTAssertFalse(kinds.isEmpty, "blocks happen")
+        XCTAssertGreaterThanOrEqual(kinds.filter { $0 >= 2 }.count * 2, kinds.count, "at least half of the blocks chain 2 kinds or more in the lab")
+        XCTAssertGreaterThan(boosted, 0, "after a block the housemate preference is on")
+    }
+
+    func testTheHousematePreferenceIsTwiceAndClearsOnPick() {
+        let lab = buddies(seed: 71, n: 3)
+        let a = lab.rigs[0].brain, h = lab.rigs[2].brain, b = lab.rigs[1].brain
+        a.socialBook.housemateBoost = true
+        XCTAssertEqual(BondPairing.weight(chooser: a, candidate: h), 2)
+        XCTAssertEqual(BondPairing.weight(chooser: a, candidate: b), 2.4)
+        _ = BondPairing.pick([h], chooser: a, roll: 0)
+        XCTAssertFalse(a.socialBook.housemateBoost, "it ends with one pair moment with a housemate")
     }
 }
