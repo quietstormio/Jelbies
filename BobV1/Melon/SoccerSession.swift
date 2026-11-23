@@ -648,7 +648,7 @@ extension BlobBrain {
             }
             socialBook.hold = false; socialBook.faceYaw = nil
             face(.excited, hold: 1.1); blushBump(hold: 2.4, peak: 0.7)
-            let ok = idleStart(.joy, sim)
+            let ok = idleStart(.bounce, sim)          // (the happy bounce, off the ground: the same one the scorer does)
             o.state = ok ? 2 : -1; o.cheered = ok
         }
     }
