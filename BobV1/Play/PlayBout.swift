@@ -14,7 +14,9 @@ import simd
 nonisolated enum BoutMath {
     /// The most touches in one bout; after them the last header goes to the player. One header in this many is aimed out of reach (the ball comes down).
     nonisolated(unsafe) static var touchCap = 8
-    nonisolated(unsafe) static var missEvery: Float = 8
+    nonisolated(unsafe) static var missEvery: Float = 4.5
+    /// The first this many touches of a bout are never aimed out of reach.
+    nonisolated(unsafe) static var safeTouches = 2
     /// A spot nobody else stands nearer than this to (bodies keep apart).
     static let keepAway: Float = 1.75
     /// A ball never comes down further out sideways than this (a wide landscape floor: a ball against a side wall is not reachable from behind).
@@ -121,7 +123,7 @@ extension PlayToss {
         // who: the one who has touched it least (with three it goes round all three)
         let rid = BoutMath.nextReceiver(others: others.map(\.id), touches: bout.touched, sender: bout.lastToucher, rnd: { self.rand() }) ?? others[0].id
         let rj = jelly(rid)!
-        let miss = rand() < 1 / BoutMath.missEvery          // (rolled once: the retries below only look for a spot that comes down inside the floor)
+        let miss = bout.touches > BoutMath.safeTouches && rand() < 1 / BoutMath.missEvery          // (rolled once: the retries below only look for a spot that comes down inside the floor; the first touches are never aimed out of reach, so a bout is never over after one or two)
         var T: Float = 1.2, spot = rj.pos, vel = SIMD3<Float>.zero
         for attempt in 0..<8 {          // (a ball that is not struck on its way goes on to the floor: aim so that it comes down inside the floor, not against the back wall or past a side line)
             spot = BoutMath.pickFree(near: rj.pos, keepOff: others.filter { $0.id != rid }.map(\.pos) + [j.pos], miss: miss, reach: { Self.bodyReach($0) }, zlo: zlo, zhi: zhi, rnd: { self.rand() })
