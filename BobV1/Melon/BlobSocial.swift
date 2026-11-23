@@ -678,6 +678,7 @@ extension BlobBrain {
             if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
+        if EmoteSpot.logOn, s.kind == .pass { NSLog("[pass] end t=%.1f ids %d,%d kicks=%d how=%@", variety.now, s.idA, s.idB, s.passes, String(describing: s.end)) }
         mixPassEnded(s)
         mixSessionEnded(s, hard: hard || s.end == .aborted || s.end == .stopped)          // (MoveMix.swift: quiet period + a stroll away)
         if s.kind == .squabble { wantHmph() }          // a huff after a squabble

@@ -40,6 +40,8 @@ nonisolated enum MoveMix {
     /// The wait before the next solo special (idleEnd) is this much longer: legs and calm standing fit between solos.
     static let soloGapMul: Float = 3.4
     static let legMin: Float = 2.5
+    /// Round 3c: a ball pass is never played closer than this between the two (a close exchange ends instead).
+    static let passMinDist: Float = 2.0
     // 7. soccer by themselves (round 3): with a soccer ball placed, some moment about every `soccerGap` s of field time, a real pass exchange of `passKicksMin...Max` kicks
     nonisolated(unsafe) static var soccerNextAt: Float = 0
     nonisolated(unsafe) static var soccerDbg: [String: Int] = [:]
@@ -107,6 +109,7 @@ struct MixBook {
     var soccerNudgeAt: Float = -99
     var soccerPassTries = 0
     var soccerOwn = false
+    var passWhy = ""
     var soccerNudgeT: Float = -99, soccerStuck = 0
     var soccerNudgeBall = SIMD2<Float>.zero
     var windowUntil: Float = -1
