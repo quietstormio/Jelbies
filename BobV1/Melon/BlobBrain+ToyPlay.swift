@@ -328,10 +328,10 @@ extension BlobBrain {
             let taken = toyPeers.filter { $0.toy.audUID == uid }.count
             guard let i = ranked.firstIndex(where: { $0 === self }), i + taken < Self.audienceLimit(foot.kind) else { continue }
             guard rand() < Self.audienceChance(foot.kind) * (idleMood == .grumpy ? ToyTuning.grumpyShare : 1) else { continue }
-            guard let spot = toyAudienceSpot(foot, user: user) else { continue }
-            toy.joined += 1; toy.audUID = uid; toy.audBy = show.by; toy.audStage = 1; toy.audSpot = spot; toy.audUntil = clock + 14
+            // he stays where he is until the player has ARRIVED at the toy (stage 3): then the spot is chosen against where everybody really stands and he walks there (stage 1): two walkers never cross on the way in
+            toy.joined += 1; toy.audUID = uid; toy.audBy = show.by; toy.audStage = 3; toy.audUntil = clock + 14
             toy.audNext = clock; toy.audReacted = false; toy.audTurn = false
-            requestNow(.goTo(spot))
+            idleState.cooldown = max(idleState.cooldown, 5)
             if EmoteSpot.logOn { NSLog("[toyshare] t=%.1f id=%d joins %@ uid=%d by=%d", variety.now, steerID, foot.kind.rawValue, uid, show.by) }
             return true
         }
@@ -350,6 +350,15 @@ extension BlobBrain {
         let user = toyPeers.first { $0.steerID == toy.audBy }
         let playing = f.occupant[uid] == toy.audBy
         let arrived = user.map { !$0.idleState.decorGo && $0.idleState.decorUID == uid } ?? false
+        if toy.audStage == 3 {
+            guard arrived else { return true }
+            guard let user, let spot = toyAudienceSpot(foot, user: user) else { toyAudienceEnd(clock, cool: 20); return false }
+            toy.audSpot = spot; toy.audStage = 1
+            if foot.kind == .drum { user.idleState.hold += 3 }          // (the drummer keeps the beat going for his audience: +3 s once)
+            else if foot.kind == .hoop { user.idleState.hold += 2 }
+            requestNow(.goTo(spot))
+            return true
+        }
         if toy.audStage == 1 {
             if scriptIsNone, pending == nil {
                 if simd_distance(position, toy.audSpot) < 0.6 { toy.audStage = 2; toy.audNext = clock + 0.3 }
@@ -368,7 +377,7 @@ extension BlobBrain {
             guard playing else { toyAudienceEnd(clock, cool: 45); return false }
             guard arrived else { return true }
             // the drummer keeps the beat going a little longer for his audience (once, +3 s on his own hold) and thumps it every 0.8 s: the same thump + sound as his own
-            if !toy.audReacted, let user { toy.audReacted = true; user.idleState.hold += 3; toy.audBeat = clock + 0.4 }
+            if !toy.audReacted { toy.audReacted = true; toy.audBeat = clock + 0.4 }
             if let user, clock >= toy.audBeat, user.idleState.kind == .decorBoop, user.idleState.decorBooped {
                 toy.audBeat = clock + 0.8
                 user.jellyKick = max(user.jellyKick, 1.2)
