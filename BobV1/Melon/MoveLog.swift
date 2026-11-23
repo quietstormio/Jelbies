@@ -247,7 +247,7 @@ final class MoveLog {
         else if b.activity == .playing || b.toy.waitUID >= 0 || b.toy.chaseSpot != nil { cat = 6 }
         else if b.activity == .eating || b.activity == .drinking || b.activity == .touched || b.activity == .recovering { cat = 9 }
         else if let k { cat = (k == .wander || k == .run) ? 0 : 3 }
-        else { cat = 2 }
+        else { cat = b.mix.sess ? 6 : 2 }          // (soccer-room-r1: a member of a soccer session standing at his place is ball play)
         if cat != s.cat {
             if s.cat == 2, s.catT > 0.2 { total.stands.append(s.catT); window.stands.append(s.catT) }
             s.cat = cat; s.catT = 0

@@ -286,7 +286,8 @@ extension BlobBrain {
     var scriptIsNone: Bool { if case .none = script { return true }; return false }
 
     /// Free to start / join a social: idle, autonomous, nothing else owns him.
-    var socialFree: Bool {
+    var socialFree: Bool { !mix.sess && socialFreeBase }
+    var socialFreeBase: Bool {
         social == nil && socialBook.enabled && attached && (autonomy || idleForced) && !held && !commanded && pending == nil && job == nil && bubbleLeash == nil
             && commandedIdle == nil && !commandedFlip && !commandedNameHop && !interruptScript && !hurry
             && activity != .touched && activity != .recovering && scriptIsNone && idleState.kind == nil && !onSlideFoot && !onHopCourt          // (park-slide-r4: not on the slide's foot; park-hopscotch-r1: nor on a court with a game on)
@@ -305,7 +306,7 @@ extension BlobBrain {
     }
     /// Out on an ordinary wander leg: autonomous, nothing owns him, no behaviour running. He can be invited to a social (his leg is ended at the next stretch of the walk).
     var socialWandering: Bool {
-        guard social == nil, bubbleLeash == nil, socialBook.enabled, attached, autonomy || idleForced, !held, !commanded, pending == nil, job == nil, commandedIdle == nil,
+        guard social == nil, !mix.sess, bubbleLeash == nil, socialBook.enabled, attached, autonomy || idleForced, !held, !commanded, pending == nil, job == nil, commandedIdle == nil,
               !commandedFlip, !commandedNameHop, !interruptScript, !hurry, !race.active, idleState.kind == nil, activity == .walking, !onSlideFoot, !meetBusy else { return false }
         if case .walk = script { return true }
         return false
@@ -596,6 +597,8 @@ extension BlobBrain {
         if !socialBook.lookPair.isEmpty { for k in socialBook.lookPair.keys { socialBook.lookPair[k]! -= dt } }
         socialBook.wantPitch = 0; socialBook.wantRoll = 0; socialBook.wantSquash = 1; socialBook.wantEyes = 1
         socialBook.handWant = nil
+        SoccerSession.shared.tick(by: self, dt)          // (soccer-room-r1: inert without a soccer ball in the room)
+        if mix.sess || mix.order.kind != .none { mixSessionTick(sim) }
 
         if socialBook.stopAll {
             socialBook.stopAll = false

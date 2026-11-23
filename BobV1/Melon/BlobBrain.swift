@@ -942,6 +942,7 @@ final class BlobBrain {
         currentPose(sim)
         if reserved && !commanded { waitPose(sim); return }
         if let lz = bubbleLeash, !commanded { if bubbleHold { restTimer = 0.15 } else { bubbleIdle(sim, lz) }; return }          // (the bubble wand is out: stay in view, look up at the wand, hop; never wander off)
+        if mix.sess { restTimer = 0.25; return }          // (soccer-room-r1: a member of a soccer session stands where the director put him)
         if toy.waitUID >= 0 || toy.chaseSpot != nil { restTimer = 0.4; return }          // (waiting for a turn at a toy: he stands and watches, he does not wander off)
         if !emoteSpotLive || reserved { emoteSpot.soloKind = nil; emoteMeetEnd(); socialBook.meetHeldBy = -1 }          // (EmoteSpot.swift: a meal, a bath or the park drops what was waiting for a spot)
         if emoteSoloArrived(sim) { mixNoteIdle(); return }          // (EmoteSpot.swift: he has walked to the spot of a solo emote)
@@ -1592,7 +1593,14 @@ final class BlobBrain {
         let pRV = PerfProbe.begin(); let rv = resolve(SIMD3(cand.x, 0, cand.y), footprint); PerfProbe.end("rs.resolve", pRV)
         stanceStepFree = false
         let got = SIMD2(rv.x, rv.z) - root
-        if MoveLog.on, simd_distance(SIMD2(rv.x, rv.z), cand) > 0.01 { MoveLog.note(.push); if EmoteSpot.logOn { curveLogPush(got: SIMD2(rv.x, rv.z), cand: cand, curved: bend != nil || aimSub) } }          // (MoveLog: the floor rules / the peer spring moved the planned step by more than 1 cm)
+        if MoveLog.on, simd_distance(SIMD2(rv.x, rv.z), cand) > 0.01 {
+            MoveLog.note(.push)
+            if EmoteSpot.logOn {          // (soccer-room-r1 log only: which body, which moment, what pushed it)
+                let pe = steerPeers().map { (id: $0.id, d: simd_distance($0.pos, cand)) }.min { $0.d < $1.d }
+                NSLog("[push] sess=%d t=%.1f id=%d at=(%.2f,%.2f) moved=%.2f nearestPeer=%d d=%.2f order=%@ st=%d script=%@ idle=%@ target=(%.2f,%.2f)", mix.sess ? 1 : 0, variety.now, steerID, root.x, root.y, simd_distance(SIMD2(rv.x, rv.z), cand), pe?.id ?? -1, pe?.d ?? -1, String(describing: mix.order.kind), mix.order.state, String(describing: script).prefix(14) as CVarArg, String(describing: idleState.kind) as CVarArg, target.x, target.y)
+                curveLogPush(got: SIMD2(rv.x, rv.z), cand: cand, curved: bend != nil || aimSub)          // (curved-walk-r1 log: which pushes came on a curved step)
+            }
+        }          // (MoveLog: the floor rules / the peer spring moved the planned step by more than 1 cm)
         if a > 0.01 { stuckT = simd_length(got) < 0.3 * a ? stuckT + feet.stepTime : max(0, stuckT - feet.stepTime) }
         rootD = got
         let wm = finalTurn ? max(-m, min(m, errF)) : (bend?.dy ?? (abs(err) > 0.5 ? turnPlan(err: err, idle: false).dyaw : max(-m, min(m, err))))

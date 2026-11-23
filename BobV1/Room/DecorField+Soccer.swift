@@ -65,7 +65,27 @@ extension DecorField {
     }
     /// The world point the ball comes to rest at after a goal (0.6 in front of the mouth, on the ball's line).
     func rollOutSpot(_ g: DecorFoot, from p: SIMD2<Float>) -> SIMD2<Float> {
-        g.centre + g.turned(SIMD2(max(-0.5, min(0.5, goalLocal(g, p).x)), GoalGeometry.mouthZ + SoccerTuning.rollOutStop))
+        let lx = max(-0.5, min(0.5, goalLocal(g, p).x))
+        let plain = g.centre + g.turned(SIMD2(lx, GoalGeometry.mouthZ + SoccerTuning.rollOutStop))
+        // soccer-room-r1: with the sessions on, the ball comes to rest on open floor (0.9 from the walls, the furniture, the goal), not in the pocket beside a goal at a wall
+        guard SoccerSessionTuning.on, MoveMix.on, let rf = GameCamera.roamFloor else { return plain }
+        func score(_ q: SIMD2<Float>) -> Float? {
+            guard rf.contains(q), rf.stopOK(q), q.y > rf.minZ + 0.9, q.y < rf.maxZ - 0.9 else { return nil }
+            let c = min(rf.halfWidth(at: q.y) - abs(q.x), floorClearance(q, except: g.uid))
+            return c
+        }
+        if let c = score(plain), c >= 0.9 { return plain }
+        var best: (SIMD2<Float>, Float)?
+        for lxx in [Float(0), -0.45, 0.45, -0.8, 0.8, -1.2, 1.2] {
+            for d in [Float(0.6), 1.0, 1.4] {
+                let local = SIMD2(lxx, GoalGeometry.mouthZ + d)
+                let q = g.centre + g.turned(local)
+                guard abs(lxx) < 0.55 || d >= 1.0, let c = score(q), c >= 0.9 else { continue }          // (a wide spot is rolled to from the middle of the mouth along a line that clears the posts)
+                let cost = simd_distance(q, plain) + (c >= 1.2 ? 0 : 0.3)
+                if best == nil || cost < best!.1 { best = (q, cost) }
+            }
+        }
+        return best?.0 ?? plain
     }
 
     // MARK: the roll
@@ -206,6 +226,7 @@ extension DecorField {
         if t >= SoccerTuning.nudgeAfter, occupant[uid] == nil {
             // the fallback: a soft roll to the nearest open floor (not into the piece it is wedged against)
             let open = nearestOpenFloor(to: p) ?? SIMD2<Float>(0, 0.6)
+            if EmoteSpot.logOn { NSLog("[fieldnudge] ball=(%.2f,%.2f) rolled toward (%.2f,%.2f)", p.x, p.y, open.x, open.y) }
             var d = open - p; let L = simd_length(d); d = L > 1e-3 ? d / L : SIMD2(0, 1)
             kickBall(uid, direction: d, speed: min(max(L * SoccerTuning.linearDecayPerS + SoccerTuning.stopSpeed, 0.8), SoccerTuning.nudgeSpeedMax))
             SoccerState.shared.setStuck(uid, 0)
@@ -216,12 +237,12 @@ extension DecorField {
 
     /// The ball's clearance at a world point: the least signed gap between its surface and the walls, the floor's edges, the sofa, every solid piece and
     /// the room's cylinders (negative = overlapping).
-    func floorClearance(_ p: SIMD2<Float>) -> Float {
+    func floorClearance(_ p: SIMD2<Float>, except: Int = -1) -> Float {
         let r = SoccerTuning.radius
         let fl = Self.soccerFloor(z: p.y)
         var c = min(p.y - (fl.zlo + r), (fl.zhi - r) - p.y, fl.xlim - abs(p.x))
         c = min(c, RoomLayout.sofaDistanceXZ(p) - r)
-        for f in feet where f.spec.solid { c = min(c, f.distance(p) - r) }
+        for f in feet where f.spec.solid && f.uid != except { c = min(c, f.distance(p) - r) }
         for cy in RoomLayout.cylinders { c = min(c, simd_distance(p, cy.centre) - cy.radius - r) }
         return c
     }

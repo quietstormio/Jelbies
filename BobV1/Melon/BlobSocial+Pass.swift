@@ -180,7 +180,7 @@ extension BlobBrain {
 extension BlobBrain {
     /// Round 3b: where the two stand for a real pass of the soccer ball: the kicker 0.95 u behind the ball, the receiver `D` = 3.4...2.0 u from the ball on the other side, along a line that is clear of bodies, furniture,
     /// sleepers and the HUD buttons. nil = the room has no such line (no pass).
-    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
+    func mixPassPlan(ball c: SIMD2<Float>, with o: BlobBrain, restOK: ((SIMD2<Float>) -> Bool)? = nil, bodyGap: Float = 1.0, dists: [Float]? = nil, strict: Bool = false) -> (pk: SIMD2<Float>, pr: SIMD2<Float>)? {
         let field = DecorField.shared
         guard let rf = roamProvider?() else { return nil }
         let others = socialOthers().filter { $0 !== self && $0 !== o }
@@ -190,24 +190,37 @@ extension BlobBrain {
             if !rf.contains(p) || rf.halfWidth(at: p.y) - abs(p.x) <= 0.45 { why["floorEdge", default: 0] += 1; return false }
             if !rf.stopOK(p) { why["hudKeepOut", default: 0] += 1; return false }
             if simd_distance(fixed(p), p) >= 0.08 { why["furniture", default: 0] += 1; return false }
-            if others.contains(where: { simd_distance($0.position, p) < 1.0 }) { why["body", default: 0] += 1; return false }
+            if others.contains(where: { simd_distance($0.position, p) < bodyGap }) { why["body", default: 0] += 1; return false }
             if mixBallSpotBad(p) { why["sleeperOrHud", default: 0] += 1; return false }
             return true
         }
         defer { mix.passWhy = why.sorted { $0.value > $1.value }.map { "\($0.key)=\($0.value)" }.joined(separator: ",") }
         var best: (pk: SIMD2<Float>, pr: SIMD2<Float>, score: Float)?
-        for D in [Float(3.4), 3.2, 3.0, 2.8, 2.6, 2.3, 2.0] {
+        for D in dists ?? [Float(3.4), 3.2, 3.0, 2.8, 2.6, 2.3, 2.0] {
             for k in 0..<16 {
                 let a = Float(k) * .pi / 8
                 let v = SIMD2(sinf(a), cosf(a))
                 let pk = c - v * 0.95, pr = c + v * D
                 guard good(pk), good(pr) else { continue }
+                if let ok = restOK, !ok(c + v * max(D - 1.0, 0.45)) { why["restInPocket", default: 0] += 1; continue }          // (soccer-room-r1: where the ball will stop must be open floor)
                 var clear = true
                 var d: Float = 0.4
                 while d <= D { let p = c + v * d; if !field.openFloor(p) { why["lineFurniture", default: 0] += 1; clear = false; break }; if mixBallSpotBad(p) { why["lineSleeperHud", default: 0] += 1; clear = false; break }; if others.contains(where: { simd_distance($0.position, p) < 0.9 }) { why["lineBody", default: 0] += 1; clear = false; break }; d += 0.4 }
                 guard clear else { continue }
                 guard reachable(position, pk), reachable(o.position, pr) else { why["unreachable", default: 0] += 1; continue }
-                let score = -(simd_distance(position, pk) + simd_distance(o.position, pr))
+                let wk = simd_distance(position, pk), wr = simd_distance(o.position, pr)
+                // round 2 (the push outlier): the walks to the places must not pass close by a body that stands (the peer spring pushed the walker every time: 7 of 10 pushes were a walk to a place)
+                func crowds(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ bodies: [SIMD2<Float>]) -> Bool {
+                    let ab = b - a, n = max(2, Int(simd_length(ab) / 0.15))
+                    for i in 0...n { let q = a + ab * (Float(i) / Float(n)); if bodies.contains(where: { simd_distance($0, q) < 1.3 }) { return true } }
+                    return false
+                }
+                let thirds = others.map { $0.position }
+                let kCross = sessPathNear(position, pk, thirds + [o.position]), rCross = sessPathNear(o.position, pr, thirds + [position])
+                // strict (round 3): a walk past a standing third member is out; so is a pair whose walks cross each other (one of them alone is sequenced by the director)
+                if strict, sessPathNear(position, pk, thirds) || sessPathNear(o.position, pr, thirds) || (sessPathNear(position, pk, [o.position]) && sessPathNear(o.position, pr, [position])) { why["walkCrowds", default: 0] += 1; continue }
+                let crowd = (kCross ? 1 : 0) + (rCross ? 1 : 0)
+                let score = -(max(wk, wr) + 0.25 * (wk + wr)) - 4 * Float(crowd)          // (the kick waits for the slower walker)
                 if best == nil || score > best!.score { best = (pk, pr, score) }
             }
             if best != nil { break }
