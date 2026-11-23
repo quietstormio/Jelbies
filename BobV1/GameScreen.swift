@@ -653,7 +653,7 @@ struct GameScreen: View {
             var kinds: [DecorKind] = [.soccerball]
             if d.integer(forKey: "PlaceSoccer") >= 2 { kinds.append(.minigoal) }
             let atXZ = (d.string(forKey: "PlaceSoccerAt") ?? "").split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }          // (soccer-room-r1: -PlaceSoccerAt "x,z" puts the ball at that open-floor spot, after the launch job is over)
-            if atXZ.count == 2 { await sleep(9) }
+            if atXZ.count == 2 { await sleep(15) }
             for k in kinds where !care.store.placedDecor.contains(where: { $0.kind == k }) {
                 care.store.grant(k.storeID)
                 if let p = care.store.place(k.storeID), k == .soccerball, atXZ.count == 2 { care.store.move(p.uid, to: SIMD2(atXZ[0], atXZ[1])) }

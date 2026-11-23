@@ -429,7 +429,7 @@ final class SoccerSession {
         }
     }
 
-    /// Round 3: the kick-off pair: the member nearest the ball (the kicker) and the nearest other one 1.6...3.9 from it with nobody on the line and open floor where the ball will stop (a standing one first).
+    /// Round 3: the kick-off pair: the member nearest the ball (the kicker) and the nearest other one 1.3...3.9 from it with nobody on the line and open floor where the ball will stop (a standing one first).
     private func kickoffPair(_ ms: [BlobBrain], _ c: SIMD2<Float>) -> (Int, Int)? {
         let field = DecorField.shared
         let order = (0..<ms.count).sorted { simd_distance(ms[$0].position, c) < simd_distance(ms[$1].position, c) }
@@ -439,7 +439,7 @@ final class SoccerSession {
         for ri in order.dropFirst() {
             let R = ms[ri]
             let v = R.position - c, L = simd_length(v)
-            guard L >= 1.6, L <= 3.9 else { continue }
+            guard L >= 1.3, L <= 3.9 else { continue }
             let dir = v / L
             let rest = c + dir * max(L - 1.0, 0.45)
             guard rf.contains(rest), rf.stopOK(rest), field.openFloor(rest, margin: 0.4) else { continue }
