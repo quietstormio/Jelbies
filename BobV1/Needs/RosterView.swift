@@ -50,6 +50,8 @@ struct RosterPanel: View {
     let care: GameCare
     @Binding var open: Bool
     var onPick: (Int) -> Void = { _ in }
+    /// The card's Profile button (profile-entry-r1): opens that Jelmiko's Profile; the panel closes first.
+    var onProfile: (Int) -> Void = { _ in }
     @State private var contentH: CGFloat = 0
 
     var body: some View {
@@ -77,7 +79,10 @@ struct RosterPanel: View {
                         ScrollView {
                             VStack(spacing: 6) {
                                 ForEach(care.select.blobs) { b in
-                                    BlobCard(blob: b, needs: care.needs(for: b.id), perks: care.jelly(b.id).map { j in j.perks.active.map { ($0, j.perks.remaining($0)) } } ?? [], personality: care.jelly(b.id)?.traits?.summary) {
+                                    BlobCard(blob: b, needs: care.needs(for: b.id), perks: care.jelly(b.id).map { j in j.perks.active.map { ($0, j.perks.remaining($0)) } } ?? [], personality: care.jelly(b.id)?.traits?.summary, profile: care.profileEntryAvailable ? {
+                                        withAnimation(CareMenu.spring) { open = false }
+                                        onProfile(b.id)
+                                    } : nil) {
                                         UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                                         withAnimation(CareMenu.spring) { open = false }
                                         onPick(b.id)
@@ -111,6 +116,7 @@ struct BlobCard: View {
     let needs: BlobNeeds
     var perks: [(kind: PerkKind, left: TimeInterval)] = []          // active power-ups (Perks model), shown as chips with the time left
     var personality: String? = nil          // "Cuddly · loves Bedtime cookie" (a picked Jelbie; nil for the older ones)
+    var profile: (() -> Void)? = nil          // the Profile button at the card's top right (home only); nil = none
     let action: () -> Void
     @State private var openPerk: PerkKind?          // the boost whose one-line explanation is showing (derived against `perks` below)
 
@@ -133,20 +139,35 @@ struct BlobCard: View {
     }
 
     var body: some View {
+        card.overlay(alignment: .topTrailing) {          // (a sibling of the combined card element, so VoiceOver and UI tests reach it)
+            if let profile {
+                ProfileEntryButton(name: blob.name, identifier: "roster-profile-\(blob.id)", action: profile)
+                    .padding(.top, -4).padding(.trailing, 4)
+            }
+        }
+    }
+
+    @ViewBuilder private var card: some View {
         let shown = perks.first(where: { $0.kind == openPerk })?.kind
         VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color(red: Double(blob.tint.x), green: Double(blob.tint.y), blue: Double(blob.tint.z)))
-                        .frame(width: 18, height: 18)
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
-                        .accessibilityHidden(true)          // the tint is decoration; the name carries the identity
-                    Text(blob.name).jFont(17, .bold).foregroundStyle(FocusStyle.brown).lineLimit(1).minimumScaleFactor(0.7)
-                    Spacer(minLength: 4)
-                    Text(needs.mood.word)
-                        .jFont(12, .semibold).foregroundStyle(FocusStyle.brown)
-                        .lineLimit(1).fixedSize()
-                        .padding(.horizontal, 9).padding(.vertical, 3)
-                        .background(Capsule().fill(Self.moodColor(needs.mood)))
+                let moodChip = Text(needs.mood.word)
+                    .jFont(12, .semibold).foregroundStyle(FocusStyle.brown)
+                    .lineLimit(1).fixedSize()
+                    .padding(.horizontal, 9).padding(.vertical, 3)
+                    .background(Capsule().fill(Self.moodColor(needs.mood)))
+                let stackMood = dts.isAccessibilitySize          // largest text: the mood chip drops under the name so the name keeps its room beside the Profile button
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Circle().fill(Color(red: Double(blob.tint.x), green: Double(blob.tint.y), blue: Double(blob.tint.z)))
+                            .frame(width: 18, height: 18)
+                            .overlay(Circle().strokeBorder(Color.white.opacity(0.7), lineWidth: 1.5))
+                            .accessibilityHidden(true)          // the tint is decoration; the name carries the identity
+                        Text(blob.name).jFont(17, .bold).foregroundStyle(FocusStyle.brown).lineLimit(1).minimumScaleFactor(0.7)
+                        Spacer(minLength: 4)
+                        if !stackMood { moodChip }
+                        if profile != nil { Color.clear.frame(width: 40, height: 1) }          // room for the Profile button
+                    }
+                    if stackMood { moodChip }
                 }
                 if let personality { Text(personality).jFont(12, .medium).foregroundStyle(FocusStyle.brown.opacity(0.8)).lineLimit(1).minimumScaleFactor(0.7) }
                 let meters = dts.isAccessibilitySize

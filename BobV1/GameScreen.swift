@@ -18,6 +18,7 @@ struct GameScreen: View {
     @State private var rosterOpen = DevArgs.enabled && UserDefaults.standard.integer(forKey: "RosterOpen") != 0          // (-RosterOpen 1: capture aid, dev-args only)
     @State private var bookOpen = false                       // Voice v1 trick book
     @State private var soundOpen = UserDefaults.standard.integer(forKey: "SoundPanelOpen") != 0      // sound settings panel (-SoundPanelOpen 1: captures)
+    @State private var profileWho: Int?          // profile-entry-r1: the Jelmiko whose Profile the roster panel / the name header opened (nil = the usual: the selected one)
     @State private var town: TownScreen? = GameScreen.launchTown()      // Go out: Town / Shop / Track (Store/TownUI.swift)
     @State private var bagOpen = UserDefaults.standard.string(forKey: "StoreOpen") == "bag"
     @State private var bagTab: BagSheet.BagTab?               // Dress / Play / Decor open the Bag on that tab, for that Jelbie
@@ -292,13 +293,13 @@ struct GameScreen: View {
             if PhotoMode.shared.active { PhotoModeView(care: model.care) }          // Photo mode: HUD hidden, the bar, the camera fingers
 
             if town != nil {                     // Go out: Town / Shop / Track
-                TownFlow(care: model.care, screen: $town, who: model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }, groom: { model.care.requestGroom() }, feed: { withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }, drink: { withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink } }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
+                TownFlow(care: model.care, screen: $town, who: profileWho ?? model.care.targetJelly, cafe: { model.care.requestCafe() }, park: { model.care.requestPark() }, groom: { model.care.requestGroom() }, feed: { withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .food } }, drink: { withAnimation(CareMenu.spring) { menuOpen = true; openPicker = .drink } }) { withAnimation(.easeInOut(duration: 0.25)) { town = nil } }
                     .transition(.opacity)
             }
 
             // (the come-here tutorial card is retired: he knows "come here" from the start)
 
-            RosterPanel(care: model.care, open: $rosterOpen) { id in model.care.rosterPick(id) }
+            RosterPanel(care: model.care, open: $rosterOpen, onPick: { id in model.care.rosterPick(id) }, onProfile: { id in openProfile(id) })
                 .padding(.top, 8)
 
             if soundOpen {
@@ -450,6 +451,7 @@ struct GameScreen: View {
             #if targetEnvironment(simulator)
             RaceDepartProbe.mark("town \(String(describing: t))")
             #endif
+            if t == nil { profileWho = nil }
             model.paused = t != nil; AudioHub.shared.setTownScene(GameScreen.townMusic(t))
         }
         .onChange(of: outing) { _, on in DayClock.shared.setOutingRate(on) }
@@ -541,6 +543,18 @@ struct GameScreen: View {
             try? await Task.sleep(nanoseconds: UInt64(after) * 1_000_000_000)
             town = .condition
         }
+        .task {          // capture aid (dev arguments only): `-SelectJelly <id>` picks that Jelmiko like a tap; `-ProfileEntryTap roster|header -ProfileEntryId <id>` presses the new Profile button after `-ProfileEntryAfter` s
+            guard DevArgs.enabled else { return }
+            let d = UserDefaults.standard
+            guard d.object(forKey: "SelectJelly") != nil || d.string(forKey: "ProfileEntryTap") != nil else { return }
+            for _ in 0..<600 where LaunchGate.shared.visible { try? await Task.sleep(nanoseconds: 100_000_000) }
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            if d.object(forKey: "SelectJelly") != nil { model.care.rosterPick(d.integer(forKey: "SelectJelly")) }
+            guard let tap = d.string(forKey: "ProfileEntryTap") else { return }
+            try? await Task.sleep(nanoseconds: UInt64(max(1, d.double(forKey: "ProfileEntryAfter")) * 1e9))
+            openProfile(d.integer(forKey: "ProfileEntryId"))
+            _ = tap
+        }
         .task { await StoryDev.runIfRequested(care: model.care) }          // `-StoryDump <n>` (dev arguments only): Story/StoryDev.swift
         .task { await WallDemo.run(model: model) }          // capture aids for the wall picture's flow (dev arguments only)
         .task { MicTuning.applyLaunchArguments(); await MicBench.runIfRequested(model: model) }          // `-MicBench N` (dev arguments only): scripted mic presses, one [micbench] line each
@@ -597,10 +611,19 @@ struct GameScreen: View {
     }
 
     /// Bottom-right care menu: one round button that expands upward into Feed / Drink / Come here.
+    /// The Profile from the room (the roster card or the name header): the Town flow's Profile screen on that Jelmiko, with no selection change and nobody called.
+    private func openProfile(_ id: Int) {
+        guard town == nil, let id = model.care.profileEntryTarget(id) else { return }
+        profileWho = id; rosterOpen = false
+        model.care.select.sheetOpen = false
+        withAnimation(.easeInOut(duration: 0.25)) { town = .condition }
+    }
+
     private func careSlot(padScale: CGFloat, hudWidth: CGFloat) -> some View {
         CareMenu(open: $menuOpen, care: model.care, openPicker: $openPicker,
                  openBag: { tab, who in bagTab = tab; bagWho = who; bagOpen = true },
                  openTown: { t, who in withAnimation(.easeInOut(duration: 0.25)) { town = t }; model.care.select.sheetOpen = false },
+                 openProfile: { id in openProfile(id) },
                  windowWidth: hudWidth, padScale: padScale)
         .padding(.trailing, 4)
 
@@ -642,7 +665,13 @@ struct GameScreen: View {
             if mode >= 2, mode <= 3 {
                 withAnimation(CareMenu.spring) { open.wrappedValue = true; picker.wrappedValue = .toy }
             } else {
-                let kind: DecorKind = { switch d.string(forKey: "PlayDemoBall") ?? "" { case "soccer": return .soccerball; case "beach": return .beachball; default: return .ball } }()
+                func ballKind(_ k: String?) -> DecorKind? { switch k ?? "" { case "soccer": return .soccerball; case "beach": return .beachball; case "ball": return .ball; default: return nil } }
+                // -PlayDemoNext soccer|beach|ball: after the first game is closed (-PlayDemoEnd 1) a second ball game in the same launch (capture aid: the second game's numbers must equal a fresh launch's)
+                var games: [DecorKind] = [ballKind(d.string(forKey: "PlayDemoBall")) ?? .ball]
+                if let n = ballKind(d.string(forKey: "PlayDemoNext")) { games.append(n) }
+                for (gi, kind) in games.enumerated() {
+                if gi > 0 { await sleep(3) }
+                NSLog("[playtoss] demo game %d %@", gi, "\(kind)")
                 care.beginPlay(ball: kind)
                 for _ in 0..<100 where care.play.camBlend < 0.95 { await sleep(0.1) }
                 await sleep(1.5)
@@ -659,7 +688,8 @@ struct GameScreen: View {
                         NSLog("[playtoss] demo round %d done rally %d nudges %d headers %d t %.1f", round, care.play.rally, care.play.nudges, care.play.headers, waited)
                         await sleep(1.8)
                     }
-                    if d.integer(forKey: "PlayDemoEnd") != 0 { await sleep(3); NSLog("[playtoss] demo: Done"); care.endPlay() }          // (capture aid: -PlayDemoEnd 1 puts the ball away after the rounds, to log the room's walls and floor after play)
+                    if d.integer(forKey: "PlayDemoEnd") != 0 || gi < games.count - 1 { await sleep(3); NSLog("[playtoss] demo: Done"); care.endPlay() }          // (capture aid: -PlayDemoEnd 1 puts the ball away after the rounds, to log the room's walls and floor after play)
+                }
                 }
             }
         }
@@ -1316,6 +1346,8 @@ struct CareMenu: View {
     /// Dress / Play / Decor ask the screen for the Bag on a tab; Compete asks for the Track / Show screens.
     var openBag: (BagSheet.BagTab, Int) -> Void = { _, _ in }
     var openTown: (TownScreen, Int) -> Void = { _, _ in }
+    /// The name header's Profile button (profile-entry-r1).
+    var openProfile: (Int) -> Void = { _ in }
     /// The measured width of the HUD (the game screen's geometry; 0 = not measured yet) and the iPad scale (1 on iPhone), passed down so a Split View / Stage Manager resize or a rotation reaches the picker.
     var windowWidth: CGFloat = 0
     var padScale: CGFloat = 1
@@ -1711,8 +1743,9 @@ struct CareMenu: View {
     @ViewBuilder private var nameCapsule: some View {
         if case .individual(let id) = HUDMenu.mode(care), let name = care.jelly(id)?.name {          // (the live mode: a row's 0.7 s freeze must not keep the name up after the X)
             HStack(spacing: 6) {
-                Text(name).jFont(15, .bold).foregroundStyle(Self.brown)
+                Text(name).jFont(15, .bold).foregroundStyle(Self.brown).lineLimit(1).truncationMode(.tail)          // the name gives way first; the buttons keep their size
                     .accessibilityIdentifier("hud-name")
+                if care.profileEntryAvailable { ProfileEntryButton(name: name, identifier: "hud-profile") { openProfile(id) } }
                 Button {
                     UIImpactFeedbackGenerator(style: .soft).impactOccurred(); AudioHub.shared.uiTap()
                     frozenMode = mode          // the rows fade out still labelled for him, not as the group's Feed / Drink / Play ...
