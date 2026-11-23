@@ -412,9 +412,10 @@ extension PlayToss {
             started = b.idleStart(.joy, j.sim)
             if started { b.commanded = true; b.idleState.reps = 2; b.face(.excited, hold: 1.5); b.blushBump(hold: 2.6, peak: 0.7) }
         }
-        if started {          // the player is the audience: the hop turns toward them in the air (his heading is set to them; the first hop's heading too)
-            let face = b.yawTo(playerPoint())
-            b.yaw = face; b.gait.facingYaw = face
+        if started, was > 25 {          // the player is the audience: the hop's heading is the direction to its target (a zero-length hop has none of its own), so the target is a hair toward the player and the hop is begun again: he turns toward them in the air
+            let to = playerPoint() - SIMD2(b.px, b.pz)
+            let L = simd_length(to)
+            if L > 1e-3 { b.idleState.target = SIMD2(b.px, b.pz) + to / L * 0.05; b.idleScootHop(j.sim) }
         }
         NSLog("[playnet] cheer id=%d started=%d kind=%@ facing=%.0f was=%.0f dt=%.2f", j.id, started ? 1 : 0, scorer ? "bounce3" : "joy2", netFacing(j), was, clock - net.goalAt)
         return started
