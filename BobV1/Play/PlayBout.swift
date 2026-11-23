@@ -13,8 +13,8 @@ import simd
 
 nonisolated enum BoutMath {
     /// The most touches in one bout; after them the last header goes to the player. One header in this many is aimed out of reach (the ball comes down).
-    nonisolated(unsafe) static var touchCap = 12
-    nonisolated(unsafe) static var missEvery: Float = 6
+    nonisolated(unsafe) static var touchCap = 8
+    nonisolated(unsafe) static var missEvery: Float = 5
     /// A spot nobody else stands nearer than this to (bodies keep apart).
     static let keepAway: Float = 1.75
     /// A ball never comes down further out sideways than this (a wide landscape floor: a ball against a side wall is not reachable from behind).
@@ -65,6 +65,9 @@ nonisolated struct BoutState {
     var toPlayer = false               // the next strike goes to the player (the button was pressed)
     var startedAt: Float = 0
     var endedAt: Float = -99
+    /// The ball that ended a bout on the floor is on its way to the hand by its own bounces (nobody fetches it); since when.
+    var homing = false
+    var homeStart: Float = 0
 }
 
 extension PlayToss {
@@ -216,8 +219,23 @@ extension PlayToss {
     /// The bout's ball came down on the floor: it is over. A small "oops" from the one who missed, no cheer, no point; the nearest sends the ball back to the player as always.
     func boutFloor() {
         guard bout.on else { boutAbort("floor-before-first-strike"); return }
-        ball.vel.x = 0; ball.vel.z = 0          // (it comes down with a soft thud and stays about where it landed: never rolled on to a wall or into the front band)
+        // the ball's own bounce carries it to the hand: horizontal speed toward the catch zone (about 1.5 s of low bounces and a roll); lifted over anybody in its way
+        let hand = handWorld(), here = SIMD2(ball.pos.x, ball.pos.z), to = SIMD2(hand.x * 0.5, catchZ() + 0.6) - here, d = simd_length(to)
+        if d > 0.3 {
+            let v = min(d * 1.5, 6)
+            ball.vel.x = to.x / d * v; ball.vel.z = to.y / d * v
+            var lifted = ball.vel; boutLift(&lifted, from: ball.pos, by: -1); ball.vel.y = max(ball.vel.y, lifted.y)
+            bout.homing = true; bout.homeStart = clock; returnAim = SIMD2(hand.x * 0.5, catchZ() + 0.6)
+        } else { ball.vel.x = 0; ball.vel.z = 0 }
+        NSLog("[bout] homing clock=%.3f from=(%.2f,%.2f) d=%.2f", clock, here.x, here.y, d)
         boutFinish("floor", oops: true)
+    }
+
+    /// A homing ball is given up (and falls back to the ordinary loose-ball path) if it has not reached the hand in 3.5 s.
+    func boutHomingTick() {
+        guard bout.homing else { return }
+        if phase != .flying && phase != .loose { bout.homing = false; return }
+        if clock - bout.homeStart > 3.5 { bout.homing = false; NSLog("[bout] homing gave up clock=%.3f", clock) }
     }
 
     func boutFinish(_ reason: String, oops: Bool) {

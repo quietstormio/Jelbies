@@ -388,7 +388,7 @@ final class PlayToss {
 
     private func letGo(from start: SIMD3<Float>, velocity v: SIMD3<Float>, foot: Bool = false, bout planned: Bool = false) {
         footFlight = foot; footChoice = nil; footPlan = [:]; kickHeightT = nil
-        boutAbort("new throw")
+        boutAbort("new throw"); bout.homing = false
         setOwn(.none); passPlan = nil; recallAt = nil; pendingPasses = rollChain()
         if planned { pendingPasses = 0; bout = BoutState(); bout.planned = true; bout.startedAt = clock }          // (beach-volley-r1)
         if UserDefaults.standard.integer(forKey: "PlayDemo") > 0 { NSLog("[playchain] throw=%d planned=%d foot=%d", throwSerial + 1, pendingPasses, foot ? 1 : 0) }
@@ -503,13 +503,14 @@ final class PlayToss {
         for e in events {
             switch e {
             case .floorBounce(let s):
-                if bout.on { boutFloor(); if phase == .flying { phase = .loose; looseT = 0 }; continue }          // (beach-volley-r1: the bout's ball came down: it is over, no point)
+                if bout.homing { onEvent?(.floorBounce(speed: s)); continue }          // (beach-volley-r1: the bout's ball is on its way to the hand by its own bounces: nobody fetches it)
+                if bout.on { boutFloor(); if !bout.homing, phase == .flying { phase = .loose; looseT = 0 }; continue }          // (beach-volley-r1: the bout's ball came down: it is over, no point)
                 if bout.planned { boutAbort("floor before the first header") }
                 if kickHeightT == nil { kickHeightT = clock }
                 onEvent?(.floorBounce(speed: s))
                 if phase == .flying { phase = .loose; looseT = 0 }
             case .bodyHit(let id, let s):
-                if bout.on { if s > 0.9 { onEvent?(.bodyBoop(id: id)) }; break }          // (beach-volley-r1: a bout ball that meets a body's side bounces off and flies on; only the floor ends it)
+                if bout.on || bout.homing { if s > 0.9 { onEvent?(.bodyBoop(id: id)) }; break }          // (beach-volley-r1: a bout ball that meets a body's side bounces off and flies on; only the floor ends it)
                 // play-ball-s2: any contact with the Jelmiko who is set to kick it is a strike, not a soft bounce
                 if footFlight || footChoice != nil, let kj = jelly(id), ball.pos.y < ball.radius + 0.9, !PlayTuning.ballReturnOld, kj.brain.tossFootApproach || !kj.brain.tossBusy {
                     strikeByContact(kj)
@@ -523,8 +524,9 @@ final class PlayToss {
             case .wall: break
             }
         }
-        if bout.on, ball.onFloor { boutFloor(); if phase == .flying { phase = .loose; looseT = 0 } }          // (beach-volley-r1: a soft landing ends it too)
-        if ball.resting || (ball.onFloor && phase == .flying) { if phase == .flying { phase = .loose; looseT = 0 } }
+        if bout.on, ball.onFloor { boutFloor(); if !bout.homing, phase == .flying { phase = .loose; looseT = 0 } }
+        boutHomingTick()          // (beach-volley-r1: a soft landing ends it too)
+        if !bout.homing, ball.resting || (ball.onFloor && phase == .flying) { if phase == .flying { phase = .loose; looseT = 0 } }
         if kickHeightT == nil, ball.pos.y <= ball.radius + Self.kickHeightAbove + 0.02, ball.vel.y <= 0.3, ball.ignoring == nil { kickHeightT = clock }
         if passPlan != nil { preparePassReceiver() }
         if !PlayTuning.ballReturnOld, footFlight || footChoice != nil { footTick() }
@@ -534,7 +536,7 @@ final class PlayToss {
         }
         if phase == .loose { for o in jellies where o.brain.tossHeaderApproach && o.brain.idleState.toss.stage < 4 { o.brain.tossHeaderRelease(o.sim, o.skinner) } }          // (a ball on the floor: nobody holds a header stand for it)
         if phase != .flying { headChoice = nil }
-        if phase == .flying { if bout.on { boutIntercepts() } else { steerReturn(dt: dt); intercepts(dt: dt, before: before) } }          // (beach-volley-r1: a bout has its own one to go for the ball)
+        if phase == .flying { if bout.on { boutIntercepts() } else if !bout.homing { steerReturn(dt: dt); intercepts(dt: dt, before: before) } }          // (beach-volley-r1: a bout has its own one to go for the ball)
         restWatch(dt: dt)
         if phase == .loose { looseT += dt; loose(dt: dt) }
     }
@@ -665,7 +667,7 @@ final class PlayToss {
 
     /// Safety nets for a ball that lies where nobody sends it back: after 2 s it is lobbed to the hand; a dropped ball that never left the hand is simply caught.
     private func restWatch(dt: Float) {
-        guard phase == .loose || phase == .flying, !bout.active else { restT = 0; return }          // (beach-volley-r1: a bout ball is not a stuck ball)
+        guard phase == .loose || phase == .flying, !bout.active, !bout.homing else { restT = 0; return }          // (beach-volley-r1: a bout ball is not a stuck ball)
         if ball.onFloor, ball.speedXZ < 0.35, bumper == nil || !(jelly(bumper!)?.brain.tossBusy ?? false) { restT += dt } else { restT = 0 }
         guard restT > (leftHand ? (PlayTuning.old ? Self.restRescueAfter : PlayTuning.restRescue) : 0.8) else { return }
         restT = 0
