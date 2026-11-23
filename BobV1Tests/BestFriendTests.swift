@@ -353,6 +353,7 @@ final class BestFriendTests: XCTestCase {
             var maxA: Float = 0, movedB: Float = 0, trace = ""
             for f in 0..<(60 * 14) {
                 lab.tick(watching: false)
+                if f >= 190 && f <= 230 && f % 6 == 0 { trace += " {\(f) A script \(String(describing: a.script).prefix(70)) act \(a.activity) idle \(String(describing: a.idleState.kind)) hold \(a.socialBook.hold) soc \(String(describing: a.social?.kind)) B script \(String(describing: b.script).prefix(50))}" }
                 if f % 30 == 0 { trace += " [\(f / 60).\(f % 60 == 0 ? 0 : 5)s A \(a.position) B \(b.position) arr \(blk.arrived.sorted()) run \(blk.running) done \(blk.done.count)]" }
                 if blk.running || blk.ended || !blk.done.isEmpty { break }
                 maxA = max(maxA, simd_distance(a.position, startA)); movedB = max(movedB, simd_distance(b.position, startB))
