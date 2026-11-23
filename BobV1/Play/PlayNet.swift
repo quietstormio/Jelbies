@@ -179,7 +179,7 @@ nonisolated enum PlayNetPlacement {
 /// What the controller keeps about the net (owned by `PlayToss.net`).
 struct PlayNetState {
     var spec: TossNet?
-    struct Hold { var t: Float = 0; var rolled = false; var scorer: Int? }
+    struct Hold { var t: Float = 0; var rolled = false; var scorer: Int?; var dead = false }
     var hold: Hold?
     /// The last Jelmiko who headed or kicked the ball since the throw (nil = nobody: the player's own throw).
     var lastToucher: Int?
@@ -201,6 +201,7 @@ struct PlayNetState {
     var awaitHand = false
     /// Keep-out round: the closest any body came to the footprint (0 = inside), the ball's floor contacts inside the dead zone, and the dead returns.
     var minBodyDist: Float = 99
+    var outT: [Int: Float] = [:]
     var floorHits = 0, prevVy: Float = 0, deadReturns = 0, keepOutSamples = 0
     var goals = 0
     /// Bodies that stay where they are while the net is up (sleepers): the net is placed clear of them.
@@ -262,7 +263,7 @@ extension PlayToss {
         if abs(p.x - n.centre.x) < n.outerHalf + PlayNetTuning.keepOutMargin {          // in or at the goal (down the back, a side net, off a post, the strip in front): the net takes it and rolls / lobs it out of the mouth exactly as after a goal, no cheer
             let at = SIMD2(min(max(p.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), n.mouthZ - 0.3)
             ball.pos = SIMD3(at.x, ball.radius, at.y); ball.vel = .zero; ball.inNet = true
-            net.hold = .init(t: PlayNetTuning.holdCheer, rolled: false, scorer: nil)
+            net.hold = .init(t: PlayNetTuning.holdCheer, rolled: false, scorer: nil, dead: true)
             NSLog("[playnet] return reason=dead (the net takes it) from %.2f,%.2f", p.x, p.y)
         } else {          // a pocket far beside the goal where nobody may stand: the same lob to the catch zone, from where it lies (the safety lob), no walk to the ball
             NSLog("[playnet] return reason=dead (beside or in front) from %.2f,%.2f", p.x, p.y)
@@ -388,6 +389,9 @@ extension PlayToss {
             }
         }
         netDeadTick()          // (play-net keep-out)
+        for j in jellies where !j.free && netKeepOut(j.pos) && !j.brain.tossBusy && Self.canHop(j.brain) && j.brain.idleState.kind == nil && clock - (net.outT[j.id] ?? -9) > 0.8 {          // (a body that stands in the keep-out walks out of it)
+            net.outT[j.id] = clock; j.brain.requestNow(.goTo(netStand(j.pos)))
+        }
         for j in jellies where !j.free {          // (the closest any body came to the footprint: the keep-out's proof)
             let d = netDistance(j.pos)
             if netKeepOut(j.pos) { net.keepOutSamples += 1 }
@@ -463,6 +467,7 @@ extension PlayToss {
         if !h.rolled, ready, ball.pos.y <= ball.radius + 0.05 || h.t >= (toPlayer ? PlayNetTuning.holdCheerMax : PlayNetTuning.holdTime) + 0.9 {          // (a ball still bouncing in the net waits to lie on the floor)
             if toPlayer {
                 if netReturnLaunch(n) { net.hold = nil; return false }
+                if h.dead { net.hold = nil; ball.inNet = false; ball.pos.y = max(ball.pos.y, ball.radius + 0.02); NSLog("[playnet] return blocked: dead ball, the safety lob instead"); netDeadLob(); return false }          // (a dead ball is never rolled out in front of the mouth: it would lie in the keep-out again)
                 NSLog("[playnet] return blocked: the old short roll-out")          // (a body stands right in front of the mouth: no way past him; the ball comes out 0.9 and the loose-ball handling has it)
             }
             h.rolled = true
