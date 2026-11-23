@@ -46,6 +46,8 @@ nonisolated enum MoveMix {
     nonisolated(unsafe) static var soccerNextAt: Float = 0
     nonisolated(unsafe) static var soccerDbg: [String: Int] = [:]
     nonisolated(unsafe) static var ballBadSince: Float = -1
+    /// A pass found no clear line from where the ball lies: the next solo kick dribbles it out to the middle of the floor first.
+    nonisolated(unsafe) static var ballNeedsRoom = false
     static let ballBadAfter: Float = 8
     static let soccerGap: ClosedRange<Float> = 45...70, soccerSoloSkip: Float = 0.5
     static let passChance: Float = 0.85, passKicksMin = 3, passKicksMax = 6
@@ -396,7 +398,7 @@ extension BlobBrain {
                 if !cands.isEmpty {
                     let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]
                     if o.socialFree {
-                        if socialStart(.pass, with: o, sim) { mix.soccerPassTries = 0; varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passStarted", default: 0] += 1; return true }
+                        if !socialStart(.pass, with: o, sim) { MoveMix.ballNeedsRoom = true; MoveMix.soccerDbg["passNoLine", default: 0] += 1; why = "noLine"; mix.soccerPassTries = 99 } else { mix.soccerPassTries = 0; varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passStarted", default: 0] += 1; return true }
                     } else if o.socialBeckonStop() {          // (he is out on a leg: asked to stop; the pass starts when he has, like the other pairs)
                         mix.soccerPassTries = 0
                         socialBook.invite = (.pass, o.steerID, 0); varietyNoteSocial(.pass, with: o); mix.last = .social; MoveMix.soccerDbg["passInvited", default: 0] += 1; return true
