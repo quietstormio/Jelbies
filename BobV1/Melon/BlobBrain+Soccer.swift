@@ -87,9 +87,15 @@ extension BlobBrain {
         if let sk = mix.sessKick {          // (soccer-room-r1: a session's directed kick: stand behind the ball on the line to the friend; no other line will do)
             mix.sessKick = nil
             plan.mode = .kick; plan.dir = sk.dir; plan.roll = sk.roll
-            guard let q = standable(ball - sk.dir * SoccerTuning.standBack) else { return nil }
-            soccerPlan = plan
-            return q
+            // (round 3: a friend standing beside the spot is no reason to give up: a little round the ball, the line stays)
+            for a in [Float(0), 0.35, -0.35, 0.7, -0.7] {
+                let p = ball - rotate(sk.dir, a) * SoccerTuning.standBack
+                let q = fixed(p)
+                guard simd_distance(p, q) < 0.08, a == 0 ? peerFree(q) : steerPeers().allSatisfy({ simd_distance($0.pos, q) >= 0.65 }) else { continue }
+                soccerPlan = plan
+                return q
+            }
+            return nil
         }
         if let to = mix.sessDribbleTo {          // (soccer-room-r1: dribble the ball a short way to a chosen spot, then he is done: the pass is the next turn)
             mix.sessDribbleTo = nil
