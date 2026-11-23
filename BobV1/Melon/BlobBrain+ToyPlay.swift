@@ -49,6 +49,7 @@ struct ToyBrain {
     var audUntil: Float = 0, audNext: Float = 0, audCool: Float = 0, audPoll: Float = 0
     var audShown: [Int: Float] = [:]
     var audReacted = false, audTurn = false
+    var audBeat: Float = 0
     var shared = 0, joined = 0
     /// Counters (tests / the report).
     var noticed = 0, queued = 0, tookTurn = 0, gaveUp = 0, chased = 0
@@ -360,7 +361,16 @@ extension BlobBrain {
         switch foot.kind {
         case .drum:
             guard playing else { toyAudienceEnd(clock, cool: 45); return false }
-            guard arrived, clock >= toy.audNext else { return true }
+            guard arrived else { return true }
+            // the drummer keeps the beat going a little longer for his audience (once, +3 s on his own hold) and thumps it every 0.8 s: the same thump + sound as his own
+            if !toy.audReacted, let user { toy.audReacted = true; user.idleState.hold += 3; toy.audBeat = clock + 0.4 }
+            if let user, clock >= toy.audBeat, user.idleState.kind == .decorBoop, user.idleState.decorBooped {
+                toy.audBeat = clock + 0.8
+                user.jellyKick = max(user.jellyKick, 1.2)
+                f.kick(uid, 0.8)
+                AudioHub.shared.play(.boop, jelly: user.steerID, x: user.px, volume: 0.8, rate: Float(0.5 + 0.08 * Double(Int(rand() * 4))))
+            }
+            guard clock >= toy.audNext else { return true }
             toy.audNext = clock + 0.5
             face(.excited, hold: 1.4)
             let moves: [IdleKind] = [.bounce, .skipHop, .joy, .bounce]
