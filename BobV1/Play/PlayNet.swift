@@ -446,53 +446,64 @@ extension PlayToss {
             let x = S.x + d.x * ((n.mouthZ - S.y) / d.y)
             return abs(x - n.centre.x) < n.innerHalf - r - 0.05
         }
-        var best: (T: SIMD2<Float>, c: Float)?
+        var best: (T: SIMD2<Float>, c: Float)?, any: (T: SIMD2<Float>, c: Float)?
         var x = -lim
         while x <= lim + 1e-4 {
             let T = SIMD2<Float>(x, tz)
             if exitsMouth(T) {
                 let c = clearance(T)
+                if any == nil || c > any!.c + 0.05 || (abs(c - any!.c) <= 0.05 && abs(x - target.x) < abs(any!.T.x - target.x)) { any = (T, c) }
                 if c >= 0.15, best == nil || c > best!.c + 0.05 || (abs(c - best!.c) <= 0.05 && abs(x - target.x) < abs(best!.T.x - target.x)) { best = (T, c) }
             }
             x += 0.1
         }
         ball.inNet = false; ball.ignoring = nil
         ball.pos.y = max(ball.pos.y, r + 0.02)
-        let mode: String
-        if let b = best {
-            let d = b.T - S, D = simd_length(d)
-            let v0 = min(D * TossTuning.rollDecayPerS + 1.6, 11)          // (it arrives still rolling at about 1.6)
-            ball.vel = SIMD3(d.x / D * v0, 0, d.y / D * v0)
-            returnAim = b.T
-            mode = String(format: "roll gap=%.2f", b.c)
-        } else {
-            var T = target
-            if !exitsMouth(T) { T.x = n.centre.x }
+        let g = TossTuning.gravity, y0 = ball.pos.y
+        // the lob's rise: the smallest from a list that goes under the bar at the mouth and over every head on the way (nil = none does: a body stands right in front of the net)
+        func lobPlan(_ T: SIMD2<Float>) -> (vy: Float, flight: Float)? {
             let L = simd_length(T - S)
-            // (the lob rises just steeply enough: under the bar at the mouth, over every body's head on the way (the line can stand 1.6 from the mouth), then down at the catch zone; the smallest
-            // rise that does both is taken, from a list)
-            let g = TossTuning.gravity, y0 = ball.pos.y
-            let dir = L > 1e-3 ? (T - S) / L : SIMD2<Float>(0, 1)
-            func plan(_ vy: Float) -> (flight: Float, ok: Bool) {
+            guard L > 1e-3, S.y < n.mouthZ - 0.4 || S.y > n.mouthZ else { return nil }          // (a ball lying on the mouth line would meet the bar going up)
+            let dir = (T - S) / L
+            for vy in stride(from: Float(4.0), through: 7.5, by: 0.5) {
                 let flight = (vy + (vy * vy + 2 * g * max(y0 - r, 0)).squareRoot()) / g
                 let hs = L / flight
                 var ok = true
                 var sD: Float = 0
                 while sD <= L, ok {
                     let q = S + dir * sD, t = sD / hs, y = y0 + vy * t - 0.5 * g * t * t
-                    if S.y < n.mouthZ, q.y < n.mouthZ + 0.05, q.y > n.mouthZ - 0.05, y + r > n.barBottom - 0.12 { ok = false }          // (the bar)
+                    if S.y < n.mouthZ, abs(q.y - (n.mouthZ + 0.04)) < 0.1, y + r > n.barBottom - 0.12 { ok = false }          // (the bar)
                     for b in bodies where simd_distance(q, b) < TossTuning.bodyRadius + r + 0.1 && y - r < TossTuning.bodyTop + 0.1 { ok = false }          // (a head)
                     sD += 0.05
                 }
-                return (flight, ok)
+                if ok { return (vy, flight) }
             }
-            var vy: Float = 5.0
-            for cand in stride(from: Float(4.0), through: 9.0, by: 0.5) { vy = cand; if plan(cand).ok { break } }
-            let flight = plan(vy).flight
-            let v = SIMD3<Float>((T.x - S.x) / flight, vy, (T.y - S.y) / flight)
-            ball.vel = v
-            returnAim = T
-            mode = "lob"
+            return nil
+        }
+        func roll(_ b: (T: SIMD2<Float>, c: Float), _ tag: String) -> String {
+            let d = b.T - S, D = simd_length(d)
+            let v0 = min(D * TossTuning.rollDecayPerS + 1.6, 11)          // (it arrives still rolling at about 1.6)
+            ball.vel = SIMD3(d.x / D * v0, 0, d.y / D * v0)
+            returnAim = b.T
+            return String(format: "%@ gap=%.2f", tag, b.c)
+        }
+        let mode: String
+        if let b = best {
+            mode = roll(b, "roll")
+        } else {
+            var T = target
+            if !exitsMouth(T) { T.x = n.centre.x }
+            if let lp = lobPlan(T) {
+                ball.vel = SIMD3((T.x - S.x) / lp.flight, lp.vy, (T.y - S.y) / lp.flight)
+                returnAim = T
+                mode = String(format: "lob vy=%.1f", lp.vy)
+            } else if let b = any {
+                mode = roll(b, "roll-squeeze")          // (a body right in front of the net: through the least tight way, a soft brush at worst)
+            } else {
+                let d = target - S, D = max(simd_length(d), 1e-3)
+                ball.vel = SIMD3(d.x / D * 8, 0, d.y / D * 8); returnAim = target
+                mode = "roll-straight"
+            }
         }
         touched = true
         phase = .flying; looseT = 0; restT = 0
