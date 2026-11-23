@@ -74,7 +74,7 @@ nonisolated enum BondMoment {
     /// A busy partner: look again after this long, at most `maxTries` times, then give up quietly until the next gap.
     static let retry: ClosedRange<Float> = 3...6, maxTries = 8
     /// After a moment starts, neither starts an ordinary pair for this long (the moment replaces one; the pair share stays where it was).
-    static let quiet: Float = 18
+    static let quiet: Float = 45
     nonisolated(unsafe) static var fails: [String: Int] = [:]
     nonisolated(unsafe) static var logAt: Float = 0
     /// The friendly pair kinds a moment may use (all existing; the one not seen for longest goes first).
