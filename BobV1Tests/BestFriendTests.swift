@@ -277,6 +277,28 @@ final class BestFriendTests: XCTestCase {
         XCTAssertTrue(a.inBuddyBlock && b.inBuddyBlock, "a flagged body reports it, so soccer leaves it alone")
     }
 
+    func testAtHomeABlockUsesStayKindsOnlyAndTheSwitchTurnsItOff() {
+        defer { BondMoment.blocksAtHome = true; BondMoment.onKind = nil }
+        BondMoment.blocksAtHome = false
+        var lab = buddies(seed: 47)
+        var a = lab.rigs[0].brain, b = lab.rigs[1].brain
+        for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner); r.brain.idleState.kind = nil; r.brain.outingPlay = false }
+        a.socialBook.bondNextAt = a.variety.now - 1
+        XCTAssertFalse(a.bondUrge(lab.rigs[0].sim)); XCTAssertNil(a.socialBook.block, "switch off: no block at home")
+        BondMoment.blocksAtHome = true
+        var kinds: [SocialKind] = []
+        BondMoment.onKind = { _, k, _ in kinds.append(k) }
+        for seed in [47, 48, 49] as [UInt64] {
+            lab = buddies(seed: seed); a = lab.rigs[0].brain; b = lab.rigs[1].brain
+            for r in lab.rigs { r.brain.abortScript(r.sim, r.skinner); r.brain.idleState.kind = nil; r.brain.outingPlay = false }
+            a.socialBook.bondNextAt = a.variety.now - 1
+            _ = a.bondUrge(lab.rigs[0].sim)
+            for _ in 0..<(60 * 40) { lab.tick(watching: false) }
+        }
+        XCTAssertFalse(kinds.isEmpty, "blocks ran")
+        for k in kinds { XCTAssertTrue(BondMoment.calmStay.contains(k), "at home only stay kinds: \(k)") }
+    }
+
     func testACancelledRendezvousLeavesBothFree() {
         let lab = buddies(seed: 43)
         let a = lab.rigs[0].brain, b = lab.rigs[1].brain
