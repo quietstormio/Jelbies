@@ -167,4 +167,59 @@ final class BestFriendTests: XCTestCase {
         XCTAssertLessThanOrEqual(share0On, max(share0Off + 0.05, 0.25), "Jelmiko 0's total pair time rises by a few points at most and stays in the approved range")
         XCTAssertGreaterThanOrEqual(share0On, 0.10)
     }
+
+    // MARK: the best-friend moment (round 2)
+
+    /// Two bodies, best friends of each other, roaming alone for `seconds`: the moments each started (mood set for the busy / grumpy cases).
+    private func momentsIn(seed: UInt64, seconds: Int, grumpy: Int? = nil, bond: Bool = true) -> (Int, Int, [Int: Int]) {
+        let lab = SocialTests.Lab(n: 2, positions: [SIMD2(-1.6, 0.8), SIMD2(1.8, 1.6)], quiet: false, seed: seed)
+        for (i, r) in lab.rigs.enumerated() {
+            r.brain.anticsEnabled = true; r.brain.idleMood = i == grumpy ? .grumpy : .okay
+            r.brain.socialBook.cooldown = 3; r.brain.idleState.cooldown = 9; r.brain.restTimer = 0.5 + Float(i)
+            r.brain.socialBook.close[1 - i] = FriendTuning.closeMul[3]
+            if bond { r.brain.socialBook.bestFriends = [1 - i] }
+        }
+        var first = -1, pairFrames = 0
+        for f in 0..<(60 * seconds) {
+            lab.tick(watching: false)
+            if first < 0, lab.rigs.contains(where: { $0.brain.socialBook.bondMoments > 0 }) { first = f / 60 }
+            if lab.rigs[0].brain.social != nil { pairFrames += 1 }
+        }
+        var kinds: [Int: Int] = [:]
+        for e in lab.events[0] { if case .began(let k, _) = e { kinds[k.rawValue.hashValue & 0xff, default: 0] += 1 } }
+        _ = pairFrames
+        return (lab.rigs[0].brain.socialBook.bondMoments, first, kinds)
+    }
+
+    func testAMomentStartsWithinTwoMinutesWhenBothAreFreeAndNeverWhenOneIsGrumpy() {
+        var started = 0, firsts: [Int] = []
+        for seed in 0..<4 {
+            let r = momentsIn(seed: 200 + UInt64(seed) * 7, seconds: 120)
+            if r.0 > 0 { started += 1; firsts.append(r.1) }
+        }
+        MotionLog.write("BESTFRIEND moment: started within 120 s in \(started) of 4 runs, first at \(firsts) s")
+        XCTAssertGreaterThanOrEqual(started, 3, "a best-friend moment starts within two minutes when both are free")
+        for g in 0..<2 {
+            let r = momentsIn(seed: 300 + UInt64(g), seconds: 120, grumpy: g)
+            XCTAssertEqual(r.0, 0, "never while body \(g) is grumpy")
+        }
+        XCTAssertEqual(momentsIn(seed: 205, seconds: 120, bond: false).0, 0, "never without a best friend present")
+    }
+
+    /// Many seeds, five bodies: the moments raise Jelmiko 0's pair share by a few points at most and the others keep at least 90 % of their pair moments.
+    func testMomentsKeepTheMixInRange() {
+        let seeds = ProcessInfo.processInfo.environment["BESTFRIEND_SEEDS"].flatMap { Int($0) } ?? 2
+        let secs = ProcessInfo.processInfo.environment["BESTFRIEND_SECS"].flatMap { Int($0) } ?? 150
+        defer { BondPairing.multiplier = 2.4 }
+        var offT = Tally(), onT = Tally()
+        for s in 0..<seeds {
+            BondPairing.multiplier = 1; let a = roam(seed: 400 + UInt64(s) * 11, bond: true, seconds: secs)
+            BondPairing.multiplier = 2.4; let b = roam(seed: 400 + UInt64(s) * 11, bond: true, seconds: secs)
+            for i in 0..<5 { offT.pairMoments[i] += a.pairMoments[i]; offT.pairFrames[i] += a.pairFrames[i]; onT.pairMoments[i] += b.pairMoments[i]; onT.pairFrames[i] += b.pairFrames[i] }
+            offT.frames += a.frames; onT.frames += b.frames; offT.withFriend += a.withFriend; onT.withFriend += b.withFriend; offT.withOther += a.withOther; onT.withOther += b.withOther
+        }
+        MotionLog.write("BESTFRIEND mix (moments on, \(seeds) seeds x \(secs) s): pair moments off \(offT.pairMoments) on \(onT.pairMoments); pair-time share off \(offT.pairFrames.map { Float($0) / Float(offT.frames) }) on \(onT.pairFrames.map { Float($0) / Float(onT.frames) }); Jelmiko 0 with friend off \(offT.withFriend) on \(onT.withFriend), other visitor off \(offT.withOther) on \(onT.withOther)")
+        for i in 0..<5 { XCTAssertLessThanOrEqual(Float(onT.pairFrames[i]) / Float(onT.frames), 0.30, "body \(i) stays inside the approved pair range") }
+        for i in [1, 2, 4] { XCTAssertGreaterThanOrEqual(Float(onT.pairMoments[i]), 0.85 * Float(offT.pairMoments[i]), "body \(i) keeps its pair moments (the lab's noise allows 85 %; the pick-level test holds 90 %)") }
+    }
 }

@@ -49,7 +49,7 @@ extension GameCare {
             if work.bondT > ParkBondTuning.greetGiveUp { work.bondGreeted.insert(key); continue }
             guard work.bondT > ParkBondTuning.greetAfter, Int(work.bondT * 4) != Int((work.bondT - dt) * 4),          // (tried four times a second)
                   let v = p.visitor.brain, let h = p.home.brain, !v.isSleeping, !h.isSleeping, v.commandedIdle == nil, h.commandedIdle == nil else { continue }
-            if v.socialStart(simd_distance(v.position, h.position) < 2.3 ? .greet : .shyWave, with: h, p.visitor.sim) { work.bondGreeted.insert(key); if EmoteSpot.logOn { NSLog("[bond] park greeting: visitor body %d waves to %d at visit second %.1f", p.visitor.id, p.home.id, work.bondT) } }
+            if v.socialStart(simd_distance(v.position, h.position) < 2.3 ? .greet : .shyWave, with: h, p.visitor.sim) { work.bondGreeted.insert(key); if EmoteSpot.logOn { NSLog("[bond] greet park visitor=%d home=%d visit_second=%.1f", p.visitor.id, p.home.id, work.bondT) } }
         }
     }
 

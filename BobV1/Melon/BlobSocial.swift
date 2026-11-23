@@ -127,6 +127,8 @@ struct SocialBook {
     var close: [Int: Float] = [:]
     /// best-friend-r1: the body ids (steerIDs) that are this Jelly's best friend now (Park/ParkModels.swift `ParkBestFriend`; set by the park / guest tick, empty everywhere else). `BondPairing` reads it.
     var bestFriends: Set<Int> = []
+    /// best-friend-r1 round 2 (BondPairing.swift `bondUrge`): game time of the next best-friend moment, the retries so far, the moments started.
+    var bondNextAt: Float = 0, bondTries = 0, bondMoments = 0
     var lastKind: SocialKind?
     /// The last 3 pair kinds started with each partner (by steerID), oldest first: the pick drops them (no-repeat per pair).
     var recentWith: [Int: [SocialKind]] = [:]

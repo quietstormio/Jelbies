@@ -949,6 +949,7 @@ final class BlobBrain {
         if !footKeep, mixAfterRunDue(sim) { return }
         if !footKeep, mixStrollDue(sim) { return }          // (MoveMix.swift: a walk away after a pair / group emote)
         let mixLeg = !footKeep && mixWantsLeg()          // (MoveMix.swift: this pick is a leg, no special: after an in-place pick, after a solo emote, or from under a HUD button; a pair roll still comes first)
+        if !footKeep, bondUrge(sim) { return }          // (best-friend-r1 round 2: BondPairing.swift)
         if !footKeep, mixSoccerUrge(sim) { return }
         if !footKeep, socialMaybeStart(sim) { mix.last = .social; return }
         HopDiag.lap(.tkPickSocial, &pt)

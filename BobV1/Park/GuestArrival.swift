@@ -197,12 +197,14 @@ extension GameCare {
         let home = actors.compactMap(\.brain).filter { !$0.isSleeping }
         guard home.count >= 2, let starter = home.first(where: { $0.socialFree && BondPairing.isBest($0, b) }) ?? home.first(where: { $0.socialFree }),          // (best-friend-r1: his best friend's Jelmiko greets first)
                let sa = actors.first(where: { $0.brain === starter }) else { return false }
+        if EmoteSpot.logOn { NSLog("[bond] greet door starter=%d guest=%d best=%d", starter.steerID, b.steerID, BondPairing.isBest(starter, b) ? 1 : 0) }
         return starter.socialStartGroup(.groupHug, with: home.filter { $0 !== starter } + [b], sa.sim)
     }
 
     /// No group hug (a household of one, or somebody busy): the Jelbies walk over to him and a few hop.
     private func guestArrivalGather(_ actors: [JellyActor], _ a: JellyActor, _ b: BlobBrain) {
         b.startHopPlay(sim: a.sim, distance: 0.0001)
+        if EmoteSpot.logOn, let f = actors.compactMap(\.brain).first(where: { BondPairing.isBest($0, b) }) { NSLog("[bond] greet door starter=%d guest=%d best=1 (walk-over)", f.steerID, b.steerID) }
         var sent = 0
         for r in actors.filter({ $0.brain.map { BondPairing.isBest($0, b) } ?? false }) + actors.filter({ !($0.brain.map { BondPairing.isBest($0, b) } ?? false) }) {          // (best-friend-r1: his best friend's Jelmiko first)
             guard let rb = r.brain, !rb.isSleeping, rb.commandedIdle == nil, !rb.commanded else { continue }

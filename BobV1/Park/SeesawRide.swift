@@ -517,6 +517,7 @@ extension BlobBrain {
         ranked.append(self)
         let p = f.position(foot)
         ranked.sort { simd_distance($0.position, p) < simd_distance($1.position, p) }
+        ranked = BondPairing.friendsFirst(ranked, at: n.uid)          // (best-friend-r1)
         guard ranked.first === self else { return false }
         R.rolled.insert(n.serial)
         let yes = rand() < (R.isSecondInvite(n.serial) ? SeesawTuning.secondChance : SeesawTuning.joinChance)
