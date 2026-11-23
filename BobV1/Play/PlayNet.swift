@@ -309,7 +309,12 @@ extension PlayToss {
         #endif
     }
     /// The angle (degrees) between where he looks and the player.
-    func netFacing(_ j: PlayJelly) -> Float { abs(wrapAngle(j.brain.yawTo(playerPoint()) - j.brain.yaw)) * 180 / .pi }
+    func netFacing(_ j: PlayJelly) -> Float {
+        // (what the eye sees: the soft body's own heading; in a hop the attractor's, as `touchLog` reads it)
+        let af = j.sim.attractor.rotation.act(SIMD3<Float>(0, 0, 1))
+        let vy = j.brain.idleState.kind == nil ? j.brain.yaw : atan2f(af.x, af.z)
+        return abs(wrapAngle(j.brain.yawTo(playerPoint()) - vy)) * 180 / .pi
+    }
 
     /// A Jelmiko touched the ball (header / kick): he is the one who scores if it goes in.
     func netNoteToucher(_ id: Int) { if netUp { net.lastToucher = id } }
@@ -394,20 +399,11 @@ extension PlayToss {
     private func netCelebrate(_ j: PlayJelly, scorer: Bool, turnUntil: Float?) -> Bool {
         let b = j.brain
         guard !b.isSleeping, !b.isNapping else { return false }
-        // still turning to the player: wait for the turn to end (or for its time)
-        if let tu = turnUntil, clock < tu {
-            if case .none = b.script {} else { return false }
-        }
         guard b.idleState.kind == nil else { return false }
         // (a Jelmiko in mid-stride is given 0.3 s to land a step; then he is stopped where he stands: round 2 found one walking to the ball for 1.8 s whose cheer never came)
         if b.feet.active, clock - net.goalAt < 0.3 { return false }
-        if netFacing(j) > 25, turnUntil == nil {          // turned away from the audience: turn first (a short turn on the spot)
-            if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) }
-            b.startTurn(to: b.yawTo(playerPoint()), sim: j.sim)
-            net.pending[j.id] = (scorer, net.pending[j.id]?.until ?? clock + PlayNetTuning.cheerWait, clock + 0.9)
-            return false
-        }
         if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) }
+        let was = netFacing(j)
         let started: Bool
         if scorer {
             started = b.idleStart(.bounce, j.sim)
@@ -416,7 +412,11 @@ extension PlayToss {
             started = b.idleStart(.joy, j.sim)
             if started { b.commanded = true; b.idleState.reps = 2; b.face(.excited, hold: 1.5); b.blushBump(hold: 2.6, peak: 0.7) }
         }
-        NSLog("[playnet] cheer id=%d started=%d kind=%@ facing=%.0f dt=%.2f", j.id, started ? 1 : 0, scorer ? "bounce3" : "joy2", netFacing(j), clock - net.goalAt)
+        if started {          // the player is the audience: the hop turns toward them in the air (his heading is set to them; the first hop's heading too)
+            let face = b.yawTo(playerPoint())
+            b.yaw = face; b.gait.facingYaw = face
+        }
+        NSLog("[playnet] cheer id=%d started=%d kind=%@ facing=%.0f was=%.0f dt=%.2f", j.id, started ? 1 : 0, scorer ? "bounce3" : "joy2", netFacing(j), was, clock - net.goalAt)
         return started
     }
 }
