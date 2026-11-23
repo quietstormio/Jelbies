@@ -127,10 +127,10 @@ struct SocialBook {
     var close: [Int: Float] = [:]
     /// best-friend-r1: the body ids (steerIDs) that are this Jelly's best friend now (Park/ParkModels.swift `ParkBestFriend`; set by the park / guest tick, empty everywhere else). `BondPairing` reads it.
     var bestFriends: Set<Int> = []
-    /// best-friend-r1 round 2 (BondPairing.swift `bondUrge`): game time of the next best-friend moment, the retries so far, the moments started.
-    var bondNextAt: Float = 0, bondTries = 0, bondMoments = 0
-    /// Round 3: the best friend whose solo emote / toy this one was asked to come and watch, and until when (game time).
-    var watchPeer = -1, watchUntil: Float = 0
+    /// best-friend-r1 round 4 (BondPairing.swift): the reserved buddy block this body is part of, the next block's time (game time), blocks' kinds started, when this body took its flag / reached its spot, and the housemate preference after a block.
+    var block: BuddyBlock?
+    var bondNextAt: Float = 0, bondMoments = 0, buddyAssigned: Float = 0, buddyArrivedAt: Float = -1
+    var housemates: Set<Int> = [], housemateBoost = false
     var lastKind: SocialKind?
     /// The last 3 pair kinds started with each partner (by steerID), oldest first: the pick drops them (no-repeat per pair).
     var recentWith: [Int: [SocialKind]] = [:]
@@ -674,8 +674,7 @@ extension BlobBrain {
             }
             if MoveMix.on {          // (MoveMix.swift: after a PAIR the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
                 if !s.kind.isGroup {
-                    var again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
-                    if BondPairing.multiplier != 1, let po = socialBrain(pid), BondPairing.isBest(self, po) { again = rand(BondMoment.pairAgain.lowerBound, BondMoment.pairAgain.upperBound) }          // (best-friend-r1: a best-friend pair waits 12...18 s, the others 30...45)
+                    let again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
                     socialBook.pair[pid] = again
                     if s.idC >= 0, s.idC != steerID { socialBook.pair[s.idC] = again }
                 } else {
@@ -685,6 +684,7 @@ extension BlobBrain {
             if s.kind == .highFive { socialBook.fiveCool[pid] = rand(EmoteTuning.fiveCooldown.0, EmoteTuning.fiveCooldown.1) }
         }
         if scriptIsNone { restTimer = max(restTimer, rand(1.0, 2.5)) }
+        if socialBook.block != nil { restTimer = min(restTimer, 0.2) }          // (best-friend-r1: a buddy block chains its next kind at the very next pick)
         if EmoteSpot.logOn, s.kind == .pass { NSLog("[pass] end t=%.1f ids %d,%d kicks=%d how=%@", variety.now, s.idA, s.idB, s.passes, String(describing: s.end)) }
         mixPassEnded(s)
         mixSessionEnded(s, hard: hard || s.end == .aborted || s.end == .stopped)          // (MoveMix.swift: quiet period + a stroll away)

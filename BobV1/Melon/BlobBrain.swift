@@ -947,15 +947,16 @@ final class BlobBrain {
         let footKeep = onSlideFoot          // (park-slide-r4: on the slide's foot nothing starts there: he walks off it to the lawn, else a wander leg that ends off it)
         if footKeep { Self.slideFootTurnAways += 1 }
         if footKeep, let f = DecorField.shared.foot(ParkToys.slideUID), let out = slideWalkOut(f, ring: true) { slideFootWalkTo = out; request(.goTo(out)); restTimer = 0.3; return }
+        if buddyPickDue(sim) { return }          // (best-friend-r1 round 4: a reserved buddy block takes its flag before every other urge)
+        if !footKeep, bondUrge(sim) { return }
         if !footKeep, mixSoccerFollowDue(sim) { return }
         if !footKeep, mixAfterRunDue(sim) { return }
         if !footKeep, mixStrollDue(sim) { return }          // (MoveMix.swift: a walk away after a pair / group emote)
         let mixLeg = !footKeep && mixWantsLeg()          // (MoveMix.swift: this pick is a leg, no special: after an in-place pick, after a solo emote, or from under a HUD button; a pair roll still comes first)
-        if !footKeep, bondUrge(sim) { return }          // (best-friend-r1 round 2: BondPairing.swift)
         if !footKeep, mixSoccerUrge(sim) { return }
         if !footKeep, socialMaybeStart(sim) { mix.last = .social; return }
         HopDiag.lap(.tkPickSocial, &pt)
-        if !footKeep, !mixLeg, idleMaybeStart(sim) { mixNoteIdle(); bondWatchAsk(); return }
+        if !footKeep, !mixLeg, idleMaybeStart(sim) { mixNoteIdle(); return }
         HopDiag.lap(.tkPickIdle, &pt)
         defer { HopDiag.lap(.tkPickWander, &pt) }
         var w: [(Int, Float)] = [(0, 7.5), (1, 1.2), (2, 0.8)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
@@ -1092,7 +1093,7 @@ final class BlobBrain {
             if valid >= (MoveMix.on ? MoveMix.roamCandidates : 6) { break }
         }
         }
-        if let b = best { bondDuoAsk(goal: b.0); roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
+        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
     }
 
@@ -1126,6 +1127,7 @@ final class BlobBrain {
         script = .none
         restTimer = rand(IdleTuning.restAfterLeg.lowerBound, IdleTuning.restAfterLeg.upperBound) * idleLively * vJit()          // (was 1.5...4.0: 2026-10-21 "they need to move a lot more")
         if bubbleLeash != nil { restTimer *= 0.3 }          // (bubble play: eager, the next little move comes quickly)
+        if socialBook.block != nil { restTimer = min(restTimer, 0.3) }          // (best-friend-r1 round 4: a reserved buddy body takes its flag at once)
         if let j = job { job = nil; onFinished?(j) }
         _ = served
     }

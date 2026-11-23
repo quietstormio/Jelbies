@@ -228,7 +228,7 @@ extension BlobBrain {
                 if mates.contains(where: { now - $0.mix.strollDirAt < 8 && $0.mix.strollThird == th }) { score -= MoveMix.strollThirdBonus }
                 if best == nil || score > best!.1 { best = (cand, score) }
             }
-            if let b = best { bondDuoAsk(goal: b.0); roamVisits[roamKeyMix(b.0), default: 0] += 1; return b.0 }
+            if let b = best { roamVisits[roamKeyMix(b.0), default: 0] += 1; return b.0 }
         }
         return nil
     }

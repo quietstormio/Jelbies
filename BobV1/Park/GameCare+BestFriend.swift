@@ -25,6 +25,8 @@ extension GameCare {
         }
         if EmoteSpot.logOn { let now = Set(pairs.map { $0.home.id * 100 + $0.visitor.id }); if now != Self.bondLogged { Self.bondLogged = now; NSLog("[bond] best-friend pairs (home body, visitor body): %@", pairs.map { "\($0.home.id)-\($0.visitor.id)" }.joined(separator: " ")) } }
         for h in homes { h.actor.brain?.socialBook.bestFriends = sets[h.actor.id] ?? [] }
+        let homeIDs = Set(homes.map(\.actor.id))
+        for h in homes { h.actor.brain?.socialBook.housemates = homeIDs.subtracting([h.actor.id]) }          // (round 4: the other Jelmiko at home are the housemates; a visitor has none)
         for v in visitors { v.actor.brain?.socialBook.bestFriends = sets[v.actor.id] ?? [] }
         return pairs
     }
