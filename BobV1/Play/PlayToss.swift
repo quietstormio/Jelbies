@@ -849,7 +849,7 @@ final class PlayToss {
         }
         guard D >= 1.6 else { setOwn(.none); liveKick(by: j); return }          // (never a pass that close: the ball goes back)
         // 0.7 to 1.1 s of travel whatever the distance; the ball is braked evenly so that it comes to rest at the spot (the receiver traps it, then kicks): v0 = 2 D / T, a = v0 / T
-        let T = min(max(0.9 + 0.05 * D, 1.0), 1.1)
+        let T = min(max(0.95 + 0.05 * D, 1.05), 1.1)
         let speed = 2 * D / T
         let d = (spot - ballXZ) / D
         ball.vel = SIMD3(d.x * speed, 0, d.y * speed)

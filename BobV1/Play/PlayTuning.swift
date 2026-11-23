@@ -28,7 +28,7 @@ nonisolated enum PlayTuning {
         }
     }
     /// A pass goes to a friend at least this far from the passer (bodies and faces never come close at a pass).
-    static let passMinDist: Float = 1.8
+    static let passMinDist: Float = 1.7
     /// ... and at most this far (a pass is slow enough to follow with the eye: 0.8 to 1.1 s of travel).
     static let passMaxDist: Float = 4.0
 
