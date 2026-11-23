@@ -687,7 +687,7 @@ struct GameScreen: View {
                         // capture aid (play-ball-s3): -PlayDemoRecall 1 presses "Pass it back" 0.3 to 2.0 s after the Jelmiko start keeping the ball
                         var keptFor = 0.0, recalled = false
                         let recallAfter = 0.3 + 1.7 * Double((round &* 7919 &+ 13) % 100) / 100
-                        while care.play.phase != .inHand, waited < 25 {
+                        while care.play.phase != .inHand, waited < 45 {
                             await sleep(0.1); waited += 0.1
                             if d.integer(forKey: "PlayDemoRecall") != 0, !recalled, care.play.keeping { keptFor += 0.1; if keptFor >= recallAfter { recalled = true; care.play.recall() } }
                         }

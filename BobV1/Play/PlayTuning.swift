@@ -16,6 +16,8 @@ nonisolated struct BallStyle {
     /// How many balls go to a friend before they go back to the player (with two or three Jelmiko), and the most passes in one chain. A header passes in the air, a kick along the floor.
     var chainChance: Float
     var chainMax: Int
+    /// beach-volley-r1: of the throws (with two or more Jelmiko), how many start a bout (the Jelmiko bounce the ball between each other) (0 = never).
+    var boutChance: Float = 0
 }
 
 nonisolated enum PlayTuning {
@@ -23,10 +25,13 @@ nonisolated enum PlayTuning {
     static func style(_ kind: DecorKind) -> BallStyle {
         switch kind {
         case .soccerball: return BallStyle(headShare: 0.12, chainChance: 0.5, chainMax: 3)
-        case .beachball: return BallStyle(headShare: 0.9, chainChance: 0.2, chainMax: 1)
+        case .beachball: return BallStyle(headShare: 0.9, chainChance: 0.2, chainMax: 1, boutChance: boutOff ? 0 : boutRoll)
         default: return BallStyle(headShare: 1, chainChance: 0.16, chainMax: 1)
         }
     }
+    /// beach-volley-r1: the share of beach-ball throws that start a bout, and the dial that pins it off (tests of the straight return; `-BoutOff 1` in dev builds).
+    nonisolated(unsafe) static var boutRoll: Float = 0.6
+    nonisolated(unsafe) static var boutOff: Bool = DevArgs.enabled && UserDefaults.standard.integer(forKey: "BoutOff") != 0
     /// A pass goes to a friend at least this far from the passer (bodies and faces never come close at a pass).
     static let passMinDist: Float = 1.7
     /// ... and at most this far (a pass is slow enough to follow with the eye: 0.8 to 1.1 s of travel).
