@@ -137,7 +137,7 @@ extension PlayToss {
         }
         ball.vel = vel
         ball.pos.y = from.y
-        ball.ignoring = id; ball.ignoreT = 0.45
+        ball.ignoring = id; ball.ignoreT = miss ? T + 0.1 : 0.45          // (a ball aimed out of reach comes down near him: he does not head his own ball again)
         bout.lastToucher = id; bout.lookAt = j.pos
         bout.receiver = rid; bout.aim = spot; bout.aimMode = miss ? "miss" : "keep"
         returnAim = nil; passTo = nil
