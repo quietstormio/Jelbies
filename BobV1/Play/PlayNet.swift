@@ -259,12 +259,12 @@ extension PlayToss {
             else if b.idleState.kind == nil, !b.isSleeping, !b.isNapping { if case .none = b.script {} else { b.abortAll(j.sim, j.skinner) } }
         }
         netClearFoot()
-        if n.contains(p) {          // inside the frame (over the bar and down into it, a side net): the net rolls / lobs it out of the mouth exactly as after a goal, no cheer
-            let at = SIMD2(min(max(p.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), min(p.y, n.mouthZ - 0.3))
+        if abs(p.x - n.centre.x) < n.outerHalf + PlayNetTuning.keepOutMargin {          // in or at the goal (down the back, a side net, off a post, the strip in front): the net takes it and rolls / lobs it out of the mouth exactly as after a goal, no cheer
+            let at = SIMD2(min(max(p.x, n.centre.x - 0.5 * n.k), n.centre.x + 0.5 * n.k), n.mouthZ - 0.3)
             ball.pos = SIMD3(at.x, ball.radius, at.y); ball.vel = .zero; ball.inNet = true
             net.hold = .init(t: PlayNetTuning.holdCheer, rolled: false, scorer: nil)
-            NSLog("[playnet] return reason=dead (in the frame) from %.2f,%.2f", p.x, p.y)
-        } else {          // beside / in front of / behind the goal where nobody may stand: the same lob to the catch zone, from where it lies (the safety lob), no walk to the ball
+            NSLog("[playnet] return reason=dead (the net takes it) from %.2f,%.2f", p.x, p.y)
+        } else {          // a pocket far beside the goal where nobody may stand: the same lob to the catch zone, from where it lies (the safety lob), no walk to the ball
             NSLog("[playnet] return reason=dead (beside or in front) from %.2f,%.2f", p.x, p.y)
             netDeadLob()
         }
