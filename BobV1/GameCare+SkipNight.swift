@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import simd
 
 enum NightSkipTuning {
     /// bedtime 0-1.5 (HUD fades out, room dims, everybody settles) | sleeping 1.5-4.8 (dim hold, lullaby fades in) | night to morning 4.8-7.6 (stars, jump at 5.6, 2 s time-lapse) | morning 7.6-9.1 (wake, HUD back)
@@ -100,6 +101,8 @@ extension GameCare {
         if let v = guestBook.visit, v.kind == .sleepover, v.arrived, let a = g.actor, let b = a.brain, !b.isSleeping, b.sleepEnabled,
            g.phase == .here || g.phase == .walkingIn, !g.arrival.active, g.hugWait == nil {
             b.abortAll(a.sim, a.skinner); b.pending = nil
+            // best-friend-r1: beside his best friend's Jelmiko (under the cover: moved to a fair spot by it; none = where he stands, as before)
+            if let f = rosterActors.compactMap(\.brain).first(where: { $0.isSleeping && BondPairing.isBest($0, b) }), simd_distance(f.position, b.position) > 2.8, let spot = BondPairing.bedSpot(for: b, near: f) { rehome(a, at: spot) }
             b.sleepInstant(a.sim, a.skinner)
         }
     }

@@ -156,6 +156,8 @@ final class GuestBook {
     @ObservationIgnored var wakeT: Float = 0
     @ObservationIgnored var wakeAfter: Float = 2
     @ObservationIgnored var greeted = false
+    /// best-friend-r1: walks to a spot beside his best friend's Jelmiko before lying down (a few tries).
+    @ObservationIgnored var bondBedTries = 0
     @ObservationIgnored var settleT: Float = 0
     @ObservationIgnored var checkT: Float = 0
     /// A group serving was on last step (the guest cheers with the Jelbies when it ends).

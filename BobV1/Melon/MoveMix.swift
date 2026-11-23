@@ -194,6 +194,7 @@ extension BlobBrain {
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
                 score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
                 score += MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
+                score += BondPairing.driftTerm(for: self, others: others, cand: cand)          // (best-friend-r1)
                 let th = mixThird(cand.y, rf)
                 if th != mixThird(here.y, rf) { score += MoveMix.strollThirdBonus }
                 if mates.contains(where: { now - $0.mix.strollDirAt < 8 && $0.mix.strollThird == th }) { score -= MoveMix.strollThirdBonus }

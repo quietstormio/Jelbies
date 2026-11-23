@@ -125,6 +125,8 @@ struct SocialBook {
     var started: [SocialKind: Int] = [:]
     /// How close this Jelly is to each other one (by steerID): 1 = housemates; the Park sets 0.55 (stranger) ... 2.1 (best friend). Close friends do the friendly kinds more often.
     var close: [Int: Float] = [:]
+    /// best-friend-r1: the body ids (steerIDs) that are this Jelly's best friend now (Park/ParkModels.swift `ParkBestFriend`; set by the park / guest tick, empty everywhere else). `BondPairing` reads it.
+    var bestFriends: Set<Int> = []
     var lastKind: SocialKind?
     /// The last 3 pair kinds started with each partner (by steerID), oldest first: the pick drops them (no-repeat per pair).
     var recentWith: [Int: [SocialKind]] = [:]
@@ -445,7 +447,7 @@ extension BlobBrain {
         }
         if cands.isEmpty { return false }
         guard starved || rand() < SocialTuning.pickChance * (watching ? (MoveMix.on ? MoveMix.watchPairMul : SocialTuning.livelyChance) : 1) * (perkFlags.social ? PerkTuning.socialBoost : 1) * varietySocialMul * friendPickMul(cands.map { $0.0 }) * parkSocialPickMul else { return false }
-        let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))].0
+        let o = BondPairing.pick(cands.map { $0.0 }, chooser: self, roll: rand())          // (best-friend-r1: a best friend counts 2.4x; every weight 1 = the old uniform index)
         if emotePairDefer(with: o) { return false }          // (EmoteSpot.swift: they stand on a much-used spot: they roam on, the roll comes round again)
         let grumpy = idleMood == .grumpy || o.idleMood == .grumpy
         // 2026-11-06: boop 3 -> 1.5. The user: "they do the hand holding emote a little too much ... not as often" (the standing side-by-side hand-on-arm boop): halved, not replaced.
@@ -528,7 +530,7 @@ extension BlobBrain {
             cands.append(o)
         }
         if cands.isEmpty || rand() > SocialTuning.zoomJoin { return }
-        let o = cands[min(cands.count - 1, Int(rand() * Float(cands.count)))]
+        let o = BondPairing.pick(cands, chooser: self, roll: rand())
         guard let pts = o.zoomLoop(around: idleState.target) else { return }
         _ = newSession(.zoomies, with: o, duration: 22)
         _ = o.socialRunLoop(pts, sim)

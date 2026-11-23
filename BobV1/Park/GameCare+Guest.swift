@@ -153,6 +153,7 @@ extension GameCare {
         }
 
         guard let a = g.actor, let b = a.brain else { return }
+        tickBestFriendsHome(actors, guest: a, vid: v.id)          // (best-friend-r1: whose best friend he is, for the pairing / greeting / bedtime)
         g.phaseT += dt
         guestRestoreArena()
         visitorLook(a, v, dt: dt, sleepLocked: false)
@@ -175,6 +176,7 @@ extension GameCare {
     func guestRemove() {
         let g = guestBook
         if let a = g.actor { a.brain?.hurry = false; visitorPutAway(a); parkBook.clear?() }
+        clearBestFriends(parkBook.roster)          // (best-friend-r1)
         g.actor = nil
         g.card = false
         g.party.cancel()
@@ -262,7 +264,8 @@ extension GameCare {
         AudioHub.shared.chirp(jelly: a.id, .happy)
         touchPlay?.spawnHeart(now: CACurrentMediaTime())
         var sent = 0
-        for r in actors {
+        func isFriend(_ r: JellyActor) -> Bool { r.brain.map { BondPairing.isBest($0, b) } ?? false }
+        for r in actors.filter(isFriend) + actors.filter({ !isFriend($0) }) {          // (best-friend-r1: his best friend's Jelmiko first)
             guard let rb = r.brain, !rb.isSleeping, rb.commandedIdle == nil, !rb.commanded else { continue }
             rb.face(.excited, hold: 2)
             if sent < 2, rb.idleState.kind == nil, rb.scriptIsNone {
@@ -292,8 +295,15 @@ extension GameCare {
         if b.bedtimeHours, rosterSleeping, !b.isSleeping, !b.sleepLocked {
             // he goes to bed a little after the Jelbies do (the usual goodnight: beside a sleeper), retried until he lies down
             g.bedT -= dt
-            if g.bedT <= 0 { b.commandedGoodnight = true; g.bedT = NightRestTuning.retry }
-        } else if !rosterSleeping { g.bedT = Float.random(in: 1...4) }          // (staggered: he lies down 1...4 s after the Jelbies, the same sleep path and clearance)
+            if g.bedT <= 0 {
+                // best-friend-r1: beside his best friend's Jelmiko when it is already asleep (walk to a fair spot by it first; a few tries, then the usual lie-down where he is)
+                if g.bondBedTries < 6, let f = actors.compactMap(\.brain).first(where: { $0.isSleeping && BondPairing.isBest($0, b) }), simd_distance(f.position, b.position) > 2.8,
+                   let spot = BondPairing.bedSpot(for: b, near: f) {
+                    g.bondBedTries += 1; g.bedT = 2.5
+                    if b.scriptIsNone, b.idleState.kind == nil, !b.commanded { b.requestNow(.goTo(spot)) }
+                } else { b.commandedGoodnight = true; g.bedT = NightRestTuning.retry }
+            }
+        } else if !rosterSleeping { g.bedT = Float.random(in: 1...4); g.bondBedTries = 0 }          // (staggered: he lies down 1...4 s after the Jelbies, the same sleep path and clearance)
         // everybody else was woken (the player's word): he wakes too, a moment later
         if b.isNapping, !rosterSleeping {
             g.wakeT += dt

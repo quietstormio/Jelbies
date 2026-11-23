@@ -195,7 +195,8 @@ extension GameCare {
     /// The group hug (the household walks to him and bunches up). False = not possible just now (fewer than three free, or he is still running).
     private func guestArrivalGroup(_ actors: [JellyActor], _ b: BlobBrain) -> Bool {
         let home = actors.compactMap(\.brain).filter { !$0.isSleeping }
-        guard home.count >= 2, let starter = home.first(where: { $0.socialFree }), let sa = actors.first(where: { $0.brain === starter }) else { return false }
+        guard home.count >= 2, let starter = home.first(where: { $0.socialFree && BondPairing.isBest($0, b) }) ?? home.first(where: { $0.socialFree }),          // (best-friend-r1: his best friend's Jelmiko greets first)
+               let sa = actors.first(where: { $0.brain === starter }) else { return false }
         return starter.socialStartGroup(.groupHug, with: home.filter { $0 !== starter } + [b], sa.sim)
     }
 
@@ -203,7 +204,7 @@ extension GameCare {
     private func guestArrivalGather(_ actors: [JellyActor], _ a: JellyActor, _ b: BlobBrain) {
         b.startHopPlay(sim: a.sim, distance: 0.0001)
         var sent = 0
-        for r in actors {
+        for r in actors.filter({ $0.brain.map { BondPairing.isBest($0, b) } ?? false }) + actors.filter({ !($0.brain.map { BondPairing.isBest($0, b) } ?? false) }) {          // (best-friend-r1: his best friend's Jelmiko first)
             guard let rb = r.brain, !rb.isSleeping, rb.commandedIdle == nil, !rb.commanded else { continue }
             let toward = rb.position + (b.position - rb.position) * 0.7
             let spot = rb.fixed(toward)

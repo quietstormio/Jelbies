@@ -1080,6 +1080,7 @@ final class BlobBrain {
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
                 score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap + MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
             }
+            score += BondPairing.driftTerm(for: self, others: others, cand: cand)          // (best-friend-r1: a little nearer an idle best friend; 0 for everybody else)
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= (MoveMix.on ? MoveMix.roamCandidates : 6) { break }
