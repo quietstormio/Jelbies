@@ -45,6 +45,8 @@ nonisolated enum MoveMix {
     // 7. soccer by themselves (round 3): with a soccer ball placed, some moment about every `soccerGap` s of field time, a real pass exchange of `passKicksMin...Max` kicks
     nonisolated(unsafe) static var soccerNextAt: Float = 0
     nonisolated(unsafe) static var soccerDbg: [String: Int] = [:]
+    nonisolated(unsafe) static var ballBadSince: Float = -1
+    static let ballBadAfter: Float = 8
     static let soccerGap: ClosedRange<Float> = 45...70, soccerSoloSkip: Float = 0.5
     static let passChance: Float = 0.85, passKicksMin = 3, passKicksMax = 6
     static let followGoal: Float = 0.55, followThird: Float = 0.35          // after a pass: a shot run (goal placed) / the third one joins with a kick
@@ -447,16 +449,23 @@ extension BlobBrain {
 extension BlobBrain {
     /// A soccer ball that has rolled to the wall, outside the floor the Jelmiko walk on, cannot be stood behind: it gets a gentle roll back in (nobody is the kicker). Every 6 s at most.
     func mixSoccerWallNudge() {
-        guard MoveMix.on, variety.now - mix.soccerNudgeAt > 6, let rf = roamProvider?() else { return }
+        guard MoveMix.on, let rf = roamProvider?() else { return }
         let f = DecorField.shared
-        guard let sb = f.feet.first(where: { $0.kind == .soccerball }), f.occupant[sb.uid] == nil, sb.uid != f.held, f.anim[sb.uid]?.moving != true else { return }
-        let c = f.position(sb)
-        guard !rf.contains(c) || rf.halfWidth(at: c.y) - abs(c.x) < 0.3 else { return }
-        mix.soccerNudgeAt = variety.now
-        let hw = max(rf.halfWidth(at: c.y) - 1.1, 0.5)
-        let target = SIMD2(min(max(c.x, -hw), hw), min(max(c.y, rf.minZ + 0.6), rf.maxZ - 0.6))
-        let d = target - c, L = simd_length(d)
-        let dir = L > 0.05 ? d / L : SIMD2<Float>(c.x > 0 ? -1 : 1, 0)
-        f.kickBall(sb.uid, direction: dir, speed: 1.4, by: -1)
+        guard let sb = f.feet.first(where: { $0.kind == .soccerball }), f.occupant[sb.uid] == nil, sb.uid != f.held, f.anim[sb.uid]?.moving != true else { MoveMix.ballBadSince = -1; return }
+        let c = f.position(sb), now = variety.now
+        // a ball at rest where no Jelmiko may stand (outside the walkable floor, at the wall, or under a HUD button)
+        let bad = !rf.contains(c) || rf.halfWidth(at: c.y) - abs(c.x) < 0.3 || !rf.stopOK(c)
+        guard bad else { MoveMix.ballBadSince = -1; return }
+        if MoveMix.ballBadSince < 0 { MoveMix.ballBadSince = now; return }
+        guard now - MoveMix.ballBadSince > MoveMix.ballBadAfter, now - mix.soccerNudgeAt > 6 else { return }
+        mix.soccerNudgeAt = now; MoveMix.ballBadSince = -1
+        // the nearest spot that is allowed, inside the floor, open and clear of the walls: the ball rolls there
+        var target: SIMD2<Float>?
+        outer: for r in [Float(0.9), 1.5, 2.2, 3.0, 3.8] { for k in 0..<16 { let a = Float(k) * .pi / 8; let p = c + SIMD2(sinf(a), cosf(a)) * r; if rf.contains(p), rf.halfWidth(at: p.y) - abs(p.x) > 0.8, rf.stopOK(p), f.openFloor(p) { target = p; break outer } } }
+        let tgt = target ?? SIMD2(0, (rf.minZ + rf.maxZ) / 2)
+        let d = tgt - c, L = simd_length(d)
+        let dir = L > 0.05 ? d / L : SIMD2<Float>(0, -1)
+        if EmoteSpot.logOn { NSLog("[ballrescue] t=%.1f ball=(%.2f,%.2f) rolled toward (%.2f,%.2f)", now, c.x, c.y, tgt.x, tgt.y) }
+        f.kickBall(sb.uid, direction: dir, speed: min(max(1.15 * L + 0.2, 0.8), 3.2), by: -1)
     }
 }
