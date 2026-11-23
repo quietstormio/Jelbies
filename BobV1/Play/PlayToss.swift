@@ -1215,7 +1215,10 @@ final class PlayToss {
     }
 
     /// play-net keep-out: the net's dead-ball return for a ball that lies outside the frame: the same lob as the safety net's, no walk to it (`rescue` itself is unchanged).
-    func netDeadLob() { rescue() }
+    func netDeadLob() {
+        rescue()
+        if let a = returnAim { ball.vel = TossAim.ballistic(from: ball.pos, to: SIMD3(a.x, ball.radius, a.y), flight: 1.6 * TossTuning.slow) }          // (a higher arc than the safety lob's: the middle Jelmiko stands in the lane and a flat lob came back off his head)
+    }
 
     /// play-net-r1: a goal ends this flight's foot plan (the ball is held in the net; nobody goes on to kick it): the same state `caught()` clears, and a foot approach under way is let go.
     func netClearFoot() {
