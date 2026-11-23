@@ -129,6 +129,8 @@ struct SocialBook {
     var bestFriends: Set<Int> = []
     /// best-friend-r1 round 2 (BondPairing.swift `bondUrge`): game time of the next best-friend moment, the retries so far, the moments started.
     var bondNextAt: Float = 0, bondTries = 0, bondMoments = 0
+    /// Round 3: the best friend whose solo emote / toy this one was asked to come and watch, and until when (game time).
+    var watchPeer = -1, watchUntil: Float = 0
     var lastKind: SocialKind?
     /// The last 3 pair kinds started with each partner (by steerID), oldest first: the pick drops them (no-repeat per pair).
     var recentWith: [Int: [SocialKind]] = [:]
@@ -672,7 +674,8 @@ extension BlobBrain {
             }
             if MoveMix.on {          // (MoveMix.swift: after a PAIR the same two do not pair again for 30...45 s; after a group no new group for 110...170 s at home, half at the park)
                 if !s.kind.isGroup {
-                    let again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
+                    var again = rand(MoveMix.pairAgain.lowerBound, MoveMix.pairAgain.upperBound)
+                    if BondPairing.multiplier != 1, let po = socialBrain(pid), BondPairing.isBest(self, po) { again = rand(BondMoment.pairAgain.lowerBound, BondMoment.pairAgain.upperBound) }          // (best-friend-r1: a best-friend pair waits 12...18 s, the others 30...45)
                     socialBook.pair[pid] = again
                     if s.idC >= 0, s.idC != steerID { socialBook.pair[s.idC] = again }
                 } else {

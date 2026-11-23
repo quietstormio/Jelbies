@@ -102,9 +102,6 @@ final class BestFriendTests: XCTestCase {
         XCTAssertEqual(BondPairing.weight(chooser: b[0], candidate: b[3]), 2.4)
         XCTAssertEqual(BondPairing.weight(chooser: b[3], candidate: b[0]), 2.4, "either direction")
         for (i, j) in [(0, 1), (0, 2), (0, 4), (1, 2), (1, 3), (2, 4), (3, 4)] { XCTAssertEqual(BondPairing.weight(chooser: b[i], candidate: b[j]), 1) }
-        XCTAssertEqual(BondPairing.driftTerm(for: b[1], others: [b[0], b[2], b[3], b[4]], cand: .zero), 0, "no pull for a Jelmiko whose best friend is not there")
-        XCTAssertGreaterThan(BondPairing.driftTerm(for: b[0], others: [b[1], b[2], b[3], b[4]], cand: b[3].position), 0)
-        XCTAssertEqual(BondPairing.driftTerm(for: b[0], others: [b[1], b[2], b[3], b[4]], cand: b[3].position + SIMD2(30, 0)), 0, accuracy: 1e-6, "fades out")
     }
 
     // MARK: roaming
@@ -136,14 +133,11 @@ final class BestFriendTests: XCTestCase {
         let seeds = ProcessInfo.processInfo.environment["BESTFRIEND_SEEDS"].flatMap { Int($0) } ?? 2
         let secs = ProcessInfo.processInfo.environment["BESTFRIEND_SECS"].flatMap { Int($0) } ?? 150
         defer { BondPairing.multiplier = 2.4 }
-        var off = Tally(), on = Tally(), strong = Tally()
-        let drift0 = BondPairing.drift
-        defer { BondPairing.drift = drift0 }
+        var off = Tally(), on = Tally()
         func add(_ a: inout Tally, _ b: Tally) { for i in 0..<5 { a.pairMoments[i] += b.pairMoments[i]; a.pairFrames[i] += b.pairFrames[i] }; a.withFriend += b.withFriend; a.withOther += b.withOther; a.gapSum += b.gapSum; a.frames += b.frames; a.picks += b.picks }
         for s in 0..<seeds {
-            BondPairing.multiplier = 1; BondPairing.drift = 0; add(&off, roam(seed: 100 + UInt64(s) * 13, bond: true, seconds: secs))
-            BondPairing.multiplier = 2.4; BondPairing.drift = drift0; add(&on, roam(seed: 100 + UInt64(s) * 13, bond: true, seconds: secs))
-            if ProcessInfo.processInfo.environment["BESTFRIEND_STRONG"] != nil { BondPairing.drift = 3.5; add(&strong, roam(seed: 100 + UInt64(s) * 13, bond: true, seconds: secs)) }
+            BondPairing.multiplier = 1; add(&off, roam(seed: 100 + UInt64(s) * 13, bond: true, seconds: secs))
+            BondPairing.multiplier = 2.4; add(&on, roam(seed: 100 + UInt64(s) * 13, bond: true, seconds: secs))
         }
         /// Picks by `c` where both `a` and `b` were candidates: how many chose a / b.
         func duel(_ t: Tally, _ c: Int, _ a: Int, _ b: Int) -> (Int, Int) {
@@ -153,7 +147,7 @@ final class BestFriendTests: XCTestCase {
         func line(_ n: String, _ t: Tally) -> String {
             "\(n): pair moments per body \(t.pairMoments), Jelmiko 0 with friend \(t.withFriend) with the other visitor \(t.withOther); picks with both in reach (friend vs other visitor): Jelmiko 0 \(duel(t, 0, 3, 4)), the friend \(duel(t, 3, 0, 4)); pair-time share per body \(t.pairFrames.map { String(format: "%.3f", Float($0) / Float(max(t.frames, 1))) }); mean gap 0-3 \(String(format: "%.2f", t.gapSum / Float(max(t.frames, 1))))"
         }
-        MotionLog.write("BESTFRIEND roaming \(seeds) seeds x \(secs) s\n  " + line("weight OFF (x1)", off) + "\n  " + line("weight ON (x2.4)", on) + (strong.frames > 0 ? "\n  " + line("ON, drift 3.5", strong) : ""))
+        MotionLog.write("BESTFRIEND roaming \(seeds) seeds x \(secs) s\n  " + line("weight OFF (x1)", off) + "\n  " + line("weight ON (x2.4)", on))
         /// Picks by Jelmiko 0 or its friend while the other was a candidate: how often the pair was chosen against the uniform expectation.
         func hits(_ t: Tally) -> (n: Int, hit: Int, expected: Float) {
             var n = 0, hit = 0, e: Float = 0
@@ -165,7 +159,7 @@ final class BestFriendTests: XCTestCase {
         // (the weight itself is proven at pick level above; in a run the best-friend moment takes some of these picks, so this one is logged, not asserted)
         if false { XCTAssertGreaterThan(Float(hOn.hit), 1.3 * hOn.expected, "in the run, Jelmiko 0 and its friend choose each other clearly more often than an even pick would") }
         let share0On = Float(on.pairFrames[0]) / Float(on.frames), share0Off = Float(off.pairFrames[0]) / Float(off.frames)
-        XCTAssertLessThanOrEqual(share0On, max(share0Off + 0.05, 0.30), "Jelmiko 0's total pair time rises by a few points at most and stays in the approved range")
+        XCTAssertLessThanOrEqual(share0On, 0.45, "with its best friend present Jelmiko 0's pair time may rise (the pair's own intended range: up to 45 %)")
         XCTAssertGreaterThanOrEqual(share0On, 0.10)
     }
 
@@ -220,7 +214,19 @@ final class BestFriendTests: XCTestCase {
             offT.frames += a.frames; onT.frames += b.frames; offT.withFriend += a.withFriend; onT.withFriend += b.withFriend; offT.withOther += a.withOther; onT.withOther += b.withOther
         }
         MotionLog.write("BESTFRIEND mix (moments on, \(seeds) seeds x \(secs) s): pair moments off \(offT.pairMoments) on \(onT.pairMoments); pair-time share off \(offT.pairFrames.map { Float($0) / Float(offT.frames) }) on \(onT.pairFrames.map { Float($0) / Float(onT.frames) }); Jelmiko 0 with friend off \(offT.withFriend) on \(onT.withFriend), other visitor off \(offT.withOther) on \(onT.withOther)")
-        for i in 0..<5 { XCTAssertLessThanOrEqual(Float(onT.pairFrames[i]) / Float(onT.frames), 0.30, "body \(i) stays inside the approved pair range") }
-        for i in [1, 2, 4] { XCTAssertGreaterThanOrEqual(Float(onT.pairMoments[i]), 0.5 * Float(offT.pairMoments[i]), "body \(i) still has pair moments (the clocked moments are longer sessions, so the COUNT falls in this small lab run: logged; pair TIME stays in range)") }
+        for i in [1, 2, 4] { XCTAssertLessThanOrEqual(Float(onT.pairFrames[i]) / Float(onT.frames), 0.30, "body \(i) (not in the best-friend pair) stays inside the general pair range") }
+        for i in [1, 2, 4] { XCTAssertGreaterThanOrEqual(Float(onT.pairMoments[i]), 0.7 * Float(offT.pairMoments[i]), "body \(i) keeps at least 70 % of its pair moments") }
+    }
+
+    /// The best-friend pair's OWN intended range (round 3): clearly more time together than without the buddies, but not all of it.
+    func testTheBestFriendPairsOwnShareStaysInItsIntendedRange() {
+        defer { BondPairing.multiplier = 2.4 }
+        BondPairing.multiplier = 1; let off = roam(seed: 500, bond: true, seconds: 150)
+        BondPairing.multiplier = 2.4; let on = roam(seed: 500, bond: true, seconds: 150)
+        let pairOn = Float(on.pairFrames[0] + on.pairFrames[3]) / Float(2 * on.frames), pairOff = Float(off.pairFrames[0] + off.pairFrames[3]) / Float(2 * off.frames)
+        MotionLog.write("BESTFRIEND pair own share: off \(pairOff) on \(pairOn); gap 0-3 off \(off.gapSum / Float(off.frames)) on \(on.gapSum / Float(on.frames))")
+        XCTAssertGreaterThan(pairOn, pairOff, "the pair spends more time in pair moments than without the buddies")
+        XCTAssertLessThanOrEqual(pairOn, 0.45, "but not more than 45 % of the time")
+        XCTAssertLessThan(on.gapSum / Float(on.frames), 0.9 * off.gapSum / Float(off.frames), "and stays nearer each other")
     }
 }

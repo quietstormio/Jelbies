@@ -223,13 +223,12 @@ extension BlobBrain {
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
                 score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap
                 score += MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
-                score += BondPairing.driftTerm(for: self, others: others, cand: cand)          // (best-friend-r1)
                 let th = mixThird(cand.y, rf)
                 if th != mixThird(here.y, rf) { score += MoveMix.strollThirdBonus }
                 if mates.contains(where: { now - $0.mix.strollDirAt < 8 && $0.mix.strollThird == th }) { score -= MoveMix.strollThirdBonus }
                 if best == nil || score > best!.1 { best = (cand, score) }
             }
-            if let b = best { roamVisits[roamKeyMix(b.0), default: 0] += 1; return b.0 }
+            if let b = best { bondDuoAsk(goal: b.0); roamVisits[roamKeyMix(b.0), default: 0] += 1; return b.0 }
         }
         return nil
     }

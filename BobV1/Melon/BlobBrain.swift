@@ -955,7 +955,7 @@ final class BlobBrain {
         if !footKeep, mixSoccerUrge(sim) { return }
         if !footKeep, socialMaybeStart(sim) { mix.last = .social; return }
         HopDiag.lap(.tkPickSocial, &pt)
-        if !footKeep, !mixLeg, idleMaybeStart(sim) { mixNoteIdle(); return }
+        if !footKeep, !mixLeg, idleMaybeStart(sim) { mixNoteIdle(); bondWatchAsk(); return }
         HopDiag.lap(.tkPickIdle, &pt)
         defer { HopDiag.lap(.tkPickWander, &pt) }
         var w: [(Int, Float)] = [(0, 7.5), (1, 1.2), (2, 0.8)]          // (was 5 / 2 / 1.5: more legs, fewer stands; 2026-10-21 "they need to move a lot more")
@@ -1087,13 +1087,12 @@ final class BlobBrain {
                 if let b = board, b.claimed(near: cand, radius: MoveMix.claimRadius, except: steerID) { continue }
                 score += MoveMix.idleWeight * mixIdleness(cand, rf) / WalkBoard.idleCap + MoveMix.thirdWeight * mixThirdNeed(cand.y, rf)
             }
-            score += BondPairing.driftTerm(for: self, others: others, cand: cand)          // (best-friend-r1: a little nearer an idle best friend; 0 for everybody else)
             if best == nil || score > best!.1 { best = (cand, score) }
             valid += 1
             if valid >= (MoveMix.on ? MoveMix.roamCandidates : 6) { break }
         }
         }
-        if let b = best { roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
+        if let b = best { bondDuoAsk(goal: b.0); roamVisits[roamKey(b.0), default: 0] += 1; if EmoteSpot.enabled, homeRoom { EmoteSpot.noteRoam(b.0, rf) }; return b.0 }
         return nil
     }
 

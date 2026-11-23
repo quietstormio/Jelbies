@@ -13,12 +13,8 @@ import simd
 nonisolated enum BondPairing {
     /// A best friend counts this many times in a partner pick (tests set 1 for the "weight off" run; `-BondPairOff 1` in the app).
     nonisolated(unsafe) static var multiplier: Float = DevArgs.enabled && UserDefaults.standard.integer(forKey: "BondPairOff") != 0 ? 1 : 2.4
-    /// The roam goal's pull toward an idle best friend (score units; the stale-floor and third terms are 6 and 30 x need, the "far from the others" term 0.6 per unit).
-    nonisolated(unsafe) static var drift: Float = DevArgs.enabled && UserDefaults.standard.integer(forKey: "BondPairOff") != 0 ? 0 : 2.0
     /// Test hook (nil in the app): called after every weighted-or-not partner pick with the chooser, its candidates and the one chosen.
     nonisolated(unsafe) static var onPick: ((BlobBrain, [BlobBrain], BlobBrain) -> Void)?
-    /// Distance (units) over which the pull fades to nothing.
-    static let driftReach: Float = 6
 
     @MainActor static func isBest(_ a: BlobBrain, _ b: BlobBrain) -> Bool {
         a.socialBook.bestFriends.contains(b.steerID) || b.socialBook.bestFriends.contains(a.steerID)
@@ -55,26 +51,21 @@ nonisolated enum BondPairing {
         func with(_ b: BlobBrain) -> Bool { b.socialOthers().contains { $0 !== b && isBest(b, $0) && $0.idleState.kind != nil && $0.idleState.decorUID == uid } }
         return xs.filter(with) + xs.filter { !with($0) }
     }
-    /// The roam goal's extra score for `cand`: a little more the nearer it is to the chooser's best friend while that one is up and about (0 for everybody else).
-    @MainActor static func driftTerm(for b: BlobBrain, others: [BlobBrain], cand: SIMD2<Float>) -> Float {
-        guard drift != 0, !b.socialBook.bestFriends.isEmpty || others.contains(where: { !$0.socialBook.bestFriends.isEmpty }) else { return 0 }
-        var t: Float = 0
-        for o in others where isBest(b, o) && o.idleState.kind != .sleep && !o.held {
-            t = max(t, drift * max(0, 1 - min(simd_distance(cand, o.position), driftReach) / driftReach))
-        }
-        return t
-    }
 }
 
 // MARK: - the best-friend moment (round 2)
 
 nonisolated enum BondMoment {
     /// About every this many seconds (game time) one of a best-friend pair goes to the other; the first one sooner.
-    static let gap: ClosedRange<Float> = 60...100, firstGap: ClosedRange<Float> = 15...35
+    static let gap: ClosedRange<Float> = 25...40, firstGap: ClosedRange<Float> = 10...20
     /// A busy partner: look again after this long, at most `maxTries` times, then give up quietly until the next gap.
     static let retry: ClosedRange<Float> = 3...6, maxTries = 8
     /// After a moment starts, neither starts an ordinary pair for this long (the moment replaces one; the pair share stays where it was).
-    static let quiet: Float = 45
+    /// After a moment only THAT PAIR waits this long before another pair start with each other (BlobSocial.swift socialRelease); each may still start ordinary things with others.
+    static let pairAgain: ClosedRange<Float> = 12...18
+    /// The duo: how often the other one takes a goal alongside, how far from the leader's goal, and the watch: how often, how far.
+    static let duoChance: Float = 0.7, duoSide: ClosedRange<Float> = 1.3...2.2
+    static let watchChance: Float = 0.5, watchDist: ClosedRange<Float> = 1.6...2.2
     nonisolated(unsafe) static var fails: [String: Int] = [:]
     nonisolated(unsafe) static var logAt: Float = 0
     /// The friendly pair kinds a moment may use (all existing; the one not seen for longest goes first).
@@ -89,6 +80,11 @@ extension BlobBrain {
         guard BondPairing.multiplier != 1, MoveMix.on, anticsEnabled, !socialBook.bestFriends.isEmpty else { return false }
         guard idleMood != .grumpy, !mixSleepy, !reserved, social == nil, idleState.kind == nil, !socialBook.hold, socialBook.enabled, socialFree else { return false }
         let now = variety.now
+        if socialBook.watchPeer >= 0 {          // the other one's solo emote / toy: come and watch (set by `bondWatchAsk`)
+            let id = socialBook.watchPeer; socialBook.watchPeer = -1
+            if now < socialBook.watchUntil, let o = socialBrain(id), o.idleState.kind != nil, o.idleState.kind != .sleep, simd_distance(o.position, position) < 4.5,
+               beginLook(at: o.position, hold: rand(2.0, 3.5), resume: nil, face: .happy, kind: .watch) { return true }
+        }
         if socialBook.bondNextAt == 0 { socialBook.bondNextAt = now + rand(BondMoment.firstGap.lowerBound, BondMoment.firstGap.upperBound) }
         guard now >= socialBook.bondNextAt else { return false }
         func later(_ s: ClosedRange<Float>) { socialBook.bondNextAt = now + rand(s.lowerBound, s.upperBound) }
@@ -122,7 +118,7 @@ extension BlobBrain {
             guard ok else { continue }
             for (a, b) in [(self, o), (o, self)] { var r = a.socialBook.recentWith[b.steerID] ?? []; r.append(kind); a.socialBook.recentWith[b.steerID] = Array(r.suffix(3)) }
             varietyNoteSocial(kind, with: o); socialBook.lastKind = kind
-            for b in [self, o] { b.mix.quietUntil = max(b.mix.quietUntil, b.variety.now + BondMoment.quiet); b.socialBook.bondMoments += 1; b.socialBook.bondTries = 0 }
+            for b in [self, o] { b.socialBook.bondMoments += 1; b.socialBook.bondTries = 0 }
             later(BondMoment.gap); o.socialBook.bondNextAt = o.variety.now + rand(BondMoment.gap.lowerBound, BondMoment.gap.upperBound)
             mix.last = .social
             if EmoteSpot.logOn { NSLog("[bond] moment t=%.1f ids=%d,%d kind=%@ gap=%.1f", now, steerID, o.steerID, kind.rawValue, d) }
@@ -130,5 +126,47 @@ extension BlobBrain {
         }
         fail("nokind")
         return false
+    }
+}
+
+// MARK: - the duo (round 3)
+
+extension BlobBrain {
+    /// A roam / stroll goal `g` was just picked by this body: its best friend, if free, takes a goal 1.3...2.2 away from it, on the side it is already on (the two paths run alongside, never across), about 7 picks in 10.
+    func bondDuoAsk(goal g: SIMD2<Float>) {
+        guard BondPairing.multiplier != 1, MoveMix.on, !socialBook.bestFriends.isEmpty, idleMood != .grumpy, !mixSleepy else { return }
+        guard let o = socialOthers().first(where: { $0 !== self && BondPairing.isBest(self, $0) }) else { return }
+        guard o.socialFree, o.idleMood != .grumpy, !o.mixSleepy, !o.held, !o.commanded, o.idleState.kind == nil, rand() < BondMoment.duoChance else { return }
+        let dir = g - position, len = simd_length(dir)
+        guard len > 0.6 else { return }
+        let u = dir / len, perp = SIMD2<Float>(-u.y, u.x)
+        let rel = simd_dot(o.position - position, perp)
+        let sgn: Float = abs(rel) > 0.25 ? (rel > 0 ? 1 : -1) : (steerID % 2 == 0 ? 1 : -1)
+        for k in 0..<4 {
+            let d = rand(BondMoment.duoSide.lowerBound, BondMoment.duoSide.upperBound)
+            let raw = g + perp * sgn * d * (k < 2 ? 1 : 1)
+            let spot = o.fixed(raw)
+            guard simd_distance(spot, raw) < 0.25, simd_distance(spot, g) > 1.25, o.mixStopOK(spot), o.peerFree(spot), o.reachable(o.position, spot) else { continue }
+            o.request(.goTo(spot))
+            return
+        }
+    }
+
+    /// This body just began a solo emote or a toy: its best friend, if free, walks to a spot 1.6...2.2 away on its own side and watches it (about half the time).
+    func bondWatchAsk() {
+        guard BondPairing.multiplier != 1, MoveMix.on, !socialBook.bestFriends.isEmpty, let k = idleState.kind, k != .sleep, k != .look, k != .stopLook else { return }
+        guard let o = socialOthers().first(where: { $0 !== self && BondPairing.isBest(self, $0) }) else { return }
+        guard o.socialFree, o.idleMood != .grumpy, !o.mixSleepy, !o.held, !o.commanded, o.idleState.kind == nil, rand() < BondMoment.watchChance else { return }
+        let toward = o.position - position, l = simd_length(toward)
+        let u = l > 0.3 ? toward / l : SIMD2<Float>(0, 1)
+        for _ in 0..<4 {
+            let d = rand(BondMoment.watchDist.lowerBound, BondMoment.watchDist.upperBound)
+            let raw = position + u * d
+            let spot = o.fixed(raw)
+            guard simd_distance(spot, raw) < 0.25, o.mixStopOK(spot), o.peerFree(spot), o.reachable(o.position, spot) else { continue }
+            if simd_distance(o.position, spot) > 0.3 { o.request(.goTo(spot)) }
+            o.socialBook.watchPeer = steerID; o.socialBook.watchUntil = o.variety.now + 14
+            return
+        }
     }
 }
