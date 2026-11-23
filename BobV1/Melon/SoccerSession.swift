@@ -90,6 +90,7 @@ final class SoccerSession {
     private var blockedSince: [Int: Float] = [:]
     private var firstOfSession = false
     private var fetchFails = 0
+    private var startWaitSince: Float = -1
     private var kickoffTurn = false          // (the first turn of a kick-off: the two nearest the ball, a short pass)
     private(set) var gamesEndedNotAll = 0
     private var gameKick: [Int: Int] = [:], prevK = -1
@@ -190,6 +191,12 @@ final class SoccerSession {
             if clock - lastWhy > 3 { lastWhy = clock; log("waiting: ready=\(ready.count) why=\(all.map { "\($0.steerID):\($0.sessBlock(inSession: false) ?? "ok")" }) ballFree=\(b.freeBall() != nil)") }
             nextStart = clock + 0.5; return
         }
+        // a session with company: when others are only a moment from free (a launch job, an emote running out) wait a few seconds rather than open with a solo game
+        if ready.count < all.filter({ $0.enabled }).count {
+            if startWaitSince < 0 { startWaitSince = clock }
+            if clock - startWaitSince < 5, ready.count < 2 { nextStart = clock + 0.5; return }
+        }
+        startWaitSince = -1
         active = true; sessions += 1
         let len = kickoffSession ? SoccerSessionTuning.kickoffLen : SoccerSessionTuning.recurLen
         endsAt = clock + b.rand(len.lowerBound, len.upperBound)
@@ -242,7 +249,7 @@ final class SoccerSession {
         for m in ms { m.mix.sessFace = nil }
         phase = .plan; kIdx = 0; rIdx = 1 % max(ms.count, 1); kicks = 0; failures = 0; planAt = -9; restSince = -1
         kickTarget = Int(ms[0].rand(SoccerSessionTuning.passKicks.lowerBound, SoccerSessionTuning.passKicks.upperBound))          // (shots: 3...6 of them)
-        if game == .pass || game == .dribblePass { kickTarget = ms.count + Int(ms[0].rand(0, 3)) }          // (a ring: one kick each and up to two more; the next game follows sooner)
+        if game == .pass || game == .dribblePass { kickTarget = ms.count + Int(ms[0].rand(0, 2)) }          // (a ring: one kick each and up to two more; the next game follows sooner)
         soloNextAt = clock + 0.8; soloWaiting = false
         gameEnds = clock + max(Float(max(ms.count, 2)) * 9, (endsAt - clock) * 0.6)          // (long enough for a whole ring: each kick takes about 8 s)          // (each game of the playlist gets its share of the session)
         for m in ms { m.mix.order = SessOrder() }
